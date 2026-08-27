@@ -24,6 +24,22 @@ jobs em background pra catalogar milhares de ROMs sem travar a UI.
   implemente isso no adapter de cada `MetadataProvider`, não numa camada
   genérica compartilhada (limites são diferentes entre provedores).
 
+## Estado atual (2026-08-27 — `in-progress`)
+
+`crates/library-scan`:
+- `FileRomHasher` impl `domain::metadata::RomHashService` — CRC32
+  (`crc32fast`) + MD5 (`md-5`), com skip do header iNES (`.nes`). Testado
+  contra valores conhecidos.
+- `system_for_extension` — palpite de `system_id` pela extensão.
+- `scan_into(repo, dir, now)` — varre recursivo, dedup por `file_path`,
+  popula `RomRepository`; `ScanReport`. 2 testes de integração.
+- App: comandos `list_roms` / `scan_library(path)`; tela Library escaneia
+  e lista de verdade.
+
+**Falta**: `MetadataProvider` (IGDB/ScreenScraper/TheGamesDB), fila de jobs
+em background, tabelas `scrape_matches`/`game_metadata`. A política já está
+travada (auto só com hash exato) — falta plugar os provedores.
+
 ## Fila de jobs
 
 ```

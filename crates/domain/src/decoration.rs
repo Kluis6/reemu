@@ -2,7 +2,9 @@
 //! inspirada na estrutura do RetroBat. Pulado automaticamente quando o
 //! ShaderChain ativo tem `includes_bezel = true`.
 
+use crate::error::RepoError;
 use crate::shader_chain::AssignmentScope;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -28,13 +30,20 @@ pub struct DecorationAssignment {
     pub asset_path: String,
 }
 
+#[async_trait]
 pub trait DecorationResolver: Send + Sync {
-    fn resolve(&self, system_id: &str, rom_id: Option<&str>) -> Option<DecorationAssignment>;
+    /// Cascata rom -> sistema -> default. `Ok(None)` = sem decoração.
+    async fn resolve(
+        &self,
+        system_id: &str,
+        rom_id: Option<&str>,
+    ) -> Result<Option<DecorationAssignment>, RepoError>;
 }
 
 /// Importador de compatibilidade: varre a estrutura de pastas de um pacote
 /// no formato RetroBat/The Bezel Project e popula `DecorationAssignment`
 /// automaticamente, sem depender de convenção de nome em runtime.
+/// (Implementação prevista para a etapa 04 — scan de filesystem.)
 pub trait DecorationPackImporter: Send + Sync {
     fn import(&self, pack: &DecorationPack) -> Result<Vec<DecorationAssignment>, String>;
 }

@@ -7,14 +7,17 @@
 //! Convenção: `Ports` = traits que o domínio expõe pra fora (implementadas
 //! pelos adapters). `Model` = tipos de dados puros (sem comportamento de I/O).
 
-pub mod core_loader;
-pub mod frame_source;
-pub mod shader_chain;
-pub mod decoration;
-pub mod core_options;
+pub mod error;
+
 pub mod audio;
-pub mod input;
-pub mod hotkeys;
-pub mod save_state;
-pub mod metadata;
+pub mod core_loader;
+pub mod core_options;
+pub mod decoration;
 pub mod focus;
+pub mod frame_source;
+pub mod hotkeys;
+pub mod input;
+pub mod library;
+pub mod metadata;
+pub mod save_state;
+pub mod shader_chain;

@@ -7,6 +7,26 @@ traits definidas em `crates/domain` (ex: `ShaderChainResolver`,
 `DecorationResolver`, `CoreOptionsStore`), usando `sqlx` sobre o schema
 já definido em `crates/db/migrations/0001_init.sql`.
 
+## Estado atual (2026-08-27 — `done`)
+
+Implementado em `crates/db`: `ShaderChainRepo`, `DecorationRepo`,
+`CoreOptionsRepo`, `AudioConfigRepo`, `InstalledCoresRepo`, `RomsRepo`,
+`SaveStateRepo` + `pool.rs`, `cascade.rs`, `convert.rs`. 18 testes de
+integração com SQLite in-memory.
+
+**Mudança de contrato**: as traits de DB em `domain` agora são `async`
+(`#[async_trait]`) — o doc abaixo foi escrito assumindo sync. Erro comum:
+`domain::error::RepoError` (`Backend` / `Corrupt`), retornado como
+`Result<Option<T>, RepoError>` (o "não encontrado" é `Ok(None)`, não erro).
+
+Save state: port dividido em `SaveStateManager` (alto nível, dispara
+`retro_serialize`, fica no core-loader — etapa 08) e `SaveStateRepository`
+(só metadata, no `db`). Ambos os models de save ganharam `id`.
+
+**Não implementado (de propósito, entra depois)**: métodos de *escrita* de
+assignment (criar/editar preset de shader/decoração por rom/sistema) —
+entram com a UI (etapa 04/07). O `db` hoje só resolve (lê) a cascata.
+
 ## Decisões relevantes
 
 - Nenhuma tabela tem `user_profile_id`.

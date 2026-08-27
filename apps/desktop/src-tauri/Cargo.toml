@@ -1,0 +1,48 @@
+[package]
+name = "reemu-desktop"
+version.workspace = true
+edition.workspace = true
+description = "ReEmu — shell desktop (Tauri v2)"
+authors = ["ReEmu"]
+license = "MIT"
+repository = "https://github.com/Kluis6/reemu"
+rust-version = "1.77.2"
+
+[lib]
+# main.rs chama `app_lib::run()` — manter o nome em sincronia se mudar.
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[features]
+# Auto-carrega REEMU_DEV_CORE/REEMU_DEV_ROM no startup — só pra testar a
+# surface de vídeo sem UI de biblioteca ainda. `cargo tauri dev --features dev-autoload`.
+dev-autoload = []
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-log = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = "0.4"
+raw-window-handle = "0.6"
+uuid = { version = "1", features = ["v4"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Cria a child window X11 pro vídeo (GTK é dono da wl_surface da janela;
+# uma child X11 sob o XID do GTK não — ver src/video.rs).
+x11-dl = "2"
+
+# Crates internos (arquitetura hexagonal — o shell é um adapter).
+domain = { path = "../../../crates/domain" }
+db = { path = "../../../crates/db" }
+emu-session = { path = "../../../crates/emu-session" }
+video-surface = { path = "../../../crates/video-surface" }
+audio-desktop = { path = "../../../crates/audio-desktop" }
+library-scan = { path = "../../../crates/library-scan" }

@@ -15,10 +15,22 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum RetroPadButton {
-    A, B, X, Y,
-    L1, L2, L3, R1, R2, R3,
-    Up, Down, Left, Right,
-    Start, Select,
+    A,
+    B,
+    X,
+    Y,
+    L1,
+    L2,
+    L3,
+    R1,
+    R2,
+    R3,
+    Up,
+    Down,
+    Left,
+    Right,
+    Start,
+    Select,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,9 +61,18 @@ pub enum MappingSource {
 /// quanto na UI de captura de binding.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RawInputEvent {
-    Keyboard { scancode: u32 },
-    GamepadButton { device_guid: String, index: u32 },
-    GamepadAxis { device_guid: String, index: u32, value: f32 },
+    Keyboard {
+        scancode: u32,
+    },
+    GamepadButton {
+        device_guid: String,
+        index: u32,
+    },
+    GamepadAxis {
+        device_guid: String,
+        index: u32,
+        value: f32,
+    },
 }
 
 pub trait ControllerMappingResolver: Send + Sync {

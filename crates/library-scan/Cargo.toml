@@ -1,0 +1,18 @@
+[package]
+name = "library-scan"
+version.workspace = true
+edition.workspace = true
+description = "Hash de ROMs (CRC32/MD5) + varredura de biblioteca"
+
+[dependencies]
+domain = { path = "../domain" }
+crc32fast = "1"
+md-5 = "0.10"
+uuid = { version = "1", features = ["v4"] }
+walkdir = "2"
+thiserror.workspace = true
+log = "0.4"
+
+[dev-dependencies]
+db = { path = "../db" }
+tokio = { version = "1", features = ["macros", "rt"] }

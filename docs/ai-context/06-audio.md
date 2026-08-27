@@ -38,6 +38,26 @@ Separe `rate_control.rs` do `audio_sink.rs` deliberadamente — a lógica de
 ajuste de taxa é pura (função de "nível de buffer" → "fator de ajuste") e
 deve ser testável sem hardware.
 
+## Estado atual (2026-08-27 — `in-progress`)
+
+`crates/audio-desktop`:
+- `rate_control.rs` — DRC **puro** (`RateControl::factor(fill) -> f32`,
+  limitado a ±`rate_control_delta`). 6 testes.
+- `sink.rs` — `CpalAudioSink` (`domain::audio::AudioSink`): cpal 0.18, ring
+  buffer, resample **linear de razão variável** com estado entre chamadas,
+  fallback pro device padrão (match por `DeviceId` persistente). `pause()`
+  para a stream de fato (`stream.pause()`).
+- `domain::audio::AudioSink` não é mais `Send + Sync` (a `cpal::Stream` é
+  `!Send`); `emu-session::SessionConfig.audio_sink` é uma factory `Send` que
+  constrói o sink **na thread do core**.
+- Wiring: `emu-session` drena `core.drain_audio()` → `sink.push_samples(...,
+  core_sample_rate)`; `FocusController`/pause → `sink.pause()`/`resume()`.
+- App: lê `AudioConfig` do SQLite no startup e passa pra factory. Stream cpal
+  abre OK neste sistema (verificado).
+
+Falta: verificar sessão longa sem glitch (core real + ouvir); trocar `rubato`
+se a qualidade do linear não bastar; comando "aplicar config de áudio ao vivo".
+
 ## Depende de
 
 `02-core-loader-desktop.md` (o core precisa estar produzindo samples de

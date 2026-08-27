@@ -1,0 +1,21 @@
+:root {
+  color-scheme: light dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+/* A janela é `transparent: true` (pro dia em que a surface nativa do jogo
+   renderizar atrás — ver apps/desktop/src-tauri/src/video.rs). Hoje o app
+   roda em modo só-webview, então pintamos um fundo opaco. Quando a camada
+   de vídeo entrar, a área "de jogo" passa a não pintar. */
+body {
+  background: #1b1a1f;
+}

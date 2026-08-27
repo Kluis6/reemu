@@ -3,9 +3,15 @@ resolver = "2"
 members = [
     "crates/domain",
     "crates/db",
+    "crates/core-loader-desktop",
+    "crates/emu-session",
+    "crates/video-surface",
+    "crates/audio-desktop",
+    "crates/library-scan",
+    "apps/desktop/src-tauri",
     # adapters de plataforma são adicionados aqui conforme forem criados:
-    # "crates/core-loader-desktop",
     # "crates/core-loader-mobile",
+    # "apps/mobile/src-tauri",
 ]
 
 [workspace.package]

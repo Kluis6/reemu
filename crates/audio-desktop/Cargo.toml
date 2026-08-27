@@ -1,0 +1,12 @@
+[package]
+name = "audio-desktop"
+version.workspace = true
+edition.workspace = true
+description = "AudioSink cpal com Dynamic Rate Control"
+
+[dependencies]
+domain = { path = "../domain" }
+cpal = "0.18"
+ringbuf = "0.5"
+thiserror.workspace = true
+log = "0.4"

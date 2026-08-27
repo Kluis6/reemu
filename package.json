@@ -5,7 +5,9 @@
   "scripts": {
     "dev:desktop": "pnpm --filter app-desktop dev",
     "dev:mobile": "pnpm --filter app-mobile dev",
-    "build:ui": "pnpm --filter ui build"
+    "build:desktop": "pnpm --filter app-desktop build",
+    "build:ui": "pnpm --filter ui build",
+    "tauri:desktop": "cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

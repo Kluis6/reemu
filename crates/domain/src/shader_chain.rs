@@ -4,6 +4,8 @@
 //! diferencial pro caso de uso — a maioria dos efeitos dependentes de
 //! depth buffer não se aplica a cores 2D).
 
+use crate::error::RepoError;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -42,7 +44,13 @@ pub struct ShaderChainAssignment {
     pub parameter_overrides: HashMap<String, String>,
 }
 
+#[async_trait]
 pub trait ShaderChainResolver: Send + Sync {
     /// Resolve em cascata: rom -> sistema -> default.
-    fn resolve(&self, system_id: &str, rom_id: Option<&str>) -> Option<ShaderChainAssignment>;
+    /// `Ok(None)` = nenhuma atribuição em nenhum escopo (não é erro).
+    async fn resolve(
+        &self,
+        system_id: &str,
+        rom_id: Option<&str>,
+    ) -> Result<Option<ShaderChainAssignment>, RepoError>;
 }

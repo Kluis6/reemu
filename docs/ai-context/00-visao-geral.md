@@ -22,7 +22,7 @@ SQLite + Fluent Design.
 
 - Traits/portas: `crates/domain/src/*.rs` (um módulo por porta)
 - Schema do banco: `crates/db/migrations/0001_init.sql`
-- Decisões e histórico completo: `resumo-arquitetura-emulador-libretro.md`
+- Decisões e histórico completo: `resumo-arquitetura-reemu.md`
   (raiz do repo)
 
 **Ao gerar código, sempre leia esses arquivos antes de assumir um formato

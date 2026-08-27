@@ -2,9 +2,11 @@
 //! Dynamic Rate Control decidido como abordagem de sincronia áudio/vídeo
 //! (não resample fixo) — evita drift acumulado em sessões longas.
 
+use crate::error::RepoError;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AudioConfig {
     pub output_device_id: Option<String>,
     pub output_device_name: Option<String>,
@@ -26,9 +28,21 @@ impl Default for AudioConfig {
     }
 }
 
-pub trait AudioSink: Send + Sync {
+/// Persistência da configuração de áudio. É sempre uma linha única por
+/// instalação (sem multi-perfil) — daí `get`/`update`, nunca `insert`/`list`.
+#[async_trait]
+pub trait AudioConfigRepository: Send + Sync {
+    async fn get(&self) -> Result<AudioConfig, RepoError>;
+    async fn update(&self, config: &AudioConfig) -> Result<(), RepoError>;
+}
+
+/// Saída de áudio. NÃO é `Send`/`Sync`: a stream do `cpal` é confinada à
+/// thread que dirige o core (`emu-session`), que é quem chama estes métodos.
+/// O adapter é construído nessa thread (via factory), nunca movido.
+pub trait AudioSink {
     /// Envia áudio do core na taxa nativa dele; a implementação faz o
-    /// resample dinâmico baseado no nível de preenchimento do buffer.
+    /// resample dinâmico baseado no nível de preenchimento do buffer
+    /// (Dynamic Rate Control).
     fn push_samples(&mut self, samples: &[i16], core_sample_rate: u32);
 
     fn pause(&mut self);

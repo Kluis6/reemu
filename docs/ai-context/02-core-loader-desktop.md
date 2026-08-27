@@ -8,6 +8,28 @@ de pixels crus) e depois o caminho GL de hardware render
 (`retro_hw_render_callback`). **Vulkan por-core fica pra depois** — ver
 `12-vulkan-hw-render-fase2.md`.
 
+## Estado atual (2026-08-27 — `in-progress`)
+
+Crate `crates/core-loader-desktop` criado. Passos 1-3 **feitos**:
+- `src/sys.rs` — FFI libretro (conferido contra `libretro.h`).
+- `RawCore` (libloading), `ffi_state` (estado global + callbacks — libretro é
+  **um core por processo**), `DesktopCore` (impl `FrameSource` +
+  `domain::core_loader::LoadedCore`), `DesktopCoreLoader` (impl `CoreLoader`;
+  `load_core()` devolve o tipo concreto com os extras).
+- Caminho **software-only** validado ponta a ponta com um core-fake em C
+  (`fixtures/testcore.c`, compilado pelo `build.rs`). 5 testes de integração.
+- `SET_HW_RENDER` detectado → requisitos persistidos + load recusado com
+  `CoreLoadError::HwRenderUnsupported`.
+- Save state: só o ponto de extensão (`request_save_state`/`poll_save_state`).
+
+**Falta (passo 4)**: criar o contexto GL real e os callbacks
+(`get_current_framebuffer`, `get_proc_address`, `context_reset`,
+`context_destroy`); validar com um core GL de verdade.
+
+Mudanças no `domain`: `frame_source::SoftwarePixelFormat` (+ campo `format` no
+`SoftwareRawBuffer`); `core_loader::SystemAvInfo` e o trait `LoadedCore`
+(substituiu o marker `LoadedCoreHandle`); `CoreLoadError::HwRenderUnsupported`.
+
 ## Ordem de implementação (não pule etapas)
 
 1. **Carregamento básico**: `libloading` pra abrir o `.so`/`.dll`/`.dylib`

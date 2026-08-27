@@ -1,0 +1,190 @@
+//! Loader ponta a ponta contra o core-fake (`fixtures/testcore.c`,
+//! compilado pelo build.rs). Sem core real nem ROM real.
+//!
+//! A API libretro é um-core-por-processo (estado global), então os testes
+//! são serializados por `TEST_LOCK`.
+
+use core_loader_desktop::DesktopCoreLoader;
+use domain::core_loader::{CoreId, CoreLoadError, CoreLoader, LoadedCore, RenderBackend};
+use domain::frame_source::{FrameOrigin, FrameSource, SoftwarePixelFormat};
+use std::sync::atomic::{AtomicU32, Ordering};
+use tokio::sync::{Mutex, MutexGuard};
+
+/// Caminho do core-fake, vindo do build.rs.
+const TESTCORE: &str = env!("REEMU_TESTCORE");
+
+// libretro é um-core-por-processo → serializa os testes. `tokio::sync::Mutex`
+// (não o std) porque a guarda cruza `.await`.
+static TEST_LOCK: Mutex<()> = Mutex::const_new(());
+static NONCE: AtomicU32 = AtomicU32::new(0);
+
+async fn guard() -> MutexGuard<'static, ()> {
+    TEST_LOCK.lock().await
+}
+
+fn loader() -> DesktopCoreLoader {
+    let tmp = std::env::temp_dir();
+    DesktopCoreLoader::new(tmp.clone(), tmp.clone(), tmp)
+}
+
+fn write_rom(bytes: &[u8]) -> std::path::PathBuf {
+    let n = NONCE.fetch_add(1, Ordering::Relaxed);
+    let p = std::env::temp_dir().join(format!("reemu-test-{}-{n}.bin", std::process::id()));
+    std::fs::write(&p, bytes).unwrap();
+    p
+}
+
+fn core_id() -> CoreId {
+    CoreId(TESTCORE.into())
+}
+
+#[tokio::test]
+async fn software_core_loads_runs_and_produces_frames() {
+    let _lock = guard().await;
+    let rom = write_rom(b"dummy content");
+    let ldr = loader();
+
+    let mut core = ldr
+        .load_core(&core_id(), rom.to_str().unwrap())
+        .await
+        .expect("load do core-fake");
+
+    let av = core.system_av_info();
+    assert_eq!(av.geometry.base_width, 64);
+    assert_eq!(av.geometry.base_height, 48);
+    assert_eq!(av.timing.fps, 60.0);
+    assert_eq!(av.timing.sample_rate, 32000.0);
+    assert_eq!(
+        core.render_requirements().render_backend,
+        RenderBackend::Software
+    );
+
+    let mut colors = vec![];
+    for _ in 0..3 {
+        let frame = core.next_frame().expect("frame do core software");
+        assert_eq!(frame.metadata.native_width, 64);
+        assert_eq!(frame.metadata.native_height, 48);
+        match frame.origin {
+            FrameOrigin::SoftwareRawBuffer {
+                data,
+                pitch,
+                format,
+            } => {
+                assert_eq!(format, SoftwarePixelFormat::Rgb565);
+                assert_eq!(pitch, 64 * 2);
+                assert_eq!(data.len(), 64 * 48 * 2);
+                colors.push((data[0], data[1]));
+            }
+            FrameOrigin::HardwareTexture(_) => panic!("core software não deveria dar textura HW"),
+        }
+    }
+    assert!(
+        colors[0] != colors[1] && colors[1] != colors[2],
+        "cada frame do core-fake muda de cor: {colors:?}"
+    );
+
+    // áudio acumulado é drenável (o core-fake emite silêncio)
+    assert!(!core.drain_audio().is_empty());
+    assert!(core.drain_audio().is_empty(), "drain esvazia");
+
+    assert_eq!(
+        ldr.known_render_requirements(&core_id())
+            .unwrap()
+            .render_backend,
+        RenderBackend::Software
+    );
+
+    drop(core);
+    let _ = std::fs::remove_file(rom);
+}
+
+#[tokio::test]
+async fn save_state_round_trip_and_pending_hook() {
+    let _lock = guard().await;
+    let rom = write_rom(b"x");
+    let ldr = loader();
+    let mut core = ldr
+        .load_core(&core_id(), rom.to_str().unwrap())
+        .await
+        .unwrap();
+
+    core.next_frame();
+    core.next_frame();
+    let snap = core.serialize_state().expect("serialize");
+
+    core.next_frame();
+    core.next_frame();
+    core.next_frame();
+    assert!(core.restore_state(&snap), "unserialize");
+
+    // ponto de extensão pra etapa 08
+    assert!(core.poll_save_state().is_none());
+    core.request_save_state();
+    assert!(core.poll_save_state().is_some());
+    assert!(core.poll_save_state().is_none());
+
+    drop(core);
+    let _ = std::fs::remove_file(rom);
+}
+
+#[tokio::test]
+async fn hw_render_core_is_rejected_with_requirements_recorded() {
+    let _lock = guard().await;
+    let rom = write_rom(b"HW payload"); // "HW" -> core-fake declara SET_HW_RENDER
+    let ldr = loader();
+
+    let res = ldr.load_core(&core_id(), rom.to_str().unwrap()).await;
+    assert!(
+        matches!(res, Err(CoreLoadError::HwRenderUnsupported(_))),
+        "core que exige HW render deve ser recusado"
+    );
+    drop(res);
+
+    let reqs = ldr
+        .known_render_requirements(&core_id())
+        .expect("requisitos detectados mesmo com load recusado");
+    assert_eq!(reqs.render_backend, RenderBackend::OpenGl);
+    assert_eq!(reqs.gl_version_min.as_deref(), Some("3.3"));
+    assert_eq!(reqs.gl_profile.as_deref(), Some("core"));
+    assert!(reqs.needs_depth_stencil);
+
+    // slot global liberado — dá pra carregar de novo
+    let ok = write_rom(b"plain");
+    let core = ldr
+        .load_core(&core_id(), ok.to_str().unwrap())
+        .await
+        .unwrap();
+    drop(core);
+
+    let _ = std::fs::remove_file(rom);
+    let _ = std::fs::remove_file(ok);
+}
+
+#[tokio::test]
+async fn missing_core_is_not_found() {
+    let _lock = guard().await;
+    let ldr = loader();
+    let res = ldr
+        .load_core(&CoreId("/nao/existe/foo_libretro.so".into()), "/tmp/x")
+        .await;
+    assert!(matches!(res, Err(CoreLoadError::NotFound(_))));
+    drop(res);
+}
+
+#[tokio::test]
+async fn second_load_while_one_is_active_fails() {
+    let _lock = guard().await;
+    let rom = write_rom(b"a");
+    let ldr = loader();
+    let core = ldr
+        .load_core(&core_id(), rom.to_str().unwrap())
+        .await
+        .unwrap();
+
+    let res = ldr.load_core(&core_id(), rom.to_str().unwrap()).await;
+    assert!(matches!(res, Err(CoreLoadError::LoadFailed(_))));
+    drop(res);
+
+    drop(core);
+    let _ = std::fs::remove_file(rom);
+}

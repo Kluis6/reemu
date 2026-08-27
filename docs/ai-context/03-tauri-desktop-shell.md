@@ -22,6 +22,47 @@ de menu sempre sobreposto.
   React via evento Tauri (`emit("focus-changed", ...)`) — não tente
   decidir foco no lado JS.
 
+## Estado atual (2026-08-27 — `in-progress`)
+
+Spine testável pronto:
+- `crates/emu-session` — `EmuSession` roda o core numa thread dedicada
+  (`emu-core-loop`), API de comandos (`load`/`set_paused`/`save_state`/...),
+  saída por `take_latest_frame()` / `drain_audio()` / `frame_seq()`.
+- `FocusController` implementa `domain::focus::FocusManager`: `toggle()`/`set()`
+  pausam/resumem a `EmuSession` na transição de foco.
+- `apps/desktop/src-tauri/src/commands.rs` — `AppState` (managed), comandos
+  `toggle_focus` (emite `focus-changed`), `load_game`, `current_focus`,
+  `session_state`.
+
+Renderer pronto e testado: `crates/video-surface` — `Renderer` wgpu que sobe o
+`SoftwareRawBuffer` numa textura e desenha com letterbox. Testado headless
+(render p/ textura offscreen + readback). `examples/play.rs` = player standalone
+(winit+wgpu+emu-session), roda.
+
+Integração feita: `video-surface::WindowTarget` cria a `wgpu::Surface` de raw
+handles; `apps/desktop/src-tauri/src/video.rs` liga na janela; render na thread
+principal a cada `RunEvent::MainEventsCleared`. Janela `transparent: true`.
+
+**Linux — resolvido via child window X11**. `wgpu::Surface` Vulkan na
+`wl_surface` da janela GTK (com OU sem webview) → `Gdk-Message: Error 71`,
+crash: o GTK é dono da submissão de buffer daquela surface. Solução (como
+mpv/RetroArch embutidos): sob X11/XWayland, `XCreateSimpleWindow` filha do XID
+do GTK + `XLowerWindow` (fica atrás do conteúdo da webview) + `wgpu::Surface`
+na child. Implementado em `src/video.rs` (mod `x11`, dep `x11-dl`) +
+`video-surface::WindowTarget`. `main.rs` força `GDK_BACKEND=x11` e
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` (webkitgtk+XWayland+NVIDIA).
+
+Verificado: child window criada, wgpu Vulkan anexado, `cargo tauri dev
+--features dev-autoload` roda sem crash. **Não verificado visualmente** que o
+jogo aparece atrás da webview transparente (sem acesso à tela) — o pipeline
+está montado.
+
+Windows/macOS: surface direto no handle da janela principal (webview
+transparente compõe sobre a camada nativa). Código pronto, não verificado.
+
+O player standalone (`cargo run -p video-surface --example play`) é o caminho
+de vídeo puro-Wayland / sem shell.
+
 ## Estrutura sugerida
 
 ```

@@ -6,6 +6,15 @@ edition.workspace = true
 [dependencies]
 domain = { path = "../domain" }
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
-# sqlx adicionado quando a implementação real dos repositórios começar:
-# sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "migrate"] }
+async-trait.workspace = true
+sqlx = { version = "0.8", default-features = false, features = [
+    "sqlite",
+    "runtime-tokio",
+    "migrate",
+    "macros",
+] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }

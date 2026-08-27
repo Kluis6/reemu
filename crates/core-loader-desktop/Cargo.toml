@@ -1,0 +1,23 @@
+[package]
+name = "core-loader-desktop"
+version.workspace = true
+edition.workspace = true
+description = "Adapter: carrega cores libretro no desktop (libloading)"
+
+[features]
+# Expõe `testcore_path()` — o core-fake compilado pelo build.rs. Usado pelos
+# testes deste crate e do `emu-session`.
+test-fixtures = []
+
+[dependencies]
+domain = { path = "../domain" }
+libloading = "0.8"
+thiserror.workspace = true
+async-trait.workspace = true
+log = "0.4"
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "sync"] }
