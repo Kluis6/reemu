@@ -1,0 +1,44 @@
+# Rust
+/target/
+**/target/
+# Cargo.lock é versionado (workspace inclui apps binários Tauri,
+# reprodutibilidade de build importa mais que flexibilidade de lib aqui)
+
+# Node / pnpm
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.pnpm-store/
+
+# Tauri
+apps/*/src-tauri/target/
+apps/*/src-tauri/gen/
+
+# Android (gerado por `cargo tauri android init`)
+apps/mobile/src-tauri/gen/android/**/build/
+apps/mobile/src-tauri/gen/android/local.properties
+*.apk
+*.aab
+
+# SQLite local (dados de desenvolvimento, não versionar)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# ROMs e assets do usuário — nunca commitar conteúdo de terceiros
+/roms/
+/cores/
+/decorations/user_imported/
+/shader_presets/user_imported/
+/saves/
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

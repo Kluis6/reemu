@@ -1,0 +1,11 @@
+[package]
+name = "db"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+domain = { path = "../domain" }
+serde.workspace = true
+thiserror.workspace = true
+# sqlx adicionado quando a implementação real dos repositórios começar:
+# sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio", "migrate"] }

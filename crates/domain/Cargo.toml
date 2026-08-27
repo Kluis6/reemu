@@ -1,0 +1,13 @@
+[package]
+name = "domain"
+version.workspace = true
+edition.workspace = true
+
+# O domain NUNCA depende de crates de I/O de plataforma (libloading, cpal,
+# gilrs, wgpu, tauri, etc). Só tipos puros e traits. Essa regra é o que
+# garante a inversão de dependência (SOLID/D) definida na arquitetura.
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
