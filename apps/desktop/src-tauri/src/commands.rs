@@ -359,3 +359,41 @@ pub async fn delete_save_state(state: State<'_, AppState>, state_id: String) -> 
         .await
         .map_err(|e| e.to_string())
 }
+
+// --- input (etapa 05) -------------------------------------------------
+
+/// Recebe `KeyboardEvent.code` da webview (keydown/keyup). Hotkey padrão
+/// (Escape/F1) alterna o menu; senão, o mapa teclado→RetroPad só vale em
+/// `GameFocused`.
+#[tauri::command]
+pub fn input_key(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    code: String,
+    pressed: bool,
+) -> Result<(), String> {
+    use domain::focus::{FocusManager, InputFocus};
+
+    if pressed && matches!(code.as_str(), "Escape" | "F1") {
+        let now = {
+            let mut fc = state.focus.lock().map_err(|_| "focus lock")?;
+            fc.toggle();
+            fc.current()
+        };
+        let s = focus_str(now);
+        let _ = app.emit("focus-changed", FocusChanged { focus: s });
+        return Ok(());
+    }
+
+    let game_focused = state
+        .focus
+        .lock()
+        .map(|f| f.current())
+        .unwrap_or(InputFocus::GameFocused)
+        == InputFocus::GameFocused;
+
+    if let Some((port, button)) = input_desktop::keymap::web_code_to_retropad(&code) {
+        emu_session::retropad().set(port as usize, button, pressed && game_focused);
+    }
+    Ok(())
+}

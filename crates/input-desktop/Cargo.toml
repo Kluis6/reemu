@@ -1,0 +1,10 @@
+[package]
+name = "input-desktop"
+version.workspace = true
+edition.workspace = true
+description = "Input desktop: SDL_GameControllerDB, hotkeys com combinação, keymap"
+
+[dependencies]
+domain = { path = "../domain" }
+thiserror.workspace = true
+log = "0.4"

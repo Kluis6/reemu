@@ -245,11 +245,15 @@ pub(crate) unsafe extern "C" fn audio_sample_batch_cb(data: *const i16, frames: 
 pub(crate) unsafe extern "C" fn input_poll_cb() {}
 
 pub(crate) unsafe extern "C" fn input_state_cb(
-    _port: c_uint,
-    _device: c_uint,
+    port: c_uint,
+    device: c_uint,
     _index: c_uint,
-    _id: c_uint,
+    id: c_uint,
 ) -> i16 {
-    // Input real é a etapa 05. Por enquanto nada pressionado.
-    0
+    // Só RetroPad (digital) por enquanto — analógico/mouse/etc na etapa 05+.
+    if device == sys::RETRO_DEVICE_JOYPAD && crate::input::retropad().query_id(port as usize, id) {
+        1
+    } else {
+        0
+    }
 }

@@ -15,11 +15,13 @@
 
 mod core;
 mod ffi_state;
+mod input;
 mod loader;
 mod raw;
 mod sys;
 
 pub use crate::core::DesktopCore;
+pub use crate::input::{libretro_joypad_id, retropad, RetroPadState};
 pub use crate::loader::DesktopCoreLoader;
 
 /// Caminho do core-fake em C (`fixtures/testcore.c`), compilado pelo build.rs.

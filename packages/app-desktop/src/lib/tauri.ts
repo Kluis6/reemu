@@ -19,6 +19,8 @@ export async function onFocusChanged(cb: (focus: InputFocus) => void): Promise<(
 }
 
 export const toggleFocus = () => invoke<InputFocus>('toggle_focus')
+export const inputKey = (code: string, pressed: boolean) =>
+  invoke<void>('input_key', { code, pressed })
 export const currentFocus = () => invoke<InputFocus>('current_focus')
 export const sessionState = () => invoke<'Idle' | 'Running' | 'Paused'>('session_state')
 

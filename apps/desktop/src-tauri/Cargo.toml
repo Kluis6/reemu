@@ -46,3 +46,4 @@ emu-session = { path = "../../../crates/emu-session" }
 video-surface = { path = "../../../crates/video-surface" }
 audio-desktop = { path = "../../../crates/audio-desktop" }
 library-scan = { path = "../../../crates/library-scan" }
+input-desktop = { path = "../../../crates/input-desktop" }

@@ -2277,6 +2277,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "input-desktop"
+version = "0.1.0"
+dependencies = [
+ "domain",
+ "log",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "ipnet"
 version = "2.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3925,6 +3934,7 @@ dependencies = [
  "db",
  "domain",
  "emu-session",
+ "input-desktop",
  "library-scan",
  "log",
  "raw-window-handle",

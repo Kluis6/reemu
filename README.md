@@ -19,6 +19,7 @@ crates/
   video-surface/        Renderer wgpu: frame do core -> textura -> tela (letterbox)
   audio-desktop/        AudioSink cpal + Dynamic Rate Control
   library-scan/         Hash de ROMs (CRC32/MD5) + varredura de biblioteca
+  input-desktop/        SDL_GameControllerDB, hotkeys com combinação, keymap
   # core-loader-mobile/  (a criar) — cores empacotados, JNI
 
 packages/
@@ -55,6 +56,9 @@ Ver `TASKS.md` para o checklist detalhado. Resumo:
       a tela Biblioteca escaneia um diretório e lista de verdade
 - [x] **Etapa 08 (parcial)** — save state: arquivo em disco + metadata +
       validação de core no load (comandos Tauri, 4 testes)
+- [x] **Etapa 05 (parcial)** — `input-desktop` (SDL DB, hotkeys com combinação,
+      keymap) + `RetroPadState` no core-loader; teclado da webview vai pro core
+- [ ] Etapa 05: `gilrs` (gamepad físico) + UI de binding
 - [ ] Etapa 02 passo 4 — contexto GL pra cores HW-accelerated
 - [ ] `apps/mobile`, `packages/ui`, `packages/shared`
 

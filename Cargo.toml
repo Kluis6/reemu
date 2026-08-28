@@ -8,6 +8,7 @@ members = [
     "crates/video-surface",
     "crates/audio-desktop",
     "crates/library-scan",
+    "crates/input-desktop",
     "apps/desktop/src-tauri",
     # adapters de plataforma são adicionados aqui conforme forem criados:
     # "crates/core-loader-mobile",

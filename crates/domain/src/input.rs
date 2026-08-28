@@ -59,7 +59,7 @@ pub enum MappingSource {
 
 /// Evento bruto de input, usado tanto na resolução normal (gamepad -> RetroPad)
 /// quanto na UI de captura de binding.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum RawInputEvent {
     Keyboard {
         scancode: u32,

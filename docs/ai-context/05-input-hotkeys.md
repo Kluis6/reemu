@@ -32,6 +32,24 @@ entre hotkey de sistema e mapeamento de controle.
 - Teclado e gamepad são normalizados num formato único antes de salvar
   (`domain::input::RawInputEvent`) — não trate como tipos separados na UI.
 
+## Estado atual (2026-08-27 — `in-progress`)
+
+- `core-loader-desktop`: `RetroPadState` (global, atômico, por porta) → o
+  callback `retro_input_state_t` lê dele (RetroPad digital). `retropad()`.
+- `crates/input-desktop`:
+  - `sdl_db` — parser SDL_GameControllerDB (`parse_mapping`/`parse_db`),
+    swap Nintendo↔Xbox, `GamepadSource::{Button,Hat,Axis}`.
+  - `hotkeys::ComboHotkeyResolver` — `HotkeyResolver` com combinação
+    (recebe o conjunto segurado; combo vence tecla única).
+  - `keymap` — `web_code_to_retropad(code)` (o que a webview manda) +
+    `KeyboardMap`.
+- App: comando `input_key(code, pressed)` + hook `useKeyboardInput`; Escape/F1
+  alterna o menu, o resto vai pro RetroPad só em `GameFocused`.
+  `FocusController` limpa o pad ao entrar no menu.
+
+**Falta**: `gilrs` (enumeração/poll de gamepad físico), `device_port_assignment`,
+`ControllerMappingResolver` do DB, UI de captura de binding.
+
 ## Fluxo da captura de binding
 
 1. Frontend chama comando Tauri `start_binding_capture(target, target_key)`

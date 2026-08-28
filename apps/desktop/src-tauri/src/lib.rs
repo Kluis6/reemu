@@ -54,6 +54,7 @@ pub fn run() {
             commands::list_save_states,
             commands::load_save_state,
             commands::delete_save_state,
+            commands::input_key,
         ])
         .build(tauri::generate_context!())
         .expect("erro ao construir o app Tauri");

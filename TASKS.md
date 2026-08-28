@@ -41,7 +41,7 @@ refaça trabalho já feito ou pule pré-requisito.
 | 02 | Core Loader Desktop — caminho GL | `done` (software) | 01 |
 | 03 | Tauri Desktop Shell — surface nativa | `in-progress` | 02 |
 | 04 | Shader Chain + Decoração | `todo` | 03 |
-| 05 | Input, Hotkeys, UI de Binding | `todo` | 03 |
+| 05 | Input, Hotkeys, UI de Binding | `in-progress` | 03 |
 | 06 | Áudio — Dynamic Rate Control | `in-progress` | 03 |
 | 07 | Frontend React — Fluent/Zustand/Toast | `in-progress` | 03 |
 | 08 | Save States e Save RAM | `in-progress` | 02 |
@@ -132,6 +132,19 @@ Ao concluir uma etapa:
   - Falta: verificar sessão longa sem glitch (precisa core real + ouvir);
     resampler linear pode virar `rubato` se a qualidade não bastar; comando
     "aplicar áudio ao vivo" (hoje muda no próximo launch).
+- **2026-08-27 — Etapa 05 (`in-progress`)**: input.
+  - `core-loader-desktop`: `RetroPadState` global (atômico, por porta) fiado
+    no callback `retro_input_state_t` (RetroPad digital). 2 testes.
+  - `crates/input-desktop`: `sdl_db` — parser do SDL_GameControllerDB
+    (swap Nintendo↔Xbox, `bN`/`hN.M`/`aN`), testado com string real de Xbox;
+    `ComboHotkeyResolver` impl `HotkeyResolver` (combinação hold+press, combo
+    vence tecla única); `KeyboardMap` + `web_code_to_retropad` (`KeyboardEvent.
+    code` → RetroPad). ~11 testes.
+  - App: comando `input_key` (Escape/F1 = hotkey de menu; senão teclado →
+    RetroPad só em `GameFocused`); hook `useKeyboardInput` encaminha
+    keydown/keyup. `FocusController` limpa o pad ao entrar no menu.
+  - **Falta**: `gilrs` (enumerar/pollar gamepad, `device_port_assignment`),
+    `ControllerMappingResolver` a partir do DB, UI de captura de binding.
 - **2026-08-27 — Etapa 08 (`in-progress`)**: save states.
   - `EmuSession.loaded_core()` — rastreia o id do core carregado (states não
     são portáveis entre cores).

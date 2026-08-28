@@ -2,6 +2,7 @@ import { Badge, Button, Caption1, makeStyles, tokens } from '@fluentui/react-com
 import { MenuOverlay } from './components/MenuOverlay'
 import { ToastLayer } from './components/ToastLayer'
 import { useFocusBridge } from './hooks/useFocusBridge'
+import { useKeyboardInput } from './hooks/useKeyboardInput'
 import { toggleFocus } from './lib/tauri'
 import { useFocusStore } from './stores/useFocusStore'
 import { useToastStore } from './stores/useToastStore'
@@ -26,6 +27,7 @@ const useStyles = makeStyles({
 export default function App() {
   const styles = useStyles()
   useFocusBridge()
+  useKeyboardInput()
   const focus = useFocusStore((s) => s.focus)
   const setFocus = useFocusStore((s) => s.setFocus)
   const push = useToastStore((s) => s.push)

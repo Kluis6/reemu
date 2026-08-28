@@ -14,3 +14,6 @@ mod session;
 
 pub use focus::FocusController;
 pub use session::{EmuSession, SessionConfig, SessionError, SessionState};
+
+/// Estado do RetroPad — escreva aqui pra mandar input pro core.
+pub use core_loader_desktop::{retropad, RetroPadState};
