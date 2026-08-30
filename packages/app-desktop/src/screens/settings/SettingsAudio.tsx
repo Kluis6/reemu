@@ -31,7 +31,7 @@ export function SettingsAudio() {
     onSuccess: () => {
       setEdits({})
       qc.invalidateQueries({ queryKey: ['audio-config'] })
-      push(sysToast('Configuração de áudio salva.', 'Success'))
+      push(sysToast('Áudio salvo e aplicado.', 'Success'))
     },
     onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, 'Error')),
   })

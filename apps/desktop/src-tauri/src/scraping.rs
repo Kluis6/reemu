@@ -92,7 +92,11 @@ fn parse_jeu(jeu: &Value, exact: bool) -> Option<ScrapeCandidate> {
     let title = first_text(jeu.get("noms")?, &["wor", "ss", "us", "eu", "jp"])?.to_string();
     let external_id = jeu
         .get("id")
-        .map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.to_string()))
+        .map(|v| {
+            v.as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| v.to_string())
+        })
         .unwrap_or_default();
     let description = jeu
         .get("synopsis")
@@ -180,8 +184,12 @@ async fn query_screenscraper(
         ));
     }
 
-    let v: Value = serde_json::from_str(&body)
-        .map_err(|e| format!("resposta não-JSON ({e}): {}", body.chars().take(120).collect::<String>()))?;
+    let v: Value = serde_json::from_str(&body).map_err(|e| {
+        format!(
+            "resposta não-JSON ({e}): {}",
+            body.chars().take(120).collect::<String>()
+        )
+    })?;
     let jeu = v
         .get("response")
         .and_then(|r| r.get("jeu"))

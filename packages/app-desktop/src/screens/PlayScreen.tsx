@@ -2,6 +2,7 @@ import { Body1, Button, Spinner, Title3, makeStyles, tokens } from '@fluentui/re
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { SaveStateThumb } from '../components/SaveStateThumb'
 import { useFocusBridge } from '../hooks/useFocusBridge'
 import { useFullscreen } from '../hooks/useFullscreen'
 import { useKeyboardInput } from '../hooks/useKeyboardInput'
@@ -179,6 +180,7 @@ export function PlayScreen() {
 
     void (async () => {
       while (alive) {
+        let got = false
         try {
           const buf = await pollFrame()
           if (buf.byteLength > 8) {
@@ -190,15 +192,17 @@ export function PlayScreen() {
               latest.img = new ImageData(new Uint8ClampedArray(buf.slice(8, 8 + need)), w, h)
               latest.w = w
               latest.h = h
+              got = true
             }
           }
         } catch {
           /* frame perdido, tenta no próximo */
         }
-        // pausado: ~8Hz (segura o freeze, retoma rápido); rodando: o mais
-        // rápido possível — o `poll_frame` já devolve vazio na hora se não há
-        // frame novo, então isso não vira busy-loop.
-        await new Promise((r) => setTimeout(r, pausedRef.current ? 120 : 3))
+        // Pausado: ~8Hz. Rodando: se acabou de pegar um frame, o próximo só sai
+        // em ~16ms — espera ~11ms antes de pollar de novo (menos IPC = menos
+        // hitch). Se veio vazio, pollar rápido pra não perder o próximo.
+        const delay = pausedRef.current ? 120 : got ? 11 : 2
+        await new Promise((r) => setTimeout(r, delay))
       }
     })()
 
@@ -230,6 +234,13 @@ export function PlayScreen() {
         const g = await loadGame(launch.coreId, launch.romPath, romId || undefined)
         if (cancelled) return
         setAspect(g.aspectRatio > 0 ? g.aspectRatio : g.baseWidth / g.baseHeight || 4 / 3)
+        // "Jogar daqui": carrega o save state pedido na URL antes de mostrar.
+        const wantState = params.get('loadState')
+        if (wantState) {
+          await loadSaveState(wantState).catch((e) =>
+            push(sysToast(`Não carregou o save state: ${e}`, 'Warning')),
+          )
+        }
         // Garante que o jogo começa com foco (não no menu de pausa).
         const f = await currentFocus().catch(() => 'GameFocused' as const)
         if (f === 'MenuFocused') await toggleFocus().catch(() => {})
@@ -244,7 +255,7 @@ export function PlayScreen() {
       void unloadGame().catch(() => {})
       loadedRef.current = false
     }
-  }, [launch, romId, setFocus])
+  }, [launch, romId, setFocus, params, push])
 
   const quickSave = useMutation({
     mutationFn: () => saveState(romId, 0),
@@ -263,6 +274,22 @@ export function PlayScreen() {
       await loadSaveState(quick.id)
     },
     onSuccess: () => push(sysToast('QuickLoad aplicado.', 'Success')),
+    onError: (e) => push(sysToast(`Falha no load: ${e}`, 'Error')),
+  })
+
+  // Lista de save states — só busca com o menu aberto.
+  const stateList = useQuery({
+    queryKey: ['save-states', romId],
+    queryFn: () => listSaveStates(romId),
+    enabled: focus === 'MenuFocused',
+    retry: false,
+  })
+  const loadAny = useMutation({
+    mutationFn: (id: string) => loadSaveState(id),
+    onSuccess: () => {
+      push(sysToast('Estado carregado.', 'Success'))
+      resume()
+    },
     onError: (e) => push(sysToast(`Falha no load: ${e}`, 'Error')),
   })
 
@@ -351,6 +378,29 @@ export function PlayScreen() {
             <Button disabled={quickLoad.isPending} onClick={() => quickLoad.mutate()}>
               QuickLoad
             </Button>
+
+            {(stateList.data?.length ?? 0) > 0 && (
+              <div className={pause.states}>
+                {stateList.data!.map((st) => (
+                  <button
+                    key={st.id}
+                    className={pause.stateRow}
+                    disabled={loadAny.isPending}
+                    onClick={() => loadAny.mutate(st.id)}
+                  >
+                    <SaveStateThumb stateId={st.id} hasThumbnail={st.hasThumbnail} />
+                    <span className={pause.stateLabel}>
+                      {st.slot === 0 ? 'QuickSave' : st.slot != null ? `Slot ${st.slot}` : 'Auto'}
+                      <br />
+                      <span className={pause.stateDate}>
+                        {new Date(st.createdAt * 1000).toLocaleString()}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <Button onClick={() => navigate('/settings')}>Configurações</Button>
             <Button appearance="subtle" onClick={() => void toggleFullscreen()}>
               {fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}

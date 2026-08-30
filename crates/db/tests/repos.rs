@@ -8,12 +8,12 @@ use db::{
     AudioConfigRepo, CoreOptionsRepo, InstalledCoresRepo, MetadataRepo, RomsRepo, ShaderChainRepo,
 };
 use domain::audio::{AudioConfig, AudioConfigRepository};
-use domain::metadata::{MatchStatus, MetadataConfig, MetadataRepository, ScrapeCandidate};
 use domain::core_loader::{
     CoreRenderRequirements, InstalledCore, InstalledCoreRepository, RenderBackend,
 };
 use domain::core_options::{CoreOptionDefinition, CoreOptionType, CoreOptionsStore};
 use domain::library::{Rom, RomRepository};
+use domain::metadata::{MatchStatus, MetadataConfig, MetadataRepository, ScrapeCandidate};
 use domain::shader_chain::{
     AssignmentScope, ShaderChainResolver, ShaderChainStore, ShaderFormat, ShaderPreset,
 };
@@ -151,7 +151,10 @@ async fn shader_parameter_overrides_roundtrip() {
         .unwrap(); // upsert, não duplica
 
     let a = sc.resolve("snes", Some("r1")).await.unwrap().unwrap();
-    assert_eq!(a.parameter_overrides.get("SCANLINE").map(String::as_str), Some("0.7"));
+    assert_eq!(
+        a.parameter_overrides.get("SCANLINE").map(String::as_str),
+        Some("0.7")
+    );
 
     sc.clear_parameter_overrides(AssignmentScope::Rom, None, Some("r1"))
         .await
@@ -195,15 +198,22 @@ async fn metadata_config_scrape_and_pending_review() {
     })
     .await
     .unwrap();
-    assert_eq!(m.get_config().await.unwrap().screenscraper_user.as_deref(), Some("u"));
+    assert_eq!(
+        m.get_config().await.unwrap().screenscraper_user.as_deref(),
+        Some("u")
+    );
 
     // fila = as 2 ROMs sem match
     assert_eq!(m.rom_ids_without_match().await.unwrap().len(), 2);
 
     // hash exato → auto (metadata aplicada na hora)
-    m.record_match("r1", &candidate("Super Mario World", true), MatchStatus::AutoMatched)
-        .await
-        .unwrap();
+    m.record_match(
+        "r1",
+        &candidate("Super Mario World", true),
+        MatchStatus::AutoMatched,
+    )
+    .await
+    .unwrap();
     m.upsert_metadata(&domain::metadata::GameMetadata {
         rom_id: "r1".into(),
         title: "Super Mario World".into(),
@@ -215,12 +225,19 @@ async fn metadata_config_scrape_and_pending_review() {
     })
     .await
     .unwrap();
-    assert_eq!(m.get_metadata("r1").await.unwrap().unwrap().title, "Super Mario World");
+    assert_eq!(
+        m.get_metadata("r1").await.unwrap().unwrap().title,
+        "Super Mario World"
+    );
 
     // match por nome → pending; não aplica metadata até revisão
-    m.record_match("r2", &candidate("Some NES Game", false), MatchStatus::PendingReview)
-        .await
-        .unwrap();
+    m.record_match(
+        "r2",
+        &candidate("Some NES Game", false),
+        MatchStatus::PendingReview,
+    )
+    .await
+    .unwrap();
     assert!(m.get_metadata("r2").await.unwrap().is_none());
     let pending = m.list_pending().await.unwrap();
     assert_eq!(pending.len(), 1);
@@ -229,7 +246,10 @@ async fn metadata_config_scrape_and_pending_review() {
 
     // aceitar → metadata aplicada, sai da fila de pendências
     m.resolve_pending("r2", true).await.unwrap();
-    assert_eq!(m.get_metadata("r2").await.unwrap().unwrap().title, "Some NES Game");
+    assert_eq!(
+        m.get_metadata("r2").await.unwrap().unwrap().title,
+        "Some NES Game"
+    );
     assert!(m.list_pending().await.unwrap().is_empty());
 
     // já não há ROM sem match

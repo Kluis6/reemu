@@ -15,6 +15,8 @@
 
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use domain::frame_source::{Frame, FrameOrigin};
 use shader_slang::{Scale, UniformFieldKind, UniformLayout};
@@ -193,6 +195,69 @@ struct Decoration {
     vp: Option<DecoViewport>,
 }
 
+/// Um staging buffer do readback + o estado do `map_async`.
+struct RbSlot {
+    buf: wgpu::Buffer,
+    /// setado pelo callback do `map_async` quando o buffer está mapeável.
+    ready: Arc<AtomicBool>,
+    /// `map_async` foi pedido e o resultado ainda não foi consumido.
+    inflight: bool,
+    w: u32,
+    h: u32,
+    padded: u32,
+}
+
+/// 2 staging buffers rodando em pipeline (ver campo `rb` do `FrameProcessor`).
+#[derive(Default)]
+struct ReadbackRing {
+    slots: [Option<RbSlot>; 2],
+    write: usize,
+    dims: Option<(u32, u32)>,
+}
+
+impl ReadbackRing {
+    /// Descarta os buffers (troca de preset / decoração / resize forçado).
+    fn invalidate(&mut self) {
+        self.slots = [None, None];
+        self.dims = None;
+        self.write = 0;
+    }
+
+    /// Garante 2 slots do tamanho `(w, h)`. Recria (e reseta o pipeline) se mudou.
+    fn ensure(&mut self, device: &wgpu::Device, w: u32, h: u32) {
+        if self.dims == Some((w, h)) {
+            return;
+        }
+        let padded = (w * 4).next_multiple_of(ROW_ALIGN);
+        let mk = || RbSlot {
+            buf: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("etapa04 readback"),
+                size: (padded * h) as u64,
+                usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            }),
+            ready: Arc::new(AtomicBool::new(false)),
+            inflight: false,
+            w,
+            h,
+            padded,
+        };
+        self.slots = [Some(mk()), Some(mk())];
+        self.dims = Some((w, h));
+        self.write = 0;
+    }
+}
+
+/// Copia as `h` linhas úteis (`w*4` bytes) de um buffer com stride `padded`.
+fn unpad_rows(src: &[u8], w: u32, h: u32, padded: u32) -> Vec<u8> {
+    let row = (w * 4) as usize;
+    let mut out = vec![0u8; row * h as usize];
+    for y in 0..h as usize {
+        out[y * row..(y + 1) * row].copy_from_slice(&src[y * padded as usize..][..row]);
+    }
+    out
+}
+
 /// Pipelines do passe de composição da moldura (`game` sem blend, `bezel` com
 /// alpha). Criados uma vez.
 struct Composite {
@@ -220,7 +285,11 @@ pub struct FrameProcessor {
     param_meta: Vec<shader_slang::Parameter>,
     passes: Vec<Pass>,
     core_tex: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
-    readback: Option<(wgpu::Buffer, u32, u32, u32)>,
+    /// Readback com pipeline: 2 staging buffers. O frame N copia a saída da GPU
+    /// pro slot N%2 e lê o slot (N+1)%2 (submetido no frame anterior, já pronto)
+    /// — sem `poll(wait)` bloqueante no caminho normal, CPU e GPU deixam de
+    /// serializar. Fallback bloqueante só quando o slot ainda não mapeou.
+    rb: ReadbackRing,
     frame_count: u64,
     comp: Composite,
     decoration: Option<Decoration>,
@@ -341,7 +410,7 @@ impl FrameProcessor {
             param_meta,
             passes,
             core_tex: None,
-            readback: None,
+            rb: ReadbackRing::default(),
             frame_count: 0,
             comp,
             decoration: None,
@@ -391,7 +460,7 @@ impl FrameProcessor {
                 depth_or_array_layers: 1,
             },
         );
-        self.readback = None;
+        self.rb.invalidate();
         self.decoration = Some(Decoration { view, w, h, vp });
     }
 
@@ -422,7 +491,7 @@ impl FrameProcessor {
         self.param_meta = meta;
         self.preset_name = preset_name;
         self.preset_source = name.to_string();
-        self.readback = None;
+        self.rb.invalidate();
         log::info!("preset de shader → '{}'", self.preset_name);
         Ok(())
     }
@@ -450,7 +519,7 @@ impl FrameProcessor {
             (m.max, m.min)
         };
         self.params.insert(name.to_string(), value.clamp(lo, hi));
-        self.readback = None;
+        self.rb.invalidate();
         true
     }
 
@@ -677,49 +746,77 @@ impl FrameProcessor {
             (fw, fh, false)
         };
 
-        self.ensure_readback(out_w, out_h);
-        let (rb, _, _, padded) = self.readback.as_ref()?;
-        let padded = *padded;
-        let src_tex = if use_comp {
-            &self.comp.target.as_ref()?.0
-        } else {
-            &self.passes.last()?.target.as_ref()?.0
-        };
-        enc.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: src_tex,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: rb,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(padded),
-                    rows_per_image: Some(out_h),
+        // --- readback com pipeline ---
+        self.rb.ensure(&self.device, out_w, out_h);
+        let write_i = self.rb.write;
+        let read_i = write_i ^ 1;
+
+        // 1. codifica a cópia GPU→buffer no slot de escrita e submete.
+        {
+            let ws = self.rb.slots[write_i].as_ref()?;
+            let src_tex = if use_comp {
+                &self.comp.target.as_ref()?.0
+            } else {
+                &self.passes.last()?.target.as_ref()?.0
+            };
+            enc.copy_texture_to_buffer(
+                wgpu::TexelCopyTextureInfo {
+                    texture: src_tex,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
                 },
-            },
-            wgpu::Extent3d {
-                width: out_w,
-                height: out_h,
-                depth_or_array_layers: 1,
-            },
-        );
+                wgpu::TexelCopyBufferInfo {
+                    buffer: &ws.buf,
+                    layout: wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(ws.padded),
+                        rows_per_image: Some(out_h),
+                    },
+                },
+                wgpu::Extent3d {
+                    width: out_w,
+                    height: out_h,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
         self.queue.submit([enc.finish()]);
 
-        let slice = rb.slice(..);
-        slice.map_async(wgpu::MapMode::Read, |_| {});
-        self.device.poll(wgpu::PollType::wait_indefinitely()).ok()?;
-        let mapped = slice.get_mapped_range().ok()?;
-        let row = (out_w * 4) as usize;
-        let mut out = vec![0u8; row * out_h as usize];
-        for y in 0..out_h as usize {
-            out[y * row..(y + 1) * row].copy_from_slice(&mapped[y * padded as usize..][..row]);
+        // 2. pede o map do slot recém-escrito (o callback marca `ready`).
+        {
+            let ws = self.rb.slots[write_i].as_mut()?;
+            ws.ready.store(false, Ordering::Relaxed);
+            let ready = ws.ready.clone();
+            ws.buf.slice(..).map_async(wgpu::MapMode::Read, move |res| {
+                if res.is_ok() {
+                    ready.store(true, Ordering::Relaxed);
+                }
+            });
+            ws.inflight = true;
         }
-        drop(mapped);
-        rb.unmap();
-        Some((out_w, out_h, out))
+
+        // 3. drena callbacks pendentes sem bloquear.
+        let _ = self.device.poll(wgpu::PollType::Poll);
+        self.rb.write = read_i;
+
+        // 4. lê o slot do frame anterior. Se ainda não mapeou (GPU atrasada),
+        //    aí sim espera — raro, e melhor que perder o frame.
+        let rs = self.rb.slots[read_i].as_mut()?;
+        if !rs.inflight {
+            return None; // 1º frame / logo após resize
+        }
+        if !rs.ready.load(Ordering::Relaxed) {
+            self.device.poll(wgpu::PollType::wait_indefinitely()).ok()?;
+        }
+        let (rw, rh, rpad) = (rs.w, rs.h, rs.padded);
+        let out = {
+            let mapped = rs.buf.slice(..).get_mapped_range().ok()?;
+            unpad_rows(&mapped, rw, rh, rpad)
+        };
+        rs.buf.unmap();
+        rs.inflight = false;
+        Some((rw, rh, out))
     }
 
     fn ensure_comp_target(&mut self, w: u32, h: u32) {
@@ -792,20 +889,6 @@ impl FrameProcessor {
         if let Some(next) = self.passes.get_mut(idx + 1) {
             next.bound = false;
         }
-    }
-
-    fn ensure_readback(&mut self, w: u32, h: u32) {
-        if matches!(&self.readback, Some((_, rw, rh, _)) if *rw == w && *rh == h) {
-            return;
-        }
-        let padded = (w * 4).next_multiple_of(ROW_ALIGN);
-        let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("etapa04 readback"),
-            size: (padded * h) as u64,
-            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        self.readback = Some((buf, w, h, padded));
     }
 }
 
@@ -1210,4 +1293,72 @@ fn new_tex(
 fn f32s_bytes(s: &[f32]) -> &[u8] {
     // SAFETY: `f32` não tem padding nem invariantes de bit.
     unsafe { std::slice::from_raw_parts(s.as_ptr() as *const u8, std::mem::size_of_val(s)) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use domain::frame_source::{Frame, FrameMetadata, FrameOrigin, SoftwarePixelFormat};
+
+    fn grey_frame(w: u32, h: u32, val: u8) -> Frame {
+        let mut data = vec![0u8; (w * h * 4) as usize];
+        for px in data.chunks_mut(4) {
+            px[0] = val; // B
+            px[1] = val; // G
+            px[2] = val; // R
+            px[3] = 0xFF; // X
+        }
+        Frame {
+            origin: FrameOrigin::SoftwareRawBuffer {
+                data,
+                pitch: w * 4,
+                format: SoftwarePixelFormat::Xrgb8888,
+            },
+            metadata: FrameMetadata {
+                native_width: w,
+                native_height: h,
+                aspect_ratio: w as f32 / h as f32,
+                rotation_degrees: 0,
+            },
+        }
+    }
+
+    /// O readback com pipeline prima 1 frame e depois entrega o frame ANTERIOR
+    /// (atraso de exatamente 1 frame). `plain` = passthrough, então a cor sai
+    /// igual à que entrou 1 frame antes.
+    #[test]
+    fn pipelined_readback_has_one_frame_delay() {
+        if std::env::var_os("REEMU_NO_GPU").is_some() {
+            return;
+        }
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando teste de readback");
+            return;
+        };
+
+        assert!(
+            fp.process(&grey_frame(64, 48, 0x40)).is_none(),
+            "1º process deve primar o pipeline (None)"
+        );
+
+        let (w, h, d2) = fp
+            .process(&grey_frame(64, 48, 0xC0))
+            .expect("2º process entrega");
+        assert_eq!((w, h), (64, 48));
+        assert_eq!(d2.len(), 64 * 48 * 4);
+        assert!(
+            d2[0].abs_diff(0x40) <= 2,
+            "esperava ~0x40, veio {:#x}",
+            d2[0]
+        );
+
+        let (_, _, d3) = fp
+            .process(&grey_frame(64, 48, 0x10))
+            .expect("3º process entrega");
+        assert!(
+            d3[0].abs_diff(0xC0) <= 2,
+            "esperava ~0xC0, veio {:#x}",
+            d3[0]
+        );
+    }
 }

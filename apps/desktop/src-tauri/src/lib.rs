@@ -127,6 +127,7 @@ pub fn run() {
             commands::list_save_states,
             commands::load_save_state,
             commands::delete_save_state,
+            commands::read_save_thumbnail,
             commands::input_key,
             commands::start_binding_capture,
             commands::cancel_binding_capture,

@@ -181,7 +181,10 @@ pub fn decode_png(path: &Path) -> Result<(Vec<u8>, u32, u32), String> {
     let mut buf = vec![0u8; reader.output_buffer_size()];
     let info = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
     if info.bit_depth != png::BitDepth::Eight {
-        return Err(format!("PNG {:?} não suportado após EXPAND", info.bit_depth));
+        return Err(format!(
+            "PNG {:?} não suportado após EXPAND",
+            info.bit_depth
+        ));
     }
     let px = (info.width * info.height) as usize;
     let mut rgba = vec![0u8; px * 4];

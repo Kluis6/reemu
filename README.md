@@ -8,7 +8,7 @@ Fluent Design). Estrutura inicial gerada a partir do design de arquitetura
 
 ```
 apps/
-  desktop/    Projeto Tauri v2 (Windows + Linux) — inicializado (crate reemu-desktop)
+  desktop/    Projeto Tauri v2 (crate reemu-desktop) — Linux OK; Win/macOS não verificados
   mobile/     Projeto Tauri v2 mobile (Android) — ainda não inicializado
 
 crates/
@@ -18,8 +18,9 @@ crates/
   emu-session/          Loop do core em thread dedicada + state machine de foco
   video-surface/        Renderer wgpu: frame do core -> textura -> tela (letterbox)
   audio-desktop/        AudioSink cpal + Dynamic Rate Control
-  library-scan/         Hash de ROMs (CRC32/MD5) + varredura de biblioteca
-  input-desktop/        SDL_GameControllerDB, hotkeys com combinação, keymap
+  library-scan/         Hash de ROMs (CRC32/MD5) + varredura + convenção de bezels
+  input-desktop/        SDL_GameControllerDB, hotkeys com combinação, keymap, gilrs
+  shader-slang/         Parser .slangp + compilador .slang (GLSL -> WGSL via naga)
   # core-loader-mobile/  (a criar) — cores empacotados, JNI
 
 packages/
@@ -37,51 +38,40 @@ implementam as traits definidas em `domain`.
 
 ## Status atual
 
-Ver `TASKS.md` para o checklist detalhado. Resumo:
+Ver `TASKS.md` para o checklist detalhado e o backlog. Resumo (2026-08-30):
 
-- [x] Workspace (Cargo + pnpm), traits do `domain`, migration SQL inicial
-- [x] `apps/desktop` inicializado (Tauri v2) + `packages/app-desktop` (React 19)
-- [x] `cargo tauri dev` abre a janela
-- [x] **Etapa 01** — repositórios sqlx em `crates/db` (7 repos, 18 testes de integração)
-- [x] CI (`.github/workflows/ci.yml`), toolchain pin, rustfmt, LICENSE
-- [x] **Etapa 02 (parcial)** — `core-loader-desktop`: caminho software-only
-      ponta a ponta (libloading + FFI libretro), 5 testes com core-fake em C
-- [x] **Etapa 03 (parcial)** — `emu-session` (loop + foco), `video-surface`
-      (renderer wgpu testado headless), vídeo no app (Linux X11 child window)
-- [x] **Etapa 07 (parcial)** — frontend em rotas (react-router hash), visual
-      "modo Xbox" (rail de ícones, cartões, navegação por controle/teclado).
-      `PlayScreen` transparente (HUD + menu de pausa). Core options, save RAM,
-      diretório de dados único.
-- [x] **Etapa 10 (parcial)** — catálogo de cores: 15 cores *software* do
-      buildbot libretro, instalar/remover pela aba **Cores** das Configurações.
-- [x] **Etapa 06 (parcial)** — `audio-desktop`: DRC puro (testado) +
-      `CpalAudioSink`, fiado no `emu-session` (o som do core sai de verdade)
-- [x] **Etapa 09 (parcial)** — `library-scan`: hash CRC32/MD5 + varredura;
-      a tela Biblioteca escaneia um diretório e lista de verdade
-- [x] **Etapa 08 (parcial)** — save state: arquivo em disco + metadata +
-      validação de core no load (comandos Tauri, 4 testes)
-- [x] **Etapa 05** — `input-desktop` (SDL DB, hotkeys com combinação, keymap) +
-      `RetroPadState` no core-loader; teclado da webview vai pro core; `gilrs`
-      (gamepad físico, thread de `emu-session`, stick esquerdo → d-pad); UI de
-      captura de binding (`<BindingCapture>` + `db::SystemHotkeysRepo`/
-      `ControllerMappingsRepo`); `HotkeyResolver` + mapeamento de controle +
-      `device_port_assignment` aplicados do DB em runtime; `QuickSave`/`QuickLoad`;
-      seção "Controles" em Settings; `<IdleScreen>`. Falta validar em hardware.
-- [ ] Etapa 02 passo 4 — contexto GL pra cores HW-accelerated
-- [ ] `apps/mobile`, `packages/ui`, `packages/shared`
+**Desktop (etapas 01–10) fechado.** Roda cores libretro software ponta a ponta:
+biblioteca → detalhe do jogo → jogar (vídeo num `<canvas>`, áudio com DRC,
+save states com thumbnail e save RAM), tudo com UI "modo Xbox" (Griffel) e
+navegação por controle.
+
+- [x] **01** Domain + `crates/db` (sqlx, ~11 repos, migrations 0001–0003)
+- [x] **02** `core-loader-desktop` — FFI libretro, caminho software-only
+- [x] **03** `emu-session` + vídeo via `<canvas>` (surface nativa adiada — ver `docs/ai-context/03`)
+- [x] **04** Shader chain (`plain`/`crt`/`lcd` + `.slangp` via `shader-slang`),
+      parâmetros ajustáveis, decoração/bezels (Bezel Project/RetroBat)
+- [x] **05** Input — teclado, `gilrs`, hotkeys/mapeamento do DB em runtime, UI de binding
+- [x] **06** `audio-desktop` — DRC + `CpalAudioSink`, aplicar config ao vivo
+- [x] **07** Frontend — Início + Meus jogos + RomDetail + PlayScreen, busca, menu de contexto
+- [x] **08** Save states + save RAM (`.srm` atômica, flush no shutdown), thumbnail por slot
+- [x] **09** Scraping — ScreenScraper por CRC + fila de revisão manual
+- [x] **10** Catálogo — 68 cores do buildbot; GL marcados "precisa de GPU"
+- [ ] **11** Port Android — desbloqueado, adiado
+- [ ] **12** HW render Vulkan — backlog (depende de GL HW primeiro)
+
+Backlog: GL HW render (etapa 02 passo 4), compilador slang via glslang→SPIR-V
+(destrava CRT-Royale/Mega Bezel/FSR), integer scaling, `SET_ROTATION` (jogos
+verticais), `packages/ui`/`shared`, `apps/mobile`.
 
 ## Rodar
 
 ```bash
-cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json   # app (modo só-webview no Linux)
-cargo run -p video-surface --example play                         # player de vídeo standalone
-cargo run -p video-surface --example play -- <core_libretro.so> <rom>
-cargo test --workspace                                            # 32 testes
+cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json   # app (vídeo via canvas)
+cargo tauri build --config apps/desktop/src-tauri/tauri.conf.json # bundle release
+cargo run -p video-surface --example play -- <core_libretro.so> <rom>   # player standalone
+cargo test --workspace
 ```
 
-## Próximo passo recomendado
-
-Confirmar visualmente que o jogo aparece atrás da webview transparente no Linux
-(`cargo tauri dev --features dev-autoload` com `REEMU_DEV_CORE`/`REEMU_DEV_ROM`),
-ajustar z-order/transparência se preciso. Depois: passo 4 da etapa 02 (contexto
-GL pra cores HW-accelerated).
+Cores: baixe pela aba **Configurações › Cores** ou copie `*_libretro.so` em
+`~/.local/share/com.reemu.desktop/cores/`. Depois aponte a Biblioteca pra pasta
+das ROMs.

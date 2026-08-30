@@ -137,6 +137,8 @@ export interface CatalogCore {
   systems: string
   license: string
   installed: boolean
+  /** 'software' roda hoje; 'opengl' baixa mas ainda não carrega (falta contexto GL). */
+  hw: 'software' | 'opengl'
 }
 export const listCoreCatalog = () => invoke<CatalogCore[]>('list_core_catalog')
 export const downloadCore = (coreId: string) => invoke<void>('download_core', { coreId })
@@ -264,6 +266,7 @@ export interface SaveState {
   slot: number | null
   createdAt: number
   filePath: string
+  hasThumbnail: boolean
 }
 export const saveState = (romId: string, slot: number | null) =>
   invoke<SaveState>('save_state', { romId, slot })
@@ -273,6 +276,14 @@ export const loadSaveState = (stateId: string) =>
   invoke<void>('load_save_state', { stateId })
 export const deleteSaveState = (stateId: string) =>
   invoke<void>('delete_save_state', { stateId })
+
+/** PNG do thumbnail de um save state como `blob:` URL, ou `null` se não tem. */
+export async function saveThumbnailUrl(stateId: string): Promise<string | null> {
+  if (!inTauri) return null
+  const buf = await invoke<ArrayBuffer>('read_save_thumbnail', { stateId })
+  if (buf.byteLength === 0) return null
+  return URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
+}
 
 // --- input / captura de binding (etapa 05) -------------------------------
 

@@ -42,6 +42,17 @@ pub struct AppState {
     pub scrape: Arc<crate::scraping::ScrapeProgress>,
     /// Flag de cancelamento da leva de scraping.
     pub scrape_stop: Arc<std::sync::atomic::AtomicBool>,
+    /// Último frame enviado pro canvas — pra gerar o thumbnail no save state.
+    /// Atualizado com throttle no `poll_frame`.
+    pub last_frame: Mutex<Option<CachedFrame>>,
+}
+
+/// Cópia de um frame RGBA8 + quando foi tirada (throttle do cache de thumbnail).
+pub struct CachedFrame {
+    pub w: u32,
+    pub h: u32,
+    pub rgba: Vec<u8>,
+    pub at: std::time::Instant,
 }
 
 /// Slot reservado pro QuickSave/QuickLoad das hotkeys (os slots manuais da UI
@@ -83,6 +94,7 @@ impl AppState {
             gpu: Mutex::new(None),
             scrape: Arc::new(crate::scraping::ScrapeProgress::default()),
             scrape_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            last_frame: Mutex::new(None),
         }
     }
 }
@@ -182,6 +194,11 @@ async fn quick_state<R: tauri::Runtime>(app: &AppHandle<R>, save: bool) -> Resul
             .save_state()
             .map_err(|e| e.to_string())?
             .ok_or("o core não suporta save state")?;
+        let thumb = {
+            let f = state.last_frame.lock().unwrap_or_else(|p| p.into_inner());
+            f.as_ref()
+                .and_then(|c| thumbnail_png(c.w, c.h, &c.rgba, 320))
+        };
         save_svc::save(
             &repo,
             &state.save_dir,
@@ -189,6 +206,7 @@ async fn quick_state<R: tauri::Runtime>(app: &AppHandle<R>, save: bool) -> Resul
             &core_id,
             Some(QUICK_SLOT),
             &bytes,
+            thumb.as_deref(),
         )
         .await
         .map_err(|e| e.to_string())?;
@@ -555,6 +573,7 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
         let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(fp) = gpu.as_mut() {
             if let Some((w, h, rgba)) = fp.process(&frame) {
+                cache_thumb_frame(&state, w, h, &rgba);
                 return pack_frame(w, h, &rgba);
             }
         }
@@ -570,7 +589,25 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
     };
     let (w, h) = (frame.metadata.native_width, frame.metadata.native_height);
     let rgba = to_rgba8(&data, w, h, pitch, format);
+    cache_thumb_frame(&state, w, h, &rgba);
     pack_frame(w, h, &rgba)
+}
+
+/// Guarda uma cópia do frame pra thumbnail do save state — no máximo 1×/500ms
+/// (o clone de um frame grande custa; a frescura do thumb não precisa de 60fps).
+fn cache_thumb_frame(state: &AppState, w: u32, h: u32, rgba: &[u8]) {
+    let mut slot = state.last_frame.lock().unwrap_or_else(|p| p.into_inner());
+    let stale = slot
+        .as_ref()
+        .map_or(true, |c| c.at.elapsed().as_millis() >= 500);
+    if stale {
+        *slot = Some(CachedFrame {
+            w,
+            h,
+            rgba: rgba.to_vec(),
+            at: std::time::Instant::now(),
+        });
+    }
 }
 
 /// `[w u32 LE][h u32 LE][rgba8…]` — o formato que a `PlayScreen` espera.
@@ -925,8 +962,27 @@ pub async fn update_audio_config(
     state: State<'_, AppState>,
     config: AudioConfigDto,
 ) -> Result<(), String> {
+    let cfg: AudioConfig = config.into();
     let repo = db::AudioConfigRepo::new(pool(&state)?);
-    repo.update(&config.into()).await.map_err(|e| e.to_string())
+    repo.update(&cfg).await.map_err(|e| e.to_string())?;
+
+    // Aplica ao vivo: recria o sink na thread do core com a config nova.
+    let cfg2 = cfg.clone();
+    let session = state.session.clone();
+    let r = tauri::async_runtime::spawn_blocking(move || {
+        session.reload_audio(Box::new(move || {
+            match audio_desktop::CpalAudioSink::new(&cfg2) {
+                Ok(s) => Some(Box::new(s) as _),
+                Err(e) => {
+                    log::error!("áudio indisponível ({e}) — rodando sem som");
+                    None
+                }
+            }
+        }))
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    r.map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]
@@ -994,6 +1050,9 @@ pub struct CatalogCoreDto {
     pub systems: String,
     pub license: String,
     pub installed: bool,
+    /// `"software"` = roda hoje; `"opengl"` = precisa de contexto GL (baixa,
+    /// mas `load_game` recusa até a etapa 02 passo 4).
+    pub hw: &'static str,
 }
 
 #[tauri::command]
@@ -1011,6 +1070,7 @@ pub fn list_core_catalog(state: State<'_, AppState>) -> Vec<CatalogCoreDto> {
             systems: e.systems.to_string(),
             license: e.license.to_string(),
             installed: installed.contains(e.id),
+            hw: e.hw.as_str(),
         })
         .collect()
 }
@@ -1186,7 +1246,9 @@ pub async fn list_rom_sources(state: State<'_, AppState>) -> Result<Vec<RomSourc
             .and_then(|d| d.parent())
             .or_else(|| p.parent())
             .unwrap_or(p);
-        *by_dir.entry(root.to_string_lossy().into_owned()).or_default() += 1;
+        *by_dir
+            .entry(root.to_string_lossy().into_owned())
+            .or_default() += 1;
     }
     let mut out: Vec<RomSourceDto> = by_dir
         .into_iter()
@@ -1198,7 +1260,10 @@ pub async fn list_rom_sources(state: State<'_, AppState>) -> Result<Vec<RomSourc
 
 /// Remove todas as ROMs de um sistema (snes, nes, …). Devolve a contagem.
 #[tauri::command]
-pub async fn remove_rom_system(state: State<'_, AppState>, system_id: String) -> Result<u64, String> {
+pub async fn remove_rom_system(
+    state: State<'_, AppState>,
+    system_id: String,
+) -> Result<u64, String> {
     let repo = db::RomsRepo::new(pool(&state)?);
     let n = repo
         .remove_by_system(&system_id)
@@ -1467,6 +1532,7 @@ pub struct SaveStateDto {
     pub slot: Option<u32>,
     pub created_at: i64,
     pub file_path: String,
+    pub has_thumbnail: bool,
 }
 
 fn save_dto(m: domain::save_state::SaveStateMetadata) -> SaveStateDto {
@@ -1475,7 +1541,35 @@ fn save_dto(m: domain::save_state::SaveStateMetadata) -> SaveStateDto {
         slot: m.slot,
         created_at: m.created_at,
         file_path: m.file_path,
+        has_thumbnail: m.thumbnail_path.is_some(),
     }
+}
+
+/// Reduz o frame RGBA8 pra no máximo `max_w` de largura (nearest) e codifica
+/// como PNG — o thumbnail do save state.
+fn thumbnail_png(w: u32, h: u32, rgba: &[u8], max_w: u32) -> Option<Vec<u8>> {
+    if w == 0 || h == 0 || rgba.len() != (w * h * 4) as usize {
+        return None;
+    }
+    let scale = (w as f32 / max_w as f32).max(1.0);
+    let (tw, th) = ((w as f32 / scale) as u32, (h as f32 / scale) as u32);
+    let (tw, th) = (tw.max(1), th.max(1));
+    let mut small = vec![0u8; (tw * th * 4) as usize];
+    for y in 0..th {
+        let sy = (y as f32 * scale) as u32;
+        for x in 0..tw {
+            let sx = (x as f32 * scale) as u32;
+            let si = ((sy.min(h - 1) * w + sx.min(w - 1)) * 4) as usize;
+            let di = ((y * tw + x) * 4) as usize;
+            small[di..di + 4].copy_from_slice(&rgba[si..si + 4]);
+        }
+    }
+    let mut out = Vec::new();
+    let mut enc = png::Encoder::new(&mut out, tw, th);
+    enc.set_color(png::ColorType::Rgba);
+    enc.set_depth(png::BitDepth::Eight);
+    enc.write_header().ok()?.write_image_data(&small).ok()?;
+    Some(out)
 }
 
 #[tauri::command]
@@ -1493,11 +1587,44 @@ pub async fn save_state(
         .save_state()
         .map_err(|e| e.to_string())?
         .ok_or_else(|| "o core não suporta save state".to_string())?;
+    let thumb = {
+        let f = state.last_frame.lock().unwrap_or_else(|p| p.into_inner());
+        f.as_ref()
+            .and_then(|c| thumbnail_png(c.w, c.h, &c.rgba, 320))
+    };
     let repo = db::SaveStateRepo::new(pool(&state)?);
-    let meta = save_svc::save(&repo, &state.save_dir, &rom_id, &core_id, slot, &bytes)
-        .await
-        .map_err(|e| e.to_string())?;
+    let meta = save_svc::save(
+        &repo,
+        &state.save_dir,
+        &rom_id,
+        &core_id,
+        slot,
+        &bytes,
+        thumb.as_deref(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
     Ok(save_dto(meta))
+}
+
+/// PNG do thumbnail de um save state (corpo vazio se não tem).
+#[tauri::command]
+pub async fn read_save_thumbnail(
+    state: State<'_, AppState>,
+    state_id: String,
+) -> Result<tauri::ipc::Response, String> {
+    use domain::save_state::SaveStateRepository;
+    let repo = db::SaveStateRepo::new(pool(&state)?);
+    let path = repo
+        .get_state(&state_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .and_then(|m| m.thumbnail_path);
+    let bytes = match path {
+        Some(p) => std::fs::read(&p).unwrap_or_default(),
+        None => Vec::new(),
+    };
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 #[tauri::command]

@@ -120,18 +120,29 @@ function Catalog() {
     (install.isPending && install.variables === id) ||
     (uninstall.isPending && uninstall.variables === id)
 
+  // software primeiro, depois os que precisam de GL
+  const sorted = [...(catalog.data ?? [])].sort(
+    (a, b) => Number(a.hw === 'opengl') - Number(b.hw === 'opengl') || a.name.localeCompare(b.name),
+  )
+
   return (
     <>
       <Caption1>
-        Cores <strong>software</strong> do buildbot oficial da libretro. Cores com aceleração
-        de vídeo (N64, PSX, PSP…) entram quando o contexto GL estiver pronto.
+        Cores do buildbot oficial da libretro. Os marcados <strong>precisa de GPU</strong> baixam
+        normalmente mas ainda não carregam — falta a negociação de contexto OpenGL (etapa 02).
+        Cores exclusivamente Vulkan ficam de fora até a etapa 12.
       </Caption1>
       <div className={styles.list}>
-        {catalog.data?.map((c: CatalogCore) => (
+        {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
             <span className={styles.meta}>
               <Body1>
                 <strong>{c.name}</strong>
+                {c.hw === 'opengl' && (
+                  <Badge appearance="outline" color="warning" style={{ marginLeft: 8 }}>
+                    precisa de GPU
+                  </Badge>
+                )}
               </Body1>
               <Caption1>
                 {c.systems} · {c.license}

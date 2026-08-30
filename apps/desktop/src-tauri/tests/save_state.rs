@@ -41,9 +41,17 @@ async fn save_writes_file_and_records_metadata() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
 
-    let meta = save_state::save(&repo, &dir, "rom1", "mesen", Some(0), b"STATE-BYTES-A")
-        .await
-        .unwrap();
+    let meta = save_state::save(
+        &repo,
+        &dir,
+        "rom1",
+        "mesen",
+        Some(0),
+        b"STATE-BYTES-A",
+        None,
+    )
+    .await
+    .unwrap();
 
     assert_eq!(std::fs::read(&meta.file_path).unwrap(), b"STATE-BYTES-A");
     let listed = save_state::list(&repo, "rom1").await.unwrap();
@@ -59,10 +67,10 @@ async fn saving_same_slot_replaces_previous() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
 
-    let first = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"OLD")
+    let first = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"OLD", None)
         .await
         .unwrap();
-    let second = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"NEW")
+    let second = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"NEW", None)
         .await
         .unwrap();
 
@@ -81,7 +89,7 @@ async fn saving_same_slot_replaces_previous() {
 async fn load_validates_core_and_returns_meta() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
-    let meta = save_state::save(&repo, &dir, "rom1", "mesen", None, b"S")
+    let meta = save_state::save(&repo, &dir, "rom1", "mesen", None, b"S", None)
         .await
         .unwrap();
 
@@ -120,7 +128,7 @@ async fn load_validates_core_and_returns_meta() {
 async fn delete_removes_file_and_record() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
-    let meta = save_state::save(&repo, &dir, "rom1", "mesen", Some(2), b"S")
+    let meta = save_state::save(&repo, &dir, "rom1", "mesen", Some(2), b"S", None)
         .await
         .unwrap();
 

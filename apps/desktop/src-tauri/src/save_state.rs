@@ -3,7 +3,8 @@
 //! o `core_id` bate (states não são portáveis entre cores).
 //!
 //! O binário do state vai pra disco (pode ser MB); o banco só guarda o
-//! `file_path` + metadata. Thumbnail ainda não (continua a etapa 08).
+//! `file_path` + metadata. O thumbnail (PNG já codificado pelo caller) é
+//! gravado ao lado, com a mesma stem + `.png`.
 
 use domain::save_state::{SaveStateMetadata, SaveStateRepository};
 use std::path::{Path, PathBuf};
@@ -49,8 +50,9 @@ fn state_path(dir: &Path, rom_id: &str, core_id: &str, slot: Option<u32>) -> Pat
     ))
 }
 
-/// Grava `state_bytes` e registra a metadata. Se `slot` já estava ocupado,
-/// o state anterior nele é apagado (arquivo + registro).
+/// Grava `state_bytes` (+ `thumbnail_png` ao lado, se dado) e registra a
+/// metadata. Se `slot` já estava ocupado, o state anterior nele é apagado
+/// (arquivo + thumbnail + registro).
 pub async fn save<R: SaveStateRepository + ?Sized>(
     repo: &R,
     save_dir: &Path,
@@ -58,12 +60,16 @@ pub async fn save<R: SaveStateRepository + ?Sized>(
     core_id: &str,
     slot: Option<u32>,
     state_bytes: &[u8],
+    thumbnail_png: Option<&[u8]>,
 ) -> Result<SaveStateMetadata, SaveError> {
     std::fs::create_dir_all(save_dir)?;
 
     if let Some(s) = slot {
         if let Some(old) = repo.find_state_in_slot(rom_id, core_id, s).await? {
             let _ = std::fs::remove_file(&old.file_path);
+            if let Some(t) = &old.thumbnail_path {
+                let _ = std::fs::remove_file(t);
+            }
             repo.delete_state(&old.id).await?;
         }
     }
@@ -71,13 +77,22 @@ pub async fn save<R: SaveStateRepository + ?Sized>(
     let path = state_path(save_dir, rom_id, core_id, slot);
     std::fs::write(&path, state_bytes)?;
 
+    let thumbnail_path = match thumbnail_png {
+        Some(png) => {
+            let tp = path.with_extension("png");
+            std::fs::write(&tp, png)?;
+            Some(tp.to_string_lossy().into_owned())
+        }
+        None => None,
+    };
+
     let meta = SaveStateMetadata {
         id: uuid::Uuid::new_v4().to_string(),
         rom_id: rom_id.to_string(),
         core_id: core_id.to_string(),
         slot,
         file_path: path.to_string_lossy().into_owned(),
-        thumbnail_path: None,
+        thumbnail_path,
         created_at: now_unix(),
         play_time_at_save: None,
     };
@@ -116,6 +131,9 @@ pub async fn delete<R: SaveStateRepository + ?Sized>(
 ) -> Result<(), SaveError> {
     if let Some(meta) = repo.get_state(state_id).await? {
         let _ = std::fs::remove_file(&meta.file_path);
+        if let Some(t) = &meta.thumbnail_path {
+            let _ = std::fs::remove_file(t);
+        }
     }
     repo.delete_state(state_id).await?;
     Ok(())

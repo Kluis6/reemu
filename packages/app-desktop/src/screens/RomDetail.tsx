@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CoreOptions } from '../components/CoreOptions'
+import { SaveStateThumb } from '../components/SaveStateThumb'
 import { ShaderParams } from '../components/ShaderParams'
 import { sysToast } from '../lib/toast'
 import {
@@ -100,9 +101,11 @@ export function RomDetail() {
   const title = meta.data?.title ?? rom.title
   const hasQuick = states.data?.some((st) => st.slot === 0) ?? false
 
-  const play = () => {
+  const play = (loadState?: string) => {
     if (!chosenCore) return
-    navigate(`/play/${rom.id}?core=${encodeURIComponent(chosenCore)}`, {
+    const q = new URLSearchParams({ core: chosenCore })
+    if (loadState) q.set('loadState', loadState)
+    navigate(`/play/${rom.id}?${q}`, {
       state: {
         coreId: chosenCore,
         romPath: rom.filePath,
@@ -165,7 +168,7 @@ export function RomDetail() {
           size="large"
           icon={<PlayRegular />}
           disabled={!chosenCore}
-          onClick={play}
+          onClick={() => play()}
         >
           {hasQuick ? 'Continuar' : 'Jogar'}
         </Button>
@@ -227,11 +230,24 @@ export function RomDetail() {
         <div className={s.panel}>
           {states.data?.length === 0 && <Caption1>Nenhum save state pra esta ROM.</Caption1>}
           {states.data?.map((st) => (
-            <div key={st.id} className={s.stateRow}>
-              <Body1>
-                {st.slot === 0 ? 'QuickSave' : st.slot != null ? `Slot ${st.slot}` : 'Auto'}{' '}
-                <Caption1>· {new Date(st.createdAt * 1000).toLocaleString()}</Caption1>
-              </Body1>
+            <div key={st.id} className={s.stateRow} style={{ gap: 12 }}>
+              <SaveStateThumb stateId={st.id} hasThumbnail={st.hasThumbnail} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Body1>
+                  {st.slot === 0 ? 'QuickSave' : st.slot != null ? `Slot ${st.slot}` : 'Auto'}
+                </Body1>
+                <Caption1 className={s.hint}>
+                  {new Date(st.createdAt * 1000).toLocaleString()}
+                </Caption1>
+              </div>
+              <Button
+                size="small"
+                icon={<PlayRegular />}
+                disabled={!chosenCore}
+                onClick={() => play(st.id)}
+              >
+                Jogar daqui
+              </Button>
               <Button
                 size="small"
                 appearance="subtle"
@@ -242,9 +258,6 @@ export function RomDetail() {
               </Button>
             </div>
           ))}
-          <Caption1 className={s.hint}>
-            Carregar um save state é feito de dentro do jogo (menu de pausa).
-          </Caption1>
         </div>
       </section>
 

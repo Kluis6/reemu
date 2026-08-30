@@ -42,13 +42,17 @@ refaça trabalho já feito ou pule pré-requisito.
 | 03 | Tauri Desktop Shell — surface nativa | `done` (desvio aceito: vídeo via `<canvas>`; surface nativa adiada — ver doc 03) | 02 |
 | 04 | Shader Chain + Decoração | `done` (shader + decoração + params na UI — 2026-08-30) | 03 |
 | 05 | Input, Hotkeys, UI de Binding | `done` (validado c/ DualSense 2026-08-29; foco de menu 2026-08-30) | 03 |
-| 06 | Áudio — Dynamic Rate Control | `in-progress` | 03 |
+| 06 | Áudio — Dynamic Rate Control | `done` (DRC + sink + "aplicar ao vivo"; falta só validar sessão longa ouvindo — usuário) | 03 |
 | 07 | Frontend React — Fluent/Zustand/Toast | `done` (modo Xbox completo: Início/Biblioteca/RomDetail/PlayScreen, Griffel, busca, nav por controle) | 03 |
-| 08 | Save States e Save RAM | `in-progress` | 02 |
-| 09 | Scraping de Metadata | `in-progress` (ScreenScraper por CRC + revisão; falta multi-provider/IGDB) | 01 |
-| 10 | Catálogo e Download de Cores | `in-progress` (MVP: lista curada + buildbot) | 01 |
-| 11 | Port Android | `todo` | 03–10 completas no desktop |
-| 12 | Vulkan HW Render Fase 2 | `blocked` | Gatilho de maturidade — ver doc 12, não iniciar antes das condições lá |
+| 08 | Save States e Save RAM | `done` (thumbnail por slot + painel na UI + "jogar daqui" — 2026-08-30) | 02 |
+| 09 | Scraping de Metadata | `done` (ScreenScraper por CRC + revisão manual; multi-provider/IGDB no backlog) | 01 |
+| 10 | Catálogo e Download de Cores | `done` (68 cores do buildbot: software + GL marcados "precisa de GPU"; Vulkan-only fora até 12) | 01 |
+| 11 | Port Android | `todo` (desbloqueado — 01–10 `done`; usuário adiou 2026-08-30) | 03–10 completas no desktop |
+| 12 | Vulkan HW Render Fase 2 | `blocked` (backlog — falta GL HW / etapa 02 passo 4 primeiro) | Gatilho de maturidade — ver doc 12 |
+
+**Desktop (01–10) fechado em 2026-08-30.** Só falta validação em hardware
+de sessão longa de áudio (etapa 06). Próximos: 11 (Android) ou os itens de
+render do backlog.
 
 ## Como atualizar
 
@@ -59,6 +63,67 @@ Ao concluir uma etapa:
    suporte a preset com sub-diretórios aninhados — ver issue X")
 3. Se uma etapa não pode prosseguir por dependência externa (ex: aguarda
    decisão sua), marque `blocked` com o motivo
+
+## Backlog (fora da ordem principal — não iniciar antes de fechar 06/08/09)
+
+Renderização / filtros (independente da etapa 12):
+- **Integer scaling** — trava o `<canvas>` num múltiplo inteiro da resolução
+  nativa + toggle em Config › Vídeo. Só frontend, ~0,5 dia, risco zero.
+- **Seleção de preset por pasta** — comando `list_slangp_dir` + UI pra apontar
+  pra uma pasta `shaders_slang` (RetroBat) e escolher `.slangp` de uma lista
+  (hoje só "Carregar .slangp…" arquivo a arquivo). ~1 dia, não toca `gpu.rs`.
+- **Presets que já compilam no `naga`** — curar lista dos que funcionam
+  (sharp-bilinear, pixellate, scale2x/3x, super-xbr, MMPX, crt-geom/lottes/
+  zfast, CAS/RCAS). Zero código.
+- **Compilador slang via glslang→SPIR-V** (substitui `naga` glsl-in) — ~1-2
+  semanas, TOCA `crates/shader-slang`. Destrava FSR 1.0 completo, xBRZ,
+  ScaleFX, CRT-Royale, guest-advanced.
+- **Feedback / OriginalHistory / LUT no `gpu.rs`** — ping-pong + ring de
+  textura + carregar PNGs de LUT do `.slangp`. ~1 semana. Destrava Mega Bezel
+  e CRT shaders de qualidade média.
+- **HDR / tonemapping** — depois do compilador completo.
+
+Cores com GPU:
+- **GL HW render (etapa 02 passo 4)** — contexto GL offscreen + callbacks
+  (`get_current_framebuffer`/`get_proc_address`/`context_reset`) + interop
+  GL↔wgpu. Destrava N64/PSX-hw/Saturn/DS/Dreamcast/PSP/GC-Wii/PS2 (GL). É
+  pré-requisito duro da etapa 12.
+- **Etapa 12 (Vulkan HW)** — `blocked`, ver doc 12. Só depois do GL estável +
+  lista de cores-alvo definida. NÃO temporal upscaling (DLSS/FSR2/XeSS não
+  servem — sem motion vectors na emulação).
+
+Metadata (etapa 09 fechada no MVP):
+- Multi-provider (IGDB / TheGamesDB) + cascata; rate-limit por provider;
+  match por MD5 além de CRC; badge de "N pendências" no rail.
+
+Áudio (etapa 06):
+- Validação de sessão longa sem glitch (precisa core real + ouvir — usuário).
+- Resampler linear → `rubato` se a qualidade não bastar.
+
+Correção de vídeo (cores software):
+- **`RETRO_ENVIRONMENT_SET_ROTATION`** — hoje reconhecido mas ignorado
+  (`ffi_state.rs`), `FrameMetadata.rotation_degrees` fica sempre 0. Jogos
+  verticais (shmups de arcade via FBNeo/MAME, alguns) renderizam de lado.
+  Precisa: capturar o valor (0-3 = 0/90/180/270°), plumar até o `gpu.rs`/canvas
+  e girar (swap w/h + rotação de uv).
+- **`SET_GEOMETRY` / `SET_SYSTEM_AV_INFO` em runtime** — `aspect_ratio` vem do
+  `av_info` do load; se o core muda a proporção no meio do jogo não pega
+  (resolução em si já pega, é per-frame). Baixa prioridade pros cores atuais.
+
+Infra:
+- `packages/ui`, `packages/shared` — ainda sem `package.json`.
+- `apps/mobile` / `packages/app-mobile` (etapa 11 Android) — só depois do
+  desktop ponta a ponta (decisão do usuário 2026-08-30: deixar pra depois).
+- Windows/macOS — o `#[cfg(not(linux))]` do `video.rs`, os paths do buildbot e o
+  bundle nunca foram verificados (sem máquina).
+- Readback: pool pro `Vec` do `pack_frame`; canvas WebGL em vez de
+  `putImageData`.
+- Dois controles idênticos colidem na porta (mesmo GUID SDL — usar `GamepadId`
+  do gilrs); eixo analógico → RetroPad (hoje só stick→d-pad digital).
+- `docs/ai-context/01,02,05,06,07,08,09.md` têm seções "Estado atual
+  (in-progress)" desatualizadas — `TASKS.md` é a fonte da verdade.
+- `SaveStateMetadata.play_time_at_save` sempre `None` (sem tracking de tempo
+  de jogo).
 
 ## Notas de progresso
 
@@ -185,9 +250,22 @@ Ao concluir uma etapa:
     core. `FocusController`/pause → `sink.pause()`/`resume()`.
   - App: lê o `AudioConfig` persistido no startup e passa pra factory.
     **Verificado**: o stream cpal abre neste sistema (sem erro).
-  - Falta: verificar sessão longa sem glitch (precisa core real + ouvir);
-    resampler linear pode virar `rubato` se a qualidade não bastar; comando
-    "aplicar áudio ao vivo" (hoje muda no próximo launch).
+  - **2026-08-30 — pacing + build otimizado** (travadas no GBA): o `core_loop`
+    (session.rs) passou a pacear por **acumulador** (`next_deadline`) + **spin**
+    no último ~1.2ms em vez de `thread::sleep` puro (que passa do ponto no
+    Linux e causa microstutter, pior em cores com fps ≠ 60 como GBA 59.73).
+    `poll_frame` era chamado ~250×/s → o fetch loop da `PlayScreen` agora
+    espera ~11ms após pegar um frame. `Cargo.toml` raiz ganhou
+    `[profile.dev] opt-level=2` + deps em `-O3` (sem isso o pipeline não
+    sustenta 60fps em `cargo tauri dev`) + `[profile.release]` lto/1-cgu.
+  - **2026-08-30 — aplicar ao vivo (etapa 06 `done`)**: `Command::ReloadAudio(
+    AudioSinkFactory, reply)` + `EmuSession::reload_audio()` — recria o
+    `AudioSink` na thread do core (dropa o stream cpal antigo antes). O comando
+    `update_audio_config` persiste E chama `reload_audio` com a config nova
+    (spawn_blocking). Muda device/sample rate sem recarregar o jogo. Toast
+    "Áudio salvo e aplicado".
+  - Falta (backlog): validar sessão longa sem glitch (core real + ouvir —
+    usuário); resampler linear → `rubato` se a qualidade não bastar.
 - **2026-08-27 — Etapa 05 (`in-progress`)**: input.
   - `core-loader-desktop`: `RetroPadState` global (atômico, por porta) fiado
     no callback `retro_input_state_t` (RetroPad digital). 2 testes.
@@ -388,8 +466,17 @@ Ao concluir uma etapa:
     `session.unload()` ao fechar (X da janela / Alt+F4 / `quit_app`), garantindo
     o flush final da `.srm` — antes só o flush periódico de 10s cobria.
     `flush_save_ram` virou escrita atômica (`.srm.tmp` + rename).
-  - **Falta**: captura de thumbnail (frame no serialize → PNG); verificação de
-    "sem stutter"; painel de estados mais rico na UI.
+  - **2026-08-30 — thumbnail + painel (etapa 08 `done`)**: `poll_frame` guarda
+    uma cópia throttled (1×/500ms) do último frame em `AppState.last_frame`
+    (`CachedFrame`); no `save_state`/QuickSave o `thumbnail_png` (nearest →
+    320px → PNG via crate `png`) é gravado ao lado do `.state` como `.png`.
+    `SaveStateMetadata.thumbnail_path` (schema já tinha a coluna); `delete`
+    remove os dois. `SaveStateDto.has_thumbnail` + comando
+    `read_save_thumbnail` (PNG por IPC → blob URL). Front:
+    `components/SaveStateThumb.tsx`, `RomDetail` lista com miniatura + "Jogar
+    daqui" (`/play?loadState=<id>` → `PlayScreen` carrega o state após o boot),
+    e o menu de pausa ganhou a lista completa de estados (miniatura + carregar).
+    +0 teste novo (os 4 de `save_state.rs` seguem, com `None` no arg novo).
 - **2026-08-27 — Etapa 09 (`in-progress`)**: `crates/library-scan`.
   - `hash.rs` — `FileRomHasher` impl `domain::metadata::RomHashService`:
     CRC32 (`crc32fast`) + MD5 (`md-5`) do arquivo, com **skip do header iNES**
@@ -478,11 +565,16 @@ Ao concluir uma etapa:
       cartões arredondados, anel de foco forte). `AppShell` reescrito;
       `<GameCard>` / `<ButtonHints>` / `useClock`. `Library` agrupada por
       sistema em grade estilo Xbox.
-    - **Catálogo de cores (MVP etapa 10)**: `core_catalog.rs` — lista curada de
-      15 cores *software* baixados do buildbot oficial (`<stem>.so.zip` →
-      extrai `.so` pra `<dados>/cores/`). Comandos `list_core_catalog` /
-      `download_core` / `remove_core` (deps `reqwest` rustls + `zip`). Aba
-      **Cores** em Settings com "Instalados" + "Catálogo" (instalar/remover).
+    - **Catálogo de cores (etapa 10)**: `core_catalog.rs` — cores do buildbot
+      oficial (`<stem>.so.zip` → extrai o dylib pra `<dados>/cores/`). Comandos
+      `list_core_catalog` / `download_core` / `remove_core` (deps `reqwest`
+      rustls + `zip`). Aba **Cores** em Settings ("Instalados" + "Catálogo").
+      **2026-08-30 — ampliado pra 68 cores** cobrindo ~todos os sistemas (NES→
+      PS2, home computers, arcade, fantasy consoles). `CatalogEntry.hw`:
+      `Software` (roda hoje) ou `OpenGl` (baixa, mas `load_game` recusa até o
+      contexto GL da etapa 02 — badge "precisa de GPU" na UI, ordenados por
+      último). Cores exclusivamente Vulkan ficam de fora até a etapa 12.
+      **Etapa 10 → `done`.**
     - **Navegação por controle**: `useGamepadNav` — setas do teclado sempre +
       Gamepad API do navegador (lazy, só após `gamepadconnected` — o WebKitGTK
       reclama se pollarmos sem gamepad). Foco geométrico (bom pra grade), `A`
@@ -537,6 +629,13 @@ Ao concluir uma etapa:
     usa present mode Mailbox/Immediate (não bloqueia a thread do event loop).
   - Windows/macOS: surface direto no handle da janela principal (webview
     transparente compõe) — código pronto, **não verificado**.
+  - **2026-08-30 — readback com pipeline** (`gpu.rs`): o readback GPU→CPU fazia
+    `device.poll(wait_indefinitely)` — bloqueava a thread do Tauri e serializava
+    CPU/GPU (sem pipeline). Agora `ReadbackRing` com 2 staging buffers: o frame
+    N copia pro slot N%2 + `map_async`, e lê o slot do frame anterior (já
+    mapeado) sem bloquear (`poll(Poll)`). Fallback bloqueante só se o slot ainda
+    não mapeou (raro). Atraso de exatamente 1 frame; sem stall no caminho
+    normal. +1 teste (`pipelined_readback_has_one_frame_delay`, headless wgpu).
   - **2026-08-30 — Etapa 03 `done` (desvio aceito)**: a surface nativa não
     funciona no WebKitGTK+NVIDIA desse setup (`Gdk Error 71` na `wl_surface`;
     child X11 não pinta). O vídeo do desktop é um **`<canvas>` na webview**:

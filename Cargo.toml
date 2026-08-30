@@ -25,3 +25,17 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"
 async-trait = "0.1"
+
+# Emulação precisa de código otimizado mesmo em `cargo tauri dev` — sem isso o
+# loop do core + conversão de pixel + resample + readback não sustentam 60fps e
+# o jogo "trava". Deps ficam em -O3 (custo só na 1ª compilação); o código do
+# projeto em -O2 (compila rápido o bastante e os hot loops ficam sãos).
+[profile.dev]
+opt-level = 2
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

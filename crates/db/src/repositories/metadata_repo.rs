@@ -198,15 +198,14 @@ impl MetadataRepository for MetadataRepo {
                 .map_err(be)?;
             return Ok(());
         }
-        let json: Option<String> =
-            sqlx::query_scalar::<_, Option<String>>(
-                "SELECT candidate_json FROM scrape_matches WHERE rom_id = ?1",
-            )
-            .bind(rom_id)
-            .fetch_optional(&self.db)
-            .await
-            .map_err(be)?
-            .flatten();
+        let json: Option<String> = sqlx::query_scalar::<_, Option<String>>(
+            "SELECT candidate_json FROM scrape_matches WHERE rom_id = ?1",
+        )
+        .bind(rom_id)
+        .fetch_optional(&self.db)
+        .await
+        .map_err(be)?
+        .flatten();
         let json = json.ok_or_else(|| RepoError::Backend("pendência sem candidato".into()))?;
         let candidate: ScrapeCandidate = serde_json::from_str(&json)
             .map_err(|e| RepoError::Corrupt(format!("candidate JSON inválido: {e}")))?;

@@ -56,6 +56,8 @@ enum Command {
     SetPaused(bool, Sender<()>),
     SaveState(Sender<Option<Vec<u8>>>),
     RestoreState(Vec<u8>, Sender<bool>),
+    /// Troca o `AudioSink` em runtime (mudou o device / sample rate nas configs).
+    ReloadAudio(AudioSinkFactory, Sender<()>),
     Shutdown,
 }
 
@@ -170,6 +172,12 @@ impl EmuSession {
 
     pub fn restore_state(&self, data: Vec<u8>) -> Result<bool, SessionError> {
         self.call(|reply| Command::RestoreState(data, reply))
+    }
+
+    /// Recria o `AudioSink` na thread do core (mudança de device/sample rate
+    /// nas configs, sem precisar recarregar o jogo).
+    pub fn reload_audio(&self, factory: AudioSinkFactory) -> Result<(), SessionError> {
+        self.call(|reply| Command::ReloadAudio(factory, reply))
     }
 
     pub fn state(&self) -> SessionState {
@@ -340,6 +348,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
     let mut paused = false;
     let mut core_sample_rate = 32_000u32;
     let mut frame_budget = Duration::from_micros(16_667);
+    // Alvo do próximo frame (pacing por acumulador — corrige o overshoot do
+    // `thread::sleep`, que é a causa de microstutter, sobretudo em cores com
+    // fps ≠ 60 como o GBA em 59.73).
+    let mut next_deadline = Instant::now();
 
     loop {
         // Ocioso ou pausado: bloqueia esperando comando. Rodando: só drena.
@@ -364,6 +376,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                             let av = c.system_av_info();
                             let fps = av.timing.fps.max(1.0);
                             frame_budget = Duration::from_secs_f64(1.0 / fps);
+                            next_deadline = Instant::now();
                             core_sample_rate = (av.timing.sample_rate.round() as u32).max(1);
                             // Carrega a battery save, se existir (antes do 1º frame).
                             let srm = srm_path(&save_dir, &rom);
@@ -422,6 +435,9 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         } else {
                             SessionState::Running
                         });
+                        if !p {
+                            next_deadline = Instant::now(); // não "recupera" a pausa
+                        }
                     }
                     let _ = reply.send(());
                 }
@@ -436,6 +452,15 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         .unwrap_or(false);
                     let _ = reply.send(ok);
                 }
+                Command::ReloadAudio(make, reply) => {
+                    // fecha o stream cpal antigo antes de abrir o novo (mesmo device).
+                    drop(sink.take());
+                    sink = make();
+                    if let (Some(s), true) = (sink.as_mut(), paused) {
+                        s.pause();
+                    }
+                    let _ = reply.send(());
+                }
                 Command::Shutdown => {
                     if let (Some(c), Some(p)) = (core.as_ref(), current_srm.as_ref()) {
                         flush_save_ram(c, p);
@@ -448,7 +473,6 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
 
         // Sem comando pendente: roda um frame (só chega aqui se há core e não pausado).
         if let Some(c) = core.as_mut() {
-            let start = Instant::now();
             if let Some(frame) = c.next_frame() {
                 shared.frame_seq.fetch_add(1, Ordering::Relaxed);
                 *shared
@@ -477,8 +501,23 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 last_srm_flush = Instant::now();
             }
 
-            if let Some(rest) = frame_budget.checked_sub(start.elapsed()) {
-                std::thread::sleep(rest);
+            // Pacing por acumulador + spin no final. `thread::sleep` do Linux
+            // passa do ponto (às vezes vários ms); dormir quase tudo e girar o
+            // resto tira o microstutter. O overshoot de um frame vira uma
+            // espera menor no próximo (o alvo é fixo, não re-baseado).
+            next_deadline += frame_budget;
+            let now = Instant::now();
+            if now < next_deadline {
+                let wait = next_deadline - now;
+                if let Some(coarse) = wait.checked_sub(Duration::from_micros(1200)) {
+                    std::thread::sleep(coarse);
+                }
+                while Instant::now() < next_deadline {
+                    std::hint::spin_loop();
+                }
+            } else if now.duration_since(next_deadline) > frame_budget * 4 {
+                // muito pra trás (core lento / stall) — desiste de recuperar.
+                next_deadline = now;
             }
         }
     }
