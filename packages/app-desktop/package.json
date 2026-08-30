@@ -14,17 +14,19 @@
     "@fluentui/react-icons": "^2.0.339",
     "@tanstack/react-query": "^5.102.6",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.2",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.1.0",
+    "@vitejs/plugin-react": "^5.2.0",
     "oxlint": "^1.79.0",
     "typescript": "~6.0.2",
-    "vite": "^8.2.2"
+    "vite": "^7.3.6"
   }
 }

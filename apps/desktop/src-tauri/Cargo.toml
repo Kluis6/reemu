@@ -28,8 +28,16 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = "0.4"
 raw-window-handle = "0.6"
+wgpu = "30"
+png = "0.17"
 uuid = { version = "1", features = ["v4"] }
 thiserror.workspace = true
+reqwest = { version = "0.12", default-features = false, features = [
+    "rustls-tls",
+] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+tauri-plugin-dialog = "2"
+tokio = { version = "1", features = ["time", "rt"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
@@ -47,3 +55,4 @@ video-surface = { path = "../../../crates/video-surface" }
 audio-desktop = { path = "../../../crates/audio-desktop" }
 library-scan = { path = "../../../crates/library-scan" }
 input-desktop = { path = "../../../crates/input-desktop" }
+shader-slang = { path = "../../../crates/shader-slang" }

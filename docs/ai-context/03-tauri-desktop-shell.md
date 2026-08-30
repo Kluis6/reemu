@@ -8,9 +8,14 @@ de menu sempre sobreposto.
 
 ## Decisões relevantes (não renegociar sem discutir)
 
-- **O jogo renderiza fora da WebView**, numa surface/child window nativa,
-  criada via `wgpu::Surface` ou binding GL direto sobre o `WindowHandle`
-  do Tauri — decisão tomada especificamente por causa de input lag.
+- ~~**O jogo renderiza fora da WebView**, numa surface/child window nativa~~
+  — **DESVIO ACEITO (2026-08-30)**: no setup de referência (WebKitGTK 2.52 +
+  NVIDIA + XWayland) a `wgpu::Surface` na `wl_surface` do GTK dá `Gdk Error 71`
+  e a child window X11 monta o DOM mas não pinta. O vídeo do desktop passou a
+  ser um **`<canvas>` dentro da webview** alimentado por `poll_frame` (RGBA8
+  por IPC). O caminho nativo (`REEMU_X11_VIDEO=1`, e o `#[cfg(not(linux))]` de
+  Win/macOS) continua no código, sem verificação. O lag do canvas não foi
+  medido; se virar problema, revisitar a surface nativa (ou GL embutido).
 - **O menu Fluent fica sempre sobreposto** (nunca escondido durante
   `MenuFocused`, e mesmo em `GameFocused` a webview continua viva, só sem
   captar input) — não implemente um modelo de "esconder a webview
@@ -22,7 +27,27 @@ de menu sempre sobreposto.
   React via evento Tauri (`emit("focus-changed", ...)`) — não tente
   decidir foco no lado JS.
 
-## Estado atual (2026-08-27 — `in-progress`)
+## Estado atual (2026-08-30 — `done`, com o desvio do canvas)
+
+Fechado. O app abre com a webview React, carrega e roda jogos (SNES validado
+pelo usuário), alterna foco pausando/resumindo o core (áudio + frame congelam),
+e o vídeo desenha num `<canvas>`:
+
+- **`poll_frame`** (`commands.rs`) — `session.take_latest_frame()` → caminho
+  GPU (etapa 04) ou CPU (`to_rgba8`) → `[w u32][h u32][rgba8…]`. Corpo vazio
+  quando não há frame novo (o `take` consome).
+- **`PlayScreen`** — dois loops desacoplados: um `async` de **fetch** (IPC,
+  guarda o último frame numa ref; 3ms rodando / 120ms pausado) e um **rAF de
+  paint** (sincronizado com o vblank, `putImageData` do último frame). Pausa =
+  o canvas segura o último frame (freeze). Resize = CSS (`height:100%`,
+  `aspect-ratio` do core), sem passo nativo.
+- `FocusController` pausa/resume a `EmuSession` na transição de foco; o único
+  gatilho é o comando `toggle_focus` (via hotkey/gamepad/menu), nunca o React.
+- Shutdown: `RunEvent::ExitRequested` → `session.unload()` (flush da `.srm`).
+
+Caminho nativo (histórico, não é o padrão):
+
+## Histórico da surface nativa (2026-08-27)
 
 Spine testável pronto:
 - `crates/emu-session` — `EmuSession` roda o core numa thread dedicada
@@ -93,8 +118,10 @@ produzindo frames.
 
 ## Critério de pronto
 
-- Janela abre com a webview React e, ao carregar um jogo, a surface
-  nativa aparece sobreposta corretamente, sem sobrepor incorretamente o
-  menu
-- Alternar foco via hotkey pausa/resume o core de forma perceptível
-  (áudio para e volta, frame congela e descongela)
+- [x] Janela abre com a webview React e, ao carregar um jogo, o vídeo do core
+  aparece (via `<canvas>` — ver desvio) sem cobrir o menu de pausa.
+- [x] Alternar foco via hotkey pausa/resume o core de forma perceptível
+  (áudio para e volta, frame congela e descongela) — validado com SNES.
+
+Follow-up (não bloqueia): medir a latência do canvas vs. nativo; verificar o
+caminho nativo em Windows/macOS quando houver máquina; GL embutido.

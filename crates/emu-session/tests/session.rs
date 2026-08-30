@@ -126,3 +126,34 @@ fn reload_after_unload_and_bad_core_reports_error() {
     s.load(testcore_path(), rom().to_str().unwrap()).unwrap();
     assert_eq!(s.state(), SessionState::Running);
 }
+
+#[test]
+fn save_ram_round_trips_through_session() {
+    let _g = lock();
+    let rom_path = rom();
+    let srm = std::env::temp_dir().join(format!(
+        "{}.srm",
+        rom_path.file_stem().unwrap().to_str().unwrap()
+    ));
+    let mut want = vec![0u8; 64];
+    want[0] = 0x11;
+    want[63] = 0xEE;
+    std::fs::write(&srm, &want).unwrap();
+
+    let s = session();
+    s.load(testcore_path(), rom_path.to_str().unwrap()).unwrap();
+    sleep(Duration::from_millis(30));
+    s.unload().unwrap(); // grava a save RAM de volta
+
+    // O `.srm` foi carregado no core no load e regravado no unload. O byte 2 é
+    // sobrescrito pelo testcore com a core option `testcore_mark` (default "A");
+    // os demais bytes vêm do arquivo original.
+    let got = std::fs::read(&srm).unwrap();
+    assert_eq!(got.len(), 64);
+    assert_eq!(got[0], 0x11, "byte que veio do arquivo");
+    assert_eq!(got[63], 0xEE, "byte que veio do arquivo");
+    assert_eq!(got[2], b'A', "byte que o core escreveu (core option)");
+
+    std::fs::remove_file(&srm).ok();
+    std::fs::remove_file(&rom_path).ok();
+}

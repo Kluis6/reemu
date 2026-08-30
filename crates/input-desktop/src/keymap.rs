@@ -46,6 +46,18 @@ pub fn web_code_to_retropad(code: &str) -> Option<(u8, RetroPadButton)> {
     ))
 }
 
+/// FNV-1a 32 bits do `KeyboardEvent.code`. A web não expõe scancode físico;
+/// só precisamos de um id estável e consistente entre a captura de binding
+/// (etapa 05) e a resolução de hotkey em runtime.
+pub fn key_scancode(code: &str) -> u32 {
+    let mut h: u32 = 0x811c_9dc5;
+    for b in code.bytes() {
+        h ^= b as u32;
+        h = h.wrapping_mul(0x0100_0193);
+    }
+    h
+}
+
 #[derive(Debug, Clone)]
 pub struct KeyboardMap {
     map: BTreeMap<u32, (u8, RetroPadButton)>,
@@ -116,6 +128,13 @@ mod tests {
         let mut m = KeyboardMap::default();
         m.bind(sc::KEY_Z, 1, RetroPadButton::A);
         assert_eq!(m.resolve(sc::KEY_Z), Some((1, RetroPadButton::A)));
+    }
+
+    #[test]
+    fn key_scancode_is_stable_and_distinct() {
+        assert_eq!(key_scancode("Escape"), key_scancode("Escape"));
+        assert_ne!(key_scancode("Escape"), key_scancode("F1"));
+        assert_ne!(key_scancode(""), key_scancode("F1"));
     }
 
     #[test]

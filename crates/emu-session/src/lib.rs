@@ -17,3 +17,11 @@ pub use session::{EmuSession, SessionConfig, SessionError, SessionState};
 
 /// Estado do RetroPad — escreva aqui pra mandar input pro core.
 pub use core_loader_desktop::{retropad, RetroPadState};
+
+/// Descoberta de cores instalados (`<dados>/cores/*_libretro.<suf>`).
+pub use core_loader_desktop::{discover_cores, DiscoveredCore};
+
+/// Core options do core carregado agora (lidas/escritas de qualquer thread).
+pub use core_loader_desktop::{
+    core_option_values, core_options, set_core_option, set_pending_core_option_values,
+};

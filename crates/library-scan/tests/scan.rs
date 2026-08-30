@@ -39,7 +39,7 @@ async fn scans_recursively_infers_system_and_dedups() {
     let db = db::connect_in_memory().await.unwrap();
     let repo = db::RomsRepo::new(db.clone());
 
-    let r = scan_into(&repo, &dir, 1_700_000_000).await.unwrap();
+    let r = scan_into(&repo, &dir, 1_700_000_000, |_| {}).await.unwrap();
     assert_eq!(
         r,
         ScanReport {
@@ -64,7 +64,7 @@ async fn scans_recursively_infers_system_and_dedups() {
     assert_eq!(zelda.md5.len(), 32);
 
     // 2ª varredura: nada novo (dedup por file_path)
-    let r2 = scan_into(&repo, &dir, 1_700_000_001).await.unwrap();
+    let r2 = scan_into(&repo, &dir, 1_700_000_001, |_| {}).await.unwrap();
     assert_eq!(r2.added, 0);
     assert_eq!(r2.skipped_known, 3);
 
@@ -79,7 +79,7 @@ async fn same_rom_different_paths_both_catalogued() {
 
     let db = db::connect_in_memory().await.unwrap();
     let repo = db::RomsRepo::new(db);
-    let r = scan_into(&repo, &dir, 0).await.unwrap();
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
     assert_eq!(r.added, 2);
 
     let by_crc = repo

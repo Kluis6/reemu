@@ -6,5 +6,7 @@ description = "Input desktop: SDL_GameControllerDB, hotkeys com combinação, ke
 
 [dependencies]
 domain = { path = "../domain" }
+core-loader-desktop = { path = "../core-loader-desktop" }
+gilrs = "0.11"
 thiserror.workspace = true
 log = "0.4"

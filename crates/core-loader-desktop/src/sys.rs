@@ -104,6 +104,72 @@ pub struct retro_game_info {
     pub meta: *const c_char,
 }
 
+// --- Core options (SET_VARIABLES v0 / SET_CORE_OPTIONS v1 / _V2) ---
+
+/// Par `key`/`value` de `RETRO_ENVIRONMENT_{SET_VARIABLES,GET_VARIABLE}` (v0).
+#[repr(C)]
+pub struct retro_variable {
+    pub key: *const c_char,
+    pub value: *const c_char,
+}
+
+pub const RETRO_NUM_CORE_OPTION_VALUES_MAX: usize = 128;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct retro_core_option_value {
+    pub value: *const c_char,
+    pub label: *const c_char,
+}
+
+/// Definição v1 (`SET_CORE_OPTIONS`). Array terminado por `key == null`.
+#[repr(C)]
+pub struct retro_core_option_definition {
+    pub key: *const c_char,
+    pub desc: *const c_char,
+    pub info: *const c_char,
+    pub values: [retro_core_option_value; RETRO_NUM_CORE_OPTION_VALUES_MAX],
+    pub default_value: *const c_char,
+}
+
+/// Definição v2 (`SET_CORE_OPTIONS_V2`). Array terminado por `key == null`.
+#[repr(C)]
+pub struct retro_core_option_v2_definition {
+    pub key: *const c_char,
+    pub desc: *const c_char,
+    pub desc_categorized: *const c_char,
+    pub info: *const c_char,
+    pub info_categorized: *const c_char,
+    pub category_key: *const c_char,
+    pub values: [retro_core_option_value; RETRO_NUM_CORE_OPTION_VALUES_MAX],
+    pub default_value: *const c_char,
+}
+
+#[repr(C)]
+pub struct retro_core_option_v2_category {
+    pub key: *const c_char,
+    pub desc: *const c_char,
+    pub info: *const c_char,
+}
+
+#[repr(C)]
+pub struct retro_core_options_v2 {
+    pub categories: *mut retro_core_option_v2_category,
+    pub definitions: *mut retro_core_option_v2_definition,
+}
+
+#[repr(C)]
+pub struct retro_core_options_intl {
+    pub us: *const retro_core_option_definition,
+    pub local: *const retro_core_option_definition,
+}
+
+#[repr(C)]
+pub struct retro_core_options_v2_intl {
+    pub us: *mut retro_core_options_v2,
+    pub local: *mut retro_core_options_v2,
+}
+
 pub type retro_proc_address_t = Option<unsafe extern "C" fn()>;
 pub type retro_hw_context_reset_t = Option<unsafe extern "C" fn()>;
 pub type retro_hw_get_current_framebuffer_t = Option<unsafe extern "C" fn() -> usize>;

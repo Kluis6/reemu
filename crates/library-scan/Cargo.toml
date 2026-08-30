@@ -16,3 +16,4 @@ log = "0.4"
 [dev-dependencies]
 db = { path = "../db" }
 tokio = { version = "1", features = ["macros", "rt"] }
+tempfile = "3"

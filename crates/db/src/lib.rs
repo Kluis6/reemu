@@ -13,8 +13,8 @@ mod repositories;
 
 pub use pool::{connect, connect_in_memory, run_migrations, Db};
 pub use repositories::{
-    AudioConfigRepo, CoreOptionsRepo, DecorationRepo, InstalledCoresRepo, RomsRepo, SaveStateRepo,
-    ShaderChainRepo,
+    AudioConfigRepo, ControllerMappingsRepo, CoreOptionsRepo, DecorationRepo, DevicePortsRepo,
+    InstalledCoresRepo, MetadataRepo, RomsRepo, SaveStateRepo, ShaderChainRepo, SystemHotkeysRepo,
 };
 
 use thiserror::Error;

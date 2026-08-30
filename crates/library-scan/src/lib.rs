@@ -2,10 +2,15 @@
 //! populando `domain::library::RomRepository`. Match automático de metadata
 //! é sempre por hash exato (ver `docs/ai-context/09`).
 
+mod decoration;
 mod hash;
 mod scan;
 mod systems;
 
+pub use decoration::{
+    scan_decoration_pack, system_from_folder_name, viewport_for_image, DecoScope,
+    ScannedDecoration, Viewport,
+};
 pub use hash::FileRomHasher;
-pub use scan::{scan_into, ScanError, ScanReport};
-pub use systems::system_for_extension;
+pub use scan::{count_roms, scan_into, ScanError, ScanProgress, ScanReport};
+pub use systems::{libretro_boxart_url, system_for_extension};

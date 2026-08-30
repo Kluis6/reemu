@@ -3,7 +3,7 @@ use domain::audio::AudioSink;
 use domain::core_loader::{CoreId, CoreLoadError, LoadedCore, SystemAvInfo};
 use domain::frame_source::{Frame, FrameSource};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
@@ -19,6 +19,8 @@ pub struct SessionConfig {
     pub system_dir: PathBuf,
     pub save_dir: PathBuf,
     pub audio_sink: Option<AudioSinkFactory>,
+    /// Liga o poll de gamepad físico (`gilrs`) numa thread própria.
+    pub enable_gamepad: bool,
 }
 
 impl SessionConfig {
@@ -28,6 +30,7 @@ impl SessionConfig {
             system_dir,
             save_dir,
             audio_sink: None,
+            enable_gamepad: false,
         }
     }
 }
@@ -64,6 +67,22 @@ struct Shared {
     /// Identificador do core carregado (o que foi passado pra `load`). `None`
     /// quando ocioso. Usado pra validar save states (não portáveis entre cores).
     loaded_core: Mutex<Option<String>>,
+    /// `true` = input vai pro jogo; `false` (menu) = a thread de gamepad
+    /// solta o RetroPad.
+    game_focused: AtomicBool,
+    /// Botão de menu do gamepad (`Mode`) foi pressionado — o shell consome.
+    menu_requested: AtomicBool,
+    /// Sinaliza a thread de gamepad pra encerrar.
+    gamepad_stop: AtomicBool,
+    /// Eventos brutos capturados pela thread de gamepad em modo de binding —
+    /// o shell drena e repassa pro frontend.
+    captured_inputs: Mutex<Vec<domain::input::RawInputEvent>>,
+    /// Gamepads conectados agora: `(guid_hex, nome)`. Atualizado pela thread
+    /// de gamepad; o shell lê pra UI de mapeamento.
+    gamepads: Mutex<Vec<(String, String)>>,
+    /// Pulsos de navegação de menu vindos do gamepad — o shell drena e emite
+    /// pro frontend como `menu-nav`.
+    nav: Mutex<Vec<input_desktop::NavPulse>>,
 }
 
 impl Shared {
@@ -76,6 +95,7 @@ pub struct EmuSession {
     tx: Sender<Command>,
     shared: Arc<Shared>,
     thread: Option<JoinHandle<()>>,
+    gamepad_thread: Option<JoinHandle<()>>,
 }
 
 impl EmuSession {
@@ -87,7 +107,22 @@ impl EmuSession {
             audio: Mutex::new(Vec::new()),
             state: Mutex::new(SessionState::Idle),
             loaded_core: Mutex::new(None),
+            game_focused: AtomicBool::new(true),
+            menu_requested: AtomicBool::new(false),
+            gamepad_stop: AtomicBool::new(false),
+            captured_inputs: Mutex::new(Vec::new()),
+            gamepads: Mutex::new(Vec::new()),
+            nav: Mutex::new(Vec::new()),
         });
+
+        let gamepad_thread = cfg.enable_gamepad.then(|| {
+            let shared = Arc::clone(&shared);
+            std::thread::Builder::new()
+                .name("emu-gamepad".into())
+                .spawn(move || gamepad_loop(shared))
+                .expect("spawn emu-gamepad")
+        });
+
         let thread = {
             let shared = Arc::clone(&shared);
             std::thread::Builder::new()
@@ -99,6 +134,7 @@ impl EmuSession {
             tx,
             shared,
             thread: Some(thread),
+            gamepad_thread,
         }
     }
 
@@ -140,6 +176,45 @@ impl EmuSession {
         *self.shared.state.lock().unwrap_or_else(|p| p.into_inner())
     }
 
+    /// Roteia input pro jogo (`true`) ou segura tudo (`false`, menu). Chamado
+    /// pelo `FocusController`.
+    pub fn set_game_focused(&self, focused: bool) {
+        self.shared.game_focused.store(focused, Ordering::Relaxed);
+    }
+
+    /// `true` uma vez se o botão de menu do gamepad foi pressionado desde a
+    /// última chamada (o shell abre/fecha o menu).
+    pub fn take_menu_request(&self) -> bool {
+        self.shared.menu_requested.swap(false, Ordering::Relaxed)
+    }
+
+    /// Drena os eventos brutos de gamepad capturados em modo de binding
+    /// (`input_desktop::capture`). O shell emite cada um pro frontend.
+    pub fn take_captured_inputs(&self) -> Vec<domain::input::RawInputEvent> {
+        std::mem::take(
+            &mut *self
+                .shared
+                .captured_inputs
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()),
+        )
+    }
+
+    /// Drena os pulsos de navegação de menu do gamepad (d-pad/stick/A/B). O
+    /// shell emite cada um pro frontend como `menu-nav`.
+    pub fn take_nav_pulses(&self) -> Vec<input_desktop::NavPulse> {
+        std::mem::take(&mut *self.shared.nav.lock().unwrap_or_else(|p| p.into_inner()))
+    }
+
+    /// Gamepads conectados agora: `(guid_hex, nome)`.
+    pub fn connected_gamepads(&self) -> Vec<(String, String)> {
+        self.shared
+            .gamepads
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+    }
+
     /// Identificador do core carregado (pra validar save states).
     pub fn loaded_core(&self) -> Option<String> {
         self.shared
@@ -171,18 +246,97 @@ impl EmuSession {
 
 impl Drop for EmuSession {
     fn drop(&mut self) {
+        self.shared.gamepad_stop.store(true, Ordering::Relaxed);
         let _ = self.tx.send(Command::Shutdown);
         if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+        if let Some(t) = self.gamepad_thread.take() {
             let _ = t.join();
         }
     }
 }
 
+fn gamepad_loop(shared: Arc<Shared>) {
+    let mut poller = match input_desktop::GamepadPoller::new() {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("gamepad indisponível: {e} — só teclado");
+            return;
+        }
+    };
+    let pad = core_loader_desktop::retropad();
+    while !shared.gamepad_stop.load(Ordering::Relaxed) {
+        let outcome = poller.poll(pad);
+        if outcome.menu_pressed {
+            shared.menu_requested.store(true, Ordering::Relaxed);
+        }
+        if !outcome.captured.is_empty() {
+            shared
+                .captured_inputs
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .extend(outcome.captured);
+        }
+        if !outcome.nav.is_empty() {
+            shared
+                .nav
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .extend(outcome.nav);
+        }
+        {
+            let mut g = shared.gamepads.lock().unwrap_or_else(|p| p.into_inner());
+            if *g != outcome.gamepads {
+                *g = outcome.gamepads;
+            }
+        }
+        if !shared.game_focused.load(Ordering::Relaxed) {
+            pad.clear(); // no menu, nada de input de jogo
+        }
+        std::thread::sleep(Duration::from_millis(8));
+    }
+}
+
+/// `<save_dir>/<stem da rom>.srm` — convenção do RetroArch pra battery save.
+fn srm_path(dir: &std::path::Path, rom_path: &str) -> PathBuf {
+    let stem = std::path::Path::new(rom_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("game");
+    dir.join(format!("{stem}.srm"))
+}
+
+fn flush_save_ram(core: &core_loader_desktop::DesktopCore, path: &std::path::Path) {
+    let Some(bytes) = core.save_ram() else { return };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    // Escrita atômica: grava num `.tmp` no mesmo diretório e renomeia por cima
+    // (rename é atômico no mesmo filesystem). Um kill no meio da escrita deixa
+    // a `.srm` antiga intacta em vez de truncada.
+    let tmp = path.with_extension("srm.tmp");
+    let write = std::fs::write(&tmp, &bytes).and_then(|()| std::fs::rename(&tmp, path));
+    match write {
+        Ok(()) => log::debug!("save RAM ({} bytes) → {path:?}", bytes.len()),
+        Err(e) => {
+            log::warn!("save RAM {path:?}: {e}");
+            let _ = std::fs::remove_file(&tmp);
+        }
+    }
+}
+
+/// De quanto em quanto tempo a save RAM é gravada em disco enquanto o jogo roda.
+const SRM_FLUSH_INTERVAL: Duration = Duration::from_secs(10);
+
 fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>) {
     // A stream do cpal é `!Send` — construída aqui, nesta thread.
     let mut sink: Option<Box<dyn AudioSink>> = cfg.audio_sink.take().and_then(|make| make());
+    let save_dir = cfg.save_dir.clone();
     let loader = DesktopCoreLoader::new(cfg.cores_dir, cfg.system_dir, cfg.save_dir);
-    let mut core = None;
+    let mut core: Option<core_loader_desktop::DesktopCore> = None;
+    let mut current_srm: Option<PathBuf> = None;
+    let mut last_srm_flush = Instant::now();
     let mut paused = false;
     let mut core_sample_rate = 32_000u32;
     let mut frame_budget = Duration::from_micros(16_667);
@@ -198,14 +352,30 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
         if let Some(cmd) = cmd {
             match cmd {
                 Command::Load(id, rom, reply) => {
+                    // Grava a save RAM do jogo anterior antes de trocar.
+                    if let (Some(c), Some(p)) = (core.as_ref(), current_srm.as_ref()) {
+                        flush_save_ram(c, p);
+                    }
                     core = None; // teardown do anterior antes de abrir outro
+                    current_srm = None;
                     shared.set_state(SessionState::Idle);
                     match loader.open_core(&id, &rom) {
-                        Ok(c) => {
+                        Ok(mut c) => {
                             let av = c.system_av_info();
                             let fps = av.timing.fps.max(1.0);
                             frame_budget = Duration::from_secs_f64(1.0 / fps);
                             core_sample_rate = (av.timing.sample_rate.round() as u32).max(1);
+                            // Carrega a battery save, se existir (antes do 1º frame).
+                            let srm = srm_path(&save_dir, &rom);
+                            if let Ok(bytes) = std::fs::read(&srm) {
+                                if c.restore_save_ram(&bytes) {
+                                    log::info!("save RAM restaurada de {srm:?}");
+                                } else {
+                                    log::warn!("save RAM {srm:?} ignorada (tamanho não bate)");
+                                }
+                            }
+                            current_srm = Some(srm);
+                            last_srm_flush = Instant::now();
                             core = Some(c);
                             paused = false;
                             if let Some(s) = sink.as_mut() {
@@ -224,7 +394,11 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     }
                 }
                 Command::Unload(reply) => {
+                    if let (Some(c), Some(p)) = (core.as_ref(), current_srm.as_ref()) {
+                        flush_save_ram(c, p);
+                    }
                     core = None;
+                    current_srm = None;
                     paused = false;
                     *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) = None;
                     if let Some(s) = sink.as_mut() {
@@ -262,7 +436,12 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         .unwrap_or(false);
                     let _ = reply.send(ok);
                 }
-                Command::Shutdown => break,
+                Command::Shutdown => {
+                    if let (Some(c), Some(p)) = (core.as_ref(), current_srm.as_ref()) {
+                        flush_save_ram(c, p);
+                    }
+                    break;
+                }
             }
             continue;
         }
@@ -290,6 +469,14 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         .extend_from_slice(&audio),
                 }
             }
+            // Flush periódico da save RAM (barato: só grava se o jogo tem SRAM).
+            if last_srm_flush.elapsed() >= SRM_FLUSH_INTERVAL {
+                if let Some(p) = current_srm.as_ref() {
+                    flush_save_ram(c, p);
+                }
+                last_srm_flush = Instant::now();
+            }
+
             if let Some(rest) = frame_budget.checked_sub(start.elapsed()) {
                 std::thread::sleep(rest);
             }

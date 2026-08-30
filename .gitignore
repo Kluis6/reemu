@@ -34,6 +34,11 @@ apps/mobile/src-tauri/gen/android/local.properties
 /shader_presets/user_imported/
 /saves/
 
+# Capturas de tela do modo Xbox (referência de design de terceiros) — o
+# docs/design/xbox-mode-reference.md descreve os padrões por escrito.
+/docs/design/screenshots/*.png
+/docs/design/screenshots/*.jpg
+
 # Editor / SO
 .vscode/
 .idea/

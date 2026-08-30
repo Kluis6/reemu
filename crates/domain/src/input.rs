@@ -11,6 +11,8 @@
 //! um índice único. Combinação em ação de jogo é incomum e deve ser
 //! tratada como recurso avançado na UI, não como fluxo padrão sugerido.
 
+use crate::error::RepoError;
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -57,6 +59,26 @@ pub enum MappingSource {
     UserOverride,
 }
 
+impl MappingSource {
+    /// Valor da coluna `controller_mappings.source` (travado por CHECK).
+    pub fn as_wire(&self) -> &'static str {
+        match self {
+            MappingSource::SdlGameControllerDb => "sdl_game_controller_db",
+            MappingSource::BundledAndroid => "bundled_android",
+            MappingSource::UserOverride => "user_override",
+        }
+    }
+
+    pub fn from_wire(s: &str) -> Option<Self> {
+        Some(match s {
+            "sdl_game_controller_db" => MappingSource::SdlGameControllerDb,
+            "bundled_android" => MappingSource::BundledAndroid,
+            "user_override" => MappingSource::UserOverride,
+            _ => return None,
+        })
+    }
+}
+
 /// Evento bruto de input, usado tanto na resolução normal (gamepad -> RetroPad)
 /// quanto na UI de captura de binding.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -77,6 +99,29 @@ pub enum RawInputEvent {
 
 pub trait ControllerMappingResolver: Send + Sync {
     fn resolve_mapping(&self, device_guid: &str) -> Option<ControllerMapping>;
+}
+
+/// Persistência dos mapeamentos de controle (tabela `controller_mappings`).
+/// Funciona como cache com override do usuário: `guid` presente = usa este,
+/// senão cai no SDL_GameControllerDB, senão fluxo manual de binding.
+/// Implementado pelo crate `db`.
+#[async_trait]
+pub trait ControllerMappingRepository: Send + Sync {
+    async fn list(&self) -> Result<Vec<ControllerMapping>, RepoError>;
+    async fn get(&self, guid: &str) -> Result<Option<ControllerMapping>, RepoError>;
+    /// Insere ou substitui o mapeamento do `guid`.
+    async fn upsert(&self, mapping: &ControllerMapping) -> Result<(), RepoError>;
+    async fn delete(&self, guid: &str) -> Result<(), RepoError>;
+}
+
+/// Atribuição fixa de `guid` → porta RetroPad (tabela `device_port_assignment`).
+/// Sem entrada = a porta é atribuída na ordem de conexão. Implementado pelo
+/// crate `db`.
+#[async_trait]
+pub trait DevicePortRepository: Send + Sync {
+    async fn list(&self) -> Result<Vec<(String, u8)>, RepoError>;
+    async fn set(&self, guid: &str, port: u8) -> Result<(), RepoError>;
+    async fn clear(&self, guid: &str) -> Result<(), RepoError>;
 }
 
 pub trait InputManager: Send + Sync {

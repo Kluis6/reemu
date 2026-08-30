@@ -69,6 +69,26 @@ impl CoreOptionsStore for CoreOptionsRepo {
         }
     }
 
+    async fn values_for(
+        &self,
+        core_id: &str,
+    ) -> Result<std::collections::HashMap<String, String>, RepoError> {
+        let rows =
+            sqlx::query("SELECT option_key, value FROM core_options_values WHERE core_id = ?1")
+                .bind(core_id)
+                .fetch_all(&self.db)
+                .await
+                .map_err(be)?;
+        rows.iter()
+            .map(|r| {
+                Ok((
+                    r.try_get::<String, _>("option_key").map_err(be)?,
+                    r.try_get::<String, _>("value").map_err(be)?,
+                ))
+            })
+            .collect()
+    }
+
     async fn set_value(
         &self,
         core_id: &str,

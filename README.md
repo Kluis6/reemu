@@ -48,17 +48,25 @@ Ver `TASKS.md` para o checklist detalhado. Resumo:
       ponta a ponta (libloading + FFI libretro), 5 testes com core-fake em C
 - [x] **Etapa 03 (parcial)** — `emu-session` (loop + foco), `video-surface`
       (renderer wgpu testado headless), vídeo no app (Linux X11 child window)
-- [x] **Etapa 07 (parcial)** — casca Fluent (MenuOverlay, ToastLayer,
-      CoreOptionsPanel), Settings com config de áudio real via SQLite
+- [x] **Etapa 07 (parcial)** — frontend em rotas (react-router hash), visual
+      "modo Xbox" (rail de ícones, cartões, navegação por controle/teclado).
+      `PlayScreen` transparente (HUD + menu de pausa). Core options, save RAM,
+      diretório de dados único.
+- [x] **Etapa 10 (parcial)** — catálogo de cores: 15 cores *software* do
+      buildbot libretro, instalar/remover pela aba **Cores** das Configurações.
 - [x] **Etapa 06 (parcial)** — `audio-desktop`: DRC puro (testado) +
       `CpalAudioSink`, fiado no `emu-session` (o som do core sai de verdade)
 - [x] **Etapa 09 (parcial)** — `library-scan`: hash CRC32/MD5 + varredura;
       a tela Biblioteca escaneia um diretório e lista de verdade
 - [x] **Etapa 08 (parcial)** — save state: arquivo em disco + metadata +
       validação de core no load (comandos Tauri, 4 testes)
-- [x] **Etapa 05 (parcial)** — `input-desktop` (SDL DB, hotkeys com combinação,
-      keymap) + `RetroPadState` no core-loader; teclado da webview vai pro core
-- [ ] Etapa 05: `gilrs` (gamepad físico) + UI de binding
+- [x] **Etapa 05** — `input-desktop` (SDL DB, hotkeys com combinação, keymap) +
+      `RetroPadState` no core-loader; teclado da webview vai pro core; `gilrs`
+      (gamepad físico, thread de `emu-session`, stick esquerdo → d-pad); UI de
+      captura de binding (`<BindingCapture>` + `db::SystemHotkeysRepo`/
+      `ControllerMappingsRepo`); `HotkeyResolver` + mapeamento de controle +
+      `device_port_assignment` aplicados do DB em runtime; `QuickSave`/`QuickLoad`;
+      seção "Controles" em Settings; `<IdleScreen>`. Falta validar em hardware.
 - [ ] Etapa 02 passo 4 — contexto GL pra cores HW-accelerated
 - [ ] `apps/mobile`, `packages/ui`, `packages/shared`
 

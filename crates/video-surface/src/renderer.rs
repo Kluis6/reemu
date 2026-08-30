@@ -150,7 +150,7 @@ impl Renderer {
             return;
         }
 
-        let rgba = crate::convert::to_rgba8(data, w, h, pitch, format);
+        let rgba = crate::to_rgba8(data, w, h, pitch, format);
 
         let needs_new = self
             .frame

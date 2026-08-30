@@ -33,10 +33,11 @@ impl FocusController {
     fn apply(&self) {
         let menu = self.focus == InputFocus::MenuFocused;
         self.session.set_paused(menu);
-        if menu {
-            // Solta tudo — senão o jogo volta com teclas "grudadas".
-            core_loader_desktop::retropad().clear();
-        }
+        self.session.set_game_focused(!menu);
+        // Solta tudo na transição — senão o jogo volta com teclas "grudadas" e
+        // o resolvedor de hotkey continua vendo a combinação que abriu o menu.
+        core_loader_desktop::retropad().clear();
+        input_desktop::held::clear();
     }
 }
 

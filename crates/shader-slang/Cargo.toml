@@ -1,0 +1,14 @@
+[package]
+name = "shader-slang"
+version.workspace = true
+edition.workspace = true
+description = "Parser do formato slang preset (.slangp) — módulo isolado (compila/parseia conteúdo de terceiros)"
+
+[dependencies]
+thiserror.workspace = true
+log = "0.4"
+# glsl-in do naga 30.0.1 só compila com wgsl-in junto (bug de packaging).
+naga = { version = "=30.0.1", features = ["glsl-in", "wgsl-in", "wgsl-out"] }
+
+[dev-dependencies]
+tempfile = "3"

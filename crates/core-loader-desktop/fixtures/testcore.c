@@ -54,8 +54,15 @@ struct retro_hw_render_callback {
 
 #define RETRO_ENVIRONMENT_SET_HW_RENDER 14
 #define RETRO_ENVIRONMENT_SET_PIXEL_FORMAT 10
+#define RETRO_ENVIRONMENT_GET_VARIABLE 15
+#define RETRO_ENVIRONMENT_SET_VARIABLES 16
 #define RETRO_PIXEL_FORMAT_RGB565 2
 #define RETRO_HW_CONTEXT_OPENGL_CORE 3
+
+struct retro_variable {
+   const char *key;
+   const char *value;
+};
 
 #define FB_W 64
 #define FB_H 48
@@ -70,7 +77,21 @@ static retro_input_state_t input_state_cb;
 static uint16_t fb[FB_W * FB_H];
 static unsigned frame_n;
 
-void retro_set_environment(retro_environment_t cb) { env_cb = cb; }
+/* SAVE_RAM de 64 bytes, pré-carregada com um padrão reconhecível — deixa o
+   `emu-session` exercitar o fluxo de battery save de verdade. SRAM[2] recebe
+   o valor atual da core option `testcore_mark` a cada `retro_run`. */
+static unsigned char testcore_sram[64] = {0xA5, 0x5A};
+
+void retro_set_environment(retro_environment_t cb) {
+   env_cb = cb;
+   struct retro_variable vars[] = {
+      {"testcore_speed", "Velocidade; normal|turbo|lento"},
+      {"testcore_mark", "Marca no SRAM; A|B|C"},
+      {0, 0},
+   };
+   if (cb)
+      cb(RETRO_ENVIRONMENT_SET_VARIABLES, vars);
+}
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { audio_sample_cb = cb; }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
@@ -139,6 +160,14 @@ void retro_run(void) {
    if (input_poll_cb)
       input_poll_cb();
 
+   /* Espelha o valor atual da opção `testcore_mark` no SRAM[2] — deixa os
+      testes verificarem o roundtrip de core options. */
+   if (env_cb) {
+      struct retro_variable v = {"testcore_mark", 0};
+      if (env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &v) && v.value)
+         testcore_sram[2] = (unsigned char)v.value[0];
+   }
+
    uint16_t color = (uint16_t)(frame_n * 111u + 1u);
    for (int i = 0; i < FB_W * FB_H; i++)
       fb[i] = color;
@@ -172,10 +201,12 @@ void retro_cheat_set(unsigned index, bool enabled, const char *code) {
    (void)code;
 }
 void *retro_get_memory_data(unsigned id) {
-   (void)id;
+   if (id == 0 /* RETRO_MEMORY_SAVE_RAM */)
+      return testcore_sram;
    return NULL;
 }
 size_t retro_get_memory_size(unsigned id) {
-   (void)id;
+   if (id == 0 /* RETRO_MEMORY_SAVE_RAM */)
+      return sizeof(testcore_sram);
    return 0;
 }

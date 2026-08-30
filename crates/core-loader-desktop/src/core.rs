@@ -3,6 +3,7 @@
 
 use crate::ffi_state::{self, CoreGuard};
 use crate::raw::RawCore;
+use crate::sys;
 use domain::core_loader::{CoreRenderRequirements, LoadedCore, SystemAvInfo};
 use domain::frame_source::{Frame, FrameMetadata, FrameOrigin, FrameSource};
 
@@ -77,6 +78,36 @@ impl DesktopCore {
     /// Restaura um estado previamente serializado (`retro_unserialize`).
     pub fn restore_state(&mut self, data: &[u8]) -> bool {
         unsafe { (self.raw.unserialize)(data.as_ptr().cast(), data.len()) }
+    }
+
+    /// Cópia da save RAM (SRAM de cartucho / battery save) do core. `None` se
+    /// o jogo não tem — muitos jogos salvam só via save state.
+    pub fn save_ram(&self) -> Option<Vec<u8>> {
+        let size = unsafe { (self.raw.get_memory_size)(sys::RETRO_MEMORY_SAVE_RAM) };
+        if size == 0 {
+            return None;
+        }
+        let ptr = unsafe { (self.raw.get_memory_data)(sys::RETRO_MEMORY_SAVE_RAM) };
+        if ptr.is_null() {
+            return None;
+        }
+        Some(unsafe { std::slice::from_raw_parts(ptr.cast::<u8>(), size) }.to_vec())
+    }
+
+    /// Escreve `data` na região de save RAM do core. Deve rodar logo após o
+    /// load, antes do primeiro `retro_run`. `false` se o tamanho não bate ou
+    /// o jogo não tem SRAM.
+    pub fn restore_save_ram(&mut self, data: &[u8]) -> bool {
+        let size = unsafe { (self.raw.get_memory_size)(sys::RETRO_MEMORY_SAVE_RAM) };
+        if size == 0 || size != data.len() {
+            return false;
+        }
+        let ptr = unsafe { (self.raw.get_memory_data)(sys::RETRO_MEMORY_SAVE_RAM) };
+        if ptr.is_null() {
+            return false;
+        }
+        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), ptr.cast::<u8>(), size) };
+        true
     }
 
     fn aspect_ratio(&self, w: u32, h: u32) -> f32 {

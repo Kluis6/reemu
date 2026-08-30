@@ -32,6 +32,13 @@ pub trait CoreOptionsStore: Send + Sync {
     async fn get_value(&self, core_id: &str, option_key: &str)
         -> Result<Option<String>, RepoError>;
 
+    /// Todos os valores escolhidos pra um core (`option_key -> value`). Usado
+    /// no load pra alimentar o core antes de ele pedir via `GET_VARIABLE`.
+    async fn values_for(
+        &self,
+        core_id: &str,
+    ) -> Result<std::collections::HashMap<String, String>, RepoError>;
+
     async fn set_value(
         &self,
         core_id: &str,

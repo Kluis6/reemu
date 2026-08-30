@@ -29,6 +29,7 @@ async fn setup() -> (db::Db, PathBuf) {
         md5: "BB".into(),
         system_id: "nes".into(),
         added_at: 0,
+        last_played_at: None,
     })
     .await
     .unwrap();

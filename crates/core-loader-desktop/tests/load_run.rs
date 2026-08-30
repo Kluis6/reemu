@@ -128,6 +128,68 @@ async fn save_state_round_trip_and_pending_hook() {
 }
 
 #[tokio::test]
+async fn save_ram_round_trip() {
+    let _lock = guard().await;
+    let rom = write_rom(b"x");
+    let ldr = loader();
+    let mut core = ldr
+        .load_core(&core_id(), rom.to_str().unwrap())
+        .await
+        .unwrap();
+
+    // O testcore expõe 64 bytes de SRAM pré-carregada (0xA5, 0x5A, ...).
+    let initial = core.save_ram().expect("testcore tem save RAM");
+    assert_eq!(initial.len(), 64);
+    assert_eq!(&initial[..2], &[0xA5, 0x5A]);
+
+    let mut new_ram = vec![0u8; 64];
+    new_ram[0] = 0x42;
+    new_ram[63] = 0x99;
+    assert!(core.restore_save_ram(&new_ram));
+    assert_eq!(core.save_ram().unwrap(), new_ram);
+
+    // tamanho errado é rejeitado
+    assert!(!core.restore_save_ram(&[0u8; 8]));
+
+    drop(core);
+    let _ = std::fs::remove_file(rom);
+}
+
+#[tokio::test]
+async fn core_options_schema_and_runtime_set() {
+    use core_loader_desktop::{core_option_values, core_options, set_core_option};
+
+    let _lock = guard().await;
+    let rom = write_rom(b"x");
+    let ldr = loader();
+    let mut core = ldr
+        .load_core(&core_id(), rom.to_str().unwrap())
+        .await
+        .unwrap();
+
+    // O testcore declara `testcore_speed` e `testcore_mark` via SET_VARIABLES.
+    let schema = core_options();
+    assert_eq!(schema.len(), 2);
+    let mark = schema
+        .iter()
+        .find(|o| o.option_key == "testcore_mark")
+        .unwrap();
+    assert_eq!(mark.default_value, "A");
+    assert_eq!(core_option_values().get("testcore_mark").unwrap(), "A");
+
+    // Troca em runtime; o core espelha o 1º char do valor em SRAM[2].
+    assert!(set_core_option("testcore_mark", "C"));
+    assert!(!set_core_option("testcore_mark", "Z")); // valor inválido
+    assert!(!set_core_option("inexistente", "A"));
+
+    core.next_frame();
+    assert_eq!(core.save_ram().unwrap()[2], b'C');
+
+    drop(core);
+    let _ = std::fs::remove_file(rom);
+}
+
+#[tokio::test]
 async fn hw_render_core_is_rejected_with_requirements_recorded() {
     let _lock = guard().await;
     let rom = write_rom(b"HW payload"); // "HW" -> core-fake declara SET_HW_RENDER

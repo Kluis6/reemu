@@ -14,9 +14,10 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalS,
     zIndex: 9999,
     pointerEvents: 'none',
-    maxWidth: '360px',
+    width: '360px',
+    maxWidth: 'calc(100vw - 32px)',
   },
-  bar: { pointerEvents: 'auto' },
+  bar: { pointerEvents: 'auto', overflowWrap: 'anywhere' },
 })
 
 const INTENT: Record<ToastVariant, 'info' | 'success' | 'warning' | 'error'> = {

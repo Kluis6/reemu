@@ -8,15 +8,26 @@ fn main() {
     // `GDK_BACKEND` explícito que não seja "wayland".
     #[cfg(target_os = "linux")]
     {
-        let cur = std::env::var("GDK_BACKEND").unwrap_or_default();
-        if cur.is_empty() || cur == "wayland" {
-            std::env::set_var("GDK_BACKEND", "x11");
+        // A child window X11 pro vídeo (ver src/video.rs) exige XWayland — e
+        // nesse combo XWayland + WebKitGTK 2.52 + NVIDIA a webview simplesmente
+        // não pinta na tela (o DOM renderiza, os pixels não chegam). Então o
+        // padrão agora é **sem** a child window: deixa o GTK usar Wayland
+        // nativo, que renderiza a UI de verdade. O vídeo do jogo passa a ser
+        // desenhado dentro da webview (canvas). `REEMU_X11_VIDEO=1` volta ao
+        // esquema antigo pra quem quiser testar.
+        if std::env::var_os("REEMU_X11_VIDEO").is_some() {
+            let cur = std::env::var("GDK_BACKEND").unwrap_or_default();
+            if cur.is_empty() || cur == "wayland" {
+                std::env::set_var("GDK_BACKEND", "x11");
+            }
         }
-        // webkitgtk + XWayland/NVIDIA: o renderer DMA-BUF costuma dar
-        // "WebKit encountered an internal error" — o composited SW renderer
-        // é estável.
+        // webkitgtk + XWayland/NVIDIA: DMA-BUF e accelerated compositing dão
+        // "internal error" / tela em branco — o SW renderer é o estável.
         if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
             std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+        if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
         }
     }
 

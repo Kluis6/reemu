@@ -7,11 +7,10 @@
 //!
 //! Ver `examples/play.rs` pra um player standalone (winit + `emu-session`).
 
-mod convert;
 mod renderer;
 mod window_target;
 
-pub use convert::to_rgba8;
+pub use domain::frame_source::to_rgba8;
 pub use renderer::{create_device, Renderer};
 pub use window_target::WindowTarget;
 

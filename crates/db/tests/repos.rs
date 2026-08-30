@@ -4,13 +4,19 @@
 mod common;
 
 use common::mem_db;
-use db::{AudioConfigRepo, CoreOptionsRepo, InstalledCoresRepo, RomsRepo};
+use db::{
+    AudioConfigRepo, CoreOptionsRepo, InstalledCoresRepo, MetadataRepo, RomsRepo, ShaderChainRepo,
+};
 use domain::audio::{AudioConfig, AudioConfigRepository};
+use domain::metadata::{MatchStatus, MetadataConfig, MetadataRepository, ScrapeCandidate};
 use domain::core_loader::{
     CoreRenderRequirements, InstalledCore, InstalledCoreRepository, RenderBackend,
 };
 use domain::core_options::{CoreOptionDefinition, CoreOptionType, CoreOptionsStore};
 use domain::library::{Rom, RomRepository};
+use domain::shader_chain::{
+    AssignmentScope, ShaderChainResolver, ShaderChainStore, ShaderFormat, ShaderPreset,
+};
 
 fn rom(id: &str, crc: &str, system: &str) -> Rom {
     Rom {
@@ -20,6 +26,7 @@ fn rom(id: &str, crc: &str, system: &str) -> Rom {
         md5: format!("md5-{id}"),
         system_id: system.into(),
         added_at: 1_700_000_000,
+        last_played_at: None,
     }
 }
 
@@ -42,6 +49,191 @@ async fn roms_crud_and_lookups() {
 
     repo.remove("r1").await.unwrap();
     assert_eq!(repo.find_by_crc32("AABBCCDD").await.unwrap().len(), 1);
+}
+
+fn preset(id: &str, builtin: bool) -> ShaderPreset {
+    ShaderPreset {
+        id: id.into(),
+        name: id.into(),
+        source_path: id.into(),
+        format: ShaderFormat::Slang,
+        is_builtin: builtin,
+        includes_bezel: false,
+    }
+}
+
+#[tokio::test]
+async fn shader_chain_assignment_cascade_and_replace() {
+    let db = mem_db().await;
+    let roms = RomsRepo::new(db.clone());
+    roms.add(&rom("r1", "AA", "snes")).await.unwrap();
+    let sc = ShaderChainRepo::new(db);
+
+    sc.upsert_preset(&preset("crt", true)).await.unwrap();
+    sc.upsert_preset(&preset("lcd", true)).await.unwrap();
+    assert_eq!(sc.list_presets().await.unwrap().len(), 2);
+
+    // sem atribuição → None
+    assert!(sc.resolve("snes", Some("r1")).await.unwrap().is_none());
+
+    // default
+    sc.set_assignment(AssignmentScope::Default, None, None, "crt")
+        .await
+        .unwrap();
+    assert_eq!(
+        sc.resolve("snes", Some("r1"))
+            .await
+            .unwrap()
+            .unwrap()
+            .preset_id,
+        "crt"
+    );
+
+    // rom vence default
+    sc.set_assignment(AssignmentScope::Rom, None, Some("r1"), "lcd")
+        .await
+        .unwrap();
+    assert_eq!(
+        sc.resolve("snes", Some("r1"))
+            .await
+            .unwrap()
+            .unwrap()
+            .preset_id,
+        "lcd"
+    );
+
+    // trocar a atribuição do escopo (não duplica)
+    sc.set_assignment(AssignmentScope::Default, None, None, "lcd")
+        .await
+        .unwrap();
+    sc.set_assignment(AssignmentScope::Default, None, None, "crt")
+        .await
+        .unwrap();
+
+    // limpar rom → volta pro default
+    sc.clear_assignment(AssignmentScope::Rom, None, Some("r1"))
+        .await
+        .unwrap();
+    assert_eq!(
+        sc.resolve("snes", Some("r1"))
+            .await
+            .unwrap()
+            .unwrap()
+            .preset_id,
+        "crt"
+    );
+}
+
+#[tokio::test]
+async fn shader_parameter_overrides_roundtrip() {
+    let db = mem_db().await;
+    RomsRepo::new(db.clone())
+        .add(&rom("r1", "AA", "snes"))
+        .await
+        .unwrap();
+    let sc = ShaderChainRepo::new(db);
+    sc.upsert_preset(&preset("crt", true)).await.unwrap();
+
+    // sem atribuição no escopo → erro claro
+    assert!(sc
+        .set_parameter_override(AssignmentScope::Rom, None, Some("r1"), "SCANLINE", "0.4")
+        .await
+        .is_err());
+
+    sc.set_assignment(AssignmentScope::Rom, None, Some("r1"), "crt")
+        .await
+        .unwrap();
+    sc.set_parameter_override(AssignmentScope::Rom, None, Some("r1"), "SCANLINE", "0.4")
+        .await
+        .unwrap();
+    sc.set_parameter_override(AssignmentScope::Rom, None, Some("r1"), "SCANLINE", "0.7")
+        .await
+        .unwrap(); // upsert, não duplica
+
+    let a = sc.resolve("snes", Some("r1")).await.unwrap().unwrap();
+    assert_eq!(a.parameter_overrides.get("SCANLINE").map(String::as_str), Some("0.7"));
+
+    sc.clear_parameter_overrides(AssignmentScope::Rom, None, Some("r1"))
+        .await
+        .unwrap();
+    let a = sc.resolve("snes", Some("r1")).await.unwrap().unwrap();
+    assert!(a.parameter_overrides.is_empty());
+}
+
+fn candidate(title: &str, exact: bool) -> ScrapeCandidate {
+    ScrapeCandidate {
+        provider: "screenscraper".into(),
+        external_id: "123".into(),
+        title: title.into(),
+        description: Some("desc".into()),
+        cover_url: Some("http://x/c.png".into()),
+        release_date: Some("1990".into()),
+        genre: Some("Platform".into()),
+        exact_hash_match: exact,
+    }
+}
+
+#[tokio::test]
+async fn metadata_config_scrape_and_pending_review() {
+    let db = mem_db().await;
+    RomsRepo::new(db.clone())
+        .add(&rom("r1", "AA", "snes"))
+        .await
+        .unwrap();
+    RomsRepo::new(db.clone())
+        .add(&rom("r2", "BB", "nes"))
+        .await
+        .unwrap();
+    let m = MetadataRepo::new(db);
+
+    // config singleton
+    assert_eq!(m.get_config().await.unwrap().provider, "screenscraper");
+    m.set_config(&MetadataConfig {
+        provider: "screenscraper".into(),
+        screenscraper_user: Some("u".into()),
+        screenscraper_password: Some("p".into()),
+    })
+    .await
+    .unwrap();
+    assert_eq!(m.get_config().await.unwrap().screenscraper_user.as_deref(), Some("u"));
+
+    // fila = as 2 ROMs sem match
+    assert_eq!(m.rom_ids_without_match().await.unwrap().len(), 2);
+
+    // hash exato → auto (metadata aplicada na hora)
+    m.record_match("r1", &candidate("Super Mario World", true), MatchStatus::AutoMatched)
+        .await
+        .unwrap();
+    m.upsert_metadata(&domain::metadata::GameMetadata {
+        rom_id: "r1".into(),
+        title: "Super Mario World".into(),
+        description: Some("desc".into()),
+        cover_url: None,
+        release_date: Some("1990".into()),
+        genre: Some("Platform".into()),
+        provider_source: Some("screenscraper".into()),
+    })
+    .await
+    .unwrap();
+    assert_eq!(m.get_metadata("r1").await.unwrap().unwrap().title, "Super Mario World");
+
+    // match por nome → pending; não aplica metadata até revisão
+    m.record_match("r2", &candidate("Some NES Game", false), MatchStatus::PendingReview)
+        .await
+        .unwrap();
+    assert!(m.get_metadata("r2").await.unwrap().is_none());
+    let pending = m.list_pending().await.unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].rom_id, "r2");
+    assert_eq!(pending[0].candidate.title, "Some NES Game");
+
+    // aceitar → metadata aplicada, sai da fila de pendências
+    m.resolve_pending("r2", true).await.unwrap();
+    assert_eq!(m.get_metadata("r2").await.unwrap().unwrap().title, "Some NES Game");
+    assert!(m.list_pending().await.unwrap().is_empty());
+
+    // já não há ROM sem match
+    assert!(m.rom_ids_without_match().await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -229,6 +421,14 @@ async fn core_options_schema_replace_get_set() {
             .as_deref(),
         Some("2x")
     );
+
+    // values_for devolve todos os valores escolhidos do core
+    opts.set_value("pcsx2", "frame_skip", "1").await.unwrap();
+    let all = opts.values_for("pcsx2").await.unwrap();
+    assert_eq!(all.len(), 2);
+    assert_eq!(all.get("internal_res").map(String::as_str), Some("2x"));
+    assert_eq!(all.get("frame_skip").map(String::as_str), Some("1"));
+    assert!(opts.values_for("desconhecido").await.unwrap().is_empty());
 
     // replace_schema substitui, não acumula
     opts.replace_schema("pcsx2", &defs[..1]).await.unwrap();

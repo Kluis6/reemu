@@ -54,3 +54,47 @@ pub trait ShaderChainResolver: Send + Sync {
         rom_id: Option<&str>,
     ) -> Result<Option<ShaderChainAssignment>, RepoError>;
 }
+
+/// Escrita da tabela de presets/atribuições (a UI de Vídeo usa).
+#[async_trait]
+pub trait ShaderChainStore: Send + Sync {
+    /// Registra/atualiza um preset (por `id`).
+    async fn upsert_preset(&self, preset: &ShaderPreset) -> Result<(), RepoError>;
+    async fn list_presets(&self) -> Result<Vec<ShaderPreset>, RepoError>;
+    /// Atribui `preset_id` a um escopo, trocando o que já existir nele.
+    async fn set_assignment(
+        &self,
+        scope: AssignmentScope,
+        system_id: Option<&str>,
+        rom_id: Option<&str>,
+        preset_id: &str,
+    ) -> Result<(), RepoError>;
+    /// Remove a atribuição de um escopo (volta pra cascata).
+    async fn clear_assignment(
+        &self,
+        scope: AssignmentScope,
+        system_id: Option<&str>,
+        rom_id: Option<&str>,
+    ) -> Result<(), RepoError>;
+
+    /// Define (ou atualiza) o valor de um parâmetro de shader no escopo dado.
+    /// O escopo precisa já ter uma atribuição (a UI cria uma antes de mexer nos
+    /// parâmetros). `value` é serializado como string (o schema guarda TEXT).
+    async fn set_parameter_override(
+        &self,
+        scope: AssignmentScope,
+        system_id: Option<&str>,
+        rom_id: Option<&str>,
+        key: &str,
+        value: &str,
+    ) -> Result<(), RepoError>;
+
+    /// Zera todos os overrides de parâmetro do escopo (volta pros defaults do
+    /// preset).
+    async fn clear_parameter_overrides(
+        &self,
+        scope: AssignmentScope,
+        system_id: Option<&str>,
+        rom_id: Option<&str>,
+    ) -> Result<(), RepoError>;
+}

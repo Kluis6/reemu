@@ -39,14 +39,14 @@ refaça trabalho já feito ou pule pré-requisito.
 |---|---|---|---|
 | 01 | Domain + DB — repositórios sqlx | `done` | Setup local |
 | 02 | Core Loader Desktop — caminho GL | `done` (software) | 01 |
-| 03 | Tauri Desktop Shell — surface nativa | `in-progress` | 02 |
-| 04 | Shader Chain + Decoração | `todo` | 03 |
-| 05 | Input, Hotkeys, UI de Binding | `in-progress` | 03 |
+| 03 | Tauri Desktop Shell — surface nativa | `done` (desvio aceito: vídeo via `<canvas>`; surface nativa adiada — ver doc 03) | 02 |
+| 04 | Shader Chain + Decoração | `done` (shader + decoração + params na UI — 2026-08-30) | 03 |
+| 05 | Input, Hotkeys, UI de Binding | `done` (validado c/ DualSense 2026-08-29; foco de menu 2026-08-30) | 03 |
 | 06 | Áudio — Dynamic Rate Control | `in-progress` | 03 |
-| 07 | Frontend React — Fluent/Zustand/Toast | `in-progress` | 03 |
+| 07 | Frontend React — Fluent/Zustand/Toast | `done` (modo Xbox completo: Início/Biblioteca/RomDetail/PlayScreen, Griffel, busca, nav por controle) | 03 |
 | 08 | Save States e Save RAM | `in-progress` | 02 |
-| 09 | Scraping de Metadata | `in-progress` | 01 |
-| 10 | Catálogo e Download de Cores | `todo` | 01 |
+| 09 | Scraping de Metadata | `in-progress` (ScreenScraper por CRC + revisão; falta multi-provider/IGDB) | 01 |
+| 10 | Catálogo e Download de Cores | `in-progress` (MVP: lista curada + buildbot) | 01 |
 | 11 | Port Android | `todo` | 03–10 completas no desktop |
 | 12 | Vulkan HW Render Fase 2 | `blocked` | Gatilho de maturidade — ver doc 12, não iniciar antes das condições lá |
 
@@ -62,6 +62,52 @@ Ao concluir uma etapa:
 
 ## Notas de progresso
 
+- **2026-08-30 — Etapa 04 fatias 3c/4/5 + modo Xbox + fixes**:
+  - **Shader por jogo/sistema no DB** (fatia 3c): `ShaderChainStore`
+    (upsert/list/set/clear assignment) em `ShaderChainRepo`; builtins semeados
+    no startup; `set_shader(name, scope, rom_id)`; `load_game` resolve em
+    cascata rom→sistema→default. `RomDetail` tem `<Select>` de shader do jogo.
+  - **Decoração / bezels** (fatias 4+5) — **VALIDADO pelo usuário 2026-08-30**:
+    `scan_decoration_pack` (Bezel Project/RetroBat, deep-scan `WalkDir`),
+    `DecorationStore` em `DecorationRepo`, `import_pack` casa stem→rom_id
+    (contra TODAS as linhas de ROM que batem — a lib pode ter duplicata),
+    composição no `gpu.rs` (jogo no viewport do `.cfg` ou centralizado 4:3 +
+    bezel alpha-blend), exclusão mútua com shader que já traz moldura.
+    Comandos `import_decoration_pack` / `clear_decorations` em Config › Vídeo.
+    - **Bug 1**: biblioteca duplicada (2 drives, mesmo rótulo "Novo volume") →
+      bezel casava a linha errada. Fix: `match_roms` grava pra todas.
+    - **Bug 2 (o que travava)**: bezels do Bezel Project são **PNG paletado +
+      tRNS**; `decode_png` só tratava RGB/RGBA → erro silencioso. Fix:
+      `Transformations::EXPAND | STRIP_16` + normalização → RGBA8. +1 teste.
+  - **Remover ROMs**: comando `remove_rom` (1) + `remove_rom_system` (snes/nes/
+    …) + `remove_rom_source` (pasta de origem) + `clear_library`. UI: chip
+    "Gerenciar biblioteca" na tela Meus jogos + "Remover sistema" no cabeçalho
+    de cada seção.
+  - **Modo Xbox (etapa 07)**: `/` virou **Início** (`Home`: hero + faixas
+    "Continuar jogando" / "Adicionados recentemente"); a biblioteca completa é
+    `/library` ("Meus jogos", grade vertical por sistema). Busca global (Y / `/`
+    / campo centralizado), menu de contexto no cartão (☰ / clique-direito),
+    dicas de botão cientes de contexto, `last_played_at` / `added_at` no
+    `RomDto`. **`styles/xbox.css` migrado 100% pra Griffel** (`styles/xbox.ts`,
+    `makeStyles` + `tokens`); doc novo `docs/design/fluent2.md`
+    (<https://fluent2.microsoft.design/>).
+  - **Foco do controle nos menus**: o anel só respondia a `:focus-visible`, que
+    o WebKitGTK não marca no `.focus()` vindo de evento Tauri → foco movia
+    invisível. Trocado por `:focus`; `focusNav` pula o campo de busca.
+  - **Fatia 6 — parâmetros de shader na UI (2026-08-30)**: `FrameProcessor`
+    guarda `param_meta` (dos `#pragma parameter`); `set_shader_param(name,val)`
+    clampa e entra no uniform buffer sem rebuild. `ShaderChainStore` ganhou
+    `set_parameter_override`/`clear_parameter_overrides` (tabela
+    `shader_parameter_overrides` já existia; upsert por `assignment_id::key`).
+    Comandos `get_shader_params` / `set_shader_param(scope?)` /
+    `reset_shader_params(scope?)`. `apply_resolved_shader_ex` aplica os
+    overrides do assignment ao carregar o jogo. Front: `<ShaderParams>`
+    (sliders Fluent + "Restaurar padrões", debounce 200ms) em `SettingsVideo`
+    (scope default) e `RomDetail` (scope rom; ganhou "Carregar .slangp…" por
+    jogo). +1 teste (`shader_parameter_overrides_roundtrip`). **Etapa 04 →
+    `done`.**
+  - VERIFICADO: `cargo test --workspace --all-features` (todos ok) + `clippy -D
+    warnings` limpos; `tsc -b` / `oxlint` / `vite build` limpos.
 - **2026-08-27 — Setup local**: bootstrap completo. `packages/app-desktop`
   (Vite+React19+Fluent+Zustand+TanStack Query) e `apps/desktop/src-tauri`
   (`reemu-desktop`, linka `domain`+`db`). `cargo tauri dev` abre a janela.
@@ -108,8 +154,18 @@ Ao concluir uma etapa:
   - Ponto de extensão de save state pronto (`request_save_state` /
     `poll_save_state` / `serialize_state`) — implementação real é etapa 08.
   - Teste: **core-fake em C** (`fixtures/testcore.c`, compilado pelo build.rs
-    p/ .so) — 5 testes de integração (load/run/frames, save state, rejeição de
-    HW core, um-por-processo, not-found). Sem baixar core nem ROM real.
+    p/ .so) — 8 testes de integração (load/run/frames, save state, save RAM,
+    core options, rejeição de HW core, um-por-processo, not-found).
+  - **2026-08-28** — descoberta de cores + core options + save RAM:
+    - `discover.rs` — `discover_cores(dir)` varre `*_libretro.<suf>`, espia
+      `retro_get_system_info`/`retro_api_version` (sem `retro_init`).
+    - `coreopts.rs` — parse de `SET_VARIABLES` (v0) / `SET_CORE_OPTIONS` (v1) /
+      `SET_CORE_OPTIONS_V2` + variantes `_INTL`; `GET_VARIABLE`/`GET_VARIABLE_UPDATE`
+      agora funcionam (`GET_CORE_OPTIONS_VERSION` → 2). API livre de thread:
+      `core_options()` / `core_option_values()` / `set_core_option()` /
+      `set_pending_core_option_values()` (valores do DB aplicados no load).
+    - `DesktopCore::{save_ram, restore_save_ram}` — `retro_get_memory_data`/
+      `_size(RETRO_MEMORY_SAVE_RAM)`.
   - **Próximo (fora do MVP-software)**: passo 4 — contexto GL real +
     callbacks (`get_current_framebuffer`, `get_proc_address`, `context_reset`),
     validado com um core GL real. Input (`input_state`) é stub aqui (etapa 05);
@@ -143,8 +199,177 @@ Ao concluir uma etapa:
   - App: comando `input_key` (Escape/F1 = hotkey de menu; senão teclado →
     RetroPad só em `GameFocused`); hook `useKeyboardInput` encaminha
     keydown/keyup. `FocusController` limpa o pad ao entrar no menu.
-  - **Falta**: `gilrs` (enumerar/pollar gamepad, `device_port_assignment`),
-    `ControllerMappingResolver` a partir do DB, UI de captura de binding.
+  - **2026-08-28** — `gilrs`: `input-desktop::GamepadPoller` (poll de gamepad
+    físico numa thread de `emu-session`, `enable_gamepad`), `Button` normalizado
+    → RetroPad (convenção libretro), 1ª controle = porta 0; botão `Mode` →
+    toggle de menu (via `take_menu_request` no loop de eventos). +4 testes.
+  - **2026-08-28** — UI de captura de binding: `input_desktop::capture` (flag
+    global; enquanto ligada, teclado/gamepad vão pro frontend por
+    `emit("raw-input-captured")` em vez de irem pro jogo). Comandos
+    `start_binding_capture` / `cancel_binding_capture` / `save_binding`
+    (`target` = `system_hotkey` | `controller_mapping`, ambos com combinação
+    hold+press) / `list_system_hotkeys` / `clear_system_hotkey` /
+    `list_controller_mappings`. `db::SystemHotkeysRepo` +
+    `db::ControllerMappingsRepo` (trigger/layout serializados em JSON). +3
+    testes. Frontend: `useBindingCaptureStore` (Zustand transitório, janela de
+    ~300ms), `<BindingCapture>` (diálogo único), seção "Atalhos de sistema" em
+    Settings.
+  - **2026-08-28** — `HotkeyResolver` ligado ao DB em runtime:
+    `input_desktop::held` (conjunto segurado global, teclado + gamepad),
+    `AppState.hotkeys: Mutex<ComboHotkeyResolver>` semeado do `system_hotkeys`
+    no startup (default `ToggleMenuOverlay` = `F1`; `Esc` fica hardcoded como
+    rede de segurança). `commands::poll_hotkeys` roda a cada frame no loop de
+    eventos ANTES do roteamento pro jogo (prioridade), dispara 1×/aperto:
+    `ToggleMenuOverlay` alterna o foco, `QuickSave`/`QuickLoad` emitem
+    `hotkey-action` (frontend só avisa por toast — falta contexto de ROM).
+    `save_binding`/`clear_system_hotkey` recompõem o resolver. `FocusController`
+    limpa o `held` na transição. +2 testes.
+  - **2026-08-28** — mapeamento de controle do DB em runtime:
+    `input_desktop::mappings` (override global lido pela thread de gamepad;
+    `set`/`resolve`, combinação suportada). `GamepadPoller` agora recompõe o
+    RetroPad por porta a cada evento a partir dos índices físicos segurados
+    (`down` por gamepad + diff contra `applied`), usando o override do `guid`
+    se houver, senão o mapa fixo do `gilrs`. `PollOutcome.gamepads`
+    (`(guid, nome)` conectados) → `EmuSession::connected_gamepads()`. Comandos
+    `list_gamepads` / `clear_controller_mapping`; `save_binding` e o startup
+    republicam o override. Frontend `<ControllerMappings>` (seção "Controles"
+    em Settings): junta gamepad conectado + mapa salvo, grade de 16 botões
+    RetroPad com rebind/`+`, "Limpar mapa". +1 teste.
+  - **2026-08-28** — fechamento da etapa 05:
+    - stick esquerdo → d-pad (`GamepadPoller` trata `AxisChanged`, limiar 0.5,
+      alimenta a mesma recomposição de RetroPad). +1 teste.
+    - `QuickSave`/`QuickLoad` reais: `AppState.current_rom` (setado por
+      `load_game(rom_id)`), `QUICK_SLOT = 0`, `poll_hotkeys` dispara uma task
+      async que grava/restaura via `save_state.rs` e devolve toast por
+      `hotkey-action {action, ok, message}`.
+    - `device_port_assignment`: `domain::input::DevicePortRepository` +
+      `db::DevicePortsRepo` (cria linha vazia em `controller_mappings` pro FK) +
+      `input_desktop::mappings::{set_ports,port_for}` (poller consulta antes da
+      ordem de conexão). Comandos `set_device_port`/`clear_device_port`/
+      `list_device_ports`; `<Select>` de porta por controle na UI. +1 teste.
+    - rótulos amigáveis do botão físico na UI (`describeRawInput`: "A (baixo)",
+      "D-pad ↑", "Guia"…).
+    - `<IdleScreen>` — tela cheia opaca quando `session_state == Idle` (a
+      webview transparente só faz sentido com jogo rodando).
+  - **2026-08-29 — validado em hardware (DualSense/PS5)**: jogo reconhece o
+    controle (RetroPad OK), áudio OK. **Bug**: os menus não respondiam ao
+    gamepad — o `useGamepadNav` dependia da Gamepad API do navegador, que o
+    WebKitGTK 2.52 nesse setup não expõe (nunca dispara `gamepadconnected`).
+    - Correção: navegação de menu passou a ser resolvida pelo **gilrs no
+      backend**. `input_desktop::gamepad`: novo `NavPulse` (Up/Down/Left/Right/
+      Confirm/Back) com edge-detection + auto-repeat (delay 380ms, repeat
+      150ms); `PollOutcome.nav`. `emu-session`: `Shared.nav` +
+      `EmuSession::take_nav_pulses()`. Shell: emite `menu-nav` no loop de
+      eventos, **só quando `session.state() != Running`** (Idle no launcher,
+      Paused no menu de pausa — durante o jogo o d-pad vai só pro RetroPad).
+    - Frontend: `lib/focusNav.ts` (`moveFocus` extraído do hook), `onMenuNav`
+      em `tauri.ts`, `useGamepadNav` escuta `menu-nav` em vez de pollar a
+      Gamepad API, `PlayScreen` trata `menu-nav` no menu de pausa (confirm =
+      clica, back = continua, setas = move foco; foca o 1º item ao abrir).
+    - **2ª rodada**: a 1ª versão não funcionou — o event loop do Tauri fica em
+      `Wait` quando a webview está ociosa, então o `MainEventsCleared` (onde a
+      ponte de input rodava) não tiquetaqueia no launcher. Movido pra uma
+      **thread dedicada `spawn_input_bridge`** (~60Hz, independente do loop);
+      d-pad-como-eixo (DualSense) agora tratado (`Axis::DPadX/DPadY` → `hat`).
+    - Cartões da Library "piscando": `QueryClient` com `refetchOnWindowFocus:
+      false` + `staleTime: 5min` (o WebKitGTK dispara foco espúrio).
+    - **3ª rodada**: menu de pausa ainda não navegava — `moveFocus` filtrava
+      por `offsetParent` que o WebKitGTK zera dentro de `position: fixed`.
+      Trocado por `getBoundingClientRect()`. Gate `state != Running` removido
+      da emissão do `menu-nav`. **Validado com DualSense**: launcher, seleção
+      1-a-1 e menu de pausa todos navegando pelo controle.
+  - **2026-08-29 — 2 correções menores**:
+    - `load_game` agora registra o core em `installed_cores` (via `get`+
+      `register`) antes do `replace_schema` — a FK de `core_options_schema`
+      falhava porque a descoberta por disco não persistia nada (WARN
+      "salvando schema de core options: FOREIGN KEY constraint failed").
+    - Splashscreen: `PlayScreen` no estado `loading` agora mostra capa (ou
+      iniciais) + título + sistema + spinner, no lugar do spinner solto.
+      `RomDetail` passa `boxart`/`system` no state da navegação; `initials`
+      extraído pra `lib/initials.ts` (compartilhado com `GameCard`).
+  - **2026-08-29 — Etapa 04 fatia 1 (caminho GPU)**: usuário escolheu o
+    pipeline slang completo do doc. Como a surface nativa está desligada nesse
+    ambiente, o wgpu roda **headless** (sem surface → sem conflito com o GTK).
+    `src-tauri/src/gpu.rs` — `FrameProcessor` (contexto wgpu + `video_surface::
+    Renderer` + alvo offscreen + readback). `poll_frame` passa o frame por ele
+    (blit 1:1, passthrough) e cai no CPU (`to_rgba8`) em qualquer falha.
+    `AppState.gpu: Mutex<Option<FrameProcessor>>`, init no setup do `lib.rs`.
+    Dep `wgpu = "30"` no shell. Verificado: adapter Vulkan (RTX 3060) sobe
+    headless sem crash. `REEMU_NO_GPU=1` desliga (volta pro caminho CPU).
+    - **1ª tentativa distorceu** (usar `video_surface::Renderer` aqui aplicava
+      `letterbox_scale` — pra SNES, squish vertical + tarjas). Reescrito como
+      **blit 1:1 próprio** em `gpu.rs` (fullscreen-triangle + `textureSample`,
+      sampler nearest, sem uniforms/escala) — é a primitiva de cada passe da
+      cadeia multi-passe. A proporção continua sendo do `<canvas>`/CSS.
+    - **Fatias 2+3 (2026-08-29) — motor multi-passe + parser `.slangp`**:
+      - `crates/shader-slang` (NOVO, membro do workspace) — parser isolado do
+        `.slangp` (`parse_slangp`/`parse_slangp_file`, segue `#reference`,
+        scale_type x/y, wrap, alias, parâmetros, texturas do usuário). 6 testes.
+      - `gpu.rs` reescrito como **cadeia multi-passe**: N passes fullscreen-
+        triangle, cada um amostrando a saída do anterior, com escala/filtro por
+        passe e uniforms semânticos (`source_size`/`output_size`/`orig_size`/
+        `frame`). Presets embutidos em WGSL: `plain` (1p), `crt` (2p:
+        sangramento H → scanline+máscara+vinheta 2x), `lcd` (1p, grade 2x).
+        `REEMU_SHADER=` escolhe; `set_preset()` troca em runtime.
+      - Comandos `get_shader_info` / `set_shader`; aba **Configurações › Vídeo**
+        (`SettingsVideo.tsx`) com os 3 presets.
+      - Verificado: `plain` e `crt` (2 passes) compilam WGSL e sobem sem erro.
+      - **Fatia 2b (2026-08-29) — compilador `.slang`** em `crates/shader-slang`:
+        `preprocess.rs` (`#include` c/ guard, split de estágios, `#pragma
+        name`/`parameter`) + `compile.rs` (rewrite push_constant→UBO e
+        `sampler2D`→texture+sampler + call-sites → `naga` glsl-in/wgsl-out;
+        `Feedback`/`OriginalHistory` → `Unsupported`). **11 testes**. Falta o
+        wiring no `gpu.rs` (reflection do bloco uniforme) — fatia 3b.
+      - **Tela cheia**: `tauri.conf.json` `fullscreen: true`; comandos
+        `is_fullscreen`/`set_fullscreen`; `useFullscreen`/`useFullscreenSync`
+        (F11 global), botão na topbar + no menu de pausa.
+      - Tuning CRT/LCD depois dos prints do usuário (CRT 3x, máscara mais leve).
+      - **Fatia 3b (2026-08-29) — `.slangp` roda na cadeia**: `gpu.rs` reescrito
+        com quad em vertex buffer (Position vec4 + TexCoord, triangle-strip);
+        builtins e slang no mesmo motor. `UniformMode::{Fixed, Slang(layout)}` —
+        no modo slang o buffer é montado por reflection (`compile.rs::reflect`
+        via IR do naga: offsets/tipos dos campos) preenchendo `MVP` (ortho
+        [0,1]→[-1,1]), `SourceSize`/`OriginalSize`/`OutputSize`/
+        `FinalViewportSize`, `FrameCount`/`FrameDirection`, e parâmetros por
+        nome (defaults do `#pragma parameter` + override do `.slangp`).
+        `REEMU_SHADER=/caminho/x.slangp` ou botão "Carregar .slangp…" em
+        Configurações › Vídeo (`pickSlangp`). **Verificado**: preset slang CRT
+        de teste (`~/.local/share/com.reemu.desktop/shaders/test-crt.slangp`)
+        compila, valida e sobe sem erro; builtins seguem OK.
+      - **UBO + Push (2026-08-29)**: shaders slang do RetroArch têm 2 blocos
+        uniformes. `reflect_all` → `Vec<(binding, layout)>`; `rewrite` força
+        `Push`→binding 0, `UBO`→binding 3 (`declares_block` casa a palavra
+        inteira; BGL do `gpu.rs` ganhou binding 3, `Pass.ubuf: [Buffer; 2]`).
+        **Validado**: `scanline.slangp` real do RetroBat compila e sobe sem
+        fallback (1 passe, 2 parâmetros).
+      - Nota: `/` estava 100% cheio → limpei `target/debug/incremental` (19G).
+      - **Fatia 3c (2026-08-30) — preset por jogo/sistema no DB**: domain
+        `ShaderChainStore` (upsert_preset / list_presets / set_assignment /
+        clear_assignment) impl em `ShaderChainRepo` (troca a atribuição do
+        escopo via DELETE+INSERT numa tx). +1 teste (cascata + replace).
+        Builtins semeados no startup (`seed_builtin_shader_presets`).
+        `set_shader(name, scope, rom_id)` — `scope`: session / `default` /
+        `rom` (name vazio = limpar). `get_rom_shader(rom_id)` → preset
+        resolvido + `from_rom`. `load_game` chama `apply_resolved_shader`
+        (cascata rom→sistema→default, senão `plain`). `FrameProcessor.
+        preset_source` pro dedup. Front: `SettingsVideo` persiste como
+        `default`; `RomDetail` tem `<Select>` "Shader deste jogo".
+      - **Fatia 4+5 (2026-08-30) — decoração / bezels**:
+        `library_scan::scan_decoration_pack` + `viewport_for_image` (convenção
+        Bezel Project/RetroBat + `.cfg` `custom_viewport_*`, 2 testes); domain
+        `DecorationStore` impl em `DecorationRepo`; shell `decoration.rs`
+        (`import_pack` mapeia stem→`rom_id`, `decode_png` RGB/RGBA8); comandos
+        `import_decoration_pack`/`clear_decorations`; `load_game` →
+        `apply_resolved_decoration` (cascata); **exclusão mútua** (pula se o
+        shader ativo tem `includes_bezel`); `gpu.rs` passe de composição (jogo
+        no viewport do `.cfg` ou centralizado + bezel PNG alpha-blend);
+        `LoadedGame.aspect_ratio` vira a da moldura. Front: import/remover em
+        Config › Vídeo.
+    **Próxima fatia**: (6) parâmetros de shader ajustáveis na UI (os
+    `#pragma parameter` já são lidos + buffer montado por nome).
+  - **Falta / follow-up**: caso de dois controles idênticos (mesmo GUID SDL →
+    colidem na porta — precisa usar o `GamepadId` do `gilrs`); saída de eixo
+    analógico pro RetroPad (hoje só stick→d-pad).
 - **2026-08-27 — Etapa 08 (`in-progress`)**: save states.
   - `EmuSession.loaded_core()` — rastreia o id do core carregado (states não
     são portáveis entre cores).
@@ -155,9 +380,16 @@ Ao concluir uma etapa:
     **4 testes** de integração (SQLite in-memory + dir temp).
   - Comandos Tauri `save_state`/`list_save_states`/`load_save_state`/
     `delete_save_state`; wrappers no `lib/tauri.ts`.
-  - **Falta**: captura de thumbnail (frame no instante do serialize → PNG);
-    save RAM (battery) com flush automático; verificação de "sem stutter";
-    painel de estados na UI.
+  - **2026-08-28** — save RAM (battery): `emu-session` carrega
+    `<saves>/<stem>.srm` no core logo após o load e regrava a cada 10s + no
+    unload/troca/shutdown (`DesktopCore::{save_ram,restore_save_ram}`). 2 testes.
+    QuickSave/QuickLoad no menu de pausa da `PlayScreen`.
+  - **2026-08-30** — shutdown limpo: `RunEvent::ExitRequested` (`lib.rs`) faz
+    `session.unload()` ao fechar (X da janela / Alt+F4 / `quit_app`), garantindo
+    o flush final da `.srm` — antes só o flush periódico de 10s cobria.
+    `flush_save_ram` virou escrita atômica (`.srm.tmp` + rename).
+  - **Falta**: captura de thumbnail (frame no serialize → PNG); verificação de
+    "sem stutter"; painel de estados mais rico na UI.
 - **2026-08-27 — Etapa 09 (`in-progress`)**: `crates/library-scan`.
   - `hash.rs` — `FileRomHasher` impl `domain::metadata::RomHashService`:
     CRC32 (`crc32fast`) + MD5 (`md-5`) do arquivo, com **skip do header iNES**
@@ -171,9 +403,39 @@ Ao concluir uma etapa:
   - `domain::library::RomRepository` ganhou `list()`.
   - App: comandos `list_roms` / `scan_library(path)`; tela Library agora
     escaneia um diretório e lista de verdade (via TanStack Query).
-  - **Falta**: `MetadataProvider` real (IGDB/ScreenScraper), fila de jobs em
-    background, `scrape_matches`/`game_metadata`. Match automático só com hash
-    exato — a política já está clara, falta o provedor.
+  - **2026-08-28** — capas via **thumbnails da libretro** (MVP, sem API key):
+    `library_scan::libretro_boxart_url(system_id, título)` monta
+    `https://thumbnails.libretro.com/<Sistema>/Named_Boxarts/<Nome>.png`
+    (mapa de ~15 sistemas + sanitização de nome no padrão RetroArch). `RomDto`
+    ganhou `boxart: Option<String>`; `<GameCard>` e `RomDetail` mostram como
+    `<img>` com fallback pras iniciais no `onerror`. Casa melhor com ROMs
+    No-Intro. +1 teste. URL verificada 200 no CDN.
+  - **2026-08-30 — etapa 07 fechada**: `RomDetail` reescrito no estilo "página
+    de jogo do Xbox" (hero com arte/capa da metadata + scrim, título grande,
+    badges de sistema/ano/gênero, descrição, botão Jogar/Continuar grande,
+    seções em painéis: shader do jogo, opções do core, save states, remover).
+    Menu de pausa da `PlayScreen` migrado pro estilo Xbox (`usePauseStyles`,
+    painel escuro + anel de foco próprio já que `/play/*` fica fora do
+    `.xb-app`). `styles/xbox.ts` += `useDetailStyles` / `usePauseStyles`.
+  - **2026-08-30 — MetadataProvider real (ScreenScraper)**: migration
+    `0003_metadata.sql` (`scrape_matches.candidate_json`, índices únicos por
+    rom, `metadata_config` singleton). domain: `GameMetadata`, `ScrapeQuery`,
+    `PendingMatch`, `MetadataConfig`; trait `MetadataProvider::search` +
+    `MetadataRepository` (get/upsert metadata, record_match, rom_ids_without_match,
+    list_pending, resolve_pending). `db::MetadataRepo`. Shell `scraping.rs`:
+    `query_screenscraper` (`jeuInfos.php` por CRC + systemeid, `ssid`/`sspassword`
+    opcionais; parse título/synopsis/dates/genres/medias), `scrape_pending`
+    (task em background, delay 1.2s, cancelável, `ScrapeProgress` atômico).
+    **Hash exato → `auto_matched` + metadata aplicada; qualquer coisa por nome →
+    `pending_review`** (Abordagem B respeitada). Comandos
+    `get/set_metadata_config`, `start_metadata_scan`, `metadata_scan_progress`,
+    `cancel_metadata_scan`, `get_rom_metadata`, `list_pending_matches`,
+    `resolve_pending_match`. Front: aba **Configurações › Metadata**
+    (`SettingsMetadata.tsx` — credenciais, botão escanear + progresso, lista de
+    revisão aceitar/rejeitar); `RomDetail` mostra título/descrição/ano/gênero/
+    capa da metadata quando existe. +1 teste db (21 agora).
+  - **Falta**: multi-provider (IGDB/TheGamesDB) + cascata; rate-limit por
+    provider; match por MD5 além de CRC; UI: badge de "N pendências" no rail.
 - **2026-08-27 — Etapa 07 (`in-progress`)**: casca da UI.
   - `packages/app-desktop/src/`: `lib/tauri.ts` (wrappers de comando/evento,
     toleram fora do Tauri), `hooks/useFocusBridge`, `components/{ToastLayer,
@@ -184,8 +446,59 @@ Ao concluir uma etapa:
     `<app_data_dir>/reemu.db` — **verificado**, 17 tabelas). Comandos
     `get_audio_config` / `update_audio_config` / `list_installed_cores`.
   - `pnpm build` + `oxlint` limpos; `cargo tauri dev` sobe com SQLite + video.
-  - Falta: verificação visual do overlay; telas de shader (04) e binding (05);
-    Library real (09).
+  - **2026-08-28** — reestruturação em **rotas (modelo launcher, opção A)**:
+    `react-router-dom` v7 + `createHashRouter` (webview, sem servidor).
+    - `layouts/`: `RootLayout` (Outlet + `BindingCapture` + `ToastLayer`),
+      `AppShell` (rail Biblioteca/Configurações/Cores, **fundo opaco**),
+      `SettingsLayout` (abas → sub-rotas).
+    - Rotas: `/` Library · `/rom/:romId` RomDetail (core picker + save states +
+      "Jogar") · `/settings/{audio,hotkeys,controllers,cores}` · `/play/:romId`
+      PlayScreen (**transparente**, HUD, Esc → menu de pausa com QuickSave/Load/
+      Sair; `loadGame` on mount / `unloadGame` on unmount).
+    - `Settings.tsx` quebrado em `screens/settings/*`; `MenuOverlay`,
+      `IdleScreen`, `App.tsx` removidos. `lib/toast.ts` (`sysToast`).
+    - Backend: comando `unload_game` (limpa `current_rom` + `session.unload()`);
+      `load_game` ganhou `rom_id`. `index.css`: `body` transparente, cada rota
+      pinta seu fundo.
+  - **2026-08-28** — pré-requisitos de backend do frontend:
+    - Diretório de dados **único** (`data_dir()` no `lib.rs` → SQLite + cores +
+      saves + system no mesmo lugar; `dirs_or_temp` removido; `AppState` ganhou
+      `cores_dir`).
+    - `list_installed_cores` agora **varre `<dados>/cores/`** (`discover_cores`)
+      e cruza com `installed_cores` (render backend). DTO ganhou `name` +
+      `extensions`. `SettingsCores` + o core-picker do `RomDetail` usam isso
+      (ordena por extensão que casa com a ROM).
+    - Core options: comandos `get_core_options` / `set_core_option` (fonte da
+      verdade = core carregado, senão DB); `load_game` semeia os valores salvos
+      antes do load e persiste o schema depois. `<CoreOptions>` (Select por
+      opção) no `RomDetail`. `CoreOptionsPanel` antigo removido.
+  - **2026-08-28** — visual "modo Xbox" + catálogo de cores + navegação por
+    controle:
+    - `styles/xbox.css` — linguagem visual (rail de ícones, topbar com relógio,
+      cartões arredondados, anel de foco forte). `AppShell` reescrito;
+      `<GameCard>` / `<ButtonHints>` / `useClock`. `Library` agrupada por
+      sistema em grade estilo Xbox.
+    - **Catálogo de cores (MVP etapa 10)**: `core_catalog.rs` — lista curada de
+      15 cores *software* baixados do buildbot oficial (`<stem>.so.zip` →
+      extrai `.so` pra `<dados>/cores/`). Comandos `list_core_catalog` /
+      `download_core` / `remove_core` (deps `reqwest` rustls + `zip`). Aba
+      **Cores** em Settings com "Instalados" + "Catálogo" (instalar/remover).
+    - **Navegação por controle**: `useGamepadNav` — setas do teclado sempre +
+      Gamepad API do navegador (lazy, só após `gamepadconnected` — o WebKitGTK
+      reclama se pollarmos sem gamepad). Foco geométrico (bom pra grade), `A`
+      clica, `B` volta. Montado no `AppShell`.
+  - **Bug resolvido — a webview nunca renderizou nessa máquina** (duas causas):
+    (1) Vite 8/Rolldown travava o dev server → **Vite 7.3 + plugin-react 5**;
+    (2) a **child window X11 pro vídeo** + `GDK_BACKEND=x11` fazem o WebKitGTK
+    2.52 (NVIDIA/XWayland) montar o DOM mas não pintar → **padrão agora é sem
+    child window X11**, GTK usa Wayland nativo (`REEMU_X11_VIDEO=1` volta o
+    esquema antigo). O vídeo do jogo passou a ser **`<canvas>` na webview**
+    (comando `poll_frame` → RGBA8; `to_rgba8` moveu pro `domain`). Confirmado
+    visualmente pelo usuário: launcher renderiza.
+  - Falta: **confirmação visual do vídeo** (precisa de core + tela; já tem 3
+    cores instalados: fceumm/snes9x/gambatte); scraping/metadata (09); shader
+    (04); thumbnails de save state; polir RomDetail/PlayScreen no estilo Xbox;
+    caçar o ruído do WebKit no dev.
 - **2026-08-27 — Etapa 03 (`in-progress`)**: spine testável do shell.
   - Novo crate `crates/emu-session`: `EmuSession` roda o core numa **thread
     dedicada** (`emu-core-loop`) com API de comandos (`load`/`unload`/
@@ -224,7 +537,14 @@ Ao concluir uma etapa:
     usa present mode Mailbox/Immediate (não bloqueia a thread do event loop).
   - Windows/macOS: surface direto no handle da janela principal (webview
     transparente compõe) — código pronto, **não verificado**.
-  - **Falta pra fechar 02+03**: (a) confirmar visualmente que o jogo aparece
-    atrás da webview transparente no Linux (não dá pra ver daqui — pipeline
-    está montado); (b) verificar Win/macOS; (c) passo 4 da etapa 02 —
-    contexto GL (`Renderer` tem o encaixe `FrameOrigin::HardwareTexture`).
+  - **2026-08-30 — Etapa 03 `done` (desvio aceito)**: a surface nativa não
+    funciona no WebKitGTK+NVIDIA desse setup (`Gdk Error 71` na `wl_surface`;
+    child X11 não pinta). O vídeo do desktop é um **`<canvas>` na webview**:
+    `poll_frame` (RGBA8 por IPC, corpo vazio = sem frame novo) + `PlayScreen`
+    com dois loops desacoplados (fetch async → ref; paint rAF sincronizado com
+    vblank; 3ms rodando / 120ms pausado; freeze automático no menu). Resize =
+    CSS. Critério de pronto atendido (SNES validado; foco pausa/resume áudio +
+    frame). Caminho nativo fica no código (`REEMU_X11_VIDEO=1`, `#[cfg(not(
+    linux))]` Win/macOS) sem verificação. Ver `docs/ai-context/03`.
+    Follow-up não-bloqueante: medir latência canvas vs nativo; passo 4 da
+    etapa 02 (contexto GL, `FrameOrigin::HardwareTexture` tem o encaixe).

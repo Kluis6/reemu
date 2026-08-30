@@ -12,10 +12,20 @@ body,
   height: 100%;
 }
 
-/* A janela é `transparent: true` (pro dia em que a surface nativa do jogo
-   renderizar atrás — ver apps/desktop/src-tauri/src/video.rs). Hoje o app
-   roda em modo só-webview, então pintamos um fundo opaco. Quando a camada
-   de vídeo entrar, a área "de jogo" passa a não pintar. */
+/* A janela é `transparent: true` — a surface nativa do jogo (X11 child window,
+   ver apps/desktop/src-tauri/src/video.rs) renderiza atrás da webview. Cada
+   rota decide se pinta um fundo opaco (AppShell: launcher) ou fica
+   transparente (PlayScreen: overlay sobre o jogo). Por isso o body é
+   transparente aqui. */
 body {
-  background: #1b1a1f;
+  background: #0b0b0d;
+}
+
+kbd {
+  font: inherit;
+  font-size: 0.85em;
+  padding: 0.1em 0.4em;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  opacity: 0.7;
 }

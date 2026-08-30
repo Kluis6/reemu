@@ -10,9 +10,11 @@
 //! consumidor (`DesktopCore::next_frame`) nunca segura o lock enquanto
 //! chama `retro_run`. O `Mutex` é basicamente livre de contenção.
 
+use crate::coreopts::{self, CoreOption};
 use crate::sys;
 use domain::core_loader::CoreLoadError;
 use domain::frame_source::SoftwarePixelFormat;
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::os::raw::{c_char, c_uint, c_void};
 use std::path::Path;
@@ -46,6 +48,16 @@ pub(crate) struct FrontendState {
     /// PCM interleaved estéreo i16 acumulado desde o último drain.
     pub audio: Vec<i16>,
     pub save_pending: bool,
+    /// Schema de core options declarado pelo core (`SET_VARIABLES`/`SET_CORE_OPTIONS*`).
+    pub core_options: Vec<CoreOption>,
+    /// Valor atual de cada opção (`key -> value`). Semeado dos valores
+    /// pendentes (DB) e depois de cada `install_core_options`.
+    pub option_values: HashMap<String, String>,
+    /// O core deve reler as opções no próximo `GET_VARIABLE_UPDATE`.
+    pub options_dirty: bool,
+    /// `CString` viva por chave, pro ponteiro que devolvemos em `GET_VARIABLE`
+    /// continuar válido até o valor mudar.
+    option_value_cache: HashMap<String, CString>,
 }
 
 impl FrontendState {
@@ -63,7 +75,55 @@ impl FrontendState {
             had_new_frame: false,
             audio: Vec::new(),
             save_pending: false,
+            core_options: Vec::new(),
+            option_values: coreopts::take_pending_core_option_values(),
+            options_dirty: false,
+            option_value_cache: HashMap::new(),
         }
+    }
+
+    /// Instala o schema declarado pelo core. Mantém valores já escolhidos que
+    /// ainda são válidos; o resto cai no default.
+    pub(crate) fn install_core_options(&mut self, opts: Vec<CoreOption>) {
+        for o in &opts {
+            let cur = self
+                .option_values
+                .entry(o.key.clone())
+                .or_insert_with(|| o.default.clone());
+            if !o.values.contains(cur) {
+                *cur = o.default.clone();
+            }
+        }
+        self.core_options = opts;
+        self.options_dirty = true;
+        self.option_value_cache.clear();
+    }
+
+    pub(crate) fn set_option_value(&mut self, key: &str, value: &str) -> bool {
+        let valid = self
+            .core_options
+            .iter()
+            .find(|o| o.key == key)
+            .is_some_and(|o| o.values.iter().any(|v| v == value));
+        if !valid {
+            return false;
+        }
+        self.option_values
+            .insert(key.to_string(), value.to_string());
+        self.option_value_cache.remove(key);
+        self.options_dirty = true;
+        true
+    }
+
+    /// Ponteiro estável pro valor atual de `key` (ou nulo se não existe).
+    fn option_ptr(&mut self, key: &str) -> *const c_char {
+        let Some(val) = self.option_values.get(key).cloned() else {
+            return std::ptr::null();
+        };
+        self.option_value_cache
+            .entry(key.to_string())
+            .or_insert_with(|| CString::new(val).unwrap_or_default())
+            .as_ptr()
     }
 }
 
@@ -157,32 +217,75 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             // aqui faria alguns cores abortarem de forma confusa.
             true
         }
+        sys::RETRO_ENVIRONMENT_GET_VARIABLE => {
+            if data.is_null() {
+                return false;
+            }
+            let var = &mut *(data as *mut sys::retro_variable);
+            let Some(key) = coreopts::cstr(var.key) else {
+                return false;
+            };
+            let ptr = st.option_ptr(&key);
+            var.value = ptr;
+            !ptr.is_null()
+        }
         sys::RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE => {
             if !data.is_null() {
-                *(data as *mut bool) = false;
+                *(data as *mut bool) = st.options_dirty;
             }
+            st.options_dirty = false;
             true
         }
         sys::RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION => {
             if !data.is_null() {
-                *(data as *mut c_uint) = 0; // v0: só GET_VARIABLE/SET_VARIABLES
+                *(data as *mut c_uint) = 2;
             }
             true
         }
-        // Reconhecidos, sem efeito nesta etapa (entram nas etapas 03/05/07).
+        sys::RETRO_ENVIRONMENT_SET_VARIABLES => {
+            st.install_core_options(coreopts::parse_variables(
+                data as *const sys::retro_variable,
+            ));
+            true
+        }
+        sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS => {
+            st.install_core_options(coreopts::parse_v1(
+                data as *const sys::retro_core_option_definition,
+            ));
+            true
+        }
+        sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL => {
+            if !data.is_null() {
+                let intl = &*(data as *const sys::retro_core_options_intl);
+                st.install_core_options(coreopts::parse_v1(intl.us));
+            }
+            true
+        }
+        sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2 => {
+            if !data.is_null() {
+                let v2 = &*(data as *const sys::retro_core_options_v2);
+                st.install_core_options(coreopts::parse_v2(v2.definitions));
+            }
+            true
+        }
+        sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL => {
+            if !data.is_null() {
+                let intl = &*(data as *const sys::retro_core_options_v2_intl);
+                if !intl.us.is_null() {
+                    st.install_core_options(coreopts::parse_v2((*intl.us).definitions));
+                }
+            }
+            true
+        }
+        // Reconhecidos, sem efeito ainda.
         sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
         | sys::RETRO_ENVIRONMENT_SET_ROTATION
         | sys::RETRO_ENVIRONMENT_SET_MESSAGE
         | sys::RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS
-        | sys::RETRO_ENVIRONMENT_SET_VARIABLES
         | sys::RETRO_ENVIRONMENT_SET_CONTROLLER_INFO
         | sys::RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO
-        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS
-        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL
         | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY
-        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2
-        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL
         | sys::RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO
         | sys::RETRO_ENVIRONMENT_SET_GEOMETRY => true,
         _ => false,

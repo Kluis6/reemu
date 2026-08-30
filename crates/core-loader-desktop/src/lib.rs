@@ -14,6 +14,8 @@
 //! `DesktopCoreLoader` impõe isso.
 
 mod core;
+mod coreopts;
+mod discover;
 mod ffi_state;
 mod input;
 mod loader;
@@ -21,6 +23,10 @@ mod raw;
 mod sys;
 
 pub use crate::core::DesktopCore;
+pub use crate::coreopts::{
+    core_option_values, core_options, set_core_option, set_pending_core_option_values,
+};
+pub use crate::discover::{discover_cores, DiscoveredCore};
 pub use crate::input::{libretro_joypad_id, retropad, RetroPadState};
 pub use crate::loader::DesktopCoreLoader;
 
