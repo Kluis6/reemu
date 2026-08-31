@@ -108,14 +108,22 @@ pub fn parse_slangp(text: &str, base_dir: &Path) -> Result<Preset, SlangError> {
     build_preset(&kv, base_dir)
 }
 
+/// Lê um arquivo de shader/preset como texto tolerando bytes não-UTF-8 — os
+/// shaders do RetroArch às vezes têm comentário de autor em Latin-1. Só afeta
+/// comentários (o código GLSL é ASCII); byte inválido vira U+FFFD.
+pub(crate) fn read_shader_text(path: &Path) -> Result<String, SlangError> {
+    let bytes = std::fs::read(path).map_err(|source| SlangError::Io {
+        path: path.display().to_string(),
+        source,
+    })?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
 fn parse_file_inner(path: &Path, depth: u8) -> Result<Preset, SlangError> {
     if depth > 8 {
         return Err(SlangError::ReferenceLoop(path.display().to_string()));
     }
-    let text = std::fs::read_to_string(path).map_err(|source| SlangError::Io {
-        path: path.display().to_string(),
-        source,
-    })?;
+    let text = read_shader_text(path)?;
     let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
     let kv = parse_kv(&text);
 
@@ -369,6 +377,22 @@ BRIGHT = 1.0
         assert!(p.passes[1].float_framebuffer);
         assert_eq!(p.parameters.get("GAMMA"), Some(&2.4));
         assert_eq!(p.parameters.get("BRIGHT"), Some(&1.0));
+    }
+
+    #[test]
+    fn read_shader_text_tolerates_latin1_bytes() {
+        // shaders do RetroArch às vezes têm o nome do autor em Latin-1.
+        let dir = std::env::temp_dir().join("reemu_slang_utf8");
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("latin1.slang");
+        let mut bytes = b"// por Jos\xE9 Nu\xF1ez\n#version 450\n".to_vec();
+        bytes.extend_from_slice(b"void main() {}\n");
+        std::fs::write(&f, &bytes).unwrap();
+
+        let text = read_shader_text(&f).unwrap();
+        assert!(text.contains("#version 450"));
+        assert!(text.contains("void main"));
+        std::fs::remove_file(&f).ok();
     }
 
     #[test]

@@ -56,10 +56,7 @@ fn flatten_includes(
     if !seen.insert(canon) {
         return Ok(String::new()); // include guard implícito
     }
-    let text = std::fs::read_to_string(path).map_err(|source| SlangError::Io {
-        path: path.display().to_string(),
-        source,
-    })?;
+    let text = crate::slangp::read_shader_text(path)?;
     let dir = path.parent().unwrap_or_else(|| Path::new("."));
     let mut out = String::with_capacity(text.len());
     for line in text.lines() {
