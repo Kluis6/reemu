@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar dependências de sistema (Tauri + winit/wgpu)
+      - name: Instalar dependências de sistema (Tauri + winit/wgpu + gilrs)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -26,6 +26,8 @@ jobs:
             librsvg2-dev \
             libsoup-3.0-dev \
             libxkbcommon-dev \
+            libudev-dev \
+            libasound2-dev \
             mesa-vulkan-drivers \
             gcc
 
