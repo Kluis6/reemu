@@ -2,15 +2,18 @@
 //! `next_frame` roda um `retro_run`) e guarda a metadata técnica pós-load.
 
 use crate::ffi_state::{self, CoreGuard};
+use crate::gl_context::GlContext;
 use crate::raw::RawCore;
 use crate::sys;
 use domain::core_loader::{CoreRenderRequirements, LoadedCore, SystemAvInfo};
-use domain::frame_source::{Frame, FrameMetadata, FrameOrigin, FrameSource};
+use domain::frame_source::{Frame, FrameMetadata, FrameOrigin, FrameSource, SoftwarePixelFormat};
 
 pub struct DesktopCore {
     raw: RawCore,
     av_info: SystemAvInfo,
     render_reqs: CoreRenderRequirements,
+    /// `Some` = core de HW render (GL). O frame sai do FBO deste contexto.
+    gl: Option<GlContext>,
     /// Mantido vivo até o Drop: libera o slot global de "um core por processo".
     _guard: CoreGuard,
 }
@@ -21,11 +24,13 @@ impl DesktopCore {
         av_info: SystemAvInfo,
         render_reqs: CoreRenderRequirements,
         guard: CoreGuard,
+        gl: Option<GlContext>,
     ) -> Self {
         Self {
             raw,
             av_info,
             render_reqs,
+            gl,
             _guard: guard,
         }
     }
@@ -126,6 +131,10 @@ impl FrameSource for DesktopCore {
     fn next_frame(&mut self) -> Option<Frame> {
         unsafe { (self.raw.run)() };
 
+        if self.gl.is_some() {
+            return self.next_hw_frame();
+        }
+
         let mut guard = ffi_state::lock();
         let st = guard.as_mut()?;
         if !st.had_new_frame {
@@ -153,6 +162,41 @@ impl FrameSource for DesktopCore {
     }
 }
 
+impl DesktopCore {
+    /// Frame de HW render: lê o FBO GL. Slice 2a = readback CPU
+    /// (`SoftwareRawBuffer` RGBA8); o interop zero-cópia entra no slice 2b.
+    fn next_hw_frame(&mut self) -> Option<Frame> {
+        let (w, h, rotation_degrees) = {
+            let mut guard = ffi_state::lock();
+            let st = guard.as_mut()?;
+            if !st.had_new_frame {
+                return None;
+            }
+            st.had_new_frame = false;
+            let (w, h) = st.hw_frame.take()?;
+            (w, h, st.rotation_degrees)
+        };
+
+        let gl = self.gl.as_ref()?;
+        gl.finish();
+        let data = gl.read_pixels(w, h);
+        let ar = self.aspect_ratio(w, h);
+        Some(Frame {
+            origin: FrameOrigin::SoftwareRawBuffer {
+                data,
+                pitch: w * 4,
+                format: SoftwarePixelFormat::Rgba8888,
+            },
+            metadata: FrameMetadata {
+                native_width: w,
+                native_height: h,
+                aspect_ratio: ar,
+                rotation_degrees,
+            },
+        })
+    }
+}
+
 impl LoadedCore for DesktopCore {
     fn system_av_info(&self) -> SystemAvInfo {
         self.av_info
@@ -169,6 +213,22 @@ impl Drop for DesktopCore {
         // `_guard` zera o estado global.
         unsafe {
             (self.raw.unload_game)();
+
+            // HW render: o core solta os recursos GL dele (`context_destroy`)
+            // enquanto o contexto ainda está corrente; depois o `GlContext`
+            // dropa e destrói o EGL.
+            if let Some(gl) = &self.gl {
+                let _ = gl.make_current();
+                let destroy = ffi_state::lock()
+                    .as_ref()
+                    .and_then(|st| st.hw_render)
+                    .and_then(|r| r.context_destroy);
+                if let Some(f) = destroy {
+                    f();
+                }
+            }
+            self.gl = None;
+
             (self.raw.deinit)();
         }
     }

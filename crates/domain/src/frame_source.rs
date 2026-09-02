@@ -23,13 +23,16 @@ pub enum SoftwarePixelFormat {
     Xrgb8888,
     /// `RETRO_PIXEL_FORMAT_RGB565`, 16 bits.
     Rgb565,
+    /// RGBA8 já na ordem final de canal (R,G,B,A em memória). Não vem do
+    /// libretro — é o que o readback de um FBO GL (`glReadPixels`) produz.
+    Rgba8888,
 }
 
 impl SoftwarePixelFormat {
     pub fn bytes_per_pixel(self) -> u32 {
         match self {
             SoftwarePixelFormat::Rgb1555 | SoftwarePixelFormat::Rgb565 => 2,
-            SoftwarePixelFormat::Xrgb8888 => 4,
+            SoftwarePixelFormat::Xrgb8888 | SoftwarePixelFormat::Rgba8888 => 4,
         }
     }
 }
@@ -110,6 +113,10 @@ pub fn to_rgba8(
                     dst[x * 4 + 2] = row[x * 4];
                     dst[x * 4 + 3] = 255;
                 }
+            }
+            SoftwarePixelFormat::Rgba8888 => {
+                // já na ordem final — cópia direta da linha.
+                dst[..w * 4].copy_from_slice(&row[..w * 4]);
             }
         }
     }

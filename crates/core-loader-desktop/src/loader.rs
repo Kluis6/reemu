@@ -1,7 +1,7 @@
 //! `DesktopCoreLoader`: implementa `domain::core_loader::CoreLoader` via
-//! `libloading`. Caminho software-only completo; se um core exige HW render
-//! (GL/Vulkan) os requisitos são detectados e persistidos, mas o load é
-//! recusado com `HwRenderUnsupported` (contexto GL real = etapa 02 passo 4).
+//! `libloading`. Caminho software-only completo; cores que exigem HW render GL
+//! negociam um contexto EGL offscreen (`setup_gl_context`); Vulkan por-core é
+//! recusado com `HwRenderUnsupported` (etapa 12).
 
 use crate::core::DesktopCore;
 use crate::ffi_state::{self, HwRenderRequest};
@@ -211,7 +211,8 @@ impl DesktopCoreLoader {
 
         let av_info = read_av_info(&raw);
 
-        let render_reqs = match ffi_state::lock().as_ref().and_then(|s| s.hw_render) {
+        let hw = ffi_state::lock().as_ref().and_then(|s| s.hw_render);
+        let render_reqs = match hw {
             None => software_requirements(),
             Some(req) => map_backend(&req)?,
         };
@@ -221,24 +222,64 @@ impl DesktopCoreLoader {
             .unwrap()
             .insert(core_id.0.clone(), render_reqs.clone());
 
-        let core = DesktopCore::new(raw, av_info, render_reqs.clone(), guard);
+        let gl = match render_reqs.render_backend {
+            RenderBackend::Software => None,
+            RenderBackend::OpenGl => {
+                let req = hw.expect("OpenGl backend sem HwRenderRequest");
+                Some(
+                    setup_gl_context(&core_id.0, &req, &av_info).inspect_err(|_| {
+                        // teardown do que já foi inicializado antes de propagar
+                        unsafe {
+                            (raw.unload_game)();
+                            (raw.deinit)();
+                        }
+                    })?,
+                )
+            }
+            RenderBackend::Vulkan => {
+                let core = DesktopCore::new(raw, av_info, render_reqs, guard, None);
+                drop(core); // teardown (unload_game + deinit + guard)
+                return Err(CoreLoadError::HwRenderUnsupported(format!(
+                    "{} exige Vulkan HW render — só na etapa 12",
+                    core_id.0
+                )));
+            }
+        };
 
-        if render_reqs.render_backend != RenderBackend::Software {
-            // Drop faz o teardown (unload_game + deinit) e libera o guard.
-            drop(core);
-            return Err(CoreLoadError::HwRenderUnsupported(format!(
-                "{} exige {:?}{} — negociação de contexto ainda não implementada",
-                core_id.0,
-                render_reqs.render_backend,
-                render_reqs
-                    .gl_version_min
-                    .map(|v| format!(" {v}"))
-                    .unwrap_or_default(),
-            )));
-        }
-
-        Ok(core)
+        Ok(DesktopCore::new(raw, av_info, render_reqs, guard, gl))
     }
+}
+
+/// Cria o contexto GL offscreen, registra o FBO no estado global e roda o
+/// `context_reset` do core (que (re)cria os objetos GL dele).
+fn setup_gl_context(
+    core_id: &str,
+    req: &HwRenderRequest,
+    av: &SystemAvInfo,
+) -> Result<crate::gl_context::GlContext, CoreLoadError> {
+    let cfg = crate::gl_context::GlConfig {
+        context_type: req.context_type,
+        version_major: req.version_major,
+        version_minor: req.version_minor,
+        depth: req.depth,
+        stencil: req.stencil,
+        bottom_left_origin: req.bottom_left_origin,
+    };
+    let max_w = av.geometry.max_width.max(av.geometry.base_width).max(1);
+    let max_h = av.geometry.max_height.max(av.geometry.base_height).max(1);
+    let ctx = crate::gl_context::GlContext::create(&cfg, max_w, max_h)
+        .map_err(|e| CoreLoadError::HwRenderUnsupported(format!("{core_id}: contexto GL: {e}")))?;
+    ctx.make_current()
+        .map_err(|e| CoreLoadError::HwRenderUnsupported(format!("{core_id}: makeCurrent: {e}")))?;
+    if let Some(st) = ffi_state::lock().as_mut() {
+        st.hw_fbo = Some(ctx.fbo());
+    }
+    // O core (re)constrói seus recursos GL agora, com o FBO já publicado.
+    if let Some(reset) = req.context_reset {
+        unsafe { reset() };
+    }
+    log::info!("contexto GL pronto pra {core_id} (FBO {})", ctx.fbo());
+    Ok(ctx)
 }
 
 #[async_trait]

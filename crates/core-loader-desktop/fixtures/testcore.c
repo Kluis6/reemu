@@ -1,6 +1,7 @@
 /* Core libretro fake, só pra testes do loader. Software-only, RGB565,
  * 64x48, 60fps. Se o conteúdo do "jogo" começar com "HW", declara
- * SET_HW_RENDER (pra testar a rejeição de cores que exigem HW render). */
+ * SET_HW_RENDER (context type OpenGL core 3.3 + depth) pra exercitar a
+ * detecção de requisitos e a negociação de contexto GL. */
 
 #include <stdbool.h>
 #include <stddef.h>

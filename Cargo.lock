@@ -759,6 +759,8 @@ dependencies = [
  "async-trait",
  "cc",
  "domain",
+ "glow",
+ "khronos-egl",
  "libloading 0.8.9",
  "log",
  "thiserror 1.0.69",

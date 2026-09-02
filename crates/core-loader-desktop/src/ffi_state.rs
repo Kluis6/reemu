@@ -36,6 +36,13 @@ pub(crate) struct HwRenderRequest {
     pub version_minor: u32,
     pub depth: bool,
     pub stencil: bool,
+    /// O core desenha com origem bottom-left (default GL). Se `false`, ele já
+    /// entrega top-left.
+    pub bottom_left_origin: bool,
+    /// Callbacks do core: chamados por nós após criar/antes de destruir o
+    /// contexto GL.
+    pub context_reset: sys::retro_hw_context_reset_t,
+    pub context_destroy: sys::retro_hw_context_reset_t,
 }
 
 pub(crate) struct FrontendState {
@@ -43,6 +50,12 @@ pub(crate) struct FrontendState {
     pub system_dir: CString,
     pub save_dir: CString,
     pub hw_render: Option<HwRenderRequest>,
+    /// Id do FBO GL que o core deve renderizar (`get_current_framebuffer`).
+    /// `Some` só depois que o `loader` cria o contexto GL.
+    pub hw_fbo: Option<u32>,
+    /// Dimensão (`w`, `h`) do último frame de HW render — o core só passa isso
+    /// no `video_refresh` com `data == RETRO_HW_FRAME_BUFFER_VALID`.
+    pub hw_frame: Option<(u32, u32)>,
     /// Rotação da tela pedida via `SET_ROTATION` (0/90/180/270°, anti-horário).
     pub rotation_degrees: u16,
     pub last_frame: Option<RawFrame>,
@@ -73,6 +86,8 @@ impl FrontendState {
             system_dir: to_c(system_dir),
             save_dir: to_c(save_dir),
             hw_render: None,
+            hw_fbo: None,
+            hw_frame: None,
             rotation_degrees: 0,
             last_frame: None,
             had_new_frame: false,
@@ -207,17 +222,38 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             if data.is_null() {
                 return false;
             }
-            let cb = &*(data as *const sys::retro_hw_render_callback);
+            let cb = &mut *(data as *mut sys::retro_hw_render_callback);
             st.hw_render = Some(HwRenderRequest {
                 context_type: cb.context_type,
                 version_major: cb.version_major,
                 version_minor: cb.version_minor,
                 depth: cb.depth,
                 stencil: cb.stencil,
+                bottom_left_origin: cb.bottom_left_origin,
+                context_reset: cb.context_reset,
+                context_destroy: cb.context_destroy,
             });
-            // Aceita a declaração (o load() detecta e recusa depois, com
-            // mensagem clara e requisitos já persistidos). Retornar false
-            // aqui faria alguns cores abortarem de forma confusa.
+            let is_gl = matches!(
+                cb.context_type,
+                sys::RETRO_HW_CONTEXT_OPENGL
+                    | sys::RETRO_HW_CONTEXT_OPENGL_CORE
+                    | sys::RETRO_HW_CONTEXT_OPENGLES2
+                    | sys::RETRO_HW_CONTEXT_OPENGLES3
+                    | sys::RETRO_HW_CONTEXT_OPENGLES_VERSION
+            );
+            if is_gl {
+                // O core lê estes ponteiros pra pegar o FBO e resolver símbolos.
+                cb.get_current_framebuffer = Some(get_current_framebuffer_cb);
+                cb.get_proc_address = Some(get_proc_address_cb);
+            }
+            // Vulkan: aceita a declaração; `loader::open_core` recusa depois com
+            // mensagem clara (é a etapa 12).
+            true
+        }
+        sys::RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER => {
+            if !data.is_null() {
+                *(data as *mut c_uint) = sys::RETRO_HW_CONTEXT_OPENGL_CORE;
+            }
             true
         }
         sys::RETRO_ENVIRONMENT_GET_VARIABLE => {
@@ -313,6 +349,14 @@ pub(crate) unsafe extern "C" fn video_refresh_cb(
         return;
     };
 
+    if std::ptr::eq(data, sys::RETRO_HW_FRAME_BUFFER_VALID) {
+        // HW render: o frame está no FBO GL, não neste ponteiro. Só registra as
+        // dimensões — o `DesktopCore::next_frame` lê o FBO (readback ou interop).
+        st.hw_frame = Some((width, height));
+        st.had_new_frame = true;
+        return;
+    }
+
     if data.is_null() {
         // frame duplicado (GET_CAN_DUPE) — mantém o último, sem conteúdo novo.
         st.had_new_frame = false;
@@ -353,6 +397,22 @@ pub(crate) unsafe extern "C" fn audio_sample_batch_cb(data: *const i16, frames: 
         }
     }
     frames
+}
+
+/// `retro_hw_get_current_framebuffer_t` — o core chama a cada frame pra saber
+/// onde renderizar. `0` = default framebuffer (antes do contexto GL existir).
+pub(crate) unsafe extern "C" fn get_current_framebuffer_cb() -> usize {
+    lock()
+        .as_ref()
+        .and_then(|st| st.hw_fbo)
+        .map_or(0, |fbo| fbo as usize)
+}
+
+/// `retro_hw_get_proc_address_t` — resolve símbolos GL pro core via EGL.
+pub(crate) unsafe extern "C" fn get_proc_address_cb(
+    sym: *const c_char,
+) -> sys::retro_proc_address_t {
+    crate::gl_context::resolve_proc(sym)
 }
 
 pub(crate) unsafe extern "C" fn input_poll_cb() {}

@@ -190,21 +190,24 @@ async fn core_options_schema_and_runtime_set() {
 }
 
 #[tokio::test]
-async fn hw_render_core_is_rejected_with_requirements_recorded() {
+async fn hw_render_core_detects_requirements_and_negotiates() {
     let _lock = guard().await;
     let rom = write_rom(b"HW payload"); // "HW" -> core-fake declara SET_HW_RENDER
     let ldr = loader();
 
     let res = ldr.load_core(&core_id(), rom.to_str().unwrap()).await;
-    assert!(
-        matches!(res, Err(CoreLoadError::HwRenderUnsupported(_))),
-        "core que exige HW render deve ser recusado"
-    );
-    drop(res);
+    // Com EGL disponível (CI/desktop) o contexto GL é criado e o core carrega;
+    // sem libEGL, recusa com HwRenderUnsupported. Nenhum outro erro é aceitável.
+    match &res {
+        Ok(_) => {}
+        Err(CoreLoadError::HwRenderUnsupported(_)) => {}
+        Err(e) => panic!("erro inesperado num core GL: {e:?}"),
+    }
+    drop(res); // libera o guard (Ok segura o DesktopCore; Err já soltou)
 
     let reqs = ldr
         .known_render_requirements(&core_id())
-        .expect("requisitos detectados mesmo com load recusado");
+        .expect("requisitos detectados");
     assert_eq!(reqs.render_backend, RenderBackend::OpenGl);
     assert_eq!(reqs.gl_version_min.as_deref(), Some("3.3"));
     assert_eq!(reqs.gl_profile.as_deref(), Some("core"));

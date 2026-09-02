@@ -15,6 +15,11 @@ libloading = "0.8"
 thiserror.workspace = true
 async-trait.workspace = true
 log = "0.4"
+# Caminho GL HW render (etapa 02 passo 4). Mesmas versões que o wgpu 30 já
+# resolve — não duplicar. `khronos-egl/dynamic` carrega libEGL em runtime: se
+# faltar, só os cores GL falham (com erro claro), os software seguem.
+khronos-egl = { version = "6", features = ["dynamic"] }
+glow = "0.17"
 
 [build-dependencies]
 cc = "1"
