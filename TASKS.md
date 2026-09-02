@@ -117,8 +117,24 @@ Infra:
   desktop ponta a ponta (decisão do usuário 2026-08-30: deixar pra depois).
 - Windows/macOS — o `#[cfg(not(linux))]` do `video.rs`, os paths do buildbot e o
   bundle nunca foram verificados (sem máquina).
-- Readback: pool pro `Vec` do `pack_frame`; canvas WebGL em vez de
-  `putImageData`.
+- Desempenho do caminho do core (auditado 2026-09-02 — os itens fáceis já
+  feitos: `rotate_rgba` sem cópia no no-op, flush da `.srm` off-thread, spin
+  com menos leitura de relógio). Ainda no radar, por ordem de impacto:
+  * **Cópias de frame por frame**: FFI aloca o buffer nativo → `to_rgba8` aloca
+    o RGBA → readback aloca a saída → `pack_frame` aloca → IPC copia → JS copia
+    (`buf.slice`) → `putImageData` copia. ~4-5 cópias do frame inteiro/frame
+    (SNES ~230KB, bezel 1080p ~8MB). Pool de buffers reusáveis (FFI + to_rgba8
+    + pack) e `new Uint8ClampedArray(buf, 8, need)` (view, sem `slice`) no JS.
+  * `latest_frame: Mutex<Option<Frame>>` → `triple_buffer`/`ArcSwap` (lock-free).
+  * `push_samples` aloca `Vec<[f32;2]>` por frame — resample direto do `&[i16]`.
+  * `drain_audio` = `mem::take` → `Vec` novo por frame (pequeno); reservar.
+  * Spin de pacing ainda queima ~0,5ms de CPU/frame (aceitável em multi-core;
+    ruim em laptop/bateria) — considerar `spin_sleep` ou janela menor.
+  * Rebase do `next_deadline` só a >4 frames atrás → core lento roda flat-out
+    (0 sleep, 100% CPU) por até 66ms antes de desistir; `* 2` seria menos pico.
+  * Sem prioridade de thread no `emu-core-loop` — sob carga o scheduler pode
+    não dar time-slice suficiente (RetroArch às vezes usa nice/SCHED_FIFO).
+- Canvas WebGL (`texImage2D`) em vez de `putImageData` (CPU).
 - Dois controles idênticos colidem na porta (mesmo GUID SDL — usar `GamepadId`
   do gilrs); eixo analógico → RetroPad (hoje só stick→d-pad digital).
 - `docs/ai-context/01,02,05,06,07,08,09.md` têm seções "Estado atual
@@ -129,11 +145,11 @@ Infra:
 ## Notas de progresso
 
 - **2026-08-30 — Etapa 04 fatias 3c/4/5 + modo Xbox + fixes**:
-  - **Shader por jogo/sistema no DB** (fatia 3c): `ShaderChainStore`
+  * **Shader por jogo/sistema no DB** (fatia 3c): `ShaderChainStore`
     (upsert/list/set/clear assignment) em `ShaderChainRepo`; builtins semeados
     no startup; `set_shader(name, scope, rom_id)`; `load_game` resolve em
     cascata rom→sistema→default. `RomDetail` tem `<Select>` de shader do jogo.
-  - **Decoração / bezels** (fatias 4+5) — **VALIDADO pelo usuário 2026-08-30**:
+  * **Decoração / bezels** (fatias 4+5) — **VALIDADO pelo usuário 2026-08-30**:
     `scan_decoration_pack` (Bezel Project/RetroBat, deep-scan `WalkDir`),
     `DecorationStore` em `DecorationRepo`, `import_pack` casa stem→rom_id
     (contra TODAS as linhas de ROM que batem — a lib pode ter duplicata),
@@ -145,11 +161,11 @@ Infra:
     - **Bug 2 (o que travava)**: bezels do Bezel Project são **PNG paletado +
       tRNS**; `decode_png` só tratava RGB/RGBA → erro silencioso. Fix:
       `Transformations::EXPAND | STRIP_16` + normalização → RGBA8. +1 teste.
-  - **Remover ROMs**: comando `remove_rom` (1) + `remove_rom_system` (snes/nes/
+  * **Remover ROMs**: comando `remove_rom` (1) + `remove_rom_system` (snes/nes/
     …) + `remove_rom_source` (pasta de origem) + `clear_library`. UI: chip
     "Gerenciar biblioteca" na tela Meus jogos + "Remover sistema" no cabeçalho
     de cada seção.
-  - **Modo Xbox (etapa 07)**: `/` virou **Início** (`Home`: hero + faixas
+  * **Modo Xbox (etapa 07)**: `/` virou **Início** (`Home`: hero + faixas
     "Continuar jogando" / "Adicionados recentemente"); a biblioteca completa é
     `/library` ("Meus jogos", grade vertical por sistema). Busca global (Y / `/`
     / campo centralizado), menu de contexto no cartão (☰ / clique-direito),
@@ -157,10 +173,10 @@ Infra:
     `RomDto`. **`styles/xbox.css` migrado 100% pra Griffel** (`styles/xbox.ts`,
     `makeStyles` + `tokens`); doc novo `docs/design/fluent2.md`
     (<https://fluent2.microsoft.design/>).
-  - **Foco do controle nos menus**: o anel só respondia a `:focus-visible`, que
+  * **Foco do controle nos menus**: o anel só respondia a `:focus-visible`, que
     o WebKitGTK não marca no `.focus()` vindo de evento Tauri → foco movia
     invisível. Trocado por `:focus`; `focusNav` pula o campo de busca.
-  - **Fatia 6 — parâmetros de shader na UI (2026-08-30)**: `FrameProcessor`
+  * **Fatia 6 — parâmetros de shader na UI (2026-08-30)**: `FrameProcessor`
     guarda `param_meta` (dos `#pragma parameter`); `set_shader_param(name,val)`
     clampa e entra no uniform buffer sem rebuild. `ShaderChainStore` ganhou
     `set_parameter_override`/`clear_parameter_overrides` (tabela
@@ -182,20 +198,20 @@ Infra:
     duplicata no SQLite) → CHECK de forma + índices únicos parciais por escopo;
     índices em todas as FKs; `ON DELETE CASCADE`. `foreign_keys` ligado por
     conexão no `pool.rs`.
-  - `domain`: novo `error::RepoError`; traits de DB viraram `async` (`#[async_trait]`,
+  * `domain`: novo `error::RepoError`; traits de DB viraram `async` (`#[async_trait]`,
     decisão do usuário); novos ports/models `library::{Rom,RomRepository}`,
     `audio::AudioConfigRepository`, `core_loader::{InstalledCore,InstalledCoreRepository}`,
     `core_options::CoreOptionsStore::replace_schema`.
-  - `crates/db`: `pool.rs`, `cascade.rs` (resolução rom→system→default genérica,
+  * `crates/db`: `pool.rs`, `cascade.rs` (resolução rom→system→default genérica,
     1 função pros 2 casos), `convert.rs` (mapa enum↔CHECK do banco). Repos:
     `ShaderChainRepo`, `DecorationRepo`, `CoreOptionsRepo`, `AudioConfigRepo`,
     `InstalledCoresRepo`, `RomsRepo`, `SaveStateRepo`. **18 testes** de
     integração (SQLite in-memory) — cascata (3 escopos + none), FK/CHECK,
     upsert, cascade delete.
-  - `save_state`: `SaveStateMetadata`/`SaveRamMetadata` ganharam `id`; port
+  * `save_state`: `SaveStateMetadata`/`SaveRamMetadata` ganharam `id`; port
     dividido — `SaveStateManager` (alto nível, core-loader, etapa 08) vs
     `SaveStateRepository` (só metadata, implementado agora).
-  - **Fica pra depois (não bloqueia)**: métodos de *escrita* de assignment
+  * **Fica pra depois (não bloqueia)**: métodos de *escrita* de assignment
     (criar/editar preset por rom/sistema) entram junto da UI (etapa 04/07);
     wiring dos repos no shell Tauri (managed state) é etapa 03.
 - **2026-08-27 — Infra**: `rust-toolchain.toml` (1.97), `rustfmt.toml`,
@@ -209,11 +225,11 @@ Infra:
   - FFI libretro em `src/sys.rs` (valores/layout conferidos contra `libretro.h`
     do RetroArch — structs `retro_system_av_info`/`retro_hw_render_callback`,
     enums, `RETRO_ENVIRONMENT_*`).
-  - `RawCore` (libloading + símbolos `retro_*`), `ffi_state` (estado global +
+  * `RawCore` (libloading + símbolos `retro_*`), `ffi_state` (estado global +
     callbacks `extern "C"` — libretro é **um core por processo**, sem userdata
     nos callbacks), `DesktopCore` (= `FrameSource`, cada `next_frame` roda um
     `retro_run`), `DesktopCoreLoader` (`CoreLoader` + `load_core` concreto).
-  - **Caminho software-only completo**: dlopen → `retro_run` → `video_refresh`
+  * **Caminho software-only completo**: dlopen → `retro_run` → `video_refresh`
     (buffer cru, repack sem padding) → `Frame::SoftwareRawBuffer`. `SET_HW_RENDER`
     é detectado, os requisitos persistidos (`InstalledCoreRepository`) e no cache,
     e o load recusado com `CoreLoadError::HwRenderUnsupported`.
@@ -222,7 +238,7 @@ Infra:
   - Teste: **core-fake em C** (`fixtures/testcore.c`, compilado pelo build.rs
     p/ .so) — 8 testes de integração (load/run/frames, save state, save RAM,
     core options, rejeição de HW core, um-por-processo, not-found).
-  - **2026-08-28** — descoberta de cores + core options + save RAM:
+  * **2026-08-28** — descoberta de cores + core options + save RAM:
     - `discover.rs` — `discover_cores(dir)` varre `*_libretro.<suf>`, espia
       `retro_get_system_info`/`retro_api_version` (sem `retro_init`).
     - `coreopts.rs` — parse de `SET_VARIABLES` (v0) / `SET_CORE_OPTIONS` (v1) /
@@ -232,7 +248,7 @@ Infra:
       `set_pending_core_option_values()` (valores do DB aplicados no load).
     - `DesktopCore::{save_ram, restore_save_ram}` — `retro_get_memory_data`/
       `_size(RETRO_MEMORY_SAVE_RAM)`.
-  - **Próximo (fora do MVP-software)**: passo 4 — contexto GL real +
+  * **Próximo (fora do MVP-software)**: passo 4 — contexto GL real +
     callbacks (`get_current_framebuffer`, `get_proc_address`, `context_reset`),
     validado com um core GL real. Input (`input_state`) é stub aqui (etapa 05);
     áudio agora sai de verdade via `drain_audio` → `emu-session` → `CpalAudioSink`
@@ -240,18 +256,18 @@ Infra:
     `core_loader` ganhou `SystemAvInfo` e o trait `LoadedCore` (substituiu o
     marker `LoadedCoreHandle`).
 - **2026-08-27 — Etapa 06 (`in-progress`)**: `crates/audio-desktop`.
-  - `rate_control.rs` — DRC como **função pura** (fração de buffer → fator de
+  * `rate_control.rs` — DRC como **função pura** (fração de buffer → fator de
     ajuste do resample, limitado a ±delta). 6 testes.
-  - `sink.rs` — `CpalAudioSink` impl `domain::audio::AudioSink`: cpal 0.18,
+  * `sink.rs` — `CpalAudioSink` impl `domain::audio::AudioSink`: cpal 0.18,
     ring buffer, **resample linear de razão variável** (estado entre chamadas),
     fallback pro dispositivo padrão se o `output_device_id` salvo não existir
     (device por `DeviceId` persistente, não índice). 2 testes de resampler.
-  - `domain::audio::AudioSink` perdeu `Send + Sync` (a `cpal::Stream` é `!Send`);
+  * `domain::audio::AudioSink` perdeu `Send + Sync` (a `cpal::Stream` é `!Send`);
     `emu-session` recebe uma **factory `Send`** e constrói o sink na thread do
     core. `FocusController`/pause → `sink.pause()`/`resume()`.
   - App: lê o `AudioConfig` persistido no startup e passa pra factory.
     **Verificado**: o stream cpal abre neste sistema (sem erro).
-  - **2026-08-30 — pacing + build otimizado** (travadas no GBA): o `core_loop`
+  * **2026-08-30 — pacing + build otimizado** (travadas no GBA): o `core_loop`
     (session.rs) passou a pacear por **acumulador** (`next_deadline`) + **spin**
     no último ~1.2ms em vez de `thread::sleep` puro (que passa do ponto no
     Linux e causa microstutter, pior em cores com fps ≠ 60 como GBA 59.73).
@@ -259,7 +275,7 @@ Infra:
     espera ~11ms após pegar um frame. `Cargo.toml` raiz ganhou
     `[profile.dev] opt-level=2` + deps em `-O3` (sem isso o pipeline não
     sustenta 60fps em `cargo tauri dev`) + `[profile.release]` lto/1-cgu.
-  - **2026-08-30 — aplicar ao vivo (etapa 06 `done`)**: `Command::ReloadAudio(
+  * **2026-08-30 — aplicar ao vivo (etapa 06 `done`)**: `Command::ReloadAudio(
     AudioSinkFactory, reply)` + `EmuSession::reload_audio()` — recria o
     `AudioSink` na thread do core (dropa o stream cpal antigo antes). O comando
     `update_audio_config` persiste E chama `reload_audio` com a config nova
@@ -268,9 +284,9 @@ Infra:
   - Falta (backlog): validar sessão longa sem glitch (core real + ouvir —
     usuário); resampler linear → `rubato` se a qualidade não bastar.
 - **2026-08-27 — Etapa 05 (`in-progress`)**: input.
-  - `core-loader-desktop`: `RetroPadState` global (atômico, por porta) fiado
+  * `core-loader-desktop`: `RetroPadState` global (atômico, por porta) fiado
     no callback `retro_input_state_t` (RetroPad digital). 2 testes.
-  - `crates/input-desktop`: `sdl_db` — parser do SDL_GameControllerDB
+  * `crates/input-desktop`: `sdl_db` — parser do SDL_GameControllerDB
     (swap Nintendo↔Xbox, `bN`/`hN.M`/`aN`), testado com string real de Xbox;
     `ComboHotkeyResolver` impl `HotkeyResolver` (combinação hold+press, combo
     vence tecla única); `KeyboardMap` + `web_code_to_retropad` (`KeyboardEvent.
@@ -278,11 +294,11 @@ Infra:
   - App: comando `input_key` (Escape/F1 = hotkey de menu; senão teclado →
     RetroPad só em `GameFocused`); hook `useKeyboardInput` encaminha
     keydown/keyup. `FocusController` limpa o pad ao entrar no menu.
-  - **2026-08-28** — `gilrs`: `input-desktop::GamepadPoller` (poll de gamepad
+  * **2026-08-28** — `gilrs`: `input-desktop::GamepadPoller` (poll de gamepad
     físico numa thread de `emu-session`, `enable_gamepad`), `Button` normalizado
     → RetroPad (convenção libretro), 1ª controle = porta 0; botão `Mode` →
     toggle de menu (via `take_menu_request` no loop de eventos). +4 testes.
-  - **2026-08-28** — UI de captura de binding: `input_desktop::capture` (flag
+  * **2026-08-28** — UI de captura de binding: `input_desktop::capture` (flag
     global; enquanto ligada, teclado/gamepad vão pro frontend por
     `emit("raw-input-captured")` em vez de irem pro jogo). Comandos
     `start_binding_capture` / `cancel_binding_capture` / `save_binding`
@@ -293,7 +309,7 @@ Infra:
     testes. Frontend: `useBindingCaptureStore` (Zustand transitório, janela de
     ~300ms), `<BindingCapture>` (diálogo único), seção "Atalhos de sistema" em
     Settings.
-  - **2026-08-28** — `HotkeyResolver` ligado ao DB em runtime:
+  * **2026-08-28** — `HotkeyResolver` ligado ao DB em runtime:
     `input_desktop::held` (conjunto segurado global, teclado + gamepad),
     `AppState.hotkeys: Mutex<ComboHotkeyResolver>` semeado do `system_hotkeys`
     no startup (default `ToggleMenuOverlay` = `F1`; `Esc` fica hardcoded como
@@ -303,7 +319,7 @@ Infra:
     `hotkey-action` (frontend só avisa por toast — falta contexto de ROM).
     `save_binding`/`clear_system_hotkey` recompõem o resolver. `FocusController`
     limpa o `held` na transição. +2 testes.
-  - **2026-08-28** — mapeamento de controle do DB em runtime:
+  * **2026-08-28** — mapeamento de controle do DB em runtime:
     `input_desktop::mappings` (override global lido pela thread de gamepad;
     `set`/`resolve`, combinação suportada). `GamepadPoller` agora recompõe o
     RetroPad por porta a cada evento a partir dos índices físicos segurados
@@ -314,7 +330,7 @@ Infra:
     republicam o override. Frontend `<ControllerMappings>` (seção "Controles"
     em Settings): junta gamepad conectado + mapa salvo, grade de 16 botões
     RetroPad com rebind/`+`, "Limpar mapa". +1 teste.
-  - **2026-08-28** — fechamento da etapa 05:
+  * **2026-08-28** — fechamento da etapa 05:
     - stick esquerdo → d-pad (`GamepadPoller` trata `AxisChanged`, limiar 0.5,
       alimenta a mesma recomposição de RetroPad). +1 teste.
     - `QuickSave`/`QuickLoad` reais: `AppState.current_rom` (setado por
@@ -330,7 +346,7 @@ Infra:
       "D-pad ↑", "Guia"…).
     - `<IdleScreen>` — tela cheia opaca quando `session_state == Idle` (a
       webview transparente só faz sentido com jogo rodando).
-  - **2026-08-29 — validado em hardware (DualSense/PS5)**: jogo reconhece o
+  * **2026-08-29 — validado em hardware (DualSense/PS5)**: jogo reconhece o
     controle (RetroPad OK), áudio OK. **Bug**: os menus não respondiam ao
     gamepad — o `useGamepadNav` dependia da Gamepad API do navegador, que o
     WebKitGTK 2.52 nesse setup não expõe (nunca dispara `gamepadconnected`).
@@ -357,7 +373,7 @@ Infra:
       Trocado por `getBoundingClientRect()`. Gate `state != Running` removido
       da emissão do `menu-nav`. **Validado com DualSense**: launcher, seleção
       1-a-1 e menu de pausa todos navegando pelo controle.
-  - **2026-08-29 — 2 correções menores**:
+  * **2026-08-29 — 2 correções menores**:
     - `load_game` agora registra o core em `installed_cores` (via `get`+
       `register`) antes do `replace_schema` — a FK de `core_options_schema`
       falhava porque a descoberta por disco não persistia nada (WARN
@@ -366,7 +382,7 @@ Infra:
       iniciais) + título + sistema + spinner, no lugar do spinner solto.
       `RomDetail` passa `boxart`/`system` no state da navegação; `initials`
       extraído pra `lib/initials.ts` (compartilhado com `GameCard`).
-  - **2026-08-29 — Etapa 04 fatia 1 (caminho GPU)**: usuário escolheu o
+  * **2026-08-29 — Etapa 04 fatia 1 (caminho GPU)**: usuário escolheu o
     pipeline slang completo do doc. Como a surface nativa está desligada nesse
     ambiente, o wgpu roda **headless** (sem surface → sem conflito com o GTK).
     `src-tauri/src/gpu.rs` — `FrameProcessor` (contexto wgpu + `video_surface::
@@ -446,28 +462,28 @@ Infra:
         Config › Vídeo.
     **Próxima fatia**: (6) parâmetros de shader ajustáveis na UI (os
     `#pragma parameter` já são lidos + buffer montado por nome).
-  - **Falta / follow-up**: caso de dois controles idênticos (mesmo GUID SDL →
+  * **Falta / follow-up**: caso de dois controles idênticos (mesmo GUID SDL →
     colidem na porta — precisa usar o `GamepadId` do `gilrs`); saída de eixo
     analógico pro RetroPad (hoje só stick→d-pad).
 - **2026-08-27 — Etapa 08 (`in-progress`)**: save states.
-  - `EmuSession.loaded_core()` — rastreia o id do core carregado (states não
+  * `EmuSession.loaded_core()` — rastreia o id do core carregado (states não
     são portáveis entre cores).
-  - `apps/desktop/src-tauri/src/save_state.rs` — orquestração (testável):
+  * `apps/desktop/src-tauri/src/save_state.rs` — orquestração (testável):
     `save` grava o `.state` em disco (caminho determinístico por slot, troca o
     anterior no mesmo slot) + `record_state`; `load_bytes` valida `core_id`
     (`CoreMismatch`/`NoCore`/`NotFound`); `list`/`delete` (arquivo + registro).
     **4 testes** de integração (SQLite in-memory + dir temp).
   - Comandos Tauri `save_state`/`list_save_states`/`load_save_state`/
     `delete_save_state`; wrappers no `lib/tauri.ts`.
-  - **2026-08-28** — save RAM (battery): `emu-session` carrega
+  * **2026-08-28** — save RAM (battery): `emu-session` carrega
     `<saves>/<stem>.srm` no core logo após o load e regrava a cada 10s + no
     unload/troca/shutdown (`DesktopCore::{save_ram,restore_save_ram}`). 2 testes.
     QuickSave/QuickLoad no menu de pausa da `PlayScreen`.
-  - **2026-08-30** — shutdown limpo: `RunEvent::ExitRequested` (`lib.rs`) faz
+  * **2026-08-30** — shutdown limpo: `RunEvent::ExitRequested` (`lib.rs`) faz
     `session.unload()` ao fechar (X da janela / Alt+F4 / `quit_app`), garantindo
     o flush final da `.srm` — antes só o flush periódico de 10s cobria.
     `flush_save_ram` virou escrita atômica (`.srm.tmp` + rename).
-  - **2026-08-30 — thumbnail + painel (etapa 08 `done`)**: `poll_frame` guarda
+  * **2026-08-30 — thumbnail + painel (etapa 08 `done`)**: `poll_frame` guarda
     uma cópia throttled (1×/500ms) do último frame em `AppState.last_frame`
     (`CachedFrame`); no `save_state`/QuickSave o `thumbnail_png` (nearest →
     320px → PNG via crate `png`) é gravado ao lado do `.state` como `.png`.
@@ -479,33 +495,33 @@ Infra:
     e o menu de pausa ganhou a lista completa de estados (miniatura + carregar).
     +0 teste novo (os 4 de `save_state.rs` seguem, com `None` no arg novo).
 - **2026-08-27 — Etapa 09 (`in-progress`)**: `crates/library-scan`.
-  - `hash.rs` — `FileRomHasher` impl `domain::metadata::RomHashService`:
+  * `hash.rs` — `FileRomHasher` impl `domain::metadata::RomHashService`:
     CRC32 (`crc32fast`) + MD5 (`md-5`) do arquivo, com **skip do header iNES**
     (`.nes`, 16 bytes). 3 testes (valores conhecidos de "hello world", skip do
     header, arquivo comum).
-  - `systems.rs` — extensão → `system_id` (nes/snes/gba/megadrive/...).
-  - `scan.rs` — `scan_into(repo, dir, now)`: varre recursivo, dedup por
+  * `systems.rs` — extensão → `system_id` (nes/snes/gba/megadrive/...).
+  * `scan.rs` — `scan_into(repo, dir, now)`: varre recursivo, dedup por
     `file_path`, pula extensões desconhecidas, popula `RomRepository`.
     `ScanReport { found, added, skipped_known, skipped_unrecognized, errors }`.
     2 testes de integração (SQLite in-memory).
-  - `domain::library::RomRepository` ganhou `list()`.
+  * `domain::library::RomRepository` ganhou `list()`.
   - App: comandos `list_roms` / `scan_library(path)`; tela Library agora
     escaneia um diretório e lista de verdade (via TanStack Query).
-  - **2026-08-28** — capas via **thumbnails da libretro** (MVP, sem API key):
+  * **2026-08-28** — capas via **thumbnails da libretro** (MVP, sem API key):
     `library_scan::libretro_boxart_url(system_id, título)` monta
     `https://thumbnails.libretro.com/<Sistema>/Named_Boxarts/<Nome>.png`
     (mapa de ~15 sistemas + sanitização de nome no padrão RetroArch). `RomDto`
     ganhou `boxart: Option<String>`; `<GameCard>` e `RomDetail` mostram como
     `<img>` com fallback pras iniciais no `onerror`. Casa melhor com ROMs
     No-Intro. +1 teste. URL verificada 200 no CDN.
-  - **2026-08-30 — etapa 07 fechada**: `RomDetail` reescrito no estilo "página
+  * **2026-08-30 — etapa 07 fechada**: `RomDetail` reescrito no estilo "página
     de jogo do Xbox" (hero com arte/capa da metadata + scrim, título grande,
     badges de sistema/ano/gênero, descrição, botão Jogar/Continuar grande,
     seções em painéis: shader do jogo, opções do core, save states, remover).
     Menu de pausa da `PlayScreen` migrado pro estilo Xbox (`usePauseStyles`,
     painel escuro + anel de foco próprio já que `/play/*` fica fora do
     `.xb-app`). `styles/xbox.ts` += `useDetailStyles` / `usePauseStyles`.
-  - **2026-08-30 — MetadataProvider real (ScreenScraper)**: migration
+  * **2026-08-30 — MetadataProvider real (ScreenScraper)**: migration
     `0003_metadata.sql` (`scrape_matches.candidate_json`, índices únicos por
     rom, `metadata_config` singleton). domain: `GameMetadata`, `ScrapeQuery`,
     `PendingMatch`, `MetadataConfig`; trait `MetadataProvider::search` +
@@ -522,19 +538,19 @@ Infra:
     (`SettingsMetadata.tsx` — credenciais, botão escanear + progresso, lista de
     revisão aceitar/rejeitar); `RomDetail` mostra título/descrição/ano/gênero/
     capa da metadata quando existe. +1 teste db (21 agora).
-  - **Falta**: multi-provider (IGDB/TheGamesDB) + cascata; rate-limit por
+  * **Falta**: multi-provider (IGDB/TheGamesDB) + cascata; rate-limit por
     provider; match por MD5 além de CRC; UI: badge de "N pendências" no rail.
 - **2026-08-27 — Etapa 07 (`in-progress`)**: casca da UI.
-  - `packages/app-desktop/src/`: `lib/tauri.ts` (wrappers de comando/evento,
+  * `packages/app-desktop/src/`: `lib/tauri.ts` (wrappers de comando/evento,
     toleram fora do Tauri), `hooks/useFocusBridge`, `components/{ToastLayer,
     MenuOverlay,CoreOptionsPanel}`, `screens/{Library (mock),Settings (real)}`,
     `App.tsx` compõe HUD + overlay + toasts.
-  - `CoreOptionsPanel` gera os controles do schema (`CoreOptionDefinition[]`).
+  * `CoreOptionsPanel` gera os controles do schema (`CoreOptionDefinition[]`).
   - Backend: `AppState.db` (SqlitePool, migrations rodam no startup em
     `<app_data_dir>/reemu.db` — **verificado**, 17 tabelas). Comandos
     `get_audio_config` / `update_audio_config` / `list_installed_cores`.
-  - `pnpm build` + `oxlint` limpos; `cargo tauri dev` sobe com SQLite + video.
-  - **2026-08-28** — reestruturação em **rotas (modelo launcher, opção A)**:
+  * `pnpm build` + `oxlint` limpos; `cargo tauri dev` sobe com SQLite + video.
+  * **2026-08-28** — reestruturação em **rotas (modelo launcher, opção A)**:
     `react-router-dom` v7 + `createHashRouter` (webview, sem servidor).
     - `layouts/`: `RootLayout` (Outlet + `BindingCapture` + `ToastLayer`),
       `AppShell` (rail Biblioteca/Configurações/Cores, **fundo opaco**),
@@ -548,7 +564,7 @@ Infra:
     - Backend: comando `unload_game` (limpa `current_rom` + `session.unload()`);
       `load_game` ganhou `rom_id`. `index.css`: `body` transparente, cada rota
       pinta seu fundo.
-  - **2026-08-28** — pré-requisitos de backend do frontend:
+  * **2026-08-28** — pré-requisitos de backend do frontend:
     - Diretório de dados **único** (`data_dir()` no `lib.rs` → SQLite + cores +
       saves + system no mesmo lugar; `dirs_or_temp` removido; `AppState` ganhou
       `cores_dir`).
@@ -560,7 +576,7 @@ Infra:
       verdade = core carregado, senão DB); `load_game` semeia os valores salvos
       antes do load e persiste o schema depois. `<CoreOptions>` (Select por
       opção) no `RomDetail`. `CoreOptionsPanel` antigo removido.
-  - **2026-08-28** — visual "modo Xbox" + catálogo de cores + navegação por
+  * **2026-08-28** — visual "modo Xbox" + catálogo de cores + navegação por
     controle:
     - `styles/xbox.css` — linguagem visual (rail de ícones, topbar com relógio,
       cartões arredondados, anel de foco forte). `AppShell` reescrito;
@@ -580,7 +596,7 @@ Infra:
       Gamepad API do navegador (lazy, só após `gamepadconnected` — o WebKitGTK
       reclama se pollarmos sem gamepad). Foco geométrico (bom pra grade), `A`
       clica, `B` volta. Montado no `AppShell`.
-  - **Bug resolvido — a webview nunca renderizou nessa máquina** (duas causas):
+  * **Bug resolvido — a webview nunca renderizou nessa máquina** (duas causas):
     (1) Vite 8/Rolldown travava o dev server → **Vite 7.3 + plugin-react 5**;
     (2) a **child window X11 pro vídeo** + `GDK_BACKEND=x11` fazem o WebKitGTK
     2.52 (NVIDIA/XWayland) montar o DOM mas não pintar → **padrão agora é sem
@@ -597,11 +613,11 @@ Infra:
     dedicada** (`emu-core-loop`) com API de comandos (`load`/`unload`/
     `set_paused`/`save_state`/`restore_state`, todos round-trip) e saída por
     buffers compartilhados (`take_latest_frame`, `drain_audio`, `frame_seq`).
-  - `FocusController` implementa `domain::focus::FocusManager` — `toggle()` e
+  * `FocusController` implementa `domain::focus::FocusManager` — `toggle()` e
     `set()` pausam/resumem a `EmuSession` na transição `GameFocused ⇄
     MenuFocused` (o core congela, para de produzir áudio). 5 testes (frames
     avançam, pause congela, resume, save/restore, foco pausa).
-  - `apps/desktop/src-tauri`: `commands.rs` — `AppState` (`EmuSession` +
+  * `apps/desktop/src-tauri`: `commands.rs` — `AppState` (`EmuSession` +
     `Mutex<FocusController>` como managed state), comandos `toggle_focus`
     (emite evento `focus-changed`), `load_game` (spawn_blocking),
     `current_focus`, `session_state`. `cargo tauri dev` continua abrindo.
@@ -617,10 +633,10 @@ Infra:
     render na thread principal a cada `RunEvent::MainEventsCleared` + resize.
     Janela agora é `transparent: true`. Feature `dev-autoload` (env
     `REEMU_DEV_CORE`/`REEMU_DEV_ROM`) pra testar sem UI de biblioteca.
-  - **Descoberta Linux**: `wgpu::Surface` Vulkan na `wl_surface` da janela
+  * **Descoberta Linux**: `wgpu::Surface` Vulkan na `wl_surface` da janela
     GTK (com ou sem webview) = `Gdk-Message: Error 71 (protocolo)`, crash — o
     GTK é dono da submissão de buffer daquela surface.
-  - **Solução Linux — child window X11** (`video-surface::window_target` +
+  * **Solução Linux — child window X11** (`video-surface::window_target` +
     `apps/desktop/src-tauri/src/video.rs` mod `x11`): sob X11/XWayland,
     `XCreateSimpleWindow` filha do XID do GTK + `XLowerWindow` (atrás da
     webview) + wgpu Surface nela. `main.rs` força `GDK_BACKEND=x11` +
@@ -630,14 +646,14 @@ Infra:
     usa present mode Mailbox/Immediate (não bloqueia a thread do event loop).
   - Windows/macOS: surface direto no handle da janela principal (webview
     transparente compõe) — código pronto, **não verificado**.
-  - **2026-08-30 — readback com pipeline** (`gpu.rs`): o readback GPU→CPU fazia
+  * **2026-08-30 — readback com pipeline** (`gpu.rs`): o readback GPU→CPU fazia
     `device.poll(wait_indefinitely)` — bloqueava a thread do Tauri e serializava
     CPU/GPU (sem pipeline). Agora `ReadbackRing` com 2 staging buffers: o frame
     N copia pro slot N%2 + `map_async`, e lê o slot do frame anterior (já
     mapeado) sem bloquear (`poll(Poll)`). Fallback bloqueante só se o slot ainda
     não mapeou (raro). Atraso de exatamente 1 frame; sem stall no caminho
     normal. +1 teste (`pipelined_readback_has_one_frame_delay`, headless wgpu).
-  - **2026-08-30 — Etapa 03 `done` (desvio aceito)**: a surface nativa não
+  * **2026-08-30 — Etapa 03 `done` (desvio aceito)**: a surface nativa não
     funciona no WebKitGTK+NVIDIA desse setup (`Gdk Error 71` na `wl_surface`;
     child X11 não pinta). O vídeo do desktop é um **`<canvas>` na webview**:
     `poll_frame` (RGBA8 por IPC, corpo vazio = sem frame novo) + `PlayScreen`
