@@ -133,6 +133,7 @@ impl FrameSource for DesktopCore {
         }
         st.had_new_frame = false;
         let raw = st.last_frame.take()?;
+        let rotation_degrees = st.rotation_degrees;
         drop(guard);
 
         let ar = self.aspect_ratio(raw.width, raw.height);
@@ -146,7 +147,7 @@ impl FrameSource for DesktopCore {
                 native_width: raw.width,
                 native_height: raw.height,
                 aspect_ratio: ar,
-                rotation_degrees: 0,
+                rotation_degrees,
             },
         })
     }

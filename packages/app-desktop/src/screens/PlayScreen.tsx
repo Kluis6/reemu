@@ -157,6 +157,10 @@ export function PlayScreen() {
   const [status, setStatus] = useState<'loading' | 'ready' | { error: string }>('loading')
   const [artBroken, setArtBroken] = useState(false)
   const [aspect, setAspect] = useState(4 / 3)
+  // AR de exibição declarada pelo core (respeita PAR ≠ 1). O paint loop usa
+  // isto quando a orientação do frame bate; se veio rotacionado (SET_ROTATION),
+  // usa a AR dos pixels.
+  const declaredAspectRef = useRef(4 / 3)
   const loadedRef = useRef(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // O loop de fetch olha o foco por ref (não re-monta o efeito a cada pausa).
@@ -212,6 +216,10 @@ export function PlayScreen() {
         if (c.width !== latest.w || c.height !== latest.h) {
           c.width = latest.w
           c.height = latest.h
+          const declared = declaredAspectRef.current
+          const pixels = latest.w / Math.max(1, latest.h)
+          // orientação bate → AR declarada (PAR ok); senão frame rotacionado.
+          setAspect((declared >= 1) === (pixels >= 1) ? declared : pixels)
         }
         c.getContext('2d')?.putImageData(latest.img, 0, 0)
       }
@@ -233,7 +241,9 @@ export function PlayScreen() {
       try {
         const g = await loadGame(launch.coreId, launch.romPath, romId || undefined)
         if (cancelled) return
-        setAspect(g.aspectRatio > 0 ? g.aspectRatio : g.baseWidth / g.baseHeight || 4 / 3)
+        const a = g.aspectRatio > 0 ? g.aspectRatio : g.baseWidth / g.baseHeight || 4 / 3
+        declaredAspectRef.current = a
+        setAspect(a)
         // "Jogar daqui": carrega o save state pedido na URL antes de mostrar.
         const wantState = params.get('loadState')
         if (wantState) {

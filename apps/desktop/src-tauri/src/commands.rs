@@ -563,16 +563,18 @@ pub async fn unload_game(app: AppHandle) -> Result<(), String> {
 /// A `PlayScreen` consome num loop de `requestAnimationFrame` e pinta no canvas.
 #[tauri::command]
 pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
-    use domain::frame_source::{to_rgba8, FrameOrigin};
+    use domain::frame_source::{rotate_rgba, to_rgba8, FrameOrigin};
     let Some(frame) = state.session.take_latest_frame() else {
         return tauri::ipc::Response::new(Vec::new());
     };
+    let rot = frame.metadata.rotation_degrees;
 
     // Caminho GPU (etapa 04 — shader chain). Cai no CPU em qualquer falha.
     {
         let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(fp) = gpu.as_mut() {
             if let Some((w, h, rgba)) = fp.process(&frame) {
+                let (rgba, w, h) = rotate_rgba(&rgba, w, h, rot);
                 cache_thumb_frame(&state, w, h, &rgba);
                 return pack_frame(w, h, &rgba);
             }
@@ -588,7 +590,7 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
         return tauri::ipc::Response::new(Vec::new());
     };
     let (w, h) = (frame.metadata.native_width, frame.metadata.native_height);
-    let rgba = to_rgba8(&data, w, h, pitch, format);
+    let (rgba, w, h) = rotate_rgba(&to_rgba8(&data, w, h, pitch, format), w, h, rot);
     cache_thumb_frame(&state, w, h, &rgba);
     pack_frame(w, h, &rgba)
 }

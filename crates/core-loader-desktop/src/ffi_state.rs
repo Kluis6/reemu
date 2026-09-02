@@ -43,6 +43,8 @@ pub(crate) struct FrontendState {
     pub system_dir: CString,
     pub save_dir: CString,
     pub hw_render: Option<HwRenderRequest>,
+    /// Rotação da tela pedida via `SET_ROTATION` (0/90/180/270°, anti-horário).
+    pub rotation_degrees: u16,
     pub last_frame: Option<RawFrame>,
     pub had_new_frame: bool,
     /// PCM interleaved estéreo i16 acumulado desde o último drain.
@@ -71,6 +73,7 @@ impl FrontendState {
             system_dir: to_c(system_dir),
             save_dir: to_c(save_dir),
             hw_render: None,
+            rotation_degrees: 0,
             last_frame: None,
             had_new_frame: false,
             audio: Vec::new(),
@@ -277,9 +280,16 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             }
             true
         }
+        sys::RETRO_ENVIRONMENT_SET_ROTATION => {
+            // `data` = *const c_uint, 0..=3 (× 90° anti-horário).
+            if !data.is_null() {
+                let turns = (*(data as *const c_uint)) % 4;
+                st.rotation_degrees = (turns as u16) * 90;
+            }
+            true
+        }
         // Reconhecidos, sem efeito ainda.
         sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
-        | sys::RETRO_ENVIRONMENT_SET_ROTATION
         | sys::RETRO_ENVIRONMENT_SET_MESSAGE
         | sys::RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS

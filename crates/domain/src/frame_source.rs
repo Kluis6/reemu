@@ -116,6 +116,39 @@ pub fn to_rgba8(
     out
 }
 
+/// Gira um buffer RGBA8 `w*h` por `degrees` (0/90/180/270, anti-horário — a
+/// convenção do `SET_ROTATION` do libretro). Devolve `(rgba, w, h)` já com as
+/// dimensões trocadas pra 90/270. `0` (ou valor inesperado) → cópia como está.
+pub fn rotate_rgba(src: &[u8], w: u32, h: u32, degrees: u16) -> (Vec<u8>, u32, u32) {
+    let (wu, hu) = (w as usize, h as usize);
+    if src.len() != wu * hu * 4 || !matches!(degrees, 90 | 180 | 270) {
+        return (src.to_vec(), w, h);
+    }
+    let px = |x: usize, y: usize| {
+        let i = (y * wu + x) * 4;
+        [src[i], src[i + 1], src[i + 2], src[i + 3]]
+    };
+    let mut out = vec![0u8; src.len()];
+    let (ow, oh) = match degrees {
+        90 | 270 => (hu, wu),
+        _ => (wu, hu),
+    };
+    for oy in 0..oh {
+        for ox in 0..ow {
+            let (sx, sy) = match degrees {
+                // anti-horário: coluna de baixo → linha de cima
+                90 => (wu - 1 - oy, ox),
+                180 => (wu - 1 - ox, hu - 1 - oy),
+                270 => (oy, hu - 1 - ox),
+                _ => unreachable!(),
+            };
+            let o = (oy * ow + ox) * 4;
+            out[o..o + 4].copy_from_slice(&px(sx, sy));
+        }
+    }
+    (out, ow as u32, oh as u32)
+}
+
 pub trait FrameSource: Send {
     fn next_frame(&mut self) -> Option<Frame>;
 }
@@ -167,5 +200,38 @@ mod to_rgba8_tests {
         assert_eq!(&out[0..4], [255, 0, 0, 255]);
         assert_eq!(&out[4..8], [0, 0, 255, 255]);
         assert_eq!(&out[8..12], [0, 255, 0, 255]);
+    }
+
+    /// Rótula os 4 pixels de uma imagem 2×1 (A B, um por linha vira coluna).
+    #[test]
+    fn rotate_rgba_quarter_turns() {
+        // 3 wide × 2 tall, valor de cada pixel = índice (0..5) no canal R.
+        let mut src = vec![0u8; 3 * 2 * 4];
+        for i in 0..6 {
+            src[i * 4] = i as u8;
+            src[i * 4 + 3] = 255;
+        }
+        // layout:  0 1 2
+        //          3 4 5
+        let r = |deg| rotate_rgba(&src, 3, 2, deg);
+
+        let (b0, w0, h0) = r(0); // sem rotação
+        assert_eq!((w0, h0), (3, 2));
+        assert_eq!(b0[0], 0);
+
+        // 90° anti-horário → 2 wide × 3 tall:  2 5 / 1 4 / 0 3
+        let (b90, w90, h90) = r(90);
+        assert_eq!((w90, h90), (2, 3));
+        assert_eq!([b90[0], b90[4], b90[8], b90[12]], [2, 5, 1, 4]);
+
+        // 180° → 3×2:  5 4 3 / 2 1 0
+        let (b180, w180, h180) = r(180);
+        assert_eq!((w180, h180), (3, 2));
+        assert_eq!([b180[0], b180[4], b180[8]], [5, 4, 3]);
+
+        // 270° anti-horário → 2×3:  3 0 / 4 1 / 5 2
+        let (b270, w270, h270) = r(270);
+        assert_eq!((w270, h270), (2, 3));
+        assert_eq!([b270[0], b270[4], b270[8], b270[12]], [3, 0, 4, 1]);
     }
 }

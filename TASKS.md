@@ -39,7 +39,7 @@ refaça trabalho já feito ou pule pré-requisito.
 |---|---|---|---|
 | 01 | Domain + DB — repositórios sqlx | `done` | Setup local |
 | 02 | Core Loader Desktop — caminho GL | `done` (software) | 01 |
-| 03 | Tauri Desktop Shell — surface nativa | `done` (desvio aceito: vídeo via `<canvas>`; surface nativa adiada — ver doc 03) | 02 |
+| 03 | Tauri Desktop Shell — surface nativa | `done` (vídeo via `<canvas>`; SET_ROTATION 2026-08-31; surface nativa adiada — ver doc 03) | 02 |
 | 04 | Shader Chain + Decoração | `done` (shader + decoração + params na UI — 2026-08-30) | 03 |
 | 05 | Input, Hotkeys, UI de Binding | `done` (validado c/ DualSense 2026-08-29; foco de menu 2026-08-30) | 03 |
 | 06 | Áudio — Dynamic Rate Control | `done` (DRC + sink + "aplicar ao vivo"; falta só validar sessão longa ouvindo — usuário) | 03 |
@@ -101,11 +101,12 @@ Metadata (etapa 09 fechada no MVP):
 - Resampler linear → `rubato` se a qualidade não bastar.
 
 Correção de vídeo (cores software):
-- **`RETRO_ENVIRONMENT_SET_ROTATION`** — hoje reconhecido mas ignorado
-  (`ffi_state.rs`), `FrameMetadata.rotation_degrees` fica sempre 0. Jogos
-  verticais (shmups de arcade via FBNeo/MAME, alguns) renderizam de lado.
-  Precisa: capturar o valor (0-3 = 0/90/180/270°), plumar até o `gpu.rs`/canvas
-  e girar (swap w/h + rotação de uv).
+- ~~`RETRO_ENVIRONMENT_SET_ROTATION`~~ — **feito 2026-08-31**: `ffi_state.rs`
+  captura o valor, `FrameMetadata.rotation_degrees`, `domain::rotate_rgba`
+  aplica na CPU no `poll_frame` (ambos os caminhos), o `<canvas>` acompanha a
+  AR (declarada quando a orientação bate, dos pixels quando veio rotacionado).
+  Falta: validar com um jogo vertical real (FBNeo). Direção assumida =
+  anti-horário (libretro.h); flipar se sair espelhado.
 - **`SET_GEOMETRY` / `SET_SYSTEM_AV_INFO` em runtime** — `aspect_ratio` vem do
   `av_info` do load; se o core muda a proporção no meio do jogo não pega
   (resolução em si já pega, é per-frame). Baixa prioridade pros cores atuais.
