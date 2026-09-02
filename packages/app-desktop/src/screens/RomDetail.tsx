@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { CoreOptions } from '../components/CoreOptions'
 import { SaveStateThumb } from '../components/SaveStateThumb'
+import { ShaderLibrary } from '../components/ShaderLibrary'
 import { ShaderParams } from '../components/ShaderParams'
 import { sysToast } from '../lib/toast'
 import {
@@ -198,6 +199,11 @@ export function RomDetail() {
                   <option value={romShader.data.sourcePath}>{currentGameShader}</option>
                 )}
             </Select>
+            <ShaderLibrary
+              onPick={(p) => shaderPick.mutate(p)}
+              activePath={shaderInfo.data.active}
+              busy={shaderPick.isPending}
+            />
             <Button
               size="small"
               appearance="subtle"
@@ -207,7 +213,7 @@ export function RomDetail() {
                 if (p) shaderPick.mutate(p)
               }}
             >
-              Carregar .slangp…
+              Carregar .slangp avulso…
             </Button>
             {romShader.data?.fromRom && (
               <ShaderParams scope="rom" romId={romId} reloadKey={currentGameShader} />

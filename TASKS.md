@@ -69,9 +69,17 @@ Ao concluir uma etapa:
 Renderização / filtros (independente da etapa 12):
 - **Integer scaling** — trava o `<canvas>` num múltiplo inteiro da resolução
   nativa + toggle em Config › Vídeo. Só frontend, ~0,5 dia, risco zero.
-- **Seleção de preset por pasta** — comando `list_slangp_dir` + UI pra apontar
-  pra uma pasta `shaders_slang` (RetroBat) e escolher `.slangp` de uma lista
-  (hoje só "Carregar .slangp…" arquivo a arquivo). ~1 dia, não toca `gpu.rs`.
+- ~~**Seleção de preset por pasta**~~ **feito (2026-09-02)** — comando
+  `list_slangp_dir` (varre recursivo, agrupa por subpasta, teto 6000) +
+  `<ShaderLibrary>` em Config › Vídeo e RomDetail: aponta pra `shaders_slang`
+  (raiz no `localStorage`, o shader ativo continua persistido no DB via
+  `set_shader`), filtro de texto, grupos colapsáveis. O "Carregar .slangp
+  avulso…" continua pra arquivos fora da pasta. Não tocou `gpu.rs`.
+- **Downloader de pacote de shaders (opção B)** — botão "Baixar pacote de
+  shaders" espelhando `core_catalog.rs`: baixa o tarball de
+  `libretro/slang-shaders` pra `<dados>/shaders/` + aponta a `ShaderLibrary`
+  pra lá. ~2-3 dias. Só vale **depois** do compilador glslang + Feedback/LUT
+  (senão baixa Mega Bezel e só dá erro de compilação).
 - **Presets que já compilam no `naga`** — curar lista dos que funcionam
   (sharp-bilinear, pixellate, scale2x/3x, super-xbr, MMPX, crt-geom/lottes/
   zfast, CAS/RCAS). Zero código.

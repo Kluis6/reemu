@@ -665,6 +665,84 @@ pub fn get_shader_info(state: State<'_, AppState>) -> ShaderInfo {
     }
 }
 
+/// Um preset `.slangp` encontrado varrendo a pasta de shaders do usuário
+/// (RetroArch / RetroBat). `category` é a subpasta de topo (`crt`, `handheld`,
+/// …) ou `""` pros presets na raiz.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SlangpEntry {
+    pub path: String,
+    pub name: String,
+    pub category: String,
+}
+
+/// Teto de segurança — a árvore `slang-shaders` tem ~1200 `.slangp`.
+const MAX_SLANGP_ENTRIES: usize = 6000;
+
+/// Varre `root` recursivamente e lista todo `*.slangp`. Não compila nada — só
+/// enumera pra UI de biblioteca (a compilação acontece no `set_shader`).
+#[tauri::command]
+pub fn list_slangp_dir(root: String) -> Result<Vec<SlangpEntry>, String> {
+    let root = std::path::PathBuf::from(&root);
+    if !root.is_dir() {
+        return Err(format!("'{}' não é uma pasta", root.display()));
+    }
+    let mut out = Vec::new();
+    walk_slangp(&root, &root, &mut out, 0);
+    out.sort_by(|a, b| {
+        (a.category.to_lowercase(), a.name.to_lowercase())
+            .cmp(&(b.category.to_lowercase(), b.name.to_lowercase()))
+    });
+    Ok(out)
+}
+
+fn walk_slangp(
+    root: &std::path::Path,
+    dir: &std::path::Path,
+    out: &mut Vec<SlangpEntry>,
+    depth: usize,
+) {
+    if depth > 8 || out.len() >= MAX_SLANGP_ENTRIES {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for ent in rd.flatten() {
+        let p = ent.path();
+        if p.is_dir() {
+            walk_slangp(root, &p, out, depth + 1);
+        } else if p
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("slangp"))
+        {
+            let name = p
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("preset")
+                .to_string();
+            let rel = p.strip_prefix(root).unwrap_or(&p);
+            let category = if rel.components().count() >= 2 {
+                rel.components()
+                    .next()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+            out.push(SlangpEntry {
+                path: p.to_string_lossy().into_owned(),
+                name,
+                category,
+            });
+        }
+        if out.len() >= MAX_SLANGP_ENTRIES {
+            return;
+        }
+    }
+}
+
 /// Registra os presets embutidos (`plain`/`crt`/`lcd`) em `shader_presets` no
 /// startup — `shader_chain_assignments.preset_id` tem FK pra essa tabela.
 pub async fn seed_builtin_shader_presets(pool: &db::Db) {

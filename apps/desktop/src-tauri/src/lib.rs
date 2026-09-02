@@ -97,6 +97,7 @@ pub fn run() {
             commands::get_shader_info,
             commands::set_shader,
             commands::get_rom_shader,
+            commands::list_slangp_dir,
             commands::get_shader_params,
             commands::set_shader_param,
             commands::reset_shader_params,

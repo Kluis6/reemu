@@ -75,6 +75,16 @@ export interface RomShader {
 }
 export const getRomShader = (romId: string) => invoke<RomShader>('get_rom_shader', { romId })
 
+/** Um `.slangp` achado varrendo a pasta de shaders do usuário. `category` é a
+ *  subpasta de topo (`crt`, `handheld`…) ou `''` pros presets na raiz. */
+export interface SlangpEntry {
+  path: string
+  name: string
+  category: string
+}
+export const listSlangpDir = (root: string) =>
+  invoke<SlangpEntry[]>('list_slangp_dir', { root })
+
 /** Parâmetro ajustável do shader ativo (`#pragma parameter`). Vazio pros
  *  builtins (plain/crt/lcd). */
 export interface ShaderParam {
@@ -242,10 +252,10 @@ export async function scanLibrary(
 }
 
 /** Diálogo nativo de seleção de pasta. `null` se cancelado / fora do Tauri. */
-export async function pickFolder(): Promise<string | null> {
+export async function pickFolder(title = 'Escolha a pasta das ROMs'): Promise<string | null> {
   if (!inTauri) return null
   const { open } = await import('@tauri-apps/plugin-dialog')
-  const sel = await open({ directory: true, multiple: false, title: 'Escolha a pasta das ROMs' })
+  const sel = await open({ directory: true, multiple: false, title })
   return typeof sel === 'string' ? sel : null
 }
 

@@ -1,5 +1,6 @@
 import { Body1, Button, Caption1, Spinner } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ShaderLibrary } from '../../components/ShaderLibrary'
 import { ShaderParams } from '../../components/ShaderParams'
 import { sysToast } from '../../lib/toast'
 import {
@@ -92,17 +93,24 @@ export function SettingsVideo() {
       {data.gpu && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <Caption1>
-            Preset externo — arquivo <code>.slangp</code> (RetroArch). Suporta
-            passe único usando <code>Source</code>; Mega Bezel completo ainda não.
+            Preset externo — arquivo <code>.slangp</code> (RetroArch). Chains
+            multi-passe simples rodam; CRT-Royale / Mega Bezel completos ainda
+            não.
           </Caption1>
+          <ShaderLibrary
+            onPick={(p) => pick.mutate(p)}
+            activePath={data.active}
+            busy={pick.isPending}
+          />
           <Button
+            appearance="subtle"
             disabled={pick.isPending}
             onClick={async () => {
               const p = await pickSlangp()
               if (p) pick.mutate(p)
             }}
           >
-            Carregar .slangp…
+            Carregar .slangp avulso…
           </Button>
           {!data.available.includes(data.active) && (
             <Caption1>
