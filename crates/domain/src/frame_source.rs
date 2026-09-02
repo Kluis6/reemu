@@ -118,11 +118,12 @@ pub fn to_rgba8(
 
 /// Gira um buffer RGBA8 `w*h` por `degrees` (0/90/180/270, anti-horário — a
 /// convenção do `SET_ROTATION` do libretro). Devolve `(rgba, w, h)` já com as
-/// dimensões trocadas pra 90/270. `0` (ou valor inesperado) → cópia como está.
-pub fn rotate_rgba(src: &[u8], w: u32, h: u32, degrees: u16) -> (Vec<u8>, u32, u32) {
+/// dimensões trocadas pra 90/270. `0` (ou valor inesperado) devolve o buffer
+/// **sem copiar** (move) — é o caminho de 99% dos frames.
+pub fn rotate_rgba(src: Vec<u8>, w: u32, h: u32, degrees: u16) -> (Vec<u8>, u32, u32) {
     let (wu, hu) = (w as usize, h as usize);
     if src.len() != wu * hu * 4 || !matches!(degrees, 90 | 180 | 270) {
-        return (src.to_vec(), w, h);
+        return (src, w, h);
     }
     let px = |x: usize, y: usize| {
         let i = (y * wu + x) * 4;
@@ -213,11 +214,11 @@ mod to_rgba8_tests {
         }
         // layout:  0 1 2
         //          3 4 5
-        let r = |deg| rotate_rgba(&src, 3, 2, deg);
+        let r = |deg| rotate_rgba(src.clone(), 3, 2, deg);
 
-        let (b0, w0, h0) = r(0); // sem rotação
+        let (b0, w0, h0) = r(0); // sem rotação — devolve o buffer intacto
         assert_eq!((w0, h0), (3, 2));
-        assert_eq!(b0[0], 0);
+        assert_eq!(b0, src);
 
         // 90° anti-horário → 2 wide × 3 tall:  2 5 / 1 4 / 0 3
         let (b90, w90, h90) = r(90);

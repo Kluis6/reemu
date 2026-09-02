@@ -315,22 +315,26 @@ fn srm_path(dir: &std::path::Path, rom_path: &str) -> PathBuf {
     dir.join(format!("{stem}.srm"))
 }
 
-fn flush_save_ram(core: &core_loader_desktop::DesktopCore, path: &std::path::Path) {
-    let Some(bytes) = core.save_ram() else { return };
+/// Escrita atômica de um `.srm`: `.tmp` no mesmo diretório + `rename` por cima
+/// (atômico no mesmo FS; um kill no meio deixa a `.srm` antiga intacta).
+fn write_srm(path: &std::path::Path, bytes: &[u8]) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    // Escrita atômica: grava num `.tmp` no mesmo diretório e renomeia por cima
-    // (rename é atômico no mesmo filesystem). Um kill no meio da escrita deixa
-    // a `.srm` antiga intacta em vez de truncada.
     let tmp = path.with_extension("srm.tmp");
-    let write = std::fs::write(&tmp, &bytes).and_then(|()| std::fs::rename(&tmp, path));
-    match write {
+    match std::fs::write(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path)) {
         Ok(()) => log::debug!("save RAM ({} bytes) → {path:?}", bytes.len()),
         Err(e) => {
             log::warn!("save RAM {path:?}: {e}");
             let _ = std::fs::remove_file(&tmp);
         }
+    }
+}
+
+/// Flush síncrono (unload / troca de jogo / shutdown — infrequente).
+fn flush_save_ram(core: &core_loader_desktop::DesktopCore, path: &std::path::Path) {
+    if let Some(bytes) = core.save_ram() {
+        write_srm(path, &bytes);
     }
 }
 
@@ -345,6 +349,18 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
     let mut core: Option<core_loader_desktop::DesktopCore> = None;
     let mut current_srm: Option<PathBuf> = None;
     let mut last_srm_flush = Instant::now();
+    // O flush periódico da `.srm` sai da thread do core (a escrita+rename+fsync
+    // podia atrasar um frame a cada 10s → hitch). O `save_ram()` continua aqui
+    // (toca o core); só o I/O vai pra thread de trás.
+    let (srm_tx, srm_rx) = mpsc::channel::<(PathBuf, Vec<u8>)>();
+    let srm_writer = std::thread::Builder::new()
+        .name("reemu-srm-writer".into())
+        .spawn(move || {
+            for (path, bytes) in srm_rx {
+                write_srm(&path, &bytes);
+            }
+        })
+        .ok();
     let mut paused = false;
     let mut core_sample_rate = 32_000u32;
     let mut frame_budget = Duration::from_micros(16_667);
@@ -493,10 +509,11 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         .extend_from_slice(&audio),
                 }
             }
-            // Flush periódico da save RAM (barato: só grava se o jogo tem SRAM).
+            // Flush periódico da save RAM: `save_ram()` aqui (barato), a
+            // escrita vai pra thread `reemu-srm-writer`.
             if last_srm_flush.elapsed() >= SRM_FLUSH_INTERVAL {
-                if let Some(p) = current_srm.as_ref() {
-                    flush_save_ram(c, p);
+                if let (Some(p), Some(bytes)) = (current_srm.as_ref(), c.save_ram()) {
+                    let _ = srm_tx.send((p.clone(), bytes));
                 }
                 last_srm_flush = Instant::now();
             }
@@ -508,12 +525,20 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
             next_deadline += frame_budget;
             let now = Instant::now();
             if now < next_deadline {
-                let wait = next_deadline - now;
-                if let Some(coarse) = wait.checked_sub(Duration::from_micros(1200)) {
+                // Dorme quase tudo (menos ~600µs de folga pro overshoot do
+                // `thread::sleep`) e gira o resto — o clock só é lido a cada
+                // ~64 iterações pra não gastar o próprio spin em `Instant::now`.
+                if let Some(coarse) = (next_deadline - now).checked_sub(Duration::from_micros(600))
+                {
                     std::thread::sleep(coarse);
                 }
-                while Instant::now() < next_deadline {
-                    std::hint::spin_loop();
+                loop {
+                    for _ in 0..64 {
+                        std::hint::spin_loop();
+                    }
+                    if Instant::now() >= next_deadline {
+                        break;
+                    }
                 }
             } else if now.duration_since(next_deadline) > frame_budget * 4 {
                 // muito pra trás (core lento / stall) — desiste de recuperar.
@@ -522,4 +547,9 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
         }
     }
     // `core` dropa aqui → DesktopCore::Drop faz unload_game + deinit.
+    // Fecha o canal e espera o writer terminar as gravações pendentes.
+    drop(srm_tx);
+    if let Some(t) = srm_writer {
+        let _ = t.join();
+    }
 }
