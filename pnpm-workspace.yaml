@@ -1,2 +1,10 @@
 packages:
   - "packages/*"
+
+# pnpm 10+ bloqueia o postinstall de dependências por padrão; o esbuild (via
+# vite) precisa do dele pra linkar o binário da plataforma. Sem isto o CI
+# falha com ERR_PNPM_IGNORED_BUILDS.
+onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true
