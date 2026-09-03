@@ -38,7 +38,7 @@ refaça trabalho já feito ou pule pré-requisito.
 | # | Etapa | Status | Depende de |
 |---|---|---|---|
 | 01 | Domain + DB — repositórios sqlx | `done` | Setup local |
-| 02 | Core Loader Desktop — caminho GL | `done` (software) | 01 |
+| 02 | Core Loader Desktop — caminho GL | `done` (software + HW render GL: contexto EGL offscreen + FBO + readback; validado c/ Super Mario 64 2026-09-02. Interop dma_buf zero-cópia opt-in `REEMU_GL_INTEROP=1`) | 01 |
 | 03 | Tauri Desktop Shell — surface nativa | `done` (vídeo via `<canvas>`; SET_ROTATION 2026-08-31; surface nativa adiada — ver doc 03) | 02 |
 | 04 | Shader Chain + Decoração | `done` (shader + decoração + params na UI — 2026-08-30) | 03 |
 | 05 | Input, Hotkeys, UI de Binding | `done` (validado c/ DualSense 2026-08-29; foco de menu 2026-08-30) | 03 |
@@ -46,13 +46,14 @@ refaça trabalho já feito ou pule pré-requisito.
 | 07 | Frontend React — Fluent/Zustand/Toast | `done` (modo Xbox completo: Início/Biblioteca/RomDetail/PlayScreen, Griffel, busca, nav por controle) | 03 |
 | 08 | Save States e Save RAM | `done` (thumbnail por slot + painel na UI + "jogar daqui" — 2026-08-30) | 02 |
 | 09 | Scraping de Metadata | `done` (ScreenScraper por CRC + revisão manual; multi-provider/IGDB no backlog) | 01 |
-| 10 | Catálogo e Download de Cores | `done` (68 cores do buildbot: software + GL marcados "precisa de GPU"; Vulkan-only fora até 12) | 01 |
+| 10 | Catálogo e Download de Cores | `done` (68 cores do buildbot: software + GL usáveis; badge "OpenGL"; Vulkan-only fora até 12) | 01 |
 | 11 | Port Android | `todo` (desbloqueado — 01–10 `done`; usuário adiou 2026-08-30) | 03–10 completas no desktop |
-| 12 | Vulkan HW Render Fase 2 | `blocked` (backlog — falta GL HW / etapa 02 passo 4 primeiro) | Gatilho de maturidade — ver doc 12 |
+| 12 | Vulkan HW Render Fase 2 | `blocked` (GL HW já feito; falta lista de cores-alvo + gatilho de maturidade — ver doc 12) | ver doc 12 |
 
-**Desktop (01–10) fechado em 2026-08-30.** Só falta validação em hardware
-de sessão longa de áudio (etapa 06). Próximos: 11 (Android) ou os itens de
-render do backlog.
+**Desktop (01–10) fechado.** GL HW render (passo 4 da etapa 02) fechado
+2026-09-02 (Super Mario 64 roda). Falta validar: interop dma_buf
+(`REEMU_GL_INTEROP=1`), sessão longa de áudio. Próximos: surface nativa
+(item #2 do caminho crítico), 11 (Android), itens do backlog de render.
 
 ## Como atualizar
 
@@ -92,10 +93,11 @@ Renderização / filtros (independente da etapa 12):
 - **HDR / tonemapping** — depois do compilador completo.
 
 Cores com GPU:
-- **GL HW render (etapa 02 passo 4)** — contexto GL offscreen + callbacks
-  (`get_current_framebuffer`/`get_proc_address`/`context_reset`) + interop
-  GL↔wgpu. Destrava N64/PSX-hw/Saturn/DS/Dreamcast/PSP/GC-Wii/PS2 (GL). É
-  pré-requisito duro da etapa 12.
+- ~~**GL HW render (etapa 02 passo 4)**~~ **feito (2026-09-02)** — `gl_context.rs`
+  + `dmabuf.rs`: contexto EGL offscreen + FBO + os 4 callbacks. Frame por
+  readback (default) ou interop dma_buf (`REEMU_GL_INTEROP=1`). Mario 64 roda.
+  Falta: validar o interop em hw, trocar `glFinish` por semáforo cross-API,
+  tirar o gate; `.7z` no scan; GLES-only sem core pra testar.
 - **Etapa 12 (Vulkan HW)** — `blocked`, ver doc 12. Só depois do GL estável +
   lista de cores-alvo definida. NÃO temporal upscaling (DLSS/FSR2/XeSS não
   servem — sem motion vectors na emulação).

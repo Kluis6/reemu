@@ -14,7 +14,7 @@ apps/
 crates/
   domain/               Regras de negócio puras — traits/portas, zero I/O de plataforma
   db/                   Schema SQLite (migrations) + repositórios sqlx
-  core-loader-desktop/  libloading + FFI libretro (caminho software-only)
+  core-loader-desktop/  libloading + FFI libretro (software + HW render GL)
   emu-session/          Loop do core em thread dedicada + state machine de foco
   video-surface/        Renderer wgpu: frame do core -> textura -> tela (letterbox)
   audio-desktop/        AudioSink cpal + Dynamic Rate Control
@@ -38,15 +38,16 @@ implementam as traits definidas em `domain`.
 
 ## Status atual
 
-Ver `TASKS.md` para o checklist detalhado e o backlog. Resumo (2026-08-30):
+Ver `TASKS.md` para o checklist detalhado e o backlog. Resumo (2026-09-02):
 
-**Desktop (etapas 01–10) fechado.** Roda cores libretro software ponta a ponta:
-biblioteca → detalhe do jogo → jogar (vídeo num `<canvas>`, áudio com DRC,
-save states com thumbnail e save RAM), tudo com UI "modo Xbox" (Griffel) e
-navegação por controle.
+**Desktop (etapas 01–10) fechado.** Roda cores libretro software **e OpenGL**
+(N64 etc.) ponta a ponta: biblioteca → detalhe do jogo → jogar (vídeo num
+`<canvas>`, áudio com DRC, save states com thumbnail e save RAM), tudo com UI
+"modo Xbox" (Griffel) e navegação por controle.
 
 - [x] **01** Domain + `crates/db` (sqlx, ~11 repos, migrations 0001–0003)
-- [x] **02** `core-loader-desktop` — FFI libretro, caminho software-only
+- [x] **02** `core-loader-desktop` — FFI libretro; software + HW render GL
+      (contexto EGL offscreen + FBO + readback; interop dma_buf opt-in). ROM `.zip`.
 - [x] **03** `emu-session` + vídeo via `<canvas>` (surface nativa adiada — ver `docs/ai-context/03`)
 - [x] **04** Shader chain (`plain`/`crt`/`lcd` + `.slangp` via `shader-slang`),
       parâmetros ajustáveis, decoração/bezels (Bezel Project/RetroBat)
@@ -55,13 +56,14 @@ navegação por controle.
 - [x] **07** Frontend — Início + Meus jogos + RomDetail + PlayScreen, busca, menu de contexto
 - [x] **08** Save states + save RAM (`.srm` atômica, flush no shutdown), thumbnail por slot
 - [x] **09** Scraping — ScreenScraper por CRC + fila de revisão manual
-- [x] **10** Catálogo — 68 cores do buildbot; GL marcados "precisa de GPU"
+- [x] **10** Catálogo — 68 cores do buildbot; software + GL usáveis (badge "OpenGL")
 - [ ] **11** Port Android — desbloqueado, adiado
-- [ ] **12** HW render Vulkan — backlog (depende de GL HW primeiro)
+- [ ] **12** HW render Vulkan — backlog
 
-Backlog: GL HW render (etapa 02 passo 4), compilador slang via glslang→SPIR-V
-(destrava CRT-Royale/Mega Bezel/FSR), integer scaling, `SET_ROTATION` (jogos
-verticais), `packages/ui`/`shared`, `apps/mobile`.
+Backlog: surface nativa de vídeo (tira as cópias de CPU do `<canvas>`),
+compilador slang via glslang→SPIR-V (destrava CRT-Royale/Mega Bezel/FSR),
+integer scaling, interop dma_buf sem gate, `.7z` no scan, `packages/ui`/`shared`,
+`apps/mobile`.
 
 ## Rodar
 

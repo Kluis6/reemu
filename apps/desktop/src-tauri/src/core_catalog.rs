@@ -7,9 +7,10 @@
 //! `fceumm_libretro`) é o mesmo id que `discover_cores` e `load_game` usam.
 //!
 //! `hw` diz o que o core exige de render:
-//! - `Software` — roda hoje.
-//! - `OpenGl` — precisa de contexto GL (etapa 02 passo 4 — ainda não existe);
-//!   dá pra baixar, mas `load_game` recusa com `HwRenderUnsupported`.
+//! - `Software` — buffer de pixels cru.
+//! - `OpenGl` — renderiza num FBO; o frontend cria um contexto GL offscreen
+//!   (etapa 02 passo 4) e traz o frame por readback (ou interop dma_buf com
+//!   `REEMU_GL_INTEROP=1`). Precisa de `libEGL` + GPU.
 //!
 //! Cores exclusivamente Vulkan ficam de fora até a etapa 12.
 

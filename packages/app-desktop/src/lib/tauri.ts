@@ -147,7 +147,7 @@ export interface CatalogCore {
   systems: string
   license: string
   installed: boolean
-  /** 'software' roda hoje; 'opengl' baixa mas ainda não carrega (falta contexto GL). */
+  /** 'software' = buffer cru; 'opengl' = renderiza em GL (precisa de GPU + libEGL). */
   hw: 'software' | 'opengl'
 }
 export const listCoreCatalog = () => invoke<CatalogCore[]>('list_core_catalog')

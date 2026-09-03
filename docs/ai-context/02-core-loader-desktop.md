@@ -8,23 +8,30 @@ de pixels crus) e depois o caminho GL de hardware render
 (`retro_hw_render_callback`). **Vulkan por-core fica pra depois** — ver
 `12-vulkan-hw-render-fase2.md`.
 
-## Estado atual (2026-08-27 — `in-progress`)
+## Estado atual (2026-09-02 — `done`)
 
-Crate `crates/core-loader-desktop` criado. Passos 1-3 **feitos**:
+Crate `crates/core-loader-desktop`. Passos 1-4 **feitos**:
 - `src/sys.rs` — FFI libretro (conferido contra `libretro.h`).
 - `RawCore` (libloading), `ffi_state` (estado global + callbacks — libretro é
   **um core por processo**), `DesktopCore` (impl `FrameSource` +
   `domain::core_loader::LoadedCore`), `DesktopCoreLoader` (impl `CoreLoader`;
   `load_core()` devolve o tipo concreto com os extras).
 - Caminho **software-only** validado ponta a ponta com um core-fake em C
-  (`fixtures/testcore.c`, compilado pelo `build.rs`). 5 testes de integração.
-- `SET_HW_RENDER` detectado → requisitos persistidos + load recusado com
-  `CoreLoadError::HwRenderUnsupported`.
+  (`fixtures/testcore.c`, compilado pelo `build.rs`).
+- **HW render GL** (`src/gl_context.rs`, `src/dmabuf.rs`): contexto EGL
+  offscreen (`DynamicInstance`, surfaceless Mesa → fallback pbuffer), FBO
+  RGBA8 + `DEPTH24_STENCIL8` opcional. `SET_HW_RENDER` escreve
+  `get_current_framebuffer`/`get_proc_address` de volta no struct do core;
+  `setup_gl_context` publica o FBO e roda `context_reset`; `Drop` chama
+  `context_destroy`. **Validado com Super Mario 64** (2026-09-02, NVIDIA).
+  - Frame sai por **readback** (`glReadPixels` → `SoftwareRawBuffer::Rgba8888`,
+    default) ou **interop zero-cópia** dma_buf (GBM aloca, EGL/wgpu importam;
+    `REEMU_GL_INTEROP=1`, ainda não validado).
+- ROM em `.zip` extraída pra arquivo temporário no load (`src/archive.rs`).
 - Save state: só o ponto de extensão (`request_save_state`/`poll_save_state`).
 
-**Falta (passo 4)**: criar o contexto GL real e os callbacks
-(`get_current_framebuffer`, `get_proc_address`, `context_reset`,
-`context_destroy`); validar com um core GL de verdade.
+**Vulkan por-core**: segue recusado com `CoreLoadError::HwRenderUnsupported`
+(etapa 12).
 
 Mudanças no `domain`: `frame_source::SoftwarePixelFormat` (+ campo `format` no
 `SoftwareRawBuffer`); `core_loader::SystemAvInfo` e o trait `LoadedCore`
@@ -69,10 +76,16 @@ Use `https://docs.libretro.com/` como fonte pra assinatura exata das
 funções `retro_*` e do struct `retro_hw_render_callback` — não invente
 assinatura de função por suposição.
 
-## Critério de pronto
+## Critério de pronto — ✅ atingido
 
-- Um core software-only carrega, roda, e produz frames consumíveis via
+- ✅ Um core software-only carrega, roda, e produz frames consumíveis via
   `FrameSource::next_frame()` sem panics
-- Um core GL hardware-accelerated (ex: um core de N64) consegue completar
-  a negociação de contexto sem erro — não precisa estar performático
-  ainda, só funcionalmente correto
+- ✅ Um core GL (N64 — `mupen64plus_next` / equivalente) completa a
+  negociação de contexto e renderiza (Super Mario 64, 2026-09-02)
+
+## Backlog deste crate
+
+- Interop zero-cópia dma_buf: validar `REEMU_GL_INTEROP=1` em hardware, trocar
+  `glFinish` grosso por semáforo cross-API, depois tirar o gate.
+- `.7z` no `archive.rs` (hoje só `.zip`).
+- GLES-only: `eglBindAPI(EGL_OPENGL_ES_API)` já implementado, sem core pra testar.

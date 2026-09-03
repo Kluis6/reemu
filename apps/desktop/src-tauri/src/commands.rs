@@ -1130,8 +1130,8 @@ pub struct CatalogCoreDto {
     pub systems: String,
     pub license: String,
     pub installed: bool,
-    /// `"software"` = roda hoje; `"opengl"` = precisa de contexto GL (baixa,
-    /// mas `load_game` recusa até a etapa 02 passo 4).
+    /// `"software"` = buffer cru; `"opengl"` = renderiza em GL (o frontend cria
+    /// o contexto offscreen; precisa de GPU + libEGL).
     pub hw: &'static str,
 }
 
