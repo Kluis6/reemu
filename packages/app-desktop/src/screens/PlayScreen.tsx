@@ -189,16 +189,8 @@ export function PlayScreen() {
   // Surface nativa: o jogo é apresentado pelo Rust direto na subsurface; deixa
   // html/body/#root transparentes pra ela aparecer atrás da webview.
   useEffect(() => {
-    if (nativeVideo) document.documentElement.classList.add('native-video')
-    // Diagnóstico no log do Rust (a webview esconde o console).
-    const w = window as unknown as { __TAURI_INTERNALS__?: { invoke?: Function } }
-    const bg = getComputedStyle(document.body).backgroundColor
-    const root = document.getElementById('root')
-    const rbg = root ? getComputedStyle(root).backgroundColor : '?'
-    void w.__TAURI_INTERNALS__?.invoke?.('js_log', {
-      level: 'info',
-      message: `nativeVideo=${nativeVideo} body.bg=${bg} #root.bg=${rbg}`,
-    })
+    if (!nativeVideo) return
+    document.documentElement.classList.add('native-video')
     return () => document.documentElement.classList.remove('native-video')
   }, [nativeVideo])
 

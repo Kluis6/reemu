@@ -1,15 +1,19 @@
 //! Surface nativa de vídeo — o jogo (wgpu) atrás da webview transparente.
 //!
-//! ## Linux (Wayland)
+//! ## Linux (Wayland) — ARQUIVADO nesse setup (2026-09-03)
 //!
-//! O GTK é dono da submissão de buffer da `wl_surface` da janela — anexar um
-//! swapchain nela dá `Gdk-Message: Error 71`. E o backend X11 (child window)
-//! faz a webview não pintar nesse combo (WebKitGTK + NVIDIA + XWayland). O
-//! caminho que sobra é o jeito Wayland-nativo: uma **`wl_subsurface`** da janela
-//! GTK, `place_below`, com `wl_surface` própria que o wgpu dirige. O compositor
-//! empilha a subsurface embaixo; a webview (fundo transparente) compõe por cima.
+//! Implementado via `wl_subsurface` da janela GTK (`place_below`, `wl_surface`
+//! própria dirigida pelo wgpu). **O lado Rust funciona** (subsurface compõe,
+//! chain roda, present ok — provado com blit de teste em magenta). Mas o
+//! **WebKitGTK 2.x nesse combo NVIDIA+Wayland não entrega webview transparente**:
+//! compositing off → transparente vira preto; compositing on → webview opaca;
+//! DMA-BUF renderer on → webview não renderiza. Sem webview transparente, a
+//! subsurface fica escondida atrás dela.
 //!
-//! Só liga com `REEMU_NATIVE_VIDEO=1` (o padrão segue no `<canvas>`).
+//! O código fica aqui, gated em `REEMU_NATIVE_VIDEO=1` — deve funcionar em
+//! stacks sem esse combo (Mesa, ou WebKitGTK com transparência ok). O padrão
+//! é o `<canvas>`. Plano B (se voltar ao assunto): `GtkGLArea` num `GtkOverlay`
+//! — a GTK compõe internamente, sem depender da transparência da `wl_surface`.
 //!
 //! ## Windows / macOS
 //!
