@@ -386,6 +386,13 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     }
                     core = None; // teardown do anterior antes de abrir outro
                     current_srm = None;
+                    // Descarta o último frame do jogo anterior — senão o
+                    // primeiro `take_latest_frame` do novo jogo devolve o frame
+                    // velho e ele pisca congelado na tela.
+                    *shared
+                        .latest_frame
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner()) = None;
                     shared.set_state(SessionState::Idle);
                     match loader.open_core(&id, &rom) {
                         Ok(mut c) => {
@@ -429,6 +436,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     core = None;
                     current_srm = None;
                     paused = false;
+                    *shared
+                        .latest_frame
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner()) = None;
                     *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) = None;
                     if let Some(s) = sink.as_mut() {
                         s.pause();
