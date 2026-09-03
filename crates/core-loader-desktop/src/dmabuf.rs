@@ -12,9 +12,6 @@
 //! O modifier é escolhido pelo driver (NVIDIA recusa linear puro em RENDERING)
 //! e propagado pros dois importadores (EGL e Vulkan aceitam modifier explícito).
 
-// Consumido por `gl_context`/`core` no restante do slice 2b (interop).
-#![allow(dead_code)]
-
 use libloading::{Library, Symbol};
 use std::os::fd::{FromRawFd, OwnedFd};
 use std::os::raw::{c_int, c_void};

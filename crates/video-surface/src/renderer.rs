@@ -296,6 +296,18 @@ pub fn create_device(
     instance: &wgpu::Instance,
     compatible_surface: Option<&wgpu::Surface<'_>>,
 ) -> Option<(wgpu::Adapter, wgpu::Device, wgpu::Queue)> {
+    create_device_with(instance, compatible_surface, wgpu::Features::empty())
+        .map(|(a, d, q, _)| (a, d, q))
+}
+
+/// Como [`create_device`], mas tenta habilitar `wanted` (features nativas
+/// opcionais); o 4º elemento diz quais entraram. Cai pro conjunto vazio se o
+/// adapter não suportar — nunca falha por causa de uma feature opcional.
+pub fn create_device_with(
+    instance: &wgpu::Instance,
+    compatible_surface: Option<&wgpu::Surface<'_>>,
+    wanted: wgpu::Features,
+) -> Option<(wgpu::Adapter, wgpu::Device, wgpu::Queue, wgpu::Features)> {
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::LowPower,
         compatible_surface,
@@ -303,14 +315,23 @@ pub fn create_device(
     }))
     .ok()?;
 
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        label: Some("video-surface device"),
-        required_limits: wgpu::Limits::downlevel_defaults(),
-        ..Default::default()
-    }))
-    .ok()?;
-
-    Some((adapter, device, queue))
+    let granted = wanted & adapter.features();
+    let mk = |feats| {
+        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("video-surface device"),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            required_features: feats,
+            ..Default::default()
+        }))
+    };
+    match mk(granted) {
+        Ok((device, queue)) => Some((adapter, device, queue, granted)),
+        Err(_) if !granted.is_empty() => {
+            let (device, queue) = mk(wgpu::Features::empty()).ok()?;
+            Some((adapter, device, queue, wgpu::Features::empty()))
+        }
+        Err(_) => None,
+    }
 }
 
 #[cfg(test)]

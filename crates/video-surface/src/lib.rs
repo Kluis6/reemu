@@ -11,7 +11,7 @@ mod renderer;
 mod window_target;
 
 pub use domain::frame_source::to_rgba8;
-pub use renderer::{create_device, Renderer};
+pub use renderer::{create_device, create_device_with, Renderer};
 pub use window_target::WindowTarget;
 
 pub use raw_window_handle;

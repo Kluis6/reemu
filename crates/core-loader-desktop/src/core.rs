@@ -129,6 +129,11 @@ impl DesktopCore {
 
 impl FrameSource for DesktopCore {
     fn next_frame(&mut self) -> Option<Frame> {
+        if let Some(gl) = &self.gl {
+            // Interop: aponta o FBO pro slot de escrita do ring antes do run.
+            gl.bind_write_slot();
+        }
+
         unsafe { (self.raw.run)() };
 
         if self.gl.is_some() {
@@ -163,8 +168,8 @@ impl FrameSource for DesktopCore {
 }
 
 impl DesktopCore {
-    /// Frame de HW render: lê o FBO GL. Slice 2a = readback CPU
-    /// (`SoftwareRawBuffer` RGBA8); o interop zero-cópia entra no slice 2b.
+    /// Frame de HW render: interop zero-cópia (`dma_buf` → `HardwareTexture`)
+    /// quando ativo, senão readback CPU (`SoftwareRawBuffer` RGBA8).
     fn next_hw_frame(&mut self) -> Option<Frame> {
         let (w, h, rotation_degrees) = {
             let mut guard = ffi_state::lock();
@@ -176,23 +181,34 @@ impl DesktopCore {
             let (w, h) = st.hw_frame.take()?;
             (w, h, st.rotation_degrees)
         };
+        let ar = self.aspect_ratio(w, h);
+        let meta = FrameMetadata {
+            native_width: w,
+            native_height: h,
+            aspect_ratio: ar,
+            rotation_degrees,
+        };
 
-        let gl = self.gl.as_ref()?;
+        let gl = self.gl.as_mut()?;
+        if gl.interop_active() {
+            let (slot, plane) = gl.finish_write_slot()?;
+            return Some(Frame {
+                origin: FrameOrigin::HardwareTexture(Box::new(
+                    crate::gl_context::GlInteropHandle::new(slot, plane),
+                )),
+                metadata: meta,
+            });
+        }
+
         gl.finish();
         let data = gl.read_pixels(w, h);
-        let ar = self.aspect_ratio(w, h);
         Some(Frame {
             origin: FrameOrigin::SoftwareRawBuffer {
                 data,
                 pitch: w * 4,
                 format: SoftwarePixelFormat::Rgba8888,
             },
-            metadata: FrameMetadata {
-                native_width: w,
-                native_height: h,
-                aspect_ratio: ar,
-                rotation_degrees,
-            },
+            metadata: meta,
         })
     }
 }

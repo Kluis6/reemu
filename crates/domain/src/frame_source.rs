@@ -37,10 +37,33 @@ impl SoftwarePixelFormat {
     }
 }
 
-/// Handle opaco pra uma textura GPU já pronta pro pipeline de pós-processamento
-/// consumir. A implementação real (wgpu::Texture, GLuint, VkImage...) vive
-/// inteiramente no adapter — o domínio só carrega o handle adiante.
-pub trait GpuTextureHandle: Send {}
+/// Layout de um plano `dma_buf` RGBA8 pra importar como textura. Todos os
+/// campos são inteiros crus — sem tipo de I/O de plataforma no domínio. O `fd`
+/// tem **posse transferida** pra quem chama `take_plane` (fecha ao dropar).
+#[derive(Debug)]
+pub struct DmabufPlaneInfo {
+    /// `RawFd` cru (Unix). Posse de quem recebe.
+    pub fd: i32,
+    pub width: u32,
+    pub height: u32,
+    pub stride: u32,
+    pub offset: u32,
+    /// `DRM_FORMAT_MOD_*` escolhido na alocação (0 = linear).
+    pub modifier: u64,
+    /// FourCC DRM (ex: `DRM_FORMAT_ABGR8888`).
+    pub fourcc: u32,
+}
+
+/// Handle pra um frame de HW render já na GPU. A textura vive num ring de
+/// slots do adapter; o pós-processamento importa o `dma_buf` uma vez por slot
+/// e depois só referencia por índice. Impl real no adapter.
+pub trait GpuTextureHandle: Send {
+    /// Índice do slot no ring — o importador cacheia a textura wgpu por slot.
+    fn slot(&self) -> u32;
+    /// Plano `dma_buf` pra importar. `Some` só na 1ª vez que o slot aparece;
+    /// depois `None` (a textura já está cacheada).
+    fn take_plane(&self) -> Option<DmabufPlaneInfo>;
+}
 
 pub enum FrameOrigin {
     /// Core software-only: buffer de pixels crus que precisa ser subido

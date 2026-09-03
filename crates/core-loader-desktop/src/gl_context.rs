@@ -17,10 +17,25 @@ use khronos_egl as egl;
 use std::os::raw::{c_char, c_void};
 use std::sync::OnceLock;
 
+use crate::dmabuf::{DmabufAllocator, DmabufPlane, SharedBuffer};
 use crate::sys;
 
 /// `EGL_PLATFORM_SURFACELESS_MESA` — display headless sem servidor (CI, Mesa).
 const PLATFORM_SURFACELESS_MESA: egl::Enum = 0x31DD;
+
+// --- EGL_EXT_image_dma_buf_import(_modifiers) ---
+const EGL_LINUX_DMA_BUF_EXT: egl::Enum = 0x3270;
+const EGL_LINUX_DRM_FOURCC_EXT: egl::Attrib = 0x3271;
+const EGL_DMA_BUF_PLANE0_FD_EXT: egl::Attrib = 0x3272;
+const EGL_DMA_BUF_PLANE0_OFFSET_EXT: egl::Attrib = 0x3273;
+const EGL_DMA_BUF_PLANE0_PITCH_EXT: egl::Attrib = 0x3274;
+const EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT: egl::Attrib = 0x3443;
+const EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT: egl::Attrib = 0x3444;
+const EGL_WIDTH: egl::Attrib = 0x3057;
+const EGL_HEIGHT: egl::Attrib = 0x3056;
+const DRM_FORMAT_MOD_INVALID: u64 = (1 << 56) - 1;
+/// Quantos alvos no ring (core escreve N, wgpu lê N-1 no mesmo frame).
+const RING: usize = 2;
 
 type EglInstance = egl::DynamicInstance<egl::EGL1_5>;
 static EGL: OnceLock<EglInstance> = OnceLock::new();
@@ -63,6 +78,23 @@ pub struct GlContext {
     max_h: u32,
     /// `read_pixels` inverte as linhas (core bottom-left → canvas top-left).
     flip: bool,
+    /// Ring de alvos `dma_buf` compartilhados com o wgpu. `None` = readback CPU.
+    interop: Option<InteropRing>,
+}
+
+/// Um alvo compartilhado: BO do GBM + `EGLImage` + textura GL respaldada por ele.
+struct InteropSlot {
+    buffer: SharedBuffer,
+    image: egl::Image,
+    tex: glow::Texture,
+    /// O plano (fd) já foi entregue pro importador wgpu?
+    handed: bool,
+}
+
+struct InteropRing {
+    _alloc: DmabufAllocator,
+    slots: Vec<InteropSlot>,
+    write: usize,
 }
 
 // SAFETY: criado e usado exclusivamente na thread do core. O `glow::Context` e
@@ -182,6 +214,7 @@ impl GlContext {
             max_w,
             max_h,
             flip: cfg.bottom_left_origin,
+            interop: None,
         })
     }
 
@@ -225,10 +258,243 @@ impl GlContext {
     pub fn finish(&self) {
         unsafe { self.gl.finish() };
     }
+
+    pub fn interop_active(&self) -> bool {
+        self.interop.is_some()
+    }
+
+    /// Tenta montar o ring de alvos `dma_buf` (GBM + EGLImage). `false` → segue
+    /// no readback de CPU (qualquer falha é best-effort, nunca fatal).
+    pub fn try_enable_interop(&mut self) -> bool {
+        match self.build_interop() {
+            Ok(ring) => {
+                log::info!(
+                    "interop dma_buf ativo ({RING} alvos {}x{})",
+                    self.max_w,
+                    self.max_h
+                );
+                self.interop = Some(ring);
+                true
+            }
+            Err(e) => {
+                log::warn!("interop dma_buf indisponível ({e}) — usando readback");
+                false
+            }
+        }
+    }
+
+    fn build_interop(&self) -> Result<InteropRing, String> {
+        let egl = egl()?;
+        let exts = egl
+            .query_string(Some(self.display), egl::EXTENSIONS)
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if !exts.contains("EGL_EXT_image_dma_buf_import") {
+            return Err("sem EGL_EXT_image_dma_buf_import".into());
+        }
+        let with_mod = exts.contains("EGL_EXT_image_dma_buf_import_modifiers");
+
+        let target: unsafe extern "system" fn(u32, *const c_void) = unsafe {
+            let p = egl
+                .get_proc_address("glEGLImageTargetTexture2DOES")
+                .ok_or("sem glEGLImageTargetTexture2DOES")?;
+            std::mem::transmute(p)
+        };
+
+        let alloc = DmabufAllocator::open()?;
+        let mut slots = Vec::with_capacity(RING);
+        for _ in 0..RING {
+            let buffer = alloc.alloc(self.max_w, self.max_h)?;
+            let plane = buffer.plane()?;
+            let image = self.make_egl_image(egl, &plane, with_mod)?;
+            let tex = unsafe {
+                let t = self
+                    .gl
+                    .create_texture()
+                    .map_err(|e| format!("glGenTextures: {e}"))?;
+                self.gl.bind_texture(glow::TEXTURE_2D, Some(t));
+                target(glow::TEXTURE_2D, image.as_ptr());
+                self.gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_MIN_FILTER,
+                    glow::LINEAR as i32,
+                );
+                self.gl.tex_parameter_i32(
+                    glow::TEXTURE_2D,
+                    glow::TEXTURE_MAG_FILTER,
+                    glow::LINEAR as i32,
+                );
+                t
+            };
+            slots.push(InteropSlot {
+                buffer,
+                image,
+                tex,
+                handed: false,
+            });
+        }
+        Ok(InteropRing {
+            _alloc: alloc,
+            slots,
+            write: 0,
+        })
+    }
+
+    fn make_egl_image(
+        &self,
+        egl: &EglInstance,
+        plane: &DmabufPlane,
+        with_mod: bool,
+    ) -> Result<egl::Image, String> {
+        use std::os::fd::IntoRawFd as _;
+        let fd = plane
+            .fd
+            .try_clone()
+            .map_err(|e| format!("dup fd: {e}"))?
+            .into_raw_fd();
+        let mut attrs: Vec<egl::Attrib> = vec![
+            EGL_WIDTH,
+            plane.width as egl::Attrib,
+            EGL_HEIGHT,
+            plane.height as egl::Attrib,
+            EGL_LINUX_DRM_FOURCC_EXT,
+            plane.fourcc as egl::Attrib,
+            EGL_DMA_BUF_PLANE0_FD_EXT,
+            fd as egl::Attrib,
+            EGL_DMA_BUF_PLANE0_OFFSET_EXT,
+            plane.offset as egl::Attrib,
+            EGL_DMA_BUF_PLANE0_PITCH_EXT,
+            plane.stride as egl::Attrib,
+        ];
+        if with_mod && plane.modifier != DRM_FORMAT_MOD_INVALID {
+            attrs.extend_from_slice(&[
+                EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT,
+                (plane.modifier & 0xFFFF_FFFF) as egl::Attrib,
+                EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT,
+                (plane.modifier >> 32) as egl::Attrib,
+            ]);
+        }
+        attrs.push(egl::ATTRIB_NONE);
+        // SAFETY: ctx = NO_CONTEXT, buffer = NULL — o contrato do dma_buf import.
+        let img = unsafe {
+            egl.create_image(
+                self.display,
+                egl::Context::from_ptr(egl::NO_CONTEXT),
+                EGL_LINUX_DMA_BUF_EXT,
+                egl::ClientBuffer::from_ptr(std::ptr::null_mut()),
+                &attrs,
+            )
+        };
+        img.map_err(|e| {
+            // SAFETY: o EGL não assumiu o fd (create_image falhou).
+            unsafe { libc_close(fd) };
+            format!("eglCreateImage(dma_buf): {e}")
+        })
+    }
+
+    /// Antes do `retro_run`: aponta o FBO pro slot de escrita atual.
+    pub fn bind_write_slot(&self) {
+        let Some(ring) = &self.interop else { return };
+        let slot = &ring.slots[ring.write];
+        unsafe {
+            self.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
+            self.gl.framebuffer_texture_2d(
+                glow::FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                Some(slot.tex),
+                0,
+            );
+        }
+    }
+
+    /// Depois do `retro_run`: garante o render (sync grosso) e devolve o slot
+    /// escrito + o plano `dma_buf` (só na 1ª vez de cada slot).
+    pub fn finish_write_slot(&mut self) -> Option<(u32, Option<DmabufPlane>)> {
+        let ring = self.interop.as_mut()?;
+        unsafe { self.gl.finish() };
+        let idx = ring.write;
+        let slot = &mut ring.slots[idx];
+        let plane = if slot.handed {
+            None
+        } else {
+            match slot.buffer.plane() {
+                Ok(p) => {
+                    slot.handed = true;
+                    Some(p)
+                }
+                Err(e) => {
+                    log::warn!("plano do slot {idx} indisponível: {e}");
+                    None
+                }
+            }
+        };
+        ring.write = (ring.write + 1) % RING;
+        Some((idx as u32, plane))
+    }
+}
+
+/// `close(2)` sem puxar a crate `libc` — só pro caminho de erro do EGLImage.
+unsafe fn libc_close(fd: i32) {
+    extern "C" {
+        fn close(fd: i32) -> i32;
+    }
+    close(fd);
+}
+
+/// Handle de um frame de HW render entregue via `dma_buf`. O `DesktopCore`
+/// devolve isso em `FrameOrigin::HardwareTexture`; o `poll_frame` (lado wgpu)
+/// importa o plano uma vez por slot e depois referencia por índice.
+pub struct GlInteropHandle {
+    slot: u32,
+    plane: std::sync::Mutex<Option<DmabufPlane>>,
+}
+
+impl GlInteropHandle {
+    pub fn new(slot: u32, plane: Option<DmabufPlane>) -> Self {
+        Self {
+            slot,
+            plane: std::sync::Mutex::new(plane),
+        }
+    }
+}
+
+impl domain::frame_source::GpuTextureHandle for GlInteropHandle {
+    fn slot(&self) -> u32 {
+        self.slot
+    }
+
+    fn take_plane(&self) -> Option<domain::frame_source::DmabufPlaneInfo> {
+        use std::os::fd::IntoRawFd as _;
+        let p = self
+            .plane
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()?;
+        Some(domain::frame_source::DmabufPlaneInfo {
+            fd: p.fd.into_raw_fd(),
+            width: p.width,
+            height: p.height,
+            stride: p.stride,
+            offset: p.offset,
+            modifier: p.modifier,
+            fourcc: p.fourcc,
+        })
+    }
 }
 
 impl Drop for GlContext {
     fn drop(&mut self) {
+        let egl = egl();
+        if let Some(ring) = self.interop.take() {
+            for slot in ring.slots {
+                unsafe { self.gl.delete_texture(slot.tex) };
+                if let Ok(e) = egl {
+                    let _ = e.destroy_image(self.display, slot.image);
+                }
+                drop(slot.buffer);
+            }
+        }
         unsafe {
             if let Some(rb) = self.depth_rbo.take() {
                 self.gl.delete_renderbuffer(rb);
@@ -236,7 +502,7 @@ impl Drop for GlContext {
             self.gl.delete_framebuffer(self.fbo);
             self.gl.delete_texture(self.color);
         }
-        if let Ok(egl) = egl() {
+        if let Ok(egl) = egl {
             let _ = egl.make_current(self.display, None, None, None);
             let _ = egl.destroy_context(self.display, self.context);
             if let Some(s) = self.surface.take() {

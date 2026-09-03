@@ -22,6 +22,14 @@ use domain::frame_source::{Frame, FrameOrigin};
 use shader_slang::{Scale, UniformFieldKind, UniformLayout};
 use video_surface::to_rgba8;
 
+/// `close(2)` cru — pro caminho de erro do import dma_buf (o fd ainda é nosso).
+unsafe fn close_raw_fd(fd: i32) {
+    extern "C" {
+        fn close(fd: i32) -> i32;
+    }
+    close(fd);
+}
+
 const FMT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const ROW_ALIGN: u32 = 256;
 const MAX_OUT_PIXELS: u32 = 8_000_000;
@@ -285,6 +293,13 @@ pub struct FrameProcessor {
     param_meta: Vec<shader_slang::Parameter>,
     passes: Vec<Pass>,
     core_tex: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
+    /// Interop zero-cópia: `dma_buf` do core (GL) importado como textura wgpu,
+    /// um por slot do ring. `interop_ok` = o device tem a feature.
+    interop_ok: bool,
+    imported: Vec<Option<(wgpu::Texture, wgpu::TextureView)>>,
+    /// View da textura importada a usar como entrada da chain neste frame
+    /// (`Some` só em frames de HW render com interop).
+    interop_view: Option<wgpu::TextureView>,
     /// Readback com pipeline: 2 staging buffers. O frame N copia a saída da GPU
     /// pro slot N%2 e lê o slot (N+1)%2 (submetido no frame anterior, já pronto)
     /// — sem `poll(wait)` bloqueante no caminho normal, CPU e GPU deixam de
@@ -302,8 +317,16 @@ impl FrameProcessor {
             return None;
         }
         let instance = wgpu::Instance::default();
-        let (adapter, device, queue) = video_surface::create_device(&instance, None)?;
-        log::info!("GPU (etapa 04): {}", adapter.get_info().name);
+        let (adapter, device, queue, feats) = video_surface::create_device_with(
+            &instance,
+            None,
+            wgpu::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF,
+        )?;
+        let interop_ok = feats.contains(wgpu::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF);
+        log::info!(
+            "GPU (etapa 04): {} (interop dma_buf={interop_ok})",
+            adapter.get_info().name
+        );
 
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("etapa04 bgl"),
@@ -410,6 +433,9 @@ impl FrameProcessor {
             param_meta,
             passes,
             core_tex: None,
+            interop_ok,
+            imported: Vec::new(),
+            interop_view: None,
             rb: ReadbackRing::default(),
             frame_count: 0,
             comp,
@@ -529,17 +555,30 @@ impl FrameProcessor {
         if nw == 0 || nh == 0 {
             return None;
         }
-        let FrameOrigin::SoftwareRawBuffer {
-            data,
-            pitch,
-            format,
-        } = &frame.origin
-        else {
-            return None;
-        };
-        let rgba = to_rgba8(data, nw, nh, *pitch, *format);
-        if rgba.len() != (nw * nh * 4) as usize {
-            return None;
+        // Entrada da chain: buffer cru (upload) ou textura dma_buf já na GPU.
+        match &frame.origin {
+            FrameOrigin::SoftwareRawBuffer {
+                data,
+                pitch,
+                format,
+            } => {
+                let rgba = to_rgba8(data, nw, nh, *pitch, *format);
+                if rgba.len() != (nw * nh * 4) as usize {
+                    return None;
+                }
+                self.ensure_core_tex(nw, nh);
+                self.upload_core(&rgba, nw, nh);
+                self.interop_view = None;
+            }
+            FrameOrigin::HardwareTexture(handle) => {
+                if !self.bind_interop_input(handle.as_ref(), nw, nh) {
+                    return None;
+                }
+                // a entrada troca de slot a cada frame → rebuild do bind group 0
+                if let Some(p) = self.passes.first_mut() {
+                    p.bound = false;
+                }
+            }
         }
 
         // dimensões de cada alvo
@@ -555,8 +594,6 @@ impl FrameProcessor {
             return None;
         }
 
-        self.ensure_core_tex(nw, nh);
-        self.upload_core(&rgba, nw, nh);
         self.frame_count = self.frame_count.wrapping_add(1);
 
         for (idx, (pw, ph)) in sizes.iter().copied().enumerate() {
@@ -604,7 +641,10 @@ impl FrameProcessor {
                 &self.sampler_nearest
             };
             let input_view: &wgpu::TextureView = if idx == 0 {
-                &self.core_tex.as_ref()?.1
+                match &self.interop_view {
+                    Some(v) => v,
+                    None => &self.core_tex.as_ref()?.1,
+                }
             } else {
                 &self.passes[idx - 1].target.as_ref()?.1
             };
@@ -871,6 +911,107 @@ impl FrameProcessor {
                 depth_or_array_layers: 1,
             },
         );
+    }
+
+    /// Importa (1ª vez do slot) e seleciona a textura `dma_buf` como entrada da
+    /// chain neste frame. `false` = interop indisponível / falhou → o chamador
+    /// devolve `None` e o `poll_frame` cai no caminho de canvas vazio.
+    fn bind_interop_input(
+        &mut self,
+        handle: &dyn domain::frame_source::GpuTextureHandle,
+        w: u32,
+        h: u32,
+    ) -> bool {
+        if !self.interop_ok {
+            return false;
+        }
+        let slot = handle.slot() as usize;
+        if slot >= 8 {
+            return false;
+        }
+        if self.imported.len() <= slot {
+            self.imported.resize_with(slot + 1, || None);
+        }
+        if let Some(plane) = handle.take_plane() {
+            match self.import_dmabuf(&plane, w, h) {
+                Ok(tv) => self.imported[slot] = Some(tv),
+                Err(e) => {
+                    // SAFETY: import falhou sem assumir o fd → fecha aqui.
+                    unsafe { close_raw_fd(plane.fd) };
+                    log::warn!("importar dma_buf (slot {slot}): {e} — interop desligado");
+                    self.interop_ok = false;
+                    return false;
+                }
+            }
+        }
+        let Some((_, view)) = self.imported.get(slot).and_then(|s| s.as_ref()) else {
+            return false;
+        };
+        self.interop_view = Some(view.clone());
+        true
+    }
+
+    fn import_dmabuf(
+        &self,
+        plane: &domain::frame_source::DmabufPlaneInfo,
+        w: u32,
+        h: u32,
+    ) -> Result<(wgpu::Texture, wgpu::TextureView), String> {
+        use std::os::fd::FromRawFd as _;
+        let size = wgpu::Extent3d {
+            width: w.max(plane.width),
+            height: h.max(plane.height),
+            depth_or_array_layers: 1,
+        };
+        let hal_desc = wgpu::hal::TextureDescriptor {
+            label: Some("dmabuf import"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUses::RESOURCE,
+            memory_flags: wgpu::hal::MemoryFlags::empty(),
+            view_formats: vec![],
+        };
+        // SAFETY: fd é um dma_buf válido (GBM); layout casa com `plane`.
+        let hal_tex = unsafe {
+            let owned = std::os::fd::OwnedFd::from_raw_fd(plane.fd);
+            let hal_dev = self
+                .device
+                .as_hal::<wgpu::hal::api::Vulkan>()
+                .ok_or("device não-Vulkan")?;
+            hal_dev
+                .texture_from_dmabuf_fd(
+                    owned,
+                    &hal_desc,
+                    plane.modifier,
+                    plane.stride as u64,
+                    plane.offset as u64,
+                )
+                .map_err(|e| format!("texture_from_dmabuf_fd: {e:?}"))?
+        };
+        let desc = wgpu::TextureDescriptor {
+            label: Some("dmabuf"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        };
+        // SAFETY: `hal_tex` recém-criado pra este device, layout coerente.
+        let tex = unsafe {
+            self.device
+                .create_texture_from_hal::<wgpu::hal::api::Vulkan>(
+                    hal_tex,
+                    &desc,
+                    wgpu::TextureUses::RESOURCE,
+                )
+        };
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        Ok((tex, view))
     }
 
     fn ensure_target(&mut self, idx: usize, w: u32, h: u32) {

@@ -278,7 +278,17 @@ fn setup_gl_context(
     if let Some(reset) = req.context_reset {
         unsafe { reset() };
     }
-    log::info!("contexto GL pronto pra {core_id} (FBO {})", ctx.fbo());
+    // Interop zero-cópia (dma_buf) é opt-in até validar em hardware:
+    // `REEMU_GL_INTEROP=1`. Sem ele, o frame sai por readback (estável).
+    let mut ctx = ctx;
+    if std::env::var_os("REEMU_GL_INTEROP").is_some() {
+        ctx.try_enable_interop();
+    }
+    log::info!(
+        "contexto GL pronto pra {core_id} (FBO {}, interop={})",
+        ctx.fbo(),
+        ctx.interop_active()
+    );
     Ok(ctx)
 }
 
