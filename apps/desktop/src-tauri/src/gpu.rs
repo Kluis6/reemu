@@ -646,7 +646,21 @@ impl FrameProcessor {
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        // Magenta em DEBUG: se aparecer, a subsurface está
+                        // visível e o problema é a chain/quad; se não, está
+                        // escondida (transparência/z-order).
+                        load: wgpu::LoadOp::Clear(
+                            if std::env::var_os("REEMU_NATIVE_VIDEO_DEBUG").is_some() {
+                                wgpu::Color {
+                                    r: 1.0,
+                                    g: 0.0,
+                                    b: 1.0,
+                                    a: 1.0,
+                                }
+                            } else {
+                                wgpu::Color::BLACK
+                            },
+                        ),
                         store: wgpu::StoreOp::Store,
                     },
                 })],

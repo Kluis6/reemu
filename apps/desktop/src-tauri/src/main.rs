@@ -21,18 +21,18 @@ fn main() {
                 std::env::set_var("GDK_BACKEND", "x11");
             }
         }
-        // O vídeo nativo (wl_subsurface) precisa da webview REALMENTE
-        // transparente — isso exige o compositing acelerado do WebKitGTK
-        // (o SW renderer sem compositing pinta o "transparente" como preto).
-        // No padrão (canvas) o SW renderer sem compositing é o mais estável
-        // nesse combo XWayland/NVIDIA.
-        if std::env::var_os("REEMU_NATIVE_VIDEO").is_none() {
-            if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-                std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-            }
-            if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
-                std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
-            }
+        // O DMA-BUF renderer do WebKitGTK dá "internal error"/tela branca nesse
+        // combo NVIDIA — sempre desligado (o SW renderer é o estável).
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+        // Compositing acelerado: no padrão (canvas) fica DESLIGADO (mais
+        // estável). No vídeo nativo precisa ficar LIGADO — a transparência da
+        // página (o "buraco" pro subsurface) só funciona com compositing.
+        if std::env::var_os("REEMU_NATIVE_VIDEO").is_none()
+            && std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none()
+        {
+            std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
         }
     }
 

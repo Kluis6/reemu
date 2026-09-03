@@ -190,10 +190,14 @@ mod wl {
             // desync: a subsurface apresenta no ritmo do jogo, não no do GTK.
             subsurface.set_desync();
 
-            // região opaca cobrindo tudo — o compositor não mistura alpha atrás.
+            // subsurface: região opaca cobrindo tudo (é o fundo, sem alpha).
             let region = compositor.create_region(&qh, ());
             region.add(0, 0, w.max(1) as i32, h.max(1) as i32);
             video.set_opaque_region(Some(&region));
+            // parent (webview): zera a região opaca — força o compositor a
+            // misturar o alpha da webview com a subsurface atrás. Se o GTK a
+            // reafirma a cada frame, isso vira no-op mas não atrapalha.
+            parent.set_opaque_region(None);
             video.commit();
             parent.commit();
             let _ = conn.flush();
