@@ -546,8 +546,8 @@ impl FrameProcessor {
     }
 
     /// Caminho da surface nativa: roda a chain e desenha o resultado (com
-    /// letterbox) direto na surface, sem tocar a CPU. Sem frame novo, re-apresenta
-    /// o último conteúdo (a surface segura a imagem).
+    /// letterbox) direto na surface, sem tocar a CPU. Sem frame novo é no-op —
+    /// a `wl_surface` segura o último buffer apresentado (freeze no pause).
     pub fn render_to_surface(&mut self, frame: Option<&Frame>) {
         if self.surface.is_none() {
             return;

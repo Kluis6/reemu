@@ -95,6 +95,7 @@ pub fn run() {
                                 .lock()
                                 .unwrap_or_else(|p| p.into_inner())
                                 .replace(vs);
+                            spawn_video_pump(app.handle().clone());
                             log::info!("vídeo nativo ativo");
                         } else {
                             log::warn!("attach_surface falhou — segue no canvas");
@@ -175,25 +176,6 @@ pub fn run() {
         .expect("erro ao construir o app Tauri");
 
     app.run(|app_handle, event| match event {
-        // Renderiza o frame do core na surface nativa a cada iteração do loop.
-        tauri::RunEvent::MainEventsCleared => {
-            // A ponte de input roda em `spawn_input_bridge` (thread própria) —
-            // aqui só o render da surface nativa de vídeo, que precisa da
-            // thread principal. Sem surface anexada, é no-op.
-            let state = app_handle.state::<AppState>();
-            let has_surface = state
-                .video
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .is_some();
-            if has_surface {
-                let frame = state.session.take_latest_frame();
-                let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
-                if let Some(fp) = gpu.as_mut() {
-                    fp.render_to_surface(frame.as_ref());
-                }
-            }
-        }
         tauri::RunEvent::WindowEvent {
             label,
             event: tauri::WindowEvent::Resized(size),
@@ -216,6 +198,33 @@ pub fn run() {
         }
         _ => {}
     });
+}
+
+/// Thread dedicada que apresenta o frame do core na surface nativa (~60Hz).
+/// Necessária porque, sem o `<canvas>` fazendo `poll_frame`, o event loop do
+/// Tauri fica ocioso e `MainEventsCleared` não tiquetaqueia. `render_to_surface`
+/// só toca wgpu (`Send`/`Sync`), então roda fora da thread principal.
+fn spawn_video_pump(app: tauri::AppHandle) {
+    std::thread::Builder::new()
+        .name("reemu-video-pump".into())
+        .spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(15));
+            let state = app.state::<AppState>();
+            let alive = state
+                .video
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .is_some();
+            if !alive {
+                break; // surface removida — encerra a thread
+            }
+            let frame = state.session.take_latest_frame();
+            let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(fp) = gpu.as_mut() {
+                fp.render_to_surface(frame.as_ref());
+            }
+        })
+        .expect("spawn reemu-video-pump");
 }
 
 /// Thread dedicada que faz a ponte gamepad→frontend (~60Hz). Independente do
