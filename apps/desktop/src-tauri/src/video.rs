@@ -1,191 +1,232 @@
 //! Surface nativa de vídeo — o jogo (wgpu) atrás da webview transparente.
 //!
-//! ## Linux
+//! ## Linux (Wayland)
 //!
-//! O GTK (que o wry usa em toda janela) é dono da submissão de buffer da
-//! `wl_surface` da janela — anexar um swapchain Vulkan nela dá
-//! `Gdk-Message: Error 71` e crash. Solução: sob X11/XWayland, criamos uma
-//! **child window X11** (`XCreateSimpleWindow`) filha do XID do GTK,
-//! abaixada (`XLowerWindow`) para ficar atrás do conteúdo da webview, e a
-//! `wgpu::Surface` vai nela. O GTK não gerencia o conteúdo dessa child.
-//! (`main.rs` força `GDK_BACKEND=x11` no Linux por isso.)
+//! O GTK é dono da submissão de buffer da `wl_surface` da janela — anexar um
+//! swapchain nela dá `Gdk-Message: Error 71`. E o backend X11 (child window)
+//! faz a webview não pintar nesse combo (WebKitGTK + NVIDIA + XWayland). O
+//! caminho que sobra é o jeito Wayland-nativo: uma **`wl_subsurface`** da janela
+//! GTK, `place_below`, com `wl_surface` própria que o wgpu dirige. O compositor
+//! empilha a subsurface embaixo; a webview (fundo transparente) compõe por cima.
+//!
+//! Só liga com `REEMU_NATIVE_VIDEO=1` (o padrão segue no `<canvas>`).
 //!
 //! ## Windows / macOS
 //!
-//! A webview transparente compõe sobre a camada nativa da mesma janela —
-//! a surface vai direto no handle da janela principal. **Não verificado**
-//! (sem máquina).
-//!
-//! Render na thread principal, a cada `RunEvent::MainEventsCleared`.
+//! Surface direto no handle da janela (webview transparente compõe por cima).
+//! Não verificado.
 
-use emu_session::EmuSession;
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
+use raw_window_handle::{
+    HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
+};
+use std::ptr::NonNull;
 use tauri::{AppHandle, Manager, Runtime};
-use video_surface::WindowTarget;
 
-pub struct VideoSurface {
-    target: WindowTarget,
-    #[cfg(target_os = "linux")]
-    _x11: Option<x11::X11Child>,
+/// Handles pro wgpu anexar a surface. Não guardados no `VideoSurface` (não são
+/// `Send`) — o chamador usa na hora, no `spawn`.
+pub struct SurfaceHandles {
+    pub display: RawDisplayHandle,
+    pub window: RawWindowHandle,
 }
 
+pub struct VideoSurface {
+    #[cfg(target_os = "linux")]
+    _wl: wl::Subsurface,
+    #[cfg(not(target_os = "linux"))]
+    _priv: (),
+}
+
+// SAFETY: só a thread principal (event loop do Tauri) toca isso —
+// `spawn`/`resize` rodam nela. O `Mutex` no `AppState` é só pra caber no
+// managed state.
+unsafe impl Send for VideoSurface {}
+
 impl VideoSurface {
-    pub fn spawn<R: Runtime>(app: &AppHandle<R>) -> Option<Self> {
+    /// `None` se não dá pra montar (não é Wayland, faltou global…) → o shell
+    /// segue no `<canvas>`. Devolve os handles pro `attach_surface` do wgpu.
+    pub fn spawn<R: Runtime>(app: &AppHandle<R>) -> Option<(Self, SurfaceHandles)> {
         let main = app.get_webview_window("main")?;
-        let size = main.inner_size().ok()?;
-        let raw_display = main.display_handle().ok()?.as_raw();
-        let raw_window = main.window_handle().ok()?.as_raw();
+        let display = main.display_handle().ok()?.as_raw();
+        let window = main.window_handle().ok()?.as_raw();
 
         #[cfg(target_os = "linux")]
-        match (raw_display, raw_window) {
-            (RawDisplayHandle::Xlib(disp), RawWindowHandle::Xlib(win)) => {
-                let child = x11::X11Child::create(disp, win.window, size.width, size.height)?;
-                let (cdisp, cwin) = child.raw_handles();
-                // SAFETY: a child window vive dentro do `VideoSurface` (Drop a destrói).
-                let target = unsafe {
-                    WindowTarget::from_raw_handles(cdisp, cwin, size.width, size.height)?
-                };
-                log::info!(
-                    "surface de vídeo: child window X11 {:#x} ({}x{})",
-                    child.xid(),
-                    size.width,
-                    size.height
-                );
-                Some(Self {
-                    target,
-                    _x11: Some(child),
-                })
-            }
-            (RawDisplayHandle::Wayland(_), _) => {
-                log::warn!(
-                    "vídeo no app precisa de X11 — rode com GDK_BACKEND=x11 \
-                     (ou use `cargo run -p video-surface --example play`)"
-                );
-                None
-            }
-            _ => None,
-        }
-
-        #[cfg(not(target_os = "linux"))]
-        {
-            // SAFETY: a janela do Tauri vive o app inteiro.
-            let target = unsafe {
-                WindowTarget::from_raw_handles(raw_display, raw_window, size.width, size.height)?
+        let (this, handles) = {
+            let (RawDisplayHandle::Wayland(d), RawWindowHandle::Wayland(w)) = (display, window)
+            else {
+                log::warn!("REEMU_NATIVE_VIDEO precisa de Wayland (rode sem GDK_BACKEND=x11)");
+                return None;
             };
+            let size = main.inner_size().ok()?;
+            let sub = wl::Subsurface::create(
+                d.display.as_ptr(),
+                w.surface.as_ptr(),
+                size.width,
+                size.height,
+            )?;
+            let wh = WaylandWindowHandle::new(NonNull::new(sub.wl_surface_ptr())?);
             log::info!(
-                "surface de vídeo anexada à janela ({}x{})",
+                "surface de vídeo: wl_subsurface ({}x{})",
                 size.width,
                 size.height
             );
-            Some(Self { target })
-        }
+            (
+                Self { _wl: sub },
+                SurfaceHandles {
+                    display,
+                    window: RawWindowHandle::Wayland(wh),
+                },
+            )
+        };
+
+        #[cfg(not(target_os = "linux"))]
+        let (this, handles) = (Self { _priv: () }, SurfaceHandles { display, window });
+
+        Some((this, handles))
     }
 
-    pub fn render(&mut self, session: &EmuSession) {
-        let frame = session.take_latest_frame();
-        self.target.render(frame.as_ref());
-    }
-
-    pub fn resize(&mut self, width: u32, height: u32) {
+    pub fn resize(&self, width: u32, height: u32) {
         #[cfg(target_os = "linux")]
-        if let Some(c) = &self._x11 {
-            c.resize(width, height);
-        }
-        self.target.resize(width, height);
+        self._wl.resize(width, height);
+        let _ = (width, height);
     }
 }
 
 #[cfg(target_os = "linux")]
-mod x11 {
-    use raw_window_handle::{
-        RawDisplayHandle, RawWindowHandle, XlibDisplayHandle, XlibWindowHandle,
-    };
-    use std::ffi::c_ulong;
-    use std::ptr::NonNull;
-    use x11_dl::xlib::{Display, Xlib};
+mod wl {
+    //! `wl_subsurface` da janela GTK via `wayland-client` com display foreign.
 
-    pub struct X11Child {
-        xlib: Xlib,
-        display: *mut Display,
-        screen: i32,
-        window: c_ulong,
-        visual_id: u32,
+    use std::os::raw::c_void;
+    use wayland_client::backend::{Backend, ObjectId};
+    use wayland_client::protocol::{
+        wl_compositor::WlCompositor, wl_region::WlRegion, wl_registry,
+        wl_subcompositor::WlSubcompositor, wl_subsurface::WlSubsurface, wl_surface::WlSurface,
+    };
+    use wayland_client::{delegate_noop, Connection, Dispatch, Proxy, QueueHandle};
+
+    pub struct Subsurface {
+        // ordem de drop: subsurface → surfaces → conn.
+        subsurface: WlSubsurface,
+        video: WlSurface,
+        parent: WlSurface,
+        compositor: WlCompositor,
+        conn: Connection,
     }
 
-    // O `*mut Display` é compartilhado com o GTK; só tocamos nele na thread
-    // principal (onde o event loop roda). `Send` é pra caber no managed state.
-    unsafe impl Send for X11Child {}
+    // O `Connection` foreign compartilha o fd do libwayland com o GTK; só
+    // tocamos nele na thread principal (event loop). `Send` pro managed state.
+    unsafe impl Send for Subsurface {}
 
-    impl X11Child {
+    struct Globals {
+        compositor: Option<WlCompositor>,
+        subcompositor: Option<WlSubcompositor>,
+    }
+
+    impl Dispatch<wl_registry::WlRegistry, ()> for Globals {
+        fn event(
+            state: &mut Self,
+            registry: &wl_registry::WlRegistry,
+            event: wl_registry::Event,
+            _: &(),
+            _: &Connection,
+            qh: &QueueHandle<Self>,
+        ) {
+            if let wl_registry::Event::Global {
+                name, interface, ..
+            } = event
+            {
+                match interface.as_str() {
+                    "wl_compositor" => {
+                        state.compositor =
+                            Some(registry.bind::<WlCompositor, _, _>(name, 4, qh, ()));
+                    }
+                    "wl_subcompositor" => {
+                        state.subcompositor =
+                            Some(registry.bind::<WlSubcompositor, _, _>(name, 1, qh, ()));
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    delegate_noop!(Globals: WlCompositor);
+    delegate_noop!(Globals: WlSubcompositor);
+    delegate_noop!(Globals: WlSubsurface);
+    delegate_noop!(Globals: WlRegion);
+    delegate_noop!(Globals: ignore WlSurface);
+
+    impl Subsurface {
         pub fn create(
-            disp: XlibDisplayHandle,
-            parent: c_ulong,
-            width: u32,
-            height: u32,
+            display_ptr: *mut c_void,
+            parent_surface_ptr: *mut c_void,
+            w: u32,
+            h: u32,
         ) -> Option<Self> {
-            let xlib = Xlib::open().ok()?;
-            let display = disp.display?.as_ptr() as *mut Display;
-            let window = unsafe {
-                (xlib.XCreateSimpleWindow)(
-                    display,
-                    parent,
-                    0,
-                    0,
-                    width.max(1),
-                    height.max(1),
-                    0,
-                    0,
-                    0, // fundo preto
-                )
+            // SAFETY: `display_ptr` é o `wl_display` vivo do GTK (do RawDisplayHandle).
+            let backend = unsafe { Backend::from_foreign_display(display_ptr.cast()) };
+            let conn = Connection::from_backend(backend);
+            let mut queue = conn.new_event_queue::<Globals>();
+            let qh = queue.handle();
+            let _registry = conn.display().get_registry(&qh, ());
+            let mut g = Globals {
+                compositor: None,
+                subcompositor: None,
             };
-            if window == 0 {
-                return None;
-            }
-            let visual_id = unsafe {
-                let vis = (xlib.XDefaultVisual)(display, disp.screen);
-                (xlib.XVisualIDFromVisual)(vis) as u32
+            queue.roundtrip(&mut g).ok()?;
+            let compositor = g.compositor?;
+            let subcompositor = g.subcompositor?;
+
+            // SAFETY: `parent_surface_ptr` é a `wl_surface` viva da janela GTK.
+            let parent = unsafe {
+                let id =
+                    ObjectId::from_ptr(WlSurface::interface(), parent_surface_ptr.cast()).ok()?;
+                WlSurface::from_id(&conn, id).ok()?
             };
-            unsafe {
-                (xlib.XLowerWindow)(display, window); // atrás do conteúdo da webview
-                (xlib.XMapWindow)(display, window);
-                (xlib.XFlush)(display);
-            }
+
+            let video = compositor.create_surface(&qh, ());
+            let subsurface = subcompositor.get_subsurface(&video, &parent, &qh, ());
+            subsurface.set_position(0, 0);
+            subsurface.place_below(&parent);
+            // desync: a subsurface apresenta no ritmo do jogo, não no do GTK.
+            subsurface.set_desync();
+
+            // região opaca cobrindo tudo — o compositor não mistura alpha atrás.
+            let region = compositor.create_region(&qh, ());
+            region.add(0, 0, w.max(1) as i32, h.max(1) as i32);
+            video.set_opaque_region(Some(&region));
+            video.commit();
+            parent.commit();
+            let _ = conn.flush();
+
             Some(Self {
-                xlib,
-                display,
-                screen: disp.screen,
-                window,
-                visual_id,
+                subsurface,
+                video,
+                parent,
+                compositor,
+                conn,
             })
         }
 
-        pub fn xid(&self) -> c_ulong {
-            self.window
+        pub fn wl_surface_ptr(&self) -> *mut c_void {
+            self.video.id().as_ptr().cast()
         }
 
-        pub fn resize(&self, width: u32, height: u32) {
-            unsafe {
-                (self.xlib.XResizeWindow)(self.display, self.window, width.max(1), height.max(1));
-                (self.xlib.XFlush)(self.display);
-            }
-        }
-
-        pub fn raw_handles(&self) -> (RawDisplayHandle, RawWindowHandle) {
-            let mut d = XlibDisplayHandle::new(NonNull::new(self.display as *mut _), self.screen);
-            let mut w = XlibWindowHandle::new(self.window);
-            w.visual_id = self.visual_id as c_ulong;
-            let _ = &mut d;
-            let _ = &mut w;
-            (RawDisplayHandle::Xlib(d), RawWindowHandle::Xlib(w))
+        pub fn resize(&self, w: u32, h: u32) {
+            let qh: QueueHandle<Globals> = self.conn.new_event_queue().handle();
+            let region = self.compositor.create_region(&qh, ());
+            region.add(0, 0, w.max(1) as i32, h.max(1) as i32);
+            self.video.set_opaque_region(Some(&region));
+            self.video.commit();
+            self.parent.commit();
+            let _ = self.conn.flush();
         }
     }
 
-    impl Drop for X11Child {
+    impl Drop for Subsurface {
         fn drop(&mut self) {
-            unsafe {
-                (self.xlib.XDestroyWindow)(self.display, self.window);
-                (self.xlib.XFlush)(self.display);
-            }
+            self.subsurface.destroy();
+            self.video.destroy();
+            let _ = self.conn.flush();
         }
     }
 }

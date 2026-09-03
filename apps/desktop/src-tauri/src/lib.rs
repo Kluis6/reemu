@@ -63,16 +63,44 @@ pub fn run() {
             // thread roda sempre, ~60Hz.
             spawn_input_bridge(app.handle().clone());
 
-            // Child window X11 pro vídeo só com `REEMU_X11_VIDEO=1` (ver
-            // main.rs): no padrão, o vídeo do jogo é renderizado na webview.
-            if std::env::var_os("REEMU_X11_VIDEO").is_some() {
+            // Surface nativa de vídeo (wl_subsurface) só com `REEMU_NATIVE_VIDEO=1`;
+            // no padrão o vídeo do jogo é desenhado na webview (`<canvas>`).
+            if std::env::var_os("REEMU_NATIVE_VIDEO").is_some() {
+                let win_size = app
+                    .handle()
+                    .get_webview_window("main")
+                    .and_then(|w| w.inner_size().ok())
+                    .unwrap_or_default();
                 match video::VideoSurface::spawn(app.handle()) {
-                    Some(vs) => {
-                        app.state::<AppState>().video.lock().unwrap().replace(vs);
+                    Some((vs, h)) => {
+                        let state = app.state::<AppState>();
+                        let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
+                        // SAFETY: `vs` (subsurface + conn) vive no AppState pelo
+                        // resto do app, mantendo os handles válidos.
+                        let attached = match gpu.as_mut() {
+                            Some(fp) => unsafe {
+                                fp.attach_surface(
+                                    h.display,
+                                    h.window,
+                                    win_size.width,
+                                    win_size.height,
+                                )
+                            },
+                            None => false,
+                        };
+                        drop(gpu);
+                        if attached {
+                            state
+                                .video
+                                .lock()
+                                .unwrap_or_else(|p| p.into_inner())
+                                .replace(vs);
+                            log::info!("vídeo nativo ativo");
+                        } else {
+                            log::warn!("attach_surface falhou — segue no canvas");
+                        }
                     }
-                    None => {
-                        log::warn!("não foi possível criar a surface de vídeo — modo só-webview")
-                    }
+                    None => log::warn!("surface de vídeo indisponível — modo canvas"),
                 }
             }
 
@@ -88,6 +116,7 @@ pub fn run() {
             commands::load_game,
             commands::unload_game,
             commands::poll_frame,
+            commands::native_video_active,
             commands::session_state,
             commands::get_audio_config,
             commands::update_audio_config,
@@ -150,11 +179,19 @@ pub fn run() {
         tauri::RunEvent::MainEventsCleared => {
             // A ponte de input roda em `spawn_input_bridge` (thread própria) —
             // aqui só o render da surface nativa de vídeo, que precisa da
-            // thread principal.
+            // thread principal. Sem surface anexada, é no-op.
             let state = app_handle.state::<AppState>();
-            let mut guard = state.video.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(vs) = guard.as_mut() {
-                vs.render(&state.session);
+            let has_surface = state
+                .video
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .is_some();
+            if has_surface {
+                let frame = state.session.take_latest_frame();
+                let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
+                if let Some(fp) = gpu.as_mut() {
+                    fp.render_to_surface(frame.as_ref());
+                }
             }
         }
         tauri::RunEvent::WindowEvent {
@@ -163,9 +200,12 @@ pub fn run() {
             ..
         } if label == "main" => {
             let state = app_handle.state::<AppState>();
-            let mut guard = state.video.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(vs) = guard.as_mut() {
+            let mut vguard = state.video.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(vs) = vguard.as_mut() {
                 vs.resize(size.width, size.height);
+                if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+                    fp.resize_surface(size.width, size.height);
+                }
             }
         }
         // Fechamento (X da janela, Alt+F4, `quit_app`): descarrega o jogo antes

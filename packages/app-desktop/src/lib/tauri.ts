@@ -39,6 +39,10 @@ export const unloadGame = () => invoke<void>('unload_game')
 /** Frame do core: `ArrayBuffer` com `[w u32 LE][h u32 LE][rgba…]`, ou vazio. */
 export const pollFrame = () => invoke<ArrayBuffer>('poll_frame')
 
+/** `true` = vídeo numa surface nativa atrás da webview (`REEMU_NATIVE_VIDEO=1`);
+ *  a PlayScreen fica transparente e não roda o loop do canvas. */
+export const nativeVideoActive = () => invoke<boolean>('native_video_active')
+
 export interface AudioConfig {
   outputDeviceId: string | null
   outputDeviceName: string | null

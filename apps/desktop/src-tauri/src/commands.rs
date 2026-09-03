@@ -558,6 +558,18 @@ pub async fn unload_game(app: AppHandle) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// `true` quando o vídeo do jogo sai numa surface nativa atrás da webview
+/// (`REEMU_NATIVE_VIDEO=1` + subsurface anexada) — a `PlayScreen` fica
+/// transparente e não roda o loop do canvas.
+#[tauri::command]
+pub fn native_video_active(state: State<'_, AppState>) -> bool {
+    state
+        .video
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .is_some()
+}
+
 /// Frame mais recente do core como RGBA8, prefixado por
 /// `[width: u32 LE][height: u32 LE]` (8 bytes). Corpo vazio = sem frame novo.
 /// A `PlayScreen` consome num loop de `requestAnimationFrame` e pinta no canvas.

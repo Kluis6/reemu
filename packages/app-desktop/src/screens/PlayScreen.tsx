@@ -15,6 +15,7 @@ import {
   listSaveStates,
   loadGame,
   loadSaveState,
+  nativeVideoActive,
   pollFrame,
   saveState,
   toggleFocus,
@@ -103,6 +104,15 @@ export function PlayScreen() {
   const styles = useStyles()
   const pause = usePauseStyles()
   const navigate = useNavigate()
+  // Vídeo numa surface nativa atrás da webview → esta tela fica transparente e
+  // não roda o loop do canvas.
+  const nativeVideo =
+    useQuery({
+      queryKey: ['native-video'],
+      queryFn: nativeVideoActive,
+      staleTime: Infinity,
+      retry: false,
+    }).data === true
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const { romId = '' } = useParams()
@@ -176,8 +186,16 @@ export function PlayScreen() {
   // fetch cai pra 4Hz. É o caminho de vídeo do desktop (a surface nativa fora
   // da webview não funciona no WebKitGTK+NVIDIA desse setup — ver
   // docs/ai-context/03; `REEMU_X11_VIDEO=1` tenta o esquema antigo).
+  // Surface nativa: o jogo é apresentado pelo Rust direto na subsurface; deixa
+  // o body transparente pra ela aparecer atrás da webview.
   useEffect(() => {
-    if (status !== 'ready') return
+    if (!nativeVideo) return
+    document.body.classList.add('native-video')
+    return () => document.body.classList.remove('native-video')
+  }, [nativeVideo])
+
+  useEffect(() => {
+    if (status !== 'ready' || nativeVideo) return
     let alive = true
     let raf = 0
     const latest = { img: null as ImageData | null, w: 0, h: 0 }
@@ -231,7 +249,7 @@ export function PlayScreen() {
       alive = false
       cancelAnimationFrame(raf)
     }
-  }, [status])
+  }, [status, nativeVideo])
 
   useEffect(() => {
     if (!launch || loadedRef.current) return
@@ -366,14 +384,16 @@ export function PlayScreen() {
   }
 
   return (
-    <div className={styles.root}>
-      <canvas
-        ref={canvasRef}
-        className={styles.canvas}
-        width={256}
-        height={240}
-        style={{ aspectRatio: String(aspect) }}
-      />
+    <div className={styles.root} style={nativeVideo ? { background: 'transparent' } : undefined}>
+      {!nativeVideo && (
+        <canvas
+          ref={canvasRef}
+          className={styles.canvas}
+          width={256}
+          height={240}
+          style={{ aspectRatio: String(aspect) }}
+        />
+      )}
 
       {focus === 'MenuFocused' && (
         <div className={pause.scrim}>

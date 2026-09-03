@@ -21,12 +21,17 @@ fn main() {
                 std::env::set_var("GDK_BACKEND", "x11");
             }
         }
-        // webkitgtk + XWayland/NVIDIA: DMA-BUF e accelerated compositing dão
-        // "internal error" / tela em branco — o SW renderer é o estável.
+        // webkitgtk + XWayland/NVIDIA: DMA-BUF renderer dá "internal error" /
+        // tela em branco — o SW renderer é o estável.
         if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
             std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         }
-        if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
+        // O vídeo nativo (wl_subsurface) precisa da webview transparente, e a
+        // transparência precisa do compositing ligado. Sem ele (padrão canvas),
+        // o SW renderer sem compositing é o mais estável.
+        if std::env::var_os("REEMU_NATIVE_VIDEO").is_none()
+            && std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none()
+        {
             std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
         }
     }

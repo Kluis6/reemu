@@ -21,6 +21,12 @@ body {
   background: #0b0b0d;
 }
 
+/* Vídeo nativo (REEMU_NATIVE_VIDEO): a PlayScreen fica transparente pra
+   subsurface do jogo aparecer atrás da webview. */
+body.native-video {
+  background: transparent;
+}
+
 kbd {
   font: inherit;
   font-size: 0.85em;

@@ -279,8 +279,7 @@ struct Composite {
 
 pub struct FrameProcessor {
     /// Guardado pra configurar a surface nativa depois (o adapter tem que ser
-    /// o mesmo que criou o device). Fatia 2.
-    #[allow(dead_code)]
+    /// o mesmo que criou o device).
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -313,14 +312,12 @@ pub struct FrameProcessor {
     comp: Composite,
     decoration: Option<Decoration>,
     /// Surface nativa (etapa 03 — vídeo fora da webview). `Some` = a chain
-    /// desenha direto nela em vez de fazer readback pro canvas. Fatia 2.
-    #[allow(dead_code)]
+    /// desenha direto nela em vez de fazer readback pro canvas.
     surface: Option<SurfaceOut>,
 }
 
 /// Alvo de apresentação nativo: a `wgpu::Surface` de uma `wl_subsurface` (ou da
 /// janela, em Win/macOS) + o pipeline de blit pro formato dela.
-#[allow(dead_code)] // campos lidos via `render_to_surface`, wiring na fatia 2
 struct SurfaceOut {
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
@@ -469,7 +466,6 @@ impl FrameProcessor {
     ///
     /// # Safety
     /// `display`/`window` têm que continuar válidos enquanto a surface viver.
-    #[allow(dead_code)] // consumido pelo video.rs na fatia 2 (wl_subsurface)
     pub unsafe fn attach_surface(
         &mut self,
         display: raw_window_handle::RawDisplayHandle,
@@ -541,7 +537,6 @@ impl FrameProcessor {
         true
     }
 
-    #[allow(dead_code)] // fatia 2
     pub fn resize_surface(&mut self, w: u32, h: u32) {
         if let Some(s) = &mut self.surface {
             s.config.width = w.max(1);
@@ -550,15 +545,9 @@ impl FrameProcessor {
         }
     }
 
-    #[allow(dead_code)] // fatia 2
-    pub fn detach_surface(&mut self) {
-        self.surface = None;
-    }
-
     /// Caminho da surface nativa: roda a chain e desenha o resultado (com
     /// letterbox) direto na surface, sem tocar a CPU. Sem frame novo, re-apresenta
     /// o último conteúdo (a surface segura a imagem).
-    #[allow(dead_code)] // fatia 2
     pub fn render_to_surface(&mut self, frame: Option<&Frame>) {
         if self.surface.is_none() {
             return;
@@ -1367,7 +1356,6 @@ fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv);
 /// Pipeline de blit (mesmo shader do composite: quad posicionado por um `Rect`
 /// uniforme, sampla uma textura) pro formato de uma surface nativa — usa a
 /// `bgl` do composite, então o bind group é o mesmo layout.
-#[allow(dead_code)] // fatia 2
 fn blit_pipeline(
     device: &wgpu::Device,
     bgl: &wgpu::BindGroupLayout,
