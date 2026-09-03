@@ -278,6 +278,10 @@ struct Composite {
 }
 
 pub struct FrameProcessor {
+    /// Guardado pra configurar a surface nativa depois (o adapter tem que ser
+    /// o mesmo que criou o device). Fatia 2.
+    #[allow(dead_code)]
+    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
     bgl: wgpu::BindGroupLayout,
@@ -308,6 +312,20 @@ pub struct FrameProcessor {
     frame_count: u64,
     comp: Composite,
     decoration: Option<Decoration>,
+    /// Surface nativa (etapa 03 — vídeo fora da webview). `Some` = a chain
+    /// desenha direto nela em vez de fazer readback pro canvas. Fatia 2.
+    #[allow(dead_code)]
+    surface: Option<SurfaceOut>,
+}
+
+/// Alvo de apresentação nativo: a `wgpu::Surface` de uma `wl_subsurface` (ou da
+/// janela, em Win/macOS) + o pipeline de blit pro formato dela.
+#[allow(dead_code)] // campos lidos via `render_to_surface`, wiring na fatia 2
+struct SurfaceOut {
+    surface: wgpu::Surface<'static>,
+    config: wgpu::SurfaceConfiguration,
+    blit_pipeline: wgpu::RenderPipeline,
+    blit_rect: wgpu::Buffer,
 }
 
 impl FrameProcessor {
@@ -422,6 +440,7 @@ impl FrameProcessor {
         Some(Self {
             sampler_nearest: mk_sampler(wgpu::FilterMode::Nearest),
             sampler_linear: mk_sampler(wgpu::FilterMode::Linear),
+            adapter,
             device,
             queue,
             bgl,
@@ -440,7 +459,194 @@ impl FrameProcessor {
             frame_count: 0,
             comp,
             decoration: None,
+            surface: None,
         })
+    }
+
+    /// Anexa uma surface nativa a partir de raw handles (a `wl_surface` de uma
+    /// subsurface no Linux; a janela em Win/macOS). A chain passa a desenhar
+    /// nela em vez de fazer readback. `false` = falhou (segue no canvas).
+    ///
+    /// # Safety
+    /// `display`/`window` têm que continuar válidos enquanto a surface viver.
+    #[allow(dead_code)] // consumido pelo video.rs na fatia 2 (wl_subsurface)
+    pub unsafe fn attach_surface(
+        &mut self,
+        display: raw_window_handle::RawDisplayHandle,
+        window: raw_window_handle::RawWindowHandle,
+        w: u32,
+        h: u32,
+    ) -> bool {
+        let instance = wgpu::Instance::default();
+        let surface = match unsafe {
+            instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle: Some(display),
+                raw_window_handle: window,
+            })
+        } {
+            Ok(s) => s,
+            Err(e) => {
+                log::warn!("create_surface: {e}");
+                return false;
+            }
+        };
+        let caps = surface.get_capabilities(&self.adapter);
+        if caps.formats.is_empty() {
+            log::warn!("adapter não desenha nessa surface");
+            return false;
+        }
+        let format = caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| !f.is_srgb())
+            .unwrap_or(caps.formats[0]);
+        let present_mode = [
+            wgpu::PresentMode::Mailbox,
+            wgpu::PresentMode::Immediate,
+            wgpu::PresentMode::Fifo,
+        ]
+        .into_iter()
+        .find(|m| caps.present_modes.contains(m))
+        .unwrap_or(wgpu::PresentMode::Fifo);
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format,
+            color_space: wgpu::SurfaceColorSpace::Auto,
+            width: w.max(1),
+            height: h.max(1),
+            present_mode,
+            alpha_mode: caps.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&self.device, &config);
+        // SAFETY: o chamador garante os handles vivos; transmute pro 'static.
+        let surface: wgpu::Surface<'static> = unsafe { std::mem::transmute(surface) };
+
+        let blit_pipeline = blit_pipeline(&self.device, &self.comp.bgl, format);
+        let blit_rect = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("blit rect"),
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        log::info!("surface nativa: {w}x{h} {format:?} {present_mode:?}");
+        self.surface = Some(SurfaceOut {
+            surface,
+            config,
+            blit_pipeline,
+            blit_rect,
+        });
+        true
+    }
+
+    #[allow(dead_code)] // fatia 2
+    pub fn resize_surface(&mut self, w: u32, h: u32) {
+        if let Some(s) = &mut self.surface {
+            s.config.width = w.max(1);
+            s.config.height = h.max(1);
+            s.surface.configure(&self.device, &s.config);
+        }
+    }
+
+    #[allow(dead_code)] // fatia 2
+    pub fn detach_surface(&mut self) {
+        self.surface = None;
+    }
+
+    /// Caminho da surface nativa: roda a chain e desenha o resultado (com
+    /// letterbox) direto na surface, sem tocar a CPU. Sem frame novo, re-apresenta
+    /// o último conteúdo (a surface segura a imagem).
+    #[allow(dead_code)] // fatia 2
+    pub fn render_to_surface(&mut self, frame: Option<&Frame>) {
+        if self.surface.is_none() {
+            return;
+        }
+        let Some(frame) = frame else { return };
+
+        let mut enc = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("surface"),
+            });
+        let Some((out_w, out_h, use_comp)) = self.run_chain(frame, &mut enc) else {
+            return;
+        };
+
+        let s = self.surface.as_ref().unwrap();
+        let (dw, dh) = (s.config.width.max(1), s.config.height.max(1));
+        // letterbox: encaixa (out_w × out_h) em (dw × dh) mantendo a proporção.
+        let ar_src = out_w as f32 / out_h.max(1) as f32;
+        let ar_dst = dw as f32 / dh as f32;
+        let (hw, hh) = if ar_src > ar_dst {
+            (1.0, ar_dst / ar_src)
+        } else {
+            (ar_src / ar_dst, 1.0)
+        };
+        self.queue
+            .write_buffer(&s.blit_rect, 0, f32s_bytes(&[0.0, 0.0, hw, hh]));
+
+        let src_view = if use_comp {
+            &self.comp.target.as_ref().unwrap().1
+        } else {
+            &self.passes.last().unwrap().target.as_ref().unwrap().1
+        };
+        let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("blit bg"),
+            layout: &self.comp.bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: s.blit_rect.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::TextureView(src_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler_linear),
+                },
+            ],
+        });
+
+        let frame_tex = match s.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(t)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
+                s.surface.configure(&self.device, &s.config);
+                return;
+            }
+            _ => return,
+        };
+        let view = frame_tex
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        {
+            let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("blit pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            rp.set_pipeline(&s.blit_pipeline);
+            rp.set_bind_group(0, &bg, &[]);
+            rp.set_vertex_buffer(0, self.quad.slice(..));
+            rp.draw(0..4, 0..1);
+        }
+        self.queue.submit([enc.finish()]);
+        self.queue.present(frame_tex);
     }
 
     /// Proporção de exibição imposta pela moldura (`w/h` da imagem), se houver.
@@ -549,7 +755,14 @@ impl FrameProcessor {
         true
     }
 
-    pub fn process(&mut self, frame: &Frame) -> Option<(u32, u32, Vec<u8>)> {
+    /// Roda a cadeia inteira (entrada + N passes + composição da moldura)
+    /// gravando em `enc`. Devolve `(out_w, out_h, com_moldura)` — a textura
+    /// final ainda não foi consumida (readback ou blit fica pro chamador).
+    fn run_chain(
+        &mut self,
+        frame: &Frame,
+        enc: &mut wgpu::CommandEncoder,
+    ) -> Option<(u32, u32, bool)> {
         let nw = frame.metadata.native_width;
         let nh = frame.metadata.native_height;
         if nw == 0 || nh == 0 {
@@ -674,11 +887,6 @@ impl FrameProcessor {
             self.passes[idx].bound = true;
         }
 
-        let mut enc = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("etapa04"),
-            });
         for idx in 0..self.passes.len() {
             let (_, view, _, _) = self.passes[idx].target.as_ref()?;
             let bg = self.passes[idx].bind_group.as_ref()?;
@@ -785,6 +993,17 @@ impl FrameProcessor {
         } else {
             (fw, fh, false)
         };
+        Some((out_w, out_h, use_comp))
+    }
+
+    /// Caminho canvas: roda a chain e lê o resultado de volta pra CPU (RGBA8).
+    pub fn process(&mut self, frame: &Frame) -> Option<(u32, u32, Vec<u8>)> {
+        let mut enc = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("etapa04"),
+            });
+        let (out_w, out_h, use_comp) = self.run_chain(frame, &mut enc)?;
 
         // --- readback com pipeline ---
         self.rb.ensure(&self.device, out_w, out_h);
@@ -1144,6 +1363,69 @@ fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
 @fragment
 fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv); }
 "#;
+
+/// Pipeline de blit (mesmo shader do composite: quad posicionado por um `Rect`
+/// uniforme, sampla uma textura) pro formato de uma surface nativa — usa a
+/// `bgl` do composite, então o bind group é o mesmo layout.
+#[allow(dead_code)] // fatia 2
+fn blit_pipeline(
+    device: &wgpu::Device,
+    bgl: &wgpu::BindGroupLayout,
+    format: wgpu::TextureFormat,
+) -> wgpu::RenderPipeline {
+    let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("blit layout"),
+        bind_group_layouts: &[Some(bgl)],
+        immediate_size: 0,
+    });
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("blit"),
+        source: wgpu::ShaderSource::Wgsl(COMP_WGSL.into()),
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("blit pipeline"),
+        layout: Some(&pl),
+        vertex: wgpu::VertexState {
+            module: &module,
+            entry_point: Some("vs"),
+            buffers: &[Some(wgpu::VertexBufferLayout {
+                array_stride: QUAD_STRIDE,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &[
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x2,
+                        offset: 16,
+                        shader_location: 1,
+                    },
+                ],
+            })],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &module,
+            entry_point: Some("fs"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleStrip,
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
 
 fn build_composite(device: &wgpu::Device) -> Composite {
     let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
