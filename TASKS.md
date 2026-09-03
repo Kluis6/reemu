@@ -52,8 +52,17 @@ refaça trabalho já feito ou pule pré-requisito.
 
 **Desktop (01–10) fechado.** GL HW render (passo 4 da etapa 02) fechado
 2026-09-02 (Super Mario 64 roda). Falta validar: interop dma_buf
-(`REEMU_GL_INTEROP=1`), sessão longa de áudio. Próximos: surface nativa
-(item #2 do caminho crítico), 11 (Android), itens do backlog de render.
+(`REEMU_GL_INTEROP=1`), sessão longa de áudio.
+
+**Surface nativa (item #2 do caminho crítico) — ARQUIVADA 2026-09-03.**
+`wl_subsurface` implementado e funcional no lado Rust, mas o WebKitGTG nesse
+combo NVIDIA+Wayland não entrega webview transparente (3 abordagens testadas —
+ver doc 03). Código gated em `REEMU_NATIVE_VIDEO=1`. Vídeo segue no `<canvas>`
+(que funciona; os travamentos reportados eram pacing/zip, já resolvidos).
+Se voltar: plano B `GtkGLArea`/`GtkOverlay`, ou otimizar o transporte do canvas
+(tirar cópia do `.slice()`, `putImageData`→WebGL, ~2 dias).
+
+Próximos: 11 (Android), itens do backlog de render, ou o polimento do canvas.
 
 ## Como atualizar
 

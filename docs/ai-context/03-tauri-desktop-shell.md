@@ -9,13 +9,23 @@ de menu sempre sobreposto.
 ## Decisões relevantes (não renegociar sem discutir)
 
 - ~~**O jogo renderiza fora da WebView**, numa surface/child window nativa~~
-  — **DESVIO ACEITO (2026-08-30)**: no setup de referência (WebKitGTK 2.52 +
-  NVIDIA + XWayland) a `wgpu::Surface` na `wl_surface` do GTK dá `Gdk Error 71`
-  e a child window X11 monta o DOM mas não pinta. O vídeo do desktop passou a
-  ser um **`<canvas>` dentro da webview** alimentado por `poll_frame` (RGBA8
-  por IPC). O caminho nativo (`REEMU_X11_VIDEO=1`, e o `#[cfg(not(linux))]` de
-  Win/macOS) continua no código, sem verificação. O lag do canvas não foi
-  medido; se virar problema, revisitar a surface nativa (ou GL embutido).
+  — **DESVIO ACEITO (2026-08-30), reconfirmado (2026-09-03)**: o vídeo do
+  desktop é um **`<canvas>` dentro da webview** alimentado por `poll_frame`
+  (RGBA8 por IPC). Três tentativas de surface nativa, todas barradas pelo
+  WebKitGTG nesse combo NVIDIA+Wayland:
+  1. `wgpu::Surface` na `wl_surface` do GTK → `Gdk Error 71`.
+  2. child window X11 (`REEMU_X11_VIDEO=1`) → o backend X11 faz a webview não
+     pintar.
+  3. `wl_subsurface` `place_below` + webview transparente (`REEMU_NATIVE_VIDEO=1`,
+     `src/video.rs`) → **o lado Rust funciona** (subsurface compõe, chain roda,
+     present ok — provado com blit de teste magenta), mas o WebKitGTG **não
+     entrega webview transparente**: compositing off → transparente vira preto;
+     on → opaca; DMA-BUF renderer on → webview em branco.
+  O código da opção 3 fica gated (deve funcionar em Mesa / WebKitGTG com alpha
+  ok). **Plano B** se voltar ao assunto: `GtkGLArea` num `GtkOverlay` — a GTK
+  compõe os widgets internamente, sem depender da transparência da `wl_surface`
+  (reusa o interop dma_buf da etapa 02). ~1 semana, risco no reparent do widget
+  da webview que o Tauri gerencia.
 - **O menu Fluent fica sempre sobreposto** (nunca escondido durante
   `MenuFocused`, e mesmo em `GameFocused` a webview continua viva, só sem
   captar input) — não implemente um modelo de "esconder a webview
