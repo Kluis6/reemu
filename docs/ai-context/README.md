@@ -12,6 +12,11 @@ Os demais são independentes entre si — não precisa incluir todos de uma vez.
 etapa está `todo`/`in-progress`/`done`, evitando retrabalho ou pular
 pré-requisito entre sessões.
 
+**`REFERENCES.md`** — links da documentação oficial externa (libretro, Tauri,
+wgpu, Fluent, Wayland/EGL). Regra do projeto: consultar a fonte oficial antes
+de escrever binding FFI / usar API de terceiro / depurar plataforma — não
+trabalhar de memória (ver `00-visao-geral.md`).
+
 ## Ordem recomendada
 
 | Doc | Etapa | Depende de |

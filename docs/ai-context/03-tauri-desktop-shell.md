@@ -26,6 +26,15 @@ de menu sempre sobreposto.
   compõe os widgets internamente, sem depender da transparência da `wl_surface`
   (reusa o interop dma_buf da etapa 02). ~1 semana, risco no reparent do widget
   da webview que o Tauri gerencia.
+
+  **Confirmado como bug upstream** (`v2.tauri.app/develop/debug/linux-graphics/`
+  + tauri-apps/tauri#14924, sem fix em 2026-02): `transparent: true` + NVIDIA +
+  WebKitGTG. As env vars da doc oficial e o que cada uma faz:
+  `__NV_DISABLE_EXPLICIT_SYNC=1` resolve o Error 71 mas **causa ghosting**
+  (frame anterior preso — foi o que apareceu no teste do vídeo nativo);
+  `WEBKIT_DISABLE_DMABUF_RENDERER=1` tira a transparência (cantos pretos);
+  `WEBKIT_DISABLE_COMPOSITING_MODE=1` desliga o compositing acelerado.
+  Não há combinação que dê webview transparente E estável nesse hardware.
 - **O menu Fluent fica sempre sobreposto** (nunca escondido durante
   `MenuFocused`, e mesmo em `GameFocused` a webview continua viva, só sem
   captar input) — não implemente um modelo de "esconder a webview

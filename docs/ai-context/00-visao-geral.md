@@ -29,6 +29,23 @@ SQLite + Fluent Design.
 de dado — não invente campo/tabela que não esteja lá. Se precisar de algo
 que não existe no schema, pare e sinalize em vez de inventar.**
 
+**Regra (2026-09-03): consultar SEMPRE a documentação oficial externa antes
+de escrever binding FFI, usar API de terceiro, ou depurar comportamento de
+plataforma.** Não trabalhar de memória em cima de:
+- **libretro**: `docs.libretro.com` + o header real
+  `raw.githubusercontent.com/libretro/libretro-common/master/include/libretro.h`
+  (valores de `#define`, layout de struct — ver `02`).
+- **Tauri v2**: `v2.tauri.app` — em especial `v2.tauri.app/develop/debug/linux-graphics/`
+  (bug conhecido NVIDIA+WebKitGTK: `transparent:true` → Error 71 / cantos pretos /
+  ghosting, **sem fix upstream** — ver `03`).
+- **wgpu**: `docs.rs/wgpu` + o fonte do crate em `~/.cargo/registry`.
+- **Fluent 2 / Griffel**: `fluent2.microsoft.design`, `react.fluentui.dev`,
+  `griffel.js.org` (ver `docs/design/fluent2.md`).
+- **Wayland/EGL/GBM/DRM**: as specs Khronos/freedesktop; valores de extensão
+  não se inventam.
+
+Lista consolidada em `docs/ai-context/REFERENCES.md`.
+
 ## Plataformas e suas divergências
 
 | Aspecto | Desktop | Android |
