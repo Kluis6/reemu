@@ -278,8 +278,9 @@ struct Composite {
 }
 
 pub struct FrameProcessor {
-    /// Guardado pra configurar a surface nativa depois (o adapter tem que ser
-    /// o mesmo que criou o device).
+    /// Guardados pra configurar a surface nativa depois — a `wgpu::Surface`
+    /// tem que sair da MESMA `Instance`/`Adapter` que criou o `device`.
+    instance: wgpu::Instance,
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -437,6 +438,7 @@ impl FrameProcessor {
         Some(Self {
             sampler_nearest: mk_sampler(wgpu::FilterMode::Nearest),
             sampler_linear: mk_sampler(wgpu::FilterMode::Linear),
+            instance,
             adapter,
             device,
             queue,
@@ -473,12 +475,12 @@ impl FrameProcessor {
         w: u32,
         h: u32,
     ) -> bool {
-        let instance = wgpu::Instance::default();
         let surface = match unsafe {
-            instance.create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
-                raw_display_handle: Some(display),
-                raw_window_handle: window,
-            })
+            self.instance
+                .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                    raw_display_handle: Some(display),
+                    raw_window_handle: window,
+                })
         } {
             Ok(s) => s,
             Err(e) => {
