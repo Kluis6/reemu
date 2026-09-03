@@ -20,6 +20,8 @@ log = "0.4"
 # faltar, só os cores GL falham (com erro claro), os software seguem.
 khronos-egl = { version = "6", features = ["dynamic"] }
 glow = "0.17"
+# `libgbm` é aberto via `libloading` (ver dmabuf.rs) — sem link estático, sem
+# precisar de `libgbm-dev`; se faltar, o interop cai pro readback.
 
 [build-dependencies]
 cc = "1"

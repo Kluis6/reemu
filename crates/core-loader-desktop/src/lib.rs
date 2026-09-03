@@ -16,6 +16,7 @@
 mod core;
 mod coreopts;
 mod discover;
+mod dmabuf;
 mod ffi_state;
 mod gl_context;
 mod input;
