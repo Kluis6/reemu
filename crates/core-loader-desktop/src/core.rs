@@ -1,6 +1,7 @@
 //! `DesktopCore`: instância de core carregada. É a `FrameSource` (cada
 //! `next_frame` roda um `retro_run`) e guarda a metadata técnica pós-load.
 
+use crate::archive::ExtractedRom;
 use crate::ffi_state::{self, CoreGuard};
 use crate::gl_context::GlContext;
 use crate::raw::RawCore;
@@ -14,6 +15,8 @@ pub struct DesktopCore {
     render_reqs: CoreRenderRequirements,
     /// `Some` = core de HW render (GL). O frame sai do FBO deste contexto.
     gl: Option<GlContext>,
+    /// ROM extraída de um `.zip` — apagada quando o core é dropado.
+    _extracted: Option<ExtractedRom>,
     /// Mantido vivo até o Drop: libera o slot global de "um core por processo".
     _guard: CoreGuard,
 }
@@ -25,12 +28,14 @@ impl DesktopCore {
         render_reqs: CoreRenderRequirements,
         guard: CoreGuard,
         gl: Option<GlContext>,
+        extracted: Option<ExtractedRom>,
     ) -> Self {
         Self {
             raw,
             av_info,
             render_reqs,
             gl,
+            _extracted: extracted,
             _guard: guard,
         }
     }

@@ -13,6 +13,7 @@
 //! callbacks C não têm ponteiro de contexto → estado global). O
 //! `DesktopCoreLoader` impõe isso.
 
+mod archive;
 mod core;
 mod coreopts;
 mod discover;

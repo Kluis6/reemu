@@ -146,6 +146,21 @@ impl DesktopCoreLoader {
     ) -> Result<DesktopCore, CoreLoadError> {
         let path = self.resolve_path(core_id)?;
 
+        // ROM em .zip: extrai a entrada interna pra um arquivo temporário. Vive
+        // (via `DesktopCore`) até o unload.
+        let extracted = if crate::archive::is_zip(Path::new(rom_path)) {
+            Some(
+                crate::archive::extract_rom(Path::new(rom_path), &std::env::temp_dir())
+                    .map_err(|e| CoreLoadError::LoadFailed(format!("extrair {rom_path}: {e}")))?,
+            )
+        } else {
+            None
+        };
+        let rom_path: &str = extracted
+            .as_ref()
+            .and_then(|e| e.path().to_str())
+            .unwrap_or(rom_path);
+
         // O guard inicializa o estado global e garante um-core-por-processo.
         let guard = ffi_state::acquire(&self.system_dir, &self.save_dir)?;
         let raw = RawCore::open(&path)?;
@@ -237,7 +252,7 @@ impl DesktopCoreLoader {
                 )
             }
             RenderBackend::Vulkan => {
-                let core = DesktopCore::new(raw, av_info, render_reqs, guard, None);
+                let core = DesktopCore::new(raw, av_info, render_reqs, guard, None, extracted);
                 drop(core); // teardown (unload_game + deinit + guard)
                 return Err(CoreLoadError::HwRenderUnsupported(format!(
                     "{} exige Vulkan HW render — só na etapa 12",
@@ -246,7 +261,14 @@ impl DesktopCoreLoader {
             }
         };
 
-        Ok(DesktopCore::new(raw, av_info, render_reqs, guard, gl))
+        Ok(DesktopCore::new(
+            raw,
+            av_info,
+            render_reqs,
+            guard,
+            gl,
+            extracted,
+        ))
     }
 }
 

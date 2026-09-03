@@ -12,6 +12,9 @@ uuid = { version = "1", features = ["v4"] }
 walkdir = "2"
 thiserror.workspace = true
 log = "0.4"
+# ROMs de N64/disco costumam vir em .zip — o scan olha dentro e o loader
+# extrai. Só deflate/store (formato dominante); sem bzip2/zstd/aes.
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 db = { path = "../db" }

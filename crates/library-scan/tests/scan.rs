@@ -72,6 +72,44 @@ async fn scans_recursively_infers_system_and_dedups() {
 }
 
 #[tokio::test]
+async fn rom_inside_zip_is_catalogued_by_inner_extension_and_hash() {
+    let dir = scratch_dir();
+    let rom_bytes = b"n64-rom-payload-inside-zip";
+
+    // .zip com uma ROM .z64 dentro (store, sem compressão).
+    let zip_path = dir.join("Mario 64.zip");
+    {
+        let f = std::fs::File::create(&zip_path).unwrap();
+        let mut zw = zip::ZipWriter::new(f);
+        zw.start_file(
+            "Super Mario 64 (USA).z64",
+            zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored),
+        )
+        .unwrap();
+        zw.write_all(rom_bytes).unwrap();
+        zw.finish().unwrap();
+    }
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!(r.added, 1);
+    assert_eq!(r.skipped_unrecognized, 0);
+
+    let n64 = repo.list_by_system("n64").await.unwrap();
+    assert_eq!(n64.len(), 1);
+    // hash é o da ROM crua, não o do .zip
+    assert_eq!(n64[0].crc32, crc_of(rom_bytes));
+    assert_eq!(
+        n64[0].file_path,
+        zip_path.to_string_lossy(),
+        "file_path aponta pro .zip"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn same_rom_different_paths_both_catalogued() {
     let dir = scratch_dir();
     write(&dir, "a/Game.gba", b"identical-bytes");

@@ -1,10 +1,19 @@
 //! Varredura de um diretório de ROMs → `domain::library::Rom` (por hash).
 
+use crate::archive::{is_supported_archive, peek_zip, read_zip_entry};
 use crate::hash::FileRomHasher;
 use crate::systems::system_for_extension;
 use domain::library::{Rom, RomRepository};
+use std::io::Cursor;
 use std::path::Path;
 use walkdir::WalkDir;
+
+/// Extensão reconhecida (ROM crua ou arquivo comprimido suportado).
+fn recognized(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| system_for_extension(e).is_some() || is_supported_archive(e))
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ScanError {
@@ -36,13 +45,7 @@ pub fn count_roms(dir: &Path) -> usize {
         .into_iter()
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .and_then(|x| x.to_str())
-                .and_then(system_for_extension)
-                .is_some()
-        })
+        .filter(|e| recognized(e.path()))
         .count()
 }
 
@@ -67,14 +70,29 @@ where
             continue;
         }
         let path = entry.path();
-        let Some(system_id) = path
+        let ext = path
             .extension()
             .and_then(|e| e.to_str())
-            .and_then(system_for_extension)
-        else {
-            report.skipped_unrecognized += 1;
-            continue;
-        };
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+
+        // ROM crua ou dentro de um .zip. Pro zip, o `system_id` e o hash vêm
+        // da entrada interna (o CRC precisa ser o da ROM, não o do arquivo).
+        let (system_id, archived_entry): (&str, Option<String>) =
+            if let Some(sys) = system_for_extension(&ext) {
+                (sys, None)
+            } else if is_supported_archive(&ext) {
+                match peek_zip(path) {
+                    Some(a) => (a.system_id, Some(a.entry)),
+                    None => {
+                        report.skipped_unrecognized += 1;
+                        continue;
+                    }
+                }
+            } else {
+                report.skipped_unrecognized += 1;
+                continue;
+            };
         report.found += 1;
         on_progress(ScanProgress {
             current: report.found,
@@ -92,7 +110,12 @@ where
             continue;
         }
 
-        let hash = match FileRomHasher::hash_file(&path_str) {
+        let hash = match &archived_entry {
+            None => FileRomHasher::hash_file(&path_str),
+            Some(entry) => read_zip_entry(path, entry)
+                .and_then(|bytes| FileRomHasher::hash_reader(Cursor::new(bytes))),
+        };
+        let hash = match hash {
             Ok(h) => h,
             Err(e) => {
                 log::warn!("hash {path_str}: {e}");

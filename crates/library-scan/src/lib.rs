@@ -2,11 +2,13 @@
 //! populando `domain::library::RomRepository`. Match automático de metadata
 //! é sempre por hash exato (ver `docs/ai-context/09`).
 
+mod archive;
 mod decoration;
 mod hash;
 mod scan;
 mod systems;
 
+pub use archive::{is_supported_archive, peek_zip, read_zip_entry, ArchivedRom};
 pub use decoration::{
     scan_decoration_pack, system_from_folder_name, viewport_for_image, DecoScope,
     ScannedDecoration, Viewport,

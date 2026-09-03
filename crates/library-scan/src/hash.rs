@@ -17,8 +17,12 @@ pub struct FileRomHasher;
 
 impl FileRomHasher {
     pub fn hash_file(path: &str) -> std::io::Result<RomHash> {
-        let mut reader = BufReader::new(File::open(path)?);
+        Self::hash_reader(BufReader::new(File::open(path)?))
+    }
 
+    /// Como [`hash_file`], mas sobre um leitor qualquer — pra ROM de dentro de
+    /// um arquivo comprimido (o CRC precisa ser o da ROM crua, não do `.zip`).
+    pub fn hash_reader<R: Read>(mut reader: R) -> std::io::Result<RomHash> {
         // Detecta e pula o header iNES.
         let mut head = [0u8; 4];
         let n = read_up_to(&mut reader, &mut head)?;

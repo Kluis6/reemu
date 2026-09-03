@@ -22,6 +22,8 @@ khronos-egl = { version = "6", features = ["dynamic"] }
 glow = "0.17"
 # `libgbm` é aberto via `libloading` (ver dmabuf.rs) — sem link estático, sem
 # precisar de `libgbm-dev`; se faltar, o interop cai pro readback.
+# ROMs em .zip são extraídas pra um arquivo temporário na hora do load.
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 [build-dependencies]
 cc = "1"

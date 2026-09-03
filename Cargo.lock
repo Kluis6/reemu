@@ -765,6 +765,7 @@ dependencies = [
  "log",
  "thiserror 1.0.69",
  "tokio",
+ "zip",
 ]
 
 [[package]]
@@ -2732,6 +2733,7 @@ dependencies = [
  "tokio",
  "uuid",
  "walkdir",
+ "zip",
 ]
 
 [[package]]
