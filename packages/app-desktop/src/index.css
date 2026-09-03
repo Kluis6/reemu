@@ -22,9 +22,13 @@ body {
 }
 
 /* Vídeo nativo (REEMU_NATIVE_VIDEO): a PlayScreen fica transparente pra
-   subsurface do jogo aparecer atrás da webview. */
-body.native-video {
-  background: transparent;
+   subsurface do jogo aparecer atrás da webview. Precisa furar html/body/#root
+   e o container da rota. */
+html.native-video,
+html.native-video body,
+html.native-video #root {
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 kbd {

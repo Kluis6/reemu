@@ -187,11 +187,13 @@ export function PlayScreen() {
   // da webview não funciona no WebKitGTK+NVIDIA desse setup — ver
   // docs/ai-context/03; `REEMU_X11_VIDEO=1` tenta o esquema antigo).
   // Surface nativa: o jogo é apresentado pelo Rust direto na subsurface; deixa
-  // o body transparente pra ela aparecer atrás da webview.
+  // html/body/#root transparentes pra ela aparecer atrás da webview.
   useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('[PlayScreen] nativeVideo =', nativeVideo)
     if (!nativeVideo) return
-    document.body.classList.add('native-video')
-    return () => document.body.classList.remove('native-video')
+    document.documentElement.classList.add('native-video')
+    return () => document.documentElement.classList.remove('native-video')
   }, [nativeVideo])
 
   useEffect(() => {

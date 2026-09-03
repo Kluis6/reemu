@@ -209,6 +209,9 @@ fn spawn_video_pump(app: tauri::AppHandle) {
         .name("reemu-video-pump".into())
         .spawn(move || {
             let (mut ticks, mut with_frame) = (0u64, 0u64);
+            // frames de "limpar" pendentes quando o jogo é descarregado (>1 pra
+            // esvaziar o swapchain).
+            let mut clear_budget = 0u8;
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(15));
                 let state = app.state::<AppState>();
@@ -221,16 +224,22 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                     break; // surface removida — encerra a thread
                 }
                 let frame = state.session.take_latest_frame();
+                let idle = matches!(state.session.state(), emu_session::SessionState::Idle);
                 ticks += 1;
-                if frame.is_some() {
-                    with_frame += 1;
-                }
-                if ticks % 180 == 0 {
-                    log::info!("video-pump: {ticks} ticks, {with_frame} com frame");
+                if ticks % 300 == 0 {
+                    log::info!("video-pump: {ticks} ticks, {with_frame} frames");
                 }
                 let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
                 if let Some(fp) = gpu.as_mut() {
-                    fp.render_to_surface(frame.as_ref());
+                    if let Some(f) = frame.as_ref() {
+                        with_frame += 1;
+                        fp.render_to_surface(Some(f));
+                        clear_budget = 3; // armado enquanto o jogo roda
+                    } else if idle && clear_budget > 0 {
+                        // jogo descarregado (não só pausado) → limpa a surface
+                        fp.clear_surface();
+                        clear_budget -= 1;
+                    }
                 }
             }
         })

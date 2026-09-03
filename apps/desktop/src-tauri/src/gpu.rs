@@ -681,6 +681,45 @@ impl FrameProcessor {
         }
     }
 
+    /// Apresenta um frame preto opaco na surface nativa — pra limpar o último
+    /// frame do jogo quando ele é descarregado (senão fica preso atrás).
+    pub fn clear_surface(&mut self) {
+        let Some(s) = self.surface.as_ref() else {
+            return;
+        };
+        let frame_tex = match s.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(t)
+            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+            _ => return,
+        };
+        let view = frame_tex
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+        let mut enc = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("clear surface"),
+            });
+        enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("clear"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        self.queue.submit([enc.finish()]);
+        self.queue.present(frame_tex);
+    }
+
     /// Proporção de exibição imposta pela moldura (`w/h` da imagem), se houver.
     pub fn decoration_aspect(&self) -> Option<f32> {
         self.decoration
