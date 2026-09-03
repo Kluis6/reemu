@@ -207,21 +207,31 @@ pub fn run() {
 fn spawn_video_pump(app: tauri::AppHandle) {
     std::thread::Builder::new()
         .name("reemu-video-pump".into())
-        .spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_millis(15));
-            let state = app.state::<AppState>();
-            let alive = state
-                .video
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .is_some();
-            if !alive {
-                break; // surface removida — encerra a thread
-            }
-            let frame = state.session.take_latest_frame();
-            let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(fp) = gpu.as_mut() {
-                fp.render_to_surface(frame.as_ref());
+        .spawn(move || {
+            let (mut ticks, mut with_frame) = (0u64, 0u64);
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(15));
+                let state = app.state::<AppState>();
+                let alive = state
+                    .video
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .is_some();
+                if !alive {
+                    break; // surface removida — encerra a thread
+                }
+                let frame = state.session.take_latest_frame();
+                ticks += 1;
+                if frame.is_some() {
+                    with_frame += 1;
+                }
+                if ticks % 180 == 0 {
+                    log::info!("video-pump: {ticks} ticks, {with_frame} com frame");
+                }
+                let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
+                if let Some(fp) = gpu.as_mut() {
+                    fp.render_to_surface(frame.as_ref());
+                }
             }
         })
         .expect("spawn reemu-video-pump");

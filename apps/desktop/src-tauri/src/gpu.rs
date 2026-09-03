@@ -310,6 +310,8 @@ pub struct FrameProcessor {
     /// serializar. Fallback bloqueante só quando o slot ainda não mapeou.
     rb: ReadbackRing,
     frame_count: u64,
+    /// Frames apresentados na surface nativa (só pra log de diagnóstico).
+    surf_frames: u64,
     comp: Composite,
     decoration: Option<Decoration>,
     /// Surface nativa (etapa 03 — vídeo fora da webview). `Some` = a chain
@@ -456,6 +458,7 @@ impl FrameProcessor {
             interop_view: None,
             rb: ReadbackRing::default(),
             frame_count: 0,
+            surf_frames: 0,
             comp,
             decoration: None,
             surface: None,
@@ -529,7 +532,10 @@ impl FrameProcessor {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        log::info!("surface nativa: {w}x{h} {format:?} {present_mode:?}");
+        log::info!(
+            "surface nativa: {w}x{h} {format:?} {present_mode:?} alpha={:?}",
+            config.alpha_mode
+        );
         self.surface = Some(SurfaceOut {
             surface,
             config,
@@ -562,8 +568,11 @@ impl FrameProcessor {
                 label: Some("surface"),
             });
         let Some((out_w, out_h, use_comp)) = self.run_chain(frame, &mut enc) else {
+            log::warn!("render_to_surface: run_chain devolveu None");
             return;
         };
+        let first = self.surf_frames == 0;
+        self.surf_frames += 1;
 
         let s = self.surface.as_ref().unwrap();
         let (dw, dh) = (s.config.width.max(1), s.config.height.max(1));
@@ -602,7 +611,22 @@ impl FrameProcessor {
             ],
         });
 
-        let frame_tex = match s.surface.get_current_texture() {
+        let acquired = s.surface.get_current_texture();
+        if first {
+            log::info!(
+                "render_to_surface: 1º frame chain {out_w}x{out_h} → surface {dw}x{dh}, acquire={}",
+                match &acquired {
+                    wgpu::CurrentSurfaceTexture::Success(_) => "Success",
+                    wgpu::CurrentSurfaceTexture::Suboptimal(_) => "Suboptimal",
+                    wgpu::CurrentSurfaceTexture::Timeout => "Timeout",
+                    wgpu::CurrentSurfaceTexture::Occluded => "Occluded",
+                    wgpu::CurrentSurfaceTexture::Outdated => "Outdated",
+                    wgpu::CurrentSurfaceTexture::Lost => "Lost",
+                    _ => "Validation/outro",
+                }
+            );
+        }
+        let frame_tex = match acquired {
             wgpu::CurrentSurfaceTexture::Success(t)
             | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
@@ -638,6 +662,9 @@ impl FrameProcessor {
         }
         self.queue.submit([enc.finish()]);
         self.queue.present(frame_tex);
+        if first {
+            log::info!("render_to_surface: 1º present feito");
+        }
     }
 
     /// Proporção de exibição imposta pela moldura (`w/h` da imagem), se houver.
