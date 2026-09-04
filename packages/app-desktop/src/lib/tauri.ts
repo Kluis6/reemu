@@ -291,6 +291,15 @@ export const loadSaveState = (stateId: string) =>
 export const deleteSaveState = (stateId: string) =>
   invoke<void>('delete_save_state', { stateId })
 
+/** PNG do frame que estava na tela quando o menu de pausa abriu (vídeo nativo),
+ *  como `blob:` URL. `null` se não há (modo canvas ou sem captura ainda). */
+export async function pauseBackgroundUrl(): Promise<string | null> {
+  if (!inTauri) return null
+  const buf = await invoke<ArrayBuffer>('pause_background')
+  if (buf.byteLength === 0) return null
+  return URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
+}
+
 /** PNG do thumbnail de um save state como `blob:` URL, ou `null` se não tem. */
 export async function saveThumbnailUrl(stateId: string): Promise<string | null> {
   if (!inTauri) return null

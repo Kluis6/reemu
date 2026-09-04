@@ -93,6 +93,14 @@ impl VideoSurface {
         self._wl.resize(width, height);
         let _ = (width, height);
     }
+
+    /// Esconde a subsurface do jogo (menu aberto). Mostrar de volta é implícito
+    /// no próximo present.
+    pub fn set_hidden(&self, hidden: bool) {
+        #[cfg(target_os = "linux")]
+        self._wl.set_hidden(hidden);
+        let _ = hidden;
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -190,18 +198,17 @@ mod wl {
             let video = compositor.create_surface(&qh, ());
             let subsurface = subcompositor.get_subsurface(&video, &parent, &qh, ());
             subsurface.set_position(0, 0);
-            subsurface.place_below(&parent);
-            // desync: a subsurface apresenta no ritmo do jogo, não no do GTK.
+            // Subsurface nasce ACIMA do parent (padrão do protocolo) — o jogo
+            // cobre a webview opaca enquanto joga; some quando o menu abre e a
+            // webview reaparece com o print do jogo de fundo. Sem janela
+            // transparente = sem o bug NVIDIA+WebKitGTK.
+            // desync: apresenta no ritmo do jogo, não no do GTK.
             subsurface.set_desync();
 
-            // subsurface: região opaca cobrindo tudo (é o fundo, sem alpha).
+            // região opaca cobrindo tudo (é o fundo do jogo, sem alpha).
             let region = compositor.create_region(&qh, ());
             region.add(0, 0, w.max(1) as i32, h.max(1) as i32);
             video.set_opaque_region(Some(&region));
-            // parent (webview): zera a região opaca — força o compositor a
-            // misturar o alpha da webview com a subsurface atrás. Se o GTK a
-            // reafirma a cada frame, isso vira no-op mas não atrapalha.
-            parent.set_opaque_region(None);
             video.commit();
             parent.commit();
             let _ = conn.flush();
@@ -217,6 +224,17 @@ mod wl {
 
         pub fn wl_surface_ptr(&self) -> *mut c_void {
             self.video.id().as_ptr().cast()
+        }
+
+        /// Esconde a subsurface (attach de buffer nulo) — quando o menu abre, a
+        /// webview opaca atrás reaparece. `show` é implícito: o próximo present
+        /// do wgpu re-anexa um buffer e remapeia.
+        pub fn set_hidden(&self, hidden: bool) {
+            if hidden {
+                self.video.attach(None, 0, 0);
+                self.video.commit();
+                let _ = self.conn.flush();
+            }
         }
 
         pub fn resize(&self, w: u32, h: u32) {

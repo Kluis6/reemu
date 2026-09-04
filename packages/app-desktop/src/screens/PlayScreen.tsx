@@ -16,6 +16,7 @@ import {
   loadGame,
   loadSaveState,
   nativeVideoActive,
+  pauseBackgroundUrl,
   pollFrame,
   saveState,
   toggleFocus,
@@ -26,14 +27,48 @@ import { useFocusStore } from '../stores/useFocusStore'
 import { useToastStore } from '../stores/useToastStore'
 
 const useStyles = makeStyles({
-  // Opaco: o frame do core é desenhado no <canvas> (a webview não tem overlay
-  // transparente nesse setup — ver src-tauri/src/main.rs).
+  // Opaco: no modo canvas o frame vai num <canvas>; no vídeo nativo (subsurface)
+  // a área fica transparente e o jogo aparece atrás (ver src-tauri/src/video.rs).
   root: {
     position: 'fixed',
     inset: 0,
     background: '#000',
     display: 'grid',
     placeItems: 'center',
+  },
+  // Fundo do menu de pausa no vídeo nativo: o frame que estava na tela,
+  // borrado e escurecido por animação (a subsurface do jogo some).
+  pauseBg: {
+    position: 'fixed',
+    inset: 0,
+    objectFit: 'cover',
+    width: '100%',
+    height: '100%',
+    animationName: {
+      from: { filter: 'blur(0) brightness(1)', opacity: 0 },
+      to: { filter: 'blur(9px) brightness(0.42)', opacity: 1 },
+    },
+    animationDuration: '190ms',
+    animationTimingFunction: 'ease-out',
+    animationFillMode: 'forwards',
+  },
+  menuIn: {
+    animationName: {
+      from: { opacity: 0, transform: 'translateY(10px) scale(0.985)' },
+      to: { opacity: 1, transform: 'none' },
+    },
+    animationDuration: '170ms',
+    animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
+    animationFillMode: 'both',
+  },
+  menuOut: {
+    animationName: {
+      from: { opacity: 1, transform: 'none' },
+      to: { opacity: 0, transform: 'translateY(6px)' },
+    },
+    animationDuration: '150ms',
+    animationTimingFunction: 'ease-in',
+    animationFillMode: 'both',
   },
   canvas: {
     // Preenche a altura da janela mantendo a proporção; encolhe se ficar
@@ -193,6 +228,40 @@ export function PlayScreen() {
     document.documentElement.classList.add('native-video')
     return () => document.documentElement.classList.remove('native-video')
   }, [nativeVideo])
+
+  // Menu de pausa: fica montado durante a animação de saída; no vídeo nativo
+  // busca o print do jogo capturado pelo Rust pra usar de fundo.
+  const menuOpen = focus === 'MenuFocused'
+  const [menuMounted, setMenuMounted] = useState(false)
+  const [pauseBg, setPauseBg] = useState<string | null>(null)
+  useEffect(() => {
+    if (menuOpen) {
+      setMenuMounted(true)
+      if (nativeVideo) {
+        let url: string | null = null
+        // pequeno atraso: o Rust captura ~2 ticks depois do foco trocar.
+        const t = setTimeout(() => {
+          void pauseBackgroundUrl().then((u) => {
+            url = u
+            setPauseBg(u)
+          })
+        }, 60)
+        return () => {
+          clearTimeout(t)
+          if (url) URL.revokeObjectURL(url)
+        }
+      }
+    } else if (menuMounted) {
+      const t = setTimeout(() => {
+        setMenuMounted(false)
+        setPauseBg((u) => {
+          if (u) URL.revokeObjectURL(u)
+          return null
+        })
+      }, 170)
+      return () => clearTimeout(t)
+    }
+  }, [menuOpen, nativeVideo, menuMounted])
 
   useEffect(() => {
     if (status !== 'ready' || nativeVideo) return
@@ -395,8 +464,11 @@ export function PlayScreen() {
         />
       )}
 
-      {focus === 'MenuFocused' && (
-        <div className={pause.scrim}>
+      {menuMounted && (
+        <div className={`${pause.scrim} ${menuOpen ? styles.menuIn : styles.menuOut}`}>
+          {nativeVideo && pauseBg && (
+            <img className={styles.pauseBg} src={pauseBg} alt="" aria-hidden />
+          )}
           <div className={pause.panel}>
             <h2 className={pause.title}>Pausado</h2>
             <Button appearance="primary" onClick={resume}>

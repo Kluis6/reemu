@@ -45,6 +45,27 @@ pub struct AppState {
     /// Último frame enviado pro canvas — pra gerar o thumbnail no save state.
     /// Atualizado com throttle no `poll_frame`.
     pub last_frame: Mutex<Option<CachedFrame>>,
+    /// Coreografia jogo↔menu no modo de vídeo nativo (subsurface). Só usado
+    /// quando `video` é `Some`.
+    pub video_menu: Mutex<VideoMenu>,
+    /// Último frame capturado da surface nativa quando o menu abriu — vira o
+    /// fundo do menu de pausa (`pause_background`).
+    pub pause_bg: Mutex<Option<(u32, u32, Vec<u8>)>>,
+}
+
+/// Estado da transição jogo↔menu no vídeo nativo. O `reemu-video-pump` dirige.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum VideoMenu {
+    /// Jogo rodando — a subsurface apresenta os frames normalmente.
+    Playing,
+    /// Menu pedido — `n` ticks (~15ms cada) até capturar o frame e esconder a
+    /// subsurface (deixa o último frame chegar fresco).
+    Opening(u8),
+    /// Menu aberto — subsurface escondida, a webview opaca mostra o menu.
+    MenuUp,
+    /// Menu fechando — `n` ticks segurando a subsurface escondida pra a
+    /// animação de saída da webview terminar antes do jogo voltar por cima.
+    Closing(u8),
 }
 
 /// Cópia de um frame RGBA8 + quando foi tirada (throttle do cache de thumbnail).
@@ -95,6 +116,8 @@ impl AppState {
             scrape: Arc::new(crate::scraping::ScrapeProgress::default()),
             scrape_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_frame: Mutex::new(None),
+            video_menu: Mutex::new(VideoMenu::Playing),
+            pause_bg: Mutex::new(None),
         }
     }
 }
@@ -241,13 +264,22 @@ pub(crate) fn focus_str(f: domain::focus::InputFocus) -> &'static str {
 /// Alterna o foco e emite `focus-changed`. Usado pelo comando `toggle_focus`,
 /// pela hotkey de teclado e pelo botão de menu do gamepad.
 pub(crate) fn toggle_and_emit<R: tauri::Runtime>(app: &AppHandle<R>) -> &'static str {
-    use domain::focus::FocusManager;
+    use domain::focus::{FocusManager, InputFocus};
     let state = app.state::<AppState>();
     let now = {
         let mut fc = state.focus.lock().unwrap_or_else(|p| p.into_inner());
         fc.toggle();
         fc.current()
     };
+    // Vídeo nativo: dispara a coreografia da subsurface (capturar + esconder ao
+    // abrir o menu; segurar escondida na saída). No modo canvas é inócuo.
+    {
+        let mut vm = state.video_menu.lock().unwrap_or_else(|p| p.into_inner());
+        *vm = match now {
+            InputFocus::MenuFocused => VideoMenu::Opening(2),
+            InputFocus::GameFocused => VideoMenu::Closing(10),
+        };
+    }
     let s = focus_str(now);
     let _ = app.emit("focus-changed", FocusChanged { focus: s });
     s
@@ -625,6 +657,17 @@ fn cache_thumb_frame(state: &AppState, w: u32, h: u32, rgba: &[u8]) {
 }
 
 /// `[w u32 LE][h u32 LE][rgba8…]` — o formato que a `PlayScreen` espera.
+/// PNG do frame que estava na tela quando o menu de pausa abriu (vídeo nativo).
+/// A `PlayScreen` usa de fundo do menu. Corpo vazio se não há.
+#[tauri::command]
+pub fn pause_background(state: State<'_, AppState>) -> tauri::ipc::Response {
+    let bg = state.pause_bg.lock().unwrap_or_else(|p| p.into_inner());
+    let png = bg
+        .as_ref()
+        .and_then(|(w, h, rgba)| thumbnail_png(*w, *h, rgba, 960));
+    tauri::ipc::Response::new(png.unwrap_or_default())
+}
+
 fn pack_frame(w: u32, h: u32, rgba: &[u8]) -> tauri::ipc::Response {
     let mut out = Vec::with_capacity(8 + rgba.len());
     out.extend_from_slice(&w.to_le_bytes());

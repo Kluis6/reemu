@@ -312,6 +312,9 @@ pub struct FrameProcessor {
     frame_count: u64,
     /// Frames apresentados na surface nativa (só pra log de diagnóstico).
     surf_frames: u64,
+    /// `(w, h, com_moldura)` da última chamada de `render_to_surface` — pra
+    /// `capture_surface_frame` ler de volta a textura certa sem rodar a chain.
+    last_surface_out: Option<(u32, u32, bool)>,
     comp: Composite,
     decoration: Option<Decoration>,
     /// Surface nativa (etapa 03 — vídeo fora da webview). `Some` = a chain
@@ -459,6 +462,7 @@ impl FrameProcessor {
             rb: ReadbackRing::default(),
             frame_count: 0,
             surf_frames: 0,
+            last_surface_out: None,
             comp,
             decoration: None,
             surface: None,
@@ -573,11 +577,18 @@ impl FrameProcessor {
         };
         let first = self.surf_frames == 0;
         self.surf_frames += 1;
+        self.last_surface_out = Some((out_w, out_h, use_comp));
+
+        // Proporção de exibição: a moldura impõe a sua; senão a AR declarada do
+        // core (respeita PAR ≠ 1); só cai na proporção de pixels se não houver.
+        let ar_src = self
+            .decoration_aspect()
+            .filter(|_| use_comp)
+            .or(Some(frame.metadata.aspect_ratio).filter(|a| *a > 0.0))
+            .unwrap_or(out_w as f32 / out_h.max(1) as f32);
 
         let s = self.surface.as_ref().unwrap();
         let (dw, dh) = (s.config.width.max(1), s.config.height.max(1));
-        // letterbox: encaixa (out_w × out_h) em (dw × dh) mantendo a proporção.
-        let ar_src = out_w as f32 / out_h.max(1) as f32;
         let ar_dst = dw as f32 / dh as f32;
         let (hw, hh) = if ar_src > ar_dst {
             (1.0, ar_dst / ar_src)
@@ -718,6 +729,60 @@ impl FrameProcessor {
         });
         self.queue.submit([enc.finish()]);
         self.queue.present(frame_tex);
+    }
+
+    /// Lê de volta o último frame que foi pra surface nativa (RGBA8 apertado) —
+    /// pra usar de fundo do menu de pausa. Bloqueante; chamado 1× por pause,
+    /// não no caminho de render.
+    pub fn capture_surface_frame(&mut self) -> Option<(u32, u32, Vec<u8>)> {
+        let (w, h, use_comp) = self.last_surface_out?;
+        let src = if use_comp {
+            &self.comp.target.as_ref()?.0
+        } else {
+            &self.passes.last()?.target.as_ref()?.0
+        };
+        let padded = w * 4 + (ROW_ALIGN - (w * 4) % ROW_ALIGN) % ROW_ALIGN;
+        let buf = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("capture"),
+            size: (padded * h) as u64,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut enc = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("capture"),
+            });
+        enc.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: src,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buf,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded),
+                    rows_per_image: Some(h),
+                },
+            },
+            wgpu::Extent3d {
+                width: w,
+                height: h,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit([enc.finish()]);
+        buf.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+        self.device.poll(wgpu::PollType::wait_indefinitely()).ok()?;
+        let rgba = {
+            let mapped = buf.slice(..).get_mapped_range().ok()?;
+            unpad_rows(&mapped, w, h, padded)
+        };
+        buf.unmap();
+        Some((w, h, rgba))
     }
 
     /// Proporção de exibição imposta pela moldura (`w/h` da imagem), se houver.

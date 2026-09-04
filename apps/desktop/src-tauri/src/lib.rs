@@ -118,6 +118,7 @@ pub fn run() {
             commands::unload_game,
             commands::poll_frame,
             commands::native_video_active,
+            commands::pause_background,
             commands::session_state,
             commands::get_audio_config,
             commands::update_audio_config,
@@ -208,37 +209,70 @@ fn spawn_video_pump(app: tauri::AppHandle) {
     std::thread::Builder::new()
         .name("reemu-video-pump".into())
         .spawn(move || {
-            let (mut ticks, mut with_frame) = (0u64, 0u64);
-            // frames de "limpar" pendentes quando o jogo é descarregado (>1 pra
-            // esvaziar o swapchain).
-            let mut clear_budget = 0u8;
+            let mut clear_budget = 0u8; // frames de "limpar" ao descarregar
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(15));
                 let state = app.state::<AppState>();
-                let alive = state
-                    .video
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner())
-                    .is_some();
-                if !alive {
-                    break; // surface removida — encerra a thread
+                {
+                    let vg = state.video.lock().unwrap_or_else(|p| p.into_inner());
+                    if vg.is_none() {
+                        break; // surface removida — encerra a thread
+                    }
                 }
                 let frame = state.session.take_latest_frame();
                 let idle = matches!(state.session.state(), emu_session::SessionState::Idle);
-                ticks += 1;
-                if ticks % 300 == 0 {
-                    log::info!("video-pump: {ticks} ticks, {with_frame} frames");
-                }
-                let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
-                if let Some(fp) = gpu.as_mut() {
-                    if let Some(f) = frame.as_ref() {
-                        with_frame += 1;
-                        fp.render_to_surface(Some(f));
-                        clear_budget = 3; // armado enquanto o jogo roda
-                    } else if idle && clear_budget > 0 {
-                        // jogo descarregado (não só pausado) → limpa a surface
-                        fp.clear_surface();
-                        clear_budget -= 1;
+                let vm = *state.video_menu.lock().unwrap_or_else(|p| p.into_inner());
+
+                use commands::VideoMenu::*;
+                match vm {
+                    Playing => {
+                        let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
+                        if let Some(fp) = gpu.as_mut() {
+                            if let Some(f) = frame.as_ref() {
+                                fp.render_to_surface(Some(f));
+                                clear_budget = 3;
+                            } else if idle && clear_budget > 0 {
+                                fp.clear_surface(); // jogo descarregado
+                                clear_budget -= 1;
+                            }
+                        }
+                    }
+                    Opening(0) => {
+                        let cap = state
+                            .gpu
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .as_mut()
+                            .and_then(|fp| fp.capture_surface_frame());
+                        *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = cap;
+                        if let Some(vs) = state
+                            .video
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .as_ref()
+                        {
+                            vs.set_hidden(true);
+                        }
+                        *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = MenuUp;
+                    }
+                    Opening(n) => {
+                        // mantém o último frame fresco até capturar
+                        if let (Some(f), Some(fp)) = (
+                            frame.as_ref(),
+                            state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut(),
+                        ) {
+                            fp.render_to_surface(Some(f));
+                        }
+                        *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) =
+                            Opening(n - 1);
+                    }
+                    MenuUp => {}
+                    Closing(0) => {
+                        *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = Playing;
+                    }
+                    Closing(n) => {
+                        *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) =
+                            Closing(n - 1);
                     }
                 }
             }
