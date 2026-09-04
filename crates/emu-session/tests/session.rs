@@ -1,11 +1,13 @@
-//! `EmuSession` (thread dedicada) + `FocusController`, contra o core-fake
-//! do `core-loader-desktop`.
-//!
-//! libretro é um-core-por-processo → os testes serializam por `LOCK`.
+//! `EmuSession` (processo filho descartável) + `FocusController`, contra o
+//! core-fake do `core-loader-desktop` — agora spawnado de verdade como
+//! `reemu-core-host` (não mais in-process). Os testes serializam por `LOCK`
+//! porque libretro é um-core-por-processo E porque cada teste sobe/mata
+//! processos reais (evita competir por porta/socket entre testes paralelos).
 
 use core_loader_desktop::testcore_path;
 use domain::focus::{FocusManager, InputFocus};
 use emu_session::{EmuSession, FocusController, SessionConfig, SessionState};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
@@ -31,20 +33,26 @@ fn session() -> EmuSession {
     EmuSession::spawn(SessionConfig::new(tmp.clone(), tmp.clone(), tmp))
 }
 
+/// `s.load(testcore_path(), <rom>)` sem opções — o caso comum dos testes.
+fn load(
+    s: &EmuSession,
+    rom: &std::path::Path,
+) -> Result<domain::core_loader::SystemAvInfo, emu_session::SessionError> {
+    s.load(testcore_path(), rom.to_str().unwrap(), HashMap::new())
+}
+
 #[test]
 fn load_runs_and_frames_advance() {
     let _g = lock();
     let s = session();
     assert_eq!(s.state(), SessionState::Idle);
 
-    let av = s
-        .load(testcore_path(), rom().to_str().unwrap())
-        .expect("load");
+    let av = load(&s, &rom()).expect("load");
     assert_eq!(av.geometry.base_width, 64);
     assert_eq!(av.timing.fps, 60.0);
     assert_eq!(s.state(), SessionState::Running);
 
-    sleep(Duration::from_millis(120));
+    sleep(Duration::from_millis(200));
     let seq = s.frame_seq();
     assert!(seq >= 4, "esperava ~7 frames em 120ms, veio {seq}");
 
@@ -61,18 +69,18 @@ fn load_runs_and_frames_advance() {
 fn pause_freezes_emulation_then_resume() {
     let _g = lock();
     let s = session();
-    s.load(testcore_path(), rom().to_str().unwrap()).unwrap();
-    sleep(Duration::from_millis(60));
+    load(&s, &rom()).unwrap();
+    sleep(Duration::from_millis(100));
 
     s.set_paused(true); // round-trip: aplicado quando retorna
     assert_eq!(s.state(), SessionState::Paused);
     let frozen_at = s.frame_seq();
-    sleep(Duration::from_millis(80));
+    sleep(Duration::from_millis(120));
     assert_eq!(s.frame_seq(), frozen_at, "pausado não deve rodar frame");
 
     s.set_paused(false);
     assert_eq!(s.state(), SessionState::Running);
-    sleep(Duration::from_millis(80));
+    sleep(Duration::from_millis(120));
     assert!(s.frame_seq() > frozen_at, "resumido volta a rodar");
 }
 
@@ -80,8 +88,8 @@ fn pause_freezes_emulation_then_resume() {
 fn save_and_restore_state_through_session() {
     let _g = lock();
     let s = session();
-    s.load(testcore_path(), rom().to_str().unwrap()).unwrap();
-    sleep(Duration::from_millis(50));
+    load(&s, &rom()).unwrap();
+    sleep(Duration::from_millis(100));
 
     let snap = s.save_state().unwrap().expect("core-fake serializa");
     assert!(!snap.is_empty());
@@ -92,8 +100,8 @@ fn save_and_restore_state_through_session() {
 fn focus_controller_pauses_and_resumes_session() {
     let _g = lock();
     let s = Arc::new(session());
-    s.load(testcore_path(), rom().to_str().unwrap()).unwrap();
-    sleep(Duration::from_millis(40));
+    load(&s, &rom()).unwrap();
+    sleep(Duration::from_millis(100));
 
     let mut focus = FocusController::new(Arc::clone(&s));
     assert_eq!(focus.current(), InputFocus::GameFocused);
@@ -102,13 +110,13 @@ fn focus_controller_pauses_and_resumes_session() {
     assert_eq!(focus.current(), InputFocus::MenuFocused);
     assert_eq!(s.state(), SessionState::Paused);
     let frozen = s.frame_seq();
-    sleep(Duration::from_millis(60));
+    sleep(Duration::from_millis(120));
     assert_eq!(s.frame_seq(), frozen, "MenuFocused pausa o core");
 
     focus.toggle();
     assert_eq!(focus.current(), InputFocus::GameFocused);
     assert_eq!(s.state(), SessionState::Running);
-    sleep(Duration::from_millis(60));
+    sleep(Duration::from_millis(120));
     assert!(s.frame_seq() > frozen);
 }
 
@@ -117,14 +125,47 @@ fn reload_after_unload_and_bad_core_reports_error() {
     let _g = lock();
     let s = session();
 
-    let err = s.load("/nao/existe/core.so", "/tmp/x").unwrap_err();
+    let err = s
+        .load("/nao/existe/core.so", "/tmp/x", HashMap::new())
+        .unwrap_err();
     assert!(matches!(err, emu_session::SessionError::Load(_)), "{err:?}");
     assert_eq!(s.state(), SessionState::Idle);
 
-    s.load(testcore_path(), rom().to_str().unwrap()).unwrap();
+    load(&s, &rom()).unwrap();
     s.unload().unwrap();
-    s.load(testcore_path(), rom().to_str().unwrap()).unwrap();
+    load(&s, &rom()).unwrap();
     assert_eq!(s.state(), SessionState::Running);
+}
+
+/// Garantia estrutural do fix do reload de N64: cada `load` sobe um
+/// processo `reemu-core-host` NOVO, nunca reusa o anterior — mesmo
+/// trocando pro MESMO core. O core-fake em si é re-entrante (não reproduz o
+/// crash do parallel_n64), mas isto testa o mecanismo que faz a
+/// re-entrância do core deixar de importar: memória de processo sempre
+/// parte limpa a cada troca.
+#[test]
+fn each_load_spawns_a_fresh_process() {
+    let _g = lock();
+    let s = session();
+
+    load(&s, &rom()).unwrap();
+    let pid1 = s.debug_child_pid().expect("pid do 1º processo");
+
+    // Troca pro MESMO core+rom — se fosse reaproveitar o processo, o pid
+    // seria igual.
+    load(&s, &rom()).unwrap();
+    let pid2 = s.debug_child_pid().expect("pid do 2º processo");
+    assert_ne!(
+        pid1, pid2,
+        "o load deveria subir um processo novo, não reusar"
+    );
+
+    s.unload().unwrap();
+    assert_eq!(s.debug_child_pid(), None, "unload mata o processo");
+
+    load(&s, &rom()).unwrap();
+    let pid3 = s.debug_child_pid().expect("pid do 3º processo");
+    assert_ne!(pid2, pid3);
 }
 
 #[test]
@@ -141,8 +182,8 @@ fn save_ram_round_trips_through_session() {
     std::fs::write(&srm, &want).unwrap();
 
     let s = session();
-    s.load(testcore_path(), rom_path.to_str().unwrap()).unwrap();
-    sleep(Duration::from_millis(30));
+    load(&s, &rom_path).unwrap();
+    sleep(Duration::from_millis(80));
     s.unload().unwrap(); // grava a save RAM de volta
 
     // O `.srm` foi carregado no core no load e regravado no unload. O byte 2 é

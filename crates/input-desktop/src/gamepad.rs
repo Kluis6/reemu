@@ -7,7 +7,7 @@
 //! binding vêm depois.
 
 use crate::{capture, held, mappings};
-use core_loader_desktop::RetroPadState;
+use core_loader_desktop::{AnalogState, RetroPadState};
 use domain::input::{RawInputEvent, RetroPadButton};
 use gilrs::{Axis, Button, Event, EventType, Gilrs};
 use std::collections::{HashMap, HashSet};
@@ -292,14 +292,13 @@ impl GamepadPoller {
     }
 
     /// Manda a posição atual dos dois sticks pro `RETRO_DEVICE_ANALOG` da porta.
-    fn push_analog(&mut self, uuid: [u8; 16]) {
+    fn push_analog(&mut self, uuid: [u8; 16], analog: &AnalogState) {
         let port = self.port_for(uuid);
-        let a = core_loader_desktop::analog();
         let (lx, ly) = self.stick.get(&uuid).copied().unwrap_or((0.0, 0.0));
         let (rx, ry) = self.rstick.get(&uuid).copied().unwrap_or((0.0, 0.0));
         // `gilrs`: Y+ = cima; libretro: Y+ = baixo → inverte Y.
-        a.set_stick(port, 0, to_axis(lx), to_axis(-ly));
-        a.set_stick(port, 1, to_axis(rx), to_axis(-ry));
+        analog.set_stick(port, 0, to_axis(lx), to_axis(-ly));
+        analog.set_stick(port, 1, to_axis(rx), to_axis(-ry));
     }
 
     fn port_for(&mut self, uuid: [u8; 16]) -> usize {
@@ -320,10 +319,10 @@ impl GamepadPoller {
     /// Recompõe o RetroPad da `port` a partir dos índices segurados: usa o
     /// override do `guid` (`mappings`) se houver, senão o mapa fixo do `gilrs`.
     /// Faz o diff contra o último estado aplicado (trata combinação e release).
-    fn recompute(&mut self, uuid: [u8; 16], pad: &RetroPadState) {
+    fn recompute(&mut self, uuid: [u8; 16], pad: &RetroPadState, analog: &AnalogState) {
         let port = self.port_for(uuid);
         // Core lendo analógico (N64…): o stick esquerdo não dobra como d-pad.
-        let stick_as_dpad = !core_loader_desktop::analog().is_used();
+        let stick_as_dpad = !analog.is_used();
         let down = self.held_indices(uuid, stick_as_dpad);
         let desired: HashSet<RetroPadButton> = mappings::resolve(&guid_hex(uuid), &down)
             .unwrap_or_else(|| {
@@ -341,8 +340,8 @@ impl GamepadPoller {
         *prev = desired;
     }
 
-    /// Drena os eventos pendentes e reflete em `pad`. Chame ~120Hz.
-    pub fn poll(&mut self, pad: &RetroPadState) -> PollOutcome {
+    /// Drena os eventos pendentes e reflete em `pad`/`analog`. Chame ~120Hz.
+    pub fn poll(&mut self, pad: &RetroPadState, analog: &AnalogState) -> PollOutcome {
         let mut out = PollOutcome::default();
         let capturing = capture::is_capturing();
         while let Some(Event { id, event, .. }) = self.gilrs.next_event() {
@@ -355,9 +354,8 @@ impl GamepadPoller {
                     self.rstick.remove(&uuid);
                     self.hat.remove(&uuid);
                     if let Some(&port) = self.ports.get(&uuid) {
-                        let a = core_loader_desktop::analog();
-                        a.set_stick(port, 0, 0, 0);
-                        a.set_stick(port, 1, 0, 0);
+                        analog.set_stick(port, 0, 0, 0);
+                        analog.set_stick(port, 1, 0, 0);
                     }
                     held::clear();
                     if let Some(port) = self.ports.get(&uuid).copied() {
@@ -382,8 +380,8 @@ impl GamepadPoller {
                         Axis::DPadY => self.hat.entry(uuid).or_insert((0.0, 0.0)).1 = value,
                         _ => continue,
                     }
-                    self.push_analog(uuid);
-                    self.recompute(uuid, pad);
+                    self.push_analog(uuid, analog);
+                    self.recompute(uuid, pad, analog);
                 }
                 EventType::ButtonPressed(btn, _) | EventType::ButtonReleased(btn, _) => {
                     let pressed = matches!(event, EventType::ButtonPressed(..));
@@ -416,7 +414,7 @@ impl GamepadPoller {
                     if btn == Button::Mode && pressed {
                         out.menu_pressed = true;
                     }
-                    self.recompute(uuid, pad);
+                    self.recompute(uuid, pad, analog);
                 }
                 _ => {}
             }

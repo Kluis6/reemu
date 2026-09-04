@@ -36,7 +36,10 @@ pub struct RetroPadState {
 }
 
 impl RetroPadState {
-    const fn new() -> Self {
+    /// `pub` — o processo PAI (`emu-session`) instancia a própria cópia pra
+    /// espelhar o input antes de mandar pro filho por IPC; não é só o
+    /// singleton `retropad()` deste processo.
+    pub const fn new() -> Self {
         Self {
             ports: [
                 AtomicU16::new(0),
@@ -81,6 +84,29 @@ impl RetroPadState {
             p.store(0, Ordering::Relaxed);
         }
     }
+
+    /// Mask de 16 bits inteira da porta (0 fora do range) — pro pai montar
+    /// o snapshot que manda pro filho por IPC.
+    pub fn mask(&self, port: usize) -> u16 {
+        self.ports
+            .get(port)
+            .map(|s| s.load(Ordering::Relaxed))
+            .unwrap_or(0)
+    }
+
+    /// Aplica a mask inteira de uma vez — o filho usa isso ao receber o
+    /// snapshot de input do pai por IPC (mais barato que 16 `set()`).
+    pub fn set_mask(&self, port: usize, mask: u16) {
+        if let Some(slot) = self.ports.get(port) {
+            slot.store(mask, Ordering::Relaxed);
+        }
+    }
+}
+
+impl Default for RetroPadState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 static PAD: RetroPadState = RetroPadState::new();
@@ -102,7 +128,9 @@ pub struct AnalogState {
 }
 
 impl AnalogState {
-    const fn new() -> Self {
+    /// `pub` pelo mesmo motivo de `RetroPadState::new` — o pai instancia a
+    /// própria cópia pro espelho de input.
+    pub const fn new() -> Self {
         Self {
             axes: [
                 [AtomicI32::new(0), AtomicI32::new(0)],
@@ -120,6 +148,22 @@ impl AnalogState {
             let packed = (i32::from(x) << 16) | i32::from(y as u16);
             a.store(packed, Ordering::Relaxed);
         }
+    }
+
+    /// Os dois sticks (`[esquerdo, direito]`) da porta — pro pai montar o
+    /// snapshot que manda pro filho por IPC.
+    pub fn sticks(&self, port: usize) -> [(i16, i16); 2] {
+        let unpack = |packed: i32| ((packed >> 16) as i16, packed as i16);
+        [
+            self.axes
+                .get(port)
+                .map(|p| unpack(p[0].load(Ordering::Relaxed)))
+                .unwrap_or_default(),
+            self.axes
+                .get(port)
+                .map(|p| unpack(p[1].load(Ordering::Relaxed)))
+                .unwrap_or_default(),
+        ]
     }
 
     /// Consulta um eixo (o que o callback usa). `id`: 0 = X, 1 = Y.
@@ -153,6 +197,12 @@ impl AnalogState {
             }
         }
         self.used.store(false, Ordering::Relaxed);
+    }
+}
+
+impl Default for AnalogState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

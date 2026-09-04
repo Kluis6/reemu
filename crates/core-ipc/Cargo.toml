@@ -1,0 +1,10 @@
+[package]
+name = "core-ipc"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+domain = { path = "../domain" }
+bincode = { version = "2", features = ["serde"] }
+rustix = { version = "1", features = ["net", "fs", "mm", "process", "std"] }

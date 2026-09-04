@@ -10,6 +10,8 @@ members = [
     "crates/library-scan",
     "crates/input-desktop",
     "crates/shader-slang",
+    "crates/core-ipc",
+    "crates/core-host-desktop",
     "apps/desktop/src-tauri",
     # adapters de plataforma são adicionados aqui conforme forem criados:
     # "crates/core-loader-mobile",

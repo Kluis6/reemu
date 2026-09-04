@@ -7,9 +7,11 @@ description = "Loop de emulação numa thread dedicada + state machine de foco"
 [dependencies]
 domain = { path = "../domain" }
 core-loader-desktop = { path = "../core-loader-desktop" }
+core-ipc = { path = "../core-ipc" }
 input-desktop = { path = "../input-desktop" }
 thiserror.workspace = true
 log = "0.4"
+rustix = { version = "1", features = ["net", "fs", "mm", "process", "std"] }
 
 [dev-dependencies]
 core-loader-desktop = { path = "../core-loader-desktop", features = ["test-fixtures"] }

@@ -145,7 +145,7 @@ fn main() {
     let session = Arc::new(emu_session::EmuSession::spawn(
         emu_session::SessionConfig::new(tmp.clone(), tmp.clone(), tmp),
     ));
-    match session.load(&core, &rom) {
+    match session.load(&core, &rom, Default::default()) {
         Ok(av) => log::info!(
             "core carregado: {}x{} @ {} fps",
             av.geometry.base_width,

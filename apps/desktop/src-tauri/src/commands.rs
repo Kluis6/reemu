@@ -341,21 +341,26 @@ pub async fn load_game(
     *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
 
-    // Alimenta o core com os valores de opção salvos ANTES de ele carregar
-    // (ele pede via `GET_VARIABLE` já durante o load).
-    if let Some(pool) = state.db.clone() {
-        if let Ok(vals) = db::CoreOptionsRepo::new(pool).values_for(&core_id).await {
-            emu_session::set_pending_core_option_values(vals);
-        }
-    }
+    // Valores de opção salvos — o filho os aplica já durante o load (ele
+    // pede via `GET_VARIABLE`), mandados junto no `EmuSession::load`.
+    let initial_option_values = match state.db.clone() {
+        Some(pool) => db::CoreOptionsRepo::new(pool)
+            .values_for(&core_id)
+            .await
+            .unwrap_or_default(),
+        None => Default::default(),
+    };
 
-    // O load é bloqueante (dlopen + retro_init); tira da thread async.
+    // O load é bloqueante (spawna o processo filho + espera o `Loaded`);
+    // tira da thread async.
     let av = {
         let core_id = core_id.clone();
-        tauri::async_runtime::spawn_blocking(move || session.load(&core_id, &rom_path))
-            .await
-            .map_err(|e| e.to_string())?
-            .map_err(|e| e.to_string())?
+        tauri::async_runtime::spawn_blocking(move || {
+            session.load(&core_id, &rom_path, initial_option_values)
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?
     };
 
     // Persiste o schema que o core declarou (repopula todo load). Antes,
@@ -387,7 +392,7 @@ pub async fn load_game(
             }
         }
 
-        let schema = emu_session::core_options();
+        let (schema, _) = state.session.core_options();
         if let Err(e) = db::CoreOptionsRepo::new(pool)
             .replace_schema(&core_id, &schema)
             .await
@@ -1263,10 +1268,7 @@ pub async fn get_core_options(
 
     let live_matches = state.session.loaded_core().as_deref() == Some(core_id.as_str());
     let (defs, values) = if live_matches {
-        (
-            emu_session::core_options(),
-            emu_session::core_option_values(),
-        )
+        state.session.core_options()
     } else if let Some(pool) = state.db.clone() {
         let repo = db::CoreOptionsRepo::new(pool);
         let defs = repo.schema_for(&core_id).await.map_err(|e| e.to_string())?;
@@ -1311,7 +1313,7 @@ pub async fn set_core_option(
     use domain::core_options::CoreOptionsStore;
 
     if state.session.loaded_core().as_deref() == Some(core_id.as_str())
-        && !emu_session::set_core_option(&key, &value)
+        && !state.session.set_core_option(&key, &value)
     {
         return Err("opção ou valor inválido pro core carregado".into());
     }

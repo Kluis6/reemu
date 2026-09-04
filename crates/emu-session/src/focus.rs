@@ -36,7 +36,7 @@ impl FocusController {
         self.session.set_game_focused(!menu);
         // Solta tudo na transição — senão o jogo volta com teclas "grudadas" e
         // o resolvedor de hotkey continua vendo a combinação que abriu o menu.
-        core_loader_desktop::retropad().clear();
+        crate::retropad().clear();
         input_desktop::held::clear();
     }
 }
