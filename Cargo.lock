@@ -4207,7 +4207,6 @@ dependencies = [
  "video-surface",
  "wayland-client",
  "wgpu",
- "x11-dl",
  "zip",
 ]
 

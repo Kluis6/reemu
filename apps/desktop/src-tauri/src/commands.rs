@@ -618,7 +618,7 @@ pub async fn unload_game(app: AppHandle) -> Result<(), String> {
 }
 
 /// `true` quando o vídeo do jogo sai numa surface nativa atrás da webview
-/// (`REEMU_NATIVE_VIDEO=1` + subsurface anexada) — a `PlayScreen` fica
+/// (subsurface anexada — padrão no Wayland) — a `PlayScreen` fica
 /// transparente e não roda o loop do canvas.
 #[tauri::command]
 pub fn native_video_active(state: State<'_, AppState>) -> bool {

@@ -300,10 +300,17 @@ fn setup_gl_context(
     if let Some(reset) = req.context_reset {
         unsafe { reset() };
     }
-    // Interop zero-cópia (dma_buf) é opt-in até validar em hardware:
-    // `REEMU_GL_INTEROP=1`. Sem ele, o frame sai por readback (estável).
+    // Interop zero-cópia (dma_buf) é o padrão; `try_enable_interop` cai pro
+    // readback sozinho se GBM/EGL/wgpu não colaborarem. `REEMU_GL_INTEROP=0`
+    // força o readback.
     let mut ctx = ctx;
-    if std::env::var_os("REEMU_GL_INTEROP").is_some() {
+    let want_interop = !matches!(
+        std::env::var("REEMU_GL_INTEROP")
+            .map(|v| v.trim().to_ascii_lowercase())
+            .as_deref(),
+        Ok("0") | Ok("false") | Ok("off") | Ok("no")
+    );
+    if want_interop {
         ctx.try_enable_interop();
     }
     log::info!(

@@ -43,9 +43,6 @@ tokio = { version = "1", features = ["time", "rt"] }
 tokio = { version = "1", features = ["macros", "rt"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-# Cria a child window X11 pro vídeo (GTK é dono da wl_surface da janela;
-# uma child X11 sob o XID do GTK não — ver src/video.rs).
-x11-dl = "2"
 # `wl_subsurface` da janela GTK pro vídeo nativo em Wayland (ver src/video.rs).
 # `system` = backend libwayland (dá `Backend::from_foreign_display`); `dlopen` =
 # carrega libwayland em runtime (sem precisar de libwayland-dev, igual ao winit).

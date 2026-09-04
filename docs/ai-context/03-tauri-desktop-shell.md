@@ -8,33 +8,29 @@ de menu sempre sobreposto.
 
 ## Decisões relevantes (não renegociar sem discutir)
 
-- ~~**O jogo renderiza fora da WebView**, numa surface/child window nativa~~
-  — **DESVIO ACEITO (2026-08-30), reconfirmado (2026-09-03)**: o vídeo do
-  desktop é um **`<canvas>` dentro da webview** alimentado por `poll_frame`
-  (RGBA8 por IPC). Três tentativas de surface nativa, todas barradas pelo
-  WebKitGTG nesse combo NVIDIA+Wayland:
+- **O jogo renderiza fora da WebView**, numa `wl_subsurface` nativa — **padrão
+  no Linux/Wayland desde 2026-09-04** (`src/video.rs`; `REEMU_NATIVE_VIDEO=0`
+  volta pro `<canvas>`; fallback automático pro canvas se não for Wayland ou o
+  attach falhar). O caminho até aqui — 4 tentativas:
   1. `wgpu::Surface` na `wl_surface` do GTK → `Gdk Error 71`.
-  2. child window X11 (`REEMU_X11_VIDEO=1`) → o backend X11 faz a webview não
-     pintar.
-  3. `wl_subsurface` `place_below` + webview transparente (`REEMU_NATIVE_VIDEO=1`,
-     `src/video.rs`) → **o lado Rust funciona** (subsurface compõe, chain roda,
-     present ok — provado com blit de teste magenta), mas o WebKitGTG **não
-     entrega webview transparente**: compositing off → transparente vira preto;
-     on → opaca; DMA-BUF renderer on → webview em branco.
-  O código da opção 3 fica gated (deve funcionar em Mesa / WebKitGTG com alpha
-  ok). **Plano B** se voltar ao assunto: `GtkGLArea` num `GtkOverlay` — a GTK
-  compõe os widgets internamente, sem depender da transparência da `wl_surface`
-  (reusa o interop dma_buf da etapa 02). ~1 semana, risco no reparent do widget
-  da webview que o Tauri gerencia.
+  2. child window X11 → o backend X11 faz a webview não pintar (código removido).
+  3. `wl_subsurface` `place_below` + webview **transparente** → o lado Rust
+     funciona, mas o WebKitGTK **não entrega webview transparente** nesse combo
+     NVIDIA (bug upstream tauri#14924, sem fix): compositing off → transparente
+     vira preto; on → opaca; DMA-BUF renderer on → webview em branco.
+  4. ✅ **`wl_subsurface` `place_above` a webview OPACA + esconder no menu**. Sem
+     transparência = sem o bug. Jogando, a subsurface (wgpu, zero-cópia) cobre a
+     webview; ao abrir o menu o Rust captura 1 frame, esconde a subsurface
+     (`attach(None)`) e a webview reaparece com o print borrado (menu de pausa
+     estilo RetroArch). Coreografia = máquina de estado `commands::VideoMenu` no
+     `reemu-video-pump`. Posição da subsurface = `(0,0)` em fullscreen (o caso
+     comum), deslocada pela espessura da CSD em janela (best-effort via
+     `inner_position - outer_position`).
 
-  **Confirmado como bug upstream** (`v2.tauri.app/develop/debug/linux-graphics/`
-  + tauri-apps/tauri#14924, sem fix em 2026-02): `transparent: true` + NVIDIA +
-  WebKitGTG. As env vars da doc oficial e o que cada uma faz:
-  `__NV_DISABLE_EXPLICIT_SYNC=1` resolve o Error 71 mas **causa ghosting**
-  (frame anterior preso — foi o que apareceu no teste do vídeo nativo);
-  `WEBKIT_DISABLE_DMABUF_RENDERER=1` tira a transparência (cantos pretos);
-  `WEBKIT_DISABLE_COMPOSITING_MODE=1` desliga o compositing acelerado.
-  Não há combinação que dê webview transparente E estável nesse hardware.
+  Env do WebKitGTK (`main.rs`, sempre no Linux): `WEBKIT_DISABLE_DMABUF_RENDERER=1`
+  + `WEBKIT_DISABLE_COMPOSITING_MODE=1` — o SW renderer sem compositing é o
+  único estável nesse combo (compositing on → loop de `internallyFailedLoadTimerFired`).
+  Como a página agora é **opaca**, não precisamos de compositing pra nada.
 - **O menu Fluent fica sempre sobreposto** (nunca escondido durante
   `MenuFocused`, e mesmo em `GameFocused` a webview continua viva, só sem
   captar input) — não implemente um modelo de "esconder a webview
@@ -46,25 +42,26 @@ de menu sempre sobreposto.
   React via evento Tauri (`emit("focus-changed", ...)`) — não tente
   decidir foco no lado JS.
 
-## Estado atual (2026-08-30 — `done`, com o desvio do canvas)
+## Estado atual (2026-09-04 — `done`, surface nativa é o padrão)
 
-Fechado. O app abre com a webview React, carrega e roda jogos (SNES validado
-pelo usuário), alterna foco pausando/resumindo o core (áudio + frame congelam),
-e o vídeo desenha num `<canvas>`:
+Fechado. O app abre com a webview React, carrega e roda jogos (SNES + N64 +
+bezel validados), alterna foco pausando/resumindo o core, e o vídeo sai numa
+**`wl_subsurface` nativa** (Linux/Wayland) ou num **`<canvas>`** (fallback):
 
-- **`poll_frame`** (`commands.rs`) — `session.take_latest_frame()` → caminho
-  GPU (etapa 04) ou CPU (`to_rgba8`) → `[w u32][h u32][rgba8…]`. Corpo vazio
-  quando não há frame novo (o `take` consome).
-- **`PlayScreen`** — dois loops desacoplados: um `async` de **fetch** (IPC,
-  guarda o último frame numa ref; 3ms rodando / 120ms pausado) e um **rAF de
-  paint** (sincronizado com o vblank, `putImageData` do último frame). Pausa =
-  o canvas segura o último frame (freeze). Resize = CSS (`height:100%`,
-  `aspect-ratio` do core), sem passo nativo.
+- **Surface nativa** (`src/video.rs` + `gpu.rs::render_to_surface` +
+  `reemu-video-pump` em `lib.rs`) — a shader chain desenha direto na imagem do
+  swapchain da subsurface (zero cópia de CPU). Menu de pausa: captura de 1
+  frame + `set_hidden` + webview opaca com o print borrado (CSS). Resize/CSD:
+  `RunEvent::WindowEvent::Resized` → `VideoSurface::reconfigure`.
+- **`poll_frame`** (`commands.rs`) — caminho `<canvas>`: `take_latest_frame()`
+  → GPU (etapa 04) ou CPU (`to_rgba8`) → `[w u32][h u32][rgba8…]`. Corpo vazio
+  quando não há frame novo. `PlayScreen` roda o loop de canvas só quando
+  `native_video_active()` é `false`.
 - `FocusController` pausa/resume a `EmuSession` na transição de foco; o único
   gatilho é o comando `toggle_focus` (via hotkey/gamepad/menu), nunca o React.
 - Shutdown: `RunEvent::ExitRequested` → `session.unload()` (flush da `.srm`).
 
-Caminho nativo (histórico, não é o padrão):
+Caminho nativo (detalhes de implementação):
 
 ## Histórico da surface nativa (2026-08-27)
 
@@ -138,9 +135,11 @@ produzindo frames.
 ## Critério de pronto
 
 - [x] Janela abre com a webview React e, ao carregar um jogo, o vídeo do core
-  aparece (via `<canvas>` — ver desvio) sem cobrir o menu de pausa.
+  aparece (surface nativa no Wayland, `<canvas>` no fallback) sem cobrir o menu
+  de pausa.
 - [x] Alternar foco via hotkey pausa/resume o core de forma perceptível
-  (áudio para e volta, frame congela e descongela) — validado com SNES.
+  (áudio para e volta, frame congela e descongela) — validado com SNES e N64.
 
-Follow-up (não bloqueia): medir a latência do canvas vs. nativo; verificar o
-caminho nativo em Windows/macOS quando houver máquina; GL embutido.
+Follow-up (não bloqueia): posição da subsurface no rect exato da área de jogo
+em janela com CSD (hoje best-effort); verificar o caminho nativo em
+Windows/macOS quando houver máquina; medir latência nativo vs. canvas.

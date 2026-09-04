@@ -9,8 +9,8 @@
 //! `hw` diz o que o core exige de render:
 //! - `Software` — buffer de pixels cru.
 //! - `OpenGl` — renderiza num FBO; o frontend cria um contexto GL offscreen
-//!   (etapa 02 passo 4) e traz o frame por readback (ou interop dma_buf com
-//!   `REEMU_GL_INTEROP=1`). Precisa de `libEGL` + GPU.
+//!   (etapa 02 passo 4) e traz o frame por interop dma_buf zero-cópia (padrão,
+//!   `REEMU_GL_INTEROP=0` força readback). Precisa de `libEGL` + GPU.
 //!
 //! Cores exclusivamente Vulkan ficam de fora até a etapa 12.
 

@@ -11,6 +11,17 @@ use commands::AppState;
 use domain::audio::AudioConfigRepository as _;
 use tauri::{Emitter, Manager};
 
+/// Flag por env var com um default: ligada, salvo `KEY=0|false|off|no`.
+fn env_flag(key: &str, default: bool) -> bool {
+    match std::env::var(key) {
+        Ok(v) => !matches!(
+            v.trim().to_ascii_lowercase().as_str(),
+            "0" | "false" | "off" | "no"
+        ),
+        Err(_) => default,
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -63,9 +74,11 @@ pub fn run() {
             // thread roda sempre, ~60Hz.
             spawn_input_bridge(app.handle().clone());
 
-            // Surface nativa de vídeo (wl_subsurface) só com `REEMU_NATIVE_VIDEO=1`;
-            // no padrão o vídeo do jogo é desenhado na webview (`<canvas>`).
-            if std::env::var_os("REEMU_NATIVE_VIDEO").is_some() {
+            // Surface nativa de vídeo (wl_subsurface `place_above`) — padrão no
+            // Linux/Wayland. `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>` na
+            // webview. Sem Wayland, `VideoSurface::spawn` devolve `None` e o
+            // canvas assume sozinho.
+            if env_flag("REEMU_NATIVE_VIDEO", true) {
                 let win_size = app
                     .handle()
                     .get_webview_window("main")
@@ -185,7 +198,18 @@ pub fn run() {
             let state = app_handle.state::<AppState>();
             let mut vguard = state.video.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(vs) = vguard.as_mut() {
-                vs.resize(size.width, size.height);
+                // Deslocamento da decoração (CSD): 0 em fullscreen, a espessura
+                // da borda/título em janela. Wayland costuma não expor posição
+                // global → cai em (0,0), que é o certo no caso comum (fullscreen).
+                let (ox, oy) = app_handle
+                    .get_webview_window("main")
+                    .and_then(|w| {
+                        let i = w.inner_position().ok()?;
+                        let o = w.outer_position().ok()?;
+                        Some(((i.x - o.x).max(0), (i.y - o.y).max(0)))
+                    })
+                    .unwrap_or((0, 0));
+                vs.reconfigure(ox, oy, size.width, size.height);
                 if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
                     fp.resize_surface(size.width, size.height);
                 }

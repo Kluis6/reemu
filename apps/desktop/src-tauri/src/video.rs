@@ -1,6 +1,6 @@
 //! Surface nativa de vídeo — o jogo (wgpu) numa `wl_subsurface` da janela GTK.
 //!
-//! ## Linux (Wayland) — `REEMU_NATIVE_VIDEO=1`
+//! ## Linux (Wayland) — padrão (`REEMU_NATIVE_VIDEO=0` volta pro `<canvas>`)
 //!
 //! O WebKitGTK 2.x nesse combo NVIDIA+Wayland **não entrega webview
 //! transparente** (bug upstream, ver `docs/ai-context/03`). Então em vez de
@@ -17,7 +17,7 @@
 //!
 //! Sem janela transparente = sem o bug NVIDIA. Zero cópia de CPU no caminho de
 //! vídeo (a chain desenha direto na imagem do swapchain da subsurface).
-//! Padrão sem a env var = `<canvas>`.
+//! Fallback automático pro `<canvas>` se não for Wayland ou o attach falhar.
 //!
 //! ## Windows / macOS
 //!
@@ -91,10 +91,13 @@ impl VideoSurface {
         Some((this, handles))
     }
 
-    pub fn resize(&self, width: u32, height: u32) {
+    /// Reposiciona e redimensiona a subsurface. `(x, y)` é relativo à
+    /// `wl_surface` do GTK — `(0, 0)` em fullscreen; a espessura da decoração
+    /// (CSD) quando em janela.
+    pub fn reconfigure(&self, x: i32, y: i32, width: u32, height: u32) {
         #[cfg(target_os = "linux")]
-        self._wl.resize(width, height);
-        let _ = (width, height);
+        self._wl.reconfigure(x, y, width, height);
+        let _ = (x, y, width, height);
     }
 
     /// Esconde a subsurface do jogo (menu aberto). Mostrar de volta é implícito
@@ -240,13 +243,14 @@ mod wl {
             }
         }
 
-        pub fn resize(&self, w: u32, h: u32) {
+        pub fn reconfigure(&self, x: i32, y: i32, w: u32, h: u32) {
             let qh: QueueHandle<Globals> = self.conn.new_event_queue().handle();
             let region = self.compositor.create_region(&qh, ());
             region.add(0, 0, w.max(1) as i32, h.max(1) as i32);
             self.video.set_opaque_region(Some(&region));
+            self.subsurface.set_position(x, y);
             self.video.commit();
-            self.parent.commit();
+            self.parent.commit(); // set_position só aplica no commit do parent
             let _ = self.conn.flush();
         }
     }
