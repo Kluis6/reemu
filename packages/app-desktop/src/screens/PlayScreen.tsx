@@ -39,8 +39,10 @@ const useStyles = makeStyles({
   // Fundo do menu de pausa no vídeo nativo: o frame que estava na tela,
   // borrado e escurecido por animação (a subsurface do jogo some).
   pauseBg: {
-    position: 'fixed',
+    position: 'absolute',
     inset: 0,
+    // atrás do painel (que é não-posicionado) mas sobre o scrim.
+    zIndex: -1,
     objectFit: 'cover',
     width: '100%',
     height: '100%',
@@ -232,36 +234,39 @@ export function PlayScreen() {
   // Menu de pausa: fica montado durante a animação de saída; no vídeo nativo
   // busca o print do jogo capturado pelo Rust pra usar de fundo.
   const menuOpen = focus === 'MenuFocused'
-  const [menuMounted, setMenuMounted] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const menuMounted = menuOpen || closing
+  const wasOpen = useRef(false)
   const [pauseBg, setPauseBg] = useState<string | null>(null)
   useEffect(() => {
     if (menuOpen) {
-      setMenuMounted(true)
-      if (nativeVideo) {
-        let url: string | null = null
-        // pequeno atraso: o Rust captura ~2 ticks depois do foco trocar.
-        const t = setTimeout(() => {
-          void pauseBackgroundUrl().then((u) => {
-            url = u
-            setPauseBg(u)
-          })
-        }, 60)
-        return () => {
-          clearTimeout(t)
-          if (url) URL.revokeObjectURL(url)
-        }
-      }
-    } else if (menuMounted) {
+      wasOpen.current = true
+      if (!nativeVideo) return
+      let url: string | null = null
+      // pequeno atraso: o Rust captura ~2 ticks depois do foco trocar.
       const t = setTimeout(() => {
-        setMenuMounted(false)
-        setPauseBg((u) => {
-          if (u) URL.revokeObjectURL(u)
-          return null
+        void pauseBackgroundUrl().then((u) => {
+          url = u
+          setPauseBg(u)
         })
-      }, 170)
-      return () => clearTimeout(t)
+      }, 60)
+      return () => {
+        clearTimeout(t)
+        if (url) URL.revokeObjectURL(url)
+      }
     }
-  }, [menuOpen, nativeVideo, menuMounted])
+    if (!wasOpen.current) return // fechou sem nunca ter aberto (mount)
+    wasOpen.current = false
+    setClosing(true)
+    const t = setTimeout(() => {
+      setClosing(false)
+      setPauseBg((u) => {
+        if (u) URL.revokeObjectURL(u)
+        return null
+      })
+    }, 175)
+    return () => clearTimeout(t)
+  }, [menuOpen, nativeVideo])
 
   useEffect(() => {
     if (status !== 'ready' || nativeVideo) return
