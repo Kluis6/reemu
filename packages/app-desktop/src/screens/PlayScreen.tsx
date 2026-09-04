@@ -332,7 +332,7 @@ export function PlayScreen() {
   const loadedKey = useRef<string | null>(null)
   useEffect(() => {
     if (!launch) return
-    const key = `${launch.coreId} ${launch.romPath} ${romId}`
+    const key = `${launch.coreId} ${launch.romPath} ${romId}`
 
     if (unloadTimer.current) {
       clearTimeout(unloadTimer.current)

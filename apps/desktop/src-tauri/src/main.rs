@@ -26,12 +26,12 @@ fn main() {
         if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
             std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
         }
-        // Compositing acelerado: no padrão (canvas) fica DESLIGADO (mais
-        // estável). No vídeo nativo precisa ficar LIGADO — a transparência da
-        // página (o "buraco" pro subsurface) só funciona com compositing.
-        if std::env::var_os("REEMU_NATIVE_VIDEO").is_none()
-            && std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none()
-        {
+        // Compositing acelerado: SEMPRE desligado nesse combo NVIDIA. Com ele
+        // ligado o WebProcess entra em loop de `internallyFailedLoadTimerFired`
+        // (GPU process caindo) → tela branca. O vídeo nativo hoje usa subsurface
+        // `place_above` + hide-no-menu (ver video.rs), então a página é OPACA e
+        // não precisa de compositing pra "furar" nada.
+        if std::env::var_os("WEBKIT_DISABLE_COMPOSITING_MODE").is_none() {
             std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
         }
     }
