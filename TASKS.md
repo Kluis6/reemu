@@ -117,6 +117,10 @@ Renderização / filtros (independente da etapa 12):
 - **HDR / tonemapping** — depois do compilador completo.
 
 Cores com GPU:
+- **N64: app fecha ao carregar a 2ª ROM na mesma sessão** (parallel_n64 não é
+  re-entrante — estado global em C sobrevive ao `dlclose`). 1ª ROM ok; SNES e
+  não-GL 100% ok. Fix futuro: subprocesso por core, `dlmopen(LM_ID_NEWLM)`, ou
+  UX de "reiniciar pra trocar de core". Ver memória `n64-reload-crash`.
 - ~~**GL HW render (etapa 02 passo 4)**~~ **feito (2026-09-02)** — `gl_context.rs`
   + `dmabuf.rs`: contexto EGL offscreen + FBO + os 4 callbacks. Frame por
   readback (default) ou interop dma_buf (`REEMU_GL_INTEROP=1`). Mario 64 roda.
