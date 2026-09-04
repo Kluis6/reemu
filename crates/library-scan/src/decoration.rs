@@ -17,6 +17,8 @@ use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;
 
+use crate::systems::system_from_folder_name;
+
 /// Retângulo do jogo dentro da moldura, em pixels da imagem (do `.cfg`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Viewport {
@@ -41,57 +43,6 @@ pub enum DecoScope {
 pub struct ScannedDecoration {
     pub scope: DecoScope,
     pub asset_path: PathBuf,
-}
-
-/// Nomes de pasta comuns em packs de bezel → `system_id` canônico do ReEmu.
-pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
-    let n = name.to_ascii_lowercase();
-    let n = n.trim();
-    Some(match n {
-        "nes"
-        | "famicom"
-        | "fc"
-        | "nintendo entertainment system"
-        | "nintendo - nintendo entertainment system" => "nes",
-        "snes"
-        | "sfc"
-        | "super famicom"
-        | "super nintendo"
-        | "supernintendo"
-        | "super nintendo entertainment system"
-        | "nintendo - super nintendo entertainment system" => "snes",
-        "gb" | "gameboy" | "game boy" | "nintendo - game boy" => "gb",
-        "gbc" | "game boy color" | "gameboycolor" | "nintendo - game boy color" => "gbc",
-        "gba" | "game boy advance" | "gameboyadvance" | "nintendo - game boy advance" => "gba",
-        "n64" | "nintendo 64" | "nintendo64" | "nintendo - nintendo 64" => "n64",
-        "genesis"
-        | "megadrive"
-        | "mega drive"
-        | "sega genesis"
-        | "sega mega drive"
-        | "sega - mega drive - genesis"
-        | "md" => "megadrive",
-        "sms"
-        | "mastersystem"
-        | "master system"
-        | "sega master system"
-        | "sega - master system - mark iii" => "mastersystem",
-        "gg" | "gamegear" | "game gear" | "sega game gear" | "sega - game gear" => "gamegear",
-        "32x" | "sega32x" | "sega 32x" | "sega - 32x" => "sega32x",
-        "pce"
-        | "pcengine"
-        | "pc engine"
-        | "turbografx"
-        | "turbografx-16"
-        | "turbografx 16"
-        | "tg16"
-        | "nec - pc engine - turbografx 16" => "pcengine",
-        "atari2600" | "atari 2600" | "2600" | "atari - 2600" => "atari2600",
-        "lynx" | "atari lynx" | "atari - lynx" => "lynx",
-        "wonderswan" | "ws" | "bandai - wonderswan" => "wonderswan",
-        "ngp" | "neo geo pocket" | "neogeopocket" | "snk - neo geo pocket" => "ngp",
-        _ => return None,
-    })
 }
 
 const GAME_DIRS: &[&str] = &[

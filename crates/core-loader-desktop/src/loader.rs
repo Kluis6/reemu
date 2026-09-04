@@ -147,12 +147,28 @@ impl DesktopCoreLoader {
         let path = self.resolve_path(core_id)?;
 
         // ROM em .zip: extrai a entrada interna pra um arquivo temporário. Vive
-        // (via `DesktopCore`) até o unload.
+        // (via `DesktopCore`) até o unload. Sets de arcade (MAME/FBNeo) não
+        // têm "uma ROM" reconhecível dentro — só chip dumps avulsos — nesse
+        // caso NÃO é erro: o core (`need_fullpath`) espera o caminho do
+        // `.zip` inteiro e abre sozinho, então cai pro caminho original.
+        // Outros erros de IO (zip corrompido, permissão) continuam
+        // propagando — só "não achei ROM reconhecida aí dentro" tem fallback.
         let extracted = if crate::archive::is_zip(Path::new(rom_path)) {
-            Some(
-                crate::archive::extract_rom(Path::new(rom_path), &std::env::temp_dir())
-                    .map_err(|e| CoreLoadError::LoadFailed(format!("extrair {rom_path}: {e}")))?,
-            )
+            match crate::archive::extract_rom(Path::new(rom_path), &std::env::temp_dir()) {
+                Ok(e) => Some(e),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    log::info!(
+                        "{rom_path}: nenhuma ROM de cartucho reconhecida dentro do .zip — \
+                         tratando como set de arcade (caminho original pro core)"
+                    );
+                    None
+                }
+                Err(e) => {
+                    return Err(CoreLoadError::LoadFailed(format!(
+                        "extrair {rom_path}: {e}"
+                    )));
+                }
+            }
         } else {
             None
         };

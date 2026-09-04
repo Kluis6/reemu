@@ -133,3 +133,62 @@ fn crc_of(bytes: &[u8]) -> String {
     h.update(bytes);
     format!("{:08X}", h.finalize())
 }
+
+#[tokio::test]
+async fn disc_extension_disambiguated_by_folder_name() {
+    let dir = scratch_dir();
+    write(&dir, "psx/Crash Bandicoot (USA).iso", b"psx-disc-image");
+    write(&dir, "dreamcast/Shenmue (USA).cue", b"dreamcast-disc-image");
+    // sem pasta reconhecida → cai no balde genérico de sempre (regressão).
+    write(&dir, "Some Game (USA).iso", b"unlabeled-disc-image");
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!(r.added, 3);
+    assert_eq!(r.skipped_unrecognized, 0);
+
+    assert_eq!(repo.list_by_system("psx").await.unwrap().len(), 1);
+    assert_eq!(repo.list_by_system("dreamcast").await.unwrap().len(), 1);
+    assert_eq!(
+        repo.list_by_system("disc").await.unwrap().len(),
+        1,
+        "sem pasta de sistema, continua caindo no balde genérico"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn arcade_zip_without_a_cartridge_entry_is_catalogued_by_folder() {
+    let dir = scratch_dir();
+    let set_bytes = b"fake-mame-romset-bytes";
+
+    // Set de arcade real: entradas sem extensão de ROM de cartucho (chip
+    // dumps avulsos) — hoje isso faria `peek_zip` devolver `None`.
+    let zip_path = dir.join("arcade/sfiii3n.zip");
+    std::fs::create_dir_all(zip_path.parent().unwrap()).unwrap();
+    {
+        let f = std::fs::File::create(&zip_path).unwrap();
+        let mut zw = zip::ZipWriter::new(f);
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zw.start_file("sfiii3n.06", opts).unwrap();
+        zw.write_all(set_bytes).unwrap();
+        zw.start_file("sfiii3n.key", opts).unwrap();
+        zw.write_all(b"more-chip-data").unwrap();
+        zw.finish().unwrap();
+    }
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!(r.added, 1, "não pode ficar skipped_unrecognized");
+    assert_eq!(r.skipped_unrecognized, 0);
+
+    let arcade = repo.list_by_system("arcade").await.unwrap();
+    assert_eq!(arcade.len(), 1);
+    // hash é do .zip INTEIRO (não tem "a ROM crua" — o set é a unidade).
+    let whole_zip = std::fs::read(&zip_path).unwrap();
+    assert_eq!(arcade[0].crc32, crc_of(&whole_zip));
+    let _ = std::fs::remove_dir_all(dir);
+}

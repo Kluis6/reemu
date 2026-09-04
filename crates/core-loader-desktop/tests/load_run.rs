@@ -253,3 +253,34 @@ async fn second_load_while_one_is_active_fails() {
     drop(core);
     let _ = std::fs::remove_file(rom);
 }
+
+/// `.zip` sem nenhuma entrada com extensão de ROM de cartucho reconhecida —
+/// o caso de um set de arcade (MAME/FBNeo, só chip dumps avulsos). Antes
+/// desse fix, `open_core` devolvia `LoadFailed` (`extract_rom` não achava o
+/// que extrair); agora cai pro caminho do `.zip` original em vez de travar.
+#[tokio::test]
+async fn zip_without_a_recognized_rom_entry_falls_back_to_the_zip_path() {
+    use std::io::Write as _;
+
+    let _lock = guard().await;
+    let n = NONCE.fetch_add(1, Ordering::Relaxed);
+    let zip_path =
+        std::env::temp_dir().join(format!("reemu-arcade-test-{}-{n}.zip", std::process::id()));
+    {
+        let f = std::fs::File::create(&zip_path).unwrap();
+        let mut zw = zip::ZipWriter::new(f);
+        let opts = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zw.start_file("sfiii3n.06", opts).unwrap();
+        zw.write_all(b"chip-dump-not-a-cartridge-rom").unwrap();
+        zw.finish().unwrap();
+    }
+
+    let ldr = loader();
+    let core = ldr
+        .load_core(&core_id(), zip_path.to_str().unwrap())
+        .await
+        .expect("não devia travar — devia cair pro caminho original do .zip");
+    drop(core);
+    let _ = std::fs::remove_file(zip_path);
+}
