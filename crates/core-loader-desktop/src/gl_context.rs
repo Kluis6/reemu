@@ -519,7 +519,12 @@ impl Drop for GlContext {
             if let Some(s) = self.surface.take() {
                 let _ = egl.destroy_surface(self.display, s);
             }
-            let _ = egl.terminate(self.display);
+            // NÃO chamar `eglTerminate`: `eglGetDisplay(EGL_DEFAULT_DISPLAY)`
+            // devolve um handle COMPARTILHADO no processo — o WebKitGTK também
+            // renderiza via EGL. Terminar aqui invalidava o display dele e o app
+            // fechava sozinho quando a webview repintava depois do unload de um
+            // core GL (N64). Só destruímos o que é nosso; o display fica vivo e
+            // o próximo core reusa (`eglInitialize` é idempotente).
         }
     }
 }
