@@ -1,24 +1,27 @@
-//! Surface nativa de vídeo — o jogo (wgpu) atrás da webview transparente.
+//! Surface nativa de vídeo — o jogo (wgpu) numa `wl_subsurface` da janela GTK.
 //!
-//! ## Linux (Wayland) — ARQUIVADO nesse setup (2026-09-03)
+//! ## Linux (Wayland) — `REEMU_NATIVE_VIDEO=1`
 //!
-//! Implementado via `wl_subsurface` da janela GTK (`place_below`, `wl_surface`
-//! própria dirigida pelo wgpu). **O lado Rust funciona** (subsurface compõe,
-//! chain roda, present ok — provado com blit de teste em magenta). Mas o
-//! **WebKitGTK 2.x nesse combo NVIDIA+Wayland não entrega webview transparente**:
-//! compositing off → transparente vira preto; compositing on → webview opaca;
-//! DMA-BUF renderer on → webview não renderiza. Sem webview transparente, a
-//! subsurface fica escondida atrás dela.
+//! O WebKitGTK 2.x nesse combo NVIDIA+Wayland **não entrega webview
+//! transparente** (bug upstream, ver `docs/ai-context/03`). Então em vez de
+//! "webview transparente sobre o vídeo", a subsurface fica **ACIMA** da webview
+//! opaca (padrão do protocolo — nasce no topo):
 //!
-//! O código fica aqui, gated em `REEMU_NATIVE_VIDEO=1` — deve funcionar em
-//! stacks sem esse combo (Mesa, ou WebKitGTK com transparência ok). O padrão
-//! é o `<canvas>`. Plano B (se voltar ao assunto): `GtkGLArea` num `GtkOverlay`
-//! — a GTK compõe internamente, sem depender da transparência da `wl_surface`.
+//! Jogando: a subsurface (jogo, `render_to_surface` no `gpu.rs`) cobre a webview
+//! (menu fechado, nada se perde). Menu: o Rust captura 1 frame
+//! (`FrameProcessor::capture_surface_frame`), esconde a subsurface
+//! (`Subsurface::set_hidden` = attach de buffer nulo) e a webview opaca reaparece
+//! com esse print de fundo (comando `pause_background`) + blur/escurece por CSS.
+//! Coreografia = máquina de estado `commands::VideoMenu`, dirigida pelo
+//! `toggle_and_emit`, no `reemu-video-pump`.
+//!
+//! Sem janela transparente = sem o bug NVIDIA. Zero cópia de CPU no caminho de
+//! vídeo (a chain desenha direto na imagem do swapchain da subsurface).
+//! Padrão sem a env var = `<canvas>`.
 //!
 //! ## Windows / macOS
 //!
-//! Surface direto no handle da janela (webview transparente compõe por cima).
-//! Não verificado.
+//! Surface direto no handle da janela. Não verificado.
 
 use raw_window_handle::{
     HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,

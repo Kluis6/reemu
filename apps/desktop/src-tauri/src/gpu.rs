@@ -310,8 +310,6 @@ pub struct FrameProcessor {
     /// serializar. Fallback bloqueante só quando o slot ainda não mapeou.
     rb: ReadbackRing,
     frame_count: u64,
-    /// Frames apresentados na surface nativa (só pra log de diagnóstico).
-    surf_frames: u64,
     /// `(w, h, com_moldura)` da última chamada de `render_to_surface` — pra
     /// `capture_surface_frame` ler de volta a textura certa sem rodar a chain.
     last_surface_out: Option<(u32, u32, bool)>,
@@ -461,7 +459,6 @@ impl FrameProcessor {
             interop_view: None,
             rb: ReadbackRing::default(),
             frame_count: 0,
-            surf_frames: 0,
             last_surface_out: None,
             comp,
             decoration: None,
@@ -536,10 +533,7 @@ impl FrameProcessor {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        log::info!(
-            "surface nativa: {w}x{h} {format:?} {present_mode:?} alpha={:?}",
-            config.alpha_mode
-        );
+        log::info!("surface nativa: {w}x{h} {format:?} {present_mode:?}");
         self.surface = Some(SurfaceOut {
             surface,
             config,
@@ -572,11 +566,8 @@ impl FrameProcessor {
                 label: Some("surface"),
             });
         let Some((out_w, out_h, use_comp)) = self.run_chain(frame, &mut enc) else {
-            log::warn!("render_to_surface: run_chain devolveu None");
             return;
         };
-        let first = self.surf_frames == 0;
-        self.surf_frames += 1;
         self.last_surface_out = Some((out_w, out_h, use_comp));
 
         // Proporção de exibição: a moldura impõe a sua; senão a AR declarada do
@@ -622,22 +613,7 @@ impl FrameProcessor {
             ],
         });
 
-        let acquired = s.surface.get_current_texture();
-        if first {
-            log::info!(
-                "render_to_surface: 1º frame chain {out_w}x{out_h} → surface {dw}x{dh}, acquire={}",
-                match &acquired {
-                    wgpu::CurrentSurfaceTexture::Success(_) => "Success",
-                    wgpu::CurrentSurfaceTexture::Suboptimal(_) => "Suboptimal",
-                    wgpu::CurrentSurfaceTexture::Timeout => "Timeout",
-                    wgpu::CurrentSurfaceTexture::Occluded => "Occluded",
-                    wgpu::CurrentSurfaceTexture::Outdated => "Outdated",
-                    wgpu::CurrentSurfaceTexture::Lost => "Lost",
-                    _ => "Validation/outro",
-                }
-            );
-        }
-        let frame_tex = match acquired {
+        let frame_tex = match s.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t)
             | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
             wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
@@ -657,21 +633,8 @@ impl FrameProcessor {
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
-                        // Magenta em DEBUG: se aparecer, a subsurface está
-                        // visível e o problema é a chain/quad; se não, está
-                        // escondida (transparência/z-order).
-                        load: wgpu::LoadOp::Clear(
-                            if std::env::var_os("REEMU_NATIVE_VIDEO_DEBUG").is_some() {
-                                wgpu::Color {
-                                    r: 1.0,
-                                    g: 0.0,
-                                    b: 1.0,
-                                    a: 1.0,
-                                }
-                            } else {
-                                wgpu::Color::BLACK
-                            },
-                        ),
+                        // letterbox = preto ao redor da imagem.
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -687,9 +650,6 @@ impl FrameProcessor {
         }
         self.queue.submit([enc.finish()]);
         self.queue.present(frame_tex);
-        if first {
-            log::info!("render_to_surface: 1º present feito");
-        }
     }
 
     /// Apresenta um frame preto opaco na surface nativa — pra limpar o último
