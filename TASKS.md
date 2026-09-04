@@ -167,6 +167,24 @@ Scan de ROMs / identificação de sistema (`library-scan`, 2026-09-04):
   re-escanear) — nenhum comando/tela existe pra reatribuir `system_id` de
   uma ROM já catalogada.
 
+BIOS / arquivos de sistema (2026-09-04 — feature nova, não existia nada antes):
+- `domain::bios` — tabela pura (`system_id` → arquivo(s) esperado(s),
+  subpasta, MD5, obrigatório?), conferida contra `docs.libretro.com/library/
+  <core>/` (Beetle PSX, Kronos, Flycast, FBNeo), não de memória. Cobre
+  `psx`/`saturn`/`dreamcast`/`arcade`.
+- `apps/desktop/src-tauri/src/bios.rs` — `check_all` (presença + MD5 contra
+  `<dados>/system`), `import_bios_file` (copia + renomeia pro nome
+  canônico), `remove_bios_file`. **Nunca baixa nada** — BIOS é copyright da
+  fabricante.
+- Comandos `list_bios_status`/`import_bios_file`/`remove_bios_file`; aba
+  nova **Configurações › BIOS** (`SettingsBios.tsx`, mesmo estilo de
+  `SettingsCores`); `RomDetail` avisa (toast, não bloqueia) se o sistema da
+  ROM tem um arquivo `required: true` faltando antes de navegar pro jogo.
+- Cobertura só dos 4 sistemas mais comuns por enquanto — PSP, PC-FX, Sega
+  CD, PC Engine CD ficam sem entrada em `domain::bios` (nenhuma doc de
+  MD5 confiável achada na hora / não pedido). Adicionar é só estender a
+  tabela, o resto (check/import/UI) já é genérico.
+
 Áudio (etapa 06):
 - ~~Validação de sessão longa~~ — N64 ~1min sem underrun (2026-09-04). Restam 2
   hitches isolados/sessão (~30-55ms) que o buffer de 250ms quase absorve.

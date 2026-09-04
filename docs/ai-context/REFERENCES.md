@@ -16,6 +16,21 @@ Não trabalhar de memória.
 Já mordido: `RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER` escrito como `42` de
 cabeça; o certo é `56` (commit `9d633d7`). `sys.rs` inteiro reconferido lá.
 
+**BIOS/arquivos de sistema por core** (`domain::bios`, 2026-09-04) — nomes de
+arquivo e MD5 vêm da página de cada core, não tem convenção única:
+
+| Core | Página |
+|---|---|
+| Beetle PSX (psx) | https://docs.libretro.com/library/beetle_psx/ |
+| Kronos (Saturn) | https://docs.libretro.com/library/kronos/ |
+| Flycast (Dreamcast) | https://docs.libretro.com/library/flycast/ |
+| FBNeo (arcade) | https://docs.libretro.com/library/fbneo/ |
+
+`libretro-thumbnails` (org do GitHub, não a doc) segue sendo a fonte pros
+nomes de pasta do `thumbnails.libretro.com` — `gh api
+orgs/libretro-thumbnails/repos` lista os repos = pastas reais (`_` no nome do
+repo = espaço na pasta).
+
 ## Tauri v2
 
 | O quê | Onde |
