@@ -38,11 +38,11 @@ refaça trabalho já feito ou pule pré-requisito.
 | # | Etapa | Status | Depende de |
 |---|---|---|---|
 | 01 | Domain + DB — repositórios sqlx | `done` | Setup local |
-| 02 | Core Loader Desktop — caminho GL | `done` (software + HW render GL: contexto EGL offscreen + FBO + readback; validado c/ Super Mario 64 2026-09-02. Interop dma_buf zero-cópia opt-in `REEMU_GL_INTEROP=1`) | 01 |
-| 03 | Tauri Desktop Shell — surface nativa | `done` (vídeo via `<canvas>`; SET_ROTATION 2026-08-31; surface nativa adiada — ver doc 03) | 02 |
+| 02 | Core Loader Desktop — caminho GL | `done` (software + HW render GL: contexto EGL offscreen + FBO + readback; validado c/ Super Mario 64 2026-09-02. Interop dma_buf zero-cópia `REEMU_GL_INTEROP=1` **validado em hw c/ N64** 2026-09-04, imagem + flip Y ok) | 01 |
+| 03 | Tauri Desktop Shell — surface nativa | `done` (`<canvas>` default; **surface nativa `wl_subsurface` `place_above` FUNCIONAL** `REEMU_NATIVE_VIDEO=1`, 2026-09-04 — SNES/N64 + bezel + menu de pausa com print borrado; SET_ROTATION 2026-08-31 — ver doc 03) | 02 |
 | 04 | Shader Chain + Decoração | `done` (shader + decoração + params na UI — 2026-08-30) | 03 |
-| 05 | Input, Hotkeys, UI de Binding | `done` (validado c/ DualSense 2026-08-29; foco de menu 2026-08-30) | 03 |
-| 06 | Áudio — Dynamic Rate Control | `done` (DRC + sink + "aplicar ao vivo"; falta só validar sessão longa ouvindo — usuário) | 03 |
+| 05 | Input, Hotkeys, UI de Binding | `done` (validado c/ DualSense 2026-08-29; foco de menu 2026-08-30; `RETRO_DEVICE_ANALOG` — analógico do N64 — 2026-09-04) | 03 |
+| 06 | Áudio — Dynamic Rate Control | `done` (DRC + sink + "aplicar ao vivo"; `SET_SYSTEM_AV_INFO` runtime + estimador de taxa real 2026-09-04 — N64 sem picote; instrumentação `REEMU_AUDIO_DEBUG=1`) | 03 |
 | 07 | Frontend React — Fluent/Zustand/Toast | `done` (modo Xbox completo: Início/Biblioteca/RomDetail/PlayScreen, Griffel, busca, nav por controle) | 03 |
 | 08 | Save States e Save RAM | `done` (thumbnail por slot + painel na UI + "jogar daqui" — 2026-08-30) | 02 |
 | 09 | Scraping de Metadata | `done` (ScreenScraper por CRC + revisão manual; multi-provider/IGDB no backlog) | 01 |
@@ -50,19 +50,34 @@ refaça trabalho já feito ou pule pré-requisito.
 | 11 | Port Android | `todo` (desbloqueado — 01–10 `done`; usuário adiou 2026-08-30) | 03–10 completas no desktop |
 | 12 | Vulkan HW Render Fase 2 | `blocked` (GL HW já feito; falta lista de cores-alvo + gatilho de maturidade — ver doc 12) | ver doc 12 |
 
-**Desktop (01–10) fechado.** GL HW render (passo 4 da etapa 02) fechado
-2026-09-02 (Super Mario 64 roda). Falta validar: interop dma_buf
-(`REEMU_GL_INTEROP=1`), sessão longa de áudio.
+**Desktop (01–10) fechado.**
 
-**Surface nativa (item #2 do caminho crítico) — ARQUIVADA 2026-09-03.**
-`wl_subsurface` implementado e funcional no lado Rust, mas o WebKitGTG nesse
-combo NVIDIA+Wayland não entrega webview transparente (3 abordagens testadas —
-ver doc 03). Código gated em `REEMU_NATIVE_VIDEO=1`. Vídeo segue no `<canvas>`
-(que funciona; os travamentos reportados eram pacing/zip, já resolvidos).
-Se voltar: plano B `GtkGLArea`/`GtkOverlay`, ou otimizar o transporte do canvas
-(tirar cópia do `.slice()`, `putImageData`→WebGL, ~2 dias).
+**Caminho crítico #1 — GL HW render** (passo 4 da etapa 02): fechado. Readback
+validado c/ Super Mario 64 (2026-09-02); **interop dma_buf zero-cópia
+(`REEMU_GL_INTEROP=1`) validado em hardware NVIDIA c/ N64 (2026-09-04)** —
+imagem correta, flip Y ok, bezel ok.
 
-Próximos: 11 (Android), itens do backlog de render, ou o polimento do canvas.
+**Caminho crítico #2 — surface nativa de vídeo**: **FUNCIONAL (2026-09-04)**.
+Depois de 3 abordagens mortas (X11 child não pinta; `wgpu::Surface` na
+`wl_surface` do GTK = Gdk Error 71; webview transparente = bug NVIDIA+WebKitGTK),
+a que funcionou: `wl_subsurface` `place_above` da webview **opaca** — o jogo
+(wgpu, zero-cópia) cobre a webview jogando; ao abrir o menu o Rust captura 1
+frame, esconde a subsurface e a webview reaparece com o print borrado (menu de
+pausa estilo RetroArch). Máquina de estado `VideoMenu` no `reemu-video-pump`.
+Gated em `REEMU_NATIVE_VIDEO=1`. Validado: SNES/N64 + bezel + troca de ROM +
+menu. Falta pra tirar o gate: posição da subsurface no rect da área de jogo
+(hoje só bate em fullscreen), remover `mod x11`+`x11-dl` mortos, doc.
+
+Bugs de jogo do N64 resolvidos 2026-09-04 (`63e99bc`..`850c6cc`): tela branca
+(NUL no PlayScreen.tsx), tela preta ao trocar ROM (pump esconde a subsurface
+no idle), analógico (`RETRO_DEVICE_ANALOG`), áudio picotado (`SET_SYSTEM_AV_INFO`
++ estimador de taxa).
+
+**~26 commits ainda não empurrados** — token do `gh` vencido, precisa
+`gh auth login -h github.com`.
+
+Próximos: tirar os gates `REEMU_NATIVE_VIDEO`/`REEMU_GL_INTEROP` (virar default),
+11 (Android), 12 (Vulkan HW), ou backlog de render/perf.
 
 ## Como atualizar
 
@@ -116,8 +131,11 @@ Metadata (etapa 09 fechada no MVP):
   match por MD5 além de CRC; badge de "N pendências" no rail.
 
 Áudio (etapa 06):
-- Validação de sessão longa sem glitch (precisa core real + ouvir — usuário).
+- ~~Validação de sessão longa~~ — N64 ~1min sem underrun (2026-09-04). Restam 2
+  hitches isolados/sessão (~30-55ms) que o buffer de 250ms quase absorve.
 - Resampler linear → `rubato` se a qualidade não bastar.
+- `SET_SYSTEM_AV_INFO` runtime propaga só timing; a geometry nova (aspect) ainda
+  não — ver "Correção de vídeo" abaixo.
 
 Correção de vídeo (cores software):
 - ~~`RETRO_ENVIRONMENT_SET_ROTATION`~~ — **feito 2026-08-31**: `ffi_state.rs`
@@ -155,7 +173,9 @@ Infra:
     não dar time-slice suficiente (RetroArch às vezes usa nice/SCHED_FIFO).
 - Canvas WebGL (`texImage2D`) em vez de `putImageData` (CPU).
 - Dois controles idênticos colidem na porta (mesmo GUID SDL — usar `GamepadId`
-  do gilrs); eixo analógico → RetroPad (hoje só stick→d-pad digital).
+  do gilrs). (~~eixo analógico → RetroPad~~ feito 2026-09-04: `RETRO_DEVICE_ANALOG`.)
+- `GET_INPUT_BITMASKS` não anunciado — cores caem no query por id (ok, mas
+  perde a otimização).
 - `docs/ai-context/01,02,05,06,07,08,09.md` têm seções "Estado atual
   (in-progress)" desatualizadas — `TASKS.md` é a fonte da verdade.
 - `SaveStateMetadata.play_time_at_save` sempre `None` (sem tracking de tempo
