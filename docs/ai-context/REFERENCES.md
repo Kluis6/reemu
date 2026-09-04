@@ -37,9 +37,11 @@ cabeça; o certo é `56` (commit `9d633d7`). `sys.rs` inteiro reconferido lá.
 4. `WEBKIT_DISABLE_COMPOSITING_MODE=1` — último recurso pro crash silencioso no
    resize; desliga o compositing acelerado inteiro.
 
-**Veredito ReEmu (2026-09-03):** com `transparent: true` + NVIDIA + WebKitGTK
-não há combinação que dê webview transparente E estável. Vídeo nativo
-arquivado, `<canvas>` é o padrão (ver `03`). É bug upstream sem solução.
+**Veredito 2026-09-03:** com `transparent: true` + NVIDIA + WebKitGTK não há
+combinação que dê webview transparente E estável — bug upstream sem solução.
+**Superado 2026-09-04**: abordagem sem janela transparente (`wl_subsurface`
+`place_above` a webview OPACA) — sem transparência, sem o bug. É o padrão
+agora (ver `03`).
 
 ## wgpu / Rust GPU
 
@@ -57,10 +59,28 @@ arquivado, `<canvas>` é o padrão (ver `03`). É bug upstream sem solução.
 | Fluent UI React | https://react.fluentui.dev/ |
 | Griffel (`makeStyles` + `tokens`) | https://griffel.js.org/ |
 
-## Wayland / EGL / GBM / DRM (vídeo nativo — arquivado mas o código existe)
+## Wayland / EGL / GBM / DRM (vídeo nativo — padrão desde 2026-09-04)
 
 | O quê | Onde |
 |---|---|
 | `EGL_EXT_image_dma_buf_import` | https://registry.khronos.org/EGL/extensions/EXT/EGL_EXT_image_dma_buf_import.txt |
 | Protocolo Wayland core (`wl_subsurface`, `wl_subcompositor`) | https://wayland.freedesktop.org/docs/html/apa.html |
 | DRM format modifiers / fourcc | `<drm_fourcc.h>` do libdrm |
+
+## IPC entre processos (isolamento de core, 2026-09-04)
+
+`crates/core-ipc` — o pai (`emu-session`) fala com o processo filho
+(`reemu-core-host`) por socket Unix `SOCK_SEQPACKET` (`socketpair`) +
+`SCM_RIGHTS` (fd de memfd/dma_buf) + `memfd_create`/`mmap` pro anel de frame.
+Sem crate de binding pronto pra isso em alto nível — usamos `rustix`
+diretamente (o `libc`/FFI cru ficaria arriscado de acertar na primeira,
+mensagens de controle têm alinhamento/`CMSG_*` chatos de montar à mão).
+
+| O quê | Onde |
+|---|---|
+| `rustix` (docs.rs, mas a fonte vendorizada é a fonte da verdade — ver abaixo) | https://docs.rs/rustix/latest/rustix/ |
+| **Fonte exata da versão em uso** (`sendmsg`/`recvmsg`/`SendAncillaryBuffer`/`memfd_create`/`mmap`/`fcntl_setfd` — conferido ali, não de memória) | `~/.cargo/registry/src/index.crates.io-*/rustix-<versão>/src/{net/send_recv/msg.rs,net/socketpair.rs,fs/memfd_create.rs,mm/mmap.rs,io/fcntl.rs}` |
+| `socketpair(2)` | https://man7.org/linux/man-pages/man2/socketpair.2.html |
+| `unix(7)` (`SCM_RIGHTS`, passagem de fd) | https://man7.org/linux/man-pages/man7/unix.7.html |
+| `memfd_create(2)` | https://man7.org/linux/man-pages/man2/memfd_create.2.html |
+| `bincode` 2 (serialização do protocolo) | https://docs.rs/bincode/latest/bincode/ |

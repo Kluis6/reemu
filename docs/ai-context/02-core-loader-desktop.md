@@ -33,6 +33,28 @@ Crate `crates/core-loader-desktop`. Passos 1-4 **feitos**:
 **Vulkan por-core**: segue recusado com `CoreLoadError::HwRenderUnsupported`
 (etapa 12).
 
+## Isolamento em processo filho (2026-09-04)
+
+`core-loader-desktop` (`RawCore`/`DesktopCore`/`ffi_state`/`gl_context`/
+`dmabuf`/`loader`) não muda — mas quem o usa agora é **exclusivamente** o novo
+binário `crates/core-host-desktop` (`reemu-core-host`), não mais
+`emu-session` diretamente. Motivo: alguns cores (parallel_n64) não são
+re-entrantes — o "um core por processo" do parágrafo acima virou "um core por
+**vida do processo**": um 2º `retro_init` no MESMO processo, depois de um
+core não re-entrante já ter rodado ali, derruba o processo sem erro visível
+(estado global em C sujo sobrevivendo ao `dlclose`).
+
+`emu-session` agora mata o processo filho e sobe um **novo**
+`reemu-core-host` a cada `load` (nunca reusa, mesmo pro mesmo core) — memória
+sempre parte limpa, a re-entrância do core deixa de importar. IPC sobre
+`crates/core-ipc` (socket Unix `SOCK_SEQPACKET` via `socketpair`, sem
+bind/endereço; fds de dma_buf/memfd passados por `SCM_RIGHTS`). Ver a memória
+`n64-reload-crash` e o cabeçalho de `emu-session/src/session.rs`.
+
+O caminho GL/interop dma_buf não muda nada do lado de dentro — `gpu.rs`
+continua importando o mesmo jeito (`GpuTextureHandle::take_plane()`), só que
+o fd agora atravessa um `sendmsg`/`recvmsg` em vez de ficar no mesmo processo.
+
 Mudanças no `domain`: `frame_source::SoftwarePixelFormat` (+ campo `format` no
 `SoftwareRawBuffer`); `core_loader::SystemAvInfo` e o trait `LoadedCore`
 (substituiu o marker `LoadedCoreHandle`); `CoreLoadError::HwRenderUnsupported`.

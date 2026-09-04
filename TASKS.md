@@ -117,10 +117,18 @@ Renderização / filtros (independente da etapa 12):
 - **HDR / tonemapping** — depois do compilador completo.
 
 Cores com GPU:
-- **N64: app fecha ao carregar a 2ª ROM na mesma sessão** (parallel_n64 não é
-  re-entrante — estado global em C sobrevive ao `dlclose`). 1ª ROM ok; SNES e
-  não-GL 100% ok. Fix futuro: subprocesso por core, `dlmopen(LM_ID_NEWLM)`, ou
-  UX de "reiniciar pra trocar de core". Ver memória `n64-reload-crash`.
+- ~~**N64: app fecha ao carregar a 2ª ROM na mesma sessão**~~ **resolvido
+  (2026-09-04)** — o core libretro passou a rodar num **processo filho
+  descartável** (`reemu-core-host`, novo bin `crates/core-host-desktop`);
+  `emu-session` mata e sobe um processo novo a cada `load` (nunca reusa,
+  mesmo pro mesmo core), então a re-entrância do parallel_n64 deixa de
+  importar (memória sempre parte limpa). IPC em `crates/core-ipc` (socket
+  Unix `SOCK_SEQPACKET` + `SCM_RIGHTS` pro dma_buf/memfd do anel de frame —
+  `gpu.rs` não mudou nada, o `GpuTextureHandle` de interop continua igual).
+  API pública de `EmuSession` ficou a mesma; `emu-session/tests/session.rs`
+  tem um teste novo (`each_load_spawns_a_fresh_process`) provando que o PID
+  muda a cada troca. Ver memória `n64-reload-crash` (histórico da
+  investigação) e o cabeçalho de `emu-session/src/session.rs`.
 - ~~**GL HW render (etapa 02 passo 4)**~~ **feito (2026-09-02)** — `gl_context.rs`
   + `dmabuf.rs`: contexto EGL offscreen + FBO + os 4 callbacks. Frame por
   readback (default) ou interop dma_buf (`REEMU_GL_INTEROP=1`). Mario 64 roda.
