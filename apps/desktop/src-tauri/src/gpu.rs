@@ -1222,7 +1222,10 @@ impl FrameProcessor {
             &self.device,
             w,
             h,
-            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC
+                // `render_to_surface` samplia esta textura no blit pra surface.
+                | wgpu::TextureUsages::TEXTURE_BINDING,
         );
         self.comp.target = Some((t, v, w, h));
     }
