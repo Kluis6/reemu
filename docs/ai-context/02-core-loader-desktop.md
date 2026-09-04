@@ -28,6 +28,12 @@ Crate `crates/core-loader-desktop`. Passos 1-4 **feitos**:
     default) ou **interop zero-cópia** dma_buf (GBM aloca, EGL/wgpu importam;
     `REEMU_GL_INTEROP=1`, ainda não validado).
 - ROM em `.zip` extraída pra arquivo temporário no load (`src/archive.rs`).
+  **Fallback pra arcade (2026-09-04)**: se `extract_rom` não achar nenhuma
+  entrada de ROM de cartucho reconhecida dentro do `.zip` (`ErrorKind::
+  NotFound`) — o caso de um set MAME/FBNeo, só chip dumps avulsos, sem "a
+  ROM" — não é mais erro: `open_core` cai pro caminho do `.zip` original
+  (o que um core `need_fullpath=true` como fbneo/mame espera). Outros
+  erros de IO (zip corrompido, permissão) continuam propagando.
 - Save state: só o ponto de extensão (`request_save_state`/`poll_save_state`).
 
 **Vulkan por-core**: segue recusado com `CoreLoadError::HwRenderUnsupported`

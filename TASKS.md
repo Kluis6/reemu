@@ -142,6 +142,31 @@ Metadata (etapa 09 fechada no MVP):
 - Multi-provider (IGDB / TheGamesDB) + cascata; rate-limit por provider;
   match por MD5 além de CRC; badge de "N pendências" no rail.
 
+Scan de ROMs / identificação de sistema (`library-scan`, 2026-09-04):
+- ~~Sistemas de disco (PS1/PS2/Saturn/Dreamcast/PSP/Sega CD/PC-FX/3DO) todos
+  caindo no balde genérico `"disc"`~~ **resolvido** — `system_from_folder_name`
+  (movido de `decoration.rs` pra `systems.rs`, agora a tabela canônica única)
+  desambigua pela pasta ancestral (`<roms>/psx/*.iso` → `system_id "psx"`)
+  quando a extensão é ambígua (`AMBIGUOUS_DISC_EXTS`); sem pasta reconhecida,
+  continua caindo em `"disc"` (fallback preservado).
+- ~~Arcade (MAME/FBNeo) invisível no scan e travava no load~~ **resolvido** —
+  `.zip` numa pasta reconhecida como arcade (`arcade`/`mame`/`fbneo`/`fba`/
+  `neogeo`/`cps1-3`) vira `system_id "arcade"`, hash do **arquivo inteiro**
+  (não tem "a ROM" dentro, só chip dumps avulsos); `core-loader-desktop::
+  loader::open_core` não trava mais quando `extract_rom` não acha nada pra
+  extrair — cai pro caminho do `.zip` original (o que `need_fullpath=true`
+  do fbneo/mame espera).
+- Novos sistemas cobertos (extensão ou pasta): `vb`, `atari7800`, `coleco`,
+  `intellivision`, `ps2`, `pcenginecd`, `pcfx`. Boxart (`thumbnails.libretro.
+  com`) coberto pros de disco+os cartuchos novos (conferido contra o org
+  `libretro-thumbnails` no GitHub); `arcade` fica sem (MAME/FBNeo são sets
+  separados lá, sem 1 pasta única).
+- **Backlog, não feito nesta rodada** (confirmado com o usuário): suporte a
+  `.7z` (pede dependência de descompressão nova, hoje só `.zip`); UI pra
+  corrigir o sistema na mão quando o palpite errar (hoje só apagar +
+  re-escanear) — nenhum comando/tela existe pra reatribuir `system_id` de
+  uma ROM já catalogada.
+
 Áudio (etapa 06):
 - ~~Validação de sessão longa~~ — N64 ~1min sem underrun (2026-09-04). Restam 2
   hitches isolados/sessão (~30-55ms) que o buffer de 250ms quase absorve.
