@@ -285,6 +285,20 @@ pub(crate) fn toggle_and_emit<R: tauri::Runtime>(app: &AppHandle<R>) -> &'static
     s
 }
 
+/// Esconde a subsurface de vídeo nativa agora (attach de buffer nulo). No modo
+/// canvas é no-op. Usado na troca/descarregamento de ROM pra a webview não
+/// ficar tapada por um frame preso enquanto o core dá teardown/load.
+pub(crate) fn hide_native_surface(state: &AppState) {
+    if let Some(vs) = state
+        .video
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .as_ref()
+    {
+        vs.set_hidden(true);
+    }
+}
+
 /// Ponte de log do frontend pro stdout do Rust (a webview transparente
 /// esconde crashes de render).
 #[tauri::command]
@@ -330,10 +344,12 @@ pub async fn load_game(
     let state = app.state::<AppState>();
     let session = Arc::clone(&state.session);
 
-    // Vídeo nativo: volta pro estado "jogando" e descarta o print do menu do
-    // jogo anterior (senão a subsurface pode ficar escondida / com frame preso).
+    // Vídeo nativo: volta pro estado "jogando", descarta o print do menu e
+    // esconde a subsurface JÁ (o load do N64 leva segundos; sem isso o último
+    // frame do jogo anterior fica preso por cima da tela de "carregando").
     *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    hide_native_surface(&state);
 
     // Alimenta o core com os valores de opção salvos ANTES de ele carregar
     // (ele pede via `GET_VARIABLE` já durante o load).
@@ -591,6 +607,10 @@ pub async fn unload_game(app: AppHandle) -> Result<(), String> {
     *state.current_rom.lock().unwrap_or_else(|p| p.into_inner()) = None;
     *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    // Esconde a subsurface antes do teardown (bloqueante, ~centenas de ms no
+    // N64 com GL): a webview reaparece na hora em vez de segurar um frame preto.
+    hide_native_surface(&state);
+    let _ = state.session.take_latest_frame();
     tauri::async_runtime::spawn_blocking(move || session.unload())
         .await
         .map_err(|e| e.to_string())?

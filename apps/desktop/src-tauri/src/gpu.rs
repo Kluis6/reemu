@@ -659,8 +659,10 @@ impl FrameProcessor {
         self.queue.present(frame_tex);
     }
 
-    /// Apresenta um frame preto opaco na surface nativa — pra limpar o último
-    /// frame do jogo quando ele é descarregado (senão fica preso atrás).
+    /// Apresenta um frame preto opaco na surface nativa. Hoje o pump esconde a
+    /// subsurface no idle em vez de pintar preto (o preto tapava a webview);
+    /// mantido pra um possível "fade to black" antes de esconder.
+    #[allow(dead_code)]
     pub fn clear_surface(&mut self) {
         let Some(s) = self.surface.as_ref() else {
             return;

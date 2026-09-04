@@ -209,7 +209,9 @@ fn spawn_video_pump(app: tauri::AppHandle) {
     std::thread::Builder::new()
         .name("reemu-video-pump".into())
         .spawn(move || {
-            let mut clear_budget = 0u8; // frames de "limpar" ao descarregar
+            // A subsurface está escondida agora? (só o pump apresenta/esconde,
+            // então este bool acompanha o estado real.)
+            let mut hidden = true;
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(15));
                 let state = app.state::<AppState>();
@@ -226,15 +228,26 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                 use commands::VideoMenu::*;
                 match vm {
                     Playing => {
-                        let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
-                        if let Some(fp) = gpu.as_mut() {
-                            if let Some(f) = frame.as_ref() {
+                        if let Some(f) = frame.as_ref() {
+                            let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
+                            if let Some(fp) = gpu.as_mut() {
                                 fp.render_to_surface(Some(f));
-                                clear_budget = 3;
-                            } else if idle && clear_budget > 0 {
-                                fp.clear_surface(); // jogo descarregado
-                                clear_budget -= 1;
                             }
+                            hidden = false; // o present remapeia a subsurface
+                        } else if idle && !hidden {
+                            // Jogo descarregado ou troca de ROM: esconde a
+                            // subsurface pra a webview (biblioteca / "carregando")
+                            // aparecer. Antes pintava um retângulo preto por cima
+                            // da UI (`clear_surface`).
+                            if let Some(vs) = state
+                                .video
+                                .lock()
+                                .unwrap_or_else(|p| p.into_inner())
+                                .as_ref()
+                            {
+                                vs.set_hidden(true);
+                            }
+                            hidden = true;
                         }
                     }
                     Opening(0) => {
@@ -253,6 +266,7 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                         {
                             vs.set_hidden(true);
                         }
+                        hidden = true;
                         *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = MenuUp;
                     }
                     Opening(n) => {
