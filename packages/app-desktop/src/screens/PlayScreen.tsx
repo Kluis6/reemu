@@ -208,7 +208,6 @@ export function PlayScreen() {
   // isto quando a orientação do frame bate; se veio rotacionado (SET_ROTATION),
   // usa a AR dos pixels.
   const declaredAspectRef = useRef(4 / 3)
-  const loadedRef = useRef(false)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   // O loop de fetch olha o foco por ref (não re-monta o efeito a cada pausa).
   const pausedRef = useRef(false)
@@ -325,9 +324,32 @@ export function PlayScreen() {
     }
   }, [status, nativeVideo])
 
+  // O unload no cleanup é ADIADO: o StrictMode (dev) monta→desmonta→remonta,
+  // e um `load → unload → load` seguido quebra o core (áudio do mupen, contexto
+  // GL). Se o effect re-rodar pro MESMO jogo em <200ms, o unload pendente é
+  // cancelado e nada recarrega.
+  const unloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loadedKey = useRef<string | null>(null)
   useEffect(() => {
-    if (!launch || loadedRef.current) return
-    loadedRef.current = true
+    if (!launch) return
+    const key = `${launch.coreId} ${launch.romPath} ${romId}`
+
+    if (unloadTimer.current) {
+      clearTimeout(unloadTimer.current)
+      unloadTimer.current = null
+    }
+    const scheduleUnload = () => {
+      unloadTimer.current = setTimeout(() => {
+        unloadTimer.current = null
+        loadedKey.current = null
+        void unloadGame().catch(() => {})
+      }, 200)
+    }
+
+    if (loadedKey.current === key) {
+      return scheduleUnload // já é este jogo (remonta do StrictMode)
+    }
+    loadedKey.current = key
     let cancelled = false
     void (async () => {
       try {
@@ -354,8 +376,7 @@ export function PlayScreen() {
     })()
     return () => {
       cancelled = true
-      void unloadGame().catch(() => {})
-      loadedRef.current = false
+      scheduleUnload()
     }
   }, [launch, romId, setFocus, params, push])
 

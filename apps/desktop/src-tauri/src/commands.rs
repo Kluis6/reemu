@@ -330,6 +330,11 @@ pub async fn load_game(
     let state = app.state::<AppState>();
     let session = Arc::clone(&state.session);
 
+    // Vídeo nativo: volta pro estado "jogando" e descarta o print do menu do
+    // jogo anterior (senão a subsurface pode ficar escondida / com frame preso).
+    *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
+    *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
+
     // Alimenta o core com os valores de opção salvos ANTES de ele carregar
     // (ele pede via `GET_VARIABLE` já durante o load).
     if let Some(pool) = state.db.clone() {
@@ -584,6 +589,8 @@ pub async fn unload_game(app: AppHandle) -> Result<(), String> {
     let state = app.state::<AppState>();
     let session = Arc::clone(&state.session);
     *state.current_rom.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
+    *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
     tauri::async_runtime::spawn_blocking(move || session.unload())
         .await
         .map_err(|e| e.to_string())?
