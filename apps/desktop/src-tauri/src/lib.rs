@@ -195,12 +195,18 @@ pub fn run() {
             event: tauri::WindowEvent::Resized(size),
             ..
         } if label == "main" => {
+            // Só REGISTRA a geometria — quem aplica (mexe na conexão Wayland +
+            // no swapchain wgpu) é o `reemu-video-pump`, dono único disso.
             let state = app_handle.state::<AppState>();
-            let mut vguard = state.video.lock().unwrap_or_else(|p| p.into_inner());
-            if let Some(vs) = vguard.as_mut() {
+            if state
+                .video
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .is_some()
+            {
                 // Deslocamento da decoração (CSD): 0 em fullscreen, a espessura
                 // da borda/título em janela. Wayland costuma não expor posição
-                // global → cai em (0,0), que é o certo no caso comum (fullscreen).
+                // global → cai em (0,0), o certo no caso comum (fullscreen).
                 let (ox, oy) = app_handle
                     .get_webview_window("main")
                     .and_then(|w| {
@@ -209,10 +215,10 @@ pub fn run() {
                         Some(((i.x - o.x).max(0), (i.y - o.y).max(0)))
                     })
                     .unwrap_or((0, 0));
-                vs.reconfigure(ox, oy, size.width, size.height);
-                if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
-                    fp.resize_surface(size.width, size.height);
-                }
+                *state
+                    .pending_surface_geom
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = Some((ox, oy, size.width, size.height));
             }
         }
         // Fechamento (X da janela, Alt+F4, `quit_app`): descarrega o jogo antes
@@ -245,6 +251,28 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                         break; // surface removida — encerra a thread
                     }
                 }
+
+                // Geometria pendente do último `Resized` (registrada pela thread
+                // principal; aplicada AQUI porque só o pump toca Wayland + wgpu).
+                if let Some((x, y, w, h)) = state
+                    .pending_surface_geom
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .take()
+                {
+                    if let Some(vs) = state
+                        .video
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_ref()
+                    {
+                        vs.reconfigure(x, y, w, h);
+                    }
+                    if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+                        fp.resize_surface(w, h);
+                    }
+                }
+
                 let frame = state.session.take_latest_frame();
                 let idle = matches!(state.session.state(), emu_session::SessionState::Idle);
                 let vm = *state.video_menu.lock().unwrap_or_else(|p| p.into_inner());

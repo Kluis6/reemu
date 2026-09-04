@@ -510,21 +510,25 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     }
                 }
                 Command::Unload(reply) => {
+                    // `Idle` + frame nulo ANTES do teardown (que bloqueia
+                    // centenas de ms no core GL): o `reemu-video-pump` esconde a
+                    // subsurface já no primeiro tick, em vez de segurar o último
+                    // frame do jogo por cima da webview durante o teardown.
+                    *shared
+                        .latest_frame
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner()) = None;
+                    shared.set_state(SessionState::Idle);
                     if let (Some(c), Some(p)) = (core.as_ref(), current_srm.as_ref()) {
                         flush_save_ram(c, p);
                     }
                     core = None;
                     current_srm = None;
                     paused = false;
-                    *shared
-                        .latest_frame
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner()) = None;
                     *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) = None;
                     if let Some(s) = sink.as_mut() {
                         s.pause();
                     }
-                    shared.set_state(SessionState::Idle);
                     let _ = reply.send(());
                 }
                 Command::SetPaused(p, reply) => {
