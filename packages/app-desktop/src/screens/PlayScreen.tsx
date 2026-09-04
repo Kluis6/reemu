@@ -346,38 +346,36 @@ export function PlayScreen() {
       }, 200)
     }
 
-    if (loadedKey.current === key) {
-      return scheduleUnload // já é este jogo (remonta do StrictMode)
-    }
-    loadedKey.current = key
-    let cancelled = false
-    void (async () => {
-      try {
-        const g = await loadGame(launch.coreId, launch.romPath, romId || undefined)
-        if (cancelled) return
-        const a = g.aspectRatio > 0 ? g.aspectRatio : g.baseWidth / g.baseHeight || 4 / 3
-        declaredAspectRef.current = a
-        setAspect(a)
-        // "Jogar daqui": carrega o save state pedido na URL antes de mostrar.
-        const wantState = params.get('loadState')
-        if (wantState) {
-          await loadSaveState(wantState).catch((e) =>
-            push(sysToast(`Não carregou o save state: ${e}`, 'Warning')),
-          )
+    // Já é este jogo (remonta do StrictMode, ou o load em voo ainda vale) —
+    // não recarrega; a promise em voo checa `loadedKey` e continua.
+    if (loadedKey.current !== key) {
+      loadedKey.current = key
+      setStatus('loading')
+      void (async () => {
+        try {
+          const g = await loadGame(launch.coreId, launch.romPath, romId || undefined)
+          if (loadedKey.current !== key) return // navegou pra outro jogo
+          const a = g.aspectRatio > 0 ? g.aspectRatio : g.baseWidth / g.baseHeight || 4 / 3
+          declaredAspectRef.current = a
+          setAspect(a)
+          // "Jogar daqui": carrega o save state pedido na URL antes de mostrar.
+          const wantState = params.get('loadState')
+          if (wantState) {
+            await loadSaveState(wantState).catch((e) =>
+              push(sysToast(`Não carregou o save state: ${e}`, 'Warning')),
+            )
+          }
+          // Garante que o jogo começa com foco (não no menu de pausa).
+          const f = await currentFocus().catch(() => 'GameFocused' as const)
+          if (f === 'MenuFocused') await toggleFocus().catch(() => {})
+          setFocus('GameFocused')
+          setStatus('ready')
+        } catch (e) {
+          if (loadedKey.current === key) setStatus({ error: String(e) })
         }
-        // Garante que o jogo começa com foco (não no menu de pausa).
-        const f = await currentFocus().catch(() => 'GameFocused' as const)
-        if (f === 'MenuFocused') await toggleFocus().catch(() => {})
-        setFocus('GameFocused')
-        setStatus('ready')
-      } catch (e) {
-        if (!cancelled) setStatus({ error: String(e) })
-      }
-    })()
-    return () => {
-      cancelled = true
-      scheduleUnload()
+      })()
     }
+    return scheduleUnload
   }, [launch, romId, setFocus, params, push])
 
   const quickSave = useMutation({
