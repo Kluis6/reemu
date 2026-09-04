@@ -341,6 +341,70 @@ fn flush_save_ram(core: &core_loader_desktop::DesktopCore, path: &std::path::Pat
 /// De quanto em quanto tempo a save RAM é gravada em disco enquanto o jogo roda.
 const SRM_FLUSH_INTERVAL: Duration = Duration::from_secs(10);
 
+/// Métricas da thread do core, 1×/s, sob `REEMU_AUDIO_DEBUG=1`.
+struct LoopDiag {
+    since: Instant,
+    frames: u64,
+    over_budget: u64,
+    dup_frames: u64,
+    busy: Duration,
+    worst: Duration,
+    audio_samples: u64,
+}
+
+impl Default for LoopDiag {
+    fn default() -> Self {
+        Self {
+            since: Instant::now(),
+            frames: 0,
+            over_budget: 0,
+            dup_frames: 0,
+            busy: Duration::ZERO,
+            worst: Duration::ZERO,
+            audio_samples: 0,
+        }
+    }
+}
+
+impl LoopDiag {
+    fn record_frame(&mut self, took: Duration, budget: Duration, duped: bool) {
+        self.frames += 1;
+        self.busy += took;
+        self.worst = self.worst.max(took);
+        if took > budget {
+            self.over_budget += 1;
+        }
+        if duped {
+            self.dup_frames += 1;
+        }
+    }
+
+    fn maybe_report(&mut self, sample_rate: u32) {
+        let elapsed = self.since.elapsed();
+        if elapsed.as_secs_f32() < 1.0 {
+            return;
+        }
+        let fps = self.frames as f32 / elapsed.as_secs_f32();
+        let busy_pct = self.busy.as_secs_f32() / elapsed.as_secs_f32() * 100.0;
+        // amostras esperadas (estéreo) no período, dado o sample_rate do core.
+        let expected = (sample_rate as f32 * elapsed.as_secs_f32() * 2.0) as u64;
+        log::info!(
+            "core 1s: {:.1} fps, {} frames (retro_run+glFinish: méd {:.1}ms, pior {:.1}ms, \
+             {} acima do budget, {} sem frame novo), cpu {:.0}%, áudio {} amostras (esperado ~{})",
+            fps,
+            self.frames,
+            self.busy.as_secs_f32() * 1000.0 / self.frames.max(1) as f32,
+            self.worst.as_secs_f32() * 1000.0,
+            self.over_budget,
+            self.dup_frames,
+            busy_pct,
+            self.audio_samples,
+            expected,
+        );
+        *self = Self::default();
+    }
+}
+
 fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>) {
     // A stream do cpal é `!Send` — construída aqui, nesta thread.
     let mut sink: Option<Box<dyn AudioSink>> = cfg.audio_sink.take().and_then(|make| make());
@@ -364,6 +428,12 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
     let mut paused = false;
     let mut core_sample_rate = 32_000u32;
     let mut frame_budget = Duration::from_micros(16_667);
+    // Diagnóstico de pacing (`REEMU_AUDIO_DEBUG=1`): a thread do core roda o
+    // frame + `glFinish` do interop; se estourar o budget de forma consistente,
+    // o áudio fica sem lastro. Reportado 1×/s.
+    let mut diag = std::env::var_os("REEMU_AUDIO_DEBUG")
+        .is_some()
+        .then(LoopDiag::default);
     // Alvo do próximo frame (pacing por acumulador — corrige o overshoot do
     // `thread::sleep`, que é a causa de microstutter, sobretudo em cores com
     // fps ≠ 60 como o GBA em 59.73).
@@ -401,6 +471,16 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                             frame_budget = Duration::from_secs_f64(1.0 / fps);
                             next_deadline = Instant::now();
                             core_sample_rate = (av.timing.sample_rate.round() as u32).max(1);
+                            log::info!(
+                                "core {}: fps={:.3} sample_rate={:.0} Hz (budget {:.2}ms/frame)",
+                                id.0,
+                                fps,
+                                av.timing.sample_rate,
+                                frame_budget.as_secs_f32() * 1000.0
+                            );
+                            diag = std::env::var_os("REEMU_AUDIO_DEBUG")
+                                .is_some()
+                                .then(LoopDiag::default);
                             // Carrega a battery save, se existir (antes do 1º frame).
                             let srm = srm_path(&save_dir, &rom);
                             if let Ok(bytes) = std::fs::read(&srm) {
@@ -500,7 +580,26 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
 
         // Sem comando pendente: roda um frame (só chega aqui se há core e não pausado).
         if let Some(c) = core.as_mut() {
-            if let Some(frame) = c.next_frame() {
+            // O core mudou fps/sample_rate em runtime (`SET_SYSTEM_AV_INFO`)?
+            // Reconfigura o pacing e o resampler — senão o áudio fica torto
+            // (ex: parallel_n64 baixa 32040 → ~26807 Hz logo após o load).
+            if let Some(t) = c.take_av_update() {
+                let fps = t.fps.max(1.0);
+                frame_budget = Duration::from_secs_f64(1.0 / fps);
+                core_sample_rate = (t.sample_rate.round() as u32).max(1);
+                next_deadline = Instant::now();
+                log::info!(
+                    "timing atualizado em runtime: fps={:.3} sample_rate={} Hz",
+                    fps,
+                    core_sample_rate
+                );
+            }
+            let t0 = diag.as_ref().map(|_| Instant::now());
+            let produced = c.next_frame();
+            if let (Some(d), Some(t0)) = (diag.as_mut(), t0) {
+                d.record_frame(t0.elapsed(), frame_budget, produced.is_none());
+            }
+            if let Some(frame) = produced {
                 shared.frame_seq.fetch_add(1, Ordering::Relaxed);
                 *shared
                     .latest_frame
@@ -508,6 +607,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     .unwrap_or_else(|p| p.into_inner()) = Some(frame);
             }
             let audio = c.drain_audio();
+            if let Some(d) = diag.as_mut() {
+                d.audio_samples += audio.len() as u64;
+                d.maybe_report(core_sample_rate);
+            }
             if !audio.is_empty() {
                 match sink.as_mut() {
                     // Com sink real, o áudio vai direto pro device (o Vec

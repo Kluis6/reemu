@@ -49,6 +49,18 @@ impl DesktopCore {
             .unwrap_or_default()
     }
 
+    /// Timing novo (`fps`, `sample_rate`) se o core pediu `SET_SYSTEM_AV_INFO`
+    /// desde a última chamada. A thread do core reconfigura o pacing e o
+    /// resampler de áudio. Também atualiza o `av_info` interno.
+    pub fn take_av_update(&mut self) -> Option<domain::core_loader::SystemTiming> {
+        let (fps, sample_rate) = ffi_state::lock()
+            .as_mut()
+            .and_then(|st| st.av_update.take())?;
+        self.av_info.timing.fps = fps;
+        self.av_info.timing.sample_rate = sample_rate;
+        Some(self.av_info.timing)
+    }
+
     /// Marca que um save state deve ser capturado. O loop principal chama
     /// `poll_save_state` logo após o próximo `next_frame` (nunca no meio de
     /// um `retro_run`). Implementação completa do save state é a etapa 08 —

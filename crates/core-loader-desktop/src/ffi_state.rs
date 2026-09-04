@@ -58,6 +58,10 @@ pub(crate) struct FrontendState {
     pub hw_frame: Option<(u32, u32)>,
     /// Rotação da tela pedida via `SET_ROTATION` (0/90/180/270°, anti-horário).
     pub rotation_degrees: u16,
+    /// `(fps, sample_rate)` novos pedidos pelo core em runtime via
+    /// `SET_SYSTEM_AV_INFO` — a thread do core drena e reconfigura o pacing e o
+    /// resampler. `parallel_n64` faz isso logo após o load (32040 → ~26807 Hz).
+    pub av_update: Option<(f64, f64)>,
     pub last_frame: Option<RawFrame>,
     pub had_new_frame: bool,
     /// PCM interleaved estéreo i16 acumulado desde o último drain.
@@ -89,6 +93,7 @@ impl FrontendState {
             hw_fbo: None,
             hw_frame: None,
             rotation_degrees: 0,
+            av_update: None,
             last_frame: None,
             had_new_frame: false,
             audio: Vec::new(),
@@ -330,6 +335,37 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             }
             true
         }
+        sys::RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO => {
+            // Timing novo (fps/sample_rate) → a thread do core drena via
+            // `DesktopCore::take_av_update` e reconfigura pacing + resampler.
+            // Geometry nova entra pelo `SET_GEOMETRY` / next frame.
+            if !data.is_null() {
+                let av = &*(data as *const sys::retro_system_av_info);
+                if av.timing.fps > 0.0 && av.timing.sample_rate > 0.0 {
+                    log::info!(
+                        "SET_SYSTEM_AV_INFO em runtime: fps={:.3} sample_rate={:.0} {}x{}",
+                        av.timing.fps,
+                        av.timing.sample_rate,
+                        av.geometry.base_width,
+                        av.geometry.base_height,
+                    );
+                    st.av_update = Some((av.timing.fps, av.timing.sample_rate));
+                }
+            }
+            true
+        }
+        sys::RETRO_ENVIRONMENT_SET_GEOMETRY => {
+            if !data.is_null() {
+                let g = &*(data as *const sys::retro_game_geometry);
+                log::debug!(
+                    "SET_GEOMETRY: {}x{} AR={:.3}",
+                    g.base_width,
+                    g.base_height,
+                    g.aspect_ratio
+                );
+            }
+            true
+        }
         // Reconhecidos, sem efeito ainda.
         sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
         | sys::RETRO_ENVIRONMENT_SET_MESSAGE
@@ -337,9 +373,7 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS
         | sys::RETRO_ENVIRONMENT_SET_CONTROLLER_INFO
         | sys::RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO
-        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY
-        | sys::RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO
-        | sys::RETRO_ENVIRONMENT_SET_GEOMETRY => true,
+        | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY => true,
         _ => false,
     }
 }
