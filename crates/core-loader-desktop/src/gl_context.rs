@@ -408,6 +408,11 @@ impl GlContext {
         }
     }
 
+    /// O core renderiza com origem bottom-left → o consumidor (wgpu) inverte Y.
+    pub fn flip_y(&self) -> bool {
+        self.flip
+    }
+
     /// Depois do `retro_run`: garante o render (sync grosso) e devolve o slot
     /// escrito + o plano `dma_buf` (só na 1ª vez de cada slot).
     pub fn finish_write_slot(&mut self) -> Option<(u32, Option<DmabufPlane>)> {
@@ -447,13 +452,15 @@ unsafe fn libc_close(fd: i32) {
 /// importa o plano uma vez por slot e depois referencia por índice.
 pub struct GlInteropHandle {
     slot: u32,
+    flip_y: bool,
     plane: std::sync::Mutex<Option<DmabufPlane>>,
 }
 
 impl GlInteropHandle {
-    pub fn new(slot: u32, plane: Option<DmabufPlane>) -> Self {
+    pub fn new(slot: u32, flip_y: bool, plane: Option<DmabufPlane>) -> Self {
         Self {
             slot,
+            flip_y,
             plane: std::sync::Mutex::new(plane),
         }
     }
@@ -462,6 +469,10 @@ impl GlInteropHandle {
 impl domain::frame_source::GpuTextureHandle for GlInteropHandle {
     fn slot(&self) -> u32 {
         self.slot
+    }
+
+    fn flip_y(&self) -> bool {
+        self.flip_y
     }
 
     fn take_plane(&self) -> Option<domain::frame_source::DmabufPlaneInfo> {

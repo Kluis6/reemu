@@ -63,6 +63,11 @@ pub trait GpuTextureHandle: Send {
     /// Plano `dma_buf` pra importar. `Some` só na 1ª vez que o slot aparece;
     /// depois `None` (a textura já está cacheada).
     fn take_plane(&self) -> Option<DmabufPlaneInfo>;
+    /// O core renderizou com origem bottom-left (GL nativo) → o importador
+    /// precisa inverter o eixo Y ao amostrar.
+    fn flip_y(&self) -> bool {
+        false
+    }
 }
 
 pub enum FrameOrigin {

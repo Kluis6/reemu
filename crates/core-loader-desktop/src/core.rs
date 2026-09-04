@@ -196,10 +196,11 @@ impl DesktopCore {
 
         let gl = self.gl.as_mut()?;
         if gl.interop_active() {
+            let flip_y = gl.flip_y();
             let (slot, plane) = gl.finish_write_slot()?;
             return Some(Frame {
                 origin: FrameOrigin::HardwareTexture(Box::new(
-                    crate::gl_context::GlInteropHandle::new(slot, plane),
+                    crate::gl_context::GlInteropHandle::new(slot, flip_y, plane),
                 )),
                 metadata: meta,
             });

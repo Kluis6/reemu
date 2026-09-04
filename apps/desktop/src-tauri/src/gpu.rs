@@ -301,6 +301,10 @@ pub struct FrameProcessor {
     /// um por slot do ring. `interop_ok` = o device tem a feature.
     interop_ok: bool,
     imported: Vec<Option<(wgpu::Texture, wgpu::TextureView)>>,
+    /// Alvo por slot pra inverter o Y do `dma_buf` (cores GL renderizam
+    /// bottom-left) — só alocado quando `flip_y`.
+    flip_tgt: Vec<Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>>,
+    flip: FlipPipe,
     /// View da textura importada a usar como entrada da chain neste frame
     /// (`Some` só em frames de HW render com interop).
     interop_view: Option<wgpu::TextureView>,
@@ -437,6 +441,7 @@ impl FrameProcessor {
             .collect::<Option<Vec<_>>>()?;
 
         let comp = build_composite(&device);
+        let flip = build_flip(&device);
 
         Some(Self {
             sampler_nearest: mk_sampler(wgpu::FilterMode::Nearest),
@@ -456,6 +461,8 @@ impl FrameProcessor {
             core_tex: None,
             interop_ok,
             imported: Vec::new(),
+            flip_tgt: Vec::new(),
+            flip,
             interop_view: None,
             rb: ReadbackRing::default(),
             frame_count: 0,
@@ -880,7 +887,7 @@ impl FrameProcessor {
                 self.interop_view = None;
             }
             FrameOrigin::HardwareTexture(handle) => {
-                if !self.bind_interop_input(handle.as_ref(), nw, nh) {
+                if !self.bind_interop_input(handle.as_ref(), nw, nh, enc) {
                     return None;
                 }
                 // a entrada troca de slot a cada frame → rebuild do bind group 0
@@ -1239,6 +1246,7 @@ impl FrameProcessor {
         handle: &dyn domain::frame_source::GpuTextureHandle,
         w: u32,
         h: u32,
+        enc: &mut wgpu::CommandEncoder,
     ) -> bool {
         if !self.interop_ok {
             return false;
@@ -1262,10 +1270,70 @@ impl FrameProcessor {
                 }
             }
         }
-        let Some((_, view)) = self.imported.get(slot).and_then(|s| s.as_ref()) else {
+        let Some((imp_tex, imp_view)) = self.imported.get(slot).and_then(|s| s.as_ref()) else {
             return false;
         };
-        self.interop_view = Some(view.clone());
+
+        if !handle.flip_y() {
+            self.interop_view = Some(imp_view.clone());
+            return true;
+        }
+
+        // Core GL renderiza bottom-left → inverte o Y num alvo próprio por slot.
+        let (tw, th) = {
+            let s = imp_tex.size();
+            (s.width, s.height)
+        };
+        if self.flip_tgt.len() <= slot {
+            self.flip_tgt.resize_with(slot + 1, || None);
+        }
+        if !matches!(&self.flip_tgt[slot], Some((_, _, w, h)) if *w == tw && *h == th) {
+            let (t, v) = new_tex(
+                &self.device,
+                tw,
+                th,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            );
+            self.flip_tgt[slot] = Some((t, v, tw, th));
+        }
+        let src_view = &self.imported[slot].as_ref().unwrap().1;
+        let dst_view = &self.flip_tgt[slot].as_ref().unwrap().1;
+        let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("flip bg"),
+            layout: &self.flip.bgl,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(src_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.sampler_nearest),
+                },
+            ],
+        });
+        {
+            let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("flip pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: dst_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            rp.set_pipeline(&self.flip.pipeline);
+            rp.set_bind_group(0, &bg, &[]);
+            rp.draw(0..3, 0..1);
+        }
+        self.interop_view = Some(self.flip_tgt[slot].as_ref().unwrap().1.clone());
         true
     }
 
@@ -1462,6 +1530,87 @@ fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
 @fragment
 fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv); }
 "#;
+
+/// Inverte o eixo Y de uma textura (fullscreen triangle). Pros `dma_buf` de
+/// cores GL, que renderizam com origem bottom-left.
+const FLIP_WGSL: &str = r#"
+@group(0) @binding(0) var T: texture_2d<f32>;
+@group(0) @binding(1) var S: sampler;
+struct V { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
+@vertex fn vs(@builtin(vertex_index) i: u32) -> V {
+    let p = array<vec2<f32>, 3>(vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
+    var o: V;
+    o.pos = vec4<f32>(p[i], 0.0, 1.0);
+    // uv.y sem a inversão usual = amostra de baixo pra cima (flip).
+    o.uv = vec2<f32>((p[i].x + 1.0) * 0.5, (p[i].y + 1.0) * 0.5);
+    return o;
+}
+@fragment fn fs(v: V) -> @location(0) vec4<f32> { return textureSample(T, S, v.uv); }
+"#;
+
+struct FlipPipe {
+    pipeline: wgpu::RenderPipeline,
+    bgl: wgpu::BindGroupLayout,
+}
+
+fn build_flip(device: &wgpu::Device) -> FlipPipe {
+    let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("flip bgl"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+    let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("flip layout"),
+        bind_group_layouts: &[Some(&bgl)],
+        immediate_size: 0,
+    });
+    let m = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("flip"),
+        source: wgpu::ShaderSource::Wgsl(FLIP_WGSL.into()),
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("flip pipeline"),
+        layout: Some(&pl),
+        vertex: wgpu::VertexState {
+            module: &m,
+            entry_point: Some("vs"),
+            buffers: &[],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &m,
+            entry_point: Some("fs"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: FMT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+    FlipPipe { pipeline, bgl }
+}
 
 /// Pipeline de blit (mesmo shader do composite: quad posicionado por um `Rect`
 /// uniforme, sampla uma textura) pro formato de uma surface nativa — usa a
