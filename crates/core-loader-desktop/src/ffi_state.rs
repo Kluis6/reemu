@@ -160,6 +160,10 @@ pub(crate) struct CoreGuard {
 impl Drop for CoreGuard {
     fn drop(&mut self) {
         *lock() = None;
+        // Zera o input global — senão um botão/eixo segurado no fim de um jogo
+        // vaza pro próximo core carregado.
+        crate::input::retropad().clear();
+        crate::input::analog().clear();
     }
 }
 
@@ -171,6 +175,8 @@ pub(crate) fn acquire(system_dir: &Path, save_dir: &Path) -> Result<CoreGuard, C
         ));
     }
     *g = Some(FrontendState::new(system_dir, save_dir));
+    crate::input::retropad().clear();
+    crate::input::analog().clear();
     Ok(CoreGuard { _private: () })
 }
 
@@ -420,13 +426,30 @@ pub(crate) unsafe extern "C" fn input_poll_cb() {}
 pub(crate) unsafe extern "C" fn input_state_cb(
     port: c_uint,
     device: c_uint,
-    _index: c_uint,
+    index: c_uint,
     id: c_uint,
 ) -> i16 {
-    // Só RetroPad (digital) por enquanto — analógico/mouse/etc na etapa 05+.
-    if device == sys::RETRO_DEVICE_JOYPAD && crate::input::retropad().query_id(port as usize, id) {
-        1
-    } else {
-        0
+    let port = port as usize;
+    match device {
+        sys::RETRO_DEVICE_JOYPAD => {
+            // Bitmask não anunciado (`GET_INPUT_BITMASKS`) → só consulta por id.
+            i16::from(crate::input::retropad().query_id(port, id))
+        }
+        sys::RETRO_DEVICE_ANALOG => {
+            let analog = crate::input::analog();
+            analog.mark_used();
+            match index {
+                sys::RETRO_DEVICE_INDEX_ANALOG_LEFT => analog.axis(port, 0, id),
+                sys::RETRO_DEVICE_INDEX_ANALOG_RIGHT => analog.axis(port, 1, id),
+                sys::RETRO_DEVICE_INDEX_ANALOG_BUTTON => {
+                    // pressão de um botão digital (id = RETRO_DEVICE_ID_JOYPAD_*):
+                    // 0 = solto, 0x7fff = totalmente pressionado.
+                    i16::from(crate::input::retropad().query_id(port, id)) * 0x7fff
+                }
+                _ => 0,
+            }
+        }
+        // Mouse / teclado / lightgun / pointer: etapa 05+.
+        _ => 0,
     }
 }

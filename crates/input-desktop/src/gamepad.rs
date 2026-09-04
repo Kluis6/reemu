@@ -56,6 +56,12 @@ fn stick_dpad(x: f32, y: f32) -> Vec<u32> {
     v
 }
 
+/// `f32` normalizado do `gilrs` (`-1.0..=1.0`) → eixo libretro
+/// (`-0x8000..=0x7fff`).
+fn to_axis(v: f32) -> i16 {
+    (v.clamp(-1.0, 1.0) * 32767.0).round() as i16
+}
+
 /// `[u8;16]` (uuid do gamepad, via `gilrs`) → string hex minúscula, o
 /// `device_guid` que vai em `RawInputEvent` e na tabela `controller_mappings`.
 pub fn guid_hex(uuid: [u8; 16]) -> String {
@@ -153,8 +159,11 @@ pub struct GamepadPoller {
     /// por gamepad — base pra recompor o RetroPad a cada evento.
     down: HashMap<[u8; 16], Vec<u32>>,
     /// Posição atual `(x, y)` do stick esquerdo, por gamepad — vira direção
-    /// de d-pad em [`Self::held_indices`].
+    /// de d-pad em [`Self::held_indices`] (só quando o core não lê analógico) e
+    /// vai sempre pro `RETRO_DEVICE_ANALOG` esquerdo.
     stick: HashMap<[u8; 16], (f32, f32)>,
+    /// Idem para o stick direito → `RETRO_DEVICE_ANALOG` direito.
+    rstick: HashMap<[u8; 16], (f32, f32)>,
     /// Posição atual `(x, y)` do d-pad quando ele chega como eixo/hat (ex:
     /// DualSense) em vez de botões. Mesma convenção do stick (Y+ = cima).
     hat: HashMap<[u8; 16], (f32, f32)>,
@@ -194,6 +203,7 @@ impl GamepadPoller {
             next_port: 0,
             down: HashMap::new(),
             stick: HashMap::new(),
+            rstick: HashMap::new(),
             hat: HashMap::new(),
             applied: HashMap::new(),
             nav_repeat: HashMap::new(),
@@ -211,7 +221,8 @@ impl GamepadPoller {
         let uuids: Vec<[u8; 16]> = self.gilrs.gamepads().map(|(_, g)| g.uuid()).collect();
         let mut held: HashSet<u32> = HashSet::new();
         for uuid in uuids {
-            held.extend(self.held_indices(uuid));
+            // Navegação de menu: o stick esquerdo sempre conta como direção.
+            held.extend(self.held_indices(uuid, true));
         }
         let mut out = Vec::new();
         let now = Instant::now();
@@ -261,14 +272,16 @@ impl GamepadPoller {
         out
     }
 
-    /// Botões físicos segurados + direção do stick esquerdo + d-pad-como-eixo,
-    /// para o `uuid`.
-    fn held_indices(&self, uuid: [u8; 16]) -> Vec<u32> {
+    /// Botões físicos segurados + d-pad-como-eixo (hat), para o `uuid`. O stick
+    /// esquerdo só entra como d-pad quando `stick_as_dpad` (menu, ou core sem
+    /// analógico) — no jogo com analógico ele vai só pro `RETRO_DEVICE_ANALOG`.
+    fn held_indices(&self, uuid: [u8; 16], stick_as_dpad: bool) -> Vec<u32> {
         let mut v = self.down.get(&uuid).cloned().unwrap_or_default();
-        for pos in [self.stick.get(&uuid), self.hat.get(&uuid)]
-            .into_iter()
-            .flatten()
-        {
+        let mut sticks = vec![self.hat.get(&uuid)];
+        if stick_as_dpad {
+            sticks.push(self.stick.get(&uuid));
+        }
+        for pos in sticks.into_iter().flatten() {
             for i in stick_dpad(pos.0, pos.1) {
                 if !v.contains(&i) {
                     v.push(i);
@@ -276,6 +289,17 @@ impl GamepadPoller {
             }
         }
         v
+    }
+
+    /// Manda a posição atual dos dois sticks pro `RETRO_DEVICE_ANALOG` da porta.
+    fn push_analog(&mut self, uuid: [u8; 16]) {
+        let port = self.port_for(uuid);
+        let a = core_loader_desktop::analog();
+        let (lx, ly) = self.stick.get(&uuid).copied().unwrap_or((0.0, 0.0));
+        let (rx, ry) = self.rstick.get(&uuid).copied().unwrap_or((0.0, 0.0));
+        // `gilrs`: Y+ = cima; libretro: Y+ = baixo → inverte Y.
+        a.set_stick(port, 0, to_axis(lx), to_axis(-ly));
+        a.set_stick(port, 1, to_axis(rx), to_axis(-ry));
     }
 
     fn port_for(&mut self, uuid: [u8; 16]) -> usize {
@@ -298,7 +322,9 @@ impl GamepadPoller {
     /// Faz o diff contra o último estado aplicado (trata combinação e release).
     fn recompute(&mut self, uuid: [u8; 16], pad: &RetroPadState) {
         let port = self.port_for(uuid);
-        let down = self.held_indices(uuid);
+        // Core lendo analógico (N64…): o stick esquerdo não dobra como d-pad.
+        let stick_as_dpad = !core_loader_desktop::analog().is_used();
+        let down = self.held_indices(uuid, stick_as_dpad);
         let desired: HashSet<RetroPadButton> = mappings::resolve(&guid_hex(uuid), &down)
             .unwrap_or_else(|| {
                 down.iter()
@@ -326,7 +352,13 @@ impl GamepadPoller {
                 EventType::Disconnected => {
                     self.down.remove(&uuid);
                     self.stick.remove(&uuid);
+                    self.rstick.remove(&uuid);
                     self.hat.remove(&uuid);
+                    if let Some(&port) = self.ports.get(&uuid) {
+                        let a = core_loader_desktop::analog();
+                        a.set_stick(port, 0, 0, 0);
+                        a.set_stick(port, 1, 0, 0);
+                    }
                     held::clear();
                     if let Some(port) = self.ports.get(&uuid).copied() {
                         for b in self.applied.remove(&port).unwrap_or_default() {
@@ -340,10 +372,17 @@ impl GamepadPoller {
                     match axis {
                         Axis::LeftStickX => self.stick.entry(uuid).or_insert((0.0, 0.0)).0 = value,
                         Axis::LeftStickY => self.stick.entry(uuid).or_insert((0.0, 0.0)).1 = value,
+                        Axis::RightStickX => {
+                            self.rstick.entry(uuid).or_insert((0.0, 0.0)).0 = value
+                        }
+                        Axis::RightStickY => {
+                            self.rstick.entry(uuid).or_insert((0.0, 0.0)).1 = value
+                        }
                         Axis::DPadX => self.hat.entry(uuid).or_insert((0.0, 0.0)).0 = value,
                         Axis::DPadY => self.hat.entry(uuid).or_insert((0.0, 0.0)).1 = value,
                         _ => continue,
                     }
+                    self.push_analog(uuid);
                     self.recompute(uuid, pad);
                 }
                 EventType::ButtonPressed(btn, _) | EventType::ButtonReleased(btn, _) => {

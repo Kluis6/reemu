@@ -65,9 +65,23 @@ pub const RETRO_MEMORY_RTC: c_uint = 1;
 pub const RETRO_MEMORY_SYSTEM_RAM: c_uint = 2;
 pub const RETRO_MEMORY_VIDEO_RAM: c_uint = 3;
 
-// --- RETRO_DEVICE_* (base) ---
+// --- RETRO_DEVICE_* (base) --- (libretro.h)
 pub const RETRO_DEVICE_NONE: c_uint = 0;
 pub const RETRO_DEVICE_JOYPAD: c_uint = 1;
+pub const RETRO_DEVICE_ANALOG: c_uint = 5;
+
+// `retro_input_state_t(port, RETRO_DEVICE_ANALOG, index, id)`:
+//   index = LEFT (0) / RIGHT (1) → id X (0) / Y (1), retorno em [-0x8000, 0x7fff]
+//   index = BUTTON (2)           → id = RETRO_DEVICE_ID_JOYPAD_*, retorno [0, 0x7fff]
+pub const RETRO_DEVICE_INDEX_ANALOG_LEFT: c_uint = 0;
+pub const RETRO_DEVICE_INDEX_ANALOG_RIGHT: c_uint = 1;
+pub const RETRO_DEVICE_INDEX_ANALOG_BUTTON: c_uint = 2;
+pub const RETRO_DEVICE_ID_ANALOG_X: c_uint = 0;
+pub const RETRO_DEVICE_ID_ANALOG_Y: c_uint = 1;
+
+/// `id` especial no `RETRO_DEVICE_JOYPAD`: pede o bitmask de todos os botões
+/// (só quando o frontend anuncia `GET_INPUT_BITMASKS` — não anunciamos ainda).
+pub const RETRO_DEVICE_ID_JOYPAD_MASK: c_uint = 256;
 
 #[repr(C)]
 pub struct retro_system_info {
