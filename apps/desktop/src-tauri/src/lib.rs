@@ -1,3 +1,4 @@
+mod bios;
 mod commands;
 mod core_catalog;
 mod decoration;
@@ -153,6 +154,9 @@ pub fn run() {
             commands::list_core_catalog,
             commands::download_core,
             commands::remove_core,
+            commands::list_bios_status,
+            commands::import_bios_file,
+            commands::remove_bios_file,
             commands::list_roms,
             commands::remove_rom,
             commands::list_rom_sources,

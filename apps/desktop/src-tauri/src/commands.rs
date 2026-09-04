@@ -26,6 +26,8 @@ pub struct AppState {
     pub save_dir: std::path::PathBuf,
     /// `<dados>/cores` — onde a descoberta de cores procura `*_libretro.so`.
     pub cores_dir: std::path::PathBuf,
+    /// `<dados>/system` — onde os cores procuram BIOS (`GET_SYSTEM_DIRECTORY`).
+    pub system_dir: std::path::PathBuf,
     /// Hotkeys de sistema carregadas do DB (`system_hotkeys`). `save_binding` /
     /// `clear_system_hotkey` recompõem via `refresh_hotkey_resolver`.
     pub hotkeys: Mutex<ComboHotkeyResolver>,
@@ -93,7 +95,8 @@ impl AppState {
     ) -> Self {
         let save_dir = base.join("saves");
         let cores_dir = base.join("cores");
-        let mut cfg = SessionConfig::new(cores_dir.clone(), base.join("system"), save_dir.clone());
+        let system_dir = base.join("system");
+        let mut cfg = SessionConfig::new(cores_dir.clone(), system_dir.clone(), save_dir.clone());
         cfg.enable_gamepad = true;
         cfg.audio_sink = Some(Box::new(move || {
             match audio_desktop::CpalAudioSink::new(&audio_config) {
@@ -113,6 +116,7 @@ impl AppState {
             db,
             save_dir,
             cores_dir,
+            system_dir,
             hotkeys: Mutex::new(ComboHotkeyResolver::new(hotkeys)),
             last_hotkey: Mutex::new(None),
             current_rom: Mutex::new(None),
@@ -1244,6 +1248,64 @@ pub async fn download_core(state: State<'_, AppState>, core_id: String) -> Resul
 #[tauri::command]
 pub fn remove_core(state: State<'_, AppState>, core_id: String) -> Result<(), String> {
     crate::core_catalog::remove(&state.cores_dir, &core_id)
+}
+
+// --- BIOS (arquivos de sistema) ---------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BiosStatusDto {
+    pub system_id: String,
+    pub filename: String,
+    pub required: bool,
+    pub note: String,
+    pub present: bool,
+    pub hash_ok: Option<bool>,
+}
+
+/// Confere `<dados>/system` contra a tabela de BIOS conhecida
+/// (`domain::bios`) — presença + MD5 quando documentado. Nunca baixa nada.
+#[tauri::command]
+pub fn list_bios_status(state: State<'_, AppState>) -> Vec<BiosStatusDto> {
+    crate::bios::check_all(&state.system_dir)
+        .into_iter()
+        .map(|s| BiosStatusDto {
+            system_id: s.system_id,
+            filename: s.filename,
+            required: s.required,
+            note: s.note,
+            present: s.present,
+            hash_ok: s.hash_ok,
+        })
+        .collect()
+}
+
+/// Copia `path` (escolhido no file picker do frontend) pro lugar/nome
+/// esperado dentro de `<dados>/system`.
+#[tauri::command]
+pub fn import_bios_file(
+    state: State<'_, AppState>,
+    system_id: String,
+    filename: String,
+    path: String,
+) -> Result<(), String> {
+    crate::bios::import_bios_file(
+        &state.system_dir,
+        &system_id,
+        &filename,
+        std::path::Path::new(&path),
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn remove_bios_file(
+    state: State<'_, AppState>,
+    system_id: String,
+    filename: String,
+) -> Result<(), String> {
+    crate::bios::remove_bios_file(&state.system_dir, &system_id, &filename)
+        .map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]

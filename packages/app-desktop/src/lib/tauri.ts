@@ -158,6 +158,33 @@ export const listCoreCatalog = () => invoke<CatalogCore[]>('list_core_catalog')
 export const downloadCore = (coreId: string) => invoke<void>('download_core', { coreId })
 export const removeCore = (coreId: string) => invoke<void>('remove_core', { coreId })
 
+/** Arquivo de sistema (BIOS) — status contra `<dados>/system`. Nunca baixa
+ *  nada (copyright da fabricante); só confere o que já está no disco. */
+export interface BiosStatus {
+  systemId: string
+  filename: string
+  required: boolean
+  note: string
+  present: boolean
+  /** `true`/`false` = presente e MD5 conhecido conferido; `null` = ausente
+   *  ou sem MD5 documentado pra esse arquivo. */
+  hashOk: boolean | null
+}
+export const listBiosStatus = () => invoke<BiosStatus[]>('list_bios_status')
+export const importBiosFile = (systemId: string, filename: string, path: string) =>
+  invoke<void>('import_bios_file', { systemId, filename, path })
+export const removeBiosFile = (systemId: string, filename: string) =>
+  invoke<void>('remove_bios_file', { systemId, filename })
+
+/** Diálogo nativo de seleção de um arquivo de BIOS (sem filtro de extensão —
+ *  vem em `.bin`/`.zip`/etc conforme o sistema). */
+export async function pickBiosFile(): Promise<string | null> {
+  if (!inTauri) return null
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const sel = await open({ multiple: false, title: 'Escolha o arquivo de BIOS' })
+  return typeof sel === 'string' ? sel : null
+}
+
 export interface RomEntry {
   id: string
   title: string

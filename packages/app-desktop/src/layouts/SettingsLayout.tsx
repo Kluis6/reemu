@@ -12,6 +12,7 @@ const TABS = [
   { key: 'hotkeys', label: 'Atalhos' },
   { key: 'controllers', label: 'Controles' },
   { key: 'cores', label: 'Cores' },
+  { key: 'bios', label: 'BIOS' },
 ]
 
 export function SettingsLayout() {

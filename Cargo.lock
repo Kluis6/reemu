@@ -4246,6 +4246,7 @@ dependencies = [
  "input-desktop",
  "library-scan",
  "log",
+ "md-5",
  "png 0.17.16",
  "raw-window-handle",
  "reqwest 0.12.28",

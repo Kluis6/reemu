@@ -10,6 +10,7 @@
 pub mod error;
 
 pub mod audio;
+pub mod bios;
 pub mod core_loader;
 pub mod core_options;
 pub mod decoration;

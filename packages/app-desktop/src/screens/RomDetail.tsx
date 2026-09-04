@@ -13,6 +13,7 @@ import {
   getRomMetadata,
   getRomShader,
   getShaderInfo,
+  listBiosStatus,
   listInstalledCores,
   listRoms,
   listSaveStates,
@@ -43,6 +44,9 @@ export function RomDetail() {
     retry: false,
   })
   const shaderInfo = useQuery({ queryKey: ['shader-info'], queryFn: getShaderInfo, retry: false })
+  // Cacheado (Config › BIOS já deixa isso quente); só pra avisar antes de
+  // jogar um sistema que precisa de BIOS obrigatório e ele estiver faltando.
+  const biosStatus = useQuery({ queryKey: ['bios-status'], queryFn: listBiosStatus, retry: false })
   const romShader = useQuery({
     queryKey: ['rom-shader', romId],
     queryFn: () => getRomShader(romId),
@@ -104,6 +108,17 @@ export function RomDetail() {
 
   const play = (loadState?: string) => {
     if (!chosenCore) return
+    const missingRequiredBios = (biosStatus.data ?? []).find(
+      (b) => b.systemId === rom.systemId && b.required && !b.present,
+    )
+    if (missingRequiredBios) {
+      push(
+        sysToast(
+          `Falta o BIOS obrigatório de ${rom.systemId.toUpperCase()} (${missingRequiredBios.filename}) — o jogo pode não rodar. Veja Configurações › BIOS.`,
+          'Warning',
+        ),
+      )
+    }
     const q = new URLSearchParams({ core: chosenCore })
     if (loadState) q.set('loadState', loadState)
     navigate(`/play/${rom.id}?${q}`, {

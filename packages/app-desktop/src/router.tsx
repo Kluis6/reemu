@@ -7,6 +7,7 @@ import { Library } from './screens/Library'
 import { PlayScreen } from './screens/PlayScreen'
 import { RomDetail } from './screens/RomDetail'
 import { SettingsAudio } from './screens/settings/SettingsAudio'
+import { SettingsBios } from './screens/settings/SettingsBios'
 import { SettingsControllers } from './screens/settings/SettingsControllers'
 import { SettingsCores } from './screens/settings/SettingsCores'
 import { SettingsHotkeys } from './screens/settings/SettingsHotkeys'
@@ -40,6 +41,7 @@ export const router = createHashRouter([
               { path: 'hotkeys', element: <SettingsHotkeys /> },
               { path: 'controllers', element: <SettingsControllers /> },
               { path: 'cores', element: <SettingsCores /> },
+              { path: 'bios', element: <SettingsBios /> },
             ],
           },
         ],
