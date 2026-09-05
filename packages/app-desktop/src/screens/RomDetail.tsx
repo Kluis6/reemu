@@ -1,13 +1,23 @@
-import { Body1, Button, Caption1, Select, Spinner } from '@fluentui/react-components'
-import { ArrowLeftRegular, DeleteRegular, PlayRegular } from '@fluentui/react-icons'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { CoreOptions } from '../components/CoreOptions'
-import { SaveStateThumb } from '../components/SaveStateThumb'
-import { ShaderLibrary } from '../components/ShaderLibrary'
-import { ShaderParams } from '../components/ShaderParams'
-import { sysToast } from '../lib/toast'
+import {
+  Body1,
+  Button,
+  Caption1,
+  Select,
+  Spinner,
+} from "@fluentui/react-components";
+import {
+  ArrowLeftRegular,
+  DeleteRegular,
+  PlayRegular,
+} from "@fluentui/react-icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { CoreOptions } from "../components/CoreOptions";
+import { SaveStateThumb } from "../components/SaveStateThumb";
+import { ShaderLibrary } from "../components/ShaderLibrary";
+import { ShaderParams } from "../components/ShaderParams";
+import { sysToast } from "../lib/toast";
 import {
   deleteSaveState,
   getRomMetadata,
@@ -20,107 +30,125 @@ import {
   pickSlangp,
   removeRom,
   setShader,
-} from '../lib/tauri'
-import { useDetailStyles } from '../styles/xbox'
-import { useToastStore } from '../stores/useToastStore'
+} from "../lib/tauri";
+import { useDetailStyles } from "../styles/xbox";
+import { useToastStore } from "../stores/useToastStore";
 
 export function RomDetail() {
-  const s = useDetailStyles()
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const push = useToastStore((st) => st.push)
-  const { romId = '' } = useParams()
+  const s = useDetailStyles();
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const push = useToastStore((st) => st.push);
+  const { romId = "" } = useParams();
 
-  const roms = useQuery({ queryKey: ['roms'], queryFn: listRoms, retry: false })
-  const cores = useQuery({ queryKey: ['installed-cores'], queryFn: listInstalledCores, retry: false })
+  const roms = useQuery({
+    queryKey: ["roms"],
+    queryFn: listRoms,
+    retry: false,
+  });
+  const cores = useQuery({
+    queryKey: ["installed-cores"],
+    queryFn: listInstalledCores,
+    retry: false,
+  });
   const states = useQuery({
-    queryKey: ['save-states', romId],
+    queryKey: ["save-states", romId],
     queryFn: () => listSaveStates(romId),
     retry: false,
-  })
+  });
   const meta = useQuery({
-    queryKey: ['rom-metadata', romId],
+    queryKey: ["rom-metadata", romId],
     queryFn: () => getRomMetadata(romId),
     retry: false,
-  })
-  const shaderInfo = useQuery({ queryKey: ['shader-info'], queryFn: getShaderInfo, retry: false })
+  });
+  const shaderInfo = useQuery({
+    queryKey: ["shader-info"],
+    queryFn: getShaderInfo,
+    retry: false,
+  });
   // Cacheado (Config › BIOS já deixa isso quente); só pra avisar antes de
   // jogar um sistema que precisa de BIOS obrigatório e ele estiver faltando.
-  const biosStatus = useQuery({ queryKey: ['bios-status'], queryFn: listBiosStatus, retry: false })
+  const biosStatus = useQuery({
+    queryKey: ["bios-status"],
+    queryFn: listBiosStatus,
+    retry: false,
+  });
   const romShader = useQuery({
-    queryKey: ['rom-shader', romId],
+    queryKey: ["rom-shader", romId],
     queryFn: () => getRomShader(romId),
     retry: false,
-  })
+  });
   const shaderPick = useMutation({
-    mutationFn: (name: string) => setShader(name, 'rom', romId),
+    mutationFn: (name: string) => setShader(name, "rom", romId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rom-shader', romId] })
-      qc.invalidateQueries({ queryKey: ['shader-info'] })
+      qc.invalidateQueries({ queryKey: ["rom-shader", romId] });
+      qc.invalidateQueries({ queryKey: ["shader-info"] });
     },
-    onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
-  })
+    onError: (e) => push(sysToast(`Falha: ${e}`, "Error")),
+  });
   const currentGameShader =
     romShader.data?.fromRom && romShader.data.sourcePath
-      ? (romShader.data.sourcePath.split(/[/\\]/).pop() ?? '')
-      : ''
+      ? (romShader.data.sourcePath.split(/[/\\]/).pop() ?? "")
+      : "";
 
-  const rom = roms.data?.find((r) => r.id === romId)
-  const ext = rom?.filePath.split('.').pop()?.toLowerCase() ?? ''
+  const rom = roms.data?.find((r) => r.id === romId);
+  const ext = rom?.filePath.split(".").pop()?.toLowerCase() ?? "";
   const coreList = [...(cores.data ?? [])].sort((a, b) => {
-    const am = a.extensions.includes(ext) ? 0 : 1
-    const bm = b.extensions.includes(ext) ? 0 : 1
-    return am - bm || a.name.localeCompare(b.name)
-  })
-  const [coreId, setCoreId] = useState('')
-  const chosenCore = coreId || coreList[0]?.coreId || ''
-  const [confirmRemove, setConfirmRemove] = useState(false)
+    const am = a.extensions.includes(ext) ? 0 : 1;
+    const bm = b.extensions.includes(ext) ? 0 : 1;
+    return am - bm || a.name.localeCompare(b.name);
+  });
+  const [coreId, setCoreId] = useState("");
+  const chosenCore = coreId || coreList[0]?.coreId || "";
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   const del = useMutation({
     mutationFn: (id: string) => deleteSaveState(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['save-states', romId] }),
-    onError: (e) => push(sysToast(`Falha ao apagar: ${e}`, 'Error')),
-  })
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["save-states", romId] }),
+    onError: (e) => push(sysToast(`Falha ao apagar: ${e}`, "Error")),
+  });
   const remove = useMutation({
     mutationFn: () => removeRom(romId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['roms'] })
-      push(sysToast(`"${rom?.title ?? 'ROM'}" removida da biblioteca.`, 'Success'))
-      navigate('/library')
+      qc.invalidateQueries({ queryKey: ["roms"] });
+      push(
+        sysToast(`"${rom?.title ?? "ROM"}" removida da biblioteca.`, "Success"),
+      );
+      navigate("/library");
     },
-    onError: (e) => push(sysToast(`Falha ao remover: ${e}`, 'Error')),
-  })
+    onError: (e) => push(sysToast(`Falha ao remover: ${e}`, "Error")),
+  });
 
-  if (roms.isLoading) return <Spinner label="Carregando…" />
+  if (roms.isLoading) return <Spinner label="Carregando…" />;
   if (!rom)
     return (
       <Body1>
-        ROM não encontrada.{' '}
-        <Button appearance="transparent" onClick={() => navigate('/library')}>
+        ROM não encontrada.{" "}
+        <Button appearance="transparent" onClick={() => navigate("/library")}>
           Voltar
         </Button>
       </Body1>
-    )
+    );
 
-  const cover = meta.data?.coverUrl ?? rom.boxart
-  const title = meta.data?.title ?? rom.title
-  const hasQuick = states.data?.some((st) => st.slot === 0) ?? false
+  const cover = meta.data?.coverUrl ?? rom.boxart;
+  const title = meta.data?.title ?? rom.title;
+  const hasQuick = states.data?.some((st) => st.slot === 0) ?? false;
 
   const play = (loadState?: string) => {
-    if (!chosenCore) return
+    if (!chosenCore) return;
     const missingRequiredBios = (biosStatus.data ?? []).find(
       (b) => b.systemId === rom.systemId && b.required && !b.present,
-    )
+    );
     if (missingRequiredBios) {
       push(
         sysToast(
           `Falta o BIOS obrigatório de ${rom.systemId.toUpperCase()} (${missingRequiredBios.filename}) — o jogo pode não rodar. Veja Configurações › BIOS.`,
-          'Warning',
+          "Warning",
         ),
-      )
+      );
     }
-    const q = new URLSearchParams({ core: chosenCore })
-    if (loadState) q.set('loadState', loadState)
+    const q = new URLSearchParams({ core: chosenCore });
+    if (loadState) q.set("loadState", loadState);
     navigate(`/play/${rom.id}?${q}`, {
       state: {
         coreId: chosenCore,
@@ -129,11 +157,11 @@ export function RomDetail() {
         boxart: cover,
         system: rom.systemId,
       },
-    })
-  }
+    });
+  };
 
   return (
-    <div className={s.root}>
+    <div className={s.root} data-loading={meta.isPending ? "true" : "false"}>
       <button className={s.back} onClick={() => navigate(-1)}>
         <ArrowLeftRegular /> Voltar
       </button>
@@ -145,7 +173,7 @@ export function RomDetail() {
             src={cover}
             alt=""
             onError={(e) => {
-              e.currentTarget.style.display = 'none'
+              e.currentTarget.style.display = "none";
             }}
           />
         )}
@@ -154,10 +182,16 @@ export function RomDetail() {
           <h1 className={s.title}>{title}</h1>
           <div className={s.badges}>
             <span className={s.badge}>{rom.systemId}</span>
-            {meta.data?.releaseDate && <span className={s.badge}>{meta.data.releaseDate}</span>}
-            {meta.data?.genre && <span className={s.badge}>{meta.data.genre}</span>}
+            {meta.data?.releaseDate && (
+              <span className={s.badge}>{meta.data.releaseDate}</span>
+            )}
+            {meta.data?.genre && (
+              <span className={s.badge}>{meta.data.genre}</span>
+            )}
           </div>
-          {meta.data?.description && <p className={s.desc}>{meta.data.description}</p>}
+          {meta.data?.description && (
+            <p className={s.desc}>{meta.data.description}</p>
+          )}
           <div className={s.path}>{rom.filePath}</div>
         </div>
       </div>
@@ -170,11 +204,13 @@ export function RomDetail() {
             disabled={coreList.length === 0}
             onChange={(_, d) => setCoreId(d.value)}
           >
-            {coreList.length === 0 && <option value="">nenhum instalado</option>}
+            {coreList.length === 0 && (
+              <option value="">nenhum instalado</option>
+            )}
             {coreList.map((c) => (
               <option key={c.coreId} value={c.coreId}>
                 {c.name}
-                {c.extensions.includes(ext) ? ' ✓' : ''}
+                {c.extensions.includes(ext) ? " ✓" : ""}
               </option>
             ))}
           </Select>
@@ -186,11 +222,13 @@ export function RomDetail() {
           disabled={!chosenCore}
           onClick={() => play()}
         >
-          {hasQuick ? 'Continuar' : 'Jogar'}
+          {hasQuick ? "Continuar" : "Jogar"}
         </Button>
       </div>
       {coreList.length === 0 && (
-        <Caption1>Instale um core em Configurações → Cores pra poder jogar.</Caption1>
+        <Caption1>
+          Instale um core em Configurações → Cores pra poder jogar.
+        </Caption1>
       )}
 
       {shaderInfo.data?.gpu && (
@@ -210,8 +248,12 @@ export function RomDetail() {
               ))}
               {romShader.data?.fromRom &&
                 romShader.data.sourcePath &&
-                !shaderInfo.data.available.includes(romShader.data.sourcePath) && (
-                  <option value={romShader.data.sourcePath}>{currentGameShader}</option>
+                !shaderInfo.data.available.includes(
+                  romShader.data.sourcePath,
+                ) && (
+                  <option value={romShader.data.sourcePath}>
+                    {currentGameShader}
+                  </option>
                 )}
             </Select>
             <ShaderLibrary
@@ -224,14 +266,18 @@ export function RomDetail() {
               appearance="subtle"
               disabled={shaderPick.isPending}
               onClick={async () => {
-                const p = await pickSlangp()
-                if (p) shaderPick.mutate(p)
+                const p = await pickSlangp();
+                if (p) shaderPick.mutate(p);
               }}
             >
               Carregar .slangp avulso…
             </Button>
             {romShader.data?.fromRom && (
-              <ShaderParams scope="rom" romId={romId} reloadKey={currentGameShader} />
+              <ShaderParams
+                scope="rom"
+                romId={romId}
+                reloadKey={currentGameShader}
+              />
             )}
           </div>
         </section>
@@ -249,13 +295,19 @@ export function RomDetail() {
       <section className={s.section}>
         <h2 className={s.sectionTitle}>Save states</h2>
         <div className={s.panel}>
-          {states.data?.length === 0 && <Caption1>Nenhum save state pra esta ROM.</Caption1>}
+          {states.data?.length === 0 && (
+            <Caption1>Nenhum save state pra esta ROM.</Caption1>
+          )}
           {states.data?.map((st) => (
             <div key={st.id} className={s.stateRow} style={{ gap: 12 }}>
               <SaveStateThumb stateId={st.id} hasThumbnail={st.hasThumbnail} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <Body1>
-                  {st.slot === 0 ? 'QuickSave' : st.slot != null ? `Slot ${st.slot}` : 'Auto'}
+                  {st.slot === 0
+                    ? "QuickSave"
+                    : st.slot != null
+                      ? `Slot ${st.slot}`
+                      : "Auto"}
                 </Body1>
                 <Caption1 className={s.hint}>
                   {new Date(st.createdAt * 1000).toLocaleString()}
@@ -288,19 +340,22 @@ export function RomDetail() {
           icon={<DeleteRegular />}
           disabled={remove.isPending}
           onClick={() => {
-            if (confirmRemove) remove.mutate()
+            if (confirmRemove) remove.mutate();
             else {
-              setConfirmRemove(true)
-              window.setTimeout(() => setConfirmRemove(false), 3000)
+              setConfirmRemove(true);
+              window.setTimeout(() => setConfirmRemove(false), 3000);
             }
           }}
         >
-          {confirmRemove ? 'Clique de novo para confirmar' : 'Remover da biblioteca'}
+          {confirmRemove
+            ? "Clique de novo para confirmar"
+            : "Remover da biblioteca"}
         </Button>
         <Caption1 className={s.hint}>
-          Remove só da lista — o arquivo em disco fica e um novo scan readiciona.
+          Remove só da lista — o arquivo em disco fica e um novo scan
+          readiciona.
         </Caption1>
       </section>
     </div>
-  )
+  );
 }

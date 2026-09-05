@@ -1,14 +1,26 @@
-import { Body1, Button, Spinner, Title3, makeStyles, tokens } from '@fluentui/react-components'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { SaveStateThumb } from '../components/SaveStateThumb'
-import { useFocusBridge } from '../hooks/useFocusBridge'
-import { useFullscreen } from '../hooks/useFullscreen'
-import { useKeyboardInput } from '../hooks/useKeyboardInput'
-import { moveFocus } from '../lib/focusNav'
-import { initials } from '../lib/initials'
-import { sysToast } from '../lib/toast'
+import {
+  Body1,
+  Button,
+  Spinner,
+  Title3,
+  makeStyles,
+  tokens,
+} from "@fluentui/react-components";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
+import { SaveStateThumb } from "../components/SaveStateThumb";
+import { useFocusBridge } from "../hooks/useFocusBridge";
+import { useFullscreen } from "../hooks/useFullscreen";
+import { useKeyboardInput } from "../hooks/useKeyboardInput";
+import { moveFocus } from "../lib/focusNav";
+import { initials } from "../lib/initials";
+import { sysToast } from "../lib/toast";
 import {
   currentFocus,
   listRoms,
@@ -21,162 +33,163 @@ import {
   saveState,
   toggleFocus,
   unloadGame,
-} from '../lib/tauri'
-import { usePauseStyles } from '../styles/xbox'
-import { useFocusStore } from '../stores/useFocusStore'
-import { useToastStore } from '../stores/useToastStore'
+} from "../lib/tauri";
+import { usePauseStyles } from "../styles/xbox";
+import { useFocusStore } from "../stores/useFocusStore";
+import { useToastStore } from "../stores/useToastStore";
 
 const useStyles = makeStyles({
   // Opaco: no modo canvas o frame vai num <canvas>; no vídeo nativo (subsurface)
   // a área fica transparente e o jogo aparece atrás (ver src-tauri/src/video.rs).
   root: {
-    position: 'fixed',
+    position: "fixed",
     inset: 0,
-    background: '#000',
-    display: 'grid',
-    placeItems: 'center',
+    background: "#000",
+    display: "grid",
+    placeItems: "center",
   },
   // Fundo do menu de pausa no vídeo nativo: o frame que estava na tela,
   // borrado e escurecido por animação (a subsurface do jogo some).
   pauseBg: {
-    position: 'absolute',
+    position: "absolute",
     inset: 0,
     // atrás do painel (que é não-posicionado) mas sobre o scrim.
     zIndex: -1,
-    objectFit: 'cover',
-    width: '100%',
-    height: '100%',
+    objectFit: "cover",
+    width: "100%",
+    height: "100%",
     animationName: {
-      from: { filter: 'blur(0) brightness(1)', opacity: 0 },
-      to: { filter: 'blur(9px) brightness(0.42)', opacity: 1 },
+      from: { filter: "blur(0) brightness(1)", opacity: 0 },
+      to: { filter: "blur(9px) brightness(0.42)", opacity: 1 },
     },
-    animationDuration: '190ms',
-    animationTimingFunction: 'ease-out',
-    animationFillMode: 'forwards',
+    animationDuration: "190ms",
+    animationTimingFunction: "ease-out",
+    animationFillMode: "forwards",
   },
   menuIn: {
     animationName: {
-      from: { opacity: 0, transform: 'translateY(10px) scale(0.985)' },
-      to: { opacity: 1, transform: 'none' },
+      from: { opacity: 0, transform: "translateY(10px) scale(0.985)" },
+      to: { opacity: 1, transform: "none" },
     },
-    animationDuration: '170ms',
-    animationTimingFunction: 'cubic-bezier(0.16, 1, 0.3, 1)',
-    animationFillMode: 'both',
+    animationDuration: "170ms",
+    animationTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
+    animationFillMode: "both",
   },
   menuOut: {
     animationName: {
-      from: { opacity: 1, transform: 'none' },
-      to: { opacity: 0, transform: 'translateY(6px)' },
+      from: { opacity: 1, transform: "none" },
+      to: { opacity: 0, transform: "translateY(6px)" },
     },
-    animationDuration: '150ms',
-    animationTimingFunction: 'ease-in',
-    animationFillMode: 'both',
+    animationDuration: "150ms",
+    animationTimingFunction: "ease-in",
+    animationFillMode: "both",
   },
   canvas: {
     // Preenche a altura da janela mantendo a proporção; encolhe se ficar
     // mais largo que a janela. `aspectRatio` vem do core (inline).
-    height: '100%',
-    width: 'auto',
-    maxWidth: '100%',
-    maxHeight: '100%',
-    imageRendering: 'pixelated',
-    background: '#000',
+    height: "100%",
+    width: "auto",
+    maxWidth: "100%",
+    maxHeight: "100%",
+    imageRendering: "pixelated",
+    background: "#000",
   },
   center: {
-    position: 'fixed',
+    position: "fixed",
     inset: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
     background: tokens.colorNeutralBackground1,
   },
   splash: {
-    position: 'fixed',
+    position: "fixed",
     inset: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
     gap: tokens.spacingVerticalL,
     // linear (não radial multicamada) — ver histórico do WebKitGTK em main.rs.
-    background: 'linear-gradient(180deg, #161d2b 0%, #0b0b0d 70%)',
-    color: '#fff',
+    background: "linear-gradient(180deg, #161d2b 0%, #0b0b0d 70%)",
+    color: "#fff",
   },
   splashArt: {
-    width: '208px',
-    height: '208px',
-    borderRadius: '16px',
-    objectFit: 'cover',
-    display: 'grid',
-    placeItems: 'center',
-    fontSize: '52px',
+    width: "208px",
+    height: "208px",
+    borderRadius: "16px",
+    objectFit: "cover",
+    display: "grid",
+    placeItems: "center",
+    fontSize: "52px",
     fontWeight: 700,
-    color: 'rgba(255,255,255,0.4)',
-    background: '#20263a',
-    boxShadow: '0 22px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.06)',
+    color: "rgba(255,255,255,0.4)",
+    background: "#20263a",
+    boxShadow:
+      "0 22px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.06)",
   },
   splashTitle: {
-    fontSize: '22px',
+    fontSize: "22px",
     fontWeight: 700,
-    textAlign: 'center',
-    maxWidth: '70%',
+    textAlign: "center",
+    maxWidth: "70%",
   },
   splashSub: {
     opacity: 0.55,
-    fontSize: '13px',
-    letterSpacing: '0.02em',
-    textTransform: 'uppercase',
+    fontSize: "13px",
+    letterSpacing: "0.02em",
+    textTransform: "uppercase",
   },
-})
+});
 
 interface LaunchInfo {
-  coreId: string
-  romPath: string
-  title: string
-  boxart?: string | null
-  system?: string
+  coreId: string;
+  romPath: string;
+  title: string;
+  boxart?: string | null;
+  system?: string;
 }
 
 export function PlayScreen() {
-  const styles = useStyles()
-  const pause = usePauseStyles()
-  const navigate = useNavigate()
+  const styles = useStyles();
+  const pause = usePauseStyles();
+  const navigate = useNavigate();
   // Vídeo numa surface nativa atrás da webview → esta tela fica transparente e
   // não roda o loop do canvas.
   const nativeVideo =
     useQuery({
-      queryKey: ['native-video'],
+      queryKey: ["native-video"],
       queryFn: nativeVideoActive,
       staleTime: Infinity,
       retry: false,
-    }).data === true
-  const qc = useQueryClient()
-  const push = useToastStore((s) => s.push)
-  const { romId = '' } = useParams()
-  const [params] = useSearchParams()
-  const locState = (useLocation().state ?? {}) as Partial<LaunchInfo>
-  const stateCore = locState.coreId
-  const statePath = locState.romPath
-  const stateTitle = locState.title
-  const stateBoxart = locState.boxart
-  const stateSystem = locState.system
+    }).data === true;
+  const qc = useQueryClient();
+  const push = useToastStore((s) => s.push);
+  const { romId = "" } = useParams();
+  const [params] = useSearchParams();
+  const locState = (useLocation().state ?? {}) as Partial<LaunchInfo>;
+  const stateCore = locState.coreId;
+  const statePath = locState.romPath;
+  const stateTitle = locState.title;
+  const stateBoxart = locState.boxart;
+  const stateSystem = locState.system;
 
-  useKeyboardInput()
-  useFocusBridge()
-  const { on: fullscreen, toggle: toggleFullscreen } = useFullscreen()
-  const focus = useFocusStore((s) => s.focus)
-  const setFocus = useFocusStore((s) => s.setFocus)
+  useKeyboardInput();
+  useFocusBridge();
+  const { on: fullscreen, toggle: toggleFullscreen } = useFullscreen();
+  const focus = useFocusStore((s) => s.focus);
+  const setFocus = useFocusStore((s) => s.setFocus);
 
   // Precisa de coreId + romPath: vêm do `navigate(state)` ou, num reload/URL
   // direta, da lista de ROMs + query param `?core=`.
   const roms = useQuery({
-    queryKey: ['roms'],
+    queryKey: ["roms"],
     queryFn: listRoms,
     retry: false,
     enabled: !statePath,
-  })
-  const rom = roms.data?.find((r) => r.id === romId)
-  const coreParam = params.get('core')
+  });
+  const rom = roms.data?.find((r) => r.id === romId);
+  const coreParam = params.get("core");
   // Memoizado por primitivos — senão o objeto muda toda render e o efeito de
   // load/unload entra em loop.
   const launch: LaunchInfo | null = useMemo(() => {
@@ -187,7 +200,7 @@ export function PlayScreen() {
         title: stateTitle ?? romId,
         boxart: stateBoxart,
         system: stateSystem,
-      }
+      };
     }
     if (rom && coreParam) {
       return {
@@ -196,24 +209,35 @@ export function PlayScreen() {
         title: rom.title,
         boxart: rom.boxart,
         system: rom.systemId,
-      }
+      };
     }
-    return null
-  }, [stateCore, statePath, stateTitle, stateBoxart, stateSystem, rom, coreParam, romId])
+    return null;
+  }, [
+    stateCore,
+    statePath,
+    stateTitle,
+    stateBoxart,
+    stateSystem,
+    rom,
+    coreParam,
+    romId,
+  ]);
 
-  const [status, setStatus] = useState<'loading' | 'ready' | { error: string }>('loading')
-  const [artBroken, setArtBroken] = useState(false)
-  const [aspect, setAspect] = useState(4 / 3)
+  const [status, setStatus] = useState<"loading" | "ready" | { error: string }>(
+    "loading",
+  );
+  const [artBroken, setArtBroken] = useState(false);
+  const [aspect, setAspect] = useState(4 / 3);
   // AR de exibição declarada pelo core (respeita PAR ≠ 1). O paint loop usa
   // isto quando a orientação do frame bate; se veio rotacionado (SET_ROTATION),
   // usa a AR dos pixels.
-  const declaredAspectRef = useRef(4 / 3)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const declaredAspectRef = useRef(4 / 3);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   // O loop de fetch olha o foco por ref (não re-monta o efeito a cada pausa).
-  const pausedRef = useRef(false)
+  const pausedRef = useRef(false);
   useEffect(() => {
-    pausedRef.current = focus === 'MenuFocused'
-  }, [focus])
+    pausedRef.current = focus === "MenuFocused";
+  }, [focus]);
 
   // Vídeo: dois loops desacoplados. O de **fetch** puxa o frame RGBA do core
   // por IPC e guarda o mais recente numa ref; o de **paint** (rAF, sincronizado
@@ -225,69 +249,73 @@ export function PlayScreen() {
   // Surface nativa: o jogo é apresentado pelo Rust direto na subsurface; deixa
   // html/body/#root transparentes pra ela aparecer atrás da webview.
   useEffect(() => {
-    if (!nativeVideo) return
-    document.documentElement.classList.add('native-video')
-    return () => document.documentElement.classList.remove('native-video')
-  }, [nativeVideo])
+    if (!nativeVideo) return;
+    document.documentElement.classList.add("native-video");
+    return () => document.documentElement.classList.remove("native-video");
+  }, [nativeVideo]);
 
   // Menu de pausa: fica montado durante a animação de saída; no vídeo nativo
   // busca o print do jogo capturado pelo Rust pra usar de fundo.
-  const menuOpen = focus === 'MenuFocused'
-  const [closing, setClosing] = useState(false)
-  const menuMounted = menuOpen || closing
-  const wasOpen = useRef(false)
-  const [pauseBg, setPauseBg] = useState<string | null>(null)
+  const menuOpen = focus === "MenuFocused";
+  const [closing, setClosing] = useState(false);
+  const menuMounted = menuOpen || closing;
+  const wasOpen = useRef(false);
+  const [pauseBg, setPauseBg] = useState<string | null>(null);
   useEffect(() => {
     if (menuOpen) {
-      wasOpen.current = true
-      if (!nativeVideo) return
-      let url: string | null = null
+      wasOpen.current = true;
+      if (!nativeVideo) return;
+      let url: string | null = null;
       // pequeno atraso: o Rust captura ~2 ticks depois do foco trocar.
       const t = setTimeout(() => {
         void pauseBackgroundUrl().then((u) => {
-          url = u
-          setPauseBg(u)
-        })
-      }, 60)
+          url = u;
+          setPauseBg(u);
+        });
+      }, 60);
       return () => {
-        clearTimeout(t)
-        if (url) URL.revokeObjectURL(url)
-      }
+        clearTimeout(t);
+        if (url) URL.revokeObjectURL(url);
+      };
     }
-    if (!wasOpen.current) return // fechou sem nunca ter aberto (mount)
-    wasOpen.current = false
-    setClosing(true)
+    if (!wasOpen.current) return; // fechou sem nunca ter aberto (mount)
+    wasOpen.current = false;
+    setClosing(true);
     const t = setTimeout(() => {
-      setClosing(false)
+      setClosing(false);
       setPauseBg((u) => {
-        if (u) URL.revokeObjectURL(u)
-        return null
-      })
-    }, 175)
-    return () => clearTimeout(t)
-  }, [menuOpen, nativeVideo])
+        if (u) URL.revokeObjectURL(u);
+        return null;
+      });
+    }, 175);
+    return () => clearTimeout(t);
+  }, [menuOpen, nativeVideo]);
 
   useEffect(() => {
-    if (status !== 'ready' || nativeVideo) return
-    let alive = true
-    let raf = 0
-    const latest = { img: null as ImageData | null, w: 0, h: 0 }
+    if (status !== "ready" || nativeVideo) return;
+    let alive = true;
+    let raf = 0;
+    const latest = { img: null as ImageData | null, w: 0, h: 0 };
 
     void (async () => {
       while (alive) {
-        let got = false
+        let got = false;
         try {
-          const buf = await pollFrame()
+          const buf = await pollFrame();
           if (buf.byteLength > 8) {
-            const dv = new DataView(buf)
-            const w = dv.getUint32(0, true)
-            const h = dv.getUint32(4, true)
-            const need = w * h * 4
+            const dv = new DataView(buf);
+            const w = dv.getUint32(0, true);
+            const h = dv.getUint32(4, true);
+            const need = w * h * 4;
             if (w > 0 && h > 0 && buf.byteLength >= 8 + need) {
-              latest.img = new ImageData(new Uint8ClampedArray(buf.slice(8, 8 + need)), w, h)
-              latest.w = w
-              latest.h = h
-              got = true
+              latest.img = new ImageData(
+                new Uint8ClampedArray(buf.slice(8, 8 + need)),
+                w,
+                h,
+              );
+              latest.w = w;
+              latest.h = h;
+              got = true;
             }
           }
         } catch {
@@ -296,188 +324,226 @@ export function PlayScreen() {
         // Pausado: ~8Hz. Rodando: se acabou de pegar um frame, o próximo só sai
         // em ~16ms — espera ~11ms antes de pollar de novo (menos IPC = menos
         // hitch). Se veio vazio, pollar rápido pra não perder o próximo.
-        const delay = pausedRef.current ? 120 : got ? 11 : 2
-        await new Promise((r) => setTimeout(r, delay))
+        const delay = pausedRef.current ? 120 : got ? 11 : 2;
+        await new Promise((r) => setTimeout(r, delay));
       }
-    })()
+    })();
 
     const paint = () => {
-      const c = canvasRef.current
+      const c = canvasRef.current;
       if (c && latest.img) {
         if (c.width !== latest.w || c.height !== latest.h) {
-          c.width = latest.w
-          c.height = latest.h
-          const declared = declaredAspectRef.current
-          const pixels = latest.w / Math.max(1, latest.h)
+          c.width = latest.w;
+          c.height = latest.h;
+          const declared = declaredAspectRef.current;
+          const pixels = latest.w / Math.max(1, latest.h);
           // orientação bate → AR declarada (PAR ok); senão frame rotacionado.
-          setAspect((declared >= 1) === (pixels >= 1) ? declared : pixels)
+          setAspect(declared >= 1 === pixels >= 1 ? declared : pixels);
         }
-        c.getContext('2d')?.putImageData(latest.img, 0, 0)
+        c.getContext("2d")?.putImageData(latest.img, 0, 0);
       }
-      if (alive) raf = requestAnimationFrame(paint)
-    }
-    raf = requestAnimationFrame(paint)
+      if (alive) raf = requestAnimationFrame(paint);
+    };
+    raf = requestAnimationFrame(paint);
 
     return () => {
-      alive = false
-      cancelAnimationFrame(raf)
-    }
-  }, [status, nativeVideo])
+      alive = false;
+      cancelAnimationFrame(raf);
+    };
+  }, [status, nativeVideo]);
 
   // O unload no cleanup é ADIADO: o StrictMode (dev) monta→desmonta→remonta,
   // e um `load → unload → load` seguido quebra o core (áudio do mupen, contexto
   // GL). Se o effect re-rodar pro MESMO jogo em <200ms, o unload pendente é
   // cancelado e nada recarrega.
-  const unloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const loadedKey = useRef<string | null>(null)
+  const unloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadedKey = useRef<string | null>(null);
   useEffect(() => {
-    if (!launch) return
-    const key = `${launch.coreId} ${launch.romPath} ${romId}`
+    if (!launch) return;
+    const key = `${launch.coreId} ${launch.romPath} ${romId}`;
 
     if (unloadTimer.current) {
-      clearTimeout(unloadTimer.current)
-      unloadTimer.current = null
+      clearTimeout(unloadTimer.current);
+      unloadTimer.current = null;
     }
     const scheduleUnload = () => {
       unloadTimer.current = setTimeout(() => {
-        unloadTimer.current = null
-        loadedKey.current = null
-        void unloadGame().catch(() => {})
-      }, 200)
-    }
+        unloadTimer.current = null;
+        loadedKey.current = null;
+        void unloadGame().catch(() => {});
+      }, 200);
+    };
 
     // Já é este jogo (remonta do StrictMode, ou o load em voo ainda vale) —
     // não recarrega; a promise em voo checa `loadedKey` e continua.
     if (loadedKey.current !== key) {
-      loadedKey.current = key
-      setStatus('loading')
+      loadedKey.current = key;
+      setStatus("loading");
       void (async () => {
         try {
-          const g = await loadGame(launch.coreId, launch.romPath, romId || undefined)
-          if (loadedKey.current !== key) return // navegou pra outro jogo
-          const a = g.aspectRatio > 0 ? g.aspectRatio : g.baseWidth / g.baseHeight || 4 / 3
-          declaredAspectRef.current = a
-          setAspect(a)
+          const g = await loadGame(
+            launch.coreId,
+            launch.romPath,
+            romId || undefined,
+          );
+          if (loadedKey.current !== key) return; // navegou pra outro jogo
+          const a =
+            g.aspectRatio > 0
+              ? g.aspectRatio
+              : g.baseWidth / g.baseHeight || 4 / 3;
+          declaredAspectRef.current = a;
+          setAspect(a);
           // "Jogar daqui": carrega o save state pedido na URL antes de mostrar.
-          const wantState = params.get('loadState')
+          const wantState = params.get("loadState");
           if (wantState) {
             await loadSaveState(wantState).catch((e) =>
-              push(sysToast(`Não carregou o save state: ${e}`, 'Warning')),
-            )
+              push(sysToast(`Não carregou o save state: ${e}`, "Warning")),
+            );
           }
           // Garante que o jogo começa com foco (não no menu de pausa).
-          const f = await currentFocus().catch(() => 'GameFocused' as const)
-          if (f === 'MenuFocused') await toggleFocus().catch(() => {})
-          setFocus('GameFocused')
-          setStatus('ready')
+          const f = await currentFocus().catch(() => "GameFocused" as const);
+          if (f === "MenuFocused") await toggleFocus().catch(() => {});
+          setFocus("GameFocused");
+          setStatus("ready");
         } catch (e) {
-          if (loadedKey.current === key) setStatus({ error: String(e) })
+          if (loadedKey.current === key) setStatus({ error: String(e) });
         }
-      })()
+      })();
     }
-    return scheduleUnload
-  }, [launch, romId, setFocus, params, push])
+    return scheduleUnload;
+  }, [launch, romId, setFocus, params, push]);
 
   const quickSave = useMutation({
     mutationFn: () => saveState(romId, 0),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['save-states', romId] })
-      push(sysToast('QuickSave gravado.', 'Success'))
+      qc.invalidateQueries({ queryKey: ["save-states", romId] });
+      push(sysToast("QuickSave gravado.", "Success"));
     },
-    onError: (e) => push(sysToast(`Falha no save: ${e}`, 'Error')),
-  })
+    onError: (e) => push(sysToast(`Falha no save: ${e}`, "Error")),
+  });
 
   const quickLoad = useMutation({
     mutationFn: async () => {
-      const list = await listSaveStates(romId)
-      const quick = list.find((s) => s.slot === 0)
-      if (!quick) throw new Error('nenhum QuickSave pra este jogo')
-      await loadSaveState(quick.id)
+      const list = await listSaveStates(romId);
+      const quick = list.find((s) => s.slot === 0);
+      if (!quick) throw new Error("nenhum QuickSave pra este jogo");
+      await loadSaveState(quick.id);
     },
-    onSuccess: () => push(sysToast('QuickLoad aplicado.', 'Success')),
-    onError: (e) => push(sysToast(`Falha no load: ${e}`, 'Error')),
-  })
+    onSuccess: () => push(sysToast("QuickLoad aplicado.", "Success")),
+    onError: (e) => push(sysToast(`Falha no load: ${e}`, "Error")),
+  });
 
   // Lista de save states — só busca com o menu aberto.
   const stateList = useQuery({
-    queryKey: ['save-states', romId],
+    queryKey: ["save-states", romId],
     queryFn: () => listSaveStates(romId),
-    enabled: focus === 'MenuFocused',
+    enabled: focus === "MenuFocused",
     retry: false,
-  })
+  });
   const loadAny = useMutation({
     mutationFn: (id: string) => loadSaveState(id),
     onSuccess: () => {
-      push(sysToast('Estado carregado.', 'Success'))
-      resume()
+      push(sysToast("Estado carregado.", "Success"));
+      resume();
     },
-    onError: (e) => push(sysToast(`Falha no load: ${e}`, 'Error')),
-  })
+    onError: (e) => push(sysToast(`Falha no load: ${e}`, "Error")),
+  });
 
   const resume = () => {
-    void toggleFocus().then(setFocus).catch(() => setFocus('GameFocused'))
-  }
+    void toggleFocus()
+      .then(setFocus)
+      .catch(() => setFocus("GameFocused"));
+  };
   const quit = () => {
-    void unloadGame().catch(() => {})
-    navigate('/')
-  }
+    void unloadGame().catch(() => {});
+    navigate("/");
+  };
 
   // A navegação do menu de pausa pelo gamepad é global (`useMenuNav` no
   // RootLayout). Aqui só focamos o 1º item ao abrir, pra `confirm` ter alvo.
   useEffect(() => {
-    if (focus !== 'MenuFocused') return
-    const raf = requestAnimationFrame(() => moveFocus('down'))
-    return () => cancelAnimationFrame(raf)
-  }, [focus])
+    if (focus !== "MenuFocused") return;
+    const raf = requestAnimationFrame(() => moveFocus("down"));
+    return () => cancelAnimationFrame(raf);
+  }, [focus]);
 
   if (!launch && !roms.isLoading) {
     return (
       <div className={styles.center}>
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div
+          style={{
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}
+        >
           <Body1>Não foi possível determinar o core/ROM.</Body1>
-          <Button onClick={() => navigate(`/rom/${romId}`)}>Voltar ao detalhe</Button>
+          <Button onClick={() => navigate(`/rom/${romId}`)}>
+            Voltar ao detalhe
+          </Button>
         </div>
       </div>
-    )
+    );
   }
 
-  if (status === 'loading') {
-    const showArt = launch?.boxart && !artBroken
+  if (status === "loading") {
+    const showArt = launch?.boxart && !artBroken;
     return (
       <div className={styles.splash}>
         {showArt ? (
           <img
             className={styles.splashArt}
-            src={launch.boxart ?? ''}
-            alt={launch?.title ?? ''}
+            src={launch.boxart ?? ""}
+            alt={launch?.title ?? ""}
             onError={() => setArtBroken(true)}
           />
         ) : (
-          <div className={styles.splashArt}>{initials(launch?.title ?? '?')}</div>
+          <div className={styles.splashArt}>
+            {initials(launch?.title ?? "?")}
+          </div>
         )}
-        <div className={styles.splashTitle}>{launch?.title ?? 'Carregando…'}</div>
-        {launch?.system && <div className={styles.splashSub}>{launch.system}</div>}
+        <div className={styles.splashTitle}>
+          {launch?.title ?? "Carregando…"}
+        </div>
+        {launch?.system && (
+          <div className={styles.splashSub}>{launch.system}</div>
+        )}
         <Spinner size="small" label="Carregando…" />
       </div>
-    )
+    );
   }
 
-  if (typeof status === 'object') {
+  if (typeof status === "object") {
     return (
       <div className={styles.center}>
-        <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 420 }}>
+        <div
+          style={{
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            maxWidth: 420,
+          }}
+        >
           <Title3>Falha ao carregar</Title3>
           <Body1>{status.error}</Body1>
-          <Button appearance="primary" onClick={() => navigate(`/rom/${romId}`)}>
+          <Button
+            appearance="primary"
+            onClick={() => navigate(`/rom/${romId}`)}
+          >
             Voltar
           </Button>
         </div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className={styles.root} style={nativeVideo ? { background: 'transparent' } : undefined}>
+    <div
+      className={styles.root}
+      style={nativeVideo ? { background: "transparent" } : undefined}
+    >
       {!nativeVideo && (
         <canvas
           ref={canvasRef}
@@ -489,7 +555,9 @@ export function PlayScreen() {
       )}
 
       {menuMounted && (
-        <div className={`${pause.scrim} ${menuOpen ? styles.menuIn : styles.menuOut}`}>
+        <div
+          className={`${pause.scrim} ${menuOpen ? styles.menuIn : styles.menuOut}`}
+        >
           {nativeVideo && pauseBg && (
             <img className={styles.pauseBg} src={pauseBg} alt="" aria-hidden />
           )}
@@ -498,10 +566,16 @@ export function PlayScreen() {
             <Button appearance="primary" onClick={resume}>
               Continuar
             </Button>
-            <Button disabled={quickSave.isPending} onClick={() => quickSave.mutate()}>
+            <Button
+              disabled={quickSave.isPending}
+              onClick={() => quickSave.mutate()}
+            >
               QuickSave
             </Button>
-            <Button disabled={quickLoad.isPending} onClick={() => quickLoad.mutate()}>
+            <Button
+              disabled={quickLoad.isPending}
+              onClick={() => quickLoad.mutate()}
+            >
               QuickLoad
             </Button>
 
@@ -514,9 +588,16 @@ export function PlayScreen() {
                     disabled={loadAny.isPending}
                     onClick={() => loadAny.mutate(st.id)}
                   >
-                    <SaveStateThumb stateId={st.id} hasThumbnail={st.hasThumbnail} />
+                    <SaveStateThumb
+                      stateId={st.id}
+                      hasThumbnail={st.hasThumbnail}
+                    />
                     <span className={pause.stateLabel}>
-                      {st.slot === 0 ? 'QuickSave' : st.slot != null ? `Slot ${st.slot}` : 'Auto'}
+                      {st.slot === 0
+                        ? "QuickSave"
+                        : st.slot != null
+                          ? `Slot ${st.slot}`
+                          : "Auto"}
                       <br />
                       <span className={pause.stateDate}>
                         {new Date(st.createdAt * 1000).toLocaleString()}
@@ -527,9 +608,9 @@ export function PlayScreen() {
               </div>
             )}
 
-            <Button onClick={() => navigate('/settings')}>Configurações</Button>
+            <Button onClick={() => navigate("/settings")}>Configurações</Button>
             <Button appearance="subtle" onClick={() => void toggleFullscreen()}>
-              {fullscreen ? 'Sair da tela cheia' : 'Tela cheia'}
+              {fullscreen ? "Sair da tela cheia" : "Tela cheia"}
             </Button>
             <Button appearance="subtle" onClick={quit}>
               Sair do jogo
@@ -538,5 +619,5 @@ export function PlayScreen() {
         </div>
       )}
     </div>
-  )
+  );
 }

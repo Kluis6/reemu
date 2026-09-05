@@ -9,51 +9,66 @@ import {
   SearchRegular,
   SettingsRegular,
   XboxControllerRegular,
-} from '@fluentui/react-icons'
-import { mergeClasses } from '@fluentui/react-components'
-import { useEffect, useRef } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { ButtonHints } from '../components/ButtonHints'
-import { useClock } from '../hooks/useClock'
-import { useFullscreen } from '../hooks/useFullscreen'
-import { quitApp } from '../lib/tauri'
-import { useSearchStore } from '../stores/useSearchStore'
-import { useShellStyles } from '../styles/xbox'
+} from "@fluentui/react-icons";
+import { mergeClasses } from "@fluentui/react-components";
+import { useEffect, useRef } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { ButtonHints } from "../components/ButtonHints";
+import { useClock } from "../hooks/useClock";
+import { useFullscreen } from "../hooks/useFullscreen";
+import { quitApp } from "../lib/tauri";
+import { useSearchStore } from "../stores/useSearchStore";
+import { useShellStyles } from "../styles/xbox";
 
 const RAIL = [
-  { to: '/', end: true, icon: <HomeRegular />, label: 'Início' },
-  { to: '/library', end: true, icon: <LibraryRegular />, label: 'Meus jogos' },
-  { to: '/settings/cores', end: false, icon: <PuzzlePieceRegular />, label: 'Cores' },
-  { to: '/settings/controllers', end: false, icon: <XboxControllerRegular />, label: 'Controles' },
-  { to: '/settings', end: true, icon: <SettingsRegular />, label: 'Configurações' },
-]
+  { to: "/", end: true, icon: <HomeRegular />, label: "Início" },
+  { to: "/library", end: true, icon: <LibraryRegular />, label: "Meus jogos" },
+  {
+    to: "/settings/cores",
+    end: false,
+    icon: <PuzzlePieceRegular />,
+    label: "Cores",
+  },
+  {
+    to: "/settings/controllers",
+    end: false,
+    icon: <XboxControllerRegular />,
+    label: "Controles",
+  },
+  {
+    to: "/settings",
+    end: true,
+    icon: <SettingsRegular />,
+    label: "Configurações",
+  },
+];
 
 export function AppShell() {
-  const s = useShellStyles()
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
-  const clock = useClock()
-  const { on: fullscreen, toggle: toggleFullscreen } = useFullscreen()
-  const atRoot = pathname === '/'
-  const atBrowse = pathname === '/' || pathname === '/library'
+  const s = useShellStyles();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const clock = useClock();
+  const { on: fullscreen, toggle: toggleFullscreen } = useFullscreen();
+  const atRoot = pathname === "/";
+  const atBrowse = pathname === "/" || pathname === "/library";
 
-  const search = useSearchStore()
-  const searchRef = useRef<HTMLInputElement>(null)
+  const search = useSearchStore();
+  const searchRef = useRef<HTMLInputElement>(null);
   // Y no controle / "/" no teclado marcam `open` → foca o campo.
   useEffect(() => {
-    if (search.open) searchRef.current?.focus()
-  }, [search.open])
+    if (search.open) searchRef.current?.focus();
+  }, [search.open]);
 
   const hints = atBrowse
     ? ([
-        { glyph: 'A', label: 'Selecionar' },
-        { glyph: 'Y', label: 'Buscar' },
-        { glyph: 'MENU', label: 'Opções' },
+        { glyph: "A", label: "Selecionar" },
+        { glyph: "Y", label: "Buscar" },
+        { glyph: "MENU", label: "Opções" },
       ] as const)
     : ([
-        { glyph: 'A', label: 'Selecionar' },
-        { glyph: 'B', label: 'Voltar' },
-      ] as const)
+        { glyph: "A", label: "Selecionar" },
+        { glyph: "B", label: "Voltar" },
+      ] as const);
 
   return (
     <div className={s.app}>
@@ -87,30 +102,35 @@ export function AppShell() {
 
       <div className={s.main}>
         <div className={s.topbar}>
-          <button
-            className={s.iconBtn}
-            onClick={() => (atRoot ? undefined : navigate(-1))}
-            disabled={atRoot}
-            aria-label="Voltar"
+          {!atRoot && (
+            <button
+              className={s.iconBtn}
+              onClick={() => navigate(-1)}
+              aria-label="Voltar"
+            >
+              <ArrowLeftRegular />
+            </button>
+          )}
+          <label
+            className={s.search}
+            data-nav-skip
+            onClick={() => searchRef.current?.focus()}
           >
-            <ArrowLeftRegular />
-          </button>
-          <label className={s.search} data-nav-skip onClick={() => searchRef.current?.focus()}>
             <SearchRegular />
             <input
               ref={searchRef}
               value={search.query}
               placeholder="Buscar na biblioteca…"
               onFocus={() => {
-                if (pathname !== '/library') navigate('/library')
-                search.setOpen(true)
+                if (pathname !== "/library") navigate("/library");
+                search.setOpen(true);
               }}
               onBlur={() => search.setOpen(false)}
               onChange={(e) => search.setQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  search.reset()
-                  searchRef.current?.blur()
+                if (e.key === "Escape") {
+                  search.reset();
+                  searchRef.current?.blur();
                 }
               }}
             />
@@ -119,10 +139,16 @@ export function AppShell() {
           <button
             className={s.iconBtn}
             onClick={() => void toggleFullscreen()}
-            aria-label={fullscreen ? 'Sair da tela cheia (F11)' : 'Tela cheia (F11)'}
-            title={fullscreen ? 'Sair da tela cheia (F11)' : 'Tela cheia (F11)'}
+            aria-label={
+              fullscreen ? "Sair da tela cheia (F11)" : "Tela cheia (F11)"
+            }
+            title={fullscreen ? "Sair da tela cheia (F11)" : "Tela cheia (F11)"}
           >
-            {fullscreen ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />}
+            {fullscreen ? (
+              <FullScreenMinimizeRegular />
+            ) : (
+              <FullScreenMaximizeRegular />
+            )}
           </button>
           <span className={s.clock}>{clock}</span>
         </div>
@@ -133,5 +159,5 @@ export function AppShell() {
 
       <ButtonHints hints={hints} />
     </div>
-  )
+  );
 }
