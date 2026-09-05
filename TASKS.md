@@ -39,7 +39,7 @@ refaça trabalho já feito ou pule pré-requisito.
 |---|---|---|---|
 | 01 | Domain + DB — repositórios sqlx | `done` | Setup local |
 | 02 | Core Loader Desktop — caminho GL | `done` (software + HW render GL: contexto EGL offscreen + FBO + readback; validado c/ Super Mario 64 2026-09-02. Interop dma_buf zero-cópia `REEMU_GL_INTEROP=1` **validado em hw c/ N64** 2026-09-04, imagem + flip Y ok) | 01 |
-| 03 | Tauri Desktop Shell — surface nativa | `done` (`<canvas>` default; **surface nativa `wl_subsurface` `place_above` FUNCIONAL** `REEMU_NATIVE_VIDEO=1`, 2026-09-04 — SNES/N64 + bezel + menu de pausa com print borrado; SET_ROTATION 2026-08-31 — ver doc 03) | 02 |
+| 03 | Tauri Desktop Shell — surface nativa | `done` (**surface nativa `wl_subsurface` `place_above` é o PADRÃO** desde `c29508f`; `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>`. SNES/N64 + bezel + menu de pausa com print borrado; SET_ROTATION 2026-08-31 — ver doc 03) | 02 |
 | 04 | Shader Chain + Decoração | `done` (shader + decoração + params na UI — 2026-08-30) | 03 |
 | 05 | Input, Hotkeys, UI de Binding | `done` (validado c/ DualSense 2026-08-29; foco de menu 2026-08-30; `RETRO_DEVICE_ANALOG` — analógico do N64 — 2026-09-04) | 03 |
 | 06 | Áudio — Dynamic Rate Control | `done` (DRC + sink + "aplicar ao vivo"; `SET_SYSTEM_AV_INFO` runtime + estimador de taxa real 2026-09-04 — N64 sem picote; instrumentação `REEMU_AUDIO_DEBUG=1`) | 03 |
@@ -57,27 +57,31 @@ validado c/ Super Mario 64 (2026-09-02); **interop dma_buf zero-cópia
 (`REEMU_GL_INTEROP=1`) validado em hardware NVIDIA c/ N64 (2026-09-04)** —
 imagem correta, flip Y ok, bezel ok.
 
-**Caminho crítico #2 — surface nativa de vídeo**: **FUNCIONAL (2026-09-04)**.
-Depois de 3 abordagens mortas (X11 child não pinta; `wgpu::Surface` na
-`wl_surface` do GTK = Gdk Error 71; webview transparente = bug NVIDIA+WebKitGTK),
-a que funcionou: `wl_subsurface` `place_above` da webview **opaca** — o jogo
-(wgpu, zero-cópia) cobre a webview jogando; ao abrir o menu o Rust captura 1
-frame, esconde a subsurface e a webview reaparece com o print borrado (menu de
-pausa estilo RetroArch). Máquina de estado `VideoMenu` no `reemu-video-pump`.
-Gated em `REEMU_NATIVE_VIDEO=1`. Validado: SNES/N64 + bezel + troca de ROM +
-menu. Falta pra tirar o gate: posição da subsurface no rect da área de jogo
-(hoje só bate em fullscreen), remover `mod x11`+`x11-dl` mortos, doc.
+**Caminho crítico #2 — surface nativa de vídeo**: **FECHADO — é o padrão**
+(`c29508f`, 2026-09-05). `wl_subsurface` `place_above` da webview **opaca** — o
+jogo (wgpu, zero-cópia) cobre a webview jogando; ao abrir o menu o Rust captura
+1 frame, esconde a subsurface e a webview reaparece com o print borrado (menu
+de pausa estilo RetroArch). Máquina de estado `VideoMenu` no `reemu-video-pump`.
+`REEMU_NATIVE_VIDEO=0` / `REEMU_GL_INTEROP=0` voltam pro `<canvas>` / readback.
+Subsurface posicionada pelo `Resized` (offset de CSD via inner/outer position;
+0,0 em fullscreen). `mod x11` e `x11-dl` removidos. Validado com SNES/N64,
+bezel, troca de ROM e menu de pausa.
 
 Bugs de jogo do N64 resolvidos 2026-09-04 (`63e99bc`..`850c6cc`): tela branca
 (NUL no PlayScreen.tsx), tela preta ao trocar ROM (pump esconde a subsurface
 no idle), analógico (`RETRO_DEVICE_ANALOG`), áudio picotado (`SET_SYSTEM_AV_INFO`
-+ estimador de taxa).
++ estimador de taxa). **Crash de reload do N64 resolvido** (`3eb1a9f`): core
+libretro isolado num processo filho descartável (`reemu-core-host` +
+`crates/core-ipc`) — ver `n64-reload-crash` na memória.
 
-**~26 commits ainda não empurrados** — token do `gh` vencido, precisa
-`gh auth login -h github.com`.
+**Polimento de UI (2026-09-05, `1fb2bb9`/`2b2d784`)**: casca responsiva pra
+telas grandes (grid `100vh`/`minmax(0,1fr)`, tiles fluidos), sistema de temas
+de cor (Verde Xbox/Roxo/Âmbar via `createDarkTheme` + tokens custom `--reemu*`,
+`useThemeStore`). FALTA: tela Config › Aparência + tema claro/HC + persist Rust.
 
-Próximos: tirar os gates `REEMU_NATIVE_VIDEO`/`REEMU_GL_INTEROP` (virar default),
-11 (Android), 12 (Vulkan HW), ou backlog de render/perf.
+**Próximo — decisão pendente do usuário**: (A) compilador slang glslang→SPIR-V
+[recomendado 2×], (B) etapa 12 Vulkan HW, (C) etapa 11 Android, (D) auditoria
+de perf do caminho do core. Ver backlog abaixo.
 
 ## Como atualizar
 
