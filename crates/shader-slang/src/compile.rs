@@ -10,10 +10,13 @@
 //!
 //! 1. `layout(push_constant) uniform Push { }` → UBO em `binding = 0`.
 //! 2. `uniform UBO { }` → `binding = 1`.
-//! 3. `sampler2D` combinado → `texture2D` + `sampler` separados: sampler i vai
-//!    pra textura `2 + 2i` e sampler `3 + 2i`; call-sites reescritos pra
-//!    `sampler2D(tex, samp)`. Cada sampler é classificado por nome
-//!    ([`TextureSemantic`]) pro executor saber o que ligar nele.
+//! 3. `sampler2D` combinado → `texture2D` + `sampler` separados (`<n>_SLANG_T`
+//!    / `<n>_SLANG_S`, bindings `2 + 2i` / `3 + 2i`), e **todo uso do
+//!    identificador** vira `sampler2D(<n>_SLANG_T, <n>_SLANG_S)`. Trocar o
+//!    identificador (não só as chamadas `texture(…)`) é o que mantém válido o
+//!    shader que passa o sampler pra função própria. Cada sampler é
+//!    classificado por nome ([`TextureSemantic`]) pro executor saber o que
+//!    ligar nele.
 
 use crate::preprocess::SlangSource;
 
@@ -242,8 +245,10 @@ fn rewrite(glsl: &str) -> (String, Vec<TextureBind>) {
         s.push('\n');
     }
 
-    // 2. samplers combinados → texture2D + sampler com bindings determinísticos
-    //    (sampler i → texture em 2+2i, sampler em 3+2i).
+    // 2. samplers combinados → texture2D + sampler separados, com bindings
+    //    determinísticos (sampler i → textura em 2+2i, sampler em 3+2i).
+    //    O nome original NÃO fica com a textura: vira `<name>_SLANG_T`, e todo
+    //    uso do identificador é trocado pela expressão construtora no passo 3.
     let mut binds: Vec<TextureBind> = Vec::new();
     let mut out = String::with_capacity(s.len() + 256);
     for line in s.lines() {
@@ -252,7 +257,7 @@ fn rewrite(glsl: &str) -> (String, Vec<TextureBind>) {
             let i = binds.len() as u32;
             let (tb, sb) = (2 + 2 * i, 3 + 2 * i);
             out.push_str(&format!(
-                "{indent}layout(set = 0, binding = {tb}) uniform texture2D {name};\n\
+                "{indent}layout(set = 0, binding = {tb}) uniform texture2D {name}_SLANG_T;\n\
                  {indent}layout(set = 0, binding = {sb}) uniform sampler {name}_SLANG_S;\n",
             ));
             binds.push(TextureBind {
@@ -267,25 +272,41 @@ fn rewrite(glsl: &str) -> (String, Vec<TextureBind>) {
         }
     }
 
-    // 3. call-sites: `fn(NAME, ...)` → `fn(sampler2D(NAME, NAME_SLANG_S), ...)`.
+    // 3. Todo uso restante do identificador → `sampler2D(<n>_SLANG_T, <n>_SLANG_S)`.
+    //    Substituir o IDENTIFICADOR (e não só chamadas `texture(NAME, …)`) é o
+    //    que faz funcionar shader que passa o sampler pra função própria —
+    //    `FxaaPixelShader(pos, Source, rcp)`, `texture2d_(Source, …)` — porque o
+    //    parâmetro continua declarado `sampler2D` e recebe um `sampler2D`.
     for b in &binds {
-        let name = &b.name;
-        for func in [
-            "texture",
-            "textureLod",
-            "textureProj",
-            "textureGrad",
-            "textureGather",
-            "textureSize",
-            "texelFetch",
-            "textureOffset",
-        ] {
-            let to = format!("{func}(sampler2D({name}, {name}_SLANG_S),");
-            out = out.replace(&format!("{func}({name},"), &to);
-            out = out.replace(&format!("{func}( {name},"), &to);
-        }
+        out = replace_ident(
+            &out,
+            &b.name,
+            &format!("sampler2D({0}_SLANG_T, {0}_SLANG_S)", b.name),
+        );
     }
     (out, binds)
+}
+
+/// Troca `name` por `to` só quando aparece como identificador inteiro — não
+/// dentro de outro (`Source` não casa em `SourceSize` nem em `Source_SLANG_T`).
+fn replace_ident(src: &str, name: &str, to: &str) -> String {
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    let mut out = String::with_capacity(src.len() + 64);
+    let mut rest = src;
+    while let Some(i) = rest.find(name) {
+        let before_ok = rest[..i].chars().next_back().is_none_or(|c| !is_word(c));
+        let after = &rest[i + name.len()..];
+        let after_ok = after.chars().next().is_none_or(|c| !is_word(c));
+        out.push_str(&rest[..i]);
+        if before_ok && after_ok {
+            out.push_str(to);
+        } else {
+            out.push_str(name);
+        }
+        rest = after;
+    }
+    out.push_str(rest);
+    out
 }
 
 /// `true` se a linha declara `uniform <name>` (`<name>` como palavra inteira,
@@ -619,5 +640,77 @@ void main() { c = texture(OriginalHistory1, vUV); }
             out.textures[0].semantic,
             TextureSemantic::OriginalHistory(1)
         );
+    }
+}
+
+#[cfg(test)]
+mod probe {
+    /// Experimento: o naga spv-in aceita sampler COMBINADO (`uniform sampler2D`)
+    /// vindo do glslang? Se aceitasse, todo o `rewrite` de sampler seria
+    /// desnecessário. Ignorado — é sonda de investigação, não regressão.
+    #[test]
+    #[ignore]
+    fn naga_accepts_combined_sampler() {
+        let glsl = r#"#version 450
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 FragColor;
+layout(set = 0, binding = 2) uniform sampler2D Source;
+vec4 helper(sampler2D t, vec2 uv) { return texture(t, uv); }
+void main() { FragColor = helper(Source, vUV); }
+"#;
+        let src = glslang::ShaderSource::from(glsl);
+        let input = glslang::ShaderInput::new(
+            &src,
+            glslang::ShaderStage::Fragment,
+            &glslang::CompilerOptions {
+                source_language: glslang::SourceLanguage::GLSL,
+                target: glslang::Target::Vulkan {
+                    version: glslang::VulkanVersion::Vulkan1_0,
+                    spirv_version: glslang::SpirvVersion::SPIRV1_0,
+                },
+                ..Default::default()
+            },
+            None,
+            None,
+        )
+        .expect("glslang aceita sampler combinado + helper");
+        let spv = glslang::Compiler::acquire()
+            .unwrap()
+            .create_shader(input)
+            .expect("shader")
+            .compile()
+            .expect("spirv");
+        eprintln!("glslang OK: {} words", spv.len());
+
+        match naga::front::spv::Frontend::new(
+            spv.iter().copied(),
+            &naga::front::spv::Options {
+                adjust_coordinate_space: true,
+                strict_capabilities: false,
+                block_ctx_dump_prefix: None,
+            },
+        )
+        .parse()
+        {
+            Ok(m) => {
+                eprintln!("naga spv-in OK. globals:");
+                for (_, g) in m.global_variables.iter() {
+                    eprintln!(
+                        "   {:?} space={:?} ty={:?}",
+                        g.name, g.space, m.types[g.ty].inner
+                    );
+                }
+                let info = naga::valid::Validator::new(
+                    naga::valid::ValidationFlags::all(),
+                    naga::valid::Capabilities::all(),
+                )
+                .validate(&m);
+                eprintln!(
+                    "validação: {:?}",
+                    info.map(|_| "OK").map_err(|e| e.to_string())
+                );
+            }
+            Err(e) => eprintln!("naga spv-in FALHOU: {e:?}"),
+        }
     }
 }

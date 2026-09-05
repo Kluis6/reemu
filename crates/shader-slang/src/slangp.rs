@@ -101,7 +101,13 @@ pub struct Preset {
 
 /// Lê e parseia um `.slangp` do disco (segue `#reference`).
 pub fn parse_slangp_file(path: &Path) -> Result<Preset, SlangError> {
-    parse_file_inner(path, 0)
+    let preset = parse_file_inner(path, 0)?;
+    // Só o topo exige passes: um arquivo referenciado pode ser um `.params`
+    // (só valores de parâmetro), que legitimamente não declara `shaders`.
+    if preset.passes.is_empty() {
+        return Err(SlangError::MissingShaderCount);
+    }
+    Ok(preset)
 }
 
 /// Parseia o conteúdo de um `.slangp` já em memória. `base_dir` resolve os
@@ -123,6 +129,20 @@ pub(crate) fn read_shader_text(path: &Path) -> Result<String, SlangError> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+/// Sobrepõe `over` em `base`: passes e texturas só se `over` trouxer os seus
+/// (um `.params` referenciado só carrega parâmetros); parâmetros sempre somam,
+/// com `over` vencendo.
+fn merge_preset(mut base: Preset, over: Preset) -> Preset {
+    if !over.passes.is_empty() {
+        base.passes = over.passes;
+    }
+    if !over.textures.is_empty() {
+        base.textures = over.textures;
+    }
+    base.parameters.extend(over.parameters);
+    base
+}
+
 fn parse_file_inner(path: &Path, depth: u8) -> Result<Preset, SlangError> {
     if depth > 8 {
         return Err(SlangError::ReferenceLoop(path.display().to_string()));
@@ -131,35 +151,47 @@ fn parse_file_inner(path: &Path, depth: u8) -> Result<Preset, SlangError> {
     let base_dir = path.parent().unwrap_or_else(|| Path::new("."));
     let kv = parse_kv(&text);
 
-    // `#reference` → herda; as chaves deste arquivo sobrescrevem.
-    if let Some(reference) = kv.get("#reference") {
-        let ref_path = resolve(base_dir, reference.trim_matches('"'));
-        let mut base = parse_file_inner(&ref_path, depth + 1)?;
+    // `#reference` → herda. Podem ser várias (Mega Bezel referencia o preset
+    // base E um `.params` só de valores): aplica na ordem, a última vence, e
+    // as chaves deste arquivo sobrescrevem todas.
+    let refs: Vec<&String> = kv
+        .iter()
+        .filter(|(k, _)| k.starts_with("#reference"))
+        .map(|(_, v)| v)
+        .collect();
+    if !refs.is_empty() {
+        let mut base: Option<Preset> = None;
+        for reference in refs {
+            let ref_path = resolve(base_dir, reference.trim_matches('"'));
+            let next = parse_file_inner(&ref_path, depth + 1)?;
+            base = Some(match base {
+                None => next,
+                Some(acc) => merge_preset(acc, next),
+            });
+        }
+        let mut base = base.expect("refs não-vazio");
         let over = build_preset_inner(&kv, base_dir, false)?;
-        if !over.passes.is_empty() {
-            base.passes = over.passes;
-        }
-        base.parameters.extend(over.parameters);
-        if !over.textures.is_empty() {
-            base.textures = over.textures;
-        }
+        base = merge_preset(base, over);
         return Ok(base);
     }
 
-    build_preset(&kv, base_dir)
+    build_preset_inner(&kv, base_dir, false)
 }
 
 /// `chave -> valor` (última ocorrência vence). `#reference` é guardado com a
 /// chave literal `#reference`.
 fn parse_kv(text: &str) -> BTreeMap<String, String> {
-    let mut map = BTreeMap::new();
+    let mut map: BTreeMap<String, String> = BTreeMap::new();
     for raw in text.lines() {
         let line = raw.trim();
         if line.is_empty() {
             continue;
         }
         if let Some(rest) = line.strip_prefix("#reference") {
-            map.insert("#reference".to_string(), rest.trim().to_string());
+            // Pode haver várias — Mega Bezel encadeia o preset base + um
+            // `.params` de valores. Numeramos pra preservar a ordem no BTreeMap.
+            let n = map.keys().filter(|k| k.starts_with("#reference")).count();
+            map.insert(format!("#reference{n:03}"), rest.trim().to_string());
             continue;
         }
         if line.starts_with('#') || line.starts_with("//") {

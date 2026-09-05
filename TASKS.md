@@ -79,9 +79,33 @@ telas grandes (grid `100vh`/`minmax(0,1fr)`, tiles fluidos), sistema de temas
 de cor (Verde Xbox/Roxo/Âmbar via `createDarkTheme` + tokens custom `--reemu*`,
 `useThemeStore`). FALTA: tela Config › Aparência + tema claro/HC + persist Rust.
 
-**Próximo — decisão pendente do usuário**: (A) compilador slang glslang→SPIR-V
-[recomendado 2×], (B) etapa 12 Vulkan HW, (C) etapa 11 Android, (D) auditoria
-de perf do caminho do core. Ver backlog abaixo.
+**Compilador slang (opção A) — FEITO** (2026-09-05, `98e8668` fase 1 +
+`33765a3` fase 2):
+
+- **Fase 1**: frontend GLSL trocado de `naga::front::glsl` (engasgava com
+  `#define`-macro, construtor `mat4`, ternário em const) pra **glslang
+  vendorizado → SPIR-V → `naga::front::spv` → WGSL**. CI += `g++`.
+- **Fase 2**: executor multi-entrada em `gpu.rs` — `TextureSemantic`
+  (`Source`/`Original`/`OriginalHistoryN`/`PassOutputN`/`PassFeedbackN`/alias/LUT), BGL
+  por passe, ring de history, feedback (cópia pro próximo frame),
+  `PassOutput`/aliases, LUTs do `.slangp` (`decode_png`), `float/srgb_
+  framebuffer`, `frame_count_mod`, `wrap_mode`, `scale_type=viewport`.
+  Interop (HW render): history = frame atual (degradação aceita).
+- **Pendente**: `mipmap_input` / `mipmap` de LUT (parsing existe; falta gerar
+  a cadeia de mips — wgpu não faz automático). TODOs em `PassSpec`/`LutSpec`.
+- Ver memória `reemu-slang-shader-pipeline`.
+
+**Próximo — validar contra presets reais** (pré-requisito do downloader de
+shaders): `libretro/slang-shaders` clonado em
+`~/.local/share/com.reemu.desktop/shaders/slang-shaders` (2554 presets).
+Harness: `gpu.rs::tests::field_validate_real_presets` (`#[ignore]`, roda
+`build_specs` em cada `.slangp` e tabula) —
+`cargo test -p reemu-desktop --lib field_validate_real_presets -- --ignored --nocapture`.
+Objetivo: taxa de sucesso + lista curada dos que funcionam + saber se
+`mipmap` trava algum alvo importante.
+
+**Depois disso, decisão pendente**: (B) etapa 12 Vulkan HW, (C) etapa 11
+Android, (D) auditoria de perf do caminho do core. Ver backlog abaixo.
 
 ## Como atualizar
 
@@ -104,21 +128,28 @@ Renderização / filtros (independente da etapa 12):
   (raiz no `localStorage`, o shader ativo continua persistido no DB via
   `set_shader`), filtro de texto, grupos colapsáveis. O "Carregar .slangp
   avulso…" continua pra arquivos fora da pasta. Não tocou `gpu.rs`.
+- ~~**Compilador slang via glslang→SPIR-V**~~ **feito (2026-09-05, `98e8668`)**
+  — substitui o `naga` glsl-in. Ver o bloco "Compilador slang (opção A)" acima.
+- ~~**Feedback / OriginalHistory / LUT no `gpu.rs`**~~ **feito (2026-09-05,
+  `33765a3`)** — ring de history + cópia de feedback + LUTs do `.slangp`.
+  Falta só `mipmap_input`/`mipmap` de LUT (gerar a cadeia de mips).
+- **Validar contra presets reais** — `slang-shaders` clonado; harness
+  `field_validate_real_presets` (`#[ignore]`) em `gpu.rs`. Produz a lista
+  curada (substitui o item "presets que já compilam no `naga`") e diz se
+  `mipmap` trava algum alvo. **Pré-requisito do downloader.**
 - **Downloader de pacote de shaders (opção B)** — botão "Baixar pacote de
   shaders" espelhando `core_catalog.rs`: baixa o tarball de
   `libretro/slang-shaders` pra `<dados>/shaders/` + aponta a `ShaderLibrary`
-  pra lá. ~2-3 dias. Só vale **depois** do compilador glslang + Feedback/LUT
-  (senão baixa Mega Bezel e só dá erro de compilação).
-- **Presets que já compilam no `naga`** — curar lista dos que funcionam
-  (sharp-bilinear, pixellate, scale2x/3x, super-xbr, MMPX, crt-geom/lottes/
-  zfast, CAS/RCAS). Zero código.
-- **Compilador slang via glslang→SPIR-V** (substitui `naga` glsl-in) — ~1-2
-  semanas, TOCA `crates/shader-slang`. Destrava FSR 1.0 completo, xBRZ,
-  ScaleFX, CRT-Royale, guest-advanced.
-- **Feedback / OriginalHistory / LUT no `gpu.rs`** — ping-pong + ring de
-  textura + carregar PNGs de LUT do `.slangp`. ~1 semana. Destrava Mega Bezel
-  e CRT shaders de qualidade média.
-- **HDR / tonemapping** — depois do compilador completo.
+  pra lá. ~2-3 dias. **Desbloqueado** (compilador + Feedback/LUT feitos) —
+  fazer depois da validação de campo.
+- **Mipmaps** (`mipmap_input` por passe + `mipmap` de LUT) — wgpu não gera
+  automático: alocar com `mip_level_count` > 1 e fazer a cadeia de blits
+  down-sample. Só vale se a validação de campo mostrar preset alvo travado.
+- **FSR 1.0 / RCAS / CAS como preset de upscaling** — destravado pelo
+  compilador; espacial (1 frame), diferente de DLSS/FSR2/XeSS temporais que
+  **não servem** pra emulação (sem motion vectors/depth/jitter — o core só
+  entrega o framebuffer pronto). Avaliado 2026-09-05.
+- **HDR / tonemapping** — depois da validação de campo.
 
 Cores com GPU:
 - ~~**N64: app fecha ao carregar a 2ª ROM na mesma sessão**~~ **resolvido

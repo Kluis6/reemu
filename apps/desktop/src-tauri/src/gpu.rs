@@ -2603,4 +2603,115 @@ mod tests {
 
         std::fs::remove_dir_all(&dir).ok();
     }
+
+    fn collect_slangp(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                collect_slangp(&p, out);
+            } else if p.extension().and_then(|x| x.to_str()) == Some("slangp") {
+                out.push(p);
+            }
+        }
+    }
+
+    /// Roda `build_specs` (parse + glslang→SPIR-V→naga por passe) em cada
+    /// `.slangp` de uma pasta e tabula. Ignorado por padrão — é validação de
+    /// campo, não CI. Rode com:
+    ///   REEMU_SHADER_DIR=~/.local/share/com.reemu.desktop/shaders/slang-shaders \
+    ///   cargo test -p reemu-desktop --lib field_validate_real_presets -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn field_validate_real_presets() {
+        let dir = std::env::var("REEMU_SHADER_DIR").unwrap_or_else(|_| {
+            format!(
+                "{}/.local/share/com.reemu.desktop/shaders/slang-shaders",
+                std::env::var("HOME").unwrap_or_default()
+            )
+        });
+        let root = std::path::Path::new(&dir);
+        let mut presets = Vec::new();
+        collect_slangp(root, &mut presets);
+        presets.sort();
+        assert!(!presets.is_empty(), "nenhum .slangp em {dir}");
+        eprintln!("validando {} presets em {dir}\n", presets.len());
+
+        let limit: usize = std::env::var("REEMU_SHADER_LIMIT")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(usize::MAX);
+
+        let (mut ok, mut err) = (0usize, 0usize);
+        // tally por categoria (1º componente do caminho; `bezel/X` usa 2 —
+        // os mega-pacotes são projetos distintos)
+        let mut by_dir: std::collections::BTreeMap<String, (usize, usize)> = Default::default();
+        let cat = |rel: &str| -> String {
+            let parts: Vec<&str> = rel.split('/').collect();
+            match parts.as_slice() {
+                ["bezel", sub, ..] => format!("bezel/{sub}"),
+                [top, _, ..] => top.to_string(),
+                _ => "(raiz)".to_string(),
+            }
+        };
+        let mut by_reason: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        // erro completo do 1º caso de cada grupo (a chave é truncada)
+        let mut full: std::collections::BTreeMap<String, String> = Default::default();
+        for p in presets.iter().take(limit) {
+            let rel = p.strip_prefix(root).unwrap_or(p).display().to_string();
+            let entry = by_dir.entry(cat(&rel)).or_default();
+            match build_specs(p.to_str().unwrap()) {
+                Ok(b) => {
+                    ok += 1;
+                    entry.0 += 1;
+                    let _ = b;
+                }
+                Err(e) => {
+                    err += 1;
+                    entry.1 += 1;
+                    // agrupa pela causa: tira os caminhos absolutos (ruído) e
+                    // corta na 1ª linha, senão cada erro do glslang vira um grupo.
+                    let cleaned = e.replace(&dir, "…").replace('\n', " ");
+                    let key: String = cleaned.chars().take(140).collect();
+                    full.entry(key.clone()).or_insert(cleaned);
+                    by_reason.entry(key).or_default().push(rel);
+                }
+            }
+        }
+        eprintln!("\n=== {ok} ok · {err} falharam ===\n");
+        let mut reasons: Vec<_> = by_reason.into_iter().collect();
+        reasons.sort_by_key(|(_, v)| std::cmp::Reverse(v.len()));
+        for (reason, files) in &reasons {
+            eprintln!("[{}×] {}", files.len(), reason);
+            if std::env::var_os("REEMU_SHADER_FULL_ERR").is_some() {
+                if let Some(f) = full.get(reason) {
+                    eprintln!("  ↳ {f}");
+                }
+            }
+            for f in files.iter().take(4) {
+                eprintln!("      {f}");
+            }
+            if files.len() > 4 {
+                eprintln!("      … +{}", files.len() - 4);
+            }
+        }
+        eprintln!("\n=== por categoria (ok/total) ===");
+        let mut cats: Vec<_> = by_dir.into_iter().collect();
+        cats.sort_by_key(|(_, (o, e))| std::cmp::Reverse(o + e));
+        for (c, (o, e)) in &cats {
+            let t = o + e;
+            eprintln!(
+                "  {:>4}/{:<4} {:>5.1}%  {c}",
+                o,
+                t,
+                100.0 * *o as f64 / t as f64
+            );
+        }
+        eprintln!(
+            "\ntaxa de sucesso: {:.1}%",
+            100.0 * ok as f64 / (ok + err).max(1) as f64
+        );
+    }
 }
