@@ -272,40 +272,353 @@ fn rewrite(glsl: &str) -> (String, Vec<TextureBind>) {
         }
     }
 
-    // 3. Todo uso restante do identificador → `sampler2D(<n>_SLANG_T, <n>_SLANG_S)`.
-    //    Substituir o IDENTIFICADOR (e não só chamadas `texture(NAME, …)`) é o
-    //    que faz funcionar shader que passa o sampler pra função própria —
-    //    `FxaaPixelShader(pos, Source, rcp)`, `texture2d_(Source, …)` — porque o
-    //    parâmetro continua declarado `sampler2D` e recebe um `sampler2D`.
-    for b in &binds {
-        out = replace_ident(
-            &out,
-            &b.name,
-            &format!("sampler2D({0}_SLANG_T, {0}_SLANG_S)", b.name),
-        );
-    }
+    // 3. Assinaturas de função que recebem `sampler2D` → par texture+sampler.
+    //    A partir daqui trabalhamos sem comentários (ver `blank_comments`).
+    let out = blank_comments(&out);
+    let (out, fns) = split_sampler_params(&out);
+
+    // 4. Cada uso de identificador de sampler na forma certa pro contexto
+    //    (construtora no ponto de uso, ou par como argumento de função).
+    let globals: Vec<String> = binds.iter().map(|b| b.name.clone()).collect();
+    let out = rewrite_sampler_uses(&out, &globals, &fns);
     (out, binds)
 }
 
-/// Troca `name` por `to` só quando aparece como identificador inteiro — não
-/// dentro de outro (`Source` não casa em `SourceSize` nem em `Source_SLANG_T`).
-fn replace_ident(src: &str, name: &str, to: &str) -> String {
-    let is_word = |c: char| c.is_alphanumeric() || c == '_';
-    let mut out = String::with_capacity(src.len() + 64);
-    let mut rest = src;
-    while let Some(i) = rest.find(name) {
-        let before_ok = rest[..i].chars().next_back().is_none_or(|c| !is_word(c));
-        let after = &rest[i + name.len()..];
-        let after_ok = after.chars().next().is_none_or(|c| !is_word(c));
-        out.push_str(&rest[..i]);
-        if before_ok && after_ok {
-            out.push_str(to);
+// ---------------------------------------------------------------------------
+// Separação de sampler combinado (GLSL → GLSL), pré-glslang.
+//
+// O naga spv-in não consome `OpTypeSampledImage` (ver `probe::
+// naga_accepts_combined_sampler`), então todo `sampler2D` precisa virar um par
+// `texture2D` + `sampler`. Isso tem três lados:
+//
+//   a) o global   `uniform sampler2D S;`   → `texture2D S_SLANG_T` + `sampler S_SLANG_S`
+//   b) a função   `f(sampler2D t, …)`      → `f(texture2D t_SLANG_T, sampler t_SLANG_S, …)`
+//   c) cada uso do identificador, em uma de DUAS formas:
+//        - argumento de função do usuário que espera sampler → `X_SLANG_T, X_SLANG_S`
+//        - qualquer outro ponto (built-in `texture(…)` etc.)  → `sampler2D(X_SLANG_T, X_SLANG_S)`
+//
+// A distinção em (c) é obrigatória: GLSL só aceita a construtora `sampler2D(…)`
+// no ponto de uso — passá-la como argumento dá
+// "sampler constructor must appear at point of use".
+// ---------------------------------------------------------------------------
+
+/// Troca todo comentário (`//…` e `/*…*/`) por espaços, preservando o
+/// comprimento em bytes e as quebras de linha. Os scanners de sampler abaixo
+/// decidem estrutura (parênteses, chaves, a palavra `sampler2D`) contando
+/// bytes, e o Mega Bezel tem MUITA assinatura e chave dentro de comentário —
+/// sem isto o `{}` desbalanceia e a função corrente é identificada errado.
+/// Comentário não faz falta pro glslang, e manter o offset mantém as linhas
+/// dos erros dele coerentes.
+fn blank_comments(src: &str) -> String {
+    let b = src.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0usize;
+    while i < b.len() {
+        if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'/' {
+            while i < b.len() && b[i] != b'\n' {
+                out.push(b' ');
+                i += 1;
+            }
+        } else if b[i] == b'/' && i + 1 < b.len() && b[i + 1] == b'*' {
+            let end = src[i + 2..]
+                .find("*/")
+                .map(|o| i + 2 + o + 2)
+                .unwrap_or(b.len());
+            while i < end {
+                out.push(if b[i] == b'\n' { b'\n' } else { b' ' });
+                i += 1;
+            }
         } else {
-            out.push_str(name);
+            out.push(b[i]);
+            i += 1;
         }
-        rest = after;
     }
-    out.push_str(rest);
+    // só trocamos bytes ASCII por espaço; o resto ficou intacto
+    String::from_utf8(out).unwrap_or_else(|_| src.to_string())
+}
+
+/// Índices dos parâmetros `sampler2D` de cada função do usuário (na numeração
+/// original de argumentos) + os nomes desses parâmetros.
+#[derive(Debug, Default, Clone)]
+struct SamplerFn {
+    /// posições (0-based) que eram `sampler2D` na assinatura original
+    positions: Vec<usize>,
+    /// nome de cada um desses parâmetros
+    names: Vec<String>,
+}
+
+type SamplerFns = std::collections::HashMap<String, SamplerFn>;
+
+fn is_word_byte(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'_'
+}
+
+/// Acha `needle` como palavra inteira a partir de `from`.
+fn find_word(hay: &str, needle: &str, from: usize) -> Option<usize> {
+    let b = hay.as_bytes();
+    let mut i = from;
+    while i <= hay.len() {
+        let off = hay.get(i..)?.find(needle)?;
+        let p = i + off;
+        let e = p + needle.len();
+        let before_ok = p == 0 || !is_word_byte(b[p - 1]);
+        let after_ok = e >= b.len() || !is_word_byte(b[e]);
+        if before_ok && after_ok {
+            return Some(p);
+        }
+        i = e;
+    }
+    None
+}
+
+/// Índice do `)` que fecha o `(` em `open`.
+fn matching_paren(b: &[u8], open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (i, c) in b.iter().enumerate().skip(open) {
+        match c {
+            b'(' => depth += 1,
+            b')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Identificador imediatamente antes do `(` em `open` → `(nome, início)`.
+fn ident_before(hay: &str, open: usize) -> Option<(String, usize)> {
+    let b = hay.as_bytes();
+    let mut e = open;
+    while e > 0 && (b[e - 1] as char).is_whitespace() {
+        e -= 1;
+    }
+    let mut s = e;
+    while s > 0 && is_word_byte(b[s - 1]) {
+        s -= 1;
+    }
+    (s < e).then(|| (hay[s..e].to_string(), s))
+}
+
+/// Fatia a lista de argumentos por vírgula de nível 0 → ranges dentro de `s`.
+fn split_args(s: &str) -> Vec<(usize, usize)> {
+    let b = s.as_bytes();
+    let (mut out, mut depth, mut start) = (Vec::new(), 0i32, 0usize);
+    for (i, c) in b.iter().enumerate() {
+        match c {
+            b'(' | b'[' => depth += 1,
+            b')' | b']' => depth -= 1,
+            b',' if depth == 0 => {
+                out.push((start, i));
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    if !s[start..].trim().is_empty() || !out.is_empty() {
+        out.push((start, s.len()));
+    }
+    out
+}
+
+/// Passo (b): reescreve as listas de parâmetro que recebem `sampler2D`.
+/// Devolve o fonte novo + o mapa de funções (pro passo (c) saber onde um
+/// argumento vira dois).
+fn split_sampler_params(src: &str) -> (String, SamplerFns) {
+    let mut fns: SamplerFns = SamplerFns::default();
+    let mut out = String::with_capacity(src.len() + 256);
+    let mut cur = 0usize;
+
+    // Cada `(` … `)` que contenha o token `sampler2D` é lista de parâmetros:
+    // nesta altura ainda não geramos nenhuma construtora `sampler2D(`.
+    let b = src.as_bytes();
+    let mut i = 0usize;
+    while i < src.len() {
+        let Some(open) = src[i..].find('(').map(|o| i + o) else {
+            break;
+        };
+        let Some(close) = matching_paren(b, open) else {
+            break;
+        };
+        let inner = &src[open + 1..close];
+        if find_word(inner, "sampler2D", 0).is_none() {
+            i = open + 1;
+            continue;
+        }
+        let Some((fname, _)) = ident_before(src, open) else {
+            i = open + 1;
+            continue;
+        };
+
+        let mut entry = SamplerFn::default();
+        let mut new_params: Vec<String> = Vec::new();
+        for (idx, (a, z)) in split_args(inner).into_iter().enumerate() {
+            let raw = &inner[a..z];
+            match sampler_param_name(raw) {
+                Some(pname) => {
+                    new_params.push(format!(
+                        " texture2D {pname}_SLANG_T, sampler {pname}_SLANG_S"
+                    ));
+                    entry.positions.push(idx);
+                    entry.names.push(pname);
+                }
+                None => new_params.push(raw.to_string()),
+            }
+        }
+        out.push_str(&src[cur..=open]);
+        out.push_str(&new_params.join(","));
+        out.push(')');
+        cur = close + 1;
+        i = close + 1;
+        if !entry.positions.is_empty() {
+            fns.insert(fname, entry);
+        }
+    }
+    out.push_str(&src[cur..]);
+    (out, fns)
+}
+
+/// `"in sampler2D tex"` → `Some("tex")`; qualquer outra coisa → `None`.
+fn sampler_param_name(param: &str) -> Option<String> {
+    let t = param.trim();
+    let pos = find_word(t, "sampler2D", 0)?;
+    // só qualificadores podem vir antes (`in`, `const`…)
+    if t[..pos]
+        .split_whitespace()
+        .any(|w| !matches!(w, "in" | "const" | "highp" | "mediump" | "lowp"))
+    {
+        return None;
+    }
+    let name: String = t[pos + "sampler2D".len()..]
+        .trim()
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    (!name.is_empty()).then_some(name)
+}
+
+/// Passo (c): reescreve cada uso de identificador de sampler na forma certa
+/// pro contexto. `globals` valem no arquivo todo; os parâmetros de uma função
+/// só valem dentro do corpo dela (daí o rastreio de `{}` e da função corrente).
+fn rewrite_sampler_uses(src: &str, globals: &[String], fns: &SamplerFns) -> String {
+    let b = src.as_bytes();
+    let mut out = String::with_capacity(src.len() + 512);
+    // pilha de chamadas: (callee, índice do argumento corrente)
+    let mut calls: Vec<(Option<String>, usize)> = Vec::new();
+    let mut brace_depth = 0i32;
+    let mut cur_fn: Option<String> = None;
+    // (nome, índice do `)`) da última chamada fechada no nível de arquivo —
+    // se o `{` seguinte só tiver espaço no meio, é a definição dessa função.
+    let mut last_top_close: Option<(String, usize)> = None;
+    let mut i = 0usize;
+
+    while i < src.len() {
+        let c = b[i];
+        // identificador?
+        if is_word_byte(c) && !c.is_ascii_digit() {
+            let s = i;
+            while i < src.len() && is_word_byte(b[i]) {
+                i += 1;
+            }
+            let word = &src[s..i];
+            // é chamada? (próximo não-branco é `(`)
+            let mut j = i;
+            while j < src.len() && (b[j] as char).is_whitespace() {
+                j += 1;
+            }
+            let is_call = j < src.len() && b[j] == b'(';
+
+            let is_sampler = !is_call
+                && (globals.iter().any(|g| g == word)
+                    || cur_fn
+                        .as_ref()
+                        .and_then(|f| fns.get(f))
+                        .is_some_and(|e| e.names.iter().any(|n| n == word)));
+
+            if is_sampler {
+                // forma par só quando é argumento de função do usuário numa
+                // posição que era `sampler2D`; senão, construtora no ponto de uso.
+                let pair = calls
+                    .last()
+                    .and_then(|(callee, idx)| {
+                        callee.as_ref().and_then(|c| fns.get(c)).map(|e| (e, *idx))
+                    })
+                    .is_some_and(|(e, idx)| e.positions.contains(&idx));
+                if pair {
+                    out.push_str(word);
+                    out.push_str("_SLANG_T, ");
+                    out.push_str(word);
+                    out.push_str("_SLANG_S");
+                } else {
+                    out.push_str("sampler2D(");
+                    out.push_str(word);
+                    out.push_str("_SLANG_T, ");
+                    out.push_str(word);
+                    out.push_str("_SLANG_S)");
+                }
+            } else {
+                out.push_str(word);
+            }
+            if is_call {
+                out.push_str(&src[i..j]);
+                out.push('(');
+                calls.push((Some(word.to_string()), 0));
+                i = j + 1;
+            }
+            continue;
+        }
+        match c {
+            b'(' => {
+                calls.push((None, 0));
+                out.push('(');
+                i += 1;
+            }
+            b')' => {
+                let popped = calls.pop();
+                if brace_depth == 0 && calls.is_empty() {
+                    if let Some((Some(name), _)) = popped {
+                        last_top_close = Some((name, i));
+                    }
+                }
+                out.push(')');
+                i += 1;
+            }
+            b',' => {
+                if let Some((_, idx)) = calls.last_mut() {
+                    *idx += 1;
+                }
+                out.push(',');
+                i += 1;
+            }
+            b'{' => {
+                if brace_depth == 0 {
+                    cur_fn = last_top_close.as_ref().and_then(|(name, close)| {
+                        src[close + 1..i].trim().is_empty().then(|| name.clone())
+                    });
+                }
+                brace_depth += 1;
+                out.push('{');
+                i += 1;
+            }
+            b'}' => {
+                brace_depth -= 1;
+                if brace_depth == 0 {
+                    cur_fn = None;
+                }
+                out.push('}');
+                i += 1;
+            }
+            _ => {
+                // avança por CHAR (o fonte pode ter comentário em UTF-8)
+                let ch = src[i..].chars().next().unwrap();
+                out.push(ch);
+                i += ch.len_utf8();
+            }
+        }
+    }
     out
 }
 
@@ -618,6 +931,75 @@ void main() {
         assert!(out.fragment_wgsl.contains("fn main"));
         let (_, layout) = &out.uniforms[0];
         assert!(layout.fields.iter().any(|f| f.name == "STRENGTH"));
+    }
+
+    /// O padrão que travava ~1265 presets: o shader passa o sampler pra uma
+    /// função própria. A construtora `sampler2D(…)` NÃO pode ser argumento
+    /// ("sampler constructor must appear at point of use"), então a assinatura
+    /// tem que virar um par e o call-site expandir em dois argumentos.
+    #[test]
+    fn sampler_passed_to_user_function_compiles() {
+        let s = r#"
+#version 450
+#pragma stage vertex
+layout(location = 0) in vec4 Position;
+layout(location = 1) in vec2 TexCoord;
+layout(location = 0) out vec2 vUV;
+void main() { gl_Position = Position; vUV = TexCoord; }
+#pragma stage fragment
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 FragColor;
+layout(set = 0, binding = 2) uniform sampler2D Source;
+vec4 tap(sampler2D t, vec2 uv) { return texture(t, uv); }
+vec3 blur(sampler2D t, vec2 uv, float d) {
+    return (tap(t, uv).rgb + tap(t, uv + vec2(d, 0.0)).rgb) * 0.5;
+}
+void main() { FragColor = vec4(blur(Source, vUV, 0.01), 1.0); }
+"#;
+        let out = compile(&preprocess_str(s)).expect("sampler em função do usuário");
+        assert_eq!(out.textures.len(), 1);
+        assert_eq!(out.textures[0].semantic, TextureSemantic::Source);
+        assert!(out.fragment_wgsl.contains("@fragment"));
+    }
+
+    #[test]
+    fn splits_signature_and_picks_the_right_use_form() {
+        let glsl = "layout(set=0,binding=2) uniform sampler2D Source;\n\
+                    vec4 tap(sampler2D t, vec2 uv) { return texture(t, uv); }\n\
+                    void main() { FragColor = tap(Source, vUV) + texture(Source, vUV); }\n";
+        let (out, binds) = rewrite(glsl);
+        assert_eq!(binds.len(), 1);
+        // assinatura virou par
+        assert!(
+            out.contains("texture2D t_SLANG_T, sampler t_SLANG_S"),
+            "{out}"
+        );
+        // dentro do corpo, o parâmetro é usado na forma construtora
+        assert!(
+            out.contains("texture(sampler2D(t_SLANG_T, t_SLANG_S), uv)"),
+            "{out}"
+        );
+        // no call-site da função do usuário, vira DOIS argumentos (sem construtora)
+        assert!(
+            out.contains("tap(Source_SLANG_T, Source_SLANG_S, vUV)"),
+            "{out}"
+        );
+        // no built-in, construtora
+        assert!(
+            out.contains("texture(sampler2D(Source_SLANG_T, Source_SLANG_S), vUV)"),
+            "{out}"
+        );
+    }
+
+    /// `SourceSize`/`Source_SLANG_T` não podem ser atingidos pela troca de
+    /// `Source` — a substituição é por palavra inteira.
+    #[test]
+    fn does_not_touch_longer_identifiers() {
+        let glsl = "layout(set=0,binding=2) uniform sampler2D Source;\n\
+                    void main() { float a = params.SourceSize.x; vec4 c = texture(Source, uv); }\n";
+        let (out, _) = rewrite(glsl);
+        assert!(out.contains("params.SourceSize.x"), "{out}");
+        assert!(!out.contains("SourceSize_SLANG"), "{out}");
     }
 
     #[test]
