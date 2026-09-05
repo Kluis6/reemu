@@ -95,14 +95,44 @@ de cor (Verde Xbox/Roxo/Âmbar via `createDarkTheme` + tokens custom `--reemu*`,
   a cadeia de mips — wgpu não faz automático). TODOs em `PassSpec`/`LutSpec`.
 - Ver memória `reemu-slang-shader-pipeline`.
 
-**Próximo — validar contra presets reais** (pré-requisito do downloader de
-shaders): `libretro/slang-shaders` clonado em
-`~/.local/share/com.reemu.desktop/shaders/slang-shaders` (2554 presets).
-Harness: `gpu.rs::tests::field_validate_real_presets` (`#[ignore]`, roda
-`build_specs` em cada `.slangp` e tabula) —
-`cargo test -p reemu-desktop --lib field_validate_real_presets -- --ignored --nocapture`.
-Objetivo: taxa de sucesso + lista curada dos que funcionam + saber se
-`mipmap` trava algum alvo importante.
+**Validação de campo — FEITA** (2026-09-05, `53771e8`). `libretro/slang-shaders`
+clonado em `~/.local/share/com.reemu.desktop/shaders/slang-shaders`.
+Harness `gpu.rs::tests::field_validate_real_presets` (`#[ignore]`, fora do CI):
+`cargo test -p reemu-desktop --lib field_validate_real_presets -- --ignored --nocapture`
+(`REEMU_SHADER_DIR`, `REEMU_SHADER_LIMIT`, `REEMU_SHADER_FULL_ERR=1`).
+
+**Resultado: 722/2554 = 28,3%.** Mas 1441 das 1832 falhas são 3 mega-pacotes,
+cada um com UM blocker — fora deles, ~65%. Por categoria:
+
+| 100% | hdr · dithering · scanlines · motionblur · stereoscopic-3d · denoisers · subframe-bfi · gpu · deblur · film |
+|---|---|
+| 84–98% | interpolation 98 · reshade 96 · pal 94 · pixel-art… 74 · ntsc 84 · misc 84 |
+| 45–65% | handheld 64 · crt 61 · edge-smoothing 61 · border 56 · downsample 53 · presets 44 |
+| 0% | bezel/Mega_Bezel (660) · bezel/scanline-classic (602) · bezel/koko-aio (179) |
+
+Duas correções saíram daí (no `53771e8`): `#reference` múltiplo (o Mega Bezel
+encadeia preset base + `.params`; só a última sobrevivia) e rewrite de sampler
+por identificador (cobre qualquer built-in, não só a lista fixa).
+
+**Blockers abertos** — cada um destrava um pacote inteiro:
+
+1. **`sampler2D` como parâmetro de função do usuário** — GLSL proíbe a
+   construtora como argumento (`sampler constructor must appear at point of
+   use`). Precisa reescrever a assinatura (`sampler2D t` → `texture2D t,
+   sampler t_SLANG_S`), os usos no corpo e os call-sites (scanner de lista de
+   argumentos). **Trava ~1265 presets** (Mega_Bezel 660 + scanline-classic 602
+   + fxaa/aa-shader-4.0/bicubic) = **69% de todas as falhas**. Maior alavanca.
+2. **`NotIOShareableType` no vertex** — varying de struct/array, que o WGSL não
+   aceita; precisa achatar em `location`s escalares. Trava koko-aio (~179) +
+   smaa (~3).
+
+Não dá pra pular o rewrite de sampler: a sonda `compile.rs::probe::
+naga_accepts_combined_sampler` (`#[ignore]`) prova que o naga spv-in falha
+(`InvalidId`) com `uniform sampler2D` vindo do glslang — ele mapeia
+`OpTypeSampledImage` pro handle da imagem e perde o sampler.
+
+`mipmap` NÃO apareceu como causa de falha em nenhum preset — segue de baixa
+prioridade.
 
 **Depois disso, decisão pendente**: (B) etapa 12 Vulkan HW, (C) etapa 11
 Android, (D) auditoria de perf do caminho do core. Ver backlog abaixo.
