@@ -18,7 +18,8 @@ mod preprocess;
 mod slangp;
 
 pub use compile::{
-    compile, CompileError, CompiledSlang, UniformField, UniformFieldKind, UniformLayout,
+    compile, CompileError, CompiledSlang, TextureBind, TextureSemantic, UniformField,
+    UniformFieldKind, UniformLayout,
 };
 pub use preprocess::{preprocess_file, preprocess_str, Parameter, SlangSource};
 pub use slangp::{

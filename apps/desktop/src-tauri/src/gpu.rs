@@ -19,7 +19,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use domain::frame_source::{Frame, FrameOrigin};
-use shader_slang::{Scale, UniformFieldKind, UniformLayout};
+use shader_slang::{
+    Scale, TextureBind, TextureSemantic, UniformFieldKind, UniformLayout, WrapMode,
+};
 use video_surface::to_rgba8;
 
 /// `close(2)` cru — pro caminho de erro do import dma_buf (o fd ainda é nosso).
@@ -65,8 +67,8 @@ struct Uniforms {
     frame: vec4<f32>,
 };
 @group(0) @binding(0) var<uniform> U: Uniforms;
-@group(0) @binding(1) var Source: texture_2d<f32>;
-@group(0) @binding(2) var Samp: sampler;
+@group(0) @binding(2) var Source: texture_2d<f32>;
+@group(0) @binding(3) var Samp: sampler;
 "#;
 
 struct BuiltinPass {
@@ -146,7 +148,7 @@ pub fn builtin_preset_names() -> Vec<String> {
 }
 
 /// Como os buffers uniformes do passe são preenchidos a cada frame.
-/// Bindings: 0 = `Push`/params ou os 64 bytes fixos; 3 = `UBO`/global (slang).
+/// Bindings: 0 = `Push`/params ou os 64 bytes fixos; 1 = `UBO`/global (slang).
 enum UniformMode {
     /// 64 bytes: `source_size`, `output_size`, `orig_size`, `frame`.
     Fixed,
@@ -158,9 +160,32 @@ struct PassSpec {
     scale_x: Scale,
     scale_y: Scale,
     linear: bool,
+    wrap: WrapMode,
     vs_wgsl: String,
     fs_wgsl: String,
     uniform: UniformMode,
+    /// Samplers declarados (na ordem = ordem dos bindings). Vazio ⇒ builtin
+    /// com um `Source` implícito (binding 2/3).
+    textures: Vec<TextureBind>,
+    fmt: wgpu::TextureFormat,
+    frame_count_mod: u32,
+    alias: Option<String>,
+    /// A saída deste passe precisa ser guardada pro próximo frame (`*Feedback`).
+    feedback: bool,
+    // TODO(fase 2): `mipmap_input` — precisa gerar a cadeia de mips (wgpu não
+    // faz automático). `slangp::Pass.mipmap_input` já é parseado.
+}
+
+/// Uma textura do usuário do `.slangp` (LUT/máscara), já decodificada — o
+/// upload pra GPU acontece em `FrameProcessor` (que tem o device).
+struct LutSpec {
+    name: String,
+    rgba: Vec<u8>,
+    w: u32,
+    h: u32,
+    linear: bool,
+    wrap: WrapMode,
+    // TODO(fase 2): `mipmap` (`TextureRef.mipmap` já é parseado).
 }
 
 /// Resultado de `build_specs`: preset resolvido pronto pra montar os passes.
@@ -171,17 +196,31 @@ struct BuiltSpecs {
     /// metadados dos `#pragma parameter` (label/min/max/step) pra UI.
     meta: Vec<shader_slang::Parameter>,
     passes: Vec<PassSpec>,
+    luts: Vec<LutSpec>,
+    /// `1 + maior índice de `OriginalHistory`` usado por qualquer passe.
+    history_depth: usize,
 }
+
+type TexView = (wgpu::Texture, wgpu::TextureView, u32, u32);
 
 struct Pass {
     pipeline: wgpu::RenderPipeline,
+    bgl: wgpu::BindGroupLayout,
     scale_x: Scale,
     scale_y: Scale,
     linear: bool,
+    wrap: WrapMode,
     uniform: UniformMode,
-    /// buffers uniformes: `[0]` = binding 0, `[1]` = binding 3.
+    /// buffers uniformes: `[0]` = binding 0 (`Push`), `[1]` = binding 1 (`UBO`).
     ubuf: [wgpu::Buffer; 2],
-    target: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
+    /// Samplers declarados no `.slang` (ordem = ordem dos bindings).
+    textures: Vec<TextureBind>,
+    fmt: wgpu::TextureFormat,
+    frame_count_mod: u32,
+    feedback: bool,
+    target: Option<TexView>,
+    /// Cópia da saída do frame anterior (só quando `feedback`).
+    feedback_target: Option<TexView>,
     bind_group: Option<wgpu::BindGroup>,
     bound: bool,
 }
@@ -284,11 +323,11 @@ pub struct FrameProcessor {
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
-    bgl: wgpu::BindGroupLayout,
-    layout: wgpu::PipelineLayout,
     quad: wgpu::Buffer,
     sampler_nearest: wgpu::Sampler,
     sampler_linear: wgpu::Sampler,
+    /// Samplers por (filtro, wrap) — criados sob demanda (passes + LUTs).
+    sampler_cache: HashMap<(bool, WrapMode), wgpu::Sampler>,
     preset_name: String,
     preset_source: String,
     /// Parâmetros globais do preset `.slangp` (nome → valor atual).
@@ -296,7 +335,17 @@ pub struct FrameProcessor {
     /// Metadados dos `#pragma parameter` (label/min/max/step) — pra UI.
     param_meta: Vec<shader_slang::Parameter>,
     passes: Vec<Pass>,
-    core_tex: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
+    /// Texturas do usuário (LUT/máscara) do `.slangp`, já na GPU.
+    luts: HashMap<String, (wgpu::Texture, wgpu::TextureView, wgpu::Sampler, u32, u32)>,
+    /// Alias de passe (`aliasN` no `.slangp`) → índice do passe.
+    pass_alias: HashMap<String, usize>,
+    /// Ring do frame do core: `[0]` = atual (`Original`), `[n]` = n frames atrás
+    /// (`OriginalHistoryN`). Tamanho = `history_depth`.
+    history: Vec<TexView>,
+    history_depth: usize,
+    /// Tamanho real da saída (surface nativa / comp target) — `scale_type =
+    /// viewport` usa isto.
+    viewport: (u32, u32),
     /// Interop zero-cópia: `dma_buf` do core (GL) importado como textura wgpu,
     /// um por slot do ring. `interop_ok` = o device tem a feature.
     interop_ok: bool,
@@ -351,53 +400,6 @@ impl FrameProcessor {
             adapter.get_info().name
         );
 
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("etapa04 bgl"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                // binding 3 = `UBO`/global do slang; dummy pros embutidos.
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("etapa04 layout"),
-            bind_group_layouts: &[Some(&bgl)],
-            immediate_size: 0,
-        });
         let quad = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("etapa04 quad"),
             size: std::mem::size_of_val(&QUAD) as u64,
@@ -423,22 +425,15 @@ impl FrameProcessor {
                 (build_specs("plain").ok()?, "plain".to_string())
             }
         };
-        let BuiltSpecs {
-            name: preset_name,
-            params,
-            meta: param_meta,
-            passes: specs,
-        } = built;
+        let r = realize(&device, &queue, built)?;
         log::info!(
-            "shader: preset '{preset_name}' ({} passe(s), {} parâmetro(s))",
-            specs.len(),
-            param_meta.len()
+            "shader: preset '{}' ({} passe(s), {} parâmetro(s), {} LUT(s), history {})",
+            r.preset_name,
+            r.passes.len(),
+            r.param_meta.len(),
+            r.luts.len(),
+            r.history_depth
         );
-
-        let passes = specs
-            .into_iter()
-            .map(|s| build_pass(&device, &layout, s))
-            .collect::<Option<Vec<_>>>()?;
 
         let comp = build_composite(&device);
         let flip = build_flip(&device);
@@ -446,19 +441,22 @@ impl FrameProcessor {
         Some(Self {
             sampler_nearest: mk_sampler(wgpu::FilterMode::Nearest),
             sampler_linear: mk_sampler(wgpu::FilterMode::Linear),
+            sampler_cache: HashMap::new(),
             instance,
             adapter,
             device,
             queue,
-            bgl,
-            layout,
             quad,
-            preset_name,
+            preset_name: r.preset_name,
             preset_source: source,
-            params,
-            param_meta,
-            passes,
-            core_tex: None,
+            params: r.params,
+            param_meta: r.param_meta,
+            passes: r.passes,
+            luts: r.luts,
+            pass_alias: r.pass_alias,
+            history: Vec::new(),
+            history_depth: r.history_depth,
+            viewport: (0, 0),
             interop_ok,
             imported: Vec::new(),
             flip_tgt: Vec::new(),
@@ -541,6 +539,7 @@ impl FrameProcessor {
             mapped_at_creation: false,
         });
         log::info!("surface nativa: {w}x{h} {format:?} {present_mode:?}");
+        self.viewport = (w.max(1), h.max(1));
         self.surface = Some(SurfaceOut {
             surface,
             config,
@@ -551,10 +550,15 @@ impl FrameProcessor {
     }
 
     pub fn resize_surface(&mut self, w: u32, h: u32) {
+        self.viewport = (w.max(1), h.max(1));
         if let Some(s) = &mut self.surface {
             s.config.width = w.max(1);
             s.config.height = h.max(1);
             s.surface.configure(&self.device, &s.config);
+        }
+        // `scale_type = viewport` mudou de tamanho → realoca alvos.
+        for p in &mut self.passes {
+            p.bound = false;
         }
     }
 
@@ -812,22 +816,20 @@ impl FrameProcessor {
     }
 
     pub fn set_preset(&mut self, name: &str) -> Result<(), String> {
-        let BuiltSpecs {
-            name: preset_name,
-            params,
-            meta,
-            passes: specs,
-        } = build_specs(name).map_err(|e| format!("shader: {e}"))?;
-        let passes = specs
-            .into_iter()
-            .map(|s| build_pass(&self.device, &self.layout, s))
-            .collect::<Option<Vec<_>>>()
+        let built = build_specs(name).map_err(|e| format!("shader: {e}"))?;
+        let r = realize(&self.device, &self.queue, built)
             .ok_or("shader: falha ao criar os pipelines")?;
-        self.passes = passes;
-        self.params = params;
-        self.param_meta = meta;
-        self.preset_name = preset_name;
+        self.passes = r.passes;
+        self.params = r.params;
+        self.param_meta = r.param_meta;
+        self.preset_name = r.preset_name;
         self.preset_source = name.to_string();
+        self.luts = r.luts;
+        self.pass_alias = r.pass_alias;
+        if r.history_depth != self.history_depth {
+            self.history_depth = r.history_depth;
+            self.history.clear();
+        }
         self.rb.invalidate();
         log::info!("preset de shader → '{}'", self.preset_name);
         Ok(())
@@ -873,7 +875,8 @@ impl FrameProcessor {
         if nw == 0 || nh == 0 {
             return None;
         }
-        // Entrada da chain: buffer cru (upload) ou textura dma_buf já na GPU.
+        // Entrada da chain: buffer cru (vai pro ring de history) ou textura
+        // dma_buf já na GPU (interop; history fica como o frame atual).
         match &frame.origin {
             FrameOrigin::SoftwareRawBuffer {
                 data,
@@ -884,51 +887,59 @@ impl FrameProcessor {
                 if rgba.len() != (nw * nh * 4) as usize {
                     return None;
                 }
-                self.ensure_core_tex(nw, nh);
-                self.upload_core(&rgba, nw, nh);
+                self.ensure_history(nw, nh);
+                self.push_history(&rgba, nw, nh);
                 self.interop_view = None;
             }
             FrameOrigin::HardwareTexture(handle) => {
                 if !self.bind_interop_input(handle.as_ref(), nw, nh, enc) {
                     return None;
                 }
-                // a entrada troca de slot a cada frame → rebuild do bind group 0
-                if let Some(p) = self.passes.first_mut() {
+                // a entrada troca de slot a cada frame → rebuild de todo bg
+                for p in &mut self.passes {
                     p.bound = false;
                 }
             }
         }
 
-        // dimensões de cada alvo
+        // dimensões de cada alvo (`viewport` usa o tamanho real da saída).
+        let vp = self.viewport;
         let mut sizes = Vec::with_capacity(self.passes.len());
         let (mut cw, mut ch) = (nw, nh);
         for p in &self.passes {
-            cw = axis_size(p.scale_x, cw, nw).max(1);
-            ch = axis_size(p.scale_y, ch, nh).max(1);
+            cw = axis_size(p.scale_x, cw, nw, vp.0);
+            ch = axis_size(p.scale_y, ch, nh, vp.1);
             sizes.push((cw, ch));
         }
         let (fw, fh) = *sizes.last()?;
         if fw * fh > MAX_OUT_PIXELS {
             return None;
         }
+        let final_vp = if vp.0 > 0 { vp } else { (fw, fh) };
 
         self.frame_count = self.frame_count.wrapping_add(1);
+        let fc = self.frame_count;
 
         for (idx, (pw, ph)) in sizes.iter().copied().enumerate() {
             self.ensure_target(idx, pw, ph);
             let (in_w, in_h) = if idx == 0 { (nw, nh) } else { sizes[idx - 1] };
+            let fc_pass = {
+                let m = self.passes[idx].frame_count_mod as u64;
+                if m > 0 {
+                    fc % m
+                } else {
+                    fc
+                }
+            };
+            // nome-base de cada textura do passe → tamanho (pro `<Nome>Size`).
+            let tex_sizes = self.tex_sizes_for(idx, (in_w, in_h), (nw, nh), &sizes);
             match &self.passes[idx].uniform {
                 UniformMode::Fixed => {
                     let mut b = vec![0u8; 64];
                     b[0..16].copy_from_slice(f32s_bytes(&size_vec(in_w, in_h)));
                     b[16..32].copy_from_slice(f32s_bytes(&size_vec(pw, ph)));
                     b[32..48].copy_from_slice(f32s_bytes(&size_vec(nw, nh)));
-                    b[48..64].copy_from_slice(f32s_bytes(&[
-                        self.frame_count as f32,
-                        1.0,
-                        0.0,
-                        0.0,
-                    ]));
+                    b[48..64].copy_from_slice(f32s_bytes(&[fc_pass as f32, 1.0, 0.0, 0.0]));
                     self.queue.write_buffer(&self.passes[idx].ubuf[0], 0, &b);
                 }
                 UniformMode::Slang(blocks) => {
@@ -939,8 +950,9 @@ impl FrameProcessor {
                             (in_w, in_h),
                             (pw, ph),
                             (nw, nh),
-                            (fw, fh),
-                            self.frame_count,
+                            final_vp,
+                            fc_pass,
+                            &tex_sizes,
                         );
                         let slot = if *binding == 0 { 0 } else { 1 };
                         self.queue.write_buffer(&self.passes[idx].ubuf[slot], 0, &b);
@@ -949,45 +961,72 @@ impl FrameProcessor {
             }
         }
 
+        // Samplers de cada (passe, textura) — precisa de `&mut self` (cache), então
+        // resolvemos antes da seção de bind groups (que só empresta `&self`).
+        let samplers: Vec<Vec<wgpu::Sampler>> = (0..self.passes.len())
+            .map(|idx| {
+                let (linear, wrap) = (self.passes[idx].linear, self.passes[idx].wrap);
+                (0..self.passes[idx].textures.len())
+                    .map(|t| {
+                        let sem = self.passes[idx].textures[t].semantic.clone();
+                        if let TextureSemantic::Named {
+                            name,
+                            feedback: false,
+                        } = &sem
+                        {
+                            if let Some((_, _, s, _, _)) = self.luts.get(name) {
+                                return s.clone();
+                            }
+                        }
+                        self.sampler_for(linear, wrap)
+                    })
+                    .collect()
+            })
+            .collect();
+
+        #[allow(clippy::needless_range_loop)] // idx indexa passes (mut) + samplers
         for idx in 0..self.passes.len() {
             if self.passes[idx].bind_group.is_some() && self.passes[idx].bound {
                 continue;
             }
-            let sampler = if self.passes[idx].linear {
-                &self.sampler_linear
-            } else {
-                &self.sampler_nearest
-            };
-            let input_view: &wgpu::TextureView = if idx == 0 {
-                match &self.interop_view {
-                    Some(v) => v,
-                    None => &self.core_tex.as_ref()?.1,
-                }
-            } else {
-                &self.passes[idx - 1].target.as_ref()?.1
-            };
+            // Resolve as views (clona — `TextureView` é Arc barato) antes de
+            // pegar `&mut self` pra gravar o bind group.
+            let binds: Vec<(u32, u32, wgpu::TextureView)> = self.passes[idx]
+                .textures
+                .iter()
+                .map(|b| {
+                    self.resolve_tex_view(&b.semantic, idx)
+                        .map(|v| (b.tex_binding, b.samp_binding, v.clone()))
+                })
+                .collect::<Option<_>>()?;
+
+            let mut entries = vec![
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.passes[idx].ubuf[0].as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: self.passes[idx].ubuf[1].as_entire_binding(),
+                },
+            ];
+            for (t, (tb, sb, view)) in binds.iter().enumerate() {
+                entries.push(wgpu::BindGroupEntry {
+                    binding: *tb,
+                    resource: wgpu::BindingResource::TextureView(view),
+                });
+                entries.push(wgpu::BindGroupEntry {
+                    binding: *sb,
+                    resource: wgpu::BindingResource::Sampler(&samplers[idx][t]),
+                });
+            }
             let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("etapa04 bg"),
-                layout: &self.bgl,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: self.passes[idx].ubuf[0].as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::TextureView(input_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::Sampler(sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 3,
-                        resource: self.passes[idx].ubuf[1].as_entire_binding(),
-                    },
-                ],
+                layout: &self.passes[idx].bgl,
+                entries: &entries,
             });
+            drop(entries);
+            drop(binds);
             self.passes[idx].bind_group = Some(bg);
             self.passes[idx].bound = true;
         }
@@ -1015,6 +1054,41 @@ impl FrameProcessor {
             rp.set_bind_group(0, bg, &[]);
             rp.set_vertex_buffer(0, self.quad.slice(..));
             rp.draw(0..4, 0..1);
+        }
+
+        // Feedback: guarda a saída dos passes marcados pro próximo frame (o
+        // sampler `*Feedback` lê esta cópia). Copiado depois de todos os passes
+        // pra um passe poder ler o feedback dele mesmo.
+        for idx in 0..self.passes.len() {
+            if !self.passes[idx].feedback {
+                continue;
+            }
+            let (Some((src, _, sw, sh)), Some((dst, _, _, _))) = (
+                self.passes[idx].target.as_ref(),
+                self.passes[idx].feedback_target.as_ref(),
+            ) else {
+                continue;
+            };
+            enc.copy_texture_to_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: src,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::TexelCopyTextureInfo {
+                    texture: dst,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                wgpu::Extent3d {
+                    width: *sw,
+                    height: *sh,
+                    depth_or_array_layers: 1,
+                },
+            );
+            self.passes[idx].bound = false; // o feedback_target mudou
         }
 
         // Composição da moldura (etapa 04 fatia 4), se houver uma.
@@ -1199,26 +1273,40 @@ impl FrameProcessor {
         self.comp.target = Some((t, v, w, h));
     }
 
-    fn ensure_core_tex(&mut self, w: u32, h: u32) {
-        if matches!(&self.core_tex, Some((_, _, tw, th)) if *tw == w && *th == h) {
+    /// Garante `history_depth` slots do frame do core, todos `w`×`h`. `[0]` é o
+    /// frame atual (`Original`); `[n]`, n frames atrás (`OriginalHistoryN`).
+    fn ensure_history(&mut self, w: u32, h: u32) {
+        let ok = self.history.len() == self.history_depth
+            && self
+                .history
+                .iter()
+                .all(|(_, _, tw, th)| *tw == w && *th == h);
+        if ok {
             return;
         }
-        let (t, v) = new_tex(
-            &self.device,
-            w,
-            h,
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        );
-        self.core_tex = Some((t, v, w, h));
+        self.history = (0..self.history_depth)
+            .map(|_| {
+                let (t, v) = new_tex(
+                    &self.device,
+                    w,
+                    h,
+                    wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                );
+                (t, v, w, h)
+            })
+            .collect();
         for p in &mut self.passes {
             p.bound = false;
         }
     }
 
-    fn upload_core(&self, rgba: &[u8], w: u32, h: u32) {
-        let Some((tex, _, _, _)) = &self.core_tex else {
+    /// Rotaciona o ring de history e grava o frame novo em `[0]`.
+    fn push_history(&mut self, rgba: &[u8], w: u32, h: u32) {
+        if self.history.is_empty() {
             return;
-        };
+        }
+        self.history.rotate_right(1);
+        let (tex, _, _, _) = &self.history[0];
         self.queue.write_texture(
             wgpu::TexelCopyTextureInfo {
                 texture: tex,
@@ -1238,6 +1326,9 @@ impl FrameProcessor {
                 depth_or_array_layers: 1,
             },
         );
+        for p in &mut self.passes {
+            p.bound = false;
+        }
     }
 
     /// Importa (1ª vez do slot) e seleciona a textura `dma_buf` como entrada da
@@ -1403,21 +1494,154 @@ impl FrameProcessor {
     }
 
     fn ensure_target(&mut self, idx: usize, w: u32, h: u32) {
-        if matches!(&self.passes[idx].target, Some((_, _, tw, th)) if *tw == w && *th == h) {
-            return;
+        let fmt = self.passes[idx].fmt;
+        let usage = wgpu::TextureUsages::RENDER_ATTACHMENT
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::COPY_SRC
+            | wgpu::TextureUsages::COPY_DST;
+        let stale =
+            !matches!(&self.passes[idx].target, Some((_, _, tw, th)) if *tw == w && *th == h);
+        if stale {
+            let (t, v) = new_tex_fmt(&self.device, w, h, fmt, usage);
+            self.passes[idx].target = Some((t, v, w, h));
+            // qualquer passe pode amostrar este (PassOutput/Source) → rebind todos
+            for p in &mut self.passes {
+                p.bound = false;
+            }
         }
-        let (t, v) = new_tex(
-            &self.device,
-            w,
-            h,
-            wgpu::TextureUsages::RENDER_ATTACHMENT
-                | wgpu::TextureUsages::TEXTURE_BINDING
-                | wgpu::TextureUsages::COPY_SRC,
-        );
-        self.passes[idx].target = Some((t, v, w, h));
-        if let Some(next) = self.passes.get_mut(idx + 1) {
-            next.bound = false;
+        // alvo de feedback (cópia do frame anterior) — mesmo tamanho/formato.
+        if self.passes[idx].feedback {
+            let fb_stale = !matches!(
+                &self.passes[idx].feedback_target,
+                Some((_, _, tw, th)) if *tw == w && *th == h
+            );
+            if fb_stale {
+                let (t, v) = new_tex_fmt(&self.device, w, h, fmt, usage);
+                self.passes[idx].feedback_target = Some((t, v, w, h));
+                for p in &mut self.passes {
+                    p.bound = false;
+                }
+            }
         }
+    }
+
+    /// Entrada da chain neste frame: interop (dma_buf) ou o topo do ring de
+    /// history (frame do core).
+    fn chain_input(&self) -> Option<&wgpu::TextureView> {
+        self.interop_view
+            .as_ref()
+            .or_else(|| self.history.first().map(|(_, v, _, _)| v))
+    }
+
+    /// Resolve uma [`TextureSemantic`] pra `TextureView` deste frame.
+    fn resolve_tex_view(
+        &self,
+        sem: &TextureSemantic,
+        pass_idx: usize,
+    ) -> Option<&wgpu::TextureView> {
+        let out_of = |i: usize| {
+            self.passes
+                .get(i)
+                .and_then(|p| p.target.as_ref())
+                .map(|(_, v, _, _)| v)
+        };
+        let fb_of = |i: usize| {
+            self.passes.get(i).and_then(|p| {
+                p.feedback_target
+                    .as_ref()
+                    .or(p.target.as_ref())
+                    .map(|(_, v, _, _)| v)
+            })
+        };
+        match sem {
+            TextureSemantic::Source => {
+                if pass_idx == 0 {
+                    self.chain_input()
+                } else {
+                    out_of(pass_idx - 1)
+                }
+            }
+            TextureSemantic::Original => self.chain_input(),
+            TextureSemantic::OriginalHistory(n) => {
+                if self.interop_view.is_some() {
+                    self.interop_view.as_ref()
+                } else {
+                    let last = self.history.len().saturating_sub(1);
+                    self.history
+                        .get((*n as usize).min(last))
+                        .map(|(_, v, _, _)| v)
+                }
+            }
+            TextureSemantic::PassOutput(n) => out_of(*n as usize),
+            TextureSemantic::PassFeedback(n) => fb_of(*n as usize),
+            TextureSemantic::Named { name, feedback } => {
+                if let Some(&pi) = self.pass_alias.get(name) {
+                    if *feedback {
+                        fb_of(pi)
+                    } else {
+                        out_of(pi)
+                    }
+                } else {
+                    self.luts.get(name).map(|(_, v, _, _, _)| v)
+                }
+            }
+        }
+    }
+
+    /// Nome-base de cada textura do passe → tamanho (pros uniformes `<Nome>Size`).
+    fn tex_sizes_for(
+        &self,
+        pass_idx: usize,
+        input: (u32, u32),
+        native: (u32, u32),
+        sizes: &[(u32, u32)],
+    ) -> HashMap<String, (u32, u32)> {
+        let mut m = HashMap::new();
+        m.insert("Source".to_string(), input);
+        m.insert("Original".to_string(), native);
+        for b in &self.passes[pass_idx].textures {
+            let (base, sz) = match &b.semantic {
+                TextureSemantic::Source => continue,
+                TextureSemantic::Original => continue,
+                TextureSemantic::OriginalHistory(k) => (format!("OriginalHistory{k}"), native),
+                TextureSemantic::PassOutput(k) => (
+                    format!("PassOutput{k}"),
+                    sizes.get(*k as usize).copied().unwrap_or(native),
+                ),
+                TextureSemantic::PassFeedback(k) => (
+                    format!("PassFeedback{k}"),
+                    sizes.get(*k as usize).copied().unwrap_or(native),
+                ),
+                TextureSemantic::Named { name, .. } => {
+                    let sz = if let Some(&pi) = self.pass_alias.get(name) {
+                        sizes.get(pi).copied().unwrap_or(native)
+                    } else if let Some((_, _, _, w, h)) = self.luts.get(name) {
+                        (*w, *h)
+                    } else {
+                        native
+                    };
+                    (name.clone(), sz)
+                }
+            };
+            m.insert(base, sz);
+        }
+        m
+    }
+
+    /// Sampler `(filtro, wrap)` do cache (cria na 1ª vez). Clona — samplers wgpu
+    /// são handles baratos.
+    fn sampler_for(&mut self, linear: bool, wrap: WrapMode) -> wgpu::Sampler {
+        self.sampler_cache
+            .entry((linear, wrap))
+            .or_insert_with(|| {
+                let f = if linear {
+                    wgpu::FilterMode::Linear
+                } else {
+                    wgpu::FilterMode::Nearest
+                };
+                self.device.create_sampler(&sampler_desc(f, wrap))
+            })
+            .clone()
     }
 }
 
@@ -1432,9 +1656,15 @@ fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
                 scale_x: Scale::Source(p.scale),
                 scale_y: Scale::Source(p.scale),
                 linear: p.linear,
+                wrap: WrapMode::ClampToEdge,
                 vs_wgsl: BUILTIN_VS.to_string(),
                 fs_wgsl: format!("{BUILTIN_FS_PRELUDE}\n{}", p.fs),
                 uniform: UniformMode::Fixed,
+                textures: Vec::new(),
+                fmt: FMT,
+                frame_count_mod: 0,
+                alias: None,
+                feedback: false,
             })
             .collect();
         return Ok(BuiltSpecs {
@@ -1442,6 +1672,8 @@ fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
             params: HashMap::new(),
             meta: Vec::new(),
             passes,
+            luts: Vec::new(),
+            history_depth: 1,
         });
     }
 
@@ -1479,6 +1711,14 @@ fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
     let mut params: HashMap<String, f32> = HashMap::new();
     let mut meta: Vec<shader_slang::Parameter> = Vec::new();
     let mut specs = Vec::new();
+    let mut history_depth = 1usize;
+    // aliases só ficam conhecidos depois de ler todos os passes (um passe pode
+    // referenciar o alias de outro que vem depois? não — mas o alias pode não
+    // ser o `#pragma name`; usamos o `aliasN` do `.slangp`).
+    let aliases: Vec<Option<String>> = preset.passes.iter().map(|p| p.alias.clone()).collect();
+    // um passe é fonte de feedback se `feedback_pass{i}` OU se algum passe
+    // amostra `PassFeedback<i>` / `<aliasI>Feedback`.
+    let mut needs_feedback = vec![false; preset.passes.len()];
     for (i, pass) in preset.passes.iter().enumerate() {
         let src = shader_slang::preprocess_file(&pass.shader_path).map_err(|e| e.to_string())?;
         for p in &src.parameters {
@@ -1489,19 +1729,76 @@ fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
         }
         let compiled = shader_slang::compile(&src)
             .map_err(|e| format!("passe {i} ({}): {e}", pass.shader_path.display()))?;
+        for t in &compiled.textures {
+            match &t.semantic {
+                TextureSemantic::OriginalHistory(n) => {
+                    history_depth = history_depth.max(*n as usize + 1);
+                }
+                TextureSemantic::PassFeedback(n) => {
+                    if let Some(f) = needs_feedback.get_mut(*n as usize) {
+                        *f = true;
+                    }
+                }
+                TextureSemantic::Named {
+                    name,
+                    feedback: true,
+                } => {
+                    if let Some(pi) = aliases.iter().position(|a| a.as_deref() == Some(name)) {
+                        needs_feedback[pi] = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if pass.feedback {
+            needs_feedback[i] = true;
+        }
+        let fmt = if pass.float_framebuffer {
+            wgpu::TextureFormat::Rgba16Float
+        } else if pass.srgb_framebuffer {
+            wgpu::TextureFormat::Rgba8UnormSrgb
+        } else {
+            FMT
+        };
         specs.push(PassSpec {
             scale_x: pass.scale_x,
             scale_y: pass.scale_y,
             linear: pass.filter_linear,
+            wrap: pass.wrap_mode,
             vs_wgsl: compiled.vertex_wgsl,
             fs_wgsl: compiled.fragment_wgsl,
             uniform: UniformMode::Slang(compiled.uniforms),
+            textures: compiled.textures,
+            fmt,
+            frame_count_mod: pass.frame_count_mod,
+            alias: pass.alias.clone(),
+            feedback: false, // preenchido abaixo
         });
+    }
+    for (spec, need) in specs.iter_mut().zip(needs_feedback) {
+        spec.feedback = need;
     }
     // valores do `.slangp` sobrescrevem os defaults dos `#pragma parameter`
     for (k, v) in &preset.parameters {
         params.insert(k.clone(), *v);
     }
+
+    // texturas do usuário (LUT/máscara) — decodifica agora, sobe pra GPU depois.
+    let mut luts = Vec::new();
+    for tex in &preset.textures {
+        match crate::decoration::decode_png(&tex.path) {
+            Ok((rgba, w, h)) => luts.push(LutSpec {
+                name: tex.name.clone(),
+                rgba,
+                w,
+                h,
+                linear: tex.linear,
+                wrap: tex.wrap_mode,
+            }),
+            Err(e) => log::warn!("LUT '{}' ({}): {e}", tex.name, tex.path.display()),
+        }
+    }
+
     let name = path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -1512,7 +1809,118 @@ fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
         params,
         meta,
         passes: specs,
+        luts,
+        history_depth,
     })
+}
+
+/// Preset já com os recursos wgpu (passes, LUTs) criados — o que `new` e
+/// `set_preset` precisam.
+struct Realized {
+    preset_name: String,
+    params: HashMap<String, f32>,
+    param_meta: Vec<shader_slang::Parameter>,
+    passes: Vec<Pass>,
+    luts: HashMap<String, (wgpu::Texture, wgpu::TextureView, wgpu::Sampler, u32, u32)>,
+    pass_alias: HashMap<String, usize>,
+    history_depth: usize,
+}
+
+fn realize(device: &wgpu::Device, queue: &wgpu::Queue, built: BuiltSpecs) -> Option<Realized> {
+    let BuiltSpecs {
+        name,
+        params,
+        meta,
+        passes: specs,
+        luts: lut_specs,
+        history_depth,
+    } = built;
+
+    let mut pass_alias = HashMap::new();
+    for (i, s) in specs.iter().enumerate() {
+        if let Some(a) = &s.alias {
+            pass_alias.insert(a.clone(), i);
+        }
+    }
+    let passes = specs
+        .into_iter()
+        .map(|s| build_pass(device, s))
+        .collect::<Option<Vec<_>>>()?;
+
+    let mut luts = HashMap::new();
+    for l in lut_specs {
+        let (tex, view) = new_tex(
+            device,
+            l.w,
+            l.h,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        );
+        queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &tex,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &l.rgba,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(l.w * 4),
+                rows_per_image: Some(l.h),
+            },
+            wgpu::Extent3d {
+                width: l.w,
+                height: l.h,
+                depth_or_array_layers: 1,
+            },
+        );
+        let filter = if l.linear {
+            wgpu::FilterMode::Linear
+        } else {
+            wgpu::FilterMode::Nearest
+        };
+        let sampler = device.create_sampler(&sampler_desc(filter, l.wrap));
+        luts.insert(l.name, (tex, view, sampler, l.w, l.h));
+    }
+
+    Some(Realized {
+        preset_name: name,
+        params,
+        param_meta: meta,
+        passes,
+        luts,
+        pass_alias,
+        history_depth,
+    })
+}
+
+fn wrap_address(w: WrapMode) -> wgpu::AddressMode {
+    match w {
+        WrapMode::ClampToEdge => wgpu::AddressMode::ClampToEdge,
+        WrapMode::ClampToBorder => wgpu::AddressMode::ClampToBorder,
+        WrapMode::Repeat => wgpu::AddressMode::Repeat,
+        WrapMode::MirroredRepeat => wgpu::AddressMode::MirrorRepeat,
+    }
+}
+
+fn sampler_desc(filter: wgpu::FilterMode, wrap: WrapMode) -> wgpu::SamplerDescriptor<'static> {
+    let a = wrap_address(wrap);
+    wgpu::SamplerDescriptor {
+        label: Some("etapa04 sampler"),
+        address_mode_u: a,
+        address_mode_v: a,
+        address_mode_w: a,
+        mag_filter: filter,
+        min_filter: filter,
+        mipmap_filter: if filter == wgpu::FilterMode::Linear {
+            wgpu::MipmapFilterMode::Linear
+        } else {
+            wgpu::MipmapFilterMode::Nearest
+        },
+        border_color: matches!(wrap, WrapMode::ClampToBorder)
+            .then_some(wgpu::SamplerBorderColor::TransparentBlack),
+        ..Default::default()
+    }
 }
 
 const COMP_WGSL: &str = r#"
@@ -1780,11 +2188,62 @@ fn build_composite(device: &wgpu::Device) -> Composite {
     }
 }
 
-fn build_pass(
-    device: &wgpu::Device,
-    layout: &wgpu::PipelineLayout,
-    spec: PassSpec,
-) -> Option<Pass> {
+/// Entradas da BGL de um passe: binding 0 e 1 (uniformes) + 1 par
+/// textura/sampler pra cada sampler declarado (bindings `2+2i` / `3+2i`).
+fn pass_bgl(device: &wgpu::Device, textures: &[TextureBind]) -> wgpu::BindGroupLayout {
+    let buf = |binding| wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    };
+    let mut entries = vec![buf(0), buf(1)];
+    for t in textures {
+        entries.push(wgpu::BindGroupLayoutEntry {
+            binding: t.tex_binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        });
+        entries.push(wgpu::BindGroupLayoutEntry {
+            binding: t.samp_binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+            count: None,
+        });
+    }
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("etapa04 bgl"),
+        entries: &entries,
+    })
+}
+
+fn build_pass(device: &wgpu::Device, spec: PassSpec) -> Option<Pass> {
+    // Builtins não listam texturas → um `Source` implícito em 2/3.
+    let textures = if spec.textures.is_empty() {
+        vec![TextureBind {
+            name: "Source".into(),
+            semantic: TextureSemantic::Source,
+            tex_binding: 2,
+            samp_binding: 3,
+        }]
+    } else {
+        spec.textures
+    };
+    let bgl = pass_bgl(device, &textures);
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("etapa04 layout"),
+        bind_group_layouts: &[Some(&bgl)],
+        immediate_size: 0,
+    });
     let vs = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("etapa04 vs"),
         source: wgpu::ShaderSource::Wgsl(spec.vs_wgsl.into()),
@@ -1795,7 +2254,7 @@ fn build_pass(
     });
     let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("etapa04 pipeline"),
-        layout: Some(layout),
+        layout: Some(&layout),
         vertex: wgpu::VertexState {
             module: &vs,
             entry_point: Some("main"),
@@ -1821,7 +2280,7 @@ fn build_pass(
             module: &fs,
             entry_point: Some("main"),
             targets: &[Some(wgpu::ColorTargetState {
-                format: FMT,
+                format: spec.fmt,
                 blend: None,
                 write_mask: wgpu::ColorWrites::ALL,
             })],
@@ -1836,9 +2295,9 @@ fn build_pass(
         multiview_mask: None,
         cache: None,
     });
-    // buffer 0 (binding 0) e buffer 1 (binding 3). Tamanho de cada bloco slang,
-    // ou dummy de 16 bytes.
-    let (mut size0, mut size3) = match &spec.uniform {
+    // buffer 0 (binding 0 = `Push`) e buffer 1 (binding 1 = `UBO`). Tamanho do
+    // bloco slang refletido, ou dummy de 16 bytes.
+    let (mut size0, mut size1) = match &spec.uniform {
         UniformMode::Fixed => (64u64, 16u64),
         UniformMode::Slang(_) => (16u64, 16u64),
     };
@@ -1848,7 +2307,7 @@ fn build_pass(
             if *b == 0 {
                 size0 = s;
             } else {
-                size3 = s;
+                size1 = s;
             }
         }
     }
@@ -1862,23 +2321,32 @@ fn build_pass(
     };
     Some(Pass {
         pipeline,
+        bgl,
         scale_x: spec.scale_x,
         scale_y: spec.scale_y,
         linear: spec.linear,
+        wrap: spec.wrap,
         uniform: spec.uniform,
-        ubuf: [mk(size0), mk(size3)],
+        ubuf: [mk(size0), mk(size1)],
+        textures,
+        fmt: spec.fmt,
+        frame_count_mod: spec.frame_count_mod,
+        feedback: spec.feedback,
         target: None,
+        feedback_target: None,
         bind_group: None,
         bound: false,
     })
 }
 
-fn axis_size(scale: Scale, cur: u32, native: u32) -> u32 {
+fn axis_size(scale: Scale, cur: u32, native: u32, viewport: u32) -> u32 {
     match scale {
-        Scale::Source(m) => (cur as f32 * m).round() as u32,
-        Scale::Absolute(px) => px,
-        // Sem viewport real aqui (o canvas escala) — supersample ~3x.
-        Scale::Viewport(m) => (native as f32 * 3.0 * m).round() as u32,
+        Scale::Source(m) => (cur as f32 * m).round().max(1.0) as u32,
+        Scale::Absolute(px) => px.max(1),
+        Scale::Viewport(m) => {
+            let base = if viewport > 0 { viewport } else { native * 3 };
+            (base as f32 * m).round().max(1.0) as u32
+        }
     }
 }
 
@@ -1901,6 +2369,7 @@ fn fill_slang(
     orig: (u32, u32),
     final_vp: (u32, u32),
     frame_count: u64,
+    tex_sizes: &HashMap<String, (u32, u32)>,
 ) -> Vec<u8> {
     let mut b = vec![0u8; (layout.size as usize).max(16)];
     let put = |b: &mut [u8], off: usize, bytes: &[u8]| {
@@ -1927,6 +2396,12 @@ fn fill_slang(
                 put(&mut b, o, &(frame_count as u32).to_le_bytes())
             }
             ("FrameDirection", UniformFieldKind::I32) => put(&mut b, o, &1i32.to_le_bytes()),
+            // `<Textura>Size` — history, PassOutput, feedback, LUTs, aliases.
+            (name, _) if name.ends_with("Size") => {
+                if let Some((w, h)) = tex_sizes.get(name.trim_end_matches("Size")) {
+                    put(&mut b, o, f32s_bytes(&size_vec(*w, *h)));
+                }
+            }
             (name, UniformFieldKind::F32) => {
                 if let Some(v) = params.get(name) {
                     put(&mut b, o, &v.to_le_bytes());
@@ -1944,17 +2419,27 @@ fn new_tex(
     h: u32,
     usage: wgpu::TextureUsages,
 ) -> (wgpu::Texture, wgpu::TextureView) {
+    new_tex_fmt(device, w, h, FMT, usage)
+}
+
+fn new_tex_fmt(
+    device: &wgpu::Device,
+    w: u32,
+    h: u32,
+    format: wgpu::TextureFormat,
+    usage: wgpu::TextureUsages,
+) -> (wgpu::Texture, wgpu::TextureView) {
     let t = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("etapa04 tex"),
         size: wgpu::Extent3d {
-            width: w,
-            height: h,
+            width: w.max(1),
+            height: h.max(1),
             depth_or_array_layers: 1,
         },
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: FMT,
+        format,
         usage,
         view_formats: &[],
     });
@@ -2032,5 +2517,90 @@ mod tests {
             "esperava ~0xC0, veio {:#x}",
             d3[0]
         );
+    }
+
+    /// Preset slang de 2 passes: o 2º amostra `Source` + `Original` +
+    /// `OriginalHistory1` + o feedback do 1º (via alias). Exercita a BGL
+    /// dinâmica, `resolve_tex_view`, o ring de history e a cópia de feedback.
+    #[test]
+    fn multipass_slang_with_history_and_feedback_runs() {
+        if std::env::var_os("REEMU_NO_GPU").is_some() {
+            return;
+        }
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        let dir = std::env::temp_dir().join("reemu_gpu_phase2");
+        std::fs::create_dir_all(&dir).unwrap();
+        let pass0 = dir.join("p0.slang");
+        let pass1 = dir.join("p1.slang");
+        let slangp = dir.join("chain.slangp");
+        let vs = concat!(
+            "#pragma stage vertex\n",
+            "layout(location=0) in vec4 Position; layout(location=1) in vec2 TexCoord;\n",
+            "layout(location=0) out vec2 vUV;\n",
+            "layout(std140, set=0, binding=0) uniform UBO { mat4 MVP; } g;\n",
+            "void main(){ gl_Position = g.MVP * Position; vUV = TexCoord; }\n",
+        );
+        std::fs::write(
+            &pass0,
+            [
+                "#version 450\n#pragma name First\n",
+                vs,
+                "#pragma stage fragment\nlayout(location=0) in vec2 vUV;\n",
+                "layout(location=0) out vec4 c;\n",
+                "layout(set=0,binding=2) uniform sampler2D Source;\n",
+                "void main(){ c = texture(Source, vUV); }\n",
+            ]
+            .concat(),
+        )
+        .unwrap();
+        std::fs::write(
+            &pass1,
+            [
+                "#version 450\n",
+                vs,
+                "#pragma stage fragment\nlayout(location=0) in vec2 vUV;\n",
+                "layout(location=0) out vec4 c;\n",
+                "layout(set=0,binding=2) uniform sampler2D Source;\n",
+                "layout(set=0,binding=3) uniform sampler2D Original;\n",
+                "layout(set=0,binding=4) uniform sampler2D OriginalHistory1;\n",
+                "layout(set=0,binding=5) uniform sampler2D FirstFeedback;\n",
+                "void main(){ c = 0.25*(texture(Source,vUV)+texture(Original,vUV)",
+                "+texture(OriginalHistory1,vUV)+texture(FirstFeedback,vUV)); }\n",
+            ]
+            .concat(),
+        )
+        .unwrap();
+        std::fs::write(
+            &slangp,
+            "shaders = 2\nshader0 = p0.slang\nalias0 = First\nfeedback_pass0 = true\nshader1 = p1.slang\n",
+        )
+        .unwrap();
+
+        fp.set_preset(slangp.to_str().unwrap())
+            .expect("preset multi-passe deve montar");
+        assert_eq!(fp.passes.len(), 2);
+        assert_eq!(fp.history_depth, 2, "OriginalHistory1 ⇒ 2 slots");
+        assert!(fp.passes[0].feedback, "feedback_pass0 + FirstFeedback");
+        assert!(
+            fp.passes[0].feedback_target.is_none(),
+            "alocado sob demanda"
+        );
+
+        fp.process(&grey_frame(32, 32, 0x20));
+        let (w, h, d) = fp
+            .process(&grey_frame(32, 32, 0x80))
+            .expect("2º process entrega um frame");
+        assert_eq!((w, h), (32, 32));
+        assert_eq!(d.len(), 32 * 32 * 4);
+        assert!(
+            fp.passes[0].feedback_target.is_some(),
+            "feedback alocado ao rodar"
+        );
+        let _ = fp.process(&grey_frame(32, 32, 0x40));
+
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

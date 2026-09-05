@@ -9,14 +9,72 @@
 //! que o executor (`gpu.rs`) espera:
 //!
 //! 1. `layout(push_constant) uniform Push { }` → UBO em `binding = 0`.
-//! 2. `uniform UBO { }` → `binding = 3`.
-//! 3. `sampler2D` combinado → `texture2D` + `sampler` separados (bindings
-//!    determinísticos), call-sites reescritos pra `sampler2D(tex, samp)`.
-//!
-//! Cobre shaders de arquivo único que só usam `Source`. Multi-sampler
-//! (`PassFeedback`, history, LUTs) ainda retorna `Unsupported` — Fase 2.
+//! 2. `uniform UBO { }` → `binding = 1`.
+//! 3. `sampler2D` combinado → `texture2D` + `sampler` separados: sampler i vai
+//!    pra textura `2 + 2i` e sampler `3 + 2i`; call-sites reescritos pra
+//!    `sampler2D(tex, samp)`. Cada sampler é classificado por nome
+//!    ([`TextureSemantic`]) pro executor saber o que ligar nele.
 
 use crate::preprocess::SlangSource;
+
+/// O que uma textura amostrada pelo shader representa na cadeia (pela
+/// convenção de nomes do RetroArch). O executor (`gpu.rs`) resolve isto pro
+/// recurso wgpu de cada frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TextureSemantic {
+    /// Saída do passe anterior (ou o frame do core, no 1º passe).
+    Source,
+    /// O frame do core, sempre (não a saída do passe anterior).
+    Original,
+    /// O frame do core de N frames atrás (N ≥ 1).
+    OriginalHistory(u32),
+    /// Saída do passe N **deste** frame (`PassOutputN`).
+    PassOutput(u32),
+    /// Saída do passe N do frame **anterior** (`PassFeedbackN`).
+    PassFeedback(u32),
+    /// Nome não reconhecido: um alias de passe (`<alias>` / `<alias>Feedback`)
+    /// ou uma textura do usuário do `.slangp`. Quem desambigua é o `gpu.rs`
+    /// (tem o preset). `feedback` = o nome terminava em `Feedback`.
+    Named { name: String, feedback: bool },
+}
+
+/// Um sampler declarado no fragmento, já classificado e com os bindings wgpu
+/// que o `rewrite` fixou.
+#[derive(Debug, Clone)]
+pub struct TextureBind {
+    /// Nome do sampler no GLSL (ex.: `Source`, `PassFeedback0`, `LUT`).
+    pub name: String,
+    pub semantic: TextureSemantic,
+    pub tex_binding: u32,
+    pub samp_binding: u32,
+}
+
+impl TextureSemantic {
+    fn classify(name: &str) -> TextureSemantic {
+        let num = |s: &str| s.parse::<u32>().ok();
+        if name == "Source" {
+            TextureSemantic::Source
+        } else if name == "Original" {
+            TextureSemantic::Original
+        } else if let Some(n) = name.strip_prefix("OriginalHistory").and_then(num) {
+            TextureSemantic::OriginalHistory(n.max(1))
+        } else if let Some(n) = name.strip_prefix("PassOutput").and_then(num) {
+            TextureSemantic::PassOutput(n)
+        } else if let Some(n) = name.strip_prefix("PassFeedback").and_then(num) {
+            TextureSemantic::PassFeedback(n)
+        } else if let Some(base) = name.strip_suffix("Feedback") {
+            TextureSemantic::Named {
+                name: base.to_string(),
+                feedback: true,
+            }
+        } else {
+            TextureSemantic::Named {
+                name: name.to_string(),
+                feedback: false,
+            }
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum CompileError {
@@ -67,34 +125,34 @@ pub struct CompiledSlang {
     pub vertex_wgsl: String,
     /// WGSL com `@fragment fn main(...)`.
     pub fragment_wgsl: String,
-    /// Nomes dos samplers combinados que viraram `texture2D` + `sampler`
-    /// (ordem de declaração) — o executor usa pra montar os bind groups.
-    pub samplers: Vec<String>,
+    /// Cada sampler combinado que virou `texture2D` + `sampler`, na ordem de
+    /// declaração (= a ordem dos bindings) — o executor liga o recurso certo
+    /// em cada um pela [`TextureSemantic`].
+    pub textures: Vec<TextureBind>,
     /// `(binding, layout)` de cada bloco uniforme. Binding 0 = `Push`,
-    /// binding 3 = `UBO` (ver `rewrite`).
+    /// binding 1 = `UBO` (ver `rewrite`).
     pub uniforms: Vec<(u32, UniformLayout)>,
 }
 
 pub fn compile(src: &SlangSource) -> Result<CompiledSlang, CompileError> {
-    let (frag, samplers) = rewrite(&src.fragment_glsl);
+    let (frag, textures) = rewrite(&src.fragment_glsl);
     let (vert, _) = rewrite(&src.vertex_glsl);
 
-    for feat in ["Feedback", "OriginalHistory", "PassFeedback", "PassOutput"] {
-        if frag.contains(feat) || vert.contains(feat) {
-            return Err(CompileError::Unsupported(format!("semântica `{feat}`")));
-        }
-    }
-    if samplers.iter().any(|s| s != "Source") {
-        return Err(CompileError::Unsupported(
-            "só `Source` como sampler por ora".into(),
-        ));
-    }
-
-    let (vertex_wgsl, _) = compile_stage(&vert, glslang::ShaderStage::Vertex, "vertex")?;
+    let (vertex_wgsl, vert_module) = compile_stage(&vert, glslang::ShaderStage::Vertex, "vertex")?;
     let (fragment_wgsl, frag_module) =
         compile_stage(&frag, glslang::ShaderStage::Fragment, "fragment")?;
-    let uniforms = reflect_all(&frag_module)?;
-    if uniforms.iter().any(|(b, _)| *b != 0 && *b != 3) {
+    // Reflete os DOIS estágios e une por binding — o `UBO` (MVP/sizes) costuma
+    // aparecer só no vertex, o `Push` (params) só no fragment.
+    let mut uniforms = reflect_all(&frag_module)?;
+    for (b, layout) in reflect_all(&vert_module)? {
+        match uniforms.iter_mut().find(|(vb, _)| *vb == b) {
+            Some((_, existing)) if layout.size > existing.size => *existing = layout,
+            Some(_) => {}
+            None => uniforms.push((b, layout)),
+        }
+    }
+    uniforms.sort_by_key(|(b, _)| *b);
+    if uniforms.iter().any(|(b, _)| *b != 0 && *b != 1) {
         return Err(CompileError::Unsupported(
             "bloco uniforme em binding inesperado".into(),
         ));
@@ -103,13 +161,13 @@ pub fn compile(src: &SlangSource) -> Result<CompiledSlang, CompileError> {
     Ok(CompiledSlang {
         vertex_wgsl,
         fragment_wgsl,
-        samplers,
+        textures,
         uniforms,
     })
 }
 
 /// Reflete TODOS os blocos uniformes do módulo → `(binding, layout)`.
-/// (RetroArch: `Push` em binding 0, `UBO` em binding 3 — ver `rewrite`.)
+/// (`Push` em binding 0, `UBO` em binding 1 — ver `rewrite`.)
 fn reflect_all(module: &naga::Module) -> Result<Vec<(u32, UniformLayout)>, CompileError> {
     let mut out = Vec::new();
     for (_, g) in module
@@ -167,16 +225,16 @@ fn reflect_struct(
 }
 
 /// Reescreve os blocos uniformes e os samplers combinados. Devolve o GLSL
-/// novo + os nomes de sampler encontrados. Bindings finais:
-///   0 = `Push`/params · 1 = texture `Source` · 2 = sampler · 3 = `UBO`/global.
-fn rewrite(glsl: &str) -> (String, Vec<String>) {
+/// novo + os samplers classificados. Bindings finais:
+///   0 = `Push` · 1 = `UBO` · 2+2i / 3+2i = textura/sampler i.
+fn rewrite(glsl: &str) -> (String, Vec<TextureBind>) {
     // 1. blocos uniformes: força o binding pelo nome do bloco.
     let mut s = String::with_capacity(glsl.len() + 128);
     for line in glsl.lines() {
         let l = if line.contains("push_constant") || declares_block(line, "Push") {
             set_layout(line, "layout(std140, set = 0, binding = 0)")
         } else if declares_block(line, "UBO") {
-            set_layout(line, "layout(std140, set = 0, binding = 3)")
+            set_layout(line, "layout(std140, set = 0, binding = 1)")
         } else {
             line.to_string()
         };
@@ -185,20 +243,24 @@ fn rewrite(glsl: &str) -> (String, Vec<String>) {
     }
 
     // 2. samplers combinados → texture2D + sampler com bindings determinísticos
-    //    (sampler i → texture em 1+2i, sampler em 2+2i).
-    let mut samplers = Vec::new();
+    //    (sampler i → texture em 2+2i, sampler em 3+2i).
+    let mut binds: Vec<TextureBind> = Vec::new();
     let mut out = String::with_capacity(s.len() + 256);
     for line in s.lines() {
         if let Some(name) = decl_combined_sampler(line) {
             let indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
-            let i = samplers.len() as u32;
+            let i = binds.len() as u32;
+            let (tb, sb) = (2 + 2 * i, 3 + 2 * i);
             out.push_str(&format!(
-                "{indent}layout(set = 0, binding = {}) uniform texture2D {name};\n\
-                 {indent}layout(set = 0, binding = {}) uniform sampler {name}_SLANG_S;\n",
-                1 + 2 * i,
-                2 + 2 * i,
+                "{indent}layout(set = 0, binding = {tb}) uniform texture2D {name};\n\
+                 {indent}layout(set = 0, binding = {sb}) uniform sampler {name}_SLANG_S;\n",
             ));
-            samplers.push(name);
+            binds.push(TextureBind {
+                semantic: TextureSemantic::classify(&name),
+                name,
+                tex_binding: tb,
+                samp_binding: sb,
+            });
         } else {
             out.push_str(line);
             out.push('\n');
@@ -206,7 +268,8 @@ fn rewrite(glsl: &str) -> (String, Vec<String>) {
     }
 
     // 3. call-sites: `fn(NAME, ...)` → `fn(sampler2D(NAME, NAME_SLANG_S), ...)`.
-    for name in &samplers {
+    for b in &binds {
+        let name = &b.name;
         for func in [
             "texture",
             "textureLod",
@@ -217,15 +280,12 @@ fn rewrite(glsl: &str) -> (String, Vec<String>) {
             "texelFetch",
             "textureOffset",
         ] {
-            let from = format!("{func}({name},");
             let to = format!("{func}(sampler2D({name}, {name}_SLANG_S),");
-            out = out.replace(&from, &to);
-            // variante sem espaço depois da vírgula já coberta; com espaço antes:
-            let from_sp = format!("{func}( {name},");
-            out = out.replace(&from_sp, &to);
+            out = out.replace(&format!("{func}({name},"), &to);
+            out = out.replace(&format!("{func}( {name},"), &to);
         }
     }
-    (out, samplers)
+    (out, binds)
 }
 
 /// `true` se a linha declara `uniform <name>` (`<name>` como palavra inteira,
@@ -376,7 +436,11 @@ void main() {
         let src = preprocess_str(CRT_SLANG);
         assert_eq!(src.parameters.len(), 1);
         let out = compile(&src).expect("deve compilar");
-        assert_eq!(out.samplers, vec!["Source".to_string()]);
+        assert_eq!(out.textures.len(), 1);
+        assert_eq!(out.textures[0].name, "Source");
+        assert_eq!(out.textures[0].semantic, TextureSemantic::Source);
+        assert_eq!(out.textures[0].tex_binding, 2);
+        assert_eq!(out.textures[0].samp_binding, 3);
         assert!(out.fragment_wgsl.contains("@fragment"));
         assert!(out.fragment_wgsl.contains("fn main"));
         assert!(out.vertex_wgsl.contains("@vertex"));
@@ -428,9 +492,60 @@ void main() {
         let out = compile(&preprocess_str(s)).expect("UBO+Push deve compilar");
         let bindings: Vec<u32> = out.uniforms.iter().map(|(b, _)| *b).collect();
         assert!(bindings.contains(&0)); // Push
-        assert!(bindings.contains(&3)); // UBO
-        let ubo = out.uniforms.iter().find(|(b, _)| *b == 3).unwrap();
+        assert!(bindings.contains(&1)); // UBO
+        let ubo = out.uniforms.iter().find(|(b, _)| *b == 1).unwrap();
         assert!(ubo.1.fields.iter().any(|f| f.name == "MVP"));
+    }
+
+    #[test]
+    fn classifies_multi_texture_semantics() {
+        let s = r#"
+#version 450
+layout(push_constant) uniform Push { vec4 SourceSize; } params;
+#pragma stage vertex
+layout(location = 0) in vec4 Position;
+layout(location = 1) in vec2 TexCoord;
+layout(location = 0) out vec2 vTexCoord;
+void main() { gl_Position = Position; vTexCoord = TexCoord; }
+#pragma stage fragment
+layout(location = 0) in vec2 vTexCoord;
+layout(location = 0) out vec4 FragColor;
+layout(set = 0, binding = 2) uniform sampler2D Source;
+layout(set = 0, binding = 3) uniform sampler2D Original;
+layout(set = 0, binding = 4) uniform sampler2D OriginalHistory2;
+layout(set = 0, binding = 5) uniform sampler2D PassOutput0;
+layout(set = 0, binding = 6) uniform sampler2D CrtPassFeedback;
+layout(set = 0, binding = 7) uniform sampler2D SnesMask;
+void main() {
+    FragColor = texture(Source, vTexCoord)
+        + texture(Original, vTexCoord) + texture(OriginalHistory2, vTexCoord)
+        + texture(PassOutput0, vTexCoord) + texture(CrtPassFeedback, vTexCoord)
+        + texture(SnesMask, vTexCoord);
+}
+"#;
+        let out = compile(&preprocess_str(s)).expect("deve compilar");
+        let sem: Vec<_> = out.textures.iter().map(|t| t.semantic.clone()).collect();
+        assert_eq!(sem[0], TextureSemantic::Source);
+        assert_eq!(sem[1], TextureSemantic::Original);
+        assert_eq!(sem[2], TextureSemantic::OriginalHistory(2));
+        assert_eq!(sem[3], TextureSemantic::PassOutput(0));
+        assert_eq!(
+            sem[4],
+            TextureSemantic::Named {
+                name: "CrtPass".into(),
+                feedback: true
+            }
+        );
+        assert_eq!(
+            sem[5],
+            TextureSemantic::Named {
+                name: "SnesMask".into(),
+                feedback: false
+            }
+        );
+        // bindings determinísticos: textura 2+2i, sampler 3+2i.
+        assert_eq!(out.textures[3].tex_binding, 8);
+        assert_eq!(out.textures[3].samp_binding, 9);
     }
 
     // GLSL que o antigo frontend glsl-in do naga rejeitava: `#define`-macro
@@ -485,10 +600,24 @@ void main() {
     }
 
     #[test]
-    fn rejects_feedback_semantics() {
-        let src = preprocess_str(
-            "#version 450\n#pragma stage fragment\nlayout(set=0,binding=2) uniform sampler2D OriginalHistory1;\nlayout(location=0) out vec4 c;\nvoid main(){ c = texture(OriginalHistory1, vec2(0.0)); }\n",
+    fn history_sampler_now_compiles_and_is_classified() {
+        let s = r#"
+#version 450
+#pragma stage vertex
+layout(location = 0) in vec4 Position;
+layout(location = 1) in vec2 TexCoord;
+layout(location = 0) out vec2 vUV;
+void main() { gl_Position = Position; vUV = TexCoord; }
+#pragma stage fragment
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 c;
+layout(set = 0, binding = 2) uniform sampler2D OriginalHistory1;
+void main() { c = texture(OriginalHistory1, vUV); }
+"#;
+        let out = compile(&preprocess_str(s)).expect("history agora compila (fase 2)");
+        assert_eq!(
+            out.textures[0].semantic,
+            TextureSemantic::OriginalHistory(1)
         );
-        assert!(matches!(compile(&src), Err(CompileError::Unsupported(_))));
     }
 }
