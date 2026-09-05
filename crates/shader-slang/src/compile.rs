@@ -1,23 +1,29 @@
-//! Compilação `.slang` (GLSL Vulkan) → WGSL, via `naga`.
+//! Compilação `.slang` (GLSL Vulkan) → WGSL.
 //!
-//! O frontend GLSL do `naga` não aceita duas coisas que todo shader slang do
-//! RetroArch usa, então reescrevemos o fonte antes:
+//! Pipeline: reescrita mínima de layout → **glslang** (GLSL Vulkan → SPIR-V,
+//! compilador de referência Khronos) → **naga** (SPIR-V → validação → WGSL).
+//! O frontend SPIR-V do `naga` é bem mais completo que o antigo glsl-in: aceita
+//! `#define`-macro pesado, construtores `mat4`, ternário em const, etc.
 //!
-//! 1. `layout(push_constant) uniform ... { }` → um UBO normal.
-//! 2. `sampler2D` combinado → `texture2D` + `sampler` separados, com os
-//!    call-sites (`texture(...)`, `textureLod`, `textureSize`, `texelFetch`…)
-//!    reescritos pra `sampler2D(tex, samp)`.
+//! Ainda reescrevemos o fonte antes do glslang pra fixar os bindings do jeito
+//! que o executor (`gpu.rs`) espera:
 //!
-//! Isso cobre shaders simples (scanline/CRT de arquivo único que só usam
-//! `Source`). Multi-sampler pesado (Mega Bezel: `PassFeedback`, history,
-//! LUTs) ainda não — retorna `Unsupported` com o motivo.
+//! 1. `layout(push_constant) uniform Push { }` → UBO em `binding = 0`.
+//! 2. `uniform UBO { }` → `binding = 3`.
+//! 3. `sampler2D` combinado → `texture2D` + `sampler` separados (bindings
+//!    determinísticos), call-sites reescritos pra `sampler2D(tex, samp)`.
+//!
+//! Cobre shaders de arquivo único que só usam `Source`. Multi-sampler
+//! (`PassFeedback`, history, LUTs) ainda retorna `Unsupported` — Fase 2.
 
 use crate::preprocess::SlangSource;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CompileError {
-    #[error("GLSL ({stage}): {msg}")]
-    Glsl { stage: &'static str, msg: String },
+    #[error("glslang ({stage}): {msg}")]
+    Glslang { stage: &'static str, msg: String },
+    #[error("SPIR-V→naga ({stage}): {msg}")]
+    SpirV { stage: &'static str, msg: String },
     #[error("validação naga ({stage}): {msg}")]
     Validate { stage: &'static str, msg: String },
     #[error("geração WGSL ({stage}): {msg}")]
@@ -84,9 +90,9 @@ pub fn compile(src: &SlangSource) -> Result<CompiledSlang, CompileError> {
         ));
     }
 
-    let (vertex_wgsl, _) = compile_stage(&vert, naga::ShaderStage::Vertex, "vertex")?;
+    let (vertex_wgsl, _) = compile_stage(&vert, glslang::ShaderStage::Vertex, "vertex")?;
     let (fragment_wgsl, frag_module) =
-        compile_stage(&frag, naga::ShaderStage::Fragment, "fragment")?;
+        compile_stage(&frag, glslang::ShaderStage::Fragment, "fragment")?;
     let uniforms = reflect_all(&frag_module)?;
     if uniforms.iter().any(|(b, _)| *b != 0 && *b != 3) {
         return Err(CompileError::Unsupported(
@@ -265,22 +271,27 @@ fn decl_combined_sampler(line: &str) -> Option<String> {
 
 fn compile_stage(
     glsl: &str,
-    stage: naga::ShaderStage,
+    stage: glslang::ShaderStage,
     label: &'static str,
 ) -> Result<(String, naga::Module), CompileError> {
-    let mut frontend = naga::front::glsl::Frontend::default();
-    let module = frontend
-        .parse(
-            &naga::front::glsl::Options {
-                stage,
-                defines: Default::default(),
-            },
-            glsl,
-        )
-        .map_err(|e| CompileError::Glsl {
-            stage: label,
-            msg: format!("{e:?}"),
-        })?;
+    let spirv = glsl_to_spirv(glsl, stage, label)?;
+
+    // SPIR-V do RetroArch é clip-space Vulkan; `adjust_coordinate_space` volta
+    // pra convenção do naga/wgsl (flip Y do `BuiltIn::Position`).
+    let module = naga::front::spv::Frontend::new(
+        spirv.iter().copied(),
+        &naga::front::spv::Options {
+            adjust_coordinate_space: true,
+            strict_capabilities: false,
+            block_ctx_dump_prefix: None,
+        },
+    )
+    .parse()
+    .map_err(|e| CompileError::SpirV {
+        stage: label,
+        msg: e.to_string(),
+    })?;
+
     let info = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::all(),
@@ -297,6 +308,31 @@ fn compile_stage(
                 msg: format!("{e:?}"),
             })?;
     Ok((wgsl, module))
+}
+
+/// GLSL Vulkan → SPIR-V (`Vec<u32>`) pelo glslang. `#include` já foi achatado
+/// pelo preprocessador, então não passamos includer.
+fn glsl_to_spirv(
+    glsl: &str,
+    stage: glslang::ShaderStage,
+    label: &'static str,
+) -> Result<Vec<u32>, CompileError> {
+    let err = |msg: String| CompileError::Glslang { stage: label, msg };
+    let compiler = glslang::Compiler::acquire()
+        .ok_or_else(|| err("glslang_initialize_process falhou".into()))?;
+    let source = glslang::ShaderSource::from(glsl.to_string());
+    // Default = alvo Vulkan 1.0 / SPIR-V 1.0 — a mesma convenção do RetroArch.
+    let options = glslang::CompilerOptions::default();
+    let input = glslang::ShaderInput::new(
+        &source,
+        stage,
+        &options,
+        None::<&[(&str, Option<&str>)]>,
+        None,
+    )
+    .map_err(|e| err(e.to_string()))?;
+    let shader = glslang::Shader::new(compiler, input).map_err(|e| err(e.to_string()))?;
+    shader.compile().map_err(|e| err(e.to_string()))
 }
 
 #[cfg(test)]
@@ -395,6 +431,57 @@ void main() {
         assert!(bindings.contains(&3)); // UBO
         let ubo = out.uniforms.iter().find(|(b, _)| *b == 3).unwrap();
         assert!(ubo.1.fields.iter().any(|f| f.name == "MVP"));
+    }
+
+    // GLSL que o antigo frontend glsl-in do naga rejeitava: `#define`-macro
+    // funcional, construtor `mat4`, laço `for` com `textureLod`, ternário.
+    // glslang (compilador de referência) engole tudo.
+    #[test]
+    fn compiles_macro_heavy_glsl_that_naga_glsl_in_rejected() {
+        let s = r#"
+#version 450
+#define PI 3.14159265
+#define SAT(x) clamp((x), 0.0, 1.0)
+#define TAPS 4
+#define TAP_UV(uv, o) ((uv) + vec2((o) * params.SourceSize.z, 0.0))
+layout(push_constant) uniform Push {
+    vec4 SourceSize;
+    float STRENGTH;
+} params;
+#pragma parameter STRENGTH "Strength" 1.0 0.0 2.0 0.01
+#pragma stage vertex
+layout(location = 0) in vec4 Position;
+layout(location = 1) in vec2 TexCoord;
+layout(location = 0) out vec2 vTexCoord;
+void main() { gl_Position = Position; vTexCoord = TexCoord; }
+#pragma stage fragment
+layout(location = 0) in vec2 vTexCoord;
+layout(location = 0) out vec4 FragColor;
+layout(set = 0, binding = 2) uniform sampler2D Source;
+mat4 rot(float a) {
+    float c = cos(a), s = sin(a);
+    return mat4(c, -s, 0.0, 0.0,
+                s,  c, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0);
+}
+void main() {
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < TAPS; i++) {
+        float o = float(i) - 1.5;
+        acc += textureLod(Source, TAP_UV(vTexCoord, o), 0.0).rgb;
+    }
+    acc /= float(TAPS);
+    float k = params.STRENGTH > 1.0 ? SAT(params.STRENGTH - 1.0) : 0.0;
+    vec3 rotated = (rot(k * PI) * vec4(acc, 1.0)).rgb;
+    FragColor = vec4(mix(acc, rotated, k), 1.0);
+}
+"#;
+        let out = compile(&preprocess_str(s)).expect("glslang deve compilar");
+        assert!(out.fragment_wgsl.contains("@fragment"));
+        assert!(out.fragment_wgsl.contains("fn main"));
+        let (_, layout) = &out.uniforms[0];
+        assert!(layout.fields.iter().any(|f| f.name == "STRENGTH"));
     }
 
     #[test]

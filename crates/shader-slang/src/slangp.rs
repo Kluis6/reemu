@@ -75,6 +75,10 @@ pub struct Pass {
     pub mipmap_input: bool,
     /// `FrameCount % N` antes de ir pro shader (0 = sem módulo).
     pub frame_count_mod: u32,
+    /// `true` = a saída deste passe precisa ser guardada pro frame seguinte
+    /// (`feedback_pass{i}` no `.slangp`), pra ser amostrada como `*Feedback`.
+    /// O executor também liga isto sozinho se algum passe amostra o feedback.
+    pub feedback: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -238,6 +242,7 @@ fn build_preset_inner(
                 .get(&format!("frame_count_mod{i}"))
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
+            feedback: flag(kv, &format!("feedback_pass{i}"), false),
         });
     }
 
@@ -292,6 +297,7 @@ fn is_structural_key(k: &str) -> bool {
         "srgb_framebuffer",
         "mipmap_input",
         "frame_count_mod",
+        "feedback_pass",
     ];
     EXACT.contains(&k) || PREFIXES.iter().any(|p| k.starts_with(p))
 }

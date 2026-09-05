@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar dependências de sistema (Tauri + winit/wgpu + gilrs)
+      - name: Instalar dependências de sistema (Tauri + winit/wgpu + gilrs + glslang)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -29,7 +29,8 @@ jobs:
             libudev-dev \
             libasound2-dev \
             mesa-vulkan-drivers \
-            gcc
+            gcc \
+            g++
 
       # O canal/componentes vêm de rust-toolchain.toml.
       - name: Preparar toolchain

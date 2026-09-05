@@ -7,8 +7,11 @@ description = "Parser do formato slang preset (.slangp) — módulo isolado (com
 [dependencies]
 thiserror.workspace = true
 log = "0.4"
-# glsl-in do naga 30.0.1 só compila com wgsl-in junto (bug de packaging).
-naga = { version = "=30.0.1", features = ["glsl-in", "wgsl-in", "wgsl-out"] }
+# glslang (compilador de referência Khronos) vendoriza o fonte C++ e compila
+# via `cc` — sem cmake/python/rede. GLSL Vulkan → SPIR-V.
+glslang = "=0.8.1"
+# SPIR-V → WGSL: o frontend spv-in do naga é bem mais completo que o glsl-in.
+naga = { version = "=30.0.1", features = ["spv-in", "wgsl-out"] }
 
 [dev-dependencies]
 tempfile = "3"

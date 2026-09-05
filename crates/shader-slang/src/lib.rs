@@ -9,8 +9,9 @@
 //! - [`parse_slangp`] / [`parse_slangp_file`] — o `.slangp` (lista de passes).
 //! - [`preprocess_file`] / [`preprocess_str`] — o `.slang` (`#include`, split
 //!   de estágios, `#pragma parameter`).
-//! - [`compile`] — GLSL Vulkan → WGSL via `naga` (cobre CRT/scanline de
-//!   arquivo único; Mega Bezel completo ainda não — ver `compile.rs`).
+//! - [`compile`] — GLSL Vulkan → SPIR-V (glslang) → WGSL (naga). Cobre
+//!   CRT/scanline de arquivo único; multi-sampler (Mega Bezel) ainda não —
+//!   ver `compile.rs`.
 
 mod compile;
 mod preprocess;
