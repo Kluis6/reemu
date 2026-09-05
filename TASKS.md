@@ -101,30 +101,34 @@ Harness `gpu.rs::tests::field_validate_real_presets` (`#[ignore]`, fora do CI):
 `cargo test -p reemu-desktop --lib field_validate_real_presets -- --ignored --nocapture`
 (`REEMU_SHADER_DIR`, `REEMU_SHADER_LIMIT`, `REEMU_SHADER_FULL_ERR=1`).
 
-**Resultado: 722/2554 = 28,3%.** Mas 1441 das 1832 falhas são 3 mega-pacotes,
-cada um com UM blocker — fora deles, ~65%. Por categoria:
+**Resultado: 1037/2554 = 40,6%** (era 722/28,3% antes do blocker #1 — ver
+`13f404f`). Fora dos 3 mega-pacotes, ~79%. Por categoria:
 
-| 100% | hdr · dithering · scanlines · motionblur · stereoscopic-3d · denoisers · subframe-bfi · gpu · deblur · film |
+| 100% | hdr · interpolation · pal · blurs · dithering · scanlines · motionblur · stereoscopic-3d · denoisers · sharpen · subframe-bfi · gpu · deblur · film |
 |---|---|
-| 84–98% | interpolation 98 · reshade 96 · pal 94 · pixel-art… 74 · ntsc 84 · misc 84 |
-| 45–65% | handheld 64 · crt 61 · edge-smoothing 61 · border 56 · downsample 53 · presets 44 |
-| 0% | bezel/Mega_Bezel (660) · bezel/scanline-classic (602) · bezel/koko-aio (179) |
+| 84–98% | reshade 98 · downsample 95 · misc 92 · pixel-art… 91 · border 91 · ntsc 88 · edge-smoothing 84 |
+| 54–80% | vhs 71 · crt 70 · handheld 67 · anti-aliasing 67 · presets 65 · deinterlacing 55 |
+| baixo | bezel/uborder 39 · bezel/Mega_Bezel 23 (era 0) · bezel/scanline-classic 0 (602) · bezel/koko-aio 0 (179) |
 
 Duas correções saíram daí (no `53771e8`): `#reference` múltiplo (o Mega Bezel
 encadeia preset base + `.params`; só a última sobrevivia) e rewrite de sampler
 por identificador (cobre qualquer built-in, não só a lista fixa).
 
-**Blockers abertos** — cada um destrava um pacote inteiro:
+**Blockers:**
 
-1. **`sampler2D` como parâmetro de função do usuário** — GLSL proíbe a
-   construtora como argumento (`sampler constructor must appear at point of
-   use`). Precisa reescrever a assinatura (`sampler2D t` → `texture2D t,
-   sampler t_SLANG_S`), os usos no corpo e os call-sites (scanner de lista de
-   argumentos). **Trava ~1265 presets** (Mega_Bezel 660 + scanline-classic 602
-   + fxaa/aa-shader-4.0/bicubic) = **69% de todas as falhas**. Maior alavanca.
+1. ~~**`sampler2D` como parâmetro de função do usuário**~~ **FEITO (`13f404f`)**
+   — a reescrita passou a cobrir assinatura, corpo e call-site, escolhendo entre
+   forma construtora (ponto de uso) e forma par (argumento). Junto veio
+   `blank_comments`: sem neutralizar comentário o Mega Bezel desbalanceava as
+   chaves (ele tem assinatura e código comentados) e a função corrente saía
+   errada — foi o que separou Mega Bezel 0% de 23%.
 2. **`NotIOShareableType` no vertex** — varying de struct/array, que o WGSL não
    aceita; precisa achatar em `location`s escalares. Trava koko-aio (~179) +
-   smaa (~3).
+   smaa (~3). **Aberto.**
+3. **`bezel/scanline-classic` (602) segue em 0%** — causa ainda em apuração;
+   usa `sampler2D` de parâmetro com o MESMO nome do global (`bandlimit.inc`).
+4. **Mega_Bezel: 507 dos 660 ainda falham** — o resto do pacote tem outra causa
+   além do blocker #1.
 
 Não dá pra pular o rewrite de sampler: a sonda `compile.rs::probe::
 naga_accepts_combined_sampler` (`#[ignore]`) prova que o naga spv-in falha
