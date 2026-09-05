@@ -42,6 +42,7 @@ apps/mobile/src-tauri/gen/android/local.properties
 # Editor / SO
 .vscode/
 .idea/
+.claude/
 .DS_Store
 Thumbs.db
 
