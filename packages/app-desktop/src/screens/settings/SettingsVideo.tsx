@@ -1,4 +1,4 @@
-import { Body1, Button, Caption1, Spinner } from '@fluentui/react-components'
+import { Body1, Button, Caption1, Spinner, tokens } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
 import { ShaderParams } from '../../components/ShaderParams'
@@ -76,8 +76,8 @@ export function SettingsVideo() {
                 gap: 2,
                 padding: '12px 14px',
                 borderRadius: 12,
-                border: `1px solid ${on ? '#6aa9ff' : 'rgba(255,255,255,0.12)'}`,
-                background: on ? 'rgba(106,169,255,0.12)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${on ? tokens.colorBrandStroke1 : tokens.colorNeutralStroke1}`,
+                background: on ? tokens.colorBrandBackground2 : tokens.colorNeutralBackground2,
                 textAlign: 'left',
                 cursor: pick.isPending || !data.gpu ? 'default' : 'pointer',
                 color: 'inherit',

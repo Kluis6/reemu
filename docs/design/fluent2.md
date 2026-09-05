@@ -17,9 +17,12 @@ coerente com o Fluent 2 e explica por que o CSS deve migrar pra **Griffel**.
   `tokens.spacingHorizontalM`, `tokens.borderRadiusMedium`,
   `tokens.shadow16`, `tokens.fontSizeBase300`, etc. Trocar o tema (claro/
   escuro/high-contrast) reajusta tudo automaticamente.
-- **Tema.** `FluentProvider` recebe um `theme` (`webLightTheme`,
-  `webDarkTheme`, `teamsHighContrastTheme`…). O ReEmu roda em
-  `webDarkTheme` (ver `main.tsx`). Nada de cor hardcoded fora dos tokens.
+- **Tema.** `FluentProvider` recebe um `theme`. O ReEmu tem temas **próprios**
+  em `src/styles/themes.ts` (`createDarkTheme(rampa)` + neutros escurecidos
+  `consoleDark` + tokens custom `reemu*`), escolhidos por `useThemeStore`
+  (persistido em `localStorage`, lido de forma síncrona → sem flash). A raiz
+  (`src/App.tsx`) aplica `THEMES[themeId].theme`. Nada de cor hardcoded fora
+  dos tokens.
 - **Ramp tipográfica.** Componentes `Title1/Title2/Title3`, `Subtitle1/2`,
   `Body1/Body2`, `Caption1/2` — não montar `font-size`/`font-weight` na mão.
 - **Espaçamento em múltiplos de 4px** via `spacing*` tokens.
@@ -83,13 +86,38 @@ foi removido (2026-08-30).
 
 - Texto, stroke, spacing, motion (`durationFaster`/`curveEasyEase`) e
   `fontFamilyBase` vêm de `tokens`.
-- O "console look" (fundo quase-preto `#0b0b0d`, verde Xbox `#6cc04a`, raio
-  12/16px, rail 64px) fica num objeto `brand` local — a ramp neutra do Fluent
-  dark é clara demais pra tela cheia, e o verde é cor de produto.
+- **Cor de marca e elevações vêm do tema**, não mais de um `brand` local:
+  `tokens.colorBrand*` + `tokens.colorNeutralBackground2..4` (escurecidos em
+  `themes.ts`) + tokens custom `var(--reemuAppBg)` / `var(--reemuAccentSoft)`
+  / `var(--reemuBrandSolid)` / `var(--reemuOnBrand)`. Só o que não é cor
+  (raio 12/16px, rail 64px) fica num objeto `shell` local.
+- Cores que NÃO devem seguir o tema, mantidas fixas: glifos A/B/X/Y do
+  controle (verde/vermelho/azul/amarelo reais do Xbox) e os scrims
+  preto/branco translúcidos sobre imagens (hero, capa).
 - Só `index.css` tem CSS global (reset: `body`/`#root` 100%, fundo opaco,
   `kbd`). O resto é Griffel.
 - Restrições WebKitGTK mantidas: 1 camada de `radial-gradient` no
   `'::before'` do `.app`, nada de `backdrop-filter`.
+
+### Temas de cor (`src/styles/themes.ts`)
+
+- 3 paletas hoje: **Verde Xbox** (padrão), **Roxo**, **Âmbar**. Cada uma é
+  uma rampa `BrandVariants` (16 tons, gerada por interpolação HSL — script
+  abaixo — ou no Fluent Theme Designer, semente ~tom 80).
+- `make(rampa)` = `createDarkTheme(rampa)` + `consoleDark` (neutros
+  `#0b0b0d`/`#14141a`/`#17171b`/`#1f1f24`, casam com o antigo `brand`) +
+  4 tokens custom `reemu*`. O `FluentProvider` emite **toda chave do objeto
+  de tema** como CSS var (`createCSSRuleFromTheme`), inclusive as custom.
+- Falta (próximo passo): tela **Configurações › Aparência** com swatches,
+  variante **clara** (`createLightTheme`) e **alto contraste**
+  (`createHighContrastTheme`), e persistência no lado Rust.
+
+```js
+// regen de rampa (node): semente -> 16 tons
+const S=[10,20,30,40,50,60,70,80,90,100,110,120,130,140,150,160];
+const L=[4,8,13,18,24,30,37,44,52,58,64,71,78,85,91,96];
+// h,s da semente em HSL; sat = clamp(12,92, s*(0.55+0.75*sin(pi*t))); hsl(h,sat,L[i])
+```
 
 Gotcha aplicado: `borderStyle`/`borderColor` sozinhos são barrados pelo tipo
 do Griffel (forçam declarar o `border` inteiro) → usar `border: '...'`

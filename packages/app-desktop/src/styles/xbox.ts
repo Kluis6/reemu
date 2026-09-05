@@ -3,26 +3,27 @@
  * docs/design/fluent2.md) em **Griffel** (`makeStyles` + `tokens` do Fluent 2),
  * substituindo o antigo `xbox.css`.
  *
- * Cores/raio/rail specifics do "console look" (quase-preto + verde Xbox) ficam
- * em `brand` — a ramp do Fluent 2 é clara demais pra tela cheia. Texto, stroke,
- * spacing, motion e tipografia usam `tokens`.
+ * Cor de marca, elevações e fundo da casca vêm do TEMA (ver styles/themes.ts):
+ * tokens Fluent (`colorBrand*`, `colorNeutralBackground*` já escurecidos) +
+ * tokens custom `--reemu*`. Trocar de tema reajusta tudo. Só o que não é cor
+ * (raio 12/16, rail 64px) fica em `shell`.
  *
  * CUIDADO (WebKitGTK, ver src-tauri/src/main.rs): nada de `backdrop-filter`
  * nem `radial-gradient` multicamada em elemento `position: fixed`.
  */
 import { makeStyles, tokens } from "@fluentui/react-components";
 
-const brand = {
-  bg: "#0b0b0d",
-  bgElev: "#17171b",
-  bgElev2: "#1f1f24",
-  appBg: "linear-gradient(180deg, #14141b 0%, #0b0b0d 42%)",
-  accent: "#6cc04a",
-  accentSoft: "rgba(108, 192, 74, 0.16)",
+// Só os valores NÃO-cor do "console look". Cor de marca, elevações e o fundo
+// da casca vêm do tema (tokens Fluent + tokens custom `--reemu*`, ver
+// styles/themes.ts) — trocar de tema reajusta tudo.
+const shell = {
   radius: "12px",
   radiusLg: "16px",
   railW: "64px",
 };
+
+// Gradiente de superfície elevada (cartões, hero) a partir dos neutros do tema.
+const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`;
 
 const fastTransition = {
   transitionDuration: tokens.durationFaster,
@@ -44,11 +45,11 @@ export const useShellStyles = makeStyles({
     // altos o rail e o `.main` colapsam pra altura do conteúdo e sobra um vazio
     // escuro embaixo ("tela preta").
     height: "100vh",
-    backgroundImage: brand.appBg,
+    backgroundImage: "var(--reemuAppBg)",
     color: tokens.colorNeutralForeground1,
     fontFamily: tokens.fontFamilyBase,
     display: "grid",
-    gridTemplateColumns: `${brand.railW} 1fr`,
+    gridTemplateColumns: `${shell.railW} 1fr`,
     gridTemplateRows: "minmax(0, 1fr)",
     overflowX: "hidden",
     overflowY: "hidden",
@@ -60,7 +61,8 @@ export const useShellStyles = makeStyles({
       right: 0,
       bottom: 0,
       left: 0,
-      backgroundImage: `radial-gradient(760px 420px at 8% -8%, ${brand.accentSoft}, transparent 70%)`,
+      backgroundImage:
+        "radial-gradient(760px 420px at 8% -8%, var(--reemuAccentSoft), transparent 70%)",
       pointerEvents: "none",
     },
     // Anel de foco forte pra navegação por controle. `:focus` (não só
@@ -72,7 +74,7 @@ export const useShellStyles = makeStyles({
       outlineStyle: "solid",
       outlineColor: tokens.colorNeutralForeground1,
       outlineOffset: "2px",
-      borderRadius: brand.radius,
+      borderRadius: shell.radius,
     },
   },
 
@@ -101,7 +103,7 @@ export const useShellStyles = makeStyles({
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    borderRadius: brand.radius,
+    borderRadius: shell.radius,
     color: tokens.colorNeutralForeground3,
     textDecorationLine: "none",
     fontSize: "22px",
@@ -111,11 +113,11 @@ export const useShellStyles = makeStyles({
     transitionProperty: "background-color, color",
     ...fastTransition,
     ":hover": {
-      backgroundColor: brand.bgElev,
+      backgroundColor: tokens.colorNeutralBackground3,
       color: tokens.colorNeutralForeground1,
     },
     '&[aria-current="page"]': {
-      backgroundColor: brand.bgElev2,
+      backgroundColor: tokens.colorNeutralBackground4,
       color: tokens.colorNeutralForeground1,
       boxShadow: `inset 0 0 0 1px ${tokens.colorNeutralStroke2}`,
     },
@@ -144,12 +146,12 @@ export const useShellStyles = makeStyles({
     borderRadius: "50%",
     marginBottom: "8px",
     objectFit: "cover",
-    backgroundColor: brand.accent,
+    backgroundColor: "var(--reemuBrandSolid)",
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
     fontWeight: 800,
-    color: brand.bg,
+    color: "var(--reemuOnBrand)",
   },
 
   main: {
@@ -185,13 +187,13 @@ export const useShellStyles = makeStyles({
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    borderRadius: brand.radius,
+    borderRadius: shell.radius,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: brand.bgElev,
+    backgroundColor: tokens.colorNeutralBackground3,
     color: tokens.colorNeutralForeground1,
     fontSize: "17px",
     cursor: "pointer",
-    ":hover": { backgroundColor: brand.bgElev },
+    ":hover": { backgroundColor: tokens.colorNeutralBackground3 },
     ":disabled": { opacity: 0.4, cursor: "default" },
   },
   // pílula de busca centralizada, independente do conteúdo lateral
@@ -208,7 +210,7 @@ export const useShellStyles = makeStyles({
     paddingRight: "16px",
     borderRadius: "20px",
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: "#14141a",
+    backgroundColor: tokens.colorNeutralBackground2,
     color: tokens.colorNeutralForeground3,
     cursor: "text",
     "& input": {
@@ -254,11 +256,11 @@ export const useHeroStyles = makeStyles({
     height: "clamp(220px, 26vw, 380px)",
     border: "none",
     padding: 0,
-    borderRadius: brand.radiusLg,
+    borderRadius: shell.radiusLg,
     overflowX: "hidden",
     overflowY: "hidden",
     cursor: "pointer",
-    backgroundImage: `linear-gradient(135deg, ${brand.bgElev2}, ${brand.bgElev})`,
+    backgroundImage: elevGradient,
     color: "inherit",
     marginTop: "8px",
     marginBottom: "4px",
@@ -296,7 +298,7 @@ export const useHeroStyles = makeStyles({
     fontWeight: 700,
     letterSpacing: "0.08em",
     textTransform: "uppercase",
-    color: brand.accent,
+    color: tokens.colorBrandForeground1,
   },
   title: {
     fontSize: "clamp(20px, 2.4vw, 30px)",
@@ -368,11 +370,11 @@ export const useBrowseStyles = makeStyles({
     color: tokens.colorNeutralForeground1,
     fontSize: tokens.fontSizeBase200,
     cursor: "pointer",
-    ":hover": { backgroundColor: brand.bgElev },
+    ":hover": { backgroundColor: tokens.colorNeutralBackground3 },
   },
   chipOn: {
-    border: `1px solid ${brand.accent}`,
-    backgroundColor: brand.accentSoft,
+    border: `1px solid ${tokens.colorBrandStroke1}`,
+    backgroundColor: "var(--reemuAccentSoft)",
   },
   count: {
     color: tokens.colorNeutralForeground3,
@@ -405,7 +407,7 @@ export const useBrowseStyles = makeStyles({
     paddingLeft: "14px",
     paddingRight: "14px",
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    borderRadius: brand.radius,
+    borderRadius: shell.radius,
     backgroundColor: "rgba(255, 255, 255, 0.02)",
     maxWidth: "640px",
   },
@@ -478,10 +480,10 @@ export const useCardStyles = makeStyles({
     position: "relative",
     width: "100%",
     height: "100%",
-    borderRadius: brand.radius,
+    borderRadius: shell.radius,
     overflowX: "hidden",
     overflowY: "hidden",
-    backgroundImage: `linear-gradient(135deg, ${brand.bgElev2}, ${brand.bgElev})`,
+    backgroundImage: elevGradient,
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
@@ -546,7 +548,7 @@ export const useHintStyles = makeStyles({
     justifyItems: "center",
     fontSize: tokens.fontSizeBase100,
     fontWeight: 700,
-    color: brand.bg,
+    color: "var(--reemuOnBrand)",
   },
   a: { backgroundColor: "#16c60c" },
   b: { backgroundColor: "#e74856" },
@@ -593,17 +595,17 @@ export const useDetailStyles = makeStyles({
     color: tokens.colorNeutralForeground1,
     fontSize: tokens.fontSizeBase200,
     cursor: "pointer",
-    ":hover": { backgroundColor: brand.bgElev },
+    ":hover": { backgroundColor: tokens.colorNeutralBackground3 },
   },
   hero: {
     position: "relative",
     minHeight: "280px",
-    borderRadius: brand.radiusLg,
+    borderRadius: shell.radiusLg,
     overflowX: "hidden",
     overflowY: "hidden",
     display: "flex",
     alignItems: "flex-end",
-    backgroundImage: `linear-gradient(135deg, ${brand.bgElev2}, ${brand.bgElev})`,
+    backgroundImage: elevGradient,
   },
   heroArt: {
     position: "absolute",
@@ -689,7 +691,7 @@ export const useDetailStyles = makeStyles({
     paddingBottom: "14px",
     paddingLeft: "16px",
     paddingRight: "16px",
-    borderRadius: brand.radius,
+    borderRadius: shell.radius,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     backgroundColor: "rgba(255, 255, 255, 0.02)",
     maxWidth: "560px",
@@ -704,8 +706,8 @@ export const useDetailStyles = makeStyles({
     paddingBottom: "8px",
     paddingLeft: "12px",
     paddingRight: "12px",
-    borderRadius: brand.radius,
-    backgroundColor: brand.bgElev,
+    borderRadius: shell.radius,
+    backgroundColor: tokens.colorNeutralBackground3,
   },
   hint: {
     fontSize: tokens.fontSizeBase100,
@@ -732,7 +734,7 @@ export const usePauseStyles = makeStyles({
       outlineStyle: "solid",
       outlineColor: tokens.colorNeutralForeground1,
       outlineOffset: "2px",
-      borderRadius: brand.radius,
+      borderRadius: shell.radius,
     },
   },
   panel: {
@@ -744,8 +746,8 @@ export const usePauseStyles = makeStyles({
     paddingBottom: "22px",
     paddingLeft: "22px",
     paddingRight: "22px",
-    borderRadius: brand.radiusLg,
-    backgroundColor: "#14141a",
+    borderRadius: shell.radiusLg,
+    backgroundColor: tokens.colorNeutralBackground2,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     color: tokens.colorNeutralForeground1,
   },
@@ -764,14 +766,14 @@ export const usePauseStyles = makeStyles({
     alignItems: "center",
     columnGap: "10px",
     padding: "6px",
-    borderRadius: brand.radius,
+    borderRadius: shell.radius,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     backgroundColor: "rgba(255,255,255,0.03)",
     color: tokens.colorNeutralForeground1,
     cursor: "pointer",
     textAlign: "left",
     font: "inherit",
-    ":hover": { backgroundColor: brand.bgElev },
+    ":hover": { backgroundColor: tokens.colorNeutralBackground3 },
   },
   stateLabel: {
     fontSize: tokens.fontSizeBase200,

@@ -111,8 +111,8 @@ const useStyles = makeStyles({
     justifyContent: "center",
     gap: tokens.spacingVerticalL,
     // linear (não radial multicamada) — ver histórico do WebKitGTK em main.rs.
-    background: "linear-gradient(180deg, #161d2b 0%, #0b0b0d 70%)",
-    color: "#fff",
+    background: "var(--reemuAppBg)",
+    color: tokens.colorNeutralForeground1,
   },
   splashArt: {
     width: "208px",
@@ -123,8 +123,8 @@ const useStyles = makeStyles({
     placeItems: "center",
     fontSize: "52px",
     fontWeight: 700,
-    color: "rgba(255,255,255,0.4)",
-    background: "#20263a",
+    color: tokens.colorNeutralForeground4,
+    background: tokens.colorNeutralBackground4,
     boxShadow:
       "0 22px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.06)",
   },
