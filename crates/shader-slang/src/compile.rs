@@ -231,6 +231,10 @@ fn reflect_struct(
 /// novo + os samplers classificados. Bindings finais:
 ///   0 = `Push` · 1 = `UBO` · 2+2i / 3+2i = textura/sampler i.
 fn rewrite(glsl: &str) -> (String, Vec<TextureBind>) {
+    // 0. builtins do GLSL que o backend WGSL do naga não tem: injeta um
+    //    equivalente e troca as chamadas.
+    let glsl = patch_missing_builtins(glsl);
+
     // 1. blocos uniformes: força o binding pelo nome do bloco.
     let mut s = String::with_capacity(glsl.len() + 128);
     for line in glsl.lines() {
@@ -1060,9 +1064,60 @@ fn rewrite_sampler_uses(src: &str, globals: &[String], fns: &SamplerFns) -> Stri
     // se o `{` seguinte só tiver espaço no meio, é a definição dessa função.
     let mut last_top_close: Option<(String, usize)> = None;
     let mut i = 0usize;
+    let mut at_line_start = true;
 
     while i < src.len() {
         let c = b[i];
+        // linha de preprocessador. `#define NOME[(args)] corpo`: o NOME e a
+        // lista de args são copiados crus (renomear o NOME do macro quebra a
+        // diretiva — o koko-aio tem `#define FPS_ESTIMATE_PASS <sampler>` onde
+        // o NOME é IGUAL a um sampler global). O CORPO segue pra reescrita
+        // normal (o Mega Bezel tem `#define PassFeedback <sampler>` e usa o
+        // alias no código). Outras diretivas (`#if`, `#pragma`…) vão cruas.
+        if at_line_start && c == b'#' {
+            let eol = src[i..].find('\n').map(|k| i + k + 1).unwrap_or(src.len());
+            let line = &src[i..eol];
+            let trimmed = line.trim_start_matches(|c: char| c == '#' || c.is_whitespace());
+            if let Some(after) = trimmed.strip_prefix("define") {
+                // copia `#define NOME` (+ `(args)` colado no nome, se houver)
+                let name_start = i + (line.len() - after.len());
+                let mut k = name_start;
+                while k < eol && (b[k] as char).is_whitespace() {
+                    k += 1;
+                }
+                while k < eol && is_word_byte(b[k]) {
+                    k += 1;
+                }
+                if k < eol && b[k] == b'(' {
+                    // lista de parâmetros do macro
+                    let mut depth = 0i32;
+                    while k < eol {
+                        match b[k] {
+                            b'(' => depth += 1,
+                            b')' => {
+                                depth -= 1;
+                                k += 1;
+                                if depth == 0 {
+                                    break;
+                                }
+                                continue;
+                            }
+                            _ => {}
+                        }
+                        k += 1;
+                    }
+                }
+                out.push_str(&src[i..k]);
+                i = k;
+                at_line_start = false;
+                continue;
+            }
+            out.push_str(line);
+            i = eol;
+            at_line_start = true;
+            continue;
+        }
+        at_line_start = c == b'\n' || (at_line_start && (c as char).is_whitespace());
         // identificador?
         if is_word_byte(c) && !c.is_ascii_digit() {
             let s = i;
@@ -1164,6 +1219,33 @@ fn rewrite_sampler_uses(src: &str, globals: &[String], fns: &SamplerFns) -> Stri
                 i += ch.len_utf8();
             }
         }
+    }
+    out
+}
+
+/// `isinf`/`isnan` — o backend WGSL do `naga` não tem
+/// (`UnsupportedRelationalFunction`). WGSL também removeu esses builtins.
+/// Injeta um equivalente escalar e troca `isinf(` / `isnan(` pelas chamadas
+/// (só quando o fonte usa — a maioria dos shaders não).
+fn patch_missing_builtins(glsl: &str) -> String {
+    let has_inf = glsl.contains("isinf(");
+    let has_nan = glsl.contains("isnan(");
+    if !has_inf && !has_nan {
+        return glsl.to_string();
+    }
+    let mut out = glsl
+        .replace("isinf(", "reemu_isinf(")
+        .replace("isnan(", "reemu_isnan(");
+    // depois do `#version`, senão vira erro de "código antes da diretiva".
+    let inject = "\n        bool reemu_isinf(float x) { return x != 0.0 && x == x * 2.0; }\n        bool reemu_isnan(float x) { return x != x; }\n";
+    if let Some(pos) = out.find("#version") {
+        let eol = out[pos..]
+            .find('\n')
+            .map(|i| pos + i + 1)
+            .unwrap_or(out.len());
+        out.insert_str(eol, inject);
+    } else {
+        out.insert_str(0, inject);
     }
     out
 }
