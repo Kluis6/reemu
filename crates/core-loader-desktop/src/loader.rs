@@ -1,12 +1,14 @@
 //! `DesktopCoreLoader`: implementa `domain::core_loader::CoreLoader` via
 //! `libloading`. Caminho software-only completo; cores que exigem HW render GL
-//! negociam um contexto EGL offscreen (`setup_gl_context`); Vulkan por-core é
-//! recusado com `HwRenderUnsupported` (etapa 12).
+//! negociam um contexto EGL offscreen (`setup_gl_context`); HW render Vulkan
+//! monta um `VkContext`/`VkFrameBridge` (`setup_vk_context`, etapa 12).
 
 use crate::core::DesktopCore;
 use crate::ffi_state::{self, HwRenderRequest};
 use crate::raw::RawCore;
 use crate::sys;
+use crate::vk_context::{VkConfig, VkContext};
+use crate::vk_frame::VkFrameBridge;
 use async_trait::async_trait;
 use domain::core_loader::{
     CoreId, CoreLoadError, CoreLoader, CoreRenderRequirements, InstalledCoreRepository, LoadedCore,
@@ -253,27 +255,22 @@ impl DesktopCoreLoader {
             .unwrap()
             .insert(core_id.0.clone(), render_reqs.clone());
 
-        let gl = match render_reqs.render_backend {
-            RenderBackend::Software => None,
+        let teardown = |raw: &RawCore| unsafe {
+            (raw.unload_game)();
+            (raw.deinit)();
+        };
+        let (gl, vk) = match render_reqs.render_backend {
+            RenderBackend::Software => (None, None),
             RenderBackend::OpenGl => {
                 let req = hw.expect("OpenGl backend sem HwRenderRequest");
-                Some(
-                    setup_gl_context(&core_id.0, &req, &av_info).inspect_err(|_| {
-                        // teardown do que já foi inicializado antes de propagar
-                        unsafe {
-                            (raw.unload_game)();
-                            (raw.deinit)();
-                        }
-                    })?,
-                )
+                let gl =
+                    setup_gl_context(&core_id.0, &req, &av_info).inspect_err(|_| teardown(&raw))?;
+                (Some(gl), None)
             }
             RenderBackend::Vulkan => {
-                let core = DesktopCore::new(raw, av_info, render_reqs, guard, None, extracted);
-                drop(core); // teardown (unload_game + deinit + guard)
-                return Err(CoreLoadError::HwRenderUnsupported(format!(
-                    "{} exige Vulkan HW render — só na etapa 12",
-                    core_id.0
-                )));
+                let req = hw.expect("Vulkan backend sem HwRenderRequest");
+                let bridge = setup_vk_context(&core_id.0, &req).inspect_err(|_| teardown(&raw))?;
+                (None, Some(bridge))
             }
         };
 
@@ -283,6 +280,7 @@ impl DesktopCoreLoader {
             render_reqs,
             guard,
             gl,
+            vk,
             extracted,
         ))
     }
@@ -335,6 +333,44 @@ fn setup_gl_context(
         ctx.interop_active()
     );
     Ok(ctx)
+}
+
+/// Cria o contexto Vulkan compartilhado + a ponte de frame, publica a
+/// `retro_hw_render_interface_vulkan` no estado global e roda o `context_reset`
+/// do core (que aí chama `GET_HW_RENDER_INTERFACE` e monta os recursos dele).
+///
+/// Fase A: `VkConfig` default (sem extensões extra). A fase B injeta o conjunto
+/// que o `wgpu-hal` exige e liga a imagem no compositor.
+fn setup_vk_context(
+    core_id: &str,
+    req: &HwRenderRequest,
+) -> Result<Box<VkFrameBridge>, CoreLoadError> {
+    let mut cfg = VkConfig::default();
+    if req.version_major >= 0x0040_0000 {
+        // O core pediu uma apiVersion concreta (ex.: flycast manda
+        // VK_API_VERSION_1_1). `version_minor` do libretro fica 0 nesses cores.
+        cfg.api_version = req.version_major;
+    }
+    let ctx = VkContext::create(&cfg).map_err(|e| {
+        CoreLoadError::HwRenderUnsupported(format!("{core_id}: contexto Vulkan: {e}"))
+    })?;
+    log::info!(
+        "contexto Vulkan pronto pra {core_id} ({})",
+        ctx.device_name()
+    );
+
+    let bridge = VkFrameBridge::new(ctx).map_err(|e| {
+        CoreLoadError::HwRenderUnsupported(format!("{core_id}: ponte de frame Vulkan: {e}"))
+    })?;
+
+    // Publica a interface ANTES do context_reset — o core a lê lá dentro.
+    if let Some(st) = ffi_state::lock().as_mut() {
+        st.vk_interface_ptr = Some(bridge.interface_ptr() as usize);
+    }
+    if let Some(reset) = req.context_reset {
+        unsafe { reset() };
+    }
+    Ok(bridge)
 }
 
 #[async_trait]

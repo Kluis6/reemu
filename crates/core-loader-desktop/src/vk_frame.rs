@@ -60,6 +60,11 @@ pub(crate) struct VkFrameBridge {
     interface: vk_sys::retro_hw_render_interface_vulkan,
 }
 
+// SAFETY: como o `GlContext`, o bridge só é tocado pela thread que dirige o
+// core. `interface.handle` é auto-referencial (aponta pro próprio `Box`) e os
+// ponteiros de função são `static`.
+unsafe impl Send for VkFrameBridge {}
+
 impl VkFrameBridge {
     pub fn new(ctx: VkContext) -> Result<Box<Self>, String> {
         let mut fences = [vk::Fence::null(); RING];

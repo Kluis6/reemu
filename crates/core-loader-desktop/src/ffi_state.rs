@@ -12,6 +12,7 @@
 
 use crate::coreopts::{self, CoreOption};
 use crate::sys;
+use crate::vk_sys;
 use domain::core_loader::CoreLoadError;
 use domain::frame_source::SoftwarePixelFormat;
 use std::collections::HashMap;
@@ -53,6 +54,17 @@ pub(crate) struct FrontendState {
     /// Id do FBO GL que o core deve renderizar (`get_current_framebuffer`).
     /// `Some` só depois que o `loader` cria o contexto GL.
     pub hw_fbo: Option<u32>,
+    /// `retro_hw_render_context_negotiation_interface_vulkan*` do core
+    /// (`SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE`). `usize` cru pra ser
+    /// `Send`; memória é `static` do core (viva pelo processo). Etapa 12.
+    pub vk_negotiation: Option<usize>,
+    /// `retro_hw_render_interface_vulkan*` que publicamos — o
+    /// `loader::setup_vk_context` seta antes do `context_reset`, o core lê em
+    /// `GET_HW_RENDER_INTERFACE`. `usize` cru; aponta pro `Box<VkFrameBridge>`
+    /// do `DesktopCore` (vivo enquanto o core estiver carregado).
+    pub vk_interface_ptr: Option<usize>,
+    /// `GET_PREFERRED_HW_RENDER` responde Vulkan (opt-in `REEMU_HW=vulkan`).
+    pub prefer_vulkan: bool,
     /// Dimensão (`w`, `h`) do último frame de HW render — o core só passa isso
     /// no `video_refresh` com `data == RETRO_HW_FRAME_BUFFER_VALID`.
     pub hw_frame: Option<(u32, u32)>,
@@ -91,6 +103,14 @@ impl FrontendState {
             save_dir: to_c(save_dir),
             hw_render: None,
             hw_fbo: None,
+            vk_negotiation: None,
+            vk_interface_ptr: None,
+            prefer_vulkan: matches!(
+                std::env::var("REEMU_HW")
+                    .map(|v| v.trim().to_ascii_lowercase())
+                    .as_deref(),
+                Ok("vulkan") | Ok("vk")
+            ),
             hw_frame: None,
             rotation_degrees: 0,
             av_update: None,
@@ -257,14 +277,44 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
                 cb.get_current_framebuffer = Some(get_current_framebuffer_cb);
                 cb.get_proc_address = Some(get_proc_address_cb);
             }
-            // Vulkan: aceita a declaração; `loader::open_core` recusa depois com
-            // mensagem clara (é a etapa 12).
+            // Vulkan: aceita a declaração; `loader::setup_vk_context` cria o
+            // contexto depois (etapa 12).
             true
         }
         sys::RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER => {
             if !data.is_null() {
-                *(data as *mut c_uint) = sys::RETRO_HW_CONTEXT_OPENGL_CORE;
+                *(data as *mut c_uint) = if st.prefer_vulkan {
+                    sys::RETRO_HW_CONTEXT_VULKAN
+                } else {
+                    sys::RETRO_HW_CONTEXT_OPENGL_CORE
+                };
             }
+            true
+        }
+        vk_sys::RETRO_ENVIRONMENT_SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE => {
+            if data.is_null() {
+                return false;
+            }
+            // Só o cabeçalho comum interessa aqui — valida o tipo antes de guardar.
+            let hdr = &*(data as *const vk_sys::retro_hw_render_context_negotiation_interface);
+            if hdr.interface_type != vk_sys::RETRO_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_VULKAN {
+                return false;
+            }
+            st.vk_negotiation = Some(data as usize);
+            log::info!(
+                "negociação Vulkan registrada (interface_version {})",
+                hdr.interface_version
+            );
+            true
+        }
+        vk_sys::RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE => {
+            let Some(ptr) = st.vk_interface_ptr else {
+                return false; // contexto ainda não montado
+            };
+            if data.is_null() {
+                return false;
+            }
+            *(data as *mut *const c_void) = ptr as *const c_void;
             true
         }
         sys::RETRO_ENVIRONMENT_GET_VARIABLE => {

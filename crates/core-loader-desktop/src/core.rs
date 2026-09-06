@@ -6,6 +6,7 @@ use crate::ffi_state::{self, CoreGuard};
 use crate::gl_context::GlContext;
 use crate::raw::RawCore;
 use crate::sys;
+use crate::vk_frame::VkFrameBridge;
 use domain::core_loader::{CoreRenderRequirements, LoadedCore, SystemAvInfo};
 use domain::frame_source::{Frame, FrameMetadata, FrameOrigin, FrameSource, SoftwarePixelFormat};
 
@@ -15,6 +16,9 @@ pub struct DesktopCore {
     render_reqs: CoreRenderRequirements,
     /// `Some` = core de HW render (GL). O frame sai do FBO deste contexto.
     gl: Option<GlContext>,
+    /// `Some` = core de HW render Vulkan (etapa 12). Dono do `VkContext` +
+    /// fence ring; `interface.handle` do core aponta pra dentro deste `Box`.
+    vk: Option<Box<VkFrameBridge>>,
     /// ROM extraída de um `.zip` — apagada quando o core é dropado.
     _extracted: Option<ExtractedRom>,
     /// Mantido vivo até o Drop: libera o slot global de "um core por processo".
@@ -28,6 +32,7 @@ impl DesktopCore {
         render_reqs: CoreRenderRequirements,
         guard: CoreGuard,
         gl: Option<GlContext>,
+        vk: Option<Box<VkFrameBridge>>,
         extracted: Option<ExtractedRom>,
     ) -> Self {
         Self {
@@ -35,6 +40,7 @@ impl DesktopCore {
             av_info,
             render_reqs,
             gl,
+            vk,
             _extracted: extracted,
             _guard: guard,
         }
@@ -150,11 +156,18 @@ impl FrameSource for DesktopCore {
             // Interop: aponta o FBO pro slot de escrita do ring antes do run.
             gl.bind_write_slot();
         }
+        if let Some(vk) = &self.vk {
+            // Avança o slot em voo antes do `get_sync_index` do core.
+            vk.begin_frame();
+        }
 
         unsafe { (self.raw.run)() };
 
         if self.gl.is_some() {
             return self.next_hw_frame();
+        }
+        if self.vk.is_some() {
+            return self.next_vk_frame();
         }
 
         let mut guard = ffi_state::lock();
@@ -228,6 +241,31 @@ impl DesktopCore {
             },
             metadata: meta,
         })
+    }
+
+    /// Frame de HW render Vulkan (etapa 12). Fase A: submete o que o core
+    /// entregou (`set_command_buffers`) e espera a GPU — mas ainda NÃO há
+    /// caminho pro compositor (`create_texture_from_hal` é a fase B), então
+    /// devolve `None` (o compositor mantém o frame anterior).
+    fn next_vk_frame(&mut self) -> Option<Frame> {
+        {
+            let mut guard = ffi_state::lock();
+            let st = guard.as_mut()?;
+            if !st.had_new_frame {
+                return None;
+            }
+            st.had_new_frame = false;
+            st.hw_frame.take()?;
+        }
+        let vk = self.vk.as_ref()?;
+        match vk.submit_pending(true) {
+            Ok(Some(img)) => {
+                log::trace!("vk frame pronto (sync_index {})", img.sync_index);
+            }
+            Ok(None) => {}
+            Err(e) => log::warn!("vk submit_pending: {e}"),
+        }
+        None // fase B liga isto no compositor
     }
 }
 
