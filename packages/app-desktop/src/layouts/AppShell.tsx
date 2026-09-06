@@ -13,6 +13,7 @@ import {
   Tooltip,
   makeStyles,
   mergeClasses,
+  tokens,
 } from "@fluentui/react-components";
 import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -23,12 +24,14 @@ import { quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
 
-const useTopbarBtn = makeStyles({
-  btn: {
+const useLocalStyles = makeStyles({
+  topbarBtn: {
     backgroundColor: "var(--reemuSurfaceSoft)",
     ":hover": { backgroundColor: "var(--reemuSurfaceSoft)", filter: "brightness(1.15)" },
     ":hover:active": { backgroundColor: "var(--reemuSurfaceSoft)", filter: "brightness(0.95)" },
   },
+  // ícones da sidebar com o border-radius padrão do botão do Fluent
+  railRadius: { borderRadius: tokens.borderRadiusMedium },
 });
 
 const RAIL = [
@@ -44,7 +47,7 @@ const RAIL = [
 
 export function AppShell() {
   const s = useShellStyles();
-  const tb = useTopbarBtn();
+  const l = useLocalStyles();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const clock = useClock();
@@ -81,7 +84,7 @@ export function AppShell() {
             key={it.to}
             to={it.to}
             end={it.end}
-            className={s.railItem}
+            className={mergeClasses(s.railItem, l.railRadius)}
             title={it.label}
             aria-label={it.label}
           >
@@ -91,7 +94,7 @@ export function AppShell() {
         <div className={s.railSpacer} />
         <div className={s.railSep} />
         <button
-          className={mergeClasses(s.railItem, s.railQuit)}
+          className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
           onClick={() => void quitApp()}
           title="Fechar o ReEmu"
           aria-label="Fechar o ReEmu"
@@ -106,7 +109,7 @@ export function AppShell() {
             <Tooltip content="Voltar para a tela anterior" relationship="label">
               <Button
                 appearance="subtle"
-                className={tb.btn}
+                className={l.topbarBtn}
                 icon={<ArrowLeftRegular />}
                 aria-label="Voltar"
                 onClick={() => navigate(-1)}
@@ -148,7 +151,7 @@ export function AppShell() {
           >
             <Button
               appearance="subtle"
-              className={tb.btn}
+              className={l.topbarBtn}
               aria-label={
                 fullscreen ? "Sair da tela cheia" : "Tela cheia"
               }
