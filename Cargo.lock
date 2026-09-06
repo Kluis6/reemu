@@ -4271,6 +4271,7 @@ dependencies = [
 name = "reemu-desktop"
 version = "0.1.0"
 dependencies = [
+ "ash",
  "audio-desktop",
  "db",
  "domain",

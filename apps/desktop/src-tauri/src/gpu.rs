@@ -18,6 +18,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use domain::core_loader::VulkanSharedDevice;
 use domain::frame_source::{Frame, FrameOrigin};
 use shader_slang::{
     Scale, TextureBind, TextureSemantic, UniformFieldKind, UniformLayout, WrapMode,
@@ -803,6 +804,58 @@ impl FrameProcessor {
         );
         self.rb.invalidate();
         self.decoration = Some(Decoration { view, w, h, vp });
+    }
+
+    /// Handles Vulkan crus DESTE device, pra um core libretro de HW render
+    /// Vulkan (etapa 12) renderizar no MESMO device do compositor — aí a
+    /// `VkImage` que ele entrega no `set_image` vira `wgpu::Texture` com
+    /// `texture_from_raw`, sem cópia nenhuma.
+    ///
+    /// `None` quando o backend não é Vulkan (wgpu caiu pra GL/D3D) ou quando a
+    /// queue do wgpu não serve — a spec do libretro Vulkan exige uma queue com
+    /// GRAPHICS **e** COMPUTE, e é a queue do wgpu que o core vai usar.
+    // O consumidor (emu-session repassando pro loader) entra na fase B3; por
+    // enquanto só o teste usa.
+    #[allow(dead_code)]
+    pub fn vulkan_shared_device(&self) -> Option<VulkanSharedDevice> {
+        // SAFETY: só lemos handles; nada é destruído aqui. O guard do `as_hal`
+        // mantém o device vivo durante a leitura, e os handles seguem válidos
+        // enquanto o `FrameProcessor` viver (é ele o dono).
+        unsafe {
+            let hal = self.device.as_hal::<wgpu::hal::api::Vulkan>()?;
+            let instance = hal.shared_instance().raw_instance();
+            let physical_device = hal.raw_physical_device();
+            let family = hal.queue_family_index();
+
+            // A queue do wgpu precisa servir pro core (GRAPHICS+COMPUTE).
+            let want = ash::vk::QueueFlags::GRAPHICS | ash::vk::QueueFlags::COMPUTE;
+            let families = instance.get_physical_device_queue_family_properties(physical_device);
+            let ok = families
+                .get(family as usize)
+                .is_some_and(|f| f.queue_flags.contains(want));
+            if !ok {
+                log::warn!(
+                    "queue family {family} do wgpu não tem GRAPHICS+COMPUTE — \
+                     HW render Vulkan indisponível"
+                );
+                return None;
+            }
+
+            Some(VulkanSharedDevice {
+                get_instance_proc_addr: hal
+                    .shared_instance()
+                    .entry()
+                    .static_fn()
+                    .get_instance_proc_addr as usize,
+                instance: std::mem::transmute::<ash::vk::Instance, usize>(instance.handle()),
+                physical_device: std::mem::transmute::<ash::vk::PhysicalDevice, usize>(
+                    physical_device,
+                ),
+                device: std::mem::transmute::<ash::vk::Device, usize>(hal.raw_device().handle()),
+                queue: std::mem::transmute::<ash::vk::Queue, usize>(hal.raw_queue()),
+                queue_family_index: family,
+            })
+        }
     }
 
     /// Nome curto pra exibição (builtin ou stem do `.slangp`).
@@ -2478,6 +2531,66 @@ mod tests {
                 rotation_degrees: 0,
             },
         }
+    }
+
+    /// Etapa 12: os handles Vulkan que exportamos pro core de HW render têm
+    /// que ser REAIS — reconstrói `ash::Instance`/`Device` a partir deles
+    /// (exatamente o que `VkContext::adopt` faz no `core-loader-desktop`) e
+    /// chama a API pra provar que respondem.
+    #[test]
+    fn vulkan_shared_device_handles_are_usable() {
+        if std::env::var_os("REEMU_NO_GPU").is_some() {
+            return;
+        }
+        let Some(fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        let Some(shared) = fp.vulkan_shared_device() else {
+            eprintln!("backend wgpu não-Vulkan (ou queue sem GRAPHICS+COMPUTE) — pulando");
+            return;
+        };
+
+        assert_ne!(shared.get_instance_proc_addr, 0);
+        assert_ne!(shared.instance, 0);
+        assert_ne!(shared.physical_device, 0);
+        assert_ne!(shared.device, 0);
+        assert_ne!(shared.queue, 0);
+
+        // SAFETY: mesma reconstrução do `VkContext::adopt`; só lê propriedades.
+        let name = unsafe {
+            let gipa = std::mem::transmute::<usize, ash::vk::PFN_vkGetInstanceProcAddr>(
+                shared.get_instance_proc_addr,
+            );
+            let static_fn = ash::StaticFn {
+                get_instance_proc_addr: gipa,
+            };
+            let inst_handle = std::mem::transmute::<usize, ash::vk::Instance>(shared.instance);
+            let instance = ash::Instance::load(&static_fn, inst_handle);
+            let phd = std::mem::transmute::<usize, ash::vk::PhysicalDevice>(shared.physical_device);
+            let props = instance.get_physical_device_properties(phd);
+            // Provar que o VkDevice também responde: carregar a tabela dele e
+            // pedir a queue declarada tem que devolver o MESMO handle.
+            let dev_handle = std::mem::transmute::<usize, ash::vk::Device>(shared.device);
+            let device = ash::Device::load(instance.fp_v1_0(), dev_handle);
+            let q = device.get_device_queue(shared.queue_family_index, 0);
+            assert_eq!(
+                std::mem::transmute::<ash::vk::Queue, usize>(q),
+                shared.queue,
+                "a queue exportada tem que ser a (family, 0) do device"
+            );
+            std::ffi::CStr::from_ptr(props.device_name.as_ptr())
+                .to_string_lossy()
+                .into_owned()
+        };
+        assert!(
+            !name.is_empty(),
+            "vkGetPhysicalDeviceProperties devolveu nome vazio"
+        );
+        eprintln!(
+            "device compartilhável: {name} (queue family {})",
+            shared.queue_family_index
+        );
     }
 
     /// O readback com pipeline prima 1 frame e depois entrega o frame ANTERIOR

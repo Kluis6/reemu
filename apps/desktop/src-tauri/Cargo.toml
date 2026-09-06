@@ -29,6 +29,9 @@ serde_json = { workspace = true }
 log = "0.4"
 raw-window-handle = "0.6"
 wgpu = "30"
+# Handles Vulkan crus pro HW render por-core (etapa 12): o core renderiza no
+# MESMO VkDevice do wgpu. Mesma versao que o wgpu 30 ja resolve.
+ash = { version = "0.38", default-features = false }
 png = "0.17"
 uuid = { version = "1", features = ["v4"] }
 thiserror.workspace = true
