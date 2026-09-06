@@ -8,7 +8,12 @@ import {
   SearchRegular,
   SettingsRegular,
 } from "@fluentui/react-icons";
-import { Button, Tooltip, mergeClasses } from "@fluentui/react-components";
+import {
+  Button,
+  Tooltip,
+  makeStyles,
+  mergeClasses,
+} from "@fluentui/react-components";
 import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ButtonHints } from "../components/ButtonHints";
@@ -17,6 +22,14 @@ import { useFullscreen } from "../hooks/useFullscreen";
 import { quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
+
+const useTopbarBtn = makeStyles({
+  btn: {
+    backgroundColor: "var(--reemuSurfaceSoft)",
+    ":hover": { backgroundColor: "var(--reemuSurfaceSoft)", filter: "brightness(1.15)" },
+    ":hover:active": { backgroundColor: "var(--reemuSurfaceSoft)", filter: "brightness(0.95)" },
+  },
+});
 
 const RAIL = [
   { to: "/", end: true, icon: <HomeRegular />, label: "Início" },
@@ -31,6 +44,7 @@ const RAIL = [
 
 export function AppShell() {
   const s = useShellStyles();
+  const tb = useTopbarBtn();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const clock = useClock();
@@ -92,6 +106,7 @@ export function AppShell() {
             <Tooltip content="Voltar para a tela anterior" relationship="label">
               <Button
                 appearance="subtle"
+                className={tb.btn}
                 icon={<ArrowLeftRegular />}
                 aria-label="Voltar"
                 onClick={() => navigate(-1)}
@@ -133,6 +148,7 @@ export function AppShell() {
           >
             <Button
               appearance="subtle"
+              className={tb.btn}
               aria-label={
                 fullscreen ? "Sair da tela cheia" : "Tela cheia"
               }

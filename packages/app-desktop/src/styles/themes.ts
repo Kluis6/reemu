@@ -95,10 +95,12 @@ const consoleDark = {
 
 /** Tokens custom do ReEmu, emitidos como `--reemu*` pelo `FluentProvider`. */
 export interface ReEmuTokens {
-  /** Fundo da casca (`.app`) — gradiente com leve lavagem da cor de marca. */
+  /** Fundo da casca (`.app`) — cinza neutro suave, sem matiz. */
   reemuAppBg: string;
-  /** Tinta de marca translúcida (brilho de canto, chip ativo). */
+  /** Realce translúcido neutro (brilho de canto, chip ativo). */
   reemuAccentSoft: string;
+  /** Superfície sólida suave — botões de ícone da topbar. */
+  reemuSurfaceSoft: string;
   /** Preenchimento sólido de marca (círculo do rail, glifos de dica). */
   reemuBrandSolid: string;
   /** Cor de texto legível sobre `reemuBrandSolid`. */
@@ -107,13 +109,6 @@ export interface ReEmuTokens {
 
 export type ReEmuTheme = Theme & ReEmuTokens;
 
-function rgba(hex: string, alpha: number): string {
-  const n = hex.replace("#", "");
-  const r = parseInt(n.slice(0, 2), 16);
-  const g = parseInt(n.slice(2, 4), 16);
-  const b = parseInt(n.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 function readableOn(hex: string): string {
   const n = hex.replace("#", "");
@@ -126,8 +121,10 @@ function make(ramp: BrandVariants): ReEmuTheme {
   return {
     ...createDarkTheme(ramp),
     ...consoleDark,
-    reemuAppBg: `linear-gradient(180deg, ${rgba(ramp[30], 0.35)} 0%, #0b0b0d 45%)`,
-    reemuAccentSoft: rgba(ramp[70], 0.16),
+    // Fundo neutro suave (estilo app do Xbox) — sem lavagem da cor de marca.
+    reemuAppBg: "linear-gradient(180deg, #26262b 0%, #1a1a1e 55%)",
+    reemuAccentSoft: "rgba(255, 255, 255, 0.05)",
+    reemuSurfaceSoft: "#33333a",
     reemuBrandSolid: ramp[80],
     reemuOnBrand: readableOn(ramp[80]),
   };
