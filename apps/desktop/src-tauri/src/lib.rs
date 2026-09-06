@@ -163,6 +163,8 @@ pub fn run() {
             commands::list_rom_sources,
             commands::remove_rom_source,
             commands::remove_rom_system,
+            commands::list_system_cores,
+            commands::set_system_core,
             commands::clear_library,
             commands::scan_library,
             commands::get_metadata_config,

@@ -32,6 +32,7 @@ import {
   listRoms,
   listSaveStates,
   pickSlangp,
+  listSystemCores,
   removeRom,
   setRomFavorite,
   setShader,
@@ -54,6 +55,11 @@ export function RomDetail() {
   const cores = useQuery({
     queryKey: ["installed-cores"],
     queryFn: listInstalledCores,
+    retry: false,
+  });
+  const sysCores = useQuery({
+    queryKey: ["system-cores"],
+    queryFn: listSystemCores,
     retry: false,
   });
   const states = useQuery({
@@ -104,7 +110,9 @@ export function RomDetail() {
     return am - bm || a.name.localeCompare(b.name);
   });
   const [coreId, setCoreId] = useState("");
-  const chosenCore = coreId || coreList[0]?.coreId || "";
+  const systemDefaultCore = rom ? (sysCores.data?.[rom.systemId] ?? "") : "";
+  const chosenCore =
+    coreId || systemDefaultCore || coreList[0]?.coreId || "";
   const [confirmRemove, setConfirmRemove] = useState(false);
 
   const del = useMutation({

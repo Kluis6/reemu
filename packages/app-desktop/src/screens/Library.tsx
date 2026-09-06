@@ -3,7 +3,6 @@ import {
   makeStyles,
   Menu,
   MenuButton,
-  MenuItem,
   MenuItemRadio,
   MenuList,
   MenuPopover,
@@ -16,24 +15,20 @@ import {
 } from "@fluentui/react-components";
 import {
   AddRegular,
-  DeleteRegular,
   FilterRegular,
-  MoreHorizontalRegular,
+  WrenchRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
 import { GameCard } from "../components/GameCard";
+import { ManageLibraryDialog } from "../components/ManageLibraryDialog";
 import { platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
 import {
-  clearLibrary,
-  listRomSources,
   listRoms,
   removeRom,
-  removeRomSource,
-  removeRomSystem,
   scanLibrary,
   setRomFavorite,
   type RomEntry,
@@ -76,7 +71,7 @@ export function Library() {
   const [tab, setTab] = useState<LibTab>("mine");
   const [platform, setPlatform] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
-  const [showManage, setShowManage] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const scanId = useRef<string | null>(null);
 
   const roms = useQuery({ queryKey: ["roms"], queryFn: listRoms, retry: false });
@@ -161,51 +156,20 @@ export function Library() {
     onSettled: () => qc.invalidateQueries({ queryKey: ["roms"] }),
   });
 
-  const sources = useQuery({
-    queryKey: ["romSources"],
-    queryFn: listRomSources,
-    enabled: showManage,
-    retry: false,
-  });
-  const [confirmPurge, setConfirmPurge] = useState<string | null>(null);
-  const purge = useMutation({
-    mutationFn: (target: string) => {
-      if (target === "__all__") return clearLibrary();
-      if (target.startsWith("sys:")) return removeRomSystem(target.slice(4));
-      return removeRomSource(target);
-    },
-    onSuccess: (n) => {
-      qc.invalidateQueries({ queryKey: ["roms"] });
-      qc.invalidateQueries({ queryKey: ["romSources"] });
-      setConfirmPurge(null);
-      push(sysToast(`${n} jogo(s) removido(s) da biblioteca.`, "Success"));
-    },
-    onError: (e) => {
-      setConfirmPurge(null);
-      push(sysToast(`Falha: ${e}`, "Error"));
-    },
-  });
-  const purgeBtn = (target: string, idle: string, confirm: string) => (
-    <Button
-      size="small"
-      icon={<DeleteRegular />}
-      appearance={confirmPurge === target ? "primary" : "secondary"}
-      disabled={purge.isPending}
-      onClick={() =>
-        confirmPurge === target ? purge.mutate(target) : setConfirmPurge(target)
-      }
-    >
-      {confirmPurge === target ? confirm : idle}
-    </Button>
-  );
-
   const all = useMemo(() => roms.data ?? [], [roms.data]);
 
-  // plataformas presentes, ordenadas pelo rótulo
-  const platforms = useMemo(() => {
-    const ids = [...new Set(all.map((r) => r.systemId))];
-    return ids.sort((a, b) => platformLabel(a).localeCompare(platformLabel(b)));
+  // plataformas presentes → `[systemId, quantidade]`, ordenado pelo rótulo
+  const platformCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const r of all) m.set(r.systemId, (m.get(r.systemId) ?? 0) + 1);
+    return [...m.entries()].sort(([a], [b]) =>
+      platformLabel(a).localeCompare(platformLabel(b)),
+    );
   }, [all]);
+  const platforms = useMemo(
+    () => platformCounts.map(([id]) => id),
+    [platformCounts],
+  );
 
   // aplica busca + filtro de plataforma
   const filtered = useMemo(() => {
@@ -332,25 +296,17 @@ export function Library() {
               onClick={() => setAddOpen(true)}
             />
           </Tooltip>
-          <Menu>
-            <MenuTrigger disableButtonEnhancement>
-              <MenuButton
-                appearance="subtle"
-                icon={<MoreHorizontalRegular />}
-                aria-label="Mais ações"
-              />
-            </MenuTrigger>
-            <MenuPopover>
-              <MenuList>
-                <MenuItem
-                  icon={<DeleteRegular />}
-                  onClick={() => setShowManage((v) => !v)}
-                >
-                  Gerenciar biblioteca
-                </MenuItem>
-              </MenuList>
-            </MenuPopover>
-          </Menu>
+          <Tooltip
+            content="Gerenciar biblioteca: core padrão por plataforma e remoção"
+            relationship="label"
+          >
+            <Button
+              appearance="subtle"
+              icon={<WrenchRegular />}
+              aria-label="Gerenciar biblioteca"
+              onClick={() => setManageOpen(true)}
+            />
+          </Tooltip>
         </div>
       </div>
 
@@ -379,47 +335,14 @@ export function Library() {
         </Menu>
       </div>
 
-      {showManage && (
-        <div className={s.libManage}>
-          <div className={s.sectionSub}>Por plataforma</div>
-          {byPlatform.length === 0 && (
-            <div className={s.count}>Biblioteca vazia.</div>
-          )}
-          {byPlatform.map(([sys, list]) => (
-            <div key={sys} className={s.libRow}>
-              <span className={s.libPath}>{platformLabel(sys)}</span>
-              <span className={s.count}>{list.length}</span>
-              {purgeBtn(`sys:${sys}`, "Remover", "Confirmar")}
-            </div>
-          ))}
-          {(sources.data?.length ?? 0) > 1 && (
-            <>
-              <div className={s.sectionSub} style={{ marginTop: 12 }}>
-                Por pasta de origem
-              </div>
-              {sources.data!.map((src) => (
-                <div key={src.path} className={s.libRow}>
-                  <span className={s.libPath} title={src.path}>
-                    {src.path}
-                  </span>
-                  <span className={s.count}>{src.count}</span>
-                  {purgeBtn(src.path, "Remover", "Confirmar")}
-                </div>
-              ))}
-            </>
-          )}
-          <div className={s.libRow} style={{ marginTop: 12 }}>
-            <span className={s.libPath}>
-              Toda a biblioteca ({all.length} jogos)
-            </span>
-            {purgeBtn("__all__", "Limpar tudo", "Confirmar: apagar tudo")}
-          </div>
-        </div>
-      )}
-
       {body()}
 
       <AddRomsDialog open={addOpen} onOpenChange={setAddOpen} onScan={startScan} />
+      <ManageLibraryDialog
+        open={manageOpen}
+        onOpenChange={setManageOpen}
+        platforms={platformCounts}
+      />
     </div>
   );
 }

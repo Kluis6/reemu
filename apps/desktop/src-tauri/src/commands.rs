@@ -1507,6 +1507,39 @@ pub async fn remove_rom_system(
     Ok(n)
 }
 
+/// Core preferido por plataforma → `{ system_id: core_id }`.
+#[tauri::command]
+pub async fn list_system_cores(
+    state: State<'_, AppState>,
+) -> Result<std::collections::HashMap<String, String>, String> {
+    use domain::core_loader::SystemCoreRepository;
+    let repo = db::SystemCoreRepo::new(pool(&state)?);
+    Ok(repo
+        .all()
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .collect())
+}
+
+/// Define (ou limpa, se `core_id` vier vazio) o core preferido de uma plataforma.
+#[tauri::command]
+pub async fn set_system_core(
+    state: State<'_, AppState>,
+    system_id: String,
+    core_id: String,
+) -> Result<(), String> {
+    use domain::core_loader::SystemCoreRepository;
+    let repo = db::SystemCoreRepo::new(pool(&state)?);
+    if core_id.is_empty() {
+        repo.clear(&system_id).await.map_err(|e| e.to_string())
+    } else {
+        repo.set(&system_id, &core_id)
+            .await
+            .map_err(|e| e.to_string())
+    }
+}
+
 /// Remove todas as ROMs sob `path` (uma biblioteca inteira). Devolve a contagem.
 #[tauri::command]
 pub async fn remove_rom_source(state: State<'_, AppState>, path: String) -> Result<u64, String> {

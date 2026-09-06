@@ -59,6 +59,16 @@ pub trait InstalledCoreRepository: Send + Sync {
     async fn remove(&self, core_id: &str) -> Result<(), RepoError>;
 }
 
+/// Core preferido por plataforma (`system_id`). O default do seletor de core;
+/// o override por ROM (state local do RomDetail) continua vencendo.
+#[async_trait]
+pub trait SystemCoreRepository: Send + Sync {
+    /// `(system_id, core_id)` de cada plataforma que tem preferência salva.
+    async fn all(&self) -> Result<Vec<(String, String)>, RepoError>;
+    async fn set(&self, system_id: &str, core_id: &str) -> Result<(), RepoError>;
+    async fn clear(&self, system_id: &str) -> Result<(), RepoError>;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CoreId(pub String);
 

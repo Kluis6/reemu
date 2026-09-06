@@ -14,6 +14,7 @@ mod metadata_repo;
 mod roms_repo;
 mod save_state_repo;
 mod shader_chain_repo;
+mod system_core_repo;
 mod system_hotkeys_repo;
 
 pub use audio_config_repo::AudioConfigRepo;
@@ -26,4 +27,5 @@ pub use metadata_repo::MetadataRepo;
 pub use roms_repo::RomsRepo;
 pub use save_state_repo::SaveStateRepo;
 pub use shader_chain_repo::ShaderChainRepo;
+pub use system_core_repo::SystemCoreRepo;
 pub use system_hotkeys_repo::SystemHotkeysRepo;

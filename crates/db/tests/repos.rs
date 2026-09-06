@@ -6,8 +6,10 @@ mod common;
 use common::mem_db;
 use db::{
     AudioConfigRepo, CoreOptionsRepo, InstalledCoresRepo, MetadataRepo, RomsRepo, ShaderChainRepo,
+    SystemCoreRepo,
 };
 use domain::audio::{AudioConfig, AudioConfigRepository};
+use domain::core_loader::SystemCoreRepository;
 use domain::core_loader::{
     CoreRenderRequirements, InstalledCore, InstalledCoreRepository, RenderBackend,
 };
@@ -478,4 +480,27 @@ async fn core_options_schema_requires_registered_core() {
         )
         .await;
     assert!(res.is_err(), "FK deveria barrar schema de core inexistente");
+}
+
+#[tokio::test]
+async fn system_core_prefs_upsert_and_clear() {
+    let repo = SystemCoreRepo::new(mem_db().await);
+    assert!(repo.all().await.unwrap().is_empty());
+    repo.set("snes", "snes9x").await.unwrap();
+    repo.set("n64", "parallel_n64").await.unwrap();
+    repo.set("snes", "bsnes").await.unwrap(); // upsert
+    let mut all = repo.all().await.unwrap();
+    all.sort();
+    assert_eq!(
+        all,
+        vec![
+            ("n64".to_string(), "parallel_n64".to_string()),
+            ("snes".to_string(), "bsnes".to_string()),
+        ]
+    );
+    repo.clear("snes").await.unwrap();
+    assert_eq!(
+        repo.all().await.unwrap(),
+        vec![("n64".to_string(), "parallel_n64".to_string())]
+    );
 }

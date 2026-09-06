@@ -262,6 +262,11 @@ export const removeRomSystem = (systemId: string) =>
   invoke<number>('remove_rom_system', { systemId })
 /** Esvazia a biblioteca inteira. Devolve quantas ROMs saíram. */
 export const clearLibrary = () => invoke<number>('clear_library')
+export const listSystemCores = () =>
+  invoke<Record<string, string>>('list_system_cores')
+/** `coreId` vazio limpa a preferência da plataforma. */
+export const setSystemCore = (systemId: string, coreId: string) =>
+  invoke<void>('set_system_core', { systemId, coreId })
 
 export interface ScanReport {
   found: number
