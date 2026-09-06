@@ -2659,6 +2659,9 @@ mod tests {
         let mut by_reason: std::collections::BTreeMap<String, Vec<String>> = Default::default();
         // erro completo do 1º caso de cada grupo (a chave é truncada)
         let mut full: std::collections::BTreeMap<String, String> = Default::default();
+        // `REEMU_SHADER_OK_LIST=/caminho` → grava os `.slangp` que compilam
+        // (lista curada pro pacote de shaders).
+        let mut ok_list: Vec<String> = Vec::new();
         for p in presets.iter().take(limit) {
             let rel = p.strip_prefix(root).unwrap_or(p).display().to_string();
             let entry = by_dir.entry(cat(&rel)).or_default();
@@ -2666,6 +2669,7 @@ mod tests {
                 Ok(b) => {
                     ok += 1;
                     entry.0 += 1;
+                    ok_list.push(rel.clone());
                     let _ = b;
                 }
                 Err(e) => {
@@ -2679,6 +2683,11 @@ mod tests {
                     by_reason.entry(key).or_default().push(rel);
                 }
             }
+        }
+        if let Ok(path) = std::env::var("REEMU_SHADER_OK_LIST") {
+            ok_list.sort();
+            let _ = std::fs::write(&path, ok_list.join("\n") + "\n");
+            eprintln!("lista de {} presets ok gravada em {path}", ok_list.len());
         }
         eprintln!("\n=== {ok} ok · {err} falharam ===\n");
         let mut reasons: Vec<_> = by_reason.into_iter().collect();
