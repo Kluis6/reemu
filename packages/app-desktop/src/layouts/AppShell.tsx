@@ -30,7 +30,11 @@ const useLocalStyles = makeStyles({
   // botões de ícone da topbar: fundo igual ao item ativo da sidebar
   surface: {
     backgroundColor: "var(--reemuSurfaceSoft)",
-    ":hover": { backgroundColor: "var(--reemuSurfaceSoft)" },
+    color: tokens.colorNeutralForeground1,
+    ":hover": {
+      backgroundColor: "var(--reemuSurfaceSoft)",
+      color: tokens.colorNeutralForeground1,
+    },
   },
 });
 

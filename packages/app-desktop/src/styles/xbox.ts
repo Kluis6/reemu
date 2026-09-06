@@ -19,16 +19,11 @@ import { makeStyles, tokens } from "@fluentui/react-components";
 const shell = {
   radius: "12px",
   radiusLg: "16px",
-  railW: "64px",
+  railW: "72px",
 };
 
 // Gradiente de superfície elevada (cartões, hero) a partir dos neutros do tema.
 const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`;
-
-const fastTransition = {
-  transitionDuration: tokens.durationFaster,
-  transitionTimingFunction: tokens.curveEasyEase,
-};
 
 const gameCardSize = "clamp(144px, 14vw, 196px)";
 
@@ -70,11 +65,10 @@ export const useShellStyles = makeStyles({
     // keydown, então o WebKitGTK não marca `:focus-visible` no `.focus()`
     // programático — e o usuário não via onde estava o foco.
     "& a:focus, & button:focus, & input:focus, & [tabindex]:focus": {
-      outlineWidth: "3px",
+      outlineWidth: "2px",
       outlineStyle: "solid",
       outlineColor: tokens.colorNeutralForeground1,
       outlineOffset: "2px",
-      borderRadius: shell.radius,
     },
   },
 
@@ -82,11 +76,11 @@ export const useShellStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    rowGap: "4px",
+    rowGap: "14px",
     paddingTop: "14px",
     paddingBottom: "14px",
-    borderRight: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: "rgba(0, 0, 0, 0.28)",
+    borderRight: "none",
+    backgroundColor: tokens.colorNeutralBackground3,
   },
   railSpacer: { flexGrow: 1 },
   railSep: {
@@ -110,28 +104,17 @@ export const useShellStyles = makeStyles({
     border: "none",
     backgroundColor: "transparent",
     cursor: "pointer",
-    transitionProperty: "background-color, color",
-    ...fastTransition,
+    transitionProperty: "background-color, color, transform, box-shadow",
+    transitionDuration: "180ms",
+    transitionTimingFunction: tokens.curveEasyEase,
     ":hover": {
       backgroundColor: tokens.colorNeutralBackground3,
       color: tokens.colorNeutralForeground1,
+      transform: "scale(1.03)",
     },
     '&[aria-current="page"]': {
-      backgroundColor: tokens.colorNeutralBackground4,
+      backgroundColor: "#5f6368",
       color: tokens.colorNeutralForeground1,
-      boxShadow: `inset 0 0 0 1px ${tokens.colorNeutralStroke2}`,
-    },
-    // indicador ativo: barra vertical fina na borda esquerda
-    '&[aria-current="page"]::before': {
-      content: '""',
-      position: "absolute",
-      left: "-10px",
-      top: "50%",
-      transform: "translateY(-50%)",
-      width: "3px",
-      height: "22px",
-      borderRadius: "3px",
-      backgroundColor: tokens.colorNeutralForeground1,
     },
   },
   railQuit: {
@@ -173,7 +156,8 @@ export const useShellStyles = makeStyles({
     paddingTop: "14px",
     paddingBottom: "14px",
     paddingLeft: "32px",
-    paddingRight: "32px",
+    paddingRight: "42px",
+    boxSizing: "border-box",
     flexShrink: 0,
     backgroundColor: "transparent",
     backgroundImage: "none",
@@ -235,7 +219,9 @@ export const useShellStyles = makeStyles({
     flexGrow: 1,
     minWidth: 0,
     overflowY: "auto",
-    paddingTop: "80px",
+    scrollbarGutter: "stable",
+    boxSizing: "border-box",
+    paddingTop: "clamp(72px, 10vw, 100px)",
     paddingLeft: "32px",
     paddingRight: "32px",
     paddingBottom: "100px",
@@ -320,7 +306,7 @@ export const useBrowseStyles = makeStyles({
     display: "flex",
     alignItems: "baseline",
     columnGap: "8px",
-    marginBottom: "14px",
+    marginBottom: "22px",
   },
   sectionTitle: { fontSize: "19px", fontWeight: 700, margin: 0 },
   sectionChevron: {
@@ -432,11 +418,21 @@ export const useBrowseStyles = makeStyles({
 
 /** Prateleira horizontal (faixas curadas da Início). */
 export const useShelfStyles = makeStyles({
-  wrap: { position: "relative", minWidth: 0, maxWidth: "100%" },
+  wrap: {
+    position: "relative",
+    minWidth: 0,
+    width: "calc(100% + 8px)",
+    maxWidth: "none",
+    marginLeft: "-4px",
+    marginRight: "-4px",
+  },
   shelf: {
     display: "flex",
     minWidth: 0,
-    maxWidth: "100%",
+    width: "100%",
+    maxWidth: "none",
+    boxSizing: "border-box",
+    justifyContent: "space-between",
     columnGap: "12px",
     overflowX: "auto",
     scrollSnapType: "x proximity",
@@ -448,6 +444,7 @@ export const useShelfStyles = makeStyles({
     "::-webkit-scrollbar": { display: "none" },
     "& > *": {
       width: gameCardSize,
+      flexBasis: gameCardSize,
       scrollSnapAlign: "start",
       flexShrink: 0,
       flexGrow: 0,

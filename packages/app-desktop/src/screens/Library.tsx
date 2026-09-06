@@ -11,6 +11,7 @@ import {
   Tab,
   TabList,
   Text,
+  tokens,
   Tooltip,
 } from "@fluentui/react-components";
 import {
@@ -41,7 +42,11 @@ import { useBrowseStyles } from "../styles/xbox";
 const useLibStyles = makeStyles({
   surface: {
     backgroundColor: "var(--reemuSurfaceSoft)",
-    ":hover": { backgroundColor: "var(--reemuSurfaceSoft)" },
+    color: tokens.colorNeutralForeground1,
+    ":hover": {
+      backgroundColor: "var(--reemuSurfaceSoft)",
+      color: tokens.colorNeutralForeground1,
+    },
   },
   bar: {
     display: "flex",
