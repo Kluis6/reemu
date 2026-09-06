@@ -99,7 +99,8 @@ export interface ReEmuTokens {
   reemuAppBg: string;
   /** Realce translúcido neutro (brilho de canto, chip ativo). */
   reemuAccentSoft: string;
-  /** Superfície sólida suave — botões de ícone da topbar. */
+  /** Superfície sólida — igual ao fundo do item ativo da sidebar; usada
+   * nos botões de ícone da topbar e de ação da biblioteca. */
   reemuSurfaceSoft: string;
   /** Preenchimento sólido de marca (círculo do rail, glifos de dica). */
   reemuBrandSolid: string;
@@ -124,7 +125,7 @@ function make(ramp: BrandVariants): ReEmuTheme {
     // Fundo neutro suave (estilo app do Xbox) — sem lavagem da cor de marca.
     reemuAppBg: "linear-gradient(180deg, #26262b 0%, #1a1a1e 55%)",
     reemuAccentSoft: "rgba(255, 255, 255, 0.05)",
-    reemuSurfaceSoft: "#33333a",
+    reemuSurfaceSoft: "#5f6368",
     reemuBrandSolid: ramp[80],
     reemuOnBrand: readableOn(ramp[80]),
   };

@@ -16,7 +16,7 @@ import {
 import {
   AddRegular,
   FilterRegular,
-  WrenchRegular,
+  MoreHorizontalRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
@@ -39,6 +39,17 @@ import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles } from "../styles/xbox";
 
 const useLibStyles = makeStyles({
+  action: {
+    backgroundColor: "var(--reemuSurfaceSoft)",
+    ":hover": {
+      backgroundColor: "var(--reemuSurfaceSoft)",
+      filter: "brightness(1.12)",
+    },
+    ":hover:active": {
+      backgroundColor: "var(--reemuSurfaceSoft)",
+      filter: "brightness(0.94)",
+    },
+  },
   bar: {
     display: "flex",
     alignItems: "center",
@@ -285,24 +296,20 @@ export function Library() {
           <Text size={200} className={s.count}>
             {all.length} {all.length === 1 ? "jogo" : "jogos"}
           </Text>
-          <Tooltip
-            content="Adicionar ROMs à biblioteca a partir de uma pasta"
-            relationship="label"
-          >
+          <Tooltip content="Adicionar ROM" relationship="label">
             <Button
-              appearance="primary"
+              appearance="subtle"
+              className={l.action}
               icon={<AddRegular />}
-              aria-label="Adicionar ROMs"
+              aria-label="Adicionar ROM"
               onClick={() => setAddOpen(true)}
             />
           </Tooltip>
-          <Tooltip
-            content="Gerenciar biblioteca: core padrão por plataforma e remoção"
-            relationship="label"
-          >
+          <Tooltip content="Gerenciar biblioteca" relationship="label">
             <Button
               appearance="subtle"
-              icon={<WrenchRegular />}
+              className={l.action}
+              icon={<MoreHorizontalRegular />}
               aria-label="Gerenciar biblioteca"
               onClick={() => setManageOpen(true)}
             />
