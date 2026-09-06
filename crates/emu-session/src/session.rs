@@ -456,17 +456,30 @@ impl ChildProc {
         let reader_channel = parent_ch.clone();
         let reader = std::thread::Builder::new()
             .name("emu-core-host-reader".into())
-            .spawn(move || loop {
-                match reader_channel.recv::<ToParent>() {
-                    Ok(Some((msg, fds))) => {
-                        if etx.send(InboundEvent { msg, fds }).is_err() {
-                            break;
+            .spawn(move || {
+                let mut errs = 0u32;
+                loop {
+                    match reader_channel.recv::<ToParent>() {
+                        Ok(Some((msg, fds))) => {
+                            errs = 0;
+                            if etx.send(InboundEvent { msg, fds }).is_err() {
+                                break;
+                            }
                         }
-                    }
-                    Ok(None) => break, // filho fechou o canal
-                    Err(e) => {
-                        log::warn!("canal IPC com o core-host: {e}");
-                        break;
+                        Ok(None) => break, // filho fechou o canal
+                        Err(e) => {
+                            // Uma mensagem ruim (ex.: save state grande demais
+                            // pro canal) não deve matar a sessão — registra e
+                            // segue. Só desiste se vier erro atrás de erro.
+                            log::warn!("canal IPC com o core-host: {e}");
+                            errs += 1;
+                            if errs >= 16 {
+                                log::error!(
+                                    "core-host: 16 erros seguidos no canal — encerrando leitura"
+                                );
+                                break;
+                            }
+                        }
                     }
                 }
             })

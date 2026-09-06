@@ -111,6 +111,11 @@ async fn save_state_round_trip_and_pending_hook() {
     core.next_frame();
     core.next_frame();
     let snap = core.serialize_state().expect("serialize");
+    assert!(
+        snap.len() > 512 * 1024,
+        "state gordo (>512KB) — cobre o caminho IPC de datagrama grande, veio {}",
+        snap.len()
+    );
 
     core.next_frame();
     core.next_frame();

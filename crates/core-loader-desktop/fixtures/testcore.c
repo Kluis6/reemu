@@ -182,11 +182,18 @@ void retro_run(void) {
       audio_batch_cb(silence, 16); /* 16 frames estéreo */
 }
 
-size_t retro_serialize_size(void) { return sizeof(frame_n); }
+/* Save state "gordo": frame_n no comeco + preenchimento deterministico.
+ * >512KB de proposito — exercita o caminho IPC de datagrama grande
+ * (SNES real passa de 800KB), que ja truncou em silencio. */
+#define TESTCORE_STATE_SIZE (900u * 1024u)
+size_t retro_serialize_size(void) { return TESTCORE_STATE_SIZE; }
 bool retro_serialize(void *data, size_t size) {
-   if (size < sizeof(frame_n))
+   if (size < TESTCORE_STATE_SIZE)
       return false;
-   memcpy(data, &frame_n, sizeof(frame_n));
+   unsigned char *p = (unsigned char *)data;
+   memcpy(p, &frame_n, sizeof(frame_n));
+   for (size_t i = sizeof(frame_n); i < TESTCORE_STATE_SIZE; i++)
+      p[i] = (unsigned char)((i * 31u + frame_n) & 0xFF);
    return true;
 }
 bool retro_unserialize(const void *data, size_t size) {
