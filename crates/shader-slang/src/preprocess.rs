@@ -35,7 +35,8 @@ pub struct SlangSource {
 /// Lê e preprocessa um `.slang` do disco.
 pub fn preprocess_file(path: &Path) -> Result<SlangSource, SlangError> {
     let mut seen = HashSet::new();
-    let flat = flatten_includes(path, &mut seen, 0)?;
+    let mut base = None;
+    let flat = flatten_includes(path, &mut seen, &mut base, 0)?;
     Ok(split(&flat))
 }
 
@@ -47,6 +48,11 @@ pub fn preprocess_str(src: &str) -> SlangSource {
 fn flatten_includes(
     path: &Path,
     seen: &mut HashSet<PathBuf>,
+    // Snapshot do `seen` no fim do prelúdio comum (antes do 1º `#pragma
+    // stage`). Cada `#pragma stage` recomeça o guard daqui: vertex e fragment
+    // são unidades de compilação separadas, então um `#include` no bloco do
+    // vertex E outro igual no bloco do fragment PRECISAM aparecer nos dois.
+    base: &mut Option<HashSet<PathBuf>>,
     depth: u8,
 ) -> Result<String, SlangError> {
     if depth > 32 {
@@ -61,6 +67,15 @@ fn flatten_includes(
     let mut out = String::with_capacity(text.len());
     for line in text.lines() {
         let t = line.trim_start();
+        if depth == 0 && t.starts_with("#pragma") && t[7..].trim_start().starts_with("stage") {
+            match base {
+                None => *base = Some(seen.clone()),
+                Some(b) => *seen = b.clone(),
+            }
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        }
         if let Some(rest) = t.strip_prefix("#include") {
             let inc = rest
                 .trim()
@@ -68,7 +83,7 @@ fn flatten_includes(
                 .trim_matches('<')
                 .trim_matches('>');
             let inc_path = dir.join(inc);
-            out.push_str(&flatten_includes(&inc_path, seen, depth + 1)?);
+            out.push_str(&flatten_includes(&inc_path, seen, base, depth + 1)?);
             out.push('\n');
         } else {
             out.push_str(line);
@@ -231,5 +246,32 @@ void main() {}
         let s = preprocess_file(&dir.path().join("main.slang")).unwrap();
         // incluído uma vez só (guard)
         assert_eq!(s.fragment_glsl.matches("float helper()").count(), 1);
+    }
+
+    /// O guard de include é POR ESTÁGIO: `fns.inc` incluído no bloco do vertex
+    /// E no do fragment tem que sair nos DOIS (unidades de compilação
+    /// separadas). Era o bug que travava o koko-aio inteiro (`hsv2rgb` sumia
+    /// do fragmento).
+    #[test]
+    fn include_guard_is_per_stage() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("fns.inc"),
+            "vec3 hsv2rgb(vec3 c) { return c; }\n",
+        )
+        .unwrap();
+        let src = [
+            "#version 450\n",
+            "#pragma stage vertex\n#include \"fns.inc\"\nvoid main() {}\n",
+            "#pragma stage fragment\n#include \"fns.inc\"\n",
+            "layout(location=0) out vec4 c;\n",
+            "void main() { c = vec4(hsv2rgb(vec3(0.0)), 1.0); }\n",
+        ]
+        .concat();
+        std::fs::write(dir.path().join("m.slang"), src).unwrap();
+        let s = preprocess_file(&dir.path().join("m.slang")).unwrap();
+        assert!(s.vertex_glsl.contains("vec3 hsv2rgb"), "vertex");
+        assert!(s.fragment_glsl.contains("vec3 hsv2rgb"), "fragment TAMBÉM");
+        assert_eq!(s.fragment_glsl.matches("vec3 hsv2rgb").count(), 1);
     }
 }
