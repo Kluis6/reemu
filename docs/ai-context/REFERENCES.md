@@ -72,8 +72,26 @@ agora (ver `03`).
 | O quê | Onde |
 |---|---|
 | wgpu API | https://docs.rs/wgpu/latest/wgpu/ |
-| wgpu-hal (interop, `texture_from_dmabuf_fd`, `as_hal`) | https://docs.rs/wgpu-hal/latest/wgpu_hal/ |
+| wgpu-hal (interop, `texture_from_dmabuf_fd`, `as_hal`, `device_from_raw`) | https://docs.rs/wgpu-hal/latest/wgpu_hal/ |
 | Fonte dos crates (sempre disponível) | `~/.cargo/registry/src/index.crates.io-*/` |
+
+## Vulkan (etapa 12 — HW render por-core)
+
+**Consultar a spec/guia oficial antes de qualquer código Vulkan — sync e
+external memory são fáceis de errar.**
+
+| O quê | Onde |
+|---|---|
+| Portal / índice da documentação | https://www.vulkan.org/ · https://docs.vulkan.org/ |
+| Spec (sincronização, barriers, external memory) | https://docs.vulkan.org/spec/latest/chapters/synchronization.html |
+| Guia (Vulkan Guide — sync, memory, wsi) | https://docs.vulkan.org/guide/latest/ |
+| `ash` (binding em uso — fonte vendorizada é a verdade) | https://docs.rs/ash/0.38.0/ash/ · `~/.cargo/registry/src/index.crates.io-*/ash-0.38.0*/` |
+
+Barrier do `set_image` (produtor color-attachment → consumidor sampler, mesma
+queue, sem semáforo): `src COLOR_ATTACHMENT_OUTPUT / COLOR_ATTACHMENT_WRITE`
+→ `dst FRAGMENT_SHADER / SHADER_READ`, layout `SHADER_READ_ONLY_OPTIMAL` →
+`SHADER_READ_ONLY_OPTIMAL` (flycast já entrega transicionada). Barrier
+explícito é **obrigatório** — ordem de submissão numa queue não basta.
 
 ## Design (frontend)
 
