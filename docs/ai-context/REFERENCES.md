@@ -10,6 +10,7 @@ Não trabalhar de memória.
 |---|---|
 | Guia da API (env callbacks, HW render, save state, core options) | https://docs.libretro.com/ |
 | **Header canônico** — `#define`, structs, enums (fonte da verdade) | https://raw.githubusercontent.com/libretro/libretro-common/master/include/libretro.h |
+| **Header Vulkan HW render** (etapa 12 — `retro_hw_render_interface_vulkan` v5, negotiation v2) | https://raw.githubusercontent.com/libretro/libretro-common/master/include/libretro_vulkan.h |
 | Buildbot de cores (catálogo, etapa 10) | https://buildbot.libretro.com/ |
 | slang-shaders (etapa 04, downloader do backlog) | https://github.com/libretro/slang-shaders |
 
@@ -24,6 +25,14 @@ arquivo e MD5 vêm da página de cada core, não tem convenção única:
 | Beetle PSX (psx) | https://docs.libretro.com/library/beetle_psx/ |
 | Kronos (Saturn) | https://docs.libretro.com/library/kronos/ |
 | Flycast (Dreamcast) | https://docs.libretro.com/library/flycast/ |
+
+**Flycast — integração Vulkan libretro (etapa 12)**, conferir sempre na fonte,
+não de memória (`flyinghead/flycast@master`):
+
+| O quê | Onde |
+|---|---|
+| Negociação v1 (`VkCreateDevice`/`VkGetApplicationInfo`), `set_image`, uso de `get_sync_index`/`lock_queue` | `core/rend/vulkan/vk_context_lr.cpp` + `vk_context_lr.h` |
+| `SET_HW_RENDER` Vulkan, `GET_HW_RENDER_INTERFACE`, ramo de `GET_PREFERRED_HW_RENDER` | `shell/libretro/libretro.cpp` (`set_vulkan_hw_render`, `retro_vk_context_reset`) |
 | FBNeo (arcade) | https://docs.libretro.com/library/fbneo/ |
 
 `libretro-thumbnails` (org do GitHub, não a doc) segue sendo a fonte pros
