@@ -55,8 +55,8 @@ impl RomsRepo {
     }
 }
 
-const SELECT_COLS: &str =
-    "SELECT id, file_path, crc32, md5, system_id, added_at, last_played_at FROM roms";
+const SELECT_COLS: &str = "SELECT id, file_path, crc32, md5, system_id, added_at, \
+     last_played_at, is_favorite FROM roms";
 
 fn row_to_rom(row: &SqliteRow) -> Result<Rom, RepoError> {
     Ok(Rom {
@@ -67,6 +67,7 @@ fn row_to_rom(row: &SqliteRow) -> Result<Rom, RepoError> {
         system_id: row.try_get("system_id").map_err(be)?,
         added_at: row.try_get("added_at").map_err(be)?,
         last_played_at: row.try_get("last_played_at").map_err(be)?,
+        is_favorite: row.try_get::<i64, _>("is_favorite").map_err(be)? != 0,
     })
 }
 
@@ -150,6 +151,16 @@ impl RomRepository for RomsRepo {
         sqlx::query("UPDATE roms SET last_played_at = ?2 WHERE id = ?1")
             .bind(id)
             .bind(at_unix)
+            .execute(&self.db)
+            .await
+            .map_err(be)?;
+        Ok(())
+    }
+
+    async fn set_favorite(&self, id: &str, favorite: bool) -> Result<(), RepoError> {
+        sqlx::query("UPDATE roms SET is_favorite = ?2 WHERE id = ?1")
+            .bind(id)
+            .bind(i64::from(favorite))
             .execute(&self.db)
             .await
             .map_err(be)?;

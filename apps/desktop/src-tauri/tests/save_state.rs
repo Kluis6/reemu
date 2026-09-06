@@ -30,6 +30,7 @@ async fn setup() -> (db::Db, PathBuf) {
         system_id: "nes".into(),
         added_at: 0,
         last_played_at: None,
+        is_favorite: false,
     })
     .await
     .unwrap();

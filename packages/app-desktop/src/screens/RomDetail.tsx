@@ -17,6 +17,7 @@ import { CoreOptions } from "../components/CoreOptions";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { ShaderLibrary } from "../components/ShaderLibrary";
 import { ShaderParams } from "../components/ShaderParams";
+import { platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
 import {
   deleteSaveState,
@@ -142,7 +143,7 @@ export function RomDetail() {
     if (missingRequiredBios) {
       push(
         sysToast(
-          `Falta o BIOS obrigatório de ${rom.systemId.toUpperCase()} (${missingRequiredBios.filename}) — o jogo pode não rodar. Veja Configurações › BIOS.`,
+          `Falta o BIOS obrigatório de ${platformLabel(rom.systemId)} (${missingRequiredBios.filename}) — o jogo pode não rodar. Veja Configurações › BIOS.`,
           "Warning",
         ),
       );
@@ -155,7 +156,7 @@ export function RomDetail() {
         romPath: rom.filePath,
         title,
         boxart: cover,
-        system: rom.systemId,
+        system: platformLabel(rom.systemId),
       },
     });
   };
@@ -181,7 +182,7 @@ export function RomDetail() {
         <div className={s.heroBody}>
           <h1 className={s.title}>{title}</h1>
           <div className={s.badges}>
-            <span className={s.badge}>{rom.systemId}</span>
+            <span className={s.badge}>{platformLabel(rom.systemId)}</span>
             {meta.data?.releaseDate && (
               <span className={s.badge}>{meta.data.releaseDate}</span>
             )}

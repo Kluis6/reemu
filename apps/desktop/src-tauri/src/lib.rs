@@ -159,6 +159,7 @@ pub fn run() {
             commands::remove_bios_file,
             commands::list_roms,
             commands::remove_rom,
+            commands::set_rom_favorite,
             commands::list_rom_sources,
             commands::remove_rom_source,
             commands::remove_rom_system,

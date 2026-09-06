@@ -1405,6 +1405,8 @@ pub struct RomDto {
     pub last_played_at: Option<i64>,
     /// Unix (s) de quando entrou na biblioteca — pra "Adicionados recentemente".
     pub added_at: i64,
+    /// Aba "Favoritos" da biblioteca.
+    pub is_favorite: bool,
 }
 
 #[tauri::command]
@@ -1427,6 +1429,7 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String
                 file_path: r.file_path,
                 last_played_at: r.last_played_at,
                 added_at: r.added_at,
+                is_favorite: r.is_favorite,
             }
         })
         .collect())
@@ -1438,6 +1441,20 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String
 pub async fn remove_rom(state: State<'_, AppState>, rom_id: String) -> Result<(), String> {
     let repo = db::RomsRepo::new(pool(&state)?);
     repo.remove(&rom_id).await.map_err(|e| e.to_string())
+}
+
+/// Liga/desliga o favorito de uma ROM (aba "Favoritos" da biblioteca).
+#[tauri::command]
+pub async fn set_rom_favorite(
+    state: State<'_, AppState>,
+    rom_id: String,
+    favorite: bool,
+) -> Result<(), String> {
+    use domain::library::RomRepository;
+    let repo = db::RomsRepo::new(pool(&state)?);
+    repo.set_favorite(&rom_id, favorite)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]

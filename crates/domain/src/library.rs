@@ -17,6 +17,8 @@ pub struct Rom {
     pub added_at: i64,
     /// Unix timestamp (segundos) do último load do jogo. `None` = nunca jogado.
     pub last_played_at: Option<i64>,
+    /// Aba "Favoritos" da biblioteca.
+    pub is_favorite: bool,
 }
 
 #[async_trait]
@@ -31,4 +33,6 @@ pub trait RomRepository: Send + Sync {
     async fn remove(&self, id: &str) -> Result<(), RepoError>;
     /// Marca a ROM como jogada agora (`last_played_at`).
     async fn mark_played(&self, id: &str, at_unix: i64) -> Result<(), RepoError>;
+    /// Liga/desliga o favorito.
+    async fn set_favorite(&self, id: &str, favorite: bool) -> Result<(), RepoError>;
 }

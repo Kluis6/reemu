@@ -5,10 +5,8 @@ import {
   HomeRegular,
   LibraryRegular,
   PowerRegular,
-  PuzzlePieceRegular,
   SearchRegular,
   SettingsRegular,
-  XboxControllerRegular,
 } from "@fluentui/react-icons";
 import { mergeClasses } from "@fluentui/react-components";
 import { useEffect, useRef } from "react";
@@ -23,18 +21,6 @@ import { useShellStyles } from "../styles/xbox";
 const RAIL = [
   { to: "/", end: true, icon: <HomeRegular />, label: "Início" },
   { to: "/library", end: true, icon: <LibraryRegular />, label: "Meus jogos" },
-  {
-    to: "/settings/cores",
-    end: false,
-    icon: <PuzzlePieceRegular />,
-    label: "Cores",
-  },
-  {
-    to: "/settings/controllers",
-    end: false,
-    icon: <XboxControllerRegular />,
-    label: "Controles",
-  },
   {
     to: "/settings",
     end: true,

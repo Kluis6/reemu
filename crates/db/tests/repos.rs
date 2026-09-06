@@ -27,6 +27,7 @@ fn rom(id: &str, crc: &str, system: &str) -> Rom {
         system_id: system.into(),
         added_at: 1_700_000_000,
         last_played_at: None,
+        is_favorite: false,
     }
 }
 
@@ -46,6 +47,13 @@ async fn roms_crud_and_lookups() {
         "r3"
     );
     assert_eq!(repo.list_by_system("nes").await.unwrap().len(), 2);
+
+    // favoritos
+    assert!(!repo.get("r3").await.unwrap().unwrap().is_favorite);
+    repo.set_favorite("r3", true).await.unwrap();
+    assert!(repo.get("r3").await.unwrap().unwrap().is_favorite);
+    repo.set_favorite("r3", false).await.unwrap();
+    assert!(!repo.get("r3").await.unwrap().unwrap().is_favorite);
 
     repo.remove("r1").await.unwrap();
     assert_eq!(repo.find_by_crc32("AABBCCDD").await.unwrap().len(), 1);

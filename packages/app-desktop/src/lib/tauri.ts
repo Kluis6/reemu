@@ -195,9 +195,13 @@ export interface RomEntry {
   lastPlayedAt: number | null
   /** Unix (s) de quando entrou na biblioteca — pra "Adicionados recentemente". */
   addedAt: number
+  /** Aba "Favoritos" da biblioteca. */
+  isFavorite: boolean
 }
 export const listRoms = () => invoke<RomEntry[]>('list_roms')
 export const removeRom = (romId: string) => invoke<void>('remove_rom', { romId })
+export const setRomFavorite = (romId: string, favorite: boolean) =>
+  invoke<void>('set_rom_favorite', { romId, favorite })
 
 // --- metadata / scraping (etapa 09) ---
 export interface MetadataConfig {

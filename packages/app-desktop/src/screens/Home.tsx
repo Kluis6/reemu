@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { GameCard } from "../components/GameCard";
+import { platformLabel } from "../lib/platform";
 import { Shelf } from "../components/Shelf";
 import { listRoms, type RomEntry } from "../lib/tauri";
 import { useBrowseStyles, useHeroStyles } from "../styles/xbox";
@@ -80,7 +81,7 @@ export function Home() {
     <GameCard
       key={r.id}
       title={r.title}
-      badge={r.systemId}
+      badge={platformLabel(r.systemId)}
       boxart={r.boxart}
       onClick={() => navigate(`/rom/${r.id}`)}
       menu={[
@@ -126,7 +127,7 @@ export function Home() {
               {hero.lastPlayedAt ? "Continuar" : "Destaque"}
             </span>
             <span className={h.title}>{hero.title}</span>
-            <span className={h.sub}>{hero.systemId.toUpperCase()}</span>
+            <span className={h.sub}>{platformLabel(hero.systemId)}</span>
           </span>
         </button>
       )}

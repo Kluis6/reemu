@@ -173,6 +173,7 @@ where
             system_id: system_id.to_string(),
             added_at: now_unix,
             last_played_at: None,
+            is_favorite: false,
         })
         .await?;
         report.added += 1;
