@@ -12,6 +12,7 @@ import {
   Tab,
   TabList,
   Text,
+  Tooltip,
 } from "@fluentui/react-components";
 import {
   AddRegular,
@@ -320,12 +321,17 @@ export function Library() {
           <Text size={200} className={s.count}>
             {all.length} {all.length === 1 ? "jogo" : "jogos"}
           </Text>
-          <Button
-            appearance="primary"
-            icon={<AddRegular />}
-            aria-label="Adicionar ROMs"
-            onClick={() => setAddOpen(true)}
-          />
+          <Tooltip
+            content="Adicionar ROMs à biblioteca a partir de uma pasta"
+            relationship="label"
+          >
+            <Button
+              appearance="primary"
+              icon={<AddRegular />}
+              aria-label="Adicionar ROMs"
+              onClick={() => setAddOpen(true)}
+            />
+          </Tooltip>
           <Menu>
             <MenuTrigger disableButtonEnhancement>
               <MenuButton

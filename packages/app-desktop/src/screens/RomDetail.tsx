@@ -4,11 +4,14 @@ import {
   Caption1,
   Select,
   Spinner,
+  Tooltip,
 } from "@fluentui/react-components";
 import {
   ArrowLeftRegular,
   DeleteRegular,
   PlayRegular,
+  StarFilled,
+  StarRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -30,6 +33,7 @@ import {
   listSaveStates,
   pickSlangp,
   removeRom,
+  setRomFavorite,
   setShader,
 } from "../lib/tauri";
 import { useDetailStyles } from "../styles/xbox";
@@ -118,6 +122,22 @@ export function RomDetail() {
       navigate("/library");
     },
     onError: (e) => push(sysToast(`Falha ao remover: ${e}`, "Error")),
+  });
+  const fav = useMutation({
+    mutationFn: (on: boolean) => setRomFavorite(romId, on),
+    onMutate: async (on) => {
+      await qc.cancelQueries({ queryKey: ["roms"] });
+      const prev = qc.getQueryData(["roms"]);
+      qc.setQueryData<{ id: string; isFavorite: boolean }[]>(["roms"], (old) =>
+        (old ?? []).map((r) => (r.id === romId ? { ...r, isFavorite: on } : r)),
+      );
+      return { prev };
+    },
+    onError: (e, _on, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["roms"], ctx.prev);
+      push(sysToast(`Falha ao favoritar: ${e}`, "Error"));
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["roms"] }),
   });
 
   if (roms.isLoading) return <Spinner label="Carregando…" />;
@@ -225,6 +245,24 @@ export function RomDetail() {
         >
           {hasQuick ? "Continuar" : "Jogar"}
         </Button>
+        <Tooltip
+          content={
+            rom.isFavorite
+              ? "Remover dos favoritos"
+              : "Adicionar aos favoritos"
+          }
+          relationship="label"
+        >
+          <Button
+            size="large"
+            appearance={rom.isFavorite ? "outline" : "subtle"}
+            icon={rom.isFavorite ? <StarFilled /> : <StarRegular />}
+            aria-pressed={rom.isFavorite}
+            onClick={() => fav.mutate(!rom.isFavorite)}
+          >
+            {rom.isFavorite ? "Favorito" : "Favoritar"}
+          </Button>
+        </Tooltip>
       </div>
       {coreList.length === 0 && (
         <Caption1>

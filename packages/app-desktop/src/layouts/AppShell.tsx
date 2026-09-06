@@ -8,7 +8,7 @@ import {
   SearchRegular,
   SettingsRegular,
 } from "@fluentui/react-icons";
-import { mergeClasses } from "@fluentui/react-components";
+import { Button, Tooltip, mergeClasses } from "@fluentui/react-components";
 import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ButtonHints } from "../components/ButtonHints";
@@ -89,13 +89,14 @@ export function AppShell() {
       <div className={s.main}>
         <div className={s.topbar}>
           {!atRoot && (
-            <button
-              className={s.iconBtn}
-              onClick={() => navigate(-1)}
-              aria-label="Voltar"
-            >
-              <ArrowLeftRegular />
-            </button>
+            <Tooltip content="Voltar para a tela anterior" relationship="label">
+              <Button
+                appearance="subtle"
+                icon={<ArrowLeftRegular />}
+                aria-label="Voltar"
+                onClick={() => navigate(-1)}
+              />
+            </Tooltip>
           )}
           <label
             className={s.search}
@@ -122,20 +123,29 @@ export function AppShell() {
             />
           </label>
           <div className={s.topbarSpacer} />
-          <button
-            className={s.iconBtn}
-            onClick={() => void toggleFullscreen()}
-            aria-label={
-              fullscreen ? "Sair da tela cheia (F11)" : "Tela cheia (F11)"
+          <Tooltip
+            content={
+              fullscreen
+                ? "Sair da tela cheia (F11)"
+                : "Ocupar a tela inteira (F11)"
             }
-            title={fullscreen ? "Sair da tela cheia (F11)" : "Tela cheia (F11)"}
+            relationship="label"
           >
-            {fullscreen ? (
-              <FullScreenMinimizeRegular />
-            ) : (
-              <FullScreenMaximizeRegular />
-            )}
-          </button>
+            <Button
+              appearance="subtle"
+              aria-label={
+                fullscreen ? "Sair da tela cheia" : "Tela cheia"
+              }
+              icon={
+                fullscreen ? (
+                  <FullScreenMinimizeRegular />
+                ) : (
+                  <FullScreenMaximizeRegular />
+                )
+              }
+              onClick={() => void toggleFullscreen()}
+            />
+          </Tooltip>
           <span className={s.clock}>{clock}</span>
         </div>
         <div className={s.scroll}>

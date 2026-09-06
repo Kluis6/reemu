@@ -1,10 +1,11 @@
 import {
-  makeStyles,
+  Button,
   Menu,
   MenuItem,
   MenuList,
   MenuPopover,
   MenuTrigger,
+  makeStyles,
   mergeClasses,
   tokens,
 } from "@fluentui/react-components";
@@ -13,38 +14,37 @@ import { useState } from "react";
 import { initials } from "../lib/initials";
 import { useCardStyles } from "../styles/xbox";
 
+export interface CardMenuItem {
+  label: string;
+  onClick: () => void;
+}
+
 const useLocalStyles = makeStyles({
   // revela a estrela no hover/foco do cartão
   reveal: {
     "&:hover [data-fav], &:focus-within [data-fav]": { opacity: 1 },
   },
-  fav: {
+  // wrapper de posicionamento — só posição/opacidade; o botão fica com o
+  // border-radius padrão do Fluent.
+  favSlot: {
     position: "absolute",
-    top: "6px",
-    right: "6px",
-    width: "26px",
-    height: "26px",
-    display: "grid",
-    placeItems: "center",
-    borderRadius: "999px",
-    cursor: "pointer",
-    color: tokens.colorNeutralForegroundInverted,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    top: "5px",
+    right: "5px",
     opacity: 0,
-    transitionProperty: "opacity, color, background-color",
+    transitionProperty: "opacity",
     transitionDuration: "140ms",
-    ":hover": { backgroundColor: "rgba(0, 0, 0, 0.72)" },
-    "&[data-on]": {
-      opacity: 1,
-      color: tokens.colorPaletteMarigoldForeground1,
+    "&[data-on]": { opacity: 1 },
+  },
+  favBtn: {
+    color: tokens.colorNeutralForegroundInverted,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    ":hover": {
+      color: tokens.colorNeutralForegroundInverted,
+      backgroundColor: "rgba(0, 0, 0, 0.7)",
     },
   },
+  favOn: { color: tokens.colorPaletteMarigoldForeground1 },
 });
-
-export interface CardMenuItem {
-  label: string;
-  onClick: () => void;
-}
 
 /**
  * Cartão de jogo no estilo Xbox: tile quadrado, badge de plataforma, estrela
@@ -73,8 +73,21 @@ export function GameCard({
   const [broken, setBroken] = useState(false);
   const showArt = boxart && !broken;
 
+  // `div[role=button]` (não `<button>`) pra poder aninhar o `Button` da estrela
+  // sem quebrar o HTML.
   const card = (
-    <button className={mergeClasses(s.card, l.reveal)} onClick={onClick}>
+    <div
+      className={mergeClasses(s.card, l.reveal)}
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
+    >
       <div className={s.art} data-art>
         {showArt ? (
           <img
@@ -89,30 +102,26 @@ export function GameCard({
         {badge && <span className={s.badge}>{badge}</span>}
         {onToggleFavorite && (
           <span
-            role="button"
-            tabIndex={0}
-            aria-label={favorite ? "Desfavoritar" : "Favoritar"}
-            aria-pressed={favorite}
-            className={l.fav}
+            className={l.favSlot}
             data-fav=""
             data-on={favorite ? "" : undefined}
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFavorite();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
+          >
+            <Button
+              size="small"
+              appearance="subtle"
+              className={mergeClasses(l.favBtn, favorite && l.favOn)}
+              aria-label={favorite ? "Desfavoritar" : "Favoritar"}
+              aria-pressed={favorite}
+              icon={favorite ? <StarFilled /> : <StarRegular />}
+              onClick={(e) => {
                 e.stopPropagation();
                 onToggleFavorite();
-              }
-            }}
-          >
-            {favorite ? <StarFilled /> : <StarRegular />}
+              }}
+            />
           </span>
         )}
       </div>
-    </button>
+    </div>
   );
 
   if (!menu || menu.length === 0) return card;
