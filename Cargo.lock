@@ -798,6 +798,7 @@ dependencies = [
 name = "core-loader-desktop"
 version = "0.1.0"
 dependencies = [
+ "ash",
  "async-trait",
  "cc",
  "domain",

@@ -24,6 +24,7 @@ mod input;
 mod loader;
 mod raw;
 mod sys;
+mod vk_sys;
 
 pub use crate::core::DesktopCore;
 pub use crate::coreopts::{

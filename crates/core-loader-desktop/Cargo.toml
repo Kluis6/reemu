@@ -20,6 +20,10 @@ log = "0.4"
 # faltar, só os cores GL falham (com erro claro), os software seguem.
 khronos-egl = { version = "6", features = ["dynamic"] }
 glow = "0.17"
+# Tipos FFI Vulkan (`RETRO_HW_RENDER_INTERFACE_VULKAN`, etapa 12) + criação do
+# device no processo-filho. Mesma versão que o wgpu 30 já resolve. `loaded`
+# carrega libvulkan em runtime: se faltar, só os cores Vulkan-first falham.
+ash = { version = "0.38", default-features = false, features = ["loaded"] }
 # `libgbm` é aberto via `libloading` (ver dmabuf.rs) — sem link estático, sem
 # precisar de `libgbm-dev`; se faltar, o interop cai pro readback.
 # ROMs em .zip são extraídas pra um arquivo temporário na hora do load.
