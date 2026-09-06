@@ -1,8 +1,23 @@
 # 12 — HW Render Vulkan Por-Core
 
-**Status: EM ANDAMENTO (iniciado 2026-09-06).** Core-alvo: **flycast**
-(Dreamcast). Decisão do usuário: rodar o core Vulkan **no processo pai**
-(in-process, junto do wgpu), zero-cópia.
+**Status: EM ANDAMENTO (iniciado 2026-09-06).** Decisão do usuário: rodar o
+core Vulkan **no processo pai** (in-process, junto do wgpu), zero-cópia.
+
+**Alvos, em ordem** (decisão 2026-09-06):
+
+1. **`libretro-samples/video/vulkan/vk_rendering`** — core de teste oficial
+   (triângulo girando). Negociação `{ get_application_info, NULL }` → **o
+   frontend cria o device** (= arquitetura escolhida). Sem BIOS, sem ROM
+   (`SET_SUPPORT_NO_GAME`). Usa `set_command_buffers` (o core NÃO submete;
+   entrega o cmd buffer pro frontend), `wait_sync_index`, `get_sync_index`.
+   Imagem `COLOR_ATTACHMENT|SAMPLED|TRANSFER_SRC`, `R8G8B8A8_UNORM`, termina
+   em `SHADER_READ_ONLY_OPTIMAL`. É o bring-up da fase A+B.
+2. **Beetle PSX HW** (`mednafen_psx_hw` / parallel-psx) — 1º emulador real.
+   `create_device` **coopera** (habilita `required_device_extensions`, usa
+   `required_features`), imagem do scanout tem `TRANSFER_SRC`, implementa
+   `wait_sync_index`, código endurecido pra frontends Vulkan não-RetroArch.
+3. **flycast** — por último (fase C). `VkCreateDevice` v1 ignora
+   `required_*`; imagem sem `TRANSFER_SRC`; Vulkan opt-in.
 
 ## Por que isso é o trecho mais arriscado do projeto inteiro
 
@@ -50,9 +65,9 @@ bugada de frontends libretro. Não subestime a validação.
 
 ## Arquitetura escolhida — device criado pelo frontend, compartilhado
 
-**Não chamar o `create_device` do flycast.** O frontend cria a `VkInstance`
-+ `VkDevice` (via `ash`) com TODAS as extensões/features que precisa, e passa
-esse device pros dois lados:
+**Não chamar o `create_device` do flycast.** O frontend cria a
+`VkInstance`/`VkDevice` (via `ash`) com TODAS as extensões/features que
+precisa, e passa esse device pros dois lados:
 
 ```text
         ash::Instance + ash::Device (1 só, criado por nós)
@@ -83,38 +98,51 @@ qualquer jeito, in-process zero-cópia é o melhor custo/benefício.)
 
 ## Sequência por frame (thread do core, processo pai)
 
-1. Antes do `retro_run`: `current_sync_index = frame_count % N`
-   (N = `popcount`-ish do mask que devolvemos; começar com N=2 ou 3).
-2. `retro_run()` → flycast renderiza, `queue.submit` (dentro de
-   `lock_queue`/`unlock_queue`), `set_image(retro_vulkan_image)`.
-3. Frontend: barrier na imagem do flycast
-   (`srcStage=COLOR_ATTACHMENT_OUTPUT`, `srcAccess=COLOR_ATTACHMENT_WRITE` →
-   `dstStage=FRAGMENT_SHADER`, `dstAccess=SHADER_READ`) — a spec do
-   `set_image` manda exatamente isso quando não há semáforo. Mesma queue ⇒
-   ordem de submissão garante o resto.
-4. `create_texture_from_hal` (1ª vez por slot; cacheia por
-   `get_sync_index`) → entrega como `Frame` pro compositor.
-5. Sync fase B: `vkQueueWaitIdle` / fence antes de amostrar (conservador,
-   correto). Fase C: fence ring por sync index + `set_signal_semaphore`.
+Modelo do `vk_rendering` / Beetle PSX (core NÃO submete — usa
+`set_command_buffers`):
+
+1. Antes do `retro_run`: `current_sync_index = (current_sync_index + 1) % N`
+   (N derivado do mask que devolvemos; começar com N=3).
+2. `retro_run()` → core:
+   - `wait_sync_index(handle)` — frontend faz CPU-wait no `fence[idx]` do
+     ciclo anterior desse índice (no-op nos N primeiros frames), depois
+     `vkResetFences`.
+   - `get_sync_index(handle)` → devolvemos `current_sync_index`.
+   - grava o cmd buffer (com o barrier de release pra `SHADER_READ_ONLY`
+     dentro dele), `set_image(&image)`, `set_command_buffers(n, cmds)` —
+     guardamos ambos no bridge.
+   - `video_refresh(RETRO_HW_FRAME_BUFFER_VALID, w, h, 0)` → marca
+     `hw_frame`/`had_new_frame` (igual GL).
+3. Depois do `retro_run` (em `DesktopCore::next_hw_frame`): frontend submete
+   os cmd buffers guardados na `VkQueue`, com `fence[current_sync_index]`.
+   (flycast, fase C: o core já submeteu ele mesmo via `lock_queue`; aí o
+   passo 3 vira só um barrier-only cmd buffer `COLOR_ATTACHMENT_WRITE` →
+   `SHADER_READ`.)
+4. `create_texture_from_hal` na `image.create_info.image` (1ª vez por índice;
+   cacheia por sync index) → entrega como `Frame` pro compositor.
+5. Sync fase B: `vkWaitForFences(fence[idx])` antes de amostrar (conservador,
+   correto). Fase C: deixar a ordem de submissão + barrier na mesma
+   `VkQueue` do wgpu resolver, sem CPU-wait; `set_signal_semaphore`.
 
 ## Fatiamento
 
-- **Fase A** — `vk_context.rs` no `core-loader-desktop`: `ash` instance +
-  device (extensões do wgpu), negociação (`GET_PREFERRED_HW_RENDER` opt-in,
-  aceitar `SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE`, responder
-  `GET_HW_RENDER_INTERFACE` com a struct preenchida), callbacks
-  (`set_image`/`get_sync_index`/`get_sync_index_mask`/`lock_queue`/
-  `unlock_queue`/`wait_sync_index`), `context_reset`. Critério: flycast
-  carrega, negocia, roda `retro_run` sem crash (frame ainda não exibido).
+- **Fase A** — `core-loader-desktop`: `vk_context.rs` (feito, `03eb89d`) +
+  `vk_frame.rs` (bridge: os 8 callbacks + fence ring por sync index) +
+  construção de `retro_hw_render_interface_vulkan` + wiring no `ffi_state.rs`
+  (`GET_PREFERRED_HW_RENDER` opt-in via `REEMU_HW=vulkan`, aceitar
+  `SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE`, responder
+  `GET_HW_RENDER_INTERFACE`) + `loader.rs::setup_vk_context`. Critério:
+  teste headless carrega a `.so` do `vk_rendering`, roda N frames,
+  `retro_run` sem crash, `set_image`/`set_command_buffers` chegam.
 - **Fase B** — backend in-process no `emu-session` (Vulkan não passa pelo
   `ChildProc`); wgpu do `gpu.rs` reconstruído sobre o `ash::Device`
   compartilhado quando um core Vulkan carrega; `FrameOrigin` novo
   (`HardwareVulkanImage`) + `create_texture_from_hal` no `gpu.rs`; sync
-  conservador. Critério: imagem do flycast na tela, orientação certa,
-  parâmetros de shader ainda funcionam.
-- **Fase C** — sync fino (fence ring por sync index, barriers mínimos),
-  validação sob carga (troca rápida de cena, resize, save/load state),
-  `provoking_vertex`/OIT reavaliados.
+  conservador. Critério: triângulo do `vk_rendering` na tela, orientação
+  certa; depois Beetle PSX HW.
+- **Fase C** — sync fino (sem CPU-wait, barriers mínimos), validação sob
+  carga (troca rápida de cena, resize, save/load state), flycast como 3º
+  alvo, `provoking_vertex`/OIT reavaliados.
 
 ## Cores que dependem disso (enquanto não fecha)
 
