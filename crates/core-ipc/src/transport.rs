@@ -40,6 +40,15 @@ const MAX_ANCILLARY: usize = 128;
 #[derive(Clone)]
 pub struct Channel(Arc<OwnedFd>);
 
+/// `true` se o erro significa "a outra ponta sumiu" — trata como EOF, não erro.
+fn peer_gone(e: rustix::io::Errno) -> bool {
+    use rustix::io::Errno;
+    matches!(
+        e,
+        Errno::CONNRESET | Errno::PIPE | Errno::CONNABORTED | Errno::NOTCONN
+    )
+}
+
 impl Channel {
     /// Par conectado, ambos os lados com `CLOEXEC` (não vazam pra outros
     /// processos que este venha a `spawn`ar). Quem for entregar um lado pro
@@ -138,13 +147,19 @@ impl Channel {
         let mut probe = [0u8; 64];
         let mut piov = [IoSliceMut::new(&mut probe)];
         let mut no_ctrl = RecvAncillaryBuffer::new(&mut []);
-        let peek = net::recvmsg(
+        let peek = match net::recvmsg(
             self.fd(),
             &mut piov,
             &mut no_ctrl,
             RecvFlags::PEEK | RecvFlags::TRUNC,
-        )
-        .map_err(io::Error::from)?;
+        ) {
+            Ok(r) => r,
+            // O filho foi morto (troca de ROM / unload / crash): o socketpair
+            // pode devolver RST em vez de FIN. Trata igual a EOF — o outro lado
+            // se foi, não é um erro de canal.
+            Err(e) if peer_gone(e) => return Ok(None),
+            Err(e) => return Err(io::Error::from(e)),
+        };
         let size = peek.bytes;
         if size == 0 {
             return Ok(None); // EOF — o outro lado fechou
@@ -157,8 +172,11 @@ impl Channel {
         let mut iov = [IoSliceMut::new(&mut buf)];
         let mut space = [MaybeUninit::<u8>::uninit(); MAX_ANCILLARY];
         let mut control = RecvAncillaryBuffer::new(&mut space);
-        let got = net::recvmsg(self.fd(), &mut iov, &mut control, RecvFlags::empty())
-            .map_err(io::Error::from)?;
+        let got = match net::recvmsg(self.fd(), &mut iov, &mut control, RecvFlags::empty()) {
+            Ok(r) => r,
+            Err(e) if peer_gone(e) => return Ok(None),
+            Err(e) => return Err(io::Error::from(e)),
+        };
         if got.bytes == 0 {
             return Ok(None);
         }
