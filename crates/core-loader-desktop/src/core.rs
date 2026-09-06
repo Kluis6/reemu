@@ -46,6 +46,13 @@ impl DesktopCore {
         }
     }
 
+    /// Frames que o core Vulkan entregou (`set_image` +
+    /// `set_command_buffers`) e que submetemos. `None` = não é core Vulkan.
+    /// Diagnóstico — é o que o teste de HW render Vulkan checa.
+    pub fn vk_frames_submitted(&self) -> Option<u64> {
+        Some(self.vk.as_ref()?.frames_submitted())
+    }
+
     /// PCM interleaved (estéreo, i16, na `sample_rate` do core) acumulado
     /// desde a última chamada. Consumido pelo `AudioSink` (etapa 06).
     pub fn drain_audio(&mut self) -> Vec<i16> {

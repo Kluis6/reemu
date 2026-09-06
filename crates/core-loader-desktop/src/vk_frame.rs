@@ -48,6 +48,9 @@ struct Inner {
     pending_cmds: Vec<vk::CommandBuffer>,
     /// De `set_signal_semaphore` (não usado na fase A).
     signal_semaphore: vk::Semaphore,
+    /// Quantos frames o core já entregou e nós submetemos com sucesso.
+    /// Observável só pra diagnóstico/teste.
+    submitted: u64,
 }
 
 /// Dono do contexto Vulkan + estado por-frame. Vive num `Box` do `DesktopCore`
@@ -105,6 +108,7 @@ impl VkFrameBridge {
                 pending_image: None,
                 pending_cmds: Vec::new(),
                 signal_semaphore: vk::Semaphore::null(),
+                submitted: 0,
             }),
             interface,
         });
@@ -171,12 +175,18 @@ impl VkFrameBridge {
             inner.fence_pending[idx] = false;
         }
 
+        inner.submitted += 1;
         Ok(Some(ReadyImage {
             image: image.create_info.image,
             view: image.image_view,
             layout: image.image_layout,
             sync_index: inner.current_index,
         }))
+    }
+
+    /// Frames entregues pelo core e submetidos com sucesso. Diagnóstico/teste.
+    pub fn frames_submitted(&self) -> u64 {
+        self.inner.lock().unwrap().submitted
     }
 }
 
