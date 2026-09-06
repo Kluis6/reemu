@@ -454,6 +454,7 @@ export const useShelfStyles = makeStyles({
       flexGrow: 0,
     },
   },
+  shelfStart: { justifyContent: "flex-start", columnGap: "16px" },
 });
 
 /** Cartão-capa em retrato. */

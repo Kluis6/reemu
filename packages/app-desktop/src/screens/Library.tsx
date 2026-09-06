@@ -299,7 +299,7 @@ export function Library() {
               Ver todos
             </Button>
           </div>
-          <Shelf>
+          <Shelf start={plist.length < 6}>
             {preview.map(card)}
             {overflow && (
               <PlatformTile
