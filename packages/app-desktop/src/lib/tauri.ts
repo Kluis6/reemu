@@ -262,6 +262,29 @@ export const removeRomSystem = (systemId: string) =>
   invoke<number>('remove_rom_system', { systemId })
 /** Esvazia a biblioteca inteira. Devolve quantas ROMs saíram. */
 export const clearLibrary = () => invoke<number>('clear_library')
+
+export interface ShaderPackStatus {
+  installed: boolean
+  path: string | null
+  presetCount: number
+}
+export const shaderPackStatus = () =>
+  invoke<ShaderPackStatus>('shader_pack_status')
+export interface ShaderPackProgress {
+  received: number
+  total: number
+  phase: 'download' | 'extract'
+}
+/** Baixa `libretro/slang-shaders` (~130 MB). Devolve o caminho instalado. */
+export async function downloadShaderPack(
+  onProgress?: (p: ShaderPackProgress) => void,
+): Promise<string> {
+  if (!inTauri) throw new Error('fora do Tauri: download_shader_pack')
+  const { invoke: raw, Channel } = await import('@tauri-apps/api/core')
+  const ch = new Channel<ShaderPackProgress>()
+  if (onProgress) ch.onmessage = onProgress
+  return raw<string>('download_shader_pack', { onProgress: ch })
+}
 export const listSystemCores = () =>
   invoke<Record<string, string>>('list_system_cores')
 /** `coreId` vazio limpa a preferência da plataforma. */

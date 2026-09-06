@@ -28,6 +28,8 @@ pub struct AppState {
     pub cores_dir: std::path::PathBuf,
     /// `<dados>/system` — onde os cores procuram BIOS (`GET_SYSTEM_DIRECTORY`).
     pub system_dir: std::path::PathBuf,
+    /// `<dados>/shaders` — pacote de shaders baixado (`libretro/slang-shaders`).
+    pub shaders_dir: std::path::PathBuf,
     /// Hotkeys de sistema carregadas do DB (`system_hotkeys`). `save_binding` /
     /// `clear_system_hotkey` recompõem via `refresh_hotkey_resolver`.
     pub hotkeys: Mutex<ComboHotkeyResolver>,
@@ -96,6 +98,7 @@ impl AppState {
         let save_dir = base.join("saves");
         let cores_dir = base.join("cores");
         let system_dir = base.join("system");
+        let shaders_dir = base.join("shaders");
         let mut cfg = SessionConfig::new(cores_dir.clone(), system_dir.clone(), save_dir.clone());
         cfg.enable_gamepad = true;
         cfg.audio_sink = Some(Box::new(move || {
@@ -117,6 +120,7 @@ impl AppState {
             save_dir,
             cores_dir,
             system_dir,
+            shaders_dir,
             hotkeys: Mutex::new(ComboHotkeyResolver::new(hotkeys)),
             last_hotkey: Mutex::new(None),
             current_rom: Mutex::new(None),
@@ -760,6 +764,25 @@ pub struct SlangpEntry {
 
 /// Teto de segurança — a árvore `slang-shaders` tem ~1200 `.slangp`.
 const MAX_SLANGP_ENTRIES: usize = 6000;
+
+/// Estado do pacote de shaders baixado (`libretro/slang-shaders`).
+#[tauri::command]
+pub fn shader_pack_status(state: State<'_, AppState>) -> crate::shader_pack::PackStatus {
+    crate::shader_pack::status(&state.shaders_dir)
+}
+
+/// Baixa o pacote `libretro/slang-shaders` (~130 MB) e o extrai pra
+/// `<dados>/shaders/slang-shaders`. Devolve o caminho instalado; a
+/// `ShaderLibrary` aponta a raiz pra ele.
+#[tauri::command]
+pub async fn download_shader_pack(
+    state: State<'_, AppState>,
+    on_progress: tauri::ipc::Channel<crate::shader_pack::DownloadProgress>,
+) -> Result<String, String> {
+    let dir = state.shaders_dir.clone();
+    let path = crate::shader_pack::download(&dir, on_progress).await?;
+    Ok(path.to_string_lossy().into_owned())
+}
 
 /// Varre `root` recursivamente e lista todo `*.slangp`. Não compila nada — só
 /// enumera pra UI de biblioteca (a compilação acontece no `set_shader`).

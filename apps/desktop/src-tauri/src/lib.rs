@@ -4,6 +4,7 @@ mod core_catalog;
 mod decoration;
 mod gpu;
 mod scraping;
+mod shader_pack;
 mod video;
 
 pub mod save_state;
@@ -143,6 +144,8 @@ pub fn run() {
             commands::set_shader,
             commands::get_rom_shader,
             commands::list_slangp_dir,
+            commands::shader_pack_status,
+            commands::download_shader_pack,
             commands::get_shader_params,
             commands::set_shader_param,
             commands::reset_shader_params,

@@ -7,10 +7,17 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
-import { FolderRegular } from '@fluentui/react-icons'
-import { useQuery } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
-import { listSlangpDir, pickFolder, type SlangpEntry } from '../lib/tauri'
+import { ArrowDownloadRegular, FolderRegular } from '@fluentui/react-icons'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMemo, useRef, useState } from 'react'
+import {
+  downloadShaderPack,
+  listSlangpDir,
+  pickFolder,
+  shaderPackStatus,
+  type SlangpEntry,
+} from '../lib/tauri'
+import { useToastStore } from '../stores/useToastStore'
 
 const ROOT_KEY = 'reemu.shaderLibRoot'
 
@@ -86,6 +93,71 @@ export function ShaderLibrary({
     }
   })
   const [filter, setFilter] = useState('')
+  const push = useToastStore((t) => t.push)
+  const updateToast = useToastStore((t) => t.update)
+  const dlId = useRef<string | null>(null)
+
+  const pack = useQuery({
+    queryKey: ['shader-pack'],
+    queryFn: shaderPackStatus,
+    retry: false,
+  })
+
+  const dl = useMutation({
+    mutationFn: () =>
+      downloadShaderPack((p) => {
+        if (!dlId.current) return
+        const pct = p.total ? p.received / p.total : null
+        const mb = (n: number) => (n / 1048576).toFixed(0)
+        updateToast(dlId.current, {
+          message:
+            p.phase === 'extract'
+              ? 'Extraindo pacote de shaders…'
+              : `Baixando shaders ${mb(p.received)}${p.total ? `/${mb(p.total)}` : ''} MB…`,
+          progress: p.phase === 'extract' ? null : pct,
+        })
+      }),
+    onMutate: () => {
+      const id = crypto.randomUUID()
+      dlId.current = id
+      push({
+        id,
+        message: 'Baixando pacote de shaders…',
+        variant: 'Info',
+        durationMs: 0,
+        source: 'System',
+        progress: null,
+      })
+    },
+    onSuccess: (path) => {
+      try {
+        localStorage.setItem(ROOT_KEY, path)
+      } catch {
+        /* modo privado */
+      }
+      setRoot(path)
+      pack.refetch()
+      if (dlId.current)
+        updateToast(dlId.current, {
+          message: 'Pacote de shaders instalado.',
+          variant: 'Success',
+          durationMs: 4000,
+          progress: undefined,
+        })
+    },
+    onError: (e) => {
+      if (dlId.current)
+        updateToast(dlId.current, {
+          message: `Falha no download: ${e}`,
+          variant: 'Error',
+          durationMs: 6000,
+          progress: undefined,
+        })
+    },
+    onSettled: () => {
+      dlId.current = null
+    },
+  })
 
   const chooseRoot = async () => {
     const p = await pickFolder('Escolha a pasta de shaders (shaders_slang)')
@@ -124,12 +196,22 @@ export function ShaderLibrary({
     return (
       <div className={s.root}>
         <Caption1>
-          Aponte pra pasta <code>shaders_slang</code> do RetroArch/RetroBat pra
-          navegar os presets aqui dentro.
+          Baixe o pacote oficial <code>libretro/slang-shaders</code> (~130 MB) ou
+          aponte pra pasta <code>shaders_slang</code> do RetroArch/RetroBat.
         </Caption1>
-        <Button icon={<FolderRegular />} onClick={chooseRoot}>
-          Escolher pasta de shaders…
-        </Button>
+        <div className={s.bar}>
+          <Button
+            appearance="primary"
+            icon={<ArrowDownloadRegular />}
+            disabled={dl.isPending}
+            onClick={() => dl.mutate()}
+          >
+            {dl.isPending ? 'Baixando…' : 'Baixar pacote de shaders'}
+          </Button>
+          <Button icon={<FolderRegular />} onClick={chooseRoot}>
+            Escolher pasta…
+          </Button>
+        </div>
       </div>
     )
   }
