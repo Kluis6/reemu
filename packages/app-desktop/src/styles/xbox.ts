@@ -68,7 +68,7 @@ export const useShellStyles = makeStyles({
       outlineWidth: "2px",
       outlineStyle: "solid",
       outlineColor: tokens.colorNeutralForeground1,
-      outlineOffset: "2px",
+      outlineOffset: "3px",
     },
   },
 
@@ -462,6 +462,8 @@ export const useCardStyles = makeStyles({
     display: "block",
     border: "none",
     backgroundColor: "transparent",
+    // mesmo raio da arte → o anel de foco arredonda igual ao card visível
+    borderRadius: shell.radius,
     padding: 0,
     cursor: "pointer",
     textAlign: "left",
@@ -729,11 +731,10 @@ export const usePauseStyles = makeStyles({
     justifyItems: "center",
     zIndex: 100,
     "& button:focus, & a:focus": {
-      outlineWidth: "3px",
+      outlineWidth: "2px",
       outlineStyle: "solid",
       outlineColor: tokens.colorNeutralForeground1,
-      outlineOffset: "2px",
-      borderRadius: shell.radius,
+      outlineOffset: "3px",
     },
   },
   panel: {
