@@ -33,7 +33,16 @@ pub(crate) struct VkConfig {
     /// (flycast pede 1.1). 1.1 é o piso recomendado pela spec do libretro.
     pub api_version: u32,
     pub extra_device_extensions: Vec<CString>,
+    /// Liga `VK_LAYER_KHRONOS_validation` + `VK_EXT_debug_utils` e roteia as
+    /// mensagens pro `log`. Opt-in por `REEMU_VK_VALIDATION=1` — a spec de
+    /// sincronização do HW render é fácil de errar em silêncio, então vale
+    /// muito rodar com isso ligado durante o desenvolvimento.
+    pub validation: bool,
 }
+
+/// Layer de validação da Khronos (pacote `vulkan-validationlayers` no Debian/
+/// Ubuntu, `vulkan-validation-layers` no Arch, ou o SDK da LunarG).
+const VALIDATION_LAYER: &CStr = c"VK_LAYER_KHRONOS_validation";
 
 impl Default for VkConfig {
     fn default() -> Self {
@@ -41,8 +50,21 @@ impl Default for VkConfig {
             app_name: CString::new("ReEmu").unwrap(),
             api_version: vk::make_api_version(0, 1, 1, 0),
             extra_device_extensions: Vec::new(),
+            validation: matches!(
+                std::env::var("REEMU_VK_VALIDATION")
+                    .map(|v| v.trim().to_ascii_lowercase())
+                    .as_deref(),
+                Ok("1") | Ok("true") | Ok("on") | Ok("yes")
+            ),
         }
     }
+}
+
+/// Messenger de debug (só quando `validation` está ligada). Precisa ser
+/// destruído ANTES da `VkInstance`.
+struct DebugMessenger {
+    loader: ash::ext::debug_utils::Instance,
+    handle: vk::DebugUtilsMessengerEXT,
 }
 
 /// Instância + dispositivo lógico + uma queue graphics/compute. Dono de tudo;
@@ -57,6 +79,7 @@ pub(crate) struct VkContext {
     /// `unlock_queue` em volta de QUALQUER `vkQueueSubmit` — o core submete os
     /// command buffers dele direto nesta queue.
     pub queue_lock: Mutex<()>,
+    debug: Option<DebugMessenger>,
     pub instance: ash::Instance,
     pub entry: ash::Entry,
 }
@@ -78,14 +101,31 @@ impl VkContext {
             .engine_name(&cfg.app_name)
             .engine_version(0)
             .api_version(cfg.api_version);
-        let instance_ci = vk::InstanceCreateInfo::default().application_info(&app_info);
-        // SAFETY: `instance_ci` referencia `app_info`, vivo até o fim do escopo;
-        // a instância é destruída no `Drop`.
+        // Validação é opt-in e best-effort: se o layer/extensão não estiverem
+        // instalados, avisa e segue sem.
+        let (layers, instance_exts) = validation_bits(&entry, cfg.validation);
+        let instance_ci = vk::InstanceCreateInfo::default()
+            .application_info(&app_info)
+            .enabled_layer_names(&layers)
+            .enabled_extension_names(&instance_exts);
+        // SAFETY: `instance_ci` referencia `app_info`/`layers`/`instance_exts`,
+        // vivos até o fim do escopo; a instância é destruída no `Drop`.
         let instance = unsafe { entry.create_instance(&instance_ci, None) }
             .map_err(|e| format!("vkCreateInstance: {e}"))?;
 
-        let cleanup_instance =
-            |instance: &ash::Instance| unsafe { instance.destroy_instance(None) };
+        let debug = if instance_exts.is_empty() {
+            None
+        } else {
+            setup_debug_messenger(&entry, &instance)
+        };
+
+        let cleanup = |instance: &ash::Instance, debug: &Option<DebugMessenger>| unsafe {
+            if let Some(d) = debug {
+                d.loader.destroy_debug_utils_messenger(d.handle, None);
+            }
+            instance.destroy_instance(None);
+        };
+        let cleanup_instance = |instance: &ash::Instance| cleanup(instance, &debug);
 
         let physical_device = match Self::pick_physical_device(&instance) {
             Ok(pd) => pd,
@@ -138,9 +178,15 @@ impl VkContext {
             queue,
             queue_family_index,
             queue_lock: Mutex::new(()),
+            debug,
             instance,
             entry,
         })
+    }
+
+    /// `true` se o layer de validação está ativo nesta instância.
+    pub fn validation_active(&self) -> bool {
+        self.debug.is_some()
     }
 
     /// `PFN_vkGetInstanceProcAddr` do loader — o campo homônimo de
@@ -202,13 +248,106 @@ impl VkContext {
 impl Drop for VkContext {
     fn drop(&mut self) {
         // SAFETY: nada mais usa o device/instância a partir daqui; espera a GPU
-        // ociosa antes de destruir (o core já foi desativado pelo chamador).
+        // ociosa antes de destruir (o core já foi desativado pelo chamador). O
+        // messenger tem que cair antes da instância.
         unsafe {
             let _ = self.device.device_wait_idle();
             self.device.destroy_device(None);
+            if let Some(d) = &self.debug {
+                d.loader.destroy_debug_utils_messenger(d.handle, None);
+            }
             self.instance.destroy_instance(None);
         }
     }
+}
+
+/// `(layers, instance_extensions)` a habilitar. Vazio se `want` for `false` ou
+/// se o layer/extensão não estiverem instalados (avisa, mas não falha — validar
+/// é opcional).
+fn validation_bits(entry: &ash::Entry, want: bool) -> (Vec<*const c_char>, Vec<*const c_char>) {
+    if !want {
+        return (Vec::new(), Vec::new());
+    }
+    // SAFETY: entry carregado.
+    let has_layer = unsafe { entry.enumerate_instance_layer_properties() }
+        .unwrap_or_default()
+        .iter()
+        .any(|p| {
+            // SAFETY: `layer_name` é um array NUL-terminado do loader.
+            let name = unsafe { CStr::from_ptr(p.layer_name.as_ptr()) };
+            name == VALIDATION_LAYER
+        });
+    // SAFETY: idem.
+    let has_ext = unsafe { entry.enumerate_instance_extension_properties(None) }
+        .unwrap_or_default()
+        .iter()
+        .any(|p| {
+            let name = unsafe { CStr::from_ptr(p.extension_name.as_ptr()) };
+            name == ash::ext::debug_utils::NAME
+        });
+
+    if !has_layer || !has_ext {
+        log::warn!(
+            "REEMU_VK_VALIDATION pedido mas indisponível (layer={has_layer}, \
+             debug_utils={has_ext}) — instale `vulkan-validationlayers`"
+        );
+        return (Vec::new(), Vec::new());
+    }
+    log::info!("validação Vulkan LIGADA ({VALIDATION_LAYER:?})");
+    (
+        vec![VALIDATION_LAYER.as_ptr()],
+        vec![ash::ext::debug_utils::NAME.as_ptr()],
+    )
+}
+
+fn setup_debug_messenger(entry: &ash::Entry, instance: &ash::Instance) -> Option<DebugMessenger> {
+    use vk::DebugUtilsMessageSeverityFlagsEXT as Sev;
+    use vk::DebugUtilsMessageTypeFlagsEXT as Ty;
+
+    let loader = ash::ext::debug_utils::Instance::new(entry, instance);
+    let ci = vk::DebugUtilsMessengerCreateInfoEXT::default()
+        .message_severity(Sev::ERROR | Sev::WARNING | Sev::INFO)
+        // VALIDATION cobre uso incorreto da API; a sincronização (o que mais
+        // importa aqui) sai em VALIDATION quando o synchronization2 validation
+        // está ligado no layer.
+        .message_type(Ty::VALIDATION | Ty::PERFORMANCE | Ty::GENERAL)
+        .pfn_user_callback(Some(debug_callback));
+    // SAFETY: `ci` vive até o fim da chamada; o handle é destruído no Drop.
+    match unsafe { loader.create_debug_utils_messenger(&ci, None) } {
+        Ok(handle) => Some(DebugMessenger { loader, handle }),
+        Err(e) => {
+            log::warn!("vkCreateDebugUtilsMessengerEXT: {e}");
+            None
+        }
+    }
+}
+
+unsafe extern "system" fn debug_callback(
+    severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    _types: vk::DebugUtilsMessageTypeFlagsEXT,
+    data: *const vk::DebugUtilsMessengerCallbackDataEXT<'_>,
+    _user: *mut std::ffi::c_void,
+) -> vk::Bool32 {
+    use vk::DebugUtilsMessageSeverityFlagsEXT as Sev;
+    if data.is_null() {
+        return vk::FALSE;
+    }
+    // SAFETY: o layer garante `data` válido pela duração do callback.
+    let msg = unsafe {
+        let d = &*data;
+        if d.p_message.is_null() {
+            return vk::FALSE;
+        }
+        CStr::from_ptr(d.p_message).to_string_lossy().into_owned()
+    };
+    if severity.contains(Sev::ERROR) {
+        log::error!("[vulkan] {msg}");
+    } else if severity.contains(Sev::WARNING) {
+        log::warn!("[vulkan] {msg}");
+    } else {
+        log::debug!("[vulkan] {msg}");
+    }
+    vk::FALSE // nunca aborta a chamada que gerou a mensagem
 }
 
 #[cfg(test)]

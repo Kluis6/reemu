@@ -144,6 +144,26 @@ Modelo do `vk_rendering` / Beetle PSX (core NÃO submete — usa
   carga (troca rápida de cena, resize, save/load state), flycast como 3º
   alvo, `provoking_vertex`/OIT reavaliados.
 
+## Validação (ligar SEMPRE durante o desenvolvimento)
+
+`REEMU_VK_VALIDATION=1` liga `VK_LAYER_KHRONOS_validation` +
+`VK_EXT_debug_utils`; as mensagens saem pelo `log` (`[vulkan] ...`). Se o
+layer não estiver instalado, avisa e segue sem validar:
+
+```sh
+sudo apt install vulkan-validationlayers   # Debian/Ubuntu
+```
+
+Erro de sincronização em HW render é silencioso sem o layer — é exatamente o
+tipo de bug que esta etapa arrisca. Rode o teste com ele:
+
+```sh
+scripts/build-vk-test-core.sh
+REEMU_VK_VALIDATION=1 RUST_LOG=debug \
+  cargo test -p core-loader-desktop --test vk_hw_render -- --ignored --nocapture
+# sem GPU: VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json (lavapipe)
+```
+
 ## Cores que dependem disso (enquanto não fecha)
 
 Aparecem no catálogo normalmente, marcados **"requer Vulkan HW render"** na
