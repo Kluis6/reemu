@@ -166,6 +166,12 @@ export function PlayScreen() {
   const qc = useQueryClient();
   const push = useToastStore((s) => s.push);
   const { romId = "" } = useParams();
+  // "Voltar" = tela anterior do histórico. Só cai num destino fixo se não
+  // houver histórico (reload direto na URL /play/...).
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate(romId ? `/rom/${romId}` : "/");
+  };
   const [params] = useSearchParams();
   const locState = (useLocation().state ?? {}) as Partial<LaunchInfo>;
   const stateCore = locState.coreId;
@@ -479,9 +485,7 @@ export function PlayScreen() {
           }}
         >
           <Body1>Não foi possível determinar o core/ROM.</Body1>
-          <Button onClick={() => navigate(`/rom/${romId}`)}>
-            Voltar ao detalhe
-          </Button>
+          <Button onClick={goBack}>Voltar</Button>
         </div>
       </div>
     );
@@ -528,10 +532,7 @@ export function PlayScreen() {
         >
           <Title3>Falha ao carregar</Title3>
           <Body1>{status.error}</Body1>
-          <Button
-            appearance="primary"
-            onClick={() => navigate(`/rom/${romId}`)}
-          >
+          <Button appearance="primary" onClick={goBack}>
             Voltar
           </Button>
         </div>
