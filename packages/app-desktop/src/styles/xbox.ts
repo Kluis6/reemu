@@ -216,6 +216,7 @@ export const useShellStyles = makeStyles({
     letterSpacing: "0.01em",
   },
   scroll: {
+    scrollBehavior: "smooth",
     flexGrow: 1,
     minWidth: 0,
     overflowY: "auto",
@@ -436,6 +437,7 @@ export const useShelfStyles = makeStyles({
     columnGap: "12px",
     overflowX: "auto",
     scrollSnapType: "x proximity",
+    scrollBehavior: "smooth",
     scrollbarWidth: "none",
     paddingTop: "4px",
     paddingLeft: "4px",

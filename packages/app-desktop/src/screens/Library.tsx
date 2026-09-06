@@ -16,6 +16,7 @@ import {
 } from "@fluentui/react-components";
 import {
   AddRegular,
+  ChevronRightRegular,
   FilterRegular,
   MoreHorizontalRegular,
 } from "@fluentui/react-icons";
@@ -24,6 +25,8 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
 import { GameCard } from "../components/GameCard";
+import { PlatformTile } from "../components/PlatformTile";
+import { Shelf } from "../components/Shelf";
 import { ManageLibraryDialog } from "../components/ManageLibraryDialog";
 import { platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
@@ -47,6 +50,12 @@ const useLibStyles = makeStyles({
       backgroundColor: "var(--reemuSurfaceSoft)",
       color: tokens.colorNeutralForeground1,
     },
+  },
+  seeAll: {
+    marginLeft: "auto",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "2px",
   },
   bar: {
     display: "flex",
@@ -263,19 +272,48 @@ export function Library() {
         return emptyState("★", "Sem favoritos", "Favorite um jogo pelo menu do cartão.");
       return emptyState("🔍", "Nada aqui", "Ajuste o filtro de plataforma ou a busca.");
     }
-    // favoritos e recém adicionados: grade única; meus jogos: agrupada
+    // favoritos e recém adicionados: grade única
     if (tab !== "mine") return grid(view);
-    return byPlatform.map(([sys, list]) => (
-      <section className={s.section} key={sys}>
-        <div className={s.sectionHead}>
-          <h2 className={s.sectionTitle}>{platformLabel(sys)}</h2>
-          <span className={s.count}>
-            {list.length} {list.length === 1 ? "jogo" : "jogos"}
-          </span>
-        </div>
-        {grid(list)}
-      </section>
-    ));
+    // meus jogos: prateleira por plataforma (prévia) + card de 4 no fim.
+    const PREVIEW = 5;
+    return byPlatform.map(([sys, plist]) => {
+      const goAll = () => navigate(`/library/${sys}`);
+      const overflow = plist.length > PREVIEW;
+      const preview = overflow ? plist.slice(0, PREVIEW) : plist;
+      const rest = plist.slice(PREVIEW);
+      return (
+        <section className={s.section} key={sys}>
+          <div className={s.sectionHead}>
+            <h2 className={s.sectionTitle}>{platformLabel(sys)}</h2>
+            <span className={s.count}>
+              {plist.length} {plist.length === 1 ? "jogo" : "jogos"}
+            </span>
+            <Button
+              className={l.seeAll}
+              appearance="transparent"
+              size="small"
+              iconPosition="after"
+              icon={<ChevronRightRegular />}
+              onClick={goAll}
+            >
+              Ver todos
+            </Button>
+          </div>
+          <Shelf>
+            {preview.map(card)}
+            {overflow && (
+              <PlatformTile
+                key="more"
+                label={platformLabel(sys)}
+                total={plist.length}
+                sample={rest}
+                onClick={goAll}
+              />
+            )}
+          </Shelf>
+        </section>
+      );
+    });
   };
 
   return (

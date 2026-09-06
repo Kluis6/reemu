@@ -4,6 +4,7 @@ import { RootLayout } from './layouts/RootLayout'
 import { SettingsLayout } from './layouts/SettingsLayout'
 import { Home } from './screens/Home'
 import { Library } from './screens/Library'
+import { PlatformLibrary } from './screens/PlatformLibrary'
 import { PlayScreen } from './screens/PlayScreen'
 import { RomDetail } from './screens/RomDetail'
 import { SettingsAudio } from './screens/settings/SettingsAudio'
@@ -29,6 +30,7 @@ export const router = createHashRouter([
         children: [
           { index: true, element: <Home /> },
           { path: 'library', element: <Library /> },
+          { path: 'library/:platform', element: <PlatformLibrary /> },
           { path: 'rom/:romId', element: <RomDetail /> },
           {
             path: 'settings',
