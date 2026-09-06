@@ -2714,4 +2714,84 @@ mod tests {
             100.0 * ok as f64 / (ok + err).max(1) as f64
         );
     }
+
+    /// Regressão: shaders slang saíam de cabeça pra baixo depois que o frontend
+    /// virou glslang→SPIR-V→naga (o naga negava o Y de `gl_Position` por
+    /// padrão). Frame com a metade de CIMA branca, metade de baixo preta →
+    /// depois de um passthrough slang, o topo da saída tem que continuar branco.
+    #[test]
+    fn slang_passthrough_keeps_orientation() {
+        if std::env::var_os("REEMU_NO_GPU").is_some() {
+            return;
+        }
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        let dir = std::env::temp_dir().join("reemu_gpu_orient");
+        std::fs::create_dir_all(&dir).unwrap();
+        let sp = dir.join("pass.slangp");
+        let sl = dir.join("pass.slang");
+        std::fs::write(
+            &sl,
+            concat!(
+                "#version 450\n",
+                "#pragma stage vertex\n",
+                "layout(location=0) in vec4 Position; layout(location=1) in vec2 TexCoord;\n",
+                "layout(location=0) out vec2 vUV;\n",
+                "layout(std140, set=0, binding=0) uniform UBO { mat4 MVP; } g;\n",
+                "void main(){ gl_Position = g.MVP * Position; vUV = TexCoord; }\n",
+                "#pragma stage fragment\n",
+                "layout(location=0) in vec2 vUV;\n",
+                "layout(location=0) out vec4 c;\n",
+                "layout(set=0,binding=2) uniform sampler2D Source;\n",
+                "void main(){ c = texture(Source, vUV); }\n",
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            &sp,
+            "shaders = 1\nshader0 = pass.slang\nscale_type0 = source\nscale0 = 1.0\n",
+        )
+        .unwrap();
+        fp.set_preset(sp.to_str().unwrap())
+            .expect("preset passthrough");
+
+        let (w, h) = (32u32, 32u32);
+        let mut data = vec![0u8; (w * h * 4) as usize];
+        for y in 0..h {
+            let v = if y < h / 2 { 0xFF } else { 0x00 };
+            for x in 0..w {
+                let i = ((y * w + x) * 4) as usize;
+                data[i..i + 4].copy_from_slice(&[v, v, v, 0xFF]);
+            }
+        }
+        let mk = || Frame {
+            origin: FrameOrigin::SoftwareRawBuffer {
+                data: data.clone(),
+                pitch: w * 4,
+                format: SoftwarePixelFormat::Xrgb8888,
+            },
+            metadata: FrameMetadata {
+                native_width: w,
+                native_height: h,
+                aspect_ratio: 1.0,
+                rotation_degrees: 0,
+            },
+        };
+        fp.process(&mk());
+        let (ow, oh, out) = fp.process(&mk()).expect("2º process entrega");
+        let px = |x: u32, y: u32| out[((y * ow + x) * 4) as usize];
+        assert!(
+            px(ow / 2, 1) > 0xC0,
+            "topo devia estar branco, veio {:#x}",
+            px(ow / 2, 1)
+        );
+        assert!(
+            px(ow / 2, oh - 2) < 0x40,
+            "base devia estar preta, veio {:#x}",
+            px(ow / 2, oh - 2)
+        );
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }

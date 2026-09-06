@@ -275,7 +275,14 @@ fn rewrite(glsl: &str) -> (String, Vec<TextureBind>) {
     // 3. Assinaturas de função que recebem `sampler2D` → par texture+sampler.
     //    A partir daqui trabalhamos sem comentários (ver `blank_comments`).
     let out = blank_comments(&out);
-    let (out, fns) = split_sampler_params(&out);
+    // 3b. varying de struct/array → `location`s escalares (WGSL não aceita
+    //     agregado atravessando estágio).
+    let out = flatten_io_aggregates(&out);
+    let (out, mut fns) = split_sampler_params(&out);
+
+    // 3c. macro que repassa sampler pra função (Mega Bezel:
+    //     `#define COMPAT_TEXTURE(c,d) HSM_GetCroppedTexSample(c,d)`).
+    let out = split_sampler_macros(&out, &mut fns);
 
     // 4. Cada uso de identificador de sampler na forma certa pro contexto
     //    (construtora no ponto de uso, ou par como argumento de função).
@@ -301,6 +308,407 @@ fn rewrite(glsl: &str) -> (String, Vec<TextureBind>) {
 // no ponto de uso — passá-la como argumento dá
 // "sampler constructor must appear at point of use".
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Achatamento de varying agregado (struct / array) → `location`s escalares.
+//
+// WGSL não aceita struct nem array como entrada/saída de estágio; o naga
+// rejeita com `NotIOShareableType`. Vários shaders usam mesmo assim — o
+// scanline-classic passa um `struct TimebaseConfig` do vertex pro fragment, o
+// koko-aio um `float[N]`.
+//
+// Reescrever os USOS não serve: o array é indexado com variável de laço, e não
+// há como quebrar isso em variáveis soltas. Então mantemos a variável original
+// como global do estágio e achatamos só as `location`s, copiando nas pontas:
+//   - vertex:   epílogo no fim do `main`     `tb_SLANG_V0 = tb.a; …`
+//   - fragment: prólogo no início do `main`  `tb.a = tb_SLANG_V0; …`
+// O corpo do shader fica intacto, indexação dinâmica inclusive.
+//
+// Nos shaders reais o agregado é sempre o varying de maior `location`, então
+// expandir pra cima a partir da location dele não colide com os outros.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+struct StructMember {
+    ty: String,
+    name: String,
+    /// tamanho como veio no fonte (número ou nome de `#define`)
+    array: Option<String>,
+}
+
+type StructDefs = std::collections::HashMap<String, Vec<StructMember>>;
+
+/// Tipos que o WGSL aceita direto numa `location`.
+fn is_io_scalar(ty: &str) -> bool {
+    matches!(
+        ty,
+        "float"
+            | "vec2"
+            | "vec3"
+            | "vec4"
+            | "int"
+            | "ivec2"
+            | "ivec3"
+            | "ivec4"
+            | "uint"
+            | "uvec2"
+            | "uvec3"
+            | "uvec4"
+    )
+}
+
+/// `"mat3"` → `(3, "vec3")`, `"mat3x2"` → `(3, "vec2")`. Matriz também não é
+/// IO-shareable no WGSL; vira uma `location` por coluna — que é exatamente o
+/// espaço que ela já ocupava (o shader pula as locations dela).
+fn mat_shape(ty: &str) -> Option<(usize, String)> {
+    let rest = ty.strip_prefix("mat")?;
+    let (cols, rows) = match rest.split_once('x') {
+        Some((c, r)) => (c.parse::<usize>().ok()?, r.parse::<usize>().ok()?),
+        None => {
+            let n = rest.parse::<usize>().ok()?;
+            (n, n)
+        }
+    };
+    (2..=4)
+        .contains(&cols)
+        .then(|| (cols, format!("vec{rows}")))
+}
+
+/// Inteiro só atravessa estágio como `flat`.
+fn needs_flat(ty: &str) -> bool {
+    ty.starts_with('i') || ty.starts_with('u')
+}
+
+/// `"blurCoordinates[5]"` → `("blurCoordinates", Some("5"))`.
+fn split_array_suffix(s: &str) -> (String, Option<String>) {
+    let s = s.trim();
+    match s.find('[') {
+        None => (s.to_string(), None),
+        Some(o) => {
+            let name = s[..o].trim().to_string();
+            let inner = s[o + 1..]
+                .split(']')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            (name, Some(inner))
+        }
+    }
+}
+
+fn matching_brace(b: &[u8], open: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (i, c) in b.iter().enumerate().skip(open) {
+        match c {
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// `struct NOME { tipo campo; … };` → membros, na ordem de declaração.
+fn parse_struct_defs(code: &str) -> StructDefs {
+    let mut out = StructDefs::default();
+    let b = code.as_bytes();
+    let mut i = 0usize;
+    while let Some(p) = find_word(code, "struct", i) {
+        let name: String = code[p + 6..]
+            .trim_start()
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        let Some(open) = code[p..].find('{').map(|o| p + o) else {
+            break;
+        };
+        let Some(close) = matching_brace(b, open) else {
+            break;
+        };
+        if !name.is_empty() {
+            let members = code[open + 1..close]
+                .split(';')
+                .filter_map(|decl| {
+                    let mut it = decl.split_whitespace();
+                    let ty = it.next()?;
+                    let rest = it.next()?;
+                    let (nm, arr) = split_array_suffix(rest);
+                    Some(StructMember {
+                        ty: ty.to_string(),
+                        name: nm,
+                        array: arr,
+                    })
+                })
+                .collect();
+            out.insert(name, members);
+        }
+        i = close + 1;
+    }
+    out
+}
+
+/// `#define NOME 12` → mapa, pra resolver tamanho de array simbólico.
+fn parse_int_defines(code: &str) -> std::collections::HashMap<String, usize> {
+    let mut out = std::collections::HashMap::new();
+    for line in code.lines() {
+        let Some(rest) = line.trim().strip_prefix("#define") else {
+            continue;
+        };
+        let mut it = rest.split_whitespace();
+        let (Some(name), Some(val)) = (it.next(), it.next()) else {
+            continue;
+        };
+        if it.next().is_some() || name.contains('(') {
+            continue;
+        }
+        if let Ok(v) = val.parse::<usize>() {
+            out.insert(name.to_string(), v);
+        }
+    }
+    out
+}
+
+fn array_len(spec: &str, defines: &std::collections::HashMap<String, usize>) -> Option<usize> {
+    spec.parse::<usize>()
+        .ok()
+        .or_else(|| defines.get(spec).copied())
+        .filter(|n| *n > 0 && *n <= 64)
+}
+
+/// Expande `ty name[array]` nas folhas `(tipo, sufixo de acesso)`.
+/// `false` = tem algo que não sabemos achatar (mat*, tipo desconhecido) —
+/// nesse caso o chamador deixa a declaração como está.
+fn flatten_leaves(
+    ty: &str,
+    access: &str,
+    array: Option<&str>,
+    structs: &StructDefs,
+    defines: &std::collections::HashMap<String, usize>,
+    depth: u32,
+    out: &mut Vec<(String, String)>,
+) -> bool {
+    if depth > 4 || out.len() > 48 {
+        return false;
+    }
+    if let Some(spec) = array {
+        let Some(n) = array_len(spec, defines) else {
+            return false;
+        };
+        return (0..n).all(|i| {
+            flatten_leaves(
+                ty,
+                &format!("{access}[{i}]"),
+                None,
+                structs,
+                defines,
+                depth + 1,
+                out,
+            )
+        });
+    }
+    if let Some(members) = structs.get(ty) {
+        return members.iter().all(|m| {
+            flatten_leaves(
+                &m.ty,
+                &format!("{access}.{}", m.name),
+                m.array.as_deref(),
+                structs,
+                defines,
+                depth + 1,
+                out,
+            )
+        });
+    }
+    if let Some((cols, col_ty)) = mat_shape(ty) {
+        for c in 0..cols {
+            out.push((col_ty.clone(), format!("{access}[{c}]")));
+        }
+        return true;
+    }
+    if is_io_scalar(ty) {
+        out.push((ty.to_string(), access.to_string()));
+        return true;
+    }
+    false
+}
+
+/// Uma declaração `layout(location = N) [quals] in|out TIPO nome[arr];`.
+struct VaryingDecl {
+    line_start: usize,
+    line_end: usize,
+    location: u32,
+    is_out: bool,
+    quals: String,
+    ty: String,
+    name: String,
+    array: Option<String>,
+}
+
+/// Parseia a linha se ela declarar um varying com `layout(location = N)`.
+fn parse_varying(line: &str) -> Option<(u32, bool, String, String, String, Option<String>)> {
+    let t = line.trim();
+    let loc_at = t.find("location")?;
+    if !t.starts_with("layout") {
+        return None;
+    }
+    let after_eq = t[loc_at..].split('=').nth(1)?;
+    let location: u32 = after_eq
+        .trim_start()
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()?;
+    let close = t.find(')')?;
+    let rest = t[close + 1..].trim().trim_end_matches(';').trim();
+    let mut quals = Vec::new();
+    let mut words = rest.split_whitespace().peekable();
+    let mut is_out = None;
+    while let Some(w) = words.peek() {
+        match *w {
+            "flat" | "noperspective" | "smooth" | "centroid" | "sample" | "highp" | "mediump"
+            | "lowp" => {
+                quals.push(words.next()?.to_string());
+            }
+            "in" => {
+                words.next();
+                is_out = Some(false);
+                break;
+            }
+            "out" => {
+                words.next();
+                is_out = Some(true);
+                break;
+            }
+            _ => return None,
+        }
+    }
+    let is_out = is_out?;
+    let ty = words.next()?.to_string();
+    let (name, array) = split_array_suffix(&words.collect::<Vec<_>>().join(" "));
+    (!name.is_empty()).then_some((location, is_out, quals.join(" "), ty, name, array))
+}
+
+/// Ver o comentário do topo do módulo.
+fn flatten_io_aggregates(glsl: &str) -> String {
+    let code = blank_comments(glsl);
+    let structs = parse_struct_defs(&code);
+    let defines = parse_int_defines(&code);
+
+    // acha os varyings que precisam achatar
+    let mut decls: Vec<VaryingDecl> = Vec::new();
+    let mut off = 0usize;
+    for line in code.split_inclusive('\n') {
+        let start = off;
+        off += line.len();
+        let Some((location, is_out, quals, ty, name, array)) = parse_varying(line) else {
+            continue;
+        };
+        // já é aceitável pro WGSL? então não mexe
+        if array.is_none() && is_io_scalar(&ty) {
+            continue;
+        }
+        decls.push(VaryingDecl {
+            line_start: start,
+            line_end: off,
+            location,
+            is_out,
+            quals,
+            ty,
+            name,
+            array,
+        });
+    }
+    if decls.is_empty() {
+        return glsl.to_string();
+    }
+
+    // monta a substituição de cada declaração + as cópias do prólogo/epílogo
+    let mut edits: Vec<(usize, usize, String)> = Vec::new();
+    let mut copies: Vec<String> = Vec::new();
+    let mut any_out = false;
+    for d in &decls {
+        let mut leaves = Vec::new();
+        if !flatten_leaves(
+            &d.ty,
+            &d.name,
+            d.array.as_deref(),
+            &structs,
+            &defines,
+            0,
+            &mut leaves,
+        ) {
+            continue; // não sabemos achatar — deixa como está
+        }
+        let mut repl = String::new();
+        for (i, (lty, access)) in leaves.iter().enumerate() {
+            let mut q = d.quals.clone();
+            if needs_flat(lty) && !q.contains("flat") {
+                q = format!("flat {q}");
+            }
+            let q = if q.trim().is_empty() {
+                String::new()
+            } else {
+                format!("{} ", q.trim())
+            };
+            let dir = if d.is_out { "out" } else { "in" };
+            let var = format!("{}_SLANG_V{i}", d.name);
+            repl.push_str(&format!(
+                "layout(location = {}) {q}{dir} {lty} {var};\n",
+                d.location + i as u32
+            ));
+            copies.push(if d.is_out {
+                format!("    {var} = {access};")
+            } else {
+                format!("    {access} = {var};")
+            });
+        }
+        // a variável original vira global do estágio (o corpo não muda)
+        let arr = d
+            .array
+            .as_deref()
+            .map(|a| format!("[{a}]"))
+            .unwrap_or_default();
+        repl.push_str(&format!("{} {}{arr};\n", d.ty, d.name));
+        any_out |= d.is_out;
+        edits.push((d.line_start, d.line_end, repl));
+    }
+    if edits.is_empty() {
+        return glsl.to_string();
+    }
+
+    // aplica as substituições de declaração (de trás pra frente, offsets estáveis)
+    let mut out = glsl.to_string();
+    for (s, e, repl) in edits.iter().rev() {
+        out.replace_range(*s..*e, repl);
+    }
+
+    // injeta as cópias no `main`: epílogo se é saída (vertex), prólogo se é
+    // entrada (fragment).
+    let body = copies.join("\n");
+    let scan = blank_comments(&out);
+    let Some(mp) = find_word(&scan, "main", 0) else {
+        return out;
+    };
+    let Some(open) = scan[mp..].find('{').map(|o| mp + o) else {
+        return out;
+    };
+    if any_out {
+        let Some(close) = matching_brace(scan.as_bytes(), open) else {
+            return out;
+        };
+        out.insert_str(close, &format!("\n{body}\n"));
+    } else {
+        out.insert_str(open + 1, &format!("\n{body}\n"));
+    }
+    out
+}
 
 /// Troca todo comentário (`//…` e `/*…*/`) por espaços, preservando o
 /// comprimento em bytes e as quebras de linha. Os scanners de sampler abaixo
@@ -500,6 +908,144 @@ fn sampler_param_name(param: &str) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+/// Macro função-like que repassa um sampler pra uma função que espera o par.
+///
+/// O Mega Bezel faz `#define COMPAT_TEXTURE(c,d) HSM_GetCroppedTexSample(c,d)`.
+/// Depois que a assinatura de `HSM_GetCroppedTexSample` virou
+/// `(texture2D, sampler, vec2)`, a macro passa a estar errada: ela repassa `c`
+/// como UM argumento onde agora vão DOIS. Então a macro precisa do mesmo
+/// tratamento que a função — parâmetro vira par, corpo repassa o par — e entra
+/// no mapa `fns` pro call-site dela também expandir.
+///
+/// Roda em ponto fixo (macro pode chamar macro), no máximo 4 rodadas.
+fn split_sampler_macros(src: &str, fns: &mut SamplerFns) -> String {
+    let mut out = src.to_string();
+    for _ in 0..4 {
+        let mut changed = false;
+        let mut next = String::with_capacity(out.len() + 128);
+        for line in out.split_inclusive('\n') {
+            match rewrite_macro_line(line, fns) {
+                Some(new_line) => {
+                    next.push_str(&new_line);
+                    changed = true;
+                }
+                None => next.push_str(line),
+            }
+        }
+        out = next;
+        if !changed {
+            break;
+        }
+    }
+    out
+}
+
+/// `Some(linha nova)` se esta linha é um `#define` que repassa sampler.
+fn rewrite_macro_line(line: &str, fns: &mut SamplerFns) -> Option<String> {
+    let trimmed = line.trim_start();
+    let indent_len = line.len() - trimmed.len();
+    let rest = trimmed.strip_prefix("#define")?;
+    let head = rest.trim_start();
+    let name: String = head
+        .chars()
+        .take_while(|c| c.is_alphanumeric() || *c == '_')
+        .collect();
+    if name.is_empty() || fns.contains_key(&name) {
+        return None; // já tratada numa rodada anterior
+    }
+    let after_name = &head[name.len()..];
+    if !after_name.starts_with('(') {
+        return None; // macro sem parâmetro
+    }
+    let close = matching_paren(after_name.as_bytes(), 0)?;
+    let params: Vec<String> = split_args(&after_name[1..close])
+        .into_iter()
+        .map(|(a, z)| after_name[1..close][a..z].trim().to_string())
+        .collect();
+    let body = &after_name[close + 1..];
+
+    // quais parâmetros da macro caem em posição de sampler no corpo?
+    let mut sampler_params: Vec<usize> = Vec::new();
+    let bb = body.as_bytes();
+    let mut i = 0usize;
+    while i < body.len() {
+        let Some(open) = body[i..].find('(').map(|o| i + o) else {
+            break;
+        };
+        let Some(cl) = matching_paren(bb, open) else {
+            break;
+        };
+        if let Some((callee, _)) = ident_before(body, open) {
+            if let Some(entry) = fns.get(&callee) {
+                let inner = &body[open + 1..cl];
+                for (idx, (a, z)) in split_args(inner).into_iter().enumerate() {
+                    if !entry.positions.contains(&idx) {
+                        continue;
+                    }
+                    let arg = inner[a..z].trim();
+                    if let Some(pi) = params.iter().position(|p| p == arg) {
+                        if !sampler_params.contains(&pi) {
+                            sampler_params.push(pi);
+                        }
+                    }
+                }
+            }
+        }
+        i = open + 1;
+    }
+    if sampler_params.is_empty() {
+        return None;
+    }
+    sampler_params.sort_unstable();
+
+    // parâmetro sampler vira par, no cabeçalho e no corpo
+    let new_params: Vec<String> = params
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            if sampler_params.contains(&i) {
+                format!("{p}_SLANG_T, {p}_SLANG_S")
+            } else {
+                p.clone()
+            }
+        })
+        .collect();
+    let mut new_body = body.to_string();
+    for i in &sampler_params {
+        let p = &params[*i];
+        new_body = replace_macro_arg(&new_body, p);
+    }
+    fns.insert(
+        name.clone(),
+        SamplerFn {
+            positions: sampler_params,
+            names: Vec::new(), // parâmetro de macro não é variável de escopo
+        },
+    );
+    Some(format!(
+        "{}#define {name}({}){new_body}",
+        &line[..indent_len],
+        new_params.join(", ")
+    ))
+}
+
+/// Troca o parâmetro `p` da macro pelo par, como palavra inteira.
+fn replace_macro_arg(body: &str, p: &str) -> String {
+    let mut out = String::with_capacity(body.len() + 32);
+    let mut i = 0usize;
+    while let Some(off) = find_word(&body[i..], p, 0) {
+        let at = i + off;
+        out.push_str(&body[i..at]);
+        out.push_str(p);
+        out.push_str("_SLANG_T, ");
+        out.push_str(p);
+        out.push_str("_SLANG_S");
+        i = at + p.len();
+    }
+    out.push_str(&body[i..]);
+    out
+}
+
 /// Passo (c): reescreve cada uso de identificador de sampler na forma certa
 /// pro contexto. `globals` valem no arquivo todo; os parâmetros de uma função
 /// só valem dentro do corpo dela (daí o rastreio de `{}` e da função corrente).
@@ -670,12 +1216,15 @@ fn compile_stage(
 ) -> Result<(String, naga::Module), CompileError> {
     let spirv = glsl_to_spirv(glsl, stage, label)?;
 
-    // SPIR-V do RetroArch é clip-space Vulkan; `adjust_coordinate_space` volta
-    // pra convenção do naga/wgsl (flip Y do `BuiltIn::Position`).
+    // `adjust_coordinate_space: false` — NÃO negar o Y de `gl_Position`.
+    // O executor (`gpu.rs`) manda o MVP como ortho `[0,1]→[-1,1]` sem flip e o
+    // quad com uv top-left = (0,0), casando com a convenção Y-up do WGSL. Isto
+    // reproduz o que o antigo frontend `naga::front::glsl` fazia; com `true`
+    // (default do naga) os shaders slang saíam de cabeça pra baixo.
     let module = naga::front::spv::Frontend::new(
         spirv.iter().copied(),
         &naga::front::spv::Options {
-            adjust_coordinate_space: true,
+            adjust_coordinate_space: false,
             strict_capabilities: false,
             block_ctx_dump_prefix: None,
         },
@@ -1000,6 +1549,64 @@ void main() { FragColor = vec4(blur(Source, vUV, 0.01), 1.0); }
         let (out, _) = rewrite(glsl);
         assert!(out.contains("params.SourceSize.x"), "{out}");
         assert!(!out.contains("SourceSize_SLANG"), "{out}");
+    }
+
+    /// WGSL não aceita struct atravessando estágio (`NotIOShareableType`).
+    /// O scanline-classic faz isso; achatamos as `location`s e copiamos nas
+    /// pontas do `main`, deixando o corpo intacto.
+    #[test]
+    fn struct_varying_is_flattened() {
+        let s = r#"
+#version 450
+struct TB { float freq; vec2 phase; };
+#pragma stage vertex
+layout(location = 0) in vec4 Position;
+layout(location = 1) in vec2 TexCoord;
+layout(location = 0) out vec2 vUV;
+layout(location = 1) out TB tb;
+void main() { gl_Position = Position; vUV = TexCoord; tb.freq = 1.0; tb.phase = vec2(0.5); }
+#pragma stage fragment
+layout(location = 0) in vec2 vUV;
+layout(location = 1) in TB tb;
+layout(location = 0) out vec4 FragColor;
+layout(set = 0, binding = 2) uniform sampler2D Source;
+void main() { FragColor = texture(Source, vUV) * tb.freq * tb.phase.x; }
+"#;
+        let out = compile(&preprocess_str(s)).expect("struct varying deve compilar");
+        assert!(out.vertex_wgsl.contains("@vertex"));
+        assert!(out.fragment_wgsl.contains("@fragment"));
+    }
+
+    /// Mesmo caso, com array (koko-aio). O array continua sendo uma variável
+    /// de verdade — indexação dinâmica no corpo segue funcionando.
+    #[test]
+    fn array_varying_is_flattened_and_stays_indexable() {
+        let s = r#"
+#version 450
+#define N 4
+#pragma stage vertex
+layout(location = 0) in vec4 Position;
+layout(location = 1) in vec2 TexCoord;
+layout(location = 0) out vec2 vUV;
+layout(location = 1) flat out float w[N];
+void main() {
+    gl_Position = Position; vUV = TexCoord;
+    for (int i = 0; i < N; i++) w[i] = float(i);
+}
+#pragma stage fragment
+layout(location = 0) in vec2 vUV;
+layout(location = 1) flat in float w[N];
+layout(location = 0) out vec4 FragColor;
+layout(set = 0, binding = 2) uniform sampler2D Source;
+void main() {
+    float acc = 0.0;
+    for (int i = 0; i < N; i++) acc += w[i];
+    FragColor = texture(Source, vUV) * acc;
+}
+"#;
+        let out = compile(&preprocess_str(s)).expect("array varying deve compilar");
+        assert!(out.vertex_wgsl.contains("@vertex"));
+        assert!(out.fragment_wgsl.contains("@fragment"));
     }
 
     #[test]
