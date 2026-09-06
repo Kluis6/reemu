@@ -9,6 +9,7 @@
 //! `src/io/fcntl.rs`) — ver `docs/ai-context/REFERENCES.md`.
 
 use rustix::fd::{AsFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
+use rustix::fs::{ftruncate, memfd_create, MemfdFlags};
 use rustix::io::{fcntl_getfd, fcntl_setfd, FdFlags};
 use rustix::net::{
     self, sockopt, AddressFamily, RecvAncillaryBuffer, RecvAncillaryMessage, RecvFlags,
@@ -20,14 +21,29 @@ use std::io::{self, IoSlice, IoSliceMut};
 use std::mem::MaybeUninit;
 use std::sync::Arc;
 
-/// Teto de sanidade pro tamanho de UMA mensagem — não é o tamanho de nenhum
-/// buffer (o `recv` aloca exatamente o que a mensagem pede, ver abaixo). Save
-/// state de SNES já passa de 800 KB; N64/PSP passam de vários MB. O que limita
-/// o envio de verdade é o `SO_SNDBUF` do socket (`SEQPACKET` = 1 datagrama por
-/// `send`), levantado no `pair()`.
-const MAX_MSG: usize = 32 * 1024 * 1024;
+/// Teto de sanidade pra UMA mensagem (inline OU memfd). Save state de N64
+/// (parallel_n64) passa de 16 MB; PSP pode passar de 30 MB.
+const MAX_MSG: usize = 128 * 1024 * 1024;
+/// Corpo bincode acima disto NÃO cabe confortável num datagrama `SEQPACKET`
+/// (o kernel recusa acima do `SO_SNDBUF` efetivo, ~8 MB nesta máquina) —
+/// então vai por **memfd** anexado via `SCM_RIGHTS`: o `send` escreve o corpo
+/// num `memfd_create`, manda só um marcador + o fd; o `recv` lê o corpo de
+/// volta da mesma memória. Save state de SNES (~800 KB) e menores continuam
+/// inline (1 syscall, sem memfd).
+const INLINE_MAX: usize = 3 * 1024 * 1024;
+/// iov do datagrama quando o corpo real está no memfd anexado. Não colide com
+/// bincode (nossos enums começam com um byte de variante pequeno).
+const MEMFD_MARKER: &[u8] = b"\x00REEMU-IPC-MEMFD\x00";
+/// Buffer fixo do `recv` — cobre qualquer mensagem inline com folga
+/// (`INLINE_MAX` < isto). Reusado por thread.
+const INLINE_CAP: usize = 4 * 1024 * 1024;
+
+thread_local! {
+    static RECV_BUF: std::cell::RefCell<Vec<u8>> =
+        std::cell::RefCell::new(vec![0u8; INLINE_CAP]);
+}
 /// Buffer de socket pedido (o kernel dobra e depois clampa em
-/// `net.core.{wmem,rmem}_max`). `SEQPACKET` recusa datagrama maior que isto.
+/// `net.core.{wmem,rmem}_max`).
 const SOCK_BUF: usize = 16 * 1024 * 1024;
 /// Espaço de controle: no máximo 1 fd por mensagem hoje (memfd do anel OU o
 /// dma_buf de um slot de interop), nunca os dois juntos.
@@ -112,6 +128,11 @@ impl Channel {
     pub fn send<T: Serialize>(&self, msg: &T, fds: &[BorrowedFd<'_>]) -> io::Result<()> {
         let body = bincode::serde::encode_to_vec(msg, bincode::config::standard())
             .map_err(|e| io::Error::other(format!("bincode encode: {e}")))?;
+        // Corpo grande sem fds próprios (save state de N64/PSP) → memfd. As
+        // mensagens que carregam fd (`Loaded`, `FrameReady`) são pequenas.
+        if fds.is_empty() && body.len() > INLINE_MAX {
+            return self.send_via_memfd(&body);
+        }
         let iov = [IoSlice::new(&body)];
         let mut space = [MaybeUninit::<u8>::uninit(); MAX_ANCILLARY];
         let mut control = SendAncillaryBuffer::new(&mut space);
@@ -121,8 +142,7 @@ impl Channel {
         net::sendmsg(self.fd(), &iov, &mut control, SendFlags::empty()).map_err(|e| {
             if e == rustix::io::Errno::MSGSIZE {
                 io::Error::other(format!(
-                    "mensagem IPC de {} bytes maior que o buffer do socket \
-                     (save state grande demais pro canal inline)",
+                    "mensagem IPC de {} bytes não coube no datagrama SEQPACKET",
                     body.len()
                 ))
             } else {
@@ -132,77 +152,102 @@ impl Channel {
         Ok(())
     }
 
+    /// Escreve o corpo num `memfd` e manda só o marcador + o fd (`SCM_RIGHTS`).
+    fn send_via_memfd(&self, body: &[u8]) -> io::Result<()> {
+        let memfd = memfd_create("reemu-ipc-blob", MemfdFlags::CLOEXEC).map_err(io::Error::from)?;
+        ftruncate(&memfd, body.len() as u64).map_err(io::Error::from)?;
+        let mut off = 0u64;
+        while (off as usize) < body.len() {
+            let n =
+                rustix::io::pwrite(&memfd, &body[off as usize..], off).map_err(io::Error::from)?;
+            if n == 0 {
+                return Err(io::Error::other("pwrite no memfd devolveu 0"));
+            }
+            off += n as u64;
+        }
+        let iov = [IoSlice::new(MEMFD_MARKER)];
+        let mut space = [MaybeUninit::<u8>::uninit(); MAX_ANCILLARY];
+        let mut control = SendAncillaryBuffer::new(&mut space);
+        let mfd = [memfd.as_fd()];
+        control.push(SendAncillaryMessage::ScmRights(&mfd));
+        net::sendmsg(self.fd(), &iov, &mut control, SendFlags::empty()).map_err(io::Error::from)?;
+        Ok(())
+    }
+
     /// Bloqueia até a próxima mensagem. `Ok(None)` = o outro lado fechou o
     /// canal (o processo saiu) — encerra a leitura, não um erro.
-    ///
-    /// `SEQPACKET` trunca no silêncio um datagrama maior que o buffer passado
-    /// (e descarta o resto), então primeiro fazemos um `recvmsg` com
-    /// `MSG_PEEK | MSG_TRUNC` — que devolve o tamanho REAL do datagrama sem
-    /// consumi-lo — e só então alocamos exatamente e lemos de verdade. Assim o
-    /// buffer nunca é grande demais (áudio é ~4KB) nem pequeno demais (save
-    /// state passa de 800KB).
     pub fn recv<T: DeserializeOwned>(&self) -> io::Result<Option<(T, Vec<OwnedFd>)>> {
-        // 1. tamanho do próximo datagrama, sem consumir e sem tocar nos fds
-        //    (buffer de controle vazio → SCM_RIGHTS fica na fila pro passo 2).
-        let mut probe = [0u8; 64];
-        let mut piov = [IoSliceMut::new(&mut probe)];
-        let mut no_ctrl = RecvAncillaryBuffer::new(&mut []);
-        let peek = match net::recvmsg(
-            self.fd(),
-            &mut piov,
-            &mut no_ctrl,
-            RecvFlags::PEEK | RecvFlags::TRUNC,
-        ) {
-            Ok(r) => r,
-            // O filho foi morto (troca de ROM / unload / crash): o socketpair
-            // pode devolver RST em vez de FIN. Trata igual a EOF — o outro lado
-            // se foi, não é um erro de canal.
-            Err(e) if peer_gone(e) => return Ok(None),
-            Err(e) => return Err(io::Error::from(e)),
-        };
-        let size = peek.bytes;
-        if size == 0 {
-            return Ok(None); // EOF — o outro lado fechou
-        }
-        // 2. leitura de verdade, buffer do tamanho exato — mas se a mensagem
-        //    passa do teto, consome mesmo assim (truncando) pra não travar o
-        //    canal e devolve erro (quem lê registra e segue).
-        let capped = size.min(MAX_MSG);
-        let mut buf = vec![0u8; capped];
-        let mut iov = [IoSliceMut::new(&mut buf)];
-        let mut space = [MaybeUninit::<u8>::uninit(); MAX_ANCILLARY];
-        let mut control = RecvAncillaryBuffer::new(&mut space);
-        let got = match net::recvmsg(self.fd(), &mut iov, &mut control, RecvFlags::empty()) {
-            Ok(r) => r,
-            Err(e) if peer_gone(e) => return Ok(None),
-            Err(e) => return Err(io::Error::from(e)),
-        };
-        if got.bytes == 0 {
-            return Ok(None);
-        }
-        if size > MAX_MSG {
-            return Err(io::Error::other(format!(
-                "mensagem IPC de {size} bytes excede o teto de {MAX_MSG} — descartada"
-            )));
-        }
-        if got.flags.contains(ReturnFlags::TRUNC) || got.bytes > buf.len() {
-            return Err(io::Error::other(format!(
-                "datagrama IPC truncado ({} de {size} bytes)",
-                got.bytes
-            )));
-        }
-        let mut owned_fds = Vec::new();
-        for msg in control.drain() {
-            if let RecvAncillaryMessage::ScmRights(iter) = msg {
-                owned_fds.extend(iter);
+        // Uma leitura só, num buffer FIXO reusado por thread (a thread leitora
+        // chama isto em loop). Nada inline passa de `INLINE_MAX`; o que passa
+        // (save state grande) veio por memfd e o datagrama aqui é só o
+        // marcador + o fd — cabe folgado. Sem `MSG_PEEK` (que interage mal com
+        // `SCM_RIGHTS`).
+        RECV_BUF.with(|cell| {
+            let mut buf = cell.borrow_mut();
+            let mut iov = [IoSliceMut::new(&mut buf[..])];
+            let mut space = [MaybeUninit::<u8>::uninit(); MAX_ANCILLARY];
+            let mut control = RecvAncillaryBuffer::new(&mut space);
+            let got = match net::recvmsg(self.fd(), &mut iov, &mut control, RecvFlags::TRUNC) {
+                Ok(r) => r,
+                // O filho foi morto (troca de ROM / unload / crash): o
+                // socketpair pode devolver RST em vez de FIN. Igual a EOF.
+                Err(e) if peer_gone(e) => return Ok(None),
+                Err(e) => return Err(io::Error::from(e)),
+            };
+            if got.bytes == 0 {
+                return Ok(None); // EOF
             }
-        }
-        let (value, _) = bincode::serde::decode_from_slice::<T, _>(
-            &buf[..got.bytes],
-            bincode::config::standard(),
-        )
-        .map_err(|e| io::Error::other(format!("bincode decode: {e}")))?;
-        Ok(Some((value, owned_fds)))
+            if got.flags.contains(ReturnFlags::TRUNC) || got.bytes > buf.len() {
+                return Err(io::Error::other(format!(
+                    "datagrama IPC de {} bytes não coube no buffer inline ({}) \
+                     — deveria ter ido por memfd",
+                    got.bytes,
+                    buf.len()
+                )));
+            }
+            let mut owned_fds = Vec::new();
+            for msg in control.drain() {
+                if let RecvAncillaryMessage::ScmRights(iter) = msg {
+                    owned_fds.extend(iter);
+                }
+            }
+
+            // Corpo grande veio por memfd (ver `send_via_memfd`): lê o bincode
+            // de volta da mesma memória e decodifica dali.
+            if got.bytes == MEMFD_MARKER.len()
+                && &buf[..got.bytes] == MEMFD_MARKER
+                && owned_fds.len() == 1
+            {
+                let fd = owned_fds.pop().unwrap();
+                let size = rustix::fs::fstat(&fd).map_err(io::Error::from)?.st_size as usize;
+                if size > MAX_MSG {
+                    return Err(io::Error::other(format!(
+                        "blob IPC de {size} bytes excede o teto de {MAX_MSG}"
+                    )));
+                }
+                let mut blob = vec![0u8; size];
+                let mut off = 0u64;
+                while (off as usize) < size {
+                    let n = rustix::io::pread(&fd, &mut blob[off as usize..], off)
+                        .map_err(io::Error::from)?;
+                    if n == 0 {
+                        return Err(io::Error::other("pread no memfd devolveu 0 antes do fim"));
+                    }
+                    off += n as u64;
+                }
+                let (value, _) =
+                    bincode::serde::decode_from_slice::<T, _>(&blob, bincode::config::standard())
+                        .map_err(|e| io::Error::other(format!("bincode decode (memfd): {e}")))?;
+                return Ok(Some((value, Vec::new())));
+            }
+
+            let (value, _) = bincode::serde::decode_from_slice::<T, _>(
+                &buf[..got.bytes],
+                bincode::config::standard(),
+            )
+            .map_err(|e| io::Error::other(format!("bincode decode: {e}")))?;
+            Ok(Some((value, owned_fds)))
+        })
     }
 }
 
@@ -212,9 +257,10 @@ mod tests {
     use rustix::fd::AsFd;
 
     /// Datagrama grande (save state de SNES passa de 800KB) — o bug era o
-    /// `recv` truncar em silêncio num buffer fixo de 512KB.
+    /// `recv` truncar em silêncio num buffer fixo de 512KB. 2MB fica no
+    /// caminho inline (< `INLINE_MAX`).
     #[test]
-    fn roundtrips_a_message_bigger_than_the_old_512k_cap() {
+    fn roundtrips_a_2mb_message_inline() {
         let (a, b) = Channel::pair().unwrap();
         let payload: Vec<u8> = (0..2_000_000u32).map(|i| i as u8).collect();
         let sent = payload.clone();
@@ -224,6 +270,22 @@ mod tests {
         let (got, fds) = b.recv::<Vec<u8>>().unwrap().unwrap();
         h.join().unwrap();
         assert!(fds.is_empty());
+        assert_eq!(got, payload);
+    }
+
+    /// Save state de N64 (parallel_n64) passa de 16MB — não cabe num datagrama
+    /// SEQPACKET, vai por memfd anexado. 20MB > `INLINE_MAX`.
+    #[test]
+    fn roundtrips_a_20mb_message_via_memfd() {
+        let (a, b) = Channel::pair().unwrap();
+        let payload: Vec<u8> = (0..20_000_000u32).map(|i| (i ^ (i >> 7)) as u8).collect();
+        let sent = payload.clone();
+        let h = std::thread::spawn(move || {
+            a.send::<Vec<u8>>(&sent, &[]).unwrap();
+        });
+        let (got, fds) = b.recv::<Vec<u8>>().unwrap().unwrap();
+        h.join().unwrap();
+        assert!(fds.is_empty(), "o memfd não vaza pro consumidor");
         assert_eq!(got.len(), payload.len());
         assert_eq!(got, payload);
     }
@@ -241,9 +303,9 @@ mod tests {
         );
     }
 
-    /// O `MSG_PEEK` do passo 1 não pode consumir os fds do `SCM_RIGHTS`.
+    /// fds do `SCM_RIGHTS` chegam junto no `recv` (mensagem pequena + fds).
     #[test]
-    fn passes_fds_after_peeking_for_size() {
+    fn passes_fds_with_a_small_message() {
         let (a, b) = Channel::pair().unwrap();
         // dois fds quaisquer pra mandar via SCM_RIGHTS
         let (f1, f2) = net::socketpair(

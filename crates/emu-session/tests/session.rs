@@ -17,6 +17,19 @@ static LOCK: Mutex<()> = Mutex::new(());
 static NONCE: AtomicU32 = AtomicU32::new(0);
 
 fn lock() -> std::sync::MutexGuard<'static, ()> {
+    // `cargo test -p emu-session` isolado NÃO recompila o binário irmão
+    // `reemu-core-host` (crate separada) — sem isto os testes rodariam contra
+    // uma versão velha do IPC. `cargo test --workspace` (CI) já compila tudo,
+    // então lá isto é no-op rápido.
+    static BUILT: std::sync::Once = std::sync::Once::new();
+    BUILT.call_once(|| {
+        let ok = std::process::Command::new(env!("CARGO"))
+            .args(["build", "-p", "core-host-desktop", "--quiet"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        assert!(ok, "falha ao compilar reemu-core-host pros testes");
+    });
     LOCK.lock().unwrap_or_else(|p| p.into_inner())
 }
 
