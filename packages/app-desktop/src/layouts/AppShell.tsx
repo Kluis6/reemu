@@ -1,5 +1,5 @@
 import {
-  ArrowLeftRegular,
+  ChevronLeftRegular,
   FullScreenMaximizeRegular,
   FullScreenMinimizeRegular,
   HomeRegular,
@@ -27,6 +27,11 @@ import { useShellStyles } from "../styles/xbox";
 const useLocalStyles = makeStyles({
   // ícones da sidebar com o border-radius padrão do botão do Fluent
   railRadius: { borderRadius: tokens.borderRadiusMedium },
+  // botões de ícone da topbar: fundo igual ao item ativo da sidebar
+  surface: {
+    backgroundColor: "var(--reemuSurfaceSoft)",
+    ":hover": { backgroundColor: "var(--reemuSurfaceSoft)" },
+  },
 });
 
 const RAIL = [
@@ -104,7 +109,8 @@ export function AppShell() {
             <Tooltip content="Voltar para a tela anterior" relationship="label">
               <Button
                 appearance="subtle"
-                icon={<ArrowLeftRegular />}
+                className={l.surface}
+                icon={<ChevronLeftRegular />}
                 aria-label="Voltar"
                 onClick={() => navigate(-1)}
               />
@@ -145,6 +151,7 @@ export function AppShell() {
           >
             <Button
               appearance="subtle"
+              className={l.surface}
               aria-label={
                 fullscreen ? "Sair da tela cheia" : "Tela cheia"
               }

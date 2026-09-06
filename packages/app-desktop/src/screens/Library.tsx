@@ -39,6 +39,10 @@ import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles } from "../styles/xbox";
 
 const useLibStyles = makeStyles({
+  surface: {
+    backgroundColor: "var(--reemuSurfaceSoft)",
+    ":hover": { backgroundColor: "var(--reemuSurfaceSoft)" },
+  },
   bar: {
     display: "flex",
     alignItems: "center",
@@ -288,6 +292,7 @@ export function Library() {
           <Tooltip content="Adicionar ROM" relationship="label">
             <Button
               appearance="subtle"
+              className={l.surface}
               icon={<AddRegular />}
               aria-label="Adicionar ROM"
               onClick={() => setAddOpen(true)}
