@@ -25,6 +25,7 @@ mod loader;
 mod raw;
 mod sys;
 mod vk_context;
+mod vk_frame;
 mod vk_sys;
 
 pub use crate::core::DesktopCore;
