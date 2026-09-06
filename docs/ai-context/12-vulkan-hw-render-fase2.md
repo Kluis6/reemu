@@ -134,12 +134,25 @@ Modelo do `vk_rendering` / Beetle PSX (core NÃO submete — usa
   `GET_HW_RENDER_INTERFACE`) + `loader.rs::setup_vk_context`. Critério:
   teste headless carrega a `.so` do `vk_rendering`, roda N frames,
   `retro_run` sem crash, `set_image`/`set_command_buffers` chegam.
-- **Fase B** — backend in-process no `emu-session` (Vulkan não passa pelo
-  `ChildProc`); wgpu do `gpu.rs` reconstruído sobre o `ash::Device`
-  compartilhado quando um core Vulkan carrega; `FrameOrigin` novo
-  (`HardwareVulkanImage`) + `create_texture_from_hal` no `gpu.rs`; sync
-  conservador. Critério: triângulo do `vk_rendering` na tela, orientação
-  certa; depois Beetle PSX HW.
+- **Fase B** — o core Vulkan usa o MESMO `VkDevice` do wgpu.
+  - **B1 (feito)** — `domain::VulkanSharedDevice` (handles crus) +
+    `VkContext::adopt` (não destrói nada; o compositor é o dono).
+  - **B2 (feito)** — `FrameProcessor::vulkan_shared_device()`: lê os handles
+    do wgpu com `as_hal::<Vulkan>()`.
+    **Correção importante do plano:** NÃO é preciso inverter a init do wgpu
+    (`Instance::from_hal`/`Adapter::device_from_raw`). O `wgpu-hal` 30 expõe
+    `raw_device()`/`raw_physical_device()`/`raw_queue()`/
+    `queue_family_index()`/`shared_instance().entry()` do device que ele
+    mesmo criou — então o `FrameProcessor` continua sendo construído como
+    sempre e o core só adota. Some o pedaço mais invasivo da etapa.
+  - **B3** — backend in-process no `emu-session` (core Vulkan não passa pelo
+    `ChildProc`) repassando o `VulkanSharedDevice` pro
+    `loader::setup_vk_context`.
+  - **B4** — `FrameOrigin::HardwareVulkanImage` + `Device::texture_from_raw`
+    (`TextureMemory::External`, sem tomar posse da `VkImage` do core) +
+    barrier `COLOR_ATTACHMENT_WRITE → SHADER_READ`; sync conservador.
+  - Critério: triângulo do `vk_rendering` na tela, orientação certa; depois
+    Beetle PSX HW.
 - **Fase C** — sync fino (sem CPU-wait, barriers mínimos), validação sob
   carga (troca rápida de cena, resize, save/load state), flycast como 3º
   alvo, `provoking_vertex`/OIT reavaliados.
