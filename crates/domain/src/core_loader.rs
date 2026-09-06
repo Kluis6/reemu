@@ -29,6 +29,28 @@ pub struct CoreRenderRequirements {
     pub needs_depth_stencil: bool,
 }
 
+/// Handles crus de um `VkDevice` **já criado pelo compositor**, pra um core de
+/// HW render Vulkan (etapa 12) usar o MESMO device — a `VkImage` que ele
+/// entrega vira textura do compositor sem cópia.
+///
+/// Tudo `usize` de propósito: o `domain` não depende de `ash`/`wgpu`. O adapter
+/// (`core-loader-desktop`) reconstrói os tipos `ash` com `Instance::load` /
+/// `Device::load` a partir do `get_instance_proc_addr`. Handles Vulkan
+/// despacháveis são ponteiros, então `usize` os representa sem perda.
+///
+/// **Posse:** quem recebe isto NÃO destrói nada — o compositor é o dono.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VulkanSharedDevice {
+    /// `PFN_vkGetInstanceProcAddr` do loader, como inteiro.
+    pub get_instance_proc_addr: usize,
+    pub instance: usize,
+    pub physical_device: usize,
+    pub device: usize,
+    /// Queue com GRAPHICS+COMPUTE (exigência da spec do libretro Vulkan).
+    pub queue: usize,
+    pub queue_family_index: u32,
+}
+
 /// Um core instalado localmente. `render_requirements` fica `None` até o
 /// primeiro load detectar (decisão: runtime, sem curadoria).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

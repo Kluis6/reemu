@@ -67,10 +67,15 @@ struct DebugMessenger {
     handle: vk::DebugUtilsMessengerEXT,
 }
 
-/// Instância + dispositivo lógico + uma queue graphics/compute. Dono de tudo;
-/// derruba na ordem certa no `Drop`.
+/// Instância + dispositivo lógico + uma queue graphics/compute.
+///
+/// Dois modos:
+/// - **dono** (`create`): criamos tudo e destruímos no `Drop`. É o caminho do
+///   teste headless e do bring-up.
+/// - **adotado** (`adopt`): os handles vêm do compositor (`VulkanSharedDevice`)
+///   — o core Vulkan usa o MESMO device do wgpu, e o `Drop` NÃO destrói nada.
+///   É o caminho de produção da fase B (zero-cópia).
 pub(crate) struct VkContext {
-    // ordem de campo = ordem de drop (device antes de instance antes de entry).
     pub device: ash::Device,
     pub physical_device: vk::PhysicalDevice,
     pub queue: vk::Queue,
@@ -79,9 +84,13 @@ pub(crate) struct VkContext {
     /// `unlock_queue` em volta de QUALQUER `vkQueueSubmit` — o core submete os
     /// command buffers dele direto nesta queue.
     pub queue_lock: Mutex<()>,
+    get_instance_proc_addr: vk::PFN_vkGetInstanceProcAddr,
     debug: Option<DebugMessenger>,
     pub instance: ash::Instance,
-    pub entry: ash::Entry,
+    /// `Some` só no modo dono (mantém a libvulkan carregada).
+    _entry: Option<ash::Entry>,
+    /// `false` = handles do compositor; o `Drop` não destrói nada.
+    owns: bool,
 }
 
 // SAFETY: `ash::Device`/`Instance` são `Send + Sync` (só handles + tabelas de
@@ -173,6 +182,7 @@ impl VkContext {
         );
 
         Ok(VkContext {
+            get_instance_proc_addr: entry.static_fn().get_instance_proc_addr,
             device,
             physical_device,
             queue,
@@ -180,11 +190,67 @@ impl VkContext {
             queue_lock: Mutex::new(()),
             debug,
             instance,
-            entry,
+            _entry: Some(entry),
+            owns: true,
         })
     }
 
-    /// `true` se o layer de validação está ativo nesta instância.
+    /// Adota o device que o compositor já criou (`VulkanSharedDevice`) em vez de
+    /// criar um novo — é o que torna o frame zero-cópia: a `VkImage` que o core
+    /// entrega no `set_image` vive no MESMO device do wgpu, então vira
+    /// `wgpu::Texture` com `create_texture_from_hal`.
+    ///
+    /// Não destrói nada no `Drop` — o compositor é o dono.
+    pub fn adopt(shared: domain::core_loader::VulkanSharedDevice) -> Result<Self, String> {
+        if shared.get_instance_proc_addr == 0
+            || shared.instance == 0
+            || shared.device == 0
+            || shared.queue == 0
+        {
+            return Err("VulkanSharedDevice com handle nulo".into());
+        }
+        // SAFETY: o compositor garante que estes handles são válidos e vivos
+        // enquanto o core estiver carregado (ele cria antes e destrói depois).
+        // `usize -> PFN_*` é a mesma transmutação que o loader Vulkan faz.
+        let (get_instance_proc_addr, instance, device, physical_device, queue) = unsafe {
+            let gipa = std::mem::transmute::<usize, vk::PFN_vkGetInstanceProcAddr>(
+                shared.get_instance_proc_addr,
+            );
+            let static_fn = ash::StaticFn {
+                get_instance_proc_addr: gipa,
+            };
+            let instance_handle = std::mem::transmute::<usize, vk::Instance>(shared.instance);
+            let instance = ash::Instance::load(&static_fn, instance_handle);
+            let device_handle = std::mem::transmute::<usize, vk::Device>(shared.device);
+            let device = ash::Device::load(instance.fp_v1_0(), device_handle);
+            let physical_device =
+                std::mem::transmute::<usize, vk::PhysicalDevice>(shared.physical_device);
+            let queue = std::mem::transmute::<usize, vk::Queue>(shared.queue);
+            (gipa, instance, device, physical_device, queue)
+        };
+
+        let ctx = VkContext {
+            get_instance_proc_addr,
+            device,
+            physical_device,
+            queue,
+            queue_family_index: shared.queue_family_index,
+            queue_lock: Mutex::new(()),
+            debug: None, // o messenger é do compositor
+            instance,
+            _entry: None,
+            owns: false,
+        };
+        log::info!(
+            "contexto Vulkan ADOTADO do compositor ({}, queue family {})",
+            ctx.device_name(),
+            ctx.queue_family_index
+        );
+        Ok(ctx)
+    }
+
+    /// `true` se o layer de validação está ativo nesta instância (só no modo
+    /// dono — quando adotado, quem liga é o compositor).
     pub fn validation_active(&self) -> bool {
         self.debug.is_some()
     }
@@ -192,7 +258,7 @@ impl VkContext {
     /// `PFN_vkGetInstanceProcAddr` do loader — o campo homônimo de
     /// `retro_hw_render_interface_vulkan`.
     pub fn get_instance_proc_addr(&self) -> vk::PFN_vkGetInstanceProcAddr {
-        self.entry.static_fn().get_instance_proc_addr
+        self.get_instance_proc_addr
     }
 
     /// `PFN_vkGetDeviceProcAddr` — idem.
@@ -247,11 +313,16 @@ impl VkContext {
 
 impl Drop for VkContext {
     fn drop(&mut self) {
-        // SAFETY: nada mais usa o device/instância a partir daqui; espera a GPU
-        // ociosa antes de destruir (o core já foi desativado pelo chamador). O
-        // messenger tem que cair antes da instância.
+        // SAFETY: nada mais usa o device a partir daqui (o core já foi
+        // desativado pelo chamador); espera a GPU ficar ociosa.
         unsafe {
             let _ = self.device.device_wait_idle();
+        }
+        if !self.owns {
+            return; // handles do compositor — ele destrói
+        }
+        // SAFETY: somos donos; o messenger tem que cair antes da instância.
+        unsafe {
             self.device.destroy_device(None);
             if let Some(d) = &self.debug {
                 d.loader.destroy_debug_utils_messenger(d.handle, None);
