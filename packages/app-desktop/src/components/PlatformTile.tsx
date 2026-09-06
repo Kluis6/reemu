@@ -1,5 +1,4 @@
 import { makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
-import { GridDotsRegular } from "@fluentui/react-icons";
 import { initials } from "../lib/initials";
 import { useCardStyles } from "../styles/xbox";
 
@@ -12,10 +11,9 @@ const useStyles = makeStyles({
     padding: 0,
     cursor: "pointer",
     color: "inherit",
-    textAlign: "left",
   },
+  // 2×2 de capas, gap pequeno, cantos como os outros cards
   grid: {
-    position: "relative",
     width: "100%",
     height: "100%",
     borderRadius: tokens.borderRadiusLarge,
@@ -23,59 +21,48 @@ const useStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gridTemplateRows: "1fr 1fr",
-    gap: "2px",
-    backgroundColor: tokens.colorNeutralBackground3,
+    gap: "3px",
+    backgroundColor: tokens.colorNeutralBackground1,
+    padding: "3px",
     boxShadow: "0 6px 14px rgba(0, 0, 0, 0.22)",
   },
   cell: {
-    position: "relative",
     minWidth: 0,
     minHeight: 0,
     display: "grid",
     placeItems: "center",
-    backgroundColor: tokens.colorNeutralBackground4,
     overflow: "hidden",
+    borderRadius: tokens.borderRadiusSmall,
+    backgroundColor: tokens.colorNeutralBackground4,
     "& img": { width: "100%", height: "100%", objectFit: "cover" },
   },
-  init: { fontSize: "14px", opacity: 0.5 },
-  overlay: {
-    position: "absolute",
-    inset: 0,
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "flex-end",
-    padding: "8px",
-    gap: "3px",
-    background:
-      "linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.12) 55%, transparent 100%)",
-    color: tokens.colorNeutralForeground1,
-  },
-  label: { fontSize: "12px", fontWeight: 700, display: "flex", alignItems: "center", gap: "5px" },
-  sub: { fontSize: "11px", opacity: 0.85 },
+  init: { fontSize: "13px", opacity: 0.45 },
 });
 
 type Mini = { id: string; title: string; boxart?: string | null };
 
 /**
- * "Card de 4" no fim da prateleira de uma plataforma: 2×2 de capas + rótulo
- * "ver todos". Clicar leva pra `/library/<systemId>`.
+ * "Card de 4" no fim da prateleira de uma plataforma: 2×2 de capas, sem
+ * texto (estilo "Jump back in" do Xbox). Clicar leva pra `/library/<systemId>`.
  */
 export function PlatformTile({
-  label,
-  total,
   sample,
   onClick,
+  ariaLabel,
 }: {
-  label: string;
-  total: number;
   sample: readonly Mini[];
   onClick: () => void;
+  ariaLabel: string;
 }) {
   const s = useStyles();
   const c = useCardStyles();
   const cells = sample.slice(0, 4);
   return (
-    <button className={mergeClasses(c.card, s.tile)} onClick={onClick}>
+    <button
+      className={mergeClasses(c.card, s.tile)}
+      aria-label={ariaLabel}
+      onClick={onClick}
+    >
       <div className={s.grid}>
         {cells.map((m) => (
           <div key={m.id} className={s.cell}>
@@ -89,12 +76,6 @@ export function PlatformTile({
         {Array.from({ length: Math.max(0, 4 - cells.length) }).map((_, i) => (
           <div key={`e${i}`} className={s.cell} />
         ))}
-        <div className={s.overlay}>
-          <span className={s.label}>
-            <GridDotsRegular /> {label}
-          </span>
-          <span className={s.sub}>Ver todos os {total}</span>
-        </div>
       </div>
     </button>
   );

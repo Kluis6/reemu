@@ -101,45 +101,48 @@ Harness `gpu.rs::tests::field_validate_real_presets` (`#[ignore]`, fora do CI):
 `cargo test -p reemu-desktop --lib field_validate_real_presets -- --ignored --nocapture`
 (`REEMU_SHADER_DIR`, `REEMU_SHADER_LIMIT`, `REEMU_SHADER_FULL_ERR=1`).
 
-**Resultado: 1037/2554 = 40,6%** (era 722/28,3% antes do blocker #1 — ver
-`13f404f`). Fora dos 3 mega-pacotes, ~79%. Por categoria:
+**Resultado final (2026-09-06): 2368/2554 = 92,7%.** Lista dos que compilam:
+`docs/shaders/working-presets.txt`. Trajetória: 28,3% (fase 2) → 40,6%
+(blocker #1) → 60,8% → **92,7%**.
 
-| 100% | hdr · interpolation · pal · blurs · dithering · scanlines · motionblur · stereoscopic-3d · denoisers · sharpen · subframe-bfi · gpu · deblur · film |
+| 100% | scanline-classic · hdr · interpolation · pal · blurs · dithering · deinterlacing · scanlines · motionblur · stereoscopic-3d · denoisers · sharpen · subframe-bfi · downsample · gpu · cel · deblur · film |
 |---|---|
-| 84–98% | reshade 98 · downsample 95 · misc 92 · pixel-art… 91 · border 91 · ntsc 88 · edge-smoothing 84 |
-| 54–80% | vhs 71 · crt 70 · handheld 67 · anti-aliasing 67 · presets 65 · deinterlacing 55 |
-| baixo | bezel/uborder 39 · bezel/Mega_Bezel 23 (era 0) · bezel/scanline-classic 0 (602) · bezel/koko-aio 0 (179) |
+| 90–98% | Mega_Bezel 97 · koko-aio 97 · border 95 · misc 92 · pixel-art… 91 · edge-smoothing 90 · uborder 90 |
+| 70–88% | ntsc 88 · vhs 86 · handheld 78 · nes_raw_palette 80 · presets 71 · crt 71 |
+| baixo | anti-aliasing 67 |
 
-Duas correções saíram daí (no `53771e8`): `#reference` múltiplo (o Mega Bezel
-encadeia preset base + `.params`; só a última sobrevivia) e rewrite de sampler
-por identificador (cobre qualquer built-in, não só a lista fixa).
+**Todos os blockers grandes fechados:**
 
-**Blockers:**
+1. ~~`sampler2D` como parâmetro de função~~ **FEITO** (`13f404f`) — reescrita
+   cobre assinatura/corpo/call-site + `blank_comments`.
+2. ~~varying de struct/array (`NotIOShareableType`)~~ **FEITO** (`b14740f`) —
+   `flatten_io_aggregates` achata em `location`s escalares (+ `mat_shape`
+   pra `mat3`/`mat4` varying).
+3. ~~scanline-classic (602)~~ **FEITO** (`dbf5b84`) — `isinf`/`isnan` viram
+   helpers escalares (`patch_missing_builtins`; o backend WGSL do naga não
+   tem `UnsupportedRelationalFunction`).
+4. ~~koko-aio (179)~~ **FEITO** (`0fbfaba` + `dbf5b84`) — guard de `#include`
+   por estágio + reescrita de sampler não toca no NOME de `#define`.
+5. Macro que repassa sampler (`#define COMPAT_TEXTURE(c,d) HSM_...(c,d)`) —
+   `split_sampler_macros`, foi o que levou Mega_Bezel de 23% a 97%.
+6. Orientação — shaders slang saíam de cabeça pra baixo
+   (`adjust_coordinate_space: false`, `b14740f`).
 
-1. ~~**`sampler2D` como parâmetro de função do usuário**~~ **FEITO (`13f404f`)**
-   — a reescrita passou a cobrir assinatura, corpo e call-site, escolhendo entre
-   forma construtora (ponto de uso) e forma par (argumento). Junto veio
-   `blank_comments`: sem neutralizar comentário o Mega Bezel desbalanceava as
-   chaves (ele tem assinatura e código comentados) e a função corrente saía
-   errada — foi o que separou Mega Bezel 0% de 23%.
-2. **`NotIOShareableType` no vertex** — varying de struct/array, que o WGSL não
-   aceita; precisa achatar em `location`s escalares. Trava koko-aio (~179) +
-   smaa (~3). **Aberto.**
-3. **`bezel/scanline-classic` (602) segue em 0%** — causa ainda em apuração;
-   usa `sampler2D` de parâmetro com o MESMO nome do global (`bandlimit.inc`).
-4. **Mega_Bezel: 507 dos 660 ainda falham** — o resto do pacote tem outra causa
-   além do blocker #1.
+**Long-tail ~7% que ainda falha** (documentado em `docs/shaders/README.md`):
+família crt-royale (`#define tex <sampler>` no vertex, sampler só no
+fragment), gameboy/authentic_gbc/xbr multipass (`validação naga`), smaa
+(constructor num caso não coberto), helpers macro/forward-ref não resolvidos.
+`mipmap` NÃO é causa de falha de nenhum preset — segue de baixa prioridade
+(degrada silenciosamente).
 
-Não dá pra pular o rewrite de sampler: a sonda `compile.rs::probe::
-naga_accepts_combined_sampler` (`#[ignore]`) prova que o naga spv-in falha
-(`InvalidId`) com `uniform sampler2D` vindo do glslang — ele mapeia
-`OpTypeSampledImage` pro handle da imagem e perde o sampler.
+**Downloader de shaders — FEITO** (`3d29717`): `shader_pack.rs` baixa
+`libretro/slang-shaders` (~130 MB, streaming) pra `<dados>/shaders/`; botão
+"Baixar pacote de shaders" na `ShaderLibrary` com toast de progresso.
 
-`mipmap` NÃO apareceu como causa de falha em nenhum preset — segue de baixa
-prioridade.
+**TRILHA DO COMPILADOR SLANG: FECHADA.**
 
-**Depois disso, decisão pendente**: (B) etapa 12 Vulkan HW, (C) etapa 11
-Android, (D) auditoria de perf do caminho do core. Ver backlog abaixo.
+**Decisão pendente**: (B) etapa 12 Vulkan HW, (C) etapa 11 Android,
+(D) auditoria de perf do caminho do core. Ver backlog abaixo.
 
 ## Como atualizar
 
@@ -167,18 +170,17 @@ Renderização / filtros (independente da etapa 12):
 - ~~**Feedback / OriginalHistory / LUT no `gpu.rs`**~~ **feito (2026-09-05,
   `33765a3`)** — ring de history + cópia de feedback + LUTs do `.slangp`.
   Falta só `mipmap_input`/`mipmap` de LUT (gerar a cadeia de mips).
-- **Validar contra presets reais** — `slang-shaders` clonado; harness
-  `field_validate_real_presets` (`#[ignore]`) em `gpu.rs`. Produz a lista
-  curada (substitui o item "presets que já compilam no `naga`") e diz se
-  `mipmap` trava algum alvo. **Pré-requisito do downloader.**
-- **Downloader de pacote de shaders (opção B)** — botão "Baixar pacote de
-  shaders" espelhando `core_catalog.rs`: baixa o tarball de
-  `libretro/slang-shaders` pra `<dados>/shaders/` + aponta a `ShaderLibrary`
-  pra lá. ~2-3 dias. **Desbloqueado** (compilador + Feedback/LUT feitos) —
-  fazer depois da validação de campo.
+- ~~**Validar contra presets reais**~~ **FEITO (2026-09-06)** — 2368/2554 =
+  92,7%. `docs/shaders/working-presets.txt`. Ver o bloco "Validação de campo"
+  acima.
+- ~~**Downloader de pacote de shaders (opção B)**~~ **FEITO (`3d29717`)** —
+  `shader_pack.rs`; botão na `ShaderLibrary`.
 - **Mipmaps** (`mipmap_input` por passe + `mipmap` de LUT) — wgpu não gera
   automático: alocar com `mip_level_count` > 1 e fazer a cadeia de blits
-  down-sample. Só vale se a validação de campo mostrar preset alvo travado.
+  down-sample. **Nenhum preset falha por isso** (degrada em silêncio) — baixa
+  prioridade.
+- **Long-tail de shaders (~7%)** — crt-royale (`#define tex` no vertex),
+  gameboy/xbr multipass (validação naga), smaa. Ver `docs/shaders/README.md`.
 - **FSR 1.0 / RCAS / CAS como preset de upscaling** — destravado pelo
   compilador; espacial (1 frame), diferente de DLSS/FSR2/XeSS temporais que
   **não servem** pra emulação (sem motion vectors/depth/jitter — o core só

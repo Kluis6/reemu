@@ -304,8 +304,7 @@ export function Library() {
             {overflow && (
               <PlatformTile
                 key="more"
-                label={platformLabel(sys)}
-                total={plist.length}
+                ariaLabel={`Ver todos os ${plist.length} de ${platformLabel(sys)}`}
                 sample={rest}
                 onClick={goAll}
               />
