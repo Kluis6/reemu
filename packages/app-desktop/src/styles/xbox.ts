@@ -327,9 +327,11 @@ export const useBrowseStyles = makeStyles({
 
   grid: {
     display: "grid",
-    // `1fr` como máximo (não a largura fixa): em telas largas as colunas
-    // crescem pra ocupar a área toda em vez de amontoar os tiles à esquerda.
-    gridTemplateColumns: `repeat(auto-fill, minmax(${gameCardSize}, 1fr))`,
+    // largura FIXA por card (`gameCardSize` já escala com o viewport via
+    // `14vw`) — mesmo tamanho que os cards da prateleira; sobra margem à
+    // direita em telas largas, como no app do Xbox.
+    gridTemplateColumns: `repeat(auto-fill, ${gameCardSize})`,
+    justifyContent: "start",
     rowGap: "16px",
     columnGap: "16px",
     "& > *": { width: "100%", minWidth: 0 },
