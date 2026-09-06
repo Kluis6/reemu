@@ -25,11 +25,6 @@ import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
 
 const useLocalStyles = makeStyles({
-  topbarBtn: {
-    backgroundColor: "var(--reemuSurfaceSoft)",
-    ":hover": { backgroundColor: "var(--reemuSurfaceSoft)", filter: "brightness(1.15)" },
-    ":hover:active": { backgroundColor: "var(--reemuSurfaceSoft)", filter: "brightness(0.95)" },
-  },
   // ícones da sidebar com o border-radius padrão do botão do Fluent
   railRadius: { borderRadius: tokens.borderRadiusMedium },
 });
@@ -109,7 +104,6 @@ export function AppShell() {
             <Tooltip content="Voltar para a tela anterior" relationship="label">
               <Button
                 appearance="subtle"
-                className={l.topbarBtn}
                 icon={<ArrowLeftRegular />}
                 aria-label="Voltar"
                 onClick={() => navigate(-1)}
@@ -151,7 +145,6 @@ export function AppShell() {
           >
             <Button
               appearance="subtle"
-              className={l.topbarBtn}
               aria-label={
                 fullscreen ? "Sair da tela cheia" : "Tela cheia"
               }
