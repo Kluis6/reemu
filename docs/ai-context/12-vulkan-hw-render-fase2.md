@@ -145,14 +145,55 @@ Modelo do `vk_rendering` / Beetle PSX (core NÃO submete — usa
     `queue_family_index()`/`shared_instance().entry()` do device que ele
     mesmo criou — então o `FrameProcessor` continua sendo construído como
     sempre e o core só adota. Some o pedaço mais invasivo da etapa.
-  - **B3** — backend in-process no `emu-session` (core Vulkan não passa pelo
-    `ChildProc`) repassando o `VulkanSharedDevice` pro
-    `loader::setup_vk_context`.
-  - **B4** — `FrameOrigin::HardwareVulkanImage` + `Device::texture_from_raw`
-    (`TextureMemory::External`, sem tomar posse da `VkImage` do core) +
-    barrier `COLOR_ATTACHMENT_WRITE → SHADER_READ`; sync conservador.
-  - Critério: triângulo do `vk_rendering` na tela, orientação certa; depois
-    Beetle PSX HW.
+  - **B4 (feito)** — `FrameOrigin::HardwareVulkanImage` +
+    `FrameProcessor::bind_vulkan_input`/`wrap_vulkan_image`:
+    `Device::texture_from_raw` (`TextureMemory::External`, `drop_callback`
+    no-op, `initial_state = RESOURCE`) cacheado por `sync_index`; alimenta
+    `self.interop_view` — a chain trata igual ao interop GL.
+    `core::next_vk_frame` devolve o `Frame` (era `None`): submete os cmd
+    buffers do core + CPU-wait no fence + embrulha a `VkImage`.
+    `DesktopCoreLoader::with_vulkan_shared_device()` faz o `adopt`.
+  - **B3a (feito) — threading: opção 4 (a thread do core só GRAVA; o
+    compositor SUBMETE).** O problema era `vkQueueSubmit` na MESMA `VkQueue`
+    de duas threads (core-loop + render do wgpu) = UB (Vulkan exige sync
+    externo na queue e não dá pra hookar o `wgpu::Queue::submit`). Descartadas:
+    (1) mover o core pra thread do compositor — restruturação grande;
+    (2) `Mutex` em volta de todo `queue.submit` — frágil (`write_buffer`/
+    `write_texture` do wgpu submetem por fora); (3) aceitar a corrida — UB.
+    **Opção 4:** o core, em `set_command_buffers`, só grava os cmd buffers;
+    quem chama `vkQueueSubmit` é sempre a thread do compositor (junto do
+    submit do wgpu). Peças:
+    - `vk_frame.rs`: `VkFrameSync` (`Arc`, `Send + Sync`) — gate por-slot
+      "geração já liberada". O core, no `wait_sync_index`, bloqueia num
+      `Condvar` até o compositor (ou o descarte de frame) liberar o uso
+      anterior daquele slot — senão o core reescreveria o command pool de um
+      slot que o compositor ainda submete (UB). `take_pending()` (era
+      `submit_pending`) pega os cmd buffers SEM submeter.
+    - `VkImageFrame` carrega os cmd buffers + o fence; `Drop` → `release()`
+      do slot (idempotente) — funciona pra quem largar o `Frame` (compositor
+      após processar, ou `emu-session` descartando frame atrasado).
+    - `domain::VulkanImageHandle` += `command_buffers()` / `fence()` /
+      `release()`.
+    - `gpu.rs::submit_vulkan_cmds`: na thread do compositor, `vkQueueSubmit`
+      dos cmd buffers do core + `vkWaitForFences` (sync conservador da fase
+      B). Chamado por `bind_vulkan_input` antes do `wrap`.
+    Teste e2e (`#[ignore]`, `apps/desktop/src-tauri/src/gpu.rs`): `vk_rendering`
+    adota o `VkDevice` do compositor → renderiza o triângulo → `FrameProcessor`
+    amostra com `texture_from_raw` → chain → readback. Verde: frame 1,
+    320×240, 1º pixel `[204, 153, 51, 255]` (= clear RGB 0.8, 0.6, 0.2), sem
+    erros da validação Vulkan.
+  - **B3b (PENDENTE)** — o `emu-session` roda o core Vulkan **in-process**
+    (roteamento). Hoje o `emu-session` manda todo core pro `reemu-core-host`
+    (processo-filho, [[n64-reload-crash]]); o core Vulkan tem que ficar no
+    processo pai (device compartilhado com o wgpu). Falta o roteamento: quando
+    `REEMU_HW=vulkan` e o core negocia Vulkan, instanciar o `DesktopCore`
+    localmente com `with_vulkan_shared_device(FrameProcessor::vulkan_shared_device())`
+    em vez do `ChildCore`, e ligar o `VkFrameSync` no caminho de descarte de
+    frame do `emu-session`.
+    Fase C traz o sync fino de qualquer jeito (`set_signal_semaphore` do core
+    → `Queue::add_wait_semaphore` do wgpu-hal, que existe na 30).
+  - Critério: triângulo do `vk_rendering` na tela pelo caminho normal do app
+    (`emu-session`), orientação certa; depois Beetle PSX HW.
 - **Fase C** — sync fino (sem CPU-wait, barriers mínimos), validação sob
   carga (troca rápida de cena, resize, save/load state), flycast como 3º
   alvo, `provoking_vertex`/OIT reavaliados.

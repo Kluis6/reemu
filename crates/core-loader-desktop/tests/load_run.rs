@@ -75,7 +75,9 @@ async fn software_core_loads_runs_and_produces_frames() {
                 assert_eq!(data.len(), 64 * 48 * 2);
                 colors.push((data[0], data[1]));
             }
-            FrameOrigin::HardwareTexture(_) => panic!("core software não deveria dar textura HW"),
+            FrameOrigin::HardwareTexture(_) | FrameOrigin::HardwareVulkanImage(_) => {
+                panic!("core software não deveria dar textura HW")
+            }
         }
     }
     assert!(

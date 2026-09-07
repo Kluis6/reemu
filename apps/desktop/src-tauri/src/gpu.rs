@@ -351,6 +351,11 @@ pub struct FrameProcessor {
     /// um por slot do ring. `interop_ok` = o device tem a feature.
     interop_ok: bool,
     imported: Vec<Option<(wgpu::Texture, wgpu::TextureView)>>,
+    /// HW render Vulkan (etapa 12): `VkImage` do core embrulhada com
+    /// `texture_from_raw` no MESMO device, cacheada por `sync_index`
+    /// (`(handle_da_VkImage, tex, view)`) — o core cicla um conjunto fixo de
+    /// imagens. Zero cópia, sem `dma_buf`.
+    vk_imported: Vec<Option<(u64, wgpu::Texture, wgpu::TextureView)>>,
     /// Alvo por slot pra inverter o Y do `dma_buf` (cores GL renderizam
     /// bottom-left) — só alocado quando `flip_y`.
     flip_tgt: Vec<Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>>,
@@ -460,6 +465,7 @@ impl FrameProcessor {
             viewport: (0, 0),
             interop_ok,
             imported: Vec::new(),
+            vk_imported: Vec::new(),
             flip_tgt: Vec::new(),
             flip,
             interop_view: None,
@@ -953,6 +959,14 @@ impl FrameProcessor {
                     p.bound = false;
                 }
             }
+            FrameOrigin::HardwareVulkanImage(handle) => {
+                if !self.bind_vulkan_input(handle.as_ref()) {
+                    return None;
+                }
+                for p in &mut self.passes {
+                    p.bound = false;
+                }
+            }
         }
 
         // dimensões de cada alvo (`viewport` usa o tamanho real da saída).
@@ -1382,6 +1396,158 @@ impl FrameProcessor {
         for p in &mut self.passes {
             p.bound = false;
         }
+    }
+
+    /// HW render Vulkan (etapa 12): embrulha a `VkImage` que o core entregou
+    /// com `texture_from_raw` (MESMO device, sem cópia) e a seleciona como
+    /// entrada da chain. Cacheia por `sync_index` — o core cicla um conjunto
+    /// fixo de imagens. `false` = falha → canvas vazio.
+    fn bind_vulkan_input(&mut self, handle: &dyn domain::frame_source::VulkanImageHandle) -> bool {
+        let slot = handle.sync_index() as usize;
+        if slot >= 8 {
+            return false;
+        }
+        // Opção 4: a thread do core só GRAVOU os command buffers; nós (thread do
+        // compositor) submetemos, aqui, na MESMA thread que faz o submit do
+        // wgpu — sem corrida na VkQueue. Sync conservador: CPU-wait no fence.
+        if !self.submit_vulkan_cmds(handle) {
+            return false;
+        }
+        if self.vk_imported.len() <= slot {
+            self.vk_imported.resize_with(slot + 1, || None);
+        }
+        let img_handle = handle.image();
+        let stale = self.vk_imported[slot]
+            .as_ref()
+            .map_or(true, |(cached, _, _)| *cached != img_handle);
+        if stale {
+            match self.wrap_vulkan_image(handle) {
+                Some(tv) => self.vk_imported[slot] = Some((img_handle, tv.0, tv.1)),
+                None => return false,
+            }
+        }
+        let Some((_, _, view)) = self.vk_imported.get(slot).and_then(|s| s.as_ref()) else {
+            return false;
+        };
+        self.interop_view = Some(view.clone());
+        true
+    }
+
+    /// Submete na `VkQueue` do wgpu os command buffers que o core gravou pra
+    /// este frame (`set_command_buffers`), sinaliza `fence`, e espera (CPU) —
+    /// sync conservador da fase B. `handle.command_buffers()` vazio = frame
+    /// dup (só re-seleciona a textura). `false` = erro de submissão.
+    ///
+    /// `handle.release()` (chamado no `Drop` do `Frame`) destrava o
+    /// `wait_sync_index` do core pra este slot.
+    fn submit_vulkan_cmds(&self, handle: &dyn domain::frame_source::VulkanImageHandle) -> bool {
+        use ash::vk::Handle as _;
+        let cmds = handle.command_buffers();
+        if cmds.is_empty() {
+            return true;
+        }
+        let fence = ash::vk::Fence::from_raw(handle.fence());
+        if fence.is_null() {
+            log::warn!("vk frame sem fence — pulando");
+            return false;
+        }
+        let cmd_bufs: Vec<ash::vk::CommandBuffer> = cmds
+            .iter()
+            .map(|&c| ash::vk::CommandBuffer::from_raw(c))
+            .collect();
+
+        // SAFETY: `hal_queue`/`hal_dev` são do MESMO device que o core adotou;
+        // `cmd_bufs` foram gravados pelo core e não estão submetidos. Estamos na
+        // thread do compositor — nenhum outro submit concorre.
+        let ok = unsafe {
+            let Some(hal_queue) = self.queue.as_hal::<wgpu::hal::api::Vulkan>() else {
+                return false;
+            };
+            let raw_queue = hal_queue.as_raw();
+            let raw_device = hal_queue.raw_device().clone();
+            drop(hal_queue);
+
+            let submit = ash::vk::SubmitInfo::default().command_buffers(&cmd_bufs);
+            if let Err(e) = raw_device.queue_submit(raw_queue, &[submit], fence) {
+                log::warn!("vkQueueSubmit (core cmds): {e}");
+                return false;
+            }
+            match raw_device.wait_for_fences(&[fence], true, u64::MAX) {
+                Ok(()) => {
+                    let _ = raw_device.reset_fences(&[fence]);
+                    true
+                }
+                Err(e) => {
+                    log::warn!("vkWaitForFences (core cmds): {e}");
+                    false
+                }
+            }
+        };
+        ok
+    }
+
+    /// `VkImage` do core → `(wgpu::Texture, TextureView)` sem cópia. O core já
+    /// deixou a imagem em `SHADER_READ_ONLY_OPTIMAL` (barrier no cmd buffer
+    /// dele) e o adapter já esperou (CPU) a submissão — então passamos
+    /// `initial_state = RESOURCE`. `drop_callback = Some(no-op)` diz ao
+    /// wgpu-hal pra NÃO destruir a imagem (é do core).
+    fn wrap_vulkan_image(
+        &self,
+        handle: &dyn domain::frame_source::VulkanImageHandle,
+    ) -> Option<(wgpu::Texture, wgpu::TextureView)> {
+        let (w, h) = (handle.width().max(1), handle.height().max(1));
+        let format = vk_format_to_wgpu(handle.vk_format());
+        let size = wgpu::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        };
+        let hal_desc = wgpu::hal::TextureDescriptor {
+            label: Some("vk hw-render image"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUses::RESOURCE,
+            memory_flags: wgpu::hal::MemoryFlags::empty(),
+            view_formats: vec![],
+        };
+        // SAFETY: `image` é uma VkImage viva do MESMO device (o core adotou o
+        // nosso). `Some(no-op)` = external, wgpu não destrói. `initial_state`
+        // bate com o layout real (o core faz o release barrier + CPU-wait).
+        let hal_tex = unsafe {
+            use ash::vk::Handle as _;
+            let vk_image = ash::vk::Image::from_raw(handle.image());
+            let hal_dev = self.device.as_hal::<wgpu::hal::api::Vulkan>()?;
+            hal_dev.texture_from_raw(
+                vk_image,
+                &hal_desc,
+                Some(Box::new(|| {})),
+                wgpu::hal::vulkan::TextureMemory::External,
+            )
+        };
+        let desc = wgpu::TextureDescriptor {
+            label: Some("vk hw-render"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        };
+        // SAFETY: `hal_tex` recém-embrulhado deste device; layout coerente.
+        let tex = unsafe {
+            self.device
+                .create_texture_from_hal::<wgpu::hal::api::Vulkan>(
+                    hal_tex,
+                    &desc,
+                    wgpu::TextureUses::RESOURCE,
+                )
+        };
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        Some((tex, view))
     }
 
     /// Importa (1ª vez do slot) e seleciona a textura `dma_buf` como entrada da
@@ -2500,6 +2666,22 @@ fn new_tex_fmt(
     (t, v)
 }
 
+/// `VkFormat` cru → `wgpu::TextureFormat`. Só os formatos que os cores-alvo de
+/// HW render Vulkan usam pro scanout (todos 8-bit RGBA/BGRA). Fallback
+/// `Rgba8Unorm` com aviso.
+fn vk_format_to_wgpu(vk_format: u32) -> wgpu::TextureFormat {
+    match vk_format {
+        37 => wgpu::TextureFormat::Rgba8Unorm, // R8G8B8A8_UNORM (vk_rendering)
+        43 => wgpu::TextureFormat::Rgba8UnormSrgb, // R8G8B8A8_SRGB
+        44 => wgpu::TextureFormat::Bgra8Unorm, // B8G8R8A8_UNORM
+        50 => wgpu::TextureFormat::Bgra8UnormSrgb, // B8G8R8A8_SRGB
+        other => {
+            log::warn!("VkFormat {other} inesperado no scanout do core — assumindo Rgba8Unorm");
+            wgpu::TextureFormat::Rgba8Unorm
+        }
+    }
+}
+
 fn f32s_bytes(s: &[f32]) -> &[u8] {
     // SAFETY: `f32` não tem padding nem invariantes de bit.
     unsafe { std::slice::from_raw_parts(s.as_ptr() as *const u8, std::mem::size_of_val(s)) }
@@ -2531,6 +2713,76 @@ mod tests {
                 rotation_degrees: 0,
             },
         }
+    }
+
+    /// Etapa 12 ponta-a-ponta (fase B): o core de teste `vk_rendering` adota o
+    /// `VkDevice` do compositor, renderiza o triângulo numa `VkImage`, e o
+    /// `FrameProcessor` a amostra com `texture_from_raw` (zero cópia) + roda a
+    /// chain. Confere que sai pixel colorido (o core limpa pra 0.8,0.6,0.2).
+    ///
+    /// `#[ignore]`: precisa de GPU + `scripts/build-vk-test-core.sh`.
+    #[test]
+    #[ignore = "precisa de ICD Vulkan + scripts/build-vk-test-core.sh"]
+    fn vk_hw_render_core_frame_reaches_the_chain() {
+        use core_loader_desktop::DesktopCoreLoader;
+        use domain::core_loader::CoreId;
+        use domain::frame_source::FrameSource;
+
+        if std::env::var_os("REEMU_NO_GPU").is_some() {
+            return;
+        }
+        let core_path = {
+            let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../target/vk-test-core/testvulkan_libretro.so");
+            if !root.is_file() {
+                eprintln!("core de teste ausente — rode scripts/build-vk-test-core.sh");
+                return;
+            }
+            root
+        };
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        let Some(shared) = fp.vulkan_shared_device() else {
+            eprintln!("backend wgpu não-Vulkan — pulando");
+            return;
+        };
+
+        let tmp = std::env::temp_dir();
+        let rom = tmp.join(format!("reemu-vkchain-{}.bin", std::process::id()));
+        std::fs::write(&rom, b"").unwrap();
+
+        let mut core = DesktopCoreLoader::new(tmp.clone(), tmp.clone(), tmp)
+            .with_vulkan_shared_device(shared)
+            .open_core(
+                &CoreId(core_path.to_string_lossy().into_owned()),
+                rom.to_str().unwrap(),
+            )
+            .expect("carregar o core de teste Vulkan adotando o device do wgpu");
+
+        // Alguns frames: o 1º prima o readback com pipeline (None), depois vem.
+        let mut got_color = false;
+        for i in 0..8 {
+            let Some(frame) = core.next_frame() else {
+                continue;
+            };
+            if let Some((w, h, rgba)) = fp.process(&frame) {
+                assert_eq!(rgba.len(), (w * h * 4) as usize);
+                // fundo do core = RGB (0.8, 0.6, 0.2) ≈ (204, 153, 51).
+                let bright = rgba.chunks(4).any(|p| p[0] > 20 && p[1] > 20);
+                if bright {
+                    got_color = true;
+                    eprintln!("frame {i}: {w}x{h}, 1º pixel = {:?}", &rgba[..4]);
+                    break;
+                }
+            }
+        }
+        let _ = std::fs::remove_file(&rom);
+        assert!(
+            got_color,
+            "a chain nunca recebeu um frame colorido do core Vulkan"
+        );
     }
 
     /// Etapa 12: os handles Vulkan que exportamos pro core de HW render têm

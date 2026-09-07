@@ -26,6 +26,11 @@ pub struct DesktopCoreLoader {
     installed: Option<Arc<dyn InstalledCoreRepository>>,
     /// Cache em memória dos requisitos já descobertos nesta sessão.
     known: Mutex<HashMap<String, CoreRenderRequirements>>,
+    /// `Some` = um core de HW render Vulkan (etapa 12) deve ADOTAR este
+    /// `VkDevice` (o do compositor wgpu) em vez de criar um novo — é o que
+    /// torna o frame zero-cópia. Só faz sentido quando o loader roda no mesmo
+    /// processo do compositor (não no `reemu-core-host`).
+    vk_shared_device: Option<domain::core_loader::VulkanSharedDevice>,
 }
 
 impl DesktopCoreLoader {
@@ -40,7 +45,19 @@ impl DesktopCoreLoader {
             save_dir: save_dir.into(),
             installed: None,
             known: Mutex::new(HashMap::new()),
+            vk_shared_device: None,
         }
+    }
+
+    /// Faz os cores de HW render Vulkan adotarem o `VkDevice` do compositor
+    /// (`FrameProcessor::vulkan_shared_device()`) — zero-cópia. Ver
+    /// `docs/ai-context/12-vulkan-hw-render-fase2.md` (fase B).
+    pub fn with_vulkan_shared_device(
+        mut self,
+        shared: domain::core_loader::VulkanSharedDevice,
+    ) -> Self {
+        self.vk_shared_device = Some(shared);
+        self
     }
 
     /// Liga o repositório de `installed_cores` (etapa 01) — os requisitos de
@@ -269,7 +286,8 @@ impl DesktopCoreLoader {
             }
             RenderBackend::Vulkan => {
                 let req = hw.expect("Vulkan backend sem HwRenderRequest");
-                let bridge = setup_vk_context(&core_id.0, &req).inspect_err(|_| teardown(&raw))?;
+                let bridge = setup_vk_context(&core_id.0, &req, self.vk_shared_device)
+                    .inspect_err(|_| teardown(&raw))?;
                 (None, Some(bridge))
             }
         };
@@ -344,16 +362,26 @@ fn setup_gl_context(
 fn setup_vk_context(
     core_id: &str,
     req: &HwRenderRequest,
+    shared: Option<domain::core_loader::VulkanSharedDevice>,
 ) -> Result<Box<VkFrameBridge>, CoreLoadError> {
-    let mut cfg = VkConfig::default();
-    if req.version_major >= 0x0040_0000 {
-        // O core pediu uma apiVersion concreta (ex.: flycast manda
-        // VK_API_VERSION_1_1). `version_minor` do libretro fica 0 nesses cores.
-        cfg.api_version = req.version_major;
-    }
-    let ctx = VkContext::create(&cfg).map_err(|e| {
-        CoreLoadError::HwRenderUnsupported(format!("{core_id}: contexto Vulkan: {e}"))
-    })?;
+    let ctx = match shared {
+        // Fase B: adota o device do compositor -> frame zero-copia.
+        Some(s) => VkContext::adopt(s).map_err(|e| {
+            CoreLoadError::HwRenderUnsupported(format!("{core_id}: adotar device Vulkan: {e}"))
+        })?,
+        // Bring-up / teste headless: cria um device proprio.
+        None => {
+            let mut cfg = VkConfig::default();
+            if req.version_major >= 0x0040_0000 {
+                // O core pediu uma apiVersion concreta (ex.: flycast manda
+                // VK_API_VERSION_1_1). `version_minor` fica 0 nesses cores.
+                cfg.api_version = req.version_major;
+            }
+            VkContext::create(&cfg).map_err(|e| {
+                CoreLoadError::HwRenderUnsupported(format!("{core_id}: contexto Vulkan: {e}"))
+            })?
+        }
+    };
     log::info!(
         "contexto Vulkan pronto pra {core_id} ({})",
         ctx.device_name()

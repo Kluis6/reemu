@@ -362,6 +362,12 @@ fn send_frame(
                 &[],
             );
         }
+        FrameOrigin::HardwareVulkanImage(_) => {
+            // HW render Vulkan (etapa 12) roda IN-PROCESS no pai (device do
+            // compositor). Se chegou aqui é bug de roteamento — a VkImage não
+            // cruza processo.
+            log::error!("frame Vulkan no core-host (bug): HW render Vulkan é in-process");
+        }
         FrameOrigin::HardwareTexture(handle) => {
             let flip_y = handle.flip_y();
             let slot = handle.slot();

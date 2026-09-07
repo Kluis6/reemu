@@ -70,6 +70,41 @@ pub trait GpuTextureHandle: Send {
     }
 }
 
+/// Handle pra a `VkImage` que um core de HW render Vulkan (etapa 12) entregou.
+/// A imagem vive no MESMO `VkDevice` do compositor (o core adotou via
+/// `VulkanSharedDevice`), então o compositor a embrulha com
+/// `wgpu::Device::texture_from_raw` — zero cópia.
+///
+/// Handles como `usize` de propósito: o `domain` não depende de `ash`/`wgpu`.
+///
+/// **Sincronização:** quando este handle chega ao compositor, o adapter JÁ
+/// esperou (CPU) a submissão do core terminar — a imagem está pronta pra
+/// amostrar. O compositor ainda insere o barrier
+/// `COLOR_ATTACHMENT_WRITE -> SHADER_READ` antes do primeiro uso.
+pub trait VulkanImageHandle: Send {
+    /// `VkImage` (não-dispatchable, mas ponteiro-sized) como inteiro.
+    fn image(&self) -> u64;
+    /// `VkImageView` que o core criou pra essa imagem.
+    fn image_view(&self) -> u64;
+    /// `VkFormat` cru (ex.: `VK_FORMAT_R8G8B8A8_UNORM` = 37).
+    fn vk_format(&self) -> u32;
+    fn width(&self) -> u32;
+    fn height(&self) -> u32;
+    /// Índice do slot em voo (`get_sync_index`) — o compositor pode cachear a
+    /// `wgpu::Texture` por slot já que o core cicla um conjunto fixo de imagens.
+    fn sync_index(&self) -> u32;
+    /// Command buffers (`VkCommandBuffer` como u64) que o core gravou pra este
+    /// frame e que o COMPOSITOR tem que submeter (a thread do core não submete
+    /// — evita corrida na `VkQueue`). Vazio = frame dup / o core já submeteu.
+    fn command_buffers(&self) -> &[u64];
+    /// `VkFence` (u64) pra o compositor sinalizar no `vkQueueSubmit` e esperar.
+    fn fence(&self) -> u64;
+    /// Libera o slot pro core reusar — chamado pelo compositor após submeter e
+    /// esperar, ou pelo `emu-session` ao descartar um frame atrasado.
+    /// Idempotente. (Também dispara no `Drop` do handle.)
+    fn release(&self);
+}
+
 pub enum FrameOrigin {
     /// Core software-only: buffer de pixels crus que precisa ser subido
     /// pra uma textura pela camada global antes de entrar no pipeline.
@@ -79,9 +114,11 @@ pub enum FrameOrigin {
         pitch: u32,
         format: SoftwarePixelFormat,
     },
-    /// Core hardware-accelerated: já entregou uma textura pronta via
-    /// negociação de HW render (GL ou Vulkan).
+    /// Core hardware-accelerated GL: `dma_buf` importado como textura wgpu.
     HardwareTexture(Box<dyn GpuTextureHandle>),
+    /// Core hardware-accelerated Vulkan (etapa 12): `VkImage` no device do
+    /// compositor, embrulhada com `texture_from_raw`.
+    HardwareVulkanImage(Box<dyn VulkanImageHandle>),
 }
 
 pub struct Frame {

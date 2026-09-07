@@ -45,6 +45,9 @@ tokio = { version = "1", features = ["time", "rt"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
+# Teste ponta-a-ponta do HW render Vulkan (etapa 12): carrega o core de teste
+# adotando o VkDevice do compositor.
+core-loader-desktop = { path = "../../../crates/core-loader-desktop" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # `wl_subsurface` da janela GTK pro vídeo nativo em Wayland (ver src/video.rs).

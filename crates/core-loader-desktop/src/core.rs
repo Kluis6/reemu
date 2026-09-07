@@ -46,11 +46,16 @@ impl DesktopCore {
         }
     }
 
-    /// Frames que o core Vulkan entregou (`set_image` +
-    /// `set_command_buffers`) e que submetemos. `None` = não é core Vulkan.
-    /// Diagnóstico — é o que o teste de HW render Vulkan checa.
-    pub fn vk_frames_submitted(&self) -> Option<u64> {
-        Some(self.vk.as_ref()?.frames_submitted())
+    /// Frames que o core Vulkan entregou (`set_image` + `set_command_buffers`).
+    /// `None` = não é core Vulkan. Diagnóstico — é o que o teste checa.
+    pub fn vk_frames_delivered(&self) -> Option<u64> {
+        Some(self.vk.as_ref()?.frames_delivered())
+    }
+
+    /// Handle de coordenação de slot do HW render Vulkan — o `emu-session` o
+    /// clona pra liberar frames descartados. `None` = não é core Vulkan.
+    pub fn vk_sync(&self) -> Option<std::sync::Arc<crate::vk_frame::VkFrameSync>> {
+        Some(self.vk.as_ref()?.sync())
     }
 
     /// PCM interleaved (estéreo, i16, na `sample_rate` do core) acumulado
@@ -250,29 +255,36 @@ impl DesktopCore {
         })
     }
 
-    /// Frame de HW render Vulkan (etapa 12). Fase A: submete o que o core
-    /// entregou (`set_command_buffers`) e espera a GPU — mas ainda NÃO há
-    /// caminho pro compositor (`create_texture_from_hal` é a fase B), então
-    /// devolve `None` (o compositor mantém o frame anterior).
+    /// Frame de HW render Vulkan (etapa 12). Submete os command buffers que o
+    /// core entregou (`set_command_buffers`), espera a GPU (sync conservador),
+    /// e devolve a `VkImage` embrulhada num `VulkanImageHandle` — o compositor
+    /// faz `texture_from_raw` no MESMO device, sem cópia.
     fn next_vk_frame(&mut self) -> Option<Frame> {
-        {
+        let (w, h, rotation_degrees) = {
             let mut guard = ffi_state::lock();
             let st = guard.as_mut()?;
             if !st.had_new_frame {
                 return None;
             }
             st.had_new_frame = false;
-            st.hw_frame.take()?;
-        }
+            let (w, h) = st.hw_frame.take()?;
+            (w, h, st.rotation_degrees)
+        };
         let vk = self.vk.as_ref()?;
-        match vk.submit_pending(true) {
-            Ok(Some(img)) => {
-                log::trace!("vk frame pronto (sync_index {})", img.sync_index);
-            }
-            Ok(None) => {}
-            Err(e) => log::warn!("vk submit_pending: {e}"),
-        }
-        None // fase B liga isto no compositor
+        let pending = vk.take_pending()?;
+        let sync = vk.sync();
+        let ar = self.aspect_ratio(w, h);
+        Some(Frame {
+            origin: FrameOrigin::HardwareVulkanImage(Box::new(crate::vk_frame::VkImageFrame::new(
+                pending, w, h, sync,
+            ))),
+            metadata: FrameMetadata {
+                native_width: w,
+                native_height: h,
+                aspect_ratio: ar,
+                rotation_degrees,
+            },
+        })
     }
 }
 

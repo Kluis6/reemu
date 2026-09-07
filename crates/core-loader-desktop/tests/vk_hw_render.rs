@@ -22,7 +22,7 @@
 
 use core_loader_desktop::DesktopCoreLoader;
 use domain::core_loader::{CoreId, LoadedCore, RenderBackend};
-use domain::frame_source::FrameSource;
+use domain::frame_source::{FrameOrigin, FrameSource};
 use std::path::PathBuf;
 
 /// `target/vk-test-core/testvulkan_libretro.so` (ou `$REEMU_VK_TEST_CORE`).
@@ -69,23 +69,30 @@ fn vulkan_test_core_negotiates_and_delivers_frames() {
         "o core devia ter negociado RETRO_HW_CONTEXT_VULKAN"
     );
 
-    // Mais frames que o RING (3) — exercita a volta do fence ring e o
-    // `wait_sync_index` no slot já submetido.
+    // Mais frames que o RING (3) — exercita a volta do slot e o
+    // `wait_sync_index` (que aqui destrava porque o `Drop` do handle libera o
+    // slot na hora, já que não fazemos nada com o `Frame`).
     const FRAMES: usize = 10;
-    for _ in 0..FRAMES {
-        // Fase A não entrega `Frame` (o caminho pro compositor é a fase B);
-        // o que importa é rodar sem crash/erro de submissão.
-        let _ = core.next_frame();
+    for i in 0..FRAMES {
+        let frame = core.next_frame().unwrap_or_else(|| panic!("frame {i}"));
+        match frame.origin {
+            FrameOrigin::HardwareVulkanImage(h) => {
+                assert_ne!(h.image(), 0, "VkImage nula no frame {i}");
+                assert!(
+                    !h.command_buffers().is_empty(),
+                    "cmd buffers vazios no frame {i}"
+                );
+                assert!(h.sync_index() < 3);
+            }
+            _ => panic!("frame {i}: esperava HardwareVulkanImage"),
+        }
+        // `frame` é dropado aqui → `release()` do slot.
     }
 
-    let submitted = core
-        .vk_frames_submitted()
+    let delivered = core
+        .vk_frames_delivered()
         .expect("DesktopCore devia ter a ponte Vulkan");
-    assert_eq!(
-        submitted, FRAMES as u64,
-        "o core devia ter entregue um frame por `retro_run` \
-         (set_image + set_command_buffers submetidos)"
-    );
+    assert_eq!(delivered, FRAMES as u64, "um frame por `retro_run`");
 
     let _ = std::fs::remove_file(&rom);
 }

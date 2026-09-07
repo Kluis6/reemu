@@ -138,8 +138,8 @@ impl Renderer {
                 pitch,
                 format,
             } => (data, *pitch, *format),
-            FrameOrigin::HardwareTexture(_) => {
-                log::warn!("HardwareTexture ainda não suportado no renderer");
+            FrameOrigin::HardwareTexture(_) | FrameOrigin::HardwareVulkanImage(_) => {
+                log::warn!("frame de HW render não suportado neste renderer");
                 return;
             }
         };
