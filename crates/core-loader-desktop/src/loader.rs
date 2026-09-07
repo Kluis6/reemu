@@ -36,6 +36,9 @@ pub struct DesktopCoreLoader {
     /// (Beetle PSX HW). Chamada durante o load quando o core registra um
     /// `create_device` na negociação — ver `docs/ai-context/12` §Beetle.
     vk_negotiator: Option<domain::core_loader::VulkanDeviceNegotiator>,
+    /// `true` (só no probe do `emu-session`) = aborta o load na hora se o core
+    /// não for Vulkan, SEM montar contexto GL no processo do compositor.
+    vulkan_only: bool,
 }
 
 impl DesktopCoreLoader {
@@ -52,6 +55,7 @@ impl DesktopCoreLoader {
             known: Mutex::new(HashMap::new()),
             vk_shared_device: None,
             vk_negotiator: None,
+            vulkan_only: false,
         }
     }
 
@@ -73,6 +77,13 @@ impl DesktopCoreLoader {
         negotiator: domain::core_loader::VulkanDeviceNegotiator,
     ) -> Self {
         self.vk_negotiator = Some(negotiator);
+        self
+    }
+
+    /// Probe do `emu-session`: aborta o load se o core não for Vulkan, sem
+    /// montar contexto GL. Ver `LocalCore::load`.
+    pub fn vulkan_only(mut self) -> Self {
+        self.vulkan_only = true;
         self
     }
 
@@ -292,6 +303,17 @@ impl DesktopCoreLoader {
             (raw.unload_game)();
             (raw.deinit)();
         };
+        // Probe do `emu-session`: só quer saber se é Vulkan. Não monta contexto
+        // GL nenhum (EGL no processo do compositor) — devolve na hora pra o
+        // loop cair pro processo filho.
+        if self.vulkan_only && render_reqs.render_backend != RenderBackend::Vulkan {
+            teardown(&raw);
+            return Err(CoreLoadError::HwRenderUnsupported(format!(
+                "{}: não é Vulkan (é {:?}) — usar o processo filho",
+                core_id.0, render_reqs.render_backend
+            )));
+        }
+
         let (gl, vk) = match render_reqs.render_backend {
             RenderBackend::Software => (None, None),
             RenderBackend::OpenGl => {

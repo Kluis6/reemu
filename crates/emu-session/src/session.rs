@@ -453,18 +453,36 @@ type LocalVkRoute = (
     Option<domain::core_loader::VulkanDeviceNegotiator>,
 );
 
-/// Se um core deve rodar in-process (etapa 12 B3b/D3): precisa do opt-in
-/// `REEMU_HW=vulkan` E de pelo menos um caminho de device publicado pelo shell
-/// — o `VkDevice` do compositor (`attach_vulkan_device`, pra `vk_rendering`/
-/// flycast) e/ou a fábrica core-owned (`attach_vulkan_negotiator`, pro Beetle).
-fn route_local_device(shared: &Shared) -> Option<LocalVkRoute> {
-    let opted_in = matches!(
+/// Cores que fazem HW render Vulkan e por isso TÊM que rodar in-process (a
+/// `VkImage` não cruza a fronteira de processo — no `reemu-core-host` o frame é
+/// descartado e a tela fica preta). Casado pelo basename do id/caminho.
+/// `parallel_n64` fica de fora de propósito: é o core não re-entrante que essa
+/// arquitetura de processo-filho protege — pra ele o Vulkan exige
+/// `REEMU_HW=vulkan` explícito.
+const VK_CAPABLE_CORES: &[&str] = &[
+    "mednafen_psx_hw",
+    "beetle_psx_hw",
+    "flycast",
+    "mupen64plus_next",
+];
+
+/// Se um core deve rodar in-process (etapa 12): precisa de um caminho de device
+/// publicado pelo shell (`attach_vulkan_device` / `attach_vulkan_negotiator`)
+/// E ou (a) `REEMU_HW=vulkan` (força qualquer core), ou (b) o core está na
+/// lista dos que fazem Vulkan HW render (`VK_CAPABLE_CORES`) — senão um core
+/// tipo o `mednafen_psx_hw` configurado pra Vulkan iria pro processo filho e a
+/// tela ficaria preta. Se o core acabar não sendo Vulkan, `LocalCore::load`
+/// devolve `HwRenderUnsupported` e o loop cai pro filho (+ cache).
+fn route_local_device(shared: &Shared, core_id: &str) -> Option<LocalVkRoute> {
+    let forced = matches!(
         std::env::var("REEMU_HW")
             .map(|v| v.trim().to_ascii_lowercase())
             .as_deref(),
         Ok("vulkan") | Ok("vk")
     );
-    if !opted_in {
+    let base = core_id.rsplit(['/', '\\']).next().unwrap_or(core_id);
+    let vk_capable = VK_CAPABLE_CORES.iter().any(|c| base.contains(c));
+    if !forced && !vk_capable {
         return None;
     }
     let device = *shared
@@ -1021,7 +1039,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 // negociar Vulkan, `LocalCore::load` devolve
                 // `HwRenderUnsupported` e caímos pro processo filho (que isola
                 // cores não re-entrantes).
-                match route_local_device(&shared) {
+                match route_local_device(&shared, &id.0) {
                     Some((device, negotiator)) if !known_non_vulkan.contains(&id.0) => {
                         match LocalCore::load(
                             &id.0,

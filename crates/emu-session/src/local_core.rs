@@ -55,22 +55,21 @@ impl LocalCore {
         negotiator: Option<domain::core_loader::VulkanDeviceNegotiator>,
     ) -> Result<(Self, SystemAvInfo), CoreLoadError> {
         core_loader_desktop::set_pending_core_option_values(initial_option_values);
-        let mut loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir);
+        let mut loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir).vulkan_only();
         if let Some(s) = shared_device {
             loader = loader.with_vulkan_shared_device(s);
         }
         if let Some(n) = negotiator {
             loader = loader.with_vulkan_negotiator(n);
         }
+        // `vulkan_only()` já aborta antes de montar contexto GL se não for
+        // Vulkan — o `?` propaga o `HwRenderUnsupported` pro `session.rs`
+        // cair pro processo filho.
         let mut core = loader.open_core(&CoreId(core_id.to_string()), rom_path)?;
-
-        if core.render_requirements().render_backend != RenderBackend::Vulkan {
-            // Não é core Vulkan — devolve o erro pro `session.rs` tentar o
-            // caminho do processo filho. O `core` dropa aqui (teardown limpo).
-            return Err(CoreLoadError::HwRenderUnsupported(
-                "core não negociou Vulkan — usar o processo filho".into(),
-            ));
-        }
+        debug_assert_eq!(
+            core.render_requirements().render_backend,
+            RenderBackend::Vulkan
+        );
 
         if let Some(bytes) = initial_save_ram {
             if core.restore_save_ram(&bytes) {
