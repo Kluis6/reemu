@@ -59,6 +59,13 @@ pub struct AppState {
     /// `reemu-video-pump` aplica — ele é o dono único da conexão Wayland (mexer
     /// nela de outra thread corrompe o `wl_display`).
     pub pending_surface_geom: Mutex<Option<(i32, i32, u32, u32)>>,
+    /// Etapa 12 §Beetle: um `FrameProcessor` reconstruído no `VkDevice` de um
+    /// core que criou o device ele mesmo. O negociador (numa thread do
+    /// `emu-session`) deixa aqui; o `reemu-video-pump` faz a troca (drop do
+    /// antigo + `attach_surface` do novo) — só ele pode tocar Wayland/wgpu.
+    pub pending_gpu: Mutex<Option<crate::gpu::FrameProcessor>>,
+    /// Handles da surface nativa pra o pump reanexar no `pending_gpu`.
+    pub vk_reattach: Mutex<Option<(crate::gpu::SendHandles, u32, u32)>>,
 }
 
 /// Estado da transição jogo↔menu no vídeo nativo. O `reemu-video-pump` dirige.
@@ -131,6 +138,8 @@ impl AppState {
             video_menu: Mutex::new(VideoMenu::Playing),
             pause_bg: Mutex::new(None),
             pending_surface_geom: Mutex::new(None),
+            pending_gpu: Mutex::new(None),
+            vk_reattach: Mutex::new(None),
         }
     }
 }

@@ -87,10 +87,6 @@ pub fn run() {
             // Linux/Wayland. `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>` na
             // webview. Sem Wayland, `VideoSurface::spawn` devolve `None` e o
             // canvas assume sozinho.
-            // Handles da surface nativa pra o negociador Vulkan §Beetle
-            // reanexar depois que reconstruir o `FrameProcessor` no device do
-            // core (D3). `None` = canvas (`poll_frame` não precisa de surface).
-            let mut adopt_surface: Option<(gpu::SendHandles, u32, u32)> = None;
             if env_flag("REEMU_NATIVE_VIDEO", true) {
                 let win_size = app
                     .handle()
@@ -124,8 +120,9 @@ pub fn run() {
                             spawn_video_pump(app.handle().clone());
                             log::info!("vídeo nativo ativo");
                             // SAFETY: os ponteiros wl vivem enquanto o `vs` no
-                            // AppState viver (resto do app).
-                            adopt_surface = Some((
+                            // AppState viver (resto do app). Só o pump usa isto
+                            // (única thread dona da conexão Wayland).
+                            *state.vk_reattach.lock().unwrap_or_else(|p| p.into_inner()) = Some((
                                 unsafe { gpu::SendHandles::new(h.display, h.window) },
                                 win_size.width,
                                 win_size.height,
@@ -146,18 +143,16 @@ pub fn run() {
                 let app_h = app.handle().clone();
                 let negotiator: domain::core_loader::VulkanDeviceNegotiator =
                     std::sync::Arc::new(move |neg| {
-                        let (mut fp, shared) =
+                        // Roda numa thread do `emu-session` — NÃO pode tocar
+                        // Wayland/wgpu-surface. Só constrói o FP e deixa em
+                        // `pending_gpu`; o video pump faz a troca.
+                        let (fp, shared) =
                             unsafe { gpu::FrameProcessor::from_core_negotiation(neg) }?;
-                        let state = app_h.state::<AppState>();
-                        if let Some((h, w, ht)) = adopt_surface.as_ref() {
-                            let ok = unsafe {
-                                fp.attach_surface(h.display(), h.window(), *w, *ht)
-                            };
-                            if !ok {
-                                log::warn!("negociador: reanexar surface falhou — canvas");
-                            }
-                        }
-                        *state.gpu.lock().unwrap_or_else(|p| p.into_inner()) = Some(fp);
+                        *app_h
+                            .state::<AppState>()
+                            .pending_gpu
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner()) = Some(fp);
                         log::info!("FrameProcessor reconstruído no device do core (§Beetle)");
                         Ok(shared)
                     });
@@ -326,6 +321,38 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                     if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
                         fp.resize_surface(w, h);
                     }
+                }
+
+                // Etapa 12 §Beetle: um core criou o `VkDevice` ele mesmo e o
+                // negociador deixou um `FrameProcessor` novo em `pending_gpu`.
+                // A troca (drop do antigo + `attach_surface` do novo) só pode
+                // rodar AQUI — o pump é a única thread dona da conexão Wayland.
+                // Antes do `step_vk_local` pra o 1º frame Vulkan já pegar o FP
+                // do device certo.
+                if let Some(mut new_fp) = state
+                    .pending_gpu
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .take()
+                {
+                    let mut slot = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
+                    drop(slot.take()); // dropa o FP antigo (+ surface) nesta thread
+                    if let Some((h, w, ht)) = state
+                        .vk_reattach
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_ref()
+                    {
+                        // SAFETY: os handles wl vivem enquanto o `VideoSurface`
+                        // no AppState viver.
+                        let ok = unsafe { new_fp.attach_surface(h.display(), h.window(), *w, *ht) };
+                        if !ok {
+                            log::warn!("§Beetle: reanexar surface no FP novo falhou — canvas");
+                        }
+                    }
+                    *slot = Some(new_fp);
+                    drop(slot);
+                    log::info!("§Beetle: FrameProcessor trocado pro device do core");
                 }
 
                 // Etapa 12 B3b/D4: um core Vulkan in-process roda AQUI, nesta
