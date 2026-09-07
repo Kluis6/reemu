@@ -317,6 +317,32 @@ struct Composite {
     target: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
 }
 
+/// Handles crus de uma `VkInstance`/`VkDevice` **já criados por um core Vulkan**
+/// (Beetle PSX HW cria o device na negociação de HW render — ver
+/// `docs/ai-context/12-vulkan-hw-render-fase2.md` §Beetle). Passado pra
+/// [`FrameProcessor::from_adopted_vulkan`], que envolve tudo no wgpu sem criar
+/// device nenhum. O core é o dono — o `FrameProcessor` não destrói nada.
+// Consumido pelo `vk_context::create_via_core_negotiation` na fatia D2; por
+// enquanto só o teste `from_adopted_vulkan_runs_the_chain` usa.
+#[allow(dead_code)]
+pub struct AdoptedVulkan {
+    pub entry: ash::Entry,
+    pub instance: ash::Instance,
+    pub physical_device: ash::vk::PhysicalDevice,
+    pub device: ash::Device,
+    pub queue_family_index: u32,
+    pub queue_index: u32,
+    /// `apiVersion` do `VkApplicationInfo` usado ao criar a instância.
+    pub instance_api_version: u32,
+    /// Extensões de instância habilitadas (ex.: `VK_KHR_surface`,
+    /// `VK_KHR_get_physical_device_properties2`).
+    pub instance_extensions: Vec<&'static std::ffi::CStr>,
+    /// Extensões de device habilitadas — TÊM que bater com o `device`.
+    pub device_extensions: Vec<&'static std::ffi::CStr>,
+    /// Features habilitadas no `device` (a validação do wgpu 30 é estrita).
+    pub features: wgpu::Features,
+}
+
 pub struct FrameProcessor {
     /// Guardados pra configurar a surface nativa depois — a `wgpu::Surface`
     /// tem que sair da MESMA `Instance`/`Adapter` que criou o `device`.
@@ -406,6 +432,20 @@ impl FrameProcessor {
             adapter.get_info().name
         );
 
+        Self::assemble(instance, adapter, device, queue, interop_ok)
+    }
+
+    /// Monta o `FrameProcessor` a partir de um `Device`/`Queue` wgpu já
+    /// existentes — shaders, quad, samplers, pipelines de composição/flip. O
+    /// `new()` (device criado por nós) e o `from_adopted_vulkan` (device de um
+    /// core Vulkan, etapa 12 §Beetle) só diferem em COMO conseguem o quarteto.
+    fn assemble(
+        instance: wgpu::Instance,
+        adapter: wgpu::Adapter,
+        device: wgpu::Device,
+        queue: wgpu::Queue,
+        interop_ok: bool,
+    ) -> Option<Self> {
         let quad = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("etapa04 quad"),
             size: std::mem::size_of_val(&QUAD) as u64,
@@ -476,6 +516,88 @@ impl FrameProcessor {
             decoration: None,
             surface: None,
         })
+    }
+
+    /// Constrói o `FrameProcessor` ADOTANDO uma `VkInstance`/`VkDevice` que já
+    /// existem — o caso de um core Vulkan que EXIGE criar o device ele mesmo na
+    /// negociação de HW render (Beetle PSX HW; ver
+    /// `docs/ai-context/12-vulkan-hw-render-fase2.md` §Beetle, fatia D1). O wgpu
+    /// não cria device nenhum: envolve o do core via `wgpu-hal`
+    /// (`Instance::from_raw` → `expose_adapter` → `device_from_raw` →
+    /// `wgpu::…::from_hal`).
+    ///
+    /// # Safety
+    /// - `entry`/`instance`/`device` de `v` têm que continuar válidos por toda a
+    ///   vida do `FrameProcessor` e ninguém mais pode destruí-los antes dele
+    ///   (por isso os `drop_callback` são `None` — o dono é o core).
+    /// - `queue_family_index`/`queue_index` apontam pra uma queue com
+    ///   GRAPHICS+COMPUTE de `physical_device`.
+    /// - `device_extensions` = EXATAMENTE as extensões habilitadas em `device`.
+    /// - `features` = as features habilitadas em `device` (nem mais nem menos —
+    ///   a validação do wgpu 30 é estrita).
+    // Fiado no `loader`/`ffi_state` na fatia D2; hoje só o teste usa.
+    #[allow(dead_code)]
+    pub unsafe fn from_adopted_vulkan(v: AdoptedVulkan) -> Option<Self> {
+        use wgpu::hal::api::Vulkan as Vk;
+
+        let hal_instance = unsafe {
+            wgpu::hal::vulkan::Instance::from_raw(
+                v.entry,
+                v.instance,
+                v.instance_api_version,
+                0, // android_sdk_version
+                None,
+                v.instance_extensions,
+                wgpu::InstanceFlags::from_build_config().with_env(),
+                wgpu::MemoryBudgetThresholds::default(),
+                false, // has_nv_optimus
+                None,  // drop_callback — a instância é do core
+            )
+        }
+        .inspect_err(|e| log::error!("adopt vk: Instance::from_raw: {e}"))
+        .ok()?;
+
+        let exposed = hal_instance.expose_adapter(v.physical_device)?;
+        log::info!(
+            "GPU (etapa 12 §Beetle): adotando {} do core",
+            exposed.info.name
+        );
+        let limits = exposed.capabilities.limits.clone();
+
+        let open_device = unsafe {
+            exposed.adapter.device_from_raw(
+                v.device,
+                None, // drop_callback — o device é do core
+                &v.device_extensions,
+                v.features,
+                &limits,
+                &wgpu::MemoryHints::default(),
+                v.queue_family_index,
+                v.queue_index,
+            )
+        }
+        .inspect_err(|e| log::error!("adopt vk: device_from_raw: {e}"))
+        .ok()?;
+
+        let wgpu_instance = unsafe { wgpu::Instance::from_hal::<Vk>(hal_instance) };
+        let adapter = unsafe { wgpu_instance.create_adapter_from_hal::<Vk>(exposed) };
+        let (device, queue) = unsafe {
+            adapter.create_device_from_hal::<Vk>(
+                open_device,
+                &wgpu::DeviceDescriptor {
+                    label: Some("etapa12 device adotado do core"),
+                    required_features: v.features,
+                    required_limits: limits,
+                    ..Default::default()
+                },
+            )
+        }
+        .inspect_err(|e| log::error!("adopt vk: create_device_from_hal: {e}"))
+        .ok()?;
+
+        // `interop_ok` = false: o caminho Beetle é zero-cópia via
+        // `texture_from_raw` no MESMO device, não usa `dma_buf`.
+        Self::assemble(wgpu_instance, adapter, device, queue, false)
     }
 
     /// Anexa uma surface nativa a partir de raw handles (a `wl_surface` de uma
@@ -2713,6 +2835,94 @@ mod tests {
                 rotation_degrees: 0,
             },
         }
+    }
+
+    /// Etapa 12 §Beetle (fatia D1): o `FrameProcessor` ADOTA uma
+    /// `VkInstance`/`VkDevice` criados fora do wgpu (aqui, à mão com `ash` —
+    /// estruturalmente o que o `libretro_create_device` do Beetle devolve) e
+    /// roda a chain de shader nela. Prova o caminho `wgpu-hal`
+    /// `Instance::from_raw` → `expose_adapter` → `device_from_raw` →
+    /// `wgpu::…::from_hal` antes de fiar o Beetle de verdade (D2..D5).
+    ///
+    /// `#[ignore]`: precisa de um ICD Vulkan (GPU ou lavapipe).
+    #[test]
+    #[ignore = "precisa de ICD Vulkan"]
+    fn from_adopted_vulkan_runs_the_chain() {
+        use ash::vk;
+
+        if std::env::var_os("REEMU_NO_GPU").is_some() {
+            return;
+        }
+        let Ok(entry) = (unsafe { ash::Entry::load() }) else {
+            eprintln!("sem loader Vulkan — pulando");
+            return;
+        };
+        let app = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_1);
+        let Ok(instance) = (unsafe {
+            entry.create_instance(&vk::InstanceCreateInfo::default().application_info(&app), None)
+        }) else {
+            eprintln!("sem ICD Vulkan — pulando");
+            return;
+        };
+
+        let gpus = unsafe { instance.enumerate_physical_devices() }.unwrap_or_default();
+        let Some(&gpu) = gpus.first() else {
+            eprintln!("sem GPU Vulkan — pulando");
+            unsafe { instance.destroy_instance(None) };
+            return;
+        };
+        let fams = unsafe { instance.get_physical_device_queue_family_properties(gpu) };
+        let Some(qfi) = fams.iter().position(|q| {
+            q.queue_flags
+                .contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE)
+        }) else {
+            eprintln!("sem queue GRAPHICS+COMPUTE — pulando");
+            unsafe { instance.destroy_instance(None) };
+            return;
+        };
+        let qfi = qfi as u32;
+
+        let prio = [1.0f32];
+        let qci = [vk::DeviceQueueCreateInfo::default()
+            .queue_family_index(qfi)
+            .queue_priorities(&prio)];
+        let device = unsafe {
+            instance.create_device(
+                gpu,
+                &vk::DeviceCreateInfo::default().queue_create_infos(&qci),
+                None,
+            )
+        }
+        .expect("create_device");
+
+        let adopted = AdoptedVulkan {
+            entry,
+            instance,
+            physical_device: gpu,
+            device,
+            queue_family_index: qfi,
+            queue_index: 0,
+            instance_api_version: vk::API_VERSION_1_1,
+            instance_extensions: vec![],
+            device_extensions: vec![],
+            features: wgpu::Features::empty(),
+        };
+        let mut fp = unsafe { FrameProcessor::from_adopted_vulkan(adopted) }
+            .expect("from_adopted_vulkan devolveu None");
+
+        // readback com pipeline: 1º frame prima (pode vir None), 2º entrega.
+        fp.process(&grey_frame(64, 48, 0xC0));
+        let (w, h, rgba) = fp
+            .process(&grey_frame(64, 48, 0xC0))
+            .expect("a chain devia entregar um frame no device adotado");
+        assert_eq!(rgba.len(), (w * h * 4) as usize);
+        assert!(
+            rgba.chunks(4).any(|p| p[0] > 0x80 && p[2] > 0x80),
+            "esperava pixel claro da chain 'plain' no device adotado"
+        );
+        // `fp` dropa aqui; a `VkInstance`/`VkDevice` vazam de propósito (o
+        // `drop_callback` é `None` — quem seria o dono é o core; no teste o
+        // processo sai logo).
     }
 
     /// Etapa 12 ponta-a-ponta (fase B): o core de teste `vk_rendering` adota o

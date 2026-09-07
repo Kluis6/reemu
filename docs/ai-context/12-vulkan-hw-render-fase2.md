@@ -238,15 +238,20 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
 
 ### Plano (fatias)
 
-- **D1 (foundational) — `FrameProcessor::from_adopted_vulkan(...)`**: refatora
-  `FrameProcessor::new()` extraindo o *tail* (shaders/quad/samplers/comp/flip)
-  pra `assemble(instance, adapter, device, queue, interop_ok)`; `new()` e
-  `from_adopted_vulkan` só diferem em como conseguem o quarteto. `from_adopted`
-  usa `wgpu-hal 30`: `vulkan::Instance::from_raw` → `instance.expose_adapter(
-  vk_physical_device)` → `adapter.device_from_raw(raw_device, …, family, 0)` →
-  `wgpu::Instance::from_hal` / `create_adapter_from_hal` /
-  `Adapter::create_device_from_hal`. Testável headless com um `ash::Device`
-  feito por nós (não o do Beetle) rodando a chain + `texture_from_raw`.
+- **D1 (feito) — `FrameProcessor::from_adopted_vulkan(AdoptedVulkan)`**:
+  `FrameProcessor::new()` teve o *tail* (shaders/quad/samplers/comp/flip)
+  extraído pra `assemble(instance, adapter, device, queue, interop_ok)`; `new()`
+  e `from_adopted_vulkan` só diferem em como conseguem o quarteto.
+  `from_adopted_vulkan` usa `wgpu-hal 30`: `vulkan::Instance::from_raw` →
+  `hal_instance.expose_adapter(vk_physical_device)` →
+  `exposed.adapter.device_from_raw(raw_device, None, exts, feats, &limits,
+  &MemoryHints::default(), family, 0)` → `wgpu::Instance::from_hal` /
+  `create_adapter_from_hal(exposed)` / `Adapter::create_device_from_hal`. Os
+  `drop_callback` são `None` (o core é o dono). Teste `#[ignore]`
+  `gpu::tests::from_adopted_vulkan_runs_the_chain`: cria uma
+  `VkInstance`/`VkDevice` à mão com `ash` (estruturalmente o que o
+  `libretro_create_device` do Beetle devolve), adota, roda a chain 'plain' e
+  confere pixel claro. **Verde com lavapipe** (2026-09-07).
 - **D2 — `vk_context.rs::create_via_core_negotiation(neg_ptr)`**: constrói a
   `ash::Instance` (extensões que o `wgpu-hal` quer no nível de instância) +
   chama o `create_device` do core com `required_device_extensions/features` do
@@ -267,7 +272,12 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   core Beetle pra thread do compositor (thread única). **Decisão pendente.**
 - **D5** — validar com o core do Beetle + BIOS PS1 + jogo, no HW do usuário.
 
-- **Estado:** D1 feito (`from_adopted_vulkan` + teste headless). D2–D5 pendentes.
+- **Estado:** D1 feito e testado (lavapipe). **D2 é o próximo:**
+  `vk_context.rs` construir a `ash::Instance` com as extensões que o `wgpu-hal`
+  quer, chamar o `create_device` do core passando
+  `Adapter::required_device_extensions` / `physical_device_features` do
+  `wgpu-hal`, e devolver um `AdoptedVulkan`. Depois D3 (roteamento +
+  FrameProcessor lazy) e D4 (queue). D5 = validar com o core do Beetle.
 
 - **Fase C** — sync fino (sem CPU-wait, barriers mínimos), validação sob
   carga (troca rápida de cena, resize, save/load state), flycast como 3º
