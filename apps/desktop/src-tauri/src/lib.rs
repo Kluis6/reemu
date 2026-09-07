@@ -117,6 +117,16 @@ pub fn run() {
                                 .lock()
                                 .unwrap_or_else(|p| p.into_inner())
                                 .replace(vs);
+                            // Aplica a geometria UMA vez agora — o `Resized` não
+                            // dispara na carga inicial, então sem isto a
+                            // subsurface fica no tamanho/posição do spawn (a
+                            // janela ainda podia estar assentando) e o jogo sai
+                            // torto. O pump reconfigura no 1º tick.
+                            *state
+                                .pending_surface_geom
+                                .lock()
+                                .unwrap_or_else(|p| p.into_inner()) =
+                                Some(current_surface_geom(app.handle()));
                             spawn_video_pump(app.handle().clone());
                             log::info!("vídeo nativo ativo");
                             // SAFETY: os ponteiros wl vivem enquanto o `vs` no
@@ -255,21 +265,12 @@ pub fn run() {
                 .unwrap_or_else(|p| p.into_inner())
                 .is_some()
             {
-                // Deslocamento da decoração (CSD): 0 em fullscreen, a espessura
-                // da borda/título em janela. Wayland costuma não expor posição
-                // global → cai em (0,0), o certo no caso comum (fullscreen).
-                let (ox, oy) = app_handle
-                    .get_webview_window("main")
-                    .and_then(|w| {
-                        let i = w.inner_position().ok()?;
-                        let o = w.outer_position().ok()?;
-                        Some(((i.x - o.x).max(0), (i.y - o.y).max(0)))
-                    })
-                    .unwrap_or((0, 0));
+                let (ox, oy) = csd_offset(app_handle);
                 *state
                     .pending_surface_geom
                     .lock()
-                    .unwrap_or_else(|p| p.into_inner()) = Some((ox, oy, size.width, size.height));
+                    .unwrap_or_else(|p| p.into_inner()) =
+                    Some((ox, oy, size.width.max(1), size.height.max(1)));
             }
         }
         // Fechamento (X da janela, Alt+F4, `quit_app`): descarrega o jogo antes
@@ -286,6 +287,31 @@ pub fn run() {
 /// Necessária porque, sem o `<canvas>` fazendo `poll_frame`, o event loop do
 /// Tauri fica ocioso e `MainEventsCleared` não tiquetaqueia. `render_to_surface`
 /// só toca wgpu (`Send`/`Sync`), então roda fora da thread principal.
+/// Deslocamento do CSD (borda/título): `(0,0)` em fullscreen e no caso comum do
+/// Wayland (não expõe posição global), a espessura da decoração em janela X11.
+fn csd_offset(app: &tauri::AppHandle) -> (i32, i32) {
+    app.get_webview_window("main")
+        .and_then(|w| {
+            let i = w.inner_position().ok()?;
+            let o = w.outer_position().ok()?;
+            Some(((i.x - o.x).max(0), (i.y - o.y).max(0)))
+        })
+        .unwrap_or((0, 0))
+}
+
+/// Geometria `(x, y, w, h)` que a subsurface de vídeo deve ter agora: tamanho =
+/// área de conteúdo da janela, posição = deslocamento do CSD. Usado na carga
+/// inicial e na troca de `FrameProcessor` (§Beetle) — o `Resized` usa o tamanho
+/// que vem no evento.
+fn current_surface_geom(app: &tauri::AppHandle) -> (i32, i32, u32, u32) {
+    let size = app
+        .get_webview_window("main")
+        .and_then(|w| w.inner_size().ok())
+        .unwrap_or_default();
+    let (ox, oy) = csd_offset(app);
+    (ox, oy, size.width.max(1), size.height.max(1))
+}
+
 fn spawn_video_pump(app: tauri::AppHandle) {
     std::thread::Builder::new()
         .name("reemu-video-pump".into())
@@ -352,6 +378,12 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                     }
                     *slot = Some(new_fp);
                     drop(slot);
+                    // O FP novo nasceu com a config de surface do spawn —
+                    // reconfigura pro tamanho/posição atuais no próximo tick.
+                    *state
+                        .pending_surface_geom
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner()) = Some(current_surface_geom(&app));
                     log::info!("§Beetle: FrameProcessor trocado pro device do core");
                 }
 
