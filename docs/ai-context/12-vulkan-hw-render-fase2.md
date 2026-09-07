@@ -1,7 +1,10 @@
 # 12 — HW Render Vulkan Por-Core
 
-**Status: EM ANDAMENTO (iniciado 2026-09-06).** Decisão do usuário: rodar o
-core Vulkan **no processo pai** (in-process, junto do wgpu), zero-cópia.
+**Status: EM ANDAMENTO (iniciado 2026-09-06).** Fase A + B (B1..B3b) feitas e
+validadas end-to-end com o core de teste `vk_rendering` num RTX 3060
+(2026-09-07). Falta o 1º emulador real (Beetle PSX HW) e a fase C (sync fino).
+Decisão do usuário: rodar o core Vulkan **no processo pai** (in-process, junto
+do wgpu), zero-cópia.
 
 **Alvos, em ordem** (decisão 2026-09-06):
 
@@ -203,10 +206,13 @@ Modelo do `vk_rendering` / Beetle PSX (core NÃO submete — usa
     cair numa 2ª carga local. Cores software/GL seguem no filho, intactos.
     Fase C traz o sync fino de qualquer jeito (`set_signal_semaphore` do core
     → `Queue::add_wait_semaphore` do wgpu-hal, que existe na 30).
-  - **Falta validar B3b end-to-end:** rodar o app com `REEMU_HW=vulkan` +
-    `scripts/build-vk-test-core.sh` e ver o triângulo do `vk_rendering` na tela
-    pelo caminho normal (`emu-session` → surface nativa), orientação certa.
-    Depois Beetle PSX HW.
+  - **B3b validado end-to-end (2026-09-07, RTX 3060):** app com
+    `REEMU_HW=vulkan` + `--features dev-autoload` + `scripts/build-vk-test-core.sh`
+    → `contexto Vulkan ADOTADO do compositor` → `core Vulkan ... in-process:
+    fps=60` (sem `reemu-core-host`) → **triângulo RGB do `vk_rendering` girando
+    na surface nativa, orientação certa**, sobre o fundo `(0.8,0.6,0.2)`. Sem
+    erro de validação Vulkan.
+  - **Próximo:** Beetle PSX HW (`mednafen_psx_hw`) — 1º emulador real.
 - **Fase C** — sync fino (sem CPU-wait, barriers mínimos), validação sob
   carga (troca rápida de cena, resize, save/load state), flycast como 3º
   alvo, `provoking_vertex`/OIT reavaliados.
