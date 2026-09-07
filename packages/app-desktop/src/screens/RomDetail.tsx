@@ -400,7 +400,7 @@ export function RomDetail() {
             </>
           )}
           {activeCfgTab === "core" && chosenCore && (
-            <CoreOptions coreId={chosenCore} />
+            <CoreOptions coreId={chosenCore} romId={romId} />
           )}
           {activeCfgTab === "states" && (
             <>

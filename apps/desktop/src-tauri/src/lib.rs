@@ -191,6 +191,7 @@ pub fn run() {
             commands::list_installed_cores,
             commands::get_core_options,
             commands::set_core_option,
+            commands::reset_core_options,
             commands::get_shader_info,
             commands::set_shader,
             commands::get_rom_shader,

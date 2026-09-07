@@ -22,6 +22,10 @@ fn row_id(core_id: &str, option_key: &str) -> String {
     format!("{core_id}\u{1f}{option_key}")
 }
 
+fn override_id(rom_id: &str, core_id: &str, option_key: &str) -> String {
+    format!("{rom_id}\u{1f}{core_id}\u{1f}{option_key}")
+}
+
 #[async_trait]
 impl CoreOptionsStore for CoreOptionsRepo {
     async fn schema_for(&self, core_id: &str) -> Result<Vec<CoreOptionDefinition>, RepoError> {
@@ -107,6 +111,109 @@ impl CoreOptionsStore for CoreOptionsRepo {
         .execute(&self.db)
         .await
         .map_err(be)?;
+        Ok(())
+    }
+
+    async fn overrides_for_rom(
+        &self,
+        rom_id: &str,
+        core_id: &str,
+    ) -> Result<std::collections::HashMap<String, String>, RepoError> {
+        let rows = sqlx::query(
+            "SELECT option_key, value FROM core_option_overrides \
+             WHERE rom_id = ?1 AND core_id = ?2",
+        )
+        .bind(rom_id)
+        .bind(core_id)
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
+        rows.iter()
+            .map(|r| {
+                Ok((
+                    r.try_get::<String, _>("option_key").map_err(be)?,
+                    r.try_get::<String, _>("value").map_err(be)?,
+                ))
+            })
+            .collect()
+    }
+
+    async fn set_scoped_value(
+        &self,
+        core_id: &str,
+        rom_id: Option<&str>,
+        option_key: &str,
+        value: Option<&str>,
+    ) -> Result<(), RepoError> {
+        match (rom_id, value) {
+            (None, Some(v)) => self.set_value(core_id, option_key, v).await,
+            (None, None) => {
+                sqlx::query(
+                    "DELETE FROM core_options_values WHERE core_id = ?1 AND option_key = ?2",
+                )
+                .bind(core_id)
+                .bind(option_key)
+                .execute(&self.db)
+                .await
+                .map_err(be)?;
+                Ok(())
+            }
+            (Some(rid), Some(v)) => {
+                sqlx::query(
+                    "INSERT INTO core_option_overrides (id, rom_id, core_id, option_key, value) \
+                     VALUES (?1, ?2, ?3, ?4, ?5) \
+                     ON CONFLICT(rom_id, core_id, option_key) DO UPDATE SET value = excluded.value",
+                )
+                .bind(override_id(rid, core_id, option_key))
+                .bind(rid)
+                .bind(core_id)
+                .bind(option_key)
+                .bind(v)
+                .execute(&self.db)
+                .await
+                .map_err(be)?;
+                Ok(())
+            }
+            (Some(rid), None) => {
+                sqlx::query(
+                    "DELETE FROM core_option_overrides \
+                     WHERE rom_id = ?1 AND core_id = ?2 AND option_key = ?3",
+                )
+                .bind(rid)
+                .bind(core_id)
+                .bind(option_key)
+                .execute(&self.db)
+                .await
+                .map_err(be)?;
+                Ok(())
+            }
+        }
+    }
+
+    async fn reset_scope(
+        &self,
+        core_id: &str,
+        rom_id: Option<&str>,
+    ) -> Result<(), RepoError> {
+        match rom_id {
+            None => {
+                sqlx::query("DELETE FROM core_options_values WHERE core_id = ?1")
+                    .bind(core_id)
+                    .execute(&self.db)
+                    .await
+                    .map_err(be)?;
+            }
+            Some(rid) => {
+                sqlx::query(
+                    "DELETE FROM core_option_overrides WHERE rom_id = ?1 AND core_id = ?2",
+                )
+                .bind(rid)
+                .bind(core_id)
+                .execute(&self.db)
+                .await
+                .map_err(be)?;
+            }
+        }
         Ok(())
     }
 

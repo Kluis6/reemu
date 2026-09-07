@@ -165,12 +165,25 @@ export interface CoreOption {
   displayName: string
   choices: string[]
   defaultValue: string
+  /** valor efetivo (jogo → core → default) */
   value: string
+  /** valor salvo por core (null = usa o default do schema) */
+  coreValue: string | null
+  /** override deste jogo (null = herda o valor por core); só com `romId` */
+  romValue: string | null
 }
-export const getCoreOptions = (coreId: string) =>
-  invoke<CoreOption[]>('get_core_options', { coreId })
-export const setCoreOption = (coreId: string, key: string, value: string) =>
-  invoke<void>('set_core_option', { coreId, key, value })
+export const getCoreOptions = (coreId: string, romId?: string) =>
+  invoke<CoreOption[]>('get_core_options', { coreId, romId: romId ?? null })
+/** `romId` ausente = valor por core; presente = override do jogo. `value`
+ *  vazio = limpar (herdar). */
+export const setCoreOption = (
+  coreId: string,
+  key: string,
+  value: string,
+  romId?: string,
+) => invoke<void>('set_core_option', { coreId, key, value, romId: romId ?? null })
+export const resetCoreOptions = (coreId: string, romId?: string) =>
+  invoke<void>('reset_core_options', { coreId, romId: romId ?? null })
 
 export interface CatalogCore {
   coreId: string

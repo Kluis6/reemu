@@ -359,12 +359,23 @@ pub async fn load_game(
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
 
     // Valores de opção salvos — o filho os aplica já durante o load (ele
-    // pede via `GET_VARIABLE`), mandados junto no `EmuSession::load`.
+    // pede via `GET_VARIABLE`), mandados junto no `EmuSession::load`. Cascata:
+    // valores por core, com os overrides deste jogo por cima.
     let initial_option_values = match state.db.clone() {
-        Some(pool) => db::CoreOptionsRepo::new(pool)
-            .values_for(&core_id)
-            .await
-            .unwrap_or_default(),
+        Some(pool) => {
+            let repo = db::CoreOptionsRepo::new(pool);
+            let mut v = repo.values_for(&core_id).await.unwrap_or_default();
+            if let Some(rid) = &rom_id {
+                for (k, val) in repo
+                    .overrides_for_rom(rid, &core_id)
+                    .await
+                    .unwrap_or_default()
+                {
+                    v.insert(k, val);
+                }
+            }
+            v
+        }
         None => Default::default(),
     };
 
@@ -1409,28 +1420,47 @@ pub struct CoreOptionDto {
     /// Escolhas possíveis (as opções libretro são sempre enumeradas).
     pub choices: Vec<String>,
     pub default_value: String,
+    /// Valor efetivo (rom → core → default).
     pub value: String,
+    /// Valor salvo por core (`null` = usa o default do schema).
+    pub core_value: Option<String>,
+    /// Override deste jogo (`null` = herda o valor por core). Só quando
+    /// `rom_id` foi passado.
+    pub rom_value: Option<String>,
 }
 
-/// Schema + valor atual das core options. Se um core está carregado agora e é
-/// esse `core_id`, lê do core (fonte da verdade em runtime); senão, do DB.
+/// Schema + valores das core options em cascata. `rom_id` (opcional) traz
+/// também o override do jogo. Schema vem do core carregado se for esse
+/// `core_id` (mais atual); os valores vêm sempre do DB.
 #[tauri::command]
 pub async fn get_core_options(
     state: State<'_, AppState>,
     core_id: String,
+    rom_id: Option<String>,
 ) -> Result<Vec<CoreOptionDto>, String> {
     use domain::core_options::{CoreOptionType, CoreOptionsStore};
 
     let live_matches = state.session.loaded_core().as_deref() == Some(core_id.as_str());
-    let (defs, values) = if live_matches {
-        state.session.core_options()
-    } else if let Some(pool) = state.db.clone() {
+    let (defs, core_values, rom_values) = if let Some(pool) = state.db.clone() {
         let repo = db::CoreOptionsRepo::new(pool);
-        let defs = repo.schema_for(&core_id).await.map_err(|e| e.to_string())?;
-        let values = repo.values_for(&core_id).await.map_err(|e| e.to_string())?;
-        (defs, values)
+        let defs = if live_matches {
+            state.session.core_options().0
+        } else {
+            repo.schema_for(&core_id).await.map_err(|e| e.to_string())?
+        };
+        let core_values = repo.values_for(&core_id).await.map_err(|e| e.to_string())?;
+        let rom_values = match &rom_id {
+            Some(rid) => repo
+                .overrides_for_rom(rid, &core_id)
+                .await
+                .map_err(|e| e.to_string())?,
+            None => Default::default(),
+        };
+        (defs, core_values, rom_values)
+    } else if live_matches {
+        (state.session.core_options().0, Default::default(), Default::default())
     } else {
-        (Vec::new(), Default::default())
+        (Vec::new(), Default::default(), Default::default())
     };
 
     Ok(defs
@@ -1441,9 +1471,11 @@ pub async fn get_core_options(
                 CoreOptionType::Bool => vec!["disabled".into(), "enabled".into()],
                 CoreOptionType::Range { .. } => Vec::new(),
             };
-            let value = values
-                .get(&d.option_key)
-                .cloned()
+            let core_value = core_values.get(&d.option_key).cloned();
+            let rom_value = rom_values.get(&d.option_key).cloned();
+            let value = rom_value
+                .clone()
+                .or_else(|| core_value.clone())
                 .unwrap_or_else(|| d.default_value.clone());
             CoreOptionDto {
                 key: d.option_key,
@@ -1451,30 +1483,68 @@ pub async fn get_core_options(
                 choices,
                 default_value: d.default_value,
                 value,
+                core_value,
+                rom_value,
             }
         })
         .collect())
 }
 
-/// Troca uma core option. Aplica no core carregado (efeito no próximo frame)
-/// e persiste no DB.
+/// Troca (ou limpa, com `value` vazio) uma core option num escopo:
+/// `rom_id` ausente → valor por core; presente → override do jogo. Aplica no
+/// core carregado se for esse core E (sem rom_id, ou a rom carregada bate).
 #[tauri::command]
 pub async fn set_core_option(
     state: State<'_, AppState>,
     core_id: String,
     key: String,
     value: String,
+    rom_id: Option<String>,
 ) -> Result<(), String> {
     use domain::core_options::CoreOptionsStore;
 
-    if state.session.loaded_core().as_deref() == Some(core_id.as_str())
-        && !state.session.set_core_option(&key, &value)
-    {
+    let clear = value.is_empty();
+    let live_rom = state
+        .current_rom
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone();
+    let live = state.session.loaded_core().as_deref() == Some(core_id.as_str())
+        && match (&rom_id, &live_rom) {
+            (None, _) => true,
+            (Some(rid), Some(lr)) => rid == lr,
+            _ => false,
+        };
+    if live && !clear && !state.session.set_core_option(&key, &value) {
         return Err("opção ou valor inválido pro core carregado".into());
     }
     if let Some(pool) = state.db.clone() {
         db::CoreOptionsRepo::new(pool)
-            .set_value(&core_id, &key, &value)
+            .set_scoped_value(
+                &core_id,
+                rom_id.as_deref(),
+                &key,
+                (!clear).then_some(value.as_str()),
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// Limpa TODOS os valores de um escopo (volta pro default do schema, ou pro
+/// valor por core no caso de escopo de jogo). Não recarrega o core — vale no
+/// próximo load.
+#[tauri::command]
+pub async fn reset_core_options(
+    state: State<'_, AppState>,
+    core_id: String,
+    rom_id: Option<String>,
+) -> Result<(), String> {
+    use domain::core_options::CoreOptionsStore;
+    if let Some(pool) = state.db.clone() {
+        db::CoreOptionsRepo::new(pool)
+            .reset_scope(&core_id, rom_id.as_deref())
             .await
             .map_err(|e| e.to_string())?;
     }

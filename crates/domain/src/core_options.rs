@@ -46,6 +46,29 @@ pub trait CoreOptionsStore: Send + Sync {
         value: &str,
     ) -> Result<(), RepoError>;
 
+    /// Overrides por jogo (`option_key -> value`) — vencem os valores do core
+    /// só quando aquela ROM está carregada.
+    async fn overrides_for_rom(
+        &self,
+        rom_id: &str,
+        core_id: &str,
+    ) -> Result<std::collections::HashMap<String, String>, RepoError>;
+
+    /// Grava (ou limpa, com `value = None`) um valor num escopo:
+    /// `rom_id = None` → valor por core; `Some(rid)` → override do jogo.
+    async fn set_scoped_value(
+        &self,
+        core_id: &str,
+        rom_id: Option<&str>,
+        option_key: &str,
+        value: Option<&str>,
+    ) -> Result<(), RepoError>;
+
+    /// Limpa TODOS os valores de um escopo (volta pro default do schema / pro
+    /// valor do core). `rom_id = None` → por core; `Some(rid)` → do jogo.
+    async fn reset_scope(&self, core_id: &str, rom_id: Option<&str>)
+        -> Result<(), RepoError>;
+
     /// Substitui o schema inteiro de um core (chamado no load, quando o core
     /// declara `retro_core_options`). Idempotente.
     async fn replace_schema(
