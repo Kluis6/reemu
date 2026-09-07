@@ -87,6 +87,10 @@ pub fn run() {
             // Linux/Wayland. `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>` na
             // webview. Sem Wayland, `VideoSurface::spawn` devolve `None` e o
             // canvas assume sozinho.
+            // Handles da surface nativa pra o negociador Vulkan §Beetle
+            // reanexar depois que reconstruir o `FrameProcessor` no device do
+            // core (D3). `None` = canvas (`poll_frame` não precisa de surface).
+            let mut adopt_surface: Option<(gpu::SendHandles, u32, u32)> = None;
             if env_flag("REEMU_NATIVE_VIDEO", true) {
                 let win_size = app
                     .handle()
@@ -119,12 +123,47 @@ pub fn run() {
                                 .replace(vs);
                             spawn_video_pump(app.handle().clone());
                             log::info!("vídeo nativo ativo");
+                            // SAFETY: os ponteiros wl vivem enquanto o `vs` no
+                            // AppState viver (resto do app).
+                            adopt_surface = Some((
+                                unsafe { gpu::SendHandles::new(h.display, h.window) },
+                                win_size.width,
+                                win_size.height,
+                            ));
                         } else {
                             log::warn!("attach_surface falhou — segue no canvas");
                         }
                     }
                     None => log::warn!("surface de vídeo indisponível — modo canvas"),
                 }
+            }
+
+            // Negociador Vulkan §Beetle (D2/D3): com `REEMU_HW=vulkan`, um core
+            // que EXIGE criar o `VkDevice` (Beetle PSX HW) chama isto — recria o
+            // `FrameProcessor` no device do core, reanexa a surface, e devolve
+            // os handles pra `emu-session` montar a ponte de frame.
+            {
+                let app_h = app.handle().clone();
+                let negotiator: domain::core_loader::VulkanDeviceNegotiator =
+                    std::sync::Arc::new(move |neg| {
+                        let (mut fp, shared) =
+                            unsafe { gpu::FrameProcessor::from_core_negotiation(neg) }?;
+                        let state = app_h.state::<AppState>();
+                        if let Some((h, w, ht)) = adopt_surface.as_ref() {
+                            let ok = unsafe {
+                                fp.attach_surface(h.display(), h.window(), *w, *ht)
+                            };
+                            if !ok {
+                                log::warn!("negociador: reanexar surface falhou — canvas");
+                            }
+                        }
+                        *state.gpu.lock().unwrap_or_else(|p| p.into_inner()) = Some(fp);
+                        log::info!("FrameProcessor reconstruído no device do core (§Beetle)");
+                        Ok(shared)
+                    });
+                app.state::<AppState>()
+                    .session
+                    .attach_vulkan_negotiator(negotiator);
             }
 
             #[cfg(feature = "dev-autoload")]

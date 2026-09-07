@@ -9,6 +9,7 @@ use crate::raw::RawCore;
 use crate::sys;
 use crate::vk_context::{VkConfig, VkContext};
 use crate::vk_frame::VkFrameBridge;
+use crate::vk_sys;
 use async_trait::async_trait;
 use domain::core_loader::{
     CoreId, CoreLoadError, CoreLoader, CoreRenderRequirements, InstalledCoreRepository, LoadedCore,
@@ -31,6 +32,10 @@ pub struct DesktopCoreLoader {
     /// torna o frame zero-cópia. Só faz sentido quando o loader roda no mesmo
     /// processo do compositor (não no `reemu-core-host`).
     vk_shared_device: Option<domain::core_loader::VulkanSharedDevice>,
+    /// `Some` = fábrica pra cores Vulkan que EXIGEM criar o device eles mesmos
+    /// (Beetle PSX HW). Chamada durante o load quando o core registra um
+    /// `create_device` na negociação — ver `docs/ai-context/12` §Beetle.
+    vk_negotiator: Option<domain::core_loader::VulkanDeviceNegotiator>,
 }
 
 impl DesktopCoreLoader {
@@ -46,6 +51,7 @@ impl DesktopCoreLoader {
             installed: None,
             known: Mutex::new(HashMap::new()),
             vk_shared_device: None,
+            vk_negotiator: None,
         }
     }
 
@@ -57,6 +63,16 @@ impl DesktopCoreLoader {
         shared: domain::core_loader::VulkanSharedDevice,
     ) -> Self {
         self.vk_shared_device = Some(shared);
+        self
+    }
+
+    /// Fábrica pra cores Vulkan "donos do device" (Beetle PSX HW). Ver
+    /// `docs/ai-context/12-vulkan-hw-render-fase2.md` §Beetle (D2/D3).
+    pub fn with_vulkan_negotiator(
+        mut self,
+        negotiator: domain::core_loader::VulkanDeviceNegotiator,
+    ) -> Self {
+        self.vk_negotiator = Some(negotiator);
         self
     }
 
@@ -286,8 +302,13 @@ impl DesktopCoreLoader {
             }
             RenderBackend::Vulkan => {
                 let req = hw.expect("Vulkan backend sem HwRenderRequest");
-                let bridge = setup_vk_context(&core_id.0, &req, self.vk_shared_device)
-                    .inspect_err(|_| teardown(&raw))?;
+                let bridge = setup_vk_context(
+                    &core_id.0,
+                    &req,
+                    self.vk_shared_device,
+                    self.vk_negotiator.clone(),
+                )
+                .inspect_err(|_| teardown(&raw))?;
                 (None, Some(bridge))
             }
         };
@@ -363,24 +384,54 @@ fn setup_vk_context(
     core_id: &str,
     req: &HwRenderRequest,
     shared: Option<domain::core_loader::VulkanSharedDevice>,
+    negotiator: Option<domain::core_loader::VulkanDeviceNegotiator>,
 ) -> Result<Box<VkFrameBridge>, CoreLoadError> {
-    let ctx = match shared {
-        // Fase B: adota o device do compositor -> frame zero-copia.
-        Some(s) => VkContext::adopt(s).map_err(|e| {
-            CoreLoadError::HwRenderUnsupported(format!("{core_id}: adotar device Vulkan: {e}"))
-        })?,
-        // Bring-up / teste headless: cria um device proprio.
-        None => {
-            let mut cfg = VkConfig::default();
-            if req.version_major >= 0x0040_0000 {
-                // O core pediu uma apiVersion concreta (ex.: flycast manda
-                // VK_API_VERSION_1_1). `version_minor` fica 0 nesses cores.
-                cfg.api_version = req.version_major;
-            }
-            VkContext::create(&cfg).map_err(|e| {
-                CoreLoadError::HwRenderUnsupported(format!("{core_id}: contexto Vulkan: {e}"))
-            })?
+    // O core registrou um `create_device` na negociação? (Beetle EXIGE que o
+    // frontend o chame — o `context_reset` dele aborta se `context == NULL`.)
+    let core_owned = ffi_state::lock().as_ref().and_then(|s| s.vk_negotiation).and_then(|p| {
+        // SAFETY: o `SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE` só guarda `p`
+        // depois de checar `interface_type == ..._VULKAN`; o ponteiro vive na
+        // .so do core, carregada por toda a vida do `DesktopCore`.
+        let iface =
+            unsafe { &*(p as *const vk_sys::retro_hw_render_context_negotiation_interface_vulkan) };
+        iface.create_device.map(|cd| domain::core_loader::VkNegotiation {
+            get_application_info: iface.get_application_info.map_or(0, |f| f as usize),
+            create_device: cd as usize,
+        })
+    });
+
+    let bring_up = || -> Result<VkContext, CoreLoadError> {
+        let mut cfg = VkConfig::default();
+        if req.version_major >= 0x0040_0000 {
+            cfg.api_version = req.version_major;
         }
+        VkContext::create(&cfg).map_err(|e| {
+            CoreLoadError::HwRenderUnsupported(format!("{core_id}: contexto Vulkan: {e}"))
+        })
+    };
+    let adopt = |s: domain::core_loader::VulkanSharedDevice| -> Result<VkContext, CoreLoadError> {
+        VkContext::adopt(s).map_err(|e| {
+            CoreLoadError::HwRenderUnsupported(format!("{core_id}: adotar device Vulkan: {e}"))
+        })
+    };
+
+    let ctx = match (core_owned, negotiator, shared) {
+        // Beetle & cia: o core cria o device; o shell reconstrói o wgpu sobre
+        // ele e devolve os handles. Se a fábrica falhar, cai pro frontend-owned.
+        (Some(neg), Some(factory), _) => match factory(neg) {
+            Ok(s) => adopt(s)?,
+            Err(e) => {
+                log::warn!("{core_id}: negociação Vulkan core-owned falhou ({e})");
+                match shared {
+                    Some(s) => adopt(s)?,
+                    None => bring_up()?,
+                }
+            }
+        },
+        // vk_rendering / flycast: o frontend criou o device, o core adota.
+        (_, _, Some(s)) => adopt(s)?,
+        // Bring-up / teste headless.
+        _ => bring_up()?,
     };
     log::info!(
         "contexto Vulkan pronto pra {core_id} ({})",

@@ -121,6 +121,10 @@ struct Shared {
     /// `Some` + `REEMU_HW=vulkan` = um core que negocia Vulkan roda
     /// **in-process** (etapa 12 B3b), não no `reemu-core-host`.
     vulkan_shared_device: Mutex<Option<domain::core_loader::VulkanSharedDevice>>,
+    /// Fábrica pra cores Vulkan "donos do device" (Beetle PSX HW) — publicada
+    /// pelo shell junto do `vulkan_shared_device`. Ver `docs/ai-context/12`
+    /// §Beetle (D2/D3).
+    vulkan_negotiator: Mutex<Option<domain::core_loader::VulkanDeviceNegotiator>>,
     /// Core Vulkan in-process (etapa 12 B3b/D4). **Dirigido pela thread do
     /// compositor** (o `retro_run` do Beetle submete sozinho na `VkQueue`, que
     /// é a do wgpu — tem que ser a MESMA thread do submit do wgpu). O
@@ -165,6 +169,7 @@ impl EmuSession {
             nav: Mutex::new(Vec::new()),
             child_pid: Mutex::new(None),
             vulkan_shared_device: Mutex::new(None),
+            vulkan_negotiator: Mutex::new(None),
             vk_local: Mutex::new(None),
             vk_local_active: AtomicBool::new(false),
             vk_local_paused: AtomicBool::new(false),
@@ -215,6 +220,20 @@ impl EmuSession {
             .vulkan_shared_device
             .lock()
             .unwrap_or_else(|p| p.into_inner()) = Some(device);
+    }
+
+    /// Publica a fábrica pra cores Vulkan "donos do device" (Beetle PSX HW) —
+    /// chamada pelo shell junto do `attach_vulkan_device`. Ver
+    /// `docs/ai-context/12-vulkan-hw-render-fase2.md` §Beetle.
+    pub fn attach_vulkan_negotiator(
+        &self,
+        negotiator: domain::core_loader::VulkanDeviceNegotiator,
+    ) {
+        *self
+            .shared
+            .vulkan_negotiator
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(negotiator);
     }
 
     /// Roda um frame do core Vulkan in-process, SE houver um e não estiver
@@ -429,10 +448,16 @@ fn snapshot_input() -> [PortInput; 4] {
     })
 }
 
-/// Se um core deve rodar in-process (etapa 12 B3b): precisa do opt-in
-/// `REEMU_HW=vulkan` E dos handles do `VkDevice` do compositor já publicados
-/// (`EmuSession::attach_vulkan_device`). `VulkanSharedDevice` é `Copy`.
-fn route_local_device(shared: &Shared) -> Option<domain::core_loader::VulkanSharedDevice> {
+type LocalVkRoute = (
+    Option<domain::core_loader::VulkanSharedDevice>,
+    Option<domain::core_loader::VulkanDeviceNegotiator>,
+);
+
+/// Se um core deve rodar in-process (etapa 12 B3b/D3): precisa do opt-in
+/// `REEMU_HW=vulkan` E de pelo menos um caminho de device publicado pelo shell
+/// — o `VkDevice` do compositor (`attach_vulkan_device`, pra `vk_rendering`/
+/// flycast) e/ou a fábrica core-owned (`attach_vulkan_negotiator`, pro Beetle).
+fn route_local_device(shared: &Shared) -> Option<LocalVkRoute> {
     let opted_in = matches!(
         std::env::var("REEMU_HW")
             .map(|v| v.trim().to_ascii_lowercase())
@@ -442,10 +467,16 @@ fn route_local_device(shared: &Shared) -> Option<domain::core_loader::VulkanShar
     if !opted_in {
         return None;
     }
-    *shared
+    let device = *shared
         .vulkan_shared_device
         .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    let negotiator = shared
+        .vulkan_negotiator
+        .lock()
         .unwrap_or_else(|p| p.into_inner())
+        .clone();
+    (device.is_some() || negotiator.is_some()).then_some((device, negotiator))
 }
 
 fn gamepad_loop(shared: Arc<Shared>) {
@@ -991,7 +1022,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 // `HwRenderUnsupported` e caímos pro processo filho (que isola
                 // cores não re-entrantes).
                 match route_local_device(&shared) {
-                    Some(device) if !known_non_vulkan.contains(&id.0) => {
+                    Some((device, negotiator)) if !known_non_vulkan.contains(&id.0) => {
                         match LocalCore::load(
                             &id.0,
                             &rom,
@@ -1001,6 +1032,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                             initial_option_values.clone(),
                             initial_save_ram.clone(),
                             device,
+                            negotiator,
                         ) {
                             Ok((lc, av)) => {
                                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) =

@@ -257,13 +257,25 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   chama o `create_device` do core com `required_device_extensions/features` do
   `wgpu-hal` (`Adapter::required_device_extensions` / `physical_device_features`).
   Devolve os handles do `retro_vulkan_context`.
-- **D3 — roteamento**: distinguir "core dono do device" de "frontend dono". O
-  `vk_rendering` manda `{app_info, NULL}` (create_device NULL); flycast e Beetle
-  mandam create_device não-NULL mas só o Beetle EXIGE. Heurística: se
-  `create_device != NULL`, **tenta** o caminho D2 primeiro e cai pro
-  frontend-cria se o `context_reset` não entregar frame. O `FrameProcessor`
-  vira lazy/rebuild: sobe um mínimo no boot (surface, canvas) e o device real
-  entra quando o core Vulkan carrega. Toca `commands.rs`/`lib.rs`.
+- **D2 (feito) — `FrameProcessor::from_core_negotiation(VkNegotiation)`**:
+  constrói `ash::Entry`+`Instance` (apiVersion do `get_application_info` do
+  core, piso 1.1; extensões de `wgpu::hal::vulkan::Instance::desired_extensions`),
+  pergunta pro `wgpu-hal` (instância hal descartável, `drop_callback` no-op)
+  quais `required_device_extensions` + core features ele quer, chama o
+  `create_device` do core com elas, reconstrói o `FrameProcessor` via
+  `from_adopted_vulkan` no device resultante, devolve `(Self,
+  VulkanSharedDevice)`. Os `drop_callback` do `from_adopted_vulkan` viraram
+  no-op (a `VkInstance`/`VkDevice` são do core).
+- **D3 (feito) — roteamento**: `domain::VulkanDeviceNegotiator =
+  Arc<dyn Fn(VkNegotiation) -> Result<VulkanSharedDevice, String>>`. O shell
+  monta esse `Arc` no setup (`lib.rs`) capturando o `AppHandle` + os handles da
+  surface (`gpu::SendHandles`): ele chama `from_core_negotiation`, reanexa a
+  surface, e **troca o `FrameProcessor` no `AppState.gpu`**.
+  `EmuSession::attach_vulkan_negotiator` publica; `route_local_device` roteia
+  local se `REEMU_HW=vulkan` + (device OU negotiator). `loader.rs::
+  setup_vk_context`: se o core registrou `create_device` E temos negotiator →
+  chama a fábrica → `VkContext::adopt(handles)`; senão → frontend-owned
+  (`vk_rendering`/flycast) → `bring-up`.
 - **D4 (feito) — thread única.** Confirmado na fonte que o wgpu 30 submete por
   fora do `Queue::submit` (`queue_write_texture` faz `submission.submit` direto),
   então o `Mutex<VkQueue>` seria frágil. Escolhido: **o core Vulkan in-process é
@@ -280,9 +292,14 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   `sleep(15ms)` quando `step_vk_local` deu frame (o pacing do core manda).
 - **D5** — validar com o core do Beetle + BIOS PS1 + jogo, no HW do usuário.
 
-- **Estado:** D1 + D4 feitos e validados (D1 lavapipe; D4 = triângulo do
-  `vk_rendering` girando liso no app RTX 3060, agora pump-driven, 2026-09-07).
-  **D2 é o próximo:** `vk_context.rs` construir a `ash::Instance` com as extensões que o
+- **Estado:** D1 + D2 + D3 + D4 feitos (D1/D4 validados). **Falta D5:** rodar
+  `REEMU_HW=vulkan` + `mednafen_psx_hw` + BIOS PS1 + jogo no HW do usuário e
+  ver o PS1 na tela pelo caminho Vulkan. Os riscos abertos: features
+  encadeadas que o `create_device` v1 do Beetle não pede (passamos
+  `Features::empty()` — pode faltar algo pro chain); a troca do
+  `FrameProcessor` mid-flight; save state (o `retro_serialize` do Beetle pode
+  submeter na `VkQueue` da thread errada — ver D4).
+  Referência histórica do plano D2 original: `vk_context.rs` construir a `ash::Instance` com as extensões que o
   `wgpu-hal` quer, chamar o `create_device` do core passando
   `Adapter::required_device_extensions` / `physical_device_features` do
   `wgpu-hal`, devolver um `AdoptedVulkan`. Depois D3 (roteamento core-dono +

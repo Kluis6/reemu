@@ -51,6 +51,28 @@ pub struct VulkanSharedDevice {
     pub queue_family_index: u32,
 }
 
+/// Ponteiros da negociação de HW render Vulkan v1 de um core que EXIGE criar o
+/// `VkDevice` ele mesmo (Beetle PSX HW — o `context_reset` dele aborta se o
+/// frontend não chamou o `create_device`). O adapter (`core-loader-desktop`)
+/// passa isto pro `VulkanDeviceNegotiator` do shell, que constrói a
+/// `ash::Instance` com as extensões que o `wgpu-hal` quer, chama o
+/// `create_device` do core, reconstrói o `FrameProcessor` sobre esse device, e
+/// devolve os handles como [`VulkanSharedDevice`].
+#[derive(Debug, Clone, Copy)]
+pub struct VkNegotiation {
+    /// `retro_vulkan_get_application_info_t` como inteiro (`0` = o core não deu).
+    pub get_application_info: usize,
+    /// `retro_vulkan_create_device_t` como inteiro (nunca `0` aqui).
+    pub create_device: usize,
+}
+
+/// Fábrica que o shell fornece: dada a negociação de um core "dono do device",
+/// cria o `VkDevice` (via o `create_device` do core), reconstrói o compositor
+/// wgpu sobre ele, e devolve os handles. `Err` = não deu (o loader cai pro
+/// caminho "frontend cria o device" ou pro bring-up).
+pub type VulkanDeviceNegotiator =
+    std::sync::Arc<dyn Fn(VkNegotiation) -> Result<VulkanSharedDevice, String> + Send + Sync>;
+
 /// Um core instalado localmente. `render_requirements` fica `None` até o
 /// primeiro load detectar (decisão: runtime, sem curadoria).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

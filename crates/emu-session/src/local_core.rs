@@ -51,11 +51,17 @@ impl LocalCore {
         save_dir: PathBuf,
         initial_option_values: HashMap<String, String>,
         initial_save_ram: Option<Vec<u8>>,
-        shared_device: domain::core_loader::VulkanSharedDevice,
+        shared_device: Option<domain::core_loader::VulkanSharedDevice>,
+        negotiator: Option<domain::core_loader::VulkanDeviceNegotiator>,
     ) -> Result<(Self, SystemAvInfo), CoreLoadError> {
         core_loader_desktop::set_pending_core_option_values(initial_option_values);
-        let loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir)
-            .with_vulkan_shared_device(shared_device);
+        let mut loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir);
+        if let Some(s) = shared_device {
+            loader = loader.with_vulkan_shared_device(s);
+        }
+        if let Some(n) = negotiator {
+            loader = loader.with_vulkan_negotiator(n);
+        }
         let mut core = loader.open_core(&CoreId(core_id.to_string()), rom_path)?;
 
         if core.render_requirements().render_backend != RenderBackend::Vulkan {

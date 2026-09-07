@@ -322,8 +322,89 @@ struct Composite {
 /// `docs/ai-context/12-vulkan-hw-render-fase2.md` §Beetle). Passado pra
 /// [`FrameProcessor::from_adopted_vulkan`], que envolve tudo no wgpu sem criar
 /// device nenhum. O core é o dono — o `FrameProcessor` não destrói nada.
-// Consumido pelo `vk_context::create_via_core_negotiation` na fatia D2; por
-// enquanto só o teste `from_adopted_vulkan_runs_the_chain` usa.
+/// Handles crus de janela/display pra reanexar a surface nativa depois — o
+/// `unsafe impl Send/Sync` é seguro porque os ponteiros wl vivem enquanto a
+/// `VideoSurface` no `AppState` viver (o resto do app). Usado só pelo
+/// negociador Vulkan §Beetle (D3), que roda numa thread do `emu-session`.
+pub struct SendHandles {
+    display: raw_window_handle::RawDisplayHandle,
+    window: raw_window_handle::RawWindowHandle,
+}
+// SAFETY: ver doc acima.
+unsafe impl Send for SendHandles {}
+unsafe impl Sync for SendHandles {}
+impl SendHandles {
+    /// # Safety
+    /// `display`/`window` têm que continuar válidos enquanto este valor viver.
+    pub unsafe fn new(
+        display: raw_window_handle::RawDisplayHandle,
+        window: raw_window_handle::RawWindowHandle,
+    ) -> Self {
+        Self { display, window }
+    }
+    pub fn display(&self) -> raw_window_handle::RawDisplayHandle {
+        self.display
+    }
+    pub fn window(&self) -> raw_window_handle::RawWindowHandle {
+        self.window
+    }
+}
+
+/// `struct retro_vulkan_context` (libretro_vulkan.h) — o core preenche isto no
+/// `create_device` da negociação. Espelha `core_loader_desktop::vk_sys`.
+#[repr(C)]
+#[derive(Default)]
+struct RetroVulkanContext {
+    gpu: ash::vk::PhysicalDevice,
+    device: ash::vk::Device,
+    queue: ash::vk::Queue,
+    queue_family_index: u32,
+    presentation_queue: ash::vk::Queue,
+    presentation_queue_family_index: u32,
+}
+
+/// Extensões de device + `VkPhysicalDeviceFeatures` (core) que o `wgpu-hal 30`
+/// quer pra adotar um device de `phys` desta `instance`. Constrói uma
+/// `wgpu::hal::vulkan::Instance` DESCARTÁVEL (de clones, com `drop_callback`
+/// no-op pra NÃO destruir a `VkInstance` real) só pra perguntar.
+///
+/// # Safety
+/// `entry`/`instance` têm que ser válidos; `phys` tem que ser da `instance`.
+unsafe fn wgpu_adopt_reqs(
+    entry: &ash::Entry,
+    instance: &ash::Instance,
+    instance_exts: &[&'static std::ffi::CStr],
+    api_version: u32,
+    phys: ash::vk::PhysicalDevice,
+) -> Option<(Vec<&'static std::ffi::CStr>, ash::vk::PhysicalDeviceFeatures)> {
+    let hal = unsafe {
+        wgpu::hal::vulkan::Instance::from_raw(
+            entry.clone(),
+            instance.clone(),
+            api_version,
+            0,
+            None,
+            instance_exts.to_vec(),
+            wgpu::InstanceFlags::from_build_config().with_env(),
+            wgpu::MemoryBudgetThresholds::default(),
+            false,
+            Some(Box::new(|| {})), // no-op: não destrói a VkInstance real
+        )
+    }
+    .ok()?;
+    let exposed = hal.expose_adapter(phys)?;
+    let exts = exposed
+        .adapter
+        .required_device_extensions(wgpu::Features::empty());
+    let feats = exposed
+        .adapter
+        .physical_device_features(&exts, wgpu::Features::empty())
+        .get_core();
+    Some((exts, feats))
+}
+
+// Consumido pelo `from_core_negotiation` (D2/D3) e pelo teste
+// `from_adopted_vulkan_runs_the_chain`.
 #[allow(dead_code)]
 pub struct AdoptedVulkan {
     pub entry: ash::Entry,
@@ -551,7 +632,9 @@ impl FrameProcessor {
                 wgpu::InstanceFlags::from_build_config().with_env(),
                 wgpu::MemoryBudgetThresholds::default(),
                 false, // has_nv_optimus
-                None,  // drop_callback — a instância é do core
+                // drop_callback no-op: a `VkInstance` é do core — o
+                // `FrameProcessor` NÃO pode destruí-la ao dropar.
+                Some(Box::new(|| {})),
             )
         }
         .inspect_err(|e| log::error!("adopt vk: Instance::from_raw: {e}"))
@@ -567,7 +650,8 @@ impl FrameProcessor {
         let open_device = unsafe {
             exposed.adapter.device_from_raw(
                 v.device,
-                None, // drop_callback — o device é do core
+                // drop_callback no-op: o `VkDevice` é do core.
+                Some(Box::new(|| {})),
                 &v.device_extensions,
                 v.features,
                 &limits,
@@ -598,6 +682,150 @@ impl FrameProcessor {
         // `interop_ok` = false: o caminho Beetle é zero-cópia via
         // `texture_from_raw` no MESMO device, não usa `dma_buf`.
         Self::assemble(wgpu_instance, adapter, device, queue, false)
+    }
+
+    /// Etapa 12 §Beetle (D2/D3): um core Vulkan que EXIGE criar o `VkDevice`
+    /// ele mesmo na negociação (Beetle PSX HW — o `context_reset` dele aborta
+    /// se `context == NULL`). Constrói a `ash::Instance` com as extensões do
+    /// `wgpu-hal`, chama o `create_device` do core passando as
+    /// extensões/features que o `wgpu-hal` quer, e reconstrói o `FrameProcessor`
+    /// sobre o device resultante. Devolve os handles pro `VkContext::adopt` do
+    /// `core-loader-desktop` montar a ponte de frame.
+    ///
+    /// # Safety
+    /// `neg.create_device` (e `neg.get_application_info`, se != 0) têm que
+    /// apontar pros callbacks vivos da `.so` do core.
+    pub unsafe fn from_core_negotiation(
+        neg: domain::core_loader::VkNegotiation,
+    ) -> Result<(Self, VulkanSharedDevice), String> {
+        use ash::vk::{self, Handle as _};
+        use std::os::raw::c_char;
+
+        let entry =
+            unsafe { ash::Entry::load() }.map_err(|e| format!("carregar loader Vulkan: {e}"))?;
+
+        // apiVersion: o que o core pediu (Beetle manda VK_MAKE_VERSION(1,0,32)),
+        // com piso em 1.1 (o wgpu-hal quer `get_physical_device_properties2`).
+        let api_version = if neg.get_application_info != 0 {
+            let f: unsafe extern "C" fn() -> *const vk::ApplicationInfo<'static> =
+                unsafe { std::mem::transmute(neg.get_application_info) };
+            let p = unsafe { f() };
+            if p.is_null() {
+                vk::API_VERSION_1_1
+            } else {
+                unsafe { (*p).api_version }.max(vk::API_VERSION_1_1)
+            }
+        } else {
+            vk::API_VERSION_1_1
+        };
+
+        let flags = wgpu::InstanceFlags::from_build_config().with_env();
+        let inst_exts =
+            wgpu::hal::vulkan::Instance::desired_extensions(&entry, api_version, flags)
+                .map_err(|e| format!("wgpu-hal desired_extensions: {e}"))?;
+        let inst_exts_c: Vec<*const c_char> = inst_exts.iter().map(|e| e.as_ptr()).collect();
+
+        let app = vk::ApplicationInfo::default().api_version(api_version);
+        let ici = vk::InstanceCreateInfo::default()
+            .application_info(&app)
+            .enabled_extension_names(&inst_exts_c);
+        let instance = unsafe { entry.create_instance(&ici, None) }
+            .map_err(|e| format!("vkCreateInstance: {e}"))?;
+
+        let cleanup = |inst: &ash::Instance| unsafe { inst.destroy_instance(None) };
+
+        let gpus = match unsafe { instance.enumerate_physical_devices() } {
+            Ok(g) => g,
+            Err(e) => {
+                cleanup(&instance);
+                return Err(format!("enumerate_physical_devices: {e}"));
+            }
+        };
+        let gpu = gpus
+            .iter()
+            .copied()
+            .find(|&g| {
+                unsafe { instance.get_physical_device_properties(g) }.device_type
+                    == vk::PhysicalDeviceType::DISCRETE_GPU
+            })
+            .or_else(|| gpus.first().copied());
+        let Some(gpu) = gpu else {
+            cleanup(&instance);
+            return Err("nenhuma GPU Vulkan".into());
+        };
+
+        // Pergunta pro wgpu-hal (instância hal descartável, drop no-op) quais
+        // device exts + core features ele precisa.
+        let reqs = unsafe { wgpu_adopt_reqs(&entry, &instance, &inst_exts, api_version, gpu) };
+        let Some((dev_exts, dev_feats)) = reqs else {
+            cleanup(&instance);
+            return Err("wgpu-hal não expôs a GPU".into());
+        };
+        let dev_exts_c: Vec<*const c_char> = dev_exts.iter().map(|e| e.as_ptr()).collect();
+
+        let create_device: unsafe extern "C" fn(
+            *mut RetroVulkanContext,
+            vk::Instance,
+            vk::PhysicalDevice,
+            vk::SurfaceKHR,
+            vk::PFN_vkGetInstanceProcAddr,
+            *const *const c_char,
+            u32,
+            *const *const c_char,
+            u32,
+            *const vk::PhysicalDeviceFeatures,
+        ) -> bool = unsafe { std::mem::transmute(neg.create_device) };
+        let gipa = entry.static_fn().get_instance_proc_addr;
+        let mut ctx = RetroVulkanContext::default();
+        let ok = unsafe {
+            create_device(
+                &mut ctx,
+                instance.handle(),
+                gpu,
+                vk::SurfaceKHR::null(),
+                gipa,
+                dev_exts_c.as_ptr(),
+                dev_exts_c.len() as u32,
+                std::ptr::null(),
+                0,
+                &dev_feats,
+            )
+        };
+        if !ok || ctx.device.is_null() {
+            cleanup(&instance);
+            return Err("o create_device do core devolveu false".into());
+        }
+        let final_gpu = if ctx.gpu.is_null() { gpu } else { ctx.gpu };
+        log::info!(
+            "core criou o VkDevice (queue family {}) — wgpu vai adotar",
+            ctx.queue_family_index
+        );
+
+        let device = unsafe { ash::Device::load(instance.fp_v1_0(), ctx.device) };
+        let shared = VulkanSharedDevice {
+            get_instance_proc_addr: gipa as usize,
+            instance: instance.handle().as_raw() as usize,
+            physical_device: final_gpu.as_raw() as usize,
+            device: ctx.device.as_raw() as usize,
+            queue: ctx.queue.as_raw() as usize,
+            queue_family_index: ctx.queue_family_index,
+        };
+
+        let adopted = AdoptedVulkan {
+            entry,
+            instance,
+            physical_device: final_gpu,
+            device,
+            queue_family_index: ctx.queue_family_index,
+            queue_index: 0,
+            instance_api_version: api_version,
+            instance_extensions: inst_exts,
+            device_extensions: dev_exts,
+            features: wgpu::Features::empty(),
+        };
+        let fp = unsafe { Self::from_adopted_vulkan(adopted) }
+            .ok_or("from_adopted_vulkan falhou no device do core")?;
+        Ok((fp, shared))
     }
 
     /// Anexa uma surface nativa a partir de raw handles (a `wl_surface` de uma
