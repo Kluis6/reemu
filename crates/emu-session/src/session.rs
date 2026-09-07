@@ -14,13 +14,14 @@
 //! por IPC. `.srm`/save-state ficam com os arquivos aqui também; só os bytes
 //! vêm do filho.
 
+use crate::local_core::LocalCore;
 use core_ipc::{Channel, FrameKind, HwPlaneMeta, PortInput, ToChild, ToParent};
 use core_loader_desktop::{AnalogState, RetroPadState};
 use domain::audio::AudioSink;
 use domain::core_loader::{CoreId, CoreLoadError, SystemAvInfo};
 use domain::core_options::CoreOptionDefinition;
 use domain::frame_source::{DmabufPlaneInfo, Frame, FrameOrigin, GpuTextureHandle};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -115,6 +116,11 @@ struct Shared {
     /// Observabilidade/diagnóstico — e a garantia de "processo novo por
     /// load" (o bug de reentrância do N64) é testável a partir disto.
     child_pid: Mutex<Option<u32>>,
+    /// Handles crus do `VkDevice` do compositor, publicados pelo shell depois
+    /// que o `FrameProcessor` sobe (`EmuSession::attach_vulkan_device`).
+    /// `Some` + `REEMU_HW=vulkan` = um core que negocia Vulkan roda
+    /// **in-process** (etapa 12 B3b), não no `reemu-core-host`.
+    vulkan_shared_device: Mutex<Option<domain::core_loader::VulkanSharedDevice>>,
 }
 
 impl Shared {
@@ -146,6 +152,7 @@ impl EmuSession {
             gamepads: Mutex::new(Vec::new()),
             nav: Mutex::new(Vec::new()),
             child_pid: Mutex::new(None),
+            vulkan_shared_device: Mutex::new(None),
         });
 
         let gamepad_thread = cfg.enable_gamepad.then(|| {
@@ -179,6 +186,19 @@ impl EmuSession {
         let (rtx, rrx) = mpsc::channel();
         self.send(make(rtx))?;
         rrx.recv().map_err(|_| SessionError::ThreadDown)
+    }
+
+    /// Publica os handles do `VkDevice` do compositor (do
+    /// `FrameProcessor::vulkan_shared_device()`). Chamado pelo shell depois que
+    /// o `FrameProcessor` sobe. A partir daí, com `REEMU_HW=vulkan`, um core
+    /// que negocia Vulkan roda in-process (etapa 12 B3b) em vez de no
+    /// `reemu-core-host` — a `VkImage` dele fica no mesmo device do compositor.
+    pub fn attach_vulkan_device(&self, device: domain::core_loader::VulkanSharedDevice) {
+        *self
+            .shared
+            .vulkan_shared_device
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(device);
     }
 
     /// Carrega e começa a rodar. Bloqueia até o core abrir (ou falhar).
@@ -356,6 +376,51 @@ fn snapshot_input() -> [PortInput; 4] {
         joypad_mask: PARENT_PAD.mask(port),
         sticks: PARENT_ANALOG.sticks(port),
     })
+}
+
+/// Se um core deve rodar in-process (etapa 12 B3b): precisa do opt-in
+/// `REEMU_HW=vulkan` E dos handles do `VkDevice` do compositor já publicados
+/// (`EmuSession::attach_vulkan_device`). `VulkanSharedDevice` é `Copy`.
+fn route_local_device(shared: &Shared) -> Option<domain::core_loader::VulkanSharedDevice> {
+    let opted_in = matches!(
+        std::env::var("REEMU_HW")
+            .map(|v| v.trim().to_ascii_lowercase())
+            .as_deref(),
+        Ok("vulkan") | Ok("vk")
+    );
+    if !opted_in {
+        return None;
+    }
+    *shared
+        .vulkan_shared_device
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+}
+
+/// Publica o resultado de um `retro_run` do caminho in-process em `shared` —
+/// o equivalente ao `handle_event(FrameReady/AudioBatch)` do caminho IPC.
+fn publish_local_tick(
+    tick: crate::local_core::FrameTick,
+    shared: &Shared,
+    sink: &mut Option<Box<dyn AudioSink>>,
+) {
+    if let Some(frame) = tick.frame {
+        shared.frame_seq.fetch_add(1, Ordering::Relaxed);
+        *shared
+            .latest_frame
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(frame);
+    }
+    if !tick.audio.is_empty() {
+        match sink.as_mut() {
+            Some(s) => s.push_samples(&tick.audio, tick.sample_rate),
+            None => shared
+                .audio
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .extend_from_slice(&tick.audio),
+        }
+    }
 }
 
 fn gamepad_loop(shared: Arc<Shared>) {
@@ -725,6 +790,16 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
     let mut proc: Option<ChildProc> = None;
     let mut events: Option<Receiver<InboundEvent>> = None;
     let mut ring: Option<core_ipc::FrameRing> = None;
+    // Caminho in-process (etapa 12 B3b): mutuamente exclusivo com `proc` — um
+    // core Vulkan roda AQUI (device do compositor), nunca no `reemu-core-host`.
+    let mut local: Option<LocalCore> = None;
+    // O processo filho pausa sozinho (para de chamar `retro_run`); o caminho
+    // in-process precisa que ESTE loop pare de tiquetaquear.
+    let mut local_paused = false;
+    // Cores que já provamos localmente e NÃO negociaram Vulkan — não tenta de
+    // novo (um 2º `retro_init` no processo pai derruba cores não re-entrantes
+    // como o parallel_n64, e esses vão pro processo filho de qualquer jeito).
+    let mut known_non_vulkan: std::collections::HashSet<String> = HashSet::new();
     let mut current_srm: Option<PathBuf> = None;
     let mut last_srm_flush = Instant::now();
 
@@ -742,13 +817,30 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
         .ok();
 
     loop {
-        let cmd = if proc.is_none() {
+        let idle_blocks = proc.is_none() && (local.is_none() || local_paused);
+        let cmd = if idle_blocks {
             rx.recv().ok()
         } else {
             rx.try_recv().ok()
         };
 
         let Some(cmd) = cmd else {
+            if let Some(lc) = local.as_mut() {
+                // Caminho in-process: roda 1 frame (com pacing próprio) e
+                // publica direto em `shared` — sem IPC, sem anel.
+                lc.apply_input(&snapshot_input());
+                let tick = lc.run_frame();
+                publish_local_tick(tick, &shared, &mut sink);
+                if let Some(path) = current_srm.as_ref() {
+                    if last_srm_flush.elapsed() >= SRM_FLUSH_INTERVAL {
+                        if let Some(bytes) = lc.save_ram() {
+                            let _ = srm_tx.send((path.clone(), bytes));
+                        }
+                        last_srm_flush = Instant::now();
+                    }
+                }
+                continue;
+            }
             if let Some(erx) = events.as_ref() {
                 while let Ok(ev) = erx.try_recv() {
                     handle_event(ev, &shared, &mut sink, &mut ring);
@@ -790,21 +882,74 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         write_srm(path, &bytes);
                     }
                 }
-                if let Some(p) = proc.take() {
-                    p.kill();
+                if let (Some(lc), Some(path)) = (local.as_ref(), current_srm.as_ref()) {
+                    if let Some(bytes) = lc.save_ram() {
+                        write_srm(path, &bytes);
+                    }
                 }
-                events = None;
-                ring = None;
-                current_srm = None;
+                // Idle + solta o frame ANTES de derrubar o core: o video pump
+                // para de amostrar a `VkImage` (que o teardown do
+                // `VkFrameBridge` vai esperar/destruir).
+                shared.set_state(SessionState::Idle);
                 *shared
                     .latest_frame
                     .lock()
                     .unwrap_or_else(|p| p.into_inner()) = None;
+                if let Some(p) = proc.take() {
+                    p.kill();
+                }
+                drop(local.take());
+                local_paused = false;
+                events = None;
+                ring = None;
+                current_srm = None;
                 *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner()) = None;
-                shared.set_state(SessionState::Idle);
 
                 let target_srm = srm_path(&save_dir, &rom);
                 let initial_save_ram = std::fs::read(&target_srm).ok();
+
+                // Etapa 12 B3b: com `REEMU_HW=vulkan` + device do compositor
+                // publicado, tenta rodar o core AQUI (in-process). Se ele não
+                // negociar Vulkan, `LocalCore::load` devolve
+                // `HwRenderUnsupported` e caímos pro processo filho (que isola
+                // cores não re-entrantes).
+                match route_local_device(&shared) {
+                    Some(device) if !known_non_vulkan.contains(&id.0) => {
+                        match LocalCore::load(
+                            &id.0,
+                            &rom,
+                            cores_dir.clone(),
+                            system_dir.clone(),
+                            save_dir.clone(),
+                            initial_option_values.clone(),
+                            initial_save_ram.clone(),
+                            device,
+                        ) {
+                            Ok((lc, av)) => {
+                                *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) =
+                                    Some(id.0.clone());
+                                shared.set_state(SessionState::Running);
+                                current_srm = Some(target_srm);
+                                last_srm_flush = Instant::now();
+                                if let Some(s) = sink.as_mut() {
+                                    s.resume();
+                                }
+                                local = Some(lc);
+                                let _ = reply.send(Ok(av));
+                                continue;
+                            }
+                            Err(CoreLoadError::HwRenderUnsupported(reason)) => {
+                                known_non_vulkan.insert(id.0.clone());
+                                log::info!("core {}: {reason} — usando o processo filho", id.0);
+                            }
+                            Err(e) => {
+                                let _ = reply.send(Err(e));
+                                continue;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
 
                 match ChildProc::spawn() {
                     Ok((p, erx)) => {
@@ -901,9 +1046,16 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         write_srm(path, &bytes);
                     }
                 }
+                if let (Some(lc), Some(path)) = (local.as_ref(), current_srm.as_ref()) {
+                    if let Some(bytes) = lc.save_ram() {
+                        write_srm(path, &bytes);
+                    }
+                }
                 if let Some(p) = proc.take() {
                     p.kill();
                 }
+                drop(local.take());
+                local_paused = false;
                 events = None;
                 ring = None;
                 current_srm = None;
@@ -915,8 +1067,15 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(());
             }
             Command::SetPaused(want_paused, reply) => {
+                let have_core = proc.is_some() || local.is_some();
                 if let Some(p) = proc.as_ref() {
                     let _ = p.channel.send(&ToChild::SetPaused(want_paused), &[]);
+                }
+                if let Some(lc) = local.as_mut() {
+                    lc.set_paused(want_paused);
+                    local_paused = want_paused;
+                }
+                if have_core {
                     if let Some(s) = sink.as_mut() {
                         if want_paused {
                             s.pause();
@@ -933,44 +1092,52 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(());
             }
             Command::SaveState(reply) => {
-                let bytes = match (proc.as_ref(), events.as_ref()) {
-                    (Some(p), Some(erx)) => {
-                        let _ = p.channel.send(&ToChild::SaveState, &[]);
-                        wait_for_reply(
-                            erx,
-                            Duration::from_secs(5),
-                            &shared,
-                            &mut sink,
-                            &mut ring,
-                            |ev| match ev.msg {
-                                ToParent::SaveStateResult(b) => Ok(b),
-                                _ => Err(ev),
-                            },
-                        )
-                        .flatten()
+                let bytes = if let Some(lc) = local.as_mut() {
+                    lc.serialize_state()
+                } else {
+                    match (proc.as_ref(), events.as_ref()) {
+                        (Some(p), Some(erx)) => {
+                            let _ = p.channel.send(&ToChild::SaveState, &[]);
+                            wait_for_reply(
+                                erx,
+                                Duration::from_secs(5),
+                                &shared,
+                                &mut sink,
+                                &mut ring,
+                                |ev| match ev.msg {
+                                    ToParent::SaveStateResult(b) => Ok(b),
+                                    _ => Err(ev),
+                                },
+                            )
+                            .flatten()
+                        }
+                        _ => None,
                     }
-                    _ => None,
                 };
                 let _ = reply.send(bytes);
             }
             Command::RestoreState(data, reply) => {
-                let ok = match (proc.as_ref(), events.as_ref()) {
-                    (Some(p), Some(erx)) => {
-                        let _ = p.channel.send(&ToChild::RestoreState(data), &[]);
-                        wait_for_reply(
-                            erx,
-                            Duration::from_secs(5),
-                            &shared,
-                            &mut sink,
-                            &mut ring,
-                            |ev| match ev.msg {
-                                ToParent::RestoreStateResult(ok) => Ok(ok),
-                                _ => Err(ev),
-                            },
-                        )
-                        .unwrap_or(false)
+                let ok = if let Some(lc) = local.as_mut() {
+                    lc.restore_state(&data)
+                } else {
+                    match (proc.as_ref(), events.as_ref()) {
+                        (Some(p), Some(erx)) => {
+                            let _ = p.channel.send(&ToChild::RestoreState(data), &[]);
+                            wait_for_reply(
+                                erx,
+                                Duration::from_secs(5),
+                                &shared,
+                                &mut sink,
+                                &mut ring,
+                                |ev| match ev.msg {
+                                    ToParent::RestoreStateResult(ok) => Ok(ok),
+                                    _ => Err(ev),
+                                },
+                            )
+                            .unwrap_or(false)
+                        }
+                        _ => false,
                     }
-                    _ => false,
                 };
                 let _ = reply.send(ok);
             }
@@ -986,45 +1153,53 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(());
             }
             Command::GetCoreOptions(reply) => {
-                let result = match (proc.as_ref(), events.as_ref()) {
-                    (Some(p), Some(erx)) => {
-                        let _ = p.channel.send(&ToChild::GetCoreOptions, &[]);
-                        wait_for_reply(
-                            erx,
-                            Duration::from_secs(2),
-                            &shared,
-                            &mut sink,
-                            &mut ring,
-                            |ev| match ev.msg {
-                                ToParent::CoreOptionsSnapshot { schema, values } => {
-                                    Ok((schema, values))
-                                }
-                                _ => Err(ev),
-                            },
-                        )
+                let result = if let Some(lc) = local.as_ref() {
+                    Some(lc.core_options())
+                } else {
+                    match (proc.as_ref(), events.as_ref()) {
+                        (Some(p), Some(erx)) => {
+                            let _ = p.channel.send(&ToChild::GetCoreOptions, &[]);
+                            wait_for_reply(
+                                erx,
+                                Duration::from_secs(2),
+                                &shared,
+                                &mut sink,
+                                &mut ring,
+                                |ev| match ev.msg {
+                                    ToParent::CoreOptionsSnapshot { schema, values } => {
+                                        Ok((schema, values))
+                                    }
+                                    _ => Err(ev),
+                                },
+                            )
+                        }
+                        _ => None,
                     }
-                    _ => None,
                 };
                 let _ = reply.send(result.unwrap_or_default());
             }
             Command::SetCoreOption(key, value, reply) => {
-                let ok = match (proc.as_ref(), events.as_ref()) {
-                    (Some(p), Some(erx)) => {
-                        let _ = p.channel.send(&ToChild::SetCoreOption { key, value }, &[]);
-                        wait_for_reply(
-                            erx,
-                            Duration::from_secs(2),
-                            &shared,
-                            &mut sink,
-                            &mut ring,
-                            |ev| match ev.msg {
-                                ToParent::SetCoreOptionResult(ok) => Ok(ok),
-                                _ => Err(ev),
-                            },
-                        )
-                        .unwrap_or(false)
+                let ok = if let Some(lc) = local.as_ref() {
+                    lc.set_core_option(&key, &value)
+                } else {
+                    match (proc.as_ref(), events.as_ref()) {
+                        (Some(p), Some(erx)) => {
+                            let _ = p.channel.send(&ToChild::SetCoreOption { key, value }, &[]);
+                            wait_for_reply(
+                                erx,
+                                Duration::from_secs(2),
+                                &shared,
+                                &mut sink,
+                                &mut ring,
+                                |ev| match ev.msg {
+                                    ToParent::SetCoreOptionResult(ok) => Ok(ok),
+                                    _ => Err(ev),
+                                },
+                            )
+                            .unwrap_or(false)
+                        }
+                        _ => false,
                     }
-                    _ => false,
                 };
                 let _ = reply.send(ok);
             }
@@ -1037,9 +1212,15 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         write_srm(path, &bytes);
                     }
                 }
+                if let (Some(lc), Some(path)) = (local.as_ref(), current_srm.as_ref()) {
+                    if let Some(bytes) = lc.save_ram() {
+                        write_srm(path, &bytes);
+                    }
+                }
                 if let Some(p) = proc.take() {
                     p.kill();
                 }
+                drop(local.take());
                 break;
             }
         }

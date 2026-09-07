@@ -10,6 +10,7 @@
 //! comandos vêm de `#[tauri::command]`.
 
 mod focus;
+mod local_core;
 mod session;
 
 pub use focus::FocusController;

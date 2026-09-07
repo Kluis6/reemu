@@ -182,18 +182,31 @@ Modelo do `vk_rendering` / Beetle PSX (core NÃO submete — usa
     amostra com `texture_from_raw` → chain → readback. Verde: frame 1,
     320×240, 1º pixel `[204, 153, 51, 255]` (= clear RGB 0.8, 0.6, 0.2), sem
     erros da validação Vulkan.
-  - **B3b (PENDENTE)** — o `emu-session` roda o core Vulkan **in-process**
-    (roteamento). Hoje o `emu-session` manda todo core pro `reemu-core-host`
-    (processo-filho, [[n64-reload-crash]]); o core Vulkan tem que ficar no
-    processo pai (device compartilhado com o wgpu). Falta o roteamento: quando
-    `REEMU_HW=vulkan` e o core negocia Vulkan, instanciar o `DesktopCore`
-    localmente com `with_vulkan_shared_device(FrameProcessor::vulkan_shared_device())`
-    em vez do `ChildCore`, e ligar o `VkFrameSync` no caminho de descarte de
-    frame do `emu-session`.
+  - **B3b (feito, opt-in) — o `emu-session` roda o core Vulkan in-process.**
+    O shell publica os handles do device na sessão
+    (`EmuSession::attach_vulkan_device`, chamado depois que o `FrameProcessor`
+    sobe, com `FrameProcessor::vulkan_shared_device()`). No `Command::Load`, se
+    `REEMU_HW=vulkan` e o device está publicado, `session.rs::core_loop` tenta
+    `crates/emu-session/src/local_core.rs::LocalCore::load` (=`DesktopCoreLoader
+    ::with_vulkan_shared_device` + `open_core`) ANTES do `ChildProc::spawn`. Se
+    o core não negociar Vulkan, `LocalCore::load` devolve `HwRenderUnsupported`
+    e o loop cai pro processo filho (e memoiza o core em `known_non_vulkan` pra
+    não fazer um 2º `retro_init` no processo pai — mataria um parallel_n64).
+    O `LocalCore` tem seu próprio drive loop (pacing por acumulador, igual ao
+    `reemu-core-host::run_one_frame`); `session.rs` publica o `Frame`/áudio
+    direto em `Shared` (sem IPC, sem anel). O `VkFrameSync` viaja dentro do
+    `Frame` (`VkImageFrame` carrega o `Arc`), então o descarte de frame
+    atrasado no `emu-session`/compositor já libera o slot pelo `Drop` — não
+    precisou de fiação extra.
+    **Trade-off (aceito, gated no env var):** volta a valer "um core por
+    processo" da API libretro pro processo pai — cores não re-entrantes podem
+    cair numa 2ª carga local. Cores software/GL seguem no filho, intactos.
     Fase C traz o sync fino de qualquer jeito (`set_signal_semaphore` do core
     → `Queue::add_wait_semaphore` do wgpu-hal, que existe na 30).
-  - Critério: triângulo do `vk_rendering` na tela pelo caminho normal do app
-    (`emu-session`), orientação certa; depois Beetle PSX HW.
+  - **Falta validar B3b end-to-end:** rodar o app com `REEMU_HW=vulkan` +
+    `scripts/build-vk-test-core.sh` e ver o triângulo do `vk_rendering` na tela
+    pelo caminho normal (`emu-session` → surface nativa), orientação certa.
+    Depois Beetle PSX HW.
 - **Fase C** — sync fino (sem CPU-wait, barriers mínimos), validação sob
   carga (troca rápida de cena, resize, save/load state), flycast como 3º
   alvo, `provoking_vertex`/OIT reavaliados.

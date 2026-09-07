@@ -63,7 +63,14 @@ pub fn run() {
             // adapter, o `poll_frame` segue no caminho CPU.
             match gpu::FrameProcessor::new() {
                 Some(fp) => {
-                    app.state::<AppState>().gpu.lock().unwrap().replace(fp);
+                    let state = app.state::<AppState>();
+                    // Etapa 12 B3b: publica os handles do `VkDevice` do
+                    // compositor na sessão. Com `REEMU_HW=vulkan`, um core que
+                    // negocia Vulkan passa a rodar in-process no mesmo device.
+                    if let Some(dev) = fp.vulkan_shared_device() {
+                        state.session.attach_vulkan_device(dev);
+                    }
+                    state.gpu.lock().unwrap().replace(fp);
                 }
                 None => log::warn!("sem GPU wgpu — frame do core vai cru pro canvas"),
             }
