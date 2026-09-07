@@ -212,7 +212,63 @@ Modelo do `vk_rendering` / Beetle PSX (core NÃO submete — usa
     fps=60` (sem `reemu-core-host`) → **triângulo RGB do `vk_rendering` girando
     na surface nativa, orientação certa**, sobre o fundo `(0.8,0.6,0.2)`. Sem
     erro de validação Vulkan.
-  - **Próximo:** Beetle PSX HW (`mednafen_psx_hw`) — 1º emulador real.
+  - **Próximo:** Beetle PSX HW (`mednafen_psx_hw`) — 1º emulador real. Ver
+    abaixo (§Beetle) — abordagem diferente do `vk_rendering`.
+
+## Beetle PSX HW — o core cria o device, o wgpu adota
+
+Conferido na fonte (`libretro/beetle-psx-libretro@master`,
+`rhi/rhi_lib_vulkan.c`, 2026-09-07 — ver memória `reemu-beetle-psx-vulkan`):
+
+- Negociação v1 `{ get_application_info, libretro_create_device, NULL }`.
+- **`vk_context_reset` do Beetle aborta (`vulkan = NULL; return;`) se
+  `context == NULL`** — e `context` só é preenchido pelo `libretro_create_device`
+  DELE. Não existe caminho "frontend criou o device" como no `vk_rendering`/
+  flycast. **Temos que chamar o `create_device` do Beetle.**
+- O `context_create_device` do Beetle **coopera**: `gpu==NULL` → pega `gpus[0]`
+  (passar o nosso `VkPhysicalDevice` pra casar com o do wgpu); **checa** que
+  todos os `required_device_extensions`/`layers` existem; **habilita** todos
+  eles + os opcionais dele; **mescla** `required_features`. Escreve
+  `retro_vulkan_context->{gpu,device,queue,queue_family_index,...}`.
+- Scanout: `COLOR_ATTACHMENT | SAMPLED | TRANSFER_SRC`, layout
+  `SHADER_READ_ONLY_OPTIMAL`, `set_image(h, img, 0, NULL, IGNORED)` — dá pra
+  `texture_from_raw` + amostrar direto (igual ao `vk_rendering`).
+- **Beetle submete sozinho** (`renderer_flush` após `set_image`) e **não** usa
+  `set_command_buffers` nem `lock_queue`/`unlock_queue`.
+
+### Plano (fatias)
+
+- **D1 (foundational) — `FrameProcessor::from_adopted_vulkan(...)`**: refatora
+  `FrameProcessor::new()` extraindo o *tail* (shaders/quad/samplers/comp/flip)
+  pra `assemble(instance, adapter, device, queue, interop_ok)`; `new()` e
+  `from_adopted_vulkan` só diferem em como conseguem o quarteto. `from_adopted`
+  usa `wgpu-hal 30`: `vulkan::Instance::from_raw` → `instance.expose_adapter(
+  vk_physical_device)` → `adapter.device_from_raw(raw_device, …, family, 0)` →
+  `wgpu::Instance::from_hal` / `create_adapter_from_hal` /
+  `Adapter::create_device_from_hal`. Testável headless com um `ash::Device`
+  feito por nós (não o do Beetle) rodando a chain + `texture_from_raw`.
+- **D2 — `vk_context.rs::create_via_core_negotiation(neg_ptr)`**: constrói a
+  `ash::Instance` (extensões que o `wgpu-hal` quer no nível de instância) +
+  chama o `create_device` do core com `required_device_extensions/features` do
+  `wgpu-hal` (`Adapter::required_device_extensions` / `physical_device_features`).
+  Devolve os handles do `retro_vulkan_context`.
+- **D3 — roteamento**: distinguir "core dono do device" de "frontend dono". O
+  `vk_rendering` manda `{app_info, NULL}` (create_device NULL); flycast e Beetle
+  mandam create_device não-NULL mas só o Beetle EXIGE. Heurística: se
+  `create_device != NULL`, **tenta** o caminho D2 primeiro e cai pro
+  frontend-cria se o `context_reset` não entregar frame. O `FrameProcessor`
+  vira lazy/rebuild: sobe um mínimo no boot (surface, canvas) e o device real
+  entra quando o core Vulkan carrega. Toca `commands.rs`/`lib.rs`.
+- **D4 — queue compartilhada**: Beetle submete na mesma `VkQueue` do wgpu de
+  outra thread. Sem `lock_queue`, a opção 4 do B3b não cobre. Opções: (a)
+  `Mutex<VkQueue>` em volta de TODO `queue.submit` do `gpu.rs` + do submit do
+  core (frágil: `write_buffer`/`write_texture` submetem por fora — usar
+  `Queue::on_submitted_work_done` / staging explícito); (b) mover o drive do
+  core Beetle pra thread do compositor (thread única). **Decisão pendente.**
+- **D5** — validar com o core do Beetle + BIOS PS1 + jogo, no HW do usuário.
+
+- **Estado:** D1 feito (`from_adopted_vulkan` + teste headless). D2–D5 pendentes.
+
 - **Fase C** — sync fino (sem CPU-wait, barriers mínimos), validação sob
   carga (troca rápida de cena, resize, save/load state), flycast como 3º
   alvo, `provoking_vertex`/OIT reavaliados.
