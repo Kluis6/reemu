@@ -280,9 +280,9 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   `sleep(15ms)` quando `step_vk_local` deu frame (o pacing do core manda).
 - **D5** — validar com o core do Beetle + BIOS PS1 + jogo, no HW do usuário.
 
-- **Estado:** D1 + D4 feitos (D1 testado com lavapipe; D4 muda o B3b pra
-  pump-driven — revalidar o triângulo do `vk_rendering` no app). **D2 é o
-  próximo:** `vk_context.rs` construir a `ash::Instance` com as extensões que o
+- **Estado:** D1 + D4 feitos e validados (D1 lavapipe; D4 = triângulo do
+  `vk_rendering` girando liso no app RTX 3060, agora pump-driven, 2026-09-07).
+  **D2 é o próximo:** `vk_context.rs` construir a `ash::Instance` com as extensões que o
   `wgpu-hal` quer, chamar o `create_device` do core passando
   `Adapter::required_device_extensions` / `physical_device_features` do
   `wgpu-hal`, devolver um `AdoptedVulkan`. Depois D3 (roteamento core-dono +
