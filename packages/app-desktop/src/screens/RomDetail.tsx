@@ -116,15 +116,17 @@ export function RomDetail() {
   const chosenCore =
     coreId || systemDefaultCore || coreList[0]?.coreId || "";
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [cfgTab, setCfgTab] = useState<"shader" | "core">("shader");
+  const [cfgTab, setCfgTab] = useState<"shader" | "core" | "states">("shader");
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   const hasCoreCfg = !!chosenCore;
-  const activeCfgTab =
-    cfgTab === "shader" && !hasShaderCfg
-      ? "core"
-      : cfgTab === "core" && !hasCoreCfg
-        ? "shader"
-        : cfgTab;
+  const cfgTabOk = { shader: hasShaderCfg, core: hasCoreCfg, states: true };
+  const activeCfgTab = cfgTabOk[cfgTab]
+    ? cfgTab
+    : hasShaderCfg
+      ? "shader"
+      : hasCoreCfg
+        ? "core"
+        : "states";
 
   const del = useMutation({
     mutationFn: (id: string) => deleteSaveState(id),
@@ -289,111 +291,112 @@ export function RomDetail() {
         </Caption1>
       )}
 
-      {(hasShaderCfg || hasCoreCfg) && (
-        <section className={s.section}>
-          <h2 className={s.sectionTitle}>Configurações deste jogo</h2>
-          <TabList
-            selectedValue={activeCfgTab}
-            onTabSelect={(_, d) => setCfgTab(d.value as "shader" | "core")}
-          >
-            {hasShaderCfg && <Tab value="shader">Shader</Tab>}
-            {hasCoreCfg && <Tab value="core">Emulador</Tab>}
-          </TabList>
-          <div className={s.panel}>
-            {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
-              <>
-                <Select
-                  value={currentGameShader}
-                  disabled={shaderPick.isPending}
-                  onChange={(_, d) => shaderPick.mutate(d.value)}
-                >
-                  <option value="">Padrão da biblioteca</option>
-                  {shaderInfo.data.available.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                  {romShader.data?.fromRom &&
-                    romShader.data.sourcePath &&
-                    !shaderInfo.data.available.includes(
-                      romShader.data.sourcePath,
-                    ) && (
-                      <option value={romShader.data.sourcePath}>
-                        {currentGameShader}
-                      </option>
-                    )}
-                </Select>
-                <ShaderLibrary
-                  onPick={(p) => shaderPick.mutate(p)}
-                  activePath={shaderInfo.data.active}
-                  busy={shaderPick.isPending}
-                />
-                <Button
-                  size="small"
-                  appearance="subtle"
-                  disabled={shaderPick.isPending}
-                  onClick={async () => {
-                    const p = await pickSlangp();
-                    if (p) shaderPick.mutate(p);
-                  }}
-                >
-                  Carregar .slangp avulso…
-                </Button>
-                {romShader.data?.fromRom && (
-                  <ShaderParams
-                    scope="rom"
-                    romId={romId}
-                    reloadKey={currentGameShader}
-                  />
-                )}
-              </>
-            )}
-            {activeCfgTab === "core" && chosenCore && (
-              <CoreOptions coreId={chosenCore} />
-            )}
-          </div>
-        </section>
-      )}
-
       <section className={s.section}>
-        <h2 className={s.sectionTitle}>Save states</h2>
+        <TabList
+          selectedValue={activeCfgTab}
+          onTabSelect={(_, d) =>
+            setCfgTab(d.value as "shader" | "core" | "states")
+          }
+        >
+          {hasShaderCfg && <Tab value="shader">Shader</Tab>}
+          {hasCoreCfg && <Tab value="core">Emulador</Tab>}
+          <Tab value="states">Save states</Tab>
+        </TabList>
         <div className={s.panel}>
-          {states.data?.length === 0 && (
-            <Caption1>Nenhum save state pra esta ROM.</Caption1>
-          )}
-          {states.data?.map((st) => (
-            <div key={st.id} className={s.stateRow} style={{ gap: 12 }}>
-              <SaveStateThumb stateId={st.id} hasThumbnail={st.hasThumbnail} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <Body1>
-                  {st.slot === 0
-                    ? "QuickSave"
-                    : st.slot != null
-                      ? `Slot ${st.slot}`
-                      : "Auto"}
-                </Body1>
-                <Caption1 className={s.hint}>
-                  {new Date(st.createdAt * 1000).toLocaleString()}
-                </Caption1>
-              </div>
-              <Button
-                size="small"
-                icon={<PlayRegular />}
-                disabled={!chosenCore}
-                onClick={() => play(st.id)}
+          {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
+            <>
+              <Select
+                value={currentGameShader}
+                disabled={shaderPick.isPending}
+                onChange={(_, d) => shaderPick.mutate(d.value)}
               >
-                Jogar daqui
-              </Button>
+                <option value="">Padrão da biblioteca</option>
+                {shaderInfo.data.available.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+                {romShader.data?.fromRom &&
+                  romShader.data.sourcePath &&
+                  !shaderInfo.data.available.includes(
+                    romShader.data.sourcePath,
+                  ) && (
+                    <option value={romShader.data.sourcePath}>
+                      {currentGameShader}
+                    </option>
+                  )}
+              </Select>
+              <ShaderLibrary
+                onPick={(p) => shaderPick.mutate(p)}
+                activePath={shaderInfo.data.active}
+                busy={shaderPick.isPending}
+              />
               <Button
                 size="small"
                 appearance="subtle"
-                disabled={del.isPending}
-                onClick={() => del.mutate(st.id)}
+                disabled={shaderPick.isPending}
+                onClick={async () => {
+                  const p = await pickSlangp();
+                  if (p) shaderPick.mutate(p);
+                }}
               >
-                Apagar
+                Carregar .slangp avulso…
               </Button>
-            </div>
-          ))}
+              {romShader.data?.fromRom && (
+                <ShaderParams
+                  scope="rom"
+                  romId={romId}
+                  reloadKey={currentGameShader}
+                />
+              )}
+            </>
+          )}
+          {activeCfgTab === "core" && chosenCore && (
+            <CoreOptions coreId={chosenCore} />
+          )}
+          {activeCfgTab === "states" && (
+            <>
+              {states.data?.length === 0 && (
+                <Caption1>Nenhum save state pra esta ROM.</Caption1>
+              )}
+              {states.data?.map((st) => (
+                <div key={st.id} className={s.stateRow} style={{ gap: 12 }}>
+                  <SaveStateThumb
+                    stateId={st.id}
+                    hasThumbnail={st.hasThumbnail}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Body1>
+                      {st.slot === 0
+                        ? "QuickSave"
+                        : st.slot != null
+                          ? `Slot ${st.slot}`
+                          : "Auto"}
+                    </Body1>
+                    <Caption1 className={s.hint}>
+                      {new Date(st.createdAt * 1000).toLocaleString()}
+                    </Caption1>
+                  </div>
+                  <Button
+                    size="small"
+                    icon={<PlayRegular />}
+                    disabled={!chosenCore}
+                    onClick={() => play(st.id)}
+                  >
+                    Jogar daqui
+                  </Button>
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    disabled={del.isPending}
+                    onClick={() => del.mutate(st.id)}
+                  >
+                    Apagar
+                  </Button>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </section>
 
