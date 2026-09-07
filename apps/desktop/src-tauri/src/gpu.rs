@@ -645,7 +645,13 @@ impl FrameProcessor {
             "GPU (etapa 12 §Beetle): adotando {} do core",
             exposed.info.name
         );
-        let limits = exposed.capabilities.limits.clone();
+        // NÃO usar `exposed.capabilities.limits` cru: a RTX 3060 reporta
+        // `max_buffer_size > u32::MAX` e a validação de indirect draw do
+        // wgpu-core dá `assert!(max_buffer_size <= u32::MAX)`. O chain de shader
+        // cabe folgado nos downlevel defaults (o `FrameProcessor::new` também
+        // usa `downlevel_defaults` via `video_surface::create_device_with`).
+        let _ = &exposed.capabilities.limits;
+        let limits = wgpu::Limits::downlevel_defaults();
 
         let open_device = unsafe {
             exposed.adapter.device_from_raw(
@@ -1846,7 +1852,7 @@ impl FrameProcessor {
         handle: &dyn domain::frame_source::VulkanImageHandle,
     ) -> Option<(wgpu::Texture, wgpu::TextureView)> {
         let (w, h) = (handle.width().max(1), handle.height().max(1));
-        let format = vk_format_to_wgpu(handle.vk_format());
+        let format = vk_format_to_wgpu(handle.vk_format())?;
         let size = wgpu::Extent3d {
             width: w,
             height: h,
@@ -3019,17 +3025,35 @@ fn new_tex_fmt(
 /// `VkFormat` cru → `wgpu::TextureFormat`. Só os formatos que os cores-alvo de
 /// HW render Vulkan usam pro scanout (todos 8-bit RGBA/BGRA). Fallback
 /// `Rgba8Unorm` com aviso.
-fn vk_format_to_wgpu(vk_format: u32) -> wgpu::TextureFormat {
-    match vk_format {
-        37 => wgpu::TextureFormat::Rgba8Unorm, // R8G8B8A8_UNORM (vk_rendering)
+/// `VkFormat` cru → `wgpu::TextureFormat` **amostrável direto** (`texture_from_raw`
+/// só serve se a `VkImage` já é um formato que o wgpu conhece). `None` = precisa
+/// de conversão (blit) antes — ex.: os formatos packed de 16 bits do PS1, que o
+/// wgpu não tem.
+fn vk_format_to_wgpu(vk_format: u32) -> Option<wgpu::TextureFormat> {
+    Some(match vk_format {
+        37 => wgpu::TextureFormat::Rgba8Unorm,     // R8G8B8A8_UNORM (vk_rendering, Beetle 32bpp)
         43 => wgpu::TextureFormat::Rgba8UnormSrgb, // R8G8B8A8_SRGB
-        44 => wgpu::TextureFormat::Bgra8Unorm, // B8G8R8A8_UNORM
+        44 => wgpu::TextureFormat::Bgra8Unorm,     // B8G8R8A8_UNORM
         50 => wgpu::TextureFormat::Bgra8UnormSrgb, // B8G8R8A8_SRGB
+        64 => wgpu::TextureFormat::Rgba16Float,    // R16G16B16A16_SFLOAT (Beetle HDR interno)
+        97 => wgpu::TextureFormat::Rgba16Float,    // (alias observado em drivers)
+        // A1R5G5B5_UNORM_PACK16 (8) / R5G5B5A1 (7) / R5G6B5 (4): default do
+        // scanout Vulkan do Beetle PSX HW quando o dither está ligado. wgpu não
+        // tem formato packed de 16 bits → precisa blit pra RGBA8 (TODO). Por
+        // ora: ligue "Dithering Pattern: OFF" nas opções do core (no Vulkan
+        // isso força o scanout pra R8G8B8A8_UNORM).
+        4 | 6 | 7 | 8 => {
+            log::error!(
+                "scanout do core em VkFormat {vk_format} (packed 16-bit, sem equivalente wgpu) — \
+                 ligue 'Dithering Pattern: OFF' nas opções do core (Vulkan → RGBA8)"
+            );
+            return None;
+        }
         other => {
             log::warn!("VkFormat {other} inesperado no scanout do core — assumindo Rgba8Unorm");
             wgpu::TextureFormat::Rgba8Unorm
         }
-    }
+    })
 }
 
 fn f32s_bytes(s: &[f32]) -> &[u8] {
