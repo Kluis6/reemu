@@ -439,7 +439,7 @@ fn dev_autoload(session: &std::sync::Arc<emu_session::EmuSession>) {
         return;
     };
     let session = std::sync::Arc::clone(session);
-    std::thread::spawn(move || match session.load(&core, &rom) {
+    std::thread::spawn(move || match session.load(&core, &rom, std::collections::HashMap::new()) {
         Ok(av) => log::info!(
             "dev-autoload: core {}x{} @ {} fps",
             av.geometry.base_width,
