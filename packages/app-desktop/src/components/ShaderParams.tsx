@@ -2,7 +2,13 @@ import { Button, Caption1, Slider, makeStyles, tokens } from '@fluentui/react-co
 import { ArrowResetRegular } from '@fluentui/react-icons'
 import { useQuery } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import { getShaderParams, resetShaderParams, setShaderParam, type ShaderParam } from '../lib/tauri'
+import {
+  getShaderParams,
+  resetShaderParams,
+  setShaderParam,
+  type ShaderParam,
+  type ShaderScope,
+} from '../lib/tauri'
 import { sysToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
 
@@ -21,17 +27,19 @@ const useStyles = makeStyles({
 export function ShaderParams({
   scope,
   romId,
+  systemId,
   reloadKey,
 }: {
-  scope: 'default' | 'rom'
+  scope: ShaderScope
   romId?: string
+  systemId?: string
   /** muda quando o preset troca lá fora → refaz o fetch. */
   reloadKey?: string
 }) {
   const s = useStyles()
   const push = useToastStore((st) => st.push)
   const q = useQuery({
-    queryKey: ['shader-params', scope, romId ?? null, reloadKey ?? null],
+    queryKey: ['shader-params', scope, romId ?? null, systemId ?? null, reloadKey ?? null],
     queryFn: getShaderParams,
     retry: false,
   })
@@ -45,14 +53,14 @@ export function ShaderParams({
     setDirty((v) => ({ ...v, [name]: value }))
     clearTimeout(timers.current[name])
     timers.current[name] = setTimeout(() => {
-      void setShaderParam(name, value, scope, romId).catch((e) =>
+      void setShaderParam(name, value, scope, romId, systemId).catch((e) =>
         push(sysToast(`Falha ao salvar parâmetro: ${e}`, 'Error')),
       )
     }, 200)
   }
 
   const reset = () => {
-    void resetShaderParams(scope, romId)
+    void resetShaderParams(scope, romId, systemId)
       .then(() => {
         setDirty({})
         return q.refetch()

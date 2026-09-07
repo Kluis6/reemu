@@ -65,17 +65,34 @@ export interface ShaderInfo {
   gpu: boolean
 }
 export const getShaderInfo = () => invoke<ShaderInfo>('get_shader_info')
+
+export type ShaderScope = 'default' | 'system' | 'rom'
 /** `scope`: undefined = só nesta sessão; 'default' = todos os jogos;
+ *  'system' (+`systemId` ou derivado do `romId`) = uma plataforma;
  *  'rom' (+`romId`) = só esse jogo (`name` vazio = limpar a atribuição). */
 export const setShader = (
   name: string,
-  scope?: 'default' | 'rom',
+  scope?: ShaderScope,
   romId?: string,
-) => invoke<void>('set_shader', { name, scope: scope ?? null, romId: romId ?? null })
+  systemId?: string,
+) =>
+  invoke<void>('set_shader', {
+    name,
+    scope: scope ?? null,
+    systemId: systemId ?? null,
+    romId: romId ?? null,
+  })
 
 export interface RomShader {
   sourcePath: string | null
   fromRom: boolean
+  /** de qual escopo o `sourcePath` veio: 'rom' | 'system' | 'default' | 'none' */
+  resolvedScope: string
+  systemId: string
+  /** o que está atribuído EXATAMENTE em cada escopo (null = herda). */
+  atRom: string | null
+  atSystem: string | null
+  atDefault: string | null
 }
 export const getRomShader = (romId: string) => invoke<RomShader>('get_rom_shader', { romId })
 
@@ -101,22 +118,32 @@ export interface ShaderParam {
   step: number
 }
 export const getShaderParams = () => invoke<ShaderParam[]>('get_shader_params')
-/** Ajusta um parâmetro agora; `scope` ('default'|'rom' + `romId`) persiste. */
+/** Ajusta um parâmetro agora; `scope` (+`systemId`/`romId`) persiste. */
 export const setShaderParam = (
   name: string,
   value: number,
-  scope?: 'default' | 'rom',
+  scope?: ShaderScope,
   romId?: string,
+  systemId?: string,
 ) =>
   invoke<void>('set_shader_param', {
     name,
     value,
     scope: scope ?? null,
+    systemId: systemId ?? null,
     romId: romId ?? null,
   })
 /** Volta os parâmetros pros defaults do preset (limpa os overrides do escopo). */
-export const resetShaderParams = (scope?: 'default' | 'rom', romId?: string) =>
-  invoke<void>('reset_shader_params', { scope: scope ?? null, romId: romId ?? null })
+export const resetShaderParams = (
+  scope?: ShaderScope,
+  romId?: string,
+  systemId?: string,
+) =>
+  invoke<void>('reset_shader_params', {
+    scope: scope ?? null,
+    systemId: systemId ?? null,
+    romId: romId ?? null,
+  })
 
 /** Importa uma pasta de bezels (formato Bezel Project/RetroBat). Devolve
  *  quantas atribuições foram gravadas. */

@@ -10,6 +10,7 @@ import {
 } from "@fluentui/react-components";
 import {
   ArrowLeftRegular,
+  ArrowResetRegular,
   DeleteRegular,
   PlayRegular,
   StarFilled,
@@ -38,6 +39,7 @@ import {
   removeRom,
   setRomFavorite,
   setShader,
+  type ShaderScope,
 } from "../lib/tauri";
 import { useDetailStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
@@ -91,18 +93,30 @@ export function RomDetail() {
     queryFn: () => getRomShader(romId),
     retry: false,
   });
+  // Escopo onde as edições de shader são gravadas: este jogo / a plataforma /
+  // todos os jogos.
+  const [shaderScope, setShaderScope] = useState<ShaderScope>("rom");
+  // backend deriva de `romId` se vazio; preenche quando `romShader` carrega.
+  const shaderSystemId = romShader.data?.systemId ?? "";
   const shaderPick = useMutation({
-    mutationFn: (name: string) => setShader(name, "rom", romId),
+    mutationFn: (name: string) =>
+      setShader(name, shaderScope, romId, shaderSystemId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rom-shader", romId] });
       qc.invalidateQueries({ queryKey: ["shader-info"] });
     },
     onError: (e) => push(sysToast(`Falha: ${e}`, "Error")),
   });
-  const currentGameShader =
-    romShader.data?.fromRom && romShader.data.sourcePath
-      ? (romShader.data.sourcePath.split(/[/\\]/).pop() ?? "")
-      : "";
+  // O que está atribuído EXATAMENTE no escopo selecionado ("" = herda).
+  const shaderAtScope =
+    (shaderScope === "rom"
+      ? romShader.data?.atRom
+      : shaderScope === "system"
+        ? romShader.data?.atSystem
+        : romShader.data?.atDefault) ?? "";
+  const currentGameShader = shaderAtScope
+    ? (shaderAtScope.split(/[/\\]/).pop() ?? shaderAtScope)
+    : "";
 
   const rom = roms.data?.find((r) => r.id === romId);
   const ext = rom?.filePath.split(".").pop()?.toLowerCase() ?? "";
@@ -305,25 +319,45 @@ export function RomDetail() {
         <div className={s.panel}>
           {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
             <>
+              <div className={s.field}>
+                <Caption1>Aplicar a</Caption1>
+                <TabList
+                  size="small"
+                  selectedValue={shaderScope}
+                  onTabSelect={(_, d) => setShaderScope(d.value as ShaderScope)}
+                >
+                  <Tab value="rom">Este jogo</Tab>
+                  <Tab value="system">
+                    {rom ? platformLabel(rom.systemId) : "Plataforma"}
+                  </Tab>
+                  <Tab value="default">Todos os jogos</Tab>
+                </TabList>
+                <Caption1 className={s.hint}>
+                  {romShader.data?.resolvedScope === "rom"
+                    ? "Ativo: definido neste jogo."
+                    : romShader.data?.resolvedScope === "system"
+                      ? "Ativo: herdado da plataforma."
+                      : romShader.data?.resolvedScope === "default"
+                        ? "Ativo: herdado de todos os jogos."
+                        : "Ativo: nenhum (shader 'plain')."}
+                </Caption1>
+              </div>
               <Select
                 value={currentGameShader}
                 disabled={shaderPick.isPending}
                 onChange={(_, d) => shaderPick.mutate(d.value)}
               >
-                <option value="">Padrão da biblioteca</option>
+                <option value="">
+                  {shaderScope === "default" ? "Nenhum" : "Herdar"}
+                </option>
                 {shaderInfo.data.available.map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
                 ))}
-                {romShader.data?.fromRom &&
-                  romShader.data.sourcePath &&
-                  !shaderInfo.data.available.includes(
-                    romShader.data.sourcePath,
-                  ) && (
-                    <option value={romShader.data.sourcePath}>
-                      {currentGameShader}
-                    </option>
+                {shaderAtScope &&
+                  !shaderInfo.data.available.includes(shaderAtScope) && (
+                    <option value={shaderAtScope}>{currentGameShader}</option>
                   )}
               </Select>
               <ShaderLibrary
@@ -331,22 +365,36 @@ export function RomDetail() {
                 activePath={shaderInfo.data.active}
                 busy={shaderPick.isPending}
               />
-              <Button
-                size="small"
-                appearance="subtle"
-                disabled={shaderPick.isPending}
-                onClick={async () => {
-                  const p = await pickSlangp();
-                  if (p) shaderPick.mutate(p);
-                }}
-              >
-                Carregar .slangp avulso…
-              </Button>
-              {romShader.data?.fromRom && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <Button
+                  size="small"
+                  appearance="subtle"
+                  disabled={shaderPick.isPending}
+                  onClick={async () => {
+                    const p = await pickSlangp();
+                    if (p) shaderPick.mutate(p);
+                  }}
+                >
+                  Carregar .slangp avulso…
+                </Button>
+                {shaderAtScope && shaderScope !== "default" && (
+                  <Button
+                    size="small"
+                    appearance="subtle"
+                    icon={<ArrowResetRegular />}
+                    disabled={shaderPick.isPending}
+                    onClick={() => shaderPick.mutate("")}
+                  >
+                    Herdar (remover deste escopo)
+                  </Button>
+                )}
+              </div>
+              {shaderAtScope && (
                 <ShaderParams
-                  scope="rom"
+                  scope={shaderScope}
                   romId={romId}
-                  reloadKey={currentGameShader}
+                  systemId={shaderSystemId}
+                  reloadKey={`${shaderScope}:${currentGameShader}`}
                 />
               )}
             </>
