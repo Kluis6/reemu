@@ -3168,4 +3168,87 @@ mod tests {
         );
         std::fs::remove_dir_all(&dir).ok();
     }
+
+    /// Etapa 12 B3b ponta-a-ponta: com `REEMU_HW=vulkan` + o device do
+    /// compositor publicado, `EmuSession` roda o core de teste `vk_rendering`
+    /// **in-process** (nunca sobe o `reemu-core-host`), e o `Frame` que sai
+    /// pela API de sempre (`take_latest_frame`) é uma `HardwareVulkanImage`
+    /// que a chain amostra e devolve pixel colorido.
+    ///
+    /// `#[ignore]`: precisa de GPU Vulkan + `scripts/build-vk-test-core.sh`.
+    /// Rode isolado: `-- --ignored --test-threads=1` (mexe no env `REEMU_HW`).
+    #[test]
+    #[ignore = "precisa de ICD Vulkan + scripts/build-vk-test-core.sh"]
+    fn emu_session_routes_vulkan_core_in_process() {
+        use emu_session::{EmuSession, SessionConfig};
+        use std::collections::HashMap;
+        use std::time::{Duration, Instant};
+
+        if std::env::var_os("REEMU_NO_GPU").is_some() {
+            return;
+        }
+        let core_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../target/vk-test-core/testvulkan_libretro.so");
+        if !core_path.is_file() {
+            eprintln!("core de teste ausente — rode scripts/build-vk-test-core.sh");
+            return;
+        }
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        let Some(shared) = fp.vulkan_shared_device() else {
+            eprintln!("backend wgpu não-Vulkan — pulando");
+            return;
+        };
+
+        // Opt-in: sem isso o `GET_PREFERRED_HW_RENDER` não devolve Vulkan e o
+        // roteamento local nem é tentado.
+        std::env::set_var("REEMU_HW", "vulkan");
+
+        let tmp = std::env::temp_dir();
+        let rom = tmp.join(format!("reemu-b3b-{}.bin", std::process::id()));
+        std::fs::write(&rom, b"").unwrap();
+
+        let session =
+            EmuSession::spawn(SessionConfig::new(tmp.clone(), tmp.clone(), tmp.clone()));
+        session.attach_vulkan_device(shared);
+        session
+            .load(
+                core_path.to_str().unwrap(),
+                rom.to_str().unwrap(),
+                HashMap::new(),
+            )
+            .expect("carregar o core Vulkan pela sessão");
+
+        assert!(
+            session.debug_child_pid().is_none(),
+            "core Vulkan foi pro processo filho — devia rodar in-process"
+        );
+
+        let mut got_color = false;
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while Instant::now() < deadline && !got_color {
+            let Some(frame) = session.take_latest_frame() else {
+                std::thread::sleep(Duration::from_millis(15));
+                continue;
+            };
+            assert!(
+                matches!(frame.origin, FrameOrigin::HardwareVulkanImage(_)),
+                "esperava HardwareVulkanImage da sessão"
+            );
+            if let Some((w, h, rgba)) = fp.process(&frame) {
+                assert_eq!(rgba.len(), (w * h * 4) as usize);
+                if rgba.chunks(4).any(|p| p[0] > 20 && p[1] > 20) {
+                    got_color = true;
+                    eprintln!("B3b frame {w}x{h}, 1º pixel = {:?}", &rgba[..4]);
+                }
+            }
+        }
+
+        session.unload().ok();
+        let _ = std::fs::remove_file(&rom);
+        std::env::remove_var("REEMU_HW");
+        assert!(got_color, "a chain nunca recebeu frame colorido pela sessão");
+    }
 }
