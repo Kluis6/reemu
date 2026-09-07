@@ -1,8 +1,10 @@
 # 12 — HW Render Vulkan Por-Core
 
-**Status: EM ANDAMENTO (iniciado 2026-09-06).** Fase A + B (B1..B3b) feitas e
-validadas end-to-end com o core de teste `vk_rendering` num RTX 3060
-(2026-09-07). Falta o 1º emulador real (Beetle PSX HW) e a fase C (sync fino).
+**Status: 1º EMULADOR REAL RODANDO (2026-09-07).** Beetle PSX HW
+(`mednafen_psx_hw`) — Crash Bandicoot 2 na tela por Vulkan HW zero-cópia num
+RTX 3060, pelo caminho normal do app (`emu-session` → surface nativa). Fase A +
+B (B1..B3b) + §Beetle D1..D5 feitas. Falta polimento (blit A1R5G5B5, badge no
+catálogo + Vulkan default, save state, spam do Beetle) e a fase C (sync fino).
 Decisão do usuário: rodar o core Vulkan **no processo pai** (in-process, junto
 do wgpu), zero-cópia.
 
@@ -292,13 +294,16 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   `sleep(15ms)` quando `step_vk_local` deu frame (o pacing do core manda).
 - **D5** — validar com o core do Beetle + BIOS PS1 + jogo, no HW do usuário.
 
-- **Estado:** D1 + D2 + D3 + D4 feitos (D1/D4 validados). **Falta D5:** rodar
-  `REEMU_HW=vulkan` + `mednafen_psx_hw` + BIOS PS1 + jogo no HW do usuário e
-  ver o PS1 na tela pelo caminho Vulkan. Os riscos abertos: features
-  encadeadas que o `create_device` v1 do Beetle não pede (passamos
-  `Features::empty()` — pode faltar algo pro chain); a troca do
-  `FrameProcessor` mid-flight; save state (o `retro_serialize` do Beetle pode
-  submeter na `VkQueue` da thread errada — ver D4).
+- **Estado:** D1..D5 feitos e VALIDADOS (Crash Bandicoot 2 por Beetle PSX HW no
+  Vulkan, RTX 3060, 2026-09-07). Bugs achados/corrigidos no caminho:
+  `assert!(max_buffer_size <= u32::MAX)` → `Limits::downlevel_defaults` no
+  device adotado (`9d1746b`); scanout `A1R5G5B5` embaralhava → `vk_format_to_wgpu`
+  devolve `Option` + erro claro (`9d1746b`); `Gdk Error 71` (attach_surface de
+  thread errada) → troca do FP no video pump via `AppState.pending_gpu`
+  (`82f59a2`). **Polimento pendente:** blit `A1R5G5B5→RGBA8` (dither ligado);
+  badge Vulkan no catálogo + tornar default; save state em core Vulkan
+  (`retro_serialize` do Beetle pode submeter — verificar thread); silenciar
+  stdout do Beetle (`[hdcache]`/`Creating shader module`).
   Referência histórica do plano D2 original: `vk_context.rs` construir a `ash::Instance` com as extensões que o
   `wgpu-hal` quer, chamar o `create_device` do core passando
   `Adapter::required_device_extensions` / `physical_device_features` do
