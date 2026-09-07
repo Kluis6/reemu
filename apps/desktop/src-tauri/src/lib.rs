@@ -260,7 +260,6 @@ fn spawn_video_pump(app: tauri::AppHandle) {
             // então este bool acompanha o estado real.)
             let mut hidden = true;
             loop {
-                std::thread::sleep(std::time::Duration::from_millis(15));
                 let state = app.state::<AppState>();
                 {
                     let vg = state.video.lock().unwrap_or_else(|p| p.into_inner());
@@ -290,7 +289,16 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                     }
                 }
 
-                let frame = state.session.take_latest_frame();
+                // Etapa 12 B3b/D4: um core Vulkan in-process roda AQUI, nesta
+                // thread — a mesma que submete o wgpu (o `retro_run` de cores
+                // como o Beetle submete direto na `VkQueue` compartilhada). O
+                // `step_vk_local` já faz o pacing; quando ele produz um frame,
+                // NÃO dormimos no fim do loop. Sem core Vulkan local, cai pro
+                // `take_latest_frame` de sempre (software/GL via `emu-session`).
+                let (frame, stepped_vk) = match state.session.step_vk_local() {
+                    Some(f) => (Some(f), true),
+                    None => (state.session.take_latest_frame(), false),
+                };
                 let idle = matches!(state.session.state(), emu_session::SessionState::Idle);
                 let vm = *state.video_menu.lock().unwrap_or_else(|p| p.into_inner());
 
@@ -357,6 +365,12 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                         *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) =
                             Closing(n - 1);
                     }
+                }
+
+                // O `step_vk_local` já dá o ritmo (pacing por acumulador do
+                // core). Sem core Vulkan local, mantém os ~15ms de sempre.
+                if !stepped_vk {
+                    std::thread::sleep(std::time::Duration::from_millis(15));
                 }
             }
         })

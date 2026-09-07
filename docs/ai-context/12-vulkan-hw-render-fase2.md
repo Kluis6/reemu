@@ -196,11 +196,11 @@ Modelo do `vk_rendering` / Beetle PSX (core NÃO submete — usa
     e o loop cai pro processo filho (e memoiza o core em `known_non_vulkan` pra
     não fazer um 2º `retro_init` no processo pai — mataria um parallel_n64).
     O `LocalCore` tem seu próprio drive loop (pacing por acumulador, igual ao
-    `reemu-core-host::run_one_frame`); `session.rs` publica o `Frame`/áudio
-    direto em `Shared` (sem IPC, sem anel). O `VkFrameSync` viaja dentro do
+    `reemu-core-host::run_one_frame`). **Desde D4** ele vive em
+    `Shared.vk_local` e é dirigido pela thread do compositor (`step_vk_local`),
+    não pelo `core_loop` — ver §Beetle D4. O `VkFrameSync` viaja dentro do
     `Frame` (`VkImageFrame` carrega o `Arc`), então o descarte de frame
-    atrasado no `emu-session`/compositor já libera o slot pelo `Drop` — não
-    precisou de fiação extra.
+    atrasado já libera o slot pelo `Drop` — não precisou de fiação extra.
     **Trade-off (aceito, gated no env var):** volta a valer "um core por
     processo" da API libretro pro processo pai — cores não re-entrantes podem
     cair numa 2ª carga local. Cores software/GL seguem no filho, intactos.
@@ -264,20 +264,29 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   frontend-cria se o `context_reset` não entregar frame. O `FrameProcessor`
   vira lazy/rebuild: sobe um mínimo no boot (surface, canvas) e o device real
   entra quando o core Vulkan carrega. Toca `commands.rs`/`lib.rs`.
-- **D4 — queue compartilhada**: Beetle submete na mesma `VkQueue` do wgpu de
-  outra thread. Sem `lock_queue`, a opção 4 do B3b não cobre. Opções: (a)
-  `Mutex<VkQueue>` em volta de TODO `queue.submit` do `gpu.rs` + do submit do
-  core (frágil: `write_buffer`/`write_texture` submetem por fora — usar
-  `Queue::on_submitted_work_done` / staging explícito); (b) mover o drive do
-  core Beetle pra thread do compositor (thread única). **Decisão pendente.**
+- **D4 (feito) — thread única.** Confirmado na fonte que o wgpu 30 submete por
+  fora do `Queue::submit` (`queue_write_texture` faz `submission.submit` direto),
+  então o `Mutex<VkQueue>` seria frágil. Escolhido: **o core Vulkan in-process é
+  dirigido pela thread do compositor** (o video pump), a mesma que submete o
+  wgpu. O `LocalCore` saiu da stack do `emu_session::core_loop` pra
+  `Shared { vk_local: Mutex<Option<LocalCore>>, vk_local_active/paused: Atomic,
+  vk_local_audio: Mutex<Vec<..>> }`. `EmuSession::step_vk_local()` (chamado pelo
+  pump no `spawn_video_pump`, antes do `render_to_surface`) faz
+  `apply_input` + `run_frame` (que já pacing) e devolve o `Frame`; o áudio vai
+  pra `vk_local_audio` e o `core_loop` (dono do `AudioSink` `!Send`) drena pro
+  sink. `core_loop` só carrega/descarrega e responde comandos (SaveState etc.
+  travam `vk_local`). `teardown_vk_local` marca ocioso + solta o frame ANTES de
+  dropar o core (o `VkFrameBridge::drop` faz `device_wait_idle`). O pump pula o
+  `sleep(15ms)` quando `step_vk_local` deu frame (o pacing do core manda).
 - **D5** — validar com o core do Beetle + BIOS PS1 + jogo, no HW do usuário.
 
-- **Estado:** D1 feito e testado (lavapipe). **D2 é o próximo:**
-  `vk_context.rs` construir a `ash::Instance` com as extensões que o `wgpu-hal`
-  quer, chamar o `create_device` do core passando
+- **Estado:** D1 + D4 feitos (D1 testado com lavapipe; D4 muda o B3b pra
+  pump-driven — revalidar o triângulo do `vk_rendering` no app). **D2 é o
+  próximo:** `vk_context.rs` construir a `ash::Instance` com as extensões que o
+  `wgpu-hal` quer, chamar o `create_device` do core passando
   `Adapter::required_device_extensions` / `physical_device_features` do
-  `wgpu-hal`, e devolver um `AdoptedVulkan`. Depois D3 (roteamento +
-  FrameProcessor lazy) e D4 (queue). D5 = validar com o core do Beetle.
+  `wgpu-hal`, devolver um `AdoptedVulkan`. Depois D3 (roteamento core-dono +
+  FrameProcessor lazy/rebuild) e D5 (validar com o core do Beetle + BIOS + jogo).
 
 - **Fase C** — sync fino (sem CPU-wait, barriers mínimos), validação sob
   carga (troca rápida de cena, resize, save/load state), flycast como 3º

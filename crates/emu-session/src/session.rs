@@ -121,6 +121,18 @@ struct Shared {
     /// `Some` + `REEMU_HW=vulkan` = um core que negocia Vulkan roda
     /// **in-process** (etapa 12 B3b), não no `reemu-core-host`.
     vulkan_shared_device: Mutex<Option<domain::core_loader::VulkanSharedDevice>>,
+    /// Core Vulkan in-process (etapa 12 B3b/D4). **Dirigido pela thread do
+    /// compositor** (o `retro_run` do Beetle submete sozinho na `VkQueue`, que
+    /// é a do wgpu — tem que ser a MESMA thread do submit do wgpu). O
+    /// `core_loop` só carrega/descarrega e responde comandos; quem chama
+    /// `step_vk_local` é o video pump.
+    vk_local: Mutex<Option<LocalCore>>,
+    /// `true` quando há um `vk_local` carregado (checagem barata sem travar).
+    vk_local_active: AtomicBool,
+    vk_local_paused: AtomicBool,
+    /// Áudio que o `step_vk_local` (thread do compositor) produziu — o
+    /// `core_loop` (dono do `AudioSink` `!Send`) drena isto pro sink.
+    vk_local_audio: Mutex<Vec<(Vec<i16>, u32)>>,
 }
 
 impl Shared {
@@ -153,6 +165,10 @@ impl EmuSession {
             nav: Mutex::new(Vec::new()),
             child_pid: Mutex::new(None),
             vulkan_shared_device: Mutex::new(None),
+            vk_local: Mutex::new(None),
+            vk_local_active: AtomicBool::new(false),
+            vk_local_paused: AtomicBool::new(false),
+            vk_local_audio: Mutex::new(Vec::new()),
         });
 
         let gamepad_thread = cfg.enable_gamepad.then(|| {
@@ -199,6 +215,41 @@ impl EmuSession {
             .vulkan_shared_device
             .lock()
             .unwrap_or_else(|p| p.into_inner()) = Some(device);
+    }
+
+    /// Roda um frame do core Vulkan in-process, SE houver um e não estiver
+    /// pausado. **Tem que ser chamado pela thread do compositor** (a mesma que
+    /// submete o wgpu) — o `retro_run` de cores como o Beetle submete direto na
+    /// `VkQueue` compartilhada, e Vulkan proíbe usar uma queue de duas threads.
+    /// O shell chama isto no video pump, antes do submit do wgpu, e usa o
+    /// `Frame` devolvido. `None` = não há core Vulkan local / está pausado /
+    /// frame duplicado.
+    pub fn step_vk_local(&self) -> Option<Frame> {
+        if !self.shared.vk_local_active.load(Ordering::Acquire)
+            || self.shared.vk_local_paused.load(Ordering::Acquire)
+        {
+            return None;
+        }
+        let mut guard = self
+            .shared
+            .vk_local
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let lc = guard.as_mut()?;
+        lc.apply_input(&snapshot_input());
+        let tick = lc.run_frame();
+        if !tick.audio.is_empty() {
+            self.shared
+                .vk_local_audio
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push((tick.audio, tick.sample_rate));
+        }
+        if let Some(frame) = tick.frame.as_ref() {
+            self.shared.frame_seq.fetch_add(1, Ordering::Relaxed);
+            let _ = frame;
+        }
+        tick.frame
     }
 
     /// Carrega e começa a rodar. Bloqueia até o core abrir (ou falhar).
@@ -395,32 +446,6 @@ fn route_local_device(shared: &Shared) -> Option<domain::core_loader::VulkanShar
         .vulkan_shared_device
         .lock()
         .unwrap_or_else(|p| p.into_inner())
-}
-
-/// Publica o resultado de um `retro_run` do caminho in-process em `shared` —
-/// o equivalente ao `handle_event(FrameReady/AudioBatch)` do caminho IPC.
-fn publish_local_tick(
-    tick: crate::local_core::FrameTick,
-    shared: &Shared,
-    sink: &mut Option<Box<dyn AudioSink>>,
-) {
-    if let Some(frame) = tick.frame {
-        shared.frame_seq.fetch_add(1, Ordering::Relaxed);
-        *shared
-            .latest_frame
-            .lock()
-            .unwrap_or_else(|p| p.into_inner()) = Some(frame);
-    }
-    if !tick.audio.is_empty() {
-        match sink.as_mut() {
-            Some(s) => s.push_samples(&tick.audio, tick.sample_rate),
-            None => shared
-                .audio
-                .lock()
-                .unwrap_or_else(|p| p.into_inner())
-                .extend_from_slice(&tick.audio),
-        }
-    }
 }
 
 fn gamepad_loop(shared: Arc<Shared>) {
@@ -780,6 +805,48 @@ fn write_srm(path: &std::path::Path, bytes: &[u8]) {
 /// De quanto em quanto tempo a save RAM é gravada em disco enquanto o jogo roda.
 const SRM_FLUSH_INTERVAL: Duration = Duration::from_secs(10);
 
+/// Descarrega o core Vulkan in-process (se houver). Marca ocioso e solta o
+/// frame ANTES de dropar o core — o video pump para de amostrar a `VkImage`
+/// que o `Drop` do `VkFrameBridge` vai esperar (`device_wait_idle`) e destruir.
+/// Salva a `.srm` e drena o áudio pendente.
+fn teardown_vk_local(
+    shared: &Shared,
+    sink: &mut Option<Box<dyn AudioSink>>,
+    current_srm: Option<&std::path::Path>,
+) {
+    if !shared.vk_local_active.swap(false, Ordering::AcqRel) {
+        return;
+    }
+    shared.vk_local_paused.store(false, Ordering::Release);
+    shared.set_state(SessionState::Idle);
+    *shared
+        .latest_frame
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = None;
+    let lc = shared
+        .vk_local
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take();
+    if let (Some(lc), Some(path)) = (lc.as_ref(), current_srm) {
+        if let Some(bytes) = lc.save_ram() {
+            write_srm(path, &bytes);
+        }
+    }
+    drop(lc);
+    let leftover = std::mem::take(
+        &mut *shared
+            .vk_local_audio
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()),
+    );
+    for (samples, rate) in leftover {
+        if let Some(s) = sink.as_mut() {
+            s.push_samples(&samples, rate);
+        }
+    }
+}
+
 fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>) {
     // A stream do cpal é `!Send` — construída aqui, nesta thread.
     let mut sink: Option<Box<dyn AudioSink>> = cfg.audio_sink.take().and_then(|make| make());
@@ -790,12 +857,9 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
     let mut proc: Option<ChildProc> = None;
     let mut events: Option<Receiver<InboundEvent>> = None;
     let mut ring: Option<core_ipc::FrameRing> = None;
-    // Caminho in-process (etapa 12 B3b): mutuamente exclusivo com `proc` — um
-    // core Vulkan roda AQUI (device do compositor), nunca no `reemu-core-host`.
-    let mut local: Option<LocalCore> = None;
-    // O processo filho pausa sozinho (para de chamar `retro_run`); o caminho
-    // in-process precisa que ESTE loop pare de tiquetaquear.
-    let mut local_paused = false;
+    // Caminho in-process (etapa 12 B3b/D4): o `LocalCore` vive em
+    // `shared.vk_local` e é DIRIGIDO pela thread do compositor
+    // (`step_vk_local`). Este loop só carrega/descarrega e responde comandos.
     // Cores que já provamos localmente e NÃO negociaram Vulkan — não tenta de
     // novo (um 2º `retro_init` no processo pai derruba cores não re-entrantes
     // como o parallel_n64, e esses vão pro processo filho de qualquer jeito).
@@ -817,7 +881,8 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
         .ok();
 
     loop {
-        let idle_blocks = proc.is_none() && (local.is_none() || local_paused);
+        let vk_local_active = shared.vk_local_active.load(Ordering::Acquire);
+        let idle_blocks = proc.is_none() && !vk_local_active;
         let cmd = if idle_blocks {
             rx.recv().ok()
         } else {
@@ -825,20 +890,41 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
         };
 
         let Some(cmd) = cmd else {
-            if let Some(lc) = local.as_mut() {
-                // Caminho in-process: roda 1 frame (com pacing próprio) e
-                // publica direto em `shared` — sem IPC, sem anel.
-                lc.apply_input(&snapshot_input());
-                let tick = lc.run_frame();
-                publish_local_tick(tick, &shared, &mut sink);
+            if vk_local_active {
+                // O core Vulkan é dirigido pelo video pump (`step_vk_local`);
+                // aqui só drenamos o áudio que ele produziu pro sink (que é
+                // `!Send` e vive nesta thread) e fazemos o flush da `.srm`.
+                let batches = std::mem::take(
+                    &mut *shared
+                        .vk_local_audio
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner()),
+                );
+                for (samples, rate) in batches {
+                    match sink.as_mut() {
+                        Some(s) => s.push_samples(&samples, rate),
+                        None => shared
+                            .audio
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .extend_from_slice(&samples),
+                    }
+                }
                 if let Some(path) = current_srm.as_ref() {
                     if last_srm_flush.elapsed() >= SRM_FLUSH_INTERVAL {
-                        if let Some(bytes) = lc.save_ram() {
+                        let bytes = shared
+                            .vk_local
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .as_ref()
+                            .and_then(|lc| lc.save_ram());
+                        if let Some(bytes) = bytes {
                             let _ = srm_tx.send((path.clone(), bytes));
                         }
                         last_srm_flush = Instant::now();
                     }
                 }
+                std::thread::sleep(Duration::from_millis(8));
                 continue;
             }
             if let Some(erx) = events.as_ref() {
@@ -882,14 +968,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         write_srm(path, &bytes);
                     }
                 }
-                if let (Some(lc), Some(path)) = (local.as_ref(), current_srm.as_ref()) {
-                    if let Some(bytes) = lc.save_ram() {
-                        write_srm(path, &bytes);
-                    }
-                }
-                // Idle + solta o frame ANTES de derrubar o core: o video pump
-                // para de amostrar a `VkImage` (que o teardown do
-                // `VkFrameBridge` vai esperar/destruir).
+                teardown_vk_local(&shared, &mut sink, current_srm.as_deref());
                 shared.set_state(SessionState::Idle);
                 *shared
                     .latest_frame
@@ -898,8 +977,6 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 if let Some(p) = proc.take() {
                     p.kill();
                 }
-                drop(local.take());
-                local_paused = false;
                 events = None;
                 ring = None;
                 current_srm = None;
@@ -928,13 +1005,18 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                             Ok((lc, av)) => {
                                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(id.0.clone());
+                                *shared
+                                    .vk_local
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner()) = Some(lc);
+                                shared.vk_local_paused.store(false, Ordering::Release);
+                                shared.vk_local_active.store(true, Ordering::Release);
                                 shared.set_state(SessionState::Running);
                                 current_srm = Some(target_srm);
                                 last_srm_flush = Instant::now();
                                 if let Some(s) = sink.as_mut() {
                                     s.resume();
                                 }
-                                local = Some(lc);
                                 let _ = reply.send(Ok(av));
                                 continue;
                             }
@@ -1033,6 +1115,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 }
             }
             Command::Unload(reply) => {
+                teardown_vk_local(&shared, &mut sink, current_srm.as_deref());
                 *shared
                     .latest_frame
                     .lock()
@@ -1046,16 +1129,9 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         write_srm(path, &bytes);
                     }
                 }
-                if let (Some(lc), Some(path)) = (local.as_ref(), current_srm.as_ref()) {
-                    if let Some(bytes) = lc.save_ram() {
-                        write_srm(path, &bytes);
-                    }
-                }
                 if let Some(p) = proc.take() {
                     p.kill();
                 }
-                drop(local.take());
-                local_paused = false;
                 events = None;
                 ring = None;
                 current_srm = None;
@@ -1067,13 +1143,21 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(());
             }
             Command::SetPaused(want_paused, reply) => {
-                let have_core = proc.is_some() || local.is_some();
+                let vk_active = shared.vk_local_active.load(Ordering::Acquire);
+                let have_core = proc.is_some() || vk_active;
                 if let Some(p) = proc.as_ref() {
                     let _ = p.channel.send(&ToChild::SetPaused(want_paused), &[]);
                 }
-                if let Some(lc) = local.as_mut() {
-                    lc.set_paused(want_paused);
-                    local_paused = want_paused;
+                if vk_active {
+                    shared.vk_local_paused.store(want_paused, Ordering::Release);
+                    if let Some(lc) = shared
+                        .vk_local
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_mut()
+                    {
+                        lc.set_paused(want_paused);
+                    }
                 }
                 if have_core {
                     if let Some(s) = sink.as_mut() {
@@ -1092,8 +1176,13 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(());
             }
             Command::SaveState(reply) => {
-                let bytes = if let Some(lc) = local.as_mut() {
-                    lc.serialize_state()
+                let bytes = if shared.vk_local_active.load(Ordering::Acquire) {
+                    shared
+                        .vk_local
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_mut()
+                        .and_then(|lc| lc.serialize_state())
                 } else {
                     match (proc.as_ref(), events.as_ref()) {
                         (Some(p), Some(erx)) => {
@@ -1117,8 +1206,13 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(bytes);
             }
             Command::RestoreState(data, reply) => {
-                let ok = if let Some(lc) = local.as_mut() {
-                    lc.restore_state(&data)
+                let ok = if shared.vk_local_active.load(Ordering::Acquire) {
+                    shared
+                        .vk_local
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_mut()
+                        .is_some_and(|lc| lc.restore_state(&data))
                 } else {
                     match (proc.as_ref(), events.as_ref()) {
                         (Some(p), Some(erx)) => {
@@ -1153,8 +1247,13 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(());
             }
             Command::GetCoreOptions(reply) => {
-                let result = if let Some(lc) = local.as_ref() {
-                    Some(lc.core_options())
+                let result = if shared.vk_local_active.load(Ordering::Acquire) {
+                    shared
+                        .vk_local
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_ref()
+                        .map(|lc| lc.core_options())
                 } else {
                     match (proc.as_ref(), events.as_ref()) {
                         (Some(p), Some(erx)) => {
@@ -1179,8 +1278,13 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(result.unwrap_or_default());
             }
             Command::SetCoreOption(key, value, reply) => {
-                let ok = if let Some(lc) = local.as_ref() {
-                    lc.set_core_option(&key, &value)
+                let ok = if shared.vk_local_active.load(Ordering::Acquire) {
+                    shared
+                        .vk_local
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .as_ref()
+                        .is_some_and(|lc| lc.set_core_option(&key, &value))
                 } else {
                     match (proc.as_ref(), events.as_ref()) {
                         (Some(p), Some(erx)) => {
@@ -1204,6 +1308,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(ok);
             }
             Command::Shutdown => {
+                teardown_vk_local(&shared, &mut sink, current_srm.as_deref());
                 if let (Some(p), Some(erx)) = (proc.as_ref(), events.as_ref()) {
                     if let (Some(bytes), Some(path)) = (
                         request_save_ram(p, erx, &shared, &mut sink, &mut ring),
@@ -1212,15 +1317,9 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                         write_srm(path, &bytes);
                     }
                 }
-                if let (Some(lc), Some(path)) = (local.as_ref(), current_srm.as_ref()) {
-                    if let Some(bytes) = lc.save_ram() {
-                        write_srm(path, &bytes);
-                    }
-                }
                 if let Some(p) = proc.take() {
                     p.kill();
                 }
-                drop(local.take());
                 break;
             }
         }

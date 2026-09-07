@@ -3436,10 +3436,13 @@ mod tests {
             "core Vulkan foi pro processo filho — devia rodar in-process"
         );
 
+        // B3b/D4: o core Vulkan local é dirigido por ESTA thread (o papel do
+        // video pump), a mesma que roda a chain — `step_vk_local` faz o
+        // `retro_run` e devolve o `Frame`.
         let mut got_color = false;
         let deadline = Instant::now() + Duration::from_secs(5);
         while Instant::now() < deadline && !got_color {
-            let Some(frame) = session.take_latest_frame() else {
+            let Some(frame) = session.step_vk_local() else {
                 std::thread::sleep(Duration::from_millis(15));
                 continue;
             };
