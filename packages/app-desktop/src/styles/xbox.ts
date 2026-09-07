@@ -25,7 +25,8 @@ const shell = {
 // Gradiente de superfície elevada (cartões, hero) a partir dos neutros do tema.
 const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`;
 
-const gameCardSize = "clamp(144px, 14vw, 196px)";
+// Em janela estreita cai pra ~2 por linha (42vw) antes do teto.
+const gameCardSize = "clamp(132px, 42vw, 196px)";
 
 /** Casca: app / rail / topbar / área de rolagem + anel de foco global. */
 export const useShellStyles = makeStyles({
@@ -155,8 +156,8 @@ export const useShellStyles = makeStyles({
     columnGap: "14px",
     paddingTop: "14px",
     paddingBottom: "14px",
-    paddingLeft: "32px",
-    paddingRight: "42px",
+    paddingLeft: "clamp(14px, 3.5vw, 32px)",
+    paddingRight: "clamp(16px, 4vw, 42px)",
     boxSizing: "border-box",
     flexShrink: 0,
     backgroundColor: "transparent",
@@ -185,7 +186,8 @@ export const useShellStyles = makeStyles({
     position: "absolute",
     left: "50%",
     transform: "translateX(-50%)",
-    width: "min(46vw, 560px)",
+    width: "clamp(160px, 46vw, 560px)",
+    maxWidth: "calc(100% - 160px)",
     height: "38px",
     display: "flex",
     alignItems: "center",
@@ -223,8 +225,8 @@ export const useShellStyles = makeStyles({
     scrollbarGutter: "stable",
     boxSizing: "border-box",
     paddingTop: "clamp(72px, 10vw, 100px)",
-    paddingLeft: "32px",
-    paddingRight: "32px",
+    paddingLeft: "clamp(14px, 3.5vw, 32px)",
+    paddingRight: "clamp(14px, 3.5vw, 32px)",
     paddingBottom: "100px",
     "::-webkit-scrollbar": { width: "10px" },
     "::-webkit-scrollbar-thumb": {

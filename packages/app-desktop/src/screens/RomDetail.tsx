@@ -321,17 +321,21 @@ export function RomDetail() {
             <>
               <div className={s.field}>
                 <Caption1>Aplicar a</Caption1>
-                <TabList
-                  size="small"
-                  selectedValue={shaderScope}
-                  onTabSelect={(_, d) => setShaderScope(d.value as ShaderScope)}
-                >
-                  <Tab value="rom">Este jogo</Tab>
-                  <Tab value="system">
-                    {rom ? platformLabel(rom.systemId) : "Plataforma"}
-                  </Tab>
-                  <Tab value="default">Todos os jogos</Tab>
-                </TabList>
+                <div style={{ overflowX: "auto" }}>
+                  <TabList
+                    size="small"
+                    selectedValue={shaderScope}
+                    onTabSelect={(_, d) =>
+                      setShaderScope(d.value as ShaderScope)
+                    }
+                  >
+                    <Tab value="rom">Jogo</Tab>
+                    <Tab value="system">
+                      {rom ? platformLabel(rom.systemId) : "Plataforma"}
+                    </Tab>
+                    <Tab value="default">Todos</Tab>
+                  </TabList>
+                </div>
                 <Caption1 className={s.hint}>
                   {romShader.data?.resolvedScope === "rom"
                     ? "Ativo: definido neste jogo."

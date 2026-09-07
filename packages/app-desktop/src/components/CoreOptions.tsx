@@ -70,7 +70,7 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
           onTabSelect={(_, d) => setScope(d.value as 'core' | 'rom')}
         >
           <Tab value="core">Este core</Tab>
-          <Tab value="rom">Este jogo</Tab>
+          <Tab value="rom">Só este jogo</Tab>
         </TabList>
       )}
       <div className={styles.head}>
