@@ -144,6 +144,10 @@ pub struct SystemAvInfo {
 pub enum CoreLoadError {
     #[error("core não encontrado: {0}")]
     NotFound(String),
+    /// O arquivo da ROM não está no caminho salvo (mídia removível remontada,
+    /// arquivo movido/apagado). Re-escanear a biblioteca conserta.
+    #[error("ROM não encontrada: {0}")]
+    RomNotFound(String),
     #[error("falha ao carregar core: {0}")]
     LoadFailed(String),
     #[error("core incompatível com a plataforma atual: {0}")]

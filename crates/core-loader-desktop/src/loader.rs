@@ -192,6 +192,13 @@ impl DesktopCoreLoader {
     ) -> Result<DesktopCore, CoreLoadError> {
         let path = self.resolve_path(core_id)?;
 
+        // A ROM sumiu do lugar (mídia removível remontada com outro sufixo,
+        // arquivo movido, ...). Sem isto o core só devolve
+        // `retro_load_game falhou`, que não diz nada.
+        if !Path::new(rom_path).exists() {
+            return Err(CoreLoadError::RomNotFound(rom_path.to_string()));
+        }
+
         // ROM em .zip: extrai a entrada interna pra um arquivo temporário. Vive
         // (via `DesktopCore`) até o unload. Sets de arcade (MAME/FBNeo) não
         // têm "uma ROM" reconhecível dentro — só chip dumps avulsos — nesse
