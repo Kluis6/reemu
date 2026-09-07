@@ -18,6 +18,7 @@ import {
 import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ButtonHints } from "../components/ButtonHints";
+import { RouteTransition } from "../components/RouteTransition";
 import { useClock } from "../hooks/useClock";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { quitApp } from "../lib/tauri";
@@ -172,7 +173,11 @@ export function AppShell() {
           <span className={s.clock}>{clock}</span>
         </div>
         <div className={s.scroll}>
-          <Outlet />
+          <RouteTransition
+            routeKey={pathname.startsWith("/settings") ? "/settings" : pathname}
+          >
+            <Outlet />
+          </RouteTransition>
         </div>
       </div>
 

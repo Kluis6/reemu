@@ -6,6 +6,7 @@ import {
   tokens,
 } from "@fluentui/react-components";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { RouteTransition } from "../components/RouteTransition";
 
 const useStyles = makeStyles({
   root: {
@@ -46,7 +47,9 @@ export function SettingsLayout() {
           </Tab>
         ))}
       </TabList>
-      <Outlet />
+      <RouteTransition routeKey={current}>
+        <Outlet />
+      </RouteTransition>
     </div>
   );
 }
