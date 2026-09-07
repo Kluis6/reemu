@@ -452,6 +452,41 @@ pub async fn load_game(
     })
 }
 
+/// Traduz `scope` ("default" | "system" | "rom") + alvos num
+/// `(AssignmentScope, system_id, rom_id)` pros repos de shader. Pro escopo
+/// `"system"` aceita `system_id` direto ou deriva de `rom_id`.
+async fn shader_scope_args(
+    pool: &db::Db,
+    scope: &str,
+    system_id: Option<&str>,
+    rom_id: Option<&str>,
+) -> Result<(AssignmentScope, Option<String>, Option<String>), String> {
+    match scope {
+        "default" => Ok((AssignmentScope::Default, None, None)),
+        "system" => {
+            let sys = match system_id {
+                Some(s) if !s.is_empty() => s.to_string(),
+                _ => {
+                    let rid = rom_id
+                        .ok_or("scope 'system' precisa de system_id ou rom_id")?;
+                    let s = system_of(pool, Some(rid)).await;
+                    if s.is_empty() {
+                        return Err("não consegui achar o sistema do jogo".into());
+                    }
+                    s
+                }
+            };
+            Ok((AssignmentScope::System, Some(sys), None))
+        }
+        "rom" => Ok((
+            AssignmentScope::Rom,
+            None,
+            Some(rom_id.ok_or("scope 'rom' precisa de rom_id")?.to_string()),
+        )),
+        other => Err(format!("scope desconhecido '{other}'")),
+    }
+}
+
 /// `system_id` de uma rom (ou `""` sem rom).
 async fn system_of(pool: &db::Db, rom_id: Option<&str>) -> String {
     match rom_id {
@@ -890,14 +925,16 @@ fn preset_id_of(name: &str) -> (String, String, bool) {
     }
 }
 
-/// Aplica `name` no processador GPU agora e, se `scope` for dado, persiste:
-/// `scope = "default"` (todos os jogos) ou `"rom"` (só `rom_id`; `name` vazio
-/// = limpar a atribuição desse jogo).
+/// Aplica `name` no processador GPU agora e, se `scope` for dado, persiste no
+/// escopo: `"default"` (todos os jogos), `"system"` (uma plataforma —
+/// `system_id` ou derivado de `rom_id`) ou `"rom"` (um jogo). `name` vazio =
+/// limpar a atribuição desse escopo (volta pra cascata).
 #[tauri::command]
 pub async fn set_shader(
     state: State<'_, AppState>,
     name: String,
     scope: Option<String>,
+    system_id: Option<String>,
     rom_id: Option<String>,
 ) -> Result<(), String> {
     let clearing = name.is_empty();
@@ -910,51 +947,55 @@ pub async fn set_shader(
     }
 
     let Some(scope) = scope else { return Ok(()) };
-    let sc = db::ShaderChainRepo::new(pool(&state)?);
-    match scope.as_str() {
-        "rom" if clearing => {
-            let rid = rom_id.ok_or("scope 'rom' precisa de rom_id")?;
-            sc.clear_assignment(AssignmentScope::Rom, None, Some(&rid))
-                .await
-                .map_err(|e| e.to_string())
-        }
-        "default" | "rom" => {
-            let (id, pname, is_builtin) = preset_id_of(&name);
-            // heurística: presets com "bezel" no nome já desenham a moldura
-            // → o DecorationResolver é pulado (exclusão mútua).
-            let includes_bezel = name.to_lowercase().contains("bezel");
-            sc.upsert_preset(&domain::shader_chain::ShaderPreset {
-                id: id.clone(),
-                name: pname,
-                source_path: name.clone(),
-                format: domain::shader_chain::ShaderFormat::Slang,
-                is_builtin,
-                includes_bezel,
-            })
+    let pool = pool(&state)?;
+    let (sc_scope, sys, rid) = shader_scope_args(
+        &pool,
+        &scope,
+        system_id.as_deref(),
+        rom_id.as_deref(),
+    )
+    .await?;
+    let sc = db::ShaderChainRepo::new(pool);
+    if clearing {
+        return sc
+            .clear_assignment(sc_scope, sys.as_deref(), rid.as_deref())
             .await
-            .map_err(|e| e.to_string())?;
-            if scope == "default" {
-                sc.set_assignment(AssignmentScope::Default, None, None, &id)
-                    .await
-            } else {
-                let rid = rom_id.ok_or("scope 'rom' precisa de rom_id")?;
-                sc.set_assignment(AssignmentScope::Rom, None, Some(&rid), &id)
-                    .await
-            }
-            .map_err(|e| e.to_string())
-        }
-        other => Err(format!("scope desconhecido '{other}'")),
+            .map_err(|e| e.to_string());
     }
+    let (id, pname, is_builtin) = preset_id_of(&name);
+    // heurística: presets com "bezel" no nome já desenham a moldura → o
+    // DecorationResolver é pulado (exclusão mútua).
+    let includes_bezel = name.to_lowercase().contains("bezel");
+    sc.upsert_preset(&domain::shader_chain::ShaderPreset {
+        id: id.clone(),
+        name: pname,
+        source_path: name.clone(),
+        format: domain::shader_chain::ShaderFormat::Slang,
+        is_builtin,
+        includes_bezel,
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    sc.set_assignment(sc_scope, sys.as_deref(), rid.as_deref(), &id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
-/// Preset de shader resolvido pra um jogo (rom → sistema → default). `None` =
-/// nenhum (usa `plain`). `from_rom` diz se veio de uma atribuição do próprio
-/// jogo (pra UI de "Shader deste jogo").
+/// Preset de shader resolvido pra um jogo (rom → sistema → default) + o que
+/// está atribuído EXATAMENTE em cada escopo (pra UI de escopo). `resolvedScope`
+/// = de onde veio o `sourcePath` ("rom" | "system" | "default" | "none").
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RomShader {
     pub source_path: Option<String>,
+    /// mantido por compat: `resolvedScope == "rom"`.
     pub from_rom: bool,
+    pub resolved_scope: String,
+    pub system_id: String,
+    /// atribuição exata em cada escopo (`None` = herda).
+    pub at_rom: Option<String>,
+    pub at_system: Option<String>,
+    pub at_default: Option<String>,
 }
 
 #[tauri::command]
@@ -971,26 +1012,53 @@ pub async fn get_rom_shader(
         .map(|r| r.system_id)
         .unwrap_or_default();
     let sc = db::ShaderChainRepo::new(pool);
-    let Some(assign) = sc
+    let presets = sc.list_presets().await.map_err(|e| e.to_string())?;
+    let src_of = |id: &str| {
+        presets
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| p.source_path.clone())
+    };
+
+    // Atribuição EXATA em cada escopo: `resolve` com alvos progressivamente
+    // mais amplos, aceitando só quando o escopo que venceu é o esperado.
+    let resolved = sc
         .resolve(&system, Some(&rom_id))
         .await
-        .map_err(|e| e.to_string())?
-    else {
-        return Ok(RomShader {
-            source_path: None,
-            from_rom: false,
-        });
+        .map_err(|e| e.to_string())?;
+    let at_rom = resolved
+        .as_ref()
+        .filter(|a| a.scope == AssignmentScope::Rom)
+        .and_then(|a| src_of(&a.preset_id));
+    let at_system = match sc.resolve(&system, None).await {
+        Ok(Some(a)) if a.scope == AssignmentScope::System => src_of(&a.preset_id),
+        _ => None,
     };
-    let src = sc
-        .list_presets()
-        .await
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .find(|p| p.id == assign.preset_id)
-        .map(|p| p.source_path);
+    let at_default = match sc.resolve("", None).await {
+        Ok(Some(a)) if a.scope == AssignmentScope::Default => src_of(&a.preset_id),
+        _ => None,
+    };
+
+    let (source_path, resolved_scope) = match &resolved {
+        Some(a) => (
+            src_of(&a.preset_id),
+            match a.scope {
+                AssignmentScope::Rom => "rom",
+                AssignmentScope::System => "system",
+                AssignmentScope::Default => "default",
+            }
+            .to_string(),
+        ),
+        None => (None, "none".to_string()),
+    };
     Ok(RomShader {
-        source_path: src,
-        from_rom: assign.scope == AssignmentScope::Rom,
+        from_rom: resolved_scope == "rom",
+        source_path,
+        resolved_scope,
+        system_id: system,
+        at_rom,
+        at_system,
+        at_default,
     })
 }
 
@@ -1039,6 +1107,7 @@ pub async fn set_shader_param(
     name: String,
     value: f32,
     scope: Option<String>,
+    system_id: Option<String>,
     rom_id: Option<String>,
 ) -> Result<(), String> {
     {
@@ -1048,21 +1117,19 @@ pub async fn set_shader_param(
         }
     }
     let Some(scope) = scope else { return Ok(()) };
-    let sc = db::ShaderChainRepo::new(pool(&state)?);
-    let v = value.to_string();
-    match scope.as_str() {
-        "default" => sc
-            .set_parameter_override(AssignmentScope::Default, None, None, &name, &v)
-            .await
-            .map_err(|e| e.to_string()),
-        "rom" => {
-            let rid = rom_id.ok_or("scope 'rom' precisa de rom_id")?;
-            sc.set_parameter_override(AssignmentScope::Rom, None, Some(&rid), &name, &v)
-                .await
-                .map_err(|e| e.to_string())
-        }
-        other => Err(format!("scope desconhecido '{other}'")),
-    }
+    let pool = pool(&state)?;
+    let (sc_scope, sys, rid) =
+        shader_scope_args(&pool, &scope, system_id.as_deref(), rom_id.as_deref()).await?;
+    db::ShaderChainRepo::new(pool)
+        .set_parameter_override(
+            sc_scope,
+            sys.as_deref(),
+            rid.as_deref(),
+            &name,
+            &value.to_string(),
+        )
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Volta os parâmetros do shader pros defaults do preset: limpa os overrides
@@ -1071,23 +1138,17 @@ pub async fn set_shader_param(
 pub async fn reset_shader_params(
     state: State<'_, AppState>,
     scope: Option<String>,
+    system_id: Option<String>,
     rom_id: Option<String>,
 ) -> Result<(), String> {
     if let Some(scope) = &scope {
-        let sc = db::ShaderChainRepo::new(pool(&state)?);
-        let r = match scope.as_str() {
-            "default" => {
-                sc.clear_parameter_overrides(AssignmentScope::Default, None, None)
-                    .await
-            }
-            "rom" => {
-                let rid = rom_id.as_deref().ok_or("scope 'rom' precisa de rom_id")?;
-                sc.clear_parameter_overrides(AssignmentScope::Rom, None, Some(rid))
-                    .await
-            }
-            other => return Err(format!("scope desconhecido '{other}'")),
-        };
-        r.map_err(|e| e.to_string())?;
+        let pool = pool(&state)?;
+        let (sc_scope, sys, rid) =
+            shader_scope_args(&pool, scope, system_id.as_deref(), rom_id.as_deref()).await?;
+        db::ShaderChainRepo::new(pool)
+            .clear_parameter_overrides(sc_scope, sys.as_deref(), rid.as_deref())
+            .await
+            .map_err(|e| e.to_string())?;
     }
     apply_resolved_shader_ex(&state, rom_id.as_deref(), true).await;
     Ok(())
