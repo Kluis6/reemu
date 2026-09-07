@@ -1,12 +1,15 @@
 # 12 — HW Render Vulkan Por-Core
 
-**Status: 1º EMULADOR REAL RODANDO (2026-09-07).** Beetle PSX HW
-(`mednafen_psx_hw`) — Crash Bandicoot 2 na tela por Vulkan HW zero-cópia num
-RTX 3060, pelo caminho normal do app (`emu-session` → surface nativa). Fase A +
-B (B1..B3b) + §Beetle D1..D5 feitas. Falta polimento (blit A1R5G5B5, badge no
-catálogo + Vulkan default, save state, spam do Beetle) e a fase C (sync fino).
-Decisão do usuário: rodar o core Vulkan **no processo pai** (in-process, junto
-do wgpu), zero-cópia.
+**Status: FECHADA PRA BEETLE PSX HW (2026-09-07).** `mednafen_psx_hw` roda
+vários jogos de PS1 por Vulkan HW zero-cópia num RTX 3060, pelo caminho normal
+do app (`emu-session` → surface nativa), com troca de jogo repetida estável
+(o `FrameProcessor` reconstrói limpo a cada load, sem leak/panic/erro de
+validação) e a imagem centralizada certa (fix `17116c9`). Fase A + B (B1..B3b)
++ §Beetle D1..D5 feitas e validadas. **Sobra polimento** (blit A1R5G5B5 pra
+dither ligado, badge Vulkan no catálogo + Vulkan default, save state em core
+Vulkan, silenciar stdout do Beetle) e a **fase C** (sync fino sem CPU-wait +
+flycast como 3º alvo). Decisão do usuário: rodar o core Vulkan **no processo
+pai** (in-process, junto do wgpu), zero-cópia.
 
 **Alvos, em ordem** (decisão 2026-09-06):
 
