@@ -6,25 +6,25 @@
 #   VK_LAYER_SETTINGS_PATH=$PWD \
 #   VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
 #   RUST_LOG=debug cargo run -p reemu-desktop
-#
-# (com `REEMU_VK_VALIDATION=1` o bring-up já liga o layer sozinho; este arquivo
-#  garante que a SYNC validation entra nos dois caminhos.)
 
-# Validação de sincronização — pega VkQueue usada de 2 threads, semáforo/barrier
-# faltando entre o submit do core e o do wgpu. É a classe de bug que a etapa 12
-# arrisca e que passa silenciosa sem isto.
+# Núcleo + SINCRONIZAÇÃO — pega VkQueue usada de 2 threads e semáforo/barrier
+# faltando entre o submit do core e o do wgpu (a classe de bug da etapa 12).
+khronos_validation.validate_core = true
 khronos_validation.validate_sync = true
 khronos_validation.syncval_submit_time_validation = true
 
-# Validação padrão + GPU-assisted (GPU-AV) pra acessos fora de limite em shader.
-khronos_validation.validate_core = true
-khronos_validation.gpuav_enable = true
+# GPU-AV (acesso fora de limite em shader) FICA DESLIGADO: liga junto com o core
+# check deixa tudo lento e a camada reclama; ativar só quando for caçar isso.
+khronos_validation.gpuav_enable = false
 
-# Mensagens: erro + warning + perf warning. Sai no debug_utils → nosso `log`.
+# Mensagens: erro + warning + perf. Saem no debug_utils → nosso `log` (`[vulkan]`).
 khronos_validation.report_flags = error,warn,perf
 khronos_validation.debug_action = VK_DBG_LAYER_ACTION_LOG_MSG
 khronos_validation.message_format_display_application_name = true
 
-# Silencia ruído conhecido do wgpu-hal (allocator, features opcionais) — ajustar
-# conforme aparecer. IDs vêm da própria mensagem (VUID-... ou número).
-# khronos_validation.message_id_filter = UNASSIGNED-BestPractices-...
+# Ruído conhecido, filtrado pra não afogar erro de sync de verdade:
+# - 0xb210f7c2 (VUID-StandaloneSpirv-None-10684): o naga (compilador de shader
+#   do wgpu 30) decora a struct de saída do vertex com `Offset` mesmo quando ela
+#   é `var` local — spirv-val recente reclama, todo driver (NVIDIA/AMD/Intel)
+#   aceita. Não é bug do ReEmu; some quando o wgpu subir de versão.
+khronos_validation.message_id_filter = 0xb210f7c2
