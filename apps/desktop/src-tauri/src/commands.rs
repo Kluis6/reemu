@@ -66,6 +66,12 @@ pub struct AppState {
     pub pending_gpu: Mutex<Option<crate::gpu::FrameProcessor>>,
     /// Handles da surface nativa pra o pump reanexar no `pending_gpu`.
     pub vk_reattach: Mutex<Option<(crate::gpu::SendHandles, u32, u32)>>,
+    /// `true` do início de um `load_game` até ele terminar: o `reemu-video-pump`
+    /// mantém a subsurface ESCONDIDA nesse meio-tempo (senão o último frame do
+    /// jogo anterior fica "grudado" no `wl_surface` por cima da tela de
+    /// "Carregando…"). Fecha a janela de corrida entre navegar e o pump ver
+    /// `Idle`.
+    pub loading_game: std::sync::atomic::AtomicBool,
 }
 
 /// Estado da transição jogo↔menu no vídeo nativo. O `reemu-video-pump` dirige.
@@ -140,6 +146,7 @@ impl AppState {
             pending_surface_geom: Mutex::new(None),
             pending_gpu: Mutex::new(None),
             vk_reattach: Mutex::new(None),
+            loading_game: std::sync::atomic::AtomicBool::new(false),
         }
     }
 }
@@ -353,8 +360,12 @@ pub async fn load_game(
     let session = Arc::clone(&state.session);
 
     // Vídeo nativo: volta pro estado "jogando" e descarta o print do menu. A
-    // subsurface é escondida pelo `reemu-video-pump` (dono único da conexão
-    // Wayland) enquanto a sessão está `Idle` no load.
+    // subsurface fica escondida pelo `reemu-video-pump` (dono único da conexão
+    // Wayland) durante todo o load — senão o último frame do jogo anterior fica
+    // grudado no `wl_surface` por cima da tela de "Carregando…".
+    state
+        .loading_game
+        .store(true, std::sync::atomic::Ordering::Relaxed);
     *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
 
@@ -383,12 +394,25 @@ pub async fn load_game(
     // tira da thread async.
     let av = {
         let core_id = core_id.clone();
-        tauri::async_runtime::spawn_blocking(move || {
+        let joined = tauri::async_runtime::spawn_blocking(move || {
             session.load(&core_id, &rom_path, initial_option_values)
         })
-        .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?
+        .await;
+        match joined {
+            Ok(Ok(av)) => av,
+            Ok(Err(e)) => {
+                state
+                    .loading_game
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                return Err(e.to_string());
+            }
+            Err(e) => {
+                state
+                    .loading_game
+                    .store(false, std::sync::atomic::Ordering::Relaxed);
+                return Err(e.to_string());
+            }
+        }
     };
 
     // Persiste o schema que o core declarou (repopula todo load). Antes,
@@ -454,6 +478,11 @@ pub async fn load_game(
     // Guarda o `rom_id` (do DB) pro QuickSave/QuickLoad; `None` se o jogo veio
     // de fora da biblioteca.
     *state.current_rom.lock().unwrap_or_else(|p| p.into_inner()) = rom_id;
+    // Load concluído: o pump pode voltar a apresentar a subsurface (agora com
+    // frames do jogo NOVO — `latest_frame` foi zerado no `Command::Load`).
+    state
+        .loading_game
+        .store(false, std::sync::atomic::Ordering::Relaxed);
     Ok(LoadedGame {
         base_width: av.geometry.base_width,
         base_height: av.geometry.base_height,

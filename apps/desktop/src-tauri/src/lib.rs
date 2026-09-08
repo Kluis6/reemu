@@ -401,29 +401,35 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                 let idle = matches!(state.session.state(), emu_session::SessionState::Idle);
                 let vm = *state.video_menu.lock().unwrap_or_else(|p| p.into_inner());
 
+                let loading =
+                    state.loading_game.load(std::sync::atomic::Ordering::Relaxed);
+
                 use commands::VideoMenu::*;
                 match vm {
                     Playing => {
-                        if let Some(f) = frame.as_ref() {
+                        if loading || idle {
+                            // Jogo descarregado, trocando de ROM ou em pleno
+                            // load: esconde a subsurface pra a webview
+                            // (biblioteca / "Carregando…") aparecer — sem deixar
+                            // o último frame do jogo anterior grudado no
+                            // `wl_surface`.
+                            if !hidden {
+                                if let Some(vs) = state
+                                    .video
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner())
+                                    .as_ref()
+                                {
+                                    vs.set_hidden(true);
+                                }
+                                hidden = true;
+                            }
+                        } else if let Some(f) = frame.as_ref() {
                             let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
                             if let Some(fp) = gpu.as_mut() {
                                 fp.render_to_surface(Some(f));
                             }
                             hidden = false; // o present remapeia a subsurface
-                        } else if idle && !hidden {
-                            // Jogo descarregado ou troca de ROM: esconde a
-                            // subsurface pra a webview (biblioteca / "carregando")
-                            // aparecer. Antes pintava um retângulo preto por cima
-                            // da UI (`clear_surface`).
-                            if let Some(vs) = state
-                                .video
-                                .lock()
-                                .unwrap_or_else(|p| p.into_inner())
-                                .as_ref()
-                            {
-                                vs.set_hidden(true);
-                            }
-                            hidden = true;
                         }
                     }
                     Opening(0) => {
