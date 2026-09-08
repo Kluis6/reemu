@@ -121,26 +121,10 @@ export const useShellStyles = makeStyles({
       color: tokens.colorNeutralForeground1,
       transform: "scale(1.06)",
     },
-    // Barrinha de acento à esquerda do item ativo, que cresce ao selecionar.
-    "::before": {
-      content: '""',
-      position: "absolute",
-      left: "-10px",
-      top: "50%",
-      width: "3px",
-      height: "0",
-      borderRadius: "2px",
-      backgroundColor: tokens.colorBrandForeground1,
-      transform: "translateY(-50%)",
-      transitionProperty: "height",
-      transitionDuration: "200ms",
-      transitionTimingFunction: tokens.curveDecelerateMid,
-    },
     '&[aria-current="page"]': {
       backgroundColor: "#3a3a3f",
       color: tokens.colorNeutralForeground1,
     },
-    '&[aria-current="page"]::before': { height: "22px" },
   },
   railQuit: {
     ":hover": {
