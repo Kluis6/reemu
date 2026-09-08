@@ -722,18 +722,22 @@ impl FrameProcessor {
             unsafe { ash::Entry::load() }.map_err(|e| format!("carregar loader Vulkan: {e}"))?;
 
         // apiVersion: o que o core pediu (Beetle manda VK_MAKE_VERSION(1,0,32)),
-        // com piso em 1.1 (o wgpu-hal quer `get_physical_device_properties2`).
+        // com **piso em 1.2** — o wgpu-hal 30 chama `vkWaitSemaphores` (timeline,
+        // core em 1.2) no `wait_for_fence`; num device 1.1 esse ponteiro é nulo
+        // e o `ash` faz `panic!("Unable to load wait_semaphores")` no video pump.
+        // NÓS criamos a instância, então o app info 1.1 do Beetle não limita —
+        // a instância nasce 1.2 e o `create_device` do core cria um device 1.2.
         let api_version = if neg.get_application_info != 0 {
             let f: unsafe extern "C" fn() -> *const vk::ApplicationInfo<'static> =
                 unsafe { std::mem::transmute(neg.get_application_info) };
             let p = unsafe { f() };
             if p.is_null() {
-                vk::API_VERSION_1_1
+                vk::API_VERSION_1_2
             } else {
-                unsafe { (*p).api_version }.max(vk::API_VERSION_1_1)
+                unsafe { (*p).api_version }.max(vk::API_VERSION_1_2)
             }
         } else {
-            vk::API_VERSION_1_1
+            vk::API_VERSION_1_2
         };
 
         let flags = wgpu::InstanceFlags::from_build_config().with_env();
@@ -3317,7 +3321,7 @@ mod tests {
             eprintln!("sem loader Vulkan — pulando");
             return;
         };
-        let app = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_1);
+        let app = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_2);
         let Ok(instance) = (unsafe {
             entry.create_instance(&vk::InstanceCreateInfo::default().application_info(&app), None)
         }) else {
@@ -3362,7 +3366,7 @@ mod tests {
             device,
             queue_family_index: qfi,
             queue_index: 0,
-            instance_api_version: vk::API_VERSION_1_1,
+            instance_api_version: vk::API_VERSION_1_2,
             instance_extensions: vec![],
             device_extensions: vec![],
             features: wgpu::Features::empty(),
