@@ -64,17 +64,25 @@ impl VideoSurface {
                 return None;
             };
             let size = main.inner_size().ok()?;
+            // HiDPI: `inner_size` é físico, mas `set_position`/região da
+            // subsurface e o `wl_surface` do pai são em coords LÓGICAS (buffer /
+            // buffer_scale). Sem casar isso, num monitor 4K com escala 2 a
+            // subsurface fica 2× maior que o pai e o compositor não mostra nada
+            // (tela preta). O swapchain do wgpu continua em pixels físicos.
+            let scale = main.scale_factor().unwrap_or(1.0).round().max(1.0) as i32;
             let sub = wl::Subsurface::create(
                 d.display.as_ptr(),
                 w.surface.as_ptr(),
                 size.width,
                 size.height,
+                scale,
             )?;
             let wh = WaylandWindowHandle::new(NonNull::new(sub.wl_surface_ptr())?);
             log::info!(
-                "surface de vídeo: wl_subsurface ({}x{})",
+                "surface de vídeo: wl_subsurface ({}x{} físico, buffer_scale {})",
                 size.width,
-                size.height
+                size.height,
+                scale
             );
             (
                 Self { _wl: sub },
@@ -128,6 +136,9 @@ mod wl {
         parent: WlSurface,
         compositor: WlCompositor,
         conn: Connection,
+        /// `wl_surface.set_buffer_scale` do vídeo. Posição/região vêm em pixels
+        /// físicos e são divididas por isto pra virar coords lógicas.
+        buffer_scale: i32,
     }
 
     // O `Connection` foreign compartilha o fd do libwayland com o GTK; só
@@ -179,7 +190,9 @@ mod wl {
             parent_surface_ptr: *mut c_void,
             w: u32,
             h: u32,
+            buffer_scale: i32,
         ) -> Option<Self> {
+            let buffer_scale = buffer_scale.max(1);
             // SAFETY: `display_ptr` é o `wl_display` vivo do GTK (do RawDisplayHandle).
             let backend = unsafe { Backend::from_foreign_display(display_ptr.cast()) };
             let conn = Connection::from_backend(backend);
@@ -210,10 +223,18 @@ mod wl {
             // transparente = sem o bug NVIDIA+WebKitGTK.
             // desync: apresenta no ritmo do jogo, não no do GTK.
             subsurface.set_desync();
+            // Buffer do wgpu é físico; casa a escala pro compositor tratar a
+            // subsurface no mesmo espaço lógico do pai.
+            video.set_buffer_scale(buffer_scale);
 
-            // região opaca cobrindo tudo (é o fundo do jogo, sem alpha).
+            // região opaca cobrindo tudo (é o fundo do jogo, sem alpha) — em
+            // coords lógicas.
+            let (lw, lh) = (
+                (w.max(1) as i32 / buffer_scale).max(1),
+                (h.max(1) as i32 / buffer_scale).max(1),
+            );
             let region = compositor.create_region(&qh, ());
-            region.add(0, 0, w.max(1) as i32, h.max(1) as i32);
+            region.add(0, 0, lw, lh);
             video.set_opaque_region(Some(&region));
             video.commit();
             parent.commit();
@@ -225,6 +246,7 @@ mod wl {
                 parent,
                 compositor,
                 conn,
+                buffer_scale,
             })
         }
 
@@ -243,12 +265,21 @@ mod wl {
             }
         }
 
+        /// `x, y, w, h` chegam em pixels FÍSICOS (área de conteúdo da janela);
+        /// posição e região vão em coords lógicas (÷ `buffer_scale`).
         pub fn reconfigure(&self, x: i32, y: i32, w: u32, h: u32) {
+            let sc = self.buffer_scale.max(1);
             let qh: QueueHandle<Globals> = self.conn.new_event_queue().handle();
             let region = self.compositor.create_region(&qh, ());
-            region.add(0, 0, w.max(1) as i32, h.max(1) as i32);
+            region.add(
+                0,
+                0,
+                (w.max(1) as i32 / sc).max(1),
+                (h.max(1) as i32 / sc).max(1),
+            );
             self.video.set_opaque_region(Some(&region));
-            self.subsurface.set_position(x, y);
+            self.video.set_buffer_scale(sc);
+            self.subsurface.set_position(x / sc, y / sc);
             self.video.commit();
             self.parent.commit(); // set_position só aplica no commit do parent
             let _ = self.conn.flush();
