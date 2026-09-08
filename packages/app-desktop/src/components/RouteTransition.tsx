@@ -4,10 +4,10 @@ import type { ReactNode } from "react";
 const useStyles = makeStyles({
   fade: {
     animationName: {
-      from: { opacity: 0, transform: "translateY(8px)" },
-      to: { opacity: 1, transform: "translateY(0)" },
+      from: { opacity: 0, transform: "translateY(10px) scale(0.994)" },
+      to: { opacity: 1, transform: "translateY(0) scale(1)" },
     },
-    animationDuration: "220ms",
+    animationDuration: "240ms",
     animationTimingFunction: tokens.curveDecelerateMid,
     animationFillMode: "both",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },

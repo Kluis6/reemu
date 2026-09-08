@@ -1,4 +1,4 @@
-import { Button, Spinner } from "@fluentui/react-components";
+import { Button, mergeClasses, Spinner } from "@fluentui/react-components";
 import {
   AddRegular,
   ChevronRightRegular,
@@ -11,7 +11,7 @@ import { GameCard } from "../components/GameCard";
 import { platformLabel } from "../lib/platform";
 import { Shelf } from "../components/Shelf";
 import { listRoms, type RomEntry } from "../lib/tauri";
-import { useBrowseStyles, useHeroStyles } from "../styles/xbox";
+import { useBrowseStyles, useHeroStyles, useMotionStyles } from "../styles/xbox";
 
 /** Uma faixa curada da Início (título + "ver mais" opcional + prateleira). */
 function Row({
@@ -19,16 +19,22 @@ function Row({
   items,
   onMore,
   render,
+  index = 0,
 }: {
   title: string;
   items: readonly RomEntry[];
   onMore?: () => void;
   render: (r: RomEntry) => ReactNode;
+  index?: number;
 }) {
   const s = useBrowseStyles();
+  const m = useMotionStyles();
   if (items.length === 0) return null;
   return (
-    <section className={s.section}>
+    <section
+      className={mergeClasses(s.section, m.riseIn)}
+      style={{ animationDelay: `${120 + index * 70}ms` }}
+    >
       <div className={s.sectionHead}>
         <h2 className={s.sectionTitle}>{title}</h2>
         {onMore && (
@@ -139,12 +145,14 @@ export function Home() {
         items={recent}
         onMore={() => navigate("/library")}
         render={card}
+        index={0}
       />
       <Row
         title="Adicionados recentemente"
         items={added}
         onMore={() => navigate("/library")}
         render={card}
+        index={1}
       />
 
       <div className={s.toolbar} style={{ marginTop: 28 }}>

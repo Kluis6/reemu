@@ -114,17 +114,33 @@ export const useShellStyles = makeStyles({
     backgroundColor: "transparent",
     cursor: "pointer",
     transitionProperty: "background-color, color, transform, box-shadow",
-    transitionDuration: "180ms",
-    transitionTimingFunction: tokens.curveEasyEase,
+    transitionDuration: "160ms",
+    transitionTimingFunction: tokens.curveDecelerateMid,
     ":hover": {
       backgroundColor: tokens.colorNeutralBackground3,
       color: tokens.colorNeutralForeground1,
-      transform: "scale(1.03)",
+      transform: "scale(1.06)",
+    },
+    // Barrinha de acento à esquerda do item ativo, que cresce ao selecionar.
+    "::before": {
+      content: '""',
+      position: "absolute",
+      left: "-10px",
+      top: "50%",
+      width: "3px",
+      height: "0",
+      borderRadius: "2px",
+      backgroundColor: tokens.colorBrandForeground1,
+      transform: "translateY(-50%)",
+      transitionProperty: "height",
+      transitionDuration: "200ms",
+      transitionTimingFunction: tokens.curveDecelerateMid,
     },
     '&[aria-current="page"]': {
-      backgroundColor: "#5f6368",
+      backgroundColor: "#3a3a3f",
       color: tokens.colorNeutralForeground1,
     },
+    '&[aria-current="page"]::before': { height: "22px" },
   },
   railQuit: {
     ":hover": {
@@ -261,6 +277,13 @@ export const useHeroStyles = makeStyles({
     color: "inherit",
     marginTop: "8px",
     marginBottom: "4px",
+    transitionProperty: "transform, box-shadow",
+    transitionDuration: "200ms",
+    transitionTimingFunction: tokens.curveDecelerateMid,
+    "&:hover, &:focus": {
+      transform: "scale(1.006)",
+      boxShadow: "0 20px 48px rgba(0, 0, 0, 0.45)",
+    },
     "& img": {
       position: "absolute",
       top: 0,
@@ -270,6 +293,12 @@ export const useHeroStyles = makeStyles({
       width: "100%",
       height: "100%",
       objectFit: "cover",
+      // zoom de entrada sutil (uma vez)
+      animationName: { from: { transform: "scale(1.07)" }, to: { transform: "scale(1)" } },
+      animationDuration: "760ms",
+      animationTimingFunction: tokens.curveDecelerateMax,
+      animationFillMode: "both",
+      "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
     },
     "&::after": {
       content: '""',
@@ -289,6 +318,15 @@ export const useHeroStyles = makeStyles({
     zIndex: 1,
     maxWidth: "60%",
     textAlign: "left",
+    animationName: {
+      from: { opacity: 0, transform: "translateY(12px)" },
+      to: { opacity: 1, transform: "translateY(0)" },
+    },
+    animationDuration: "460ms",
+    animationDelay: "90ms",
+    animationTimingFunction: tokens.curveDecelerateMid,
+    animationFillMode: "both",
+    "@media (prefers-reduced-motion: reduce)": { animationName: "none", opacity: 1 },
   },
   kicker: {
     fontSize: tokens.fontSizeBase200,
@@ -307,6 +345,32 @@ export const useHeroStyles = makeStyles({
   sub: {
     fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground3,
+  },
+});
+
+/** Animações de entrada compartilhadas (estilo Xbox full-screen: fade + subida
+ *  suave, com stagger por índice via `animationDelay` inline). */
+export const useMotionStyles = makeStyles({
+  riseIn: {
+    animationName: {
+      from: { opacity: 0, transform: "translateY(16px)" },
+      to: { opacity: 1, transform: "translateY(0)" },
+    },
+    animationDuration: "380ms",
+    animationTimingFunction: tokens.curveDecelerateMid,
+    animationFillMode: "both",
+    "@media (prefers-reduced-motion: reduce)": {
+      animationName: "none",
+      opacity: 1,
+      transform: "none",
+    },
+  },
+  fadeIn: {
+    animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
+    animationDuration: "300ms",
+    animationTimingFunction: tokens.curveDecelerateMid,
+    animationFillMode: "both",
+    "@media (prefers-reduced-motion: reduce)": { animationName: "none", opacity: 1 },
   },
 });
 
@@ -438,6 +502,10 @@ export const useShelfStyles = makeStyles({
     maxWidth: "none",
     marginLeft: "-4px",
     marginRight: "-4px",
+    // Compensa o padding vertical do `.shelf` (folga pro card crescer no foco
+    // sem ser cortado pelo `overflow` do scroller).
+    marginTop: "-14px",
+    marginBottom: "-14px",
   },
   shelf: {
     display: "flex",
@@ -454,10 +522,14 @@ export const useShelfStyles = makeStyles({
     scrollSnapType: "x proximity",
     scrollBehavior: "smooth",
     scrollbarWidth: "none",
-    paddingTop: "4px",
+    // Foco por controle centraliza o card na faixa (moveFocus faz o
+    // scrollIntoView; isto dá a margem).
+    scrollPaddingLeft: "48px",
+    scrollPaddingRight: "48px",
+    paddingTop: "14px",
+    paddingBottom: "14px",
     paddingLeft: "4px",
     paddingRight: "4px",
-    paddingBottom: "4px",
     "::-webkit-scrollbar": { display: "none" },
     "& > *": {
       width: gameCardSize,
@@ -483,13 +555,26 @@ export const useCardStyles = makeStyles({
     cursor: "pointer",
     textAlign: "left",
     color: "inherit",
-    transitionProperty: "outline-color, outline-offset",
-    transitionDuration: "180ms",
-    transitionTimingFunction: tokens.curveEasyEase,
-    "&:hover [data-art] img": { transform: "scale(1.04)" },
-    "&:focus [data-art] img": { transform: "scale(1.04)" },
-    "&:focus [data-art]": {
-      boxShadow: "0 8px 18px rgba(0, 0, 0, 0.3)",
+    // O tile INTEIRO cresce no hover/foco (estilo Xbox full-screen) — os
+    // vizinhos não mexem (transform não reflui). `will-change` evita hitch.
+    willChange: "transform",
+    transformOrigin: "center",
+    transitionProperty: "transform, outline-color, outline-offset",
+    transitionDuration: "160ms",
+    transitionTimingFunction: tokens.curveDecelerateMid,
+    "&:hover, &:focus, &:focus-visible": {
+      transform: "scale(1.055)",
+      zIndex: 2,
+    },
+    "&:hover [data-art] img, &:focus [data-art] img": {
+      transform: "scale(1.06)",
+    },
+    "&:hover [data-art], &:focus [data-art]": {
+      boxShadow: "0 14px 34px rgba(0, 0, 0, 0.5)",
+    },
+    "@media (prefers-reduced-motion: reduce)": {
+      transitionProperty: "outline-color, outline-offset",
+      "&:hover, &:focus, &:focus-visible": { transform: "none" },
     },
   },
   art: {

@@ -48,6 +48,8 @@ export function moveFocus(dir: NavDir) {
   }
   if (best) {
     best.focus()
-    best.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+    // Centraliza na horizontal (faixa rolável estilo Xbox), sem pular na
+    // vertical mais que o necessário.
+    best.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
   }
 }

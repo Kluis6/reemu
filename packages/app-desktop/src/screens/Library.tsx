@@ -1,6 +1,7 @@
 import {
   Button,
   makeStyles,
+  mergeClasses,
   Menu,
   MenuButton,
   MenuItemRadio,
@@ -40,7 +41,7 @@ import {
 } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
-import { useBrowseStyles } from "../styles/xbox";
+import { useBrowseStyles, useMotionStyles } from "../styles/xbox";
 
 const useLibStyles = makeStyles({
   surface: {
@@ -77,6 +78,7 @@ type LibTab = "mine" | "fav" | "recent";
  */
 export function Library() {
   const s = useBrowseStyles();
+  const m = useMotionStyles();
   const l = useLibStyles();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -241,7 +243,7 @@ export function Library() {
   );
 
   const grid = (list: readonly RomEntry[]) => (
-    <div className={s.grid}>{list.map(card)}</div>
+    <div className={mergeClasses(s.grid, m.fadeIn)}>{list.map(card)}</div>
   );
 
   const emptyState = (icon: string, title: string, sub?: string) => (
@@ -276,12 +278,16 @@ export function Library() {
     if (tab !== "mine") return grid(view);
     // meus jogos: prateleira por plataforma. A Shelf mede a largura e mostra só
     // o que enche a linha; se sobrar jogo, o card 2×2 "ver todos" fecha a linha.
-    return byPlatform.map(([sys, plist]) => {
+    return byPlatform.map(([sys, plist], i) => {
       const goAll = () => navigate(`/library/${sys}`);
       // teto generoso — a Shelf corta no que couber; não renderiza milhares.
       const capped = plist.slice(0, 40);
       return (
-        <section className={s.section} key={sys}>
+        <section
+          className={mergeClasses(s.section, m.riseIn)}
+          style={{ animationDelay: `${Math.min(i, 8) * 55}ms` }}
+          key={sys}
+        >
           <div className={s.sectionHead}>
             <h2 className={s.sectionTitle}>{platformLabel(sys)}</h2>
             <span className={s.count}>
