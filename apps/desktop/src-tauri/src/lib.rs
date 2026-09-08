@@ -394,6 +394,12 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                 // `step_vk_local` já faz o pacing; quando ele produz um frame,
                 // NÃO dormimos no fim do loop. Sem core Vulkan local, cai pro
                 // `take_latest_frame` de sempre (software/GL via `emu-session`).
+                //
+                // Portão da VkQueue: segurado durante `step_vk_local` + o submit
+                // do wgpu (mais abaixo) — o `core_loop` pega o mesmo portão pra
+                // `serialize_state`/`restore_state`. Sem core Vulkan local é
+                // gratuito (sem contenção). Solto ANTES do sleep.
+                let vk_gate = state.session.lock_vk_queue();
                 let (frame, stepped_vk) = match state.session.step_vk_local() {
                     Some(f) => (Some(f), true),
                     None => (state.session.take_latest_frame(), false),
@@ -471,6 +477,8 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                             Closing(n - 1);
                     }
                 }
+
+                drop(vk_gate); // libera a VkQueue antes de dormir
 
                 // O `step_vk_local` já dá o ritmo (pacing por acumulador do
                 // core). Sem core Vulkan local, mantém os ~15ms de sempre.

@@ -303,10 +303,21 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   device adotado (`9d1746b`); scanout `A1R5G5B5` embaralhava → `vk_format_to_wgpu`
   devolve `Option` + erro claro (`9d1746b`); `Gdk Error 71` (attach_surface de
   thread errada) → troca do FP no video pump via `AppState.pending_gpu`
-  (`82f59a2`). **Polimento pendente:** blit `A1R5G5B5→RGBA8` (dither ligado);
-  badge Vulkan no catálogo + tornar default; save state em core Vulkan
-  (`retro_serialize` do Beetle pode submeter — verificar thread); silenciar
-  stdout do Beetle (`[hdcache]`/`Creating shader module`).
+  (`82f59a2`).
+  **Feito depois (core do polimento):** badge `Vulkan` no catálogo
+  (`CoreHw::Vulkan`, `mednafen_psx_hw` marcado `vk`, badge/caption no
+  `SettingsCores`) — o roteamento pra Vulkan já era default pros
+  `VK_CAPABLE_CORES` (com fallback pro processo filho), agora o rótulo bate.
+  Scanout `A1R5G5B5` (dither ligado): o `core_loop` injeta
+  `beetle_psx_hw_dither_mode=disabled` como DEFAULT ao rotear PSX-hw pro Vulkan
+  (força RGBA8); o override do usuário (cascata de core options) vence. Save
+  state em core Vulkan: `Shared.vk_render_gate: Mutex<()>` — o video pump
+  segura durante `step_vk_local` + submit do wgpu, o `core_loop` pega antes de
+  `serialize_state`/`restore_state` (`retro_serialize` pode submeter na mesma
+  `VkQueue`); ordem gate→`vk_local` nos dois lados.
+  **Pendente:** blit `A1R5G5B5→RGBA8` real (dither + Vulkan juntos); silenciar
+  stdout do Beetle (`[hdcache]`/`Creating shader module`); flycast/mupen como
+  alvos validados.
   Referência histórica do plano D2 original: `vk_context.rs` construir a `ash::Instance` com as extensões que o
   `wgpu-hal` quer, chamar o `create_device` do core passando
   `Adapter::required_device_extensions` / `physical_device_features` do

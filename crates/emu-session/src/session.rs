@@ -137,6 +137,11 @@ struct Shared {
     /// Áudio que o `step_vk_local` (thread do compositor) produziu — o
     /// `core_loop` (dono do `AudioSink` `!Send`) drena isto pro sink.
     vk_local_audio: Mutex<Vec<(Vec<i16>, u32)>>,
+    /// Serializa quem submete na `VkQueue` compartilhada: o video pump
+    /// (`step_vk_local` + `render_to_surface` do wgpu) e o `core_loop`
+    /// (`serialize_state`/`restore_state` — o `retro_serialize` de alguns cores
+    /// submete). A `VkQueue` NÃO é sincronizada externamente pelo Vulkan.
+    vk_render_gate: Mutex<()>,
 }
 
 impl Shared {
@@ -174,6 +179,7 @@ impl EmuSession {
             vk_local_active: AtomicBool::new(false),
             vk_local_paused: AtomicBool::new(false),
             vk_local_audio: Mutex::new(Vec::new()),
+            vk_render_gate: Mutex::new(()),
         });
 
         let gamepad_thread = cfg.enable_gamepad.then(|| {
@@ -243,6 +249,18 @@ impl EmuSession {
     /// O shell chama isto no video pump, antes do submit do wgpu, e usa o
     /// `Frame` devolvido. `None` = não há core Vulkan local / está pausado /
     /// frame duplicado.
+    /// Trava o "portão" da `VkQueue` compartilhada. O video pump segura isto
+    /// enquanto roda `step_vk_local` + o submit do wgpu (`render_to_surface`);
+    /// o `core_loop` pega antes de `serialize_state`/`restore_state` (o
+    /// `retro_serialize` de alguns cores submete). Mantém os submits das duas
+    /// threads serializados — Vulkan não sincroniza a queue sozinho.
+    pub fn lock_vk_queue(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.shared
+            .vk_render_gate
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+    }
+
     pub fn step_vk_local(&self) -> Option<Frame> {
         if !self.shared.vk_local_active.load(Ordering::Acquire)
             || self.shared.vk_local_paused.load(Ordering::Acquire)
@@ -1041,13 +1059,24 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 // cores não re-entrantes).
                 match route_local_device(&shared, &id.0) {
                     Some((device, negotiator)) if !known_non_vulkan.contains(&id.0) => {
+                        // Beetle PSX HW: com dither ligado, o scanout Vulkan sai
+                        // num formato packed 16-bit (A1R5G5B5) que o wgpu não
+                        // amostra. "disabled" força RGBA8. Só default — o
+                        // override do usuário (cascata de core options) já vem
+                        // por cima em `initial_option_values`.
+                        let mut vk_opts = initial_option_values.clone();
+                        if id.0.contains("psx_hw") {
+                            vk_opts
+                                .entry("beetle_psx_hw_dither_mode".to_string())
+                                .or_insert_with(|| "disabled".to_string());
+                        }
                         match LocalCore::load(
                             &id.0,
                             &rom,
                             cores_dir.clone(),
                             system_dir.clone(),
                             save_dir.clone(),
-                            initial_option_values.clone(),
+                            vk_opts,
                             initial_save_ram.clone(),
                             device,
                             negotiator,
@@ -1227,6 +1256,12 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
             }
             Command::SaveState(reply) => {
                 let bytes = if shared.vk_local_active.load(Ordering::Acquire) {
+                    // Portão da VkQueue: o `retro_serialize` pode submeter, e o
+                    // video pump submete o wgpu na mesma queue de outra thread.
+                    let _gate = shared
+                        .vk_render_gate
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner());
                     shared
                         .vk_local
                         .lock()
@@ -1257,6 +1292,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
             }
             Command::RestoreState(data, reply) => {
                 let ok = if shared.vk_local_active.load(Ordering::Acquire) {
+                    let _gate = shared
+                        .vk_render_gate
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner());
                     shared
                         .vk_local
                         .lock()

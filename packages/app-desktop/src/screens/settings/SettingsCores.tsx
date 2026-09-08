@@ -125,9 +125,9 @@ function Catalog() {
   return (
     <>
       <Caption1>
-        Cores do buildbot oficial da libretro. Os marcados <strong>OpenGL</strong> renderizam em 3D
-        (precisam de GPU) — N64, PSX-hw, PSP, Saturn, DS. Cores exclusivamente Vulkan ficam de fora
-        até a etapa 12.
+        Cores do buildbot oficial da libretro. Os marcados <strong>OpenGL</strong> /{' '}
+        <strong>Vulkan</strong> renderizam em 3D (precisam de GPU) — N64, PSX-hw, Saturn, DS,
+        Dreamcast. Os <strong>Vulkan</strong> rodam no mesmo device do compositor, sem cópia.
       </Caption1>
       <div className={styles.list}>
         {sorted.map((c: CatalogCore) => (
@@ -138,6 +138,11 @@ function Catalog() {
                 {c.hw === 'opengl' && (
                   <Badge appearance="outline" color="informative" style={{ marginLeft: 8 }}>
                     OpenGL
+                  </Badge>
+                )}
+                {c.hw === 'vulkan' && (
+                  <Badge appearance="outline" color="severe" style={{ marginLeft: 8 }}>
+                    Vulkan
                   </Badge>
                 )}
               </Body1>

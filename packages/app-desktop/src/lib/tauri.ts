@@ -191,8 +191,9 @@ export interface CatalogCore {
   systems: string
   license: string
   installed: boolean
-  /** 'software' = buffer cru; 'opengl' = renderiza em GL (precisa de GPU + libEGL). */
-  hw: 'software' | 'opengl'
+  /** 'software' = buffer cru; 'opengl' = renderiza em GL; 'vulkan' = roda
+   *  in-process no device do compositor (zero cópia). */
+  hw: 'software' | 'opengl' | 'vulkan'
 }
 export const listCoreCatalog = () => invoke<CatalogCore[]>('list_core_catalog')
 export const downloadCore = (coreId: string) => invoke<void>('download_core', { coreId })

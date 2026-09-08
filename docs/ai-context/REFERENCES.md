@@ -75,6 +75,23 @@ agora (ver `03`).
 | wgpu-hal (interop, `texture_from_dmabuf_fd`, `as_hal`, `device_from_raw`) | https://docs.rs/wgpu-hal/latest/wgpu_hal/ |
 | Fonte dos crates (sempre disponível) | `~/.cargo/registry/src/index.crates.io-*/` |
 
+## OpenGL (etapa 02 passo 4 — HW render GL por core: N64, PSX-hw, Saturn, DS, Dreamcast)
+
+**Consultar a doc oficial antes de mexer no contexto GL offscreen, nos FBOs do
+core, ou na interop dma_buf — não de memória.**
+
+| O quê | Onde |
+|---|---|
+| Índice da documentação OpenGL (Khronos) | https://www.opengl.org/Documentation/Documentation.html |
+| Registry (specs core + extensões, `.xml` canônico) | https://registry.khronos.org/OpenGL/ |
+| Wiki (FBO, contextos, sync objects, `GL_ARB_*`) | https://www.khronos.org/opengl/wiki/ |
+| Referência de funções (`glTexImage2D`, `glFramebufferTexture`, …) | https://registry.khronos.org/OpenGL-Refpages/gl4/ |
+| EGL (contexto/superfície offscreen, `EGL_KHR_surfaceless_context`) | https://registry.khronos.org/EGL/ |
+
+O core GL renderiza num FBO que o frontend dá; o resultado sai por interop
+dma_buf zero-cópia (`EGL_EXT_image_dma_buf_import`, ver seção Wayland/EGL) ou,
+com `REEMU_GL_INTEROP=0`, por `glReadPixels`.
+
 ## Vulkan (etapa 12 — HW render por-core)
 
 **Consultar a spec/guia oficial antes de qualquer código Vulkan — sync e

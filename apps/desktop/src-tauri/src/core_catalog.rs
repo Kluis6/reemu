@@ -11,8 +11,9 @@
 //! - `OpenGl` — renderiza num FBO; o frontend cria um contexto GL offscreen
 //!   (etapa 02 passo 4) e traz o frame por interop dma_buf zero-cópia (padrão,
 //!   `REEMU_GL_INTEROP=0` força readback). Precisa de `libEGL` + GPU.
-//!
-//! Cores exclusivamente Vulkan ficam de fora até a etapa 12.
+//! - `Vulkan` — o core roda in-process e adota o `VkDevice` do compositor
+//!   (etapa 12); o `VkImage` do scanout vira textura do wgpu sem cópia. Cai
+//!   pro processo filho (GL/sw) se a negociação Vulkan não rolar.
 
 use std::path::{Path, PathBuf};
 
@@ -20,6 +21,10 @@ use std::path::{Path, PathBuf};
 pub enum CoreHw {
     Software,
     OpenGl,
+    /// Renderiza em Vulkan. O ReEmu roda esses cores in-process, adotando o
+    /// `VkDevice` do compositor (etapa 12) — zero cópia. Cai pro processo filho
+    /// (GL/sw) se a negociação Vulkan falhar.
+    Vulkan,
 }
 
 impl CoreHw {
@@ -27,6 +32,7 @@ impl CoreHw {
         match self {
             CoreHw::Software => "software",
             CoreHw::OpenGl => "opengl",
+            CoreHw::Vulkan => "vulkan",
         }
     }
 }
@@ -67,6 +73,21 @@ const fn gl(
         systems,
         license,
         hw: CoreHw::OpenGl,
+    }
+}
+
+const fn vk(
+    id: &'static str,
+    name: &'static str,
+    systems: &'static str,
+    license: &'static str,
+) -> CatalogEntry {
+    CatalogEntry {
+        id,
+        name,
+        systems,
+        license,
+        hw: CoreHw::Vulkan,
     }
 }
 
@@ -207,7 +228,7 @@ pub const CATALOG: &[CatalogEntry] = &[
         "PlayStation",
         "GPLv2",
     ),
-    gl(
+    vk(
         "mednafen_psx_hw_libretro",
         "Beetle PSX HW",
         "PlayStation",
