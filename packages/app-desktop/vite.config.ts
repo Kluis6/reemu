@@ -13,7 +13,11 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    // Sem TAURI_DEV_HOST, escuta explicitamente em 127.0.0.1 — o `devUrl` do
+    // Tauri também é 127.0.0.1. O WebKitGTK resolve `localhost` como `::1`
+    // primeiro e, como o Vite não escuta IPv6, dava "Connection refused" na
+    // webview (o Chrome cai pra IPv4 sozinho, por isso funcionava lá).
+    host: host || '127.0.0.1',
     hmr: host
       ? { protocol: 'ws', host, port: 1421 }
       : undefined,
