@@ -216,10 +216,93 @@ pub fn decode_png(path: &Path) -> Result<(Vec<u8>, u32, u32), String> {
     Ok((rgba, info.width, info.height))
 }
 
+/// Descobre o retângulo do jogo (em pixels da imagem) pela **janela
+/// transparente** no meio da moldura. The Bezel Project não põe
+/// `custom_viewport_*` nos `.cfg` dos packs "games" (eles são só definição de
+/// overlay), então sem isto todo bezel de jogo cai no fallback "altura cheia +
+/// AR do core" — que estica jogos verticais e não-4:3 pra fora da arte.
+///
+/// Heurística: conta pixels quase-transparentes (`alpha <= 24`) por linha e por
+/// coluna; uma linha/coluna faz parte da janela se ao menos metade dela é
+/// transparente (ignora bordas finas e cantos arredondados). O bbox dessas
+/// linhas/colunas é a janela — validado por tamanho e por densidade de
+/// transparência lá dentro (>= 80%), senão devolve `None` (a arte é opaca ou
+/// tem transparência espalhada demais pra confiar).
+pub fn transparent_bbox(rgba: &[u8], w: u32, h: u32) -> Option<crate::gpu::DecoViewport> {
+    if w < 32 || h < 32 || rgba.len() != (w as usize) * (h as usize) * 4 {
+        return None;
+    }
+    let (wu, hu) = (w as usize, h as usize);
+    const CLEAR: u8 = 24;
+    let mut row = vec![0u32; hu];
+    let mut col = vec![0u32; wu];
+    for y in 0..hu {
+        let line = &rgba[y * wu * 4..(y + 1) * wu * 4];
+        for x in 0..wu {
+            if line[x * 4 + 3] <= CLEAR {
+                row[y] += 1;
+                col[x] += 1;
+            }
+        }
+    }
+    let max_row = *row.iter().max().unwrap_or(&0);
+    let max_col = *col.iter().max().unwrap_or(&0);
+    if max_row == 0 || max_col == 0 {
+        return None;
+    }
+    let ys: Vec<usize> = (0..hu).filter(|&y| row[y] * 2 >= max_row).collect();
+    let xs: Vec<usize> = (0..wu).filter(|&x| col[x] * 2 >= max_col).collect();
+    let (y0, y1) = (*ys.first()?, *ys.last()?);
+    let (x0, x1) = (*xs.first()?, *xs.last()?);
+    let (bw, bh) = ((x1 - x0 + 1) as f32, (y1 - y0 + 1) as f32);
+    let (fw, fh) = (w as f32, h as f32);
+    if bw < fw * 0.10 || bh < fh * 0.10 || bw > fw * 0.99 || bh > fh * 0.99 {
+        return None;
+    }
+    let mut clear_in = 0u64;
+    for y in y0..=y1 {
+        let line = &rgba[y * wu * 4..(y + 1) * wu * 4];
+        for x in x0..=x1 {
+            if line[x * 4 + 3] <= CLEAR {
+                clear_in += 1;
+            }
+        }
+    }
+    if clear_in * 100 < (bw as u64) * (bh as u64) * 80 {
+        return None;
+    }
+    Some(crate::gpu::DecoViewport {
+        x: x0 as f32,
+        y: y0 as f32,
+        w: bw,
+        h: bh,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::decode_png;
+    use super::{decode_png, transparent_bbox};
     use std::io::BufWriter;
+
+    #[test]
+    fn finds_transparent_window_in_bezel() {
+        // moldura 200×100 opaca com janela transparente (60,20)–(139,79)
+        let (w, h) = (200usize, 100usize);
+        let mut rgba = vec![255u8; w * h * 4];
+        for y in 20..80 {
+            for x in 60..140 {
+                rgba[(y * w + x) * 4 + 3] = 0;
+            }
+        }
+        let vp = transparent_bbox(&rgba, w as u32, h as u32).expect("achou janela");
+        assert_eq!((vp.x, vp.y, vp.w, vp.h), (60.0, 20.0, 80.0, 60.0));
+    }
+
+    #[test]
+    fn rejects_fully_opaque_frame() {
+        let rgba = vec![255u8; 200 * 100 * 4];
+        assert!(transparent_bbox(&rgba, 200, 100).is_none());
+    }
 
     /// Os bezels do Bezel Project são PNG paletado (colortype 3) + tRNS —
     /// `decode_png` tem que expandir pra RGBA8 em vez de recusar.

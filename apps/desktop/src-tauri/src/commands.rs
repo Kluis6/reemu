@@ -568,13 +568,7 @@ async fn apply_resolved_decoration(state: &AppState, rom_id: Option<&str>, shade
             .inspect_err(|e| log::warn!("REEMU_BEZEL: {e}"))
             .ok()
             .map(|(rgba, w, h)| {
-                let vp =
-                    library_scan::viewport_for_image(&path).map(|v| crate::gpu::DecoViewport {
-                        x: v.x as f32,
-                        y: v.y as f32,
-                        w: v.w as f32,
-                        h: v.h as f32,
-                    });
+                let vp = deco_viewport(&path, &rgba, w, h);
                 log::info!("decoração: REEMU_BEZEL {} ({w}x{h})", path.display());
                 (rgba, w, h, vp)
             })
@@ -618,18 +612,44 @@ async fn resolve_decoration(
     let (rgba, w, h) = crate::decoration::decode_png(path)
         .inspect_err(|e| log::warn!("decoração {}: {e}", a.asset_path))
         .ok()?;
-    let vp = library_scan::viewport_for_image(path).map(|v| crate::gpu::DecoViewport {
-        x: v.x as f32,
-        y: v.y as f32,
-        w: v.w as f32,
-        h: v.h as f32,
-    });
-    log::info!(
-        "decoração: {} ({w}x{h}){}",
-        a.asset_path,
-        if vp.is_some() { " +viewport" } else { "" }
-    );
+    let vp = deco_viewport(path, &rgba, w, h);
+    log::info!("decoração: {} ({w}x{h})", a.asset_path);
     Some((rgba, w, h, vp))
+}
+
+/// Retângulo do jogo dentro da moldura: usa o `custom_viewport_*` do `.cfg`
+/// irmão se houver; senão descobre pela janela transparente da própria arte
+/// (The Bezel Project não põe viewport nos `.cfg` dos packs "games"). Loga qual
+/// fonte venceu — sem nenhuma das duas, o compositor centraliza com a AR do
+/// core (só serve pra 4:3 de altura cheia).
+fn deco_viewport(
+    path: &std::path::Path,
+    rgba: &[u8],
+    w: u32,
+    h: u32,
+) -> Option<crate::gpu::DecoViewport> {
+    if let Some(v) = library_scan::viewport_for_image(path) {
+        log::info!("decoração: viewport do .cfg ({},{} {}×{})", v.x, v.y, v.w, v.h);
+        return Some(crate::gpu::DecoViewport {
+            x: v.x as f32,
+            y: v.y as f32,
+            w: v.w as f32,
+            h: v.h as f32,
+        });
+    }
+    match crate::decoration::transparent_bbox(rgba, w, h) {
+        Some(v) => {
+            log::info!(
+                "decoração: viewport pela transparência ({},{} {}×{})",
+                v.x, v.y, v.w, v.h
+            );
+            Some(v)
+        }
+        None => {
+            log::info!("decoração: sem viewport (fallback: centralizado, AR do core)");
+            None
+        }
+    }
 }
 
 #[tauri::command]

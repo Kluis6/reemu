@@ -1623,13 +1623,25 @@ impl FrameProcessor {
             // com rotação de 90°/270° a AR de exibição inverte.
             let dar = if quarter && dar0 > 0.0 { 1.0 / dar0 } else { dar0 };
             let (cx, cy, hw, hh) = match vp {
-                Some(v) => (
-                    (v.x + v.w / 2.0) / dw as f32 * 2.0 - 1.0,
-                    1.0 - (v.y + v.h / 2.0) / dh as f32 * 2.0,
-                    (v.w / dw as f32).clamp(0.0, 1.0),
-                    (v.h / dh as f32).clamp(0.0, 1.0),
-                ),
-                None => {
+                // Janela do jogo conhecida (do `.cfg` ou detectada pela
+                // transparência): encaixa a imagem DENTRO dela respeitando a AR
+                // (letterbox), em vez de esticar — assim jogo vertical / não-4:3
+                // não estoura a arte.
+                Some(v) if v.w > 0.0 && v.h > 0.0 => {
+                    let rect_ar = v.w / v.h;
+                    let (gw, gh) = if dar >= rect_ar {
+                        (v.w, v.w / dar.max(0.01))
+                    } else {
+                        (v.h * dar, v.h)
+                    };
+                    (
+                        (v.x + v.w / 2.0) / dw as f32 * 2.0 - 1.0,
+                        1.0 - (v.y + v.h / 2.0) / dh as f32 * 2.0,
+                        (gw / dw as f32).clamp(0.0, 1.0),
+                        (gh / dh as f32).clamp(0.0, 1.0),
+                    )
+                }
+                _ => {
                     let vw = (dh as f32 * dar).min(dw as f32);
                     (0.0, 0.0, vw / dw as f32, 1.0)
                 }
