@@ -43,7 +43,12 @@ export const useShellStyles = makeStyles({
     // altos o rail e o `.main` colapsam pra altura do conteúdo e sobra um vazio
     // escuro embaixo ("tela preta").
     height: "100vh",
-    backgroundImage: "var(--reemuAppBg)",
+    // Fallback literal: se o `--reemuAppBg` do FluentProvider não resolver, a
+    // área de conteúdo NÃO pode cair pro `body` quase-preto (aí a página fica
+    // mais escura que o rail e parece que as cores trocaram).
+    backgroundColor: "#1a1a1e",
+    backgroundImage:
+      "var(--reemuAppBg, linear-gradient(180deg, #26262b 0%, #1a1a1e 55%))",
     color: tokens.colorNeutralForeground1,
     fontFamily: tokens.fontFamilyBase,
     display: "grid",
@@ -83,7 +88,9 @@ export const useShellStyles = makeStyles({
     paddingTop: "14px",
     paddingBottom: "14px",
     borderRight: "none",
-    backgroundColor: tokens.colorNeutralBackground3,
+    // Rail sempre mais escuro que a área de conteúdo (hierarquia do "console
+    // look"). Literal, não token — imune a variação de tema/emissão de var.
+    backgroundColor: "#101014",
   },
   railSpacer: { flexGrow: 1 },
   railSep: {
