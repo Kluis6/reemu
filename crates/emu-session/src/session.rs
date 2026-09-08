@@ -1103,6 +1103,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 .entry("beetle_psx_hw_dither_mode".to_string())
                                 .or_insert_with(|| "disabled".to_string());
                         }
+                        log::info!("etapa 12: chamando LocalCore::load pra {}", id.0);
                         match LocalCore::load(
                             &id.0,
                             &rom,
@@ -1143,6 +1144,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 log::info!("core {}: {reason} — usando o processo filho", id.0);
                             }
                             Err(e) => {
+                                log::error!(
+                                    "etapa 12: LocalCore::load({}) FALHOU: {e}",
+                                    id.0
+                                );
                                 let _ = reply.send(Err(e));
                                 continue;
                             }

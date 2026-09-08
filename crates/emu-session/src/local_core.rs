@@ -54,7 +54,9 @@ impl LocalCore {
         shared_device: Option<domain::core_loader::VulkanSharedDevice>,
         negotiator: Option<domain::core_loader::VulkanDeviceNegotiator>,
     ) -> Result<(Self, SystemAvInfo), CoreLoadError> {
-        core_loader_desktop::silence_core_stdout();
+        // NB: `silence_core_stdout` NÃO aqui — este caminho roda no processo
+        // principal (Tauri/webview/wgpu). Só o processo filho (`core-host`)
+        // redireciona o stdout.
         core_loader_desktop::set_pending_core_option_values(initial_option_values);
         let mut loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir).vulkan_only();
         if let Some(s) = shared_device {
