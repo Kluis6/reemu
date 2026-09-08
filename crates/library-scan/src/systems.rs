@@ -9,7 +9,8 @@
 /// desambiguar pelo nome da pasta antes de aceitar esse fallback (ver
 /// `system_from_folder_name`). Deliberadamente **sem** `.bin` — usado por
 /// lixo demais fora de contexto de disco pra arriscar reconhecer sozinho.
-pub const AMBIGUOUS_DISC_EXTS: &[&str] = &["iso", "cue", "chd", "pbp", "gdi", "cdi", "mdf"];
+pub const AMBIGUOUS_DISC_EXTS: &[&str] =
+    &["iso", "cue", "chd", "pbp", "gdi", "cdi", "mdf", "m3u"];
 
 /// `system_id` canônico pra uma extensão (sem o ponto, minúsculo). `None` se
 /// não reconhecida. Pras extensões de disco (`AMBIGUOUS_DISC_EXTS`) isso é
@@ -35,7 +36,11 @@ pub fn system_for_extension(ext: &str) -> Option<&'static str> {
         "vb" => "vb",
         "col" => "coleco",
         "int" => "intellivision",
-        "iso" | "cue" | "chd" | "pbp" | "gdi" | "cdi" | "mdf" => "disc", // ver AMBIGUOUS_DISC_EXTS
+        // `.gdi`/`.cdi` são GD-ROM → Dreamcast por padrão (NAOMI/Atomiswave a
+        // pasta desambigua); `.pbp` é EBOOT de PSP. As outras seguem ambíguas.
+        "gdi" | "cdi" => "dreamcast",
+        "pbp" => "psp",
+        "iso" | "cue" | "chd" | "mdf" | "m3u" => "disc", // ver AMBIGUOUS_DISC_EXTS
         _ => return None,
     })
 }
@@ -98,11 +103,14 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         "ps2" | "playstation2" | "playstation 2" | "sony - playstation 2" => "ps2",
         "saturn" | "sega saturn" | "sega - saturn" => "saturn",
         "dreamcast" | "dc" | "sega dreamcast" | "sega - dreamcast" => "dreamcast",
+        "naomi" | "sega naomi" | "sega - naomi" | "naomi2" | "naomi 2" | "sega - naomi 2" => "naomi",
+        "atomiswave" | "aw" | "sammy atomiswave" | "sammy - atomiswave" => "atomiswave",
         "psp" | "playstationportable" | "sony - playstation portable" => "psp",
         "segacd" | "mega-cd" | "megacd" | "sega cd" | "sega - mega-cd - sega cd" => "segacd",
-        "pcenginecd" | "turbografxcd" | "turbografx-cd" | "tgcd" | "pce-cd" | "pcecd" => {
-            "pcenginecd"
-        }
+        "pcenginecd" | "turbografxcd" | "turbografx-cd" | "tgcd" | "pce-cd" | "pcecd"
+        | "nec - pc engine cd - turbografx-cd" => "pcenginecd",
+        "neogeocd" | "neo geo cd" | "neogeo cd" | "ngcd" | "snk - neo geo cd" => "neogeocd",
+        "cdi" | "cd-i" | "cdimono1" | "philips cd-i" | "philips - cd-i" => "cdi",
         "3do" | "the 3do company - 3do" => "3do",
         "pcfx" | "pc-fx" | "pc fx" | "nec - pc-fx" => "pcfx",
         // --- arcade ---
@@ -131,7 +139,11 @@ fn libretro_thumbnail_system(system_id: &str) -> Option<&'static str> {
         "sega32x" => "Sega - 32X",
         "saturn" => "Sega - Saturn",
         "dreamcast" => "Sega - Dreamcast",
+        "naomi" => "Sega - Naomi",
+        "atomiswave" => "Atomiswave",
         "segacd" => "Sega - Mega-CD - Sega CD",
+        "neogeocd" => "SNK - Neo Geo CD",
+        "cdi" => "Philips - CD-i",
         "pcengine" => "NEC - PC Engine - TurboGrafx 16",
         "pcenginecd" => "NEC - PC Engine CD - TurboGrafx-CD",
         "pcfx" => "NEC - PC-FX",
@@ -230,14 +242,20 @@ mod tests {
         assert_eq!(system_for_extension("col"), Some("coleco"));
         assert_eq!(system_for_extension("int"), Some("intellivision"));
         assert_eq!(system_for_extension("iso"), Some("disc")); // fallback genérico
-        assert_eq!(system_for_extension("gdi"), Some("disc"));
+        assert_eq!(system_for_extension("gdi"), Some("dreamcast")); // GD-ROM
+        assert_eq!(system_for_extension("cdi"), Some("dreamcast"));
+        assert_eq!(system_for_extension("pbp"), Some("psp"));
         assert_eq!(system_for_extension("xyz"), None);
     }
 
     #[test]
-    fn ambiguous_disc_exts_have_a_generic_fallback() {
+    fn ambiguous_disc_exts_resolve_to_a_disc_system() {
+        // toda extensão de disco cai num sistema de disco conhecido (genérico
+        // `disc`, ou já específico quando a extensão não é de fato ambígua).
+        const DISC_SYSTEMS: &[&str] = &["disc", "dreamcast", "psp"];
         for ext in AMBIGUOUS_DISC_EXTS {
-            assert_eq!(system_for_extension(ext), Some("disc"), "{ext}");
+            let sys = system_for_extension(ext).unwrap_or("?");
+            assert!(DISC_SYSTEMS.contains(&sys), "{ext} -> {sys}");
         }
     }
 
@@ -249,6 +267,9 @@ mod tests {
         assert_eq!(system_from_folder_name("Saturn"), Some("saturn"));
         assert_eq!(system_from_folder_name("dreamcast"), Some("dreamcast"));
         assert_eq!(system_from_folder_name("dc"), Some("dreamcast"));
+        assert_eq!(system_from_folder_name("naomi"), Some("naomi"));
+        assert_eq!(system_from_folder_name("atomiswave"), Some("atomiswave"));
+        assert_eq!(system_from_folder_name("neogeocd"), Some("neogeocd"));
         assert_eq!(system_from_folder_name("psp"), Some("psp"));
         assert_eq!(system_from_folder_name("segacd"), Some("segacd"));
         assert_eq!(system_from_folder_name("not-a-system"), None);

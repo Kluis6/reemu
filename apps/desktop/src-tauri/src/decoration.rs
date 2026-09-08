@@ -256,7 +256,13 @@ pub fn transparent_bbox(rgba: &[u8], w: u32, h: u32) -> Option<crate::gpu::DecoV
     let (x0, x1) = (*xs.first()?, *xs.last()?);
     let (bw, bh) = ((x1 - x0 + 1) as f32, (y1 - y0 + 1) as f32);
     let (fw, fh) = (w as f32, h as f32);
-    if bw < fw * 0.10 || bh < fh * 0.10 || bw > fw * 0.99 || bh > fh * 0.99 {
+    // Rejeita só o degenerado (janela minúscula, ou a imagem TODA transparente
+    // = sem moldura de verdade). Janela de altura ou largura cheia é normal num
+    // bezel com arte só nas laterais (GBA, GB) ou só em cima/embaixo.
+    if bw < fw * 0.10
+        || bh < fh * 0.10
+        || (bw > fw * 0.985 && bh > fh * 0.985)
+    {
         return None;
     }
     let mut clear_in = 0u64;
@@ -302,6 +308,20 @@ mod tests {
     fn rejects_fully_opaque_frame() {
         let rgba = vec![255u8; 200 * 100 * 4];
         assert!(transparent_bbox(&rgba, 200, 100).is_none());
+    }
+
+    #[test]
+    fn accepts_full_height_window_side_art_bezel() {
+        // bezel estilo GBA: janela de altura CHEIA, arte só nas laterais
+        let (w, h) = (200usize, 100usize);
+        let mut rgba = vec![255u8; w * h * 4];
+        for y in 0..h {
+            for x in 40..160 {
+                rgba[(y * w + x) * 4 + 3] = 0;
+            }
+        }
+        let vp = transparent_bbox(&rgba, w as u32, h as u32).expect("achou janela");
+        assert_eq!((vp.x, vp.y, vp.w, vp.h), (40.0, 0.0, 120.0, 100.0));
     }
 
     /// Os bezels do Bezel Project são PNG paletado (colortype 3) + tRNS —
