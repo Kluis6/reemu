@@ -338,6 +338,16 @@ layer não estiver instalado, avisa e segue sem validar:
 sudo apt install vulkan-validationlayers   # Debian/Ubuntu
 ```
 
+**Sync validation** (pega `VkQueue` de 2 threads, semáforo faltando entre o
+submit do core e o do wgpu) NÃO entra pelo `REEMU_VK_VALIDATION` — o device do
+Beetle é criado pelo wgpu, não pelo nosso `vk_context.rs`. Use o
+`vk_layer_settings.txt` da raiz do repo:
+
+```sh
+VK_LAYER_SETTINGS_PATH=$PWD VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
+  RUST_LOG=debug cargo run -p reemu-desktop
+```
+
 Erro de sincronização em HW render é silencioso sem o layer — é exatamente o
 tipo de bug que esta etapa arrisca. Rode o teste com ele:
 

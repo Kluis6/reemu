@@ -1,0 +1,30 @@
+# Config da camada de validação Vulkan pro desenvolvimento do ReEmu (etapa 12).
+# Aplica MESMO quando o device é criado pelo wgpu / adotado de um core (Beetle
+# PSX HW) — o nosso `vk_context.rs` só configura o caminho bring-up.
+#
+# Uso:
+#   VK_LAYER_SETTINGS_PATH=$PWD \
+#   VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation \
+#   RUST_LOG=debug cargo run -p reemu-desktop
+#
+# (com `REEMU_VK_VALIDATION=1` o bring-up já liga o layer sozinho; este arquivo
+#  garante que a SYNC validation entra nos dois caminhos.)
+
+# Validação de sincronização — pega VkQueue usada de 2 threads, semáforo/barrier
+# faltando entre o submit do core e o do wgpu. É a classe de bug que a etapa 12
+# arrisca e que passa silenciosa sem isto.
+khronos_validation.validate_sync = true
+khronos_validation.syncval_submit_time_validation = true
+
+# Validação padrão + GPU-assisted (GPU-AV) pra acessos fora de limite em shader.
+khronos_validation.validate_core = true
+khronos_validation.gpuav_enable = true
+
+# Mensagens: erro + warning + perf warning. Sai no debug_utils → nosso `log`.
+khronos_validation.report_flags = error,warn,perf
+khronos_validation.debug_action = VK_DBG_LAYER_ACTION_LOG_MSG
+khronos_validation.message_format_display_application_name = true
+
+# Silencia ruído conhecido do wgpu-hal (allocator, features opcionais) — ajustar
+# conforme aparecer. IDs vêm da própria mensagem (VUID-... ou número).
+# khronos_validation.message_id_filter = UNASSIGNED-BestPractices-...

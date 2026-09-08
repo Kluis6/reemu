@@ -115,13 +115,34 @@ external memory são fáceis de errar.**
 | Portal / índice da documentação | https://www.vulkan.org/ · https://docs.vulkan.org/ |
 | Spec (sincronização, barriers, external memory) | https://docs.vulkan.org/spec/latest/chapters/synchronization.html |
 | Guia (Vulkan Guide — sync, memory, wsi) | https://docs.vulkan.org/guide/latest/ |
+| **Synchronization Examples** (padrões `VkSubmitInfo`/semáforo/barrier prontos) | https://github.com/KhronosGroup/Vulkan-Docs/wiki/Synchronization-Examples |
+| **Vulkan Samples** (`timeline_semaphore`, `synchronization_2`, `hpp_*`) | https://github.com/KhronosGroup/Vulkan-Samples |
 | `ash` (binding em uso — fonte vendorizada é a verdade) | https://docs.rs/ash/0.38.0/ash/ · `~/.cargo/registry/src/index.crates.io-*/ash-0.38.0*/` |
+
+**Ferramentas do LunarG SDK que valem pro que falta na etapa 12:**
+
+| Ferramenta | Pra quê no ReEmu |
+|---|---|
+| **Synchronization validation** (`VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT`) | pega a classe de bug que sobrou: `VkQueue` submetida de 2 threads, semáforo faltando entre o submit do core e o do wgpu. Ligar via `vk_layer_settings.txt` (aplica mesmo no device ADOTADO, que não passa pelo nosso `vk_context.rs`). |
+| `vkconfig` (GUI) | liga/desliga validação + sync-val sem env var, por app |
+| `gfxreconstruct` | captura 1 frame do Beetle e replay offline — debugar o scanout `A1R5G5B5` sem o jogo rodando |
+| `synchronization2` (`vkQueueSubmit2` + `VkSemaphoreSubmitInfo`) | o `submit_vulkan_cmds` usa `VkSubmitInfo` legado + fence binário; o wgpu-hal 30 já usa timeline por dentro — migrar alinha os dois |
+
+`vk_layer_settings.txt` na raiz do repo liga sync-val: rodar o caminho Beetle
+com `VK_LAYER_SETTINGS_PATH=$PWD VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation`.
 
 Barrier do `set_image` (produtor color-attachment → consumidor sampler, mesma
 queue, sem semáforo): `src COLOR_ATTACHMENT_OUTPUT / COLOR_ATTACHMENT_WRITE`
 → `dst FRAGMENT_SHADER / SHADER_READ`, layout `SHADER_READ_ONLY_OPTIMAL` →
 `SHADER_READ_ONLY_OPTIMAL` (flycast já entrega transicionada). Barrier
 explícito é **obrigatório** — ordem de submissão numa queue não basta.
+
+**Pra o handoff GL→Vulkan sem CPU-wait** (item pendente, ver `02` §OpenGL):
+consumidor importa o fence-fd como `VkSemaphore` com `VK_KHR_external_semaphore_fd`
+(`vkImportSemaphoreFdKHR`, `VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT`) e
+passa em `wgpu_hal::vulkan::Queue::add_wait_semaphore`. O wgpu-hal 30 **não**
+habilita `VK_KHR_external_semaphore_fd` sozinho — precisa criar o device pelo
+caminho manual de `wgpu-hal` (como o `from_adopted_vulkan` já faz).
 
 ## Design (frontend)
 
