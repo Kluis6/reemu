@@ -382,6 +382,7 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             if !data.is_null() {
                 let turns = (*(data as *const c_uint)) % 4;
                 st.rotation_degrees = (turns as u16) * 90;
+                log::info!("SET_ROTATION: {}° (anti-horário)", st.rotation_degrees);
             }
             true
         }
