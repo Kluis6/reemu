@@ -65,6 +65,29 @@ pub struct GlConfig {
     pub bottom_left_origin: bool,
 }
 
+/// Como o produtor GL espera o render terminar antes de entregar o `dma_buf`
+/// pro consumidor (wgpu/Vulkan). `REEMU_GL_SYNC`:
+/// - `finish` (default) — `glFinish`: stall de pipeline inteiro, sempre seguro.
+/// - `fence` — `glFlush` + `glClientWaitSync` num fence do fim do frame: espera
+///   só até o render do core, spec-correto (`GL_ARB_sync`).
+/// - `flush` — só `glFlush`, confia no sync implícito do `dma_buf` (kernel
+///   fencing na reservation object). Mais rápido; pode tearar em driver que
+///   não faz implicit sync.
+#[derive(Clone, Copy, PartialEq)]
+enum SyncMode {
+    Finish,
+    Fence,
+    Flush,
+}
+
+fn sync_mode() -> SyncMode {
+    match std::env::var("REEMU_GL_SYNC").ok().as_deref() {
+        Some("fence") => SyncMode::Fence,
+        Some("flush") => SyncMode::Flush,
+        _ => SyncMode::Finish,
+    }
+}
+
 pub struct GlContext {
     display: egl::Display,
     context: egl::Context,
@@ -80,6 +103,7 @@ pub struct GlContext {
     flip: bool,
     /// Ring de alvos `dma_buf` compartilhados com o wgpu. `None` = readback CPU.
     interop: Option<InteropRing>,
+    sync: SyncMode,
 }
 
 /// Um alvo compartilhado: BO do GBM + `EGLImage` + textura GL respaldada por ele.
@@ -193,15 +217,28 @@ impl GlContext {
         egl.make_current(display, surface, surface, Some(context))
             .map_err(|e| format!("eglMakeCurrent: {e}"))?;
 
-        let gl = unsafe {
+        let mut gl = unsafe {
             glow::Context::from_loader_function_cstr(|s| {
                 egl.get_proc_address(s.to_str().unwrap_or_default())
                     .map_or(std::ptr::null(), |f| f as *const c_void)
             })
         };
 
+        if std::env::var_os("REEMU_GL_DEBUG").is_some() {
+            unsafe { enable_gl_debug(&mut gl) };
+        }
+
         let (fbo, color, depth_rbo) =
             unsafe { build_fbo(&gl, max_w, max_h, cfg.depth || cfg.stencil)? };
+
+        let sync = sync_mode();
+        if sync != SyncMode::Finish {
+            log::info!("HW render GL: sync mode {:?}", match sync {
+                SyncMode::Fence => "fence (glClientWaitSync)",
+                SyncMode::Flush => "flush (implicit dma_buf sync)",
+                SyncMode::Finish => unreachable!(),
+            });
+        }
 
         Ok(Self {
             display,
@@ -215,6 +252,7 @@ impl GlContext {
             max_h,
             flip: cfg.bottom_left_origin,
             interop: None,
+            sync,
         })
     }
 
@@ -413,11 +451,30 @@ impl GlContext {
         self.flip
     }
 
-    /// Depois do `retro_run`: garante o render (sync grosso) e devolve o slot
-    /// escrito + o plano `dma_buf` (só na 1ª vez de cada slot).
+    /// Depois do `retro_run`: garante que o render do core terminou antes de
+    /// entregar o `dma_buf`, e devolve o slot escrito + o plano (só na 1ª vez de
+    /// cada slot). Modo de sync por `REEMU_GL_SYNC` (ver [`SyncMode`]).
     pub fn finish_write_slot(&mut self) -> Option<(u32, Option<DmabufPlane>)> {
+        let sync = self.sync;
         let ring = self.interop.as_mut()?;
-        unsafe { self.gl.finish() };
+        unsafe {
+            match sync {
+                SyncMode::Finish => self.gl.finish(),
+                SyncMode::Flush => self.gl.flush(),
+                SyncMode::Fence => {
+                    self.gl.flush();
+                    if let Ok(f) = self.gl.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0) {
+                        // 50 ms de teto — se estourar, entrega mesmo assim (pior
+                        // caso: 1 frame com tearing, melhor que travar o vídeo).
+                        self.gl
+                            .client_wait_sync(f, glow::SYNC_FLUSH_COMMANDS_BIT, 50_000_000);
+                        self.gl.delete_sync(f);
+                    } else {
+                        self.gl.finish();
+                    }
+                }
+            }
+        }
         let idx = ring.write;
         let slot = &mut ring.slots[idx];
         let plane = if slot.handed {
@@ -561,6 +618,34 @@ fn open_display(egl: &EglInstance) -> Result<egl::Display, String> {
         egl.get_display(egl::DEFAULT_DISPLAY)
             .ok_or_else(|| "eglGetDisplay(EGL_DEFAULT_DISPLAY) devolveu NO_DISPLAY".into())
     }
+}
+
+/// `GL_KHR_debug`: manda as mensagens do driver pro `log` (síncrono, então o
+/// backtrace bate com a chamada culpada). Ligado por `REEMU_GL_DEBUG` — o
+/// diagnóstico de "tela preta" num core GL no hardware do usuário. Spec:
+/// registry.khronos.org/OpenGL, extensão `KHR_debug`.
+unsafe fn enable_gl_debug(gl: &mut glow::Context) {
+    let exts = gl.supported_extensions().clone();
+    if !exts.contains("GL_KHR_debug") {
+        log::warn!("REEMU_GL_DEBUG: contexto sem GL_KHR_debug — sem debug output");
+        return;
+    }
+    gl.enable(glow::DEBUG_OUTPUT);
+    gl.enable(glow::DEBUG_OUTPUT_SYNCHRONOUS);
+    gl.debug_message_callback(|source, gltype, id, severity, msg| {
+        let sev = match severity {
+            glow::DEBUG_SEVERITY_HIGH => "HIGH",
+            glow::DEBUG_SEVERITY_MEDIUM => "MED",
+            glow::DEBUG_SEVERITY_LOW => "LOW",
+            _ => "NOTE",
+        };
+        if severity == glow::DEBUG_SEVERITY_HIGH {
+            log::error!("GL[{sev}] src=0x{source:x} type=0x{gltype:x} id={id}: {msg}");
+        } else {
+            log::debug!("GL[{sev}] src=0x{source:x} type=0x{gltype:x} id={id}: {msg}");
+        }
+    });
+    log::info!("REEMU_GL_DEBUG: GL_KHR_debug ativo (síncrono)");
 }
 
 unsafe fn build_fbo(

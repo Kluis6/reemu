@@ -27,6 +27,13 @@ Crate `crates/core-loader-desktop`. Passos 1-4 **feitos**:
   - Frame sai por **readback** (`glReadPixels` → `SoftwareRawBuffer::Rgba8888`,
     default) ou **interop zero-cópia** dma_buf (GBM aloca, EGL/wgpu importam;
     `REEMU_GL_INTEROP=1`, ainda não validado).
+  - **`REEMU_GL_SYNC`** (só no caminho interop): `finish` (default, `glFinish`),
+    `fence` (`glFlush` + `glClientWaitSync` num fence do fim do frame — espera
+    só o render do core), `flush` (só `glFlush`, confia no sync implícito do
+    `dma_buf`). `fence`/`flush` são o "sync fino" — testar antes de virar
+    default (ver `docs/ai-context/REFERENCES.md` §OpenGL).
+  - **`REEMU_GL_DEBUG=1`** liga `GL_KHR_debug` (`glDebugMessageCallback`
+    síncrono → `log`) — diagnóstico de "tela preta" num core GL.
 - ROM em `.zip` extraída pra arquivo temporário no load (`src/archive.rs`).
   **Fallback pra arcade (2026-09-04)**: se `extract_rom` não achar nenhuma
   entrada de ROM de cartucho reconhecida dentro do `.zip` (`ErrorKind::
