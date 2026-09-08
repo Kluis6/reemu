@@ -122,8 +122,9 @@ function make(ramp: BrandVariants): ReEmuTheme {
   return {
     ...createDarkTheme(ramp),
     ...consoleDark,
-    // Fundo neutro suave (estilo app do Xbox) — sem lavagem da cor de marca.
-    reemuAppBg: "linear-gradient(180deg, #26262b 0%, #1a1a1e 55%)",
+    // Fundo quase preto (estilo app do Xbox) — leve clareada no topo, sem
+    // lavagem da cor de marca. Igual ao rail embaixo.
+    reemuAppBg: "linear-gradient(180deg, #121214 0%, #0b0b0d 45%)",
     reemuAccentSoft: "rgba(255, 255, 255, 0.05)",
     reemuSurfaceSoft: "#5f6368",
     reemuBrandSolid: ramp[80],
