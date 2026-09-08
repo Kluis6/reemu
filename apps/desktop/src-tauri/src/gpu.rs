@@ -1546,12 +1546,12 @@ impl FrameProcessor {
             } else {
                 (fw, fh)
             };
-            // giro do UV = -giro da imagem (CCW). d=90 → (0,-1); 180 → (-1,0);
-            // 270 → (0,1).
+            // giro do UV = -giro da imagem. `SET_ROTATION` do libretro é
+            // anti-horário (turns×90° CCW): 90 → (0,1); 180 → (-1,0); 270 → (0,-1).
             let (cos, sin) = match deg {
-                90 => (0.0f32, -1.0f32),
+                90 => (0.0f32, 1.0f32),
                 180 => (-1.0, 0.0),
-                270 => (0.0, 1.0),
+                270 => (0.0, -1.0),
                 _ => (1.0, 0.0),
             };
             if self.ensure_rot_target(rw, rh) {
