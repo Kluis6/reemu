@@ -1982,7 +1982,15 @@ impl FrameProcessor {
         handle: &dyn domain::frame_source::VulkanImageHandle,
     ) -> Option<(wgpu::Texture, wgpu::TextureView)> {
         let (w, h) = (handle.width().max(1), handle.height().max(1));
-        let format = vk_format_to_wgpu(handle.vk_format())?;
+        let vkf = handle.vk_format();
+        let Some(format) = vk_format_to_wgpu(vkf) else {
+            log::error!(
+                "§Beetle: scanout VkFormat {vkf} sem equivalente wgpu — frame não entra na chain \
+                 (com dither ligado o Beetle usa A1R5G5B5; a opção deveria estar 'disabled')"
+            );
+            return None;
+        };
+        log::info!("§Beetle: 1ª VkImage {w}x{h} VkFormat {vkf} → {format:?}");
         let size = wgpu::Extent3d {
             width: w,
             height: h,

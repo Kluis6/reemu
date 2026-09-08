@@ -156,14 +156,21 @@ pub fn run() {
                         // Roda numa thread do `emu-session` — NÃO pode tocar
                         // Wayland/wgpu-surface. Só constrói o FP e deixa em
                         // `pending_gpu`; o video pump faz a troca.
+                        log::info!("§Beetle: negociador Vulkan chamado pelo core");
                         let (fp, shared) =
-                            unsafe { gpu::FrameProcessor::from_core_negotiation(neg) }?;
+                            match unsafe { gpu::FrameProcessor::from_core_negotiation(neg) } {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    log::error!("§Beetle: from_core_negotiation FALHOU: {e}");
+                                    return Err(e);
+                                }
+                            };
                         *app_h
                             .state::<AppState>()
                             .pending_gpu
                             .lock()
                             .unwrap_or_else(|p| p.into_inner()) = Some(fp);
-                        log::info!("FrameProcessor reconstruído no device do core (§Beetle)");
+                        log::info!("§Beetle: FrameProcessor reconstruído no device do core");
                         Ok(shared)
                     });
                 app.state::<AppState>()

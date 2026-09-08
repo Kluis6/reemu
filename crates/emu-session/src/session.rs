@@ -134,6 +134,9 @@ struct Shared {
     /// `true` quando há um `vk_local` carregado (checagem barata sem travar).
     vk_local_active: AtomicBool,
     vk_local_paused: AtomicBool,
+    /// Ticks consecutivos com `vk_local` ativo mas sem frame — só pro warn de
+    /// diagnóstico em `step_vk_local`.
+    vk_local_stall: AtomicU64,
     /// Áudio que o `step_vk_local` (thread do compositor) produziu — o
     /// `core_loop` (dono do `AudioSink` `!Send`) drena isto pro sink.
     vk_local_audio: Mutex<Vec<(Vec<i16>, u32)>>,
@@ -178,6 +181,7 @@ impl EmuSession {
             vk_local: Mutex::new(None),
             vk_local_active: AtomicBool::new(false),
             vk_local_paused: AtomicBool::new(false),
+            vk_local_stall: AtomicU64::new(0),
             vk_local_audio: Mutex::new(Vec::new()),
             vk_render_gate: Mutex::new(()),
         });
@@ -282,9 +286,25 @@ impl EmuSession {
                 .unwrap_or_else(|p| p.into_inner())
                 .push((tick.audio, tick.sample_rate));
         }
-        if let Some(frame) = tick.frame.as_ref() {
-            self.shared.frame_seq.fetch_add(1, Ordering::Relaxed);
-            let _ = frame;
+        match tick.frame.as_ref() {
+            Some(_) => {
+                self.shared.vk_local_stall.store(0, Ordering::Relaxed);
+                let n = self.shared.frame_seq.fetch_add(1, Ordering::Relaxed);
+                if n == 0 {
+                    log::info!("etapa 12: 1º frame Vulkan in-process produzido");
+                }
+            }
+            None => {
+                // Ativo mas sem frame por muito tempo = o core não está
+                // entregando a VkImage (formato de scanout, barrier, etc).
+                let n = self.shared.vk_local_stall.fetch_add(1, Ordering::Relaxed);
+                if n == 120 {
+                    log::warn!(
+                        "etapa 12: core Vulkan ativo mas 120 ticks SEM frame — \
+                         a VkImage não está chegando no compositor"
+                    );
+                }
+            }
         }
         tick.frame
     }
@@ -1057,7 +1077,20 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 // negociar Vulkan, `LocalCore::load` devolve
                 // `HwRenderUnsupported` e caímos pro processo filho (que isola
                 // cores não re-entrantes).
-                match route_local_device(&shared, &id.0) {
+                let route = route_local_device(&shared, &id.0);
+                log::info!(
+                    "etapa 12: core {} → rota {} (device={}, negotiator={}, known_non_vk={})",
+                    id.0,
+                    if route.is_some() && !known_non_vulkan.contains(&id.0) {
+                        "LOCAL (in-process)"
+                    } else {
+                        "processo filho"
+                    },
+                    route.as_ref().map(|(d, _)| d.is_some()).unwrap_or(false),
+                    route.as_ref().map(|(_, n)| n.is_some()).unwrap_or(false),
+                    known_non_vulkan.contains(&id.0),
+                );
+                match route {
                     Some((device, negotiator)) if !known_non_vulkan.contains(&id.0) => {
                         // Beetle PSX HW: com dither ligado, o scanout Vulkan sai
                         // num formato packed 16-bit (A1R5G5B5) que o wgpu não
@@ -1082,6 +1115,12 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                             negotiator,
                         ) {
                             Ok((lc, av)) => {
+                                log::info!(
+                                    "etapa 12: core Vulkan in-process ATIVO ({}) — {}x{}",
+                                    id.0,
+                                    av.geometry.base_width,
+                                    av.geometry.base_height
+                                );
                                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(id.0.clone());
                                 *shared
