@@ -274,13 +274,12 @@ export function Library() {
     }
     // favoritos e recém adicionados: grade única
     if (tab !== "mine") return grid(view);
-    // meus jogos: prateleira por plataforma (prévia) + card de 4 no fim.
-    const PREVIEW = 5;
+    // meus jogos: prateleira por plataforma. A Shelf mede a largura e mostra só
+    // o que enche a linha; se sobrar jogo, o card 2×2 "ver todos" fecha a linha.
     return byPlatform.map(([sys, plist]) => {
       const goAll = () => navigate(`/library/${sys}`);
-      const overflow = plist.length > PREVIEW;
-      const preview = overflow ? plist.slice(0, PREVIEW) : plist;
-      const rest = plist.slice(PREVIEW);
+      // teto generoso — a Shelf corta no que couber; não renderiza milhares.
+      const capped = plist.slice(0, 40);
       return (
         <section className={s.section} key={sys}>
           <div className={s.sectionHead}>
@@ -299,16 +298,17 @@ export function Library() {
               Ver todos
             </Button>
           </div>
-          <Shelf start={plist.length < 6}>
-            {preview.map(card)}
-            {overflow && (
+          <Shelf
+            more={
               <PlatformTile
                 key="more"
                 ariaLabel={`Ver todos os ${plist.length} de ${platformLabel(sys)}`}
-                sample={rest}
+                sample={plist.slice(-8)}
                 onClick={goAll}
               />
-            )}
+            }
+          >
+            {capped.map(card)}
           </Shelf>
         </section>
       );

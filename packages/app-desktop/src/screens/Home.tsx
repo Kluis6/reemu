@@ -63,16 +63,18 @@ export function Home() {
   });
   const all = useMemo(() => roms.data ?? [], [roms.data]);
 
+  // Corta num teto generoso; a prateleira mostra só o que enche a linha (varia
+  // com o tamanho da tela).
   const recent = useMemo(
     () =>
       all
         .filter((r) => r.lastPlayedAt != null)
         .sort((a, b) => (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0))
-        .slice(0, 6),
+        .slice(0, 30),
     [all],
   );
   const added = useMemo(
-    () => [...all].sort((a, b) => b.addedAt - a.addedAt).slice(0, 6),
+    () => [...all].sort((a, b) => b.addedAt - a.addedAt).slice(0, 30),
     [all],
   );
   const hero = recent[0] ?? all.find((r) => r.boxart) ?? all[0];

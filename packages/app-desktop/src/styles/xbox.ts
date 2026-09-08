@@ -12,6 +12,7 @@
  * nem `radial-gradient` multicamada em elemento `position: fixed`.
  */
 import { makeStyles, tokens } from "@fluentui/react-components";
+import { cardSizeCss, SHELF_GAP } from "../lib/shelf";
 
 // Só os valores NÃO-cor do "console look". Cor de marca, elevações e o fundo
 // da casca vêm do tema (tokens Fluent + tokens custom `--reemu*`, ver
@@ -25,8 +26,9 @@ const shell = {
 // Gradiente de superfície elevada (cartões, hero) a partir dos neutros do tema.
 const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`;
 
-// Em janela estreita cai pra ~2 por linha (42vw) antes do teto.
-const gameCardSize = "clamp(132px, 42vw, 196px)";
+// Largura de um card (mesma fórmula do JS que conta quantos cabem — ver
+// lib/shelf.ts). Fluida: ~148px em janela estreita, até 248px em telas largas.
+const gameCardSize = cardSizeCss;
 
 /** Casca: app / rail / topbar / área de rolagem + anel de foco global. */
 export const useShellStyles = makeStyles({
@@ -329,13 +331,13 @@ export const useBrowseStyles = makeStyles({
 
   grid: {
     display: "grid",
-    // largura FIXA por card (`gameCardSize` já escala com o viewport via
-    // `14vw`) — mesmo tamanho que os cards da prateleira; sobra margem à
-    // direita em telas largas, como no app do Xbox.
+    // Card fluido (`gameCardSize` escala com o viewport) — mesmo tamanho que os
+    // da prateleira. `auto-fill` reflui de 2 colunas (janela estreita) a
+    // dezenas (4K), sempre alinhado à esquerda.
     gridTemplateColumns: `repeat(auto-fill, ${gameCardSize})`,
     justifyContent: "start",
-    rowGap: "16px",
-    columnGap: "16px",
+    rowGap: "18px",
+    columnGap: `${SHELF_GAP}px`,
     "& > *": { width: "100%", minWidth: 0 },
   },
 
@@ -437,8 +439,11 @@ export const useShelfStyles = makeStyles({
     width: "100%",
     maxWidth: "none",
     boxSizing: "border-box",
-    justifyContent: "space-between",
-    columnGap: "12px",
+    // Sempre alinhado à esquerda: quem controla o preenchimento da linha é a
+    // quantidade de cards (Shelf mede a largura), não `space-between` — que com
+    // poucos itens abria buracos gigantes e jogava o último card pra fora.
+    justifyContent: "flex-start",
+    columnGap: `${SHELF_GAP}px`,
     overflowX: "auto",
     scrollSnapType: "x proximity",
     scrollBehavior: "smooth",
@@ -456,7 +461,6 @@ export const useShelfStyles = makeStyles({
       flexGrow: 0,
     },
   },
-  shelfStart: { justifyContent: "flex-start", columnGap: "16px" },
 });
 
 /** Cartão-capa em retrato. */
