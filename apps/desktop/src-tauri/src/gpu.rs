@@ -470,6 +470,13 @@ pub struct FrameProcessor {
     /// View da textura importada a usar como entrada da chain neste frame
     /// (`Some` só em frames de HW render com interop).
     interop_view: Option<wgpu::TextureView>,
+    /// Rotação de tela (`SET_ROTATION`, jogos verticais de arcade): a saída da
+    /// chain é redesenhada rotacionada AQUI antes da moldura/blit, então a
+    /// moldura fica em pé e só o jogo gira. `rot_view` = `Some` quando o frame
+    /// atual tem rotação.
+    rot_pipeline: wgpu::RenderPipeline,
+    rot_tgt: Option<(wgpu::Texture, wgpu::TextureView, u32, u32)>,
+    rot_view: Option<wgpu::TextureView>,
     /// Readback com pipeline: 2 staging buffers. O frame N copia a saída da GPU
     /// pro slot N%2 e lê o slot (N+1)%2 (submetido no frame anterior, já pronto)
     /// — sem `poll(wait)` bloqueante no caminho normal, CPU e GPU deixam de
@@ -564,6 +571,7 @@ impl FrameProcessor {
 
         let comp = build_composite(&device);
         let flip = build_flip(&device);
+        let rot_pipeline = rotate_pipeline(&device, &comp.bgl);
 
         Some(Self {
             sampler_nearest: mk_sampler(wgpu::FilterMode::Nearest),
@@ -594,6 +602,9 @@ impl FrameProcessor {
             frame_count: 0,
             last_surface_out: None,
             comp,
+            rot_pipeline,
+            rot_tgt: None,
+            rot_view: None,
             decoration: None,
             surface: None,
         })
@@ -946,10 +957,14 @@ impl FrameProcessor {
 
         // Proporção de exibição: a moldura impõe a sua; senão a AR declarada do
         // core (respeita PAR ≠ 1); só cai na proporção de pixels se não houver.
+        // Com rotação de 90°/270° e sem moldura, a AR do core inverte — mais
+        // simples usar as dimensões (já rotacionadas) da saída.
+        let quarter = matches!(frame.metadata.rotation_degrees % 360, 90 | 270);
         let ar_src = self
             .decoration_aspect()
             .filter(|_| use_comp)
-            .or(Some(frame.metadata.aspect_ratio).filter(|a| *a > 0.0))
+            .or(Some(frame.metadata.aspect_ratio)
+                .filter(|a| *a > 0.0 && !quarter))
             .unwrap_or(out_w as f32 / out_h.max(1) as f32);
 
         let s = self.surface.as_ref().unwrap();
@@ -965,6 +980,8 @@ impl FrameProcessor {
 
         let src_view = if use_comp {
             &self.comp.target.as_ref().unwrap().1
+        } else if let Some(v) = &self.rot_view {
+            v
         } else {
             &self.passes.last().unwrap().target.as_ref().unwrap().1
         };
@@ -1074,6 +1091,8 @@ impl FrameProcessor {
         let (w, h, use_comp) = self.last_surface_out?;
         let src = if use_comp {
             &self.comp.target.as_ref()?.0
+        } else if let Some((t, _, _, _)) = self.rot_tgt.as_ref().filter(|_| self.rot_view.is_some()) {
+            t
         } else {
             &self.passes.last()?.target.as_ref()?.0
         };
@@ -1514,15 +1533,95 @@ impl FrameProcessor {
             self.passes[idx].bound = false; // o feedback_target mudou
         }
 
+        // Rotação de tela (`SET_ROTATION`) — redesenha a saída da chain
+        // rotacionada num alvo próprio; a moldura e o blit final leem daí, então
+        // a moldura fica em pé. Faz ANTES da composição de propósito.
+        self.rot_view = None;
+        let (mut fw, mut fh) = (fw, fh);
+        let deg = frame.metadata.rotation_degrees % 360;
+        let quarter = deg == 90 || deg == 270;
+        if deg != 0 {
+            let (rw, rh) = if deg == 90 || deg == 270 {
+                (fh, fw)
+            } else {
+                (fw, fh)
+            };
+            // giro do UV = -giro da imagem (CCW). d=90 → (0,-1); 180 → (-1,0);
+            // 270 → (0,1).
+            let (cos, sin) = match deg {
+                90 => (0.0f32, -1.0f32),
+                180 => (-1.0, 0.0),
+                270 => (0.0, 1.0),
+                _ => (1.0, 0.0),
+            };
+            if self.ensure_rot_target(rw, rh) {
+                let src = &self.passes.last()?.target.as_ref()?.1;
+                let rot_view = self.rot_tgt.as_ref()?.1.clone();
+                let ubuf = self.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("rot u"),
+                    size: 16,
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                self.queue
+                    .write_buffer(&ubuf, 0, f32s_bytes(&[cos, sin, 0.0, 0.0]));
+                let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("rot bg"),
+                    layout: &self.comp.bgl,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: ubuf.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(src),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Sampler(&self.sampler_linear),
+                        },
+                    ],
+                });
+                {
+                    let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("rot pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: &rot_view,
+                            resolve_target: None,
+                            depth_slice: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        multiview_mask: None,
+                    });
+                    rp.set_pipeline(&self.rot_pipeline);
+                    rp.set_bind_group(0, &bg, &[]);
+                    rp.set_vertex_buffer(0, self.quad.slice(..));
+                    rp.draw(0..4, 0..1);
+                }
+                self.rot_view = Some(rot_view);
+                fw = rw;
+                fh = rh;
+            }
+        }
+
         // Composição da moldura (etapa 04 fatia 4), se houver uma.
         let (out_w, out_h, use_comp) = if let Some((dw, dh, vp)) =
             self.decoration.as_ref().map(|d| (d.w, d.h, d.vp))
         {
-            let dar = if frame.metadata.aspect_ratio > 0.0 {
+            let dar0 = if frame.metadata.aspect_ratio > 0.0 {
                 frame.metadata.aspect_ratio
             } else {
                 nw as f32 / nh.max(1) as f32
             };
+            // com rotação de 90°/270° a AR de exibição inverte.
+            let dar = if quarter && dar0 > 0.0 { 1.0 / dar0 } else { dar0 };
             let (cx, cy, hw, hh) = match vp {
                 Some(v) => (
                     (v.x + v.w / 2.0) / dw as f32 * 2.0 - 1.0,
@@ -1541,7 +1640,10 @@ impl FrameProcessor {
                 .write_buffer(&self.comp.rect_bezel, 0, f32s_bytes(&[0.0, 0.0, 1.0, 1.0]));
             self.ensure_comp_target(dw, dh);
 
-            let game_view = &self.passes.last()?.target.as_ref()?.1;
+            let game_view = match &self.rot_view {
+                Some(v) => v,
+                None => &self.passes.last()?.target.as_ref()?.1,
+            };
             let deco_view = &self.decoration.as_ref()?.view;
             let comp_view = &self.comp.target.as_ref()?.1;
             let mk_bg = |rect: &wgpu::Buffer, tex: &wgpu::TextureView| {
@@ -1617,6 +1719,8 @@ impl FrameProcessor {
             let ws = self.rb.slots[write_i].as_ref()?;
             let src_tex = if use_comp {
                 &self.comp.target.as_ref()?.0
+            } else if let Some((t, _, _, _)) = self.rot_tgt.as_ref().filter(|_| self.rot_view.is_some()) {
+                t
             } else {
                 &self.passes.last()?.target.as_ref()?.0
             };
@@ -1694,6 +1798,25 @@ impl FrameProcessor {
                 | wgpu::TextureUsages::TEXTURE_BINDING,
         );
         self.comp.target = Some((t, v, w, h));
+    }
+
+    /// Alvo pra o passe de rotação (`SET_ROTATION`). `false` se `w`/`h` for 0.
+    fn ensure_rot_target(&mut self, w: u32, h: u32) -> bool {
+        if w == 0 || h == 0 {
+            return false;
+        }
+        if !matches!(&self.rot_tgt, Some((_, _, tw, th)) if *tw == w && *th == h) {
+            let (t, v) = new_tex(
+                &self.device,
+                w,
+                h,
+                wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::COPY_SRC
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+            );
+            self.rot_tgt = Some((t, v, w, h));
+        }
+        true
     }
 
     /// Garante `history_depth` slots do frame do core, todos `w`×`h`. `[0]` é o
@@ -2515,6 +2638,88 @@ fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
 @fragment
 fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv); }
 "#;
+
+/// Rotaciona uma textura em múltiplos de 90° (`SET_ROTATION`). Reusa o
+/// `comp.bgl` (uniforme no binding 0, textura 1, sampler 2). `R.c.xy` = (cos,
+/// sin) da rotação aplicada em `uv - 0.5` (giro do UV = giro inverso da imagem).
+const ROT_WGSL: &str = r#"
+struct Rot { c: vec4<f32> };
+@group(0) @binding(0) var<uniform> R: Rot;
+@group(0) @binding(1) var Tex: texture_2d<f32>;
+@group(0) @binding(2) var Smp: sampler;
+struct VOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
+@vertex
+fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
+    var o: VOut;
+    o.pos = vec4<f32>(p.xy * 2.0 - vec2<f32>(1.0, 1.0), 0.0, 1.0);
+    // rotação linear do UV em volta do centro → per-vertex + interpolação é
+    // exata. (o binding 0 aqui é lido só no vertex, igual ao COMP_WGSL.)
+    let d = uv - vec2<f32>(0.5, 0.5);
+    o.uv = vec2<f32>(d.x * R.c.x - d.y * R.c.y, d.x * R.c.y + d.y * R.c.x)
+         + vec2<f32>(0.5, 0.5);
+    return o;
+}
+@fragment
+fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv); }
+"#;
+
+fn rotate_pipeline(
+    device: &wgpu::Device,
+    bgl: &wgpu::BindGroupLayout,
+) -> wgpu::RenderPipeline {
+    let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("rot layout"),
+        bind_group_layouts: &[Some(bgl)],
+        immediate_size: 0,
+    });
+    let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("rot"),
+        source: wgpu::ShaderSource::Wgsl(ROT_WGSL.into()),
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("rot pipeline"),
+        layout: Some(&pl),
+        vertex: wgpu::VertexState {
+            module: &module,
+            entry_point: Some("vs"),
+            buffers: &[Some(wgpu::VertexBufferLayout {
+                array_stride: QUAD_STRIDE,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &[
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 0,
+                        shader_location: 0,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x2,
+                        offset: 16,
+                        shader_location: 1,
+                    },
+                ],
+            })],
+            compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &module,
+            entry_point: Some("fs"),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: FMT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            compilation_options: Default::default(),
+        }),
+        primitive: wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleStrip,
+            ..Default::default()
+        },
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    })
+}
 
 /// Inverte o eixo Y de uma textura (fullscreen triangle). Pros `dma_buf` de
 /// cores GL, que renderizam com origem bottom-left.

@@ -699,12 +699,12 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
     };
     let rot = frame.metadata.rotation_degrees;
 
-    // Caminho GPU (etapa 04 — shader chain). Cai no CPU em qualquer falha.
+    // Caminho GPU (etapa 04 — shader chain). A rotação (`SET_ROTATION`) já é
+    // aplicada dentro da chain (antes da moldura). Cai no CPU em qualquer falha.
     {
         let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(fp) = gpu.as_mut() {
             if let Some((w, h, rgba)) = fp.process(&frame) {
-                let (rgba, w, h) = rotate_rgba(rgba, w, h, rot);
                 cache_thumb_frame(&state, w, h, &rgba);
                 return pack_frame(w, h, &rgba);
             }
