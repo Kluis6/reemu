@@ -806,6 +806,7 @@ dependencies = [
  "khronos-egl",
  "libloading 0.8.9",
  "log",
+ "rustix 1.1.4",
  "thiserror 1.0.69",
  "tokio",
  "zip",

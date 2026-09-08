@@ -28,6 +28,9 @@ ash = { version = "0.38", default-features = false, features = ["loaded"] }
 # precisar de `libgbm-dev`; se faltar, o interop cai pro readback.
 # ROMs em .zip são extraídas pra um arquivo temporário na hora do load.
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# Só pra `silence_core_stdout` (dup2 do stdout pra /dev/null — cores libretro
+# spammam via printf cru fora do log callback).
+rustix = { version = "1", features = ["fs", "stdio", "std"] }
 
 [build-dependencies]
 cc = "1"

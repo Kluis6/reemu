@@ -172,6 +172,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 initial_save_ram,
             } => {
                 core = None; // não deveria haver um core já — o pai mata e sobe de novo a cada troca.
+                core_loader_desktop::silence_core_stdout();
                 core_loader_desktop::set_pending_core_option_values(initial_option_values);
                 let loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir);
                 match loader.open_core(&CoreId(core_id.clone()), &rom_path) {
