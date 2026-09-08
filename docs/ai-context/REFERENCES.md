@@ -83,7 +83,7 @@ core, ou na interop dma_buf — não de memória.**
 | O quê | Onde |
 |---|---|
 | Índice da documentação OpenGL (Khronos) | https://www.opengl.org/Documentation/Documentation.html |
-| Registry (specs core + extensões, `.xml` canônico) | https://registry.khronos.org/OpenGL/ |
+| **Registry** — índice de specs core + GLSL + TODAS as extensões + `gl.xml` (enums canônicos) | https://registry.khronos.org/OpenGL/index_gl.php |
 | Wiki (FBO, contextos, sync objects, `GL_ARB_*`) | https://www.khronos.org/opengl/wiki/ |
 | Referência de funções (`glTexImage2D`, `glFramebufferTexture`, …) | https://registry.khronos.org/OpenGL-Refpages/gl4/ |
 | EGL (contexto/superfície offscreen, `EGL_KHR_surfaceless_context`) | https://registry.khronos.org/EGL/ |
@@ -91,6 +91,19 @@ core, ou na interop dma_buf — não de memória.**
 O core GL renderiza num FBO que o frontend dá; o resultado sai por interop
 dma_buf zero-cópia (`EGL_EXT_image_dma_buf_import`, ver seção Wayland/EGL) ou,
 com `REEMU_GL_INTEROP=0`, por `glReadPixels`.
+
+**Specs de extensão que valem pro `gl_context.rs` (conferir o enum/semântica na
+fonte, não de memória):**
+
+| Extensão | Pra quê no ReEmu |
+|---|---|
+| `GL_OES_EGL_image` | `glEGLImageTargetTexture2DOES` — restrições de target/formato da textura respaldada por `EGLImage` |
+| `EGL_EXT_image_dma_buf_import` / `_modifiers` | enums `EGL_LINUX_DMA_BUF_EXT`, `EGL_DMA_BUF_PLANE0_*` (hoje hard-coded em `gl_context.rs`) |
+| `EGL_MESA_platform_surfaceless` | `PLATFORM_SURFACELESS_MESA = 0x31DD` |
+| `EGL_KHR_fence_sync` + `EGL_ANDROID_native_fence_sync` **ou** `GL_EXT_semaphore_fd` | handoff GL→Vulkan SEM `glFinish` (o "sync fino" pendente, ver `12`) |
+| `GL_KHR_debug` | `glDebugMessageCallback` atrás de `REEMU_GL_DEBUG` (diagnóstico de "tela preta" em core GL) |
+
+`gl.xml` é a fonte dos valores de enum; o `glow` em uso já é gerado dele.
 
 ## Vulkan (etapa 12 — HW render por-core)
 
