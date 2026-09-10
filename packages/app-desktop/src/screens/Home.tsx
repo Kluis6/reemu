@@ -1,4 +1,4 @@
-import { Button, mergeClasses, Spinner } from "@fluentui/react-components";
+import { Button, Card, mergeClasses, Spinner } from "@fluentui/react-components";
 import {
   AddRegular,
   ChevronRightRegular,
@@ -38,14 +38,15 @@ function Row({
       <div className={s.sectionHead}>
         <h2 className={s.sectionTitle}>{title}</h2>
         {onMore && (
-          <button
+          <Button
             className={s.sectionChevron}
             onClick={onMore}
             tabIndex={-1}
             aria-hidden
-          >
-            <ChevronRightRegular />
-          </button>
+            appearance="subtle"
+            size="small"
+            icon={<ChevronRightRegular />}
+          />
         )}
       </div>
       <Shelf>{items.map(render)}</Shelf>
@@ -128,7 +129,11 @@ export function Home() {
   return (
     <div>
       {hero && (
-        <button className={h.hero} onClick={() => navigate(`/rom/${hero.id}`)}>
+        <Card
+          className={h.hero}
+          onClick={() => navigate(`/rom/${hero.id}`)}
+          aria-label={hero.title}
+        >
           {hero.boxart && <img src={hero.boxart} alt="" />}
           <span className={h.body}>
             <span className={h.kicker}>
@@ -137,7 +142,7 @@ export function Home() {
             <span className={h.title}>{hero.title}</span>
             <span className={h.sub}>{platformLabel(hero.systemId)}</span>
           </span>
-        </button>
+        </Card>
       )}
 
       <Row
@@ -156,9 +161,14 @@ export function Home() {
       />
 
       <div className={s.toolbar} style={{ marginTop: 28 }}>
-        <button className={s.chip} onClick={() => navigate("/library")}>
-          <GridRegular /> Ver todos os jogos ({all.length})
-        </button>
+        <Button
+          shape="circular"
+          appearance="subtle"
+          icon={<GridRegular />}
+          onClick={() => navigate("/library")}
+        >
+          Ver todos os jogos ({all.length})
+        </Button>
       </div>
     </div>
   );

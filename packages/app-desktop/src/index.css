@@ -18,7 +18,7 @@ body,
    transparente (PlayScreen: overlay sobre o jogo). Por isso o body é
    transparente aqui. */
 body {
-  background: #0b0b0d;
+  background: #151517;
 }
 
 /* Vídeo nativo (REEMU_NATIVE_VIDEO): a PlayScreen fica transparente pra
@@ -39,3 +39,4 @@ kbd {
   border-radius: 4px;
   opacity: 0.7;
 }
+

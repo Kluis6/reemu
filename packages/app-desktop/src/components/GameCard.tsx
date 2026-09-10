@@ -1,5 +1,6 @@
 import {
   Button,
+  Card,
   Menu,
   MenuItem,
   MenuList,
@@ -76,7 +77,7 @@ export function GameCard({
   // `div[role=button]` (não `<button>`) pra poder aninhar o `Button` da estrela
   // sem quebrar o HTML.
   const card = (
-    <div
+    <Card
       className={mergeClasses(s.card, l.reveal)}
       role="button"
       tabIndex={0}
@@ -121,7 +122,7 @@ export function GameCard({
           </span>
         )}
       </div>
-    </div>
+    </Card>
   );
 
   if (!menu || menu.length === 0) return card;
