@@ -1,4 +1,8 @@
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Body1,
   Button,
   Caption1,
@@ -42,31 +46,14 @@ const useStyles = makeStyles({
     overflowY: 'auto',
     paddingRight: tokens.spacingHorizontalXS,
   },
-  group: { marginTop: tokens.spacingVerticalXS },
-  groupHead: {
-    cursor: 'pointer',
-    color: tokens.colorNeutralForeground2,
-    paddingTop: tokens.spacingVerticalXXS,
-    paddingBottom: tokens.spacingVerticalXXS,
-    userSelect: 'none',
-  },
+  panel: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
   item: {
-    display: 'block',
-    width: '100%',
-    textAlign: 'left',
-    paddingTop: tokens.spacingVerticalXS,
-    paddingBottom: tokens.spacingVerticalXS,
-    paddingLeft: tokens.spacingHorizontalS,
-    paddingRight: tokens.spacingHorizontalS,
-    borderRadius: tokens.borderRadiusMedium,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground1,
-    color: 'inherit',
-    cursor: 'pointer',
+    justifyContent: 'flex-start',
+    fontWeight: tokens.fontWeightRegular,
   },
   itemOn: {
-    border: `1px solid ${tokens.colorBrandStroke1}`,
     backgroundColor: tokens.colorBrandBackground2,
+    ':hover': { backgroundColor: tokens.colorBrandBackground2Hover },
   },
 })
 
@@ -94,6 +81,9 @@ export function ShaderLibrary({
     }
   })
   const [filter, setFilter] = useState('')
+  // grupos abertos (só relevante quando há > 3 grupos e sem filtro — senão
+  // tudo fica aberto).
+  const [openGroups, setOpenGroups] = useState<string[]>([])
   const push = useToastStore((t) => t.push)
   const updateToast = useToastStore((t) => t.update)
   const dlId = useRef<string | null>(null)
@@ -245,31 +235,44 @@ export function ShaderLibrary({
           </div>
           <div className={s.list}>
             {groups.length === 0 && <Caption1>Nada encontrado.</Caption1>}
-            {groups.map(([cat, items]) => (
-              <details key={cat} className={s.group} open={groups.length <= 3 || !!filter.trim()}>
-                <summary className={s.groupHead}>
-                  <Caption1>
-                    {cat} · {items.length}
-                  </Caption1>
-                </summary>
-                {items.map((e) => (
-                  <Button
-                    key={e.path}
-                    appearance="subtle"
-                    size="small"
-                    disabled={busy}
-                    className={mergeClasses(
-                      s.item,
-                      e.path === activePath && s.itemOn,
-                    )}
-                    onClick={() => onPick(e.path)}
-                    title={e.path}
-                  >
-                    {e.name}
-                  </Button>
-                ))}
-              </details>
-            ))}
+            <Accordion
+              multiple
+              collapsible
+              openItems={
+                groups.length <= 3 || filter.trim()
+                  ? groups.map(([cat]) => cat)
+                  : openGroups
+              }
+              onToggle={(_, d) => setOpenGroups(d.openItems as string[])}
+            >
+              {groups.map(([cat, items]) => (
+                <AccordionItem key={cat} value={cat}>
+                  <AccordionHeader>
+                    <Caption1>
+                      {cat} · {items.length}
+                    </Caption1>
+                  </AccordionHeader>
+                  <AccordionPanel className={s.panel}>
+                    {items.map((e) => (
+                      <Button
+                        key={e.path}
+                        appearance="subtle"
+                        size="small"
+                        disabled={busy}
+                        className={mergeClasses(
+                          s.item,
+                          e.path === activePath && s.itemOn,
+                        )}
+                        onClick={() => onPick(e.path)}
+                        title={e.path}
+                      >
+                        {e.name}
+                      </Button>
+                    ))}
+                  </AccordionPanel>
+                </AccordionItem>
+              ))}
+            </Accordion>
           </div>
         </>
       )}

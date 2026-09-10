@@ -4,12 +4,24 @@ import {
   FullScreenMinimizeRegular,
   HomeRegular,
   LibraryRegular,
+  PeopleRegular,
+  PersonRegular,
   PowerRegular,
-  SearchRegular,
+  PresenceAvailableRegular,
   SettingsRegular,
+  SignOutRegular,
+  TrophyRegular,
 } from "@fluentui/react-icons";
 import {
+  Avatar,
   Button,
+  Menu,
+  MenuDivider,
+  MenuItem,
+  MenuList,
+  MenuPopover,
+  MenuTrigger,
+  SearchBox,
   Tooltip,
   makeStyles,
   mergeClasses,
@@ -50,6 +62,14 @@ const RAIL = [
   },
 ];
 
+// Menu do avatar. As telas de perfil/conquistas/rede ainda não existem —
+// itens ficam desabilitados até terem tela. "Sair" fecha o app.
+const PROFILE_MENU = [
+  { icon: <PersonRegular />, label: "Meu perfil" },
+  { icon: <TrophyRegular />, label: "Minhas conquistas" },
+  { icon: <PeopleRegular />, label: "Minha rede" },
+] as const;
+
 export function AppShell() {
   const s = useShellStyles();
   const l = useLocalStyles();
@@ -77,13 +97,49 @@ export function AppShell() {
         { glyph: "A", label: "Selecionar" },
         { glyph: "B", label: "Voltar" },
       ] as const);
-
   return (
     <div className={s.app}>
       <nav className={s.rail}>
-        <div className={s.railBrand} title="ReEmu">
-          R
-        </div>
+        <Menu positioning={{ position: "after", align: "top", offset: 8 }}>
+          <MenuTrigger disableButtonEnhancement>
+            <Avatar
+              className={s.railBrand}
+              name="ReEmu"
+              color="colorful"
+              badge={{ status: "available" }}
+              aria-label="Perfil"
+            />
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList hasIcons>
+              {PROFILE_MENU.map((m) => (
+                <MenuItem key={m.label} icon={m.icon} disabled>
+                  {m.label}
+                </MenuItem>
+              ))}
+              <MenuDivider />
+              <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                  <MenuItem icon={<PresenceAvailableRegular />} disabled>
+                    Status
+                  </MenuItem>
+                </MenuTrigger>
+                <MenuPopover>
+                  <MenuList>
+                    <MenuItem>Online</MenuItem>
+                    <MenuItem>Ausente</MenuItem>
+                    <MenuItem>Jogando</MenuItem>
+                  </MenuList>
+                </MenuPopover>
+              </Menu>
+              <MenuDivider />
+              <MenuItem icon={<SignOutRegular />} onClick={() => void quitApp()}>
+                Sair
+              </MenuItem>
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+
         {RAIL.map((it) => (
           <NavLink
             key={it.to}
@@ -98,14 +154,16 @@ export function AppShell() {
         ))}
         <div className={s.railSpacer} />
         <div className={s.railSep} />
-        <button
-          className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
-          onClick={() => void quitApp()}
-          title="Fechar o ReEmu"
-          aria-label="Fechar o ReEmu"
-        >
-          <PowerRegular />
-        </button>
+
+        <Tooltip content="Fechar o ReEmu" relationship="label">
+          <Button
+            className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
+            onClick={() => void quitApp()}
+            aria-label="Fechar o ReEmu"
+            appearance="subtle"
+            icon={<PowerRegular />}
+          />
+        </Tooltip>
       </nav>
 
       <div className={s.main}>
@@ -121,30 +179,26 @@ export function AppShell() {
               />
             </Tooltip>
           )}
-          <label
+          <SearchBox
+            ref={searchRef}
             className={s.search}
             data-nav-skip
-            onClick={() => searchRef.current?.focus()}
-          >
-            <SearchRegular />
-            <input
-              ref={searchRef}
-              value={search.query}
-              placeholder="Buscar na biblioteca…"
-              onFocus={() => {
-                if (pathname !== "/library") navigate("/library");
-                search.setOpen(true);
-              }}
-              onBlur={() => search.setOpen(false)}
-              onChange={(e) => search.setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  search.reset();
-                  searchRef.current?.blur();
-                }
-              }}
-            />
-          </label>
+            appearance="filled-darker"
+            value={search.query}
+            placeholder="Buscar na biblioteca…"
+            onFocus={() => {
+              if (pathname !== "/library") navigate("/library");
+              search.setOpen(true);
+            }}
+            onBlur={() => search.setOpen(false)}
+            onChange={(_, d) => search.setQuery(d.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                search.reset();
+                searchRef.current?.blur();
+              }
+            }}
+          />
           <div className={s.topbarSpacer} />
           <Tooltip
             content={
@@ -157,9 +211,7 @@ export function AppShell() {
             <Button
               appearance="subtle"
               className={l.surface}
-              aria-label={
-                fullscreen ? "Sair da tela cheia" : "Tela cheia"
-              }
+              aria-label={fullscreen ? "Sair da tela cheia" : "Tela cheia"}
               icon={
                 fullscreen ? (
                   <FullScreenMinimizeRegular />

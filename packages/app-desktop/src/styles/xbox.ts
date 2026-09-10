@@ -1,3 +1,4 @@
+
 /**
  * Linguagem visual do "modo Xbox" (ver docs/design/xbox-mode-reference.md e
  * docs/design/fluent2.md) em **Griffel** (`makeStyles` + `tokens` do Fluent 2),
@@ -71,7 +72,7 @@ export const useShellStyles = makeStyles({
     // `:focus-visible`): o pulso do gamepad vem de um evento Tauri, sem
     // keydown, então o WebKitGTK não marca `:focus-visible` no `.focus()`
     // programático — e o usuário não via onde estava o foco.
-    "& a:focus, & button:focus, & input:focus, & [tabindex]:focus": {
+    "& a:focus, & input:focus, & [tabindex]:focus": {
       outlineWidth: "2px",
       outlineStyle: "solid",
       outlineColor: tokens.colorNeutralForeground1,
@@ -95,7 +96,7 @@ export const useShellStyles = makeStyles({
   railSep: {
     width: "26px",
     height: "1px",
-    backgroundColor: tokens.colorNeutralStroke2,
+    backgroundColor: tokens.colorNeutralStroke1,
     marginTop: "6px",
     marginBottom: "6px",
   },
@@ -106,10 +107,11 @@ export const useShellStyles = makeStyles({
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    borderRadius: shell.radius,
+    flex: "none",
+  
     color: tokens.colorNeutralForeground3,
     textDecorationLine: "none",
-    fontSize: "22px",
+    fontSize: "32px",
     border: "none",
     backgroundColor: "transparent",
     cursor: "pointer",
@@ -190,32 +192,16 @@ export const useShellStyles = makeStyles({
     ":disabled": { opacity: 0.4, cursor: "default" },
   },
   // pílula de busca centralizada, independente do conteúdo lateral
+  // Só posicionamento (pílula centralizada, independente do conteúdo lateral) —
+  // o chrome do campo (borda, fundo, foco) vem do `<SearchBox>` do Fluent.
   search: {
     position: "absolute",
     left: "50%",
     transform: "translateX(-50%)",
     width: "clamp(160px, 46vw, 560px)",
     maxWidth: "calc(100% - 160px)",
-    height: "38px",
-    display: "flex",
-    alignItems: "center",
-    columnGap: "10px",
-    paddingLeft: "16px",
-    paddingRight: "16px",
+    maxHeight: "38px",
     borderRadius: "20px",
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
-    color: tokens.colorNeutralForeground3,
-    cursor: "text",
-    "& input": {
-      flexGrow: 1,
-      border: "none",
-      backgroundColor: "transparent",
-      color: tokens.colorNeutralForeground1,
-      font: "inherit",
-      outlineStyle: "none",
-    },
-    "& input::placeholder": { color: tokens.colorNeutralForeground3 },
   },
   clock: {
     color: tokens.colorNeutralForeground3,
@@ -278,7 +264,10 @@ export const useHeroStyles = makeStyles({
       height: "100%",
       objectFit: "cover",
       // zoom de entrada sutil (uma vez)
-      animationName: { from: { transform: "scale(1.07)" }, to: { transform: "scale(1)" } },
+      animationName: {
+        from: { transform: "scale(1.07)" },
+        to: { transform: "scale(1)" },
+      },
       animationDuration: "760ms",
       animationTimingFunction: tokens.curveDecelerateMax,
       animationFillMode: "both",
@@ -310,7 +299,10 @@ export const useHeroStyles = makeStyles({
     animationDelay: "90ms",
     animationTimingFunction: tokens.curveDecelerateMid,
     animationFillMode: "both",
-    "@media (prefers-reduced-motion: reduce)": { animationName: "none", opacity: 1 },
+    "@media (prefers-reduced-motion: reduce)": {
+      animationName: "none",
+      opacity: 1,
+    },
   },
   kicker: {
     fontSize: tokens.fontSizeBase200,
@@ -354,7 +346,10 @@ export const useMotionStyles = makeStyles({
     animationDuration: "300ms",
     animationTimingFunction: tokens.curveDecelerateMid,
     animationFillMode: "both",
-    "@media (prefers-reduced-motion: reduce)": { animationName: "none", opacity: 1 },
+    "@media (prefers-reduced-motion: reduce)": {
+      animationName: "none",
+      opacity: 1,
+    },
   },
 });
 
@@ -814,7 +809,11 @@ export const usePauseStyles = makeStyles({
     alignItems: "center",
     justifyItems: "center",
     zIndex: 100,
-    "& button:focus, & a:focus": {
+    // Anel de foco no `:focus` (não só `:focus-visible`): a navegação por
+    // controle foca via `.focus()` sem keydown e o WebKitGTK não marca
+    // `:focus-visible` aí. O `<Button>` do Fluent só mostra o dele no
+    // `:focus-visible`, então aqui a gente reforça.
+    "& a:focus, & button:focus": {
       outlineWidth: "2px",
       outlineStyle: "solid",
       outlineColor: tokens.colorNeutralForeground1,
