@@ -126,7 +126,9 @@ impl FrontendState {
     }
 
     /// Instala o schema declarado pelo core. Mantém valores já escolhidos que
-    /// ainda são válidos; o resto cai no default.
+    /// ainda são válidos; um pré-setado que não bate exato tenta casar
+    /// case-insensitive (ex.: "disabled" vs "Disabled" entre versões de core);
+    /// o resto cai no default.
     pub(crate) fn install_core_options(&mut self, opts: Vec<CoreOption>) {
         for o in &opts {
             let cur = self
@@ -134,16 +136,19 @@ impl FrontendState {
                 .entry(o.key.clone())
                 .or_insert_with(|| o.default.clone());
             if !o.values.contains(cur) {
-                // Valor pré-setado (cascata de config / default do etapa 12)
-                // não bate no schema declarado — loga pra não perder o motivo.
-                log::warn!(
-                    "core option '{}': valor '{}' inválido — opções: {:?}; caindo pro default '{}'",
-                    o.key,
-                    cur,
-                    o.values,
-                    o.default
-                );
-                *cur = o.default.clone();
+                if let Some(m) = o.values.iter().find(|v| v.eq_ignore_ascii_case(cur)) {
+                    log::info!("core option '{}': '{}' → '{}' (case)", o.key, cur, m);
+                    *cur = m.clone();
+                } else {
+                    log::warn!(
+                        "core option '{}': valor '{}' inválido — opções: {:?}; caindo pro default '{}'",
+                        o.key,
+                        cur,
+                        o.values,
+                        o.default
+                    );
+                    *cur = o.default.clone();
+                }
             }
         }
         self.core_options = opts;
