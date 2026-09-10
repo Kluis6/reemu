@@ -134,6 +134,15 @@ impl FrontendState {
                 .entry(o.key.clone())
                 .or_insert_with(|| o.default.clone());
             if !o.values.contains(cur) {
+                // Valor pré-setado (cascata de config / default do etapa 12)
+                // não bate no schema declarado — loga pra não perder o motivo.
+                log::warn!(
+                    "core option '{}': valor '{}' inválido — opções: {:?}; caindo pro default '{}'",
+                    o.key,
+                    cur,
+                    o.values,
+                    o.default
+                );
                 *cur = o.default.clone();
             }
         }
