@@ -459,6 +459,47 @@ export async function saveThumbnailUrl(stateId: string): Promise<string | null> 
   return URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
 }
 
+// --- perfil local (um por instalação) ----------------------------------
+
+export interface Profile {
+  name: string
+  bio: string | null
+  /** 'preset:1'..'preset:5' ou 'file'. */
+  avatar: string
+  onboarded: boolean
+}
+export const getProfile = () => invoke<Profile>('get_profile')
+
+/** `name` obrigatório; `avatar` = 'preset:N' (1..5) ou 'file'. Marca o
+ *  onboarding como concluído. */
+export const setProfile = (name: string, bio: string | null, avatar: string) =>
+  invoke<void>('set_profile', { name, bio: bio ?? null, avatar })
+
+/** Copia a imagem escolhida pra `<dados>/profile/avatar.<ext>`. */
+export const setProfileAvatarFile = (srcPath: string) =>
+  invoke<void>('set_profile_avatar_file', { srcPath })
+
+/** A imagem de avatar do usuário como `blob:` URL, ou `null` se ele usa um
+ *  preset / ainda não escolheu. Passe um nonce pra furar cache após troca. */
+export async function profileAvatarUrl(): Promise<string | null> {
+  if (!inTauri) return null
+  const buf = await invoke<ArrayBuffer>('read_profile_avatar')
+  if (buf.byteLength === 0) return null
+  return URL.createObjectURL(new Blob([buf]))
+}
+
+/** Diálogo nativo pra escolher uma imagem de avatar. */
+export async function pickImage(): Promise<string | null> {
+  if (!inTauri) return null
+  const { open } = await import('@tauri-apps/plugin-dialog')
+  const sel = await open({
+    multiple: false,
+    title: 'Escolha uma imagem de avatar',
+    filters: [{ name: 'Imagem', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+  })
+  return typeof sel === 'string' ? sel : null
+}
+
 // --- input / captura de binding (etapa 05) -------------------------------
 
 /** Espelha `domain::input::RawInputEvent` (serde externally tagged). */

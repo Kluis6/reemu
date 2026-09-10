@@ -13,7 +13,6 @@ import {
   TrophyRegular,
 } from "@fluentui/react-icons";
 import {
-  Avatar,
   Button,
   Menu,
   MenuDivider,
@@ -27,13 +26,15 @@ import {
   mergeClasses,
   tokens,
 } from "@fluentui/react-components";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ButtonHints } from "../components/ButtonHints";
+import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
 import { useClock } from "../hooks/useClock";
 import { useFullscreen } from "../hooks/useFullscreen";
-import { quitApp } from "../lib/tauri";
+import { getProfile, quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
 
@@ -62,10 +63,9 @@ const RAIL = [
   },
 ];
 
-// Menu do avatar. As telas de perfil/conquistas/rede ainda não existem —
-// itens ficam desabilitados até terem tela. "Sair" fecha o app.
-const PROFILE_MENU = [
-  { icon: <PersonRegular />, label: "Meu perfil" },
+// Menu do avatar. Conquistas/rede ainda não têm tela — ficam desabilitados.
+// "Sair" fecha o app.
+const PROFILE_EXTRA = [
   { icon: <TrophyRegular />, label: "Minhas conquistas" },
   { icon: <PeopleRegular />, label: "Minha rede" },
 ] as const;
@@ -80,6 +80,7 @@ export function AppShell() {
   const atRoot = pathname === "/";
   const atBrowse = pathname === "/" || pathname === "/library";
 
+  const profile = useQuery({ queryKey: ["profile"], queryFn: getProfile, retry: false });
   const search = useSearchStore();
   const searchRef = useRef<HTMLInputElement>(null);
   // Y no controle / "/" no teclado marcam `open` → foca o campo.
@@ -102,18 +103,25 @@ export function AppShell() {
       <nav className={s.rail}>
         <Menu positioning={{ position: "after", align: "top", offset: 8 }}>
           <MenuTrigger disableButtonEnhancement>
-            <Avatar
-              className={s.railBrand}
-              name="ReEmu"
-              size={48}
-              color="colorful"
-              badge={{ status: "available" }}
-              aria-label="Perfil"
-            />
+            <button className={s.railBrand} aria-label="Perfil" type="button">
+              <ProfileAvatar
+                profile={
+                  profile.data ?? { name: "Jogador", avatar: "preset:1" }
+                }
+                size={48}
+                badge="available"
+              />
+            </button>
           </MenuTrigger>
           <MenuPopover>
             <MenuList hasIcons>
-              {PROFILE_MENU.map((m) => (
+              <MenuItem
+                icon={<PersonRegular />}
+                onClick={() => navigate("/settings/perfil")}
+              >
+                {profile.data?.name ? `Perfil — ${profile.data.name}` : "Meu perfil"}
+              </MenuItem>
+              {PROFILE_EXTRA.map((m) => (
                 <MenuItem key={m.label} icon={m.icon} disabled>
                   {m.label}
                 </MenuItem>

@@ -18,6 +18,7 @@ const useStyles = makeStyles({
 });
 
 const TABS = [
+  { key: "perfil", label: "Perfil" },
   { key: "audio", label: "Áudio" },
   { key: "video", label: "Vídeo" },
   { key: "metadata", label: "Metadata" },

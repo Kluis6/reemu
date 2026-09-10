@@ -4,6 +4,7 @@ import { RootLayout } from './layouts/RootLayout'
 import { SettingsLayout } from './layouts/SettingsLayout'
 import { Home } from './screens/Home'
 import { Library } from './screens/Library'
+import { Onboarding } from './screens/Onboarding'
 import { PlatformLibrary } from './screens/PlatformLibrary'
 import { PlayScreen } from './screens/PlayScreen'
 import { RomDetail } from './screens/RomDetail'
@@ -13,6 +14,7 @@ import { SettingsControllers } from './screens/settings/SettingsControllers'
 import { SettingsCores } from './screens/settings/SettingsCores'
 import { SettingsHotkeys } from './screens/settings/SettingsHotkeys'
 import { SettingsMetadata } from './screens/settings/SettingsMetadata'
+import { SettingsProfile } from './screens/settings/SettingsProfile'
 import { SettingsVideo } from './screens/settings/SettingsVideo'
 
 /**
@@ -36,7 +38,8 @@ export const router = createHashRouter([
             path: 'settings',
             element: <SettingsLayout />,
             children: [
-              { index: true, element: <Navigate to="audio" replace /> },
+              { index: true, element: <Navigate to="perfil" replace /> },
+              { path: 'perfil', element: <SettingsProfile /> },
               { path: 'audio', element: <SettingsAudio /> },
               { path: 'video', element: <SettingsVideo /> },
               { path: 'metadata', element: <SettingsMetadata /> },
@@ -48,6 +51,7 @@ export const router = createHashRouter([
           },
         ],
       },
+      { path: 'onboarding', element: <Onboarding /> },
       { path: 'play/:romId', element: <PlayScreen /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],

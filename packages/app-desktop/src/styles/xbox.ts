@@ -137,6 +137,12 @@ export const useShellStyles = makeStyles({
   railBrand: {
     marginBottom: "6px",
     cursor: "pointer",
+    padding: 0,
+    border: "none",
+    backgroundColor: "transparent",
+    borderRadius: tokens.borderRadiusCircular,
+    lineHeight: 0,
+    outlineOffset: "2px",
   },
 
   main: {
