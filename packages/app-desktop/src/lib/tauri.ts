@@ -329,7 +329,8 @@ export interface ShaderPackProgress {
   total: number
   phase: 'download' | 'extract'
 }
-/** Baixa `libretro/slang-shaders` (~130 MB). Devolve o caminho instalado. */
+/** Baixa o pacote de slang shaders (buildbot da libretro; GitHub como
+ * fallback) — os mesmos que o RetroArch usa. Devolve o caminho instalado. */
 export async function downloadShaderPack(
   onProgress?: (p: ShaderPackProgress) => void,
 ): Promise<string> {

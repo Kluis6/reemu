@@ -187,8 +187,9 @@ export function ShaderLibrary({
     return (
       <div className={s.root}>
         <Caption1>
-          Baixe o pacote oficial <code>libretro/slang-shaders</code> (~130 MB) ou
-          aponte pra pasta <code>shaders_slang</code> do RetroArch/RetroBat.
+          Baixe o pacote de slang shaders — os mesmos do RetroArch (Online
+          Updater → Update Slang Shaders) — ou aponte pra pasta{' '}
+          <code>shaders_slang</code> do RetroArch/RetroBat.
         </Caption1>
         <div className={s.bar}>
           <Button
