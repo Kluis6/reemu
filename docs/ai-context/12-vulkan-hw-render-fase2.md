@@ -308,16 +308,23 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   (`CoreHw::Vulkan`, `mednafen_psx_hw` marcado `vk`, badge/caption no
   `SettingsCores`) — o roteamento pra Vulkan já era default pros
   `VK_CAPABLE_CORES` (com fallback pro processo filho), agora o rótulo bate.
-  Scanout `A1R5G5B5` (dither ligado): o `core_loop` injeta
-  `beetle_psx_hw_dither_mode=disabled` como DEFAULT ao rotear PSX-hw pro Vulkan
-  (força RGBA8); o override do usuário (cascata de core options) vence. Save
-  state em core Vulkan: `Shared.vk_render_gate: Mutex<()>` — o video pump
-  segura durante `step_vk_local` + submit do wgpu, o `core_loop` pega antes de
-  `serialize_state`/`restore_state` (`retro_serialize` pode submeter na mesma
-  `VkQueue`); ordem gate→`vk_local` nos dois lados.
-  **Pendente:** blit `A1R5G5B5→RGBA8` real (dither + Vulkan juntos); silenciar
-  stdout do Beetle (`[hdcache]`/`Creating shader module`); flycast/mupen como
-  alvos validados.
+  Scanout `A1R5G5B5` (dither ligado / jogo em 16bpp): **`VkBlit` em `gpu.rs`**
+  (`16830fe`) — `vkCmdBlitImage` da VkImage do core (packed, `SHADER_READ_ONLY`)
+  pra um `R8G8B8A8_UNORM` nosso no device adotado, por slot do ring; barriers
+  pra `TRANSFER` e de volta; submit + CPU-wait na queue compartilhada (sob o
+  `vk_render_gate`). `bind_vulkan_input` roteia pro blit quando
+  `vk_format_to_wgpu` devolve `None` (VkFormat 4/6/7/8). Confirmado que
+  **nenhuma core option força RGBA8** — o formato depende do modo de vídeo do
+  jogo (16 vs 24 bpp), a tentativa `beetle_psx_hw_dither_mode=disabled` não
+  pegava. Save state em core Vulkan: `Shared.vk_render_gate: Mutex<()>` — o
+  video pump segura durante `step_vk_local` + submit do wgpu, o `core_loop`
+  pega antes de `serialize_state`/`restore_state` (`retro_serialize` pode
+  submeter na mesma `VkQueue`); ordem gate→`vk_local` nos dois lados.
+  Teto de textura do device (`downlevel_defaults` = 2048) subido pro cap real
+  → surface 4K deixa de dar tela preta (`ae0d87f`).
+  **Pendente:** silenciar stdout do Beetle (`[hdcache]`/`Creating shader
+  module`) no caminho in-process; flycast/mupen como alvos validados; Fase C
+  (tirar os CPU-waits do blit e do `submit_vulkan_cmds`).
   Referência histórica do plano D2 original: `vk_context.rs` construir a `ash::Instance` com as extensões que o
   `wgpu-hal` quer, chamar o `create_device` do core passando
   `Adapter::required_device_extensions` / `physical_device_features` do
