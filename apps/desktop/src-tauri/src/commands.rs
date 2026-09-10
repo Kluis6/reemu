@@ -114,6 +114,7 @@ impl AppState {
         let cores_dir = base.join("cores");
         let system_dir = base.join("system");
         let shaders_dir = base.join("shaders");
+        crate::gpu::set_shader_root(crate::shader_pack::install_dir(&shaders_dir));
         let decorations_dir = base.join("decorations");
         let mut cfg = SessionConfig::new(cores_dir.clone(), system_dir.clone(), save_dir.clone());
         cfg.enable_gamepad = true;
@@ -853,12 +854,37 @@ pub fn set_fullscreen(window: tauri::WebviewWindow, value: bool) -> Result<(), S
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CuratedPresetInfo {
+    /// Wire id — `curated:<id>` (o que `set_shader` espera).
+    pub id: String,
+    pub label: String,
+    pub desc: String,
+    /// `false` = o pacote `slang-shaders` ainda não foi baixado.
+    pub available: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ShaderInfo {
-    /// Preset ativo (`plain` quando não há GPU).
+    /// Preset ativo — nome do builtin, `curated:<id>` ou caminho `.slangp`.
     pub active: String,
     pub available: Vec<String>,
+    /// Presets "de 1 clique" que apontam pro pacote `slang-shaders`.
+    pub curated: Vec<CuratedPresetInfo>,
     /// `false` = sem adapter wgpu; a troca de preset não tem efeito.
     pub gpu: bool,
+}
+
+fn curated_infos() -> Vec<CuratedPresetInfo> {
+    crate::gpu::CURATED
+        .iter()
+        .map(|c| CuratedPresetInfo {
+            id: format!("curated:{}", c.id),
+            label: c.label.to_string(),
+            desc: c.desc.to_string(),
+            available: crate::gpu::curated_slangp(c).is_some(),
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -866,13 +892,15 @@ pub fn get_shader_info(state: State<'_, AppState>) -> ShaderInfo {
     let guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
     match guard.as_ref() {
         Some(fp) => ShaderInfo {
-            active: fp.preset_name().to_string(),
+            active: fp.preset_source().to_string(),
             available: crate::gpu::builtin_preset_names(),
+            curated: curated_infos(),
             gpu: true,
         },
         None => ShaderInfo {
             active: "plain".into(),
             available: crate::gpu::builtin_preset_names(),
+            curated: curated_infos(),
             gpu: false,
         },
     }
@@ -996,6 +1024,9 @@ pub async fn seed_builtin_shader_presets(pool: &db::Db) {
 
 /// `builtin:<nome>` ou o próprio caminho `.slangp` (o que `set_preset` aceita).
 fn preset_id_of(name: &str) -> (String, String, bool) {
+    if let Some(c) = crate::gpu::curated_by_wire(name) {
+        return (name.to_string(), c.label.to_string(), true);
+    }
     if name.ends_with(".slangp") {
         let stem = std::path::Path::new(name)
             .file_stem()

@@ -148,6 +148,70 @@ pub fn builtin_preset_names() -> Vec<String> {
     BUILTINS.iter().map(|p| p.name.to_string()).collect()
 }
 
+/// Preset "de 1 clique" que aponta pra um `.slangp` do pacote `slang-shaders`.
+/// A UI mostra estes como opções fixas; ficam indisponíveis se o pacote não
+/// foi baixado. Wire id = `curated:<id>` — resolvido por [`build_specs`].
+pub struct Curated {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub desc: &'static str,
+    /// Caminho relativo à raiz do `slang-shaders`.
+    pub relpath: &'static str,
+}
+
+/// Só entram aqui presets confirmados no `docs/shaders/working-presets.txt`.
+pub const CURATED: &[Curated] = &[
+    Curated {
+        id: "xbr",
+        label: "Suavizar pixel art (xBR)",
+        desc: "Deixa o 2D liso sem borrar — ideal pra 8/16-bit.",
+        relpath: "edge-smoothing/xbr/other presets/xbr-lv2-standalone.slangp",
+    },
+    Curated {
+        id: "scalefx",
+        label: "Suavizar pixel art (ScaleFX)",
+        desc: "Alternativa ao xBR; segura melhor os detalhes finos.",
+        relpath: "edge-smoothing/scalefx/scalefx.slangp",
+    },
+    Curated {
+        id: "super-xbr",
+        label: "Suavizar 2D e 3D (Super-xBR)",
+        desc: "Também serve pra consoles 3D (PS1/N64).",
+        relpath: "edge-smoothing/xbr/super-xbr.slangp",
+    },
+    Curated {
+        id: "ntsc",
+        label: "Cor de TV antiga (NTSC)",
+        desc: "Sangramento de vídeo composto — a cara certa de NES/Mega Drive.",
+        relpath: "ntsc/ntsc-adaptive.slangp",
+    },
+    Curated {
+        id: "crt-guest",
+        label: "CRT avançado (Guest)",
+        desc: "Tubo completo: máscara de fósforo, brilho e geometria.",
+        relpath: "crt/crt-guest-advanced.slangp",
+    },
+];
+
+pub fn curated_by_wire(wire: &str) -> Option<&'static Curated> {
+    let id = wire.strip_prefix("curated:")?;
+    CURATED.iter().find(|c| c.id == id)
+}
+
+static SHADER_ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Raiz do pacote `slang-shaders` (`<dados>/shaders/slang-shaders`), usada pra
+/// resolver os presets `curated:<id>`. Setada uma vez no startup.
+pub fn set_shader_root(dir: std::path::PathBuf) {
+    let _ = SHADER_ROOT.set(dir);
+}
+
+/// Caminho absoluto do `.slangp` de um preset curado, se o pacote já existe.
+pub fn curated_slangp(c: &Curated) -> Option<std::path::PathBuf> {
+    let p = SHADER_ROOT.get()?.join(c.relpath);
+    p.is_file().then_some(p)
+}
+
 /// Como os buffers uniformes do passe são preenchidos a cada frame.
 /// Bindings: 0 = `Push`/params ou os 64 bytes fixos; 1 = `UBO`/global (slang).
 enum UniformMode {
@@ -1689,11 +1753,6 @@ impl FrameProcessor {
         }
     }
 
-    /// Nome curto pra exibição (builtin ou stem do `.slangp`).
-    pub fn preset_name(&self) -> &str {
-        &self.preset_name
-    }
-
     /// O que foi passado pra `set_preset` (builtin ou caminho) — pra dedup.
     pub fn preset_source(&self) -> &str {
         &self.preset_source
@@ -2859,6 +2918,16 @@ impl FrameProcessor {
 /// `plain|crt|lcd` ou um caminho `.slangp` → preset pronto (nome, params,
 /// metadados dos parâmetros, passes).
 fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
+    if let Some(c) = curated_by_wire(want) {
+        let p = curated_slangp(c).ok_or_else(|| {
+            format!(
+                "'{}' precisa do pacote de shaders — baixe em Config › Vídeo",
+                c.label
+            )
+        })?;
+        let s = p.to_string_lossy();
+        return build_specs(&s);
+    }
     if let Some(b) = BUILTINS.iter().find(|b| b.name == want) {
         let passes = b
             .passes
@@ -3771,6 +3840,29 @@ fn f32s_bytes(s: &[f32]) -> &[u8] {
 mod tests {
     use super::*;
     use domain::frame_source::{Frame, FrameMetadata, FrameOrigin, SoftwarePixelFormat};
+
+    #[test]
+    fn curated_wire_ids_resolve_and_are_unique() {
+        let mut ids: Vec<&str> = CURATED.iter().map(|c| c.id).collect();
+        let n = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), n, "id curado duplicado");
+        assert!(curated_by_wire("curated:xbr").is_some());
+        assert!(curated_by_wire("curated:desconhecido").is_none());
+        assert!(curated_by_wire("xbr").is_none(), "exige o prefixo curated:");
+        assert!(CURATED.iter().all(|c| c.relpath.ends_with(".slangp")));
+    }
+
+    #[test]
+    fn curated_without_pack_errors_with_hint() {
+        // SHADER_ROOT não setada neste processo de teste → sem pacote.
+        let e = match build_specs("curated:ntsc") {
+            Ok(_) => panic!("deveria falhar sem o pacote"),
+            Err(e) => e,
+        };
+        assert!(e.contains("pacote de shaders"), "mensagem: {e}");
+    }
 
     fn grey_frame(w: u32, h: u32, val: u8) -> Frame {
         let mut data = vec![0u8; (w * h * 4) as usize];

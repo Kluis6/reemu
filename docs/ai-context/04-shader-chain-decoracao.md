@@ -46,6 +46,27 @@ de compatibilidade de pacotes estilo RetroBat/The Bezel Project.
   pack completo + GRAPHICS packages vêm de releases próprios, fora do
   `libretro/slang-shaders` — automação é backlog.
 
+## Presets curados ("de 1 clique")
+
+`gpu.rs::CURATED` — lista fixa de `{id, label, desc, relpath}` apontando pra
+`.slangp` **confirmados** em `docs/shaders/working-presets.txt` (xBR, ScaleFX,
+Super-xBR, NTSC adaptativo, crt-guest-advanced). Wire id = `curated:<id>`;
+`build_specs` resolve via `SHADER_ROOT` (setado no startup pra
+`<dados>/shaders/slang-shaders`) e erra com dica se o pacote não foi baixado.
+`get_shader_info` devolve `curated[]` com `available` por preset; a UI
+(`SettingsVideo`, `RomDetail`) mostra como opções fixas ao lado dos builtins.
+`get_shader_info.active` agora é `preset_source()` (não mais `preset_name()`),
+então o realce bate pra builtin, `curated:<id>` e caminho `.slangp`.
+
+## Pendências de qualidade de imagem
+
+- **Mipmaps** (`gpu.rs` TODOs em `PassSpec`/`LutSpec`): `mipmap_input` e
+  `mipmap` de LUT são parseados mas o executor não gera a cadeia — passes de
+  bloom/glow/halation (Mega Bezel, crt-royale) amostram só o nível 0 e ficam
+  "chapados". É a maior lacuna visual hoje.
+- ~7% dos presets não compilam (crt-royale mask-resize, alguns GB, smaa,
+  xbr multipass) — padrões de GLSL que a reescrita do `compile.rs` não cobre.
+
 ## Pipeline de composição (ordem fixa)
 
 ```

@@ -470,8 +470,15 @@ export function RomDetail() {
                     {n}
                   </option>
                 ))}
+                {shaderInfo.data.curated.map((c) => (
+                  <option key={c.id} value={c.id} disabled={!c.available}>
+                    {c.label}
+                    {c.available ? '' : ' (baixe o pacote de shaders)'}
+                  </option>
+                ))}
                 {shaderAtScope &&
-                  !shaderInfo.data.available.includes(shaderAtScope) && (
+                  !shaderInfo.data.available.includes(shaderAtScope) &&
+                  !shaderInfo.data.curated.some((c) => c.id === shaderAtScope) && (
                     <option value={shaderAtScope}>{currentGameShader}</option>
                   )}
               </Select>

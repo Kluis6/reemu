@@ -43,8 +43,9 @@ export function SettingsVideo() {
     mutationFn: (name: string) => setShader(name, 'default'),
     onSuccess: (_, name) => {
       qc.invalidateQueries({ queryKey: ['shader-info'] })
+      const curated = data?.curated.find((c) => c.id === name)?.label
       const base = name.split(/[/\\]/).pop() ?? name
-      push(sysToast(`Shader padrão: ${LABELS[name]?.title ?? base}`, 'Success'))
+      push(sysToast(`Shader padrão: ${LABELS[name]?.title ?? curated ?? base}`, 'Success'))
     },
     onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
   })
@@ -72,7 +73,12 @@ export function SettingsVideo() {
           : 'Sem GPU disponível — o frame vai cru pra tela; a troca não tem efeito.'}
       </Caption1>
       <RadioGroup
-        value={data.available.includes(data.active) ? data.active : ''}
+        value={
+          data.available.includes(data.active) ||
+          data.curated.some((c) => c.id === data.active)
+            ? data.active
+            : ''
+        }
         onChange={(_, d) => pick.mutate(d.value)}
       >
         {data.available.map((name) => (
@@ -90,14 +96,33 @@ export function SettingsVideo() {
             }}
           />
         ))}
+        {data.curated.map((c) => (
+          <Radio
+            key={c.id}
+            value={c.id}
+            disabled={pick.isPending || !data.gpu || !c.available}
+            label={{
+              children: (
+                <span style={{ display: 'flex', flexDirection: 'column' }}>
+                  <Text as="strong" weight="semibold">{c.label}</Text>
+                  <Caption1>
+                    {c.available
+                      ? c.desc
+                      : `${c.desc} — precisa do pacote de shaders (abaixo).`}
+                  </Caption1>
+                </span>
+              ),
+            }}
+          />
+        ))}
       </RadioGroup>
 
       {data.gpu && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <Caption1>
-            Preset externo — arquivo <code>.slangp</code> (RetroArch). Chains
-            multi-passe simples rodam; CRT-Royale / Mega Bezel completos ainda
-            não.
+            Preset externo — arquivo <code>.slangp</code> (RetroArch). ~93% dos
+            presets do pacote rodam (Mega Bezel inclusive); glow/bloom que
+            dependem de mipmap ainda ficam mais duros que no RetroArch.
           </Caption1>
           <ShaderLibrary
             onPick={(p) => pick.mutate(p)}

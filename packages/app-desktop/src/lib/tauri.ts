@@ -58,9 +58,19 @@ export const quitApp = () => invoke<void>('quit_app')
 export const isFullscreen = () => invoke<boolean>('is_fullscreen')
 export const setFullscreen = (value: boolean) => invoke<void>('set_fullscreen', { value })
 
+/** Preset "de 1 clique" que aponta pro pacote `slang-shaders`. */
+export interface CuratedPreset {
+  /** wire id — `curated:<id>`, o que `setShader` espera. */
+  id: string
+  label: string
+  desc: string
+  /** false = o pacote de shaders ainda não foi baixado. */
+  available: boolean
+}
 export interface ShaderInfo {
   active: string
   available: string[]
+  curated: CuratedPreset[]
   /** false = sem adapter wgpu; trocar de preset não tem efeito. */
   gpu: boolean
 }
