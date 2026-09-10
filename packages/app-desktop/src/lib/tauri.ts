@@ -151,6 +151,33 @@ export const importDecorationPack = (path: string) =>
   invoke<number>('import_decoration_pack', { path })
 export const clearDecorations = () => invoke<void>('clear_decorations')
 
+/** Um sistema do catálogo de bezels do The Bezel Project. */
+export interface BezelCatalogItem {
+  systemId: string
+  installed: boolean
+}
+export const bezelCatalog = () =>
+  invoke<BezelCatalogItem[]>('bezel_catalog')
+
+export interface BezelProgress {
+  systemId: string
+  received: number
+  total: number
+  phase: 'download' | 'extract' | 'import'
+}
+/** Baixa o pack de bezels de um sistema (The Bezel Project) e re-importa a
+ *  árvore. Devolve o total de atribuições gravadas. */
+export async function downloadBezelPack(
+  systemId: string,
+  onProgress?: (p: BezelProgress) => void,
+): Promise<number> {
+  if (!inTauri) throw new Error('fora do Tauri: download_bezel_pack')
+  const { invoke: raw, Channel } = await import('@tauri-apps/api/core')
+  const ch = new Channel<BezelProgress>()
+  if (onProgress) ch.onmessage = onProgress
+  return raw<number>('download_bezel_pack', { systemId, onProgress: ch })
+}
+
 export interface InstalledCore {
   coreId: string
   name: string

@@ -8,6 +8,7 @@ import {
   Text,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { BezelLibrary } from '../../components/BezelLibrary'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
 import { ShaderParams } from '../../components/ShaderParams'
 import { sysToast } from '../../lib/toast'
@@ -124,12 +125,16 @@ export function SettingsVideo() {
 
       {data.gpu && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <Text as="strong" weight="semibold">Molduras / bezels</Text>
           <Caption1>
-            Molduras / bezels — pasta no formato Bezel Project / RetroBat
-            (<code>default.png</code>, <code>&lt;sistema&gt;/</code>,{' '}
+            Baixe direto do The Bezel Project por sistema, ou importe uma pasta
+            no formato Bezel Project / RetroBat (<code>default.png</code>,{' '}
+            <code>&lt;sistema&gt;/</code>,{' '}
             <code>games/&lt;sistema&gt;/&lt;rom&gt;.png</code>). O jogo é
-            posicionado pelo <code>.cfg</code> irmão quando existe.
+            posicionado pelo <code>.cfg</code> irmão ou pela janela transparente
+            da arte.
           </Caption1>
+          <BezelLibrary />
           <div style={{ display: 'flex', gap: 8 }}>
             <Button
               disabled={deco.isPending}

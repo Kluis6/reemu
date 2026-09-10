@@ -1,3 +1,4 @@
+mod bezel_pack;
 mod bios;
 mod commands;
 mod core_catalog;
@@ -210,6 +211,8 @@ pub fn run() {
             commands::reset_shader_params,
             commands::import_decoration_pack,
             commands::clear_decorations,
+            commands::bezel_catalog,
+            commands::download_bezel_pack,
             commands::is_fullscreen,
             commands::set_fullscreen,
             commands::quit_app,

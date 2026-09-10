@@ -25,6 +25,27 @@ de compatibilidade de pacotes estilo RetroBat/The Bezel Project.
   `<pack>/default.png` (fallback) — populando `decoration_assignments`
   automaticamente a partir disso, não em runtime a cada resolução.
 
+## Download automático de assets
+
+- **Slang shaders** (`apps/desktop/src-tauri/src/shader_pack.rs`): baixa o
+  `shaders_slang.zip` do buildbot da libretro — a mesma fonte do "Online
+  Updater → Update Slang Shaders" do RetroArch. GitHub (`codeload`) é
+  fallback. A extração detecta sozinha (`zip_common_root`) se o zip embrulha
+  tudo num dir raiz.
+- **Bezels por sistema** (`apps/desktop/src-tauri/src/bezel_pack.rs`): baixa
+  um repo `bezelproject-<X>` do **The Bezel Project** (família overlay do
+  RetroArch) sob demanda, extrai só `retroarch/overlay/**` remapeado pra
+  `<dados>/decorations/bezelproject/<system_id>/` e re-importa a árvore
+  inteira via `decoration::import_pack` (modelo "um pack ativo" — todos os
+  sistemas convivem sob a mesma raiz). Catálogo `system_id → repo` no
+  módulo; `bezel_catalog` / `download_bezel_pack` são os comandos. UI em
+  `components/BezelLibrary.tsx` (Config › Vídeo), só sistemas presentes na
+  biblioteca. Casamento bezel↔ROM continua por nome de arquivo
+  (No-Intro/Redump).
+- **Mega Bezel** (HyperspaceMadness): ainda manual (`.slangp` externo). O
+  pack completo + GRAPHICS packages vêm de releases próprios, fora do
+  `libretro/slang-shaders` — automação é backlog.
+
 ## Pipeline de composição (ordem fixa)
 
 ```

@@ -30,6 +30,8 @@ pub struct AppState {
     pub system_dir: std::path::PathBuf,
     /// `<dados>/shaders` — pacote de shaders baixado (`libretro/slang-shaders`).
     pub shaders_dir: std::path::PathBuf,
+    /// `<dados>/decorations` — bezels baixados (The Bezel Project) / importados.
+    pub decorations_dir: std::path::PathBuf,
     /// Hotkeys de sistema carregadas do DB (`system_hotkeys`). `save_binding` /
     /// `clear_system_hotkey` recompõem via `refresh_hotkey_resolver`.
     pub hotkeys: Mutex<ComboHotkeyResolver>,
@@ -112,6 +114,7 @@ impl AppState {
         let cores_dir = base.join("cores");
         let system_dir = base.join("system");
         let shaders_dir = base.join("shaders");
+        let decorations_dir = base.join("decorations");
         let mut cfg = SessionConfig::new(cores_dir.clone(), system_dir.clone(), save_dir.clone());
         cfg.enable_gamepad = true;
         cfg.audio_sink = Some(Box::new(move || {
@@ -134,6 +137,7 @@ impl AppState {
             cores_dir,
             system_dir,
             shaders_dir,
+            decorations_dir,
             hotkeys: Mutex::new(ComboHotkeyResolver::new(hotkeys)),
             last_hotkey: Mutex::new(None),
             current_rom: Mutex::new(None),
@@ -705,6 +709,25 @@ pub async fn clear_decorations(state: State<'_, AppState>) -> Result<(), String>
         fp.set_decoration(None);
     }
     Ok(())
+}
+
+/// Catálogo de bezels do The Bezel Project + quais já estão baixados.
+#[tauri::command]
+pub fn bezel_catalog(state: State<'_, AppState>) -> Vec<crate::bezel_pack::CatalogItem> {
+    crate::bezel_pack::catalog(&state.decorations_dir)
+}
+
+/// Baixa o pack de bezels de `system_id` (The Bezel Project) e re-importa a
+/// árvore. Devolve o total de atribuições gravadas.
+#[tauri::command]
+pub async fn download_bezel_pack(
+    state: State<'_, AppState>,
+    system_id: String,
+    on_progress: tauri::ipc::Channel<crate::bezel_pack::DownloadProgress>,
+) -> Result<usize, String> {
+    let pool = pool(&state)?;
+    let dir = state.decorations_dir.clone();
+    crate::bezel_pack::download(&dir, &pool, &system_id, on_progress).await
 }
 
 #[tauri::command]
