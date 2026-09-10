@@ -251,9 +251,15 @@ export function RomDetail() {
 
   return (
     <div className={s.root} data-loading={meta.isPending ? "true" : "false"}>
-      <button className={s.back} onClick={() => navigate(-1)}>
-        <ArrowLeftRegular /> Voltar
-      </button>
+      <Button
+        className={s.back}
+        appearance="subtle"
+        size="small"
+        icon={<ArrowLeftRegular />}
+        onClick={() => navigate(-1)}
+      >
+        Voltar
+      </Button>
 
       <div className={s.hero}>
         {cover && (

@@ -1,10 +1,11 @@
-import { makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
+import { Button, makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
 import { initials } from "../lib/initials";
 import { useCardStyles } from "../styles/xbox";
 
 const useStyles = makeStyles({
   tile: {
     width: "100%",
+    minWidth: 0,
     aspectRatio: "1 / 1",
     display: "block",
     border: "none",
@@ -58,7 +59,8 @@ export function PlatformTile({
   const c = useCardStyles();
   const cells = sample.slice(0, 4);
   return (
-    <button
+    <Button
+      appearance="transparent"
       className={mergeClasses(c.card, s.tile)}
       aria-label={ariaLabel}
       onClick={onClick}
@@ -77,6 +79,6 @@ export function PlatformTile({
           <div key={`e${i}`} className={s.cell} />
         ))}
       </div>
-    </button>
+    </Button>
   );
 }

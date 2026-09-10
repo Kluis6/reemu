@@ -583,8 +583,9 @@ export function PlayScreen() {
             {(stateList.data?.length ?? 0) > 0 && (
               <div className={pause.states}>
                 {stateList.data!.map((st) => (
-                  <button
+                  <Button
                     key={st.id}
+                    appearance="subtle"
                     className={pause.stateRow}
                     disabled={loadAny.isPending}
                     onClick={() => loadAny.mutate(st.id)}
@@ -604,7 +605,7 @@ export function PlayScreen() {
                         {new Date(st.createdAt * 1000).toLocaleString()}
                       </span>
                     </span>
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}

@@ -5,6 +5,7 @@ import {
   Input,
   Spinner,
   makeStyles,
+  mergeClasses,
   tokens,
 } from '@fluentui/react-components'
 import { ArrowDownloadRegular, FolderRegular } from '@fluentui/react-icons'
@@ -252,16 +253,20 @@ export function ShaderLibrary({
                   </Caption1>
                 </summary>
                 {items.map((e) => (
-                  <button
+                  <Button
                     key={e.path}
-                    type="button"
+                    appearance="subtle"
+                    size="small"
                     disabled={busy}
-                    className={`${s.item} ${e.path === activePath ? s.itemOn : ''}`}
+                    className={mergeClasses(
+                      s.item,
+                      e.path === activePath && s.itemOn,
+                    )}
                     onClick={() => onPick(e.path)}
                     title={e.path}
                   >
                     {e.name}
-                  </button>
+                  </Button>
                 ))}
               </details>
             ))}

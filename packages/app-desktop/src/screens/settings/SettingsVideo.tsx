@@ -1,4 +1,11 @@
-import { Body1, Button, Caption1, Spinner, tokens } from '@fluentui/react-components'
+import {
+  Body1,
+  Button,
+  Caption1,
+  Radio,
+  RadioGroup,
+  Spinner,
+} from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
 import { ShaderParams } from '../../components/ShaderParams'
@@ -62,33 +69,26 @@ export function SettingsVideo() {
           ? 'Shader padrão da biblioteca (roda na GPU offscreen). Cada jogo pode ter um shader próprio na tela de detalhe.'
           : 'Sem GPU disponível — o frame vai cru pra tela; a troca não tem efeito.'}
       </Caption1>
-      <div style={{ display: 'grid', gap: 8 }}>
-        {data.available.map((name) => {
-          const on = name === data.active
-          return (
-            <button
-              key={name}
-              disabled={pick.isPending || !data.gpu}
-              onClick={() => pick.mutate(name)}
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2,
-                padding: '12px 14px',
-                borderRadius: 12,
-                border: `1px solid ${on ? tokens.colorBrandStroke1 : tokens.colorNeutralStroke1}`,
-                background: on ? tokens.colorBrandBackground2 : tokens.colorNeutralBackground2,
-                textAlign: 'left',
-                cursor: pick.isPending || !data.gpu ? 'default' : 'pointer',
-                color: 'inherit',
-              }}
-            >
-              <strong>{LABELS[name]?.title ?? name}</strong>
-              <Caption1>{LABELS[name]?.desc ?? ''}</Caption1>
-            </button>
-          )
-        })}
-      </div>
+      <RadioGroup
+        value={data.available.includes(data.active) ? data.active : ''}
+        onChange={(_, d) => pick.mutate(d.value)}
+      >
+        {data.available.map((name) => (
+          <Radio
+            key={name}
+            value={name}
+            disabled={pick.isPending || !data.gpu}
+            label={{
+              children: (
+                <span style={{ display: 'flex', flexDirection: 'column' }}>
+                  <strong>{LABELS[name]?.title ?? name}</strong>
+                  <Caption1>{LABELS[name]?.desc ?? ''}</Caption1>
+                </span>
+              ),
+            }}
+          />
+        ))}
+      </RadioGroup>
 
       {data.gpu && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
