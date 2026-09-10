@@ -2,6 +2,14 @@ import {
   Body1,
   Button,
   Caption1,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Field,
+  Input,
   Select,
   Spinner,
   Tab,
@@ -12,6 +20,7 @@ import {
   ArrowLeftRegular,
   ArrowResetRegular,
   DeleteRegular,
+  EditRegular,
   PlayRegular,
   StarFilled,
   StarRegular,
@@ -23,7 +32,7 @@ import { CoreOptions } from "../components/CoreOptions";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { ShaderLibrary } from "../components/ShaderLibrary";
 import { ShaderParams } from "../components/ShaderParams";
-import { platformLabel } from "../lib/platform";
+import { knownPlatforms, platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
 import {
   deleteSaveState,
@@ -38,6 +47,7 @@ import {
   listSystemCores,
   removeRom,
   setRomFavorite,
+  setRomMetadata,
   setShader,
   type ShaderScope,
 } from "../lib/tauri";
@@ -130,6 +140,9 @@ export function RomDetail() {
   const chosenCore =
     coreId || systemDefaultCore || coreList[0]?.coreId || "";
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editSystem, setEditSystem] = useState("");
   const [cfgTab, setCfgTab] = useState<"shader" | "core" | "states">("shader");
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   const hasCoreCfg = !!chosenCore;
@@ -158,6 +171,26 @@ export function RomDetail() {
     },
     onError: (e) => push(sysToast(`Falha ao remover: ${e}`, "Error")),
   });
+  const editMeta = useMutation({
+    mutationFn: () =>
+      setRomMetadata(
+        romId,
+        editName === (rom?.title ?? "") ? undefined : editName,
+        editSystem === rom?.systemId ? undefined : editSystem,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["roms"] });
+      qc.invalidateQueries({ queryKey: ["rom-metadata", romId] });
+      setEditOpen(false);
+      push(sysToast("Dados da ROM atualizados.", "Success"));
+    },
+    onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, "Error")),
+  });
+  const openEdit = () => {
+    setEditName(rom?.title ?? "");
+    setEditSystem(rom?.systemId ?? "");
+    setEditOpen(true);
+  };
   const fav = useMutation({
     mutationFn: (on: boolean) => setRomFavorite(romId, on),
     onMutate: async (on) => {
@@ -298,12 +331,79 @@ export function RomDetail() {
             {rom.isFavorite ? "Favorito" : "Favoritar"}
           </Button>
         </Tooltip>
+        <Tooltip content="Editar nome e plataforma" relationship="label">
+          <Button
+            size="large"
+            appearance="subtle"
+            icon={<EditRegular />}
+            onClick={openEdit}
+          >
+            Editar
+          </Button>
+        </Tooltip>
       </div>
       {coreList.length === 0 && (
         <Caption1>
           Instale um core em Configurações → Cores pra poder jogar.
         </Caption1>
       )}
+
+      <Dialog
+        open={editOpen}
+        onOpenChange={(_, d) => setEditOpen(d.open)}
+      >
+        <DialogSurface>
+          <DialogBody>
+            <DialogTitle>Editar ROM</DialogTitle>
+            <DialogContent
+              style={{ display: "flex", flexDirection: "column", gap: 16 }}
+            >
+              <Field label="Nome">
+                <Input
+                  value={editName}
+                  onChange={(_, d) => setEditName(d.value)}
+                  placeholder={rom.title}
+                />
+              </Field>
+              <Field
+                label="Plataforma"
+                hint="Corrige ROMs que o scan não identificou (ficam em 'Disco')."
+              >
+                <Select
+                  value={editSystem}
+                  onChange={(_, d) => setEditSystem(d.value)}
+                >
+                  {!knownPlatforms().some(([id]) => id === editSystem) && (
+                    <option value={editSystem}>
+                      {platformLabel(editSystem)}
+                    </option>
+                  )}
+                  {knownPlatforms().map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                appearance="secondary"
+                onClick={() => setEditOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                appearance="primary"
+                disabled={editMeta.isPending}
+                onClick={() => editMeta.mutate()}
+              >
+                Salvar
+              </Button>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
 
       <section className={s.section}>
         <TabList

@@ -4,6 +4,7 @@
 
 mod archive;
 mod decoration;
+mod disc_sniff;
 mod hash;
 mod scan;
 mod systems;

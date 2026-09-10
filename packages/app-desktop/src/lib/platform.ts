@@ -43,3 +43,9 @@ const LABELS: Record<string, string> = {
 export function platformLabel(systemId: string): string {
   return LABELS[systemId] ?? systemId.toUpperCase();
 }
+
+/** `[systemId, rótulo]` de todas as plataformas conhecidas, ordenado pelo
+ *  rótulo — pro seletor de plataforma na edição manual de uma ROM. */
+export function knownPlatforms(): [string, string][] {
+  return Object.entries(LABELS).sort((a, b) => a[1].localeCompare(b[1]));
+}

@@ -56,7 +56,7 @@ impl RomsRepo {
 }
 
 const SELECT_COLS: &str = "SELECT id, file_path, crc32, md5, system_id, added_at, \
-     last_played_at, is_favorite FROM roms";
+     last_played_at, is_favorite, user_title FROM roms";
 
 fn row_to_rom(row: &SqliteRow) -> Result<Rom, RepoError> {
     Ok(Rom {
@@ -68,6 +68,10 @@ fn row_to_rom(row: &SqliteRow) -> Result<Rom, RepoError> {
         added_at: row.try_get("added_at").map_err(be)?,
         last_played_at: row.try_get("last_played_at").map_err(be)?,
         is_favorite: row.try_get::<i64, _>("is_favorite").map_err(be)? != 0,
+        user_title: row
+            .try_get::<Option<String>, _>("user_title")
+            .map_err(be)?
+            .filter(|s| !s.is_empty()),
     })
 }
 
@@ -164,6 +168,33 @@ impl RomRepository for RomsRepo {
             .execute(&self.db)
             .await
             .map_err(be)?;
+        Ok(())
+    }
+
+    async fn set_metadata(
+        &self,
+        id: &str,
+        title: Option<&str>,
+        system_id: Option<&str>,
+    ) -> Result<(), RepoError> {
+        if let Some(t) = title {
+            // string vazia = NULL (volta pro nome do arquivo)
+            let val: Option<&str> = (!t.trim().is_empty()).then(|| t.trim());
+            sqlx::query("UPDATE roms SET user_title = ?2 WHERE id = ?1")
+                .bind(id)
+                .bind(val)
+                .execute(&self.db)
+                .await
+                .map_err(be)?;
+        }
+        if let Some(s) = system_id.map(str::trim).filter(|s| !s.is_empty()) {
+            sqlx::query("UPDATE roms SET system_id = ?2 WHERE id = ?1")
+                .bind(id)
+                .bind(s)
+                .execute(&self.db)
+                .await
+                .map_err(be)?;
+        }
         Ok(())
     }
 }

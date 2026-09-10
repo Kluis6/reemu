@@ -107,11 +107,13 @@ where
         // disco, o arquivo INTEIRO é a "ROM".
         let (system_id, archived_entry): (&str, Option<String>) =
             if AMBIGUOUS_DISC_EXTS.contains(&ext.as_str()) {
-                // Extensão de disco: tenta a pasta ancestral (biblioteca
-                // organizada por sistema, RetroBat/ES-DE); sem sinal de
-                // pasta, cai no balde genérico de sempre.
+                // Extensão de disco: (1) pasta ancestral (RetroBat/ES-DE); (2)
+                // sistema específico da extensão (`.gdi`→dreamcast, `.pbp`→psp);
+                // (3) assinatura no conteúdo do arquivo; (4) balde genérico.
                 let sys = system_from_dirs(&ancestor_dirs(path, dir))
-                    .unwrap_or_else(|| system_for_extension(&ext).unwrap_or("disc"));
+                    .or_else(|| system_for_extension(&ext).filter(|s| *s != "disc"))
+                    .or_else(|| crate::disc_sniff::identify(path))
+                    .unwrap_or("disc");
                 (sys, None)
             } else if let Some(sys) = system_for_extension(&ext) {
                 (sys, None)
@@ -174,6 +176,7 @@ where
             added_at: now_unix,
             last_played_at: None,
             is_favorite: false,
+            user_title: None,
         })
         .await?;
         report.added += 1;

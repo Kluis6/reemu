@@ -30,6 +30,7 @@ fn rom(id: &str, crc: &str, system: &str) -> Rom {
         added_at: 1_700_000_000,
         last_played_at: None,
         is_favorite: false,
+        user_title: None,
     }
 }
 

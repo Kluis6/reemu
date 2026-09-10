@@ -244,6 +244,19 @@ export const removeRom = (romId: string) => invoke<void>('remove_rom', { romId }
 export const setRomFavorite = (romId: string, favorite: boolean) =>
   invoke<void>('set_rom_favorite', { romId, favorite })
 
+/** Edição manual: `title` vazio volta pro nome do arquivo; `systemId` vazio não
+ *  mexe na plataforma. */
+export const setRomMetadata = (
+  romId: string,
+  title?: string,
+  systemId?: string,
+) =>
+  invoke<void>('set_rom_metadata', {
+    romId,
+    title: title ?? null,
+    systemId: systemId ?? null,
+  })
+
 // --- metadata / scraping (etapa 09) ---
 export interface MetadataConfig {
   provider: string

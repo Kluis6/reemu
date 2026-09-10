@@ -19,6 +19,9 @@ pub struct Rom {
     pub last_played_at: Option<i64>,
     /// Aba "Favoritos" da biblioteca.
     pub is_favorite: bool,
+    /// Nome definido manualmente pelo usuário (`set_metadata`). `None` = usa o
+    /// nome do arquivo. A plataforma editada vai direto em `system_id`.
+    pub user_title: Option<String>,
 }
 
 #[async_trait]
@@ -35,4 +38,12 @@ pub trait RomRepository: Send + Sync {
     async fn mark_played(&self, id: &str, at_unix: i64) -> Result<(), RepoError>;
     /// Liga/desliga o favorito.
     async fn set_favorite(&self, id: &str, favorite: bool) -> Result<(), RepoError>;
+    /// Edição manual: `title = Some("")` limpa (volta pro nome do arquivo);
+    /// `system_id = Some(...)` troca a plataforma. `None` = não mexe no campo.
+    async fn set_metadata(
+        &self,
+        id: &str,
+        title: Option<&str>,
+        system_id: Option<&str>,
+    ) -> Result<(), RepoError>;
 }

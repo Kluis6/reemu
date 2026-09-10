@@ -222,6 +222,7 @@ pub fn run() {
             commands::list_roms,
             commands::remove_rom,
             commands::set_rom_favorite,
+            commands::set_rom_metadata,
             commands::list_rom_sources,
             commands::remove_rom_source,
             commands::remove_rom_system,

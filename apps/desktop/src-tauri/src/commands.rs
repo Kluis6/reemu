@@ -1628,11 +1628,13 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String
     Ok(roms
         .into_iter()
         .map(|r| {
-            let title = std::path::Path::new(&r.file_path)
-                .file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or(&r.file_path)
-                .to_string();
+            let title = r.user_title.clone().unwrap_or_else(|| {
+                std::path::Path::new(&r.file_path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(&r.file_path)
+                    .to_string()
+            });
             RomDto {
                 boxart: library_scan::libretro_boxart_url(&r.system_id, &title),
                 title,
@@ -1645,6 +1647,21 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String
             }
         })
         .collect())
+}
+
+/// Edição manual dos dados de uma ROM. `title` vazio limpa (volta pro nome do
+/// arquivo); `system_id` vazio/`None` não mexe na plataforma.
+#[tauri::command]
+pub async fn set_rom_metadata(
+    state: State<'_, AppState>,
+    rom_id: String,
+    title: Option<String>,
+    system_id: Option<String>,
+) -> Result<(), String> {
+    let repo = db::RomsRepo::new(pool(&state)?);
+    repo.set_metadata(&rom_id, title.as_deref(), system_id.as_deref())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Remove a ROM da biblioteca (só o registro no banco — o arquivo em disco

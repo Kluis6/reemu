@@ -9,8 +9,9 @@
 /// desambiguar pelo nome da pasta antes de aceitar esse fallback (ver
 /// `system_from_folder_name`). Deliberadamente **sem** `.bin` — usado por
 /// lixo demais fora de contexto de disco pra arriscar reconhecer sozinho.
-pub const AMBIGUOUS_DISC_EXTS: &[&str] =
-    &["iso", "cue", "chd", "pbp", "gdi", "cdi", "mdf", "m3u"];
+pub const AMBIGUOUS_DISC_EXTS: &[&str] = &[
+    "iso", "cue", "chd", "pbp", "gdi", "cdi", "mdf", "m3u", "img", "ccd", "nrg", "cso",
+];
 
 /// `system_id` canônico pra uma extensão (sem o ponto, minúsculo). `None` se
 /// não reconhecida. Pras extensões de disco (`AMBIGUOUS_DISC_EXTS`) isso é
@@ -37,10 +38,11 @@ pub fn system_for_extension(ext: &str) -> Option<&'static str> {
         "col" => "coleco",
         "int" => "intellivision",
         // `.gdi`/`.cdi` são GD-ROM → Dreamcast por padrão (NAOMI/Atomiswave a
-        // pasta desambigua); `.pbp` é EBOOT de PSP. As outras seguem ambíguas.
+        // pasta desambigua); `.pbp`/`.cso` são de PSP. As outras seguem ambíguas
+        // (`scan.rs` tenta a pasta, depois fareja o conteúdo).
         "gdi" | "cdi" => "dreamcast",
-        "pbp" => "psp",
-        "iso" | "cue" | "chd" | "mdf" | "m3u" => "disc", // ver AMBIGUOUS_DISC_EXTS
+        "pbp" | "cso" => "psp",
+        "iso" | "cue" | "chd" | "mdf" | "m3u" | "img" | "ccd" | "nrg" => "disc",
         _ => return None,
     })
 }
