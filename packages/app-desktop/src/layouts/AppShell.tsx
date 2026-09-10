@@ -29,6 +29,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { AnimatedBackground } from "../components/AnimatedBackground";
 import { ButtonHints } from "../components/ButtonHints";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
@@ -100,6 +101,7 @@ export function AppShell() {
       ] as const);
   return (
     <div className={s.app}>
+      <AnimatedBackground />
       <nav className={s.rail}>
         <Menu positioning={{ position: "after", align: "top", offset: 8 }}>
           <MenuTrigger disableButtonEnhancement>

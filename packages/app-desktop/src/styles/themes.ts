@@ -106,6 +106,11 @@ export interface ReEmuTokens {
   reemuBrandSolid: string;
   /** Cor de texto legível sobre `reemuBrandSolid`. */
   reemuOnBrand: string;
+  /** Manchas do fundo animado (`components/AnimatedBackground`) — 3 tons da
+   *  rampa de marca, então cada tema pinta o fundo com a própria cor. */
+  reemuBg1: string;
+  reemuBg2: string;
+  reemuBg3: string;
 }
 
 export type ReEmuTheme = Theme & ReEmuTokens;
@@ -129,6 +134,9 @@ function make(ramp: BrandVariants): ReEmuTheme {
     reemuSurfaceSoft: "#5f6368",
     reemuBrandSolid: ramp[80],
     reemuOnBrand: readableOn(ramp[80]),
+    reemuBg1: ramp[70],
+    reemuBg2: ramp[90],
+    reemuBg3: ramp[50],
   };
 }
 

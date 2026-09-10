@@ -8,6 +8,7 @@ import { Onboarding } from './screens/Onboarding'
 import { PlatformLibrary } from './screens/PlatformLibrary'
 import { PlayScreen } from './screens/PlayScreen'
 import { RomDetail } from './screens/RomDetail'
+import { SettingsAppearance } from './screens/settings/SettingsAppearance'
 import { SettingsAudio } from './screens/settings/SettingsAudio'
 import { SettingsBios } from './screens/settings/SettingsBios'
 import { SettingsControllers } from './screens/settings/SettingsControllers'
@@ -40,6 +41,7 @@ export const router = createHashRouter([
             children: [
               { index: true, element: <Navigate to="perfil" replace /> },
               { path: 'perfil', element: <SettingsProfile /> },
+              { path: 'aparencia', element: <SettingsAppearance /> },
               { path: 'audio', element: <SettingsAudio /> },
               { path: 'video', element: <SettingsVideo /> },
               { path: 'metadata', element: <SettingsMetadata /> },
