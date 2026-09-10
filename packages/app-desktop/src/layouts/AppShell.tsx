@@ -105,6 +105,7 @@ export function AppShell() {
             <Avatar
               className={s.railBrand}
               name="ReEmu"
+              size={48}
               color="colorful"
               badge={{ status: "available" }}
               aria-label="Perfil"

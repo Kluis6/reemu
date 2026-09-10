@@ -21,7 +21,8 @@ import { cardSizeCss, SHELF_GAP } from "../lib/shelf";
 const shell = {
   radius: "12px",
   radiusLg: "16px",
-  railW: "72px",
+  // Rail cresce em telas largas (fixo em 72px ficava minúsculo em 4K).
+  railW: "clamp(72px, 5vw, 108px)",
 };
 
 // Gradiente de superfície elevada (cartões, hero) a partir dos neutros do tema.
@@ -102,16 +103,15 @@ export const useShellStyles = makeStyles({
   },
   railItem: {
     position: "relative",
-    width: "44px",
-    height: "44px",
+    width: "clamp(44px, 3.4vw, 64px)",
+    height: "clamp(44px, 3.4vw, 64px)",
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
     flex: "none",
-  
     color: tokens.colorNeutralForeground3,
     textDecorationLine: "none",
-    fontSize: "32px",
+    fontSize: "clamp(22px, 1.7vw, 32px)",
     border: "none",
     backgroundColor: "transparent",
     cursor: "pointer",
@@ -135,17 +135,8 @@ export const useShellStyles = makeStyles({
     },
   },
   railBrand: {
-    width: "38px",
-    height: "38px",
-    borderRadius: "50%",
-    marginBottom: "8px",
-    objectFit: "cover",
-    backgroundColor: "var(--reemuBrandSolid)",
-    display: "grid",
-    alignItems: "center",
-    justifyItems: "center",
-    fontWeight: 800,
-    color: "var(--reemuOnBrand)",
+    marginBottom: "6px",
+    cursor: "pointer",
   },
 
   main: {
@@ -198,15 +189,14 @@ export const useShellStyles = makeStyles({
     position: "absolute",
     left: "50%",
     transform: "translateX(-50%)",
-    width: "clamp(160px, 46vw, 560px)",
+    width: "clamp(200px, 42vw, 780px)",
     maxWidth: "calc(100% - 160px)",
-    maxHeight: "38px",
     borderRadius: "20px",
   },
   clock: {
     color: tokens.colorNeutralForeground3,
     fontVariantNumeric: "tabular-nums",
-    fontSize: "16px",
+    fontSize: "clamp(15px, 1vw, 22px)",
     fontWeight: 600,
     lineHeight: 1,
     letterSpacing: "0.01em",
@@ -218,9 +208,9 @@ export const useShellStyles = makeStyles({
     overflowY: "auto",
     scrollbarGutter: "stable",
     boxSizing: "border-box",
-    paddingTop: "clamp(72px, 10vw, 100px)",
-    paddingLeft: "clamp(14px, 3.5vw, 32px)",
-    paddingRight: "clamp(14px, 3.5vw, 32px)",
+    paddingTop: "clamp(72px, 9vw, 132px)",
+    paddingLeft: "clamp(14px, 3vw, 56px)",
+    paddingRight: "clamp(14px, 3vw, 56px)",
     paddingBottom: "100px",
     "::-webkit-scrollbar": { width: "10px" },
     "::-webkit-scrollbar-thumb": {
@@ -236,7 +226,8 @@ export const useHeroStyles = makeStyles({
     position: "relative",
     display: "block",
     width: "100%",
-    height: "clamp(220px, 26vw, 380px)",
+    minWidth: 0,
+    height: "clamp(220px, 26vw, 520px)",
     border: "none",
     padding: 0,
     borderRadius: shell.radiusLg,
@@ -312,14 +303,14 @@ export const useHeroStyles = makeStyles({
     color: tokens.colorBrandForeground1,
   },
   title: {
-    fontSize: "clamp(20px, 2.4vw, 30px)",
+    fontSize: "clamp(20px, 2.4vw, 44px)",
     fontWeight: 800,
     lineHeight: 1.15,
     marginTop: "4px",
     marginBottom: "2px",
   },
   sub: {
-    fontSize: tokens.fontSizeBase200,
+    fontSize: "clamp(12px, 0.9vw, 18px)",
     color: tokens.colorNeutralForeground3,
   },
 });
@@ -362,7 +353,11 @@ export const useBrowseStyles = makeStyles({
     columnGap: "8px",
     marginBottom: "22px",
   },
-  sectionTitle: { fontSize: "19px", fontWeight: 700, margin: 0 },
+  sectionTitle: {
+    fontSize: "clamp(18px, 1.35vw, 28px)",
+    fontWeight: 700,
+    margin: 0,
+  },
   sectionChevron: {
     color: tokens.colorNeutralForeground3,
     fontSize: "15px",

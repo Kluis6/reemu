@@ -8,10 +8,13 @@
  * Um card: largura fluida entre MIN e MAX, escalando com a largura da janela —
  * a MESMA fórmula nos dois lados (o `clamp()` do CSS e o `cardWidthPx` do JS).
  */
-export const CARD_MIN = 148;
-export const CARD_MAX = 248;
-export const CARD_VW = 0.132;
-export const SHELF_GAP = 14;
+export const CARD_MIN = 150;
+export const CARD_MAX = 320;
+/** ~1/8.5 da largura da janela → mantém ~8 cards por prateleira em qualquer
+ *  tela; o card cresce até 320px em 2.7K+ (antes travava em 248 e ficava
+ *  minúsculo em 4K). */
+export const CARD_VW = 0.116;
+export const SHELF_GAP = 16;
 
 /** `clamp()` pronto pro `width` / `grid-template-columns`. */
 export const cardSizeCss = `clamp(${CARD_MIN}px, ${CARD_VW * 100}vw, ${CARD_MAX}px)`;
