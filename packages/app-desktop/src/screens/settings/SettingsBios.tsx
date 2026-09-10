@@ -1,4 +1,4 @@
-import { Badge, Body1, Button, Caption1, Spinner, Text, makeStyles, tokens } from '@fluentui/react-components'
+import { Badge, Body1, Button, Caption1, Text, makeStyles, tokens } from '@fluentui/react-components'
 import {
   CheckmarkCircleFilled,
   DeleteRegular,
@@ -13,6 +13,7 @@ import {
   removeBiosFile,
   type BiosStatus,
 } from '../../lib/tauri'
+import { LoadingState } from '../../components/EmptyState'
 import { sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
 
@@ -72,7 +73,7 @@ export function SettingsBios() {
     onError: (e) => push(sysToast(`Falha ao remover: ${e}`, 'Error')),
   })
 
-  if (bios.isLoading) return <Spinner label="Conferindo pasta de sistema…" />
+  if (bios.isLoading) return <LoadingState label="Conferindo pasta de sistema…" />
   if (bios.isError) return <Body1>Indisponível.</Body1>
 
   const bySystem = new Map<string, BiosStatus[]>()

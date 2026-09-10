@@ -1,11 +1,4 @@
-import {
-  Button,
-  Card,
-  mergeClasses,
-  Spinner,
-  Subtitle1,
-  Text,
-} from "@fluentui/react-components";
+import { Button, Card, mergeClasses, Text } from "@fluentui/react-components";
 import {
   AddRegular,
   ChevronRightRegular,
@@ -14,6 +7,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { platformLabel } from "../lib/platform";
 import { Shelf } from "../components/Shelf";
@@ -115,23 +109,25 @@ export function Home() {
     />
   );
 
-  if (roms.isLoading)
-    return <Spinner style={{ marginTop: 40 }} label="Carregando…" />;
+  if (roms.isLoading) return <LoadingState />;
 
   if (!roms.isError && all.length === 0) {
     return (
-      <div className={s.empty}>
-        <div className={s.emptyIcon}>🕹</div>
-        <Subtitle1 as="h2">Bem-vindo ao ReEmu</Subtitle1>
-        <Text>Adicione suas ROMs pra montar a biblioteca.</Text>
-        <Button
-          appearance="primary"
-          icon={<AddRegular />}
-          onClick={() => navigate("/library")}
-        >
-          Adicionar ROMs…
-        </Button>
-      </div>
+      <EmptyState
+        icon="🕹"
+        title="Bem-vindo ao ReEmu"
+        action={
+          <Button
+            appearance="primary"
+            icon={<AddRegular />}
+            onClick={() => navigate("/library")}
+          >
+            Adicionar ROMs…
+          </Button>
+        }
+      >
+        Adicione suas ROMs pra montar a biblioteca.
+      </EmptyState>
     );
   }
 

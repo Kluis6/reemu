@@ -4,11 +4,11 @@ import {
   Caption1,
   Radio,
   RadioGroup,
-  Spinner,
   Text,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BezelLibrary } from '../../components/BezelLibrary'
+import { LoadingState } from '../../components/EmptyState'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
 import { ShaderParams } from '../../components/ShaderParams'
 import { sysToast } from '../../lib/toast'
@@ -62,7 +62,7 @@ export function SettingsVideo() {
     onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
   })
 
-  if (isLoading) return <Spinner label="Carregando…" />
+  if (isLoading) return <LoadingState />
   if (isError || !data) return <Body1>Informação de shader indisponível.</Body1>
 
   return (

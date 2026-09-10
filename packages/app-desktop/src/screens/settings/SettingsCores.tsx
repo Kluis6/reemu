@@ -3,7 +3,6 @@ import {
   Body1,
   Button,
   Caption1,
-  Spinner,
   Tab,
   TabList,
   Text,
@@ -17,6 +16,7 @@ import {
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { LoadingState } from '../../components/EmptyState'
 import { sysToast } from '../../lib/toast'
 import {
   downloadCore,
@@ -61,7 +61,7 @@ function Installed() {
   const styles = useStyles()
   const cores = useQuery({ queryKey: ['installed-cores'], queryFn: listInstalledCores, retry: false })
 
-  if (cores.isLoading) return <Spinner label="Lendo pasta de cores…" />
+  if (cores.isLoading) return <LoadingState label="Lendo pasta de cores…" />
   if (cores.isError) return <Body1>Indisponível (backend sem banco).</Body1>
   if ((cores.data?.length ?? 0) === 0)
     return (
@@ -114,7 +114,7 @@ function Catalog() {
     onError: (e) => push(sysToast(`Falha ao remover: ${e}`, 'Error')),
   })
 
-  if (catalog.isLoading) return <Spinner label="Carregando catálogo…" />
+  if (catalog.isLoading) return <LoadingState label="Carregando catálogo…" />
   if (catalog.isError) return <Body1>Catálogo indisponível.</Body1>
 
   const busy = (id: string) =>

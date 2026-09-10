@@ -6,7 +6,6 @@ import {
   Image,
   Input,
   ProgressBar,
-  Spinner,
   Text,
   makeStyles,
   tokens,
@@ -14,6 +13,7 @@ import {
 import { CheckmarkRegular, DismissRegular, SearchRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { LoadingState } from '../../components/EmptyState'
 import { sysToast } from '../../lib/toast'
 import {
   cancelMetadataScan,
@@ -100,7 +100,7 @@ export function SettingsMetadata() {
     onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
   })
 
-  if (cfg.isLoading) return <Spinner label="Carregando…" />
+  if (cfg.isLoading) return <LoadingState />
   if (cfg.isError || !form) return <Body1>Config de metadata indisponível (sem banco?).</Body1>
 
   const p = progress.data

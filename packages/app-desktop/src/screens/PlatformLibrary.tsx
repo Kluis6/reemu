@@ -1,7 +1,8 @@
-import { Spinner, Subtitle1, Text } from "@fluentui/react-components";
+import { Text } from "@fluentui/react-components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
@@ -74,13 +75,11 @@ export function PlatformLibrary() {
       </div>
 
       {roms.isLoading ? (
-        <Spinner style={{ marginTop: 40 }} label="Carregando…" />
+        <LoadingState />
       ) : list.length === 0 ? (
-        <div className={s.empty}>
-          <div className={s.emptyIcon}>🕹</div>
-          <Subtitle1 as="h2">Nada nessa plataforma</Subtitle1>
-          <Text>Ajuste a busca ou volte pra biblioteca.</Text>
-        </div>
+        <EmptyState icon="🕹" title="Nada nessa plataforma">
+          Ajuste a busca ou volte pra biblioteca.
+        </EmptyState>
       ) : (
         <div className={s.grid}>
           {list.map((r) => (

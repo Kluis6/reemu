@@ -12,7 +12,6 @@ import {
   Field,
   Input,
   Select,
-  Spinner,
   Tab,
   TabList,
   Tooltip,
@@ -30,6 +29,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { CoreOptions } from "../components/CoreOptions";
+import { EmptyState, LoadingState } from "../components/EmptyState";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { ShaderLibrary } from "../components/ShaderLibrary";
 import { ShaderParams } from "../components/ShaderParams";
@@ -209,15 +209,20 @@ export function RomDetail() {
     onSettled: () => qc.invalidateQueries({ queryKey: ["roms"] }),
   });
 
-  if (roms.isLoading) return <Spinner label="Carregando…" />;
+  if (roms.isLoading) return <LoadingState />;
   if (!rom)
     return (
-      <Body1>
-        ROM não encontrada.{" "}
-        <Button appearance="transparent" onClick={() => navigate("/library")}>
-          Voltar
-        </Button>
-      </Body1>
+      <EmptyState
+        icon="🔍"
+        title="ROM não encontrada"
+        action={
+          <Button appearance="primary" onClick={() => navigate("/library")}>
+            Voltar pra biblioteca
+          </Button>
+        }
+      >
+        Ela pode ter sido removida da biblioteca.
+      </EmptyState>
     );
 
   const cover = meta.data?.coverUrl ?? rom.boxart;

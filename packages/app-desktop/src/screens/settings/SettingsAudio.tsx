@@ -1,6 +1,7 @@
-import { Body1, Button, Field, Input, Spinner, Switch, makeStyles, tokens } from '@fluentui/react-components'
+import { Body1, Button, Field, Input, Switch, makeStyles, tokens } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { LoadingState } from '../../components/EmptyState'
 import { sysToast } from '../../lib/toast'
 import { getAudioConfig, updateAudioConfig, type AudioConfig } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
@@ -36,7 +37,7 @@ export function SettingsAudio() {
     onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, 'Error')),
   })
 
-  if (isLoading) return <Spinner label="Carregando…" />
+  if (isLoading) return <LoadingState />
   if (isError || !draft)
     return <Body1>Configurações indisponíveis (backend sem banco de dados).</Body1>
 

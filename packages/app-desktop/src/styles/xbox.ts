@@ -418,20 +418,6 @@ export const useBrowseStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
   },
 
-  empty: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    rowGap: "10px",
-    textAlign: "center",
-    paddingTop: "72px",
-    paddingBottom: "72px",
-    paddingLeft: "24px",
-    paddingRight: "24px",
-    color: tokens.colorNeutralForeground3,
-    "& h2": { color: tokens.colorNeutralForeground1, margin: 0 },
-  },
-  emptyIcon: { fontSize: "44px", opacity: 0.5 },
 
   libManage: {
     marginTop: "14px",

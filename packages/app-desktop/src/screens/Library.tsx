@@ -8,8 +8,6 @@ import {
   MenuList,
   MenuPopover,
   MenuTrigger,
-  Spinner,
-  Subtitle1,
   Tab,
   TabList,
   Text,
@@ -26,6 +24,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
+import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { PlatformTile } from "../components/PlatformTile";
 import { Shelf } from "../components/Shelf";
@@ -247,33 +246,44 @@ export function Library() {
     <div className={mergeClasses(s.grid, m.fadeIn)}>{list.map(card)}</div>
   );
 
-  const emptyState = (icon: string, title: string, sub?: string) => (
-    <div className={s.empty}>
-      <div className={s.emptyIcon}>{icon}</div>
-      <Subtitle1 as="h2">{title}</Subtitle1>
-      {sub && <Text>{sub}</Text>}
-    </div>
-  );
-
   const body = () => {
-    if (roms.isLoading)
-      return <Spinner style={{ marginTop: 40 }} label="Carregando biblioteca…" />;
+    if (roms.isLoading) return <LoadingState label="Carregando biblioteca…" />;
     if (roms.isError)
-      return emptyState(
-        "⚠",
-        "Biblioteca indisponível",
-        "O backend não conseguiu abrir o banco de dados.",
+      return (
+        <EmptyState icon="⚠" title="Biblioteca indisponível">
+          O backend não conseguiu abrir o banco de dados.
+        </EmptyState>
       );
     if (all.length === 0)
-      return emptyState(
-        "🕹",
-        "Nenhuma ROM ainda",
-        "Use o + pra apontar a pasta das suas ROMs.",
+      return (
+        <EmptyState
+          icon="🕹"
+          title="Nenhuma ROM ainda"
+          action={
+            <Button
+              appearance="primary"
+              icon={<AddRegular />}
+              onClick={() => setAddOpen(true)}
+            >
+              Adicionar ROMs…
+            </Button>
+          }
+        >
+          Aponte a pasta das suas ROMs pra montar a biblioteca.
+        </EmptyState>
       );
     if (view.length === 0) {
       if (tab === "fav")
-        return emptyState("★", "Sem favoritos", "Favorite um jogo pelo menu do cartão.");
-      return emptyState("🔍", "Nada aqui", "Ajuste o filtro de plataforma ou a busca.");
+        return (
+          <EmptyState icon="★" title="Sem favoritos">
+            Favorite um jogo pelo menu do cartão.
+          </EmptyState>
+        );
+      return (
+        <EmptyState icon="🔍" title="Nada aqui">
+          Ajuste o filtro de plataforma ou a busca.
+        </EmptyState>
+      );
     }
     // favoritos e recém adicionados: grade única
     if (tab !== "mine") return grid(view);
