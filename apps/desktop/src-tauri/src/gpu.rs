@@ -492,6 +492,12 @@ pub struct FrameProcessor {
     surface_fail_streak: u32,
     /// Já apresentou ao menos 1 frame na surface nativa? (log de sanidade).
     surface_presented: bool,
+    /// Queue family do device adotado (§Beetle) — pro command pool do blit.
+    adopted_queue_family: Option<u32>,
+    /// Conversor `A1R5G5B5`/packed-16 → RGBA8 pra cores Vulkan que fazem scanout
+    /// num formato que o wgpu não amostra (Beetle PSX HW com dither ligado, ou
+    /// jogo em modo 16bpp). Lazy: só nasce no 1º frame packed.
+    vk_blit: Option<VkBlit>,
     comp: Composite,
     decoration: Option<Decoration>,
     /// Surface nativa (etapa 03 — vídeo fora da webview). `Some` = a chain
@@ -506,6 +512,389 @@ struct SurfaceOut {
     config: wgpu::SurfaceConfiguration,
     blit_pipeline: wgpu::RenderPipeline,
     blit_rect: wgpu::Buffer,
+}
+
+/// Um alvo RGBA8 do conversor packed→RGBA8, por slot do ring do core.
+struct VkBlitTarget {
+    image: ash::vk::Image,
+    memory: ash::vk::DeviceMemory,
+    w: u32,
+    h: u32,
+    /// Já foi transicionado pra `SHADER_READ_ONLY_OPTIMAL` ao menos uma vez
+    /// (o 1º barrier usa `old_layout = UNDEFINED`).
+    ready: bool,
+    /// `wgpu::Texture` embrulhando `image` (external — wgpu não destrói).
+    wrapped: Option<(wgpu::Texture, wgpu::TextureView)>,
+}
+
+/// Converte o scanout packed 16-bit de um core Vulkan (Beetle PSX HW com dither,
+/// ou jogo em modo 16bpp — `VK_FORMAT_A1R5G5B5_UNORM_PACK16` etc.) pra RGBA8
+/// via `vkCmdBlitImage` no device adotado, já que o wgpu não amostra esses
+/// formatos. Recursos crus de `ash` — destruídos no `Drop` após
+/// `device_wait_idle`.
+struct VkBlit {
+    device: ash::Device,
+    queue: ash::vk::Queue,
+    mem_props: ash::vk::PhysicalDeviceMemoryProperties,
+    pool: ash::vk::CommandPool,
+    cmd: ash::vk::CommandBuffer,
+    fence: ash::vk::Fence,
+    targets: Vec<Option<VkBlitTarget>>,
+}
+
+impl VkBlit {
+    /// # Safety
+    /// `device`/`queue` são do device Vulkan adotado (§Beetle); `qf` é a queue
+    /// family da `queue`.
+    unsafe fn new(device: &wgpu::Device, queue: &wgpu::Queue, qf: u32) -> Option<Self> {
+        use ash::vk;
+        let (raw_device, mem_props) = unsafe {
+            let hd = device.as_hal::<wgpu::hal::api::Vulkan>()?;
+            let phys = hd.raw_physical_device();
+            let instance = hd.shared_instance().raw_instance().clone();
+            (hd.raw_device().clone(), instance.get_physical_device_memory_properties(phys))
+        };
+        let raw_queue = unsafe { queue.as_hal::<wgpu::hal::api::Vulkan>()?.as_raw() };
+
+        let pool = unsafe {
+            raw_device.create_command_pool(
+                &vk::CommandPoolCreateInfo::default()
+                    .queue_family_index(qf)
+                    .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER),
+                None,
+            )
+        }
+        .inspect_err(|e| log::error!("vk_blit: create_command_pool: {e}"))
+        .ok()?;
+        let cmd = unsafe {
+            raw_device.allocate_command_buffers(
+                &vk::CommandBufferAllocateInfo::default()
+                    .command_pool(pool)
+                    .level(vk::CommandBufferLevel::PRIMARY)
+                    .command_buffer_count(1),
+            )
+        }
+        .ok()?[0];
+        let fence = unsafe {
+            raw_device.create_fence(&vk::FenceCreateInfo::default(), None)
+        }
+        .ok()?;
+
+        Some(Self {
+            device: raw_device,
+            queue: raw_queue,
+            mem_props,
+            pool,
+            cmd,
+            fence,
+            targets: Vec::new(),
+        })
+    }
+
+    fn mem_type(&self, bits: u32, want: ash::vk::MemoryPropertyFlags) -> Option<u32> {
+        (0..self.mem_props.memory_type_count).find(|&i| {
+            (bits & (1 << i)) != 0
+                && self.mem_props.memory_types[i as usize]
+                    .property_flags
+                    .contains(want)
+        })
+    }
+
+    /// Garante um alvo RGBA8 `w×h` no `slot`. `false` = falhou.
+    unsafe fn ensure_target(&mut self, _device: &wgpu::Device, slot: usize, w: u32, h: u32) -> bool {
+        use ash::vk;
+        if self.targets.len() <= slot {
+            self.targets.resize_with(slot + 1, || None);
+        }
+        if let Some(t) = &self.targets[slot] {
+            if t.w == w && t.h == h {
+                return true;
+            }
+            let old = self.targets[slot].take().unwrap();
+            unsafe {
+                let _ = self.device.device_wait_idle();
+                self.destroy_target(old);
+            }
+        }
+        let img = match unsafe {
+            self.device.create_image(
+                &vk::ImageCreateInfo::default()
+                    .image_type(vk::ImageType::TYPE_2D)
+                    .format(vk::Format::R8G8B8A8_UNORM)
+                    .extent(vk::Extent3D { width: w, height: h, depth: 1 })
+                    .mip_levels(1)
+                    .array_layers(1)
+                    .samples(vk::SampleCountFlags::TYPE_1)
+                    .tiling(vk::ImageTiling::OPTIMAL)
+                    .usage(vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED)
+                    .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                    .initial_layout(vk::ImageLayout::UNDEFINED),
+                None,
+            )
+        } {
+            Ok(i) => i,
+            Err(e) => {
+                log::error!("vk_blit: create_image: {e}");
+                return false;
+            }
+        };
+        let req = unsafe { self.device.get_image_memory_requirements(img) };
+        let Some(mt) = self.mem_type(req.memory_type_bits, vk::MemoryPropertyFlags::DEVICE_LOCAL)
+        else {
+            log::error!("vk_blit: sem tipo de memória DEVICE_LOCAL");
+            unsafe { self.device.destroy_image(img, None) };
+            return false;
+        };
+        let memory = match unsafe {
+            self.device.allocate_memory(
+                &vk::MemoryAllocateInfo::default()
+                    .allocation_size(req.size)
+                    .memory_type_index(mt),
+                None,
+            )
+        } {
+            Ok(m) => m,
+            Err(e) => {
+                log::error!("vk_blit: allocate_memory: {e}");
+                unsafe { self.device.destroy_image(img, None) };
+                return false;
+            }
+        };
+        if let Err(e) = unsafe { self.device.bind_image_memory(img, memory, 0) } {
+            log::error!("vk_blit: bind_image_memory: {e}");
+            unsafe {
+                self.device.destroy_image(img, None);
+                self.device.free_memory(memory, None);
+            }
+            return false;
+        }
+        self.targets[slot] = Some(VkBlitTarget {
+            image: img,
+            memory,
+            w,
+            h,
+            ready: false,
+            wrapped: None,
+        });
+        true
+    }
+
+    /// Blita `handle` (packed, `SHADER_READ_ONLY_OPTIMAL`) → o RGBA8 do `slot`.
+    unsafe fn run(
+        &mut self,
+        handle: &dyn domain::frame_source::VulkanImageHandle,
+        slot: usize,
+    ) -> bool {
+        use ash::vk::{self, Handle as _};
+        let Some(t) = self.targets.get(slot).and_then(|s| s.as_ref()) else {
+            return false;
+        };
+        let (dst, w, h, ready) = (t.image, t.w, t.h, t.ready);
+        let src = vk::Image::from_raw(handle.image());
+        let sub = vk::ImageSubresourceRange::default()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .level_count(1)
+            .layer_count(1);
+        let layers = vk::ImageSubresourceLayers::default()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .layer_count(1);
+        let end = vk::Offset3D { x: w as i32, y: h as i32, z: 1 };
+        let ignore = vk::QUEUE_FAMILY_IGNORED;
+
+        let ok = unsafe {
+            self.device
+                .reset_command_buffer(self.cmd, vk::CommandBufferResetFlags::empty())
+                .is_ok()
+                && self
+                    .device
+                    .begin_command_buffer(
+                        self.cmd,
+                        &vk::CommandBufferBeginInfo::default()
+                            .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+                    )
+                    .is_ok()
+        };
+        if !ok {
+            return false;
+        }
+        unsafe {
+            let to_transfer = [
+                vk::ImageMemoryBarrier::default()
+                    .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .src_access_mask(vk::AccessFlags::SHADER_READ)
+                    .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+                    .src_queue_family_index(ignore)
+                    .dst_queue_family_index(ignore)
+                    .image(src)
+                    .subresource_range(sub),
+                vk::ImageMemoryBarrier::default()
+                    .old_layout(if ready {
+                        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL
+                    } else {
+                        vk::ImageLayout::UNDEFINED
+                    })
+                    .new_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .src_access_mask(vk::AccessFlags::empty())
+                    .dst_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                    .src_queue_family_index(ignore)
+                    .dst_queue_family_index(ignore)
+                    .image(dst)
+                    .subresource_range(sub),
+            ];
+            self.device.cmd_pipeline_barrier(
+                self.cmd,
+                vk::PipelineStageFlags::FRAGMENT_SHADER | vk::PipelineStageFlags::TOP_OF_PIPE,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &to_transfer,
+            );
+
+            let region = vk::ImageBlit::default()
+                .src_subresource(layers)
+                .src_offsets([vk::Offset3D::default(), end])
+                .dst_subresource(layers)
+                .dst_offsets([vk::Offset3D::default(), end]);
+            self.device.cmd_blit_image(
+                self.cmd,
+                src,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                dst,
+                vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                &[region],
+                vk::Filter::NEAREST,
+            );
+
+            let to_shader = [
+                vk::ImageMemoryBarrier::default()
+                    .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+                    .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                    .src_queue_family_index(ignore)
+                    .dst_queue_family_index(ignore)
+                    .image(src)
+                    .subresource_range(sub),
+                vk::ImageMemoryBarrier::default()
+                    .old_layout(vk::ImageLayout::TRANSFER_DST_OPTIMAL)
+                    .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                    .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                    .src_queue_family_index(ignore)
+                    .dst_queue_family_index(ignore)
+                    .image(dst)
+                    .subresource_range(sub),
+            ];
+            self.device.cmd_pipeline_barrier(
+                self.cmd,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &to_shader,
+            );
+
+            if self.device.end_command_buffer(self.cmd).is_err() {
+                return false;
+            }
+            let cmds = [self.cmd];
+            let submit = vk::SubmitInfo::default().command_buffers(&cmds);
+            let _ = self.device.reset_fences(&[self.fence]);
+            if let Err(e) = self.device.queue_submit(self.queue, &[submit], self.fence) {
+                log::error!("vk_blit: queue_submit: {e}");
+                return false;
+            }
+            if self
+                .device
+                .wait_for_fences(&[self.fence], true, u64::MAX)
+                .is_err()
+            {
+                return false;
+            }
+        }
+        if let Some(t) = self.targets[slot].as_mut() {
+            t.ready = true;
+        }
+        true
+    }
+
+    /// `wgpu::TextureView` do RGBA8 do `slot` (embrulha a `VkImage` uma vez).
+    unsafe fn wgpu_view(&mut self, device: &wgpu::Device, slot: usize) -> Option<wgpu::TextureView> {
+        use ash::vk::Handle as _;
+        let t = self.targets.get_mut(slot).and_then(|s| s.as_mut())?;
+        if t.wrapped.is_none() {
+            let size = wgpu::Extent3d {
+                width: t.w,
+                height: t.h,
+                depth_or_array_layers: 1,
+            };
+            let hal_desc = wgpu::hal::TextureDescriptor {
+                label: Some("vk blit rgba8"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUses::RESOURCE,
+                memory_flags: wgpu::hal::MemoryFlags::empty(),
+                view_formats: vec![],
+            };
+            let hal_tex = unsafe {
+                let hd = device.as_hal::<wgpu::hal::api::Vulkan>()?;
+                hd.texture_from_raw(
+                    ash::vk::Image::from_raw(t.image.as_raw()),
+                    &hal_desc,
+                    // external: wgpu NÃO destrói — o `VkBlit::drop` faz.
+                    Some(Box::new(|| {})),
+                    wgpu::hal::vulkan::TextureMemory::External,
+                )
+            };
+            let desc = wgpu::TextureDescriptor {
+                label: Some("vk blit"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            };
+            let tex = unsafe {
+                device.create_texture_from_hal::<wgpu::hal::api::Vulkan>(
+                    hal_tex,
+                    &desc,
+                    wgpu::TextureUses::RESOURCE,
+                )
+            };
+            let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+            t.wrapped = Some((tex, view));
+        }
+        Some(t.wrapped.as_ref().unwrap().1.clone())
+    }
+
+    unsafe fn destroy_target(&self, t: VkBlitTarget) {
+        drop(t.wrapped); // dropa a wgpu::Texture (external — não toca a VkImage)
+        unsafe {
+            self.device.destroy_image(t.image, None);
+            self.device.free_memory(t.memory, None);
+        }
+    }
+}
+
+impl Drop for VkBlit {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = self.device.device_wait_idle();
+            for t in std::mem::take(&mut self.targets).into_iter().flatten() {
+                self.destroy_target(t);
+            }
+            self.device.destroy_fence(self.fence, None);
+            self.device.destroy_command_pool(self.pool, None);
+        }
+    }
 }
 
 impl FrameProcessor {
@@ -609,6 +998,8 @@ impl FrameProcessor {
             last_surface_out: None,
             surface_fail_streak: 0,
             surface_presented: false,
+            adopted_queue_family: None,
+            vk_blit: None,
             comp,
             rot_pipeline,
             rot_tgt: None,
@@ -710,7 +1101,9 @@ impl FrameProcessor {
 
         // `interop_ok` = false: o caminho Beetle é zero-cópia via
         // `texture_from_raw` no MESMO device, não usa `dma_buf`.
-        Self::assemble(wgpu_instance, adapter, device, queue, false)
+        let mut fp = Self::assemble(wgpu_instance, adapter, device, queue, false)?;
+        fp.adopted_queue_family = Some(v.queue_family_index);
+        Some(fp)
     }
 
     /// Etapa 12 §Beetle (D2/D3): um core Vulkan que EXIGE criar o `VkDevice`
@@ -1959,6 +2352,14 @@ impl FrameProcessor {
         let stale = self.vk_imported[slot]
             .as_ref()
             .map_or(true, |(cached, _, _)| *cached != img_handle);
+        // Scanout num formato packed 16-bit (A1R5G5B5 = 8, R5G5B5A1 = 7,
+        // R5G6B5 = 4) que o wgpu não amostra: `vkCmdBlitImage` pra um RGBA8
+        // nosso e amostra esse. Roda TODO frame (o conteúdo muda), só o alvo
+        // + o wrapper wgpu são cacheados por slot.
+        if vk_format_to_wgpu(handle.vk_format()).is_none() {
+            return self.bind_via_blit(handle, slot);
+        }
+
         if stale {
             match self.wrap_vulkan_image(handle) {
                 Some(tv) => self.vk_imported[slot] = Some((img_handle, tv.0, tv.1)),
@@ -1970,6 +2371,50 @@ impl FrameProcessor {
         };
         self.interop_view = Some(view.clone());
         true
+    }
+
+    /// `A1R5G5B5`/packed-16 → RGBA8 por `vkCmdBlitImage` no device adotado.
+    fn bind_via_blit(
+        &mut self,
+        handle: &dyn domain::frame_source::VulkanImageHandle,
+        slot: usize,
+    ) -> bool {
+        let Some(qf) = self.adopted_queue_family else {
+            log::error!(
+                "§Beetle: scanout packed (VkFormat {}) mas o device não é adotado — \
+                 sem como converter",
+                handle.vk_format()
+            );
+            return false;
+        };
+        if self.vk_blit.is_none() {
+            match unsafe { VkBlit::new(&self.device, &self.queue, qf) } {
+                Some(b) => {
+                    log::info!("§Beetle: conversor packed→RGBA8 (vkCmdBlitImage) ativo");
+                    self.vk_blit = Some(b);
+                }
+                None => {
+                    log::error!("§Beetle: falha ao criar o conversor packed→RGBA8");
+                    return false;
+                }
+            }
+        }
+        let (w, h) = (handle.width().max(1), handle.height().max(1));
+        let blit = self.vk_blit.as_mut().unwrap();
+        if !unsafe { blit.ensure_target(&self.device, slot, w, h) } {
+            log::error!("§Beetle: alvo de blit {w}x{h} falhou");
+            return false;
+        }
+        if !unsafe { blit.run(handle, slot) } {
+            return false;
+        }
+        match unsafe { blit.wgpu_view(&self.device, slot) } {
+            Some(view) => {
+                self.interop_view = Some(view);
+                true
+            }
+            None => false,
+        }
     }
 
     /// Submete na `VkQueue` do wgpu os command buffers que o core gravou pra
@@ -3295,13 +3740,11 @@ fn new_tex_fmt(
     (t, v)
 }
 
-/// `VkFormat` cru → `wgpu::TextureFormat`. Só os formatos que os cores-alvo de
-/// HW render Vulkan usam pro scanout (todos 8-bit RGBA/BGRA). Fallback
-/// `Rgba8Unorm` com aviso.
 /// `VkFormat` cru → `wgpu::TextureFormat` **amostrável direto** (`texture_from_raw`
 /// só serve se a `VkImage` já é um formato que o wgpu conhece). `None` = precisa
-/// de conversão (blit) antes — ex.: os formatos packed de 16 bits do PS1, que o
-/// wgpu não tem.
+/// de conversão antes (`VkBlit` faz `vkCmdBlitImage` pra RGBA8) — os formatos
+/// packed 16-bit do PS1 (A1R5G5B5 = 8, R5G5B5A1 = 7, R5G6B5 = 4), que o wgpu
+/// não tem.
 fn vk_format_to_wgpu(vk_format: u32) -> Option<wgpu::TextureFormat> {
     Some(match vk_format {
         37 => wgpu::TextureFormat::Rgba8Unorm,     // R8G8B8A8_UNORM (vk_rendering, Beetle 32bpp)
@@ -3310,18 +3753,8 @@ fn vk_format_to_wgpu(vk_format: u32) -> Option<wgpu::TextureFormat> {
         50 => wgpu::TextureFormat::Bgra8UnormSrgb, // B8G8R8A8_SRGB
         64 => wgpu::TextureFormat::Rgba16Float,    // R16G16B16A16_SFLOAT (Beetle HDR interno)
         97 => wgpu::TextureFormat::Rgba16Float,    // (alias observado em drivers)
-        // A1R5G5B5_UNORM_PACK16 (8) / R5G5B5A1 (7) / R5G6B5 (4): default do
-        // scanout Vulkan do Beetle PSX HW quando o dither está ligado. wgpu não
-        // tem formato packed de 16 bits → precisa blit pra RGBA8 (TODO). Por
-        // ora: ligue "Dithering Pattern: OFF" nas opções do core (no Vulkan
-        // isso força o scanout pra R8G8B8A8_UNORM).
-        4 | 6 | 7 | 8 => {
-            log::error!(
-                "scanout do core em VkFormat {vk_format} (packed 16-bit, sem equivalente wgpu) — \
-                 ligue 'Dithering Pattern: OFF' nas opções do core (Vulkan → RGBA8)"
-            );
-            return None;
-        }
+        // Packed 16-bit → `None`: o `bind_via_blit` converte com `vkCmdBlitImage`.
+        4 | 6 | 7 | 8 => return None,
         other => {
             log::warn!("VkFormat {other} inesperado no scanout do core — assumindo Rgba8Unorm");
             wgpu::TextureFormat::Rgba8Unorm
