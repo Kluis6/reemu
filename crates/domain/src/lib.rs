@@ -20,5 +20,6 @@ pub mod hotkeys;
 pub mod input;
 pub mod library;
 pub mod metadata;
+pub mod profile;
 pub mod save_state;
 pub mod shader_chain;

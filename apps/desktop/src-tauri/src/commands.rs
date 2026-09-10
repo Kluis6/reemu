@@ -32,6 +32,8 @@ pub struct AppState {
     pub shaders_dir: std::path::PathBuf,
     /// `<dados>/decorations` — bezels baixados (The Bezel Project) / importados.
     pub decorations_dir: std::path::PathBuf,
+    /// `<dados>/profile` — imagem de avatar escolhida pelo usuário.
+    pub profile_dir: std::path::PathBuf,
     /// Hotkeys de sistema carregadas do DB (`system_hotkeys`). `save_binding` /
     /// `clear_system_hotkey` recompõem via `refresh_hotkey_resolver`.
     pub hotkeys: Mutex<ComboHotkeyResolver>,
@@ -116,6 +118,7 @@ impl AppState {
         let shaders_dir = base.join("shaders");
         crate::gpu::set_shader_root(crate::shader_pack::install_dir(&shaders_dir));
         let decorations_dir = base.join("decorations");
+        let profile_dir = base.join("profile");
         let mut cfg = SessionConfig::new(cores_dir.clone(), system_dir.clone(), save_dir.clone());
         cfg.enable_gamepad = true;
         cfg.audio_sink = Some(Box::new(move || {
@@ -139,6 +142,7 @@ impl AppState {
             system_dir,
             shaders_dir,
             decorations_dir,
+            profile_dir,
             hotkeys: Mutex::new(ComboHotkeyResolver::new(hotkeys)),
             last_hotkey: Mutex::new(None),
             current_rom: Mutex::new(None),

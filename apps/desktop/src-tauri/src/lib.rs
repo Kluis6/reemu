@@ -4,6 +4,7 @@ mod commands;
 mod core_catalog;
 mod decoration;
 mod gpu;
+mod profile;
 mod scraping;
 mod shader_pack;
 mod video;
@@ -213,6 +214,10 @@ pub fn run() {
             commands::clear_decorations,
             commands::bezel_catalog,
             commands::download_bezel_pack,
+            profile::get_profile,
+            profile::read_profile_avatar,
+            profile::set_profile,
+            profile::set_profile_avatar_file,
             commands::is_fullscreen,
             commands::set_fullscreen,
             commands::quit_app,

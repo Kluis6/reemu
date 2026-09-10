@@ -5,10 +5,11 @@ mod common;
 
 use common::mem_db;
 use db::{
-    AudioConfigRepo, CoreOptionsRepo, InstalledCoresRepo, MetadataRepo, RomsRepo, ShaderChainRepo,
-    SystemCoreRepo,
+    AudioConfigRepo, CoreOptionsRepo, InstalledCoresRepo, MetadataRepo, ProfileRepo, RomsRepo,
+    ShaderChainRepo, SystemCoreRepo,
 };
 use domain::audio::{AudioConfig, AudioConfigRepository};
+use domain::profile::{Profile, ProfileRepository};
 use domain::core_loader::SystemCoreRepository;
 use domain::core_loader::{
     CoreRenderRequirements, InstalledCore, InstalledCoreRepository, RenderBackend,
@@ -297,6 +298,36 @@ async fn audio_config_is_single_row_get_update() {
 
     let cfg = repo.get().await.unwrap();
     assert_eq!(cfg, updated);
+}
+
+#[tokio::test]
+async fn profile_is_single_row_get_update() {
+    let repo = ProfileRepo::new(mem_db().await);
+
+    // migration semeia a linha vazia, sem onboarding
+    let p = repo.get().await.unwrap();
+    assert!(!p.onboarded);
+    assert_eq!(p.name, "");
+    assert_eq!(p.bio, None);
+    assert_eq!(p.avatar, "preset:1");
+
+    let updated = Profile {
+        name: "Marco".into(),
+        bio: Some("speedrunner de SMW".into()),
+        avatar: "preset:3".into(),
+        onboarded: true,
+    };
+    repo.update(&updated).await.unwrap();
+    assert_eq!(repo.get().await.unwrap(), updated);
+
+    // bio vazia volta como None
+    repo.update(&Profile {
+        bio: Some(String::new()),
+        ..updated.clone()
+    })
+    .await
+    .unwrap();
+    assert_eq!(repo.get().await.unwrap().bio, None);
 }
 
 #[tokio::test]
