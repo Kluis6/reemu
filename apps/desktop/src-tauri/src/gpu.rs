@@ -486,6 +486,12 @@ pub struct FrameProcessor {
     /// `(w, h, com_moldura)` da última chamada de `render_to_surface` — pra
     /// `capture_surface_frame` ler de volta a textura certa sem rodar a chain.
     last_surface_out: Option<(u32, u32, bool)>,
+    /// `get_current_texture` falhando em sequência (surface `Outdated`/`Lost`) —
+    /// diagnóstico da "tela preta" (surface configurada num tamanho que o
+    /// compositor não aceita, comum em 4K).
+    surface_fail_streak: u32,
+    /// Já apresentou ao menos 1 frame na surface nativa? (log de sanidade).
+    surface_presented: bool,
     comp: Composite,
     decoration: Option<Decoration>,
     /// Surface nativa (etapa 03 — vídeo fora da webview). `Some` = a chain
@@ -601,6 +607,8 @@ impl FrameProcessor {
             rb: ReadbackRing::default(),
             frame_count: 0,
             last_surface_out: None,
+            surface_fail_streak: 0,
+            surface_presented: false,
             comp,
             rot_pipeline,
             rot_tgt: None,
@@ -658,11 +666,15 @@ impl FrameProcessor {
         );
         // NÃO usar `exposed.capabilities.limits` cru: a RTX 3060 reporta
         // `max_buffer_size > u32::MAX` e a validação de indirect draw do
-        // wgpu-core dá `assert!(max_buffer_size <= u32::MAX)`. O chain de shader
-        // cabe folgado nos downlevel defaults (o `FrameProcessor::new` também
-        // usa `downlevel_defaults` via `video_surface::create_device_with`).
-        let _ = &exposed.capabilities.limits;
-        let limits = wgpu::Limits::downlevel_defaults();
+        // wgpu-core dá `assert!(max_buffer_size <= u32::MAX)`. Base nos downlevel
+        // defaults, mas sobe o teto de textura (downlevel trava em 2048 e a
+        // surface 4K precisa de swapchain de 3840+ → tela do jogo preta).
+        let al = &exposed.capabilities.limits;
+        let limits = wgpu::Limits {
+            max_texture_dimension_1d: al.max_texture_dimension_1d.min(16384),
+            max_texture_dimension_2d: al.max_texture_dimension_2d.min(16384),
+            ..wgpu::Limits::downlevel_defaults()
+        };
 
         let open_device = unsafe {
             exposed.adapter.device_from_raw(
@@ -894,12 +906,19 @@ impl FrameProcessor {
         .into_iter()
         .find(|m| caps.present_modes.contains(m))
         .unwrap_or(wgpu::PresentMode::Fifo);
+        // Nunca configurar acima do teto de textura do device (senão o
+        // swapchain não é criado e `get_current_texture` fica `Outdated`).
+        let cap = self.device.limits().max_texture_dimension_2d;
+        let (cw, ch) = (w.clamp(1, cap), h.clamp(1, cap));
+        if (cw, ch) != (w, h) {
+            log::warn!("surface nativa: {w}x{h} > teto {cap} — limitando a {cw}x{ch}");
+        }
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
             color_space: wgpu::SurfaceColorSpace::Auto,
-            width: w.max(1),
-            height: h.max(1),
+            width: cw,
+            height: ch,
             present_mode,
             alpha_mode: caps.alpha_modes[0],
             view_formats: vec![],
@@ -916,8 +935,8 @@ impl FrameProcessor {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        log::info!("surface nativa: {w}x{h} {format:?} {present_mode:?}");
-        self.viewport = (w.max(1), h.max(1));
+        log::info!("surface nativa: {cw}x{ch} {format:?} {present_mode:?}");
+        self.viewport = (cw, ch);
         self.surface = Some(SurfaceOut {
             surface,
             config,
@@ -928,11 +947,16 @@ impl FrameProcessor {
     }
 
     pub fn resize_surface(&mut self, w: u32, h: u32) {
-        self.viewport = (w.max(1), h.max(1));
+        let cap = self.device.limits().max_texture_dimension_2d;
+        let (w, h) = (w.clamp(1, cap), h.clamp(1, cap));
+        self.viewport = (w, h);
         if let Some(s) = &mut self.surface {
-            s.config.width = w.max(1);
-            s.config.height = h.max(1);
-            s.surface.configure(&self.device, &s.config);
+            if (s.config.width, s.config.height) != (w, h) {
+                s.config.width = w;
+                s.config.height = h;
+                s.surface.configure(&self.device, &s.config);
+                self.surface_fail_streak = 0;
+            }
         }
         // `scale_type = viewport` mudou de tamanho → realoca alvos.
         for p in &mut self.passes {
@@ -1009,13 +1033,33 @@ impl FrameProcessor {
         });
 
         let frame_tex = match s.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(t)
-            | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
-            wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-                s.surface.configure(&self.device, &s.config);
+            wgpu::CurrentSurfaceTexture::Success(t) => {
+                self.surface_fail_streak = 0;
+                t
+            }
+            wgpu::CurrentSurfaceTexture::Suboptimal(t) => {
+                self.surface_fail_streak = 0;
+                t
+            }
+            other => {
+                self.surface_fail_streak += 1;
+                if matches!(self.surface_fail_streak, 1 | 30 | 300) {
+                    log::warn!(
+                        "surface nativa: get_current_texture {:?} ({}x) — config {}x{}; reconfigurando",
+                        std::mem::discriminant(&other),
+                        self.surface_fail_streak,
+                        s.config.width,
+                        s.config.height,
+                    );
+                }
+                if matches!(
+                    other,
+                    wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost
+                ) {
+                    s.surface.configure(&self.device, &s.config);
+                }
                 return;
             }
-            _ => return,
         };
         let view = frame_tex
             .texture
@@ -1045,6 +1089,15 @@ impl FrameProcessor {
         }
         self.queue.submit([enc.finish()]);
         self.queue.present(frame_tex);
+        if !self.surface_presented {
+            self.surface_presented = true;
+            let s = self.surface.as_ref().unwrap();
+            log::info!(
+                "surface nativa: 1º frame apresentado ({}x{})",
+                s.config.width,
+                s.config.height
+            );
+        }
     }
 
     /// Apresenta um frame preto opaco na surface nativa. Hoje o pump esconde a
