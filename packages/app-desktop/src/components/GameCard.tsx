@@ -74,13 +74,14 @@ export function GameCard({
   const [broken, setBroken] = useState(false);
   const showArt = boxart && !broken;
 
-  // `div[role=button]` (não `<button>`) pra poder aninhar o `Button` da estrela
-  // sem quebrar o HTML.
+  // `<Card>` do Fluent com `onClick` já vira focável, mas NÃO ganha
+  // `role`/teclado — a gente adiciona (a nav por controle e o leitor de tela
+  // tratam o tile inteiro como botão). A estrela é um `<Button>` aninhado com
+  // `stopPropagation`.
   const card = (
     <Card
       className={mergeClasses(s.card, l.reveal)}
       role="button"
-      tabIndex={0}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
