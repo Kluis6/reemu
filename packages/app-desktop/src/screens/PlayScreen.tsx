@@ -563,7 +563,9 @@ export function PlayScreen() {
             <img className={styles.pauseBg} src={pauseBg} alt="" aria-hidden />
           )}
           <div className={pause.panel}>
-            <h2 className={pause.title}>Pausado</h2>
+            <Title3 as="h2" className={pause.title}>
+              Pausado
+            </Title3>
             <Button appearance="primary" onClick={resume}>
               Continuar
             </Button>

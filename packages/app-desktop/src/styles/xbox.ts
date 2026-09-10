@@ -429,11 +429,7 @@ export const useBrowseStyles = makeStyles({
     paddingLeft: "24px",
     paddingRight: "24px",
     color: tokens.colorNeutralForeground3,
-    "& h2": {
-      color: tokens.colorNeutralForeground1,
-      fontSize: "18px",
-      margin: 0,
-    },
+    "& h2": { color: tokens.colorNeutralForeground1, margin: 0 },
   },
   emptyIcon: { fontSize: "44px", opacity: 0.5 },
 

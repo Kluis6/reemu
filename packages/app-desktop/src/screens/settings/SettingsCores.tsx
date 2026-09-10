@@ -6,6 +6,7 @@ import {
   Spinner,
   Tab,
   TabList,
+  Text,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
@@ -75,7 +76,7 @@ function Installed() {
         <div key={c.coreId} className={styles.row}>
           <span className={styles.meta}>
             <Body1>
-              <strong>{c.name}</strong>
+              <Text as="strong" weight="semibold">{c.name}</Text>
             </Body1>
             <Caption1>
               {c.version || 's/ versão'}
@@ -125,16 +126,16 @@ function Catalog() {
   return (
     <>
       <Caption1>
-        Cores do buildbot oficial da libretro. Os marcados <strong>OpenGL</strong> /{' '}
-        <strong>Vulkan</strong> renderizam em 3D (precisam de GPU) — N64, PSX-hw, Saturn, DS,
-        Dreamcast. Os <strong>Vulkan</strong> rodam no mesmo device do compositor, sem cópia.
+        Cores do buildbot oficial da libretro. Os marcados <Text as="strong" weight="semibold">OpenGL</Text> /{' '}
+        <Text as="strong" weight="semibold">Vulkan</Text> renderizam em 3D (precisam de GPU) — N64, PSX-hw, Saturn, DS,
+        Dreamcast. Os <Text as="strong" weight="semibold">Vulkan</Text> rodam no mesmo device do compositor, sem cópia.
       </Caption1>
       <div className={styles.list}>
         {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
             <span className={styles.meta}>
               <Body1>
-                <strong>{c.name}</strong>
+                <Text as="strong" weight="semibold">{c.name}</Text>
                 {c.hw === 'opengl' && (
                   <Badge appearance="outline" color="informative" style={{ marginLeft: 8 }}>
                     OpenGL

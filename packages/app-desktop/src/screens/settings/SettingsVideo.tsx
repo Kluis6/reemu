@@ -5,6 +5,7 @@ import {
   Radio,
   RadioGroup,
   Spinner,
+  Text,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
@@ -81,7 +82,7 @@ export function SettingsVideo() {
             label={{
               children: (
                 <span style={{ display: 'flex', flexDirection: 'column' }}>
-                  <strong>{LABELS[name]?.title ?? name}</strong>
+                  <Text as="strong" weight="semibold">{LABELS[name]?.title ?? name}</Text>
                   <Caption1>{LABELS[name]?.desc ?? ''}</Caption1>
                 </span>
               ),
@@ -114,7 +115,7 @@ export function SettingsVideo() {
           </Button>
           {!data.available.includes(data.active) && (
             <Caption1>
-              Ativo: <strong>{data.active}</strong>
+              Ativo: <Text as="strong" weight="semibold">{data.active}</Text>
             </Caption1>
           )}
           <ShaderParams scope="default" reloadKey={data.active} />

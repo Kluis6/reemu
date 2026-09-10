@@ -1,4 +1,11 @@
-import { Button, Card, mergeClasses, Spinner } from "@fluentui/react-components";
+import {
+  Button,
+  Card,
+  mergeClasses,
+  Spinner,
+  Subtitle1,
+  Text,
+} from "@fluentui/react-components";
 import {
   AddRegular,
   ChevronRightRegular,
@@ -36,7 +43,9 @@ function Row({
       style={{ animationDelay: `${120 + index * 70}ms` }}
     >
       <div className={s.sectionHead}>
-        <h2 className={s.sectionTitle}>{title}</h2>
+        <Text as="h2" className={s.sectionTitle}>
+          {title}
+        </Text>
         {onMore && (
           <Button
             className={s.sectionChevron}
@@ -113,8 +122,8 @@ export function Home() {
     return (
       <div className={s.empty}>
         <div className={s.emptyIcon}>🕹</div>
-        <h2>Bem-vindo ao ReEmu</h2>
-        <span>Adicione suas ROMs pra montar a biblioteca.</span>
+        <Subtitle1 as="h2">Bem-vindo ao ReEmu</Subtitle1>
+        <Text>Adicione suas ROMs pra montar a biblioteca.</Text>
         <Button
           appearance="primary"
           icon={<AddRegular />}

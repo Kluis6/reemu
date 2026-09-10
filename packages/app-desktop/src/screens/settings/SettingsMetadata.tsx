@@ -7,6 +7,7 @@ import {
   Input,
   ProgressBar,
   Spinner,
+  Text,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
@@ -108,7 +109,7 @@ export function SettingsMetadata() {
     <div className={s.root}>
       <Caption1>
         Busca título, descrição, ano e gênero por hash (CRC32) no{' '}
-        <strong>ScreenScraper</strong>. Só match de hash exato entra sozinho — o
+        <Text as="strong" weight="semibold">ScreenScraper</Text>. Só match de hash exato entra sozinho — o
         resto vai pra revisão abaixo. Uma conta grátis em screenscraper.fr
         aumenta bastante o limite de requisições.
       </Caption1>

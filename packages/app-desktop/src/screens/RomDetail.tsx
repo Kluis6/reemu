@@ -1,5 +1,6 @@
 import {
   Body1,
+  Text,
   Button,
   Caption1,
   Dialog,
@@ -274,7 +275,9 @@ export function RomDetail() {
         )}
         <div className={s.heroScrim} />
         <div className={s.heroBody}>
-          <h1 className={s.title}>{title}</h1>
+          <Text as="h1" className={s.title}>
+            {title}
+          </Text>
           <div className={s.badges}>
             <span className={s.badge}>{platformLabel(rom.systemId)}</span>
             {meta.data?.releaseDate && (
@@ -285,7 +288,9 @@ export function RomDetail() {
             )}
           </div>
           {meta.data?.description && (
-            <p className={s.desc}>{meta.data.description}</p>
+            <Text as="p" className={s.desc}>
+              {meta.data.description}
+            </Text>
           )}
           <div className={s.path}>{rom.filePath}</div>
         </div>

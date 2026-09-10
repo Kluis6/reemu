@@ -9,6 +9,7 @@ import {
   MenuPopover,
   MenuTrigger,
   Spinner,
+  Subtitle1,
   Tab,
   TabList,
   Text,
@@ -249,8 +250,8 @@ export function Library() {
   const emptyState = (icon: string, title: string, sub?: string) => (
     <div className={s.empty}>
       <div className={s.emptyIcon}>{icon}</div>
-      <h2>{title}</h2>
-      {sub && <span>{sub}</span>}
+      <Subtitle1 as="h2">{title}</Subtitle1>
+      {sub && <Text>{sub}</Text>}
     </div>
   );
 
@@ -289,7 +290,9 @@ export function Library() {
           key={sys}
         >
           <div className={s.sectionHead}>
-            <h2 className={s.sectionTitle}>{platformLabel(sys)}</h2>
+            <Text as="h2" className={s.sectionTitle}>
+              {platformLabel(sys)}
+            </Text>
             <span className={s.count}>
               {plist.length} {plist.length === 1 ? "jogo" : "jogos"}
             </span>

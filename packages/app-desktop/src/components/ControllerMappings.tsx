@@ -6,6 +6,7 @@ import {
   Select,
   Spinner,
   Subtitle2,
+  Text,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
@@ -154,7 +155,7 @@ export function ControllerMappings() {
                 return (
                   <span key={btn} className={styles.cell}>
                     <span>
-                      <strong>{btn}</strong>
+                      <Text as="strong" weight="semibold">{btn}</Text>
                       {entry && (
                         <span className={styles.bound}>
                           {' '}

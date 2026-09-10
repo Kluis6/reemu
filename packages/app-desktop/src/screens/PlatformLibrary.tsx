@@ -1,4 +1,4 @@
-import { Spinner, Text } from "@fluentui/react-components";
+import { Spinner, Subtitle1, Text } from "@fluentui/react-components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -65,7 +65,9 @@ export function PlatformLibrary() {
   return (
     <div>
       <div className={s.sectionHead}>
-        <h2 className={s.sectionTitle}>{platformLabel(platform)}</h2>
+        <Text as="h2" className={s.sectionTitle}>
+          {platformLabel(platform)}
+        </Text>
         <span className={s.count}>
           {list.length} {list.length === 1 ? "jogo" : "jogos"}
         </span>
@@ -76,7 +78,7 @@ export function PlatformLibrary() {
       ) : list.length === 0 ? (
         <div className={s.empty}>
           <div className={s.emptyIcon}>🕹</div>
-          <h2>Nada nessa plataforma</h2>
+          <Subtitle1 as="h2">Nada nessa plataforma</Subtitle1>
           <Text>Ajuste a busca ou volte pra biblioteca.</Text>
         </div>
       ) : (

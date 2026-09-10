@@ -1,4 +1,4 @@
-import { Badge, Body1, Button, Caption1, Spinner, makeStyles, tokens } from '@fluentui/react-components'
+import { Badge, Body1, Button, Caption1, Spinner, Text, makeStyles, tokens } from '@fluentui/react-components'
 import {
   CheckmarkCircleFilled,
   DeleteRegular,
@@ -86,13 +86,13 @@ export function SettingsBios() {
     <div className={styles.root}>
       <Caption1>
         Arquivos de sistema que alguns cores exigem além da ROM (PS1, Saturn, Dreamcast, Arcade).
-        O ReEmu <strong>nunca baixa BIOS</strong> — são copyright da fabricante; importe um arquivo
+        O ReEmu <Text as="strong" weight="semibold">nunca baixa BIOS</Text> — são copyright da fabricante; importe um arquivo
         que você já possui legalmente.
       </Caption1>
       {[...bySystem.entries()].map(([systemId, files]) => (
         <div key={systemId} className={styles.system}>
           <Body1>
-            <strong>{(SYSTEM_LABEL[systemId] ?? systemId).toUpperCase()}</strong>
+            <Text as="strong" weight="semibold">{(SYSTEM_LABEL[systemId] ?? systemId).toUpperCase()}</Text>
           </Body1>
           <div className={styles.list}>
             {files.map((f) => {
