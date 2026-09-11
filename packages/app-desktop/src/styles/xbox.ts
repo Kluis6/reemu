@@ -415,6 +415,12 @@ export const useCardStyles = makeStyles({
     "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
       border: "none !important",
     },
+    // Afasta mais o anel de foco (o global do `.app` usa 3px) — com o zoom
+    // da imagem por baixo, rente ficava apertado. `!important`: precisa
+    // ganhar do `.app [tabindex]:focus`, que tem mais specificity.
+    "&:focus, &:focus-visible": {
+      outlineOffset: "6px !important",
+    },
     "&:hover, &:focus-within, &:focus-visible": {
       boxShadow: "0 14px 32px rgba(0, 0, 0, 0.48)",
       zIndex: 2,

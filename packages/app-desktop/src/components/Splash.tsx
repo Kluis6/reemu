@@ -1,5 +1,5 @@
 import { makeStyles, tokens } from '@fluentui/react-components'
-import { useState } from 'react'
+import { useImageExists } from '../hooks/useImageExists'
 import { AnimatedBackground } from './AnimatedBackground'
 
 /** Caminho da logo — coloque `reemu-logo.png` em `packages/app-desktop/public/`. */
@@ -108,23 +108,20 @@ const useStyles = makeStyles({
  *  `leaving` dispara o fade-out. */
 export function Splash({ leaving = false }: { leaving?: boolean }) {
   const s = useStyles()
-  const [noImg, setNoImg] = useState(false)
+  // Pré-carrega fora do DOM — nunca monta um <img> quebrado (o ícone de
+  // imagem ausente do navegador piscava na tela até o onError reagir).
+  const imgOk = useImageExists(LOGO_SRC)
   return (
     <div className={leaving ? `${s.root} ${s.leaving}` : s.root}>
       <AnimatedBackground />
       <div className={s.stage}>
         <div className={s.glow} aria-hidden />
-        {noImg ? (
+        {imgOk ? (
+          <img className={s.logo} src={LOGO_SRC} alt="ReEmu" />
+        ) : (
           <div className={`${s.logo} ${s.wordmark}`}>
             Re<span className={s.wmGreen}>Emu</span>
           </div>
-        ) : (
-          <img
-            className={s.logo}
-            src={LOGO_SRC}
-            alt="ReEmu"
-            onError={() => setNoImg(true)}
-          />
         )}
       </div>
       <div className={s.tag}>carregando…</div>
