@@ -103,8 +103,15 @@ export const useShellStyles = makeStyles({
   },
   railItem: {
     position: "relative",
-    width: "clamp(38px, 2.7vw, 48px)",
-    height: "clamp(38px, 2.7vw, 48px)",
+    // !important: essa classe também vai num <Button> do Fluent (botão de
+    // fechar) — o Button tem width/height/padding/minWidth próprios (do
+    // tamanho "medium" default) que competiam com isso e deixavam ele fora
+    // de proporção com o <NavLink> (um <a> puro, sem essa disputa).
+    width: "clamp(38px, 2.7vw, 48px) !important",
+    height: "clamp(38px, 2.7vw, 48px) !important",
+    minWidth: "0 !important",
+    maxWidth: "none !important",
+    padding: "0 !important",
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
@@ -129,6 +136,14 @@ export const useShellStyles = makeStyles({
     },
   },
   railQuit: {
+    // O slot de ícone do <Button> do Fluent tem tamanho FIXO (20px, ver
+    // fui-Button__icon) — não acompanha o fontSize clamp do railItem como o
+    // ícone cru do <NavLink> acompanha. Reajusta pra escalar igual.
+    "& .fui-Button__icon": {
+      fontSize: "1em",
+      width: "1em",
+      height: "1em",
+    },
     ":hover": {
       backgroundColor: "rgba(220, 60, 60, 0.18)",
       color: "#ff8a8a",
@@ -406,7 +421,7 @@ export const useCardStyles = makeStyles({
     textAlign: "left",
     color: "inherit",
     transitionProperty: "outline-color, outline-offset",
-    transitionDuration: "160ms",
+    transitionDuration: "220ms",
     transitionTimingFunction: tokens.curveEasyEase,
     // O <Card> do Fluent desenha o próprio "anel" de foco via `::after` COM
     // BORDA (`[data-fui-focus-visible]`/`[data-fui-focus-within]`, ver
@@ -426,9 +441,9 @@ export const useCardStyles = makeStyles({
     "&:hover, &:focus-within, &:focus-visible": {
       zIndex: 2,
     },
-    // zoom da imagem (não do card)
+    // zoom da imagem (não do card) — sutil, não um "salto"
     "&:hover [data-art] img, &:focus-within [data-art] img": {
-      transform: "scale(1.07)",
+      transform: "scale(1.045)",
     },
     // revela o nome sobreposto
     "&:hover [data-meta], &:focus-within [data-meta]": {
@@ -460,7 +475,9 @@ export const useCardStyles = makeStyles({
       objectFit: "cover",
       objectPosition: "center",
       transitionProperty: "transform",
-      transitionDuration: "300ms",
+      // Zoom mais suave: menos escala, mais tempo — sem perder o feedback
+      // de hover/foco, mas sem o "salto" abrupto.
+      transitionDuration: "460ms",
       transitionTimingFunction: tokens.curveEasyEase,
     },
   },
@@ -486,7 +503,7 @@ export const useCardStyles = makeStyles({
     opacity: 0,
     transform: "translateY(6px)",
     transitionProperty: "opacity, transform",
-    transitionDuration: "150ms",
+    transitionDuration: "280ms",
     transitionTimingFunction: tokens.curveEasyEase,
     pointerEvents: "none",
     "@media (prefers-reduced-motion: reduce)": { transform: "none" },
