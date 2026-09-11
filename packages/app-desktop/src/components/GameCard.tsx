@@ -104,8 +104,8 @@ export function GameCard({
         )}
       </div>
       <div className={s.meta} data-meta>
-        <span className={s.titleText}>{title}</span>
         {badge && <span className={s.subText}>{badge}</span>}
+        <span className={s.titleText}>{title}</span>
       </div>
     </Card>
   );
