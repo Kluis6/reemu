@@ -54,6 +54,17 @@ const useLocalStyles = makeStyles({
       color: tokens.colorNeutralForeground1,
     },
   },
+  // Menu do avatar — proporções do menu do modo XBOX de verdade: mais
+  // largo, linhas com bem mais respiro que o padrão "medium" do Fluent
+  // (que usa `spacingVerticalSNudge`, ~2px, nas linhas — bem apertado).
+  menuPopover: { minWidth: "236px" },
+  menuItem: {
+    paddingTop: tokens.spacingVerticalM,
+    paddingBottom: tokens.spacingVerticalM,
+    paddingLeft: tokens.spacingHorizontalM,
+    paddingRight: tokens.spacingHorizontalM,
+    columnGap: tokens.spacingHorizontalM,
+  },
 });
 
 // Presença/status do perfil ainda não existe — o badge e o anel do avatar
@@ -149,36 +160,41 @@ export function AppShell() {
               />
             </button>
           </MenuTrigger>
-          <MenuPopover>
+          <MenuPopover className={l.menuPopover}>
             <MenuList hasIcons>
               <MenuItem
+                className={l.menuItem}
                 icon={<PersonRegular />}
                 onClick={() => navigate("/settings/perfil")}
               >
-                {profile.data?.name ? `Perfil — ${profile.data.name}` : "Meu perfil"}
+                Meu perfil
               </MenuItem>
               {PROFILE_EXTRA.map((m) => (
-                <MenuItem key={m.label} icon={m.icon} disabled>
+                <MenuItem key={m.label} className={l.menuItem} icon={m.icon} disabled>
                   {m.label}
                 </MenuItem>
               ))}
               <MenuDivider />
               <Menu>
                 <MenuTrigger disableButtonEnhancement>
-                  <MenuItem icon={<PresenceAvailableRegular />} disabled>
+                  <MenuItem className={l.menuItem} icon={<PresenceAvailableRegular />} disabled>
                     Status
                   </MenuItem>
                 </MenuTrigger>
-                <MenuPopover>
+                <MenuPopover className={l.menuPopover}>
                   <MenuList>
-                    <MenuItem>Online</MenuItem>
-                    <MenuItem>Ausente</MenuItem>
-                    <MenuItem>Jogando</MenuItem>
+                    <MenuItem className={l.menuItem}>Online</MenuItem>
+                    <MenuItem className={l.menuItem}>Ausente</MenuItem>
+                    <MenuItem className={l.menuItem}>Jogando</MenuItem>
                   </MenuList>
                 </MenuPopover>
               </Menu>
               <MenuDivider />
-              <MenuItem icon={<SignOutRegular />} onClick={() => void quitApp()}>
+              <MenuItem
+                className={l.menuItem}
+                icon={<SignOutRegular />}
+                onClick={() => void quitApp()}
+              >
                 Sair
               </MenuItem>
             </MenuList>
