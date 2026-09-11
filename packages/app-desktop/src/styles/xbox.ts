@@ -73,10 +73,12 @@ export const useShellStyles = makeStyles({
     // `:focus-visible`): o pulso do gamepad vem de um evento Tauri, sem
     // keydown, então o WebKitGTK não marca `:focus-visible` no `.focus()`
     // programático — e o usuário não via onde estava o foco.
+    // Cor de marca (verde no tema padrão/claro) — igual ao destaque do item
+    // selecionado no dashboard Xbox de verdade, não um cinza neutro.
     "& a:focus, & input:focus, & [tabindex]:focus": {
       outlineWidth: "2px",
       outlineStyle: "solid",
-      outlineColor: tokens.colorNeutralForeground1,
+      outlineColor: tokens.colorBrandStroke1,
       outlineOffset: "3px",
     },
   },
@@ -759,7 +761,7 @@ export const usePauseStyles = makeStyles({
     "& a:focus, & button:focus": {
       outlineWidth: "2px",
       outlineStyle: "solid",
-      outlineColor: tokens.colorNeutralForeground1,
+      outlineColor: tokens.colorBrandStroke1,
       outlineOffset: "3px",
     },
   },
