@@ -386,78 +386,91 @@ export const useShelfStyles = makeStyles({
 
 /** Cartão de jogo — arte + título + plataforma embaixo (modelo modo XBOX). */
 export const useCardStyles = makeStyles({
+  // O card É a imagem (quadrado). Sem escala no card — o zoom é na imagem.
+  // O nome fica sobre a imagem e só aparece no hover/foco.
   card: {
+    position: "relative",
     width: "100%",
-    display: "flex",
-    flexDirection: "column",
-    rowGap: "8px",
+    aspectRatio: "1 / 1",
+    display: "block",
     border: "none",
     backgroundColor: "transparent",
-    // mesmo raio da arte → o anel de foco arredonda igual ao card visível
     borderRadius: shell.radius,
+    overflowX: "hidden",
+    overflowY: "hidden",
     padding: 0,
     cursor: "pointer",
     textAlign: "left",
     color: "inherit",
-    // O tile INTEIRO cresce no hover/foco (estilo Xbox full-screen) — os
-    // vizinhos não mexem (transform não reflui). `will-change` evita hitch.
-    willChange: "transform",
-    transformOrigin: "center",
-    transitionProperty: "transform, outline-color, outline-offset",
+    boxShadow: "0 6px 14px rgba(0, 0, 0, 0.22)",
+    transitionProperty: "box-shadow, outline-color, outline-offset",
     transitionDuration: "260ms",
     transitionTimingFunction: tokens.curveEasyEase,
-    "&:hover, &:focus, &:focus-visible": {
-      transform: "scale(1.035)",
+    "&:hover, &:focus-within, &:focus-visible": {
+      boxShadow: "0 16px 38px rgba(0, 0, 0, 0.5)",
       zIndex: 2,
     },
-    "&:hover [data-art] img, &:focus [data-art] img": {
-      transform: "scale(1.05)",
+    // zoom da imagem (não do card)
+    "&:hover [data-art] img, &:focus-within [data-art] img": {
+      transform: "scale(1.08)",
     },
-    "&:hover [data-art], &:focus [data-art]": {
-      boxShadow: "0 14px 34px rgba(0, 0, 0, 0.5)",
+    // revela o nome sobreposto
+    "&:hover [data-meta], &:focus-within [data-meta]": {
+      opacity: 1,
+      transform: "translateY(0)",
     },
     "@media (prefers-reduced-motion: reduce)": {
-      transitionProperty: "outline-color, outline-offset",
-      "&:hover, &:focus, &:focus-visible": { transform: "none" },
+      "&:hover [data-art] img, &:focus-within [data-art] img": {
+        transform: "none",
+      },
     },
   },
   art: {
-    position: "relative",
-    width: "100%",
-    aspectRatio: "1 / 1",
-    borderRadius: shell.radius,
-    overflowX: "hidden",
-    overflowY: "hidden",
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     backgroundImage: elevGradient,
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    boxShadow: "0 6px 14px rgba(0, 0, 0, 0.22)",
-    transitionProperty: "box-shadow",
-    transitionDuration: "300ms",
-    transitionTimingFunction: tokens.curveEasyEase,
     "& img": {
       width: "100%",
       height: "100%",
       objectFit: "cover",
       transitionProperty: "transform",
-      transitionDuration: "320ms",
+      transitionDuration: "520ms",
       transitionTimingFunction: tokens.curveEasyEase,
     },
   },
   meta: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     display: "flex",
     flexDirection: "column",
     rowGap: "1px",
-    paddingLeft: "2px",
-    paddingRight: "2px",
-    minWidth: 0,
+    paddingTop: "18px",
+    paddingBottom: "9px",
+    paddingLeft: "10px",
+    paddingRight: "10px",
+    backgroundImage:
+      "linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)",
+    opacity: 0,
+    transform: "translateY(8px)",
+    transitionProperty: "opacity, transform",
+    transitionDuration: "220ms",
+    transitionTimingFunction: tokens.curveEasyEase,
+    pointerEvents: "none",
+    "@media (prefers-reduced-motion: reduce)": { transform: "none" },
   },
   titleText: {
-    fontSize: tokens.fontSizeBase300,
+    fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightSemibold,
-    lineHeight: 1.25,
-    color: tokens.colorNeutralForeground1,
+    lineHeight: 1.2,
+    color: "#ffffff",
     display: "-webkit-box",
     WebkitLineClamp: 2,
     WebkitBoxOrient: "vertical",
@@ -465,8 +478,8 @@ export const useCardStyles = makeStyles({
     overflowY: "hidden",
   },
   subText: {
-    fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase100,
+    color: "rgba(255, 255, 255, 0.72)",
     whiteSpace: "nowrap",
     overflowX: "hidden",
     textOverflow: "ellipsis",

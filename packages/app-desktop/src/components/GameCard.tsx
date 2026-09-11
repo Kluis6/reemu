@@ -48,9 +48,10 @@ const useLocalStyles = makeStyles({
 });
 
 /**
- * Cartão de jogo no estilo modo XBOX: arte quadrada, e embaixo o título +
- * a plataforma (`badge`). Estrela de favorito no canto da arte. Botão /
- * clique-direito abre o menu de contexto (`menu`).
+ * Cartão de jogo no estilo modo XBOX: o card É a capa quadrada. O nome (+
+ * plataforma, `badge`) fica SOBRE a imagem e só aparece no hover/foco; o
+ * efeito de movimento é um zoom na imagem, o card em si não escala. Estrela
+ * de favorito no canto. Botão / clique-direito abre o menu de contexto.
  */
 export function GameCard({
   title,
@@ -83,6 +84,7 @@ export function GameCard({
     <Card
       className={mergeClasses(s.card, l.reveal)}
       role="button"
+      aria-label={title}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -123,7 +125,7 @@ export function GameCard({
           </span>
         )}
       </div>
-      <div className={s.meta}>
+      <div className={s.meta} data-meta>
         <span className={s.titleText}>{title}</span>
         {badge && <span className={s.subText}>{badge}</span>}
       </div>
