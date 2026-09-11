@@ -4,9 +4,12 @@ import {
   Caption1,
   Radio,
   RadioGroup,
+  Tab,
+  TabList,
   Text,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { BezelLibrary } from '../../components/BezelLibrary'
 import { LoadingState } from '../../components/EmptyState'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
@@ -28,9 +31,12 @@ const LABELS: Record<string, { title: string; desc: string }> = {
   lcd: { title: 'LCD portátil', desc: 'Grade sutil de pixels, cara de handheld.' },
 }
 
+type VideoTab = 'shaders' | 'molduras'
+
 export function SettingsVideo() {
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
+  const [tab, setTab] = useState<VideoTab>('shaders')
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['shader-info'],
@@ -65,6 +71,56 @@ export function SettingsVideo() {
   if (isLoading) return <LoadingState />
   if (isError || !data) return <Body1>Informação de shader indisponível.</Body1>
 
+  // Presets embutidos (plain/CRT/LCD) + curados (xBR/ScaleFX/…) — parte da
+  // aba "Shaders", mas também mostrado (desabilitado) sem GPU, só pra
+  // informar o que existiria.
+  const presetPicker = (
+    <RadioGroup
+      value={
+        data.available.includes(data.active) ||
+        data.curated.some((c) => c.id === data.active)
+          ? data.active
+          : ''
+      }
+      onChange={(_, d) => pick.mutate(d.value)}
+    >
+      {data.available.map((name) => (
+        <Radio
+          key={name}
+          value={name}
+          disabled={pick.isPending || !data.gpu}
+          label={{
+            children: (
+              <span style={{ display: 'flex', flexDirection: 'column' }}>
+                <Text as="strong" weight="semibold">{LABELS[name]?.title ?? name}</Text>
+                <Caption1>{LABELS[name]?.desc ?? ''}</Caption1>
+              </span>
+            ),
+          }}
+        />
+      ))}
+      {data.curated.map((c) => (
+        <Radio
+          key={c.id}
+          value={c.id}
+          disabled={pick.isPending || !data.gpu || !c.available}
+          label={{
+            children: (
+              <span style={{ display: 'flex', flexDirection: 'column' }}>
+                <Text as="strong" weight="semibold">{c.label}</Text>
+                <Caption1>
+                  {c.available
+                    ? c.desc
+                    : `${c.desc} — precisa do pacote de shaders (abaixo).`}
+                </Caption1>
+              </span>
+            ),
+          }}
+        />
+      ))}
+    </RadioGroup>
+  )
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 460 }}>
       <Caption1>
@@ -72,113 +128,86 @@ export function SettingsVideo() {
           ? 'Shader padrão da biblioteca (roda na GPU offscreen). Cada jogo pode ter um shader próprio na tela de detalhe.'
           : 'Sem GPU disponível — o frame vai cru pra tela; a troca não tem efeito.'}
       </Caption1>
-      <RadioGroup
-        value={
-          data.available.includes(data.active) ||
-          data.curated.some((c) => c.id === data.active)
-            ? data.active
-            : ''
-        }
-        onChange={(_, d) => pick.mutate(d.value)}
-      >
-        {data.available.map((name) => (
-          <Radio
-            key={name}
-            value={name}
-            disabled={pick.isPending || !data.gpu}
-            label={{
-              children: (
-                <span style={{ display: 'flex', flexDirection: 'column' }}>
-                  <Text as="strong" weight="semibold">{LABELS[name]?.title ?? name}</Text>
-                  <Caption1>{LABELS[name]?.desc ?? ''}</Caption1>
-                </span>
-              ),
-            }}
-          />
-        ))}
-        {data.curated.map((c) => (
-          <Radio
-            key={c.id}
-            value={c.id}
-            disabled={pick.isPending || !data.gpu || !c.available}
-            label={{
-              children: (
-                <span style={{ display: 'flex', flexDirection: 'column' }}>
-                  <Text as="strong" weight="semibold">{c.label}</Text>
-                  <Caption1>
-                    {c.available
-                      ? c.desc
-                      : `${c.desc} — precisa do pacote de shaders (abaixo).`}
-                  </Caption1>
-                </span>
-              ),
-            }}
-          />
-        ))}
-      </RadioGroup>
+
+      {!data.gpu && presetPicker}
 
       {data.gpu && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <Caption1>
-            Preset externo — arquivo <code>.slangp</code> (RetroArch). ~93% dos
-            presets do pacote rodam (Mega Bezel inclusive); glow/bloom que
-            dependem de mipmap ainda ficam mais duros que no RetroArch.
-          </Caption1>
-          <ShaderLibrary
-            onPick={(p) => pick.mutate(p)}
-            activePath={data.active}
-            busy={pick.isPending}
-          />
-          <Button
-            appearance="subtle"
-            disabled={pick.isPending}
-            onClick={async () => {
-              const p = await pickSlangp()
-              if (p) pick.mutate(p)
-            }}
+        <>
+          <TabList
+            selectedValue={tab}
+            onTabSelect={(_, d) => setTab(d.value as VideoTab)}
           >
-            Carregar .slangp avulso…
-          </Button>
-          {!data.available.includes(data.active) && (
-            <Caption1>
-              Ativo: <Text as="strong" weight="semibold">{data.active}</Text>
-            </Caption1>
-          )}
-          <ShaderParams scope="default" reloadKey={data.active} />
-        </div>
-      )}
+            <Tab value="shaders">Shaders</Tab>
+            <Tab value="molduras">Molduras</Tab>
+          </TabList>
 
-      {data.gpu && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <Text as="strong" weight="semibold">Molduras / bezels</Text>
-          <Caption1>
-            Baixe direto do The Bezel Project por sistema, ou importe uma pasta
-            no formato Bezel Project / RetroBat (<code>default.png</code>,{' '}
-            <code>&lt;sistema&gt;/</code>,{' '}
-            <code>games/&lt;sistema&gt;/&lt;rom&gt;.png</code>). O jogo é
-            posicionado pelo <code>.cfg</code> irmão ou pela janela transparente
-            da arte.
-          </Caption1>
-          <BezelLibrary />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button
-              disabled={deco.isPending}
-              onClick={async () => {
-                const p = await pickFolder()
-                if (p) deco.mutate(p)
-              }}
-            >
-              Importar pasta de bezels…
-            </Button>
-            <Button
-              appearance="subtle"
-              disabled={decoClear.isPending}
-              onClick={() => decoClear.mutate()}
-            >
-              Remover bezels
-            </Button>
-          </div>
-        </div>
+          {tab === 'shaders' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {presetPicker}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <Caption1>
+                  Preset externo — arquivo <code>.slangp</code> (RetroArch).
+                  ~93% dos presets do pacote rodam (Mega Bezel inclusive);
+                  glow/bloom que dependem de mipmap ainda ficam mais duros
+                  que no RetroArch.
+                </Caption1>
+                <ShaderLibrary
+                  onPick={(p) => pick.mutate(p)}
+                  activePath={data.active}
+                  busy={pick.isPending}
+                />
+                <Button
+                  appearance="subtle"
+                  disabled={pick.isPending}
+                  onClick={async () => {
+                    const p = await pickSlangp()
+                    if (p) pick.mutate(p)
+                  }}
+                >
+                  Carregar .slangp avulso…
+                </Button>
+                {!data.available.includes(data.active) && (
+                  <Caption1>
+                    Ativo: <Text as="strong" weight="semibold">{data.active}</Text>
+                  </Caption1>
+                )}
+                <ShaderParams scope="default" reloadKey={data.active} />
+              </div>
+            </div>
+          )}
+
+          {tab === 'molduras' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Caption1>
+                Baixe direto do The Bezel Project por sistema, ou importe uma
+                pasta no formato Bezel Project / RetroBat (
+                <code>default.png</code>, <code>&lt;sistema&gt;/</code>,{' '}
+                <code>games/&lt;sistema&gt;/&lt;rom&gt;.png</code>). O jogo é
+                posicionado pelo <code>.cfg</code> irmão ou pela janela
+                transparente da arte.
+              </Caption1>
+              <BezelLibrary />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button
+                  disabled={deco.isPending}
+                  onClick={async () => {
+                    const p = await pickFolder()
+                    if (p) deco.mutate(p)
+                  }}
+                >
+                  Importar pasta de bezels…
+                </Button>
+                <Button
+                  appearance="subtle"
+                  disabled={decoClear.isPending}
+                  onClick={() => decoClear.mutate()}
+                >
+                  Remover bezels
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
