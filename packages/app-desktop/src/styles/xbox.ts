@@ -458,7 +458,10 @@ export const useCardStyles = makeStyles({
     "& img": {
       width: "100%",
       height: "100%",
-      objectFit: "cover",
+      // `contain`, não `cover`: capa de retrato (Game Gear) ou scan largo
+      // com lombada (Genesis) cortava a arte de verdade com `cover`. Sobra
+      // vira letterbox no fundo (`elevGradient`, já existe pra isso).
+      objectFit: "contain",
       transitionProperty: "transform",
       transitionDuration: "300ms",
       transitionTimingFunction: tokens.curveEasyEase,

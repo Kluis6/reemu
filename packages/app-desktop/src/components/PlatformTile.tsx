@@ -35,7 +35,9 @@ const useStyles = makeStyles({
     overflow: "hidden",
     borderRadius: tokens.borderRadiusSmall,
     backgroundColor: tokens.colorNeutralBackground4,
-    "& img": { width: "100%", height: "100%", objectFit: "cover" },
+    // `contain`, não `cover` — mesmo motivo do GameCard: capa de retrato ou
+    // scan largo com lombada não pode cortar a arte de verdade.
+    "& img": { width: "100%", height: "100%", objectFit: "contain" },
   },
   init: { fontSize: "13px", opacity: 0.45 },
 });
