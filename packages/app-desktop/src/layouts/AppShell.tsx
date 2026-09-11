@@ -31,9 +31,9 @@ import { useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { ButtonHints } from "../components/ButtonHints";
+import { Clock } from "../components/Clock";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
-import { useClock } from "../hooks/useClock";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { getProfile, quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
@@ -81,7 +81,6 @@ export function AppShell() {
   const l = useLocalStyles();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const clock = useClock();
   const { on: fullscreen, toggle: toggleFullscreen } = useFullscreen();
   const atRoot = pathname === "/";
   const atBrowse = pathname === "/" || pathname === "/library";
@@ -250,7 +249,7 @@ export function AppShell() {
               onClick={() => void toggleFullscreen()}
             />
           </Tooltip>
-          <span className={s.clock}>{clock}</span>
+          <Clock />
         </div>
         <div className={s.scroll} ref={scrollRef}>
           <RouteTransition

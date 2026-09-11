@@ -586,7 +586,6 @@ export const useDetailStyles = makeStyles({
     flexDirection: "column",
     rowGap: "20px",
     paddingBottom: "48px",
-    maxWidth: "860px",
     opacity: 1,
     transform: "translateY(0)",
     transitionProperty: "opacity, transform",
@@ -646,7 +645,7 @@ export const useDetailStyles = makeStyles({
     position: "relative",
     zIndex: 1,
     padding: "26px",
-    maxWidth: "72%",
+    maxWidth: "min(72%, 640px)",
   },
   title: {
     fontSize: "clamp(24px, 3vw, 40px)",
