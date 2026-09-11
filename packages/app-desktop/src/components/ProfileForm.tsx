@@ -45,13 +45,14 @@ const useStyles = makeStyles({
     width: '52px',
     height: '52px',
     borderRadius: tokens.borderRadiusCircular,
-    overflow: 'hidden',
+    // SEM overflow:hidden aqui — cortava o próprio anel de foco no
+    // WebKitGTK (mesmo bug do GameCard). O SVG já se arredonda sozinho
+    // (border-radius inline no <PresetAvatar>).
     border: `2px solid transparent`,
   },
   choiceOn: {
     border: `2px solid ${tokens.colorBrandStroke1}`,
   },
-  choiceSvg: { width: '100%', height: '100%', borderRadius: '50%' },
 })
 
 /**

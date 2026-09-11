@@ -396,8 +396,10 @@ export const useCardStyles = makeStyles({
     border: "none",
     backgroundColor: "transparent",
     borderRadius: shell.radius,
-    overflowX: "hidden",
-    overflowY: "hidden",
+    // SEM overflow:hidden aqui — o WebKitGTK corta o próprio outline de foco
+    // quando ele "vaza" pra fora de um elemento com overflow:hidden nele
+    // mesmo (o anel ficava com pedaço cortado). Quem clipa a arte/zoom
+    // agora é o `.art` (embaixo), não o card inteiro.
     padding: 0,
     cursor: "pointer",
     textAlign: "left",
@@ -446,6 +448,9 @@ export const useCardStyles = makeStyles({
     right: 0,
     bottom: 0,
     left: 0,
+    borderRadius: shell.radius,
+    overflowX: "hidden",
+    overflowY: "hidden",
     backgroundImage: elevGradient,
     display: "grid",
     alignItems: "center",
@@ -464,6 +469,11 @@ export const useCardStyles = makeStyles({
     left: 0,
     right: 0,
     bottom: 0,
+    // Cantos de baixo arredondados igual à arte — o card não clipa mais
+    // (era o que cortava o anel de foco), então quem tem que ficar
+    // arredondado por conta própria é cada camada.
+    borderBottomLeftRadius: shell.radius,
+    borderBottomRightRadius: shell.radius,
     display: "flex",
     flexDirection: "column",
     rowGap: "1px",
