@@ -16,7 +16,6 @@ import {
 } from "@fluentui/react-components";
 import {
   AddRegular,
-  ChevronRightRegular,
   FilterRegular,
   MoreHorizontalRegular,
 } from "@fluentui/react-icons";
@@ -26,6 +25,7 @@ import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
+import { SectionHeader } from "../components/SectionHeader";
 import { PlatformTile } from "../components/PlatformTile";
 import { Shelf } from "../components/Shelf";
 import { ManageLibraryDialog } from "../components/ManageLibraryDialog";
@@ -51,12 +51,6 @@ const useLibStyles = makeStyles({
       backgroundColor: "var(--reemuSurfaceSoft)",
       color: tokens.colorNeutralForeground1,
     },
-  },
-  seeAll: {
-    marginLeft: "auto",
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "2px",
   },
   bar: {
     display: "flex",
@@ -299,24 +293,15 @@ export function Library() {
           style={{ animationDelay: `${Math.min(i, 8) * 55}ms` }}
           key={sys}
         >
-          <div className={s.sectionHead}>
-            <Text as="h2" className={s.sectionTitle}>
-              {platformLabel(sys)}
-            </Text>
-            <span className={s.count}>
-              {plist.length} {plist.length === 1 ? "jogo" : "jogos"}
-            </span>
-            <Button
-              className={l.seeAll}
-              appearance="transparent"
-              size="small"
-              iconPosition="after"
-              icon={<ChevronRightRegular />}
-              onClick={goAll}
-            >
-              Ver todos
-            </Button>
-          </div>
+          <SectionHeader
+            title={platformLabel(sys)}
+            onSeeAll={goAll}
+            right={
+              <span className={s.count}>
+                {plist.length} {plist.length === 1 ? "jogo" : "jogos"}
+              </span>
+            }
+          />
           <Shelf
             more={
               <PlatformTile

@@ -1,28 +1,31 @@
-import { Button, Card, mergeClasses, Text } from "@fluentui/react-components";
+import { Button, Card, mergeClasses } from "@fluentui/react-components";
 import {
   AddRegular,
-  ChevronRightRegular,
   GridRegular,
+  SettingsRegular,
 } from "@fluentui/react-icons";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
+import { SectionHeader } from "../components/SectionHeader";
 import { platformLabel } from "../lib/platform";
 import { Shelf } from "../components/Shelf";
 import { listRoms, type RomEntry } from "../lib/tauri";
 import { useBrowseStyles, useHeroStyles, useMotionStyles } from "../styles/xbox";
 
-/** Uma faixa curada da Início (título + "ver mais" opcional + prateleira). */
+/** Uma faixa curada da Início (cabeçalho + prateleira). */
 function Row({
   title,
+  subtitle,
   items,
   onMore,
   render,
   index = 0,
 }: {
   title: string;
+  subtitle?: string;
   items: readonly RomEntry[];
   onMore?: () => void;
   render: (r: RomEntry) => ReactNode;
@@ -36,22 +39,7 @@ function Row({
       className={mergeClasses(s.section, m.riseIn)}
       style={{ animationDelay: `${120 + index * 70}ms` }}
     >
-      <div className={s.sectionHead}>
-        <Text as="h2" className={s.sectionTitle}>
-          {title}
-        </Text>
-        {onMore && (
-          <Button
-            className={s.sectionChevron}
-            onClick={onMore}
-            tabIndex={-1}
-            aria-hidden
-            appearance="subtle"
-            size="small"
-            icon={<ChevronRightRegular />}
-          />
-        )}
-      </div>
+      <SectionHeader title={title} subtitle={subtitle} onSeeAll={onMore} />
       <Shelf>{items.map(render)}</Shelf>
     </section>
   );
@@ -150,8 +138,36 @@ export function Home() {
         </Card>
       )}
 
+      <div className={s.toolbar} style={{ marginTop: 18 }}>
+        <Button
+          shape="circular"
+          appearance="subtle"
+          icon={<GridRegular />}
+          onClick={() => navigate("/library")}
+        >
+          Todos os jogos ({all.length})
+        </Button>
+        <Button
+          shape="circular"
+          appearance="subtle"
+          icon={<AddRegular />}
+          onClick={() => navigate("/library")}
+        >
+          Adicionar ROMs
+        </Button>
+        <Button
+          shape="circular"
+          appearance="subtle"
+          icon={<SettingsRegular />}
+          onClick={() => navigate("/settings")}
+        >
+          Configurações
+        </Button>
+      </div>
+
       <Row
         title="Continuar jogando"
+        subtitle="De onde você parou"
         items={recent}
         onMore={() => navigate("/library")}
         render={card}
@@ -159,22 +175,12 @@ export function Home() {
       />
       <Row
         title="Adicionados recentemente"
+        subtitle="O que entrou por último na biblioteca"
         items={added}
         onMore={() => navigate("/library")}
         render={card}
         index={1}
       />
-
-      <div className={s.toolbar} style={{ marginTop: 28 }}>
-        <Button
-          shape="circular"
-          appearance="subtle"
-          icon={<GridRegular />}
-          onClick={() => navigate("/library")}
-        >
-          Ver todos os jogos ({all.length})
-        </Button>
-      </div>
     </div>
   );
 }

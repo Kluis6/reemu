@@ -1,9 +1,9 @@
-import { Text } from "@fluentui/react-components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
+import { SectionHeader } from "../components/SectionHeader";
 import { platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
 import {
@@ -65,14 +65,14 @@ export function PlatformLibrary() {
 
   return (
     <div>
-      <div className={s.sectionHead}>
-        <Text as="h2" className={s.sectionTitle}>
-          {platformLabel(platform)}
-        </Text>
-        <span className={s.count}>
-          {list.length} {list.length === 1 ? "jogo" : "jogos"}
-        </span>
-      </div>
+      <SectionHeader
+        title={platformLabel(platform)}
+        right={
+          <span className={s.count}>
+            {list.length} {list.length === 1 ? "jogo" : "jogos"}
+          </span>
+        }
+      />
 
       {roms.isLoading ? (
         <LoadingState />

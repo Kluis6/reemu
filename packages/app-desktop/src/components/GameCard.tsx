@@ -48,8 +48,9 @@ const useLocalStyles = makeStyles({
 });
 
 /**
- * Cartão de jogo no estilo Xbox: tile quadrado, badge de plataforma, estrela
- * de favorito. Botão / clique-direito abre o menu de contexto (`menu`).
+ * Cartão de jogo no estilo modo XBOX: arte quadrada, e embaixo o título +
+ * a plataforma (`badge`). Estrela de favorito no canto da arte. Botão /
+ * clique-direito abre o menu de contexto (`menu`).
  */
 export function GameCard({
   title,
@@ -61,7 +62,7 @@ export function GameCard({
   menu,
 }: {
   title: string;
-  subtitle?: string;
+  /** Linha secundária embaixo do título (normalmente a plataforma). */
   badge?: string;
   boxart?: string | null;
   favorite?: boolean;
@@ -94,14 +95,13 @@ export function GameCard({
         {showArt ? (
           <img
             src={boxart}
-            alt={title}
+            alt=""
             loading="lazy"
             onError={() => setBroken(true)}
           />
         ) : (
           <span style={{ fontSize: 30, opacity: 0.5 }}>{initials(title)}</span>
         )}
-        {badge && <span className={s.badge}>{badge}</span>}
         {onToggleFavorite && (
           <span
             className={l.favSlot}
@@ -122,6 +122,10 @@ export function GameCard({
             />
           </span>
         )}
+      </div>
+      <div className={s.meta}>
+        <span className={s.titleText}>{title}</span>
+        {badge && <span className={s.subText}>{badge}</span>}
       </div>
     </Card>
   );

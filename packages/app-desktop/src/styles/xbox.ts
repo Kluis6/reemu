@@ -353,31 +353,6 @@ export const useMotionStyles = makeStyles({
 /** Seções, cabeçalho, toolbar/chips, grade, estado vazio, gerenciar bibliotecas. */
 export const useBrowseStyles = makeStyles({
   section: { marginTop: "28px" },
-  sectionHead: {
-    display: "flex",
-    alignItems: "baseline",
-    columnGap: "8px",
-    marginBottom: "22px",
-  },
-  sectionTitle: {
-    fontSize: "clamp(18px, 1.35vw, 28px)",
-    fontWeight: 700,
-    margin: 0,
-  },
-  sectionChevron: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: "15px",
-    border: "none",
-    backgroundColor: "transparent",
-    cursor: "pointer",
-    padding: 0,
-  },
-  sectionSub: {
-    fontSize: tokens.fontSizeBase100,
-    color: tokens.colorNeutralForeground3,
-    marginTop: "2px",
-    marginBottom: "12px",
-  },
 
   grid: {
     display: "grid",
@@ -479,6 +454,7 @@ export const useShelfStyles = makeStyles({
     // quantidade de cards (Shelf mede a largura), não `space-between` — que com
     // poucos itens abria buracos gigantes e jogava o último card pra fora.
     justifyContent: "flex-start",
+    alignItems: "flex-start",
     columnGap: `${SHELF_GAP}px`,
     overflowX: "auto",
     scrollSnapType: "x proximity",
@@ -503,12 +479,13 @@ export const useShelfStyles = makeStyles({
   },
 });
 
-/** Cartão-capa em retrato. */
+/** Cartão de jogo — arte + título + plataforma embaixo (modelo modo XBOX). */
 export const useCardStyles = makeStyles({
   card: {
     width: "100%",
-    aspectRatio: "1 / 1",
-    display: "block",
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "8px",
     border: "none",
     backgroundColor: "transparent",
     // mesmo raio da arte → o anel de foco arredonda igual ao card visível
@@ -525,7 +502,7 @@ export const useCardStyles = makeStyles({
     transitionDuration: "160ms",
     transitionTimingFunction: tokens.curveDecelerateMid,
     "&:hover, &:focus, &:focus-visible": {
-      transform: "scale(1.055)",
+      transform: "scale(1.04)",
       zIndex: 2,
     },
     "&:hover [data-art] img, &:focus [data-art] img": {
@@ -542,7 +519,7 @@ export const useCardStyles = makeStyles({
   art: {
     position: "relative",
     width: "100%",
-    height: "100%",
+    aspectRatio: "1 / 1",
     borderRadius: shell.radius,
     overflowX: "hidden",
     overflowY: "hidden",
@@ -563,21 +540,31 @@ export const useCardStyles = makeStyles({
       transitionTimingFunction: tokens.curveEasyEase,
     },
   },
-  badge: {
-    position: "absolute",
-    left: "7px",
-    bottom: "7px",
-    paddingTop: "3px",
-    paddingBottom: "3px",
-    paddingLeft: "7px",
-    paddingRight: "7px",
-    borderRadius: "999px",
-    fontSize: "9px",
-    fontWeight: 700,
-    letterSpacing: "0.02em",
-    textTransform: "uppercase",
-    backgroundColor: "rgba(0, 0, 0, 0.62)",
+  meta: {
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "1px",
+    paddingLeft: "2px",
+    paddingRight: "2px",
+    minWidth: 0,
+  },
+  titleText: {
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: tokens.fontWeightSemibold,
+    lineHeight: 1.25,
     color: tokens.colorNeutralForeground1,
+    display: "-webkit-box",
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: "vertical",
+    overflowX: "hidden",
+    overflowY: "hidden",
+  },
+  subText: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+    whiteSpace: "nowrap",
+    overflowX: "hidden",
+    textOverflow: "ellipsis",
   },
 });
 
