@@ -1,12 +1,8 @@
-import {
-  Body1,
-  Title1,
-  makeStyles,
-  tokens,
-} from '@fluentui/react-components'
+import { Body1, makeStyles, tokens } from '@fluentui/react-components'
 import { useQuery } from '@tanstack/react-query'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { AnimatedBackground } from '../components/AnimatedBackground'
+import { AppLogo } from '../components/AppLogo'
 import { LoadingState } from '../components/EmptyState'
 import { ProfileForm } from '../components/ProfileForm'
 import { getProfile } from '../lib/tauri'
@@ -56,10 +52,10 @@ export function Onboarding() {
       <AnimatedBackground />
       <div className={s.card}>
         <div className={s.head}>
-          <Title1>Bem-vindo ao ReEmu</Title1>
+          <AppLogo height={132} />
           <Body1>
-            Vamos criar seu perfil. Ele fica só neste computador — depois dá pra
-            ligar a uma rede social.
+            Bem-vindo — vamos criar seu perfil. Ele fica só neste computador;
+            depois dá pra ligar a uma rede social.
           </Body1>
         </div>
         <ProfileForm
