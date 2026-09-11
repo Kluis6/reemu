@@ -122,7 +122,16 @@ export function SettingsVideo() {
   )
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 460 }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+        // A aba Shaders precisa de mais largura pras 2 colunas — o resto
+        // (sem GPU / Molduras) fica no mesmo limite estreito de antes.
+        maxWidth: data.gpu && tab === 'shaders' ? 860 : 460,
+      }}
+    >
       <Caption1>
         {data.gpu
           ? 'Shader padrão da biblioteca (roda na GPU offscreen). Cada jogo pode ter um shader próprio na tela de detalhe.'
@@ -142,9 +151,21 @@ export function SettingsVideo() {
           </TabList>
 
           {tab === 'shaders' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {presetPicker}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            // `auto-fit`/`minmax`: 2 colunas quando cabe, 1 coluna sozinha
+            // quando a janela é estreita — responsivo sem media query.
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                columnGap: 24,
+                rowGap: 14,
+                alignItems: 'start',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+                {presetPicker}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                 <Caption1>
                   Preset externo — arquivo <code>.slangp</code> (RetroArch).
                   ~93% dos presets do pacote rodam (Mega Bezel inclusive);
