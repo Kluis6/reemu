@@ -736,8 +736,9 @@ export const useDetailStyles = makeStyles({
     paddingRight: "16px",
     borderRadius: shell.radius,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: "var(--reemuFillWeak)",
-    maxWidth: "560px",
+    // Sólido (não `--reemuFillWeak`, que é translúcido) — e sem `maxWidth`:
+    // acompanha a largura do hero/ações acima, como o resto da página.
+    backgroundColor: tokens.colorNeutralBackground2,
   },
   field: { display: "flex", flexDirection: "column", rowGap: "4px" },
   stateRow: {
