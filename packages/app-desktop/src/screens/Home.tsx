@@ -39,7 +39,7 @@ function Row({
   return (
     <section
       className={mergeClasses(s.section, m.riseIn)}
-      style={{ animationDelay: `${120 + index * 70}ms` }}
+      style={{ animationDelay: `${90 + index * 50}ms` }}
     >
       <SectionHeader title={title} subtitle={subtitle} onSeeAll={onMore} />
       <Shelf>{items.map(render)}</Shelf>

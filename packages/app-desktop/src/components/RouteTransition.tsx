@@ -3,18 +3,18 @@ import type { ReactNode } from "react";
 import { useNavigationType } from "react-router-dom";
 
 const enterFwd = {
-  from: { opacity: 0, transform: "translateY(16px) scale(0.99)" },
-  to: { opacity: 1, transform: "translateY(0) scale(1)" },
+  from: { opacity: 0, transform: "translateY(10px)" },
+  to: { opacity: 1, transform: "translateY(0)" },
 };
 const enterBack = {
-  from: { opacity: 0, transform: "translateX(-26px)" },
+  from: { opacity: 0, transform: "translateX(-14px)" },
   to: { opacity: 1, transform: "translateX(0)" },
 };
 
 const useStyles = makeStyles({
   layer: {
-    animationDuration: "280ms",
-    animationTimingFunction: tokens.curveDecelerateMid,
+    animationDuration: "380ms",
+    animationTimingFunction: tokens.curveDecelerateMax,
     animationFillMode: "both",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
   },

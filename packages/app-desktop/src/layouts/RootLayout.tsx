@@ -9,8 +9,8 @@ import { useMenuNav } from '../hooks/useMenuNav'
 import { getProfile } from '../lib/tauri'
 
 /** Tempo mínimo da splash (estilo Xbox — não pisca em máquina rápida). */
-const SPLASH_MIN_MS = 1800
-const SPLASH_FADE_MS = 320
+const SPLASH_MIN_MS = 1900
+const SPLASH_FADE_MS = 480
 
 /**
  * Envolve todas as rotas. Global: splash de abertura, gate de onboarding, fila

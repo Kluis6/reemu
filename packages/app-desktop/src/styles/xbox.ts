@@ -116,12 +116,12 @@ export const useShellStyles = makeStyles({
     backgroundColor: "transparent",
     cursor: "pointer",
     transitionProperty: "background-color, color, transform, box-shadow",
-    transitionDuration: "160ms",
-    transitionTimingFunction: tokens.curveDecelerateMid,
+    transitionDuration: "240ms",
+    transitionTimingFunction: tokens.curveEasyEase,
     ":hover": {
       backgroundColor: tokens.colorNeutralBackground3,
       color: tokens.colorNeutralForeground1,
-      transform: "scale(1.06)",
+      transform: "scale(1.04)",
     },
     '&[aria-current="page"]': {
       backgroundColor: "#3a3a3f",
@@ -231,11 +231,11 @@ export const useShellStyles = makeStyles({
 export const useMotionStyles = makeStyles({
   riseIn: {
     animationName: {
-      from: { opacity: 0, transform: "translateY(16px)" },
+      from: { opacity: 0, transform: "translateY(12px)" },
       to: { opacity: 1, transform: "translateY(0)" },
     },
-    animationDuration: "380ms",
-    animationTimingFunction: tokens.curveDecelerateMid,
+    animationDuration: "460ms",
+    animationTimingFunction: tokens.curveDecelerateMax,
     animationFillMode: "both",
     "@media (prefers-reduced-motion: reduce)": {
       animationName: "none",
@@ -245,8 +245,8 @@ export const useMotionStyles = makeStyles({
   },
   fadeIn: {
     animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
-    animationDuration: "300ms",
-    animationTimingFunction: tokens.curveDecelerateMid,
+    animationDuration: "380ms",
+    animationTimingFunction: tokens.curveEasyEase,
     animationFillMode: "both",
     "@media (prefers-reduced-motion: reduce)": {
       animationName: "none",
@@ -404,14 +404,14 @@ export const useCardStyles = makeStyles({
     willChange: "transform",
     transformOrigin: "center",
     transitionProperty: "transform, outline-color, outline-offset",
-    transitionDuration: "160ms",
-    transitionTimingFunction: tokens.curveDecelerateMid,
+    transitionDuration: "260ms",
+    transitionTimingFunction: tokens.curveEasyEase,
     "&:hover, &:focus, &:focus-visible": {
-      transform: "scale(1.04)",
+      transform: "scale(1.035)",
       zIndex: 2,
     },
     "&:hover [data-art] img, &:focus [data-art] img": {
-      transform: "scale(1.06)",
+      transform: "scale(1.05)",
     },
     "&:hover [data-art], &:focus [data-art]": {
       boxShadow: "0 14px 34px rgba(0, 0, 0, 0.5)",
@@ -434,14 +434,14 @@ export const useCardStyles = makeStyles({
     justifyItems: "center",
     boxShadow: "0 6px 14px rgba(0, 0, 0, 0.22)",
     transitionProperty: "box-shadow",
-    transitionDuration: "180ms",
+    transitionDuration: "300ms",
     transitionTimingFunction: tokens.curveEasyEase,
     "& img": {
       width: "100%",
       height: "100%",
       objectFit: "cover",
       transitionProperty: "transform",
-      transitionDuration: "220ms",
+      transitionDuration: "320ms",
       transitionTimingFunction: tokens.curveEasyEase,
     },
   },

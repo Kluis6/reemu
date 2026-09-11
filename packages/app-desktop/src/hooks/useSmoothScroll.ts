@@ -19,12 +19,13 @@ export function useSmoothScroll(ref: RefObject<HTMLElement | null>) {
     const tick = () => {
       const cur = el.scrollTop;
       const diff = target - cur;
-      if (Math.abs(diff) < 0.5) {
+      if (Math.abs(diff) < 0.4) {
         el.scrollTop = target;
         running = false;
         return;
       }
-      el.scrollTop = cur + diff * 0.18;
+      // fator baixo = deslize mais longo e macio
+      el.scrollTop = cur + diff * 0.12;
       raf = requestAnimationFrame(tick);
     };
 

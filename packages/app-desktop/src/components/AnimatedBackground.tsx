@@ -9,19 +9,19 @@ import { useThemeStore } from '../stores/useThemeStore'
  * `prefers-reduced-motion`. Puramente decorativo (`aria-hidden`, sem input).
  */
 const drift1 = {
-  '0%': { transform: 'translate3d(-8%, -6%, 0) scale(1)' },
-  '50%': { transform: 'translate3d(6%, 4%, 0) scale(1.15)' },
-  '100%': { transform: 'translate3d(-8%, -6%, 0) scale(1)' },
+  '0%': { transform: 'translate3d(-6%, -4%, 0) scale(1)' },
+  '50%': { transform: 'translate3d(4%, 3%, 0) scale(1.08)' },
+  '100%': { transform: 'translate3d(-6%, -4%, 0) scale(1)' },
 }
 const drift2 = {
-  '0%': { transform: 'translate3d(6%, 8%, 0) scale(1.1)' },
-  '50%': { transform: 'translate3d(-6%, -4%, 0) scale(0.95)' },
-  '100%': { transform: 'translate3d(6%, 8%, 0) scale(1.1)' },
+  '0%': { transform: 'translate3d(4%, 6%, 0) scale(1.06)' },
+  '50%': { transform: 'translate3d(-4%, -3%, 0) scale(0.97)' },
+  '100%': { transform: 'translate3d(4%, 6%, 0) scale(1.06)' },
 }
 const drift3 = {
-  '0%': { transform: 'translate3d(0, 4%, 0) scale(1)' },
-  '50%': { transform: 'translate3d(4%, -6%, 0) scale(1.2)' },
-  '100%': { transform: 'translate3d(0, 4%, 0) scale(1)' },
+  '0%': { transform: 'translate3d(0, 3%, 0) scale(1)' },
+  '50%': { transform: 'translate3d(3%, -4%, 0) scale(1.1)' },
+  '100%': { transform: 'translate3d(0, 3%, 0) scale(1)' },
 }
 
 const useStyles = makeStyles({
@@ -49,7 +49,7 @@ const useStyles = makeStyles({
     left: '-15vmax',
     backgroundColor: 'var(--reemuBg1, #3b82f6)',
     animationName: drift1,
-    animationDuration: '26s',
+    animationDuration: '38s',
     animationTimingFunction: 'ease-in-out',
     animationIterationCount: 'infinite',
   },
@@ -58,7 +58,7 @@ const useStyles = makeStyles({
     right: '-15vmax',
     backgroundColor: 'var(--reemuBg2, #8b5cf6)',
     animationName: drift2,
-    animationDuration: '34s',
+    animationDuration: '44s',
     animationTimingFunction: 'ease-in-out',
     animationIterationCount: 'infinite',
   },
@@ -68,7 +68,7 @@ const useStyles = makeStyles({
     backgroundColor: 'var(--reemuBg3, #06b6d4)',
     opacity: 0.35,
     animationName: drift3,
-    animationDuration: '42s',
+    animationDuration: '54s',
     animationTimingFunction: 'ease-in-out',
     animationIterationCount: 'infinite',
   },
