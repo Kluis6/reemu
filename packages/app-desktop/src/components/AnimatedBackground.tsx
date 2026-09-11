@@ -63,7 +63,7 @@ const useStyles = makeStyles({
     position: 'absolute',
     inset: 0,
     backgroundImage:
-      'var(--reemuVeil, radial-gradient(ellipse at center, rgba(9, 9, 12, 0.2) 0%, rgba(9, 9, 12, 0.82) 100%))',
+      'var(--reemuVeil, radial-gradient(ellipse at center, rgba(9, 9, 12, 0.08) 0%, rgba(9, 9, 12, 0.82) 100%))',
   },
 })
 
