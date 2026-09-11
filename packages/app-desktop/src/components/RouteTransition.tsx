@@ -13,7 +13,7 @@ const enterBack = {
 
 const useStyles = makeStyles({
   layer: {
-    animationDuration: "300ms",
+    animationDuration: "400ms",
     animationTimingFunction: tokens.curveDecelerateMax,
     animationFillMode: "both",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
