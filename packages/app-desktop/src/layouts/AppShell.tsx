@@ -9,10 +9,8 @@ import {
   PeopleRegular,
   PersonRegular,
   PowerRegular,
-  PresenceAvailableRegular,
   SettingsFilled,
   SettingsRegular,
-  SignOutRegular,
   TrophyRegular,
 } from "@fluentui/react-icons";
 import {
@@ -55,15 +53,12 @@ const useLocalStyles = makeStyles({
     },
   },
   // Menu do avatar — proporções do menu do modo XBOX de verdade: mais
-  // largo, linhas com bem mais respiro que o padrão "medium" do Fluent
-  // (que usa `spacingVerticalSNudge`, ~2px, nas linhas — bem apertado).
+  // largo, com respiro no CORPO da lista (topo/base), não em cada item —
+  // as linhas continuam com o padding "medium" padrão do Fluent.
   menuPopover: { minWidth: "236px" },
-  menuItem: {
+  menuBody: {
     paddingTop: tokens.spacingVerticalM,
     paddingBottom: tokens.spacingVerticalM,
-    paddingLeft: tokens.spacingHorizontalM,
-    paddingRight: tokens.spacingHorizontalM,
-    columnGap: tokens.spacingHorizontalM,
   },
 });
 
@@ -165,42 +160,36 @@ export function AppShell() {
             </button>
           </MenuTrigger>
           <MenuPopover className={l.menuPopover}>
-            <MenuList hasIcons>
+            {/* SEM `hasIcons`: só os itens que passam `icon` (Perfil,
+                conquistas, rede) ficam indentados — Status/Sair, sem
+                `icon`, ficam alinhados à esquerda. */}
+            <MenuList className={l.menuBody}>
               <MenuItem
-                className={l.menuItem}
                 icon={<PersonRegular />}
                 onClick={() => navigate("/settings/perfil")}
               >
                 Meu perfil
               </MenuItem>
               {PROFILE_EXTRA.map((m) => (
-                <MenuItem key={m.label} className={l.menuItem} icon={m.icon} disabled>
+                <MenuItem key={m.label} icon={m.icon} disabled>
                   {m.label}
                 </MenuItem>
               ))}
               <MenuDivider />
               <Menu>
                 <MenuTrigger disableButtonEnhancement>
-                  <MenuItem className={l.menuItem} icon={<PresenceAvailableRegular />} disabled>
-                    Status
-                  </MenuItem>
+                  <MenuItem disabled>Status</MenuItem>
                 </MenuTrigger>
                 <MenuPopover className={l.menuPopover}>
-                  <MenuList>
-                    <MenuItem className={l.menuItem}>Online</MenuItem>
-                    <MenuItem className={l.menuItem}>Ausente</MenuItem>
-                    <MenuItem className={l.menuItem}>Jogando</MenuItem>
+                  <MenuList className={l.menuBody}>
+                    <MenuItem>Online</MenuItem>
+                    <MenuItem>Ausente</MenuItem>
+                    <MenuItem>Jogando</MenuItem>
                   </MenuList>
                 </MenuPopover>
               </Menu>
               <MenuDivider />
-              <MenuItem
-                className={l.menuItem}
-                icon={<SignOutRegular />}
-                onClick={() => void quitApp()}
-              >
-                Sair
-              </MenuItem>
+              <MenuItem onClick={() => void quitApp()}>Sair</MenuItem>
             </MenuList>
           </MenuPopover>
         </Menu>
