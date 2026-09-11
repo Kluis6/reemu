@@ -528,7 +528,7 @@ export const useCardStyles = makeStyles({
     paddingLeft: "10px",
     paddingRight: "10px",
     backgroundImage:
-      "linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)",
+      "linear-gradient(0deg, rgba(0,0,0,0.96) 0%, rgba(0,0,0,0.65) 55%, transparent 100%)",
     opacity: 0,
     transform: "translateY(6px)",
     transitionProperty: "opacity, transform",
