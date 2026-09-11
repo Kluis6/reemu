@@ -1,4 +1,4 @@
-import { Button, Card, mergeClasses } from "@fluentui/react-components";
+import { Button, mergeClasses } from "@fluentui/react-components";
 import {
   AddRegular,
   GridRegular,
@@ -9,11 +9,12 @@ import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
+import { HeroCarousel } from "../components/HeroCarousel";
 import { SectionHeader } from "../components/SectionHeader";
 import { platformLabel } from "../lib/platform";
 import { Shelf } from "../components/Shelf";
 import { listRoms, type RomEntry } from "../lib/tauri";
-import { useBrowseStyles, useHeroStyles, useMotionStyles } from "../styles/xbox";
+import { useBrowseStyles, useMotionStyles } from "../styles/xbox";
 
 /** Uma faixa curada da Início (cabeçalho + prateleira). */
 function Row({
@@ -52,7 +53,6 @@ function Row({
  */
 export function Home() {
   const s = useBrowseStyles();
-  const h = useHeroStyles();
   const navigate = useNavigate();
   const roms = useQuery({
     queryKey: ["roms"],
@@ -75,7 +75,23 @@ export function Home() {
     () => [...all].sort((a, b) => b.addedAt - a.addedAt).slice(0, 30),
     [all],
   );
-  const hero = recent[0] ?? all.find((r) => r.boxart) ?? all[0];
+  // Destaques do carrossel: jogados recentemente primeiro, depois os que têm
+  // capa, sem repetir; teto de 6.
+  const featured = useMemo(() => {
+    const seen = new Set<string>();
+    const out: RomEntry[] = [];
+    for (const r of [
+      ...recent,
+      ...all.filter((r) => r.boxart),
+      ...all,
+    ]) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+      out.push(r);
+      if (out.length >= 6) break;
+    }
+    return out;
+  }, [recent, all]);
 
   const card = (r: RomEntry) => (
     <GameCard
@@ -121,22 +137,10 @@ export function Home() {
 
   return (
     <div>
-      {hero && (
-        <Card
-          className={h.hero}
-          onClick={() => navigate(`/rom/${hero.id}`)}
-          aria-label={hero.title}
-        >
-          {hero.boxart && <img src={hero.boxart} alt="" />}
-          <span className={h.body}>
-            <span className={h.kicker}>
-              {hero.lastPlayedAt ? "Continuar" : "Destaque"}
-            </span>
-            <span className={h.title}>{hero.title}</span>
-            <span className={h.sub}>{platformLabel(hero.systemId)}</span>
-          </span>
-        </Card>
-      )}
+      <HeroCarousel
+        items={featured}
+        onOpen={(id) => navigate(`/rom/${id}`)}
+      />
 
       <div className={s.toolbar} style={{ marginTop: 18 }}>
         <Button
