@@ -2,12 +2,15 @@ import {
   ChevronLeftRegular,
   FullScreenMaximizeRegular,
   FullScreenMinimizeRegular,
+  HomeFilled,
   HomeRegular,
+  LibraryFilled,
   LibraryRegular,
   PeopleRegular,
   PersonRegular,
   PowerRegular,
   PresenceAvailableRegular,
+  SettingsFilled,
   SettingsRegular,
   SignOutRegular,
   TrophyRegular,
@@ -58,13 +61,28 @@ const useLocalStyles = makeStyles({
 const SHOW_AVATAR_BADGE = false;
 const SHOW_AVATAR_RING = false;
 
+// Ícone Regular normalmente, Filled quando a rota está ativa — mesma
+// linguagem do rail do Xbox de verdade.
 const RAIL = [
-  { to: "/", end: true, icon: <HomeRegular />, label: "Início" },
-  { to: "/library", end: true, icon: <LibraryRegular />, label: "Meus jogos" },
+  {
+    to: "/",
+    end: true,
+    icon: <HomeRegular />,
+    activeIcon: <HomeFilled />,
+    label: "Início",
+  },
+  {
+    to: "/library",
+    end: true,
+    icon: <LibraryRegular />,
+    activeIcon: <LibraryFilled />,
+    label: "Meus jogos",
+  },
   {
     to: "/settings",
     end: true,
     icon: <SettingsRegular />,
+    activeIcon: <SettingsFilled />,
     label: "Configurações",
   },
 ];
@@ -176,7 +194,7 @@ export function AppShell() {
             title={it.label}
             aria-label={it.label}
           >
-            {it.icon}
+            {({ isActive }) => (isActive ? it.activeIcon : it.icon)}
           </NavLink>
         ))}
         <div className={s.railSpacer} />

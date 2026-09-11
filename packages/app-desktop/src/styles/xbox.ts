@@ -127,17 +127,29 @@ export const useShellStyles = makeStyles({
     border: "none",
     backgroundColor: "transparent",
     cursor: "pointer",
-    transitionProperty: "background-color, color, transform",
+    transitionProperty: "background-color, color",
     transitionDuration: "150ms",
     transitionTimingFunction: tokens.curveEasyEase,
     ":hover": {
       backgroundColor: tokens.colorNeutralBackground3,
       color: tokens.colorNeutralForeground1,
-      transform: "scale(1.03)",
     },
     '&[aria-current="page"]': {
       backgroundColor: "var(--reemuActiveBg)",
       color: "var(--reemuActiveFg)",
+    },
+    // Zoom só no glifo (não na pílula inteira) — cresce suave no hover/foco
+    // e volta sozinho ao sair, via transition no próprio ícone.
+    "& svg": {
+      transitionProperty: "transform",
+      transitionDuration: "220ms",
+      transitionTimingFunction: tokens.curveEasyEase,
+    },
+    "&:hover svg, &:focus svg, &:focus-visible svg": {
+      transform: "scale(1.18)",
+    },
+    "@media (prefers-reduced-motion: reduce)": {
+      "& svg": { transitionProperty: "none" },
     },
   },
   railQuit: {
