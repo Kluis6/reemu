@@ -18,7 +18,7 @@ import { cardSizeCss, SHELF_GAP } from "../lib/shelf";
 // Só os valores NÃO-cor do "console look". Cor de marca, elevações e o fundo
 // da casca vêm do tema (tokens Fluent + tokens custom `--reemu*`, ver
 // styles/themes.ts) — trocar de tema reajusta tudo.
-const shell = {
+export const shell = {
   radius: "12px",
   radiusLg: "16px",
   // Rail estreito estilo modo XBOX; cresce um pouco em telas largas.

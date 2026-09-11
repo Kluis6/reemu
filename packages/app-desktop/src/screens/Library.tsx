@@ -24,8 +24,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
+import { CardGridSkeleton } from "../components/CardGridSkeleton";
 import { GamepadArt, SearchArt, StarArt } from "../components/EmptyArt";
-import { EmptyState, LoadingState } from "../components/EmptyState";
+import { EmptyState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { SectionHeader } from "../components/SectionHeader";
 import { PlatformTile } from "../components/PlatformTile";
@@ -256,7 +257,7 @@ export function Library() {
   );
 
   const body = () => {
-    if (roms.isLoading) return <LoadingState label="Carregando biblioteca…" />;
+    if (roms.isLoading) return <CardGridSkeleton />;
     if (roms.isError)
       return (
         <EmptyState icon="⚠" title="Biblioteca indisponível">

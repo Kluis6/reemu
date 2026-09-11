@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { CardGridSkeleton } from "../components/CardGridSkeleton";
 import { SearchArt } from "../components/EmptyArt";
-import { EmptyState, LoadingState } from "../components/EmptyState";
+import { EmptyState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { SectionHeader } from "../components/SectionHeader";
 import { platformLabel } from "../lib/platform";
@@ -76,7 +77,7 @@ export function PlatformLibrary() {
       />
 
       {roms.isLoading ? (
-        <LoadingState />
+        <CardGridSkeleton />
       ) : list.length === 0 ? (
         <EmptyState art={<SearchArt />} title="Nada nessa plataforma">
           Ajuste a busca ou volte pra biblioteca.
