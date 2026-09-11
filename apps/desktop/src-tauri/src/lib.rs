@@ -3,6 +3,7 @@ mod bezel_pack;
 mod bios;
 mod commands;
 mod core_catalog;
+mod covers;
 mod decoration;
 mod gpu;
 mod profile;
@@ -29,7 +30,7 @@ fn env_flag(key: &str, default: bool) -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    let app = covers::register(tauri::Builder::default())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             if cfg!(debug_assertions) {

@@ -37,6 +37,9 @@ pub struct AppState {
     /// `<dados>/appearance` — papel de parede da tela inicial escolhido pelo
     /// usuário (mesmo padrão do avatar: presença do arquivo = estado).
     pub appearance_dir: std::path::PathBuf,
+    /// `<dados>/covers` — cache local das capas baixadas da libretro (uma
+    /// vez por ROM, servido pelo protocolo `cover://` em `covers.rs`).
+    pub covers_dir: std::path::PathBuf,
     /// Hotkeys de sistema carregadas do DB (`system_hotkeys`). `save_binding` /
     /// `clear_system_hotkey` recompõem via `refresh_hotkey_resolver`.
     pub hotkeys: Mutex<ComboHotkeyResolver>,
@@ -123,6 +126,7 @@ impl AppState {
         let decorations_dir = base.join("decorations");
         let profile_dir = base.join("profile");
         let appearance_dir = base.join("appearance");
+        let covers_dir = base.join("covers");
         let mut cfg = SessionConfig::new(cores_dir.clone(), system_dir.clone(), save_dir.clone());
         cfg.enable_gamepad = true;
         cfg.audio_sink = Some(Box::new(move || {
@@ -148,6 +152,7 @@ impl AppState {
             decorations_dir,
             profile_dir,
             appearance_dir,
+            covers_dir,
             hotkeys: Mutex::new(ComboHotkeyResolver::new(hotkeys)),
             last_hotkey: Mutex::new(None),
             current_rom: Mutex::new(None),
@@ -1674,7 +1679,10 @@ pub struct RomDto {
     pub title: String,
     pub system_id: String,
     pub file_path: String,
-    /// Boxart da libretro (o `<img>` tenta carregar; cai num placeholder se 404).
+    /// `cover://localhost/<id>` — protocolo custom (`covers.rs`) que serve
+    /// do cache em disco ou baixa da libretro e cacheia na 1ª vez; o
+    /// `<img>` cai num placeholder de iniciais se vier 404 (sem cobertura
+    /// ou sem rede na 1ª tentativa).
     pub boxart: Option<String>,
     /// Unix (s) do último load — pra "Continuar jogando". `None` = nunca.
     pub last_played_at: Option<i64>,
@@ -1684,6 +1692,19 @@ pub struct RomDto {
     pub is_favorite: bool,
 }
 
+/// Título de exibição de uma ROM: o que o usuário renomeou, senão o nome do
+/// arquivo sem extensão. Mesma regra usada pro `list_roms` e pro cache de
+/// capas (`covers.rs`) resolverem o mesmo jogo pro mesmo nome.
+pub(crate) fn rom_title(r: &domain::library::Rom) -> String {
+    r.user_title.clone().unwrap_or_else(|| {
+        std::path::Path::new(&r.file_path)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(&r.file_path)
+            .to_string()
+    })
+}
+
 #[tauri::command]
 pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String> {
     let repo = db::RomsRepo::new(pool(&state)?);
@@ -1691,15 +1712,16 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String
     Ok(roms
         .into_iter()
         .map(|r| {
-            let title = r.user_title.clone().unwrap_or_else(|| {
-                std::path::Path::new(&r.file_path)
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or(&r.file_path)
-                    .to_string()
-            });
+            let title = rom_title(&r);
+            // Sem cobertura conhecida (`libretro_boxart_url` → `None`, ex.:
+            // arcade) nem tenta o protocolo — cai direto nas iniciais, igual
+            // hoje. Com cobertura, aponta pro protocolo `cover://` (ver
+            // `covers.rs`): serve do cache em disco se já baixou antes, ou
+            // baixa na hora e grava — funciona offline depois da 1ª vez.
+            let boxart = library_scan::libretro_boxart_url(&r.system_id, &title)
+                .map(|_| format!("cover://localhost/{}", r.id));
             RomDto {
-                boxart: library_scan::libretro_boxart_url(&r.system_id, &title),
+                boxart,
                 title,
                 id: r.id,
                 system_id: r.system_id,
