@@ -2,10 +2,17 @@ import { makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { useThemeStore } from '../stores/useThemeStore'
 
 /**
- * Fundo animado das telas — 2 manchas de cor desfocadas que derivam devagar.
- * As cores vêm de `--reemuBg1/2` (o `FluentProvider` emite a partir do tema).
- * Leve de propósito: só `translate` no keyframe (sem `scale`/`filter`
- * animados — re-rasterizavam o blur a cada frame no WebKitGTK). Decorativo.
+ * Fundo animado das telas — 2 manchas de cor que derivam devagar. As cores
+ * vêm de `--reemuBg1/2` (o `FluentProvider` emite a partir do tema).
+ *
+ * SEM `filter: blur()`: num software renderer (WebKitGTK sem compositing
+ * acelerado, caso do NVIDIA — ver main.rs) borrar uma área de metade da
+ * tela é uma convolução cara, refeita a cada frame da animação, o tempo
+ * todo que o app fica aberto — era o item mais pesado do frontend. Um
+ * `radial-gradient` de UMA camada (a regra do topo do arquivo é nada de
+ * gradiente multicamada nesse WebKitGTK) já dá a borda suave sozinho, sem
+ * blur nenhum — muito mais barato de rasterizar. Só `translate` no
+ * keyframe (sem `scale`, que mudaria a caixa e forçaria recálculo).
  */
 const drift1 = {
   '0%, 100%': { transform: 'translate3d(-4%, -3%, 0)' },
@@ -29,27 +36,27 @@ const useStyles = makeStyles({
   },
   blob: {
     position: 'absolute',
-    width: '55vmax',
-    height: '55vmax',
-    borderRadius: '50%',
-    filter: 'blur(55px)',
-    opacity: 0.4,
+    width: '70vmax',
+    height: '70vmax',
+    opacity: 0.5,
     willChange: 'transform',
     animationTimingFunction: 'ease-in-out',
     animationIterationCount: 'infinite',
     '@media (prefers-reduced-motion: reduce)': { animationName: 'none' },
   },
   b1: {
-    top: '-18vmax',
-    left: '-14vmax',
-    backgroundColor: 'var(--reemuBg1, #3b82f6)',
+    top: '-26vmax',
+    left: '-22vmax',
+    backgroundImage:
+      'radial-gradient(circle, var(--reemuBg1, #3b82f6) 0%, var(--reemuBg1, #3b82f6) 32%, transparent 68%)',
     animationName: drift1,
     animationDuration: '40s',
   },
   b2: {
-    bottom: '-22vmax',
-    right: '-14vmax',
-    backgroundColor: 'var(--reemuBg2, #8b5cf6)',
+    bottom: '-30vmax',
+    right: '-22vmax',
+    backgroundImage:
+      'radial-gradient(circle, var(--reemuBg2, #8b5cf6) 0%, var(--reemuBg2, #8b5cf6) 32%, transparent 68%)',
     animationName: drift2,
     animationDuration: '52s',
   },
