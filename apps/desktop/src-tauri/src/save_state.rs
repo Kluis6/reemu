@@ -23,6 +23,20 @@ pub enum SaveError {
     NoCore,
 }
 
+/// Chave de compatibilidade de save state. Algumas builds só trocam o
+/// renderer do MESMO motor de emulação (ex.: `mednafen_psx_libretro` vs
+/// `mednafen_psx_hw_libretro` — o Beetle PSX "normal" e o "HW"/Vulkan são o
+/// mesmo `libretro/beetle-psx-libretro`, compilado com/sem HAVE_HW; o
+/// `retro_serialize`/`retro_unserialize` é idêntico, só o vídeo muda). Pra
+/// esses, o state de um carrega no outro — normaliza os dois pro mesmo nome
+/// de base. Qualquer outro core_id passa direto (sem par conhecido).
+fn save_family(core_id: &str) -> std::borrow::Cow<'_, str> {
+    match core_id.strip_suffix("_hw_libretro") {
+        Some(base) => std::borrow::Cow::Owned(format!("{base}_libretro")),
+        None => std::borrow::Cow::Borrowed(core_id),
+    }
+}
+
 fn now_unix() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -109,7 +123,7 @@ pub async fn load_bytes<R: SaveStateRepository + ?Sized>(
 ) -> Result<SaveStateMetadata, SaveError> {
     let meta = repo.get_state(state_id).await?.ok_or(SaveError::NotFound)?;
     let running = running_core.ok_or(SaveError::NoCore)?;
-    if meta.core_id != running {
+    if save_family(&meta.core_id) != save_family(running) {
         return Err(SaveError::CoreMismatch {
             state: meta.core_id,
             running: running.to_string(),
@@ -137,4 +151,31 @@ pub async fn delete<R: SaveStateRepository + ?Sized>(
     }
     repo.delete_state(state_id).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::save_family;
+
+    #[test]
+    fn hw_and_sw_beetle_psx_share_a_family() {
+        assert_eq!(
+            save_family("mednafen_psx_libretro"),
+            save_family("mednafen_psx_hw_libretro")
+        );
+    }
+
+    #[test]
+    fn unrelated_cores_keep_their_own_family() {
+        assert_ne!(save_family("mesen"), save_family("nestopia"));
+        assert_ne!(
+            save_family("mednafen_psx_libretro"),
+            save_family("mednafen_saturn_libretro")
+        );
+    }
+
+    #[test]
+    fn core_without_hw_sibling_is_its_own_family() {
+        assert_eq!(save_family("mesen"), "mesen");
+    }
 }

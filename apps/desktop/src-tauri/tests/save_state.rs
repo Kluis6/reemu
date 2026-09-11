@@ -31,6 +31,7 @@ async fn setup() -> (db::Db, PathBuf) {
         added_at: 0,
         last_played_at: None,
         is_favorite: false,
+        user_title: None,
     })
     .await
     .unwrap();
@@ -121,6 +122,58 @@ async fn load_validates_core_and_returns_meta() {
             .unwrap_err(),
         SaveError::NotFound
     ));
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Beetle PSX "normal" e "HW" são o mesmo `libretro/beetle-psx-libretro`
+/// (só troca o renderer) — save state de um tem que carregar no outro.
+/// Outro core qualquer com sufixo parecido não deve colar por acidente.
+#[tokio::test]
+async fn load_allows_sw_hw_sibling_cores() {
+    let (db, dir) = setup().await;
+    let repo = db::SaveStateRepo::new(db);
+
+    let meta = save_state::save(
+        &repo,
+        &dir,
+        "rom1",
+        "mednafen_psx_libretro",
+        None,
+        b"S",
+        None,
+    )
+    .await
+    .unwrap();
+
+    // salvo no SW, carrega rodando o HW
+    let ok = save_state::load_bytes(&repo, &meta.id, Some("mednafen_psx_hw_libretro"))
+        .await
+        .unwrap();
+    assert_eq!(ok.core_id, "mednafen_psx_libretro");
+
+    let meta_hw = save_state::save(
+        &repo,
+        &dir,
+        "rom1",
+        "mednafen_psx_hw_libretro",
+        None,
+        b"S2",
+        None,
+    )
+    .await
+    .unwrap();
+
+    // e o inverso: salvo no HW, carrega rodando o SW
+    save_state::load_bytes(&repo, &meta_hw.id, Some("mednafen_psx_libretro"))
+        .await
+        .unwrap();
+
+    // um core sem parentesco continua bloqueado
+    let err = save_state::load_bytes(&repo, &meta.id, Some("mednafen_saturn_libretro"))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, SaveError::CoreMismatch { .. }), "{err:?}");
 
     let _ = std::fs::remove_dir_all(dir);
 }
