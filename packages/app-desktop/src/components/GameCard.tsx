@@ -1,5 +1,4 @@
 import {
-  Button,
   Card,
   Menu,
   MenuItem,
@@ -7,10 +6,9 @@ import {
   MenuPopover,
   MenuTrigger,
   makeStyles,
-  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
-import { StarFilled, StarRegular } from "@fluentui/react-icons";
+import { StarFilled } from "@fluentui/react-icons";
 import { useState } from "react";
 import { initials } from "../lib/initials";
 import { useCardStyles } from "../styles/xbox";
@@ -21,44 +19,37 @@ export interface CardMenuItem {
 }
 
 const useLocalStyles = makeStyles({
-  // revela a estrela no hover/foco do cartão
-  reveal: {
-    "&:hover [data-fav], &:focus-within [data-fav]": { opacity: 1 },
-  },
-  // wrapper de posicionamento — só posição/opacidade; o botão fica com o
-  // border-radius padrão do Fluent.
-  favSlot: {
+  // Só indicador — não é botão. Sempre visível (não depende de hover),
+  // já que não há mais ação de favoritar aqui (fica na tela do jogo).
+  favBadge: {
     position: "absolute",
     top: "5px",
     right: "5px",
-    opacity: 0,
-    transitionProperty: "opacity",
-    transitionDuration: "140ms",
-    "&[data-on]": { opacity: 1 },
-  },
-  favBtn: {
-    color: tokens.colorNeutralForegroundInverted,
+    display: "grid",
+    alignItems: "center",
+    justifyItems: "center",
+    width: "24px",
+    height: "24px",
+    borderRadius: tokens.borderRadiusCircular,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
-    ":hover": {
-      color: tokens.colorNeutralForegroundInverted,
-      backgroundColor: "rgba(0, 0, 0, 0.7)",
-    },
+    color: tokens.colorPaletteMarigoldForeground1,
+    fontSize: "14px",
+    pointerEvents: "none",
   },
-  favOn: { color: tokens.colorPaletteMarigoldForeground1 },
 });
 
 /**
  * Cartão de jogo no estilo modo XBOX: o card É a capa quadrada. O nome (+
- * plataforma, `badge`) fica SOBRE a imagem e só aparece no hover/foco; o
- * efeito de movimento é um zoom na imagem, o card em si não escala. Estrela
- * de favorito no canto. Botão / clique-direito abre o menu de contexto.
+ * plataforma, `badge`) fica SOBRE a imagem e só aparece no hover/foco. A
+ * estrela de favorito é só indicador (aparece quando `favorite` já é
+ * `true`) — favoritar/desfavoritar é ação da tela de detalhes do jogo, não
+ * do cartão. Botão / clique-direito abre o menu de contexto.
  */
 export function GameCard({
   title,
   badge,
   boxart,
   favorite,
-  onToggleFavorite,
   onClick,
   menu,
 }: {
@@ -67,7 +58,6 @@ export function GameCard({
   badge?: string;
   boxart?: string | null;
   favorite?: boolean;
-  onToggleFavorite?: () => void;
   onClick?: () => void;
   menu?: readonly CardMenuItem[];
 }) {
@@ -79,11 +69,10 @@ export function GameCard({
 
   // `<Card>` do Fluent com `onClick` já vira focável, mas NÃO ganha
   // `role`/teclado — a gente adiciona (a nav por controle e o leitor de tela
-  // tratam o tile inteiro como botão). A estrela é um `<Button>` aninhado com
-  // `stopPropagation`.
+  // tratam o tile inteiro como botão).
   const card = (
     <Card
-      className={mergeClasses(s.card, l.reveal)}
+      className={s.card}
       appearance="filled"
       role="button"
       aria-label={title}
@@ -108,24 +97,9 @@ export function GameCard({
         ) : (
           <span style={{ fontSize: 30, opacity: 0.5 }}>{initials(title)}</span>
         )}
-        {onToggleFavorite && (
-          <span
-            className={l.favSlot}
-            data-fav=""
-            data-on={favorite ? "" : undefined}
-          >
-            <Button
-              size="small"
-              appearance="subtle"
-              className={mergeClasses(l.favBtn, favorite && l.favOn)}
-              aria-label={favorite ? "Desfavoritar" : "Favoritar"}
-              aria-pressed={favorite}
-              icon={favorite ? <StarFilled /> : <StarRegular />}
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite();
-              }}
-            />
+        {favorite && (
+          <span className={l.favBadge} aria-label="Favorito">
+            <StarFilled />
           </span>
         )}
       </div>

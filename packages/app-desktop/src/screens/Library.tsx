@@ -38,7 +38,6 @@ import {
   listRoms,
   removeRom,
   scanLibrary,
-  setRomFavorite,
   type RomEntry,
   type ScanProgress,
 } from "../lib/tauri";
@@ -163,24 +162,6 @@ export function Library() {
     onError: (e) => push(sysToast(`Falha: ${e}`, "Error")),
   });
 
-  const fav = useMutation({
-    mutationFn: ({ id, on }: { id: string; on: boolean }) =>
-      setRomFavorite(id, on),
-    onMutate: async ({ id, on }) => {
-      await qc.cancelQueries({ queryKey: ["roms"] });
-      const prev = qc.getQueryData<RomEntry[]>(["roms"]);
-      qc.setQueryData<RomEntry[]>(["roms"], (old) =>
-        (old ?? []).map((r) => (r.id === id ? { ...r, isFavorite: on } : r)),
-      );
-      return { prev };
-    },
-    onError: (e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["roms"], ctx.prev);
-      push(sysToast(`Falha ao favoritar: ${e}`, "Error"));
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["roms"] }),
-  });
-
   const all = useMemo(() => roms.data ?? [], [roms.data]);
 
   // plataformas presentes → `[systemId, quantidade]`, ordenado pelo rótulo
@@ -232,10 +213,6 @@ export function Library() {
   const cardMenu = (r: RomEntry) =>
     [
       { label: "Abrir", onClick: () => navigate(`/rom/${r.id}`) },
-      {
-        label: r.isFavorite ? "Desfavoritar" : "Favoritar",
-        onClick: () => fav.mutate({ id: r.id, on: !r.isFavorite }),
-      },
       { label: "Remover da biblioteca", onClick: () => del.mutate(r.id) },
     ] as const;
 
@@ -246,7 +223,6 @@ export function Library() {
       badge={platformLabel(r.systemId)}
       boxart={r.boxart}
       favorite={r.isFavorite}
-      onToggleFavorite={() => fav.mutate({ id: r.id, on: !r.isFavorite })}
       onClick={() => navigate(`/rom/${r.id}`)}
       menu={cardMenu(r)}
     />
@@ -286,7 +262,7 @@ export function Library() {
       if (tab === "fav")
         return (
           <EmptyState art={<StarArt />} title="Sem favoritos">
-            Favorite um jogo pelo menu do cartão.
+            Favorite um jogo na tela dele.
           </EmptyState>
         );
       return (

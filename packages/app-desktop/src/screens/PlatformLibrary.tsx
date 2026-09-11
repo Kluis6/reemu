@@ -8,12 +8,7 @@ import { GameCard } from "../components/GameCard";
 import { SectionHeader } from "../components/SectionHeader";
 import { platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
-import {
-  listRoms,
-  removeRom,
-  setRomFavorite,
-  type RomEntry,
-} from "../lib/tauri";
+import { listRoms, removeRom } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles } from "../styles/xbox";
@@ -37,24 +32,6 @@ export function PlatformLibrary() {
     if (query) l = l.filter((r) => r.title.toLowerCase().includes(query));
     return l.sort((a, b) => a.title.localeCompare(b.title));
   }, [roms.data, platform, query]);
-
-  const fav = useMutation({
-    mutationFn: ({ id, on }: { id: string; on: boolean }) =>
-      setRomFavorite(id, on),
-    onMutate: async ({ id, on }) => {
-      await qc.cancelQueries({ queryKey: ["roms"] });
-      const prev = qc.getQueryData<RomEntry[]>(["roms"]);
-      qc.setQueryData<RomEntry[]>(["roms"], (old) =>
-        (old ?? []).map((r) => (r.id === id ? { ...r, isFavorite: on } : r)),
-      );
-      return { prev };
-    },
-    onError: (e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(["roms"], ctx.prev);
-      push(sysToast(`Falha ao favoritar: ${e}`, "Error"));
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["roms"] }),
-  });
 
   const del = useMutation({
     mutationFn: (id: string) => removeRom(id),
@@ -91,16 +68,9 @@ export function PlatformLibrary() {
               badge={platformLabel(r.systemId)}
               boxart={r.boxart}
               favorite={r.isFavorite}
-              onToggleFavorite={() =>
-                fav.mutate({ id: r.id, on: !r.isFavorite })
-              }
               onClick={() => navigate(`/rom/${r.id}`)}
               menu={[
                 { label: "Abrir", onClick: () => navigate(`/rom/${r.id}`) },
-                {
-                  label: r.isFavorite ? "Desfavoritar" : "Favoritar",
-                  onClick: () => fav.mutate({ id: r.id, on: !r.isFavorite }),
-                },
                 {
                   label: "Remover da biblioteca",
                   onClick: () => del.mutate(r.id),
