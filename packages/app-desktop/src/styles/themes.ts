@@ -84,6 +84,26 @@ const ambar: BrandVariants = {
   160: "#FAF6F0",
 };
 
+/** Azul PlayStation (o acento do dashboard PS4/PS5). */
+const psBlue: BrandVariants = {
+  10: "#020C14",
+  20: "#041A29",
+  30: "#052842",
+  40: "#05375B",
+  50: "#064674",
+  60: "#05558D",
+  70: "#0667AC",
+  80: "#0A7BCB",
+  90: "#128EE7",
+  100: "#379DE6",
+  110: "#60ABE0",
+  120: "#86B9DE",
+  130: "#A9C8DF",
+  140: "#C8D8E4",
+  150: "#DFE6EB",
+  160: "#F3F4F5",
+};
+
 // --------------------------------------------------------------- fábrica ----
 
 /** Neutros do "console look" — casam com o antigo `brand` (bg/bgElev/bgElev2)
@@ -207,12 +227,14 @@ export type ThemeId =
   | "xbox-green"
   | "roxo"
   | "ambar"
+  | "ps-blue"
   | "claro"
   | "roxo-claro"
   | "ambar-claro";
 
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen) },
+  "ps-blue": { label: "Azul PlayStation", theme: make(psBlue) },
   roxo: { label: "Roxo", theme: make(roxo) },
   ambar: { label: "Âmbar", theme: make(ambar) },
   // Modo claro do dashboard Xbox (Series S/X e "modo XBOX" no PC): fundo
