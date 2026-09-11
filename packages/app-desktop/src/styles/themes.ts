@@ -2,13 +2,17 @@
  * Temas de cor do ReEmu (Fluent 2 / Griffel).
  *
  * Cada tema = uma rampa de marca (`BrandVariants`, 16 tons) passada por
- * `createDarkTheme`, mais:
- *  - `consoleDark`: neutros mais escuros que o `webDarkTheme` — a rampa neutra
- *    do Fluent é clara demais pra uma tela cheia tipo TV (era o motivo do
- *    antigo objeto `brand` em `xbox.ts`).
+ * `createDarkTheme` OU `createLightTheme` (`make(ramp, mode)`), mais:
+ *  - `consoleDark`/`consoleLight`: neutros mais "de console" que os temas web
+ *    padrão do Fluent (a rampa neutra web é clara/pálida demais pra uma tela
+ *    cheia tipo TV — era o motivo do antigo objeto `brand` em `xbox.ts`).
+ *    Calibrados olhando screenshot real do dashboard Xbox Series S/X e do
+ *    "modo XBOX" no PC, nos dois modos.
  *  - tokens **custom** `reemu*`: o `FluentProvider` emite toda chave do objeto
  *    de tema como CSS var (`--reemuAppBg`, …), então o Griffel referencia com
- *    `var(--reemuAppBg)`.
+ *    `var(--reemuAppBg)`. Todo token `reemu*` tem que ter um valor pros DOIS
+ *    modos em `make()` — é isso que faz o tema claro não "vazar" preto por
+ *    baixo (ver `reemuVeil`).
  *
  * Regenerar rampas: Fluent Theme Designer
  * (https://react.fluentui.dev/?path=/docs/theme-theme-designer--docs) ou o
@@ -16,6 +20,7 @@
  */
 import {
   createDarkTheme,
+  createLightTheme,
   type BrandVariants,
   type Theme,
 } from "@fluentui/react-components";
@@ -93,6 +98,22 @@ const consoleDark = {
   colorNeutralBackground4: "#1f1f24",
 } satisfies Partial<Theme>;
 
+/** Neutros do "console look" claro — calibrado com screenshots reais do
+ *  dashboard Xbox Series S/X e do "modo XBOX" no PC (guia/conquistas, gestor
+ *  de armazenamento): o fundo NÃO é branco, é um cinza médio-claro; quem é
+ *  branco são os cartões/painéis por cima (tile de jogo, popup de
+ *  conquista) — o mesmo contraste "cartão claro sobre fundo cinza" do tema
+ *  escuro (lá é "cartão cinza sobre fundo quase-preto"), só invertido. */
+const consoleLight = {
+  colorNeutralBackground1: "#e2e3e6",
+  colorNeutralBackground1Hover: "#d4d6da",
+  colorNeutralBackground1Pressed: "#e2e3e6",
+  colorNeutralBackground1Selected: "#cbcdd2",
+  colorNeutralBackground2: "#ffffff",
+  colorNeutralBackground3: "#eceef1",
+  colorNeutralBackground4: "#d6d8dc",
+} satisfies Partial<Theme>;
+
 /** Tokens custom do ReEmu, emitidos como `--reemu*` pelo `FluentProvider`. */
 export interface ReEmuTokens {
   /** Fundo da casca (`.app`) — cinza neutro suave, sem matiz. */
@@ -111,6 +132,24 @@ export interface ReEmuTokens {
   reemuBg1: string;
   reemuBg2: string;
   reemuBg3: string;
+  /** Véu sobre as manchas do fundo (`components/AnimatedBackground`) — escuro
+   *  no tema escuro (abafa a cor, mantém tudo "moody"), CLARO no tema claro
+   *  (abafa a cor pro lado do branco). Sem isto o fundo de um tema claro
+   *  ficaria escuro de qualquer jeito (o véu cobre tudo por cima). */
+  reemuVeil: string;
+  /** Fundo do item ativo no rail (`[aria-current="page"]`) — mais forte que
+   *  o hover (`colorNeutralBackground3`), pra destacar onde o usuário está.
+   *  No claro é o verde de marca (como no guia/gestor de armazenamento do
+   *  Xbox de verdade — o item selecionado vira uma pílula verde solida). */
+  reemuActiveBg: string;
+  /** Cor do texto/ícone sobre `reemuActiveBg` — sempre branco (a pílula
+   *  ativa é sempre escura o bastante pra pedir texto claro, nos dois
+   *  modos: cinza escuro no tema escuro, verde saturado no claro). */
+  reemuActiveFg: string;
+  /** Preenchimento quase-imperceptível usado em chips/painéis que ficam
+   *  direto sobre o fundo da casca (não sobre uma arte) — branco translúcido
+   *  no escuro, preto translúcido no claro. */
+  reemuFillWeak: string;
 }
 
 export type ReEmuTheme = Theme & ReEmuTokens;
@@ -123,31 +162,52 @@ function readableOn(hex: string): string {
   return (r * 299 + g * 587 + b * 114) / 1000 > 128 ? "#0b0b0d" : "#ffffff";
 }
 
-function make(ramp: BrandVariants): ReEmuTheme {
+function make(ramp: BrandVariants, mode: "dark" | "light" = "dark"): ReEmuTheme {
+  const light = mode === "light";
   return {
-    ...createDarkTheme(ramp),
-    ...consoleDark,
-    // Fundo quase preto (estilo app do Xbox) — leve clareada no topo, sem
-    // lavagem da cor de marca. Igual ao rail embaixo.
-    reemuAppBg: "linear-gradient(180deg, #121214 0%, #0b0b0d 45%)",
-    reemuAccentSoft: "rgba(255, 255, 255, 0.05)",
-    reemuSurfaceSoft: "#5f6368",
+    ...(light ? createLightTheme(ramp) : createDarkTheme(ramp)),
+    ...(light ? consoleLight : consoleDark),
+    // Fundo da casca: o stop mais "fraco" do gradiente é sempre igual ao
+    // `colorNeutralBackground1` (o rail usa esse mesmo tom — ver `xbox.ts`),
+    // só o outro stop clareia (escuro) ou clareia mais ainda (claro).
+    reemuAppBg: light
+      ? "linear-gradient(180deg, #ececee 0%, #e2e3e6 45%)"
+      : "linear-gradient(180deg, #121214 0%, #0b0b0d 45%)",
+    reemuAccentSoft: light ? "rgba(0, 0, 0, 0.045)" : "rgba(255, 255, 255, 0.05)",
+    // Botão/pílula "sólida" (ícones da topbar, ação da biblioteca): no
+    // escuro é um cinza médio sobre o quase-preto; no claro o equivalente é
+    // BRANCO sobre o cinza da casca (mesmo idioma "cartão claro flutuando"
+    // das telas de jogos/apps do Xbox — os tiles também são brancos).
+    reemuSurfaceSoft: light ? "#ffffff" : "#5f6368",
     reemuBrandSolid: ramp[80],
     reemuOnBrand: readableOn(ramp[80]),
     reemuBg1: ramp[70],
     reemuBg2: ramp[90],
     reemuBg3: ramp[50],
+    reemuVeil: light
+      ? "linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.9) 100%)"
+      : "linear-gradient(180deg, rgba(9, 9, 12, 0.55) 0%, rgba(9, 9, 12, 0.82) 100%)",
+    // Verde de marca (tom 70 — mais fechado que o 80 padrão, fica igual ao
+    // verde da pílula de seleção nos screenshots) só no claro; no escuro
+    // continua o cinza neutro que já existia.
+    reemuActiveBg: light ? ramp[70] : "#3a3a3f",
+    reemuActiveFg: "#ffffff",
+    reemuFillWeak: light ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.04)",
   };
 }
 
 // -------------------------------------------------------------- registro ----
 
-export type ThemeId = "xbox-green" | "roxo" | "ambar";
+export type ThemeId = "xbox-green" | "roxo" | "ambar" | "claro";
 
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen) },
   roxo: { label: "Roxo", theme: make(roxo) },
   ambar: { label: "Âmbar", theme: make(ambar) },
+  // Modo claro do dashboard Xbox (Series S/X e "modo XBOX" no PC): fundo
+  // branco/cinza bem claro, mesmo verde de marca do tema padrão — só a
+  // luminosidade da casca inverte, a marca não muda.
+  claro: { label: "Claro", theme: make(xboxGreen, "light") },
 };
 
 export const DEFAULT_THEME_ID: ThemeId = "xbox-green";

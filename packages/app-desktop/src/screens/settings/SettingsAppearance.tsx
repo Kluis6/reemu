@@ -2,7 +2,6 @@ import {
   Caption1,
   Text,
   makeStyles,
-  mergeClasses,
   tokens,
 } from '@fluentui/react-components'
 import { CheckmarkFilled } from '@fluentui/react-icons'
@@ -16,6 +15,10 @@ const useStyles = makeStyles({
     gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
     gap: tokens.spacingHorizontalM,
   },
+  // Cor de fundo/borda/texto vêm inline do PRÓPRIO tema sendo mostrado (`t`),
+  // não do tema ativo — senão o card do tema "Claro" ficaria escuro sempre
+  // que o usuário já estivesse num tema escuro (e vice-versa), e a prévia
+  // não serviria pra nada.
   card: {
     position: 'relative',
     display: 'flex',
@@ -23,12 +26,10 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalXS,
     padding: tokens.spacingHorizontalS,
     borderRadius: tokens.borderRadiusLarge,
-    border: `2px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: tokens.colorNeutralBackground2,
+    border: '2px solid transparent',
     cursor: 'pointer',
     textAlign: 'left',
   },
-  cardOn: { border: `2px solid ${tokens.colorBrandStroke1}` },
   swatch: {
     height: '46px',
     borderRadius: tokens.borderRadiusMedium,
@@ -40,7 +41,6 @@ const useStyles = makeStyles({
     position: 'absolute',
     top: tokens.spacingVerticalXS,
     right: tokens.spacingHorizontalXS,
-    color: tokens.colorBrandForeground1,
   },
 })
 
@@ -72,16 +72,30 @@ export function SettingsAppearance() {
               type="button"
               role="radio"
               aria-checked={on}
-              className={mergeClasses(s.card, on && s.cardOn)}
+              className={s.card}
+              style={{
+                backgroundColor: t.colorNeutralBackground2,
+                borderColor: on ? t.colorBrandStroke1 : t.colorNeutralStroke2,
+              }}
               onClick={() => setTheme(id)}
             >
-              {on && <CheckmarkFilled className={s.check} />}
+              {on && (
+                <CheckmarkFilled
+                  className={s.check}
+                  style={{ color: t.colorBrandForeground1 }}
+                />
+              )}
               <div className={s.swatch}>
                 <span className={s.seg} style={{ background: t.reemuBg1 }} />
                 <span className={s.seg} style={{ background: t.reemuBrandSolid }} />
                 <span className={s.seg} style={{ background: t.reemuBg2 }} />
               </div>
-              <Text weight={on ? 'semibold' : 'regular'}>{THEMES[id].label}</Text>
+              <Text
+                weight={on ? 'semibold' : 'regular'}
+                style={{ color: t.colorNeutralForeground1 }}
+              >
+                {THEMES[id].label}
+              </Text>
             </button>
           )
         })}

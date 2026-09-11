@@ -39,11 +39,14 @@ const useStyles = makeStyles({
     backgroundImage:
       'radial-gradient(circle, var(--reemuBg2, #8b5cf6) 0%, var(--reemuBg2, #8b5cf6) 32%, transparent 68%)',
   },
+  // `--reemuVeil` inverte por tema (escuro abafa pro preto, claro abafa pro
+  // branco) — sem isto o fundo ficaria escuro mesmo num tema claro, já que o
+  // véu cobre as manchas por cima de tudo.
   veil: {
     position: 'absolute',
     inset: 0,
     backgroundImage:
-      'linear-gradient(180deg, rgba(9, 9, 12, 0.55) 0%, rgba(9, 9, 12, 0.82) 100%)',
+      'var(--reemuVeil, linear-gradient(180deg, rgba(9, 9, 12, 0.55) 0%, rgba(9, 9, 12, 0.82) 100%))',
   },
 })
 

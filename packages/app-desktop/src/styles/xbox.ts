@@ -89,9 +89,12 @@ export const useShellStyles = makeStyles({
     paddingTop: "clamp(10px, 1.4vw, 16px)",
     paddingBottom: "clamp(10px, 1.4vw, 16px)",
     borderRight: "none",
-    // Mesmo quase-preto do fundo das páginas (estilo app do Xbox — rail e
-    // conteúdo no mesmo tom). Literal, imune a variação de tema.
-    backgroundColor: "#0b0b0d",
+    // Mesmo tom do fundo das páginas (estilo app do Xbox — rail e conteúdo
+    // no mesmo tom): `colorNeutralBackground1` É o stop mais fraco do
+    // gradiente `--reemuAppBg` em todo tema (ver `styles/themes.ts::make`),
+    // então isto acompanha tema claro/escuro sem precisar de um token à
+    // parte.
+    backgroundColor: tokens.colorNeutralBackground1,
   },
   railSpacer: { flexGrow: 1 },
   railSep: {
@@ -131,8 +134,8 @@ export const useShellStyles = makeStyles({
       transform: "scale(1.03)",
     },
     '&[aria-current="page"]': {
-      backgroundColor: "#3a3a3f",
-      color: tokens.colorNeutralForeground1,
+      backgroundColor: "var(--reemuActiveBg)",
+      color: "var(--reemuActiveFg)",
     },
   },
   railQuit: {
@@ -306,7 +309,7 @@ export const useBrowseStyles = makeStyles({
     paddingRight: "12px",
     borderRadius: "999px",
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    backgroundColor: "var(--reemuFillWeak)",
     color: tokens.colorNeutralForeground1,
     fontSize: tokens.fontSizeBase200,
     cursor: "pointer",
@@ -330,7 +333,7 @@ export const useBrowseStyles = makeStyles({
     paddingRight: "14px",
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     borderRadius: shell.radius,
-    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    backgroundColor: "var(--reemuFillWeak)",
     maxWidth: "640px",
   },
   libRow: {
@@ -536,6 +539,11 @@ export const useCardStyles = makeStyles({
 
 /** Barra de dicas de botão do controle (canto inferior direito). */
 export const useHintStyles = makeStyles({
+  // Chip HUD sempre escuro, IMUNE ao tema (igual overlay de botão de
+  // controle em qualquer console/jogo — inclusive no próprio Xbox, os
+  // glifos de botão ficam sobre um fundo escuro translúcido mesmo com o
+  // dashboard no modo claro). Por isso o texto é branco literal, não um
+  // token que inverteria com o tema e ficaria ilegível (branco no claro).
   hints: {
     position: "fixed",
     right: "22px",
@@ -548,9 +556,9 @@ export const useHintStyles = makeStyles({
     paddingRight: "16px",
     borderRadius: "999px",
     backgroundColor: "rgba(0, 0, 0, 0.6)",
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    border: "1px solid rgba(255, 255, 255, 0.14)",
     fontSize: tokens.fontSizeBase200,
-    color: tokens.colorNeutralForeground1,
+    color: "#ffffff",
     zIndex: 50,
     pointerEvents: "none",
   },
@@ -572,8 +580,8 @@ export const useHintStyles = makeStyles({
   y: { backgroundColor: "#fce100" },
   menu: {
     backgroundColor: "transparent",
-    border: `1px solid ${tokens.colorNeutralForeground3}`,
-    color: tokens.colorNeutralForeground1,
+    border: "1px solid rgba(255, 255, 255, 0.4)",
+    color: "#ffffff",
     fontSize: "11px",
   },
 });
@@ -606,7 +614,7 @@ export const useDetailStyles = makeStyles({
     paddingRight: "14px",
     borderRadius: "999px",
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    backgroundColor: "var(--reemuFillWeak)",
     color: tokens.colorNeutralForeground1,
     fontSize: tokens.fontSizeBase200,
     cursor: "pointer",
@@ -708,7 +716,7 @@ export const useDetailStyles = makeStyles({
     paddingRight: "16px",
     borderRadius: shell.radius,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: "rgba(255, 255, 255, 0.02)",
+    backgroundColor: "var(--reemuFillWeak)",
     maxWidth: "560px",
   },
   field: { display: "flex", flexDirection: "column", rowGap: "4px" },
@@ -786,7 +794,7 @@ export const usePauseStyles = makeStyles({
     padding: "6px",
     borderRadius: shell.radius,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: "rgba(255,255,255,0.03)",
+    backgroundColor: "var(--reemuFillWeak)",
     color: tokens.colorNeutralForeground1,
     cursor: "pointer",
     textAlign: "left",
