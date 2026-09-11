@@ -184,9 +184,14 @@ function make(ramp: BrandVariants, mode: "dark" | "light" = "dark"): ReEmuTheme 
     reemuBg1: ramp[70],
     reemuBg2: ramp[90],
     reemuBg3: ramp[50],
+    // Radial (não mais vertical): centro bem mais transparente — deixa o
+    // papel de parede aparecer no meio da tela — e as bordas/cantos (onde
+    // ficam as manchas de cor do tema) mantêm a força de antes. Camada
+    // ÚNICA de gradiente (WebKitGTK quebra com radial-gradient multicamada
+    // num elemento `position: fixed` — ver comentário no `.app`).
     reemuVeil: light
-      ? "linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.9) 100%)"
-      : "linear-gradient(180deg, rgba(9, 9, 12, 0.55) 0%, rgba(9, 9, 12, 0.82) 100%)",
+      ? "radial-gradient(ellipse at center, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.9) 100%)"
+      : "radial-gradient(ellipse at center, rgba(9, 9, 12, 0.2) 0%, rgba(9, 9, 12, 0.82) 100%)",
     // Verde de marca (tom 70 — mais fechado que o 80 padrão, fica igual ao
     // verde da pílula de seleção nos screenshots) só no claro; no escuro
     // continua o cinza neutro que já existia.

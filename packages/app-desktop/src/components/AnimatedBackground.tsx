@@ -56,12 +56,14 @@ const useStyles = makeStyles({
   },
   // `--reemuVeil` inverte por tema (escuro abafa pro preto, claro abafa pro
   // branco) — sem isto o fundo ficaria escuro mesmo num tema claro, já que o
-  // véu cobre as manchas por cima de tudo.
+  // véu cobre as manchas por cima de tudo. É radial (centro mais
+  // transparente, bordas/cantos mais fortes) — deixa o papel de parede
+  // aparecer mais no meio da tela sem lavar as manchas de cor nos cantos.
   veil: {
     position: 'absolute',
     inset: 0,
     backgroundImage:
-      'var(--reemuVeil, linear-gradient(180deg, rgba(9, 9, 12, 0.55) 0%, rgba(9, 9, 12, 0.82) 100%))',
+      'var(--reemuVeil, radial-gradient(ellipse at center, rgba(9, 9, 12, 0.2) 0%, rgba(9, 9, 12, 0.82) 100%))',
   },
 })
 
