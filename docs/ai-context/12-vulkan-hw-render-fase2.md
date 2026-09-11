@@ -322,6 +322,12 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   submeter na mesma `VkQueue`); ordem gate→`vk_local` nos dois lados.
   Teto de textura do device (`downlevel_defaults` = 2048) subido pro cap real
   → surface 4K deixa de dar tela preta (`ae0d87f`).
+  **Confirmado pelo usuário (2026-09-11), na própria máquina (RTX 3060):**
+  jogo de PS1 rodando por Beetle PSX HW/Vulkan in-process — inclui o
+  caminho do `VkBlit` (scanout `A1R5G5B5`/16bpp), que até aqui só tinha
+  validação minha (Crash Bandicoot 2, sem forçar 16bpp). Fecha a ressalva de
+  "implementado mas não testado no hardware do usuário" que constava desde
+  `16830fe`.
   **Pendente:** silenciar stdout do Beetle (`[hdcache]`/`Creating shader
   module`) no caminho in-process; flycast/mupen como alvos validados; Fase C
   (tirar os CPU-waits do blit e do `submit_vulkan_cmds`).
