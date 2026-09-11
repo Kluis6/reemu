@@ -58,10 +58,10 @@ const useStyles = makeStyles({
     objectFit: "cover",
     width: "100%",
     height: "100%",
-    animationName: {
-      from: { filter: "blur(0) brightness(1)", opacity: 0 },
-      to: { filter: "blur(9px) brightness(0.42)", opacity: 1 },
-    },
+    // blur/brightness estáticos (animar o raio do blur re-rasteriza a cada
+    // frame — pesado no WebKitGTK); só a opacity anima.
+    filter: "blur(9px) brightness(0.42)",
+    animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
     animationDuration: "190ms",
     animationTimingFunction: "ease-out",
     animationFillMode: "forwards",

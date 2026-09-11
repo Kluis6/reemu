@@ -2,77 +2,57 @@ import { makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { useThemeStore } from '../stores/useThemeStore'
 
 /**
- * Fundo animado das telas — manchas de cor grandes e desfocadas que derivam
- * devagar. As cores vêm de CSS custom properties (`--reemuBg1..3`) que o
- * `FluentProvider` emite a partir do tema (`styles/themes.ts`); sem tema, cai
- * num azul/roxo neutro. Respeita
- * `prefers-reduced-motion`. Puramente decorativo (`aria-hidden`, sem input).
+ * Fundo animado das telas — 2 manchas de cor desfocadas que derivam devagar.
+ * As cores vêm de `--reemuBg1/2` (o `FluentProvider` emite a partir do tema).
+ * Leve de propósito: só `translate` no keyframe (sem `scale`/`filter`
+ * animados — re-rasterizavam o blur a cada frame no WebKitGTK). Decorativo.
  */
 const drift1 = {
-  '0%': { transform: 'translate3d(-6%, -4%, 0) scale(1)' },
-  '50%': { transform: 'translate3d(4%, 3%, 0) scale(1.08)' },
-  '100%': { transform: 'translate3d(-6%, -4%, 0) scale(1)' },
+  '0%, 100%': { transform: 'translate3d(-4%, -3%, 0)' },
+  '50%': { transform: 'translate3d(4%, 3%, 0)' },
 }
 const drift2 = {
-  '0%': { transform: 'translate3d(4%, 6%, 0) scale(1.06)' },
-  '50%': { transform: 'translate3d(-4%, -3%, 0) scale(0.97)' },
-  '100%': { transform: 'translate3d(4%, 6%, 0) scale(1.06)' },
-}
-const drift3 = {
-  '0%': { transform: 'translate3d(0, 3%, 0) scale(1)' },
-  '50%': { transform: 'translate3d(3%, -4%, 0) scale(1.1)' },
-  '100%': { transform: 'translate3d(0, 3%, 0) scale(1)' },
+  '0%, 100%': { transform: 'translate3d(3%, 4%, 0)' },
+  '50%': { transform: 'translate3d(-3%, -3%, 0)' },
 }
 
 const useStyles = makeStyles({
   root: {
     position: 'fixed',
     inset: 0,
-    // atrás do conteúdo em fluxo, à frente do fundo do container
     zIndex: -1,
-    overflow: 'hidden',
+    overflowX: 'hidden',
+    overflowY: 'hidden',
     pointerEvents: 'none',
     backgroundColor: tokens.colorNeutralBackground1,
+    contain: 'strict',
   },
   blob: {
     position: 'absolute',
-    width: '60vmax',
-    height: '60vmax',
+    width: '55vmax',
+    height: '55vmax',
     borderRadius: '50%',
-    filter: 'blur(80px)',
-    opacity: 0.55,
+    filter: 'blur(55px)',
+    opacity: 0.4,
     willChange: 'transform',
+    animationTimingFunction: 'ease-in-out',
+    animationIterationCount: 'infinite',
     '@media (prefers-reduced-motion: reduce)': { animationName: 'none' },
   },
   b1: {
-    top: '-20vmax',
-    left: '-15vmax',
+    top: '-18vmax',
+    left: '-14vmax',
     backgroundColor: 'var(--reemuBg1, #3b82f6)',
     animationName: drift1,
-    animationDuration: '38s',
-    animationTimingFunction: 'ease-in-out',
-    animationIterationCount: 'infinite',
+    animationDuration: '40s',
   },
   b2: {
-    bottom: '-25vmax',
-    right: '-15vmax',
+    bottom: '-22vmax',
+    right: '-14vmax',
     backgroundColor: 'var(--reemuBg2, #8b5cf6)',
     animationName: drift2,
-    animationDuration: '44s',
-    animationTimingFunction: 'ease-in-out',
-    animationIterationCount: 'infinite',
+    animationDuration: '52s',
   },
-  b3: {
-    top: '20%',
-    left: '35%',
-    backgroundColor: 'var(--reemuBg3, #06b6d4)',
-    opacity: 0.35,
-    animationName: drift3,
-    animationDuration: '54s',
-    animationTimingFunction: 'ease-in-out',
-    animationIterationCount: 'infinite',
-  },
-  // véu escuro pra dar contraste no conteúdo por cima (a shell é dark-first)
   veil: {
     position: 'absolute',
     inset: 0,
@@ -91,7 +71,6 @@ export function AnimatedBackground({ forceStill = false }: { forceStill?: boolea
     <div className={s.root} aria-hidden>
       <div className={mergeClasses(s.blob, s.b1, still)} />
       <div className={mergeClasses(s.blob, s.b2, still)} />
-      <div className={mergeClasses(s.blob, s.b3, still)} />
       <div className={s.veil} />
     </div>
   )

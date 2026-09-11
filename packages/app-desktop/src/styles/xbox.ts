@@ -115,13 +115,13 @@ export const useShellStyles = makeStyles({
     border: "none",
     backgroundColor: "transparent",
     cursor: "pointer",
-    transitionProperty: "background-color, color, transform, box-shadow",
-    transitionDuration: "240ms",
+    transitionProperty: "background-color, color, transform",
+    transitionDuration: "150ms",
     transitionTimingFunction: tokens.curveEasyEase,
     ":hover": {
       backgroundColor: tokens.colorNeutralBackground3,
       color: tokens.colorNeutralForeground1,
-      transform: "scale(1.04)",
+      transform: "scale(1.03)",
     },
     '&[aria-current="page"]': {
       backgroundColor: "#3a3a3f",
@@ -231,11 +231,11 @@ export const useShellStyles = makeStyles({
 export const useMotionStyles = makeStyles({
   riseIn: {
     animationName: {
-      from: { opacity: 0, transform: "translateY(12px)" },
+      from: { opacity: 0, transform: "translateY(10px)" },
       to: { opacity: 1, transform: "translateY(0)" },
     },
-    animationDuration: "460ms",
-    animationTimingFunction: tokens.curveDecelerateMax,
+    animationDuration: "260ms",
+    animationTimingFunction: tokens.curveDecelerateMid,
     animationFillMode: "both",
     "@media (prefers-reduced-motion: reduce)": {
       animationName: "none",
@@ -245,7 +245,7 @@ export const useMotionStyles = makeStyles({
   },
   fadeIn: {
     animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
-    animationDuration: "380ms",
+    animationDuration: "200ms",
     animationTimingFunction: tokens.curveEasyEase,
     animationFillMode: "both",
     "@media (prefers-reduced-motion: reduce)": {
@@ -404,15 +404,15 @@ export const useCardStyles = makeStyles({
     color: "inherit",
     boxShadow: "0 6px 14px rgba(0, 0, 0, 0.22)",
     transitionProperty: "box-shadow, outline-color, outline-offset",
-    transitionDuration: "260ms",
+    transitionDuration: "160ms",
     transitionTimingFunction: tokens.curveEasyEase,
     "&:hover, &:focus-within, &:focus-visible": {
-      boxShadow: "0 16px 38px rgba(0, 0, 0, 0.5)",
+      boxShadow: "0 14px 32px rgba(0, 0, 0, 0.48)",
       zIndex: 2,
     },
     // zoom da imagem (não do card)
     "&:hover [data-art] img, &:focus-within [data-art] img": {
-      transform: "scale(1.08)",
+      transform: "scale(1.07)",
     },
     // revela o nome sobreposto
     "&:hover [data-meta], &:focus-within [data-meta]": {
@@ -440,7 +440,7 @@ export const useCardStyles = makeStyles({
       height: "100%",
       objectFit: "cover",
       transitionProperty: "transform",
-      transitionDuration: "520ms",
+      transitionDuration: "300ms",
       transitionTimingFunction: tokens.curveEasyEase,
     },
   },
@@ -459,9 +459,9 @@ export const useCardStyles = makeStyles({
     backgroundImage:
       "linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 55%, transparent 100%)",
     opacity: 0,
-    transform: "translateY(8px)",
+    transform: "translateY(6px)",
     transitionProperty: "opacity, transform",
-    transitionDuration: "220ms",
+    transitionDuration: "150ms",
     transitionTimingFunction: tokens.curveEasyEase,
     pointerEvents: "none",
     "@media (prefers-reduced-motion: reduce)": { transform: "none" },

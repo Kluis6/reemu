@@ -32,7 +32,7 @@ const useStyles = makeStyles({
     fontSize: '20px',
     color: tokens.colorNeutralForeground3,
     transitionProperty: 'transform, color',
-    transitionDuration: '260ms',
+    transitionDuration: '150ms',
     transitionTimingFunction: tokens.curveEasyEase,
     'button:hover > &, button:focus-visible > &': {
       transform: 'translateX(3px)',

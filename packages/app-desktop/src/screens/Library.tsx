@@ -305,7 +305,7 @@ export function Library() {
       return (
         <section
           className={mergeClasses(s.section, m.riseIn)}
-          style={{ animationDelay: `${Math.min(i, 8) * 42}ms` }}
+          style={{ animationDelay: `${Math.min(i, 6) * 32}ms` }}
           key={sys}
         >
           <SectionHeader
