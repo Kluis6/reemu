@@ -856,6 +856,30 @@ pub fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
+/// Desliga a máquina (`systemctl poweroff`) — menu de energia do rail,
+/// estilo "modo XBOX". Só dispara o comando (`spawn`, não espera): a
+/// própria queda do sistema encerra o ReEmu, não precisa de outro passo
+/// aqui. Depende de o usuário ter permissão via polkit/systemd-logind
+/// (padrão em qualquer desktop Linux moderno, sem precisar de senha).
+#[tauri::command]
+pub fn shutdown_system() -> Result<(), String> {
+    std::process::Command::new("systemctl")
+        .arg("poweroff")
+        .spawn()
+        .map_err(|e| format!("não consegui desligar: {e}"))?;
+    Ok(())
+}
+
+/// Reinicia a máquina (`systemctl reboot`). Ver `shutdown_system`.
+#[tauri::command]
+pub fn restart_system() -> Result<(), String> {
+    std::process::Command::new("systemctl")
+        .arg("reboot")
+        .spawn()
+        .map_err(|e| format!("não consegui reiniciar: {e}"))?;
+    Ok(())
+}
+
 #[tauri::command]
 pub fn is_fullscreen(window: tauri::WebviewWindow) -> bool {
     window.is_fullscreen().unwrap_or(false)

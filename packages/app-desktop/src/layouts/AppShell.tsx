@@ -28,11 +28,12 @@ import {
   tokens,
 } from "@fluentui/react-components";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { ButtonHints } from "../components/ButtonHints";
 import { Clock } from "../components/Clock";
+import { PowerMenuDialog } from "../components/PowerMenuDialog";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
 import { useFullscreen } from "../hooks/useFullscreen";
@@ -118,6 +119,7 @@ export function AppShell() {
   const { on: fullscreen, toggle: toggleFullscreen } = useFullscreen();
   const atRoot = pathname === "/";
   const atBrowse = pathname === "/" || pathname === "/library";
+  const [powerOpen, setPowerOpen] = useState(false);
 
   const profile = useQuery({ queryKey: ["profile"], queryFn: getProfile, retry: false });
   const search = useSearchStore();
@@ -215,16 +217,18 @@ export function AppShell() {
         <div className={s.railSpacer} />
         <div className={s.railSep} />
 
-        <Tooltip content="Fechar o ReEmu" relationship="label">
+        <Tooltip content="Encerrar" relationship="label">
           <Button
             className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
-            onClick={() => void quitApp()}
-            aria-label="Fechar o ReEmu"
+            onClick={() => setPowerOpen(true)}
+            aria-label="Encerrar"
             appearance="subtle"
             icon={<PowerRegular />}
           />
         </Tooltip>
       </nav>
+
+      <PowerMenuDialog open={powerOpen} onOpenChange={setPowerOpen} />
 
       <div className={s.main}>
         <div className={s.topbar}>

@@ -55,6 +55,12 @@ export const updateAudioConfig = (config: AudioConfig) =>
   invoke<void>('update_audio_config', { config })
 
 export const quitApp = () => invoke<void>('quit_app')
+
+/** Desliga a máquina (`systemctl poweroff`) — menu de energia do rail. */
+export const shutdownSystem = () => invoke<void>('shutdown_system')
+
+/** Reinicia a máquina (`systemctl reboot`). */
+export const restartSystem = () => invoke<void>('restart_system')
 export const isFullscreen = () => invoke<boolean>('is_fullscreen')
 export const setFullscreen = (value: boolean) => invoke<void>('set_fullscreen', { value })
 

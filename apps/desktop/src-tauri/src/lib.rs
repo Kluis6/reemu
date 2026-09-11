@@ -226,6 +226,8 @@ pub fn run() {
             commands::is_fullscreen,
             commands::set_fullscreen,
             commands::quit_app,
+            commands::shutdown_system,
+            commands::restart_system,
             commands::list_core_catalog,
             commands::download_core,
             commands::remove_core,
