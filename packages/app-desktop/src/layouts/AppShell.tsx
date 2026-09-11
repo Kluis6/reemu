@@ -91,7 +91,11 @@ const RAIL = [
   },
   {
     to: "/settings",
-    end: true,
+    // NÃO `end: true`: "/settings" sozinho nunca é a rota renderizada — o
+    // índice redireciona pra "/settings/perfil" (ver router.tsx), então com
+    // `end` o NavLink nunca batia e o ícone nunca acendia em nenhuma
+    // subpágina de Configurações.
+    end: false,
     icon: <SettingsRegular />,
     activeIcon: <SettingsFilled />,
     label: "Configurações",

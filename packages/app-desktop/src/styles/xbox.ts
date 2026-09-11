@@ -148,6 +148,12 @@ export const useShellStyles = makeStyles({
     "&:hover svg, &:focus svg, &:focus-visible svg": {
       transform: "scale(1.18)",
     },
+    // Feedback de clique: encolhe (zoom out) no instante do toque/clique —
+    // Griffel prioriza o bucket `:active` acima de `:hover`/`:focus`, então
+    // isto já ganha deles sem precisar de `!important`.
+    "&:active svg": {
+      transform: "scale(0.85)",
+    },
     "@media (prefers-reduced-motion: reduce)": {
       "& svg": { transitionProperty: "none" },
     },
