@@ -340,12 +340,13 @@ export const useShelfStyles = makeStyles({
   wrap: {
     position: "relative",
     minWidth: 0,
-    width: "calc(100% + 8px)",
+    width: "calc(100% + 20px)",
     maxWidth: "none",
-    marginLeft: "-4px",
-    marginRight: "-4px",
-    // Compensa o padding vertical do `.shelf` (folga pro card crescer no foco
-    // sem ser cortado pelo `overflow` do scroller).
+    marginLeft: "-10px",
+    marginRight: "-10px",
+    // Compensa o padding do `.shelf` (folga pro anel de foco não ser
+    // cortado pelo `overflow` do scroller — o 1º/último card de cada linha
+    // só tem essa margem pra respirar, os do meio ainda têm o SHELF_GAP).
     marginTop: "-14px",
     marginBottom: "-14px",
   },
@@ -371,8 +372,8 @@ export const useShelfStyles = makeStyles({
     scrollPaddingRight: "48px",
     paddingTop: "14px",
     paddingBottom: "14px",
-    paddingLeft: "4px",
-    paddingRight: "4px",
+    paddingLeft: "10px",
+    paddingRight: "10px",
     "::-webkit-scrollbar": { display: "none" },
     "& > *": {
       width: gameCardSize,
@@ -458,10 +459,8 @@ export const useCardStyles = makeStyles({
     "& img": {
       width: "100%",
       height: "100%",
-      // `contain`, não `cover`: capa de retrato (Game Gear) ou scan largo
-      // com lombada (Genesis) cortava a arte de verdade com `cover`. Sobra
-      // vira letterbox no fundo (`elevGradient`, já existe pra isso).
-      objectFit: "contain",
+      objectFit: "cover",
+      objectPosition: "center",
       transitionProperty: "transform",
       transitionDuration: "300ms",
       transitionTimingFunction: tokens.curveEasyEase,
