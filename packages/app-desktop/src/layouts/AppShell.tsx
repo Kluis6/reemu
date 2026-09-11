@@ -53,12 +53,18 @@ const useLocalStyles = makeStyles({
     },
   },
   // Menu do avatar — proporções do menu do modo XBOX de verdade: mais
-  // largo, com respiro no CORPO da lista (topo/base), não em cada item —
-  // as linhas continuam com o padding "medium" padrão do Fluent.
+  // largo, com respiro no CORPO da lista (mesmo valor nos 4 lados — o
+  // `<MenuList>` do Fluent vem com padding horizontal menor que o
+  // vertical por padrão), não em cada item — as linhas continuam com o
+  // padding "medium" padrão do Fluent.
   menuPopover: { minWidth: "236px" },
-  menuBody: {
-    paddingTop: tokens.spacingVerticalM,
-    paddingBottom: tokens.spacingVerticalM,
+  menuBody: { padding: tokens.spacingVerticalM },
+  // O <MenuDivider> do Fluent vem com só 4px de margem vertical — some
+  // fácil entre linhas com o padding maior do body. `!important`: o
+  // componente injeta a própria classe (`margin: 4px -5px 4px -5px`)
+  // depois da nossa.
+  menuDivider: {
+    margin: `${tokens.spacingVerticalS} -5px !important`,
   },
 });
 
@@ -175,7 +181,7 @@ export function AppShell() {
                   {m.label}
                 </MenuItem>
               ))}
-              <MenuDivider />
+              <MenuDivider className={l.menuDivider} />
               <Menu>
                 <MenuTrigger disableButtonEnhancement>
                   <MenuItem disabled>Status</MenuItem>
@@ -188,7 +194,7 @@ export function AppShell() {
                   </MenuList>
                 </MenuPopover>
               </Menu>
-              <MenuDivider />
+              <MenuDivider className={l.menuDivider} />
               <MenuItem onClick={() => void quitApp()}>Sair</MenuItem>
             </MenuList>
           </MenuPopover>
