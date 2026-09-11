@@ -34,6 +34,9 @@ pub struct AppState {
     pub decorations_dir: std::path::PathBuf,
     /// `<dados>/profile` — imagem de avatar escolhida pelo usuário.
     pub profile_dir: std::path::PathBuf,
+    /// `<dados>/appearance` — papel de parede da tela inicial escolhido pelo
+    /// usuário (mesmo padrão do avatar: presença do arquivo = estado).
+    pub appearance_dir: std::path::PathBuf,
     /// Hotkeys de sistema carregadas do DB (`system_hotkeys`). `save_binding` /
     /// `clear_system_hotkey` recompõem via `refresh_hotkey_resolver`.
     pub hotkeys: Mutex<ComboHotkeyResolver>,
@@ -119,6 +122,7 @@ impl AppState {
         crate::gpu::set_shader_root(crate::shader_pack::install_dir(&shaders_dir));
         let decorations_dir = base.join("decorations");
         let profile_dir = base.join("profile");
+        let appearance_dir = base.join("appearance");
         let mut cfg = SessionConfig::new(cores_dir.clone(), system_dir.clone(), save_dir.clone());
         cfg.enable_gamepad = true;
         cfg.audio_sink = Some(Box::new(move || {
@@ -143,6 +147,7 @@ impl AppState {
             shaders_dir,
             decorations_dir,
             profile_dir,
+            appearance_dir,
             hotkeys: Mutex::new(ComboHotkeyResolver::new(hotkeys)),
             last_hotkey: Mutex::new(None),
             current_rom: Mutex::new(None),

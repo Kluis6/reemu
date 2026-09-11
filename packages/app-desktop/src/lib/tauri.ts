@@ -488,16 +488,33 @@ export async function profileAvatarUrl(): Promise<string | null> {
   return URL.createObjectURL(new Blob([buf]))
 }
 
-/** Diálogo nativo pra escolher uma imagem de avatar. */
-export async function pickImage(): Promise<string | null> {
+/** Diálogo nativo pra escolher uma imagem (avatar, papel de parede…). */
+export async function pickImage(title = 'Escolha uma imagem'): Promise<string | null> {
   if (!inTauri) return null
   const { open } = await import('@tauri-apps/plugin-dialog')
   const sel = await open({
     multiple: false,
-    title: 'Escolha uma imagem de avatar',
+    title,
     filters: [{ name: 'Imagem', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
   })
   return typeof sel === 'string' ? sel : null
+}
+
+// --- papel de parede da tela inicial (opcional) --------------------------
+
+/** Copia a imagem escolhida pra `<dados>/appearance/wallpaper.<ext>`. */
+export const setWallpaperFile = (srcPath: string) =>
+  invoke<void>('set_wallpaper_file', { srcPath })
+
+/** Remove o papel de parede — a tela inicial volta a mostrar só a cor do tema. */
+export const clearWallpaper = () => invoke<void>('clear_wallpaper')
+
+/** O papel de parede escolhido como `blob:` URL, ou `null` se não há nenhum. */
+export async function wallpaperUrl(): Promise<string | null> {
+  if (!inTauri) return null
+  const buf = await invoke<ArrayBuffer>('read_wallpaper')
+  if (buf.byteLength === 0) return null
+  return URL.createObjectURL(new Blob([buf]))
 }
 
 // --- input / captura de binding (etapa 05) -------------------------------

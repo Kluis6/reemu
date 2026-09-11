@@ -1,14 +1,21 @@
 import { makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
+import { useQuery } from '@tanstack/react-query'
+import { wallpaperUrl } from '../lib/tauri'
 
 /**
- * Fundo das telas — 2 manchas de cor ESTÁTICAS (sem animação nenhuma). As
- * cores vêm de `--reemuBg1/2` (o `FluentProvider` emite a partir do tema).
+ * Fundo das telas — papel de parede opcional (embaixo de tudo) + 2 manchas
+ * de cor ESTÁTICAS (sem animação nenhuma) por cima. As cores vêm de
+ * `--reemuBg1/2` (o `FluentProvider` emite a partir do tema).
  *
  * Era animado (drift lento via `translate`), mas mesmo sem `filter`/blur —
  * já otimizado pra regra do WebKitGTK sem compositing (ver
  * `frontend-perf-webkitgtk` nas memórias) — 2 áreas de 70vmax repintando em
  * loop infinito o tempo todo ainda pesava. Removido por pedido direto: fica
  * só a cor, parado, sem custo de repintura contínua.
+ *
+ * O papel de parede (`<img>`, Configurações › Aparência) é ESTÁTICO também —
+ * o navegador decodifica uma vez e reusa o bitmap nas pinturas seguintes,
+ * então não reintroduz o custo do blur animado. Sem `filter` nele.
  */
 const useStyles = makeStyles({
   root: {
@@ -20,6 +27,14 @@ const useStyles = makeStyles({
     pointerEvents: 'none',
     backgroundColor: tokens.colorNeutralBackground1,
     contain: 'strict',
+  },
+  wallpaper: {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    objectPosition: 'center',
   },
   blob: {
     position: 'absolute',
@@ -52,8 +67,16 @@ const useStyles = makeStyles({
 
 export function AnimatedBackground() {
   const s = useStyles()
+  // `staleTime: Infinity`: raramente muda: `SettingsAppearance` invalida a
+  // query na mão quando o usuário troca/remove o papel de parede.
+  const wallpaper = useQuery({
+    queryKey: ['wallpaper'],
+    queryFn: wallpaperUrl,
+    staleTime: Infinity,
+  })
   return (
     <div className={s.root} aria-hidden>
+      {wallpaper.data && <img src={wallpaper.data} alt="" className={s.wallpaper} />}
       <div className={mergeClasses(s.blob, s.b1)} />
       <div className={mergeClasses(s.blob, s.b2)} />
       <div className={s.veil} />

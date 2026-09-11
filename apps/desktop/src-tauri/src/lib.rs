@@ -1,3 +1,4 @@
+mod appearance;
 mod bezel_pack;
 mod bios;
 mod commands;
@@ -218,6 +219,9 @@ pub fn run() {
             profile::read_profile_avatar,
             profile::set_profile,
             profile::set_profile_avatar_file,
+            appearance::read_wallpaper,
+            appearance::set_wallpaper_file,
+            appearance::clear_wallpaper,
             commands::is_fullscreen,
             commands::set_fullscreen,
             commands::quit_app,

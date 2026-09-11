@@ -1,10 +1,15 @@
 import {
+  Button,
   Caption1,
   Text,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
-import { CheckmarkFilled } from '@fluentui/react-icons'
+import { CheckmarkFilled, ImageAddRegular } from '@fluentui/react-icons'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { clearWallpaper, pickImage, setWallpaperFile, wallpaperUrl } from '../../lib/tauri'
+import { sysToast } from '../../lib/toast'
+import { useToastStore } from '../../stores/useToastStore'
 import { useThemeStore } from '../../stores/useThemeStore'
 import { THEMES, type ThemeId } from '../../styles/themes'
 
@@ -42,14 +47,57 @@ const useStyles = makeStyles({
     top: tokens.spacingVerticalXS,
     right: tokens.spacingHorizontalXS,
   },
+  wallRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalL,
+  },
+  wallPreview: {
+    width: '96px',
+    height: '64px',
+    flexShrink: 0,
+    borderRadius: tokens.borderRadiusLarge,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground3,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    display: 'grid',
+    alignItems: 'center',
+    justifyItems: 'center',
+    color: tokens.colorNeutralForeground3,
+    fontSize: '20px',
+  },
+  wallActions: { display: 'flex', gap: tokens.spacingHorizontalS },
 })
 
 const IDS = Object.keys(THEMES) as ThemeId[]
 
-/** Configurações › Aparência — tema de cor + fundo animado. */
+/** Configurações › Aparência — tema de cor + papel de parede da tela inicial. */
 export function SettingsAppearance() {
   const s = useStyles()
   const { themeId, setTheme } = useThemeStore()
+  const qc = useQueryClient()
+  const push = useToastStore((t) => t.push)
+  const wallpaper = useQuery({ queryKey: ['wallpaper'], queryFn: wallpaperUrl })
+
+  const upload = useMutation({
+    mutationFn: async () => {
+      const path = await pickImage('Escolha um papel de parede')
+      if (!path) return false
+      await setWallpaperFile(path)
+      return true
+    },
+    onSuccess: (ok) => {
+      if (!ok) return
+      qc.invalidateQueries({ queryKey: ['wallpaper'] })
+    },
+    onError: (e) => push(sysToast(`Falha ao carregar imagem: ${e}`, 'Error')),
+  })
+  const remove = useMutation({
+    mutationFn: clearWallpaper,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['wallpaper'] }),
+    onError: (e) => push(sysToast(`Falha ao remover: ${e}`, 'Error')),
+  })
 
   return (
     <div className={s.root}>
@@ -99,6 +147,45 @@ export function SettingsAppearance() {
             </button>
           )
         })}
+      </div>
+
+      <div>
+        <Text as="strong" weight="semibold">
+          Papel de parede
+        </Text>
+        <Caption1 as="p" style={{ margin: '2px 0 0' }}>
+          Uma imagem sua atrás das cores do tema, na tela inicial. Opcional —
+          as manchas de cor ficam por cima, então o tema continua dando o tom.
+        </Caption1>
+      </div>
+
+      <div className={s.wallRow}>
+        <div
+          className={s.wallPreview}
+          style={
+            wallpaper.data ? { backgroundImage: `url(${wallpaper.data})` } : undefined
+          }
+        >
+          {!wallpaper.data && <ImageAddRegular />}
+        </div>
+        <div className={s.wallActions}>
+          <Button
+            appearance="secondary"
+            disabled={upload.isPending}
+            onClick={() => upload.mutate()}
+          >
+            {wallpaper.data ? 'Trocar imagem…' : 'Escolher imagem…'}
+          </Button>
+          {wallpaper.data && (
+            <Button
+              appearance="subtle"
+              disabled={remove.isPending}
+              onClick={() => remove.mutate()}
+            >
+              Remover
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   )

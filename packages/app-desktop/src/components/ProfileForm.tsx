@@ -80,7 +80,7 @@ export function ProfileForm({
 
   const upload = useMutation({
     mutationFn: async () => {
-      const path = await pickImage()
+      const path = await pickImage('Escolha uma imagem de avatar')
       if (!path) return false
       await setProfileAvatarFile(path)
       return true
