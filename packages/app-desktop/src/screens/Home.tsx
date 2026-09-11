@@ -7,6 +7,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { GamepadArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { HeroCarousel } from "../components/HeroCarousel";
@@ -118,7 +119,7 @@ export function Home() {
   if (!roms.isError && all.length === 0) {
     return (
       <EmptyState
-        icon="🕹"
+        art={<GamepadArt />}
         title="Bem-vindo ao ReEmu"
         action={
           <Button

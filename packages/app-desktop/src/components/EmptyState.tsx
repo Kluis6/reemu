@@ -19,6 +19,7 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
   },
   icon: { fontSize: '44px', lineHeight: 1, opacity: 0.5 },
+  art: { color: tokens.colorBrandForeground1, opacity: 0.85 },
   title: { color: tokens.colorNeutralForeground1 },
   action: { marginTop: tokens.spacingVerticalS },
   loading: {
@@ -35,11 +36,15 @@ const useStyles = makeStyles({
  */
 export function EmptyState({
   icon,
+  art,
   title,
   children,
   action,
 }: {
-  icon: ReactNode
+  /** Emoji/ícone pequeno (fallback). Ignorado se `art` for dado. */
+  icon?: ReactNode
+  /** Ilustração de linha (`components/EmptyArt`) — no lugar do `icon`. */
+  art?: ReactNode
   title: string
   /** Uma frase curta explicando o que fazer. */
   children?: ReactNode
@@ -49,8 +54,8 @@ export function EmptyState({
   const s = useStyles()
   return (
     <div className={s.root}>
-      <div className={s.icon} aria-hidden>
-        {icon}
+      <div className={art ? s.art : s.icon} aria-hidden>
+        {art ?? icon}
       </div>
       <Subtitle1 as="h2" className={s.title}>
         {title}

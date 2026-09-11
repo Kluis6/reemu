@@ -16,6 +16,7 @@ import {
 } from "@fluentui/react-components";
 import {
   AddRegular,
+  ArrowSortRegular,
   FilterRegular,
   MoreHorizontalRegular,
 } from "@fluentui/react-icons";
@@ -23,6 +24,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
+import { GamepadArt, SearchArt, StarArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { SectionHeader } from "../components/SectionHeader";
@@ -63,7 +65,14 @@ const useLibStyles = makeStyles({
   barRight: { display: "flex", alignItems: "center", columnGap: "10px" },
 });
 
-type LibTab = "mine" | "fav" | "recent";
+type LibTab = "mine" | "fav";
+type LibSort = "name" | "added" | "played";
+
+const SORT_LABEL: Record<LibSort, string> = {
+  name: "Nome (A–Z)",
+  added: "Adicionado recentemente",
+  played: "Jogado por último",
+};
 
 /**
  * "Meus jogos" — a biblioteca no estilo modo Xbox: abas (todos / favoritos /
@@ -83,6 +92,7 @@ export function Library() {
     .toLowerCase();
 
   const [tab, setTab] = useState<LibTab>("mine");
+  const [sort, setSort] = useState<LibSort>("name");
   const [platform, setPlatform] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
@@ -195,11 +205,16 @@ export function Library() {
   }, [all, platform, query]);
 
   const view = useMemo(() => {
-    if (tab === "fav") return filtered.filter((r) => r.isFavorite);
-    if (tab === "recent")
-      return [...filtered].sort((a, b) => b.addedAt - a.addedAt);
-    return filtered;
-  }, [filtered, tab]);
+    const base = tab === "fav" ? filtered.filter((r) => r.isFavorite) : filtered;
+    const cmp: Record<LibSort, (a: RomEntry, b: RomEntry) => number> = {
+      name: (a, b) => a.title.localeCompare(b.title),
+      added: (a, b) => b.addedAt - a.addedAt,
+      played: (a, b) =>
+        (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0) ||
+        a.title.localeCompare(b.title),
+    };
+    return [...base].sort(cmp[sort]);
+  }, [filtered, tab, sort]);
 
   const byPlatform = useMemo(() => {
     const groups = new Map<string, RomEntry[]>();
@@ -251,7 +266,7 @@ export function Library() {
     if (all.length === 0)
       return (
         <EmptyState
-          icon="🕹"
+          art={<GamepadArt />}
           title="Nenhuma ROM ainda"
           action={
             <Button
@@ -269,17 +284,17 @@ export function Library() {
     if (view.length === 0) {
       if (tab === "fav")
         return (
-          <EmptyState icon="★" title="Sem favoritos">
+          <EmptyState art={<StarArt />} title="Sem favoritos">
             Favorite um jogo pelo menu do cartão.
           </EmptyState>
         );
       return (
-        <EmptyState icon="🔍" title="Nada aqui">
+        <EmptyState art={<SearchArt />} title="Nada aqui">
           Ajuste o filtro de plataforma ou a busca.
         </EmptyState>
       );
     }
-    // favoritos e recém adicionados: grade única
+    // favoritos: grade única
     if (tab !== "mine") return grid(view);
     // meus jogos: prateleira por plataforma. A Shelf mede a largura e mostra só
     // o que enche a linha; se sobrar jogo, o card 2×2 "ver todos" fecha a linha.
@@ -328,7 +343,6 @@ export function Library() {
         >
           <Tab value="mine">Meus jogos</Tab>
           <Tab value="fav">Favoritos</Tab>
-          <Tab value="recent">Recém adicionados</Tab>
         </TabList>
 
         <div className={l.barRight}>
@@ -356,13 +370,24 @@ export function Library() {
       </div>
 
       <div className={s.toolbar}>
+        <Tooltip content="Limpar filtros" relationship="label">
+          <Button
+            appearance="subtle"
+            className={l.surface}
+            icon={<FilterRegular />}
+            aria-label="Limpar filtros"
+            disabled={platform === "all"}
+            onClick={() => setPlatform("all")}
+          />
+        </Tooltip>
+
         <Menu
           checkedValues={{ plat: [platform] }}
           onCheckedValueChange={(_, d) => setPlatform(d.checkedItems[0] ?? "all")}
         >
           <MenuTrigger disableButtonEnhancement>
-            <MenuButton appearance="subtle" icon={<FilterRegular />}>
-              {platform === "all" ? "Todas as plataformas" : platformLabel(platform)}
+            <MenuButton appearance="subtle">
+              {platform === "all" ? "Plataforma" : platformLabel(platform)}
             </MenuButton>
           </MenuTrigger>
           <MenuPopover>
@@ -373,6 +398,28 @@ export function Library() {
               {platforms.map((p) => (
                 <MenuItemRadio key={p} name="plat" value={p}>
                   {platformLabel(p)}
+                </MenuItemRadio>
+              ))}
+            </MenuList>
+          </MenuPopover>
+        </Menu>
+
+        <Menu
+          checkedValues={{ sort: [sort] }}
+          onCheckedValueChange={(_, d) =>
+            setSort((d.checkedItems[0] as LibSort) ?? "name")
+          }
+        >
+          <MenuTrigger disableButtonEnhancement>
+            <MenuButton appearance="subtle" icon={<ArrowSortRegular />}>
+              {SORT_LABEL[sort]}
+            </MenuButton>
+          </MenuTrigger>
+          <MenuPopover>
+            <MenuList>
+              {(Object.keys(SORT_LABEL) as LibSort[]).map((k) => (
+                <MenuItemRadio key={k} name="sort" value={k}>
+                  {SORT_LABEL[k]}
                 </MenuItemRadio>
               ))}
             </MenuList>

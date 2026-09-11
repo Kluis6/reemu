@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { SectionHeader } from "../components/SectionHeader";
@@ -77,7 +78,7 @@ export function PlatformLibrary() {
       {roms.isLoading ? (
         <LoadingState />
       ) : list.length === 0 ? (
-        <EmptyState icon="🕹" title="Nada nessa plataforma">
+        <EmptyState art={<SearchArt />} title="Nada nessa plataforma">
           Ajuste a busca ou volte pra biblioteca.
         </EmptyState>
       ) : (

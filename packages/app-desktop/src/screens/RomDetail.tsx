@@ -29,6 +29,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { CoreOptions } from "../components/CoreOptions";
+import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { ShaderLibrary } from "../components/ShaderLibrary";
@@ -213,7 +214,7 @@ export function RomDetail() {
   if (!rom)
     return (
       <EmptyState
-        icon="🔍"
+        art={<SearchArt />}
         title="ROM não encontrada"
         action={
           <Button appearance="primary" onClick={() => navigate("/library")}>
