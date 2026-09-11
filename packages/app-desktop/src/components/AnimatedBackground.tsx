@@ -65,7 +65,11 @@ const useStyles = makeStyles({
   },
 })
 
-export function AnimatedBackground() {
+/** `showWallpaper = false` no Splash: o boot é um momento de marca fixo,
+ *  igual ao power-on de um console de verdade — não deve variar com uma
+ *  foto escolhida pelo usuário (só as cores do tema, que já eram
+ *  compartilhadas ali antes do papel de parede existir). */
+export function AnimatedBackground({ showWallpaper = true }: { showWallpaper?: boolean }) {
   const s = useStyles()
   // `staleTime: Infinity`: raramente muda: `SettingsAppearance` invalida a
   // query na mão quando o usuário troca/remove o papel de parede.
@@ -73,10 +77,13 @@ export function AnimatedBackground() {
     queryKey: ['wallpaper'],
     queryFn: wallpaperUrl,
     staleTime: Infinity,
+    enabled: showWallpaper,
   })
   return (
     <div className={s.root} aria-hidden>
-      {wallpaper.data && <img src={wallpaper.data} alt="" className={s.wallpaper} />}
+      {showWallpaper && wallpaper.data && (
+        <img src={wallpaper.data} alt="" className={s.wallpaper} />
+      )}
       <div className={mergeClasses(s.blob, s.b1)} />
       <div className={mergeClasses(s.blob, s.b2)} />
       <div className={s.veil} />

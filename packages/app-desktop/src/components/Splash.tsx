@@ -113,7 +113,7 @@ export function Splash({ leaving = false }: { leaving?: boolean }) {
   const imgOk = useImageExists(LOGO_SRC)
   return (
     <div className={leaving ? `${s.root} ${s.leaving}` : s.root}>
-      <AnimatedBackground />
+      <AnimatedBackground showWallpaper={false} />
       <div className={s.stage}>
         <div className={s.glow} aria-hidden />
         {imgOk ? (
