@@ -35,6 +35,7 @@ import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
 import { useClock } from "../hooks/useClock";
 import { useFullscreen } from "../hooks/useFullscreen";
+import { useSmoothScroll } from "../hooks/useSmoothScroll";
 import { getProfile, quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
@@ -84,10 +85,16 @@ export function AppShell() {
   const profile = useQuery({ queryKey: ["profile"], queryFn: getProfile, retry: false });
   const search = useSearchStore();
   const searchRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useSmoothScroll(scrollRef);
   // Y no controle / "/" no teclado marcam `open` → foca o campo.
   useEffect(() => {
     if (search.open) searchRef.current?.focus();
   }, [search.open]);
+  // volta ao topo ao trocar de tela (a animação de entrada cobre o salto)
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, [pathname]);
 
   const hints = atBrowse
     ? ([
@@ -235,7 +242,7 @@ export function AppShell() {
           </Tooltip>
           <span className={s.clock}>{clock}</span>
         </div>
-        <div className={s.scroll}>
+        <div className={s.scroll} ref={scrollRef}>
           <RouteTransition
             routeKey={pathname.startsWith("/settings") ? "/settings" : pathname}
           >
