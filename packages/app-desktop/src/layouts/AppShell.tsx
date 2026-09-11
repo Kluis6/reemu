@@ -119,7 +119,7 @@ export function AppShell() {
     <div className={s.app}>
       <AnimatedBackground />
       <nav className={s.rail}>
-        <Menu positioning={{ position: "after", align: "top", offset: 8 }}>
+        <Menu positioning={{ position: "below", align: "start", offset: 12 }}>
           <MenuTrigger disableButtonEnhancement>
             <button className={s.railBrand} aria-label="Perfil" type="button">
               <ProfileAvatar

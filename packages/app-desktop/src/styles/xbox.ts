@@ -405,8 +405,7 @@ export const useCardStyles = makeStyles({
     cursor: "pointer",
     textAlign: "left",
     color: "inherit",
-    boxShadow: "0 6px 14px rgba(0, 0, 0, 0.22)",
-    transitionProperty: "box-shadow, outline-color, outline-offset",
+    transitionProperty: "outline-color, outline-offset",
     transitionDuration: "160ms",
     transitionTimingFunction: tokens.curveEasyEase,
     // O <Card> do Fluent desenha o próprio "anel" de foco via `::after` COM
@@ -425,7 +424,6 @@ export const useCardStyles = makeStyles({
       outlineOffset: "6px !important",
     },
     "&:hover, &:focus-within, &:focus-visible": {
-      boxShadow: "0 14px 32px rgba(0, 0, 0, 0.48)",
       zIndex: 2,
     },
     // zoom da imagem (não do card)

@@ -29,7 +29,6 @@ const useStyles = makeStyles({
     gap: "6px",
     backgroundColor: tokens.colorNeutralBackground1,
     padding: "6px",
-    boxShadow: "0 6px 14px rgba(0, 0, 0, 0.22)",
   },
   cell: {
     minWidth: 0,
