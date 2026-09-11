@@ -550,7 +550,7 @@ export const useCardStyles = makeStyles({
   },
   subText: {
     fontSize: tokens.fontSizeBase100,
-    color: "rgba(255, 255, 255, 0.72)",
+    color: "#ffffff",
     whiteSpace: "nowrap",
     overflowX: "hidden",
     textOverflow: "ellipsis",
