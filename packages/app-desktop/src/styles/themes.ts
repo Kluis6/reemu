@@ -190,8 +190,8 @@ function make(ramp: BrandVariants, mode: "dark" | "light" = "dark"): ReEmuTheme 
     // ÚNICA de gradiente (WebKitGTK quebra com radial-gradient multicamada
     // num elemento `position: fixed` — ver comentário no `.app`).
     reemuVeil: light
-      ? "radial-gradient(ellipse at center, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.9) 100%)"
-      : "radial-gradient(ellipse at center, rgba(9, 9, 12, 0.08) 0%, rgba(9, 9, 12, 0.82) 100%)",
+      ? "radial-gradient(ellipse at center, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.9) 100%)"
+      : "radial-gradient(ellipse at center, rgba(9, 9, 12, 0.04) 0%, rgba(9, 9, 12, 0.82) 100%)",
     // Verde de marca (tom 70 — mais fechado que o 80 padrão, fica igual ao
     // verde da pílula de seleção nos screenshots) só no claro; no escuro
     // continua o cinza neutro que já existia.
@@ -203,16 +203,25 @@ function make(ramp: BrandVariants, mode: "dark" | "light" = "dark"): ReEmuTheme 
 
 // -------------------------------------------------------------- registro ----
 
-export type ThemeId = "xbox-green" | "roxo" | "ambar" | "claro";
+export type ThemeId =
+  | "xbox-green"
+  | "roxo"
+  | "ambar"
+  | "claro"
+  | "roxo-claro"
+  | "ambar-claro";
 
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen) },
   roxo: { label: "Roxo", theme: make(roxo) },
   ambar: { label: "Âmbar", theme: make(ambar) },
   // Modo claro do dashboard Xbox (Series S/X e "modo XBOX" no PC): fundo
-  // branco/cinza bem claro, mesmo verde de marca do tema padrão — só a
-  // luminosidade da casca inverte, a marca não muda.
+  // branco/cinza bem claro — só a luminosidade da casca inverte, a marca
+  // não muda. Uma variante claro por rampa, mesmo par light/dark que o
+  // verde já tinha.
   claro: { label: "Claro", theme: make(xboxGreen, "light") },
+  "roxo-claro": { label: "Roxo Claro", theme: make(roxo, "light") },
+  "ambar-claro": { label: "Âmbar Claro", theme: make(ambar, "light") },
 };
 
 export const DEFAULT_THEME_ID: ThemeId = "xbox-green";
