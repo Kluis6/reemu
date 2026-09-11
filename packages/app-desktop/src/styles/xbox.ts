@@ -421,7 +421,7 @@ export const useCardStyles = makeStyles({
     textAlign: "left",
     color: "inherit",
     transitionProperty: "outline-color, outline-offset",
-    transitionDuration: "220ms",
+    transitionDuration: "170ms",
     transitionTimingFunction: tokens.curveEasyEase,
     // O <Card> do Fluent desenha o próprio "anel" de foco via `::after` COM
     // BORDA (`[data-fui-focus-visible]`/`[data-fui-focus-within]`, ver
@@ -475,9 +475,8 @@ export const useCardStyles = makeStyles({
       objectFit: "cover",
       objectPosition: "center",
       transitionProperty: "transform",
-      // Zoom mais suave: menos escala, mais tempo — sem perder o feedback
-      // de hover/foco, mas sem o "salto" abrupto.
-      transitionDuration: "460ms",
+      // Zoom suave mas sem arrastar: nem o "salto" de antes nem lento demais.
+      transitionDuration: "320ms",
       transitionTimingFunction: tokens.curveEasyEase,
     },
   },
@@ -503,7 +502,7 @@ export const useCardStyles = makeStyles({
     opacity: 0,
     transform: "translateY(6px)",
     transitionProperty: "opacity, transform",
-    transitionDuration: "280ms",
+    transitionDuration: "200ms",
     transitionTimingFunction: tokens.curveEasyEase,
     pointerEvents: "none",
     "@media (prefers-reduced-motion: reduce)": { transform: "none" },
