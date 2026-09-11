@@ -79,7 +79,7 @@ export const useShellStyles = makeStyles({
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
-      outlineOffset: "3px",
+      outlineOffset: "2px",
     },
   },
 
@@ -439,11 +439,11 @@ export const useCardStyles = makeStyles({
     "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
       border: "none !important",
     },
-    // Afasta mais o anel de foco (o global do `.app` usa 3px) — com o zoom
+    // Afasta mais o anel de foco (o global do `.app` usa 2px) — com o zoom
     // da imagem por baixo, rente ficava apertado. `!important`: precisa
     // ganhar do `.app [tabindex]:focus`, que tem mais specificity.
     "&:focus, &:focus-visible": {
-      outlineOffset: "6px !important",
+      outlineOffset: "4px !important",
     },
     "&:hover, &:focus-within, &:focus-visible": {
       zIndex: 2,
@@ -762,7 +762,7 @@ export const usePauseStyles = makeStyles({
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
-      outlineOffset: "3px",
+      outlineOffset: "2px",
     },
   },
   panel: {
