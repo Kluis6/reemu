@@ -230,7 +230,8 @@ export type ThemeId =
   | "ps-blue"
   | "claro"
   | "roxo-claro"
-  | "ambar-claro";
+  | "ambar-claro"
+  | "ps-blue-claro";
 
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen) },
@@ -244,6 +245,7 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   claro: { label: "Claro", theme: make(xboxGreen, "light") },
   "roxo-claro": { label: "Roxo Claro", theme: make(roxo, "light") },
   "ambar-claro": { label: "Âmbar Claro", theme: make(ambar, "light") },
+  "ps-blue-claro": { label: "Azul Claro", theme: make(psBlue, "light") },
 };
 
 export const DEFAULT_THEME_ID: ThemeId = "xbox-green";
