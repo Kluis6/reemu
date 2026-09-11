@@ -79,6 +79,9 @@ function TileCell({
           src={item.boxart ?? undefined}
           alt=""
           loading="lazy"
+          // Ver GameCard.tsx — decode síncrono evita a capa aparecer com um
+          // pedaço ainda não decodificado logo após o `onLoad`.
+          decoding="sync"
           data-loaded={loaded ? "" : undefined}
           onLoad={() => setLoaded(true)}
           onError={() => setBroken(true)}

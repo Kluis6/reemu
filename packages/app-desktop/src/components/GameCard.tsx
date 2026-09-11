@@ -90,6 +90,14 @@ export function GameCard({
             src={boxart}
             alt=""
             loading="lazy"
+            // `sync`: força o decode completo do bitmap ANTES do primeiro
+            // paint — sem isto, o `onLoad` (que só garante os bytes
+            // baixados) podia disparar antes do raster estar pronto, e a
+            // imagem aparecia com um pedaço (geralmente o topo) ainda não
+            // decodificado por um instante, mesmo já com opacity:1. Capas
+            // remotas grandes (Mega Drive: PNGs de ~500-800KB) são as mais
+            // afetadas.
+            decoding="sync"
             data-loaded={loaded ? "" : undefined}
             onLoad={() => setLoaded(true)}
             onError={() => setBroken(true)}
