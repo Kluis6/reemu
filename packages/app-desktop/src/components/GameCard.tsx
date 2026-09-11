@@ -83,6 +83,7 @@ export function GameCard({
   const card = (
     <Card
       className={mergeClasses(s.card, l.reveal)}
+      appearance="filled"
       role="button"
       aria-label={title}
       onClick={onClick}

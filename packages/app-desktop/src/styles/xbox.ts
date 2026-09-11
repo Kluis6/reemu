@@ -406,6 +406,15 @@ export const useCardStyles = makeStyles({
     transitionProperty: "box-shadow, outline-color, outline-offset",
     transitionDuration: "160ms",
     transitionTimingFunction: tokens.curveEasyEase,
+    // O <Card> do Fluent desenha o próprio "anel" de foco via `::after` COM
+    // BORDA (`[data-fui-focus-visible]`/`[data-fui-focus-within]`, ver
+    // @fluentui/react-card useCardStyles) — some daqui. O anel que fica é o
+    // `outline` global do `.app` (`& [tabindex]:focus`), o mesmo usado em
+    // todo o resto do app pra navegação por controle. `!important` porque o
+    // Card injeta essa regra DEPOIS da nossa (perde no empate de ordem).
+    "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
+      border: "none !important",
+    },
     "&:hover, &:focus-within, &:focus-visible": {
       boxShadow: "0 14px 32px rgba(0, 0, 0, 0.48)",
       zIndex: 2,

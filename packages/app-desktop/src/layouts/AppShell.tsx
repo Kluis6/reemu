@@ -35,7 +35,6 @@ import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
 import { useClock } from "../hooks/useClock";
 import { useFullscreen } from "../hooks/useFullscreen";
-import { useSmoothScroll } from "../hooks/useSmoothScroll";
 import { getProfile, quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
@@ -90,8 +89,13 @@ export function AppShell() {
   const profile = useQuery({ queryKey: ["profile"], queryFn: getProfile, retry: false });
   const search = useSearchStore();
   const searchRef = useRef<HTMLInputElement>(null);
+  // Rolagem por wheel é NATIVA (o WebKitGTK já entrega inércia/suavidade
+  // sozinho) — um `wheel` handler com `preventDefault` pra suavizar via JS
+  // tira o scroll da thread rápida e joga na main thread, que é onde
+  // React/estilo competem: fica MAIS lento, não mais suave (ver
+  // trac.webkit.org/changeset/270425 e web.dev/articles/animations-guide).
+  // `scroll-behavior: smooth` no CSS cobre o scrollIntoView do gamepad.
   const scrollRef = useRef<HTMLDivElement>(null);
-  useSmoothScroll(scrollRef);
   // Y no controle / "/" no teclado marcam `open` → foca o campo.
   useEffect(() => {
     if (search.open) searchRef.current?.focus();
