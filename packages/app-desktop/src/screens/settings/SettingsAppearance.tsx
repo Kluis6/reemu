@@ -1,6 +1,5 @@
 import {
   Caption1,
-  Switch,
   Text,
   makeStyles,
   mergeClasses,
@@ -50,7 +49,7 @@ const IDS = Object.keys(THEMES) as ThemeId[]
 /** Configurações › Aparência — tema de cor + fundo animado. */
 export function SettingsAppearance() {
   const s = useStyles()
-  const { themeId, setTheme, bgAnimated, setBgAnimated } = useThemeStore()
+  const { themeId, setTheme } = useThemeStore()
 
   return (
     <div className={s.root}>
@@ -59,7 +58,7 @@ export function SettingsAppearance() {
           Tema de cor
         </Text>
         <Caption1 as="p" style={{ margin: '2px 0 0' }}>
-          Muda a cor de destaque e o fundo animado. Mais temas vêm depois.
+          Muda a cor de destaque e do fundo. Mais temas vêm depois.
         </Caption1>
       </div>
 
@@ -87,16 +86,6 @@ export function SettingsAppearance() {
           )
         })}
       </div>
-
-      <Switch
-        checked={bgAnimated}
-        onChange={(_, d) => setBgAnimated(d.checked)}
-        label="Fundo animado"
-      />
-      <Caption1>
-        As manchas de cor do fundo se movem devagar. Desligado, elas ficam
-        paradas. O sistema já respeita “reduzir movimento” do SO.
-      </Caption1>
     </div>
   )
 }

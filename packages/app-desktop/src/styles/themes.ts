@@ -106,7 +106,7 @@ export interface ReEmuTokens {
   reemuBrandSolid: string;
   /** Cor de texto legível sobre `reemuBrandSolid`. */
   reemuOnBrand: string;
-  /** Manchas do fundo animado (`components/AnimatedBackground`) — 3 tons da
+  /** Manchas do fundo (`components/AnimatedBackground`) — 3 tons da
    *  rampa de marca, então cada tema pinta o fundo com a própria cor. */
   reemuBg1: string;
   reemuBg2: string;
