@@ -157,7 +157,7 @@ export function SettingsVideo() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                columnGap: 24,
+                columnGap: 48,
                 rowGap: 14,
                 alignItems: 'start',
               }}
