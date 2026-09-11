@@ -74,12 +74,17 @@ export const useShellStyles = makeStyles({
     // keydown, então o WebKitGTK não marca `:focus-visible` no `.focus()`
     // programático — e o usuário não via onde estava o foco.
     // Cor de marca (verde no tema padrão/claro) — igual ao destaque do item
-    // selecionado no dashboard Xbox de verdade, não um cinza neutro.
+    // selecionado no dashboard Xbox de verdade, não um cinza neutro. O
+    // `boxShadow` é um brilho na MESMA cor por fora do anel (igual ao glow
+    // do item selecionado nas imagens de referência) — estático, só no
+    // `:focus`, não anima, então não repete o custo do blur contínuo do
+    // `AnimatedBackground` (ver `frontend-perf-webkitgtk`).
     "& a:focus, & input:focus, & [tabindex]:focus": {
-      outlineWidth: "2px",
+      outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
       outlineOffset: "3px",
+      boxShadow: `0 0 0 1px ${tokens.colorBrandStroke1}, 0 0 16px 3px ${tokens.colorBrandStroke1}`,
     },
   },
 
@@ -441,9 +446,13 @@ export const useCardStyles = makeStyles({
     },
     // Afasta mais o anel de foco (o global do `.app` usa 3px) — com o zoom
     // da imagem por baixo, rente ficava apertado. `!important`: precisa
-    // ganhar do `.app [tabindex]:focus`, que tem mais specificity.
+    // ganhar do `.app [tabindex]:focus`, que tem mais specificity. O
+    // `boxShadow` repete o do global mas com raio maior — o anel do card
+    // fica 6px pra fora (não 3px), então o brilho precisa alcançar mais
+    // longe pra continuar "colado" nele.
     "&:focus, &:focus-visible": {
       outlineOffset: "6px !important",
+      boxShadow: `0 0 0 1px ${tokens.colorBrandStroke1}, 0 0 20px 6px ${tokens.colorBrandStroke1} !important`,
     },
     "&:hover, &:focus-within, &:focus-visible": {
       zIndex: 2,
@@ -759,10 +768,11 @@ export const usePauseStyles = makeStyles({
     // `:focus-visible` aí. O `<Button>` do Fluent só mostra o dele no
     // `:focus-visible`, então aqui a gente reforça.
     "& a:focus, & button:focus": {
-      outlineWidth: "2px",
+      outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
       outlineOffset: "3px",
+      boxShadow: `0 0 0 1px ${tokens.colorBrandStroke1}, 0 0 16px 3px ${tokens.colorBrandStroke1}`,
     },
   },
   panel: {
