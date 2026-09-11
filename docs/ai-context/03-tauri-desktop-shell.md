@@ -27,10 +27,14 @@ de menu sempre sobreposto.
      comum), deslocada pela espessura da CSD em janela (best-effort via
      `inner_position - outer_position`).
 
-  Env do WebKitGTK (`main.rs`, sempre no Linux): `WEBKIT_DISABLE_DMABUF_RENDERER=1`
-  + `WEBKIT_DISABLE_COMPOSITING_MODE=1` — o SW renderer sem compositing é o
-  único estável nesse combo (compositing on → loop de `internallyFailedLoadTimerFired`).
-  Como a página agora é **opaca**, não precisamos de compositing pra nada.
+  Env do WebKitGTK (`main.rs::configure_webkit_gpu`, Linux): **só no NVIDIA
+  proprietário** força `WEBKIT_DISABLE_DMABUF_RENDERER=1` +
+  `WEBKIT_DISABLE_COMPOSITING_MODE=1` (compositing on → loop de
+  `internallyFailedLoadTimerFired` → tela branca). Em AMD/Intel (Mesa) o
+  compositing acelerado fica **ligado** — as animações do frontend rodam na
+  GPU em vez da CPU. `REEMU_WEBKIT_COMPOSITING=1|0` força. Detecção de NVIDIA:
+  `/proc/driver/nvidia/version`, `/dev/nvidia0`, `__GLX_VENDOR_LIBRARY_NAME`.
+  Como a página é **opaca**, o vídeo nativo (subsurface) funciona nos dois casos.
 - **O menu Fluent fica sempre sobreposto** (nunca escondido durante
   `MenuFocused`, e mesmo em `GameFocused` a webview continua viva, só sem
   captar input) — não implemente um modelo de "esconder a webview

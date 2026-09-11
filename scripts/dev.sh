@@ -11,6 +11,10 @@
 #   RUST_LOG=debug scripts/dev.sh
 #   scripts/dev.sh --vk-validation       # + sync validation da camada Khronos
 #   scripts/dev.sh 2>&1 | grep VkFormat  # filtrar a saída
+#
+#   REEMU_WEBKIT_COMPOSITING=1 scripts/dev.sh   # força GPU no WebKitGTK
+#     Auto-ligado em AMD/Intel; desligado em NVIDIA proprietário (tela branca).
+#     Teste com =1 se o driver NVIDIA for novo; =0 pra forçar software.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
