@@ -54,6 +54,11 @@ const useLocalStyles = makeStyles({
   },
 });
 
+// Presença/status do perfil ainda não existe — o badge e o anel do avatar
+// entram quando tivermos rede social. Por ora, sempre desligados.
+const SHOW_AVATAR_BADGE = false;
+const SHOW_AVATAR_RING = false;
+
 const RAIL = [
   { to: "/", end: true, icon: <HomeRegular />, label: "Início" },
   { to: "/library", end: true, icon: <LibraryRegular />, label: "Meus jogos" },
@@ -117,8 +122,9 @@ export function AppShell() {
                 profile={
                   profile.data ?? { name: "Jogador", avatar: "preset:1" }
                 }
-                size={48}
-                badge="available"
+                size={32}
+                ring={SHOW_AVATAR_RING}
+                badge={SHOW_AVATAR_BADGE ? "available" : undefined}
               />
             </button>
           </MenuTrigger>

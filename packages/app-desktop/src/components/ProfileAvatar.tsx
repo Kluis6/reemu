@@ -6,21 +6,26 @@ import { profileAvatarUrl, type Profile } from '../lib/tauri'
 
 /**
  * Avatar do perfil — resolve `preset:N` (SVG embutido) ou `file` (imagem do
- * usuário, servida por IPC → `blob:` URL). Envolve o `<Avatar>` do Fluent
- * (badge, borda circular, tamanho). `nonce` fura o cache do blob depois de
- * trocar a imagem.
+ * usuário, servida por IPC → `blob:` URL). Envolve o `<Avatar>` do Fluent.
+ * `nonce` fura o cache do blob depois de trocar a imagem.
+ *
+ * `badge` e `ring` ficam desligados por padrão — entram quando tivermos
+ * presença/status (rede social).
  */
 export function ProfileAvatar({
   profile,
   size = 40,
   nonce = 0,
   badge,
+  ring = false,
   className,
 }: {
   profile: Pick<Profile, 'name' | 'avatar'>
   size?: number
   nonce?: number
   badge?: 'available' | 'away' | 'busy' | 'offline'
+  /** Anel colorido em volta do avatar (Fluent `color="colorful"`). */
+  ring?: boolean
   className?: string
 }) {
   const preset = presetOf(profile.avatar)
@@ -46,7 +51,7 @@ export function ProfileAvatar({
       className={className}
       name={profile.name || 'Jogador'}
       size={size as 20 | 24 | 28 | 32 | 36 | 40 | 48 | 56 | 64 | 72 | 96 | 120 | 128}
-      color="colorful"
+      color={ring ? 'colorful' : 'neutral'}
       badge={badge ? { status: badge } : undefined}
       image={
         isFile && file.data
