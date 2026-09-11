@@ -207,11 +207,14 @@ async fn query_screenscraper(
 }
 
 /// Roda uma leva de scraping sobre as ROMs sem match. Bloqueante (chamar de
-/// `spawn_blocking`/task). `stop` permite cancelar.
+/// `spawn_blocking`/task). `stop` permite cancelar. `covers_dir`: descarta o
+/// cache de capa (`covers.rs`) de qualquer rom que ganhar uma `cover_url`
+/// nova aqui, pra próxima leitura buscar a capa escrapeada.
 pub async fn scrape_pending(
     pool: db::Db,
     progress: Arc<ScrapeProgress>,
     stop: Arc<AtomicBool>,
+    covers_dir: std::path::PathBuf,
 ) -> Result<(), String> {
     let repo = db::MetadataRepo::new(pool.clone());
     let roms_repo = db::RomsRepo::new(pool.clone());
@@ -268,7 +271,7 @@ pub async fn scrape_pending(
                     log::warn!("metadata: gravar match de {stem}: {e}");
                     progress.failed.fetch_add(1, Ordering::Relaxed);
                 } else if c.exact_hash_match {
-                    let _ = repo
+                    let ok = repo
                         .upsert_metadata(&GameMetadata {
                             rom_id: rom_id.clone(),
                             title: c.title.clone(),
@@ -278,7 +281,11 @@ pub async fn scrape_pending(
                             genre: c.genre.clone(),
                             provider_source: Some(c.provider.clone()),
                         })
-                        .await;
+                        .await
+                        .is_ok();
+                    if ok {
+                        crate::covers::invalidate(&covers_dir, &rom_id);
+                    }
                     progress.auto.fetch_add(1, Ordering::Relaxed);
                 } else {
                     progress.pending.fetch_add(1, Ordering::Relaxed);

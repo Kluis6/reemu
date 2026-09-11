@@ -2042,7 +2042,13 @@ pub async fn resolve_pending_match(
     db::MetadataRepo::new(pool(&state)?)
         .resolve_pending(&rom_id, accept)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    // Aceito = pode ter trazido uma `cover_url` nova — descarta o cache pra
+    // próxima leitura buscar essa em vez de continuar servindo a antiga.
+    if accept {
+        crate::covers::invalidate(&state.covers_dir, &rom_id);
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -2090,9 +2096,12 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), Strin
     let pool = pool(&state)?;
     let progress = state.scrape.clone();
     let stop = state.scrape_stop.clone();
+    let covers_dir = state.covers_dir.clone();
     stop.store(false, std::sync::atomic::Ordering::Relaxed);
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = crate::scraping::scrape_pending(pool, progress.clone(), stop).await {
+        if let Err(e) =
+            crate::scraping::scrape_pending(pool, progress.clone(), stop, covers_dir).await
+        {
             log::warn!("metadata: leva falhou: {e}");
             progress
                 .running
