@@ -58,7 +58,7 @@ const useLocalStyles = makeStyles({
   // vertical por padrão), não em cada item — as linhas continuam com o
   // padding "medium" padrão do Fluent.
   menuPopover: { minWidth: "236px" },
-  menuBody: { padding: tokens.spacingVerticalM },
+  menuBody: { padding: tokens.spacingVerticalS },
   // O <MenuDivider> do Fluent vem com só 4px de margem vertical — some
   // fácil entre linhas com o padding maior do body. `!important`: o
   // componente injeta a própria classe (`margin: 4px -5px 4px -5px`)
