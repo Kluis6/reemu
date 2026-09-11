@@ -230,8 +230,10 @@ export const useShellStyles = makeStyles({
     scrollbarGutter: "stable",
     boxSizing: "border-box",
     paddingTop: "clamp(60px, 6.5vw, 92px)",
-    paddingLeft: "clamp(16px, 3vw, 48px)",
-    paddingRight: "clamp(16px, 3vw, 48px)",
+    // Mesmo valor do padding da `.topbar` — o conteúdo alinha exatamente com
+    // o botão de voltar (esquerda) e o fim do relógio (direita).
+    paddingLeft: "clamp(12px, 3vw, 28px)",
+    paddingRight: "clamp(14px, 3.5vw, 36px)",
     paddingBottom: "96px",
     "::-webkit-scrollbar": { width: "10px" },
     "::-webkit-scrollbar-thumb": {
