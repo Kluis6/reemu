@@ -8,7 +8,7 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import { ImageAddRegular } from '@fluentui/react-icons'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { PRESET_IDS } from '../lib/avatars'
 import { PresetAvatar } from './PresetAvatar'
@@ -70,6 +70,7 @@ export function ProfileForm({
   onDone: () => void
 }) {
   const s = useStyles()
+  const qc = useQueryClient()
   const push = useToastStore((t) => t.push)
   const [name, setName] = useState(initial.name)
   const [bio, setBio] = useState(initial.bio ?? '')
@@ -93,7 +94,19 @@ export function ProfileForm({
 
   const save = useMutation({
     mutationFn: () => setProfile(name.trim(), bio.trim() || null, avatar),
-    onSuccess: onDone,
+    onSuccess: () => {
+      // atualiza o cache na hora (o RootLayout usa ['profile'] pro gate de
+      // onboarding — sem isto ele redireciona de volta pra cá).
+      const next: Profile = {
+        name: name.trim(),
+        bio: bio.trim() || null,
+        avatar,
+        onboarded: true,
+      }
+      qc.setQueryData(['profile'], next)
+      qc.invalidateQueries({ queryKey: ['profile'] })
+      onDone()
+    },
     onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, 'Error')),
   })
 
