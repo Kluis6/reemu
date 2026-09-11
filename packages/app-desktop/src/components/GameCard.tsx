@@ -74,6 +74,7 @@ export function GameCard({
   const s = useCardStyles();
   const l = useLocalStyles();
   const [broken, setBroken] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const showArt = boxart && !broken;
 
   // `<Card>` do Fluent com `onClick` já vira focável, mas NÃO ganha
@@ -100,6 +101,8 @@ export function GameCard({
             src={boxart}
             alt=""
             loading="lazy"
+            data-loaded={loaded ? "" : undefined}
+            onLoad={() => setLoaded(true)}
             onError={() => setBroken(true)}
           />
         ) : (

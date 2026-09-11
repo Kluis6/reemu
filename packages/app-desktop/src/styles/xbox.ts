@@ -474,10 +474,15 @@ export const useCardStyles = makeStyles({
       height: "100%",
       objectFit: "cover",
       objectPosition: "center",
-      transitionProperty: "transform",
+      // Some até o onLoad disparar — uma capa remota ainda decodificando
+      // (linha por linha) podia aparecer com uma faixa escura no topo por
+      // um instante; agora só fica visível já pronta.
+      opacity: 0,
+      transitionProperty: "transform, opacity",
       // Zoom suave mas sem arrastar: nem o "salto" de antes nem lento demais.
-      transitionDuration: "320ms",
+      transitionDuration: "320ms, 220ms",
       transitionTimingFunction: tokens.curveEasyEase,
+      "&[data-loaded]": { opacity: 1 },
     },
   },
   meta: {

@@ -44,6 +44,12 @@ const useStyles = makeStyles({
       height: "100%",
       objectFit: "cover",
       objectPosition: "center",
+      // some até o onLoad — mesmo motivo do GameCard (evita mostrar a
+      // imagem ainda decodificando).
+      opacity: 0,
+      transitionProperty: "opacity",
+      transitionDuration: "220ms",
+      "&[data-loaded]": { opacity: 1 },
     },
   },
   init: { fontSize: "13px", opacity: 0.45 },
@@ -64,6 +70,7 @@ function TileCell({
   initClassName: string;
 }) {
   const [broken, setBroken] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const showArt = item.boxart && !broken;
   return (
     <div className={cellClassName}>
@@ -72,6 +79,8 @@ function TileCell({
           src={item.boxart ?? undefined}
           alt=""
           loading="lazy"
+          data-loaded={loaded ? "" : undefined}
+          onLoad={() => setLoaded(true)}
           onError={() => setBroken(true)}
         />
       ) : (
