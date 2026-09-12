@@ -20,6 +20,7 @@ import { sysToast } from "../lib/toast";
 import { useToastStore } from "../stores/useToastStore";
 
 const useStyles = makeStyles({
+  surface: { maxWidth: "360px" },
   content: { display: "flex", flexDirection: "column", rowGap: tokens.spacingVerticalXS },
   row: {
     justifyContent: "flex-start",
@@ -57,7 +58,7 @@ export function PowerMenuDialog({
 
   return (
     <Dialog open={open} onOpenChange={(_, d) => onOpenChange(d.open)}>
-      <DialogSurface>
+      <DialogSurface className={s.surface}>
         <DialogBody>
           <DialogTitle>Encerrar</DialogTitle>
           <DialogContent className={s.content}>
