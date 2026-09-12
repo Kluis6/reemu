@@ -167,10 +167,6 @@ export const useShellStyles = makeStyles({
       width: "1em",
       height: "1em",
     },
-    ":hover": {
-      backgroundColor: "rgba(220, 60, 60, 0.18)",
-      color: "#ff8a8a",
-    },
   },
   railBrand: {
     marginBottom: "6px",
