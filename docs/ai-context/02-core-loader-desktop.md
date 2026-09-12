@@ -129,5 +129,14 @@ assinatura de função por suposição.
   que renegocia `SET_SYSTEM_AV_INFO` em runtime; `next_hw_frame` devolve
   `None` silenciosamente (sem log) e, se isso acontece antes do 1º present
   bem-sucedido, a tela nunca sai do preto inicial.
+  **Pegadinha à parte, achada testando o fix**: a rota "processo filho" roda
+  este crate dentro do `reemu-core-host` — um `[[bin]]` SEPARADO
+  (`core-host-desktop`), que `reemu-desktop` não depende. `cargo tauri dev`
+  nunca recompila esse binário sozinho, então um fix aqui em
+  `core-loader-desktop` só chega na rota processo-filho depois de um
+  `cargo build -p core-host-desktop` manual — sem isso o app roda o binário
+  velho, sem erro nenhum, e parece que a correção "não funcionou".
+  `scripts/dev.sh` já builda esse binário antes de subir o app; se editar
+  este crate e testar por fora do script, lembrar de rebuildar os DOIS.
 - `.7z` no `archive.rs` (hoje só `.zip`).
 - GLES-only: `eglBindAPI(EGL_OPENGL_ES_API)` já implementado, sem core pra testar.
