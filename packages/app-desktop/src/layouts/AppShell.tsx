@@ -183,7 +183,7 @@ export function AppShell() {
                   {m.label}
                 </MenuItem>
               ))}
-              <MenuDivider className={l.menuDivider} />
+              <MenuDivider />
               <Menu>
                 <MenuTrigger disableButtonEnhancement>
                   <MenuItem disabled>Status</MenuItem>
@@ -196,7 +196,7 @@ export function AppShell() {
                   </MenuList>
                 </MenuPopover>
               </Menu>
-              <MenuDivider className={l.menuDivider} />
+             
               <MenuItem onClick={() => void quitApp()}>Sair</MenuItem>
             </MenuList>
           </MenuPopover>

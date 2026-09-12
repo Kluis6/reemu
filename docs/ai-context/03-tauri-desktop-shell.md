@@ -126,17 +126,23 @@ apps/desktop/src-tauri/src/
   pra surface antes do próximo frame ser desenhado.
 - Ao pausar (`MenuFocused`), congele o último frame renderizado em vez de
   limpar a tela — evita salto visual feio atrás do menu.
-- **Esconder a subsurface (`attach(None)`) sozinho pode não bastar pro
-  compositor recompor a região** (relatado 2026-09-12: trocar de ROM/
-  plataforma deixava o último frame do jogo anterior "grudado" na tela
-  durante o load do próximo, SEMPRE, não só numa troca rápida — a webview
-  por baixo já estava pintada certa, só faltava o compositor redesenhar
-  ali). `Subsurface::set_hidden` (`video.rs`) agora também manda
-  `damage_buffer` + `commit` no PARENT (a webview) logo depois de destacar
-  o buffer da subsurface, forçando o redesenho da região. Log
-  `Subsurface::set_hidden(true) — buffer destacado...` (nível info) marca
-  quando isso dispara — se o sintoma voltar, confirmar primeiro se esse
-  log aparece a cada troca antes de suspeitar de outra causa.
+- **Bug em aberto (2026-09-12): trocar de ROM/plataforma deixa o último
+  frame do jogo anterior "grudado" na tela durante o load do próximo,
+  SEMPRE** (não é uma corrida de timing — investigado, não é isso).
+  `Subsurface::set_hidden` (`video.rs`) já faz `attach(None)`, `commit`
+  e `flush` corretos na subsurface do JOGO; um log em nível info
+  (`Subsurface::set_hidden(true) — buffer destacado`) confirma que isso
+  dispara a cada troca. **Tentativa que NÃO FUNCIONOU e foi revertida**:
+  mandar `damage_buffer` + `commit` no PARENT (a `wl_surface` da própria
+  janela GTK) pra forçar o compositor a recompor a região — isso quebrou
+  na hora com `Gdk-Message: Error 22 (Argumento inválido) dispatching to
+  Wayland display`, porque aquela surface é gerenciada pelo GDK e um
+  commit nosso por fora do ciclo dele corrompe o estado pendente. **Nunca
+  chamar `commit()`/`damage_buffer()` em `self.parent`** — só na
+  subsurface do jogo (`self.video`). Causa raiz ainda não encontrada;
+  próximo passo é investigar do lado do compositor/driver (por que
+  destacar o buffer não basta pra ele recompor aquela região), não tentar
+  mais gambiarras no lado do cliente sobre o `parent`.
 - O comando Tauri que alterna foco deve ser o único ponto de entrada que
   aciona `FocusManager::toggle()` — não deixe o React decidir isso
   diretamente, só solicitar via `invoke`.

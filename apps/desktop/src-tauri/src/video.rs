@@ -258,25 +258,20 @@ mod wl {
         /// webview opaca atrás reaparece. `show` é implícito: o próximo present
         /// do wgpu re-anexa um buffer e remapeia.
         ///
-        /// `damage_buffer` + `commit` no PARENT (a webview): destacar só o
-        /// buffer da subsurface (`video.attach(None)`) devolve o `wl_surface`
-        /// dela pro estado "sem conteúdo", mas em alguns compositor/driver
-        /// (NVIDIA proprietário incluso) isso sozinho não bastava — o
-        /// compositor não recomputava dano da região que a subsurface cobria
-        /// (ela nasce ACIMA do parent), e o ÚLTIMO frame do jogo ficava
-        /// "grudado" na tela mesmo com o buffer já destacado (relatado
-        /// 2026-09-12: sempre, não só numa troca rápida). A webview por
-        /// baixo já está pintada certa (é opaca, sem essa região
-        /// transparente por design — ver `Subsurface::create`); só faltava
-        /// pedir pro compositor redesenhar ali.
+        /// **NÃO chamar `commit()`/`damage_buffer()` no PARENT aqui** — essa
+        /// `wl_surface` é gerenciada pelo GTK/GDK (é a janela real); um commit
+        /// nosso, por fora do ciclo de desenho dele, colide com o estado
+        /// pendente que o GDK mantém pra ela. Tentado 2026-09-12 como fix pro
+        /// "frame do jogo anterior grudado" — causou `Gdk-Message: Error 22
+        /// (Argumento inválido) dispatching to Wayland display` na hora,
+        /// revertido. Só mexer na subsurface DO JOGO (`self.video`), nunca em
+        /// `self.parent`.
         pub fn set_hidden(&self, hidden: bool) {
             if hidden {
                 self.video.attach(None, 0, 0);
                 self.video.commit();
-                self.parent.damage_buffer(0, 0, i32::MAX, i32::MAX);
-                self.parent.commit();
                 let _ = self.conn.flush();
-                log::info!("Subsurface::set_hidden(true) — buffer destacado + parent danificado/commitado");
+                log::info!("Subsurface::set_hidden(true) — buffer destacado");
             }
         }
 
