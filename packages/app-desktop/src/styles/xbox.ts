@@ -441,18 +441,20 @@ export const useCardStyles = makeStyles({
     cursor: "pointer",
     textAlign: "left",
     color: "inherit",
-    // O anel de foco é o do PRÓPRIO <Card> do Fluent — um `border` num
-    // `::after` (`[data-fui-focus-visible]`/`[data-fui-focus-within]`, ver
-    // @fluentui/react-card useCardStyles), largura/raio já certos por
-    // padrão (`strokeWidthThick`, mesmo raio do card). Só a COR troca pra
-    // marca; o `outline` global do `.app` é desligado aqui pra não
-    // duplicar o anel. `!important`: o Card injeta a própria regra de cor
-    // (`colorStrokeFocus2`) depois da nossa.
-    "&:focus, &:focus-visible": {
-      outline: "none !important",
-    },
+    // O <Card> do Fluent desenha o próprio "anel" de foco via `::after` COM
+    // BORDA (`[data-fui-focus-visible]`/`[data-fui-focus-within]`, ver
+    // @fluentui/react-card useCardStyles) — some daqui. O anel que fica é o
+    // `outline` global do `.app` (`& [tabindex]:focus`), o mesmo usado em
+    // todo o resto do app pra navegação por controle. `!important` porque o
+    // Card injeta essa regra DEPOIS da nossa (perde no empate de ordem).
     "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
-      border: `${tokens.strokeWidthThick} solid ${tokens.colorBrandStroke1} !important`,
+      border: "none !important",
+    },
+    // Afasta mais o anel de foco (o global do `.app` usa 2px) — com o zoom
+    // da imagem por baixo, rente ficava apertado. `!important`: precisa
+    // ganhar do `.app [tabindex]:focus`, que tem mais specificity.
+    "&:focus, &:focus-visible": {
+      outlineOffset: "4px !important",
     },
     "&:hover, &:focus-within, &:focus-visible": {
       zIndex: 2,
