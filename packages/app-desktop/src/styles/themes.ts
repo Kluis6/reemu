@@ -46,6 +46,30 @@ const xboxGreen: BrandVariants = {
   160: "#F4F8F2",
 };
 
+/** Verde do dashboard "Blades" do Xbox 360 clássico (2005) — mais amarelado
+ *  que o `xboxGreen` (Series S/X moderno): o brilho por trás da blade
+ *  selecionada e o logo antigo do Xbox usavam esse verde-limão ("Apple
+ *  Green" #7EB900), não o verde puro atual (#107C10). Sem tema claro — o
+ *  Blades nunca teve um "modo claro", era preto/verde sempre. */
+const xboxClassico: BrandVariants = {
+  10: "#0C0F05",
+  20: "#192108",
+  30: "#2A3A09",
+  40: "#3C5507",
+  50: "#527605",
+  60: "#669306",
+  70: "#7EB508",
+  80: "#95D709",
+  90: "#ADF514",
+  100: "#B7F631",
+  110: "#C2F84F",
+  120: "#CEF971",
+  130: "#D8F797",
+  140: "#E3F5BC",
+  150: "#EDF6DA",
+  160: "#F7FAF0",
+};
+
 const roxo: BrandVariants = {
   10: "#08050F",
   20: "#0F0821",
@@ -257,6 +281,7 @@ function make(
 
 export type ThemeId =
   | "xbox-green"
+  | "xbox-classico"
   | "roxo"
   | "ambar"
   | "ps-blue"
@@ -269,6 +294,8 @@ export type ThemeId =
 
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen) },
+  // Sem par "-claro" de propósito — o dashboard Blades nunca teve modo claro.
+  "xbox-classico": { label: "Xbox Clássico", theme: make(xboxClassico) },
   "ps-blue": { label: "Azul PlayStation", theme: make(psBlue) },
   ps1: { label: "PlayStation Clássico", theme: make(ps1Red, "dark", ps1Accents) },
   roxo: { label: "Roxo", theme: make(roxo) },
