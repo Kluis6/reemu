@@ -328,9 +328,12 @@ Conferido na fonte (`libretro/beetle-psx-libretro@master`,
   validação minha (Crash Bandicoot 2, sem forçar 16bpp). Fecha a ressalva de
   "implementado mas não testado no hardware do usuário" que constava desde
   `16830fe`.
-  **Pendente:** silenciar stdout do Beetle (`[hdcache]`/`Creating shader
-  module`) no caminho in-process; flycast/mupen como alvos validados; Fase C
-  (tirar os CPU-waits do blit e do `submit_vulkan_cmds`).
+  **Feito (2026-09-12):** stdout do core silenciado no caminho in-process
+  (`core_loader_desktop::with_core_stdout_silenced`, mute só durante
+  `open_core`/`retro_load_game` — o `[hdcache]`/`Creating shader module` cru
+  do Beetle não pousa mais no stdout do processo principal).
+  **Pendente:** flycast/mupen como alvos validados; Fase C (tirar os
+  CPU-waits do blit e do `submit_vulkan_cmds`).
   Referência histórica do plano D2 original: `vk_context.rs` construir a `ash::Instance` com as extensões que o
   `wgpu-hal` quer, chamar o `create_device` do core passando
   `Adapter::required_device_extensions` / `physical_device_features` do
