@@ -102,6 +102,17 @@ const useStyles = makeStyles({
     transition: 'opacity 240ms ease',
     pointerEvents: 'none',
   },
+  // Scanlines de CRT — ESTÁTICO: só um `repeating-linear-gradient` (sem
+  // filter, sem animação), pinta uma vez e fica. Por cima de tudo (a tela
+  // toda "por trás do vidro"), não só do fundo.
+  scanlines: {
+    position: 'absolute',
+    inset: 0,
+    zIndex: 2,
+    pointerEvents: 'none',
+    backgroundImage:
+      'repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.18) 0px, rgba(0, 0, 0, 0.18) 1px, transparent 1px, transparent 3px)',
+  },
 })
 
 /** Tela de abertura — liga a logo com uma expansão curta + brilho que respira.
@@ -125,6 +136,7 @@ export function Splash({ leaving = false }: { leaving?: boolean }) {
         )}
       </div>
       <div className={s.tag}>carregando…</div>
+      <div className={s.scanlines} aria-hidden />
     </div>
   )
 }
