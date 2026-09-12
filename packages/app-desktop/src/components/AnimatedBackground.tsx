@@ -40,7 +40,7 @@ const useStyles = makeStyles({
     position: 'absolute',
     width: '70vmax',
     height: '70vmax',
-    opacity: 0.5,
+    opacity: 0.65,
   },
   b1: {
     top: '-26vmax',
