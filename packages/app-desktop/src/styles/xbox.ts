@@ -779,6 +779,14 @@ export const usePauseStyles = makeStyles({
       outlineColor: tokens.colorBrandStroke1,
       outlineOffset: "2px",
     },
+    // O <Button> do Fluent desenha o PRÓPRIO anel de foco (borda some +
+    // `::after`) — mata só isso, fica só o outline global acima (mesmo
+    // ajuste já feito no GameCard/`useCardStyles`). `!important`: o
+    // Button injeta essa regra depois da nossa.
+    "& .fui-Button[data-fui-focus-visible]::after, & .fui-Button[data-fui-focus-within]::after":
+      {
+        border: "none !important",
+      },
   },
   panel: {
     display: "flex",
@@ -809,7 +817,8 @@ export const usePauseStyles = makeStyles({
     alignItems: "center",
     columnGap: "10px",
     padding: "6px",
-    borderRadius: shell.radius,
+    // Raio padrão do <Button> do Fluent (não `shell.radius`) — pedido
+    // direto pra não destoar do resto dos botões do menu.
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     backgroundColor: "var(--reemuFillWeak)",
     color: tokens.colorNeutralForeground1,

@@ -612,7 +612,6 @@ export function PlayScreen() {
               </div>
             )}
 
-            <Button onClick={() => navigate("/settings")}>Configurações</Button>
             <Button appearance="subtle" onClick={() => void toggleFullscreen()}>
               {fullscreen ? "Sair da tela cheia" : "Tela cheia"}
             </Button>
