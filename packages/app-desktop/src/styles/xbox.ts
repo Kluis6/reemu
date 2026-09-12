@@ -432,32 +432,27 @@ export const useCardStyles = makeStyles({
     display: "block",
     border: "none",
     backgroundColor: "transparent",
-    borderRadius: shell.radius,
-    // SEM overflow:hidden aqui — o WebKitGTK corta o próprio outline de foco
-    // quando ele "vaza" pra fora de um elemento com overflow:hidden nele
-    // mesmo (o anel ficava com pedaço cortado). Quem clipa a arte/zoom
-    // agora é o `.art` (embaixo), não o card inteiro.
+    // Raio padrão do Fluent (`--fui-Card--border-radius` no tamanho
+    // "medium" resolve pra isto) — não um valor customizado.
+    borderRadius: tokens.borderRadiusMedium,
+    // SEM overflow:hidden aqui — quem clipa a arte/zoom é o `.art`
+    // (embaixo), não o card inteiro.
     padding: 0,
     cursor: "pointer",
     textAlign: "left",
     color: "inherit",
-    transitionProperty: "outline-color, outline-offset",
-    transitionDuration: "170ms",
-    transitionTimingFunction: tokens.curveEasyEase,
-    // O <Card> do Fluent desenha o próprio "anel" de foco via `::after` COM
-    // BORDA (`[data-fui-focus-visible]`/`[data-fui-focus-within]`, ver
-    // @fluentui/react-card useCardStyles) — some daqui. O anel que fica é o
-    // `outline` global do `.app` (`& [tabindex]:focus`), o mesmo usado em
-    // todo o resto do app pra navegação por controle. `!important` porque o
-    // Card injeta essa regra DEPOIS da nossa (perde no empate de ordem).
-    "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
-      border: "none !important",
-    },
-    // Afasta mais o anel de foco (o global do `.app` usa 2px) — com o zoom
-    // da imagem por baixo, rente ficava apertado. `!important`: precisa
-    // ganhar do `.app [tabindex]:focus`, que tem mais specificity.
+    // O anel de foco é o do PRÓPRIO <Card> do Fluent — um `border` num
+    // `::after` (`[data-fui-focus-visible]`/`[data-fui-focus-within]`, ver
+    // @fluentui/react-card useCardStyles), largura/raio já certos por
+    // padrão (`strokeWidthThick`, mesmo raio do card). Só a COR troca pra
+    // marca; o `outline` global do `.app` é desligado aqui pra não
+    // duplicar o anel. `!important`: o Card injeta a própria regra de cor
+    // (`colorStrokeFocus2`) depois da nossa.
     "&:focus, &:focus-visible": {
-      outlineOffset: "4px !important",
+      outline: "none !important",
+    },
+    "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
+      border: `${tokens.strokeWidthThick} solid ${tokens.colorBrandStroke1} !important`,
     },
     "&:hover, &:focus-within, &:focus-visible": {
       zIndex: 2,
@@ -483,7 +478,7 @@ export const useCardStyles = makeStyles({
     right: 0,
     bottom: 0,
     left: 0,
-    borderRadius: shell.radius,
+    borderRadius: tokens.borderRadiusMedium,
     overflowX: "hidden",
     overflowY: "hidden",
     backgroundImage: elevGradient,
@@ -511,11 +506,12 @@ export const useCardStyles = makeStyles({
     left: 0,
     right: 0,
     bottom: 0,
-    // Cantos de baixo arredondados igual à arte — o card não clipa mais
-    // (era o que cortava o anel de foco), então quem tem que ficar
-    // arredondado por conta própria é cada camada.
-    borderBottomLeftRadius: shell.radius,
-    borderBottomRightRadius: shell.radius,
+    // Cantos de baixo arredondados igual à arte — o card não clipa
+    // (`overflow` fica na `.art`), então quem tem que ficar arredondado
+    // por conta própria é cada camada. Raio padrão do Fluent, igual ao
+    // `.card`/`.art`.
+    borderBottomLeftRadius: tokens.borderRadiusMedium,
+    borderBottomRightRadius: tokens.borderRadiusMedium,
     display: "flex",
     flexDirection: "column",
     rowGap: "1px",
