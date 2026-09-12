@@ -123,7 +123,7 @@ export function SettingsAppearance() {
           Tema de cor
         </Text>
         <Caption1 as="p" style={{ margin: '2px 0 0' }}>
-          Muda a cor de destaque e do fundo. Mais temas vêm depois.
+          Muda a cor de destaque e do fundo do app.
         </Caption1>
       </div>
 
@@ -222,8 +222,7 @@ export function SettingsAppearance() {
           Papel de parede
         </Text>
         <Caption1 as="p" style={{ margin: '2px 0 0' }}>
-          Uma imagem sua atrás das cores do tema, na tela inicial. Opcional —
-          as manchas de cor ficam por cima, então o tema continua dando o tom.
+          Uma imagem de fundo pra tela inicial. Opcional.
         </Caption1>
       </div>
 

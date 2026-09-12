@@ -101,17 +101,17 @@ export function SettingsMetadata() {
   })
 
   if (cfg.isLoading) return <LoadingState />
-  if (cfg.isError || !form) return <Body1>Config de metadata indisponível (sem banco?).</Body1>
+  if (cfg.isError || !form) return <Body1>Não foi possível carregar as configurações de metadata.</Body1>
 
   const p = progress.data
 
   return (
     <div className={s.root}>
       <Caption1>
-        Busca título, descrição, ano e gênero por hash (CRC32) no{' '}
-        <Text as="strong" weight="semibold">ScreenScraper</Text>. Só match de hash exato entra sozinho — o
-        resto vai pra revisão abaixo. Uma conta grátis em screenscraper.fr
-        aumenta bastante o limite de requisições.
+        Busca título, descrição, ano e gênero automaticamente no{' '}
+        <Text as="strong" weight="semibold">ScreenScraper</Text>. Resultados
+        incertos vão pra revisão abaixo. Uma conta grátis em
+        screenscraper.fr aumenta o limite de buscas.
       </Caption1>
 
       <div className={s.form}>
@@ -164,7 +164,7 @@ export function SettingsMetadata() {
 
       {(pending.data?.length ?? 0) > 0 && (
         <div className={s.pending}>
-          <Caption1>Revisar ({pending.data!.length}) — correspondências por nome, não por hash</Caption1>
+          <Caption1>Revisar ({pending.data!.length}) — correspondências incertas</Caption1>
           {pending.data!.map((m) => (
             <div key={m.romId} className={s.row}>
               {m.coverUrl && <Image className={s.cover} src={m.coverUrl} alt="" />}

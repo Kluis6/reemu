@@ -110,8 +110,9 @@ export function ControllerMappings() {
   return (
     <div className={styles.root}>
       <Caption1>
-        Sem override, o botão do controle segue o padrão do SDL_GameControllerDB.
-        Combinação é opção avançada — o normal é um botão por função.
+        Por padrão, os controles usam o mapeamento automático do sistema.
+        Combinação de botões é opção avançada — o normal é um botão por
+        função.
       </Caption1>
       {devices.map(([guid, dev]) => {
         const bound = new Map(dev.mapping?.entries.map((e) => [e.button, e]) ?? [])

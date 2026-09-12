@@ -157,10 +157,7 @@ export function BezelLibrary() {
           </div>
         ))}
       </div>
-      <Caption1>
-        Packs do The Bezel Project — 100–600 MB por sistema. O bezel casa com a
-        ROM pelo nome do arquivo (padrão No-Intro/Redump).
-      </Caption1>
+      <Caption1>Packs do The Bezel Project — 100–600 MB por sistema.</Caption1>
     </div>
   )
 }

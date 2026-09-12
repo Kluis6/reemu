@@ -62,13 +62,9 @@ function Installed() {
   const cores = useQuery({ queryKey: ['installed-cores'], queryFn: listInstalledCores, retry: false })
 
   if (cores.isLoading) return <LoadingState label="Lendo pasta de cores…" />
-  if (cores.isError) return <Body1>Indisponível (backend sem banco).</Body1>
+  if (cores.isError) return <Body1>Não foi possível carregar os cores instalados.</Body1>
   if ((cores.data?.length ?? 0) === 0)
-    return (
-      <Caption1>
-        Nenhum core em <code>&lt;dados&gt;/cores/</code>. Instale pelo catálogo.
-      </Caption1>
-    )
+    return <Caption1>Nenhum core instalado ainda. Instale pelo catálogo.</Caption1>
 
   return (
     <div className={styles.list}>
@@ -126,9 +122,10 @@ function Catalog() {
   return (
     <>
       <Caption1>
-        Cores do buildbot oficial da libretro. Os marcados <Text as="strong" weight="semibold">OpenGL</Text> /{' '}
-        <Text as="strong" weight="semibold">Vulkan</Text> renderizam em 3D (precisam de GPU) — N64, PSX-hw, Saturn, DS,
-        Dreamcast. Os <Text as="strong" weight="semibold">Vulkan</Text> rodam no mesmo device do compositor, sem cópia.
+        Cores oficiais da libretro, prontos pra instalar. Os marcados{' '}
+        <Text as="strong" weight="semibold">OpenGL</Text> /{' '}
+        <Text as="strong" weight="semibold">Vulkan</Text> usam a placa de vídeo
+        pra jogos 3D (N64, PSX-hw, Saturn, DS, Dreamcast).
       </Caption1>
       <div className={styles.list}>
         {sorted.map((c: CatalogCore) => (

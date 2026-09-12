@@ -21,10 +21,7 @@ export function SettingsProfile() {
 
   return (
     <div className={s.root}>
-      <Caption1>
-        Seu perfil local — um por instalação. No futuro dá pra ligar a uma rede
-        social.
-      </Caption1>
+      <Caption1>Como seu nome e avatar aparecem no ReEmu.</Caption1>
       <ProfileForm
         initial={{
           name: profile.data?.name ?? '',

@@ -134,8 +134,8 @@ export function SettingsVideo() {
     >
       <Caption1>
         {data.gpu
-          ? 'Shader padrão da biblioteca (roda na GPU offscreen). Cada jogo pode ter um shader próprio na tela de detalhe.'
-          : 'Sem GPU disponível — o frame vai cru pra tela; a troca não tem efeito.'}
+          ? 'Shader padrão pra todos os jogos. Cada jogo pode ter um shader próprio na tela de detalhe.'
+          : 'Sem GPU disponível — shaders não têm efeito nesta máquina.'}
       </Caption1>
 
       {!data.gpu && presetPicker}
@@ -167,10 +167,9 @@ export function SettingsVideo() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                 <Caption1>
-                  Preset externo — arquivo <code>.slangp</code> (RetroArch).
-                  ~93% dos presets do pacote rodam (Mega Bezel inclusive);
-                  glow/bloom que dependem de mipmap ainda ficam mais duros
-                  que no RetroArch.
+                  Preset externo — arquivo <code>.slangp</code> do RetroArch.
+                  A maioria funciona bem; alguns efeitos de brilho podem
+                  ficar um pouco diferentes.
                 </Caption1>
                 <ShaderLibrary
                   onPick={(p) => pick.mutate(p)}
@@ -200,12 +199,8 @@ export function SettingsVideo() {
           {tab === 'molduras' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <Caption1>
-                Baixe direto do The Bezel Project por sistema, ou importe uma
-                pasta no formato Bezel Project / RetroBat (
-                <code>default.png</code>, <code>&lt;sistema&gt;/</code>,{' '}
-                <code>games/&lt;sistema&gt;/&lt;rom&gt;.png</code>). O jogo é
-                posicionado pelo <code>.cfg</code> irmão ou pela janela
-                transparente da arte.
+                Baixe molduras por sistema direto do The Bezel Project, ou
+                importe sua própria pasta (formato Bezel Project / RetroBat).
               </Caption1>
               <BezelLibrary />
               <div style={{ display: 'flex', gap: 8 }}>
