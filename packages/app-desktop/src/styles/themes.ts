@@ -84,6 +84,31 @@ const ambar: BrandVariants = {
   160: "#FAF6F0",
 };
 
+/** Vermelho PlayStation (o "Spanish Red" da marca oficial — logo/símbolo). */
+const ps1Red: BrandVariants = {
+  10: "#0F0507",
+  20: "#21080C",
+  30: "#3A0911",
+  40: "#550714",
+  50: "#760517",
+  60: "#93061D",
+  70: "#B50824",
+  80: "#D7092A",
+  90: "#F51439",
+  100: "#F63151",
+  110: "#F84F6A",
+  120: "#F97187",
+  130: "#F797A6",
+  140: "#F5BCC5",
+  150: "#F6DADF",
+  160: "#FAF0F2",
+};
+
+/** Manchas do fundo do tema "PlayStation Clássico": teal, azul e amarelo
+ *  oficiais da marca (junto do vermelho da rampa acima) — base cinza,
+ *  destaque multicor no degradê, como pedido. */
+const ps1Accents = { bg1: "#00AC9F", bg2: "#2E6DB4", bg3: "#F3C300" };
+
 /** Azul PlayStation (o acento do dashboard PS4/PS5). */
 const psBlue: BrandVariants = {
   10: "#020C14",
@@ -182,7 +207,11 @@ function readableOn(hex: string): string {
   return (r * 299 + g * 587 + b * 114) / 1000 > 128 ? "#0b0b0d" : "#ffffff";
 }
 
-function make(ramp: BrandVariants, mode: "dark" | "light" = "dark"): ReEmuTheme {
+function make(
+  ramp: BrandVariants,
+  mode: "dark" | "light" = "dark",
+  bgAccents?: { bg1: string; bg2: string; bg3: string },
+): ReEmuTheme {
   const light = mode === "light";
   return {
     ...(light ? createLightTheme(ramp) : createDarkTheme(ramp)),
@@ -201,9 +230,12 @@ function make(ramp: BrandVariants, mode: "dark" | "light" = "dark"): ReEmuTheme 
     reemuSurfaceSoft: light ? "#ffffff" : "#5f6368",
     reemuBrandSolid: ramp[80],
     reemuOnBrand: readableOn(ramp[80]),
-    reemuBg1: ramp[70],
-    reemuBg2: ramp[90],
-    reemuBg3: ramp[50],
+    // Tema normal: 3 tons DA MESMA rampa. `bgAccents` (só o "PlayStation
+    // Clássico" usa por ora) troca isso por cores fixas de marca oficiais,
+    // pra um degradê multicor em vez de tons derivados de um único matiz.
+    reemuBg1: bgAccents?.bg1 ?? ramp[70],
+    reemuBg2: bgAccents?.bg2 ?? ramp[90],
+    reemuBg3: bgAccents?.bg3 ?? ramp[50],
     // Radial (não mais vertical): centro bem mais transparente — deixa o
     // papel de parede aparecer no meio da tela — e as bordas/cantos (onde
     // ficam as manchas de cor do tema) mantêm a força de antes. Camada
@@ -228,14 +260,17 @@ export type ThemeId =
   | "roxo"
   | "ambar"
   | "ps-blue"
+  | "ps1"
   | "claro"
   | "roxo-claro"
   | "ambar-claro"
-  | "ps-blue-claro";
+  | "ps-blue-claro"
+  | "ps1-claro";
 
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen) },
   "ps-blue": { label: "Azul PlayStation", theme: make(psBlue) },
+  ps1: { label: "PlayStation Clássico", theme: make(ps1Red, "dark", ps1Accents) },
   roxo: { label: "Roxo", theme: make(roxo) },
   ambar: { label: "Âmbar", theme: make(ambar) },
   // Modo claro do dashboard Xbox (Series S/X e "modo XBOX" no PC): fundo
@@ -246,6 +281,10 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "roxo-claro": { label: "Roxo Claro", theme: make(roxo, "light") },
   "ambar-claro": { label: "Âmbar Claro", theme: make(ambar, "light") },
   "ps-blue-claro": { label: "Azul Claro", theme: make(psBlue, "light") },
+  "ps1-claro": {
+    label: "PlayStation Clássico Claro",
+    theme: make(ps1Red, "light", ps1Accents),
+  },
 };
 
 export const DEFAULT_THEME_ID: ThemeId = "xbox-green";
