@@ -771,22 +771,21 @@ export const usePauseStyles = makeStyles({
     zIndex: 100,
     // Anel de foco no `:focus` (não só `:focus-visible`): a navegação por
     // controle foca via `.focus()` sem keydown e o WebKitGTK não marca
-    // `:focus-visible` aí. O `<Button>` do Fluent só mostra o dele no
-    // `:focus-visible`, então aqui a gente reforça.
+    // `:focus-visible` aí. `!important`: o `.r1f29ykk[data-fui-focus-visible]`
+    // do próprio Button (ver abaixo) tem mais especificidade que isto
+    // (classe+atributo vs classe+pseudo) e ganharia o `outline` sem isso.
     "& a:focus, & button:focus": {
-      outlineWidth: "3px",
-      outlineStyle: "solid",
-      outlineColor: tokens.colorBrandStroke1,
-      outlineOffset: "2px",
+      outline: `3px solid ${tokens.colorBrandStroke1} !important`,
+      outlineOffset: "2px !important",
     },
-    // O <Button> do Fluent desenha o PRÓPRIO anel de foco (borda some +
-    // `::after`) — mata só isso, fica só o outline global acima (mesmo
-    // ajuste já feito no GameCard/`useCardStyles`). `!important`: o
-    // Button injeta essa regra depois da nossa.
-    "& .fui-Button[data-fui-focus-visible]::after, & .fui-Button[data-fui-focus-within]::after":
-      {
-        border: "none !important",
-      },
+    // O <Button> do Fluent NÃO usa `::after` pra isso — muda a própria
+    // `border-color` e desenha um `box-shadow` inset direto no elemento
+    // quando `[data-fui-focus-visible]` (raiz `.fui-Button`, não um
+    // pseudo). Neutraliza os dois; o anel que sobra é só o outline acima.
+    "& .fui-Button[data-fui-focus-visible]": {
+      border: "1px solid transparent !important",
+      boxShadow: "none !important",
+    },
   },
   panel: {
     display: "flex",
