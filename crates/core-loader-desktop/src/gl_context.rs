@@ -747,6 +747,61 @@ fn flip_rows_in_place(buf: &mut [u8], w: u32, h: u32) {
     }
 }
 
+/// Renderiza uma cor sólida num `dma_buf` real (GBM + EGLImage + GL, o mesmo
+/// caminho de `try_enable_interop`/`bind_write_slot`/`finish_write_slot` que
+/// um core de HW render usa) e devolve o plano já no formato público de
+/// `domain` — pra provar, num teste de `reemu-desktop` (o outro lado do
+/// interop, o import pelo wgpu em `gpu.rs`), que um `dma_buf` produzido de
+/// verdade por este crate importa e amostra certo do lado de lá. Só disponível
+/// com a feature `test-fixtures` (mesmo padrão do `testcore_path`).
+///
+/// O `GlContext` pode ser dropado logo depois — o fd do `dma_buf` exportado
+/// (`gbm_bo_get_fd`) é uma referência do kernel independente do `gbm_bo` de
+/// origem, então o conteúdo continua válido.
+#[cfg(feature = "test-fixtures")]
+pub fn render_solid_rgba_to_dmabuf(
+    rgba: [u8; 4],
+    w: u32,
+    h: u32,
+) -> Result<domain::frame_source::DmabufPlaneInfo, String> {
+    use std::os::fd::IntoRawFd as _;
+    let cfg = GlConfig {
+        context_type: sys::RETRO_HW_CONTEXT_OPENGL,
+        version_major: 3,
+        version_minor: 3,
+        depth: false,
+        stencil: false,
+        bottom_left_origin: false,
+    };
+    let mut ctx = GlContext::create(&cfg, w, h)?;
+    if !ctx.try_enable_interop() {
+        return Err("interop dma_buf indisponível nesta máquina".into());
+    }
+    ctx.bind_write_slot();
+    unsafe {
+        ctx.gl.clear_color(
+            rgba[0] as f32 / 255.0,
+            rgba[1] as f32 / 255.0,
+            rgba[2] as f32 / 255.0,
+            rgba[3] as f32 / 255.0,
+        );
+        ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+    }
+    let (_, plane) = ctx
+        .finish_write_slot()
+        .ok_or("finish_write_slot devolveu None (interop não ativo?)")?;
+    let plane = plane.ok_or("1ª entrega do slot deveria mandar o fd (handed=false)")?;
+    Ok(domain::frame_source::DmabufPlaneInfo {
+        fd: plane.fd.into_raw_fd(),
+        width: plane.width,
+        height: plane.height,
+        stride: plane.stride,
+        offset: plane.offset,
+        modifier: plane.modifier,
+        fourcc: plane.fourcc,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

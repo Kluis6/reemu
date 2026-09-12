@@ -4105,6 +4105,81 @@ mod tests {
         );
     }
 
+    /// Handle de teste pro lado consumidor do interop GL (`import_dmabuf`/
+    /// `bind_interop_input`) — embrulha um `DmabufPlaneInfo` já pronto (vindo
+    /// de `render_solid_rgba_to_dmabuf`, o lado produtor GL do
+    /// `core-loader-desktop`) na mesma interface que um `GlInteropHandle` de
+    /// verdade usaria.
+    struct TestDmabufHandle {
+        slot: u32,
+        plane: std::sync::Mutex<Option<domain::frame_source::DmabufPlaneInfo>>,
+    }
+
+    impl domain::frame_source::GpuTextureHandle for TestDmabufHandle {
+        fn slot(&self) -> u32 {
+            self.slot
+        }
+        fn take_plane(&self) -> Option<domain::frame_source::DmabufPlaneInfo> {
+            self.plane.lock().unwrap_or_else(|e| e.into_inner()).take()
+        }
+    }
+
+    /// Etapa 02 (backlog): valida o lado CONSUMIDOR do interop dma_buf —
+    /// `import_dmabuf`/`bind_interop_input` (`gpu.rs`) — contra um `dma_buf`
+    /// produzido de verdade pelo lado GL do `core-loader-desktop`
+    /// (`render_solid_rgba_to_dmabuf`, `EGL_EXT_image_dma_buf_import` + GBM),
+    /// não um mock. Fecha a ponta que faltava: o produtor (GL) já tinha teste
+    /// próprio (`core-loader-desktop::gl_context::tests::
+    /// interop_ring_renders_into_dmabuf_backed_texture`); este prova que o
+    /// wgpu do lado do compositor importa e amostra esse MESMO `dma_buf`
+    /// corretamente, ponta a ponta entre os dois crates.
+    #[test]
+    #[ignore = "precisa de EGL+GBM+Vulkan em hardware real (render node DRM)"]
+    fn dmabuf_from_gl_producer_imports_correctly_into_wgpu() {
+        if std::env::var_os("REEMU_NO_GPU").is_some() {
+            return;
+        }
+        let plane = core_loader_desktop::render_solid_rgba_to_dmabuf([220, 40, 10, 255], 64, 64)
+            .expect("renderizar dma_buf de teste via GL (core-loader-desktop)");
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        assert!(
+            fp.interop_ok,
+            "device wgpu sem VULKAN_EXTERNAL_MEMORY_DMA_BUF — não dá pra validar interop aqui"
+        );
+
+        let frame = Frame {
+            origin: FrameOrigin::HardwareTexture(Box::new(TestDmabufHandle {
+                slot: 0,
+                plane: std::sync::Mutex::new(Some(plane)),
+            })),
+            metadata: FrameMetadata {
+                native_width: 64,
+                native_height: 64,
+                aspect_ratio: 1.0,
+                rotation_degrees: 0,
+            },
+        };
+
+        assert!(
+            fp.process(&frame).is_none(),
+            "1º process deve primar o pipeline (None)"
+        );
+        let (w, h, data) = fp.process(&frame).expect("2º process entrega");
+        assert_eq!((w, h), (64, 64));
+        assert_eq!(data.len(), 64 * 64 * 4);
+        // `plain` (default) é passthrough — a cor tem que sair igual à que
+        // foi renderizada no dma_buf do lado GL (R,G,B,A na mesma ordem de
+        // memória do fourcc ABGR8888 usado pelo produtor).
+        assert!(
+            data[0].abs_diff(220) <= 2 && data[1].abs_diff(40) <= 2 && data[2].abs_diff(10) <= 2,
+            "esperava ~[220,40,10,..], veio {:?}",
+            &data[0..4]
+        );
+    }
+
     /// O readback com pipeline prima 1 frame e depois entrega o frame ANTERIOR
     /// (atraso de exatamente 1 frame). `plain` = passthrough, então a cor sai
     /// igual à que entrou 1 frame antes.

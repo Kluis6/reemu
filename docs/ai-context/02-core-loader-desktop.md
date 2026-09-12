@@ -133,11 +133,24 @@ assinatura de função por suposição.
   "só entrega o fd na 1ª vez que o slot é usado" (`handed`). Rodado e
   passando nos 3 `REEMU_GL_SYNC` (`finish`/`fence`/`flush`) — a troca do
   `glFinish` grosso por sync fino já existe e funciona neste hardware; falta
-  só decidir qual vira default depois de mais uso real. **Não validado
-  ainda**: o lado consumidor (import do fd pelo wgpu, `apps/desktop/
-  src-tauri/src/gpu.rs`) e um core de verdade rodando com jogo (a suíte só
-  prova a mecânica de render+entrega do lado produtor). Gate continua
-  opt-in até isso rodar numa sessão de jogo real.
+  só decidir qual vira default depois de mais uso real.
+  **2026-09-12: lado consumidor (wgpu) TAMBÉM validado em hardware real.**
+  Novo helper `core_loader_desktop::render_solid_rgba_to_dmabuf` (feature
+  `test-fixtures`, `gl_context.rs`) renderiza uma cor sólida num `dma_buf`
+  real pelo mesmo caminho de produção (GBM + EGLImage + GL) e devolve o
+  plano já no formato público de `domain`; o teste `reemu-desktop::
+  gpu::tests::dmabuf_from_gl_producer_imports_correctly_into_wgpu`
+  (`#[ignore]`) importa esse `dma_buf` de verdade via `FrameProcessor::
+  process` (o MESMO caminho que um core real usaria — `import_dmabuf` +
+  `bind_interop_input`) e confere que a cor sai intacta do outro lado.
+  **Verde no RTX 3060.** Fecha a lacuna "lado consumidor não testado" —
+  agora produtor (GL) e consumidor (wgpu) têm prova de hardware
+  independente, cada um do seu lado do dma_buf.
+  **Ainda falta**: um core de HW render de verdade rodando um jogo, com
+  `REEMU_GL_INTEROP=1`, numa sessão completa (a suíte prova a mecânica de
+  import/render, não substitui `retro_run` real nem a renegociação de
+  `SET_SYSTEM_AV_INFO` em runtime — ver hipótese do N64 abaixo). Gate
+  continua opt-in até isso acontecer.
   **2026-09-12: usuário relatou tela preta com `parallel_n64_libretro`**
   rodando com interop (o código tinha invertido sem querer o padrão pra
   ligado — corrigido de volta pra opt-in). Hipótese ainda não confirmada
