@@ -1,9 +1,5 @@
 import { Button, mergeClasses } from "@fluentui/react-components";
-import {
-  AddRegular,
-  GridRegular,
-  SettingsRegular,
-} from "@fluentui/react-icons";
+import { AddRegular, GridRegular } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
@@ -228,14 +224,6 @@ export function Home() {
           onClick={() => setAddOpen(true)}
         >
           Adicionar ROMs
-        </Button>
-        <Button
-          shape="circular"
-          appearance="subtle"
-          icon={<SettingsRegular />}
-          onClick={() => navigate("/settings")}
-        >
-          Configurações
         </Button>
       </div>
 
