@@ -319,3 +319,72 @@ export const DEFAULT_THEME_ID: ThemeId = "xbox-green";
 export function isThemeId(v: unknown): v is ThemeId {
   return typeof v === "string" && v in THEMES;
 }
+
+// --------------------------------------------------- tema "Personalizado" ----
+//
+// Igual à personalização de fundo do Xbox Series S/X: a pessoa escolhe
+// claro/escuro e desliza UM controle de matiz — o resto da rampa (os outros
+// 15 tons) é completado pelo sistema, não escolhido tom a tom. `RAMP_L`/
+// `RAMP_S` abaixo são a mesma curva de luminosidade/saturação usada pra
+// gerar as rampas "PS1" e "Xbox Clássico" à mão (extraída da rampa "Âmbar",
+// a primeira calibrada manualmente) — só o matiz muda por tema; saturação e
+// luminosidade vêm sempre dessa curva fixa, senão um matiz muito escuro ou
+// pouco vívido geraria uma rampa sem contraste (por isso o controle exposto
+// ao usuário é só o de matiz, não um seletor de cor livre).
+
+const RAMP_STOPS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160] as const;
+const RAMP_L = [3.9, 8.0, 13.1, 18.0, 24.1, 30.0, 37.1, 43.9, 52.0, 57.8, 64.1, 71.0, 78.0, 84.9, 91.0, 96.1];
+const RAMP_S = [50.0, 61.0, 73.1, 84.8, 91.9, 92.2, 91.5, 92.0, 91.8, 91.6, 92.3, 91.9, 85.7, 74.0, 60.9, 50.0];
+
+function hslToHex(h: number, s: number, l: number): string {
+  const sn = s / 100;
+  const ln = l / 100;
+  const c = (1 - Math.abs(2 * ln - 1)) * sn;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = ln - c / 2;
+  const [r, g, b] =
+    h < 60
+      ? [c, x, 0]
+      : h < 120
+        ? [x, c, 0]
+        : h < 180
+          ? [0, c, x]
+          : h < 240
+            ? [0, x, c]
+            : h < 300
+              ? [x, 0, c]
+              : [c, 0, x];
+  const toHex = (v: number) =>
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, "0")
+      .toUpperCase();
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+/** Gera uma rampa de marca completa a partir de só um matiz (0-360°), pro
+ *  tema "Personalizado" — ver comentário da seção acima. */
+export function generateBrandRamp(hue: number): BrandVariants {
+  const h = ((hue % 360) + 360) % 360;
+  const out = {} as BrandVariants;
+  RAMP_STOPS.forEach((stop, i) => {
+    out[stop] = hslToHex(h, RAMP_S[i], RAMP_L[i]);
+  });
+  return out;
+}
+
+export type ThemeMode = "dark" | "light";
+
+export type ThemeSelection =
+  | { kind: "preset"; id: ThemeId }
+  | { kind: "custom"; hue: number; mode: ThemeMode };
+
+export const DEFAULT_CUSTOM_HUE = 205; // mesmo tom do "Azul PlayStation" — ponto de partida neutro.
+
+/** Resolve uma seleção de tema (preset OU personalizado) pro `Theme` que o
+ *  `FluentProvider` consome. Personalizado é gerado na hora — não fica em
+ *  `THEMES`, que é só o catálogo de presets curados. */
+export function resolveTheme(selection: ThemeSelection): ReEmuTheme {
+  if (selection.kind === "preset") return THEMES[selection.id].theme;
+  return make(generateBrandRamp(selection.hue), selection.mode);
+}

@@ -1,9 +1,14 @@
 import {
   Button,
   Caption1,
+  ColorPicker,
+  ColorSlider,
+  Radio,
+  RadioGroup,
   Text,
   makeStyles,
   tokens,
+  type RadioGroupOnChangeData,
 } from '@fluentui/react-components'
 import { CheckmarkFilled, ImageAddRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -11,7 +16,7 @@ import { clearWallpaper, pickImage, setWallpaperFile, wallpaperUrl } from '../..
 import { sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
 import { useThemeStore } from '../../stores/useThemeStore'
-import { THEMES, type ThemeId } from '../../styles/themes'
+import { resolveTheme, THEMES, type ThemeId, type ThemeMode } from '../../styles/themes'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL, maxWidth: '520px' },
@@ -68,6 +73,15 @@ const useStyles = makeStyles({
     fontSize: '20px',
   },
   wallActions: { display: 'flex', gap: tokens.spacingHorizontalS },
+  customPanel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalM,
+    padding: tokens.spacingHorizontalM,
+    borderRadius: tokens.borderRadiusLarge,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  hueSlider: { width: '100%' },
 })
 
 const IDS = Object.keys(THEMES) as ThemeId[]
@@ -75,7 +89,10 @@ const IDS = Object.keys(THEMES) as ThemeId[]
 /** Configurações › Aparência — tema de cor + papel de parede da tela inicial. */
 export function SettingsAppearance() {
   const s = useStyles()
-  const { themeId, setTheme } = useThemeStore()
+  const { selection, customDraft, setPreset, activateCustom, setCustomHue, setCustomMode } =
+    useThemeStore()
+  const isCustom = selection.kind === 'custom'
+  const customPreview = resolveTheme({ kind: 'custom', ...customDraft })
   const qc = useQueryClient()
   const push = useToastStore((t) => t.push)
   const wallpaper = useQuery({ queryKey: ['wallpaper'], queryFn: wallpaperUrl })
@@ -113,7 +130,7 @@ export function SettingsAppearance() {
       <div className={s.grid} role="radiogroup" aria-label="Tema de cor">
         {IDS.map((id) => {
           const t = THEMES[id].theme
-          const on = id === themeId
+          const on = selection.kind === 'preset' && selection.id === id
           return (
             <button
               key={id}
@@ -125,7 +142,7 @@ export function SettingsAppearance() {
                 backgroundColor: t.colorNeutralBackground2,
                 borderColor: on ? t.colorBrandStroke1 : t.colorNeutralStroke2,
               }}
-              onClick={() => setTheme(id)}
+              onClick={() => setPreset(id)}
             >
               {on && (
                 <CheckmarkFilled
@@ -147,7 +164,58 @@ export function SettingsAppearance() {
             </button>
           )
         })}
+
+        {/* "Personalizado": mesma UX do fundo do Xbox Series S/X — a pessoa
+            escolhe claro/escuro e um matiz, o resto da rampa é gerado. */}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={isCustom}
+          className={s.card}
+          style={{
+            backgroundColor: customPreview.colorNeutralBackground2,
+            borderColor: isCustom ? customPreview.colorBrandStroke1 : customPreview.colorNeutralStroke2,
+          }}
+          onClick={activateCustom}
+        >
+          {isCustom && (
+            <CheckmarkFilled
+              className={s.check}
+              style={{ color: customPreview.colorBrandForeground1 }}
+            />
+          )}
+          <div className={s.swatch}>
+            <span className={s.seg} style={{ background: customPreview.reemuBg1 }} />
+            <span className={s.seg} style={{ background: customPreview.reemuBrandSolid }} />
+            <span className={s.seg} style={{ background: customPreview.reemuBg2 }} />
+          </div>
+          <Text
+            weight={isCustom ? 'semibold' : 'regular'}
+            style={{ color: customPreview.colorNeutralForeground1 }}
+          >
+            Personalizado
+          </Text>
+        </button>
       </div>
+
+      {isCustom && (
+        <div className={s.customPanel}>
+          <RadioGroup
+            layout="horizontal"
+            value={customDraft.mode}
+            onChange={(_, data: RadioGroupOnChangeData) => setCustomMode(data.value as ThemeMode)}
+          >
+            <Radio value="dark" label="Escuro" />
+            <Radio value="light" label="Claro" />
+          </RadioGroup>
+          <ColorPicker
+            color={{ h: customDraft.hue, s: 1, v: 1 }}
+            onColorChange={(_, data) => setCustomHue(data.color.h)}
+          >
+            <ColorSlider className={s.hueSlider} aria-label="Matiz do tema personalizado" />
+          </ColorPicker>
+        </div>
+      )}
 
       <div>
         <Text as="strong" weight="semibold">
