@@ -70,44 +70,6 @@ const xboxClassico: BrandVariants = {
   160: "#F7FAF0",
 };
 
-const roxo: BrandVariants = {
-  10: "#08050F",
-  20: "#0F0821",
-  30: "#17083B",
-  40: "#1E0557",
-  50: "#270576",
-  60: "#310693",
-  70: "#3D08B5",
-  80: "#4809D7",
-  90: "#5914F5",
-  100: "#6E31F6",
-  110: "#824FF8",
-  120: "#9B71F9",
-  130: "#B495F9",
-  140: "#CDBBF6",
-  150: "#E2DAF7",
-  160: "#F3F0FA",
-};
-
-const ambar: BrandVariants = {
-  10: "#0F0B05",
-  20: "#211608",
-  30: "#3A2509",
-  40: "#553407",
-  50: "#764705",
-  60: "#935806",
-  70: "#B56D08",
-  80: "#D78109",
-  90: "#F59714",
-  100: "#F6A431",
-  110: "#F8B14F",
-  120: "#F9C071",
-  130: "#F7CF97",
-  140: "#F5DDBC",
-  150: "#F6EADA",
-  160: "#FAF6F0",
-};
-
 /** Vermelho PlayStation (o "Spanish Red" da marca oficial — logo/símbolo). */
 const ps1Red: BrandVariants = {
   10: "#0F0507",
@@ -282,31 +244,27 @@ function make(
 export type ThemeId =
   | "xbox-green"
   | "xbox-classico"
-  | "roxo"
-  | "ambar"
   | "ps-blue"
   | "ps1"
   | "claro"
-  | "roxo-claro"
-  | "ambar-claro"
   | "ps-blue-claro"
   | "ps1-claro";
 
+// "Roxo"/"Âmbar" (e seus pares "-claro") foram removidos: eram só uma rampa
+// de cor simples, sem identidade nenhuma — redundante agora que o
+// "Personalizado" deixa escolher qualquer matiz (ver seção abaixo). Os temas
+// que sobram são todos "de marca" (Xbox, PlayStation).
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen) },
   // Sem par "-claro" de propósito — o dashboard Blades nunca teve modo claro.
   "xbox-classico": { label: "Xbox Clássico", theme: make(xboxClassico) },
   "ps-blue": { label: "Azul PlayStation", theme: make(psBlue) },
   ps1: { label: "PlayStation Clássico", theme: make(ps1Red, "dark", ps1Accents) },
-  roxo: { label: "Roxo", theme: make(roxo) },
-  ambar: { label: "Âmbar", theme: make(ambar) },
   // Modo claro do dashboard Xbox (Series S/X e "modo XBOX" no PC): fundo
   // branco/cinza bem claro — só a luminosidade da casca inverte, a marca
   // não muda. Uma variante claro por rampa, mesmo par light/dark que o
   // verde já tinha.
   claro: { label: "Claro", theme: make(xboxGreen, "light") },
-  "roxo-claro": { label: "Roxo Claro", theme: make(roxo, "light") },
-  "ambar-claro": { label: "Âmbar Claro", theme: make(ambar, "light") },
   "ps-blue-claro": { label: "Azul Claro", theme: make(psBlue, "light") },
   "ps1-claro": {
     label: "PlayStation Clássico Claro",
