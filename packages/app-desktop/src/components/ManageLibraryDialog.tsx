@@ -13,9 +13,14 @@ import { ManageLibraryFields } from "./ManageLibraryFields";
 import { useManageLibrary } from "../lib/useManageLibrary";
 
 const useStyles = makeStyles({
-  // Mais largo que o padrão do Fluent (600px) — a linha de plataforma tem 4
-  // colunas (nome, contagem, seletor de core, remover) e ficava apertada.
-  surface: { maxWidth: "820px" },
+  // Maior que o padrão do Fluent (600px, altura de sobra pro conteúdo) — a
+  // linha de plataforma tem 4 colunas (nome, contagem, seletor de core,
+  // remover) e a lista de plataformas cresce bastante.
+  surface: { width: "90vw", maxWidth: "90vw", height: "80vh", maxHeight: "80vh" },
+  // `DialogBody` não herda altura sozinho (Fluent deixa o grid encolher pro
+  // conteúdo) — sem isto a área de conteúdo não teria altura fixa pra rolar
+  // dentro dos 80vh do surface.
+  body: { height: "100%" },
 });
 
 /**
@@ -46,7 +51,7 @@ export function ManageLibraryDialog({
   return (
     <Dialog open={open} onOpenChange={(_, d) => onOpenChange(d.open)}>
       <DialogSurface className={s.surface}>
-        <DialogBody>
+        <DialogBody className={s.body}>
           <DialogTitle
             action={
               <Button
