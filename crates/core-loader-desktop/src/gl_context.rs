@@ -776,6 +776,71 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "precisa de EGL+GBM em hardware real (render node DRM) — interop dma_buf"]
+    fn interop_ring_renders_into_dmabuf_backed_texture() {
+        let cfg = GlConfig {
+            context_type: sys::RETRO_HW_CONTEXT_OPENGL,
+            version_major: 3,
+            version_minor: 3,
+            depth: false,
+            stencil: false,
+            bottom_left_origin: true,
+        };
+        let mut ctx = GlContext::create(&cfg, 64, 64).expect("criar contexto GL");
+        assert!(
+            ctx.try_enable_interop(),
+            "interop deveria estar disponível nesta máquina (GBM + EGL_EXT_image_dma_buf_import)"
+        );
+
+        // 1º frame no slot 0: clear vermelho, lê de volta a MESMA textura que o
+        // dma_buf respalda (bind_write_slot já a deixou como COLOR_ATTACHMENT0)
+        // — prova que o driver realmente escreveu no buffer compartilhado, não
+        // só numa textura GL comum.
+        ctx.bind_write_slot();
+        unsafe {
+            ctx.gl.clear_color(1.0, 0.0, 0.0, 1.0);
+            ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+        let (slot0, plane0) = ctx.finish_write_slot().expect("slot 0 sempre entrega Some");
+        assert_eq!(slot0, 0);
+        assert!(plane0.is_some(), "1ª entrega do slot manda o fd (handed=false)");
+        assert_eq!(
+            &ctx.read_pixels(8, 8)[0..4],
+            &[255, 0, 0, 255],
+            "clear vermelho no alvo dma_buf do slot 0"
+        );
+
+        // 2º frame: ring de 2 avança pro slot 1.
+        ctx.bind_write_slot();
+        unsafe {
+            ctx.gl.clear_color(0.0, 1.0, 0.0, 1.0);
+            ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+        let (slot1, plane1) = ctx.finish_write_slot().expect("slot 1 entrega Some");
+        assert_eq!(slot1, 1);
+        assert!(plane1.is_some());
+
+        // 3º frame: RING=2 volta pro slot 0 — reaproveita o MESMO dma_buf já
+        // entregue antes, então não manda o fd de novo (`handed=true`).
+        ctx.bind_write_slot();
+        unsafe {
+            ctx.gl.clear_color(0.0, 0.0, 1.0, 1.0);
+            ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+        let (slot0_again, plane0_again) = ctx.finish_write_slot().expect("slot 0 de novo");
+        assert_eq!(slot0_again, 0);
+        assert!(
+            plane0_again.is_none(),
+            "2ª vez do MESMO slot não reenvia o fd — já foi entregue (`handed`)"
+        );
+        assert_eq!(
+            &ctx.read_pixels(8, 8)[0..4],
+            &[0, 0, 255, 255],
+            "clear azul no slot 0 reaproveitado"
+        );
+    }
+
+    #[test]
     fn flip_rows_swaps_top_bottom() {
         // 1×2, linha 0 = 0xAA, linha 1 = 0xBB
         let mut b = vec![0xAA, 0xAA, 0xAA, 0xAA, 0xBB, 0xBB, 0xBB, 0xBB];

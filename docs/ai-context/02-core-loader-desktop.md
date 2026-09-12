@@ -122,6 +122,22 @@ assinatura de função por suposição.
 
 - Interop zero-cópia dma_buf: validar `REEMU_GL_INTEROP=1` em hardware, trocar
   `glFinish` grosso por semáforo cross-API, depois tirar o gate.
+  **2026-09-12: validado o lado GL em hardware real** (NVIDIA RTX 3060,
+  driver 595.84) — novo teste `gl_context::tests::
+  interop_ring_renders_into_dmabuf_backed_texture` (`#[ignore]`, roda só com
+  `--ignored` num render node DRM de verdade) confirma, de ponta a ponta:
+  alocação GBM, import via `EGL_EXT_image_dma_buf_import`, render de
+  verdade no FBO respaldado pelo `dma_buf` (`glClear` + `read_pixels` na
+  MESMA textura provam que o driver escreveu no buffer compartilhado, não
+  numa textura GL comum), rotação do ring (`RING=2`) e a semântica de
+  "só entrega o fd na 1ª vez que o slot é usado" (`handed`). Rodado e
+  passando nos 3 `REEMU_GL_SYNC` (`finish`/`fence`/`flush`) — a troca do
+  `glFinish` grosso por sync fino já existe e funciona neste hardware; falta
+  só decidir qual vira default depois de mais uso real. **Não validado
+  ainda**: o lado consumidor (import do fd pelo wgpu, `apps/desktop/
+  src-tauri/src/gpu.rs`) e um core de verdade rodando com jogo (a suíte só
+  prova a mecânica de render+entrega do lado produtor). Gate continua
+  opt-in até isso rodar numa sessão de jogo real.
   **2026-09-12: usuário relatou tela preta com `parallel_n64_libretro`**
   rodando com interop (o código tinha invertido sem querer o padrão pra
   ligado — corrigido de volta pra opt-in). Hipótese ainda não confirmada
