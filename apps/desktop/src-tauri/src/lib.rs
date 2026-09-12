@@ -454,11 +454,27 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                                 hidden = true;
                             }
                         } else if let Some(f) = frame.as_ref() {
+                            // Mostrar não é mais implícito no present (ver
+                            // `video.rs::Subsurface::set_hidden`) — a
+                            // subsurface foi mandada pra TRÁS do parent ao
+                            // esconder, então precisa voltar pra FRENTE
+                            // antes do frame novo aparecer, senão ele
+                            // renderiza atrás da webview (invisível).
+                            if hidden {
+                                if let Some(vs) = state
+                                    .video
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner())
+                                    .as_ref()
+                                {
+                                    vs.show();
+                                }
+                            }
                             let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
                             if let Some(fp) = gpu.as_mut() {
                                 fp.render_to_surface(Some(f));
                             }
-                            hidden = false; // o present remapeia a subsurface
+                            hidden = false;
                         }
                     }
                     Opening(0) => {

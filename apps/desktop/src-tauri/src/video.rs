@@ -108,12 +108,20 @@ impl VideoSurface {
         let _ = (x, y, width, height);
     }
 
-    /// Esconde a subsurface do jogo (menu aberto). Mostrar de volta é implícito
-    /// no próximo present.
+    /// Esconde a subsurface do jogo (menu aberto, load em andamento, ou
+    /// sessão ociosa). Chamar `show()` antes do próximo present real —
+    /// mostrar não é mais implícito (ver `wl::Subsurface::set_hidden`).
     pub fn set_hidden(&self, hidden: bool) {
         #[cfg(target_os = "linux")]
         self._wl.set_hidden(hidden);
         let _ = hidden;
+    }
+
+    /// Desfaz `set_hidden(true)` — recoloca a subsurface na frente do
+    /// parent. Chamar antes de anexar o próximo frame.
+    pub fn show(&self) {
+        #[cfg(target_os = "linux")]
+        self._wl.show();
     }
 }
 
@@ -254,25 +262,48 @@ mod wl {
             self.video.id().as_ptr().cast()
         }
 
-        /// Esconde a subsurface (attach de buffer nulo) — quando o menu abre, a
-        /// webview opaca atrás reaparece. `show` é implícito: o próximo present
-        /// do wgpu re-anexa um buffer e remapeia.
+        /// Esconde a subsurface do jogo: destaca o buffer E manda ela pra
+        /// TRÁS do parent (`place_below`) — não só `attach(None)`. Detach de
+        /// buffer sozinho depende do compositor recompor a região que a
+        /// subsurface cobria (ela nasce ACIMA do parent); em alguns
+        /// compositor/driver isso não acontecia de forma confiável e o
+        /// último frame do jogo ficava "grudado" na tela mesmo com o buffer
+        /// já destacado (relatado 2026-09-12, sempre, não só numa troca
+        /// rápida). Mudança de ordem de empilhamento é um mecanismo do
+        /// protocolo muito mais básico/testado que "compositor percebe
+        /// buffer nulo": com o parent (opaco, sem essa região transparente
+        /// por design) na FRENTE, ele aparece garantido, incondicional a
+        /// como o compositor trata detach de buffer.
         ///
-        /// **NÃO chamar `commit()`/`damage_buffer()` no PARENT aqui** — essa
-        /// `wl_surface` é gerenciada pelo GTK/GDK (é a janela real); um commit
-        /// nosso, por fora do ciclo de desenho dele, colide com o estado
-        /// pendente que o GDK mantém pra ela. Tentado 2026-09-12 como fix pro
-        /// "frame do jogo anterior grudado" — causou `Gdk-Message: Error 22
-        /// (Argumento inválido) dispatching to Wayland display` na hora,
-        /// revertido. Só mexer na subsurface DO JOGO (`self.video`), nunca em
-        /// `self.parent`.
+        /// `show()` (chamado no próximo present real) desfaz com
+        /// `place_above`.
+        ///
+        /// **NÃO chamar `commit()`/`damage_buffer()` no PARENT** — essa
+        /// `wl_surface` é gerenciada pelo GTK/GDK (é a janela real); um
+        /// commit nosso, por fora do ciclo de desenho dele, colide com o
+        /// estado pendente que o GDK mantém pra ela. Tentado 2026-09-12 —
+        /// causou `Gdk-Message: Error 22 (Argumento inválido) dispatching to
+        /// Wayland display` na hora, revertido. Só mexer nos objetos que
+        /// criamos (`self.subsurface`/`self.video`), nunca em `self.parent`.
         pub fn set_hidden(&self, hidden: bool) {
             if hidden {
+                self.subsurface.place_below(&self.parent);
                 self.video.attach(None, 0, 0);
                 self.video.commit();
                 let _ = self.conn.flush();
-                log::info!("Subsurface::set_hidden(true) — buffer destacado");
+                log::info!(
+                    "Subsurface::set_hidden(true) — buffer destacado + movida pra trás do parent"
+                );
             }
+        }
+
+        /// Desfaz o `set_hidden(true)`: recoloca a subsurface na FRENTE do
+        /// parent. Chamar antes do próximo `attach` de um frame novo (senão
+        /// o jogo volta a renderizar, mas atrás da webview — invisível).
+        pub fn show(&self) {
+            self.subsurface.place_above(&self.parent);
+            self.video.commit();
+            let _ = self.conn.flush();
         }
 
         /// `x, y, w, h` chegam em pixels FÍSICOS (área de conteúdo da janela);

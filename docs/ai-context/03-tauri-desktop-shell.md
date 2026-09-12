@@ -126,23 +126,34 @@ apps/desktop/src-tauri/src/
   pra surface antes do próximo frame ser desenhado.
 - Ao pausar (`MenuFocused`), congele o último frame renderizado em vez de
   limpar a tela — evita salto visual feio atrás do menu.
-- **Bug em aberto (2026-09-12): trocar de ROM/plataforma deixa o último
+- **Bug reportado 2026-09-12: trocar de ROM/plataforma deixava o último
   frame do jogo anterior "grudado" na tela durante o load do próximo,
-  SEMPRE** (não é uma corrida de timing — investigado, não é isso).
-  `Subsurface::set_hidden` (`video.rs`) já faz `attach(None)`, `commit`
-  e `flush` corretos na subsurface do JOGO; um log em nível info
-  (`Subsurface::set_hidden(true) — buffer destacado`) confirma que isso
-  dispara a cada troca. **Tentativa que NÃO FUNCIONOU e foi revertida**:
-  mandar `damage_buffer` + `commit` no PARENT (a `wl_surface` da própria
-  janela GTK) pra forçar o compositor a recompor a região — isso quebrou
-  na hora com `Gdk-Message: Error 22 (Argumento inválido) dispatching to
-  Wayland display`, porque aquela surface é gerenciada pelo GDK e um
-  commit nosso por fora do ciclo dele corrompe o estado pendente. **Nunca
-  chamar `commit()`/`damage_buffer()` em `self.parent`** — só na
-  subsurface do jogo (`self.video`). Causa raiz ainda não encontrada;
-  próximo passo é investigar do lado do compositor/driver (por que
-  destacar o buffer não basta pra ele recompor aquela região), não tentar
-  mais gambiarras no lado do cliente sobre o `parent`.
+  SEMPRE** (não era uma corrida de timing). `Subsurface::set_hidden`
+  fazia `attach(None)` + `commit` + `flush` — protocolarmente correto,
+  mas detach de buffer sozinho depende do compositor recompor a região
+  que a subsurface cobria (ela nasce ACIMA do parent); nem todo
+  compositor/driver faz isso de forma confiável.
+  - **Tentativa que NÃO FUNCIONOU e foi revertida**: mandar
+    `damage_buffer` + `commit` no PARENT (a `wl_surface` da própria janela
+    GTK) — quebrou na hora com `Gdk-Message: Error 22 (Argumento
+    inválido) dispatching to Wayland display`, porque aquela surface é
+    gerenciada pelo GDK e um commit nosso por fora do ciclo dele corrompe
+    o estado pendente. **Nunca chamar `commit()`/`damage_buffer()` em
+    `self.parent`** — só nos objetos que criamos (`self.subsurface`/
+    `self.video`).
+  - **Fix tentado (não confirmado em campo ainda)**: em vez de confiar só
+    no detach de buffer, `set_hidden(true)` agora TAMBÉM manda a
+    subsurface pra trás do parent (`wl_subsurface.place_below`) — mudança
+    de ordem de empilhamento é um mecanismo bem mais básico/testado do
+    protocolo que "compositor percebe buffer nulo", e com o parent opaco
+    na frente o conteúdo dele aparece garantido. Como mostrar deixou de
+    ser implícito no próximo present, `Subsurface::show()` (novo,
+    `place_above` de volta) precisa ser chamado ANTES de anexar o
+    primeiro frame novo — feito no `reemu-video-pump` (`lib.rs`, ramo
+    `Playing` quando `hidden` era `true`). Se esquecer de chamar `show()`
+    em algum caminho que anexa frame, o jogo volta a rodar mas fica
+    invisível (atrás do parent) — checar isso primeiro se aparecer uma
+    tela preta/webview presa depois de mexer aqui de novo.
 - O comando Tauri que alterna foco deve ser o único ponto de entrada que
   aciona `FocusManager::toggle()` — não deixe o React decidir isso
   diretamente, só solicitar via `invoke`.
