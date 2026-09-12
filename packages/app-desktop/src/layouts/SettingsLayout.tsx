@@ -20,6 +20,7 @@ const useStyles = makeStyles({
 const TABS = [
   { key: "perfil", label: "Perfil" },
   { key: "aparencia", label: "Aparência" },
+  { key: "biblioteca", label: "Gerenciar biblioteca" },
   { key: "audio", label: "Áudio" },
   { key: "video", label: "Vídeo" },
   { key: "metadata", label: "Metadata" },

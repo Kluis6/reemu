@@ -14,6 +14,7 @@ import { SettingsBios } from './screens/settings/SettingsBios'
 import { SettingsControllers } from './screens/settings/SettingsControllers'
 import { SettingsCores } from './screens/settings/SettingsCores'
 import { SettingsHotkeys } from './screens/settings/SettingsHotkeys'
+import { SettingsLibrary } from './screens/settings/SettingsLibrary'
 import { SettingsMetadata } from './screens/settings/SettingsMetadata'
 import { SettingsProfile } from './screens/settings/SettingsProfile'
 import { SettingsVideo } from './screens/settings/SettingsVideo'
@@ -42,6 +43,7 @@ export const router = createHashRouter([
               { index: true, element: <Navigate to="perfil" replace /> },
               { path: 'perfil', element: <SettingsProfile /> },
               { path: 'aparencia', element: <SettingsAppearance /> },
+              { path: 'biblioteca', element: <SettingsLibrary /> },
               { path: 'audio', element: <SettingsAudio /> },
               { path: 'video', element: <SettingsVideo /> },
               { path: 'metadata', element: <SettingsMetadata /> },
