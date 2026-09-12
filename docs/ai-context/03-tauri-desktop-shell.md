@@ -126,6 +126,17 @@ apps/desktop/src-tauri/src/
   pra surface antes do próximo frame ser desenhado.
 - Ao pausar (`MenuFocused`), congele o último frame renderizado em vez de
   limpar a tela — evita salto visual feio atrás do menu.
+- **Esconder a subsurface (`attach(None)`) sozinho pode não bastar pro
+  compositor recompor a região** (relatado 2026-09-12: trocar de ROM/
+  plataforma deixava o último frame do jogo anterior "grudado" na tela
+  durante o load do próximo, SEMPRE, não só numa troca rápida — a webview
+  por baixo já estava pintada certa, só faltava o compositor redesenhar
+  ali). `Subsurface::set_hidden` (`video.rs`) agora também manda
+  `damage_buffer` + `commit` no PARENT (a webview) logo depois de destacar
+  o buffer da subsurface, forçando o redesenho da região. Log
+  `Subsurface::set_hidden(true) — buffer destacado...` (nível info) marca
+  quando isso dispara — se o sintoma voltar, confirmar primeiro se esse
+  log aparece a cada troca antes de suspeitar de outra causa.
 - O comando Tauri que alterna foco deve ser o único ponto de entrada que
   aciona `FocusManager::toggle()` — não deixe o React decidir isso
   diretamente, só solicitar via `invoke`.
