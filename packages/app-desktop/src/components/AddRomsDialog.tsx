@@ -13,6 +13,7 @@ import {
 } from "@fluentui/react-components";
 import { DismissRegular, FolderRegular } from "@fluentui/react-icons";
 import { useState } from "react";
+import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { pickFolder } from "../lib/tauri";
 
 const useStyles = makeStyles({
@@ -41,7 +42,11 @@ export function AddRomsDialog({
   const [dir, setDir] = useState("");
 
   return (
-    <Dialog open={open} onOpenChange={(_, d) => onOpenChange(d.open)}>
+    <Dialog
+      open={open}
+      onOpenChange={(_, d) => onOpenChange(d.open)}
+      surfaceMotion={DIALOG_FADE_ONLY}
+    >
       <DialogSurface>
         <DialogBody>
           <DialogTitle

@@ -20,9 +20,6 @@ importers:
       '@fluentui/react-icons':
         specifier: ^2.0.339
         version: 2.0.339(react@19.2.8)
-      '@fluentui/react-motion':
-        specifier: ^9.16.3
-        version: 9.16.3(@types/react-dom@19.2.5(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@tanstack/react-query':
         specifier: ^5.102.6
         version: 5.102.6(react@19.2.8)

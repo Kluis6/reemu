@@ -10,6 +10,7 @@ import {
 } from "@fluentui/react-components";
 import { DismissRegular } from "@fluentui/react-icons";
 import { ManageLibraryFields } from "./ManageLibraryFields";
+import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { useManageLibrary } from "../lib/useManageLibrary";
 
 const useStyles = makeStyles({
@@ -49,7 +50,11 @@ export function ManageLibraryDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(_, d) => onOpenChange(d.open)}>
+    <Dialog
+      open={open}
+      onOpenChange={(_, d) => onOpenChange(d.open)}
+      surfaceMotion={DIALOG_FADE_ONLY}
+    >
       <DialogSurface className={s.surface}>
         <DialogBody className={s.body}>
           <DialogTitle

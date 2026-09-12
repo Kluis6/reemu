@@ -34,6 +34,7 @@ import { EmptyState, LoadingState } from "../components/EmptyState";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { ShaderLibrary } from "../components/ShaderLibrary";
 import { ShaderParams } from "../components/ShaderParams";
+import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { knownPlatforms, platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
 import {
@@ -368,6 +369,7 @@ export function RomDetail() {
       <Dialog
         open={editOpen}
         onOpenChange={(_, d) => setEditOpen(d.open)}
+        surfaceMotion={DIALOG_FADE_ONLY}
       >
         <DialogSurface>
           <DialogBody>

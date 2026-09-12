@@ -15,6 +15,7 @@ import {
   PowerRegular,
 } from "@fluentui/react-icons";
 import { useMutation } from "@tanstack/react-query";
+import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { quitApp, restartSystem, shutdownSystem } from "../lib/tauri";
 import { sysToast } from "../lib/toast";
 import { useToastStore } from "../stores/useToastStore";
@@ -57,7 +58,11 @@ export function PowerMenuDialog({
   const busy = shutdown.isPending || restart.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={(_, d) => onOpenChange(d.open)}>
+    <Dialog
+      open={open}
+      onOpenChange={(_, d) => onOpenChange(d.open)}
+      surfaceMotion={DIALOG_FADE_ONLY}
+    >
       <DialogSurface className={s.surface}>
         <DialogBody>
           <DialogTitle>Encerrar</DialogTitle>

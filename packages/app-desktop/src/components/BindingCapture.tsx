@@ -13,6 +13,7 @@ import {
 } from '@fluentui/react-components'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { DIALOG_FADE_ONLY } from '../lib/motion'
 import { describeRawInput, onRawInputCaptured, saveBinding } from '../lib/tauri'
 import { useBindingCaptureStore } from '../stores/useBindingCaptureStore'
 import { useToastStore } from '../stores/useToastStore'
@@ -92,7 +93,11 @@ export function BindingCapture() {
   }, [active, events, push, qc, reset])
 
   return (
-    <Dialog open={active !== null} onOpenChange={(_, d) => !d.open && reset()}>
+    <Dialog
+      open={active !== null}
+      onOpenChange={(_, d) => !d.open && reset()}
+      surfaceMotion={DIALOG_FADE_ONLY}
+    >
       <DialogSurface>
         <DialogBody>
           <DialogTitle>Capturar atalho{active ? ` — ${active.label}` : ''}</DialogTitle>
