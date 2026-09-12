@@ -60,7 +60,9 @@ const useLibStyles = makeStyles({
     justifyContent: "space-between",
     columnGap: "12px",
     flexWrap: "wrap",
-    marginBottom: "10px",
+    // Respiro entre as tabs (Meus jogos/Favoritos) e a linha de filtros
+    // abaixo, igual ao modo Xbox de verdade (tabs bem separadas do filtro).
+    marginBottom: "24px",
   },
   barRight: { display: "flex", alignItems: "center", columnGap: "10px" },
 });
