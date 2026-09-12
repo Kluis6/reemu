@@ -54,9 +54,11 @@ impl LocalCore {
         shared_device: Option<domain::core_loader::VulkanSharedDevice>,
         negotiator: Option<domain::core_loader::VulkanDeviceNegotiator>,
     ) -> Result<(Self, SystemAvInfo), CoreLoadError> {
-        // NB: `silence_core_stdout` NÃO aqui — este caminho roda no processo
-        // principal (Tauri/webview/wgpu). Só o processo filho (`core-host`)
-        // redireciona o stdout.
+        // NB: `silence_core_stdout` (a versão PERMANENTE) NÃO aqui — este
+        // caminho roda no processo principal (Tauri/webview/wgpu), matar o
+        // stdout pra sempre calaria eles também. `with_core_stdout_silenced`
+        // muta só durante o `open_core` (onde o Beetle spamma `[hdcache]`/
+        // `Creating shader module`) e restaura o stdout logo depois.
         core_loader_desktop::set_pending_core_option_values(initial_option_values);
         let mut loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir).vulkan_only();
         if let Some(s) = shared_device {
@@ -68,7 +70,9 @@ impl LocalCore {
         // `vulkan_only()` já aborta antes de montar contexto GL se não for
         // Vulkan — o `?` propaga o `HwRenderUnsupported` pro `session.rs`
         // cair pro processo filho.
-        let mut core = loader.open_core(&CoreId(core_id.to_string()), rom_path)?;
+        let mut core = core_loader_desktop::with_core_stdout_silenced(|| {
+            loader.open_core(&CoreId(core_id.to_string()), rom_path)
+        })?;
         debug_assert_eq!(
             core.render_requirements().render_backend,
             RenderBackend::Vulkan
