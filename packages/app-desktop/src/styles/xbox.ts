@@ -223,19 +223,27 @@ export const useShellStyles = makeStyles({
     ":disabled": { opacity: 0.4, cursor: "default" },
   },
   // Só posicionamento (pílula centralizada, independente do conteúdo
-  // lateral) — o chrome do campo (borda, raio, fundo, foco) é o padrão do
+  // lateral) — o chrome do campo (borda, raio, fundo) é o padrão do
   // `<SearchBox>` do Fluent (`appearance="filled-darker"` já pega as cores
-  // do tema sozinho). Um `borderRadius` aqui SOBRESCREVIA só o wrapper
-  // externo, não o `<input>` interno — o anel de foco (desenhado no
-  // `<input>`) ficava com cantos quadrados por cima do fundo arredondado
-  // (o WebKitGTK não acompanha outline a um border-radius de outro
-  // elemento — mesma causa do bug já documentado pro GameCard).
+  // do tema sozinho).
+  //
+  // O foco em si o Fluent já resolve sozinho, SEM outline: o `<Input>`
+  // (base do SearchBox) marca `:focus-within{ outline: 2px solid
+  // transparent }` de propósito e desenha o realce como uma barrinha
+  // animada embaixo (`::after`, cor `colorCompoundBrandStroke`, já do
+  // tema). O `<input>` cru lá dentro não tem cantos arredondados — a
+  // regra global `.app "& input:focus"` (pro resto do app) desenhava um
+  // outline colorido normal EM CIMA disso, quadrado, por cima do fundo
+  // arredondado do SearchBox. Desliga essa regra global só aqui.
   search: {
     position: "absolute",
     left: "50%",
     transform: "translateX(-50%)",
     width: "clamp(200px, 42vw, 780px)",
     maxWidth: "calc(100% - 160px)",
+    "& input:focus": {
+      outline: "none !important",
+    },
   },
   clock: {
     color: tokens.colorNeutralForeground3,
