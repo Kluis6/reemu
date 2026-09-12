@@ -146,17 +146,26 @@ assinatura de função por suposição.
   **Verde no RTX 3060.** Fecha a lacuna "lado consumidor não testado" —
   agora produtor (GL) e consumidor (wgpu) têm prova de hardware
   independente, cada um do seu lado do dma_buf.
-  **Ainda falta**: um core de HW render de verdade rodando um jogo, com
-  `REEMU_GL_INTEROP=1`, numa sessão completa (a suíte prova a mecânica de
-  import/render, não substitui `retro_run` real nem a renegociação de
-  `SET_SYSTEM_AV_INFO` em runtime — ver hipótese do N64 abaixo). Gate
-  continua opt-in até isso acontecer.
-  **2026-09-12: usuário relatou tela preta com `parallel_n64_libretro`**
+  **2026-09-12: validado numa sessão de jogo real.** `REEMU_GL_INTEROP=1` +
+  `parallel_n64_libretro`, dois jogos carregados em sequência (troca de
+  jogo incluída) — `interop dma_buf ativo`, `contexto GL pronto ...
+  interop=true`, `SET_SYSTEM_AV_INFO em runtime` disparou nos dois carregamentos
+  (960x720→renegociado, depois 640x480→renegociado) SEM tela preta e sem
+  travar. Isso **derruba a hipótese** de que a renegociação de
+  `SET_SYSTEM_AV_INFO` fazia `next_hw_frame` devolver `None` pra sempre — o
+  caso que tinha causado o relato de tela preta (abaixo) simplesmente não
+  reproduz mais depois do fix do default opt-in. Com produtor, consumidor
+  e sessão de jogo real todos validados neste hardware, falta só:
+  (a) testar em mais combinações (outro core GL — PSX-hw sem Vulkan — e/ou
+  outra GPU) antes de considerar universal, e (b) decidir se `REEMU_GL_INTEROP`
+  vira default ligado (hoje seguro mas opt-in).
+  **2026-09-12 (histórico): usuário relatou tela preta com `parallel_n64_libretro`**
   rodando com interop (o código tinha invertido sem querer o padrão pra
-  ligado — corrigido de volta pra opt-in). Hipótese ainda não confirmada
-  com teste do usuário: o core para de entregar frame novo bem na hora em
-  que renegocia `SET_SYSTEM_AV_INFO` em runtime; `next_hw_frame` devolve
-  `None` silenciosamente (sem log) e, se isso acontece antes do 1º present
+  ligado — corrigido de volta pra opt-in). Hipótese que motivou a
+  investigação (não confirmada, e hoje contestada pelo teste acima): o core
+  para de entregar frame novo bem na hora em que renegocia
+  `SET_SYSTEM_AV_INFO` em runtime; `next_hw_frame` devolve `None`
+  silenciosamente (sem log) e, se isso acontece antes do 1º present
   bem-sucedido, a tela nunca sai do preto inicial.
   **Pegadinha à parte, achada testando o fix**: a rota "processo filho" roda
   este crate dentro do `reemu-core-host` — um `[[bin]]` SEPARADO
