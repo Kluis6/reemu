@@ -88,9 +88,12 @@ core, ou na interop dma_buf — não de memória.**
 | Referência de funções (`glTexImage2D`, `glFramebufferTexture`, …) | https://registry.khronos.org/OpenGL-Refpages/gl4/ |
 | EGL (contexto/superfície offscreen, `EGL_KHR_surfaceless_context`) | https://registry.khronos.org/EGL/ |
 
-O core GL renderiza num FBO que o frontend dá; o resultado sai por interop
-dma_buf zero-cópia (`EGL_EXT_image_dma_buf_import`, ver seção Wayland/EGL) ou,
-com `REEMU_GL_INTEROP=0`, por `glReadPixels`.
+O core GL renderiza num FBO que o frontend dá; por padrão o resultado sai por
+`glReadPixels` (readback, caminho estável). Com `REEMU_GL_INTEROP=1` sai por
+interop dma_buf zero-cópia (`EGL_EXT_image_dma_buf_import`, ver seção
+Wayland/EGL) — opt-in, ainda não validado o bastante em hardware pra ser
+padrão (achado 2026-09-12: tela preta com `parallel_n64_libretro` quando
+ligado).
 
 **Specs de extensão que valem pro `gl_context.rs` (conferir o enum/semântica na
 fonte, não de memória):**

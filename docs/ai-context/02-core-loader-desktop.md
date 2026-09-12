@@ -122,5 +122,12 @@ assinatura de função por suposição.
 
 - Interop zero-cópia dma_buf: validar `REEMU_GL_INTEROP=1` em hardware, trocar
   `glFinish` grosso por semáforo cross-API, depois tirar o gate.
+  **2026-09-12: usuário relatou tela preta com `parallel_n64_libretro`**
+  rodando com interop (o código tinha invertido sem querer o padrão pra
+  ligado — corrigido de volta pra opt-in). Hipótese ainda não confirmada
+  com teste do usuário: o core para de entregar frame novo bem na hora em
+  que renegocia `SET_SYSTEM_AV_INFO` em runtime; `next_hw_frame` devolve
+  `None` silenciosamente (sem log) e, se isso acontece antes do 1º present
+  bem-sucedido, a tela nunca sai do preto inicial.
 - `.7z` no `archive.rs` (hoje só `.zip`).
 - GLES-only: `eglBindAPI(EGL_OPENGL_ES_API)` já implementado, sem core pra testar.
