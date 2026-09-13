@@ -28,7 +28,10 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground1,
     borderRadius: tokens.borderRadiusXLarge,
     padding: tokens.spacingHorizontalXXL,
-    boxShadow: tokens.shadow28,
+    // Fluent 2 elevation: este card faz o papel de um painel/modal centrado
+    // (não uma side-nav ou bottom sheet, que é o que shadow28 cobre) — a
+    // tier certa é a mesma que o Dialog do Fluent usa, shadow64.
+    boxShadow: tokens.shadow64,
   },
   head: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
 })

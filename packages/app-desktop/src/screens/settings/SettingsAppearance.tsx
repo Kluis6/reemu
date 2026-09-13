@@ -39,6 +39,14 @@ const useStyles = makeStyles({
     border: '2px solid transparent',
     cursor: 'pointer',
     textAlign: 'left',
+    // Fluent 2 elevation: tile pequeno e tocável = shadow2 em repouso,
+    // shadow4 no hover (uma tier abaixo do GameCard — isto é chrome de
+    // configuração, não conteúdo).
+    boxShadow: tokens.shadow2,
+    transitionProperty: 'box-shadow',
+    transitionDuration: '150ms',
+    transitionTimingFunction: tokens.curveEasyEase,
+    ':hover': { boxShadow: tokens.shadow4 },
   },
   swatch: {
     height: '46px',

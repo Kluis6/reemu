@@ -125,8 +125,11 @@ const useStyles = makeStyles({
     fontWeight: 700,
     color: tokens.colorNeutralForeground4,
     background: tokens.colorNeutralBackground4,
-    boxShadow:
-      "0 22px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.06)",
+    // Fluent 2 elevation (não um box-shadow cru): shadow16 (a tier de
+    // "callouts/hover cards") — pega o peso visual do card grande e
+    // isolado, e acompanha o tema (a opacidade some sozinha muda entre
+    // claro/escuro, ao contrário de um rgba(0,0,0,..) fixo).
+    boxShadow: tokens.shadow16,
   },
   splashTitle: {
     fontSize: "22px",

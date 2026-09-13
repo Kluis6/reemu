@@ -475,6 +475,12 @@ export const useCardStyles = makeStyles({
     "&:hover [data-art] img, &:focus-within [data-art] img": {
       transform: "scale(1.045)",
     },
+    // Elevação (Fluent 2 "elevation": shadow4 em repouso → shadow8 no hover/
+    // foco, o mesmo par que o <Card> nativo do Fluent usa — só que aplicado
+    // no `.art`, já que `.card` em si não tem preenchimento visível).
+    "&:hover [data-art], &:focus-within [data-art]": {
+      boxShadow: tokens.shadow8,
+    },
     // revela o nome sobreposto
     "&:hover [data-meta], &:focus-within [data-meta]": {
       opacity: 1,
@@ -499,6 +505,13 @@ export const useCardStyles = makeStyles({
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
+    // Repouso do par shadow4→shadow8 (ver `.card:hover [data-art]` acima) —
+    // `overflow:hidden` no próprio elemento não corta a sombra dele mesmo,
+    // só o conteúdo (a capa), então convive bem com o clip da imagem.
+    boxShadow: tokens.shadow4,
+    transitionProperty: "box-shadow",
+    transitionDuration: "150ms",
+    transitionTimingFunction: tokens.curveEasyEase,
     "& img": {
       width: "100%",
       height: "100%",
@@ -513,6 +526,9 @@ export const useCardStyles = makeStyles({
       transitionDuration: "320ms, 220ms",
       transitionTimingFunction: tokens.curveEasyEase,
       "&[data-loaded]": { opacity: 1 },
+    },
+    "@media (prefers-reduced-motion: reduce)": {
+      transitionProperty: "none",
     },
   },
   meta: {
