@@ -65,6 +65,7 @@ const useStyles = makeStyles({
     animationDuration: "190ms",
     animationTimingFunction: "ease-out",
     animationFillMode: "forwards",
+    "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
   },
   menuIn: {
     animationName: {
@@ -74,6 +75,7 @@ const useStyles = makeStyles({
     animationDuration: "170ms",
     animationTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
     animationFillMode: "both",
+    "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
   },
   menuOut: {
     animationName: {
@@ -83,6 +85,7 @@ const useStyles = makeStyles({
     animationDuration: "150ms",
     animationTimingFunction: "ease-in",
     animationFillMode: "both",
+    "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
   },
   canvas: {
     // Preenche a altura da janela mantendo a proporção; encolhe se ficar
