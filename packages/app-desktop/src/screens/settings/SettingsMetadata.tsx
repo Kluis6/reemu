@@ -39,7 +39,13 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
   },
-  cover: { width: '36px', height: '48px', objectFit: 'cover', flexShrink: 0, borderRadius: '3px' },
+  cover: {
+    width: '36px',
+    height: '48px',
+    objectFit: 'cover',
+    flexShrink: 0,
+    borderRadius: tokens.borderRadiusMedium,
+  },
   grow: { flexGrow: 1, minWidth: 0 },
   dim: { color: tokens.colorNeutralForeground3 },
 })

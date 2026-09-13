@@ -120,7 +120,7 @@ const useStyles = makeStyles({
   splashArt: {
     width: "208px",
     height: "208px",
-    borderRadius: "16px",
+    borderRadius: tokens.borderRadiusXLarge,
     objectFit: "cover",
     display: "grid",
     placeItems: "center",
