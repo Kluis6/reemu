@@ -64,11 +64,13 @@ const useStyles = makeStyles({
     maxWidth: '62%',
     zIndex: 1,
   },
+  // fluent2.microsoft.design/typography: "use sentence case, nunca all
+  // caps" — tracking largo (0.08em) era calibrado pra maiúsculas, reduzido
+  // junto (senão "Continuar"/"Destaque" minúsculo ficava esparramado).
   kicker: {
     fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightBold,
-    letterSpacing: '0.08em',
-    textTransform: 'uppercase',
+    letterSpacing: '0.02em',
     color: tokens.colorBrandForeground1,
   },
   title: {

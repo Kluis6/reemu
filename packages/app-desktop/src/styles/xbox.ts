@@ -698,6 +698,7 @@ export const useDetailStyles = makeStyles({
     marginTop: "10px",
     flexWrap: "wrap",
   },
+  // fluent2.microsoft.design/typography: "use sentence case, nunca all caps".
   badge: {
     paddingTop: "3px",
     paddingBottom: "3px",
@@ -706,7 +707,6 @@ export const useDetailStyles = makeStyles({
     borderRadius: tokens.borderRadiusCircular,
     fontSize: tokens.fontSizeBase200,
     fontWeight: 600,
-    textTransform: "uppercase",
     letterSpacing: "0.02em",
     backgroundColor: "rgba(0, 0, 0, 0.55)",
     border: `1px solid ${tokens.colorNeutralStroke2}`,

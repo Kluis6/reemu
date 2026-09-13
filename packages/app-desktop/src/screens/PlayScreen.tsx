@@ -20,6 +20,7 @@ import { useFullscreen } from "../hooks/useFullscreen";
 import { useKeyboardInput } from "../hooks/useKeyboardInput";
 import { moveFocus } from "../lib/focusNav";
 import { initials } from "../lib/initials";
+import { platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
 import {
   currentFocus,
@@ -140,11 +141,11 @@ const useStyles = makeStyles({
     textAlign: "center",
     maxWidth: "70%",
   },
+  // fluent2.microsoft.design/typography: "use sentence case, nunca all caps".
   splashSub: {
     opacity: 0.55,
     fontSize: "13px",
     letterSpacing: "0.02em",
-    textTransform: "uppercase",
   },
 });
 
@@ -517,7 +518,7 @@ export function PlayScreen() {
           {launch?.title ?? "Carregando…"}
         </div>
         {launch?.system && (
-          <div className={styles.splashSub}>{launch.system}</div>
+          <div className={styles.splashSub}>{platformLabel(launch.system)}</div>
         )}
         <Spinner size="small" label="Carregando…" />
       </div>
