@@ -155,7 +155,7 @@ export function SettingsAppearance() {
               {on && (
                 <CheckmarkFilled
                   className={s.check}
-                  style={{ color: t.colorBrandForeground1 }}
+                  style={{ color: t.reemuBrandText }}
                 />
               )}
               <div className={s.swatch}>
@@ -189,7 +189,7 @@ export function SettingsAppearance() {
           {isCustom && (
             <CheckmarkFilled
               className={s.check}
-              style={{ color: customPreview.colorBrandForeground1 }}
+              style={{ color: customPreview.reemuBrandText }}
             />
           )}
           <div className={s.swatch}>

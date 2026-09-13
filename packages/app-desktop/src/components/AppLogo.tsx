@@ -7,7 +7,10 @@ const LOGO_SRC = '/reemu-logo.png'
 const useStyles = makeStyles({
   img: { display: 'block', width: 'auto', objectFit: 'contain' },
   wordmark: { fontWeight: tokens.fontWeightBold, letterSpacing: '0.02em', lineHeight: 1 },
-  green: { color: tokens.colorBrandForeground1 },
+  // `--reemuBrandText`, não `colorBrandForeground1` — este é texto (o
+  // fallback do wordmark), e o tom padrão de marca falha contraste AA no
+  // tema claro (ver `styles/themes.ts::ReEmuTokens.reemuBrandText`).
+  green: { color: "var(--reemuBrandText)" },
 })
 
 /** Logo do ReEmu — imagem quando disponível, senão o wordmark "ReEmu". */

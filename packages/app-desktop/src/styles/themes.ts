@@ -181,6 +181,18 @@ export interface ReEmuTokens {
    *  direto sobre o fundo da casca (não sobre uma arte) — branco translúcido
    *  no escuro, preto translúcido no claro. */
   reemuFillWeak: string;
+  /** Cor de marca pra TEXTO/ÍCONE sobre o fundo neutro da casca (não sobre
+   *  uma superfície colorida — pra isso é `reemuOnBrand`). `tokens.
+   *  colorBrandForeground1` (tom 80/100 da rampa) falha WCAG AA (< 3:1,
+   *  chega a ficar em ~2:1) contra os neutros customizados do tema claro
+   *  pra praticamente toda rampa cadastrada (confirmado calculando o
+   *  contraste real das 4 rampas) — rampas mais claras/amareladas
+   *  (Xbox Clássico) falham ainda pior. Tom 40 da rampa passa em AA (>6:1)
+   *  em todas; no escuro tom 90 já é legível de sobra, mantém perto do que
+   *  `colorBrandForeground1` já mostrava. Usar em vez de
+   *  `colorBrandForeground1` sempre que a cor de marca for aplicada como
+   *  `color` de texto/ícone direto sobre o fundo da casca. */
+  reemuBrandText: string;
 }
 
 export type ReEmuTheme = Theme & ReEmuTokens;
@@ -236,6 +248,10 @@ function make(
     reemuActiveBg: light ? ramp[70] : "#3a3a3f",
     reemuActiveFg: "#ffffff",
     reemuFillWeak: light ? "rgba(0, 0, 0, 0.04)" : "rgba(255, 255, 255, 0.04)",
+    // Ver doc de `ReEmuTokens.reemuBrandText` — tom mais fechado que
+    // `colorBrandForeground1` pra garantir AA (>4.5:1) contra os neutros
+    // customizados do tema claro em qualquer rampa cadastrada.
+    reemuBrandText: light ? ramp[40] : ramp[90],
   };
 }
 

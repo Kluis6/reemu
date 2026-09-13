@@ -19,7 +19,10 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
   },
   icon: { fontSize: '44px', lineHeight: 1, opacity: 0.5 },
-  art: { color: tokens.colorBrandForeground1, opacity: 0.85 },
+  // `--reemuBrandText`, não `colorBrandForeground1`: o tom padrão de marca
+  // falha contraste AA contra os neutros customizados do tema claro (ver
+  // `styles/themes.ts::ReEmuTokens.reemuBrandText`).
+  art: { color: "var(--reemuBrandText)", opacity: 0.85 },
   title: { color: tokens.colorNeutralForeground1 },
   action: { marginTop: tokens.spacingVerticalS },
   loading: {
