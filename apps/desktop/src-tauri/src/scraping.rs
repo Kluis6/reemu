@@ -1,6 +1,8 @@
 //! Scraping de metadata (etapa 09). Provider: **ScreenScraper** (`screenscraper.fr`)
-//! por hash (CRC32) — match exato = auto; qualquer resultado por nome vai pra
-//! `pending_review` (decisão Abordagem B, ver docs/ai-context/09).
+//! por hash (CRC32) — hash exato OU nome de arquivo batendo exato com o
+//! `romfilename` que o próprio ScreenScraper devolve = auto; qualquer outra
+//! coisa vai pra `pending_review` (decisão Abordagem B revisada, ver
+//! docs/ai-context/09 e `domain::metadata::ScrapeCandidate::auto_matches`).
 //!
 //! Credenciais do usuário (conta grátis no screenscraper.fr) são opcionais mas
 //! melhoram muito o limite de requisições — anônimo é bem restrito.
@@ -87,8 +89,20 @@ fn first_text<'a>(arr: &'a Value, prefer_lang: &[&str]) -> Option<&'a str> {
     items.first()?.get("text").and_then(Value::as_str)
 }
 
-/// Extrai um `ScrapeCandidate` do JSON do `jeuInfos.php`.
-fn parse_jeu(jeu: &Value, exact: bool) -> Option<ScrapeCandidate> {
+/// Nome de arquivo "canônico" que o ScreenScraper reconhece pro candidato
+/// (campo `rom.romfilename` do `jeuInfos.php`), sem extensão.
+fn candidate_filename_stem(jeu: &Value) -> Option<&str> {
+    let name = jeu.get("rom")?.get("romfilename")?.as_str()?;
+    // Tira a extensão à mão (evita puxar `std::path::Path` só pra isto e
+    // funciona igual pra nomes com pontos no meio, ex. "Sonic 3 & Knuckles").
+    Some(name.rsplit_once('.').map_or(name, |(stem, _ext)| stem))
+}
+
+/// Extrai um `ScrapeCandidate` do JSON do `jeuInfos.php`. `file_stem` é o
+/// nome do arquivo local (sem extensão) — comparado, exato e
+/// case-insensitive, contra `candidate_filename_stem` pro segundo critério
+/// de auto-match (ver comentário do módulo).
+fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCandidate> {
     let title = first_text(jeu.get("noms")?, &["wor", "ss", "us", "eu", "jp"])?.to_string();
     let external_id = jeu
         .get("id")
@@ -127,6 +141,9 @@ fn parse_jeu(jeu: &Value, exact: bool) -> Option<ScrapeCandidate> {
             .map(str::to_string)
     });
 
+    let exact_filename_match = candidate_filename_stem(jeu)
+        .is_some_and(|candidate_stem| candidate_stem.eq_ignore_ascii_case(file_stem));
+
     Some(ScrapeCandidate {
         provider: "screenscraper".into(),
         external_id,
@@ -135,7 +152,8 @@ fn parse_jeu(jeu: &Value, exact: bool) -> Option<ScrapeCandidate> {
         cover_url,
         release_date,
         genre,
-        exact_hash_match: exact,
+        exact_hash_match: exact_hash,
+        exact_filename_match,
     })
 }
 
@@ -203,7 +221,7 @@ async fn query_screenscraper(
         .map(|c| c.eq_ignore_ascii_case(&q.hash.crc32))
         .unwrap_or(false);
 
-    Ok(parse_jeu(jeu, exact))
+    Ok(parse_jeu(jeu, exact, q.file_stem))
 }
 
 /// Roda uma leva de scraping sobre as ROMs sem match. Bloqueante (chamar de
@@ -262,7 +280,8 @@ pub async fn scrape_pending(
 
         match query_screenscraper(&client, &cfg, &q).await {
             Ok(Some(c)) => {
-                let status = if c.exact_hash_match {
+                let auto = c.auto_matches();
+                let status = if auto {
                     MatchStatus::AutoMatched
                 } else {
                     MatchStatus::PendingReview
@@ -270,7 +289,7 @@ pub async fn scrape_pending(
                 if let Err(e) = repo.record_match(&rom_id, &c, status).await {
                     log::warn!("metadata: gravar match de {stem}: {e}");
                     progress.failed.fetch_add(1, Ordering::Relaxed);
-                } else if c.exact_hash_match {
+                } else if auto {
                     let ok = repo
                         .upsert_metadata(&GameMetadata {
                             rom_id: rom_id.clone(),
@@ -304,6 +323,7 @@ pub async fn scrape_pending(
                             release_date: None,
                             genre: None,
                             exact_hash_match: false,
+                            exact_filename_match: false,
                         },
                         MatchStatus::NoMatch,
                     )

@@ -1,6 +1,12 @@
-//! Scraping de metadata de jogos. Matching por hash (CRC32/MD5), não por
-//! nome de arquivo. Match automático só com hash exato (Abordagem B) —
-//! qualquer busca heurística vai sempre pra revisão manual. Provedor
+//! Scraping de metadata de jogos. Matching primário por hash (CRC32/MD5).
+//! Match automático com hash exato OU com o nome do arquivo batendo, byte a
+//! byte (sem extensão, case-insensitive), o `romfilename` que o PRÓPRIO
+//! provedor devolveu pro candidato (Abordagem B revisada, 2026-09-13 —
+//! decisão explícita do usuário, ver docs/ai-context/09) — não é heurística
+//! nem fuzzy match, é igualdade exata contra o nome canônico que o
+//! provedor já reconhece (arquivos No-Intro/Redump costumam bater aqui).
+//! Qualquer OUTRA coisa (nome parecido, busca por texto livre, score de
+//! confiança da API) continua indo sempre pra revisão manual. Provedor
 //! configurável pelo usuário (IGDB, ScreenScraper, TheGamesDB...).
 
 use crate::error::RepoError;
@@ -21,7 +27,8 @@ pub enum MatchStatus {
     NoMatch,
 }
 
-/// Um resultado de provedor pra uma ROM: metadata + se veio de hash exato.
+/// Um resultado de provedor pra uma ROM: metadata + os dois critérios que
+/// podem disparar auto-aplicação.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScrapeCandidate {
     pub provider: String,
@@ -31,9 +38,23 @@ pub struct ScrapeCandidate {
     pub cover_url: Option<String>,
     pub release_date: Option<String>,
     pub genre: Option<String>,
-    /// True somente se veio de correspondência exata de hash — é o único
-    /// critério que dispara auto-aplicação (decisão: Abordagem B).
+    /// True se veio de correspondência exata de hash.
     pub exact_hash_match: bool,
+    /// True se o `file_stem` da consulta bate, exato e case-insensitive, com
+    /// o nome de arquivo que o PRÓPRIO provedor devolveu pro candidato (ex.:
+    /// `rom.romfilename` do ScreenScraper, sem extensão). `#[serde(default)]`:
+    /// linhas gravadas antes desta mudança não têm este campo no JSON.
+    #[serde(default)]
+    pub exact_filename_match: bool,
+}
+
+impl ScrapeCandidate {
+    /// Os dois critérios que disparam auto-aplicação (decisão: Abordagem B
+    /// revisada) — nenhum outro sinal (score de confiança, nome parecido)
+    /// conta. Ver comentário do módulo.
+    pub fn auto_matches(&self) -> bool {
+        self.exact_hash_match || self.exact_filename_match
+    }
 }
 
 /// O que um provedor recebe pra procurar uma ROM.
@@ -41,8 +62,9 @@ pub struct ScrapeCandidate {
 pub struct ScrapeQuery<'a> {
     pub hash: &'a RomHash,
     pub system_id: &'a str,
-    /// Nome do arquivo (sem extensão) — só usado pra busca heurística quando o
-    /// hash não bate; nunca dispara auto-match.
+    /// Nome do arquivo (sem extensão). Usado tanto pra busca heurística
+    /// quanto, se bater exato com o nome que o provedor reconhece pro
+    /// candidato encontrado, pra auto-match (`exact_filename_match`).
     pub file_stem: &'a str,
 }
 

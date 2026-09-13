@@ -7,14 +7,21 @@ jobs em background pra catalogar milhares de ROMs sem travar a UI.
 
 ## Decisões relevantes
 
-- **Matching por hash (CRC32/MD5), nunca por nome de arquivo** — nome é
+- **Matching primário por hash (CRC32/MD5)** — nome de arquivo sozinho é
   pouco confiável (tags de região, revisão, scene groups).
-- **Match automático só com hash exato** (`ScrapeCandidate.exact_hash_match
-  = true`) — decisão explícita (Abordagem B): qualquer resultado vindo de
-  busca heurística/por nome do provedor, mesmo com score de confiança
-  alto declarado pela API externa, vai sempre pra `status =
-  'pending_review'`, nunca `'auto_matched'`. Não implemente threshold de
-  confiança como critério de automação.
+- **Match automático com hash exato OU nome de arquivo exato** —
+  `ScrapeCandidate::auto_matches()` (`exact_hash_match ||
+  exact_filename_match`). **Abordagem B revisada, 2026-09-13** (decisão
+  explícita do usuário — a Abordagem B original só aceitava hash): o 2º
+  critério é `exact_filename_match`, que só é `true` quando o `file_stem`
+  local bate, byte a byte (sem extensão, case-insensitive), com o nome de
+  arquivo que o PRÓPRIO provedor devolveu pro candidato que ele encontrou
+  (ex.: `rom.romfilename` do ScreenScraper) — não é fuzzy, não é
+  "parecido", é igualdade exata contra o nome canônico que o provedor já
+  reconhece (cobre bem dumps No-Intro/Redump com nome intacto). Continua
+  proibido: threshold de confiança da API, busca por texto livre, ou
+  qualquer comparação aproximada de nome como critério de automação —
+  esses continuam indo sempre pra `pending_review`.
 - **Provedor configurável pelo usuário** — `MetadataProvider` é uma trait
   com múltiplas implementações possíveis (IGDB, ScreenScraper,
   TheGamesDB); a UI deixa escolher/priorizar quais ficam ativos.
@@ -67,6 +74,8 @@ crates/core-loader-desktop/src/scraping/     -- ou um crate próprio, se preferi
 ## Critério de pronto
 
 - Biblioteca de milhares de ROMs é escaneada sem travar a UI
-- Nenhum match sem hash exato vira `auto_matched`, mesmo com score alto
+- Nenhum match sem hash exato OU nome de arquivo exato (ver
+  `ScrapeCandidate::auto_matches`) vira `auto_matched`, mesmo com score alto
+  declarado pela API — nunca por score de confiança ou nome aproximado
 - Trocar o provedor ativo nas configurações reflete na próxima leva de
   scraping sem precisar reiniciar o app

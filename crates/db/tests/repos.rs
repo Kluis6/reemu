@@ -185,6 +185,7 @@ fn candidate(title: &str, exact: bool) -> ScrapeCandidate {
         release_date: Some("1990".into()),
         genre: Some("Platform".into()),
         exact_hash_match: exact,
+        exact_filename_match: false,
     }
 }
 
