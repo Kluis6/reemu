@@ -121,7 +121,11 @@ export function AppShell() {
   const atBrowse = pathname === "/" || pathname === "/library";
   const [powerOpen, setPowerOpen] = useState(false);
 
-  const profile = useQuery({ queryKey: ["profile"], queryFn: getProfile, retry: false });
+  const profile = useQuery({
+    queryKey: ["profile"],
+    queryFn: getProfile,
+    retry: false,
+  });
   const search = useSearchStore();
   const searchRef = useRef<HTMLInputElement>(null);
   // Rolagem por wheel é NATIVA (o WebKitGTK já entrega inércia/suavidade
@@ -196,7 +200,7 @@ export function AppShell() {
                   </MenuList>
                 </MenuPopover>
               </Menu>
-             
+
               <MenuItem onClick={() => void quitApp()}>Sair</MenuItem>
             </MenuList>
           </MenuPopover>
@@ -235,6 +239,7 @@ export function AppShell() {
           {!atRoot && (
             <Tooltip content="Voltar para a tela anterior" relationship="label">
               <Button
+                size="small"
                 appearance="subtle"
                 className={l.surface}
                 icon={<ChevronLeftRegular />}
@@ -273,7 +278,8 @@ export function AppShell() {
             relationship="label"
           >
             <Button
-              appearance="subtle"
+              appearance="secondary"
+              size="small"
               className={l.surface}
               aria-label={fullscreen ? "Sair da tela cheia" : "Tela cheia"}
               icon={
