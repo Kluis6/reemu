@@ -9,7 +9,51 @@ coerente com o Fluent 2 e explica por que o CSS deve migrar pra **Griffel**.
 
 ---
 
-## Princípios do Fluent 2
+## Princípios de design (fluent2.microsoft.design/design-principles)
+
+Os 4 princípios oficiais do Fluent 2 — guiam decisão, não são regra de CSS.
+Traduzidos pro contexto do ReEmu (frontend solo, "modo Xbox", não é produto
+Microsoft):
+
+- **Natural em cada plataforma.** No Fluent: reusar componente/padrão nativo
+  ~80% do tempo, gastar esforço próprio só na experiência de marca. No ReEmu:
+  é por isso que [[frontend-fluentui-only]] existe — todo componente vem do
+  `@fluentui/react-components`, custom só quando não há equivalente (Dialog,
+  Field, Button, Card...). A "experiência de assinatura" onde vale investir
+  é o "modo Xbox" em si: `GameCard`, `HeroCarousel`, a rail — não reinventar
+  o que o Fluent já resolve (ver [[fluent2-elevation-audit]]: aprendido que
+  "natural nesta plataforma" pro ReEmu significa às vezes DESVIAR do genérico
+  "web" do Fluent pra bater com a referência Xbox real — as duas coisas
+  convivem, uma é sobre QUAL COMPONENTE usar, a outra é sobre COMO ele
+  aparece).
+- **Construído pra foco.** Menos ruído visual, não atrapalhar o que a pessoa
+  veio fazer (achar um jogo e jogar). Já apareceu nesta sessão sem citar o
+  nome: remover a pill "Configurações" duplicada da Início, simplificar
+  textos explicativos técnicos demais em Configurações (CRC32,
+  `SDL_GameControllerDB`, "roda na GPU offscreen"...), manter animação de
+  fundo estática (não contínua) por causa do custo real no WebKitGTK sem
+  compositing (ver [[frontend-perf-webkitgtk]]). Regra prática: toda vez que
+  aparecer a tentação de explicar COMO uma feature funciona por dentro na UI,
+  perguntar se a pessoa precisa saber isso pra usar a feature — se não,
+  cortar.
+- **Um por todos, todos por um** (inclusão). No ReEmu isso é literalmente
+  suportar os dois jeitos de navegar o app — controle E teclado/mouse — sem
+  tratar um como cidadão de segunda classe: os glifos de controle
+  (`ButtonHints`, A/B/X/Y), o anel de foco global consistente em todo
+  componente (Dialog, Card, Button, SearchBox — várias sessões calibrando
+  isso), tamanho de alvo adequado pro rail em telas pequenas. **Gap
+  conhecido, não fechado**: falta tema de **alto contraste**
+  (`createHighContrastTheme`, o Fluent já expõe) — hoje só tem os temas de
+  cor + claro/escuro.
+- **Inconfundivelmente [ReEmu]** (adaptado — o original é "Microsoft", não
+  se aplica literalmente aqui). Um pouco de personalidade RENDE muito: os
+  temas com identidade própria (PS1, Xbox Clássico, Personalizado com
+  seletor de matiz), o splash de boot, os ícones dos consoles. A referência
+  continua sendo o modo Xbox real ([[frontend-xbox-design-reference]]), não
+  a marca Fluent/Microsoft — "inconfundível" aqui quer dizer "reconhecível
+  como o dashboard que inspirou", não "parece um produto da Microsoft".
+
+## Convenções técnicas do Fluent 2
 
 - **Tokens, não valores fixos.** Cor, espaçamento, raio, sombra, tipografia e
   motion vêm de _design tokens_. Em código: `import { tokens } from
