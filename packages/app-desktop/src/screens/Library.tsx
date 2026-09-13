@@ -19,6 +19,7 @@ import {
   ArrowSortRegular,
   FilterRegular,
   MoreHorizontalRegular,
+  WarningRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
@@ -238,7 +239,7 @@ export function Library() {
     if (roms.isLoading) return <CardGridSkeleton />;
     if (roms.isError)
       return (
-        <EmptyState icon="⚠" title="Biblioteca indisponível">
+        <EmptyState icon={<WarningRegular />} title="Biblioteca indisponível">
           O backend não conseguiu abrir o banco de dados.
         </EmptyState>
       );
