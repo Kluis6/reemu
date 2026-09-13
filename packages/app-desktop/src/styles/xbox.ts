@@ -113,8 +113,11 @@ export const useShellStyles = makeStyles({
     // fechar) — o Button tem width/height/padding/minWidth próprios (do
     // tamanho "medium" default) que competiam com isso e deixavam ele fora
     // de proporção com o <NavLink> (um <a> puro, sem essa disputa).
-    width: "clamp(38px, 2.7vw, 48px) !important",
-    height: "clamp(38px, 2.7vw, 48px) !important",
+    // Piso 44px (não 38px): fluent2.microsoft.design/layout — alvo mínimo de
+    // toque/clique pra web. Numa janela 1366-1920px (a faixa "XX-large" da
+    // própria doc, bem comum) o `2.7vw` sozinho ficava abaixo disso.
+    width: "clamp(44px, 2.7vw, 48px) !important",
+    height: "clamp(44px, 2.7vw, 48px) !important",
     minWidth: "0 !important",
     maxWidth: "none !important",
     padding: "0 !important",
