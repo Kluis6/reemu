@@ -11,10 +11,14 @@ const powerOn = {
   '60%': { opacity: 1 },
   to: { opacity: 1, transform: 'scaleY(1) scaleX(1)' },
 }
-// glow que respira via OPACITY de um brilho separado (composited, barato)
+// glow que respira via OPACITY de um brilho separado (composited, barato).
+// Faixa mais baixa que um "0.4-0.75" ingênuo: as cores do gradiente agora são
+// sólidas (tokens do tema, não dá pra variar alpha por stop num var()), então
+// quem faz o efeito "glow suave" (em vez de mancha sólida) é só a opacity do
+// elemento inteiro.
 const breathe = {
-  '0%, 100%': { opacity: 0.4 },
-  '50%': { opacity: 0.75 },
+  '0%, 100%': { opacity: 0.16 },
+  '50%': { opacity: 0.3 },
 }
 const rise = {
   from: { opacity: 0, transform: 'translateY(8px)' },
@@ -52,18 +56,23 @@ const useStyles = makeStyles({
       animationDuration: '260ms',
     },
   },
-  // brilho estático atrás da logo; só a opacity anima
+  // brilho estático atrás da logo; só a opacity anima. Cor do TEMA, não fixa
+  // verde/azul — o boot é "momento de marca fixo" só quanto ao papel de
+  // parede do usuário (ver memória frontend-xbox-design-reference); a cor
+  // em si sempre foi pra vir do tema, e o wordmark (`.wmGreen` abaixo) já
+  // faz isso. `--reemuBrandSolid`/`--reemuBg1` (tons da rampa do tema ativo,
+  // ver `styles/themes.ts`) com fallback pro azul/verde antigo.
   glow: {
     position: 'absolute',
     inset: '-8%',
     borderRadius: '50%',
     backgroundImage:
-      'radial-gradient(closest-side, rgba(64,220,120,0.35), rgba(60,150,255,0.16) 55%, transparent 78%)',
+      'radial-gradient(closest-side, var(--reemuBrandSolid, #40dc78), var(--reemuBg1, #3c96ff) 55%, transparent 78%)',
     animationName: breathe,
     animationDuration: '4s',
     animationTimingFunction: 'ease-in-out',
     animationIterationCount: 'infinite',
-    '@media (prefers-reduced-motion: reduce)': { animationName: 'none', opacity: 0.5 },
+    '@media (prefers-reduced-motion: reduce)': { animationName: 'none', opacity: 0.22 },
   },
   logo: {
     position: 'absolute',
