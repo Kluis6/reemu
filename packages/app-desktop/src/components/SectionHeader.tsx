@@ -1,4 +1,4 @@
-import { Text, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
+import { Button, Text, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { ChevronRightRegular } from '@fluentui/react-icons'
 import type { ReactNode } from 'react'
 
@@ -9,16 +9,16 @@ const useStyles = makeStyles({
     alignItems: 'center',
     columnGap: tokens.spacingHorizontalM,
   },
+  // `<Button appearance="transparent">` por baixo — zera o tamanho/padding
+  // padrão dele (feito pra rótulo de botão normal, não pra um título grande)
+  // e mantém só o hover/focus nativos do Fluent.
   titleBtn: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    columnGap: '4px',
-    border: 'none',
-    backgroundColor: 'transparent',
-    padding: 0,
+    minWidth: 'auto !important',
+    height: 'auto !important',
+    padding: '0 !important',
+    columnGap: '4px !important',
     margin: 0,
     color: 'inherit',
-    cursor: 'pointer',
     borderRadius: tokens.borderRadiusMedium,
     outlineOffset: '4px',
   },
@@ -34,7 +34,9 @@ const useStyles = makeStyles({
     transitionProperty: 'transform, color',
     transitionDuration: '150ms',
     transitionTimingFunction: tokens.curveEasyEase,
-    'button:hover > &, button:focus-visible > &': {
+    // Descendente, não filho direto — o ícone do `<Button icon=.../>` fica
+    // dentro de um `span.fui-Button__icon`, não direto no `<button>`.
+    'button:hover &, button:focus-visible &': {
       transform: 'translateX(3px)',
       color: tokens.colorNeutralForeground1,
     },
@@ -72,17 +74,18 @@ export function SectionHeader({
     <div className={s.root}>
       <div className={s.row}>
         {onSeeAll ? (
-          <button
-            type="button"
+          <Button
+            appearance="transparent"
             className={s.titleBtn}
             onClick={onSeeAll}
             aria-label={seeAllLabel ?? `Ver tudo — ${title}`}
+            icon={<ChevronRightRegular className={s.chevron} />}
+            iconPosition="after"
           >
             <Text as={as} className={s.title}>
               {title}
             </Text>
-            <ChevronRightRegular className={s.chevron} />
-          </button>
+          </Button>
         ) : (
           <Text as={as} className={mergeClasses(s.title, s.titlePlain)}>
             {title}

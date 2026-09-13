@@ -304,8 +304,7 @@ export function RomDetail() {
       </div>
 
       <div className={s.actions}>
-        <label className={s.field}>
-          <Caption1>Core</Caption1>
+        <Field label="Core">
           <Select
             value={chosenCore}
             disabled={coreList.length === 0}
@@ -321,7 +320,7 @@ export function RomDetail() {
               </option>
             ))}
           </Select>
-        </label>
+        </Field>
         <Button
           appearance="primary"
           size="large"
