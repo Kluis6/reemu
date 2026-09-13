@@ -91,12 +91,13 @@ export const useShellStyles = makeStyles({
     paddingTop: "clamp(10px, 1.4vw, 16px)",
     paddingBottom: "clamp(10px, 1.4vw, 16px)",
     borderRight: "none",
-    // Mesmo tom do fundo das páginas (estilo app do Xbox — rail e conteúdo
-    // no mesmo tom): `colorNeutralBackground1` É o stop mais fraco do
-    // gradiente `--reemuAppBg` em todo tema (ver `styles/themes.ts::make`),
-    // então isto acompanha tema claro/escuro sem precisar de um token à
-    // parte.
-    backgroundColor: tokens.colorNeutralBackground1,
+    // Hierarquia visual (Fluent 2): chrome de navegação persistente fica um
+    // tom ACIMA do conteúdo (`colorNeutralBackground1`), não no mesmo tom —
+    // é o que separa a rail (estrutural, sempre visível) da área de
+    // conteúdo (rola por baixo). Mesmo tom que os cards/paineis já usam
+    // (`useCardStyles`, diálogos), então o rail lê como "uma superfície",
+    // igual a eles.
+    backgroundColor: tokens.colorNeutralBackground2,
   },
   railSpacer: { flexGrow: 1 },
   railSep: {
@@ -475,12 +476,6 @@ export const useCardStyles = makeStyles({
     "&:hover [data-art] img, &:focus-within [data-art] img": {
       transform: "scale(1.045)",
     },
-    // Elevação (Fluent 2 "elevation": shadow4 em repouso → shadow8 no hover/
-    // foco, o mesmo par que o <Card> nativo do Fluent usa — só que aplicado
-    // no `.art`, já que `.card` em si não tem preenchimento visível).
-    "&:hover [data-art], &:focus-within [data-art]": {
-      boxShadow: tokens.shadow8,
-    },
     // revela o nome sobreposto
     "&:hover [data-meta], &:focus-within [data-meta]": {
       opacity: 1,
@@ -505,13 +500,6 @@ export const useCardStyles = makeStyles({
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    // Repouso do par shadow4→shadow8 (ver `.card:hover [data-art]` acima) —
-    // `overflow:hidden` no próprio elemento não corta a sombra dele mesmo,
-    // só o conteúdo (a capa), então convive bem com o clip da imagem.
-    boxShadow: tokens.shadow4,
-    transitionProperty: "box-shadow",
-    transitionDuration: "150ms",
-    transitionTimingFunction: tokens.curveEasyEase,
     "& img": {
       width: "100%",
       height: "100%",
@@ -526,9 +514,6 @@ export const useCardStyles = makeStyles({
       transitionDuration: "320ms, 220ms",
       transitionTimingFunction: tokens.curveEasyEase,
       "&[data-loaded]": { opacity: 1 },
-    },
-    "@media (prefers-reduced-motion: reduce)": {
-      transitionProperty: "none",
     },
   },
   meta: {
