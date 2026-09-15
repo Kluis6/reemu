@@ -30,7 +30,7 @@ const useLocalStyles = makeStyles({
     justifyItems: "center",
     width: "24px",
     height: "24px",
-    borderRadius: tokens.borderRadiusCircular,
+    borderRadius: tokens.borderRadiusMedium,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
     color: tokens.colorPaletteMarigoldForeground1,
     fontSize: "14px",

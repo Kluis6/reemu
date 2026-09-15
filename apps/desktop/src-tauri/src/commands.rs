@@ -2544,7 +2544,7 @@ pub async fn list_device_ports(state: State<'_, AppState>) -> Result<Vec<DeviceP
         .collect())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GamepadDto {
     pub guid: String,

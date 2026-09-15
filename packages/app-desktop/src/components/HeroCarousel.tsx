@@ -12,7 +12,9 @@ const useStyles = makeStyles({
     position: 'relative',
     width: '100%',
     minWidth: 0,
-    height: 'clamp(220px, 26vw, 460px)',
+    // Teto subiu de 460 pra 960px — mesma proporção de tela, só sem travar
+    // bem antes de 4K (~1769px de viewport).
+    height: 'clamp(220px, 26vw, 960px)',
     borderRadius: tokens.borderRadiusXLarge,
     overflow: 'hidden',
     marginTop: '8px',
@@ -47,7 +49,7 @@ const useStyles = makeStyles({
     inset: 0,
     display: 'grid',
     placeItems: 'center',
-    fontSize: 'clamp(48px, 8vw, 120px)',
+    fontSize: 'clamp(48px, 8vw, 220px)',
     fontWeight: tokens.fontWeightBold,
     color: 'rgba(255,255,255,0.12)',
   },
@@ -59,8 +61,8 @@ const useStyles = makeStyles({
   },
   body: {
     position: 'absolute',
-    left: 'clamp(20px, 3vw, 40px)',
-    bottom: 'clamp(20px, 3vw, 40px)',
+    left: 'clamp(20px, 3vw, 115px)',
+    bottom: 'clamp(20px, 3vw, 115px)',
     maxWidth: '62%',
     zIndex: 1,
   },
@@ -74,13 +76,13 @@ const useStyles = makeStyles({
     color: tokens.colorBrandForeground1,
   },
   title: {
-    fontSize: 'clamp(20px, 2.4vw, 42px)',
+    fontSize: 'clamp(20px, 2.4vw, 64px)',
     fontWeight: tokens.fontWeightBold,
     lineHeight: 1.12,
     margin: '4px 0 2px',
   },
   sub: {
-    fontSize: 'clamp(12px, 0.9vw, 17px)',
+    fontSize: 'clamp(12px, 0.9vw, 26px)',
     color: tokens.colorNeutralForeground2,
   },
   arrow: {

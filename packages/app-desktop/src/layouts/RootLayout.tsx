@@ -5,6 +5,7 @@ import { BindingCapture } from '../components/BindingCapture'
 import { Splash } from '../components/Splash'
 import { ToastLayer } from '../components/ToastLayer'
 import { useFullscreenSync } from '../hooks/useFullscreen'
+import { useGamepadStatus } from '../hooks/useGamepadStatus'
 import { useMenuNav } from '../hooks/useMenuNav'
 import { getProfile } from '../lib/tauri'
 
@@ -19,6 +20,7 @@ const SPLASH_FADE_MS = 240
 export function RootLayout() {
   useMenuNav()
   useFullscreenSync()
+  useGamepadStatus()
 
   const { pathname } = useLocation()
   const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile, retry: false })

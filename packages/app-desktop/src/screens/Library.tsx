@@ -55,6 +55,17 @@ const useLibStyles = makeStyles({
       color: tokens.colorNeutralForeground1,
     },
   },
+  // "Adicionar ROM": mesmo tom de fundo da sidebar (`rail`,
+  // `colorNeutralBackground2`) no fundo E na borda, igual aos botões
+  // Voltar/Fullscreen da topbar (`layouts/AppShell.tsx`).
+  navBtn: {
+    backgroundColor: `${tokens.colorNeutralBackground2} !important`,
+    border: `1px solid ${tokens.colorNeutralBackground2} !important`,
+    ":hover": {
+      backgroundColor: `${tokens.colorNeutralBackground2Hover} !important`,
+      border: `1px solid ${tokens.colorNeutralBackground2Hover} !important`,
+    },
+  },
   bar: {
     display: "flex",
     alignItems: "center",
@@ -66,6 +77,19 @@ const useLibStyles = makeStyles({
     marginBottom: "24px",
   },
   barRight: { display: "flex", alignItems: "center", columnGap: "10px" },
+  // `MenuItemRadio` do Fluent renderiza [checkmark, content] nessa ordem de
+  // DOM (sem prop pra inverter) — reordena visualmente via flex `order`: o
+  // `content` (`flexGrow: 1` já de fábrica) ocupa a esquerda e empurra o
+  // checkmark pro fim da linha. Usado nos dois dropdowns (Plataforma/Ordenar).
+  radioMenuList: {
+    "& .fui-MenuItemRadio__content": {
+      order: 1,
+      textAlign: "left",
+    },
+    "& .fui-MenuItemRadio__checkmark": {
+      order: 2,
+    },
+  },
 });
 
 type LibTab = "mine" | "fav";
@@ -331,8 +355,8 @@ export function Library() {
           </Text>
           <Tooltip content="Adicionar ROM" relationship="label">
             <Button
-              appearance="subtle"
-              className={l.surface}
+              appearance="secondary"
+              className={l.navBtn}
               icon={<AddRegular />}
               aria-label="Adicionar ROM"
               onClick={() => setAddOpen(true)}
@@ -352,7 +376,7 @@ export function Library() {
       <div className={s.toolbar}>
         <Tooltip content="Limpar filtros" relationship="label">
           <Button
-            appearance="subtle"
+            appearance="secondary"
             className={l.surface}
             icon={<FilterRegular />}
             aria-label="Limpar filtros"
@@ -366,12 +390,12 @@ export function Library() {
           onCheckedValueChange={(_, d) => setPlatform(d.checkedItems[0] ?? "all")}
         >
           <MenuTrigger disableButtonEnhancement>
-            <MenuButton appearance="subtle">
+            <MenuButton appearance="subtle" className={l.surface}>
               {platform === "all" ? "Plataforma" : platformLabel(platform)}
             </MenuButton>
           </MenuTrigger>
           <MenuPopover>
-            <MenuList>
+            <MenuList className={l.radioMenuList}>
               <MenuItemRadio name="plat" value="all">
                 Todas as plataformas
               </MenuItemRadio>
@@ -391,12 +415,12 @@ export function Library() {
           }
         >
           <MenuTrigger disableButtonEnhancement>
-            <MenuButton appearance="subtle" icon={<ArrowSortRegular />}>
+            <MenuButton appearance="subtle" className={l.surface} icon={<ArrowSortRegular />}>
               {SORT_LABEL[sort]}
             </MenuButton>
           </MenuTrigger>
           <MenuPopover>
-            <MenuList>
+            <MenuList className={l.radioMenuList}>
               {(Object.keys(SORT_LABEL) as LibSort[]).map((k) => (
                 <MenuItemRadio key={k} name="sort" value={k}>
                   {SORT_LABEL[k]}

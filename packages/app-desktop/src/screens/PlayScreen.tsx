@@ -469,7 +469,9 @@ export function PlayScreen() {
   };
   const quit = () => {
     void unloadGame().catch(() => {});
-    navigate("/");
+    // Único caminho até aqui é o botão "Jogar" do RomDetail (push simples,
+    // sem `replace`) — volta pra lá em vez de sempre pro Início.
+    navigate(-1);
   };
 
   // A navegação do menu de pausa pelo gamepad é global (`useMenuNav` no

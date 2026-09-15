@@ -9,10 +9,10 @@
  * a MESMA fórmula nos dois lados (o `clamp()` do CSS e o `cardWidthPx` do JS).
  */
 export const CARD_MIN = 150;
-export const CARD_MAX = 320;
+export const CARD_MAX = 445;
 /** ~1/8.5 da largura da janela → mantém ~8 cards por prateleira em qualquer
- *  tela; o card cresce até 320px em 2.7K+ (antes travava em 248 e ficava
- *  minúsculo em 4K). */
+ *  tela; o card cresce até 445px em 4K real (3840px) — teto anterior (320)
+ *  travava em ~2.7K e já ficava pequeno em 4K de verdade. */
 export const CARD_VW = 0.116;
 export const SHELF_GAP = 16;
 

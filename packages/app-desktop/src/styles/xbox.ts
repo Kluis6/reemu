@@ -21,15 +21,17 @@ import { cardSizeCss, SHELF_GAP } from "../lib/shelf";
 export const shell = {
   radius: "12px",
   radiusLg: "16px",
-  // Rail estreito estilo modo XBOX; cresce um pouco em telas largas.
-  railW: "clamp(56px, 3.6vw, 80px)",
+  // Rail estreito estilo modo XBOX; cresce com a tela. Teto antigo (80px)
+  // travava em ~2222px de viewport — em 4K (3840px) ficava minúsculo. Mesma
+  // inclinação (3.6vw), teto estendido pra continuar crescendo até 4K real.
+  railW: "clamp(56px, 3.6vw, 138px)",
 };
 
 // Gradiente de superfície elevada (cartões, hero) a partir dos neutros do tema.
 const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`;
 
 // Largura de um card (mesma fórmula do JS que conta quantos cabem — ver
-// lib/shelf.ts). Fluida: ~148px em janela estreita, até 248px em telas largas.
+// lib/shelf.ts). Fluida: ~150px em janela estreita, até 320px em 2.7K+.
 const gameCardSize = cardSizeCss;
 
 /** Casca: app / rail / topbar / área de rolagem + anel de foco global. */
@@ -87,9 +89,9 @@ export const useShellStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    rowGap: "clamp(6px, 0.9vw, 12px)",
-    paddingTop: "clamp(10px, 1.4vw, 16px)",
-    paddingBottom: "clamp(10px, 1.4vw, 16px)",
+    rowGap: "clamp(6px, 0.9vw, 35px)",
+    paddingTop: "clamp(10px, 1.4vw, 54px)",
+    paddingBottom: "clamp(10px, 1.4vw, 54px)",
     borderRight: "none",
     // Hierarquia visual (Fluent 2): chrome de navegação persistente fica um
     // tom ACIMA do conteúdo (`colorNeutralBackground1`), não no mesmo tom —
@@ -101,7 +103,7 @@ export const useShellStyles = makeStyles({
   },
   railSpacer: { flexGrow: 1 },
   railSep: {
-    width: "clamp(18px, 1.8vw, 26px)",
+    width: "clamp(18px, 1.8vw, 69px)",
     height: "1px",
     backgroundColor: tokens.colorNeutralStroke1,
     marginTop: "4px",
@@ -115,9 +117,11 @@ export const useShellStyles = makeStyles({
     // de proporção com o <NavLink> (um <a> puro, sem essa disputa).
     // Piso 44px (não 38px): fluent2.microsoft.design/layout — alvo mínimo de
     // toque/clique pra web. Numa janela 1366-1920px (a faixa "XX-large" da
-    // própria doc, bem comum) o `2.7vw` sozinho ficava abaixo disso.
-    width: "clamp(44px, 2.7vw, 48px) !important",
-    height: "clamp(44px, 2.7vw, 48px) !important",
+    // própria doc, bem comum) o `2.7vw` sozinho ficava abaixo disso. Teto
+    // estendido de 48 pra 104px — travava bem antes de 4K (~1778px de
+    // viewport) e ficava minúsculo num monitor/TV grande.
+    width: "clamp(44px, 2.7vw, 104px) !important",
+    height: "clamp(44px, 2.7vw, 104px) !important",
     minWidth: "0 !important",
     maxWidth: "none !important",
     padding: "0 !important",
@@ -127,7 +131,7 @@ export const useShellStyles = makeStyles({
     flex: "none",
     color: tokens.colorNeutralForeground3,
     textDecorationLine: "none",
-    fontSize: "clamp(19px, 1.4vw, 24px)",
+    fontSize: "clamp(19px, 1.4vw, 54px)",
     border: "none",
     backgroundColor: "transparent",
     cursor: "pointer",
@@ -198,11 +202,11 @@ export const useShellStyles = makeStyles({
     zIndex: 2,
     display: "flex",
     alignItems: "center",
-    columnGap: "clamp(8px, 1.4vw, 14px)",
-    paddingTop: "clamp(10px, 1.4vw, 16px)",
-    paddingBottom: "clamp(10px, 1.4vw, 16px)",
-    paddingLeft: "clamp(12px, 3vw, 28px)",
-    paddingRight: "clamp(14px, 3.5vw, 36px)",
+    columnGap: "clamp(8px, 1.4vw, 54px)",
+    paddingTop: "clamp(10px, 1.4vw, 54px)",
+    paddingBottom: "clamp(10px, 1.4vw, 54px)",
+    paddingLeft: "clamp(12px, 3vw, 115px)",
+    paddingRight: "clamp(14px, 3.5vw, 134px)",
     boxSizing: "border-box",
     flexShrink: 0,
     backgroundColor: "transparent",
@@ -226,10 +230,11 @@ export const useShellStyles = makeStyles({
     ":hover": { backgroundColor: tokens.colorNeutralBackground3 },
     ":disabled": { opacity: 0.4, cursor: "default" },
   },
-  // Só posicionamento (pílula centralizada, independente do conteúdo
-  // lateral) — o chrome do campo (borda, raio, fundo) é o padrão do
-  // `<SearchBox>` do Fluent (`appearance="filled-darker"` já pega as cores
-  // do tema sozinho).
+  // Posicionamento (pílula centralizada, independente do conteúdo lateral) —
+  // borda e raio ficam com o padrão do `<SearchBox>` do Fluent
+  // (`appearance="filled-darker"` já pega essas do tema sozinho); só o FUNDO
+  // é sobrescrito abaixo pro mesmo tom da sidebar (`colorNeutralBackground2`)
+  // em vez do `colorNeutralBackground3` que "filled-darker" traria.
   //
   // O foco em si o Fluent já resolve sozinho, SEM outline: o `<Input>`
   // (base do SearchBox) marca `:focus-within{ outline: 2px solid
@@ -243,8 +248,12 @@ export const useShellStyles = makeStyles({
     position: "absolute",
     left: "50%",
     transform: "translateX(-50%)",
-    width: "clamp(200px, 42vw, 780px)",
+    // Teto subiu de 780 pra 1100px — mas não pra 42vw cheio (~1613px em 4K):
+    // uma busca centralizada não deve virar a largura da tela toda, só
+    // acompanhar o crescimento geral em vez de travar em telas grandes.
+    width: "clamp(200px, 42vw, 1100px)",
     maxWidth: "calc(100% - 160px)",
+    backgroundColor: `${tokens.colorNeutralBackground2} !important`,
     "& input:focus": {
       outline: "none !important",
     },
@@ -252,10 +261,16 @@ export const useShellStyles = makeStyles({
   clock: {
     color: tokens.colorNeutralForeground3,
     fontVariantNumeric: "tabular-nums",
-    fontSize: "clamp(15px, 1vw, 22px)",
+    fontSize: "clamp(15px, 1vw, 38px)",
     fontWeight: 600,
     lineHeight: 1,
     letterSpacing: "0.01em",
+  },
+  gamepadStatus: {
+    display: "flex",
+    alignItems: "center",
+    color: tokens.colorNeutralForeground3,
+    fontSize: "clamp(16px, 1.1vw, 42px)",
   },
   scroll: {
     scrollBehavior: "smooth",
@@ -264,11 +279,14 @@ export const useShellStyles = makeStyles({
     overflowY: "auto",
     scrollbarGutter: "stable",
     boxSizing: "border-box",
-    paddingTop: "clamp(60px, 6.5vw, 92px)",
+    // Só precisa limpar a altura da `.topbar` (padding + conteúdo, este sem
+    // `clamp` — os botões da Fluent não escalam) com uma folga; não faz
+    // sentido crescer no mesmo 6.5vw até 4K cheio (viraria vão vazio enorme).
+    paddingTop: "clamp(60px, 6.5vw, 172px)",
     // Mesmo valor do padding da `.topbar` — o conteúdo alinha exatamente com
     // o botão de voltar (esquerda) e o fim do relógio (direita).
-    paddingLeft: "clamp(12px, 3vw, 28px)",
-    paddingRight: "clamp(14px, 3.5vw, 36px)",
+    paddingLeft: "clamp(12px, 3vw, 115px)",
+    paddingRight: "clamp(14px, 3.5vw, 134px)",
     paddingBottom: "96px",
     "::-webkit-scrollbar": { width: "10px" },
     "::-webkit-scrollbar-thumb": {
@@ -584,9 +602,11 @@ export const useHintStyles = makeStyles({
     paddingBottom: "8px",
     paddingLeft: "16px",
     paddingRight: "16px",
-    borderRadius: tokens.borderRadiusCircular,
+    // Mesmo raio do card (`useCardStyles.card`, `borderRadiusMedium`) — era
+    // `borderRadiusCircular` (pílula).
+    borderRadius: tokens.borderRadiusMedium,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
-    border: "1px solid rgba(255, 255, 255, 0.14)",
+    border: "none",
     fontSize: tokens.fontSizeBase200,
     color: "#ffffff",
     zIndex: 50,
@@ -634,22 +654,6 @@ export const useDetailStyles = makeStyles({
       transform: "translateY(6px)",
     },
   },
-  back: {
-    alignSelf: "flex-start",
-    display: "inline-flex",
-    alignItems: "center",
-    columnGap: "6px",
-    height: "32px",
-    paddingLeft: "10px",
-    paddingRight: "14px",
-    borderRadius: tokens.borderRadiusCircular,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: "var(--reemuFillWeak)",
-    color: tokens.colorNeutralForeground1,
-    fontSize: tokens.fontSizeBase200,
-    cursor: "pointer",
-    ":hover": { backgroundColor: tokens.colorNeutralBackground3 },
-  },
   hero: {
     position: "relative",
     minHeight: "280px",
@@ -685,11 +689,25 @@ export const useDetailStyles = makeStyles({
     padding: "26px",
     maxWidth: "min(72%, 640px)",
   },
+  platform: {
+    display: "block",
+    fontSize: tokens.fontSizeBase300,
+    fontWeight: 600,
+    letterSpacing: "0.02em",
+    color: "var(--reemuBrandText)",
+    marginBottom: "4px",
+  },
   title: {
-    fontSize: "clamp(24px, 3vw, 40px)",
+    // Teto subiu de 40 pra 64px (não os 115px que 3vw daria em 4K cheio —
+    // um título de jogo não precisa ficar do tamanho de um outdoor).
+    fontSize: "clamp(24px, 3vw, 64px)",
     fontWeight: 800,
     lineHeight: 1.1,
     margin: 0,
+    // Sempre branco: o hero tem `heroScrim` escuro por baixo em qualquer
+    // tema (claro ou escuro) — a cor do tema (`colorNeutralForeground1`)
+    // ficaria ilegível no tema claro.
+    color: "#fff",
   },
   badges: {
     display: "flex",
@@ -722,17 +740,41 @@ export const useDetailStyles = makeStyles({
     overflowX: "hidden",
     overflowY: "hidden",
   },
-  path: {
-    marginTop: "10px",
-    fontSize: tokens.fontSizeBase100,
-    color: tokens.colorNeutralForeground3,
-  },
   actions: {
     display: "flex",
     columnGap: "12px",
     rowGap: "10px",
     alignItems: "end",
     flexWrap: "wrap",
+    // O `[tabindex]:focus` global do `.app` (useShellStyles) não cobre
+    // `<button>` puro (o `<Button>` do Fluent não recebe `tabindex` — só
+    // `a`/`input`/elementos com `tabindex` explícito ganham o anel dali).
+    // Mesmo par de regras já usado em `usePauseStyles.scrim` (que também
+    // precisa do seu próprio anel): apaga o "halo" nativo do Fluent
+    // (`boxShadow`/`border-color` via `[data-fui-focus-visible]` na própria
+    // raiz `.fui-Button`, não um `::after` como o Card) e desenha o anel
+    // padrão do reemu direto no `:focus` (não só `:focus-visible`: o pulso
+    // do gamepad foca via `.focus()` sem keydown).
+    "& .fui-Button[data-fui-focus-visible]": {
+      border: "1px solid transparent !important",
+      boxShadow: "none !important",
+    },
+    "& button:focus": {
+      outline: `3px solid ${tokens.colorBrandStroke1} !important`,
+      outlineOffset: "2px !important",
+    },
+  },
+  // Favoritar/Editar/Informações: `appearance="secondary"` sem a borda
+  // visível do Fluent. `1px solid transparent` (NÃO `border: none`) sempre
+  // — inclusive em repouso, não só no foco. O botão "Jogar" ao lado
+  // (`appearance="primary"`) já reserva 1px de borda transparente o tempo
+  // todo; com `border: none` aqui, esses 3 botões ficavam 2px menores que o
+  // "Jogar" em repouso, e a regra de foco em `.actions` (acima) reintroduzia
+  // o 1px só quando focados — essa mudança de tamanho no exato instante do
+  // foco/desfoco era o "piscar" percebido. Reservando o mesmo 1px sempre, o
+  // tamanho fica idêntico ao "Jogar" em qualquer estado.
+  noBorderButton: {
+    border: "1px solid transparent !important",
   },
   section: { display: "flex", flexDirection: "column", rowGap: "10px" },
   sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },
@@ -751,6 +793,13 @@ export const useDetailStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
   },
   field: { display: "flex", flexDirection: "column", rowGap: "4px" },
+  // Mesma matemática do grid de 3 colunas do `CoreOptions` (`repeat(3,
+  // minmax(0, 1fr))` + `columnGap: spacingHorizontalM`) — alinha a borda
+  // direita do seletor de core com a da 1ª coluna das opções do core.
+  coreField: {
+    width: `calc((100% - 2 * ${tokens.spacingHorizontalM}) / 3)`,
+    minWidth: "200px",
+  },
   stateRow: {
     display: "flex",
     alignItems: "center",
@@ -766,6 +815,37 @@ export const useDetailStyles = makeStyles({
   hint: {
     fontSize: tokens.fontSizeBase100,
     color: tokens.colorNeutralForeground3,
+  },
+  // 1/3 da largura da tela — nenhum dos presets do Drawer (`size`) bate com
+  // isso, então sobrescreve a CSS var interna que o Fluent usa pra largura.
+  infoDrawer: {
+    ["--fui-Drawer--size" as string]: "33.34vw",
+  },
+  infoBody: {
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "16px",
+    paddingBottom: "24px",
+  },
+  infoCover: {
+    width: "100%",
+    borderRadius: shell.radius,
+    aspectRatio: "16 / 9",
+    objectFit: "cover",
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  infoRow: {
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "2px",
+  },
+  infoLabel: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+  },
+  infoValue: {
+    fontSize: tokens.fontSizeBase300,
+    wordBreak: "break-word",
   },
 });
 

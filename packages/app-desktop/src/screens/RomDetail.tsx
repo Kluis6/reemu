@@ -9,18 +9,23 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  DrawerBody,
+  DrawerHeader,
+  DrawerHeaderTitle,
   Field,
   Input,
+  OverlayDrawer,
   Select,
   Tab,
   TabList,
   Tooltip,
 } from "@fluentui/react-components";
 import {
-  ArrowLeftRegular,
   ArrowResetRegular,
   DeleteRegular,
+  DismissRegular,
   EditRegular,
+  InfoRegular,
   PlayRegular,
   StarFilled,
   StarRegular,
@@ -146,16 +151,17 @@ export function RomDetail() {
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editSystem, setEditSystem] = useState("");
-  const [cfgTab, setCfgTab] = useState<"shader" | "core" | "states">("shader");
+  const [infoOpen, setInfoOpen] = useState(false);
+  const [cfgTab, setCfgTab] = useState<"core" | "states" | "shader">("core");
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   const hasCoreCfg = !!chosenCore;
   const cfgTabOk = { shader: hasShaderCfg, core: hasCoreCfg, states: true };
   const activeCfgTab = cfgTabOk[cfgTab]
     ? cfgTab
-    : hasShaderCfg
-      ? "shader"
-      : hasCoreCfg
-        ? "core"
+    : hasCoreCfg
+      ? "core"
+      : hasShaderCfg
+        ? "shader"
         : "states";
 
   const del = useMutation({
@@ -259,16 +265,6 @@ export function RomDetail() {
 
   return (
     <div className={s.root} data-loading={meta.isPending ? "true" : "false"}>
-      <Button
-        className={s.back}
-        appearance="subtle"
-        size="small"
-        icon={<ArrowLeftRegular />}
-        onClick={() => navigate(-1)}
-      >
-        Voltar
-      </Button>
-
       <div className={s.hero}>
         {cover && (
           <img
@@ -282,45 +278,29 @@ export function RomDetail() {
         )}
         <div className={s.heroScrim} />
         <div className={s.heroBody}>
+          <span className={s.platform}>{platformLabel(rom.systemId)}</span>
           <Text as="h1" className={s.title}>
             {title}
           </Text>
-          <div className={s.badges}>
-            <span className={s.badge}>{platformLabel(rom.systemId)}</span>
-            {meta.data?.releaseDate && (
-              <span className={s.badge}>{meta.data.releaseDate}</span>
-            )}
-            {meta.data?.genre && (
-              <span className={s.badge}>{meta.data.genre}</span>
-            )}
-          </div>
+          {(meta.data?.releaseDate || meta.data?.genre) && (
+            <div className={s.badges}>
+              {meta.data?.releaseDate && (
+                <span className={s.badge}>{meta.data.releaseDate}</span>
+              )}
+              {meta.data?.genre && (
+                <span className={s.badge}>{meta.data.genre}</span>
+              )}
+            </div>
+          )}
           {meta.data?.description && (
             <Text as="p" className={s.desc}>
               {meta.data.description}
             </Text>
           )}
-          <div className={s.path}>{rom.filePath}</div>
         </div>
       </div>
 
       <div className={s.actions}>
-        <Field label="Core">
-          <Select
-            value={chosenCore}
-            disabled={coreList.length === 0}
-            onChange={(_, d) => setCoreId(d.value)}
-          >
-            {coreList.length === 0 && (
-              <option value="">nenhum instalado</option>
-            )}
-            {coreList.map((c) => (
-              <option key={c.coreId} value={c.coreId}>
-                {c.name}
-                {c.extensions.includes(ext) ? " ✓" : ""}
-              </option>
-            ))}
-          </Select>
-        </Field>
         <Button
           appearance="primary"
           size="large"
@@ -340,23 +320,33 @@ export function RomDetail() {
         >
           <Button
             size="large"
-            appearance={rom.isFavorite ? "outline" : "subtle"}
+            appearance="secondary"
+            className={s.noBorderButton}
             icon={rom.isFavorite ? <StarFilled /> : <StarRegular />}
+            aria-label={rom.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
             aria-pressed={rom.isFavorite}
             onClick={() => fav.mutate(!rom.isFavorite)}
-          >
-            {rom.isFavorite ? "Favorito" : "Favoritar"}
-          </Button>
+          />
         </Tooltip>
         <Tooltip content="Editar nome e plataforma" relationship="label">
           <Button
             size="large"
-            appearance="subtle"
+            appearance="secondary"
+            className={s.noBorderButton}
             icon={<EditRegular />}
+            aria-label="Editar nome e plataforma"
             onClick={openEdit}
-          >
-            Editar
-          </Button>
+          />
+        </Tooltip>
+        <Tooltip content="Informações completas" relationship="label">
+          <Button
+            size="large"
+            appearance="secondary"
+            className={s.noBorderButton}
+            icon={<InfoRegular />}
+            aria-label="Informações completas"
+            onClick={() => setInfoOpen(true)}
+          />
         </Tooltip>
       </div>
       {coreList.length === 0 && (
@@ -423,16 +413,98 @@ export function RomDetail() {
         </DialogSurface>
       </Dialog>
 
+      <OverlayDrawer
+        position="end"
+        size="medium"
+        className={s.infoDrawer}
+        open={infoOpen}
+        onOpenChange={(_, d) => setInfoOpen(d.open)}
+      >
+        <DrawerHeader>
+          <DrawerHeaderTitle
+            action={
+              <Button
+                appearance="subtle"
+                aria-label="Fechar"
+                icon={<DismissRegular />}
+                onClick={() => setInfoOpen(false)}
+              />
+            }
+          >
+            Informações do jogo
+          </DrawerHeaderTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          <div className={s.infoBody}>
+            {cover && <img className={s.infoCover} src={cover} alt="" />}
+            <div className={s.infoRow}>
+              <span className={s.infoLabel}>Título</span>
+              <span className={s.infoValue}>{title}</span>
+            </div>
+            <div className={s.infoRow}>
+              <span className={s.infoLabel}>Plataforma</span>
+              <span className={s.infoValue}>{platformLabel(rom.systemId)}</span>
+            </div>
+            {meta.data?.releaseDate && (
+              <div className={s.infoRow}>
+                <span className={s.infoLabel}>Lançamento</span>
+                <span className={s.infoValue}>{meta.data.releaseDate}</span>
+              </div>
+            )}
+            {meta.data?.genre && (
+              <div className={s.infoRow}>
+                <span className={s.infoLabel}>Gênero</span>
+                <span className={s.infoValue}>{meta.data.genre}</span>
+              </div>
+            )}
+            {meta.data?.description && (
+              <div className={s.infoRow}>
+                <span className={s.infoLabel}>Descrição</span>
+                <span className={s.infoValue}>{meta.data.description}</span>
+              </div>
+            )}
+            {meta.data?.providerSource && (
+              <div className={s.infoRow}>
+                <span className={s.infoLabel}>Fonte dos dados</span>
+                <span className={s.infoValue}>{meta.data.providerSource}</span>
+              </div>
+            )}
+            <div className={s.infoRow}>
+              <span className={s.infoLabel}>Arquivo</span>
+              <span className={s.infoValue}>{rom.filePath}</span>
+            </div>
+            <div className={s.infoRow}>
+              <span className={s.infoLabel}>Adicionado em</span>
+              <span className={s.infoValue}>
+                {new Date(rom.addedAt * 1000).toLocaleString()}
+              </span>
+            </div>
+            <div className={s.infoRow}>
+              <span className={s.infoLabel}>Última vez jogado</span>
+              <span className={s.infoValue}>
+                {rom.lastPlayedAt
+                  ? new Date(rom.lastPlayedAt * 1000).toLocaleString()
+                  : "Nunca jogado"}
+              </span>
+            </div>
+            <div className={s.infoRow}>
+              <span className={s.infoLabel}>Favorito</span>
+              <span className={s.infoValue}>{rom.isFavorite ? "Sim" : "Não"}</span>
+            </div>
+          </div>
+        </DrawerBody>
+      </OverlayDrawer>
+
       <section className={s.section}>
         <TabList
           selectedValue={activeCfgTab}
           onTabSelect={(_, d) =>
-            setCfgTab(d.value as "shader" | "core" | "states")
+            setCfgTab(d.value as "core" | "states" | "shader")
           }
         >
-          {hasShaderCfg && <Tab value="shader">Shader</Tab>}
           {hasCoreCfg && <Tab value="core">Emulador</Tab>}
           <Tab value="states">Save states</Tab>
+          {hasShaderCfg && <Tab value="shader">Shader</Tab>}
         </TabList>
         <div className={s.panel}>
           {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
@@ -451,7 +523,6 @@ export function RomDetail() {
                     <Tab value="system">
                       {rom ? platformLabel(rom.systemId) : "Plataforma"}
                     </Tab>
-                    <Tab value="default">Todos</Tab>
                   </TabList>
                 </div>
                 <Caption1 className={s.hint}>
@@ -465,6 +536,7 @@ export function RomDetail() {
                 </Caption1>
               </div>
               <Select
+                size="small"
                 value={currentGameShader}
                 disabled={shaderPick.isPending}
                 onChange={(_, d) => shaderPick.mutate(d.value)}
@@ -529,7 +601,26 @@ export function RomDetail() {
             </>
           )}
           {activeCfgTab === "core" && chosenCore && (
-            <CoreOptions coreId={chosenCore} romId={romId} />
+            <>
+              <Field label="Core" className={s.coreField}>
+                <Select
+                  value={chosenCore}
+                  disabled={coreList.length === 0}
+                  onChange={(_, d) => setCoreId(d.value)}
+                >
+                  {coreList.length === 0 && (
+                    <option value="">nenhum instalado</option>
+                  )}
+                  {coreList.map((c) => (
+                    <option key={c.coreId} value={c.coreId}>
+                      {c.name}
+                      {c.extensions.includes(ext) ? " ✓" : ""}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <CoreOptions coreId={chosenCore} romId={romId} />
+            </>
           )}
           {activeCfgTab === "states" && (
             <>

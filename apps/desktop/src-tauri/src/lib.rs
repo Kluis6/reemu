@@ -557,6 +557,14 @@ fn spawn_input_bridge(app: tauri::AppHandle) {
                 let _ = app.emit("menu-nav", commands::nav_pulse_name(pulse));
             }
 
+            // Controle plugado/desligado → toast + ícone na topbar.
+            for (guid, name) in state.session.take_gamepad_connected() {
+                let _ = app.emit("gamepad-connected", commands::GamepadDto { guid, name });
+            }
+            for guid in state.session.take_gamepad_disconnected() {
+                let _ = app.emit("gamepad-disconnected", &guid);
+            }
+
             // Hotkeys de sistema (teclado + gamepad).
             commands::poll_hotkeys(&app);
         })

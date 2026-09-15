@@ -17,9 +17,15 @@ import { sysToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS, maxWidth: '440px' },
+  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
   head: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' },
   hint: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    columnGap: tokens.spacingHorizontalM,
+    rowGap: tokens.spacingVerticalS,
+  },
 })
 
 /**
@@ -89,36 +95,38 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
           Resetar
         </Button>
       </div>
-      {opts.data.map((o) => {
-        // "rom": mostra o override ("" = herda). "core": o valor por core, ou
-        // o default do schema.
-        const cur =
-          scope === 'rom' ? (o.romValue ?? '') : (o.coreValue ?? o.defaultValue)
-        return (
-          <Field
-            key={o.key}
-            label={o.displayName}
-            hint={
-              scope === 'rom' && o.romValue == null
-                ? `herdando: ${o.value}`
-                : undefined
-            }
-          >
-            <Select
-              value={cur}
-              disabled={change.isPending}
-              onChange={(_, d) => change.mutate({ key: o.key, value: d.value })}
+      <div className={styles.grid}>
+        {opts.data.map((o) => {
+          // "rom": mostra o override ("" = herda). "core": o valor por core,
+          // ou o default do schema.
+          const cur =
+            scope === 'rom' ? (o.romValue ?? '') : (o.coreValue ?? o.defaultValue)
+          return (
+            <Field
+              key={o.key}
+              label={o.displayName}
+              hint={
+                scope === 'rom' && o.romValue == null
+                  ? `herdando: ${o.value}`
+                  : undefined
+              }
             >
-              {scope === 'rom' && <option value="">Herdar ({o.value})</option>}
-              {o.choices.map((c) => (
-                <option key={c} value={c}>
-                  {c === o.defaultValue ? `${c} (padrão)` : c}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )
-      })}
+              <Select
+                value={cur}
+                disabled={change.isPending}
+                onChange={(_, d) => change.mutate({ key: o.key, value: d.value })}
+              >
+                {scope === 'rom' && <option value="">Herdar ({o.value})</option>}
+                {o.choices.map((c) => (
+                  <option key={c} value={c}>
+                    {c === o.defaultValue ? `${c} (padrão)` : c}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )
+        })}
+      </div>
     </div>
   )
 }

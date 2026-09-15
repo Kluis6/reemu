@@ -109,6 +109,11 @@ struct Shared {
     /// Gamepads conectados agora: `(guid_hex, nome)`. Atualizado pela thread
     /// de gamepad; o shell lê pra UI de mapeamento.
     gamepads: Mutex<Vec<(String, String)>>,
+    /// Gamepads que conectaram desde o último drain — `(guid_hex, nome)`. O
+    /// shell emite cada um pro frontend como `gamepad-connected`.
+    gamepad_connected: Mutex<Vec<(String, String)>>,
+    /// Guids que desconectaram desde o último drain (`gamepad-disconnected`).
+    gamepad_disconnected: Mutex<Vec<String>>,
     /// Pulsos de navegação de menu vindos do gamepad — o shell drena e emite
     /// pro frontend como `menu-nav`.
     nav: Mutex<Vec<input_desktop::NavPulse>>,
@@ -174,6 +179,8 @@ impl EmuSession {
             gamepad_stop: AtomicBool::new(false),
             captured_inputs: Mutex::new(Vec::new()),
             gamepads: Mutex::new(Vec::new()),
+            gamepad_connected: Mutex::new(Vec::new()),
+            gamepad_disconnected: Mutex::new(Vec::new()),
             nav: Mutex::new(Vec::new()),
             child_pid: Mutex::new(None),
             vulkan_shared_device: Mutex::new(None),
@@ -409,6 +416,30 @@ impl EmuSession {
             .clone()
     }
 
+    /// Drena os gamepads que conectaram desde o último drain. O shell emite
+    /// cada um pro frontend como `gamepad-connected` (toast + ícone).
+    pub fn take_gamepad_connected(&self) -> Vec<(String, String)> {
+        std::mem::take(
+            &mut *self
+                .shared
+                .gamepad_connected
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()),
+        )
+    }
+
+    /// Drena os guids que desconectaram desde o último drain
+    /// (`gamepad-disconnected`).
+    pub fn take_gamepad_disconnected(&self) -> Vec<String> {
+        std::mem::take(
+            &mut *self
+                .shared
+                .gamepad_disconnected
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()),
+        )
+    }
+
     /// PID do processo `reemu-core-host` ativo agora (`None` = ocioso).
     /// Cada `load` sobe um processo NOVO (nunca reusa) — é essa garantia que
     /// isola cores não re-entrantes como o parallel_n64; testável comparando
@@ -567,6 +598,20 @@ fn gamepad_loop(shared: Arc<Shared>) {
             if *g != outcome.gamepads {
                 *g = outcome.gamepads;
             }
+        }
+        if !outcome.connected.is_empty() {
+            shared
+                .gamepad_connected
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .extend(outcome.connected);
+        }
+        if !outcome.disconnected.is_empty() {
+            shared
+                .gamepad_disconnected
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .extend(outcome.disconnected);
         }
         if !shared.game_focused.load(Ordering::Relaxed) {
             PARENT_PAD.clear(); // no menu, nada de input de jogo

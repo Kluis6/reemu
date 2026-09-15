@@ -193,6 +193,11 @@ pub struct PollOutcome {
     /// Pulsos de navegação de menu (d-pad/stick/A/B) desta rodada. O shell só
     /// age neles quando a UI está em menu (fora do jogo ou pausado).
     pub nav: Vec<NavPulse>,
+    /// Gamepads que conectaram NESTA rodada: `(guid_hex, nome)`. O shell
+    /// emite cada um pro frontend (toast + ícone na topbar).
+    pub connected: Vec<(String, String)>,
+    /// Guids que desconectaram NESTA rodada.
+    pub disconnected: Vec<String>,
 }
 
 impl GamepadPoller {
@@ -347,8 +352,12 @@ impl GamepadPoller {
         while let Some(Event { id, event, .. }) = self.gilrs.next_event() {
             let uuid = self.gilrs.gamepad(id).uuid();
             match event {
-                EventType::Connected => {}
+                EventType::Connected => {
+                    let name = self.gilrs.gamepad(id).name().to_string();
+                    out.connected.push((guid_hex(uuid), name));
+                }
                 EventType::Disconnected => {
+                    out.disconnected.push(guid_hex(uuid));
                     self.down.remove(&uuid);
                     self.stick.remove(&uuid);
                     self.rstick.remove(&uuid);

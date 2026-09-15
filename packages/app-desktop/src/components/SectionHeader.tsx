@@ -24,7 +24,7 @@ const useStyles = makeStyles({
   },
   titlePlain: { cursor: 'default' },
   title: {
-    fontSize: 'clamp(18px, 1.35vw, 28px)',
+    fontSize: 'clamp(18px, 1.35vw, 44px)',
     fontWeight: tokens.fontWeightBold,
     lineHeight: 1.15,
   },

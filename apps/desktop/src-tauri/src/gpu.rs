@@ -35,7 +35,14 @@ unsafe fn close_raw_fd(fd: i32) {
 
 const FMT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 const ROW_ALIGN: u32 = 256;
-const MAX_OUT_PIXELS: u32 = 8_000_000;
+// Teto de segurança contra shader chain que explode de tamanho passe a
+// passe. 8_000_000 (antigo) já é MENOR que 4K puro (3840×2160=8_294_400) —
+// qualquer shader cujo passe final escale pro `viewport` (comum em CRT/
+// scanline, ex.: crt-guest-advanced) faz `run_chain` devolver `None` calado
+// nessa checagem em qualquer tela 4K, virando tela preta sem log nenhum.
+// 20_000_000 cobre 4K com folga (~2.4x) e a maior parte de 5K, mantendo a
+// checagem como proteção real só contra upscales patológicos.
+const MAX_OUT_PIXELS: u32 = 20_000_000;
 
 /// Quad [0,1]×[0,1] em triangle-strip: `vec4 Position` + `vec2 TexCoord`.
 /// (0,0) de `TexCoord` = topo-esquerda, casando com a textura.
@@ -1816,6 +1823,7 @@ impl FrameProcessor {
         let nw = frame.metadata.native_width;
         let nh = frame.metadata.native_height;
         if nw == 0 || nh == 0 {
+            log::warn!("run_chain: frame com dimensão zero (nw={nw} nh={nh}) — pulando");
             return None;
         }
         // Entrada da chain: buffer cru (vai pro ring de history) ou textura
@@ -1828,6 +1836,11 @@ impl FrameProcessor {
             } => {
                 let rgba = to_rgba8(data, nw, nh, *pitch, *format);
                 if rgba.len() != (nw * nh * 4) as usize {
+                    log::warn!(
+                        "run_chain: buffer de software com tamanho inesperado ({} bytes, esperado {}) pra {nw}x{nh} — pulando frame",
+                        rgba.len(),
+                        nw * nh * 4
+                    );
                     return None;
                 }
                 self.ensure_history(nw, nh);
@@ -1836,6 +1849,7 @@ impl FrameProcessor {
             }
             FrameOrigin::HardwareTexture(handle) => {
                 if !self.bind_interop_input(handle.as_ref(), nw, nh, enc) {
+                    log::warn!("run_chain: bind_interop_input falhou pra {nw}x{nh} — pulando frame");
                     return None;
                 }
                 // a entrada troca de slot a cada frame → rebuild de todo bg
@@ -1845,6 +1859,7 @@ impl FrameProcessor {
             }
             FrameOrigin::HardwareVulkanImage(handle) => {
                 if !self.bind_vulkan_input(handle.as_ref()) {
+                    log::warn!("run_chain: bind_vulkan_input falhou — pulando frame");
                     return None;
                 }
                 for p in &mut self.passes {
@@ -1862,8 +1877,17 @@ impl FrameProcessor {
             ch = axis_size(p.scale_y, ch, nh, vp.1);
             sizes.push((cw, ch));
         }
-        let (fw, fh) = *sizes.last()?;
+        let Some(&(fw, fh)) = sizes.last() else {
+            log::warn!("run_chain: nenhum passe de shader configurado — pulando frame");
+            return None;
+        };
         if fw * fh > MAX_OUT_PIXELS {
+            log::warn!(
+                "run_chain: saída final {fw}x{fh} ({} px) excede MAX_OUT_PIXELS ({MAX_OUT_PIXELS}) — tela ficaria preta, pulando frame. Verifique os passes do shader ativo (viewport={}x{}, entrada={nw}x{nh}).",
+                fw as u64 * fh as u64,
+                vp.0,
+                vp.1
+            );
             return None;
         }
         let final_vp = if vp.0 > 0 { vp } else { (fw, fh) };
@@ -1942,14 +1966,20 @@ impl FrameProcessor {
             }
             // Resolve as views (clona — `TextureView` é Arc barato) antes de
             // pegar `&mut self` pra gravar o bind group.
-            let binds: Vec<(u32, u32, wgpu::TextureView)> = self.passes[idx]
+            let Some(binds): Option<Vec<(u32, u32, wgpu::TextureView)>> = self.passes[idx]
                 .textures
                 .iter()
                 .map(|b| {
                     self.resolve_tex_view(&b.semantic, idx)
                         .map(|v| (b.tex_binding, b.samp_binding, v.clone()))
                 })
-                .collect::<Option<_>>()?;
+                .collect()
+            else {
+                log::warn!(
+                    "run_chain: passe {idx} não conseguiu resolver uma textura de bind group — pulando frame"
+                );
+                return None;
+            };
 
             let mut entries = vec![
                 wgpu::BindGroupEntry {

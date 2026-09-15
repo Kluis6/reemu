@@ -616,6 +616,20 @@ export interface Gamepad {
 }
 export const listGamepads = () => invoke<Gamepad[]>('list_gamepads')
 
+/** Controle plugado agora (toast + ícone na topbar). */
+export async function onGamepadConnected(cb: (g: Gamepad) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<Gamepad>('gamepad-connected', (e) => cb(e.payload))
+}
+
+/** Controle desligado agora — `guid_hex`. Some do ícone, sem toast. */
+export async function onGamepadDisconnected(cb: (guid: string) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<string>('gamepad-disconnected', (e) => cb(e.payload))
+}
+
 export interface DevicePort {
   guid: string
   port: number

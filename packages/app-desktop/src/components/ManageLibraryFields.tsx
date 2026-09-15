@@ -83,6 +83,7 @@ export function ManageLibraryFields({
                 {n} {n === 1 ? "jogo" : "jogos"}
               </span>
               <Select
+                size="small"
                 value={coreValue(sys)}
                 onChange={(_, d) => setPending((p) => ({ ...p, [sys]: d.value }))}
               >

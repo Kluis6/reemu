@@ -33,6 +33,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { ButtonHints } from "../components/ButtonHints";
 import { Clock } from "../components/Clock";
+import { GamepadStatus } from "../components/GamepadStatus";
 import { PowerMenuDialog } from "../components/PowerMenuDialog";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
@@ -44,13 +45,18 @@ import { useShellStyles } from "../styles/xbox";
 const useLocalStyles = makeStyles({
   // ícones da sidebar com o border-radius padrão do botão do Fluent
   railRadius: { borderRadius: tokens.borderRadiusMedium },
-  // botões de ícone da topbar: fundo igual ao item ativo da sidebar
-  surface: {
-    backgroundColor: "var(--reemuSurfaceSoft)",
-    color: tokens.colorNeutralForeground1,
+  // Voltar/Fullscreen: mesmo tom de fundo da sidebar (`rail`,
+  // `colorNeutralBackground2`) no fundo E na borda — a borda fica sempre da
+  // mesma cor do fundo (em repouso e no hover), então nunca aparece como uma
+  // linha separada. `border` (não `borderColor`: o Griffel não aceita esse
+  // shorthand isolado, só `shorthands.borderColor()` — ver
+  // griffel.js.org/react/guides/limitations).
+  navBtn: {
+    backgroundColor: `${tokens.colorNeutralBackground2} !important`,
+    border: `1px solid ${tokens.colorNeutralBackground2} !important`,
     ":hover": {
-      backgroundColor: "var(--reemuSurfaceSoft)",
-      color: tokens.colorNeutralForeground1,
+      backgroundColor: `${tokens.colorNeutralBackground2Hover} !important`,
+      border: `1px solid ${tokens.colorNeutralBackground2Hover} !important`,
     },
   },
   // Menu do avatar — proporções do menu do modo XBOX de verdade: mais
@@ -239,9 +245,8 @@ export function AppShell() {
           {!atRoot && (
             <Tooltip content="Voltar para a tela anterior" relationship="label">
               <Button
-                size="small"
-                appearance="subtle"
-                className={l.surface}
+                appearance="secondary"
+                className={l.navBtn}
                 icon={<ChevronLeftRegular />}
                 aria-label="Voltar"
                 onClick={() => navigate(-1)}
@@ -279,8 +284,7 @@ export function AppShell() {
           >
             <Button
               appearance="secondary"
-              size="small"
-              className={l.surface}
+              className={l.navBtn}
               aria-label={fullscreen ? "Sair da tela cheia" : "Tela cheia"}
               icon={
                 fullscreen ? (
@@ -292,6 +296,7 @@ export function AppShell() {
               onClick={() => void toggleFullscreen()}
             />
           </Tooltip>
+          <GamepadStatus />
           <Clock />
         </div>
         <div className={s.scroll} ref={scrollRef}>
