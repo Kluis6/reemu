@@ -279,77 +279,84 @@ export function RomDetail() {
         )}
         <div className={s.heroScrim} />
         <div className={s.heroBody}>
-          <span className={s.platform}>{platformLabel(rom.systemId)}</span>
-          <Text as="h1" className={s.title}>
-            {title}
-          </Text>
-          {(meta.data?.releaseDate || meta.data?.genre) && (
-            <div className={s.badges}>
-              {meta.data?.releaseDate && (
-                <span className={s.badge}>{meta.data.releaseDate}</span>
-              )}
-              {meta.data?.genre && (
-                <span className={s.badge}>{meta.data.genre}</span>
+          <div className={s.heroHeader}>
+            {cover && <img className={s.heroIcon} src={cover} alt="" />}
+            <div className={s.heroTitleCol}>
+              <span className={s.platform}>{platformLabel(rom.systemId)}</span>
+              <Text as="h1" className={s.title}>
+                {title}
+              </Text>
+              {(meta.data?.releaseDate || meta.data?.genre) && (
+                <div className={s.badges}>
+                  {meta.data?.releaseDate && (
+                    <span className={s.badge}>{meta.data.releaseDate}</span>
+                  )}
+                  {meta.data?.genre && (
+                    <span className={s.badge}>{meta.data.genre}</span>
+                  )}
+                </div>
               )}
             </div>
-          )}
-          {meta.data?.description && (
-            <Text as="p" className={s.desc}>
-              {meta.data.description}
-            </Text>
-          )}
+          </div>
+
+          <div className={s.actions}>
+            <Button
+              appearance="primary"
+              size="large"
+              icon={<PlayRegular />}
+              disabled={!chosenCore}
+              onClick={() => play()}
+            >
+              {hasQuick ? "Continuar" : "Jogar"}
+            </Button>
+            <Tooltip
+              content={
+                rom.isFavorite
+                  ? "Remover dos favoritos"
+                  : "Adicionar aos favoritos"
+              }
+              relationship="label"
+            >
+              <Button
+                size="large"
+                appearance="secondary"
+                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
+                icon={rom.isFavorite ? <StarFilled /> : <StarRegular />}
+                aria-label={rom.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                aria-pressed={rom.isFavorite}
+                onClick={() => fav.mutate(!rom.isFavorite)}
+              />
+            </Tooltip>
+            <Tooltip content="Editar nome e plataforma" relationship="label">
+              <Button
+                size="large"
+                appearance="secondary"
+                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
+                icon={<EditRegular />}
+                aria-label="Editar nome e plataforma"
+                onClick={openEdit}
+              />
+            </Tooltip>
+            <Tooltip content="Informações completas" relationship="label">
+              <Button
+                size="large"
+                appearance="secondary"
+                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
+                icon={<InfoRegular />}
+                aria-label="Informações completas"
+                onClick={() => setInfoOpen(true)}
+              />
+            </Tooltip>
+          </div>
         </div>
       </div>
 
-      <div className={s.actions}>
-        <Button
-          appearance="primary"
-          size="large"
-          icon={<PlayRegular />}
-          disabled={!chosenCore}
-          onClick={() => play()}
-        >
-          {hasQuick ? "Continuar" : "Jogar"}
-        </Button>
-        <Tooltip
-          content={
-            rom.isFavorite
-              ? "Remover dos favoritos"
-              : "Adicionar aos favoritos"
-          }
-          relationship="label"
-        >
-          <Button
-            size="large"
-            appearance="secondary"
-            className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
-            icon={rom.isFavorite ? <StarFilled /> : <StarRegular />}
-            aria-label={rom.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-            aria-pressed={rom.isFavorite}
-            onClick={() => fav.mutate(!rom.isFavorite)}
-          />
-        </Tooltip>
-        <Tooltip content="Editar nome e plataforma" relationship="label">
-          <Button
-            size="large"
-            appearance="secondary"
-            className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
-            icon={<EditRegular />}
-            aria-label="Editar nome e plataforma"
-            onClick={openEdit}
-          />
-        </Tooltip>
-        <Tooltip content="Informações completas" relationship="label">
-          <Button
-            size="large"
-            appearance="secondary"
-            className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
-            icon={<InfoRegular />}
-            aria-label="Informações completas"
-            onClick={() => setInfoOpen(true)}
-          />
-        </Tooltip>
-      </div>
+      {meta.data?.description && (
+        <Text as="p" className={s.desc}>
+          {meta.data.description}
+        </Text>
+      )}
+
       {coreList.length === 0 && (
         <Caption1>
           Instale um core em Configurações → Cores pra poder jogar.

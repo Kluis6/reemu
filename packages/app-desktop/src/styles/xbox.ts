@@ -742,7 +742,10 @@ export const useDetailStyles = makeStyles({
     overflowX: "hidden",
     overflowY: "hidden",
     display: "flex",
-    alignItems: "flex-end",
+    // Modelo "página de produto de loja" (não mais "hub Xbox" com texto
+    // ancorado embaixo): ícone + título + botões ficam no TOPO do hero, o
+    // resto do banner só é pano de fundo decorativo.
+    alignItems: "flex-start",
     backgroundImage: elevGradient,
   },
   heroArt: {
@@ -761,14 +764,40 @@ export const useDetailStyles = makeStyles({
     right: 0,
     bottom: 0,
     left: 0,
+    // Escurece o canto SUPERIOR-esquerdo (onde ícone/título/botões ficam
+    // agora) — invertido do modelo antigo (escurecia embaixo).
     backgroundImage:
-      "linear-gradient(90deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.1) 100%), linear-gradient(0deg, rgba(0,0,0,0.7), transparent 55%)",
+      "linear-gradient(90deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.1) 100%), linear-gradient(180deg, rgba(0,0,0,0.75), transparent 60%)",
   },
   heroBody: {
     position: "relative",
     zIndex: 1,
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "clamp(14px, 1.6vw, 28px)",
     padding: "26px",
-    maxWidth: "min(72%, 640px)",
+    maxWidth: "min(85%, 760px)",
+  },
+  heroHeader: {
+    display: "flex",
+    flexDirection: "row",
+    alignItems: "center",
+    columnGap: "clamp(16px, 1.6vw, 32px)",
+  },
+  heroIcon: {
+    flexShrink: 0,
+    width: "clamp(72px, 8.5vw, 168px)",
+    height: "clamp(72px, 8.5vw, 168px)",
+    borderRadius: shell.radius,
+    objectFit: "cover",
+    border: "1px solid rgba(255, 255, 255, 0.15)",
+    boxShadow: "0 6px 20px rgba(0, 0, 0, 0.45)",
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  heroTitleCol: {
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
   },
   platform: {
     display: "block",
@@ -779,11 +808,12 @@ export const useDetailStyles = makeStyles({
     marginBottom: "4px",
   },
   title: {
-    // Teto subiu de 40 pra 64px (não os 115px que 3vw daria em 4K cheio —
-    // um título de jogo não precisa ficar do tamanho de um outdoor).
-    fontSize: "clamp(24px, 3vw, 64px)",
+    // Um degrau menor que o antigo (24-64px): agora divide a linha com o
+    // ícone em vez de ser o único elemento da faixa — não precisa mais
+    // carregar sozinho a escala do hero inteiro.
+    fontSize: "clamp(20px, 2.3vw, 46px)",
     fontWeight: 800,
-    lineHeight: 1.1,
+    lineHeight: 1.15,
     margin: 0,
     // Sempre branco: o hero tem `heroScrim` escuro por baixo em qualquer
     // tema (claro ou escuro) — a cor do tema (`colorNeutralForeground1`)
@@ -794,7 +824,7 @@ export const useDetailStyles = makeStyles({
     display: "flex",
     columnGap: "8px",
     rowGap: "6px",
-    marginTop: "10px",
+    marginTop: "8px",
     flexWrap: "wrap",
   },
   // fluent2.microsoft.design/typography: "use sentence case, nunca all caps".
@@ -810,8 +840,10 @@ export const useDetailStyles = makeStyles({
     backgroundColor: "rgba(0, 0, 0, 0.55)",
     border: `1px solid ${tokens.colorNeutralStroke2}`,
   },
+  // Descrição: fora do hero agora (modelo "página de loja" — banner só
+  // com ícone/título/ações, sinopse vem depois, sobre o fundo normal da
+  // página) — `.root` já dá o espaçamento (`rowGap`) entre ela e o hero.
   desc: {
-    marginTop: "12px",
     fontSize: tokens.fontSizeBase300,
     lineHeight: 1.5,
     color: tokens.colorNeutralForeground2,
@@ -820,6 +852,7 @@ export const useDetailStyles = makeStyles({
     WebkitBoxOrient: "vertical",
     overflowX: "hidden",
     overflowY: "hidden",
+    maxWidth: "min(85%, 760px)",
   },
   actions: {
     display: "flex",
