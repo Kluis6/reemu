@@ -968,6 +968,10 @@ export const useDetailStyles = makeStyles({
       height: "1em",
     },
   },
+  // Coração de favorito preenchido: cor de marca (mesmo token do "Nintendo
+  // 64" no kicker do hero) em vez do branco padrão dos outros ícones —
+  // destaca visualmente que está favoritado.
+  favIconOn: { color: "var(--reemuBrandText)" },
   section: { display: "flex", flexDirection: "column", rowGap: "10px" },
   // Puxa a seção de tabs (Emulador/Save states/Shader) por cima da borda
   // de baixo do hero — pedido do usuário, estilo "card flutuante"

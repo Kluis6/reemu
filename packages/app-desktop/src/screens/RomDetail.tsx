@@ -321,7 +321,13 @@ export function RomDetail() {
                 size="large"
                 appearance="secondary"
                 className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
-                icon={rom.isFavorite ? <HeartFilled /> : <HeartRegular />}
+                icon={
+                  rom.isFavorite ? (
+                    <HeartFilled className={s.favIconOn} />
+                  ) : (
+                    <HeartRegular />
+                  )
+                }
                 aria-label={rom.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                 aria-pressed={rom.isFavorite}
                 onClick={() => fav.mutate(!rom.isFavorite)}
