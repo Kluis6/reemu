@@ -96,14 +96,30 @@ const useStyles = makeStyles({
     transitionProperty: 'background-color, transform',
     transitionDuration: '150ms',
     transitionTimingFunction: tokens.curveEasyEase,
+    // Fluido: o `.wrap` (hero) cresce de 220 até 960px de altura
+    // (`clamp(220px, 26vw, 960px)` acima) — as setas ficavam do tamanho
+    // "medium" fixo do Fluent (32px) em qualquer altura de hero, minúsculas
+    // num banner de 960px em 4K. `max-width`/`min-width`: o Fluent injeta um
+    // `max-width` próprio em botão circular icon-only que vence o `width`
+    // mesmo com `!important` (mesmo caso da topbar em `xbox.ts`).
+    width: "clamp(32px, 2.4vw, 72px) !important",
+    height: "clamp(32px, 2.4vw, 72px) !important",
+    minWidth: "0 !important",
+    maxWidth: "clamp(32px, 2.4vw, 72px) !important",
+    fontSize: "clamp(15px, 1.1vw, 32px) !important",
+    "& .fui-Button__icon": {
+      fontSize: "1em",
+      width: "1em",
+      height: "1em",
+    },
     ':hover': {
       backgroundColor: 'rgba(0,0,0,0.72)',
       color: "#ffffff",
       transform: 'translateY(-50%) scale(1.06)',
     },
   },
-  arrowL: { left: '10px' },
-  arrowR: { right: '10px' },
+  arrowL: { left: 'clamp(10px, 0.8vw, 28px)' },
+  arrowR: { right: 'clamp(10px, 0.8vw, 28px)' },
   dots: {
     position: 'absolute',
     bottom: '12px',

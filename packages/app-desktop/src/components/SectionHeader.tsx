@@ -29,7 +29,10 @@ const useStyles = makeStyles({
     lineHeight: 1.15,
   },
   chevron: {
-    fontSize: '20px',
+    // Acompanha o título ao lado (`clamp(18px, 1.35vw, 44px)`), um degrau
+    // menor — sem isto ficava sempre 20px, minúsculo ao lado de um título
+    // de 44px em 4K.
+    fontSize: 'clamp(16px, 1.1vw, 34px)',
     color: tokens.colorNeutralForeground3,
     transitionProperty: 'transform, color',
     transitionDuration: '150ms',

@@ -14,6 +14,7 @@ import {
   DrawerHeaderTitle,
   Field,
   Input,
+  mergeClasses,
   OverlayDrawer,
   Select,
   Tab,
@@ -321,7 +322,7 @@ export function RomDetail() {
           <Button
             size="large"
             appearance="secondary"
-            className={s.noBorderButton}
+            className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
             icon={rom.isFavorite ? <StarFilled /> : <StarRegular />}
             aria-label={rom.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
             aria-pressed={rom.isFavorite}
@@ -332,7 +333,7 @@ export function RomDetail() {
           <Button
             size="large"
             appearance="secondary"
-            className={s.noBorderButton}
+            className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
             icon={<EditRegular />}
             aria-label="Editar nome e plataforma"
             onClick={openEdit}
@@ -342,7 +343,7 @@ export function RomDetail() {
           <Button
             size="large"
             appearance="secondary"
-            className={s.noBorderButton}
+            className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
             icon={<InfoRegular />}
             aria-label="Informações completas"
             onClick={() => setInfoOpen(true)}

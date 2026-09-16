@@ -13,7 +13,7 @@
  * nem `radial-gradient` multicamada em elemento `position: fixed`.
  */
 import { makeStyles, tokens } from "@fluentui/react-components";
-import { cardSizeCss, SHELF_GAP } from "../lib/shelf";
+import { CARD_MIN, cardSizeCss, SHELF_GAP, SHELF_PAD } from "../lib/shelf";
 
 // Só os valores NÃO-cor do "console look". Cor de marca, elevações e o fundo
 // da casca vêm do tema (tokens Fluent + tokens custom `--reemu*`, ver
@@ -57,6 +57,17 @@ export const useShellStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: `${shell.railW} 1fr`,
     gridTemplateRows: "minmax(0, 1fr)",
+    // Publica a largura da rail como var CSS — `.topbar`/`.scroll` derivam o
+    // padding lateral disso (`calc()`) em vez de um `clamp()` próprio e
+    // independente. Antes os dois cresciam com fórmulas diferentes (rail:
+    // piso 56px/3.6vw; padding: piso 12px/3vw) e só ficavam proporcionais
+    // entre si acima de ~1600px de largura — numa janela de notebook comum
+    // (1366-1440px), a rail já tinha travado no piso mas o padding do
+    // conteúdo continuava encolhendo, e o respiro entre os dois ficava
+    // desproporcional (conteúdo "descolava" da rail ao redimensionar).
+    // Amarrado direto na rail, o gutter agora escala junto em qualquer
+    // largura.
+    ["--reemuRailW" as string]: shell.railW,
     overflowX: "hidden",
     overflowY: "hidden",
     // brilho de canto (1 camada só — multicamada quebra o WebKitGTK)
@@ -205,8 +216,12 @@ export const useShellStyles = makeStyles({
     columnGap: "clamp(8px, 1.4vw, 54px)",
     paddingTop: "clamp(10px, 1.4vw, 54px)",
     paddingBottom: "clamp(10px, 1.4vw, 54px)",
-    paddingLeft: "clamp(12px, 3vw, 115px)",
-    paddingRight: "clamp(14px, 3.5vw, 134px)",
+    // Derivado da largura real da rail (`--reemuRailW`, publicada em
+    // `.app`), não de um `clamp()` independente — ver comentário em `.app`.
+    // Mesma proporção que o valor antigo tinha nas telas grandes (5/6 ≈
+    // 115/138 em 4K), agora válida em QUALQUER largura.
+    paddingLeft: "calc(var(--reemuRailW) * 0.8333)",
+    paddingRight: "calc(var(--reemuRailW) * 0.9722)",
     boxSizing: "border-box",
     flexShrink: 0,
     backgroundColor: "transparent",
@@ -321,10 +336,12 @@ export const useShellStyles = makeStyles({
     // `clamp` — os botões da Fluent não escalam) com uma folga; não faz
     // sentido crescer no mesmo 6.5vw até 4K cheio (viraria vão vazio enorme).
     paddingTop: "clamp(60px, 6.5vw, 172px)",
-    // Mesmo valor do padding da `.topbar` — o conteúdo alinha exatamente com
-    // o botão de voltar (esquerda) e o fim do relógio (direita).
-    paddingLeft: "clamp(12px, 3vw, 115px)",
-    paddingRight: "clamp(14px, 3.5vw, 134px)",
+    // Mesma fórmula do padding da `.topbar` (derivada de `--reemuRailW`,
+    // ver `.app`) — o conteúdo alinha exatamente com o botão de voltar
+    // (esquerda) e o fim do relógio (direita) em QUALQUER largura, não só
+    // acima de ~1600px.
+    paddingLeft: "calc(var(--reemuRailW) * 0.8333)",
+    paddingRight: "calc(var(--reemuRailW) * 0.9722)",
     paddingBottom: "96px",
     "::-webkit-scrollbar": { width: "10px" },
     "::-webkit-scrollbar-thumb": {
@@ -369,11 +386,17 @@ export const useBrowseStyles = makeStyles({
 
   grid: {
     display: "grid",
-    // Card fluido (`gameCardSize` escala com o viewport) — mesmo tamanho que os
-    // da prateleira. `auto-fill` reflui de 2 colunas (janela estreita) a
-    // dezenas (4K), sempre alinhado à esquerda.
-    gridTemplateColumns: `repeat(auto-fill, ${gameCardSize})`,
-    justifyContent: "start",
+    // `auto-fit` + `minmax(MIN, 1fr)`: o número de colunas que cabem ainda
+    // varia com a tela (de 2 na janela estreita a dezenas em 4K), mas cada
+    // coluna ESTICA pra dividir a largura toda da linha — sem isto
+    // (`auto-fill` + card de largura fixa em `vw`), a última coluna quase
+    // nunca batia exatamente na borda direita do container (mesma borda
+    // onde termina a topbar/relógio), sobrando uma faixa morta variável. Sem
+    // teto: numa grade rala (poucos favoritos, poucos jogos de uma
+    // plataforma) os cards crescem pra preencher mesmo assim — é o
+    // comportamento "dinâmico" pedido, prioriza alinhar com a borda a manter
+    // um teto de tamanho fixo.
+    gridTemplateColumns: `repeat(auto-fit, minmax(${CARD_MIN}px, 1fr))`,
     rowGap: "18px",
     columnGap: `${SHELF_GAP}px`,
     "& > *": { width: "100%", minWidth: 0 },
@@ -480,12 +503,16 @@ export const useShelfStyles = makeStyles({
     scrollPaddingRight: "48px",
     paddingTop: "14px",
     paddingBottom: "14px",
-    paddingLeft: "10px",
-    paddingRight: "10px",
+    paddingLeft: `${SHELF_PAD}px`,
+    paddingRight: `${SHELF_PAD}px`,
     "::-webkit-scrollbar": { display: "none" },
     "& > *": {
-      width: gameCardSize,
-      flexBasis: gameCardSize,
+      // `--reemuCardW` (px, calculado por `useShelfCapacity`/`Shelf.tsx` pra
+      // encher a linha exatamente) tem prioridade; o `clamp()` estático fica
+      // só de fallback até a 1ª medição do `ResizeObserver` resolver (1º
+      // paint) ou se JS estiver desligado.
+      width: `var(--reemuCardW, ${gameCardSize})`,
+      flexBasis: `var(--reemuCardW, ${gameCardSize})`,
       scrollSnapAlign: "start",
       flexShrink: 0,
       flexGrow: 0,
@@ -696,7 +723,11 @@ export const useDetailStyles = makeStyles({
   },
   hero: {
     position: "relative",
-    minHeight: "280px",
+    // Fluido (mesma ideia do `HeroCarousel` da Início, um degrau menor) —
+    // sem isto o hero do RomDetail ficava baixo/apertado no 4K enquanto o
+    // título por cima já crescia até 64px via `clamp()` (título e moldura
+    // descasando).
+    minHeight: "clamp(220px, 22vw, 720px)",
     borderRadius: shell.radiusLg,
     overflowX: "hidden",
     overflowY: "hidden",
@@ -815,6 +846,24 @@ export const useDetailStyles = makeStyles({
   // tamanho fica idêntico ao "Jogar" em qualquer estado.
   noBorderButton: {
     border: "1px solid transparent !important",
+  },
+  // Favoritar/Editar/Informações são `size="large"` icon-only — o Fluent
+  // trava esse tamanho em px cru (~40px) que não acompanha o título do hero
+  // ao lado (`clamp(24px, 3vw, 64px)`, crescia sozinho até 64px em 4K
+  // enquanto estes ficavam do tamanho de uma tela FHD). Mesmo truque do
+  // `navIconBtn` da topbar: `max-width` porque o Fluent injeta um próprio
+  // que vence o `width` mesmo com `!important` (regra de box model).
+  heroActionBtn: {
+    width: "clamp(40px, 2.1vw, 96px) !important",
+    height: "clamp(40px, 2.1vw, 96px) !important",
+    minWidth: "0 !important",
+    maxWidth: "clamp(40px, 2.1vw, 96px) !important",
+    fontSize: "clamp(18px, 1vw, 44px) !important",
+    "& .fui-Button__icon": {
+      fontSize: "1em",
+      width: "1em",
+      height: "1em",
+    },
   },
   section: { display: "flex", flexDirection: "column", rowGap: "10px" },
   sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },

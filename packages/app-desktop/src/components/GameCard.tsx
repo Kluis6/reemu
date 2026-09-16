@@ -28,12 +28,17 @@ const useLocalStyles = makeStyles({
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    width: "24px",
-    height: "24px",
+    // Fluido: o card (`gameCardSize` em xbox.ts) cresce de 150 até 445px —
+    // um badge de canto fixo em 24px virava um pontinho perdido num card
+    // gigante em 4K. `1.25vw` bate ~24px em 1920px (mesmo tamanho de hoje),
+    // teto moderado (não escala 1:1 com o card, só o suficiente pra não
+    // sumir).
+    width: "clamp(20px, 1.25vw, 42px)",
+    height: "clamp(20px, 1.25vw, 42px)",
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
     color: tokens.colorPaletteMarigoldForeground1,
-    fontSize: "14px",
+    fontSize: "clamp(12px, 0.7vw, 24px)",
     pointerEvents: "none",
   },
 });
