@@ -764,10 +764,13 @@ export const useDetailStyles = makeStyles({
     right: 0,
     bottom: 0,
     left: 0,
-    // Escurece o canto SUPERIOR-esquerdo (onde ícone/título/botões ficam
-    // agora) — invertido do modelo antigo (escurecia embaixo).
+    // Suave — a arte de fundo (plano de fundo do jogo) fica visível quase
+    // inteira, só um gradiente leve no canto SUPERIOR-esquerdo (onde
+    // ícone/título/botões ficam) pra garantir contraste do texto branco,
+    // igual à referência (Store/app Xbox): a imagem domina, o gradiente é
+    // só um auxílio de legibilidade, não uma parede escura por cima.
     backgroundImage:
-      "linear-gradient(90deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.1) 100%), linear-gradient(180deg, rgba(0,0,0,0.75), transparent 60%)",
+      "linear-gradient(90deg, rgba(0,0,0,0.4) 0%, transparent 45%), linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 32%, transparent 58%)",
   },
   heroBody: {
     position: "relative",
