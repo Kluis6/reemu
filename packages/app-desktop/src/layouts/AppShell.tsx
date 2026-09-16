@@ -172,6 +172,7 @@ export function AppShell() {
                   profile.data ?? { name: "Jogador", avatar: "preset:1" }
                 }
                 size={32}
+                className={s.railAvatarSize}
                 ring={SHOW_AVATAR_RING}
                 badge={SHOW_AVATAR_BADGE ? "available" : undefined}
               />
@@ -246,7 +247,7 @@ export function AppShell() {
             <Tooltip content="Voltar para a tela anterior" relationship="label">
               <Button
                 appearance="secondary"
-                className={l.navBtn}
+                className={mergeClasses(l.navBtn, s.navIconBtn)}
                 icon={<ChevronLeftRegular />}
                 aria-label="Voltar"
                 onClick={() => navigate(-1)}
@@ -284,7 +285,7 @@ export function AppShell() {
           >
             <Button
               appearance="secondary"
-              className={l.navBtn}
+              className={mergeClasses(l.navBtn, s.navIconBtn)}
               aria-label={fullscreen ? "Sair da tela cheia" : "Tela cheia"}
               icon={
                 fullscreen ? (

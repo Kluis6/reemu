@@ -215,6 +215,44 @@ export const useShellStyles = makeStyles({
     boxShadow: "none",
   },
   topbarSpacer: { flexGrow: 1 },
+  // Tamanho fluido pros botões de ícone "soltos" da topbar/rail (Voltar,
+  // Tela cheia, Adicionar ROM, Gerenciar biblioteca…) — cor/borda continuam
+  // no `navBtn` local de cada tela; aqui só width/height/fontSize, na MESMA
+  // curva do `railItem` (rail ao lado) só que um degrau menor, pra não
+  // ficarem do mesmo tamanho do ícone de navegação principal. Sem isto eles
+  // ficam no tamanho fixo "medium" do Fluent (32px) em qualquer resolução —
+  // minúsculos ao lado da rail em telas grandes/4K (medido: 32px em 1920px
+  // E em 3840px, contra 52px→104px da rail). `!important`: o `<Button>` do
+  // Fluent injeta width/height/padding próprios do tamanho "medium" depois
+  // da nossa classe.
+  navIconBtn: {
+    width: "clamp(32px, 1.7vw, 78px) !important",
+    height: "clamp(32px, 1.7vw, 78px) !important",
+    minWidth: "0 !important",
+    // O Fluent injeta `max-width: 32px` sozinho em `<Button icon>` sem
+    // texto (pra travar o botão "quadrado") — sem isto, `max-width` vence
+    // o `width` acima (regra do CSS, independe de `!important`) e o botão
+    // nunca cresce além de 32px.
+    maxWidth: "clamp(32px, 1.7vw, 78px) !important",
+    padding: "0 !important",
+    fontSize: "clamp(14px, 0.85vw, 34px) !important",
+    // O slot de ícone do <Button> tem tamanho fixo (20px) — não acompanha o
+    // fontSize acima sozinho (mesmo caso do `railQuit`, ver abaixo).
+    "& .fui-Button__icon": {
+      fontSize: "1em",
+      width: "1em",
+      height: "1em",
+    },
+  },
+  // Mesma ideia pro avatar do perfil (rail): o `<Avatar>` do Fluent só
+  // aceita tamanhos discretos via prop (`size`), que viram width/height em
+  // px cru — nunca acompanham a tela sozinhos. Override aqui, curva um
+  // degrau abaixo do `railItem` (o avatar sempre foi menor que os ícones de
+  // navegação abaixo dele).
+  railAvatarSize: {
+    width: "clamp(32px, 1.6vw, 84px) !important",
+    height: "clamp(32px, 1.6vw, 84px) !important",
+  },
   iconBtn: {
     width: "38px",
     height: "38px",
@@ -594,33 +632,36 @@ export const useHintStyles = makeStyles({
   // token que inverteria com o tema e ficaria ilegível (branco no claro).
   hints: {
     position: "fixed",
-    right: "22px",
-    bottom: "16px",
+    // Mesma curva de canto usada pela topbar (`clamp(12px, 3vw, 115px)` /
+    // `clamp(14px, 3.5vw, 134px)`) num degrau menor — HUD fixo, não precisa
+    // acompanhar 1:1, só não ficar minúsculo em 4K.
+    right: "clamp(14px, 1.2vw, 44px)",
+    bottom: "clamp(10px, 1vw, 32px)",
     display: "flex",
-    columnGap: "16px",
-    paddingTop: "8px",
-    paddingBottom: "8px",
-    paddingLeft: "16px",
-    paddingRight: "16px",
+    columnGap: "clamp(10px, 1vw, 32px)",
+    paddingTop: "clamp(6px, 0.5vw, 16px)",
+    paddingBottom: "clamp(6px, 0.5vw, 16px)",
+    paddingLeft: "clamp(12px, 1vw, 32px)",
+    paddingRight: "clamp(12px, 1vw, 32px)",
     // Mesmo raio do card (`useCardStyles.card`, `borderRadiusMedium`) — era
     // `borderRadiusCircular` (pílula).
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
     border: "none",
-    fontSize: tokens.fontSizeBase200,
+    fontSize: "clamp(13px, 0.85vw, 30px)",
     color: "#ffffff",
     zIndex: 50,
     pointerEvents: "none",
   },
   hint: { display: "flex", alignItems: "center", columnGap: "6px" },
   glyph: {
-    width: "20px",
-    height: "20px",
+    width: "clamp(20px, 1.2vw, 44px)",
+    height: "clamp(20px, 1.2vw, 44px)",
     borderRadius: "50%",
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    fontSize: tokens.fontSizeBase100,
+    fontSize: "clamp(11px, 0.7vw, 26px)",
     fontWeight: 700,
     color: "var(--reemuOnBrand)",
   },
@@ -632,7 +673,6 @@ export const useHintStyles = makeStyles({
     backgroundColor: "transparent",
     border: "1px solid rgba(255, 255, 255, 0.4)",
     color: "#ffffff",
-    fontSize: "11px",
   },
 });
 

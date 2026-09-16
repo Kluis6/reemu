@@ -44,7 +44,7 @@ import {
 } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
-import { useBrowseStyles, useMotionStyles } from "../styles/xbox";
+import { useBrowseStyles, useMotionStyles, useShellStyles } from "../styles/xbox";
 
 const useLibStyles = makeStyles({
   surface: {
@@ -110,6 +110,7 @@ export function Library() {
   const s = useBrowseStyles();
   const m = useMotionStyles();
   const l = useLibStyles();
+  const shell = useShellStyles();
   const qc = useQueryClient();
   const navigate = useNavigate();
   const push = useToastStore((s) => s.push);
@@ -356,7 +357,7 @@ export function Library() {
           <Tooltip content="Adicionar ROM" relationship="label">
             <Button
               appearance="secondary"
-              className={l.navBtn}
+              className={mergeClasses(l.navBtn, shell.navIconBtn)}
               icon={<AddRegular />}
               aria-label="Adicionar ROM"
               onClick={() => setAddOpen(true)}
@@ -365,6 +366,7 @@ export function Library() {
           <Tooltip content="Gerenciar biblioteca" relationship="label">
             <Button
               appearance="subtle"
+              className={shell.navIconBtn}
               icon={<MoreHorizontalRegular />}
               aria-label="Gerenciar biblioteca"
               onClick={() => setManageOpen(true)}
