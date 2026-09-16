@@ -46,6 +46,17 @@ const SCROLLBAR_W = 10;
 // exatamente esse valor via margin negativo, não duplicar o clamp à mão.
 const TOPBAR_CLEARANCE = "clamp(60px, 6.5vw, 172px)";
 
+// Padding lateral compartilhado por `.topbar`/`.scroll` (derivado de
+// `--reemuRailW`, ver `.app`) — extraído pra constante porque um hero de
+// sangria total (RomDetail) precisa cancelar exatamente esse valor com
+// margin negativo, não duplicar a fórmula à mão. Esquerda é simétrica
+// entre topbar/scroll; a direita não (`.scroll` perde `SCROLLBAR_W` pro
+// próprio gutter, `.topbar` compensa isso no padding — ver ambos abaixo),
+// por isso os dois nomes separados.
+const PAGE_PAD_L = "calc(var(--reemuRailW) * 0.8333)";
+const SCROLL_PAD_R = "calc(var(--reemuRailW) * 0.9722)";
+const TOPBAR_PAD_R = `calc(${SCROLL_PAD_R} + ${SCROLLBAR_W}px)`;
+
 /** Casca: app / rail / topbar / área de rolagem + anel de foco global. */
 export const useShellStyles = makeStyles({
   app: {
@@ -238,13 +249,13 @@ export const useShellStyles = makeStyles({
     // `.app`), não de um `clamp()` independente — ver comentário em `.app`.
     // Mesma proporção que o valor antigo tinha nas telas grandes (5/6 ≈
     // 115/138 em 4K), agora válida em QUALQUER largura.
-    paddingLeft: "calc(var(--reemuRailW) * 0.8333)",
+    paddingLeft: PAGE_PAD_L,
     // +10px (SCROLLBAR_W): a `.scroll` reserva essa faixa pro scrollbar
     // próprio (`scrollbarGutter: "stable"` + `::-webkit-scrollbar` de
     // 10px abaixo) — a topbar não rola, então não perde essa faixa
     // sozinha. Sem compensar aqui, o relógio ficava ~10px à direita de
     // onde o conteúdo (hero/cards) realmente termina.
-    paddingRight: `calc(var(--reemuRailW) * 0.9722 + ${SCROLLBAR_W}px)`,
+    paddingRight: TOPBAR_PAD_R,
     boxSizing: "border-box",
     flexShrink: 0,
     backgroundColor: "transparent",
@@ -363,8 +374,8 @@ export const useShellStyles = makeStyles({
     // ver `.app`) — o conteúdo alinha exatamente com o botão de voltar
     // (esquerda) e o fim do relógio (direita) em QUALQUER largura, não só
     // acima de ~1600px.
-    paddingLeft: "calc(var(--reemuRailW) * 0.8333)",
-    paddingRight: "calc(var(--reemuRailW) * 0.9722)",
+    paddingLeft: PAGE_PAD_L,
+    paddingRight: SCROLL_PAD_R,
     paddingBottom: "96px",
     "::-webkit-scrollbar": { width: `${SCROLLBAR_W}px` },
     "::-webkit-scrollbar-thumb": {
@@ -751,6 +762,15 @@ export const useDetailStyles = makeStyles({
     // `.scroll` reserva pra topbar (`--reemuTopbarH`) com margin negativo
     // em vez de deixar aquele vão em branco acima do hero.
     marginTop: "calc(-1 * var(--reemuTopbarH, 0px))",
+    // Sangria total nos lados também — cancela o padding lateral da
+    // `.scroll` (mesmos `PAGE_PAD_L`/`SCROLL_PAD_R` que ela usa) pra o
+    // hero ocupar a largura inteira da página, rente à rail de um lado e
+    // à borda da janela do outro (`width:auto` + margin negativo já
+    // estica sozinho, sem precisar declarar `width` à mão). `heroBody`
+    // devolve esse respiro pro conteúdo (ícone/título) não ficar colado
+    // na rail.
+    marginLeft: `calc(-1 * ${PAGE_PAD_L})`,
+    marginRight: `calc(-1 * ${SCROLL_PAD_R})`,
     // Bem mais baixo que o antigo `clamp(220px, 22vw, 720px)`: aquela
     // fórmula em `vw` não olhava pra ALTURA da janela — numa janela larga
     // e baixa (ex. 1600×700) passava de 50% da altura da tela sozinha.
@@ -759,7 +779,9 @@ export const useDetailStyles = makeStyles({
     // segurança contra qualquer proporção de janela.
     minHeight: "clamp(240px, 15vw, 400px)",
     maxHeight: "46vh",
-    borderRadius: shell.radiusLg,
+    // Sem raio: hero de sangria total (encosta na rail e na borda da
+    // janela) não tem mais canto pra arredondar, igual à referência.
+    borderRadius: 0,
     overflowX: "hidden",
     overflowY: "hidden",
     display: "flex",
@@ -799,7 +821,10 @@ export const useDetailStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     rowGap: "clamp(14px, 1.6vw, 28px)",
-    paddingLeft: "26px",
+    // Esquerda usa o MESMO padding da página (`PAGE_PAD_L`, o `.hero` pai
+    // cancelou com margin negativo) — ícone/título alinham com o resto do
+    // conteúdo (tabs, título das seções) em vez de ficar colado na rail.
+    paddingLeft: PAGE_PAD_L,
     paddingRight: "26px",
     paddingBottom: "26px",
     // O hero agora cola no topo (por baixo da topbar flutuante — ver
