@@ -972,6 +972,9 @@ export const useDetailStyles = makeStyles({
   // 64" no kicker do hero) em vez do branco padrão dos outros ícones —
   // destaca visualmente que está favoritado.
   favIconOn: { color: "var(--reemuBrandText)" },
+  // Botão "Jogar": peso de fonte mais leve que o padrão "semibold" do
+  // Fluent pra `appearance="primary"` (pedido do usuário).
+  playBtn: { fontWeight: tokens.fontWeightMedium },
   section: { display: "flex", flexDirection: "column", rowGap: "10px" },
   // Puxa a seção de tabs (Emulador/Save states/Shader) por cima da borda
   // de baixo do hero — pedido do usuário, estilo "card flutuante"

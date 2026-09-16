@@ -303,6 +303,7 @@ export function RomDetail() {
             <Button
               appearance="primary"
               size="large"
+              className={s.playBtn}
               icon={<PlayRegular />}
               disabled={!chosenCore}
               onClick={() => play()}
