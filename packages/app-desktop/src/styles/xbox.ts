@@ -981,8 +981,9 @@ export const useDetailStyles = makeStyles({
     // pouco POR CIMA da imagem, não só encostadas nela). A imagem é bem
     // mais alta que a versão original (`.hero` acima) e o gradiente de
     // baixo foi reforçado junto (`.heroScrim`), então ainda sobra folga
-    // abaixo da linha de botões — não colide.
-    marginTop: "clamp(-130px, -7vw, -80px)",
+    // abaixo da linha de botões — não colide (conferido até em janela
+    // 1600×700, o caso mais apertado testado).
+    marginTop: "clamp(-150px, -8vw, -95px)",
   },
   sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },
   panel: {
@@ -994,7 +995,10 @@ export const useDetailStyles = makeStyles({
     paddingLeft: "16px",
     paddingRight: "16px",
     borderRadius: shell.radius,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    // Borda na MESMA cor do fundo (pedido do usuário) — fica "sem borda"
+    // visualmente, sem tirar a propriedade (mantém a caixa com o mesmo
+    // tamanho de antes, sem o realce de contorno).
+    border: `1px solid ${tokens.colorNeutralBackground2}`,
     // Sólido (não `--reemuFillWeak`, que é translúcido) — e sem `maxWidth`:
     // acompanha a largura do hero/ações acima, como o resto da página.
     backgroundColor: tokens.colorNeutralBackground2,
