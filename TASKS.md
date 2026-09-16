@@ -48,7 +48,7 @@ refaça trabalho já feito ou pule pré-requisito.
 | 09 | Scraping de Metadata | `done` (ScreenScraper por CRC + revisão manual; multi-provider/IGDB no backlog) | 01 |
 | 10 | Catálogo e Download de Cores | `done` (68 cores do buildbot: software + GL usáveis; badge "OpenGL"; Vulkan-only fora até 12) | 01 |
 | 11 | Port Android | `todo` (desbloqueado — 01–10 `done`; usuário adiou 2026-08-30) | 03–10 completas no desktop |
-| 12 | Vulkan HW Render Fase 2 | `blocked` (GL HW já feito; falta lista de cores-alvo + gatilho de maturidade — ver doc 12) | ver doc 12 |
+| 12 | Vulkan HW Render Fase 2 | `done` pra Beetle PSX HW (`mednafen_psx_hw`, validado em hw do usuário 2026-09-11/12 — device criado pelo frontend, wgpu adota, `VkBlit` do scanout A1R5G5B5, save state e stdout do core resolvidos). **Pendente**: flycast/mupen como 2º/3º alvo + Fase C (tirar CPU-wait do blit/submit, validar sob carga) — ver doc 12 | ver doc 12 |
 
 **Desktop (01–10) fechado.**
 

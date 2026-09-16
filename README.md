@@ -38,7 +38,7 @@ implementam as traits definidas em `domain`.
 
 ## Status atual
 
-Ver `TASKS.md` para o checklist detalhado e o backlog. Resumo (2026-09-02):
+Ver `TASKS.md` para o checklist detalhado e o backlog. Resumo (2026-09-16):
 
 **Desktop (etapas 01–10) fechado.** Roda cores libretro software **e OpenGL**
 (N64 etc.) ponta a ponta: biblioteca → detalhe do jogo → jogar (vídeo num
@@ -58,12 +58,12 @@ Ver `TASKS.md` para o checklist detalhado e o backlog. Resumo (2026-09-02):
 - [x] **09** Scraping — ScreenScraper por CRC + fila de revisão manual
 - [x] **10** Catálogo — 68 cores do buildbot; software + GL usáveis (badge "OpenGL")
 - [ ] **11** Port Android — desbloqueado, adiado
-- [ ] **12** HW render Vulkan — backlog
+- [x] **12** HW render Vulkan — fechado pra Beetle PSX HW (validado em hw do
+      usuário 2026-09-11/12); flycast/mupen e Fase C (sync fino) pendentes
 
-Backlog: surface nativa de vídeo (tira as cópias de CPU do `<canvas>`),
-compilador slang via glslang→SPIR-V (destrava CRT-Royale/Mega Bezel/FSR),
-integer scaling, interop dma_buf sem gate, `.7z` no scan, `packages/ui`/`shared`,
-`apps/mobile`.
+Backlog: flycast/mupen como alvos Vulkan + Fase C (tirar CPU-wait do sync),
+surface nativa de vídeo (tira as cópias de CPU do `<canvas>`), integer scaling,
+interop dma_buf sem gate, `.7z` no scan, `packages/ui`/`shared`, `apps/mobile`.
 
 ## Rodar
 

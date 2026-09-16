@@ -43,6 +43,19 @@ md-5 = "0.10"
 tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["time", "rt"] }
 
+# Crates internos (arquitetura hexagonal — o shell é um adapter). Nenhum tem
+# código específico de Linux (core-loader-desktop já trata windows/macos em
+# discover.rs/loader.rs) — ficavam presos no bloco cfg(linux) abaixo por
+# engano, o que quebrava o build Windows (crate não linkado).
+domain = { path = "../../../crates/domain" }
+db = { path = "../../../crates/db" }
+emu-session = { path = "../../../crates/emu-session" }
+video-surface = { path = "../../../crates/video-surface" }
+audio-desktop = { path = "../../../crates/audio-desktop" }
+library-scan = { path = "../../../crates/library-scan" }
+input-desktop = { path = "../../../crates/input-desktop" }
+shader-slang = { path = "../../../crates/shader-slang" }
+
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
 # Teste ponta-a-ponta do HW render Vulkan (etapa 12): carrega o core de teste
@@ -55,13 +68,3 @@ core-loader-desktop = { path = "../../../crates/core-loader-desktop", features =
 # `system` = backend libwayland (dá `Backend::from_foreign_display`); `dlopen` =
 # carrega libwayland em runtime (sem precisar de libwayland-dev, igual ao winit).
 wayland-client = { version = "0.31", features = ["system", "dlopen"] }
-
-# Crates internos (arquitetura hexagonal — o shell é um adapter).
-domain = { path = "../../../crates/domain" }
-db = { path = "../../../crates/db" }
-emu-session = { path = "../../../crates/emu-session" }
-video-surface = { path = "../../../crates/video-surface" }
-audio-desktop = { path = "../../../crates/audio-desktop" }
-library-scan = { path = "../../../crates/library-scan" }
-input-desktop = { path = "../../../crates/input-desktop" }
-shader-slang = { path = "../../../crates/shader-slang" }
