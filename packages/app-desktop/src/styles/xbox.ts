@@ -39,6 +39,13 @@ const gameCardSize = cardSizeCss;
 // exatamente esse valor no próprio padding (ver comentário em `.topbar`).
 const SCROLLBAR_W = 10;
 
+// Folga vertical pra limpar a `.topbar` flutuante (padding + conteúdo dela,
+// que não escala por `clamp()` — botões do Fluent são fixos). Extraída pra
+// constante e publicada como `--reemuTopbarH` em `.app` (ver abaixo) porque
+// páginas com hero "colado no topo" (RomDetail) precisam cancelar
+// exatamente esse valor via margin negativo, não duplicar o clamp à mão.
+const TOPBAR_CLEARANCE = "clamp(60px, 6.5vw, 172px)";
+
 /** Casca: app / rail / topbar / área de rolagem + anel de foco global. */
 export const useShellStyles = makeStyles({
   app: {
@@ -73,6 +80,12 @@ export const useShellStyles = makeStyles({
     // Amarrado direto na rail, o gutter agora escala junto em qualquer
     // largura.
     ["--reemuRailW" as string]: shell.railW,
+    // Folga vertical que a `.scroll` reserva pra topbar flutuante não
+    // cobrir o início do conteúdo (topbar é `position:absolute` por cima).
+    // Publicada aqui pra páginas com hero "colado no topo" (RomDetail)
+    // poderem cancelar essa folga com margin negativo em vez de duplicar
+    // o valor (ver `.hero` em `useDetailStyles`).
+    ["--reemuTopbarH" as string]: TOPBAR_CLEARANCE,
     overflowX: "hidden",
     overflowY: "hidden",
     // brilho de canto (1 camada só — multicamada quebra o WebKitGTK)
@@ -345,7 +358,7 @@ export const useShellStyles = makeStyles({
     // Só precisa limpar a altura da `.topbar` (padding + conteúdo, este sem
     // `clamp` — os botões da Fluent não escalam) com uma folga; não faz
     // sentido crescer no mesmo 6.5vw até 4K cheio (viraria vão vazio enorme).
-    paddingTop: "clamp(60px, 6.5vw, 172px)",
+    paddingTop: `var(--reemuTopbarH, ${TOPBAR_CLEARANCE})`,
     // Mesma fórmula do padding da `.topbar` (derivada de `--reemuRailW`,
     // ver `.app`) — o conteúdo alinha exatamente com o botão de voltar
     // (esquerda) e o fim do relógio (direita) em QUALQUER largura, não só
@@ -733,11 +746,19 @@ export const useDetailStyles = makeStyles({
   },
   hero: {
     position: "relative",
-    // Fluido (mesma ideia do `HeroCarousel` da Início, um degrau menor) —
-    // sem isto o hero do RomDetail ficava baixo/apertado no 4K enquanto o
-    // título por cima já crescia até 64px via `clamp()` (título e moldura
-    // descasando).
-    minHeight: "clamp(220px, 22vw, 720px)",
+    // Colado no topo da página (atrás da topbar flutuante, igual à
+    // referência de Store/app Xbox) — cancela a `paddingTop` que a
+    // `.scroll` reserva pra topbar (`--reemuTopbarH`) com margin negativo
+    // em vez de deixar aquele vão em branco acima do hero.
+    marginTop: "calc(-1 * var(--reemuTopbarH, 0px))",
+    // Bem mais baixo que o antigo `clamp(220px, 22vw, 720px)`: aquela
+    // fórmula em `vw` não olhava pra ALTURA da janela — numa janela larga
+    // e baixa (ex. 1600×700) passava de 50% da altura da tela sozinha.
+    // Conteúdo agora é só ícone+título+botões (compacto, ancorado no
+    // topo), não precisa de tanto espaço; `maxHeight` em `vh` é o teto de
+    // segurança contra qualquer proporção de janela.
+    minHeight: "clamp(240px, 15vw, 400px)",
+    maxHeight: "46vh",
     borderRadius: shell.radiusLg,
     overflowX: "hidden",
     overflowY: "hidden",
@@ -778,7 +799,14 @@ export const useDetailStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     rowGap: "clamp(14px, 1.6vw, 28px)",
-    padding: "26px",
+    paddingLeft: "26px",
+    paddingRight: "26px",
+    paddingBottom: "26px",
+    // O hero agora cola no topo (por baixo da topbar flutuante — ver
+    // `marginTop` negativo em `.hero`) — o próprio conteúdo (ícone/título)
+    // precisa dessa folga de volta, senão nasce escondido atrás da busca/
+    // relógio. `+ 6px`: respiro extra além da altura exata da topbar.
+    paddingTop: "calc(var(--reemuTopbarH, 0px) + 6px)",
     maxWidth: "min(85%, 760px)",
   },
   heroHeader: {
