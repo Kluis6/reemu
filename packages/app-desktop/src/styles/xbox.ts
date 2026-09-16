@@ -771,14 +771,14 @@ export const useDetailStyles = makeStyles({
     // na rail.
     marginLeft: `calc(-1 * ${PAGE_PAD_L})`,
     marginRight: `calc(-1 * ${SCROLL_PAD_R})`,
-    // Bem mais baixo que o antigo `clamp(220px, 22vw, 720px)`: aquela
-    // fórmula em `vw` não olhava pra ALTURA da janela — numa janela larga
-    // e baixa (ex. 1600×700) passava de 50% da altura da tela sozinha.
-    // Conteúdo agora é só ícone+título+botões (compacto, ancorado no
-    // topo), não precisa de tanto espaço; `maxHeight` em `vh` é o teto de
-    // segurança contra qualquer proporção de janela.
-    minHeight: "clamp(240px, 15vw, 400px)",
-    maxHeight: "46vh",
+    // Mais alto que a 1ª versão (pedido do usuário, pra dar espaço pra
+    // seção de tabs sobrepor a borda de baixo — ver `.tabsOverlap`) — a
+    // 1ª tentativa (320-520px) não sobrava folga suficiente abaixo da
+    // linha de botões e a sobreposição colidia com eles; ainda com `vw`
+    // moderado (não voltou ao antigo `22vw`/720px) e um teto em `vh` como
+    // segurança contra janela larga-e-baixa.
+    minHeight: "clamp(400px, 24vw, 620px)",
+    maxHeight: "60vh",
     // Sem raio: hero de sangria total (encosta na rail e na borda da
     // janela) não tem mais canto pra arredondar, igual à referência.
     borderRadius: 0,
@@ -965,6 +965,29 @@ export const useDetailStyles = makeStyles({
     },
   },
   section: { display: "flex", flexDirection: "column", rowGap: "10px" },
+  // Puxa a seção de tabs (Emulador/Save states/Shader) por cima da borda
+  // de baixo do hero — pedido do usuário, estilo "card flutuante"
+  // (Netflix/Steam). `zIndex:10` garante que fica por cima da arte do
+  // hero (que não declara z-index próprio, mas isto blinda contra
+  // qualquer ordem de pintura).
+  tabsOverlap: {
+    position: "relative",
+    zIndex: 10,
+    // Moderado o bastante pra sobrepor só a área decorativa do hero
+    // (abaixo da linha de botões), não os próprios botões — calibrado
+    // junto com `.hero.minHeight` acima.
+    marginTop: "clamp(-64px, -4vw, -40px)",
+  },
+  // Fundo escuro translúcido só atrás da faixa de tabs — sem isto o texto
+  // (cor padrão do tema) perde contraste em cima da arte do hero na zona
+  // de sobreposição.
+  tabsBar: {
+    display: "inline-flex",
+    borderRadius: shell.radiusLg,
+    backgroundColor: "rgba(0, 0, 0, 0.55)",
+    paddingLeft: "8px",
+    paddingRight: "8px",
+  },
   sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },
   panel: {
     display: "flex",

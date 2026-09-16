@@ -26,10 +26,10 @@ import {
   DeleteRegular,
   DismissRegular,
   EditRegular,
+  HeartFilled,
+  HeartRegular,
   InfoRegular,
   PlayRegular,
-  StarFilled,
-  StarRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -321,7 +321,7 @@ export function RomDetail() {
                 size="large"
                 appearance="secondary"
                 className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
-                icon={rom.isFavorite ? <StarFilled /> : <StarRegular />}
+                icon={rom.isFavorite ? <HeartFilled /> : <HeartRegular />}
                 aria-label={rom.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                 aria-pressed={rom.isFavorite}
                 onClick={() => fav.mutate(!rom.isFavorite)}
@@ -347,21 +347,37 @@ export function RomDetail() {
                 onClick={() => setInfoOpen(true)}
               />
             </Tooltip>
+            <Tooltip
+              content={
+                confirmRemove
+                  ? "Clique de novo para confirmar"
+                  : "Remover da biblioteca"
+              }
+              relationship="label"
+            >
+              <Button
+                size="large"
+                appearance="secondary"
+                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
+                icon={<DeleteRegular />}
+                aria-label={
+                  confirmRemove
+                    ? "Clique de novo para confirmar remoção"
+                    : "Remover da biblioteca"
+                }
+                disabled={remove.isPending}
+                onClick={() => {
+                  if (confirmRemove) remove.mutate();
+                  else {
+                    setConfirmRemove(true);
+                    window.setTimeout(() => setConfirmRemove(false), 3000);
+                  }
+                }}
+              />
+            </Tooltip>
           </div>
         </div>
       </div>
-
-      {meta.data?.description && (
-        <Text as="p" className={s.desc}>
-          {meta.data.description}
-        </Text>
-      )}
-
-      {coreList.length === 0 && (
-        <Caption1>
-          Instale um core em Configurações → Cores pra poder jogar.
-        </Caption1>
-      )}
 
       <Dialog
         open={editOpen}
@@ -503,17 +519,19 @@ export function RomDetail() {
         </DrawerBody>
       </OverlayDrawer>
 
-      <section className={s.section}>
-        <TabList
-          selectedValue={activeCfgTab}
-          onTabSelect={(_, d) =>
-            setCfgTab(d.value as "core" | "states" | "shader")
-          }
-        >
-          {hasCoreCfg && <Tab value="core">Emulador</Tab>}
-          <Tab value="states">Save states</Tab>
-          {hasShaderCfg && <Tab value="shader">Shader</Tab>}
-        </TabList>
+      <section className={mergeClasses(s.section, s.tabsOverlap)}>
+        <div className={s.tabsBar}>
+          <TabList
+            selectedValue={activeCfgTab}
+            onTabSelect={(_, d) =>
+              setCfgTab(d.value as "core" | "states" | "shader")
+            }
+          >
+            {hasCoreCfg && <Tab value="core">Emulador</Tab>}
+            <Tab value="states">Save states</Tab>
+            {hasShaderCfg && <Tab value="shader">Shader</Tab>}
+          </TabList>
+        </div>
         <div className={s.panel}>
           {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
             <>
@@ -676,28 +694,17 @@ export function RomDetail() {
         </div>
       </section>
 
-      <section className={s.section}>
-        <Button
-          appearance="subtle"
-          icon={<DeleteRegular />}
-          disabled={remove.isPending}
-          onClick={() => {
-            if (confirmRemove) remove.mutate();
-            else {
-              setConfirmRemove(true);
-              window.setTimeout(() => setConfirmRemove(false), 3000);
-            }
-          }}
-        >
-          {confirmRemove
-            ? "Clique de novo para confirmar"
-            : "Remover da biblioteca"}
-        </Button>
-        <Caption1 className={s.hint}>
-          Remove só da lista — o arquivo em disco fica e um novo scan
-          readiciona.
+      {meta.data?.description && (
+        <Text as="p" className={s.desc}>
+          {meta.data.description}
+        </Text>
+      )}
+
+      {coreList.length === 0 && (
+        <Caption1>
+          Instale um core em Configurações → Cores pra poder jogar.
         </Caption1>
-      </section>
+      )}
     </div>
   );
 }
