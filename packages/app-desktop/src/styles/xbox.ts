@@ -771,14 +771,12 @@ export const useDetailStyles = makeStyles({
     // na rail.
     marginLeft: `calc(-1 * ${PAGE_PAD_L})`,
     marginRight: `calc(-1 * ${SCROLL_PAD_R})`,
-    // Mais alto que a 1ª versão (pedido do usuário, pra dar espaço pra
-    // seção de tabs sobrepor a borda de baixo — ver `.tabsOverlap`) — a
-    // 1ª tentativa (320-520px) não sobrava folga suficiente abaixo da
-    // linha de botões e a sobreposição colidia com eles; ainda com `vw`
-    // moderado (não voltou ao antigo `22vw`/720px) e um teto em `vh` como
-    // segurança contra janela larga-e-baixa.
-    minHeight: "clamp(400px, 24vw, 620px)",
-    maxHeight: "60vh",
+    // Mais alto ainda (pedido do usuário) — a imagem precisa continuar
+    // visível por trás da faixa de tabs, não só encostar nela. Calibrado
+    // junto com `.tabsOverlap` (folga sobrando abaixo da linha de botões
+    // continua maior que o quanto a faixa sobe, então não colide).
+    minHeight: "clamp(460px, 28vw, 720px)",
+    maxHeight: "66vh",
     // Sem raio: hero de sangria total (encosta na rail e na borda da
     // janela) não tem mais canto pra arredondar, igual à referência.
     borderRadius: 0,
@@ -807,13 +805,17 @@ export const useDetailStyles = makeStyles({
     right: 0,
     bottom: 0,
     left: 0,
-    // Suave — a arte de fundo (plano de fundo do jogo) fica visível quase
-    // inteira, só um gradiente leve no canto SUPERIOR-esquerdo (onde
-    // ícone/título/botões ficam) pra garantir contraste do texto branco,
-    // igual à referência (Store/app Xbox): a imagem domina, o gradiente é
-    // só um auxílio de legibilidade, não uma parede escura por cima.
-    backgroundImage:
-      "linear-gradient(90deg, rgba(0,0,0,0.4) 0%, transparent 45%), linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 32%, transparent 58%)",
+    // A arte de fundo (plano de fundo do jogo) continua dominando o meio
+    // do hero, com 3 camadas de gradiente (mais escuras que a 1ª versão)
+    // garantindo contraste nas duas pontas: canto SUPERIOR-esquerdo
+    // (ícone/título) e faixa DE BAIXO (onde a seção de tabs sobrepõe —
+    // ver `.tabsOverlap` — sem um fundo sólido atrás dela, é este
+    // gradiente que sustenta a legibilidade ali).
+    backgroundImage: [
+      "linear-gradient(90deg, rgba(0,0,0,0.45) 0%, transparent 45%)",
+      "linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 18%, transparent 38%)",
+      "linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.22) 32%, transparent 58%)",
+    ].join(", "),
   },
   heroBody: {
     position: "relative",
@@ -973,20 +975,10 @@ export const useDetailStyles = makeStyles({
   tabsOverlap: {
     position: "relative",
     zIndex: 10,
-    // Moderado o bastante pra sobrepor só a área decorativa do hero
-    // (abaixo da linha de botões), não os próprios botões — calibrado
-    // junto com `.hero.minHeight` acima.
-    marginTop: "clamp(-64px, -4vw, -40px)",
-  },
-  // Fundo escuro translúcido só atrás da faixa de tabs — sem isto o texto
-  // (cor padrão do tema) perde contraste em cima da arte do hero na zona
-  // de sobreposição.
-  tabsBar: {
-    display: "inline-flex",
-    borderRadius: shell.radiusLg,
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
-    paddingLeft: "8px",
-    paddingRight: "8px",
+    // Sobe mais que antes — a imagem agora é bem mais alta (`.hero`
+    // acima), sobra folga de sobra abaixo da linha de botões pra isto não
+    // colidir com eles.
+    marginTop: "clamp(-90px, -5vw, -56px)",
   },
   sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },
   panel: {

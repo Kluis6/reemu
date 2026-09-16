@@ -520,18 +520,16 @@ export function RomDetail() {
       </OverlayDrawer>
 
       <section className={mergeClasses(s.section, s.tabsOverlap)}>
-        <div className={s.tabsBar}>
-          <TabList
-            selectedValue={activeCfgTab}
-            onTabSelect={(_, d) =>
-              setCfgTab(d.value as "core" | "states" | "shader")
-            }
-          >
-            {hasCoreCfg && <Tab value="core">Emulador</Tab>}
-            <Tab value="states">Save states</Tab>
-            {hasShaderCfg && <Tab value="shader">Shader</Tab>}
-          </TabList>
-        </div>
+        <TabList
+          selectedValue={activeCfgTab}
+          onTabSelect={(_, d) =>
+            setCfgTab(d.value as "core" | "states" | "shader")
+          }
+        >
+          {hasCoreCfg && <Tab value="core">Emulador</Tab>}
+          <Tab value="states">Save states</Tab>
+          {hasShaderCfg && <Tab value="shader">Shader</Tab>}
+        </TabList>
         <div className={s.panel}>
           {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
             <>
