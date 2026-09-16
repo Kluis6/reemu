@@ -34,6 +34,11 @@ const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4},
 // lib/shelf.ts). Fluida: ~150px em janela estreita, até 320px em 2.7K+.
 const gameCardSize = cardSizeCss;
 
+// Largura do scrollbar customizado da `.scroll` (`::-webkit-scrollbar`
+// abaixo) — extraída pra constante porque a `.topbar` precisa compensar
+// exatamente esse valor no próprio padding (ver comentário em `.topbar`).
+const SCROLLBAR_W = 10;
+
 /** Casca: app / rail / topbar / área de rolagem + anel de foco global. */
 export const useShellStyles = makeStyles({
   app: {
@@ -221,7 +226,12 @@ export const useShellStyles = makeStyles({
     // Mesma proporção que o valor antigo tinha nas telas grandes (5/6 ≈
     // 115/138 em 4K), agora válida em QUALQUER largura.
     paddingLeft: "calc(var(--reemuRailW) * 0.8333)",
-    paddingRight: "calc(var(--reemuRailW) * 0.9722)",
+    // +10px (SCROLLBAR_W): a `.scroll` reserva essa faixa pro scrollbar
+    // próprio (`scrollbarGutter: "stable"` + `::-webkit-scrollbar` de
+    // 10px abaixo) — a topbar não rola, então não perde essa faixa
+    // sozinha. Sem compensar aqui, o relógio ficava ~10px à direita de
+    // onde o conteúdo (hero/cards) realmente termina.
+    paddingRight: `calc(var(--reemuRailW) * 0.9722 + ${SCROLLBAR_W}px)`,
     boxSizing: "border-box",
     flexShrink: 0,
     backgroundColor: "transparent",
@@ -343,7 +353,7 @@ export const useShellStyles = makeStyles({
     paddingLeft: "calc(var(--reemuRailW) * 0.8333)",
     paddingRight: "calc(var(--reemuRailW) * 0.9722)",
     paddingBottom: "96px",
-    "::-webkit-scrollbar": { width: "10px" },
+    "::-webkit-scrollbar": { width: `${SCROLLBAR_W}px` },
     "::-webkit-scrollbar-thumb": {
       backgroundColor: tokens.colorNeutralStroke2,
       borderRadius: tokens.borderRadiusCircular,
