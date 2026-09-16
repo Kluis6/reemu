@@ -813,7 +813,9 @@ export const useDetailStyles = makeStyles({
     // gradiente que sustenta a legibilidade ali).
     backgroundImage: [
       "linear-gradient(90deg, rgba(0,0,0,0.45) 0%, transparent 45%)",
-      "linear-gradient(0deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 18%, transparent 38%)",
+      // Reforçada (pedido do usuário) — mais opaca rente à borda de baixo
+      // e alcança mais alto, acompanhando o `.tabsOverlap` maior abaixo.
+      "linear-gradient(0deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.6) 20%, rgba(0,0,0,0.22) 38%, transparent 55%)",
       "linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.22) 32%, transparent 58%)",
     ].join(", "),
   },
@@ -975,10 +977,12 @@ export const useDetailStyles = makeStyles({
   tabsOverlap: {
     position: "relative",
     zIndex: 10,
-    // Sobe mais que antes — a imagem agora é bem mais alta (`.hero`
-    // acima), sobra folga de sobra abaixo da linha de botões pra isto não
-    // colidir com eles.
-    marginTop: "clamp(-90px, -5vw, -56px)",
+    // Sobe mais que antes (pedido do usuário — as tabs devem ficar um
+    // pouco POR CIMA da imagem, não só encostadas nela). A imagem é bem
+    // mais alta que a versão original (`.hero` acima) e o gradiente de
+    // baixo foi reforçado junto (`.heroScrim`), então ainda sobra folga
+    // abaixo da linha de botões — não colide.
+    marginTop: "clamp(-130px, -7vw, -80px)",
   },
   sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },
   panel: {
