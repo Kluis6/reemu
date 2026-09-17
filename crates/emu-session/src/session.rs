@@ -625,16 +625,57 @@ fn gamepad_loop(shared: Arc<Shared>) {
 /// Acha o binário irmão `reemu-core-host` a partir do executável atual.
 /// `cargo test` roda de `target/debug/deps/`, o bin do workspace fica 1
 /// nível acima; `cargo tauri dev`/produção já ficam no mesmo nível.
+/// Nome do binário do processo filho, com a extensão certa por plataforma
+/// (`.exe` no Windows — sem isto, `core_host_path` nunca achava nada lá).
+fn core_host_bin_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "reemu-core-host.exe"
+    } else {
+        "reemu-core-host"
+    }
+}
+
 fn core_host_path() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
+    let name = core_host_bin_name();
+
+    // Dev / instalação Windows: o `resource_dir` do Tauri é a MESMA pasta
+    // do executável lá (ver docs.rs/tauri `PathResolver::resource_dir`) —
+    // sobe até 2 níveis a partir dele.
     let mut dir = exe.parent()?.to_path_buf();
     for _ in 0..2 {
-        let candidate = dir.join("reemu-core-host");
+        let candidate = dir.join(name);
         if candidate.is_file() {
             return Some(candidate);
         }
         dir = dir.parent()?.to_path_buf();
     }
+
+    // Linux empacotado (.deb/AppImage): o `resource_dir` do Tauri fica em
+    // `/usr/lib/<productName>` (ou `${APPDIR}/usr/lib/<productName>` dentro
+    // do AppImage) — NÃO ao lado do executável (`/usr/bin/reemu-desktop`) e
+    // NÃO no nome do binário: é o `productName` do tauri.conf.json ("ReEmu"),
+    // confirmado empacotando um .deb/.AppImage real e inspecionando o
+    // conteúdo (`dpkg-deb -c` / `--appimage-extract`). Replica a mesma
+    // convenção sem precisar de `AppHandle` aqui (este crate não depende de
+    // Tauri, mantém a regra de dependência hexagonal).
+    if cfg!(target_os = "linux") {
+        const PRODUCT_NAME: &str = "ReEmu";
+        if let Ok(appdir) = std::env::var("APPDIR") {
+            let candidate = PathBuf::from(appdir)
+                .join("usr/lib")
+                .join(PRODUCT_NAME)
+                .join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+        let candidate = PathBuf::from("/usr/lib").join(PRODUCT_NAME).join(name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
     None
 }
 
