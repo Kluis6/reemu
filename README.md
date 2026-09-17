@@ -1,91 +1,68 @@
-# ReEmu — Monorepo
+# ReEmu
 
 [![CI](https://github.com/Kluis6/reemu/actions/workflows/ci.yml/badge.svg)](https://github.com/Kluis6/reemu/actions/workflows/ci.yml)
 [![Release](https://github.com/Kluis6/reemu/actions/workflows/release.yml/badge.svg)](https://github.com/Kluis6/reemu/actions/workflows/release.yml)
-[![Downloads](https://img.shields.io/github/v/release/Kluis6/reemu?label=downloads)](https://github.com/Kluis6/reemu/releases/latest)
 
-Frontend emulador para cores libretro (Tauri v2 + React 19 + SQLite +
-Fluent Design). Estrutura inicial gerada a partir do design de arquitetura
-(ver `resumo-arquitetura-reemu.md`).
+<img src="apps/desktop/src-tauri/icons/icon.png" alt="logo do ReEmu" width="150"/>
+
+**ReEmu** é um frontend desktop pra emulação de jogos via cores
+[libretro](https://www.libretro.com/) (o mesmo formato de core do
+RetroArch) — biblioteca de jogos com capas, shaders (CRT, LCD, presets
+`.slangp` do RetroArch), molduras/bezels, save states com miniatura,
+suporte a controle e uma interface no estilo "modo console" (Xbox/PS).
 
 ## Downloads
 
-Builds oficiais (Linux `.deb`/`.AppImage`, Windows `.msi`/`.exe`) são
-publicados como [GitHub Releases](https://github.com/Kluis6/reemu/releases)
-a cada tag de versão (`vX.Y.Z`) — ver `.github/workflows/release.yml`. Não
-há build nightly da `main`; releases ficam como **draft** até serem
-revisadas e publicadas manualmente.
+Baixe a versão mais recente pra Linux ou Windows em
+[**GitHub Releases**](https://github.com/Kluis6/reemu/releases/latest).
 
-## Estrutura
+- **Linux**: `.deb` (Debian/Ubuntu) ou `.AppImage` (qualquer distro)
+- **Windows**: `.msi` ou `.exe` (instalador NSIS)
 
-```
-apps/
-  desktop/    Projeto Tauri v2 (crate reemu-desktop) — Linux OK; Win/macOS não verificados
-  mobile/     Projeto Tauri v2 mobile (Android) — ainda não inicializado
+Builds novos saem a cada versão marcada (`vX.Y.Z`) — sem build nightly.
 
-crates/
-  domain/               Regras de negócio puras — traits/portas, zero I/O de plataforma
-  db/                   Schema SQLite (migrations) + repositórios sqlx
-  core-loader-desktop/  libloading + FFI libretro (software + HW render GL)
-  emu-session/          Loop do core em thread dedicada + state machine de foco
-  video-surface/        Renderer wgpu: frame do core -> textura -> tela (letterbox)
-  audio-desktop/        AudioSink cpal + Dynamic Rate Control
-  library-scan/         Hash de ROMs (CRC32/MD5) + varredura + convenção de bezels
-  input-desktop/        SDL_GameControllerDB, hotkeys com combinação, keymap, gilrs
-  shader-slang/         Parser .slangp + compilador .slang (GLSL -> WGSL via naga)
-  # core-loader-mobile/  (a criar) — cores empacotados, JNI
+## Instalar
 
-packages/
-  ui/             Componentes Fluent, tokens de design — vazio
-  shared/         Hooks, cliente IPC, state management (Zustand) — vazio
-  app-desktop/    Entrypoint React desktop — Vite + React 19 + Fluent + Zustand + TanStack Query
-  app-mobile/     Entrypoint React mobile (layout touch) — vazio
-```
+### Linux
 
-## Regra de dependência (hexagonal)
-
-`domain` nunca importa crates de I/O de plataforma. Tudo que toca hardware,
-sistema de arquivos ou rede vive nos adapters (`core-loader-*`, `db`), que
-implementam as traits definidas em `domain`.
-
-## Status atual
-
-Ver `TASKS.md` para o checklist detalhado e o backlog. Resumo (2026-09-16):
-
-**Desktop (etapas 01–10) fechado.** Roda cores libretro software **e OpenGL**
-(N64 etc.) ponta a ponta: biblioteca → detalhe do jogo → jogar (vídeo num
-`<canvas>`, áudio com DRC, save states com thumbnail e save RAM), tudo com UI
-"modo Xbox" (Griffel) e navegação por controle.
-
-- [x] **01** Domain + `crates/db` (sqlx, ~11 repos, migrations 0001–0003)
-- [x] **02** `core-loader-desktop` — FFI libretro; software + HW render GL
-      (contexto EGL offscreen + FBO + readback; interop dma_buf opt-in). ROM `.zip`.
-- [x] **03** `emu-session` + vídeo via `<canvas>` (surface nativa adiada — ver `docs/ai-context/03`)
-- [x] **04** Shader chain (`plain`/`crt`/`lcd` + `.slangp` via `shader-slang`),
-      parâmetros ajustáveis, decoração/bezels (Bezel Project/RetroBat)
-- [x] **05** Input — teclado, `gilrs`, hotkeys/mapeamento do DB em runtime, UI de binding
-- [x] **06** `audio-desktop` — DRC + `CpalAudioSink`, aplicar config ao vivo
-- [x] **07** Frontend — Início + Meus jogos + RomDetail + PlayScreen, busca, menu de contexto
-- [x] **08** Save states + save RAM (`.srm` atômica, flush no shutdown), thumbnail por slot
-- [x] **09** Scraping — ScreenScraper por CRC + fila de revisão manual
-- [x] **10** Catálogo — 68 cores do buildbot; software + GL usáveis (badge "OpenGL")
-- [ ] **11** Port Android — desbloqueado, adiado
-- [x] **12** HW render Vulkan — fechado pra Beetle PSX HW (validado em hw do
-      usuário 2026-09-11/12); flycast/mupen e Fase C (sync fino) pendentes
-
-Backlog: flycast/mupen como alvos Vulkan + Fase C (tirar CPU-wait do sync),
-surface nativa de vídeo (tira as cópias de CPU do `<canvas>`), integer scaling,
-interop dma_buf sem gate, `.7z` no scan, `packages/ui`/`shared`, `apps/mobile`.
-
-## Rodar
+Baixe o `.deb` e instale:
 
 ```bash
-cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json   # app (vídeo via canvas)
-cargo tauri build --config apps/desktop/src-tauri/tauri.conf.json # bundle release
-cargo run -p video-surface --example play -- <core_libretro.so> <rom>   # player standalone
-cargo test --workspace
+sudo apt install ./ReEmu_*.deb
 ```
 
-Cores: baixe pela aba **Configurações › Cores** ou copie `*_libretro.so` em
-`~/.local/share/com.reemu.desktop/cores/`. Depois aponte a Biblioteca pra pasta
-das ROMs.
+Ou baixe o `.AppImage`, dê permissão de execução e rode direto:
+
+```bash
+chmod +x ReEmu_*.AppImage
+./ReEmu_*.AppImage
+```
+
+### Windows
+
+Baixe o `.msi` (ou o `.exe`) e execute o instalador.
+
+## Cores libretro
+
+O ReEmu não vem com cores/emuladores embutidos. Depois de instalar, abra
+**Configurações › Cores** dentro do app pra baixar os cores libretro que
+quiser direto do buildbot oficial, ou copie os arquivos `*_libretro.so` /
+`*_libretro.dll` manualmente na pasta de cores. Depois é só apontar a
+biblioteca pra pasta das suas ROMs.
+
+## Build a partir do código-fonte
+
+Precisa de Rust, Node/pnpm e a [Tauri CLI](https://v2.tauri.app). Passo a
+passo completo em [`STEP_BY_STEP.md`](STEP_BY_STEP.md); resumo rápido:
+
+```bash
+git clone https://github.com/Kluis6/reemu.git
+cd reemu
+pnpm install
+cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json
+```
+
+## Desenvolvimento
+
+Progresso e backlog: [`TASKS.md`](TASKS.md). Decisões de arquitetura:
+[`resumo-arquitetura-reemu.md`](resumo-arquitetura-reemu.md).
