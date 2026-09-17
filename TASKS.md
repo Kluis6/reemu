@@ -258,8 +258,19 @@ Scan de ROMs / identificação de sistema (`library-scan`, 2026-09-04):
   com`) coberto pros de disco+os cartuchos novos (conferido contra o org
   `libretro-thumbnails` no GitHub); `arcade` fica sem (MAME/FBNeo são sets
   separados lá, sem 1 pasta única).
-- **Backlog, não feito nesta rodada** (confirmado com o usuário): suporte a
-  `.7z` (pede dependência de descompressão nova, hoje só `.zip`); UI pra
+- ~~Suporte a `.7z` no scan~~ **feito (2026-09-17)** — `sevenz-rust2`
+  (fork mantido do `sevenz-rust`, puro Rust — sem libarchive/7z nativo,
+  compila limpo no CI Windows+Linux). `library-scan::archive` generalizado
+  (`is_supported_archive`/`peek_archive`/`read_archive_entry`, dispatch por
+  extensão) e `core-loader-desktop::archive` idem (`is_archive`/
+  `extract_rom`), mesmo tratamento de set de arcade sem entrada de cartucho
+  reconhecível (`NotFound` → cai pro caminho do arquivo original). Testado
+  de ponta a ponta com fixtures `.7z` reais (`ArchiveWriter`, feature
+  `compress` só em dev-dependencies) — não só compila: scan cataloga
+  hash/sistema certo, `extract_rom` extrai bytes certos, fallback de arcade
+  funciona. `default-features = false` no build de produção (sem aes256/
+  bzip2/ppmd — não usados por sets de ROM comuns).
+- **Backlog, não feito nesta rodada** (confirmado com o usuário): UI pra
   corrigir o sistema na mão quando o palpite errar (hoje só apagar +
   re-escanear) — nenhum comando/tela existe pra reatribuir `system_id` de
   uma ROM já catalogada.

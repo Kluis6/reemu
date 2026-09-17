@@ -15,8 +15,16 @@ log = "0.4"
 # ROMs de N64/disco costumam vir em .zip — o scan olha dentro e o loader
 # extrai. Só deflate/store (formato dominante); sem bzip2/zstd/aes.
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# .7z (comum em sets de ROM fora do padrão No-Intro/Redump). Puro Rust (sem
+# libarchive/7z nativo — precisa compilar limpo no CI Windows+Linux). LZMA/
+# LZMA2 (o padrão do 7-Zip) não precisam de feature; sem aes256/bzip2/ppmd
+# (não usados por sets de ROM comuns, só ROM não vem cifrada).
+sevenz-rust2 = { version = "0.22", default-features = false }
 
 [dev-dependencies]
 db = { path = "../db" }
 tokio = { version = "1", features = ["macros", "rt"] }
 tempfile = "3"
+# Só os testes escrevem `.7z` (fixture) — resolver 2 isola essa feature de
+# encoder pro build de teste, o binário de produção não linka LZMA encoder.
+sevenz-rust2 = { version = "0.22", default-features = false, features = ["compress"] }

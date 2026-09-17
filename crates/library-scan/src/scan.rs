@@ -1,6 +1,6 @@
 //! Varredura de um diretório de ROMs → `domain::library::Rom` (por hash).
 
-use crate::archive::{is_supported_archive, peek_zip, read_zip_entry};
+use crate::archive::{is_supported_archive, peek_archive, read_archive_entry};
 use crate::hash::FileRomHasher;
 use crate::systems::{system_for_extension, system_from_folder_name, AMBIGUOUS_DISC_EXTS};
 use domain::library::{Rom, RomRepository};
@@ -99,12 +99,12 @@ where
             .unwrap_or_default()
             .to_ascii_lowercase();
 
-        // ROM crua, dentro de um .zip, ou imagem de disco (extensão
+        // ROM crua, dentro de um .zip/.7z, ou imagem de disco (extensão
         // ambígua entre vários sistemas — PS1/PS2/Saturn/Dreamcast/PSP/...).
-        // Pro zip de cartucho, o `system_id`/hash vêm da entrada interna (o
-        // CRC precisa ser o da ROM, não o do arquivo); pro zip de arcade
-        // (MAME/FBNeo — sem entrada de cartucho reconhecível dentro) e pra
-        // disco, o arquivo INTEIRO é a "ROM".
+        // Pro arquivo de cartucho, o `system_id`/hash vêm da entrada interna
+        // (o CRC precisa ser o da ROM, não o do arquivo); pro arquivo de
+        // arcade (MAME/FBNeo — sem entrada de cartucho reconhecível dentro)
+        // e pra disco, o arquivo INTEIRO é a "ROM".
         let (system_id, archived_entry): (&str, Option<String>) =
             if AMBIGUOUS_DISC_EXTS.contains(&ext.as_str()) {
                 // Extensão de disco: (1) pasta ancestral (RetroBat/ES-DE); (2)
@@ -120,11 +120,11 @@ where
             } else if is_supported_archive(&ext) {
                 let is_arcade = system_from_dirs(&ancestor_dirs(path, dir)) == Some("arcade");
                 if is_arcade {
-                    // Set de arcade: sem "a ROM" dentro do zip (chip dumps
-                    // avulsos) — o zip inteiro é a unidade, hash do arquivo.
+                    // Set de arcade: sem "a ROM" dentro do arquivo (chip
+                    // dumps avulsos) — ele inteiro é a unidade, hash do arquivo.
                     ("arcade", None)
                 } else {
-                    match peek_zip(path) {
+                    match peek_archive(path) {
                         Some(a) => (a.system_id, Some(a.entry)),
                         None => {
                             report.skipped_unrecognized += 1;
@@ -155,7 +155,7 @@ where
 
         let hash = match &archived_entry {
             None => FileRomHasher::hash_file(&path_str),
-            Some(entry) => read_zip_entry(path, entry)
+            Some(entry) => read_archive_entry(path, entry)
                 .and_then(|bytes| FileRomHasher::hash_reader(Cursor::new(bytes))),
         };
         let hash = match hash {

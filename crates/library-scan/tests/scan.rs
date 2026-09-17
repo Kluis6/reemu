@@ -110,6 +110,41 @@ async fn rom_inside_zip_is_catalogued_by_inner_extension_and_hash() {
 }
 
 #[tokio::test]
+async fn rom_inside_7z_is_catalogued_by_inner_extension_and_hash() {
+    let dir = scratch_dir();
+    let rom_bytes = b"n64-rom-payload-inside-7z";
+
+    // .7z com uma ROM .z64 dentro.
+    let archive_path = dir.join("Mario 64.7z");
+    {
+        let mut w = sevenz_rust2::ArchiveWriter::create(&archive_path).unwrap();
+        w.push_archive_entry(
+            sevenz_rust2::ArchiveEntry::new_file("Super Mario 64 (USA).z64"),
+            Some(std::io::Cursor::new(rom_bytes.to_vec())),
+        )
+        .unwrap();
+        w.finish().unwrap();
+    }
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!(r.added, 1);
+    assert_eq!(r.skipped_unrecognized, 0);
+
+    let n64 = repo.list_by_system("n64").await.unwrap();
+    assert_eq!(n64.len(), 1);
+    // hash é o da ROM crua, não o do .7z
+    assert_eq!(n64[0].crc32, crc_of(rom_bytes));
+    assert_eq!(
+        n64[0].file_path,
+        archive_path.to_string_lossy(),
+        "file_path aponta pro .7z"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn same_rom_different_paths_both_catalogued() {
     let dir = scratch_dir();
     write(&dir, "a/Game.gba", b"identical-bytes");

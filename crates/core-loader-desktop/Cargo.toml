@@ -28,6 +28,8 @@ ash = { version = "0.38", default-features = false, features = ["loaded"] }
 # precisar de `libgbm-dev`; se faltar, o interop cai pro readback.
 # ROMs em .zip são extraídas pra um arquivo temporário na hora do load.
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# .7z — mesma extração, na hora do load (ver library-scan/Cargo.toml).
+sevenz-rust2 = { version = "0.22", default-features = false }
 # Só pra `silence_core_stdout` (dup2 do stdout pra /dev/null — cores libretro
 # spammam via printf cru fora do log callback).
 rustix = { version = "1", features = ["fs", "stdio", "std"] }
@@ -37,3 +39,6 @@ cc = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+# Só os testes escrevem `.7z` (fixture) — resolver 2 isola essa feature de
+# encoder pro build de teste, o binário de produção não linka LZMA encoder.
+sevenz-rust2 = { version = "0.22", default-features = false, features = ["compress"] }

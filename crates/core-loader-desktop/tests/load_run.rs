@@ -291,3 +291,31 @@ async fn zip_without_a_recognized_rom_entry_falls_back_to_the_zip_path() {
     drop(core);
     let _ = std::fs::remove_file(zip_path);
 }
+
+/// Mesmo caso do teste acima, mas em `.7z`.
+#[tokio::test]
+async fn sevenz_without_a_recognized_rom_entry_falls_back_to_the_archive_path() {
+    let _lock = guard().await;
+    let n = NONCE.fetch_add(1, Ordering::Relaxed);
+    let archive_path =
+        std::env::temp_dir().join(format!("reemu-arcade-test-{}-{n}.7z", std::process::id()));
+    {
+        let mut w = sevenz_rust2::ArchiveWriter::create(&archive_path).unwrap();
+        w.push_archive_entry(
+            sevenz_rust2::ArchiveEntry::new_file("sfiii3n.06"),
+            Some(std::io::Cursor::new(
+                b"chip-dump-not-a-cartridge-rom".to_vec(),
+            )),
+        )
+        .unwrap();
+        w.finish().unwrap();
+    }
+
+    let ldr = loader();
+    let core = ldr
+        .load_core(&core_id(), archive_path.to_str().unwrap())
+        .await
+        .expect("não devia travar — devia cair pro caminho original do .7z");
+    drop(core);
+    let _ = std::fs::remove_file(archive_path);
+}
