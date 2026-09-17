@@ -157,8 +157,17 @@ Ao concluir uma etapa:
 ## Backlog (fora da ordem principal — não iniciar antes de fechar 06/08/09)
 
 Renderização / filtros (independente da etapa 12):
-- **Integer scaling** — trava o `<canvas>` num múltiplo inteiro da resolução
-  nativa + toggle em Config › Vídeo. Só frontend, ~0,5 dia, risco zero.
+- ~~**Integer scaling**~~ **feito (2026-09-17)** — `domain::video` +
+  `db::VideoConfigRepo` (linha única, mesmo padrão de `audio_config`) +
+  comandos `get_video_config`/`update_video_config` + toggle em Config ›
+  Vídeo (`SettingsVideo.tsx`). Cálculo em `gpu.rs`: sem moldura, fator
+  `floor(min(dw/nw, dh/nh))` (sem corte, pode sobrar letterbox); com
+  moldura/bezel, fator `ceil(altura_da_moldura / altura_nativa)` — arredonda
+  pra CIMA e deixa a GPU cortar o excesso (sem `.clamp` no NDC), eliminando
+  a barra preta acima/abaixo ao custo de recortar a borda da imagem. Não
+  redimensiona a janela do app nem a moldura (photo bezel), só o retângulo
+  do jogo dentro dela — feature de resize de janela foi tentada e revertida
+  a pedido do usuário (queria o jogo se ajustando à janela, não o inverso).
 - ~~**Seleção de preset por pasta**~~ **feito (2026-09-02)** — comando
   `list_slangp_dir` (varre recursivo, agrupa por subpasta, teto 6000) +
   `<ShaderLibrary>` em Config › Vídeo e RomDetail: aponta pra `shaders_slang`
@@ -278,8 +287,58 @@ Infra:
 - `packages/ui`, `packages/shared` — ainda sem `package.json`.
 - `apps/mobile` / `packages/app-mobile` (etapa 11 Android) — só depois do
   desktop ponta a ponta (decisão do usuário 2026-08-30: deixar pra depois).
-- Windows/macOS — o `#[cfg(not(linux))]` do `video.rs`, os paths do buildbot e o
-  bundle nunca foram verificados (sem máquina).
+- Windows/macOS — **bug de build Windows corrigido (2026-09-16, `019cb06`)**:
+  os 8 crates internos (`domain`/`db`/`emu-session`/`video-surface`/
+  `audio-desktop`/`library-scan`/`input-desktop`/`shader-slang`) estavam
+  presos dentro de `[target.'cfg(target_os = "linux")'.dependencies]` em
+  `apps/desktop/src-tauri/Cargo.toml` — no Windows nenhum linkava (221 erros
+  "unresolved crate"). Movidos pra `[dependencies]`; só `wayland-client`
+  continua linux-only. **Ainda falta**: ninguém compilou de fato numa máquina
+  Windows real (sem máquina disponível) — os paths do buildbot, o `video.rs`
+  (`#[cfg(not(linux))]`) e o bundle continuam não verificados na prática.
+- `reemu-core-host` (processo filho do core, `crates/core-host-desktop`) NÃO
+  é dependência de `apps/desktop/src-tauri/Cargo.toml` — `cargo tauri dev`
+  sozinho não o recompila. Usar sempre `scripts/dev.sh` (já faz `cargo build
+  -p core-host-desktop` antes); rodando `cargo tauri dev` direto o binário
+  fica desatualizado/ausente em `target/debug/` e o app falha ao carregar
+  qualquer jogo com "binário reemu-core-host não encontrado ao lado do
+  executável" (incidentes 2026-09-11 e 2026-09-16).
+- Frontend — responsividade revisada de ponta a ponta (2026-09-16, commits
+  `36d469a`..`208a3bd`): elementos de tamanho fixo do Fluent trocados por
+  `clamp()` (topbar, avatar, cards, setas do carrossel), padding lateral das
+  páginas passou a derivar da largura real da rail via CSS var (alinhamento
+  consistente em qualquer resolução, não só acima de 1600px), cards da
+  grade/prateleira agora esticam dinamicamente até a borda (`auto-fit` +
+  largura calculada em JS). Hero do RomDetail redesenhado no modelo "página
+  de produto de loja" (ícone+título+ações no topo, banner de fundo colado no
+  topo/sangrando a largura toda, tabs sobrepondo a base do hero).
+- **`core_host_path()` — 2 bugs de empacotamento corrigidos (2026-09-17)**,
+  achados ao montar o pipeline de release abaixo (não empacotados ainda, sem
+  release publicada até agora — só rodava via `scripts/dev.sh`/`cargo tauri
+  dev`, que sempre caem no branch "irmão do executável"):
+  1. Windows nunca procurava `reemu-core-host.exe` (faltava a extensão).
+  2. Linux `.deb`/AppImage: o `resource_dir` do Tauri (onde `bundle.resources`
+     copia o binário) NÃO é `/usr/lib/<nome-do-executável>` como a doc do
+     `PathResolver` sugere genericamente — é `/usr/lib/<productName>`
+     (`ReEmu`, de `tauri.conf.json`). Confirmado empacotando um `.deb`/
+     `.AppImage` reais localmente e inspecionando o conteúdo (`dpkg-deb -c`,
+     `--appimage-extract`) antes de escrever o fix — a suposição inicial
+     (nome do binário) teria saído quebrada em produção.
+- **CI/CD de release (2026-09-17)** — pipeline nos moldes do Flycast: tag
+  `v*` → `.github/workflows/release.yml` builda Linux (`.deb`+`.AppImage`) e
+  Windows (`.msi`+`.exe` NSIS) em matrix, builda `reemu-core-host` ANTES do
+  `cargo tauri build` (não é dependência do crate principal, ver nota acima)
+  e sobe os artefatos como Release **draft** no GitHub (`softprops/
+  action-gh-release@v2` — revisar e publicar manual). `tauri.linux.conf.json`
+  / `tauri.windows.conf.json` (novos, auto-mergeados pelo Tauri por nome de
+  arquivo) declaram `bundle.resources` apontando pro `reemu-core-host[.exe]`
+  de `target/release/`. Só dispara em tag (não em todo push/merge — decisão
+  do usuário). Validado com uma build de release real local (não só CI):
+  `cargo build --release -p core-host-desktop` + `cargo tauri build`
+  produziram `.deb`/`.rpm`/`.AppImage` com o `reemu-core-host` no lugar
+  certo (`dpkg-deb -c` confirmou o path, ver bug 2 acima). **Falta**: badge +
+  seção "Downloads" no README apontando pra Releases; nunca rodou de fato no
+  GitHub Actions (sem runner Windows pra testar aqui).
 - Desempenho do caminho do core (auditado 2026-09-02 — os itens fáceis já
   feitos: `rotate_rgba` sem cópia no no-op, flush da `.srm` off-thread, spin
   com menos leitura de relógio). Ainda no radar, por ordem de impacto:

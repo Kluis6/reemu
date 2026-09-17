@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "targets": ["msi", "nsis"],
+    "resources": {
+      "../../../target/release/reemu-core-host.exe": ""
+    }
+  }
+}

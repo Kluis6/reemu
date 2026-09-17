@@ -1,8 +1,20 @@
 # ReEmu — Monorepo
 
+[![CI](https://github.com/Kluis6/reemu/actions/workflows/ci.yml/badge.svg)](https://github.com/Kluis6/reemu/actions/workflows/ci.yml)
+[![Release](https://github.com/Kluis6/reemu/actions/workflows/release.yml/badge.svg)](https://github.com/Kluis6/reemu/actions/workflows/release.yml)
+[![Downloads](https://img.shields.io/github/v/release/Kluis6/reemu?label=downloads)](https://github.com/Kluis6/reemu/releases/latest)
+
 Frontend emulador para cores libretro (Tauri v2 + React 19 + SQLite +
 Fluent Design). Estrutura inicial gerada a partir do design de arquitetura
 (ver `resumo-arquitetura-reemu.md`).
+
+## Downloads
+
+Builds oficiais (Linux `.deb`/`.AppImage`, Windows `.msi`/`.exe`) são
+publicados como [GitHub Releases](https://github.com/Kluis6/reemu/releases)
+a cada tag de versão (`vX.Y.Z`) — ver `.github/workflows/release.yml`. Não
+há build nightly da `main`; releases ficam como **draft** até serem
+revisadas e publicadas manualmente.
 
 ## Estrutura
 
