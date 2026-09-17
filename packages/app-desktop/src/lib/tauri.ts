@@ -54,6 +54,18 @@ export const getAudioConfig = () => invoke<AudioConfig>('get_audio_config')
 export const updateAudioConfig = (config: AudioConfig) =>
   invoke<void>('update_audio_config', { config })
 
+export interface VideoConfig {
+  /** Trava o retângulo do jogo num múltiplo inteiro da resolução nativa do
+   *  core (evita o borrão de escala não-inteira em pixel art). Com moldura/
+   *  bezel ativa, arredonda o fator pra CIMA (não pra baixo) pra eliminar a
+   *  barra preta acima/abaixo da tela — o excesso é cortado pela GPU, não
+   *  redimensionado. A moldura em si nunca é redimensionada. */
+  integerScaling: boolean
+}
+export const getVideoConfig = () => invoke<VideoConfig>('get_video_config')
+export const updateVideoConfig = (config: VideoConfig) =>
+  invoke<void>('update_video_config', { config })
+
 export const quitApp = () => invoke<void>('quit_app')
 
 /** Desliga a máquina (`systemctl poweroff`) — menu de energia do rail. */

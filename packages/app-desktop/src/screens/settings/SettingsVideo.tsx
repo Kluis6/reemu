@@ -2,8 +2,10 @@ import {
   Body1,
   Button,
   Caption1,
+  Field,
   Radio,
   RadioGroup,
+  Switch,
   Tab,
   TabList,
   Text,
@@ -18,10 +20,12 @@ import { sysToast } from '../../lib/toast'
 import {
   clearDecorations,
   getShaderInfo,
+  getVideoConfig,
   importDecorationPack,
   pickFolder,
   pickSlangp,
   setShader,
+  updateVideoConfig,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
 
@@ -54,6 +58,17 @@ export function SettingsVideo() {
       push(sysToast(`Shader padrão: ${LABELS[name]?.title ?? curated ?? base}`, 'Success'))
     },
     onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
+  })
+
+  const videoCfg = useQuery({
+    queryKey: ['video-config'],
+    queryFn: getVideoConfig,
+    retry: false,
+  })
+  const setIntegerScaling = useMutation({
+    mutationFn: (integerScaling: boolean) => updateVideoConfig({ integerScaling }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['video-config'] }),
+    onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, 'Error')),
   })
 
   const deco = useMutation({
@@ -132,6 +147,17 @@ export function SettingsVideo() {
         maxWidth: data.gpu && tab === 'shaders' ? 860 : 460,
       }}
     >
+      <Field
+        label="Integer scaling"
+        hint="Trava o vídeo num múltiplo inteiro da resolução nativa do core — evita borrão de escala fracionária em pixel art. Com moldura/bezel ativa, preenche o máximo da altura da tela sem barra preta; o excesso é cortado nas bordas em vez de sobrar espaço vazio. A moldura não muda de tamanho."
+      >
+        <Switch
+          checked={videoCfg.data?.integerScaling ?? false}
+          disabled={videoCfg.isLoading || setIntegerScaling.isPending}
+          onChange={(_, d) => setIntegerScaling.mutate(d.checked)}
+        />
+      </Field>
+
       <Caption1>
         {data.gpu
           ? 'Shader padrão pra todos os jogos. Cada jogo pode ter um shader próprio na tela de detalhe.'

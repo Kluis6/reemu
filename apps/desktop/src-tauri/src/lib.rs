@@ -15,6 +15,7 @@ pub mod save_state;
 
 use commands::AppState;
 use domain::audio::AudioConfigRepository as _;
+use domain::video::VideoConfigRepository as _;
 use tauri::{Emitter, Manager};
 
 /// Flag por env var com um default: ligada, salvo `KEY=0|false|off|no`.
@@ -50,6 +51,13 @@ pub fn run() {
                         .ok()
                 })
                 .unwrap_or_default();
+            let video_config = db
+                .as_ref()
+                .and_then(|pool| {
+                    tauri::async_runtime::block_on(db::VideoConfigRepo::new(pool.clone()).get())
+                        .ok()
+                })
+                .unwrap_or_default();
             let hotkeys = db
                 .as_ref()
                 .and_then(|pool| {
@@ -66,8 +74,9 @@ pub fn run() {
             // Headless: sem surface, não conflita com o GTK. Se não houver
             // adapter, o `poll_frame` segue no caminho CPU.
             match gpu::FrameProcessor::new() {
-                Some(fp) => {
+                Some(mut fp) => {
                     let state = app.state::<AppState>();
+                    fp.set_integer_scaling(video_config.integer_scaling);
                     // Etapa 12 B3b: publica os handles do `VkDevice` do
                     // compositor na sessão. Com `REEMU_HW=vulkan`, um core que
                     // negocia Vulkan passa a rodar in-process no mesmo device.
@@ -199,6 +208,8 @@ pub fn run() {
             commands::session_state,
             commands::get_audio_config,
             commands::update_audio_config,
+            commands::get_video_config,
+            commands::update_video_config,
             commands::list_installed_cores,
             commands::get_core_options,
             commands::set_core_option,
@@ -386,6 +397,11 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                     .take()
                 {
                     let mut slot = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
+                    // Preserva a config de integer scaling do FP antigo — ele
+                    // nasce sempre com o padrão (`false`) em `assemble()`.
+                    let prev_integer_scaling =
+                        slot.as_ref().map(|f| f.integer_scaling()).unwrap_or(false);
+                    new_fp.set_integer_scaling(prev_integer_scaling);
                     drop(slot.take()); // dropa o FP antigo (+ surface) nesta thread
                     if let Some((h, w, ht)) = state
                         .vk_reattach

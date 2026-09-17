@@ -17,6 +17,7 @@ mod save_state_repo;
 mod shader_chain_repo;
 mod system_core_repo;
 mod system_hotkeys_repo;
+mod video_config_repo;
 
 pub use audio_config_repo::AudioConfigRepo;
 pub use controller_mappings_repo::ControllerMappingsRepo;
@@ -31,3 +32,4 @@ pub use save_state_repo::SaveStateRepo;
 pub use shader_chain_repo::ShaderChainRepo;
 pub use system_core_repo::SystemCoreRepo;
 pub use system_hotkeys_repo::SystemHotkeysRepo;
+pub use video_config_repo::VideoConfigRepo;

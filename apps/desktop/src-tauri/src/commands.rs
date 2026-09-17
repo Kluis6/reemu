@@ -10,6 +10,7 @@ use domain::audio::{AudioConfig, AudioConfigRepository};
 use domain::core_loader::InstalledCoreRepository;
 use domain::hotkeys::{HotkeyBinding, SystemAction};
 use domain::shader_chain::{AssignmentScope, ShaderChainStore};
+use domain::video::{VideoConfig, VideoConfigRepository};
 use emu_session::{EmuSession, FocusController, SessionConfig, SessionState};
 use input_desktop::ComboHotkeyResolver;
 use serde::{Deserialize, Serialize};
@@ -1390,6 +1391,50 @@ pub async fn update_audio_config(
     .await
     .map_err(|e| e.to_string())?;
     r.map_err(|e| e.to_string())
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VideoConfigDto {
+    pub integer_scaling: bool,
+}
+
+impl From<VideoConfig> for VideoConfigDto {
+    fn from(c: VideoConfig) -> Self {
+        Self {
+            integer_scaling: c.integer_scaling,
+        }
+    }
+}
+
+impl From<VideoConfigDto> for VideoConfig {
+    fn from(c: VideoConfigDto) -> Self {
+        Self {
+            integer_scaling: c.integer_scaling,
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn get_video_config(state: State<'_, AppState>) -> Result<VideoConfigDto, String> {
+    let repo = db::VideoConfigRepo::new(pool(&state)?);
+    repo.get().await.map(Into::into).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_video_config(
+    state: State<'_, AppState>,
+    config: VideoConfigDto,
+) -> Result<(), String> {
+    let cfg: VideoConfig = config.into();
+    let repo = db::VideoConfigRepo::new(pool(&state)?);
+    repo.update(&cfg).await.map_err(|e| e.to_string())?;
+
+    // Aplica ao vivo: o próximo `render_to_surface` já lê o valor novo.
+    if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+        fp.set_integer_scaling(cfg.integer_scaling);
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]

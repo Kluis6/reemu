@@ -23,3 +23,4 @@ pub mod metadata;
 pub mod profile;
 pub mod save_state;
 pub mod shader_chain;
+pub mod video;

@@ -574,6 +574,13 @@ pub struct FrameProcessor {
     /// Surface nativa (etapa 03 — vídeo fora da webview). `Some` = a chain
     /// desenha direto nela em vez de fazer readback pro canvas.
     surface: Option<SurfaceOut>,
+    /// Integer scaling (backlog): trava o retângulo final do jogo (caminho
+    /// surface nativa, `render_to_surface`) num múltiplo INTEIRO da
+    /// resolução nativa do core, em vez do letterbox fracionário livre. Não
+    /// se aplica quando a moldura define um viewport explícito (o bezel foi
+    /// desenhado pra aquele retângulo exato). `false` por padrão — muda ao
+    /// vivo via `set_integer_scaling` (chamado por `update_video_config`).
+    integer_scaling: bool,
 }
 
 /// Alvo de apresentação nativo: a `wgpu::Surface` de uma `wl_subsurface` (ou da
@@ -1077,6 +1084,7 @@ impl FrameProcessor {
             rot_view: None,
             decoration: None,
             surface: None,
+            integer_scaling: false,
         })
     }
 
@@ -1428,6 +1436,20 @@ impl FrameProcessor {
         }
     }
 
+    /// Liga/desliga integer scaling ao vivo (`update_video_config`) — só
+    /// precisa marcar a flag, o próximo `render_to_surface` já lê o valor
+    /// novo (sem precisar recarregar o jogo).
+    pub fn set_integer_scaling(&mut self, on: bool) {
+        self.integer_scaling = on;
+    }
+
+    /// Pra carregar o valor atual num `FrameProcessor` NOVO que substitui
+    /// este (§Beetle — troca de device Vulkan em runtime, ver `lib.rs`) —
+    /// sem isto, o FP novo nasceria sempre com integer scaling desligado.
+    pub fn integer_scaling(&self) -> bool {
+        self.integer_scaling
+    }
+
     /// Caminho da surface nativa: roda a chain e desenha o resultado (com
     /// letterbox) direto na surface, sem tocar a CPU. Sem frame novo é no-op —
     /// a `wl_surface` segura o último buffer apresentado (freeze no pause).
@@ -1462,7 +1484,27 @@ impl FrameProcessor {
         let s = self.surface.as_ref().unwrap();
         let (dw, dh) = (s.config.width.max(1), s.config.height.max(1));
         let ar_dst = dw as f32 / dh as f32;
-        let (hw, hh) = if ar_src > ar_dst {
+        // Integer scaling (backlog): só se aplica ao pixel CRU do core, sem
+        // moldura (`!use_comp`) — uma moldura/bezel é foto, não pixel art, e
+        // já foi desenhada pro retângulo dela (`decoration_aspect()` acima).
+        // `native_width/height` não giram sozinhos com `SET_ROTATION`; troca
+        // W↔H no giro de 90/270° igual ao `ar_src` acima.
+        let (hw, hh) = if self.integer_scaling && !use_comp {
+            let (nw, nh) = if quarter {
+                (
+                    frame.metadata.native_height.max(1),
+                    frame.metadata.native_width.max(1),
+                )
+            } else {
+                (
+                    frame.metadata.native_width.max(1),
+                    frame.metadata.native_height.max(1),
+                )
+            };
+            let factor = (dw / nw).min(dh / nh).max(1);
+            let (out_w, out_h) = ((nw * factor) as f32, (nh * factor) as f32);
+            (out_w / dw as f32, out_h / dh as f32)
+        } else if ar_src > ar_dst {
             (1.0, ar_dst / ar_src)
         } else {
             (ar_src / ar_dst, 1.0)
@@ -2163,8 +2205,31 @@ impl FrameProcessor {
             let dar = if quarter && dar0 > 0.0 { 1.0 / dar0 } else { dar0 };
             let (cx, cy, hw, hh) = match vp {
                 // Janela do jogo conhecida (do `.cfg` ou detectada pela
-                // transparência da arte): o jogo PREENCHE a janela — sem
-                // letterbox (a moldura foi desenhada pra esse retângulo).
+                // transparência da arte): por padrão o jogo PREENCHE a janela
+                // (sem letterbox — a moldura foi desenhada pra esse
+                // retângulo). Com integer scaling ligado, o jogo fica no
+                // MENOR múltiplo inteiro que COBRE a ALTURA do canvas inteiro
+                // da moldura (`dh`, não `v.h`/vidro) — `ceil`, não `floor`:
+                // sem isto sobrava uma faixa preta em cima/embaixo sempre que
+                // `dh` não é múltiplo exato da resolução nativa (pedido do
+                // usuário — prefere cortar um pouco do jogo pras bordas a
+                // deixar barra preta). O excesso que passa de `dh` é
+                // cortado pelo clipping normal da GPU (`hw`/`hh` SEM
+                // `.clamp` — um NDC >1 já sai da viewport sozinho). Largura
+                // só ACOMPANHA o mesmo fator (proporcional); a moldura em si
+                // nunca muda de tamanho.
+                Some(v) if v.w > 0.0 && v.h > 0.0 && self.integer_scaling => {
+                    let (gnw, gnh) = if quarter { (nh, nw) } else { (nw, nh) };
+                    let factor = ((dh as f32 / gnh.max(1) as f32).ceil() as u32).max(1);
+                    let (gw, gh) = ((gnw * factor) as f32, (gnh * factor) as f32);
+                    let (cx0, cy0) = (v.x + v.w / 2.0, v.y + v.h / 2.0);
+                    (
+                        cx0 / dw as f32 * 2.0 - 1.0,
+                        1.0 - cy0 / dh as f32 * 2.0,
+                        gw / dw as f32,
+                        gh / dh as f32,
+                    )
+                }
                 Some(v) if v.w > 0.0 && v.h > 0.0 => (
                     (v.x + v.w / 2.0) / dw as f32 * 2.0 - 1.0,
                     1.0 - (v.y + v.h / 2.0) / dh as f32 * 2.0,
