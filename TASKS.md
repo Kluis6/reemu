@@ -270,10 +270,14 @@ Scan de ROMs / identificação de sistema (`library-scan`, 2026-09-04):
   hash/sistema certo, `extract_rom` extrai bytes certos, fallback de arcade
   funciona. `default-features = false` no build de produção (sem aes256/
   bzip2/ppmd — não usados por sets de ROM comuns).
-- **Backlog, não feito nesta rodada** (confirmado com o usuário): UI pra
-  corrigir o sistema na mão quando o palpite errar (hoje só apagar +
-  re-escanear) — nenhum comando/tela existe pra reatribuir `system_id` de
-  uma ROM já catalogada.
+- ~~UI pra corrigir sistema errado na mão~~ **já existia, nota corrigida
+  (2026-09-17)** — a anotação anterior estava desatualizada. `set_metadata`
+  (`domain::library::RomRepository`) já suporta trocar `system_id`; comando
+  Tauri `set_rom_metadata` já registrado; `RomDetail.tsx` já tem o botão
+  "Editar nome e plataforma" (ícone de lápis na hero) abrindo um diálogo
+  com `<Select>` de todas as plataformas (`knownPlatforms()` em
+  `lib/platform.ts`), hint explícito ("Corrige ROMs que o scan não
+  identificou, ficam em 'Disco'"). Nada a fazer aqui.
 
 BIOS / arquivos de sistema (2026-09-04 — feature nova, não existia nada antes):
 - `domain::bios` — tabela pura (`system_id` → arquivo(s) esperado(s),
