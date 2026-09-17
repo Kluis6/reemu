@@ -2207,21 +2207,36 @@ impl FrameProcessor {
                 // Janela do jogo conhecida (do `.cfg` ou detectada pela
                 // transparência da arte): por padrão o jogo PREENCHE a janela
                 // (sem letterbox — a moldura foi desenhada pra esse
-                // retângulo). Com integer scaling ligado, o jogo fica no
-                // MENOR múltiplo inteiro que COBRE a ALTURA do canvas inteiro
-                // da moldura (`dh`, não `v.h`/vidro) — `ceil`, não `floor`:
-                // sem isto sobrava uma faixa preta em cima/embaixo sempre que
-                // `dh` não é múltiplo exato da resolução nativa (pedido do
-                // usuário — prefere cortar um pouco do jogo pras bordas a
-                // deixar barra preta). O excesso que passa de `dh` é
-                // cortado pelo clipping normal da GPU (`hw`/`hh` SEM
-                // `.clamp` — um NDC >1 já sai da viewport sozinho). Largura
-                // só ACOMPANHA o mesmo fator (proporcional); a moldura em si
-                // nunca muda de tamanho.
+                // retângulo). Com integer scaling ligado, a ALTURA fica no
+                // múltiplo inteiro MAIS PRÓXIMO da altura do canvas inteiro
+                // da moldura (`dh`, não `v.h`/vidro) — `round`, não `floor`
+                // puro: quando o fator de baixo deixaria uma barra preta
+                // pequena, tudo bem; mas perto do meio do caminho entre dois
+                // fatores (ex: `dh/nativa` = 4.5), sempre arredondar pra CIMA
+                // significa saltar um fator inteiro inteiro maior que o
+                // necessário só pra não ter barra nenhuma — isso cortava
+                // linhas inteiras de HUD/texto perto da borda (visto com
+                // Batman Beyond/PS1: fator 4→5 cortava "Developed by" no
+                // topo). `round` escolhe sempre o menor erro em pixels entre
+                // faixa preta (fator de baixo) e corte de jogo (fator de
+                // cima). O excesso que ainda passar de `dh` é cortado pelo
+                // clipping normal da GPU (`hw`/`hh` SEM `.clamp` — um NDC >1
+                // já sai da viewport sozinho).
+                // A LARGURA vem de `altura × dar` (proporção já corrigida de
+                // PAR/pixel não-quadrado acima), NÃO de `native_width ×
+                // fator` — cores com pixel não-quadrado (PS1, N64, Mega
+                // Drive…) têm `native_width/native_height` cru diferente da
+                // proporção real de exibição; multiplicar os dois pelo mesmo
+                // fator inteiro deixava a imagem mais larga que o vidro,
+                // cortando texto/HUD nas bordas esquerda/direita (visto no
+                // teste com Batman Beyond/PS1). Isso é genérico — usa o
+                // `aspect_ratio` que TODO core já reporta, sem tabela por
+                // sistema. A moldura em si nunca muda de tamanho.
                 Some(v) if v.w > 0.0 && v.h > 0.0 && self.integer_scaling => {
-                    let (gnw, gnh) = if quarter { (nh, nw) } else { (nw, nh) };
-                    let factor = ((dh as f32 / gnh.max(1) as f32).ceil() as u32).max(1);
-                    let (gw, gh) = ((gnw * factor) as f32, (gnh * factor) as f32);
+                    let gnh = if quarter { nw } else { nh };
+                    let factor = ((dh as f32 / gnh.max(1) as f32).round() as u32).max(1);
+                    let gh = (gnh * factor) as f32;
+                    let gw = gh * dar;
                     let (cx0, cy0) = (v.x + v.w / 2.0, v.y + v.h / 2.0);
                     (
                         cx0 / dw as f32 * 2.0 - 1.0,

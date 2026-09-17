@@ -157,16 +157,33 @@ Ao concluir uma etapa:
 ## Backlog (fora da ordem principal — não iniciar antes de fechar 06/08/09)
 
 Renderização / filtros (independente da etapa 12):
-- ~~**Integer scaling**~~ **feito (2026-09-17)** — `domain::video` +
-  `db::VideoConfigRepo` (linha única, mesmo padrão de `audio_config`) +
-  comandos `get_video_config`/`update_video_config` + toggle em Config ›
-  Vídeo (`SettingsVideo.tsx`). Cálculo em `gpu.rs`: sem moldura, fator
-  `floor(min(dw/nw, dh/nh))` (sem corte, pode sobrar letterbox); com
-  moldura/bezel, fator `ceil(altura_da_moldura / altura_nativa)` — arredonda
-  pra CIMA e deixa a GPU cortar o excesso (sem `.clamp` no NDC), eliminando
-  a barra preta acima/abaixo ao custo de recortar a borda da imagem. Não
-  redimensiona a janela do app nem a moldura (photo bezel), só o retângulo
-  do jogo dentro dela — feature de resize de janela foi tentada e revertida
+- ~~**Integer scaling**~~ **feito (2026-09-17), com 2 correções no mesmo
+  dia** — `domain::video` + `db::VideoConfigRepo` (linha única, mesmo
+  padrão de `audio_config`) + comandos `get_video_config`/
+  `update_video_config` + toggle em Config › Vídeo (`SettingsVideo.tsx`).
+  Cálculo em `gpu.rs`: sem moldura, fator `floor(min(dw/nw, dh/nh))` (sem
+  corte, pode sobrar letterbox); com moldura/bezel, fator
+  `round(altura_da_moldura / altura_nativa)` e deixa a GPU cortar o excesso
+  quando passar (sem `.clamp` no NDC).
+  - **Correção 1** (testado com Batman Beyond/PS1): a largura usava
+    `native_width × fator` (pixel quadrado); cores com PAR ≠ 1 (PS1, N64,
+    Mega Drive…) ficavam mais largos que o vidro da moldura, cortando texto/
+    HUD nas bordas esquerda/direita. Fix: largura = `altura × aspect_ratio`
+    (já corrigido de PAR), genérico pra qualquer core — não precisa de
+    tabela por plataforma.
+  - **Correção 2**: o fator sempre arredondava pra CIMA (`ceil`) pra nunca
+    sobrar barra preta; quando a conta caía perto do meio do caminho entre
+    dois fatores (ex: 4.5), isso saltava um fator inteiro MAIOR que o
+    necessário, cortando linhas inteiras de HUD perto da borda ("Developed
+    by" sumia no boot do Batman Beyond). Trocado pra `round` (fator mais
+    próximo, menor erro em pixels entre barra preta e corte).
+  - **Ainda não é o resultado ideal** (confirmado com o usuário, ficou como
+    está por ora): em molduras onde a proporção cai bem no meio do caminho
+    entre dois fatores, a barra preta que sobra pode ficar maior do que o
+    usuário gostaria (visto no mesmo teste — bordas pretas grossas em vez de
+    quase preencher a moldura). Não redimensiona a janela do app nem a
+    moldura (photo bezel), só o retângulo do jogo dentro dela — feature de
+    resize de janela foi tentada e revertida
   a pedido do usuário (queria o jogo se ajustando à janela, não o inverso).
 - ~~**Seleção de preset por pasta**~~ **feito (2026-09-02)** — comando
   `list_slangp_dir` (varre recursivo, agrupa por subpasta, teto 6000) +

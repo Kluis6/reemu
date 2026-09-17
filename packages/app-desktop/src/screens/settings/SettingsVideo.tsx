@@ -149,7 +149,7 @@ export function SettingsVideo() {
     >
       <Field
         label="Integer scaling"
-        hint="Trava o vídeo num múltiplo inteiro da resolução nativa do core — evita borrão de escala fracionária em pixel art. Com moldura/bezel ativa, preenche o máximo da altura da tela sem barra preta; o excesso é cortado nas bordas em vez de sobrar espaço vazio. A moldura não muda de tamanho."
+        hint="Trava o vídeo num múltiplo inteiro da resolução nativa do core — evita borrão de escala fracionária em pixel art. Com moldura/bezel ativa, escolhe o múltiplo mais próximo da altura da tela: às vezes sobra uma barra preta fina, às vezes corta um pouco a borda do jogo — o que for menor. A moldura não muda de tamanho."
       >
         <Switch
           checked={videoCfg.data?.integerScaling ?? false}

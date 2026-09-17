@@ -55,11 +55,13 @@ export const updateAudioConfig = (config: AudioConfig) =>
   invoke<void>('update_audio_config', { config })
 
 export interface VideoConfig {
-  /** Trava o retângulo do jogo num múltiplo inteiro da resolução nativa do
-   *  core (evita o borrão de escala não-inteira em pixel art). Com moldura/
-   *  bezel ativa, arredonda o fator pra CIMA (não pra baixo) pra eliminar a
-   *  barra preta acima/abaixo da tela — o excesso é cortado pela GPU, não
-   *  redimensionado. A moldura em si nunca é redimensionada. */
+  /** Trava a altura do retângulo do jogo num múltiplo inteiro da resolução
+   *  nativa do core (evita o borrão de escala não-inteira em pixel art).
+   *  Com moldura/bezel ativa, arredonda pro fator MAIS PRÓXIMO (não sempre
+   *  pra cima) — minimiza o erro em pixels entre deixar uma barra preta
+   *  fina ou cortar um pouco a borda do jogo, cortado pela GPU quando
+   *  ultrapassa. A largura segue a proporção correta do core (PAR), não o
+   *  fator bruto. A moldura em si nunca é redimensionada. */
   integerScaling: boolean
 }
 export const getVideoConfig = () => invoke<VideoConfig>('get_video_config')
