@@ -28,5 +28,5 @@ Mais fracos: `presets/` 71%, `crt/` 71% (família crt-royale), anti-aliasing 67%
   reescrita ainda não cobre.
 - helpers não-resolvidos (`tex2Dblur9fast`, `tsample`, `blur`,
   `get_orientation`, `normalized_sigmoid`) — macro/forward-ref.
-- `mipmap_input` / `mipmap` de LUT: parseado, executor não gera a cadeia de
-  mips (nenhum preset *falha* por isso — degrada silenciosamente).
+- ~~`mipmap_input` / `mipmap` de LUT: parseado, executor não gera a cadeia de
+  mips~~ **feito (2026-09-18)** — ver `docs/ai-context/04`.

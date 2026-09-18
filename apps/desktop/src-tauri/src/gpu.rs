@@ -244,8 +244,11 @@ struct PassSpec {
     alias: Option<String>,
     /// A saída deste passe precisa ser guardada pro próximo frame (`*Feedback`).
     feedback: bool,
-    // TODO(fase 2): `mipmap_input` — precisa gerar a cadeia de mips (wgpu não
-    // faz automático). `slangp::Pass.mipmap_input` já é parseado.
+    /// `mipmap_input<N>` do `.slangp` neste passe — o passe ANTERIOR precisa
+    /// gerar a cadeia de mips na saída dele pra este aqui amostrar (mesma
+    /// convenção do RetroArch: `next_pass->mipmap` decide o `max_levels` do
+    /// passe corrente — ver `ensure_target`).
+    mipmap_input: bool,
 }
 
 /// Uma textura do usuário do `.slangp` (LUT/máscara), já decodificada — o
@@ -257,7 +260,9 @@ struct LutSpec {
     h: u32,
     linear: bool,
     wrap: WrapMode,
-    // TODO(fase 2): `mipmap` (`TextureRef.mipmap` já é parseado).
+    /// `<name>_mipmap` do `.slangp` — gera a cadeia de mips no upload (feito
+    /// na CPU em `realize`, já que o LUT só carrega 1× no load do preset).
+    mipmap: bool,
 }
 
 /// Resultado de `build_specs`: preset resolvido pronto pra montar os passes.
@@ -295,6 +300,10 @@ struct Pass {
     feedback_target: Option<TexView>,
     bind_group: Option<wgpu::BindGroup>,
     bound: bool,
+    mipmap_input: bool,
+    /// Quantos níveis de mip o `.target` atual tem (1 = sem cadeia) — decidido
+    /// em `ensure_target` por `mipmap_input` do PRÓXIMO passe.
+    target_mip_levels: u32,
 }
 
 /// Retângulo do jogo (viewport) dentro da moldura, em pixels da imagem.
@@ -554,6 +563,14 @@ pub struct FrameProcessor {
     /// serializar. Fallback bloqueante só quando o slot ainda não mapeou.
     rb: ReadbackRing,
     frame_count: u64,
+    /// Blit linear nível-a-nível pra gerar cadeia de mips de um `.target` de
+    /// passe (`mipmap_input`) — wgpu não tem "generate mipmaps" embutido
+    /// (ver `generate_mips`). Reusa a `bgl`/shader do `comp` (mesmo layout:
+    /// rect uniforme + textura + sampler), só o pipeline é próprio porque o
+    /// formato do alvo pode divergir do formato de composição.
+    mip_pipeline: wgpu::RenderPipeline,
+    /// Rect fixo `[0,0,1,1]` (quad cheio) — reusado em todo blit de mip.
+    mip_rect: wgpu::Buffer,
     /// `(w, h, com_moldura)` da última chamada de `render_to_surface` — pra
     /// `capture_surface_frame` ler de volta a textura certa sem rodar a chain.
     last_surface_out: Option<(u32, u32, bool)>,
@@ -1045,6 +1062,14 @@ impl FrameProcessor {
         let comp = build_composite(&device);
         let flip = build_flip(&device);
         let rot_pipeline = rotate_pipeline(&device, &comp.bgl);
+        let mip_pipeline = blit_pipeline(&device, &comp.bgl, FMT);
+        let mip_rect = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("mip rect"),
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        queue.write_buffer(&mip_rect, 0, f32s_bytes(&[0.0, 0.0, 1.0, 1.0]));
 
         Some(Self {
             sampler_nearest: mk_sampler(wgpu::FilterMode::Nearest),
@@ -1055,6 +1080,8 @@ impl FrameProcessor {
             device,
             queue,
             quad,
+            mip_pipeline,
+            mip_rect,
             preset_name: r.preset_name,
             preset_source: source,
             params: r.params,
@@ -2055,12 +2082,27 @@ impl FrameProcessor {
         }
 
         for idx in 0..self.passes.len() {
-            let (_, view, _, _) = self.passes[idx].target.as_ref()?;
+            let (tex, view, _, _) = self.passes[idx].target.as_ref()?;
+            let levels = self.passes[idx].target_mip_levels;
+            // Com mip chain, o attachment de render só pode ser 1 nível — a
+            // `view` "cheia" (todos os níveis) fica só pra sampling depois
+            // (`resolve_tex_view`). Sem mip (caso comum), usa a mesma de sempre.
+            let level0_view;
+            let attach_view: &wgpu::TextureView = if levels > 1 {
+                level0_view = tex.create_view(&wgpu::TextureViewDescriptor {
+                    base_mip_level: 0,
+                    mip_level_count: Some(1),
+                    ..Default::default()
+                });
+                &level0_view
+            } else {
+                view
+            };
             let bg = self.passes[idx].bind_group.as_ref()?;
             let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("etapa04 pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view,
+                    view: attach_view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
@@ -2077,6 +2119,12 @@ impl FrameProcessor {
             rp.set_bind_group(0, bg, &[]);
             rp.set_vertex_buffer(0, self.quad.slice(..));
             rp.draw(0..4, 0..1);
+            drop(rp);
+            if levels > 1 {
+                // gera o resto da cadeia ANTES do próximo passe (que sampleia
+                // este alvo) rodar — mesmo `enc`, ordem de submissão garante.
+                self.generate_mips(enc, tex, levels);
+            }
         }
 
         // Feedback: guarda a saída dos passes marcados pro próximo frame (o
@@ -2879,11 +2927,21 @@ impl FrameProcessor {
             | wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::COPY_SRC
             | wgpu::TextureUsages::COPY_DST;
-        let stale =
-            !matches!(&self.passes[idx].target, Some((_, _, tw, th)) if *tw == w && *th == h);
+        // `mipmap_input<idx+1>` do `.slangp` — o passe SEGUINTE quer amostrar
+        // a saída deste com mip (bloom/glow via mip como blur barato, ex.
+        // crt-royale/Mega Bezel). Mesma convenção do RetroArch: quem pede a
+        // cadeia é o passe que LÊ, não o que escreve.
+        let levels = if self.passes.get(idx + 1).is_some_and(|p| p.mipmap_input) {
+            mip_level_count(w, h)
+        } else {
+            1
+        };
+        let stale = !matches!(&self.passes[idx].target, Some((_, _, tw, th)) if *tw == w && *th == h)
+            || self.passes[idx].target_mip_levels != levels;
         if stale {
-            let (t, v) = new_tex_fmt(&self.device, w, h, fmt, usage);
+            let (t, v) = new_tex_fmt_mips(&self.device, w, h, fmt, usage, levels);
             self.passes[idx].target = Some((t, v, w, h));
+            self.passes[idx].target_mip_levels = levels;
             // qualquer passe pode amostrar este (PassOutput/Source) → rebind todos
             for p in &mut self.passes {
                 p.bound = false;
@@ -2902,6 +2960,68 @@ impl FrameProcessor {
                     p.bound = false;
                 }
             }
+        }
+    }
+
+    /// Gera os níveis `1..levels` da cadeia de mip de `tex` (nível 0 já
+    /// desenhado pelo passe) — um blit linear por nível, cada um lendo o
+    /// nível anterior e escrevendo no seguinte. wgpu não tem um "generate
+    /// mipmaps" embutido (ao contrário de `vkCmdBlitImage`, que o RetroArch
+    /// usa pra isso em `vulkan_framebuffer_generate_mips`) — aqui é a mesma
+    /// técnica via render pass: reusa o pipeline/shader do blit de
+    /// composição (`COMP_WGSL`, um quad cheio via `mip_rect = [0,0,1,1]`)
+    /// com `sampler_linear` pra suavizar cada redução (igual ao
+    /// `VK_FILTER_LINEAR` da referência).
+    fn generate_mips(&self, enc: &mut wgpu::CommandEncoder, tex: &wgpu::Texture, levels: u32) {
+        for i in 1..levels {
+            let src_view = tex.create_view(&wgpu::TextureViewDescriptor {
+                base_mip_level: i - 1,
+                mip_level_count: Some(1),
+                ..Default::default()
+            });
+            let dst_view = tex.create_view(&wgpu::TextureViewDescriptor {
+                base_mip_level: i,
+                mip_level_count: Some(1),
+                ..Default::default()
+            });
+            let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("mip gen bg"),
+                layout: &self.comp.bgl,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: self.mip_rect.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&src_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler_linear),
+                    },
+                ],
+            });
+            let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("mip gen"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &dst_view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            rp.set_pipeline(&self.mip_pipeline);
+            rp.set_bind_group(0, &bg, &[]);
+            rp.set_vertex_buffer(0, self.quad.slice(..));
+            rp.draw(0..4, 0..1);
         }
     }
 
@@ -3055,6 +3175,7 @@ fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
                 frame_count_mod: 0,
                 alias: None,
                 feedback: false,
+                mipmap_input: false,
             })
             .collect();
         return Ok(BuiltSpecs {
@@ -3163,6 +3284,7 @@ fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
             frame_count_mod: pass.frame_count_mod,
             alias: pass.alias.clone(),
             feedback: false, // preenchido abaixo
+            mipmap_input: pass.mipmap_input,
         });
     }
     for (spec, need) in specs.iter_mut().zip(needs_feedback) {
@@ -3184,6 +3306,7 @@ fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
                 h,
                 linear: tex.linear,
                 wrap: tex.wrap_mode,
+                mipmap: tex.mipmap,
             }),
             Err(e) => log::warn!("LUT '{}' ({}): {e}", tex.name, tex.path.display()),
         }
@@ -3239,11 +3362,18 @@ fn realize(device: &wgpu::Device, queue: &wgpu::Queue, built: BuiltSpecs) -> Opt
 
     let mut luts = HashMap::new();
     for l in lut_specs {
-        let (tex, view) = new_tex(
+        let levels = if l.mipmap {
+            mip_level_count(l.w, l.h)
+        } else {
+            1
+        };
+        let (tex, view) = new_tex_fmt_mips(
             device,
             l.w,
             l.h,
+            FMT,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            levels,
         );
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
@@ -3264,6 +3394,32 @@ fn realize(device: &wgpu::Device, queue: &wgpu::Queue, built: BuiltSpecs) -> Opt
                 depth_or_array_layers: 1,
             },
         );
+        // Resto da cadeia (níveis 1..levels): box downsample sucessivo na
+        // CPU, um `write_texture` por nível — só roda no load do preset.
+        let mut prev = (l.rgba, l.w, l.h);
+        for lvl in 1..levels {
+            let (down, dw, dh) = downsample_rgba8(&prev.0, prev.1, prev.2);
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &tex,
+                    mip_level: lvl,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &down,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(dw * 4),
+                    rows_per_image: Some(dh),
+                },
+                wgpu::Extent3d {
+                    width: dw,
+                    height: dh,
+                    depth_or_array_layers: 1,
+                },
+            );
+            prev = (down, dw, dh);
+        }
         let filter = if l.linear {
             wgpu::FilterMode::Linear
         } else {
@@ -3808,6 +3964,8 @@ fn build_pass(device: &wgpu::Device, spec: PassSpec) -> Option<Pass> {
         feedback_target: None,
         bind_group: None,
         bound: false,
+        mipmap_input: spec.mipmap_input,
+        target_mip_levels: 1,
     })
 }
 
@@ -3901,6 +4059,21 @@ fn new_tex_fmt(
     format: wgpu::TextureFormat,
     usage: wgpu::TextureUsages,
 ) -> (wgpu::Texture, wgpu::TextureView) {
+    new_tex_fmt_mips(device, w, h, format, usage, 1)
+}
+
+/// Como `new_tex_fmt`, mas com `mip_level_count` explícito (>1 = aloca a
+/// cadeia inteira; o conteúdo dos níveis >0 fica indefinido até alguém
+/// preencher — `realize` faz isso na CPU pros LUTs, `generate_mips` faz via
+/// blit na GPU pros alvos de passe).
+fn new_tex_fmt_mips(
+    device: &wgpu::Device,
+    w: u32,
+    h: u32,
+    format: wgpu::TextureFormat,
+    usage: wgpu::TextureUsages,
+    mip_level_count: u32,
+) -> (wgpu::Texture, wgpu::TextureView) {
     let t = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("etapa04 tex"),
         size: wgpu::Extent3d {
@@ -3908,7 +4081,7 @@ fn new_tex_fmt(
             height: h.max(1),
             depth_or_array_layers: 1,
         },
-        mip_level_count: 1,
+        mip_level_count: mip_level_count.max(1),
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format,
@@ -3917,6 +4090,41 @@ fn new_tex_fmt(
     });
     let v = t.create_view(&wgpu::TextureViewDescriptor::default());
     (t, v)
+}
+
+/// `floor(log2(max(w,h))) + 1` — nº de níveis de uma cadeia de mip completa
+/// (mesma fórmula do `glslang_num_miplevels` que o RetroArch usa).
+fn mip_level_count(w: u32, h: u32) -> u32 {
+    32 - w.max(h).max(1).leading_zeros()
+}
+
+/// Downsample 2×2 (box filter) — aproxima o blit linear por nível que o
+/// RetroArch faz na GPU (`vkCmdBlitImage` com `VK_FILTER_LINEAR`), mas
+/// gerado na CPU: os LUTs só carregam 1× no load do preset, não por frame.
+fn downsample_rgba8(src: &[u8], w: u32, h: u32) -> (Vec<u8>, u32, u32) {
+    let nw = (w / 2).max(1);
+    let nh = (h / 2).max(1);
+    let mut out = vec![0u8; (nw * nh * 4) as usize];
+    for y in 0..nh {
+        for x in 0..nw {
+            let mut acc = [0u32; 4];
+            for dy in 0..2 {
+                for dx in 0..2 {
+                    let sx = (x * 2 + dx).min(w - 1);
+                    let sy = (y * 2 + dy).min(h - 1);
+                    let i = ((sy * w + sx) * 4) as usize;
+                    for (c, a) in acc.iter_mut().enumerate() {
+                        *a += src[i + c] as u32;
+                    }
+                }
+            }
+            let o = ((y * nw + x) * 4) as usize;
+            for c in 0..4 {
+                out[o + c] = (acc[c] / 4) as u8;
+            }
+        }
+    }
+    (out, nw, nh)
 }
 
 /// `VkFormat` cru → `wgpu::TextureFormat` **amostrável direto** (`texture_from_raw`
@@ -3972,6 +4180,40 @@ mod tests {
             Err(e) => e,
         };
         assert!(e.contains("pacote de shaders"), "mensagem: {e}");
+    }
+
+    #[test]
+    fn mip_level_count_matches_floor_log2_plus_one() {
+        assert_eq!(mip_level_count(1, 1), 1);
+        assert_eq!(mip_level_count(2, 1), 2);
+        assert_eq!(mip_level_count(64, 64), 7); // 64,32,16,8,4,2,1
+        assert_eq!(mip_level_count(1024, 1024), 11);
+        // não-quadrado: usa o maior lado (igual ao glslang_num_miplevels).
+        assert_eq!(mip_level_count(1920, 1080), mip_level_count(1920, 1920));
+    }
+
+    #[test]
+    fn downsample_rgba8_averages_2x2_blocks() {
+        #[rustfmt::skip]
+        let src: [u8; 16] = [
+            255, 0,   0,   255, // (0,0) vermelho
+            0,   255, 0,   255, // (1,0) verde
+            0,   0,   255, 255, // (0,1) azul
+            255, 255, 0,   255, // (1,1) amarelo
+        ];
+        let (out, w, h) = downsample_rgba8(&src, 2, 2);
+        assert_eq!((w, h), (1, 1));
+        // média inteira (truncada) de cada canal dos 4 pixels.
+        assert_eq!(out, vec![127, 127, 63, 255]);
+    }
+
+    #[test]
+    fn downsample_rgba8_handles_odd_dimensions() {
+        // 3×1 → 1×1: não deve estourar índice (clamp do pixel repetido).
+        let src: [u8; 12] = [10, 10, 10, 255, 20, 20, 20, 255, 30, 30, 30, 255];
+        let (out, w, h) = downsample_rgba8(&src, 3, 1);
+        assert_eq!((w, h), (1, 1));
+        assert_eq!(out.len(), 4);
     }
 
     fn grey_frame(w: u32, h: u32, val: u8) -> Frame {
@@ -4410,6 +4652,99 @@ mod tests {
             "feedback alocado ao rodar"
         );
         let _ = fp.process(&grey_frame(32, 32, 0x40));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// `mipmap_input1 = true` ⇒ o passe 0 precisa gerar a cadeia de mip da
+    /// própria saída (fase 2, `generate_mips`/`ensure_target`). Prova de
+    /// ponta a ponta, não só "não crasha": o passe 0 desenha um xadrez 8×8
+    /// (64×64px, célula=8px) e o passe 1 lê `textureLod(Source, vUV, 6.0)`
+    /// — o nível 6 de uma cadeia de 64px é 1×1, então TODO pixel da saída
+    /// tem que ler essa média única. Matemago: 8px de célula ÷ 2³ = célula
+    /// de 1px no nível 3 (ainda xadrez exato), e um box de 2×2 nesse nível
+    /// cobre sempre 2 pretos + 2 brancos ⇒ níveis 4..6 já saem uniformes em
+    /// 127 (exato, sem viés de arredondamento). Se a cadeia NÃO foi gerada,
+    /// o clamp de LOD cai no nível 0 e a saída reproduz o xadrez cru — alto
+    /// contraste, nada uniforme.
+    #[test]
+    fn mipmap_input_generates_full_mip_chain_for_next_pass() {
+        if std::env::var_os("REEMU_NO_GPU").is_some() {
+            return;
+        }
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        let dir = std::env::temp_dir().join("reemu_gpu_mipmap_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let checker = dir.join("checker.slang");
+        let sample_mip = dir.join("sample_mip.slang");
+        let slangp = dir.join("mip.slangp");
+        let vs = concat!(
+            "#pragma stage vertex\n",
+            "layout(location=0) in vec4 Position; layout(location=1) in vec2 TexCoord;\n",
+            "layout(location=0) out vec2 vUV;\n",
+            "layout(std140, set=0, binding=0) uniform UBO { mat4 MVP; } g;\n",
+            "void main(){ gl_Position = g.MVP * Position; vUV = TexCoord; }\n",
+        );
+        std::fs::write(
+            &checker,
+            [
+                "#version 450\n#pragma name Checker\n",
+                vs,
+                "#pragma stage fragment\nlayout(location=0) in vec2 vUV;\n",
+                "layout(location=0) out vec4 c;\n",
+                "layout(set=0,binding=2) uniform sampler2D Source;\n",
+                "void main(){ float cb = mod(floor(vUV.x*8.0)+floor(vUV.y*8.0), 2.0); c = vec4(cb,cb,cb,1.0); }\n",
+            ]
+            .concat(),
+        )
+        .unwrap();
+        std::fs::write(
+            &sample_mip,
+            [
+                "#version 450\n",
+                vs,
+                "#pragma stage fragment\nlayout(location=0) in vec2 vUV;\n",
+                "layout(location=0) out vec4 c;\n",
+                "layout(set=0,binding=2) uniform sampler2D Source;\n",
+                "void main(){ c = textureLod(Source, vUV, 6.0); }\n",
+            ]
+            .concat(),
+        )
+        .unwrap();
+        std::fs::write(
+            &slangp,
+            "shaders = 2\nshader0 = checker.slang\nshader1 = sample_mip.slang\nmipmap_input1 = true\n",
+        )
+        .unwrap();
+
+        fp.set_preset(slangp.to_str().unwrap())
+            .expect("preset com mipmap_input deve montar");
+        assert!(fp.passes[1].mipmap_input, "mipmap_input1 parseado");
+
+        // readback com pipeline tem 1 frame de atraso (ver
+        // `pipelined_readback_has_one_frame_delay`) — o 1º `process` prima.
+        fp.process(&grey_frame(64, 64, 0x80));
+        let (w, h, out) = fp
+            .process(&grey_frame(64, 64, 0x80))
+            .expect("frame processado");
+        assert_eq!((w, h), (64, 64));
+
+        // R=G=B por construção do shader — qualquer um dos 3 primeiros
+        // bytes do pixel serve, sem depender da ordem exata de canal.
+        let vals: Vec<u8> = out.chunks(4).map(|px| px[0]).collect();
+        let (min, max) = (*vals.iter().min().unwrap(), *vals.iter().max().unwrap());
+        assert!(
+            max - min <= 10,
+            "saída devia ser uniforme (mip 1×1 amostrado em toda parte) — \
+             min={min} max={max}: cadeia de mip não foi gerada?"
+        );
+        assert!(
+            (100..=155).contains(&min),
+            "valor uniforme longe da média esperada (~127) do xadrez 50/50 — min={min}"
+        );
 
         std::fs::remove_dir_all(&dir).ok();
     }

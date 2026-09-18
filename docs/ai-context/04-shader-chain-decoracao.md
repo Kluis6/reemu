@@ -60,10 +60,19 @@ então o realce bate pra builtin, `curated:<id>` e caminho `.slangp`.
 
 ## Pendências de qualidade de imagem
 
-- **Mipmaps** (`gpu.rs` TODOs em `PassSpec`/`LutSpec`): `mipmap_input` e
-  `mipmap` de LUT são parseados mas o executor não gera a cadeia — passes de
-  bloom/glow/halation (Mega Bezel, crt-royale) amostram só o nível 0 e ficam
-  "chapados". É a maior lacuna visual hoje.
+- ~~**Mipmaps**~~ **feito (2026-09-18)** — `mipmap_input` (passe) e `mipmap`
+  (LUT) do `.slangp` agora geram a cadeia de verdade. Passe: `ensure_target`
+  aloca `mip_level_count` quando o PRÓXIMO passe tem `mipmap_input` (mesma
+  convenção do RetroArch — quem pede é quem lê, não quem escreve, ver
+  `shader_vulkan.c::next_pass->mipmap`); `generate_mips` gera os níveis
+  1..N via blit linear nível-a-nível (wgpu não tem "generate mipmaps"
+  embutido, ao contrário do `vkCmdBlitImage` da referência) reusando o
+  pipeline/shader do blit de composição. LUT: gerado na CPU em `realize`
+  (box downsample 2×2 sucessivo, só roda no load do preset). Validado com
+  teste real de GPU (`mipmap_input_generates_full_mip_chain_for_next_pass`)
+  — xadrez 8×8 + `textureLod` no nível mais alto, confirmado que falha sem
+  o fix (min=0/max=255, xadrez cru vazando) e passa com ele (uniforme
+  ~127). Sem GPU: fallback pro nível 0 continua igual a antes.
 - ~7% dos presets não compilam (crt-royale mask-resize, alguns GB, smaa,
   xbr multipass) — padrões de GLSL que a reescrita do `compile.rs` não cobre.
 

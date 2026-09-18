@@ -201,10 +201,22 @@ Renderização / filtros (independente da etapa 12):
   acima.
 - ~~**Downloader de pacote de shaders (opção B)**~~ **FEITO (`3d29717`)** —
   `shader_pack.rs`; botão na `ShaderLibrary`.
-- **Mipmaps** (`mipmap_input` por passe + `mipmap` de LUT) — wgpu não gera
-  automático: alocar com `mip_level_count` > 1 e fazer a cadeia de blits
-  down-sample. **Nenhum preset falha por isso** (degrada em silêncio) — baixa
-  prioridade.
+- ~~**Mipmaps**~~ **feito (2026-09-18)** — `mipmap_input` (passe) e `mipmap`
+  (LUT) do `.slangp` agora geram a cadeia de verdade (antes só eram
+  parseados, o executor amostrava sempre o nível 0 — passes de bloom/glow/
+  halation do Mega Bezel/crt-royale ficavam "chapados"). Passe: em
+  `ensure_target` (`gpu.rs`), o alvo do passe N aloca `mip_level_count` só
+  quando o passe N+1 tem `mipmap_input` (mesma convenção do RetroArch —
+  conferida no `shader_vulkan.c` deles, não de memória); `generate_mips`
+  preenche os níveis 1..N via blit linear nível-a-nível a cada frame (wgpu
+  não tem "generate mipmaps" embutido, ao contrário do `vkCmdBlitImage`),
+  reusando o pipeline de blit da composição. LUT: cadeia gerada uma vez, na
+  CPU (box downsample 2×2), no load do preset — não por frame. Validado com
+  teste real de GPU (`gpu::tests::mipmap_input_generates_full_mip_chain_
+  for_next_pass`): xadrez 8×8 no passe 0 + `textureLod` no nível mais alto
+  no passe 1 — confirmado que FALHA sem o fix (xadrez cru vazando, LOD
+  grudado no nível 0) e passa com ele (saída uniforme ~127, a média
+  correta). `crates/shader-slang` não mudou (já parseava os dois campos).
 - **Long-tail de shaders (~7%)** — crt-royale (`#define tex` no vertex),
   gameboy/xbr multipass (validação naga), smaa. Ver `docs/shaders/README.md`.
 - **FSR 1.0 / RCAS / CAS como preset de upscaling** — destravado pelo
