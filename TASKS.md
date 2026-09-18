@@ -337,9 +337,27 @@ Infra:
   presos dentro de `[target.'cfg(target_os = "linux")'.dependencies]` em
   `apps/desktop/src-tauri/Cargo.toml` — no Windows nenhum linkava (221 erros
   "unresolved crate"). Movidos pra `[dependencies]`; só `wayland-client`
-  continua linux-only. **Ainda falta**: ninguém compilou de fato numa máquina
-  Windows real (sem máquina disponível) — os paths do buildbot, o `video.rs`
-  (`#[cfg(not(linux))]`) e o bundle continuam não verificados na prática.
+  continua linux-only.
+- ~~`core-loader-desktop/build.rs` quebrava `cargo tauri dev` inteiro no
+  Windows~~ **feito (2026-09-18)** — 1º teste real numa máquina Windows do
+  usuário: `LINK : fatal error LNK1561: pontos de entrada devem ser
+  definidos` ao compilar `fixtures/testcore.c` (o core-fake em C usado nos
+  testes deste crate, mas o `build.rs` roda pra QUALQUER build, não só
+  teste). Causa: o `build.rs` usava flags estilo GCC (`-shared`, `-o`)
+  incondicionalmente por `target_os`; no toolchain padrão do rustup pra
+  Windows (`*-pc-windows-msvc`) o compilador é `cl.exe`/`link.exe`, que não
+  reconhece essas flags — cai no padrão de EXE comum sem `/DLL`, e como
+  `testcore.c` não tem `main()`, o linker recusa por falta de entry point.
+  Fix: detecta o compilador de verdade via `cc::Tool::is_like_msvc()` (não
+  só o SO-alvo — cobre também `*-pc-windows-gnu`/MinGW, que continua
+  precisando das flags GCC) e usa `/LD` + `/Fe:<saída>` no MSVC. Validado no
+  Linux (não regrediu, mesmo branch de antes) — validação MSVC de verdade
+  pendente do usuário testar de novo.
+- Windows — **ainda falta**: ninguém terminou de compilar/rodar de fato
+  numa máquina Windows real ponta a ponta (o teste acima já pegou 1 bug
+  real) — os paths do buildbot de cores, o `video.rs` (`#[cfg(not(linux))]`,
+  ver risco conhecido da superfície nativa) e o bundle continuam não
+  verificados na prática.
 - `reemu-core-host` (processo filho do core, `crates/core-host-desktop`) NÃO
   é dependência de `apps/desktop/src-tauri/Cargo.toml` — `cargo tauri dev`
   sozinho não o recompila. Usar sempre `scripts/dev.sh` (já faz `cargo build
