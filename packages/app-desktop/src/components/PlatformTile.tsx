@@ -20,6 +20,12 @@ const useStyles = makeStyles({
   grid: {
     width: "100%",
     height: "100%",
+    // Sem isto, o padding SOMA em cima do width/height:100% (box-sizing
+    // padrão do navegador é content-box) — o grid inteiro rendia 100% do
+    // card PAI + o padding de sobra, vazando pra fora do card (medido:
+    // card de 191px, grid saindo a 207px — os 16px do padding/gap
+    // duplicados). `border-box` faz o padding entrar DENTRO do 100%.
+    boxSizing: "border-box",
     borderRadius: tokens.borderRadiusLarge,
     overflowX: "hidden",
     overflowY: "hidden",
