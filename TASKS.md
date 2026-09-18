@@ -410,8 +410,25 @@ Infra:
   * Sem prioridade de thread no `emu-core-loop` — sob carga o scheduler pode
     não dar time-slice suficiente (RetroArch às vezes usa nice/SCHED_FIFO).
 - Canvas WebGL (`texImage2D`) em vez de `putImageData` (CPU).
-- Dois controles idênticos colidem na porta (mesmo GUID SDL — usar `GamepadId`
-  do gilrs). (~~eixo analógico → RetroPad~~ feito 2026-09-04: `RETRO_DEVICE_ANALOG`.)
+- ~~Dois controles idênticos colidem na porta (mesmo GUID SDL)~~ **feito
+  (2026-09-18)** — `GamepadPoller` (`input-desktop::gamepad`) indexava todo
+  o estado por conexão (`ports`/`down`/`stick`/`rstick`/`hat`) pelo `uuid`
+  (GUID do SDL_GameControllerDB), que é por MODELO — duas unidades
+  idênticas (mesmo GUID) colidiam na mesma entrada do mapa: só uma porta
+  era atribuída pras duas, e os botões de uma se misturavam no estado da
+  outra. Trocado pra `gilrs::GamepadId` (identidade da CONEXÃO física,
+  distinta mesmo entre unidades idênticas — confirmado `Copy+Eq+Hash` na
+  doc do gilrs 0.11). GUID continua sendo usado só onde é inerentemente por
+  modelo: atribuição fixa de porta salva pelo usuário e remapeamento de
+  botão (`device_port_assignment`/`controller_mappings`) — duas unidades
+  idênticas ainda competem pelo mesmo *override salvo*, mas isso é limite
+  do GUID do SDL não ter número de série (RetroArch tem a mesma limitação).
+  **Sem teste automatizado**: `GamepadId` não tem construtor público (só
+  nasce de hardware real conectado via `Gilrs`), não dá pra forjar duas
+  conexões num teste unitário — validado por leitura do código + os 18
+  testes existentes do crate continuam passando (sem regressão); validação
+  com hardware real (dois controles idênticos) fica pra quem tiver o par.
+  (~~eixo analógico → RetroPad~~ feito 2026-09-04: `RETRO_DEVICE_ANALOG`.)
 - `GET_INPUT_BITMASKS` não anunciado — cores caem no query por id (ok, mas
   perde a otimização).
 - `docs/ai-context/01,02,05,06,07,08,09.md` têm seções "Estado atual
