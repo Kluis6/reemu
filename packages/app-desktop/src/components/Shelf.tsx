@@ -48,8 +48,18 @@ export function Shelf({
   // (`renderedCount <= cap`); se `fill={false}` deixou mais itens do que
   // cabem, a linha rola no eixo X e esticar só pioraria — cai no `clamp()`
   // estático (fallback da CSS var abaixo).
+  // Esticar pra preencher a linha só faz sentido com um número razoável de
+  // cards de verdade — com 1-2 (ex.: uma plataforma com só 1 jogo), a conta
+  // de `shelfFillWidth` (que divide a largura da prateleira pela contagem
+  // renderizada, sem teto) faz ESSE card sozinho virar do tamanho da
+  // prateleira INTEIRA. Abaixo do limiar, cai pro tamanho padrão (mesmo
+  // `clamp()` estático que as outras prateleiras usam — sem `--reemuCardW`
+  // aqui, herda do CSS) em vez de esticar um punhado de cards a esmo.
+  const MIN_ITEMS_TO_FILL = 3;
   const cardPx =
-    shelfWidth > 0 && renderedCount > 0 && renderedCount <= cap
+    shelfWidth > 0 &&
+    renderedCount >= MIN_ITEMS_TO_FILL &&
+    renderedCount <= cap
       ? shelfFillWidth(shelfWidth, viewport, renderedCount)
       : 0;
 
