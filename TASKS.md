@@ -386,11 +386,20 @@ Infra:
 - Desempenho do caminho do core (auditado 2026-09-02 — os itens fáceis já
   feitos: `rotate_rgba` sem cópia no no-op, flush da `.srm` off-thread, spin
   com menos leitura de relógio). Ainda no radar, por ordem de impacto:
-  * **Cópias de frame por frame**: FFI aloca o buffer nativo → `to_rgba8` aloca
-    o RGBA → readback aloca a saída → `pack_frame` aloca → IPC copia → JS copia
-    (`buf.slice`) → `putImageData` copia. ~4-5 cópias do frame inteiro/frame
-    (SNES ~230KB, bezel 1080p ~8MB). Pool de buffers reusáveis (FFI + to_rgba8
-    + pack) e `new Uint8ClampedArray(buf, 8, need)` (view, sem `slice`) no JS.
+  * ~~**Cópias de frame por frame**~~ **2 das ~4-5 cópias eliminadas
+    (2026-09-18)**: (1) `gpu.rs::process()` — o readback (`unpad_rows`)
+    alocava um `Vec` novo por frame só pra `pack_frame` copiar de novo em
+    cima; agora `process()` escreve num buffer persistente do
+    `FrameProcessor` (`readback_scratch`, reusado — só redimensiona se o
+    tamanho mudar) e devolve `&[u8]` emprestado em vez de `Vec<u8>` dono, um
+    `alloc+copy` a menos por frame no caminho GPU (o dominante — roda
+    sempre que há GPU disponível, que é quase sempre). (2) JS
+    (`PlayScreen.tsx`) — trocado `buf.slice(8, 8+need)` (copia o
+    `ArrayBuffer` inteiro) por `new Uint8ClampedArray(buf, 8, need)` (view
+    sobre o mesmo buffer, sem cópia; `Uint8ClampedArray` não tem restrição
+    de alinhamento, o offset de 8 é seguro). **Ainda no radar**: FFI aloca o
+    buffer nativo do core, `to_rgba8` aloca o RGBA, `pack_frame` ainda aloca
+    (prepend do header de 8 bytes) — esses continuam um `alloc+copy` cada.
   * `latest_frame: Mutex<Option<Frame>>` → `triple_buffer`/`ArcSwap` (lock-free).
   * `push_samples` aloca `Vec<[f32;2]>` por frame — resample direto do `&[i16]`.
   * `drain_audio` = `mem::take` → `Vec` novo por frame (pequeno); reservar.

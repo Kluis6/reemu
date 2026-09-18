@@ -793,8 +793,8 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
         let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(fp) = gpu.as_mut() {
             if let Some((w, h, rgba)) = fp.process(&frame) {
-                cache_thumb_frame(&state, w, h, &rgba);
-                return pack_frame(w, h, &rgba);
+                cache_thumb_frame(&state, w, h, rgba);
+                return pack_frame(w, h, rgba);
             }
         }
     }

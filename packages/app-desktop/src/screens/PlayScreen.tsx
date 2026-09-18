@@ -321,8 +321,11 @@ export function PlayScreen() {
             const h = dv.getUint32(4, true);
             const need = w * h * 4;
             if (w > 0 && h > 0 && buf.byteLength >= 8 + need) {
+              // View sobre o MESMO ArrayBuffer (sem `.slice()`, que copia o
+              // frame inteiro) — `Uint8ClampedArray` não tem restrição de
+              // alinhamento, então o offset de 8 bytes do header é seguro.
               latest.img = new ImageData(
-                new Uint8ClampedArray(buf.slice(8, 8 + need)),
+                new Uint8ClampedArray(buf, 8, need),
                 w,
                 h,
               );

@@ -380,10 +380,24 @@ impl ReadbackRing {
 fn unpad_rows(src: &[u8], w: u32, h: u32, padded: u32) -> Vec<u8> {
     let row = (w * 4) as usize;
     let mut out = vec![0u8; row * h as usize];
-    for y in 0..h as usize {
-        out[y * row..(y + 1) * row].copy_from_slice(&src[y * padded as usize..][..row]);
-    }
+    unpad_rows_into(&mut out, src, w, h, padded);
     out
+}
+
+/// Como `unpad_rows`, mas escreve em `dst` reaproveitando a alocação (só
+/// redimensiona se o tamanho mudou — resolução do jogo é estável quadro a
+/// quadro). Usado no readback por quadro (`process`, hot path a 60fps); sem
+/// isto, era um `vec![0u8; ...]` novo (alocação + zero-fill) a cada frame só
+/// pra ser copiado de novo logo em seguida no `pack_frame` do IPC.
+fn unpad_rows_into(dst: &mut Vec<u8>, src: &[u8], w: u32, h: u32, padded: u32) {
+    let row = (w * 4) as usize;
+    let need = row * h as usize;
+    if dst.len() != need {
+        dst.resize(need, 0);
+    }
+    for y in 0..h as usize {
+        dst[y * row..(y + 1) * row].copy_from_slice(&src[y * padded as usize..][..row]);
+    }
 }
 
 /// Pipelines do passe de composição da moldura (`game` sem blend, `bezel` com
@@ -563,6 +577,10 @@ pub struct FrameProcessor {
     /// serializar. Fallback bloqueante só quando o slot ainda não mapeou.
     rb: ReadbackRing,
     frame_count: u64,
+    /// Buffer reusado do readback de `process()` (retirar o padding de linha
+    /// do staging buffer) — só realoca se o tamanho mudar (resolução do jogo
+    /// é estável quadro a quadro). Ver `unpad_rows_into`.
+    readback_scratch: Vec<u8>,
     /// Blit linear nível-a-nível pra gerar cadeia de mips de um `.target` de
     /// passe (`mipmap_input`) — wgpu não tem "generate mipmaps" embutido
     /// (ver `generate_mips`). Reusa a `bgl`/shader do `comp` (mesmo layout:
@@ -1099,6 +1117,7 @@ impl FrameProcessor {
             flip,
             interop_view: None,
             rb: ReadbackRing::default(),
+            readback_scratch: Vec::new(),
             frame_count: 0,
             last_surface_out: None,
             surface_fail_streak: 0,
@@ -2371,7 +2390,12 @@ impl FrameProcessor {
     }
 
     /// Caminho canvas: roda a chain e lê o resultado de volta pra CPU (RGBA8).
-    pub fn process(&mut self, frame: &Frame) -> Option<(u32, u32, Vec<u8>)> {
+    /// `None` se não há frame novo pronto ainda (readback com 1 quadro de
+    /// atraso — ver o comentário de `rb`). O `&[u8]` devolvido é emprestado
+    /// de `self.readback_scratch` (reusado quadro a quadro, sem realocar
+    /// quando o tamanho não muda) — o chamador precisa copiar antes da
+    /// próxima chamada a `process`.
+    pub fn process(&mut self, frame: &Frame) -> Option<(u32, u32, &[u8])> {
         let mut enc = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -2445,13 +2469,14 @@ impl FrameProcessor {
             self.device.poll(wgpu::PollType::wait_indefinitely()).ok()?;
         }
         let (rw, rh, rpad) = (rs.w, rs.h, rs.padded);
-        let out = {
+        {
             let mapped = rs.buf.slice(..).get_mapped_range().ok()?;
-            unpad_rows(&mapped, rw, rh, rpad)
-        };
+            unpad_rows_into(&mut self.readback_scratch, &mapped, rw, rh, rpad);
+        }
+        let rs = self.rb.slots[read_i].as_mut()?;
         rs.buf.unmap();
         rs.inflight = false;
-        Some((rw, rh, out))
+        Some((rw, rh, self.readback_scratch.as_slice()))
     }
 
     fn ensure_comp_target(&mut self, w: u32, h: u32) {
