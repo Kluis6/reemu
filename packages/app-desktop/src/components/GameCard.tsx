@@ -8,7 +8,7 @@ import {
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
-import { StarFilled } from "@fluentui/react-icons";
+import { HeartFilled } from "@fluentui/react-icons";
 import { useState } from "react";
 import { initials } from "../lib/initials";
 import { useCardStyles } from "../styles/xbox";
@@ -37,7 +37,10 @@ const useLocalStyles = makeStyles({
     height: "clamp(20px, 1.25vw, 42px)",
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
-    color: tokens.colorPaletteMarigoldForeground1,
+    // Mesma cor de marca do coração da página do jogo (RomDetail) —
+    // `--reemuBrandText`, não `colorBrandForeground1` (falha contraste AA
+    // no tema claro, ver `styles/themes.ts::ReEmuTokens.reemuBrandText`).
+    color: "var(--reemuBrandText)",
     fontSize: "clamp(12px, 0.7vw, 24px)",
     pointerEvents: "none",
   },
@@ -112,7 +115,7 @@ export function GameCard({
         )}
         {favorite && (
           <span className={l.favBadge} aria-label="Favorito">
-            <StarFilled />
+            <HeartFilled />
           </span>
         )}
       </div>

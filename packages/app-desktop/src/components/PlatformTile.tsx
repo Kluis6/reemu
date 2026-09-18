@@ -1,22 +1,22 @@
-import { Button, makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
+import { Card, makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
 import { useState } from "react";
 import { initials } from "../lib/initials";
 import { useCardStyles } from "../styles/xbox";
 
+// Padding do grupo 2×2 = gap entre as células — mesmo valor nos dois (um
+// só reaproveitado nas duas propriedades), fluido com a tela em vez de
+// fixo (mesma convenção de `clamp()` do resto do card, ver `xbox.ts`).
+const TILE_GAP = "clamp(4px, 0.5vw, 16px)";
+
 const useStyles = makeStyles({
-  // Mesma caixa quadrada do GameCard (mergeClasses com `c.card` garante as
-  // mesmas proporções) — só troca o conteúdo por um grid 2×2.
+  // `c.card` (mergeClasses) já cobre proporção/borda/padding/cursor — só
+  // falta `minWidth: 0` (a caixa fica dentro de um grid, então sem isso o
+  // conteúdo interno podia forçar a célula a crescer além da vaga).
   tile: {
-    width: "100%",
     minWidth: 0,
-    aspectRatio: "1 / 1",
-    display: "block",
-    border: "none",
-    padding: 0,
-    cursor: "pointer",
-    color: "inherit",
   },
-  // 2×2 de capas: padding em volta do grupo + gap entre as células.
+  // 2×2 de capas (2 colunas × 2 linhas, 4 células centralizadas): padding
+  // responsivo em volta do grupo + gap entre as células, mesmo valor.
   grid: {
     width: "100%",
     height: "100%",
@@ -26,9 +26,9 @@ const useStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: "1fr 1fr",
     gridTemplateRows: "1fr 1fr",
-    gap: "6px",
+    gap: TILE_GAP,
     backgroundColor: tokens.colorNeutralBackground1,
-    padding: "6px",
+    padding: TILE_GAP,
   },
   cell: {
     minWidth: 0,
@@ -96,6 +96,8 @@ function TileCell({
 /**
  * "Card de 4" no fim da prateleira de uma plataforma: 2×2 de capas, sem
  * texto (estilo "Jump back in" do Xbox). Clicar leva pra `/library/<systemId>`.
+ * Mesmo `<Card>` do Fluent que o `GameCard` (não `<Button>`) — é dali que
+ * vem o anel de hover/foco, pra ficar idêntico ao resto da prateleira.
  */
 export function PlatformTile({
   sample,
@@ -110,11 +112,18 @@ export function PlatformTile({
   const c = useCardStyles();
   const cells = sample.slice(0, 4);
   return (
-    <Button
-      appearance="transparent"
+    <Card
       className={mergeClasses(c.card, s.tile)}
+      appearance="filled"
+      role="button"
       aria-label={ariaLabel}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
       <div className={s.grid}>
         {cells.map((m) => (
@@ -129,6 +138,6 @@ export function PlatformTile({
           <div key={`e${i}`} className={s.cell} />
         ))}
       </div>
-    </Button>
+    </Card>
   );
 }
