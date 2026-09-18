@@ -37,31 +37,21 @@ export function Shelf({
   const truncated = fill && items.length > room;
   const shown = truncated ? items.slice(0, room) : items;
   const tail = truncated ? more : null;
-  const renderedCount = shown.length + (tail ? 1 : 0);
 
   // Largura de card que preenche a linha de ponta a ponta (até a borda
-  // direita do container — mesma borda onde termina a topbar/relógio), com
-  // base em quantos cards ESTA linha vai renderizar de verdade (não a
-  // capacidade bruta da largura — uma linha com menos itens que `cap`, ex.
-  // "Continuar jogando" com só 3 jogos, não deve esticar os cards pra
-  // preencher 8 vagas vazias). Só estica quando a linha cabe inteira
-  // (`renderedCount <= cap`); se `fill={false}` deixou mais itens do que
-  // cabem, a linha rola no eixo X e esticar só pioraria — cai no `clamp()`
-  // estático (fallback da CSS var abaixo).
-  // Esticar pra preencher a linha só faz sentido com um número razoável de
-  // cards de verdade — com 1-2 (ex.: uma plataforma com só 1 jogo), a conta
-  // de `shelfFillWidth` (que divide a largura da prateleira pela contagem
-  // renderizada, sem teto) faz ESSE card sozinho virar do tamanho da
-  // prateleira INTEIRA. Abaixo do limiar, cai pro tamanho padrão (mesmo
-  // `clamp()` estático que as outras prateleiras usam — sem `--reemuCardW`
-  // aqui, herda do CSS) em vez de esticar um punhado de cards a esmo.
-  const MIN_ITEMS_TO_FILL = 3;
-  const cardPx =
-    shelfWidth > 0 &&
-    renderedCount >= MIN_ITEMS_TO_FILL &&
-    renderedCount <= cap
-      ? shelfFillWidth(shelfWidth, viewport, renderedCount)
-      : 0;
+  // direita do container — mesma borda onde termina a topbar/relógio).
+  // Baseada em `cap` (quantos cards CABEM na largura disponível, igual em
+  // qualquer prateleira da página — só depende da largura/viewport, não do
+  // conteúdo), NÃO em `renderedCount` (quantos ESTA prateleira de fato
+  // mostra). Já tentamos basear em `renderedCount`: cada prateleira acabava
+  // com um tamanho de card diferente da vizinha (uma com 3 jogos "enchia" a
+  // linha esticando pra um tamanho, outra com 6 pra outro), e no extremo —
+  // 1 jogo só — o card sozinho virava do tamanho da prateleira INTEIRA.
+  // Usar `cap` fixa o mesmo tamanho pra toda prateleira da tela, cheia ou
+  // não; uma prateleira com poucos itens só deixa espaço vazio à direita
+  // em vez de esticar os poucos cards que tem — mesmo comportamento do
+  // "Continuar jogando" antes de qualquer um desses ajustes.
+  const cardPx = shelfWidth > 0 ? shelfFillWidth(shelfWidth, viewport, cap) : 0;
 
   const style: CSSProperties | undefined =
     cardPx > 0
