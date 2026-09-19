@@ -63,7 +63,7 @@ jobs:
       # `reemu-core-host` (crates/core-host-desktop) NÃO é dependência de
       # apps/desktop/src-tauri — `cargo tauri build` sozinho nunca o
       # compila. Precisa existir em target/release/ ANTES do bundle: é isso
-      # que tauri.linux.conf.json / tauri.windows.conf.json (bundle.resources)
+      # que tauri.bundle.linux.json / tauri.bundle.windows.json (bundle.resources)
       # embutem no pacote final, ao lado do executável principal. Mesmo
       # motivo do scripts/dev.sh no modo dev (ver memória
       # reemu-core-host-stale-binary) — sem isto o app empacotado sai
@@ -71,8 +71,18 @@ jobs:
       - name: Build reemu-core-host (release)
         run: cargo build --release -p core-host-desktop
 
-      - name: Build + empacotar o app desktop
-        run: cargo tauri build --config apps/desktop/src-tauri/tauri.conf.json
+      # `bundle.resources` (o reemu-core-host release) + targets de pacote
+      # ficam em tauri.bundle.<os>.json, passados SÓ aqui — não nos nomes
+      # tauri.<os>.conf.json que o Tauri mescla sozinho, porque o build.rs do
+      # tauri exige que todo resource exista até no `cargo tauri dev`, que não
+      # tem (nem precisa de) um build release do core-host.
+      - name: Build + empacotar o app desktop (Linux)
+        if: runner.os == 'Linux'
+        run: cargo tauri build --config apps/desktop/src-tauri/tauri.conf.json --config apps/desktop/src-tauri/tauri.bundle.linux.json
+
+      - name: Build + empacotar o app desktop (Windows)
+        if: runner.os == 'Windows'
+        run: cargo tauri build --config apps/desktop/src-tauri/tauri.conf.json --config apps/desktop/src-tauri/tauri.bundle.windows.json
 
       - name: Publicar artefatos na Release (draft) — só em tag
         if: startsWith(github.ref, 'refs/tags/')

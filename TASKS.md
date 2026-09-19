@@ -381,7 +381,19 @@ Infra:
   testes passando (o transporte Unix não mudou). **Não validado**: nada disso
   rodou num Windows de verdade ainda (os testes de `transport_win.rs` só
   compilam aqui) — próximo passo é o usuário rodar `cargo tauri dev` +
-  `cargo test -p core-ipc` no Windows.
+  `cargo test -p core-ipc` no Windows. **Atualização (2026-09-19)**: o
+  usuário rodou `cargo test -p core-ipc` no Windows — os 5 testes do
+  transporte passaram (incluindo o de deadlock recv/send).
+- ~~`cargo tauri dev` exigia um build RELEASE do core-host~~ **feito
+  (2026-09-19)** — 3º erro no Windows: `resource path
+  ..\..\..\target\release\reemu-core-host.exe doesn't exist`. O `build.rs`
+  do Tauri valida `bundle.resources` até no dev, e os
+  `tauri.<os>.conf.json` são mesclados automaticamente. Latente no Linux
+  também (só funcionava porque já havia um release antigo em `target/`).
+  Fix: renomeados pra `tauri.bundle.{linux,windows}.json` (não
+  auto-mesclados), passados via `--config` só no `cargo tauri build` do
+  `release.yml`. Novo `scripts/dev.ps1` (equivalente do `dev.sh`: builda o
+  core-host debug antes do `cargo tauri dev`).
 - `emu-session/tests/session.rs::pause_freezes_emulation_then_resume` é
   intermitente sob carga (visto 2×, rodando a suíte de vários crates em
   paralelo; passa isolado): um `FrameReady` que já estava no canal chega
@@ -426,7 +438,7 @@ Infra:
   `cargo tauri build` (não é dependência do crate principal, ver nota acima)
   e sobe os artefatos como Release **draft** no GitHub (`softprops/
   action-gh-release@v2` — revisar e publicar manual). `tauri.linux.conf.json`
-  / `tauri.windows.conf.json` (novos, auto-mergeados pelo Tauri por nome de
+  / `tauri.windows.conf.json` (hoje `tauri.bundle.<os>.json`, ver entrada de 2026-09-19; eram auto-mergeados pelo Tauri por nome de
   arquivo) declaram `bundle.resources` apontando pro `reemu-core-host[.exe]`
   de `target/release/`. Só dispara em tag (não em todo push/merge — decisão
   do usuário). Validado com uma build de release real local (não só CI):
