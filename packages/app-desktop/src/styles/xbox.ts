@@ -13,7 +13,7 @@
  * nem `radial-gradient` multicamada em elemento `position: fixed`.
  */
 import { makeStyles, tokens } from "@fluentui/react-components";
-import { CARD_MIN, cardSizeCss, SHELF_GAP, SHELF_PAD } from "../lib/shelf";
+import { cardSizeCss, SHELF_GAP, SHELF_PAD } from "../lib/shelf";
 
 // Só os valores NÃO-cor do "console look". Cor de marca, elevações e o fundo
 // da casca vêm do tema (tokens Fluent + tokens custom `--reemu*`, ver
@@ -430,7 +430,12 @@ export const useBrowseStyles = makeStyles({
     // plataforma) os cards crescem pra preencher mesmo assim — é o
     // comportamento "dinâmico" pedido, prioriza alinhar com a borda a manter
     // um teto de tamanho fixo.
-    gridTemplateColumns: `repeat(auto-fit, minmax(${CARD_MIN}px, 1fr))`,
+    //
+    // Mínimo = o MESMO tamanho fluido do card das prateleiras da tela inicial
+    // (`cardSizeCss`: ~223px em 1920, 445px em 4K), não o piso fixo de
+    // 150px — com o piso, a grade enchia a linha de cards de ~150px em
+    // qualquer tela (11 por linha em 1920), bem menores que os da Início.
+    gridTemplateColumns: `repeat(auto-fit, minmax(${gameCardSize}, 1fr))`,
     rowGap: "18px",
     columnGap: `${SHELF_GAP}px`,
     "& > *": { width: "100%", minWidth: 0 },
