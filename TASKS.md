@@ -30,8 +30,11 @@ refaça trabalho já feito ou pule pré-requisito.
 - [x] `done` — `packages/app-desktop`: Vite + React 19 + Fluent + Zustand +
       TanStack Query instalados; `vite.config.ts` afinado p/ Tauri (porta 1420)
 - [x] `done` — `cargo tauri dev` abre a janela sem erro (2026-08-27)
-- [ ] `todo` — `apps/mobile` / `packages/app-mobile` — só depois do desktop ponta a ponta
-- [ ] `todo` — `packages/ui`, `packages/shared` — ainda sem `package.json`
+- [ ] `todo` — `apps/mobile` / `packages/app-mobile` / `packages/ui` /
+      `packages/shared` — parte da **Etapa 11 (Android)**, adiada pelo usuário;
+      nenhum dos 4 existe ainda (nem a pasta). Os pacotes compartilhados só
+      nascem quando o mobile for o 2º consumidor (ver nota de 2026-09-19 no
+      backlog › Infra).
 
 ## Etapas de implementação (docs/ai-context/01 a 12)
 
@@ -360,7 +363,14 @@ Correção de vídeo (cores software):
   (resolução em si já pega, é per-frame). Baixa prioridade pros cores atuais.
 
 Infra:
-- `packages/ui`, `packages/shared` — ainda sem `package.json`.
+- ~~`packages/ui`, `packages/shared` — ainda sem `package.json`~~
+  **adiado pra Etapa 11 (2026-09-19, decisão do usuário)** — não existia
+  nem a pasta. Criar agora seria reorganizar código sem um 2º consumidor.
+  Removidos do `package.json` raiz os scripts `dev:mobile`/`build:ui`, que
+  apontavam pra pacotes inexistentes (`pnpm --filter` sem match não roda
+  nada). Pro Android, esta máquina tem só um SDK parcial (platform 37,
+  build-tools 36): faltam NDK, JDK 17, `cmdline-tools` e os targets Rust
+  `*-linux-android*`.
 - `apps/mobile` / `packages/app-mobile` (etapa 11 Android) — só depois do
   desktop ponta a ponta (decisão do usuário 2026-08-30: deixar pra depois).
 - Windows/macOS — **bug de build Windows corrigido (2026-09-16, `019cb06`)**:
