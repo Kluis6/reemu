@@ -31,21 +31,32 @@ jobs em background pra catalogar milhares de ROMs sem travar a UI.
   implemente isso no adapter de cada `MetadataProvider`, não numa camada
   genérica compartilhada (limites são diferentes entre provedores).
 
-## Estado atual (2026-08-27 — `in-progress`)
+## Estado atual (2026-09-19 — `done` no MVP)
 
 `crates/library-scan`:
-- `FileRomHasher` impl `domain::metadata::RomHashService` — CRC32
-  (`crc32fast`) + MD5 (`md-5`), com skip do header iNES (`.nes`). Testado
-  contra valores conhecidos.
-- `system_for_extension` — palpite de `system_id` pela extensão.
-- `scan_into(repo, dir, now)` — varre recursivo, dedup por `file_path`,
-  popula `RomRepository`; `ScanReport`. 2 testes de integração.
-- App: comandos `list_roms` / `scan_library(path)`; tela Library escaneia
-  e lista de verdade.
+- `hash.rs` — `FileRomHasher` (CRC32 + MD5, pula o header iNES).
+- `systems.rs` — `system_id` por extensão e por nome de pasta (inclusive os
+  nomes no estilo No-Intro/RetroArch); `disc_sniff.rs` identifica o sistema
+  de imagens de disco pelo conteúdo; `archive.rs` lê `.zip`/`.7z`.
+- `scan.rs` — `scan_into` varre recursivo, com dedup por `file_path`.
 
-**Falta**: `MetadataProvider` (IGDB/ScreenScraper/TheGamesDB), fila de jobs
-em background, tabelas `scrape_matches`/`game_metadata`. A política já está
-travada (auto só com hash exato) — falta plugar os provedores.
+`apps/desktop/src-tauri/src/scraping.rs`:
+- Um provider: **ScreenScraper** (`api.screenscraper.fr`), busca por CRC.
+  Credenciais do usuário são opcionais (aumentam o limite de requisições).
+- `scrape_pending` roda em background com progresso consultável
+  (`metadata_scan_progress`, `start_metadata_scan`, `cancel_metadata_scan`);
+  a UI não trava.
+- A política continua: só hash exato vira `auto_matched`; o resto vai pra
+  revisão manual (`set_rom_metadata`).
+- Capas: vêm do `thumbnails.libretro.com`, com cache local servido pelo
+  protocolo `cover://` (`covers.rs`) — funcionam sem internet depois da 1ª
+  vez.
+- Telas: `SettingsMetadata` (credenciais) e `SettingsLibrary` (pastas e
+  scan).
+
+**Falta** (backlog do `TASKS.md`): IGDB/TheGamesDB como providers extras em
+cascata, com limite de requisições por provider — hoje não há como trocar o
+provider ativo, então o 3º item do critério de pronto não se aplica ainda.
 
 ## Fila de jobs
 

@@ -77,7 +77,9 @@ libretro isolado num processo filho descartável (`reemu-core-host` +
 **Polimento de UI (2026-09-05, `1fb2bb9`/`2b2d784`)**: casca responsiva pra
 telas grandes (grid `100vh`/`minmax(0,1fr)`, tiles fluidos), sistema de temas
 de cor (Verde Xbox/Roxo/Âmbar via `createDarkTheme` + tokens custom `--reemu*`,
-`useThemeStore`). FALTA: tela Config › Aparência + tema claro/HC + persist Rust.
+`useThemeStore`). Tela Configurações › Aparência e modo claro já existem
+(salvos no `localStorage`). FALTA: tema de alto contraste e persistir o tema
+no lado Rust.
 
 **Compilador slang (opção A) — FEITO** (2026-09-05, `98e8668` fase 1 +
 `33765a3` fase 2):
@@ -506,8 +508,10 @@ Infra:
   (~~eixo analógico → RetroPad~~ feito 2026-09-04: `RETRO_DEVICE_ANALOG`.)
 - `GET_INPUT_BITMASKS` não anunciado — cores caem no query por id (ok, mas
   perde a otimização).
-- `docs/ai-context/01,02,05,06,07,08,09.md` têm seções "Estado atual
-  (in-progress)" desatualizadas — `TASKS.md` é a fonte da verdade.
+- ~~`docs/ai-context/01,02,05,06,07,08,09.md` com "Estado atual"
+  desatualizado~~ **feito (2026-09-19)** — seções de 01 e 05–09 reescritas
+  conferindo contra o código (02 já estava em dia). Os "Falta" que
+  sobraram estão no fim de cada seção.
 - `SaveStateMetadata.play_time_at_save` sempre `None` (sem tracking de tempo
   de jogo).
 

@@ -7,12 +7,14 @@ traits definidas em `crates/domain` (ex: `ShaderChainResolver`,
 `DecorationResolver`, `CoreOptionsStore`), usando `sqlx` sobre o schema
 já definido em `crates/db/migrations/0001_init.sql`.
 
-## Estado atual (2026-08-27 — `done`)
+## Estado atual (2026-09-19 — `done`)
 
-Implementado em `crates/db`: `ShaderChainRepo`, `DecorationRepo`,
-`CoreOptionsRepo`, `AudioConfigRepo`, `InstalledCoresRepo`, `RomsRepo`,
-`SaveStateRepo` + `pool.rs`, `cascade.rs`, `convert.rs`. 18 testes de
-integração com SQLite in-memory.
+Implementado em `crates/db/src/repositories/`: shader chain, decoração,
+core options, áudio, vídeo, cores instalados, core padrão por sistema,
+ROMs, save states, metadata, perfil, atalhos de sistema, mapeamento de
+controles e porta por dispositivo — mais `pool.rs`, `cascade.rs`,
+`convert.rs`. Migrations `0001`–`0009` em `crates/db/migrations/`. Testes de
+integração com SQLite in-memory em `crates/db/tests/`.
 
 **Mudança de contrato**: as traits de DB em `domain` agora são `async`
 (`#[async_trait]`) — o doc abaixo foi escrito assumindo sync. Erro comum:
@@ -23,9 +25,9 @@ Save state: port dividido em `SaveStateManager` (alto nível, dispara
 `retro_serialize`, fica no core-loader — etapa 08) e `SaveStateRepository`
 (só metadata, no `db`). Ambos os models de save ganharam `id`.
 
-**Não implementado (de propósito, entra depois)**: métodos de *escrita* de
-assignment (criar/editar preset de shader/decoração por rom/sistema) —
-entram com a UI (etapa 04/07). O `db` hoje só resolve (lê) a cascata.
+A escrita de assignment (que antes era só leitura da cascata) entrou com a
+UI das etapas 04/07: `set_assignment`/`clear_assignment` e overrides de
+parâmetro no shader chain, `upsert_pack` na decoração.
 
 ## Decisões relevantes
 

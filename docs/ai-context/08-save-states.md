@@ -34,22 +34,30 @@ crates/core-loader-desktop/src/
                        grava arquivo, delega metadata pro repositório (etapa 01)
 ```
 
-## Estado atual (2026-08-27 — `in-progress`)
+## Estado atual (2026-09-19 — `done`)
 
-- `emu-session`: `save_state()` / `restore_state(bytes)` (chama
-  `retro_serialize`/`retro_unserialize` na thread do core) + `loaded_core()`.
-- `apps/desktop/src-tauri/src/save_state.rs` (testável, 4 testes):
-  - `save(repo, save_dir, rom_id, core_id, slot, bytes)` — grava o `.state`
-    (caminho determinístico `rom__core__slotN.state`, troca o anterior no
-    slot) + `SaveStateRepository::record_state`.
-  - `load_bytes(repo, state_id, running_core)` — valida que o `core_id` bate
-    (`SaveError::CoreMismatch`), senão erro claro, não tenta carregar.
-  - `list` / `delete` (arquivo + registro).
-- Comandos Tauri: `save_state` / `list_save_states` / `load_save_state` /
-  `delete_save_state`.
+- `emu-session`: `save_state()`/`restore_state(bytes)` rodam na thread do
+  core (no processo filho `reemu-core-host`, via `core-ipc`). Save states
+  grandes (N64/PSP) passam: acima de 3 MB vão por memfd no Unix; no Windows,
+  o pipe com prefixo de tamanho aguenta até 128 MB.
+- `apps/desktop/src-tauri/src/save_state.rs`: `save` grava o `.state` e o
+  thumbnail PNG ao lado, com caminho determinístico por
+  ROM/core/slot, e troca o anterior do slot; `load_bytes` recusa um state de
+  outro core com `SaveError::CoreMismatch`. Cores irmãos com state
+  compatível contam como a mesma "família" (`save_family` — ex: Beetle PSX
+  e Beetle PSX HW).
+- Comandos: `save_state`, `list_save_states`, `load_save_state`,
+  `delete_save_state`, `read_save_thumbnail`.
+- Save RAM (bateria): `.srm` restaurada no `Load`; flush automático a cada
+  10 s (`SRM_FLUSH_INTERVAL`), gravado fora da thread do core, e também ao
+  trocar de jogo.
+- UI: painel de slots com thumbnail (`SaveStateThumb`) no menu de pausa
+  (`PlayScreen`) e no `RomDetail`, com "jogar daqui"; QuickSave/QuickLoad
+  por atalho (slot 0).
 
-**Falta**: thumbnail no instante do serialize; save RAM (battery) com flush
-automático; painel de estados na UI; medir stutter.
+**Falta**: `SaveStateMetadata.play_time_at_save` fica sempre `None` (não
+existe contagem de tempo de jogo); o stutter ao salvar nunca foi medido
+formalmente, embora não se perceba.
 
 ## Depende de
 

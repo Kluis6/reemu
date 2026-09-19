@@ -38,25 +38,31 @@ Separe `rate_control.rs` do `audio_sink.rs` deliberadamente — a lógica de
 ajuste de taxa é pura (função de "nível de buffer" → "fator de ajuste") e
 deve ser testável sem hardware.
 
-## Estado atual (2026-08-27 — `in-progress`)
+## Estado atual (2026-09-19 — `done`)
 
 `crates/audio-desktop`:
-- `rate_control.rs` — DRC **puro** (`RateControl::factor(fill) -> f32`,
-  limitado a ±`rate_control_delta`). 6 testes.
-- `sink.rs` — `CpalAudioSink` (`domain::audio::AudioSink`): cpal 0.18, ring
-  buffer, resample **linear de razão variável** com estado entre chamadas,
-  fallback pro device padrão (match por `DeviceId` persistente). `pause()`
-  para a stream de fato (`stream.pause()`).
-- `domain::audio::AudioSink` não é mais `Send + Sync` (a `cpal::Stream` é
-  `!Send`); `emu-session::SessionConfig.audio_sink` é uma factory `Send` que
-  constrói o sink **na thread do core**.
-- Wiring: `emu-session` drena `core.drain_audio()` → `sink.push_samples(...,
-  core_sample_rate)`; `FocusController`/pause → `sink.pause()`/`resume()`.
-- App: lê `AudioConfig` do SQLite no startup e passa pra factory. Stream cpal
-  abre OK neste sistema (verificado).
+- `rate_control.rs` — DRC puro (`RateControl::factor(fill)`, limitado a
+  ±`rate_control_delta`).
+- `sink.rs` — `CpalAudioSink`: ring buffer + resample **linear** de razão
+  variável. `RateEstimator` estima a taxa REAL de chegada das amostras (o
+  core nem sempre entrega a taxa que anuncia), limitado a ±12%. Dispositivo
+  escolhido por `DeviceId` persistente; se o salvo não existir mais, cai no
+  padrão do sistema.
+- A factory do sink roda **na thread do core** (a `cpal::Stream` é `!Send`).
 
-Falta: verificar sessão longa sem glitch (core real + ouvir); trocar `rubato`
-se a qualidade do linear não bastar; comando "aplicar config de áudio ao vivo".
+Integração: `emu-session` drena o áudio do core pro sink; pausa/foco chamam
+`pause()`/`resume()`. `SET_SYSTEM_AV_INFO` em runtime atualiza a taxa (o N64
+troca de taxa depois do boot — era a causa do áudio picotado, 2026-09-04).
+`update_audio_config` aplica ao vivo via `session.reload_audio`, sem
+reiniciar o jogo. Tela: `SettingsAudio`. Diagnóstico: `REEMU_AUDIO_DEBUG=1`
+(fps, amostras por segundo, frames acima do orçamento).
+
+Validado: N64 ~1 min sem underrun; sobram ~2 engasgos isolados por sessão
+(30–55 ms), que o buffer de 250 ms quase absorve. **Falta**:
+- sessão de 10+ min, pedida no critério de pronto, nunca medida formalmente;
+- trocar pro `rubato` só se a qualidade do linear não bastar;
+- nenhum toast quando o dispositivo salvo some — hoje a troca pro padrão é
+  silenciosa (o critério de pronto pede toast).
 
 ## Depende de
 

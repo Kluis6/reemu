@@ -47,30 +47,29 @@ packages/app-desktop/src/
     Settings.tsx
 ```
 
-## Estado atual (2026-08-27 — `in-progress`)
+## Estado atual (2026-09-19 — `done`)
 
-Feito em `packages/app-desktop/src/`:
-- `lib/tauri.ts` — wrappers dos comandos/eventos, toleram rodar fora do Tauri.
-- `hooks/useFocusBridge.ts` — espelha `focus-changed` → `useFocusStore`.
-- `components/ToastLayer.tsx` — fila, auto-dismiss por `durationMs`,
-  `pointerEvents: none` (nunca captura input).
-- `components/MenuOverlay.tsx` — scrim + painel Fluent, só quando `MenuFocused`;
-  abas Biblioteca / Configurações.
-- `components/CoreOptionsPanel.tsx` — Dropdown/Switch/Slider **gerados** de
-  `CoreOptionDefinition[]`.
-- `screens/Library.tsx` — mock (scan real = etapa 09).
-- `screens/Settings.tsx` — form de áudio **real** via TanStack Query +
-  comandos `get_audio_config`/`update_audio_config`.
-- `App.tsx` — HUD (foco + toggle + toast de teste) + MenuOverlay + ToastLayer.
+O frontend virou o "modo Xbox" (tela cheia, navegável por controle), bem
+além do escopo original deste doc. Em `packages/app-desktop/src/`:
 
-Backend novo (`apps/desktop/src-tauri`): `AppState.db` (SqlitePool, migrations
-rodam no startup em `<app_data_dir>/reemu.db` — verificado, 17 tabelas +
-`audio_config` seedado); comandos `get_audio_config`, `update_audio_config`,
-`list_installed_cores`.
+- Telas: `Home` (prateleiras + `HeroCarousel`), `Library`,
+  `PlatformLibrary`, `RomDetail`, `PlayScreen` (jogo + menu de pausa com o
+  último frame borrado ao fundo — substituiu o antigo `MenuOverlay`) e
+  `Onboarding`. Configurações em `screens/settings/`: Aparência, Áudio,
+  BIOS, Controles, Cores, Atalhos, Biblioteca, Metadata, Perfil e Vídeo.
+- Stores Zustand pequenas: foco, toast, captura de binding, gamepad, busca,
+  tela cheia e tema.
+- Componentes centrais: `ToastLayer` (fila, `pointerEvents: none`),
+  `CoreOptions` (gerado de `CoreOptionDefinition[]`, sem código por core),
+  `ShaderLibrary`/`ShaderParams`, `BezelLibrary`, `BindingCapture`,
+  `GameCard`/`PlatformTile`/`Shelf` (tamanho do card uniforme por página).
+- Estilo: Fluent 2 + Griffel obrigatórios; medidas fluidas com `clamp()`.
+  Temas de cor com modo claro/escuro (`styles/themes.ts`, `useThemeStore`),
+  salvos no `localStorage`; papel de parede da tela inicial salvo pelo Rust
+  (`appearance.rs`).
 
-Falta: telas de shader/decoração (etapa 04), captura de binding (etapa 05),
-`useBindingCaptureStore`, tela de erro bloqueante dedicada, e o Library real
-(etapa 09). Verificação visual do overlay pendente (sem tela).
+**Falta**: tela de erro bloqueante dedicada (hoje os erros viram toast); tema
+de alto contraste; persistir o tema no lado Rust (hoje só `localStorage`).
 
 ## Depende de
 
