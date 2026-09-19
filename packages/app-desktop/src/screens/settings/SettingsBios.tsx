@@ -38,6 +38,9 @@ const SYSTEM_LABEL: Record<string, string> = {
   saturn: 'Saturn',
   dreamcast: 'Dreamcast',
   arcade: 'Arcade (FBNeo)',
+  segacd: 'Sega CD / Mega-CD',
+  pcenginecd: 'PC Engine CD',
+  pcfx: 'PC-FX',
 }
 
 type Key = { systemId: string; filename: string }
@@ -86,7 +89,7 @@ export function SettingsBios() {
   return (
     <div className={styles.root}>
       <Caption1>
-        Arquivos de sistema que alguns cores exigem além da ROM (PS1, Saturn, Dreamcast, Arcade).
+        Arquivos de sistema que alguns cores exigem além da ROM (PS1, Saturn, Dreamcast, Arcade, Sega CD, PC Engine CD, PC-FX).
         O ReEmu <Text as="strong" weight="semibold">nunca baixa BIOS</Text> — são copyright da fabricante; importe um arquivo
         que você já possui legalmente.
       </Caption1>

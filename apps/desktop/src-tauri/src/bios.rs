@@ -57,8 +57,10 @@ pub fn check_all(system_dir: &Path) -> Vec<BiosStatus> {
             let present = path.is_file();
             let hash_ok = present
                 .then(|| {
-                    file.md5.map(|want| {
-                        md5_hex(&path).is_some_and(|got| got.eq_ignore_ascii_case(want))
+                    (!file.md5.is_empty()).then(|| {
+                        md5_hex(&path).is_some_and(|got| {
+                            file.md5.iter().any(|want| got.eq_ignore_ascii_case(want))
+                        })
                     })
                 })
                 .flatten();

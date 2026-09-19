@@ -295,7 +295,7 @@ BIOS / arquivos de sistema (2026-09-04 — feature nova, não existia nada antes
 - `domain::bios` — tabela pura (`system_id` → arquivo(s) esperado(s),
   subpasta, MD5, obrigatório?), conferida contra `docs.libretro.com/library/
   <core>/` (Beetle PSX, Kronos, Flycast, FBNeo), não de memória. Cobre
-  `psx`/`saturn`/`dreamcast`/`arcade`.
+  `psx`/`saturn`/`dreamcast`/`arcade`/`segacd`/`pcenginecd`/`pcfx`.
 - `apps/desktop/src-tauri/src/bios.rs` — `check_all` (presença + MD5 contra
   `<dados>/system`), `import_bios_file` (copia + renomeia pro nome
   canônico), `remove_bios_file`. **Nunca baixa nada** — BIOS é copyright da
@@ -304,10 +304,21 @@ BIOS / arquivos de sistema (2026-09-04 — feature nova, não existia nada antes
   nova **Configurações › BIOS** (`SettingsBios.tsx`, mesmo estilo de
   `SettingsCores`); `RomDetail` avisa (toast, não bloqueia) se o sistema da
   ROM tem um arquivo `required: true` faltando antes de navegar pro jogo.
-- Cobertura só dos 4 sistemas mais comuns por enquanto — PSP, PC-FX, Sega
-  CD, PC Engine CD ficam sem entrada em `domain::bios` (nenhuma doc de
-  MD5 confiável achada na hora / não pedido). Adicionar é só estender a
-  tabela, o resto (check/import/UI) já é genérico.
+- ~~Cobertura só dos 4 sistemas mais comuns~~ **Sega CD, PC Engine CD e
+  PC-FX adicionados (2026-09-19)**, conferidos em `docs.libretro.com`
+  (Genesis Plus GX, PicoDrive, Beetle PCE Fast, Beetle PC-FX) e nas strings
+  dos `.so` instalados. `BiosFile::md5` virou lista de MD5s aceitos: o
+  `bios_CD_U.bin` tem dois documentados (GPGX e PicoDrive citam revisões
+  diferentes), e um MD5 só marcaria uma BIOS boa como errada. Obrigatórios:
+  `syscard3.pce` (PCE CD) e `pcfx.rom`. As 3 BIOS de Sega CD ficaram
+  opcionais (cada uma só vale pros jogos da sua região, e ninguém tem as
+  3) — por isso o `RomDetail` não avisa de Sega CD; avisar certo exigiria
+  saber a região da ROM.
+- PSP **não** entra em `domain::bios`: o PPSSPP não usa BIOS, e sim a pasta
+  `assets` do projeto PPSSPP (GPL) em `<system>/PPSSPP/` (fontes, telas de
+  memory card, configurações por jogo). Como é GPL, dá pra baixar como os
+  shaders (`shader_pack.rs`) — **todo**, se os jogos de PSP mostrarem
+  problema sem ela.
 
 Áudio (etapa 06):
 - ~~Validação de sessão longa~~ — N64 ~1min sem underrun (2026-09-04). Restam 2
