@@ -227,3 +227,29 @@ async fn arcade_zip_without_a_cartridge_entry_is_catalogued_by_folder() {
     assert_eq!(arcade[0].crc32, crc_of(&whole_zip));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[tokio::test]
+async fn generic_extension_counts_only_inside_its_system_folder() {
+    let dir = scratch_dir();
+    write(&dir, "msx/Metal Gear (Japan).rom", b"msx-cart");
+    write(&dir, "odyssey2/K.C. Munchkin (USA).bin", b"o2-cart");
+    write(&dir, "zxspectrum/Manic Miner.tap", b"zx-tape");
+    write(&dir, "nds/Mario Kart DS (USA).nds", b"nds-cart");
+    // mesmas extensões genéricas fora da pasta do sistema → ignoradas
+    write(&dir, "Random.rom", b"x");
+    write(&dir, "firmware.bin", b"y");
+    // `.bin` dentro da pasta de um sistema que NÃO o aceita → ignorado
+    write(&dir, "nds/extra.bin", b"z");
+
+    assert_eq!(library_scan::count_roms(&dir), 4, "barra de progresso usa a mesma regra");
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!(r.added, 4);
+    assert_eq!(r.skipped_unrecognized, 3);
+    for sys in ["msx", "odyssey2", "zxspectrum", "nds"] {
+        assert_eq!(repo.list_by_system(sys).await.unwrap().len(), 1, "{sys}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}

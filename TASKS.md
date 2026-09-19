@@ -267,6 +267,25 @@ Scan de ROMs / identificação de sistema (`library-scan`, 2026-09-04):
   loader::open_core` não trava mais quando `extract_rom` não acha nada pra
   extrair — cai pro caminho do `.zip` original (o que `need_fullpath=true`
   do fbneo/mame espera).
+- ~~Cores do catálogo pra sistemas que o scan não reconhecia~~ **feito
+  (2026-09-19)** — o app baixava core pra Nintendo DS, SG-1000,
+  SuperGrafx, Atari 5200/8-bit/Jaguar, Pokémon Mini, Supervision, MSX,
+  Vectrex, Odyssey², C64, Amiga, ZX Spectrum e Amstrad CPC, mas as ROMs
+  desses sistemas ficavam invisíveis. Os 15 entraram em `systems.rs`
+  (extensão exclusiva + nomes de pasta + pasta de capa), com extensões
+  tiradas do `.info` oficial de cada core (`libretro-core-info`) e pastas
+  de capa conferidas nos repos do `libretro-thumbnails`. Extensões
+  genéricas desses cores (`.bin`/`.rom`/`.dsk`/`.tap`/`.cas`) só contam
+  dentro da pasta do sistema (`folder_only_exts` + ramo novo em
+  `scan.rs`) — fora dela continuam ignoradas. `.sgx` saiu de `pcengine`
+  pra `supergrafx`. `ROM_EXTS` do `core-loader-desktop::archive` estava
+  dessincronizado (faltavam `a78`/`vb`/`col`/`int`: esses sistemas
+  zipados eram catalogados mas não extraídos no load) — sincronizado.
+  **Não feito**: id do ScreenScraper dos 15 (a lista oficial exige
+  credencial de dev, que o app não tem — ficam só com capa do libretro,
+  como PS1/Saturn); BIOS desses sistemas (Amiga Kickstart, Atari 5200,
+  MSX, firmware do DS) em `domain::bios`; DOS e ScummVM (jogos são
+  pastas/`.zip` sem extensão própria — precisam de outro tratamento).
 - Novos sistemas cobertos (extensão ou pasta): `vb`, `atari7800`, `coleco`,
   `intellivision`, `ps2`, `pcenginecd`, `pcfx`. Boxart (`thumbnails.libretro.
   com`) coberto pros de disco+os cartuchos novos (conferido contra o org

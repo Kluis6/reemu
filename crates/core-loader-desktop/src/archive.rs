@@ -10,12 +10,17 @@ use sevenz_rust2::{ArchiveReader, Password};
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 
-/// Extensões de ROM crua (subconjunto — o suficiente pra achar a entrada certa
-/// dentro do zip). Espelha `library-scan::system_for_extension`.
+/// Extensões de ROM crua pra achar a entrada certa dentro do zip. Espelha as
+/// extensões de cartucho de `library-scan::system_for_extension` — sem elas
+/// aqui, uma ROM zipada é catalogada pelo scan mas não é extraída no load.
+/// (Este crate não depende do `library-scan`; manter as duas em sincronia.)
 const ROM_EXTS: &[&str] = &[
     "nes", "fds", "unif", "unf", "sfc", "smc", "swc", "fig", "gb", "gbc", "gba", "srl", "n64",
-    "z64", "v64", "ndd", "md", "smd", "gen", "sgd", "sms", "gg", "pce", "sgx", "a26", "lnx", "ws",
-    "wsc", "ngp", "ngc", "32x", "cue", "chd", "iso", "pbp",
+    "z64", "v64", "ndd", "md", "smd", "gen", "sgd", "sms", "gg", "pce", "sgx", "a26", "a78", "lnx",
+    "ws", "wsc", "ngp", "ngc", "32x", "vb", "col", "int", "nds", "dsi", "ids", "sg", "a52", "atr",
+    "xfd", "atx", "xex", "j64", "jag", "min", "sv", "mx1", "mx2", "vec", "d64", "d71", "d81", "g64",
+    "t64", "x64", "crt", "adf", "adz", "dms", "hdf", "tzx", "z80", "rzx", "szx", "scl", "trd",
+    "cdt", "cpr", "cue", "chd", "iso", "pbp",
 ];
 
 /// ROM extraída pra um arquivo temporário — apagado no `Drop`.

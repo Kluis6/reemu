@@ -2,7 +2,9 @@
 
 use crate::archive::{is_supported_archive, peek_archive, read_archive_entry};
 use crate::hash::FileRomHasher;
-use crate::systems::{system_for_extension, system_from_folder_name, AMBIGUOUS_DISC_EXTS};
+use crate::systems::{
+    folder_only_exts, system_for_extension, system_from_folder_name, AMBIGUOUS_DISC_EXTS,
+};
 use domain::library::{Rom, RomRepository};
 use std::io::Cursor;
 use std::path::Path;
@@ -31,11 +33,22 @@ fn system_from_dirs(dirs: &[String]) -> Option<&'static str> {
     dirs.iter().rev().find_map(|d| system_from_folder_name(d))
 }
 
-/// Extensão reconhecida (ROM crua ou arquivo comprimido suportado).
-fn recognized(path: &Path) -> bool {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| system_for_extension(e).is_some() || is_supported_archive(e))
+/// Sistema da pasta ancestral, se `ext` for uma das extensões genéricas que
+/// ele aceita (`folder_only_exts` — ex: `.rom` dentro de `<roms>/msx/`).
+fn system_from_folder_ext(path: &Path, root: &Path, ext: &str) -> Option<&'static str> {
+    system_from_dirs(&ancestor_dirs(path, root)).filter(|s| folder_only_exts(s).contains(&ext))
+}
+
+/// Extensão reconhecida (ROM crua, arquivo comprimido suportado, ou
+/// extensão genérica dentro da pasta de um sistema que a aceita).
+fn recognized(path: &Path, root: &Path) -> bool {
+    let Some(ext) = path.extension().and_then(|e| e.to_str()) else {
+        return false;
+    };
+    let ext = ext.to_ascii_lowercase();
+    system_for_extension(&ext).is_some()
+        || is_supported_archive(&ext)
+        || system_from_folder_ext(path, root, &ext).is_some()
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -68,7 +81,7 @@ pub fn count_roms(dir: &Path) -> usize {
         .into_iter()
         .filter_map(Result::ok)
         .filter(|e| e.file_type().is_file())
-        .filter(|e| recognized(e.path()))
+        .filter(|e| recognized(e.path(), dir))
         .count()
 }
 
@@ -116,6 +129,8 @@ where
                     .unwrap_or("disc");
                 (sys, None)
             } else if let Some(sys) = system_for_extension(&ext) {
+                (sys, None)
+            } else if let Some(sys) = system_from_folder_ext(path, dir, &ext) {
                 (sys, None)
             } else if is_supported_archive(&ext) {
                 let is_arcade = system_from_dirs(&ancestor_dirs(path, dir)) == Some("arcade");

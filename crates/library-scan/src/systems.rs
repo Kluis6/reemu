@@ -27,7 +27,8 @@ pub fn system_for_extension(ext: &str) -> Option<&'static str> {
         "md" | "smd" | "gen" | "sgd" => "megadrive",
         "sms" => "mastersystem",
         "gg" => "gamegear",
-        "pce" | "sgx" => "pcengine",
+        "pce" => "pcengine",
+        "sgx" => "supergrafx",
         "a26" => "atari2600",
         "a78" => "atari7800",
         "lnx" => "lynx",
@@ -37,6 +38,23 @@ pub fn system_for_extension(ext: &str) -> Option<&'static str> {
         "vb" => "vb",
         "col" => "coleco",
         "int" => "intellivision",
+        // Extensões exclusivas de um sistema, tiradas do `supported_extensions`
+        // do `.info` oficial de cada core do catálogo (`libretro-core-info`).
+        // As genéricas desses mesmos cores (`.bin`/`.rom`/`.dsk`/`.tap`/`.cas`)
+        // ficam em `folder_only_exts`: só valem com a pasta dizendo o sistema.
+        "nds" | "dsi" | "ids" => "nds",
+        "sg" => "sg1000",
+        "a52" => "atari5200",
+        "atr" | "xfd" | "atx" | "xex" => "atari8bit",
+        "j64" | "jag" => "jaguar",
+        "min" => "pokemini",
+        "sv" => "supervision",
+        "mx1" | "mx2" => "msx",
+        "vec" => "vectrex",
+        "d64" | "d71" | "d81" | "g64" | "t64" | "x64" | "crt" => "c64",
+        "adf" | "adz" | "dms" | "hdf" => "amiga",
+        "tzx" | "z80" | "rzx" | "szx" | "scl" | "trd" => "zxspectrum",
+        "cdt" | "cpr" => "amstradcpc",
         // `.gdi`/`.cdi` são GD-ROM → Dreamcast por padrão (NAOMI/Atomiswave a
         // pasta desambigua); `.pbp`/`.cso` são de PSP. As outras seguem ambíguas
         // (`scan.rs` tenta a pasta, depois fareja o conteúdo).
@@ -100,6 +118,25 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         "virtualboy" | "virtual boy" | "vb" | "nintendo - virtual boy" => "vb",
         "colecovision" | "coleco" | "coleco - colecovision" => "coleco",
         "intellivision" | "intv" | "mattel - intellivision" => "intellivision",
+        "nds" | "nintendo ds" | "nintendods" | "nintendo - nintendo ds" | "dsi"
+        | "nintendo dsi" | "nintendo - nintendo dsi" => "nds",
+        "sg1000" | "sg-1000" | "sega sg-1000" | "sega - sg-1000" => "sg1000",
+        "supergrafx" | "sgx" | "pc engine supergrafx" | "nec - pc engine supergrafx" => {
+            "supergrafx"
+        }
+        "atari5200" | "atari 5200" | "5200" | "atari - 5200" => "atari5200",
+        "atari800" | "atari8bit" | "atari 8-bit" | "atari 800" | "atarixl"
+        | "atari - 8-bit family" => "atari8bit",
+        "jaguar" | "atarijaguar" | "atari jaguar" | "atari - jaguar" => "jaguar",
+        "pokemini" | "pokemon mini" | "nintendo - pokemon mini" => "pokemini",
+        "supervision" | "watara supervision" | "watara - supervision" => "supervision",
+        "msx" | "msx1" | "msx2" | "microsoft - msx" | "microsoft - msx2" => "msx",
+        "vectrex" | "gce - vectrex" => "vectrex",
+        "odyssey2" | "odyssey 2" | "videopac" | "magnavox - odyssey2" => "odyssey2",
+        "c64" | "commodore 64" | "commodore64" | "commodore - 64" => "c64",
+        "amiga" | "commodore amiga" | "commodore - amiga" => "amiga",
+        "zxspectrum" | "zx spectrum" | "spectrum" | "sinclair - zx spectrum" => "zxspectrum",
+        "amstradcpc" | "cpc" | "amstrad cpc" | "amstrad - cpc" => "amstradcpc",
         // --- disco (AMBIGUOUS_DISC_EXTS) ---
         "psx" | "playstation" | "ps1" | "sony - playstation" => "psx",
         "ps2" | "playstation2" | "playstation 2" | "sony - playstation 2" => "ps2",
@@ -120,6 +157,28 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         | "cps2" | "cps3" => "arcade",
         _ => return None,
     })
+}
+
+/// Extensões genéricas (usadas por vários sistemas, ou por arquivo que não é
+/// ROM) que só contam como ROM de `system_id` quando uma pasta ancestral já
+/// identifica esse sistema (ex: `<roms>/msx/jogo.rom`). Fora dessa pasta o
+/// scan continua ignorando — um `.bin` solto não vira ROM de nada. Tiradas
+/// do `supported_extensions` do `.info` oficial dos cores do catálogo.
+pub fn folder_only_exts(system_id: &str) -> &'static [&'static str] {
+    match system_id {
+        "msx" => &["rom", "ri", "dsk", "cas"],
+        "odyssey2" => &["bin"],
+        "vectrex" => &["bin"],
+        "supervision" => &["bin"],
+        "sg1000" => &["bin", "rom"],
+        "atari5200" => &["bin", "rom", "car"],
+        "atari8bit" => &["bin", "rom", "car", "cas", "com"],
+        "jaguar" => &["bin", "rom", "abs", "cof"],
+        "c64" => &["prg", "p00", "tap"],
+        "zxspectrum" => &["tap", "dsk", "sna", "dck"],
+        "amstradcpc" => &["dsk", "sna", "tap"],
+        _ => &[],
+    }
 }
 
 /// Pasta do sistema no servidor de thumbnails da libretro
@@ -160,6 +219,21 @@ fn libretro_thumbnail_system(system_id: &str) -> Option<&'static str> {
         "psx" => "Sony - PlayStation",
         "ps2" => "Sony - PlayStation 2",
         "psp" => "Sony - PlayStation Portable",
+        "nds" => "Nintendo - Nintendo DS",
+        "sg1000" => "Sega - SG-1000",
+        "supergrafx" => "NEC - PC Engine SuperGrafx",
+        "atari5200" => "Atari - 5200",
+        "atari8bit" => "Atari - 8-bit Family",
+        "jaguar" => "Atari - Jaguar",
+        "pokemini" => "Nintendo - Pokemon Mini",
+        "supervision" => "Watara - Supervision",
+        "msx" => "Microsoft - MSX",
+        "vectrex" => "GCE - Vectrex",
+        "odyssey2" => "Magnavox - Odyssey2",
+        "c64" => "Commodore - 64",
+        "amiga" => "Commodore - Amiga",
+        "zxspectrum" => "Sinclair - ZX Spectrum",
+        "amstradcpc" => "Amstrad - CPC",
         // "arcade": sem cobertura de boxart 1:1 (MAME/FBNeo são sets separados
         // no thumbnails.libretro.com, não um sistema único) — fica sem, o
         // frontend já cai nas iniciais no `onerror`.
@@ -275,6 +349,62 @@ mod tests {
         assert_eq!(system_from_folder_name("psp"), Some("psp"));
         assert_eq!(system_from_folder_name("segacd"), Some("segacd"));
         assert_eq!(system_from_folder_name("not-a-system"), None);
+    }
+
+    /// Todo sistema novo precisa das 3 pontas: extensão ou pasta que o
+    /// reconhece, e pasta de capa no libretro-thumbnails.
+    const CATALOG_SYSTEMS: &[&str] = &[
+        "nds",
+        "sg1000",
+        "supergrafx",
+        "atari5200",
+        "atari8bit",
+        "jaguar",
+        "pokemini",
+        "supervision",
+        "msx",
+        "vectrex",
+        "odyssey2",
+        "c64",
+        "amiga",
+        "zxspectrum",
+        "amstradcpc",
+    ];
+
+    #[test]
+    fn catalog_systems_are_recognized_and_have_boxart() {
+        for sys in CATALOG_SYSTEMS {
+            assert_eq!(system_from_folder_name(sys), Some(*sys), "pasta {sys}");
+            assert!(libretro_boxart_url(sys, "Game").is_some(), "capa {sys}");
+        }
+    }
+
+    #[test]
+    fn maps_catalog_system_extensions() {
+        assert_eq!(system_for_extension("nds"), Some("nds"));
+        assert_eq!(system_for_extension("sg"), Some("sg1000"));
+        assert_eq!(system_for_extension("sgx"), Some("supergrafx"));
+        assert_eq!(system_for_extension("pce"), Some("pcengine"));
+        assert_eq!(system_for_extension("a52"), Some("atari5200"));
+        assert_eq!(system_for_extension("xex"), Some("atari8bit"));
+        assert_eq!(system_for_extension("j64"), Some("jaguar"));
+        assert_eq!(system_for_extension("min"), Some("pokemini"));
+        assert_eq!(system_for_extension("sv"), Some("supervision"));
+        assert_eq!(system_for_extension("mx2"), Some("msx"));
+        assert_eq!(system_for_extension("vec"), Some("vectrex"));
+        assert_eq!(system_for_extension("d64"), Some("c64"));
+        assert_eq!(system_for_extension("adf"), Some("amiga"));
+        assert_eq!(system_for_extension("tzx"), Some("zxspectrum"));
+        assert_eq!(system_for_extension("cdt"), Some("amstradcpc"));
+    }
+
+    #[test]
+    fn generic_exts_never_recognized_without_folder() {
+        for sys in CATALOG_SYSTEMS {
+            for ext in folder_only_exts(sys) {
+                assert_eq!(system_for_extension(ext), None, "{sys}: .{ext}");
+            }
+        }
     }
 
     #[test]
