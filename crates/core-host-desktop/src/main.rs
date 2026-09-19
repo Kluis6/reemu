@@ -9,12 +9,14 @@
 //! mudança de comportamento — só o "escrever em `Shared`" de
 //! `emu_session::core_loop` vira "mandar mensagem `ToParent`".
 
-use core_ipc::{Channel, FrameKind, HwPlaneMeta, PortInput, ToChild, ToParent};
+use core_ipc::{Channel, FrameKind, PortInput, ToChild, ToParent};
+#[cfg(unix)]
+use core_ipc::HwPlaneMeta;
 use core_loader_desktop::{DesktopCore, DesktopCoreLoader};
 use domain::core_loader::{CoreId, LoadedCore};
 use domain::frame_source::{FrameOrigin, FrameSource};
+#[cfg(unix)]
 use rustix::fd::{AsFd, FromRawFd, OwnedFd};
-use std::os::fd::RawFd;
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
@@ -25,9 +27,11 @@ fn main() {
         .skip_while(|a| a != "--fd")
         .nth(1)
         .expect("reemu-core-host: uso: --fd <numero>");
-    let fd_num: RawFd = fd_arg.parse().expect("--fd inválido");
+    // Tipo inferido do uso logo abaixo: `RawFd` (i32) no Unix, `ChannelArg`
+    // (handles + nome do canal) no Windows.
+    let fd_num = fd_arg.parse().expect("--fd inválido");
 
-    // SAFETY: o pai deixou este fd sem CLOEXEC especificamente pra este
+    // SAFETY: o pai deixou este fd/handle herdável especificamente pra este
     // processo herdar (ver `core-ipc::Channel::clear_cloexec`); ninguém mais
     // neste processo novo pode ter reivindicado o mesmo número ainda.
     let channel = unsafe { Channel::from_inherited_fd(fd_num) };
@@ -201,7 +205,11 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         let max_w = av.geometry.max_width.max(av.geometry.base_width).max(1);
                         let max_h = av.geometry.max_height.max(av.geometry.base_height).max(1);
                         let slot_size = (max_w * max_h * 4) as usize;
-                        let new_ring = match core_ipc::FrameRing::create(slot_size) {
+                        #[cfg(unix)]
+                        let new_ring = core_ipc::FrameRing::create(slot_size);
+                        #[cfg(windows)]
+                        let new_ring = core_ipc::FrameRing::create(&channel, slot_size);
+                        let new_ring = match new_ring {
                             Ok(r) => r,
                             Err(e) => {
                                 let _ = channel.send(
@@ -211,8 +219,14 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                                 continue;
                             }
                         };
-                        let ring_fd = new_ring.fd();
-                        let _ = channel.send(&ToParent::Loaded(Ok(av)), &[ring_fd]);
+                        // Unix: o memfd do anel vai junto via `SCM_RIGHTS`.
+                        // Windows: o anel já é nomeado (derivado do nome do
+                        // pipe, ver `core_ipc::shm_ring_win`) — o pai abre
+                        // pelo mesmo nome, nada extra viaja na mensagem.
+                        #[cfg(unix)]
+                        let _ = channel.send(&ToParent::Loaded(Ok(av)), &[new_ring.fd()]);
+                        #[cfg(windows)]
+                        let _ = channel.send(&ToParent::Loaded(Ok(av)), &[]);
                         let _ = channel.send(&ToParent::SaveRamRestored(restored), &[]);
                         ring = Some(new_ring);
                         frame_slot = 0;
@@ -369,6 +383,18 @@ fn send_frame(
             // cruza processo.
             log::error!("frame Vulkan no core-host (bug): HW render Vulkan é in-process");
         }
+        // dma_buf (GBM/DRM) é um conceito de interop gráfico específico do
+        // Linux, opt-in via `REEMU_GL_INTEROP=1` (default off) — não existe
+        // equivalente no Windows (lá seria D3D11/D3D12 shared handle, um
+        // subsistema totalmente diferente, fora do escopo desta porta de
+        // IPC). No Windows este caminho não é alcançado na prática (nada em
+        // `core-loader-desktop` produz `HardwareTexture` lá), mas precisa
+        // compilar — loga e descarta o frame em vez de travar.
+        #[cfg(windows)]
+        FrameOrigin::HardwareTexture(_handle) => {
+            log::error!("frame HardwareTexture (dma_buf) no core-host: sem suporte no Windows");
+        }
+        #[cfg(unix)]
         FrameOrigin::HardwareTexture(handle) => {
             let flip_y = handle.flip_y();
             let slot = handle.slot();

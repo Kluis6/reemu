@@ -17,6 +17,10 @@ mod archive;
 mod core;
 mod coreopts;
 mod discover;
+// GBM/DRM — interop gráfico zero-cópia Linux-only (opt-in via
+// `REEMU_GL_INTEROP=1`, default off). Sem equivalente no Windows (seria
+// D3D11/D3D12 shared handle, subsistema totalmente diferente) — não portado.
+#[cfg(unix)]
 mod dmabuf;
 mod ffi_state;
 mod gl_context;
@@ -33,7 +37,7 @@ pub use crate::coreopts::{
     core_option_values, core_options, set_core_option, set_pending_core_option_values,
 };
 pub use crate::discover::{discover_cores, DiscoveredCore};
-#[cfg(feature = "test-fixtures")]
+#[cfg(all(unix, feature = "test-fixtures"))]
 pub use crate::gl_context::render_solid_rgba_to_dmabuf;
 pub use crate::input::{analog, libretro_joypad_id, retropad, AnalogState, RetroPadState};
 pub use crate::loader::DesktopCoreLoader;
@@ -49,6 +53,7 @@ pub use crate::loader::DesktopCoreLoader;
 /// PROCESSO PRINCIPAL (caminho Vulkan in-process, `emu-session::local_core`)
 /// isso mataria o stdout do Tauri/webview/wgpu também — usar
 /// `with_core_stdout_silenced` lá (mute só durante o load, restaura depois).
+#[cfg(unix)]
 pub fn silence_core_stdout() {
     use std::sync::Once;
     static ONCE: Once = Once::new();
@@ -71,6 +76,33 @@ pub fn silence_core_stdout() {
     });
 }
 
+/// Equivalente Windows: troca o HANDLE de `STD_OUTPUT_HANDLE` pro device
+/// `NUL` (não existe `dup2` — `SetStdHandle` só reatribui o valor guardado
+/// na tabela de handles-padrão do processo, ver `with_core_stdout_silenced`
+/// pra como isso difere de `dup2` na hora de restaurar).
+#[cfg(windows)]
+pub fn silence_core_stdout() {
+    use std::sync::Once;
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| {
+        if std::env::var_os("REEMU_CORE_STDOUT").is_some() {
+            return;
+        }
+        match win_stdout::open_nul_write() {
+            Ok(h) => {
+                use windows_sys::Win32::System::Console::{SetStdHandle, STD_OUTPUT_HANDLE};
+                if unsafe { SetStdHandle(STD_OUTPUT_HANDLE, h) } == 0 {
+                    log::warn!(
+                        "silence_core_stdout: SetStdHandle falhou: {}",
+                        std::io::Error::last_os_error()
+                    );
+                }
+            }
+            Err(e) => log::warn!("silence_core_stdout: abrir NUL: {e}"),
+        }
+    });
+}
+
 /// Versão do `silence_core_stdout` pro caminho **in-process** (processo
 /// principal): redireciona stdout pra `/dev/null` só durante `f()` e
 /// restaura o fd original depois — não pode ser permanente aqui porque o
@@ -82,6 +114,7 @@ pub fn silence_core_stdout() {
 /// `REEMU_CORE_STDOUT` (qualquer valor) desliga, igual `silence_core_stdout`.
 /// Falha em qualquer etapa (dup/open/dup2) só loga um aviso e segue sem
 /// silenciar — nunca quebra o load do core por causa disso.
+#[cfg(unix)]
 pub fn with_core_stdout_silenced<T>(f: impl FnOnce() -> T) -> T {
     use std::os::fd::{AsFd, BorrowedFd};
 
@@ -118,6 +151,95 @@ pub fn with_core_stdout_silenced<T>(f: impl FnOnce() -> T) -> T {
         log::warn!("with_core_stdout_silenced: restaurar stdout falhou: {e}");
     }
     result
+}
+
+/// Equivalente Windows: sem `dup2`, `SetStdHandle` só reatribui o valor na
+/// tabela — restaurar não fecha `saved` (ele passa a SER o handle ativo de
+/// novo), só o `devnull` que ficou pra trás precisa fechar explicitamente.
+#[cfg(windows)]
+pub fn with_core_stdout_silenced<T>(f: impl FnOnce() -> T) -> T {
+    use windows_sys::Win32::Foundation::{CloseHandle, DuplicateHandle, DUPLICATE_SAME_ACCESS};
+    use windows_sys::Win32::System::Console::{GetStdHandle, SetStdHandle, STD_OUTPUT_HANDLE};
+    use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+    if std::env::var_os("REEMU_CORE_STDOUT").is_some() {
+        return f();
+    }
+    let current = unsafe { GetStdHandle(STD_OUTPUT_HANDLE) };
+    let mut saved = std::ptr::null_mut();
+    let dup_ok = unsafe {
+        DuplicateHandle(
+            GetCurrentProcess(),
+            current,
+            GetCurrentProcess(),
+            &mut saved,
+            0,
+            0,
+            DUPLICATE_SAME_ACCESS,
+        )
+    };
+    if dup_ok == 0 {
+        log::warn!(
+            "with_core_stdout_silenced: DuplicateHandle falhou: {}",
+            std::io::Error::last_os_error()
+        );
+        return f();
+    }
+    let devnull = match win_stdout::open_nul_write() {
+        Ok(h) => h,
+        Err(e) => {
+            log::warn!("with_core_stdout_silenced: abrir NUL: {e}");
+            unsafe { CloseHandle(saved) };
+            return f();
+        }
+    };
+    if unsafe { SetStdHandle(STD_OUTPUT_HANDLE, devnull) } == 0 {
+        log::warn!(
+            "with_core_stdout_silenced: SetStdHandle(NUL) falhou: {}",
+            std::io::Error::last_os_error()
+        );
+        unsafe {
+            CloseHandle(saved);
+            CloseHandle(devnull);
+        }
+        return f();
+    }
+    let result = f();
+    if unsafe { SetStdHandle(STD_OUTPUT_HANDLE, saved) } == 0 {
+        log::warn!(
+            "with_core_stdout_silenced: restaurar stdout falhou: {}",
+            std::io::Error::last_os_error()
+        );
+    }
+    unsafe { CloseHandle(devnull) };
+    result
+}
+
+#[cfg(windows)]
+mod win_stdout {
+    use windows_sys::Win32::Foundation::{GENERIC_WRITE, HANDLE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+
+    pub(super) fn open_nul_write() -> std::io::Result<HANDLE> {
+        let wname: Vec<u16> = "NUL".encode_utf16().chain(std::iter::once(0)).collect();
+        let h = unsafe {
+            CreateFileW(
+                wname.as_ptr(),
+                GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE,
+                std::ptr::null(),
+                OPEN_EXISTING,
+                0,
+                std::ptr::null_mut(),
+            )
+        };
+        if h == INVALID_HANDLE_VALUE {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(h)
+    }
 }
 
 /// Caminho do core-fake em C (`fixtures/testcore.c`), compilado pelo build.rs.

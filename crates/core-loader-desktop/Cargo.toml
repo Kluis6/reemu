@@ -30,9 +30,23 @@ ash = { version = "0.38", default-features = false, features = ["loaded"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 # .7z — mesma extração, na hora do load (ver library-scan/Cargo.toml).
 sevenz-rust2 = { version = "0.22", default-features = false }
+
+[target.'cfg(unix)'.dependencies]
 # Só pra `silence_core_stdout` (dup2 do stdout pra /dev/null — cores libretro
-# spammam via printf cru fora do log callback).
+# spammam via printf cru fora do log callback) e `dmabuf.rs` (GBM/DRM,
+# interop gráfico Linux-only, opt-in via REEMU_GL_INTEROP=1).
 rustix = { version = "1", features = ["fs", "stdio", "std"] }
+
+[target.'cfg(windows)'.dependencies]
+# Equivalente Windows de `silence_core_stdout`/`with_core_stdout_silenced`
+# (`SetStdHandle`/`GetStdHandle`/`DuplicateHandle` no lugar de `dup`/`dup2`).
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Console",
+    "Win32_System_Threading",
+] }
 
 [build-dependencies]
 cc = "1"

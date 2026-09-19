@@ -17,6 +17,7 @@ use khronos_egl as egl;
 use std::os::raw::{c_char, c_void};
 use std::sync::OnceLock;
 
+#[cfg(unix)]
 use crate::dmabuf::{DmabufAllocator, DmabufPlane, SharedBuffer};
 use crate::sys;
 
@@ -24,17 +25,33 @@ use crate::sys;
 const PLATFORM_SURFACELESS_MESA: egl::Enum = 0x31DD;
 
 // --- EGL_EXT_image_dma_buf_import(_modifiers) ---
+// Interop zero-cópia GL↔Vulkan via dma_buf: conceito Linux/DRM-only (o
+// `dmabuf.rs` que aloca os buffers GBM já é `#[cfg(unix)]` em lib.rs). Sem
+// equivalente Windows — lá o caminho GL sempre cai no readback via
+// `glReadPixels` (ver `try_enable_interop`/`bind_write_slot`/
+// `finish_write_slot` abaixo).
+#[cfg(unix)]
 const EGL_LINUX_DMA_BUF_EXT: egl::Enum = 0x3270;
+#[cfg(unix)]
 const EGL_LINUX_DRM_FOURCC_EXT: egl::Attrib = 0x3271;
+#[cfg(unix)]
 const EGL_DMA_BUF_PLANE0_FD_EXT: egl::Attrib = 0x3272;
+#[cfg(unix)]
 const EGL_DMA_BUF_PLANE0_OFFSET_EXT: egl::Attrib = 0x3273;
+#[cfg(unix)]
 const EGL_DMA_BUF_PLANE0_PITCH_EXT: egl::Attrib = 0x3274;
+#[cfg(unix)]
 const EGL_DMA_BUF_PLANE0_MODIFIER_LO_EXT: egl::Attrib = 0x3443;
+#[cfg(unix)]
 const EGL_DMA_BUF_PLANE0_MODIFIER_HI_EXT: egl::Attrib = 0x3444;
+#[cfg(unix)]
 const EGL_WIDTH: egl::Attrib = 0x3057;
+#[cfg(unix)]
 const EGL_HEIGHT: egl::Attrib = 0x3056;
+#[cfg(unix)]
 const DRM_FORMAT_MOD_INVALID: u64 = (1 << 56) - 1;
 /// Quantos alvos no ring (core escreve N, wgpu lê N-1 no mesmo frame).
+#[cfg(unix)]
 const RING: usize = 2;
 
 type EglInstance = egl::DynamicInstance<egl::EGL1_5>;
@@ -102,11 +119,18 @@ pub struct GlContext {
     /// `read_pixels` inverte as linhas (core bottom-left → canvas top-left).
     flip: bool,
     /// Ring de alvos `dma_buf` compartilhados com o wgpu. `None` = readback CPU.
+    /// Linux/DRM-only — no Windows o caminho GL sempre usa o readback
+    /// (`try_enable_interop`/`interop_active`/`bind_write_slot`/
+    /// `finish_write_slot` têm um braço `#[cfg(windows)]` que nunca ativa isso).
+    #[cfg(unix)]
     interop: Option<InteropRing>,
+    // Só lido em `finish_write_slot` (caminho de interop, Unix).
+    #[cfg_attr(windows, allow(dead_code))]
     sync: SyncMode,
 }
 
 /// Um alvo compartilhado: BO do GBM + `EGLImage` + textura GL respaldada por ele.
+#[cfg(unix)]
 struct InteropSlot {
     buffer: SharedBuffer,
     image: egl::Image,
@@ -115,6 +139,7 @@ struct InteropSlot {
     handed: bool,
 }
 
+#[cfg(unix)]
 struct InteropRing {
     _alloc: DmabufAllocator,
     slots: Vec<InteropSlot>,
@@ -251,6 +276,7 @@ impl GlContext {
             max_w,
             max_h,
             flip: cfg.bottom_left_origin,
+            #[cfg(unix)]
             interop: None,
             sync,
         })
@@ -297,12 +323,21 @@ impl GlContext {
         unsafe { self.gl.finish() };
     }
 
+    #[cfg(unix)]
     pub fn interop_active(&self) -> bool {
         self.interop.is_some()
     }
 
+    /// No Windows não existe interop `dma_buf` (GBM/DRM são conceitos Linux) —
+    /// o caminho GL sempre usa o readback via `read_pixels`.
+    #[cfg(windows)]
+    pub fn interop_active(&self) -> bool {
+        false
+    }
+
     /// Tenta montar o ring de alvos `dma_buf` (GBM + EGLImage). `false` → segue
     /// no readback de CPU (qualquer falha é best-effort, nunca fatal).
+    #[cfg(unix)]
     pub fn try_enable_interop(&mut self) -> bool {
         match self.build_interop() {
             Ok(ring) => {
@@ -321,6 +356,15 @@ impl GlContext {
         }
     }
 
+    /// Sem `dma_buf` no Windows — sempre cai no readback via `read_pixels`.
+    /// `REEMU_GL_INTEROP=1` (opt-in Linux) não tem efeito aqui.
+    #[cfg(windows)]
+    pub fn try_enable_interop(&mut self) -> bool {
+        log::warn!("interop dma_buf indisponível (sem suporte no Windows) — usando readback");
+        false
+    }
+
+    #[cfg(unix)]
     fn build_interop(&self) -> Result<InteropRing, String> {
         let egl = egl()?;
         let exts = egl
@@ -378,6 +422,7 @@ impl GlContext {
         })
     }
 
+    #[cfg(unix)]
     fn make_egl_image(
         &self,
         egl: &EglInstance,
@@ -431,6 +476,7 @@ impl GlContext {
     }
 
     /// Antes do `retro_run`: aponta o FBO pro slot de escrita atual.
+    #[cfg(unix)]
     pub fn bind_write_slot(&self) {
         let Some(ring) = &self.interop else { return };
         let slot = &ring.slots[ring.write];
@@ -446,6 +492,11 @@ impl GlContext {
         }
     }
 
+    /// Sem interop no Windows — o FBO já aponta pra `self.color` (montado em
+    /// `build_fbo`) e o frame sai por `read_pixels`. No-op, chamado todo frame.
+    #[cfg(windows)]
+    pub fn bind_write_slot(&self) {}
+
     /// O core renderiza com origem bottom-left → o consumidor (wgpu) inverte Y.
     pub fn flip_y(&self) -> bool {
         self.flip
@@ -454,6 +505,7 @@ impl GlContext {
     /// Depois do `retro_run`: garante que o render do core terminou antes de
     /// entregar o `dma_buf`, e devolve o slot escrito + o plano (só na 1ª vez de
     /// cada slot). Modo de sync por `REEMU_GL_SYNC` (ver [`SyncMode`]).
+    #[cfg(unix)]
     pub fn finish_write_slot(&mut self) -> Option<(u32, Option<DmabufPlane>)> {
         let sync = self.sync;
         let ring = self.interop.as_mut()?;
@@ -494,9 +546,19 @@ impl GlContext {
         ring.write = (ring.write + 1) % RING;
         Some((idx as u32, plane))
     }
+
+    /// Sem `dma_buf` no Windows — sempre `None` (o chamador cai no readback
+    /// via `interop_active() == false`, este método só é alcançado se algum
+    /// dia esse invariante mudar). O tipo do plano é `()` porque não existe
+    /// um equivalente Windows do plano `dma_buf` pra carregar aqui.
+    #[cfg(windows)]
+    pub fn finish_write_slot(&mut self) -> Option<(u32, Option<()>)> {
+        None
+    }
 }
 
 /// `close(2)` sem puxar a crate `libc` — só pro caminho de erro do EGLImage.
+#[cfg(unix)]
 unsafe fn libc_close(fd: i32) {
     extern "C" {
         fn close(fd: i32) -> i32;
@@ -507,12 +569,14 @@ unsafe fn libc_close(fd: i32) {
 /// Handle de um frame de HW render entregue via `dma_buf`. O `DesktopCore`
 /// devolve isso em `FrameOrigin::HardwareTexture`; o `poll_frame` (lado wgpu)
 /// importa o plano uma vez por slot e depois referencia por índice.
+#[cfg(unix)]
 pub struct GlInteropHandle {
     slot: u32,
     flip_y: bool,
     plane: std::sync::Mutex<Option<DmabufPlane>>,
 }
 
+#[cfg(unix)]
 impl GlInteropHandle {
     pub fn new(slot: u32, flip_y: bool, plane: Option<DmabufPlane>) -> Self {
         Self {
@@ -523,6 +587,7 @@ impl GlInteropHandle {
     }
 }
 
+#[cfg(unix)]
 impl domain::frame_source::GpuTextureHandle for GlInteropHandle {
     fn slot(&self) -> u32 {
         self.slot
@@ -551,9 +616,42 @@ impl domain::frame_source::GpuTextureHandle for GlInteropHandle {
     }
 }
 
+/// Windows não tem `dma_buf` — este handle nunca é de fato produzido (só
+/// existe pra `DesktopCore::next_hw_frame` compilar em todas as plataformas;
+/// `GlContext::interop_active()` é sempre `false` aqui, então o branch que
+/// construiria isto nunca roda). `take_plane` devolve `None` sempre.
+#[cfg(windows)]
+pub struct GlInteropHandle {
+    slot: u32,
+    flip_y: bool,
+}
+
+#[cfg(windows)]
+impl GlInteropHandle {
+    pub fn new(slot: u32, flip_y: bool, _plane: Option<()>) -> Self {
+        Self { slot, flip_y }
+    }
+}
+
+#[cfg(windows)]
+impl domain::frame_source::GpuTextureHandle for GlInteropHandle {
+    fn slot(&self) -> u32 {
+        self.slot
+    }
+
+    fn flip_y(&self) -> bool {
+        self.flip_y
+    }
+
+    fn take_plane(&self) -> Option<domain::frame_source::DmabufPlaneInfo> {
+        None
+    }
+}
+
 impl Drop for GlContext {
     fn drop(&mut self) {
         let egl = egl();
+        #[cfg(unix)]
         if let Some(ring) = self.interop.take() {
             for slot in ring.slots {
                 unsafe { self.gl.delete_texture(slot.tex) };
@@ -758,7 +856,7 @@ fn flip_rows_in_place(buf: &mut [u8], w: u32, h: u32) {
 /// O `GlContext` pode ser dropado logo depois — o fd do `dma_buf` exportado
 /// (`gbm_bo_get_fd`) é uma referência do kernel independente do `gbm_bo` de
 /// origem, então o conteúdo continua válido.
-#[cfg(feature = "test-fixtures")]
+#[cfg(all(unix, feature = "test-fixtures"))]
 pub fn render_solid_rgba_to_dmabuf(
     rgba: [u8; 4],
     w: u32,

@@ -11,6 +11,8 @@ core-ipc = { path = "../core-ipc" }
 input-desktop = { path = "../input-desktop" }
 thiserror.workspace = true
 log = "0.4"
+
+[target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["net", "fs", "mm", "process", "std"] }
 
 [dev-dependencies]

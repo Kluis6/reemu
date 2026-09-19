@@ -685,7 +685,7 @@ fn core_host_path() -> Option<PathBuf> {
 /// porque o consumidor não olhou pra ele na hora certa.
 struct InboundEvent {
     msg: ToParent,
-    fds: Vec<rustix::fd::OwnedFd>,
+    fds: Vec<core_ipc::InlineHandle>,
 }
 
 struct ChildProc {
@@ -852,7 +852,7 @@ fn reconstruct_frame(
     slot: u32,
     meta: domain::frame_source::FrameMetadata,
     kind: FrameKind,
-    fds: Vec<rustix::fd::OwnedFd>,
+    fds: Vec<core_ipc::InlineHandle>,
 ) -> Option<Frame> {
     match kind {
         FrameKind::Software { pitch, format } => {
@@ -882,7 +882,8 @@ fn reconstruct_frame(
     }
 }
 
-fn dmabuf_plane_info(meta: HwPlaneMeta, fds: Vec<rustix::fd::OwnedFd>) -> DmabufPlaneInfo {
+#[cfg(unix)]
+fn dmabuf_plane_info(meta: HwPlaneMeta, fds: Vec<core_ipc::InlineHandle>) -> DmabufPlaneInfo {
     use rustix::fd::IntoRawFd;
     // SAFETY/posse: o fd recebido por `SCM_RIGHTS` é nosso a partir daqui;
     // `DmabufPlaneInfo` documenta que a posse passa pra quem chama
@@ -895,6 +896,24 @@ fn dmabuf_plane_info(meta: HwPlaneMeta, fds: Vec<rustix::fd::OwnedFd>) -> Dmabuf
         .unwrap_or(-1);
     DmabufPlaneInfo {
         fd,
+        width: meta.width,
+        height: meta.height,
+        stride: meta.stride,
+        offset: meta.offset,
+        modifier: meta.modifier,
+        fourcc: meta.fourcc,
+    }
+}
+
+// dma_buf não existe no Windows (ver `core-host-desktop::send_frame` —
+// `FrameOrigin::HardwareTexture` ali só loga e descarta, nunca manda
+// `FrameReady{kind: Hardware, ..}`) — este caminho nunca é exercitado na
+// prática ali, mas o tipo da mensagem IPC é compartilhado, então precisa
+// compilar.
+#[cfg(windows)]
+fn dmabuf_plane_info(meta: HwPlaneMeta, _fds: Vec<core_ipc::InlineHandle>) -> DmabufPlaneInfo {
+    DmabufPlaneInfo {
+        fd: -1,
         width: meta.width,
         height: meta.height,
         stride: meta.stride,
@@ -1282,9 +1301,21 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 let max_h =
                                     av.geometry.max_height.max(av.geometry.base_height).max(1);
                                 let slot_size = (max_w * max_h * 4) as usize;
+                                // Unix: o memfd do anel veio via `SCM_RIGHTS`
+                                // junto do `Loaded` (`fds`). Windows: o anel é
+                                // nomeado (derivado do nome do pipe, ver
+                                // `core_ipc::shm_ring_win`) — o filho já criou
+                                // com esse nome, o pai só abre; `fds` vem
+                                // sempre vazio ali (sem `SCM_RIGHTS`).
+                                #[cfg(unix)]
                                 let ring_ok = fds.into_iter().next().and_then(|fd| {
                                     core_ipc::FrameRing::from_fd(fd, slot_size).ok()
                                 });
+                                #[cfg(windows)]
+                                let ring_ok = {
+                                    let _ = fds;
+                                    core_ipc::FrameRing::open(&p.channel, slot_size).ok()
+                                };
                                 if ring_ok.is_none() {
                                     log::warn!(
                                         "core {}: sem anel de frame (fd não veio) — sem vídeo",

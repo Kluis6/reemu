@@ -351,8 +351,42 @@ Infra:
   Fix: detecta o compilador de verdade via `cc::Tool::is_like_msvc()` (não
   só o SO-alvo — cobre também `*-pc-windows-gnu`/MinGW, que continua
   precisando das flags GCC) e usa `/LD` + `/Fe:<saída>` no MSVC. Validado no
-  Linux (não regrediu, mesmo branch de antes) — validação MSVC de verdade
-  pendente do usuário testar de novo.
+  Linux (não regrediu, mesmo branch de antes) — o usuário confirmou no
+  Windows: o LNK1561 sumiu e o build avançou até o próximo erro (abaixo).
+- ~~`core-ipc`/`core-loader-desktop` não compilavam no Windows~~ **feito
+  (2026-09-19)** — 2º teste real no Windows: 16 erros `E0432`/`E0433`, todos
+  por uso de `std::os::fd`/`rustix::{net,fs,mm,io,stdio}` sem nenhum
+  `#[cfg(unix)]`. Não era só o build: o `core-ipc` (socketpair `SEQPACKET` +
+  `SCM_RIGHTS` + `memfd`) é o canal de TODO carregamento de jogo, então foi
+  portado de verdade, mantendo o processo filho isolado por jogo (evita o
+  bug de reload do N64):
+  - `core-ipc/src/transport_win.rs`: dois pipes nomeados unidirecionais em
+    modo byte + framing (`u32` LE + bincode). Dois e não um duplex porque,
+    num handle síncrono, o `ReadFile` bloqueado da thread leitora trava o
+    `WriteFile` de outra thread no MESMO handle (deadlock). Os handles vão
+    pro filho por herança (`SetHandleInformation` + `bInheritHandles=TRUE`,
+    que o `std::process::Command` já usa por padrão — conferido na fonte do
+    `std`), serializados no `--fd` como `<rd>:<wr>:<nome>` (`ChannelArg`).
+  - `core-ipc/src/shm_ring_win.rs`: anel de frame em memória compartilhada
+    NOMEADA (`CreateFileMappingW`, nome derivado do nome do canal) no lugar
+    do memfd via `SCM_RIGHTS`, que não existe em pipe nomeado.
+  - interop dma_buf/GBM (`dmabuf.rs`, parte de `gl_context.rs`, braço
+    `HardwareTexture` do core-host) só em `#[cfg(unix)]`; no Windows o GL
+    sempre cai no readback. `silence_core_stdout`/`with_core_stdout_silenced`
+    ganharam versão Windows (`SetStdHandle` + `NUL`). `rustix` virou
+    dependência só de Unix nos 4 crates.
+  Validado: `cargo check --target x86_64-pc-windows-gnu` limpo nos 4 crates
+  (com um stub falso de `x86_64-w64-mingw32-gcc` só pro `build.rs` do
+  testcore passar — sem link de verdade); Linux clippy `-D warnings` limpo e
+  testes passando (o transporte Unix não mudou). **Não validado**: nada disso
+  rodou num Windows de verdade ainda (os testes de `transport_win.rs` só
+  compilam aqui) — próximo passo é o usuário rodar `cargo tauri dev` +
+  `cargo test -p core-ipc` no Windows.
+- `emu-session/tests/session.rs::pause_freezes_emulation_then_resume` é
+  intermitente sob carga (visto 2×, rodando a suíte de vários crates em
+  paralelo; passa isolado): um `FrameReady` que já estava no canal chega
+  depois do round-trip do `SetPaused(true)` e avança o `frame_seq`. Corrida
+  pré-existente do teste/protocolo, não da porta Windows.
 - Windows — **ainda falta**: ninguém terminou de compilar/rodar de fato
   numa máquina Windows real ponta a ponta (o teste acima já pegou 1 bug
   real) — os paths do buildbot de cores, o `video.rs` (`#[cfg(not(linux))]`,
