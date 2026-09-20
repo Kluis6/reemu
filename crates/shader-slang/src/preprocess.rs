@@ -67,7 +67,11 @@ fn flatten_includes(
     let mut out = String::with_capacity(text.len());
     for line in text.lines() {
         let t = line.trim_start();
-        if depth == 0 && t.starts_with("#pragma") && t[7..].trim_start().starts_with("stage") {
+        // Em QUALQUER profundidade: o crt-yah põe o `#pragma stage fragment`
+        // dentro de um `.h` incluído (`ntsc-pass1.stage-f.h`), e com o reset
+        // só no arquivo raiz o `screen-helper.h` já visto no vertex sumia do
+        // fragment (`get_orientation`/`normalized_sigmoid` indefinidas).
+        if t.starts_with("#pragma") && t[7..].trim_start().starts_with("stage") {
             match base {
                 None => *base = Some(seen.clone()),
                 Some(b) => *seen = b.clone(),
@@ -273,5 +277,25 @@ void main() {}
         assert!(s.vertex_glsl.contains("vec3 hsv2rgb"), "vertex");
         assert!(s.fragment_glsl.contains("vec3 hsv2rgb"), "fragment TAMBÉM");
         assert_eq!(s.fragment_glsl.matches("vec3 hsv2rgb").count(), 1);
+    }
+
+    /// Mesmo guard por estágio quando o `#pragma stage` mora num arquivo
+    /// incluído, não no raiz (crt-yah: `x.stage-v.h` / `x.stage-f.h`).
+    #[test]
+    fn include_guard_resets_on_stage_pragma_inside_an_include() {
+        let dir = tempfile::tempdir().unwrap();
+        let w = |n: &str, c: &str| std::fs::write(dir.path().join(n), c).unwrap();
+        w("helper.h", "int orient(vec2 s) { return 0; }\n");
+        w("v.h", "#pragma stage vertex\n#include \"helper.h\"\nvoid main() {}\n");
+        w(
+            "f.h",
+            "#pragma stage fragment\n#include \"helper.h\"\n\
+             layout(location=0) out vec4 c;\n\
+             void main() { c = vec4(float(orient(vec2(1.0)))); }\n",
+        );
+        w("m.slang", "#version 450\n#include \"v.h\"\n#include \"f.h\"\n");
+        let s = preprocess_file(&dir.path().join("m.slang")).unwrap();
+        assert!(s.vertex_glsl.contains("int orient"), "vertex");
+        assert!(s.fragment_glsl.contains("int orient"), "fragment TAMBÉM");
     }
 }

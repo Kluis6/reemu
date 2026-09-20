@@ -104,11 +104,15 @@ no lado Rust.
 clonado em `~/.local/share/com.reemu.desktop/shaders/slang-shaders`.
 Harness `gpu.rs::tests::field_validate_real_presets` (`#[ignore]`, fora do CI):
 `cargo test -p reemu-desktop --lib field_validate_real_presets -- --ignored --nocapture`
-(`REEMU_SHADER_DIR`, `REEMU_SHADER_LIMIT`, `REEMU_SHADER_FULL_ERR=1`).
+(`REEMU_SHADER_DIR`, `REEMU_SHADER_LIMIT`, `REEMU_SHADER_FULL_ERR=1`,
+`REEMU_SHADER_DUMP=<pasta>` pro GLSL reescrito do estágio que falhou).
 
-**Resultado final (2026-09-06): 2368/2554 = 92,7%.** Lista dos que compilam:
+**Resultado final (2026-09-19): 2547/2554 = 99,7%.** Lista dos que compilam:
 `docs/shaders/working-presets.txt`. Trajetória: 28,3% (fase 2) → 40,6%
-(blocker #1) → 60,8% → **92,7%**.
+(blocker #1) → 60,8% → 92,7% (2026-09-06) → **99,7%**. Sobra 1 falha real
+(`test/format.slangp`, textura de inteiros — feature de pipeline, não de
+compilador) + 6 `.slangp` de `koko-aio/**/refs/` que nem são preset (sem a
+chave `shaders`).
 
 | 100% | scanline-classic · hdr · interpolation · pal · blurs · dithering · deinterlacing · scanlines · motionblur · stereoscopic-3d · denoisers · sharpen · subframe-bfi · downsample · gpu · cel · deblur · film |
 |---|---|
@@ -222,8 +226,20 @@ Renderização / filtros (independente da etapa 12):
   no passe 1 — confirmado que FALHA sem o fix (xadrez cru vazando, LOD
   grudado no nível 0) e passa com ele (saída uniforme ~127, a média
   correta). `crates/shader-slang` não mudou (já parseava os dois campos).
-- **Long-tail de shaders (~7%)** — crt-royale (`#define tex` no vertex),
-  gameboy/xbr multipass (validação naga), smaa. Ver `docs/shaders/README.md`.
+- ~~**Long-tail de shaders (~7%)**~~ **feito (2026-09-19)** — 92,7% → 99,7%
+  (+179 presets), zero regressão (diff contra o `working-presets.txt`
+  anterior). 9 correções em `crates/shader-slang`, cada uma com teste
+  unitário: macro de tipo/repasse escondendo o sampler (smaa), parâmetro
+  sampler dentro de `#if` no meio da assinatura (smaa), macro multilinha
+  usando o parâmetro sampler da função (crt-royale), apelido de sampler em
+  cadeia e condicional (metacrt/crt-royale), guard de `#include` por estágio
+  quando o `#pragma stage` está num arquivo incluído (crt-yah), `modf` via
+  `trunc` (`MissingSpecialType` do naga), `return` final em função não-void
+  (`ExpressionAlreadyInScope`), `flat` em varying inteiro (ntsc-blastem),
+  variável local sombreando sampler global (crt-geom-deluxe). Famílias que
+  estavam em 67–78% foram a 100%: anti-aliasing, crt, handheld,
+  edge-smoothing, presets, ntsc, misc, border, pixel-art-scaling, vhs,
+  reshade, nes_raw_palette. Ver `docs/shaders/README.md`.
 - **FSR 1.0 / RCAS / CAS como preset de upscaling** — destravado pelo
   compilador; espacial (1 frame), diferente de DLSS/FSR2/XeSS temporais que
   **não servem** pra emulação (sem motion vectors/depth/jitter — o core só
