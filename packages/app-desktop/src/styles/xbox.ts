@@ -447,7 +447,10 @@ export const useBrowseStyles = makeStyles({
     columnGap: "10px",
     rowGap: "10px",
     marginTop: "6px",
-    marginBottom: "4px",
+    // Mesmo respiro do `rowGap` da grade (18px): com os 4px de antes a
+    // primeira linha de cards ficava colada na linha de filtros, enquanto
+    // acima dela as tabs tinham 24px de folga.
+    marginBottom: "18px",
     flexWrap: "wrap",
   },
   chip: {

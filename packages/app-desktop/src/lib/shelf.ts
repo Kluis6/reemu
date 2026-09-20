@@ -8,7 +8,10 @@
  * Um card: largura fluida entre MIN e MAX, escalando com a largura da janela —
  * a MESMA fórmula nos dois lados (o `clamp()` do CSS e o `cardWidthPx` do JS).
  */
-export const CARD_MIN = 150;
+/** Piso de largura do card. 150px deixava a grade (e a prateleira) com
+ *  cards minúsculos em 1366px, a largura mais comum de notebook — onde o
+ *  termo fluido (`CARD_VW`) ainda não passa do piso. */
+export const CARD_MIN = 180;
 export const CARD_MAX = 445;
 /** ~1/8.5 da largura da janela → mantém ~8 cards por prateleira em qualquer
  *  tela; o card cresce até 445px em 4K real (3840px) — teto anterior (320)
