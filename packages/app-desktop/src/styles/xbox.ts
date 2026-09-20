@@ -855,7 +855,7 @@ export const useDetailStyles = makeStyles({
     height: "clamp(72px, 8.5vw, 168px)",
     borderRadius: shell.radius,
     objectFit: "cover",
-    border: "1px solid rgba(255, 255, 255, 0.15)",
+    // Sem borda (pedido do usuário) — a sombra já separa a capa do banner.
     boxShadow: "0 6px 20px rgba(0, 0, 0, 0.45)",
     backgroundColor: tokens.colorNeutralBackground3,
   },
