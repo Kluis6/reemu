@@ -6,7 +6,8 @@
   "scripts": {
     "dev:desktop": "pnpm --filter app-desktop dev",
     "build:desktop": "pnpm --filter app-desktop build",
-    "tauri:desktop": "cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json"
+    "tauri:desktop": "cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json",
+    "tauri:before-dev": "node scripts/dev-before.mjs"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

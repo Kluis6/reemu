@@ -100,8 +100,12 @@ pub fn run() {
             // Surface nativa de vídeo (wl_subsurface `place_above`) — padrão no
             // Linux/Wayland. `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>` na
             // webview. Sem Wayland, `VideoSurface::spawn` devolve `None` e o
-            // canvas assume sozinho.
-            if env_flag("REEMU_NATIVE_VIDEO", true) {
+            // canvas assume sozinho. Fora do Linux o padrão é o canvas: lá a
+            // surface cairia no HWND da janela, ATRÁS da janela filha do
+            // WebView2 (jogo invisível), e não há como esconder/mostrar pro
+            // menu de pausa (`video.rs` só implementa isso pra Wayland).
+            // `REEMU_NATIVE_VIDEO=1` força, pra quem for implementar.
+            if env_flag("REEMU_NATIVE_VIDEO", cfg!(target_os = "linux")) {
                 let win_size = app
                     .handle()
                     .get_webview_window("main")

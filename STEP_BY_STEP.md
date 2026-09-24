@@ -57,9 +57,39 @@ pkg-config --modversion webkit2gtk-4.1 libudev alsa
 
 ### Windows
 
-Siga os pré-requisitos do Tauri v2 (Build Tools do Visual Studio com
-"Desenvolvimento para desktop com C++" + WebView2):
-<https://v2.tauri.app/start/prerequisites/>.
+Siga os pré-requisitos do Tauri v2: <https://v2.tauri.app/start/prerequisites/>.
+Resumo do que o ReEmu precisa (nada além disso — sem CMake, LLVM, NASM ou
+vcpkg; todo C/C++ do projeto compila pelo MSVC):
+
+- **Build Tools do Visual Studio** com a carga **"Desenvolvimento para
+  desktop com C++"** (traz o `cl.exe`, o linker e o Windows SDK). Compila o
+  glslang, o SQLite e o `ring`.
+- **WebView2** (já vem no Windows 10/11 atualizado).
+- **Rust com toolchain MSVC**. O `rust-toolchain.toml` fixa a versão, mas a
+  arquitetura vem do rustup — tem que ser `x86_64-pc-windows-msvc`, não
+  `-gnu`:
+
+  ```powershell
+  rustup show                                   # "Default host" deve terminar em -msvc
+  rustup set default-host x86_64-pc-windows-msvc
+  ```
+
+- **Node 22 + pnpm** (`corepack enable`) e a **Tauri CLI**
+  (`cargo install tauri-cli --version "^2"`).
+
+Erros comuns no Windows:
+
+| Sintoma | Causa / solução |
+| --- | --- |
+| `link.exe not found`, `cl.exe` não encontrado, `LNK1181` | Falta a carga "Desenvolvimento para desktop com C++" |
+| `x86_64-w64-mingw32-gcc not found` | Toolchain `-gnu`; troque pra `-msvc` (acima) |
+| `.\scripts\dev.ps1 não pode ser carregado… execução de scripts foi desabilitada` | Política do PowerShell: `powershell -ExecutionPolicy Bypass -File scripts\dev.ps1`, ou rode `cargo tauri dev` direto |
+| `Could not connect to http://127.0.0.1:1420 after 180s` | Corrigido em 2026-09-24 (`scripts/dev-before.mjs`); atualize o repositório |
+| Jogo não aparece (tela da biblioteca fica por cima) | Surface nativa ainda não existe no Windows; o padrão lá é o `<canvas>` desde 2026-09-24 — não defina `REEMU_NATIVE_VIDEO=1` |
+| Caminho longo demais / `os error 206` | `git config --system core.longpaths true` e clone numa pasta curta (ex.: `C:\dev\reemu`) |
+
+Do Linux dá pra conferir se o código compila pra Windows sem ter a máquina:
+`scripts/check-windows.sh` (só checa o Rust, não gera `.exe`).
 
 ## 3. Instalar dependências JS
 
