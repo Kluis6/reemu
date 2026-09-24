@@ -86,6 +86,7 @@ Erros comuns no Windows:
 | `.\scripts\dev.ps1 não pode ser carregado… execução de scripts foi desabilitada` | Política do PowerShell: `powershell -ExecutionPolicy Bypass -File scripts\dev.ps1`, ou rode `cargo tauri dev` direto |
 | `Could not connect to http://127.0.0.1:1420 after 180s` | Corrigido em 2026-09-24 (`scripts/dev-before.mjs`); atualize o repositório |
 | Jogo não aparece (tela da biblioteca fica por cima) | Surface nativa ainda não existe no Windows; o padrão lá é o `<canvas>` desde 2026-09-24 — não defina `REEMU_NATIVE_VIDEO=1` |
+| `LNK1285: arquivo PDB corrompido` | Corrigido em 2026-09-24 (o core-host compilava no mesmo `target/` em paralelo com o app). Atualize o repositório e apague o PDB estragado uma vez: `cargo clean -p sevenz-rust2` (se outro crate der o mesmo erro, `cargo clean`) |
 | Caminho longo demais / `os error 206` | `git config --system core.longpaths true` e clone numa pasta curta (ex.: `C:\dev\reemu`) |
 
 Do Linux dá pra conferir se o código compila pra Windows sem ter a máquina:
