@@ -19,11 +19,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use domain::core_loader::VulkanSharedDevice;
+use domain::frame_source::to_rgba8_into;
 use domain::frame_source::{Frame, FrameOrigin};
 use shader_slang::{
     Scale, TextureBind, TextureSemantic, UniformFieldKind, UniformLayout, WrapMode,
 };
-use video_surface::to_rgba8;
 
 /// `close(2)` cru — pro caminho de erro do import dma_buf (o fd ainda é nosso).
 unsafe fn close_raw_fd(fd: i32) {
@@ -584,6 +584,9 @@ pub struct FrameProcessor {
     /// `process_packed`, que escreve direto no `Vec` da resposta IPC).
     #[cfg(test)]
     readback_scratch: Vec<u8>,
+    /// Frame de software convertido pra RGBA8 antes de subir pra GPU —
+    /// reusado quadro a quadro (era um `Vec` novo por frame).
+    rgba_scratch: Vec<u8>,
     /// Blit linear nível-a-nível pra gerar cadeia de mips de um `.target` de
     /// passe (`mipmap_input`) — wgpu não tem "generate mipmaps" embutido
     /// (ver `generate_mips`). Reusa a `bgl`/shader do `comp` (mesmo layout:
@@ -739,6 +742,7 @@ impl FrameProcessor {
             rb: ReadbackRing::default(),
             #[cfg(test)]
             readback_scratch: Vec::new(),
+            rgba_scratch: Vec::new(),
             frame_count: 0,
             last_surface_out: None,
             surface_fail_streak: 0,

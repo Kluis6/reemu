@@ -20,8 +20,36 @@ use rustix::fd::{AsFd, FromRawFd, OwnedFd};
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
+/// Este processo só roda o core — sobe a prioridade dele pra, sob carga, o
+/// escalonador não atrasar o `retro_run` (o pacing dorme o resto do quadro,
+/// então não rouba CPU dos outros). Melhor esforço:
+/// - Windows: classe `ABOVE_NORMAL` — não exige administrador.
+/// - Unix: `nice -5` só com privilégio (`CAP_SYS_NICE` / `RLIMIT_NICE`); sem
+///   ele o sistema recusa e o processo segue na prioridade normal.
+fn raise_priority() {
+    #[cfg(unix)]
+    match rustix::process::setpriority_process(None, -5) {
+        Ok(()) => log::info!("core-host: prioridade elevada (nice -5)"),
+        Err(e) => log::debug!("core-host: prioridade normal (sem permissão pra elevar: {e})"),
+    }
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Threading::{
+            GetCurrentProcess, SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS,
+        };
+        // SAFETY: pseudo-handle do próprio processo, sempre válido.
+        let ok = unsafe { SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS) } != 0;
+        if ok {
+            log::info!("core-host: prioridade ABOVE_NORMAL");
+        } else {
+            log::warn!("core-host: SetPriorityClass falhou — prioridade normal");
+        }
+    }
+}
+
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    raise_priority();
 
     let fd_arg = std::env::args()
         .skip_while(|a| a != "--fd")
@@ -394,7 +422,9 @@ fn run_one_frame(
     }
     if let (Some(frame), Some(ring)) = (produced, ring.as_ref()) {
         let ts = diag.as_ref().map(|_| Instant::now());
-        send_frame(channel, ring, frame_slot, frame);
+        if let Some(buf) = send_frame(channel, ring, frame_slot, frame) {
+            c.recycle_frame_buffer(buf);
+        }
         if let (Some(d), Some(ts)) = (diag.as_mut(), ts) {
             d.record_send(ts.elapsed());
         }
@@ -426,7 +456,7 @@ fn send_frame(
     ring: &core_ipc::FrameRing,
     frame_slot: &mut u32,
     frame: domain::frame_source::Frame,
-) {
+) -> Option<Vec<u8>> {
     match frame.origin {
         FrameOrigin::SoftwareRawBuffer {
             data,
@@ -444,12 +474,15 @@ fn send_frame(
                 },
                 &[],
             );
+            // Já está no anel: o buffer volta pro core reusar no próximo quadro.
+            Some(data)
         }
         FrameOrigin::HardwareVulkanImage(_) => {
             // HW render Vulkan (etapa 12) roda IN-PROCESS no pai (device do
             // compositor). Se chegou aqui é bug de roteamento — a VkImage não
             // cruza processo.
             log::error!("frame Vulkan no core-host (bug): HW render Vulkan é in-process");
+            None
         }
         // dma_buf (GBM/DRM) é um conceito de interop gráfico específico do
         // Linux, opt-in via `REEMU_GL_INTEROP=1` (default off) — não existe
@@ -461,6 +494,7 @@ fn send_frame(
         #[cfg(windows)]
         FrameOrigin::HardwareTexture(_handle) => {
             log::error!("frame HardwareTexture (dma_buf) no core-host: sem suporte no Windows");
+            None
         }
         #[cfg(unix)]
         FrameOrigin::HardwareTexture(handle) => {
@@ -507,6 +541,7 @@ fn send_frame(
                     );
                 }
             }
+            None
         }
     }
 }

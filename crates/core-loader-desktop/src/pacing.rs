@@ -19,6 +19,12 @@ const INITIAL_MARGIN: Duration = Duration::from_micros(600);
 /// Folga acima do pior atraso visto, pra um sono um pouco mais lento que o
 /// habitual ainda não estourar o prazo.
 const SAFETY: Duration = Duration::from_micros(100);
+/// Até quantos frames de atraso o acumulador tenta recuperar rodando quadros
+/// colados. Era 4 (~66 ms a 60 fps): um core atrasado corria sem dormir esse
+/// tempo todo — o jogo "acelerava" visivelmente e a CPU dava pico. 2 ainda
+/// absorve um engasgo isolado do sistema (um quadro perdido) sem acelerar;
+/// acima disso ressincroniza com o relógio.
+const MAX_CATCH_UP_FRAMES: u32 = 2;
 
 /// Quanto um `pace()` dormiu, girou em spin, e se o frame já chegou atrasado.
 #[derive(Default, Debug, Clone, Copy)]
@@ -65,7 +71,8 @@ impl Pacer {
     }
 
     /// Espera até o prazo do próximo frame. Acumulador: um frame que atrasou
-    /// um pouco é compensado nos seguintes; atrasado mais de 4 frames,
+    /// um pouco é compensado nos seguintes; atrasado mais de
+    /// `MAX_CATCH_UP_FRAMES`,
     /// desiste e ressincroniza (core lento demais pra máquina).
     pub fn pace(&mut self) -> PaceStats {
         let mut stats = PaceStats::default();
@@ -73,7 +80,7 @@ impl Pacer {
         let now = Instant::now();
         if now >= self.next {
             stats.late = true;
-            if now.duration_since(self.next) > self.budget * 4 {
+            if now.duration_since(self.next) > self.budget * MAX_CATCH_UP_FRAMES {
                 self.next = now;
             }
             return stats;
@@ -159,5 +166,17 @@ mod tests {
         assert!(p.pace().late);
         // ressincronizou: o próximo não chega atrasado
         assert!(!p.pace().late);
+    }
+
+    #[test]
+    fn catches_up_at_most_max_frames_then_resyncs() {
+        let budget = Duration::from_millis(10);
+        let mut p = Pacer::new(budget);
+        // ~3 quadros de atraso: acima do limite de 2 → ressincroniza, e o
+        // pace seguinte já dorme normalmente. Com o limite antigo (4) ele
+        // ficaria correndo colado pra "recuperar" esses quadros.
+        std::thread::sleep(budget * 4);
+        assert!(p.pace().late);
+        assert!(!p.pace().late, "ressincronizou, não fica correndo colado");
     }
 }

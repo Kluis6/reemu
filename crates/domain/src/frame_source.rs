@@ -129,7 +129,8 @@ pub struct Frame {
 /// Reempacota `src` (com `pitch` bytes por linha, formato `fmt`) num buffer
 /// RGBA8 apertado `width*height*4`. CPU-side — os framebuffers de core são
 /// pequenos (ex: 256x240). Consumido pela textura wgpu e pelo `<canvas>` do
-/// shell.
+/// shell. Aloca um buffer novo; no caminho quente, prefira
+/// `to_rgba8_into` (reusa) ou `to_rgba8_slice` (escreve onde você mandar).
 pub fn to_rgba8(
     src: &[u8],
     width: u32,
@@ -137,11 +138,49 @@ pub fn to_rgba8(
     pitch: u32,
     fmt: SoftwarePixelFormat,
 ) -> Vec<u8> {
+    let mut out = Vec::new();
+    to_rgba8_into(&mut out, src, width, height, pitch, fmt);
+    out
+}
+
+/// Igual a `to_rgba8`, mas reusa `dst` (só realoca se o tamanho crescer) —
+/// pra quem converte todo quadro (a GPU sobe um frame por quadro).
+pub fn to_rgba8_into(
+    dst: &mut Vec<u8>,
+    src: &[u8],
+    width: u32,
+    height: u32,
+    pitch: u32,
+    fmt: SoftwarePixelFormat,
+) {
+    let n = width as usize * height as usize * 4;
+    dst.resize(n, 0);
+    to_rgba8_slice(&mut dst[..n], src, width, height, pitch, fmt);
+}
+
+/// Núcleo da conversão: escreve em `out`, que precisa ter exatamente
+/// `width*height*4` bytes (ex: o trecho de pixels de um buffer maior, depois
+/// de um cabeçalho).
+pub fn to_rgba8_slice(
+    out: &mut [u8],
+    src: &[u8],
+    width: u32,
+    height: u32,
+    pitch: u32,
+    fmt: SoftwarePixelFormat,
+) {
     let (w, h, pitch) = (width as usize, height as usize, pitch as usize);
-    let mut out = vec![0u8; w * h * 4];
+    debug_assert_eq!(out.len(), w * h * 4);
+    let row_bytes = w * fmt.bytes_per_pixel() as usize;
 
     for y in 0..h {
-        let Some(row) = src.get(y * pitch..) else {
+        // A linha INTEIRA precisa existir: `src.get(y * pitch..)` sozinho
+        // devolve uma fatia vazia (não `None`) quando cai exatamente no fim, e
+        // aí o índice abaixo entrava em pânico.
+        let Some(row) = src.get(y * pitch..y * pitch + row_bytes) else {
+            // core mandou menos linhas que o declarado: o resto fica preto
+            // (num buffer reusado sobraria o quadro anterior)
+            out[y * w * 4..].fill(0);
             break;
         };
         let dst = &mut out[y * w * 4..];
@@ -185,7 +224,6 @@ pub fn to_rgba8(
             }
         }
     }
-    out
 }
 
 /// Gira um buffer RGBA8 `w*h` por `degrees` (0/90/180/270, anti-horário — a
@@ -306,5 +344,27 @@ mod to_rgba8_tests {
         let (b270, w270, h270) = r(270);
         assert_eq!((w270, h270), (2, 3));
         assert_eq!([b270[0], b270[4], b270[8], b270[12]], [3, 0, 4, 1]);
+    }
+
+    #[test]
+    fn into_reuses_buffer_with_same_result() {
+        let src: Vec<u8> = (0..4 * 3 * 4).map(|i| i as u8).collect();
+        let fresh = to_rgba8(&src, 4, 3, 16, SoftwarePixelFormat::Xrgb8888);
+        let mut buf = vec![0xAB; 1000]; // lixo de um quadro maior anterior
+        to_rgba8_into(&mut buf, &src, 4, 3, 16, SoftwarePixelFormat::Xrgb8888);
+        assert_eq!(buf, fresh);
+    }
+
+    #[test]
+    fn short_source_blanks_the_rest_even_when_reusing() {
+        // 2 linhas declaradas, só 1 no buffer do core
+        let src = [1u8, 2, 3, 0];
+        let mut buf = vec![0xFF; 8];
+        to_rgba8_into(&mut buf, &src, 1, 2, 4, SoftwarePixelFormat::Xrgb8888);
+        assert_eq!(
+            buf,
+            [3, 2, 1, 255, 0, 0, 0, 0],
+            "sem sobra do quadro anterior"
+        );
     }
 }

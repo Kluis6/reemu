@@ -439,7 +439,7 @@ pub fn native_video_active(state: State<'_, AppState>) -> bool {
 /// A `PlayScreen` consome num loop de `requestAnimationFrame` e pinta no canvas.
 #[tauri::command]
 pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
-    use domain::frame_source::{rotate_rgba, to_rgba8, FrameOrigin};
+    use domain::frame_source::{rotate_rgba, to_rgba8, to_rgba8_slice, FrameOrigin};
     let Some(frame) = state.session.take_latest_frame() else {
         return tauri::ipc::Response::new(Vec::new());
     };
@@ -468,6 +468,19 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
         return tauri::ipc::Response::new(Vec::new());
     };
     let (w, h) = (frame.metadata.native_width, frame.metadata.native_height);
+    if !matches!(rot, 90 | 180 | 270) {
+        // Sem rotação (quase sempre): converte direto no `Vec` da resposta,
+        // depois do cabeçalho — sem o RGBA intermediário nem a cópia do
+        // `pack_frame`.
+        let n = w as usize * h as usize * 4;
+        let mut out = Vec::with_capacity(8 + n);
+        out.extend_from_slice(&w.to_le_bytes());
+        out.extend_from_slice(&h.to_le_bytes());
+        out.resize(8 + n, 0);
+        to_rgba8_slice(&mut out[8..], &data, w, h, pitch, format);
+        cache_thumb_frame(&state, w, h, &out[8..]);
+        return tauri::ipc::Response::new(out);
+    }
     let (rgba, w, h) = rotate_rgba(to_rgba8(&data, w, h, pitch, format), w, h, rot);
     cache_thumb_frame(&state, w, h, &rgba);
     pack_frame(w, h, &rgba)

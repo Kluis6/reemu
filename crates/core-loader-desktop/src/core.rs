@@ -58,6 +58,15 @@ impl DesktopCore {
         Some(self.vk.as_ref()?.sync())
     }
 
+    /// Devolve o buffer de um frame de software já consumido (copiado pro
+    /// anel de IPC, subido pra GPU…): o próximo quadro reusa essa memória em
+    /// vez de alocar outra. Opcional — sem isto só aloca como antes.
+    pub fn recycle_frame_buffer(&mut self, buf: Vec<u8>) {
+        if let Some(st) = ffi_state::lock().as_mut() {
+            st.spare_frame = buf;
+        }
+    }
+
     /// PCM interleaved (estéreo, i16, na `sample_rate` do core) acumulado
     /// desde a última chamada. Consumido pelo `AudioSink` (etapa 06).
     pub fn drain_audio(&mut self) -> Vec<i16> {

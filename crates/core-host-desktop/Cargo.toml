@@ -14,5 +14,9 @@ domain = { path = "../domain" }
 log = "0.4"
 env_logger = "0.11"
 
+[target.'cfg(windows)'.dependencies]
+# SetPriorityClass (prioridade do processo do core, ver `raise_priority`).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Threading"] }
+
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1", features = ["net", "fs", "mm", "process", "std"] }

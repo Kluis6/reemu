@@ -78,13 +78,11 @@ Feito em 2026-09-24 (ver `docs/historico.md`): pump acorda no frame
 (perdia 12% dos frames), margem de spin adaptativa (33 → 6 ms/s de CPU),
 áudio sem alocação por frame, canvas sem a 2ª cópia do frame.
 
-- [ ] `todo` — Cópias de frame que restam: buffer nativo do core → anel
-      (inevitável entre processos) e o caminho de CPU sem GPU (`to_rgba8` +
-      `pack_frame`, só roda sem adapter wgpu).
-- [ ] `todo` — Rebase do acumulador de pacing só a >4 frames de atraso
-      (core lento roda sem dormir por até ~66 ms antes de ressincronizar);
-      thread do core sem prioridade elevada. Decidir com dados do
-      `REEMU_PERF=1` num jogo pesado.
+- [ ] `todo` — Única alocação por quadro que sobra no caminho do frame: o
+      `emu-session` lê o slot do anel num `Vec` novo (`reconstruct_frame`).
+      Reciclar exige devolver o buffer do pump de vídeo pra sessão (outra
+      thread). Ganho medido do mesmo tipo de mudança no conversor: 5–45 µs
+      por quadro — baixa prioridade.
 
 ### Funcionalidades
 

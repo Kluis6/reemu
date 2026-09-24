@@ -75,6 +75,10 @@ pub(crate) struct FrontendState {
     /// resampler. `parallel_n64` faz isso logo após o load (32040 → ~26807 Hz).
     pub av_update: Option<(f64, f64)>,
     pub last_frame: Option<RawFrame>,
+    /// Buffer de um frame já consumido, devolvido por
+    /// `DesktopCore::recycle_frame_buffer` — o próximo `video_refresh_cb`
+    /// reusa em vez de alocar um `Vec` novo por quadro.
+    pub spare_frame: Vec<u8>,
     pub had_new_frame: bool,
     /// PCM interleaved estéreo i16 acumulado desde o último drain.
     pub audio: Vec<i16>,
@@ -115,6 +119,7 @@ impl FrontendState {
             rotation_degrees: 0,
             av_update: None,
             last_frame: None,
+            spare_frame: Vec::new(),
             had_new_frame: false,
             audio: Vec::new(),
             save_pending: false,
@@ -471,7 +476,9 @@ pub(crate) unsafe extern "C" fn video_refresh_cb(
     let fmt = st.pixel_format;
     let row_bytes = width as usize * fmt.bytes_per_pixel() as usize;
     let src = data as *const u8;
-    let mut buf = Vec::with_capacity(row_bytes * height as usize);
+    let mut buf = std::mem::take(&mut st.spare_frame);
+    buf.clear();
+    buf.reserve(row_bytes * height as usize);
     for y in 0..height as usize {
         let row = std::slice::from_raw_parts(src.add(y * pitch), row_bytes);
         buf.extend_from_slice(row);

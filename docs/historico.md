@@ -568,6 +568,25 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-24 (fim de noite) — desempenho: cópias e pacing**:
+  * Conversor RGBA reusa buffer (`to_rgba8_into`/`to_rgba8_slice`): no
+    caminho principal (core de software + GPU) era um `Vec` novo por
+    quadro. Medido em release: 256×224 64→46 µs, 640×480 269→225 µs por
+    quadro (7–28%; pouco em absoluto frente aos 16,67 ms).
+  * Bug que já existia: com buffer de core mais curto que o declarado,
+    `src.get(y*pitch..)` devolvia fatia vazia no limite exato e o índice
+    entrava em pânico. Agora exige a linha inteira e zera o resto.
+  * Canvas sem GPU converte direto no `Vec` da resposta IPC (sem RGBA
+    intermediário nem a cópia do `pack_frame`) quando não há rotação.
+  * `reemu-core-host`: o buffer do frame volta pro core depois de copiado
+    pro anel (`DesktopCore::recycle_frame_buffer`) — sem alocação por
+    quadro no callback de vídeo.
+  * Pacer: recuperação de atraso limitada a 2 quadros (era 4, ~66 ms
+    rodando sem dormir — "acelerava" e dava pico de CPU). Teste falha com
+    o limite antigo.
+  * Prioridade do processo do core: `ABOVE_NORMAL` no Windows; `nice -5`
+    no Unix quando há privilégio (senão segue normal, log em debug).
+
 - **2026-09-24 (madrugada) — metadata, DOS/ScummVM, PPSSPP, plano Rust**:
   * **ScreenScraper em todos os sistemas do scan** (eram 15): ids tirados da
     tabela do ES-DE (GPL, `ScreenScraper.cpp`) — os 15 que já existiam

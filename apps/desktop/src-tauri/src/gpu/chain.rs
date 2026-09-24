@@ -25,17 +25,13 @@ impl FrameProcessor {
                 pitch,
                 format,
             } => {
-                let rgba = to_rgba8(data, nw, nh, *pitch, *format);
-                if rgba.len() != (nw * nh * 4) as usize {
-                    log::warn!(
-                        "run_chain: buffer de software com tamanho inesperado ({} bytes, esperado {}) pra {nw}x{nh} — pulando frame",
-                        rgba.len(),
-                        nw * nh * 4
-                    );
-                    return None;
-                }
+                // Buffer reusado (sai do `self` só pra o `push_history`
+                // poder pegar `&mut self` junto).
+                let mut rgba = std::mem::take(&mut self.rgba_scratch);
+                to_rgba8_into(&mut rgba, data, nw, nh, *pitch, *format);
                 self.ensure_history(nw, nh);
                 self.push_history(&rgba, nw, nh);
+                self.rgba_scratch = rgba;
                 self.interop_view = None;
             }
             FrameOrigin::HardwareTexture(handle) => {
