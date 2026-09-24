@@ -92,7 +92,10 @@ Feito em 2026-09-24 (ver `docs/historico.md`): pump acorda no frame
       fonte pública confiável pros ids de plataforma do IGDB (a lista só
       sai da API autenticada) — não implementar de memória. Alternativa
       avaliada: o banco do LaunchBox (`gamesdb.launchbox-app.com/Metadata.zip`,
-      ~108 MB, atualizado diariamente) — conferir os termos de uso antes.
+      ~108 MB, atualizado diariamente) — avaliado em 2026-09-24: o site não
+      publica termos de uso (só política de privacidade, sobre contas), então
+      não há autorização pra usar o banco num app distribuído. Só com
+      permissão escrita do LaunchBox.
 - [ ] `todo` — Validar o TheGamesDB com uma chave real (o parser foi testado
       com JSON no formato que o ES-DE lê, não com resposta capturada).
 - [ ] `todo` — `GET_INPUT_BITMASKS` não anunciado (cores caem no query por
