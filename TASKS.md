@@ -50,6 +50,8 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       os_keyring -- --ignored` (Credential Manager).
 - [ ] `todo` — `SET_ROTATION` com um jogo vertical real (FBNeo). Direção
       assumida = anti-horário; flipar se sair espelhado.
+- [ ] `todo` — Canvas WebGL no WebView2: conferir no log `canvas de vídeo:
+      webgl` e a imagem na orientação certa.
 - [ ] `todo` — Dois controles idênticos ao mesmo tempo (fix por
       `GamepadId` sem teste automatizado possível).
 
@@ -65,8 +67,6 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       caminho entre dois inteiros, sobra barra preta grossa (aceito por ora).
 - [ ] `todo` — Presets FSR 1.0 / RCAS / CAS (espaciais; temporais não servem
       pra emulação). HDR / tonemapping.
-- [ ] `todo` — Canvas WebGL (`texImage2D`) em vez de `putImageData` no
-      caminho `<canvas>`.
 - [ ] `todo` — Shader: `test/format.slangp` (textura de inteiros) é a única
       falha de preset que sobrou por limitação do pipeline.
 

@@ -568,6 +568,16 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-24 — canvas de vídeo com WebGL**: o caminho `<canvas>` (padrão
+  no Windows) desenhava com `putImageData`, que converte e copia o frame na
+  CPU a cada quadro. Agora `lib/frameRenderer.ts` sobe o frame como textura
+  WebGL (`texImage2D` na troca de tamanho, `texSubImage2D` no resto) e a GPU
+  desenha um quad *nearest*; sem WebGL (ex.: WebKitGTK sem compositing) cai
+  no `putImageData` de antes. O `PlayScreen` só redesenha quando chega frame
+  novo e registra no log do Rust qual renderizador pegou
+  (`canvas de vídeo: webgl|2d`). Trata perda/restauração de contexto.
+  Validado no Chrome headless (SwiftShader) com frame assimétrico: WebGL e
+  2D dão a mesma imagem, sem inverter nem espelhar. Falta ver no WebView2.
 - **2026-09-24 (fim de noite) — desempenho: cópias e pacing**:
   * Conversor RGBA reusa buffer (`to_rgba8_into`/`to_rgba8_slice`): no
     caminho principal (core de software + GPU) era um `Vec` novo por

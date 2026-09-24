@@ -19,7 +19,8 @@ import { useFocusBridge } from "../hooks/useFocusBridge";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useKeyboardInput } from "../hooks/useKeyboardInput";
 import { moveFocus } from "../lib/focusNav";
-import { formatPlayTime } from '../lib/playTime'
+import { formatPlayTime } from "../lib/playTime";
+import { createFrameRenderer, type FrameRenderer } from "../lib/frameRenderer";
 import { initials } from "../lib/initials";
 import { platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
@@ -35,6 +36,7 @@ import {
   saveState,
   toggleFocus,
   unloadGame,
+  jsLog,
 } from "../lib/tauri";
 import { usePauseStyles } from "../styles/xbox";
 import { useFocusStore } from "../stores/useFocusStore";
@@ -309,7 +311,10 @@ export function PlayScreen() {
     if (status !== "ready" || nativeVideo) return;
     let alive = true;
     let raf = 0;
-    const latest = { img: null as ImageData | null, w: 0, h: 0 };
+    // `fresh`: chegou frame novo desde o último desenho — sem frame novo não
+    // redesenha (o canvas continua mostrando o último).
+    const latest = { px: null as Uint8Array<ArrayBuffer> | null, w: 0, h: 0, fresh: false };
+    let renderer: FrameRenderer | null = null;
 
     void (async () => {
       while (alive) {
@@ -323,15 +328,12 @@ export function PlayScreen() {
             const need = w * h * 4;
             if (w > 0 && h > 0 && buf.byteLength >= 8 + need) {
               // View sobre o MESMO ArrayBuffer (sem `.slice()`, que copia o
-              // frame inteiro) — `Uint8ClampedArray` não tem restrição de
+              // frame inteiro) — `Uint8Array` não tem restrição de
               // alinhamento, então o offset de 8 bytes do header é seguro.
-              latest.img = new ImageData(
-                new Uint8ClampedArray(buf, 8, need),
-                w,
-                h,
-              );
+              latest.px = new Uint8Array(buf, 8, need);
               latest.w = w;
               latest.h = h;
+              latest.fresh = true;
               got = true;
             }
           }
@@ -348,16 +350,21 @@ export function PlayScreen() {
 
     const paint = () => {
       const c = canvasRef.current;
-      if (c && latest.img) {
+      if (c && latest.px && latest.fresh) {
+        if (!renderer) {
+          // WebGL se der, senão 2D (`lib/frameRenderer.ts`).
+          renderer = createFrameRenderer(c);
+          if (renderer) jsLog("info", `canvas de vídeo: ${renderer.kind}`);
+          else jsLog("error", "canvas de vídeo: sem contexto WebGL nem 2D — jogo sem imagem");
+        }
         if (c.width !== latest.w || c.height !== latest.h) {
-          c.width = latest.w;
-          c.height = latest.h;
           const declared = declaredAspectRef.current;
           const pixels = latest.w / Math.max(1, latest.h);
           // orientação bate → AR declarada (PAR ok); senão frame rotacionado.
           setAspect(declared >= 1 === pixels >= 1 ? declared : pixels);
         }
-        c.getContext("2d")?.putImageData(latest.img, 0, 0);
+        renderer?.draw(latest.px, latest.w, latest.h);
+        latest.fresh = false;
       }
       if (alive) raf = requestAnimationFrame(paint);
     };
@@ -366,6 +373,7 @@ export function PlayScreen() {
     return () => {
       alive = false;
       cancelAnimationFrame(raf);
+      renderer?.dispose();
     };
   }, [status, nativeVideo]);
 

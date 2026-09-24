@@ -693,3 +693,8 @@ export function describeRawInput(ev: RawInputEvent): string {
     return GAMEPAD_BUTTON_NAMES[ev.GamepadButton.index] ?? `Botão ${ev.GamepadButton.index}`
   return `Eixo ${ev.GamepadAxis.index}`
 }
+
+/** Manda uma linha pro log do Rust (terminal do `tauri dev` / log do app) —
+ *  diagnóstico da webview. Nunca lança. */
+export const jsLog = (level: 'info' | 'warn' | 'error', message: string) =>
+  invoke<void>('js_log', { level, message }).catch(() => {})
