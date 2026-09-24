@@ -3,6 +3,7 @@ import {
   Body1,
   Button,
   Caption1,
+  Input,
   Tab,
   TabList,
   Text,
@@ -91,6 +92,7 @@ function Catalog() {
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const catalog = useQuery({ queryKey: ['core-catalog'], queryFn: listCoreCatalog, retry: false })
+  const [filter, setFilter] = useState('')
 
   const install = useMutation({
     mutationFn: (coreId: string) => downloadCore(coreId),
@@ -117,7 +119,10 @@ function Catalog() {
     (install.isPending && install.variables === id) ||
     (uninstall.isPending && uninstall.variables === id)
 
-  const sorted = [...(catalog.data ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  const f = filter.trim().toLowerCase()
+  const sorted = [...(catalog.data ?? [])]
+    .filter((c) => !f || `${c.name} ${c.systems}`.toLowerCase().includes(f))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <>
@@ -127,7 +132,20 @@ function Catalog() {
         <Text as="strong" weight="semibold">Vulkan</Text> usam a placa de vídeo
         pra jogos 3D (N64, PSX-hw, Saturn, DS, Dreamcast).
       </Caption1>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <Input
+          size="small"
+          placeholder="Filtrar por nome ou sistema…"
+          value={filter}
+          onChange={(_, d) => setFilter(d.value)}
+          style={{ flex: 1 }}
+        />
+        <Caption1>
+          {sorted.length} de {catalog.data?.length ?? 0} cores
+        </Caption1>
+      </div>
       <div className={styles.list}>
+        {sorted.length === 0 && <Caption1>Nenhum core encontrado.</Caption1>}
         {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
             <span className={styles.meta}>
