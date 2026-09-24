@@ -1063,13 +1063,19 @@ fn split_sampler_aliases(
     loop {
         let mut grew = false;
         for (name, _) in &defs {
-            if known.contains(name) || fn_sampler_params.contains(name) {
+            // Um global declarado com o MESMO nome do `#define` não impede o
+            // apelido: pro preprocessador, `uniform sampler2D NOME;` declara o
+            // ALVO do macro. O koko-aio 1.9.101 faz isso atrás de um
+            // `#if FPS_ESTIMATE_PASS != avglum_passFeedback` — sem virar
+            // apelido, o corpo virava `sampler2D(…)` dentro do `#if` e o
+            // glslang recusava a diretiva.
+            if aliases.contains(name) || fn_sampler_params.contains(name) {
                 continue;
             }
             let all_point_to_known = defs
                 .iter()
                 .filter(|(n, _)| n == name)
-                .all(|(_, b)| b.as_ref().is_some_and(|b| known.contains(b)));
+                .all(|(_, b)| b.as_ref().is_some_and(|b| b != name && known.contains(b)));
             if all_point_to_known {
                 known.push(name.clone());
                 aliases.push(name.clone());
@@ -1676,7 +1682,9 @@ fn patch_missing_builtins(glsl: &str) -> String {
     let has_inf = glsl.contains("isinf(");
     let has_nan = glsl.contains("isnan(");
     let has_modf = find_word(glsl, "modf", 0).is_some();
-    if !has_inf && !has_nan && !has_modf {
+    let has_find_bit =
+        find_word(glsl, "findLSB", 0).is_some() || find_word(glsl, "findMSB", 0).is_some();
+    if !has_inf && !has_nan && !has_modf && !has_find_bit {
         return glsl.to_string();
     }
     let mut out = glsl
@@ -1691,6 +1699,36 @@ fn patch_missing_builtins(glsl: &str) -> String {
         for t in ["float", "vec2", "vec3", "vec4"] {
             inject.push_str(&format!(
                 "        {t} reemu_modf({t} x, out {t} i) {{ i = trunc(x); return x - i; }}\n"
+            ));
+        }
+    }
+    if has_find_bit {
+        // `findLSB`/`findMSB` de `uint` devolvem `int`, mas o frontend SPIR-V
+        // do naga tipa o resultado como o operando (`uint`) e o store num
+        // `int` vira `InvalidStoreTypes`. Os helpers só usam a forma `int`:
+        // LSB por bitcast (o bit mais baixo não muda); MSB com o bit 31 ligado
+        // é 31, senão o valor cabe positivo num `int` e o resultado é igual.
+        out = rename_calls(&out, "findLSB", "reemu_findLSB");
+        out = rename_calls(&out, "findMSB", "reemu_findMSB");
+        for (i, u) in [
+            ("int", "uint"),
+            ("ivec2", "uvec2"),
+            ("ivec3", "uvec3"),
+            ("ivec4", "uvec4"),
+        ] {
+            let msb_u = if i == "int" {
+                "x >= 0x80000000u ? 31 : findMSB(int(x))".to_string()
+            } else {
+                format!(
+                    "mix(findMSB({i}(x & {u}(0x7fffffffu))), {i}(31), \
+                     greaterThanEqual(x, {u}(0x80000000u)))"
+                )
+            };
+            inject.push_str(&format!(
+                "        {i} reemu_findLSB({i} x) {{ return findLSB(x); }}\n        \
+                 {i} reemu_findMSB({i} x) {{ return findMSB(x); }}\n        \
+                 {i} reemu_findLSB({u} x) {{ return findLSB({i}(x)); }}\n        \
+                 {i} reemu_findMSB({u} x) {{ return {msb_u}; }}\n"
             ));
         }
     }
@@ -2191,6 +2229,39 @@ void main() {
         assert!(out.fragment_wgsl.contains("@fragment"));
     }
 
+    /// koko-aio 1.9.101 (`avglum_pass.slang`): o apelido tem o MESMO nome de
+    /// um `uniform sampler2D` declarado atrás de um `#if` que compara o
+    /// apelido. Sem virar apelido, o corpo virava `sampler2D(…)` dentro do
+    /// `#if` e o glslang recusava a diretiva.
+    #[test]
+    fn sampler_alias_named_like_guarded_decl_compiles() {
+        let s = r#"
+#version 450
+#pragma stage vertex
+layout(location = 0) in vec4 Position;
+layout(location = 1) in vec2 TexCoord;
+layout(location = 0) out vec2 vUV;
+void main() { gl_Position = Position; vUV = TexCoord; }
+#pragma stage fragment
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 FragColor;
+#ifdef ALT
+   #define FPS_ESTIMATE_PASS colortools_passFeedback
+#else
+   #define FPS_ESTIMATE_PASS avglum_passFeedback
+#endif
+layout(set = 0, binding = 2) uniform sampler2D avglum_passFeedback;
+layout(set = 0, binding = 3) uniform sampler2D colortools_passFeedback;
+#if FPS_ESTIMATE_PASS != avglum_passFeedback
+    layout(set = 0, binding = 4) uniform sampler2D FPS_ESTIMATE_PASS;
+#endif
+float get_fps(sampler2D s) { return texture(s, vec2(0.5)).r; }
+void main() { FragColor = vec4(get_fps(FPS_ESTIMATE_PASS), vUV, 1.0); }
+"#;
+        let out = compile(&preprocess_str(s)).expect("apelido com nome de decl guardada");
+        assert!(out.fragment_wgsl.contains("@fragment"));
+    }
+
     /// `modf` virava `MissingSpecialType` na validação do naga.
     #[test]
     fn modf_compiles_via_trunc_helper() {
@@ -2214,6 +2285,32 @@ void main() {
 "#;
         let out = compile(&preprocess_str(s)).expect("modf deve compilar");
         assert!(out.fragment_wgsl.contains("trunc"));
+    }
+
+    /// `findLSB`/`findMSB` de `uint` devolvem `int` no GLSL, mas o frontend
+    /// SPIR-V do naga tipa o resultado como o operando (`uint`): o store num
+    /// `int` virava `InvalidStoreTypes` (vectorscale, `resolve-crossings`).
+    #[test]
+    fn find_lsb_msb_of_uint_store_into_int() {
+        let s = r#"
+#version 450
+#pragma stage vertex
+layout(location = 0) in vec4 Position;
+layout(location = 1) in vec2 TexCoord;
+layout(location = 0) out vec2 vUV;
+void main() { gl_Position = Position; vUV = TexCoord; }
+#pragma stage fragment
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 FragColor;
+void main() {
+    uvec2 bits = uvec2(vUV * 255.0);
+    int lo = findLSB(bits.x);
+    int hi = findMSB(bits.y | 1u);
+    ivec2 both = findLSB(bits);
+    FragColor = vec4(float(lo), float(hi), float(both.x + both.y), 1.0);
+}
+"#;
+        compile(&preprocess_str(s)).expect("findLSB/findMSB de uint deve compilar");
     }
 
     #[test]

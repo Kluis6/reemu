@@ -12,9 +12,19 @@ REEMU_SHADER_OK_LIST=docs/shaders/working-presets.txt \
 cargo test -p reemu-desktop --lib field_validate_real_presets -- --ignored --nocapture
 ```
 
-**Última medição (2026-09-19): 2547/2554 = 99,7%** (era 92,7% em 2026-09-06).
+**Última medição (2026-09-24): 2651/2658 = 99,7%**, contra
+`libretro/slang-shaders@afb1416`. Era 2547/2554 em 2026-09-19 e 92,7% em
+2026-09-06. Todos os 2547 da medição anterior continuam compilando.
 
-Por pacote: tudo 100%, menos `bezel/koko-aio` (173/179) — e os 6 que faltam
+O upstream mudou entre as duas medições e derrubou a taxa pra 92,9% até
+duas correções no `shader-slang`: (1) o koko-aio 1.9.101 declara
+`uniform sampler2D FPS_ESTIMATE_PASS` atrás de
+`#if FPS_ESTIMATE_PASS != avglum_passFeedback`, e o `FPS_ESTIMATE_PASS` é
+um `#define` apelido de sampler; (2) o vectorscale novo usa
+`findLSB`/`findMSB` de `uint`, que o naga tipa errado (helpers em
+`patch_missing_builtins`).
+
+Por pacote: tudo 100%, menos `bezel/koko-aio` (177/183) — e os 6 que faltam
 lá não são preset: são blocos de parâmetros em `refs/` (sem a chave
 `shaders`), feitos pra serem referenciados por outro preset. Descontando
 esses, a única falha real é `test/format.slangp`.

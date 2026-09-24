@@ -706,6 +706,7 @@ bezel/koko-aio/Presets-ng/Monitor-Balanced.slangp
 bezel/koko-aio/Presets-ng/Monitor-FXAA_sharp-Core_SlotMask.slangp
 bezel/koko-aio/Presets-ng/Monitor-FXAA_sharp-Screen_SlotMask.slangp
 bezel/koko-aio/Presets-ng/Monitor-FXAA_sharp-aperturegrille.slangp
+bezel/koko-aio/Presets-ng/Monitor-Lottes-ShadowMask.slangp
 bezel/koko-aio/Presets-ng/Monitor-New_slotmask_gm.slangp
 bezel/koko-aio/Presets-ng/Monitor-New_slotmask_rgb.slangp
 bezel/koko-aio/Presets-ng/Monitor-Screen_Hmask-Aperturegrille-Overmask-IntegerScaling.slangp
@@ -719,6 +720,7 @@ bezel/koko-aio/Presets-ng/Monitor-Screen_Hmask-Screen_SlotMask_Taller_Brighter.s
 bezel/koko-aio/Presets-ng/Monitor-Screen_Hmask-Screen_SlotMask_Taller_Brightest.slangp
 bezel/koko-aio/Presets-ng/Monitor-Screen_Hmask-ShadowMask.slangp
 bezel/koko-aio/Presets-ng/Monitor-Screen_Hmask_Overlapped-oldpainless.slangp
+bezel/koko-aio/Presets-ng/Monitor-ShadowMask.slangp
 bezel/koko-aio/Presets-ng/Monitor-crt-regale.slangp
 bezel/koko-aio/Presets-ng/Monitor-for_1440pMin_HiNits.slangp
 bezel/koko-aio/Presets-ng/Monitor-for_HigherNits.slangp
@@ -804,6 +806,7 @@ bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-Balanced.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-FXAA_sharp-Core_SlotMask.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-FXAA_sharp-Screen_SlotMask.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-FXAA_sharp-aperturegrille.slangp
+bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-Lottes-ShadowMask.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-New_slotmask_gm.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-New_slotmask_rgb.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-Screen_Hmask-Aperturegrille-Overmask-IntegerScaling.slangp
@@ -817,6 +820,7 @@ bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-Screen_Hmask-Screen_Sl
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-Screen_Hmask-Screen_SlotMask_Taller_Brightest.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-Screen_Hmask-ShadowMask.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-Screen_Hmask_Overlapped-oldpainless.slangp
+bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-ShadowMask.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-crt-regale.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-for_1440pMin_HiNits.slangp
 bezel/koko-aio/Presets_HiresGames_Fast/Presets-ng/Monitor-for_HigherNits.slangp
@@ -1562,6 +1566,7 @@ crt/cathode-retro_no-signal.slangp
 crt/crt-1tap-bloom.slangp
 crt/crt-1tap-bloom_fast.slangp
 crt/crt-1tap.slangp
+crt/crt-2tap.slangp
 crt/crt-CreativeForce-Arcade.slangp
 crt/crt-CreativeForce-SharpSmooth.slangp
 crt/crt-Cyclon.slangp
@@ -1857,6 +1862,8 @@ edge-smoothing/scalenx/scale2x.slangp
 edge-smoothing/scalenx/scale2xSFX.slangp
 edge-smoothing/scalenx/scale2xplus.slangp
 edge-smoothing/scalenx/scale3x.slangp
+edge-smoothing/vectorscale/vectorscale-exact-energy-single-aa.slangp
+edge-smoothing/vectorscale/vectorscale-exact-energy.slangp
 edge-smoothing/vectorscale/vectorscale-single-aa.slangp
 edge-smoothing/vectorscale/vectorscale.slangp
 edge-smoothing/xbr/hybrid-jinc2-xbr-lv2.slangp
@@ -1979,12 +1986,109 @@ handheld/simpletex_lcd.slangp
 handheld/simpletex_lcd_720p.slangp
 handheld/sunlight_shimmer.slangp
 handheld/zfast-lcd.slangp
+hdr/adamant_presets/LCD_SAFE/3DS Adamant DSLite (3x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC 601 0 IRE (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC 601 0 IRE (Slot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC 601 7.5 IRE (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC 601 7.5 IRE (Slot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC 709 (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC 709 (Slot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC EBU (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC EBU (Slot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC NTSC-J (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant NTSC NTSC-J (Slot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant PAL EBU Composite (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant PAL EBU Composite (Slot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant PAL EBU RF (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant PAL EBU RF (Slot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant PAL EBU SCART (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant PAL EBU SCART (Slot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant RGB 709 (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/CRT Adamant RGB 709 (Slot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/GB Adamant (9x scale Wikipedia Palette) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/GBA Adamant 601 3.8 Gamma (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/GBA Adamant VBA Gameboy Colors Lut (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/GBA Adamant VBA Gameboy Colors Lut, Boosted White (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/GBA Adamant VBA Gameboy Colors Lut, True Black (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/GBA Adamant VBA Gameboy Colors Lut, True Black, Boosted White (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/NDS Adamant GBA (3x scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/NDSL Adamant DSLite (3x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/PSP Adamant PSP (6x Scale RGB Grid) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/SGG Adamant (3066x2160 scaling Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/~CRT Adamant Raw 709 (Aperture grille) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/~CRT Adamant Raw 709 (Dot Mask) [2160p].slangp
+hdr/adamant_presets/LCD_SAFE/~CRT Adamant Raw 709 (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/3DS Adamant DSLite (3x Scale BGR Grid) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/3DS Adamant DSLite (3x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 601 0 IRE (Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 601 0 IRE (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 601 0 IRE (Slot Mask) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 601 0 IRE (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 601 7.5 IRE (Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 601 7.5 IRE (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 601 7.5 IRE (Slot Mask) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 601 7.5 IRE (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 709 (Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 709 (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 709 (Slot Mask) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC 709 (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC EBU (Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC EBU (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC EBU (Slot Mask) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC EBU (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC NTSC-J (Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC NTSC-J (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC NTSC-J (Slot Mask) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant NTSC NTSC-J (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU Composite (Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU Composite (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU Composite (Slot Mask) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU Composite (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU RF (Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU RF (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU RF (Slot Mask) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU RF (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU SCART (Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU SCART (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU SCART (Slot Mask) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant PAL EBU SCART (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant RGB 709 (Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant RGB 709 (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/CRT Adamant RGB 709 (Slot Mask) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/CRT Adamant RGB 709 (Slot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/GB Adamant (9x scale Wikipedia Palette) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/GB Adamant (9x scale Wikipedia Palette) [2160p].slangp
+hdr/adamant_presets/WOLED/GBA Adamant 601 3.8 Gamma (9x Scale BGR Grid) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/GBA Adamant 601 3.8 Gamma (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/WOLED/GBA Adamant VBA Gameboy Colors Lut (9x Scale BGR Grid) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/GBA Adamant VBA Gameboy Colors Lut (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/WOLED/GBA Adamant VBA Gameboy Colors Lut, Boosted White (9x Scale BGR Grid) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/GBA Adamant VBA Gameboy Colors Lut, Boosted White (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/WOLED/GBA Adamant VBA Gameboy Colors Lut, True Black (9x Scale BGR Grid) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/GBA Adamant VBA Gameboy Colors Lut, True Black (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/WOLED/GBA Adamant VBA Gameboy Colors Lut, True Black, Boosted White (9x Scale BGR Grid) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/GBA Adamant VBA Gameboy Colors Lut, True Black, Boosted White (9x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/WOLED/NDS Adamant GBA (3x scale BGR Grid) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/NDS Adamant GBA (3x scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/WOLED/NDSL Adamant DSLite (3x Scale BGR Grid) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/NDSL Adamant DSLite (3x Scale BGR Grid) [2160p].slangp
+hdr/adamant_presets/WOLED/PSP Adamant PSP (6x Scale RGB Grid) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/PSP Adamant PSP (6x Scale RGB Grid) [2160p].slangp
+hdr/adamant_presets/WOLED/SGG Adamant (3066x2160 scaling Aperture grille) [2160p Subframe BFI].slangp
+hdr/adamant_presets/WOLED/SGG Adamant (3066x2160 scaling Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/~CRT Adamant Raw 709 (Aperture grille) [2160p].slangp
+hdr/adamant_presets/WOLED/~CRT Adamant Raw 709 (Dot Mask) [2160p].slangp
+hdr/adamant_presets/WOLED/~CRT Adamant Raw 709 (Slot Mask) [2160p].slangp
+hdr/crt-adamant-default-ntsc.slangp
+hdr/crt-adamant-default-pal.slangp
+hdr/crt-adamant-default.slangp
 hdr/crt-sony-megatron-default-hdr-NTSC.slangp
 hdr/crt-sony-megatron-default-hdr.slangp
 hdr/crt-sony-megatron-v2-default-NTSC.slangp
 hdr/crt-sony-megatron-v2-default-config.slangp
 hdr/crt-sony-megatron-v2-default-sdr.slangp
 hdr/crt-sony-megatron-v2-default.slangp
+hdr/hdr-config-adamant.slangp
 hdr/hdr-config.slangp
 hdr/hdr.slangp
 hdr/hdr_inverse_tonemap.slangp
