@@ -7,6 +7,7 @@ mod covers;
 mod credentials;
 mod decoration;
 mod gpu;
+mod perf;
 mod profile;
 mod scraping;
 mod shader_pack;
@@ -359,8 +360,13 @@ fn spawn_video_pump(app: tauri::AppHandle) {
             // A subsurface está escondida agora? (só o pump apresenta/esconde,
             // então este bool acompanha o estado real.)
             let mut hidden = true;
+            let mut diag = perf::enabled()
+                .then(|| perf::PumpDiag::new(app.state::<AppState>().session.frame_seq()));
             loop {
                 let state = app.state::<AppState>();
+                if let Some(d) = diag.as_mut() {
+                    d.tick();
+                }
                 {
                     let vg = state.video.lock().unwrap_or_else(|p| p.into_inner());
                     if vg.is_none() {
@@ -494,9 +500,15 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                             }
                             let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
                             if let Some(fp) = gpu.as_mut() {
+                                let t = std::time::Instant::now();
                                 fp.render_to_surface(Some(f));
+                                if let Some(d) = diag.as_mut() {
+                                    d.presented(t.elapsed());
+                                }
                             }
                             hidden = false;
+                        } else if let Some(d) = diag.as_mut() {
+                            d.empty();
                         }
                     }
                     Opening(0) => {
@@ -540,11 +552,20 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                 }
 
                 drop(vk_gate); // libera a VkQueue antes de dormir
+                if let Some(d) = diag.as_mut() {
+                    d.maybe_report(state.session.frame_seq());
+                }
 
                 // O `step_vk_local` já dá o ritmo (pacing por acumulador do
-                // core). Sem core Vulkan local, mantém os ~15ms de sempre.
+                // core). Sem core Vulkan local, acorda assim que o próximo
+                // frame chegar do core — um tempo fixo (eram 15 ms) fica fora
+                // de fase com os 16,67 ms de um core a 60 fps e perde/repete
+                // frames. O teto de 20 ms mantém menu/resize/troca de FP
+                // respondendo sem jogo rodando (e com o core pausado).
                 if !stepped_vk {
-                    std::thread::sleep(std::time::Duration::from_millis(15));
+                    state
+                        .session
+                        .wait_for_frame(std::time::Duration::from_millis(20));
                 }
             }
         })

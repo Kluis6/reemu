@@ -26,6 +26,7 @@ mod ffi_state;
 mod gl_context;
 mod input;
 mod loader;
+pub mod pacing;
 mod raw;
 mod sys;
 mod vk_context;
@@ -41,6 +42,7 @@ pub use crate::discover::{discover_cores, DiscoveredCore};
 pub use crate::gl_context::render_solid_rgba_to_dmabuf;
 pub use crate::input::{analog, libretro_joypad_id, retropad, AnalogState, RetroPadState};
 pub use crate::loader::DesktopCoreLoader;
+pub use crate::pacing::{PaceStats, Pacer};
 
 /// Redireciona o **stdout** do processo pra `/dev/null`, PRA SEMPRE — vários
 /// cores (Beetle PSX HW: `[hdcache]`, `Creating shader module`…) spammam via

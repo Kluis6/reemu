@@ -15,13 +15,13 @@
 //! `ToParent` por IPC.
 
 use core_ipc::PortInput;
-use core_loader_desktop::{DesktopCore, DesktopCoreLoader};
+use core_loader_desktop::{DesktopCore, DesktopCoreLoader, Pacer};
 use domain::core_loader::{CoreId, CoreLoadError, LoadedCore, RenderBackend, SystemAvInfo};
 use domain::core_options::CoreOptionDefinition;
 use domain::frame_source::{Frame, FrameSource};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Um `retro_run` já rodado: o frame (se veio um novo), o PCM acumulado e a
 /// taxa de amostragem vigente. `session.rs` empurra pra `Shared`.
@@ -33,8 +33,7 @@ pub(crate) struct FrameTick {
 
 pub(crate) struct LocalCore {
     core: DesktopCore,
-    frame_budget: Duration,
-    next_deadline: Instant,
+    pacer: Pacer,
     sample_rate: u32,
 }
 
@@ -94,8 +93,7 @@ impl LocalCore {
         Ok((
             Self {
                 core,
-                frame_budget: Duration::from_secs_f64(1.0 / fps),
-                next_deadline: Instant::now(),
+                pacer: Pacer::new(Duration::from_secs_f64(1.0 / fps)),
                 sample_rate,
             },
             av,
@@ -118,9 +116,8 @@ impl LocalCore {
     pub(crate) fn run_frame(&mut self) -> FrameTick {
         if let Some(t) = self.core.take_av_update() {
             let fps = t.fps.max(1.0);
-            self.frame_budget = Duration::from_secs_f64(1.0 / fps);
+            self.pacer.set_budget(Duration::from_secs_f64(1.0 / fps));
             self.sample_rate = (t.sample_rate.round() as u32).max(1);
-            self.next_deadline = Instant::now();
             log::info!(
                 "timing atualizado em runtime: fps={fps:.3} sample_rate={} Hz",
                 self.sample_rate
@@ -129,7 +126,7 @@ impl LocalCore {
 
         let frame = self.core.next_frame();
         let audio = self.core.drain_audio();
-        self.pace();
+        self.pacer.pace();
         FrameTick {
             frame,
             audio,
@@ -139,7 +136,7 @@ impl LocalCore {
 
     pub(crate) fn set_paused(&mut self, paused: bool) {
         if !paused {
-            self.next_deadline = Instant::now();
+            self.pacer.reset();
         }
     }
 
@@ -164,28 +161,5 @@ impl LocalCore {
 
     pub(crate) fn set_core_option(&self, key: &str, value: &str) -> bool {
         core_loader_desktop::set_core_option(key, value)
-    }
-
-    /// Pacing idêntico ao de `reemu-core-host::pace`: dorme o grosso, depois
-    /// spin fino até o deadline; se atrasou muito, ressincroniza.
-    fn pace(&mut self) {
-        self.next_deadline += self.frame_budget;
-        let now = Instant::now();
-        if now < self.next_deadline {
-            if let Some(coarse) = (self.next_deadline - now).checked_sub(Duration::from_micros(600))
-            {
-                std::thread::sleep(coarse);
-            }
-            loop {
-                for _ in 0..64 {
-                    std::hint::spin_loop();
-                }
-                if Instant::now() >= self.next_deadline {
-                    break;
-                }
-            }
-        } else if now.duration_since(self.next_deadline) > self.frame_budget * 4 {
-            self.next_deadline = now;
-        }
     }
 }

@@ -450,9 +450,11 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
     {
         let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(fp) = gpu.as_mut() {
-            if let Some((w, h, rgba)) = fp.process(&frame) {
-                cache_thumb_frame(&state, w, h, rgba);
-                return pack_frame(w, h, rgba);
+            if let Some(packed) = fp.process_packed(&frame) {
+                let w = u32::from_le_bytes(packed[0..4].try_into().unwrap_or_default());
+                let h = u32::from_le_bytes(packed[4..8].try_into().unwrap_or_default());
+                cache_thumb_frame(&state, w, h, &packed[8..]);
+                return tauri::ipc::Response::new(packed);
             }
         }
     }

@@ -63,7 +63,13 @@ impl DesktopCore {
     pub fn drain_audio(&mut self) -> Vec<i16> {
         ffi_state::lock()
             .as_mut()
-            .map(|st| std::mem::take(&mut st.audio))
+            // Próximo frame já nasce com a capacidade deste: os callbacks de
+            // áudio do core empurram aos pedaços, e um `Vec` vazio (o que o
+            // `mem::take` deixava) realocava ~9× por frame até ~1600 amostras.
+            .map(|st| {
+                let cap = st.audio.capacity();
+                std::mem::replace(&mut st.audio, Vec::with_capacity(cap))
+            })
             .unwrap_or_default()
     }
 

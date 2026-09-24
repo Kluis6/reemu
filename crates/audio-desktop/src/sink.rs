@@ -29,6 +29,9 @@ pub struct CpalAudioSink {
     rate_control: RateControl,
     resampler: Resampler,
     scratch: Vec<f32>,
+    /// Entrada convertida pra f32, reusada entre `push_samples` (era um
+    /// `Vec` novo por frame).
+    in_frames: Vec<[f32; 2]>,
     /// Estimador da taxa real de entrada (frames estéreo/s medidos pelo
     /// relógio). Cores mentem um pouco no `sample_rate` declarado
     /// (parallel_n64: diz 26807, entrega ~27244) — medir corrige o resto.
@@ -136,6 +139,7 @@ impl CpalAudioSink {
             rate_control: RateControl::new(config.rate_control_delta, config.rate_control_enabled),
             resampler: Resampler::default(),
             scratch: Vec::new(),
+            in_frames: Vec::new(),
             in_rate: RateEstimator::new(),
             drc_delta: config.rate_control_delta,
             drc_enabled: config.rate_control_enabled,
@@ -166,10 +170,13 @@ impl AudioSink for CpalAudioSink {
         if samples.is_empty() {
             return;
         }
-        let in_frames: Vec<[f32; 2]> = samples
-            .chunks_exact(2)
-            .map(|c| [c[0] as f32 / 32768.0, c[1] as f32 / 32768.0])
-            .collect();
+        let mut in_frames = std::mem::take(&mut self.in_frames);
+        in_frames.clear();
+        in_frames.extend(
+            samples
+                .chunks_exact(2)
+                .map(|c| [c[0] as f32 / 32768.0, c[1] as f32 / 32768.0]),
+        );
 
         self.in_rate.anchor_to(core_sample_rate);
         self.in_rate.observe(in_frames.len());
@@ -225,6 +232,7 @@ impl AudioSink for CpalAudioSink {
                 d.fill_n = 0;
             }
         }
+        self.in_frames = in_frames;
     }
 
     fn pause(&mut self) {

@@ -12,7 +12,7 @@
 #[cfg(unix)]
 use core_ipc::HwPlaneMeta;
 use core_ipc::{Channel, FrameKind, PortInput, ToChild, ToParent};
-use core_loader_desktop::{DesktopCore, DesktopCoreLoader};
+use core_loader_desktop::{DesktopCore, DesktopCoreLoader, PaceStats, Pacer};
 use domain::core_loader::{CoreId, LoadedCore};
 use domain::frame_source::{FrameOrigin, FrameSource};
 #[cfg(unix)]
@@ -64,15 +64,30 @@ fn main() {
     log::info!("reemu-core-host: encerrando");
 }
 
-/// Métricas de pacing 1×/s sob `REEMU_AUDIO_DEBUG=1` — mesmo formato que
-/// `emu_session::LoopDiag` tinha quando isto rodava no processo pai.
+/// Diagnóstico de desempenho do loop do core, 1 linha por segundo no log.
+/// Liga com `REEMU_PERF=1` (ou o antigo `REEMU_AUDIO_DEBUG=1`). Mede o que
+/// as tarefas de desempenho do TASKS.md precisam pra decidir: regularidade
+/// real entre frames, custo do `retro_run`, custo de mandar o frame pro pai
+/// (anel + IPC) e quanto o pacing dorme vs. queima CPU em spin.
+fn diag_enabled() -> bool {
+    std::env::var_os("REEMU_PERF").is_some() || std::env::var_os("REEMU_AUDIO_DEBUG").is_some()
+}
+
 struct LoopDiag {
     since: Instant,
+    last_frame_start: Option<Instant>,
+    /// Intervalo entre o início de frames consecutivos, em ms.
+    intervals: Vec<f32>,
     frames: u64,
     over_budget: u64,
     dup_frames: u64,
     busy: Duration,
     worst: Duration,
+    send: Duration,
+    send_worst: Duration,
+    slept: Duration,
+    spun: Duration,
+    late: u64,
     audio_samples: u64,
 }
 
@@ -80,17 +95,32 @@ impl Default for LoopDiag {
     fn default() -> Self {
         Self {
             since: Instant::now(),
+            last_frame_start: None,
+            intervals: Vec::with_capacity(128),
             frames: 0,
             over_budget: 0,
             dup_frames: 0,
             busy: Duration::ZERO,
             worst: Duration::ZERO,
+            send: Duration::ZERO,
+            send_worst: Duration::ZERO,
+            slept: Duration::ZERO,
+            spun: Duration::ZERO,
+            late: 0,
             audio_samples: 0,
         }
     }
 }
 
 impl LoopDiag {
+    fn frame_start(&mut self, now: Instant) {
+        if let Some(prev) = self.last_frame_start {
+            self.intervals
+                .push(now.duration_since(prev).as_secs_f32() * 1000.0);
+        }
+        self.last_frame_start = Some(now);
+    }
+
     fn record_frame(&mut self, took: Duration, budget: Duration, duped: bool) {
         self.frames += 1;
         self.busy += took;
@@ -103,26 +133,61 @@ impl LoopDiag {
         }
     }
 
-    fn maybe_report(&mut self, sample_rate: u32) {
+    fn record_send(&mut self, took: Duration) {
+        self.send += took;
+        self.send_worst = self.send_worst.max(took);
+    }
+
+    fn record_pace(&mut self, p: &PaceStats) {
+        self.slept += p.slept;
+        self.spun += p.spun;
+        if p.late {
+            self.late += 1;
+        }
+    }
+
+    fn maybe_report(&mut self, sample_rate: u32, budget: Duration) {
         let elapsed = self.since.elapsed();
         if elapsed.as_secs_f32() < 1.0 {
             return;
         }
-        let fps = self.frames as f32 / elapsed.as_secs_f32();
-        let expected = (sample_rate as f32 * elapsed.as_secs_f32() * 2.0) as u64;
+        let secs = elapsed.as_secs_f32();
+        let n = self.frames.max(1) as f32;
+        let ms = |d: Duration| d.as_secs_f32() * 1000.0;
+        let mut iv = std::mem::take(&mut self.intervals);
+        iv.sort_by(f32::total_cmp);
+        let pct = |p: f32| {
+            iv.get(((iv.len() as f32 - 1.0) * p).round() as usize)
+                .copied()
+                .unwrap_or(0.0)
+        };
+        let expected = (sample_rate as f32 * secs * 2.0) as u64;
         log::info!(
-            "core-host 1s: {:.1} fps, {} frames (retro_run: méd {:.1}ms, pior {:.1}ms, {} \
-             acima do budget, {} sem frame novo), áudio {} amostras (esperado ~{})",
-            fps,
-            self.frames,
-            self.busy.as_secs_f32() * 1000.0 / self.frames.max(1) as f32,
-            self.worst.as_secs_f32() * 1000.0,
+            "perf core 1s: {:.1} fps (alvo {:.1}) | intervalo méd {:.2} p99 {:.2} máx {:.2} ms | \
+             retro_run méd {:.2} pior {:.2} ms, {} acima do budget, {} sem frame novo | \
+             envio méd {:.2} pior {:.2} ms | pacing: dormiu {:.0} ms, spin {:.1} ms \
+             ({:.1}% de 1 CPU), {} atrasados | áudio {} amostras (esperado ~{})",
+            self.frames as f32 / secs,
+            1.0 / budget.as_secs_f32(),
+            iv.iter().sum::<f32>() / iv.len().max(1) as f32,
+            pct(0.99),
+            iv.last().copied().unwrap_or(0.0),
+            ms(self.busy) / n,
+            ms(self.worst),
             self.over_budget,
             self.dup_frames,
+            ms(self.send) / n,
+            ms(self.send_worst),
+            ms(self.slept),
+            ms(self.spun),
+            self.spun.as_secs_f32() / secs * 100.0,
+            self.late,
             self.audio_samples,
             expected,
         );
+        let last = self.last_frame_start;
         *self = Self::default();
+        self.last_frame_start = last;
     }
 }
 
@@ -132,11 +197,8 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
     let mut frame_slot = 0u32;
     let mut paused = false;
     let mut core_sample_rate = 32_000u32;
-    let mut frame_budget = Duration::from_micros(16_667);
-    let mut next_deadline = Instant::now();
-    let mut diag = std::env::var_os("REEMU_AUDIO_DEBUG")
-        .is_some()
-        .then(LoopDiag::default);
+    let mut pacer = Pacer::new(Duration::from_micros(16_667));
+    let mut diag = diag_enabled().then(LoopDiag::default);
 
     loop {
         let msg = if core.is_none() || paused {
@@ -158,8 +220,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 &mut ring,
                 &mut frame_slot,
                 &mut core_sample_rate,
-                &mut frame_budget,
-                &mut next_deadline,
+                &mut pacer,
                 &mut diag,
             );
             continue;
@@ -183,8 +244,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                     Ok(mut c) => {
                         let av = c.system_av_info();
                         let fps = av.timing.fps.max(1.0);
-                        frame_budget = Duration::from_secs_f64(1.0 / fps);
-                        next_deadline = Instant::now();
+                        pacer.set_budget(Duration::from_secs_f64(1.0 / fps));
                         core_sample_rate = (av.timing.sample_rate.round() as u32).max(1);
                         log::info!(
                             "core {core_id}: fps={:.3} sample_rate={:.0} Hz",
@@ -231,9 +291,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         ring = Some(new_ring);
                         frame_slot = 0;
                         paused = false;
-                        diag = std::env::var_os("REEMU_AUDIO_DEBUG")
-                            .is_some()
-                            .then(LoopDiag::default);
+                        diag = diag_enabled().then(LoopDiag::default);
                         core = Some(c);
                     }
                     Err(e) => {
@@ -244,8 +302,9 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
             ToChild::SetPaused(p) => {
                 paused = p;
                 if !p {
-                    next_deadline = Instant::now();
+                    pacer.reset();
                 }
+                let _ = channel.send(&ToParent::PausedAck, &[]);
             }
             ToChild::SaveState => {
                 let bytes = core.as_mut().and_then(|c| c.serialize_state());
@@ -308,17 +367,15 @@ fn run_one_frame(
     ring: &mut Option<core_ipc::FrameRing>,
     frame_slot: &mut u32,
     core_sample_rate: &mut u32,
-    frame_budget: &mut Duration,
-    next_deadline: &mut Instant,
+    pacer: &mut Pacer,
     diag: &mut Option<LoopDiag>,
 ) {
     let Some(c) = core.as_mut() else { return };
 
     if let Some(t) = c.take_av_update() {
         let fps = t.fps.max(1.0);
-        *frame_budget = Duration::from_secs_f64(1.0 / fps);
+        pacer.set_budget(Duration::from_secs_f64(1.0 / fps));
         *core_sample_rate = (t.sample_rate.round() as u32).max(1);
-        *next_deadline = Instant::now();
         log::info!(
             "timing atualizado em runtime: fps={:.3} sample_rate={} Hz",
             fps,
@@ -326,19 +383,27 @@ fn run_one_frame(
         );
     }
 
-    let t0 = diag.as_ref().map(|_| Instant::now());
+    let t0 = diag.as_mut().map(|d| {
+        let now = Instant::now();
+        d.frame_start(now);
+        now
+    });
     let produced = c.next_frame();
     if let (Some(d), Some(t0)) = (diag.as_mut(), t0) {
-        d.record_frame(t0.elapsed(), *frame_budget, produced.is_none());
+        d.record_frame(t0.elapsed(), pacer.budget(), produced.is_none());
     }
     if let (Some(frame), Some(ring)) = (produced, ring.as_ref()) {
+        let ts = diag.as_ref().map(|_| Instant::now());
         send_frame(channel, ring, frame_slot, frame);
+        if let (Some(d), Some(ts)) = (diag.as_mut(), ts) {
+            d.record_send(ts.elapsed());
+        }
     }
 
     let audio = c.drain_audio();
     if let Some(d) = diag.as_mut() {
         d.audio_samples += audio.len() as u64;
-        d.maybe_report(*core_sample_rate);
+        d.maybe_report(*core_sample_rate, pacer.budget());
     }
     if !audio.is_empty() {
         let _ = channel.send(
@@ -350,7 +415,10 @@ fn run_one_frame(
         );
     }
 
-    pace(frame_budget, next_deadline);
+    let p = pacer.pace();
+    if let Some(d) = diag.as_mut() {
+        d.record_pace(&p);
+    }
 }
 
 fn send_frame(
@@ -440,27 +508,5 @@ fn send_frame(
                 }
             }
         }
-    }
-}
-
-/// Pacing por acumulador + spin — idêntico ao que `emu_session::core_loop`
-/// fazia antes disso virar o loop do processo filho.
-fn pace(frame_budget: &Duration, next_deadline: &mut Instant) {
-    *next_deadline += *frame_budget;
-    let now = Instant::now();
-    if now < *next_deadline {
-        if let Some(coarse) = (*next_deadline - now).checked_sub(Duration::from_micros(600)) {
-            std::thread::sleep(coarse);
-        }
-        loop {
-            for _ in 0..64 {
-                std::hint::spin_loop();
-            }
-            if Instant::now() >= *next_deadline {
-                break;
-            }
-        }
-    } else if now.duration_since(*next_deadline) > *frame_budget * 4 {
-        *next_deadline = now;
     }
 }

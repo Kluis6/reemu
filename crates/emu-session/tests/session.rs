@@ -78,6 +78,46 @@ fn load_runs_and_frames_advance() {
     assert_eq!(s.state(), SessionState::Idle);
 }
 
+/// Simula o `reemu-video-pump`: espera o frame, "renderiza" (3 ms), repete.
+/// Devolve `(recebidos do core, apresentados)` no período.
+fn present_loop(s: &EmuSession, dur: Duration) -> (u64, u64) {
+    let _ = s.take_latest_frame();
+    let start_seq = s.frame_seq();
+    let t0 = std::time::Instant::now();
+    let mut presented = 0;
+    while t0.elapsed() < dur {
+        if s.take_latest_frame().is_some() {
+            presented += 1;
+            sleep(Duration::from_millis(3)); // custo de render
+        }
+        s.wait_for_frame(Duration::from_millis(20));
+    }
+    (s.frame_seq() - start_seq, presented)
+}
+
+/// O pump dormia 15 ms fixos + o render: fora de fase com os 16,67 ms do
+/// core, sobrescrevia frames antes de apresentar (micro-engasgo). Acordando
+/// pelo `wait_for_frame`, apresenta tudo que chega.
+#[test]
+fn presenter_waking_on_frame_does_not_drop_frames() {
+    let _g = lock();
+    let s = session();
+    load(&s, &rom()).unwrap();
+    sleep(Duration::from_millis(100));
+
+    let (received, presented) = present_loop(&s, Duration::from_millis(1500));
+    assert!(
+        received >= 80,
+        "o core deveria entregar ~90 frames, veio {received}"
+    );
+    assert!(
+        presented + 2 >= received,
+        "perdeu {} de {received} frames",
+        received - presented
+    );
+    s.unload().unwrap();
+}
+
 #[test]
 fn pause_freezes_emulation_then_resume() {
     let _g = lock();

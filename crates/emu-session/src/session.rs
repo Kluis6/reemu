@@ -25,7 +25,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -91,6 +91,9 @@ enum Command {
 struct Shared {
     frame_seq: AtomicU64,
     latest_frame: Mutex<Option<Frame>>,
+    /// Sinaliza `latest_frame` preenchido — quem apresenta espera nisto em
+    /// vez de dormir um tempo fixo (ver `wait_for_frame`).
+    frame_ready: Condvar,
     audio: Mutex<Vec<i16>>,
     state: Mutex<SessionState>,
     /// Identificador do core carregado (o que foi passado pra `load`). `None`
@@ -171,6 +174,7 @@ impl EmuSession {
         let shared = Arc::new(Shared {
             frame_seq: AtomicU64::new(0),
             latest_frame: Mutex::new(None),
+            frame_ready: Condvar::new(),
             audio: Mutex::new(Vec::new()),
             state: Mutex::new(SessionState::Idle),
             loaded_core: Mutex::new(None),
@@ -473,6 +477,23 @@ impl EmuSession {
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .take()
+    }
+
+    /// Bloqueia até existir um frame não consumido ou `timeout` passar — NÃO
+    /// o consome (quem apresenta chama `take_latest_frame` depois). Serve pra
+    /// o loop de vídeo acordar no instante em que o frame chega, em vez de
+    /// dormir um tempo fixo fora de fase com o core (15 ms fixos contra os
+    /// 16,67 ms de um core a 60 fps perdiam/repetiam frames).
+    pub fn wait_for_frame(&self, timeout: std::time::Duration) {
+        let guard = self
+            .shared
+            .latest_frame
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        let _ = self
+            .shared
+            .frame_ready
+            .wait_timeout_while(guard, timeout, |f| f.is_none());
     }
 
     /// PCM interleaved estéreo acumulado desde o último drain.
@@ -815,6 +836,7 @@ fn handle_event(
                     .latest_frame
                     .lock()
                     .unwrap_or_else(|p| p.into_inner()) = Some(frame);
+                shared.frame_ready.notify_all();
             }
         }
         ToParent::AudioBatch {
@@ -1380,8 +1402,26 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
             Command::SetPaused(want_paused, reply) => {
                 let vk_active = shared.vk_local_active.load(Ordering::Acquire);
                 let have_core = proc.is_some() || vk_active;
-                if let Some(p) = proc.as_ref() {
+                // Ida e volta: espera o filho confirmar. Sem isso o
+                // `set_paused(true)` retornava com um `FrameReady` do frame em
+                // andamento ainda a caminho, e ele chegava DEPOIS (o frame
+                // avançava com a sessão "pausada").
+                if let (Some(p), Some(erx)) = (proc.as_ref(), events.as_ref()) {
                     let _ = p.channel.send(&ToChild::SetPaused(want_paused), &[]);
+                    let acked = wait_for_reply(
+                        erx,
+                        Duration::from_secs(2),
+                        &shared,
+                        &mut sink,
+                        &mut ring,
+                        |ev| match ev.msg {
+                            ToParent::PausedAck => Ok(()),
+                            _ => Err(ev),
+                        },
+                    );
+                    if acked.is_none() {
+                        log::warn!("core-host não confirmou o SetPaused({want_paused}) em 2s");
+                    }
                 }
                 if vk_active {
                     shared.vk_local_paused.store(want_paused, Ordering::Release);

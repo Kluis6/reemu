@@ -123,7 +123,17 @@ RUST_LOG=debug scripts/dev.sh
 scripts/dev.sh --vk-validation          # validation layer do Vulkan
 REEMU_NATIVE_VIDEO=0 scripts/dev.sh     # <canvas> em vez da surface nativa
 REEMU_WEBKIT_COMPOSITING=1 scripts/dev.sh
+REEMU_PERF=1 scripts/dev.sh             # métricas de desempenho 1×/s no log
 ```
+
+Com `REEMU_PERF=1`, cada segundo de jogo gera duas linhas no log:
+
+- `perf core`: fps real vs. alvo; intervalo entre frames (médio, p99,
+  máximo); tempo do `retro_run`; custo de mandar o frame pro app; quanto o
+  pacing dormiu e quanto queimou em spin; frames atrasados.
+- `perf vídeo`: frames recebidos do core vs. apresentados (a diferença são
+  **frames perdidos**); voltas do loop de vídeo sem frame novo; tempo de
+  render. Só no modo surface nativa (o padrão).
 
 Dados do app (banco, cores, BIOS, shaders) ficam em
 `~/.local/share/com.reemu.desktop/` no Linux.

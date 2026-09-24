@@ -87,6 +87,11 @@ pub enum ToParent {
         values: HashMap<String, String>,
     },
     SetCoreOptionResult(bool),
+    /// Confirmação do `SetPaused`, mandada DEPOIS de aplicar. Tudo que o
+    /// filho mandou antes (um `FrameReady` do frame que estava rodando) chega
+    /// antes dela no canal — o pai espera por ela, então quando o
+    /// `set_paused(true)` retorna não chega mais frame nenhum.
+    PausedAck,
     /// Erro fatal que não impede o processo de seguir vivo (loga no pai).
     Warn(String),
 }

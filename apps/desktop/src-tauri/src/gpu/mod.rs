@@ -580,9 +580,9 @@ pub struct FrameProcessor {
     /// serializar. Fallback bloqueante só quando o slot ainda não mapeou.
     rb: ReadbackRing,
     frame_count: u64,
-    /// Buffer reusado do readback de `process()` (retirar o padding de linha
-    /// do staging buffer) — só realoca se o tamanho mudar (resolução do jogo
-    /// é estável quadro a quadro). Ver `unpad_rows_into`.
+    /// Buffer reusado do readback de `process()` (só nos testes — o app usa
+    /// `process_packed`, que escreve direto no `Vec` da resposta IPC).
+    #[cfg(test)]
     readback_scratch: Vec<u8>,
     /// Blit linear nível-a-nível pra gerar cadeia de mips de um `.target` de
     /// passe (`mipmap_input`) — wgpu não tem "generate mipmaps" embutido
@@ -737,6 +737,7 @@ impl FrameProcessor {
             flip,
             interop_view: None,
             rb: ReadbackRing::default(),
+            #[cfg(test)]
             readback_scratch: Vec::new(),
             frame_count: 0,
             last_surface_out: None,
@@ -1521,13 +1522,58 @@ impl FrameProcessor {
 }
 
 impl FrameProcessor {
-    /// Caminho canvas: roda a chain e lê o resultado de volta pra CPU (RGBA8).
+    /// Roda a chain e lê o resultado de volta pra CPU (RGBA8, sem cabeçalho).
     /// `None` se não há frame novo pronto ainda (readback com 1 quadro de
-    /// atraso — ver o comentário de `rb`). O `&[u8]` devolvido é emprestado
-    /// de `self.readback_scratch` (reusado quadro a quadro, sem realocar
-    /// quando o tamanho não muda) — o chamador precisa copiar antes da
-    /// próxima chamada a `process`.
+    /// atraso — ver o comentário de `rb`). O `&[u8]` é emprestado de
+    /// `self.readback_scratch`. Só os testes usam; o canvas usa
+    /// `process_packed`.
+    #[cfg(test)]
     pub fn process(&mut self, frame: &Frame) -> Option<(u32, u32, &[u8])> {
+        let (slot, w, h, padded) = self.readback_frame(frame)?;
+        {
+            let mapped = self.rb.slots[slot]
+                .as_ref()?
+                .buf
+                .slice(..)
+                .get_mapped_range()
+                .ok()?;
+            unpad_rows_into(&mut self.readback_scratch, &mapped, w, h, padded);
+        }
+        self.release_readback(slot);
+        Some((w, h, self.readback_scratch.as_slice()))
+    }
+
+    /// Igual ao `process`, mas já no formato do `poll_frame`: `[w u32 LE]
+    /// [h u32 LE][RGBA…]` num `Vec` só, pronto pra virar a resposta IPC. O
+    /// `process` + montar o cabeçalho copiava o frame inteiro de novo
+    /// (8 MB por frame em 1080p); aqui o readback escreve direto no destino.
+    pub fn process_packed(&mut self, frame: &Frame) -> Option<Vec<u8>> {
+        let (slot, w, h, padded) = self.readback_frame(frame)?;
+        let out = {
+            let mapped = self.rb.slots[slot]
+                .as_ref()?
+                .buf
+                .slice(..)
+                .get_mapped_range()
+                .ok()?;
+            let row = (w * 4) as usize;
+            let mut out = Vec::with_capacity(8 + row * h as usize);
+            out.extend_from_slice(&w.to_le_bytes());
+            out.extend_from_slice(&h.to_le_bytes());
+            for y in 0..h as usize {
+                out.extend_from_slice(&mapped[y * padded as usize..][..row]);
+            }
+            out
+        };
+        self.release_readback(slot);
+        Some(out)
+    }
+
+    /// Roda a chain, pede o readback deste frame e deixa MAPEADO o slot do
+    /// frame anterior (pipeline de 1 quadro — ver `rb`). Devolve
+    /// `(slot, w, h, bytes_por_linha_com_padding)`; o chamador copia do
+    /// mapeamento e chama `release_readback(slot)`.
+    fn readback_frame(&mut self, frame: &Frame) -> Option<(usize, u32, u32, u32)> {
         let mut enc = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -1602,15 +1648,14 @@ impl FrameProcessor {
         if !rs.ready.load(Ordering::Relaxed) {
             self.device.poll(wgpu::PollType::wait_indefinitely()).ok()?;
         }
-        let (rw, rh, rpad) = (rs.w, rs.h, rs.padded);
-        {
-            let mapped = rs.buf.slice(..).get_mapped_range().ok()?;
-            unpad_rows_into(&mut self.readback_scratch, &mapped, rw, rh, rpad);
+        Some((read_i, rs.w, rs.h, rs.padded))
+    }
+
+    fn release_readback(&mut self, slot: usize) {
+        if let Some(rs) = self.rb.slots[slot].as_mut() {
+            rs.buf.unmap();
+            rs.inflight = false;
         }
-        let rs = self.rb.slots[read_i].as_mut()?;
-        rs.buf.unmap();
-        rs.inflight = false;
-        Some((rw, rh, self.readback_scratch.as_slice()))
     }
 
     fn ensure_comp_target(&mut self, w: u32, h: u32) {

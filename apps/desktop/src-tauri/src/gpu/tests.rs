@@ -380,6 +380,31 @@ fn dmabuf_from_gl_producer_imports_correctly_into_wgpu() {
 /// O readback com pipeline prima 1 frame e depois entrega o frame ANTERIOR
 /// (atraso de exatamente 1 frame). `plain` = passthrough, então a cor sai
 /// igual à que entrou 1 frame antes.
+/// `process_packed` (o que o canvas usa) = cabeçalho `[w][h]` + os MESMOS
+/// pixels do `process`. Largura 50 → 200 bytes/linha contra 256 com padding:
+/// um erro na retirada do padding apareceria aqui.
+#[test]
+fn process_packed_matches_process() {
+    if std::env::var_os("REEMU_NO_GPU").is_some() {
+        return;
+    }
+    let (Some(mut a), Some(mut b)) = (FrameProcessor::new(), FrameProcessor::new()) else {
+        eprintln!("sem adapter wgpu — pulando teste de readback");
+        return;
+    };
+    let frame = || grey_frame(50, 30, 0x7A);
+    assert!(a.process(&frame()).is_none());
+    assert!(b.process_packed(&frame()).is_none());
+    let (w, h, plain) = a.process(&frame()).expect("2º process entrega");
+    let packed = b
+        .process_packed(&frame())
+        .expect("2º process_packed entrega");
+    assert_eq!((w, h), (50, 30));
+    assert_eq!(&packed[0..4], &50u32.to_le_bytes());
+    assert_eq!(&packed[4..8], &30u32.to_le_bytes());
+    assert_eq!(&packed[8..], plain);
+}
+
 #[test]
 fn pipelined_readback_has_one_frame_delay() {
     if std::env::var_os("REEMU_NO_GPU").is_some() {
