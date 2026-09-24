@@ -38,9 +38,8 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [ ] `todo` — **Windows ponta a ponta**: só os testes do `core-ipc` rodaram
       numa máquina Windows real. Falta `cargo tauri dev` completo, `video.rs`
       no caminho `#[cfg(not(linux))]`, paths do buildbot de cores, instalador.
-      Suspeita a conferir: o `boxart` é `cover://localhost/<id>`
-      (`commands/library.rs`), mas no Windows o Tauri 2 serve protocolo
-      custom em `http://cover.localhost/` — capas podem não aparecer.
+      Conferir que as capas aparecem (URL `http://cover.localhost/<id>` no
+      Windows, `covers::cover_url`, corrigida sem teste em máquina real).
 - [ ] `todo` — **Pipeline de release no GitHub Actions**: nunca rodou lá.
       Disparar `release.yml` por `workflow_dispatch` ou tag `v0.1.0-rc1`
       (sai como Release draft).
@@ -65,17 +64,6 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       pra emulação). HDR / tonemapping.
 - [ ] `todo` — Canvas WebGL (`texImage2D`) em vez de `putImageData` no
       caminho `<canvas>`.
-- [ ] `todo` — **Shaders do upstream regrediram pra 92,9%** (2470/2658,
-      medido 2026-09-24 contra `libretro/slang-shaders@afb1416`). Não é
-      código nosso: o mesmo código passa 173/179 no koko-aio de antes do sync
-      e 2/2 no vectorscale antigo. Causas:
-      (1) sync do koko-aio 1.9.101 (upstream `637d7bb`, 2026-09-16) →
-      `shaders-ng/avglum_pass.slang` dá `'#if' : unexpected` no glslang
-      (linha 1703 do fonte pré-processado), 176 presets;
-      (2) reescrita do vectorscale (upstream `b61e1ee`, 2026-09-09) →
-      `resolve-crossings.slang` falha na validação do naga, 4 presets.
-      Afeta quem usa "Baixar pacote de shaders", que baixa o upstream atual.
-      Atualizar também o `docs/shaders/working-presets.txt` depois.
 - [ ] `todo` — Shader: `test/format.slangp` (textura de inteiros) é a única
       falha de preset que sobrou por limitação do pipeline.
 

@@ -66,6 +66,18 @@ fn ok_png(bytes: Vec<u8>) -> http::Response<Vec<u8>> {
         .unwrap()
 }
 
+/// URL da capa de uma ROM pro `<img>`. No Windows o WebView2 não aceita
+/// esquema custom em subrecurso: o wry intercepta `http://<esquema>.localhost/`
+/// no lugar (`custom_protocol_workaround` do wry; `useHttpsScheme` não está
+/// ligado, então é `http`). O handler abaixo só lê o path, serve pras duas.
+pub fn cover_url(rom_id: &str) -> String {
+    if cfg!(windows) {
+        format!("http://cover.localhost/{rom_id}")
+    } else {
+        format!("cover://localhost/{rom_id}")
+    }
+}
+
 /// Registra `cover://` no builder. Chamar antes de `.setup()`/`.run()` —
 /// o handler só roda depois, quando o `AppState` já está gerenciado.
 pub fn register<R: Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {

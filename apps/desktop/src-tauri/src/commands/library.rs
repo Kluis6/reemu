@@ -9,7 +9,8 @@ pub struct RomDto {
     pub title: String,
     pub system_id: String,
     pub file_path: String,
-    /// `cover://localhost/<id>` — protocolo custom (`covers.rs`) que serve
+    /// `cover://localhost/<id>` (`http://cover.localhost/<id>` no Windows,
+    /// ver `covers::cover_url`) — protocolo custom (`covers.rs`) que serve
     /// do cache em disco ou baixa da libretro e cacheia na 1ª vez; o
     /// `<img>` cai num placeholder de iniciais se vier 404 (sem cobertura
     /// ou sem rede na 1ª tentativa).
@@ -49,7 +50,7 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String
             // `covers.rs`): serve do cache em disco se já baixou antes, ou
             // baixa na hora e grava — funciona offline depois da 1ª vez.
             let boxart = library_scan::libretro_boxart_url(&r.system_id, &title)
-                .map(|_| format!("cover://localhost/{}", r.id));
+                .map(|_| crate::covers::cover_url(&r.id));
             RomDto {
                 boxart,
                 title,

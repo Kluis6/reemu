@@ -568,6 +568,27 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-24 (tarde) — shaders do upstream, capas no Windows, release**:
+  * Upstream `libretro/slang-shaders@afb1416` tinha derrubado a validação de
+    campo pra 92,9%. Duas correções no `shader-slang`, cada uma com teste
+    unitário que falha sem ela:
+    - koko-aio 1.9.101 (176 presets): `#define FPS_ESTIMATE_PASS
+      avglum_passFeedback` + `uniform sampler2D FPS_ESTIMATE_PASS` atrás de
+      `#if FPS_ESTIMATE_PASS != avglum_passFeedback`. O
+      `split_sampler_aliases` pulava nomes já declarados como global; agora
+      o `#define` prevalece (pro preprocessador a decl declara o ALVO), o
+      `#if` fica com identificadores não definidos (`0 != 0`), como no
+      RetroArch.
+    - vectorscale novo (4 presets): `findLSB`/`findMSB` de `uint` devolvem
+      `int`, o naga tipa como `uint` → `InvalidStoreTypes`. Helpers
+      `reemu_findLSB`/`reemu_findMSB` em `patch_missing_builtins`.
+    - Resultado: 2651/2658 = 99,7%, zero regressão contra a lista anterior
+      (todos os 2547 continuam), `working-presets.txt` atualizado (+104).
+  * Capas no Windows: `boxart` era `cover://localhost/<id>`, mas o WebView2
+    só intercepta `http://cover.localhost/` pra subrecurso (conferido no
+    `custom_protocol_workaround` do wry 0.55.1). `covers::cover_url` escolhe
+    por plataforma. Não testado em Windows real.
+
 - **2026-09-24 — revisão geral + melhorias fora do backlog**:
   * `cargo fmt --check` falhava em 20 arquivos (CI vermelho no 1º passo) →
     `cargo fmt --all`; hook `.githooks/pre-commit` (rustfmt + oxlint, ativar
