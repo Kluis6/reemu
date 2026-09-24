@@ -257,3 +257,57 @@ async fn generic_extension_counts_only_inside_its_system_folder() {
     }
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// DOS: `.zip`/`.exe` SOLTOS na pasta `dos/` são jogos; os executáveis de
+/// dentro da pasta de um jogo (instalador, setup…) não viram entradas; o
+/// `.zip` é o jogo inteiro (hash do arquivo, sem extrair o `.bin` de dentro,
+/// que seria confundido com uma ROM). `.scummvm` vale em qualquer pasta.
+#[tokio::test]
+async fn dos_and_scummvm_games() {
+    let dir = scratch_dir();
+    let zip_path = dir.join("dos/Doom.zip");
+    std::fs::create_dir_all(zip_path.parent().unwrap()).unwrap();
+    {
+        let f = std::fs::File::create(&zip_path).unwrap();
+        let mut zw = zip::ZipWriter::new(f);
+        for (name, bytes) in [("DOOM.EXE", &b"mz-doom"[..]), ("DATA.BIN", &b"bin"[..])] {
+            zw.start_file(
+                name,
+                zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Stored),
+            )
+            .unwrap();
+            zw.write_all(bytes).unwrap();
+        }
+        zw.finish().unwrap();
+    }
+    write(&dir, "dos/Keen.exe", b"mz-keen");
+    write(&dir, "dos/Wolf3D/WOLF3D.EXE", b"mz-wolf"); // dentro da pasta do jogo
+    write(&dir, "dos/Wolf3D/INSTALL.BAT", b"@echo off");
+    write(&dir, "outros/setup.exe", b"mz-qualquer"); // fora da pasta dos/
+    write(&dir, "jogos/Monkey Island/monkey.scummvm", b"monkey");
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!(r.added, 3, "{r:?}");
+    assert_eq!(r.skipped_unrecognized, 3, "{r:?}"); // WOLF3D.EXE, INSTALL.BAT, setup.exe
+
+    let mut dos: Vec<_> = repo
+        .list_by_system("dos")
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|r| (r.file_path.rsplit('/').next().unwrap().to_string(), r.crc32))
+        .collect();
+    dos.sort();
+    let zip_crc = crc_of(&std::fs::read(&zip_path).unwrap());
+    assert_eq!(
+        dos,
+        vec![
+            ("Doom.zip".to_string(), zip_crc),
+            ("Keen.exe".to_string(), crc_of(b"mz-keen")),
+        ]
+    );
+    assert_eq!(repo.list_by_system("scummvm").await.unwrap().len(), 1);
+}

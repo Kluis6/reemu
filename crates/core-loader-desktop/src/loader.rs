@@ -199,37 +199,6 @@ impl DesktopCoreLoader {
             return Err(CoreLoadError::RomNotFound(rom_path.to_string()));
         }
 
-        // ROM em .zip/.7z: extrai a entrada interna pra um arquivo temporário.
-        // Vive (via `DesktopCore`) até o unload. Sets de arcade (MAME/FBNeo)
-        // não têm "uma ROM" reconhecível dentro — só chip dumps avulsos —
-        // nesse caso NÃO é erro: o core (`need_fullpath`) espera o caminho do
-        // arquivo inteiro e abre sozinho, então cai pro caminho original.
-        // Outros erros de IO (arquivo corrompido, permissão) continuam
-        // propagando — só "não achei ROM reconhecida aí dentro" tem fallback.
-        let extracted = if crate::archive::is_archive(Path::new(rom_path)) {
-            match crate::archive::extract_rom(Path::new(rom_path), &std::env::temp_dir()) {
-                Ok(e) => Some(e),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    log::info!(
-                        "{rom_path}: nenhuma ROM de cartucho reconhecida dentro do arquivo — \
-                         tratando como set de arcade (caminho original pro core)"
-                    );
-                    None
-                }
-                Err(e) => {
-                    return Err(CoreLoadError::LoadFailed(format!(
-                        "extrair {rom_path}: {e}"
-                    )));
-                }
-            }
-        } else {
-            None
-        };
-        let rom_path: &str = extracted
-            .as_ref()
-            .and_then(|e| e.path().to_str())
-            .unwrap_or(rom_path);
-
         // O guard inicializa o estado global e garante um-core-por-processo.
         let guard = ffi_state::acquire(&self.system_dir, &self.save_dir)?;
         let raw = RawCore::open(&path)?;
@@ -254,11 +223,62 @@ impl DesktopCoreLoader {
 
         // Info do core (need_fullpath decide se carregamos a ROM em memória).
         // `info` tem ponteiros crus — não deve cruzar um `.await`.
-        let need_fullpath = {
+        //
+        // `keep_archive`: o core quer o .zip/.7z INTEIRO — pede
+        // `block_extract` ou lista a própria extensão do arquivo entre as que
+        // aceita (mesma regra do RetroArch). É o caso do DOSBox Pure (o jogo
+        // de DOS é o zip todo; extrair um `.bin` de dentro dele quebraria) e
+        // dos cores de arcade (o set inteiro é a unidade).
+        let (need_fullpath, keep_archive) = {
             let mut info: sys::retro_system_info = unsafe { std::mem::zeroed() };
             unsafe { (raw.get_system_info)(&mut info) };
-            info.need_fullpath
+            let ext = Path::new(rom_path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or_default()
+                .to_ascii_lowercase();
+            let accepts_archive = !info.valid_extensions.is_null() && {
+                // SAFETY: string C estática do core, válida enquanto ele estiver aberto.
+                let exts = unsafe { std::ffi::CStr::from_ptr(info.valid_extensions) };
+                exts.to_string_lossy()
+                    .split('|')
+                    .any(|e| e.eq_ignore_ascii_case(&ext))
+            };
+            (info.need_fullpath, info.block_extract || accepts_archive)
         };
+
+        // ROM em .zip/.7z: extrai a entrada interna pra um arquivo temporário
+        // — a não ser que o core queira o arquivo como está (`keep_archive`,
+        // acima).
+        // Vive (via `DesktopCore`) até o unload. Sets de arcade (MAME/FBNeo)
+        // não têm "uma ROM" reconhecível dentro — só chip dumps avulsos —
+        // nesse caso NÃO é erro: o core (`need_fullpath`) espera o caminho do
+        // arquivo inteiro e abre sozinho, então cai pro caminho original.
+        // Outros erros de IO (arquivo corrompido, permissão) continuam
+        // propagando — só "não achei ROM reconhecida aí dentro" tem fallback.
+        let extracted = if crate::archive::is_archive(Path::new(rom_path)) && !keep_archive {
+            match crate::archive::extract_rom(Path::new(rom_path), &std::env::temp_dir()) {
+                Ok(e) => Some(e),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    log::info!(
+                        "{rom_path}: nenhuma ROM de cartucho reconhecida dentro do arquivo — \
+                         tratando como set de arcade (caminho original pro core)"
+                    );
+                    None
+                }
+                Err(e) => {
+                    return Err(CoreLoadError::LoadFailed(format!(
+                        "extrair {rom_path}: {e}"
+                    )));
+                }
+            }
+        } else {
+            None
+        };
+        let rom_path: &str = extracted
+            .as_ref()
+            .and_then(|e| e.path().to_str())
+            .unwrap_or(rom_path);
 
         let load_ok = {
             let c_path = CString::new(rom_path)

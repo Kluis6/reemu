@@ -55,6 +55,11 @@ pub fn system_for_extension(ext: &str) -> Option<&'static str> {
         "adf" | "adz" | "dms" | "hdf" => "amiga",
         "tzx" | "z80" | "rzx" | "szx" | "scl" | "trd" => "zxspectrum",
         "cdt" | "cpr" => "amstradcpc",
+        // `.scummvm`: arquivo de texto com o id do jogo, dentro da pasta do
+        // jogo (convenção do core ScummVM do libretro). `.dosz`: zip de jogo
+        // de DOS do DOSBox Pure. Os dois só existem pra esses sistemas.
+        "scummvm" => "scummvm",
+        "dosz" => "dos",
         // `.gdi`/`.cdi` são GD-ROM → Dreamcast por padrão (NAOMI/Atomiswave a
         // pasta desambigua); `.pbp`/`.cso` são de PSP. As outras seguem ambíguas
         // (`scan.rs` tenta a pasta, depois fareja o conteúdo).
@@ -146,6 +151,8 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         "amiga" | "commodore amiga" | "commodore - amiga" => "amiga",
         "zxspectrum" | "zx spectrum" | "spectrum" | "sinclair - zx spectrum" => "zxspectrum",
         "amstradcpc" | "cpc" | "amstrad cpc" | "amstrad - cpc" => "amstradcpc",
+        "dos" | "msdos" | "ms-dos" | "pc" => "dos",
+        "scummvm" => "scummvm",
         // --- disco (AMBIGUOUS_DISC_EXTS) ---
         "psx" | "playstation" | "ps1" | "sony - playstation" => "psx",
         "ps2" | "playstation2" | "playstation 2" | "sony - playstation 2" => "ps2",
@@ -175,6 +182,15 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
     })
 }
 
+/// Sistemas cujas extensões de `folder_only_exts` só valem para arquivo
+/// SOLTO direto na pasta do sistema, não em subpastas. DOS: a pasta de um
+/// jogo tem vários `.exe`/`.bat` (instalador, setup, o jogo) e cada um viraria
+/// uma entrada na biblioteca — o jogo fica como `.zip` ou executável na raiz
+/// da pasta `dos/`.
+pub fn folder_only_flat(system_id: &str) -> bool {
+    system_id == "dos"
+}
+
 /// Extensões genéricas (usadas por vários sistemas, ou por arquivo que não é
 /// ROM) que só contam como ROM de `system_id` quando uma pasta ancestral já
 /// identifica esse sistema (ex: `<roms>/msx/jogo.rom`). Fora dessa pasta o
@@ -193,6 +209,9 @@ pub fn folder_only_exts(system_id: &str) -> &'static [&'static str] {
         "c64" => &["prg", "p00", "tap"],
         "zxspectrum" => &["tap", "dsk", "sna", "dck"],
         "amstradcpc" => &["dsk", "sna", "tap"],
+        // Jogo de DOS: um .zip (recomendado pelo DOSBox Pure), ou o
+        // executável/config SOLTO na pasta — ver `folder_only_flat`.
+        "dos" => &["zip", "exe", "com", "bat", "conf"],
         _ => &[],
     }
 }
@@ -250,6 +269,8 @@ fn libretro_thumbnail_system(system_id: &str) -> Option<&'static str> {
         "amiga" => "Commodore - Amiga",
         "zxspectrum" => "Sinclair - ZX Spectrum",
         "amstradcpc" => "Amstrad - CPC",
+        "dos" => "DOS",
+        "scummvm" => "ScummVM",
         // "arcade": sem cobertura de boxart 1:1 (MAME/FBNeo são sets separados
         // no thumbnails.libretro.com, não um sistema único) — fica sem, o
         // frontend já cai nas iniciais no `onerror`.
@@ -385,6 +406,8 @@ mod tests {
         "amiga",
         "zxspectrum",
         "amstradcpc",
+        "dos",
+        "scummvm",
     ];
 
     #[test]
@@ -412,6 +435,8 @@ mod tests {
         assert_eq!(system_for_extension("adf"), Some("amiga"));
         assert_eq!(system_for_extension("tzx"), Some("zxspectrum"));
         assert_eq!(system_for_extension("cdt"), Some("amstradcpc"));
+        assert_eq!(system_for_extension("scummvm"), Some("scummvm"));
+        assert_eq!(system_for_extension("dosz"), Some("dos"));
     }
 
     #[test]

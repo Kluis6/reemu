@@ -3,7 +3,8 @@
 use crate::archive::{is_supported_archive, peek_archive, read_archive_entry};
 use crate::hash::FileRomHasher;
 use crate::systems::{
-    folder_only_exts, system_for_extension, system_from_folder_name, AMBIGUOUS_DISC_EXTS,
+    folder_only_exts, folder_only_flat, system_for_extension, system_from_folder_name,
+    AMBIGUOUS_DISC_EXTS,
 };
 use domain::library::{Rom, RomRepository};
 use std::io::Cursor;
@@ -36,7 +37,13 @@ fn system_from_dirs(dirs: &[String]) -> Option<&'static str> {
 /// Sistema da pasta ancestral, se `ext` for uma das extensões genéricas que
 /// ele aceita (`folder_only_exts` — ex: `.rom` dentro de `<roms>/msx/`).
 fn system_from_folder_ext(path: &Path, root: &Path, ext: &str) -> Option<&'static str> {
-    system_from_dirs(&ancestor_dirs(path, root)).filter(|s| folder_only_exts(s).contains(&ext))
+    let dirs = ancestor_dirs(path, root);
+    let sys = system_from_dirs(&dirs).filter(|s| folder_only_exts(s).contains(&ext))?;
+    // `folder_only_flat` (DOS): só arquivo direto na pasta do sistema.
+    if folder_only_flat(sys) && dirs.last().and_then(|d| system_from_folder_name(d)) != Some(sys) {
+        return None;
+    }
+    Some(sys)
 }
 
 /// Extensão reconhecida (ROM crua, arquivo comprimido suportado, ou

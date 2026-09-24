@@ -51,6 +51,8 @@ const LABELS: Record<string, string> = {
   amiga: "Amiga",
   zxspectrum: "ZX Spectrum",
   amstradcpc: "Amstrad CPC",
+  dos: "DOS",
+  scummvm: "ScummVM",
   arcade: "Arcade",
   disc: "Disco",
 };

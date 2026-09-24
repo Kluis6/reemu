@@ -111,7 +111,9 @@ def main():
         why = None
         if core_id in EXCLUDE:
             why = "exclusão manual"
-        elif info.get("categories", "") != "Emulator":
+        elif info.get("categories", "") not in ("Emulator", "Game"):
+            # "Game" entra só por causa do filtro de sistema abaixo (na
+            # prática: ScummVM); os demais "Game" não têm sistema no scan.
             why = "não é emulador"
         elif core_id not in linux or core_id not in windows:
             why = "fora do buildbot Linux+Windows"

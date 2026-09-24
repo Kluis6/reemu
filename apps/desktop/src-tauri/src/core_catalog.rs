@@ -539,6 +539,9 @@ pub const CATALOG: &[CatalogEntry] = &[
         "SNK Neo Geo Pocket / Color",
         "GPLv2",
     ),
+    sw("dosbox_libretro", "DOSBox", "DOS", "GPLv2"),
+    sw("dosbox_core_libretro", "DOSBox-core", "DOS", "GPLv2"),
+    sw("dosbox_svn_libretro", "DOSBox-SVN", "DOS", "GPLv2"),
 ];
 
 pub fn find(core_id: &str) -> Option<&'static CatalogEntry> {
