@@ -23,8 +23,27 @@ import { useToastStore } from '../../stores/useToastStore'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
-  system: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
-  list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
+  // Um bloco por sistema em COLUNAS CORRIDAS (2, ou 3 em tela larga): cada
+  // coluna empilha os blocos direto um embaixo do outro. Em grade, a linha
+  // inteira tomava a altura do maior bloco (PlayStation, 3 arquivos) e o
+  // vizinho menor (Saturn, 1) ficava com um buraco embaixo.
+  groups: {
+    columnCount: 2,
+    columnGap: tokens.spacingHorizontalXL,
+    '@media (min-width: 1600px)': { columnCount: 3 },
+  },
+  // `inline-flex` + largura cheia: bloco inline nunca é partido entre duas
+  // colunas (mais garantido que só `breakInside` no WebKitGTK). O espaço
+  // entre blocos vem da margem, já que `gap` não vale entre itens de coluna.
+  system: {
+    display: 'inline-flex',
+    flexDirection: 'column',
+    width: '100%',
+    gap: tokens.spacingVerticalS,
+    breakInside: 'avoid',
+    marginBottom: tokens.spacingVerticalXL,
+  },
+  list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
   row: {
     display: 'flex',
     alignItems: 'center',
@@ -34,7 +53,17 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
   },
-  meta: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  meta: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, overflowWrap: 'anywhere' },
+  // Selos + botão: nunca encolhem nem quebram — quem quebra linha é a nota
+  // à esquerda (sem isto, "presente, hash não bate" vazava da pílula e o
+  // "Remover" era cortado nas colunas estreitas).
+  actions: {
+    display: 'flex',
+    gap: tokens.spacingHorizontalS,
+    alignItems: 'center',
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
+  },
 })
 
 type Key = { systemId: string; filename: string }
@@ -96,104 +125,106 @@ export function SettingsBios() {
         <Text as="strong" weight="semibold">nunca baixa BIOS</Text> — são copyright da fabricante; importe um arquivo
         que você já possui legalmente.
       </Caption1>
-      {[...bySystem.entries()].map(([systemId, files]) => (
-        <div key={systemId} className={styles.system}>
-          <Body1>
-            <Text as="strong" weight="semibold">{platformLabel(systemId).toUpperCase()}</Text>
-          </Body1>
-          <div className={styles.list}>
-            {files.map((f) => {
-              const key: Key = { systemId, filename: f.filename }
-              const busy =
-                (doImport.isPending && sameKey(doImport.variables, key)) ||
-                (doRemove.isPending && sameKey(doRemove.variables, key))
-              return (
-                <div key={f.filename} className={styles.row}>
-                  <span className={styles.meta}>
-                    <Body1>
-                      <code>{f.filename}</code>
-                      {f.required && (
-                        <Badge appearance="tint" color="danger" style={{ marginLeft: 8 }}>
-                          obrigatório
+      <div className={styles.groups}>
+        {[...bySystem.entries()].map(([systemId, files]) => (
+          <div key={systemId} className={styles.system}>
+            <Body1>
+              <Text as="strong" weight="semibold">{platformLabel(systemId).toUpperCase()}</Text>
+            </Body1>
+            <div className={styles.list}>
+              {files.map((f) => {
+                const key: Key = { systemId, filename: f.filename }
+                const busy =
+                  (doImport.isPending && sameKey(doImport.variables, key)) ||
+                  (doRemove.isPending && sameKey(doRemove.variables, key))
+                return (
+                  <div key={f.filename} className={styles.row}>
+                    <span className={styles.meta}>
+                      <Body1>
+                        <code>{f.filename}</code>
+                        {f.required && (
+                          <Badge appearance="tint" color="danger" style={{ marginLeft: 8 }}>
+                            obrigatório
+                          </Badge>
+                        )}
+                      </Body1>
+                      <Caption1>{f.note}</Caption1>
+                    </span>
+                    <span className={styles.actions}>
+                      {!f.present && (
+                        <Badge appearance="tint" color={f.required ? 'danger' : 'informative'}>
+                          faltando
                         </Badge>
                       )}
-                    </Body1>
-                    <Caption1>{f.note}</Caption1>
-                  </span>
-                  <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    {!f.present && (
-                      <Badge appearance="tint" color={f.required ? 'danger' : 'informative'}>
-                        faltando
-                      </Badge>
-                    )}
-                    {f.present && f.hashOk === false && (
-                      <Badge appearance="tint" color="warning" icon={<WarningFilled />}>
-                        presente, hash não bate
-                      </Badge>
-                    )}
-                    {f.present && f.hashOk !== false && (
-                      <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                        presente
-                      </Badge>
-                    )}
-                    {f.present ? (
-                      <Button
-                        size="small"
-                        appearance="subtle"
-                        icon={<DeleteRegular />}
-                        disabled={busy}
-                        onClick={() => doRemove.mutate(key)}
-                      >
-                        Remover
-                      </Button>
-                    ) : (
-                      <Button
-                        size="small"
-                        appearance="primary"
-                        icon={<DocumentArrowUpRegular />}
-                        disabled={busy}
-                        onClick={() => doImport.mutate(key)}
-                      >
-                        {busy ? 'Importando…' : 'Importar…'}
-                      </Button>
-                    )}
-                  </span>
-                </div>
-              )
-            })}
+                      {f.present && f.hashOk === false && (
+                        <Badge appearance="tint" color="warning" icon={<WarningFilled />}>
+                          presente, hash não bate
+                        </Badge>
+                      )}
+                      {f.present && f.hashOk !== false && (
+                        <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
+                          presente
+                        </Badge>
+                      )}
+                      {f.present ? (
+                        <Button
+                          size="small"
+                          appearance="subtle"
+                          icon={<DeleteRegular />}
+                          disabled={busy}
+                          onClick={() => doRemove.mutate(key)}
+                        >
+                          Remover
+                        </Button>
+                      ) : (
+                        <Button
+                          size="small"
+                          appearance="primary"
+                          icon={<DocumentArrowUpRegular />}
+                          disabled={busy}
+                          onClick={() => doImport.mutate(key)}
+                        >
+                          {busy ? 'Importando…' : 'Importar…'}
+                        </Button>
+                      )}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      ))}
-      <div className={styles.system}>
-        <Body1>
-          <Text as="strong" weight="semibold">{platformLabel('psp').toUpperCase()}</Text>
-        </Body1>
-        <div className={styles.row}>
-          <span className={styles.meta}>
-            <Body1>
-              <code>PPSSPP/</code>
-            </Body1>
-            <Caption1>
-              Não é BIOS: fontes e arquivos do próprio emulador PPSSPP (GPL, baixados do buildbot da libretro).
-              Sem eles, alguns jogos mostram texto quebrado nos diálogos do sistema.
-            </Caption1>
-          </span>
-          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {ppsspp.data && (
-              <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                instalado
-              </Badge>
-            )}
-            <Button
-              size="small"
-              appearance={ppsspp.data ? 'subtle' : 'primary'}
-              icon={<ArrowDownloadRegular />}
-              disabled={getPpsspp.isPending}
-              onClick={() => getPpsspp.mutate()}
-            >
-              {getPpsspp.isPending ? 'Baixando…' : ppsspp.data ? 'Atualizar' : 'Baixar'}
-            </Button>
-          </span>
+        ))}
+        <div className={styles.system}>
+          <Body1>
+            <Text as="strong" weight="semibold">{platformLabel('psp').toUpperCase()}</Text>
+          </Body1>
+          <div className={styles.row}>
+            <span className={styles.meta}>
+              <Body1>
+                <code>PPSSPP/</code>
+              </Body1>
+              <Caption1>
+                Não é BIOS: fontes e arquivos do próprio emulador PPSSPP (GPL, baixados do buildbot da libretro).
+                Sem eles, alguns jogos mostram texto quebrado nos diálogos do sistema.
+              </Caption1>
+            </span>
+            <span className={styles.actions}>
+              {ppsspp.data && (
+                <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
+                  instalado
+                </Badge>
+              )}
+              <Button
+                size="small"
+                appearance={ppsspp.data ? 'subtle' : 'primary'}
+                icon={<ArrowDownloadRegular />}
+                disabled={getPpsspp.isPending}
+                onClick={() => getPpsspp.mutate()}
+              >
+                {getPpsspp.isPending ? 'Baixando…' : ppsspp.data ? 'Atualizar' : 'Baixar'}
+              </Button>
+            </span>
+          </div>
         </div>
       </div>
     </div>

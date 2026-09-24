@@ -16,12 +16,12 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalL,
     maxWidth: "640px",
   },
-  // Abas de lista em grade (Cores) usam a largura da tela — 640px é bom pra
+  // Abas de lista em grade (Cores, BIOS) usam a largura da tela — 640px é bom pra
   // formulário, mas deixava as colunas de cores espremidas.
   wide: { maxWidth: "1400px" },
 });
 
-const WIDE_TABS = new Set(["cores"]);
+const WIDE_TABS = new Set(["cores", "bios"]);
 
 const TABS = [
   { key: "perfil", label: "Perfil" },

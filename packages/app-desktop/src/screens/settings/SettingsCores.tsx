@@ -35,7 +35,7 @@ const useStyles = makeStyles({
   list: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-    gap: tokens.spacingVerticalXS,
+    gap: tokens.spacingVerticalM,
     '@media (min-width: 1600px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' },
   },
   // mensagem de lista vazia ocupa a linha inteira do grid
@@ -178,7 +178,7 @@ function Catalog() {
               </Caption1>
             </span>
             {c.installed ? (
-              <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
                 <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
                   instalado
                 </Badge>
