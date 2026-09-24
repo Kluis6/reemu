@@ -26,7 +26,9 @@ fn has(hay: &[u8], needle: &[u8]) -> bool {
 /// `.cue` aponta pro `.bin`/`.img` da trilha 1 — abre esse e fareja nele.
 fn sniff_cue(path: &Path) -> Option<&'static str> {
     let text = std::fs::read_to_string(path).ok()?;
-    let line = text.lines().find(|l| l.trim_start().to_ascii_uppercase().starts_with("FILE"))?;
+    let line = text
+        .lines()
+        .find(|l| l.trim_start().to_ascii_uppercase().starts_with("FILE"))?;
     // FILE "trilha 1.bin" BINARY  → pega o que está entre aspas
     let start = line.find('"')? + 1;
     let end = line[start..].find('"')? + start;
@@ -64,9 +66,7 @@ fn sniff_bytes(b: &[u8]) -> Option<&'static str> {
     if has(b, b"BOOT2") || has(b, b"cdrom0:") {
         return Some("ps2");
     }
-    if has(b, b"PLAYSTATION")
-        || has(b, b"Sony Computer Entertainment")
-        || has(b, b"BOOT = cdrom:")
+    if has(b, b"PLAYSTATION") || has(b, b"Sony Computer Entertainment") || has(b, b"BOOT = cdrom:")
     {
         return Some("psx");
     }

@@ -286,14 +286,20 @@ void main() {}
         let dir = tempfile::tempdir().unwrap();
         let w = |n: &str, c: &str| std::fs::write(dir.path().join(n), c).unwrap();
         w("helper.h", "int orient(vec2 s) { return 0; }\n");
-        w("v.h", "#pragma stage vertex\n#include \"helper.h\"\nvoid main() {}\n");
+        w(
+            "v.h",
+            "#pragma stage vertex\n#include \"helper.h\"\nvoid main() {}\n",
+        );
         w(
             "f.h",
             "#pragma stage fragment\n#include \"helper.h\"\n\
              layout(location=0) out vec4 c;\n\
              void main() { c = vec4(float(orient(vec2(1.0)))); }\n",
         );
-        w("m.slang", "#version 450\n#include \"v.h\"\n#include \"f.h\"\n");
+        w(
+            "m.slang",
+            "#version 450\n#include \"v.h\"\n#include \"f.h\"\n",
+        );
         let s = preprocess_file(&dir.path().join("m.slang")).unwrap();
         assert!(s.vertex_glsl.contains("int orient"), "vertex");
         assert!(s.fragment_glsl.contains("int orient"), "fragment TAMBÉM");

@@ -190,11 +190,7 @@ impl CoreOptionsStore for CoreOptionsRepo {
         }
     }
 
-    async fn reset_scope(
-        &self,
-        core_id: &str,
-        rom_id: Option<&str>,
-    ) -> Result<(), RepoError> {
+    async fn reset_scope(&self, core_id: &str, rom_id: Option<&str>) -> Result<(), RepoError> {
         match rom_id {
             None => {
                 sqlx::query("DELETE FROM core_options_values WHERE core_id = ?1")
@@ -204,14 +200,12 @@ impl CoreOptionsStore for CoreOptionsRepo {
                     .map_err(be)?;
             }
             Some(rid) => {
-                sqlx::query(
-                    "DELETE FROM core_option_overrides WHERE rom_id = ?1 AND core_id = ?2",
-                )
-                .bind(rid)
-                .bind(core_id)
-                .execute(&self.db)
-                .await
-                .map_err(be)?;
+                sqlx::query("DELETE FROM core_option_overrides WHERE rom_id = ?1 AND core_id = ?2")
+                    .bind(rid)
+                    .bind(core_id)
+                    .execute(&self.db)
+                    .await
+                    .map_err(be)?;
             }
         }
         Ok(())

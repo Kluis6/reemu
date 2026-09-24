@@ -446,8 +446,9 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                 let idle = matches!(state.session.state(), emu_session::SessionState::Idle);
                 let vm = *state.video_menu.lock().unwrap_or_else(|p| p.into_inner());
 
-                let loading =
-                    state.loading_game.load(std::sync::atomic::Ordering::Relaxed);
+                let loading = state
+                    .loading_game
+                    .load(std::sync::atomic::Ordering::Relaxed);
 
                 use commands::VideoMenu::*;
                 match vm {
@@ -629,13 +630,15 @@ fn dev_autoload(session: &std::sync::Arc<emu_session::EmuSession>) {
         return;
     };
     let session = std::sync::Arc::clone(session);
-    std::thread::spawn(move || match session.load(&core, &rom, std::collections::HashMap::new()) {
-        Ok(av) => log::info!(
-            "dev-autoload: core {}x{} @ {} fps",
-            av.geometry.base_width,
-            av.geometry.base_height,
-            av.timing.fps
-        ),
-        Err(e) => log::error!("dev-autoload: {e}"),
-    });
+    std::thread::spawn(
+        move || match session.load(&core, &rom, std::collections::HashMap::new()) {
+            Ok(av) => log::info!(
+                "dev-autoload: core {}x{} @ {} fps",
+                av.geometry.base_width,
+                av.geometry.base_height,
+                av.timing.fps
+            ),
+            Err(e) => log::error!("dev-autoload: {e}"),
+        },
+    );
 }

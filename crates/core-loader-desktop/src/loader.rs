@@ -422,17 +422,23 @@ fn setup_vk_context(
 ) -> Result<Box<VkFrameBridge>, CoreLoadError> {
     // O core registrou um `create_device` na negociação? (Beetle EXIGE que o
     // frontend o chame — o `context_reset` dele aborta se `context == NULL`.)
-    let core_owned = ffi_state::lock().as_ref().and_then(|s| s.vk_negotiation).and_then(|p| {
-        // SAFETY: o `SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE` só guarda `p`
-        // depois de checar `interface_type == ..._VULKAN`; o ponteiro vive na
-        // .so do core, carregada por toda a vida do `DesktopCore`.
-        let iface =
-            unsafe { &*(p as *const vk_sys::retro_hw_render_context_negotiation_interface_vulkan) };
-        iface.create_device.map(|cd| domain::core_loader::VkNegotiation {
-            get_application_info: iface.get_application_info.map_or(0, |f| f as usize),
-            create_device: cd as usize,
-        })
-    });
+    let core_owned = ffi_state::lock()
+        .as_ref()
+        .and_then(|s| s.vk_negotiation)
+        .and_then(|p| {
+            // SAFETY: o `SET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE` só guarda `p`
+            // depois de checar `interface_type == ..._VULKAN`; o ponteiro vive na
+            // .so do core, carregada por toda a vida do `DesktopCore`.
+            let iface = unsafe {
+                &*(p as *const vk_sys::retro_hw_render_context_negotiation_interface_vulkan)
+            };
+            iface
+                .create_device
+                .map(|cd| domain::core_loader::VkNegotiation {
+                    get_application_info: iface.get_application_info.map_or(0, |f| f as usize),
+                    create_device: cd as usize,
+                })
+        });
 
     let bring_up = || -> Result<VkContext, CoreLoadError> {
         let mut cfg = VkConfig::default();

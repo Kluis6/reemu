@@ -1231,9 +1231,7 @@ fn ends_with_return(body: &str) -> bool {
         return false; // termina em `}` de bloco (if/else, laço…)
     }
     let t = &t[..t.len() - 1];
-    let last = t
-        .rfind([';', '{', '}'])
-        .map_or(t, |p| &t[p + 1..]);
+    let last = t.rfind([';', '{', '}']).map_or(t, |p| &t[p + 1..]);
     last.trim_start().starts_with("return")
 }
 
@@ -2231,7 +2229,10 @@ void main() {
         assert!(out.contains("#define chained_SLANG_T a_SLANG_T"), "{out}");
         assert!(out.contains("#define a_SLANG_T Source_SLANG_T"));
         assert!(out.contains("#define mixed Source"), "misto fica intacto");
-        assert!(out.contains("#define tex Source"), "nome de parâmetro fica intacto");
+        assert!(
+            out.contains("#define tex Source"),
+            "nome de parâmetro fica intacto"
+        );
     }
 
     /// Função não-void sem `return` final (todos os `return` dentro de
@@ -2277,10 +2278,19 @@ void main() { FragColor = vec4(slot(vUV * 100.0) * pick(vUV.x), 1.0); }
                    inline float4 e(float x) {\n#if X\n return float4(x);\n#endif\n}\n";
         let out = ensure_trailing_returns(src);
         assert!(out.contains("float a(float x) { return x; }"), "{out}");
-        assert!(out.contains("return vec3(1.0);  return vec3(0.0); }"), "{out}");
+        assert!(
+            out.contains("return vec3(1.0);  return vec3(0.0); }"),
+            "{out}"
+        );
         assert!(out.contains("void c() { }"), "{out}");
-        assert!(out.contains("S d() { if (true) return S(1); }"), "struct fica: {out}");
-        assert!(!out.contains("float4(0.0)"), "return dentro de #if conta: {out}");
+        assert!(
+            out.contains("S d() { if (true) return S(1); }"),
+            "struct fica: {out}"
+        );
+        assert!(
+            !out.contains("float4(0.0)"),
+            "return dentro de #if conta: {out}"
+        );
     }
 
     #[test]
@@ -2290,15 +2300,30 @@ void main() { FragColor = vec4(slot(vUV * 100.0) * pick(vUV.x), 1.0); }
                     layout(location = 4) out uvec2 u;\n\
                     layout(location = 5) out float w;\n";
         let out = flat_integer_varyings(vert, Stage::Vertex);
-        assert!(out.contains("layout(location = 0) in int attr;"), "atributo: {out}");
-        assert!(out.contains("layout(location = 2) flat out int curfield;"), "{out}");
-        assert!(out.contains("layout(location = 4) flat out uvec2 u;"), "{out}");
+        assert!(
+            out.contains("layout(location = 0) in int attr;"),
+            "atributo: {out}"
+        );
+        assert!(
+            out.contains("layout(location = 2) flat out int curfield;"),
+            "{out}"
+        );
+        assert!(
+            out.contains("layout(location = 4) flat out uvec2 u;"),
+            "{out}"
+        );
         assert!(out.contains("layout(location = 5) out float w;"), "{out}");
         let frag = "layout(location = 3) in int scanlines;\n\
                     layout(location = 0) out uvec4 FragColor;\n";
         let out = flat_integer_varyings(frag, Stage::Fragment);
-        assert!(out.contains("layout(location = 3) flat in int scanlines;"), "{out}");
-        assert!(out.contains("layout(location = 0) out uvec4 FragColor;"), "alvo: {out}");
+        assert!(
+            out.contains("layout(location = 3) flat in int scanlines;"),
+            "{out}"
+        );
+        assert!(
+            out.contains("layout(location = 0) out uvec4 FragColor;"),
+            "alvo: {out}"
+        );
     }
 
     /// Variável local com o mesmo nome de um sampler global (crt-geom-deluxe).
@@ -2340,9 +2365,15 @@ void main() { FragColor = vec4(pick(1) * texture(delta, vUV).rgb, 1.0); }
             one_param_macro("#define SMAATexture2D(tex) sampler2D tex"),
             Some(("SMAATexture2D".into(), "sampler2D $".into()))
         );
-        assert_eq!(kind("#define T(tex) Texture2D tex"), Some("Texture2D $".into()));
+        assert_eq!(
+            kind("#define T(tex) Texture2D tex"),
+            Some("Texture2D $".into())
+        );
         assert_eq!(kind("#define T(a, b) sampler2D a"), None);
-        assert_eq!(kind("#define T(tex) sampler2D other"), Some("sampler2D other".into()));
+        assert_eq!(
+            kind("#define T(tex) sampler2D other"),
+            Some("sampler2D other".into())
+        );
         assert_eq!(
             one_param_macro("#define SMAATexturePass2D(tex) tex"),
             Some(("SMAATexturePass2D".into(), "$".into()))

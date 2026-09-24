@@ -527,8 +527,7 @@ async fn shader_scope_args(
             let sys = match system_id {
                 Some(s) if !s.is_empty() => s.to_string(),
                 _ => {
-                    let rid = rom_id
-                        .ok_or("scope 'system' precisa de system_id ou rom_id")?;
+                    let rid = rom_id.ok_or("scope 'system' precisa de system_id ou rom_id")?;
                     let s = system_of(pool, Some(rid)).await;
                     if s.is_empty() {
                         return Err("não consegui achar o sistema do jogo".into());
@@ -678,7 +677,13 @@ fn deco_viewport(
     h: u32,
 ) -> Option<crate::gpu::DecoViewport> {
     if let Some(v) = library_scan::viewport_for_image(path) {
-        log::info!("decoração: viewport do .cfg ({},{} {}×{})", v.x, v.y, v.w, v.h);
+        log::info!(
+            "decoração: viewport do .cfg ({},{} {}×{})",
+            v.x,
+            v.y,
+            v.w,
+            v.h
+        );
         return Some(crate::gpu::DecoViewport {
             x: v.x as f32,
             y: v.y as f32,
@@ -690,7 +695,10 @@ fn deco_viewport(
         Some(v) => {
             log::info!(
                 "decoração: viewport pela transparência ({},{} {}×{})",
-                v.x, v.y, v.w, v.h
+                v.x,
+                v.y,
+                v.w,
+                v.h
             );
             Some(v)
         }
@@ -1101,13 +1109,8 @@ pub async fn set_shader(
 
     let Some(scope) = scope else { return Ok(()) };
     let pool = pool(&state)?;
-    let (sc_scope, sys, rid) = shader_scope_args(
-        &pool,
-        &scope,
-        system_id.as_deref(),
-        rom_id.as_deref(),
-    )
-    .await?;
+    let (sc_scope, sys, rid) =
+        shader_scope_args(&pool, &scope, system_id.as_deref(), rom_id.as_deref()).await?;
     let sc = db::ShaderChainRepo::new(pool);
     if clearing {
         return sc
@@ -1644,7 +1647,11 @@ pub async fn get_core_options(
         };
         (defs, core_values, rom_values)
     } else if live_matches {
-        (state.session.core_options().0, Default::default(), Default::default())
+        (
+            state.session.core_options().0,
+            Default::default(),
+            Default::default(),
+        )
     } else {
         (Vec::new(), Default::default(), Default::default())
     };

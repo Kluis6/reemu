@@ -9,9 +9,9 @@
 //! mudança de comportamento — só o "escrever em `Shared`" de
 //! `emu_session::core_loop` vira "mandar mensagem `ToParent`".
 
-use core_ipc::{Channel, FrameKind, PortInput, ToChild, ToParent};
 #[cfg(unix)]
 use core_ipc::HwPlaneMeta;
+use core_ipc::{Channel, FrameKind, PortInput, ToChild, ToParent};
 use core_loader_desktop::{DesktopCore, DesktopCoreLoader};
 use domain::core_loader::{CoreId, LoadedCore};
 use domain::frame_source::{FrameOrigin, FrameSource};

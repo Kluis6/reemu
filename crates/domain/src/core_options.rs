@@ -66,8 +66,7 @@ pub trait CoreOptionsStore: Send + Sync {
 
     /// Limpa TODOS os valores de um escopo (volta pro default do schema / pro
     /// valor do core). `rom_id = None` → por core; `Some(rid)` → do jogo.
-    async fn reset_scope(&self, core_id: &str, rom_id: Option<&str>)
-        -> Result<(), RepoError>;
+    async fn reset_scope(&self, core_id: &str, rom_id: Option<&str>) -> Result<(), RepoError>;
 
     /// Substitui o schema inteiro de um core (chamado no load, quando o core
     /// declara `retro_core_options`). Idempotente.

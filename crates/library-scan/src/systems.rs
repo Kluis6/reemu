@@ -118,14 +118,23 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         "virtualboy" | "virtual boy" | "vb" | "nintendo - virtual boy" => "vb",
         "colecovision" | "coleco" | "coleco - colecovision" => "coleco",
         "intellivision" | "intv" | "mattel - intellivision" => "intellivision",
-        "nds" | "nintendo ds" | "nintendods" | "nintendo - nintendo ds" | "dsi"
-        | "nintendo dsi" | "nintendo - nintendo dsi" => "nds",
+        "nds"
+        | "nintendo ds"
+        | "nintendods"
+        | "nintendo - nintendo ds"
+        | "dsi"
+        | "nintendo dsi"
+        | "nintendo - nintendo dsi" => "nds",
         "sg1000" | "sg-1000" | "sega sg-1000" | "sega - sg-1000" => "sg1000",
         "supergrafx" | "sgx" | "pc engine supergrafx" | "nec - pc engine supergrafx" => {
             "supergrafx"
         }
         "atari5200" | "atari 5200" | "5200" | "atari - 5200" => "atari5200",
-        "atari800" | "atari8bit" | "atari 8-bit" | "atari 800" | "atarixl"
+        "atari800"
+        | "atari8bit"
+        | "atari 8-bit"
+        | "atari 800"
+        | "atarixl"
         | "atari - 8-bit family" => "atari8bit",
         "jaguar" | "atarijaguar" | "atari jaguar" | "atari - jaguar" => "jaguar",
         "pokemini" | "pokemon mini" | "nintendo - pokemon mini" => "pokemini",
@@ -142,11 +151,18 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         "ps2" | "playstation2" | "playstation 2" | "sony - playstation 2" => "ps2",
         "saturn" | "sega saturn" | "sega - saturn" => "saturn",
         "dreamcast" | "dc" | "sega dreamcast" | "sega - dreamcast" => "dreamcast",
-        "naomi" | "sega naomi" | "sega - naomi" | "naomi2" | "naomi 2" | "sega - naomi 2" => "naomi",
+        "naomi" | "sega naomi" | "sega - naomi" | "naomi2" | "naomi 2" | "sega - naomi 2" => {
+            "naomi"
+        }
         "atomiswave" | "aw" | "sammy atomiswave" | "sammy - atomiswave" => "atomiswave",
         "psp" | "playstationportable" | "sony - playstation portable" => "psp",
         "segacd" | "mega-cd" | "megacd" | "sega cd" | "sega - mega-cd - sega cd" => "segacd",
-        "pcenginecd" | "turbografxcd" | "turbografx-cd" | "tgcd" | "pce-cd" | "pcecd"
+        "pcenginecd"
+        | "turbografxcd"
+        | "turbografx-cd"
+        | "tgcd"
+        | "pce-cd"
+        | "pcecd"
         | "nec - pc engine cd - turbografx-cd" => "pcenginecd",
         "neogeocd" | "neo geo cd" | "neogeo cd" | "ngcd" | "snk - neo geo cd" => "neogeocd",
         "cdi" | "cd-i" | "cdimono1" | "philips cd-i" | "philips - cd-i" => "cdi",

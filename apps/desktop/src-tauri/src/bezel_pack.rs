@@ -185,8 +185,7 @@ pub async fn download(
         }
         let _ = std::fs::remove_file(&zip_tmp);
         std::fs::remove_dir_all(&dest).ok();
-        std::fs::rename(&tmp, &dest)
-            .map_err(|e| format!("mover pra {}: {e}", dest.display()))?;
+        std::fs::rename(&tmp, &dest).map_err(|e| format!("mover pra {}: {e}", dest.display()))?;
         log::info!("bezel: pack de {sid} extraído em {}", dest.display());
         Ok(())
     })
@@ -214,7 +213,9 @@ fn remap_entry(name: &Path, sid: &str) -> Option<PathBuf> {
     // pula o dir raiz do zip (`bezelproject-X-master/`)
     let after_root = comps.get(1..)?;
     let rest = match after_root {
-        [a, b, tail @ ..] if a.eq_ignore_ascii_case("retroarch") && b.eq_ignore_ascii_case("overlay") => {
+        [a, b, tail @ ..]
+            if a.eq_ignore_ascii_case("retroarch") && b.eq_ignore_ascii_case("overlay") =>
+        {
             tail
         }
         _ => return None,

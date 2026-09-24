@@ -18,9 +18,9 @@ const ROM_EXTS: &[&str] = &[
     "nes", "fds", "unif", "unf", "sfc", "smc", "swc", "fig", "gb", "gbc", "gba", "srl", "n64",
     "z64", "v64", "ndd", "md", "smd", "gen", "sgd", "sms", "gg", "pce", "sgx", "a26", "a78", "lnx",
     "ws", "wsc", "ngp", "ngc", "32x", "vb", "col", "int", "nds", "dsi", "ids", "sg", "a52", "atr",
-    "xfd", "atx", "xex", "j64", "jag", "min", "sv", "mx1", "mx2", "vec", "d64", "d71", "d81", "g64",
-    "t64", "x64", "crt", "adf", "adz", "dms", "hdf", "tzx", "z80", "rzx", "szx", "scl", "trd",
-    "cdt", "cpr", "cue", "chd", "iso", "pbp",
+    "xfd", "atx", "xex", "j64", "jag", "min", "sv", "mx1", "mx2", "vec", "d64", "d71", "d81",
+    "g64", "t64", "x64", "crt", "adf", "adz", "dms", "hdf", "tzx", "z80", "rzx", "szx", "scl",
+    "trd", "cdt", "cpr", "cue", "chd", "iso", "pbp",
 ];
 
 /// ROM extraída pra um arquivo temporário — apagado no `Drop`.

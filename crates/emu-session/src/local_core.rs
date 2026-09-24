@@ -89,9 +89,7 @@ impl LocalCore {
         let av = core.system_av_info();
         let fps = av.timing.fps.max(1.0);
         let sample_rate = (av.timing.sample_rate.round() as u32).max(1);
-        log::info!(
-            "core Vulkan {core_id} in-process: fps={fps:.3} sample_rate={sample_rate} Hz"
-        );
+        log::info!("core Vulkan {core_id} in-process: fps={fps:.3} sample_rate={sample_rate} Hz");
 
         Ok((
             Self {
@@ -157,9 +155,7 @@ impl LocalCore {
         self.core.save_ram()
     }
 
-    pub(crate) fn core_options(
-        &self,
-    ) -> (Vec<CoreOptionDefinition>, HashMap<String, String>) {
+    pub(crate) fn core_options(&self) -> (Vec<CoreOptionDefinition>, HashMap<String, String>) {
         (
             core_loader_desktop::core_options(),
             core_loader_desktop::core_option_values(),
@@ -176,8 +172,7 @@ impl LocalCore {
         self.next_deadline += self.frame_budget;
         let now = Instant::now();
         if now < self.next_deadline {
-            if let Some(coarse) =
-                (self.next_deadline - now).checked_sub(Duration::from_micros(600))
+            if let Some(coarse) = (self.next_deadline - now).checked_sub(Duration::from_micros(600))
             {
                 std::thread::sleep(coarse);
             }

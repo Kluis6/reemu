@@ -259,10 +259,7 @@ pub fn transparent_bbox(rgba: &[u8], w: u32, h: u32) -> Option<crate::gpu::DecoV
     // Rejeita só o degenerado (janela minúscula, ou a imagem TODA transparente
     // = sem moldura de verdade). Janela de altura ou largura cheia é normal num
     // bezel com arte só nas laterais (GBA, GB) ou só em cima/embaixo.
-    if bw < fw * 0.10
-        || bh < fh * 0.10
-        || (bw > fw * 0.985 && bh > fh * 0.985)
-    {
+    if bw < fw * 0.10 || bh < fh * 0.10 || (bw > fw * 0.985 && bh > fh * 0.985) {
         return None;
     }
     let mut clear_in = 0u64;

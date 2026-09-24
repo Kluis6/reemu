@@ -241,7 +241,11 @@ async fn generic_extension_counts_only_inside_its_system_folder() {
     // `.bin` dentro da pasta de um sistema que NÃO o aceita → ignorado
     write(&dir, "nds/extra.bin", b"z");
 
-    assert_eq!(library_scan::count_roms(&dir), 4, "barra de progresso usa a mesma regra");
+    assert_eq!(
+        library_scan::count_roms(&dir),
+        4,
+        "barra de progresso usa a mesma regra"
+    );
 
     let db = db::connect_in_memory().await.unwrap();
     let repo = db::RomsRepo::new(db);

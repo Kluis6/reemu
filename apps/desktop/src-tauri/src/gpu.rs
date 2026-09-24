@@ -470,7 +470,10 @@ unsafe fn wgpu_adopt_reqs(
     instance_exts: &[&'static std::ffi::CStr],
     api_version: u32,
     phys: ash::vk::PhysicalDevice,
-) -> Option<(Vec<&'static std::ffi::CStr>, ash::vk::PhysicalDeviceFeatures)> {
+) -> Option<(
+    Vec<&'static std::ffi::CStr>,
+    ash::vk::PhysicalDeviceFeatures,
+)> {
     let hal = unsafe {
         wgpu::hal::vulkan::Instance::from_raw(
             entry.clone(),
@@ -665,7 +668,10 @@ impl VkBlit {
             let hd = device.as_hal::<wgpu::hal::api::Vulkan>()?;
             let phys = hd.raw_physical_device();
             let instance = hd.shared_instance().raw_instance().clone();
-            (hd.raw_device().clone(), instance.get_physical_device_memory_properties(phys))
+            (
+                hd.raw_device().clone(),
+                instance.get_physical_device_memory_properties(phys),
+            )
         };
         let raw_queue = unsafe { queue.as_hal::<wgpu::hal::api::Vulkan>()?.as_raw() };
 
@@ -688,10 +694,8 @@ impl VkBlit {
             )
         }
         .ok()?[0];
-        let fence = unsafe {
-            raw_device.create_fence(&vk::FenceCreateInfo::default(), None)
-        }
-        .ok()?;
+        let fence =
+            unsafe { raw_device.create_fence(&vk::FenceCreateInfo::default(), None) }.ok()?;
 
         Some(Self {
             device: raw_device,
@@ -714,7 +718,13 @@ impl VkBlit {
     }
 
     /// Garante um alvo RGBA8 `w×h` no `slot`. `false` = falhou.
-    unsafe fn ensure_target(&mut self, _device: &wgpu::Device, slot: usize, w: u32, h: u32) -> bool {
+    unsafe fn ensure_target(
+        &mut self,
+        _device: &wgpu::Device,
+        slot: usize,
+        w: u32,
+        h: u32,
+    ) -> bool {
         use ash::vk;
         if self.targets.len() <= slot {
             self.targets.resize_with(slot + 1, || None);
@@ -734,7 +744,11 @@ impl VkBlit {
                 &vk::ImageCreateInfo::default()
                     .image_type(vk::ImageType::TYPE_2D)
                     .format(vk::Format::R8G8B8A8_UNORM)
-                    .extent(vk::Extent3D { width: w, height: h, depth: 1 })
+                    .extent(vk::Extent3D {
+                        width: w,
+                        height: h,
+                        depth: 1,
+                    })
                     .mip_levels(1)
                     .array_layers(1)
                     .samples(vk::SampleCountFlags::TYPE_1)
@@ -811,7 +825,11 @@ impl VkBlit {
         let layers = vk::ImageSubresourceLayers::default()
             .aspect_mask(vk::ImageAspectFlags::COLOR)
             .layer_count(1);
-        let end = vk::Offset3D { x: w as i32, y: h as i32, z: 1 };
+        let end = vk::Offset3D {
+            x: w as i32,
+            y: h as i32,
+            z: 1,
+        };
         let ignore = vk::QUEUE_FAMILY_IGNORED;
 
         let ok = unsafe {
@@ -935,7 +953,11 @@ impl VkBlit {
     }
 
     /// `wgpu::TextureView` do RGBA8 do `slot` (embrulha a `VkImage` uma vez).
-    unsafe fn wgpu_view(&mut self, device: &wgpu::Device, slot: usize) -> Option<wgpu::TextureView> {
+    unsafe fn wgpu_view(
+        &mut self,
+        device: &wgpu::Device,
+        slot: usize,
+    ) -> Option<wgpu::TextureView> {
         use ash::vk::Handle as _;
         let t = self.targets.get_mut(slot).and_then(|s| s.as_mut())?;
         if t.wrapped.is_none() {
@@ -1271,9 +1293,8 @@ impl FrameProcessor {
         };
 
         let flags = wgpu::InstanceFlags::from_build_config().with_env();
-        let inst_exts =
-            wgpu::hal::vulkan::Instance::desired_extensions(&entry, api_version, flags)
-                .map_err(|e| format!("wgpu-hal desired_extensions: {e}"))?;
+        let inst_exts = wgpu::hal::vulkan::Instance::desired_extensions(&entry, api_version, flags)
+            .map_err(|e| format!("wgpu-hal desired_extensions: {e}"))?;
         let inst_exts_c: Vec<*const c_char> = inst_exts.iter().map(|e| e.as_ptr()).collect();
 
         let app = vk::ApplicationInfo::default().api_version(api_version);
@@ -1523,8 +1544,7 @@ impl FrameProcessor {
         let ar_src = self
             .decoration_aspect()
             .filter(|_| use_comp)
-            .or(Some(frame.metadata.aspect_ratio)
-                .filter(|a| *a > 0.0 && !quarter))
+            .or(Some(frame.metadata.aspect_ratio).filter(|a| *a > 0.0 && !quarter))
             .unwrap_or(out_w as f32 / out_h.max(1) as f32);
 
         let s = self.surface.as_ref().unwrap();
@@ -1700,7 +1720,8 @@ impl FrameProcessor {
         let (w, h, use_comp) = self.last_surface_out?;
         let src = if use_comp {
             &self.comp.target.as_ref()?.0
-        } else if let Some((t, _, _, _)) = self.rot_tgt.as_ref().filter(|_| self.rot_view.is_some()) {
+        } else if let Some((t, _, _, _)) = self.rot_tgt.as_ref().filter(|_| self.rot_view.is_some())
+        {
             t
         } else {
             &self.passes.last()?.target.as_ref()?.0
@@ -1937,7 +1958,9 @@ impl FrameProcessor {
             }
             FrameOrigin::HardwareTexture(handle) => {
                 if !self.bind_interop_input(handle.as_ref(), nw, nh, enc) {
-                    log::warn!("run_chain: bind_interop_input falhou pra {nw}x{nh} — pulando frame");
+                    log::warn!(
+                        "run_chain: bind_interop_input falhou pra {nw}x{nh} — pulando frame"
+                    );
                     return None;
                 }
                 // a entrada troca de slot a cada frame → rebuild de todo bg
@@ -2269,7 +2292,11 @@ impl FrameProcessor {
                 nw as f32 / nh.max(1) as f32
             };
             // com rotação de 90°/270° a AR de exibição inverte.
-            let dar = if quarter && dar0 > 0.0 { 1.0 / dar0 } else { dar0 };
+            let dar = if quarter && dar0 > 0.0 {
+                1.0 / dar0
+            } else {
+                dar0
+            };
             let (cx, cy, hw, hh) = match vp {
                 // Janela do jogo conhecida (do `.cfg` ou detectada pela
                 // transparência da arte): por padrão o jogo PREENCHE a janela
@@ -2413,7 +2440,9 @@ impl FrameProcessor {
             let ws = self.rb.slots[write_i].as_ref()?;
             let src_tex = if use_comp {
                 &self.comp.target.as_ref()?.0
-            } else if let Some((t, _, _, _)) = self.rot_tgt.as_ref().filter(|_| self.rot_view.is_some()) {
+            } else if let Some((t, _, _, _)) =
+                self.rot_tgt.as_ref().filter(|_| self.rot_view.is_some())
+            {
                 t
             } else {
                 &self.passes.last()?.target.as_ref()?.0
@@ -3536,10 +3565,7 @@ fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
 fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv); }
 "#;
 
-fn rotate_pipeline(
-    device: &wgpu::Device,
-    bgl: &wgpu::BindGroupLayout,
-) -> wgpu::RenderPipeline {
+fn rotate_pipeline(device: &wgpu::Device, bgl: &wgpu::BindGroupLayout) -> wgpu::RenderPipeline {
     let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("rot layout"),
         bind_group_layouts: &[Some(bgl)],
@@ -4159,12 +4185,12 @@ fn downsample_rgba8(src: &[u8], w: u32, h: u32) -> (Vec<u8>, u32, u32) {
 /// não tem.
 fn vk_format_to_wgpu(vk_format: u32) -> Option<wgpu::TextureFormat> {
     Some(match vk_format {
-        37 => wgpu::TextureFormat::Rgba8Unorm,     // R8G8B8A8_UNORM (vk_rendering, Beetle 32bpp)
+        37 => wgpu::TextureFormat::Rgba8Unorm, // R8G8B8A8_UNORM (vk_rendering, Beetle 32bpp)
         43 => wgpu::TextureFormat::Rgba8UnormSrgb, // R8G8B8A8_SRGB
-        44 => wgpu::TextureFormat::Bgra8Unorm,     // B8G8R8A8_UNORM
+        44 => wgpu::TextureFormat::Bgra8Unorm, // B8G8R8A8_UNORM
         50 => wgpu::TextureFormat::Bgra8UnormSrgb, // B8G8R8A8_SRGB
-        64 => wgpu::TextureFormat::Rgba16Float,    // R16G16B16A16_SFLOAT (Beetle HDR interno)
-        97 => wgpu::TextureFormat::Rgba16Float,    // (alias observado em drivers)
+        64 => wgpu::TextureFormat::Rgba16Float, // R16G16B16A16_SFLOAT (Beetle HDR interno)
+        97 => wgpu::TextureFormat::Rgba16Float, // (alias observado em drivers)
         // Packed 16-bit → `None`: o `bind_via_blit` converte com `vkCmdBlitImage`.
         4 | 6 | 7 | 8 => return None,
         other => {
@@ -4286,7 +4312,10 @@ mod tests {
         };
         let app = vk::ApplicationInfo::default().api_version(vk::API_VERSION_1_2);
         let Ok(instance) = (unsafe {
-            entry.create_instance(&vk::InstanceCreateInfo::default().application_info(&app), None)
+            entry.create_instance(
+                &vk::InstanceCreateInfo::default().application_info(&app),
+                None,
+            )
         }) else {
             eprintln!("sem ICD Vulkan — pulando");
             return;
@@ -5015,8 +5044,7 @@ mod tests {
         let rom = tmp.join(format!("reemu-b3b-{}.bin", std::process::id()));
         std::fs::write(&rom, b"").unwrap();
 
-        let session =
-            EmuSession::spawn(SessionConfig::new(tmp.clone(), tmp.clone(), tmp.clone()));
+        let session = EmuSession::spawn(SessionConfig::new(tmp.clone(), tmp.clone(), tmp.clone()));
         session.attach_vulkan_device(shared);
         session
             .load(
@@ -5057,6 +5085,9 @@ mod tests {
         session.unload().ok();
         let _ = std::fs::remove_file(&rom);
         std::env::remove_var("REEMU_HW");
-        assert!(got_color, "a chain nunca recebeu frame colorido pela sessão");
+        assert!(
+            got_color,
+            "a chain nunca recebeu frame colorido pela sessão"
+        );
     }
 }

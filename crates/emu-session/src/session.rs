@@ -1229,10 +1229,8 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 );
                                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(id.0.clone());
-                                *shared
-                                    .vk_local
-                                    .lock()
-                                    .unwrap_or_else(|p| p.into_inner()) = Some(lc);
+                                *shared.vk_local.lock().unwrap_or_else(|p| p.into_inner()) =
+                                    Some(lc);
                                 shared.vk_local_paused.store(false, Ordering::Release);
                                 shared.vk_local_active.store(true, Ordering::Release);
                                 shared.set_state(SessionState::Running);
@@ -1249,10 +1247,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 log::info!("core {}: {reason} — usando o processo filho", id.0);
                             }
                             Err(e) => {
-                                log::error!(
-                                    "etapa 12: LocalCore::load({}) FALHOU: {e}",
-                                    id.0
-                                );
+                                log::error!("etapa 12: LocalCore::load({}) FALHOU: {e}", id.0);
                                 let _ = reply.send(Err(e));
                                 continue;
                             }

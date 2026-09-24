@@ -9,7 +9,6 @@ use db::{
     ShaderChainRepo, SystemCoreRepo,
 };
 use domain::audio::{AudioConfig, AudioConfigRepository};
-use domain::profile::{Profile, ProfileRepository};
 use domain::core_loader::SystemCoreRepository;
 use domain::core_loader::{
     CoreRenderRequirements, InstalledCore, InstalledCoreRepository, RenderBackend,
@@ -17,6 +16,7 @@ use domain::core_loader::{
 use domain::core_options::{CoreOptionDefinition, CoreOptionType, CoreOptionsStore};
 use domain::library::{Rom, RomRepository};
 use domain::metadata::{MatchStatus, MetadataConfig, MetadataRepository, ScrapeCandidate};
+use domain::profile::{Profile, ProfileRepository};
 use domain::shader_chain::{
     AssignmentScope, ShaderChainResolver, ShaderChainStore, ShaderFormat, ShaderPreset,
 };

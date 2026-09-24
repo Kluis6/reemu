@@ -258,11 +258,14 @@ impl GlContext {
 
         let sync = sync_mode();
         if sync != SyncMode::Finish {
-            log::info!("HW render GL: sync mode {:?}", match sync {
-                SyncMode::Fence => "fence (glClientWaitSync)",
-                SyncMode::Flush => "flush (implicit dma_buf sync)",
-                SyncMode::Finish => unreachable!(),
-            });
+            log::info!(
+                "HW render GL: sync mode {:?}",
+                match sync {
+                    SyncMode::Fence => "fence (glClientWaitSync)",
+                    SyncMode::Flush => "flush (implicit dma_buf sync)",
+                    SyncMode::Finish => unreachable!(),
+                }
+            );
         }
 
         Ok(Self {
@@ -956,7 +959,10 @@ mod tests {
         }
         let (slot0, plane0) = ctx.finish_write_slot().expect("slot 0 sempre entrega Some");
         assert_eq!(slot0, 0);
-        assert!(plane0.is_some(), "1ª entrega do slot manda o fd (handed=false)");
+        assert!(
+            plane0.is_some(),
+            "1ª entrega do slot manda o fd (handed=false)"
+        );
         assert_eq!(
             &ctx.read_pixels(8, 8)[0..4],
             &[255, 0, 0, 255],

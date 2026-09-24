@@ -245,7 +245,9 @@ mod tests {
     #[test]
     fn pc_engine_cd_and_pc_fx_require_their_default_bios() {
         let pce = bios_files_for_system("pcenginecd");
-        assert!(pce.iter().any(|f| f.filename == "syscard3.pce" && f.required));
+        assert!(pce
+            .iter()
+            .any(|f| f.filename == "syscard3.pce" && f.required));
         assert_eq!(pce.iter().filter(|f| f.required).count(), 1);
         assert!(bios_files_for_system("pcfx")[0].required);
     }
@@ -262,7 +264,8 @@ mod tests {
                 for h in f.md5 {
                     assert_eq!(h.len(), 32, "{sys}/{}", f.filename);
                     assert!(
-                        h.chars().all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)),
+                        h.chars()
+                            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c)),
                         "{sys}/{}",
                         f.filename
                     );
