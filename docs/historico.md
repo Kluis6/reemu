@@ -568,6 +568,42 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-24 (madrugada) — metadata, DOS/ScummVM, PPSSPP, plano Rust**:
+  * **ScreenScraper em todos os sistemas do scan** (eram 15): ids tirados da
+    tabela do ES-DE (GPL, `ScreenScraper.cpp`) — os 15 que já existiam
+    batem com os de lá. Consulta também por **MD5** (`md5=`), e `rommd5`
+    igual conta como hash exato. Teste lê o `systems.rs` e exige id nos
+    dois provedores pra todo sistema.
+  * **TheGamesDB de reserva** quando o ScreenScraper não acha: busca por
+    nome (tags `(USA)`/`[!]` removidas) + plataforma (ids do
+    `GamesDBJSONScraper.cpp` do ES-DE), capa por `/Games/Images`. Sempre
+    pra revisão. Chave no chaveiro (conta `thegamesdb`; `credentials.rs`
+    generalizado pra N segredos, mesma migração/fallback). Não testado com
+    chave real. IGDB **não** feito (sem fonte pública dos ids de plataforma).
+  * Migration 0011 reenfileira os "não encontrado" (`external_id` vazio) —
+    sugestões rejeitadas pelo usuário não voltam (conferido com SQL).
+  * Selo de pendências de metadata no ícone de Configurações do rail.
+  * **DOS e ScummVM no scan**: `.scummvm`/`.dosz` exclusivos; `.zip/.exe/
+    .com/.bat/.conf` só SOLTOS na pasta `dos/` (`folder_only_flat` — os
+    `.exe` de dentro da pasta de um jogo não viram entradas). +3 variantes
+    do DOSBox no catálogo (127). Teste de scan com a árvore realista.
+  * **Loader respeita `block_extract` / extensão aceita pelo core**: não
+    extrai o `.zip` se o core quer o arquivo inteiro (regra do RetroArch).
+    Conferido no DOSBox Pure real (`block_extract = true`). Antes um `.bin`
+    dentro do zip de um jogo de DOS seria extraído e passado no lugar.
+  * **Assets do PPSSPP**: `system_files.rs` baixa `assets/system/PPSSPP.zip`
+    do buildbot (GPL, 193 arquivos), extrai em pasta temporária e troca
+    atomicamente; teste com o pacote real. Linha própria na tela de BIOS.
+  * Tela de BIOS usava um mapa de nomes próprio sem os sistemas novos
+    (Amiga/Atari/MSX/DS apareciam como id cru) — agora `platformLabel`.
+  * Aba Cores em grade de 2 colunas (3 a partir de 1600 px), com a área de
+    Configurações liberada até 1400 px só nessa aba; toast com mais padding.
+    Conferido por captura (Chrome headless com backend simulado).
+  * `docs/ai-context/14-emuladores-nativos-rust.md`: levantamento de
+    licenças (API do GitHub + texto) e plano de recriação em Rust a partir
+    de fontes permissivas (ares ISC como base), bloqueado até a
+    compatibilidade total com libretro.
+
 - **2026-09-24 (noite) — desempenho, tempo de jogo, tema, BIOS, teste
   intermitente** (medições com `REEMU_PERF=1`, core falso de teste):
   * `reemu-video-pump` dormia 15 ms fixos + render, fora de fase com os

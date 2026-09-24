@@ -88,20 +88,47 @@ Feito em 2026-09-24 (ver `docs/historico.md`): pump acorda no frame
 
 ### Funcionalidades
 
-- [ ] `todo` — Metadata: multi-provider (IGDB / TheGamesDB) + cascata,
-      rate-limit por provider, match por MD5, badge de pendências no rail.
-- [ ] `todo` — DOS e ScummVM (jogos são pastas/`.zip` sem extensão própria).
-- [ ] `todo` — PSP: baixar a pasta `assets` do PPSSPP (GPL) em
-      `<system>/PPSSPP/`, se os jogos mostrarem problema sem ela.
+- [ ] `blocked` — Metadata: IGDB como 3º provedor. Bloqueado por falta de
+      fonte pública confiável pros ids de plataforma do IGDB (a lista só
+      sai da API autenticada) — não implementar de memória. Alternativa
+      avaliada: o banco do LaunchBox (`gamesdb.launchbox-app.com/Metadata.zip`,
+      ~108 MB, atualizado diariamente) — conferir os termos de uso antes.
+- [ ] `todo` — Validar o TheGamesDB com uma chave real (o parser foi testado
+      com JSON no formato que o ES-DE lê, não com resposta capturada).
 - [ ] `todo` — `GET_INPUT_BITMASKS` não anunciado (cores caem no query por
       id; funciona, perde a otimização).
 
 ### Infra / qualidade
 
+- [ ] `todo` — **Teste de fumaça do catálogo**: job que baixa cada core do
+      catálogo (127) e o carrega com uma ROM de teste pública, em Linux e
+      Windows. Hoje só amostras foram carregadas à mão. Faz parte do portão
+      do projeto de emuladores nativos (abaixo).
+
 - [ ] `todo` — Etapa 11 (Android): `apps/mobile`, `packages/app-mobile`,
       `packages/ui`, `packages/shared`. Os pacotes compartilhados só nascem
       quando o mobile for o 2º consumidor. Esta máquina ainda precisa de NDK,
       JDK 17, `cmdline-tools` e targets Rust `*-linux-android*`.
+
+## Projeto futuro: emuladores nativos em Rust
+
+`blocked` — só começa quando o ReEmu for **totalmente compatível com cores
+libretro** (critérios na Fase 0 do plano). Plano completo, levantamento de
+licenças e ordem: [`docs/ai-context/14-emuladores-nativos-rust.md`](docs/ai-context/14-emuladores-nativos-rust.md).
+
+Resumo: recriar em Rust os emuladores a partir de fontes **livres e
+permissivas** (o ReEmu é MIT — traduzir código GPL obrigaria a virar GPL),
+substituindo os cores libretro sistema a sistema, sempre com o libretro
+como alternativa. Base principal: **ares** (ISC), que cobre quase todos os
+sistemas. Ordem, do mais fácil pro mais difícil:
+
+1. ColecoVision + SG-1000 → 2. Master System/Game Gear → 3. Game Boy/Color
+→ 4. NES (adaptar o TetaNES, Rust) → 5. Atari 2600 → 6. PC Engine →
+7. WonderSwan → 8. Neo Geo Pocket → 9. ZX Spectrum/MSX → 10. Atari 5200 →
+11. Mega Drive → 12. GBA → 13. SNES → 14. Neo Geo → 15. Sega CD/32X/PCE CD
+→ 16. Amiga → 17. C64 → 18. PlayStation → 19. N64 → 20. Saturn →
+21. DS → 22. PS2. Dreamcast, PSP, GameCube/Wii, 3DS, DOS e ScummVM ficam
+com libretro (só existem fontes GPL).
 
 ## Como atualizar
 
