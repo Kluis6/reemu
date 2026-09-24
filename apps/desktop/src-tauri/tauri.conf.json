@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../../../packages/app-desktop/dist",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeDevCommand": "pnpm --filter app-desktop dev",
+    "beforeDevCommand": "cargo build -p core-host-desktop && pnpm --filter app-desktop dev",
     "beforeBuildCommand": "pnpm --filter app-desktop build"
   },
   "app": {

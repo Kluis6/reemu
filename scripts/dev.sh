@@ -6,14 +6,11 @@
 # que sobe o Vite (beforeDevCommand) e espera ele responder antes de rodar o
 # Rust.
 #
-# `reemu-core-host` (o processo filho que carrega o core — `session.rs` acha
-# ele como binário IRMÃO ao lado do executável) é um `[[bin]]` de
-# `core-host-desktop`, um crate que o `reemu-desktop` NÃO depende — então
-# `cargo tauri dev` nunca o recompila sozinho. Rodar um core pela rota
-# "processo filho" com um `reemu-core-host` desatualizado (ex.: depois de
-# mexer em `core-loader-desktop`) já causou tela preta silenciosa (sem erro
-# nenhum, só o binário velho rodando código velho) — 2026-09-11. Por isso o
-# build explícito abaixo, sempre antes de subir o app.
+# `reemu-core-host` (o processo filho que carrega o core) é um `[[bin]]` de
+# `core-host-desktop`, crate de que o `reemu-desktop` NÃO depende. Quem o
+# recompila é o `beforeDevCommand` do `tauri.conf.json` — então `cargo tauri
+# dev` direto também serve; este script só junta o `--config` e os atalhos
+# abaixo (RUST_LOG, validation layer).
 #
 # Uso:
 #   scripts/dev.sh                       # log em info
@@ -36,5 +33,4 @@ if [[ "${1:-}" == "--vk-validation" ]]; then
   echo "dev.sh: sync validation Vulkan LIGADA (vk_layer_settings.txt)" >&2
 fi
 
-cargo build -p core-host-desktop
 exec cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json "$@"

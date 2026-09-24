@@ -1,150 +1,131 @@
-# Passo a Passo — Setup Local do ReEmu
+# Passo a Passo — Rodar o ReEmu a partir do código-fonte
 
-Pré-requisito: extrair `reemu-scaffold.tar.gz` num diretório
-local antes de começar. Todos os comandos abaixo assumem que você está
-dentro da pasta `reemu/`.
+Todos os comandos assumem que você está na raiz do repositório (`reemu/`).
 
-**Antes de tudo**: confira `TASKS.md` — é o checklist de progresso do
-projeto. Ao delegar trabalho pra uma IA (Claude Code ou outro), aponte
-pra ele primeiro ("veja o TASKS.md e continue da próxima etapa `todo`").
-Atualize o status lá ao final de cada etapa concluída.
+**Antes de mexer no código**: confira `TASKS.md` — é o checklist de
+progresso do projeto. Ao delegar trabalho pra uma IA (Claude Code ou outra),
+aponte pra ele primeiro ("veja o TASKS.md e continue da próxima tarefa
+`todo`").
 
 ---
 
-## 1. Instalar ferramentas base
+## 1. Ferramentas base
 
 ```bash
-# Rust (se ainda não tiver)
+# Rust — a versão exata vem de rust-toolchain.toml (o rustup baixa sozinho)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# Node + pnpm
-# (via nvm, ou o gerenciador que preferir)
-npm install -g pnpm
+# Node 22 + pnpm (versão do pnpm fixada em package.json › packageManager)
+corepack enable
 
-# Tauri CLI
+# Tauri CLI v2
 cargo install tauri-cli --version "^2"
-
-# Dependências de sistema do Tauri v2 (Linux) — varia por distro,
-# ver: https://v2.tauri.app/start/prerequisites/
 ```
 
-No Windows/macOS, siga os pré-requisitos específicos de plataforma na
-documentação oficial do Tauri v2 (link acima) antes de continuar.
+## 2. Dependências de sistema
 
----
+### Linux (Debian/Ubuntu)
 
-## 2. Validar o workspace Rust
+Mesma lista que o CI instala (`.github/workflows/ci.yml`):
 
 ```bash
-cargo check --workspace
+sudo apt install \
+  libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+  librsvg2-dev libsoup-3.0-dev libxkbcommon-dev \
+  libudev-dev libasound2-dev \
+  gcc g++
 ```
 
-Isso deve compilar `domain` e `db` sem erros — são os dois únicos crates
-com implementação real no scaffold. Se der erro de dependência, rode
-`cargo update` primeiro.
+Pra que serve cada grupo:
 
----
+- **webkit2gtk / gtk3 / appindicator / rsvg / soup**: janela e webview do Tauri
+- **libxkbcommon**: teclado (winit)
+- **libudev**: controles (`gilrs`). Sem ele o build para em `libudev-sys`
+  com `Package 'libudev' not found`
+- **libasound2**: áudio (`cpal`/ALSA). Sem ele o build para em `alsa-sys`
+- **g++**: compila o glslang vendorizado (compilador de shaders slang)
 
-## 3. Inicializar o app desktop (Tauri v2)
+Outras distros: nomes equivalentes em
+<https://v2.tauri.app/start/prerequisites/>, mais os dev packages de
+`libudev` e ALSA.
+
+Pra conferir se o pkg-config enxerga tudo:
 
 ```bash
-cd apps/desktop
-cargo tauri init
+pkg-config --modversion webkit2gtk-4.1 libudev alsa
 ```
 
-Durante o wizard, use:
-- **App name**: `ReEmu`
-- **Frontend dev server**: `http://localhost:1420` (padrão Vite)
-- **Frontend dist**: `../../packages/app-desktop/dist`
-- **Dev command**: `pnpm --filter app-desktop dev`
-- **Build command**: `pnpm --filter app-desktop build`
+### Windows
 
-Depois de inicializado, edite `src-tauri/Cargo.toml` pra adicionar as
-dependências dos crates internos:
+Siga os pré-requisitos do Tauri v2 (Build Tools do Visual Studio com
+"Desenvolvimento para desktop com C++" + WebView2):
+<https://v2.tauri.app/start/prerequisites/>.
 
-```toml
-[dependencies]
-domain = { path = "../../../crates/domain" }
-db = { path = "../../../crates/db" }
-```
-
----
-
-## 4. Criar o app React (frontend desktop)
+## 3. Instalar dependências JS
 
 ```bash
-cd packages/app-desktop
-pnpm create vite@latest . -- --template react-ts
-pnpm add zustand @tanstack/react-query
-pnpm add @fluentui/react-components @fluentui/react-icons
-```
-
-Confirme que o `vite.config.ts` gerado usa a porta `1420` (padrão que o
-Tauri espera) — ajuste se o wizard do passo 3 usou outra.
-
----
-
-## 5. Instalar dependências na raiz do monorepo
-
-```bash
-cd ../..   # volta pra raiz do monorepo
 pnpm install
 ```
 
----
-
-## 6. Rodar em modo dev
+## 4. Rodar em modo dev
 
 ```bash
-cd apps/desktop
-cargo tauri dev
+scripts/dev.sh          # Linux
+.\scripts\dev.ps1       # Windows (PowerShell)
 ```
 
-Se tudo estiver certo, isso abre a janela do Tauri carregando o app React
-vazio — ainda sem nenhuma feature implementada, só a fundação rodando.
-
----
-
-## 7. Criar o primeiro crate adapter: `core-loader-desktop`
+Ou direto, sem o script:
 
 ```bash
-cd crates
-cargo new core-loader-desktop --lib
-cd core-loader-desktop
-cargo add domain --path ../domain
-cargo add libloading
-cargo add gilrs
-cargo add cpal
+cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json
 ```
 
-Adicione `"crates/core-loader-desktop"` na lista de `members` do
-`Cargo.toml` raiz.
+As duas formas funcionam: o `beforeDevCommand` do `tauri.conf.json`
+compila o `reemu-core-host` (o processo filho que carrega o core libretro)
+e depois sobe o Vite na porta 1420. A primeira compilação demora (as deps
+rodam em `-O3` mesmo no dev, ver `Cargo.toml`); as seguintes são
+incrementais.
 
-**A partir daqui, siga a ordem dos documentos em `docs/ai-context/`** —
-cada um cobre uma etapa específica com as decisões de arquitetura já
-resolvidas, pra usar como contexto ao trabalhar com um assistente de IA
-(Claude Code ou outro).
-
----
-
-## 8. Setup Android (só quando chegar nessa fase)
+O script só acrescenta atalhos:
 
 ```bash
-cd apps/mobile
-cargo tauri init
-cargo tauri android init
+RUST_LOG=debug scripts/dev.sh
+scripts/dev.sh --vk-validation          # validation layer do Vulkan
+REEMU_NATIVE_VIDEO=0 scripts/dev.sh     # <canvas> em vez da surface nativa
+REEMU_WEBKIT_COMPOSITING=1 scripts/dev.sh
 ```
 
-Requer Android SDK + NDK instalados. Lembre-se: `targetSdkVersion` deve
-ser configurado baixo (ex: 28) no `AndroidManifest.xml` gerado, conforme
-decidido — ver `docs/ai-context/11-android-port.md`.
+Dados do app (banco, cores, BIOS, shaders) ficam em
+`~/.local/share/com.reemu.desktop/` no Linux.
 
----
+## 5. Verificar antes de commitar
 
-## Ordem recomendada de implementação
+É o que o CI roda. Se passar aqui, passa lá:
 
-1. `crates/db` — implementar repositórios reais (sqlx) sobre a migration existente
-2. `crates/core-loader-desktop` — caminho GL, validado com um core software-only (ex: core de NES) antes de partir pra HW render
-3. `apps/desktop` + `packages/app-desktop` — wiring básico, sem features ainda
-4. Camadas de feature, uma por vez, seguindo `docs/ai-context/`
-5. `apps/mobile` — só depois do desktop estar funcional ponta a ponta
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+pnpm --filter app-desktop lint
+pnpm --filter app-desktop build
+```
+
+## 6. Build de release local
+
+```bash
+cargo build --release -p core-host-desktop
+cargo tauri build --config apps/desktop/src-tauri/tauri.conf.json \
+  --config apps/desktop/src-tauri/tauri.bundle.linux.json
+```
+
+No Windows, troque por `tauri.bundle.windows.json`. Esses arquivos
+declaram o `reemu-core-host` como recurso do pacote. Eles não são
+mesclados automaticamente (ver TASKS.md › Infra), por isso o `--config`
+explícito. O mesmo fluxo roda no CI em `.github/workflows/release.yml`,
+disparado por tag `v*` ou manualmente (`workflow_dispatch`).
+
+## 7. Android (Etapa 11, adiada)
+
+Ainda não existe `apps/mobile`. Quando a etapa começar, veja
+`docs/ai-context/11-android-port.md`. Esta máquina precisa, além do SDK,
+de NDK, JDK 17, `cmdline-tools` e dos targets Rust `*-linux-android*`.

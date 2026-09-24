@@ -1,11 +1,8 @@
 # Equivalente Windows do scripts/dev.sh — sobe o app desktop em modo dev
 # (Vite + binário Rust juntos, via `cargo tauri dev`).
 #
-# `reemu-core-host` (processo filho que carrega o core) é um [[bin]] de
-# `core-host-desktop`, crate de que o `reemu-desktop` NÃO depende — o
-# `cargo tauri dev` sozinho nunca o recompila, e um core-host velho roda
-# código velho sem erro nenhum (ver comentário do dev.sh). Por isso o build
-# explícito antes.
+# `reemu-core-host` (processo filho que carrega o core) é recompilado pelo
+# `beforeDevCommand` do `tauri.conf.json` (ver comentário do dev.sh).
 #
 # Uso (PowerShell, na raiz do repo):
 #   .\scripts\dev.ps1
@@ -15,9 +12,6 @@ $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
 if (-not $env:RUST_LOG) { $env:RUST_LOG = "info" }
-
-cargo build -p core-host-desktop
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 cargo tauri dev --config apps/desktop/src-tauri/tauri.conf.json @args
 exit $LASTEXITCODE

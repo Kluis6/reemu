@@ -462,13 +462,21 @@ Infra:
   real) — os paths do buildbot de cores, o `video.rs` (`#[cfg(not(linux))]`,
   ver risco conhecido da superfície nativa) e o bundle continuam não
   verificados na prática.
-- `reemu-core-host` (processo filho do core, `crates/core-host-desktop`) NÃO
-  é dependência de `apps/desktop/src-tauri/Cargo.toml` — `cargo tauri dev`
-  sozinho não o recompila. Usar sempre `scripts/dev.sh` (já faz `cargo build
-  -p core-host-desktop` antes); rodando `cargo tauri dev` direto o binário
-  fica desatualizado/ausente em `target/debug/` e o app falha ao carregar
-  qualquer jogo com "binário reemu-core-host não encontrado ao lado do
-  executável" (incidentes 2026-09-11 e 2026-09-16).
+- ~~`cargo tauri dev` direto não recompilava o `reemu-core-host`~~ **feito
+  (2026-09-24)** — o core-host (`crates/core-host-desktop`) NÃO é dependência
+  de `apps/desktop/src-tauri/Cargo.toml`, e só o `scripts/dev.sh` o
+  compilava; rodando `cargo tauri dev` direto o binário ficava
+  desatualizado/ausente (incidentes 2026-09-11 e 2026-09-16). Agora o
+  `beforeDevCommand` do `tauri.conf.json` faz `cargo build -p
+  core-host-desktop && pnpm --filter app-desktop dev`, então qualquer forma
+  de subir o app recompila (validado: `touch` no core-host → `cargo tauri
+  dev` recompilou antes do Vite). O `release.yml` continua buildando o
+  core-host release explicitamente (o `beforeBuildCommand` não mudou).
+- **`cargo fmt --check` falhava em 20 arquivos** (2026-09-24) — código
+  commitado sem formatar quebrava o 1º passo do job `rust` do CI. Corrigido
+  com `cargo fmt --all`. `STEP_BY_STEP.md` reescrito (era do scaffold): deps
+  de sistema iguais às do CI (incl. `libudev-dev`/`libasound2-dev`), fluxo
+  dev atual, checagem pré-commit e build de release.
 - Frontend — responsividade revisada de ponta a ponta (2026-09-16, commits
   `36d469a`..`208a3bd`): elementos de tamanho fixo do Fluent trocados por
   `clamp()` (topbar, avatar, cards, setas do carrossel), padding lateral das
