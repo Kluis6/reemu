@@ -588,6 +588,14 @@ Infra:
     só intercepta `http://cover.localhost/` pra subrecurso (conferido no
     `custom_protocol_workaround` do wry 0.55.1). `covers::cover_url` escolhe
     por plataforma. Não testado em Windows real.
+  * **IPC com `wmem_max` padrão**: com o CI verde no rustfmt (vermelho desde
+    pelo menos 2026-09-18, então os testes não rodavam lá), apareceu
+    `roundtrips_a_2mb_message_inline` falhando. No padrão do Linux
+    (`net.core.wmem_max` = 212992) o `SO_SNDBUF` fica em ~416KB e qualquer
+    mensagem inline maior dava `EMSGSIZE` — save state de SNES (~800KB)
+    inclusive. Esta máquina tem `wmem_max` = 4MB, por isso nunca apareceu
+    aqui. `send` agora cai pro memfd no `EMSGSIZE`; teste novo força o
+    buffer pequeno. Suíte inteira rodada com o buffer simulado do CI: ok.
 
 - **2026-09-24 — revisão geral + melhorias fora do backlog**:
   * `cargo fmt --check` falhava em 20 arquivos (CI vermelho no 1º passo) →

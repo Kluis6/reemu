@@ -25,7 +25,9 @@ use std::sync::Arc;
 /// (parallel_n64) passa de 16 MB; PSP pode passar de 30 MB.
 const MAX_MSG: usize = 128 * 1024 * 1024;
 /// Corpo bincode acima disto NÃO cabe confortável num datagrama `SEQPACKET`
-/// (o kernel recusa acima do `SO_SNDBUF` efetivo, ~8 MB nesta máquina) —
+/// (o kernel recusa acima do `SO_SNDBUF` efetivo: ~8 MB com `wmem_max`
+/// aumentado, ~416 KB no padrão do Linux — abaixo disso o `send` também cai
+/// pro memfd quando recebe `EMSGSIZE`) —
 /// então vai por **memfd** anexado via `SCM_RIGHTS`: o `send` escreve o corpo
 /// num `memfd_create`, manda só um marcador + o fd; o `recv` lê o corpo de
 /// volta da mesma memória. Save state de SNES (~800 KB) e menores continuam
@@ -139,7 +141,17 @@ impl Channel {
         if !fds.is_empty() {
             control.push(SendAncillaryMessage::ScmRights(fds));
         }
-        net::sendmsg(self.fd(), &iov, &mut control, SendFlags::empty()).map_err(|e| {
+        match net::sendmsg(self.fd(), &iov, &mut control, SendFlags::empty()) {
+            // O teto real do datagrama é o `SO_SNDBUF` efetivo, que o kernel
+            // limita em `net.core.wmem_max` — no padrão do Linux (212992) dá
+            // ~416KB, bem abaixo do `INLINE_MAX`. Sem fds próprios, o corpo
+            // vai pelo memfd, que não tem esse limite.
+            Err(rustix::io::Errno::MSGSIZE) if fds.is_empty() => {
+                return self.send_via_memfd(&body);
+            }
+            r => r,
+        }
+        .map_err(|e| {
             if e == rustix::io::Errno::MSGSIZE {
                 io::Error::other(format!(
                     "mensagem IPC de {} bytes não coube no datagrama SEQPACKET",
@@ -257,8 +269,9 @@ mod tests {
     use rustix::fd::AsFd;
 
     /// Datagrama grande (save state de SNES passa de 800KB) — o bug era o
-    /// `recv` truncar em silêncio num buffer fixo de 512KB. 2MB fica no
-    /// caminho inline (< `INLINE_MAX`).
+    /// `recv` truncar em silêncio num buffer fixo de 512KB. 2MB é menor que
+    /// `INLINE_MAX`: vai inline se o `SO_SNDBUF` deixar, senão cai pro memfd
+    /// (ver `falls_back_to_memfd_when_socket_buffer_is_small`).
     #[test]
     fn roundtrips_a_2mb_message_inline() {
         let (a, b) = Channel::pair().unwrap();
@@ -269,6 +282,24 @@ mod tests {
         });
         let (got, fds) = b.recv::<Vec<u8>>().unwrap().unwrap();
         h.join().unwrap();
+        assert!(fds.is_empty());
+        assert_eq!(got, payload);
+    }
+
+    /// Com o `net.core.wmem_max` padrão do Linux (212992, o do runner do CI
+    /// e da maioria das distros) o `SO_SNDBUF` fica em ~416KB e um save state
+    /// de SNES (~800KB) não cabe inline: o `sendmsg` dá `EMSGSIZE`. Tem que
+    /// cair pro memfd em vez de falhar. Força o buffer pequeno pra reproduzir
+    /// aqui, independente do sysctl da máquina.
+    #[test]
+    fn falls_back_to_memfd_when_socket_buffer_is_small() {
+        let (a, b) = Channel::pair().unwrap();
+        sockopt::set_socket_send_buffer_size(a.fd(), 208 * 1024).unwrap();
+        let payload: Vec<u8> = (0..800_000u32).map(|i| (i * 7) as u8).collect();
+        let sent = payload.clone();
+        let h = std::thread::spawn(move || a.send::<Vec<u8>>(&sent, &[]));
+        let (got, fds) = b.recv::<Vec<u8>>().unwrap().unwrap();
+        h.join().unwrap().unwrap();
         assert!(fds.is_empty());
         assert_eq!(got, payload);
     }
