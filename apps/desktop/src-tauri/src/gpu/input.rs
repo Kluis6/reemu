@@ -321,6 +321,19 @@ impl FrameProcessor {
         true
     }
 
+    /// dma_buf só existe em Unix — no Windows o GL HW render sempre vai pelo
+    /// readback (ver `core-loader-desktop::gl_context`), nunca chega aqui.
+    #[cfg(not(unix))]
+    pub(super) fn import_dmabuf(
+        &self,
+        _plane: &domain::frame_source::DmabufPlaneInfo,
+        _w: u32,
+        _h: u32,
+    ) -> Result<(wgpu::Texture, wgpu::TextureView), String> {
+        Err("interop dma_buf só existe em Unix".into())
+    }
+
+    #[cfg(unix)]
     pub(super) fn import_dmabuf(
         &self,
         plane: &domain::frame_source::DmabufPlaneInfo,

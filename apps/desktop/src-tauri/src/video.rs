@@ -23,9 +23,10 @@
 //!
 //! Surface direto no handle da janela. Não verificado.
 
-use raw_window_handle::{
-    HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle, WaylandWindowHandle,
-};
+#[cfg(target_os = "linux")]
+use raw_window_handle::WaylandWindowHandle;
+use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
+#[cfg(target_os = "linux")]
 use std::ptr::NonNull;
 use tauri::{AppHandle, Manager, Runtime};
 
