@@ -35,14 +35,17 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
+- [ ] `todo` — **Surface nativa de vídeo no Windows**: hoje o padrão lá é o
+      `<canvas>` (a surface no HWND fica atrás do WebView2). Precisa de uma
+      janela filha acima do WebView2 + esconder/mostrar pro menu de pausa,
+      equivalente ao `wl_subsurface` do Linux.
 - [ ] `todo` — **Windows ponta a ponta**: só os testes do `core-ipc` rodaram
       numa máquina Windows real. Falta `cargo tauri dev` completo, `video.rs`
       no caminho `#[cfg(not(linux))]`, paths do buildbot de cores, instalador.
       Conferir que as capas aparecem (URL `http://cover.localhost/<id>` no
       Windows, `covers::cover_url`, corrigida sem teste em máquina real).
-- [ ] `todo` — **Pipeline de release no GitHub Actions**: nunca rodou lá.
-      Disparar `release.yml` por `workflow_dispatch` ou tag `v0.1.0-rc1`
-      (sai como Release draft).
+- [ ] `todo` — **Instalador do `v0.1.0-rc2`** (Release draft no GitHub —
+      o pipeline passou em Linux e Windows): instalar e abrir no Windows.
 - [ ] `todo` — **Chaveiro no Windows**: `cargo test -p reemu-desktop --lib
       os_keyring -- --ignored` (Credential Manager).
 - [ ] `todo` — `SET_ROTATION` com um jogo vertical real (FBNeo). Direção
@@ -69,25 +72,24 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Desempenho do caminho do core
 
-- [ ] `todo` — Cópias de frame restantes: buffer nativo do core, RGBA do
-      `to_rgba8`, header de 8 bytes do `pack_frame`.
-- [ ] `todo` — `latest_frame: Mutex<Option<Frame>>` → `triple_buffer`/`ArcSwap`.
-- [ ] `todo` — Áudio: `push_samples` aloca `Vec` por frame; `drain_audio`
-      faz `mem::take`. Resample direto do `&[i16]`; reservar capacidade.
-      Resampler linear → `rubato` se a qualidade não bastar.
-- [ ] `todo` — Spin de pacing (~0,5 ms CPU/frame); rebase do `next_deadline`
-      só a >4 frames; sem prioridade de thread no `emu-core-loop`.
+Medir antes de otimizar: `REEMU_PERF=1 scripts/dev.sh` com um jogo pesado
+(N64/PS1) e anotar as linhas `perf core`/`perf vídeo` (ver STEP_BY_STEP §4).
+Feito em 2026-09-24 (ver `docs/historico.md`): pump acorda no frame
+(perdia 12% dos frames), margem de spin adaptativa (33 → 6 ms/s de CPU),
+áudio sem alocação por frame, canvas sem a 2ª cópia do frame.
+
+- [ ] `todo` — Cópias de frame que restam: buffer nativo do core → anel
+      (inevitável entre processos) e o caminho de CPU sem GPU (`to_rgba8` +
+      `pack_frame`, só roda sem adapter wgpu).
+- [ ] `todo` — Rebase do acumulador de pacing só a >4 frames de atraso
+      (core lento roda sem dormir por até ~66 ms antes de ressincronizar);
+      thread do core sem prioridade elevada. Decidir com dados do
+      `REEMU_PERF=1` num jogo pesado.
 
 ### Funcionalidades
 
-- [ ] `todo` — Tema de alto contraste; persistir o tema no lado Rust (hoje
-      `localStorage`).
-- [ ] `todo` — Tempo de jogo: `SaveStateMetadata.play_time_at_save` sempre
-      `None`.
 - [ ] `todo` — Metadata: multi-provider (IGDB / TheGamesDB) + cascata,
       rate-limit por provider, match por MD5, badge de pendências no rail.
-- [ ] `todo` — BIOS dos sistemas novos (Amiga Kickstart, Atari 5200, MSX,
-      firmware do DS) em `domain::bios`.
 - [ ] `todo` — DOS e ScummVM (jogos são pastas/`.zip` sem extensão própria).
 - [ ] `todo` — PSP: baixar a pasta `assets` do PPSSPP (GPL) em
       `<system>/PPSSPP/`, se os jogos mostrarem problema sem ela.
@@ -96,9 +98,6 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Infra / qualidade
 
-- [ ] `todo` — Teste intermitente
-      `emu-session/tests/session.rs::pause_freezes_emulation_then_resume`: um
-      `FrameReady` já no canal chega depois do `SetPaused(true)`.
 - [ ] `todo` — Etapa 11 (Android): `apps/mobile`, `packages/app-mobile`,
       `packages/ui`, `packages/shared`. Os pacotes compartilhados só nascem
       quando o mobile for o 2º consumidor. Esta máquina ainda precisa de NDK,

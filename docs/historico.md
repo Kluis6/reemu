@@ -568,6 +568,76 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-24 (noite) — desempenho, tempo de jogo, tema, BIOS, teste
+  intermitente** (medições com `REEMU_PERF=1`, core falso de teste):
+  * `reemu-video-pump` dormia 15 ms fixos + render, fora de fase com os
+    16,67 ms do core: perdia **11 de 91 frames (12%)** com 3 ms de render.
+    Agora acorda por `EmuSession::wait_for_frame` (`Condvar` no próprio
+    `latest_frame`; espera fora do portão da VkQueue) — 0 perdidos. Teste
+    `presenter_waking_on_frame_does_not_drop_frames` falha com o sleep
+    antigo. O `Mutex` do `latest_frame` ficou: o frame é MOVIDO, o lock
+    dura nanossegundos — trocar por `ArcSwap` não compraria nada.
+  * Pacing: `core_loader_desktop::Pacer` (um só pro core-host e pro
+    Vulkan in-process) com margem de spin adaptativa ao atraso real do
+    `sleep` (150 µs–2 ms): spin **33 → 6,3 ms/s** de CPU, mesma precisão
+    (16,67 ms, p99 igual, 0 atrasados).
+  * Áudio: buffer de conversão reusado no `push_samples`; `drain_audio`
+    do core devolve um `Vec` já com a capacidade do anterior (antes ~9
+    realocações por frame).
+  * Canvas: `FrameProcessor::process_packed` faz o readback direto no
+    `Vec` da resposta IPC (cabeçalho + RGBA) — sem a 2ª cópia do frame
+    inteiro (8 MB/frame em 1080p). Teste de GPU compara com `process`
+    (largura 50 → exercita o padding).
+  * Tempo de jogo: `roms.play_time_secs` (migration 0010) + `play_clock.rs`
+    (amostra 1×/s, só conta `Running`, grava a cada 10 s e quando para /
+    troca de ROM). `play_time_at_save` dos save states preenchido; página
+    do jogo e menu de pausa mostram.
+  * Tema: preset "Alto contraste" (base `teamsHighContrastTheme`; teste
+    confere AAA 7:1 nos pares de texto) e escolha salva em
+    `<dados>/appearance/theme.json` — o `localStorage` é por origem e
+    perdia o tema entre dev/produção/Windows. Migra o valor antigo.
+  * BIOS: Amiga, Atari 5200, Atari 8-bit, MSX e DS em `domain::bios`,
+    conferidos nos docs E nos `.info` (20 MD5, comparados por script).
+    Nenhum obrigatório: cada sistema tem um core no catálogo que roda sem.
+  * Teste intermitente `pause_freezes_emulation_then_resume`: corrida real
+    — `SetPaused` era "dispara e esquece" e um `FrameReady` do frame em
+    andamento chegava depois do retorno. Agora o filho confirma
+    (`ToParent::PausedAck`) e o pai espera. Sob 16 núcleos ocupados: antigo
+    **6/40 falhas**, novo **0/40**.
+
+- **2026-09-24 (noite) — Windows: dev não subia**:
+  * `beforeDevCommand` compilava o core-host ANTES do Vite (mudança da manhã)
+    e o `cargo tauri dev` só espera o Vite 180 s (tauri-cli 2.11.5,
+    `dev.rs`, 90 × 2 s) → num clone novo no Windows estourava com `Could
+    not connect to http://127.0.0.1:1420`. Agora `scripts/dev-before.mjs`
+    (via `pnpm -w run tauri:before-dev`) sobe o Vite na hora e compila o
+    core-host em paralelo; o `cargo run` do app espera a trava do `target/`,
+    então a ordem continua garantida. Validado no Linux (ordem + nada sobra
+    rodando ao encerrar).
+  * Surface nativa fora do Linux ligava o wgpu no HWND da janela, atrás da
+    janela filha do WebView2 (jogo invisível; `set_hidden`/`show` são no-op
+    fora do Wayland). Padrão agora é `<canvas>` fora do Linux
+    (`REEMU_NATIVE_VIDEO=1` força).
+  * `scripts/check-windows.sh`: `cargo check` cruzado pra Windows com
+    compilador C falso nos build scripts; job novo no CI.
+  * STEP_BY_STEP › Windows: pré-requisitos exatos (MSVC, toolchain `-msvc`)
+    e tabela de erros comuns.
+
+- **2026-09-24 (noite) — catálogo de cores 69 → 124**: `scripts/gen_core_catalog.py`
+  gera as entradas a partir do `libretro-core-info` oficial, cruzando com a
+  listagem do buildbot e com o `library-scan`. Entra o core que: é da
+  categoria `Emulator`; existe no buildbot de Linux E Windows; tem um
+  sistema (campo `database` do `.info`) que o scan reconhece pela tabela de
+  pastas (`system_from_folder_name`) ou é arcade; e roda em software ou
+  OpenGL desktop. Fora: Vulkan/Direct3D/GLES-only e `hw_render = true` sem
+  API declarada (só o Beetle PSX HW foi validado em Vulkan, doc 12);
+  `play_libretro` (PS2 em GL sem declarar) e `mesen2_libretro` (nome
+  gigante, sistemas já cobertos) por exclusão manual. Os 110 zips (55 × 2
+  SOs) conferidos por HTTP `Range` (têm o `<id>.so`/`.dll` que o
+  `download()` procura); amostra de 12 cores baixada e carregada via
+  `retro_api_version`/`retro_get_system_info` sem erro. Aba Catálogo ganhou
+  filtro por nome/sistema.
+
 - **2026-09-24 (tarde) — shaders do upstream, capas no Windows, release**:
   * Upstream `libretro/slang-shaders@afb1416` tinha derrubado a validação de
     campo pra 92,9%. Duas correções no `shader-slang`, cada uma com teste
