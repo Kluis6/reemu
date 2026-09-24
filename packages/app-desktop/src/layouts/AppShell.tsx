@@ -162,7 +162,7 @@ export function AppShell() {
       ] as const);
   return (
     <div className={s.app}>
-      <AnimatedBackground />
+      <AnimatedBackground showWallpaper={atRoot} />
       <nav className={s.rail}>
         <Menu positioning={{ position: "below", align: "start", offset: 12 }}>
           <MenuTrigger disableButtonEnhancement>

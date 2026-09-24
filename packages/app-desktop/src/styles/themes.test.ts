@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { THEMES } from './themes'
+import { customBgPalette, THEMES } from './themes'
 
 /** Razão de contraste WCAG 2.x entre duas cores `#rrggbb`. */
 function contrast(a: string, b: string): number {
@@ -30,6 +30,21 @@ describe('tema de alto contraste', () => {
   })
 
   it('fundo sem as manchas de cor do tema', () => {
-    expect([t.reemuBg1, t.reemuBg2, t.reemuBg3]).toEqual([bg, bg, bg])
+    expect([t.reemuBg1, t.reemuBg2, t.reemuBg3, t.reemuBg4]).toEqual([bg, bg, bg, bg])
+  })
+})
+
+describe('paletas do fundo', () => {
+  it('todo tema tem as 4 cores do fundo', () => {
+    for (const [id, { theme }] of Object.entries(THEMES)) {
+      for (const c of [theme.reemuBg1, theme.reemuBg2, theme.reemuBg3, theme.reemuBg4]) {
+        expect(c, id).toMatch(/^#[0-9a-fA-F]{6}$/)
+      }
+    }
+  })
+
+  it('o Personalizado deriva 4 matizes distintos', () => {
+    const p = customBgPalette(205)
+    expect(new Set([p.bg1, p.bg2, p.bg3, p.bg4]).size).toBe(4)
   })
 })

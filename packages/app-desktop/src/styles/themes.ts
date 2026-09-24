@@ -94,7 +94,29 @@ const ps1Red: BrandVariants = {
 /** Manchas do fundo do tema "PlayStation Clássico": teal, azul e amarelo
  *  oficiais da marca (junto do vermelho da rampa acima) — base cinza,
  *  destaque multicor no degradê, como pedido. */
-const ps1Accents = { bg1: "#00AC9F", bg2: "#2E6DB4", bg3: "#F3C300" };
+// ------------------------------------------------------ paletas do fundo ----
+//
+// 4 brilhos difusos, um por canto, com MATIZES diferentes (não 4 tons da
+// mesma rampa) — o fundo do dashboard do Xbox (Series/PC): ciano no alto à
+// esquerda, rosado no alto à direita, verde embaixo à direita, azul fundo
+// embaixo à esquerda. Posição fixa por slot (`components/AnimatedBackground`):
+//   bg1 = alto/esquerda · bg2 = baixo/direita · bg3 = baixo/esquerda · bg4 = alto/direita
+
+export interface BgPalette {
+  bg1: string;
+  bg2: string;
+  bg3: string;
+  bg4: string;
+}
+
+/** O da imagem de referência do dashboard do Xbox. */
+const xboxGreenBg: BgPalette = { bg1: "#1E7F74", bg2: "#2E9E4F", bg3: "#1B3F5C", bg4: "#8A3A4A" };
+/** Blades (2005): lima + oliva, com âmbar no canto quente. */
+const xboxClassicoBg: BgPalette = { bg1: "#5A8410", bg2: "#7FAF14", bg3: "#2C4A12", bg4: "#C47A12" };
+const psBlueBg: BgPalette = { bg1: "#0A6FC2", bg2: "#2FA7C9", bg3: "#1C2F7A", bg4: "#6A3FB5" };
+/** As 4 cores do logo do PlayStation original (amarelo e vermelho um tom
+ *  abaixo — cheios, eles gritavam no fundo). */
+const ps1Bg: BgPalette = { bg1: "#00AC9F", bg2: "#2E6DB4", bg3: "#C9A200", bg4: "#B0122E" };
 
 /** Azul PlayStation (o acento do dashboard PS4/PS5). */
 const psBlue: BrandVariants = {
@@ -159,11 +181,16 @@ export interface ReEmuTokens {
   reemuBrandSolid: string;
   /** Cor de texto legível sobre `reemuBrandSolid`. */
   reemuOnBrand: string;
-  /** Manchas do fundo (`components/AnimatedBackground`) — 3 tons da
-   *  rampa de marca, então cada tema pinta o fundo com a própria cor. */
+  /** Brilhos do fundo (`components/AnimatedBackground`), um por canto —
+   *  ver `BgPalette`. */
   reemuBg1: string;
   reemuBg2: string;
   reemuBg3: string;
+  reemuBg4: string;
+  /** Véu leve e uniforme sobre os brilhos (o `reemuVeil`, que escurece as
+   *  bordas, é pro papel de parede — nos brilhos ele apagaria justamente os
+   *  cantos, onde fica a cor). */
+  reemuGlowVeil: string;
   /** Véu sobre as manchas do fundo (`components/AnimatedBackground`) — escuro
    *  no tema escuro (abafa a cor, mantém tudo "moody"), CLARO no tema claro
    *  (abafa a cor pro lado do branco). Sem isto o fundo de um tema claro
@@ -206,11 +233,7 @@ function readableOn(hex: string): string {
   return (r * 299 + g * 587 + b * 114) / 1000 > 128 ? "#0b0b0d" : "#ffffff";
 }
 
-function make(
-  ramp: BrandVariants,
-  mode: "dark" | "light" = "dark",
-  bgAccents?: { bg1: string; bg2: string; bg3: string },
-): ReEmuTheme {
+function make(ramp: BrandVariants, mode: "dark" | "light", bg: BgPalette): ReEmuTheme {
   const light = mode === "light";
   return {
     ...(light ? createLightTheme(ramp) : createDarkTheme(ramp)),
@@ -229,12 +252,14 @@ function make(
     reemuSurfaceSoft: light ? "#ffffff" : "#5f6368",
     reemuBrandSolid: ramp[80],
     reemuOnBrand: readableOn(ramp[80]),
-    // Tema normal: 3 tons DA MESMA rampa. `bgAccents` (só o "PlayStation
-    // Clássico" usa por ora) troca isso por cores fixas de marca oficiais,
-    // pra um degradê multicor em vez de tons derivados de um único matiz.
-    reemuBg1: bgAccents?.bg1 ?? ramp[70],
-    reemuBg2: bgAccents?.bg2 ?? ramp[90],
-    reemuBg3: bgAccents?.bg3 ?? ramp[50],
+    reemuBg1: bg.bg1,
+    reemuBg2: bg.bg2,
+    reemuBg3: bg.bg3,
+    reemuBg4: bg.bg4,
+    // Escuro: só abafa um pouco (o fundo continua quase preto e os cantos
+    // brilham). Claro: puxa bastante pro cinza da casca — cor cheia num
+    // fundo claro fica berrante.
+    reemuGlowVeil: light ? "rgba(236, 238, 241, 0.62)" : "rgba(9, 9, 12, 0.1)",
     // Radial (não mais vertical): centro bem mais transparente — deixa o
     // papel de parede aparecer no meio da tela — e as bordas/cantos (onde
     // ficam as manchas de cor do tema) mantêm a força de antes. Camada
@@ -275,6 +300,8 @@ function makeHighContrast(): ReEmuTheme {
     reemuBg1: bg,
     reemuBg2: bg,
     reemuBg3: bg,
+    reemuBg4: bg,
+    reemuGlowVeil: `linear-gradient(${bg}, ${bg})`,
     reemuVeil: `linear-gradient(${bg}, ${bg})`,
     reemuActiveBg: t.colorBrandBackground,
     reemuActiveFg: t.colorNeutralForegroundOnBrand,
@@ -300,20 +327,20 @@ export type ThemeId =
 // "Personalizado" deixa escolher qualquer matiz (ver seção abaixo). Os temas
 // que sobram são todos "de marca" (Xbox, PlayStation).
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
-  "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen) },
+  "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen, "dark", xboxGreenBg) },
   // Sem par "-claro" de propósito — o dashboard Blades nunca teve modo claro.
-  "xbox-classico": { label: "Xbox Clássico", theme: make(xboxClassico) },
-  "ps-blue": { label: "Azul PlayStation", theme: make(psBlue) },
-  ps1: { label: "PlayStation Clássico", theme: make(ps1Red, "dark", ps1Accents) },
+  "xbox-classico": { label: "Xbox Clássico", theme: make(xboxClassico, "dark", xboxClassicoBg) },
+  "ps-blue": { label: "Azul PlayStation", theme: make(psBlue, "dark", psBlueBg) },
+  ps1: { label: "PlayStation Clássico", theme: make(ps1Red, "dark", ps1Bg) },
   // Modo claro do dashboard Xbox (Series S/X e "modo XBOX" no PC): fundo
   // branco/cinza bem claro — só a luminosidade da casca inverte, a marca
   // não muda. Uma variante claro por rampa, mesmo par light/dark que o
   // verde já tinha.
-  claro: { label: "Claro", theme: make(xboxGreen, "light") },
-  "ps-blue-claro": { label: "Azul Claro", theme: make(psBlue, "light") },
+  claro: { label: "Claro", theme: make(xboxGreen, "light", xboxGreenBg) },
+  "ps-blue-claro": { label: "Azul Claro", theme: make(psBlue, "light", psBlueBg) },
   "ps1-claro": {
     label: "PlayStation Clássico Claro",
-    theme: make(ps1Red, "light", ps1Accents),
+    theme: make(ps1Red, "light", ps1Bg),
   },
   "alto-contraste": { label: "Alto contraste", theme: makeHighContrast() },
 };
@@ -388,7 +415,27 @@ export const DEFAULT_CUSTOM_HUE = 205; // mesmo tom do "Azul PlayStation" — po
 /** Resolve uma seleção de tema (preset OU personalizado) pro `Theme` que o
  *  `FluentProvider` consome. Personalizado é gerado na hora — não fica em
  *  `THEMES`, que é só o catálogo de presets curados. */
+/**
+ * Paleta de fundo do "Personalizado": 4 matizes em volta do escolhido, no
+ * mesmo arranjo dos presets — o próprio matiz no alto à esquerda, um vizinho
+ * mais claro embaixo à direita, um vizinho escuro embaixo à esquerda e um
+ * quase-complementar abafado no alto à direita (o "canto quente").
+ */
+export function customBgPalette(hue: number): BgPalette {
+  const h = (d: number) => (((hue + d) % 360) + 360) % 360;
+  return {
+    bg1: hslToHex(h(0), 60, 30),
+    bg2: hslToHex(h(35), 62, 38),
+    bg3: hslToHex(h(-45), 55, 22),
+    bg4: hslToHex(h(160), 42, 34),
+  };
+}
+
 export function resolveTheme(selection: ThemeSelection): ReEmuTheme {
   if (selection.kind === "preset") return THEMES[selection.id].theme;
-  return make(generateBrandRamp(selection.hue), selection.mode);
+  return make(
+    generateBrandRamp(selection.hue),
+    selection.mode,
+    customBgPalette(selection.hue),
+  );
 }

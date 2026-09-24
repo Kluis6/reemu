@@ -16,7 +16,13 @@ import { clearWallpaper, pickImage, setWallpaperFile, wallpaperUrl } from '../..
 import { sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
 import { useThemeStore } from '../../stores/useThemeStore'
-import { resolveTheme, THEMES, type ThemeId, type ThemeMode } from '../../styles/themes'
+import {
+  resolveTheme,
+  THEMES,
+  type ReEmuTheme,
+  type ThemeId,
+  type ThemeMode,
+} from '../../styles/themes'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL, maxWidth: '520px' },
@@ -92,6 +98,19 @@ const useStyles = makeStyles({
   hueSlider: { width: '100%' },
 })
 
+/** Amostra do tema: as 4 cores do fundo (na ordem dos cantos, ver
+ *  `BgPalette`) com a cor de marca no meio. */
+function Swatch({ t }: { t: ReEmuTheme }) {
+  const s = useStyles()
+  return (
+    <div className={s.swatch}>
+      {[t.reemuBg1, t.reemuBg4, t.reemuBrandSolid, t.reemuBg2, t.reemuBg3].map((c, i) => (
+        <span key={i} className={s.seg} style={{ background: c }} />
+      ))}
+    </div>
+  )
+}
+
 const IDS = Object.keys(THEMES) as ThemeId[]
 
 /** Configurações › Aparência — tema de cor + papel de parede da tela inicial. */
@@ -158,11 +177,7 @@ export function SettingsAppearance() {
                   style={{ color: t.reemuBrandText }}
                 />
               )}
-              <div className={s.swatch}>
-                <span className={s.seg} style={{ background: t.reemuBg1 }} />
-                <span className={s.seg} style={{ background: t.reemuBrandSolid }} />
-                <span className={s.seg} style={{ background: t.reemuBg2 }} />
-              </div>
+              <Swatch t={t} />
               <Text
                 weight={on ? 'semibold' : 'regular'}
                 style={{ color: t.colorNeutralForeground1 }}
@@ -192,11 +207,7 @@ export function SettingsAppearance() {
               style={{ color: customPreview.reemuBrandText }}
             />
           )}
-          <div className={s.swatch}>
-            <span className={s.seg} style={{ background: customPreview.reemuBg1 }} />
-            <span className={s.seg} style={{ background: customPreview.reemuBrandSolid }} />
-            <span className={s.seg} style={{ background: customPreview.reemuBg2 }} />
-          </div>
+          <Swatch t={customPreview} />
           <Text
             weight={isCustom ? 'semibold' : 'regular'}
             style={{ color: customPreview.colorNeutralForeground1 }}

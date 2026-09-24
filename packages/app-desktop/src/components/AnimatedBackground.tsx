@@ -3,20 +3,25 @@ import { useQuery } from '@tanstack/react-query'
 import { wallpaperUrl } from '../lib/tauri'
 
 /**
- * Fundo das telas — papel de parede opcional (embaixo de tudo) + 2 manchas
- * de cor ESTÁTICAS (sem animação nenhuma) por cima. As cores vêm de
- * `--reemuBg1/2` (o `FluentProvider` emite a partir do tema).
+ * Fundo das telas, em um de dois modos (nunca os dois juntos):
  *
- * Era animado (drift lento via `translate`), mas mesmo sem `filter`/blur —
- * já otimizado pra regra do WebKitGTK sem compositing (ver
- * `frontend-perf-webkitgtk` nas memórias) — 2 áreas de 70vmax repintando em
- * loop infinito o tempo todo ainda pesava. Removido por pedido direto: fica
- * só a cor, parado, sem custo de repintura contínua.
+ * - **Papel de parede** (só onde quem usa pede — hoje a tela inicial): a
+ *   imagem escolhida em Configurações › Aparência + o `--reemuVeil` (véu
+ *   neutro, escuro no tema escuro / claro no claro) pra manter o texto
+ *   legível. SEM as cores do tema por cima.
+ * - **Cores do tema** (todo o resto, e a tela inicial sem papel de parede):
+ *   4 brilhos difusos, um por canto — `--reemuBg1..4`, ver `BgPalette` em
+ *   `styles/themes.ts` — + o `--reemuGlowVeil`, leve e uniforme.
  *
- * O papel de parede (`<img>`, Configurações › Aparência) é ESTÁTICO também —
- * o navegador decodifica uma vez e reusa o bitmap nas pinturas seguintes,
- * então não reintroduz o custo do blur animado. Sem `filter` nele.
+ * Tudo ESTÁTICO e sem `filter`/blur: o WebKitGTK sem compositing repinta
+ * caro (ver `frontend-perf-webkitgtk` nas memórias) — o drift animado que
+ * existia antes foi removido por isso. Cada brilho é um elemento com UM
+ * `radial-gradient` só: o WebKitGTK quebra com radial-gradient multicamada
+ * num elemento `position: fixed`.
  */
+const glow = (v: string, fallback: string) =>
+  `radial-gradient(circle closest-side, var(${v}, ${fallback}) 0%, transparent 100%)`
+
 const useStyles = makeStyles({
   root: {
     position: 'fixed',
@@ -36,30 +41,37 @@ const useStyles = makeStyles({
     objectFit: 'cover',
     objectPosition: 'center',
   },
-  blob: {
+  glow: {
     position: 'absolute',
-    width: '70vmax',
-    height: '70vmax',
-    opacity: 0.65,
+    width: '90vmax',
+    height: '90vmax',
+    opacity: 0.95,
   },
-  b1: {
-    top: '-26vmax',
-    left: '-22vmax',
-    backgroundImage:
-      'radial-gradient(circle, var(--reemuBg1, #3b82f6) 0%, var(--reemuBg1, #3b82f6) 32%, transparent 68%)',
+  // alto/esquerda — o brilho principal, puxado pro centro-alto como na
+  // referência (o ciano atrás da prateleira "Jump back in").
+  g1: { top: '-42vmax', left: '-18vmax', backgroundImage: glow('--reemuBg1', '#1E7F74') },
+  // baixo/direita
+  g2: { bottom: '-46vmax', right: '-30vmax', backgroundImage: glow('--reemuBg2', '#2E9E4F') },
+  // baixo/esquerda — o mais discreto (azul fundo)
+  g3: {
+    bottom: '-50vmax',
+    left: '-40vmax',
+    opacity: 0.8,
+    backgroundImage: glow('--reemuBg3', '#1B3F5C'),
   },
-  b2: {
-    bottom: '-30vmax',
-    right: '-22vmax',
-    backgroundImage:
-      'radial-gradient(circle, var(--reemuBg2, #8b5cf6) 0%, var(--reemuBg2, #8b5cf6) 32%, transparent 68%)',
+  // alto/direita — o "canto quente"
+  g4: {
+    top: '-50vmax',
+    right: '-38vmax',
+    opacity: 0.85,
+    backgroundImage: glow('--reemuBg4', '#8A3A4A'),
   },
-  // `--reemuVeil` inverte por tema (escuro abafa pro preto, claro abafa pro
-  // branco) — sem isto o fundo ficaria escuro mesmo num tema claro, já que o
-  // véu cobre as manchas por cima de tudo. É radial (centro mais
-  // transparente, bordas/cantos mais fortes) — deixa o papel de parede
-  // aparecer mais no meio da tela sem lavar as manchas de cor nos cantos.
-  veil: {
+  glowVeil: {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: 'linear-gradient(var(--reemuGlowVeil, rgba(9, 9, 12, 0.1)), var(--reemuGlowVeil, rgba(9, 9, 12, 0.1)))',
+  },
+  wallpaperVeil: {
     position: 'absolute',
     inset: 0,
     backgroundImage:
@@ -67,13 +79,15 @@ const useStyles = makeStyles({
   },
 })
 
-/** `showWallpaper = false` no Splash: o boot é um momento de marca fixo,
- *  igual ao power-on de um console de verdade — não deve variar com uma
- *  foto escolhida pelo usuário (só as cores do tema, que já eram
- *  compartilhadas ali antes do papel de parede existir). */
-export function AnimatedBackground({ showWallpaper = true }: { showWallpaper?: boolean }) {
+/**
+ * `showWallpaper`: se o usuário escolheu um papel de parede, mostra SÓ ele
+ * (sem as cores do tema). Quem decide é a tela: o `AppShell` liga só na
+ * tela inicial; Splash e Onboarding ficam sempre com as cores do tema (o
+ * boot é um momento de marca fixo, como o power-on de um console).
+ */
+export function AnimatedBackground({ showWallpaper = false }: { showWallpaper?: boolean }) {
   const s = useStyles()
-  // `staleTime: Infinity`: raramente muda: `SettingsAppearance` invalida a
+  // `staleTime: Infinity`: raramente muda — `SettingsAppearance` invalida a
   // query na mão quando o usuário troca/remove o papel de parede.
   const wallpaper = useQuery({
     queryKey: ['wallpaper'],
@@ -81,14 +95,21 @@ export function AnimatedBackground({ showWallpaper = true }: { showWallpaper?: b
     staleTime: Infinity,
     enabled: showWallpaper,
   })
+  if (showWallpaper && wallpaper.data) {
+    return (
+      <div className={s.root} aria-hidden>
+        <img src={wallpaper.data} alt="" className={s.wallpaper} />
+        <div className={s.wallpaperVeil} />
+      </div>
+    )
+  }
   return (
     <div className={s.root} aria-hidden>
-      {showWallpaper && wallpaper.data && (
-        <img src={wallpaper.data} alt="" className={s.wallpaper} />
-      )}
-      <div className={mergeClasses(s.blob, s.b1)} />
-      <div className={mergeClasses(s.blob, s.b2)} />
-      <div className={s.veil} />
+      <div className={mergeClasses(s.glow, s.g3)} />
+      <div className={mergeClasses(s.glow, s.g4)} />
+      <div className={mergeClasses(s.glow, s.g1)} />
+      <div className={mergeClasses(s.glow, s.g2)} />
+      <div className={s.glowVeil} />
     </div>
   )
 }
