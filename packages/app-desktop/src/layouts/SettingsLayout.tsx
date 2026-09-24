@@ -3,6 +3,7 @@ import {
   TabList,
   Title2,
   makeStyles,
+  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -15,7 +16,12 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalL,
     maxWidth: "640px",
   },
+  // Abas de lista em grade (Cores) usam a largura da tela — 640px é bom pra
+  // formulário, mas deixava as colunas de cores espremidas.
+  wide: { maxWidth: "1400px" },
 });
+
+const WIDE_TABS = new Set(["cores"]);
 
 const TABS = [
   { key: "perfil", label: "Perfil" },
@@ -38,7 +44,7 @@ export function SettingsLayout() {
     TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? "audio";
 
   return (
-    <div className={styles.root}>
+    <div className={mergeClasses(styles.root, WIDE_TABS.has(current) && styles.wide)}>
       <Title2>Configurações</Title2>
       <TabList
         selectedValue={current}

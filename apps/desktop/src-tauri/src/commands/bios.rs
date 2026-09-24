@@ -200,3 +200,16 @@ pub async fn reset_core_options(
     }
     Ok(())
 }
+
+/// Pasta `PPSSPP/` (assets do core de PSP) instalada em `<system_dir>/`?
+#[tauri::command]
+pub fn ppsspp_assets_installed(state: State<'_, AppState>) -> bool {
+    crate::system_files::ppsspp_installed(&state.system_dir)
+}
+
+/// Baixa os assets do PPSSPP do buildbot da libretro (GPL — ao contrário de
+/// BIOS, pode ser baixado). Devolve quantos arquivos foram instalados.
+#[tauri::command]
+pub async fn download_ppsspp_assets(state: State<'_, AppState>) -> Result<usize, String> {
+    crate::system_files::download_ppsspp(&state.system_dir).await
+}

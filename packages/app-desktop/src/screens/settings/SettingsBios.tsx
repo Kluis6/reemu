@@ -1,5 +1,6 @@
 import { Badge, Body1, Button, Caption1, Text, makeStyles, tokens } from '@fluentui/react-components'
 import {
+  ArrowDownloadRegular,
   CheckmarkCircleFilled,
   DeleteRegular,
   DocumentArrowUpRegular,
@@ -7,12 +8,15 @@ import {
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  downloadPpssppAssets,
   importBiosFile,
   listBiosStatus,
   pickBiosFile,
+  ppssppAssetsInstalled,
   removeBiosFile,
   type BiosStatus,
 } from '../../lib/tauri'
+import { platformLabel } from '../../lib/platform'
 import { LoadingState } from '../../components/EmptyState'
 import { sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
@@ -33,16 +37,6 @@ const useStyles = makeStyles({
   meta: { display: 'flex', flexDirection: 'column', gap: '2px' },
 })
 
-const SYSTEM_LABEL: Record<string, string> = {
-  psx: 'PlayStation',
-  saturn: 'Saturn',
-  dreamcast: 'Dreamcast',
-  arcade: 'Arcade (FBNeo)',
-  segacd: 'Sega CD / Mega-CD',
-  pcenginecd: 'PC Engine CD',
-  pcfx: 'PC-FX',
-}
-
 type Key = { systemId: string; filename: string }
 const sameKey = (a?: Key, b?: Key) => a?.systemId === b?.systemId && a?.filename === b?.filename
 
@@ -53,6 +47,15 @@ export function SettingsBios() {
   const bios = useQuery({ queryKey: ['bios-status'], queryFn: listBiosStatus, retry: false })
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['bios-status'] })
+  const ppsspp = useQuery({ queryKey: ['ppsspp-assets'], queryFn: ppssppAssetsInstalled, retry: false })
+  const getPpsspp = useMutation({
+    mutationFn: downloadPpssppAssets,
+    onSuccess: (n) => {
+      qc.invalidateQueries({ queryKey: ['ppsspp-assets'] })
+      push(sysToast(`Arquivos do PPSSPP instalados (${n})`, 'Success'))
+    },
+    onError: (e) => push(sysToast(`Falha ao baixar: ${e}`, 'Error')),
+  })
 
   // O picker abre dentro do `mutationFn` — `isPending`/`variables` cobrem o
   // diálogo nativo + a cópia, então o botão fica "ocupado" o tempo todo.
@@ -89,14 +92,14 @@ export function SettingsBios() {
   return (
     <div className={styles.root}>
       <Caption1>
-        Arquivos de sistema que alguns cores exigem além da ROM (PS1, Saturn, Dreamcast, Arcade, Sega CD, PC Engine CD, PC-FX).
-        O ReEmu <Text as="strong" weight="semibold">nunca baixa BIOS</Text> — são copyright da fabricante; importe um arquivo
+        Arquivos de sistema que alguns cores exigem ou aceitam além da ROM. O ReEmu{' '}
+        <Text as="strong" weight="semibold">nunca baixa BIOS</Text> — são copyright da fabricante; importe um arquivo
         que você já possui legalmente.
       </Caption1>
       {[...bySystem.entries()].map(([systemId, files]) => (
         <div key={systemId} className={styles.system}>
           <Body1>
-            <Text as="strong" weight="semibold">{(SYSTEM_LABEL[systemId] ?? systemId).toUpperCase()}</Text>
+            <Text as="strong" weight="semibold">{platformLabel(systemId).toUpperCase()}</Text>
           </Body1>
           <div className={styles.list}>
             {files.map((f) => {
@@ -161,6 +164,38 @@ export function SettingsBios() {
           </div>
         </div>
       ))}
+      <div className={styles.system}>
+        <Body1>
+          <Text as="strong" weight="semibold">{platformLabel('psp').toUpperCase()}</Text>
+        </Body1>
+        <div className={styles.row}>
+          <span className={styles.meta}>
+            <Body1>
+              <code>PPSSPP/</code>
+            </Body1>
+            <Caption1>
+              Não é BIOS: fontes e arquivos do próprio emulador PPSSPP (GPL, baixados do buildbot da libretro).
+              Sem eles, alguns jogos mostram texto quebrado nos diálogos do sistema.
+            </Caption1>
+          </span>
+          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {ppsspp.data && (
+              <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
+                instalado
+              </Badge>
+            )}
+            <Button
+              size="small"
+              appearance={ppsspp.data ? 'subtle' : 'primary'}
+              icon={<ArrowDownloadRegular />}
+              disabled={getPpsspp.isPending}
+              onClick={() => getPpsspp.mutate()}
+            >
+              {getPpsspp.isPending ? 'Baixando…' : ppsspp.data ? 'Atualizar' : 'Baixar'}
+            </Button>
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

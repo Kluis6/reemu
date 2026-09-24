@@ -12,6 +12,7 @@ mod play_clock;
 mod profile;
 mod scraping;
 mod shader_pack;
+mod system_files;
 mod video;
 
 pub mod save_state;
@@ -255,6 +256,8 @@ pub fn run() {
             commands::list_bios_status,
             commands::import_bios_file,
             commands::remove_bios_file,
+            commands::ppsspp_assets_installed,
+            commands::download_ppsspp_assets,
             commands::list_roms,
             commands::remove_rom,
             commands::set_rom_favorite,

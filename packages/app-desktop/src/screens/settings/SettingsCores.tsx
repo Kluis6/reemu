@@ -30,7 +30,16 @@ import { useToastStore } from '../../stores/useToastStore'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
-  list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
+  // 2 colunas; 3 em tela larga (com o rail e a navegação de Configurações
+  // ao lado, abaixo disso a 3ª coluna aperta nome + sistema + botão).
+  list: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: tokens.spacingVerticalXS,
+    '@media (min-width: 1600px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' },
+  },
+  // mensagem de lista vazia ocupa a linha inteira do grid
+  fullRow: { gridColumn: '1 / -1' },
   row: {
     display: 'flex',
     alignItems: 'center',
@@ -40,7 +49,9 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
   },
-  meta: { display: 'flex', flexDirection: 'column', gap: '2px' },
+  // `minWidth: 0` deixa o texto quebrar dentro da coluna em vez de empurrar
+  // o botão pra fora do card.
+  meta: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, overflowWrap: 'anywhere' },
 })
 
 export function SettingsCores() {
@@ -145,7 +156,7 @@ function Catalog() {
         </Caption1>
       </div>
       <div className={styles.list}>
-        {sorted.length === 0 && <Caption1>Nenhum core encontrado.</Caption1>}
+        {sorted.length === 0 && <Caption1 className={styles.fullRow}>Nenhum core encontrado.</Caption1>}
         {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
             <span className={styles.meta}>

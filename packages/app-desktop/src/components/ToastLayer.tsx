@@ -17,13 +17,21 @@ const useStyles = makeStyles({
     right: tokens.spacingHorizontalM,
     display: "flex",
     flexDirection: "column",
-    gap: tokens.spacingVerticalS,
+    gap: tokens.spacingVerticalM,
     zIndex: 9999,
     pointerEvents: "none",
     width: "360px",
     maxWidth: "calc(100vw - 32px)",
   },
-  bar: { pointerEvents: "auto", overflowWrap: "anywhere" },
+  // O `MessageBar` da Fluent vem bem justo — mais respiro em volta do texto.
+  bar: {
+    pointerEvents: "auto",
+    overflowWrap: "anywhere",
+    paddingTop: tokens.spacingVerticalM,
+    paddingBottom: tokens.spacingVerticalM,
+    paddingLeft: tokens.spacingHorizontalL,
+    paddingRight: tokens.spacingHorizontalL,
+  },
   body: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS },
   progress: { marginTop: tokens.spacingVerticalXXS },
 });
