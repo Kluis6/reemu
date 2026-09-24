@@ -7,12 +7,16 @@ import {
   type ThemeMode,
   type ThemeSelection,
 } from "../styles/themes";
+import { getThemeSelection, setThemeSelection } from "../lib/tauri";
 
 /**
- * Aparência: tema de cor (ver `styles/themes.ts`). Persistido em
- * `localStorage` e lido de forma síncrona na criação da store — assim o
- * `FluentProvider` já monta com o tema certo, sem flash. (Um persist no lado
- * Rust entra junto com a evolução de Configurações › Aparência.)
+ * Aparência: tema de cor (ver `styles/themes.ts`). A fonte da verdade é o
+ * Rust (`<dados>/appearance/theme.json`, ver `appearance.rs`) — o
+ * `localStorage` é por origem (dev, `tauri://` no Linux e
+ * `http://tauri.localhost` no Windows têm cada um o seu) e sozinho perdia a
+ * escolha entre eles. Ele segue como cache síncrono: a store nasce com o
+ * valor dele (o `FluentProvider` já monta com o tema certo, sem flash) e
+ * `syncFromRust` corrige logo depois se o Rust tiver outro.
  */
 const KEY = "reemu.theme";
 
@@ -39,7 +43,16 @@ function isSelection(v: unknown): v is ThemeSelection {
 
 function load(): Persisted {
   try {
-    const raw = localStorage.getItem(KEY);
+    return parse(localStorage.getItem(KEY));
+  } catch {
+    /* modo privado / storage bloqueado */
+  }
+  return { selection: DEFAULT_SELECTION, customDraft: DEFAULT_DRAFT };
+}
+
+/** `null`/vazio/inválido → padrão. Aceita o formato antigo (id cru). */
+function parse(raw: string | null): Persisted {
+  try {
     if (!raw) return { selection: DEFAULT_SELECTION, customDraft: DEFAULT_DRAFT };
     // Formato antigo (pré-"Personalizado"): só o id do tema como string crua.
     if (isThemeId(raw)) {
@@ -62,16 +75,24 @@ function load(): Persisted {
       };
     }
   } catch {
-    /* modo privado / storage bloqueado / JSON inválido */
+    /* JSON inválido */
   }
   return { selection: DEFAULT_SELECTION, customDraft: DEFAULT_DRAFT };
 }
 
+const inTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
 function persist(state: Persisted) {
+  const json = JSON.stringify(state);
   try {
-    localStorage.setItem(KEY, JSON.stringify(state));
+    localStorage.setItem(KEY, json);
   } catch {
     /* ignora — o tema ainda vale nesta sessão */
+  }
+  if (inTauri()) {
+    setThemeSelection(json).catch(() => {
+      /* sem Rust (build antigo) — fica só no localStorage */
+    });
   }
 }
 
@@ -116,3 +137,43 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ selection: next.selection });
   },
 }));
+
+/**
+ * Traz a escolha salva no Rust. Se o Rust ainda não tem nada (1ª vez depois
+ * desta mudança), manda pra lá o que o `localStorage` tinha — quem já tinha
+ * escolhido um tema não perde. Exportada pra teste; roda sozinha na carga.
+ */
+export async function syncFromRust(): Promise<void> {
+  if (!inTauri()) return;
+  let raw: string;
+  try {
+    raw = await getThemeSelection();
+  } catch {
+    return;
+  }
+  if (!raw) {
+    let local: string | null = null;
+    try {
+      local = localStorage.getItem(KEY);
+    } catch {
+      /* storage bloqueado */
+    }
+    if (local) {
+      const p = parse(local);
+      setThemeSelection(JSON.stringify(p)).catch(() => {});
+    }
+    return;
+  }
+  const saved = parse(raw);
+  const cur = useThemeStore.getState();
+  if (JSON.stringify(saved) !== JSON.stringify({ selection: cur.selection, customDraft: cur.customDraft })) {
+    useThemeStore.setState(saved);
+    try {
+      localStorage.setItem(KEY, JSON.stringify(saved));
+    } catch {
+      /* ignora */
+    }
+  }
+}
+
+void syncFromRust();

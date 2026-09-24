@@ -36,6 +36,10 @@ pub trait RomRepository: Send + Sync {
     async fn remove(&self, id: &str) -> Result<(), RepoError>;
     /// Marca a ROM como jogada agora (`last_played_at`).
     async fn mark_played(&self, id: &str, at_unix: i64) -> Result<(), RepoError>;
+    /// Soma `secs` ao tempo de jogo acumulado da ROM.
+    async fn add_play_time(&self, id: &str, secs: u64) -> Result<(), RepoError>;
+    /// Tempo de jogo acumulado, em segundos (0 se nunca jogou ou não existe).
+    async fn play_time(&self, id: &str) -> Result<u64, RepoError>;
     /// Liga/desliga o favorito.
     async fn set_favorite(&self, id: &str, favorite: bool) -> Result<(), RepoError>;
     /// Edição manual: `title = Some("")` limpa (volta pro nome do arquivo);

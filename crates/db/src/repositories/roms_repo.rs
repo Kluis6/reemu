@@ -161,6 +161,25 @@ impl RomRepository for RomsRepo {
         Ok(())
     }
 
+    async fn add_play_time(&self, id: &str, secs: u64) -> Result<(), RepoError> {
+        sqlx::query("UPDATE roms SET play_time_secs = play_time_secs + ?2 WHERE id = ?1")
+            .bind(id)
+            .bind(secs as i64)
+            .execute(&self.db)
+            .await
+            .map_err(be)?;
+        Ok(())
+    }
+
+    async fn play_time(&self, id: &str) -> Result<u64, RepoError> {
+        let secs: Option<i64> = sqlx::query_scalar("SELECT play_time_secs FROM roms WHERE id = ?1")
+            .bind(id)
+            .fetch_optional(&self.db)
+            .await
+            .map_err(be)?;
+        Ok(secs.unwrap_or(0).max(0) as u64)
+    }
+
     async fn set_favorite(&self, id: &str, favorite: bool) -> Result<(), RepoError> {
         sqlx::query("UPDATE roms SET is_favorite = ?2 WHERE id = ?1")
             .bind(id)

@@ -270,6 +270,23 @@ async fn metadata_config_scrape_and_pending_review() {
 }
 
 #[tokio::test]
+async fn play_time_accumulates_per_rom() {
+    let repo = RomsRepo::new(mem_db().await);
+    repo.add(&rom("r1", "AA", "nes")).await.unwrap();
+    repo.add(&rom("r2", "BB", "nes")).await.unwrap();
+    assert_eq!(repo.play_time("r1").await.unwrap(), 0);
+    repo.add_play_time("r1", 90).await.unwrap();
+    repo.add_play_time("r1", 30).await.unwrap();
+    assert_eq!(repo.play_time("r1").await.unwrap(), 120);
+    assert_eq!(
+        repo.play_time("r2").await.unwrap(),
+        0,
+        "não vaza pra outra ROM"
+    );
+    assert_eq!(repo.play_time("nao-existe").await.unwrap(), 0);
+}
+
+#[tokio::test]
 async fn roms_duplicate_path_is_error() {
     let repo = RomsRepo::new(mem_db().await);
     repo.add(&rom("r1", "AA", "nes")).await.unwrap();

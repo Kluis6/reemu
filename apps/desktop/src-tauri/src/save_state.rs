@@ -67,6 +67,7 @@ fn state_path(dir: &Path, rom_id: &str, core_id: &str, slot: Option<u32>) -> Pat
 /// Grava `state_bytes` (+ `thumbnail_png` ao lado, se dado) e registra a
 /// metadata. Se `slot` já estava ocupado, o state anterior nele é apagado
 /// (arquivo + thumbnail + registro).
+#[allow(clippy::too_many_arguments)]
 pub async fn save<R: SaveStateRepository + ?Sized>(
     repo: &R,
     save_dir: &Path,
@@ -75,6 +76,7 @@ pub async fn save<R: SaveStateRepository + ?Sized>(
     slot: Option<u32>,
     state_bytes: &[u8],
     thumbnail_png: Option<&[u8]>,
+    play_time: Option<u64>,
 ) -> Result<SaveStateMetadata, SaveError> {
     std::fs::create_dir_all(save_dir)?;
 
@@ -108,7 +110,7 @@ pub async fn save<R: SaveStateRepository + ?Sized>(
         file_path: path.to_string_lossy().into_owned(),
         thumbnail_path,
         created_at: now_unix(),
-        play_time_at_save: None,
+        play_time_at_save: play_time,
     };
     repo.record_state(&meta).await?;
     Ok(meta)

@@ -51,6 +51,7 @@ async fn save_writes_file_and_records_metadata() {
         Some(0),
         b"STATE-BYTES-A",
         None,
+        Some(3600),
     )
     .await
     .unwrap();
@@ -58,6 +59,11 @@ async fn save_writes_file_and_records_metadata() {
     assert_eq!(std::fs::read(&meta.file_path).unwrap(), b"STATE-BYTES-A");
     let listed = save_state::list(&repo, "rom1").await.unwrap();
     assert_eq!(listed.len(), 1);
+    assert_eq!(
+        listed[0].play_time_at_save,
+        Some(3600),
+        "tempo de jogo gravado"
+    );
     assert_eq!(listed[0].id, meta.id);
     assert_eq!(listed[0].slot, Some(0));
 
@@ -69,10 +75,10 @@ async fn saving_same_slot_replaces_previous() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
 
-    let first = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"OLD", None)
+    let first = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"OLD", None, None)
         .await
         .unwrap();
-    let second = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"NEW", None)
+    let second = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"NEW", None, None)
         .await
         .unwrap();
 
@@ -91,7 +97,7 @@ async fn saving_same_slot_replaces_previous() {
 async fn load_validates_core_and_returns_meta() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
-    let meta = save_state::save(&repo, &dir, "rom1", "mesen", None, b"S", None)
+    let meta = save_state::save(&repo, &dir, "rom1", "mesen", None, b"S", None, None)
         .await
         .unwrap();
 
@@ -142,6 +148,7 @@ async fn load_allows_sw_hw_sibling_cores() {
         None,
         b"S",
         None,
+        None,
     )
     .await
     .unwrap();
@@ -159,6 +166,7 @@ async fn load_allows_sw_hw_sibling_cores() {
         "mednafen_psx_hw_libretro",
         None,
         b"S2",
+        None,
         None,
     )
     .await
@@ -182,7 +190,7 @@ async fn load_allows_sw_hw_sibling_cores() {
 async fn delete_removes_file_and_record() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
-    let meta = save_state::save(&repo, &dir, "rom1", "mesen", Some(2), b"S", None)
+    let meta = save_state::save(&repo, &dir, "rom1", "mesen", Some(2), b"S", None, None)
         .await
         .unwrap();
 

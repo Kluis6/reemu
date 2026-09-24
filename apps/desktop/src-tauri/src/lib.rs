@@ -8,6 +8,7 @@ mod credentials;
 mod decoration;
 mod gpu;
 mod perf;
+mod play_clock;
 mod profile;
 mod scraping;
 mod shader_pack;
@@ -97,6 +98,7 @@ pub fn run() {
             // o jogo, quando o `poll_frame` do canvas acorda o loop). Esta
             // thread roda sempre, ~60Hz.
             spawn_input_bridge(app.handle().clone());
+            play_clock::spawn(app.handle().clone());
 
             // Surface nativa de vídeo (wl_subsurface `place_above`) — padrão no
             // Linux/Wayland. `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>` na
@@ -240,6 +242,8 @@ pub fn run() {
             appearance::read_wallpaper,
             appearance::set_wallpaper_file,
             appearance::clear_wallpaper,
+            appearance::get_theme_selection,
+            appearance::set_theme_selection,
             commands::is_fullscreen,
             commands::set_fullscreen,
             commands::quit_app,
@@ -259,6 +263,7 @@ pub fn run() {
             commands::remove_rom_source,
             commands::remove_rom_system,
             commands::list_system_cores,
+            commands::rom_play_time,
             commands::set_system_core,
             commands::clear_library,
             commands::scan_library,

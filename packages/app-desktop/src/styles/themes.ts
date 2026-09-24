@@ -21,6 +21,7 @@
 import {
   createDarkTheme,
   createLightTheme,
+  teamsHighContrastTheme,
   type BrandVariants,
   type Theme,
 } from "@fluentui/react-components";
@@ -255,6 +256,33 @@ function make(
   };
 }
 
+/**
+ * Alto contraste: o tema de alto contraste da Fluent (preto/branco puros,
+ * foco em ciano) + os tokens do ReEmu no mesmo esquema — sem as manchas de
+ * cor do fundo animado nem o véu, que só atrapalham a leitura aqui. O teste
+ * em `themes.test.ts` confere os pares texto/fundo em AAA (7:1).
+ */
+function makeHighContrast(): ReEmuTheme {
+  const t = teamsHighContrastTheme;
+  const bg = t.colorNeutralBackground1;
+  return {
+    ...t,
+    reemuAppBg: bg,
+    reemuAccentSoft: "rgba(255, 255, 255, 0.12)",
+    reemuSurfaceSoft: bg,
+    reemuBrandSolid: t.colorBrandBackground,
+    reemuOnBrand: t.colorNeutralForegroundOnBrand,
+    reemuBg1: bg,
+    reemuBg2: bg,
+    reemuBg3: bg,
+    reemuVeil: `linear-gradient(${bg}, ${bg})`,
+    reemuActiveBg: t.colorBrandBackground,
+    reemuActiveFg: t.colorNeutralForegroundOnBrand,
+    reemuFillWeak: "rgba(255, 255, 255, 0.08)",
+    reemuBrandText: t.colorBrandForeground1,
+  };
+}
+
 // -------------------------------------------------------------- registro ----
 
 export type ThemeId =
@@ -264,7 +292,8 @@ export type ThemeId =
   | "ps1"
   | "claro"
   | "ps-blue-claro"
-  | "ps1-claro";
+  | "ps1-claro"
+  | "alto-contraste";
 
 // "Roxo"/"Âmbar" (e seus pares "-claro") foram removidos: eram só uma rampa
 // de cor simples, sem identidade nenhuma — redundante agora que o
@@ -286,6 +315,7 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
     label: "PlayStation Clássico Claro",
     theme: make(ps1Red, "light", ps1Accents),
   },
+  "alto-contraste": { label: "Alto contraste", theme: makeHighContrast() },
 };
 
 export const DEFAULT_THEME_ID: ThemeId = "xbox-green";

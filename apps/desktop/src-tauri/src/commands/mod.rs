@@ -52,6 +52,8 @@ pub struct AppState {
     /// `rom_id` do jogo carregado agora (o path vai pro core, o id vai pro DB).
     /// `None` quando ocioso. Usado pelo QuickSave/QuickLoad das hotkeys.
     pub current_rom: Mutex<Option<String>>,
+    /// Tempo de jogo ainda não gravado da ROM atual (`play_clock.rs`).
+    pub play_clock: Mutex<crate::play_clock::PlayClock>,
     /// Contexto GPU pro processamento de frame (etapa 04). `None` = sem
     /// adapter wgpu; `poll_frame` cai no caminho CPU (`to_rgba8`).
     pub gpu: Mutex<Option<crate::gpu::FrameProcessor>>,
@@ -159,6 +161,7 @@ impl AppState {
             hotkeys: Mutex::new(ComboHotkeyResolver::new(hotkeys)),
             last_hotkey: Mutex::new(None),
             current_rom: Mutex::new(None),
+            play_clock: Mutex::new(Default::default()),
             gpu: Mutex::new(None),
             scrape: Arc::new(crate::scraping::ScrapeProgress::default()),
             scrape_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -281,6 +284,7 @@ async fn quick_state<R: tauri::Runtime>(app: &AppHandle<R>, save: bool) -> Resul
             Some(QUICK_SLOT),
             &bytes,
             thumb.as_deref(),
+            crate::play_clock::total(&state, &rom_id).await,
         )
         .await
         .map_err(|e| e.to_string())?;

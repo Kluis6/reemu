@@ -152,6 +152,13 @@ pub async fn remove_rom_system(
     Ok(n)
 }
 
+/// Tempo total de jogo da ROM, em segundos (banco + o que o relógio ainda
+/// não gravou).
+#[tauri::command]
+pub async fn rom_play_time(state: State<'_, AppState>, rom_id: String) -> Result<u64, String> {
+    Ok(crate::play_clock::total(&state, &rom_id).await.unwrap_or(0))
+}
+
 /// Core preferido por plataforma → `{ system_id: core_id }`.
 #[tauri::command]
 pub async fn list_system_cores(

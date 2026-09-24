@@ -452,7 +452,14 @@ export interface SaveState {
   createdAt: number
   filePath: string
   hasThumbnail: boolean
+  /** Tempo de jogo (s) quando foi salvo; `null` em saves antigos. */
+  playTimeAtSave: number | null
 }
+/** JSON da escolha de tema salva no Rust (`""` se nunca escolheu). */
+export const getThemeSelection = () => invoke<string>('get_theme_selection')
+export const setThemeSelection = (json: string) => invoke<void>('set_theme_selection', { json })
+/** Tempo total de jogo da ROM, em segundos. */
+export const getRomPlayTime = (romId: string) => invoke<number>('rom_play_time', { romId })
 export const saveState = (romId: string, slot: number | null) =>
   invoke<SaveState>('save_state', { romId, slot })
 export const listSaveStates = (romId: string) =>

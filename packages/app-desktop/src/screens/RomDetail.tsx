@@ -58,8 +58,10 @@ import {
   setRomFavorite,
   setRomMetadata,
   setShader,
+  getRomPlayTime,
   type ShaderScope,
 } from "../lib/tauri";
+import { formatPlayTime } from "../lib/playTime";
 import { useDetailStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
 
@@ -83,6 +85,11 @@ export function RomDetail() {
   const sysCores = useQuery({
     queryKey: ["system-cores"],
     queryFn: listSystemCores,
+    retry: false,
+  });
+  const playTime = useQuery({
+    queryKey: ["play-time", romId],
+    queryFn: () => getRomPlayTime(romId),
     retry: false,
   });
   const states = useQuery({
@@ -519,6 +526,12 @@ export function RomDetail() {
               </span>
             </div>
             <div className={s.infoRow}>
+              <span className={s.infoLabel}>Tempo de jogo</span>
+              <span className={s.infoValue}>
+                {playTime.data ? formatPlayTime(playTime.data) : "Nunca jogado"}
+              </span>
+            </div>
+            <div className={s.infoRow}>
               <span className={s.infoLabel}>Favorito</span>
               <span className={s.infoValue}>{rom.isFavorite ? "Sim" : "Não"}</span>
             </div>
@@ -674,6 +687,8 @@ export function RomDetail() {
                     </Body1>
                     <Caption1 className={s.hint}>
                       {new Date(st.createdAt * 1000).toLocaleString()}
+                      {st.playTimeAtSave != null &&
+                        ` · ${formatPlayTime(st.playTimeAtSave)} de jogo`}
                     </Caption1>
                   </div>
                   <Button

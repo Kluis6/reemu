@@ -10,6 +10,9 @@ pub struct SaveStateDto {
     pub created_at: i64,
     pub file_path: String,
     pub has_thumbnail: bool,
+    /// Tempo de jogo da ROM (s) quando o estado foi salvo. `None` = save
+    /// antigo, de antes do relógio existir.
+    pub play_time_at_save: Option<u64>,
 }
 
 fn save_dto(m: domain::save_state::SaveStateMetadata) -> SaveStateDto {
@@ -19,6 +22,7 @@ fn save_dto(m: domain::save_state::SaveStateMetadata) -> SaveStateDto {
         created_at: m.created_at,
         file_path: m.file_path,
         has_thumbnail: m.thumbnail_path.is_some(),
+        play_time_at_save: m.play_time_at_save,
     }
 }
 
@@ -78,6 +82,7 @@ pub async fn save_state(
         slot,
         &bytes,
         thumb.as_deref(),
+        crate::play_clock::total(&state, &rom_id).await,
     )
     .await
     .map_err(|e| e.to_string())?;

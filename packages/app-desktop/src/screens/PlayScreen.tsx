@@ -19,6 +19,7 @@ import { useFocusBridge } from "../hooks/useFocusBridge";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useKeyboardInput } from "../hooks/useKeyboardInput";
 import { moveFocus } from "../lib/focusNav";
+import { formatPlayTime } from '../lib/playTime'
 import { initials } from "../lib/initials";
 import { platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
@@ -617,6 +618,8 @@ export function PlayScreen() {
                       <br />
                       <span className={pause.stateDate}>
                         {new Date(st.createdAt * 1000).toLocaleString()}
+                        {st.playTimeAtSave != null &&
+                          ` · ${formatPlayTime(st.playTimeAtSave)} de jogo`}
                       </span>
                     </span>
                   </Button>

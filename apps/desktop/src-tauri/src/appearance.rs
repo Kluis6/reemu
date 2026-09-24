@@ -71,3 +71,67 @@ pub async fn clear_wallpaper(state: State<'_, AppState>) -> Result<(), String> {
     }
     Ok(())
 }
+
+// --- tema de cor --------------------------------------------------------
+//
+// A escolha de tema (`useThemeStore` no frontend) morava só no
+// `localStorage`, que é POR ORIGEM: dev (`http://127.0.0.1:1420`), produção
+// no Linux (`tauri://localhost`) e no Windows (`http://tauri.localhost`) têm
+// cada um o seu — o tema escolhido "sumia" entre eles. Fica aqui a fonte da
+// verdade; o `localStorage` segue como cache síncrono (o app abre já com o
+// tema certo, sem piscar o padrão). O Rust só guarda o JSON: quem valida o
+// formato é o frontend (`isSelection`), que conhece os temas.
+
+const THEME_FILE: &str = "theme.json";
+const THEME_MAX_BYTES: usize = 4 * 1024;
+
+fn read_theme(dir: &Path) -> String {
+    std::fs::read_to_string(dir.join(THEME_FILE)).unwrap_or_default()
+}
+
+fn write_theme(dir: &Path, json: &str) -> Result<(), String> {
+    if json.len() > THEME_MAX_BYTES {
+        return Err("tema grande demais".into());
+    }
+    serde_json::from_str::<serde_json::Value>(json).map_err(|e| format!("tema inválido: {e}"))?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let tmp = dir.join(format!("{THEME_FILE}.tmp"));
+    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, dir.join(THEME_FILE)).map_err(|e| e.to_string())
+}
+
+/// JSON da escolha de tema salva (vazio se nunca escolheu).
+#[tauri::command]
+pub fn get_theme_selection(state: State<'_, AppState>) -> String {
+    read_theme(&state.appearance_dir)
+}
+
+#[tauri::command]
+pub fn set_theme_selection(state: State<'_, AppState>, json: String) -> Result<(), String> {
+    write_theme(&state.appearance_dir, &json)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn theme_roundtrip_and_validation() {
+        let dir = std::env::temp_dir().join(format!("reemu-theme-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(read_theme(&dir), "", "sem arquivo = vazio");
+
+        let json = r#"{"selection":{"kind":"preset","id":"alto-contraste"}}"#;
+        write_theme(&dir, json).unwrap();
+        assert_eq!(read_theme(&dir), json);
+
+        assert!(write_theme(&dir, "{nao-e-json").is_err());
+        assert!(write_theme(&dir, &"x".repeat(THEME_MAX_BYTES + 1)).is_err());
+        assert_eq!(
+            read_theme(&dir),
+            json,
+            "escrita recusada não estraga o salvo"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
