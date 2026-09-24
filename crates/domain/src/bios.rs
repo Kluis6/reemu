@@ -10,7 +10,15 @@
 //! (não de memória — ver `docs/ai-context/REFERENCES.md`): Beetle PSX,
 //! Kronos (Saturn), Flycast (Dreamcast), FBNeo, Genesis Plus GX + PicoDrive
 //! (Sega CD), Beetle PCE Fast (PC Engine CD), Beetle PC-FX. Os nomes também
-//! batem com as strings dos próprios `.so` desses cores.
+//! batem com as strings dos próprios `.so` desses cores. Amiga (PUAE), Atari
+//! 5200/8-bit (atari800 + a5200), MSX (fMSX) e DS (melonDS/DeSmuME) foram
+//! conferidos nos mesmos docs E nos `firmwareN_path`/`firmwareN_opt` do
+//! `libretro-core-info` (o a5200 e o melonDS DS não têm página nos docs).
+//!
+//! `required` só é `true` quando TODOS os cores do sistema no catálogo
+//! exigem o arquivo — o `RomDetail` avisa quando falta um obrigatório, e um
+//! aviso falso pra quem usa o outro core confunde mais do que ajuda. Quando
+//! um core exige e outro não, a `note` diz qual.
 //!
 //! PSP não entra aqui: o PPSSPP não usa BIOS, e sim a pasta `assets` do
 //! projeto PPSSPP (GPL) em `<system_dir>/PPSSPP/` — outro tipo de coisa.
@@ -186,6 +194,160 @@ const PC_FX: &[BiosFile] = &[BiosFile {
     note: "BIOS v1.00 — o Beetle PC-FX não roda sem",
 }];
 
+const AMIGA: &[BiosFile] = &[
+    BiosFile {
+        filename: "kick34005.A500",
+        subfolder: None,
+        md5: &["82a21c1890cae844b3df741f2762d48d"],
+        required: false,
+        note: "Kickstart 1.3 (A500) — o da maioria dos jogos. PUAE usa AROS embutido se faltar",
+    },
+    BiosFile {
+        filename: "kick37175.A500",
+        subfolder: None,
+        md5: &["dc10d7bdd1b6f450773dfb558477c230"],
+        required: false,
+        note: "Kickstart 2.04 (A500+)",
+    },
+    BiosFile {
+        filename: "kick40063.A600",
+        subfolder: None,
+        md5: &["e40a5dfb3d017ba8779faba30cbd1c8e"],
+        required: false,
+        note: "Kickstart 3.1 (A600)",
+    },
+    BiosFile {
+        filename: "kick40068.A1200",
+        subfolder: None,
+        md5: &["646773759326fbac3b2311fd8c8793ee"],
+        required: false,
+        note: "Kickstart 3.1 (A1200) — jogos AGA",
+    },
+    BiosFile {
+        filename: "kick40060.CD32",
+        subfolder: None,
+        // KS sozinho ou KS + extended num arquivo só — os docs listam os dois
+        md5: &[
+            "5f8924d013dd57a89cf349f4cdedc6b1",
+            "f2f241bf094168cfb9e7805dc2856433",
+        ],
+        required: false,
+        note: "Kickstart 3.1 do CD32 (sozinho ou já combinado com o extended)",
+    },
+    BiosFile {
+        filename: "kick40060.CD32.ext",
+        subfolder: None,
+        md5: &["bb72565701b1b6faece07d68ea5da639"],
+        required: false,
+        note: "CD32 extended ROM (dispensável se o kick40060.CD32 já é o combinado)",
+    },
+];
+const ATARI_5200: &[BiosFile] = &[BiosFile {
+    filename: "5200.rom",
+    subfolder: None,
+    md5: &["281f20ea4320404ec820fb7ec0693b38"],
+    required: false,
+    note: "atari800 exige; o a5200 roda sem",
+}];
+const ATARI_8BIT: &[BiosFile] = &[
+    BiosFile {
+        filename: "ATARIXL.ROM",
+        subfolder: None,
+        md5: &["06daac977823773a3eea3422fd26a703"],
+        required: false,
+        note: "OS do Atari XL/XE — o atari800 pede pra jogos de XL/XE",
+    },
+    BiosFile {
+        filename: "ATARIBAS.ROM",
+        subfolder: None,
+        md5: &["0bac0c6a50104045d902df4503a4c30b"],
+        required: false,
+        note: "Interpretador BASIC",
+    },
+    BiosFile {
+        filename: "ATARIOSA.ROM",
+        subfolder: None,
+        md5: &["eb1f32f5d9f382db1bbfb8d7f9cb343a"],
+        required: false,
+        note: "OS do Atari 400/800 (PAL)",
+    },
+    BiosFile {
+        filename: "ATARIOSB.ROM",
+        subfolder: None,
+        md5: &["a3e8d617c95d08031fe1b20d541434b2"],
+        required: false,
+        note: "OS do Atari 400/800 (NTSC)",
+    },
+];
+const MSX: &[BiosFile] = &[
+    BiosFile {
+        filename: "MSX.ROM",
+        subfolder: None,
+        md5: &["364a1a579fe5cb8dba54519bcfcdac0d"],
+        required: false,
+        note: "MSX1 — fMSX exige; o blueMSX usa as pastas Machines/Databases",
+    },
+    BiosFile {
+        filename: "MSX2.ROM",
+        subfolder: None,
+        md5: &["ec3a01c91f24fbddcbcab0ad301bc9ef"],
+        required: false,
+        note: "MSX2 — fMSX exige",
+    },
+    BiosFile {
+        filename: "MSX2EXT.ROM",
+        subfolder: None,
+        md5: &["2183c2aff17cf4297bdb496de78c2e8a"],
+        required: false,
+        note: "MSX2 ExtROM — fMSX exige",
+    },
+    BiosFile {
+        filename: "MSX2P.ROM",
+        subfolder: None,
+        md5: &["847cc025ffae665487940ff2639540e5"],
+        required: false,
+        note: "MSX2+ — fMSX exige",
+    },
+    BiosFile {
+        filename: "MSX2PEXT.ROM",
+        subfolder: None,
+        md5: &["7c8243c71d8f143b2531f01afa6a05dc"],
+        required: false,
+        note: "MSX2+ ExtROM — fMSX exige",
+    },
+    BiosFile {
+        filename: "DISK.ROM",
+        subfolder: None,
+        md5: &["80dcd1ad1a4cf65d64b7ba10504e8190"],
+        required: false,
+        note: "DiskROM/BDOS — jogos em disquete no fMSX",
+    },
+];
+const NDS: &[BiosFile] = &[
+    BiosFile {
+        filename: "bios7.bin",
+        subfolder: None,
+        md5: &["df692a80a5b1bc90728bc3dfc76cd948"],
+        required: false,
+        note: "ARM7 — melonDS tem BIOS livre embutida; DeSmuME só usa com a opção de BIOS externa",
+    },
+    BiosFile {
+        filename: "bios9.bin",
+        subfolder: None,
+        md5: &["a392174eb3e572fed6447e956bde4b25"],
+        required: false,
+        note: "ARM9 — mesma situação do bios7.bin",
+    },
+    BiosFile {
+        filename: "firmware.bin",
+        subfolder: None,
+        // o MD5 muda de dump pra dump (guarda configurações do console)
+        md5: &[],
+        required: false,
+        note: "Firmware do DS — opcional; o MD5 varia por console",
+    },
+];
+
 /// Arquivos de sistema conhecidos pra um `system_id`. `&[]` = o sistema não
 /// precisa de nada além da ROM (a maioria — cartucho puro).
 pub fn bios_files_for_system(system_id: &str) -> &'static [BiosFile] {
@@ -197,6 +359,11 @@ pub fn bios_files_for_system(system_id: &str) -> &'static [BiosFile] {
         "segacd" => SEGA_CD,
         "pcenginecd" => PC_ENGINE_CD,
         "pcfx" => PC_FX,
+        "amiga" => AMIGA,
+        "atari5200" => ATARI_5200,
+        "atari8bit" => ATARI_8BIT,
+        "msx" => MSX,
+        "nds" => NDS,
         _ => &[],
     }
 }
@@ -211,6 +378,11 @@ pub const KNOWN_SYSTEMS: &[&str] = &[
     "segacd",
     "pcenginecd",
     "pcfx",
+    "amiga",
+    "atari5200",
+    "atari8bit",
+    "msx",
+    "nds",
 ];
 
 #[cfg(test)]
@@ -250,6 +422,17 @@ mod tests {
             .any(|f| f.filename == "syscard3.pce" && f.required));
         assert_eq!(pce.iter().filter(|f| f.required).count(), 1);
         assert!(bios_files_for_system("pcfx")[0].required);
+    }
+
+    #[test]
+    fn systems_with_multiple_cores_only_warn_when_all_require_it() {
+        // cada um desses tem um core no catálogo que roda sem o arquivo
+        for sys in ["amiga", "atari5200", "atari8bit", "msx", "nds"] {
+            assert!(
+                bios_files_for_system(sys).iter().all(|f| !f.required),
+                "{sys}: nenhum arquivo deveria ser obrigatório"
+            );
+        }
     }
 
     #[test]
