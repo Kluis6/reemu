@@ -10,6 +10,10 @@ pub struct MetadataConfigDto {
     pub provider: String,
     pub screenscraper_user: Option<String>,
     pub screenscraper_password: Option<String>,
+    /// Chave de API do TheGamesDB (provedor de reserva). `#[serde(default)]`:
+    /// frontend antigo não manda o campo.
+    #[serde(default)]
+    pub thegamesdb_api_key: Option<String>,
 }
 
 #[tauri::command]
@@ -20,6 +24,7 @@ pub async fn get_metadata_config(state: State<'_, AppState>) -> Result<MetadataC
         provider: c.provider,
         screenscraper_user: c.screenscraper_user,
         screenscraper_password: c.screenscraper_password,
+        thegamesdb_api_key: c.thegamesdb_api_key,
     })
 }
 
@@ -34,6 +39,7 @@ pub async fn set_metadata_config(
         provider: config.provider,
         screenscraper_user: norm(config.screenscraper_user),
         screenscraper_password: norm(config.screenscraper_password),
+        thegamesdb_api_key: norm(config.thegamesdb_api_key),
     };
     crate::credentials::save_config(&repo, &crate::credentials::OsKeyring, cfg).await
 }

@@ -208,12 +208,17 @@ async fn metadata_config_scrape_and_pending_review() {
         provider: "screenscraper".into(),
         screenscraper_user: Some("u".into()),
         screenscraper_password: Some("p".into()),
+        thegamesdb_api_key: Some("k".into()),
     })
     .await
     .unwrap();
     assert_eq!(
         m.get_config().await.unwrap().screenscraper_user.as_deref(),
         Some("u")
+    );
+    assert_eq!(
+        m.get_config().await.unwrap().thegamesdb_api_key.as_deref(),
+        Some("k")
     );
 
     // fila = as 2 ROMs sem match

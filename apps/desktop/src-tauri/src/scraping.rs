@@ -6,6 +6,17 @@
 //!
 //! Credenciais do usuário (conta grátis no screenscraper.fr) são opcionais mas
 //! melhoram muito o limite de requisições — anônimo é bem restrito.
+//!
+//! Reserva: **TheGamesDB** (`thegamesdb.net`, precisa de chave de API do
+//! usuário) quando o ScreenScraper não acha o jogo. É busca por NOME (o
+//! TheGamesDB não tem hash), então o resultado vai SEMPRE pra revisão — nunca
+//! auto-aplicado. IGDB ficou de fora: a lista de ids de plataforma dele só sai
+//! da API autenticada, sem fonte pública confiável pra conferir.
+//!
+//! Ids de plataforma dos dois provedores: tabelas do ES-DE (EmulationStation
+//! Desktop Edition, GPL — `es-app/src/scrapers/ScreenScraper.cpp` e
+//! `GamesDBJSONScraper.cpp`), não de memória; os 15 ids do ScreenScraper que
+//! o ReEmu já tinha batem com os de lá.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -16,10 +27,15 @@ use domain::metadata::{
 };
 use serde_json::Value;
 
-/// Pausa entre requisições — o ScreenScraper anônimo é bem limitado.
+/// Pausa entre requisições ao ScreenScraper — anônimo é bem limitado.
 const REQUEST_DELAY: std::time::Duration = std::time::Duration::from_millis(1200);
+/// Pausa depois de consultar o TheGamesDB — a chave tem cota MENSAL
+/// (`remaining_monthly_allowance`), então sem pressa.
+const TGDB_DELAY: std::time::Duration = std::time::Duration::from_millis(1000);
 
-/// `system_id` canônico do ReEmu → `systemeid` do ScreenScraper.
+/// `system_id` canônico do ReEmu → `systemeid` do ScreenScraper (tabela do
+/// ES-DE, ver comentário do módulo). `disc` fica de fora: sem saber o sistema,
+/// não há o que perguntar.
 fn screenscraper_system_id(system_id: &str) -> Option<u32> {
     Some(match system_id {
         "nes" => 3,
@@ -28,17 +44,230 @@ fn screenscraper_system_id(system_id: &str) -> Option<u32> {
         "gb" => 9,
         "gbc" => 10,
         "gba" => 12,
+        "vb" => 11,
+        "nds" => 15,
+        "pokemini" => 211,
         "megadrive" => 1,
         "mastersystem" => 2,
         "gamegear" => 21,
         "sega32x" => 19,
+        "segacd" => 20,
+        "saturn" => 22,
+        "dreamcast" => 23,
+        "sg1000" => 109,
+        "naomi" => 56,
+        "atomiswave" => 53,
+        "psx" => 57,
+        "ps2" => 58,
+        "psp" => 61,
         "pcengine" => 31,
+        "pcenginecd" => 114,
+        "supergrafx" => 105,
+        "pcfx" => 72,
         "atari2600" => 26,
+        "atari5200" => 40,
+        "atari7800" => 41,
+        "atari8bit" => 43,
+        "jaguar" => 27,
         "lynx" => 28,
         "wonderswan" => 45,
         "ngp" => 25,
+        "neogeocd" => 70,
+        "coleco" => 48,
+        "intellivision" => 115,
+        "vectrex" => 102,
+        "odyssey2" => 104,
+        "supervision" => 207,
+        "3do" => 29,
+        "cdi" => 133,
+        "msx" => 113,
+        "c64" => 66,
+        "amiga" => 64,
+        "zxspectrum" => 76,
+        "amstradcpc" => 65,
+        "arcade" => 75,
+        "dos" => 135,
+        "scummvm" => 123,
         _ => return None,
     })
+}
+
+/// `system_id` → `filter[platform]` do TheGamesDB (tabela do ES-DE). Mais de
+/// um id quando o TheGamesDB separa o que o ReEmu junta (Genesis/Mega Drive,
+/// WonderSwan/Color, NGP/Color, Atari 8-bit/XE).
+fn thegamesdb_platforms(system_id: &str) -> Option<&'static str> {
+    Some(match system_id {
+        "nes" => "7",
+        "snes" => "6",
+        "n64" => "3",
+        "gb" => "4",
+        "gbc" => "41",
+        "gba" => "5",
+        "vb" => "4918",
+        "nds" => "8",
+        "pokemini" => "4957",
+        "megadrive" => "18,36",
+        "mastersystem" => "35",
+        "gamegear" => "20",
+        "sega32x" => "33",
+        "segacd" => "21",
+        "saturn" => "17",
+        "dreamcast" => "16",
+        "sg1000" => "4949",
+        "naomi" | "atomiswave" | "arcade" => "23",
+        "psx" => "10",
+        "ps2" => "11",
+        "psp" => "13",
+        "pcengine" | "supergrafx" => "34",
+        "pcenginecd" => "4955",
+        "pcfx" => "4930",
+        "atari2600" => "22",
+        "atari5200" => "26",
+        "atari7800" => "27",
+        "atari8bit" => "4943,30",
+        "jaguar" => "28",
+        "lynx" => "4924",
+        "wonderswan" => "4925,4926",
+        "ngp" => "4922,4923",
+        "neogeocd" => "4956",
+        "coleco" => "31",
+        "intellivision" => "32",
+        "vectrex" => "4939",
+        "odyssey2" => "4927",
+        "supervision" => "4959",
+        "3do" => "25",
+        "cdi" => "4917",
+        "msx" => "4929",
+        "c64" => "40",
+        "amiga" => "4911",
+        "zxspectrum" => "4913",
+        "amstradcpc" => "4914",
+        "dos" | "scummvm" => "1",
+        _ => return None,
+    })
+}
+
+/// Nome do arquivo → título pra busca por nome: tira as tags No-Intro/TOSEC
+/// (`(USA)`, `(Rev 1)`, `[!]`…) e troca `_` por espaço.
+fn search_title(file_stem: &str) -> String {
+    let mut out = String::with_capacity(file_stem.len());
+    let mut depth = 0i32;
+    for c in file_stem.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = (depth - 1).max(0),
+            _ if depth == 0 => out.push(if c == '_' { ' ' } else { c }),
+            _ => {}
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// 1º jogo de `data.games` do `/v1/Games/ByGameName` → candidato (sem capa;
+/// a capa vem de outra chamada, `parse_tgdb_boxart`).
+fn parse_tgdb_game(v: &Value) -> Option<ScrapeCandidate> {
+    let game = v.get("data")?.get("games")?.as_array()?.first()?;
+    let id = game.get("id")?;
+    let external_id = id
+        .as_str()
+        .map(str::to_string)
+        .unwrap_or_else(|| id.to_string());
+    let text = |k: &str| {
+        game.get(k)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    Some(ScrapeCandidate {
+        provider: "thegamesdb".into(),
+        external_id,
+        title: text("game_title")?,
+        description: text("overview").map(|d| d.replace('\r', "")),
+        cover_url: None,
+        release_date: text("release_date"),
+        // Os gêneros vêm só como ids numéricos (a tabela exige outra chamada
+        // com a chave) — melhor sem gênero que com um chute.
+        genre: None,
+        // Busca por nome: nunca auto-aplica (ver comentário do módulo).
+        exact_hash_match: false,
+        exact_filename_match: false,
+    })
+}
+
+/// Capa (boxart frontal) do `/v1/Games/Images`: `data.base_url.large` +
+/// o `filename` do item `type: boxart, side: front` do jogo `game_id`.
+fn parse_tgdb_boxart(v: &Value, game_id: &str) -> Option<String> {
+    let data = v.get("data")?;
+    let base = data.get("base_url")?.get("large")?.as_str()?;
+    let images = data.get("images")?.get(game_id)?.as_array()?;
+    let front = images.iter().find(|i| {
+        i.get("type").and_then(Value::as_str) == Some("boxart")
+            && i.get("side").and_then(Value::as_str) == Some("front")
+    })?;
+    Some(format!("{base}{}", front.get("filename")?.as_str()?))
+}
+
+/// Consulta o TheGamesDB por nome + plataforma. `Ok(None)` = nada achado ou
+/// sistema que ele não cobre.
+async fn query_thegamesdb(
+    client: &reqwest::Client,
+    api_key: &str,
+    q: &ScrapeQuery<'_>,
+) -> Result<Option<ScrapeCandidate>, String> {
+    let Some(platforms) = thegamesdb_platforms(q.system_id) else {
+        return Ok(None);
+    };
+    let title = search_title(q.file_stem);
+    if title.is_empty() {
+        return Ok(None);
+    }
+    let get = |path: &str, params: &[(&str, &str)]| {
+        let mut url = reqwest::Url::parse(&format!("https://api.thegamesdb.net/v1/{path}"))
+            .expect("URL fixa válida");
+        url.query_pairs_mut()
+            .append_pair("apikey", api_key)
+            .extend_pairs(params);
+        client.get(url).send()
+    };
+    let read = |resp: reqwest::Response| async move {
+        let status = resp.status();
+        let body = resp.text().await.map_err(|e| e.to_string())?;
+        if !status.is_success() {
+            // 403 = chave inválida ou cota do mês esgotada
+            return Err(format!(
+                "TheGamesDB HTTP {status}: {}",
+                body.chars().take(160).collect::<String>().trim()
+            ));
+        }
+        serde_json::from_str::<Value>(&body).map_err(|e| format!("TheGamesDB: JSON inválido ({e})"))
+    };
+
+    let found = read(
+        get(
+            "Games/ByGameName",
+            &[
+                ("name", title.as_str()),
+                ("filter[platform]", platforms),
+                ("fields", "overview"),
+            ],
+        )
+        .await
+        .map_err(|e| format!("rede: {e}"))?,
+    )
+    .await?;
+    let Some(mut c) = parse_tgdb_game(&found) else {
+        return Ok(None);
+    };
+    // Capa: segunda chamada. Falhar aqui não perde o resto da metadata.
+    match get("Games/Images", &[("games_id", c.external_id.as_str())]).await {
+        Ok(resp) => match read(resp).await {
+            Ok(v) => c.cover_url = parse_tgdb_boxart(&v, &c.external_id),
+            Err(e) => log::warn!("metadata: capa do TheGamesDB: {e}"),
+        },
+        Err(e) => log::warn!("metadata: capa do TheGamesDB: rede: {e}"),
+    }
+    Ok(Some(c))
 }
 
 /// Progresso de uma leva de scraping (consultável via comando).
@@ -175,6 +404,11 @@ async fn query_screenscraper(
             .append_pair("systemeid", &sys.to_string())
             .append_pair("crc", &q.hash.crc32.to_uppercase())
             .append_pair("romnom", &format!("{}.zip", q.file_stem));
+        // MD5 junto: o ScreenScraper identifica por qualquer um dos hashes
+        // (o ES-DE consulta por MD5) — ajuda quando o CRC não está catalogado.
+        if !q.hash.md5.is_empty() {
+            qp.append_pair("md5", &q.hash.md5.to_lowercase());
+        }
         if let (Some(u), Some(p)) = (&cfg.screenscraper_user, &cfg.screenscraper_password) {
             if !u.is_empty() {
                 qp.append_pair("ssid", u).append_pair("sspassword", p);
@@ -213,15 +447,18 @@ async fn query_screenscraper(
         .and_then(|r| r.get("jeu"))
         .ok_or("resposta sem 'jeu'")?;
 
-    // O CRC bateu? o ScreenScraper devolve `romcrc` / `rom` com o hash usado.
-    let exact = jeu
-        .get("rom")
-        .and_then(|r| r.get("romcrc"))
-        .and_then(Value::as_str)
-        .map(|c| c.eq_ignore_ascii_case(&q.hash.crc32))
-        .unwrap_or(false);
+    Ok(parse_jeu(jeu, rom_hash_matches(jeu, q), q.file_stem))
+}
 
-    Ok(parse_jeu(jeu, exact, q.file_stem))
+/// O hash bateu? O ScreenScraper devolve em `rom` o CRC (`romcrc`) e o MD5
+/// (`rommd5`) da ROM que ele achou — qualquer um igual ao nosso é exato.
+fn rom_hash_matches(jeu: &Value, q: &ScrapeQuery<'_>) -> bool {
+    let rom = jeu.get("rom");
+    let field = |k: &str| rom.and_then(|r| r.get(k)).and_then(Value::as_str);
+    let crc = field("romcrc").is_some_and(|c| c.eq_ignore_ascii_case(&q.hash.crc32));
+    let md5 = !q.hash.md5.is_empty()
+        && field("rommd5").is_some_and(|m| m.eq_ignore_ascii_case(&q.hash.md5));
+    crc || md5
 }
 
 /// Roda uma leva de scraping sobre as ROMs sem match. Bloqueante (chamar de
@@ -278,7 +515,16 @@ pub async fn scrape_pending(
             file_stem: &stem,
         };
 
-        match query_screenscraper(&client, &cfg, &q).await {
+        // Cascata: ScreenScraper (hash) primeiro; se ele não achar e houver
+        // chave do TheGamesDB, tenta por nome lá — sempre pra revisão.
+        let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
+        let mut result = query_screenscraper(&client, &cfg, &q).await;
+        if let (Ok(None), Some(key)) = (&result, tgdb_key) {
+            tokio::time::sleep(REQUEST_DELAY).await;
+            result = query_thegamesdb(&client, key, &q).await;
+            tokio::time::sleep(TGDB_DELAY).await;
+        }
+        match result {
             Ok(Some(c)) => {
                 let auto = c.auto_matches();
                 let status = if auto {
@@ -347,4 +593,122 @@ pub async fn scrape_pending(
         "metadata: leva concluída — {done}/{total} ({auto} auto, {pending} p/ revisão, {failed} falha)"
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use domain::metadata::RomHash;
+    use serde_json::json;
+
+    /// `system_id`s que o scan produz — lidos do próprio `systems.rs` (tabela
+    /// canônica), pra sistema novo lá sem id aqui quebrar o teste.
+    fn scan_system_ids() -> Vec<String> {
+        let src = include_str!("../../../../crates/library-scan/src/systems.rs");
+        let mut ids: Vec<String> = src
+            .split("=> \"")
+            .skip(1)
+            .filter_map(|rest| {
+                let id = rest.split('"').next()?;
+                id.bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+                    .then(|| id.to_string())
+            })
+            .filter(|id| id != "disc")
+            .collect();
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
+    #[test]
+    fn every_scanned_system_has_ids_in_both_providers() {
+        let ids = scan_system_ids();
+        assert!(
+            ids.len() > 40,
+            "o parse ainda acha a tabela ({})",
+            ids.len()
+        );
+        let no_ss: Vec<_> = ids
+            .iter()
+            .filter(|i| screenscraper_system_id(i).is_none())
+            .collect();
+        let no_tgdb: Vec<_> = ids
+            .iter()
+            .filter(|i| thegamesdb_platforms(i).is_none())
+            .collect();
+        assert!(no_ss.is_empty(), "sem id no ScreenScraper: {no_ss:?}");
+        assert!(no_tgdb.is_empty(), "sem id no TheGamesDB: {no_tgdb:?}");
+    }
+
+    #[test]
+    fn search_title_drops_dump_tags() {
+        assert_eq!(search_title("Super Mario World (USA)"), "Super Mario World");
+        assert_eq!(
+            search_title("Chrono_Trigger (USA) (Rev 1) [!]"),
+            "Chrono Trigger"
+        );
+        assert_eq!(search_title("Sonic 3 & Knuckles"), "Sonic 3 & Knuckles");
+        assert_eq!(search_title("(Beta)"), "");
+    }
+
+    #[test]
+    fn exact_hash_by_crc_or_md5() {
+        let hash = RomHash {
+            crc32: "b19ed489".into(),
+            md5: "cdd3c8c37322978ca8669b34bc89c804".into(),
+        };
+        let q = ScrapeQuery {
+            hash: &hash,
+            system_id: "snes",
+            file_stem: "x",
+        };
+        let crc = json!({"rom": {"romcrc": "B19ED489"}});
+        let md5 =
+            json!({"rom": {"romcrc": "00000000", "rommd5": "CDD3C8C37322978CA8669B34BC89C804"}});
+        let none = json!({"rom": {"romcrc": "00000000", "rommd5": "ffff"}});
+        assert!(rom_hash_matches(&crc, &q));
+        assert!(rom_hash_matches(&md5, &q), "MD5 igual também é exato");
+        assert!(!rom_hash_matches(&none, &q));
+        assert!(!rom_hash_matches(&json!({}), &q));
+    }
+
+    // JSON no formato que o ES-DE lê do TheGamesDB (`GamesDBJSONScraper.cpp`:
+    // `data.games[].{id, game_title, overview, release_date}` e
+    // `data.base_url.large` + `data.images[<id>][].{type, side, filename}`).
+    // Montado a partir desses campos — não é uma resposta capturada ao vivo.
+
+    #[test]
+    fn tgdb_game_goes_to_review_never_auto() {
+        let v = json!({"data": {"games": [
+            {"id": 1018, "game_title": "Chrono Trigger", "release_date": "1995-08-11",
+             "platform": 6, "overview": "Linha 1.\r\nLinha 2.\r\n"},
+            {"id": 9, "game_title": "Outro"}
+        ]}});
+        let c = parse_tgdb_game(&v).expect("candidato");
+        assert_eq!(c.provider, "thegamesdb");
+        assert_eq!(c.external_id, "1018");
+        assert_eq!(c.title, "Chrono Trigger");
+        assert_eq!(c.release_date.as_deref(), Some("1995-08-11"));
+        assert_eq!(c.description.as_deref(), Some("Linha 1.\nLinha 2."));
+        assert!(!c.auto_matches(), "busca por nome vai sempre pra revisão");
+        assert!(parse_tgdb_game(&json!({"data": {"games": []}})).is_none());
+        assert!(parse_tgdb_game(&json!({"code": 403})).is_none());
+    }
+
+    #[test]
+    fn tgdb_boxart_front_with_base_url() {
+        let v = json!({"data": {
+            "base_url": {"large": "https://cdn.thegamesdb.net/images/large/"},
+            "images": {"1018": [
+                {"type": "boxart", "side": "back", "filename": "boxart/back/1018-1.jpg"},
+                {"type": "boxart", "side": "front", "filename": "boxart/front/1018-1.jpg"}
+            ]}
+        }});
+        assert_eq!(
+            parse_tgdb_boxart(&v, "1018").as_deref(),
+            Some("https://cdn.thegamesdb.net/images/large/boxart/front/1018-1.jpg")
+        );
+        assert_eq!(parse_tgdb_boxart(&v, "999"), None);
+    }
 }

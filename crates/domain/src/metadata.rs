@@ -107,6 +107,10 @@ pub struct MetadataConfig {
     pub provider: String,
     pub screenscraper_user: Option<String>,
     pub screenscraper_password: Option<String>,
+    /// Chave de API do TheGamesDB — provedor de reserva, consultado só
+    /// quando o ScreenScraper não acha o jogo. `None` = não usar.
+    #[serde(default)]
+    pub thegamesdb_api_key: Option<String>,
 }
 
 impl Default for MetadataConfig {
@@ -115,6 +119,7 @@ impl Default for MetadataConfig {
             provider: "screenscraper".into(),
             screenscraper_user: None,
             screenscraper_password: None,
+            thegamesdb_api_key: None,
         }
     }
 }

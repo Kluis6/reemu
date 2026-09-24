@@ -54,7 +54,7 @@ fn row_to_meta(row: &sqlx::sqlite::SqliteRow) -> Result<GameMetadata, RepoError>
 impl MetadataRepository for MetadataRepo {
     async fn get_config(&self) -> Result<MetadataConfig, RepoError> {
         let row = sqlx::query(
-            "SELECT provider, screenscraper_user, screenscraper_password \
+            "SELECT provider, screenscraper_user, screenscraper_password, thegamesdb_api_key \
              FROM metadata_config WHERE id = 1",
         )
         .fetch_optional(&self.db)
@@ -65,17 +65,19 @@ impl MetadataRepository for MetadataRepo {
             provider: row.try_get("provider").map_err(be)?,
             screenscraper_user: row.try_get("screenscraper_user").map_err(be)?,
             screenscraper_password: row.try_get("screenscraper_password").map_err(be)?,
+            thegamesdb_api_key: row.try_get("thegamesdb_api_key").map_err(be)?,
         })
     }
 
     async fn set_config(&self, cfg: &MetadataConfig) -> Result<(), RepoError> {
         sqlx::query(
             "UPDATE metadata_config SET provider = ?1, screenscraper_user = ?2, \
-             screenscraper_password = ?3 WHERE id = 1",
+             screenscraper_password = ?3, thegamesdb_api_key = ?4 WHERE id = 1",
         )
         .bind(&cfg.provider)
         .bind(&cfg.screenscraper_user)
         .bind(&cfg.screenscraper_password)
+        .bind(&cfg.thegamesdb_api_key)
         .execute(&self.db)
         .await
         .map_err(be)?;

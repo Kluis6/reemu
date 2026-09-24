@@ -115,9 +115,11 @@ export function SettingsMetadata() {
     <div className={s.root}>
       <Caption1>
         Busca título, descrição, ano e gênero automaticamente no{' '}
-        <Text as="strong" weight="semibold">ScreenScraper</Text>. Resultados
-        incertos vão pra revisão abaixo. Uma conta grátis em
-        screenscraper.fr aumenta o limite de buscas.
+        <Text as="strong" weight="semibold">ScreenScraper</Text> pelo hash
+        da ROM. Resultados incertos vão pra revisão abaixo. Uma conta grátis
+        em screenscraper.fr aumenta o limite de buscas. Com uma chave do{' '}
+        <Text as="strong" weight="semibold">TheGamesDB</Text>, o que o
+        ScreenScraper não achar é buscado lá pelo nome — sempre pra revisão.
       </Caption1>
 
       <div className={s.form}>
@@ -132,6 +134,16 @@ export function SettingsMetadata() {
             type="password"
             value={form.screenscraperPassword ?? ''}
             onChange={(_, d) => setForm({ ...form, screenscraperPassword: d.value || null })}
+          />
+        </Field>
+        <Field
+          label="Chave de API TheGamesDB (opcional)"
+          hint="Com uma conta em thegamesdb.net, a chave aparece em api.thegamesdb.net/key.php. Fica no chaveiro do sistema."
+        >
+          <Input
+            type="password"
+            value={form.thegamesdbApiKey ?? ''}
+            onChange={(_, d) => setForm({ ...form, thegamesdbApiKey: d.value || null })}
           />
         </Field>
         <Button

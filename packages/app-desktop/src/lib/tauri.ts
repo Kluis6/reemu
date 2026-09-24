@@ -273,6 +273,10 @@ export const importBiosFile = (systemId: string, filename: string, path: string)
   invoke<void>('import_bios_file', { systemId, filename, path })
 export const removeBiosFile = (systemId: string, filename: string) =>
   invoke<void>('remove_bios_file', { systemId, filename })
+/** Pasta `PPSSPP/` (assets do core de PSP) instalada na pasta de sistema? */
+export const ppssppAssetsInstalled = () => invoke<boolean>('ppsspp_assets_installed')
+/** Baixa os assets do PPSSPP (GPL, buildbot da libretro). Devolve nº de arquivos. */
+export const downloadPpssppAssets = () => invoke<number>('download_ppsspp_assets')
 
 /** Diálogo nativo de seleção de um arquivo de BIOS (sem filtro de extensão —
  *  vem em `.bin`/`.zip`/etc conforme o sistema). */
@@ -319,6 +323,9 @@ export interface MetadataConfig {
   provider: string
   screenscraperUser: string | null
   screenscraperPassword: string | null
+  /** Chave de API do TheGamesDB — provedor de reserva (busca por nome, sempre
+   *  pra revisão). Fica no chaveiro do sistema, como a senha. */
+  thegamesdbApiKey: string | null
 }
 export const getMetadataConfig = () => invoke<MetadataConfig>('get_metadata_config')
 export const setMetadataConfig = (config: MetadataConfig) =>

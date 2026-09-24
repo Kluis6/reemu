@@ -15,6 +15,7 @@ import {
 } from "@fluentui/react-icons";
 import {
   Button,
+  CounterBadge,
   Menu,
   MenuDivider,
   MenuItem,
@@ -38,13 +39,15 @@ import { PowerMenuDialog } from "../components/PowerMenuDialog";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
 import { useFullscreen } from "../hooks/useFullscreen";
-import { getProfile, quitApp } from "../lib/tauri";
+import { getProfile, listPendingMatches, quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
 
 const useLocalStyles = makeStyles({
   // ícones da sidebar com o border-radius padrão do botão do Fluent
-  railRadius: { borderRadius: tokens.borderRadiusMedium },
+  railRadius: { borderRadius: tokens.borderRadiusMedium, position: "relative" },
+  // contador de pendências de metadata no ícone de Configurações
+  railBadge: { position: "absolute", top: "2px", right: "2px", pointerEvents: "none" },
   // Voltar/Fullscreen: mesmo tom de fundo da sidebar (`rail`,
   // `colorNeutralBackground2`) no fundo E na borda — a borda fica sempre da
   // mesma cor do fundo (em repouso e no hover), então nunca aparece como uma
@@ -126,6 +129,15 @@ export function AppShell() {
   const atRoot = pathname === "/";
   const atBrowse = pathname === "/" || pathname === "/library";
   const [powerOpen, setPowerOpen] = useState(false);
+  // Correspondências de metadata esperando revisão (Configurações ›
+  // Metadata). Mesma query da tela de revisão: resolver lá atualiza aqui.
+  const pending = useQuery({
+    queryKey: ["pending-matches"],
+    queryFn: listPendingMatches,
+    retry: false,
+    staleTime: 30_000,
+  });
+  const pendingCount = pending.data?.length ?? 0;
 
   const profile = useQuery({
     queryKey: ["profile"],
@@ -220,9 +232,26 @@ export function AppShell() {
             end={it.end}
             className={mergeClasses(s.railItem, l.railRadius)}
             title={it.label}
-            aria-label={it.label}
+            aria-label={
+              it.to === "/settings" && pendingCount > 0
+                ? `${it.label} — ${pendingCount} metadata para revisar`
+                : it.label
+            }
           >
-            {({ isActive }) => (isActive ? it.activeIcon : it.icon)}
+            {({ isActive }) => (
+              <>
+                {isActive ? it.activeIcon : it.icon}
+                {it.to === "/settings" && pendingCount > 0 && (
+                  <CounterBadge
+                    className={l.railBadge}
+                    count={pendingCount}
+                    overflowCount={99}
+                    size="small"
+                    color="brand"
+                  />
+                )}
+              </>
+            )}
           </NavLink>
         ))}
         <div className={s.railSpacer} />
