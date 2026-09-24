@@ -185,7 +185,7 @@ Modelo do `vk_rendering` / Beetle PSX (core NÃO submete — usa
     - `gpu.rs::submit_vulkan_cmds`: na thread do compositor, `vkQueueSubmit`
       dos cmd buffers do core + `vkWaitForFences` (sync conservador da fase
       B). Chamado por `bind_vulkan_input` antes do `wrap`.
-    Teste e2e (`#[ignore]`, `apps/desktop/src-tauri/src/gpu.rs`): `vk_rendering`
+    Teste e2e (`#[ignore]`, `apps/desktop/src-tauri/src/gpu/tests.rs`): `vk_rendering`
     adota o `VkDevice` do compositor → renderiza o triângulo → `FrameProcessor`
     amostra com `texture_from_raw` → chain → readback. Verde: frame 1,
     320×240, 1º pixel `[204, 153, 51, 255]` (= clear RGB 0.8, 0.6, 0.2), sem

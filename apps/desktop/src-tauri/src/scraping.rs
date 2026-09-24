@@ -236,7 +236,7 @@ pub async fn scrape_pending(
 ) -> Result<(), String> {
     let repo = db::MetadataRepo::new(pool.clone());
     let roms_repo = db::RomsRepo::new(pool.clone());
-    let cfg = repo.get_config().await.map_err(|e| e.to_string())?;
+    let cfg = crate::credentials::load_config(&repo, &crate::credentials::OsKeyring).await?;
 
     let ids = repo
         .rom_ids_without_match()

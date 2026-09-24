@@ -65,5 +65,8 @@ jobs:
       - name: lint
         run: pnpm --filter app-desktop lint
 
+      - name: test
+        run: pnpm --filter app-desktop test
+
       - name: build
         run: pnpm --filter app-desktop build

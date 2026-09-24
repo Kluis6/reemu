@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Checagens rápidas antes do commit — o que mais quebrava o CI à toa.
+# Ativar uma vez por clone:  git config core.hooksPath .githooks
+# Pular num commit específico: git commit --no-verify
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+if grep -q '\.rs$' <<<"$staged"; then
+  if ! cargo fmt --all --check >/dev/null 2>&1; then
+    echo "pre-commit: código Rust fora do rustfmt. Rode 'cargo fmt --all' e adicione de novo." >&2
+    exit 1
+  fi
+fi
+
+if grep -q '^packages/app-desktop/' <<<"$staged"; then
+  pnpm --filter app-desktop --silent lint
+fi

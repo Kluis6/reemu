@@ -107,7 +107,15 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 pnpm --filter app-desktop lint
+pnpm --filter app-desktop test
 pnpm --filter app-desktop build
+```
+
+O hook `.githooks/pre-commit` roda as duas mais rápidas (rustfmt e oxlint)
+só quando há arquivo daquela parte no commit. Ative uma vez por clone:
+
+```bash
+git config core.hooksPath .githooks
 ```
 
 ## 6. Build de release local
@@ -120,7 +128,7 @@ cargo tauri build --config apps/desktop/src-tauri/tauri.conf.json \
 
 No Windows, troque por `tauri.bundle.windows.json`. Esses arquivos
 declaram o `reemu-core-host` como recurso do pacote. Eles não são
-mesclados automaticamente (ver TASKS.md › Infra), por isso o `--config`
+mesclados automaticamente (ver `docs/historico.md` › Infra), por isso o `--config`
 explícito. O mesmo fluxo roda no CI em `.github/workflows/release.yml`,
 disparado por tag `v*` ou manualmente (`workflow_dispatch`).
 

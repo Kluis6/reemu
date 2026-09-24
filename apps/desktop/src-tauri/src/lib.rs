@@ -4,6 +4,7 @@ mod bios;
 mod commands;
 mod core_catalog;
 mod covers;
+mod credentials;
 mod decoration;
 mod gpu;
 mod profile;

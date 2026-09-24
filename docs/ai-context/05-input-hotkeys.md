@@ -34,8 +34,8 @@ entre hotkey de sistema e mapeamento de controle.
 
 ## Estado atual (2026-09-19 — `done`)
 
-Etapa fechada; o detalhe de cada peça está no código e no histórico do
-`TASKS.md`. Mapa rápido:
+Etapa fechada; o detalhe de cada peça está no código e no
+`docs/historico.md`. Mapa rápido:
 
 - `core-loader-desktop`: `RetroPadState` (digital) e `AnalogState`
   (`RETRO_DEVICE_ANALOG`, sticks esquerdo/direito — analógico do N64,

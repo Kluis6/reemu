@@ -19,6 +19,11 @@ window.addEventListener('error', (e) => reportToRust(`${e.message} @ ${e.filenam
 window.addEventListener('unhandledrejection', (e) =>
   reportToRust(`unhandledrejection: ${String(e.reason?.stack ?? e.reason)}`),
 )
+// CSP (`app.security.csp` no tauri.conf.json) bloqueia em silêncio — sem isto
+// uma capa/imagem de origem nova só "some" da tela.
+document.addEventListener('securitypolicyviolation', (e) =>
+  reportToRust(`CSP bloqueou ${e.blockedURI || '(inline)'} (${e.effectiveDirective})`),
+)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -68,3 +68,12 @@ core-loader-desktop = { path = "../../../crates/core-loader-desktop", features =
 # `system` = backend libwayland (dá `Backend::from_foreign_display`); `dlopen` =
 # carrega libwayland em runtime (sem precisar de libwayland-dev, igual ao winit).
 wayland-client = { version = "0.31", features = ["system", "dlopen"] }
+# Senha do ScreenScraper no chaveiro do sistema (src/credentials.rs). Secret
+# Service via libdbus — que o tao/Tauri já linka, sem pacote de sistema novo.
+keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }

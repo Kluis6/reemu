@@ -75,7 +75,7 @@ Spine testável pronto:
   saída por `take_latest_frame()` / `drain_audio()` / `frame_seq()`.
 - `FocusController` implementa `domain::focus::FocusManager`: `toggle()`/`set()`
   pausam/resumem a `EmuSession` na transição de foco.
-- `apps/desktop/src-tauri/src/commands.rs` — `AppState` (managed), comandos
+- `apps/desktop/src-tauri/src/commands/` — `AppState` (managed, em `mod.rs`), comandos
   `toggle_focus` (emite `focus-changed`), `load_game`, `current_focus`,
   `session_state`.
 

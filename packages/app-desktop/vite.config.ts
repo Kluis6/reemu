@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
@@ -33,5 +34,11 @@ export default defineConfig({
   build: {
     minify: !process.env.TAURI_ENV_DEBUG,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+  },
+
+  test: {
+    // O Fluent (via `tabster`) mistura ESM/CJS de um jeito que o Node puro
+    // não resolve; processar pelo Vite, como no app, resolve.
+    server: { deps: { inline: [/@fluentui/, 'tabster'] } },
   },
 })
