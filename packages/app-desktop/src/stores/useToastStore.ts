@@ -21,6 +21,8 @@ export interface ToastItem {
    * toast fixo (`durationMs: 0`) e vai atualizando via `update`.
    */
   progress?: number | null;
+  /** Botão no toast (ex.: "Ver" na atualização). Clicar também fecha o toast. */
+  action?: { label: string; onClick: () => void };
 }
 
 interface ToastState {

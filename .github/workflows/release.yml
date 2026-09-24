@@ -2,6 +2,15 @@ name: Release
 
 # Dispara em tags de versão (ex: v0.1.0) — sem build nightly na main — E cria
 # uma Release DRAFT no GitHub com os artefatos (revise e publique manual).
+# O corpo do draft vem dos commits feat/fix/perf desde a tag anterior
+# (scripts/release-notes.sh) — edite à vontade antes de publicar.
+#
+# Auto-update: com o secret TAURI_SIGNING_PRIVATE_KEY definido, o build assina
+# os instaladores (`.sig` ao lado de cada um). Ao PUBLICAR a Release, o job
+# `updater-manifest` monta o `latest.json` com as assinaturas e o texto final
+# da Release — é o arquivo que o app consulta (tauri.conf.json ›
+# plugins.updater.endpoints). A versão anunciada é a do tauri.conf.json:
+# suba o `version` a cada Release, senão o app acha que já está atualizado.
 # `workflow_dispatch` é só pra VALIDAR o build sob demanda (ex: testar o
 # Windows sem máquina real disponível) — não cria Release, só sobe os
 # artefatos como workflow artifact temporário (ver step abaixo).
@@ -10,6 +19,8 @@ on:
     tags:
       - "v*"
   workflow_dispatch: {}
+  release:
+    types: [published]
 
 permissions:
   contents: write
@@ -17,6 +28,7 @@ permissions:
 jobs:
   build:
     name: Build (${{ matrix.os }})
+    if: github.event_name != 'release'
     strategy:
       fail-fast: false
       matrix:
@@ -24,6 +36,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release-notes.sh precisa das tags anteriores
 
       - name: Instalar dependências de sistema (Linux — Tauri + wgpu/gilrs)
         if: runner.os == 'Linux'
@@ -76,25 +90,46 @@ jobs:
       # tauri.<os>.conf.json que o Tauri mescla sozinho, porque o build.rs do
       # tauri exige que todo resource exista até no `cargo tauri dev`, que não
       # tem (nem precisa de) um build release do core-host.
-      - name: Build + empacotar o app desktop (Linux)
-        if: runner.os == 'Linux'
-        run: cargo tauri build --config apps/desktop/src-tauri/tauri.conf.json --config apps/desktop/src-tauri/tauri.bundle.linux.json
+      #
+      # Com a chave de assinatura (secret), entra também tauri.updater.json
+      # (`createUpdaterArtifacts`) — gera os `.sig` do auto-update. Sem a
+      # chave o build segue igual, só sem auto-update.
+      - name: Build + empacotar o app desktop
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          os=$([ "$RUNNER_OS" = Windows ] && echo windows || echo linux)
+          args=(--config apps/desktop/src-tauri/tauri.conf.json --config "apps/desktop/src-tauri/tauri.bundle.$os.json")
+          if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            args+=(--config apps/desktop/src-tauri/tauri.updater.json)
+          else
+            echo "::warning::sem TAURI_SIGNING_PRIVATE_KEY — build sem auto-update"
+          fi
+          cargo tauri build "${args[@]}"
 
-      - name: Build + empacotar o app desktop (Windows)
-        if: runner.os == 'Windows'
-        run: cargo tauri build --config apps/desktop/src-tauri/tauri.conf.json --config apps/desktop/src-tauri/tauri.bundle.windows.json
+      - name: Notas da versão (commits desde a tag anterior)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: scripts/release-notes.sh "$GITHUB_REF_NAME" > release-notes.md
 
       - name: Publicar artefatos na Release (draft) — só em tag
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           draft: true
+          body_path: release-notes.md
           fail_on_unmatched_files: false
           files: |
             target/release/bundle/deb/*.deb
+            target/release/bundle/deb/*.deb.sig
             target/release/bundle/appimage/*.AppImage
+            target/release/bundle/appimage/*.AppImage.sig
             target/release/bundle/msi/*.msi
+            target/release/bundle/msi/*.msi.sig
             target/release/bundle/nsis/*.exe
+            target/release/bundle/nsis/*.exe.sig
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -110,3 +145,39 @@ jobs:
             target/release/bundle/nsis/*.exe
           if-no-files-found: error
           retention-days: 7
+
+  # Roda quando a Release é publicada (não no draft): `latest.json` com as
+  # assinaturas dos instaladores e as notas finais da Release. Sem `.sig`
+  # (build sem chave) não publica nada — o app só não vê atualização.
+  updater-manifest:
+    name: Manifesto do auto-update (latest.json)
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Gerar e publicar latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+          NOTES: ${{ github.event.release.body }}
+        run: |
+          version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
+          if [ "$TAG" != "v$version" ]; then
+            echo "::warning::tag $TAG ≠ v$version (tauri.conf.json) — o app compara pela versão $version"
+          fi
+          mkdir sigs
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.sig' --dir sigs || true
+          printf '%s\n' "$NOTES" > notes.md
+          set +e
+          node scripts/updater-manifest.mjs "$version" "$TAG" "$GITHUB_REPOSITORY" sigs notes.md > latest.json
+          code=$?
+          set -e
+          if [ $code -eq 2 ]; then
+            echo "::warning::Release sem assinaturas .sig — auto-update não publicado"
+            exit 0
+          fi
+          [ $code -eq 0 ]
+          gh release upload "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber

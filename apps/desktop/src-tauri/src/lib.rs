@@ -13,6 +13,7 @@ mod profile;
 mod scraping;
 mod shader_pack;
 mod system_files;
+mod updates;
 mod video;
 
 pub mod save_state;
@@ -37,6 +38,8 @@ fn env_flag(key: &str, default: bool) -> bool {
 pub fn run() {
     let app = covers::register(tauri::Builder::default())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(updates::UpdateState::default())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -248,6 +251,8 @@ pub fn run() {
             commands::is_fullscreen,
             commands::set_fullscreen,
             commands::quit_app,
+            updates::update_check,
+            updates::update_install,
             commands::shutdown_system,
             commands::restart_system,
             commands::list_core_catalog,

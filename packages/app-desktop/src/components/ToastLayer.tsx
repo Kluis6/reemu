@@ -1,5 +1,7 @@
 import {
+  Button,
   MessageBar,
+  MessageBarActions,
   MessageBarBody,
   ProgressBar,
   makeStyles,
@@ -59,7 +61,14 @@ export function ToastLayer() {
   return (
     <div className={styles.layer}>
       {queue.map((t) => (
-        <MessageBar key={t.id} className={styles.bar} intent={INTENT[t.variant]}>
+        <MessageBar
+          key={t.id}
+          className={styles.bar}
+          intent={INTENT[t.variant]}
+          // com botão: texto em cima e ação embaixo — em uma linha só o botão
+          // estourava a largura fixa da camada e saía cortado
+          layout={t.action ? "multiline" : "auto"}
+        >
           <MessageBarBody className={styles.body}>
             {t.message}
             {t.progress !== undefined && (
@@ -70,6 +79,19 @@ export function ToastLayer() {
               />
             )}
           </MessageBarBody>
+          {t.action && (
+            <MessageBarActions>
+              <Button
+                size="small"
+                onClick={() => {
+                  dismiss(t.id);
+                  t.action?.onClick();
+                }}
+              >
+                {t.action.label}
+              </Button>
+            </MessageBarActions>
+          )}
         </MessageBar>
       ))}
     </div>

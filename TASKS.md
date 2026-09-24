@@ -55,6 +55,18 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [ ] `todo` — Dois controles idênticos ao mesmo tempo (fix por
       `GamepadId` sem teste automatizado possível).
 
+### Atualização automática
+
+- [ ] `blocked` — **Chave de assinatura** (depende do usuário): gerar com
+      `cargo tauri signer generate`, pôr a pública em `tauri.conf.json` ›
+      `plugins.updater.pubkey` e a privada nos secrets do GitHub. Passo a
+      passo no STEP_BY_STEP §6. Sem isso o app não procura versão nova.
+- [ ] `todo` — Validar ponta a ponta com duas Releases publicadas: instalar
+      a antiga pelo AppImage e pelo NSIS, atualizar pelo modal e conferir o
+      aviso "atualizado" depois do reinício. O `.deb` usa `pkexec`.
+- [ ] `todo` — Página no GitHub Pages listando as Releases (lê a API do
+      GitHub no navegador).
+
 ### Vídeo / GPU
 
 - [ ] `todo` — Etapa 12: flycast e mupen como 2º/3º alvo Vulkan; Fase C

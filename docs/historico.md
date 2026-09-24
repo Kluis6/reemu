@@ -568,6 +568,33 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-24 — atualização automática, sino de notificações**:
+  `tauri-plugin-updater` com comandos próprios (`updates.rs`:
+  `update_check`/`update_install`, progresso pelo evento `update-progress`).
+  Sem chave pública configurada, a verificação fica desligada, então o app
+  não quebra antes de a chave existir. `requireSignedVersion` ligado (o CLI
+  2.11 grava a versão na assinatura, o que bloqueia downgrade via manifesto
+  adulterado).
+  * Frontend: `useUpdateCheck` (8 s depois de abrir e a cada 6 h, só com o
+    shell montado, nunca por cima do jogo) → notificação no sino
+    (`NotificationBell`, acima do Encerrar, contador de não lidas) + toast
+    com "Ver" → `UpdateDialog` (notas da Release, "Atualizar agora" com
+    barra de download, "Fechar"). Depois do reinício, aviso "atualizado
+    para X" com as novidades. O toast ganhou `action`; com botão, usa o
+    layout multilinha (em uma linha o botão saía cortado).
+  * CI (`release.yml`): assina se houver o secret
+    `TAURI_SIGNING_PRIVATE_KEY` (`tauri.updater.json` →
+    `createUpdaterArtifacts`), sobe os `.sig`, preenche o draft com
+    `scripts/release-notes.sh` e, ao publicar a Release, o job
+    `updater-manifest` gera o `latest.json` (`scripts/updater-manifest.mjs`)
+    com as notas finais. Chaves `{os}-{arch}-{instalador}` + `{os}-{arch}`,
+    conferidas contra o `get_urls` do plugin 2.12.
+  * Validado: tsc, lint, vitest (+2 do parser das notas), clippy, check
+    cruzado do Windows, scripts rodados localmente (notas desde a rc2;
+    manifesto com `.sig` falsos) e capturas no Chrome headless com o
+    backend simulado (toast, sino, lista, modal, progresso). Falta testar
+    com Releases reais (depende da chave).
+
 - **2026-09-24 — canvas de vídeo com WebGL**: o caminho `<canvas>` (padrão
   no Windows) desenhava com `putImageData`, que converte e copia o frame na
   CPU a cada quadro. Agora `lib/frameRenderer.ts` sobe o frame como textura

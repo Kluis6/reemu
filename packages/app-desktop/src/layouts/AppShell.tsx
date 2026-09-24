@@ -35,10 +35,13 @@ import { AnimatedBackground } from "../components/AnimatedBackground";
 import { ButtonHints } from "../components/ButtonHints";
 import { Clock } from "../components/Clock";
 import { GamepadStatus } from "../components/GamepadStatus";
+import { NotificationBell } from "../components/NotificationBell";
 import { PowerMenuDialog } from "../components/PowerMenuDialog";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
+import { UpdateDialog } from "../components/UpdateDialog";
 import { useFullscreen } from "../hooks/useFullscreen";
+import { useUpdateCheck } from "../hooks/useUpdateCheck";
 import { getProfile, listPendingMatches, quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
@@ -129,6 +132,7 @@ export function AppShell() {
   const atRoot = pathname === "/";
   const atBrowse = pathname === "/" || pathname === "/library";
   const [powerOpen, setPowerOpen] = useState(false);
+  useUpdateCheck();
   // Correspondências de metadata esperando revisão (Configurações ›
   // Metadata). Mesma query da tela de revisão: resolver lá atualiza aqui.
   const pending = useQuery({
@@ -257,6 +261,9 @@ export function AppShell() {
         <div className={s.railSpacer} />
         <div className={s.railSep} />
 
+        <NotificationBell
+          className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
+        />
         <Tooltip content="Encerrar" relationship="label">
           <Button
             className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
@@ -269,6 +276,7 @@ export function AppShell() {
       </nav>
 
       <PowerMenuDialog open={powerOpen} onOpenChange={setPowerOpen} />
+      <UpdateDialog />
 
       <div className={s.main}>
         <div className={s.topbar}>

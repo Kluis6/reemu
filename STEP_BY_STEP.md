@@ -173,6 +173,40 @@ mesclados automaticamente (ver `docs/historico.md` › Infra), por isso o `--con
 explícito. O mesmo fluxo roda no CI em `.github/workflows/release.yml`,
 disparado por tag `v*` ou manualmente (`workflow_dispatch`).
 
+### Publicar uma versão com atualização automática
+
+O app procura versão nova ao abrir e a cada 6 h. Quando acha, mostra um
+toast, acende o sino da barra lateral e abre um modal com as notas e o botão
+"Atualizar agora". Ele lê
+`https://github.com/Kluis6/reemu/releases/latest/download/latest.json`.
+
+**Configuração (uma vez só):**
+
+1. `cargo tauri signer generate -w ~/.tauri/reemu.key`. Anote a senha.
+   **Não** faça commit da chave privada e não a perca: sem ela, nenhuma
+   versão futura é aceita pelos apps já instalados.
+2. Cole o conteúdo de `~/.tauri/reemu.key.pub` em
+   `apps/desktop/src-tauri/tauri.conf.json` › `plugins.updater.pubkey` e
+   faça o commit (a chave pública não é segredo).
+3. No GitHub, em Settings › Secrets and variables › Actions, crie
+   `TAURI_SIGNING_PRIVATE_KEY` (conteúdo de `~/.tauri/reemu.key`) e
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+**A cada versão:**
+
+1. Suba o `version` no `tauri.conf.json` (ex.: `0.2.0`). O app compara por
+   ele, não pela tag.
+2. `git tag v0.2.0 && git push --tags`. O CI gera os instaladores
+   assinados e cria a Release em **draft**, com as notas montadas a partir
+   dos commits `feat`/`fix`/`perf`.
+3. Revise as notas no GitHub e clique em **Publish**. Nessa hora o job
+   `updater-manifest` gera o `latest.json` com o texto final. Draft e
+   pre-release não chegam aos usuários.
+
+Para testar a interface sem publicar nada:
+`REEMU_FAKE_UPDATE=1 cargo tauri dev` finge uma versão 9.9.9 (só em build
+de debug; o "Atualizar agora" simula o download e para com um erro).
+
 ## 7. Android (Etapa 11, adiada)
 
 Ainda não existe `apps/mobile`. Quando a etapa começar, veja

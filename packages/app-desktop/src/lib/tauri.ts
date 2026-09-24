@@ -698,3 +698,37 @@ export function describeRawInput(ev: RawInputEvent): string {
  *  diagnóstico da webview. Nunca lança. */
 export const jsLog = (level: 'info' | 'warn' | 'error', message: string) =>
   invoke<void>('js_log', { level, message }).catch(() => {})
+
+// ── Atualização do app (`src-tauri/src/updates.rs`) ─────────────────────
+
+export interface UpdateInfo {
+  version: string
+  currentVersion: string
+  /** Markdown do corpo da Release no GitHub. */
+  notes: string | null
+  /** RFC 3339. */
+  date: string | null
+}
+
+/** `null` = já está na última versão (ou auto-update sem chave configurada). */
+export const checkForUpdate = () => invoke<UpdateInfo | null>('update_check')
+
+/** Baixa, instala e reinicia o app — só retorna se der erro. */
+export const installUpdate = () => invoke<void>('update_install')
+
+export async function onUpdateProgress(
+  cb: (p: { downloaded: number; total: number | null }) => void,
+): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<{ downloaded: number; total: number | null }>('update-progress', (e) =>
+    cb(e.payload),
+  )
+}
+
+/** Versão do app instalado (`tauri.conf.json` › `version`). */
+export async function appVersion(): Promise<string> {
+  if (!inTauri) throw new Error('fora do Tauri: appVersion')
+  const { getVersion } = await import('@tauri-apps/api/app')
+  return getVersion()
+}
