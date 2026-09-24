@@ -13,8 +13,10 @@ suporte a controle e uma interface no estilo "modo console" (Xbox/PS).
 
 ## Downloads
 
-Baixe a versão mais recente pra Linux ou Windows em
-[**GitHub Releases**](https://github.com/Kluis6/reemu/releases/latest).
+Baixe a versão mais recente pra Linux ou Windows na
+[**página de downloads**](https://kluis6.github.io/reemu/) ou em
+[GitHub Releases](https://github.com/Kluis6/reemu/releases/latest). Depois de
+instalado, o ReEmu avisa quando sai versão nova e se atualiza sozinho.
 
 - **Linux**: `.deb` (Debian/Ubuntu) ou `.AppImage` (qualquer distro)
 - **Windows**: `.msi` ou `.exe` (instalador NSIS)

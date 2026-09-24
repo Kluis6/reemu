@@ -64,8 +64,8 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [ ] `todo` — Validar ponta a ponta com duas Releases publicadas: instalar
       a antiga pelo AppImage e pelo NSIS, atualizar pelo modal e conferir o
       aviso "atualizado" depois do reinício. O `.deb` usa `pkexec`.
-- [ ] `todo` — Página no GitHub Pages listando as Releases (lê a API do
-      GitHub no navegador).
+- [ ] `todo` — Salvar a logo oficial em `site/logo.png` (a página já
+      aponta pra ela; sem o arquivo a imagem some e o resto aparece).
 
 ### Vídeo / GPU
 

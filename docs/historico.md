@@ -568,6 +568,17 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-24 — página de downloads no GitHub Pages**
+  (`https://kluis6.github.io/reemu/`): `site/` estático (HTML/CSS/JS puro),
+  publicado pelo `pages.yml` quando `site/` muda. Lê as Releases da API do
+  GitHub no navegador (cache de 10 min na sessão; 60 consultas/h por IP),
+  então publicar uma Release já aparece sem novo deploy. Botão principal pelo
+  sistema do visitante (AppImage/.deb no Linux, setup.exe/.msi no Windows),
+  notas da versão mais recente abertas, antigas recolhidas, `.sig` e
+  `latest.json` ocultos. Texto da API só via `textContent`. Visual da logo
+  oficial (preto, neon verde → azul, linhas de CRT). Validado no Chrome
+  headless (desktop, 390 px, sem versões, API bloqueada) com API simulada.
+
 - **2026-09-24 — atualização automática, sino de notificações**:
   `tauri-plugin-updater` com comandos próprios (`updates.rs`:
   `update_check`/`update_install`, progresso pelo evento `update-progress`).

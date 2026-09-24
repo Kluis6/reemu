@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ReEmu — React Emulator Frontend</title>
+    <meta
+      name="description"
+      content="Baixe o ReEmu, frontend de emulação com cores libretro para Linux e Windows."
+    />
+    <meta property="og:title" content="ReEmu — React Emulator Frontend" />
+    <meta property="og:description" content="Frontend de emulação com cores libretro para Linux e Windows." />
+    <meta property="og:image" content="https://kluis6.github.io/reemu/logo.png" />
+    <meta name="theme-color" content="#030605" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="top">
+      <div class="wrap top-row">
+        <a class="wordmark" href="./" aria-label="ReEmu — início">Re<span>Emu</span></a>
+        <a class="gh" href="https://github.com/Kluis6/reemu">Código no GitHub</a>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <img
+          class="logo"
+          src="logo.png"
+          alt="ReEmu — React Emulator Frontend"
+          width="1672"
+          height="941"
+          onerror="this.remove()"
+        />
+        <h1>Seus jogos clássicos, com cara de <span class="grad">console</span>.</h1>
+        <p class="lead">
+          Frontend de emulação com cores
+          <a href="https://www.libretro.com/">libretro</a>: biblioteca com capas, shaders CRT,
+          molduras, save states com miniatura e navegação completa pelo controle.
+          Grátis e de código aberto (MIT).
+        </p>
+
+        <div id="primary" class="primary" aria-live="polite">
+          <p class="muted">Procurando a versão mais recente…</p>
+        </div>
+        <p class="note">
+          Depois de instalado, o ReEmu avisa sozinho quando sai versão nova e se
+          atualiza pelo próprio app.
+        </p>
+      </section>
+
+      <section aria-labelledby="versions-title">
+        <h2 id="versions-title">Todas as versões</h2>
+        <div id="releases" class="releases"></div>
+      </section>
+    </main>
+
+    <footer class="wrap foot">
+      <p>
+        ReEmu é distribuído sob a licença MIT. Os cores libretro têm licenças
+        próprias e são baixados pelo app. Jogos e BIOS não acompanham o ReEmu.
+      </p>
+    </footer>
+  </body>
+</html>

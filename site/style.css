@@ -1,0 +1,360 @@
+/* Identidade da logo oficial: preto profundo, neon verde → azul, linhas de
+   CRT. Só tema escuro — a logo tem fundo preto e o neon perde no claro. */
+:root {
+  --bg: #030605;
+  --surface: #0a100e;
+  --surface-2: #111a17;
+  --border: #1b2a25;
+  --text: #eef4f1;
+  --muted: #9aaba4;
+  --green: #3ddc2f;
+  --green-strong: #25a918;
+  --blue: #1e8bff;
+  --warn: #f5c400;
+  --radius: 12px;
+  --glow-green: 0 0 18px rgba(61, 220, 47, 0.35);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(ellipse 70% 45% at 30% 0%, rgba(61, 220, 47, 0.1), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 80% 5%, rgba(30, 139, 255, 0.1), transparent 70%),
+    var(--bg);
+  background-repeat: no-repeat;
+  color: var(--text);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif;
+  min-height: 100vh;
+}
+
+/* linhas de varredura do CRT, como na logo — bem sutis, por cima de tudo */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.025) 0 1px,
+    transparent 1px 3px
+  );
+}
+
+a {
+  color: var(--green);
+}
+
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.top {
+  border-bottom: 1px solid var(--border);
+  background: rgba(3, 6, 5, 0.7);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 60px;
+}
+
+.wordmark {
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.wordmark span {
+  color: var(--green);
+  text-shadow: var(--glow-green);
+}
+
+.gh {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.gh:hover {
+  color: var(--text);
+}
+
+.hero {
+  padding: 24px 0 40px;
+  text-align: center;
+}
+
+.logo {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  height: auto;
+  margin: 0 auto 8px;
+  /* funde as bordas da arte com o fundo da página */
+  -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 72%, transparent 100%);
+}
+
+h1 {
+  font-size: clamp(1.7rem, 4.5vw, 2.5rem);
+  line-height: 1.15;
+  margin: 0 auto 16px;
+  max-width: 22ch;
+}
+
+.grad {
+  background: linear-gradient(90deg, var(--green), var(--blue));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lead {
+  color: var(--muted);
+  font-size: 1.1rem;
+  max-width: 62ch;
+  margin: 0 auto 32px;
+}
+
+.primary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 52px;
+  padding: 10px 22px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.btn small {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.btn:hover {
+  border-color: var(--blue);
+  box-shadow: 0 0 16px rgba(30, 139, 255, 0.25);
+}
+
+.btn.main {
+  background: linear-gradient(135deg, var(--green-strong), #1b8a3a);
+  border-color: var(--green);
+  color: #ffffff;
+  box-shadow: var(--glow-green);
+}
+
+.btn.main small {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.btn.main:hover {
+  box-shadow: 0 0 26px rgba(61, 220, 47, 0.55);
+}
+
+.btn:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.note {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 16px 0 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+h2 {
+  font-size: 1.35rem;
+  margin: 24px 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* traço verde → azul, como o sublinhado do slogan da logo */
+h2::before {
+  content: "";
+  width: 28px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--green), var(--blue));
+}
+
+.releases {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 32px;
+}
+
+.release {
+  background: linear-gradient(180deg, var(--surface-2), var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.release:first-child {
+  border-color: rgba(61, 220, 47, 0.45);
+}
+
+.release-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+}
+
+.release-head h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.badge.latest {
+  background: rgba(61, 220, 47, 0.12);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.badge.pre {
+  color: var(--warn);
+}
+
+.date {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.notes {
+  margin-top: 12px;
+}
+
+.notes h4 {
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+  color: var(--green);
+}
+
+.notes ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.notes li::marker {
+  color: var(--blue);
+}
+
+.notes p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+details.notes-more > summary {
+  cursor: pointer;
+  color: var(--green);
+  margin-top: 12px;
+}
+
+.downloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 24px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.downloads h4 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.downloads ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.downloads li {
+  padding: 3px 0;
+  overflow-wrap: anywhere;
+}
+
+.downloads .size {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.release-foot {
+  margin-top: 12px;
+  font-size: 0.9rem;
+}
+
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  color: var(--muted);
+}
+
+.foot {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  padding-bottom: 32px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
+}
