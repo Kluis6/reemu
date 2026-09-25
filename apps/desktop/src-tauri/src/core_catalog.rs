@@ -662,6 +662,34 @@ mod tests {
     /// `REEMU_SMOKE_ONLY=fceumm_libretro,vbam_libretro` restringe a lista;
     /// `REEMU_CORE_HOST` aponta outro binário. Com `GITHUB_STEP_SUMMARY`
     /// escreve a tabela no resumo do job.
+    /// Onde cada thread do probe travado está parada no kernel (Linux:
+    /// `/proc/<pid>/task/*/{comm,wchan,syscall}`) — pra falha que só
+    /// acontece no runner do CI dizer a causa sem precisar de gdb lá.
+    fn hang_diagnostics(pid: u32) -> String {
+        let Ok(tasks) = std::fs::read_dir(format!("/proc/{pid}/task")) else {
+            return String::new();
+        };
+        let read = |p: std::path::PathBuf| {
+            std::fs::read_to_string(p)
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default()
+        };
+        let threads: Vec<String> = tasks
+            .flatten()
+            .map(|t| {
+                let d = t.path();
+                let syscall = read(d.join("syscall"));
+                let nr = syscall.split(' ').next().unwrap_or("?").to_string();
+                format!(
+                    "{} (wchan {}, syscall {nr})",
+                    read(d.join("comm")),
+                    read(d.join("wchan"))
+                )
+            })
+            .collect();
+        format!(" — threads: {}", threads.join("; "))
+    }
+
     /// Falhas conhecidas e explicadas: aparecem na tabela como
     /// "conhecido" e não derrubam o job. Tirar daqui quando resolver.
     const KNOWN_BROKEN: &[(&str, &str)] = &[(
@@ -725,16 +753,19 @@ mod tests {
                 .arg("--probe")
                 .arg(&cores_dir)
                 .arg(c.id)
+                .stdin(Stdio::null())
                 .stdout(Stdio::from(out_file))
                 .stderr(Stdio::null())
                 .spawn()
                 .expect("rodar reemu-core-host --probe");
             let deadline = Instant::now() + Duration::from_secs(60);
+            let mut hang_info = String::new();
             let status = loop {
                 if let Some(st) = child.try_wait().unwrap() {
                     break Some(st);
                 }
                 if Instant::now() > deadline {
+                    hang_info = hang_diagnostics(child.id());
                     let _ = child.kill();
                     let _ = child.wait();
                     break None;
@@ -747,7 +778,7 @@ mod tests {
             let _ = std::fs::remove_file(&out_path);
             let line = out.lines().find(|l| l.starts_with("REEMU_PROBE_"));
             let row = match (status, line) {
-                (None, _) => ("travou", "mais de 60 s no retro_init".to_string()),
+                (None, _) => ("travou", format!("mais de 60 s no retro_init{hang_info}")),
                 (Some(st), Some(l)) if st.success() && l.starts_with("REEMU_PROBE_OK") => {
                     let f: Vec<&str> = l.split('\t').collect();
                     (
