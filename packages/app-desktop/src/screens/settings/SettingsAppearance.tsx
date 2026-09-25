@@ -103,6 +103,20 @@ const useStyles = makeStyles({
     overflow: "hidden",
   },
   seg: { flexGrow: 1 },
+  // bolinha do Switch (18 px, o tamanho do círculo original da Fluent)
+  // com o ícone dentro
+  thumb: {
+    display: "inline-grid",
+    placeItems: "center",
+    width: "1em",
+    height: "1em",
+    padding: "2px",
+    boxSizing: "border-box",
+    borderRadius: "50%",
+    backgroundClip: "content-box",
+    fontSize: "inherit",
+    "& > svg": { fontSize: "10px" },
+  },
   name: {
     display: "inline-flex",
     alignItems: "center",
@@ -210,17 +224,32 @@ function ThemeCard({
           >
             <Switch
               aria-label={`${label}: modo claro`}
-              // o `indicator` da Fluent é a bolinha que desliza — no lugar
-              // do círculo, lua (escuro) e sol (claro)
+              // bolinha normal do Switch (o filho do `indicator` é o que
+              // desliza), com a lua/o sol pequeno dentro dela
               indicator={{
-                children:
-                  mode === "light" ? (
-                    <WeatherSunnyFilled />
-                  ) : (
-                    <WeatherMoonFilled />
-                  ),
-                // desligado: lua e borda com as cores do PRÓPRIO card (as
-                // do tema ativo sumiam num card de fundo oposto)
+                children: (
+                  <span
+                    className={s.thumb}
+                    style={{
+                      // círculo: branco no trilho de marca / cinza do card
+                      // desligado; ícone na cor do trilho por baixo
+                      backgroundColor:
+                        mode === "light"
+                          ? t.colorNeutralForegroundOnBrand
+                          : t.colorNeutralForeground2,
+                      color:
+                        mode === "light"
+                          ? t.colorBrandBackground
+                          : t.colorNeutralBackground2,
+                    }}
+                  >
+                    {mode === "light" ? (
+                      <WeatherSunnyFilled />
+                    ) : (
+                      <WeatherMoonFilled />
+                    )}
+                  </span>
+                ),
                 style:
                   mode === "light"
                     ? undefined
