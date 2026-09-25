@@ -307,17 +307,26 @@ fn vulkan_shared_device_handles_are_usable() {
 /// de `render_solid_rgba_to_dmabuf`, o lado produtor GL do
 /// `core-loader-desktop`) na mesma interface que um `GlInteropHandle` de
 /// verdade usaria.
+#[cfg(target_os = "linux")]
 struct TestDmabufHandle {
     slot: u32,
     plane: std::sync::Mutex<Option<domain::frame_source::DmabufPlaneInfo>>,
+    sync_fd: std::sync::Mutex<Option<i32>>,
 }
 
+#[cfg(target_os = "linux")]
 impl domain::frame_source::GpuTextureHandle for TestDmabufHandle {
     fn slot(&self) -> u32 {
         self.slot
     }
     fn take_plane(&self) -> Option<domain::frame_source::DmabufPlaneInfo> {
         self.plane.lock().unwrap_or_else(|e| e.into_inner()).take()
+    }
+    fn take_sync_fd(&self) -> Option<i32> {
+        self.sync_fd
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
     }
 }
 
@@ -330,14 +339,21 @@ impl domain::frame_source::GpuTextureHandle for TestDmabufHandle {
 /// interop_ring_renders_into_dmabuf_backed_texture`); este prova que o
 /// wgpu do lado do compositor importa e amostra esse MESMO `dma_buf`
 /// corretamente, ponta a ponta entre os dois crates.
+///
+/// Com a fence nativa (padrão), o produtor NÃO faz `glFinish`: manda o
+/// `sync_file` e é o semáforo importado no wgpu que segura o submit — este
+/// teste cobre esse caminho (e acusa se a fence não vier nesta máquina).
+#[cfg(target_os = "linux")]
 #[test]
 #[ignore = "precisa de EGL+GBM+Vulkan em hardware real (render node DRM)"]
 fn dmabuf_from_gl_producer_imports_correctly_into_wgpu() {
     if std::env::var_os("REEMU_NO_GPU").is_some() {
         return;
     }
-    let plane = core_loader_desktop::render_solid_rgba_to_dmabuf([220, 40, 10, 255], 64, 64)
-        .expect("renderizar dma_buf de teste via GL (core-loader-desktop)");
+    let (plane, sync_fd) =
+        core_loader_desktop::render_solid_rgba_to_dmabuf([220, 40, 10, 255], 64, 64)
+            .expect("renderizar dma_buf de teste via GL (core-loader-desktop)");
+    eprintln!("fence sync_file do produtor: {sync_fd:?}");
     let Some(mut fp) = FrameProcessor::new() else {
         eprintln!("sem adapter wgpu — pulando");
         return;
@@ -346,11 +362,13 @@ fn dmabuf_from_gl_producer_imports_correctly_into_wgpu() {
         fp.interop_ok,
         "device wgpu sem VULKAN_EXTERNAL_MEMORY_DMA_BUF — não dá pra validar interop aqui"
     );
+    eprintln!("semáforo sync_fd no device: {}", fp.sync_fd.is_some());
 
     let frame = Frame {
         origin: FrameOrigin::HardwareTexture(Box::new(TestDmabufHandle {
             slot: 0,
             plane: std::sync::Mutex::new(Some(plane)),
+            sync_fd: std::sync::Mutex::new(sync_fd),
         })),
         metadata: FrameMetadata {
             native_width: 64,
@@ -1033,4 +1051,85 @@ fn field_render_upscalers() {
             "{rel}: saída sem contraste ({lo}..{hi})"
         );
     }
+}
+
+/// Core GL de verdade + ROM de verdade, pela sessão (processo filho), com o
+/// quadro passando pela chain — pra reproduzir problema de interop que só
+/// aparece com jogo rodando (ex.: a tela preta do parallel_n64 que deixou
+/// `REEMU_GL_INTEROP` opt-in até 2026-09-25). Imprime por segundo: quadros, quantos de HW
+/// (dma_buf) e quantos não-pretos.
+///
+/// ```text
+/// cargo build -p core-host-desktop
+/// REEMU_TEST_GL_CORE=parallel_n64_libretro REEMU_TEST_ROM=/caminho/jogo.zip \
+///   cargo test -p reemu-desktop --lib gl_core_real_rom \
+///   -- --ignored --nocapture
+/// ```
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "core GL e ROM reais (REEMU_TEST_GL_CORE / REEMU_TEST_ROM)"]
+fn gl_core_real_rom() {
+    use emu_session::{EmuSession, SessionConfig};
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
+    let (Ok(core), Ok(rom)) = (
+        std::env::var("REEMU_TEST_GL_CORE"),
+        std::env::var("REEMU_TEST_ROM"),
+    ) else {
+        eprintln!("defina REEMU_TEST_GL_CORE e REEMU_TEST_ROM");
+        return;
+    };
+    let data = std::path::PathBuf::from(std::env::var("HOME").unwrap())
+        .join(".local/share/com.reemu.desktop");
+    let secs: u64 = std::env::var("REEMU_TEST_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(20);
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem adapter wgpu — pulando");
+        return;
+    };
+    let tmp = std::env::temp_dir().join(format!("reemu-glrom-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let session = EmuSession::spawn(SessionConfig::new(
+        data.join("cores"),
+        data.join("system"),
+        tmp.clone(),
+    ));
+    session
+        .load(&core, &rom, HashMap::new())
+        .expect("carregar core GL + ROM pela sessão");
+
+    let (mut frames, mut hw, mut lit, mut out) = (0u32, 0u32, 0u32, 0u32);
+    let mut last_dims = (0, 0);
+    let start = Instant::now();
+    let mut next_report = 1;
+    while start.elapsed() < Duration::from_secs(secs) {
+        session.wait_for_frame(Duration::from_millis(100));
+        if let Some(frame) = session.take_latest_frame() {
+            frames += 1;
+            if matches!(frame.origin, FrameOrigin::HardwareTexture(_)) {
+                hw += 1;
+            }
+            last_dims = (frame.metadata.native_width, frame.metadata.native_height);
+            if let Some((_, _, rgba)) = fp.process(&frame) {
+                out += 1;
+                if rgba.chunks(4).any(|p| p[0] > 16 || p[1] > 16 || p[2] > 16) {
+                    lit += 1;
+                }
+            }
+            session.recycle_frame(frame);
+        }
+        if start.elapsed().as_secs() >= next_report {
+            eprintln!(
+                "{next_report:>3}s: quadros {frames}, HW {hw}, saída {out}, não-pretos {lit}, último {}x{}",
+                last_dims.0, last_dims.1
+            );
+            next_report += 1;
+        }
+    }
+    session.unload().ok();
+    let _ = std::fs::remove_dir_all(&tmp);
+    assert!(frames > 0, "nenhum quadro chegou");
+    assert!(lit > 0, "todos os quadros saíram pretos");
 }

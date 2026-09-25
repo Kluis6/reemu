@@ -73,8 +73,10 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 - [ ] `todo` — Etapa 12: flycast e mupen como 2º/3º alvo Vulkan; Fase C
       (tirar a espera de CPU do blit/submit, validar sob carga). Ver doc 12.
-- [ ] `todo` — Interop GL: trocar `glFinish` por semáforo cross-API e tirar
-      o gate `REEMU_GL_INTEROP`.
+- [x] `done` — Interop GL: `glFinish` trocado por fence `sync_file` →
+      semáforo Vulkan, e o interop virou padrão no Linux (2026-09-25; ver
+      docs/historico.md). Falta rodar uma vez com as camadas de validação
+      do Vulkan instaladas (`vulkan-validationlayers`).
 - [ ] `todo` — Integer scaling com moldura: quando o fator cai no meio do
       caminho entre dois inteiros, sobra barra preta grossa (aceito por ora).
 - [ ] `todo` — CAS (AMD FidelityFX, licença MIT) não vem no pacote de shaders

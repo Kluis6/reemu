@@ -72,6 +72,10 @@ wayland-client = { version = "0.31", features = ["system", "dlopen"] }
 # Senha do ScreenScraper no chaveiro do sistema (src/credentials.rs). Secret
 # Service via libdbus — que o tao/Tauri já linka, sem pacote de sistema novo.
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
+# Interop GL: espera a fence `sync_file` do core (gpu/sync_fd.rs) — `poll()`
+# no fallback de CPU e o `block_on` da abertura do device com a extensão.
+rustix = { version = "1", features = ["event", "std"] }
+pollster = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }

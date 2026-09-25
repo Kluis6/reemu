@@ -15,6 +15,8 @@
 use glow::HasContext as _;
 #[cfg(unix)]
 use khronos_egl as egl;
+#[cfg(unix)]
+use std::os::fd::{FromRawFd as _, OwnedFd};
 use std::os::raw::{c_char, c_void};
 #[cfg(unix)]
 use std::sync::OnceLock;
@@ -90,7 +92,12 @@ pub struct GlConfig {
 
 /// Como o produtor GL espera o render terminar antes de entregar o `dma_buf`
 /// pro consumidor (wgpu/Vulkan). `REEMU_GL_SYNC`:
-/// - `finish` (default) — `glFinish`: stall de pipeline inteiro, sempre seguro.
+/// - `native` (default) — fence nativa `EGL_ANDROID_native_fence_sync`: cria o
+///   sync no fim do frame, `glFlush` (o fd nasce no flush, pela spec) e manda o
+///   fd de `sync_file` junto do frame. O CONSUMIDOR espera na GPU (semáforo
+///   Vulkan importado com `VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_SYNC_FD_BIT`) —
+///   a thread do core não para. Sem a extensão, cai no `finish`.
+/// - `finish` — `glFinish`: stall de pipeline inteiro, sempre seguro.
 /// - `fence` — `glFlush` + `glClientWaitSync` num fence do fim do frame: espera
 ///   só até o render do core, spec-correto (`GL_ARB_sync`).
 /// - `flush` — só `glFlush`, confia no sync implícito do `dma_buf` (kernel
@@ -98,6 +105,7 @@ pub struct GlConfig {
 ///   não faz implicit sync.
 #[derive(Clone, Copy, PartialEq)]
 enum SyncMode {
+    Native,
     Finish,
     Fence,
     Flush,
@@ -105,9 +113,84 @@ enum SyncMode {
 
 fn sync_mode() -> SyncMode {
     match std::env::var("REEMU_GL_SYNC").ok().as_deref() {
+        Some("finish") => SyncMode::Finish,
         Some("fence") => SyncMode::Fence,
         Some("flush") => SyncMode::Flush,
-        _ => SyncMode::Finish,
+        _ => SyncMode::Native,
+    }
+}
+
+// --- EGL_KHR_fence_sync + EGL_ANDROID_native_fence_sync (registro Khronos,
+// EGL/extensions/ANDROID/EGL_ANDROID_native_fence_sync.txt) ---
+#[cfg(unix)]
+const EGL_SYNC_NATIVE_FENCE_ANDROID: u32 = 0x3144;
+#[cfg(unix)]
+const EGL_SYNC_NATIVE_FENCE_FD_ANDROID: i32 = 0x3145;
+#[cfg(unix)]
+const EGL_NO_NATIVE_FENCE_FD_ANDROID: i32 = -1;
+#[cfg(unix)]
+const EGL_NONE_I: i32 = 0x3038;
+
+/// `eglCreateSyncKHR` / `eglDestroySyncKHR` / `eglDupNativeFenceFDANDROID`
+/// (funções de extensão — via `eglGetProcAddress`).
+#[cfg(unix)]
+struct NativeFence {
+    create: unsafe extern "system" fn(*mut c_void, u32, *const i32) -> *mut c_void,
+    destroy: unsafe extern "system" fn(*mut c_void, *mut c_void) -> u32,
+    dup_fd: unsafe extern "system" fn(*mut c_void, *mut c_void) -> i32,
+}
+
+#[cfg(unix)]
+impl NativeFence {
+    fn load(egl: &EglInstance, display: egl::Display) -> Result<Self, String> {
+        let exts = egl
+            .query_string(Some(display), egl::EXTENSIONS)
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        for ext in ["EGL_KHR_fence_sync", "EGL_ANDROID_native_fence_sync"] {
+            if !exts.split(' ').any(|e| e == ext) {
+                return Err(format!("sem {ext}"));
+            }
+        }
+        let f = |name: &str| egl.get_proc_address(name).ok_or(format!("sem {name}"));
+        // SAFETY: assinaturas da spec (EGLDisplay/EGLSyncKHR são ponteiros
+        // opacos; EGLenum = u32; EGLint = i32; EGLBoolean = u32).
+        type Create = unsafe extern "system" fn(*mut c_void, u32, *const i32) -> *mut c_void;
+        type Destroy = unsafe extern "system" fn(*mut c_void, *mut c_void) -> u32;
+        type DupFd = unsafe extern "system" fn(*mut c_void, *mut c_void) -> i32;
+        type Proc = extern "system" fn();
+        unsafe {
+            Ok(Self {
+                create: std::mem::transmute::<Proc, Create>(f("eglCreateSyncKHR")?),
+                destroy: std::mem::transmute::<Proc, Destroy>(f("eglDestroySyncKHR")?),
+                dup_fd: std::mem::transmute::<Proc, DupFd>(f("eglDupNativeFenceFDANDROID")?),
+            })
+        }
+    }
+
+    /// Fence do fim dos comandos já emitidos, como fd de `sync_file`. Pela
+    /// spec: o sync criado com `FD = EGL_NO_NATIVE_FENCE_FD_ANDROID` insere
+    /// um fence no stream do contexto atual; o fd nativo nasce no próximo
+    /// `Flush()`; `eglDupNativeFenceFDANDROID` devolve uma cópia (nossa) e
+    /// `eglDestroySyncKHR` fecha a do EGL. `None` = falhou (use `glFinish`).
+    ///
+    /// # Safety
+    /// O contexto GL do `display` tem que estar atual nesta thread.
+    unsafe fn signal_fd(&self, gl: &glow::Context, display: egl::Display) -> Option<OwnedFd> {
+        let dpy = display.as_ptr();
+        let attrs = [
+            EGL_SYNC_NATIVE_FENCE_FD_ANDROID,
+            EGL_NO_NATIVE_FENCE_FD_ANDROID,
+            EGL_NONE_I,
+        ];
+        let sync = (self.create)(dpy, EGL_SYNC_NATIVE_FENCE_ANDROID, attrs.as_ptr());
+        if sync.is_null() {
+            return None;
+        }
+        gl.flush();
+        let fd = (self.dup_fd)(dpy, sync);
+        (self.destroy)(dpy, sync);
+        (fd >= 0).then(|| OwnedFd::from_raw_fd(fd))
     }
 }
 
@@ -131,6 +214,10 @@ pub struct GlContext {
     // Só lido em `finish_write_slot` (caminho de interop, Unix).
     #[cfg_attr(windows, allow(dead_code))]
     sync: SyncMode,
+    /// Funções da fence nativa, carregadas junto com o interop quando o
+    /// modo é `Native` e o display tem as extensões.
+    #[cfg(unix)]
+    native_fence: Option<NativeFence>,
 }
 
 /// Um alvo compartilhado: BO do GBM + `EGLImage` + textura GL respaldada por ele.
@@ -168,13 +255,14 @@ impl GlContext {
             unsafe { build_fbo(&gl, max_w, max_h, cfg.depth || cfg.stencil)? };
 
         let sync = sync_mode();
-        if sync != SyncMode::Finish {
+        if sync != SyncMode::Native {
             log::info!(
                 "HW render GL: sync mode {:?}",
                 match sync {
                     SyncMode::Fence => "fence (glClientWaitSync)",
                     SyncMode::Flush => "flush (implicit dma_buf sync)",
-                    SyncMode::Finish => unreachable!(),
+                    SyncMode::Finish => "finish (glFinish)",
+                    SyncMode::Native => unreachable!(),
                 }
             );
         }
@@ -191,6 +279,8 @@ impl GlContext {
             #[cfg(unix)]
             interop: None,
             sync,
+            #[cfg(unix)]
+            native_fence: None,
         })
     }
 
@@ -251,10 +341,23 @@ impl GlContext {
     pub fn try_enable_interop(&mut self) -> bool {
         match self.build_interop() {
             Ok(ring) => {
+                if self.sync == SyncMode::Native {
+                    match egl().and_then(|e| NativeFence::load(e, self.plat.display)) {
+                        Ok(nf) => self.native_fence = Some(nf),
+                        Err(e) => log::warn!(
+                            "fence nativa EGL indisponível ({e}) — interop espera com glFinish"
+                        ),
+                    }
+                }
                 log::info!(
-                    "interop dma_buf ativo ({RING} alvos {}x{})",
+                    "interop dma_buf ativo ({RING} alvos {}x{}, sync {})",
                     self.max_w,
-                    self.max_h
+                    self.max_h,
+                    if self.native_fence.is_some() {
+                        "sync_file"
+                    } else {
+                        "glFinish"
+                    }
                 );
                 self.interop = Some(ring);
                 true
@@ -267,7 +370,7 @@ impl GlContext {
     }
 
     /// Sem `dma_buf` no Windows — sempre cai no readback via `read_pixels`.
-    /// `REEMU_GL_INTEROP=1` (opt-in Linux) não tem efeito aqui.
+    /// `REEMU_GL_INTEROP` (Linux) não tem efeito aqui.
     #[cfg(windows)]
     pub fn try_enable_interop(&mut self) -> bool {
         log::warn!("interop dma_buf indisponível (sem suporte no Windows) — usando readback");
@@ -412,15 +515,26 @@ impl GlContext {
         self.flip
     }
 
-    /// Depois do `retro_run`: garante que o render do core terminou antes de
-    /// entregar o `dma_buf`, e devolve o slot escrito + o plano (só na 1ª vez de
-    /// cada slot). Modo de sync por `REEMU_GL_SYNC` (ver [`SyncMode`]).
+    /// Depois do `retro_run`: sincroniza o render do core com o consumidor e
+    /// devolve o slot escrito + o plano (só na 1ª vez de cada slot) + a fence
+    /// de fim de render (`sync_file`, só no modo `Native`). Modo de sync por
+    /// `REEMU_GL_SYNC` (ver [`SyncMode`]).
     #[cfg(unix)]
-    pub fn finish_write_slot(&mut self) -> Option<(u32, Option<DmabufPlane>)> {
+    pub fn finish_write_slot(&mut self) -> Option<(u32, Option<DmabufPlane>, Option<OwnedFd>)> {
         let sync = self.sync;
         let ring = self.interop.as_mut()?;
+        let mut sync_fd = None;
         unsafe {
             match sync {
+                SyncMode::Native => match &self.native_fence {
+                    Some(nf) => {
+                        sync_fd = nf.signal_fd(&self.gl, self.plat.display);
+                        if sync_fd.is_none() {
+                            self.gl.finish();
+                        }
+                    }
+                    None => self.gl.finish(),
+                },
                 SyncMode::Finish => self.gl.finish(),
                 SyncMode::Flush => self.gl.flush(),
                 SyncMode::Fence => {
@@ -454,7 +568,7 @@ impl GlContext {
             }
         };
         ring.write = (ring.write + 1) % RING;
-        Some((idx as u32, plane))
+        Some((idx as u32, plane, sync_fd))
     }
 
     /// Sem `dma_buf` no Windows — sempre `None` (o chamador cai no readback
@@ -462,7 +576,7 @@ impl GlContext {
     /// dia esse invariante mudar). O tipo do plano é `()` porque não existe
     /// um equivalente Windows do plano `dma_buf` pra carregar aqui.
     #[cfg(windows)]
-    pub fn finish_write_slot(&mut self) -> Option<(u32, Option<()>)> {
+    pub fn finish_write_slot(&mut self) -> Option<(u32, Option<()>, Option<()>)> {
         None
     }
 }
@@ -484,15 +598,22 @@ pub struct GlInteropHandle {
     slot: u32,
     flip_y: bool,
     plane: std::sync::Mutex<Option<DmabufPlane>>,
+    sync_fd: std::sync::Mutex<Option<OwnedFd>>,
 }
 
 #[cfg(unix)]
 impl GlInteropHandle {
-    pub fn new(slot: u32, flip_y: bool, plane: Option<DmabufPlane>) -> Self {
+    pub fn new(
+        slot: u32,
+        flip_y: bool,
+        plane: Option<DmabufPlane>,
+        sync_fd: Option<OwnedFd>,
+    ) -> Self {
         Self {
             slot,
             flip_y,
             plane: std::sync::Mutex::new(plane),
+            sync_fd: std::sync::Mutex::new(sync_fd),
         }
     }
 }
@@ -505,6 +626,15 @@ impl domain::frame_source::GpuTextureHandle for GlInteropHandle {
 
     fn flip_y(&self) -> bool {
         self.flip_y
+    }
+
+    fn take_sync_fd(&self) -> Option<i32> {
+        use std::os::fd::IntoRawFd as _;
+        self.sync_fd
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+            .map(|fd| fd.into_raw_fd())
     }
 
     fn take_plane(&self) -> Option<domain::frame_source::DmabufPlaneInfo> {
@@ -538,7 +668,7 @@ pub struct GlInteropHandle {
 
 #[cfg(windows)]
 impl GlInteropHandle {
-    pub fn new(slot: u32, flip_y: bool, _plane: Option<()>) -> Self {
+    pub fn new(slot: u32, flip_y: bool, _plane: Option<()>, _sync_fd: Option<()>) -> Self {
         Self { slot, flip_y }
     }
 }
@@ -1191,7 +1321,7 @@ pub fn render_solid_rgba_to_dmabuf(
     rgba: [u8; 4],
     w: u32,
     h: u32,
-) -> Result<domain::frame_source::DmabufPlaneInfo, String> {
+) -> Result<(domain::frame_source::DmabufPlaneInfo, Option<i32>), String> {
     use std::os::fd::IntoRawFd as _;
     let cfg = GlConfig {
         context_type: sys::RETRO_HW_CONTEXT_OPENGL,
@@ -1215,11 +1345,12 @@ pub fn render_solid_rgba_to_dmabuf(
         );
         ctx.gl.clear(glow::COLOR_BUFFER_BIT);
     }
-    let (_, plane) = ctx
+    let (_, plane, sync_fd) = ctx
         .finish_write_slot()
         .ok_or("finish_write_slot devolveu None (interop não ativo?)")?;
     let plane = plane.ok_or("1ª entrega do slot deveria mandar o fd (handed=false)")?;
-    Ok(domain::frame_source::DmabufPlaneInfo {
+    let sync_fd = sync_fd.map(|f| f.into_raw_fd());
+    let info = domain::frame_source::DmabufPlaneInfo {
         fd: plane.fd.into_raw_fd(),
         width: plane.width,
         height: plane.height,
@@ -1227,7 +1358,8 @@ pub fn render_solid_rgba_to_dmabuf(
         offset: plane.offset,
         modifier: plane.modifier,
         fourcc: plane.fourcc,
-    })
+    };
+    Ok((info, sync_fd))
 }
 
 #[cfg(test)]
@@ -1284,7 +1416,7 @@ mod tests {
             ctx.gl.clear_color(1.0, 0.0, 0.0, 1.0);
             ctx.gl.clear(glow::COLOR_BUFFER_BIT);
         }
-        let (slot0, plane0) = ctx.finish_write_slot().expect("slot 0 sempre entrega Some");
+        let (slot0, plane0, _) = ctx.finish_write_slot().expect("slot 0 sempre entrega Some");
         assert_eq!(slot0, 0);
         assert!(
             plane0.is_some(),
@@ -1302,7 +1434,7 @@ mod tests {
             ctx.gl.clear_color(0.0, 1.0, 0.0, 1.0);
             ctx.gl.clear(glow::COLOR_BUFFER_BIT);
         }
-        let (slot1, plane1) = ctx.finish_write_slot().expect("slot 1 entrega Some");
+        let (slot1, plane1, _) = ctx.finish_write_slot().expect("slot 1 entrega Some");
         assert_eq!(slot1, 1);
         assert!(plane1.is_some());
 
@@ -1313,7 +1445,7 @@ mod tests {
             ctx.gl.clear_color(0.0, 0.0, 1.0, 1.0);
             ctx.gl.clear(glow::COLOR_BUFFER_BIT);
         }
-        let (slot0_again, plane0_again) = ctx.finish_write_slot().expect("slot 0 de novo");
+        let (slot0_again, plane0_again, _) = ctx.finish_write_slot().expect("slot 0 de novo");
         assert_eq!(slot0_again, 0);
         assert!(
             plane0_again.is_none(),

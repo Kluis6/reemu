@@ -581,6 +581,11 @@ pub struct FrameProcessor {
     /// um por slot do ring. `interop_ok` = o device tem a feature.
     interop_ok: bool,
     imported: Vec<Option<(wgpu::Texture, wgpu::TextureView)>>,
+    /// Espera na GPU pela fence de fim de render do core GL (no lugar do
+    /// `glFinish` dele) — `None` = device sem `VK_KHR_external_semaphore_fd`
+    /// (espera pela CPU no fd). Ver `gpu/sync_fd.rs`.
+    #[cfg(target_os = "linux")]
+    sync_fd: Option<sync_fd::SyncFdImporter>,
     /// HW render Vulkan (etapa 12): `VkImage` do core embrulhada com
     /// `texture_from_raw` no MESMO device, cacheada por `sync_index`
     /// (`(handle_da_VkImage, tex, view)`) — o core cicla um conjunto fixo de
@@ -677,18 +682,39 @@ impl FrameProcessor {
             return None;
         }
         let instance = wgpu::Instance::default();
-        let (adapter, device, queue, feats) = video_surface::create_device_with(
-            &instance,
-            None,
-            wgpu::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF,
-        )?;
+        let wanted = wgpu::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF;
+        // Linux: tenta abrir já com `VK_KHR_external_semaphore_fd` (fence
+        // do core GL como semáforo); senão, o device de sempre.
+        #[cfg(target_os = "linux")]
+        let with_sync = sync_fd::create_device(&instance, wanted);
+        #[cfg(not(target_os = "linux"))]
+        let with_sync: Option<(
+            wgpu::Adapter,
+            wgpu::Device,
+            wgpu::Queue,
+            wgpu::Features,
+            bool,
+        )> = None;
+        let (adapter, device, queue, feats, sync_ok) = match with_sync {
+            Some(t) => t,
+            None => {
+                let (a, d, q, f) = video_surface::create_device_with(&instance, None, wanted)?;
+                (a, d, q, f, false)
+            }
+        };
         let interop_ok = feats.contains(wgpu::Features::VULKAN_EXTERNAL_MEMORY_DMA_BUF);
         log::info!(
-            "GPU (etapa 04): {} (interop dma_buf={interop_ok})",
+            "GPU (etapa 04): {} (interop dma_buf={interop_ok}, sync_file→semáforo={sync_ok})",
             adapter.get_info().name
         );
 
-        Self::assemble(instance, adapter, device, queue, interop_ok)
+        #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
+        let mut fp = Self::assemble(instance, adapter, device, queue, interop_ok)?;
+        #[cfg(target_os = "linux")]
+        if sync_ok {
+            fp.sync_fd = sync_fd::SyncFdImporter::new(&fp.device);
+        }
+        Some(fp)
     }
 
     /// Monta o `FrameProcessor` a partir de um `Device`/`Queue` wgpu já
@@ -771,6 +797,8 @@ impl FrameProcessor {
             history_depth: r.history_depth,
             viewport: (0, 0),
             interop_ok,
+            #[cfg(target_os = "linux")]
+            sync_fd: None,
             imported: Vec::new(),
             vk_imported: Vec::new(),
             flip_tgt: Vec::new(),
@@ -1841,6 +1869,8 @@ mod chain;
 mod input;
 mod pipelines;
 mod specs;
+#[cfg(target_os = "linux")]
+mod sync_fd;
 #[cfg(test)]
 mod tests;
 mod textures;

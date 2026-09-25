@@ -47,8 +47,8 @@ thread_local! {
 /// Buffer de socket pedido (o kernel dobra e depois clampa em
 /// `net.core.{wmem,rmem}_max`).
 const SOCK_BUF: usize = 16 * 1024 * 1024;
-/// Espaço de controle: no máximo 1 fd por mensagem hoje (memfd do anel OU o
-/// dma_buf de um slot de interop), nunca os dois juntos.
+/// Espaço de controle: até 2 fds por mensagem hoje (dma_buf do slot de
+/// interop + fence `sync_file` do frame) — 128 bytes cabem folgado.
 const MAX_ANCILLARY: usize = 128;
 
 /// Barato de clonar (`Arc` por dentro) — o lado que lê roda numa thread

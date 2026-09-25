@@ -108,6 +108,11 @@ pub enum FrameKind {
     Hardware {
         flip_y: bool,
         plane: Option<HwPlaneMeta>,
+        /// Uma fence de fim de render (`sync_file`) veio junto, fora de
+        /// banda, DEPOIS do fd do plano (se houver). O consumidor espera por
+        /// ela antes de amostrar (no lugar do `glFinish` do produtor).
+        #[serde(default)]
+        sync: bool,
     },
 }
 

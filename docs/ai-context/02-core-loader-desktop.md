@@ -159,6 +159,20 @@ assinatura de função por suposição.
   (a) testar em mais combinações (outro core GL — PSX-hw sem Vulkan — e/ou
   outra GPU) antes de considerar universal, e (b) decidir se `REEMU_GL_INTEROP`
   vira default ligado (hoje seguro mas opt-in).
+  **2026-09-25: interop vira o PADRÃO (`REEMU_GL_INTEROP=0` desliga) e o
+  `glFinish` sai.** Causa real da tela preta achada: a sessão perdia o plano
+  `dma_buf` de um slot quando o 1º quadro dele era descartado (substituído
+  em `latest_frame`) antes de importar — o filho só manda o plano uma vez
+  por slot, então o slot nunca era importado e os quadros dele sumiam em
+  silêncio (reproduzido com mupen64plus_next: metade dos quadros não saía).
+  Corrigido com `Shared::orphan_planes` (emu-session). Sync: fence nativa
+  `EGL_ANDROID_native_fence_sync` → fd `sync_file` no `FrameReady` →
+  semáforo Vulkan (`VK_KHR_external_semaphore_fd`, `SYNC_FD`, import
+  temporário) esperado no próximo submit via
+  `wgpu::hal::vulkan::Queue::add_wait_semaphore`; sem a extensão, `poll()`
+  no fd. Validado no RTX 3060 com parallel_n64 e mupen64plus_next
+  (GoldenEye) e flycast (MSR), interop × readback com as mesmas contagens
+  (teste `gl_core_real_rom`).
   **2026-09-12 (histórico): usuário relatou tela preta com `parallel_n64_libretro`**
   rodando com interop (o código tinha invertido sem querer o padrão pra
   ligado — corrigido de volta pra opt-in). Hipótese que motivou a

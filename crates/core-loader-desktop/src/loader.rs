@@ -486,20 +486,20 @@ fn setup_gl_context(
     if let Some(reset) = req.context_reset {
         unsafe { reset() };
     }
-    // Interop zero-cópia (dma_buf) é OPT-IN (`REEMU_GL_INTEROP=1`) — ainda
-    // "não validado em hardware" (ver docs/ai-context/02-core-loader-desktop.md).
-    // Confirmado 2026-09-12: tela preta com parallel_n64_libretro quando
-    // ligado por padrão (o core deixa de entregar frame novo bem na hora em
-    // que renegocia `SET_SYSTEM_AV_INFO` — `next_hw_frame` devolve `None`
-    // silenciosamente e o present anterior, ainda preto, nunca é
-    // substituído). Sem a env var, cai no readback via CPU — caminho
-    // estável, já testado com os outros cores HW.
+    // Interop zero-cópia (dma_buf) é o PADRÃO desde 2026-09-25;
+    // `REEMU_GL_INTEROP=0` força o readback via CPU. Foi opt-in por uma
+    // "tela preta com parallel_n64" (2026-09-12) — a causa real era a
+    // sessão perder o plano `dma_buf` de um slot quando o 1º quadro dele
+    // era descartado antes de importar (ver `orphan_planes` em
+    // emu-session). Validado com parallel_n64, mupen64plus_next e flycast
+    // com jogo rodando (teste `gl_core_real_rom`), e com a fence nativa no
+    // lugar do `glFinish`.
     let mut ctx = ctx;
-    let want_interop = matches!(
+    let want_interop = !matches!(
         std::env::var("REEMU_GL_INTEROP")
             .map(|v| v.trim().to_ascii_lowercase())
             .as_deref(),
-        Ok("1") | Ok("true") | Ok("on") | Ok("yes")
+        Ok("0") | Ok("false") | Ok("off") | Ok("no")
     );
     if want_interop {
         ctx.try_enable_interop();

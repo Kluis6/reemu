@@ -95,6 +95,13 @@ struct Shared {
     /// `FrameReady` — sem isto cada quadro alocava (e liberava) um `Vec` do
     /// tamanho do frame (ver `EmuSession::recycle_frame`).
     spare_bufs: Mutex<Vec<Vec<u8>>>,
+    /// Plano `dma_buf` de um slot de interop que veio num quadro descartado
+    /// antes de alguém importar (o filho só manda o plano no 1º quadro de
+    /// cada slot). Sem isto o slot nunca era importado e os quadros dele
+    /// sumiam em silêncio — metade da imagem, ou tela preta. Entregue no
+    /// próximo quadro do mesmo slot; esvaziado a cada `Load` (os slots são
+    /// do processo filho).
+    orphan_planes: Mutex<HashMap<u32, OrphanPlane>>,
     /// Sinaliza `latest_frame` preenchido — quem apresenta espera nisto em
     /// vez de dormir um tempo fixo (ver `wait_for_frame`).
     frame_ready: Condvar,
@@ -165,11 +172,17 @@ impl Shared {
     const MAX_SPARE: usize = 2;
 
     fn recycle(&self, frame: Frame) {
-        if let FrameOrigin::SoftwareRawBuffer { data, .. } = frame.origin {
-            let mut pool = self.spare_bufs.lock().unwrap_or_else(|p| p.into_inner());
-            if pool.len() < Self::MAX_SPARE {
-                pool.push(data);
+        match frame.origin {
+            FrameOrigin::SoftwareRawBuffer { data, .. } => {
+                let mut pool = self.spare_bufs.lock().unwrap_or_else(|p| p.into_inner());
+                if pool.len() < Self::MAX_SPARE {
+                    pool.push(data);
+                }
             }
+            FrameOrigin::HardwareTexture(handle) => {
+                stash_orphan_plane(&self.orphan_planes, handle.as_ref());
+            }
+            _ => {}
         }
     }
 
@@ -199,6 +212,7 @@ impl EmuSession {
             frame_seq: AtomicU64::new(0),
             latest_frame: Mutex::new(None),
             spare_bufs: Mutex::new(Vec::new()),
+            orphan_planes: Mutex::new(HashMap::new()),
             frame_ready: Condvar::new(),
             audio: Mutex::new(Vec::new()),
             state: Mutex::new(SessionState::Idle),
@@ -737,9 +751,9 @@ fn core_host_path() -> Option<PathBuf> {
     None
 }
 
-/// Uma mensagem `ToParent` + os fds (`SCM_RIGHTS`) que vieram junto dela — no
-/// máximo 1 hoje (memfd do anel no `Loaded`, dma_buf num `FrameReady` de
-/// interop). Repassado inteiro pra quem consome, pra nunca perder um fd só
+/// Uma mensagem `ToParent` + os fds (`SCM_RIGHTS`) que vieram junto dela —
+/// memfd do anel no `Loaded`; dma_buf e/ou fence `sync_file` num
+/// `FrameReady` de interop. Repassado inteiro pra quem consome, pra nunca perder um fd só
 /// porque o consumidor não olhou pra ele na hora certa.
 struct InboundEvent {
     msg: ToParent,
@@ -879,7 +893,15 @@ fn handle_event(
                 FrameKind::Software { .. } => shared.take_spare(),
                 FrameKind::Hardware { .. } => None,
             };
-            if let Some(frame) = reconstruct_frame(ring.as_ref(), slot, meta, kind, ev.fds, spare) {
+            if let Some(frame) = reconstruct_frame(
+                ring.as_ref(),
+                slot,
+                meta,
+                kind,
+                ev.fds,
+                spare,
+                &shared.orphan_planes,
+            ) {
                 shared.frame_seq.fetch_add(1, Ordering::Relaxed);
                 let replaced = shared
                     .latest_frame
@@ -931,6 +953,7 @@ fn reconstruct_frame(
     kind: FrameKind,
     fds: Vec<core_ipc::InlineHandle>,
     spare: Option<Vec<u8>>,
+    orphans: &Mutex<HashMap<u32, OrphanPlane>>,
 ) -> Option<Frame> {
     match kind {
         FrameKind::Software { pitch, format } => {
@@ -947,13 +970,40 @@ fn reconstruct_frame(
                 metadata: meta,
             })
         }
-        FrameKind::Hardware { flip_y, plane } => {
-            let plane = plane.map(|p| dmabuf_plane_info(p, fds));
+        FrameKind::Hardware {
+            flip_y,
+            plane,
+            sync,
+        } => {
+            // fds fora de banda: plano (se `plane`), depois a fence (se `sync`).
+            let mut fds = fds.into_iter();
+            let plane = match plane {
+                Some(p) => {
+                    // plano novo do slot: um órfão antigo (de outro buffer)
+                    // não serve mais — sai do mapa e fecha
+                    orphans
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .remove(&slot);
+                    Some(dmabuf_plane_info(p, fds.next()))
+                }
+                None => orphans
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .remove(&slot)
+                    .and_then(|mut o| o.0.take()),
+            };
+            let sync_fd = if sync {
+                fds.next().map(inline_into_raw_fd)
+            } else {
+                None
+            };
             Some(Frame {
                 origin: FrameOrigin::HardwareTexture(Box::new(IpcGpuTextureHandle {
                     slot,
                     flip_y,
                     plane: Mutex::new(plane),
+                    sync_fd: Mutex::new(sync_fd),
                 })),
                 metadata: meta,
             })
@@ -961,18 +1011,26 @@ fn reconstruct_frame(
     }
 }
 
+/// fd recebido por `SCM_RIGHTS` → fd cru, com a posse passando pra quem
+/// chamar `take_plane`/`take_sync_fd`.
 #[cfg(unix)]
-fn dmabuf_plane_info(meta: HwPlaneMeta, fds: Vec<core_ipc::InlineHandle>) -> DmabufPlaneInfo {
+fn inline_into_raw_fd(f: core_ipc::InlineHandle) -> i32 {
     use rustix::fd::IntoRawFd;
+    f.into_raw_fd()
+}
+
+#[cfg(windows)]
+fn inline_into_raw_fd(_f: core_ipc::InlineHandle) -> i32 {
+    -1
+}
+
+#[cfg(unix)]
+fn dmabuf_plane_info(meta: HwPlaneMeta, fd: Option<core_ipc::InlineHandle>) -> DmabufPlaneInfo {
     // SAFETY/posse: o fd recebido por `SCM_RIGHTS` é nosso a partir daqui;
     // `DmabufPlaneInfo` documenta que a posse passa pra quem chama
     // `take_plane` (fecha ao dropar) — é exatamente o `gpu.rs::import_dmabuf`
     // de sempre, que já sabe fazer isso.
-    let fd = fds
-        .into_iter()
-        .next()
-        .map(|f| f.into_raw_fd())
-        .unwrap_or(-1);
+    let fd = fd.map(inline_into_raw_fd).unwrap_or(-1);
     DmabufPlaneInfo {
         fd,
         width: meta.width,
@@ -990,7 +1048,7 @@ fn dmabuf_plane_info(meta: HwPlaneMeta, fds: Vec<core_ipc::InlineHandle>) -> Dma
 // prática ali, mas o tipo da mensagem IPC é compartilhado, então precisa
 // compilar.
 #[cfg(windows)]
-fn dmabuf_plane_info(meta: HwPlaneMeta, _fds: Vec<core_ipc::InlineHandle>) -> DmabufPlaneInfo {
+fn dmabuf_plane_info(meta: HwPlaneMeta, _fd: Option<core_ipc::InlineHandle>) -> DmabufPlaneInfo {
     DmabufPlaneInfo {
         fd: -1,
         width: meta.width,
@@ -1004,10 +1062,61 @@ fn dmabuf_plane_info(meta: HwPlaneMeta, _fds: Vec<core_ipc::InlineHandle>) -> Dm
 
 /// Espelha `core_loader_desktop::gl_context::GlInteropHandle` — mesma forma,
 /// só que alimentado pela mensagem IPC em vez de um `GlContext` local.
+/// Quadro de interop descartado com o plano ainda dentro: guarda pro próximo
+/// quadro do slot (ver `Shared::orphan_planes`).
+fn stash_orphan_plane(orphans: &Mutex<HashMap<u32, OrphanPlane>>, handle: &dyn GpuTextureHandle) {
+    if let Some(plane) = handle.take_plane() {
+        orphans
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(handle.slot(), OrphanPlane(Some(plane)));
+    }
+}
+
+/// Plano guardado em `Shared::orphan_planes` — fecha o fd se for
+/// descartado sem ser entregue.
+struct OrphanPlane(Option<DmabufPlaneInfo>);
+
+impl Drop for OrphanPlane {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        if let Some(p) = self.0.take() {
+            if p.fd >= 0 {
+                use rustix::fd::FromRawFd;
+                // SAFETY: fd nosso (veio de `take_plane`), nunca entregue.
+                drop(unsafe { rustix::fd::OwnedFd::from_raw_fd(p.fd) });
+            }
+        }
+    }
+}
+
 struct IpcGpuTextureHandle {
     slot: u32,
     flip_y: bool,
     plane: Mutex<Option<DmabufPlaneInfo>>,
+    sync_fd: Mutex<Option<i32>>,
+}
+
+impl Drop for IpcGpuTextureHandle {
+    /// Quadro descartado sem ninguém pegar a fence / o plano: fecha os fds
+    /// (o plano normalmente já foi resgatado por `Shared::recycle`).
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        {
+            use rustix::fd::FromRawFd;
+            let sync = self.sync_fd.get_mut().ok().and_then(|f| f.take());
+            let plane = self
+                .plane
+                .get_mut()
+                .ok()
+                .and_then(|p| p.take())
+                .map(|p| p.fd);
+            for fd in sync.into_iter().chain(plane).filter(|&fd| fd >= 0) {
+                // SAFETY: fds nossos, nunca entregues (`take_*` não chamado).
+                drop(unsafe { rustix::fd::OwnedFd::from_raw_fd(fd) });
+            }
+        }
+    }
 }
 
 impl GpuTextureHandle for IpcGpuTextureHandle {
@@ -1017,6 +1126,13 @@ impl GpuTextureHandle for IpcGpuTextureHandle {
 
     fn take_plane(&self) -> Option<DmabufPlaneInfo> {
         self.plane.lock().unwrap_or_else(|p| p.into_inner()).take()
+    }
+
+    fn take_sync_fd(&self) -> Option<i32> {
+        self.sync_fd
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .take()
     }
 
     fn flip_y(&self) -> bool {
@@ -1408,6 +1524,11 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                     );
                                 }
                                 ring = ring_ok;
+                                shared
+                                    .orphan_planes
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner())
+                                    .clear();
                                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(id.0.clone());
                                 *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner()) =
@@ -1705,5 +1826,67 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
 impl Shared {
     fn state(&self) -> SessionState {
         *self.state.lock().unwrap_or_else(|p| p.into_inner())
+    }
+}
+
+#[cfg(all(test, unix))]
+mod orphan_plane_tests {
+    use super::*;
+
+    fn meta() -> HwPlaneMeta {
+        HwPlaneMeta {
+            width: 64,
+            height: 64,
+            stride: 256,
+            offset: 0,
+            modifier: 0,
+            fourcc: 0,
+        }
+    }
+
+    fn hw(
+        plane: Option<HwPlaneMeta>,
+        fds: Vec<core_ipc::InlineHandle>,
+        orphans: &Mutex<HashMap<u32, OrphanPlane>>,
+    ) -> Frame {
+        let frame_meta = domain::frame_source::FrameMetadata {
+            native_width: 64,
+            native_height: 64,
+            aspect_ratio: 1.0,
+            rotation_degrees: 0,
+        };
+        let kind = FrameKind::Hardware {
+            flip_y: false,
+            plane,
+            sync: false,
+        };
+        reconstruct_frame(None, 1, frame_meta, kind, fds, None, orphans).unwrap()
+    }
+
+    /// Regressão da "metade dos quadros some" com interop: o plano só vem no
+    /// 1º quadro do slot; se esse quadro é descartado antes de importar, o
+    /// próximo quadro do MESMO slot tem que trazê-lo.
+    #[test]
+    fn plane_of_a_dropped_frame_goes_to_the_next_frame_of_the_slot() {
+        let orphans = Mutex::new(HashMap::new());
+        let fd: core_ipc::InlineHandle = std::fs::File::open("/dev/null").unwrap().into();
+
+        let first = hw(Some(meta()), vec![fd], &orphans);
+        let FrameOrigin::HardwareTexture(h) = first.origin else {
+            unreachable!()
+        };
+        stash_orphan_plane(&orphans, h.as_ref()); // descartado sem importar
+
+        let second = hw(None, vec![], &orphans);
+        let FrameOrigin::HardwareTexture(h2) = second.origin else {
+            unreachable!()
+        };
+        let plane = h2.take_plane().expect("plano resgatado no quadro seguinte");
+        assert!(plane.fd >= 0);
+        assert_eq!(plane.width, 64);
+        // e não fica duplicado pra um terceiro quadro
+        assert!(orphans.lock().unwrap().is_empty());
+        // SAFETY: fd nosso (acabou de sair de `take_plane`).
+        drop(unsafe { <rustix::fd::OwnedFd as rustix::fd::FromRawFd>::from_raw_fd(plane.fd) });
     }
 }

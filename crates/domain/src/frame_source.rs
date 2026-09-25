@@ -68,6 +68,14 @@ pub trait GpuTextureHandle: Send {
     fn flip_y(&self) -> bool {
         false
     }
+    /// Fence de fim de render do produtor, como fd de `sync_file` do Linux
+    /// (`EGL_ANDROID_native_fence_sync`). O consumidor espera por ela antes
+    /// de amostrar a textura — no lugar do `glFinish` do produtor. `None` =
+    /// o produtor já esperou a GPU (sem a extensão). Posse do fd passa pra
+    /// quem chama (fecha ao terminar).
+    fn take_sync_fd(&self) -> Option<i32> {
+        None
+    }
 }
 
 /// Handle pra a `VkImage` que um core de HW render Vulkan (etapa 12) entregou.

@@ -518,7 +518,7 @@ fn send_frame(
             None
         }
         // dma_buf (GBM/DRM) é um conceito de interop gráfico específico do
-        // Linux, opt-in via `REEMU_GL_INTEROP=1` (default off) — não existe
+        // Linux (padrão; `REEMU_GL_INTEROP=0` desliga) — não existe
         // equivalente no Windows (lá seria D3D11/D3D12 shared handle, um
         // subsistema totalmente diferente, fora do escopo desta porta de
         // IPC). No Windows este caminho não é alcançado na prática (nada em
@@ -533,47 +533,42 @@ fn send_frame(
         FrameOrigin::HardwareTexture(handle) => {
             let flip_y = handle.flip_y();
             let slot = handle.slot();
-            match handle.take_plane() {
-                Some(plane) => {
-                    // SAFETY: posse do fd foi transferida por `take_plane`
-                    // (ver `domain::frame_source::DmabufPlaneInfo`) — fecha
-                    // ao sair do escopo, depois que `send` já o duplicou pro
-                    // outro lado dentro do `sendmsg`.
-                    let owned = unsafe { OwnedFd::from_raw_fd(plane.fd) };
-                    let meta = HwPlaneMeta {
-                        width: plane.width,
-                        height: plane.height,
-                        stride: plane.stride,
-                        offset: plane.offset,
-                        modifier: plane.modifier,
-                        fourcc: plane.fourcc,
-                    };
-                    let _ = channel.send(
-                        &ToParent::FrameReady {
-                            slot,
-                            meta: frame.metadata,
-                            kind: FrameKind::Hardware {
-                                flip_y,
-                                plane: Some(meta),
-                            },
-                        },
-                        &[owned.as_fd()],
-                    );
-                }
-                None => {
-                    let _ = channel.send(
-                        &ToParent::FrameReady {
-                            slot,
-                            meta: frame.metadata,
-                            kind: FrameKind::Hardware {
-                                flip_y,
-                                plane: None,
-                            },
-                        },
-                        &[],
-                    );
-                }
-            }
+            // SAFETY (os dois): `take_plane`/`take_sync_fd` transferem a posse
+            // do fd (ver `domain::frame_source`) — fecham ao sair do escopo,
+            // depois que `send` já os duplicou pro outro lado no `sendmsg`.
+            let plane = handle.take_plane();
+            let plane_fd = plane
+                .as_ref()
+                .map(|p| unsafe { OwnedFd::from_raw_fd(p.fd) });
+            let sync_fd = handle
+                .take_sync_fd()
+                .map(|fd| unsafe { OwnedFd::from_raw_fd(fd) });
+            let meta = plane.map(|plane| HwPlaneMeta {
+                width: plane.width,
+                height: plane.height,
+                stride: plane.stride,
+                offset: plane.offset,
+                modifier: plane.modifier,
+                fourcc: plane.fourcc,
+            });
+            // Ordem fora de banda: plano (se houver), depois a fence.
+            let fds: Vec<_> = plane_fd
+                .iter()
+                .chain(sync_fd.iter())
+                .map(|f| f.as_fd())
+                .collect();
+            let _ = channel.send(
+                &ToParent::FrameReady {
+                    slot,
+                    meta: frame.metadata,
+                    kind: FrameKind::Hardware {
+                        flip_y,
+                        plane: meta,
+                        sync: sync_fd.is_some(),
+                    },
+                },
+                &fds,
+            );
             None
         }
     }

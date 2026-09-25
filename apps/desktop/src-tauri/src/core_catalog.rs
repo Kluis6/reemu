@@ -10,7 +10,8 @@
 //! - `Software` — buffer de pixels cru.
 //! - `OpenGl` — renderiza num FBO; o frontend cria um contexto GL offscreen
 //!   (etapa 02 passo 4) e traz o frame por interop dma_buf zero-cópia (padrão,
-//!   `REEMU_GL_INTEROP=0` força readback). Precisa de `libEGL` + GPU.
+//!   `REEMU_GL_INTEROP=0` força readback; a fence `sync_file` do fim do frame
+//!   substitui o `glFinish`). Precisa de `libEGL` + GPU.
 //! - `Vulkan` — o core roda in-process e adota o `VkDevice` do compositor
 //!   (etapa 12); o `VkImage` do scanout vira textura do wgpu sem cópia. Cai
 //!   pro processo filho (GL/sw) se a negociação Vulkan não rolar.
@@ -715,11 +716,16 @@ mod tests {
             if let Some((k, v)) = core_loader_desktop::exec_stack_env(&path) {
                 cmd.env(k, v);
             }
+            // stdout num ARQUIVO, não pipe: core que imprime muito no init
+            // enchia o pipe (lido só no fim) e travava o probe (pcsx_rearmed
+            // no CI)
+            let out_path = cores_dir.join(format!("{}.probe.txt", c.id));
+            let out_file = std::fs::File::create(&out_path).expect("arquivo do probe");
             let mut child = cmd
                 .arg("--probe")
                 .arg(&cores_dir)
                 .arg(c.id)
-                .stdout(Stdio::piped())
+                .stdout(Stdio::from(out_file))
                 .stderr(Stdio::null())
                 .spawn()
                 .expect("rodar reemu-core-host --probe");
@@ -735,10 +741,10 @@ mod tests {
                 }
                 std::thread::sleep(Duration::from_millis(50));
             };
-            let mut out = String::new();
-            if let Some(mut so) = child.stdout.take() {
-                let _ = std::io::Read::read_to_string(&mut so, &mut out);
-            }
+            let out = std::fs::read(&out_path)
+                .map(|b| String::from_utf8_lossy(&b).into_owned())
+                .unwrap_or_default();
+            let _ = std::fs::remove_file(&out_path);
             let line = out.lines().find(|l| l.starts_with("REEMU_PROBE_"));
             let row = match (status, line) {
                 (None, _) => ("travou", "mais de 60 s no retro_init".to_string()),

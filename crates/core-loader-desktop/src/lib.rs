@@ -17,8 +17,8 @@ mod archive;
 mod core;
 mod coreopts;
 mod discover;
-// GBM/DRM — interop gráfico zero-cópia Linux-only (opt-in via
-// `REEMU_GL_INTEROP=1`, default off). Sem equivalente no Windows (seria
+// GBM/DRM — interop gráfico zero-cópia Linux-only (padrão; `REEMU_GL_INTEROP=0`
+// desliga). Sem equivalente no Windows (seria
 // D3D11/D3D12 shared handle, subsistema totalmente diferente) — não portado.
 #[cfg(unix)]
 mod dmabuf;

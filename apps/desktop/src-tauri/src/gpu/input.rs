@@ -232,6 +232,23 @@ impl FrameProcessor {
         h: u32,
         enc: &mut wgpu::CommandEncoder,
     ) -> bool {
+        // Fence de fim de render do core (no lugar do `glFinish` dele): a
+        // GPU espera por ela antes do submit que amostra a textura. Sempre
+        // consumida — mesmo sem interop, pra não vazar o fd.
+        #[cfg(target_os = "linux")]
+        if let Some(fd) = handle.take_sync_fd() {
+            use std::os::fd::FromRawFd as _;
+            // SAFETY: `take_sync_fd` transfere a posse do fd.
+            let fd = unsafe { std::os::fd::OwnedFd::from_raw_fd(fd) };
+            let rest = match self.sync_fd.as_mut() {
+                Some(imp) => imp.stage_wait(&self.queue, fd).err(),
+                None => Some(fd),
+            };
+            if let Some(fd) = rest {
+                // 50 ms de teto, como o antigo modo `fence` do produtor.
+                super::sync_fd::cpu_wait(fd, 50);
+            }
+        }
         if !self.interop_ok {
             return false;
         }

@@ -300,6 +300,20 @@ pub fn create_device(
         .map(|(a, d, q, _)| (a, d, q))
 }
 
+/// Limites com que o ReEmu abre o device. Base nos downlevel defaults (evita
+/// o `assert!(max_buffer_size <= u32::MAX)` da indirect-validation do
+/// wgpu-core, que a RTX estoura com o cap real), MAS sobe o teto de textura:
+/// `downlevel` trava em 2048 e uma surface 4K precisa de swapchain de 3840+
+/// → sem isso a tela do jogo fica preta.
+pub fn device_limits(adapter: &wgpu::Adapter) -> wgpu::Limits {
+    let al = adapter.limits();
+    wgpu::Limits {
+        max_texture_dimension_1d: al.max_texture_dimension_1d.min(16384),
+        max_texture_dimension_2d: al.max_texture_dimension_2d.min(16384),
+        ..wgpu::Limits::downlevel_defaults()
+    }
+}
+
 /// Como [`create_device`], mas tenta habilitar `wanted` (features nativas
 /// opcionais); o 4º elemento diz quais entraram. Cai pro conjunto vazio se o
 /// adapter não suportar — nunca falha por causa de uma feature opcional.
@@ -316,16 +330,7 @@ pub fn create_device_with(
     .ok()?;
 
     let granted = wanted & adapter.features();
-    // Base nos downlevel defaults (evita o `assert!(max_buffer_size <= u32::MAX)`
-    // da indirect-validation do wgpu-core, que a RTX estoura com o cap real),
-    // MAS sobe o teto de textura: `downlevel` trava em 2048 e uma surface 4K
-    // precisa de swapchain de 3840+ → sem isso a tela do jogo fica preta.
-    let al = adapter.limits();
-    let limits = wgpu::Limits {
-        max_texture_dimension_1d: al.max_texture_dimension_1d.min(16384),
-        max_texture_dimension_2d: al.max_texture_dimension_2d.min(16384),
-        ..wgpu::Limits::downlevel_defaults()
-    };
+    let limits = device_limits(&adapter);
     let mk = |feats| {
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("video-surface device"),
