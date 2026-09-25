@@ -435,16 +435,18 @@ pub fn native_video_active(state: State<'_, AppState>) -> bool {
 }
 
 /// Tamanho do cabeçalho do `poll_frame`: `[w u32][h u32][deco_gen u32]
-/// [retângulo do jogo na moldura: cx, cy, meia_l, meia_a em f32 NDC]`, tudo LE.
-/// `deco_gen == 0` = sem moldura (o retângulo não vale).
-const FRAME_HEADER: usize = 28;
+/// [retângulo do jogo na moldura: cx, cy, meia_l, meia_a em f32 NDC]
+/// [proporção de exibição f32]`, tudo LE. `deco_gen == 0` = sem moldura (o
+/// retângulo não vale). A proporção vem de cada quadro — muda quando o core
+/// pede `SET_GEOMETRY` em runtime.
+const FRAME_HEADER: usize = 32;
 
-fn frame_header(w: u32, h: u32) -> Vec<u8> {
+fn frame_header(w: u32, h: u32, aspect: f32) -> Vec<u8> {
     let mut out = Vec::with_capacity(FRAME_HEADER + w as usize * h as usize * 4);
     out.extend_from_slice(&w.to_le_bytes());
     out.extend_from_slice(&h.to_le_bytes());
     out.extend_from_slice(&0u32.to_le_bytes());
-    for v in [0.0f32, 0.0, 1.0, 1.0] {
+    for v in [0.0f32, 0.0, 1.0, 1.0, aspect] {
         out.extend_from_slice(&v.to_le_bytes());
     }
     out
@@ -489,12 +491,13 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
         return tauri::ipc::Response::new(Vec::new());
     };
     let (w, h) = (frame.metadata.native_width, frame.metadata.native_height);
+    let aspect = frame.metadata.aspect_ratio;
     if !matches!(rot, 90 | 180 | 270) {
         // Sem rotação (quase sempre): converte direto no `Vec` da resposta,
         // depois do cabeçalho — sem o RGBA intermediário nem a cópia do
         // `pack_frame`.
         let n = w as usize * h as usize * 4;
-        let mut out = frame_header(w, h);
+        let mut out = frame_header(w, h, aspect);
         out.resize(FRAME_HEADER + n, 0);
         to_rgba8_slice(&mut out[FRAME_HEADER..], data, w, h, pitch, format);
         state.session.recycle_frame(frame);
@@ -505,7 +508,7 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
     state.session.recycle_frame(frame);
     let (rgba, w, h) = rotate_rgba(rgba, w, h, rot);
     cache_thumb_frame(&state, w, h, &rgba);
-    let mut out = frame_header(w, h);
+    let mut out = frame_header(w, h, aspect);
     out.extend_from_slice(&rgba);
     tauri::ipc::Response::new(out)
 }

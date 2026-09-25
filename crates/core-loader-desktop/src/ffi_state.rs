@@ -74,6 +74,12 @@ pub(crate) struct FrontendState {
     /// `SET_SYSTEM_AV_INFO` — a thread do core drena e reconfigura o pacing e o
     /// resampler. `parallel_n64` faz isso logo após o load (32040 → ~26807 Hz).
     pub av_update: Option<(f64, f64)>,
+    /// Geometria nova pedida em runtime (`SET_GEOMETRY`, ou a `geometry` de
+    /// um `SET_SYSTEM_AV_INFO`): `(base_width, base_height, aspect_ratio)`.
+    /// O `DesktopCore` aplica antes de montar o próximo quadro — é o que leva
+    /// a proporção nova até a tela (libretro.h: `SET_GEOMETRY` é o caminho
+    /// indicado pra mudar a proporção sem reiniciar o vídeo).
+    pub geometry_update: Option<(u32, u32, f32)>,
     pub last_frame: Option<RawFrame>,
     /// Buffer de um frame já consumido, devolvido por
     /// `DesktopCore::recycle_frame_buffer` — o próximo `video_refresh_cb`
@@ -118,6 +124,7 @@ impl FrontendState {
             hw_frame: None,
             rotation_degrees: 0,
             av_update: None,
+            geometry_update: None,
             last_frame: None,
             spare_frame: Vec::new(),
             had_new_frame: false,
@@ -421,6 +428,11 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
                     );
                     st.av_update = Some((av.timing.fps, av.timing.sample_rate));
                 }
+                st.geometry_update = Some((
+                    av.geometry.base_width,
+                    av.geometry.base_height,
+                    av.geometry.aspect_ratio,
+                ));
             }
             true
         }
@@ -433,6 +445,9 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
                     g.base_height,
                     g.aspect_ratio
                 );
+                // `max_width`/`max_height` são ignorados neste comando
+                // (libretro.h) — só base e proporção.
+                st.geometry_update = Some((g.base_width, g.base_height, g.aspect_ratio));
             }
             true
         }

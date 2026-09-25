@@ -100,6 +100,27 @@ async fn software_core_loads_runs_and_produces_frames() {
     let _ = std::fs::remove_file(rom);
 }
 
+/// `SET_GEOMETRY` em runtime (libretro.h: o caminho pra mudar a proporção
+/// sem reiniciar o vídeo) chega na proporção dos quadros seguintes.
+#[tokio::test]
+async fn runtime_set_geometry_changes_frame_aspect() {
+    let _lock = guard().await;
+    let rom = write_rom(b"GEOM rom");
+    let mut core = loader()
+        .load_core(&core_id(), rom.to_str().unwrap())
+        .await
+        .expect("load do core-fake");
+    let aspects: Vec<f32> = (0..4)
+        .map(|_| core.next_frame().expect("quadro").metadata.aspect_ratio)
+        .collect();
+    assert!((aspects[0] - 64.0 / 48.0).abs() < 1e-4, "{aspects:?}");
+    assert_eq!(
+        aspects[3], 2.0,
+        "proporção nova depois do SET_GEOMETRY: {aspects:?}"
+    );
+    assert_eq!(core.system_av_info().geometry.aspect_ratio, 2.0);
+}
+
 #[tokio::test]
 async fn save_state_round_trip_and_pending_hook() {
     let _lock = guard().await;

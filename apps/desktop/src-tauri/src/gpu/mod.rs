@@ -1581,7 +1581,8 @@ impl FrameProcessor {
     }
 
     /// Formato do `poll_frame` no modo canvas: `[w][h][deco_gen u32]
-    /// [retângulo do jogo 4×f32]` (28 bytes, LE) + RGBA só do jogo. Com
+    /// [retângulo do jogo 4×f32][proporção f32]` (32 bytes, LE) + RGBA só do
+    /// jogo. Com
     /// `deco_gen == 0` não há moldura e o retângulo não vale. Liga
     /// `split_decoration` (a moldura vai pelo `decoration_image`).
     pub fn process_packed_split(&mut self, frame: &Frame) -> Option<Vec<u8>> {
@@ -1606,7 +1607,7 @@ impl FrameProcessor {
                 .get_mapped_range()
                 .ok()?;
             let row = (w * 4) as usize;
-            let mut out = Vec::with_capacity(28 + row * h as usize);
+            let mut out = Vec::with_capacity(32 + row * h as usize);
             out.extend_from_slice(&w.to_le_bytes());
             out.extend_from_slice(&h.to_le_bytes());
             if split_header {
@@ -1619,6 +1620,7 @@ impl FrameProcessor {
                 for v in self.game_rect {
                     out.extend_from_slice(&v.to_le_bytes());
                 }
+                out.extend_from_slice(&frame.metadata.aspect_ratio.to_le_bytes());
             }
             for y in 0..h as usize {
                 out.extend_from_slice(&mapped[y * padded as usize..][..row]);

@@ -367,7 +367,10 @@ export function PlayScreen() {
       // moldura: geração (0 = nenhuma) e retângulo do jogo em NDC
       decoGen: 0,
       rect: [0, 0, 1, 1] as [number, number, number, number],
+      // proporção de exibição do quadro (muda com `SET_GEOMETRY` em runtime)
+      aspect: 0,
     };
+    let appliedAspect = 0;
     let renderer: FrameRenderer | null = null;
     let shownDecoGen = 0;
     let fetchingDeco = false;
@@ -423,6 +426,7 @@ export function PlayScreen() {
                 dv.getFloat32(20, true),
                 dv.getFloat32(24, true),
               ];
+              latest.aspect = dv.getFloat32(28, true);
               latest.fresh = true;
               got = true;
               void syncDeco(latest.decoGen);
@@ -448,8 +452,15 @@ export function PlayScreen() {
           if (renderer) jsLog("info", `canvas de vídeo: ${renderer.kind}`);
           else jsLog("error", "canvas de vídeo: sem contexto WebGL nem 2D — jogo sem imagem");
         }
-        if (c.width !== latest.w || c.height !== latest.h) {
-          const declared = declaredAspectRef.current;
+        if (
+          c.width !== latest.w ||
+          c.height !== latest.h ||
+          latest.aspect !== appliedAspect
+        ) {
+          // Proporção do próprio quadro quando vem (o core pode mudar em
+          // runtime); senão a declarada no carregamento.
+          appliedAspect = latest.aspect;
+          const declared = latest.aspect > 0 ? latest.aspect : declaredAspectRef.current;
           const pixels = latest.w / Math.max(1, latest.h);
           // orientação bate → AR declarada (PAR ok); senão frame rotacionado.
           setAspect(declared >= 1 === pixels >= 1 ? declared : pixels);

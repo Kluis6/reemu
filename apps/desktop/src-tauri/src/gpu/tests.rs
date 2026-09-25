@@ -946,7 +946,7 @@ fn split_decoration_sends_game_only() {
         (50, 30),
         "tamanho do jogo, não da moldura"
     );
-    assert_eq!(out.len(), 28 + 50 * 30 * 4);
+    assert_eq!(out.len(), 32 + 50 * 30 * 4);
     let (gen, img, w, h) = fp.decoration_image().expect("moldura guardada");
     assert!(gen > 0);
     assert_eq!(u32_at(8), gen);
@@ -955,4 +955,9 @@ fn split_decoration_sends_game_only() {
     assert!(f32_at(12).abs() < 1e-4 && f32_at(16).abs() < 1e-4);
     assert!((f32_at(20) - 0.5).abs() < 1e-4);
     assert!((f32_at(24) - 200.0 / 300.0).abs() < 1e-4);
+    assert_eq!(
+        f32_at(28),
+        frame().metadata.aspect_ratio,
+        "proporção do quadro"
+    );
 }

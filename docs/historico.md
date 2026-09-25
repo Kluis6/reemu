@@ -568,6 +568,16 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-25 — proporção de tela muda em runtime (`SET_GEOMETRY`)**: o
+  loader só logava o `SET_GEOMETRY` e, do `SET_SYSTEM_AV_INFO`, usava só o
+  timing — a proporção de cada quadro ficava a do carregamento. Pelo
+  `libretro.h` oficial, `SET_GEOMETRY` é o caminho indicado pra mudar a
+  proporção sem reiniciar o vídeo (e ignora `max_width`/`max_height`). Agora
+  os dois guardam `geometry_update` e o `DesktopCore` aplica depois de cada
+  `retro_run`; a proporção segue nos metadados do quadro (superfície nativa)
+  e no cabeçalho do `poll_frame` (modo canvas, agora 32 bytes). Core falso
+  com ROM "GEOM" pede `SET_GEOMETRY` no 3º quadro; teste confere a mudança.
+
 - **2026-09-25 — sem alocação por quadro no caminho software**: o
   `emu-session` lia cada quadro do anel de memória compartilhada num `Vec`
   novo (`reconstruct_frame`), liberado logo depois de apresentado. Agora a

@@ -57,6 +57,7 @@ struct retro_hw_render_callback {
 #define RETRO_ENVIRONMENT_SET_PIXEL_FORMAT 10
 #define RETRO_ENVIRONMENT_GET_VARIABLE 15
 #define RETRO_ENVIRONMENT_SET_VARIABLES 16
+#define RETRO_ENVIRONMENT_SET_GEOMETRY 37 /* libretro.h */
 #define RETRO_PIXEL_FORMAT_RGB565 2
 #define RETRO_HW_CONTEXT_OPENGL_CORE 3
 
@@ -128,11 +129,18 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
 }
 void retro_reset(void) { frame_n = 0; }
 
+/* ROM começando com "GEOM": a partir do 3º quadro o core pede
+   `SET_GEOMETRY` com proporção 2.0 — testa a mudança em runtime. */
+static int geometry_test = 0;
+
 bool retro_load_game(const struct retro_game_info *game) {
    enum { fmt = RETRO_PIXEL_FORMAT_RGB565 };
    unsigned pf = RETRO_PIXEL_FORMAT_RGB565;
    if (env_cb)
       env_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pf);
+
+   geometry_test = game && game->data && game->size >= 4 &&
+                   memcmp(game->data, "GEOM", 4) == 0;
 
    if (game && game->data && game->size >= 2 &&
        memcmp(game->data, "HW", 2) == 0) {
@@ -167,6 +175,11 @@ void retro_run(void) {
       struct retro_variable v = {"testcore_mark", 0};
       if (env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &v) && v.value)
          testcore_sram[2] = (unsigned char)v.value[0];
+   }
+
+   if (geometry_test && frame_n == 2 && env_cb) {
+      struct retro_game_geometry g = {FB_W, FB_H, FB_W, FB_H, 2.0f};
+      env_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &g);
    }
 
    uint16_t color = (uint16_t)(frame_n * 111u + 1u);

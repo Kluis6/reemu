@@ -165,6 +165,30 @@ impl DesktopCore {
         true
     }
 
+    /// Aplica a geometria que o core pediu em runtime (ver
+    /// `ffi_state::geometry_update`). Chamado depois de cada `retro_run`, que
+    /// é onde a libretro permite `SET_GEOMETRY`/`SET_SYSTEM_AV_INFO`.
+    fn apply_geometry_update(&mut self) {
+        let Some((w, h, ar)) = ffi_state::lock()
+            .as_mut()
+            .and_then(|st| st.geometry_update.take())
+        else {
+            return;
+        };
+        let g = &mut self.av_info.geometry;
+        if (g.base_width, g.base_height) != (w, h) || g.aspect_ratio != ar {
+            log::info!(
+                "geometria em runtime: {}x{} AR {:.3} → {w}x{h} AR {ar:.3}",
+                g.base_width,
+                g.base_height,
+                g.aspect_ratio
+            );
+        }
+        g.base_width = w;
+        g.base_height = h;
+        g.aspect_ratio = ar;
+    }
+
     fn aspect_ratio(&self, w: u32, h: u32) -> f32 {
         let declared = self.av_info.geometry.aspect_ratio;
         if declared > 0.0 {
@@ -189,6 +213,7 @@ impl FrameSource for DesktopCore {
         }
 
         unsafe { (self.raw.run)() };
+        self.apply_geometry_update();
 
         if self.gl.is_some() {
             return self.next_hw_frame();

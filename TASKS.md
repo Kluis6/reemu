@@ -75,8 +75,6 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       (tirar a espera de CPU do blit/submit, validar sob carga). Ver doc 12.
 - [ ] `todo` — Interop GL: trocar `glFinish` por semáforo cross-API e tirar
       o gate `REEMU_GL_INTEROP`.
-- [ ] `todo` — `SET_GEOMETRY`/`SET_SYSTEM_AV_INFO` em runtime propagam só
-      timing; a proporção nova não pega. Baixa prioridade.
 - [ ] `todo` — Integer scaling com moldura: quando o fator cai no meio do
       caminho entre dois inteiros, sobra barra preta grossa (aceito por ora).
 - [ ] `todo` — Presets FSR 1.0 / RCAS / CAS (espaciais; temporais não servem
