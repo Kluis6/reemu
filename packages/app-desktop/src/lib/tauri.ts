@@ -2,6 +2,7 @@
 // Tudo tolera rodar fora do Tauri (ex: `vite` puro no navegador) — nesse
 // caso os comandos rejeitam e os listeners viram no-op.
 
+import i18n from '../i18n'
 import type { InputFocus } from '../stores/useFocusStore'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
@@ -289,7 +290,7 @@ export const downloadPpssppAssets = () => invoke<number>('download_ppsspp_assets
 export async function pickBiosFile(): Promise<string | null> {
   if (!inTauri) return null
   const { open } = await import('@tauri-apps/plugin-dialog')
-  const sel = await open({ multiple: false, title: 'Escolha o arquivo de BIOS' })
+  const sel = await open({ multiple: false, title: i18n.t('dialogs.pickBios') })
   return typeof sel === 'string' ? sel : null
 }
 
@@ -440,7 +441,7 @@ export async function scanLibrary(
 }
 
 /** Diálogo nativo de seleção de pasta. `null` se cancelado / fora do Tauri. */
-export async function pickFolder(title = 'Escolha a pasta das ROMs'): Promise<string | null> {
+export async function pickFolder(title = i18n.t('dialogs.pickRomFolder')): Promise<string | null> {
   if (!inTauri) return null
   const { open } = await import('@tauri-apps/plugin-dialog')
   const sel = await open({ directory: true, multiple: false, title })
@@ -453,7 +454,7 @@ export async function pickSlangp(): Promise<string | null> {
   const { open } = await import('@tauri-apps/plugin-dialog')
   const sel = await open({
     multiple: false,
-    title: 'Escolha um preset .slangp',
+    title: i18n.t('dialogs.pickSlangp'),
     filters: [{ name: 'slang preset', extensions: ['slangp'] }],
   })
   return typeof sel === 'string' ? sel : null
@@ -529,13 +530,13 @@ export async function profileAvatarUrl(): Promise<string | null> {
 }
 
 /** Diálogo nativo pra escolher uma imagem (avatar, papel de parede…). */
-export async function pickImage(title = 'Escolha uma imagem'): Promise<string | null> {
+export async function pickImage(title = i18n.t('dialogs.pickImage')): Promise<string | null> {
   if (!inTauri) return null
   const { open } = await import('@tauri-apps/plugin-dialog')
   const sel = await open({
     multiple: false,
     title,
-    filters: [{ name: 'Imagem', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
+    filters: [{ name: i18n.t('dialogs.imageFilter'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
   })
   return typeof sel === 'string' ? sel : null
 }
@@ -683,21 +684,25 @@ export const RETROPAD_BUTTONS = [
 ] as const
 
 /** Nome físico do botão do gamepad (bate com `input_desktop::gilrs_button_index`). */
-const GAMEPAD_BUTTON_NAMES: Record<number, string> = {
-  0: 'A (baixo)', 1: 'B (direita)', 2: 'Y (cima)', 3: 'X (esquerda)',
+// Função (não constante): os rótulos com texto seguem o idioma ativo.
+const gamepadButtonNames = (): Record<number, string> => ({
+  0: i18n.t('input.pad.south'), 1: i18n.t('input.pad.east'), 2: i18n.t('input.pad.north'), 3: i18n.t('input.pad.west'),
   4: 'C', 5: 'Z',
   6: 'L1', 7: 'L2', 8: 'R1', 9: 'R2',
-  10: 'Select', 11: 'Start', 12: 'Guia',
+  10: 'Select', 11: 'Start', 12: i18n.t('input.pad.guide'),
   13: 'L3', 14: 'R3',
   15: 'D-pad ↑', 16: 'D-pad ↓', 17: 'D-pad ←', 18: 'D-pad →',
-}
+})
 
 /** Rótulo curto e legível de um evento bruto (pra chips da UI de captura). */
 export function describeRawInput(ev: RawInputEvent): string {
-  if ('Keyboard' in ev) return 'Tecla'
+  if ('Keyboard' in ev) return i18n.t('input.key')
   if ('GamepadButton' in ev)
-    return GAMEPAD_BUTTON_NAMES[ev.GamepadButton.index] ?? `Botão ${ev.GamepadButton.index}`
-  return `Eixo ${ev.GamepadAxis.index}`
+    return (
+      gamepadButtonNames()[ev.GamepadButton.index] ??
+      i18n.t('input.button', { n: ev.GamepadButton.index })
+    )
+  return i18n.t('input.axis', { n: ev.GamepadAxis.index })
 }
 
 /** Manda uma linha pro log do Rust (terminal do `tauri dev` / log do app) —

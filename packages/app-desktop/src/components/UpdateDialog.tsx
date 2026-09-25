@@ -26,6 +26,8 @@ import {
   useNotificationStore,
   type UpdateDialogState,
 } from "../stores/useNotificationStore";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 
 const useStyles = makeStyles({
   surface: { maxWidth: "560px", width: "calc(100vw - 32px)" },
@@ -73,14 +75,14 @@ const useStyles = makeStyles({
 });
 
 const mb = (bytes: number) =>
-  (bytes / 1_048_576).toLocaleString("pt-BR", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+  (bytes / 1_048_576).toLocaleString(i18n.language, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
 
 function formatDate(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   return Number.isNaN(d.getTime())
     ? null
-    : d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+    : d.toLocaleDateString(i18n.language, { day: "2-digit", month: "long", year: "numeric" });
 }
 
 /**
@@ -96,6 +98,7 @@ export function UpdateDialog() {
 }
 
 function UpdateDialogOpen({ dialog }: { dialog: UpdateDialogState }) {
+  const { t } = useTranslation();
   const s = useStyles();
   const close = useNotificationStore((n) => n.closeDialog);
   const [installing, setInstalling] = useState(false);
@@ -151,20 +154,20 @@ function UpdateDialogOpen({ dialog }: { dialog: UpdateDialogState }) {
         <DialogBody>
           <DialogTitle>
             {mode === "update"
-              ? `Atualização disponível — versão ${info.version}`
-              : `Novidades da versão ${info.version}`}
+              ? t("updates.dialogUpdate", { version: info.version })
+              : t("updates.dialogWhatsNew", { version: info.version })}
           </DialogTitle>
           <DialogContent className={s.content}>
             <Caption1 className={s.meta}>
               {mode === "update"
-                ? `Você está na versão ${info.currentVersion}.`
-                : `Atualizado a partir da versão ${info.currentVersion}.`}
-              {date ? ` Publicada em ${date}.` : ""}
+                ? t("updates.currentVersion", { version: info.currentVersion })
+                : t("updates.updatedFrom", { version: info.currentVersion })}
+              {date ? t("updates.publishedOn", { date }) : ""}
             </Caption1>
 
-            <div className={s.notes} tabIndex={0} aria-label="Resumo das mudanças">
+            <div className={s.notes} tabIndex={0} aria-label={t("updates.notesLabel")}>
               {blocks.length === 0 && (
-                <p className={s.empty}>Esta versão não tem notas publicadas.</p>
+                <p className={s.empty}>{t("updates.noNotes")}</p>
               )}
               {blocks.map((b, i) =>
                 b.type === "heading" ? (
@@ -191,10 +194,10 @@ function UpdateDialogOpen({ dialog }: { dialog: UpdateDialogState }) {
                 <Caption1 className={s.meta}>
                   {progress
                     ? progress.total
-                      ? `Baixando… ${mb(progress.downloaded)} de ${mb(progress.total)} MB.`
-                      : `Baixando… ${mb(progress.downloaded)} MB.`
-                    : "Preparando o download…"}{" "}
-                  O ReEmu reinicia sozinho no fim.
+                      ? t("updates.downloadingOf", { done: mb(progress.downloaded), total: mb(progress.total) })
+                      : t("updates.downloadingMb", { done: mb(progress.downloaded) })
+                    : t("updates.preparing")}{" "}
+                  {t("updates.restarts")}
                 </Caption1>
               </div>
             )}
@@ -202,8 +205,8 @@ function UpdateDialogOpen({ dialog }: { dialog: UpdateDialogState }) {
             {error && (
               <MessageBar intent="error">
                 <MessageBarBody>
-                  <MessageBarTitle>{describeError(error, "atualizar o ReEmu").title}</MessageBarTitle>
-                  {describeError(error, "atualizar o ReEmu").hint}
+                  <MessageBarTitle>{describeError(error, "updateReemu").title}</MessageBarTitle>
+                  {describeError(error, "updateReemu").hint}
                   <Caption1 block className={s.meta}>
                     {error}
                   </Caption1>
@@ -220,7 +223,7 @@ function UpdateDialogOpen({ dialog }: { dialog: UpdateDialogState }) {
                 disabled={installing}
                 onClick={() => void install()}
               >
-                {installing ? "Atualizando…" : "Atualizar agora"}
+                {installing ? t("updates.updating") : t("updates.updateNow")}
               </Button>
             )}
             <Button
@@ -229,7 +232,7 @@ function UpdateDialogOpen({ dialog }: { dialog: UpdateDialogState }) {
               disabled={installing}
               onClick={close}
             >
-              Fechar
+              {t("common.close")}
             </Button>
           </DialogActions>
         </DialogBody>

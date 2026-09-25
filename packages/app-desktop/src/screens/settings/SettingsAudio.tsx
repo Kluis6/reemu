@@ -5,12 +5,14 @@ import { LoadingState } from '../../components/EmptyState'
 import { errorToast, sysToast } from '../../lib/toast'
 import { getAudioConfig, updateAudioConfig, type AudioConfig } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   section: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM, maxWidth: '440px' },
 })
 
 export function SettingsAudio() {
+  const { t } = useTranslation()
   const styles = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
@@ -32,24 +34,24 @@ export function SettingsAudio() {
     onSuccess: () => {
       setEdits({})
       qc.invalidateQueries({ queryKey: ['audio-config'] })
-      push(sysToast('Áudio salvo e aplicado.', 'Success'))
+      push(sysToast(t('audio.saved'), 'Success'))
     },
-    onError: (e) => push(errorToast(e, 'salvar a configuração de áudio')),
+    onError: (e) => push(errorToast(e, 'saveAudioConfig')),
   })
 
   if (isLoading) return <LoadingState />
   if (isError || !draft)
-    return <Body1>Configurações indisponíveis (backend sem banco de dados).</Body1>
+    return <Body1>{t('audio.unavailable')}</Body1>
 
   return (
     <div className={styles.section}>
-      <Field label="Dynamic Rate Control" hint="Ajusta o resample em tempo real pra sincronia A/V.">
+      <Field label={t('audio.drc')} hint={t('audio.drcHint')}>
         <Switch
           checked={draft.rateControlEnabled}
           onChange={(_, d) => set('rateControlEnabled', d.checked)}
         />
       </Field>
-      <Field label="Margem de ajuste (delta)" hint="0.005 = ±0,5%">
+      <Field label={t('audio.delta')} hint={t('audio.deltaHint')}>
         <Input
           type="number"
           step={0.001}
@@ -57,10 +59,10 @@ export function SettingsAudio() {
           onChange={(_, d) => set('rateControlDelta', Number(d.value))}
         />
       </Field>
-      <Field label="Dispositivo de saída (ID do SO)">
+      <Field label={t('audio.device')}>
         <Input
           value={draft.outputDeviceId ?? ''}
-          placeholder="padrão do sistema"
+          placeholder={t('audio.systemDefault')}
           onChange={(_, d) => set('outputDeviceId', d.value === '' ? null : d.value)}
         />
       </Field>
@@ -69,7 +71,7 @@ export function SettingsAudio() {
         disabled={save.isPending || Object.keys(edits).length === 0}
         onClick={() => save.mutate(draft)}
       >
-        Salvar
+        {t('common.save')}
       </Button>
     </div>
   )

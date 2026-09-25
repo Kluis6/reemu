@@ -1,5 +1,6 @@
 import { Skeleton, SkeletonItem, makeStyles } from '@fluentui/react-components'
 import { useBrowseStyles, shell } from '../styles/xbox'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   item: {
@@ -16,10 +17,11 @@ const useStyles = makeStyles({
  * layout quando os cards de verdade chegam.
  */
 export function CardGridSkeleton({ count = 12 }: { count?: number }) {
+  const { t } = useTranslation()
   const g = useBrowseStyles()
   const s = useStyles()
   return (
-    <Skeleton className={g.grid} aria-label="Carregando jogos…">
+    <Skeleton className={g.grid} aria-label={t('shell.loadingGames')}>
       {Array.from({ length: count }).map((_, i) => (
         <SkeletonItem key={i} className={s.item} />
       ))}

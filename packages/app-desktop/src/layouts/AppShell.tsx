@@ -214,7 +214,7 @@ export function AppShell() {
                 icon={<PersonRegular />}
                 onClick={() => navigate("/settings/perfil")}
               >
-                Meu perfil
+                {t("shell.myProfile")}
               </MenuItem>
               {PROFILE_EXTRA.map((m) => (
                 <MenuItem key={m.label} icon={m.icon} disabled>
@@ -331,8 +331,8 @@ export function AppShell() {
           <Tooltip
             content={
               fullscreen
-                ? "Sair da tela cheia (F11)"
-                : "Ocupar a tela inteira (F11)"
+                ? t("shell.exitFullscreenTip")
+                : t("shell.fullscreenTip")
             }
             relationship="label"
           >

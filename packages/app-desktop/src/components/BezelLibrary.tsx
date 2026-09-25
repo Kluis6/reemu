@@ -22,6 +22,7 @@ import {
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
 import { errorPatch } from '../lib/toast'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
@@ -52,10 +53,11 @@ const mb = (n: number) => (n / 1048576).toFixed(0)
  * (100–600 MB) — download é sob demanda, por sistema.
  */
 export function BezelLibrary() {
+  const { t } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
-  const push = useToastStore((t) => t.push)
-  const updateToast = useToastStore((t) => t.update)
+  const push = useToastStore((st) => st.push)
+  const updateToast = useToastStore((st) => st.update)
   const dlId = useRef<string | null>(null)
 
   const cat = useQuery({ queryKey: ['bezel-catalog'], queryFn: bezelCatalog, retry: false })
@@ -70,10 +72,10 @@ export function BezelLibrary() {
         updateToast(dlId.current, {
           message:
             p.phase === 'download'
-              ? `Baixando bezels ${label} ${mb(p.received)}${p.total ? `/${mb(p.total)}` : ''} MB…`
+              ? t('bezels.downloadingMb', { label, received: mb(p.received), total: p.total ? `/${mb(p.total)}` : '' })
               : p.phase === 'extract'
-                ? `Extraindo bezels ${label}…`
-                : `Casando bezels com a biblioteca…`,
+                ? t('bezels.extracting', { label })
+                : t('bezels.matching'),
           progress: p.phase === 'download' ? pct : null,
         })
       }),
@@ -82,7 +84,7 @@ export function BezelLibrary() {
       dlId.current = id
       push({
         id,
-        message: `Baixando bezels — ${platformLabel(systemId)}…`,
+        message: t('bezels.downloading', { label: platformLabel(systemId) }),
         variant: 'Info',
         durationMs: 0,
         source: 'System',
@@ -92,7 +94,7 @@ export function BezelLibrary() {
     onSuccess: (n, systemId) => {
       if (dlId.current)
         updateToast(dlId.current, {
-          message: `Bezels de ${platformLabel(systemId)} prontos — ${n} atribuição(ões). Aplica no próximo jogo.`,
+          message: t('bezels.ready', { label: platformLabel(systemId), count: n }),
           variant: 'Success',
           durationMs: 4000,
           progress: undefined,
@@ -101,15 +103,15 @@ export function BezelLibrary() {
     },
     onError: (e) => {
       if (dlId.current)
-        updateToast(dlId.current, errorPatch(e, 'baixar as molduras'))
+        updateToast(dlId.current, errorPatch(e, 'downloadBezels'))
     },
     onSettled: () => {
       dlId.current = null
     },
   })
 
-  if (cat.isLoading || roms.isLoading) return <Spinner size="tiny" label="Carregando…" />
-  if (cat.isError || !cat.data) return <Body1>Catálogo de bezels indisponível.</Body1>
+  if (cat.isLoading || roms.isLoading) return <Spinner size="tiny" label={t('common.loading')} />
+  if (cat.isError || !cat.data) return <Body1>{t('bezels.unavailable')}</Body1>
 
   const libSystems = new Set((roms.data ?? []).map((r) => r.systemId))
   const rows = cat.data.filter((c) => libSystems.has(c.systemId))
@@ -117,8 +119,7 @@ export function BezelLibrary() {
   if (rows.length === 0)
     return (
       <Caption1>
-        Nenhum sistema da sua biblioteca tem bezel no The Bezel Project (ou a
-        biblioteca ainda está vazia).
+        {t('bezels.none')}
       </Caption1>
     )
 
@@ -129,7 +130,7 @@ export function BezelLibrary() {
           <div key={c.systemId} className={s.row}>
             <span className={s.name}>
               {c.installed && (
-                <CheckmarkCircleRegular className={s.done} aria-label="baixado" />
+                <CheckmarkCircleRegular className={s.done} aria-label={t('bezels.downloaded')} />
               )}
               <Body1>{platformLabel(c.systemId)}</Body1>
             </span>
@@ -148,12 +149,12 @@ export function BezelLibrary() {
               disabled={dl.isPending}
               onClick={() => dl.mutate(c.systemId)}
             >
-              {c.installed ? 'Reinstalar' : 'Baixar'}
+              {c.installed ? t('bezels.reinstall') : t('bezels.download')}
             </Button>
           </div>
         ))}
       </div>
-      <Caption1>Packs do The Bezel Project — 100–600 MB por sistema.</Caption1>
+      <Caption1>{t('bezels.footer')}</Caption1>
     </div>
   )
 }

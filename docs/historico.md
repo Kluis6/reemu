@@ -1542,6 +1542,13 @@ Infra:
 - **Idioma:** preferência em Configurações › Aparência (Automático / Português (Brasil) / English / Español, cada idioma no próprio nome), guardada em `reemu.language`. `auto` segue `navigator.languages` pela língua-base (pt-PT → pt-BR, es-MX → es); sem correspondência, pt-BR. O `<html lang>` acompanha o idioma. A troca vale na hora, sem reiniciar.
 - **Primeira leva migrada:** o rail (Início, Meus jogos, Configurações), o menu do perfil, o topo (voltar, busca, tela cheia, encerrar), as dicas de botão, o título e as abas de Configurações e a tela Aparência inteira, incluindo os nomes dos temas (`ThemeFamily.nameKey`) e os tamanhos da interface. O resto está listado no TASKS.md. Regra para textos novos no CLAUDE.md.
 
+## 2026-09-25 — Frontend inteiro em três idiomas
+
+- Migradas para `t()` as telas que faltavam (Início, Biblioteca, plataforma, detalhe do jogo, tela de jogo, todas as abas de Configurações, onboarding) e os componentes (biblioteca de shaders e molduras, opções do core, mapeamento de controles, captura de atalho, gerenciar biblioteca, atualização e notificações, carrossel, diálogos de adicionar ROMs e de encerrar, erro de rota).
+- `lib/errors.ts`: as regras têm um `id` e título/dica vêm de `errors.rules.<id>`; `errorToast`/`describeError` recebem a **chave** da ação (`actions.<chave>`) em vez de uma frase pronta, e montam "Não foi possível <ação>" no idioma ativo.
+- Datas e números no idioma ativo com `Intl` (`toLocaleString(i18n.language)`): data de lançamento dos metadados (em UTC, para o fuso não mudar o dia), última vez jogado, data da versão no aviso de atualização, MB baixados. Plurais pelo sufixo `_one`/`_other` do i18next.
+- Fica para depois (TASKS.md): textos gerados no Rust (shaders curados, notas de BIOS, eventos do backend) e o site/instalador.
+
 ## 2026-09-25 — Release v0.1.3
 
 - Corrige o crash da v0.1.2 no Linux: abrir um jogo de N64 no mupen64plus_next com o plugin padrão (GLideN64) derrubava o app. Também entram o interop GL com modificador DRM negociado (validação limpa), a fase C dos cores Vulkan e a base de idiomas (pt-BR, en, es). A versão do `package.json` da raiz, que tinha ficado em 0.1.1, foi alinhada.

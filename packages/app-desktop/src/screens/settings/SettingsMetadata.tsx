@@ -26,6 +26,7 @@ import {
   type MetadataConfig,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
+import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL, maxWidth: '520px' },
@@ -51,6 +52,7 @@ const useStyles = makeStyles({
 })
 
 export function SettingsMetadata() {
+  const { t } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((st) => st.push)
@@ -87,14 +89,14 @@ export function SettingsMetadata() {
     mutationFn: (c: MetadataConfig) => setMetadataConfig(c),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['metadata-config'] })
-      push(sysToast('Configuração salva.', 'Success'))
+      push(sysToast(t('metadata.saved'), 'Success'))
     },
-    onError: (e) => push(errorToast(e, 'salvar a configuração de metadados')),
+    onError: (e) => push(errorToast(e, 'saveMetadataConfig')),
   })
   const scan = useMutation({
     mutationFn: () => startMetadataScan(),
     onSuccess: () => progress.refetch(),
-    onError: (e) => push(errorToast(e, 'buscar os metadados')),
+    onError: (e) => push(errorToast(e, 'fetchMetadata')),
   })
   const resolve = useMutation({
     mutationFn: ({ romId, accept }: { romId: string; accept: boolean }) =>
@@ -103,33 +105,28 @@ export function SettingsMetadata() {
       pending.refetch()
       qc.invalidateQueries({ queryKey: ['roms'] })
     },
-    onError: (e) => push(errorToast(e, 'resolver a correspondência')),
+    onError: (e) => push(errorToast(e, 'resolveMatch')),
   })
 
   if (cfg.isLoading) return <LoadingState />
-  if (cfg.isError || !form) return <Body1>Não foi possível carregar as configurações de metadata.</Body1>
+  if (cfg.isError || !form) return <Body1>{t('metadata.unavailable')}</Body1>
 
   const p = progress.data
 
   return (
     <div className={s.root}>
       <Caption1>
-        Busca título, descrição, ano e gênero automaticamente no{' '}
-        <Text as="strong" weight="semibold">ScreenScraper</Text> pelo hash
-        da ROM. Resultados incertos vão pra revisão abaixo. Uma conta grátis
-        em screenscraper.fr aumenta o limite de buscas. Com uma chave do{' '}
-        <Text as="strong" weight="semibold">TheGamesDB</Text>, o que o
-        ScreenScraper não achar é buscado lá pelo nome — sempre pra revisão.
+        <Trans i18nKey="metadata.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
       </Caption1>
 
       <div className={s.form}>
-        <Field label="Usuário ScreenScraper (opcional)">
+        <Field label={t('metadata.ssUser')}>
           <Input
             value={form.screenscraperUser ?? ''}
             onChange={(_, d) => setForm({ ...form, screenscraperUser: d.value || null })}
           />
         </Field>
-        <Field label="Senha ScreenScraper (opcional)">
+        <Field label={t('metadata.ssPassword')}>
           <Input
             type="password"
             value={form.screenscraperPassword ?? ''}
@@ -137,8 +134,8 @@ export function SettingsMetadata() {
           />
         </Field>
         <Field
-          label="Chave de API TheGamesDB (opcional)"
-          hint="Com uma conta em thegamesdb.net, a chave aparece em api.thegamesdb.net/key.php. Fica no chaveiro do sistema."
+          label={t('metadata.tgdbKey')}
+          hint={t('metadata.tgdbKeyHint')}
         >
           <Input
             type="password"
@@ -151,7 +148,7 @@ export function SettingsMetadata() {
           disabled={save.isPending}
           onClick={() => save.mutate(form)}
         >
-          Salvar
+          {t('common.save')}
         </Button>
       </div>
 
@@ -162,11 +159,11 @@ export function SettingsMetadata() {
             disabled={running || scan.isPending}
             onClick={() => scan.mutate()}
           >
-            {running ? 'Escaneando…' : 'Escanear metadata da biblioteca'}
+            {running ? t('metadata.scanning') : t('metadata.scan')}
           </Button>
           {running && (
             <Button appearance="subtle" onClick={() => void cancelMetadataScan()}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
           )}
         </div>
@@ -174,7 +171,7 @@ export function SettingsMetadata() {
           <>
             <ProgressBar value={p.total ? p.done / p.total : undefined} />
             <Caption1 className={s.dim}>
-              {p.done}/{p.total} — {p.auto} automáticas · {p.pending} p/ revisão · {p.failed} falha
+              {t('metadata.progress', { done: p.done, total: p.total, auto: p.auto, pending: p.pending, failed: p.failed })}
             </Caption1>
           </>
         )}
@@ -182,7 +179,7 @@ export function SettingsMetadata() {
 
       {(pending.data?.length ?? 0) > 0 && (
         <div className={s.pending}>
-          <Caption1>Revisar ({pending.data!.length}) — correspondências incertas</Caption1>
+          <Caption1>{t('metadata.review', { count: pending.data!.length })}</Caption1>
           {pending.data!.map((m) => (
             <div key={m.romId} className={s.row}>
               {m.coverUrl && <Image className={s.cover} src={m.coverUrl} alt="" />}
@@ -200,7 +197,7 @@ export function SettingsMetadata() {
                 disabled={resolve.isPending}
                 onClick={() => resolve.mutate({ romId: m.romId, accept: true })}
               >
-                Aceitar
+                {t('metadata.accept')}
               </Button>
               <Button
                 size="small"

@@ -12,12 +12,14 @@ import { listRoms, removeRom } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles } from "../styles/xbox";
+import { useTranslation } from "react-i18next";
 
 /**
  * `/library/:platform` — grade completa de uma plataforma só. A tela
  * "Meus jogos" mostra só uma prévia de cada plataforma e manda pra cá.
  */
 export function PlatformLibrary() {
+  const { t } = useTranslation();
   const s = useBrowseStyles();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -37,9 +39,9 @@ export function PlatformLibrary() {
     mutationFn: (id: string) => removeRom(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roms"] });
-      push(sysToast("Removida da biblioteca.", "Success"));
+      push(sysToast(t("library.removed"), "Success"));
     },
-    onError: (e) => push(errorToast(e, "remover o jogo")),
+    onError: (e) => push(errorToast(e, "removeGame")),
   });
 
   return (
@@ -48,7 +50,7 @@ export function PlatformLibrary() {
         title={platformLabel(platform)}
         right={
           <span className={s.count}>
-            {list.length} {list.length === 1 ? "jogo" : "jogos"}
+            {t("library.games", { count: list.length })}
           </span>
         }
       />
@@ -56,8 +58,8 @@ export function PlatformLibrary() {
       {roms.isLoading ? (
         <CardGridSkeleton />
       ) : list.length === 0 ? (
-        <EmptyState art={<SearchArt />} title="Nada nessa plataforma">
-          Ajuste a busca ou volte pra biblioteca.
+        <EmptyState art={<SearchArt />} title={t("home.emptyPlatform")}>
+          {t("home.emptyPlatformHint")}
         </EmptyState>
       ) : (
         <div className={s.grid}>
@@ -70,9 +72,9 @@ export function PlatformLibrary() {
               favorite={r.isFavorite}
               onClick={() => navigate(`/rom/${r.id}`)}
               menu={[
-                { label: "Abrir", onClick: () => navigate(`/rom/${r.id}`) },
+                { label: t("library.open"), onClick: () => navigate(`/rom/${r.id}`) },
                 {
-                  label: "Remover da biblioteca",
+                  label: t("library.remove"),
                   onClick: () => del.mutate(r.id),
                 },
               ]}

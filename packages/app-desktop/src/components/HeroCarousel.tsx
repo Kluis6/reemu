@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { initials } from '../lib/initials'
 import { platformLabel } from '../lib/platform'
 import type { RomEntry } from '../lib/tauri'
+import { useTranslation } from 'react-i18next'
 
 const ADVANCE_MS = 7000
 
@@ -167,6 +168,7 @@ export function HeroCarousel({
   items: readonly RomEntry[]
   onOpen: (id: string) => void
 }) {
+  const { t } = useTranslation()
   const s = useStyles()
   const [rawIdx, setRawIdx] = useState(0)
   const [paused, setPaused] = useState(false)
@@ -177,10 +179,10 @@ export function HeroCarousel({
 
   useEffect(() => {
     if (n <= 1 || paused) return
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       if (!document.hidden) setRawIdx((i) => i + 1)
     }, ADVANCE_MS)
-    return () => clearInterval(t)
+    return () => clearInterval(timer)
   }, [n, paused])
 
   if (n === 0) return null
@@ -192,7 +194,7 @@ export function HeroCarousel({
       onMouseLeave={() => setPaused(false)}
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={() => setPaused(false)}
-      aria-roledescription="carrossel"
+      aria-roledescription={t('shell2.carousel')}
     >
       {items.map((r, i) => (
         <button
@@ -211,7 +213,7 @@ export function HeroCarousel({
           <span className={s.scrim} />
           <span className={s.body}>
             <span className={s.kicker}>
-              {r.lastPlayedAt ? 'Continuar' : 'Destaque'}
+              {r.lastPlayedAt ? t('shell2.continue') : t('shell2.featured')}
             </span>
             <span className={s.title}>{r.title}</span>
             <span className={s.sub}>{platformLabel(r.systemId)}</span>
@@ -226,7 +228,7 @@ export function HeroCarousel({
             appearance="subtle"
             className={mergeClasses(s.arrow, s.arrowL)}
             icon={<ChevronLeftRegular />}
-            aria-label="Anterior"
+            aria-label={t('shell2.previous')}
             onClick={() => go(idx - 1)}
           />
           <Button
@@ -234,7 +236,7 @@ export function HeroCarousel({
             appearance="subtle"
             className={mergeClasses(s.arrow, s.arrowR)}
             icon={<ChevronRightRegular />}
-            aria-label="Próximo"
+            aria-label={t('shell2.next')}
             onClick={() => go(idx + 1)}
           />
           <div className={s.dots}>
@@ -243,7 +245,7 @@ export function HeroCarousel({
                 key={r.id}
                 type="button"
                 className={mergeClasses(s.dot, i === idx && s.dotOn)}
-                aria-label={`Ir para o destaque ${i + 1}`}
+                aria-label={t('shell2.goToSlide', { n: i + 1 })}
                 aria-current={i === idx}
                 onClick={() => go(i)}
               />

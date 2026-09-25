@@ -1,6 +1,7 @@
 import { Button, Text, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { ChevronRightRegular } from '@fluentui/react-icons'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { marginBottom: '18px' },
@@ -72,6 +73,7 @@ export function SectionHeader({
   right?: ReactNode
   as?: 'h2' | 'h3'
 }) {
+  const { t } = useTranslation()
   const s = useStyles()
   return (
     <div className={s.root}>
@@ -81,7 +83,7 @@ export function SectionHeader({
             appearance="transparent"
             className={s.titleBtn}
             onClick={onSeeAll}
-            aria-label={seeAllLabel ?? `Ver tudo — ${title}`}
+            aria-label={seeAllLabel ?? t('shell2.seeAll', { title })}
             icon={<ChevronRightRegular className={s.chevron} />}
             iconPosition="after"
           >

@@ -24,6 +24,7 @@ import {
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
 import { errorPatch } from '../lib/toast'
+import { Trans, useTranslation } from 'react-i18next'
 
 const ROOT_KEY = 'reemu.shaderLibRoot'
 
@@ -73,6 +74,7 @@ export function ShaderLibrary({
   activePath: string
   busy: boolean
 }) {
+  const { t } = useTranslation()
   const s = useStyles()
   const [root, setRoot] = useState<string>(() => {
     try {
@@ -85,8 +87,8 @@ export function ShaderLibrary({
   // grupos abertos (só relevante quando há > 3 grupos e sem filtro — senão
   // tudo fica aberto).
   const [openGroups, setOpenGroups] = useState<string[]>([])
-  const push = useToastStore((t) => t.push)
-  const updateToast = useToastStore((t) => t.update)
+  const push = useToastStore((st) => st.push)
+  const updateToast = useToastStore((st) => st.update)
   const dlId = useRef<string | null>(null)
 
   const pack = useQuery({
@@ -104,8 +106,8 @@ export function ShaderLibrary({
         updateToast(dlId.current, {
           message:
             p.phase === 'extract'
-              ? 'Extraindo pacote de shaders…'
-              : `Baixando shaders ${mb(p.received)}${p.total ? `/${mb(p.total)}` : ''} MB…`,
+              ? t('shaders.extracting')
+              : t('shaders.downloadingMb', { received: mb(p.received), total: p.total ? `/${mb(p.total)}` : '' }),
           progress: p.phase === 'extract' ? null : pct,
         })
       }),
@@ -114,7 +116,7 @@ export function ShaderLibrary({
       dlId.current = id
       push({
         id,
-        message: 'Baixando pacote de shaders…',
+        message: t('shaders.downloadingPack'),
         variant: 'Info',
         durationMs: 0,
         source: 'System',
@@ -131,7 +133,7 @@ export function ShaderLibrary({
       pack.refetch()
       if (dlId.current)
         updateToast(dlId.current, {
-          message: 'Pacote de shaders instalado.',
+          message: t('shaders.installed'),
           variant: 'Success',
           durationMs: 4000,
           progress: undefined,
@@ -139,7 +141,7 @@ export function ShaderLibrary({
     },
     onError: (e) => {
       if (dlId.current)
-        updateToast(dlId.current, errorPatch(e, 'baixar o pacote de shaders'))
+        updateToast(dlId.current, errorPatch(e, 'downloadShaderPack'))
     },
     onSettled: () => {
       dlId.current = null
@@ -147,7 +149,7 @@ export function ShaderLibrary({
   })
 
   const chooseRoot = async () => {
-    const p = await pickFolder('Escolha a pasta de shaders (shaders_slang)')
+    const p = await pickFolder(t('shaders.pickFolder'))
     if (!p) return
     try {
       localStorage.setItem(ROOT_KEY, p)
@@ -171,21 +173,19 @@ export function ShaderLibrary({
     const by = new Map<string, SlangpEntry[]>()
     for (const e of q.data ?? []) {
       if (!hit(e)) continue
-      const k = e.category || '(raiz)'
+      const k = e.category || t('shaders.root')
       const arr = by.get(k)
       if (arr) arr.push(e)
       else by.set(k, [e])
     }
     return [...by.entries()]
-  }, [q.data, filter])
+  }, [q.data, filter, t])
 
   if (!root) {
     return (
       <div className={s.root}>
         <Caption1>
-          Baixe o pacote de shaders slang (CRT, LCD, fliperama e outros) ou
-          aponte pra uma pasta <code>shaders_slang</code> que você já tenha no
-          computador.
+          <Trans i18nKey="shaders.intro" components={{ code: <code /> }} />
         </Caption1>
         <div className={s.bar}>
           <Button
@@ -194,10 +194,10 @@ export function ShaderLibrary({
             disabled={dl.isPending}
             onClick={() => dl.mutate()}
           >
-            {dl.isPending ? 'Baixando…' : 'Baixar pacote de shaders'}
+            {dl.isPending ? t('shaders.downloading') : t('shaders.download')}
           </Button>
           <Button icon={<FolderRegular />} onClick={chooseRoot}>
-            Escolher pasta…
+            {t('shaders.chooseFolder')}
           </Button>
         </div>
       </div>
@@ -211,27 +211,27 @@ export function ShaderLibrary({
           {root}
         </span>
         <Button size="small" appearance="subtle" onClick={chooseRoot}>
-          Trocar
+          {t('shaders.change')}
         </Button>
       </div>
 
-      {q.isLoading && <Spinner size="tiny" label="Varrendo…" />}
-      {q.isError && <Body1>Falha ao ler a pasta: {String(q.error)}</Body1>}
+      {q.isLoading && <Spinner size="tiny" label={t('shaders.scanning')} />}
+      {q.isError && <Body1>{t('shaders.readFailed', { error: String(q.error) })}</Body1>}
 
       {q.data && (
         <>
           <div className={s.bar}>
             <Input
               size="small"
-              placeholder="Filtrar…"
+              placeholder={t('shaders.filter')}
               value={filter}
               onChange={(_, d) => setFilter(d.value)}
               style={{ flex: 1 }}
             />
-            <Caption1>{q.data.length} presets</Caption1>
+            <Caption1>{t('shaders.presets', { count: q.data.length })}</Caption1>
           </div>
           <div className={s.list}>
-            {groups.length === 0 && <Caption1>Nada encontrado.</Caption1>}
+            {groups.length === 0 && <Caption1>{t('shaders.nothing')}</Caption1>}
             <Accordion
               multiple
               collapsible

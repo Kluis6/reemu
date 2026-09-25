@@ -18,6 +18,7 @@ import { describeRawInput, onRawInputCaptured, saveBinding } from '../lib/tauri'
 import { useBindingCaptureStore } from '../stores/useBindingCaptureStore'
 import { useToastStore } from '../stores/useToastStore'
 import { errorToast } from '../lib/toast'
+import { useTranslation } from 'react-i18next'
 
 const SETTLE_MS = 300
 
@@ -39,6 +40,7 @@ const useStyles = makeStyles({
  * assenta, grava via `save_binding`.
  */
 export function BindingCapture() {
+  const { t } = useTranslation()
   const styles = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
@@ -71,7 +73,7 @@ export function BindingCapture() {
         .then(() => {
           push({
             id: crypto.randomUUID(),
-            message: `Binding salvo: ${label}`,
+            message: t('capture.saved', { label }),
             variant: 'Success',
             durationMs: 2500,
             source: 'System',
@@ -80,12 +82,12 @@ export function BindingCapture() {
           qc.invalidateQueries({ queryKey: ['controller-mappings'] })
         })
         .catch((e) => {
-          push(errorToast(e, 'salvar o atalho'))
+          push(errorToast(e, 'saveHotkey'))
         })
         .finally(() => reset())
     }, SETTLE_MS)
     return () => window.clearTimeout(timer)
-  }, [active, events, push, qc, reset])
+  }, [active, events, push, qc, reset, t])
 
   return (
     <Dialog
@@ -95,15 +97,14 @@ export function BindingCapture() {
     >
       <DialogSurface>
         <DialogBody>
-          <DialogTitle>Capturar atalho{active ? ` — ${active.label}` : ''}</DialogTitle>
+          <DialogTitle>{active ? t('capture.titleFor', { label: active.label }) : t('capture.title')}</DialogTitle>
           <DialogContent>
             <Text as="p" block className={styles.hint}>
-              Pressione a tecla ou o botão do controle. Segure a primeira e aperte outra
-              para uma combinação. Grava sozinho após um instante.
+              {t('capture.hint')}
             </Text>
             <div className={styles.chips}>
               {events.length === 0 ? (
-                <Text className={styles.hint}>aguardando input…</Text>
+                <Text className={styles.hint}>{t('capture.waiting')}</Text>
               ) : (
                 events.map((ev, i) => (
                   <Badge key={i} appearance="tint" size="large">
@@ -115,7 +116,7 @@ export function BindingCapture() {
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={() => reset()}>
-              Cancelar
+              {t('common.cancel')}
             </Button>
           </DialogActions>
         </DialogBody>

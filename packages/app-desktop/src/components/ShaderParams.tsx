@@ -11,6 +11,7 @@ import {
 } from '../lib/tauri'
 import { errorToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -36,6 +37,7 @@ export function ShaderParams({
   /** muda quando o preset troca lá fora → refaz o fetch. */
   reloadKey?: string
 }) {
+  const { t } = useTranslation()
   const s = useStyles()
   const push = useToastStore((st) => st.push)
   const q = useQuery({
@@ -54,7 +56,7 @@ export function ShaderParams({
     clearTimeout(timers.current[name])
     timers.current[name] = setTimeout(() => {
       void setShaderParam(name, value, scope, romId, systemId).catch((e) =>
-        push(errorToast(e, 'salvar o parâmetro do shader')),
+        push(errorToast(e, 'saveShaderParam')),
       )
     }, 200)
   }
@@ -65,7 +67,7 @@ export function ShaderParams({
         setDirty({})
         return q.refetch()
       })
-      .catch((e) => push(errorToast(e, 'restaurar os parâmetros do shader')))
+      .catch((e) => push(errorToast(e, 'resetShaderParams')))
   }
 
   const params: ShaderParam[] = q.data ?? []
@@ -74,9 +76,9 @@ export function ShaderParams({
   return (
     <div className={s.root}>
       <div className={s.head}>
-        <Caption1>Parâmetros do shader</Caption1>
+        <Caption1>{t('shaders.params')}</Caption1>
         <Button size="small" appearance="subtle" icon={<ArrowResetRegular />} onClick={reset}>
-          Restaurar padrões
+          {t('shaders.resetParams')}
         </Button>
       </div>
       {params.map((p) => {

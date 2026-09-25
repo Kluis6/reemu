@@ -15,6 +15,7 @@ import { DismissRegular, FolderRegular } from "@fluentui/react-icons";
 import { useState } from "react";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { pickFolder } from "../lib/tauri";
+import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
   row: {
@@ -38,6 +39,7 @@ export function AddRomsDialog({
   onOpenChange: (open: boolean) => void;
   onScan: (dir: string) => void;
 }) {
+  const { t } = useTranslation();
   const s = useStyles();
   const [dir, setDir] = useState("");
 
@@ -53,21 +55,21 @@ export function AddRomsDialog({
             action={
               <Button
                 appearance="subtle"
-                aria-label="Fechar"
+                aria-label={t("common.close")}
                 icon={<DismissRegular />}
                 onClick={() => onOpenChange(false)}
               />
             }
           >
-            Adicionar ROMs à biblioteca
+            {t("shell2.addRomsTitle")}
           </DialogTitle>
           <DialogContent>
-            <Field hint="A pasta é varrida recursivamente. Extensões desconhecidas são ignoradas.">
+            <Field hint={t("shell2.addRomsHint")}>
               <div className={s.row}>
                 <Input
                   className={s.input}
                   value={dir}
-                  placeholder="/caminho/para/suas/ROMs"
+                  placeholder={t("shell2.addRomsPlaceholder")}
                   contentBefore={<FolderRegular />}
                   onChange={(_, d) => setDir(d.value)}
                 />
@@ -78,14 +80,14 @@ export function AddRomsDialog({
                     if (p) setDir(p);
                   }}
                 >
-                  Procurar…
+                  {t("shell2.browse")}
                 </Button>
               </div>
             </Field>
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={() => onOpenChange(false)}>
-              Cancelar
+              {t("common.cancel")}
             </Button>
             <Button
               appearance="primary"
@@ -95,7 +97,7 @@ export function AddRomsDialog({
                 setDir("");
               }}
             >
-              Escanear
+              {t("shell2.scan")}
             </Button>
           </DialogActions>
         </DialogBody>

@@ -45,6 +45,7 @@ import {
 import { usePauseStyles } from "../styles/xbox";
 import { useFocusStore } from "../stores/useFocusStore";
 import { useToastStore } from "../stores/useToastStore";
+import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
   // Opaco: no modo canvas o frame vai num <canvas>; no vídeo nativo (subsurface)
@@ -221,6 +222,7 @@ interface LaunchInfo {
 }
 
 export function PlayScreen() {
+  const { t, i18n } = useTranslation();
   const styles = useStyles();
   const pause = usePauseStyles();
   const navigate = useNavigate();
@@ -571,7 +573,7 @@ export function PlayScreen() {
           const wantState = params.get("loadState");
           if (wantState) {
             await loadSaveState(wantState).catch((e) =>
-              push(errorToast(e, "carregar o save state")),
+              push(errorToast(e, "loadSaveState")),
             );
           }
           // Garante que o jogo começa com foco (não no menu de pausa).
@@ -591,9 +593,9 @@ export function PlayScreen() {
     mutationFn: () => saveState(romId, 0),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["save-states", romId] });
-      push(sysToast("QuickSave gravado.", "Success"));
+      push(sysToast(t("play.quickSaved"), "Success"));
     },
-    onError: (e) => push(errorToast(e, "salvar o estado do jogo")),
+    onError: (e) => push(errorToast(e, "saveGameState")),
   });
 
   const quickLoad = useMutation({
@@ -603,8 +605,8 @@ export function PlayScreen() {
       if (!quick) throw new Error("nenhum QuickSave pra este jogo");
       await loadSaveState(quick.id);
     },
-    onSuccess: () => push(sysToast("QuickLoad aplicado.", "Success")),
-    onError: (e) => push(errorToast(e, "carregar o estado do jogo")),
+    onSuccess: () => push(sysToast(t("play.quickLoaded"), "Success")),
+    onError: (e) => push(errorToast(e, "loadGameState")),
   });
 
   // Lista de save states — só busca com o menu aberto.
@@ -617,10 +619,10 @@ export function PlayScreen() {
   const loadAny = useMutation({
     mutationFn: (id: string) => loadSaveState(id),
     onSuccess: () => {
-      push(sysToast("Estado carregado.", "Success"));
+      push(sysToast(t("play.stateLoaded"), "Success"));
       resume();
     },
-    onError: (e) => push(errorToast(e, "carregar o estado do jogo")),
+    onError: (e) => push(errorToast(e, "loadGameState")),
   });
 
   const resume = () => {
@@ -654,8 +656,8 @@ export function PlayScreen() {
             gap: 12,
           }}
         >
-          <Body1>Não foi possível determinar o core/ROM.</Body1>
-          <Button onClick={goBack}>Voltar</Button>
+          <Body1>{t("play.noTarget")}</Body1>
+          <Button onClick={goBack}>{t("common.back")}</Button>
         </div>
       </div>
     );
@@ -678,12 +680,12 @@ export function PlayScreen() {
           </div>
         )}
         <div className={styles.splashTitle}>
-          {launch?.title ?? "Carregando…"}
+          {launch?.title ?? t("common.loading")}
         </div>
         {launch?.system && (
           <div className={styles.splashSub}>{platformLabel(launch.system)}</div>
         )}
-        <Spinner size="small" label="Carregando…" />
+        <Spinner size="small" label={t("common.loading")} />
       </div>
     );
   }
@@ -691,7 +693,7 @@ export function PlayScreen() {
   if (typeof status === "object") {
     // O que aconteceu e o que fazer (lib/errors.ts), com o botão pra
     // solução quando existe e o texto técnico recolhido pra relatar.
-    const err = describeError(status.error, "abrir o jogo");
+    const err = describeError(status.error, "openGame");
     const fix = err.fix ? fixRoute(err.fix) : null;
     return (
       <div className={styles.center}>
@@ -711,14 +713,14 @@ export function PlayScreen() {
               </Button>
             )}
             <Button appearance={fix ? "secondary" : "primary"} onClick={goBack}>
-              Voltar
+              {t("common.back")}
             </Button>
             <Button appearance="subtle" onClick={() => copyErrorDetails(err.title, err.technical)}>
-              Copiar detalhes
+              {t("errors.copyDetails")}
             </Button>
           </div>
           <details className={styles.errorDetails}>
-            <summary>Detalhes técnicos</summary>
+            <summary>{t("errors.technicalDetails")}</summary>
             <code>{err.technical}</code>
           </details>
         </div>
@@ -760,22 +762,22 @@ export function PlayScreen() {
           )}
           <div className={pause.panel}>
             <Title3 as="h2" className={pause.title}>
-              Pausado
+              {t("play.paused")}
             </Title3>
             <Button appearance="primary" onClick={resume}>
-              Continuar
+              {t("play.continue")}
             </Button>
             <Button
               disabled={quickSave.isPending}
               onClick={() => quickSave.mutate()}
             >
-              QuickSave
+              {t("play.quickSave")}
             </Button>
             <Button
               disabled={quickLoad.isPending}
               onClick={() => quickLoad.mutate()}
             >
-              QuickLoad
+              {t("play.quickLoad")}
             </Button>
 
             {(stateList.data?.length ?? 0) > 0 && (
@@ -794,15 +796,15 @@ export function PlayScreen() {
                     />
                     <span className={pause.stateLabel}>
                       {st.slot === 0
-                        ? "QuickSave"
+                        ? t("play.quickSave")
                         : st.slot != null
-                          ? `Slot ${st.slot}`
-                          : "Auto"}
+                          ? t("game.slot", { n: st.slot })
+                          : t("game.auto")}
                       <br />
                       <span className={pause.stateDate}>
-                        {new Date(st.createdAt * 1000).toLocaleString()}
+                        {new Date(st.createdAt * 1000).toLocaleString(i18n.language)}
                         {st.playTimeAtSave != null &&
-                          ` · ${formatPlayTime(st.playTimeAtSave)} de jogo`}
+                          t("game.playedFor", { time: formatPlayTime(st.playTimeAtSave) })}
                       </span>
                     </span>
                   </Button>
@@ -811,10 +813,10 @@ export function PlayScreen() {
             )}
 
             <Button appearance="subtle" onClick={() => void toggleFullscreen()}>
-              {fullscreen ? "Sair da tela cheia" : "Tela cheia"}
+              {fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen")}
             </Button>
             <Button appearance="subtle" onClick={quit}>
-              Sair do jogo
+              {t("play.quit")}
             </Button>
           </div>
         </div>

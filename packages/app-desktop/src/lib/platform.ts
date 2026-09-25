@@ -1,3 +1,4 @@
+import i18n from "../i18n";
 /**
  * `system_id` do backend → nome curto de plataforma pra UI (chips, abas,
  * filtro). O backend usa ids técnicos (`snes`, `n64`); aqui viram rótulos
@@ -58,6 +59,9 @@ const LABELS: Record<string, string> = {
 };
 
 export function platformLabel(systemId: string): string {
+  // "Disco" (ROM sem plataforma identificada) é o único rótulo traduzível;
+  // o resto são nomes próprios de console.
+  if (systemId === "disc") return i18n.t("platform.disc");
   return LABELS[systemId] ?? systemId.toUpperCase();
 }
 

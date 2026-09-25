@@ -9,3 +9,15 @@ it('formata o tempo de jogo', () => {
   expect(formatPlayTime(2 * 3600)).toBe('2 h')
   expect(formatPlayTime(3 * 3600 + 12 * 60 + 5)).toBe('3 h 12 min')
 })
+
+it('traduz o "menos de 1 min"', async () => {
+  const { default: i18n } = await import('../i18n')
+  const prev = i18n.language
+  try {
+    await i18n.changeLanguage('en')
+    expect(formatPlayTime(10)).toBe('under 1 min')
+    expect(formatPlayTime(3 * 3600 + 12 * 60)).toBe('3 h 12 min')
+  } finally {
+    await i18n.changeLanguage(prev)
+  }
+})

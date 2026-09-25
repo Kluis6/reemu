@@ -7,6 +7,7 @@ import { AppLogo } from '../components/AppLogo'
 import { LoadingState } from '../components/EmptyState'
 import { ProfileForm } from '../components/ProfileForm'
 import { getProfile } from '../lib/tauri'
+import { useTranslation } from 'react-i18next'
 
 // Primeira abertura: o fundo acende devagar, o cartão entra (fade + subida
 // curta + leve crescimento) logo depois do splash e o conteúdo vem em
@@ -100,6 +101,7 @@ const useStyles = makeStyles({
  * `setProfile` marca `onboarded` e a `/` passa a abrir normalmente.
  */
 export function Onboarding() {
+  const { t } = useTranslation()
   const s = useStyles()
   const navigate = useNavigate()
   const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile, retry: false })
@@ -131,8 +133,7 @@ export function Onboarding() {
             <AppLogo height={132} />
           </div>
           <Body1 className={mergeClasses(s.part, s.d2)}>
-            Bem-vindo — vamos criar seu perfil. Ele fica só neste computador;
-            depois dá pra ligar a uma rede social.
+            {t('shell.welcome')}
           </Body1>
         </div>
         <div className={mergeClasses(s.part, s.d3)}>
@@ -142,7 +143,7 @@ export function Onboarding() {
               bio: profile.data?.bio ?? null,
               avatar: profile.data?.avatar ?? 'preset:1',
             }}
-            submitLabel="Começar"
+            submitLabel={t('shell.start')}
             onDone={finish}
           />
         </div>

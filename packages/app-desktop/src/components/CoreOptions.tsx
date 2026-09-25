@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { getCoreOptions, resetCoreOptions, setCoreOption } from '../lib/tauri'
 import { errorToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
@@ -36,6 +37,7 @@ const useStyles = makeStyles({
  * vencem os valores por core só quando essa ROM está carregada.
  */
 export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string }) {
+  const { t } = useTranslation()
   const styles = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
@@ -54,18 +56,18 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
     mutationFn: (v: { key: string; value: string }) =>
       setCoreOption(coreId, v.key, v.value, scopeRomId),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e) => push(errorToast(e, 'aplicar a opção do core')),
+    onError: (e) => push(errorToast(e, 'applyCoreOption')),
   })
   const reset = useMutation({
     mutationFn: () => resetCoreOptions(coreId, scopeRomId),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e) => push(errorToast(e, 'restaurar as opções do core')),
+    onError: (e) => push(errorToast(e, 'resetCoreOptions')),
   })
 
   if (!coreId) return null
-  if (opts.isLoading) return <Spinner size="tiny" label="Carregando opções…" />
+  if (opts.isLoading) return <Spinner size="tiny" label={t('coreOptions.loading')} />
   if (!opts.data || opts.data.length === 0)
-    return <Caption1>Sem opções — ou o core ainda não foi executado nenhuma vez.</Caption1>
+    return <Caption1>{t('coreOptions.none')}</Caption1>
 
   return (
     <div className={styles.root}>
@@ -75,15 +77,15 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
           selectedValue={scope}
           onTabSelect={(_, d) => setScope(d.value as 'core' | 'rom')}
         >
-          <Tab value="core">Este core</Tab>
-          <Tab value="rom">Só este jogo</Tab>
+          <Tab value="core">{t('coreOptions.thisCore')}</Tab>
+          <Tab value="rom">{t('coreOptions.thisGame')}</Tab>
         </TabList>
       )}
       <div className={styles.head}>
         <Caption1 className={styles.hint}>
           {scope === 'rom'
-            ? 'Overrides deste jogo — vencem quando ele está carregado.'
-            : 'Valem pra todos os jogos deste core.'}
+            ? t('coreOptions.romHint')
+            : t('coreOptions.coreHint')}
         </Caption1>
         <Button
           size="small"
@@ -92,7 +94,7 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
           disabled={reset.isPending}
           onClick={() => reset.mutate()}
         >
-          Resetar
+          {t('coreOptions.reset')}
         </Button>
       </div>
       <div className={styles.grid}>
@@ -107,7 +109,7 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
               label={o.displayName}
               hint={
                 scope === 'rom' && o.romValue == null
-                  ? `herdando: ${o.value}`
+                  ? t('coreOptions.inheriting', { value: o.value })
                   : undefined
               }
             >
@@ -116,10 +118,10 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
                 disabled={change.isPending}
                 onChange={(_, d) => change.mutate({ key: o.key, value: d.value })}
               >
-                {scope === 'rom' && <option value="">Herdar ({o.value})</option>}
+                {scope === 'rom' && <option value="">{t('coreOptions.inherit', { value: o.value })}</option>}
                 {o.choices.map((c) => (
                   <option key={c} value={c}>
-                    {c === o.defaultValue ? `${c} (padrão)` : c}
+                    {c === o.defaultValue ? t('coreOptions.default', { value: c }) : c}
                   </option>
                 ))}
               </Select>

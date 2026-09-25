@@ -4,6 +4,9 @@
 // técnico original não some: vai em `technical`, pra "Copiar detalhes" e
 // relato de problema.
 
+import i18n from '../i18n'
+import type { Messages } from '../i18n/types'
+
 /** Lugar do app que resolve o problema — vira um botão na tela de erro. */
 export type ErrorFix = 'cores' | 'bios' | 'metadata' | 'library'
 
@@ -31,10 +34,12 @@ export function errorText(e: unknown): string {
   }
 }
 
+/** Chave da regra em `errors.rules.<id>` (título + dica, i18n). */
+type RuleId = keyof Messages['errors']['rules']
+
 interface Rule {
   test: RegExp
-  title: string
-  hint?: string
+  id: RuleId
   fix?: ErrorFix
 }
 
@@ -42,114 +47,110 @@ interface Rule {
 const RULES: Rule[] = [
   {
     test: /signature|assinatura|minisign|pubkey/i,
-    title: 'A atualização baixada não passou na verificação de segurança',
-    hint: 'Nada foi instalado. Tente de novo mais tarde.',
+    id: 'badSignature',
   },
   {
     // antes da regra de rede: "timeout" aqui é o core, não a internet
     test: /core-host não respondeu|core-host.*timeout/i,
-    title: 'O emulador travou ao abrir o jogo',
-    hint: 'O core levou mais de 30 segundos para carregar e foi encerrado. Tente de novo ou escolha outro core para este sistema.',
+    id: 'coreHung',
     fix: 'cores',
   },
   {
     test: /fora do Tauri/i,
-    title: 'Esta função só funciona dentro do app ReEmu',
+    id: 'outsideApp',
   },
   {
     test: /\b429\b|too many requests|limite de (consultas|requisi)/i,
-    title: 'O servidor limitou as consultas por agora',
-    hint: 'Espere alguns minutos e tente de novo.',
+    id: 'rateLimited',
   },
   {
     test: /\b401\b|\b403\b|unauthori[sz]ed|forbidden|senha|credencia|login|chave (da api|inválida)/i,
-    title: 'O servidor recusou o login ou a chave de acesso',
-    hint: 'Confira usuário, senha ou chave em Configurações › Metadados.',
+    id: 'authFailed',
     fix: 'metadata',
   },
   {
     test: /error sending request|dns|failed to lookup|tcp connect|connection (refused|reset|closed)|(operation|request|connection|connect) timed? ?out|network|sem conex|HTTP 5\d\d|\b50[0-4]\b/i,
-    title: 'Sem conexão com a internet, ou o servidor não respondeu',
-    hint: 'Confira a conexão e tente de novo em instantes.',
+    id: 'offline',
   },
   {
     test: /\b404\b|not found.*http|http.*not found/i,
-    title: 'O arquivo não existe mais no servidor',
-    hint: 'Pode ter sido removido ou renomeado lá. Tente de novo mais tarde.',
+    id: 'notFoundRemote',
   },
   {
     test: /bios|firmware/i,
-    title: 'Falta um arquivo de BIOS que este sistema precisa',
-    hint: 'Veja em Configurações › BIOS quais arquivos faltam e importe-os.',
+    id: 'missingBios',
     fix: 'bios',
   },
   {
     test: /contexto GL|HW render|hardware render|OpenGL|Vulkan|wglCreateContext|pixel format|driver de vídeo/i,
-    title: 'A placa de vídeo não aceitou o modo de desenho deste core',
-    hint: 'Atualize o driver de vídeo ou escolha outro core para este sistema.',
+    id: 'gpuRejected',
     fix: 'cores',
   },
   {
     test: /core-host|encerrou inesperadamente|processo filho|broken pipe|pipe|canal .*fechad|encerrou inesperad|child/i,
-    title: 'O emulador fechou inesperadamente',
-    hint: 'Tente abrir de novo ou escolha outro core para este jogo. Se repetir, relate o problema.',
+    id: 'coreCrashed',
     fix: 'cores',
   },
   {
     test: /nenhum core|core não (instalado|encontrado)|sem core|core.*(not found|ausente)|carregar core: .*(no such file|não encontrad)/i,
-    title: 'Não há um core instalado para rodar este jogo',
-    hint: 'Instale um core para este sistema em Configurações › Cores.',
+    id: 'noCore',
     fix: 'cores',
   },
   {
     test: /incompatível com a plataforma|incompatible platform|arquitetura|wrong ELF|%1 is not a valid Win32|bad exe format/i,
-    title: 'Este core não é compatível com este computador',
-    hint: 'Baixe o core de novo em Configurações › Cores.',
+    id: 'coreIncompatible',
     fix: 'cores',
   },
   {
     test: /save state|estado salvo|serializ|unserializ/i,
-    title: 'O save state não é compatível com este core ou versão',
-    hint: 'Save states só abrem no mesmo core em que foram criados.',
+    id: 'saveStateIncompatible',
   },
   {
     test: /retro_load_game|não carregou o jogo|rom (inválida|não reconhecida)|nenhuma rom reconhecida|formato não suportado/i,
-    title: 'O core não aceitou este arquivo de jogo',
-    hint: 'Confira se o arquivo é do sistema certo e não está corrompido.',
+    id: 'romRejected',
     fix: 'library',
   },
   {
     test: /no space left|os error 28|os error 112|disco cheio|espaço insuficiente/i,
-    title: 'O disco está cheio',
-    hint: 'Libere espaço e tente de novo.',
+    id: 'diskFull',
   },
   {
     test: /permission denied|access is denied|acesso negado|os error 13|os error 5\b|sem permiss/i,
-    title: 'Sem permissão para acessar o arquivo ou a pasta',
-    hint: 'Feche programas que estejam usando o arquivo ou escolha outra pasta.',
+    id: 'noPermission',
   },
   {
     test: /no such file|cannot find the (file|path)|os error [23]\b|não encontrad|not found/i,
-    title: 'Arquivo ou pasta não encontrado',
-    hint: 'Ele pode ter sido movido, renomeado ou apagado.',
+    id: 'notFound',
   },
   {
     test: /invalid (zip|archive)|corrupt|checksum|unexpected end of file|zip/i,
-    title: 'O arquivo está corrompido ou incompleto',
-    hint: 'Baixe ou copie o arquivo de novo.',
+    id: 'corrupt',
   },
 ]
 
-/** `action` = o que o usuário tentou fazer, no infinitivo ("baixar o core"). */
-export function describeError(e: unknown, action: string): FriendlyError {
+/** O que o usuário tentou fazer — chave em `actions.*` (i18n), usada em
+ *  "Não foi possível {ação}" quando nenhuma regra reconhece o erro. */
+export type ActionKey = keyof Messages['actions']
+
+/** Traduz no idioma ativo na hora da chamada. Os padrões (`test`) casam o
+ *  texto técnico, que vem do Rust/SO — independem do idioma da interface. */
+export function describeError(e: unknown, action: ActionKey): FriendlyError {
   const technical = errorText(e)
     .replace(/^Error:\s*/i, '')
     .trim()
   const rule = RULES.find((r) => r.test.test(technical))
-  if (rule) return { title: rule.title, hint: rule.hint, fix: rule.fix, technical }
+  if (rule) {
+    const hint = i18n.t(`errors.rules.${rule.id}.hint`)
+    return {
+      title: i18n.t(`errors.rules.${rule.id}.title`),
+      hint: hint || undefined,
+      fix: rule.fix,
+      technical,
+    }
+  }
   return {
-    title: `Não foi possível ${action}`,
-    hint: 'Tente de novo. Se repetir, copie os detalhes e relate o problema.',
+    title: i18n.t('errors.cannot', { action: i18n.t(`actions.${action}`) }),
+    hint: i18n.t('errors.genericHint'),
     technical,
   }
 }

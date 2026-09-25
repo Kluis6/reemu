@@ -5,10 +5,17 @@
 //    "Plataforma, Ação"); textos por idioma.
 //  - TheGamesDB (API v1): `release_date` `AAAA-MM-DD`, `overview` em texto.
 
-const MONTHS = [
-  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
-  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
-]
+import i18n from '../i18n'
+
+// Datas no idioma da interface via Intl (UTC: a data do provedor não tem
+// fuso, e o fuso local podia jogar o dia pra trás).
+const dateText = (y: number, month: number, day: number) =>
+  new Date(Date.UTC(y, month - 1, day || 1)).toLocaleDateString(i18n.language, {
+    timeZone: 'UTC',
+    year: 'numeric',
+    month: 'long',
+    ...(day ? { day: 'numeric' } : {}),
+  })
 
 /** "1995-08-11" → "11 de agosto de 1995"; "1991-01-01" (só o ano, pela doc
  *  do ScreenScraper) → "1991"; "1994-11" → "novembro de 1994"; "1993" →
@@ -23,8 +30,7 @@ export function formatReleaseDate(raw: string | null | undefined): string | null
   const day = d ? Number(d) : 0
   if (!month || month > 12) return y
   if (month === 1 && day === 1) return y // convenção "só o ano"
-  if (!day) return `${MONTHS[month - 1]} de ${y}`
-  return `${day} de ${MONTHS[month - 1]} de ${y}`
+  return dateText(Number(y), month, day)
 }
 
 /** "Plataforma, Ação" / "Action / Platform" → ["Plataforma", "Ação"]. */
@@ -68,17 +74,17 @@ export function descriptionParagraphs(raw: string | null | undefined): string[] 
 const PROVIDERS: Record<string, string> = {
   screenscraper: 'ScreenScraper',
   thegamesdb: 'TheGamesDB',
-  manual: 'Editado por você',
 }
 
 export function providerLabel(raw: string | null | undefined): string | null {
   if (!raw) return null
-  return PROVIDERS[raw.toLowerCase()] ?? raw
+  const k = raw.toLowerCase()
+  return k === 'manual' ? i18n.t('format.manual') : (PROVIDERS[k] ?? raw)
 }
 
 /** Epoch em segundos → "25 de set. de 2026, 06:30". */
 export function formatDateTime(epochSec: number): string {
-  return new Date(epochSec * 1000).toLocaleString('pt-BR', {
+  return new Date(epochSec * 1000).toLocaleString(i18n.language, {
     dateStyle: 'medium',
     timeStyle: 'short',
   })

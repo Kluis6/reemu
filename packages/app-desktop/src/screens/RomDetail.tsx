@@ -77,8 +77,10 @@ import {
 import { formatPlayTime } from "../lib/playTime";
 import { useDetailStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
+import { useTranslation } from "react-i18next";
 
 export function RomDetail() {
+  const { t, i18n } = useTranslation();
   const s = useDetailStyles();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -144,7 +146,7 @@ export function RomDetail() {
       qc.invalidateQueries({ queryKey: ["rom-shader", romId] });
       qc.invalidateQueries({ queryKey: ["shader-info"] });
     },
-    onError: (e) => push(errorToast(e, "trocar o shader deste jogo")),
+    onError: (e) => push(errorToast(e, "changeGameShader")),
   });
   // O que está atribuído EXATAMENTE no escopo selecionado ("" = herda).
   const shaderAtScope =
@@ -195,18 +197,18 @@ export function RomDetail() {
   const del = useMutation({
     mutationFn: (id: string) => deleteSaveState(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["save-states", romId] }),
-    onError: (e) => push(errorToast(e, "apagar o save state")),
+    onError: (e) => push(errorToast(e, "deleteSaveState")),
   });
   const remove = useMutation({
     mutationFn: () => removeRom(romId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roms"] });
       push(
-        sysToast(`"${rom?.title ?? "ROM"}" removida da biblioteca.`, "Success"),
+        sysToast(t("game.removed", { title: rom?.title ?? "ROM" }), "Success"),
       );
       navigate("/library");
     },
-    onError: (e) => push(errorToast(e, "remover o jogo")),
+    onError: (e) => push(errorToast(e, "removeGame")),
   });
   const editMeta = useMutation({
     mutationFn: () =>
@@ -219,9 +221,9 @@ export function RomDetail() {
       qc.invalidateQueries({ queryKey: ["roms"] });
       qc.invalidateQueries({ queryKey: ["rom-metadata", romId] });
       setEditOpen(false);
-      push(sysToast("Dados da ROM atualizados.", "Success"));
+      push(sysToast(t("game.updated"), "Success"));
     },
-    onError: (e) => push(errorToast(e, "salvar as alterações")),
+    onError: (e) => push(errorToast(e, "saveChanges")),
   });
   const openEdit = () => {
     setEditName(rom?.title ?? "");
@@ -240,7 +242,7 @@ export function RomDetail() {
     },
     onError: (e, _on, ctx) => {
       if (ctx?.prev) qc.setQueryData(["roms"], ctx.prev);
-      push(errorToast(e, "favoritar o jogo"));
+      push(errorToast(e, "favoriteGame"));
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["roms"] }),
   });
@@ -250,14 +252,14 @@ export function RomDetail() {
     return (
       <EmptyState
         art={<SearchArt />}
-        title="ROM não encontrada"
+        title={t("game.notFound")}
         action={
           <Button appearance="primary" onClick={() => navigate("/library")}>
-            Voltar pra biblioteca
+            {t("game.backToLibrary")}
           </Button>
         }
       >
-        Ela pode ter sido removida da biblioteca.
+        {t("game.notFoundHint")}
       </EmptyState>
     );
 
@@ -274,7 +276,7 @@ export function RomDetail() {
     if (missingRequiredBios) {
       push(
         sysToast(
-          `Falta o BIOS obrigatório de ${platformLabel(rom.systemId)} (${missingRequiredBios.filename}) — o jogo pode não rodar. Veja Configurações › BIOS.`,
+          t("game.missingBios", { platform: platformLabel(rom.systemId), file: missingRequiredBios.filename }),
           "Warning",
         ),
       );
@@ -331,12 +333,12 @@ export function RomDetail() {
               disabled={!chosenCore}
               onClick={() => play()}
             >
-              {hasQuick ? "Continuar" : "Jogar"}
+              {hasQuick ? t("game.continue") : t("game.play")}
             </Button>
             {/* Ações secundárias só com ícone (pedido do usuário); o nome vem
                 pelo tooltip e pelo aria-label. */}
             <Tooltip
-              content={rom.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              content={rom.isFavorite ? t("game.favoriteRemove") : t("game.favoriteAdd")}
               relationship="label"
             >
               <Button
@@ -354,7 +356,7 @@ export function RomDetail() {
                 onClick={() => fav.mutate(!rom.isFavorite)}
               />
             </Tooltip>
-            <Tooltip content="Editar nome e plataforma" relationship="label">
+            <Tooltip content={t("game.edit")} relationship="label">
               <Button
                 size="large"
                 appearance="secondary"
@@ -363,7 +365,7 @@ export function RomDetail() {
                 onClick={openEdit}
               />
             </Tooltip>
-            <Tooltip content="Informações completas" relationship="label">
+            <Tooltip content={t("game.info")} relationship="label">
               <Button
                 size="large"
                 appearance="secondary"
@@ -374,7 +376,7 @@ export function RomDetail() {
             </Tooltip>
             <Tooltip
               content={
-                confirmRemove ? "Aperte de novo para confirmar a remoção" : "Remover da biblioteca"
+                confirmRemove ? t("game.removeConfirm") : t("game.remove")
               }
               relationship="label"
             >
@@ -402,12 +404,11 @@ export function RomDetail() {
           {coreList.length === 0 && (
             <MessageBar intent="warning" className={s.noCoreBar}>
               <MessageBarBody>
-                Nenhum core instalado para {platformLabel(rom.systemId)} — é ele
-                que roda o jogo.
+                {t("game.noCore", { platform: platformLabel(rom.systemId) })}
               </MessageBarBody>
               <MessageBarActions>
                 <Button appearance="primary" onClick={() => navigate("/settings/cores")}>
-                  Abrir Cores
+                  {t("common.openCores")}
                 </Button>
               </MessageBarActions>
             </MessageBar>
@@ -422,11 +423,11 @@ export function RomDetail() {
       >
         <DialogSurface>
           <DialogBody>
-            <DialogTitle>Editar ROM</DialogTitle>
+            <DialogTitle>{t("game.editTitle")}</DialogTitle>
             <DialogContent
               style={{ display: "flex", flexDirection: "column", gap: 16 }}
             >
-              <Field label="Nome">
+              <Field label={t("common.name")}>
                 <Input
                   value={editName}
                   onChange={(_, d) => setEditName(d.value)}
@@ -434,8 +435,8 @@ export function RomDetail() {
                 />
               </Field>
               <Field
-                label="Plataforma"
-                hint="Corrige ROMs que o scan não identificou (ficam em 'Disco')."
+                label={t("common.platform")}
+                hint={t("game.platformHint")}
               >
                 <Select
                   value={editSystem}
@@ -459,14 +460,14 @@ export function RomDetail() {
                 appearance="secondary"
                 onClick={() => setEditOpen(false)}
               >
-                Cancelar
+                {t("common.cancel")}
               </Button>
               <Button
                 appearance="primary"
                 disabled={editMeta.isPending}
                 onClick={() => editMeta.mutate()}
               >
-                Salvar
+                {t("common.save")}
               </Button>
             </DialogActions>
           </DialogBody>
@@ -485,13 +486,13 @@ export function RomDetail() {
             action={
               <Button
                 appearance="subtle"
-                aria-label="Fechar"
+                aria-label={t("common.close")}
                 icon={<DismissRegular />}
                 onClick={() => setInfoOpen(false)}
               />
             }
           >
-            Informações do jogo
+            {t("game.infoTitle")}
           </DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
@@ -500,22 +501,22 @@ export function RomDetail() {
 
             <section className={s.infoSection} aria-labelledby="info-sobre">
               <h3 id="info-sobre" className={s.infoHeading}>
-                Sobre o jogo
+                {t("game.about")}
               </h3>
               <dl className={s.infoList}>
-                <dt className={s.infoLabel}>Título</dt>
+                <dt className={s.infoLabel}>{t("game.title")}</dt>
                 <dd className={s.infoValue}>{title}</dd>
-                <dt className={s.infoLabel}>Plataforma</dt>
+                <dt className={s.infoLabel}>{t("common.platform")}</dt>
                 <dd className={s.infoValue}>{platformLabel(rom.systemId)}</dd>
                 {releaseText && (
                   <>
-                    <dt className={s.infoLabel}>Lançamento</dt>
+                    <dt className={s.infoLabel}>{t("game.release")}</dt>
                     <dd className={s.infoValue}>{releaseText}</dd>
                   </>
                 )}
                 {genres.length > 0 && (
                   <>
-                    <dt className={s.infoLabel}>{genres.length > 1 ? "Gêneros" : "Gênero"}</dt>
+                    <dt className={s.infoLabel}>{genres.length > 1 ? t("game.genres") : t("game.genre")}</dt>
                     <dd className={mergeClasses(s.infoValue, s.infoTags)}>
                       {genres.map((g) => (
                         <Badge key={g} appearance="tint" color="brand" shape="rounded" size="large">
@@ -527,7 +528,7 @@ export function RomDetail() {
                 )}
                 {sourceText && (
                   <>
-                    <dt className={s.infoLabel}>Fonte dos dados</dt>
+                    <dt className={s.infoLabel}>{t("game.source")}</dt>
                     <dd className={s.infoValue}>{sourceText}</dd>
                   </>
                 )}
@@ -537,7 +538,7 @@ export function RomDetail() {
             {descParas.length > 0 && (
               <section className={s.infoSection} aria-labelledby="info-desc">
                 <h3 id="info-desc" className={s.infoHeading}>
-                  Descrição
+                  {t("game.description")}
                 </h3>
                 {descParas.map((p, i) => (
                   <p key={i} className={s.infoPara}>
@@ -549,26 +550,26 @@ export function RomDetail() {
 
             <section className={s.infoSection} aria-labelledby="info-lib">
               <h3 id="info-lib" className={s.infoHeading}>
-                Na sua biblioteca
+                {t("game.inLibrary")}
               </h3>
               <dl className={s.infoList}>
-                <dt className={s.infoLabel}>Arquivo</dt>
+                <dt className={s.infoLabel}>{t("game.file")}</dt>
                 <dd className={s.infoValue}>
                   <span className={s.infoFileName}>{fileParts.name}</span>
                   {fileParts.dir && <span className={s.infoFileDir}>{fileParts.dir}</span>}
                 </dd>
-                <dt className={s.infoLabel}>Adicionado em</dt>
+                <dt className={s.infoLabel}>{t("game.addedAt")}</dt>
                 <dd className={s.infoValue}>{formatDateTime(rom.addedAt)}</dd>
-                <dt className={s.infoLabel}>Última vez jogado</dt>
+                <dt className={s.infoLabel}>{t("game.lastPlayed")}</dt>
                 <dd className={s.infoValue}>
-                  {rom.lastPlayedAt ? formatDateTime(rom.lastPlayedAt) : "Nunca jogado"}
+                  {rom.lastPlayedAt ? formatDateTime(rom.lastPlayedAt) : t("game.neverPlayed")}
                 </dd>
-                <dt className={s.infoLabel}>Tempo de jogo</dt>
+                <dt className={s.infoLabel}>{t("game.playTime")}</dt>
                 <dd className={s.infoValue}>
-                  {playTime.data ? formatPlayTime(playTime.data) : "Nunca jogado"}
+                  {playTime.data ? formatPlayTime(playTime.data) : t("game.neverPlayed")}
                 </dd>
-                <dt className={s.infoLabel}>Favorito</dt>
-                <dd className={s.infoValue}>{rom.isFavorite ? "Sim" : "Não"}</dd>
+                <dt className={s.infoLabel}>{t("game.favorite")}</dt>
+                <dd className={s.infoValue}>{rom.isFavorite ? t("common.yes") : t("common.no")}</dd>
               </dl>
             </section>
           </div>
@@ -582,15 +583,15 @@ export function RomDetail() {
             setCfgTab(d.value as "core" | "states" | "shader")
           }
         >
-          {hasCoreCfg && <Tab value="core">Emulador</Tab>}
-          <Tab value="states">Save states</Tab>
-          {hasShaderCfg && <Tab value="shader">Shader</Tab>}
+          {hasCoreCfg && <Tab value="core">{t("game.tabs.core")}</Tab>}
+          <Tab value="states">{t("game.tabs.states")}</Tab>
+          {hasShaderCfg && <Tab value="shader">{t("game.tabs.shader")}</Tab>}
         </TabList>
         <div className={s.panel}>
           {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
             <>
               <div className={s.field}>
-                <Caption1>Aplicar a</Caption1>
+                <Caption1>{t("game.shader.applyTo")}</Caption1>
                 <div style={{ overflowX: "auto" }}>
                   <TabList
                     size="small"
@@ -599,20 +600,20 @@ export function RomDetail() {
                       setShaderScope(d.value as ShaderScope)
                     }
                   >
-                    <Tab value="rom">Jogo</Tab>
+                    <Tab value="rom">{t("game.shader.scopeGame")}</Tab>
                     <Tab value="system">
-                      {rom ? platformLabel(rom.systemId) : "Plataforma"}
+                      {rom ? platformLabel(rom.systemId) : t("common.platform")}
                     </Tab>
                   </TabList>
                 </div>
                 <Caption1 className={s.hint}>
                   {romShader.data?.resolvedScope === "rom"
-                    ? "Ativo: definido neste jogo."
+                    ? t("game.shader.activeRom")
                     : romShader.data?.resolvedScope === "system"
-                      ? "Ativo: herdado da plataforma."
+                      ? t("game.shader.activeSystem")
                       : romShader.data?.resolvedScope === "default"
-                        ? "Ativo: herdado de todos os jogos."
-                        : "Ativo: nenhum (shader 'plain')."}
+                        ? t("game.shader.activeDefault")
+                        : t("game.shader.activeNone")}
                 </Caption1>
               </div>
               <Select
@@ -622,7 +623,7 @@ export function RomDetail() {
                 onChange={(_, d) => shaderPick.mutate(d.value)}
               >
                 <option value="">
-                  {shaderScope === "default" ? "Nenhum" : "Herdar"}
+                  {shaderScope === "default" ? t("common.none") : t("game.shader.inherit")}
                 </option>
                 {shaderInfo.data.available.map((n) => (
                   <option key={n} value={n}>
@@ -632,7 +633,7 @@ export function RomDetail() {
                 {shaderInfo.data.curated.map((c) => (
                   <option key={c.id} value={c.id} disabled={!c.available}>
                     {c.label}
-                    {c.available ? '' : ' (baixe o pacote de shaders)'}
+                    {c.available ? "" : t("game.shader.needsPack")}
                   </option>
                 ))}
                 {shaderAtScope &&
@@ -656,7 +657,7 @@ export function RomDetail() {
                     if (p) shaderPick.mutate(p);
                   }}
                 >
-                  Carregar .slangp avulso…
+                  {t("game.shader.loadFile")}
                 </Button>
                 {shaderAtScope && shaderScope !== "default" && (
                   <Button
@@ -666,7 +667,7 @@ export function RomDetail() {
                     disabled={shaderPick.isPending}
                     onClick={() => shaderPick.mutate("")}
                   >
-                    Herdar (remover deste escopo)
+                    {t("game.shader.inheritRemove")}
                   </Button>
                 )}
               </div>
@@ -682,14 +683,14 @@ export function RomDetail() {
           )}
           {activeCfgTab === "core" && chosenCore && (
             <>
-              <Field label="Core" className={s.coreField}>
+              <Field label={t("game.core")} className={s.coreField}>
                 <Select
                   value={chosenCore}
                   disabled={coreList.length === 0}
                   onChange={(_, d) => setCoreId(d.value)}
                 >
                   {coreList.length === 0 && (
-                    <option value="">nenhum instalado</option>
+                    <option value="">{t("game.noneInstalled")}</option>
                   )}
                   {coreList.map((c) => (
                     <option key={c.coreId} value={c.coreId}>
@@ -705,7 +706,7 @@ export function RomDetail() {
           {activeCfgTab === "states" && (
             <>
               {states.data?.length === 0 && (
-                <Caption1>Nenhum save state pra esta ROM.</Caption1>
+                <Caption1>{t("game.noStates")}</Caption1>
               )}
               {states.data?.map((st) => (
                 <div key={st.id} className={s.stateRow} style={{ gap: 12 }}>
@@ -718,13 +719,13 @@ export function RomDetail() {
                       {st.slot === 0
                         ? "QuickSave"
                         : st.slot != null
-                          ? `Slot ${st.slot}`
-                          : "Auto"}
+                          ? t("game.slot", { n: st.slot })
+                          : t("game.auto")}
                     </Body1>
                     <Caption1 className={s.hint}>
-                      {new Date(st.createdAt * 1000).toLocaleString()}
+                      {new Date(st.createdAt * 1000).toLocaleString(i18n.language)}
                       {st.playTimeAtSave != null &&
-                        ` · ${formatPlayTime(st.playTimeAtSave)} de jogo`}
+                        t("game.playedFor", { time: formatPlayTime(st.playTimeAtSave) })}
                     </Caption1>
                   </div>
                   <Button
@@ -733,7 +734,7 @@ export function RomDetail() {
                     disabled={!chosenCore}
                     onClick={() => play(st.id)}
                   >
-                    Jogar daqui
+                    {t("game.playFromHere")}
                   </Button>
                   <Button
                     size="small"
@@ -741,7 +742,7 @@ export function RomDetail() {
                     disabled={del.isPending}
                     onClick={() => del.mutate(st.id)}
                   >
-                    Apagar
+                    {t("common.delete")}
                   </Button>
                 </div>
               ))}

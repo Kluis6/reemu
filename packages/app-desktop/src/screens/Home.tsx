@@ -20,6 +20,7 @@ import {
 import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles, useMotionStyles } from "../styles/xbox";
 import { errorPatch } from "../lib/toast";
+import { useTranslation } from "react-i18next";
 
 /** Uma faixa curada da Início (cabeçalho + prateleira). */
 function Row({
@@ -57,6 +58,7 @@ function Row({
  * fica em `/library`. Novas seções entram aqui.
  */
 export function Home() {
+  const { t } = useTranslation();
   const s = useBrowseStyles();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -78,7 +80,7 @@ export function Home() {
       scanLibrary(path, (p: ScanProgress) => {
         if (!scanId.current) return;
         updateToast(scanId.current, {
-          message: `Escaneando ${p.current}${p.total ? `/${p.total}` : ""}…`,
+          message: t("scan.progress", { current: p.current, total: p.total ? `/${p.total}` : "" }),
           progress: p.total ? p.current / p.total : null,
         });
       }),
@@ -87,7 +89,7 @@ export function Home() {
       scanId.current = id;
       push({
         id,
-        message: "Escaneando…",
+        message: t("scan.start"),
         variant: "Info",
         durationMs: 0,
         source: "System",
@@ -97,7 +99,7 @@ export function Home() {
     onSuccess: (r) => {
       if (scanId.current) {
         updateToast(scanId.current, {
-          message: `${r.added} adicionada(s) · ${r.skippedKnown} já na biblioteca · ${r.skippedUnrecognized} ignorada(s)`,
+          message: t("scan.result", { added: r.added, known: r.skippedKnown, skipped: r.skippedUnrecognized }),
           variant: r.errors > 0 ? "Warning" : "Success",
           durationMs: 5000,
           progress: undefined,
@@ -108,7 +110,7 @@ export function Home() {
     },
     onError: (e) => {
       if (scanId.current) {
-        updateToast(scanId.current, errorPatch(e, "procurar jogos na pasta"));
+        updateToast(scanId.current, errorPatch(e, "scanFolder"));
       }
     },
     onSettled: () => {
@@ -161,11 +163,11 @@ export function Home() {
       onClick={() => navigate(`/rom/${r.id}`)}
       menu={[
         {
-          label: "Abrir",
+          label: t("library.open"),
           onClick: () => navigate(`/rom/${r.id}`),
         },
         {
-          label: "Ver biblioteca",
+          label: t("home.seeLibrary"),
           onClick: () => navigate("/library"),
         },
       ]}
@@ -179,18 +181,18 @@ export function Home() {
       <>
         <EmptyState
           art={<GamepadArt />}
-          title="Bem-vindo ao ReEmu"
+          title={t("home.welcome")}
           action={
             <Button
               appearance="primary"
               icon={<AddRegular />}
               onClick={() => setAddOpen(true)}
             >
-              Adicionar ROMs…
+              {t("library.addRoms")}
             </Button>
           }
         >
-          Adicione suas ROMs pra montar a biblioteca.
+          {t("home.welcomeHint")}
         </EmptyState>
         <AddRomsDialog open={addOpen} onOpenChange={setAddOpen} onScan={startScan} />
       </>
@@ -211,7 +213,7 @@ export function Home() {
           icon={<GridRegular />}
           onClick={() => navigate("/library")}
         >
-          Todos os jogos ({all.length})
+          {t("home.allGames", { count: all.length })}
         </Button>
         <Button
           shape="circular"
@@ -219,21 +221,21 @@ export function Home() {
           icon={<AddRegular />}
           onClick={() => setAddOpen(true)}
         >
-          Adicionar ROMs
+          {t("home.addRoms")}
         </Button>
       </div>
 
       <Row
-        title="Continuar jogando"
-        subtitle="De onde você parou"
+        title={t("home.continue")}
+        subtitle={t("home.continueSub")}
         items={recent}
         onMore={() => navigate("/library")}
         render={card}
         index={0}
       />
       <Row
-        title="Adicionados recentemente"
-        subtitle="O que entrou por último na biblioteca"
+        title={t("home.recent")}
+        subtitle={t("home.recentSub")}
         items={added}
         onMore={() => navigate("/library")}
         render={card}

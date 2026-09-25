@@ -330,12 +330,12 @@ export function SettingsAppearance() {
       if (!ok) return;
       qc.invalidateQueries({ queryKey: ["wallpaper"] });
     },
-    onError: (e) => push(errorToast(e, "carregar a imagem")),
+    onError: (e) => push(errorToast(e, "loadImage")),
   });
   const remove = useMutation({
     mutationFn: clearWallpaper,
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wallpaper"] }),
-    onError: (e) => push(errorToast(e, "remover o papel de parede")),
+    onError: (e) => push(errorToast(e, "removeWallpaper")),
   });
 
   return (
@@ -381,7 +381,7 @@ export function SettingsAppearance() {
           const v = Number(data.value);
           setUiScaleState(v);
           setUiScale(v).catch((e) =>
-            push(errorToast(e, "mudar o tamanho da interface")),
+            push(errorToast(e, "changeUiScale")),
           );
         }}
       >

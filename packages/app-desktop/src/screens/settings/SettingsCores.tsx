@@ -27,6 +27,7 @@ import {
   type CatalogCore,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
+import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -55,14 +56,15 @@ const useStyles = makeStyles({
 })
 
 export function SettingsCores() {
+  const { t } = useTranslation()
   const styles = useStyles()
   const [tab, setTab] = useState<'installed' | 'catalog'>('installed')
 
   return (
     <div className={styles.root}>
       <TabList selectedValue={tab} onTabSelect={(_, d) => setTab(d.value as typeof tab)}>
-        <Tab value="installed">Instalados</Tab>
-        <Tab value="catalog">Catálogo</Tab>
+        <Tab value="installed">{t('cores.installed')}</Tab>
+        <Tab value="catalog">{t('cores.catalog')}</Tab>
       </TabList>
       {tab === 'installed' ? <Installed /> : <Catalog />}
     </div>
@@ -70,13 +72,14 @@ export function SettingsCores() {
 }
 
 function Installed() {
+  const { t } = useTranslation()
   const styles = useStyles()
   const cores = useQuery({ queryKey: ['installed-cores'], queryFn: listInstalledCores, retry: false })
 
-  if (cores.isLoading) return <LoadingState label="Lendo pasta de cores…" />
-  if (cores.isError) return <Body1>Não foi possível carregar os cores instalados.</Body1>
+  if (cores.isLoading) return <LoadingState label={t('cores.reading')} />
+  if (cores.isError) return <Body1>{t('cores.loadFailed')}</Body1>
   if ((cores.data?.length ?? 0) === 0)
-    return <Caption1>Nenhum core instalado ainda. Instale pelo catálogo.</Caption1>
+    return <Caption1>{t('cores.noneYet')}</Caption1>
 
   return (
     <div className={styles.list}>
@@ -87,7 +90,7 @@ function Installed() {
               <Text as="strong" weight="semibold">{c.name}</Text>
             </Body1>
             <Caption1>
-              {c.version || 's/ versão'}
+              {c.version || t('cores.noVersion')}
               {c.renderBackend ? ` · ${c.renderBackend}` : ''}
               {c.extensions.length > 0 ? ` · .${c.extensions.slice(0, 5).join(' .')}` : ''}
             </Caption1>
@@ -99,6 +102,7 @@ function Installed() {
 }
 
 function Catalog() {
+  const { t } = useTranslation()
   const styles = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
@@ -110,9 +114,9 @@ function Catalog() {
     onSuccess: (_d, coreId) => {
       qc.invalidateQueries({ queryKey: ['core-catalog'] })
       qc.invalidateQueries({ queryKey: ['installed-cores'] })
-      push(sysToast(`Core instalado: ${coreId}`, 'Success'))
+      push(sysToast(t('cores.installedToast', { id: coreId }), 'Success'))
     },
-    onError: (e) => push(errorToast(e, 'baixar o core')),
+    onError: (e) => push(errorToast(e, 'downloadCore')),
   })
   const uninstall = useMutation({
     mutationFn: (coreId: string) => removeCore(coreId),
@@ -120,11 +124,11 @@ function Catalog() {
       qc.invalidateQueries({ queryKey: ['core-catalog'] })
       qc.invalidateQueries({ queryKey: ['installed-cores'] })
     },
-    onError: (e) => push(errorToast(e, 'remover o core')),
+    onError: (e) => push(errorToast(e, 'removeCore')),
   })
 
-  if (catalog.isLoading) return <LoadingState label="Carregando catálogo…" />
-  if (catalog.isError) return <Body1>Catálogo indisponível.</Body1>
+  if (catalog.isLoading) return <LoadingState label={t('cores.loadingCatalog')} />
+  if (catalog.isError) return <Body1>{t('cores.catalogUnavailable')}</Body1>
 
   const busy = (id: string) =>
     (install.isPending && install.variables === id) ||
@@ -138,25 +142,22 @@ function Catalog() {
   return (
     <>
       <Caption1>
-        Cores oficiais da libretro, prontos pra instalar. Os marcados{' '}
-        <Text as="strong" weight="semibold">OpenGL</Text> /{' '}
-        <Text as="strong" weight="semibold">Vulkan</Text> usam a placa de vídeo
-        pra jogos 3D (N64, PSX-hw, Saturn, DS, Dreamcast).
+        <Trans i18nKey="cores.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
       </Caption1>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <Input
           size="small"
-          placeholder="Filtrar por nome ou sistema…"
+          placeholder={t('cores.filter')}
           value={filter}
           onChange={(_, d) => setFilter(d.value)}
           style={{ flex: 1 }}
         />
         <Caption1>
-          {sorted.length} de {catalog.data?.length ?? 0} cores
+          {t('cores.count', { shown: sorted.length, total: catalog.data?.length ?? 0 })}
         </Caption1>
       </div>
       <div className={styles.list}>
-        {sorted.length === 0 && <Caption1 className={styles.fullRow}>Nenhum core encontrado.</Caption1>}
+        {sorted.length === 0 && <Caption1 className={styles.fullRow}>{t('cores.noneFound')}</Caption1>}
         {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
             <span className={styles.meta}>
@@ -180,7 +181,7 @@ function Catalog() {
             {c.installed ? (
               <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
                 <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                  instalado
+                  {t('cores.installedBadge')}
                 </Badge>
                 <Button
                   size="small"
@@ -189,7 +190,7 @@ function Catalog() {
                   disabled={busy(c.coreId)}
                   onClick={() => uninstall.mutate(c.coreId)}
                 >
-                  Remover
+                  {t('common.remove')}
                 </Button>
               </span>
             ) : (
@@ -200,7 +201,7 @@ function Catalog() {
                 disabled={busy(c.coreId)}
                 onClick={() => install.mutate(c.coreId)}
               >
-                {busy(c.coreId) ? 'Baixando…' : 'Instalar'}
+                {busy(c.coreId) ? t('cores.downloading') : t('cores.install')}
               </Button>
             )}
           </div>

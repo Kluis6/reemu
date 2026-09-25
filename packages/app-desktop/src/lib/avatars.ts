@@ -19,14 +19,7 @@ export function presetOf(avatar: string): PresetId | null {
   return (PRESET_IDS as readonly string[]).includes(n) ? (n as PresetId) : null
 }
 
-/** Nome de cada preset — rótulo acessível e dica na grade de escolha. */
-export const AVATAR_NAMES: Record<PresetId, string> = {
-  '1': 'Robô',
-  '2': 'Controle',
-  '3': 'Slime',
-  '4': 'Fliperama',
-  '5': 'Nave',
-}
+// Nome de cada preset: `profileForm.presets.<id>` nos idiomas.
 
 /** Gradiente de fundo (canto superior esquerdo → inferior direito). */
 export const AVATAR_GRADIENTS: Record<PresetId, [string, string]> = {

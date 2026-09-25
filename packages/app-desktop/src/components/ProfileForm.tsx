@@ -10,7 +10,7 @@ import {
 import { ImageAddRegular } from '@fluentui/react-icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { AVATAR_NAMES, PRESET_IDS } from '../lib/avatars'
+import { PRESET_IDS } from '../lib/avatars'
 import { PresetAvatar } from './PresetAvatar'
 import { errorToast } from '../lib/toast'
 import {
@@ -21,6 +21,7 @@ import {
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
 import { ProfileAvatar } from './ProfileAvatar'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: {
@@ -70,9 +71,10 @@ export function ProfileForm({
   submitLabel: string
   onDone: () => void
 }) {
+  const { t } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
-  const push = useToastStore((t) => t.push)
+  const push = useToastStore((st) => st.push)
   const [name, setName] = useState(initial.name)
   const [bio, setBio] = useState(initial.bio ?? '')
   const [avatar, setAvatar] = useState(initial.avatar)
@@ -80,7 +82,7 @@ export function ProfileForm({
 
   const upload = useMutation({
     mutationFn: async () => {
-      const path = await pickImage('Escolha uma imagem de avatar')
+      const path = await pickImage(t('profileForm.pickAvatar'))
       if (!path) return false
       await setProfileAvatarFile(path)
       return true
@@ -90,7 +92,7 @@ export function ProfileForm({
       setAvatar('file')
       setNonce((n) => n + 1)
     },
-    onError: (e) => push(errorToast(e, 'carregar a imagem')),
+    onError: (e) => push(errorToast(e, 'loadImage')),
   })
 
   const save = useMutation({
@@ -108,16 +110,16 @@ export function ProfileForm({
       qc.invalidateQueries({ queryKey: ['profile'] })
       onDone()
     },
-    onError: (e) => push(errorToast(e, 'salvar o perfil')),
+    onError: (e) => push(errorToast(e, 'saveProfile')),
   })
 
-  const nameError = name.trim().length === 0 ? 'Escolha um nome.' : undefined
+  const nameError = name.trim().length === 0 ? t('profileForm.nameRequired') : undefined
 
   return (
     <div className={s.root}>
       <div className={s.avatarRow}>
         <ProfileAvatar profile={{ name, avatar }} size={72} nonce={nonce} />
-        <Field label="Avatar" hint="5 opções ou uma imagem sua (PNG/JPG/WEBP).">
+        <Field label={t('profileForm.avatar')} hint={t('profileForm.avatarHint')}>
           <div className={s.choices}>
             {PRESET_IDS.map((id) => (
               <Button
@@ -128,8 +130,8 @@ export function ProfileForm({
                   avatar === `preset:${id}` && s.choiceOn,
                 )}
                 onClick={() => setAvatar(`preset:${id}`)}
-                aria-label={`Avatar ${AVATAR_NAMES[id]}`}
-                title={AVATAR_NAMES[id]}
+                aria-label={t('profileForm.avatarLabel', { name: t(`profileForm.presets.${id}`) })}
+                title={t(`profileForm.presets.${id}`)}
                 aria-pressed={avatar === `preset:${id}`}
               >
                 <PresetAvatar id={id} size={48} style={{ borderRadius: '50%' }} />
@@ -141,28 +143,28 @@ export function ProfileForm({
               icon={<ImageAddRegular />}
               disabled={upload.isPending}
               onClick={() => upload.mutate()}
-              aria-label="Escolher imagem"
+              aria-label={t('profileForm.chooseImage')}
             />
           </div>
         </Field>
       </div>
 
-      <Field label="Nome" required validationMessage={nameError}>
+      <Field label={t('profileForm.name')} required validationMessage={nameError}>
         <Input
           value={name}
           maxLength={40}
           onChange={(_, d) => setName(d.value)}
-          placeholder="Como você quer aparecer"
+          placeholder={t('profileForm.namePlaceholder')}
         />
       </Field>
 
-      <Field label="Bio" hint="Opcional — até 280 caracteres.">
+      <Field label={t('profileForm.bio')} hint={t('profileForm.bioHint')}>
         <Textarea
           value={bio}
           maxLength={280}
           resize="vertical"
           onChange={(_, d) => setBio(d.value)}
-          placeholder="Uma linha sobre você"
+          placeholder={t('profileForm.bioPlaceholder')}
         />
       </Field>
 

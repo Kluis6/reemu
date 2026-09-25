@@ -12,6 +12,7 @@ import { DismissRegular } from "@fluentui/react-icons";
 import { ManageLibraryFields } from "./ManageLibraryFields";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { useManageLibrary } from "../lib/useManageLibrary";
+import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
   // Maior que o padrão do Fluent (600px, altura de sobra pro conteúdo) — a
@@ -41,6 +42,7 @@ export function ManageLibraryDialog({
   /** `[systemId, quantidade]` presentes na biblioteca. */
   platforms: readonly (readonly [string, number])[];
 }) {
+  const { t } = useTranslation();
   const s = useStyles();
   const state = useManageLibrary(open);
 
@@ -61,27 +63,27 @@ export function ManageLibraryDialog({
             action={
               <Button
                 appearance="subtle"
-                aria-label="Fechar"
+                aria-label={t("common.close")}
                 icon={<DismissRegular />}
                 onClick={close}
               />
             }
           >
-            Gerenciar biblioteca
+            {t("manage.title")}
           </DialogTitle>
           <DialogContent>
             <ManageLibraryFields state={state} platforms={platforms} />
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={close}>
-              Fechar
+              {t("common.close")}
             </Button>
             <Button
               appearance="primary"
               disabled={state.save.isPending || Object.keys(state.pending).length === 0}
               onClick={() => state.save.mutate(undefined, { onSuccess: () => onOpenChange(false) })}
             >
-              Salvar
+              {t("common.save")}
             </Button>
           </DialogActions>
         </DialogBody>

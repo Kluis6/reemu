@@ -25,6 +25,7 @@ import { EmptyState } from './EmptyState'
 import { useBindingCaptureStore } from '../stores/useBindingCaptureStore'
 import { useToastStore } from '../stores/useToastStore'
 import { errorToast } from '../lib/toast'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -79,6 +80,7 @@ function useDevices() {
 }
 
 export function ControllerMappings() {
+  const { t } = useTranslation()
   const styles = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
@@ -92,34 +94,30 @@ export function ControllerMappings() {
     mutationFn: (guid: string) => clearControllerMapping(guid),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['controller-mappings'] })
-      push(toast('Mapa de controle removido (volta ao padrão).', 'Success'))
+      push(toast(t('controllers.mapRemoved'), 'Success'))
     },
-    onError: (e) => push(errorToast(e, 'apagar o mapeamento do controle')),
+    onError: (e) => push(errorToast(e, 'deleteControllerMapping')),
   })
 
   const assignPort = useMutation({
     mutationFn: ({ guid, port }: { guid: string; port: number | null }) =>
       port === null ? clearDevicePort(guid) : setDevicePort(guid, port),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['device-ports'] }),
-    onError: (e) => push(errorToast(e, 'definir a porta do controle')),
+    onError: (e) => push(errorToast(e, 'setControllerPort')),
   })
 
-  if (loading) return <Spinner label="Procurando controles…" />
+  if (loading) return <Spinner label={t('controllers.searching')} />
   if (devices.length === 0)
     return (
-      <EmptyState title="Nenhum controle conectado">
-        Conecte um controle por USB ou Bluetooth — ele aparece aqui sozinho, e
-        dá pra ajustar o mapeamento de cada botão. Sem controle, o teclado
-        funciona em todo o app.
+      <EmptyState title={t('controllers.noneTitle')}>
+        {t('controllers.noneHint')}
       </EmptyState>
     )
 
   return (
     <div className={styles.root}>
       <Caption1>
-        Por padrão, os controles usam o mapeamento automático do sistema.
-        Combinação de botões é opção avançada — o normal é um botão por
-        função.
+        {t('controllers.intro')}
       </Caption1>
       {devices.map(([guid, dev]) => {
         const bound = new Map(dev.mapping?.entries.map((e) => [e.button, e]) ?? [])
@@ -129,7 +127,7 @@ export function ControllerMappings() {
               <Subtitle2>{dev.name}</Subtitle2>
               <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <Badge appearance="tint" color={dev.connected ? 'success' : 'informative'}>
-                  {dev.connected ? 'conectado' : 'salvo'}
+                  {dev.connected ? t('controllers.connected') : t('controllers.saved')}
                 </Badge>
                 <Select
                   size="small"
@@ -139,11 +137,12 @@ export function ControllerMappings() {
                     assignPort.mutate({ guid, port: d.value === '' ? null : Number(d.value) })
                   }
                 >
-                  <option value="">Porta: auto</option>
-                  <option value="0">Porta 1</option>
-                  <option value="1">Porta 2</option>
-                  <option value="2">Porta 3</option>
-                  <option value="3">Porta 4</option>
+                  <option value="">{t('controllers.portAuto')}</option>
+                  {[0, 1, 2, 3].map((p) => (
+                    <option key={p} value={String(p)}>
+                      {t('controllers.port', { n: p + 1 })}
+                    </option>
+                  ))}
                 </Select>
                 {dev.mapping && (
                   <Button
@@ -152,7 +151,7 @@ export function ControllerMappings() {
                     disabled={clearMap.isPending}
                     onClick={() => clearMap.mutate(guid)}
                   >
-                    Limpar mapa
+                    {t('controllers.clearMap')}
                   </Button>
                 )}
               </span>

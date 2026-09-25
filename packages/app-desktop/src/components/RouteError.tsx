@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { isRouteErrorResponse, useNavigate, useRouteError } from 'react-router-dom'
 import { jsLog } from '../lib/tauri'
 import { EmptyState } from './EmptyState'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: {
@@ -28,6 +29,7 @@ const useStyles = makeStyles({
  * topbar continuam funcionando).
  */
 export function RouteError() {
+  const { t } = useTranslation()
   const s = useStyles()
   const error = useRouteError()
   const navigate = useNavigate()
@@ -45,18 +47,17 @@ export function RouteError() {
   return (
     <div className={s.root} role="alert">
       <EmptyState
-        title="Algo deu errado nesta tela"
+        title={t('shell2.routeError')}
         action={
           <div className={s.actions}>
             <Button appearance="primary" onClick={() => navigate(0)}>
-              Tentar de novo
+              {t('common.retry')}
             </Button>
-            <Button onClick={() => navigate('/', { replace: true })}>Voltar ao início</Button>
+            <Button onClick={() => navigate('/', { replace: true })}>{t('shell2.goHome')}</Button>
           </div>
         }
       >
-        Seus jogos e configurações não foram afetados. Se continuar acontecendo,
-        relate o problema com o texto abaixo.
+        {t('shell2.routeErrorHint')}
         <div className={s.detail}>{detail}</div>
       </EmptyState>
     </div>

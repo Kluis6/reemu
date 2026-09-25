@@ -15,6 +15,7 @@ import {
   type ToastItem,
   type ToastVariant,
 } from "../stores/useToastStore";
+import i18n from "../i18n";
 
 const useStyles = makeStyles({
   // Camada independente da state machine de foco: sempre por cima, nunca
@@ -119,8 +120,8 @@ export function ToastLayer() {
                 appearance="transparent"
                 size="small"
                 icon={<DismissRegular />}
-                aria-label="Fechar"
-                title="Fechar"
+                aria-label={i18n.t("shell.close")}
+                title={i18n.t("shell.close")}
                 onClick={() => dismiss(t.id)}
               />
             }

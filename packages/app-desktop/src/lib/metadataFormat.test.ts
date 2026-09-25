@@ -52,3 +52,21 @@ describe('providerLabel e splitPath', () => {
     expect(splitPath('/home/l/roms/Sonic.md')).toEqual({ name: 'Sonic.md', dir: '/home/l/roms' })
   })
 })
+
+describe('formatReleaseDate em outros idiomas', () => {
+  it('segue o idioma da interface', async () => {
+    const { default: i18n } = await import('../i18n')
+    const prev = i18n.language
+    try {
+      await i18n.changeLanguage('en')
+      expect(formatReleaseDate('1995-08-11')).toBe('August 11, 1995')
+      expect(formatReleaseDate('1994-11')).toBe('November 1994')
+      expect(providerLabel('manual')).toBe('Edited by you')
+      await i18n.changeLanguage('es')
+      expect(formatReleaseDate('1995-08-11')).toBe('11 de agosto de 1995')
+      expect(formatReleaseDate('1991-01-01')).toBe('1991')
+    } finally {
+      await i18n.changeLanguage(prev)
+    }
+  })
+})

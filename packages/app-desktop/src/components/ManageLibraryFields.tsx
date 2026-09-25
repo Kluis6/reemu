@@ -1,6 +1,7 @@
 import { Button, Select, Spinner, Text, makeStyles, tokens } from "@fluentui/react-components";
 import { platformLabel } from "../lib/platform";
 import type { ManageLibraryState } from "../lib/useManageLibrary";
+import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
   section: {
@@ -53,6 +54,7 @@ export function ManageLibraryFields({
   /** `[systemId, quantidade]` presentes na biblioteca. */
   platforms: readonly (readonly [string, number])[];
 }) {
+  const { t } = useTranslation();
   const s = useStyles();
   const { cores, sysCores, sources, setPending, confirm, setConfirm, purge, coreValue } = state;
 
@@ -70,31 +72,31 @@ export function ManageLibraryFields({
   return (
     <>
       {cores.isLoading || sysCores.isLoading ? (
-        <Spinner label="Carregando…" />
+        <Spinner label={t("common.loading")} />
       ) : platforms.length === 0 ? (
-        <Text>Biblioteca vazia.</Text>
+        <Text>{t("manage.empty")}</Text>
       ) : (
         <>
-          <div className={s.section}>Plataformas — core padrão e remoção</div>
+          <div className={s.section}>{t("manage.platformsSection")}</div>
           {platforms.map(([sys, n]) => (
             <div key={sys} className={s.row}>
               <Text>{platformLabel(sys)}</Text>
               <span className={s.count}>
-                {n} {n === 1 ? "jogo" : "jogos"}
+                {t("library.games", { count: n })}
               </span>
               <Select
                 size="small"
                 value={coreValue(sys)}
                 onChange={(_, d) => setPending((p) => ({ ...p, [sys]: d.value }))}
               >
-                <option value="">Automático (por extensão)</option>
+                <option value="">{t("manage.auto")}</option>
                 {(cores.data ?? []).map((c) => (
                   <option key={c.coreId} value={c.coreId}>
                     {c.name}
                   </option>
                 ))}
               </Select>
-              {purgeBtn(`sys:${sys}`, "Remover", "Confirmar")}
+              {purgeBtn(`sys:${sys}`, t("common.remove"), t("manage.confirm"))}
             </div>
           ))}
         </>
@@ -102,14 +104,14 @@ export function ManageLibraryFields({
 
       {(sources.data?.length ?? 0) > 1 && (
         <>
-          <div className={s.section}>Pastas de origem</div>
+          <div className={s.section}>{t("manage.sources")}</div>
           {sources.data!.map((src) => (
             <div key={src.path} className={s.srcRow}>
               <span className={s.path} title={src.path}>
                 {src.path}
               </span>
               <span className={s.count}>{src.count}</span>
-              {purgeBtn(src.path, "Remover", "Confirmar")}
+              {purgeBtn(src.path, t("common.remove"), t("manage.confirm"))}
             </div>
           ))}
         </>
@@ -117,8 +119,8 @@ export function ManageLibraryFields({
 
       {platforms.length > 0 && (
         <div className={s.srcRow} style={{ marginTop: 12 }}>
-          <span className={s.path}>Toda a biblioteca</span>
-          {purgeBtn("__all__", "Limpar tudo", "Confirmar: apagar tudo")}
+          <span className={s.path}>{t("manage.all")}</span>
+          {purgeBtn("__all__", t("manage.clearAll"), t("manage.confirmClearAll"))}
         </div>
       )}
     </>

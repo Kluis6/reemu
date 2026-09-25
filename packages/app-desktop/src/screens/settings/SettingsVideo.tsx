@@ -28,16 +28,19 @@ import {
   updateVideoConfig,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
+import { useTranslation } from 'react-i18next'
 
-const LABELS: Record<string, { title: string; desc: string }> = {
-  plain: { title: 'Nenhum (nítido)', desc: 'Pixels do core sem filtro.' },
-  crt: { title: 'CRT', desc: 'Scanlines, máscara de fósforo e vinheta.' },
-  lcd: { title: 'LCD portátil', desc: 'Grade sutil de pixels, cara de handheld.' },
-}
+// Presets embutidos com nome/descrição traduzidos (`video.presets.<id>`).
+const BUILTIN = ['plain', 'crt', 'lcd'] as const
+type Builtin = (typeof BUILTIN)[number]
+const isBuiltin = (n: string): n is Builtin => (BUILTIN as readonly string[]).includes(n)
 
 type VideoTab = 'shaders' | 'molduras'
 
 export function SettingsVideo() {
+  const { t } = useTranslation()
+  const presetTitle = (n: string) => (isBuiltin(n) ? t(`video.presets.${n}.title`) : n)
+  const presetDesc = (n: string) => (isBuiltin(n) ? t(`video.presets.${n}.desc`) : '')
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const [tab, setTab] = useState<VideoTab>('shaders')
@@ -55,9 +58,9 @@ export function SettingsVideo() {
       qc.invalidateQueries({ queryKey: ['shader-info'] })
       const curated = data?.curated.find((c) => c.id === name)?.label
       const base = name.split(/[/\\]/).pop() ?? name
-      push(sysToast(`Shader padrão: ${LABELS[name]?.title ?? curated ?? base}`, 'Success'))
+      push(sysToast(t('video.defaultShader', { name: isBuiltin(name) ? presetTitle(name) : (curated ?? base) }), 'Success'))
     },
-    onError: (e) => push(errorToast(e, 'trocar o shader padrão')),
+    onError: (e) => push(errorToast(e, 'changeDefaultShader')),
   })
 
   const videoCfg = useQuery({
@@ -68,23 +71,23 @@ export function SettingsVideo() {
   const setIntegerScaling = useMutation({
     mutationFn: (integerScaling: boolean) => updateVideoConfig({ integerScaling }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['video-config'] }),
-    onError: (e) => push(errorToast(e, 'salvar a configuração de vídeo')),
+    onError: (e) => push(errorToast(e, 'saveVideoConfig')),
   })
 
   const deco = useMutation({
     mutationFn: (path: string) => importDecorationPack(path),
     onSuccess: (n) =>
-      push(sysToast(`Bezels importados — ${n} atribuição(ões). Aplica no próximo jogo.`, 'Success')),
-    onError: (e) => push(errorToast(e, 'importar as molduras')),
+      push(sysToast(t('video.bezelsImported', { count: n }), 'Success')),
+    onError: (e) => push(errorToast(e, 'importBezels')),
   })
   const decoClear = useMutation({
     mutationFn: () => clearDecorations(),
-    onSuccess: () => push(sysToast('Bezels removidos.', 'Success')),
-    onError: (e) => push(errorToast(e, 'limpar as molduras')),
+    onSuccess: () => push(sysToast(t('video.bezelsRemoved'), 'Success')),
+    onError: (e) => push(errorToast(e, 'clearBezels')),
   })
 
   if (isLoading) return <LoadingState />
-  if (isError || !data) return <Body1>Informação de shader indisponível.</Body1>
+  if (isError || !data) return <Body1>{t('video.unavailable')}</Body1>
 
   // Presets embutidos (plain/CRT/LCD) + curados (xBR/ScaleFX/…) — parte da
   // aba "Shaders", mas também mostrado (desabilitado) sem GPU, só pra
@@ -107,8 +110,8 @@ export function SettingsVideo() {
           label={{
             children: (
               <span style={{ display: 'flex', flexDirection: 'column' }}>
-                <Text as="strong" weight="semibold">{LABELS[name]?.title ?? name}</Text>
-                <Caption1>{LABELS[name]?.desc ?? ''}</Caption1>
+                <Text as="strong" weight="semibold">{presetTitle(name)}</Text>
+                <Caption1>{presetDesc(name)}</Caption1>
               </span>
             ),
           }}
@@ -126,7 +129,7 @@ export function SettingsVideo() {
                 <Caption1>
                   {c.available
                     ? c.desc
-                    : `${c.desc} — precisa do pacote de shaders (abaixo).`}
+                    : t('video.needsPack', { desc: c.desc })}
                 </Caption1>
               </span>
             ),
@@ -148,8 +151,8 @@ export function SettingsVideo() {
       }}
     >
       <Field
-        label="Integer scaling"
-        hint="Trava o vídeo num múltiplo inteiro da resolução nativa do core — evita borrão de escala fracionária em pixel art. Com moldura/bezel ativa, escolhe o múltiplo mais próximo da altura da tela: às vezes sobra uma barra preta fina, às vezes corta um pouco a borda do jogo — o que for menor. A moldura não muda de tamanho."
+        label={t('video.integerScaling')}
+        hint={t('video.integerScalingHint')}
       >
         <Switch
           checked={videoCfg.data?.integerScaling ?? false}
@@ -160,8 +163,8 @@ export function SettingsVideo() {
 
       <Caption1>
         {data.gpu
-          ? 'Shader padrão pra todos os jogos. Cada jogo pode ter um shader próprio na tela de detalhe.'
-          : 'Sem GPU disponível — shaders não têm efeito nesta máquina.'}
+          ? t('video.gpuHint')
+          : t('video.noGpu')}
       </Caption1>
 
       {!data.gpu && presetPicker}
@@ -172,8 +175,8 @@ export function SettingsVideo() {
             selectedValue={tab}
             onTabSelect={(_, d) => setTab(d.value as VideoTab)}
           >
-            <Tab value="shaders">Shaders</Tab>
-            <Tab value="molduras">Molduras</Tab>
+            <Tab value="shaders">{t('video.tabShaders')}</Tab>
+            <Tab value="molduras">{t('video.tabBezels')}</Tab>
           </TabList>
 
           {tab === 'shaders' && (
@@ -192,11 +195,7 @@ export function SettingsVideo() {
                 {presetPicker}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                <Caption1>
-                  Preset externo — um arquivo <code>.slangp</code> seu.
-                  A maioria funciona bem; alguns efeitos de brilho podem
-                  ficar um pouco diferentes.
-                </Caption1>
+                <Caption1>{t('video.externalPreset')}</Caption1>
                 <ShaderLibrary
                   onPick={(p) => pick.mutate(p)}
                   activePath={data.active}
@@ -210,11 +209,11 @@ export function SettingsVideo() {
                     if (p) pick.mutate(p)
                   }}
                 >
-                  Carregar .slangp avulso…
+                  {t('game.shader.loadFile')}
                 </Button>
                 {!data.available.includes(data.active) && (
                   <Caption1>
-                    Ativo: <Text as="strong" weight="semibold">{data.active}</Text>
+                    {t('video.active')} <Text as="strong" weight="semibold">{data.active}</Text>
                   </Caption1>
                 )}
                 <ShaderParams scope="default" reloadKey={data.active} />
@@ -224,27 +223,24 @@ export function SettingsVideo() {
 
           {tab === 'molduras' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <Caption1>
-                Baixe molduras por sistema direto do The Bezel Project, ou
-                importe sua própria pasta (formato Bezel Project).
-              </Caption1>
+              <Caption1>{t('video.bezelsHint')}</Caption1>
               <BezelLibrary />
               <div style={{ display: 'flex', gap: 8 }}>
                 <Button
                   disabled={deco.isPending}
                   onClick={async () => {
-                    const p = await pickFolder()
+                    const p = await pickFolder(t('dialogs.pickBezelFolder'))
                     if (p) deco.mutate(p)
                   }}
                 >
-                  Importar pasta de bezels…
+                  {t('video.importBezels')}
                 </Button>
                 <Button
                   appearance="subtle"
                   disabled={decoClear.isPending}
                   onClick={() => decoClear.mutate()}
                 >
-                  Remover bezels
+                  {t('video.removeBezels')}
                 </Button>
               </div>
             </div>

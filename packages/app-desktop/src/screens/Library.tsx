@@ -45,6 +45,7 @@ import {
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles, useMotionStyles, useShellStyles } from "../styles/xbox";
+import { useTranslation } from "react-i18next";
 
 const useLibStyles = makeStyles({
   surface: {
@@ -95,11 +96,12 @@ const useLibStyles = makeStyles({
 type LibTab = "mine" | "fav";
 type LibSort = "name" | "added" | "played";
 
-const SORT_LABEL: Record<LibSort, string> = {
-  name: "Nome (A–Z)",
-  added: "Adicionado recentemente",
-  played: "Jogado por último",
-};
+// chave de tradução de cada ordenação
+const SORT_LABEL = {
+  name: "library.sort.name",
+  added: "library.sort.added",
+  played: "library.sort.played",
+} as const satisfies Record<LibSort, string>;
 
 /**
  * "Meus jogos" — a biblioteca no estilo modo Xbox: abas (todos / favoritos /
@@ -107,6 +109,7 @@ const SORT_LABEL: Record<LibSort, string> = {
  * tela inicial (`/`) com hero e faixas curadas fica em `screens/Home`.
  */
 export function Library() {
+  const { t } = useTranslation();
   const s = useBrowseStyles();
   const m = useMotionStyles();
   const l = useLibStyles();
@@ -133,7 +136,7 @@ export function Library() {
       scanLibrary(path, (p: ScanProgress) => {
         if (!scanId.current) return;
         updateToast(scanId.current, {
-          message: `Escaneando ${p.current}${p.total ? `/${p.total}` : ""}…`,
+          message: t("scan.progress", { current: p.current, total: p.total ? `/${p.total}` : "" }),
           progress: p.total ? p.current / p.total : null,
         });
       }),
@@ -142,7 +145,7 @@ export function Library() {
       scanId.current = id;
       push({
         id,
-        message: "Escaneando…",
+        message: t("scan.start"),
         variant: "Info",
         durationMs: 0,
         source: "System",
@@ -152,7 +155,7 @@ export function Library() {
     onSuccess: (r) => {
       if (scanId.current) {
         updateToast(scanId.current, {
-          message: `${r.added} adicionada(s) · ${r.skippedKnown} já na biblioteca · ${r.skippedUnrecognized} ignorada(s)`,
+          message: t("scan.result", { added: r.added, known: r.skippedKnown, skipped: r.skippedUnrecognized }),
           variant: r.errors > 0 ? "Warning" : "Success",
           durationMs: 5000,
           progress: undefined,
@@ -163,7 +166,7 @@ export function Library() {
     },
     onError: (e) => {
       if (scanId.current) {
-        updateToast(scanId.current, errorPatch(e, "procurar jogos na pasta"));
+        updateToast(scanId.current, errorPatch(e, "scanFolder"));
       }
     },
     onSettled: () => {
@@ -180,9 +183,9 @@ export function Library() {
     mutationFn: (id: string) => removeRom(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roms"] });
-      push(sysToast("Removida da biblioteca.", "Success"));
+      push(sysToast(t("library.removed"), "Success"));
     },
-    onError: (e) => push(errorToast(e, "remover o jogo")),
+    onError: (e) => push(errorToast(e, "removeGame")),
   });
 
   const all = useMemo(() => roms.data ?? [], [roms.data]);
@@ -235,8 +238,8 @@ export function Library() {
 
   const cardMenu = (r: RomEntry) =>
     [
-      { label: "Abrir", onClick: () => navigate(`/rom/${r.id}`) },
-      { label: "Remover da biblioteca", onClick: () => del.mutate(r.id) },
+      { label: t("library.open"), onClick: () => navigate(`/rom/${r.id}`) },
+      { label: t("library.remove"), onClick: () => del.mutate(r.id) },
     ] as const;
 
   const card = (r: RomEntry) => (
@@ -259,38 +262,38 @@ export function Library() {
     if (roms.isLoading) return <CardGridSkeleton />;
     if (roms.isError)
       return (
-        <EmptyState icon={<WarningRegular />} title="Biblioteca indisponível">
-          O backend não conseguiu abrir o banco de dados.
+        <EmptyState icon={<WarningRegular />} title={t("library.unavailable")}>
+          {t("library.unavailableHint")}
         </EmptyState>
       );
     if (all.length === 0)
       return (
         <EmptyState
           art={<GamepadArt />}
-          title="Nenhuma ROM ainda"
+          title={t("library.empty")}
           action={
             <Button
               appearance="primary"
               icon={<AddRegular />}
               onClick={() => setAddOpen(true)}
             >
-              Adicionar ROMs…
+              {t("library.addRoms")}
             </Button>
           }
         >
-          Aponte a pasta das suas ROMs pra montar a biblioteca.
+          {t("library.emptyHint")}
         </EmptyState>
       );
     if (view.length === 0) {
       if (tab === "fav")
         return (
-          <EmptyState art={<StarArt />} title="Sem favoritos">
-            Favorite um jogo na tela dele.
+          <EmptyState art={<StarArt />} title={t("library.noFavorites")}>
+            {t("library.noFavoritesHint")}
           </EmptyState>
         );
       return (
-        <EmptyState art={<SearchArt />} title="Nada aqui">
-          Ajuste o filtro de plataforma ou a busca.
+        <EmptyState art={<SearchArt />} title={t("library.nothing")}>
+          {t("library.nothingHint")}
         </EmptyState>
       );
     }
@@ -313,7 +316,7 @@ export function Library() {
             onSeeAll={goAll}
             right={
               <span className={s.count}>
-                {plist.length} {plist.length === 1 ? "jogo" : "jogos"}
+                {t("library.games", { count: plist.length })}
               </span>
             }
           />
@@ -321,7 +324,7 @@ export function Library() {
             more={
               <PlatformTile
                 key="more"
-                ariaLabel={`Ver todos os ${plist.length} de ${platformLabel(sys)}`}
+                ariaLabel={t("library.seeAll", { count: plist.length, platform: platformLabel(sys) })}
                 sample={plist.slice(-8)}
                 onClick={goAll}
               />
@@ -341,29 +344,29 @@ export function Library() {
           selectedValue={tab}
           onTabSelect={(_, d) => setTab(d.value as LibTab)}
         >
-          <Tab value="mine">Meus jogos</Tab>
-          <Tab value="fav">Favoritos</Tab>
+          <Tab value="mine">{t("library.tabMine")}</Tab>
+          <Tab value="fav">{t("library.tabFav")}</Tab>
         </TabList>
 
         <div className={l.barRight}>
           <Text size={200} className={s.count}>
-            {all.length} {all.length === 1 ? "jogo" : "jogos"}
+            {t("library.games", { count: all.length })}
           </Text>
-          <Tooltip content="Adicionar ROM" relationship="label">
+          <Tooltip content={t("library.addRom")} relationship="label">
             <Button
               appearance="secondary"
               className={mergeClasses(l.navBtn, shell.navIconBtn)}
               icon={<AddRegular />}
-              aria-label="Adicionar ROM"
+              aria-label={t("library.addRom")}
               onClick={() => setAddOpen(true)}
             />
           </Tooltip>
-          <Tooltip content="Gerenciar biblioteca" relationship="label">
+          <Tooltip content={t("library.manage")} relationship="label">
             <Button
               appearance="subtle"
               className={shell.navIconBtn}
               icon={<MoreHorizontalRegular />}
-              aria-label="Gerenciar biblioteca"
+              aria-label={t("library.manage")}
               onClick={() => setManageOpen(true)}
             />
           </Tooltip>
@@ -377,13 +380,13 @@ export function Library() {
         >
           <MenuTrigger disableButtonEnhancement>
             <MenuButton appearance="subtle" className={l.surface}>
-              {platform === "all" ? "Plataforma" : platformLabel(platform)}
+              {platform === "all" ? t("common.platform") : platformLabel(platform)}
             </MenuButton>
           </MenuTrigger>
           <MenuPopover>
             <MenuList className={l.radioMenuList}>
               <MenuItemRadio name="plat" value="all">
-                Todas as plataformas
+                {t("library.allPlatforms")}
               </MenuItemRadio>
               {platforms.map((p) => (
                 <MenuItemRadio key={p} name="plat" value={p}>
@@ -403,7 +406,7 @@ export function Library() {
             icon={<FilterRegular />}
             onClick={() => setPlatform("all")}
           >
-            Limpar filtro
+            {t("library.clearFilter")}
           </Button>
         )}
 
@@ -415,14 +418,14 @@ export function Library() {
         >
           <MenuTrigger disableButtonEnhancement>
             <MenuButton appearance="subtle" className={l.surface} icon={<ArrowSortRegular />}>
-              {SORT_LABEL[sort]}
+              {t(SORT_LABEL[sort])}
             </MenuButton>
           </MenuTrigger>
           <MenuPopover>
             <MenuList className={l.radioMenuList}>
               {(Object.keys(SORT_LABEL) as LibSort[]).map((k) => (
                 <MenuItemRadio key={k} name="sort" value={k}>
-                  {SORT_LABEL[k]}
+                  {t(SORT_LABEL[k])}
                 </MenuItemRadio>
               ))}
             </MenuList>

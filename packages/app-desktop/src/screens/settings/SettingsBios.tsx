@@ -20,6 +20,7 @@ import { platformLabel } from '../../lib/platform'
 import { LoadingState } from '../../components/EmptyState'
 import { errorToast, sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
+import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -70,6 +71,7 @@ type Key = { systemId: string; filename: string }
 const sameKey = (a?: Key, b?: Key) => a?.systemId === b?.systemId && a?.filename === b?.filename
 
 export function SettingsBios() {
+  const { t } = useTranslation()
   const styles = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
@@ -81,9 +83,9 @@ export function SettingsBios() {
     mutationFn: downloadPpssppAssets,
     onSuccess: (n) => {
       qc.invalidateQueries({ queryKey: ['ppsspp-assets'] })
-      push(sysToast(`Arquivos do PPSSPP instalados (${n})`, 'Success'))
+      push(sysToast(t('bios.ppssppInstalled', { count: n }), 'Success'))
     },
-    onError: (e) => push(errorToast(e, 'baixar os arquivos')),
+    onError: (e) => push(errorToast(e, 'downloadFiles')),
   })
 
   // O picker abre dentro do `mutationFn` — `isPending`/`variables` cobrem o
@@ -98,18 +100,18 @@ export function SettingsBios() {
     onSuccess: (imported, { filename }) => {
       if (!imported) return
       refresh()
-      push(sysToast(`BIOS importado: ${filename}`, 'Success'))
+      push(sysToast(t('bios.imported', { file: filename }), 'Success'))
     },
-    onError: (e) => push(errorToast(e, 'importar a BIOS')),
+    onError: (e) => push(errorToast(e, 'importBios')),
   })
   const doRemove = useMutation({
     mutationFn: (v: Key) => removeBiosFile(v.systemId, v.filename),
     onSuccess: refresh,
-    onError: (e) => push(errorToast(e, 'remover a BIOS')),
+    onError: (e) => push(errorToast(e, 'removeBios')),
   })
 
-  if (bios.isLoading) return <LoadingState label="Conferindo pasta de sistema…" />
-  if (bios.isError) return <Body1>Indisponível.</Body1>
+  if (bios.isLoading) return <LoadingState label={t('bios.checking')} />
+  if (bios.isError) return <Body1>{t('bios.unavailable')}</Body1>
 
   const bySystem = new Map<string, BiosStatus[]>()
   for (const b of bios.data ?? []) {
@@ -121,9 +123,7 @@ export function SettingsBios() {
   return (
     <div className={styles.root}>
       <Caption1>
-        Arquivos de sistema que alguns cores exigem ou aceitam além da ROM. O ReEmu{' '}
-        <Text as="strong" weight="semibold">nunca baixa BIOS</Text> — são copyright da fabricante; importe um arquivo
-        que você já possui legalmente.
+        <Trans i18nKey="bios.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
       </Caption1>
       <div className={styles.groups}>
         {[...bySystem.entries()].map(([systemId, files]) => (
@@ -144,7 +144,7 @@ export function SettingsBios() {
                         <code>{f.filename}</code>
                         {f.required && (
                           <Badge appearance="tint" color="danger" style={{ marginLeft: 8 }}>
-                            obrigatório
+                            {t('bios.required')}
                           </Badge>
                         )}
                       </Body1>
@@ -153,17 +153,17 @@ export function SettingsBios() {
                     <span className={styles.actions}>
                       {!f.present && (
                         <Badge appearance="tint" color={f.required ? 'danger' : 'informative'}>
-                          faltando
+                          {t('bios.missing')}
                         </Badge>
                       )}
                       {f.present && f.hashOk === false && (
                         <Badge appearance="tint" color="warning" icon={<WarningFilled />}>
-                          presente, hash não bate
+                          {t('bios.hashMismatch')}
                         </Badge>
                       )}
                       {f.present && f.hashOk !== false && (
                         <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                          presente
+                          {t('bios.present')}
                         </Badge>
                       )}
                       {f.present ? (
@@ -174,7 +174,7 @@ export function SettingsBios() {
                           disabled={busy}
                           onClick={() => doRemove.mutate(key)}
                         >
-                          Remover
+                          {t('common.remove')}
                         </Button>
                       ) : (
                         <Button
@@ -184,7 +184,7 @@ export function SettingsBios() {
                           disabled={busy}
                           onClick={() => doImport.mutate(key)}
                         >
-                          {busy ? 'Importando…' : 'Importar…'}
+                          {busy ? t('bios.importing') : t('bios.import')}
                         </Button>
                       )}
                     </span>
@@ -203,15 +203,12 @@ export function SettingsBios() {
               <Body1>
                 <code>PPSSPP/</code>
               </Body1>
-              <Caption1>
-                Não é BIOS: fontes e arquivos do próprio emulador PPSSPP (GPL, baixados do buildbot da libretro).
-                Sem eles, alguns jogos mostram texto quebrado nos diálogos do sistema.
-              </Caption1>
+              <Caption1>{t('bios.ppssppNote')}</Caption1>
             </span>
             <span className={styles.actions}>
               {ppsspp.data && (
                 <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                  instalado
+                  {t('bios.installed')}
                 </Badge>
               )}
               <Button
@@ -221,7 +218,7 @@ export function SettingsBios() {
                 disabled={getPpsspp.isPending}
                 onClick={() => getPpsspp.mutate()}
               >
-                {getPpsspp.isPending ? 'Baixando…' : ppsspp.data ? 'Atualizar' : 'Baixar'}
+                {getPpsspp.isPending ? t('bios.downloading') : ppsspp.data ? t('bios.update') : t('bios.download')}
               </Button>
             </span>
           </div>

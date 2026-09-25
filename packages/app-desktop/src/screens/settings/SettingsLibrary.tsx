@@ -6,6 +6,7 @@ import { ManageLibraryFields } from "../../components/ManageLibraryFields";
 import { platformLabel } from "../../lib/platform";
 import { listRoms } from "../../lib/tauri";
 import { useManageLibrary } from "../../lib/useManageLibrary";
+import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
   root: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalM },
@@ -18,6 +19,7 @@ const useStyles = makeStyles({
  * cheia em vez de modal. Reusa `useManageLibrary`/`ManageLibraryFields`.
  */
 export function SettingsLibrary() {
+  const { t } = useTranslation();
   const s = useStyles();
   const roms = useQuery({ queryKey: ["roms"], queryFn: listRoms, retry: false });
   const platforms = useMemo(() => {
@@ -28,7 +30,7 @@ export function SettingsLibrary() {
 
   const state = useManageLibrary(true);
 
-  if (roms.isLoading) return <LoadingState label="Carregando biblioteca…" />;
+  if (roms.isLoading) return <LoadingState label={t("library.loading")} />;
 
   return (
     <div className={s.root}>
@@ -39,7 +41,7 @@ export function SettingsLibrary() {
           disabled={state.save.isPending || Object.keys(state.pending).length === 0}
           onClick={() => state.save.mutate()}
         >
-          Salvar
+          {t("common.save")}
         </Button>
       </div>
     </div>

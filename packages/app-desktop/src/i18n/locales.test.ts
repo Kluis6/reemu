@@ -27,7 +27,8 @@ describe('locales', () => {
     expect(keys(msgs).sort()).toEqual(base)
     for (const k of base) {
       expect(vars(get(msgs, k)), k).toEqual(vars(get(ptBR, k)))
-      expect(get(msgs, k).trim(), k).not.toBe('')
+      // vazio só onde o pt-BR também é vazio (ex.: regra de erro sem dica)
+      expect(get(msgs, k).trim() === '', k).toBe(get(ptBR, k).trim() === '')
     }
   })
 })

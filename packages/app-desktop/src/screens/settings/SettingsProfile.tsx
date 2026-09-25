@@ -5,6 +5,7 @@ import { ProfileForm } from '../../components/ProfileForm'
 import { sysToast } from '../../lib/toast'
 import { getProfile } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -12,26 +13,27 @@ const useStyles = makeStyles({
 
 /** Configurações › Perfil — edita o mesmo perfil local do onboarding. */
 export function SettingsProfile() {
+  const { t } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
-  const push = useToastStore((t) => t.push)
+  const push = useToastStore((st) => st.push)
   const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile, retry: false })
 
   if (profile.isLoading) return <LoadingState />
 
   return (
     <div className={s.root}>
-      <Caption1>Como seu nome e avatar aparecem no ReEmu.</Caption1>
+      <Caption1>{t('profile.intro')}</Caption1>
       <ProfileForm
         initial={{
           name: profile.data?.name ?? '',
           bio: profile.data?.bio ?? null,
           avatar: profile.data?.avatar ?? 'preset:1',
         }}
-        submitLabel="Salvar"
+        submitLabel={t('common.save')}
         onDone={() => {
           qc.invalidateQueries({ queryKey: ['profile'] })
-          push(sysToast('Perfil atualizado.', 'Success'))
+          push(sysToast(t('profile.updated'), 'Success'))
         }}
       />
     </div>

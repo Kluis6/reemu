@@ -1,6 +1,7 @@
 import { makeStyles, tokens } from '@fluentui/react-components'
 import { useImageExists } from '../hooks/useImageExists'
 import { AnimatedBackground } from './AnimatedBackground'
+import { useTranslation } from 'react-i18next'
 
 /** Caminho da logo — coloque `reemu-logo.png` em `packages/app-desktop/public/`. */
 const LOGO_SRC = '/reemu-logo.png'
@@ -127,6 +128,7 @@ const useStyles = makeStyles({
 /** Tela de abertura — liga a logo com uma expansão curta + brilho que respira.
  *  `leaving` dispara o fade-out. */
 export function Splash({ leaving = false }: { leaving?: boolean }) {
+  const { t } = useTranslation()
   const s = useStyles()
   // Pré-carrega fora do DOM — nunca monta um <img> quebrado (o ícone de
   // imagem ausente do navegador piscava na tela até o onError reagir).
@@ -144,7 +146,7 @@ export function Splash({ leaving = false }: { leaving?: boolean }) {
           </div>
         )}
       </div>
-      <div className={s.tag}>carregando…</div>
+      <div className={s.tag}>{t('shell.splashLoading')}</div>
       <div className={s.scanlines} aria-hidden />
     </div>
   )

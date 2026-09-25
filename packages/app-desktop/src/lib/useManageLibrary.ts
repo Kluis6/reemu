@@ -11,6 +11,7 @@ import {
 } from "./tauri";
 import { errorToast, sysToast } from "./toast";
 import { useToastStore } from "../stores/useToastStore";
+import { useTranslation } from "react-i18next";
 
 /**
  * Lógica de "Gerenciar biblioteca": por plataforma, escolhe o core padrão e
@@ -24,6 +25,7 @@ import { useToastStore } from "../stores/useToastStore";
  */
 export function useManageLibrary(enabled: boolean) {
   const qc = useQueryClient();
+  const { t } = useTranslation();
   const push = useToastStore((s) => s.push);
 
   const cores = useQuery({
@@ -56,11 +58,11 @@ export function useManageLibrary(enabled: boolean) {
       qc.invalidateQueries({ queryKey: ["roms"] });
       qc.invalidateQueries({ queryKey: ["romSources"] });
       setConfirm(null);
-      push(sysToast(`${n} jogo(s) removido(s) da biblioteca.`, "Success"));
+      push(sysToast(t("manage.removed", { count: n }), "Success"));
     },
     onError: (e) => {
       setConfirm(null);
-      push(errorToast(e, "remover da biblioteca"));
+      push(errorToast(e, "removeFromLibrary"));
     },
   });
 
@@ -74,9 +76,9 @@ export function useManageLibrary(enabled: boolean) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["system-cores"] });
       setPending({});
-      push(sysToast("Configurações da biblioteca salvas.", "Success"));
+      push(sysToast(t("manage.saved"), "Success"));
     },
-    onError: (e) => push(errorToast(e, "salvar as alterações")),
+    onError: (e) => push(errorToast(e, "saveChanges")),
   });
 
   const coreValue = (sys: string) => pending[sys] ?? sysCores.data?.[sys] ?? "";

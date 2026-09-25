@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { appVersion, checkForUpdate, type UpdateInfo } from "../lib/tauri";
 import { useNotificationStore } from "../stores/useNotificationStore";
 import { useToastStore } from "../stores/useToastStore";
+import i18n from "../i18n";
 
 /** Depois de abrir o app — não disputa rede/CPU com o carregamento inicial. */
 const FIRST_CHECK_MS = 8_000;
@@ -57,20 +58,20 @@ export function useUpdateCheck() {
       upsert({
         id: `whats-new-${done.version}`,
         kind: "whatsNew",
-        title: `ReEmu atualizado para a versão ${done.version}`,
-        summary: "Veja o que mudou",
+        title: i18n.t("updates.updatedTitle", { version: done.version }),
+        summary: i18n.t("updates.updatedSummary"),
         at: Date.now(),
         read: false,
         update: done,
       });
       push({
         id: crypto.randomUUID(),
-        message: `ReEmu atualizado para a versão ${done.version}.`,
+        message: i18n.t("updates.updatedToast", { version: done.version }),
         variant: "Success",
         durationMs: 8000,
         source: "System",
         action: {
-          label: "Novidades",
+          label: i18n.t("updates.whatsNew"),
           onClick: () => openDialog({ mode: "whatsNew", info: done }),
         },
       });
@@ -93,8 +94,8 @@ export function useUpdateCheck() {
       upsert({
         id: "update",
         kind: "update",
-        title: `Nova versão disponível: ${info.version}`,
-        summary: `Você está na ${info.currentVersion}`,
+        title: i18n.t("updates.availableTitle", { version: info.version }),
+        summary: i18n.t("updates.availableSummary", { version: info.currentVersion }),
         at: prev?.update.version === info.version ? prev.at : Date.now(),
         read: prev?.update.version === info.version ? prev.read : false,
         update: info,
@@ -104,12 +105,12 @@ export function useUpdateCheck() {
       const found = info;
       push({
         id: crypto.randomUUID(),
-        message: `Nova versão do ReEmu disponível: ${info.version}.`,
+        message: i18n.t("updates.availableToast", { version: info.version }),
         variant: "Info",
         durationMs: 10000,
         source: "System",
         action: {
-          label: "Ver",
+          label: i18n.t("updates.view"),
           onClick: () => openDialog({ mode: "update", info: found }),
         },
       });

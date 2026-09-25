@@ -11,6 +11,7 @@ import {
 import { HeartFilled } from "@fluentui/react-icons";
 import { useState } from "react";
 import { useCardStyles } from "../styles/xbox";
+import { useTranslation } from "react-i18next";
 
 export interface CardMenuItem {
   label: string;
@@ -97,6 +98,7 @@ export function GameCard({
   onClick?: () => void;
   menu?: readonly CardMenuItem[];
 }) {
+  const { t } = useTranslation();
   const s = useCardStyles();
   const l = useLocalStyles();
   const [broken, setBroken] = useState(false);
@@ -145,7 +147,7 @@ export function GameCard({
           </span>
         )}
         {favorite && (
-          <span className={l.favBadge} aria-label="Favorito">
+          <span className={l.favBadge} aria-label={t("shell.favorite")}>
             <HeartFilled />
           </span>
         )}

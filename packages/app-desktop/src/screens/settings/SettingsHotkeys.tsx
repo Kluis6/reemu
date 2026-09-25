@@ -10,12 +10,10 @@ import {
 } from '../../lib/tauri'
 import { useBindingCaptureStore } from '../../stores/useBindingCaptureStore'
 import { useToastStore } from '../../stores/useToastStore'
+import { Trans, useTranslation } from 'react-i18next'
 
-const HOTKEY_ACTIONS: { key: SystemActionKey; label: string }[] = [
-  { key: 'toggle_menu_overlay', label: 'Abrir/fechar menu' },
-  { key: 'quick_save', label: 'Save state rápido' },
-  { key: 'quick_load', label: 'Load state rápido' },
-]
+// Rótulo traduzido na renderização: `hotkeys.actions.<key>`.
+const HOTKEY_ACTIONS = ['toggle_menu_overlay', 'quick_save', 'quick_load'] as const satisfies readonly SystemActionKey[]
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM, maxWidth: '520px' },
@@ -29,10 +27,11 @@ const useStyles = makeStyles({
   actions: { display: 'flex', gap: tokens.spacingHorizontalXS },
 })
 
-const triggerText = (t: RawInputEvent[]) =>
-  t.length === 0 ? 'não definido' : t.map(describeRawInput).join(' + ')
 
 export function SettingsHotkeys() {
+  const { t } = useTranslation()
+  const triggerText = (tr: RawInputEvent[]) =>
+    tr.length === 0 ? t('hotkeys.notSet') : tr.map(describeRawInput).join(' + ')
   const styles = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
@@ -45,16 +44,17 @@ export function SettingsHotkeys() {
   const clearHotkey = useMutation({
     mutationFn: (key: SystemActionKey) => clearSystemHotkey(key),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['system-hotkeys'] }),
-    onError: (e) => push(errorToast(e, 'limpar o atalho')),
+    onError: (e) => push(errorToast(e, 'clearHotkey')),
   })
 
   return (
     <div className={styles.root}>
       <Caption1>
-        Combinação hold+press: segure a primeira tecla/botão e aperte outra.{' '}
-        <kbd>Esc</kbd> sempre abre/fecha o menu no jogo (rede de segurança, não editável).
+        <Trans i18nKey="hotkeys.intro" components={{ kbd: <kbd /> }} />
       </Caption1>
-      {HOTKEY_ACTIONS.map(({ key, label }) => (
+      {HOTKEY_ACTIONS.map((key) => {
+        const label = t(`hotkeys.actions.${key}`)
+        return (
         <div key={key} className={styles.row}>
           <span className={styles.label}>
             <Body1>{label}</Body1>
@@ -65,7 +65,7 @@ export function SettingsHotkeys() {
               size="small"
               onClick={() => beginCapture({ target: 'system_hotkey', targetKey: key, label })}
             >
-              Redefinir
+              {t('hotkeys.reset')}
             </Button>
             <Button
               size="small"
@@ -73,11 +73,12 @@ export function SettingsHotkeys() {
               disabled={clearHotkey.isPending || triggerFor(key).length === 0}
               onClick={() => clearHotkey.mutate(key)}
             >
-              Limpar
+              {t('hotkeys.clear')}
             </Button>
           </span>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

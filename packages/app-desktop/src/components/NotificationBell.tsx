@@ -18,6 +18,8 @@ import {
 } from "@fluentui/react-icons";
 import { useState } from "react";
 import { useNotificationStore, type AppNotification } from "../stores/useNotificationStore";
+import { useTranslation } from "react-i18next";
+import i18n from "../i18n";
 
 const useStyles = makeStyles({
   badge: { position: "absolute", top: "2px", right: "2px", pointerEvents: "none" },
@@ -53,11 +55,11 @@ const useStyles = makeStyles({
 
 function ago(at: number): string {
   const min = Math.round((Date.now() - at) / 60_000);
-  if (min < 1) return "agora";
-  if (min < 60) return `há ${min} min`;
+  if (min < 1) return i18n.t("notifications.now");
+  if (min < 60) return i18n.t("notifications.minAgo", { count: min });
   const h = Math.round(min / 60);
-  if (h < 24) return `há ${h} h`;
-  return new Date(at).toLocaleDateString("pt-BR");
+  if (h < 24) return i18n.t("notifications.hAgo", { count: h });
+  return new Date(at).toLocaleDateString(i18n.language);
 }
 
 /**
@@ -66,6 +68,7 @@ function ago(at: number): string {
  * lista marca tudo como lido. Clicar num aviso abre o modal da atualização.
  */
 export function NotificationBell({ className }: { className?: string }) {
+  const { t } = useTranslation();
   const s = useStyles();
   const items = useNotificationStore((n) => n.items);
   const markAllRead = useNotificationStore((n) => n.markAllRead);
@@ -91,12 +94,12 @@ export function NotificationBell({ className }: { className?: string }) {
       trapFocus
     >
       <PopoverTrigger disableButtonEnhancement>
-        <Tooltip content="Notificações" relationship="label">
+        <Tooltip content={t("notifications.title")} relationship="label">
           <Button
             className={className}
             appearance="subtle"
             icon={<AlertRegular />}
-            aria-label={unread > 0 ? `Notificações — ${unread} novas` : "Notificações"}
+            aria-label={unread > 0 ? t("notifications.titleUnread", { count: unread }) : t("notifications.title")}
           >
             {unread > 0 && (
               <CounterBadge
@@ -111,10 +114,10 @@ export function NotificationBell({ className }: { className?: string }) {
         </Tooltip>
       </PopoverTrigger>
       <PopoverSurface className={s.surface}>
-        <Subtitle2 className={s.header}>Notificações</Subtitle2>
+        <Subtitle2 className={s.header}>{t("notifications.title")}</Subtitle2>
         {items.length === 0 ? (
           <Caption1 className={s.empty}>
-            Nenhuma notificação. Avisos de versões novas do ReEmu aparecem aqui.
+            {t("notifications.empty")}
           </Caption1>
         ) : (
           <div className={s.list}>

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
-import { AVATAR_NAMES, presetDataUri, type PresetId } from '../lib/avatars'
+import { presetDataUri, type PresetId } from '../lib/avatars'
+import { useTranslation } from 'react-i18next'
 
 /**
  * Avatar predefinido (preenche a caixa). Mesmo SVG do `<Avatar>` do Fluent
@@ -14,12 +15,13 @@ export function PresetAvatar({
   size?: number
   style?: CSSProperties
 }) {
+  const { t } = useTranslation()
   return (
     <img
       src={presetDataUri(id)}
       width={size}
       height={size}
-      alt={`Avatar ${AVATAR_NAMES[id]}`}
+      alt={t('profileForm.avatarLabel', { name: t(`profileForm.presets.${id}`) })}
       draggable={false}
       style={{ display: 'block', ...style }}
     />

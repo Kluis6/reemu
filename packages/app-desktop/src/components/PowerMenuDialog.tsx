@@ -19,6 +19,7 @@ import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { quitApp, restartSystem, shutdownSystem } from "../lib/tauri";
 import { errorToast } from "../lib/toast";
 import { useToastStore } from "../stores/useToastStore";
+import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
   surface: { maxWidth: "360px" },
@@ -43,16 +44,17 @@ export function PowerMenuDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const s = useStyles();
-  const push = useToastStore((t) => t.push);
+  const push = useToastStore((st) => st.push);
 
   const shutdown = useMutation({
     mutationFn: shutdownSystem,
-    onError: (e) => push(errorToast(e, "desligar o computador")),
+    onError: (e) => push(errorToast(e, "shutdownComputer")),
   });
   const restart = useMutation({
     mutationFn: restartSystem,
-    onError: (e) => push(errorToast(e, "reiniciar o computador")),
+    onError: (e) => push(errorToast(e, "restartComputer")),
   });
 
   const busy = shutdown.isPending || restart.isPending;
@@ -65,7 +67,7 @@ export function PowerMenuDialog({
     >
       <DialogSurface className={s.surface}>
         <DialogBody>
-          <DialogTitle>Encerrar</DialogTitle>
+          <DialogTitle>{t("shell2.power")}</DialogTitle>
           <DialogContent className={s.content}>
             <Button
               className={s.row}
@@ -74,7 +76,7 @@ export function PowerMenuDialog({
               disabled={busy}
               onClick={() => void quitApp()}
             >
-              Fechar o ReEmu
+              {t("shell2.quit")}
             </Button>
             <Button
               className={s.row}
@@ -83,7 +85,7 @@ export function PowerMenuDialog({
               disabled={busy}
               onClick={() => restart.mutate()}
             >
-              Reiniciar o computador
+              {t("shell2.restart")}
             </Button>
             <Button
               className={s.row}
@@ -92,12 +94,12 @@ export function PowerMenuDialog({
               disabled={busy}
               onClick={() => shutdown.mutate()}
             >
-              Desligar o computador
+              {t("shell2.shutdown")}
             </Button>
           </DialogContent>
           <DialogActions>
             <Button appearance="secondary" onClick={() => onOpenChange(false)}>
-              Cancelar
+              {t("common.cancel")}
             </Button>
           </DialogActions>
         </DialogBody>

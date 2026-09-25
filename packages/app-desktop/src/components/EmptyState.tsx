@@ -6,6 +6,7 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: {
@@ -71,10 +72,11 @@ export function EmptyState({
 
 /** Spinner centralizado — mesmo espaçamento em todas as telas. */
 export function LoadingState({ label }: { label?: string }) {
+  const { t } = useTranslation()
   const s = useStyles()
   return (
     <div className={s.loading}>
-      <Spinner label={label ?? 'Carregando…'} />
+      <Spinner label={label ?? t('common.loading')} />
     </div>
   )
 }
