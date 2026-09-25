@@ -104,7 +104,19 @@ void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; }
 void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; }
 
 unsigned retro_api_version(void) { return 1; }
-void retro_init(void) { frame_n = 0; }
+#define RETRO_ENVIRONMENT_GET_LOG_INTERFACE 27 /* libretro.h */
+typedef void (*log_printf_t)(unsigned level, const char *fmt, ...);
+struct log_callback { log_printf_t log; };
+
+/* Como o VBA-M: pede a interface de log e usa SEM checar se veio nula.
+ * Se o frontend não entregar o callback, todo teste que carrega este core
+ * cai aqui (regressão: vbam_libretro morria no retro_init). */
+void retro_init(void) {
+   struct log_callback log = { 0 };
+   frame_n = 0;
+   env_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log);
+   log.log(1, "testcore: init %d\n", 42);
+}
 void retro_deinit(void) {}
 
 void retro_get_system_info(struct retro_system_info *info) {

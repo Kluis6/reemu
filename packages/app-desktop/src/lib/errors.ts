@@ -90,7 +90,7 @@ const RULES: Rule[] = [
     fix: 'cores',
   },
   {
-    test: /core-host|processo filho|broken pipe|pipe|canal .*fechad|encerrou inesperad|child/i,
+    test: /core-host|encerrou inesperadamente|processo filho|broken pipe|pipe|canal .*fechad|encerrou inesperad|child/i,
     title: 'O emulador fechou inesperadamente',
     hint: 'Tente abrir de novo ou escolha outro core para este jogo. Se repetir, relate o problema.',
     fix: 'cores',

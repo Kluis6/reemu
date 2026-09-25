@@ -1328,7 +1328,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 }
 
                 match ChildProc::spawn() {
-                    Ok((p, erx)) => {
+                    Ok((mut p, erx)) => {
                         let pid = p.child.id();
                         let sent = p.channel.send(
                             &ToChild::Load {
@@ -1408,10 +1408,28 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 let _ = reply.send(Err(CoreLoadError::LoadFailed(msg)));
                             }
                             None => {
+                                // `None` = timeout OU canal fechado. Se o
+                                // processo já morreu (ex.: o core caiu no
+                                // `retro_init`), diz isso — "timeout" levava
+                                // o usuário a procurar problema de rede.
+                                // (o canal fecha um instante antes do
+                                // processo virar "esperável" — tenta 5×20 ms)
+                                let mut exited = None;
+                                for _ in 0..5 {
+                                    exited = p.child.try_wait().ok().flatten();
+                                    if exited.is_some() {
+                                        break;
+                                    }
+                                    std::thread::sleep(Duration::from_millis(20));
+                                }
                                 p.kill();
-                                let _ = reply.send(Err(CoreLoadError::LoadFailed(
-                                    "core-host não respondeu (timeout)".into(),
-                                )));
+                                let msg = match exited {
+                                    Some(status) => format!(
+                                        "core-host: o core encerrou inesperadamente ao carregar o jogo ({status})"
+                                    ),
+                                    None => "core-host não respondeu (timeout)".to_string(),
+                                };
+                                let _ = reply.send(Err(CoreLoadError::LoadFailed(msg)));
                             }
                         }
                     }

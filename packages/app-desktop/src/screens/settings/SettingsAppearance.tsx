@@ -43,25 +43,27 @@ const useStyles = makeStyles({
   },
   // temas à esquerda, papel de parede numa coluna à direita; em janela
   // estreita a coluna desce pra baixo dos temas
+  // quebra pela largura DISPONÍVEL (flex-wrap), não pela da janela: a
+  // coluna do papel de parede desce quando os temas não cabem em 2 colunas
   columns: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1fr) 280px",
-    alignItems: "start",
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "flex-start",
     gap: tokens.spacingHorizontalXXL,
-    "@media (max-width: 960px)": { gridTemplateColumns: "minmax(0, 1fr)" },
   },
   section: {
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalL,
+    flex: "1 1 520px",
     minWidth: 0,
   },
-  wallCard: { gap: tokens.spacingVerticalM },
+  wallCard: { gap: tokens.spacingVerticalM, flex: "0 1 300px", minWidth: "240px" },
   grid: {
     display: "grid",
     // sempre duas colunas (uma só em janela bem estreita)
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    "@media (max-width: 560px)": { gridTemplateColumns: "minmax(0, 1fr)" },
+    "@media (max-width: 640px)": { gridTemplateColumns: "minmax(0, 1fr)" },
     gap: tokens.spacingHorizontalM,
   },
   // Cor de fundo/borda/texto vêm inline do PRÓPRIO tema sendo mostrado (`t`),
@@ -81,7 +83,8 @@ const useStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: tokens.spacingHorizontalS,
+    flexWrap: "wrap",
+    columnGap: tokens.spacingHorizontalS,
     minHeight: "32px",
   },
   swatch: {

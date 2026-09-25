@@ -11,6 +11,7 @@ describe('describeError', () => {
     ['core exige HW render ainda não suportado: flycast: contexto GL: x', /placa de vídeo/, 'cores'],
     ['core-host: canal fechado (broken pipe)', /fechou inesperadamente/, 'cores'],
     ['core-host não respondeu (timeout)', /travou ao abrir/, 'cores'],
+    ['core-host: o core encerrou inesperadamente ao carregar o jogo (signal: 11 (SIGSEGV))', /fechou inesperadamente/, 'cores'],
     ['operation timed out', /Sem conexão/, undefined],
     ['Firmware scph5501.bin missing', /BIOS/, 'bios'],
     ['nenhum core instalado pra megadrive', /Não há um core/, 'cores'],

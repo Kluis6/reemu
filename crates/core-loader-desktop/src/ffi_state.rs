@@ -252,6 +252,17 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
         // com todos os botões de uma vez (uma chamada por porta em vez de 16).
         // A doc diz que o ponteiro é ignorado; alguns cores passam um `bool*`
         // mesmo assim, então marcamos `true` nele quando vem.
+        // `struct retro_log_callback { retro_log_printf_t log; }`. Tem que
+        // existir: cores como o VBA-M chamam `log_cb` sem checar se é nulo
+        // depois de outras perguntas (ex.: GET_INPUT_BITMASKS) — sem isto
+        // o `retro_init` dele caía com ponteiro nulo.
+        sys::RETRO_ENVIRONMENT_GET_LOG_INTERFACE => {
+            if data.is_null() {
+                return false;
+            }
+            *(data as *mut *const c_void) = reemu_log_printf as *const c_void;
+            true
+        }
         sys::RETRO_ENVIRONMENT_GET_INPUT_BITMASKS => {
             if !data.is_null() {
                 *(data as *mut bool) = true;
@@ -583,5 +594,31 @@ pub(crate) unsafe extern "C" fn input_state_cb(
         }
         // Mouse / teclado / lightgun / pointer: etapa 05+.
         _ => 0,
+    }
+}
+
+extern "C" {
+    /// Em src/log_shim.c — o `retro_log_printf_t` entregue aos cores.
+    fn reemu_log_printf(level: c_uint, fmt: *const c_char, ...);
+}
+
+/// Chamado por `reemu_log_printf` com a mensagem já formatada. Níveis do
+/// `enum retro_log_level` (libretro.h): 0 debug, 1 info, 2 warn, 3 error.
+#[no_mangle]
+extern "C" fn reemu_core_log(level: c_uint, msg: *const c_char) {
+    if msg.is_null() {
+        return;
+    }
+    // SAFETY: o shim passa um buffer seu, terminado em NUL (vsnprintf).
+    let text = unsafe { std::ffi::CStr::from_ptr(msg) }.to_string_lossy();
+    let text = text.trim_end();
+    if text.is_empty() {
+        return;
+    }
+    match level {
+        0 => log::debug!(target: "core", "{text}"),
+        1 => log::info!(target: "core", "{text}"),
+        2 => log::warn!(target: "core", "{text}"),
+        _ => log::error!(target: "core", "{text}"),
     }
 }

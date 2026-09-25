@@ -7,6 +7,13 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rerun-if-changed=fixtures/testcore.c");
+    println!("cargo:rerun-if-changed=src/log_shim.c");
+
+    // `GET_LOG_INTERFACE`: o callback de log do libretro é variádico
+    // (printf) e só C define isso em Rust estável — ver src/log_shim.c.
+    cc::Build::new()
+        .file("src/log_shim.c")
+        .compile("reemu_log_shim");
 
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();

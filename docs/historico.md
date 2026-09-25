@@ -1457,3 +1457,15 @@ Infra:
 - Cada card guarda o próprio modo. No card selecionado o Switch aplica na hora; nos outros ele só troca a prévia daquele card, e clicar no card aplica o tema no modo mostrado. Um card não muda por causa de outro.
 - O papel de parede foi para uma coluna à direita dos temas (`Card` com prévia 16:9). Em janela estreita (até 960 px) ele desce para baixo dos temas.
 - **Tema Super Nintendo** (`snes` / `snes-claro`): marca no roxo dos botões A/B do SNES americano, indo até o lavanda de X/Y. Os 4 brilhos do fundo são os botões do Super Famicom/PAL na posição do losango: X azul, A vermelho, B amarelo, Y verde. O escuro usa o grafite das peças escuras do console; o claro, o cinza do corpo. Referência das cores dos botões: artigo "Super Nintendo Entertainment System controller" (Nintendo Wiki/Fandom).
+
+## 2026-09-25 — GBA (VBA-M) caía ao abrir; interface de log libretro
+
+- **Sintoma:** "Sem conexão com a internet" ao abrir Ace Combat Advance. O texto era do classificador (corrigido antes). A mensagem real era `core-host não respondeu (timeout)`.
+- **Causa:** o `vbam_libretro` morria com SIGSEGV no `retro_init`, reproduzido fora do app com o `open_core` do loader e um backtrace no gdb. Depois que o ReEmu passou a anunciar `GET_INPUT_BITMASKS` (hoje cedo), o VBA-M chama `log_cb(...)` sem checar se é nulo (`src/libretro/libretro.cpp`, `retro_init`). Como o ReEmu não entregava `GET_LOG_INTERFACE` (27), `log_cb` ficava nulo.
+- **Correção:** `GET_LOG_INTERFACE` implementado (`struct retro_log_callback`, libretro.h). O callback é variádico (printf), e Rust estável não define função C variádica, então `src/log_shim.c` (compilado pelo `cc` no build.rs) formata a mensagem e chama `reemu_core_log`, que manda para o `log` com target `core` e o nível do `retro_log_level`. O core falso (`fixtures/testcore.c`) agora imita o VBA-M e usa o log sem checar, então qualquer teste que carregue o core falso quebra se a interface sumir.
+- Quando o core-host morre durante o Load, a sessão agora diz "o core encerrou inesperadamente ao carregar o jogo (signal …)" em vez de "timeout", e o frontend mostra "O emulador fechou inesperadamente".
+
+## 2026-09-25 — Tema Super Nintendo refeito com as cores do console; aba Aparência larga
+
+- O tema SNES agora usa só as cores do console americano (foto de referência do usuário): marca no roxo-azulado das chaves POWER/RESET, fundo com o lavanda de X/Y, o roxo de A/B, o cinza das partes rebaixadas e o roxo das chaves. O claro é o cinza-lavanda do corpo; o escuro, o grafite do direcional.
+- A aba Aparência entrou nas abas largas do `SettingsLayout` (antes limitada a 640 px, o que espremia os cards e cortava o Switch). A coluna do papel de parede quebra pela largura disponível (flex-wrap), não pela largura da janela.

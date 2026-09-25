@@ -145,62 +145,62 @@ const alvaBlue: BrandVariants = {
  *  (`accent`). */
 const alvaBg: BgPalette = { bg1: "#0094D3", bg2: "#00C398", bg3: "#7C45F5", bg4: "#FF8B3E" };
 
-/** Super Nintendo — o roxo do SNES americano (botões A/B, tom 80) indo até
- *  o lavanda dos botões X/Y (tom 120). */
+/** Super Nintendo (modelo americano) — o roxo-azulado das chaves
+ *  POWER/RESET no tom 80, indo até o lavanda dos botões X/Y (tom 130). */
 const snesPurple: BrandVariants = {
-  10: "#0E0A1C",
-  20: "#181230",
-  30: "#221A45",
-  40: "#2C2259",
-  50: "#372B6E",
-  60: "#413483",
-  70: "#4E3F93",
-  80: "#5E4FA2",
-  90: "#6F61B0",
-  100: "#8174BD",
-  110: "#9387C9",
-  120: "#A69BD4",
-  130: "#B8AFDE",
-  140: "#CBC4E8",
-  150: "#DED9F1",
-  160: "#F1EEF9",
+  10: "#0D0B24",
+  20: "#16133A",
+  30: "#1F1B52",
+  40: "#29236A",
+  50: "#332C82",
+  60: "#3E3599",
+  70: "#4B41B4",
+  80: "#5B4FCF",
+  90: "#6C61D6",
+  100: "#7E74DC",
+  110: "#9088E2",
+  120: "#A39CE8",
+  130: "#B6B0ED",
+  140: "#C9C4F2",
+  150: "#DCD9F7",
+  160: "#EFEDFB",
 };
 
-/** Os 4 botões do controle do Super Famicom / SNES europeu, no lugar do
- *  losango: X azul (alto/esquerda), A vermelho (alto/direita), B amarelo
- *  (baixo/direita), Y verde (baixo/esquerda). Um tom abaixo do plástico,
- *  como no `ps1Bg`, pra não gritar no fundo. */
-const snesBg: BgPalette = { bg1: "#2B4FB0", bg2: "#C9A200", bg3: "#1E8F46", bg4: "#B81E2C" };
+/** Só as cores do console, sem o arco-íris do Super Famicom: lavanda dos
+ *  botões X/Y (alto/esquerda), roxo dos botões A/B (baixo/direita), cinza
+ *  das partes rebaixadas do corpo (baixo/esquerda) e o roxo-azulado das
+ *  chaves POWER/RESET (alto/direita). */
+const snesBg: BgPalette = { bg1: "#8F88D6", bg2: "#4A3D9E", bg3: "#8C8A98", bg4: "#5B4FCF" };
 
-/** Escuro: o grafite das peças escuras do console (entrada de cartucho,
- *  botões Power/Reset). Claro: o cinza do corpo. Os dois com um toque de
- *  lavanda, como o plástico. */
+/** Escuro: o grafite do direcional e dos botões SELECT/START. Claro: o
+ *  cinza-lavanda do corpo do console, com o cinza mais escuro das partes
+ *  rebaixadas nas superfícies de baixo. */
 const snesDark = {
-  colorNeutralBackground1: "#1C1B21",
-  colorNeutralBackground1Hover: "#26252C",
-  colorNeutralBackground1Pressed: "#17161B",
-  colorNeutralBackground1Selected: "#322F3A",
-  colorNeutralBackground2: "#24232A",
-  colorNeutralBackground3: "#2E2C35",
-  colorNeutralBackground4: "#393641",
-  colorNeutralForeground1: "#F4F3F7",
-  colorNeutralForeground2: "#CBC8D3",
-  colorNeutralForeground3: "#9D99A8",
+  colorNeutralBackground1: "#1D1C23",
+  colorNeutralBackground1Hover: "#27262E",
+  colorNeutralBackground1Pressed: "#18171D",
+  colorNeutralBackground1Selected: "#33313C",
+  colorNeutralBackground2: "#25242C",
+  colorNeutralBackground3: "#2F2D37",
+  colorNeutralBackground4: "#3A3843",
+  colorNeutralForeground1: "#F3F2F7",
+  colorNeutralForeground2: "#CAC8D4",
+  colorNeutralForeground3: "#9C99A9",
   colorNeutralStroke1: "rgba(255, 255, 255, 0.12)",
   colorNeutralStroke2: "rgba(255, 255, 255, 0.07)",
 } satisfies Partial<Theme>;
 
 const snesLight = {
-  colorNeutralBackground1: "#E6E5EA",
-  colorNeutralBackground1Hover: "#DCDBE1",
-  colorNeutralBackground1Pressed: "#D2D1D8",
-  colorNeutralBackground1Selected: "#D2D1D8",
-  colorNeutralBackground2: "#F1F0F4",
-  colorNeutralBackground3: "#DAD9DF",
-  colorNeutralBackground4: "#CFCED5",
-  colorNeutralForeground1: "#1C1B21",
-  colorNeutralForeground2: "#3E3C46",
-  colorNeutralForeground3: "#5E5B68",
+  colorNeutralBackground1: "#DCDAE2",
+  colorNeutralBackground1Hover: "#D1CFD8",
+  colorNeutralBackground1Pressed: "#C7C5CF",
+  colorNeutralBackground1Selected: "#C7C5CF",
+  colorNeutralBackground2: "#E9E8EE",
+  colorNeutralBackground3: "#CFCDD6",
+  colorNeutralBackground4: "#BFBDC8",
+  colorNeutralForeground1: "#1D1C23",
+  colorNeutralForeground2: "#3D3B47",
+  colorNeutralForeground3: "#5C5968",
   colorNeutralStroke1: "rgba(0, 0, 0, 0.16)",
   colorNeutralStroke2: "rgba(0, 0, 0, 0.09)",
 } satisfies Partial<Theme>;
@@ -507,15 +507,15 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
     label: "Super Nintendo",
     theme: make(snesPurple, "dark", snesBg, {
       neutrals: snesDark,
-      appBg: "linear-gradient(180deg, #1C1B21 0%, #141318 45%)",
-      activeBg: "#3A3645",
+      appBg: "linear-gradient(180deg, #1D1C23 0%, #15141A 45%)",
+      activeBg: "#3A3845",
     }),
   },
   "snes-claro": {
     label: "Super Nintendo Claro",
     theme: make(snesPurple, "light", snesBg, {
       neutrals: snesLight,
-      appBg: "linear-gradient(180deg, #ECEBF0 0%, #E3E2E8 45%)",
+      appBg: "linear-gradient(180deg, #E4E2EA 0%, #D9D7E0 45%)",
       activeBg: snesPurple[80],
     }),
   },
