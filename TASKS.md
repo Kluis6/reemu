@@ -76,13 +76,18 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [x] `done` — Etapa 12: flycast e mupen64plus_next rodam em Vulkan
       in-process no Linux (2026-09-25, `REEMU_HW=vulkan`; mupen com
       `mupen64plus-rdp-plugin=parallel`). Ver docs/historico.md.
-- [ ] `todo` — Etapa 12, fase C: tirar a espera de CPU do blit/submit e
-      validar sob carga (troca de cena, resize, save/load state); decidir se
-      flycast em Vulkan vira padrão (hoje GL no processo filho).
+- [x] `done` — Etapa 12, fase C (2026-09-25): sem espera de CPU no submit
+      dos cmd buffers do core nem no blit; fence-marcador de fim de quadro
+      esperada só no `wait_sync_index`. Validado com as camadas de validação
+      (sync incluída). Ver docs/historico.md.
+- [ ] `todo` — flycast em Vulkan como padrão (hoje GL no processo filho, Vulkan
+      com `REEMU_HW=vulkan`): falta o usuário validar jogando; o próprio
+      flycast gera 2× `VUID-vkUpdateDescriptorSets-None-03047` quando
+      renderiza vários quadros num `retro_run` (interno dele).
 - [x] `done` — Interop GL: `glFinish` trocado por fence `sync_file` →
       semáforo Vulkan, e o interop virou padrão no Linux (2026-09-25; ver
-      docs/historico.md). Falta rodar uma vez com as camadas de validação
-      do Vulkan instaladas (`vulkan-validationlayers`).
+      docs/historico.md). Validado com as camadas de validação em
+      2026-09-25 (corrigido o modificador DRM fora da negociação).
 - [ ] `todo` — Integer scaling com moldura: quando o fator cai no meio do
       caminho entre dois inteiros, sobra barra preta grossa (aceito por ora).
 - [ ] `todo` — CAS (AMD FidelityFX, licença MIT) não vem no pacote de shaders
