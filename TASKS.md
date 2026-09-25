@@ -64,11 +64,9 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Vídeo / GPU
 
-- [ ] `todo` — **Render OpenGL por hardware no Windows**: o contexto GL do
-      core sai do EGL (`khronos_egl`), que o Windows não tem — todo core GL
-      HW (Beetle PSX HW, flycast, mupen64plus/parallel-n64 em GL) falha lá
-      com "contexto GL". Precisa de um contexto WGL (ou ANGLE) no
-      `gl_context.rs`, com readback. Visto no teste de 2026-09-25.
+- [ ] `todo` — **Validar o OpenGL por hardware no Windows** (WGL, feito em
+      2026-09-25 sem máquina Windows): abrir um jogo de PS1 no Beetle PSX HW,
+      Dreamcast no flycast e N64 no mupen64plus/parallel e conferir a imagem.
 - [ ] `todo` — Vulkan in-process no Windows: desligado por padrão depois
       que o `flycast` derrubou o app (`STATUS_ACCESS_VIOLATION`); só com
       `REEMU_HW=vulkan`. Investigar antes de religar.

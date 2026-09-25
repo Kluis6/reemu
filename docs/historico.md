@@ -568,6 +568,21 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-25 — OpenGL por hardware no Windows (WGL)**: o contexto GL dos
+  cores vinha só do EGL, que o Windows não tem, então Beetle PSX HW, flycast
+  e mupen64plus/parallel em GL não subiam lá. `gl_context.rs` agora separa a
+  plataforma (`PlatCtx`): EGL no Linux (inalterado) e WGL no Windows, sem
+  dependência nova (`windows-sys`) — janela oculta 1×1 com pixel format
+  RGBA8/depth24/stencil8, contexto temporário pra obter
+  `wglCreateContextAttribsARB` e o contexto final na versão e perfil do
+  core (core, compat ou ES via `WGL_EXT_create_context_es2_profile`);
+  `wglGetProcAddress` com fallback pro `opengl32.dll` (GL 1.1). O frame sai
+  pelo readback (`glReadPixels`), como já era o caminho sem interop.
+  Constantes e regras conferidas nas especificações da Khronos
+  (`WGL_ARB_create_context`, `WGL_EXT_create_context_es2_profile`).
+  Validado: clippy nas duas plataformas, testes de GPU real do EGL no
+  Linux (readback e ring dma_buf). Falta rodar no Windows.
+
 - **2026-09-25 — revisão de UI (heurísticas de Nielsen + guia Xbox/TV da
   Microsoft + Fluent 2)**. Telas capturadas em 1920×1080 com backend
   simulado; o que foi achado e corrigido:

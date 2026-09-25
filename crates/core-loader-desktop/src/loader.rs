@@ -392,11 +392,10 @@ fn setup_gl_context(
     let max_w = av.geometry.max_width.max(av.geometry.base_width).max(1);
     let max_h = av.geometry.max_height.max(av.geometry.base_height).max(1);
     let ctx = crate::gl_context::GlContext::create(&cfg, max_w, max_h).map_err(|e| {
-        // O contexto GL sai do EGL, que o Windows não tem (sem `libEGL.dll`):
-        // lá todo core com render OpenGL por hardware cai aqui.
+        // Windows: contexto via WGL (`gl_context::wgl`). Falhar aqui quase
+        // sempre é driver de vídeo sem OpenGL moderno.
         let hint = if cfg!(windows) {
-            " — render OpenGL por hardware ainda não funciona no Windows; \
-             use um core de software para este sistema"
+            " — atualize o driver de vídeo, ou use um core de software para este sistema"
         } else {
             ""
         };
