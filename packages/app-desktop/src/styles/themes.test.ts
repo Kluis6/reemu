@@ -48,3 +48,21 @@ describe('paletas do fundo', () => {
     expect(new Set([p.bg1, p.bg2, p.bg3, p.bg4]).size).toBe(4)
   })
 })
+
+describe('tema Alva', () => {
+  it.each(['alva', 'alva-claro'] as const)('%s: texto legível (AA) sobre os fundos', (id) => {
+    const t = THEMES[id].theme
+    for (const back of [t.colorNeutralBackground1, t.colorNeutralBackground2]) {
+      expect(contrast(t.colorNeutralForeground1, back)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(t.reemuBrandText, back)).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(contrast(t.reemuOnBrand, t.reemuBrandSolid)).toBeGreaterThanOrEqual(3)
+    expect(contrast(t.reemuActiveFg, t.reemuActiveBg)).toBeGreaterThanOrEqual(3)
+  })
+
+  it('usa o azul do Alvanista como marca', () => {
+    // preenchimento sólido de marca = tom 80 da rampa = #0094D3 do site
+    expect(THEMES.alva.theme.reemuBrandSolid.toLowerCase()).toBe('#0094d3')
+    expect(THEMES['alva-claro'].theme.reemuActiveBg.toLowerCase()).toBe('#0094d3')
+  })
+})

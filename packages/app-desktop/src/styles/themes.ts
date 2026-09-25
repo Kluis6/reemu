@@ -118,6 +118,66 @@ const psBlueBg: BgPalette = { bg1: "#0A6FC2", bg2: "#2FA7C9", bg3: "#1C2F7A", bg
  *  abaixo — cheios, eles gritavam no fundo). */
 const ps1Bg: BgPalette = { bg1: "#00AC9F", bg2: "#2E6DB4", bg3: "#C9A200", bg4: "#B0122E" };
 
+/** Alva — o azul do Alvanista (alvanista.com, `--color-brand-500` #0094D3
+ *  no tom 80; `-600` #005C82 no 60, `-700` #004060 no 40, `-300` #33B5E5
+ *  no 100, tirados do CSS do site em 2026-09-25). */
+const alvaBlue: BrandVariants = {
+  10: "#001018",
+  20: "#001C2B",
+  30: "#00283E",
+  40: "#004060",
+  50: "#004C70",
+  60: "#005C82",
+  70: "#0078AA",
+  80: "#0094D3",
+  90: "#1AA3DB",
+  100: "#33B5E5",
+  110: "#5AC3EA",
+  120: "#7ED0EE",
+  130: "#A0DCF2",
+  140: "#C0E8F6",
+  150: "#DDF3FA",
+  160: "#F2FAFD",
+};
+
+/** Os 4 acentos do Alvanista: azul de marca, verde-água (`secondary`),
+ *  roxo (`--neon-purple`, o gradiente principal no escuro) e laranja
+ *  (`accent`). */
+const alvaBg: BgPalette = { bg1: "#0094D3", bg2: "#00C398", bg3: "#7C45F5", bg4: "#FF8B3E" };
+
+/** Neutros do Alvanista — as variáveis `--bg-dominant`, `--surface-*`,
+ *  `--text-*` e `--border-*` do site, escuro (`:root`) e claro
+ *  (`[data-theme=light]`). */
+const alvaDark = {
+  colorNeutralBackground1: "#121212",
+  colorNeutralBackground1Hover: "#1E1F22",
+  colorNeutralBackground1Pressed: "#0E0E0E",
+  colorNeutralBackground1Selected: "#2E3035",
+  colorNeutralBackground2: "#1E1F22",
+  colorNeutralBackground3: "#2E3035",
+  colorNeutralBackground4: "#3A3B40",
+  colorNeutralForeground1: "#FFFFFF",
+  colorNeutralForeground2: "#C8CAD0",
+  colorNeutralForeground3: "#9A9DA5",
+  colorNeutralStroke1: "rgba(255, 255, 255, 0.12)",
+  colorNeutralStroke2: "rgba(255, 255, 255, 0.07)",
+} satisfies Partial<Theme>;
+
+const alvaLight = {
+  colorNeutralBackground1: "#F0F2F5",
+  colorNeutralBackground1Hover: "#E4ECF2",
+  colorNeutralBackground1Pressed: "#F0F2F5",
+  colorNeutralBackground1Selected: "#E4ECF2",
+  colorNeutralBackground2: "#FFFFFF",
+  colorNeutralBackground3: "#F4F7FA",
+  colorNeutralBackground4: "#E4ECF2",
+  colorNeutralForeground1: "#121212",
+  colorNeutralForeground2: "#1E1F22",
+  colorNeutralForeground3: "#6B7280",
+  colorNeutralStroke1: "rgba(0, 0, 0, 0.12)",
+  colorNeutralStroke2: "rgba(0, 0, 0, 0.06)",
+} satisfies Partial<Theme>;
+
 /** Azul PlayStation (o acento do dashboard PS4/PS5). */
 const psBlue: BrandVariants = {
   10: "#020C14",
@@ -233,11 +293,27 @@ function readableOn(hex: string): string {
   return (r * 299 + g * 587 + b * 114) / 1000 > 128 ? "#0b0b0d" : "#ffffff";
 }
 
-function make(ramp: BrandVariants, mode: "dark" | "light", bg: BgPalette): ReEmuTheme {
+/** Ajustes de um tema com identidade própria (ex.: Alva) por cima do
+ *  "console look" padrão. */
+interface ThemeOverrides {
+  /** Neutros no lugar de `consoleDark`/`consoleLight`. */
+  neutrals?: Partial<Theme>;
+  /** Fundo da casca (`reemuAppBg`). */
+  appBg?: string;
+  /** Pílula do item ativo no rail (`reemuActiveBg`). */
+  activeBg?: string;
+}
+
+function make(
+  ramp: BrandVariants,
+  mode: "dark" | "light",
+  bg: BgPalette,
+  o: ThemeOverrides = {},
+): ReEmuTheme {
   const light = mode === "light";
-  return {
+  const t: ReEmuTheme = {
     ...(light ? createLightTheme(ramp) : createDarkTheme(ramp)),
-    ...(light ? consoleLight : consoleDark),
+    ...(o.neutrals ?? (light ? consoleLight : consoleDark)),
     // Fundo da casca: o stop mais "fraco" do gradiente é sempre igual ao
     // `colorNeutralBackground1` (o rail usa esse mesmo tom — ver `xbox.ts`),
     // só o outro stop clareia (escuro) ou clareia mais ainda (claro).
@@ -279,6 +355,9 @@ function make(ramp: BrandVariants, mode: "dark" | "light", bg: BgPalette): ReEmu
     // customizados do tema claro em qualquer rampa cadastrada.
     reemuBrandText: light ? ramp[40] : ramp[90],
   };
+  if (o.appBg) t.reemuAppBg = o.appBg;
+  if (o.activeBg) t.reemuActiveBg = o.activeBg;
+  return t;
 }
 
 /**
@@ -320,6 +399,8 @@ export type ThemeId =
   | "claro"
   | "ps-blue-claro"
   | "ps1-claro"
+  | "alva"
+  | "alva-claro"
   | "alto-contraste";
 
 // "Roxo"/"Âmbar" (e seus pares "-claro") foram removidos: eram só uma rampa
@@ -341,6 +422,24 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "ps1-claro": {
     label: "PlayStation Clássico Claro",
     theme: make(ps1Red, "light", ps1Bg),
+  },
+  // Alva: cores do Alvanista (alvanista.com), nos dois modos do site. No
+  // claro a pílula ativa é o azul de marca, como a navegação de lá.
+  alva: {
+    label: "Alva",
+    theme: make(alvaBlue, "dark", alvaBg, {
+      neutrals: alvaDark,
+      appBg: "linear-gradient(180deg, #121212 0%, #0E0E0E 45%)",
+      activeBg: "#2E3035",
+    }),
+  },
+  "alva-claro": {
+    label: "Alva Claro",
+    theme: make(alvaBlue, "light", alvaBg, {
+      neutrals: alvaLight,
+      appBg: "linear-gradient(180deg, #F4F7FA 0%, #F0F2F5 45%)",
+      activeBg: alvaBlue[80],
+    }),
   },
   "alto-contraste": { label: "Alto contraste", theme: makeHighContrast() },
 };

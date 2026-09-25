@@ -71,6 +71,10 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'flex-start',
     textAlign: 'left',
+    // Sempre sobre a arte + véu escuro (`scrim`), em qualquer tema — texto
+    // claro fixo. Herdando a cor do tema, nos temas claros o título saía
+    // quase preto sobre o escuro.
+    color: '#ffffff',
   },
   // fluent2.microsoft.design/typography: "use sentence case, nunca all
   // caps" — tracking largo (0.08em) era calibrado pra maiúsculas, reduzido
@@ -79,7 +83,8 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightBold,
     letterSpacing: '0.02em',
-    color: tokens.colorBrandForeground1,
+    // tom sólido da marca: legível sobre o véu escuro nos dois modos
+    color: 'var(--reemuBrandSolid)',
   },
   title: {
     fontSize: 'clamp(20px, 2.4vw, 64px)',
@@ -89,7 +94,7 @@ const useStyles = makeStyles({
   },
   sub: {
     fontSize: 'clamp(12px, 0.9vw, 26px)',
-    color: tokens.colorNeutralForeground2,
+    color: 'rgba(255, 255, 255, 0.82)',
   },
   arrow: {
     position: 'absolute',
