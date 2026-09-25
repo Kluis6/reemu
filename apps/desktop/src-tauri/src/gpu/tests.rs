@@ -1156,9 +1156,22 @@ fn gl_core_real_rom() {
         }));
     }
     let session = EmuSession::spawn(cfg);
+    // `REEMU_TEST_OPTS="chave=valor,chave=valor"`: opções de core no load.
+    let opts: HashMap<String, String> = std::env::var("REEMU_TEST_OPTS")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|kv| kv.split_once('='))
+        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+        .collect();
     session
-        .load(&core, &rom, HashMap::new())
+        .load(&core, &rom, opts)
         .expect("carregar core GL + ROM pela sessão");
+    if let Ok(keys) = std::env::var("REEMU_TEST_SHOW_OPTS") {
+        let (_, values) = session.core_options();
+        for k in keys.split(',') {
+            eprintln!("opção {k} = {:?}", values.get(k));
+        }
+    }
 
     let (mut frames, mut hw, mut lit, mut out) = (0u32, 0u32, 0u32, 0u32);
     let mut last_dims = (0, 0);

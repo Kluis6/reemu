@@ -58,6 +58,21 @@ fn stick_dpad(x: f32, y: f32) -> Vec<u32> {
 
 /// `f32` normalizado do `gilrs` (`-1.0..=1.0`) → eixo libretro
 /// (`-0x8000..=0x7fff`).
+/// Zona morta RADIAL dos analógicos. O mapeamento SDL do `gilrs` não traz
+/// zona morta pra todo controle (DualSense: `deadzone = 0.0`), e um stick
+/// parado mandava (6%, 10%) pro jogo. Abaixo de `STICK_DEADZONE` do raio vira
+/// zero; acima, reescala pra começar do 0 sem salto (sem perder a direção).
+const STICK_DEADZONE: f32 = 0.15;
+
+fn radial_deadzone((x, y): (f32, f32)) -> (f32, f32) {
+    let r = (x * x + y * y).sqrt();
+    if r < STICK_DEADZONE {
+        return (0.0, 0.0);
+    }
+    let scaled = ((r - STICK_DEADZONE) / (1.0 - STICK_DEADZONE)).min(1.0);
+    (x / r * scaled, y / r * scaled)
+}
+
 fn to_axis(v: f32) -> i16 {
     (v.clamp(-1.0, 1.0) * 32767.0).round() as i16
 }
@@ -311,8 +326,8 @@ impl GamepadPoller {
     /// Manda a posição atual dos dois sticks pro `RETRO_DEVICE_ANALOG` da porta.
     fn push_analog(&mut self, id: GamepadId, uuid: [u8; 16], analog: &AnalogState) {
         let port = self.port_for(id, uuid);
-        let (lx, ly) = self.stick.get(&id).copied().unwrap_or((0.0, 0.0));
-        let (rx, ry) = self.rstick.get(&id).copied().unwrap_or((0.0, 0.0));
+        let (lx, ly) = radial_deadzone(self.stick.get(&id).copied().unwrap_or((0.0, 0.0)));
+        let (rx, ry) = radial_deadzone(self.rstick.get(&id).copied().unwrap_or((0.0, 0.0)));
         // `gilrs`: Y+ = cima; libretro: Y+ = baixo → inverte Y.
         analog.set_stick(port, 0, to_axis(lx), to_axis(-ly));
         analog.set_stick(port, 1, to_axis(rx), to_axis(-ry));
@@ -372,8 +387,15 @@ impl GamepadPoller {
     pub fn poll(&mut self, pad: &RetroPadState, analog: &AnalogState) -> PollOutcome {
         let mut out = PollOutcome::default();
         let capturing = capture::is_capturing();
+        static DEBUG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        let debug = *DEBUG.get_or_init(|| std::env::var_os("REEMU_INPUT_DEBUG").is_some());
         while let Some(Event { id, event, .. }) = self.gilrs.next_event() {
             let uuid = self.gilrs.gamepad(id).uuid();
+            // Diagnóstico: evento cru do gilrs (botão/eixo + valor + código
+            // evdev) — pra ver o que um controle manda de verdade.
+            if debug && !matches!(event, EventType::AxisChanged(_, v, _) if v.abs() < 0.05) {
+                log::info!("controle {}: {event:?}", self.gilrs.gamepad(id).name());
+            }
             match event {
                 EventType::Connected => {
                     let name = self.gilrs.gamepad(id).name().to_string();
@@ -460,6 +482,17 @@ impl GamepadPoller {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stick_at_rest_is_zero_and_full_tilt_stays_full() {
+        // o repouso do DualSense medido no app: (2048, -3328) / 32767
+        assert_eq!(radial_deadzone((0.0625, -0.1016)), (0.0, 0.0));
+        let (x, y) = radial_deadzone((1.0, 0.0));
+        assert!((x - 1.0).abs() < 1e-6 && y == 0.0);
+        // logo depois da borda da zona morta: pequeno, sem salto
+        let (x, _) = radial_deadzone((0.16, 0.0));
+        assert!(x > 0.0 && x < 0.02, "{x}");
+    }
 
     #[test]
     fn button_mapping_libretro_convention() {

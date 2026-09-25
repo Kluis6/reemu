@@ -49,8 +49,8 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       no Linux (AppImage) — é a 1ª versão com auto-update.
 - [ ] `todo` — **Chaveiro no Windows**: `cargo test -p reemu-desktop --lib
       os_keyring -- --ignored` (Credential Manager).
-- [ ] `todo` — `SET_ROTATION` com um jogo vertical real (FBNeo). Direção
-      assumida = anti-horário; flipar se sair espelhado.
+- [x] `done` — `SET_ROTATION` com um jogo vertical real: validado pelo
+      usuário em 2026-09-25 (shooter vertical de arcade em pé, sem espelhar).
 
 ### Atualização automática
 

@@ -1512,3 +1512,10 @@ Infra:
 ## 2026-09-25 — Release v0.1.2
 
 - Versão 0.1.2 (`Cargo.toml` do workspace e `tauri.conf.json`). A tag `v0.1.2` dispara o `release.yml`, que monta os instaladores Linux e Windows num rascunho. Ao publicar o release, o job `updater-manifest` gera o `latest.json` do auto-update, e o site (`site/app.js`) passa a listar a versão pela API do GitHub.
+
+## 2026-09-25 — Zona morta dos analógicos; diagnóstico de entrada; rotação validada
+
+- **Zona morta:** o mapeamento SDL do `gilrs` não traz zona morta para todo controle. No DualSense ela é `0.0` (conferido com `Gamepad::deadzone`), e o stick parado mandava (2048, −3328), ou seja 6% e 10%, para o jogo. Agora há uma zona morta radial de 15% em `push_analog`, reescalada a partir da borda para não dar salto.
+- **`REEMU_INPUT_DEBUG=1`:** o app registra cada evento bruto do `gilrs` (botão/eixo, valor, código evdev), e o core-host registra os botões que chegam em cada porta. O mapeamento do DualSense no `gilrs` 0.11 é simétrico (L2 = `ABS_Z`, R2 = `ABS_RZ`, os dois como botão analógico). O teclado R (R2) acelera no MSR, e o R2 do DualSense não; a causa segue em aberto até o log bruto do controle.
+- **`SET_ROTATION`:** validado pelo usuário com um shooter vertical de arcade, em pé e sem espelhar.
+- **Teste de jogo real:** `REEMU_TEST_OPTS` (opções de core no load) e `REEMU_TEST_SHOW_OPTS`. Medido no MSR: as travas de ~100 ms do flycast continuam iguais com `flycast_threaded_rendering=disabled` (a opção chega ao core), então não vêm da renderização em thread.
