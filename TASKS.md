@@ -44,8 +44,9 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       no caminho `#[cfg(not(linux))]`, paths do buildbot de cores, instalador.
       Conferir que as capas aparecem (URL `http://cover.localhost/<id>` no
       Windows, `covers::cover_url`, corrigida sem teste em máquina real).
-- [ ] `todo` — **Instalador do `v0.1.0-rc2`** (Release draft no GitHub —
-      o pipeline passou em Linux e Windows): instalar e abrir no Windows.
+- [ ] `todo` — **Publicar e instalar a `v0.1.1`**: o draft no GitHub já tem os
+      4 instaladores assinados. Publicar, instalar no Windows (`-setup.exe`) e
+      no Linux (AppImage) — é a 1ª versão com auto-update.
 - [ ] `todo` — **Chaveiro no Windows**: `cargo test -p reemu-desktop --lib
       os_keyring -- --ignored` (Credential Manager).
 - [ ] `todo` — `SET_ROTATION` com um jogo vertical real (FBNeo). Direção
@@ -53,13 +54,11 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Atualização automática
 
-- [ ] `blocked` — **Chave de assinatura** (depende do usuário): gerar com
-      `cargo tauri signer generate`, pôr a pública em `tauri.conf.json` ›
-      `plugins.updater.pubkey` e a privada nos secrets do GitHub. Passo a
-      passo no STEP_BY_STEP §6. Sem isso o app não procura versão nova.
 - [ ] `todo` — Validar ponta a ponta com duas Releases publicadas: instalar
       a antiga pelo AppImage e pelo NSIS, atualizar pelo modal e conferir o
       aviso "atualizado" depois do reinício. O `.deb` usa `pkexec`.
+- [ ] `todo` — Capturas do site em `site/screens/` (`inicio`, `biblioteca`,
+      `jogo`, `pausa`, `cores` .png).
 - [ ] `todo` — Salvar a logo oficial em `site/logo.png` (a página já
       aponta pra ela; sem o arquivo a imagem some e o resto aparece).
 
