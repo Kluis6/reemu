@@ -428,6 +428,11 @@ impl FrameProcessor {
                     (0.0, 0.0, vw / dw as f32, 1.0)
                 }
             };
+            self.game_rect = [cx, cy, hw, hh];
+            if self.split_decoration {
+                // modo canvas: o WebView põe a moldura por cima (ver o campo)
+                return Some((fw, fh, false));
+            }
             self.queue
                 .write_buffer(&self.comp.rect_game, 0, f32s_bytes(&[cx, cy, hw, hh]));
             self.queue

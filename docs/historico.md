@@ -580,6 +580,16 @@ Infra:
     um core de software; WGL virou tarefa.
   * Uma ISO de PS3 ia para o PS1 (a checagem por "PLAYSTATION" pegava). O
     farejador reconhece as marcas do PS3 antes e deixa sem sistema.
+  * Desempenho baixo com moldura, mesmo em core leve: no modo canvas a GPU
+    compunha jogo + moldura no tamanho da moldura (1920×1080) e cada quadro
+    voltava pra CPU e passava pelo IPC do WebView2 (~8 MB × 60/s). Agora
+    `split_decoration`: o quadro sai só com o jogo (Mega Drive: ~290 KB),
+    o cabeçalho do `poll_frame` (28 bytes) leva a geração da moldura e o
+    retângulo do jogo, e a moldura vai uma vez por `decoration_image`; o
+    `PlayScreen` empilha as duas camadas. A superfície nativa continua
+    compondo na GPU. Teste de GPU novo + captura headless conferindo a
+    posição (261,20 1401×1041 numa moldura 1920×1080).
+  * Dois controles iguais (PS5) reconhecidos sem conflito — validado.
 
 - **2026-09-24 — página de downloads no GitHub Pages**
   (`https://kluis6.github.io/reemu/`): `site/` estático (HTML/CSS/JS puro),

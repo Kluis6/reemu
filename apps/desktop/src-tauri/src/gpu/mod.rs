@@ -317,6 +317,9 @@ pub struct DecoViewport {
 
 struct Decoration {
     view: wgpu::TextureView,
+    /// A imagem em RGBA8 — o modo canvas manda pro WebView uma vez por jogo
+    /// (`decoration_image`) em vez de compor na GPU a cada quadro.
+    rgba: Vec<u8>,
     w: u32,
     h: u32,
     /// `None` = viewport padrão (centralizado, altura cheia, proporção do core).
@@ -612,6 +615,17 @@ pub struct FrameProcessor {
     vk_blit: Option<VkBlit>,
     comp: Composite,
     decoration: Option<Decoration>,
+    /// Muda a cada `set_decoration` — o WebView compara pra saber quando
+    /// buscar a imagem nova da moldura. 0 = nunca houve.
+    deco_gen: u32,
+    /// Retângulo do jogo dentro da moldura no último `run_chain`, em NDC
+    /// `[centro_x, centro_y, meia_largura, meia_altura]`.
+    game_rect: [f32; 4],
+    /// Modo canvas: não compõe a moldura na GPU — o readback sai só com o
+    /// jogo e o WebView empilha a moldura por cima. Compor aqui mandava o
+    /// quadro no tamanho da moldura (1920×1080 = 8 MB) pelo IPC a cada
+    /// quadro, o que derrubava o desempenho no Windows (2026-09-25).
+    pub split_decoration: bool,
     /// Surface nativa (etapa 03 — vídeo fora da webview). `Some` = a chain
     /// desenha direto nela em vez de fazer readback pro canvas.
     surface: Option<SurfaceOut>,
@@ -754,6 +768,9 @@ impl FrameProcessor {
             rot_tgt: None,
             rot_view: None,
             decoration: None,
+            deco_gen: 0,
+            game_rect: [0.0, 0.0, 1.0, 1.0],
+            split_decoration: false,
             surface: None,
             integer_scaling: false,
         })
@@ -1417,7 +1434,14 @@ impl FrameProcessor {
             },
         );
         self.rb.invalidate();
-        self.decoration = Some(Decoration { view, w, h, vp });
+        self.deco_gen = self.deco_gen.wrapping_add(1).max(1);
+        self.decoration = Some(Decoration {
+            view,
+            rgba,
+            w,
+            h,
+            vp,
+        });
     }
 
     /// Handles Vulkan crus DESTE device, pra um core libretro de HW render
@@ -1551,7 +1575,28 @@ impl FrameProcessor {
     /// [h u32 LE][RGBA…]` num `Vec` só, pronto pra virar a resposta IPC. O
     /// `process` + montar o cabeçalho copiava o frame inteiro de novo
     /// (8 MB por frame em 1080p); aqui o readback escreve direto no destino.
+    #[cfg(test)]
     pub fn process_packed(&mut self, frame: &Frame) -> Option<Vec<u8>> {
+        self.process_packed_inner(frame, false)
+    }
+
+    /// Formato do `poll_frame` no modo canvas: `[w][h][deco_gen u32]
+    /// [retângulo do jogo 4×f32]` (28 bytes, LE) + RGBA só do jogo. Com
+    /// `deco_gen == 0` não há moldura e o retângulo não vale. Liga
+    /// `split_decoration` (a moldura vai pelo `decoration_image`).
+    pub fn process_packed_split(&mut self, frame: &Frame) -> Option<Vec<u8>> {
+        self.split_decoration = true;
+        self.process_packed_inner(frame, true)
+    }
+
+    /// `(geração, imagem RGBA, largura, altura)` da moldura atual.
+    pub fn decoration_image(&self) -> Option<(u32, &[u8], u32, u32)> {
+        self.decoration
+            .as_ref()
+            .map(|d| (self.deco_gen, d.rgba.as_slice(), d.w, d.h))
+    }
+
+    fn process_packed_inner(&mut self, frame: &Frame, split_header: bool) -> Option<Vec<u8>> {
         let (slot, w, h, padded) = self.readback_frame(frame)?;
         let out = {
             let mapped = self.rb.slots[slot]
@@ -1561,9 +1606,20 @@ impl FrameProcessor {
                 .get_mapped_range()
                 .ok()?;
             let row = (w * 4) as usize;
-            let mut out = Vec::with_capacity(8 + row * h as usize);
+            let mut out = Vec::with_capacity(28 + row * h as usize);
             out.extend_from_slice(&w.to_le_bytes());
             out.extend_from_slice(&h.to_le_bytes());
+            if split_header {
+                let gen = if self.decoration.is_some() {
+                    self.deco_gen
+                } else {
+                    0
+                };
+                out.extend_from_slice(&gen.to_le_bytes());
+                for v in self.game_rect {
+                    out.extend_from_slice(&v.to_le_bytes());
+                }
+            }
             for y in 0..h as usize {
                 out.extend_from_slice(&mapped[y * padded as usize..][..row]);
             }

@@ -50,8 +50,6 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       os_keyring -- --ignored` (Credential Manager).
 - [ ] `todo` — `SET_ROTATION` com um jogo vertical real (FBNeo). Direção
       assumida = anti-horário; flipar se sair espelhado.
-- [ ] `todo` — Dois controles idênticos ao mesmo tempo (fix por
-      `GamepadId` sem teste automatizado possível).
 
 ### Atualização automática
 

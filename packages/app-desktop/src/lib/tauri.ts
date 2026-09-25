@@ -36,8 +36,14 @@ export const loadGame = (coreId: string, romPath: string, romId?: string) =>
   invoke<LoadedGame>('load_game', { coreId, romPath, romId: romId ?? null })
 export const unloadGame = () => invoke<void>('unload_game')
 
-/** Frame do core: `ArrayBuffer` com `[w u32 LE][h u32 LE][rgba…]`, ou vazio. */
+/** Quadro do jogo: cabeçalho de `FRAME_HEADER` bytes (`[w][h][decoGen]
+ *  [cx cy hw hh f32]`, LE) + RGBA8. Vazio = sem quadro novo. */
 export const pollFrame = () => invoke<ArrayBuffer>('poll_frame')
+export const FRAME_HEADER = 28
+
+/** Moldura ativa do modo canvas: `[decoGen][w][h]` (u32 LE) + RGBA8.
+ *  Vazio = sem moldura. Buscada só quando `decoGen` do quadro muda. */
+export const decorationImage = () => invoke<ArrayBuffer>('decoration_image')
 
 /** `true` = vídeo numa surface nativa atrás da webview (`REEMU_NATIVE_VIDEO=1`);
  *  a PlayScreen fica transparente e não roda o loop do canvas. */

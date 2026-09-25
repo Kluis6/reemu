@@ -251,6 +251,7 @@ pub fn run() {
             commands::is_fullscreen,
             commands::set_fullscreen,
             commands::quit_app,
+            commands::decoration_image,
             updates::update_check,
             updates::update_install,
             commands::shutdown_system,

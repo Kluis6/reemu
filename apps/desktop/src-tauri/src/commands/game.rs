@@ -434,9 +434,27 @@ pub fn native_video_active(state: State<'_, AppState>) -> bool {
         .is_some()
 }
 
-/// Frame mais recente do core como RGBA8, prefixado por
-/// `[width: u32 LE][height: u32 LE]` (8 bytes). Corpo vazio = sem frame novo.
-/// A `PlayScreen` consome num loop de `requestAnimationFrame` e pinta no canvas.
+/// Tamanho do cabeçalho do `poll_frame`: `[w u32][h u32][deco_gen u32]
+/// [retângulo do jogo na moldura: cx, cy, meia_l, meia_a em f32 NDC]`, tudo LE.
+/// `deco_gen == 0` = sem moldura (o retângulo não vale).
+const FRAME_HEADER: usize = 28;
+
+fn frame_header(w: u32, h: u32) -> Vec<u8> {
+    let mut out = Vec::with_capacity(FRAME_HEADER + w as usize * h as usize * 4);
+    out.extend_from_slice(&w.to_le_bytes());
+    out.extend_from_slice(&h.to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    for v in [0.0f32, 0.0, 1.0, 1.0] {
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+    out
+}
+
+/// Frame mais recente do core como RGBA8, com o cabeçalho de
+/// `FRAME_HEADER` bytes na frente. Corpo vazio = sem frame novo. A
+/// `PlayScreen` consome num loop e pinta no canvas. Com moldura, o quadro é
+/// SÓ o jogo: a moldura vem uma vez por `decoration_image` e o WebView
+/// empilha as duas (ver `FrameProcessor::split_decoration`).
 #[tauri::command]
 pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
     use domain::frame_source::{rotate_rgba, to_rgba8, to_rgba8_slice, FrameOrigin};
@@ -450,10 +468,10 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
     {
         let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(fp) = gpu.as_mut() {
-            if let Some(packed) = fp.process_packed(&frame) {
+            if let Some(packed) = fp.process_packed_split(&frame) {
                 let w = u32::from_le_bytes(packed[0..4].try_into().unwrap_or_default());
                 let h = u32::from_le_bytes(packed[4..8].try_into().unwrap_or_default());
-                cache_thumb_frame(&state, w, h, &packed[8..]);
+                cache_thumb_frame(&state, w, h, &packed[FRAME_HEADER..]);
                 return tauri::ipc::Response::new(packed);
             }
         }
@@ -473,17 +491,34 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
         // depois do cabeçalho — sem o RGBA intermediário nem a cópia do
         // `pack_frame`.
         let n = w as usize * h as usize * 4;
-        let mut out = Vec::with_capacity(8 + n);
-        out.extend_from_slice(&w.to_le_bytes());
-        out.extend_from_slice(&h.to_le_bytes());
-        out.resize(8 + n, 0);
-        to_rgba8_slice(&mut out[8..], &data, w, h, pitch, format);
-        cache_thumb_frame(&state, w, h, &out[8..]);
+        let mut out = frame_header(w, h);
+        out.resize(FRAME_HEADER + n, 0);
+        to_rgba8_slice(&mut out[FRAME_HEADER..], &data, w, h, pitch, format);
+        cache_thumb_frame(&state, w, h, &out[FRAME_HEADER..]);
         return tauri::ipc::Response::new(out);
     }
     let (rgba, w, h) = rotate_rgba(to_rgba8(&data, w, h, pitch, format), w, h, rot);
     cache_thumb_frame(&state, w, h, &rgba);
-    pack_frame(w, h, &rgba)
+    let mut out = frame_header(w, h);
+    out.extend_from_slice(&rgba);
+    tauri::ipc::Response::new(out)
+}
+
+/// Imagem da moldura ativa pro modo canvas: `[deco_gen u32][w u32][h u32]`
+/// + RGBA8. Corpo vazio = sem moldura. Buscada quando o `deco_gen` do
+/// `poll_frame` muda — não a cada quadro.
+#[tauri::command]
+pub fn decoration_image(state: State<'_, AppState>) -> tauri::ipc::Response {
+    let gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
+    let Some((gen, rgba, w, h)) = gpu.as_ref().and_then(|fp| fp.decoration_image()) else {
+        return tauri::ipc::Response::new(Vec::new());
+    };
+    let mut out = Vec::with_capacity(12 + rgba.len());
+    out.extend_from_slice(&gen.to_le_bytes());
+    out.extend_from_slice(&w.to_le_bytes());
+    out.extend_from_slice(&h.to_le_bytes());
+    out.extend_from_slice(rgba);
+    tauri::ipc::Response::new(out)
 }
 
 /// Guarda uma cópia do frame pra thumbnail do save state — no máximo 1×/500ms
@@ -503,7 +538,6 @@ fn cache_thumb_frame(state: &AppState, w: u32, h: u32, rgba: &[u8]) {
     }
 }
 
-/// `[w u32 LE][h u32 LE][rgba8…]` — o formato que a `PlayScreen` espera.
 /// PNG do frame que estava na tela quando o menu de pausa abriu (vídeo nativo).
 /// A `PlayScreen` usa de fundo do menu. Corpo vazio se não há.
 #[tauri::command]
@@ -513,14 +547,6 @@ pub fn pause_background(state: State<'_, AppState>) -> tauri::ipc::Response {
         .as_ref()
         .and_then(|(w, h, rgba)| thumbnail_png(*w, *h, rgba, 960));
     tauri::ipc::Response::new(png.unwrap_or_default())
-}
-
-fn pack_frame(w: u32, h: u32, rgba: &[u8]) -> tauri::ipc::Response {
-    let mut out = Vec::with_capacity(8 + rgba.len());
-    out.extend_from_slice(&w.to_le_bytes());
-    out.extend_from_slice(&h.to_le_bytes());
-    out.extend_from_slice(rgba);
-    tauri::ipc::Response::new(out)
 }
 
 /// Fecha o app. O flush final da save RAM acontece no handler de

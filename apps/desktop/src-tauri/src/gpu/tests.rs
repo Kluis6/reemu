@@ -906,3 +906,53 @@ fn emu_session_routes_vulkan_core_in_process() {
         "a chain nunca recebeu frame colorido pela sessão"
     );
 }
+
+/// Modo canvas: com moldura, o readback sai só com o jogo (tamanho da saída
+/// da chain, não da moldura) e o cabeçalho leva a geração da moldura e o
+/// retângulo do jogo — a moldura em si vai uma vez pelo `decoration_image`.
+#[test]
+fn split_decoration_sends_game_only() {
+    if std::env::var_os("REEMU_NO_GPU").is_some() {
+        return;
+    }
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem adapter wgpu — pulando teste de readback");
+        return;
+    };
+    let (dw, dh) = (400u32, 300u32);
+    fp.set_decoration(Some((
+        vec![0u8; (dw * dh * 4) as usize],
+        dw,
+        dh,
+        Some(DecoViewport {
+            x: 100.0,
+            y: 50.0,
+            w: 200.0,
+            h: 200.0,
+        }),
+    )));
+    let frame = || grey_frame(50, 30, 0x7A);
+    assert!(
+        fp.process_packed_split(&frame()).is_none(),
+        "1º quadro: pipeline"
+    );
+    let out = fp
+        .process_packed_split(&frame())
+        .expect("2º quadro entrega");
+    let u32_at = |i: usize| u32::from_le_bytes(out[i..i + 4].try_into().unwrap());
+    let f32_at = |i: usize| f32::from_le_bytes(out[i..i + 4].try_into().unwrap());
+    assert_eq!(
+        (u32_at(0), u32_at(4)),
+        (50, 30),
+        "tamanho do jogo, não da moldura"
+    );
+    assert_eq!(out.len(), 28 + 50 * 30 * 4);
+    let (gen, img, w, h) = fp.decoration_image().expect("moldura guardada");
+    assert!(gen > 0);
+    assert_eq!(u32_at(8), gen);
+    assert_eq!((w, h, img.len()), (dw, dh, (dw * dh * 4) as usize));
+    // janela 200×200 centrada em (200,150) de 400×300 → NDC (0, 0, 0.5, 2/3)
+    assert!(f32_at(12).abs() < 1e-4 && f32_at(16).abs() < 1e-4);
+    assert!((f32_at(20) - 0.5).abs() < 1e-4);
+    assert!((f32_at(24) - 200.0 / 300.0).abs() < 1e-4);
+}

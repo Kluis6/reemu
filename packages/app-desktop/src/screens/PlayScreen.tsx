@@ -7,7 +7,7 @@ import {
   tokens,
 } from "@fluentui/react-components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   useLocation,
   useNavigate,
@@ -33,6 +33,8 @@ import {
   nativeVideoActive,
   pauseBackgroundUrl,
   pollFrame,
+  FRAME_HEADER,
+  decorationImage,
   saveState,
   toggleFocus,
   unloadGame,
@@ -90,6 +92,31 @@ const useStyles = makeStyles({
     animationTimingFunction: "ease-in",
     animationFillMode: "both",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
+  },
+  // Sem moldura o palco não gera caixa: o canvas se comporta como filho
+  // direto do `root` (centralizado pelo grid).
+  plainStage: { display: "contents" },
+  // Com moldura: palco na proporção da moldura, o maior que couber na
+  // janela. O jogo fica no retângulo que o Rust calcula (`game_rect`) e a
+  // moldura por cima — mesma imagem que a composição na GPU daria, sem
+  // mandar 8 MB por quadro pelo IPC.
+  decoStage: {
+    position: "relative",
+    width: "min(100vw, calc(100vh * var(--reemuDecoAr)))",
+    aspectRatio: "var(--reemuDecoAr)",
+    overflow: "hidden",
+    background: "#000",
+  },
+  gameInDeco: {
+    position: "absolute",
+    imageRendering: "pixelated",
+  },
+  decoLayer: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    pointerEvents: "none",
   },
   canvas: {
     // Preenche a altura da janela mantendo a proporção; encolhe se ficar
@@ -249,6 +276,25 @@ export function PlayScreen() {
   // usa a AR dos pixels.
   const declaredAspectRef = useRef(4 / 3);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Moldura no modo canvas (`decoration_image`): dimensões pro palco; a
+  // imagem fica na ref e é pintada no canvas de cima quando ele monta.
+  const [deco, setDeco] = useState<{ gen: number; w: number; h: number } | null>(null);
+  const decoPixels = useRef<Uint8ClampedArray<ArrayBuffer> | null>(null);
+  const decoCanvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = decoCanvasRef.current;
+    const px = decoPixels.current;
+    if (!deco || !c || !px) return;
+    c.width = deco.w;
+    c.height = deco.h;
+    c.getContext("2d")?.putImageData(new ImageData(px, deco.w, deco.h), 0, 0);
+  }, [deco]);
+  // Sem moldura: tira o posicionamento que o paint aplicou no canvas do jogo.
+  useEffect(() => {
+    if (deco) return;
+    const c = canvasRef.current;
+    if (c) for (const k of ["left", "top", "width", "height"] as const) c.style[k] = "";
+  }, [deco]);
   // O loop de fetch olha o foco por ref (não re-monta o efeito a cada pausa).
   const pausedRef = useRef(false);
   useEffect(() => {
@@ -313,28 +359,73 @@ export function PlayScreen() {
     let raf = 0;
     // `fresh`: chegou frame novo desde o último desenho — sem frame novo não
     // redesenha (o canvas continua mostrando o último).
-    const latest = { px: null as Uint8Array<ArrayBuffer> | null, w: 0, h: 0, fresh: false };
+    const latest = {
+      px: null as Uint8Array<ArrayBuffer> | null,
+      w: 0,
+      h: 0,
+      fresh: false,
+      // moldura: geração (0 = nenhuma) e retângulo do jogo em NDC
+      decoGen: 0,
+      rect: [0, 0, 1, 1] as [number, number, number, number],
+    };
     let renderer: FrameRenderer | null = null;
+    let shownDecoGen = 0;
+    let fetchingDeco = false;
+    let appliedRect = "";
+
+    // Moldura nova (ou nenhuma): busca a imagem uma vez e troca o palco.
+    const syncDeco = async (gen: number) => {
+      if (gen === shownDecoGen || fetchingDeco) return;
+      if (gen === 0) {
+        shownDecoGen = 0;
+        decoPixels.current = null;
+        setDeco(null);
+        return;
+      }
+      fetchingDeco = true;
+      try {
+        const buf = await decorationImage();
+        if (!alive || buf.byteLength < 12) return;
+        const dv = new DataView(buf);
+        const [g, w, h] = [dv.getUint32(0, true), dv.getUint32(4, true), dv.getUint32(8, true)];
+        if (buf.byteLength < 12 + w * h * 4) return;
+        decoPixels.current = new Uint8ClampedArray(buf, 12, w * h * 4);
+        shownDecoGen = g;
+        setDeco({ gen: g, w, h });
+      } catch {
+        /* tenta de novo no próximo quadro */
+      } finally {
+        fetchingDeco = false;
+      }
+    };
 
     void (async () => {
       while (alive) {
         let got = false;
         try {
           const buf = await pollFrame();
-          if (buf.byteLength > 8) {
+          if (buf.byteLength > FRAME_HEADER) {
             const dv = new DataView(buf);
             const w = dv.getUint32(0, true);
             const h = dv.getUint32(4, true);
             const need = w * h * 4;
-            if (w > 0 && h > 0 && buf.byteLength >= 8 + need) {
+            if (w > 0 && h > 0 && buf.byteLength >= FRAME_HEADER + need) {
               // View sobre o MESMO ArrayBuffer (sem `.slice()`, que copia o
               // frame inteiro) — `Uint8Array` não tem restrição de
-              // alinhamento, então o offset de 8 bytes do header é seguro.
-              latest.px = new Uint8Array(buf, 8, need);
+              // alinhamento, então o offset do cabeçalho é seguro.
+              latest.px = new Uint8Array(buf, FRAME_HEADER, need);
               latest.w = w;
               latest.h = h;
+              latest.decoGen = dv.getUint32(8, true);
+              latest.rect = [
+                dv.getFloat32(12, true),
+                dv.getFloat32(16, true),
+                dv.getFloat32(20, true),
+                dv.getFloat32(24, true),
+              ];
               latest.fresh = true;
               got = true;
+              void syncDeco(latest.decoGen);
             }
           }
         } catch {
@@ -362,6 +453,20 @@ export function PlayScreen() {
           const pixels = latest.w / Math.max(1, latest.h);
           // orientação bate → AR declarada (PAR ok); senão frame rotacionado.
           setAspect(declared >= 1 === pixels >= 1 ? declared : pixels);
+        }
+        if (latest.decoGen !== 0 && shownDecoGen === latest.decoGen) {
+          // retângulo NDC do Rust → % do palco (só mexe no DOM se mudou)
+          const [cx, cy, hw, hh] = latest.rect;
+          const key = latest.rect.join();
+          if (key !== appliedRect) {
+            appliedRect = key;
+            c.style.left = `${((cx - hw + 1) / 2) * 100}%`;
+            c.style.top = `${((1 - cy - hh) / 2) * 100}%`;
+            c.style.width = `${hw * 100}%`;
+            c.style.height = `${hh * 100}%`;
+          }
+        } else {
+          appliedRect = "";
         }
         renderer?.draw(latest.px, latest.w, latest.h);
         latest.fresh = false;
@@ -567,13 +672,23 @@ export function PlayScreen() {
       style={nativeVideo ? { background: "transparent" } : undefined}
     >
       {!nativeVideo && (
-        <canvas
-          ref={canvasRef}
-          className={styles.canvas}
-          width={256}
-          height={240}
-          style={{ aspectRatio: String(aspect) }}
-        />
+        <div
+          className={deco ? styles.decoStage : styles.plainStage}
+          style={
+            deco
+              ? ({ ["--reemuDecoAr" as string]: String(deco.w / deco.h) } as CSSProperties)
+              : undefined
+          }
+        >
+          <canvas
+            ref={canvasRef}
+            className={deco ? styles.gameInDeco : styles.canvas}
+            width={256}
+            height={240}
+            style={deco ? undefined : { aspectRatio: String(aspect) }}
+          />
+          {deco && <canvas ref={decoCanvasRef} className={styles.decoLayer} aria-hidden />}
+        </div>
       )}
 
       {menuMounted && (
