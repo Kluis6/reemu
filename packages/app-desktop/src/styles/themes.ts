@@ -528,19 +528,27 @@ export const DEFAULT_THEME_ID: ThemeId = "xbox-green";
  *  claro — o card mostra um botão Escuro/Claro em vez de dois cards. Os
  *  `ThemeId` continuam os mesmos (é o que fica salvo). */
 export interface ThemeFamily {
-  label: string;
+  /** Chave do nome em `appearance.theme.names` (i18n). */
+  nameKey:
+    | "xboxGreen"
+    | "xboxClassic"
+    | "psBlue"
+    | "psClassic"
+    | "alva"
+    | "snes"
+    | "highContrast";
   dark: ThemeId;
   light?: ThemeId;
 }
 
 export const THEME_FAMILIES: ThemeFamily[] = [
-  { label: "Verde Xbox", dark: "xbox-green", light: "claro" },
-  { label: "Xbox Clássico", dark: "xbox-classico" },
-  { label: "Azul PlayStation", dark: "ps-blue", light: "ps-blue-claro" },
-  { label: "PlayStation Clássico", dark: "ps1", light: "ps1-claro" },
-  { label: "Alva", dark: "alva", light: "alva-claro" },
-  { label: "Super Nintendo", dark: "snes", light: "snes-claro" },
-  { label: "Alto contraste", dark: "alto-contraste" },
+  { nameKey: "xboxGreen", dark: "xbox-green", light: "claro" },
+  { nameKey: "xboxClassic", dark: "xbox-classico" },
+  { nameKey: "psBlue", dark: "ps-blue", light: "ps-blue-claro" },
+  { nameKey: "psClassic", dark: "ps1", light: "ps1-claro" },
+  { nameKey: "alva", dark: "alva", light: "alva-claro" },
+  { nameKey: "snes", dark: "snes", light: "snes-claro" },
+  { nameKey: "highContrast", dark: "alto-contraste" },
 ];
 
 /** Família e modo de um tema salvo. */

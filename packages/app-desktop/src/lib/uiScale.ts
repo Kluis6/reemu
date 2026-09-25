@@ -4,10 +4,11 @@
 // Ctrl+ de um navegador. Pensado pra TV: a Microsoft recomenda texto de no
 // mínimo 15 epx a ~3 m da tela e o próprio Xbox renderiza a 200% em 1080p.
 
+// `label` = chave de tradução (i18n).
 export const UI_SCALES = [
-  { value: 1, label: 'Padrão' },
-  { value: 1.25, label: 'Grande' },
-  { value: 1.5, label: 'Maior' },
+  { value: 1, label: 'appearance.uiScale.default' },
+  { value: 1.25, label: 'appearance.uiScale.large' },
+  { value: 1.5, label: 'appearance.uiScale.larger' },
 ] as const
 
 const KEY = 'reemu.uiScale'

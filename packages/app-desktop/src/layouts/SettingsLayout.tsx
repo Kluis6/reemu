@@ -6,6 +6,7 @@ import {
   mergeClasses,
   tokens,
 } from "@fluentui/react-components";
+import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { RouteTransition } from "../components/RouteTransition";
 
@@ -23,36 +24,43 @@ const useStyles = makeStyles({
 
 const WIDE_TABS = new Set(["aparencia", "cores", "bios"]);
 
+// `key` = trecho da rota; `label` = chave de tradução.
 const TABS = [
-  { key: "perfil", label: "Perfil" },
-  { key: "aparencia", label: "Aparência" },
-  { key: "biblioteca", label: "Gerenciar biblioteca" },
-  { key: "audio", label: "Áudio" },
-  { key: "video", label: "Vídeo" },
-  { key: "metadata", label: "Metadados" },
-  { key: "hotkeys", label: "Atalhos" },
-  { key: "controllers", label: "Controles" },
-  { key: "cores", label: "Cores" },
-  { key: "bios", label: "BIOS" },
-];
+  { key: "perfil", label: "settings.tabs.profile" },
+  { key: "aparencia", label: "settings.tabs.appearance" },
+  { key: "biblioteca", label: "settings.tabs.library" },
+  { key: "audio", label: "settings.tabs.audio" },
+  { key: "video", label: "settings.tabs.video" },
+  { key: "metadata", label: "settings.tabs.metadata" },
+  { key: "hotkeys", label: "settings.tabs.hotkeys" },
+  { key: "controllers", label: "settings.tabs.controllers" },
+  { key: "cores", label: "settings.tabs.cores" },
+  { key: "bios", label: "settings.tabs.bios" },
+] as const;
 
 export function SettingsLayout() {
+  const { t } = useTranslation();
   const styles = useStyles();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const current =
-    TABS.find((t) => pathname.endsWith(`/${t.key}`))?.key ?? "audio";
+    TABS.find((tab) => pathname.endsWith(`/${tab.key}`))?.key ?? "audio";
 
   return (
-    <div className={mergeClasses(styles.root, WIDE_TABS.has(current) && styles.wide)}>
-      <Title2>Configurações</Title2>
+    <div
+      className={mergeClasses(
+        styles.root,
+        WIDE_TABS.has(current) && styles.wide,
+      )}
+    >
+      <Title2>{t("settings.title")}</Title2>
       <TabList
         selectedValue={current}
         onTabSelect={(_, d) => navigate(`/settings/${d.value}`)}
       >
-        {TABS.map((t) => (
-          <Tab key={t.key} value={t.key}>
-            {t.label}
+        {TABS.map((tab) => (
+          <Tab key={tab.key} value={tab.key}>
+            {t(tab.label)}
           </Tab>
         ))}
       </TabList>

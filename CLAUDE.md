@@ -43,3 +43,20 @@ Fontes oficiais, nesta ordem de preferência:
 
 Se a documentação oficial não cobrir o caso, diga isso explicitamente e
 marque a decisão como não verificada em vez de apresentá-la como certa.
+
+## Idiomas da interface (pt-BR, en, es)
+
+Texto que aparece para o usuário no frontend passa por `useTranslation()` →
+`t('chave')` (react-i18next), nunca fixo no componente. Base em
+`packages/app-desktop/src/i18n/`:
+
+- `locales/pt-BR.ts` é a **origem**: chave nova entra aqui primeiro e define
+  o formato (`Messages`); `en.ts` e `es.ts` são tipados por ele, então
+  esquecer uma chave não compila, e `locales.test.ts` confere as mesmas
+  chaves e as mesmas variáveis `{{x}}` nos três.
+- As chaves são tipadas (`i18next.d.ts`): `t('chave.errada')` é erro de
+  compilação.
+- Listas fixas fora do componente guardam a **chave** (ex.: `label:
+  "nav.home"`) e traduzem na renderização.
+- Idioma: preferência em Configurações › Aparência (`reemu.language`:
+  idioma ou `auto`); `auto` segue o sistema; sem correspondência, pt-BR.

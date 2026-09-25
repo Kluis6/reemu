@@ -2,6 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import './index.css'
+// idiomas (pt-BR/en/es) — inicializa antes do 1º render
+import './i18n'
 import { applyUiScale, getUiScale } from './lib/uiScale'
 
 // A webview é opaca (o vídeo do jogo é desenhado num canvas dentro dela, não

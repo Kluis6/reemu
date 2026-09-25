@@ -30,6 +30,7 @@ import {
 } from "@fluentui/react-components";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { ButtonHints } from "../components/ButtonHints";
@@ -50,7 +51,12 @@ const useLocalStyles = makeStyles({
   // ícones da sidebar com o border-radius padrão do botão do Fluent
   railRadius: { borderRadius: tokens.borderRadiusMedium, position: "relative" },
   // contador de pendências de metadata no ícone de Configurações
-  railBadge: { position: "absolute", top: "2px", right: "2px", pointerEvents: "none" },
+  railBadge: {
+    position: "absolute",
+    top: "2px",
+    right: "2px",
+    pointerEvents: "none",
+  },
   // Voltar/Fullscreen: mesmo tom de fundo da sidebar (`rail`,
   // `colorNeutralBackground2`) no fundo E na borda — a borda fica sempre da
   // mesma cor do fundo (em repouso e no hover), então nunca aparece como uma
@@ -94,14 +100,14 @@ const RAIL = [
     end: true,
     icon: <HomeRegular />,
     activeIcon: <HomeFilled />,
-    label: "Início",
+    label: "nav.home",
   },
   {
     to: "/library",
     end: true,
     icon: <LibraryRegular />,
     activeIcon: <LibraryFilled />,
-    label: "Meus jogos",
+    label: "nav.library",
   },
   {
     to: "/settings",
@@ -112,18 +118,19 @@ const RAIL = [
     end: false,
     icon: <SettingsRegular />,
     activeIcon: <SettingsFilled />,
-    label: "Configurações",
+    label: "nav.settings",
   },
-];
+] as const;
 
 // Menu do avatar. Conquistas/rede ainda não têm tela — ficam desabilitados.
 // "Sair" fecha o app.
 const PROFILE_EXTRA = [
-  { icon: <TrophyRegular />, label: "Minhas conquistas" },
-  { icon: <PeopleRegular />, label: "Minha rede" },
+  { icon: <TrophyRegular />, label: "nav.achievements" },
+  { icon: <PeopleRegular />, label: "nav.network" },
 ] as const;
 
 export function AppShell() {
+  const { t } = useTranslation();
   const s = useShellStyles();
   const l = useLocalStyles();
   const navigate = useNavigate();
@@ -168,13 +175,13 @@ export function AppShell() {
 
   const hints = atBrowse
     ? ([
-        { glyph: "A", label: "Selecionar" },
-        { glyph: "Y", label: "Buscar" },
-        { glyph: "MENU", label: "Opções" },
+        { glyph: "A", label: t("hints.select") },
+        { glyph: "Y", label: t("hints.search") },
+        { glyph: "MENU", label: t("hints.options") },
       ] as const)
     : ([
-        { glyph: "A", label: "Selecionar" },
-        { glyph: "B", label: "Voltar" },
+        { glyph: "A", label: t("hints.select") },
+        { glyph: "B", label: t("hints.back") },
       ] as const);
   return (
     <div className={s.app}>
@@ -182,7 +189,11 @@ export function AppShell() {
       <nav className={s.rail}>
         <Menu positioning={{ position: "below", align: "start", offset: 12 }}>
           <MenuTrigger disableButtonEnhancement>
-            <button className={s.railBrand} aria-label="Perfil" type="button">
+            <button
+              className={s.railBrand}
+              aria-label={t("shell.profile")}
+              type="button"
+            >
               <ProfileAvatar
                 profile={
                   profile.data ?? { name: "Jogador", avatar: "preset:1" }
@@ -207,24 +218,26 @@ export function AppShell() {
               </MenuItem>
               {PROFILE_EXTRA.map((m) => (
                 <MenuItem key={m.label} icon={m.icon} disabled>
-                  {m.label}
+                  {t(m.label)}
                 </MenuItem>
               ))}
               <MenuDivider />
               <Menu>
                 <MenuTrigger disableButtonEnhancement>
-                  <MenuItem disabled>Status</MenuItem>
+                  <MenuItem disabled>{t("shell.status")}</MenuItem>
                 </MenuTrigger>
                 <MenuPopover className={l.menuPopover}>
                   <MenuList className={l.menuBody}>
-                    <MenuItem>Online</MenuItem>
-                    <MenuItem>Ausente</MenuItem>
-                    <MenuItem>Jogando</MenuItem>
+                    <MenuItem>{t("shell.online")}</MenuItem>
+                    <MenuItem>{t("shell.away")}</MenuItem>
+                    <MenuItem>{t("shell.playing")}</MenuItem>
                   </MenuList>
                 </MenuPopover>
               </Menu>
 
-              <MenuItem onClick={() => void quitApp()}>Sair</MenuItem>
+              <MenuItem onClick={() => void quitApp()}>
+                {t("shell.quit")}
+              </MenuItem>
             </MenuList>
           </MenuPopover>
         </Menu>
@@ -235,11 +248,14 @@ export function AppShell() {
             to={it.to}
             end={it.end}
             className={mergeClasses(s.railItem, l.railRadius)}
-            title={it.label}
+            title={t(it.label)}
             aria-label={
               it.to === "/settings" && pendingCount > 0
-                ? `${it.label} — ${pendingCount} metadata para revisar`
-                : it.label
+                ? t("shell.pendingMetadata", {
+                    label: t(it.label),
+                    count: pendingCount,
+                  })
+                : t(it.label)
             }
           >
             {({ isActive }) => (
@@ -264,11 +280,11 @@ export function AppShell() {
           className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
         />
         <div className={s.railSep} />
-        <Tooltip content="Encerrar" relationship="label">
+        <Tooltip content={t("shell.shutdown")} relationship="label">
           <Button
             className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
             onClick={() => setPowerOpen(true)}
-            aria-label="Encerrar"
+            aria-label={t("shell.shutdown")}
             appearance="subtle"
             icon={<PowerRegular />}
           />
@@ -281,12 +297,12 @@ export function AppShell() {
       <div className={s.main}>
         <div className={s.topbar}>
           {!atRoot && (
-            <Tooltip content="Voltar para a tela anterior" relationship="label">
+            <Tooltip content={t("shell.backTooltip")} relationship="label">
               <Button
                 appearance="secondary"
                 className={mergeClasses(l.navBtn, s.navIconBtn)}
                 icon={<ChevronLeftRegular />}
-                aria-label="Voltar"
+                aria-label={t("hints.back")}
                 onClick={() => navigate(-1)}
               />
             </Tooltip>
@@ -297,7 +313,7 @@ export function AppShell() {
             data-nav-skip
             appearance="filled-darker"
             value={search.query}
-            placeholder="Buscar na biblioteca…"
+            placeholder={t("shell.searchPlaceholder")}
             onFocus={() => {
               if (pathname !== "/library") navigate("/library");
               search.setOpen(true);
@@ -323,7 +339,9 @@ export function AppShell() {
             <Button
               appearance="secondary"
               className={mergeClasses(l.navBtn, s.navIconBtn)}
-              aria-label={fullscreen ? "Sair da tela cheia" : "Tela cheia"}
+              aria-label={
+                fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen")
+              }
               icon={
                 fullscreen ? (
                   <FullScreenMinimizeRegular />

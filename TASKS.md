@@ -128,6 +128,14 @@ no `emu-session`, ver `docs/historico.md`).
       analógicos — jogos de Dreamcast/N64/PS2 que exigem analógico não
       andam só no teclado).
 
+- [ ] `todo` — **Idiomas (pt-BR, en, es)**: base pronta em 2026-09-25
+      (`packages/app-desktop/src/i18n`, seletor em Aparência; migrados rail,
+      topo, abas de Configurações e Aparência). Falta migrar as outras telas
+      (Início, Biblioteca, detalhe do jogo, tela de jogo, demais abas de
+      Configurações, onboarding, toasts, `lib/errors.ts`), datas/números com
+      `Intl` no idioma ativo, textos que vêm do Rust (erros e eventos) e o
+      site/instalador.
+
 ### Infra / qualidade
 
 - [x] `done` — **Teste de fumaça do catálogo, fase 1** (2026-09-25):

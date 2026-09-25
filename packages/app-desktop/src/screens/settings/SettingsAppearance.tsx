@@ -20,6 +20,13 @@ import {
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  getLanguagePreference,
+  LANGUAGES,
+  setLanguagePreference,
+  type LanguagePreference,
+} from "../../i18n";
 import {
   clearWallpaper,
   pickImage,
@@ -189,13 +196,14 @@ function ThemeCard({
   /** Ausente = tema só escuro: sem Switch (o rodapé mantém a altura). */
   onModeChange?: (m: ThemeMode) => void;
 }) {
+  const { t: tr } = useTranslation();
   const s = useStyles();
   return (
     <Card
       className={s.card}
       selected={selected}
       onSelectionChange={onSelect}
-      aria-label={`Tema ${label}`}
+      aria-label={tr("appearance.theme.card", { name: label })}
       style={{
         backgroundColor: t.colorNeutralBackground2,
         borderColor: selected ? t.colorBrandStroke1 : t.colorNeutralStroke2,
@@ -223,7 +231,7 @@ function ThemeCard({
             onKeyDown={(e) => e.stopPropagation()}
           >
             <Switch
-              aria-label={`${label}: modo claro`}
+              aria-label={tr("appearance.theme.lightMode", { name: label })}
               // bolinha normal do Switch (o filho do `indicator` é o que
               // desliza), com a lua/o sol pequeno dentro dela
               indicator={{
@@ -270,6 +278,10 @@ function ThemeCard({
 
 /** Configurações › Aparência — tema de cor + papel de parede da tela inicial. */
 export function SettingsAppearance() {
+  const { t } = useTranslation();
+  const [langPref, setLangPref] = useState<LanguagePreference>(
+    getLanguagePreference,
+  );
   const s = useStyles();
   const {
     selection,
@@ -309,7 +321,7 @@ export function SettingsAppearance() {
 
   const upload = useMutation({
     mutationFn: async () => {
-      const path = await pickImage("Escolha um papel de parede");
+      const path = await pickImage(t("appearance.wallpaper.pickTitle"));
       if (!path) return false;
       await setWallpaperFile(path);
       return true;
@@ -330,16 +342,40 @@ export function SettingsAppearance() {
     <div className={s.root}>
       <div>
         <Text as="strong" weight="semibold">
-          Tamanho da interface
+          {t("language.title")}
         </Text>
         <Caption1 as="p" block style={{ margin: "2px 0 0" }}>
-          Aumenta textos, botões e capas por igual. Padrão pro monitor, Grande
-          pra notebook de longe ou TV pequena, Maior pra TV vista do sofá.
+          {t("language.description")}
         </Caption1>
       </div>
       <RadioGroup
         layout="horizontal"
-        aria-label="Tamanho da interface"
+        aria-label={t("language.title")}
+        value={langPref}
+        onChange={(_, data: RadioGroupOnChangeData) => {
+          const v = data.value as LanguagePreference;
+          setLangPref(v);
+          void setLanguagePreference(v);
+        }}
+      >
+        <Radio value="auto" label={t("language.auto")} />
+        {LANGUAGES.map((l) => (
+          // cada idioma no próprio nome (quem não lê o atual acha o seu)
+          <Radio key={l} value={l} label={t(`language.${l}`)} />
+        ))}
+      </RadioGroup>
+
+      <div>
+        <Text as="strong" weight="semibold">
+          {t("appearance.uiScale.title")}
+        </Text>
+        <Caption1 as="p" block style={{ margin: "2px 0 0" }}>
+          {t("appearance.uiScale.description")}
+        </Caption1>
+      </div>
+      <RadioGroup
+        layout="horizontal"
+        aria-label={t("appearance.uiScale.title")}
         value={String(uiScale)}
         onChange={(_, data: RadioGroupOnChangeData) => {
           const v = Number(data.value);
@@ -353,7 +389,7 @@ export function SettingsAppearance() {
           <Radio
             key={o.value}
             value={String(o.value)}
-            label={`${o.label} (${Math.round(o.value * 100)}%)`}
+            label={`${t(o.label)} (${Math.round(o.value * 100)}%)`}
           />
         ))}
       </RadioGroup>
@@ -362,14 +398,14 @@ export function SettingsAppearance() {
         <div className={s.section}>
           <div>
             <Text as="strong" weight="semibold">
-              Tema de cor
+              {t("appearance.theme.title")}
             </Text>
             <Caption1 as="p" block style={{ margin: "2px 0 0" }}>
-              Muda a cor de destaque e do fundo do app.
+              {t("appearance.theme.description")}
             </Caption1>
           </div>
 
-          <div className={s.grid} aria-label="Tema de cor">
+          <div className={s.grid} aria-label={t("appearance.theme.title")}>
             {THEME_FAMILIES.map((f) => {
               const on = active?.family === f;
               const mode: ThemeMode = on
@@ -387,7 +423,7 @@ export function SettingsAppearance() {
                 <ThemeCard
                   key={f.dark}
                   t={THEMES[id].theme}
-                  label={f.label}
+                  label={t(`appearance.theme.names.${f.nameKey}`)}
                   selected={on}
                   onSelect={() => setPreset(id)}
                   mode={mode}
@@ -399,7 +435,7 @@ export function SettingsAppearance() {
             + um matiz (painel abaixo); o resto da rampa é gerado. */}
             <ThemeCard
               t={customPreview}
-              label="Personalizado"
+              label={t("appearance.theme.names.custom")}
               selected={isCustom}
               onSelect={() =>
                 customMode === customDraft.mode
@@ -422,7 +458,7 @@ export function SettingsAppearance() {
               >
                 <ColorSlider
                   className={s.hueSlider}
-                  aria-label="Matiz do tema personalizado"
+                  aria-label={t("appearance.theme.hue")}
                 />
               </ColorPicker>
             </div>
@@ -432,10 +468,10 @@ export function SettingsAppearance() {
         <Card className={s.wallCard} appearance="filled-alternative">
           <div>
             <Text as="strong" weight="semibold">
-              Papel de parede
+              {t("appearance.wallpaper.title")}
             </Text>
             <Caption1 as="p" block style={{ margin: "2px 0 0" }}>
-              Uma imagem de fundo pra tela inicial. Opcional.
+              {t("appearance.wallpaper.description")}
             </Caption1>
           </div>
 
@@ -455,7 +491,9 @@ export function SettingsAppearance() {
               disabled={upload.isPending}
               onClick={() => upload.mutate()}
             >
-              {wallpaper.data ? "Trocar imagem…" : "Escolher imagem…"}
+              {wallpaper.data
+                ? t("appearance.wallpaper.change")
+                : t("appearance.wallpaper.choose")}
             </Button>
             {wallpaper.data && (
               <Button
@@ -463,7 +501,7 @@ export function SettingsAppearance() {
                 disabled={remove.isPending}
                 onClick={() => remove.mutate()}
               >
-                Remover
+                {t("appearance.wallpaper.remove")}
               </Button>
             )}
           </div>
