@@ -8,7 +8,10 @@ contexto de cada etapa está em `docs/ai-context/`.
 
 Sempre que o trabalho tocar OpenGL, Vulkan, WGL, EGL, GLX, wgpu, shaders ou
 qualquer API de GPU, **consulte a documentação oficial antes de decidir ou
-escrever código** — não implemente de memória. Confira nela os valores de
+escrever código** — não implemente de memória. Vale para **cada decisão**
+sobre GPU, inclusive as pequenas (um formato de textura, um flag, a ordem de
+duas chamadas), não só para as grandes; as fontes de partida indicadas pelo
+dono do projeto são <https://www.vulkan.org/> e <https://www.opengl.org/>. Confira nela os valores de
 constantes, a ordem das chamadas, os requisitos de sincronização e o que a
 especificação garante (ou não) em cada plataforma. Registre no commit ou no
 `docs/historico.md` qual documento embasou a decisão.
