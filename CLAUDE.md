@@ -19,9 +19,16 @@ Fontes oficiais, nesta ordem de preferência:
   Vulkan): <https://registry.khronos.org/> — ex.:
   `OpenGL/extensions/ARB/WGL_ARB_create_context.txt`,
   `EGL/extensions/EXT/EGL_EXT_image_dma_buf_import.txt`.
-- **Vulkan**: especificação e guia em <https://docs.vulkan.org/> e
+- **Vulkan** (a partir de <https://www.vulkan.org/>, indicado pelo dono do
+  projeto): especificação em <https://docs.vulkan.org/spec/latest/index.html>,
+  Vulkan Guide <https://github.com/KhronosGroup/Vulkan-Guide>, exemplos
+  oficiais <https://github.com/KhronosGroup/Vulkan-Samples> e o registro
   <https://registry.khronos.org/vulkan/>.
-- **OpenGL (páginas de referência)**: <https://registry.khronos.org/OpenGL-Refpages/>.
+- **OpenGL** (a partir de <https://www.opengl.org/>, indicado pelo dono do
+  projeto): registro com as especificações de OpenGL e GLSL
+  <https://registry.khronos.org/OpenGL/index_gl.php>, páginas de referência
+  <https://registry.khronos.org/OpenGL-Refpages/gl4/> (e `gl2.1/` para o
+  perfil antigo) e o OpenGL Wiki <https://www.khronos.org/opengl/wiki/>.
 - **wgpu**: <https://docs.rs/wgpu> (a versão usada está no `Cargo.lock`) e
   <https://www.w3.org/TR/webgpu/> para a semântica.
 - **Windows (WGL, DXGI, Direct3D)**: <https://learn.microsoft.com/windows/win32/>.
