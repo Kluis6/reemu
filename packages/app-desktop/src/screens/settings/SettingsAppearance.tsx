@@ -12,7 +12,12 @@ import {
   tokens,
   type RadioGroupOnChangeData,
 } from "@fluentui/react-components";
-import { CheckmarkFilled, ImageAddRegular } from "@fluentui/react-icons";
+import {
+  CheckmarkFilled,
+  ImageAddRegular,
+  WeatherMoonFilled,
+  WeatherSunnyFilled,
+} from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import {
@@ -58,7 +63,11 @@ const useStyles = makeStyles({
     flex: "1 1 520px",
     minWidth: 0,
   },
-  wallCard: { gap: tokens.spacingVerticalM, flex: "0 1 300px", minWidth: "240px" },
+  wallCard: {
+    gap: tokens.spacingVerticalM,
+    flex: "0 1 300px",
+    minWidth: "240px",
+  },
   grid: {
     display: "grid",
     // sempre duas colunas (uma só em janela bem estreita)
@@ -200,13 +209,26 @@ function ThemeCard({
             onKeyDown={(e) => e.stopPropagation()}
           >
             <Switch
-              // cor do texto do PRÓPRIO tema do card (o slot herdaria a do
-              // tema ativo e sumiria num card de fundo oposto)
-              label={{
-                children: "Claro",
-                style: { color: t.colorNeutralForeground2 },
+              aria-label={`${label}: modo claro`}
+              // o `indicator` da Fluent é a bolinha que desliza — no lugar
+              // do círculo, lua (escuro) e sol (claro)
+              indicator={{
+                children:
+                  mode === "light" ? (
+                    <WeatherSunnyFilled />
+                  ) : (
+                    <WeatherMoonFilled />
+                  ),
+                // desligado: lua e borda com as cores do PRÓPRIO card (as
+                // do tema ativo sumiam num card de fundo oposto)
+                style:
+                  mode === "light"
+                    ? undefined
+                    : {
+                        color: t.colorNeutralForeground2,
+                        borderColor: t.colorNeutralStrokeAccessible,
+                      },
               }}
-              labelPosition="before"
               checked={mode === "light"}
               onChange={(_, d) => onModeChange(d.checked ? "light" : "dark")}
             />
