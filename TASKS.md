@@ -77,8 +77,9 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       o gate `REEMU_GL_INTEROP`.
 - [ ] `todo` — Integer scaling com moldura: quando o fator cai no meio do
       caminho entre dois inteiros, sobra barra preta grossa (aceito por ora).
-- [ ] `todo` — Presets FSR 1.0 / RCAS / CAS (espaciais; temporais não servem
-      pra emulação). HDR / tonemapping.
+- [ ] `todo` — CAS (AMD FidelityFX, licença MIT) não vem no pacote de shaders
+      do libretro — portar como `.slang` se fizer falta (FSR, RCAS e NIS já
+      estão nos presets recomendados). HDR / tonemapping.
 - [ ] `todo` — Shader: `test/format.slangp` (textura de inteiros) é a única
       falha de preset que sobrou por limitação do pipeline.
 

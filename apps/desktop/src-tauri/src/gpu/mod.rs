@@ -198,6 +198,29 @@ pub const CURATED: &[Curated] = &[
         desc: "Tubo completo: máscara de fósforo, brilho e geometria.",
         relpath: "crt/crt-guest-advanced.slangp",
     },
+    // Ampliação/nitidez espaciais (sem histórico de quadros — servem pra
+    // emulação). FSR 1 = EASU (amplia pra resolução da tela) + RCAS
+    // (nitidez), nessa ordem, conforme a doc da AMD
+    // (gpuopen.com/fidelityfx-superresolution). Os três rodam na GPU no teste
+    // `field_render_upscalers`.
+    Curated {
+        id: "fsr",
+        label: "Ampliar com nitidez (AMD FSR)",
+        desc: "Amplia e realça as bordas — bom pro 3D de PS1, N64 e PSP.",
+        relpath: "edge-smoothing/fsr/fsr.slangp",
+    },
+    Curated {
+        id: "nis",
+        label: "Ampliar com nitidez (NVIDIA NIS)",
+        desc: "Alternativa ao FSR, com nitidez um pouco mais forte.",
+        relpath: "edge-smoothing/nis/nis.slangp",
+    },
+    Curated {
+        id: "rcas",
+        label: "Só nitidez (RCAS)",
+        desc: "Realça as bordas sem ampliar — deixa o 3D menos borrado.",
+        relpath: "sharpen/rca_sharpen.slangp",
+    },
 ];
 
 pub fn curated_by_wire(wire: &str) -> Option<&'static Curated> {

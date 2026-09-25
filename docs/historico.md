@@ -568,6 +568,18 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-25 — FSR, NIS e RCAS nos presets recomendados**: o pacote
+  `slang-shaders` já trazia FSR 1 (`edge-smoothing/fsr`), NIS
+  (`edge-smoothing/nis`) e RCAS (`sharpen/rca_sharpen`); CAS não vem nele.
+  Conferido na doc da AMD (gpuopen.com/fidelityfx-superresolution): FSR 1 é
+  espacial (sem histórico — serve pra emulação), EASU amplia pra resolução
+  da tela e o RCAS dá nitidez depois, em espaço gama; o `fsr.slangp` segue
+  isso. Os presets compilam (validação de campo) e rodam na GPU num teste
+  novo (`field_render_upscalers`, tabuleiro 64×48 → 192×144, saída com
+  contraste). Entraram na lista curada: "Ampliar com nitidez (AMD FSR)",
+  "(NVIDIA NIS)" e "Só nitidez (RCAS)". Sem superfície nativa (modo canvas)
+  o passe `viewport` amplia pra 3× o nativo.
+
 - **2026-09-25 — proporção de tela muda em runtime (`SET_GEOMETRY`)**: o
   loader só logava o `SET_GEOMETRY` e, do `SET_SYSTEM_AV_INFO`, usava só o
   timing — a proporção de cada quadro ficava a do carregamento. Pelo

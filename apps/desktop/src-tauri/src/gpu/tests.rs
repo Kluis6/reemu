@@ -961,3 +961,76 @@ fn split_decoration_sends_game_only() {
         "proporção do quadro"
     );
 }
+
+/// Tabuleiro 64×48 (casas de 8 px) — bordas nítidas pros filtros de
+/// ampliação/nitidez terem o que processar.
+fn checker_frame(w: u32, h: u32) -> Frame {
+    let mut data = vec![0u8; (w * h * 4) as usize];
+    for y in 0..h {
+        for x in 0..w {
+            let v = if ((x / 8) + (y / 8)) % 2 == 0 {
+                0xE0
+            } else {
+                0x20
+            };
+            let i = ((y * w + x) * 4) as usize;
+            data[i..i + 4].copy_from_slice(&[v, v, v, 0xFF]);
+        }
+    }
+    Frame {
+        origin: FrameOrigin::SoftwareRawBuffer {
+            data,
+            pitch: w * 4,
+            format: SoftwarePixelFormat::Xrgb8888,
+        },
+        metadata: FrameMetadata {
+            native_width: w,
+            native_height: h,
+            aspect_ratio: w as f32 / h as f32,
+            rotation_degrees: 0,
+        },
+    }
+}
+
+/// Roda de verdade (GPU) os presets de ampliação/nitidez do pacote: FSR 1
+/// (EASU + RCAS, AMD), só EASU, RCAS e NIS (NVIDIA). Confere o tamanho da
+/// saída — passe `viewport` sem superfície amplia pra 3× o nativo — e que a
+/// imagem não sai preta nem lisa. Ignorado por padrão (precisa do pacote):
+///   cargo test -p reemu-desktop --lib field_render_upscalers -- --ignored --nocapture
+#[test]
+#[ignore]
+fn field_render_upscalers() {
+    let root = std::path::PathBuf::from(std::env::var("REEMU_SHADER_DIR").unwrap_or_else(|_| {
+        format!(
+            "{}/.local/share/com.reemu.desktop/shaders/slang-shaders",
+            std::env::var("HOME").unwrap_or_default()
+        )
+    }));
+    let cases = [
+        ("edge-smoothing/fsr/fsr.slangp", 3),
+        ("edge-smoothing/fsr/fsr-easu.slangp", 3),
+        ("sharpen/rca_sharpen.slangp", 1),
+        ("edge-smoothing/nis/nis.slangp", 3),
+    ];
+    for (rel, scale) in cases {
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        let path = root.join(rel);
+        fp.set_preset(path.to_str().unwrap())
+            .unwrap_or_else(|e| panic!("{rel}: {e}"));
+        let _ = fp.process(&checker_frame(64, 48));
+        let (w, h, d) = fp
+            .process(&checker_frame(64, 48))
+            .unwrap_or_else(|| panic!("{rel}: sem quadro"));
+        assert_eq!((w, h), (64 * scale, 48 * scale), "{rel}: tamanho da saída");
+        let luma: Vec<u8> = d.chunks(4).map(|p| p[1]).collect();
+        let (lo, hi) = (*luma.iter().min().unwrap(), *luma.iter().max().unwrap());
+        eprintln!("{rel}: {w}x{h} luma {lo}..{hi}");
+        assert!(
+            hi > 0x80 && lo < 0x60,
+            "{rel}: saída sem contraste ({lo}..{hi})"
+        );
+    }
+}
