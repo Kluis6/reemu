@@ -142,6 +142,22 @@ impl Drop for SharedBuffer {
 }
 
 /// Dono do device GBM (um render node DRM).
+/// Modificadores DRM que o consumidor (Vulkan do app) importa pra amostrar,
+/// em ordem de preferência — vêm do pai no `Load`. Vazio = não informado.
+static IMPORT_MODIFIERS: std::sync::Mutex<Vec<u64>> = std::sync::Mutex::new(Vec::new());
+
+/// Define a lista (ver [`DmabufAllocator::alloc`]).
+pub fn set_import_modifiers(mods: Vec<u64>) {
+    *IMPORT_MODIFIERS.lock().unwrap_or_else(|p| p.into_inner()) = mods;
+}
+
+fn import_modifiers() -> Vec<u64> {
+    IMPORT_MODIFIERS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
+}
+
 pub struct DmabufAllocator {
     dev: *mut gbm_device,
     _node: std::fs::File,
@@ -175,9 +191,16 @@ impl DmabufAllocator {
         Err(last)
     }
 
-    /// Aloca um buffer RGBA8 `w×h` pra render + amostragem. Deixa o driver
-    /// escolher o modifier (NVIDIA costuma recusar linear puro em RENDERING);
-    /// tenta com/sem modifiers explícitos e cai pra linear como último recurso.
+    /// Aloca um buffer RGBA8 `w×h` pra render + amostragem.
+    ///
+    /// Com a lista de modificadores que o CONSUMIDOR (Vulkan/wgpu) importa
+    /// ([`set_import_modifiers`]) — a negociação do
+    /// `VK_EXT_image_drm_format_modifier` —, aloca SÓ com um deles
+    /// (`gbm_bo_create_with_modifiers` escolhe um da lista); se nenhum servir,
+    /// erro (o interop desliga e o quadro vai pelo readback — nunca um layout
+    /// que o Vulkan recusa, que era comportamento indefinido: com "driver
+    /// escolhe" a NVIDIA dava `0x300000000e08014`, fora da lista do Vulkan).
+    /// Sem lista (teste antigo / sem Vulkan), mantém o "driver escolhe".
     pub fn alloc(&self, w: u32, h: u32) -> Result<SharedBuffer, String> {
         let g = gbm()?;
         let (w, h) = (w.max(1), h.max(1));
@@ -186,6 +209,17 @@ impl DmabufAllocator {
         let with_mods = |mods: &[u64]| unsafe {
             (g.bo_create_with_modifiers)(self.dev, w, h, fmt, mods.as_ptr(), mods.len() as u32)
         };
+        let allowed = import_modifiers();
+        if !allowed.is_empty() {
+            let bo = with_mods(&allowed);
+            if bo.is_null() {
+                return Err(format!(
+                    "gbm_bo_create_with_modifiers {w}x{h}: nenhum dos {} modificadores que o Vulkan importa serve",
+                    allowed.len()
+                ));
+            }
+            return Ok(self.wrap(bo));
+        }
         let bo = {
             let a = with_mods(&[u64::MAX]); // deixa o driver escolher
             if !a.is_null() {
@@ -210,17 +244,24 @@ impl DmabufAllocator {
         if bo.is_null() {
             return Err(format!("gbm_bo_create {w}x{h} falhou (todas as vias)"));
         }
+        Ok(self.wrap(bo))
+    }
+
+    fn wrap(&self, bo: *mut gbm_bo) -> SharedBuffer {
+        // `gbm()` já deu certo pra chegar aqui.
+        let g = gbm().expect("gbm carregado");
         let modifier = unsafe { (g.bo_get_modifier)(bo) };
+        let (w, h) = unsafe { ((g.bo_get_width)(bo), (g.bo_get_height)(bo)) };
         log::info!("dma_buf {w}x{h} modifier 0x{modifier:x}");
-        Ok(SharedBuffer {
+        SharedBuffer {
             modifier,
-            width: unsafe { (g.bo_get_width)(bo) },
-            height: unsafe { (g.bo_get_height)(bo) },
+            width: w,
+            height: h,
             stride: unsafe { (g.bo_get_stride)(bo) },
             offset: unsafe { (g.bo_get_offset)(bo, 0) },
             fourcc: DRM_FORMAT_ABGR8888,
             bo,
-        })
+        }
     }
 }
 

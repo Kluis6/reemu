@@ -41,6 +41,10 @@ pub struct VkFrameSync {
     cv: Condvar,
     /// Só pra o `wait_sync_index` não travar pra sempre se o compositor sumir.
     shutdown: std::sync::atomic::AtomicBool,
+    /// A fence-marcador do slot foi submetida e ainda não esperada (ver
+    /// `VkFrameBridge::begin_frame`) — o `wait_sync_index` espera antes de o
+    /// core reusar o slot.
+    submitted: [std::sync::atomic::AtomicBool; RING],
 }
 
 impl VkFrameSync {
@@ -50,6 +54,7 @@ impl VkFrameSync {
             lock: Mutex::new(()),
             cv: Condvar::new(),
             shutdown: std::sync::atomic::AtomicBool::new(false),
+            submitted: [const { std::sync::atomic::AtomicBool::new(false) }; RING],
         })
     }
 
@@ -90,6 +95,20 @@ impl VkFrameSync {
                 log::warn!("vk wait_sync_index slot {s}: compositor atrasado (gen {need})");
             }
         }
+    }
+
+    /// Marca que a fence do slot foi submetida (e ainda não esperada).
+    pub fn mark_submitted(&self, slot: u32) {
+        self.submitted[slot as usize % RING].store(true, Ordering::Release);
+    }
+
+    fn is_submitted(&self, slot: u32) -> bool {
+        self.submitted[slot as usize % RING].load(Ordering::Acquire)
+    }
+
+    /// Consome a marca: `true` = há fence submetida pra esperar.
+    fn take_submitted(&self, slot: u32) -> bool {
+        self.submitted[slot as usize % RING].swap(false, Ordering::AcqRel)
     }
 
     fn stop(&self) {
@@ -203,6 +222,27 @@ impl VkFrameBridge {
     /// `get_sync_index`/`wait_sync_index` que o core chama em seguida.
     pub fn begin_frame(&self) {
         let mut inner = self.inner.lock().unwrap();
+        // Marcador de "tudo do slot anterior terminou na GPU": submissão
+        // VAZIA com a fence do slot. Pela spec Vulkan, o sinal de fence de um
+        // `vkQueueSubmit` inclui no 1º escopo "all commands that occur earlier
+        // in submission order" — cobre o trabalho que o core submeteu sozinho
+        // (flycast, via `lock_queue`), os cmd buffers de `set_command_buffers`
+        // e a leitura do compositor (wgpu) daquele quadro. O `wait_sync_index`
+        // do core espera esta fence quando o slot volta (RING-1 quadros
+        // depois — normalmente já sinalizada): é o "waits on CPU for device
+        // activity for the current sync index" do `libretro_vulkan.h`. Roda na
+        // thread que dirige o core in-process, a mesma dos submits do wgpu.
+        if inner.generation > 0 {
+            let prev = inner.current_index;
+            let fence = inner.fences[prev as usize % RING];
+            if fence != vk::Fence::null() && !self.sync.is_submitted(prev) {
+                // SAFETY: fence nossa, sem sinal (resetada no último wait);
+                // fila do device adotado, sem submit concorrente nesta thread.
+                if unsafe { self.ctx.device.queue_submit(self.ctx.queue, &[], fence) }.is_ok() {
+                    self.sync.mark_submitted(prev);
+                }
+            }
+        }
         inner.generation += 1;
         inner.current_index = (inner.generation % RING as u64) as u32;
         inner.pending_image = None;
@@ -314,6 +354,16 @@ unsafe extern "C" fn cb_wait_sync_index(handle: *mut c_void) {
     };
     // Bloqueia até o compositor liberar o uso anterior deste slot.
     b.sync.wait_free(idx, gen);
+    // Fase C: espera AQUI a fence-marcador do uso anterior do slot (toda a
+    // atividade de GPU daquele quadro; quase sempre já sinalizada) antes de o
+    // core reusar os recursos dele, e a reseta pro próximo marcador.
+    if b.sync.take_submitted(idx) {
+        let fence = b.inner.lock().unwrap().fences[idx as usize % RING];
+        if fence != vk::Fence::null() {
+            let _ = b.ctx.device.wait_for_fences(&[fence], true, u64::MAX);
+            let _ = b.ctx.device.reset_fences(&[fence]);
+        }
+    }
 }
 
 unsafe extern "C" fn cb_lock_queue(handle: *mut c_void) {

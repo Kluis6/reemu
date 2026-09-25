@@ -24,12 +24,61 @@ pub(super) struct VkBlit {
     pub(super) queue: ash::vk::Queue,
     pub(super) mem_props: ash::vk::PhysicalDeviceMemoryProperties,
     pub(super) pool: ash::vk::CommandPool,
-    pub(super) cmd: ash::vk::CommandBuffer,
-    pub(super) fence: ash::vk::Fence,
+    /// Um command buffer + fence POR SLOT (fase C): o blit é submetido sem
+    /// esperar a CPU; a fence do slot só é esperada antes de regravar o
+    /// command buffer daquele slot (spec Vulkan: não regravar um command
+    /// buffer em estado pendente). A ordem na GPU vem das barreiras (a 1ª
+    /// tem `srcStage` com FRAGMENT_SHADER, encadeando com a barreira do
+    /// core que libera a imagem pra leitura no fragment shader).
+    pub(super) slots: Vec<BlitSlot>,
     pub(super) targets: Vec<Option<VkBlitTarget>>,
 }
 
+/// Command buffer + fence de um slot do blit.
+pub(super) struct BlitSlot {
+    cmd: ash::vk::CommandBuffer,
+    fence: ash::vk::Fence,
+    /// Submetido e ainda não esperado.
+    pending: bool,
+}
+
 impl VkBlit {
+    /// Command buffer do `slot`, pronto pra regravar: cria na 1ª vez; se o
+    /// uso anterior ainda está pendente, espera a fence dele e a reseta.
+    unsafe fn slot_cmd(&mut self, slot: usize) -> Option<(ash::vk::CommandBuffer, ash::vk::Fence)> {
+        use ash::vk;
+        while self.slots.len() <= slot {
+            let cmd = unsafe {
+                self.device.allocate_command_buffers(
+                    &vk::CommandBufferAllocateInfo::default()
+                        .command_pool(self.pool)
+                        .level(vk::CommandBufferLevel::PRIMARY)
+                        .command_buffer_count(1),
+                )
+            }
+            .ok()?[0];
+            let fence = unsafe {
+                self.device
+                    .create_fence(&vk::FenceCreateInfo::default(), None)
+            }
+            .ok()?;
+            self.slots.push(BlitSlot {
+                cmd,
+                fence,
+                pending: false,
+            });
+        }
+        let s = &mut self.slots[slot];
+        if s.pending {
+            unsafe {
+                let _ = self.device.wait_for_fences(&[s.fence], true, u64::MAX);
+                let _ = self.device.reset_fences(&[s.fence]);
+            }
+            s.pending = false;
+        }
+        Some((s.cmd, s.fence))
+    }
+
     /// # Safety
     /// `device`/`queue` são do device Vulkan adotado (§Beetle); `qf` é a queue
     /// family da `queue`.
@@ -56,25 +105,12 @@ impl VkBlit {
         }
         .inspect_err(|e| log::error!("vk_blit: create_command_pool: {e}"))
         .ok()?;
-        let cmd = unsafe {
-            raw_device.allocate_command_buffers(
-                &vk::CommandBufferAllocateInfo::default()
-                    .command_pool(pool)
-                    .level(vk::CommandBufferLevel::PRIMARY)
-                    .command_buffer_count(1),
-            )
-        }
-        .ok()?[0];
-        let fence =
-            unsafe { raw_device.create_fence(&vk::FenceCreateInfo::default(), None) }.ok()?;
-
         Some(Self {
             device: raw_device,
             queue: raw_queue,
             mem_props,
             pool,
-            cmd,
-            fence,
+            slots: Vec::new(),
             targets: Vec::new(),
         })
     }
@@ -202,15 +238,18 @@ impl VkBlit {
             z: 1,
         };
         let ignore = vk::QUEUE_FAMILY_IGNORED;
+        let Some((cmd, fence)) = (unsafe { self.slot_cmd(slot) }) else {
+            return false;
+        };
 
         let ok = unsafe {
             self.device
-                .reset_command_buffer(self.cmd, vk::CommandBufferResetFlags::empty())
+                .reset_command_buffer(cmd, vk::CommandBufferResetFlags::empty())
                 .is_ok()
                 && self
                     .device
                     .begin_command_buffer(
-                        self.cmd,
+                        cmd,
                         &vk::CommandBufferBeginInfo::default()
                             .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
                     )
@@ -245,7 +284,7 @@ impl VkBlit {
                     .subresource_range(sub),
             ];
             self.device.cmd_pipeline_barrier(
-                self.cmd,
+                cmd,
                 vk::PipelineStageFlags::FRAGMENT_SHADER | vk::PipelineStageFlags::TOP_OF_PIPE,
                 vk::PipelineStageFlags::TRANSFER,
                 vk::DependencyFlags::empty(),
@@ -260,7 +299,7 @@ impl VkBlit {
                 .dst_subresource(layers)
                 .dst_offsets([vk::Offset3D::default(), end]);
             self.device.cmd_blit_image(
-                self.cmd,
+                cmd,
                 src,
                 vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                 dst,
@@ -290,7 +329,7 @@ impl VkBlit {
                     .subresource_range(sub),
             ];
             self.device.cmd_pipeline_barrier(
-                self.cmd,
+                cmd,
                 vk::PipelineStageFlags::TRANSFER,
                 vk::PipelineStageFlags::FRAGMENT_SHADER,
                 vk::DependencyFlags::empty(),
@@ -299,23 +338,17 @@ impl VkBlit {
                 &to_shader,
             );
 
-            if self.device.end_command_buffer(self.cmd).is_err() {
+            if self.device.end_command_buffer(cmd).is_err() {
                 return false;
             }
-            let cmds = [self.cmd];
+            let cmds = [cmd];
             let submit = vk::SubmitInfo::default().command_buffers(&cmds);
-            let _ = self.device.reset_fences(&[self.fence]);
-            if let Err(e) = self.device.queue_submit(self.queue, &[submit], self.fence) {
+            if let Err(e) = self.device.queue_submit(self.queue, &[submit], fence) {
                 log::error!("vk_blit: queue_submit: {e}");
                 return false;
             }
-            if self
-                .device
-                .wait_for_fences(&[self.fence], true, u64::MAX)
-                .is_err()
-            {
-                return false;
-            }
+            // Sem esperar a CPU (fase C) — ver `slots`.
+            self.slots[slot].pending = true;
         }
         if let Some(t) = self.targets[slot].as_mut() {
             t.ready = true;
@@ -397,7 +430,10 @@ impl Drop for VkBlit {
             for t in std::mem::take(&mut self.targets).into_iter().flatten() {
                 self.destroy_target(t);
             }
-            self.device.destroy_fence(self.fence, None);
+            for sl in self.slots.drain(..) {
+                self.device.destroy_fence(sl.fence, None);
+            }
+            // (os command buffers vão junto com o pool)
             self.device.destroy_command_pool(self.pool, None);
         }
     }

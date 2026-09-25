@@ -296,8 +296,10 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 save_dir,
                 initial_option_values,
                 initial_save_ram,
+                dmabuf_modifiers,
             } => {
                 core = None; // não deveria haver um core já — o pai mata e sobe de novo a cada troca.
+                core_loader_desktop::set_dmabuf_import_modifiers(dmabuf_modifiers);
                 core_loader_desktop::silence_core_stdout();
                 core_loader_desktop::set_pending_core_option_values(initial_option_values);
                 let loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir);

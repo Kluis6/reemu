@@ -105,7 +105,8 @@ pub trait VulkanImageHandle: Send {
     /// frame e que o COMPOSITOR tem que submeter (a thread do core não submete
     /// — evita corrida na `VkQueue`). Vazio = frame dup / o core já submeteu.
     fn command_buffers(&self) -> &[u64];
-    /// `VkFence` (u64) pra o compositor sinalizar no `vkQueueSubmit` e esperar.
+    /// `VkFence` (u64) do slot — hoje o marcador de fim de quadro que a ponte
+    /// submete (ver `VkFrameBridge::begin_frame`); o compositor não a usa.
     fn fence(&self) -> u64;
     /// Libera o slot pro core reusar — chamado pelo compositor após submeter e
     /// esperar, ou pelo `emu-session` ao descartar um frame atrasado.

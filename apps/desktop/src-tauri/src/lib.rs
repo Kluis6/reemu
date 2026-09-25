@@ -90,6 +90,17 @@ pub fn run() {
                     if let Some(dev) = fp.vulkan_shared_device() {
                         state.session.attach_vulkan_device(dev);
                     }
+                    // Interop GL: o filho aloca o dma_buf só com os
+                    // modificadores que este device importa.
+                    #[cfg(target_os = "linux")]
+                    {
+                        let mods = fp.dmabuf_import_modifiers();
+                        log::info!(
+                            "interop dma_buf: {} modificador(es) aceitos pelo Vulkan",
+                            mods.len()
+                        );
+                        state.session.set_dmabuf_modifiers(mods);
+                    }
                     state.gpu.lock().unwrap().replace(fp);
                 }
                 None => log::warn!("sem GPU wgpu — frame do core vai cru pro canvas"),

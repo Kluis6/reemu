@@ -29,6 +29,11 @@ pub enum ToChild {
         /// filho restaurar ANTES do 1º frame, mesma garantia de ordem que
         /// existia quando os dois lados eram o mesmo processo.
         initial_save_ram: Option<Vec<u8>>,
+        /// Modificadores DRM que o Vulkan do pai importa (negociação do
+        /// `VK_EXT_image_drm_format_modifier`) — o GBM do interop GL aloca
+        /// só com eles. Vazio = pai sem Vulkan / não informou.
+        #[serde(default)]
+        dmabuf_modifiers: Vec<u64>,
     },
     SetPaused(bool),
     SaveState,

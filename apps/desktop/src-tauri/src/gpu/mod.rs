@@ -1522,6 +1522,81 @@ impl FrameProcessor {
     // O consumidor (emu-session repassando pro loader) entra na fase B3; por
     // enquanto só o teste usa.
     #[allow(dead_code)]
+    /// Modificadores DRM com que ESTE device importa um `dma_buf`
+    /// `R8G8B8A8_UNORM` pra amostrar — a lista que o produtor GL (GBM) tem
+    /// que usar ao alocar. Negociação do `VK_EXT_image_drm_format_modifier`
+    /// (apêndice da extensão, "Negotiation"): 1º
+    /// `vkGetPhysicalDeviceFormatProperties2` + `VkDrmFormatModifierPropertiesListEXT`
+    /// (modificadores com `SAMPLED_IMAGE`, 1 plano), 2º, por candidato,
+    /// `vkGetPhysicalDeviceImageFormatProperties2` com
+    /// `VkPhysicalDeviceImageDrmFormatModifierInfoEXT` +
+    /// `VkPhysicalDeviceExternalImageFormatInfo(DMA_BUF)` — só entra se der
+    /// certo E o `compatibleHandleTypes` incluir `DMA_BUF_EXT`. Vazio = sem
+    /// Vulkan / sem a extensão (o chamador cai no readback).
+    #[cfg(target_os = "linux")]
+    pub fn dmabuf_import_modifiers(&self) -> Vec<u64> {
+        use ash::vk;
+        let Some(hal) = (unsafe { self.adapter.as_hal::<wgpu::hal::api::Vulkan>() }) else {
+            return Vec::new();
+        };
+        if !hal
+            .physical_device_capabilities()
+            .supports_extension(ash::ext::image_drm_format_modifier::NAME)
+        {
+            return Vec::new();
+        }
+        let instance = hal.shared_instance().raw_instance();
+        let phys = hal.raw_physical_device();
+        let format = vk::Format::R8G8B8A8_UNORM;
+        // 1º passo: quantos, depois a lista.
+        let mut list = vk::DrmFormatModifierPropertiesListEXT::default();
+        let mut props2 = vk::FormatProperties2::default().push_next(&mut list);
+        unsafe { instance.get_physical_device_format_properties2(phys, format, &mut props2) };
+        let n = list.drm_format_modifier_count as usize;
+        let mut mods = vec![vk::DrmFormatModifierPropertiesEXT::default(); n];
+        let mut list = vk::DrmFormatModifierPropertiesListEXT::default()
+            .drm_format_modifier_properties(&mut mods);
+        let mut props2 = vk::FormatProperties2::default().push_next(&mut list);
+        unsafe { instance.get_physical_device_format_properties2(phys, format, &mut props2) };
+        let candidates: Vec<u64> = mods
+            .iter()
+            .filter(|m| {
+                m.drm_format_modifier_plane_count == 1
+                    && m.drm_format_modifier_tiling_features
+                        .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE)
+            })
+            .map(|m| m.drm_format_modifier)
+            .collect();
+        // 2º passo: confirma cada um pro uso real (2D, SAMPLED, dma_buf).
+        candidates
+            .into_iter()
+            .filter(|&modifier| {
+                let mut mod_info = vk::PhysicalDeviceImageDrmFormatModifierInfoEXT::default()
+                    .drm_format_modifier(modifier)
+                    .sharing_mode(vk::SharingMode::EXCLUSIVE);
+                let mut ext_info = vk::PhysicalDeviceExternalImageFormatInfo::default()
+                    .handle_type(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT);
+                let info = vk::PhysicalDeviceImageFormatInfo2::default()
+                    .format(format)
+                    .ty(vk::ImageType::TYPE_2D)
+                    .tiling(vk::ImageTiling::DRM_FORMAT_MODIFIER_EXT)
+                    .usage(vk::ImageUsageFlags::SAMPLED)
+                    .push_next(&mut mod_info)
+                    .push_next(&mut ext_info);
+                let mut ext_props = vk::ExternalImageFormatProperties::default();
+                let mut out = vk::ImageFormatProperties2::default().push_next(&mut ext_props);
+                let ok = unsafe {
+                    instance.get_physical_device_image_format_properties2(phys, &info, &mut out)
+                }
+                .is_ok();
+                ok && ext_props
+                    .external_memory_properties
+                    .compatible_handle_types
+                    .contains(vk::ExternalMemoryHandleTypeFlags::DMA_BUF_EXT)
+            })
+            .collect()
+    }
+
     pub fn vulkan_shared_device(&self) -> Option<VulkanSharedDevice> {
         // SAFETY: só lemos handles; nada é destruído aqui. O guard do `as_hal`
         // mantém o device vivo durante a leitura, e os handles seguem válidos

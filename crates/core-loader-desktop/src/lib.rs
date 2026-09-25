@@ -40,6 +40,15 @@ pub use crate::coreopts::{
 };
 pub use crate::discover::{discover_cores, DiscoveredCore};
 pub use crate::execstack::{core_file, exec_stack_env};
+/// Lista de modificadores DRM que o Vulkan do app importa (negociação do
+/// `VK_EXT_image_drm_format_modifier`) — o alocador GBM do interop GL usa.
+/// No-op fora do Unix.
+pub fn set_dmabuf_import_modifiers(mods: Vec<u64>) {
+    #[cfg(unix)]
+    crate::dmabuf::set_import_modifiers(mods);
+    #[cfg(not(unix))]
+    let _ = mods;
+}
 #[cfg(all(unix, feature = "test-fixtures"))]
 pub use crate::gl_context::{render_rect_rgba_to_dmabuf, render_solid_rgba_to_dmabuf};
 pub use crate::input::{analog, libretro_joypad_id, retropad, AnalogState, RetroPadState};

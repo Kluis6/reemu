@@ -140,6 +140,9 @@ struct Shared {
     /// `Some` + `REEMU_HW=vulkan` = um core que negocia Vulkan roda
     /// **in-process** (etapa 12 B3b), não no `reemu-core-host`.
     vulkan_shared_device: Mutex<Option<domain::core_loader::VulkanSharedDevice>>,
+    /// Modificadores DRM que o Vulkan do app importa — vão no `Load` pro
+    /// GBM do interop GL do filho (ver `set_dmabuf_modifiers`).
+    dmabuf_modifiers: Mutex<Vec<u64>>,
     /// Fábrica pra cores Vulkan "donos do device" (Beetle PSX HW) — publicada
     /// pelo shell junto do `vulkan_shared_device`. Ver `docs/ai-context/12`
     /// §Beetle (D2/D3).
@@ -227,6 +230,7 @@ impl EmuSession {
             nav: Mutex::new(Vec::new()),
             child_pid: Mutex::new(None),
             vulkan_shared_device: Mutex::new(None),
+            dmabuf_modifiers: Mutex::new(Vec::new()),
             vulkan_negotiator: Mutex::new(None),
             vk_local: Mutex::new(None),
             vk_local_active: AtomicBool::new(false),
@@ -285,6 +289,17 @@ impl EmuSession {
     /// Publica a fábrica pra cores Vulkan "donos do device" (Beetle PSX HW) —
     /// chamada pelo shell junto do `attach_vulkan_device`. Ver
     /// `docs/ai-context/12-vulkan-hw-render-fase2.md` §Beetle.
+    /// Modificadores DRM que o Vulkan do app importa pra amostrar
+    /// (`FrameProcessor::dmabuf_import_modifiers`). O filho aloca o `dma_buf`
+    /// do interop GL só com eles.
+    pub fn set_dmabuf_modifiers(&self, mods: Vec<u64>) {
+        *self
+            .shared
+            .dmabuf_modifiers
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = mods;
+    }
+
     pub fn attach_vulkan_negotiator(
         &self,
         negotiator: domain::core_loader::VulkanDeviceNegotiator,
@@ -1499,6 +1514,11 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 save_dir: save_dir.clone(),
                                 initial_option_values,
                                 initial_save_ram,
+                                dmabuf_modifiers: shared
+                                    .dmabuf_modifiers
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner())
+                                    .clone(),
                             },
                             &[],
                         );

@@ -95,8 +95,13 @@ impl FrameProcessor {
     }
 
     /// Submete na `VkQueue` do wgpu os command buffers que o core gravou pra
-    /// este frame (`set_command_buffers`), sinaliza `fence`, e espera (CPU) —
-    /// sync conservador da fase B. `handle.command_buffers()` vazio = frame
+    /// este frame (`set_command_buffers`) — SEM fence e SEM esperar (fase C). A ordem na GPU vem da barreira que o core grava no próprio
+    /// cmd buffer (`libretro_vulkan.h`: "vkCmdPipelineBarrier must be used to
+    /// synchronize the core and frontend"); fora de render pass, o 2º escopo
+    /// dela cobre "all commands that occur later in submission order" na
+    /// mesma fila (spec Vulkan, `vkCmdPipelineBarrier`) — inclusive o submit
+    /// do wgpu que vem depois. A conclusão do quadro é marcada pela ponte
+    /// (`VkFrameBridge::begin_frame`) e esperada no `wait_sync_index`. `handle.command_buffers()` vazio = frame
     /// dup (só re-seleciona a textura). `false` = erro de submissão.
     ///
     /// `handle.release()` (chamado no `Drop` do `Frame`) destrava o
@@ -109,11 +114,6 @@ impl FrameProcessor {
         let cmds = handle.command_buffers();
         if cmds.is_empty() {
             return true;
-        }
-        let fence = ash::vk::Fence::from_raw(handle.fence());
-        if fence.is_null() {
-            log::warn!("vk frame sem fence — pulando");
-            return false;
         }
         let cmd_bufs: Vec<ash::vk::CommandBuffer> = cmds
             .iter()
@@ -132,20 +132,11 @@ impl FrameProcessor {
             drop(hal_queue);
 
             let submit = ash::vk::SubmitInfo::default().command_buffers(&cmd_bufs);
-            if let Err(e) = raw_device.queue_submit(raw_queue, &[submit], fence) {
+            if let Err(e) = raw_device.queue_submit(raw_queue, &[submit], ash::vk::Fence::null()) {
                 log::warn!("vkQueueSubmit (core cmds): {e}");
                 return false;
             }
-            match raw_device.wait_for_fences(&[fence], true, u64::MAX) {
-                Ok(()) => {
-                    let _ = raw_device.reset_fences(&[fence]);
-                    true
-                }
-                Err(e) => {
-                    log::warn!("vkWaitForFences (core cmds): {e}");
-                    false
-                }
-            }
+            true
         };
         ok
     }

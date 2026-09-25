@@ -354,14 +354,16 @@ fn dmabuf_from_gl_producer_imports_correctly_into_wgpu() {
     if std::env::var_os("REEMU_NO_GPU").is_some() {
         return;
     }
-    let (plane, sync_fd) =
-        core_loader_desktop::render_solid_rgba_to_dmabuf([220, 40, 10, 255], 64, 64)
-            .expect("renderizar dma_buf de teste via GL (core-loader-desktop)");
-    eprintln!("fence sync_file do produtor: {sync_fd:?}");
     let Some(mut fp) = FrameProcessor::new() else {
         eprintln!("sem adapter wgpu — pulando");
         return;
     };
+    // negociação: o produtor aloca só com o que este device importa
+    core_loader_desktop::set_dmabuf_import_modifiers(fp.dmabuf_import_modifiers());
+    let (plane, sync_fd) =
+        core_loader_desktop::render_solid_rgba_to_dmabuf([220, 40, 10, 255], 64, 64)
+            .expect("renderizar dma_buf de teste via GL (core-loader-desktop)");
+    eprintln!("fence sync_file do produtor: {sync_fd:?}");
     assert!(
         fp.interop_ok,
         "device wgpu sem VULKAN_EXTERNAL_MEMORY_DMA_BUF — não dá pra validar interop aqui"
@@ -1070,13 +1072,14 @@ fn interop_crops_frame_smaller_than_the_buffer() {
         return;
     }
     for flip in [true, false] {
-        let (plane, sync_fd) =
-            core_loader_desktop::render_rect_rgba_to_dmabuf([30, 200, 60, 255], 64, 64, 40, 24)
-                .expect("renderizar dma_buf de teste via GL");
         let Some(mut fp) = FrameProcessor::new() else {
             eprintln!("sem adapter wgpu — pulando");
             return;
         };
+        core_loader_desktop::set_dmabuf_import_modifiers(fp.dmabuf_import_modifiers());
+        let (plane, sync_fd) =
+            core_loader_desktop::render_rect_rgba_to_dmabuf([30, 200, 60, 255], 64, 64, 40, 24)
+                .expect("renderizar dma_buf de teste via GL");
         let handle = TestDmabufHandle {
             slot: 0,
             plane: std::sync::Mutex::new(Some(plane)),
@@ -1156,6 +1159,7 @@ fn gl_core_real_rom() {
         }));
     }
     let session = EmuSession::spawn(cfg);
+    session.set_dmabuf_modifiers(fp.dmabuf_import_modifiers());
     // `REEMU_TEST_OPTS="chave=valor,chave=valor"`: opções de core no load.
     let opts: HashMap<String, String> = std::env::var("REEMU_TEST_OPTS")
         .unwrap_or_default()
@@ -1250,6 +1254,7 @@ fn diag_bezel_composition() {
         fp.set_integer_scaling(integer);
         fp.set_decoration(Some((buf.clone(), bw, bh, vp())));
         let frame = if hw {
+            core_loader_desktop::set_dmabuf_import_modifiers(fp.dmabuf_import_modifiers());
             let (plane, sync_fd) = core_loader_desktop::render_rect_rgba_to_dmabuf(
                 [30, 200, 60, 255],
                 853,
@@ -1419,5 +1424,21 @@ fn vk_core_real_rom() {
         assert!(!in_process, "core ficou in-process — devia ir pro filho");
     } else if std::env::var_os("REEMU_TEST_NO_FORCE").is_none() {
         assert!(in_process, "core foi pro processo filho");
+    }
+}
+
+/// Lista os modificadores DRM com que o device importa dma_buf RGBA8 pra
+/// amostrar (negociação do `VK_EXT_image_drm_format_modifier`).
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "hardware real"]
+fn print_dmabuf_import_modifiers() {
+    let Some(fp) = FrameProcessor::new() else {
+        return;
+    };
+    let mods = fp.dmabuf_import_modifiers();
+    eprintln!("modificadores aceitos ({}):", mods.len());
+    for m in &mods {
+        eprintln!("  {m:#018x}");
     }
 }
