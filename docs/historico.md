@@ -1442,3 +1442,11 @@ Infra:
 - `lib/errors.ts` (`describeError`) traduz o erro cru em título ("o que aconteceu"), dica ("o que fazer") e, quando existe, um botão para a tela que resolve (Cores, BIOS, Metadados, Biblioteca). O texto original fica em "Detalhes técnicos" / "Copiar detalhes" (heurística 9 de Nielsen). Todos os toasts `Falha: ${e}` passaram para `errorToast`, a tela de erro do jogo e o diálogo de atualização usam o mesmo classificador.
 - `core-host não respondeu (timeout)` era lido como falta de internet porque a regra de rede casava qualquer "timeout". Agora ele tem regra própria antes da de rede ("O emulador travou ao abrir o jogo"), e a regra de rede só casa timeouts de rede.
 - Todo toast tem um X para fechar. Toast só informativo (sem botão nem progresso) some em no máximo 5 s.
+
+## 2026-09-25 — Fundo dos temas com deriva lenta (só Windows)
+
+- Os 4 brilhos do `AnimatedBackground` deslizam alguns vmax e mudam de escala em até 8%, em ciclos de 38 a 54 s que vão e voltam (`alternate`). As cores não mudam.
+- A animação usa só `transform`, que o WebView2 anima direto no compositor da GPU, sem layout nem repintura. Fonte: web.dev, "Stick to compositor-only properties and manage layer count": só `transform` e `opacity` têm essa garantia, e cada camada extra custa memória de GPU. Por isso não há `will-change` nem blur.
+- **Só no Windows.** No Linux o fundo continua estático, porque o WebKitGTK roda sem compositing com NVIDIA proprietário (`src-tauri/src/main.rs`) e repintaria a tela toda a cada quadro.
+- A animação para com "reduzir movimento" do sistema (`prefers-reduced-motion`, MDN). Com a janela sem foco ou minimizada ela fica pausada com `animation-play-state: paused`, que retoma de onde parou (MDN).
+- Na tela de jogo o fundo não existe: `/play` fica fora do `AppShell`, então o custo durante o jogo é zero.
