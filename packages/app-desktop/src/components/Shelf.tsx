@@ -6,6 +6,7 @@ import {
 } from "react";
 import { useShelfCapacity } from "../hooks/useShelfCapacity";
 import { shelfCapacity, shelfFillWidth } from "../lib/shelf";
+import { mergeClasses } from "@fluentui/react-components";
 import { useShelfStyles } from "../styles/xbox";
 
 /**
@@ -60,7 +61,7 @@ export function Shelf({
 
   return (
     <div className={s.wrap}>
-      <div ref={ref} className={s.shelf} style={style}>
+      <div ref={ref} className={mergeClasses(s.shelf, fill && s.shelfFit)} style={style}>
         {shown}
         {tail}
       </div>

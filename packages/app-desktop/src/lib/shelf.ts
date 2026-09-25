@@ -60,9 +60,10 @@ export function shelfFillWidth(
   const nominal = cardWidthPx(viewport);
   if (cap <= 0) return nominal;
   const filled = (shelfWidth - (cap - 1) * SHELF_GAP) / cap;
-  // `ceil`, não `round`: o resto do arredondamento de cada card some no
-  // scroller (`.shelf` já rola no X se preciso), então prefere sobrar
-  // 1 px pra dentro (ou nada) a faltar alguns px pra fora — é o lado que
-  // mantém a última borda alinhada com o fim da topbar/relógio.
-  return Math.ceil(Math.max(nominal, filled));
+  // Largura fracionária, truncada em centésimos: a fila NUNCA passa da
+  // prateleira. O `Math.ceil` de antes estourava até 1 px por card — a
+  // prateleira virava rolável e, a cada foco pelo controle, o
+  // `scrollIntoView` deslocava a fila inteira pra um lado e pro outro
+  // (visto no Windows, 2026-09-25). Sobra no máximo ~0,01 px por card.
+  return Math.floor(Math.max(nominal, filled) * 100) / 100;
 }

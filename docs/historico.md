@@ -590,6 +590,20 @@ Infra:
     compondo na GPU. Teste de GPU novo + captura headless conferindo a
     posição (261,20 1401×1041 numa moldura 1920×1080).
   * Dois controles iguais (PS5) reconhecidos sem conflito — validado.
+  * Prateleira "dançando" ao focar: `shelfFillWidth` arredondava a largura
+    do card pra cima (`ceil`) e a fila passava da prateleira alguns px —
+    virava rolável e o `scrollIntoView({ inline: 'center' })` do foco a
+    deslocava. Agora largura fracionária truncada (nunca passa) e
+    prateleira `fill` com `overflow-x: clip`. Medido em escala 125%: o 1º
+    card fica parado em todos os 21 focos.
+  * Texto serrilhado: `RouteTransition` e `riseIn`/`fadeIn` usavam
+    `fill-mode: both`, deixando a tela presa numa camada composta (WebView2
+    troca ClearType por antialias em cinza). Agora `backwards`.
+  * Ícones borrados no rail: tamanho em `clamp(...vw)` fracionário + zoom
+    por `scale`. Tamanho arredondado em múltiplos de 4 px (`round()`,
+    pixel inteiro em 125/150/175%) e zoom pelo tamanho do ícone.
+  * Separador do rail agora entre o sino e o desligar; legenda do destaque
+    da tela inicial empilhada (saía "ContinuarJogo 2Super Nintendo").
 
 - **2026-09-24 — página de downloads no GitHub Pages**
   (`https://kluis6.github.io/reemu/`): `site/` estático (HTML/CSS/JS puro),

@@ -65,6 +65,12 @@ const useStyles = makeStyles({
     bottom: 'clamp(20px, 3vw, 115px)',
     maxWidth: '62%',
     zIndex: 1,
+    // kicker / título / sistema são <span> (dentro de <button>) — em coluna,
+    // senão saíam colados na mesma linha ("ContinuarJogo 2Super Nintendo").
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    textAlign: 'left',
   },
   // fluent2.microsoft.design/typography: "use sentence case, nunca all
   // caps" — tracking largo (0.08em) era calibrado pra maiúsculas, reduzido

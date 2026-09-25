@@ -259,11 +259,11 @@ export function AppShell() {
           </NavLink>
         ))}
         <div className={s.railSpacer} />
-        <div className={s.railSep} />
 
         <NotificationBell
           className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
         />
+        <div className={s.railSep} />
         <Tooltip content="Encerrar" relationship="label">
           <Button
             className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}

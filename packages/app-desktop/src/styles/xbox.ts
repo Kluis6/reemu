@@ -171,7 +171,11 @@ export const useShellStyles = makeStyles({
     flex: "none",
     color: tokens.colorNeutralForeground3,
     textDecorationLine: "none",
-    fontSize: "clamp(19px, 1.4vw, 54px)",
+    // Ícone em múltiplos de 4 px: com escala de tela de 125/150/175% (comum
+    // no Windows) cai em pixel inteiro do monitor — o `clamp` cru dava
+    // tamanhos como 26,88 px e o SVG saía borrado. `round()` onde houver;
+    // o `clamp` fica de reserva.
+    fontSize: ["clamp(19px, 1.4vw, 54px)", "round(nearest, clamp(20px, 1.4vw, 52px), 4px)"],
     border: "none",
     backgroundColor: "transparent",
     cursor: "pointer",
@@ -188,13 +192,17 @@ export const useShellStyles = makeStyles({
     },
     // Zoom só no glifo (não na pílula inteira) — cresce suave no hover/foco
     // e volta sozinho ao sair, via transition no próprio ícone.
+    // Cresce pelo TAMANHO (redesenha nítido), não por `scale` (que amplia a
+    // imagem já rasterizada — borrava no Windows). Passo de 4 px, mesmo
+    // motivo do `fontSize` acima.
     "& svg": {
-      transitionProperty: "transform",
+      fontSize: "1em",
+      transitionProperty: "font-size, transform",
       transitionDuration: "220ms",
       transitionTimingFunction: tokens.curveEasyEase,
     },
     "&:hover svg, &:focus svg, &:focus-visible svg": {
-      transform: "scale(1.18)",
+      fontSize: ["1.18em", "round(nearest, 1.18em, 4px)"],
     },
     // Feedback de clique: encolhe (zoom out) no instante do toque/clique —
     // Griffel prioriza o bucket `:active` acima de `:hover`/`:focus`, então
@@ -395,7 +403,8 @@ export const useMotionStyles = makeStyles({
     },
     animationDuration: "260ms",
     animationTimingFunction: tokens.curveDecelerateMid,
-    animationFillMode: "both",
+    // `backwards`: ver RouteTransition (texto nítido depois da entrada)
+    animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": {
       animationName: "none",
       opacity: 1,
@@ -406,7 +415,7 @@ export const useMotionStyles = makeStyles({
     animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
     animationDuration: "200ms",
     animationTimingFunction: tokens.curveEasyEase,
-    animationFillMode: "both",
+    animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": {
       animationName: "none",
       opacity: 1,
@@ -522,6 +531,16 @@ export const useShelfStyles = makeStyles({
     // só tem essa margem pra respirar, os do meio ainda têm o SHELF_GAP).
     marginTop: "-14px",
     marginBottom: "-14px",
+  },
+  // Prateleira que só mostra o que cabe (`fill`): não rola. `clip` (não
+  // `hidden`) não cria contêiner de rolagem — o `scrollIntoView` do foco por
+  // controle não tem o que deslocar, e o Y continua visível pro anel de foco
+  // e o zoom da capa. Sem isto a fila "dançava" a cada foco (Windows,
+  // 2026-09-25). `!important`: ganha do `overflowX: auto` de `.shelf`.
+  shelfFit: {
+    overflowX: "clip !important" as "clip",
+    overflowY: "visible !important" as "visible",
+    scrollSnapType: "none",
   },
   shelf: {
     display: "flex",

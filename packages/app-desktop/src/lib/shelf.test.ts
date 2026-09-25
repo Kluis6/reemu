@@ -26,13 +26,13 @@ describe('shelfCapacity', () => {
 })
 
 describe('shelfFillWidth', () => {
-  it('estica os cards até a borda sem estourar mais de 1px por card', () => {
-    for (const [shelf, vw] of [[1300, 1366], [1800, 1920], [3700, 3840]]) {
+  it('enche a prateleira sem nunca passar dela (senão ela rola ao focar)', () => {
+    for (const [shelf, vw] of [[1300, 1366], [1800, 1920], [3700, 3840], [1535.2, 1536]]) {
       const cap = shelfCapacity(shelf, vw)
       const w = shelfFillWidth(shelf, vw, cap)
       const total = cap * w + (cap - 1) * SHELF_GAP
-      expect(total).toBeGreaterThanOrEqual(shelf)
-      expect(total - shelf).toBeLessThan(cap)
+      expect(total).toBeLessThanOrEqual(shelf + 1e-9)
+      expect(shelf - total).toBeLessThan(0.01 * cap + 1e-9)
     }
   })
 

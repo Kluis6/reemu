@@ -15,7 +15,12 @@ const useStyles = makeStyles({
   layer: {
     animationDuration: "400ms",
     animationTimingFunction: tokens.curveDecelerateMax,
-    animationFillMode: "both",
+    // `backwards`, não `both`: com `both` o estado final ficava aplicado pra
+    // sempre — a tela inteira presa numa camada composta, e o WebView2 troca
+    // o ClearType do texto por antialias em cinza (letras serrilhadas no
+    // Windows, 2026-09-25). O quadro final é o estado natural, então ao
+    // terminar nada muda na tela.
+    animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
   },
   fwd: { animationName: enterFwd },
