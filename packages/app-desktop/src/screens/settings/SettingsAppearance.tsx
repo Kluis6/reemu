@@ -59,7 +59,9 @@ const useStyles = makeStyles({
   wallCard: { gap: tokens.spacingVerticalM },
   grid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+    // sempre duas colunas (uma só em janela bem estreita)
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    "@media (max-width: 560px)": { gridTemplateColumns: "minmax(0, 1fr)" },
     gap: tokens.spacingHorizontalM,
   },
   // Cor de fundo/borda/texto vêm inline do PRÓPRIO tema sendo mostrado (`t`),
