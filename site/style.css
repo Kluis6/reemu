@@ -873,6 +873,105 @@ h2 {
   margin: 20px 0 0;
 }
 
+/* ─────────────── Apoie ─────────────── */
+
+.donate {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 14px;
+}
+
+.donate[hidden] {
+  display: none;
+}
+
+.donate-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 22px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, rgba(61, 220, 47, 0.08), rgba(30, 139, 255, 0.06)),
+    var(--surface);
+  color: var(--text);
+  text-decoration: none;
+  transition: transform 0.3s var(--ease), border-color 0.3s, box-shadow 0.3s;
+}
+
+a.donate-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--green);
+  box-shadow: 0 0 24px rgba(61, 220, 47, 0.18);
+}
+
+.donate-card strong {
+  font-size: 1.1rem;
+}
+
+.donate-card span {
+  color: var(--muted);
+  font-size: 0.93rem;
+}
+
+.pix-key {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.pix-copy {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--green);
+  background: rgba(61, 220, 47, 0.12);
+  color: var(--green);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pix-copy:hover {
+  background: rgba(61, 220, 47, 0.2);
+}
+
+.donate-soon {
+  margin: 0 0 4px;
+  color: var(--muted);
+}
+
+.help {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.help-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.help-item span {
+  color: var(--muted);
+  font-size: 0.93rem;
+  flex-grow: 1;
+}
+
+.help-item a {
+  margin-top: 6px;
+  font-weight: 600;
+}
+
 /* ─────────────── Versões ─────────────── */
 
 .releases {

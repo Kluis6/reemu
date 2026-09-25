@@ -98,3 +98,64 @@ if (lightbox && typeof lightbox.showModal === "function") {
     if (e.target === lightbox) lightbox.close();
   });
 }
+
+// Doação: mostra só as formas com link configurado no HTML (`data-link`,
+// `data-pix`). Sem nenhuma, esconde a grade e mostra o aviso.
+{
+  const grid = document.getElementById("donate-methods");
+  let shown = 0;
+  grid?.querySelectorAll("[data-link]").forEach((a) => {
+    const url = a.dataset.link.trim();
+    if (/^https:\/\//.test(url)) {
+      a.href = url;
+      a.target = "_blank";
+      shown++;
+    } else {
+      a.remove();
+    }
+  });
+  grid?.querySelectorAll("[data-pix]").forEach((card) => {
+    const key = card.dataset.pix.trim();
+    if (!key) {
+      card.remove();
+      return;
+    }
+    shown++;
+    card.querySelector(".pix-key").textContent = key;
+    const btn = card.querySelector(".pix-copy");
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(key);
+        btn.textContent = "Chave copiada!";
+      } catch {
+        btn.textContent = "Copie a chave acima";
+      }
+      setTimeout(() => (btn.textContent = "Copiar chave Pix"), 2500);
+    });
+  });
+  if (grid && shown === 0) {
+    grid.hidden = true;
+    document.getElementById("donate-soon").hidden = false;
+  }
+
+  // "Divulgue": compartilhamento nativo quando existe, senão copia o link.
+  document.querySelectorAll(".share-link").forEach((a) => {
+    a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const data = {
+        title: "ReEmu",
+        text: "ReEmu: seus jogos clássicos com cara de console. Grátis para Linux e Windows.",
+        url: "https://kluis6.github.io/reemu/",
+      };
+      try {
+        if (navigator.share) await navigator.share(data);
+        else {
+          await navigator.clipboard.writeText(data.url);
+          a.textContent = "Link copiado!";
+        }
+      } catch {
+        // compartilhamento cancelado — nada a fazer
+      }
+    });
+  });
+}
