@@ -1008,9 +1008,9 @@ export const useDetailStyles = makeStyles({
   // Botão "Jogar": peso de fonte mais leve que o padrão "semibold" do
   // Fluent pra `appearance="primary"` (pedido do usuário).
   playBtn: { fontWeight: tokens.fontWeightMedium },
-  // Remover: separado das outras ações e com cor de perigo no texto/ícone.
+  // Remover: cor de perigo no ícone. Mesmo espaçamento das outras ações
+  // (a margem extra que o separava deixava os ícones desiguais).
   dangerBtn: {
-    marginLeft: "12px",
     color: `${tokens.colorPaletteRedForeground1} !important`,
   },
   // 2º toque pendente: botão vermelho cheio — a confirmação fica visível
