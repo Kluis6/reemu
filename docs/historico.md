@@ -568,6 +568,19 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-25 — primeiro teste longo no Windows (RTX 3060)**: canvas WebGL
+  confirmado (`canvas de vídeo: webgl`); download de ~40 cores, BIOS,
+  PPSSPP, shaders e bezels ok; Mega Drive e GBA rodando com moldura.
+  Problemas e correções:
+  * `flycast` foi pela rota Vulkan in-process e derrubou o app
+    (`STATUS_ACCESS_VIOLATION`). A escolha automática dessa rota agora só
+    vale no Linux (validado); fora dele, só com `REEMU_HW=vulkan`.
+  * Cores com render OpenGL por hardware não sobem no Windows: o contexto
+    vem do EGL, que lá não existe. Mensagem de erro agora diz isso e sugere
+    um core de software; WGL virou tarefa.
+  * Uma ISO de PS3 ia para o PS1 (a checagem por "PLAYSTATION" pegava). O
+    farejador reconhece as marcas do PS3 antes e deixa sem sistema.
+
 - **2026-09-24 — página de downloads no GitHub Pages**
   (`https://kluis6.github.io/reemu/`): `site/` estático (HTML/CSS/JS puro),
   publicado pelo `pages.yml` quando `site/` muda. Lê as Releases da API do

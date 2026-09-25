@@ -60,6 +60,21 @@ fn sniff_bytes(b: &[u8]) -> Option<&'static str> {
         return Some("pcenginecd");
     }
     // Sony — a área de licença/`SYSTEM.CNF` costuma cair nesses 256 KiB.
+    // PS3 primeiro: o ReEmu não tem core de PS3, mas o disco carrega marcas
+    // "PLAYSTATION" que caíam no PS1 abaixo — e o jogo abria no core errado.
+    // Sem sistema, fica no balde genérico em vez de mentir.
+    if [
+        &b"PS3_GAME"[..],
+        b"PS3_DISC.SFB",
+        b"PLAYSTATION3",
+        b"PlayStation3",
+        b"PS3VOLUME",
+    ]
+    .iter()
+    .any(|sig| has(b, sig))
+    {
+        return None;
+    }
     if has(b, b"PSP_GAME") || has(b, b"UMD_DATA.BIN") {
         return Some("psp");
     }
@@ -98,6 +113,15 @@ mod tests {
         assert_eq!(sniff_bytes(&b), Some("saturn"));
         b[0..16].copy_from_slice(b"SEGA SEGAKATANA ");
         assert_eq!(sniff_bytes(&b), Some("dreamcast"));
+    }
+
+    #[test]
+    fn ps3_disc_is_not_ps1() {
+        let mut b = vec![0u8; 4096];
+        b[100..111].copy_from_slice(b"PLAYSTATION");
+        assert_eq!(sniff_bytes(&b), Some("psx"));
+        b[2000..2008].copy_from_slice(b"PS3_GAME");
+        assert_eq!(sniff_bytes(&b), None);
     }
 
     #[test]

@@ -563,6 +563,11 @@ const VK_CAPABLE_CORES: &[&str] = &[
 /// tipo o `mednafen_psx_hw` configurado pra Vulkan iria pro processo filho e a
 /// tela ficaria preta. Se o core acabar não sendo Vulkan, `LocalCore::load`
 /// devolve `HwRenderUnsupported` e o loop cai pro filho (+ cache).
+///
+/// A escolha automática (b) só vale no Linux, onde o caminho foi validado. No
+/// Windows o `flycast` carregado in-process derrubou o app inteiro
+/// (`STATUS_ACCESS_VIOLATION`, 2026-09-25) — sem o isolamento do processo
+/// filho, um core que quebra leva a interface junto. Lá só com `REEMU_HW=vulkan`.
 fn route_local_device(shared: &Shared, core_id: &str) -> Option<LocalVkRoute> {
     let forced = matches!(
         std::env::var("REEMU_HW")
@@ -571,7 +576,7 @@ fn route_local_device(shared: &Shared, core_id: &str) -> Option<LocalVkRoute> {
         Ok("vulkan") | Ok("vk")
     );
     let base = core_id.rsplit(['/', '\\']).next().unwrap_or(core_id);
-    let vk_capable = VK_CAPABLE_CORES.iter().any(|c| base.contains(c));
+    let vk_capable = cfg!(target_os = "linux") && VK_CAPABLE_CORES.iter().any(|c| base.contains(c));
     if !forced && !vk_capable {
         return None;
     }

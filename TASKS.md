@@ -50,8 +50,6 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       os_keyring -- --ignored` (Credential Manager).
 - [ ] `todo` — `SET_ROTATION` com um jogo vertical real (FBNeo). Direção
       assumida = anti-horário; flipar se sair espelhado.
-- [ ] `todo` — Canvas WebGL no WebView2: conferir no log `canvas de vídeo:
-      webgl` e a imagem na orientação certa.
 - [ ] `todo` — Dois controles idênticos ao mesmo tempo (fix por
       `GamepadId` sem teste automatizado possível).
 
@@ -68,6 +66,15 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       aponta pra ela; sem o arquivo a imagem some e o resto aparece).
 
 ### Vídeo / GPU
+
+- [ ] `todo` — **Render OpenGL por hardware no Windows**: o contexto GL do
+      core sai do EGL (`khronos_egl`), que o Windows não tem — todo core GL
+      HW (Beetle PSX HW, flycast, mupen64plus/parallel-n64 em GL) falha lá
+      com "contexto GL". Precisa de um contexto WGL (ou ANGLE) no
+      `gl_context.rs`, com readback. Visto no teste de 2026-09-25.
+- [ ] `todo` — Vulkan in-process no Windows: desligado por padrão depois
+      que o `flycast` derrubou o app (`STATUS_ACCESS_VIOLATION`); só com
+      `REEMU_HW=vulkan`. Investigar antes de religar.
 
 - [ ] `todo` — Etapa 12: flycast e mupen como 2º/3º alvo Vulkan; Fase C
       (tirar a espera de CPU do blit/submit, validar sob carga). Ver doc 12.

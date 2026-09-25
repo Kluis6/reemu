@@ -391,8 +391,17 @@ fn setup_gl_context(
     };
     let max_w = av.geometry.max_width.max(av.geometry.base_width).max(1);
     let max_h = av.geometry.max_height.max(av.geometry.base_height).max(1);
-    let ctx = crate::gl_context::GlContext::create(&cfg, max_w, max_h)
-        .map_err(|e| CoreLoadError::HwRenderUnsupported(format!("{core_id}: contexto GL: {e}")))?;
+    let ctx = crate::gl_context::GlContext::create(&cfg, max_w, max_h).map_err(|e| {
+        // O contexto GL sai do EGL, que o Windows não tem (sem `libEGL.dll`):
+        // lá todo core com render OpenGL por hardware cai aqui.
+        let hint = if cfg!(windows) {
+            " — render OpenGL por hardware ainda não funciona no Windows; \
+             use um core de software para este sistema"
+        } else {
+            ""
+        };
+        CoreLoadError::HwRenderUnsupported(format!("{core_id}: contexto GL: {e}{hint}"))
+    })?;
     ctx.make_current()
         .map_err(|e| CoreLoadError::HwRenderUnsupported(format!("{core_id}: makeCurrent: {e}")))?;
     if let Some(st) = ffi_state::lock().as_mut() {
