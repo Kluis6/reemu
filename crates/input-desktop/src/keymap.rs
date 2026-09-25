@@ -39,6 +39,11 @@ pub fn web_code_to_retropad(code: &str) -> Option<(u8, RetroPadButton)> {
             "KeyS" => X,
             "KeyQ" => L1,
             "KeyW" => R1,
+            // Gatilhos: no Dreamcast (flycast) e no PS2 são os L/R do
+            // controle — sem isto não dava pra acelerar/frear em jogo de
+            // corrida pelo teclado.
+            "KeyE" => L2,
+            "KeyR" => R2,
             "Enter" => Start,
             "ShiftRight" | "ShiftLeft" => Select,
             _ => return None,
@@ -140,6 +145,8 @@ mod tests {
     #[test]
     fn web_codes() {
         assert_eq!(web_code_to_retropad("KeyZ"), Some((0, RetroPadButton::B)));
+        assert_eq!(web_code_to_retropad("KeyE"), Some((0, RetroPadButton::L2)));
+        assert_eq!(web_code_to_retropad("KeyR"), Some((0, RetroPadButton::R2)));
         assert_eq!(
             web_code_to_retropad("ArrowLeft"),
             Some((0, RetroPadButton::Left))

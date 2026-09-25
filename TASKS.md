@@ -109,6 +109,14 @@ no `emu-session`, ver `docs/historico.md`).
 - [ ] `todo` — Validar o TheGamesDB com uma chave real (o parser foi testado
       com JSON no formato que o ES-DE lê, não com resposta capturada).
 
+- [ ] `todo` — **Teclado configurável**: hoje o mapa do teclado é fixo
+      (`input-desktop::keymap::web_code_to_retropad`) e não aparece em
+      Configurações › Controles. Falta a tela de remapear teclas (a captura
+      de binding já existe para controles e atalhos) e mover o analógico
+      esquerdo pelo teclado (hoje só o controle físico alimenta os
+      analógicos — jogos de Dreamcast/N64/PS2 que exigem analógico não
+      andam só no teclado).
+
 ### Infra / qualidade
 
 - [x] `done` — **Teste de fumaça do catálogo, fase 1** (2026-09-25):
