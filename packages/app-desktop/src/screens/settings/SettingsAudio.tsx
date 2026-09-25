@@ -2,7 +2,7 @@ import { Body1, Button, Field, Input, Switch, makeStyles, tokens } from '@fluent
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { LoadingState } from '../../components/EmptyState'
-import { sysToast } from '../../lib/toast'
+import { errorToast, sysToast } from '../../lib/toast'
 import { getAudioConfig, updateAudioConfig, type AudioConfig } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
 
@@ -34,7 +34,7 @@ export function SettingsAudio() {
       qc.invalidateQueries({ queryKey: ['audio-config'] })
       push(sysToast('Áudio salvo e aplicado.', 'Success'))
     },
-    onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'salvar a configuração de áudio')),
   })
 
   if (isLoading) return <LoadingState />

@@ -21,6 +21,7 @@ import {
   type BezelProgress,
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
+import { errorPatch } from '../lib/toast'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
@@ -100,12 +101,7 @@ export function BezelLibrary() {
     },
     onError: (e) => {
       if (dlId.current)
-        updateToast(dlId.current, {
-          message: `Falha ao baixar bezels: ${e}`,
-          variant: 'Error',
-          durationMs: 6000,
-          progress: undefined,
-        })
+        updateToast(dlId.current, errorPatch(e, 'baixar as molduras'))
     },
     onSettled: () => {
       dlId.current = null

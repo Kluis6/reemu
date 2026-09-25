@@ -1,6 +1,6 @@
 import { Body1, Button, Caption1, makeStyles, tokens } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { sysToast } from '../../lib/toast'
+import { errorToast } from '../../lib/toast'
 import {
   clearSystemHotkey,
   describeRawInput,
@@ -45,7 +45,7 @@ export function SettingsHotkeys() {
   const clearHotkey = useMutation({
     mutationFn: (key: SystemActionKey) => clearSystemHotkey(key),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['system-hotkeys'] }),
-    onError: (e) => push(sysToast(`Falha ao limpar: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'limpar o atalho')),
   })
 
   return (

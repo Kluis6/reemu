@@ -24,6 +24,7 @@ import {
 import { EmptyState } from './EmptyState'
 import { useBindingCaptureStore } from '../stores/useBindingCaptureStore'
 import { useToastStore } from '../stores/useToastStore'
+import { errorToast } from '../lib/toast'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -93,14 +94,14 @@ export function ControllerMappings() {
       qc.invalidateQueries({ queryKey: ['controller-mappings'] })
       push(toast('Mapa de controle removido (volta ao padrão).', 'Success'))
     },
-    onError: (e) => push(toast(`Falha: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'apagar o mapeamento do controle')),
   })
 
   const assignPort = useMutation({
     mutationFn: ({ guid, port }: { guid: string; port: number | null }) =>
       port === null ? clearDevicePort(guid) : setDevicePort(guid, port),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['device-ports'] }),
-    onError: (e) => push(toast(`Falha ao definir a porta: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'definir a porta do controle')),
   })
 
   if (loading) return <Spinner label="Procurando controles…" />

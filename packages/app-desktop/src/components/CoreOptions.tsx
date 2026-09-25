@@ -13,7 +13,7 @@ import { ArrowResetRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { getCoreOptions, resetCoreOptions, setCoreOption } from '../lib/tauri'
-import { sysToast } from '../lib/toast'
+import { errorToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
 
 const useStyles = makeStyles({
@@ -54,12 +54,12 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
     mutationFn: (v: { key: string; value: string }) =>
       setCoreOption(coreId, v.key, v.value, scopeRomId),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e) => push(sysToast(`Falha ao aplicar opção: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'aplicar a opção do core')),
   })
   const reset = useMutation({
     mutationFn: () => resetCoreOptions(coreId, scopeRomId),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'restaurar as opções do core')),
   })
 
   if (!coreId) return null

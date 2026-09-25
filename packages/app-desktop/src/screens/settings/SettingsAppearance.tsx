@@ -14,7 +14,7 @@ import { CheckmarkFilled, ImageAddRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { clearWallpaper, pickImage, setWallpaperFile, wallpaperUrl } from '../../lib/tauri'
-import { sysToast } from '../../lib/toast'
+import { errorToast } from '../../lib/toast'
 import { UI_SCALES, getUiScale, setUiScale } from '../../lib/uiScale'
 import { useToastStore } from '../../stores/useToastStore'
 import { useThemeStore } from '../../stores/useThemeStore'
@@ -138,12 +138,12 @@ export function SettingsAppearance() {
       if (!ok) return
       qc.invalidateQueries({ queryKey: ['wallpaper'] })
     },
-    onError: (e) => push(sysToast(`Falha ao carregar imagem: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'carregar a imagem')),
   })
   const remove = useMutation({
     mutationFn: clearWallpaper,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['wallpaper'] }),
-    onError: (e) => push(sysToast(`Falha ao remover: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'remover o papel de parede')),
   })
 
   return (
@@ -164,7 +164,7 @@ export function SettingsAppearance() {
         onChange={(_, data: RadioGroupOnChangeData) => {
           const v = Number(data.value)
           setUiScaleState(v)
-          setUiScale(v).catch((e) => push(sysToast(`Falha ao mudar o tamanho: ${e}`, 'Error')))
+          setUiScale(v).catch((e) => push(errorToast(e, 'mudar o tamanho da interface')))
         }}
       >
         {UI_SCALES.map((o) => (

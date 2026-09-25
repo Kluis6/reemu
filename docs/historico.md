@@ -1436,3 +1436,9 @@ Infra:
     linux))]` Win/macOS) sem verificação. Ver `docs/ai-context/03`.
     Follow-up não-bloqueante: medir latência canvas vs nativo; passo 4 da
     etapa 02 (contexto GL, `FrameOrigin::HardwareTexture` tem o encaixe).
+
+## 2026-09-25 — Erros explicados e toasts com botão de fechar
+
+- `lib/errors.ts` (`describeError`) traduz o erro cru em título ("o que aconteceu"), dica ("o que fazer") e, quando existe, um botão para a tela que resolve (Cores, BIOS, Metadados, Biblioteca). O texto original fica em "Detalhes técnicos" / "Copiar detalhes" (heurística 9 de Nielsen). Todos os toasts `Falha: ${e}` passaram para `errorToast`, a tela de erro do jogo e o diálogo de atualização usam o mesmo classificador.
+- `core-host não respondeu (timeout)` era lido como falta de internet porque a regra de rede casava qualquer "timeout". Agora ele tem regra própria antes da de rede ("O emulador travou ao abrir o jogo"), e a regra de rede só casa timeouts de rede.
+- Todo toast tem um X para fechar. Toast só informativo (sem botão nem progresso) some em no máximo 5 s.

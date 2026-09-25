@@ -23,6 +23,12 @@ export interface ToastItem {
   progress?: number | null;
   /** Botão no toast (ex.: "Ver" na atualização). Clicar também fecha o toast. */
   action?: { label: string; onClick: () => void };
+  /** Botões extras depois do `action` (ex.: "Copiar detalhes" num erro). */
+  moreActions?: { label: string; onClick: () => void }[];
+  /** Título em negrito acima da mensagem (erros: o que aconteceu). */
+  title?: string;
+  /** Texto técnico em letra menor (erros: a mensagem original). */
+  detail?: string;
 }
 
 interface ToastState {

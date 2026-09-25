@@ -1,5 +1,6 @@
 import {
   Body1,
+  Caption1,
   Button,
   Spinner,
   Title3,
@@ -22,8 +23,9 @@ import { moveFocus } from "../lib/focusNav";
 import { formatPlayTime } from "../lib/playTime";
 import { createFrameRenderer, type FrameRenderer } from "../lib/frameRenderer";
 import { initials } from "../lib/initials";
+import { describeError } from "../lib/errors";
 import { platformLabel } from "../lib/platform";
-import { sysToast } from "../lib/toast";
+import { copyErrorDetails, errorToast, fixRoute, sysToast } from "../lib/toast";
 import {
   currentFocus,
   listRoms,
@@ -127,6 +129,37 @@ const useStyles = makeStyles({
     maxHeight: "100%",
     imageRendering: "pixelated",
     background: "#000",
+  },
+  errorBox: {
+    textAlign: "center",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    gap: "12px",
+    maxWidth: "520px",
+    padding: tokens.spacingHorizontalXXL,
+  },
+  errorGame: { color: tokens.colorNeutralForeground3 },
+  errorActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: "8px",
+    marginTop: "4px",
+  },
+  errorDetails: {
+    marginTop: "8px",
+    maxWidth: "100%",
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+    "& summary": { cursor: "pointer" },
+    "& code": {
+      display: "block",
+      marginTop: "6px",
+      textAlign: "left",
+      whiteSpace: "pre-wrap",
+      overflowWrap: "anywhere",
+    },
   },
   center: {
     position: "fixed",
@@ -538,7 +571,7 @@ export function PlayScreen() {
           const wantState = params.get("loadState");
           if (wantState) {
             await loadSaveState(wantState).catch((e) =>
-              push(sysToast(`Não carregou o save state: ${e}`, "Warning")),
+              push(errorToast(e, "carregar o save state")),
             );
           }
           // Garante que o jogo começa com foco (não no menu de pausa).
@@ -560,7 +593,7 @@ export function PlayScreen() {
       qc.invalidateQueries({ queryKey: ["save-states", romId] });
       push(sysToast("QuickSave gravado.", "Success"));
     },
-    onError: (e) => push(sysToast(`Falha no save: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "salvar o estado do jogo")),
   });
 
   const quickLoad = useMutation({
@@ -571,7 +604,7 @@ export function PlayScreen() {
       await loadSaveState(quick.id);
     },
     onSuccess: () => push(sysToast("QuickLoad aplicado.", "Success")),
-    onError: (e) => push(sysToast(`Falha no load: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "carregar o estado do jogo")),
   });
 
   // Lista de save states — só busca com o menu aberto.
@@ -587,7 +620,7 @@ export function PlayScreen() {
       push(sysToast("Estado carregado.", "Success"));
       resume();
     },
-    onError: (e) => push(sysToast(`Falha no load: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "carregar o estado do jogo")),
   });
 
   const resume = () => {
@@ -656,22 +689,38 @@ export function PlayScreen() {
   }
 
   if (typeof status === "object") {
+    // O que aconteceu e o que fazer (lib/errors.ts), com o botão pra
+    // solução quando existe e o texto técnico recolhido pra relatar.
+    const err = describeError(status.error, "abrir o jogo");
+    const fix = err.fix ? fixRoute(err.fix) : null;
     return (
       <div className={styles.center}>
-        <div
-          style={{
-            textAlign: "center",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            maxWidth: 420,
-          }}
-        >
-          <Title3>Falha ao carregar</Title3>
-          <Body1>{status.error}</Body1>
-          <Button appearance="primary" onClick={goBack}>
-            Voltar
-          </Button>
+        <div className={styles.errorBox} role="alert">
+          <Title3>{err.title}</Title3>
+          {launch?.title && (
+            <Caption1 className={styles.errorGame}>
+              {launch.title}
+              {launch.system ? ` · ${platformLabel(launch.system)}` : ""}
+            </Caption1>
+          )}
+          {err.hint && <Body1>{err.hint}</Body1>}
+          <div className={styles.errorActions}>
+            {fix && (
+              <Button appearance="primary" onClick={() => (window.location.hash = fix.hash)}>
+                {fix.label}
+              </Button>
+            )}
+            <Button appearance={fix ? "secondary" : "primary"} onClick={goBack}>
+              Voltar
+            </Button>
+            <Button appearance="subtle" onClick={() => copyErrorDetails(err.title, err.technical)}>
+              Copiar detalhes
+            </Button>
+          </div>
+          <details className={styles.errorDetails}>
+            <summary>Detalhes técnicos</summary>
+            <code>{err.technical}</code>
+          </details>
         </div>
       </div>
     );

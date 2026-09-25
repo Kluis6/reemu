@@ -14,7 +14,7 @@ import { CheckmarkRegular, DismissRegular, SearchRegular } from '@fluentui/react
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { LoadingState } from '../../components/EmptyState'
-import { sysToast } from '../../lib/toast'
+import { errorToast, sysToast } from '../../lib/toast'
 import {
   cancelMetadataScan,
   getMetadataConfig,
@@ -89,12 +89,12 @@ export function SettingsMetadata() {
       qc.invalidateQueries({ queryKey: ['metadata-config'] })
       push(sysToast('Configuração salva.', 'Success'))
     },
-    onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'salvar a configuração de metadados')),
   })
   const scan = useMutation({
     mutationFn: () => startMetadataScan(),
     onSuccess: () => progress.refetch(),
-    onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'buscar os metadados')),
   })
   const resolve = useMutation({
     mutationFn: ({ romId, accept }: { romId: string; accept: boolean }) =>
@@ -103,7 +103,7 @@ export function SettingsMetadata() {
       pending.refetch()
       qc.invalidateQueries({ queryKey: ['roms'] })
     },
-    onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'resolver a correspondência')),
   })
 
   if (cfg.isLoading) return <LoadingState />

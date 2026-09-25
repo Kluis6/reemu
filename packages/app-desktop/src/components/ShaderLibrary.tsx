@@ -23,6 +23,7 @@ import {
   type SlangpEntry,
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
+import { errorPatch } from '../lib/toast'
 
 const ROOT_KEY = 'reemu.shaderLibRoot'
 
@@ -138,12 +139,7 @@ export function ShaderLibrary({
     },
     onError: (e) => {
       if (dlId.current)
-        updateToast(dlId.current, {
-          message: `Falha no download: ${e}`,
-          variant: 'Error',
-          durationMs: 6000,
-          progress: undefined,
-        })
+        updateToast(dlId.current, errorPatch(e, 'baixar o pacote de shaders'))
     },
     onSettled: () => {
       dlId.current = null

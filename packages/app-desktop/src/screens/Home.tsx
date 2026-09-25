@@ -19,6 +19,7 @@ import {
 } from "../lib/tauri";
 import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles, useMotionStyles } from "../styles/xbox";
+import { errorPatch } from "../lib/toast";
 
 /** Uma faixa curada da Início (cabeçalho + prateleira). */
 function Row({
@@ -107,12 +108,7 @@ export function Home() {
     },
     onError: (e) => {
       if (scanId.current) {
-        updateToast(scanId.current, {
-          message: `Scan falhou: ${e}`,
-          variant: "Error",
-          durationMs: 6000,
-          progress: undefined,
-        });
+        updateToast(scanId.current, errorPatch(e, "procurar jogos na pasta"));
       }
     },
     onSettled: () => {

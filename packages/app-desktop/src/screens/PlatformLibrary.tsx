@@ -7,7 +7,7 @@ import { EmptyState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { SectionHeader } from "../components/SectionHeader";
 import { platformLabel } from "../lib/platform";
-import { sysToast } from "../lib/toast";
+import { errorToast, sysToast } from "../lib/toast";
 import { listRoms, removeRom } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
@@ -39,7 +39,7 @@ export function PlatformLibrary() {
       qc.invalidateQueries({ queryKey: ["roms"] });
       push(sysToast("Removida da biblioteca.", "Success"));
     },
-    onError: (e) => push(sysToast(`Falha: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "remover o jogo")),
   });
 
   return (

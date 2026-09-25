@@ -34,7 +34,7 @@ import { PlatformTile } from "../components/PlatformTile";
 import { Shelf } from "../components/Shelf";
 import { ManageLibraryDialog } from "../components/ManageLibraryDialog";
 import { platformLabel } from "../lib/platform";
-import { sysToast } from "../lib/toast";
+import { errorPatch, errorToast, sysToast } from "../lib/toast";
 import {
   listRoms,
   removeRom,
@@ -163,12 +163,7 @@ export function Library() {
     },
     onError: (e) => {
       if (scanId.current) {
-        updateToast(scanId.current, {
-          message: `Scan falhou: ${e}`,
-          variant: "Error",
-          durationMs: 6000,
-          progress: undefined,
-        });
+        updateToast(scanId.current, errorPatch(e, "procurar jogos na pasta"));
       }
     },
     onSettled: () => {
@@ -187,7 +182,7 @@ export function Library() {
       qc.invalidateQueries({ queryKey: ["roms"] });
       push(sysToast("Removida da biblioteca.", "Success"));
     },
-    onError: (e) => push(sysToast(`Falha: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "remover o jogo")),
   });
 
   const all = useMemo(() => roms.data ?? [], [roms.data]);

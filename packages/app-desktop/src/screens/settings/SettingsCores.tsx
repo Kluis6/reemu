@@ -18,7 +18,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { LoadingState } from '../../components/EmptyState'
-import { sysToast } from '../../lib/toast'
+import { errorToast, sysToast } from '../../lib/toast'
 import {
   downloadCore,
   listCoreCatalog,
@@ -112,7 +112,7 @@ function Catalog() {
       qc.invalidateQueries({ queryKey: ['installed-cores'] })
       push(sysToast(`Core instalado: ${coreId}`, 'Success'))
     },
-    onError: (e) => push(sysToast(`Falha no download: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'baixar o core')),
   })
   const uninstall = useMutation({
     mutationFn: (coreId: string) => removeCore(coreId),
@@ -120,7 +120,7 @@ function Catalog() {
       qc.invalidateQueries({ queryKey: ['core-catalog'] })
       qc.invalidateQueries({ queryKey: ['installed-cores'] })
     },
-    onError: (e) => push(sysToast(`Falha ao remover: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'remover o core')),
   })
 
   if (catalog.isLoading) return <LoadingState label="Carregando catálogo…" />

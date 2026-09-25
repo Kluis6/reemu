@@ -12,7 +12,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { AVATAR_NAMES, PRESET_IDS } from '../lib/avatars'
 import { PresetAvatar } from './PresetAvatar'
-import { sysToast } from '../lib/toast'
+import { errorToast } from '../lib/toast'
 import {
   pickImage,
   setProfile,
@@ -90,7 +90,7 @@ export function ProfileForm({
       setAvatar('file')
       setNonce((n) => n + 1)
     },
-    onError: (e) => push(sysToast(`Falha ao carregar imagem: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'carregar a imagem')),
   })
 
   const save = useMutation({
@@ -108,7 +108,7 @@ export function ProfileForm({
       qc.invalidateQueries({ queryKey: ['profile'] })
       onDone()
     },
-    onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'salvar o perfil')),
   })
 
   const nameError = name.trim().length === 0 ? 'Escolha um nome.' : undefined

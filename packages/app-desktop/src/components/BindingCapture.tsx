@@ -17,6 +17,7 @@ import { DIALOG_FADE_ONLY } from '../lib/motion'
 import { describeRawInput, onRawInputCaptured, saveBinding } from '../lib/tauri'
 import { useBindingCaptureStore } from '../stores/useBindingCaptureStore'
 import { useToastStore } from '../stores/useToastStore'
+import { errorToast } from '../lib/toast'
 
 const SETTLE_MS = 300
 
@@ -79,13 +80,7 @@ export function BindingCapture() {
           qc.invalidateQueries({ queryKey: ['controller-mappings'] })
         })
         .catch((e) => {
-          push({
-            id: crypto.randomUUID(),
-            message: `Falha ao salvar binding: ${e}`,
-            variant: 'Error',
-            durationMs: 4000,
-            source: 'System',
-          })
+          push(errorToast(e, 'salvar o atalho'))
         })
         .finally(() => reset())
     }, SETTLE_MS)

@@ -55,7 +55,7 @@ import {
 } from "../lib/metadataFormat";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { knownPlatforms, platformLabel } from "../lib/platform";
-import { sysToast } from "../lib/toast";
+import { errorToast, sysToast } from "../lib/toast";
 import {
   deleteSaveState,
   getRomMetadata,
@@ -144,7 +144,7 @@ export function RomDetail() {
       qc.invalidateQueries({ queryKey: ["rom-shader", romId] });
       qc.invalidateQueries({ queryKey: ["shader-info"] });
     },
-    onError: (e) => push(sysToast(`Falha: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "trocar o shader deste jogo")),
   });
   // O que está atribuído EXATAMENTE no escopo selecionado ("" = herda).
   const shaderAtScope =
@@ -195,7 +195,7 @@ export function RomDetail() {
   const del = useMutation({
     mutationFn: (id: string) => deleteSaveState(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["save-states", romId] }),
-    onError: (e) => push(sysToast(`Falha ao apagar: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "apagar o save state")),
   });
   const remove = useMutation({
     mutationFn: () => removeRom(romId),
@@ -206,7 +206,7 @@ export function RomDetail() {
       );
       navigate("/library");
     },
-    onError: (e) => push(sysToast(`Falha ao remover: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "remover o jogo")),
   });
   const editMeta = useMutation({
     mutationFn: () =>
@@ -221,7 +221,7 @@ export function RomDetail() {
       setEditOpen(false);
       push(sysToast("Dados da ROM atualizados.", "Success"));
     },
-    onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "salvar as alterações")),
   });
   const openEdit = () => {
     setEditName(rom?.title ?? "");
@@ -240,7 +240,7 @@ export function RomDetail() {
     },
     onError: (e, _on, ctx) => {
       if (ctx?.prev) qc.setQueryData(["roms"], ctx.prev);
-      push(sysToast(`Falha ao favoritar: ${e}`, "Error"));
+      push(errorToast(e, "favoritar o jogo"));
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["roms"] }),
   });

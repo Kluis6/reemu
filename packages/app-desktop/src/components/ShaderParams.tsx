@@ -9,7 +9,7 @@ import {
   type ShaderParam,
   type ShaderScope,
 } from '../lib/tauri'
-import { sysToast } from '../lib/toast'
+import { errorToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
 
 const useStyles = makeStyles({
@@ -54,7 +54,7 @@ export function ShaderParams({
     clearTimeout(timers.current[name])
     timers.current[name] = setTimeout(() => {
       void setShaderParam(name, value, scope, romId, systemId).catch((e) =>
-        push(sysToast(`Falha ao salvar parâmetro: ${e}`, 'Error')),
+        push(errorToast(e, 'salvar o parâmetro do shader')),
       )
     }, 200)
   }
@@ -65,7 +65,7 @@ export function ShaderParams({
         setDirty({})
         return q.refetch()
       })
-      .catch((e) => push(sysToast(`Falha: ${e}`, 'Error')))
+      .catch((e) => push(errorToast(e, 'restaurar os parâmetros do shader')))
   }
 
   const params: ShaderParam[] = q.data ?? []

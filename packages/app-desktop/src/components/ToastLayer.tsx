@@ -3,12 +3,18 @@ import {
   MessageBar,
   MessageBarActions,
   MessageBarBody,
+  MessageBarTitle,
   ProgressBar,
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
+import { DismissRegular } from "@fluentui/react-icons";
 import { useEffect } from "react";
-import { useToastStore, type ToastVariant } from "../stores/useToastStore";
+import {
+  useToastStore,
+  type ToastItem,
+  type ToastVariant,
+} from "../stores/useToastStore";
 
 const useStyles = makeStyles({
   // Camada independente da state machine de foco: sempre por cima, nunca
@@ -34,9 +40,34 @@ const useStyles = makeStyles({
     paddingLeft: tokens.spacingHorizontalL,
     paddingRight: tokens.spacingHorizontalL,
   },
-  body: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS },
+  body: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+  },
+  // texto técnico do erro: menor, apagado, no máximo 3 linhas
+  detail: {
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
+    overflowWrap: "anywhere",
+    display: "-webkit-box",
+    WebkitLineClamp: "3",
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
   progress: { marginTop: tokens.spacingVerticalXXS },
 });
+
+/** Toast só informativo (sem botão nem progresso) some sozinho em poucos
+ *  segundos, mesmo que quem criou tenha pedido mais tempo ou `0`. */
+const INFO_MAX_MS = 5000;
+
+function lifetime(t: ToastItem): number {
+  const informative =
+    !t.action && !t.moreActions?.length && t.progress === undefined;
+  if (!informative) return t.durationMs;
+  return t.durationMs > 0 ? Math.min(t.durationMs, INFO_MAX_MS) : INFO_MAX_MS;
+}
 
 const INTENT: Record<ToastVariant, "info" | "success" | "warning" | "error"> = {
   Info: "info",
@@ -50,11 +81,12 @@ export function ToastLayer() {
   const queue = useToastStore((s) => s.queue);
   const dismiss = useToastStore((s) => s.dismiss);
 
-  // Auto-dismiss por `durationMs` (0 = fica até ser removido/atualizado).
+  // Auto-dismiss por `lifetime` (0 = fica até fechar no X ou ser atualizado).
   useEffect(() => {
     const timers = queue
-      .filter((t) => t.durationMs > 0)
-      .map((t) => window.setTimeout(() => dismiss(t.id), t.durationMs));
+      .map((t) => [t.id, lifetime(t)] as const)
+      .filter(([, ms]) => ms > 0)
+      .map(([id, ms]) => window.setTimeout(() => dismiss(id), ms));
     return () => timers.forEach(window.clearTimeout);
   }, [queue, dismiss]);
 
@@ -67,10 +99,12 @@ export function ToastLayer() {
           intent={INTENT[t.variant]}
           // com botão: texto em cima e ação embaixo — em uma linha só o botão
           // estourava a largura fixa da camada e saía cortado
-          layout={t.action ? "multiline" : "auto"}
+          layout={t.action || t.title ? "multiline" : "auto"}
         >
           <MessageBarBody className={styles.body}>
+            {t.title && <MessageBarTitle>{t.title}</MessageBarTitle>}
             {t.message}
+            {t.detail && <span className={styles.detail}>{t.detail}</span>}
             {t.progress !== undefined && (
               <ProgressBar
                 className={styles.progress}
@@ -79,19 +113,33 @@ export function ToastLayer() {
               />
             )}
           </MessageBarBody>
-          {t.action && (
-            <MessageBarActions>
+          <MessageBarActions
+            containerAction={
               <Button
+                appearance="transparent"
                 size="small"
-                onClick={() => {
-                  dismiss(t.id);
-                  t.action?.onClick();
-                }}
-              >
-                {t.action.label}
-              </Button>
-            </MessageBarActions>
-          )}
+                icon={<DismissRegular />}
+                aria-label="Fechar"
+                title="Fechar"
+                onClick={() => dismiss(t.id)}
+              />
+            }
+          >
+            {[...(t.action ? [t.action] : []), ...(t.moreActions ?? [])].map(
+              (a) => (
+                <Button
+                  key={a.label}
+                  size="small"
+                  onClick={() => {
+                    dismiss(t.id);
+                    a.onClick();
+                  }}
+                >
+                  {a.label}
+                </Button>
+              ),
+            )}
+          </MessageBarActions>
         </MessageBar>
       ))}
     </div>

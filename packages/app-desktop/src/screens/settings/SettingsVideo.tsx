@@ -16,7 +16,7 @@ import { BezelLibrary } from '../../components/BezelLibrary'
 import { LoadingState } from '../../components/EmptyState'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
 import { ShaderParams } from '../../components/ShaderParams'
-import { sysToast } from '../../lib/toast'
+import { errorToast, sysToast } from '../../lib/toast'
 import {
   clearDecorations,
   getShaderInfo,
@@ -57,7 +57,7 @@ export function SettingsVideo() {
       const base = name.split(/[/\\]/).pop() ?? name
       push(sysToast(`Shader padrão: ${LABELS[name]?.title ?? curated ?? base}`, 'Success'))
     },
-    onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'trocar o shader padrão')),
   })
 
   const videoCfg = useQuery({
@@ -68,19 +68,19 @@ export function SettingsVideo() {
   const setIntegerScaling = useMutation({
     mutationFn: (integerScaling: boolean) => updateVideoConfig({ integerScaling }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['video-config'] }),
-    onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'salvar a configuração de vídeo')),
   })
 
   const deco = useMutation({
     mutationFn: (path: string) => importDecorationPack(path),
     onSuccess: (n) =>
       push(sysToast(`Bezels importados — ${n} atribuição(ões). Aplica no próximo jogo.`, 'Success')),
-    onError: (e) => push(sysToast(`Falha ao importar: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'importar as molduras')),
   })
   const decoClear = useMutation({
     mutationFn: () => clearDecorations(),
     onSuccess: () => push(sysToast('Bezels removidos.', 'Success')),
-    onError: (e) => push(sysToast(`Falha: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'limpar as molduras')),
   })
 
   if (isLoading) return <LoadingState />

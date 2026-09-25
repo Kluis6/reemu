@@ -17,7 +17,7 @@ import {
 import { useMutation } from "@tanstack/react-query";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { quitApp, restartSystem, shutdownSystem } from "../lib/tauri";
-import { sysToast } from "../lib/toast";
+import { errorToast } from "../lib/toast";
 import { useToastStore } from "../stores/useToastStore";
 
 const useStyles = makeStyles({
@@ -48,11 +48,11 @@ export function PowerMenuDialog({
 
   const shutdown = useMutation({
     mutationFn: shutdownSystem,
-    onError: (e) => push(sysToast(`Falha ao desligar: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "desligar o computador")),
   });
   const restart = useMutation({
     mutationFn: restartSystem,
-    onError: (e) => push(sysToast(`Falha ao reiniciar: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "reiniciar o computador")),
   });
 
   const busy = shutdown.isPending || restart.isPending;

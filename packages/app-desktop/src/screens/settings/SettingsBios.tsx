@@ -18,7 +18,7 @@ import {
 } from '../../lib/tauri'
 import { platformLabel } from '../../lib/platform'
 import { LoadingState } from '../../components/EmptyState'
-import { sysToast } from '../../lib/toast'
+import { errorToast, sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
 
 const useStyles = makeStyles({
@@ -83,7 +83,7 @@ export function SettingsBios() {
       qc.invalidateQueries({ queryKey: ['ppsspp-assets'] })
       push(sysToast(`Arquivos do PPSSPP instalados (${n})`, 'Success'))
     },
-    onError: (e) => push(sysToast(`Falha ao baixar: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'baixar os arquivos')),
   })
 
   // O picker abre dentro do `mutationFn` — `isPending`/`variables` cobrem o
@@ -100,12 +100,12 @@ export function SettingsBios() {
       refresh()
       push(sysToast(`BIOS importado: ${filename}`, 'Success'))
     },
-    onError: (e) => push(sysToast(`Falha ao importar: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'importar a BIOS')),
   })
   const doRemove = useMutation({
     mutationFn: (v: Key) => removeBiosFile(v.systemId, v.filename),
     onSuccess: refresh,
-    onError: (e) => push(sysToast(`Falha ao remover: ${e}`, 'Error')),
+    onError: (e) => push(errorToast(e, 'remover a BIOS')),
   })
 
   if (bios.isLoading) return <LoadingState label="Conferindo pasta de sistema…" />

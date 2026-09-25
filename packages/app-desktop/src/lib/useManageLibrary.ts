@@ -9,7 +9,7 @@ import {
   removeRomSystem,
   setSystemCore,
 } from "./tauri";
-import { sysToast } from "./toast";
+import { errorToast, sysToast } from "./toast";
 import { useToastStore } from "../stores/useToastStore";
 
 /**
@@ -60,7 +60,7 @@ export function useManageLibrary(enabled: boolean) {
     },
     onError: (e) => {
       setConfirm(null);
-      push(sysToast(`Falha: ${e}`, "Error"));
+      push(errorToast(e, "remover da biblioteca"));
     },
   });
 
@@ -76,7 +76,7 @@ export function useManageLibrary(enabled: boolean) {
       setPending({});
       push(sysToast("Configurações da biblioteca salvas.", "Success"));
     },
-    onError: (e) => push(sysToast(`Falha ao salvar: ${e}`, "Error")),
+    onError: (e) => push(errorToast(e, "salvar as alterações")),
   });
 
   const coreValue = (sys: string) => pending[sys] ?? sysCores.data?.[sys] ?? "";
