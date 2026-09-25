@@ -6,7 +6,15 @@ const LOGO_SRC = '/reemu-logo.png'
 
 const useStyles = makeStyles({
   img: { display: 'block', width: 'auto', objectFit: 'contain' },
-  wordmark: { fontWeight: tokens.fontWeightBold, letterSpacing: '0.02em', lineHeight: 1 },
+  wordmark: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '0.18em',
+    fontWeight: tokens.fontWeightBold,
+    letterSpacing: '0.02em',
+    lineHeight: 1,
+  },
+  mark: { height: '1.25em', width: 'auto' },
   // `--reemuBrandText`, não `colorBrandForeground1` — este é texto (o
   // fallback do wordmark), e o tom padrão de marca falha contraste AA no
   // tema claro (ver `styles/themes.ts::ReEmuTokens.reemuBrandText`).
@@ -22,7 +30,10 @@ export function AppLogo({ height = 40 }: { height?: number }) {
   if (!imgOk)
     return (
       <span className={s.wordmark} style={{ fontSize: height * 0.7 }}>
-        Re<span className={s.green}>Emu</span>
+        <img className={s.mark} src="/reemu-mark.svg" alt="" />
+        <span>
+          Re<span className={s.green}>Emu</span>
+        </span>
       </span>
     )
   return (
