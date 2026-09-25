@@ -1100,18 +1100,61 @@ export const useDetailStyles = makeStyles({
     objectFit: "cover",
     backgroundColor: tokens.colorNeutralBackground3,
   },
-  infoRow: {
+  // Seções da gaveta (Sobre o jogo / Descrição / Na sua biblioteca).
+  infoSection: {
     display: "flex",
     flexDirection: "column",
-    rowGap: "2px",
+    rowGap: "10px",
+    paddingTop: "4px",
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
   },
+  infoHeading: {
+    margin: "10px 0 2px",
+    fontSize: tokens.fontSizeBase400,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground1,
+  },
+  // Lista rótulo → valor em duas colunas (rótulos alinhados à esquerda).
+  infoList: {
+    margin: 0,
+    display: "grid",
+    gridTemplateColumns: "minmax(110px, 34%) 1fr",
+    columnGap: "16px",
+    rowGap: "12px",
+    alignItems: "baseline",
+  },
+  // 12 px no mínimo — o guia de TV da Microsoft pede ≥12 px até pro texto
+  // secundário (antes era fontSizeBase100, 10 px).
   infoLabel: {
-    fontSize: tokens.fontSizeBase100,
+    fontSize: tokens.fontSizeBase200,
     color: tokens.colorNeutralForeground3,
   },
   infoValue: {
+    margin: 0,
     fontSize: tokens.fontSizeBase300,
-    wordBreak: "break-word",
+    color: tokens.colorNeutralForeground1,
+    overflowWrap: "anywhere",
+  },
+  infoTags: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "6px",
+  },
+  infoPara: {
+    margin: 0,
+    fontSize: tokens.fontSizeBase300,
+    lineHeight: tokens.lineHeightBase400,
+    color: tokens.colorNeutralForeground2,
+  },
+  infoFileName: {
+    display: "block",
+    fontWeight: tokens.fontWeightSemibold,
+  },
+  infoFileDir: {
+    display: "block",
+    marginTop: "2px",
+    fontSize: tokens.fontSizeBase200,
+    color: tokens.colorNeutralForeground3,
   },
 });
 

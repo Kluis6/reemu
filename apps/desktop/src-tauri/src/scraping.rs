@@ -341,20 +341,35 @@ fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCan
                 .unwrap_or_else(|| v.to_string())
         })
         .unwrap_or_default();
+    // Idiomas pelo `nomcourt` da `languesListe.php` (doc da API v2 do
+    // ScreenScraper): português primeiro, depois inglês e o texto "mundial".
     let description = jeu
         .get("synopsis")
-        .and_then(|s| first_text(s, &["en", "wor"]))
+        .and_then(|s| first_text(s, &["pt", "en", "wor"]))
         .map(str::to_string);
     let release_date = jeu
         .get("dates")
         .and_then(|d| first_text(d, &["wor", "us", "eu", "jp"]))
         .map(str::to_string);
+    // Todos os gêneros, o principal (`principale: "1"` na doc) primeiro,
+    // separados por ", " — a gaveta de informações mostra cada um como etiqueta.
     let genre = jeu.get("genres").and_then(|g| {
-        g.as_array()?
-            .first()?
-            .get("noms")
-            .and_then(|n| first_text(n, &["en", "wor"]))
-            .map(str::to_string)
+        let arr = g.as_array()?;
+        let is_main = |x: &Value| {
+            matches!(x.get("principale"), Some(v) if v.as_str() == Some("1") || v.as_i64() == Some(1))
+        };
+        let mut ordered: Vec<&Value> = arr.iter().filter(|x| is_main(x)).collect();
+        ordered.extend(arr.iter().filter(|x| !is_main(x)));
+        let mut names: Vec<String> = Vec::new();
+        for x in ordered {
+            if let Some(n) = x.get("noms").and_then(|n| first_text(n, &["pt", "en", "wor"])) {
+                let n = n.trim().to_string();
+                if !n.is_empty() && !names.contains(&n) {
+                    names.push(n);
+                }
+            }
+        }
+        (!names.is_empty()).then(|| names.join(", "))
     });
     let cover_url = jeu.get("medias").and_then(|m| {
         let arr = m.as_array()?;
@@ -639,6 +654,31 @@ mod tests {
             .collect();
         assert!(no_ss.is_empty(), "sem id no ScreenScraper: {no_ss:?}");
         assert!(no_tgdb.is_empty(), "sem id no TheGamesDB: {no_tgdb:?}");
+    }
+
+    #[test]
+    fn parse_jeu_prefers_portuguese_and_main_genre() {
+        // Formato do `jeuInfos.php` (doc da API v2): textos por `langue`,
+        // gêneros com `principale` e nomes por idioma.
+        let jeu = serde_json::json!({
+            "id": "3",
+            "noms": [{"region": "wor", "text": "Sonic The Hedgehog"}],
+            "synopsis": [
+                {"langue": "en", "text": "A blue hedgehog."},
+                {"langue": "pt", "text": "Um ouriço azul."}
+            ],
+            "dates": [{"region": "us", "text": "1991-06-23"}],
+            "genres": [
+                {"id": "2", "principale": "0",
+                 "noms": [{"langue": "en", "text": "Action"}, {"langue": "pt", "text": "Ação"}]},
+                {"id": "7", "principale": "1",
+                 "noms": [{"langue": "en", "text": "Platform"}, {"langue": "pt", "text": "Plataforma"}]}
+            ]
+        });
+        let c = parse_jeu(&jeu, true, "Sonic").expect("candidato");
+        assert_eq!(c.description.as_deref(), Some("Um ouriço azul."));
+        assert_eq!(c.genre.as_deref(), Some("Plataforma, Ação"));
+        assert_eq!(c.release_date.as_deref(), Some("1991-06-23"));
     }
 
     #[test]

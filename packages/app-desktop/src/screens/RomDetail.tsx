@@ -1,6 +1,7 @@
 import {
   Body1,
   Text,
+  Badge,
   Button,
   Caption1,
   Dialog,
@@ -44,6 +45,14 @@ import { EmptyState, LoadingState } from "../components/EmptyState";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { ShaderLibrary } from "../components/ShaderLibrary";
 import { ShaderParams } from "../components/ShaderParams";
+import {
+  descriptionParagraphs,
+  formatDateTime,
+  formatReleaseDate,
+  providerLabel,
+  splitGenres,
+  splitPath,
+} from "../lib/metadataFormat";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { knownPlatforms, platformLabel } from "../lib/platform";
 import { sysToast } from "../lib/toast";
@@ -164,6 +173,13 @@ export function RomDetail() {
   const [editName, setEditName] = useState("");
   const [editSystem, setEditSystem] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
+  // Campos da gaveta formatados pelo que cada provedor documenta
+  // (lib/metadataFormat.ts).
+  const releaseText = formatReleaseDate(meta.data?.releaseDate);
+  const genres = splitGenres(meta.data?.genre);
+  const descParas = descriptionParagraphs(meta.data?.description);
+  const sourceText = providerLabel(meta.data?.providerSource);
+  const releaseYear = meta.data?.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
   const [cfgTab, setCfgTab] = useState<"core" | "states" | "shader">("core");
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   const hasCoreCfg = !!chosenCore;
@@ -246,6 +262,7 @@ export function RomDetail() {
     );
 
   const cover = meta.data?.coverUrl ?? rom.boxart;
+  const fileParts = splitPath(rom.filePath);
   const title = meta.data?.title ?? rom.title;
   const hasQuick = states.data?.some((st) => st.slot === 0) ?? false;
 
@@ -299,12 +316,8 @@ export function RomDetail() {
               </Text>
               {(meta.data?.releaseDate || meta.data?.genre) && (
                 <div className={s.badges}>
-                  {meta.data?.releaseDate && (
-                    <span className={s.badge}>{meta.data.releaseDate}</span>
-                  )}
-                  {meta.data?.genre && (
-                    <span className={s.badge}>{meta.data.genre}</span>
-                  )}
+                  {releaseYear && <span className={s.badge}>{releaseYear}</span>}
+                  {genres[0] && <span className={s.badge}>{genres[0]}</span>}
                 </div>
               )}
             </div>
@@ -484,66 +497,80 @@ export function RomDetail() {
         <DrawerBody>
           <div className={s.infoBody}>
             {cover && <img className={s.infoCover} src={cover} alt="" />}
-            <div className={s.infoRow}>
-              <span className={s.infoLabel}>Título</span>
-              <span className={s.infoValue}>{title}</span>
-            </div>
-            <div className={s.infoRow}>
-              <span className={s.infoLabel}>Plataforma</span>
-              <span className={s.infoValue}>{platformLabel(rom.systemId)}</span>
-            </div>
-            {meta.data?.releaseDate && (
-              <div className={s.infoRow}>
-                <span className={s.infoLabel}>Lançamento</span>
-                <span className={s.infoValue}>{meta.data.releaseDate}</span>
-              </div>
+
+            <section className={s.infoSection} aria-labelledby="info-sobre">
+              <h3 id="info-sobre" className={s.infoHeading}>
+                Sobre o jogo
+              </h3>
+              <dl className={s.infoList}>
+                <dt className={s.infoLabel}>Título</dt>
+                <dd className={s.infoValue}>{title}</dd>
+                <dt className={s.infoLabel}>Plataforma</dt>
+                <dd className={s.infoValue}>{platformLabel(rom.systemId)}</dd>
+                {releaseText && (
+                  <>
+                    <dt className={s.infoLabel}>Lançamento</dt>
+                    <dd className={s.infoValue}>{releaseText}</dd>
+                  </>
+                )}
+                {genres.length > 0 && (
+                  <>
+                    <dt className={s.infoLabel}>{genres.length > 1 ? "Gêneros" : "Gênero"}</dt>
+                    <dd className={mergeClasses(s.infoValue, s.infoTags)}>
+                      {genres.map((g) => (
+                        <Badge key={g} appearance="tint" color="brand" shape="rounded" size="large">
+                          {g}
+                        </Badge>
+                      ))}
+                    </dd>
+                  </>
+                )}
+                {sourceText && (
+                  <>
+                    <dt className={s.infoLabel}>Fonte dos dados</dt>
+                    <dd className={s.infoValue}>{sourceText}</dd>
+                  </>
+                )}
+              </dl>
+            </section>
+
+            {descParas.length > 0 && (
+              <section className={s.infoSection} aria-labelledby="info-desc">
+                <h3 id="info-desc" className={s.infoHeading}>
+                  Descrição
+                </h3>
+                {descParas.map((p, i) => (
+                  <p key={i} className={s.infoPara}>
+                    {p}
+                  </p>
+                ))}
+              </section>
             )}
-            {meta.data?.genre && (
-              <div className={s.infoRow}>
-                <span className={s.infoLabel}>Gênero</span>
-                <span className={s.infoValue}>{meta.data.genre}</span>
-              </div>
-            )}
-            {meta.data?.description && (
-              <div className={s.infoRow}>
-                <span className={s.infoLabel}>Descrição</span>
-                <span className={s.infoValue}>{meta.data.description}</span>
-              </div>
-            )}
-            {meta.data?.providerSource && (
-              <div className={s.infoRow}>
-                <span className={s.infoLabel}>Fonte dos dados</span>
-                <span className={s.infoValue}>{meta.data.providerSource}</span>
-              </div>
-            )}
-            <div className={s.infoRow}>
-              <span className={s.infoLabel}>Arquivo</span>
-              <span className={s.infoValue}>{rom.filePath}</span>
-            </div>
-            <div className={s.infoRow}>
-              <span className={s.infoLabel}>Adicionado em</span>
-              <span className={s.infoValue}>
-                {new Date(rom.addedAt * 1000).toLocaleString()}
-              </span>
-            </div>
-            <div className={s.infoRow}>
-              <span className={s.infoLabel}>Última vez jogado</span>
-              <span className={s.infoValue}>
-                {rom.lastPlayedAt
-                  ? new Date(rom.lastPlayedAt * 1000).toLocaleString()
-                  : "Nunca jogado"}
-              </span>
-            </div>
-            <div className={s.infoRow}>
-              <span className={s.infoLabel}>Tempo de jogo</span>
-              <span className={s.infoValue}>
-                {playTime.data ? formatPlayTime(playTime.data) : "Nunca jogado"}
-              </span>
-            </div>
-            <div className={s.infoRow}>
-              <span className={s.infoLabel}>Favorito</span>
-              <span className={s.infoValue}>{rom.isFavorite ? "Sim" : "Não"}</span>
-            </div>
+
+            <section className={s.infoSection} aria-labelledby="info-lib">
+              <h3 id="info-lib" className={s.infoHeading}>
+                Na sua biblioteca
+              </h3>
+              <dl className={s.infoList}>
+                <dt className={s.infoLabel}>Arquivo</dt>
+                <dd className={s.infoValue}>
+                  <span className={s.infoFileName}>{fileParts.name}</span>
+                  {fileParts.dir && <span className={s.infoFileDir}>{fileParts.dir}</span>}
+                </dd>
+                <dt className={s.infoLabel}>Adicionado em</dt>
+                <dd className={s.infoValue}>{formatDateTime(rom.addedAt)}</dd>
+                <dt className={s.infoLabel}>Última vez jogado</dt>
+                <dd className={s.infoValue}>
+                  {rom.lastPlayedAt ? formatDateTime(rom.lastPlayedAt) : "Nunca jogado"}
+                </dd>
+                <dt className={s.infoLabel}>Tempo de jogo</dt>
+                <dd className={s.infoValue}>
+                  {playTime.data ? formatPlayTime(playTime.data) : "Nunca jogado"}
+                </dd>
+                <dt className={s.infoLabel}>Favorito</dt>
+                <dd className={s.infoValue}>{rom.isFavorite ? "Sim" : "Não"}</dd>
+              </dl>
+            </section>
           </div>
         </DrawerBody>
       </OverlayDrawer>
