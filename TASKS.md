@@ -68,11 +68,17 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       2026-09-25 sem máquina Windows): abrir um jogo de PS1 no Beetle PSX HW,
       Dreamcast no flycast e N64 no mupen64plus/parallel e conferir a imagem.
 - [ ] `todo` — Vulkan in-process no Windows: desligado por padrão depois
-      que o `flycast` derrubou o app (`STATUS_ACCESS_VIOLATION`); só com
-      `REEMU_HW=vulkan`. Investigar antes de religar.
+      que o `flycast` derrubou o app (`STATUS_ACCESS_VIOLATION`). Causa
+      provável achada no Linux em 2026-09-25 (despachante do flycast nulo /
+      extensões não ligadas — corrigido pelo hook do `vkCreateDevice`);
+      falta validar num Windows antes de religar.
 
-- [ ] `todo` — Etapa 12: flycast e mupen como 2º/3º alvo Vulkan; Fase C
-      (tirar a espera de CPU do blit/submit, validar sob carga). Ver doc 12.
+- [x] `done` — Etapa 12: flycast e mupen64plus_next rodam em Vulkan
+      in-process no Linux (2026-09-25, `REEMU_HW=vulkan`; mupen com
+      `mupen64plus-rdp-plugin=parallel`). Ver docs/historico.md.
+- [ ] `todo` — Etapa 12, fase C: tirar a espera de CPU do blit/submit e
+      validar sob carga (troca de cena, resize, save/load state); decidir se
+      flycast em Vulkan vira padrão (hoje GL no processo filho).
 - [x] `done` — Interop GL: `glFinish` trocado por fence `sync_file` →
       semáforo Vulkan, e o interop virou padrão no Linux (2026-09-25; ver
       docs/historico.md). Falta rodar uma vez com as camadas de validação

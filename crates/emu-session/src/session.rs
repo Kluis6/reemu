@@ -595,12 +595,30 @@ type LocalVkRoute = (
 /// `parallel_n64` fica de fora de propósito: é o core não re-entrante que essa
 /// arquitetura de processo-filho protege — pra ele o Vulkan exige
 /// `REEMU_HW=vulkan` explícito.
-const VK_CAPABLE_CORES: &[&str] = &[
-    "mednafen_psx_hw",
-    "beetle_psx_hw",
-    "flycast",
-    "mupen64plus_next",
+///
+/// O 2º campo é a condição de opção de core pra valer: o
+/// `mupen64plus_next` só é Vulkan com o plugin de vídeo `parallel` (o padrão
+/// é o GLideN64, OpenGL) — e ele sobe a thread de emulação DENTRO do
+/// `retro_load_game`, que já desenha em GL antes do `vulkan_only` rejeitar:
+/// tentar in-process com o GLideN64 derrubava o app inteiro (SIGSEGV,
+/// 2026-09-25). Flycast e Beetle escolhem o renderizador pela negociação e
+/// caem pro filho com segurança.
+const VK_CAPABLE_CORES: &[(&str, Option<(&str, &str)>)] = &[
+    ("mednafen_psx_hw", None),
+    ("beetle_psx_hw", None),
+    ("flycast", None),
+    (
+        "mupen64plus_next",
+        Some(("mupen64plus-rdp-plugin", "parallel")),
+    ),
 ];
+
+/// O core está na lista E a condição de opção (se houver) bate.
+fn vk_capable(base: &str, options: &HashMap<String, String>) -> bool {
+    VK_CAPABLE_CORES.iter().any(|(name, cond)| {
+        base.contains(name) && cond.is_none_or(|(k, v)| options.get(k).is_some_and(|o| o == v))
+    })
+}
 
 /// Se um core deve rodar in-process (etapa 12): precisa de um caminho de device
 /// publicado pelo shell (`attach_vulkan_device` / `attach_vulkan_negotiator`)
@@ -614,7 +632,11 @@ const VK_CAPABLE_CORES: &[&str] = &[
 /// Windows o `flycast` carregado in-process derrubou o app inteiro
 /// (`STATUS_ACCESS_VIOLATION`, 2026-09-25) — sem o isolamento do processo
 /// filho, um core que quebra leva a interface junto. Lá só com `REEMU_HW=vulkan`.
-fn route_local_device(shared: &Shared, core_id: &str) -> Option<LocalVkRoute> {
+fn route_local_device(
+    shared: &Shared,
+    core_id: &str,
+    options: &HashMap<String, String>,
+) -> Option<LocalVkRoute> {
     let forced = matches!(
         std::env::var("REEMU_HW")
             .map(|v| v.trim().to_ascii_lowercase())
@@ -622,8 +644,11 @@ fn route_local_device(shared: &Shared, core_id: &str) -> Option<LocalVkRoute> {
         Ok("vulkan") | Ok("vk")
     );
     let base = core_id.rsplit(['/', '\\']).next().unwrap_or(core_id);
-    let vk_capable = cfg!(target_os = "linux") && VK_CAPABLE_CORES.iter().any(|c| base.contains(c));
-    if !forced && !vk_capable {
+    let capable = vk_capable(base, options);
+    // Nem forçando: mupen com GLideN64 in-process derruba o app.
+    let unsafe_gl = base.contains("mupen64plus_next") && !capable;
+    let auto = cfg!(target_os = "linux") && capable;
+    if unsafe_gl || (!forced && !auto) {
         return None;
     }
     let device = *shared
@@ -1377,7 +1402,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 // negociar Vulkan, `LocalCore::load` devolve
                 // `HwRenderUnsupported` e caímos pro processo filho (que isola
                 // cores não re-entrantes).
-                let route = route_local_device(&shared, &id.0);
+                let route = route_local_device(&shared, &id.0, &initial_option_values);
                 log::info!(
                     "etapa 12: core {} → rota {} (device={}, negotiator={}, known_non_vk={})",
                     id.0,
@@ -1888,5 +1913,22 @@ mod orphan_plane_tests {
         assert!(orphans.lock().unwrap().is_empty());
         // SAFETY: fd nosso (acabou de sair de `take_plane`).
         drop(unsafe { <rustix::fd::OwnedFd as rustix::fd::FromRawFd>::from_raw_fd(plane.fd) });
+    }
+}
+
+#[cfg(test)]
+mod vk_route_tests {
+    use super::*;
+
+    #[test]
+    fn mupen_only_counts_as_vulkan_with_the_parallel_plugin() {
+        let mut opts = HashMap::new();
+        assert!(!vk_capable("mupen64plus_next_libretro", &opts));
+        opts.insert("mupen64plus-rdp-plugin".to_string(), "gliden64".to_string());
+        assert!(!vk_capable("mupen64plus_next_libretro", &opts));
+        opts.insert("mupen64plus-rdp-plugin".to_string(), "parallel".to_string());
+        assert!(vk_capable("mupen64plus_next_libretro", &opts));
+        assert!(vk_capable("flycast_libretro", &HashMap::new()));
+        assert!(!vk_capable("parallel_n64_libretro", &HashMap::new()));
     }
 }

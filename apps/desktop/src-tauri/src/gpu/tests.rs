@@ -1286,3 +1286,138 @@ fn diag_bezel_composition() {
         eprintln!("{name}: {w}x{h} → {path}");
     }
 }
+
+/// Etapa 12 com core e ROM REAIS: core Vulkan in-process (device do
+/// compositor, `REEMU_HW=vulkan`) dirigido por esta thread via
+/// `step_vk_local`, quadro pela chain. Imprime por segundo quadros,
+/// não-pretos e o tempo do passo (retro_run + submit). Rode isolado
+/// (`--test-threads=1`, mexe no env).
+///
+/// ```text
+/// REEMU_TEST_VK_CORE=flycast_libretro REEMU_TEST_ROM=/caminho/jogo.cue \
+///   cargo test -p reemu-desktop --lib vk_core_real_rom -- --ignored --nocapture --test-threads=1
+/// ```
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "core Vulkan e ROM reais (REEMU_TEST_VK_CORE / REEMU_TEST_ROM)"]
+fn vk_core_real_rom() {
+    use emu_session::{EmuSession, SessionConfig};
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
+    let (Ok(core), Ok(rom)) = (
+        std::env::var("REEMU_TEST_VK_CORE"),
+        std::env::var("REEMU_TEST_ROM"),
+    ) else {
+        eprintln!("defina REEMU_TEST_VK_CORE e REEMU_TEST_ROM");
+        return;
+    };
+    let _ = env_logger::builder().is_test(true).try_init();
+    let data = std::path::PathBuf::from(std::env::var("HOME").unwrap())
+        .join(".local/share/com.reemu.desktop");
+    let secs: u64 = std::env::var("REEMU_TEST_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(15);
+    let mut fp = FrameProcessor::new().expect("adapter wgpu");
+    let shared = fp.vulkan_shared_device().expect("backend Vulkan");
+    // `REEMU_TEST_NO_FORCE=1`: como o app por padrão (sem `REEMU_HW`).
+    if std::env::var_os("REEMU_TEST_NO_FORCE").is_none() {
+        std::env::set_var("REEMU_HW", "vulkan");
+    }
+    let tmp = std::env::temp_dir().join(format!("reemu-vkrom-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let session = EmuSession::spawn(SessionConfig::new(
+        data.join("cores"),
+        data.join("system"),
+        tmp.clone(),
+    ));
+    session.attach_vulkan_device(shared);
+    // Negociador como no app (lib.rs): core com `create_device` (Beetle,
+    // flycast) cria o device e o FrameProcessor é refeito em cima dele.
+    let rebuilt: std::sync::Arc<std::sync::Mutex<Option<FrameProcessor>>> = Default::default();
+    {
+        let rebuilt = std::sync::Arc::clone(&rebuilt);
+        session.attach_vulkan_negotiator(std::sync::Arc::new(move |neg| {
+            let (fp, shared) = unsafe { FrameProcessor::from_core_negotiation(neg) }?;
+            *rebuilt.lock().unwrap() = Some(fp);
+            Ok(shared)
+        }));
+    }
+    let opts: HashMap<String, String> = std::env::var("REEMU_TEST_OPTS")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|kv| kv.split_once('='))
+        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+        .collect();
+    session
+        .load(&core, &rom, opts)
+        .expect("carregar core Vulkan + ROM");
+    if let Some(new_fp) = rebuilt.lock().unwrap().take() {
+        eprintln!("device criado pelo core (negociação) — FrameProcessor refeito");
+        fp = new_fp;
+    }
+    let in_process = session.debug_child_pid().is_none();
+    eprintln!("in-process: {in_process}");
+
+    let (mut frames, mut vk, mut lit) = (0u32, 0u32, 0u32);
+    let (mut step_sum, mut step_max) = (Duration::ZERO, Duration::ZERO);
+    let start = Instant::now();
+    let mut next = 1;
+    let mut last_dump = u64::MAX;
+    let mut tick = Instant::now();
+    while start.elapsed() < Duration::from_secs(secs) {
+        let t = Instant::now();
+        let frame = session.step_vk_local();
+        let dt = t.elapsed();
+        step_sum += dt;
+        step_max = step_max.max(dt);
+        if let Some(frame) = frame {
+            frames += 1;
+            if matches!(frame.origin, FrameOrigin::HardwareVulkanImage(_)) {
+                vk += 1;
+            }
+            if let Some((w, h, rgba)) = fp.process(&frame) {
+                if rgba.chunks(4).any(|p| p[0] > 16 || p[1] > 16 || p[2] > 16) {
+                    lit += 1;
+                }
+                // `REEMU_TEST_DUMP=/pasta`: grava um PNG por segundo (1º quadro)
+                if let Ok(dir) = std::env::var("REEMU_TEST_DUMP") {
+                    let sec = start.elapsed().as_secs();
+                    if sec != last_dump {
+                        last_dump = sec;
+                        let path = format!("{dir}/q{sec:02}.png");
+                        let mut enc =
+                            png::Encoder::new(std::fs::File::create(&path).unwrap(), w, h);
+                        enc.set_color(png::ColorType::Rgba);
+                        enc.write_header().unwrap().write_image_data(rgba).unwrap();
+                    }
+                }
+            }
+        }
+        // ~60 Hz, como o video pump
+        let spent = tick.elapsed();
+        if spent < Duration::from_micros(16_683) {
+            std::thread::sleep(Duration::from_micros(16_683) - spent);
+        }
+        tick = Instant::now();
+        if start.elapsed().as_secs() >= next {
+            eprintln!(
+                "{next:>3}s: quadros {frames}, Vulkan {vk}, não-pretos {lit}, passo méd {:.2} máx {:.2} ms",
+                step_sum.as_secs_f64() * 1000.0 / frames.max(1) as f64,
+                step_max.as_secs_f64() * 1000.0
+            );
+            step_max = Duration::ZERO;
+            next += 1;
+        }
+    }
+    session.unload().ok();
+    std::env::remove_var("REEMU_HW");
+    let _ = std::fs::remove_dir_all(&tmp);
+    // `REEMU_TEST_EXPECT_CHILD=1`: o core TEM que ir pro filho (ex.: mupen
+    // com GLideN64). Senão, forçando Vulkan, tem que ficar in-process.
+    if std::env::var_os("REEMU_TEST_EXPECT_CHILD").is_some() {
+        assert!(!in_process, "core ficou in-process — devia ir pro filho");
+    } else if std::env::var_os("REEMU_TEST_NO_FORCE").is_none() {
+        assert!(in_process, "core foi pro processo filho");
+    }
+}

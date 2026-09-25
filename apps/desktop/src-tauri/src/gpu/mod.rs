@@ -1019,6 +1019,10 @@ impl FrameProcessor {
             *const vk::PhysicalDeviceFeatures,
         ) -> bool = unsafe { std::mem::transmute(neg.create_device) };
         let gipa = entry.static_fn().get_instance_proc_addr;
+        // O core recebe o NOSSO `vkGetInstanceProcAddr`: o `vkCreateDevice`
+        // que ele carregar passa pelo hook, que garante as extensões/features
+        // do wgpu e registra a lista final (ver `device_hook`).
+        device_hook::arm(gipa, &dev_exts, dev_feats);
         let mut ctx = RetroVulkanContext::default();
         let ok = unsafe {
             create_device(
@@ -1026,7 +1030,7 @@ impl FrameProcessor {
                 instance.handle(),
                 gpu,
                 vk::SurfaceKHR::null(),
-                gipa,
+                device_hook::get_instance_proc_addr,
                 dev_exts_c.as_ptr(),
                 dev_exts_c.len() as u32,
                 std::ptr::null(),
@@ -1034,10 +1038,22 @@ impl FrameProcessor {
                 &dev_feats,
             )
         };
+        let enabled_exts = device_hook::disarm();
         if !ok || ctx.device.is_null() {
             cleanup(&instance);
             return Err("o create_device do core devolveu false".into());
         }
+        // O que foi LIGADO no device (o flycast ignora o
+        // `required_device_extensions` e escolhe as dele; o hook somou as do
+        // wgpu). Sem o hook ter visto o `vkCreateDevice` (core que usou outro
+        // loader), cai no que foi pedido — o caso do Beetle, que honra a lista.
+        let dev_exts = match enabled_exts {
+            Some(list) => {
+                log::info!("VkDevice do core: {} extensões ligadas", list.len());
+                list
+            }
+            None => dev_exts,
+        };
         let final_gpu = if ctx.gpu.is_null() { gpu } else { ctx.gpu };
         log::info!(
             "core criou o VkDevice (queue family {}) — wgpu vai adotar",
@@ -1866,6 +1882,7 @@ impl FrameProcessor {
 }
 
 mod chain;
+mod device_hook;
 mod input;
 mod pipelines;
 mod specs;
