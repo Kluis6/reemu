@@ -41,6 +41,27 @@ impl Drop for ExtractedRom {
     }
 }
 
+/// Cria o arquivo temporário da ROM extraída com nome único. `create_new`
+/// falha se o nome já existe — o antigo `if !p.exists()` + `File::create`
+/// deixava duas extrações simultâneas no mesmo processo escolherem o mesmo
+/// nome, e a primeira a terminar apagava o arquivo da outra (visto no CI com
+/// os testes de zip e 7z em paralelo).
+fn create_unique(temp_dir: &Path, ext: &str) -> std::io::Result<(PathBuf, std::fs::File)> {
+    for n in 0u32.. {
+        let p = temp_dir.join(format!("reemu-rom-{}-{n}.{ext}", std::process::id()));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&p)
+        {
+            Ok(f) => return Ok((p, f)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    unreachable!("u32 esgotado ao nomear a ROM temporária")
+}
+
 fn is_rom_entry(name: &str) -> bool {
     Path::new(name)
         .extension()
@@ -97,16 +118,7 @@ fn extract_rom_zip(zip_path: &Path, temp_dir: &Path) -> std::io::Result<Extracte
         .unwrap_or("rom")
         .to_ascii_lowercase();
 
-    let mut n = 0u32;
-    let out_path = loop {
-        let p = temp_dir.join(format!("reemu-rom-{}-{n}.{ext}", std::process::id()));
-        if !p.exists() {
-            break p;
-        }
-        n += 1;
-    };
-
-    let mut out = std::fs::File::create(&out_path)?;
+    let (out_path, mut out) = create_unique(temp_dir, &ext)?;
     let mut buf = [0u8; 64 * 1024];
     loop {
         let r = entry.read(&mut buf)?;
@@ -123,7 +135,6 @@ fn extract_rom_7z(archive_path: &Path, temp_dir: &Path) -> std::io::Result<Extra
     let mut r = ArchiveReader::open(archive_path, Password::empty())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
-    let mut n = 0u32;
     let mut result: Option<std::io::Result<PathBuf>> = None;
     r.for_each_entries(|entry, reader| {
         if result.is_some() || entry.is_directory() || !is_rom_entry(entry.name()) {
@@ -134,15 +145,8 @@ fn extract_rom_7z(archive_path: &Path, temp_dir: &Path) -> std::io::Result<Extra
             .and_then(|e| e.to_str())
             .unwrap_or("rom")
             .to_ascii_lowercase();
-        let out_path = loop {
-            let p = temp_dir.join(format!("reemu-rom-{}-{n}.{ext}", std::process::id()));
-            if !p.exists() {
-                break p;
-            }
-            n += 1;
-        };
         result = Some((|| -> std::io::Result<PathBuf> {
-            let mut out = std::fs::File::create(&out_path)?;
+            let (out_path, mut out) = create_unique(temp_dir, &ext)?;
             std::io::copy(reader, &mut out)?;
             out.flush()?;
             Ok(out_path)
@@ -241,5 +245,36 @@ mod tests {
         assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 
         let _ = std::fs::remove_file(&archive_path);
+    }
+
+    /// Extrações simultâneas no mesmo processo recebem arquivos distintos —
+    /// antes, o nome saía de `exists()` + `create()` e duas threads pegavam o
+    /// mesmo, e a primeira a terminar apagava o arquivo da outra.
+    #[test]
+    fn concurrent_extractions_get_distinct_files() {
+        let zip_path = scratch_path("zip");
+        {
+            let f = std::fs::File::create(&zip_path).unwrap();
+            let mut zw = zip::ZipWriter::new(f);
+            let opts: zip::write::SimpleFileOptions = Default::default();
+            zw.start_file("Race (USA).gba", opts).unwrap();
+            zw.write_all(b"gba-payload").unwrap();
+            zw.finish().unwrap();
+        }
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let p = zip_path.clone();
+                std::thread::spawn(move || extract_rom(&p, &std::env::temp_dir()).unwrap())
+            })
+            .collect();
+        let extracted: Vec<ExtractedRom> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let mut paths: Vec<_> = extracted.iter().map(|e| e.path().to_path_buf()).collect();
+        paths.sort();
+        paths.dedup();
+        assert_eq!(paths.len(), 8, "cada extração com seu próprio arquivo");
+        for e in &extracted {
+            assert_eq!(std::fs::read(e.path()).unwrap(), b"gba-payload");
+        }
+        let _ = std::fs::remove_file(&zip_path);
     }
 }
