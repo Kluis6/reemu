@@ -145,6 +145,66 @@ const alvaBlue: BrandVariants = {
  *  (`accent`). */
 const alvaBg: BgPalette = { bg1: "#0094D3", bg2: "#00C398", bg3: "#7C45F5", bg4: "#FF8B3E" };
 
+/** Super Nintendo — o roxo do SNES americano (botões A/B, tom 80) indo até
+ *  o lavanda dos botões X/Y (tom 120). */
+const snesPurple: BrandVariants = {
+  10: "#0E0A1C",
+  20: "#181230",
+  30: "#221A45",
+  40: "#2C2259",
+  50: "#372B6E",
+  60: "#413483",
+  70: "#4E3F93",
+  80: "#5E4FA2",
+  90: "#6F61B0",
+  100: "#8174BD",
+  110: "#9387C9",
+  120: "#A69BD4",
+  130: "#B8AFDE",
+  140: "#CBC4E8",
+  150: "#DED9F1",
+  160: "#F1EEF9",
+};
+
+/** Os 4 botões do controle do Super Famicom / SNES europeu, no lugar do
+ *  losango: X azul (alto/esquerda), A vermelho (alto/direita), B amarelo
+ *  (baixo/direita), Y verde (baixo/esquerda). Um tom abaixo do plástico,
+ *  como no `ps1Bg`, pra não gritar no fundo. */
+const snesBg: BgPalette = { bg1: "#2B4FB0", bg2: "#C9A200", bg3: "#1E8F46", bg4: "#B81E2C" };
+
+/** Escuro: o grafite das peças escuras do console (entrada de cartucho,
+ *  botões Power/Reset). Claro: o cinza do corpo. Os dois com um toque de
+ *  lavanda, como o plástico. */
+const snesDark = {
+  colorNeutralBackground1: "#1C1B21",
+  colorNeutralBackground1Hover: "#26252C",
+  colorNeutralBackground1Pressed: "#17161B",
+  colorNeutralBackground1Selected: "#322F3A",
+  colorNeutralBackground2: "#24232A",
+  colorNeutralBackground3: "#2E2C35",
+  colorNeutralBackground4: "#393641",
+  colorNeutralForeground1: "#F4F3F7",
+  colorNeutralForeground2: "#CBC8D3",
+  colorNeutralForeground3: "#9D99A8",
+  colorNeutralStroke1: "rgba(255, 255, 255, 0.12)",
+  colorNeutralStroke2: "rgba(255, 255, 255, 0.07)",
+} satisfies Partial<Theme>;
+
+const snesLight = {
+  colorNeutralBackground1: "#E6E5EA",
+  colorNeutralBackground1Hover: "#DCDBE1",
+  colorNeutralBackground1Pressed: "#D2D1D8",
+  colorNeutralBackground1Selected: "#D2D1D8",
+  colorNeutralBackground2: "#F1F0F4",
+  colorNeutralBackground3: "#DAD9DF",
+  colorNeutralBackground4: "#CFCED5",
+  colorNeutralForeground1: "#1C1B21",
+  colorNeutralForeground2: "#3E3C46",
+  colorNeutralForeground3: "#5E5B68",
+  colorNeutralStroke1: "rgba(0, 0, 0, 0.16)",
+  colorNeutralStroke2: "rgba(0, 0, 0, 0.09)",
+} satisfies Partial<Theme>;
+
 /** Neutros do Alvanista — as variáveis `--bg-dominant`, `--surface-*`,
  *  `--text-*` e `--border-*` do site, escuro (`:root`) e claro
  *  (`[data-theme=light]`). */
@@ -401,6 +461,8 @@ export type ThemeId =
   | "ps1-claro"
   | "alva"
   | "alva-claro"
+  | "snes"
+  | "snes-claro"
   | "alto-contraste";
 
 // "Roxo"/"Âmbar" (e seus pares "-claro") foram removidos: eram só uma rampa
@@ -441,10 +503,54 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
       activeBg: alvaBlue[80],
     }),
   },
+  snes: {
+    label: "Super Nintendo",
+    theme: make(snesPurple, "dark", snesBg, {
+      neutrals: snesDark,
+      appBg: "linear-gradient(180deg, #1C1B21 0%, #141318 45%)",
+      activeBg: "#3A3645",
+    }),
+  },
+  "snes-claro": {
+    label: "Super Nintendo Claro",
+    theme: make(snesPurple, "light", snesBg, {
+      neutrals: snesLight,
+      appBg: "linear-gradient(180deg, #ECEBF0 0%, #E3E2E8 45%)",
+      activeBg: snesPurple[80],
+    }),
+  },
   "alto-contraste": { label: "Alto contraste", theme: makeHighContrast() },
 };
 
 export const DEFAULT_THEME_ID: ThemeId = "xbox-green";
+
+/** Um card em Configurações › Aparência: o tema e, quando existe, o par
+ *  claro — o card mostra um botão Escuro/Claro em vez de dois cards. Os
+ *  `ThemeId` continuam os mesmos (é o que fica salvo). */
+export interface ThemeFamily {
+  label: string;
+  dark: ThemeId;
+  light?: ThemeId;
+}
+
+export const THEME_FAMILIES: ThemeFamily[] = [
+  { label: "Verde Xbox", dark: "xbox-green", light: "claro" },
+  { label: "Xbox Clássico", dark: "xbox-classico" },
+  { label: "Azul PlayStation", dark: "ps-blue", light: "ps-blue-claro" },
+  { label: "PlayStation Clássico", dark: "ps1", light: "ps1-claro" },
+  { label: "Alva", dark: "alva", light: "alva-claro" },
+  { label: "Super Nintendo", dark: "snes", light: "snes-claro" },
+  { label: "Alto contraste", dark: "alto-contraste" },
+];
+
+/** Família e modo de um tema salvo. */
+export function familyOf(id: ThemeId): { family: ThemeFamily; mode: ThemeMode } {
+  for (const family of THEME_FAMILIES) {
+    if (family.dark === id) return { family, mode: "dark" };
+    if (family.light === id) return { family, mode: "light" };
+  }
+  throw new Error(`tema sem família: ${id}`);
+}
 
 export function isThemeId(v: unknown): v is ThemeId {
   return typeof v === "string" && v in THEMES;

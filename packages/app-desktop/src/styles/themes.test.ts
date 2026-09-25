@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { customBgPalette, THEMES } from './themes'
+import { customBgPalette, familyOf, THEME_FAMILIES, THEMES, type ThemeId } from './themes'
+
+describe('THEME_FAMILIES', () => {
+  it('cada tema está em exatamente uma família, no modo certo', () => {
+    const ids = THEME_FAMILIES.flatMap((f) => [f.dark, ...(f.light ? [f.light] : [])])
+    expect([...ids].sort()).toEqual(Object.keys(THEMES).sort())
+    for (const f of THEME_FAMILIES) {
+      expect(familyOf(f.dark)).toEqual({ family: f, mode: 'dark' })
+      if (f.light) expect(familyOf(f.light as ThemeId)).toEqual({ family: f, mode: 'light' })
+    }
+  })
+})
 
 /** Razão de contraste WCAG 2.x entre duas cores `#rrggbb`. */
 function contrast(a: string, b: string): number {

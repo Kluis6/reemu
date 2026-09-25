@@ -1450,3 +1450,10 @@ Infra:
 - **Só no Windows.** No Linux o fundo continua estático, porque o WebKitGTK roda sem compositing com NVIDIA proprietário (`src-tauri/src/main.rs`) e repintaria a tela toda a cada quadro.
 - A animação para com "reduzir movimento" do sistema (`prefers-reduced-motion`, MDN). Com a janela sem foco ou minimizada ela fica pausada com `animation-play-state: paused`, que retoma de onde parou (MDN).
 - Na tela de jogo o fundo não existe: `/play` fica fora do `AppShell`, então o custo durante o jogo é zero.
+
+## 2026-09-25 — Aparência: um card por tema, Switch "Claro" e tema Super Nintendo
+
+- Os pares escuro/claro (Verde Xbox/Claro, Azul PlayStation, PlayStation Clássico, Alva, Super Nintendo) viraram **um card cada**, com um `Switch` "Claro" (Fluent 2) no rodapé. Os `ThemeId` salvos continuam os mesmos, só agrupados em `THEME_FAMILIES` (`styles/themes.ts`), com teste garantindo que cada tema está em uma família. Os cards são `Card` do Fluent.
+- Cada card guarda o próprio modo. No card selecionado o Switch aplica na hora; nos outros ele só troca a prévia daquele card, e clicar no card aplica o tema no modo mostrado. Um card não muda por causa de outro.
+- O papel de parede foi para uma coluna à direita dos temas (`Card` com prévia 16:9). Em janela estreita (até 960 px) ele desce para baixo dos temas.
+- **Tema Super Nintendo** (`snes` / `snes-claro`): marca no roxo dos botões A/B do SNES americano, indo até o lavanda de X/Y. Os 4 brilhos do fundo são os botões do Super Famicom/PAL na posição do losango: X azul, A vermelho, B amarelo, Y verde. O escuro usa o grafite das peças escuras do console; o claro, o cinza do corpo. Referência das cores dos botões: artigo "Super Nintendo Entertainment System controller" (Nintendo Wiki/Fandom).
