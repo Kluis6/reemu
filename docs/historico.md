@@ -1541,3 +1541,7 @@ Infra:
 - `i18next` 26 + `react-i18next` 17 em `packages/app-desktop/src/i18n/`. O `pt-BR` é a origem das chaves; `en` e `es` são tipados pelo formato dele (`Messages`), e as chaves do `t()` são tipadas (`i18next.d.ts`). O teste `locales.test.ts` garante as mesmas chaves e as mesmas variáveis `{{x}}` nos três idiomas, além da detecção do idioma do sistema.
 - **Idioma:** preferência em Configurações › Aparência (Automático / Português (Brasil) / English / Español, cada idioma no próprio nome), guardada em `reemu.language`. `auto` segue `navigator.languages` pela língua-base (pt-PT → pt-BR, es-MX → es); sem correspondência, pt-BR. O `<html lang>` acompanha o idioma. A troca vale na hora, sem reiniciar.
 - **Primeira leva migrada:** o rail (Início, Meus jogos, Configurações), o menu do perfil, o topo (voltar, busca, tela cheia, encerrar), as dicas de botão, o título e as abas de Configurações e a tela Aparência inteira, incluindo os nomes dos temas (`ThemeFamily.nameKey`) e os tamanhos da interface. O resto está listado no TASKS.md. Regra para textos novos no CLAUDE.md.
+
+## 2026-09-25 — Release v0.1.3
+
+- Corrige o crash da v0.1.2 no Linux: abrir um jogo de N64 no mupen64plus_next com o plugin padrão (GLideN64) derrubava o app. Também entram o interop GL com modificador DRM negociado (validação limpa), a fase C dos cores Vulkan e a base de idiomas (pt-BR, en, es). A versão do `package.json` da raiz, que tinha ficado em 0.1.1, foi alinhada.
