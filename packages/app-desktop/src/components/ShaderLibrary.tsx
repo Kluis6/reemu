@@ -187,9 +187,9 @@ export function ShaderLibrary({
     return (
       <div className={s.root}>
         <Caption1>
-          Baixe o pacote de slang shaders — os mesmos do RetroArch (Online
-          Updater → Update Slang Shaders) — ou aponte pra pasta{' '}
-          <code>shaders_slang</code> do RetroArch/RetroBat.
+          Baixe o pacote de shaders slang (CRT, LCD, fliperama e outros) ou
+          aponte pra uma pasta <code>shaders_slang</code> que você já tenha no
+          computador.
         </Caption1>
         <div className={s.bar}>
           <Button

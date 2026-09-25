@@ -193,7 +193,7 @@ export function SettingsVideo() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
                 <Caption1>
-                  Preset externo — arquivo <code>.slangp</code> do RetroArch.
+                  Preset externo — um arquivo <code>.slangp</code> seu.
                   A maioria funciona bem; alguns efeitos de brilho podem
                   ficar um pouco diferentes.
                 </Caption1>
@@ -226,7 +226,7 @@ export function SettingsVideo() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <Caption1>
                 Baixe molduras por sistema direto do The Bezel Project, ou
-                importe sua própria pasta (formato Bezel Project / RetroBat).
+                importe sua própria pasta (formato Bezel Project).
               </Caption1>
               <BezelLibrary />
               <div style={{ display: 'flex', gap: 8 }}>

@@ -10,7 +10,7 @@ import {
 import { ImageAddRegular } from '@fluentui/react-icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { PRESET_IDS } from '../lib/avatars'
+import { AVATAR_NAMES, PRESET_IDS } from '../lib/avatars'
 import { PresetAvatar } from './PresetAvatar'
 import { sysToast } from '../lib/toast'
 import {
@@ -128,7 +128,8 @@ export function ProfileForm({
                   avatar === `preset:${id}` && s.choiceOn,
                 )}
                 onClick={() => setAvatar(`preset:${id}`)}
-                aria-label={`Avatar ${id}`}
+                aria-label={`Avatar ${AVATAR_NAMES[id]}`}
+                title={AVATAR_NAMES[id]}
                 aria-pressed={avatar === `preset:${id}`}
               >
                 <PresetAvatar id={id} size={48} style={{ borderRadius: '50%' }} />

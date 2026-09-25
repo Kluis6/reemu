@@ -55,7 +55,7 @@ pub(super) fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
         "slangp" => {}
         "glslp" | "cgp" => {
             return Err(format!(
-                "preset '.{ext}' (GLSL/Cg) não é suportado — use a pasta `shaders_slang` do RetroArch (.slangp)"
+                "preset '.{ext}' (GLSL/Cg) não é suportado — use um preset slang (.slangp)"
             ))
         }
         "slang" | "glsl" | "cg" => {
