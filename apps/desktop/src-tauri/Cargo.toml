@@ -59,6 +59,8 @@ tauri-plugin-updater = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }
+# logs do lado do app nos testes de hardware (ex.: diagnóstico de áudio)
+env_logger = "0.11"
 # Teste ponta-a-ponta do HW render Vulkan (etapa 12): carrega o core de teste
 # adotando o VkDevice do compositor. `test-fixtures` também expõe
 # `render_solid_rgba_to_dmabuf` (interop GL — teste do lado consumidor/wgpu).

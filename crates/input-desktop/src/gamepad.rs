@@ -9,7 +9,7 @@
 use crate::{capture, held, mappings};
 use core_loader_desktop::{AnalogState, RetroPadState};
 use domain::input::{RawInputEvent, RetroPadButton};
-use gilrs::{Axis, Button, Event, EventType, GamepadId, Gilrs};
+use gilrs::{Axis, Button, Event, EventType, GamepadId, Gilrs, GilrsBuilder};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -208,7 +208,13 @@ pub struct PollOutcome {
 impl GamepadPoller {
     pub fn new() -> Result<Self, Box<gilrs::Error>> {
         Ok(Self {
-            gilrs: Gilrs::new().map_err(Box::new)?,
+            // Gatilho analógico vira botão a partir de 25% do curso (solta
+            // abaixo de 15%). O padrão do gilrs é 75%/65% — no DualSense, de
+            // curso longo, meia pressão não contava e o jogo não acelerava.
+            gilrs: GilrsBuilder::new()
+                .set_axis_to_btn(0.25, 0.15)
+                .build()
+                .map_err(Box::new)?,
             ports: HashMap::new(),
             next_port: 0,
             down: HashMap::new(),

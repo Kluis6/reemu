@@ -4669,6 +4669,7 @@ dependencies = [
  "db",
  "domain",
  "emu-session",
+ "env_logger",
  "input-desktop",
  "keyring",
  "library-scan",

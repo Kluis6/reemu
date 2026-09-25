@@ -268,7 +268,19 @@ struct RateEstimator {
     est: f64,
     window_frames: f64,
     window_start: Instant,
+    /// Janelas seguidas fora da faixa, no mesmo sentido (+1/-1 por janela).
+    outlier_streak: i32,
 }
+
+/// Janela de medição fora de ±`BURST_TOL` da taxa declarada é rajada ou
+/// trava do core (o flycast para de renderizar e depois manda de uma vez o
+/// áudio atrasado — `shell/libretro/audiostream.cpp`), não desvio de
+/// relógio: não entra na média. Mentira real de relógio é menor (parallel_n64
+/// declara 26807 e entrega ~27244, 1,6%).
+const BURST_TOL: f64 = 0.03;
+/// ...a não ser que se sustente: tantas janelas (0,5 s cada) seguidas no
+/// mesmo sentido = o core entrega mesmo nessa taxa.
+const SUSTAINED_WINDOWS: i32 = 4;
 
 impl RateEstimator {
     fn new() -> Self {
@@ -277,6 +289,7 @@ impl RateEstimator {
             est: 0.0,
             window_frames: 0.0,
             window_start: Instant::now(),
+            outlier_streak: 0,
         }
     }
 
@@ -288,20 +301,40 @@ impl RateEstimator {
             self.est = d;
             self.window_frames = 0.0;
             self.window_start = Instant::now();
+            self.outlier_streak = 0;
         }
     }
 
     fn observe(&mut self, frames: usize) {
+        self.observe_at(frames, Instant::now());
+    }
+
+    fn observe_at(&mut self, frames: usize, now: Instant) {
         self.window_frames += frames as f64;
-        let elapsed = self.window_start.elapsed().as_secs_f64();
+        let elapsed = now.duration_since(self.window_start).as_secs_f64();
         if elapsed >= 0.5 && self.window_frames > 0.0 {
             let inst = self.window_frames / elapsed;
-            self.est = self.est * 0.75 + inst * 0.25;
-            let lo = self.anchor * 0.88;
-            let hi = self.anchor * 1.12;
-            self.est = self.est.clamp(lo, hi);
+            let dev = inst / self.anchor - 1.0;
+            let accept = if dev.abs() <= BURST_TOL {
+                self.outlier_streak = 0;
+                true
+            } else {
+                let dir = if dev > 0.0 { 1 } else { -1 };
+                self.outlier_streak = if self.outlier_streak.signum() == dir {
+                    self.outlier_streak + dir
+                } else {
+                    dir
+                };
+                self.outlier_streak.abs() >= SUSTAINED_WINDOWS
+            };
+            if accept {
+                self.est = self.est * 0.75 + inst * 0.25;
+                let lo = self.anchor * 0.88;
+                let hi = self.anchor * 1.12;
+                self.est = self.est.clamp(lo, hi);
+            }
             self.window_frames = 0.0;
-            self.window_start = Instant::now();
+            self.window_start = now;
         }
     }
 
@@ -373,5 +406,53 @@ mod tests {
         // ratio 1.0, 20 frames de entrada -> ~19 de saída (perde ~1 de borda)
         let frames = out.len() / 2;
         assert!((17..=20).contains(&frames), "{frames}");
+    }
+}
+
+#[cfg(test)]
+mod rate_estimator_tests {
+    use super::*;
+    use std::time::Duration;
+
+    /// 44100 Hz declarados, entrega fiel em quadros de 1/60 s — com uma
+    /// rajada de 3× (core que travou e mandou o atrasado) no meio. A
+    /// estimativa não pode se afastar da taxa real.
+    #[test]
+    fn a_burst_does_not_skew_the_rate() {
+        let mut r = RateEstimator::new();
+        r.anchor_to(44100);
+        let t0 = r.window_start;
+        let per_frame = 735; // 44100 / 60
+                             // mede 1 s depois da rajada (quadros 240..250)
+        for i in 1..=310u64 {
+            let now = t0 + Duration::from_micros(i * 16_667);
+            let frames = if (240..250).contains(&i) {
+                per_frame * 3
+            } else {
+                per_frame
+            };
+            r.observe_at(frames, now);
+        }
+        let err = (r.rate() / 44100.0 - 1.0).abs();
+        assert!(
+            err < 0.005,
+            "taxa estimada {:.0} ({:.2}% fora)",
+            r.rate(),
+            err * 100.0
+        );
+    }
+
+    /// Desvio real e sustentado (core que mente 5% no sample rate) ainda é
+    /// aprendido.
+    #[test]
+    fn a_sustained_offset_is_still_learned() {
+        let mut r = RateEstimator::new();
+        r.anchor_to(44100);
+        let t0 = r.window_start;
+        for i in 1..=900u64 {
+            let now = t0 + Duration::from_micros(i * 16_667);
+            r.observe_at(772, now); // ~46320 Hz, +5%
+        }
+        assert!(r.rate() > 45500.0, "não aprendeu o desvio: {:.0}", r.rate());
     }
 }

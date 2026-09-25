@@ -1144,11 +1144,18 @@ fn gl_core_real_rom() {
     };
     let tmp = std::env::temp_dir().join(format!("reemu-glrom-{}", std::process::id()));
     std::fs::create_dir_all(&tmp).unwrap();
-    let session = EmuSession::spawn(SessionConfig::new(
-        data.join("cores"),
-        data.join("system"),
-        tmp.clone(),
-    ));
+    let mut cfg = SessionConfig::new(data.join("cores"), data.join("system"), tmp.clone());
+    // `REEMU_TEST_AUDIO=1`: som de verdade no dispositivo padrão (com
+    // `REEMU_AUDIO_DEBUG=1` o sink loga fill/descartes/underrun por segundo).
+    let _ = env_logger::builder().is_test(true).try_init();
+    if std::env::var_os("REEMU_TEST_AUDIO").is_some() {
+        cfg.audio_sink = Some(Box::new(|| {
+            audio_desktop::CpalAudioSink::new(&Default::default())
+                .ok()
+                .map(|s| Box::new(s) as _)
+        }));
+    }
+    let session = EmuSession::spawn(cfg);
     session
         .load(&core, &rom, HashMap::new())
         .expect("carregar core GL + ROM pela sessão");
