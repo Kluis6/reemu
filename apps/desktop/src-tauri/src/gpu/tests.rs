@@ -1369,6 +1369,7 @@ fn vk_core_real_rom() {
     let start = Instant::now();
     let mut next = 1;
     let mut last_dump = u64::MAX;
+    let (mut saved, mut restored): (Option<Vec<u8>>, bool) = (None, false);
     let mut tick = Instant::now();
     while start.elapsed() < Duration::from_secs(secs) {
         let t = Instant::now();
@@ -1405,6 +1406,22 @@ fn vk_core_real_rom() {
             std::thread::sleep(Duration::from_micros(16_683) - spent);
         }
         tick = Instant::now();
+        // `REEMU_TEST_SAVESTATE=1`: salva no 6º s e restaura no 9º (carga
+        // na fila compartilhada: serialize/unserialize podem submeter).
+        if std::env::var_os("REEMU_TEST_SAVESTATE").is_some() {
+            let el = start.elapsed().as_secs();
+            if el >= 6 && saved.is_none() && !restored {
+                saved = session.save_state().expect("save_state");
+                eprintln!("save state: {:?} bytes", saved.as_ref().map(|b| b.len()));
+            }
+            if el >= 9 && !restored {
+                if let Some(b) = saved.take() {
+                    let ok = session.restore_state(b).expect("restore_state");
+                    eprintln!("restore state: {ok}");
+                }
+                restored = true;
+            }
+        }
         if start.elapsed().as_secs() >= next {
             eprintln!(
                 "{next:>3}s: quadros {frames}, Vulkan {vk}, não-pretos {lit}, passo méd {:.2} máx {:.2} ms",
