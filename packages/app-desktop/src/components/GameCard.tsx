@@ -10,7 +10,6 @@ import {
 } from "@fluentui/react-components";
 import { HeartFilled } from "@fluentui/react-icons";
 import { useState } from "react";
-import { initials } from "../lib/initials";
 import { useCardStyles } from "../styles/xbox";
 
 export interface CardMenuItem {
@@ -43,6 +42,35 @@ const useLocalStyles = makeStyles({
     color: "var(--reemuBrandText)",
     fontSize: "clamp(12px, 0.7vw, 24px)",
     pointerEvents: "none",
+  },
+  // Sem capa: o NOME do jogo no próprio card (antes eram só as iniciais —
+  // "CA", "CA", "CA" não dizia qual era qual; reconhecer > lembrar).
+  noArt: {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
+    padding: "12%",
+    textAlign: "center",
+    backgroundImage: `linear-gradient(160deg, ${tokens.colorNeutralBackground3}, ${tokens.colorNeutralBackground1})`,
+  },
+  noArtTitle: {
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: "clamp(15px, 1vw, 30px)",
+    lineHeight: 1.25,
+    overflowWrap: "anywhere",
+    display: "-webkit-box",
+    WebkitLineClamp: "3",
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
+  noArtSub: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: "clamp(12px, 0.75vw, 22px)",
   },
 });
 
@@ -111,7 +139,10 @@ export function GameCard({
             onError={() => setBroken(true)}
           />
         ) : (
-          <span style={{ fontSize: 30, opacity: 0.5 }}>{initials(title)}</span>
+          <span className={l.noArt}>
+            <span className={l.noArtTitle}>{title}</span>
+            {badge && <span className={l.noArtSub}>{badge}</span>}
+          </span>
         )}
         {favorite && (
           <span className={l.favBadge} aria-label="Favorito">
@@ -119,10 +150,13 @@ export function GameCard({
           </span>
         )}
       </div>
-      <div className={s.meta} data-meta>
-        {badge && <span className={s.subText}>{badge}</span>}
-        <span className={s.titleText}>{title}</span>
-      </div>
+      {/* nome sobre a capa no foco — sem capa o nome já está no card */}
+      {showArt && (
+        <div className={s.meta} data-meta>
+          {badge && <span className={s.subText}>{badge}</span>}
+          <span className={s.titleText}>{title}</span>
+        </div>
+      )}
     </Card>
   );
 

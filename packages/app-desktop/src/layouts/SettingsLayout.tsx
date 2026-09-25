@@ -29,7 +29,7 @@ const TABS = [
   { key: "biblioteca", label: "Gerenciar biblioteca" },
   { key: "audio", label: "Áudio" },
   { key: "video", label: "Vídeo" },
-  { key: "metadata", label: "Metadata" },
+  { key: "metadata", label: "Metadados" },
   { key: "hotkeys", label: "Atalhos" },
   { key: "controllers", label: "Controles" },
   { key: "cores", label: "Cores" },

@@ -1,6 +1,5 @@
 import {
   Badge,
-  Body1,
   Button,
   Caption1,
   Select,
@@ -22,6 +21,7 @@ import {
   setDevicePort,
   type ControllerMapping,
 } from '../lib/tauri'
+import { EmptyState } from './EmptyState'
 import { useBindingCaptureStore } from '../stores/useBindingCaptureStore'
 import { useToastStore } from '../stores/useToastStore'
 
@@ -105,7 +105,13 @@ export function ControllerMappings() {
 
   if (loading) return <Spinner label="Procurando controles…" />
   if (devices.length === 0)
-    return <Body1>Nenhum controle conectado nem mapa salvo.</Body1>
+    return (
+      <EmptyState title="Nenhum controle conectado">
+        Conecte um controle por USB ou Bluetooth — ele aparece aqui sozinho, e
+        dá pra ajustar o mapeamento de cada botão. Sem controle, o teclado
+        funciona em todo o app.
+      </EmptyState>
+    )
 
   return (
     <div className={styles.root}>

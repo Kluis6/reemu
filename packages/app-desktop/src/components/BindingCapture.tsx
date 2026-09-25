@@ -102,7 +102,7 @@ export function BindingCapture() {
         <DialogBody>
           <DialogTitle>Capturar atalho{active ? ` — ${active.label}` : ''}</DialogTitle>
           <DialogContent>
-            <Text as="p" className={styles.hint}>
+            <Text as="p" block className={styles.hint}>
               Pressione a tecla ou o botão do controle. Segure a primeira e aperte outra
               para uma combinação. Grava sozinho após um instante.
             </Text>

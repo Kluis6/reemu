@@ -5,6 +5,7 @@ import { SettingsLayout } from './layouts/SettingsLayout'
 import { Home } from './screens/Home'
 import { Library } from './screens/Library'
 import { Onboarding } from './screens/Onboarding'
+import { RouteError } from './components/RouteError'
 import { PlatformLibrary } from './screens/PlatformLibrary'
 import { PlayScreen } from './screens/PlayScreen'
 import { RomDetail } from './screens/RomDetail'
@@ -28,29 +29,37 @@ import { SettingsVideo } from './screens/settings/SettingsVideo'
 export const router = createHashRouter([
   {
     element: <RootLayout />,
+    errorElement: <RouteError />,
     children: [
       {
         element: <AppShell />,
         children: [
-          { index: true, element: <Home /> },
-          { path: 'library', element: <Library /> },
-          { path: 'library/:platform', element: <PlatformLibrary /> },
-          { path: 'rom/:romId', element: <RomDetail /> },
           {
-            path: 'settings',
-            element: <SettingsLayout />,
+            // Erro numa tela aparece DENTRO da casca (rail/topbar seguem de
+            // pé) — ver components/RouteError.
+            errorElement: <RouteError />,
             children: [
-              { index: true, element: <Navigate to="perfil" replace /> },
-              { path: 'perfil', element: <SettingsProfile /> },
-              { path: 'aparencia', element: <SettingsAppearance /> },
-              { path: 'biblioteca', element: <SettingsLibrary /> },
-              { path: 'audio', element: <SettingsAudio /> },
-              { path: 'video', element: <SettingsVideo /> },
-              { path: 'metadata', element: <SettingsMetadata /> },
-              { path: 'hotkeys', element: <SettingsHotkeys /> },
-              { path: 'controllers', element: <SettingsControllers /> },
-              { path: 'cores', element: <SettingsCores /> },
-              { path: 'bios', element: <SettingsBios /> },
+              { index: true, element: <Home /> },
+              { path: 'library', element: <Library /> },
+              { path: 'library/:platform', element: <PlatformLibrary /> },
+              { path: 'rom/:romId', element: <RomDetail /> },
+              {
+                path: 'settings',
+                element: <SettingsLayout />,
+                children: [
+                  { index: true, element: <Navigate to="perfil" replace /> },
+                  { path: 'perfil', element: <SettingsProfile /> },
+                  { path: 'aparencia', element: <SettingsAppearance /> },
+                  { path: 'biblioteca', element: <SettingsLibrary /> },
+                  { path: 'audio', element: <SettingsAudio /> },
+                  { path: 'video', element: <SettingsVideo /> },
+                  { path: 'metadata', element: <SettingsMetadata /> },
+                  { path: 'hotkeys', element: <SettingsHotkeys /> },
+                  { path: 'controllers', element: <SettingsControllers /> },
+                  { path: 'cores', element: <SettingsCores /> },
+                  { path: 'bios', element: <SettingsBios /> },
+                ],
+              },
             ],
           },
         ],

@@ -15,11 +15,13 @@ import {
   Field,
   Input,
   mergeClasses,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
   OverlayDrawer,
   Select,
   Tab,
   TabList,
-  Tooltip,
 } from "@fluentui/react-components";
 import {
   ArrowResetRegular,
@@ -317,79 +319,73 @@ export function RomDetail() {
             >
               {hasQuick ? "Continuar" : "Jogar"}
             </Button>
-            <Tooltip
-              content={
-                rom.isFavorite
-                  ? "Remover dos favoritos"
-                  : "Adicionar aos favoritos"
+            {/* Rótulo sempre visível (sem tooltip): no controle o tooltip
+                aparece e some sozinho no foco — a Microsoft desaconselha em
+                TV. A confirmação de remoção vira o próprio texto do botão. */}
+            <Button
+              size="large"
+              appearance="secondary"
+              className={mergeClasses(s.noBorderButton, s.heroLabeledBtn)}
+              icon={
+                rom.isFavorite ? (
+                  <HeartFilled className={s.favIconOn} />
+                ) : (
+                  <HeartRegular />
+                )
               }
-              relationship="label"
+              aria-pressed={rom.isFavorite}
+              onClick={() => fav.mutate(!rom.isFavorite)}
             >
-              <Button
-                size="large"
-                appearance="secondary"
-                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
-                icon={
-                  rom.isFavorite ? (
-                    <HeartFilled className={s.favIconOn} />
-                  ) : (
-                    <HeartRegular />
-                  )
-                }
-                aria-label={rom.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
-                aria-pressed={rom.isFavorite}
-                onClick={() => fav.mutate(!rom.isFavorite)}
-              />
-            </Tooltip>
-            <Tooltip content="Editar nome e plataforma" relationship="label">
-              <Button
-                size="large"
-                appearance="secondary"
-                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
-                icon={<EditRegular />}
-                aria-label="Editar nome e plataforma"
-                onClick={openEdit}
-              />
-            </Tooltip>
-            <Tooltip content="Informações completas" relationship="label">
-              <Button
-                size="large"
-                appearance="secondary"
-                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
-                icon={<InfoRegular />}
-                aria-label="Informações completas"
-                onClick={() => setInfoOpen(true)}
-              />
-            </Tooltip>
-            <Tooltip
-              content={
-                confirmRemove
-                  ? "Clique de novo para confirmar"
-                  : "Remover da biblioteca"
-              }
-              relationship="label"
+              {rom.isFavorite ? "Favorito" : "Favoritar"}
+            </Button>
+            <Button
+              size="large"
+              appearance="secondary"
+              className={mergeClasses(s.noBorderButton, s.heroLabeledBtn)}
+              icon={<EditRegular />}
+              onClick={openEdit}
             >
-              <Button
-                size="large"
-                appearance="secondary"
-                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
-                icon={<DeleteRegular />}
-                aria-label={
-                  confirmRemove
-                    ? "Clique de novo para confirmar remoção"
-                    : "Remover da biblioteca"
+              Editar
+            </Button>
+            <Button
+              size="large"
+              appearance="secondary"
+              className={mergeClasses(s.noBorderButton, s.heroLabeledBtn)}
+              icon={<InfoRegular />}
+              onClick={() => setInfoOpen(true)}
+            >
+              Informações
+            </Button>
+            <Button
+              size="large"
+              appearance="secondary"
+              className={mergeClasses(s.noBorderButton, s.heroLabeledBtn, s.dangerBtn)}
+              icon={<DeleteRegular />}
+              disabled={remove.isPending}
+              onClick={() => {
+                if (confirmRemove) remove.mutate();
+                else {
+                  setConfirmRemove(true);
+                  window.setTimeout(() => setConfirmRemove(false), 3000);
                 }
-                disabled={remove.isPending}
-                onClick={() => {
-                  if (confirmRemove) remove.mutate();
-                  else {
-                    setConfirmRemove(true);
-                    window.setTimeout(() => setConfirmRemove(false), 3000);
-                  }
-                }}
-              />
-            </Tooltip>
+              }}
+            >
+              {confirmRemove ? "Confirmar remoção" : "Remover"}
+            </Button>
           </div>
+          {coreList.length === 0 && (
+            <MessageBar intent="warning" className={s.noCoreBar}>
+              <MessageBarBody>
+                Nenhum core instalado para {platformLabel(rom.systemId)} — é ele
+                que roda o jogo.
+              </MessageBarBody>
+              <MessageBarActions>
+                <Button appearance="primary" onClick={() => navigate("/settings/cores")}>
+                  Abrir Cores
+                </Button>
+              </MessageBarActions>
+            </MessageBar>
+          )}
         </div>
       </div>
 
@@ -715,16 +711,11 @@ export function RomDetail() {
       </section>
 
       {meta.data?.description && (
-        <Text as="p" className={s.desc}>
+        <Text as="p" block className={s.desc}>
           {meta.data.description}
         </Text>
       )}
 
-      {coreList.length === 0 && (
-        <Caption1>
-          Instale um core em Configurações → Cores pra poder jogar.
-        </Caption1>
-      )}
     </div>
   );
 }

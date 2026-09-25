@@ -568,6 +568,29 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-25 — revisão de UI (heurísticas de Nielsen + guia Xbox/TV da
+  Microsoft + Fluent 2)**. Telas capturadas em 1920×1080 com backend
+  simulado; o que foi achado e corrigido:
+  * H9 (recuperar de erros): erro de execução mostrava a página técnica do
+    React Router em inglês. `RouteError` como `errorElement` — mensagem em
+    português, "Tentar de novo"/"Voltar ao início", rail de pé, erro no log.
+  * H6 (reconhecer > lembrar): jogo sem capa mostrava só as iniciais ("CA",
+    "CA"…). Agora nome + plataforma no card.
+  * H1/H10 (status e ajuda): "Jogar" desabilitado sem motivo visível (o aviso
+    ficava escondido no pé da página). Aviso ao lado com botão "Abrir Cores".
+  * TV (Microsoft: sem tooltip no controle, rótulos sempre visíveis): ações
+    do detalhe do jogo com texto; confirmação de remoção no próprio botão
+    ("Confirmar remoção"), em vermelho e separado.
+  * H8/H4: texto do Fluent é `inline` mesmo com `as="p"` — título e
+    descrição colavam ("Tema de corMuda…"); `block` onde faltava. Grade da
+    plataforma com `auto-fill` (3 jogos viravam cards de ~560 px). "Limpar
+    filtro" só com filtro ativo (antes: quadrado cinza vazio). Aba
+    "Metadata" → "Metadados". Estado vazio de Controles explica o que fazer.
+  * H7 (flexibilidade) / TV: "Tamanho da interface" em Aparência (100, 125,
+    150%) com o zoom nativo do webview (`setZoom`, permissão
+    `core:webview:allow-set-webview-zoom`) — a Microsoft pede ≥15 epx de
+    texto a ~3 m e o Xbox renderiza a 200% em 1080p.
+
 - **2026-09-25 — primeiro teste longo no Windows (RTX 3060)**: canvas WebGL
   confirmado (`canvas de vídeo: webgl`); download de ~40 cores, BIOS,
   PPSSPP, shaders e bezels ok; Mega Drive e GBA rodando com moldura.

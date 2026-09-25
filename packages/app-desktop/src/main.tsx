@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import './index.css'
+import { applyUiScale, getUiScale } from './lib/uiScale'
 
 // A webview é opaca (o vídeo do jogo é desenhado num canvas dentro dela, não
 // atrás) — ver apps/desktop/src-tauri/src/main.rs pro histórico.
@@ -24,6 +25,10 @@ window.addEventListener('unhandledrejection', (e) =>
 document.addEventListener('securitypolicyviolation', (e) =>
   reportToRust(`CSP bloqueou ${e.blockedURI || '(inline)'} (${e.effectiveDirective})`),
 )
+
+// Tamanho da interface escolhido em Aparência — antes do 1º render, pra não
+// piscar no tamanho padrão.
+if (getUiScale() !== 1) applyUiScale(getUiScale()).catch(() => {})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

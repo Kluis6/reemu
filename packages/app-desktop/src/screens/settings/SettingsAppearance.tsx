@@ -12,8 +12,10 @@ import {
 } from '@fluentui/react-components'
 import { CheckmarkFilled, ImageAddRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { clearWallpaper, pickImage, setWallpaperFile, wallpaperUrl } from '../../lib/tauri'
 import { sysToast } from '../../lib/toast'
+import { UI_SCALES, getUiScale, setUiScale } from '../../lib/uiScale'
 import { useToastStore } from '../../stores/useToastStore'
 import { useThemeStore } from '../../stores/useThemeStore'
 import {
@@ -119,6 +121,7 @@ export function SettingsAppearance() {
   const { selection, customDraft, setPreset, activateCustom, setCustomHue, setCustomMode } =
     useThemeStore()
   const isCustom = selection.kind === 'custom'
+  const [uiScale, setUiScaleState] = useState(getUiScale)
   const customPreview = resolveTheme({ kind: 'custom', ...customDraft })
   const qc = useQueryClient()
   const push = useToastStore((t) => t.push)
@@ -147,9 +150,37 @@ export function SettingsAppearance() {
     <div className={s.root}>
       <div>
         <Text as="strong" weight="semibold">
+          Tamanho da interface
+        </Text>
+        <Caption1 as="p" block style={{ margin: '2px 0 0' }}>
+          Aumenta textos, botões e capas por igual. Padrão pro monitor, Grande
+          pra notebook de longe ou TV pequena, Maior pra TV vista do sofá.
+        </Caption1>
+      </div>
+      <RadioGroup
+        layout="horizontal"
+        aria-label="Tamanho da interface"
+        value={String(uiScale)}
+        onChange={(_, data: RadioGroupOnChangeData) => {
+          const v = Number(data.value)
+          setUiScaleState(v)
+          setUiScale(v).catch((e) => push(sysToast(`Falha ao mudar o tamanho: ${e}`, 'Error')))
+        }}
+      >
+        {UI_SCALES.map((o) => (
+          <Radio
+            key={o.value}
+            value={String(o.value)}
+            label={`${o.label} (${Math.round(o.value * 100)}%)`}
+          />
+        ))}
+      </RadioGroup>
+
+      <div>
+        <Text as="strong" weight="semibold">
           Tema de cor
         </Text>
-        <Caption1 as="p" style={{ margin: '2px 0 0' }}>
+        <Caption1 as="p" block style={{ margin: '2px 0 0' }}>
           Muda a cor de destaque e do fundo do app.
         </Caption1>
       </div>
@@ -240,7 +271,7 @@ export function SettingsAppearance() {
         <Text as="strong" weight="semibold">
           Papel de parede
         </Text>
-        <Caption1 as="p" style={{ margin: '2px 0 0' }}>
+        <Caption1 as="p" block style={{ margin: '2px 0 0' }}>
           Uma imagem de fundo pra tela inicial. Opcional.
         </Caption1>
       </div>

@@ -376,17 +376,6 @@ export function Library() {
       </div>
 
       <div className={s.toolbar}>
-        <Tooltip content="Limpar filtros" relationship="label">
-          <Button
-            appearance="secondary"
-            className={l.surface}
-            icon={<FilterRegular />}
-            aria-label="Limpar filtros"
-            disabled={platform === "all"}
-            onClick={() => setPlatform("all")}
-          />
-        </Tooltip>
-
         <Menu
           checkedValues={{ plat: [platform] }}
           onCheckedValueChange={(_, d) => setPlatform(d.checkedItems[0] ?? "all")}
@@ -409,6 +398,19 @@ export function Library() {
             </MenuList>
           </MenuPopover>
         </Menu>
+
+        {/* Só com filtro ativo, com texto: desabilitado e só com ícone ele
+            virava um quadrado cinza sem significado. */}
+        {platform !== "all" && (
+          <Button
+            appearance="subtle"
+            className={l.surface}
+            icon={<FilterRegular />}
+            onClick={() => setPlatform("all")}
+          >
+            Limpar filtro
+          </Button>
+        )}
 
         <Menu
           checkedValues={{ sort: [sort] }}
