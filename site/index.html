@@ -8,43 +8,38 @@
       name="description"
       content="ReEmu: frontend de emulação com cores libretro para Linux e Windows. Biblioteca com capas, shaders CRT, molduras, save states e navegação completa pelo controle."
     />
+    <meta name="author" content="Luis Julio" />
     <meta property="og:title" content="ReEmu — React Emulator Frontend" />
     <meta
       property="og:description"
       content="Seus jogos clássicos com cara de console. Grátis e de código aberto, para Linux e Windows."
     />
-    <meta property="og:image" content="https://kluis6.github.io/reemu/og.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
+    <meta property="og:image" content="https://kluis6.github.io/reemu/logo.png" />
     <meta property="og:url" content="https://kluis6.github.io/reemu/" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#030605" />
-    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="icon-512.png" type="image/png" sizes="512x512" />
-    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="stylesheet" href="style.css" />
     <!-- liga as animações de entrada só com JS ativo (sem JS, tudo visível) -->
     <script>
       document.documentElement.classList.add("js");
     </script>
-    <script src="ui.js" defer></script>
-    <script src="app.js" defer></script>
+    <!-- Fluent UI 2 (web components) + tema: ver vendor/README.md -->
+    <script type="module" src="ui.js"></script>
+    <script type="module" src="app.js"></script>
   </head>
   <body>
     <a class="skip" href="#conteudo">Pular para o conteúdo</a>
 
     <header class="top">
       <div class="wrap top-row">
-        <a class="wordmark" href="./" aria-label="ReEmu — início"
-          ><img src="mark.svg" alt="" width="34" height="34" />Re<span>Emu</span></a
-        >
+        <a class="wordmark" href="./" aria-label="ReEmu — início">Re<span>Emu</span></a>
         <nav class="nav" aria-label="Seções">
-          <a href="#recursos">Recursos</a>
-          <a href="#praticidade">Praticidade</a>
-          <a href="#telas">Telas</a>
-          <a href="#apoie">Apoie</a>
-          <a href="#download" class="nav-cta">Baixar</a>
+          <fluent-anchor-button class="nav-link" appearance="subtle" href="#recursos">Recursos</fluent-anchor-button>
+          <fluent-anchor-button class="nav-link" appearance="subtle" href="#praticidade">Praticidade</fluent-anchor-button>
+          <fluent-anchor-button class="nav-link" appearance="subtle" href="#telas">Telas</fluent-anchor-button>
+          <fluent-anchor-button class="nav-link" appearance="subtle" href="#apoie">Apoie</fluent-anchor-button>
+          <fluent-anchor-button appearance="primary" href="#download">Baixar</fluent-anchor-button>
         </nav>
       </div>
     </header>
@@ -78,21 +73,22 @@
             height="941"
             onerror="this.remove()"
           />
-          <!-- emblema vetorial: aparece só se a arte acima (logo.png) faltar -->
-          <img class="hero-mark" src="mark.svg" alt="" width="168" height="168" />
-          <p class="eyebrow reveal">Frontend de emulação · Linux e Windows · Grátis</p>
+          <fluent-badge class="reveal" appearance="outline" color="informative" shape="circular" size="large">
+            Frontend de emulação · Linux e Windows · Grátis
+          </fluent-badge>
           <h1 class="reveal">
             Seus jogos clássicos, com cara de <span class="grad">console</span>.
           </h1>
           <p class="lead reveal">
             O ReEmu junta sua coleção numa biblioteca bonita, com capas, e roda tudo com
-            os cores <a href="https://www.libretro.com/">libretro</a>, os mesmos do
-            RetroArch. Shaders CRT, molduras, save states com miniatura e navegação
-            inteira pelo controle, sem abrir um arquivo de configuração.
+            os cores <fluent-link inline href="https://www.libretro.com/">libretro</fluent-link>,
+            os mesmos do RetroArch. Shaders CRT, molduras, save states com miniatura e
+            navegação inteira pelo controle, sem abrir um arquivo de configuração.
           </p>
 
           <div id="primary" class="primary reveal" aria-live="polite">
-            <p class="muted">Procurando a versão mais recente…</p>
+            <fluent-spinner size="small"></fluent-spinner>
+            <fluent-text size="200">Procurando a versão mais recente…</fluent-text>
           </div>
           <p class="note reveal">
             Código aberto (MIT). Depois de instalado, o ReEmu se atualiza sozinho.
@@ -118,48 +114,39 @@
           </p>
 
           <div class="features">
-            <article class="feature reveal">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="9" rx="1.5"/><rect x="14" y="4" width="7" height="9" rx="1.5"/><path d="M3 17h18M3 20h12"/></svg>
+            <article class="card feature reveal">
               <h3>Biblioteca com capas</h3>
               <p>Aponte a pasta das ROMs e o ReEmu identifica cada jogo (inclusive por hash) e busca capas e informações no ScreenScraper, com o TheGamesDB de reserva.</p>
             </article>
-            <article class="feature reveal">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M3 9h18M3 13h18M9 21h6"/></svg>
+            <article class="card feature reveal">
               <h3>Shaders CRT e LCD</h3>
               <p>99,7% dos presets <code>.slangp</code> do RetroArch funcionam: escolha o visual de tubo, de portátil ou de fliperama pela interface, com ajuste de parâmetros.</p>
             </article>
-            <article class="feature reveal">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="6" y="7" width="12" height="10" rx="1"/></svg>
+            <article class="card feature reveal">
               <h3>Molduras (bezels)</h3>
               <p>Baixe o pacote do The Bezel Project ou importe as suas. A moldura se encaixa em volta da imagem do jogo, como num gabinete de verdade.</p>
             </article>
-            <article class="feature reveal">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><rect x="8" y="3" width="7" height="5"/><rect x="8" y="13" width="8" height="5" rx="1"/></svg>
+            <article class="card feature reveal">
               <h3>Save states com miniatura</h3>
               <p>Vários espaços de salvamento, cada um com a imagem do momento. O save interno do jogo (SRAM) é gravado sozinho, até ao fechar a janela.</p>
             </article>
-            <article class="feature reveal">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12a4 4 0 0 1 4 4v1a4 4 0 0 1-7 2.6l-.6-.6H9.6l-.6.6A4 4 0 0 1 2 13v-1a4 4 0 0 1 4-4z"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="16.5" cy="11.5" r="1"/><circle cx="18" cy="13.5" r="1"/></svg>
+            <article class="card feature reveal">
               <h3>Tudo pelo controle</h3>
               <p>Menus, biblioteca, configurações e o menu de pausa navegáveis pelo gamepad, com dicas de botões na tela. Mapeamento por controle e atalhos de salvar/carregar.</p>
             </article>
-            <article class="feature reveal">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+            <article class="card feature reveal">
               <h3>Cores e BIOS sem mistério</h3>
               <p>Catálogo com mais de 120 cores libretro, baixados com um clique. A tela de BIOS mostra, por sistema, o que falta e importa o arquivo certo para o lugar certo.</p>
             </article>
-            <article class="feature reveal">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z"/></svg>
+            <article class="card feature reveal">
               <h3>Temas e papel de parede</h3>
               <p>Temas com fundo animado em quatro cores, papel de parede na tela inicial e um tema de alto contraste para quem precisa de mais legibilidade.</p>
             </article>
-            <article class="feature reveal">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2M9 2h6"/></svg>
+            <article class="card feature reveal">
               <h3>Tempo de jogo</h3>
               <p>O ReEmu conta quanto você jogou cada título e mostra na página do jogo. Perfil com avatar, busca rápida e destaques na tela inicial.</p>
             </article>
-            <article class="feature reveal">
-              <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>
+            <article class="card feature reveal">
               <h3>Atualização automática</h3>
               <p>Quando sai versão nova, um aviso aparece e o sino da barra lateral mostra o resumo das mudanças. Um clique e o ReEmu se atualiza e reinicia.</p>
             </article>
@@ -174,18 +161,18 @@
           <h2 class="reveal">Do download ao primeiro jogo em três passos</h2>
 
           <ol class="steps">
-            <li class="step reveal">
-              <span class="step-n">1</span>
+            <li class="card step reveal">
+              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">1</fluent-badge>
               <h3>Instale</h3>
               <p>Baixe o instalador para Windows ou o AppImage para Linux. Nada de dependências para caçar.</p>
             </li>
-            <li class="step reveal">
-              <span class="step-n">2</span>
+            <li class="card step reveal">
+              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">2</fluent-badge>
               <h3>Aponte suas ROMs</h3>
               <p>Escolha a pasta. O ReEmu reconhece os sistemas, abre arquivos compactados e busca as capas sozinho.</p>
             </li>
-            <li class="step reveal">
-              <span class="step-n">3</span>
+            <li class="card step reveal">
+              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">3</fluent-badge>
               <h3>Jogue</h3>
               <p>Baixe o core do sistema pelo catálogo, escolha o jogo e aperte A. Seu progresso fica salvo.</p>
             </li>
@@ -238,27 +225,27 @@
 
           <h3 class="sub-title reveal">Tecnologia moderna por baixo</h3>
           <div class="tech">
-            <div class="tech-item reveal">
+            <div class="card tech-item reveal">
               <strong>Núcleo em Rust</strong>
               <span>Rápido e com gestão de memória segura, do carregamento dos cores ao áudio.</span>
             </div>
-            <div class="tech-item reveal">
+            <div class="card tech-item reveal">
               <strong>Core em processo separado</strong>
               <span>Se um core travar, a interface continua de pé e o resto do app não cai junto.</span>
             </div>
-            <div class="tech-item reveal">
+            <div class="card tech-item reveal">
               <strong>Vulkan e OpenGL</strong>
               <span>Renderização por hardware para os cores 3D, com pipeline de shaders na GPU.</span>
             </div>
-            <div class="tech-item reveal">
+            <div class="card tech-item reveal">
               <strong>Áudio sem estalos</strong>
               <span>Controle dinâmico de taxa (DRC) mantém som e imagem em sincronia.</span>
             </div>
-            <div class="tech-item reveal">
+            <div class="card tech-item reveal">
               <strong>Interface Fluent 2</strong>
               <span>React com o design system da Microsoft, no espírito do modo console do Xbox.</span>
             </div>
-            <div class="tech-item reveal">
+            <div class="card tech-item reveal">
               <strong>Senhas no chaveiro do sistema</strong>
               <span>Credenciais do ScreenScraper e do TheGamesDB guardadas pelo próprio sistema operacional.</span>
             </div>
@@ -313,14 +300,44 @@
         <div class="wrap">
           <p class="kicker reveal">Sistemas</p>
           <h2 class="reveal">Do Atari ao PlayStation</h2>
-          <ul class="systems reveal" aria-label="Alguns dos sistemas suportados">
-            <li>NES</li><li>Super Nintendo</li><li>Nintendo 64</li><li>Game Boy</li><li>Game Boy Color</li><li>Game Boy Advance</li><li>Nintendo DS</li><li>Virtual Boy</li>
-            <li>Master System</li><li>Mega Drive</li><li>Sega CD</li><li>32X</li><li>Saturn</li><li>Dreamcast</li><li>Game Gear</li>
-            <li>PlayStation</li><li>PSP</li><li>PC Engine</li><li>PC Engine CD</li><li>Neo Geo Pocket</li><li>Neo Geo CD</li><li>Arcade</li>
-            <li>Atari 2600</li><li>Atari 7800</li><li>Atari Lynx</li><li>Atari Jaguar</li><li>WonderSwan</li><li>3DO</li>
-            <li>MSX</li><li>Commodore 64</li><li>Amiga</li><li>ZX Spectrum</li><li>Amstrad CPC</li><li>DOS</li><li>ScummVM</li>
-            <li class="more">e mais…</li>
-          </ul>
+          <div class="systems reveal" role="list" aria-label="Alguns dos sistemas suportados">
+            <fluent-badge role="listitem" appearance="outline" size="large">NES</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Super Nintendo</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Nintendo 64</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Game Boy</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Game Boy Color</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Game Boy Advance</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Nintendo DS</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Virtual Boy</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Master System</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Mega Drive</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Sega CD</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">32X</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Saturn</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Dreamcast</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Game Gear</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">PlayStation</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">PSP</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">PC Engine</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">PC Engine CD</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Neo Geo Pocket</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Neo Geo CD</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Arcade</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Atari 2600</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Atari 7800</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Atari Lynx</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Atari Jaguar</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">WonderSwan</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">3DO</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">MSX</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Commodore 64</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Amiga</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">ZX Spectrum</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">Amstrad CPC</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">DOS</fluent-badge>
+            <fluent-badge role="listitem" appearance="outline" size="large">ScummVM</fluent-badge>
+            <fluent-badge role="listitem" appearance="ghost" size="large">e mais…</fluent-badge>
+          </div>
           <p class="fine reveal">
             O ReEmu não inclui jogos nem BIOS. Use cópias dos seus próprios jogos.
           </p>
@@ -342,52 +359,55 @@
                Cartão sem link fica escondido; sem nenhum, aparece o aviso
                abaixo. Nunca coloque um link que não seja seu. -->
           <div class="donate" id="donate-methods">
-            <a class="donate-card reveal" data-link="" href="#" rel="noopener">
+            <div class="card donate-card reveal" data-link="">
               <strong>GitHub Sponsors</strong>
               <span>Apoio mensal ou único, direto pelo GitHub.</span>
-            </a>
-            <div class="donate-card reveal" data-pix="">
+              <fluent-anchor-button appearance="primary" target="_blank" rel="noopener">Apoiar no GitHub</fluent-anchor-button>
+            </div>
+            <div class="card donate-card reveal" data-pix="">
               <strong>Pix</strong>
               <span>Transferência instantânea, sem taxa.</span>
               <code class="pix-key"></code>
-              <button type="button" class="pix-copy">Copiar chave Pix</button>
+              <fluent-button class="pix-copy" appearance="primary">Copiar chave Pix</fluent-button>
             </div>
-            <a class="donate-card reveal" data-link="" href="#" rel="noopener">
+            <div class="card donate-card reveal" data-link="">
               <strong>Ko-fi</strong>
               <span>Pague um café para o projeto, sem cadastro.</span>
-            </a>
-            <a class="donate-card reveal" data-link="" href="#" rel="noopener">
+              <fluent-anchor-button appearance="primary" target="_blank" rel="noopener">Apoiar no Ko-fi</fluent-anchor-button>
+            </div>
+            <div class="card donate-card reveal" data-link="">
               <strong>PayPal</strong>
               <span>Cartão de crédito de qualquer país.</span>
-            </a>
+              <fluent-anchor-button appearance="primary" target="_blank" rel="noopener">Doar pelo PayPal</fluent-anchor-button>
+            </div>
           </div>
-          <p class="donate-soon reveal" id="donate-soon" hidden>
-            As formas de doação estão sendo configuradas. Enquanto isso, dá para
-            ajudar de outros jeitos:
-          </p>
+          <fluent-message-bar class="donate-soon reveal" id="donate-soon" intent="info" layout="multiline" hidden>
+            As formas de doação estão sendo configuradas. Enquanto isso, dá para ajudar
+            de outros jeitos:
+          </fluent-message-bar>
 
-          <ul class="help">
-            <li class="help-item reveal">
+          <div class="help">
+            <div class="card help-item reveal">
               <strong>Dê uma estrela</strong>
               <span>Ajuda mais gente a encontrar o projeto no GitHub.</span>
-              <a href="https://github.com/Kluis6/reemu">Abrir no GitHub</a>
-            </li>
-            <li class="help-item reveal">
+              <fluent-anchor-button appearance="outline" href="https://github.com/Kluis6/reemu">Abrir no GitHub</fluent-anchor-button>
+            </div>
+            <div class="card help-item reveal">
               <strong>Relate problemas</strong>
               <span>Um jogo que não abre ou um controle que não responde: conte o que aconteceu.</span>
-              <a href="https://github.com/Kluis6/reemu/issues">Abrir um relato</a>
-            </li>
-            <li class="help-item reveal">
+              <fluent-anchor-button appearance="outline" href="https://github.com/Kluis6/reemu/issues">Abrir um relato</fluent-anchor-button>
+            </div>
+            <div class="card help-item reveal">
               <strong>Divulgue</strong>
               <span>Mostre o ReEmu para quem curte jogos clássicos.</span>
-              <a href="#" class="share-link">Compartilhar</a>
-            </li>
-          </ul>
+              <fluent-button class="share-btn" appearance="outline">Compartilhar</fluent-button>
+            </div>
+          </div>
         </div>
       </section>
 
       <!-- ─────────────── Download ─────────────── -->
-      <section id="download" class="section">
+      <section id="download" class="section section-alt">
         <div class="wrap">
           <p class="kicker reveal">Download</p>
           <h2 class="reveal">Todas as versões</h2>
@@ -398,27 +418,28 @@
 
     <footer class="foot">
       <div class="wrap foot-row">
-        <a class="wordmark small" href="./" aria-label="ReEmu — voltar ao topo"
-          ><img src="mark.svg" alt="" width="28" height="28" />Re<span>Emu</span></a
-        >
+        <p class="foot-credit">
+          <a class="wordmark small" href="./" aria-label="ReEmu — voltar ao topo">Re<span>Emu</span></a>
+          <span class="foot-by">desenvolvido por Luis Julio</span>
+        </p>
         <nav class="foot-links" aria-label="Links">
-          <a href="https://github.com/Kluis6/reemu">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.4 1.1 2.9.8.1-.7.4-1.1.6-1.3-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7.9.7 1.9V21c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg>
-            Código no GitHub
-          </a>
-          <a href="https://github.com/Kluis6/reemu/releases">Releases</a>
-          <a href="https://github.com/Kluis6/reemu/issues">Reportar um problema</a>
+          <fluent-link href="https://github.com/Kluis6/reemu">Código no GitHub</fluent-link>
+          <fluent-link href="https://github.com/Kluis6/reemu/releases">Releases</fluent-link>
+          <fluent-link href="https://github.com/Kluis6/reemu/issues">Reportar um problema</fluent-link>
         </nav>
+        <fluent-divider class="foot-divider"></fluent-divider>
         <p class="foot-legal">
           Licença MIT. Os cores libretro têm licenças próprias e são baixados pelo app.
-          O ReEmu não inclui jogos nem BIOS.
+          O ReEmu não inclui jogos nem BIOS. Interface do site com Fluent UI 2.
         </p>
       </div>
     </footer>
 
-    <dialog id="lightbox" class="lightbox" aria-label="Captura ampliada">
-      <form method="dialog"><button class="lb-close" aria-label="Fechar">×</button></form>
-      <img alt="" />
-    </dialog>
+    <fluent-dialog id="lightbox" type="modal" aria-label="Captura ampliada">
+      <fluent-dialog-body>
+        <img class="lightbox-img" alt="" />
+        <fluent-button slot="close" appearance="transparent">Fechar</fluent-button>
+      </fluent-dialog-body>
+    </fluent-dialog>
   </body>
 </html>

@@ -3,7 +3,8 @@
 // A API sem login aceita 60 consultas/hora por IP — a resposta fica em
 // cache na sessão por 10 min pra não gastar isso à toa.
 //
-// Todo texto vindo da API entra via textContent (nunca innerHTML).
+// Monta a interface com os componentes Fluent UI 2 (`fluent-*`, registrados
+// em ui.js). Todo texto vindo da API entra como texto (nunca innerHTML).
 
 const REPO = "Kluis6/reemu";
 const API = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
@@ -14,7 +15,7 @@ const CACHE_MS = 10 * 60 * 1000;
 // Instaladores reconhecidos. `.sig` e `latest.json` são do auto-update.
 const KINDS = [
   { re: /-setup\.exe$/i, os: "windows", label: "Instalador (.exe)", hint: "recomendado", main: true },
-  { re: /\.msi$/i, os: "windows", label: "Pacote MSI (.msi)", hint: "para instalação gerenciada" },
+  { re: /\.msi$/i, os: "windows", label: "Pacote MSI (.msi)", hint: "instalação gerenciada" },
   { re: /\.AppImage$/i, os: "linux", label: "AppImage", hint: "qualquer distro · recomendado", main: true },
   { re: /\.deb$/i, os: "linux", label: "Pacote .deb", hint: "Debian, Ubuntu, Mint" },
   { re: /\.rpm$/i, os: "linux", label: "Pacote .rpm", hint: "Fedora, openSUSE" },
@@ -24,8 +25,9 @@ const OS_NAME = { windows: "Windows", linux: "Linux" };
 function el(tag, attrs = {}, ...children) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
+    if (v === false || v == null) continue;
     if (k === "class") node.className = v;
-    else node.setAttribute(k, v);
+    else node.setAttribute(k, v === true ? "" : v);
   }
   for (const c of children) {
     if (c == null || c === false) continue;
@@ -79,13 +81,25 @@ function renderNotes(md) {
   return box.childElementCount ? box : null;
 }
 
+// Botão de download grande: título + linha de detalhe (versão, tamanho).
+function downloadButton(f, version, primary) {
+  return el(
+    "fluent-anchor-button",
+    { class: "dl-btn", appearance: primary ? "primary" : "outline", size: "large", href: f.url },
+    el("span", { class: "dl-stack" },
+      el("span", { class: "dl-title" }, `Baixar para ${OS_NAME[f.os]} — ${f.label}`),
+      el("span", { class: "dl-sub" }, `${version} · ${fmtSize(f.size)} · ${f.hint}`)),
+  );
+}
+
 function renderPrimary(latest) {
   const box = document.getElementById("primary");
   box.replaceChildren();
   if (!latest) {
     box.append(
-      el("p", { class: "muted" }, "Ainda não há versão publicada. Acompanhe em ",
-        el("a", { href: RELEASES_PAGE }, "GitHub Releases"), "."),
+      el("fluent-message-bar", { intent: "info", layout: "multiline" },
+        "Ainda não há versão publicada. Acompanhe em ",
+        el("fluent-link", { inline: true, href: RELEASES_PAGE }, "GitHub Releases"), "."),
     );
     return;
   }
@@ -96,55 +110,65 @@ function renderPrimary(latest) {
   const order = os
     ? files.filter((f) => f.os === os).sort((a, b) => Number(!!b.main) - Number(!!a.main))
     : files.filter((f) => f.main);
-  order.forEach((f, i) => {
-    box.append(
-      el("a", { class: i === 0 && os ? "btn main" : "btn", href: f.url },
-        `Baixar para ${OS_NAME[f.os]} — ${f.label}`,
-        el("small", {}, `${latest.tag_name} · ${fmtSize(f.size)} · ${f.hint}`)),
-    );
-  });
-  if (!os) {
-    box.append(el("p", { class: "muted" }, "O ReEmu roda em Windows e Linux."));
-  }
+  order.forEach((f, i) => box.append(downloadButton(f, latest.tag_name, i === 0 && !!os)));
+  if (!os) box.append(el("fluent-text", { size: "200", block: true }, "O ReEmu roda em Windows e Linux."));
   if (order.length === 0) {
-    box.append(el("a", { class: "btn", href: latest.html_url }, `Ver a versão ${latest.tag_name} no GitHub`));
+    box.append(
+      el("fluent-anchor-button", { appearance: "primary", size: "large", href: latest.html_url },
+        `Ver a versão ${latest.tag_name} no GitHub`),
+    );
   }
 }
 
+function renderDownloads(files) {
+  const grid = el("div", { class: "downloads" });
+  for (const os of ["windows", "linux"]) {
+    const mine = files.filter((f) => f.os === os);
+    if (!mine.length) continue;
+    grid.append(
+      el("div", { class: "dl-group" },
+        el("fluent-text", { size: "300", weight: "semibold", block: true }, OS_NAME[os]),
+        ...mine.map((f) =>
+          el("div", { class: "dl-row" },
+            el("fluent-anchor-button", { appearance: "outline", size: "small", href: f.url }, f.label),
+            el("fluent-text", { size: "200", class: "muted" }, `${fmtSize(f.size)} · ${f.hint}`)),
+        )),
+    );
+  }
+  return grid;
+}
+
 function renderRelease(r, isLatest) {
-  const card = el("article", { class: "release", id: r.tag_name });
+  const card = el("article", { class: "card release", id: r.tag_name });
   card.append(
     el("div", { class: "release-head" },
       el("h3", {}, r.name || r.tag_name),
-      isLatest && el("span", { class: "badge latest" }, "Mais recente"),
-      r.prerelease && el("span", { class: "badge pre" }, "Pré-lançamento"),
-      el("span", { class: "date" }, fmtDate(r.published_at))),
+      isLatest && el("fluent-badge", { appearance: "filled", color: "brand" }, "Mais recente"),
+      r.prerelease && el("fluent-badge", { appearance: "tint", color: "warning" }, "Pré-lançamento"),
+      el("fluent-text", { size: "200", class: "muted" }, fmtDate(r.published_at))),
   );
 
   const notes = renderNotes(r.body);
   if (notes) {
     // Só a mais recente abre as notas; as antigas ficam recolhidas.
     if (isLatest) card.append(notes);
-    else card.append(el("details", { class: "notes-more" }, el("summary", {}, "O que mudou"), notes));
+    else {
+      card.append(
+        el("fluent-accordion", { class: "notes-more" },
+          el("fluent-accordion-item", {},
+            el("span", { slot: "heading" }, "O que mudou"),
+            notes)),
+      );
+    }
   }
 
   const files = installers(r);
   if (files.length) {
-    const grid = el("div", { class: "downloads" });
-    for (const os of ["windows", "linux"]) {
-      const mine = files.filter((f) => f.os === os);
-      if (!mine.length) continue;
-      grid.append(
-        el("div", {},
-          el("h4", {}, OS_NAME[os]),
-          el("ul", {}, ...mine.map((f) =>
-            el("li", {}, el("a", { href: f.url }, f.label), " ",
-              el("span", { class: "size" }, `${fmtSize(f.size)} · ${f.hint}`))))),
-      );
-    }
-    card.append(grid);
+    card.append(el("fluent-divider", { class: "release-divider" }), renderDownloads(files));
   }
-  card.append(el("p", { class: "release-foot" }, el("a", { href: r.html_url }, "Ver no GitHub")));
+  card.append(
+    el("p", { class: "release-foot" }, el("fluent-link", { href: r.html_url }, "Ver no GitHub")),
+  );
   return card;
 }
 
@@ -152,7 +176,7 @@ function renderList(releases) {
   const box = document.getElementById("releases");
   box.replaceChildren();
   if (!releases.length) {
-    box.append(el("div", { class: "empty" }, "Nenhuma versão publicada ainda."));
+    box.append(el("fluent-message-bar", { intent: "info" }, "Nenhuma versão publicada ainda."));
     return;
   }
   const latest = releases.find((r) => !r.prerelease) || releases[0];
@@ -161,11 +185,14 @@ function renderList(releases) {
 
 function renderError(message) {
   document.getElementById("primary").replaceChildren(
-    el("a", { class: "btn main", href: `${RELEASES_PAGE}/latest` }, "Baixar no GitHub Releases",
-      el("small", {}, "abre a versão mais recente")),
+    el("fluent-anchor-button", { class: "dl-btn", appearance: "primary", size: "large", href: `${RELEASES_PAGE}/latest` },
+      el("span", { class: "dl-stack" },
+        el("span", { class: "dl-title" }, "Baixar no GitHub Releases"),
+        el("span", { class: "dl-sub" }, "abre a versão mais recente"))),
   );
   document.getElementById("releases").replaceChildren(
-    el("div", { class: "empty" }, message, " ", el("a", { href: RELEASES_PAGE }, "Ver todas no GitHub"), "."),
+    el("fluent-message-bar", { intent: "warning", layout: "multiline" },
+      message, " ", el("fluent-link", { inline: true, href: RELEASES_PAGE }, "Ver todas no GitHub"), "."),
   );
 }
 

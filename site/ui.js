@@ -1,11 +1,15 @@
-// Movimento da página: entrada dos blocos ao rolar, contadores, topo com
-// fundo depois de rolar e o ampliador das capturas. Tudo opcional — sem JS
-// (ou com "reduzir movimento") a página aparece inteira e parada.
+// Registra os componentes Fluent UI 2 (`fluent-*`), aplica o tema e cuida do
+// movimento da página: entrada dos blocos ao rolar, contadores, topo com
+// fundo depois de rolar, doações e o ampliador das capturas. Sem JS (ou com
+// "reduzir movimento") a página aparece inteira e parada.
+import { setTheme } from "./vendor/fluent-web-components-3.1.3.min.js";
+import theme from "./vendor/reemu-theme.js";
+
+setTheme(theme);
 
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // Topo: transparente no hero, com fundo desfocado depois de rolar.
-// (não `top`: é `window.top` no escopo global e redeclarar dá SyntaxError)
 const header = document.querySelector(".top");
 const onScroll = () => header.classList.toggle("scrolled", scrollY > 12);
 addEventListener("scroll", onScroll, { passive: true });
@@ -25,8 +29,7 @@ function countUp(el) {
   const dur = 1400;
   const tick = (now) => {
     const t = Math.min(1, (now - start) / dur);
-    const eased = 1 - Math.pow(1 - t, 3);
-    el.textContent = fmt(to * eased);
+    el.textContent = fmt(to * (1 - Math.pow(1 - t, 3)));
     if (t < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -55,11 +58,9 @@ if ("IntersectionObserver" in window && !reduceMotion) {
     },
     { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
   );
-  // O hero já está na tela ao abrir: entra em cascata no próximo quadro,
-  // sem esperar o observer. O resto entra conforme a rolagem.
-  const heroReveals = document.querySelectorAll(".hero .reveal");
+  // O hero já está na tela ao abrir: entra em cascata no próximo quadro.
   requestAnimationFrame(() => {
-    heroReveals.forEach((el) => {
+    document.querySelectorAll(".hero .reveal").forEach((el) => {
       el.classList.add("in");
       el.querySelectorAll(".count").forEach(countUp);
     });
@@ -67,8 +68,7 @@ if ("IntersectionObserver" in window && !reduceMotion) {
   reveals.forEach((el) => {
     if (!el.closest(".hero")) io.observe(el);
   });
-  // Rede de segurança: se o observer nunca responder (navegador/aba em
-  // estado estranho), nada pode ficar invisível — mostra tudo.
+  // Rede de segurança: se o observer nunca responder, nada fica invisível.
   setTimeout(() => {
     if (observed) return;
     io.disconnect();
@@ -81,37 +81,29 @@ if ("IntersectionObserver" in window && !reduceMotion) {
 
 // Ampliador das capturas (só as que existem — quadros "em breve" ignoram).
 const lightbox = document.getElementById("lightbox");
-if (lightbox && typeof lightbox.showModal === "function") {
-  const big = lightbox.querySelector("img");
-  document.querySelectorAll(".shot-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const fig = btn.closest("figure");
-      if (fig.classList.contains("missing")) return;
-      const img = btn.querySelector("img");
-      big.src = img.currentSrc || img.src;
-      big.alt = img.alt;
-      lightbox.showModal();
-    });
+const big = lightbox?.querySelector(".lightbox-img");
+document.querySelectorAll(".shot-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (btn.closest("figure").classList.contains("missing") || !big) return;
+    const img = btn.querySelector("img");
+    big.src = img.currentSrc || img.src;
+    big.alt = img.alt;
+    lightbox.show();
   });
-  // clicar fora da imagem fecha
-  lightbox.addEventListener("click", (e) => {
-    if (e.target === lightbox) lightbox.close();
-  });
-}
+});
 
 // Doação: mostra só as formas com link configurado no HTML (`data-link`,
 // `data-pix`). Sem nenhuma, esconde a grade e mostra o aviso.
 {
   const grid = document.getElementById("donate-methods");
   let shown = 0;
-  grid?.querySelectorAll("[data-link]").forEach((a) => {
-    const url = a.dataset.link.trim();
+  grid?.querySelectorAll("[data-link]").forEach((card) => {
+    const url = card.dataset.link.trim();
     if (/^https:\/\//.test(url)) {
-      a.href = url;
-      a.target = "_blank";
+      card.querySelector("fluent-anchor-button")?.setAttribute("href", url);
       shown++;
     } else {
-      a.remove();
+      card.remove();
     }
   });
   grid?.querySelectorAll("[data-pix]").forEach((card) => {
@@ -137,25 +129,24 @@ if (lightbox && typeof lightbox.showModal === "function") {
     grid.hidden = true;
     document.getElementById("donate-soon").hidden = false;
   }
-
-  // "Divulgue": compartilhamento nativo quando existe, senão copia o link.
-  document.querySelectorAll(".share-link").forEach((a) => {
-    a.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const data = {
-        title: "ReEmu",
-        text: "ReEmu: seus jogos clássicos com cara de console. Grátis para Linux e Windows.",
-        url: "https://kluis6.github.io/reemu/",
-      };
-      try {
-        if (navigator.share) await navigator.share(data);
-        else {
-          await navigator.clipboard.writeText(data.url);
-          a.textContent = "Link copiado!";
-        }
-      } catch {
-        // compartilhamento cancelado — nada a fazer
-      }
-    });
-  });
 }
+
+// "Divulgue": compartilhamento nativo quando existe, senão copia o link.
+document.querySelectorAll(".share-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const data = {
+      title: "ReEmu",
+      text: "ReEmu: seus jogos clássicos com cara de console. Grátis para Linux e Windows.",
+      url: "https://kluis6.github.io/reemu/",
+    };
+    try {
+      if (navigator.share) await navigator.share(data);
+      else {
+        await navigator.clipboard.writeText(data.url);
+        btn.textContent = "Link copiado!";
+      }
+    } catch {
+      // compartilhamento cancelado — nada a fazer
+    }
+  });
+});
