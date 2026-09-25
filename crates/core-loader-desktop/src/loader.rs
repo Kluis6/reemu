@@ -95,21 +95,24 @@ impl DesktopCoreLoader {
     }
 
     fn resolve_path(&self, core_id: &CoreId) -> Result<PathBuf, CoreLoadError> {
-        let raw = Path::new(&core_id.0);
-        let candidates = if raw.is_absolute() || raw.components().count() > 1 {
-            vec![raw.to_path_buf()]
-        } else {
-            vec![
-                self.cores_dir.join(&core_id.0),
-                self.cores_dir
-                    .join(format!("{}{}", core_id.0, dylib_suffix())),
-            ]
-        };
-        candidates
-            .into_iter()
-            .find(|p| p.is_file())
+        resolve_core_file(&self.cores_dir, &core_id.0)
             .ok_or_else(|| CoreLoadError::NotFound(core_id.0.clone()))
     }
+}
+
+/// `<pasta>/<id>` ou `<pasta>/<id>.<so|dll|dylib>` — ou o próprio id, se
+/// ele já for um caminho.
+pub(crate) fn resolve_core_file(cores_dir: &Path, core_id: &str) -> Option<PathBuf> {
+    let raw = Path::new(core_id);
+    let candidates = if raw.is_absolute() || raw.components().count() > 1 {
+        vec![raw.to_path_buf()]
+    } else {
+        vec![
+            cores_dir.join(core_id),
+            cores_dir.join(format!("{core_id}{}", dylib_suffix())),
+        ]
+    };
+    candidates.into_iter().find(|p| p.is_file())
 }
 
 fn dylib_suffix() -> &'static str {
@@ -161,7 +164,88 @@ fn software_requirements() -> CoreRenderRequirements {
     }
 }
 
+/// O que o core diz de si no `retro_get_system_info` — resultado de
+/// [`DesktopCoreLoader::probe_core`].
+#[derive(Debug, Clone)]
+pub struct CoreProbe {
+    pub library_name: String,
+    pub library_version: String,
+    /// Extensões aceitas, separadas por `|` (como o libretro manda).
+    pub valid_extensions: String,
+    pub need_fullpath: bool,
+}
+
+/// Inicializa o core na MESMA ordem do RetroArch (`runloop.c`,
+/// `runloop_event_init_core` + `core_init_libretro_cbs`):
+/// `retro_get_system_info` → `retro_set_environment` → `retro_init` → os
+/// demais `retro_set_*`. O libretro.h só exige environment antes do init e
+/// os callbacks antes do primeiro `retro_run`, mas os cores seguem o
+/// RetroArch na prática: os feitos com `rust-libretro` (RustyNES) só criam
+/// a instância no `get_system_info` e entram em pânico no
+/// `set_environment` sem ela; o Mesen cai num `set_video_refresh` chamado
+/// antes do `retro_init`. (Achados pelo teste de fumaça do catálogo.)
+///
+/// # Safety
+/// `raw` precisa ser um core recém-aberto, com o `ffi_state` adquirido.
+unsafe fn init_in_retroarch_order(raw: &RawCore) {
+    let mut info: sys::retro_system_info = std::mem::zeroed();
+    (raw.get_system_info)(&mut info);
+    (raw.set_environment)(ffi_state::environment_cb);
+    (raw.init)();
+    (raw.set_video_refresh)(ffi_state::video_refresh_cb);
+    (raw.set_audio_sample)(ffi_state::audio_sample_cb);
+    (raw.set_audio_sample_batch)(ffi_state::audio_sample_batch_cb);
+    (raw.set_input_poll)(ffi_state::input_poll_cb);
+    (raw.set_input_state)(ffi_state::input_state_cb);
+}
+
+fn c_str(p: *const std::os::raw::c_char) -> String {
+    if p.is_null() {
+        return String::new();
+    }
+    // SAFETY: string C do core, válida enquanto ele está aberto.
+    unsafe { std::ffi::CStr::from_ptr(p) }
+        .to_string_lossy()
+        .into_owned()
+}
+
 impl DesktopCoreLoader {
+    /// Abre o core SEM jogo: confere a versão da API, entrega os callbacks,
+    /// roda `retro_init` e lê `retro_get_system_info`. Não chama
+    /// `retro_deinit` (ver abaixo) — use num processo que vai sair. É o teste de fumaça do catálogo — pega core que não
+    /// abre na plataforma ou que cai no `retro_init` (o VBA-M caía por falta
+    /// de `GET_LOG_INTERFACE`). Um core que cai derruba o processo: rode
+    /// isto num processo separado (`reemu-core-host --probe`).
+    pub fn probe_core(&self, core_id: &CoreId) -> Result<CoreProbe, CoreLoadError> {
+        let path = self.resolve_path(core_id)?;
+        let _guard = ffi_state::acquire(&self.system_dir, &self.save_dir)?;
+        let raw = RawCore::open(&path)?;
+
+        let api = unsafe { (raw.api_version)() };
+        if api != sys::RETRO_API_VERSION {
+            return Err(CoreLoadError::LoadFailed(format!(
+                "RETRO_API_VERSION {api} != {} suportado",
+                sys::RETRO_API_VERSION
+            )));
+        }
+        let probe = unsafe {
+            init_in_retroarch_order(&raw);
+            let mut info: sys::retro_system_info = std::mem::zeroed();
+            (raw.get_system_info)(&mut info);
+            let probe = CoreProbe {
+                library_name: c_str(info.library_name),
+                library_version: c_str(info.library_version),
+                valid_extensions: c_str(info.valid_extensions),
+                need_fullpath: info.need_fullpath,
+            };
+            // SEM `retro_deinit`: o VBA-M (e outros) limpa o estado do jogo
+            // no deinit e cai se nenhum jogo foi carregado — o probe roda
+            // num processo descartável, que só sai.
+            probe
+        };
+        Ok(probe)
+    }
+
     /// Como `CoreLoader::load`, mas devolve o tipo concreto (dá acesso a
     /// `drain_audio`, `serialize_state`, ...) e persiste os requisitos de
     /// render no `InstalledCoreRepository`, se ligado.
@@ -211,15 +295,7 @@ impl DesktopCoreLoader {
             )));
         }
 
-        unsafe {
-            (raw.set_environment)(ffi_state::environment_cb);
-            (raw.set_video_refresh)(ffi_state::video_refresh_cb);
-            (raw.set_audio_sample)(ffi_state::audio_sample_cb);
-            (raw.set_audio_sample_batch)(ffi_state::audio_sample_batch_cb);
-            (raw.set_input_poll)(ffi_state::input_poll_cb);
-            (raw.set_input_state)(ffi_state::input_state_cb);
-            (raw.init)();
-        }
+        unsafe { init_in_retroarch_order(&raw) };
 
         // Info do core (need_fullpath decide se carregamos a ROM em memória).
         // `info` tem ponteiros crus — não deve cruzar um `.await`.

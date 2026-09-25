@@ -22,6 +22,7 @@ mod discover;
 // D3D11/D3D12 shared handle, subsistema totalmente diferente) — não portado.
 #[cfg(unix)]
 mod dmabuf;
+mod execstack;
 mod ffi_state;
 mod gl_context;
 mod input;
@@ -38,10 +39,11 @@ pub use crate::coreopts::{
     core_option_values, core_options, set_core_option, set_pending_core_option_values,
 };
 pub use crate::discover::{discover_cores, DiscoveredCore};
+pub use crate::execstack::{core_file, exec_stack_env};
 #[cfg(all(unix, feature = "test-fixtures"))]
 pub use crate::gl_context::render_solid_rgba_to_dmabuf;
 pub use crate::input::{analog, libretro_joypad_id, retropad, AnalogState, RetroPadState};
-pub use crate::loader::DesktopCoreLoader;
+pub use crate::loader::{CoreProbe, DesktopCoreLoader};
 pub use crate::pacing::{PaceStats, Pacer};
 
 /// Redireciona o **stdout** do processo pra `/dev/null`, PRA SEMPRE — vários

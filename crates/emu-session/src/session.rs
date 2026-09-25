@@ -753,7 +753,12 @@ struct ChildProc {
 }
 
 impl ChildProc {
-    fn spawn() -> Result<(Self, Receiver<InboundEvent>), String> {
+    /// `env`: variável extra pro filho — hoje só o `GLIBC_TUNABLES` de
+    /// pilha executável, quando o core pede (ver
+    /// `core_loader_desktop::exec_stack_env`).
+    fn spawn(
+        env: Option<(&'static str, String)>,
+    ) -> Result<(Self, Receiver<InboundEvent>), String> {
         let exe = core_host_path().ok_or_else(|| {
             "binário reemu-core-host não encontrado ao lado do executável".to_string()
         })?;
@@ -764,9 +769,12 @@ impl ChildProc {
         #[cfg(debug_assertions)]
         child_ch.assert_inheritable();
         let fd_num = child_ch.as_raw_fd();
-        let child = std::process::Command::new(exe)
-            .arg("--fd")
-            .arg(fd_num.to_string())
+        let mut cmd = std::process::Command::new(exe);
+        cmd.arg("--fd").arg(fd_num.to_string());
+        if let Some((k, v)) = env {
+            cmd.env(k, v);
+        }
+        let child = cmd
             .spawn()
             .map_err(|e| format!("spawn reemu-core-host: {e}"))?;
         // O processo filho já herdou o fd no fork; nossa cópia do lado dele
@@ -1327,7 +1335,18 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     _ => {}
                 }
 
-                match ChildProc::spawn() {
+                // Core que pede pilha executável (melonDS no buildbot): a
+                // glibc ≥ 2.41 recusa o dlopen, a não ser que o processo
+                // parta com `glibc.rtld.execstack=2` — só o filho deste core.
+                let child_env = core_loader_desktop::core_file(&cores_dir, &id.0)
+                    .and_then(|p| core_loader_desktop::exec_stack_env(&p));
+                if child_env.is_some() {
+                    log::info!(
+                        "core {}: pede pilha executável — filho com glibc.rtld.execstack=2",
+                        id.0
+                    );
+                }
+                match ChildProc::spawn(child_env) {
                     Ok((mut p, erx)) => {
                         let pid = p.child.id();
                         let sent = p.channel.send(

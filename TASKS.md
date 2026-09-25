@@ -109,10 +109,14 @@ no `emu-session`, ver `docs/historico.md`).
 
 ### Infra / qualidade
 
-- [ ] `todo` — **Teste de fumaça do catálogo**: job que baixa cada core do
-      catálogo (127) e o carrega com uma ROM de teste pública, em Linux e
-      Windows. Hoje só amostras foram carregadas à mão. Faz parte do portão
-      do projeto de emuladores nativos (abaixo).
+- [x] `done` — **Teste de fumaça do catálogo, fase 1** (2026-09-25):
+      workflow semanal `catalog-smoke.yml` (Linux e Windows) baixa cada core
+      e abre com `reemu-core-host --probe` (`retro_init` + system info, sem
+      jogo). Ver docs/historico.md.
+- [ ] `todo` — **Fumaça do catálogo, fase 2**: carregar cada core com uma
+      ROM de teste pública (homebrew de domínio público por sistema) e rodar
+      alguns quadros. Faz parte do portão do projeto de emuladores nativos
+      (abaixo).
 
 - [ ] `todo` — Etapa 11 (Android): `apps/mobile`, `packages/app-mobile`,
       `packages/ui`, `packages/shared`. Os pacotes compartilhados só nascem

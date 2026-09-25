@@ -38,6 +38,18 @@ fn core_id() -> CoreId {
     CoreId(TESTCORE.into())
 }
 
+/// Teste de fumaça do catálogo usa isto: abre sem jogo, lê o system info e
+/// fecha — e o core-fake chama o log no `retro_init` como o VBA-M.
+#[tokio::test]
+async fn probe_reads_system_info_without_a_game() {
+    let _lock = guard().await;
+    let p = loader().probe_core(&core_id()).expect("probe do core-fake");
+    assert_eq!(p.library_name, "reemu-testcore");
+    assert_eq!(p.library_version, "0.1.0");
+    assert_eq!(p.valid_extensions, "test|bin");
+    assert!(!p.need_fullpath);
+}
+
 #[tokio::test]
 async fn software_core_loads_runs_and_produces_frames() {
     let _lock = guard().await;

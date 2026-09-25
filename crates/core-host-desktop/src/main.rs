@@ -47,8 +47,41 @@ fn raise_priority() {
     }
 }
 
+/// `reemu-core-host --probe <pasta de cores> <core_id>`: abre o core sem
+/// jogo (`DesktopCoreLoader::probe_core`) e sai. Usado pelo teste de fumaça
+/// do catálogo — num processo à parte, um core que cai no `retro_init` só
+/// derruba este processo. Resultado numa linha com prefixo fixo no stdout
+/// (o core pode escrever o que quiser antes): `REEMU_PROBE_OK\t<nome>\t
+/// <versão>\t<extensões>` com saída 0, ou `REEMU_PROBE_ERR\t<erro>` com
+/// saída 2.
+fn probe(args: &[String]) -> ! {
+    let (Some(cores_dir), Some(core_id)) = (args.first(), args.get(1)) else {
+        eprintln!("uso: reemu-core-host --probe <pasta de cores> <core_id>");
+        std::process::exit(64);
+    };
+    let tmp = std::env::temp_dir();
+    let loader = DesktopCoreLoader::new(cores_dir, &tmp, &tmp);
+    match loader.probe_core(&CoreId(core_id.clone())) {
+        Ok(p) => {
+            println!(
+                "REEMU_PROBE_OK\t{}\t{}\t{}",
+                p.library_name, p.library_version, p.valid_extensions
+            );
+            std::process::exit(0);
+        }
+        Err(e) => {
+            println!("REEMU_PROBE_ERR\t{e}");
+            std::process::exit(2);
+        }
+    }
+}
+
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--probe") {
+        probe(&args[1..]);
+    }
     raise_priority();
 
     let fd_arg = std::env::args()

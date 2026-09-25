@@ -1,0 +1,71 @@
+name: Fumaça do catálogo
+
+# Baixa cada core do catálogo (apps/desktop/src-tauri/src/core_catalog.rs)
+# do buildbot, pelo mesmo `download` do app, e abre com
+# `reemu-core-host --probe` (retro_init + system info, sem jogo) num processo
+# à parte. Pega core que sumiu do buildbot, que não abre na plataforma ou que
+# cai no retro_init (como o VBA-M sem GET_LOG_INTERFACE). A tabela sai no
+# resumo do job. Semanal — os nightlies do buildbot mudam sozinhos.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # segunda, 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Só estes cores (ids separados por vírgula; vazio = todos)"
+        required: false
+        default: ""
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Catálogo (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar dependências de sistema (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libsoup-3.0-dev libxkbcommon-dev libudev-dev \
+            libasound2-dev mesa-vulkan-drivers libegl1 libgl1 gcc g++
+
+      - name: Preparar toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: catalog-smoke
+
+      # O crate do app embute o frontend (`frontendDist`) ao compilar.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter app-desktop build
+
+      - name: Compilar o core-host
+        run: cargo build -p core-host-desktop
+
+      - name: Baixar e abrir cada core
+        shell: bash
+        env:
+          REEMU_SMOKE_ONLY: ${{ inputs.only }}
+        run: |
+          # vazio = catálogo inteiro
+          [ -z "$REEMU_SMOKE_ONLY" ] && unset REEMU_SMOKE_ONLY
+          cargo test -p reemu-desktop --lib catalog_smoke -- --ignored --nocapture
