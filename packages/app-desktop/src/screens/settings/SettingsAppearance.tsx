@@ -186,7 +186,7 @@ function ThemeCard({
   selected: boolean;
   onSelect: () => void;
   mode: ThemeMode;
-  /** Ausente = tema só escuro (sem Switch). */
+  /** Ausente = tema só escuro: sem Switch (o rodapé mantém a altura). */
   onModeChange?: (m: ThemeMode) => void;
 }) {
   const s = useStyles();
@@ -262,11 +262,7 @@ function ThemeCard({
               onChange={(_, d) => onModeChange(d.checked ? "light" : "dark")}
             />
           </span>
-        ) : (
-          <Caption1 style={{ color: t.colorNeutralForeground3 }}>
-            Só escuro
-          </Caption1>
-        )}
+        ) : null}
       </div>
     </Card>
   );
