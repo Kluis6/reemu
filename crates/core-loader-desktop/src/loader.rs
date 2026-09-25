@@ -115,6 +115,9 @@ pub(crate) fn resolve_core_file(cores_dir: &Path, core_id: &str) -> Option<PathB
     candidates.into_iter().find(|p| p.is_file())
 }
 
+/// Portas de controle que o ReEmu alimenta (RetroPad 0..3).
+const MAX_PORTS: u32 = 4;
+
 fn dylib_suffix() -> &'static str {
     if cfg!(target_os = "windows") {
         ".dll"
@@ -387,6 +390,19 @@ impl DesktopCoreLoader {
             return Err(CoreLoadError::LoadFailed(format!(
                 "retro_load_game falhou para {rom_path}"
             )));
+        }
+
+        // Liga um controle em cada porta, como o RetroArch
+        // (`command_event_init_controllers`, depois de carregar o conteúdo):
+        // porta declarada em `SET_CONTROLLER_INFO` → `RETRO_DEVICE_JOYPAD`.
+        // Cores como o flycast só leem a entrada das portas configuradas
+        // assim — sem isto nem teclado nem controle chegavam ao jogo.
+        let ports = ffi_state::lock()
+            .as_ref()
+            .map_or(0, |s| s.controller_ports)
+            .min(MAX_PORTS);
+        for port in 0..ports {
+            unsafe { (raw.set_controller_port_device)(port, sys::RETRO_DEVICE_JOYPAD) };
         }
 
         let av_info = read_av_info(&raw);

@@ -80,6 +80,10 @@ pub(crate) struct FrontendState {
     /// a proporção nova até a tela (libretro.h: `SET_GEOMETRY` é o caminho
     /// indicado pra mudar a proporção sem reiniciar o vídeo).
     pub geometry_update: Option<(u32, u32, f32)>,
+    /// Portas declaradas pelo core em `SET_CONTROLLER_INFO` (0 = não
+    /// declarou). O loader liga um `RETRO_DEVICE_JOYPAD` em cada uma depois
+    /// do `retro_load_game`, como o RetroArch.
+    pub controller_ports: u32,
     pub last_frame: Option<RawFrame>,
     /// Buffer de um frame já consumido, devolvido por
     /// `DesktopCore::recycle_frame_buffer` — o próximo `video_refresh_cb`
@@ -125,6 +129,7 @@ impl FrontendState {
             rotation_degrees: 0,
             av_update: None,
             geometry_update: None,
+            controller_ports: 0,
             last_frame: None,
             spare_frame: Vec::new(),
             had_new_frame: false,
@@ -472,12 +477,25 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             }
             true
         }
+        // Array terminado num `retro_controller_info` zerado; cada item é
+        // uma porta do console emulado (libretro.h). Teto de 16 pra não
+        // correr memória se o core esquecer o terminador.
+        sys::RETRO_ENVIRONMENT_SET_CONTROLLER_INFO => {
+            if !data.is_null() {
+                let arr = data as *const sys::retro_controller_info;
+                let mut n = 0u32;
+                while n < 16 && !(*arr.add(n as usize)).types.is_null() {
+                    n += 1;
+                }
+                st.controller_ports = n;
+            }
+            true
+        }
         // Reconhecidos, sem efeito ainda.
         sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
         | sys::RETRO_ENVIRONMENT_SET_MESSAGE
         | sys::RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS
-        | sys::RETRO_ENVIRONMENT_SET_CONTROLLER_INFO
         | sys::RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO
         | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY => true,
         _ => false,

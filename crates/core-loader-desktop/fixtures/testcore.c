@@ -111,9 +111,17 @@ struct log_callback { log_printf_t log; };
 /* Como o VBA-M: pede a interface de log e usa SEM checar se veio nula.
  * Se o frontend não entregar o callback, todo teste que carrega este core
  * cai aqui (regressão: vbam_libretro morria no retro_init). */
+#define RETRO_ENVIRONMENT_SET_CONTROLLER_INFO 35 /* libretro.h */
+struct controller_description { const char *desc; unsigned id; };
+struct controller_info { const struct controller_description *types; unsigned num_types; };
+
 void retro_init(void) {
    struct log_callback log = { 0 };
+   static const struct controller_description pad[] = { { "RetroPad", 1 } };
+   static const struct controller_info ports[] = { { pad, 1 }, { pad, 1 }, { 0, 0 } };
    frame_n = 0;
+   testcore_sram[6] = 0;
+   env_cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void *)ports);
    env_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log);
    log.log(1, "testcore: init %d\n", 42);
 }
@@ -138,9 +146,12 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
    info->timing.sample_rate = 32000.0;
 }
 
+/* Portas que o frontend configurou como RETRO_DEVICE_JOYPAD (1) — bit N =
+   porta N, espelhado em SRAM[6]. Como o flycast, este core declara 2 portas
+   (SET_CONTROLLER_INFO no retro_init) e espera o frontend ligá-las. */
 void retro_set_controller_port_device(unsigned port, unsigned device) {
-   (void)port;
-   (void)device;
+   if (device == 1 && port < 8)
+      testcore_sram[6] |= (unsigned char)(1u << port);
 }
 void retro_reset(void) { frame_n = 0; }
 

@@ -114,6 +114,14 @@ pub struct retro_system_timing {
     pub sample_rate: f64,
 }
 
+/// `struct retro_controller_info` (libretro.h) — um por porta do console
+/// emulado; o array do `SET_CONTROLLER_INFO` termina num elemento zerado.
+#[repr(C)]
+pub struct retro_controller_info {
+    pub types: *const c_void,
+    pub num_types: c_uint,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct retro_system_av_info {

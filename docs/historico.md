@@ -1494,3 +1494,10 @@ Infra:
 
 - No flycast, o teclado não tinha os gatilhos do Dreamcast: o controle de DC usa L2/R2 do RetroPad como gatilhos analógicos (`get_analog_trigger` com `JOYPAD_L2/R2` em `shell/libretro/libretro.cpp`), e o mapa fixo do teclado só ia até L1/R1. Em jogo de corrida não dava para acelerar nem frear. Agora **E = L2** e **R = R2**, na mesma fileira de Q/W = L1/R1. O `input_state` já responde `RETRO_DEVICE_INDEX_ANALOG_BUTTON` com 0x7fff quando o botão está pressionado.
 - **Continua pendente** (TASKS.md): tela para remapear o teclado e o analógico pelo teclado.
+
+## 2026-09-25 — flycast não lia teclado nem controle: portas de controle ligadas depois do load
+
+- **Sintoma:** no flycast, nem teclado nem controle funcionavam. Medido com um contador temporário: o core chamava `input_poll`, mas **nunca** `input_state`.
+- **Causa:** o ReEmu ignorava o `SET_CONTROLLER_INFO` e nunca chamava `retro_set_controller_port_device`. O RetroArch chama, para cada porta declarada, depois de carregar o conteúdo (`CMD_EVENT_CONTROLLER_INIT` → `command_event_init_controllers`, em `command.c`/`retroarch.c`), com `RETRO_DEVICE_JOYPAD` para cada usuário ativo. O flycast mantém `device_type[]` em -1 até receber essa chamada (`shell/libretro/libretro.cpp`).
+- **Correção:** o ReEmu guarda quantas portas o core declarou (array de `retro_controller_info` terminado num elemento zerado, conforme o `libretro.h`, com teto de 16) e, depois do `retro_load_game`, chama `retro_set_controller_port_device(porta, RETRO_DEVICE_JOYPAD)` para as portas 0..min(declaradas, 4). Com isso o flycast passou a ler os botões (`JOYPAD_MASK`), os dois analógicos e os gatilhos analógicos em todas as portas.
+- Teste `declared_ports_get_a_joypad_after_load`: o core falso declara 2 portas e registra quais o frontend ligou.

@@ -159,6 +159,23 @@ async fn input_bitmask_returns_all_buttons_at_once() {
     let _ = std::fs::remove_file(rom);
 }
 
+/// Como o RetroArch: toda porta declarada em `SET_CONTROLLER_INFO` recebe
+/// `retro_set_controller_port_device(porta, JOYPAD)` depois do load — o
+/// flycast não lia teclado nem controle sem isso. O core-fake declara 2.
+#[tokio::test]
+async fn declared_ports_get_a_joypad_after_load() {
+    let _lock = guard().await;
+    let rom = write_rom(b"ports");
+    let core = loader()
+        .load_core(&core_id(), rom.to_str().unwrap())
+        .await
+        .expect("load do core-fake");
+    let sram = core.save_ram().unwrap();
+    assert_eq!(sram[6], 0b11, "portas ligadas: {:#04b}", sram[6]);
+    drop(core);
+    let _ = std::fs::remove_file(rom);
+}
+
 #[tokio::test]
 async fn save_state_round_trip_and_pending_hook() {
     let _lock = guard().await;
