@@ -566,6 +566,11 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                 }
 
                 drop(vk_gate); // libera a VkQueue antes de dormir
+                               // Quadro já apresentado: o buffer volta pro pool da sessão
+                               // (o do core Vulkan local não é da sessão).
+                if let (Some(f), false) = (frame, stepped_vk) {
+                    state.session.recycle_frame(f);
+                }
                 if let Some(d) = diag.as_mut() {
                     d.maybe_report(state.session.frame_seq());
                 }

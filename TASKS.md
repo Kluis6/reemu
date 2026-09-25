@@ -92,11 +92,8 @@ Feito em 2026-09-24 (ver `docs/historico.md`): pump acorda no frame
 (perdia 12% dos frames), margem de spin adaptativa (33 → 6 ms/s de CPU),
 áudio sem alocação por frame, canvas sem a 2ª cópia do frame.
 
-- [ ] `todo` — Única alocação por quadro que sobra no caminho do frame: o
-      `emu-session` lê o slot do anel num `Vec` novo (`reconstruct_frame`).
-      Reciclar exige devolver o buffer do pump de vídeo pra sessão (outra
-      thread). Ganho medido do mesmo tipo de mudança no conversor: 5–45 µs
-      por quadro — baixa prioridade.
+Sem alocação por quadro no caminho software desde 2026-09-25 (pool de buffers
+no `emu-session`, ver `docs/historico.md`).
 
 ### Funcionalidades
 

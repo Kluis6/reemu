@@ -91,6 +91,10 @@ enum Command {
 struct Shared {
     frame_seq: AtomicU64,
     latest_frame: Mutex<Option<Frame>>,
+    /// Buffers de quadros software já apresentados, pra reuso no próximo
+    /// `FrameReady` — sem isto cada quadro alocava (e liberava) um `Vec` do
+    /// tamanho do frame (ver `EmuSession::recycle_frame`).
+    spare_bufs: Mutex<Vec<Vec<u8>>>,
     /// Sinaliza `latest_frame` preenchido — quem apresenta espera nisto em
     /// vez de dormir um tempo fixo (ver `wait_for_frame`).
     frame_ready: Condvar,
@@ -156,6 +160,26 @@ struct Shared {
 }
 
 impl Shared {
+    /// Máximo de buffers guardados: um em uso pelo apresentador e um
+    /// esperando é o que o pipeline precisa.
+    const MAX_SPARE: usize = 2;
+
+    fn recycle(&self, frame: Frame) {
+        if let FrameOrigin::SoftwareRawBuffer { data, .. } = frame.origin {
+            let mut pool = self.spare_bufs.lock().unwrap_or_else(|p| p.into_inner());
+            if pool.len() < Self::MAX_SPARE {
+                pool.push(data);
+            }
+        }
+    }
+
+    fn take_spare(&self) -> Option<Vec<u8>> {
+        self.spare_bufs
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .pop()
+    }
+
     fn set_state(&self, s: SessionState) {
         *self.state.lock().unwrap_or_else(|p| p.into_inner()) = s;
     }
@@ -174,6 +198,7 @@ impl EmuSession {
         let shared = Arc::new(Shared {
             frame_seq: AtomicU64::new(0),
             latest_frame: Mutex::new(None),
+            spare_bufs: Mutex::new(Vec::new()),
             frame_ready: Condvar::new(),
             audio: Mutex::new(Vec::new()),
             state: Mutex::new(SessionState::Idle),
@@ -477,6 +502,13 @@ impl EmuSession {
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .take()
+    }
+
+    /// Devolve um quadro já apresentado: o buffer de um quadro software volta
+    /// pro pool e o próximo `FrameReady` copia o anel pra dentro dele, sem
+    /// alocar. Opcional — quem não devolve só perde o reuso.
+    pub fn recycle_frame(&self, frame: Frame) {
+        self.shared.recycle(frame);
     }
 
     /// Bloqueia até existir um frame não consumido ou `timeout` passar — NÃO
@@ -835,13 +867,23 @@ fn handle_event(
 ) {
     match ev.msg {
         ToParent::FrameReady { slot, meta, kind } => {
-            if let Some(frame) = reconstruct_frame(ring.as_ref(), slot, meta, kind, ev.fds) {
+            let spare = match kind {
+                FrameKind::Software { .. } => shared.take_spare(),
+                FrameKind::Hardware { .. } => None,
+            };
+            if let Some(frame) = reconstruct_frame(ring.as_ref(), slot, meta, kind, ev.fds, spare) {
                 shared.frame_seq.fetch_add(1, Ordering::Relaxed);
-                *shared
+                let replaced = shared
                     .latest_frame
                     .lock()
-                    .unwrap_or_else(|p| p.into_inner()) = Some(frame);
+                    .unwrap_or_else(|p| p.into_inner())
+                    .replace(frame);
                 shared.frame_ready.notify_all();
+                // Quadro que chegou antes do anterior ser apresentado: o
+                // buffer do anterior volta pro pool (fora do lock).
+                if let Some(old) = replaced {
+                    shared.recycle(old);
+                }
             }
         }
         ToParent::AudioBatch {
@@ -880,12 +922,14 @@ fn reconstruct_frame(
     meta: domain::frame_source::FrameMetadata,
     kind: FrameKind,
     fds: Vec<core_ipc::InlineHandle>,
+    spare: Option<Vec<u8>>,
 ) -> Option<Frame> {
     match kind {
         FrameKind::Software { pitch, format } => {
             let ring = ring?;
             let len = pitch as usize * meta.native_height as usize;
-            let data = ring.read_slot_to_vec(slot as usize, len);
+            let mut data = spare.unwrap_or_default();
+            ring.read_slot_into(slot as usize, len, &mut data);
             Some(Frame {
                 origin: FrameOrigin::SoftwareRawBuffer {
                     data,

@@ -251,3 +251,42 @@ fn save_ram_round_trips_through_session() {
     std::fs::remove_file(&srm).ok();
     std::fs::remove_file(&rom_path).ok();
 }
+
+/// O buffer de um quadro devolvido com `recycle_frame` é reaproveitado pelo
+/// próximo quadro do core — sem alocar um `Vec` novo a cada quadro.
+#[test]
+fn recycled_frame_buffer_is_reused() {
+    use domain::frame_source::FrameOrigin;
+    let _g = lock();
+    let s = session();
+    load(&s, &rom()).expect("load");
+
+    let data_ptr = |f: &domain::frame_source::Frame| match &f.origin {
+        FrameOrigin::SoftwareRawBuffer { data, .. } => data.as_ptr() as usize,
+        _ => panic!("core-fake entrega quadro software"),
+    };
+
+    // Esvazia o pool e o quadro pendente, depois pega um quadro e o devolve.
+    let _ = s.take_latest_frame();
+    s.wait_for_frame(Duration::from_millis(200));
+    let first = s.take_latest_frame().expect("quadro");
+    let ptr = data_ptr(&first);
+    s.recycle_frame(first);
+
+    // Um dos próximos quadros sai no mesmo buffer (o pool guarda até 2; um
+    // quadro que chegue no meio do caminho pode usar o outro).
+    let mut seen = Vec::new();
+    for _ in 0..4 {
+        s.wait_for_frame(Duration::from_millis(200));
+        let f = s.take_latest_frame().expect("próximo quadro");
+        assert_eq!(f.metadata.native_width, 64);
+        seen.push(data_ptr(&f));
+        s.recycle_frame(f);
+    }
+    assert!(
+        seen.contains(&ptr),
+        "buffer reaproveitado: {ptr:#x} em {seen:x?}"
+    );
+
+    s.unload().unwrap();
+}

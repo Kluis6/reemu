@@ -103,13 +103,20 @@ impl FrameRing {
     /// pai) — a 1 cópia extra do caminho software em troca do processo
     /// descartável.
     pub fn read_slot_to_vec(&self, idx: usize, len: usize) -> Vec<u8> {
+        let mut out = Vec::new();
+        self.read_slot_into(idx, len, &mut out);
+        out
+    }
+
+    /// Igual a `read_slot_to_vec`, mas reaproveitando `out` — com o buffer
+    /// de um quadro anterior (mesmo tamanho) não há alocação nem zeragem.
+    pub fn read_slot_into(&self, idx: usize, len: usize, out: &mut Vec<u8>) {
         let off = (idx % SLOTS) * self.slot_size;
         let n = len.min(self.slot_size);
-        let mut out = vec![0u8; n];
+        out.resize(n, 0);
         unsafe {
             std::ptr::copy_nonoverlapping(self.ptr.add(off), out.as_mut_ptr(), n);
         }
-        out
     }
 }
 

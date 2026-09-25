@@ -469,6 +469,9 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
         let mut gpu = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(fp) = gpu.as_mut() {
             if let Some(packed) = fp.process_packed_split(&frame) {
+                drop(gpu);
+                // a GPU já copiou o quadro: o buffer volta pro pool da sessão
+                state.session.recycle_frame(frame);
                 let w = u32::from_le_bytes(packed[0..4].try_into().unwrap_or_default());
                 let h = u32::from_le_bytes(packed[4..8].try_into().unwrap_or_default());
                 cache_thumb_frame(&state, w, h, &packed[FRAME_HEADER..]);
@@ -478,7 +481,7 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
     }
 
     let FrameOrigin::SoftwareRawBuffer {
-        data,
+        ref data,
         pitch,
         format,
     } = frame.origin
@@ -493,11 +496,14 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
         let n = w as usize * h as usize * 4;
         let mut out = frame_header(w, h);
         out.resize(FRAME_HEADER + n, 0);
-        to_rgba8_slice(&mut out[FRAME_HEADER..], &data, w, h, pitch, format);
+        to_rgba8_slice(&mut out[FRAME_HEADER..], data, w, h, pitch, format);
+        state.session.recycle_frame(frame);
         cache_thumb_frame(&state, w, h, &out[FRAME_HEADER..]);
         return tauri::ipc::Response::new(out);
     }
-    let (rgba, w, h) = rotate_rgba(to_rgba8(&data, w, h, pitch, format), w, h, rot);
+    let rgba = to_rgba8(data, w, h, pitch, format);
+    state.session.recycle_frame(frame);
+    let (rgba, w, h) = rotate_rgba(rgba, w, h, rot);
     cache_thumb_frame(&state, w, h, &rgba);
     let mut out = frame_header(w, h);
     out.extend_from_slice(&rgba);

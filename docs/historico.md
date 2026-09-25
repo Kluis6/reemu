@@ -568,6 +568,16 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-25 — sem alocação por quadro no caminho software**: o
+  `emu-session` lia cada quadro do anel de memória compartilhada num `Vec`
+  novo (`reconstruct_frame`), liberado logo depois de apresentado. Agora a
+  sessão tem um pool de até 2 buffers: `FrameRing::read_slot_into` copia pra
+  um buffer reaproveitado, quem apresenta devolve o quadro com
+  `EmuSession::recycle_frame` (`poll_frame` no modo canvas e o laço da
+  superfície nativa), e um quadro substituído antes de ser apresentado
+  também devolve o seu. Teste de integração com o core-fake confere que o
+  buffer devolvido volta a ser usado.
+
 - **2026-09-25 — OpenGL por hardware no Windows (WGL)**: o contexto GL dos
   cores vinha só do EGL, que o Windows não tem, então Beetle PSX HW, flycast
   e mupen64plus/parallel em GL não subiam lá. `gl_context.rs` agora separa a
