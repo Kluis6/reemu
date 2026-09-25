@@ -41,7 +41,7 @@ pub use crate::coreopts::{
 pub use crate::discover::{discover_cores, DiscoveredCore};
 pub use crate::execstack::{core_file, exec_stack_env};
 #[cfg(all(unix, feature = "test-fixtures"))]
-pub use crate::gl_context::render_solid_rgba_to_dmabuf;
+pub use crate::gl_context::{render_rect_rgba_to_dmabuf, render_solid_rgba_to_dmabuf};
 pub use crate::input::{analog, libretro_joypad_id, retropad, AnalogState, RetroPadState};
 pub use crate::loader::{CoreProbe, DesktopCoreLoader};
 pub use crate::pacing::{PaceStats, Pacer};

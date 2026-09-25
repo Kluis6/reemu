@@ -312,10 +312,14 @@ struct TestDmabufHandle {
     slot: u32,
     plane: std::sync::Mutex<Option<domain::frame_source::DmabufPlaneInfo>>,
     sync_fd: std::sync::Mutex<Option<i32>>,
+    flip: bool,
 }
 
 #[cfg(target_os = "linux")]
 impl domain::frame_source::GpuTextureHandle for TestDmabufHandle {
+    fn flip_y(&self) -> bool {
+        self.flip
+    }
     fn slot(&self) -> u32 {
         self.slot
     }
@@ -369,6 +373,7 @@ fn dmabuf_from_gl_producer_imports_correctly_into_wgpu() {
             slot: 0,
             plane: std::sync::Mutex::new(Some(plane)),
             sync_fd: std::sync::Mutex::new(sync_fd),
+            flip: false,
         })),
         metadata: FrameMetadata {
             native_width: 64,
@@ -1049,6 +1054,54 @@ fn field_render_upscalers() {
         assert!(
             hi > 0x80 && lo < 0x60,
             "{rel}: saída sem contraste ({lo}..{hi})"
+        );
+    }
+}
+
+/// Core que desenha MENOR que o máximo (flycast: buffer 853x853, quadro
+/// 640x480 no canto de origem do GL): a saída tem que ser só o quadro,
+/// inteiro colorido — com e sem inversão de Y. Antes o passe de flip copiava
+/// o buffer inteiro e o jogo aparecia cortado num canto (2026-09-25).
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "precisa de EGL+GBM+Vulkan em hardware real (render node DRM)"]
+fn interop_crops_frame_smaller_than_the_buffer() {
+    if std::env::var_os("REEMU_NO_GPU").is_some() {
+        return;
+    }
+    for flip in [true, false] {
+        let (plane, sync_fd) =
+            core_loader_desktop::render_rect_rgba_to_dmabuf([30, 200, 60, 255], 64, 64, 40, 24)
+                .expect("renderizar dma_buf de teste via GL");
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        let handle = TestDmabufHandle {
+            slot: 0,
+            plane: std::sync::Mutex::new(Some(plane)),
+            sync_fd: std::sync::Mutex::new(sync_fd),
+            flip,
+        };
+        let frame = Frame {
+            origin: FrameOrigin::HardwareTexture(Box::new(handle)),
+            metadata: FrameMetadata {
+                native_width: 40,
+                native_height: 24,
+                aspect_ratio: 40.0 / 24.0,
+                rotation_degrees: 0,
+            },
+        };
+        let _ = fp.process(&frame);
+        let (w, h, data) = fp.process(&frame).expect("2º process entrega");
+        assert_eq!((w, h), (40, 24), "saída do tamanho do quadro (flip={flip})");
+        let dark = data
+            .chunks(4)
+            .filter(|p| p[0].abs_diff(30) > 3 || p[1].abs_diff(200) > 3)
+            .count();
+        assert_eq!(
+            dark, 0,
+            "{dark} pixels fora da cor — recorte errado (flip={flip})"
         );
     }
 }

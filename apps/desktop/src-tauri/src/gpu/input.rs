@@ -275,28 +275,40 @@ impl FrameProcessor {
             return false;
         };
 
-        if !handle.flip_y() {
-            self.interop_view = Some(imp_view.clone());
-            return true;
-        }
-
-        // Core GL renderiza bottom-left → inverte o Y num alvo próprio por slot.
+        // O buffer tem o tamanho MÁXIMO do core; o quadro ocupa só `w`×`h`
+        // (ex.: flycast aloca 853x853 e desenha 640x480). Recorta — e inverte
+        // o Y se o core é bottom-left — num alvo do tamanho do quadro.
         let (tw, th) = {
             let s = imp_tex.size();
             (s.width, s.height)
         };
+        let (w, h) = (w.clamp(1, tw), h.clamp(1, th));
+        let flip = handle.flip_y();
+        if !flip && (w, h) == (tw, th) {
+            self.interop_view = Some(imp_view.clone());
+            return true;
+        }
         if self.flip_tgt.len() <= slot {
             self.flip_tgt.resize_with(slot + 1, || None);
         }
-        if !matches!(&self.flip_tgt[slot], Some((_, _, w, h)) if *w == tw && *h == th) {
+        if !matches!(&self.flip_tgt[slot], Some((_, _, tgt_w, tgt_h)) if *tgt_w == w && *tgt_h == h)
+        {
             let (t, v) = new_tex(
                 &self.device,
-                tw,
-                th,
+                w,
+                h,
                 wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             );
-            self.flip_tgt[slot] = Some((t, v, tw, th));
+            self.flip_tgt[slot] = Some((t, v, w, h));
         }
+        let params = [
+            w as f32 / tw as f32,
+            h as f32 / th as f32,
+            if flip { 1.0 } else { 0.0 },
+            0.0f32,
+        ];
+        let bytes: Vec<u8> = params.iter().flat_map(|f| f.to_le_bytes()).collect();
+        self.queue.write_buffer(&self.flip.params, 0, &bytes);
         let src_view = &self.imported[slot].as_ref().unwrap().1;
         let dst_view = &self.flip_tgt[slot].as_ref().unwrap().1;
         let bg = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -310,6 +322,10 @@ impl FrameProcessor {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&self.sampler_nearest),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.flip.params.as_entire_binding(),
                 },
             ],
         });

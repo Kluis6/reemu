@@ -1322,6 +1322,31 @@ pub fn render_solid_rgba_to_dmabuf(
     w: u32,
     h: u32,
 ) -> Result<(domain::frame_source::DmabufPlaneInfo, Option<i32>), String> {
+    render_solid_impl(rgba, w, h, (w, h))
+}
+
+/// Como [`render_solid_rgba_to_dmabuf`], mas o buffer (`w`×`h`, o "máximo"
+/// do core) fica preto e só o retângulo `rw`×`rh` a partir da origem do GL
+/// (viewport (0,0), como um core que desenha menor que o máximo) recebe a
+/// cor — pra testar o recorte do lado consumidor.
+#[cfg(all(unix, feature = "test-fixtures"))]
+pub fn render_rect_rgba_to_dmabuf(
+    rgba: [u8; 4],
+    w: u32,
+    h: u32,
+    rw: u32,
+    rh: u32,
+) -> Result<(domain::frame_source::DmabufPlaneInfo, Option<i32>), String> {
+    render_solid_impl(rgba, w, h, (rw, rh))
+}
+
+#[cfg(all(unix, feature = "test-fixtures"))]
+fn render_solid_impl(
+    rgba: [u8; 4],
+    w: u32,
+    h: u32,
+    (rw, rh): (u32, u32),
+) -> Result<(domain::frame_source::DmabufPlaneInfo, Option<i32>), String> {
     use std::os::fd::IntoRawFd as _;
     let cfg = GlConfig {
         context_type: sys::RETRO_HW_CONTEXT_OPENGL,
@@ -1337,6 +1362,11 @@ pub fn render_solid_rgba_to_dmabuf(
     }
     ctx.bind_write_slot();
     unsafe {
+        ctx.gl.disable(glow::SCISSOR_TEST);
+        ctx.gl.clear_color(0.0, 0.0, 0.0, 1.0);
+        ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+        ctx.gl.enable(glow::SCISSOR_TEST);
+        ctx.gl.scissor(0, 0, rw as i32, rh as i32);
         ctx.gl.clear_color(
             rgba[0] as f32 / 255.0,
             rgba[1] as f32 / 255.0,
@@ -1344,6 +1374,7 @@ pub fn render_solid_rgba_to_dmabuf(
             rgba[3] as f32 / 255.0,
         );
         ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+        ctx.gl.disable(glow::SCISSOR_TEST);
     }
     let (_, plane, sync_fd) = ctx
         .finish_write_slot()

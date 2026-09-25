@@ -102,18 +102,25 @@ pub(super) fn rotate_pipeline(
     })
 }
 
-/// Inverte o eixo Y de uma textura (fullscreen triangle). Pros `dma_buf` de
-/// cores GL, que renderizam com origem bottom-left.
+/// Recorta o quadro de um `dma_buf` de core GL e, se preciso, inverte o Y
+/// (fullscreen triangle). O buffer tem o tamanho MÁXIMO do core
+/// (`max_width`×`max_height`) e o quadro ocupa só as primeiras `h` linhas e
+/// `w` colunas da memória (viewport do GL em (0,0)) — `P.xy` = `(w/tw,
+/// h/th)`. `P.z` = 1 → core bottom-left (GL nativo): a linha 0 da memória vai
+/// pra BAIXO da saída. Em WebGPU a NDC tem y pra cima e o uv (0,0) é a 1ª
+/// linha da textura (spec WebGPU, "Coordinate Systems").
 pub(super) const FLIP_WGSL: &str = r#"
 @group(0) @binding(0) var T: texture_2d<f32>;
 @group(0) @binding(1) var S: sampler;
+@group(0) @binding(2) var<uniform> P: vec4<f32>;
 struct V { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 @vertex fn vs(@builtin(vertex_index) i: u32) -> V {
     let p = array<vec2<f32>, 3>(vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
     var o: V;
     o.pos = vec4<f32>(p[i], 0.0, 1.0);
-    // uv.y sem a inversão usual = amostra de baixo pra cima (flip).
-    o.uv = vec2<f32>((p[i].x + 1.0) * 0.5, (p[i].y + 1.0) * 0.5);
+    let up = (p[i].y + 1.0) * 0.5; // 0 embaixo, 1 em cima
+    let v = select(1.0 - up, up, P.z > 0.5);
+    o.uv = vec2<f32>((p[i].x + 1.0) * 0.5 * P.x, v * P.y);
     return o;
 }
 @fragment fn fs(v: V) -> @location(0) vec4<f32> { return textureSample(T, S, v.uv); }
@@ -122,6 +129,8 @@ struct V { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 pub(super) struct FlipPipe {
     pub(super) pipeline: wgpu::RenderPipeline,
     pub(super) bgl: wgpu::BindGroupLayout,
+    /// `vec4(w/tw, h/th, flip, 0)` — reescrito a cada quadro de interop.
+    pub(super) params: wgpu::Buffer,
 }
 
 pub(super) fn build_flip(device: &wgpu::Device) -> FlipPipe {
@@ -144,7 +153,23 @@ pub(super) fn build_flip(device: &wgpu::Device) -> FlipPipe {
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                 count: None,
             },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: wgpu::BufferSize::new(16),
+                },
+                count: None,
+            },
         ],
+    });
+    let params = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("flip params"),
+        size: 16,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     });
     let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("flip layout"),
@@ -180,7 +205,11 @@ pub(super) fn build_flip(device: &wgpu::Device) -> FlipPipe {
         multiview_mask: None,
         cache: None,
     });
-    FlipPipe { pipeline, bgl }
+    FlipPipe {
+        pipeline,
+        bgl,
+        params,
+    }
 }
 
 /// Pipeline de blit (mesmo shader do composite: quad posicionado por um `Rect`
