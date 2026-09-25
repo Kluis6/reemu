@@ -1008,22 +1008,16 @@ export const useDetailStyles = makeStyles({
   // Botão "Jogar": peso de fonte mais leve que o padrão "semibold" do
   // Fluent pra `appearance="primary"` (pedido do usuário).
   playBtn: { fontWeight: tokens.fontWeightMedium },
-  // Ações secundárias do hero com rótulo visível (ícone + texto), mesma
-  // altura fluida do botão Jogar.
-  heroLabeledBtn: {
-    minHeight: "clamp(40px, 2.1vw, 96px) !important",
-    fontSize: "clamp(15px, 0.85vw, 34px) !important",
-    fontWeight: tokens.fontWeightRegular,
-    "& .fui-Button__icon": {
-      fontSize: "1.25em",
-      width: "1.25em",
-      height: "1.25em",
-    },
-  },
   // Remover: separado das outras ações e com cor de perigo no texto/ícone.
   dangerBtn: {
     marginLeft: "12px",
     color: `${tokens.colorPaletteRedForeground1} !important`,
+  },
+  // 2º toque pendente: botão vermelho cheio — a confirmação fica visível
+  // sem depender do tooltip.
+  dangerConfirm: {
+    backgroundColor: `${tokens.colorPaletteRedBackground3} !important`,
+    color: "#ffffff !important",
   },
   noCoreBar: {
     marginTop: "14px",

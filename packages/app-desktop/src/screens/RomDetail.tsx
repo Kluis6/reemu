@@ -22,9 +22,11 @@ import {
   Select,
   Tab,
   TabList,
+  Tooltip,
 } from "@fluentui/react-components";
 import {
   ArrowResetRegular,
+  DeleteFilled,
   DeleteRegular,
   DismissRegular,
   EditRegular,
@@ -313,65 +315,76 @@ export function RomDetail() {
               appearance="primary"
               size="large"
               className={s.playBtn}
-              icon={<PlayRegular />}
               disabled={!chosenCore}
               onClick={() => play()}
             >
               {hasQuick ? "Continuar" : "Jogar"}
             </Button>
-            {/* Rótulo sempre visível (sem tooltip): no controle o tooltip
-                aparece e some sozinho no foco — a Microsoft desaconselha em
-                TV. A confirmação de remoção vira o próprio texto do botão. */}
-            <Button
-              size="large"
-              appearance="secondary"
-              className={mergeClasses(s.noBorderButton, s.heroLabeledBtn)}
-              icon={
-                rom.isFavorite ? (
-                  <HeartFilled className={s.favIconOn} />
-                ) : (
-                  <HeartRegular />
-                )
-              }
-              aria-pressed={rom.isFavorite}
-              onClick={() => fav.mutate(!rom.isFavorite)}
+            {/* Ações secundárias só com ícone (pedido do usuário); o nome vem
+                pelo tooltip e pelo aria-label. */}
+            <Tooltip
+              content={rom.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+              relationship="label"
             >
-              {rom.isFavorite ? "Favorito" : "Favoritar"}
-            </Button>
-            <Button
-              size="large"
-              appearance="secondary"
-              className={mergeClasses(s.noBorderButton, s.heroLabeledBtn)}
-              icon={<EditRegular />}
-              onClick={openEdit}
-            >
-              Editar
-            </Button>
-            <Button
-              size="large"
-              appearance="secondary"
-              className={mergeClasses(s.noBorderButton, s.heroLabeledBtn)}
-              icon={<InfoRegular />}
-              onClick={() => setInfoOpen(true)}
-            >
-              Informações
-            </Button>
-            <Button
-              size="large"
-              appearance="secondary"
-              className={mergeClasses(s.noBorderButton, s.heroLabeledBtn, s.dangerBtn)}
-              icon={<DeleteRegular />}
-              disabled={remove.isPending}
-              onClick={() => {
-                if (confirmRemove) remove.mutate();
-                else {
-                  setConfirmRemove(true);
-                  window.setTimeout(() => setConfirmRemove(false), 3000);
+              <Button
+                size="large"
+                appearance="secondary"
+                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
+                icon={
+                  rom.isFavorite ? (
+                    <HeartFilled className={s.favIconOn} />
+                  ) : (
+                    <HeartRegular />
+                  )
                 }
-              }}
+                aria-pressed={rom.isFavorite}
+                onClick={() => fav.mutate(!rom.isFavorite)}
+              />
+            </Tooltip>
+            <Tooltip content="Editar nome e plataforma" relationship="label">
+              <Button
+                size="large"
+                appearance="secondary"
+                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
+                icon={<EditRegular />}
+                onClick={openEdit}
+              />
+            </Tooltip>
+            <Tooltip content="Informações completas" relationship="label">
+              <Button
+                size="large"
+                appearance="secondary"
+                className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
+                icon={<InfoRegular />}
+                onClick={() => setInfoOpen(true)}
+              />
+            </Tooltip>
+            <Tooltip
+              content={
+                confirmRemove ? "Aperte de novo para confirmar a remoção" : "Remover da biblioteca"
+              }
+              relationship="label"
             >
-              {confirmRemove ? "Confirmar remoção" : "Remover"}
-            </Button>
+              <Button
+                size="large"
+                appearance={confirmRemove ? "primary" : "secondary"}
+                className={mergeClasses(
+                  s.noBorderButton,
+                  s.heroActionBtn,
+                  s.dangerBtn,
+                  confirmRemove && s.dangerConfirm,
+                )}
+                icon={confirmRemove ? <DeleteFilled /> : <DeleteRegular />}
+                disabled={remove.isPending}
+                onClick={() => {
+                  if (confirmRemove) remove.mutate();
+                  else {
+                    setConfirmRemove(true);
+                    window.setTimeout(() => setConfirmRemove(false), 3000);
+                  }
+                }}
+              />
+            </Tooltip>
           </div>
           {coreList.length === 0 && (
             <MessageBar intent="warning" className={s.noCoreBar}>
