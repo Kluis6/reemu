@@ -248,6 +248,16 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             }
             true
         }
+        // Suportado: o `input_state_cb` responde `RETRO_DEVICE_ID_JOYPAD_MASK`
+        // com todos os botões de uma vez (uma chamada por porta em vez de 16).
+        // A doc diz que o ponteiro é ignorado; alguns cores passam um `bool*`
+        // mesmo assim, então marcamos `true` nele quando vem.
+        sys::RETRO_ENVIRONMENT_GET_INPUT_BITMASKS => {
+            if !data.is_null() {
+                *(data as *mut bool) = true;
+            }
+            true
+        }
         sys::RETRO_ENVIRONMENT_SET_PIXEL_FORMAT => {
             if data.is_null() {
                 return false;
@@ -552,10 +562,11 @@ pub(crate) unsafe extern "C" fn input_state_cb(
 ) -> i16 {
     let port = port as usize;
     match device {
-        sys::RETRO_DEVICE_JOYPAD => {
-            // Bitmask não anunciado (`GET_INPUT_BITMASKS`) → só consulta por id.
-            i16::from(crate::input::retropad().query_id(port, id))
+        sys::RETRO_DEVICE_JOYPAD if id == sys::RETRO_DEVICE_ID_JOYPAD_MASK => {
+            // Bit N = botão de id N — é exatamente como o estado já é guardado.
+            crate::input::retropad().mask(port) as i16
         }
+        sys::RETRO_DEVICE_JOYPAD => i16::from(crate::input::retropad().query_id(port, id)),
         sys::RETRO_DEVICE_ANALOG => {
             let analog = crate::input::analog();
             analog.mark_used();

@@ -80,8 +80,13 @@ pub const RETRO_DEVICE_ID_ANALOG_X: c_uint = 0;
 pub const RETRO_DEVICE_ID_ANALOG_Y: c_uint = 1;
 
 /// `id` especial no `RETRO_DEVICE_JOYPAD`: pede o bitmask de todos os botões
-/// (só quando o frontend anuncia `GET_INPUT_BITMASKS` — não anunciamos ainda).
+/// (bit N = botão `RETRO_DEVICE_ID_JOYPAD_*` de valor N — libretro.h). Vale
+/// porque anunciamos `GET_INPUT_BITMASKS`.
 pub const RETRO_DEVICE_ID_JOYPAD_MASK: c_uint = 256;
+
+/// "O frontend devolve todos os botões de uma vez num bitmask" (libretro.h).
+/// O ponteiro de dados é ignorado; a resposta é o retorno `true`.
+pub const RETRO_ENVIRONMENT_GET_INPUT_BITMASKS: c_uint = 51 | RETRO_ENVIRONMENT_EXPERIMENTAL;
 
 #[repr(C)]
 pub struct retro_system_info {

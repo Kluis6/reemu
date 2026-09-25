@@ -121,6 +121,32 @@ async fn runtime_set_geometry_changes_frame_aspect() {
     assert_eq!(core.system_av_info().geometry.aspect_ratio, 2.0);
 }
 
+/// `GET_INPUT_BITMASKS` (libretro.h): anunciado, o core lê todos os botões
+/// numa chamada só — bit N = botão `RETRO_DEVICE_ID_JOYPAD_*` N. O core
+/// falso espelha a máscara da porta 0 em SRAM[4..6].
+#[tokio::test]
+async fn input_bitmask_returns_all_buttons_at_once() {
+    use core_loader_desktop::retropad;
+    use domain::input::RetroPadButton;
+    let _lock = guard().await;
+    let rom = write_rom(b"bitmask");
+    let mut core = loader()
+        .load_core(&core_id(), rom.to_str().unwrap())
+        .await
+        .expect("load do core-fake");
+    retropad().clear();
+    retropad().set(0, RetroPadButton::A, true); // id 8
+    retropad().set(0, RetroPadButton::Start, true); // id 3
+    retropad().set(0, RetroPadButton::R3, true); // id 15
+    core.next_frame();
+    let sram = core.save_ram().unwrap();
+    let mask = u16::from(sram[4]) | (u16::from(sram[5]) << 8);
+    assert_eq!(mask, (1 << 8) | (1 << 3) | (1 << 15), "máscara {mask:#06x}");
+    retropad().clear();
+    drop(core);
+    let _ = std::fs::remove_file(rom);
+}
+
 #[tokio::test]
 async fn save_state_round_trip_and_pending_hook() {
     let _lock = guard().await;

@@ -568,6 +568,14 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-09-25 — `GET_INPUT_BITMASKS` anunciado**: pelo `libretro.h`, o
+  frontend que responde `true` a `GET_INPUT_BITMASKS` (51 | EXPERIMENTAL)
+  aceita `RETRO_DEVICE_ID_JOYPAD_MASK` (256) no `input_state` e devolve
+  todos os botões num `int16_t`, bit N = botão de id N. O estado do RetroPad
+  já era guardado assim (B=0 … R3=15), então a resposta é a máscara da
+  porta. Core falso agora pergunta e lê a máscara como um core real; teste
+  com A, Start e R3 (bit 15, `int16_t` negativo).
+
 - **2026-09-25 — FSR, NIS e RCAS nos presets recomendados**: o pacote
   `slang-shaders` já trazia FSR 1 (`edge-smoothing/fsr`), NIS
   (`edge-smoothing/nis`) e RCAS (`sharpen/rca_sharpen`); CAS não vem nele.

@@ -58,6 +58,9 @@ struct retro_hw_render_callback {
 #define RETRO_ENVIRONMENT_GET_VARIABLE 15
 #define RETRO_ENVIRONMENT_SET_VARIABLES 16
 #define RETRO_ENVIRONMENT_SET_GEOMETRY 37 /* libretro.h */
+#define RETRO_ENVIRONMENT_GET_INPUT_BITMASKS (51 | 0x10000) /* libretro.h */
+#define RETRO_DEVICE_JOYPAD 1
+#define RETRO_DEVICE_ID_JOYPAD_MASK 256
 #define RETRO_PIXEL_FORMAT_RGB565 2
 #define RETRO_HW_CONTEXT_OPENGL_CORE 3
 
@@ -129,6 +132,10 @@ void retro_set_controller_port_device(unsigned port, unsigned device) {
 }
 void retro_reset(void) { frame_n = 0; }
 
+/* Como um core real: pergunta se o frontend suporta bitmask e, se sim,
+   lê todos os botões da porta 0 de uma vez — espelhados em SRAM[4..6]. */
+static int has_bitmasks = 0;
+
 /* ROM começando com "GEOM": a partir do 3º quadro o core pede
    `SET_GEOMETRY` com proporção 2.0 — testa a mudança em runtime. */
 static int geometry_test = 0;
@@ -139,6 +146,7 @@ bool retro_load_game(const struct retro_game_info *game) {
    if (env_cb)
       env_cb(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pf);
 
+   has_bitmasks = env_cb && env_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL);
    geometry_test = game && game->data && game->size >= 4 &&
                    memcmp(game->data, "GEOM", 4) == 0;
 
@@ -175,6 +183,12 @@ void retro_run(void) {
       struct retro_variable v = {"testcore_mark", 0};
       if (env_cb(RETRO_ENVIRONMENT_GET_VARIABLE, &v) && v.value)
          testcore_sram[2] = (unsigned char)v.value[0];
+   }
+
+   if (has_bitmasks && input_state_cb) {
+      int16_t mask = input_state_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_MASK);
+      testcore_sram[4] = (unsigned char)(mask & 0xFF);
+      testcore_sram[5] = (unsigned char)((mask >> 8) & 0xFF);
    }
 
    if (geometry_test && frame_n == 2 && env_cb) {

@@ -106,8 +106,6 @@ no `emu-session`, ver `docs/historico.md`).
       permissão escrita do LaunchBox.
 - [ ] `todo` — Validar o TheGamesDB com uma chave real (o parser foi testado
       com JSON no formato que o ES-DE lê, não com resposta capturada).
-- [ ] `todo` — `GET_INPUT_BITMASKS` não anunciado (cores caem no query por
-      id; funciona, perde a otimização).
 
 ### Infra / qualidade
 
