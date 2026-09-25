@@ -1193,3 +1193,83 @@ fn gl_core_real_rom() {
     assert!(frames > 0, "nenhum quadro chegou");
     assert!(lit > 0, "todos os quadros saíram pretos");
 }
+
+/// Diagnóstico manual: compõe um quadro com a moldura de verdade e grava
+/// PNG em `$REEMU_DIAG_OUT` (interop 853x853 → 640x480 e software 640x480),
+/// pra comparar o alinhamento jogo × moldura. Não afirma nada.
+#[cfg(target_os = "linux")]
+#[test]
+#[ignore = "diagnóstico manual (REEMU_DIAG_BEZEL, REEMU_DIAG_OUT)"]
+fn diag_bezel_composition() {
+    let (Ok(bezel), Ok(out)) = (
+        std::env::var("REEMU_DIAG_BEZEL"),
+        std::env::var("REEMU_DIAG_OUT"),
+    ) else {
+        return;
+    };
+    let decoder = png::Decoder::new(std::io::BufReader::new(
+        std::fs::File::open(&bezel).unwrap(),
+    ));
+    let mut reader = decoder.read_info().unwrap();
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).unwrap();
+    buf.truncate(info.buffer_size());
+    let (bw, bh) = (info.width, info.height);
+    let vp = || {
+        Some(DecoViewport {
+            x: 263.0,
+            y: 22.0,
+            w: 1396.0,
+            h: 1037.0,
+        })
+    };
+    let preset = std::env::var("REEMU_DIAG_PRESET").ok();
+    let integer = std::env::var_os("REEMU_DIAG_INTEGER").is_some();
+    for (name, hw) in [("interop", true), ("software", false)] {
+        let mut fp = FrameProcessor::new().expect("adapter");
+        if let Some(p) = &preset {
+            set_shader_root(
+                std::path::PathBuf::from(std::env::var("HOME").unwrap())
+                    .join(".local/share/com.reemu.desktop/shaders/slang-shaders"),
+            );
+            fp.set_preset(p).expect("preset");
+        }
+        fp.set_integer_scaling(integer);
+        fp.set_decoration(Some((buf.clone(), bw, bh, vp())));
+        let frame = if hw {
+            let (plane, sync_fd) = core_loader_desktop::render_rect_rgba_to_dmabuf(
+                [30, 200, 60, 255],
+                853,
+                853,
+                640,
+                480,
+            )
+            .unwrap();
+            Frame {
+                origin: FrameOrigin::HardwareTexture(Box::new(TestDmabufHandle {
+                    slot: 0,
+                    plane: std::sync::Mutex::new(Some(plane)),
+                    sync_fd: std::sync::Mutex::new(sync_fd),
+                    flip: true,
+                })),
+                metadata: FrameMetadata {
+                    native_width: 640,
+                    native_height: 480,
+                    aspect_ratio: 4.0 / 3.0,
+                    rotation_degrees: 0,
+                },
+            }
+        } else {
+            let mut f = grey_frame(640, 480, 0x7A);
+            f.metadata.aspect_ratio = 4.0 / 3.0;
+            f
+        };
+        let _ = fp.process(&frame);
+        let (w, h, data) = fp.process(&frame).expect("saída");
+        let path = format!("{out}/{name}.png");
+        let mut enc = png::Encoder::new(std::fs::File::create(&path).unwrap(), w, h);
+        enc.set_color(png::ColorType::Rgba);
+        enc.write_header().unwrap().write_image_data(data).unwrap();
+        eprintln!("{name}: {w}x{h} → {path}");
+    }
+}

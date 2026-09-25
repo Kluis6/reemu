@@ -411,10 +411,40 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
     // — não importa mais se esse teardown deixa estado global sujo.
 }
 
+/// Nomes dos botões num `joypad_mask` (bit = id libretro), pro
+/// `REEMU_INPUT_DEBUG`.
+fn mask_names(mask: u16) -> String {
+    const NAMES: [&str; 16] = [
+        "B", "Y", "Select", "Start", "Cima", "Baixo", "Esq", "Dir", "A", "X", "L1", "R1", "L2",
+        "R2", "L3", "R3",
+    ];
+    let v: Vec<&str> = (0..16)
+        .filter(|i| mask & (1 << i) != 0)
+        .map(|i| NAMES[i])
+        .collect();
+    if v.is_empty() {
+        "(nada)".into()
+    } else {
+        v.join("+")
+    }
+}
+
 fn apply_input(ports: &[PortInput; 4]) {
+    static DEBUG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let debug = *DEBUG.get_or_init(|| std::env::var_os("REEMU_INPUT_DEBUG").is_some());
     let pad = core_loader_desktop::retropad();
     let analog = core_loader_desktop::analog();
     for (port, input) in ports.iter().enumerate() {
+        // Diagnóstico: o que o core VAI ver nesta porta (botões + analógico
+        // esquerdo), só quando muda.
+        if debug && pad.mask(port) != input.joypad_mask {
+            log::info!(
+                "entrada porta {}: {} (analógico esq {:?})",
+                port + 1,
+                mask_names(input.joypad_mask),
+                input.sticks[0]
+            );
+        }
         pad.set_mask(port, input.joypad_mask);
         analog.set_stick(port, 0, input.sticks[0].0, input.sticks[0].1);
         analog.set_stick(port, 1, input.sticks[1].0, input.sticks[1].1);
