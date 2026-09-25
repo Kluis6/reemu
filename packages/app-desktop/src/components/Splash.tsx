@@ -4,8 +4,6 @@ import { AnimatedBackground } from './AnimatedBackground'
 
 /** Caminho da logo — coloque `reemu-logo.png` em `packages/app-desktop/public/`. */
 const LOGO_SRC = '/reemu-logo.png'
-/** Emblema vetorial — usado com o wordmark enquanto não há a arte acima. */
-const MARK_SRC = '/reemu-mark.svg'
 
 // Entrada: fade + leve expansão vertical (toque de CRT), sem animar filter.
 const powerOn = {
@@ -87,18 +85,14 @@ const useStyles = makeStyles({
     position: 'absolute',
     inset: 0,
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    rowGap: '0.1em',
     fontSize: 'clamp(44px, 8vw, 220px)',
     fontWeight: tokens.fontWeightBold,
     letterSpacing: '0.03em',
     color: tokens.colorNeutralForeground1,
   },
   wmGreen: { color: tokens.colorBrandForeground1 },
-  // emblema vetorial (branding/reemu-mark.svg) acima do wordmark
-  mark: { height: '1.9em', width: 'auto', display: 'block' },
   tag: {
     position: 'relative',
     zIndex: 1,
@@ -146,10 +140,7 @@ export function Splash({ leaving = false }: { leaving?: boolean }) {
           <img className={s.logo} src={LOGO_SRC} alt="ReEmu" />
         ) : (
           <div className={`${s.logo} ${s.wordmark}`}>
-            <img className={s.mark} src={MARK_SRC} alt="" />
-            <span>
-              Re<span className={s.wmGreen}>Emu</span>
-            </span>
+            Re<span className={s.wmGreen}>Emu</span>
           </div>
         )}
       </div>
