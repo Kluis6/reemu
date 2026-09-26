@@ -288,6 +288,15 @@ impl DesktopCoreLoader {
 
         // O guard inicializa o estado global e garante um-core-por-processo.
         let guard = ffi_state::acquire(&self.system_dir, &self.save_dir)?;
+        if self.vulkan_only {
+            // Rota in-process (etapa 12): só Vulkan serve aqui, então é o que
+            // `GET_PREFERRED_HW_RENDER` responde — o flycast escolhe o
+            // renderizador por essa resposta (libretro.cpp: `preferred ==
+            // RETRO_HW_CONTEXT_VULKAN` → `set_vulkan_hw_render()`).
+            if let Some(st) = ffi_state::lock().as_mut() {
+                st.prefer_vulkan = true;
+            }
+        }
         let raw = RawCore::open(&path)?;
 
         let api = unsafe { (raw.api_version)() };

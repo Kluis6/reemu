@@ -63,7 +63,8 @@ pub(crate) struct FrontendState {
     /// `GET_HW_RENDER_INTERFACE`. `usize` cru; aponta pro `Box<VkFrameBridge>`
     /// do `DesktopCore` (vivo enquanto o core estiver carregado).
     pub vk_interface_ptr: Option<usize>,
-    /// `GET_PREFERRED_HW_RENDER` responde Vulkan (opt-in `REEMU_HW=vulkan`).
+    /// `GET_PREFERRED_HW_RENDER` responde Vulkan: na rota in-process
+    /// (`DesktopCoreLoader::vulkan_only`) ou com `REEMU_HW=vulkan`.
     pub prefer_vulkan: bool,
     /// Dimensão (`w`, `h`) do último frame de HW render — o core só passa isso
     /// no `video_refresh` com `data == RETRO_HW_FRAME_BUFFER_VALID`.
