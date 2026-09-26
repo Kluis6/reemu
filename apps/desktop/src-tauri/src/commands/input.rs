@@ -55,7 +55,7 @@ pub fn input_key(
         == InputFocus::GameFocused;
 
     if let Some((port, button)) = input_desktop::keymap::web_code_to_retropad(&code) {
-        emu_session::retropad().set(port as usize, button, pressed && game_focused);
+        emu_session::keyboard_pad().set(port as usize, button, pressed && game_focused);
     }
     Ok(())
 }
@@ -91,6 +91,7 @@ fn retropad_from_str(s: &str) -> Option<domain::input::RetroPadButton> {
 #[tauri::command]
 pub fn start_binding_capture() -> Result<(), String> {
     emu_session::retropad().clear();
+    emu_session::keyboard_pad().clear();
     input_desktop::capture::begin();
     Ok(())
 }

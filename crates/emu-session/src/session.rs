@@ -344,6 +344,11 @@ impl EmuSession {
         let lc = guard.as_mut()?;
         lc.apply_input(&snapshot_input());
         let tick = lc.run_frame();
+        // Rota local: o core marca o analógico do core-loader (mesmo
+        // processo); o poller do controle olha o do pai.
+        if core_loader_desktop::analog().is_used() {
+            PARENT_ANALOG.mark_used();
+        }
         if !tick.audio.is_empty() {
             self.shared
                 .vk_local_audio
@@ -583,9 +588,20 @@ impl Drop for EmuSession {
 /// snapshot pro filho por IPC a cada tick.
 static PARENT_PAD: RetroPadState = RetroPadState::new();
 static PARENT_ANALOG: AnalogState = AnalogState::new();
+/// Teclado num estado À PARTE do controle, combinado por OR no snapshot. No
+/// mesmo estado, um soltava os botões do outro: o poller do controle solta o
+/// que ele aplicou (ex.: o stick passando pelo limiar de d-pad) e isso
+/// derrubava uma seta segurada no teclado — e vice-versa.
+static KEYBOARD_PAD: RetroPadState = RetroPadState::new();
 
+/// Estado do RetroPad alimentado pelo controle (thread de gamepad).
 pub fn retropad() -> &'static RetroPadState {
     &PARENT_PAD
+}
+
+/// Estado do RetroPad alimentado pelo teclado (`input_key` do shell).
+pub fn keyboard_pad() -> &'static RetroPadState {
+    &KEYBOARD_PAD
 }
 
 pub fn analog() -> &'static AnalogState {
@@ -594,7 +610,7 @@ pub fn analog() -> &'static AnalogState {
 
 fn snapshot_input() -> [PortInput; 4] {
     std::array::from_fn(|port| PortInput {
-        joypad_mask: PARENT_PAD.mask(port),
+        joypad_mask: PARENT_PAD.mask(port) | KEYBOARD_PAD.mask(port),
         sticks: PARENT_ANALOG.sticks(port),
     })
 }
@@ -748,7 +764,9 @@ fn gamepad_loop(shared: Arc<Shared>) {
                 .extend(outcome.disconnected);
         }
         if !shared.game_focused.load(Ordering::Relaxed) {
-            PARENT_PAD.clear(); // no menu, nada de input de jogo
+            // no menu, nada de input de jogo
+            PARENT_PAD.clear();
+            KEYBOARD_PAD.clear();
         }
         std::thread::sleep(Duration::from_millis(8));
     }
@@ -1000,6 +1018,7 @@ fn handle_event(
         }
         ToParent::SaveRamRestored(None) => {}
         ToParent::Warn(msg) => log::warn!("core-host: {msg}"),
+        ToParent::AnalogUsed => PARENT_ANALOG.mark_used(),
         other => log::debug!("evento do core-host fora de um round-trip: {other:?}"),
     }
 }
@@ -1433,6 +1452,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
 
                 let target_srm = srm_path(&save_dir, &rom);
                 let initial_save_ram = std::fs::read(&target_srm).ok();
+                // Jogo novo: volta a dobrar o stick como d-pad até o core
+                // mostrar que lê analógico (`AnalogUsed` / rota local).
+                PARENT_ANALOG.clear();
+                core_loader_desktop::analog().clear();
 
                 // Etapa 12 B3b: com `REEMU_HW=vulkan` + device do compositor
                 // publicado, tenta rodar o core AQUI (in-process). Se ele não
@@ -1984,5 +2007,35 @@ mod vk_route_tests {
         assert!(gl_in_load("parallel_n64_libretro", &opts));
         opts.insert("parallel-n64-gfxplugin".to_string(), "parallel".to_string());
         assert!(!gl_in_load("parallel_n64_libretro", &opts));
+    }
+}
+
+#[cfg(test)]
+mod input_merge_tests {
+    use super::*;
+    use domain::input::RetroPadButton;
+
+    #[test]
+    fn keyboard_and_gamepad_do_not_release_each_other() {
+        // porta 3: não disputa os globais com outros testes
+        KEYBOARD_PAD.set(3, RetroPadButton::Left, true);
+        PARENT_PAD.set(3, RetroPadButton::Left, true); // stick passou do limiar
+        PARENT_PAD.set(3, RetroPadButton::Left, false); // e voltou
+        let bit = 1u16 << core_loader_desktop::libretro_joypad_id(RetroPadButton::Left);
+        assert_ne!(
+            snapshot_input()[3].joypad_mask & bit,
+            0,
+            "seta do teclado segue apertada"
+        );
+        PARENT_PAD.set(3, RetroPadButton::R2, true);
+        KEYBOARD_PAD.set(3, RetroPadButton::R2, false); // soltar R no teclado
+        let r2 = 1u16 << core_loader_desktop::libretro_joypad_id(RetroPadButton::R2);
+        assert_ne!(
+            snapshot_input()[3].joypad_mask & r2,
+            0,
+            "R2 do controle segue apertado"
+        );
+        KEYBOARD_PAD.clear();
+        PARENT_PAD.clear();
     }
 }

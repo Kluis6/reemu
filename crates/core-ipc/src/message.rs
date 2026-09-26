@@ -99,6 +99,10 @@ pub enum ToParent {
     PausedAck,
     /// Erro fatal que não impede o processo de seguir vivo (loga no pai).
     Warn(String),
+    /// O core leu o analógico pela 1ª vez (`RETRO_DEVICE_ANALOG`). Mandado
+    /// uma vez: a partir daí o pai para de dobrar o stick esquerdo como
+    /// d-pad (senão mexer o stick aperta/solta as setas junto).
+    AnalogUsed,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

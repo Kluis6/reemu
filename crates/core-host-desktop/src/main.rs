@@ -485,6 +485,14 @@ fn run_one_frame(
     if let (Some(d), Some(t0)) = (diag.as_mut(), t0) {
         d.record_frame(t0.elapsed(), pacer.budget(), produced.is_none());
     }
+    // 1ª leitura de analógico pelo core → avisa o pai (uma vez por processo;
+    // cada jogo roda num filho novo).
+    static ANALOG_SENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if core_loader_desktop::analog().is_used()
+        && !ANALOG_SENT.swap(true, std::sync::atomic::Ordering::Relaxed)
+    {
+        let _ = channel.send(&ToParent::AnalogUsed, &[]);
+    }
     if let (Some(frame), Some(ring)) = (produced, ring.as_ref()) {
         let ts = diag.as_ref().map(|_| Instant::now());
         if let Some(buf) = send_frame(channel, ring, frame_slot, frame) {
