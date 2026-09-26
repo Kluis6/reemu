@@ -438,7 +438,7 @@ const es: Messages = {
     unavailable: 'Información de shader no disponible.',
     needsPack: '{{desc}} — necesita el paquete de shaders (abajo).',
     integerScaling: 'Escalado entero',
-    integerScalingHint: 'Fija el video en un múltiplo entero de la resolución nativa del núcleo — evita el desenfoque del escalado fraccional en pixel art. Con un marco activo, elige el múltiplo más cercano a la altura de la pantalla: a veces queda una barra negra fina, a veces se recorta un poco el borde del juego — lo que sea menor. El marco no cambia de tamaño.',
+    integerScalingHint: 'Fija el vídeo en un múltiplo entero de la resolución nativa del core — evita el desenfoque del escalado fraccionario en pixel art. Con un marco activo, el juego llena la ventana del marco y el marco entero se amplía o reduce un poco para encajar en ese múltiplo — sin franja negra entre el juego y el marco.',
     gpuHint: 'Shader predeterminado para todos los juegos. Cada juego puede tener su propio shader en su pantalla de detalle.',
     noGpu: 'No hay GPU disponible — los shaders no tienen efecto en este equipo.',
     tabShaders: 'Shaders',

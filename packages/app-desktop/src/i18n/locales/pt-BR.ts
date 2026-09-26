@@ -439,7 +439,7 @@ const ptBR = {
     unavailable: 'Informação de shader indisponível.',
     needsPack: '{{desc}} — precisa do pacote de shaders (abaixo).',
     integerScaling: 'Integer scaling',
-    integerScalingHint: 'Trava o vídeo num múltiplo inteiro da resolução nativa do core — evita borrão de escala fracionária em pixel art. Com moldura/bezel ativa, escolhe o múltiplo mais próximo da altura da tela: às vezes sobra uma barra preta fina, às vezes corta um pouco a borda do jogo — o que for menor. A moldura não muda de tamanho.',
+    integerScalingHint: 'Trava o vídeo num múltiplo inteiro da resolução nativa do core — evita borrão de escala fracionária em pixel art. Com moldura/bezel ativa, o jogo preenche a janela da moldura e a moldura inteira é ampliada ou reduzida um pouco pra caber no múltiplo — sem faixa preta entre o jogo e a moldura.',
     gpuHint: 'Shader padrão pra todos os jogos. Cada jogo pode ter um shader próprio na tela de detalhe.',
     noGpu: 'Sem GPU disponível — shaders não têm efeito nesta máquina.',
     tabShaders: 'Shaders',

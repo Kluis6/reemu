@@ -38,9 +38,10 @@ export const loadGame = (coreId: string, romPath: string, romId?: string) =>
 export const unloadGame = () => invoke<void>('unload_game')
 
 /** Quadro do jogo: cabeçalho de `FRAME_HEADER` bytes (`[w][h][decoGen]
- *  [cx cy hw hh f32][proporção f32]`, LE) + RGBA8. Vazio = sem quadro novo. */
+ *  [cx cy hw hh f32][proporção f32][zoom da moldura f32]`, LE) + RGBA8.
+ *  Vazio = sem quadro novo. */
 export const pollFrame = () => invoke<ArrayBuffer>('poll_frame')
-export const FRAME_HEADER = 32
+export const FRAME_HEADER = 36
 
 /** Moldura ativa do modo canvas: `[decoGen][w][h]` (u32 LE) + RGBA8.
  *  Vazio = sem moldura. Buscada só quando `decoGen` do quadro muda. */

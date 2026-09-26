@@ -361,141 +361,142 @@ impl FrameProcessor {
         }
 
         // Composição da moldura (etapa 04 fatia 4), se houver uma.
-        let (out_w, out_h, use_comp) = if let Some((dw, dh, vp)) =
-            self.decoration.as_ref().map(|d| (d.w, d.h, d.vp))
-        {
-            let dar0 = if frame.metadata.aspect_ratio > 0.0 {
-                frame.metadata.aspect_ratio
-            } else {
-                nw as f32 / nh.max(1) as f32
-            };
-            // com rotação de 90°/270° a AR de exibição inverte.
-            let dar = if quarter && dar0 > 0.0 {
-                1.0 / dar0
-            } else {
-                dar0
-            };
-            let (cx, cy, hw, hh) = match vp {
-                // Janela do jogo conhecida (do `.cfg` ou detectada pela
-                // transparência da arte): por padrão o jogo PREENCHE a janela
-                // (sem letterbox — a moldura foi desenhada pra esse
-                // retângulo). Com integer scaling ligado, a ALTURA fica no
-                // múltiplo inteiro MAIS PRÓXIMO da altura do canvas inteiro
-                // da moldura (`dh`, não `v.h`/vidro) — `round`, não `floor`
-                // puro: quando o fator de baixo deixaria uma barra preta
-                // pequena, tudo bem; mas perto do meio do caminho entre dois
-                // fatores (ex: `dh/nativa` = 4.5), sempre arredondar pra CIMA
-                // significa saltar um fator inteiro inteiro maior que o
-                // necessário só pra não ter barra nenhuma — isso cortava
-                // linhas inteiras de HUD/texto perto da borda (visto com
-                // Batman Beyond/PS1: fator 4→5 cortava "Developed by" no
-                // topo). `round` escolhe sempre o menor erro em pixels entre
-                // faixa preta (fator de baixo) e corte de jogo (fator de
-                // cima). O excesso que ainda passar de `dh` é cortado pelo
-                // clipping normal da GPU (`hw`/`hh` SEM `.clamp` — um NDC >1
-                // já sai da viewport sozinho).
-                // A LARGURA vem de `altura × dar` (proporção já corrigida de
-                // PAR/pixel não-quadrado acima), NÃO de `native_width ×
-                // fator` — cores com pixel não-quadrado (PS1, N64, Mega
-                // Drive…) têm `native_width/native_height` cru diferente da
-                // proporção real de exibição; multiplicar os dois pelo mesmo
-                // fator inteiro deixava a imagem mais larga que o vidro,
-                // cortando texto/HUD nas bordas esquerda/direita (visto no
-                // teste com Batman Beyond/PS1). Isso é genérico — usa o
-                // `aspect_ratio` que TODO core já reporta, sem tabela por
-                // sistema. A moldura em si nunca muda de tamanho.
-                Some(v) if v.w > 0.0 && v.h > 0.0 && self.integer_scaling => {
-                    let gnh = if quarter { nw } else { nh };
-                    let factor = ((dh as f32 / gnh.max(1) as f32).round() as u32).max(1);
-                    let gh = (gnh * factor) as f32;
-                    let gw = gh * dar;
-                    let (cx0, cy0) = (v.x + v.w / 2.0, v.y + v.h / 2.0);
-                    (
-                        cx0 / dw as f32 * 2.0 - 1.0,
-                        1.0 - cy0 / dh as f32 * 2.0,
-                        gw / dw as f32,
-                        gh / dh as f32,
-                    )
+        let (out_w, out_h, use_comp) =
+            if let Some((dw, dh, vp)) = self.decoration.as_ref().map(|d| (d.w, d.h, d.vp)) {
+                let dar0 = if frame.metadata.aspect_ratio > 0.0 {
+                    frame.metadata.aspect_ratio
+                } else {
+                    nw as f32 / nh.max(1) as f32
+                };
+                // com rotação de 90°/270° a AR de exibição inverte.
+                let dar = if quarter && dar0 > 0.0 {
+                    1.0 / dar0
+                } else {
+                    dar0
+                };
+                let mut zoom = 1.0f32;
+                let (cx, cy, hw, hh) = match vp {
+                    // Janela do jogo conhecida (do `.cfg` ou detectada pela
+                    // transparência da arte): por padrão o jogo PREENCHE a janela
+                    // (sem letterbox — a moldura foi desenhada pra esse retângulo).
+                    // Integer scaling com moldura: a altura do jogo é um múltiplo
+                    // inteiro da nativa E preenche a janela da moldura. Pra isso a
+                    // COMPOSIÇÃO inteira (moldura + jogo) ganha um zoom `k` perto
+                    // de 1, em volta do centro: entre o piso e o teto de
+                    // `janela/nativa`, fica o fator cujo zoom é mais próximo de 1
+                    // (menor |ln k|). Antes a moldura ficava fixa e sobrava faixa
+                    // preta entre ela e o jogo (fator de baixo) ou o jogo era
+                    // cortado (fator de cima); agora a sobra vai pra fora da
+                    // moldura (k < 1: fundo preto em volta) ou corta só a borda
+                    // externa da arte (k > 1). Ex.: janela de 1041 px — 224
+                    // linhas → 5× (k 1,076); 240 → 4× (k 0,922); 480 → 2× (0,922).
+                    // A LARGURA vem de `altura × dar` (proporção já corrigida de
+                    // PAR/pixel não-quadrado acima), não de `native_width × fator`.
+                    Some(v) if v.w > 0.0 && v.h > 0.0 && self.integer_scaling => {
+                        let gnh = (if quarter { nw } else { nh }).max(1) as f32;
+                        let r = v.h / gnh;
+                        let lo = r.floor().max(1.0);
+                        let factor = [lo, lo + 1.0]
+                            .into_iter()
+                            .min_by(|a, b| {
+                                let d = |f: f32| (f * gnh / v.h).ln().abs();
+                                d(*a).total_cmp(&d(*b))
+                            })
+                            .unwrap_or(lo);
+                        let gh = factor * gnh;
+                        let k = gh / v.h;
+                        zoom = k;
+                        let (cx0, cy0) = (v.x + v.w / 2.0, v.y + v.h / 2.0);
+                        (
+                            (cx0 / dw as f32 * 2.0 - 1.0) * k,
+                            (1.0 - cy0 / dh as f32 * 2.0) * k,
+                            gh * dar / dw as f32,
+                            gh / dh as f32,
+                        )
+                    }
+                    Some(v) if v.w > 0.0 && v.h > 0.0 => (
+                        (v.x + v.w / 2.0) / dw as f32 * 2.0 - 1.0,
+                        1.0 - (v.y + v.h / 2.0) / dh as f32 * 2.0,
+                        (v.w / dw as f32).clamp(0.0, 1.0),
+                        (v.h / dh as f32).clamp(0.0, 1.0),
+                    ),
+                    _ => {
+                        let vw = (dh as f32 * dar).min(dw as f32);
+                        (0.0, 0.0, vw / dw as f32, 1.0)
+                    }
+                };
+                self.game_rect = [cx, cy, hw, hh];
+                self.deco_zoom = zoom;
+                if self.split_decoration {
+                    // modo canvas: o WebView põe a moldura por cima (ver o campo)
+                    return Some((fw, fh, false));
                 }
-                Some(v) if v.w > 0.0 && v.h > 0.0 => (
-                    (v.x + v.w / 2.0) / dw as f32 * 2.0 - 1.0,
-                    1.0 - (v.y + v.h / 2.0) / dh as f32 * 2.0,
-                    (v.w / dw as f32).clamp(0.0, 1.0),
-                    (v.h / dh as f32).clamp(0.0, 1.0),
-                ),
-                _ => {
-                    let vw = (dh as f32 * dar).min(dw as f32);
-                    (0.0, 0.0, vw / dw as f32, 1.0)
-                }
-            };
-            self.game_rect = [cx, cy, hw, hh];
-            if self.split_decoration {
-                // modo canvas: o WebView põe a moldura por cima (ver o campo)
-                return Some((fw, fh, false));
-            }
-            self.queue
-                .write_buffer(&self.comp.rect_game, 0, f32s_bytes(&[cx, cy, hw, hh]));
-            self.queue
-                .write_buffer(&self.comp.rect_bezel, 0, f32s_bytes(&[0.0, 0.0, 1.0, 1.0]));
-            self.ensure_comp_target(dw, dh);
+                self.queue
+                    .write_buffer(&self.comp.rect_game, 0, f32s_bytes(&[cx, cy, hw, hh]));
+                self.queue.write_buffer(
+                    &self.comp.rect_bezel,
+                    0,
+                    f32s_bytes(&[0.0, 0.0, zoom, zoom]),
+                );
+                self.ensure_comp_target(dw, dh);
 
-            let game_view = match &self.rot_view {
-                Some(v) => v,
-                None => &self.passes.last()?.target.as_ref()?.1,
+                let game_view = match &self.rot_view {
+                    Some(v) => v,
+                    None => &self.passes.last()?.target.as_ref()?.1,
+                };
+                let deco_view = &self.decoration.as_ref()?.view;
+                let comp_view = &self.comp.target.as_ref()?.1;
+                let mk_bg = |rect: &wgpu::Buffer, tex: &wgpu::TextureView| {
+                    self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                        label: Some("comp bg"),
+                        layout: &self.comp.bgl,
+                        entries: &[
+                            wgpu::BindGroupEntry {
+                                binding: 0,
+                                resource: rect.as_entire_binding(),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 1,
+                                resource: wgpu::BindingResource::TextureView(tex),
+                            },
+                            wgpu::BindGroupEntry {
+                                binding: 2,
+                                resource: wgpu::BindingResource::Sampler(&self.sampler_linear),
+                            },
+                        ],
+                    })
+                };
+                let game_bg = mk_bg(&self.comp.rect_game, game_view);
+                let bezel_bg = mk_bg(&self.comp.rect_bezel, deco_view);
+                {
+                    let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+                        label: Some("comp pass"),
+                        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                            view: comp_view,
+                            resolve_target: None,
+                            depth_slice: None,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                                store: wgpu::StoreOp::Store,
+                            },
+                        })],
+                        depth_stencil_attachment: None,
+                        timestamp_writes: None,
+                        occlusion_query_set: None,
+                        multiview_mask: None,
+                    });
+                    rp.set_vertex_buffer(0, self.quad.slice(..));
+                    rp.set_pipeline(&self.comp.game_pipeline);
+                    rp.set_bind_group(0, &game_bg, &[]);
+                    rp.draw(0..4, 0..1);
+                    rp.set_pipeline(&self.comp.bezel_pipeline);
+                    rp.set_bind_group(0, &bezel_bg, &[]);
+                    rp.draw(0..4, 0..1);
+                }
+                (dw, dh, true)
+            } else {
+                (fw, fh, false)
             };
-            let deco_view = &self.decoration.as_ref()?.view;
-            let comp_view = &self.comp.target.as_ref()?.1;
-            let mk_bg = |rect: &wgpu::Buffer, tex: &wgpu::TextureView| {
-                self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("comp bg"),
-                    layout: &self.comp.bgl,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: rect.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::TextureView(tex),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::Sampler(&self.sampler_linear),
-                        },
-                    ],
-                })
-            };
-            let game_bg = mk_bg(&self.comp.rect_game, game_view);
-            let bezel_bg = mk_bg(&self.comp.rect_bezel, deco_view);
-            {
-                let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("comp pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: comp_view,
-                        resolve_target: None,
-                        depth_slice: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                            store: wgpu::StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                    multiview_mask: None,
-                });
-                rp.set_vertex_buffer(0, self.quad.slice(..));
-                rp.set_pipeline(&self.comp.game_pipeline);
-                rp.set_bind_group(0, &game_bg, &[]);
-                rp.draw(0..4, 0..1);
-                rp.set_pipeline(&self.comp.bezel_pipeline);
-                rp.set_bind_group(0, &bezel_bg, &[]);
-                rp.draw(0..4, 0..1);
-            }
-            (dw, dh, true)
-        } else {
-            (fw, fh, false)
-        };
         Some((out_w, out_h, use_comp))
     }
 

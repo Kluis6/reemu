@@ -438,7 +438,7 @@ const en: Messages = {
     unavailable: 'Shader information unavailable.',
     needsPack: '{{desc}} — needs the shader pack (below).',
     integerScaling: 'Integer scaling',
-    integerScalingHint: 'Locks the video to a whole multiple of the core\'s native resolution — avoids fractional-scaling blur in pixel art. With a bezel active, it picks the multiple closest to the screen height: sometimes a thin black bar is left, sometimes the game\'s edge is cropped a little — whichever is smaller. The bezel doesn\'t change size.',
+    integerScalingHint: 'Locks the video to a whole multiple of the core\'s native resolution — avoids fractional-scaling blur in pixel art. With a bezel active, the game fills the bezel window and the whole bezel is enlarged or shrunk slightly to fit that multiple — no black bar between the game and the bezel.',
     gpuHint: 'Default shader for all games. Each game can have its own shader on its detail page.',
     noGpu: 'No GPU available — shaders have no effect on this machine.',
     tabShaders: 'Shaders',

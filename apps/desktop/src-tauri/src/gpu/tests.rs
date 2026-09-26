@@ -971,7 +971,12 @@ fn split_decoration_sends_game_only() {
         (50, 30),
         "tamanho do jogo, não da moldura"
     );
-    assert_eq!(out.len(), 32 + 50 * 30 * 4);
+    assert_eq!(out.len(), 36 + 50 * 30 * 4);
+    assert_eq!(
+        f32_at(32),
+        1.0,
+        "sem integer scaling a moldura não tem zoom"
+    );
     let (gen, img, w, h) = fp.decoration_image().expect("moldura guardada");
     assert!(gen > 0);
     assert_eq!(u32_at(8), gen);

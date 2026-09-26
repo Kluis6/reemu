@@ -403,6 +403,8 @@ export function PlayScreen() {
       // moldura: geração (0 = nenhuma) e retângulo do jogo em NDC
       decoGen: 0,
       rect: [0, 0, 1, 1] as [number, number, number, number],
+      // zoom da moldura em volta do centro (integer scaling; 1 = sem)
+      zoom: 1,
       // proporção de exibição do quadro (muda com `SET_GEOMETRY` em runtime)
       aspect: 0,
     };
@@ -463,6 +465,7 @@ export function PlayScreen() {
                 dv.getFloat32(24, true),
               ];
               latest.aspect = dv.getFloat32(28, true);
+              latest.zoom = dv.getFloat32(32, true) || 1;
               latest.fresh = true;
               got = true;
               void syncDeco(latest.decoGen);
@@ -504,9 +507,11 @@ export function PlayScreen() {
         if (latest.decoGen !== 0 && shownDecoGen === latest.decoGen) {
           // retângulo NDC do Rust → % do palco (só mexe no DOM se mudou)
           const [cx, cy, hw, hh] = latest.rect;
-          const key = latest.rect.join();
+          const key = `${latest.rect.join()}|${latest.zoom}`;
           if (key !== appliedRect) {
             appliedRect = key;
+            const d = decoCanvasRef.current;
+            if (d) d.style.transform = latest.zoom === 1 ? "" : `scale(${latest.zoom})`;
             c.style.left = `${((cx - hw + 1) / 2) * 100}%`;
             c.style.top = `${((1 - cy - hh) / 2) * 100}%`;
             c.style.width = `${hw * 100}%`;

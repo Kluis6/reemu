@@ -649,6 +649,9 @@ pub struct FrameProcessor {
     /// Retângulo do jogo dentro da moldura no último `run_chain`, em NDC
     /// `[centro_x, centro_y, meia_largura, meia_altura]`.
     game_rect: [f32; 4],
+    /// Zoom da moldura (centro da tela) no último `run_chain`: 1 fora do
+    /// integer scaling; perto de 1 com ele (ver `chain.rs`).
+    deco_zoom: f32,
     /// Modo canvas: não compõe a moldura na GPU — o readback sai só com o
     /// jogo e o WebView empilha a moldura por cima. Compor aqui mandava o
     /// quadro no tamanho da moldura (1920×1080 = 8 MB) pelo IPC a cada
@@ -821,6 +824,7 @@ impl FrameProcessor {
             decoration: None,
             deco_gen: 0,
             game_rect: [0.0, 0.0, 1.0, 1.0],
+            deco_zoom: 1.0,
             split_decoration: false,
             surface: None,
             integer_scaling: false,
@@ -1749,7 +1753,7 @@ impl FrameProcessor {
                 .get_mapped_range()
                 .ok()?;
             let row = (w * 4) as usize;
-            let mut out = Vec::with_capacity(32 + row * h as usize);
+            let mut out = Vec::with_capacity(36 + row * h as usize);
             out.extend_from_slice(&w.to_le_bytes());
             out.extend_from_slice(&h.to_le_bytes());
             if split_header {
@@ -1763,6 +1767,7 @@ impl FrameProcessor {
                     out.extend_from_slice(&v.to_le_bytes());
                 }
                 out.extend_from_slice(&frame.metadata.aspect_ratio.to_le_bytes());
+                out.extend_from_slice(&self.deco_zoom.to_le_bytes());
             }
             for y in 0..h as usize {
                 out.extend_from_slice(&mapped[y * padded as usize..][..row]);
