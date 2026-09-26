@@ -549,6 +549,96 @@ pub fn find(core_id: &str) -> Option<&'static CatalogEntry> {
     CATALOG.iter().find(|c| c.id == core_id)
 }
 
+/// Ids de sistema (os da varredura, `library_scan::systems`) que um core do
+/// catálogo atende, tirados do texto `systems` dele. Serve pra escolher o
+/// core de um jogo pelo SISTEMA antes da extensão — `.bin` é aceito por
+/// dezenas de cores, e a ordem alfabética mandava jogo de Mega Drive pro
+/// a5200. Core fora do catálogo → vazio.
+pub fn system_ids(core_id: &str) -> Vec<&'static str> {
+    find(core_id).map_or_else(Vec::new, |c| systems_from_text(c.systems))
+}
+
+fn systems_from_text(text: &str) -> Vec<&'static str> {
+    let t = text.to_lowercase();
+    // palavra inteira (separada por espaço, `/`, `(`…): "nes" não casa
+    // "genesis", "md" não casa "mdx"
+    let words: Vec<&str> = t
+        .split(|c: char| !c.is_alphanumeric() && c != '-')
+        .filter(|w| !w.is_empty())
+        .collect();
+    let word = |w: &str| words.contains(&w);
+    let has = |s: &str| t.contains(s);
+    // "Game Boy Advance" não é Game Boy
+    let without_gba = t.replace("game boy advance", "");
+    let mut out = Vec::new();
+    let mut add = |cond: bool, id: &'static str| {
+        if cond && !out.contains(&id) {
+            out.push(id);
+        }
+    };
+    add(has("snes") || has("super nintendo") || word("sfc"), "snes");
+    add(word("nes") || has("famicom"), "nes");
+    add(has("game boy advance") || word("gba"), "gba");
+    let gb = without_gba.contains("game boy") || word("gb") || word("gbc");
+    add(gb, "gb");
+    add(gb, "gbc");
+    add(has("nintendo ds") || word("nds"), "nds");
+    add(has("virtual boy"), "vb");
+    add(has("nintendo 64"), "n64");
+    add(
+        has("mega drive") || has("genesis") || word("md"),
+        "megadrive",
+    );
+    add(has("master system") || word("ms"), "mastersystem");
+    add(has("game gear") || word("gg"), "gamegear");
+    add(has("sg-1000"), "sg1000");
+    add(
+        has("sega") && (has("sega cd") || word("cd")) || has("mega-cd"),
+        "segacd",
+    );
+    add(word("32x"), "sega32x");
+    add(has("saturn"), "saturn");
+    add(has("dreamcast"), "dreamcast");
+    add(has("naomi"), "naomi");
+    add(has("atomiswave"), "atomiswave");
+    let pce = has("pc engine") || has("turbografx") || has("supergrafx");
+    add(pce, "pcengine");
+    add(pce && word("cd"), "pcenginecd");
+    add(has("pc-fx"), "pcfx");
+    add(has("playstation 2"), "ps2");
+    add(has("playstation") && !has("playstation 2"), "psx");
+    add(word("psp"), "psp");
+    add(has("neo geo cd"), "neogeocd");
+    add(has("neo geo pocket"), "ngp");
+    add(
+        has("arcade") || word("cps") || word("mame") || has("neo geo /"),
+        "arcade",
+    );
+    add(has("atari 2600"), "atari2600");
+    add(has("5200"), "atari5200");
+    add(has("7800"), "atari7800");
+    add(has("atari 8-bit"), "atari8bit");
+    add(has("lynx"), "lynx");
+    add(has("jaguar"), "jaguar");
+    add(has("wonderswan"), "wonderswan");
+    add(has("pokémon mini") || has("pokemon mini"), "pokemini");
+    add(has("supervision"), "supervision");
+    add(word("msx"), "msx");
+    add(has("colecovision"), "coleco");
+    add(has("commodore 64") || has("c64"), "c64");
+    add(has("amiga"), "amiga");
+    add(has("zx spectrum"), "zxspectrum");
+    add(has("amstrad cpc"), "amstradcpc");
+    add(word("dos") || has("ms-dos"), "dos");
+    add(has("scummvm"), "scummvm");
+    add(word("3do"), "3do");
+    add(has("intellivision"), "intellivision");
+    add(has("odyssey"), "odyssey2");
+    add(has("vectrex"), "vectrex");
+    add(word("cdi"), "cdi");
+    out
+}
+
 fn buildbot_os() -> &'static str {
     if cfg!(target_os = "windows") {
         "windows"
@@ -688,6 +778,42 @@ mod tests {
             })
             .collect();
         format!(" — threads: {}", threads.join("; "))
+    }
+
+    #[test]
+    fn system_ids_from_catalog_text() {
+        let ids = |t| systems_from_text(t);
+        assert_eq!(ids("NES / Famicom"), vec!["nes"]);
+        assert_eq!(ids("Mega Drive / Genesis"), vec!["megadrive"]);
+        assert_eq!(ids("Super Nintendo"), vec!["snes"]);
+        assert_eq!(ids("Game Boy Advance / GB / GBC"), vec!["gba", "gb", "gbc"]);
+        assert_eq!(ids("Nintendo Game Boy Advance"), vec!["gba"]);
+        assert_eq!(ids("Game Boy / Color"), vec!["gb", "gbc"]);
+        assert_eq!(
+            ids("Mega Drive / Master System / Game Gear / SG-1000 / Sega CD"),
+            vec!["megadrive", "mastersystem", "gamegear", "sg1000", "segacd"]
+        );
+        assert_eq!(ids("Sega MD/CD"), vec!["megadrive", "segacd"]);
+        assert_eq!(ids("Atari 5200"), vec!["atari5200"]);
+        assert_eq!(ids("Atari 2600"), vec!["atari2600"]);
+        assert_eq!(ids("PlayStation"), vec!["psx"]);
+        assert_eq!(ids("PlayStation 2"), vec!["ps2"]);
+        assert_eq!(
+            ids("Dreamcast / NAOMI / Atomiswave"),
+            vec!["dreamcast", "naomi", "atomiswave"]
+        );
+        assert_eq!(
+            ids("PC Engine / SuperGrafx / CD"),
+            vec!["pcengine", "pcenginecd"]
+        );
+        assert_eq!(ids("Neo Geo / CPS / arcade"), vec!["arcade"]);
+        // todo core do catálogo cai em pelo menos um sistema
+        let sem: Vec<_> = CATALOG
+            .iter()
+            .filter(|c| systems_from_text(c.systems).is_empty())
+            .map(|c| (c.id, c.systems))
+            .collect();
+        assert!(sem.is_empty(), "sem sistema: {sem:?}");
     }
 
     /// Falhas conhecidas e explicadas: aparecem na tabela como
