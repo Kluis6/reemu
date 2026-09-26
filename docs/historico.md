@@ -1542,6 +1542,14 @@ Infra:
 - **Idioma:** preferência em Configurações › Aparência (Automático / Português (Brasil) / English / Español, cada idioma no próprio nome), guardada em `reemu.language`. `auto` segue `navigator.languages` pela língua-base (pt-PT → pt-BR, es-MX → es); sem correspondência, pt-BR. O `<html lang>` acompanha o idioma. A troca vale na hora, sem reiniciar.
 - **Primeira leva migrada:** o rail (Início, Meus jogos, Configurações), o menu do perfil, o topo (voltar, busca, tela cheia, encerrar), as dicas de botão, o título e as abas de Configurações e a tela Aparência inteira, incluindo os nomes dos temas (`ThemeFamily.nameKey`) e os tamanhos da interface. O resto está listado no TASKS.md. Regra para textos novos no CLAUDE.md.
 
+## 2026-09-26 — Interface VFS do libretro (v3)
+
+- `RETRO_ENVIRONMENT_GET_VFS_INTERFACE` implementada em `core-loader-desktop/src/vfs.rs` sobre `std::fs`, com as 18 funções até a v3 (arquivo, `truncate`, `stat`, `mkdir` e pastas). Semântica do `libretro.h` de cada função. A tabela de modos do `open` é a da implementação de referência do libretro-common (`vfs/vfs_implementation.c`): `WRITE|UPDATE_EXISTING` equivale a `r+b`, que também lê. O flycast abre o `.cue` nesse modo. Core que pede versão acima de 3 recebe `false`.
+- Motivo: o Stella 8 só reconhece a ROM pelo `stat` da VFS (`FSNodeLIBRETRO::setFlags`) e não abria nenhum jogo. Agora Pitfall II roda (300 quadros com imagem e áudio).
+- Regressão conferida, já que todo core com `filestream` do libretro-common passa a fazer E/S por aqui:
+  - fumaça em todos os 51 cores de cartucho do catálogo (depois de a ROM de SNES do teste subir para 128 KiB, porque o Snes9x 2010 recusa menos);
+  - flycast/MSR e Beetle/40 Winks com jogo real, confirmando pelo log `vfs open` que o flycast lê BIOS, VMU, `.cue` e trilhas pela VFS.
+
 ## 2026-09-26 — Gatilhos analógicos, teclado configurável, Vulkan por padrão, fumaça fase 2, moldura com integer scaling
 
 - **Gatilhos:** a pressão calibrada de L2/R2 vai ao core pelo `RETRO_DEVICE_INDEX_ANALOG_BUTTON`, na faixa `[0, 0x7fff]` do `libretro.h`. Sem pressão (teclado), vale o digital.

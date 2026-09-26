@@ -143,9 +143,8 @@ no `emu-session`, ver `docs/historico.md`).
       geradas pelo teste (NES, SNES, GB, GBA, Mega Drive, Master System, PC
       Engine, Atari 2600) rodam 180 quadros em cada core compatível; o
       travamento do pcsx_rearmed no CI (FIFO no /tmp) foi resolvido.
-- [ ] `todo` — **VFS do libretro** (`RETRO_ENVIRONMENT_GET_VFS_INTERFACE`,
-      v1–v3): o Stella 8 (`stella_libretro`) só reconhece a ROM com ela e
-      hoje não abre nenhum jogo no ReEmu (o Stella 2014 funciona).
+- [x] `done` — **VFS do libretro v3** (2026-09-26): `core-loader-desktop/src/vfs.rs`;
+      o Stella 8 voltou a abrir jogos (Pitfall II testado).
 
 - [ ] `todo` — Etapa 11 (Android): `apps/mobile`, `packages/app-mobile`,
       `packages/ui`, `packages/shared`. Os pacotes compartilhados só nascem

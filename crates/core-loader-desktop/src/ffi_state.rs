@@ -269,6 +269,8 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             *(data as *mut *const c_void) = reemu_log_printf as *const c_void;
             true
         }
+        // VFS v3 sobre `std::fs` (ver `vfs.rs`).
+        sys::RETRO_ENVIRONMENT_GET_VFS_INTERFACE => crate::vfs::get_interface(data),
         sys::RETRO_ENVIRONMENT_GET_INPUT_BITMASKS => {
             if !data.is_null() {
                 *(data as *mut bool) = true;

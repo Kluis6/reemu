@@ -113,10 +113,11 @@ fn nes() -> Vec<u8> {
     rom
 }
 
-/// SNES LoROM, 32 KiB (banco $00:8000). Cor 0 do CGRAM = vermelho, tela
-/// ligada em brilho máximo.
+/// SNES LoROM, 128 KiB (código no banco $00:8000). Cor 0 do CGRAM =
+/// vermelho, tela ligada em brilho máximo. 128 KiB e não 32: o Snes9x 2010
+/// recusa ROM menor ("ROM is corrupt or invalid", testado com 32 e 64).
 fn snes() -> Vec<u8> {
-    let mut rom = vec![0u8; 32 * 1024];
+    let mut rom = vec![0u8; 128 * 1024];
     #[rustfmt::skip]
     let code: &[u8] = &[
         0x78,             // $8000 SEI
@@ -139,7 +140,7 @@ fn snes() -> Vec<u8> {
     put(&mut rom, h, b"REEMU SMOKE TEST     "); // título, 21 bytes
     rom[h + 0x15] = 0x20; // LoROM
     rom[h + 0x16] = 0x00; // só ROM
-    rom[h + 0x17] = 0x05; // 32 KiB (1 << 5 KiB)
+    rom[h + 0x17] = 0x07; // 128 KiB (1 << 7 KiB)
     rom[h + 0x19] = 0x01; // América do Norte
                           // vetores nativos ($FFE4..) e de emulação ($FFF4..) → RTI; reset → $8000
     for v in (0x7FE4..0x7FFC).step_by(2) {

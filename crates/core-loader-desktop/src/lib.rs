@@ -30,6 +30,7 @@ mod loader;
 pub mod pacing;
 mod raw;
 mod sys;
+mod vfs;
 mod vk_context;
 mod vk_frame;
 mod vk_sys;

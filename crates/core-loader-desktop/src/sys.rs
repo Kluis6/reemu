@@ -90,6 +90,7 @@ pub const RETRO_DEVICE_ID_JOYPAD_R2: c_uint = 13;
 /// "O frontend devolve todos os botões de uma vez num bitmask" (libretro.h).
 /// O ponteiro de dados é ignorado; a resposta é o retorno `true`.
 pub const RETRO_ENVIRONMENT_GET_INPUT_BITMASKS: c_uint = 51 | RETRO_ENVIRONMENT_EXPERIMENTAL;
+pub const RETRO_ENVIRONMENT_GET_VFS_INTERFACE: c_uint = 45 | RETRO_ENVIRONMENT_EXPERIMENTAL;
 
 #[repr(C)]
 pub struct retro_system_info {

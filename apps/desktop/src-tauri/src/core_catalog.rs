@@ -692,19 +692,11 @@ mod tests {
 
     /// Falhas conhecidas e explicadas: aparecem na tabela como
     /// "conhecido" e não derrubam o job. Tirar daqui quando resolver.
-    const KNOWN_BROKEN: &[(&str, &str)] = &[
-        (
-            "ep128emu_core_libretro",
-            "cai numa thread de emulação que o próprio core sobe no retro_init \
+    const KNOWN_BROKEN: &[(&str, &str)] = &[(
+        "ep128emu_core_libretro",
+        "cai numa thread de emulação que o próprio core sobe no retro_init \
              (sem jogo, sem as ROMs opcionais do Enterprise) — binário sem símbolos",
-        ),
-        (
-            "stella_libretro",
-            "o Stella 8 só reconhece a ROM via RETRO_ENVIRONMENT_GET_VFS_INTERFACE \
-             (FSNodeLIBRETRO::setFlags devolve falso sem VFS) — o ReEmu ainda não \
-             oferece a VFS; ver TASKS.md",
-        ),
-    ];
+    )];
 
     /// Roda o `reemu-core-host` com `args` (probe ou run) e espera até 60 s.
     /// Devolve o status (`None` = travou e foi morto), o stdout e, se travou,
