@@ -628,6 +628,28 @@ const VK_CAPABLE_CORES: &[(&str, Option<(&str, &str)>)] = &[
     ),
 ];
 
+/// Cores que, sem a opção que escolhe o renderizador Vulkan, sobem OpenGL
+/// DENTRO do `retro_load_game` e seguem desenhando mesmo com o
+/// `SET_HW_RENDER` recusado — in-process isso derruba o app inteiro, então
+/// nunca vão pra rota local sem a opção, nem com `REEMU_HW=vulkan`.
+/// - `mupen64plus_next`: GLideN64 é o padrão (SIGSEGV em 2026-09-25).
+/// - `parallel_n64`: com `gfxplugin=auto` o `retro_load_game` chama
+///   `retro_init_gl()` ("it is assumed it always exists, otherwise fail") —
+///   só `parallel` pede `RETRO_HW_CONTEXT_VULKAN` (libretro/parallel-n64,
+///   `libretro/libretro.c`: `core_settings_autoselect_gfx_plugin`,
+///   `retro_init_vulkan`). App caiu assim em 2026-09-26.
+const GL_IN_LOAD_CORES: &[(&str, &str, &str)] = &[
+    ("mupen64plus_next", "mupen64plus-rdp-plugin", "parallel"),
+    ("parallel_n64", "parallel-n64-gfxplugin", "parallel"),
+];
+
+/// O core sobe GL no load com as opções atuais (ver `GL_IN_LOAD_CORES`).
+fn gl_in_load(base: &str, options: &HashMap<String, String>) -> bool {
+    GL_IN_LOAD_CORES
+        .iter()
+        .any(|(name, k, v)| base.contains(name) && options.get(*k).is_none_or(|o| o != v))
+}
+
 /// O core está na lista E a condição de opção (se houver) bate.
 fn vk_capable(base: &str, options: &HashMap<String, String>) -> bool {
     VK_CAPABLE_CORES.iter().any(|(name, cond)| {
@@ -660,8 +682,8 @@ fn route_local_device(
     );
     let base = core_id.rsplit(['/', '\\']).next().unwrap_or(core_id);
     let capable = vk_capable(base, options);
-    // Nem forçando: mupen com GLideN64 in-process derruba o app.
-    let unsafe_gl = base.contains("mupen64plus_next") && !capable;
+    // Nem forçando: core que sobe GL no load in-process derruba o app.
+    let unsafe_gl = gl_in_load(base, options);
     let auto = cfg!(target_os = "linux") && capable;
     if unsafe_gl || (!forced && !auto) {
         return None;
@@ -1950,5 +1972,17 @@ mod vk_route_tests {
         assert!(vk_capable("mupen64plus_next_libretro", &opts));
         assert!(vk_capable("flycast_libretro", &HashMap::new()));
         assert!(!vk_capable("parallel_n64_libretro", &HashMap::new()));
+    }
+
+    #[test]
+    fn gl_in_load_cores_need_the_vulkan_option() {
+        let mut opts = HashMap::new();
+        assert!(gl_in_load("parallel_n64_libretro", &opts));
+        assert!(gl_in_load("mupen64plus_next_libretro", &opts));
+        assert!(!gl_in_load("flycast_libretro", &opts));
+        opts.insert("parallel-n64-gfxplugin".to_string(), "auto".to_string());
+        assert!(gl_in_load("parallel_n64_libretro", &opts));
+        opts.insert("parallel-n64-gfxplugin".to_string(), "parallel".to_string());
+        assert!(!gl_in_load("parallel_n64_libretro", &opts));
     }
 }

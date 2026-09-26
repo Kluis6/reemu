@@ -1542,6 +1542,11 @@ Infra:
 - **Idioma:** preferência em Configurações › Aparência (Automático / Português (Brasil) / English / Español, cada idioma no próprio nome), guardada em `reemu.language`. `auto` segue `navigator.languages` pela língua-base (pt-PT → pt-BR, es-MX → es); sem correspondência, pt-BR. O `<html lang>` acompanha o idioma. A troca vale na hora, sem reiniciar.
 - **Primeira leva migrada:** o rail (Início, Meus jogos, Configurações), o menu do perfil, o topo (voltar, busca, tela cheia, encerrar), as dicas de botão, o título e as abas de Configurações e a tela Aparência inteira, incluindo os nomes dos temas (`ThemeFamily.nameKey`) e os tamanhos da interface. O resto está listado no TASKS.md. Regra para textos novos no CLAUDE.md.
 
+## 2026-09-26 — parallel_n64 derrubava o app na rota in-process
+
+- Com `REEMU_HW=vulkan`, o parallel_n64 ia para a rota in-process e o app inteiro fechava no `LocalCore::load`. Fonte: `libretro/libretro.c` do repositório oficial libretro/parallel-n64. Com o padrão `parallel-n64-gfxplugin=auto`, o `retro_load_game` chama `retro_init_gl()` (o comentário diz que o GL "is assumed it always exists") e segue desenhando em GL mesmo com o `SET_HW_RENDER` recusado. Só o valor `parallel` pede `RETRO_HW_CONTEXT_VULKAN` (`retro_init_vulkan`). É o mesmo caso do mupen64plus_next com GLideN64.
+- `GL_IN_LOAD_CORES` em `emu-session/session.rs` lista esses cores com a opção que escolhe o Vulkan. Sem ela, o core nunca vai para a rota local, nem com `REEMU_HW=vulkan`, e roda no processo filho.
+
 ## 2026-09-25 — Frontend inteiro em três idiomas
 
 - Migradas para `t()` as telas que faltavam (Início, Biblioteca, plataforma, detalhe do jogo, tela de jogo, todas as abas de Configurações, onboarding) e os componentes (biblioteca de shaders e molduras, opções do core, mapeamento de controles, captura de atalho, gerenciar biblioteca, atualização e notificações, carrossel, diálogos de adicionar ROMs e de encerrar, erro de rota).
