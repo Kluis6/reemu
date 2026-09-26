@@ -537,8 +537,19 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                                 }
                             }
                             hidden = false;
-                        } else if let Some(d) = diag.as_mut() {
-                            d.empty();
+                        } else {
+                            if let Some(d) = diag.as_mut() {
+                                d.empty();
+                            }
+                            // sem quadro novo (core mandou quadro repetido):
+                            // se a última apresentação falhou, reapresenta
+                            if !hidden {
+                                if let Some(fp) =
+                                    state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut()
+                                {
+                                    fp.redraw_surface_if_pending();
+                                }
+                            }
                         }
                     }
                     Opening(0) => {

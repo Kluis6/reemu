@@ -629,6 +629,9 @@ pub struct FrameProcessor {
     /// `(w, h, com_moldura)` da última chamada de `render_to_surface` — pra
     /// `capture_surface_frame` ler de volta a textura certa sem rodar a chain.
     last_surface_out: Option<(u32, u32, bool)>,
+    /// A última apresentação na surface falhou (Outdated/Timeout…): o pump
+    /// reapresenta mesmo sem quadro novo (`redraw_surface_if_pending`).
+    surface_redraw_pending: bool,
     /// `get_current_texture` falhando em sequência (surface `Outdated`/`Lost`) —
     /// diagnóstico da "tela preta" (surface configurada num tamanho que o
     /// compositor não aceita, comum em 4K).
@@ -813,6 +816,7 @@ impl FrameProcessor {
             rgba_scratch: Vec::new(),
             frame_count: 0,
             last_surface_out: None,
+            surface_redraw_pending: false,
             surface_fail_streak: 0,
             surface_presented: false,
             adopted_queue_family: None,
@@ -1269,6 +1273,32 @@ impl FrameProcessor {
         self.queue
             .write_buffer(&s.blit_rect, 0, f32s_bytes(&[0.0, 0.0, hw, hh]));
 
+        let presented = self.blit_last(enc, use_comp);
+        self.surface_redraw_pending = !presented;
+    }
+
+    /// Reapresenta o último resultado da chain se a apresentação anterior
+    /// falhou (ver `blit_last`). Chamado pelo pump quando o core não mandou
+    /// quadro novo.
+    pub fn redraw_surface_if_pending(&mut self) {
+        if !self.surface_redraw_pending || self.surface.is_none() {
+            return;
+        }
+        let Some((_, _, use_comp)) = self.last_surface_out else {
+            return;
+        };
+        let enc = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("surface redraw"),
+            });
+        self.surface_redraw_pending = !self.blit_last(enc, use_comp);
+    }
+
+    /// Desenha a saída atual da chain (o retângulo já está em `blit_rect`) na
+    /// surface e apresenta. `false` se não conseguiu textura da surface.
+    fn blit_last(&mut self, mut enc: wgpu::CommandEncoder, use_comp: bool) -> bool {
+        let s = self.surface.as_ref().unwrap();
         let src_view = if use_comp {
             &self.comp.target.as_ref().unwrap().1
         } else if let Some(v) = &self.rot_view {
@@ -1315,13 +1345,26 @@ impl FrameProcessor {
                         s.config.height,
                     );
                 }
+                // wgpu 30 (`CurrentSurfaceTexture`): Outdated → "Call
+                // `Surface::configure()` and try again"; Timeout/Occluded →
+                // "skip the current frame and try again later". Reconfigura e
+                // tenta de novo JÁ; se ainda assim não vier textura, o quadro
+                // fica pendente e o pump reapresenta sem esperar quadro novo
+                // do core (cores de Atari mandam quadro repetido — NULL — com
+                // a tela parada, e a tela ficava preta até a pausa).
                 if matches!(
                     other,
                     wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost
                 ) {
                     s.surface.configure(&self.device, &s.config);
+                    match s.surface.get_current_texture() {
+                        wgpu::CurrentSurfaceTexture::Success(t)
+                        | wgpu::CurrentSurfaceTexture::Suboptimal(t) => t,
+                        _ => return false,
+                    }
+                } else {
+                    return false;
                 }
-                return;
             }
         };
         let view = frame_tex
@@ -1352,6 +1395,7 @@ impl FrameProcessor {
         }
         self.queue.submit([enc.finish()]);
         self.queue.present(frame_tex);
+        self.surface_fail_streak = 0;
         if !self.surface_presented {
             self.surface_presented = true;
             let s = self.surface.as_ref().unwrap();
@@ -1361,6 +1405,7 @@ impl FrameProcessor {
                 s.config.height
             );
         }
+        true
     }
 
     /// Apresenta um frame preto opaco na surface nativa. Hoje o pump esconde a
