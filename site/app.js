@@ -103,8 +103,15 @@ function downloadButton(f, version, primary) {
   );
 }
 
+// Botões de download do topo e da chamada final (`#primary`, `#primary-cta`).
 function renderPrimary(latest) {
-  const box = document.getElementById("primary");
+  for (const id of ["primary", "primary-cta"]) {
+    const box = document.getElementById(id);
+    if (box) fillPrimary(box, latest);
+  }
+}
+
+function fillPrimary(box, latest) {
   box.replaceChildren();
   if (!latest) {
     box.append(
@@ -195,12 +202,14 @@ function renderList(releases) {
 }
 
 function renderError(message) {
-  document.getElementById("primary").replaceChildren(
-    el("fluent-anchor-button", { class: "dl-btn", appearance: "primary", size: "large", href: `${RELEASES_PAGE}/latest` },
-      el("span", { class: "dl-stack" },
-        el("span", { class: "dl-title" }, t("dl.fallback")),
-        el("span", { class: "dl-sub" }, t("dl.fallbackSub")))),
-  );
+  for (const id of ["primary", "primary-cta"]) {
+    document.getElementById(id)?.replaceChildren(
+      el("fluent-anchor-button", { class: "dl-btn", appearance: "primary", size: "large", href: `${RELEASES_PAGE}/latest` },
+        el("span", { class: "dl-stack" },
+          el("span", { class: "dl-title" }, t("dl.fallback")),
+          el("span", { class: "dl-sub" }, t("dl.fallbackSub")))),
+    );
+  }
   document.getElementById("releases").replaceChildren(
     el("fluent-message-bar", { intent: "warning", layout: "multiline" },
       message, " ", el("fluent-link", { inline: true, href: RELEASES_PAGE }, t("dl.viewAll")), "."),

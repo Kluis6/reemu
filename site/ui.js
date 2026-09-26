@@ -151,3 +151,19 @@ document.querySelectorAll(".share-btn").forEach((btn) => {
     }
   });
 });
+
+// Galeria: enquanto nenhuma captura existe em site/screens/, o bloco inteiro
+// fica escondido — cinco quadros "Captura em breve" parecem site inacabado.
+// As imagens são `loading="lazy"`: o erro de cada uma chega quando ela entra
+// perto da tela, então a conferência roda a cada erro e no `load`.
+const gallery = document.querySelector(".gallery");
+if (gallery) {
+  const check = () => {
+    const imgs = [...gallery.querySelectorAll("img")];
+    gallery.hidden = imgs.every(
+      (i) => i.closest("figure")?.classList.contains("missing") || (i.complete && i.naturalWidth === 0),
+    );
+  };
+  gallery.addEventListener("error", check, true);
+  addEventListener("load", check);
+}

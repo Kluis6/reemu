@@ -44,6 +44,7 @@ const JS_PT = {
 };
 
 const EN = {
+  "cta.all": "See all versions and what changed",
   "meta.description": "ReEmu: your classics, your collection, a modern experience. A free, open-source frontend to organize and play your classic games on Windows and Linux.",
   "meta.og": "Your classics. Your collection. A modern experience. Free and open source, for Windows and Linux.",
   skip: "Skip to content",
@@ -212,6 +213,7 @@ const EN = {
 };
 
 const ES = {
+  "cta.all": "Ver todas las versiones y qué cambió",
   "meta.description": "ReEmu: tus clásicos, tu colección, una experiencia moderna. Frontend gratuito y de código abierto para organizar y jugar tus juegos clásicos en Windows y Linux.",
   "meta.og": "Tus clásicos. Tu colección. Una experiencia moderna. Gratis y de código abierto, para Windows y Linux.",
   skip: "Saltar al contenido",

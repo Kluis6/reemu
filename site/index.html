@@ -99,9 +99,9 @@
       </section>
 
       <!-- ─────────────── Nova vida ─────────────── -->
-      <section class="section">
+      <section id="vida" class="section" aria-labelledby="vida-titulo">
         <div class="wrap">
-          <h2 data-i18n="life.title" class="reveal">Dê uma nova vida à sua coleção</h2>
+          <h2 id="vida-titulo" data-i18n="life.title" class="reveal">Dê uma nova vida à sua coleção</h2>
           <p data-i18n="life.p1" class="section-lead tight reveal">
             Seus jogos clássicos merecem mais do que uma pasta cheia de arquivos.
           </p>
@@ -116,9 +116,9 @@
       </section>
 
       <!-- ─────────────── Biblioteca ─────────────── -->
-      <section id="biblioteca" class="section section-alt">
+      <section id="biblioteca" class="section section-alt" aria-labelledby="biblioteca-titulo">
         <div class="wrap">
-          <h2 data-i18n="lib.title" class="reveal">Uma biblioteca feita para jogar</h2>
+          <h2 id="biblioteca-titulo" data-i18n="lib.title" class="reveal">Uma biblioteca feita para jogar</h2>
 
           <div class="features">
             <article class="card feature reveal">
@@ -159,36 +159,10 @@
         </div>
       </section>
 
-      <!-- ─────────────── Como começar ─────────────── -->
-      <section id="comecar" class="section">
-        <div class="wrap">
-          <h2 data-i18n="start.title" class="reveal">Do download ao primeiro jogo</h2>
-
-          <ol class="steps">
-            <li class="card step reveal">
-              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">1</fluent-badge>
-              <h3 data-i18n="s1.t">Instale</h3>
-              <p data-i18n="s1.p">Baixe o ReEmu para Windows ou Linux. Instalação simples, sem ficar procurando dependências.</p>
-            </li>
-            <li class="card step reveal">
-              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">2</fluent-badge>
-              <h3 data-i18n="s2.t">Adicione sua coleção</h3>
-              <p data-i18n="s2.p">Escolha onde estão seus jogos. O ReEmu identifica os sistemas e organiza sua biblioteca automaticamente.</p>
-            </li>
-            <li class="card step reveal">
-              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">3</fluent-badge>
-              <h3 data-i18n="s3.t">Sente. Escolha. Jogue.</h3>
-              <p data-i18n="s3.p">Pegue seu controle, escolha um jogo e comece.</p>
-            </li>
-          </ol>
-          <p class="punch reveal"><strong data-i18n="start.punch">É assim que deveria ser.</strong></p>
-        </div>
-      </section>
-
       <!-- ─────────────── Menos configuração ─────────────── -->
-      <section class="section section-alt">
+      <section id="menos" class="section" aria-labelledby="menos-titulo">
         <div class="wrap">
-          <h2 data-i18n="less.title" class="reveal">Menos configuração. Mais jogo.</h2>
+          <h2 id="menos-titulo" data-i18n="less.title" class="reveal">Menos configuração. Mais jogo.</h2>
           <p data-i18n="less.lead" class="section-lead reveal">
             Você não precisa transformar uma noite de nostalgia em uma sessão de configuração.
           </p>
@@ -206,9 +180,9 @@
       </section>
 
       <!-- ─────────────── Sala e PC ─────────────── -->
-      <section id="telas" class="section">
+      <section id="telas" class="section section-alt" aria-labelledby="telas-titulo">
         <div class="wrap">
-          <h2 data-i18n="room.title" class="reveal">Feito para a sala. Perfeito para o PC.</h2>
+          <h2 id="telas-titulo" data-i18n="room.title" class="reveal">Feito para a sala. Perfeito para o PC.</h2>
           <p data-i18n="room.lead" class="section-lead tight reveal">
             O ReEmu foi pensado para funcionar tanto na sua mesa quanto na TV da sala.
           </p>
@@ -257,9 +231,9 @@
       </section>
 
       <!-- ─────────────── Sistemas ─────────────── -->
-      <section class="section section-alt">
+      <section id="sistemas" class="section" aria-labelledby="sistemas-titulo">
         <div class="wrap">
-          <h2 data-i18n="more.title" class="reveal">Mais do que uma biblioteca</h2>
+          <h2 id="sistemas-titulo" data-i18n="more.title" class="reveal">Mais do que uma biblioteca</h2>
           <h3 data-i18n="more.sub" class="sub-title first reveal">Uma experiência para a sua coleção inteira.</h3>
           <p data-i18n="more.lead" class="section-lead reveal">
             Do Atari ao PlayStation, dos portáteis aos arcades, o ReEmu reúne diferentes gerações
@@ -309,10 +283,36 @@
         </div>
       </section>
 
+      <!-- ─────────────── Como começar ─────────────── -->
+      <section id="comecar" class="section section-alt" aria-labelledby="comecar-titulo">
+        <div class="wrap">
+          <h2 id="comecar-titulo" data-i18n="start.title" class="reveal">Do download ao primeiro jogo</h2>
+
+          <ol class="steps">
+            <li class="card step reveal">
+              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">1</fluent-badge>
+              <h3 data-i18n="s1.t">Instale</h3>
+              <p data-i18n="s1.p">Baixe o ReEmu para Windows ou Linux. Instalação simples, sem ficar procurando dependências.</p>
+            </li>
+            <li class="card step reveal">
+              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">2</fluent-badge>
+              <h3 data-i18n="s2.t">Adicione sua coleção</h3>
+              <p data-i18n="s2.p">Escolha onde estão seus jogos. O ReEmu identifica os sistemas e organiza sua biblioteca automaticamente.</p>
+            </li>
+            <li class="card step reveal">
+              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">3</fluent-badge>
+              <h3 data-i18n="s3.t">Sente. Escolha. Jogue.</h3>
+              <p data-i18n="s3.p">Pegue seu controle, escolha um jogo e comece.</p>
+            </li>
+          </ol>
+          <p class="punch reveal"><strong data-i18n="start.punch">É assim que deveria ser.</strong></p>
+        </div>
+      </section>
+
       <!-- ─────────────── Chamada ─────────────── -->
-      <section class="section cta">
+      <section id="download" class="section cta" aria-labelledby="download-titulo">
         <div class="wrap center">
-          <h2 data-i18n="cta.title" class="reveal">Seus jogos clássicos nunca pareceram tão atuais.</h2>
+          <h2 id="download-titulo" data-i18n="cta.title" class="reveal">Seus jogos clássicos nunca pareceram tão atuais.</h2>
           <p class="section-lead reveal">
             <span data-i18n="cta.p1">A nostalgia está nos jogos.</span><br />
             <span data-i18n="cta.p2">A experiência pode ser moderna.</span>
@@ -321,15 +321,28 @@
           <p data-i18n="cta.lead" class="section-lead reveal">
             Baixe gratuitamente e transforme sua coleção em uma biblioteca feita para jogar.
           </p>
-          <fluent-anchor-button data-i18n="cta.button" class="reveal" appearance="primary" size="large" href="#download">Baixar ReEmu</fluent-anchor-button>
+          <!-- Preenchido pelo app.js com o instalador do sistema do visitante
+               (mesmo do hero); sem JS, fica o link da versão mais recente. -->
+          <div id="primary-cta" class="primary reveal" aria-live="polite">
+            <fluent-anchor-button data-i18n="cta.button" appearance="primary" size="large" href="https://github.com/Kluis6/reemu/releases/latest">Baixar ReEmu</fluent-anchor-button>
+          </div>
           <p data-i18n="cta.note" class="note reveal">Windows · Linux · Código aberto · Gratuito</p>
+          <p class="note reveal"><fluent-link data-i18n="cta.all" href="#versoes">Ver todas as versões e o que mudou</fluent-link></p>
+        </div>
+      </section>
+
+      <!-- ─────────────── Download ─────────────── -->
+      <section id="versoes" class="section section-alt" aria-labelledby="versoes-titulo">
+        <div class="wrap">
+          <h2 id="versoes-titulo" data-i18n="dl.title" class="reveal">Todas as versões</h2>
+          <div id="releases" class="releases"></div>
         </div>
       </section>
 
       <!-- ─────────────── Apoie ─────────────── -->
-      <section id="apoie" class="section section-alt">
+      <section id="apoie" class="section" aria-labelledby="apoie-titulo">
         <div class="wrap">
-          <h2 data-i18n="sup.title" class="reveal">Gratuito. Aberto. Feito para jogadores.</h2>
+          <h2 id="apoie-titulo" data-i18n="sup.title" class="reveal">Gratuito. Aberto. Feito para jogadores.</h2>
           <p data-i18n="sup.lead" class="section-lead tight reveal">O ReEmu é gratuito e de código aberto.</p>
           <ul class="bullets reveal">
             <li data-i18n="sup.b1">Sem anúncios.</li>
@@ -393,18 +406,10 @@
         </div>
       </section>
 
-      <!-- ─────────────── Download ─────────────── -->
-      <section id="download" class="section">
-        <div class="wrap">
-          <h2 data-i18n="dl.title" class="reveal">Todas as versões</h2>
-          <div id="releases" class="releases"></div>
-        </div>
-      </section>
-
       <!-- ─────────────── Sua coleção ─────────────── -->
-      <section class="section section-alt">
+      <section id="colecao" class="section section-alt" aria-labelledby="colecao-titulo">
         <div class="wrap">
-          <h2 data-i18n="own.title" class="reveal">Sua coleção pertence a você.</h2>
+          <h2 id="colecao-titulo" data-i18n="own.title" class="reveal">Sua coleção pertence a você.</h2>
           <p data-i18n="own.p1" class="section-lead tight reveal">O ReEmu não inclui jogos nem BIOS.</p>
           <p data-i18n="own.p2" class="section-lead reveal">
             Use cópias dos jogos que você possui e respeite as leis aplicáveis à sua região.
