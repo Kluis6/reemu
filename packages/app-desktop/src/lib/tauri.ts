@@ -222,6 +222,8 @@ export interface InstalledCore {
   version: string
   extensions: string[]
   renderBackend: string | null
+  /** Sistemas (ids da varredura) que o core atende, pelo catálogo. */
+  systems: string[]
 }
 export const listInstalledCores = () => invoke<InstalledCore[]>('list_installed_cores')
 

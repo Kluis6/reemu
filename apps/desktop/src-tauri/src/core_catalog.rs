@@ -807,9 +807,18 @@ mod tests {
             vec!["pcengine", "pcenginecd"]
         );
         assert_eq!(ids("Neo Geo / CPS / arcade"), vec!["arcade"]);
-        // todo core do catálogo cai em pelo menos um sistema
+        // todo core do catálogo cai em pelo menos um sistema da varredura,
+        // exceto os de sistemas que a varredura não tem (Doom, TIC-80,
+        // Commodore 128, Enterprise)
+        const SEM_SISTEMA: &[&str] = &[
+            "prboom_libretro",
+            "tic80_libretro",
+            "vice_x128_libretro",
+            "ep128emu_core_libretro",
+        ];
         let sem: Vec<_> = CATALOG
             .iter()
+            .filter(|c| !SEM_SISTEMA.contains(&c.id))
             .filter(|c| systems_from_text(c.systems).is_empty())
             .map(|c| (c.id, c.systems))
             .collect();

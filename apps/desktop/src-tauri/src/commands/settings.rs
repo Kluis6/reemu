@@ -125,6 +125,9 @@ pub struct InstalledCoreDto {
     pub extensions: Vec<String>,
     /// Backend de render detectado num load anterior (`installed_cores`, se houver).
     pub render_backend: Option<String>,
+    /// Sistemas (ids da varredura) que o core atende, pelo catálogo — pra
+    /// escolher o core de um jogo pelo sistema antes da extensão.
+    pub systems: Vec<String>,
 }
 
 /// Cores disponíveis: varre `<dados>/cores/*_libretro.<suf>` e cruza com a
@@ -164,6 +167,10 @@ pub async fn list_installed_cores(
             version: c.library_version,
             extensions: c.valid_extensions,
             render_backend: backends.get(&c.core_id).cloned().flatten(),
+            systems: crate::core_catalog::system_ids(&c.core_id)
+                .into_iter()
+                .map(String::from)
+                .collect(),
             core_id: c.core_id,
         })
         .collect())

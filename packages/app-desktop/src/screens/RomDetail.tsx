@@ -78,6 +78,7 @@ import { formatPlayTime } from "../lib/playTime";
 import { useDetailStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
+import { rankCores } from "../lib/coreChoice";
 import { curatedText, presetTitle } from "../lib/backendText";
 
 export function RomDetail() {
@@ -162,11 +163,7 @@ export function RomDetail() {
 
   const rom = roms.data?.find((r) => r.id === romId);
   const ext = rom?.filePath.split(".").pop()?.toLowerCase() ?? "";
-  const coreList = [...(cores.data ?? [])].sort((a, b) => {
-    const am = a.extensions.includes(ext) ? 0 : 1;
-    const bm = b.extensions.includes(ext) ? 0 : 1;
-    return am - bm || a.name.localeCompare(b.name);
-  });
+  const coreList = rankCores(cores.data ?? [], rom?.systemId, ext);
   const [coreId, setCoreId] = useState("");
   const systemDefaultCore = rom ? (sysCores.data?.[rom.systemId] ?? "") : "";
   const chosenCore =
