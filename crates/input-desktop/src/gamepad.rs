@@ -64,6 +64,57 @@ fn stick_dpad(x: f32, y: f32) -> Vec<u32> {
 /// zero; acima, reescala pra começar do 0 sem salto (sem perder a direção).
 const STICK_DEADZONE: f32 = 0.15;
 
+/// Gatilho analógico (L2/R2) com o "zero" calibrado. O DualSense medido no
+/// app (hid-playstation, `ABS_Z`/`ABS_RZ` 0–255) ficava em 168/173 SOLTO —
+/// ~66% do curso: com o limiar de 25% os dois gatilhos contavam como
+/// apertados o tempo todo (no MSR: freio + acelerador juntos, o carro não
+/// saía). O zero é o menor valor já visto; o aperto é medido a partir dele e
+/// reescalado pra 0..1. Controle com zero em 0 (o normal) não muda nada.
+#[derive(Debug, Clone, Copy)]
+struct TriggerCal {
+    rest: f32,
+    pressed: bool,
+}
+
+/// Limiares de aperto do gatilho (sobre o valor já calibrado), com histerese.
+const TRIGGER_PRESS: f32 = 0.25;
+const TRIGGER_RELEASE: f32 = 0.15;
+
+impl TriggerCal {
+    /// 1º valor visto vira o zero — exceto 1.0 (gatilho digital apertado, ou
+    /// o analógico já no fundo), que conta como zero em 0.
+    fn new(first: f32) -> Self {
+        Self {
+            rest: if first >= 0.99 { 0.0 } else { first },
+            pressed: false,
+        }
+    }
+
+    /// Atualiza com um valor novo; devolve `Some(apertado)` se o estado mudou.
+    fn update(&mut self, value: f32) -> Option<bool> {
+        self.rest = self.rest.min(value);
+        let span = 1.0 - self.rest;
+        let eff = if span < 0.05 {
+            0.0
+        } else {
+            ((value - self.rest) / span).clamp(0.0, 1.0)
+        };
+        let now = if self.pressed {
+            eff > TRIGGER_RELEASE
+        } else {
+            eff >= TRIGGER_PRESS
+        };
+        (now != self.pressed).then(|| {
+            self.pressed = now;
+            now
+        })
+    }
+}
+
+fn is_analog_trigger(b: Button) -> bool {
+    matches!(b, Button::LeftTrigger2 | Button::RightTrigger2)
+}
+
 fn radial_deadzone((x, y): (f32, f32)) -> (f32, f32) {
     let r = (x * x + y * y).sqrt();
     if r < STICK_DEADZONE {
@@ -197,6 +248,8 @@ pub struct GamepadPoller {
     nav_search_down: bool,
     nav_context_down: bool,
     nav_back_down: bool,
+    /// Zero calibrado de L2/R2 por conexão física (ver [`TriggerCal`]).
+    triggers: HashMap<(GamepadId, Button), TriggerCal>,
 }
 
 /// O que o poll observou de interessante além do RetroPad (pro caller
@@ -242,6 +295,7 @@ impl GamepadPoller {
             nav_search_down: false,
             nav_context_down: false,
             nav_back_down: false,
+            triggers: HashMap::new(),
         })
     }
 
@@ -407,6 +461,7 @@ impl GamepadPoller {
                     self.stick.remove(&id);
                     self.rstick.remove(&id);
                     self.hat.remove(&id);
+                    self.triggers.retain(|(g, _), _| *g != id);
                     if let Some(&port) = self.ports.get(&id) {
                         analog.set_stick(port, 0, 0, 0);
                         analog.set_stick(port, 1, 0, 0);
@@ -433,38 +488,26 @@ impl GamepadPoller {
                     self.push_analog(id, uuid, analog);
                     self.recompute(id, uuid, pad, analog);
                 }
+                // L2/R2: aperto decidido aqui, pelo valor com o zero calibrado
+                // — o press/release do gilrs usa o valor cru.
+                EventType::ButtonChanged(btn, value, _) if is_analog_trigger(btn) => {
+                    let changed = match self.triggers.entry((id, btn)) {
+                        std::collections::hash_map::Entry::Vacant(e) => {
+                            e.insert(TriggerCal::new(value)).update(value)
+                        }
+                        std::collections::hash_map::Entry::Occupied(mut e) => {
+                            e.get_mut().update(value)
+                        }
+                    };
+                    if let Some(pressed) = changed {
+                        self.button_edge(id, uuid, btn, pressed, capturing, &mut out, pad, analog);
+                    }
+                }
+                EventType::ButtonPressed(btn, _) | EventType::ButtonReleased(btn, _)
+                    if is_analog_trigger(btn) => {}
                 EventType::ButtonPressed(btn, _) | EventType::ButtonReleased(btn, _) => {
                     let pressed = matches!(event, EventType::ButtonPressed(..));
-                    let index = gilrs_button_index(btn);
-                    if capturing {
-                        // Em captura, só o press interessa (o frontend agrupa a
-                        // combinação); nada vai pro RetroPad.
-                        if pressed {
-                            out.captured.push(RawInputEvent::GamepadButton {
-                                device_guid: guid_hex(uuid),
-                                index,
-                            });
-                        }
-                        continue;
-                    }
-                    // Conjunto segurado — físico (recompor RetroPad) + global
-                    // (`held`, pra resolução de hotkey de combinação).
-                    let slot = self.down.entry(id).or_default();
-                    slot.retain(|i| *i != index);
-                    let ev = RawInputEvent::GamepadButton {
-                        device_guid: guid_hex(uuid),
-                        index,
-                    };
-                    if pressed {
-                        slot.push(index);
-                        held::press(ev);
-                    } else {
-                        held::release(&ev);
-                    }
-                    if btn == Button::Mode && pressed {
-                        out.menu_pressed = true;
-                    }
-                    self.recompute(id, uuid, pad, analog);
+                    self.button_edge(id, uuid, btn, pressed, capturing, &mut out, pad, analog);
                 }
                 _ => {}
             }
@@ -476,6 +519,52 @@ impl GamepadPoller {
             .map(|(_, g)| (guid_hex(g.uuid()), g.name().to_string()))
             .collect();
         out
+    }
+
+    /// Botão físico apertado/solto: captura de binding, conjunto segurado e
+    /// recomposição do RetroPad.
+    #[allow(clippy::too_many_arguments)]
+    fn button_edge(
+        &mut self,
+        id: GamepadId,
+        uuid: [u8; 16],
+        btn: Button,
+        pressed: bool,
+        capturing: bool,
+        out: &mut PollOutcome,
+        pad: &RetroPadState,
+        analog: &AnalogState,
+    ) {
+        let index = gilrs_button_index(btn);
+        if capturing {
+            // Em captura, só o press interessa (o frontend agrupa a
+            // combinação); nada vai pro RetroPad.
+            if pressed {
+                out.captured.push(RawInputEvent::GamepadButton {
+                    device_guid: guid_hex(uuid),
+                    index,
+                });
+            }
+            return;
+        }
+        // Conjunto segurado — físico (recompor RetroPad) + global
+        // (`held`, pra resolução de hotkey de combinação).
+        let slot = self.down.entry(id).or_default();
+        slot.retain(|i| *i != index);
+        let ev = RawInputEvent::GamepadButton {
+            device_guid: guid_hex(uuid),
+            index,
+        };
+        if pressed {
+            slot.push(index);
+            held::press(ev);
+        } else {
+            held::release(&ev);
+        }
+        if btn == Button::Mode && pressed {
+            out.menu_pressed = true;
+        }
+        self.recompute(id, uuid, pad, analog);
     }
 }
 
@@ -492,6 +581,30 @@ mod tests {
         // logo depois da borda da zona morta: pequeno, sem salto
         let (x, _) = radial_deadzone((0.16, 0.0));
         assert!(x > 0.0 && x < 0.02, "{x}");
+    }
+
+    #[test]
+    fn trigger_with_offset_rest_is_not_pressed() {
+        // DualSense medido: L2 solto em 168/255 com jitter de ±1
+        let mut t = TriggerCal::new(168.0 / 255.0);
+        assert_eq!(t.update(169.0 / 255.0), None);
+        assert_eq!(t.update(167.0 / 255.0), None);
+        // apertado até o fundo → conta; solto de volta → solta
+        assert_eq!(t.update(1.0), Some(true));
+        assert_eq!(t.update(168.0 / 255.0), Some(false));
+    }
+
+    #[test]
+    fn trigger_with_zero_rest_keeps_the_usual_threshold() {
+        let mut t = TriggerCal::new(0.0);
+        assert_eq!(t.update(0.2), None);
+        assert_eq!(t.update(0.3), Some(true));
+        assert_eq!(t.update(0.2), None); // histerese: só solta abaixo de 15%
+        assert_eq!(t.update(0.1), Some(false));
+        // gatilho digital: 1º evento já é o fundo → zero em 0
+        let mut d = TriggerCal::new(1.0);
+        assert_eq!(d.update(1.0), Some(true));
+        assert_eq!(d.update(0.0), Some(false));
     }
 
     #[test]

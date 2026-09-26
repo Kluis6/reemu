@@ -1542,6 +1542,11 @@ Infra:
 - **Idioma:** preferência em Configurações › Aparência (Automático / Português (Brasil) / English / Español, cada idioma no próprio nome), guardada em `reemu.language`. `auto` segue `navigator.languages` pela língua-base (pt-PT → pt-BR, es-MX → es); sem correspondência, pt-BR. O `<html lang>` acompanha o idioma. A troca vale na hora, sem reiniciar.
 - **Primeira leva migrada:** o rail (Início, Meus jogos, Configurações), o menu do perfil, o topo (voltar, busca, tela cheia, encerrar), as dicas de botão, o título e as abas de Configurações e a tela Aparência inteira, incluindo os nomes dos temas (`ThemeFamily.nameKey`) e os tamanhos da interface. O resto está listado no TASKS.md. Regra para textos novos no CLAUDE.md.
 
+## 2026-09-26 — Gatilhos do DualSense e teclado + controle
+
+- **R2 não acelerava no MSR:** o DualSense do dono (driver `hid-playstation`, Bluetooth) informa `ABS_Z`/`ABS_RZ` em 168/173 de 0–255 com os gatilhos **soltos**, lido pelo `EVIOCGABS` do evdev. Com o limiar de 25% do gilrs (`btn_value` = valor/faixa), L2 e R2 contavam como apertados o tempo todo: no MSR, freio e acelerador juntos. O `GamepadPoller` agora decide L2/R2 pelo `ButtonChanged` com o zero calibrado (`TriggerCal`: o menor valor visto é o zero; o aperto é reescalado a partir dele, com histerese de 25%/15%) e ignora o press/release cru do gilrs para os gatilhos. Controle com zero em 0 continua igual.
+- **Teclado × controle:** cada um tem o próprio estado, combinado por OR no snapshot enviado ao core. O stick esquerdo não dobra mais como direcional quando o core lê o analógico (`ToParent::AnalogUsed` no filho; marca direta na rota in-process).
+
 ## 2026-09-26 — parallel_n64 derrubava o app na rota in-process
 
 - Com `REEMU_HW=vulkan`, o parallel_n64 ia para a rota in-process e o app inteiro fechava no `LocalCore::load`. Fonte: `libretro/libretro.c` do repositório oficial libretro/parallel-n64. Com o padrão `parallel-n64-gfxplugin=auto`, o `retro_load_game` chama `retro_init_gl()` (o comentário diz que o GL "is assumed it always exists") e segue desenhando em GL mesmo com o `SET_HW_RENDER` recusado. Só o valor `parallel` pede `RETRO_HW_CONTEXT_VULKAN` (`retro_init_vulkan`). É o mesmo caso do mupen64plus_next com GLideN64.
