@@ -1,11 +1,15 @@
 name: Fumaça do catálogo
 
 # Baixa cada core do catálogo (apps/desktop/src-tauri/src/core_catalog.rs)
-# do buildbot, pelo mesmo `download` do app, e abre com
-# `reemu-core-host --probe` (retro_init + system info, sem jogo) num processo
-# à parte. Pega core que sumiu do buildbot, que não abre na plataforma ou que
-# cai no retro_init (como o VBA-M sem GET_LOG_INTERFACE). A tabela sai no
-# resumo do job. Semanal — os nightlies do buildbot mudam sozinhos.
+# do buildbot, pelo mesmo `download` do app, e:
+# - fase 1: abre com `reemu-core-host --probe` (retro_init + system info,
+#   sem jogo) num processo à parte;
+# - fase 2: nos sistemas de cartucho (NES, SNES, GB, GBA, Mega Drive, Master
+#   System, PC Engine, Atari 2600), carrega uma ROM mínima gerada pelo
+#   próprio teste (smoke_roms.rs) com `--run` e roda 180 quadros.
+# Pega core que sumiu do buildbot, que não abre na plataforma, que cai no
+# retro_init ou que não roda um jogo. A tabela sai no resumo do job.
+# Semanal — os nightlies do buildbot mudam sozinhos.
 
 on:
   schedule:

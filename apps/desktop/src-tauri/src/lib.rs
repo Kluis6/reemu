@@ -12,6 +12,8 @@ mod play_clock;
 mod profile;
 mod scraping;
 mod shader_pack;
+#[cfg(test)]
+mod smoke_roms;
 mod system_files;
 mod updates;
 mod video;

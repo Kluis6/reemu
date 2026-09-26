@@ -59,21 +59,107 @@ fn probe(args: &[String]) -> ! {
         eprintln!("uso: reemu-core-host --probe <pasta de cores> <core_id>");
         std::process::exit(64);
     };
-    let tmp = std::env::temp_dir();
-    let loader = DesktopCoreLoader::new(cores_dir, &tmp, &tmp);
-    match loader.probe_core(&CoreId(core_id.clone())) {
+    let sandbox = Sandbox::new("probe");
+    let loader = DesktopCoreLoader::new(cores_dir, &sandbox.0, &sandbox.0);
+    let code = match loader.probe_core(&CoreId(core_id.clone())) {
         Ok(p) => {
             println!(
                 "REEMU_PROBE_OK\t{}\t{}\t{}",
                 p.library_name, p.library_version, p.valid_extensions
             );
-            std::process::exit(0);
+            0
         }
         Err(e) => {
             println!("REEMU_PROBE_ERR\t{e}");
-            std::process::exit(2);
+            2
         }
+    };
+    drop(sandbox);
+    std::process::exit(code);
+}
+
+/// Pasta de sistema/saves só deste processo, vazia, apagada no fim. Não
+/// usar o `temp_dir()` inteiro: o pcsx_rearmed, sem achar o BIOS pelos nomes
+/// conhecidos, abre TODO arquivo da pasta de sistema (`find_any_bios`, em
+/// frontend/libretro.c) — no runner do GitHub o `/tmp` tem FIFOs, e abrir
+/// um FIFO bloqueia até alguém abrir a outra ponta (o probe travava em
+/// `wait_for_partner` no `openat`).
+struct Sandbox(std::path::PathBuf);
+
+impl Sandbox {
+    fn new(kind: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("reemu-{kind}-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        Self(dir)
     }
+}
+
+impl Drop for Sandbox {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// `reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros>`: carrega
+/// o jogo, roda `quadros` `retro_run` e sai — fase 2 do teste de fumaça do
+/// catálogo. Resultado no stdout: `REEMU_RUN_OK\t<quadros de vídeo>\t
+/// <quadros com cor>\t<amostras de áudio>` (saída 0) ou `REEMU_RUN_ERR\t
+/// <erro>` (saída 2). "Com cor" = algum pixel não preto (as ROMs de teste
+/// pintam o fundo).
+fn run_rom(args: &[String]) -> ! {
+    let (Some(cores_dir), Some(core_id), Some(rom), Some(frames)) = (
+        args.first(),
+        args.get(1),
+        args.get(2),
+        args.get(3).and_then(|n| n.parse::<u32>().ok()),
+    ) else {
+        eprintln!("uso: reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros>");
+        std::process::exit(64);
+    };
+    let sandbox = Sandbox::new("run");
+    let loader = DesktopCoreLoader::new(cores_dir, &sandbox.0, &sandbox.0);
+    let code = match loader.open_core(&CoreId(core_id.clone()), rom) {
+        Err(e) => {
+            println!("REEMU_RUN_ERR\t{e}");
+            2
+        }
+        Ok(mut core) => {
+            let (mut video, mut colored, mut audio) = (0u32, 0u32, 0usize);
+            for _ in 0..frames {
+                if let Some(frame) = core.next_frame() {
+                    video += 1;
+                    if let FrameOrigin::SoftwareRawBuffer {
+                        data,
+                        pitch,
+                        format,
+                    } = &frame.origin
+                    {
+                        let rgba = domain::frame_source::to_rgba8(
+                            data,
+                            frame.metadata.native_width,
+                            frame.metadata.native_height,
+                            *pitch,
+                            *format,
+                        );
+                        if rgba
+                            .chunks_exact(4)
+                            .any(|p| p[0] > 16 || p[1] > 16 || p[2] > 16)
+                        {
+                            colored += 1;
+                        }
+                    }
+                }
+                audio += core.drain_audio().len();
+            }
+            println!("REEMU_RUN_OK\t{video}\t{colored}\t{audio}");
+            // o processo sai já: sem `retro_deinit` (alguns cores caem nele,
+            // como o VBA-M no probe)
+            std::mem::forget(core);
+            0
+        }
+    };
+    drop(sandbox);
+    std::process::exit(code);
 }
 
 fn main() {
@@ -81,6 +167,9 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--probe") {
         probe(&args[1..]);
+    }
+    if args.first().map(String::as_str) == Some("--run") {
+        run_rom(&args[1..]);
     }
     raise_priority();
 

@@ -692,18 +692,71 @@ mod tests {
 
     /// Falhas conhecidas e explicadas: aparecem na tabela como
     /// "conhecido" e não derrubam o job. Tirar daqui quando resolver.
-    const KNOWN_BROKEN: &[(&str, &str)] = &[(
-        "ep128emu_core_libretro",
-        "cai numa thread de emulação que o próprio core sobe no retro_init \
-         (sem jogo, sem as ROMs opcionais do Enterprise) — binário sem símbolos",
-    )];
+    const KNOWN_BROKEN: &[(&str, &str)] = &[
+        (
+            "ep128emu_core_libretro",
+            "cai numa thread de emulação que o próprio core sobe no retro_init \
+             (sem jogo, sem as ROMs opcionais do Enterprise) — binário sem símbolos",
+        ),
+        (
+            "stella_libretro",
+            "o Stella 8 só reconhece a ROM via RETRO_ENVIRONMENT_GET_VFS_INTERFACE \
+             (FSNodeLIBRETRO::setFlags devolve falso sem VFS) — o ReEmu ainda não \
+             oferece a VFS; ver TASKS.md",
+        ),
+    ];
+
+    /// Roda o `reemu-core-host` com `args` (probe ou run) e espera até 60 s.
+    /// Devolve o status (`None` = travou e foi morto), o stdout e, se travou,
+    /// o diagnóstico das threads.
+    fn run_host(
+        host: &std::path::Path,
+        core: &std::path::Path,
+        args: &[&std::ffi::OsStr],
+        out_path: &std::path::Path,
+    ) -> (Option<std::process::ExitStatus>, String, String) {
+        use std::process::{Command, Stdio};
+        use std::time::{Duration, Instant};
+        let mut cmd = Command::new(host);
+        // mesmo tratamento do app pra core que pede pilha executável
+        if let Some((k, v)) = core_loader_desktop::exec_stack_env(core) {
+            cmd.env(k, v);
+        }
+        // stdout num ARQUIVO, não pipe: core que imprime muito enchia o pipe
+        // (lido só no fim) e travava o processo
+        let out_file = std::fs::File::create(out_path).expect("arquivo de saída");
+        let mut child = cmd
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(out_file))
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("rodar reemu-core-host");
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let mut hang_info = String::new();
+        let status = loop {
+            if let Some(st) = child.try_wait().unwrap() {
+                break Some(st);
+            }
+            if Instant::now() > deadline {
+                hang_info = hang_diagnostics(child.id());
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        let out = std::fs::read(out_path)
+            .map(|b| String::from_utf8_lossy(&b).into_owned())
+            .unwrap_or_default();
+        let _ = std::fs::remove_file(out_path);
+        (status, out, hang_info)
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore = "baixa o catálogo inteiro — rode com --ignored"]
     async fn catalog_smoke() {
         use std::fmt::Write as _;
-        use std::process::{Command, Stdio};
-        use std::time::{Duration, Instant};
 
         let host = std::env::var_os("REEMU_CORE_HOST")
             .map(PathBuf::from)
@@ -723,8 +776,8 @@ mod tests {
             .map(|v| v.split(',').map(|s| s.trim().to_string()).collect());
         let cores_dir = std::env::temp_dir().join(format!("reemu-smoke-{}", std::process::id()));
 
-        // (core, sistemas, resultado, detalhe)
-        let mut rows: Vec<(&str, &str, &str, String)> = Vec::new();
+        // (core, sistemas, resultado do probe, detalhe, jogo)
+        let mut rows: Vec<(&str, &str, &str, String, String)> = Vec::new();
         for c in CATALOG {
             if only
                 .as_ref()
@@ -735,47 +788,17 @@ mod tests {
             let path = match download(&cores_dir, c.id).await {
                 Ok(p) => p,
                 Err(e) => {
-                    rows.push((c.id, c.systems, "download", e));
+                    rows.push((c.id, c.systems, "download", e, "—".into()));
                     continue;
                 }
             };
-            let mut cmd = Command::new(&host);
-            // mesmo tratamento do app pra core que pede pilha executável
-            if let Some((k, v)) = core_loader_desktop::exec_stack_env(&path) {
-                cmd.env(k, v);
-            }
-            // stdout num ARQUIVO, não pipe: core que imprime muito no init
-            // enchia o pipe (lido só no fim) e travava o probe (pcsx_rearmed
-            // no CI)
             let out_path = cores_dir.join(format!("{}.probe.txt", c.id));
-            let out_file = std::fs::File::create(&out_path).expect("arquivo do probe");
-            let mut child = cmd
-                .arg("--probe")
-                .arg(&cores_dir)
-                .arg(c.id)
-                .stdin(Stdio::null())
-                .stdout(Stdio::from(out_file))
-                .stderr(Stdio::null())
-                .spawn()
-                .expect("rodar reemu-core-host --probe");
-            let deadline = Instant::now() + Duration::from_secs(60);
-            let mut hang_info = String::new();
-            let status = loop {
-                if let Some(st) = child.try_wait().unwrap() {
-                    break Some(st);
-                }
-                if Instant::now() > deadline {
-                    hang_info = hang_diagnostics(child.id());
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    break None;
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            };
-            let out = std::fs::read(&out_path)
-                .map(|b| String::from_utf8_lossy(&b).into_owned())
-                .unwrap_or_default();
-            let _ = std::fs::remove_file(&out_path);
+            let probe_args = [
+                "--probe".as_ref(),
+                cores_dir.as_os_str(),
+                std::ffi::OsStr::new(c.id),
+            ];
+            let (status, out, hang_info) = run_host(&host, &path, &probe_args, &out_path);
             let line = out.lines().find(|l| l.starts_with("REEMU_PROBE_"));
             let row = match (status, line) {
                 (None, _) => ("travou", format!("mais de 60 s no retro_init{hang_info}")),
@@ -796,27 +819,83 @@ mod tests {
                 Some((_, why)) if row.0 != "ok" => ("conhecido", format!("{}: {why}", row.1)),
                 _ => row,
             };
-            rows.push((c.id, c.systems, row.0, row.1));
+            // Fase 2: com o core aberto, carrega uma ROM gerada do sistema
+            // (`smoke_roms`) e roda alguns quadros.
+            let game = match (row.0, crate::smoke_roms::RomKind::for_systems(c.systems)) {
+                ("ok", Some(kind)) => {
+                    let rom = cores_dir.join(format!("smoke.{}", kind.extension()));
+                    std::fs::write(&rom, kind.build()).expect("gravar a ROM de teste");
+                    let out_path = cores_dir.join(format!("{}.run.txt", c.id));
+                    let run_args = [
+                        "--run".as_ref(),
+                        cores_dir.as_os_str(),
+                        std::ffi::OsStr::new(c.id),
+                        rom.as_os_str(),
+                        std::ffi::OsStr::new("180"),
+                    ];
+                    let (status, out, hang) = run_host(&host, &path, &run_args, &out_path);
+                    let line = out.lines().find(|l| l.starts_with("REEMU_RUN_"));
+                    match (status, line) {
+                        (None, _) => format!("FALHA: travou{hang}"),
+                        (Some(_), Some(l)) if l.starts_with("REEMU_RUN_OK") => {
+                            let f: Vec<&str> = l.split('\t').collect();
+                            let n = |i: usize| f.get(i).and_then(|v| v.parse::<u64>().ok());
+                            match (n(1), n(2), n(3)) {
+                                (Some(0), _, _) => "FALHA: nenhum quadro de vídeo".into(),
+                                (Some(v), Some(cor), Some(a)) => format!(
+                                    "{v} quadros{}{}",
+                                    if cor > 0 {
+                                        ", com imagem"
+                                    } else {
+                                        ", tela preta"
+                                    },
+                                    if a > 0 { ", áudio" } else { "" }
+                                ),
+                                _ => format!("FALHA: saída estranha: {l}"),
+                            }
+                        }
+                        (Some(_), Some(l)) => {
+                            format!("FALHA: {}", l.trim_start_matches("REEMU_RUN_ERR\t"))
+                        }
+                        (Some(st), None) => format!("FALHA: caiu ({st})"),
+                    }
+                }
+                ("ok", None) => "sem ROM de teste".into(),
+                _ => "—".into(),
+            };
+            let game = match KNOWN_BROKEN.iter().find(|k| k.0 == c.id) {
+                Some((_, why)) if game.starts_with("FALHA") => format!("conhecido: {why}"),
+                _ => game,
+            };
+            rows.push((c.id, c.systems, row.0, row.1, game));
             // libera o disco (o MAME sozinho tem centenas de MB)
             let _ = std::fs::remove_file(&path);
         }
         let _ = std::fs::remove_dir_all(&cores_dir);
 
+        let game_failed = |g: &str| g.starts_with("FALHA");
         let failed = rows
             .iter()
-            .filter(|r| r.2 != "ok" && r.2 != "conhecido")
+            .filter(|r| (r.2 != "ok" && r.2 != "conhecido") || game_failed(&r.4))
             .count();
         let ok = rows.iter().filter(|r| r.2 == "ok").count();
+        let games = rows.iter().filter(|r| r.4.contains("quadros")).count();
         let mut md = format!(
-            "## Fumaça do catálogo ({})\n\n{} de {} cores abriram.\n\n| core | sistemas | resultado | detalhe |\n|---|---|---|---|\n",
+            "## Fumaça do catálogo ({})\n\n{} de {} cores abriram; {} rodaram a ROM de teste.\n\n| core | sistemas | resultado | detalhe | jogo |\n|---|---|---|---|---|\n",
             buildbot_os(),
             ok,
-            rows.len()
+            rows.len(),
+            games
         );
         // falhas primeiro
-        rows.sort_by_key(|r| (r.2 == "ok", r.2 == "conhecido", r.0));
-        for (id, sys, res, det) in &rows {
-            let _ = writeln!(md, "| `{id}` | {sys} | {res} | {} |", det.replace('|', "/"));
+        rows.sort_by_key(|r| (r.2 == "ok" && !game_failed(&r.4), r.2 == "conhecido", r.0));
+        for (id, sys, res, det, game) in &rows {
+            let _ = writeln!(
+                md,
+                "| `{id}` | {sys} | {res} | {} | {} |",
+                det.replace('|', "/"),
+                game.replace('|', "/")
+            );
         }
         println!("{md}");
         if let Some(p) = std::env::var_os("GITHUB_STEP_SUMMARY") {
@@ -824,7 +903,7 @@ mod tests {
         }
         assert_eq!(
             failed, 0,
-            "{failed} core(s) não abriram — ver a tabela acima"
+            "{failed} core(s) não abriram ou não rodaram a ROM de teste — ver a tabela acima"
         );
     }
 }
