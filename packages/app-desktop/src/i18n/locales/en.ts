@@ -479,6 +479,13 @@ const en: Messages = {
   },
   bios: {
     notes: {
+      naomi_zip: 'NAOMI board BIOS (MAME set) — NAOMI games won\'t run without it',
+      naomi2_zip: 'NAOMI 2 BIOS (MAME set) — only for NAOMI 2 games',
+      hod2bios_zip: 'The House of the Dead 2\'s own BIOS',
+      f355bios_zip: 'Ferrari F355 Challenge BIOS (twin/deluxe)',
+      f355dlx_zip: 'Ferrari F355 Challenge BIOS (deluxe)',
+      airlbios_zip: 'Airline Pilots BIOS (deluxe)',
+      awbios_zip: 'Atomiswave board BIOS (MAME set) — the games won\'t run without it',
       scph5500_bin: 'NTSC-J (Japan) — Beetle PSX falls back to the built-in OpenBIOS if missing',
       scph5501_bin: 'NTSC-U (USA) — Beetle PSX falls back to the built-in OpenBIOS if missing',
       scph5502_bin: 'PAL (Europe) — Beetle PSX falls back to the built-in OpenBIOS if missing',

@@ -1542,6 +1542,14 @@ Infra:
 - **Idioma:** preferência em Configurações › Aparência (Automático / Português (Brasil) / English / Español, cada idioma no próprio nome), guardada em `reemu.language`. `auto` segue `navigator.languages` pela língua-base (pt-PT → pt-BR, es-MX → es); sem correspondência, pt-BR. O `<html lang>` acompanha o idioma. A troca vale na hora, sem reiniciar.
 - **Primeira leva migrada:** o rail (Início, Meus jogos, Configurações), o menu do perfil, o topo (voltar, busca, tela cheia, encerrar), as dicas de botão, o título e as abas de Configurações e a tela Aparência inteira, incluindo os nomes dos temas (`ThemeFamily.nameKey`) e os tamanhos da interface. O resto está listado no TASKS.md. Regra para textos novos no CLAUDE.md.
 
+## 2026-09-26 — Tela preta nos cores de Atari, 2600 na biblioteca, core por sistema, BIOS de NAOMI
+
+- **Tela preta até pausar (a5200, Stella):** o 1º `get_current_texture` voltava `Outdated` (surface criada em 1280x753, janela em 1366x768). O app reconfigurava e descartava o quadro, e cores que mandam quadro repetido com a tela parada nunca mandavam outro. A correção segue a doc do wgpu 30 (`CurrentSurfaceTexture`): em `Outdated`, `configure` e tenta de novo na hora. Se ainda falhar, o quadro fica pendente e o pump reapresenta a saída da chain sem esperar quadro novo.
+- **Atari 2600 fora da biblioteca:** `.bin` só vale dentro da pasta de um sistema listado em `folder_only_exts`, e 2600 e 7800 não estavam lá. Extensões pelo `.info` oficial: stella `a26|bin`, prosystem `a78|bin|cdf`.
+- **Core automático por sistema:** a tela do jogo ordenava só por extensão e nome, então um `.bin` de Mega Drive, 2600 ou PS1 ia para o a5200. `core_catalog::system_ids` e `rankCores` agora ordenam por sistema, extensão e nome.
+- **Stella com "audio buffer overflow":** era uma ROM de Atari 5200 ("Adventure II") aberta no core de 2600. Com o Pitfall II (2600) não acontece.
+- **BIOS de NAOMI/Atomiswave** na tela de BIOS (docs.libretro.com, library/flycast): `naomi.zip`, `naomi2.zip`, as de jogo específico (`hod2bios`, `f355bios`, `f355dlx`, `airlbios`) e `awbios.zip`, em `system/dc/`.
+
 ## 2026-09-26 — Interface VFS do libretro (v3)
 
 - `RETRO_ENVIRONMENT_GET_VFS_INTERFACE` implementada em `core-loader-desktop/src/vfs.rs` sobre `std::fs`, com as 18 funções até a v3 (arquivo, `truncate`, `stat`, `mkdir` e pastas). Semântica do `libretro.h` de cada função. A tabela de modos do `open` é a da implementação de referência do libretro-common (`vfs/vfs_implementation.c`): `WRITE|UPDATE_EXISTING` equivale a `r+b`, que também lê. O flycast abre o `.cue` nesse modo. Core que pede versão acima de 3 recebe `false`.

@@ -480,6 +480,13 @@ const ptBR = {
   },
   bios: {
     notes: {
+      naomi_zip: 'BIOS da placa NAOMI (set do MAME) — os jogos de NAOMI não rodam sem',
+      naomi2_zip: 'BIOS da NAOMI 2 (set do MAME) — só pros jogos de NAOMI 2',
+      hod2bios_zip: 'BIOS própria de The House of the Dead 2',
+      f355bios_zip: 'BIOS de Ferrari F355 Challenge (twin/deluxe)',
+      f355dlx_zip: 'BIOS de Ferrari F355 Challenge (deluxe)',
+      airlbios_zip: 'BIOS de Airline Pilots (deluxe)',
+      awbios_zip: 'BIOS da placa Atomiswave (set do MAME) — os jogos não rodam sem',
       scph5500_bin: 'NTSC-J (Japão) — Beetle PSX cai pro OpenBIOS embutido se faltar',
       scph5501_bin: 'NTSC-U (EUA) — Beetle PSX cai pro OpenBIOS embutido se faltar',
       scph5502_bin: 'PAL (Europa) — Beetle PSX cai pro OpenBIOS embutido se faltar',

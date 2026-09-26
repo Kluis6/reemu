@@ -81,6 +81,63 @@ const DREAMCAST: &[BiosFile] = &[BiosFile {
     note: "Flycast tem opção \"Enable HLE BIOS\" — roda sem, com menos precisão",
 }];
 
+/// NAOMI / NAOMI 2 no Flycast: BIOS do MAME em `dc/` (docs.libretro.com,
+/// library/flycast — "BIOS from MAME"). Opcionais pra Dreamcast, mas o jogo
+/// de NAOMI não roda sem a da placa; as de jogo específico só valem pra ele.
+/// Sem MD5: os sets do MAME variam de versão.
+const NAOMI: &[BiosFile] = &[
+    BiosFile {
+        filename: "naomi.zip",
+        subfolder: Some("dc"),
+        md5: &[],
+        required: true,
+        note: "BIOS da placa NAOMI (set do MAME) — os jogos de NAOMI não rodam sem",
+    },
+    BiosFile {
+        filename: "naomi2.zip",
+        subfolder: Some("dc"),
+        md5: &[],
+        required: false,
+        note: "BIOS da NAOMI 2 (set do MAME) — só pros jogos de NAOMI 2",
+    },
+    BiosFile {
+        filename: "hod2bios.zip",
+        subfolder: Some("dc"),
+        md5: &[],
+        required: false,
+        note: "BIOS própria de The House of the Dead 2",
+    },
+    BiosFile {
+        filename: "f355bios.zip",
+        subfolder: Some("dc"),
+        md5: &[],
+        required: false,
+        note: "BIOS de Ferrari F355 Challenge (twin/deluxe)",
+    },
+    BiosFile {
+        filename: "f355dlx.zip",
+        subfolder: Some("dc"),
+        md5: &[],
+        required: false,
+        note: "BIOS de Ferrari F355 Challenge (deluxe)",
+    },
+    BiosFile {
+        filename: "airlbios.zip",
+        subfolder: Some("dc"),
+        md5: &[],
+        required: false,
+        note: "BIOS de Airline Pilots (deluxe)",
+    },
+];
+
+const ATOMISWAVE: &[BiosFile] = &[BiosFile {
+    filename: "awbios.zip",
+    subfolder: Some("dc"),
+    md5: &[],
+    required: true,
+    note: "BIOS da placa Atomiswave (set do MAME) — os jogos não rodam sem",
+}];
+
 const ARCADE: &[BiosFile] = &[
     BiosFile {
         filename: "neogeo.zip",
@@ -355,6 +412,8 @@ pub fn bios_files_for_system(system_id: &str) -> &'static [BiosFile] {
         "psx" => PSX,
         "saturn" => SATURN,
         "dreamcast" => DREAMCAST,
+        "naomi" => NAOMI,
+        "atomiswave" => ATOMISWAVE,
         "arcade" => ARCADE,
         "segacd" => SEGA_CD,
         "pcenginecd" => PC_ENGINE_CD,
@@ -374,6 +433,8 @@ pub const KNOWN_SYSTEMS: &[&str] = &[
     "psx",
     "saturn",
     "dreamcast",
+    "naomi",
+    "atomiswave",
     "arcade",
     "segacd",
     "pcenginecd",
