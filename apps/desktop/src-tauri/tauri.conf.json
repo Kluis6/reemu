@@ -53,6 +53,11 @@
     ],
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "windows": {
+      "nsis": {
+        "languages": ["PortugueseBR", "English", "Spanish"]
+      }
     }
   },
   "plugins": {

@@ -28,6 +28,7 @@ import {
   updateVideoConfig,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
+import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
 
 // Presets embutidos com nome/descrição traduzidos (`video.presets.<id>`).
@@ -56,7 +57,8 @@ export function SettingsVideo() {
     mutationFn: (name: string) => setShader(name, 'default'),
     onSuccess: (_, name) => {
       qc.invalidateQueries({ queryKey: ['shader-info'] })
-      const curated = data?.curated.find((c) => c.id === name)?.label
+      const c = data?.curated.find((x) => x.id === name)
+      const curated = c && curatedText(t, c.id, 'label', c.label)
       const base = name.split(/[/\\]/).pop() ?? name
       push(sysToast(t('video.defaultShader', { name: isBuiltin(name) ? presetTitle(name) : (curated ?? base) }), 'Success'))
     },
@@ -125,11 +127,11 @@ export function SettingsVideo() {
           label={{
             children: (
               <span style={{ display: 'flex', flexDirection: 'column' }}>
-                <Text as="strong" weight="semibold">{c.label}</Text>
+                <Text as="strong" weight="semibold">{curatedText(t, c.id, 'label', c.label)}</Text>
                 <Caption1>
                   {c.available
-                    ? c.desc
-                    : t('video.needsPack', { desc: c.desc })}
+                    ? curatedText(t, c.id, 'desc', c.desc)
+                    : t('video.needsPack', { desc: curatedText(t, c.id, 'desc', c.desc) })}
                 </Caption1>
               </span>
             ),

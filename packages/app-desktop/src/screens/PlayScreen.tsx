@@ -33,6 +33,7 @@ import {
   loadGame,
   loadSaveState,
   nativeVideoActive,
+  onHotkeyAction,
   pauseBackgroundUrl,
   pollFrame,
   FRAME_HEADER,
@@ -588,6 +589,29 @@ export function PlayScreen() {
     }
     return scheduleUnload;
   }, [launch, romId, setFocus, params, push]);
+
+  // QuickSave/QuickLoad pelo atalho de sistema: o backend faz e avisa por
+  // `hotkey-action`; o aviso (já traduzido) sai daqui.
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let alive = true;
+    void onHotkeyAction((e) => {
+      const save = e.action === "quick_save";
+      if (e.ok) {
+        qc.invalidateQueries({ queryKey: ["save-states", romId] });
+        push(sysToast(t(save ? "play.quickSaved" : "play.quickLoaded"), "Success"));
+      } else {
+        push(errorToast(e.message, save ? "quickSave" : "quickLoad"));
+      }
+    }).then((fn) => {
+      if (alive) off = fn;
+      else fn();
+    });
+    return () => {
+      alive = false;
+      off?.();
+    };
+  }, [push, qc, romId, t]);
 
   const quickSave = useMutation({
     mutationFn: () => saveState(romId, 0),

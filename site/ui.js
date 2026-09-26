@@ -4,6 +4,7 @@
 // "reduzir movimento") a página aparece inteira e parada.
 import { setTheme } from "./vendor/fluent-web-components-3.1.3.min.js";
 import theme from "./vendor/reemu-theme.js";
+import { lang, t } from "./i18n.js";
 
 setTheme(theme);
 
@@ -15,12 +16,12 @@ const onScroll = () => header.classList.toggle("scrolled", scrollY > 12);
 addEventListener("scroll", onScroll, { passive: true });
 onScroll();
 
-// Contador de 0 até `data-to` (com `data-decimals` casas, vírgula pt-BR).
+// Contador de 0 até `data-to` (com `data-decimals` casas, no idioma ativo).
 function countUp(el) {
   const to = Number(el.dataset.to);
   const decimals = Number(el.dataset.decimals || 0);
   const fmt = (v) =>
-    v.toLocaleString("pt-BR", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    v.toLocaleString(lang(), { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   if (reduceMotion) {
     el.textContent = fmt(to);
     return;
@@ -118,11 +119,11 @@ document.querySelectorAll(".shot-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       try {
         await navigator.clipboard.writeText(key);
-        btn.textContent = "Chave copiada!";
+        btn.textContent = t("pix.copied");
       } catch {
-        btn.textContent = "Copie a chave acima";
+        btn.textContent = t("pix.manual");
       }
-      setTimeout(() => (btn.textContent = "Copiar chave Pix"), 2500);
+      setTimeout(() => (btn.textContent = t("pix.copy")), 2500);
     });
   });
   if (grid && shown === 0) {
@@ -136,14 +137,14 @@ document.querySelectorAll(".share-btn").forEach((btn) => {
   btn.addEventListener("click", async () => {
     const data = {
       title: "ReEmu",
-      text: "ReEmu: seus jogos clássicos com cara de console. Grátis para Linux e Windows.",
+      text: t("share.text"),
       url: "https://kluis6.github.io/reemu/",
     };
     try {
       if (navigator.share) await navigator.share(data);
       else {
         await navigator.clipboard.writeText(data.url);
-        btn.textContent = "Link copiado!";
+        btn.textContent = t("share.copied");
       }
     } catch {
       // compartilhamento cancelado — nada a fazer

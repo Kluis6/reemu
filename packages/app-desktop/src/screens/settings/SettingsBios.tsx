@@ -20,6 +20,7 @@ import { platformLabel } from '../../lib/platform'
 import { LoadingState } from '../../components/EmptyState'
 import { errorToast, sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
+import { biosNote } from '../../lib/backendText'
 import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
@@ -148,7 +149,7 @@ export function SettingsBios() {
                           </Badge>
                         )}
                       </Body1>
-                      <Caption1>{f.note}</Caption1>
+                      <Caption1>{biosNote(t, f.filename, f.note)}</Caption1>
                     </span>
                     <span className={styles.actions}>
                       {!f.present && (

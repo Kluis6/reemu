@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ReEmu — React Emulator Frontend</title>
-    <meta
+    <meta data-i18n-attr="content=meta.description"
       name="description"
       content="ReEmu: frontend de emulação com cores libretro para Linux e Windows. Biblioteca com capas, shaders CRT, molduras, save states e navegação completa pelo controle."
     />
     <meta name="author" content="Luis Julio" />
     <meta property="og:title" content="ReEmu — React Emulator Frontend" />
-    <meta
+    <meta data-i18n-attr="content=meta.og"
       property="og:description"
       content="Seus jogos clássicos com cara de console. Grátis e de código aberto, para Linux e Windows."
     />
@@ -25,21 +25,27 @@
       document.documentElement.classList.add("js");
     </script>
     <!-- Fluent UI 2 (web components) + tema: ver vendor/README.md -->
+    <script type="module" src="i18n.js"></script>
     <script type="module" src="ui.js"></script>
     <script type="module" src="app.js"></script>
   </head>
   <body>
-    <a class="skip" href="#conteudo">Pular para o conteúdo</a>
+    <a data-i18n="skip" class="skip" href="#conteudo">Pular para o conteúdo</a>
 
     <header class="top">
       <div class="wrap top-row">
-        <a class="wordmark" href="./" aria-label="ReEmu — início">Re<span>Emu</span></a>
-        <nav class="nav" aria-label="Seções">
-          <fluent-anchor-button class="nav-link" appearance="subtle" href="#recursos">Recursos</fluent-anchor-button>
-          <fluent-anchor-button class="nav-link" appearance="subtle" href="#praticidade">Praticidade</fluent-anchor-button>
-          <fluent-anchor-button class="nav-link" appearance="subtle" href="#telas">Telas</fluent-anchor-button>
-          <fluent-anchor-button class="nav-link" appearance="subtle" href="#apoie">Apoie</fluent-anchor-button>
-          <fluent-anchor-button appearance="primary" href="#download">Baixar</fluent-anchor-button>
+        <a data-i18n-attr="aria-label=nav.home" class="wordmark" href="./" aria-label="ReEmu — início">Re<span>Emu</span></a>
+        <nav data-i18n-attr="aria-label=nav.aria" class="nav" aria-label="Seções">
+          <fluent-anchor-button data-i18n="nav.features" class="nav-link" appearance="subtle" href="#recursos">Recursos</fluent-anchor-button>
+          <fluent-anchor-button data-i18n="nav.ease" class="nav-link" appearance="subtle" href="#praticidade">Praticidade</fluent-anchor-button>
+          <fluent-anchor-button data-i18n="nav.screens" class="nav-link" appearance="subtle" href="#telas">Telas</fluent-anchor-button>
+          <fluent-anchor-button data-i18n="nav.support" class="nav-link" appearance="subtle" href="#apoie">Apoie</fluent-anchor-button>
+          <fluent-anchor-button data-i18n="nav.download" appearance="primary" href="#download">Baixar</fluent-anchor-button>
+          <div class="langs" role="group" aria-label="Idioma / Language / Idioma">
+            <fluent-button size="small" appearance="subtle" data-lang="pt-BR" lang="pt-BR">PT</fluent-button>
+            <fluent-button size="small" appearance="subtle" data-lang="en" lang="en">EN</fluent-button>
+            <fluent-button size="small" appearance="subtle" data-lang="es" lang="es">ES</fluent-button>
+          </div>
         </nav>
       </div>
     </header>
@@ -73,13 +79,13 @@
             height="941"
             onerror="this.remove()"
           />
-          <fluent-badge class="reveal" appearance="outline" color="informative" shape="circular" size="large">
+          <fluent-badge data-i18n="hero.badge" class="reveal" appearance="outline" color="informative" shape="circular" size="large">
             Frontend de emulação · Linux e Windows · Grátis
           </fluent-badge>
-          <h1 class="reveal">
+          <h1 data-i18n="hero.title" class="reveal">
             Seus jogos clássicos, com cara de <span class="grad">console</span>.
           </h1>
-          <p class="lead reveal">
+          <p data-i18n="hero.lead" class="lead reveal">
             O ReEmu junta sua coleção numa biblioteca bonita, com capas, e roda tudo com
             os cores <fluent-link inline href="https://www.libretro.com/">libretro</fluent-link>,
             os mesmos do RetroArch. Shaders CRT, molduras, save states com miniatura e
@@ -88,17 +94,17 @@
 
           <div id="primary" class="primary reveal" aria-live="polite">
             <fluent-spinner size="small"></fluent-spinner>
-            <fluent-text size="200">Procurando a versão mais recente…</fluent-text>
+            <fluent-text data-i18n="hero.loading" size="200">Procurando a versão mais recente…</fluent-text>
           </div>
-          <p class="note reveal">
+          <p data-i18n="hero.note" class="note reveal">
             Código aberto (MIT). Depois de instalado, o ReEmu se atualiza sozinho.
           </p>
 
           <dl class="stats reveal">
-            <div><dt><span class="count" data-to="120">120</span>+</dt><dd>cores no catálogo</dd></div>
-            <div><dt><span class="count" data-to="40">40</span>+</dt><dd>sistemas reconhecidos</dd></div>
-            <div><dt><span class="count" data-to="99.7" data-decimals="1">99,7</span>%</dt><dd>dos presets de shader</dd></div>
-            <div><dt>1</dt><dd>controle para tudo</dd></div>
+            <div><dt><span class="count" data-to="120">120</span>+</dt><dd data-i18n="stats.cores">cores no catálogo</dd></div>
+            <div><dt><span class="count" data-to="40">40</span>+</dt><dd data-i18n="stats.systems">sistemas reconhecidos</dd></div>
+            <div><dt><span class="count" data-to="99.7" data-decimals="1">99,7</span>%</dt><dd data-i18n="stats.shaders">dos presets de shader</dd></div>
+            <div><dt>1</dt><dd data-i18n="stats.pad">controle para tudo</dd></div>
           </dl>
         </div>
       </section>
@@ -106,49 +112,49 @@
       <!-- ─────────────── Recursos ─────────────── -->
       <section id="recursos" class="section">
         <div class="wrap">
-          <p class="kicker reveal">Recursos</p>
-          <h2 class="reveal">Tudo o que um frontend moderno precisa ter</h2>
-          <p class="section-lead reveal">
+          <p data-i18n="features.kicker" class="kicker reveal">Recursos</p>
+          <h2 data-i18n="features.title" class="reveal">Tudo o que um frontend moderno precisa ter</h2>
+          <p data-i18n="features.lead" class="section-lead reveal">
             Pensado para a TV da sala e para o PC de mesa: interface no estilo console,
             rápida, e com os detalhes que fazem diferença no dia a dia.
           </p>
 
           <div class="features">
             <article class="card feature reveal">
-              <h3>Biblioteca com capas</h3>
-              <p>Aponte a pasta das ROMs e o ReEmu identifica cada jogo (inclusive por hash) e busca capas e informações no ScreenScraper, com o TheGamesDB de reserva.</p>
+              <h3 data-i18n="f1.t">Biblioteca com capas</h3>
+              <p data-i18n="f1.p">Aponte a pasta das ROMs e o ReEmu identifica cada jogo (inclusive por hash) e busca capas e informações no ScreenScraper, com o TheGamesDB de reserva.</p>
             </article>
             <article class="card feature reveal">
-              <h3>Shaders CRT e LCD</h3>
-              <p>99,7% dos presets <code>.slangp</code> do RetroArch funcionam: escolha o visual de tubo, de portátil ou de fliperama pela interface, com ajuste de parâmetros.</p>
+              <h3 data-i18n="f2.t">Shaders CRT e LCD</h3>
+              <p data-i18n="f2.p">99,7% dos presets <code>.slangp</code> do RetroArch funcionam: escolha o visual de tubo, de portátil ou de fliperama pela interface, com ajuste de parâmetros.</p>
             </article>
             <article class="card feature reveal">
-              <h3>Molduras (bezels)</h3>
-              <p>Baixe o pacote do The Bezel Project ou importe as suas. A moldura se encaixa em volta da imagem do jogo, como num gabinete de verdade.</p>
+              <h3 data-i18n="f3.t">Molduras (bezels)</h3>
+              <p data-i18n="f3.p">Baixe o pacote do The Bezel Project ou importe as suas. A moldura se encaixa em volta da imagem do jogo, como num gabinete de verdade.</p>
             </article>
             <article class="card feature reveal">
-              <h3>Save states com miniatura</h3>
-              <p>Vários espaços de salvamento, cada um com a imagem do momento. O save interno do jogo (SRAM) é gravado sozinho, até ao fechar a janela.</p>
+              <h3 data-i18n="f4.t">Save states com miniatura</h3>
+              <p data-i18n="f4.p">Vários espaços de salvamento, cada um com a imagem do momento. O save interno do jogo (SRAM) é gravado sozinho, até ao fechar a janela.</p>
             </article>
             <article class="card feature reveal">
-              <h3>Tudo pelo controle</h3>
-              <p>Menus, biblioteca, configurações e o menu de pausa navegáveis pelo gamepad, com dicas de botões na tela. Mapeamento por controle e atalhos de salvar/carregar.</p>
+              <h3 data-i18n="f5.t">Tudo pelo controle</h3>
+              <p data-i18n="f5.p">Menus, biblioteca, configurações e o menu de pausa navegáveis pelo gamepad, com dicas de botões na tela. Mapeamento por controle e atalhos de salvar/carregar.</p>
             </article>
             <article class="card feature reveal">
-              <h3>Cores e BIOS sem mistério</h3>
-              <p>Catálogo com mais de 120 cores libretro, baixados com um clique. A tela de BIOS mostra, por sistema, o que falta e importa o arquivo certo para o lugar certo.</p>
+              <h3 data-i18n="f6.t">Cores e BIOS sem mistério</h3>
+              <p data-i18n="f6.p">Catálogo com mais de 120 cores libretro, baixados com um clique. A tela de BIOS mostra, por sistema, o que falta e importa o arquivo certo para o lugar certo.</p>
             </article>
             <article class="card feature reveal">
-              <h3>Temas e papel de parede</h3>
-              <p>Temas com fundo animado em quatro cores, papel de parede na tela inicial e um tema de alto contraste para quem precisa de mais legibilidade.</p>
+              <h3 data-i18n="f7.t">Temas e papel de parede</h3>
+              <p data-i18n="f7.p">Temas com fundo animado em quatro cores, papel de parede na tela inicial e um tema de alto contraste para quem precisa de mais legibilidade.</p>
             </article>
             <article class="card feature reveal">
-              <h3>Tempo de jogo</h3>
-              <p>O ReEmu conta quanto você jogou cada título e mostra na página do jogo. Perfil com avatar, busca rápida e destaques na tela inicial.</p>
+              <h3 data-i18n="f8.t">Tempo de jogo</h3>
+              <p data-i18n="f8.p">O ReEmu conta quanto você jogou cada título e mostra na página do jogo. Perfil com avatar, busca rápida e destaques na tela inicial.</p>
             </article>
             <article class="card feature reveal">
-              <h3>Atualização automática</h3>
-              <p>Quando sai versão nova, um aviso aparece e o sino da barra lateral mostra o resumo das mudanças. Um clique e o ReEmu se atualiza e reinicia.</p>
+              <h3 data-i18n="f9.t">Atualização automática</h3>
+              <p data-i18n="f9.p">Quando sai versão nova, um aviso aparece e o sino da barra lateral mostra o resumo das mudanças. Um clique e o ReEmu se atualiza e reinicia.</p>
             </article>
           </div>
         </div>
@@ -157,97 +163,97 @@
       <!-- ─────────────── Praticidade ─────────────── -->
       <section id="praticidade" class="section section-alt">
         <div class="wrap">
-          <p class="kicker reveal">Praticidade</p>
-          <h2 class="reveal">Do download ao primeiro jogo em três passos</h2>
+          <p data-i18n="ease.kicker" class="kicker reveal">Praticidade</p>
+          <h2 data-i18n="ease.title" class="reveal">Do download ao primeiro jogo em três passos</h2>
 
           <ol class="steps">
             <li class="card step reveal">
               <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">1</fluent-badge>
-              <h3>Instale</h3>
-              <p>Baixe o instalador para Windows ou o AppImage para Linux. Nada de dependências para caçar.</p>
+              <h3 data-i18n="s1.t">Instale</h3>
+              <p data-i18n="s1.p">Baixe o instalador para Windows ou o AppImage para Linux. Nada de dependências para caçar.</p>
             </li>
             <li class="card step reveal">
               <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">2</fluent-badge>
-              <h3>Aponte suas ROMs</h3>
-              <p>Escolha a pasta. O ReEmu reconhece os sistemas, abre arquivos compactados e busca as capas sozinho.</p>
+              <h3 data-i18n="s2.t">Aponte suas ROMs</h3>
+              <p data-i18n="s2.p">Escolha a pasta. O ReEmu reconhece os sistemas, abre arquivos compactados e busca as capas sozinho.</p>
             </li>
             <li class="card step reveal">
               <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">3</fluent-badge>
-              <h3>Jogue</h3>
-              <p>Baixe o core do sistema pelo catálogo, escolha o jogo e aperte A. Seu progresso fica salvo.</p>
+              <h3 data-i18n="s3.t">Jogue</h3>
+              <p data-i18n="s3.p">Baixe o core do sistema pelo catálogo, escolha o jogo e aperte A. Seu progresso fica salvo.</p>
             </li>
           </ol>
 
-          <h3 class="sub-title reveal">O que o ReEmu faz por você</h3>
+          <h3 data-i18n="cmp.title" class="sub-title reveal">O que o ReEmu faz por você</h3>
           <div class="compare-wrap reveal">
             <table class="compare">
               <thead>
                 <tr>
-                  <th scope="col">Tarefa</th>
-                  <th scope="col">Montando tudo à mão</th>
-                  <th scope="col" class="us">Com o ReEmu</th>
+                  <th data-i18n="cmp.task" scope="col">Tarefa</th>
+                  <th data-i18n="cmp.manual" scope="col">Montando tudo à mão</th>
+                  <th data-i18n="cmp.us" scope="col" class="us">Com o ReEmu</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <th scope="row">Emuladores</th>
-                  <td>Achar, baixar e configurar um para cada sistema</td>
-                  <td class="us">Catálogo de cores libretro, instalados com um clique</td>
+                  <th data-i18n="cmp.r1" scope="row">Emuladores</th>
+                  <td data-i18n="cmp.r1a">Achar, baixar e configurar um para cada sistema</td>
+                  <td data-i18n="cmp.r1b" class="us">Catálogo de cores libretro, instalados com um clique</td>
                 </tr>
                 <tr>
-                  <th scope="row">BIOS</th>
-                  <td>Descobrir nomes, versões e pastas de cada arquivo</td>
-                  <td class="us">Lista por sistema do que falta, com importação guiada</td>
+                  <th data-i18n="cmp.r2" scope="row">BIOS</th>
+                  <td data-i18n="cmp.r2a">Descobrir nomes, versões e pastas de cada arquivo</td>
+                  <td data-i18n="cmp.r2b" class="us">Lista por sistema do que falta, com importação guiada</td>
                 </tr>
                 <tr>
-                  <th scope="row">Capas e informações</th>
-                  <td>Procurar imagens e renomear uma por uma</td>
-                  <td class="us">Busca automática no ScreenScraper e no TheGamesDB</td>
+                  <th data-i18n="cmp.r3" scope="row">Capas e informações</th>
+                  <td data-i18n="cmp.r3a">Procurar imagens e renomear uma por uma</td>
+                  <td data-i18n="cmp.r3b" class="us">Busca automática no ScreenScraper e no TheGamesDB</td>
                 </tr>
                 <tr>
-                  <th scope="row">Visual retrô</th>
-                  <td>Editar presets e caminhos de shader em arquivos</td>
-                  <td class="us">Presets escolhidos e ajustados pela interface</td>
+                  <th data-i18n="cmp.r4" scope="row">Visual retrô</th>
+                  <td data-i18n="cmp.r4a">Editar presets e caminhos de shader em arquivos</td>
+                  <td data-i18n="cmp.r4b" class="us">Presets escolhidos e ajustados pela interface</td>
                 </tr>
                 <tr>
-                  <th scope="row">Navegação</th>
-                  <td>Teclado e mouse para configurar</td>
-                  <td class="us">Tudo pelo controle, no sofá</td>
+                  <th data-i18n="cmp.r5" scope="row">Navegação</th>
+                  <td data-i18n="cmp.r5a">Teclado e mouse para configurar</td>
+                  <td data-i18n="cmp.r5b" class="us">Tudo pelo controle, no sofá</td>
                 </tr>
                 <tr>
-                  <th scope="row">Atualizações</th>
-                  <td>Voltar ao site e reinstalar</td>
-                  <td class="us">Aviso no app e atualização com um clique</td>
+                  <th data-i18n="cmp.r6" scope="row">Atualizações</th>
+                  <td data-i18n="cmp.r6a">Voltar ao site e reinstalar</td>
+                  <td data-i18n="cmp.r6b" class="us">Aviso no app e atualização com um clique</td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <h3 class="sub-title reveal">Tecnologia moderna por baixo</h3>
+          <h3 data-i18n="tech.title" class="sub-title reveal">Tecnologia moderna por baixo</h3>
           <div class="tech">
             <div class="card tech-item reveal">
-              <strong>Núcleo em Rust</strong>
-              <span>Rápido e com gestão de memória segura, do carregamento dos cores ao áudio.</span>
+              <strong data-i18n="t1.t">Núcleo em Rust</strong>
+              <span data-i18n="t1.p">Rápido e com gestão de memória segura, do carregamento dos cores ao áudio.</span>
             </div>
             <div class="card tech-item reveal">
-              <strong>Core em processo separado</strong>
-              <span>Se um core travar, a interface continua de pé e o resto do app não cai junto.</span>
+              <strong data-i18n="t2.t">Core em processo separado</strong>
+              <span data-i18n="t2.p">Se um core travar, a interface continua de pé e o resto do app não cai junto.</span>
             </div>
             <div class="card tech-item reveal">
-              <strong>Vulkan e OpenGL</strong>
-              <span>Renderização por hardware para os cores 3D, com pipeline de shaders na GPU.</span>
+              <strong data-i18n="t3.t">Vulkan e OpenGL</strong>
+              <span data-i18n="t3.p">Renderização por hardware para os cores 3D, com pipeline de shaders na GPU.</span>
             </div>
             <div class="card tech-item reveal">
-              <strong>Áudio sem estalos</strong>
-              <span>Controle dinâmico de taxa (DRC) mantém som e imagem em sincronia.</span>
+              <strong data-i18n="t4.t">Áudio sem estalos</strong>
+              <span data-i18n="t4.p">Controle dinâmico de taxa (DRC) mantém som e imagem em sincronia.</span>
             </div>
             <div class="card tech-item reveal">
-              <strong>Interface Fluent 2</strong>
-              <span>React com o design system da Microsoft, no espírito do modo console do Xbox.</span>
+              <strong data-i18n="t5.t">Interface Fluent 2</strong>
+              <span data-i18n="t5.p">React com o design system da Microsoft, no espírito do modo console do Xbox.</span>
             </div>
             <div class="card tech-item reveal">
-              <strong>Senhas no chaveiro do sistema</strong>
-              <span>Credenciais do ScreenScraper e do TheGamesDB guardadas pelo próprio sistema operacional.</span>
+              <strong data-i18n="t6.t">Senhas no chaveiro do sistema</strong>
+              <span data-i18n="t6.p">Credenciais do ScreenScraper e do TheGamesDB guardadas pelo próprio sistema operacional.</span>
             </div>
           </div>
         </div>
@@ -256,40 +262,40 @@
       <!-- ─────────────── Telas ─────────────── -->
       <section id="telas" class="section">
         <div class="wrap">
-          <p class="kicker reveal">Telas</p>
-          <h2 class="reveal">Veja o ReEmu em ação</h2>
+          <p data-i18n="screens.kicker" class="kicker reveal">Telas</p>
+          <h2 data-i18n="screens.title" class="reveal">Veja o ReEmu em ação</h2>
           <!-- Capturas em site/screens/ — enquanto o arquivo não existe, o
                quadro mostra "Captura em breve". -->
           <div class="gallery">
             <figure class="shot shot-wide reveal">
-              <button type="button" class="shot-btn" aria-label="Ampliar: tela inicial">
-                <img src="screens/inicio.png" alt="Tela inicial do ReEmu com destaques e jogos recentes" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
+              <button data-i18n-attr="aria-label=sc1.btn" type="button" class="shot-btn" aria-label="Ampliar: tela inicial">
+                <img data-i18n-attr="alt=sc1.alt" src="screens/inicio.png" alt="Tela inicial do ReEmu com destaques e jogos recentes" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
               </button>
-              <figcaption>Tela inicial com destaques e jogos recentes</figcaption>
+              <figcaption data-i18n="sc1.cap">Tela inicial com destaques e jogos recentes</figcaption>
             </figure>
             <figure class="shot reveal">
-              <button type="button" class="shot-btn" aria-label="Ampliar: biblioteca">
-                <img src="screens/biblioteca.png" alt="Biblioteca de jogos com capas" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
+              <button data-i18n-attr="aria-label=sc2.btn" type="button" class="shot-btn" aria-label="Ampliar: biblioteca">
+                <img data-i18n-attr="alt=sc2.alt" src="screens/biblioteca.png" alt="Biblioteca de jogos com capas" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
               </button>
-              <figcaption>Biblioteca por sistema, com capas</figcaption>
+              <figcaption data-i18n="sc2.cap">Biblioteca por sistema, com capas</figcaption>
             </figure>
             <figure class="shot reveal">
-              <button type="button" class="shot-btn" aria-label="Ampliar: jogo com shader">
-                <img src="screens/jogo.png" alt="Jogo rodando com shader CRT e moldura" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
+              <button data-i18n-attr="aria-label=sc3.btn" type="button" class="shot-btn" aria-label="Ampliar: jogo com shader">
+                <img data-i18n-attr="alt=sc3.alt" src="screens/jogo.png" alt="Jogo rodando com shader CRT e moldura" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
               </button>
-              <figcaption>Jogo com shader CRT e moldura</figcaption>
+              <figcaption data-i18n="sc3.cap">Jogo com shader CRT e moldura</figcaption>
             </figure>
             <figure class="shot reveal">
-              <button type="button" class="shot-btn" aria-label="Ampliar: menu de pausa">
-                <img src="screens/pausa.png" alt="Menu de pausa com save states e miniaturas" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
+              <button data-i18n-attr="aria-label=sc4.btn" type="button" class="shot-btn" aria-label="Ampliar: menu de pausa">
+                <img data-i18n-attr="alt=sc4.alt" src="screens/pausa.png" alt="Menu de pausa com save states e miniaturas" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
               </button>
-              <figcaption>Menu de pausa e save states</figcaption>
+              <figcaption data-i18n="sc4.cap">Menu de pausa e save states</figcaption>
             </figure>
             <figure class="shot reveal">
-              <button type="button" class="shot-btn" aria-label="Ampliar: catálogo de cores">
-                <img src="screens/cores.png" alt="Catálogo de cores para download" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
+              <button data-i18n-attr="aria-label=sc5.btn" type="button" class="shot-btn" aria-label="Ampliar: catálogo de cores">
+                <img data-i18n-attr="alt=sc5.alt" src="screens/cores.png" alt="Catálogo de cores para download" loading="lazy" onerror="this.closest('figure').classList.add('missing')" />
               </button>
-              <figcaption>Catálogo de cores e BIOS</figcaption>
+              <figcaption data-i18n="sc5.cap">Catálogo de cores e BIOS</figcaption>
             </figure>
           </div>
         </div>
@@ -298,9 +304,9 @@
       <!-- ─────────────── Sistemas ─────────────── -->
       <section class="section section-alt">
         <div class="wrap">
-          <p class="kicker reveal">Sistemas</p>
-          <h2 class="reveal">Do Atari ao PlayStation</h2>
-          <div class="systems reveal" role="list" aria-label="Alguns dos sistemas suportados">
+          <p data-i18n="sys.kicker" class="kicker reveal">Sistemas</p>
+          <h2 data-i18n="sys.title" class="reveal">Do Atari ao PlayStation</h2>
+          <div data-i18n-attr="aria-label=sys.aria" class="systems reveal" role="list" aria-label="Alguns dos sistemas suportados">
             <fluent-badge role="listitem" appearance="outline" size="large">NES</fluent-badge>
             <fluent-badge role="listitem" appearance="outline" size="large">Super Nintendo</fluent-badge>
             <fluent-badge role="listitem" appearance="outline" size="large">Nintendo 64</fluent-badge>
@@ -336,9 +342,9 @@
             <fluent-badge role="listitem" appearance="outline" size="large">Amstrad CPC</fluent-badge>
             <fluent-badge role="listitem" appearance="outline" size="large">DOS</fluent-badge>
             <fluent-badge role="listitem" appearance="outline" size="large">ScummVM</fluent-badge>
-            <fluent-badge role="listitem" appearance="ghost" size="large">e mais…</fluent-badge>
+            <fluent-badge data-i18n="sys.more" role="listitem" appearance="ghost" size="large">e mais…</fluent-badge>
           </div>
-          <p class="fine reveal">
+          <p data-i18n="sys.fine" class="fine reveal">
             O ReEmu não inclui jogos nem BIOS. Use cópias dos seus próprios jogos.
           </p>
         </div>
@@ -347,9 +353,9 @@
       <!-- ─────────────── Apoie ─────────────── -->
       <section id="apoie" class="section">
         <div class="wrap">
-          <p class="kicker reveal">Apoie</p>
-          <h2 class="reveal">Ajude o ReEmu a continuar evoluindo</h2>
-          <p class="section-lead reveal">
+          <p data-i18n="sup.kicker" class="kicker reveal">Apoie</p>
+          <h2 data-i18n="sup.title" class="reveal">Ajude o ReEmu a continuar evoluindo</h2>
+          <p data-i18n="sup.lead" class="section-lead reveal">
             O ReEmu é gratuito, sem anúncios e de código aberto. Doações pagam o tempo
             de desenvolvimento, os testes em hardware de verdade (Windows, Linux,
             controles, placas de vídeo) e a hospedagem. Qualquer valor ajuda.
@@ -361,46 +367,46 @@
           <div class="donate" id="donate-methods">
             <div class="card donate-card reveal" data-link="">
               <strong>GitHub Sponsors</strong>
-              <span>Apoio mensal ou único, direto pelo GitHub.</span>
-              <fluent-anchor-button appearance="primary" target="_blank" rel="noopener">Apoiar no GitHub</fluent-anchor-button>
+              <span data-i18n="d1.p">Apoio mensal ou único, direto pelo GitHub.</span>
+              <fluent-anchor-button data-i18n="d1.b" appearance="primary" target="_blank" rel="noopener">Apoiar no GitHub</fluent-anchor-button>
             </div>
             <div class="card donate-card reveal" data-pix="">
               <strong>Pix</strong>
-              <span>Transferência instantânea, sem taxa.</span>
+              <span data-i18n="d2.p">Transferência instantânea, sem taxa.</span>
               <code class="pix-key"></code>
-              <fluent-button class="pix-copy" appearance="primary">Copiar chave Pix</fluent-button>
+              <fluent-button data-i18n="d2.b" class="pix-copy" appearance="primary">Copiar chave Pix</fluent-button>
             </div>
             <div class="card donate-card reveal" data-link="">
               <strong>Ko-fi</strong>
-              <span>Pague um café para o projeto, sem cadastro.</span>
-              <fluent-anchor-button appearance="primary" target="_blank" rel="noopener">Apoiar no Ko-fi</fluent-anchor-button>
+              <span data-i18n="d3.p">Pague um café para o projeto, sem cadastro.</span>
+              <fluent-anchor-button data-i18n="d3.b" appearance="primary" target="_blank" rel="noopener">Apoiar no Ko-fi</fluent-anchor-button>
             </div>
             <div class="card donate-card reveal" data-link="">
               <strong>PayPal</strong>
-              <span>Cartão de crédito de qualquer país.</span>
-              <fluent-anchor-button appearance="primary" target="_blank" rel="noopener">Doar pelo PayPal</fluent-anchor-button>
+              <span data-i18n="d4.p">Cartão de crédito de qualquer país.</span>
+              <fluent-anchor-button data-i18n="d4.b" appearance="primary" target="_blank" rel="noopener">Doar pelo PayPal</fluent-anchor-button>
             </div>
           </div>
-          <fluent-message-bar class="donate-soon reveal" id="donate-soon" intent="info" layout="multiline" hidden>
+          <fluent-message-bar data-i18n="sup.soon" class="donate-soon reveal" id="donate-soon" intent="info" layout="multiline" hidden>
             As formas de doação estão sendo configuradas. Enquanto isso, dá para ajudar
             de outros jeitos:
           </fluent-message-bar>
 
           <div class="help">
             <div class="card help-item reveal">
-              <strong>Dê uma estrela</strong>
-              <span>Ajuda mais gente a encontrar o projeto no GitHub.</span>
-              <fluent-anchor-button appearance="outline" href="https://github.com/Kluis6/reemu">Abrir no GitHub</fluent-anchor-button>
+              <strong data-i18n="h1.t">Dê uma estrela</strong>
+              <span data-i18n="h1.p">Ajuda mais gente a encontrar o projeto no GitHub.</span>
+              <fluent-anchor-button data-i18n="h1.b" appearance="outline" href="https://github.com/Kluis6/reemu">Abrir no GitHub</fluent-anchor-button>
             </div>
             <div class="card help-item reveal">
-              <strong>Relate problemas</strong>
-              <span>Um jogo que não abre ou um controle que não responde: conte o que aconteceu.</span>
-              <fluent-anchor-button appearance="outline" href="https://github.com/Kluis6/reemu/issues">Abrir um relato</fluent-anchor-button>
+              <strong data-i18n="h2.t">Relate problemas</strong>
+              <span data-i18n="h2.p">Um jogo que não abre ou um controle que não responde: conte o que aconteceu.</span>
+              <fluent-anchor-button data-i18n="h2.b" appearance="outline" href="https://github.com/Kluis6/reemu/issues">Abrir um relato</fluent-anchor-button>
             </div>
             <div class="card help-item reveal">
-              <strong>Divulgue</strong>
-              <span>Mostre o ReEmu para quem curte jogos clássicos.</span>
-              <fluent-button class="share-btn" appearance="outline">Compartilhar</fluent-button>
+              <strong data-i18n="h3.t">Divulgue</strong>
+              <span data-i18n="h3.p">Mostre o ReEmu para quem curte jogos clássicos.</span>
+              <fluent-button data-i18n="share.button" class="share-btn" appearance="outline">Compartilhar</fluent-button>
             </div>
           </div>
         </div>
@@ -409,8 +415,8 @@
       <!-- ─────────────── Download ─────────────── -->
       <section id="download" class="section section-alt">
         <div class="wrap">
-          <p class="kicker reveal">Download</p>
-          <h2 class="reveal">Todas as versões</h2>
+          <p data-i18n="dl.kicker" class="kicker reveal">Download</p>
+          <h2 data-i18n="dl.title" class="reveal">Todas as versões</h2>
           <div id="releases" class="releases"></div>
         </div>
       </section>
@@ -419,26 +425,26 @@
     <footer class="foot">
       <div class="wrap foot-row">
         <p class="foot-credit">
-          <a class="wordmark small" href="./" aria-label="ReEmu — voltar ao topo">Re<span>Emu</span></a>
-          <span class="foot-by">desenvolvido por Luis Julio</span>
+          <a data-i18n-attr="aria-label=foot.top" class="wordmark small" href="./" aria-label="ReEmu — voltar ao topo">Re<span>Emu</span></a>
+          <span data-i18n="foot.by" class="foot-by">desenvolvido por Luis Julio</span>
         </p>
         <nav class="foot-links" aria-label="Links">
-          <fluent-link href="https://github.com/Kluis6/reemu">Código no GitHub</fluent-link>
-          <fluent-link href="https://github.com/Kluis6/reemu/releases">Releases</fluent-link>
-          <fluent-link href="https://github.com/Kluis6/reemu/issues">Reportar um problema</fluent-link>
+          <fluent-link data-i18n="foot.code" href="https://github.com/Kluis6/reemu">Código no GitHub</fluent-link>
+          <fluent-link data-i18n="foot.releases" href="https://github.com/Kluis6/reemu/releases">Releases</fluent-link>
+          <fluent-link data-i18n="foot.issue" href="https://github.com/Kluis6/reemu/issues">Reportar um problema</fluent-link>
         </nav>
         <fluent-divider class="foot-divider"></fluent-divider>
-        <p class="foot-legal">
+        <p data-i18n="foot.legal" class="foot-legal">
           Licença MIT. Os cores libretro têm licenças próprias e são baixados pelo app.
           O ReEmu não inclui jogos nem BIOS. Interface do site com Fluent UI 2.
         </p>
       </div>
     </footer>
 
-    <fluent-dialog id="lightbox" type="modal" aria-label="Captura ampliada">
+    <fluent-dialog data-i18n-attr="aria-label=lightbox.aria" id="lightbox" type="modal" aria-label="Captura ampliada">
       <fluent-dialog-body>
         <img class="lightbox-img" alt="" />
-        <fluent-button slot="close" appearance="transparent">Fechar</fluent-button>
+        <fluent-button data-i18n="lightbox.close" slot="close" appearance="transparent">Fechar</fluent-button>
       </fluent-dialog-body>
     </fluent-dialog>
   </body>

@@ -6,6 +6,8 @@
 // Monta a interface com os componentes Fluent UI 2 (`fluent-*`, registrados
 // em ui.js). Todo texto vindo da API entra como texto (nunca innerHTML).
 
+import { lang, t } from "./i18n.js";
+
 const REPO = "Kluis6/reemu";
 const API = `https://api.github.com/repos/${REPO}/releases?per_page=30`;
 const RELEASES_PAGE = `https://github.com/${REPO}/releases`;
@@ -13,12 +15,13 @@ const CACHE_KEY = "reemu.releases.v1";
 const CACHE_MS = 10 * 60 * 1000;
 
 // Instaladores reconhecidos. `.sig` e `latest.json` são do auto-update.
+// `key`: rótulo em `dl.<key>` e dica em `dl.<key>Hint` (i18n.js).
 const KINDS = [
-  { re: /-setup\.exe$/i, os: "windows", label: "Instalador (.exe)", hint: "recomendado", main: true },
-  { re: /\.msi$/i, os: "windows", label: "Pacote MSI (.msi)", hint: "instalação gerenciada" },
-  { re: /\.AppImage$/i, os: "linux", label: "AppImage", hint: "qualquer distro · recomendado", main: true },
-  { re: /\.deb$/i, os: "linux", label: "Pacote .deb", hint: "Debian, Ubuntu, Mint" },
-  { re: /\.rpm$/i, os: "linux", label: "Pacote .rpm", hint: "Fedora, openSUSE" },
+  { re: /-setup\.exe$/i, os: "windows", key: "exe", main: true },
+  { re: /\.msi$/i, os: "windows", key: "msi" },
+  { re: /\.AppImage$/i, os: "linux", key: "appimage", main: true },
+  { re: /\.deb$/i, os: "linux", key: "deb" },
+  { re: /\.rpm$/i, os: "linux", key: "rpm" },
 ];
 const OS_NAME = { windows: "Windows", linux: "Linux" };
 
@@ -44,15 +47,23 @@ function visitorOs() {
   return null;
 }
 
-const fmtSize = (b) => `${(b / 1_048_576).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MB`;
+const fmtSize = (b) => `${(b / 1_048_576).toLocaleString(lang(), { maximumFractionDigits: 1 })} MB`;
 const fmtDate = (iso) =>
-  new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
+  new Date(iso).toLocaleDateString(lang(), { day: "2-digit", month: "long", year: "numeric" });
 
 function installers(release) {
   const out = [];
   for (const a of release.assets || []) {
     const kind = KINDS.find((k) => k.re.test(a.name));
-    if (kind) out.push({ ...kind, name: a.name, url: a.browser_download_url, size: a.size });
+    if (kind)
+      out.push({
+        ...kind,
+        label: t(`dl.${kind.key}`),
+        hint: t(`dl.${kind.key}Hint`),
+        name: a.name,
+        url: a.browser_download_url,
+        size: a.size,
+      });
   }
   return out;
 }
@@ -87,7 +98,7 @@ function downloadButton(f, version, primary) {
     "fluent-anchor-button",
     { class: "dl-btn", appearance: primary ? "primary" : "outline", size: "large", href: f.url },
     el("span", { class: "dl-stack" },
-      el("span", { class: "dl-title" }, `Baixar para ${OS_NAME[f.os]} — ${f.label}`),
+      el("span", { class: "dl-title" }, t("dl.for", { os: OS_NAME[f.os], label: f.label })),
       el("span", { class: "dl-sub" }, `${version} · ${fmtSize(f.size)} · ${f.hint}`)),
   );
 }
@@ -98,7 +109,7 @@ function renderPrimary(latest) {
   if (!latest) {
     box.append(
       el("fluent-message-bar", { intent: "info", layout: "multiline" },
-        "Ainda não há versão publicada. Acompanhe em ",
+        t("dl.none"),
         el("fluent-link", { inline: true, href: RELEASES_PAGE }, "GitHub Releases"), "."),
     );
     return;
@@ -111,11 +122,11 @@ function renderPrimary(latest) {
     ? files.filter((f) => f.os === os).sort((a, b) => Number(!!b.main) - Number(!!a.main))
     : files.filter((f) => f.main);
   order.forEach((f, i) => box.append(downloadButton(f, latest.tag_name, i === 0 && !!os)));
-  if (!os) box.append(el("fluent-text", { size: "200", block: true }, "O ReEmu roda em Windows e Linux."));
+  if (!os) box.append(el("fluent-text", { size: "200", block: true }, t("dl.otherOs")));
   if (order.length === 0) {
     box.append(
       el("fluent-anchor-button", { appearance: "primary", size: "large", href: latest.html_url },
-        `Ver a versão ${latest.tag_name} no GitHub`),
+        t("dl.viewTag", { tag: latest.tag_name })),
     );
   }
 }
@@ -143,8 +154,8 @@ function renderRelease(r, isLatest) {
   card.append(
     el("div", { class: "release-head" },
       el("h3", {}, r.name || r.tag_name),
-      isLatest && el("fluent-badge", { appearance: "filled", color: "brand" }, "Mais recente"),
-      r.prerelease && el("fluent-badge", { appearance: "tint", color: "warning" }, "Pré-lançamento"),
+      isLatest && el("fluent-badge", { appearance: "filled", color: "brand" }, t("dl.latest")),
+      r.prerelease && el("fluent-badge", { appearance: "tint", color: "warning" }, t("dl.pre")),
       el("fluent-text", { size: "200", class: "muted" }, fmtDate(r.published_at))),
   );
 
@@ -156,7 +167,7 @@ function renderRelease(r, isLatest) {
       card.append(
         el("fluent-accordion", { class: "notes-more" },
           el("fluent-accordion-item", {},
-            el("span", { slot: "heading" }, "O que mudou"),
+            el("span", { slot: "heading" }, t("dl.changes")),
             notes)),
       );
     }
@@ -167,7 +178,7 @@ function renderRelease(r, isLatest) {
     card.append(el("fluent-divider", { class: "release-divider" }), renderDownloads(files));
   }
   card.append(
-    el("p", { class: "release-foot" }, el("fluent-link", { href: r.html_url }, "Ver no GitHub")),
+    el("p", { class: "release-foot" }, el("fluent-link", { href: r.html_url }, t("dl.viewGithub"))),
   );
   return card;
 }
@@ -176,7 +187,7 @@ function renderList(releases) {
   const box = document.getElementById("releases");
   box.replaceChildren();
   if (!releases.length) {
-    box.append(el("fluent-message-bar", { intent: "info" }, "Nenhuma versão publicada ainda."));
+    box.append(el("fluent-message-bar", { intent: "info" }, t("dl.noReleases")));
     return;
   }
   const latest = releases.find((r) => !r.prerelease) || releases[0];
@@ -187,12 +198,12 @@ function renderError(message) {
   document.getElementById("primary").replaceChildren(
     el("fluent-anchor-button", { class: "dl-btn", appearance: "primary", size: "large", href: `${RELEASES_PAGE}/latest` },
       el("span", { class: "dl-stack" },
-        el("span", { class: "dl-title" }, "Baixar no GitHub Releases"),
-        el("span", { class: "dl-sub" }, "abre a versão mais recente"))),
+        el("span", { class: "dl-title" }, t("dl.fallback")),
+        el("span", { class: "dl-sub" }, t("dl.fallbackSub")))),
   );
   document.getElementById("releases").replaceChildren(
     el("fluent-message-bar", { intent: "warning", layout: "multiline" },
-      message, " ", el("fluent-link", { inline: true, href: RELEASES_PAGE }, "Ver todas no GitHub"), "."),
+      message, " ", el("fluent-link", { inline: true, href: RELEASES_PAGE }, t("dl.viewAll")), "."),
   );
 }
 
@@ -216,16 +227,26 @@ async function loadReleases() {
   return data;
 }
 
+// Guarda o resultado pra remontar no idioma novo sem consultar a API de novo.
+let shown = null;
+function render() {
+  if (!shown) return;
+  if (shown.error) {
+    renderError(shown.error === "rate" ? t("dl.rate") : t("dl.failed"));
+    return;
+  }
+  renderPrimary(shown.releases.find((r) => !r.prerelease) || shown.releases[0] || null);
+  renderList(shown.releases);
+}
+addEventListener("reemu-lang", render);
+
 loadReleases()
   .then((releases) => {
-    renderPrimary(releases.find((r) => !r.prerelease) || releases[0] || null);
-    renderList(releases);
+    shown = { releases };
+    render();
   })
   .catch((e) => {
     console.warn("releases:", e);
-    renderError(
-      e.message === "rate"
-        ? "O GitHub limitou as consultas deste endereço por agora. Tente de novo em alguns minutos."
-        : "Não foi possível carregar a lista de versões.",
-    );
+    shown = { error: e.message === "rate" ? "rate" : "failed" };
+    render();
   });

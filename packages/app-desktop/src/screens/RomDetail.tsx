@@ -78,6 +78,7 @@ import { formatPlayTime } from "../lib/playTime";
 import { useDetailStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
+import { curatedText, presetTitle } from "../lib/backendText";
 
 export function RomDetail() {
   const { t, i18n } = useTranslation();
@@ -627,12 +628,12 @@ export function RomDetail() {
                 </option>
                 {shaderInfo.data.available.map((n) => (
                   <option key={n} value={n}>
-                    {n}
+                    {presetTitle(t, n)}
                   </option>
                 ))}
                 {shaderInfo.data.curated.map((c) => (
                   <option key={c.id} value={c.id} disabled={!c.available}>
-                    {c.label}
+                    {curatedText(t, c.id, "label", c.label)}
                     {c.available ? "" : t("game.shader.needsPack")}
                   </option>
                 ))}

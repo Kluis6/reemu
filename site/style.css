@@ -144,6 +144,17 @@ code {
   }
 }
 
+/* Seletor de idioma (i18n.js): PT/EN/ES compactos, visíveis também no
+   celular, onde os links de seção somem. */
+.langs {
+  display: flex;
+  gap: 2px;
+  margin-left: 8px;
+}
+.langs fluent-button {
+  min-width: 36px;
+}
+
 /* ─────────────── Hero ─────────────── */
 
 .hero {
