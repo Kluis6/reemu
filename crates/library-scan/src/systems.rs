@@ -203,6 +203,9 @@ pub fn folder_only_exts(system_id: &str) -> &'static [&'static str] {
         "vectrex" => &["bin"],
         "supervision" => &["bin"],
         "sg1000" => &["bin", "rom"],
+        // stella/stella2014: "a26|bin"; prosystem: "a78|bin|cdf" (.info)
+        "atari2600" => &["bin"],
+        "atari7800" => &["bin", "cdf"],
         "atari5200" => &["bin", "rom", "car"],
         "atari8bit" => &["bin", "rom", "car", "cas", "com"],
         "jaguar" => &["bin", "rom", "abs", "cof"],

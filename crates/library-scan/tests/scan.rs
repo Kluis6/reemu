@@ -235,6 +235,10 @@ async fn generic_extension_counts_only_inside_its_system_folder() {
     write(&dir, "odyssey2/K.C. Munchkin (USA).bin", b"o2-cart");
     write(&dir, "zxspectrum/Manic Miner.tap", b"zx-tape");
     write(&dir, "nds/Mario Kart DS (USA).nds", b"nds-cart");
+    // Atari 2600/7800: `.bin` (e `.BIN`, como no RetroBat) só dentro da pasta
+    write(&dir, "atari2600/Pitfall! (USA).bin", b"2600-a");
+    write(&dir, "atari2600/Adventure.BIN", b"2600-b");
+    write(&dir, "atari7800/Galaga (USA).bin", b"7800-cart");
     // mesmas extensões genéricas fora da pasta do sistema → ignoradas
     write(&dir, "Random.rom", b"x");
     write(&dir, "firmware.bin", b"y");
@@ -243,18 +247,19 @@ async fn generic_extension_counts_only_inside_its_system_folder() {
 
     assert_eq!(
         library_scan::count_roms(&dir),
-        4,
+        7,
         "barra de progresso usa a mesma regra"
     );
 
     let db = db::connect_in_memory().await.unwrap();
     let repo = db::RomsRepo::new(db);
     let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
-    assert_eq!(r.added, 4);
+    assert_eq!(r.added, 7);
     assert_eq!(r.skipped_unrecognized, 3);
-    for sys in ["msx", "odyssey2", "zxspectrum", "nds"] {
+    for sys in ["msx", "odyssey2", "zxspectrum", "nds", "atari7800"] {
         assert_eq!(repo.list_by_system(sys).await.unwrap().len(), 1, "{sys}");
     }
+    assert_eq!(repo.list_by_system("atari2600").await.unwrap().len(), 2);
     let _ = std::fs::remove_dir_all(dir);
 }
 
