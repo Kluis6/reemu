@@ -3,7 +3,7 @@
 //! camada de input (`input-desktop` / comandos Tauri) e lido pelo core.
 
 use domain::input::RetroPadButton;
-use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU16, AtomicU32, Ordering};
 
 /// `RETRO_DEVICE_ID_JOYPAD_*` — ordem fixa da API libretro.
 pub fn libretro_joypad_id(button: RetroPadButton) -> u32 {
@@ -124,6 +124,9 @@ pub fn retropad() -> &'static RetroPadState {
 pub struct AnalogState {
     // packed: x nos 16 bits altos, y nos 16 baixos (ambos i16).
     axes: [[AtomicI32; 2]; MAX_PORTS],
+    /// Pressão de L2/R2 em `[0, 0x7fff]` (libretro.h: "Analog buttons are
+    /// reported in the range of [0, 0x7fff]"). packed: L2 alto, R2 baixo.
+    triggers: [AtomicU32; MAX_PORTS],
     used: AtomicBool,
 }
 
@@ -138,6 +141,12 @@ impl AnalogState {
                 [AtomicI32::new(0), AtomicI32::new(0)],
                 [AtomicI32::new(0), AtomicI32::new(0)],
             ],
+            triggers: [
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+                AtomicU32::new(0),
+            ],
             used: AtomicBool::new(false),
         }
     }
@@ -148,6 +157,24 @@ impl AnalogState {
             let packed = (i32::from(x) << 16) | i32::from(y as u16);
             a.store(packed, Ordering::Relaxed);
         }
+    }
+
+    /// Pressão dos gatilhos `(L2, R2)` da porta, cada um em `[0, 0x7fff]`.
+    pub fn set_triggers(&self, port: usize, l2: u16, r2: u16) {
+        if let Some(t) = self.triggers.get(port) {
+            let packed = (u32::from(l2.min(0x7fff)) << 16) | u32::from(r2.min(0x7fff));
+            t.store(packed, Ordering::Relaxed);
+        }
+    }
+
+    /// `(L2, R2)` da porta — pro snapshot do pai e pro callback.
+    pub fn triggers(&self, port: usize) -> (u16, u16) {
+        let packed = self
+            .triggers
+            .get(port)
+            .map(|t| t.load(Ordering::Relaxed))
+            .unwrap_or(0);
+        ((packed >> 16) as u16, packed as u16)
     }
 
     /// Os dois sticks (`[esquerdo, direito]`) da porta — pro pai montar o
@@ -196,6 +223,9 @@ impl AnalogState {
                 a.store(0, Ordering::Relaxed);
             }
         }
+        for t in &self.triggers {
+            t.store(0, Ordering::Relaxed);
+        }
         self.used.store(false, Ordering::Relaxed);
     }
 }
@@ -236,6 +266,18 @@ mod tests {
         assert!(p.is_pressed(1, RetroPadButton::Start));
         assert!(!p.is_pressed(0, RetroPadButton::Start));
         p.set(99, RetroPadButton::Start, true); // fora do range: no-op
+    }
+
+    #[test]
+    fn trigger_pressure_roundtrip() {
+        let a = AnalogState::new();
+        a.set_triggers(1, 0x7fff, 123);
+        assert_eq!(a.triggers(1), (0x7fff, 123));
+        a.set_triggers(1, 0xffff, 0); // acima do teto: satura em 0x7fff
+        assert_eq!(a.triggers(1), (0x7fff, 0));
+        assert_eq!(a.triggers(9), (0, 0));
+        a.clear();
+        assert_eq!(a.triggers(1), (0, 0));
     }
 
     #[test]

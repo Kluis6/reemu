@@ -603,9 +603,21 @@ pub(crate) unsafe extern "C" fn input_state_cb(
                 sys::RETRO_DEVICE_INDEX_ANALOG_LEFT => analog.axis(port, 0, id),
                 sys::RETRO_DEVICE_INDEX_ANALOG_RIGHT => analog.axis(port, 1, id),
                 sys::RETRO_DEVICE_INDEX_ANALOG_BUTTON => {
-                    // pressão de um botão digital (id = RETRO_DEVICE_ID_JOYPAD_*):
-                    // 0 = solto, 0x7fff = totalmente pressionado.
-                    i16::from(crate::input::retropad().query_id(port, id)) * 0x7fff
+                    // Pressão do botão (id = RETRO_DEVICE_ID_JOYPAD_*), em
+                    // [0, 0x7fff] (libretro.h). L2/R2 do controle trazem a
+                    // pressão real; sem ela (teclado, outros botões) o
+                    // digital vale 0 ou 0x7fff.
+                    let (l2, r2) = analog.triggers(port);
+                    let pressure = match id {
+                        sys::RETRO_DEVICE_ID_JOYPAD_L2 => l2,
+                        sys::RETRO_DEVICE_ID_JOYPAD_R2 => r2,
+                        _ => 0,
+                    };
+                    if pressure > 0 {
+                        pressure as i16
+                    } else {
+                        i16::from(crate::input::retropad().query_id(port, id)) * 0x7fff
+                    }
                 }
                 _ => 0,
             }
@@ -638,5 +650,33 @@ extern "C" fn reemu_core_log(level: c_uint, msg: *const c_char) {
         1 => log::info!(target: "core", "{text}"),
         2 => log::warn!(target: "core", "{text}"),
         _ => log::error!(target: "core", "{text}"),
+    }
+}
+
+#[cfg(test)]
+mod input_state_tests {
+    use super::*;
+    use domain::input::RetroPadButton;
+
+    #[test]
+    fn analog_button_uses_trigger_pressure_and_falls_back_to_digital() {
+        // porta 3: não disputa os globais com outros testes
+        let q = |id| unsafe {
+            input_state_cb(
+                3,
+                sys::RETRO_DEVICE_ANALOG,
+                sys::RETRO_DEVICE_INDEX_ANALOG_BUTTON,
+                id,
+            )
+        };
+        crate::input::analog().set_triggers(3, 0, 12_000);
+        assert_eq!(q(sys::RETRO_DEVICE_ID_JOYPAD_R2), 12_000);
+        assert_eq!(q(sys::RETRO_DEVICE_ID_JOYPAD_L2), 0);
+        // sem pressão (teclado): o digital vale 0x7fff
+        crate::input::analog().set_triggers(3, 0, 0);
+        crate::input::retropad().set(3, RetroPadButton::R2, true);
+        assert_eq!(q(sys::RETRO_DEVICE_ID_JOYPAD_R2), 0x7fff);
+        crate::input::retropad().set(3, RetroPadButton::R2, false);
+        assert_eq!(q(sys::RETRO_DEVICE_ID_JOYPAD_R2), 0);
     }
 }

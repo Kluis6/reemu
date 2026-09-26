@@ -612,6 +612,7 @@ fn snapshot_input() -> [PortInput; 4] {
     std::array::from_fn(|port| PortInput {
         joypad_mask: PARENT_PAD.mask(port) | KEYBOARD_PAD.mask(port),
         sticks: PARENT_ANALOG.sticks(port),
+        triggers: PARENT_ANALOG.triggers(port),
     })
 }
 

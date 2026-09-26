@@ -109,6 +109,7 @@ impl LocalCore {
             pad.set_mask(port, input.joypad_mask);
             analog.set_stick(port, 0, input.sticks[0].0, input.sticks[0].1);
             analog.set_stick(port, 1, input.sticks[1].0, input.sticks[1].1);
+            analog.set_triggers(port, input.triggers.0, input.triggers.1);
         }
     }
 

@@ -60,6 +60,8 @@ pub struct PortInput {
     pub joypad_mask: u16,
     /// `[esquerdo, direito]`, cada um `(x, y)` em `[-0x8000, 0x7fff]`.
     pub sticks: [(i16, i16); 2],
+    /// Pressão de `(L2, R2)` em `[0, 0x7fff]` (0 = solto ou sem analógico).
+    pub triggers: (u16, u16),
 }
 
 /// Filho → pai.

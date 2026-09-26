@@ -74,11 +74,15 @@ const STICK_DEADZONE: f32 = 0.15;
 struct TriggerCal {
     rest: f32,
     pressed: bool,
+    /// Pressão atual já calibrada, `0..=1`.
+    level: f32,
 }
 
 /// Limiares de aperto do gatilho (sobre o valor já calibrado), com histerese.
 const TRIGGER_PRESS: f32 = 0.25;
 const TRIGGER_RELEASE: f32 = 0.15;
+/// Abaixo disto a pressão analógica mandada ao core é 0.
+const TRIGGER_DEADZONE: f32 = 0.04;
 
 impl TriggerCal {
     /// 1º valor visto vira o zero — exceto 1.0 (gatilho digital apertado, ou
@@ -87,6 +91,7 @@ impl TriggerCal {
         Self {
             rest: if first >= 0.99 { 0.0 } else { first },
             pressed: false,
+            level: 0.0,
         }
     }
 
@@ -99,6 +104,8 @@ impl TriggerCal {
         } else {
             ((value - self.rest) / span).clamp(0.0, 1.0)
         };
+        // zona morta curta: ruído perto do zero não vira pressão
+        self.level = if eff < TRIGGER_DEADZONE { 0.0 } else { eff };
         let now = if self.pressed {
             eff > TRIGGER_RELEASE
         } else {
@@ -465,6 +472,7 @@ impl GamepadPoller {
                     if let Some(&port) = self.ports.get(&id) {
                         analog.set_stick(port, 0, 0, 0);
                         analog.set_stick(port, 1, 0, 0);
+                        analog.set_triggers(port, 0, 0);
                     }
                     held::clear();
                     if let Some(port) = self.ports.get(&id).copied() {
@@ -499,6 +507,9 @@ impl GamepadPoller {
                             e.get_mut().update(value)
                         }
                     };
+                    if !capturing {
+                        self.push_triggers(id, uuid, analog);
+                    }
                     if let Some(pressed) = changed {
                         self.button_edge(id, uuid, btn, pressed, capturing, &mut out, pad, analog);
                     }
@@ -519,6 +530,21 @@ impl GamepadPoller {
             .map(|(_, g)| (guid_hex(g.uuid()), g.name().to_string()))
             .collect();
         out
+    }
+
+    /// Pressão calibrada de L2/R2 desta conexão → `analog` da porta dela.
+    fn push_triggers(&mut self, id: GamepadId, uuid: [u8; 16], analog: &AnalogState) {
+        let port = self.port_for(id, uuid);
+        let level = |b| {
+            self.triggers
+                .get(&(id, b))
+                .map_or(0, |t: &TriggerCal| (t.level * 32767.0).round() as u16)
+        };
+        analog.set_triggers(
+            port,
+            level(Button::LeftTrigger2),
+            level(Button::RightTrigger2),
+        );
     }
 
     /// Botão físico apertado/solto: captura de binding, conjunto segurado e
@@ -592,6 +618,18 @@ mod tests {
         // apertado até o fundo → conta; solto de volta → solta
         assert_eq!(t.update(1.0), Some(true));
         assert_eq!(t.update(168.0 / 255.0), Some(false));
+    }
+
+    #[test]
+    fn trigger_level_is_calibrated_pressure() {
+        let mut t = TriggerCal::new(0.0);
+        t.update(0.02);
+        assert_eq!(t.level, 0.0); // zona morta
+        t.update(0.5);
+        assert!((t.level - 0.5).abs() < 1e-6);
+        let mut off = TriggerCal::new(0.6); // zero deslocado
+        off.update(0.8);
+        assert!((off.level - 0.5).abs() < 1e-3, "{}", off.level);
     }
 
     #[test]

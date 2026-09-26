@@ -83,6 +83,9 @@ pub const RETRO_DEVICE_ID_ANALOG_Y: c_uint = 1;
 /// (bit N = botão `RETRO_DEVICE_ID_JOYPAD_*` de valor N — libretro.h). Vale
 /// porque anunciamos `GET_INPUT_BITMASKS`.
 pub const RETRO_DEVICE_ID_JOYPAD_MASK: c_uint = 256;
+/// Gatilhos (libretro.h), também usados como `id` de `RETRO_DEVICE_INDEX_ANALOG_BUTTON`.
+pub const RETRO_DEVICE_ID_JOYPAD_L2: c_uint = 12;
+pub const RETRO_DEVICE_ID_JOYPAD_R2: c_uint = 13;
 
 /// "O frontend devolve todos os botões de uma vez num bitmask" (libretro.h).
 /// O ponteiro de dados é ignorado; a resposta é o retorno `true`.
