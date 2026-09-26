@@ -40,5 +40,6 @@ export default defineConfig({
     // O Fluent (via `tabster`) mistura ESM/CJS de um jeito que o Node puro
     // não resolve; processar pelo Vite, como no app, resolve.
     server: { deps: { inline: [/@fluentui/, 'tabster'] } },
+    setupFiles: ['./src/test-setup.ts'],
   },
 })
