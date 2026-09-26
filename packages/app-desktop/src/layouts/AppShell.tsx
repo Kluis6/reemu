@@ -300,7 +300,7 @@ export function AppShell() {
             <Tooltip content={t("shell.backTooltip")} relationship="label">
               <Button
                 appearance="secondary"
-                className={mergeClasses(l.navBtn, s.navIconBtn)}
+                className={mergeClasses(l.navBtn, s.navIconBtn, s.navIconLg)}
                 icon={<ChevronLeftRegular />}
                 aria-label={t("hints.back")}
                 onClick={() => navigate(-1)}

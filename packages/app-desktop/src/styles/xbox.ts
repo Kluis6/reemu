@@ -301,6 +301,11 @@ export const useShellStyles = makeStyles({
       height: "1em",
     },
   },
+  // Ícone um pouco maior no mesmo botão (voltar, adicionar ROM, gerenciar
+  // biblioteca) — vem depois de `navIconBtn` no mergeClasses.
+  navIconLg: {
+    fontSize: "clamp(18px, 1.1vw, 44px) !important",
+  },
   // Mesma ideia pro avatar do perfil (rail): o `<Avatar>` do Fluent só
   // aceita tamanhos discretos via prop (`size`), que viram width/height em
   // px cru — nunca acompanham a tela sozinhos. Override aqui, curva um

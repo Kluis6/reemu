@@ -355,7 +355,7 @@ export function Library() {
           <Tooltip content={t("library.addRom")} relationship="label">
             <Button
               appearance="secondary"
-              className={mergeClasses(l.navBtn, shell.navIconBtn)}
+              className={mergeClasses(l.navBtn, shell.navIconBtn, shell.navIconLg)}
               icon={<AddRegular />}
               aria-label={t("library.addRom")}
               onClick={() => setAddOpen(true)}
@@ -364,7 +364,7 @@ export function Library() {
           <Tooltip content={t("library.manage")} relationship="label">
             <Button
               appearance="subtle"
-              className={shell.navIconBtn}
+              className={mergeClasses(shell.navIconBtn, shell.navIconLg)}
               icon={<MoreHorizontalRegular />}
               aria-label={t("library.manage")}
               onClick={() => setManageOpen(true)}
