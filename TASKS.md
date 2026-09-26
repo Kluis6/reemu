@@ -80,16 +80,16 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       dos cmd buffers do core nem no blit; fence-marcador de fim de quadro
       esperada só no `wait_sync_index`. Validado com as camadas de validação
       (sync incluída). Ver docs/historico.md.
-- [ ] `todo` — flycast em Vulkan como padrão (hoje GL no processo filho, Vulkan
-      com `REEMU_HW=vulkan`): falta o usuário validar jogando; o próprio
-      flycast gera 2× `VUID-vkUpdateDescriptorSets-None-03047` quando
-      renderiza vários quadros num `retro_run` (interno dele).
+- [x] `done` — flycast em Vulkan como padrão (2026-09-26): a rota in-process
+      responde Vulkan ao GET_PREFERRED_HW_RENDER; flycast e Beetle PSX HW
+      rodam em Vulkan no Linux sem `REEMU_HW`.
 - [x] `done` — Interop GL: `glFinish` trocado por fence `sync_file` →
       semáforo Vulkan, e o interop virou padrão no Linux (2026-09-25; ver
       docs/historico.md). Validado com as camadas de validação em
       2026-09-25 (corrigido o modificador DRM fora da negociação).
-- [ ] `todo` — Integer scaling com moldura: quando o fator cai no meio do
-      caminho entre dois inteiros, sobra barra preta grossa (aceito por ora).
+- [x] `done` — Integer scaling com moldura (2026-09-26): a moldura ganha um
+      zoom perto de 1 e o jogo preenche a janela dela no múltiplo inteiro —
+      sem faixa preta entre os dois.
 - [ ] `todo` — CAS (AMD FidelityFX, licença MIT) não vem no pacote de shaders
       do libretro — portar como `.slang` se fizer falta (FSR, RCAS e NIS já
       estão nos presets recomendados). HDR / tonemapping.
@@ -120,21 +120,18 @@ no `emu-session`, ver `docs/historico.md`).
 - [ ] `todo` — Validar o TheGamesDB com uma chave real (o parser foi testado
       com JSON no formato que o ES-DE lê, não com resposta capturada).
 
-- [ ] `todo` — **Teclado configurável**: hoje o mapa do teclado é fixo
-      (`input-desktop::keymap::web_code_to_retropad`) e não aparece em
-      Configurações › Controles. Falta a tela de remapear teclas (a captura
-      de binding já existe para controles e atalhos) e mover o analógico
-      esquerdo pelo teclado (hoje só o controle físico alimenta os
-      analógicos — jogos de Dreamcast/N64/PS2 que exigem analógico não
-      andam só no teclado).
+- [x] `done` — **Teclado configurável** (2026-09-26): seção Teclado em
+      Configurações › Controles (botões e direções dos dois analógicos); as
+      setas também movem o analógico esquerdo por padrão.
+- [x] `done` — **Gatilhos analógicos** (2026-09-26): pressão real de L2/R2
+      chega ao core (`RETRO_DEVICE_INDEX_ANALOG_BUTTON`).
 
 - [x] `done` — **Idiomas (pt-BR, en, es) no frontend** (2026-09-25): todas
       as telas, componentes, toasts, erros (`lib/errors.ts`) e diálogos
       nativos passam por `t()`; datas e números usam `Intl` no idioma ativo.
-- [ ] `todo` — **Idiomas: textos que vêm do Rust** — rótulos e descrições
-      dos shaders curados, notas de BIOS, mensagens de eventos/erros do
-      backend, títulos de notificações já gravadas (ficam no idioma em que
-      foram criadas) e o site/instalador.
+- [x] `done` — **Idiomas: textos que vêm do Rust** (2026-09-26): shaders
+      prontos, notas de BIOS, aviso do QuickSave por atalho, instalador NSIS
+      e o site (seletor PT/EN/ES).
 
 ### Infra / qualidade
 
@@ -142,10 +139,13 @@ no `emu-session`, ver `docs/historico.md`).
       workflow semanal `catalog-smoke.yml` (Linux e Windows) baixa cada core
       e abre com `reemu-core-host --probe` (`retro_init` + system info, sem
       jogo). Ver docs/historico.md.
-- [ ] `todo` — **Fumaça do catálogo, fase 2**: carregar cada core com uma
-      ROM de teste pública (homebrew de domínio público por sistema) e rodar
-      alguns quadros. Faz parte do portão do projeto de emuladores nativos
-      (abaixo).
+- [x] `done` — **Fumaça do catálogo, fase 2** (2026-09-26): ROMs mínimas
+      geradas pelo teste (NES, SNES, GB, GBA, Mega Drive, Master System, PC
+      Engine, Atari 2600) rodam 180 quadros em cada core compatível; o
+      travamento do pcsx_rearmed no CI (FIFO no /tmp) foi resolvido.
+- [ ] `todo` — **VFS do libretro** (`RETRO_ENVIRONMENT_GET_VFS_INTERFACE`,
+      v1–v3): o Stella 8 (`stella_libretro`) só reconhece a ROM com ela e
+      hoje não abre nenhum jogo no ReEmu (o Stella 2014 funciona).
 
 - [ ] `todo` — Etapa 11 (Android): `apps/mobile`, `packages/app-mobile`,
       `packages/ui`, `packages/shared`. Os pacotes compartilhados só nascem
