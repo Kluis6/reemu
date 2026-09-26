@@ -180,6 +180,16 @@ impl RomRepository for RomsRepo {
         Ok(secs.unwrap_or(0).max(0) as u64)
     }
 
+    async fn set_system(&self, id: &str, system_id: &str) -> Result<(), RepoError> {
+        sqlx::query("UPDATE roms SET system_id = ?2 WHERE id = ?1")
+            .bind(id)
+            .bind(system_id)
+            .execute(&self.db)
+            .await
+            .map_err(be)?;
+        Ok(())
+    }
+
     async fn set_favorite(&self, id: &str, favorite: bool) -> Result<(), RepoError> {
         sqlx::query("UPDATE roms SET is_favorite = ?2 WHERE id = ?1")
             .bind(id)

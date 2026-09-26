@@ -34,6 +34,10 @@ pub trait RomRepository: Send + Sync {
     async fn list_by_system(&self, system_id: &str) -> Result<Vec<Rom>, RepoError>;
     async fn list(&self) -> Result<Vec<Rom>, RepoError>;
     async fn remove(&self, id: &str) -> Result<(), RepoError>;
+    /// Troca o sistema de uma ROM já catalogada (a varredura reclassifica
+    /// quando a regra de identificação muda — ex.: NAOMI que entrou como
+    /// `disc`). Mantém tempo de jogo, favorito e metadados.
+    async fn set_system(&self, id: &str, system_id: &str) -> Result<(), RepoError>;
     /// Marca a ROM como jogada agora (`last_played_at`).
     async fn mark_played(&self, id: &str, at_unix: i64) -> Result<(), RepoError>;
     /// Soma `secs` ao tempo de jogo acumulado da ROM.

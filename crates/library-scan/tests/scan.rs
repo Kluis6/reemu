@@ -48,6 +48,8 @@ async fn scans_recursively_infers_system_and_dedups() {
             skipped_known: 0,
             skipped_unrecognized: 2,
             errors: 0,
+            reclassified: 0,
+            removed: 0,
         }
     );
 
@@ -228,6 +230,74 @@ async fn arcade_zip_without_a_cartridge_entry_is_catalogued_by_folder() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// NAOMI/Atomiswave no formato do MAME (layout do RetroBat): o `.zip`/`.7z`
+/// inteiro é o jogo, com o sistema da pasta; o `.chd` na subpasta com o id
+/// do jogo é parte dele, não uma entrada. Entradas de uma varredura antiga
+/// (`.chd` catalogado, `.7z` como `disc`) são corrigidas.
+#[tokio::test]
+async fn naomi_and_atomiswave_mame_sets() {
+    let dir = scratch_dir();
+    write(&dir, "naomi/azumanga.zip", b"naomi-set");
+    write(&dir, "naomi/azumanga/gdl-0018.chd", b"gdrom");
+    write(&dir, "naomi/18wheelr.zip", b"naomi-set-2");
+    write(&dir, "naomi/japan/Chaos Field (Japan).7z", b"7z-gdrom");
+    write(&dir, "atomiswave/anmlbskt.zip", b"aw-set");
+    // .chd sem .zip irmão continua sendo disco (da pasta do sistema)
+    write(&dir, "naomi/solto/jogo.chd", b"chd-solto");
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    // estado de uma varredura antiga: o .chd do set catalogado e o .7z como disc
+    for (path, sys) in [
+        ("naomi/azumanga/gdl-0018.chd", "naomi"),
+        ("naomi/japan/Chaos Field (Japan).7z", "disc"),
+    ] {
+        repo.add(&domain::library::Rom {
+            id: path.to_string(),
+            file_path: dir.join(path).to_string_lossy().into_owned(),
+            crc32: "0".into(),
+            md5: "0".into(),
+            system_id: sys.into(),
+            added_at: 0,
+            last_played_at: None,
+            is_favorite: false,
+            user_title: None,
+        })
+        .await
+        .unwrap();
+    }
+    repo.set_favorite("naomi/japan/Chaos Field (Japan).7z", true)
+        .await
+        .unwrap();
+
+    assert_eq!(library_scan::count_roms(&dir), 5, "o .chd do set não conta");
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!((r.added, r.reclassified, r.removed), (4, 1, 1), "{r:?}");
+
+    let naomi = repo.list_by_system("naomi").await.unwrap();
+    let mut names: Vec<_> = naomi
+        .iter()
+        .map(|r| r.file_path.rsplit('/').next().unwrap().to_string())
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "18wheelr.zip",
+            "Chaos Field (Japan).7z",
+            "azumanga.zip",
+            "jogo.chd"
+        ]
+    );
+    // o reclassificado mantém o que tinha (favorito)
+    assert!(naomi
+        .iter()
+        .any(|r| r.file_path.ends_with(".7z") && r.is_favorite));
+    assert_eq!(repo.list_by_system("atomiswave").await.unwrap().len(), 1);
+    assert!(repo.list_by_system("disc").await.unwrap().is_empty());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[tokio::test]
 async fn generic_extension_counts_only_inside_its_system_folder() {
     let dir = scratch_dir();
@@ -315,4 +385,43 @@ async fn dos_and_scummvm_games() {
         ]
     );
     assert_eq!(repo.list_by_system("scummvm").await.unwrap().len(), 1);
+}
+
+/// A pasta do sistema adicionada COMO RAIZ (`…/roms/atari2600`, não
+/// `…/roms`): o nome da raiz identifica o sistema.
+#[tokio::test]
+async fn system_folder_as_scan_root() {
+    let dir = scratch_dir();
+    write(&dir, "atari2600/Pitfall! (USA).bin", b"2600");
+    write(&dir, "atomiswave/anmlbskt.zip", b"aw-set");
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    for sys in ["atari2600", "atomiswave"] {
+        let root = dir.join(sys);
+        assert_eq!(library_scan::count_roms(&root), 1, "{sys}");
+        let r = scan_into(&repo, &root, 0, |_| {}).await.unwrap();
+        assert_eq!(r.added, 1, "{sys}: {r:?}");
+        assert_eq!(repo.list_by_system(sys).await.unwrap().len(), 1, "{sys}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Diagnóstico: varre `REEMU_SCAN_DIR` num banco em memória e imprime quantas
+/// ROMs caíram em cada sistema (não toca a biblioteca do app).
+#[tokio::test]
+#[ignore = "diagnóstico manual (REEMU_SCAN_DIR)"]
+async fn scan_real_folder() {
+    let Ok(dir) = std::env::var("REEMU_SCAN_DIR") else {
+        return;
+    };
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, std::path::Path::new(&dir), 0, |_| {})
+        .await
+        .unwrap();
+    let mut by: std::collections::BTreeMap<String, usize> = Default::default();
+    for rom in repo.list().await.unwrap() {
+        *by.entry(rom.system_id).or_default() += 1;
+    }
+    eprintln!("{r:?}\n{by:?}");
 }

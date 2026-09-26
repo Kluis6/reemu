@@ -16,16 +16,18 @@ use walkdir::WalkDir;
 /// Mesma técnica de `decoration.rs::classify` pra achar o "nome de sistema"
 /// mais perto do arquivo numa biblioteca organizada por pasta (RetroBat/ES-DE).
 fn ancestor_dirs(path: &Path, root: &Path) -> Vec<String> {
-    path.strip_prefix(root)
-        .ok()
-        .and_then(|rel| rel.parent())
-        .map(|p| {
-            p.iter()
-                .filter_map(|c| c.to_str())
-                .map(str::to_string)
-                .collect()
-        })
-        .unwrap_or_default()
+    // O nome da PRÓPRIA pasta raiz também conta: quem adiciona
+    // `…/roms/atari2600` (e não `…/roms`) como fonte tem o sistema no nome da
+    // raiz — sem isto, `.bin` de 2600 e os sets de NAOMI eram ignorados.
+    let mut dirs: Vec<String> = root
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| vec![n.to_string()])
+        .unwrap_or_default();
+    if let Some(rel) = path.strip_prefix(root).ok().and_then(|rel| rel.parent()) {
+        dirs.extend(rel.iter().filter_map(|c| c.to_str()).map(str::to_string));
+    }
+    dirs
 }
 
 /// Tenta achar um `system_id` nas pastas ancestrais, da mais próxima do
@@ -46,6 +48,34 @@ fn system_from_folder_ext(path: &Path, root: &Path, ext: &str) -> Option<&'stati
     Some(sys)
 }
 
+/// Sistemas em que o arquivo comprimido INTEIRO é o jogo (set do MAME:
+/// dumps de chip avulsos, sem "a ROM" dentro): o sistema vem da pasta e o
+/// core recebe o `.zip`/`.7z` como está (flycast/MAME aceitam `zip|7z`).
+const WHOLE_ARCHIVE_SYSTEMS: &[&str] = &["arcade", "naomi", "atomiswave"];
+
+/// `.chd` que acompanha um set do MAME: fica numa subpasta com o id do jogo
+/// ao lado do `.zip` (`naomi/azumanga/gdl-0018.chd` + `naomi/azumanga.zip`,
+/// "the chd file in a subdirectory of the roms folder named after the mame
+/// ID" — docs.libretro.com, library/flycast). O jogo se abre pelo `.zip`; o
+/// `.chd` sozinho não dá boot, então não vira entrada própria.
+fn is_mame_companion(path: &Path, ext: &str) -> bool {
+    if ext != "chd" {
+        return false;
+    }
+    let (Some(dir), Some(id)) = (path.parent(), path.parent().and_then(|d| d.file_name())) else {
+        return false;
+    };
+    let Some(parent) = dir.parent() else {
+        return false;
+    };
+    ["zip", "7z"].iter().any(|e| {
+        let mut set = std::ffi::OsString::from(id);
+        set.push(".");
+        set.push(e);
+        parent.join(set).is_file()
+    })
+}
+
 /// Extensão reconhecida (ROM crua, arquivo comprimido suportado, ou
 /// extensão genérica dentro da pasta de um sistema que a aceita).
 fn recognized(path: &Path, root: &Path) -> bool {
@@ -53,6 +83,9 @@ fn recognized(path: &Path, root: &Path) -> bool {
         return false;
     };
     let ext = ext.to_ascii_lowercase();
+    if is_mame_companion(path, &ext) {
+        return false;
+    }
     system_for_extension(&ext).is_some()
         || is_supported_archive(&ext)
         || system_from_folder_ext(path, root, &ext).is_some()
@@ -71,6 +104,10 @@ pub struct ScanReport {
     pub skipped_known: usize,
     pub skipped_unrecognized: usize,
     pub errors: usize,
+    /// Já catalogadas com outro sistema, corrigidas pela regra atual.
+    pub reclassified: usize,
+    /// Catalogadas antes mas que não são jogo (`.chd` de set do MAME).
+    pub removed: usize,
 }
 
 /// Progresso da varredura (arquivo `current` de `total` reconhecidos).
@@ -119,6 +156,16 @@ where
             .unwrap_or_default()
             .to_ascii_lowercase();
 
+        // Parte de um set do MAME (`.chd` ao lado do `.zip`): não é jogo; se
+        // uma varredura antiga catalogou, sai da biblioteca.
+        if is_mame_companion(path, &ext) {
+            if let Some(old) = repo.find_by_path(&path.to_string_lossy()).await? {
+                repo.remove(&old.id).await?;
+                report.removed += 1;
+            }
+            continue;
+        }
+
         // ROM crua, dentro de um .zip/.7z, ou imagem de disco (extensão
         // ambígua entre vários sistemas — PS1/PS2/Saturn/Dreamcast/PSP/...).
         // Pro arquivo de cartucho, o `system_id`/hash vêm da entrada interna
@@ -140,11 +187,13 @@ where
             } else if let Some(sys) = system_from_folder_ext(path, dir, &ext) {
                 (sys, None)
             } else if is_supported_archive(&ext) {
-                let is_arcade = system_from_dirs(&ancestor_dirs(path, dir)) == Some("arcade");
-                if is_arcade {
-                    // Set de arcade: sem "a ROM" dentro do arquivo (chip
-                    // dumps avulsos) — ele inteiro é a unidade, hash do arquivo.
-                    ("arcade", None)
+                let whole = system_from_dirs(&ancestor_dirs(path, dir))
+                    .filter(|s| WHOLE_ARCHIVE_SYSTEMS.contains(s));
+                if let Some(sys) = whole {
+                    // Set de arcade/NAOMI/Atomiswave: sem "a ROM" dentro do
+                    // arquivo (chip dumps avulsos) — ele inteiro é a unidade,
+                    // hash do arquivo.
+                    (sys, None)
                 } else {
                     match peek_archive(path) {
                         Some(a) => (a.system_id, Some(a.entry)),
@@ -170,8 +219,15 @@ where
         });
 
         let path_str = path.to_string_lossy();
-        if repo.find_by_path(&path_str).await?.is_some() {
-            report.skipped_known += 1;
+        if let Some(old) = repo.find_by_path(&path_str).await? {
+            // Já catalogada; se a regra de identificação mudou (ex.: NAOMI
+            // que entrou como `disc`), corrige o sistema sem perder nada.
+            if old.system_id != system_id {
+                repo.set_system(&old.id, system_id).await?;
+                report.reclassified += 1;
+            } else {
+                report.skipped_known += 1;
+            }
             continue;
         }
 
