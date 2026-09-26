@@ -1545,6 +1545,7 @@ Infra:
 ## 2026-09-26 — Gatilhos do DualSense e teclado + controle
 
 - **R2 não acelerava no MSR:** o DualSense do dono (driver `hid-playstation`, Bluetooth) informa `ABS_Z`/`ABS_RZ` em 168/173 de 0–255 com os gatilhos **soltos**, lido pelo `EVIOCGABS` do evdev. Com o limiar de 25% do gilrs (`btn_value` = valor/faixa), L2 e R2 contavam como apertados o tempo todo: no MSR, freio e acelerador juntos. O `GamepadPoller` agora decide L2/R2 pelo `ButtonChanged` com o zero calibrado (`TriggerCal`: o menor valor visto é o zero; o aperto é reescalado a partir dele, com histerese de 25%/15%) e ignora o press/release cru do gilrs para os gatilhos. Controle com zero em 0 continua igual.
+- **Conclusão (defeito do controle):** com `scripts/dualsense-triggers.py` (evdev cru), `ABS_Z` e `ABS_RZ` subiam e desciam juntos (142/150 → 255/255 → ~202/204) apertando só o R2, e o zero ia caindo sozinho com o controle parado na mão. O hardwaretester.com também não via os gatilhos. Trocando de controle, tudo normal. A calibração fica (inofensiva com zero em 0), mas nenhum software separa dois gatilhos que o controle manda como o mesmo sinal. Para suspeita parecida, rode o script antes de mexer no app.
 - **Teclado × controle:** cada um tem o próprio estado, combinado por OR no snapshot enviado ao core. O stick esquerdo não dobra mais como direcional quando o core lê o analógico (`ToParent::AnalogUsed` no filho; marca direta na rota in-process).
 
 ## 2026-09-26 — parallel_n64 derrubava o app na rota in-process
