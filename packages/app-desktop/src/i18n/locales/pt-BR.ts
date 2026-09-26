@@ -97,6 +97,8 @@ const ptBR = {
     },
   },
   actions: {
+    saveKeyboard: 'salvar a tecla',
+    resetKeyboard: 'restaurar o teclado',
     removeGame: 'remover o jogo',
     saveHotkey: 'salvar o atalho',
     saveChanges: 'salvar as alterações',
@@ -643,6 +645,38 @@ const ptBR = {
   format: {
     lessThanMin: 'menos de 1 min',
     manual: 'Editado por você',
+  },
+  keyboard: {
+    title: 'Teclado',
+    intro: 'Clique em "Trocar" e aperte a tecla nova. As setas também movem o analógico esquerdo, pra jogos que só leem o analógico. Esc é reservado para o menu.',
+    change: 'Trocar',
+    clear: 'Limpar',
+    none: 'sem tecla',
+    press: 'Aperte uma tecla… (Esc cancela)',
+    reset: 'Restaurar padrão',
+    resetDone: 'Teclado de volta ao padrão.',
+    custom: 'alterada',
+    groups: {
+      dpad: 'Direcional',
+      buttons: 'Botões',
+      lstick: 'Analógico esquerdo',
+      rstick: 'Analógico direito',
+    },
+    dirs: {
+      up: 'Cima',
+      down: 'Baixo',
+      left: 'Esquerda',
+      right: 'Direita',
+    },
+    keys: {
+      space: 'Espaço',
+      shiftLeft: 'Shift esq.',
+      shiftRight: 'Shift dir.',
+      ctrlLeft: 'Ctrl esq.',
+      ctrlRight: 'Ctrl dir.',
+      altLeft: 'Alt esq.',
+      altRight: 'Alt dir.',
+    },
   },
 }
 

@@ -96,6 +96,8 @@ const es: Messages = {
     },
   },
   actions: {
+    saveKeyboard: 'guardar la tecla',
+    resetKeyboard: 'restaurar el teclado',
     removeGame: 'quitar el juego',
     saveHotkey: 'guardar el atajo',
     saveChanges: 'guardar los cambios',
@@ -642,6 +644,38 @@ const es: Messages = {
   format: {
     lessThanMin: 'menos de 1 min',
     manual: 'Editado por ti',
+  },
+  keyboard: {
+    title: 'Teclado',
+    intro: 'Haz clic en "Cambiar" y pulsa la tecla nueva. Las flechas también mueven el stick izquierdo, para juegos que solo leen el analógico. Esc está reservado para el menú.',
+    change: 'Cambiar',
+    clear: 'Borrar',
+    none: 'sin tecla',
+    press: 'Pulsa una tecla… (Esc cancela)',
+    reset: 'Restaurar predeterminados',
+    resetDone: 'Teclado restaurado.',
+    custom: 'cambiada',
+    groups: {
+      dpad: 'Cruceta',
+      buttons: 'Botones',
+      lstick: 'Stick izquierdo',
+      rstick: 'Stick derecho',
+    },
+    dirs: {
+      up: 'Arriba',
+      down: 'Abajo',
+      left: 'Izquierda',
+      right: 'Derecha',
+    },
+    keys: {
+      space: 'Espacio',
+      shiftLeft: 'Mayús izq.',
+      shiftRight: 'Mayús der.',
+      ctrlLeft: 'Ctrl izq.',
+      ctrlRight: 'Ctrl der.',
+      altLeft: 'Alt izq.',
+      altRight: 'Alt der.',
+    },
   },
 }
 

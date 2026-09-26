@@ -22,7 +22,7 @@ const useStyles = makeStyles({
   wide: { maxWidth: "1400px" },
 });
 
-const WIDE_TABS = new Set(["aparencia", "cores", "bios"]);
+const WIDE_TABS = new Set(["aparencia", "cores", "bios", "controllers"]);
 
 // `key` = trecho da rota; `label` = chave de tradução.
 const TABS = [

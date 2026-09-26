@@ -651,6 +651,18 @@ export interface Gamepad {
 }
 export const listGamepads = () => invoke<Gamepad[]>('list_gamepads')
 
+/** Um alvo do teclado (botão do RetroPad ou direção de analógico) e a tecla
+ *  dele (`KeyboardEvent.code`; vazio = sem tecla). */
+export interface KeyboardBinding {
+  target: string
+  code: string
+  isDefault: boolean
+}
+export const listKeyboardBindings = () => invoke<KeyboardBinding[]>('list_keyboard_bindings')
+export const setKeyboardBinding = (target: string, code: string) =>
+  invoke<void>('set_keyboard_binding', { target, code })
+export const resetKeyboardBindings = () => invoke<void>('reset_keyboard_bindings')
+
 /** Controle plugado agora (toast + ícone na topbar). */
 export async function onGamepadConnected(cb: (g: Gamepad) => void): Promise<() => void> {
   if (!inTauri) return () => {}

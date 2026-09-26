@@ -22,7 +22,7 @@ pub use core_loader_desktop::{AnalogState, RetroPadState};
 /// snapshot pro processo filho por IPC. Não confundir com
 /// `core_loader_desktop::retropad()`/`analog()`, que são os globais do
 /// FILHO (lidos pelo `input_state_cb` do core).
-pub use session::{analog, keyboard_pad, retropad};
+pub use session::{analog, keyboard_analog, keyboard_pad, retropad};
 
 /// Descoberta de cores instalados (`<dados>/cores/*_libretro.<suf>`) — probe
 /// leve (dlopen sem `retro_init`), roda neste processo sem conflitar com o

@@ -96,6 +96,8 @@ const en: Messages = {
     },
   },
   actions: {
+    saveKeyboard: 'save the key',
+    resetKeyboard: 'reset the keyboard',
     removeGame: 'remove the game',
     saveHotkey: 'save the hotkey',
     saveChanges: 'save the changes',
@@ -642,6 +644,38 @@ const en: Messages = {
   format: {
     lessThanMin: 'under 1 min',
     manual: 'Edited by you',
+  },
+  keyboard: {
+    title: 'Keyboard',
+    intro: 'Click "Change" and press the new key. The arrow keys also move the left stick, for games that only read the analog stick. Esc is reserved for the menu.',
+    change: 'Change',
+    clear: 'Clear',
+    none: 'no key',
+    press: 'Press a key… (Esc cancels)',
+    reset: 'Restore defaults',
+    resetDone: 'Keyboard back to defaults.',
+    custom: 'changed',
+    groups: {
+      dpad: 'D-pad',
+      buttons: 'Buttons',
+      lstick: 'Left stick',
+      rstick: 'Right stick',
+    },
+    dirs: {
+      up: 'Up',
+      down: 'Down',
+      left: 'Left',
+      right: 'Right',
+    },
+    keys: {
+      space: 'Space',
+      shiftLeft: 'Left Shift',
+      shiftRight: 'Right Shift',
+      ctrlLeft: 'Left Ctrl',
+      ctrlRight: 'Right Ctrl',
+      altLeft: 'Left Alt',
+      altRight: 'Right Alt',
+    },
   },
 }
 

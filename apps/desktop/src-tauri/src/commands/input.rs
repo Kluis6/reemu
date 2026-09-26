@@ -54,9 +54,76 @@ pub fn input_key(
         .unwrap_or(InputFocus::GameFocused)
         == InputFocus::GameFocused;
 
-    if let Some((port, button)) = input_desktop::keymap::web_code_to_retropad(&code) {
-        emu_session::keyboard_pad().set(port as usize, button, pressed && game_focused);
+    // Teclado → porta 1: botões e direções de analógico (mapa configurável).
+    use input_desktop::keymap::{self, KeyTarget};
+    let down = pressed && game_focused;
+    for target in keymap::resolve(&code) {
+        match target {
+            KeyTarget::Button(button) => emu_session::keyboard_pad().set(0, button, down),
+            KeyTarget::Stick { stick, dir } => {
+                let (x, y) = keymap::stick_key(stick, dir, down);
+                emu_session::keyboard_analog().set_stick(0, usize::from(stick), x, y);
+            }
+        }
     }
+    Ok(())
+}
+
+/// Um alvo do teclado com a tecla efetiva (padrão ou do usuário).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyboardBindingDto {
+    pub target: String,
+    /// `KeyboardEvent.code`; vazio = sem tecla.
+    pub code: String,
+    pub is_default: bool,
+}
+
+#[tauri::command]
+pub fn list_keyboard_bindings() -> Vec<KeyboardBindingDto> {
+    input_desktop::keymap::bindings()
+        .into_iter()
+        .map(|b| KeyboardBindingDto {
+            target: b.target.to_string(),
+            code: b.code,
+            is_default: b.is_default,
+        })
+        .collect()
+}
+
+/// Troca a tecla de um alvo (`code` vazio = deixa o alvo sem tecla).
+#[tauri::command]
+pub async fn set_keyboard_binding(
+    state: State<'_, AppState>,
+    target: String,
+    code: String,
+) -> Result<(), String> {
+    if input_desktop::keymap::target_by_name(&target).is_none() {
+        return Err(format!("alvo desconhecido: {target}"));
+    }
+    if code == "Escape" {
+        return Err("Esc é reservado para o menu".into());
+    }
+    let repo = db::KeyboardBindingsRepo::new(pool(&state)?);
+    repo.set(&target, &code).await.map_err(|e| e.to_string())?;
+    reload_keyboard(&repo).await
+}
+
+/// Volta o teclado inteiro ao padrão.
+#[tauri::command]
+pub async fn reset_keyboard_bindings(state: State<'_, AppState>) -> Result<(), String> {
+    let repo = db::KeyboardBindingsRepo::new(pool(&state)?);
+    repo.clear().await.map_err(|e| e.to_string())?;
+    reload_keyboard(&repo).await
+}
+
+async fn reload_keyboard(repo: &db::KeyboardBindingsRepo) -> Result<(), String> {
+    let list = repo.list().await.map_err(|e| e.to_string())?;
+    input_desktop::keymap::set_overrides(&list);
+    // tecla trocada no meio de um aperto não pode ficar presa
+    emu_session::keyboard_pad().clear();
+    emu_session::keyboard_analog().clear();
+    input_desktop::keymap::release_sticks();
     Ok(())
 }
 
@@ -92,6 +159,8 @@ fn retropad_from_str(s: &str) -> Option<domain::input::RetroPadButton> {
 pub fn start_binding_capture() -> Result<(), String> {
     emu_session::retropad().clear();
     emu_session::keyboard_pad().clear();
+    emu_session::keyboard_analog().clear();
+    input_desktop::keymap::release_sticks();
     input_desktop::capture::begin();
     Ok(())
 }
@@ -189,6 +258,9 @@ pub async fn load_controller_mappings(pool: &db::Db) {
     use domain::input::{ControllerMappingRepository, DevicePortRepository};
     if let Ok(list) = db::ControllerMappingsRepo::new(pool.clone()).list().await {
         input_desktop::mappings::set(list);
+    }
+    if let Ok(keys) = db::KeyboardBindingsRepo::new(pool.clone()).list().await {
+        input_desktop::keymap::set_overrides(&keys);
     }
     if let Ok(ports) = db::DevicePortsRepo::new(pool.clone()).list().await {
         input_desktop::mappings::set_ports(

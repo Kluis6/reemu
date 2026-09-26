@@ -1,54 +1,247 @@
-//! Mapa teclado → RetroPad (porta 0). Os `scancode` são valores físicos do
-//! SO — o default aqui usa os do padrão `KeyCode` do winit/Tauri (W3C
-//! `KeyboardEvent.code` numerados). A UI de binding (etapa 05) sobrescreve.
+//! Mapa teclado → RetroPad (porta 1). A webview manda o `KeyboardEvent.code`
+//! (W3C, posição física da tecla); cada tecla pode acionar um ou mais alvos:
+//! um botão do RetroPad ou uma direção de um dos analógicos.
+//!
+//! O padrão vem de [`DEFAULTS`]; o usuário sobrescreve por alvo em
+//! Configurações › Controles (tabela `keyboard_bindings`), e o mapa efetivo
+//! é trocado inteiro por [`set_overrides`].
 
 use domain::input::RetroPadButton;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::sync::{Mutex, RwLock};
 
-/// Scancodes W3C usados no default (mesmos que winit `KeyCode as u32` expõe
-/// via `to_scancode` não — aqui é um id estável nosso; a ponte winit converte).
-pub mod sc {
-    pub const ARROW_UP: u32 = 1;
-    pub const ARROW_DOWN: u32 = 2;
-    pub const ARROW_LEFT: u32 = 3;
-    pub const ARROW_RIGHT: u32 = 4;
-    pub const KEY_Z: u32 = 10;
-    pub const KEY_X: u32 = 11;
-    pub const KEY_A: u32 = 12;
-    pub const KEY_S: u32 = 13;
-    pub const KEY_Q: u32 = 14;
-    pub const KEY_W: u32 = 15;
-    pub const ENTER: u32 = 20;
-    pub const SHIFT_RIGHT: u32 = 21;
+/// Direção de um analógico acionada por tecla.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StickDir {
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
-/// `KeyboardEvent.code` (W3C, o que a webview manda) → RetroPad, porta 0.
-/// Default do app enquanto não há UI de binding.
-pub fn web_code_to_retropad(code: &str) -> Option<(u8, RetroPadButton)> {
+/// O que uma tecla aciona.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum KeyTarget {
+    Button(RetroPadButton),
+    /// `stick`: 0 = esquerdo, 1 = direito.
+    Stick {
+        stick: u8,
+        dir: StickDir,
+    },
+}
+
+/// Todos os alvos, na ordem da tela, com o nome estável usado no banco e no
+/// frontend.
+pub const TARGETS: &[(&str, KeyTarget)] = {
+    use KeyTarget::{Button as B, Stick as S};
     use RetroPadButton::*;
-    Some((
-        0,
-        match code {
-            "ArrowUp" => Up,
-            "ArrowDown" => Down,
-            "ArrowLeft" => Left,
-            "ArrowRight" => Right,
-            "KeyZ" => B,
-            "KeyX" => A,
-            "KeyA" => Y,
-            "KeyS" => X,
-            "KeyQ" => L1,
-            "KeyW" => R1,
-            // Gatilhos: no Dreamcast (flycast) e no PS2 são os L/R do
-            // controle — sem isto não dava pra acelerar/frear em jogo de
-            // corrida pelo teclado.
-            "KeyE" => L2,
-            "KeyR" => R2,
-            "Enter" => Start,
-            "ShiftRight" | "ShiftLeft" => Select,
-            _ => return None,
-        },
-    ))
+    use StickDir as D;
+    &[
+        ("Up", B(Up)),
+        ("Down", B(Down)),
+        ("Left", B(Left)),
+        ("Right", B(Right)),
+        ("B", B(RetroPadButton::B)),
+        ("A", B(RetroPadButton::A)),
+        ("Y", B(RetroPadButton::Y)),
+        ("X", B(RetroPadButton::X)),
+        ("L1", B(L1)),
+        ("R1", B(R1)),
+        ("L2", B(L2)),
+        ("R2", B(R2)),
+        ("L3", B(L3)),
+        ("R3", B(R3)),
+        ("Start", B(Start)),
+        ("Select", B(Select)),
+        (
+            "LStickUp",
+            S {
+                stick: 0,
+                dir: D::Up,
+            },
+        ),
+        (
+            "LStickDown",
+            S {
+                stick: 0,
+                dir: D::Down,
+            },
+        ),
+        (
+            "LStickLeft",
+            S {
+                stick: 0,
+                dir: D::Left,
+            },
+        ),
+        (
+            "LStickRight",
+            S {
+                stick: 0,
+                dir: D::Right,
+            },
+        ),
+        (
+            "RStickUp",
+            S {
+                stick: 1,
+                dir: D::Up,
+            },
+        ),
+        (
+            "RStickDown",
+            S {
+                stick: 1,
+                dir: D::Down,
+            },
+        ),
+        (
+            "RStickLeft",
+            S {
+                stick: 1,
+                dir: D::Left,
+            },
+        ),
+        (
+            "RStickRight",
+            S {
+                stick: 1,
+                dir: D::Right,
+            },
+        ),
+    ]
+};
+
+/// Tecla padrão de cada alvo (`""` = sem tecla). Setas = d-pad E analógico
+/// esquerdo: jogos que só leem o analógico (Dreamcast, N64, PS2) andam no
+/// teclado sem configurar nada; os que só leem o d-pad ignoram o stick.
+/// Gatilhos em E/R (no Dreamcast e no PS2 são o acelerador/freio).
+pub const DEFAULTS: &[(&str, &str)] = &[
+    ("Up", "ArrowUp"),
+    ("Down", "ArrowDown"),
+    ("Left", "ArrowLeft"),
+    ("Right", "ArrowRight"),
+    ("B", "KeyZ"),
+    ("A", "KeyX"),
+    ("Y", "KeyA"),
+    ("X", "KeyS"),
+    ("L1", "KeyQ"),
+    ("R1", "KeyW"),
+    ("L2", "KeyE"),
+    ("R2", "KeyR"),
+    ("L3", ""),
+    ("R3", ""),
+    ("Start", "Enter"),
+    ("Select", "ShiftRight"),
+    ("LStickUp", "ArrowUp"),
+    ("LStickDown", "ArrowDown"),
+    ("LStickLeft", "ArrowLeft"),
+    ("LStickRight", "ArrowRight"),
+    ("RStickUp", ""),
+    ("RStickDown", ""),
+    ("RStickLeft", ""),
+    ("RStickRight", ""),
+];
+
+/// Alvo pelo nome estável.
+pub fn target_by_name(name: &str) -> Option<KeyTarget> {
+    TARGETS.iter().find(|(n, _)| *n == name).map(|(_, t)| *t)
+}
+
+fn default_code(name: &str) -> &'static str {
+    DEFAULTS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map_or("", |(_, c)| c)
+}
+
+/// Um alvo no mapa efetivo, pra tela de configuração.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Binding {
+    pub target: &'static str,
+    /// `KeyboardEvent.code`; `""` = sem tecla.
+    pub code: String,
+    pub is_default: bool,
+}
+
+struct Effective {
+    by_target: Vec<Binding>,
+    by_code: HashMap<String, Vec<KeyTarget>>,
+}
+
+fn build(overrides: &[(String, String)]) -> Effective {
+    let by_target: Vec<Binding> = TARGETS
+        .iter()
+        .map(|(name, _)| {
+            let over = overrides.iter().find(|(t, _)| t == name).map(|(_, c)| c);
+            Binding {
+                target: name,
+                code: over
+                    .cloned()
+                    .unwrap_or_else(|| default_code(name).to_string()),
+                is_default: over.is_none(),
+            }
+        })
+        .collect();
+    let mut by_code: HashMap<String, Vec<KeyTarget>> = HashMap::new();
+    for b in &by_target {
+        if let (false, Some(t)) = (b.code.is_empty(), target_by_name(b.target)) {
+            by_code.entry(b.code.clone()).or_default().push(t);
+        }
+    }
+    Effective { by_target, by_code }
+}
+
+static EFFECTIVE: RwLock<Option<Effective>> = RwLock::new(None);
+
+/// Troca as escolhas do usuário (`(alvo, code)`); o resto fica no padrão.
+pub fn set_overrides(overrides: &[(String, String)]) {
+    *EFFECTIVE.write().unwrap_or_else(|p| p.into_inner()) = Some(build(overrides));
+}
+
+fn with_effective<R>(f: impl FnOnce(&Effective) -> R) -> R {
+    let guard = EFFECTIVE.read().unwrap_or_else(|p| p.into_inner());
+    match guard.as_ref() {
+        Some(e) => f(e),
+        None => f(&build(&[])),
+    }
+}
+
+/// Alvos acionados pela tecla `code` (vazio se nenhum).
+pub fn resolve(code: &str) -> Vec<KeyTarget> {
+    with_effective(|e| e.by_code.get(code).cloned().unwrap_or_default())
+}
+
+/// Mapa efetivo inteiro, na ordem de [`TARGETS`].
+pub fn bindings() -> Vec<Binding> {
+    with_effective(|e| e.by_target.clone())
+}
+
+/// Direções seguradas por stick (`[esquerdo, direito]`), pra montar a
+/// posição do analógico a partir das teclas.
+static HELD_DIRS: Mutex<[[bool; 4]; 2]> = Mutex::new([[false; 4]; 2]);
+
+/// Registra uma direção de stick apertada/solta e devolve a posição do stick
+/// no range libretro (X+ = direita, Y+ = baixo — libretro.h). Teclas opostas
+/// juntas se anulam; diagonal vai ao máximo nos dois eixos.
+pub fn stick_key(stick: u8, dir: StickDir, pressed: bool) -> (i16, i16) {
+    let mut held = HELD_DIRS.lock().unwrap_or_else(|p| p.into_inner());
+    let s = &mut held[usize::from(stick.min(1))];
+    s[dir as usize] = pressed;
+    let axis = |neg: bool, pos: bool| match (neg, pos) {
+        (true, false) => -0x7fff,
+        (false, true) => 0x7fff,
+        _ => 0,
+    };
+    (
+        axis(s[StickDir::Left as usize], s[StickDir::Right as usize]),
+        axis(s[StickDir::Up as usize], s[StickDir::Down as usize]),
+    )
+}
+
+/// Solta todas as direções (menu aberto, captura de binding).
+pub fn release_sticks() {
+    *HELD_DIRS.lock().unwrap_or_else(|p| p.into_inner()) = [[false; 4]; 2];
 }
 
 /// FNV-1a 32 bits do `KeyboardEvent.code`. A web não expõe scancode físico;
@@ -63,76 +256,62 @@ pub fn key_scancode(code: &str) -> u32 {
     h
 }
 
-#[derive(Debug, Clone)]
-pub struct KeyboardMap {
-    map: BTreeMap<u32, (u8, RetroPadButton)>,
-}
-
-impl KeyboardMap {
-    pub fn new() -> Self {
-        Self {
-            map: BTreeMap::new(),
-        }
-    }
-
-    pub fn bind(&mut self, scancode: u32, port: u8, button: RetroPadButton) {
-        self.map.insert(scancode, (port, button));
-    }
-
-    pub fn resolve(&self, scancode: u32) -> Option<(u8, RetroPadButton)> {
-        self.map.get(&scancode).copied()
-    }
-
-    pub fn entries(&self) -> impl Iterator<Item = (u32, u8, RetroPadButton)> + '_ {
-        self.map.iter().map(|(k, (p, b))| (*k, *p, *b))
-    }
-}
-
-impl Default for KeyboardMap {
-    /// Layout comum: setas = d-pad, Z/X = B/A, A/S = Y/X, Q/W = L1/R1,
-    /// Enter = Start, Shift direito = Select.
-    fn default() -> Self {
-        use RetroPadButton::*;
-        let mut m = Self::new();
-        for (k, b) in [
-            (sc::ARROW_UP, Up),
-            (sc::ARROW_DOWN, Down),
-            (sc::ARROW_LEFT, Left),
-            (sc::ARROW_RIGHT, Right),
-            (sc::KEY_Z, B),
-            (sc::KEY_X, A),
-            (sc::KEY_A, Y),
-            (sc::KEY_S, X),
-            (sc::KEY_Q, L1),
-            (sc::KEY_W, R1),
-            (sc::ENTER, Start),
-            (sc::SHIFT_RIGHT, Select),
-        ] {
-            m.bind(k, 0, b);
-        }
-        m
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn default_covers_dpad_and_face() {
-        let m = KeyboardMap::default();
-        assert_eq!(m.resolve(sc::ARROW_UP), Some((0, RetroPadButton::Up)));
-        assert_eq!(m.resolve(sc::KEY_Z), Some((0, RetroPadButton::B)));
-        assert_eq!(m.resolve(sc::ENTER), Some((0, RetroPadButton::Start)));
-        assert_eq!(m.resolve(999), None);
-        assert_eq!(m.entries().count(), 12);
+    fn every_target_has_a_default_entry() {
+        assert_eq!(TARGETS.len(), DEFAULTS.len());
+        for (name, _) in TARGETS {
+            assert!(DEFAULTS.iter().any(|(n, _)| n == name), "{name}");
+        }
     }
 
     #[test]
-    fn rebind_overrides() {
-        let mut m = KeyboardMap::default();
-        m.bind(sc::KEY_Z, 1, RetroPadButton::A);
-        assert_eq!(m.resolve(sc::KEY_Z), Some((1, RetroPadButton::A)));
+    fn default_arrows_drive_dpad_and_left_stick() {
+        let e = build(&[]);
+        let up = e.by_code.get("ArrowUp").unwrap();
+        assert!(up.contains(&KeyTarget::Button(RetroPadButton::Up)));
+        assert!(up.contains(&KeyTarget::Stick {
+            stick: 0,
+            dir: StickDir::Up
+        }));
+        assert_eq!(
+            e.by_code.get("KeyR").unwrap(),
+            &vec![KeyTarget::Button(RetroPadButton::R2)]
+        );
+        assert!(!e.by_code.contains_key(""));
+    }
+
+    #[test]
+    fn override_moves_a_target_to_another_key() {
+        let e = build(&[("R2".into(), "Space".into()), ("L3".into(), "KeyC".into())]);
+        assert!(!e.by_code.contains_key("KeyR"));
+        assert_eq!(
+            e.by_code.get("Space").unwrap(),
+            &vec![KeyTarget::Button(RetroPadButton::R2)]
+        );
+        let r2 = e.by_target.iter().find(|b| b.target == "R2").unwrap();
+        assert!(!r2.is_default);
+        // desligar um alvo: code vazio
+        let e = build(&[("LStickUp".into(), String::new())]);
+        assert_eq!(
+            e.by_code.get("ArrowUp").unwrap(),
+            &vec![KeyTarget::Button(RetroPadButton::Up)]
+        );
+    }
+
+    #[test]
+    fn stick_keys_combine_and_cancel() {
+        release_sticks();
+        assert_eq!(stick_key(0, StickDir::Up, true), (0, -0x7fff));
+        assert_eq!(stick_key(0, StickDir::Right, true), (0x7fff, -0x7fff));
+        assert_eq!(stick_key(0, StickDir::Down, true), (0x7fff, 0));
+        assert_eq!(stick_key(0, StickDir::Up, false), (0x7fff, 0x7fff));
+        release_sticks();
+        assert_eq!(stick_key(1, StickDir::Left, true), (-0x7fff, 0));
+        release_sticks();
     }
 
     #[test]
@@ -140,17 +319,5 @@ mod tests {
         assert_eq!(key_scancode("Escape"), key_scancode("Escape"));
         assert_ne!(key_scancode("Escape"), key_scancode("F1"));
         assert_ne!(key_scancode(""), key_scancode("F1"));
-    }
-
-    #[test]
-    fn web_codes() {
-        assert_eq!(web_code_to_retropad("KeyZ"), Some((0, RetroPadButton::B)));
-        assert_eq!(web_code_to_retropad("KeyE"), Some((0, RetroPadButton::L2)));
-        assert_eq!(web_code_to_retropad("KeyR"), Some((0, RetroPadButton::R2)));
-        assert_eq!(
-            web_code_to_retropad("ArrowLeft"),
-            Some((0, RetroPadButton::Left))
-        );
-        assert_eq!(web_code_to_retropad("Space"), None);
     }
 }

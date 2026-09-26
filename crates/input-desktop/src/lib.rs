@@ -20,5 +20,4 @@ pub use gamepad::{
     NavPulse, PollOutcome,
 };
 pub use hotkeys::ComboHotkeyResolver;
-pub use keymap::KeyboardMap;
 pub use sdl_db::{parse_db, parse_mapping, GamepadSource, ParsedMapping, SdlDbError};

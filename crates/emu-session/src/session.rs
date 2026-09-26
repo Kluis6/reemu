@@ -593,6 +593,9 @@ static PARENT_ANALOG: AnalogState = AnalogState::new();
 /// que ele aplicou (ex.: o stick passando pelo limiar de d-pad) e isso
 /// derrubava uma seta segurada no teclado — e vice-versa.
 static KEYBOARD_PAD: RetroPadState = RetroPadState::new();
+/// Analógicos movidos por tecla (setas etc.). No snapshot, um stick do
+/// teclado fora do centro vence o do controle.
+static KEYBOARD_ANALOG: AnalogState = AnalogState::new();
 
 /// Estado do RetroPad alimentado pelo controle (thread de gamepad).
 pub fn retropad() -> &'static RetroPadState {
@@ -604,6 +607,11 @@ pub fn keyboard_pad() -> &'static RetroPadState {
     &KEYBOARD_PAD
 }
 
+/// Analógicos alimentados pelo teclado.
+pub fn keyboard_analog() -> &'static AnalogState {
+    &KEYBOARD_ANALOG
+}
+
 pub fn analog() -> &'static AnalogState {
     &PARENT_ANALOG
 }
@@ -611,7 +619,11 @@ pub fn analog() -> &'static AnalogState {
 fn snapshot_input() -> [PortInput; 4] {
     std::array::from_fn(|port| PortInput {
         joypad_mask: PARENT_PAD.mask(port) | KEYBOARD_PAD.mask(port),
-        sticks: PARENT_ANALOG.sticks(port),
+        sticks: {
+            let pad = PARENT_ANALOG.sticks(port);
+            let kb = KEYBOARD_ANALOG.sticks(port);
+            std::array::from_fn(|i| if kb[i] != (0, 0) { kb[i] } else { pad[i] })
+        },
         triggers: PARENT_ANALOG.triggers(port),
     })
 }
@@ -768,6 +780,8 @@ fn gamepad_loop(shared: Arc<Shared>) {
             // no menu, nada de input de jogo
             PARENT_PAD.clear();
             KEYBOARD_PAD.clear();
+            KEYBOARD_ANALOG.clear();
+            input_desktop::keymap::release_sticks();
         }
         std::thread::sleep(Duration::from_millis(8));
     }
