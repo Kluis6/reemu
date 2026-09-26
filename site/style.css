@@ -284,7 +284,7 @@ h1 {
   line-height: 1.08;
   letter-spacing: -0.01em;
   margin: 0 auto 18px;
-  max-width: 18ch;
+  max-width: 24ch;
 }
 
 .grad {
@@ -431,6 +431,79 @@ h2 {
 .sub-title {
   font-size: 1.25rem;
   margin: 64px 0 20px;
+}
+
+/* Frases de efeito da copy ("Encontre. Escolha. Jogue."): destaque em
+   branco + complemento em cinza, uma por linha. */
+.punch {
+  margin: 36px 0 0;
+  font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+  line-height: 1.35;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.punch span {
+  color: var(--muted);
+}
+
+.section-lead.tight {
+  margin-bottom: 12px;
+}
+
+.sub-title.first {
+  margin-top: 28px;
+}
+
+/* listas curtas da copy ("Interface limpa.", "Sem anúncios."…) */
+.bullets {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.bullets li {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-alt);
+  font-size: 0.95rem;
+}
+
+.feature .emoji {
+  font-size: 1.15em;
+}
+
+.feature p + p {
+  margin-top: 8px;
+}
+
+/* chamada final centralizada */
+.center {
+  text-align: center;
+}
+
+.center h2,
+.center .section-lead {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.cta .punch,
+.cta .note {
+  align-items: center;
+}
+
+.cta fluent-anchor-button {
+  margin-top: 8px;
+}
+
+.gallery {
+  margin-top: 40px;
 }
 
 /* ─────────────── Recursos ─────────────── */

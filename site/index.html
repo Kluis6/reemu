@@ -3,16 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ReEmu — React Emulator Frontend</title>
+    <title data-i18n="meta.title">ReEmu — Seus clássicos. Sua coleção.</title>
     <meta data-i18n-attr="content=meta.description"
       name="description"
-      content="ReEmu: frontend de emulação com cores libretro para Linux e Windows. Biblioteca com capas, shaders CRT, molduras, save states e navegação completa pelo controle."
+      content="ReEmu: seus clássicos, sua coleção, uma experiência moderna. Frontend gratuito e de código aberto para organizar e jogar seus jogos clássicos no Windows e no Linux."
     />
     <meta name="author" content="Luis Julio" />
-    <meta property="og:title" content="ReEmu — React Emulator Frontend" />
+    <meta property="og:title" content="ReEmu — Seus clássicos. Sua coleção. Uma experiência moderna." />
     <meta data-i18n-attr="content=meta.og"
       property="og:description"
-      content="Seus jogos clássicos com cara de console. Grátis e de código aberto, para Linux e Windows."
+      content="Seus clássicos. Sua coleção. Uma experiência moderna. Grátis e de código aberto, para Windows e Linux."
     />
     <meta property="og:image" content="https://kluis6.github.io/reemu/logo.png" />
     <meta property="og:url" content="https://kluis6.github.io/reemu/" />
@@ -36,9 +36,8 @@
       <div class="wrap top-row">
         <a data-i18n-attr="aria-label=nav.home" class="wordmark" href="./" aria-label="ReEmu — início">Re<span>Emu</span></a>
         <nav data-i18n-attr="aria-label=nav.aria" class="nav" aria-label="Seções">
-          <fluent-anchor-button data-i18n="nav.features" class="nav-link" appearance="subtle" href="#recursos">Recursos</fluent-anchor-button>
-          <fluent-anchor-button data-i18n="nav.ease" class="nav-link" appearance="subtle" href="#praticidade">Praticidade</fluent-anchor-button>
-          <fluent-anchor-button data-i18n="nav.screens" class="nav-link" appearance="subtle" href="#telas">Telas</fluent-anchor-button>
+          <fluent-anchor-button data-i18n="nav.library" class="nav-link" appearance="subtle" href="#biblioteca">Biblioteca</fluent-anchor-button>
+          <fluent-anchor-button data-i18n="nav.start" class="nav-link" appearance="subtle" href="#comecar">Como começar</fluent-anchor-button>
           <fluent-anchor-button data-i18n="nav.support" class="nav-link" appearance="subtle" href="#apoie">Apoie</fluent-anchor-button>
           <fluent-anchor-button data-i18n="nav.download" appearance="primary" href="#download">Baixar</fluent-anchor-button>
           <div class="langs" role="group" aria-label="Idioma / Language / Idioma">
@@ -74,196 +73,152 @@
           <img
             class="logo"
             src="logo.png"
-            alt="ReEmu — React Emulator Frontend"
+            alt="ReEmu"
             width="1672"
             height="941"
             onerror="this.remove()"
           />
-          <fluent-badge data-i18n="hero.badge" class="reveal" appearance="outline" color="informative" shape="circular" size="large">
-            Frontend de emulação · Linux e Windows · Grátis
-          </fluent-badge>
           <h1 data-i18n="hero.title" class="reveal">
-            Seus jogos clássicos, com cara de <span class="grad">console</span>.
+            Seus clássicos. Sua coleção. Uma experiência <span class="grad">moderna</span>.
           </h1>
           <p data-i18n="hero.lead" class="lead reveal">
-            O ReEmu junta sua coleção numa biblioteca bonita, com capas, e roda tudo com
-            os cores <fluent-link inline href="https://www.libretro.com/">libretro</fluent-link>,
-            os mesmos do RetroArch. Shaders CRT, molduras, save states com miniatura e
-            navegação inteira pelo controle, sem abrir um arquivo de configuração.
+            ReEmu é um frontend moderno para organizar, descobrir e jogar seus jogos clássicos em
+            uma interface feita para quem gosta de jogar — não de ficar configurando.
+          </p>
+          <p data-i18n="hero.lead2" class="lead reveal">
+            Sua coleção ganha capas, informações, favoritos, progresso, temas e uma navegação
+            pensada para o controle.
           </p>
 
           <div id="primary" class="primary reveal" aria-live="polite">
             <fluent-spinner size="small"></fluent-spinner>
             <fluent-text data-i18n="hero.loading" size="200">Procurando a versão mais recente…</fluent-text>
           </div>
-          <p data-i18n="hero.note" class="note reveal">
-            Código aberto (MIT). Depois de instalado, o ReEmu se atualiza sozinho.
-          </p>
-
-          <dl class="stats reveal">
-            <div><dt><span class="count" data-to="120">120</span>+</dt><dd data-i18n="stats.cores">cores no catálogo</dd></div>
-            <div><dt><span class="count" data-to="40">40</span>+</dt><dd data-i18n="stats.systems">sistemas reconhecidos</dd></div>
-            <div><dt><span class="count" data-to="99.7" data-decimals="1">99,7</span>%</dt><dd data-i18n="stats.shaders">dos presets de shader</dd></div>
-            <div><dt>1</dt><dd data-i18n="stats.pad">controle para tudo</dd></div>
-          </dl>
+          <p data-i18n="hero.note" class="note reveal">Baixe grátis · Windows · Linux · Código aberto</p>
         </div>
       </section>
 
-      <!-- ─────────────── Recursos ─────────────── -->
-      <section id="recursos" class="section">
+      <!-- ─────────────── Nova vida ─────────────── -->
+      <section class="section">
         <div class="wrap">
-          <p data-i18n="features.kicker" class="kicker reveal">Recursos</p>
-          <h2 data-i18n="features.title" class="reveal">Tudo o que um frontend moderno precisa ter</h2>
-          <p data-i18n="features.lead" class="section-lead reveal">
-            Pensado para a TV da sala e para o PC de mesa: interface no estilo console,
-            rápida, e com os detalhes que fazem diferença no dia a dia.
+          <h2 data-i18n="life.title" class="reveal">Dê uma nova vida à sua coleção</h2>
+          <p data-i18n="life.p1" class="section-lead tight reveal">
+            Seus jogos clássicos merecem mais do que uma pasta cheia de arquivos.
           </p>
+          <p data-i18n="life.p2" class="section-lead reveal">
+            O ReEmu transforma sua coleção em uma biblioteca bonita, organizada e fácil de explorar.
+          </p>
+          <p class="punch reveal">
+            <strong data-i18n="life.punch">Encontre. Escolha. Jogue.</strong>
+            <span data-i18n="life.punch2">Sem complicação.</span>
+          </p>
+        </div>
+      </section>
+
+      <!-- ─────────────── Biblioteca ─────────────── -->
+      <section id="biblioteca" class="section section-alt">
+        <div class="wrap">
+          <h2 data-i18n="lib.title" class="reveal">Uma biblioteca feita para jogar</h2>
 
           <div class="features">
             <article class="card feature reveal">
-              <h3 data-i18n="f1.t">Biblioteca com capas</h3>
-              <p data-i18n="f1.p">Aponte a pasta das ROMs e o ReEmu identifica cada jogo (inclusive por hash) e busca capas e informações no ScreenScraper, com o TheGamesDB de reserva.</p>
+              <h3><span class="emoji" aria-hidden="true">🎮</span> <span data-i18n="f1.t">Sua coleção, do seu jeito</span></h3>
+              <p data-i18n="f1.p">Aponte o ReEmu para suas pastas e deixe ele organizar o resto.</p>
+              <p data-i18n="f1.p2">Seus jogos são identificados automaticamente e apresentados com capas, informações e organização por sistema.</p>
             </article>
             <article class="card feature reveal">
-              <h3 data-i18n="f2.t">Shaders CRT e LCD</h3>
-              <p data-i18n="f2.p">99,7% dos presets <code>.slangp</code> do RetroArch funcionam: escolha o visual de tubo, de portátil ou de fliperama pela interface, com ajuste de parâmetros.</p>
+              <h3><span class="emoji" aria-hidden="true">✨</span> <span data-i18n="f2.t">Uma interface que parece um console</span></h3>
+              <p data-i18n="f2.p">Navegue pela sua coleção de forma rápida e intuitiva.</p>
+              <p data-i18n="f2.p2">Tudo foi pensado para funcionar muito bem com controle — da biblioteca às configurações e ao menu durante o jogo.</p>
             </article>
             <article class="card feature reveal">
-              <h3 data-i18n="f3.t">Molduras (bezels)</h3>
-              <p data-i18n="f3.p">Baixe o pacote do The Bezel Project ou importe as suas. A moldura se encaixa em volta da imagem do jogo, como num gabinete de verdade.</p>
+              <h3><span class="emoji" aria-hidden="true">🖼️</span> <span data-i18n="f3.t">Seus jogos, com a aparência que você quiser</span></h3>
+              <p data-i18n="f3.p">Transforme a experiência visual dos clássicos.</p>
+              <p data-i18n="f3.p2">Use shaders, molduras e diferentes estilos de apresentação para recriar aquela sensação de jogar em uma TV antiga, em um portátil ou em um arcade.</p>
             </article>
             <article class="card feature reveal">
-              <h3 data-i18n="f4.t">Save states com miniatura</h3>
-              <p data-i18n="f4.p">Vários espaços de salvamento, cada um com a imagem do momento. O save interno do jogo (SRAM) é gravado sozinho, até ao fechar a janela.</p>
+              <h3><span class="emoji" aria-hidden="true">💾</span> <span data-i18n="f4.t">Continue exatamente de onde parou</span></h3>
+              <p data-i18n="f4.p">Salve seu progresso quando quiser.</p>
+              <p data-i18n="f4.p2">Os save states mostram uma miniatura do momento salvo para que você encontre rapidamente o ponto certo da sua aventura.</p>
             </article>
             <article class="card feature reveal">
-              <h3 data-i18n="f5.t">Tudo pelo controle</h3>
-              <p data-i18n="f5.p">Menus, biblioteca, configurações e o menu de pausa navegáveis pelo gamepad, com dicas de botões na tela. Mapeamento por controle e atalhos de salvar/carregar.</p>
+              <h3><span class="emoji" aria-hidden="true">❤️</span> <span data-i18n="f5.t">Seus favoritos sempre por perto</span></h3>
+              <p data-i18n="f5.p">Crie sua própria seleção de jogos.</p>
+              <p data-i18n="f5.p2">Favoritos, jogos recentes, destaques e busca rápida ajudam você a chegar ao que realmente quer jogar.</p>
             </article>
             <article class="card feature reveal">
-              <h3 data-i18n="f6.t">Cores e BIOS sem mistério</h3>
-              <p data-i18n="f6.p">Catálogo com mais de 120 cores libretro, baixados com um clique. A tela de BIOS mostra, por sistema, o que falta e importa o arquivo certo para o lugar certo.</p>
-            </article>
-            <article class="card feature reveal">
-              <h3 data-i18n="f7.t">Temas e papel de parede</h3>
-              <p data-i18n="f7.p">Temas com fundo animado em quatro cores, papel de parede na tela inicial e um tema de alto contraste para quem precisa de mais legibilidade.</p>
-            </article>
-            <article class="card feature reveal">
-              <h3 data-i18n="f8.t">Tempo de jogo</h3>
-              <p data-i18n="f8.p">O ReEmu conta quanto você jogou cada título e mostra na página do jogo. Perfil com avatar, busca rápida e destaques na tela inicial.</p>
-            </article>
-            <article class="card feature reveal">
-              <h3 data-i18n="f9.t">Atualização automática</h3>
-              <p data-i18n="f9.p">Quando sai versão nova, um aviso aparece e o sino da barra lateral mostra o resumo das mudanças. Um clique e o ReEmu se atualiza e reinicia.</p>
+              <h3><span class="emoji" aria-hidden="true">⏱️</span> <span data-i18n="f6.t">Saiba quanto você jogou</span></h3>
+              <p data-i18n="f6.p">O ReEmu acompanha seu tempo de jogo e mostra seu histórico diretamente na página de cada título.</p>
             </article>
           </div>
+
+          <p class="punch reveal">
+            <span data-i18n="lib.close1">Sua coleção deixa de ser apenas uma biblioteca.</span>
+            <strong data-i18n="lib.close2">Ela passa a contar a sua história.</strong>
+          </p>
         </div>
       </section>
 
-      <!-- ─────────────── Praticidade ─────────────── -->
-      <section id="praticidade" class="section section-alt">
+      <!-- ─────────────── Como começar ─────────────── -->
+      <section id="comecar" class="section">
         <div class="wrap">
-          <p data-i18n="ease.kicker" class="kicker reveal">Praticidade</p>
-          <h2 data-i18n="ease.title" class="reveal">Do download ao primeiro jogo em três passos</h2>
+          <h2 data-i18n="start.title" class="reveal">Do download ao primeiro jogo</h2>
 
           <ol class="steps">
             <li class="card step reveal">
               <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">1</fluent-badge>
               <h3 data-i18n="s1.t">Instale</h3>
-              <p data-i18n="s1.p">Baixe o instalador para Windows ou o AppImage para Linux. Nada de dependências para caçar.</p>
+              <p data-i18n="s1.p">Baixe o ReEmu para Windows ou Linux. Instalação simples, sem ficar procurando dependências.</p>
             </li>
             <li class="card step reveal">
               <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">2</fluent-badge>
-              <h3 data-i18n="s2.t">Aponte suas ROMs</h3>
-              <p data-i18n="s2.p">Escolha a pasta. O ReEmu reconhece os sistemas, abre arquivos compactados e busca as capas sozinho.</p>
+              <h3 data-i18n="s2.t">Adicione sua coleção</h3>
+              <p data-i18n="s2.p">Escolha onde estão seus jogos. O ReEmu identifica os sistemas e organiza sua biblioteca automaticamente.</p>
             </li>
             <li class="card step reveal">
               <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">3</fluent-badge>
-              <h3 data-i18n="s3.t">Jogue</h3>
-              <p data-i18n="s3.p">Baixe o core do sistema pelo catálogo, escolha o jogo e aperte A. Seu progresso fica salvo.</p>
+              <h3 data-i18n="s3.t">Sente. Escolha. Jogue.</h3>
+              <p data-i18n="s3.p">Pegue seu controle, escolha um jogo e comece.</p>
             </li>
           </ol>
+          <p class="punch reveal"><strong data-i18n="start.punch">É assim que deveria ser.</strong></p>
+        </div>
+      </section>
 
-          <h3 data-i18n="cmp.title" class="sub-title reveal">O que o ReEmu faz por você</h3>
-          <div class="compare-wrap reveal">
-            <table class="compare">
-              <thead>
-                <tr>
-                  <th data-i18n="cmp.task" scope="col">Tarefa</th>
-                  <th data-i18n="cmp.manual" scope="col">Montando tudo à mão</th>
-                  <th data-i18n="cmp.us" scope="col" class="us">Com o ReEmu</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th data-i18n="cmp.r1" scope="row">Emuladores</th>
-                  <td data-i18n="cmp.r1a">Achar, baixar e configurar um para cada sistema</td>
-                  <td data-i18n="cmp.r1b" class="us">Catálogo de cores libretro, instalados com um clique</td>
-                </tr>
-                <tr>
-                  <th data-i18n="cmp.r2" scope="row">BIOS</th>
-                  <td data-i18n="cmp.r2a">Descobrir nomes, versões e pastas de cada arquivo</td>
-                  <td data-i18n="cmp.r2b" class="us">Lista por sistema do que falta, com importação guiada</td>
-                </tr>
-                <tr>
-                  <th data-i18n="cmp.r3" scope="row">Capas e informações</th>
-                  <td data-i18n="cmp.r3a">Procurar imagens e renomear uma por uma</td>
-                  <td data-i18n="cmp.r3b" class="us">Busca automática no ScreenScraper e no TheGamesDB</td>
-                </tr>
-                <tr>
-                  <th data-i18n="cmp.r4" scope="row">Visual retrô</th>
-                  <td data-i18n="cmp.r4a">Editar presets e caminhos de shader em arquivos</td>
-                  <td data-i18n="cmp.r4b" class="us">Presets escolhidos e ajustados pela interface</td>
-                </tr>
-                <tr>
-                  <th data-i18n="cmp.r5" scope="row">Navegação</th>
-                  <td data-i18n="cmp.r5a">Teclado e mouse para configurar</td>
-                  <td data-i18n="cmp.r5b" class="us">Tudo pelo controle, no sofá</td>
-                </tr>
-                <tr>
-                  <th data-i18n="cmp.r6" scope="row">Atualizações</th>
-                  <td data-i18n="cmp.r6a">Voltar ao site e reinstalar</td>
-                  <td data-i18n="cmp.r6b" class="us">Aviso no app e atualização com um clique</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <h3 data-i18n="tech.title" class="sub-title reveal">Tecnologia moderna por baixo</h3>
+      <!-- ─────────────── Menos configuração ─────────────── -->
+      <section class="section section-alt">
+        <div class="wrap">
+          <h2 data-i18n="less.title" class="reveal">Menos configuração. Mais jogo.</h2>
+          <p data-i18n="less.lead" class="section-lead reveal">
+            Você não precisa transformar uma noite de nostalgia em uma sessão de configuração.
+          </p>
+          <h3 data-i18n="less.with" class="sub-title first reveal">Com o ReEmu</h3>
           <div class="tech">
-            <div class="card tech-item reveal">
-              <strong data-i18n="t1.t">Núcleo em Rust</strong>
-              <span data-i18n="t1.p">Rápido e com gestão de memória segura, do carregamento dos cores ao áudio.</span>
-            </div>
-            <div class="card tech-item reveal">
-              <strong data-i18n="t2.t">Core em processo separado</strong>
-              <span data-i18n="t2.p">Se um core travar, a interface continua de pé e o resto do app não cai junto.</span>
-            </div>
-            <div class="card tech-item reveal">
-              <strong data-i18n="t3.t">Vulkan e OpenGL</strong>
-              <span data-i18n="t3.p">Renderização por hardware para os cores 3D, com pipeline de shaders na GPU.</span>
-            </div>
-            <div class="card tech-item reveal">
-              <strong data-i18n="t4.t">Áudio sem estalos</strong>
-              <span data-i18n="t4.p">Controle dinâmico de taxa (DRC) mantém som e imagem em sincronia.</span>
-            </div>
-            <div class="card tech-item reveal">
-              <strong data-i18n="t5.t">Interface Fluent 2</strong>
-              <span data-i18n="t5.p">React com o design system da Microsoft, no espírito do modo console do Xbox.</span>
-            </div>
-            <div class="card tech-item reveal">
-              <strong data-i18n="t6.t">Senhas no chaveiro do sistema</strong>
-              <span data-i18n="t6.p">Credenciais do ScreenScraper e do TheGamesDB guardadas pelo próprio sistema operacional.</span>
-            </div>
+            <div class="card tech-item reveal"><strong data-i18n="w1.t">Sua coleção</strong><span data-i18n="w1.p">Organizada automaticamente em uma biblioteca visual.</span></div>
+            <div class="card tech-item reveal"><strong data-i18n="w2.t">Capas e informações</strong><span data-i18n="w2.p">Seus jogos ficam muito mais fáceis de encontrar e explorar.</span></div>
+            <div class="card tech-item reveal"><strong data-i18n="w3.t">Sistemas</strong><span data-i18n="w3.p">Diversas plataformas reunidas em um único lugar.</span></div>
+            <div class="card tech-item reveal"><strong data-i18n="w4.t">Controles</strong><span data-i18n="w4.p">Navegação completa pelo gamepad.</span></div>
+            <div class="card tech-item reveal"><strong data-i18n="w5.t">Visual</strong><span data-i18n="w5.p">Shaders, molduras e temas para personalizar sua experiência.</span></div>
+            <div class="card tech-item reveal"><strong data-i18n="w6.t">Progresso</strong><span data-i18n="w6.p">Save states, histórico e tempo de jogo sempre à mão.</span></div>
+            <div class="card tech-item reveal"><strong data-i18n="w7.t">Atualizações</strong><span data-i18n="w7.p">O próprio ReEmu avisa quando existe uma nova versão.</span></div>
           </div>
         </div>
       </section>
 
-      <!-- ─────────────── Telas ─────────────── -->
+      <!-- ─────────────── Sala e PC ─────────────── -->
       <section id="telas" class="section">
         <div class="wrap">
-          <p data-i18n="screens.kicker" class="kicker reveal">Telas</p>
-          <h2 data-i18n="screens.title" class="reveal">Veja o ReEmu em ação</h2>
+          <h2 data-i18n="room.title" class="reveal">Feito para a sala. Perfeito para o PC.</h2>
+          <p data-i18n="room.lead" class="section-lead tight reveal">
+            O ReEmu foi pensado para funcionar tanto na sua mesa quanto na TV da sala.
+          </p>
+          <ul class="bullets reveal">
+            <li data-i18n="room.b1">Interface limpa.</li>
+            <li data-i18n="room.b2">Navegação por controle.</li>
+            <li data-i18n="room.b3">Textos fáceis de ler.</li>
+            <li data-i18n="room.b4">Acesso rápido à sua coleção.</li>
+          </ul>
+          <p class="punch reveal"><strong data-i18n="room.punch">Conecte o controle. Sente no sofá. Escolha um jogo.</strong></p>
           <!-- Capturas em site/screens/ — enquanto o arquivo não existe, o
                quadro mostra "Captura em breve". -->
           <div class="gallery">
@@ -304,8 +259,12 @@
       <!-- ─────────────── Sistemas ─────────────── -->
       <section class="section section-alt">
         <div class="wrap">
-          <p data-i18n="sys.kicker" class="kicker reveal">Sistemas</p>
-          <h2 data-i18n="sys.title" class="reveal">Do Atari ao PlayStation</h2>
+          <h2 data-i18n="more.title" class="reveal">Mais do que uma biblioteca</h2>
+          <h3 data-i18n="more.sub" class="sub-title first reveal">Uma experiência para a sua coleção inteira.</h3>
+          <p data-i18n="more.lead" class="section-lead reveal">
+            Do Atari ao PlayStation, dos portáteis aos arcades, o ReEmu reúne diferentes gerações
+            de jogos em uma única experiência.
+          </p>
           <div data-i18n-attr="aria-label=sys.aria" class="systems reveal" role="list" aria-label="Alguns dos sistemas suportados">
             <fluent-badge role="listitem" appearance="outline" size="large">NES</fluent-badge>
             <fluent-badge role="listitem" appearance="outline" size="large">Super Nintendo</fluent-badge>
@@ -344,22 +303,44 @@
             <fluent-badge role="listitem" appearance="outline" size="large">ScummVM</fluent-badge>
             <fluent-badge data-i18n="sys.more" role="listitem" appearance="ghost" size="large">e mais…</fluent-badge>
           </div>
-          <p data-i18n="sys.fine" class="fine reveal">
-            O ReEmu não inclui jogos nem BIOS. Use cópias dos seus próprios jogos.
+          <p class="punch reveal">
+            <strong data-i18n="more.punch">Clássicos de várias gerações.<br />Uma única biblioteca.</strong>
           </p>
         </div>
       </section>
 
-      <!-- ─────────────── Apoie ─────────────── -->
-      <section id="apoie" class="section">
-        <div class="wrap">
-          <p data-i18n="sup.kicker" class="kicker reveal">Apoie</p>
-          <h2 data-i18n="sup.title" class="reveal">Ajude o ReEmu a continuar evoluindo</h2>
-          <p data-i18n="sup.lead" class="section-lead reveal">
-            O ReEmu é gratuito, sem anúncios e de código aberto. Doações pagam o tempo
-            de desenvolvimento, os testes em hardware de verdade (Windows, Linux,
-            controles, placas de vídeo) e a hospedagem. Qualquer valor ajuda.
+      <!-- ─────────────── Chamada ─────────────── -->
+      <section class="section cta">
+        <div class="wrap center">
+          <h2 data-i18n="cta.title" class="reveal">Seus jogos clássicos nunca pareceram tão atuais.</h2>
+          <p class="section-lead reveal">
+            <span data-i18n="cta.p1">A nostalgia está nos jogos.</span><br />
+            <span data-i18n="cta.p2">A experiência pode ser moderna.</span>
           </p>
+          <h3 data-i18n="cta.sub" class="sub-title first reveal">Descubra o ReEmu</h3>
+          <p data-i18n="cta.lead" class="section-lead reveal">
+            Baixe gratuitamente e transforme sua coleção em uma biblioteca feita para jogar.
+          </p>
+          <fluent-anchor-button data-i18n="cta.button" class="reveal" appearance="primary" size="large" href="#download">Baixar ReEmu</fluent-anchor-button>
+          <p data-i18n="cta.note" class="note reveal">Windows · Linux · Código aberto · Gratuito</p>
+        </div>
+      </section>
+
+      <!-- ─────────────── Apoie ─────────────── -->
+      <section id="apoie" class="section section-alt">
+        <div class="wrap">
+          <h2 data-i18n="sup.title" class="reveal">Gratuito. Aberto. Feito para jogadores.</h2>
+          <p data-i18n="sup.lead" class="section-lead tight reveal">O ReEmu é gratuito e de código aberto.</p>
+          <ul class="bullets reveal">
+            <li data-i18n="sup.b1">Sem anúncios.</li>
+            <li data-i18n="sup.b2">Sem assinatura.</li>
+            <li data-i18n="sup.b3">Sem transformar sua coleção em um serviço.</li>
+          </ul>
+          <p data-i18n="sup.help" class="section-lead reveal">
+            Se você gosta do projeto, pode ajudar a mantê-lo evoluindo — contribuindo com código,
+            relatando problemas, divulgando o projeto ou apoiando seu desenvolvimento.
+          </p>
+          <h3 data-i18n="sup.cta" class="sub-title first reveal">Apoie o ReEmu</h3>
 
           <!-- Formas de doação: preencha `data-link` (e `data-pix` no Pix).
                Cartão sem link fica escondido; sem nenhum, aparece o aviso
@@ -413,11 +394,21 @@
       </section>
 
       <!-- ─────────────── Download ─────────────── -->
-      <section id="download" class="section section-alt">
+      <section id="download" class="section">
         <div class="wrap">
-          <p data-i18n="dl.kicker" class="kicker reveal">Download</p>
           <h2 data-i18n="dl.title" class="reveal">Todas as versões</h2>
           <div id="releases" class="releases"></div>
+        </div>
+      </section>
+
+      <!-- ─────────────── Sua coleção ─────────────── -->
+      <section class="section section-alt">
+        <div class="wrap">
+          <h2 data-i18n="own.title" class="reveal">Sua coleção pertence a você.</h2>
+          <p data-i18n="own.p1" class="section-lead tight reveal">O ReEmu não inclui jogos nem BIOS.</p>
+          <p data-i18n="own.p2" class="section-lead reveal">
+            Use cópias dos jogos que você possui e respeite as leis aplicáveis à sua região.
+          </p>
         </div>
       </section>
     </main>
@@ -426,18 +417,15 @@
       <div class="wrap foot-row">
         <p class="foot-credit">
           <a data-i18n-attr="aria-label=foot.top" class="wordmark small" href="./" aria-label="ReEmu — voltar ao topo">Re<span>Emu</span></a>
-          <span data-i18n="foot.by" class="foot-by">desenvolvido por Luis Julio</span>
+          <span data-i18n="foot.tagline" class="foot-by">Seus clássicos. Sua coleção. Uma experiência moderna.</span>
         </p>
         <nav class="foot-links" aria-label="Links">
-          <fluent-link data-i18n="foot.code" href="https://github.com/Kluis6/reemu">Código no GitHub</fluent-link>
+          <fluent-link href="https://github.com/Kluis6/reemu">GitHub</fluent-link>
           <fluent-link data-i18n="foot.releases" href="https://github.com/Kluis6/reemu/releases">Releases</fluent-link>
           <fluent-link data-i18n="foot.issue" href="https://github.com/Kluis6/reemu/issues">Reportar um problema</fluent-link>
         </nav>
         <fluent-divider class="foot-divider"></fluent-divider>
-        <p data-i18n="foot.legal" class="foot-legal">
-          Licença MIT. Os cores libretro têm licenças próprias e são baixados pelo app.
-          O ReEmu não inclui jogos nem BIOS. Interface do site com Fluent UI 2.
-        </p>
+        <p data-i18n="foot.legal" class="foot-legal">Gratuito · Código aberto · Windows · Linux</p>
       </div>
     </footer>
 
