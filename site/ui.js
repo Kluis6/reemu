@@ -1,83 +1,108 @@
 // Registra os componentes Fluent UI 2 (`fluent-*`), aplica o tema e cuida do
-// movimento da página: entrada dos blocos ao rolar, contadores, topo com
-// fundo depois de rolar, doações e o ampliador das capturas. Sem JS (ou com
+// movimento da página com o Motion (https://motion.dev): entrada dos blocos
+// ao rolar, brilho do hero, pulsos do circuito; e ainda o topo com fundo
+// depois de rolar, doações e o ampliador das capturas. Sem JS (ou com
 // "reduzir movimento") a página aparece inteira e parada.
 import { setTheme } from "./vendor/fluent-web-components-3.1.3.min.js";
 import theme from "./vendor/reemu-theme.js";
-import { lang, t } from "./i18n.js";
+// Bundle UMD do Motion: registra `globalThis.Motion` (copiado de
+// node_modules por scripts/vendor-motion.mjs no build).
+import "./vendor/motion.js";
+import { t } from "./i18n.js";
+
+const { animate } = globalThis.Motion;
 
 setTheme(theme);
 
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+// curva "sai rápido, assenta devagar" da identidade (ease-soft no tema)
+const EASE = [0.2, 0.7, 0.2, 1];
 
 // Topo: transparente no hero, com fundo desfocado depois de rolar.
 const header = document.querySelector(".top");
-const onScroll = () => header.classList.toggle("scrolled", scrollY > 12);
+const onScroll = () => header.toggleAttribute("data-scrolled", scrollY > 12);
 addEventListener("scroll", onScroll, { passive: true });
 onScroll();
 
-// Contador de 0 até `data-to` (com `data-decimals` casas, no idioma ativo).
-function countUp(el) {
-  const to = Number(el.dataset.to);
-  const decimals = Number(el.dataset.decimals || 0);
-  const fmt = (v) =>
-    v.toLocaleString(lang(), { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
-  if (reduceMotion) {
-    el.textContent = fmt(to);
-    return;
-  }
-  const start = performance.now();
-  const dur = 1400;
-  const tick = (now) => {
-    const t = Math.min(1, (now - start) / dur);
-    el.textContent = fmt(to * (1 - Math.pow(1 - t, 3)));
-    if (t < 1) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
-
-// Entrada ao rolar. Irmãos entram em cascata (60 ms entre um e outro).
+// Entrada ao rolar: os `.reveal` começam transparentes (`js:opacity-0` no
+// HTML) e sobem 22 px ao entrar na tela. Irmãos entram em cascata (60 ms
+// entre um e outro).
 const reveals = document.querySelectorAll(".reveal");
-if ("IntersectionObserver" in window && !reduceMotion) {
+const delayOf = new Map();
+{
   const siblingsIndex = new Map();
   for (const el of reveals) {
-    const parent = el.parentElement;
-    const i = siblingsIndex.get(parent) ?? 0;
-    siblingsIndex.set(parent, i + 1);
-    el.style.setProperty("--d", `${Math.min(i, 8) * 60}ms`);
+    const i = siblingsIndex.get(el.parentElement) ?? 0;
+    siblingsIndex.set(el.parentElement, i + 1);
+    delayOf.set(el, Math.min(i, 8) * 0.06);
   }
+}
+const reveal = (el) =>
+  animate(el, { opacity: [0, 1], y: [22, 0] }, { duration: 0.7, delay: delayOf.get(el), ease: EASE });
+const showAll = () => reveals.forEach((el) => (el.style.opacity = "1"));
+
+if ("IntersectionObserver" in window && !reduceMotion) {
   let observed = false;
   const io = new IntersectionObserver(
     (entries) => {
       observed = true;
       for (const e of entries) {
         if (!e.isIntersecting) continue;
-        e.target.classList.add("in");
-        e.target.querySelectorAll(".count").forEach(countUp);
+        reveal(e.target);
         io.unobserve(e.target);
       }
     },
     { rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
   );
   // O hero já está na tela ao abrir: entra em cascata no próximo quadro.
-  requestAnimationFrame(() => {
-    document.querySelectorAll(".hero .reveal").forEach((el) => {
-      el.classList.add("in");
-      el.querySelectorAll(".count").forEach(countUp);
-    });
-  });
+  const hero = document.querySelector("main > section");
+  requestAnimationFrame(() => hero.querySelectorAll(".reveal").forEach(reveal));
   reveals.forEach((el) => {
-    if (!el.closest(".hero")) io.observe(el);
+    if (!hero.contains(el)) io.observe(el);
   });
   // Rede de segurança: se o observer nunca responder, nada fica invisível.
   setTimeout(() => {
     if (observed) return;
     io.disconnect();
-    reveals.forEach((el) => el.classList.add("in"));
-    document.querySelectorAll(".count").forEach(countUp);
+    showAll();
   }, 2500);
 } else {
-  reveals.forEach((el) => el.classList.add("in"));
+  showAll();
+}
+
+if (!reduceMotion) {
+  // Brilhos do hero: vão e voltam devagar, cada um num ritmo.
+  const drift = { ease: "easeInOut", repeat: Infinity, repeatType: "reverse" };
+  const orbA = document.querySelector('[data-orb="a"]');
+  const orbB = document.querySelector('[data-orb="b"]');
+  if (orbA) animate(orbA, { x: 140, y: 90, scale: 1.15 }, { ...drift, duration: 18 });
+  if (orbB) animate(orbB, { x: -120, y: 120, scale: 0.9 }, { ...drift, duration: 22 });
+
+  // Pulso de sinal correndo em cada trilha do circuito, da borda pro centro.
+  // `pathLength=1` + traço `0.06 1.4`: o deslocamento vai de 1.46 (um
+  // período) a 0, igual em qualquer trilha. Duração e atraso de cada uma
+  // vêm do SVG (`data-dur`, `data-delay`).
+  for (const path of document.querySelectorAll("[data-pulses] path")) {
+    animate(1.46, 0, {
+      duration: Number(path.dataset.dur),
+      delay: Number(path.dataset.delay),
+      ease: "linear",
+      repeat: Infinity,
+      onUpdate: (v) => (path.style.strokeDashoffset = String(v)),
+    });
+  }
+
+  // "moderna" do título: o gradiente verde → azul corre pelo texto. O i18n
+  // troca o HTML do título ao mudar o idioma, então a animação recomeça.
+  let shine = null;
+  const startShine = () => {
+    shine?.stop();
+    const grad = document.querySelector("h1 .grad");
+    if (grad)
+      shine = animate(grad, { backgroundPosition: ["0% 0%", "-200% 0%"] }, { duration: 6, ease: "linear", repeat: Infinity });
+  };
+  startShine();
+  addEventListener("reemu-lang", startShine);
 }
 
 // Ampliador das capturas (só as que existem — quadros "em breve" ignoram).
@@ -85,7 +110,7 @@ const lightbox = document.getElementById("lightbox");
 const big = lightbox?.querySelector(".lightbox-img");
 document.querySelectorAll(".shot-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    if (btn.closest("figure").classList.contains("missing") || !big) return;
+    if ("missing" in btn.closest("figure").dataset || !big) return;
     const img = btn.querySelector("img");
     big.src = img.currentSrc || img.src;
     big.alt = img.alt;
@@ -161,7 +186,7 @@ if (gallery) {
   const check = () => {
     const imgs = [...gallery.querySelectorAll("img")];
     gallery.hidden = imgs.every(
-      (i) => i.closest("figure")?.classList.contains("missing") || (i.complete && i.naturalWidth === 0),
+      (i) => "missing" in (i.closest("figure")?.dataset ?? {}) || (i.complete && i.naturalWidth === 0),
     );
   };
   gallery.addEventListener("error", check, true);

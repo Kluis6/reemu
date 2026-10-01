@@ -71,7 +71,7 @@ function installers(release) {
 // Markdown mínimo (o que scripts/release-notes.sh gera): `## seção`, `- item`
 // e parágrafos. Mesmo recorte do parser do app (lib/releaseNotes.ts).
 function renderNotes(md) {
-  const box = el("div", { class: "notes" });
+  const box = el("div", { class: "mt-3" });
   let list = null;
   for (const raw of (md || "").split(/\r?\n/)) {
     const line = raw.trim().replace(/\*\*|__|`/g, "");
@@ -80,26 +80,31 @@ function renderNotes(md) {
     const li = line.match(/^[-*+]\s+(.*)$/);
     if (h) {
       list = null;
-      box.append(el("h4", {}, h[1]));
+      box.append(el("h4", { class: "mt-3.5 mb-1.5 text-[0.95rem] font-bold text-green" }, h[1]));
     } else if (li) {
-      if (!list) box.append((list = el("ul")));
+      if (!list) box.append((list = el("ul", { class: "list-disc pl-5" })));
       list.append(el("li", {}, li[1]));
     } else {
       list = null;
-      box.append(el("p", {}, line));
+      box.append(el("p", { class: "mt-2 text-muted" }, line));
     }
   }
   return box.childElementCount ? box : null;
 }
 
-// Botão de download grande: título + linha de detalhe (versão, tamanho).
+// Botão de download grande: título + linha de detalhe, em duas linhas.
+const DL_BTN = "h-auto min-h-14 py-2";
+function dlStack(title, sub) {
+  return el("span", { class: "flex flex-col items-start text-left leading-[1.3]" },
+    el("span", { class: "font-semibold" }, title),
+    el("span", { class: "text-[length:var(--fontSizeBase200,12px)] font-normal opacity-85" }, sub));
+}
+
 function downloadButton(f, version, primary) {
   return el(
     "fluent-anchor-button",
-    { class: "dl-btn", appearance: primary ? "primary" : "outline", size: "large", href: f.url },
-    el("span", { class: "dl-stack" },
-      el("span", { class: "dl-title" }, t("dl.for", { os: OS_NAME[f.os], label: f.label })),
-      el("span", { class: "dl-sub" }, `${version} · ${fmtSize(f.size)} · ${f.hint}`)),
+    { class: DL_BTN, appearance: primary ? "primary" : "outline", size: "large", href: f.url },
+    dlStack(t("dl.for", { os: OS_NAME[f.os], label: f.label }), `${version} · ${fmtSize(f.size)} · ${f.hint}`),
   );
 }
 
@@ -139,17 +144,17 @@ function fillPrimary(box, latest) {
 }
 
 function renderDownloads(files) {
-  const grid = el("div", { class: "downloads" });
+  const grid = el("div", { class: "grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-x-6 gap-y-3" });
   for (const os of ["windows", "linux"]) {
     const mine = files.filter((f) => f.os === os);
     if (!mine.length) continue;
     grid.append(
-      el("div", { class: "dl-group" },
+      el("div", { class: "flex flex-col gap-2" },
         el("fluent-text", { size: "300", weight: "semibold", block: true }, OS_NAME[os]),
         ...mine.map((f) =>
-          el("div", { class: "dl-row" },
+          el("div", { class: "flex flex-wrap items-center gap-x-2.5 gap-y-1.5" },
             el("fluent-anchor-button", { appearance: "outline", size: "small", href: f.url }, f.label),
-            el("fluent-text", { size: "200", class: "muted" }, `${fmtSize(f.size)} · ${f.hint}`)),
+            el("fluent-text", { size: "200", class: "text-muted" }, `${fmtSize(f.size)} · ${f.hint}`)),
         )),
     );
   }
@@ -157,13 +162,17 @@ function renderDownloads(files) {
 }
 
 function renderRelease(r, isLatest) {
-  const card = el("article", { class: "card release", id: r.tag_name });
+  // A mais recente (a primeira) com a borda verde.
+  const card = el("article", {
+    class: "rounded-card border border-line bg-surface p-6 shadow-card first:border-green/45",
+    id: r.tag_name,
+  });
   card.append(
-    el("div", { class: "release-head" },
-      el("h3", {}, r.name || r.tag_name),
+    el("div", { class: "flex flex-wrap items-center gap-x-3 gap-y-2" },
+      el("h3", { class: "text-[1.2rem] font-bold" }, r.name || r.tag_name),
       isLatest && el("fluent-badge", { appearance: "filled", color: "brand" }, t("dl.latest")),
       r.prerelease && el("fluent-badge", { appearance: "tint", color: "warning" }, t("dl.pre")),
-      el("fluent-text", { size: "200", class: "muted" }, fmtDate(r.published_at))),
+      el("fluent-text", { size: "200", class: "text-muted" }, fmtDate(r.published_at))),
   );
 
   const notes = renderNotes(r.body);
@@ -172,7 +181,7 @@ function renderRelease(r, isLatest) {
     if (isLatest) card.append(notes);
     else {
       card.append(
-        el("fluent-accordion", { class: "notes-more" },
+        el("fluent-accordion", { class: "mt-2" },
           el("fluent-accordion-item", {},
             el("span", { slot: "heading" }, t("dl.changes")),
             notes)),
@@ -182,10 +191,10 @@ function renderRelease(r, isLatest) {
 
   const files = installers(r);
   if (files.length) {
-    card.append(el("fluent-divider", { class: "release-divider" }), renderDownloads(files));
+    card.append(el("fluent-divider", { class: "my-4" }), renderDownloads(files));
   }
   card.append(
-    el("p", { class: "release-foot" }, el("fluent-link", { href: r.html_url }, t("dl.viewGithub"))),
+    el("p", { class: "mt-3.5" }, el("fluent-link", { href: r.html_url }, t("dl.viewGithub"))),
   );
   return card;
 }
@@ -204,10 +213,8 @@ function renderList(releases) {
 function renderError(message) {
   for (const id of ["primary", "primary-cta"]) {
     document.getElementById(id)?.replaceChildren(
-      el("fluent-anchor-button", { class: "dl-btn", appearance: "primary", size: "large", href: `${RELEASES_PAGE}/latest` },
-        el("span", { class: "dl-stack" },
-          el("span", { class: "dl-title" }, t("dl.fallback")),
-          el("span", { class: "dl-sub" }, t("dl.fallbackSub")))),
+      el("fluent-anchor-button", { class: DL_BTN, appearance: "primary", size: "large", href: `${RELEASES_PAGE}/latest` },
+        dlStack(t("dl.fallback"), t("dl.fallbackSub"))),
     );
   }
   document.getElementById("releases").replaceChildren(

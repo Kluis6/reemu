@@ -2,6 +2,8 @@ name: Pages
 
 # Publica `site/` (página de downloads) no GitHub Pages:
 # https://kluis6.github.io/reemu/
+# Antes de publicar, gera o CSS do Tailwind e copia o Motion para `vendor/`
+# (`pnpm --filter reemu-site build`; os dois arquivos não são versionados).
 # A lista de versões é lida da API do GitHub no navegador — publicar uma
 # Release NÃO precisa de novo deploy; só mudanças em `site/` disparam este.
 on:
@@ -9,6 +11,7 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      - "pnpm-lock.yaml"
       - ".github/workflows/pages.yml"
   workflow_dispatch: {}
 
@@ -29,9 +32,20 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter reemu-site
+      - run: pnpm --filter reemu-site build
+      # Só o que é servido: fora as dependências, a entrada do CSS e o script.
+      - run: |
+          cp -r site _site
+          rm -rf _site/node_modules _site/src _site/scripts _site/package.json
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

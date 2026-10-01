@@ -1,10 +1,15 @@
 packages:
   - "packages/*"
+  # site de downloads (GitHub Pages): build do CSS (Tailwind CLI) e o Motion
+  - "site"
 
 # pnpm 10+ bloqueia o postinstall de dependências por padrão; o esbuild (via
 # vite) precisa do dele pra linkar o binário da plataforma. Sem isto o CI
 # falha com ERR_PNPM_IGNORED_BUILDS.
 onlyBuiltDependencies:
   - esbuild
+  - "@parcel/watcher"
 allowBuilds:
   esbuild: true
+  # binário nativo do watcher do Tailwind CLI (`pnpm --filter reemu-site dev`)
+  "@parcel/watcher": true

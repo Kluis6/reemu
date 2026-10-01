@@ -1,0 +1,64 @@
+/* Entrada do Tailwind (v4): `pnpm --filter reemu-site build` gera
+   `site/tailwind.css`. Os estilos ficam nas classes do HTML e do JS; aqui só
+   os tokens da identidade (preto profundo, verde → azul da logo). Só tema
+   escuro — a logo tem fundo preto e o neon perde no claro.
+
+   Fontes das classes: só os arquivos do site (o `vendor/` traz o bundle do
+   Fluent, cheio de palavras que virariam classes à toa). */
+@import "tailwindcss" source(none);
+@source "../index.html";
+@source "../*.js";
+
+/* Os tokens do Fluent (`--colorNeutral…`, `--fontFamilyBase`…) chegam via
+   `setTheme` em ui.js; os valores depois da vírgula valem até lá (ou sem
+   JS). `inline`: a classe usa o `var()` do Fluent direto. */
+@theme inline {
+  --color-bg: #030605;
+  --color-bg-alt: #060b09;
+  --color-surface: var(--colorNeutralBackground1, #0a100e);
+  --color-surface-2: var(--colorNeutralBackground2, #111a17);
+  --color-line: var(--colorNeutralStroke2, #1b2a25);
+  --color-ink: var(--colorNeutralForeground1, #eef4f1);
+  --color-muted: var(--colorNeutralForeground3, #9aaba4);
+  --color-green: #3ddc2f;
+  --color-blue: #1e8bff;
+
+  --font-sans: var(--fontFamilyBase, "Segoe UI", system-ui, -apple-system, Roboto, Ubuntu, sans-serif);
+  --font-mono: var(--fontFamilyMonospace, ui-monospace, "Cascadia Code", monospace);
+
+  --radius-card: var(--borderRadiusXLarge, 12px);
+  --shadow-card: var(--shadow4, none);
+  --shadow-lift: var(--shadow16, 0 12px 32px rgba(0, 0, 0, 0.45));
+
+  --ease-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/* `js:` = só com JS ativo (o <head> põe a classe `js` no <html>). Usado
+   para esconder os blocos que entram ao rolar — sem JS, tudo visível. */
+@custom-variant js (&:where(.js *));
+
+/* O reset do Tailwind (`* { margin: 0; padding: 0; border: 0 solid }`)
+   também pega o elemento hospedeiro dos componentes Fluent — e regra do
+   documento vence o `:host` de dentro do componente, então os botões
+   perdiam borda e respiro. `revert-layer` descarta o reset nesses
+   elementos e deixa valer o estilo do próprio Fluent. */
+@layer base {
+  :where(
+      fluent-accordion,
+      fluent-accordion-item,
+      fluent-anchor-button,
+      fluent-badge,
+      fluent-button,
+      fluent-dialog,
+      fluent-dialog-body,
+      fluent-divider,
+      fluent-link,
+      fluent-message-bar,
+      fluent-spinner,
+      fluent-text
+    ) {
+    margin: revert-layer;
+    padding: revert-layer;
+    border: revert-layer;
+  }
+}

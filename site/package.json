@@ -1,0 +1,14 @@
+{
+  "name": "reemu-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tailwindcss -i src/input.css -o tailwind.css --minify && node scripts/vendor-motion.mjs",
+    "dev": "node scripts/vendor-motion.mjs && tailwindcss -i src/input.css -o tailwind.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "4.3.3",
+    "motion": "13.4.6",
+    "tailwindcss": "4.3.3"
+  }
+}
