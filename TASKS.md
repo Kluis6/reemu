@@ -59,14 +59,14 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       aviso "atualizado" depois do reinício. O `.deb` usa `pkexec`.
 - [ ] `todo` — Capturas do site em `site/screens/` (`inicio`, `biblioteca`,
       `jogo`, `pausa`, `cores` .png).
-- [ ] `todo` — Salvar a logo oficial em `site/logo.png` (a página já
-      aponta pra ela; sem o arquivo a imagem some e o resto aparece).
+- [x] `done` — Logo e favicon do site (`site/logo.webp`, `favicon-*.png`,
+      `icon-512.png`), 2026-10-01.
 
 ### Vídeo / GPU
 
-- [ ] `todo` — **Validar o OpenGL por hardware no Windows** (WGL, feito em
-      2026-09-25 sem máquina Windows): abrir um jogo de PS1 no Beetle PSX HW,
-      Dreamcast no flycast e N64 no mupen64plus/parallel e conferir a imagem.
+- [x] `done` — **OpenGL por hardware no Windows** (WGL): validado pelo
+      usuário em 2026-10-01 pelos logs — flycast (GL 3.2), Beetle PSX HW
+      (3.3) e parallel_n64 (3.0 compat) abriram contexto e renderizaram.
 - [ ] `todo` — Vulkan in-process no Windows: desligado por padrão depois
       que o `flycast` derrubou o app (`STATUS_ACCESS_VIOLATION`). Causa
       provável achada no Linux em 2026-09-25 (despachante do flycast nulo /
