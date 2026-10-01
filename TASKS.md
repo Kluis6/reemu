@@ -35,10 +35,12 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
-- [ ] `todo` — **Surface nativa de vídeo no Windows**: hoje o padrão lá é o
-      `<canvas>` (a surface no HWND fica atrás do WebView2). Precisa de uma
-      janela filha acima do WebView2 + esconder/mostrar pro menu de pausa,
-      equivalente ao `wl_subsurface` do Linux.
+- [ ] `todo` — **Validar o vídeo nativo no Windows** (janela filha acima do
+      WebView2, feita em 2026-10-01 sem máquina Windows; ver o histórico):
+      jogo aparece e preenche a janela, menu de pausa esconde e volta, trocar
+      de jogo não pisca o anterior, redimensionar/tela cheia acompanha,
+      clicar no jogo não tira o teclado. Se der errado:
+      `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>`.
 - [ ] `todo` — **Windows ponta a ponta**: só os testes do `core-ipc` rodaram
       numa máquina Windows real. Falta `cargo tauri dev` completo, `video.rs`
       no caminho `#[cfg(not(linux))]`, paths do buildbot de cores, instalador.

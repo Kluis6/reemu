@@ -1,4 +1,5 @@
-//! Surface nativa de vídeo — o jogo (wgpu) numa `wl_subsurface` da janela GTK.
+//! Surface nativa de vídeo — o jogo (wgpu) numa `wl_subsurface` da janela GTK
+//! (Linux) ou numa janela filha do HWND principal (Windows).
 //!
 //! ## Linux (Wayland) — padrão (`REEMU_NATIVE_VIDEO=0` volta pro `<canvas>`)
 //!
@@ -19,12 +20,43 @@
 //! vídeo (a chain desenha direto na imagem do swapchain da subsurface).
 //! Fallback automático pro `<canvas>` se não for Wayland ou o attach falhar.
 //!
-//! ## Windows / macOS
+//! ## Windows — padrão (`REEMU_NATIVE_VIDEO=0` volta pro `<canvas>`)
+//!
+//! Mesma coreografia, com uma janela filha (`WS_CHILD`) do HWND da janela no
+//! lugar da subsurface. A surface não pode ficar no HWND principal: o
+//! WebView2 é uma janela filha dele e cobriria o jogo. A nossa é criada
+//! depois e vai pro topo da ordem Z entre as irmãs (`HWND_TOP`), cobrindo o
+//! WebView2 enquanto joga; no menu ela some (`SWP_HIDEWINDOW`) e o WebView2
+//! aparece com o print de fundo. Decisões (documentação da Microsoft, Win32):
+//!
+//! - `WS_DISABLED`: "When a child window is disabled, the system passes the
+//!   child's mouse input messages to the parent window" (Window Features ›
+//!   Disabled Windows) — clicar no jogo não tira o foco do teclado do
+//!   WebView2, que é quem recebe as teclas do jogo e o Esc do menu.
+//! - `WS_CLIPSIBLINGS`: a irmã (WebView2) não desenha por cima da nossa área
+//!   (Window Features › Child Windows).
+//! - `SWP_ASYNCWINDOWPOS`: quem mexe na janela é o `reemu-video-pump`, não a
+//!   thread que a criou (a principal, do event loop). Com a flag, "the system
+//!   posts the request to the thread that owns the window. This prevents the
+//!   calling thread from blocking" (SetWindowPos) — sem deadlock com a thread
+//!   principal esperando um lock que o pump segura.
+//! - Present fora da thread da janela: o risco de deadlock que o DXGI descreve
+//!   (DXGI overview › Multithread considerations) é de swapchain em tela
+//!   cheia exclusiva; a nossa é em janela (o "tela cheia" do app é janela
+//!   sem borda).
+//!
+//! Mostrar vem DEPOIS do present (ao contrário do Wayland): a janela
+//! escondida guarda o último quadro apresentado, e mostrá-la antes do quadro
+//! novo piscaria o jogo anterior. Validação pendente em máquina Windows.
+//!
+//! ## macOS
 //!
 //! Surface direto no handle da janela. Não verificado.
 
 #[cfg(target_os = "linux")]
 use raw_window_handle::WaylandWindowHandle;
+#[cfg(target_os = "windows")]
+use raw_window_handle::Win32WindowHandle;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle, RawDisplayHandle, RawWindowHandle};
 #[cfg(target_os = "linux")]
 use std::ptr::NonNull;
@@ -40,7 +72,9 @@ pub struct SurfaceHandles {
 pub struct VideoSurface {
     #[cfg(target_os = "linux")]
     _wl: wl::Subsurface,
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "windows")]
+    _win: win::ChildWindow,
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     _priv: (),
 }
 
@@ -94,7 +128,30 @@ impl VideoSurface {
             )
         };
 
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(target_os = "windows")]
+        let (this, handles) = {
+            let RawWindowHandle::Win32(parent) = window else {
+                return None;
+            };
+            let size = main.inner_size().ok()?;
+            let child = win::ChildWindow::create(parent.hwnd.get(), size.width, size.height)?;
+            let mut wh = Win32WindowHandle::new(std::num::NonZeroIsize::new(child.hwnd())?);
+            wh.hinstance = std::num::NonZeroIsize::new(child.hinstance());
+            log::info!(
+                "surface de vídeo: janela filha ({}x{} físico)",
+                size.width,
+                size.height
+            );
+            (
+                Self { _win: child },
+                SurfaceHandles {
+                    display,
+                    window: RawWindowHandle::Win32(wh),
+                },
+            )
+        };
+
+        #[cfg(not(any(target_os = "linux", target_os = "windows")))]
         let (this, handles) = (Self { _priv: () }, SurfaceHandles { display, window });
 
         Some((this, handles))
@@ -106,6 +163,8 @@ impl VideoSurface {
     pub fn reconfigure(&self, x: i32, y: i32, width: u32, height: u32) {
         #[cfg(target_os = "linux")]
         self._wl.reconfigure(x, y, width, height);
+        #[cfg(target_os = "windows")]
+        self._win.reconfigure(x, y, width, height);
         let _ = (x, y, width, height);
     }
 
@@ -115,6 +174,8 @@ impl VideoSurface {
     pub fn set_hidden(&self, hidden: bool) {
         #[cfg(target_os = "linux")]
         self._wl.set_hidden(hidden);
+        #[cfg(target_os = "windows")]
+        self._win.set_hidden(hidden);
         let _ = hidden;
     }
 
@@ -123,6 +184,156 @@ impl VideoSurface {
     pub fn show(&self) {
         #[cfg(target_os = "linux")]
         self._wl.show();
+    }
+
+    /// Par do `show()` pra depois do present: no Windows é aqui que a janela
+    /// filha aparece, já com o quadro novo (ver o cabeçalho do módulo).
+    pub fn show_after_present(&self) {
+        #[cfg(target_os = "windows")]
+        self._win.show();
+    }
+}
+
+#[cfg(target_os = "windows")]
+mod win {
+    //! Janela filha (`WS_CHILD`) do HWND principal pra surface do wgpu.
+
+    use windows_sys::Win32::Foundation::{GetLastError, ERROR_CLASS_ALREADY_EXISTS, HWND};
+    use windows_sys::Win32::Graphics::Gdi::{GetStockObject, BLACK_BRUSH};
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DefWindowProcW, PostMessageW, RegisterClassExW, SetWindowPos, HWND_TOP,
+        SWP_ASYNCWINDOWPOS, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+        SWP_SHOWWINDOW, WM_CLOSE, WNDCLASSEXW, WS_CHILD, WS_CLIPSIBLINGS, WS_DISABLED,
+    };
+
+    pub struct ChildWindow {
+        // HWND/HINSTANCE como inteiro: o ponteiro cru não é `Send`.
+        hwnd: isize,
+        hinstance: isize,
+    }
+
+    // Cada chamada daqui é um `SetWindowPos` assíncrono (seguro de outra
+    // thread) ou um `PostMessageW`.
+    unsafe impl Send for ChildWindow {}
+
+    fn wide(s: &str) -> Vec<u16> {
+        s.encode_utf16().chain(Some(0)).collect()
+    }
+
+    impl ChildWindow {
+        /// Cria escondida, do tamanho da área de cliente do pai. Chamar na
+        /// thread principal: a janela pertence à thread que a cria, e é o
+        /// laço de mensagens dela (o event loop do Tauri) que a atende.
+        pub fn create(parent: isize, w: u32, h: u32) -> Option<Self> {
+            let class = wide("ReEmuVideo");
+            // SAFETY: chamadas Win32 com argumentos válidos; `class` vive até
+            // o fim da função (o sistema copia o nome no registro).
+            unsafe {
+                let hinstance = GetModuleHandleW(std::ptr::null());
+                let wc = WNDCLASSEXW {
+                    cbSize: std::mem::size_of::<WNDCLASSEXW>() as u32,
+                    style: 0,
+                    // Sem tratamento próprio: pintura, tamanho e fechamento
+                    // ficam com o padrão. O fundo preto cobre o intervalo até
+                    // o 1º present.
+                    lpfnWndProc: Some(DefWindowProcW),
+                    cbClsExtra: 0,
+                    cbWndExtra: 0,
+                    hInstance: hinstance,
+                    hIcon: std::ptr::null_mut(),
+                    hCursor: std::ptr::null_mut(),
+                    hbrBackground: GetStockObject(BLACK_BRUSH),
+                    lpszMenuName: std::ptr::null(),
+                    lpszClassName: class.as_ptr(),
+                    hIconSm: std::ptr::null_mut(),
+                };
+                if RegisterClassExW(&wc) == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS {
+                    log::warn!("RegisterClassExW falhou: {}", GetLastError());
+                    return None;
+                }
+                let hwnd = CreateWindowExW(
+                    0,
+                    class.as_ptr(),
+                    std::ptr::null(),
+                    WS_CHILD | WS_CLIPSIBLINGS | WS_DISABLED,
+                    0,
+                    0,
+                    w.max(1) as i32,
+                    h.max(1) as i32,
+                    parent as HWND,
+                    std::ptr::null_mut(),
+                    hinstance,
+                    std::ptr::null(),
+                );
+                if hwnd.is_null() {
+                    log::warn!("CreateWindowExW falhou: {}", GetLastError());
+                    return None;
+                }
+                Some(Self {
+                    hwnd: hwnd as isize,
+                    hinstance: hinstance as isize,
+                })
+            }
+        }
+
+        pub fn hwnd(&self) -> isize {
+            self.hwnd
+        }
+
+        pub fn hinstance(&self) -> isize {
+            self.hinstance
+        }
+
+        fn set_pos(&self, x: i32, y: i32, w: i32, h: i32, flags: u32) {
+            // SAFETY: HWND nosso, vivo até o `Drop`.
+            unsafe {
+                SetWindowPos(
+                    self.hwnd as HWND,
+                    HWND_TOP,
+                    x,
+                    y,
+                    w,
+                    h,
+                    flags | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS,
+                );
+            }
+        }
+
+        /// `(x, y)` em coordenadas de cliente do pai (sempre `(0, 0)` aqui,
+        /// ver `csd_offset` no lib.rs), tamanho em pixels físicos. Sem
+        /// `SWP_NOZORDER`: reafirma o topo sobre o WebView2 a cada mudança.
+        pub fn reconfigure(&self, x: i32, y: i32, w: u32, h: u32) {
+            self.set_pos(x, y, w.max(1) as i32, h.max(1) as i32, 0);
+        }
+
+        pub fn set_hidden(&self, hidden: bool) {
+            if hidden {
+                self.set_pos(
+                    0,
+                    0,
+                    0,
+                    0,
+                    SWP_HIDEWINDOW | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER,
+                );
+            }
+        }
+
+        /// Mostra e põe no topo das irmãs (acima do WebView2).
+        pub fn show(&self) {
+            self.set_pos(0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOMOVE | SWP_NOSIZE);
+        }
+    }
+
+    impl Drop for ChildWindow {
+        fn drop(&mut self) {
+            // `DestroyWindow` só vale na thread dona da janela; o `WM_CLOSE`
+            // chega lá e o `DefWindowProcW` destrói.
+            // SAFETY: HWND nosso.
+            unsafe {
+                PostMessageW(self.hwnd as HWND, WM_CLOSE, 0, 0);
+            }
+        }
     }
 }
 

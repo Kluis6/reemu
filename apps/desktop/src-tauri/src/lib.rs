@@ -117,15 +117,16 @@ pub fn run() {
             spawn_input_bridge(app.handle().clone());
             play_clock::spawn(app.handle().clone());
 
-            // Surface nativa de vídeo (wl_subsurface `place_above`) — padrão no
-            // Linux/Wayland. `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>` na
+            // Surface nativa de vídeo — padrão no Linux/Wayland (wl_subsurface
+            // `place_above`) e no Windows (janela filha acima do WebView2), ver
+            // `video.rs`. `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>` na
             // webview. Sem Wayland, `VideoSurface::spawn` devolve `None` e o
-            // canvas assume sozinho. Fora do Linux o padrão é o canvas: lá a
-            // surface cairia no HWND da janela, ATRÁS da janela filha do
-            // WebView2 (jogo invisível), e não há como esconder/mostrar pro
-            // menu de pausa (`video.rs` só implementa isso pra Wayland).
-            // `REEMU_NATIVE_VIDEO=1` força, pra quem for implementar.
-            if env_flag("REEMU_NATIVE_VIDEO", cfg!(target_os = "linux")) {
+            // canvas assume sozinho. No macOS o padrão segue o canvas (sem
+            // implementação de esconder/mostrar pro menu de pausa).
+            if env_flag(
+                "REEMU_NATIVE_VIDEO",
+                cfg!(any(target_os = "linux", target_os = "windows")),
+            ) {
                 let win_size = app
                     .handle()
                     .get_webview_window("main")
@@ -362,6 +363,11 @@ pub fn run() {
 /// Deslocamento do CSD (borda/título): `(0,0)` em fullscreen e no caso comum do
 /// Wayland (não expõe posição global), a espessura da decoração em janela X11.
 fn csd_offset(app: &tauri::AppHandle) -> (i32, i32) {
+    // Windows: a janela filha do vídeo já é posicionada em coordenadas de
+    // cliente do pai — a origem da área de conteúdo, sem borda a descontar.
+    if cfg!(target_os = "windows") {
+        return (0, 0);
+    }
     app.get_webview_window("main")
         .and_then(|w| {
             let i = w.inner_position().ok()?;
@@ -540,6 +546,16 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                                 fp.render_to_surface(Some(f));
                                 if let Some(d) = diag.as_mut() {
                                     d.presented(t.elapsed());
+                                }
+                            }
+                            if hidden {
+                                if let Some(vs) = state
+                                    .video
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner())
+                                    .as_ref()
+                                {
+                                    vs.show_after_present();
                                 }
                             }
                             hidden = false;

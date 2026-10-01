@@ -1588,3 +1588,16 @@ Infra:
 ## 2026-09-25 — Release v0.1.3
 
 - Corrige o crash da v0.1.2 no Linux: abrir um jogo de N64 no mupen64plus_next com o plugin padrão (GLideN64) derrubava o app. Também entram o interop GL com modificador DRM negociado (validação limpa), a fase C dos cores Vulkan e a base de idiomas (pt-BR, en, es). A versão do `package.json` da raiz, que tinha ficado em 0.1.1, foi alinhada.
+
+## 2026-10-01 — Vídeo nativo no Windows: janela filha acima do WebView2
+
+- No Windows o jogo ia pelo `<canvas>`: o quadro saía da GPU, passava pela IPC e voltava para a GPU no WebGL. Agora é como no Linux. A chain desenha direto no swapchain de uma **janela filha** (`WS_CHILD`) do HWND principal, criada na thread principal pelo `VideoSurface::spawn` (`video.rs`, módulo `win`). A surface não pode ficar no HWND principal porque o WebView2 é uma janela filha dele e cobriria o jogo. A nossa vai para o topo das irmãs (`HWND_TOP`).
+- Coreografia igual à da `wl_subsurface`: a máquina `VideoMenu` no `reemu-video-pump` esconde a janela no menu de pausa, no carregamento e sem jogo (`SWP_HIDEWINDOW`). O WebView2 aparece com o print de fundo.
+- Decisões, pela documentação da Microsoft (Win32):
+  - `WS_DISABLED`: "When a child window is disabled, the system passes the child's mouse input messages to the parent window" (*Window Features › Disabled Windows*). Clicar no jogo não tira o foco do teclado do WebView2, que recebe as teclas do jogo e o Esc.
+  - `WS_CLIPSIBLINGS` (*Window Features › Child Windows*): a janela irmã não desenha na nossa área.
+  - `SWP_ASYNCWINDOWPOS` (*SetWindowPos*): "the system posts the request to the thread that owns the window. This prevents the calling thread from blocking". O pump mexe na janela de outra thread sem esperar o event loop.
+  - O deadlock de *DXGI overview › Multithread considerations* é de swapchain em tela cheia exclusiva. O do app é em janela (a tela cheia é janela sem borda).
+  - Mostrar vem **depois** do present: a janela escondida guarda o último quadro, e mostrá-la antes piscaria o jogo anterior.
+  - Posição em coordenadas de cliente do pai, sempre `(0, 0)`: `csd_offset` devolve zero no Windows.
+- Padrão no Windows (`REEMU_NATIVE_VIDEO=0` volta para o canvas). Verificado aqui: `scripts/check-windows.sh` e os testes do Linux. **Falta validar numa máquina Windows.**
