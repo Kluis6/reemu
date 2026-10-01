@@ -231,6 +231,7 @@ pub fn run() {
             commands::poll_frame,
             commands::set_video_viewport,
             commands::native_video_active,
+            commands::native_video_overlay,
             commands::pause_background,
             commands::session_state,
             commands::get_audio_config,
@@ -513,13 +514,26 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                             // o último frame do jogo anterior grudado no
                             // `wl_surface`.
                             if !hidden {
-                                if let Some(vs) = state
+                                let overlay = if let Some(vs) = state
                                     .video
                                     .lock()
                                     .unwrap_or_else(|p| p.into_inner())
                                     .as_ref()
                                 {
                                     vs.set_hidden(true);
+                                    vs.overlay()
+                                } else {
+                                    false
+                                };
+                                // Protótipo REEMU_WIN_OVERLAY: a surface fica
+                                // atrás da interface transparente — limpa de
+                                // preto em vez de esconder.
+                                if overlay {
+                                    if let Some(fp) =
+                                        state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut()
+                                    {
+                                        fp.clear_surface();
+                                    }
                                 }
                                 hidden = true;
                             }
@@ -573,6 +587,19 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                                 }
                             }
                         }
+                    }
+                    // Protótipo REEMU_WIN_OVERLAY: o menu é desenhado por cima do
+                    // jogo ao vivo — sem print de fundo e sem esconder a surface.
+                    Opening(0)
+                        if state
+                            .video
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .as_ref()
+                            .is_some_and(|vs| vs.overlay()) =>
+                    {
+                        *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
+                        *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = MenuUp;
                     }
                     Opening(0) => {
                         let cap = state

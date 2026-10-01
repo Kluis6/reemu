@@ -41,6 +41,14 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       de jogo não pisca o anterior, redimensionar/tela cheia acompanha,
       clicar no jogo não tira o teclado. Se der errado:
       `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>`.
+- [ ] `todo` — **Testar o protótipo de overlay no Windows**
+      (`REEMU_WIN_OVERLAY`, 2026-10-01): WebView2 transparente por cima do
+      jogo. Rodar `REEMU_WIN_OVERLAY=1` (surface no HWND principal) e
+      `REEMU_WIN_OVERLAY=child` (janela filha abaixo do WebView2) e, em
+      cada um, conferir: o jogo aparece na PlayScreen; Esc abre o menu POR
+      CIMA do jogo (escurecido, sem print); avisos/toasts aparecem durante o
+      jogo; biblioteca e configurações continuam opacas; trocar de jogo não
+      mostra o anterior. A variante que funcionar vira o padrão.
 - [ ] `todo` — **Windows ponta a ponta**: só os testes do `core-ipc` rodaram
       numa máquina Windows real. Falta `cargo tauri dev` completo, `video.rs`
       no caminho `#[cfg(not(linux))]`, paths do buildbot de cores, instalador.

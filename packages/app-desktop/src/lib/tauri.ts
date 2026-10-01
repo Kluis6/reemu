@@ -55,6 +55,9 @@ export const decorationImage = () => invoke<ArrayBuffer>('decoration_image')
 /** `true` = vídeo numa surface nativa atrás da webview (`REEMU_NATIVE_VIDEO=1`);
  *  a PlayScreen fica transparente e não roda o loop do canvas. */
 export const nativeVideoActive = () => invoke<boolean>('native_video_active')
+/** Protótipo `REEMU_WIN_OVERLAY` (Windows): jogo atrás da webview transparente —
+ *  o menu de pausa fica por cima do jogo, sem print de fundo. */
+export const nativeVideoOverlay = () => invoke<boolean>('native_video_overlay')
 
 export interface AudioConfig {
   outputDeviceId: string | null

@@ -33,6 +33,7 @@ import {
   loadGame,
   loadSaveState,
   nativeVideoActive,
+  nativeVideoOverlay,
   onHotkeyAction,
   pauseBackgroundUrl,
   pollFrame,
@@ -237,6 +238,15 @@ export function PlayScreen() {
       staleTime: Infinity,
       retry: false,
     }).data === true;
+  // Protótipo REEMU_WIN_OVERLAY: o jogo continua visível atrás da interface,
+  // então o menu de pausa dispensa o print de fundo.
+  const overlay =
+    useQuery({
+      queryKey: ["native-video-overlay"],
+      queryFn: nativeVideoOverlay,
+      staleTime: Infinity,
+      retry: false,
+    }).data === true;
   const qc = useQueryClient();
   const push = useToastStore((s) => s.push);
   const { romId = "" } = useParams();
@@ -396,7 +406,7 @@ export function PlayScreen() {
   useEffect(() => {
     if (menuOpen) {
       wasOpen.current = true;
-      if (!nativeVideo) return;
+      if (!nativeVideo || overlay) return;
       let url: string | null = null;
       // pequeno atraso: o Rust captura ~2 ticks depois do foco trocar.
       const t = setTimeout(() => {
@@ -421,7 +431,7 @@ export function PlayScreen() {
       });
     }, 175);
     return () => clearTimeout(t);
-  }, [menuOpen, nativeVideo]);
+  }, [menuOpen, nativeVideo, overlay]);
 
   useEffect(() => {
     if (status !== "ready" || nativeVideo) return;

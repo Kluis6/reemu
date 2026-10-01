@@ -49,6 +49,24 @@
 //! escondida guarda o último quadro apresentado, e mostrá-la antes do quadro
 //! novo piscaria o jogo anterior. Validação pendente em máquina Windows.
 //!
+//! ### Protótipo: WebView2 transparente por cima (`REEMU_WIN_OVERLAY`)
+//!
+//! Em vez de o jogo cobrir a interface e sumir no menu, o jogo fica ATRÁS e o
+//! WebView2 transparente por cima: `DefaultBackgroundColor` com alfa 0 —
+//! "In the case of a transparent DefaultBackgroundColor WebView will render
+//! hosting app content as the background" (Microsoft, WebView2
+//! `ICoreWebView2Controller2::put_DefaultBackgroundColor`; só alfa 0 ou 255).
+//! A `PlayScreen` já é transparente no vídeo nativo; o menu de pausa e os
+//! avisos viram camadas HTML sobre o jogo ao vivo, sem print nem esconder.
+//! Sem jogo / carregando, a surface é limpa de preto (`clear_surface`) em vez
+//! de escondida. Duas variantes pra testar qual o WebView2 em modo janela
+//! deixa aparecer por baixo (a documentação não detalha):
+//!
+//! - `REEMU_WIN_OVERLAY=1`: surface no próprio HWND principal (o "hosting app
+//!   content" mais literal);
+//! - `REEMU_WIN_OVERLAY=child`: a janela filha, mas no FUNDO das irmãs
+//!   (`HWND_BOTTOM`), abaixo do WebView2.
+//!
 //! ## macOS
 //!
 //! Surface direto no handle da janela. Não verificado.
@@ -72,10 +90,32 @@ pub struct SurfaceHandles {
 pub struct VideoSurface {
     #[cfg(target_os = "linux")]
     _wl: wl::Subsurface,
+    /// `None` = surface no próprio HWND principal (`REEMU_WIN_OVERLAY=1`).
     #[cfg(target_os = "windows")]
-    _win: win::ChildWindow,
+    _win: Option<win::ChildWindow>,
+    /// WebView2 transparente por cima do jogo (`REEMU_WIN_OVERLAY`).
+    #[cfg(target_os = "windows")]
+    overlay: bool,
     #[cfg(not(any(target_os = "linux", target_os = "windows")))]
     _priv: (),
+}
+
+/// Variante do protótipo `REEMU_WIN_OVERLAY` (ver o cabeçalho do módulo).
+#[cfg(target_os = "windows")]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum WinOverlay {
+    Off,
+    Parent,
+    Child,
+}
+
+#[cfg(target_os = "windows")]
+fn win_overlay() -> WinOverlay {
+    match std::env::var("REEMU_WIN_OVERLAY").as_deref() {
+        Ok("1") | Ok("parent") => WinOverlay::Parent,
+        Ok("child") => WinOverlay::Child,
+        _ => WinOverlay::Off,
+    }
 }
 
 // SAFETY: só a thread principal (event loop do Tauri) toca isso —
@@ -133,22 +173,66 @@ impl VideoSurface {
             let RawWindowHandle::Win32(parent) = window else {
                 return None;
             };
+            let mode = win_overlay();
+            if mode != WinOverlay::Off {
+                // Só o WebView2 (não a janela): alfa 0 deixa ver o conteúdo do
+                // app por baixo. As telas com fundo opaco no CSS continuam
+                // opacas; só a `PlayScreen` é transparente.
+                let webview: &tauri::Webview<R> = main.as_ref();
+                if let Err(e) =
+                    webview.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)))
+                {
+                    log::warn!("REEMU_WIN_OVERLAY: WebView2 transparente falhou ({e})");
+                    return None;
+                }
+            }
             let size = main.inner_size().ok()?;
-            let child = win::ChildWindow::create(parent.hwnd.get(), size.width, size.height)?;
-            let mut wh = Win32WindowHandle::new(std::num::NonZeroIsize::new(child.hwnd())?);
-            wh.hinstance = std::num::NonZeroIsize::new(child.hinstance());
-            log::info!(
-                "surface de vídeo: janela filha ({}x{} físico)",
-                size.width,
-                size.height
-            );
-            (
-                Self { _win: child },
-                SurfaceHandles {
-                    display,
-                    window: RawWindowHandle::Win32(wh),
-                },
-            )
+            if mode == WinOverlay::Parent {
+                log::info!(
+                    "surface de vídeo: HWND principal atrás do WebView2 transparente ({}x{} físico) — protótipo REEMU_WIN_OVERLAY",
+                    size.width,
+                    size.height
+                );
+                (
+                    Self {
+                        _win: None,
+                        overlay: true,
+                    },
+                    SurfaceHandles { display, window },
+                )
+            } else {
+                let below = mode == WinOverlay::Child;
+                let child =
+                    win::ChildWindow::create(parent.hwnd.get(), size.width, size.height, below)?;
+                if below {
+                    // Fica sempre visível no fundo; quem some é a cor do
+                    // WebView2 por cima.
+                    child.show();
+                }
+                let mut wh = Win32WindowHandle::new(std::num::NonZeroIsize::new(child.hwnd())?);
+                wh.hinstance = std::num::NonZeroIsize::new(child.hinstance());
+                log::info!(
+                    "surface de vídeo: janela filha {} do WebView2 ({}x{} físico){}",
+                    if below { "abaixo" } else { "acima" },
+                    size.width,
+                    size.height,
+                    if below {
+                        " — protótipo REEMU_WIN_OVERLAY=child"
+                    } else {
+                        ""
+                    }
+                );
+                (
+                    Self {
+                        _win: Some(child),
+                        overlay: below,
+                    },
+                    SurfaceHandles {
+                        display,
+                        window: RawWindowHandle::Win32(wh),
+                    },
+                )
+            }
         };
 
         #[cfg(not(any(target_os = "linux", target_os = "windows")))]
@@ -164,8 +248,20 @@ impl VideoSurface {
         #[cfg(target_os = "linux")]
         self._wl.reconfigure(x, y, width, height);
         #[cfg(target_os = "windows")]
-        self._win.reconfigure(x, y, width, height);
+        if let Some(w) = &self._win {
+            w.reconfigure(x, y, width, height);
+        }
         let _ = (x, y, width, height);
+    }
+
+    /// WebView2 transparente por cima do jogo (protótipo `REEMU_WIN_OVERLAY`):
+    /// a interface é desenhada sobre o jogo, então nada de esconder/mostrar —
+    /// o pump limpa a surface de preto quando não há jogo.
+    pub fn overlay(&self) -> bool {
+        #[cfg(target_os = "windows")]
+        return self.overlay;
+        #[cfg(not(target_os = "windows"))]
+        false
     }
 
     /// Esconde a subsurface do jogo (menu aberto, load em andamento, ou
@@ -175,7 +271,9 @@ impl VideoSurface {
         #[cfg(target_os = "linux")]
         self._wl.set_hidden(hidden);
         #[cfg(target_os = "windows")]
-        self._win.set_hidden(hidden);
+        if let (Some(w), false) = (&self._win, self.overlay) {
+            w.set_hidden(hidden);
+        }
         let _ = hidden;
     }
 
@@ -190,7 +288,9 @@ impl VideoSurface {
     /// filha aparece, já com o quadro novo (ver o cabeçalho do módulo).
     pub fn show_after_present(&self) {
         #[cfg(target_os = "windows")]
-        self._win.show();
+        if let (Some(w), false) = (&self._win, self.overlay) {
+            w.show();
+        }
     }
 }
 
@@ -202,15 +302,18 @@ mod win {
     use windows_sys::Win32::Graphics::Gdi::{GetStockObject, BLACK_BRUSH};
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, PostMessageW, RegisterClassExW, SetWindowPos, HWND_TOP,
-        SWP_ASYNCWINDOWPOS, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-        SWP_SHOWWINDOW, WM_CLOSE, WNDCLASSEXW, WS_CHILD, WS_CLIPSIBLINGS, WS_DISABLED,
+        CreateWindowExW, DefWindowProcW, PostMessageW, RegisterClassExW, SetWindowPos, HWND_BOTTOM,
+        HWND_TOP, SWP_ASYNCWINDOWPOS, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+        SWP_NOZORDER, SWP_SHOWWINDOW, WM_CLOSE, WNDCLASSEXW, WS_CHILD, WS_CLIPSIBLINGS,
+        WS_DISABLED,
     };
 
     pub struct ChildWindow {
         // HWND/HINSTANCE como inteiro: o ponteiro cru não é `Send`.
         hwnd: isize,
         hinstance: isize,
+        /// No fundo das irmãs (abaixo do WebView2) em vez do topo.
+        below: bool,
     }
 
     // Cada chamada daqui é um `SetWindowPos` assíncrono (seguro de outra
@@ -225,7 +328,7 @@ mod win {
         /// Cria escondida, do tamanho da área de cliente do pai. Chamar na
         /// thread principal: a janela pertence à thread que a cria, e é o
         /// laço de mensagens dela (o event loop do Tauri) que a atende.
-        pub fn create(parent: isize, w: u32, h: u32) -> Option<Self> {
+        pub fn create(parent: isize, w: u32, h: u32, below: bool) -> Option<Self> {
             let class = wide("ReEmuVideo");
             // SAFETY: chamadas Win32 com argumentos válidos; `class` vive até
             // o fim da função (o sistema copia o nome no registro).
@@ -273,6 +376,7 @@ mod win {
                 Some(Self {
                     hwnd: hwnd as isize,
                     hinstance: hinstance as isize,
+                    below,
                 })
             }
         }
@@ -290,7 +394,7 @@ mod win {
             unsafe {
                 SetWindowPos(
                     self.hwnd as HWND,
-                    HWND_TOP,
+                    if self.below { HWND_BOTTOM } else { HWND_TOP },
                     x,
                     y,
                     w,
@@ -302,7 +406,8 @@ mod win {
 
         /// `(x, y)` em coordenadas de cliente do pai (sempre `(0, 0)` aqui,
         /// ver `csd_offset` no lib.rs), tamanho em pixels físicos. Sem
-        /// `SWP_NOZORDER`: reafirma o topo sobre o WebView2 a cada mudança.
+        /// `SWP_NOZORDER`: reafirma a posição em relação ao WebView2 (acima,
+        /// ou abaixo no protótipo) a cada mudança.
         pub fn reconfigure(&self, x: i32, y: i32, w: u32, h: u32) {
             self.set_pos(x, y, w.max(1) as i32, h.max(1) as i32, 0);
         }
@@ -319,7 +424,8 @@ mod win {
             }
         }
 
-        /// Mostra e põe no topo das irmãs (acima do WebView2).
+        /// Mostra e reafirma a posição entre as irmãs (no topo, acima do
+        /// WebView2; ou no fundo, abaixo dele).
         pub fn show(&self) {
             self.set_pos(0, 0, 0, 0, SWP_SHOWWINDOW | SWP_NOMOVE | SWP_NOSIZE);
         }

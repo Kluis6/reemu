@@ -434,6 +434,19 @@ pub fn native_video_active(state: State<'_, AppState>) -> bool {
         .is_some()
 }
 
+/// Protótipo `REEMU_WIN_OVERLAY` (Windows): o jogo fica atrás da webview
+/// transparente — o menu de pausa é desenhado por cima do jogo ao vivo, sem o
+/// print de fundo (`pause_background`).
+#[tauri::command]
+pub fn native_video_overlay(state: State<'_, AppState>) -> bool {
+    state
+        .video
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .as_ref()
+        .is_some_and(|vs| vs.overlay())
+}
+
 /// Tamanho do cabeçalho do `poll_frame`: `[w u32][h u32][deco_gen u32]
 /// [retângulo do jogo na moldura: cx, cy, meia_l, meia_a em f32 NDC]
 /// [proporção de exibição f32]`, tudo LE. `deco_gen == 0` = sem moldura (o

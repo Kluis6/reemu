@@ -1620,3 +1620,15 @@ Infra:
   - Destaque da página do jogo dimensionado para o aviso de core não invadir as abas.
   - Destaque da Início com 208 epx, para a primeira fileira aparecer junto, como no dashboard.
 - Verificado no Chrome headless com o backend simulado, em 16:9, 21:9 e 4:3. A experiência de tela cheia do Xbox no PC não tem medidas publicadas; os tamanhos vêm das regras oficiais acima e da tela de referência.
+
+## 2026-10-01 — Protótipo no Windows: WebView2 transparente por cima do jogo (`REEMU_WIN_OVERLAY`)
+
+- **Ideia:** no Windows o WebView2 aceita fundo transparente, ao contrário do WebKitGTK com NVIDIA. O jogo pode ficar *atrás* da interface: menu de pausa, avisos e HUD passam a ser camadas HTML sobre o jogo ao vivo, sem print de fundo e sem esconder e mostrar janela.
+- **Base:** documentação do WebView2, `ICoreWebView2Controller2::put_DefaultBackgroundColor`: "In the case of a transparent DefaultBackgroundColor WebView will render hosting app content as the background" (só alfa 0 ou 255). No Tauri é `Webview::set_background_color(Color(0,0,0,0))`, e o wry repassa ao `DefaultBackgroundColor`. Só o WebView2 fica transparente; as telas com fundo opaco no CSS continuam opacas, e a `PlayScreen` já era transparente no vídeo nativo.
+- **Duas variantes**, porque a documentação não detalha o que aparece por baixo no modo janela:
+  - `REEMU_WIN_OVERLAY=1`: a surface vai no próprio HWND principal;
+  - `REEMU_WIN_OVERLAY=child`: a janela filha fica no fundo das irmãs (`HWND_BOTTOM`), abaixo do WebView2.
+- **Comportamento no modo overlay:**
+  - sem jogo ou carregando, a surface é limpa de preto (`clear_surface`) em vez de escondida;
+  - ao abrir o menu, não há captura nem esconder; a `PlayScreen` não busca o `pause_background`, e o véu do menu escurece o jogo.
+- Sem a flag, nada muda (janela filha por cima, como antes). Verificado aqui: `scripts/check-windows.sh`, clippy e os testes no Linux. **Falta rodar no Windows.**
