@@ -1464,3 +1464,59 @@ fn print_dmabuf_import_modifiers() {
         eprintln!("  {m:#018x}");
     }
 }
+
+/// Modo canvas (Windows): a passada `scale_type = viewport` sai no tamanho
+/// que a webview informou (`set_canvas_viewport`), não em 3× a nativa. Era
+/// isso que fazia a máscara de CRT virar moiré (resultado reduzido no
+/// canvas) e o quadro de ~11 MB pelo IPC derrubar o desempenho.
+#[test]
+fn canvas_viewport_sizes_viewport_passes() {
+    if std::env::var_os("REEMU_NO_GPU").is_some() {
+        return;
+    }
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem adapter wgpu — pulando");
+        return;
+    };
+    let dir = std::env::temp_dir().join("reemu_gpu_canvas_vp");
+    std::fs::create_dir_all(&dir).unwrap();
+    let sl = dir.join("pass.slang");
+    let sp = dir.join("vp.slangp");
+    std::fs::write(
+        &sl,
+        concat!(
+            "#version 450\n",
+            "#pragma stage vertex\n",
+            "layout(location=0) in vec4 Position; layout(location=1) in vec2 TexCoord;\n",
+            "layout(location=0) out vec2 vUV;\n",
+            "layout(std140, set=0, binding=0) uniform UBO { mat4 MVP; } g;\n",
+            "void main(){ gl_Position = g.MVP * Position; vUV = TexCoord; }\n",
+            "#pragma stage fragment\n",
+            "layout(location=0) in vec2 vUV;\n",
+            "layout(location=0) out vec4 c;\n",
+            "layout(set=0,binding=2) uniform sampler2D Source;\n",
+            "void main(){ c = texture(Source, vUV); }\n",
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        &sp,
+        "shaders = 1\nshader0 = pass.slang\nscale_type0 = viewport\nscale0 = 1.0\n",
+    )
+    .unwrap();
+    fp.set_preset(sp.to_str().unwrap())
+        .expect("preset viewport");
+
+    let frame = grey_frame(64, 48, 0x80);
+    let size = |fp: &mut FrameProcessor| {
+        let _ = fp.process(&frame);
+        let (w, h, _) = fp.process(&frame).expect("saída");
+        (w, h)
+    };
+    // sem viewport informado: o antigo fallback de 3× a nativa
+    assert_eq!(size(&mut fp), (192, 144));
+    // com o tamanho real da área do jogo na tela
+    fp.set_canvas_viewport(990, 735);
+    assert_eq!(size(&mut fp), (990, 735));
+    let _ = std::fs::remove_dir_all(&dir);
+}

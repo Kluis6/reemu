@@ -36,6 +36,7 @@ import {
   onHotkeyAction,
   pauseBackgroundUrl,
   pollFrame,
+  setVideoViewport,
   FRAME_HEADER,
   decorationImage,
   saveState,
@@ -331,6 +332,39 @@ export function PlayScreen() {
     const c = canvasRef.current;
     if (c) for (const k of ["left", "top", "width", "height"] as const) c.style[k] = "";
   }, [deco]);
+  // Modo canvas: informa ao backend o tamanho REAL (pixels físicos) da área
+  // do jogo — é o viewport dos shaders. Sem isso o shader rodava em 3× a
+  // nativa e o canvas reduzia o resultado: máscara de CRT virava moiré e o
+  // quadro gigante pelo IPC derrubava o desempenho.
+  useEffect(() => {
+    if (nativeVideo) return;
+    const c = canvasRef.current;
+    if (!c) return;
+    let last = "";
+    const send = (w: number, h: number) => {
+      const key = `${w}x${h}`;
+      if (w < 1 || h < 1 || key === last) return;
+      last = key;
+      void setVideoViewport(w, h).catch(() => {});
+    };
+    const ro = new ResizeObserver((entries) => {
+      const dp = entries[0]?.devicePixelContentBoxSize?.[0];
+      if (dp) {
+        send(Math.round(dp.inlineSize), Math.round(dp.blockSize));
+      } else {
+        const r = c.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        send(Math.round(r.width * dpr), Math.round(r.height * dpr));
+      }
+    });
+    try {
+      ro.observe(c, { box: "device-pixel-content-box" });
+    } catch {
+      ro.observe(c); // motor sem esse modo: cai no cálculo por devicePixelRatio
+    }
+    return () => ro.disconnect();
+  }, [nativeVideo, deco]);
+
   // O loop de fetch olha o foco por ref (não re-monta o efeito a cada pausa).
   const pausedRef = useRef(false);
   useEffect(() => {

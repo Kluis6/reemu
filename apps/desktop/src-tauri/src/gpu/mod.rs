@@ -1198,6 +1198,34 @@ impl FrameProcessor {
         }
     }
 
+    /// Modo canvas (sem surface nativa, ex.: Windows): tamanho em pixels
+    /// FÍSICOS da área onde a webview desenha o jogo. É o "viewport" da spec
+    /// slang ("the area requested by the frontend, represented by
+    /// `FinalViewportSize`" — docs.libretro.com, slang-shaders). Sem ele, a
+    /// passada `scale_type = viewport` caía em 3× a nativa (1920x1440 pro
+    /// Dreamcast): a máscara de fósforo do CRT era desenhada nesse tamanho e
+    /// reduzida no canvas → moiré em listras; e o readback de ~11 MB/quadro
+    /// pelo IPC derrubava o desempenho. Com surface nativa o viewport vem
+    /// dela (`resize_surface`) e isto não faz nada.
+    pub fn set_canvas_viewport(&mut self, w: u32, h: u32) {
+        if self.surface.is_some() || w == 0 || h == 0 {
+            return;
+        }
+        let cap = self.device.limits().max_texture_dimension_2d;
+        let v = (w.min(cap), h.min(cap));
+        if v != self.viewport {
+            self.viewport = v;
+            for p in &mut self.passes {
+                p.bound = false;
+            }
+        }
+    }
+
+    /// Viewport atual (pra preservar ao trocar de `FrameProcessor`).
+    pub fn viewport(&self) -> (u32, u32) {
+        self.viewport
+    }
+
     /// Liga/desliga integer scaling ao vivo (`update_video_config`) — só
     /// precisa marcar a flag, o próximo `render_to_surface` já lê o valor
     /// novo (sem precisar recarregar o jogo).

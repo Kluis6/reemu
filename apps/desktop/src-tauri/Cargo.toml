@@ -84,3 +84,8 @@ keyring = { version = "3", features = ["windows-native"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 keyring = { version = "3", features = ["apple-native"] }
+
+[lints.rust]
+# No Windows o link.exe imprime "Criando biblioteca ...dll.lib e objeto ...exp"
+# a cada build do cdylib — mensagem informativa do linker, não um problema.
+linker_messages = "allow"

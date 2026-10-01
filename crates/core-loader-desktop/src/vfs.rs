@@ -28,6 +28,8 @@ const SEEK_END: c_int = 2;
 
 const STAT_IS_VALID: c_int = 1 << 0;
 const STAT_IS_DIRECTORY: c_int = 1 << 1;
+// só o Unix tem "character special" (`FileTypeExt::is_char_device`)
+#[cfg(unix)]
 const STAT_IS_CHARACTER_SPECIAL: c_int = 1 << 2;
 
 /// `struct retro_vfs_interface_info`.

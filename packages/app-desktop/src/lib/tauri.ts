@@ -41,6 +41,11 @@ export const unloadGame = () => invoke<void>('unload_game')
  *  [cx cy hw hh f32][proporção f32][zoom da moldura f32]`, LE) + RGBA8.
  *  Vazio = sem quadro novo. */
 export const pollFrame = () => invoke<ArrayBuffer>('poll_frame')
+
+/** Modo canvas: tamanho, em pixels físicos, da área onde o jogo é desenhado —
+ *  o "viewport" dos shaders (spec slang: `FinalViewportSize`). */
+export const setVideoViewport = (width: number, height: number) =>
+  invoke<void>('set_video_viewport', { width, height })
 export const FRAME_HEADER = 36
 
 /** Moldura ativa do modo canvas: `[decoGen][w][h]` (u32 LE) + RGBA8.

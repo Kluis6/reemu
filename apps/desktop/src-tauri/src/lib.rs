@@ -228,6 +228,7 @@ pub fn run() {
             commands::load_game,
             commands::unload_game,
             commands::poll_frame,
+            commands::set_video_viewport,
             commands::native_video_active,
             commands::pause_background,
             commands::session_state,
@@ -443,6 +444,11 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                     let prev_integer_scaling =
                         slot.as_ref().map(|f| f.integer_scaling()).unwrap_or(false);
                     new_fp.set_integer_scaling(prev_integer_scaling);
+                    // idem o viewport do modo canvas (o da surface nativa vem
+                    // do `attach_surface` do novo FP)
+                    if let Some((w, h)) = slot.as_ref().map(|f| f.viewport()) {
+                        new_fp.set_canvas_viewport(w, h);
+                    }
                     drop(slot.take()); // dropa o FP antigo (+ surface) nesta thread
                     if let Some((h, w, ht)) = state
                         .vk_reattach

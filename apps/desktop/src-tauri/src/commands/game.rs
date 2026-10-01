@@ -457,6 +457,15 @@ fn frame_header(w: u32, h: u32, aspect: f32) -> Vec<u8> {
 /// `PlayScreen` consome num loop e pinta no canvas. Com moldura, o quadro é
 /// SÓ o jogo: a moldura vem uma vez por `decoration_image` e o WebView
 /// empilha as duas (ver `FrameProcessor::split_decoration`).
+/// Modo canvas: a webview informa o tamanho, em pixels físicos, da área onde
+/// desenha o jogo — o viewport dos shaders (ver `set_canvas_viewport`).
+#[tauri::command]
+pub fn set_video_viewport(state: State<'_, AppState>, width: u32, height: u32) {
+    if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+        fp.set_canvas_viewport(width, height);
+    }
+}
+
 #[tauri::command]
 pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
     use domain::frame_source::{rotate_rgba, to_rgba8, to_rgba8_slice, FrameOrigin};
