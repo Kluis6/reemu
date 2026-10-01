@@ -364,6 +364,17 @@ interface ThemeOverrides {
   activeBg?: string;
 }
 
+/** Tipografia pra TV (Microsoft, "Designing for Xbox and TV"): texto
+ *  principal com no mínimo 15 epx e secundário com 12 epx. O Fluent usa 14
+ *  no corpo (`Base300`) e 10 no menor (`Base100`) — os dois sobem; o resto
+ *  da rampa (12, 16, 20, 24, 28…) já atende. */
+const tvType: Partial<Theme> = {
+  fontSizeBase100: "12px",
+  lineHeightBase100: "16px",
+  fontSizeBase300: "15px",
+  lineHeightBase300: "20px",
+};
+
 function make(
   ramp: BrandVariants,
   mode: "dark" | "light",
@@ -374,6 +385,7 @@ function make(
   const t: ReEmuTheme = {
     ...(light ? createLightTheme(ramp) : createDarkTheme(ramp)),
     ...(o.neutrals ?? (light ? consoleLight : consoleDark)),
+    ...tvType,
     // Fundo da casca: o stop mais "fraco" do gradiente é sempre igual ao
     // `colorNeutralBackground1` (o rail usa esse mesmo tom — ver `xbox.ts`),
     // só o outro stop clareia (escuro) ou clareia mais ainda (claro).

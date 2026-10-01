@@ -62,13 +62,11 @@ export function SettingsHotkeys() {
           </span>
           <span className={styles.actions}>
             <Button
-              size="small"
               onClick={() => beginCapture({ target: 'system_hotkey', targetKey: key, label })}
             >
               {t('hotkeys.reset')}
             </Button>
             <Button
-              size="small"
               appearance="subtle"
               disabled={clearHotkey.isPending || triggerFor(key).length === 0}
               onClick={() => clearHotkey.mutate(key)}

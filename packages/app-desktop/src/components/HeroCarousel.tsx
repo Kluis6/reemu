@@ -13,9 +13,9 @@ const useStyles = makeStyles({
     position: 'relative',
     width: '100%',
     minWidth: 0,
-    // Teto subiu de 460 pra 960px — mesma proporção de tela, só sem travar
-    // bem antes de 4K (~1769px de viewport).
-    height: 'clamp(220px, 26vw, 960px)',
+    // ~40% da tela de referência (540 epx): o destaque e a 1ª fileira de
+    // jogos aparecem juntos, como no dashboard do Xbox.
+    height: '208px',
     borderRadius: tokens.borderRadiusXLarge,
     overflow: 'hidden',
     marginTop: '8px',
@@ -50,7 +50,7 @@ const useStyles = makeStyles({
     inset: 0,
     display: 'grid',
     placeItems: 'center',
-    fontSize: 'clamp(48px, 8vw, 220px)',
+    fontSize: '72px',
     fontWeight: tokens.fontWeightBold,
     color: 'rgba(255,255,255,0.12)',
   },
@@ -62,8 +62,8 @@ const useStyles = makeStyles({
   },
   body: {
     position: 'absolute',
-    left: 'clamp(20px, 3vw, 115px)',
-    bottom: 'clamp(20px, 3vw, 115px)',
+    left: '24px',
+    bottom: '24px',
     maxWidth: '62%',
     zIndex: 1,
     // kicker / título / sistema são <span> (dentro de <button>) — em coluna,
@@ -88,13 +88,14 @@ const useStyles = makeStyles({
     color: 'var(--reemuBrandSolid)',
   },
   title: {
-    fontSize: 'clamp(20px, 2.4vw, 64px)',
+    // "Title" da rampa tipográfica do Windows (28 epx).
+    fontSize: '28px',
     fontWeight: tokens.fontWeightBold,
     lineHeight: 1.12,
     margin: '4px 0 2px',
   },
   sub: {
-    fontSize: 'clamp(12px, 0.9vw, 26px)',
+    fontSize: tokens.fontSizeBase300,
     color: 'rgba(255, 255, 255, 0.82)',
   },
   arrow: {
@@ -108,17 +109,14 @@ const useStyles = makeStyles({
     transitionProperty: 'background-color, transform',
     transitionDuration: '150ms',
     transitionTimingFunction: tokens.curveEasyEase,
-    // Fluido: o `.wrap` (hero) cresce de 220 até 960px de altura
-    // (`clamp(220px, 26vw, 960px)` acima) — as setas ficavam do tamanho
-    // "medium" fixo do Fluent (32px) em qualquer altura de hero, minúsculas
-    // num banner de 960px em 4K. `max-width`/`min-width`: o Fluent injeta um
+    // Alvo mínimo de 32 epx. `max-width`/`min-width`: o Fluent injeta um
     // `max-width` próprio em botão circular icon-only que vence o `width`
     // mesmo com `!important` (mesmo caso da topbar em `xbox.ts`).
-    width: "clamp(32px, 2.4vw, 72px) !important",
-    height: "clamp(32px, 2.4vw, 72px) !important",
+    width: "32px !important",
+    height: "32px !important",
     minWidth: "0 !important",
-    maxWidth: "clamp(32px, 2.4vw, 72px) !important",
-    fontSize: "clamp(15px, 1.1vw, 32px) !important",
+    maxWidth: "32px !important",
+    fontSize: "16px !important",
     "& .fui-Button__icon": {
       fontSize: "1em",
       width: "1em",
@@ -130,8 +128,8 @@ const useStyles = makeStyles({
       transform: 'translateY(-50%) scale(1.06)',
     },
   },
-  arrowL: { left: 'clamp(10px, 0.8vw, 28px)' },
-  arrowR: { right: 'clamp(10px, 0.8vw, 28px)' },
+  arrowL: { left: '12px' },
+  arrowR: { right: '12px' },
   dots: {
     position: 'absolute',
     bottom: '12px',

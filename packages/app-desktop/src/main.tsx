@@ -4,7 +4,7 @@ import { App } from './App'
 import './index.css'
 // idiomas (pt-BR/en/es) — inicializa antes do 1º render
 import './i18n'
-import { applyUiScale, getUiScale } from './lib/uiScale'
+import { startUiScale } from './lib/uiScale'
 
 // A webview é opaca (o vídeo do jogo é desenhado num canvas dentro dela, não
 // atrás) — ver apps/desktop/src-tauri/src/main.rs pro histórico.
@@ -28,12 +28,14 @@ document.addEventListener('securitypolicyviolation', (e) =>
   reportToRust(`CSP bloqueou ${e.blockedURI || '(inline)'} (${e.effectiveDirective})`),
 )
 
-// Tamanho da interface escolhido em Aparência — antes do 1º render, pra não
-// piscar no tamanho padrão.
-if (getUiScale() !== 1) applyUiScale(getUiScale()).catch(() => {})
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+// Escala modo Xbox (tela lógica de 960×540 epx, ver lib/uiScale.ts) — aplicada
+// antes do 1º render, pra não piscar no tamanho errado.
+startUiScale()
+  .catch((e) => reportToRust(`escala da interface: ${String(e)}`))
+  .finally(() =>
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    ),
+  )

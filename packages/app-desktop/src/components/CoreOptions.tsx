@@ -73,7 +73,6 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
     <div className={styles.root}>
       {romId && (
         <TabList
-          size="small"
           selectedValue={scope}
           onTabSelect={(_, d) => setScope(d.value as 'core' | 'rom')}
         >
@@ -88,7 +87,6 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
             : t('coreOptions.coreHint')}
         </Caption1>
         <Button
-          size="small"
           appearance="subtle"
           icon={<ArrowResetRegular />}
           disabled={reset.isPending}

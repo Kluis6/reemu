@@ -206,7 +206,7 @@ export function Home() {
         onOpen={(id) => navigate(`/rom/${id}`)}
       />
 
-      <div className={s.toolbar} style={{ marginTop: 18 }}>
+      <div className={s.toolbar} style={{ marginTop: 12 }}>
         <Button
           shape="circular"
           appearance="subtle"

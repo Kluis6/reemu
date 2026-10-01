@@ -192,7 +192,6 @@ export function SettingsMetadata() {
                 </Caption1>
               </div>
               <Button
-                size="small"
                 icon={<CheckmarkRegular />}
                 disabled={resolve.isPending}
                 onClick={() => resolve.mutate({ romId: m.romId, accept: true })}
@@ -200,7 +199,6 @@ export function SettingsMetadata() {
                 {t('metadata.accept')}
               </Button>
               <Button
-                size="small"
                 appearance="subtle"
                 icon={<DismissRegular />}
                 disabled={resolve.isPending}

@@ -44,8 +44,6 @@ const useStyles = makeStyles({
     position: 'fixed',
     inset: 0,
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
     padding: tokens.spacingHorizontalXXL,
     overflowY: 'auto',
   },
@@ -54,6 +52,9 @@ const useStyles = makeStyles({
     zIndex: 1,
     width: '100%',
     maxWidth: '480px',
+    // centraliza com margem automática (não `align-items: center`): se o
+    // cartão passar da altura da tela, o topo não fica cortado — rola.
+    margin: 'auto',
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalL,
@@ -130,7 +131,7 @@ export function Onboarding() {
       <div className={mergeClasses(s.card, leaving && s.leaving)}>
         <div className={s.head}>
           <div className={mergeClasses(s.part, s.d1)}>
-            <AppLogo height={132} />
+            <AppLogo height={72} />
           </div>
           <Body1 className={mergeClasses(s.part, s.d2)}>
             {t('shell.welcome')}

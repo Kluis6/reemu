@@ -64,7 +64,8 @@ const es: Messages = {
     uiScale: {
       title: 'Tamaño de la interfaz',
       description:
-        'Agranda textos, botones y portadas por igual. Predeterminado para el monitor, Grande para un portátil de lejos o una TV pequeña, Más grande para una TV vista desde el sofá.',
+        'La interfaz ya se ajusta a la pantalla con las proporciones de Xbox. Compacto para un monitor en el escritorio, Predeterminado para la TV, Grande y Más grande para ver desde más lejos.',
+      compact: 'Compacto',
       default: 'Predeterminado',
       large: 'Grande',
       larger: 'Más grande',

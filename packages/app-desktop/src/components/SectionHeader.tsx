@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
-  root: { marginBottom: '18px' },
+  root: { marginBottom: '12px' },
   row: {
     display: 'flex',
     alignItems: 'center',
@@ -25,15 +25,16 @@ const useStyles = makeStyles({
   },
   titlePlain: { cursor: 'default' },
   title: {
-    fontSize: 'clamp(18px, 1.35vw, 44px)',
+    // "Subtitle" da rampa tipográfica do Windows (20 epx).
+    fontSize: '20px',
     fontWeight: tokens.fontWeightBold,
     lineHeight: 1.15,
+    // `<Text as="h2">`: sem a margem padrão do navegador (0,83em).
+    margin: 0,
   },
   chevron: {
-    // Acompanha o título ao lado (`clamp(18px, 1.35vw, 44px)`), um degrau
-    // menor — sem isto ficava sempre 20px, minúsculo ao lado de um título
-    // de 44px em 4K.
-    fontSize: 'clamp(16px, 1.1vw, 34px)',
+    // Um degrau abaixo do título ao lado.
+    fontSize: '16px',
     color: tokens.colorNeutralForeground3,
     transitionProperty: 'transform, color',
     transitionDuration: '150ms',

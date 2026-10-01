@@ -130,7 +130,6 @@ export function ControllerMappings() {
                   {dev.connected ? t('controllers.connected') : t('controllers.saved')}
                 </Badge>
                 <Select
-                  size="small"
                   value={portFor(guid) === null ? '' : String(portFor(guid))}
                   disabled={assignPort.isPending}
                   onChange={(_, d) =>
@@ -146,7 +145,6 @@ export function ControllerMappings() {
                 </Select>
                 {dev.mapping && (
                   <Button
-                    size="small"
                     appearance="subtle"
                     disabled={clearMap.isPending}
                     onClick={() => clearMap.mutate(guid)}
@@ -171,7 +169,6 @@ export function ControllerMappings() {
                       )}
                     </span>
                     <Button
-                      size="small"
                       appearance="transparent"
                       onClick={() =>
                         beginCapture({

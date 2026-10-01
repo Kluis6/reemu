@@ -146,7 +146,6 @@ function Catalog() {
       </Caption1>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <Input
-          size="small"
           placeholder={t('cores.filter')}
           value={filter}
           onChange={(_, d) => setFilter(d.value)}
@@ -184,7 +183,6 @@ function Catalog() {
                   {t('cores.installedBadge')}
                 </Badge>
                 <Button
-                  size="small"
                   appearance="subtle"
                   icon={<DeleteRegular />}
                   disabled={busy(c.coreId)}
@@ -195,7 +193,6 @@ function Catalog() {
               </span>
             ) : (
               <Button
-                size="small"
                 appearance="primary"
                 icon={<ArrowDownloadRegular />}
                 disabled={busy(c.coreId)}

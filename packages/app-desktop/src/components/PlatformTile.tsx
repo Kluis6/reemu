@@ -3,10 +3,8 @@ import { useState } from "react";
 import { initials } from "../lib/initials";
 import { useCardStyles } from "../styles/xbox";
 
-// Padding do grupo 2×2 = gap entre as células — mesmo valor nos dois (um
-// só reaproveitado nas duas propriedades), fluido com a tela em vez de
-// fixo (mesma convenção de `clamp()` do resto do card, ver `xbox.ts`).
-const TILE_GAP = "clamp(4px, 0.5vw, 16px)";
+// Padding do grupo 2×2 = gap entre as células — mesmo valor nos dois.
+const TILE_GAP = "6px";
 
 const useStyles = makeStyles({
   // `c.card` (mergeClasses) já cobre proporção/borda/padding/cursor — só

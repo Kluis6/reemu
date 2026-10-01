@@ -135,7 +135,6 @@ export function BezelLibrary() {
               <Body1>{platformLabel(c.systemId)}</Body1>
             </span>
             <Button
-              size="small"
               appearance={c.installed ? 'subtle' : 'secondary'}
               icon={
                 dl.isPending && dl.variables === c.systemId ? (

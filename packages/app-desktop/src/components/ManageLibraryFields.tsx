@@ -60,7 +60,6 @@ export function ManageLibraryFields({
 
   const purgeBtn = (target: string, idle: string, confirmLabel: string) => (
     <Button
-      size="small"
       appearance={confirm === target ? "primary" : "secondary"}
       disabled={purge.isPending}
       onClick={() => (confirm === target ? purge.mutate(target) : setConfirm(target))}
@@ -85,7 +84,6 @@ export function ManageLibraryFields({
                 {t("library.games", { count: n })}
               </span>
               <Select
-                size="small"
                 value={coreValue(sys)}
                 onChange={(_, d) => setPending((p) => ({ ...p, [sys]: d.value }))}
               >

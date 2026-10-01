@@ -14,48 +14,44 @@
  */
 import { makeStyles, tokens } from "@fluentui/react-components";
 import { cardSizeCss, SHELF_GAP, SHELF_PAD } from "../lib/shelf";
+import * as M from "./metrics";
 
 // Só os valores NÃO-cor do "console look". Cor de marca, elevações e o fundo
 // da casca vêm do tema (tokens Fluent + tokens custom `--reemu*`, ver
 // styles/themes.ts) — trocar de tema reajusta tudo.
+//
+// Medidas em epx (styles/metrics.ts): a tela lógica tem sempre pelo menos
+// 960×540, como no Xbox, e cresce com a resolução pelo zoom da tela inteira
+// (lib/uiScale.ts) — por isso nada aqui usa `vw`.
 export const shell = {
-  radius: "12px",
-  radiusLg: "16px",
-  // Rail estreito estilo modo XBOX; cresce com a tela. Teto antigo (80px)
-  // travava em ~2222px de viewport — em 4K (3840px) ficava minúsculo. Mesma
-  // inclinação (3.6vw), teto estendido pra continuar crescendo até 4K real.
-  railW: "clamp(56px, 3.6vw, 138px)",
+  radius: `${M.RADIUS}px`,
+  radiusLg: `${M.RADIUS_LG}px`,
+  railW: `${M.RAIL_W}px`,
 };
 
 // Gradiente de superfície elevada (cartões, hero) a partir dos neutros do tema.
 const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`;
 
-// Largura de um card (mesma fórmula do JS que conta quantos cabem — ver
-// lib/shelf.ts). Fluida: ~150px em janela estreita, até 320px em 2.7K+.
+// Largura de um card (a mesma que o JS usa pra contar quantos cabem — ver
+// lib/shelf.ts): 6 por fileira numa tela 16:9.
 const gameCardSize = cardSizeCss;
 
 // Largura do scrollbar customizado da `.scroll` (`::-webkit-scrollbar`
-// abaixo) — extraída pra constante porque a `.topbar` precisa compensar
-// exatamente esse valor no próprio padding (ver comentário em `.topbar`).
-const SCROLLBAR_W = 10;
+// abaixo) — a `.topbar` compensa exatamente esse valor no próprio padding.
+const SCROLLBAR_W = M.SCROLLBAR_W;
 
-// Folga vertical pra limpar a `.topbar` flutuante (padding + conteúdo dela,
-// que não escala por `clamp()` — botões do Fluent são fixos). Extraída pra
-// constante e publicada como `--reemuTopbarH` em `.app` (ver abaixo) porque
-// páginas com hero "colado no topo" (RomDetail) precisam cancelar
-// exatamente esse valor via margin negativo, não duplicar o clamp à mão.
-const TOPBAR_CLEARANCE = "clamp(60px, 6.5vw, 172px)";
+// Folga vertical pra limpar a `.topbar` flutuante. Publicada como
+// `--reemuTopbarH` em `.app` (ver abaixo) porque páginas com hero "colado no
+// topo" (RomDetail) cancelam exatamente esse valor via margin negativo.
+const TOPBAR_CLEARANCE = `${M.TOPBAR_CLEARANCE}px`;
 
-// Padding lateral compartilhado por `.topbar`/`.scroll` (derivado de
-// `--reemuRailW`, ver `.app`) — extraído pra constante porque um hero de
-// sangria total (RomDetail) precisa cancelar exatamente esse valor com
-// margin negativo, não duplicar a fórmula à mão. Esquerda é simétrica
-// entre topbar/scroll; a direita não (`.scroll` perde `SCROLLBAR_W` pro
-// próprio gutter, `.topbar` compensa isso no padding — ver ambos abaixo),
-// por isso os dois nomes separados.
-const PAGE_PAD_L = "calc(var(--reemuRailW) * 0.8333)";
-const SCROLL_PAD_R = "calc(var(--reemuRailW) * 0.9722)";
-const TOPBAR_PAD_R = `calc(${SCROLL_PAD_R} + ${SCROLLBAR_W}px)`;
+// Padding lateral compartilhado por `.topbar`/`.scroll` — um hero de sangria
+// total (RomDetail) cancela exatamente esse valor com margin negativo. A
+// direita fecha na área segura da TV (48 epx da borda): a `.scroll` perde
+// `SCROLLBAR_W` pro próprio gutter, a `.topbar` não — por isso dois nomes.
+const PAGE_PAD_L = `${M.PAGE_PAD_L}px`;
+const SCROLL_PAD_R = `${M.PAGE_PAD_R - SCROLLBAR_W}px`;
+const TOPBAR_PAD_R = `${M.PAGE_PAD_R}px`;
 
 /** Casca: app / rail / topbar / área de rolagem + anel de foco global. */
 export const useShellStyles = makeStyles({
@@ -80,16 +76,7 @@ export const useShellStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: `${shell.railW} 1fr`,
     gridTemplateRows: "minmax(0, 1fr)",
-    // Publica a largura da rail como var CSS — `.topbar`/`.scroll` derivam o
-    // padding lateral disso (`calc()`) em vez de um `clamp()` próprio e
-    // independente. Antes os dois cresciam com fórmulas diferentes (rail:
-    // piso 56px/3.6vw; padding: piso 12px/3vw) e só ficavam proporcionais
-    // entre si acima de ~1600px de largura — numa janela de notebook comum
-    // (1366-1440px), a rail já tinha travado no piso mas o padding do
-    // conteúdo continuava encolhendo, e o respiro entre os dois ficava
-    // desproporcional (conteúdo "descolava" da rail ao redimensionar).
-    // Amarrado direto na rail, o gutter agora escala junto em qualquer
-    // largura.
+    // Largura da rail como var CSS (quem precisa alinhar com ela lê daqui).
     ["--reemuRailW" as string]: shell.railW,
     // Folga vertical que a `.scroll` reserva pra topbar flutuante não
     // cobrir o início do conteúdo (topbar é `position:absolute` por cima).
@@ -129,9 +116,10 @@ export const useShellStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    rowGap: "clamp(6px, 0.9vw, 35px)",
-    paddingTop: "clamp(10px, 1.4vw, 54px)",
-    paddingBottom: "clamp(10px, 1.4vw, 54px)",
+    rowGap: "8px",
+    // Itens dentro da área segura de cima/baixo da TV.
+    paddingTop: `${M.SAFE_Y}px`,
+    paddingBottom: `${M.SAFE_Y}px`,
     borderRight: "none",
     // Hierarquia visual (Fluent 2): chrome de navegação persistente fica um
     // tom ACIMA do conteúdo (`colorNeutralBackground1`), não no mesmo tom —
@@ -143,7 +131,7 @@ export const useShellStyles = makeStyles({
   },
   railSpacer: { flexGrow: 1 },
   railSep: {
-    width: "clamp(18px, 1.8vw, 69px)",
+    width: "24px",
     height: "1px",
     backgroundColor: tokens.colorNeutralStroke1,
     marginTop: "4px",
@@ -155,13 +143,9 @@ export const useShellStyles = makeStyles({
     // fechar) — o Button tem width/height/padding/minWidth próprios (do
     // tamanho "medium" default) que competiam com isso e deixavam ele fora
     // de proporção com o <NavLink> (um <a> puro, sem essa disputa).
-    // Piso 44px (não 38px): fluent2.microsoft.design/layout — alvo mínimo de
-    // toque/clique pra web. Numa janela 1366-1920px (a faixa "XX-large" da
-    // própria doc, bem comum) o `2.7vw` sozinho ficava abaixo disso. Teto
-    // estendido de 48 pra 104px — travava bem antes de 4K (~1778px de
-    // viewport) e ficava minúsculo num monitor/TV grande.
-    width: "clamp(44px, 2.7vw, 104px) !important",
-    height: "clamp(44px, 2.7vw, 104px) !important",
+    // 40 epx: acima do alvo mínimo de 32 epx do guia de TV da Microsoft.
+    width: `${M.RAIL_ITEM}px !important`,
+    height: `${M.RAIL_ITEM}px !important`,
     minWidth: "0 !important",
     maxWidth: "none !important",
     padding: "0 !important",
@@ -171,11 +155,9 @@ export const useShellStyles = makeStyles({
     flex: "none",
     color: tokens.colorNeutralForeground3,
     textDecorationLine: "none",
-    // Ícone em múltiplos de 4 px: com escala de tela de 125/150/175% (comum
-    // no Windows) cai em pixel inteiro do monitor — o `clamp` cru dava
-    // tamanhos como 26,88 px e o SVG saía borrado. `round()` onde houver;
-    // o `clamp` fica de reserva.
-    fontSize: ["clamp(19px, 1.4vw, 54px)", "round(nearest, clamp(20px, 1.4vw, 52px), 4px)"],
+    // Ícone padrão do Fluent (20 epx), em múltiplo de 4 — cai em pixel
+    // inteiro nos zooms comuns e o SVG não borra.
+    fontSize: `${M.ICON}px`,
     border: "none",
     backgroundColor: "transparent",
     cursor: "pointer",
@@ -193,8 +175,7 @@ export const useShellStyles = makeStyles({
     // Zoom só no glifo (não na pílula inteira) — cresce suave no hover/foco
     // e volta sozinho ao sair, via transition no próprio ícone.
     // Cresce pelo TAMANHO (redesenha nítido), não por `scale` (que amplia a
-    // imagem já rasterizada — borrava no Windows). Passo de 4 px, mesmo
-    // motivo do `fontSize` acima.
+    // imagem já rasterizada — borrava no Windows): 20 → 24 epx.
     "& svg": {
       fontSize: "1em",
       transitionProperty: "font-size, transform",
@@ -202,7 +183,7 @@ export const useShellStyles = makeStyles({
       transitionTimingFunction: tokens.curveEasyEase,
     },
     "&:hover svg, &:focus svg, &:focus-visible svg": {
-      fontSize: ["1.18em", "round(nearest, 1.18em, 4px)"],
+      fontSize: "1.2em",
     },
     // Feedback de clique: encolhe (zoom out) no instante do toque/clique —
     // Griffel prioriza o bucket `:active` acima de `:hover`/`:focus`, então
@@ -216,8 +197,8 @@ export const useShellStyles = makeStyles({
   },
   railQuit: {
     // O slot de ícone do <Button> do Fluent tem tamanho FIXO (20px, ver
-    // fui-Button__icon) — não acompanha o fontSize clamp do railItem como o
-    // ícone cru do <NavLink> acompanha. Reajusta pra escalar igual.
+    // fui-Button__icon) — não acompanha o fontSize do railItem (nem o
+    // aumento no foco) como o ícone cru do <NavLink>. Reajusta pra igualar.
     "& .fui-Button__icon": {
       fontSize: "1em",
       width: "1em",
@@ -250,19 +231,15 @@ export const useShellStyles = makeStyles({
     zIndex: 2,
     display: "flex",
     alignItems: "center",
-    columnGap: "clamp(8px, 1.4vw, 54px)",
-    paddingTop: "clamp(10px, 1.4vw, 54px)",
-    paddingBottom: "clamp(10px, 1.4vw, 54px)",
-    // Derivado da largura real da rail (`--reemuRailW`, publicada em
-    // `.app`), não de um `clamp()` independente — ver comentário em `.app`.
-    // Mesma proporção que o valor antigo tinha nas telas grandes (5/6 ≈
-    // 115/138 em 4K), agora válida em QUALQUER largura.
+    columnGap: "12px",
+    // Começa na área segura de cima da TV; altura total = TOPBAR_CLEARANCE.
+    paddingTop: `${M.TOPBAR_TOP}px`,
+    paddingBottom: "16px",
     paddingLeft: PAGE_PAD_L,
-    // +10px (SCROLLBAR_W): a `.scroll` reserva essa faixa pro scrollbar
-    // próprio (`scrollbarGutter: "stable"` + `::-webkit-scrollbar` de
-    // 10px abaixo) — a topbar não rola, então não perde essa faixa
-    // sozinha. Sem compensar aqui, o relógio ficava ~10px à direita de
-    // onde o conteúdo (hero/cards) realmente termina.
+    // Inclui o SCROLLBAR_W: a `.scroll` reserva essa faixa pro scrollbar
+    // próprio (`scrollbarGutter: "stable"`) — a topbar não rola, então não
+    // perde essa faixa sozinha. Assim o relógio termina na mesma borda que o
+    // conteúdo (hero/cards).
     paddingRight: TOPBAR_PAD_R,
     boxSizing: "border-box",
     flexShrink: 0,
@@ -272,27 +249,23 @@ export const useShellStyles = makeStyles({
     boxShadow: "none",
   },
   topbarSpacer: { flexGrow: 1 },
-  // Tamanho fluido pros botões de ícone "soltos" da topbar/rail (Voltar,
-  // Tela cheia, Adicionar ROM, Gerenciar biblioteca…) — cor/borda continuam
-  // no `navBtn` local de cada tela; aqui só width/height/fontSize, na MESMA
-  // curva do `railItem` (rail ao lado) só que um degrau menor, pra não
-  // ficarem do mesmo tamanho do ícone de navegação principal. Sem isto eles
-  // ficam no tamanho fixo "medium" do Fluent (32px) em qualquer resolução —
-  // minúsculos ao lado da rail em telas grandes/4K (medido: 32px em 1920px
-  // E em 3840px, contra 52px→104px da rail). `!important`: o `<Button>` do
-  // Fluent injeta width/height/padding próprios do tamanho "medium" depois
-  // da nossa classe.
+  // Botões de ícone "soltos" da topbar/rail (Voltar, Tela cheia, Adicionar
+  // ROM, Gerenciar biblioteca…) — cor/borda continuam no `navBtn` local de
+  // cada tela; aqui só width/height/fontSize: o alvo mínimo de 32 epx, um
+  // degrau abaixo do `railItem` (40). `!important`: o `<Button>` do Fluent
+  // injeta width/height/padding próprios do tamanho "medium" depois da nossa
+  // classe.
   navIconBtn: {
-    width: "clamp(32px, 1.7vw, 78px) !important",
-    height: "clamp(32px, 1.7vw, 78px) !important",
+    width: `${M.TARGET_MIN}px !important`,
+    height: `${M.TARGET_MIN}px !important`,
     minWidth: "0 !important",
     // O Fluent injeta `max-width: 32px` sozinho em `<Button icon>` sem
     // texto (pra travar o botão "quadrado") — sem isto, `max-width` vence
     // o `width` acima (regra do CSS, independe de `!important`) e o botão
     // nunca cresce além de 32px.
-    maxWidth: "clamp(32px, 1.7vw, 78px) !important",
+    maxWidth: `${M.TARGET_MIN}px !important`,
     padding: "0 !important",
-    fontSize: "clamp(14px, 0.85vw, 34px) !important",
+    fontSize: "16px !important",
     // O slot de ícone do <Button> tem tamanho fixo (20px) — não acompanha o
     // fontSize acima sozinho (mesmo caso do `railQuit`, ver abaixo).
     "& .fui-Button__icon": {
@@ -304,16 +277,13 @@ export const useShellStyles = makeStyles({
   // Ícone um pouco maior no mesmo botão (voltar, adicionar ROM, gerenciar
   // biblioteca) — vem depois de `navIconBtn` no mergeClasses.
   navIconLg: {
-    fontSize: "clamp(18px, 1.1vw, 44px) !important",
+    fontSize: `${M.ICON}px !important`,
   },
-  // Mesma ideia pro avatar do perfil (rail): o `<Avatar>` do Fluent só
-  // aceita tamanhos discretos via prop (`size`), que viram width/height em
-  // px cru — nunca acompanham a tela sozinhos. Override aqui, curva um
-  // degrau abaixo do `railItem` (o avatar sempre foi menor que os ícones de
-  // navegação abaixo dele).
+  // Avatar do perfil (rail): um degrau abaixo do `railItem`, como sempre
+  // foi em relação aos ícones de navegação abaixo dele.
   railAvatarSize: {
-    width: "clamp(32px, 1.6vw, 84px) !important",
-    height: "clamp(32px, 1.6vw, 84px) !important",
+    width: "32px !important",
+    height: "32px !important",
   },
   iconBtn: {
     width: "38px",
@@ -348,10 +318,8 @@ export const useShellStyles = makeStyles({
     position: "absolute",
     left: "50%",
     transform: "translateX(-50%)",
-    // Teto subiu de 780 pra 1100px — mas não pra 42vw cheio (~1613px em 4K):
-    // uma busca centralizada não deve virar a largura da tela toda, só
-    // acompanhar o crescimento geral em vez de travar em telas grandes.
-    width: "clamp(200px, 42vw, 1100px)",
+    // ~3/8 da tela de referência — centralizada, sem virar a largura toda.
+    width: "360px",
     maxWidth: "calc(100% - 160px)",
     backgroundColor: `${tokens.colorNeutralBackground2} !important`,
     "& input:focus": {
@@ -361,7 +329,7 @@ export const useShellStyles = makeStyles({
   clock: {
     color: tokens.colorNeutralForeground3,
     fontVariantNumeric: "tabular-nums",
-    fontSize: "clamp(15px, 1vw, 38px)",
+    fontSize: "15px",
     fontWeight: 600,
     lineHeight: 1,
     letterSpacing: "0.01em",
@@ -370,7 +338,7 @@ export const useShellStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     color: tokens.colorNeutralForeground3,
-    fontSize: "clamp(16px, 1.1vw, 42px)",
+    fontSize: `${M.ICON}px`,
   },
   scroll: {
     scrollBehavior: "smooth",
@@ -379,17 +347,14 @@ export const useShellStyles = makeStyles({
     overflowY: "auto",
     scrollbarGutter: "stable",
     boxSizing: "border-box",
-    // Só precisa limpar a altura da `.topbar` (padding + conteúdo, este sem
-    // `clamp` — os botões da Fluent não escalam) com uma folga; não faz
-    // sentido crescer no mesmo 6.5vw até 4K cheio (viraria vão vazio enorme).
+    // Limpa a altura da `.topbar` flutuante.
     paddingTop: `var(--reemuTopbarH, ${TOPBAR_CLEARANCE})`,
-    // Mesma fórmula do padding da `.topbar` (derivada de `--reemuRailW`,
-    // ver `.app`) — o conteúdo alinha exatamente com o botão de voltar
-    // (esquerda) e o fim do relógio (direita) em QUALQUER largura, não só
-    // acima de ~1600px.
+    // Mesmo padding da `.topbar` — o conteúdo alinha com o botão de voltar
+    // (esquerda) e o fim do relógio (direita).
     paddingLeft: PAGE_PAD_L,
     paddingRight: SCROLL_PAD_R,
-    paddingBottom: "96px",
+    // Área segura de baixo + a barra de dicas, que não pode cobrir nada.
+    paddingBottom: `${M.PAGE_PAD_B}px`,
     "::-webkit-scrollbar": { width: `${SCROLLBAR_W}px` },
     "::-webkit-scrollbar-thumb": {
       backgroundColor: tokens.colorNeutralStroke2,
@@ -430,7 +395,7 @@ export const useMotionStyles = makeStyles({
 
 /** Seções, cabeçalho, toolbar/chips, grade, estado vazio, gerenciar bibliotecas. */
 export const useBrowseStyles = makeStyles({
-  section: { marginTop: "28px" },
+  section: { marginTop: "24px" },
 
   grid: {
     display: "grid",
@@ -445,16 +410,14 @@ export const useBrowseStyles = makeStyles({
     // comportamento "dinâmico" pedido, prioriza alinhar com a borda a manter
     // um teto de tamanho fixo.
     //
-    // Mínimo = o MESMO tamanho fluido do card das prateleiras da tela inicial
-    // (`cardSizeCss`: ~223px em 1920, 445px em 4K), não o piso fixo de
-    // 150px — com o piso, a grade enchia a linha de cards de ~150px em
-    // qualquer tela (11 por linha em 1920), bem menores que os da Início.
+    // Mínimo = o MESMO tamanho do card das prateleiras da tela inicial
+    // (`cardSizeCss`, 6 por fileira em 16:9).
     //
     // `auto-fill` (não `auto-fit`): com a linha cheia as colunas continuam
     // esticando até a borda; numa grade rala as colunas vazias ficam
     // reservadas e o card mantém o tamanho da prateleira — com `auto-fit`, 3
-    // jogos viravam cards de ~560px em 1920 (1/3 da tela cada), fora de
-    // escala com o resto do app (revisão de UI, 2026-09-25).
+    // jogos viravam cards de 1/3 da tela cada, fora de escala com o resto do
+    // app (revisão de UI, 2026-09-25).
     gridTemplateColumns: `repeat(auto-fill, minmax(${gameCardSize}, 1fr))`,
     rowGap: "18px",
     columnGap: `${SHELF_GAP}px`,
@@ -533,10 +496,10 @@ export const useShelfStyles = makeStyles({
   wrap: {
     position: "relative",
     minWidth: 0,
-    width: "calc(100% + 20px)",
+    width: `calc(100% + ${2 * SHELF_PAD}px)`,
     maxWidth: "none",
-    marginLeft: "-10px",
-    marginRight: "-10px",
+    marginLeft: `-${SHELF_PAD}px`,
+    marginRight: `-${SHELF_PAD}px`,
     // Compensa o padding do `.shelf` (folga pro anel de foco não ser
     // cortado pelo `overflow` do scroller — o 1º/último card de cada linha
     // só tem essa margem pra respirar, os do meio ainda têm o SHELF_GAP).
@@ -580,9 +543,9 @@ export const useShelfStyles = makeStyles({
     "::-webkit-scrollbar": { display: "none" },
     "& > *": {
       // `--reemuCardW` (px, calculado por `useShelfCapacity`/`Shelf.tsx` pra
-      // encher a linha exatamente) tem prioridade; o `clamp()` estático fica
-      // só de fallback até a 1ª medição do `ResizeObserver` resolver (1º
-      // paint) ou se JS estiver desligado.
+      // encher a linha exatamente) tem prioridade; o nominal fica só de
+      // fallback até a 1ª medição do `ResizeObserver` resolver (1º paint) ou
+      // se JS estiver desligado.
       width: `var(--reemuCardW, ${gameCardSize})`,
       flexBasis: `var(--reemuCardW, ${gameCardSize})`,
       scrollSnapAlign: "start",
@@ -731,36 +694,35 @@ export const useHintStyles = makeStyles({
   // token que inverteria com o tema e ficaria ilegível (branco no claro).
   hints: {
     position: "fixed",
-    // Mesma curva de canto usada pela topbar (`clamp(12px, 3vw, 115px)` /
-    // `clamp(14px, 3.5vw, 134px)`) num degrau menor — HUD fixo, não precisa
-    // acompanhar 1:1, só não ficar minúsculo em 4K.
-    right: "clamp(14px, 1.2vw, 44px)",
-    bottom: "clamp(10px, 1vw, 32px)",
+    // No canto da área segura da TV (48 × 27 epx da borda).
+    right: `${M.SAFE_X}px`,
+    bottom: `${M.SAFE_Y}px`,
     display: "flex",
-    columnGap: "clamp(10px, 1vw, 32px)",
-    paddingTop: "clamp(6px, 0.5vw, 16px)",
-    paddingBottom: "clamp(6px, 0.5vw, 16px)",
-    paddingLeft: "clamp(12px, 1vw, 32px)",
-    paddingRight: "clamp(12px, 1vw, 32px)",
+    columnGap: "12px",
+    paddingTop: "6px",
+    paddingBottom: "6px",
+    paddingLeft: "12px",
+    paddingRight: "12px",
     // Mesmo raio do card (`useCardStyles.card`, `borderRadiusMedium`) — era
     // `borderRadiusCircular` (pílula).
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: "rgba(0, 0, 0, 0.6)",
     border: "none",
-    fontSize: "clamp(13px, 0.85vw, 30px)",
+    // Texto secundário: mínimo de 12 epx do guia de TV.
+    fontSize: "13px",
     color: "#ffffff",
     zIndex: 50,
     pointerEvents: "none",
   },
   hint: { display: "flex", alignItems: "center", columnGap: "6px" },
   glyph: {
-    width: "clamp(20px, 1.2vw, 44px)",
-    height: "clamp(20px, 1.2vw, 44px)",
+    width: "20px",
+    height: "20px",
     borderRadius: "50%",
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    fontSize: "clamp(11px, 0.7vw, 26px)",
+    fontSize: "12px",
     fontWeight: 700,
     color: "var(--reemuOnBrand)",
   },
@@ -813,8 +775,10 @@ export const useDetailStyles = makeStyles({
     // visível por trás da faixa de tabs, não só encostar nela. Calibrado
     // junto com `.tabsOverlap` (folga sobrando abaixo da linha de botões
     // continua maior que o quanto a faixa sobe, então não colide).
-    minHeight: "clamp(460px, 28vw, 720px)",
-    maxHeight: "66vh",
+    // Cabe topbar + plataforma + título + ações + aviso de core e ainda
+    // sobra a faixa que as abas sobrepõem (`.tabsOverlap`).
+    minHeight: "340px",
+    maxHeight: "72vh",
     // Sem raio: hero de sangria total (encosta na rail e na borda da
     // janela) não tem mais canto pra arredondar, igual à referência.
     borderRadius: 0,
@@ -862,7 +826,7 @@ export const useDetailStyles = makeStyles({
     zIndex: 1,
     display: "flex",
     flexDirection: "column",
-    rowGap: "clamp(14px, 1.6vw, 28px)",
+    rowGap: "16px",
     // Esquerda usa o MESMO padding da página (`PAGE_PAD_L`, o `.hero` pai
     // cancelou com margin negativo) — ícone/título alinham com o resto do
     // conteúdo (tabs, título das seções) em vez de ficar colado na rail.
@@ -880,12 +844,12 @@ export const useDetailStyles = makeStyles({
     display: "flex",
     flexDirection: "row",
     alignItems: "center",
-    columnGap: "clamp(16px, 1.6vw, 32px)",
+    columnGap: "16px",
   },
   heroIcon: {
     flexShrink: 0,
-    width: "clamp(72px, 8.5vw, 168px)",
-    height: "clamp(72px, 8.5vw, 168px)",
+    width: "96px",
+    height: "96px",
     borderRadius: shell.radius,
     objectFit: "cover",
     // Sem borda (pedido do usuário) — a sombra já separa a capa do banner.
@@ -906,10 +870,8 @@ export const useDetailStyles = makeStyles({
     marginBottom: "4px",
   },
   title: {
-    // Um degrau menor que o antigo (24-64px): agora divide a linha com o
-    // ícone em vez de ser o único elemento da faixa — não precisa mais
-    // carregar sozinho a escala do hero inteiro.
-    fontSize: "clamp(20px, 2.3vw, 46px)",
+    // "Title" da rampa tipográfica do Windows (28 epx).
+    fontSize: "28px",
     fontWeight: 800,
     lineHeight: 1.15,
     margin: 0,
@@ -988,18 +950,15 @@ export const useDetailStyles = makeStyles({
   noBorderButton: {
     border: "1px solid transparent !important",
   },
-  // Favoritar/Editar/Informações são `size="large"` icon-only — o Fluent
-  // trava esse tamanho em px cru (~40px) que não acompanha o título do hero
-  // ao lado (`clamp(24px, 3vw, 64px)`, crescia sozinho até 64px em 4K
-  // enquanto estes ficavam do tamanho de uma tela FHD). Mesmo truque do
-  // `navIconBtn` da topbar: `max-width` porque o Fluent injeta um próprio
-  // que vence o `width` mesmo com `!important` (regra de box model).
+  // Favoritar/Editar/Informações: `size="large"` icon-only, quadrados de 40
+  // epx (a altura do botão "Jogar" ao lado). `max-width` porque o Fluent
+  // injeta um próprio que vence o `width` mesmo com `!important`.
   heroActionBtn: {
-    width: "clamp(40px, 2.1vw, 96px) !important",
-    height: "clamp(40px, 2.1vw, 96px) !important",
+    width: "40px !important",
+    height: "40px !important",
     minWidth: "0 !important",
-    maxWidth: "clamp(40px, 2.1vw, 96px) !important",
-    fontSize: "clamp(18px, 1vw, 44px) !important",
+    maxWidth: "40px !important",
+    fontSize: `${M.ICON}px !important`,
     "& .fui-Button__icon": {
       fontSize: "1em",
       width: "1em",
@@ -1043,7 +1002,7 @@ export const useDetailStyles = makeStyles({
     // baixo foi reforçado junto (`.heroScrim`), então ainda sobra folga
     // abaixo da linha de botões — não colide (conferido até em janela
     // 1600×700, o caso mais apertado testado).
-    marginTop: "clamp(-150px, -8vw, -95px)",
+    marginTop: "-56px",
   },
   sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },
   panel: {

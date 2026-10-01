@@ -64,7 +64,8 @@ const en: Messages = {
     uiScale: {
       title: 'Interface size',
       description:
-        'Scales text, buttons and covers evenly. Default for a monitor, Large for a laptop from afar or a small TV, Larger for a TV seen from the couch.',
+        'The interface already fits the screen with Xbox proportions. Compact for a desk monitor, Default for a TV, Large and Larger for viewing from farther away.',
+      compact: 'Compact',
       default: 'Default',
       large: 'Large',
       larger: 'Larger',

@@ -210,7 +210,7 @@ export function ShaderLibrary({
         <span className={s.path} title={root}>
           {root}
         </span>
-        <Button size="small" appearance="subtle" onClick={chooseRoot}>
+        <Button appearance="subtle" onClick={chooseRoot}>
           {t('shaders.change')}
         </Button>
       </div>
@@ -222,7 +222,6 @@ export function ShaderLibrary({
         <>
           <div className={s.bar}>
             <Input
-              size="small"
               placeholder={t('shaders.filter')}
               value={filter}
               onChange={(_, d) => setFilter(d.value)}
@@ -254,7 +253,6 @@ export function ShaderLibrary({
                       <Button
                         key={e.path}
                         appearance="subtle"
-                        size="small"
                         disabled={busy}
                         className={mergeClasses(
                           s.item,

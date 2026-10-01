@@ -1601,3 +1601,22 @@ Infra:
   - Mostrar vem **depois** do present: a janela escondida guarda o último quadro, e mostrá-la antes piscaria o jogo anterior.
   - Posição em coordenadas de cliente do pai, sempre `(0, 0)`: `csd_offset` devolve zero no Windows.
 - Padrão no Windows (`REEMU_NATIVE_VIDEO=0` volta para o canvas). Verificado aqui: `scripts/check-windows.sh` e os testes do Linux. **Falta validar numa máquina Windows.**
+
+## 2026-10-01 — Frontend nas proporções do Xbox (960×540 epx)
+
+- Referência: Microsoft, *Designing for Xbox and TV* e *Gamepad and remote control interactions*. O Xbox renderiza 1080p a 200%, e a interface é desenhada numa tela lógica de 960×540 epx que escala por igual.
+- **Escala:** `lib/uiScale.ts` passa a calcular o zoom nativo do webview a partir do tamanho lógico da janela, com `zoom = min(L/960, A/540)`. 1 px do CSS vale 1 epx: zoom 2 em 1080p, 4 em 4K. O cálculo acompanha redimensionamento e troca de DPI.
+  - Antes, cada componente escalava sozinho com `clamp(…vw…)`, e as proporções mudavam de tela para tela (rail com 26 epx em 1080p, abaixo do mínimo de 32).
+  - A preferência de tamanho virou um multiplicador: Compacto 80%, Padrão, Grande 115% e Maior 130%.
+- **Métricas** (`styles/metrics.ts`):
+  - área segura de 48/27 epx (rail, topbar e dicas ficam dentro dela);
+  - alvo de pelo menos 32 epx (31 botões, `Select` e `Input` saíram de `size="small"`, além de duas `TabList`);
+  - texto de pelo menos 15/12 epx (tokens do tema);
+  - 6 cards por fileira em 16:9, pela regra dos 6 cliques;
+  - títulos na rampa do Windows (28/20/15).
+- **Telas:**
+  - Configurações com as categorias numa lista vertical, como no Xbox. Dez abas não cabiam em 960 epx.
+  - Primeiro acesso com rolagem quando passa da altura.
+  - Destaque da página do jogo dimensionado para o aviso de core não invadir as abas.
+  - Destaque da Início com 208 epx, para a primeira fileira aparecer junto, como no dashboard.
+- Verificado no Chrome headless com o backend simulado, em 16:9, 21:9 e 4:3. A experiência de tela cheia do Xbox no PC não tem medidas publicadas; os tamanhos vêm das regras oficiais acima e da tela de referência.

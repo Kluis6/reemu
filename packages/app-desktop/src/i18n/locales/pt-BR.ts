@@ -65,7 +65,8 @@ const ptBR = {
     uiScale: {
       title: 'Tamanho da interface',
       description:
-        'Aumenta textos, botões e capas por igual. Padrão pro monitor, Grande pra notebook de longe ou TV pequena, Maior pra TV vista do sofá.',
+        'A interface já se ajusta à tela nas proporções do Xbox. Compacto pra monitor na mesa, Padrão pra TV, Grande e Maior pra ver de mais longe.',
+      compact: 'Compacto',
       default: 'Padrão',
       large: 'Grande',
       larger: 'Maior',

@@ -118,7 +118,6 @@ export function ToastLayer() {
             containerAction={
               <Button
                 appearance="transparent"
-                size="small"
                 icon={<DismissRegular />}
                 aria-label={i18n.t("shell.close")}
                 title={i18n.t("shell.close")}
@@ -130,7 +129,6 @@ export function ToastLayer() {
               (a) => (
                 <Button
                   key={a.label}
-                  size="small"
                   onClick={() => {
                     dismiss(t.id);
                     a.onClick();

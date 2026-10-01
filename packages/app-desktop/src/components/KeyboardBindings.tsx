@@ -136,7 +136,6 @@ export function KeyboardBindings() {
       <div className={s.head}>
         <Subtitle2>{t('keyboard.title')}</Subtitle2>
         <Button
-          size="small"
           appearance="subtle"
           icon={<ArrowResetRegular />}
           disabled={reset.isPending}
@@ -171,14 +170,12 @@ export function KeyboardBindings() {
                     )}
                   </span>
                   <Button
-                    size="small"
                     disabled={set.isPending}
                     onClick={() => setCapturing(capturing === target ? null : target)}
                   >
                     {t('keyboard.change')}
                   </Button>
                   <Button
-                    size="small"
                     appearance="subtle"
                     disabled={set.isPending || !code}
                     onClick={() => set.mutate({ target, code: '' })}

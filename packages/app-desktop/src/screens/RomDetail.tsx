@@ -592,7 +592,6 @@ export function RomDetail() {
                 <Caption1>{t("game.shader.applyTo")}</Caption1>
                 <div style={{ overflowX: "auto" }}>
                   <TabList
-                    size="small"
                     selectedValue={shaderScope}
                     onTabSelect={(_, d) =>
                       setShaderScope(d.value as ShaderScope)
@@ -615,7 +614,6 @@ export function RomDetail() {
                 </Caption1>
               </div>
               <Select
-                size="small"
                 value={currentGameShader}
                 disabled={shaderPick.isPending}
                 onChange={(_, d) => shaderPick.mutate(d.value)}
@@ -647,7 +645,6 @@ export function RomDetail() {
               />
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <Button
-                  size="small"
                   appearance="subtle"
                   disabled={shaderPick.isPending}
                   onClick={async () => {
@@ -659,7 +656,6 @@ export function RomDetail() {
                 </Button>
                 {shaderAtScope && shaderScope !== "default" && (
                   <Button
-                    size="small"
                     appearance="subtle"
                     icon={<ArrowResetRegular />}
                     disabled={shaderPick.isPending}
@@ -727,7 +723,6 @@ export function RomDetail() {
                     </Caption1>
                   </div>
                   <Button
-                    size="small"
                     icon={<PlayRegular />}
                     disabled={!chosenCore}
                     onClick={() => play(st.id)}
@@ -735,7 +730,6 @@ export function RomDetail() {
                     {t("game.playFromHere")}
                   </Button>
                   <Button
-                    size="small"
                     appearance="subtle"
                     disabled={del.isPending}
                     onClick={() => del.mutate(st.id)}

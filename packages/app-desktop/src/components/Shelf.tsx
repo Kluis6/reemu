@@ -31,9 +31,7 @@ export function Shelf({
   const [ref, shelfWidth] = useShelfCapacity();
 
   const items = Children.toArray(children).filter(isValidElement);
-  const viewport = typeof window !== "undefined" ? window.innerWidth : 1920;
-  const cap =
-    shelfWidth > 0 ? shelfCapacity(shelfWidth, viewport) : items.length || 1;
+  const cap = shelfWidth > 0 ? shelfCapacity(shelfWidth) : items.length || 1;
   const room = more ? Math.max(1, cap - 1) : cap;
   const truncated = fill && items.length > room;
   const shown = truncated ? items.slice(0, room) : items;
@@ -42,7 +40,7 @@ export function Shelf({
   // Largura de card que preenche a linha de ponta a ponta (até a borda
   // direita do container — mesma borda onde termina a topbar/relógio).
   // Baseada em `cap` (quantos cards CABEM na largura disponível, igual em
-  // qualquer prateleira da página — só depende da largura/viewport, não do
+  // qualquer prateleira da página — só depende da largura, não do
   // conteúdo), NÃO em `renderedCount` (quantos ESTA prateleira de fato
   // mostra). Já tentamos basear em `renderedCount`: cada prateleira acabava
   // com um tamanho de card diferente da vizinha (uma com 3 jogos "enchia" a
@@ -52,7 +50,7 @@ export function Shelf({
   // não; uma prateleira com poucos itens só deixa espaço vazio à direita
   // em vez de esticar os poucos cards que tem — mesmo comportamento do
   // "Continuar jogando" antes de qualquer um desses ajustes.
-  const cardPx = shelfWidth > 0 ? shelfFillWidth(shelfWidth, viewport, cap) : 0;
+  const cardPx = shelfWidth > 0 ? shelfFillWidth(shelfWidth, cap) : 0;
 
   const style: CSSProperties | undefined =
     cardPx > 0

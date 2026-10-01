@@ -77,7 +77,7 @@ export function ShaderParams({
     <div className={s.root}>
       <div className={s.head}>
         <Caption1>{t('shaders.params')}</Caption1>
-        <Button size="small" appearance="subtle" icon={<ArrowResetRegular />} onClick={reset}>
+        <Button appearance="subtle" icon={<ArrowResetRegular />} onClick={reset}>
           {t('shaders.resetParams')}
         </Button>
       </div>

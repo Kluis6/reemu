@@ -169,7 +169,6 @@ export function SettingsBios() {
                       )}
                       {f.present ? (
                         <Button
-                          size="small"
                           appearance="subtle"
                           icon={<DeleteRegular />}
                           disabled={busy}
@@ -179,7 +178,6 @@ export function SettingsBios() {
                         </Button>
                       ) : (
                         <Button
-                          size="small"
                           appearance="primary"
                           icon={<DocumentArrowUpRegular />}
                           disabled={busy}
@@ -213,7 +211,6 @@ export function SettingsBios() {
                 </Badge>
               )}
               <Button
-                size="small"
                 appearance={ppsspp.data ? 'subtle' : 'primary'}
                 icon={<ArrowDownloadRegular />}
                 disabled={getPpsspp.isPending}

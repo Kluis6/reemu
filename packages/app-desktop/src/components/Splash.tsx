@@ -88,7 +88,7 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 'clamp(44px, 8vw, 220px)',
+    fontSize: '72px',
     fontWeight: tokens.fontWeightBold,
     letterSpacing: '0.03em',
     color: tokens.colorNeutralForeground1,
