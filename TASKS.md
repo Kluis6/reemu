@@ -243,23 +243,17 @@ conferir".
       ("GetProcAddress failed"), e os 9 testes de `tests/session.rs`
       falham. Já falhavam antes de 2026-10-02 (conferido com `git stash`).
       Provável: a DLL de teste não exporta os símbolos no Windows.
-- [ ] `in-progress` — A5. Áudio em dobro no flycast. **Causa (fonte do
-      flycast, `shell/libretro/libretro.cpp`):** com Threaded Rendering
-      (padrão), o `retro_run` repete `emu.render()` até 5 vezes até achar
-      um quadro novo. Num jogo a 30 fps (Jet Set Radio), cada `retro_run`
-      emula 2 refreshes; chamado 60×/s pelo core-host, o jogo emula 120/s e
-      entrega o dobro de áudio (176 mil contra 88 mil amostras/s). A opção
-      do flycast `reicast_detect_vsync_swap_interval` ("Detect Frame Rate
-      Changes", desligada por padrão) avisa o frontend por
-      `SET_SYSTEM_AV_INFO` quando o jogo muda pra 30 fps, e o core-host já
-      ajusta o `Pacer`. Falta: confirmar com o usuário se o jogo parecia
-      acelerado e decidir se a opção vira padrão do ReEmu (a descrição dela
-      pede desligado em jogos de taxa instável).
-      **Validado com a opção ligada (2026-10-02):** o flycast avisa
-      `fps=29.973` quando o jogo vai pra 30 fps, o core-host passa a 30
-      chamadas/s e o áudio fica certo (88.284 amostras/s contra ~88.282
-      esperadas). Falta decidir se a opção vira padrão do ReEmu pro flycast
-      (jogos de taxa instável pedem desligado; dá pra desligar por jogo).
+- [x] `done` — A5. Áudio em dobro no flycast em jogos a 30 fps. **Causa
+      (fonte do flycast, `shell/libretro/libretro.cpp`):** com Threaded
+      Rendering, o `retro_run` repete `emu.render()` até achar um quadro
+      novo; num jogo a 30 fps, cada chamada emula 2 refreshes e o áudio sai
+      em dobro. **Correção:** o ReEmu liga por padrão a opção
+      `reicast_detect_vsync_swap_interval` ("Detect Frame Rate Changes";
+      `FRONTEND_DEFAULTS` em `core-loader-desktop/src/coreopts.rs`), e o
+      core avisa por `SET_SYSTEM_AV_INFO` quando o jogo muda de taxa.
+      Validado no Jet Set Radio (2026-10-02): 30 chamadas/s e 88.284
+      amostras/s de áudio contra ~88.282 esperadas. Jogo de taxa instável
+      (Ecco, Unreal Tournament) pode desligar a opção por jogo.
 - [ ] `todo` — B1. Detectar suporte nos dois lados: extensões GL
       `GL_EXT_memory_object`, `GL_EXT_memory_object_win32`,
       `GL_EXT_semaphore` e `GL_EXT_semaphore_win32` no contexto WGL do filho;

@@ -1673,3 +1673,10 @@ Infra:
 - **Cores não comerciais** (Genesis Plus GX, família Snes9x, FB Alpha/FBNeo, MAME 2000/2003/2003-Plus, PicoDrive e outros): "may not be sold, nor may they be used in a commercial product or activity without copyright holders' approval" (docs.libretro.com/development/licenses). O ReEmu é gratuito e não os distribui. Doação voluntária não vende o software. Se um dia houver versão paga, anúncio ou loja, esses cores precisam sair da oferta ou ter autorização dos autores.
 - **GPL:** os cores GPL rodam no processo do core-host (e os Vulkan, no do app). Quem monta essa combinação é o usuário, na própria máquina, e o ReEmu não redistribui nenhum binário de core, então não há obrigação de fonte do lado do ReEmu.
 - **Buildbot:** a documentação da libretro não tem regra publicada pra uso por outros frontends (não verificado além disso). Os downloads agora se identificam com `User-Agent: ReEmu/<versão> (+https://github.com/Kluis6/reemu)` (`http.rs`); antes saíam sem User-Agent.
+
+## 2026-10-02 — flycast: "Detect Frame Rate Changes" ligado por padrão
+
+- **Sintoma:** em jogos a 30 fps (Jet Set Radio), o áudio saía em dobro (176 mil amostras/s contra 88 mil).
+- **Causa** (`shell/libretro/libretro.cpp` do flycast): com Threaded Rendering, o `retro_run` repete `emu.render()` até achar um quadro novo. Num jogo a 30 fps, cada chamada emula 2 refreshes.
+- **Correção:** tabela `FRONTEND_DEFAULTS` em `core-loader-desktop/src/coreopts.rs`, aplicada ao schema quando o core declara as opções. Ela troca o padrão de `reicast_detect_vsync_swap_interval` para `enabled`, só se o core oferecer esse valor. O valor escolhido pelo usuário continua tendo prioridade. Valores e descrição conferidos em `shell/libretro/libretro_core_options.h` (flyinghead/flycast, master): `disabled`/`enabled`, padrão `disabled`, recomendado desligar em jogos de taxa instável.
+- **Validado no Windows:** o flycast avisa `fps=29.973`, o core-host passa a 30 chamadas/s e o áudio fica em 88.284 amostras/s (~88.282 esperadas), sem quadros perdidos.

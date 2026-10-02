@@ -24,6 +24,30 @@ pub(crate) struct CoreOption {
     pub default: String,
 }
 
+/// Padrões do ReEmu que substituem o padrão declarado pelo core (`key`,
+/// `valor`). Só valem se o core oferecer esse valor; a escolha do usuário
+/// (vinda do banco) continua tendo prioridade.
+///
+/// - `reicast_detect_vsync_swap_interval` (flycast, "Detect Frame Rate
+///   Changes", `disabled` no core): avisa por `SET_SYSTEM_AV_INFO` quando o
+///   jogo cai pra 30/20 fps. Sem ela, com Threaded Rendering, cada
+///   `retro_run` emula 2 refreshes num jogo a 30 fps e o áudio sai em dobro
+///   (Jet Set Radio, 2026-10-02). A descrição no core
+///   (`shell/libretro/libretro_core_options.h`) pede desligado em jogos de
+///   taxa instável (Ecco, Unreal Tournament); aí o usuário desliga por jogo.
+const FRONTEND_DEFAULTS: &[(&str, &str)] = &[("reicast_detect_vsync_swap_interval", "enabled")];
+
+/// Aplica `FRONTEND_DEFAULTS` ao schema declarado pelo core.
+pub(crate) fn apply_frontend_defaults(opts: &mut [CoreOption]) {
+    for o in opts.iter_mut() {
+        if let Some((_, v)) = FRONTEND_DEFAULTS.iter().find(|(k, _)| *k == o.key) {
+            if o.values.iter().any(|x| x == v) {
+                o.default = (*v).to_string();
+            }
+        }
+    }
+}
+
 pub(crate) unsafe fn cstr(p: *const c_char) -> Option<String> {
     (!p.is_null()).then(|| CStr::from_ptr(p).to_string_lossy().into_owned())
 }
@@ -197,4 +221,44 @@ pub fn set_core_option(key: &str, value: &str) -> bool {
         .as_mut()
         .map(|st| st.set_option_value(key, value))
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn opt(key: &str, values: &[&str], default: &str) -> CoreOption {
+        CoreOption {
+            key: key.into(),
+            desc: key.into(),
+            values: values.iter().map(|v| v.to_string()).collect(),
+            default: default.into(),
+        }
+    }
+
+    #[test]
+    fn frontend_default_overrides_the_core_default() {
+        let mut opts = vec![
+            opt(
+                "reicast_detect_vsync_swap_interval",
+                &["disabled", "enabled"],
+                "disabled",
+            ),
+            opt("reicast_other", &["disabled", "enabled"], "disabled"),
+        ];
+        apply_frontend_defaults(&mut opts);
+        assert_eq!(opts[0].default, "enabled");
+        assert_eq!(opts[1].default, "disabled");
+    }
+
+    #[test]
+    fn frontend_default_needs_a_value_the_core_offers() {
+        let mut opts = vec![opt(
+            "reicast_detect_vsync_swap_interval",
+            &["off", "on"],
+            "off",
+        )];
+        apply_frontend_defaults(&mut opts);
+        assert_eq!(opts[0].default, "off");
+    }
 }

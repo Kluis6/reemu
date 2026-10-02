@@ -147,7 +147,8 @@ impl FrontendState {
     /// ainda são válidos; um pré-setado que não bate exato tenta casar
     /// case-insensitive (ex.: "disabled" vs "Disabled" entre versões de core);
     /// o resto cai no default.
-    pub(crate) fn install_core_options(&mut self, opts: Vec<CoreOption>) {
+    pub(crate) fn install_core_options(&mut self, mut opts: Vec<CoreOption>) {
+        coreopts::apply_frontend_defaults(&mut opts);
         for o in &opts {
             let cur = self
                 .option_values
