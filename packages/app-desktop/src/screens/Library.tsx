@@ -18,12 +18,11 @@ import {
   AddRegular,
   ArrowSortRegular,
   FilterRegular,
-  ArrowSyncRegular,
   MoreHorizontalRegular,
   WarningRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
 import { CardGridSkeleton } from "../components/CardGridSkeleton";
@@ -35,14 +34,12 @@ import { PlatformTile } from "../components/PlatformTile";
 import { Shelf } from "../components/Shelf";
 import { ManageLibraryDialog } from "../components/ManageLibraryDialog";
 import { platformLabel } from "../lib/platform";
-import { errorPatch, errorToast, sysToast } from "../lib/toast";
+import { errorToast, sysToast } from "../lib/toast";
+import { useLibraryScan } from "../lib/useLibraryScan";
 import {
   listRoms,
   removeRom,
-  rescanLibrary,
-  scanLibrary,
   type RomEntry,
-  type ScanProgress,
 } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
@@ -119,7 +116,6 @@ export function Library() {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const push = useToastStore((s) => s.push);
-  const updateToast = useToastStore((s) => s.update);
   const query = useSearchStore((s) => s.query)
     .trim()
     .toLowerCase();
@@ -129,58 +125,12 @@ export function Library() {
   const [platform, setPlatform] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
-  const scanId = useRef<string | null>(null);
 
   const roms = useQuery({ queryKey: ["roms"], queryFn: listRoms, retry: false });
 
-  // `path` = adicionar uma pasta; `null` = varrer de novo as já adicionadas.
-  const scan = useMutation({
-    mutationFn: (path: string | null) => {
-      const progress = (p: ScanProgress) => {
-        if (!scanId.current) return;
-        updateToast(scanId.current, {
-          message: t("scan.progress", { current: p.current, total: p.total ? `/${p.total}` : "" }),
-          progress: p.total ? p.current / p.total : null,
-        });
-      };
-      return path === null ? rescanLibrary(progress) : scanLibrary(path, progress);
-    },
-    onMutate: () => {
-      const id = crypto.randomUUID();
-      scanId.current = id;
-      push({
-        id,
-        message: t("scan.start"),
-        variant: "Info",
-        durationMs: 0,
-        source: "System",
-        progress: null,
-      });
-    },
-    onSuccess: (r, path) => {
-      if (scanId.current) {
-        updateToast(scanId.current, {
-          message:
-            path === null
-              ? t("scan.refreshResult", { added: r.added, removed: r.removed, reclassified: r.reclassified })
-              : t("scan.result", { added: r.added, known: r.skippedKnown, skipped: r.skippedUnrecognized }),
-          variant: r.errors > 0 ? "Warning" : "Success",
-          durationMs: 5000,
-          progress: undefined,
-        });
-      }
-      qc.invalidateQueries({ queryKey: ["roms"] });
-      qc.invalidateQueries({ queryKey: ["romSources"] });
-    },
-    onError: (e) => {
-      if (scanId.current) {
-        updateToast(scanId.current, errorPatch(e, "scanFolder"));
-      }
-    },
-    onSettled: () => {
-      scanId.current = null;
-    },
-  });
+  // adicionar uma pasta (o "Atualizar biblioteca" fica em Gerenciar
+  // biblioteca, ver `ManageLibraryFields`)
+  const scan = useLibraryScan();
 
   const startScan = (dir: string) => {
     setAddOpen(false);
@@ -367,16 +317,6 @@ export function Library() {
               icon={<AddRegular />}
               aria-label={t("library.addRom")}
               onClick={() => setAddOpen(true)}
-            />
-          </Tooltip>
-          <Tooltip content={t("library.refresh")} relationship="label">
-            <Button
-              appearance="subtle"
-              className={mergeClasses(shell.navIconBtn, shell.navIconLg)}
-              icon={<ArrowSyncRegular />}
-              aria-label={t("library.refresh")}
-              disabled={scan.isPending}
-              onClick={() => scan.mutate(null)}
             />
           </Tooltip>
           <Tooltip content={t("library.manage")} relationship="label">

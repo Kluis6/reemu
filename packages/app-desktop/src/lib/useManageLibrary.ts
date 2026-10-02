@@ -10,6 +10,7 @@ import {
   setSystemCore,
 } from "./tauri";
 import { errorToast, sysToast } from "./toast";
+import { useLibraryScan } from "./useLibraryScan";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
 
@@ -81,6 +82,9 @@ export function useManageLibrary(enabled: boolean) {
     onError: (e) => push(errorToast(e, "saveChanges")),
   });
 
+  // "Atualizar biblioteca": varre de novo as pastas já adicionadas.
+  const rescan = useLibraryScan();
+
   const coreValue = (sys: string) => pending[sys] ?? sysCores.data?.[sys] ?? "";
 
   const reset = () => setPending({});
@@ -95,6 +99,7 @@ export function useManageLibrary(enabled: boolean) {
     setConfirm,
     purge,
     save,
+    rescan,
     coreValue,
     reset,
   };

@@ -1,4 +1,5 @@
 import { Button, Select, Spinner, Text, makeStyles, tokens } from "@fluentui/react-components";
+import { ArrowSyncRegular } from "@fluentui/react-icons";
 import { platformLabel } from "../lib/platform";
 import type { ManageLibraryState } from "../lib/useManageLibrary";
 import { useTranslation } from "react-i18next";
@@ -37,6 +38,14 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
   },
   count: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
+  refreshRow: {
+    display: "flex",
+    alignItems: "center",
+    columnGap: tokens.spacingHorizontalM,
+    paddingBottom: tokens.spacingVerticalS,
+  },
+  hint: { flexGrow: 1, color: tokens.colorNeutralForeground3 },
+  refreshBtn: { flexShrink: 0, whiteSpace: "nowrap" },
 });
 
 /**
@@ -56,7 +65,8 @@ export function ManageLibraryFields({
 }) {
   const { t } = useTranslation();
   const s = useStyles();
-  const { cores, sysCores, sources, setPending, confirm, setConfirm, purge, coreValue } = state;
+  const { cores, sysCores, sources, setPending, confirm, setConfirm, purge, rescan, coreValue } =
+    state;
 
   const purgeBtn = (target: string, idle: string, confirmLabel: string) => (
     <Button
@@ -70,6 +80,21 @@ export function ManageLibraryFields({
 
   return (
     <>
+      {(sources.data?.length ?? 0) > 0 && (
+        <div className={s.refreshRow}>
+          <Text className={s.hint}>{t("manage.refreshHint")}</Text>
+          <Button
+            appearance="secondary"
+            className={s.refreshBtn}
+            icon={<ArrowSyncRegular />}
+            disabled={rescan.isPending}
+            onClick={() => rescan.mutate(null)}
+          >
+            {t("library.refresh")}
+          </Button>
+        </div>
+      )}
+
       {cores.isLoading || sysCores.isLoading ? (
         <Spinner label={t("common.loading")} />
       ) : platforms.length === 0 ? (
