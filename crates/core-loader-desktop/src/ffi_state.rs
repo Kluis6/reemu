@@ -101,6 +101,9 @@ pub(crate) struct FrontendState {
     pub option_values: HashMap<String, String>,
     /// O core deve reler as opções no próximo `GET_VARIABLE_UPDATE`.
     pub options_dirty: bool,
+    /// Opções que o PRÓPRIO core trocou (`SET_VARIABLE`), ainda não
+    /// entregues ao frontend pra guardar (`take_core_set_options`).
+    pub core_set_options: Vec<(String, String)>,
     /// `CString` viva por chave, pro ponteiro que devolvemos em `GET_VARIABLE`
     /// continuar válido até o valor mudar.
     option_value_cache: HashMap<String, CString>,
@@ -139,6 +142,7 @@ impl FrontendState {
             core_options: Vec::new(),
             option_values: coreopts::take_pending_core_option_values(),
             options_dirty: false,
+            core_set_options: Vec::new(),
             option_value_cache: HashMap::new(),
         }
     }
@@ -384,6 +388,28 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             let ptr = st.option_ptr(&key);
             var.value = ptr;
             !ptr.is_null()
+        }
+        // "After changing a core option value with this callback, it will be
+        // reflected in the frontend and GET_VARIABLE_UPDATE will return true";
+        // `data` nulo = só pergunta se a chamada existe (`libretro.h`). O
+        // PPSSPP usa isto pra fixar o MAC sorteado na 1ª vez
+        // (`ppsspp_change_mac_address01..12`); sem guardar, cada sessão
+        // sorteava outro.
+        sys::RETRO_ENVIRONMENT_SET_VARIABLE => {
+            if data.is_null() {
+                return true;
+            }
+            let var = &*(data as *const sys::retro_variable);
+            let (Some(key), Some(value)) = (coreopts::cstr(var.key), coreopts::cstr(var.value))
+            else {
+                return false;
+            };
+            if key.is_empty() || value.is_empty() || !st.set_option_value(&key, &value) {
+                return false;
+            }
+            log::info!("core trocou a opção '{key}' para '{value}'");
+            st.core_set_options.push((key, value));
+            true
         }
         sys::RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE => {
             if !data.is_null() {

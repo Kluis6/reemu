@@ -111,6 +111,12 @@ pub enum ToParent {
     /// uma vez: a partir daí o pai para de dobrar o stick esquerdo como
     /// d-pad (senão mexer o stick aperta/solta as setas junto).
     AnalogUsed,
+    /// O core trocou uma opção dele (`RETRO_ENVIRONMENT_SET_VARIABLE`) — o
+    /// pai guarda, pra valer nas próximas sessões.
+    CoreOptionSet {
+        key: String,
+        value: String,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -32,6 +32,8 @@ pub const RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS: c_uint = 11;
 pub const RETRO_ENVIRONMENT_SET_HW_RENDER: c_uint = 14;
 pub const RETRO_ENVIRONMENT_GET_VARIABLE: c_uint = 15;
 pub const RETRO_ENVIRONMENT_SET_VARIABLES: c_uint = 16;
+/// O core troca o valor de uma opção dele (`libretro.h`).
+pub const RETRO_ENVIRONMENT_SET_VARIABLE: c_uint = 70;
 pub const RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: c_uint = 17;
 pub const RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME: c_uint = 18;
 pub const RETRO_ENVIRONMENT_GET_LOG_INTERFACE: c_uint = 27;

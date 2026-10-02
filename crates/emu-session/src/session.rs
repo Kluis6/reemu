@@ -179,6 +179,12 @@ struct Shared {
     /// Alguma thread já chamou `step_vk_local` (o video pump do app; num
     /// teste, a própria thread do teste).
     vk_driver_seen: AtomicBool,
+    /// Opções que o core trocou sozinho (`SET_VARIABLE`), `(core, chave,
+    /// valor)`, esperando o app guardar (`take_core_set_options`).
+    core_set_options: Mutex<Vec<(String, String, String)>>,
+    /// Core do `Load` em andamento: o filho manda o `CoreOptionSet` do load
+    /// antes do `Loaded`, quando `loaded_core` ainda não foi preenchido.
+    loading_core: Mutex<Option<String>>,
 }
 
 type VkJob = Box<dyn FnOnce() + Send>;
@@ -326,6 +332,8 @@ impl EmuSession {
             vk_jobs: Mutex::new(std::collections::VecDeque::new()),
             vk_job_seq: AtomicU64::new(0),
             vk_driver_seen: AtomicBool::new(false),
+            core_set_options: Mutex::new(Vec::new()),
+            loading_core: Mutex::new(None),
         });
 
         let gamepad_thread = cfg.enable_gamepad.then(|| {
@@ -418,6 +426,19 @@ impl EmuSession {
             .unwrap_or_else(|p| p.into_inner())
     }
 
+    /// Opções que o core trocou sozinho (`RETRO_ENVIRONMENT_SET_VARIABLE`)
+    /// desde a última chamada, `(core, chave, valor)`. O app grava como
+    /// opção do core, pra valerem nas próximas sessões.
+    pub fn take_core_set_options(&self) -> Vec<(String, String, String)> {
+        std::mem::take(
+            &mut *self
+                .shared
+                .core_set_options
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()),
+        )
+    }
+
     pub fn step_vk_local(&self) -> Option<Frame> {
         // Esta é a thread que dirige o core: carregar/salvar/descarregar
         // vêm pra cá (`on_vk_thread`). Quem chama já segura o portão da
@@ -448,6 +469,7 @@ impl EmuSession {
         let lc = guard.as_mut()?;
         lc.apply_input(&snapshot_input());
         let tick = lc.run_frame();
+        collect_local_core_set_options(&self.shared);
         // Rota local: o core marca o analógico do core-loader (mesmo
         // processo); o poller do controle olha o do pai.
         if core_loader_desktop::analog().is_used() {
@@ -738,6 +760,36 @@ pub fn keyboard_analog() -> &'static AnalogState {
 
 pub fn analog() -> &'static AnalogState {
     &PARENT_ANALOG
+}
+
+/// Guarda uma opção que o core trocou sozinho, pro app gravar.
+fn note_core_set_option(shared: &Shared, key: String, value: String) {
+    let core = shared
+        .loaded_core
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone()
+        .or_else(|| {
+            shared
+                .loading_core
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .clone()
+        });
+    if let Some(core) = core {
+        shared
+            .core_set_options
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .push((core, key, value));
+    }
+}
+
+/// Rota in-process: as trocas ficam no estado global do core-loader.
+fn collect_local_core_set_options(shared: &Shared) {
+    for (key, value) in core_loader_desktop::take_core_set_options() {
+        note_core_set_option(shared, key, value);
+    }
 }
 
 fn snapshot_input() -> [PortInput; 4] {
@@ -1182,6 +1234,10 @@ fn handle_event(
         ToParent::SaveRamRestored(None) => {}
         ToParent::Warn(msg) => log::warn!("core-host: {msg}"),
         ToParent::AnalogUsed => PARENT_ANALOG.mark_used(),
+        ToParent::CoreOptionSet { key, value } => {
+            log::info!("core trocou a opção '{key}' para '{value}'");
+            note_core_set_option(shared, key, value);
+        }
         other => log::debug!("evento do core-host fora de um round-trip: {other:?}"),
     }
 }
@@ -1590,6 +1646,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
 
         match cmd {
             Command::Load(id, rom, initial_option_values, reply) => {
+                *shared
+                    .loading_core
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = Some(id.0.clone());
                 // Salva a save RAM do jogo anterior e mata o processo
                 // incondicionalmente — o novo `Load` SEMPRE sobe um processo
                 // novo, mesmo que o anterior fosse o mesmo core (é essa
@@ -1682,6 +1742,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                     Some(id.0.clone());
                                 *shared.vk_local.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(lc);
+                                collect_local_core_set_options(&shared);
                                 shared.vk_local_paused.store(false, Ordering::Release);
                                 shared.vk_local_active.store(true, Ordering::Release);
                                 shared.set_state(SessionState::Running);

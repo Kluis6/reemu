@@ -457,6 +457,9 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         // Windows: o anel já é nomeado (derivado do nome do
                         // pipe, ver `core_ipc::shm_ring_win`) — o pai abre
                         // pelo mesmo nome, nada extra viaja na mensagem.
+                        // Opções que o core fixou no load (o MAC do PPSSPP)
+                        // chegam ao pai antes da resposta do load.
+                        forward_core_set_options(&channel);
                         #[cfg(unix)]
                         let _ = channel.send(&ToParent::Loaded(Ok(av)), &[new_ring.fd()]);
                         #[cfg(windows)]
@@ -629,6 +632,7 @@ fn run_one_frame(
     {
         let _ = channel.send(&ToParent::AnalogUsed, &[]);
     }
+    forward_core_set_options(channel);
     if let (Some(frame), Some(ring)) = (produced, ring.as_ref()) {
         let ts = diag.as_ref().map(|_| Instant::now());
         if let Some(buf) = send_frame(channel, ring, frame_slot, frame) {
@@ -747,5 +751,12 @@ fn send_frame(
             );
             None
         }
+    }
+}
+
+/// Repassa ao pai as opções que o core trocou sozinho (`SET_VARIABLE`).
+fn forward_core_set_options(channel: &core_ipc::Channel) {
+    for (key, value) in core_loader_desktop::take_core_set_options() {
+        let _ = channel.send(&ToParent::CoreOptionSet { key, value }, &[]);
     }
 }

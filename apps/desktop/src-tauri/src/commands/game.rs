@@ -144,6 +144,7 @@ pub async fn load_game(
     // Guarda o `rom_id` (do DB) pro QuickSave/QuickLoad; `None` se o jogo veio
     // de fora da biblioteca.
     *state.current_rom.lock().unwrap_or_else(|p| p.into_inner()) = rom_id;
+    persist_core_set_options(&state).await;
     // Load concluído: o pump pode voltar a apresentar a subsurface (agora com
     // frames do jogo NOVO — `latest_frame` foi zerado no `Command::Load`).
     state
@@ -416,10 +417,34 @@ pub async fn unload_game(app: AppHandle) -> Result<(), String> {
     // na conexão Wayland fora da thread do pump corrompe o `wl_display`
     // (o driver Vulkan da NVIDIA também escreve nela no present) → app fecha.
     let _ = state.session.take_latest_frame();
-    tauri::async_runtime::spawn_blocking(move || session.unload())
+    let r = tauri::async_runtime::spawn_blocking(move || session.unload())
         .await
         .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string());
+    persist_core_set_options(&state).await;
+    r
+}
+
+/// Grava como opção do core (escopo do core, todos os jogos) o que o core
+/// trocou sozinho via `RETRO_ENVIRONMENT_SET_VARIABLE`. É assim que o
+/// PPSSPP fixa o MAC sorteado na 1ª vez (`ppsspp_change_mac_address01..12`):
+/// o RetroArch guarda essas trocas nas opções do core. Sem guardar, cada
+/// sessão sorteava um MAC novo e jogos que amarram o save ao console (o
+/// Tekken Dark Resurrection) diziam "Game data is corrupted".
+async fn persist_core_set_options(state: &AppState) {
+    use domain::core_options::CoreOptionsStore;
+    let changes = state.session.take_core_set_options();
+    let Some(pool) = state.db.clone() else {
+        return;
+    };
+    let repo = db::CoreOptionsRepo::new(pool);
+    for (core, key, value) in changes {
+        if let Err(e) = repo.set_scoped_value(&core, None, &key, Some(&value)).await {
+            log::warn!("guardando a opção '{key}' que o core {core} trocou: {e}");
+        } else {
+            log::info!("opção '{key}' = '{value}' do core {core} guardada");
+        }
+    }
 }
 
 /// `true` quando o vídeo do jogo sai numa surface nativa atrás da webview

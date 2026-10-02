@@ -223,6 +223,15 @@ pub fn set_core_option(key: &str, value: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Opções que o core trocou sozinho (`SET_VARIABLE`) desde a última
+/// chamada — o frontend guarda, pra valerem nas próximas sessões.
+pub fn take_core_set_options() -> Vec<(String, String)> {
+    ffi_state::lock()
+        .as_mut()
+        .map(|st| std::mem::take(&mut st.core_set_options))
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
