@@ -7,7 +7,7 @@
  * Cor de marca, elevações e fundo da casca vêm do TEMA (ver styles/themes.ts):
  * tokens Fluent (`colorBrand*`, `colorNeutralBackground*` já escurecidos) +
  * tokens custom `--reemu*`. Trocar de tema reajusta tudo. Só o que não é cor
- * (raio 12/16, rail 64px) fica em `shell`.
+ * (raio 12/16, rail 68px) fica em `shell`.
  *
  * CUIDADO (WebKitGTK, ver src-tauri/src/main.rs): nada de `backdrop-filter`
  * nem `radial-gradient` multicamada em elemento `position: fixed`.
@@ -21,7 +21,7 @@ import * as M from "./metrics";
 // styles/themes.ts) — trocar de tema reajusta tudo.
 //
 // Medidas em epx (styles/metrics.ts): a tela lógica tem sempre pelo menos
-// 960×540, como no Xbox, e cresce com a resolução pelo zoom da tela inteira
+// 1366×768, como o app Xbox do Windows, e cresce com a resolução pelo zoom da tela inteira
 // (lib/uiScale.ts) — por isso nada aqui usa `vw`.
 export const shell = {
   radius: `${M.RADIUS}px`,
@@ -35,6 +35,9 @@ const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4},
 // Largura de um card (a mesma que o JS usa pra contar quantos cabem — ver
 // lib/shelf.ts): 6 por fileira numa tela 16:9.
 const gameCardSize = cardSizeCss;
+
+// Distância do anel de foco até o elemento (o anel tem 3 epx).
+const FOCUS_OFFSET = 4;
 
 // Largura do scrollbar customizado da `.scroll` (`::-webkit-scrollbar`
 // abaixo) — a `.topbar` compensa exatamente esse valor no próprio padding.
@@ -51,7 +54,9 @@ const TOPBAR_CLEARANCE = `${M.TOPBAR_CLEARANCE}px`;
 // `SCROLLBAR_W` pro próprio gutter, a `.topbar` não — por isso dois nomes.
 const PAGE_PAD_L = `${M.PAGE_PAD_L}px`;
 const SCROLL_PAD_R = `${M.PAGE_PAD_R - SCROLLBAR_W}px`;
-const TOPBAR_PAD_R = `${M.PAGE_PAD_R}px`;
+// A topbar é mais larga que o conteúdo, como no app Xbox (ver metrics.ts).
+const TOPBAR_PAD_L = `${M.TOPBAR_PAD_L}px`;
+const TOPBAR_PAD_R = `${M.TOPBAR_PAD_R}px`;
 
 /** Casca: app / rail / topbar / área de rolagem + anel de foco global. */
 export const useShellStyles = makeStyles({
@@ -108,7 +113,19 @@ export const useShellStyles = makeStyles({
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
-      outlineOffset: "2px",
+      // 4 epx: o anel respira em volta do item (pedido do usuário). Na rail
+      // ele ocupa 4 + 3 = 7 de cada lado do item de 50 e cabe nos 9 que
+      // sobram dos 68.
+      outlineOffset: `${FOCUS_OFFSET}px`,
+    },
+    // Botões do Fluent: o foco de teclado deles (`[data-fui-focus-visible]`)
+    // é uma borda + `box-shadow` rente ao botão, sem afastamento. Troca pelo
+    // mesmo anel de cima. `!important`: a regra do Fluent é classe+atributo.
+    "& .fui-Button[data-fui-focus-visible]": {
+      borderColor: "transparent !important",
+      boxShadow: "none !important",
+      outline: `3px solid ${tokens.colorBrandStroke1} !important`,
+      outlineOffset: `${FOCUS_OFFSET}px !important`,
     },
   },
 
@@ -116,10 +133,10 @@ export const useShellStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    rowGap: "8px",
-    // Itens dentro da área segura de cima/baixo da TV.
-    paddingTop: `${M.SAFE_Y}px`,
-    paddingBottom: `${M.SAFE_Y}px`,
+    // Itens a cada 56 epx, avatar centrado em y = 31 (app Xbox, metrics.ts).
+    rowGap: `${M.RAIL_GAP}px`,
+    paddingTop: `${M.RAIL_TOP}px`,
+    paddingBottom: `${M.RAIL_TOP}px`,
     borderRight: "none",
     // Hierarquia visual (Fluent 2): chrome de navegação persistente fica um
     // tom ACIMA do conteúdo (`colorNeutralBackground1`), não no mesmo tom —
@@ -131,7 +148,7 @@ export const useShellStyles = makeStyles({
   },
   railSpacer: { flexGrow: 1 },
   railSep: {
-    width: "24px",
+    width: "28px",
     height: "1px",
     backgroundColor: tokens.colorNeutralStroke1,
     marginTop: "4px",
@@ -143,9 +160,9 @@ export const useShellStyles = makeStyles({
     // fechar) — o Button tem width/height/padding/minWidth próprios (do
     // tamanho "medium" default) que competiam com isso e deixavam ele fora
     // de proporção com o <NavLink> (um <a> puro, sem essa disputa).
-    // 40 epx: acima do alvo mínimo de 32 epx do guia de TV da Microsoft.
-    width: `${M.RAIL_ITEM}px !important`,
-    height: `${M.RAIL_ITEM}px !important`,
+    // 50×46 epx, o retângulo do item ativo no app Xbox.
+    width: `${M.RAIL_ITEM_W}px !important`,
+    height: `${M.RAIL_ITEM_H}px !important`,
     minWidth: "0 !important",
     maxWidth: "none !important",
     padding: "0 !important",
@@ -155,9 +172,9 @@ export const useShellStyles = makeStyles({
     flex: "none",
     color: tokens.colorNeutralForeground3,
     textDecorationLine: "none",
-    // Ícone padrão do Fluent (20 epx), em múltiplo de 4 — cai em pixel
-    // inteiro nos zooms comuns e o SVG não borra.
-    fontSize: `${M.ICON}px`,
+    // Ícone de 24 epx, como na rail do app Xbox (múltiplo de 4: o SVG não
+    // borra).
+    fontSize: `${M.RAIL_ICON}px`,
     border: "none",
     backgroundColor: "transparent",
     cursor: "pointer",
@@ -175,7 +192,7 @@ export const useShellStyles = makeStyles({
     // Zoom só no glifo (não na pílula inteira) — cresce suave no hover/foco
     // e volta sozinho ao sair, via transition no próprio ícone.
     // Cresce pelo TAMANHO (redesenha nítido), não por `scale` (que amplia a
-    // imagem já rasterizada — borrava no Windows): 20 → 24 epx.
+    // imagem já rasterizada — borrava no Windows): 24 → ~29 epx.
     "& svg": {
       fontSize: "1em",
       transitionProperty: "font-size, transform",
@@ -206,14 +223,15 @@ export const useShellStyles = makeStyles({
     },
   },
   railBrand: {
-    marginBottom: "6px",
+    // 7 + rowGap (10): o 1º item começa em y = 64, como no app Xbox.
+    marginBottom: "7px",
     cursor: "pointer",
     padding: 0,
     border: "none",
     backgroundColor: "transparent",
     borderRadius: tokens.borderRadiusCircular,
     lineHeight: 0,
-    outlineOffset: "2px",
+    outlineOffset: `${FOCUS_OFFSET}px`,
   },
 
   main: {
@@ -232,10 +250,10 @@ export const useShellStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     columnGap: "12px",
-    // Começa na área segura de cima da TV; altura total = TOPBAR_CLEARANCE.
+    // Controles a partir de y = 32; altura total = TOPBAR_CLEARANCE.
     paddingTop: `${M.TOPBAR_TOP}px`,
     paddingBottom: "16px",
-    paddingLeft: PAGE_PAD_L,
+    paddingLeft: TOPBAR_PAD_L,
     // Inclui o SCROLLBAR_W: a `.scroll` reserva essa faixa pro scrollbar
     // próprio (`scrollbarGutter: "stable"`) — a topbar não rola, então não
     // perde essa faixa sozinha. Assim o relógio termina na mesma borda que o
@@ -318,8 +336,9 @@ export const useShellStyles = makeStyles({
     position: "absolute",
     left: "50%",
     transform: "translateX(-50%)",
-    // ~3/8 da tela de referência — centralizada, sem virar a largura toda.
-    width: "360px",
+    // 500 epx, como a busca do app Xbox — centralizada na área à direita da
+    // rail.
+    width: `${M.SEARCH_W}px`,
     maxWidth: "calc(100% - 160px)",
     backgroundColor: `${tokens.colorNeutralBackground2} !important`,
     "& input:focus": {
@@ -329,7 +348,7 @@ export const useShellStyles = makeStyles({
   clock: {
     color: tokens.colorNeutralForeground3,
     fontVariantNumeric: "tabular-nums",
-    fontSize: "15px",
+    fontSize: tokens.fontSizeBase300,
     fontWeight: 600,
     lineHeight: 1,
     letterSpacing: "0.01em",
@@ -395,7 +414,8 @@ export const useMotionStyles = makeStyles({
 
 /** Seções, cabeçalho, toolbar/chips, grade, estado vazio, gerenciar bibliotecas. */
 export const useBrowseStyles = makeStyles({
-  section: { marginTop: "24px" },
+  // Do fim de uma fileira ao título da próxima (app Xbox, metrics.ts).
+  section: { marginTop: `${M.SECTION_GAP}px` },
 
   grid: {
     display: "grid",
@@ -419,7 +439,7 @@ export const useBrowseStyles = makeStyles({
     // jogos viravam cards de 1/3 da tela cada, fora de escala com o resto do
     // app (revisão de UI, 2026-09-25).
     gridTemplateColumns: `repeat(auto-fill, minmax(${gameCardSize}, 1fr))`,
-    rowGap: "18px",
+    rowGap: `${SHELF_GAP}px`,
     columnGap: `${SHELF_GAP}px`,
     "& > *": { width: "100%", minWidth: 0 },
   },
@@ -430,10 +450,10 @@ export const useBrowseStyles = makeStyles({
     columnGap: "10px",
     rowGap: "10px",
     marginTop: "6px",
-    // Mesmo respiro do `rowGap` da grade (18px): com os 4px de antes a
+    // Mesmo respiro do `rowGap` da grade (20px): com os 4px de antes a
     // primeira linha de cards ficava colada na linha de filtros, enquanto
     // acima dela as tabs tinham 24px de folga.
-    marginBottom: "18px",
+    marginBottom: `${SHELF_GAP}px`,
     flexWrap: "wrap",
   },
   chip: {
@@ -584,11 +604,11 @@ export const useCardStyles = makeStyles({
     "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
       border: "none !important",
     },
-    // Afasta mais o anel de foco (o global do `.app` usa 2px) — com o zoom
+    // Afasta mais o anel de foco (o global do `.app` usa 4px) — com o zoom
     // da imagem por baixo, rente ficava apertado. `!important`: precisa
     // ganhar do `.app [tabindex]:focus`, que tem mais specificity.
     "&:focus, &:focus-visible": {
-      outlineOffset: "4px !important",
+      outlineOffset: `${FOCUS_OFFSET + 2}px !important`,
     },
     "&:hover, &:focus-within, &:focus-visible": {
       zIndex: 2,
@@ -737,6 +757,11 @@ export const useHintStyles = makeStyles({
   },
 });
 
+// Página do jogo: altura dos botões do hero (o app Xbox usa 55) e o
+// degradê que dissolve a arte do hero no fundo da página.
+const HERO_BTN_H = 56;
+const HERO_FADE = "linear-gradient(180deg, #000 0%, #000 70%, transparent 100%)";
+
 /** Página de detalhe do jogo (RomDetail) — estilo "página de jogo" do Xbox:
  *  hero com arte, título grande, botão Jogar, seções em painéis. */
 export const useDetailStyles = makeStyles({
@@ -775,9 +800,10 @@ export const useDetailStyles = makeStyles({
     // visível por trás da faixa de tabs, não só encostar nela. Calibrado
     // junto com `.tabsOverlap` (folga sobrando abaixo da linha de botões
     // continua maior que o quanto a faixa sobe, então não colide).
-    // Cabe topbar + plataforma + título + ações + aviso de core e ainda
-    // sobra a faixa que as abas sobrepõem (`.tabsOverlap`).
-    minHeight: "340px",
+    // Cabe topbar + capa + ações + aviso de core e ainda sobra a faixa que
+    // as abas sobrepõem (`.tabsOverlap`). 420 epx: a arte do app Xbox se
+    // dissolve no fundo por volta de y = 420 (1366×768).
+    minHeight: "420px",
     maxHeight: "72vh",
     // Sem raio: hero de sangria total (encosta na rail e na borda da
     // janela) não tem mais canto pra arredondar, igual à referência.
@@ -790,6 +816,12 @@ export const useDetailStyles = makeStyles({
     // resto do banner só é pano de fundo decorativo.
     alignItems: "flex-start",
     backgroundImage: elevGradient,
+    // Arte, véu e fundo somem juntos no fundo da página em vez de terminar
+    // num corte reto, como na página de jogo do app Xbox. A máscara vai no
+    // hero inteiro: nos filhos o fundo do próprio hero continuava marcando
+    // a borda. Os botões terminam bem antes do início do degradê.
+    maskImage: HERO_FADE,
+    WebkitMaskImage: HERO_FADE,
   },
   heroArt: {
     position: "absolute",
@@ -826,6 +858,7 @@ export const useDetailStyles = makeStyles({
     zIndex: 1,
     display: "flex",
     flexDirection: "column",
+    // Capa → ações: 16 epx, como no app Xbox.
     rowGap: "16px",
     // Esquerda usa o MESMO padding da página (`PAGE_PAD_L`, o `.hero` pai
     // cancelou com margin negativo) — ícone/título alinham com o resto do
@@ -836,9 +869,9 @@ export const useDetailStyles = makeStyles({
     // O hero agora cola no topo (por baixo da topbar flutuante — ver
     // `marginTop` negativo em `.hero`) — o próprio conteúdo (ícone/título)
     // precisa dessa folga de volta, senão nasce escondido atrás da busca/
-    // relógio. `+ 6px`: respiro extra além da altura exata da topbar.
-    paddingTop: "calc(var(--reemuTopbarH, 0px) + 6px)",
-    maxWidth: "min(85%, 760px)",
+    // relógio. A capa começa logo abaixo dela (y = 80; 79 no app Xbox).
+    paddingTop: "var(--reemuTopbarH, 0px)",
+    maxWidth: "min(85%, 900px)",
   },
   heroHeader: {
     display: "flex",
@@ -848,9 +881,10 @@ export const useDetailStyles = makeStyles({
   },
   heroIcon: {
     flexShrink: 0,
-    width: "96px",
-    height: "96px",
-    borderRadius: shell.radius,
+    // 128 epx, cantos de 4, como a capa da página de jogo do app Xbox.
+    width: "128px",
+    height: "128px",
+    borderRadius: tokens.borderRadiusMedium,
     objectFit: "cover",
     // Sem borda (pedido do usuário) — a sombra já separa a capa do banner.
     boxShadow: "0 6px 20px rgba(0, 0, 0, 0.45)",
@@ -870,10 +904,10 @@ export const useDetailStyles = makeStyles({
     marginBottom: "4px",
   },
   title: {
-    // "Title" da rampa tipográfica do Windows (28 epx).
-    fontSize: "28px",
-    fontWeight: 800,
-    lineHeight: 1.15,
+    // Título da página de jogo do app Xbox: ~36 epx, semibold.
+    fontSize: "36px",
+    fontWeight: tokens.fontWeightSemibold,
+    lineHeight: 1.2,
     margin: 0,
     // Sempre branco: o hero tem `heroScrim` escuro por baixo em qualquer
     // tema (claro ou escuro) — a cor do tema (`colorNeutralForeground1`)
@@ -916,7 +950,8 @@ export const useDetailStyles = makeStyles({
   },
   actions: {
     display: "flex",
-    columnGap: "12px",
+    // 16 epx entre os botões, como no app Xbox.
+    columnGap: "16px",
     rowGap: "10px",
     alignItems: "end",
     flexWrap: "wrap",
@@ -935,7 +970,7 @@ export const useDetailStyles = makeStyles({
     },
     "& button:focus": {
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
-      outlineOffset: "2px !important",
+      outlineOffset: `${FOCUS_OFFSET}px !important`,
     },
   },
   // Favoritar/Editar/Informações: `appearance="secondary"` sem a borda
@@ -950,14 +985,14 @@ export const useDetailStyles = makeStyles({
   noBorderButton: {
     border: "1px solid transparent !important",
   },
-  // Favoritar/Editar/Informações: `size="large"` icon-only, quadrados de 40
-  // epx (a altura do botão "Jogar" ao lado). `max-width` porque o Fluent
-  // injeta um próprio que vence o `width` mesmo com `!important`.
+  // Favoritar/Editar/Informações: icon-only, quadrados de 56 epx (a altura
+  // do "Jogar" ao lado; o "…" do app Xbox tem 56×55). `max-width` porque o
+  // Fluent injeta um próprio que vence o `width` mesmo com `!important`.
   heroActionBtn: {
-    width: "40px !important",
-    height: "40px !important",
+    width: `${HERO_BTN_H}px !important`,
+    height: `${HERO_BTN_H}px !important`,
     minWidth: "0 !important",
-    maxWidth: "40px !important",
+    maxWidth: `${HERO_BTN_H}px !important`,
     fontSize: `${M.ICON}px !important`,
     "& .fui-Button__icon": {
       fontSize: "1em",
@@ -965,13 +1000,29 @@ export const useDetailStyles = makeStyles({
       height: "1em",
     },
   },
+  // Linha de tempo de jogo abaixo das ações (página de jogo do app Xbox:
+  // texto de 16 com ícone, logo abaixo dos botões). Branco translúcido:
+  // fica sempre sobre o véu escuro do hero.
+  heroStats: {
+    display: "flex",
+    alignItems: "center",
+    columnGap: "8px",
+    fontSize: tokens.fontSizeBase400,
+    color: "rgba(255, 255, 255, 0.82)",
+  },
+  heroStatsIcon: { fontSize: `${M.ICON}px`, flexShrink: 0 },
   // Coração de favorito preenchido: cor de marca (mesmo token do "Nintendo
   // 64" no kicker do hero) em vez do branco padrão dos outros ícones —
   // destaca visualmente que está favoritado.
   favIconOn: { color: "var(--reemuBrandText)" },
-  // Botão "Jogar": peso de fonte mais leve que o padrão "semibold" do
-  // Fluent pra `appearance="primary"` (pedido do usuário).
-  playBtn: { fontWeight: tokens.fontWeightMedium },
+  // Botão "Jogar": 180×56 epx com texto de 14 regular, como o
+  // "Reproduzir" do app Xbox (180×55).
+  playBtn: {
+    minWidth: "180px !important",
+    height: `${HERO_BTN_H}px !important`,
+    fontSize: `${tokens.fontSizeBase300} !important`,
+    fontWeight: `${tokens.fontWeightRegular} !important`,
+  },
   // Remover: cor de perigo no ícone. Mesmo espaçamento das outras ações
   // (a margem extra que o separava deixava os ícones desiguais).
   dangerBtn: {
@@ -1143,7 +1194,7 @@ export const usePauseStyles = makeStyles({
     // (classe+atributo vs classe+pseudo) e ganharia o `outline` sem isso.
     "& a:focus, & button:focus": {
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
-      outlineOffset: "2px !important",
+      outlineOffset: `${FOCUS_OFFSET}px !important`,
     },
     // O <Button> do Fluent NÃO usa `::after` pra isso — muda a própria
     // `border-color` e desenha um `box-shadow` inset direto no elemento

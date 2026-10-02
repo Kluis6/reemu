@@ -28,7 +28,7 @@ document.addEventListener('securitypolicyviolation', (e) =>
   reportToRust(`CSP bloqueou ${e.blockedURI || '(inline)'} (${e.effectiveDirective})`),
 )
 
-// Escala modo Xbox (tela lógica de 960×540 epx, ver lib/uiScale.ts) — aplicada
+// Escala modo Xbox (tela lógica de 1366×768 epx, ver lib/uiScale.ts) — aplicada
 // antes do 1º render, pra não piscar no tamanho errado.
 startUiScale()
   .catch((e) => reportToRust(`escala da interface: ${String(e)}`))

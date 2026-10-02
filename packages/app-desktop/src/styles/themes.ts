@@ -364,15 +364,13 @@ interface ThemeOverrides {
   activeBg?: string;
 }
 
-/** Tipografia pra TV (Microsoft, "Designing for Xbox and TV"): texto
- *  principal com no mínimo 15 epx e secundário com 12 epx. O Fluent usa 14
- *  no corpo (`Base300`) e 10 no menor (`Base100`) — os dois sobem; o resto
- *  da rampa (12, 16, 20, 24, 28…) já atende. */
+/** Tipografia do app Xbox do Windows: corpo de 14 epx (o `Base300` padrão
+ *  do Fluent, ex.: "Pesquisar jogos…", "Compre e jogue agora" nas capturas
+ *  em 1366×768). Só o menor (`Base100`, 10 no Fluent) sobe pra 12 — o app
+ *  não usa texto abaixo disso. */
 const tvType: Partial<Theme> = {
   fontSizeBase100: "12px",
   lineHeightBase100: "16px",
-  fontSizeBase300: "15px",
-  lineHeightBase300: "20px",
 };
 
 function make(

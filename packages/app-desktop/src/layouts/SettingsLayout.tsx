@@ -12,7 +12,7 @@ import { RouteTransition } from "../components/RouteTransition";
 
 // Modelo das Configurações do Xbox: categorias numa lista vertical à
 // esquerda, conteúdo à direita. Dez abas lado a lado não cabem na tela de
-// referência (960 epx) e a lista vertical é o que o controle navega melhor
+// referência e a lista vertical é o que o controle navega melhor
 // (cima/baixo escolhe a categoria, direita entra no conteúdo).
 const useStyles = makeStyles({
   root: {

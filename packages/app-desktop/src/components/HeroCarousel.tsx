@@ -13,9 +13,10 @@ const useStyles = makeStyles({
     position: 'relative',
     width: '100%',
     minWidth: 0,
-    // ~40% da tela de referência (540 epx): o destaque e a 1ª fileira de
-    // jogos aparecem juntos, como no dashboard do Xbox.
-    height: '208px',
+    // Altura dos destaques do app Xbox ("Em destaque", 324 epx) menos um
+    // pouco: o destaque e a 1ª fileira de jogos aparecem juntos na tela de
+    // referência (768 epx).
+    height: '288px',
     borderRadius: tokens.borderRadiusXLarge,
     overflow: 'hidden',
     marginTop: '8px',

@@ -1632,3 +1632,21 @@ Infra:
   - sem jogo ou carregando, a surface é limpa de preto (`clear_surface`) em vez de escondida;
   - ao abrir o menu, não há captura nem esconder; a `PlayScreen` não busca o `pause_background`, e o véu do menu escurece o jogo.
 - Sem a flag, nada muda (janela filha por cima, como antes). Verificado aqui: `scripts/check-windows.sh`, clippy e os testes no Linux. **Falta rodar no Windows.**
+
+## 2026-10-02 — Windows: vídeo nativo validado; proporções do app Xbox (1366×768)
+
+- **Vídeo nativo no Windows** (RTX 3060, wgpu em Vulkan):
+  - O padrão (janela filha acima do WebView2) funcionou: o jogo aparece, o Esc abre o menu e volta, e clicar no jogo não tira o teclado.
+  - O protótipo `REEMU_WIN_OVERLAY` deu tela preta nas duas variantes (`=1` e `=child`), mesmo com som e "1º frame apresentado". A causa provável é que o WebView2 no modo janela não deixa ver o que está por baixo. Isso não está verificado: a página da Microsoft "Windowed vs. Visual hosting" não trata do caso.
+  - Às vezes o jogo anterior piscava na troca de jogo. O present é assíncrono (Vulkan, `vkQueuePresentKHR`: não garante a imagem visível quando a chamada retorna), então a janela filha podia reaparecer antes do 1º quadro novo, ainda com o último quadro guardado. Correção: o pump apresenta um quadro preto antes de esconder (`clear_surface`, só no Windows).
+- **Proporções:** comparado com capturas do app Xbox do Windows na mesma resolução (1366×768), o ReEmu saía 1,42× maior (rail de 91 px contra 68, controles de 46 contra 31, texto de 21 contra 14). Isso vinha da tela lógica de 960×540 do console.
+  - A referência passou a ser **1366×768** (`lib/uiScale.ts`).
+  - As métricas foram medidas nas capturas (`styles/metrics.ts`): rail 68 com itens de 50×46 a cada 56; busca de 500; margem de 47; cards de 184 com espaço de 20; título de seção 24; corpo 14.
+  - Conferido com um print do app rodando em 1366×768: rail, busca, botões da direita e as seis colunas de cards caem nas mesmas coordenadas da captura do Xbox.
+
+- **Página do jogo** (`useDetailStyles`), medida contra a página de jogo do app Xbox em 1366×768:
+  - capa de 128 (antes 96) logo abaixo da topbar;
+  - título de 36 semibold (antes 28 extra-bold);
+  - "Jogar" com 180×56 e texto de 14 regular, ações de 56×56 com 16 entre elas (antes 40 e 12);
+  - destaque de 420 de altura que se dissolve no fundo por uma máscara no hero inteiro, em vez do corte reto em 340.
+  - Conferido com print: capa, título e botões caem nas coordenadas do Xbox. A linha da plataforma acima do título e os selos de ano/gênero continuam, porque são do ReEmu.

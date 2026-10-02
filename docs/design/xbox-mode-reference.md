@@ -28,25 +28,27 @@ documento descreve o que cada padrão deve ser).
 
 ## Escala (proporções do Xbox)
 
-Fonte: Microsoft, [Designing for Xbox and TV](https://learn.microsoft.com/windows/apps/design/devices/designing-for-tv)
-e [Gamepad and remote control interactions](https://learn.microsoft.com/windows/apps/design/input/gamepad-and-remote-interactions).
+Fonte: capturas do app Xbox do Windows em 1366×768 (Início, Game Pass e menu
+do perfil, 2026-10-02), mais as regras de Microsoft, [Designing for Xbox and TV](https://learn.microsoft.com/windows/apps/design/devices/designing-for-tv)
+que continuam valendo (alvo ≥ 32 epx, 6 cards por fileira).
 
-- O Xbox renderiza 1920×1080 a **200%**: a interface é desenhada em pixels
-  efetivos (epx) numa tela lógica de **960×540** e escala por igual. O ReEmu
-  faz o mesmo com o zoom nativo do webview (`lib/uiScale.ts`):
-  `zoom = min(largura / 960, altura / 540)` → 1 px do CSS = 1 epx, zoom 2 em
-  1080p, 4 em 4K. Proporções idênticas em qualquer resolução; telas mais
-  largas (21:9) ou mais altas (16:10, 4:3) só ganham espaço na outra
-  dimensão. **Nada de `vw`/`clamp()` pra tamanho de componente.**
-- Métricas em `styles/metrics.ts`:
-  - área segura da TV: 48 epx nas laterais, 27 em cima e embaixo;
-  - alvo interativo ≥ 32 epx de altura (nada de `size="small"` em botão,
-    `Select`, `Input` ou `TabList`);
-  - texto principal ≥ 15 epx, secundário ≥ 12 epx (tokens `fontSizeBase300`
-    e `fontSizeBase100` do tema sobem pra 15 e 12);
-  - no máximo 6 cliques de borda a borda → 6 cards por fileira em 16:9
-    (`CARD_W` ≈ 126 epx);
-  - rampa tipográfica do Windows: Title 28, Subtitle 20, Body 15, Caption 12.
+- A interface é desenhada em pixels efetivos (epx) numa tela lógica de
+  **1366×768**, a resolução em que o app Xbox desenha 1 px = 1 px, e escala
+  por igual com o zoom nativo do webview (`lib/uiScale.ts`):
+  `zoom = min(largura / 1366, altura / 768)` → zoom ~1,41 em 1080p, ~2,81 em
+  4K. Telas mais largas (21:9) ou mais altas (16:10, 4:3) só ganham espaço
+  na outra dimensão. **Nada de `vw`/`clamp()` pra tamanho de componente.**
+- Até 2026-10-01 a referência era 960×540 (console, 1080p a 200%): em
+  1366×768 tudo saía 1,42× maior que no app Xbox.
+- Métricas em `styles/metrics.ts`, medidas nas capturas:
+  - rail de 68 epx; item ativo 50×46 (cantos de 6), itens a cada 56; ícones
+    de 24; avatar de 32 centrado em y = 31;
+  - topbar: controles de 32 a partir de y = 32; "voltar" 17 epx depois da
+    rail; busca de 500 centralizada; à direita termina a 36 da borda;
+  - conteúdo com 47 epx de margem dos dois lados (área de 1204 epx);
+  - cards de 184 com 20 entre eles (6 por fileira);
+  - título de seção 24 semibold, 20 até os cards;
+  - texto do corpo 14 (padrão do Fluent), o menor 12.
 - Preferência do usuário (Aparência › Tamanho da interface) multiplica o
   zoom: Compacto 80%, Padrão 100%, Grande 115%, Maior 130%.
 - Configurações seguem o Xbox: categorias numa lista vertical à esquerda.
@@ -73,15 +75,15 @@ e [Gamepad and remote control interactions](https://learn.microsoft.com/windows/
 └────┴──────────────────────────────────────────────────────────┘
 ```
 
-- **Rail** (`.xb-rail`, 64 epx, itens de 40): só ícones. Ativo = **barra vertical fina**
+- **Rail** (`.xb-rail`, 68 epx, itens de 50×46): só ícones. Ativo = **barra vertical fina**
   (3 px) na borda esquerda do ícone + ícone branco; inativo = ícone cinza.
   Divisória (`border-top`) separando a navegação principal dos utilitários
   (notificações, sair). Ícone de marca (círculo "R") no topo.
-- **Topbar** (começa na área segura de cima, controles de 32 epx): chevron
-  *voltar*, campo de busca centralizado (360 epx), à direita utilitários +
-  relógio `tabular-nums`.
-- **Conteúdo**: rolagem vertical só aqui. Padding 24 epx depois da rail, 48
-  (área segura) à direita, e embaixo área segura + barra de dicas.
+- **Topbar** (controles de 32 epx a partir de y = 32): chevron *voltar*,
+  campo de busca centralizado (500 epx), à direita utilitários + relógio
+  `tabular-nums`.
+- **Conteúdo**: rolagem vertical só aqui. Padding de 47 epx dos dois lados,
+  e embaixo a folga da barra de dicas.
 
 ## 2. Cores e tokens
 

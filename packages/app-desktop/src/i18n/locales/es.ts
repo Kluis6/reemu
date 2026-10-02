@@ -277,6 +277,7 @@ const es: Messages = {
     lastPlayed: 'Última vez jugado',
     neverPlayed: 'Nunca jugado',
     playTime: 'Tiempo de juego',
+    timePlayed: 'Tiempo jugado: {{time}}',
     favorite: 'Favorito',
     tabs: {
       core: 'Emulador',

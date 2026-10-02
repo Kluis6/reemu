@@ -27,6 +27,7 @@ import {
 } from "@fluentui/react-components";
 import {
   ArrowResetRegular,
+  ClockRegular,
   DeleteFilled,
   DeleteRegular,
   DismissRegular,
@@ -108,6 +109,10 @@ export function RomDetail() {
     queryKey: ["play-time", romId],
     queryFn: () => getRomPlayTime(romId),
     retry: false,
+    // Sempre atual ao abrir a página: o tempo muda a cada partida e a
+    // volta do jogo não invalida esta query (o cache padrão é de 5 min).
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   const states = useQuery({
     queryKey: ["save-states", romId],
@@ -399,6 +404,18 @@ export function RomDetail() {
               />
             </Tooltip>
           </div>
+          {/* Tempo de jogo abaixo das ações, como na página de jogo do app
+              Xbox ("Tempo jogado: 20 minutos"). */}
+          {playTime.data !== undefined && (
+            <div className={s.heroStats}>
+              <ClockRegular className={s.heroStatsIcon} />
+              <span>
+                {playTime.data > 0
+                  ? t("game.timePlayed", { time: formatPlayTime(playTime.data) })
+                  : t("game.neverPlayed")}
+              </span>
+            </div>
+          )}
           {coreList.length === 0 && (
             <MessageBar intent="warning" className={s.noCoreBar}>
               <MessageBarBody>

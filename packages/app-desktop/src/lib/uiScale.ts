@@ -1,12 +1,16 @@
-// Escala da interface no modelo do Xbox (Microsoft, "Designing for Xbox and
-// TV"): o Xbox renderiza 1920×1080 a 200%, então toda a interface é desenhada
-// em pixels efetivos (epx) numa tela lógica de 960×540, e a TELA INTEIRA
-// escala por igual — as proporções ficam idênticas em 720p, 1080p ou 4K.
+// Escala da interface nas proporções do app Xbox do Windows: a interface é
+// desenhada em pixels efetivos (epx) numa tela lógica de 1366×768 — onde o
+// app Xbox desenha 1 px = 1 px, e de onde vêm as medidas de
+// styles/metrics.ts — e a TELA INTEIRA escala por igual, então as proporções
+// ficam idênticas em 720p, 1080p ou 4K.
 //
-// Aqui o mesmo efeito vem do zoom NATIVO do webview (`setZoom`): com
-// `zoom = min(largura / 960, altura / 540)` (tamanho lógico da janela), 1 px
-// do CSS vale 1 epx e a viewport tem sempre pelo menos 960×540 — 1080p dá
-// zoom 2 (os 200% do Xbox), 4K dá 4. Os estilos usam valores fixos em px (=
+// Antes a referência era 960×540 (Xbox console, 1080p a 200%): com ela, em
+// 1366×768 tudo saía 1,42× maior que no app Xbox (rail de 91 px contra 68).
+//
+// O efeito vem do zoom NATIVO do webview (`setZoom`): com
+// `zoom = min(largura / 1366, altura / 768)` (tamanho lógico da janela), 1 px
+// do CSS vale 1 epx e a viewport tem sempre pelo menos 1366×768 — 1080p dá
+// zoom ~1,41, 4K dá ~2,81. Os estilos usam valores fixos em px (=
 // epx, ver styles/metrics.ts), nunca `vw`. Telas mais largas que 16:9
 // (ultrawide) ou mais altas (16:10, 4:3) ganham espaço a mais na outra
 // dimensão, que o layout preenche (mais cards por fileira, mais linhas).
@@ -14,8 +18,8 @@
 // A preferência em Configurações › Aparência só multiplica esse zoom.
 
 /** Tela lógica de referência do Xbox, em epx. */
-export const BASE_W = 960
-export const BASE_H = 540
+export const BASE_W = 1366
+export const BASE_H = 768
 
 // `label` = chave de tradução (i18n).
 export const UI_SCALES = [
@@ -36,7 +40,7 @@ export function getUiScale(): number {
   }
 }
 
-/** Zoom que encaixa a tela lógica de 960×540 epx numa janela de `w`×`h` px
+/** Zoom que encaixa a tela lógica de 1366×768 epx numa janela de `w`×`h` px
  *  lógicos (já sem a escala de DPI do sistema), vezes a preferência. */
 export function fitZoom(w: number, h: number, user: number): number {
   const fit = Math.min(w / BASE_W, h / BASE_H)

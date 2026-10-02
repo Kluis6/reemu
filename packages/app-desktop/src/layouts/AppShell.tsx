@@ -49,7 +49,8 @@ import { useShellStyles } from "../styles/xbox";
 
 const useLocalStyles = makeStyles({
   // ícones da sidebar com o border-radius padrão do botão do Fluent
-  railRadius: { borderRadius: tokens.borderRadiusMedium, position: "relative" },
+  // Cantos de 6 epx, como o item ativo da rail do app Xbox.
+  railRadius: { borderRadius: tokens.borderRadiusLarge, position: "relative" },
   // contador de pendências de metadata no ícone de Configurações
   railBadge: {
     position: "absolute",

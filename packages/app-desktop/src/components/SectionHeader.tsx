@@ -1,10 +1,12 @@
 import { Button, Text, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { ChevronRightRegular } from '@fluentui/react-icons'
 import type { ReactNode } from 'react'
+import { SECTION_TITLE, SECTION_TITLE_GAP } from '../styles/metrics'
 import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
-  root: { marginBottom: '12px' },
+  // Espaço até os cards, como no app Xbox (metrics.ts).
+  root: { marginBottom: `${SECTION_TITLE_GAP}px` },
   row: {
     display: 'flex',
     alignItems: 'center',
@@ -21,20 +23,20 @@ const useStyles = makeStyles({
     margin: 0,
     color: 'inherit',
     borderRadius: tokens.borderRadiusMedium,
-    outlineOffset: '4px',
+    outlineOffset: '6px',
   },
   titlePlain: { cursor: 'default' },
   title: {
-    // "Subtitle" da rampa tipográfica do Windows (20 epx).
-    fontSize: '20px',
-    fontWeight: tokens.fontWeightBold,
+    // Título de seção do app Xbox ("Voltar a jogar"): 24 epx, semibold.
+    fontSize: `${SECTION_TITLE}px`,
+    fontWeight: tokens.fontWeightSemibold,
     lineHeight: 1.15,
     // `<Text as="h2">`: sem a margem padrão do navegador (0,83em).
     margin: 0,
   },
   chevron: {
     // Um degrau abaixo do título ao lado.
-    fontSize: '16px',
+    fontSize: '20px',
     color: tokens.colorNeutralForeground3,
     transitionProperty: 'transform, color',
     transitionDuration: '150ms',

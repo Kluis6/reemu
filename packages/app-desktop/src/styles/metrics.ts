@@ -1,58 +1,78 @@
 /**
  * Métricas do "modo Xbox", em epx (pixel efetivo). Com a escala de
  * lib/uiScale.ts, 1 px do CSS = 1 epx e a tela lógica tem pelo menos
- * 960×540 — a mesma do Xbox (1080p a 200%). Por isso os valores aqui são
- * fixos: crescem com a tela pelo zoom, nunca por `vw`.
+ * 1366×768: a mesma em que o app Xbox do Windows desenha 1 px = 1 px. Por
+ * isso os valores aqui são fixos: crescem com a tela pelo zoom, nunca por
+ * `vw`.
  *
- * Fonte das regras: Microsoft, "Designing for Xbox and TV" e "Gamepad and
- * remote control interactions" (ver docs/design/xbox-mode-reference.md §Escala).
- * - Área segura da TV: 48 epx nas laterais, 27 epx em cima e embaixo.
- * - Alvo interativo: no mínimo 32 epx de altura.
- * - Texto: 15 epx o principal, 12 epx o secundário (tokens do tema).
- * - De uma borda a outra, no máximo 6 cliques — daí os 6 cards por fileira
- *   numa tela 16:9.
+ * Os números saem das capturas do app Xbox do Windows em 1366×768 (início,
+ * Game Pass e menu do perfil, 2026-10-02) — ver
+ * docs/design/xbox-mode-reference.md §Escala. Das regras de TV da Microsoft
+ * ("Designing for Xbox and TV") ficam o alvo mínimo de 32 epx e os 6 cards
+ * por fileira; a área segura e a rampa de texto passam a ser as do app.
  */
 
-/** Área segura da TV (overscan). */
-export const SAFE_X = 48;
-export const SAFE_Y = 27;
+/** Margem lateral do conteúdo: 47 epx dos dois lados, como os cards do
+ *  Xbox (da rail até o 1º card e do último card até a borda). */
+export const SAFE_X = 47;
+/** Topo dos controles da topbar (busca, voltar) — y = 32 no Xbox. */
+export const SAFE_Y = 32;
 
-/** Altura mínima de um alvo interativo. */
+/** Altura mínima de um alvo interativo (a busca do Xbox tem 31). */
 export const TARGET_MIN = 32;
 
 /** Ícone padrão do Fluent/Windows. */
 export const ICON = 20;
 
-/** Rail de navegação (ícones). Fundo vai até a borda; os itens têm 40 epx
- *  (acima do mínimo de 32) e o conteúdo começa depois dela. */
-export const RAIL_W = 64;
-export const RAIL_ITEM = 40;
+/** Rail de navegação: 68 epx; o item ativo é um retângulo de 50×46 e os
+ *  itens se repetem a cada 56 (46 + 10 de espaço). Ícones de 24. */
+export const RAIL_W = 68;
+export const RAIL_ITEM_W = 50;
+export const RAIL_ITEM_H = 46;
+export const RAIL_GAP = 10;
+export const RAIL_ICON = 24;
+/** Avatar do perfil no topo da rail (centro em y = 31). */
+export const RAIL_TOP = 15;
 
-/** Topbar flutuante: começa na área segura de cima, controles de 32 epx. */
+/** Topbar flutuante: controles de 32 epx a partir de y = 32. */
 export const TOPBAR_TOP = SAFE_Y;
-/** Folga que a área de rolagem reserva pra topbar: topo seguro + controle
- *  + respiro. */
+/** Folga que a área de rolagem reserva pra topbar: topo + controle +
+ *  respiro. */
 export const TOPBAR_CLEARANCE = TOPBAR_TOP + TARGET_MIN + 16;
+/** A topbar é mais larga que o conteúdo: o "voltar" começa 17 epx depois
+ *  da rail e o botão da direita termina a 36 da borda. */
+export const TOPBAR_PAD_L = 17;
+export const TOPBAR_PAD_R = 36;
+/** Largura da busca, centralizada na área à direita da rail. */
+export const SEARCH_W = 500;
 
-/** Padding lateral do conteúdo: à esquerda, a rail já afasta da borda
- *  (64 + 24 = 88 ≥ 48); à direita, a área segura. */
-export const PAGE_PAD_L = 24;
+/** Padding lateral do conteúdo (a barra de rolagem fica dentro do da
+ *  direita). */
+export const PAGE_PAD_L = SAFE_X;
 export const PAGE_PAD_R = SAFE_X;
 
 /** Barra de rolagem da área de conteúdo. */
 export const SCROLLBAR_W = 6;
 
-/** Folga embaixo pra barra de dicas (área segura + dica + respiro). */
+/** Folga embaixo pra barra de dicas (margem + dica + respiro). */
 export const PAGE_PAD_B = SAFE_Y + TARGET_MIN + 24;
 
 /** Espaço entre cards de jogo. */
-export const CARD_GAP = 12;
+export const CARD_GAP = 20;
 
-/** Largura nominal de um card: 6 por fileira numa tela 16:9 (regra dos 6
- *  cliques). Conteúdo = 960 − rail − paddings − barra de rolagem. */
-export const CARD_W = Math.floor(
-  (960 - RAIL_W - PAGE_PAD_L - PAGE_PAD_R - SCROLLBAR_W - 5 * CARD_GAP) / 6,
-);
+/** Largura nominal de um card: 6 por fileira na tela de referência (184
+ *  epx, como no Xbox). Conteúdo = 1366 − rail − paddings = 1204. O `- 1` é
+ *  folga pro arredondamento do zoom: a prateleira estica o card até
+ *  encher a linha (lib/shelf.ts), então ele volta a 184. */
+export const CARD_W =
+  Math.floor((1366 - RAIL_W - PAGE_PAD_L - PAGE_PAD_R - 5 * CARD_GAP) / 6) - 1;
+
+/** Título de seção ("Voltar a jogar" no Xbox: 24, semibold) e o espaço
+ *  dele até os cards (20). */
+export const SECTION_TITLE = 24;
+export const SECTION_TITLE_GAP = 20;
+/** Do fim de uma fileira ao título da próxima. */
+export const SECTION_GAP = 40;
 
 /** Raios (escala do Fluent). */
 export const RADIUS = 8;

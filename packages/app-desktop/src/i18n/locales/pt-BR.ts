@@ -278,6 +278,7 @@ const ptBR = {
     lastPlayed: 'Última vez jogado',
     neverPlayed: 'Nunca jogado',
     playTime: 'Tempo de jogo',
+    timePlayed: 'Tempo jogado: {{time}}',
     favorite: 'Favorito',
     tabs: {
       core: 'Emulador',

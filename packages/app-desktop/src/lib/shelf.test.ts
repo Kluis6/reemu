@@ -4,8 +4,10 @@ import { SHELF_GAP, shelfCapacity, shelfFillWidth } from './shelf'
 
 describe('CARD_W', () => {
   it('cabem 6 cards numa fileira da tela de referência 16:9 (regra dos 6 cliques)', () => {
-    // 960 − rail (64) − paddings (24 + 48) − barra de rolagem (6) = 818 epx
-    expect(shelfCapacity(818)).toBe(6)
+    // 1366 − rail (68) − paddings (47 + 47) = 1204 epx, a área dos cards do
+    // app Xbox em 1366×768
+    expect(shelfCapacity(1204)).toBe(6)
+    expect(shelfFillWidth(1204, 6)).toBe(184)
   })
 })
 
@@ -23,7 +25,7 @@ describe('shelfCapacity', () => {
 
 describe('shelfFillWidth', () => {
   it('a fileira enche a prateleira sem passar dela', () => {
-    for (const shelf of [818, 1000, 1234.5, 2000]) {
+    for (const shelf of [818, 1204, 1234.5, 2000]) {
       const cap = shelfCapacity(shelf)
       const w = shelfFillWidth(shelf, cap)
       const total = cap * w + (cap - 1) * SHELF_GAP
