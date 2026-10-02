@@ -211,6 +211,10 @@ pub struct GlContext {
     blit_flip: bool,
     /// FBO de destino da inversão, no tamanho do último quadro lido.
     flip_target: Option<FlipTarget>,
+    /// Readback assíncrono por PBO (tarefa A1 do TASKS): GL/GLES ≥ 3.0 e
+    /// sem `REEMU_GL_PBO=0`. Cai pra `false` se um mapeamento falhar.
+    pbo_ok: bool,
+    pbo: Option<PboRing>,
     /// Ring de alvos `dma_buf` compartilhados com o wgpu. `None` = readback CPU.
     /// Linux/DRM-only — no Windows o caminho GL sempre usa o readback
     /// (`try_enable_interop`/`interop_active`/`bind_write_slot`/
@@ -254,6 +258,18 @@ struct FlipTarget {
     h: u32,
 }
 
+/// Dois PBOs em revezamento: o quadro N é lido pra um enquanto o outro, com
+/// o quadro N-1 já pronto, é mapeado e copiado.
+struct PboRing {
+    bufs: [glow::Buffer; 2],
+    /// Bytes alocados em cada um.
+    cap: [usize; 2],
+    /// `(w, h, invertido na GPU)` do quadro pendente em cada um.
+    pending: [Option<(u32, u32, bool)>; 2],
+    /// O próximo a receber `glReadPixels`.
+    cur: usize,
+}
+
 // SAFETY: criado e usado exclusivamente na thread do core. O `glow::Context` e
 // os handles EGL nunca são tocados de outra thread (o `core_loop` guarda o
 // `DesktopCore` numa var local da thread e o dropa na mesma thread).
@@ -273,6 +289,10 @@ impl GlContext {
         // `glBlitFramebuffer`: "OpenGL 3.0" na tabela de versões da refpage
         // (registry.khronos.org/OpenGL-Refpages/gl4); no GLES, desde o 3.0.
         let blit_flip = gl.version().major >= 3;
+        // PBO + `glMapBufferRange`: OpenGL 3.0 na tabela de versões da
+        // refpage do `glMapBufferRange`; no GLES, também desde o 3.0.
+        let pbo_ok = gl.version().major >= 3
+            && std::env::var("REEMU_GL_PBO").map_or(true, |v| v.trim() != "0");
         if cfg.bottom_left_origin && !blit_flip {
             log::info!("HW render GL: contexto < 3.0, linhas invertidas na CPU");
         }
@@ -301,6 +321,8 @@ impl GlContext {
             flip: cfg.bottom_left_origin,
             blit_flip,
             flip_target: None,
+            pbo_ok,
+            pbo: None,
             #[cfg(unix)]
             interop: None,
             sync,
@@ -321,17 +343,147 @@ impl GlContext {
     /// Lê `w×h` do FBO como RGBA8 apertado, já flipado pra origem top-left.
     /// Fallback quando o interop não está ativo.
     ///
-    /// A inversão é na GPU quando dá (tarefa A2 do TASKS): um
-    /// `glBlitFramebuffer` com o destino de cabeça pra baixo, "If either the
-    /// source or destination rectangle specifies a negative dimension, the
-    /// image is reversed in the corresponding direction"
-    /// (EXT_framebuffer_blit), pra um FBO à parte, e a leitura sai dele já
-    /// na ordem certa. A inversão linha por linha na CPU custava ~0,75 ms
-    /// por quadro em 1920×1440 (medido em 2026-10-02).
+    /// A inversão é na GPU quando dá (`bind_read_source`, tarefa A2); na
+    /// CPU custava ~0,75 ms por quadro em 1920×1440 (medido em 2026-10-02).
     pub fn read_pixels(&mut self, w: u32, h: u32) -> Vec<u8> {
         let (w, h) = (w.min(self.max_w).max(1), h.min(self.max_h).max(1));
         let t0 = std::time::Instant::now();
         let mut buf = vec![0u8; (w * h * 4) as usize];
+        let gpu_flip = self.bind_read_source(w, h);
+        unsafe {
+            self.gl.read_pixels(
+                0,
+                0,
+                w as i32,
+                h as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::Slice(Some(&mut buf)),
+            );
+            if gpu_flip {
+                // Devolve o FBO do core nos dois alvos.
+                self.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
+            }
+        }
+        let t1 = std::time::Instant::now();
+        if self.flip && !gpu_flip {
+            flip_rows_in_place(&mut buf, w, h);
+        }
+        readback_stats::record_read(t1 - t0, t1.elapsed(), u64::from(w) * u64::from(h) * 4);
+        buf
+    }
+
+    /// Readback assíncrono (tarefa A1 do TASKS). O `glReadPixels` do quadro
+    /// atual vai pra um PBO: "If a non-zero named buffer object is bound to
+    /// the GL_PIXEL_PACK_BUFFER target ... data is treated as a byte offset
+    /// into the buffer object's data store" (refpage `glReadPixels`), sem a
+    /// CPU esperar a GPU. O que sai é o quadro ANTERIOR, do outro PBO: o
+    /// `glMapBufferRange` só devolve o ponteiro "once all pending operations
+    /// on the buffer object have completed" (refpage), o que já sincroniza
+    /// sem `glFinish`. Custa 1 quadro de latência; o `glFinish` e a leitura
+    /// síncrona custavam ~3,5–7 ms por quadro em 1920×1440 (medido em
+    /// 2026-10-02).
+    ///
+    /// `Err(())` = PBO indisponível, use `finish` + `read_pixels`.
+    /// `Ok(None)` = 1º quadro, ainda não há anterior pra entregar.
+    /// `Ok(Some((rgba, w, h)))` = o quadro anterior, origem no topo.
+    #[allow(clippy::result_unit_err)]
+    pub fn read_pixels_async(&mut self, w: u32, h: u32) -> Result<Option<(Vec<u8>, u32, u32)>, ()> {
+        if !self.pbo_ok {
+            return Err(());
+        }
+        let (w, h) = (w.min(self.max_w).max(1), h.min(self.max_h).max(1));
+        if self.pbo.is_none() {
+            let made = unsafe {
+                self.gl
+                    .create_buffer()
+                    .and_then(|a| self.gl.create_buffer().map(|b| [a, b]))
+            };
+            match made {
+                Ok(bufs) => {
+                    self.pbo = Some(PboRing {
+                        bufs,
+                        cap: [0, 0],
+                        pending: [None, None],
+                        cur: 0,
+                    })
+                }
+                Err(e) => {
+                    log::warn!("HW render GL: PBO indisponível ({e}) — readback síncrono");
+                    self.pbo_ok = false;
+                    return Err(());
+                }
+            }
+        }
+        let t0 = std::time::Instant::now();
+        let gpu_flip = self.bind_read_source(w, h);
+        let gl = &self.gl;
+        let ring = self.pbo.as_mut().expect("PBO criado acima");
+        let slot = ring.cur;
+        let need = (w * h * 4) as usize;
+        let mut out = None;
+        let mut failed = false;
+        unsafe {
+            gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(ring.bufs[slot]));
+            if ring.cap[slot] < need {
+                gl.buffer_data_size(glow::PIXEL_PACK_BUFFER, need as i32, glow::STREAM_READ);
+                ring.cap[slot] = need;
+            }
+            gl.read_pixels(
+                0,
+                0,
+                w as i32,
+                h as i32,
+                glow::RGBA,
+                glow::UNSIGNED_BYTE,
+                glow::PixelPackData::BufferOffset(0),
+            );
+            ring.pending[slot] = Some((w, h, gpu_flip));
+            if gpu_flip {
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
+            }
+            // Manda a leitura pra GPU já; o mapeamento dela é no próximo quadro.
+            gl.flush();
+
+            let prev = 1 - slot;
+            if let Some((pw, ph, flipped)) = ring.pending[prev].take() {
+                let len = (pw * ph * 4) as usize;
+                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(ring.bufs[prev]));
+                let ptr =
+                    gl.map_buffer_range(glow::PIXEL_PACK_BUFFER, 0, len as i32, glow::MAP_READ_BIT);
+                if ptr.is_null() {
+                    failed = true;
+                } else {
+                    let mut data = std::slice::from_raw_parts(ptr, len).to_vec();
+                    gl.unmap_buffer(glow::PIXEL_PACK_BUFFER);
+                    if self.flip && !flipped {
+                        flip_rows_in_place(&mut data, pw, ph);
+                    }
+                    out = Some((data, pw, ph));
+                }
+            }
+            gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
+            ring.cur = prev;
+        }
+        if failed {
+            log::warn!("HW render GL: glMapBufferRange falhou — readback síncrono daqui em diante");
+            self.pbo_ok = false;
+            return Err(());
+        }
+        let bytes = out.as_ref().map_or(0, |(d, _, _)| d.len() as u64);
+        readback_stats::record_read(t0.elapsed(), std::time::Duration::ZERO, bytes);
+        Ok(out)
+    }
+
+    /// Liga o FBO de onde o quadro vai ser lido em `GL_READ_FRAMEBUFFER`.
+    /// Com `flip` e blit disponível, inverte antes na GPU (tarefa A2): um
+    /// `glBlitFramebuffer` com o destino de cabeça pra baixo, "If either the
+    /// source or destination rectangle specifies a negative dimension, the
+    /// image is reversed in the corresponding direction"
+    /// (EXT_framebuffer_blit), pra um FBO à parte. Devolve se inverteu na
+    /// GPU; nesse caso o chamador devolve o FBO do core (`FRAMEBUFFER`)
+    /// depois de ler.
+    fn bind_read_source(&mut self, w: u32, h: u32) -> bool {
         let gpu_flip = self.flip && self.blit_flip && self.ensure_flip_target(w, h);
         unsafe {
             if gpu_flip {
@@ -364,26 +516,8 @@ impl GlContext {
             }
             self.gl.read_buffer(glow::COLOR_ATTACHMENT0);
             self.gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1);
-            self.gl.read_pixels(
-                0,
-                0,
-                w as i32,
-                h as i32,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                glow::PixelPackData::Slice(Some(&mut buf)),
-            );
-            if gpu_flip {
-                // Devolve o FBO do core nos dois alvos.
-                self.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
-            }
         }
-        let t1 = std::time::Instant::now();
-        if self.flip && !gpu_flip {
-            flip_rows_in_place(&mut buf, w, h);
-        }
-        readback_stats::record_read(t1 - t0, t1.elapsed(), u64::from(w) * u64::from(h) * 4);
-        buf
+        gpu_flip
     }
 
     /// Garante o FBO de destino da inversão em `w×h`. `false` (e desliga a
@@ -825,6 +959,11 @@ impl Drop for GlContext {
             if let Some(t) = self.flip_target.take() {
                 self.gl.delete_framebuffer(t.fbo);
                 self.gl.delete_renderbuffer(t.rbo);
+            }
+            if let Some(ring) = self.pbo.take() {
+                for b in ring.bufs {
+                    self.gl.delete_buffer(b);
+                }
             }
             if let Some(rb) = self.depth_rbo.take() {
                 self.gl.delete_renderbuffer(rb);
@@ -1620,6 +1759,49 @@ mod tests {
             &px[7 * row..7 * row + 4],
             &[255, 0, 0, 255],
             "linha de baixo vermelha"
+        );
+    }
+
+    #[test]
+    #[ignore = "precisa de EGL em runtime (libEGL + Mesa surfaceless ou $DISPLAY)"]
+    fn pbo_readback_delivers_the_previous_frame() {
+        let cfg = GlConfig {
+            context_type: sys::RETRO_HW_CONTEXT_OPENGL,
+            version_major: 3,
+            version_minor: 3,
+            depth: false,
+            stencil: false,
+            bottom_left_origin: true,
+        };
+        let mut ctx = GlContext::create(&cfg, 64, 64).expect("criar contexto GL");
+        let paint = |ctx: &GlContext, r: f32, g: f32| unsafe {
+            ctx.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(ctx.fbo));
+            ctx.gl.viewport(0, 0, 8, 8);
+            ctx.gl.clear_color(r, g, 0.0, 1.0);
+            ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+            // Linha de baixo (y 0 no GL) em azul, pra conferir a orientação.
+            ctx.gl.enable(glow::SCISSOR_TEST);
+            ctx.gl.scissor(0, 0, 8, 1);
+            ctx.gl.clear_color(0.0, 0.0, 1.0, 1.0);
+            ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+            ctx.gl.disable(glow::SCISSOR_TEST);
+        };
+        // Quadro 1 (verde): ainda não há anterior.
+        paint(&ctx, 0.0, 1.0);
+        assert!(matches!(ctx.read_pixels_async(8, 8), Ok(None)));
+        // Quadro 2 (vermelho): sai o quadro 1.
+        paint(&ctx, 1.0, 0.0);
+        let (px, w, h) = ctx
+            .read_pixels_async(8, 8)
+            .expect("PBO disponível em GL 3.3")
+            .expect("quadro anterior");
+        assert_eq!((w, h), (8, 8));
+        let row = 8 * 4;
+        assert_eq!(&px[0..4], &[0, 255, 0, 255], "1ª linha: quadro 1 (verde)");
+        assert_eq!(
+            &px[7 * row..7 * row + 4],
+            &[0, 0, 255, 255],
+            "última linha: a de baixo (azul)"
         );
     }
 

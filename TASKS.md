@@ -154,13 +154,16 @@ conferir".
       Em 640×480 o caminho lento não pesa. Em 1920×1440 ele leva ~5–8 ms,
       metade do quadro: com o `retro_run` em 12–14 ms apareceram 7–13
       quadros/s acima do orçamento. Decisão: fazer A1 e A2.
-- [ ] `todo` — A1. Readback assíncrono com PBO: `glReadPixels` num
-      `GL_PIXEL_PACK_BUFFER` (2–3 buffers em anel) + `glFenceSync`; ler o
-      quadro N−1 enquanto a GPU faz o N. Mapear o PBO e copiar direto pro
-      slot do anel compartilhado, sem o `Vec` intermediário. A conferir:
-      OpenGL Wiki "Pixel Buffer Object", refpages `glReadPixels`,
-      `glMapBufferRange` e `glFenceSync`. Custo: um quadro de latência.
-      Medir se compensa contra o A0.
+- [x] `done` — A1. Readback assíncrono com PBO (2026-10-02): dois PBOs
+      em revezamento. O `glReadPixels` do quadro N vai pra um (byte
+      offset no buffer, refpage `glReadPixels`), e o outro, com o N-1, é
+      mapeado com `glMapBufferRange`, que só volta "once all pending
+      operations on the buffer object have completed" (refpage): isso já
+      sincroniza, sem `glFinish`. 1 quadro de latência; o 1º quadro do jogo
+      não sai. GL/GLES ≥ 3.0; `REEMU_GL_PBO=0` ou falha no mapeamento volta
+      ao síncrono. Teste `pbo_readback_delivers_the_previous_frame` (cor e
+      orientação do quadro anterior) passou num WGL 3.3 real. Falta medir
+      (A3).
 - [x] `done` — A2. Inversão das linhas na GPU (2026-10-02): em vez de
       `flip_rows_in_place` na CPU (~0,75 ms/quadro em 1920×1440), o
       `read_pixels` faz um `glBlitFramebuffer` com o destino de cabeça pra

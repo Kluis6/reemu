@@ -283,8 +283,23 @@ impl DesktopCore {
             });
         }
 
-        gl.finish();
-        let data = gl.read_pixels(w, h);
+        // Readback assíncrono por PBO (tarefa A1): o que sai é o quadro
+        // anterior, sem `glFinish`. Sem PBO, o caminho síncrono de antes.
+        let (data, w, h) = match gl.read_pixels_async(w, h) {
+            Ok(Some(frame)) => frame,
+            // 1º quadro: ainda não há anterior pra entregar.
+            Ok(None) => return None,
+            Err(()) => {
+                gl.finish();
+                (gl.read_pixels(w, h), w, h)
+            }
+        };
+        let meta = FrameMetadata {
+            native_width: w,
+            native_height: h,
+            aspect_ratio: self.aspect_ratio(w, h),
+            rotation_degrees,
+        };
         Some(Frame {
             origin: FrameOrigin::SoftwareRawBuffer {
                 data,
