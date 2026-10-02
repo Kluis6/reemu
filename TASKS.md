@@ -202,6 +202,13 @@ conferir".
       depois de 3 faltas; tick atrasado não gera quadro extra. Falta
       validar de novo, e comparar latência 1 × 2 com as variáveis limpas
       (pode ser que latência 1 deva virar o padrão).
+      **2º teste (latência 1 de novo):** fora do lock o vídeo ficou liso
+      (acquire ~0,03 ms, core 16,68 ms). O lock engatou e funcionou (60
+      quadros a 16,72 ms, 0 perdidos), mas caía depois de cada travada
+      interna do flycast (`retro_run` de 76–83 ms): a fila de present
+      esvaziava, os acquires não bloqueavam e 3 faltas destravavam, com
+      23–24 ms a cada entrada e saída. Agora destrava só depois de 30
+      faltas. Falta testar o caso com latência 2 (variável limpa).
 - [ ] `todo` — Testes de integração do `emu-session` no Windows: o core de
       teste (`testcore_path`) carrega sem `retro_set_environment`
       ("GetProcAddress failed"), e os 9 testes de `tests/session.rs`

@@ -159,8 +159,13 @@ const LOCK_AFTER: u32 = 30;
 const TICK_GAP_FRAMES: f64 = 2.0;
 /// Folga além do prazo normal do quadro antes de rodar sem tick.
 const TICK_SLACK: Duration = Duration::from_millis(1);
-/// Faltas seguidas de tick antes de destravar.
-const MAX_MISSES: u32 = 3;
+/// Faltas seguidas de tick antes de destravar (~0,5 s a 60 Hz). Sem tick o
+/// quadro roda no prazo normal, então ficar travado não acelera nada. Com 3,
+/// cada travada interna do core (o flycast tem `retro_run` de 76–83 ms)
+/// esvaziava a fila de present, os acquires seguintes não bloqueavam, e o
+/// lock caía e voltava com um intervalo de 23–24 ms a cada vez
+/// (2026-10-02).
+const MAX_MISSES: u32 = 30;
 /// Tick que chega antes disto (em quadros) depois de um quadro rodado é do
 /// quadro que já rodou (atrasado) e não dispara outro.
 const STALE_TICK_FRAMES: f64 = 0.5;
