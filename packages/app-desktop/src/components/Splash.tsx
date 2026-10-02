@@ -7,11 +7,12 @@ import { useTranslation } from 'react-i18next'
  *  `packages/app-desktop/public/`. */
 const LOGO_SRC = '/reemu-logo.webp'
 
-// Entrada: fade + leve expansão vertical (toque de CRT), sem animar filter.
-const powerOn = {
-  from: { opacity: 0, transform: 'scaleY(0.55) scaleX(1.02)' },
-  '60%': { opacity: 1 },
-  to: { opacity: 1, transform: 'scaleY(1) scaleX(1)' },
+// Entrada: fade-in só de opacidade (composited, barato). Antes era uma
+// expansão vertical de "TV ligando"; trocada a pedido do usuário por um
+// fade com ritmo fluido (2026-10-02).
+const fadeIn = {
+  from: { opacity: 0 },
+  to: { opacity: 1 },
 }
 // glow que respira via OPACITY de um brilho separado (composited, barato).
 // Faixa mais baixa que um "0.4-0.75" ingênuo: as cores do gradiente agora são
@@ -21,10 +22,6 @@ const powerOn = {
 const breathe = {
   '0%, 100%': { opacity: 0.16 },
   '50%': { opacity: 0.3 },
-}
-const rise = {
-  from: { opacity: 0, transform: 'translateY(8px)' },
-  to: { opacity: 1, transform: 'translateY(0)' },
 }
 const pulse = {
   '0%, 100%': { opacity: 0.35 },
@@ -49,13 +46,19 @@ const useStyles = makeStyles({
     width: 'min(78vw, 880px)',
     maxWidth: '100%',
     aspectRatio: '16 / 9',
-    animationName: powerOn,
-    animationDuration: '460ms',
-    animationTimingFunction: 'cubic-bezier(.16,.84,.3,1)',
+    // 800 ms com ease-out cúbico: acelera no começo e assenta devagar,
+    // sem tranco no fim. O atraso de 80 ms evita que o 1º quadro pinte a
+    // animação já no meio. Cabe no mínimo de 1,1 s da splash
+    // (`SPLASH_MIN_MS` no RootLayout): a logo fica inteira antes do
+    // fade-out.
+    animationName: fadeIn,
+    animationDuration: '800ms',
+    animationDelay: '80ms',
+    animationTimingFunction: 'cubic-bezier(0.33, 1, 0.68, 1)',
     animationFillMode: 'both',
     '@media (prefers-reduced-motion: reduce)': {
-      animationName: rise,
-      animationDuration: '260ms',
+      animationDuration: '300ms',
+      animationDelay: '0ms',
     },
   },
   // brilho estático atrás da logo; só a opacity anima. Cor do TEMA, não fixa
