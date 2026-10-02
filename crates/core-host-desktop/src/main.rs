@@ -371,9 +371,12 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
     let mut core_sample_rate = 32_000u32;
     let mut pacer = Pacer::new(Duration::from_micros(16_667));
     let mut diag = diag_enabled().then(LoopDiag::default);
-    // Tarefa A4: ritmo preso ao refresh do monitor. `REEMU_VSYNC_PACING=0`
-    // desliga (volta ao relógio do core sempre).
-    let vsync_enabled = std::env::var("REEMU_VSYNC_PACING").map_or(true, |v| v.trim() != "0");
+    // Tarefa A4: ritmo preso ao refresh do monitor, só com
+    // `REEMU_VSYNC_PACING=1`. Desligado por padrão: no Windows com latência
+    // 1 o acquire só bloqueia às vezes, o tick chega intermitente e, travado,
+    // o core caía pra 48–56 fps (2026-10-02). Sem o lock, a latência 1 já
+    // deixou o vídeo liso.
+    let vsync_enabled = std::env::var("REEMU_VSYNC_PACING").is_ok_and(|v| v.trim() == "1");
     let mut vsync = VsyncLock::default();
 
     loop {

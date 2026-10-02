@@ -211,6 +211,14 @@ conferir".
       esvaziava, os acquires não bloqueavam e 3 faltas destravavam, com
       23–24 ms a cada entrada e saída. Agora destrava só depois de 30
       faltas. Falta testar o caso com latência 2 (variável limpa).
+      **3º teste e decisão (2026-10-02):** travado, o core caía pra 48–56
+      fps com intervalos de ~25 ms (tick intermitente com latência 1). Fora
+      do lock, latência 1 deu 60 fps cravados, 0 perdidos e acquire de
+      ~0,03 ms; com latência 2 (teste anterior) eram ~15,6 ms e 1 perdido a
+      cada ~5 s. **Latência 1 virou o padrão e o lock ficou opcional**
+      (`REEMU_VSYNC_PACING=1`). Pendente: validar latência 1 em outra GPU
+      (AMD/Intel) e no Linux/Wayland; o deslize de fase de 0,3% continua
+      (o Mailbox descarta o quadro sobrando sem tranco visível).
 - [ ] `todo` — Testes de integração do `emu-session` no Windows: o core de
       teste (`testcore_path`) carrega sem `retro_set_environment`
       ("GetProcAddress failed"), e os 9 testes de `tests/session.rs`

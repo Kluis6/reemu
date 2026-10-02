@@ -1168,15 +1168,20 @@ impl FrameProcessor {
             ])
             .find(|m| caps.present_modes.contains(m))
             .unwrap_or(wgpu::PresentMode::Fifo);
-        // `REEMU_FRAME_LATENCY` (1–3) pra teste; padrão 2. "Desired maximum
+        // `REEMU_FRAME_LATENCY` (1–3) pra teste; padrão 1. "Desired maximum
         // number of monitor refreshes between a get_current_texture call and
         // the texture being presented"; no Vulkan o swapchain fica com
-        // latência + 1 imagens (docs.rs wgpu 30, `SurfaceConfiguration`).
+        // latência + 1 imagens. 1 "minimizes latency but prevents CPU-GPU
+        // parallelism" (docs.rs wgpu 30, `SurfaceConfiguration`): o render
+        // do pump leva ~2,4 ms, o paralelismo não faz falta. Medido no
+        // Windows em 2026-10-02 (RTX 3060, Mailbox): com 2, ~15,6 ms de
+        // espera no `get_current_texture` por quadro e 1 quadro perdido a
+        // cada ~5 s; com 1, ~0,03 ms e nenhum perdido.
         let frame_latency = std::env::var("REEMU_FRAME_LATENCY")
             .ok()
             .and_then(|v| v.trim().parse::<u32>().ok())
             .filter(|n| (1..=3).contains(n))
-            .unwrap_or(2);
+            .unwrap_or(1);
         // Nunca configurar acima do teto de textura do device (senão o
         // swapchain não é criado e `get_current_texture` fica `Outdated`).
         let cap = self.device.limits().max_texture_dimension_2d;
