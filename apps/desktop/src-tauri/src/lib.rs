@@ -570,6 +570,9 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                                 fp.render_to_surface(Some(f));
                                 if let Some(d) = diag.as_mut() {
                                     d.presented(t.elapsed());
+                                    if let Some((acq, pre)) = fp.take_present_timing() {
+                                        d.present_split(acq, pre);
+                                    }
                                 }
                             }
                             if hidden {

@@ -638,6 +638,9 @@ pub struct FrameProcessor {
     surface_fail_streak: u32,
     /// Já apresentou ao menos 1 frame na surface nativa? (log de sanidade).
     surface_presented: bool,
+    /// Tempo do último `blit_last`: `(get_current_texture, submit + present)`.
+    /// O `REEMU_PERF` do pump separa isso do "render" (tarefa A4 do TASKS).
+    last_present_timing: Option<(std::time::Duration, std::time::Duration)>,
     /// Queue family do device adotado (§Beetle) — pro command pool do blit.
     adopted_queue_family: Option<u32>,
     /// Conversor `A1R5G5B5`/packed-16 → RGBA8 pra cores Vulkan que fazem scanout
@@ -819,6 +822,7 @@ impl FrameProcessor {
             surface_redraw_pending: false,
             surface_fail_streak: 0,
             surface_presented: false,
+            last_present_timing: None,
             adopted_queue_family: None,
             vk_blit: None,
             comp,
@@ -1132,14 +1136,44 @@ impl FrameProcessor {
             .copied()
             .find(|f| !f.is_srgb())
             .unwrap_or(caps.formats[0]);
-        let present_mode = [
-            wgpu::PresentMode::Mailbox,
-            wgpu::PresentMode::Immediate,
-            wgpu::PresentMode::Fifo,
-        ]
-        .into_iter()
-        .find(|m| caps.present_modes.contains(m))
-        .unwrap_or(wgpu::PresentMode::Fifo);
+        // `REEMU_PRESENT_MODE` (fifo, mailbox, immediate, fiforelaxed) força
+        // um modo pra teste (tarefa A4 do TASKS). Só vale se a surface
+        // suportar: o wgpu entra em pânico com modo não suportado
+        // (docs.rs wgpu 30, `SurfaceConfiguration::present_mode`).
+        let forced = std::env::var("REEMU_PRESENT_MODE").ok().and_then(|v| {
+            match v.trim().to_ascii_lowercase().as_str() {
+                "fifo" => Some(wgpu::PresentMode::Fifo),
+                "fiforelaxed" | "fifo_relaxed" => Some(wgpu::PresentMode::FifoRelaxed),
+                "mailbox" => Some(wgpu::PresentMode::Mailbox),
+                "immediate" => Some(wgpu::PresentMode::Immediate),
+                _ => None,
+            }
+        });
+        if let Some(m) = forced.filter(|m| !caps.present_modes.contains(m)) {
+            log::warn!(
+                "REEMU_PRESENT_MODE={m:?} não suportado por esta surface ({:?}) — ignorado",
+                caps.present_modes
+            );
+        }
+        let present_mode = forced
+            .filter(|m| caps.present_modes.contains(m))
+            .into_iter()
+            .chain([
+                wgpu::PresentMode::Mailbox,
+                wgpu::PresentMode::Immediate,
+                wgpu::PresentMode::Fifo,
+            ])
+            .find(|m| caps.present_modes.contains(m))
+            .unwrap_or(wgpu::PresentMode::Fifo);
+        // `REEMU_FRAME_LATENCY` (1–3) pra teste; padrão 2. "Desired maximum
+        // number of monitor refreshes between a get_current_texture call and
+        // the texture being presented"; no Vulkan o swapchain fica com
+        // latência + 1 imagens (docs.rs wgpu 30, `SurfaceConfiguration`).
+        let frame_latency = std::env::var("REEMU_FRAME_LATENCY")
+            .ok()
+            .and_then(|v| v.trim().parse::<u32>().ok())
+            .filter(|n| (1..=3).contains(n))
+            .unwrap_or(2);
         // Nunca configurar acima do teto de textura do device (senão o
         // swapchain não é criado e `get_current_texture` fica `Outdated`).
         let cap = self.device.limits().max_texture_dimension_2d;
@@ -1156,7 +1190,7 @@ impl FrameProcessor {
             present_mode,
             alpha_mode: caps.alpha_modes[0],
             view_formats: vec![],
-            desired_maximum_frame_latency: 2,
+            desired_maximum_frame_latency: frame_latency,
         };
         surface.configure(&self.device, &config);
         // SAFETY: o chamador garante os handles vivos; transmute pro 'static.
@@ -1169,7 +1203,10 @@ impl FrameProcessor {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        log::info!("surface nativa: {cw}x{ch} {format:?} {present_mode:?}");
+        log::info!(
+            "surface nativa: {cw}x{ch} {format:?} {present_mode:?}, latência {frame_latency}              (modos suportados: {:?})",
+            caps.present_modes
+        );
         self.viewport = (cw, ch);
         self.surface = Some(SurfaceOut {
             surface,
@@ -1305,6 +1342,14 @@ impl FrameProcessor {
         self.surface_redraw_pending = !presented;
     }
 
+    /// `(get_current_texture, submit + present)` do último quadro apresentado,
+    /// e zera. Pro diagnóstico `REEMU_PERF` do pump.
+    pub fn take_present_timing(
+        &mut self,
+    ) -> Option<(std::time::Duration, std::time::Duration)> {
+        self.last_present_timing.take()
+    }
+
     /// Reapresenta o último resultado da chain se a apresentação anterior
     /// falhou (ver `blit_last`). Chamado pelo pump quando o core não mandou
     /// quadro novo.
@@ -1353,6 +1398,7 @@ impl FrameProcessor {
             ],
         });
 
+        let t_acquire = std::time::Instant::now();
         let frame_tex = match s.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(t) => {
                 self.surface_fail_streak = 0;
@@ -1421,8 +1467,11 @@ impl FrameProcessor {
             rp.set_vertex_buffer(0, self.quad.slice(..));
             rp.draw(0..4, 0..1);
         }
+        let acquire = t_acquire.elapsed();
+        let t_present = std::time::Instant::now();
         self.queue.submit([enc.finish()]);
         self.queue.present(frame_tex);
+        self.last_present_timing = Some((acquire, t_present.elapsed()));
         self.surface_fail_streak = 0;
         if !self.surface_presented {
             self.surface_presented = true;

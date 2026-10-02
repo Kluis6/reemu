@@ -23,6 +23,10 @@ pub struct PumpDiag {
     empty: u64,
     render: Duration,
     render_worst: Duration,
+    /// Parte do render: espera do `get_current_texture` e submit + present.
+    acquire: Duration,
+    acquire_worst: Duration,
+    present: Duration,
 }
 
 impl PumpDiag {
@@ -37,6 +41,9 @@ impl PumpDiag {
             empty: 0,
             render: Duration::ZERO,
             render_worst: Duration::ZERO,
+            acquire: Duration::ZERO,
+            acquire_worst: Duration::ZERO,
+            present: Duration::ZERO,
         }
     }
 
@@ -54,6 +61,13 @@ impl PumpDiag {
         self.presented += 1;
         self.render += render;
         self.render_worst = self.render_worst.max(render);
+    }
+
+    /// Divisão do render do último quadro (`FrameProcessor::take_present_timing`).
+    pub fn present_split(&mut self, acquire: Duration, present: Duration) {
+        self.acquire += acquire;
+        self.acquire_worst = self.acquire_worst.max(acquire);
+        self.present += present;
     }
 
     /// Jogando, mas sem frame novo nesta volta.
@@ -74,7 +88,7 @@ impl PumpDiag {
             log::info!(
                 "perf vídeo 1s: {} recebidos do core, {} apresentados, {} perdidos | \
                  {} voltas do pump ({:.1}/s, maior intervalo {:.1} ms), {} sem frame novo | \
-                 render méd {:.2} pior {:.2} ms",
+                 render méd {:.2} pior {:.2} ms (get_current_texture méd {:.2} pior {:.2},                  submit+present méd {:.2})",
                 received,
                 self.presented,
                 received.saturating_sub(self.presented),
@@ -84,6 +98,9 @@ impl PumpDiag {
                 self.empty,
                 ms(self.render) / self.presented.max(1) as f32,
                 ms(self.render_worst),
+                ms(self.acquire) / self.presented.max(1) as f32,
+                ms(self.acquire_worst),
+                ms(self.present) / self.presented.max(1) as f32,
             );
         }
         let last_tick = self.last_tick;
