@@ -12,7 +12,7 @@
  * CUIDADO (WebKitGTK, ver src-tauri/src/main.rs): nada de `backdrop-filter`
  * nem `radial-gradient` multicamada em elemento `position: fixed`.
  */
-import { makeStyles, tokens } from "@fluentui/react-components";
+import { makeStyles, shorthands, tokens } from "@fluentui/react-components";
 import { cardSizeCss, SHELF_GAP, SHELF_PAD } from "../lib/shelf";
 import * as M from "./metrics";
 
@@ -122,7 +122,9 @@ export const useShellStyles = makeStyles({
     // é uma borda + `box-shadow` rente ao botão, sem afastamento. Troca pelo
     // mesmo anel de cima. `!important`: a regra do Fluent é classe+atributo.
     "& .fui-Button[data-fui-focus-visible]": {
-      borderColor: "transparent !important",
+      // Griffel não aceita a abreviada `borderColor`; `shorthands` expande nas
+      // quatro bordas.
+      ...shorthands.borderColor("transparent !important"),
       boxShadow: "none !important",
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,

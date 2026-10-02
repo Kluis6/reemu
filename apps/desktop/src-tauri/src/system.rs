@@ -160,7 +160,11 @@ fn show_tray<R: Runtime>(app: &AppHandle<R>, state: &SystemState) -> tauri::Resu
     if app.tray_by_id(TRAY_ID).is_some() {
         return Ok(());
     }
-    let labels = state.labels.lock().unwrap_or_else(|p| p.into_inner()).clone();
+    let labels = state
+        .labels
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone();
     let open = MenuItem::with_id(app, "tray-open", &labels.open, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "tray-quit", &labels.quit, true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &quit])?;
