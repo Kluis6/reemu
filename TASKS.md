@@ -299,6 +299,10 @@ conferir".
       Linux. Validado com `vk_core_real_rom` sem `REEMU_HW`, e o mupen sem
       `parallel` segue no processo filho. Falta só conferir no app, sem a
       variável.
+- [ ] `todo` — Medir o vazamento de índices de TLS da rota Vulkan
+      in-process: cada jogo carrega e descarrega a DLL do core no processo
+      do app (ver "out of TLS indexes" em `docs/historico.md`). Trocar de
+      jogo várias vezes e contar com `TlsAlloc` num teste; o C3 elimina.
 - [ ] `todo` — C3. (Depois da B) Core Vulkan no processo filho: o core-host
       cria o próprio device, renderiza em imagens exportadas pelo app
       (`VK_KHR_external_memory_win32`) e devolve só o índice + semáforo.

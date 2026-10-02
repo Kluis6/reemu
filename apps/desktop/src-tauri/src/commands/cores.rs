@@ -17,10 +17,11 @@ pub struct CatalogCoreDto {
 
 #[tauri::command]
 pub fn list_core_catalog(state: State<'_, AppState>) -> Vec<CatalogCoreDto> {
+    // Só os nomes dos arquivos: o catálogo não precisa carregar as DLLs
+    // (ver `core_loader_desktop::discover`).
     let installed: std::collections::HashSet<String> =
-        emu_session::discover_cores(&state.cores_dir)
+        emu_session::installed_core_ids(&state.cores_dir)
             .into_iter()
-            .map(|c| c.core_id)
             .collect();
     crate::core_catalog::CATALOG
         .iter()

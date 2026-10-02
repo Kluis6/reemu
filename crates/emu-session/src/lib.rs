@@ -27,4 +27,4 @@ pub use session::{analog, keyboard_analog, keyboard_pad, retropad};
 /// Descoberta de cores instalados (`<dados>/cores/*_libretro.<suf>`) — probe
 /// leve (dlopen sem `retro_init`), roda neste processo sem conflitar com o
 /// core carregado no filho.
-pub use core_loader_desktop::{discover_cores, DiscoveredCore};
+pub use core_loader_desktop::{discover_cores, installed_core_ids, DiscoveredCore};

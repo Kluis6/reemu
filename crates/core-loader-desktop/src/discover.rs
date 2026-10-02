@@ -6,12 +6,25 @@
 //! que essas duas funções podem ser chamadas a qualquer momento, antes de
 //! `retro_init`, e não tocam em estado global (a regra "um core por
 //! processo" só vale a partir de `set_environment`/`init`).
+//!
+//! Mas espiar = carregar a DLL no processo do app, e cada carga roda a
+//! inicialização dela. No Windows várias reservam índices de TLS e não
+//! devolvem no `FreeLibrary`; a lista de cores era refeita a cada
+//! atualização da tela, recarregando todas, e o app caiu com "fatal runtime
+//! error: out of TLS indexes" instalando cores (2026-10-02). Por isso:
+//! - [`installed_core_ids`] só olha os nomes dos arquivos;
+//! - [`discover_cores`] guarda o que espiou por (caminho, tamanho, data), e
+//!   cada DLL é carregada uma vez por execução (de novo só se o arquivo
+//!   mudar).
 
 use crate::raw::RawCore;
 use crate::sys;
+use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::SystemTime;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveredCore {
@@ -47,15 +60,13 @@ fn cstr(p: *const c_char) -> String {
     }
 }
 
-/// Varre `dir` (não-recursivo). Diretório inexistente → lista vazia.
-/// Arquivos que não abrem como core libretro são ignorados em silêncio.
-pub fn discover_cores(dir: &Path) -> Vec<DiscoveredCore> {
-    let suffix = dylib_suffix();
-    let marker = format!("_libretro{suffix}");
+/// Arquivos `*_libretro.<suf>` em `dir` (não-recursivo).
+fn core_files(dir: &Path) -> Vec<PathBuf> {
+    let marker = format!("_libretro{}", dylib_suffix());
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };
-    let mut out: Vec<DiscoveredCore> = entries
+    entries
         .flatten()
         .map(|e| e.path())
         .filter(|p| {
@@ -64,7 +75,60 @@ pub fn discover_cores(dir: &Path) -> Vec<DiscoveredCore> {
                     .and_then(|n| n.to_str())
                     .is_some_and(|n| n.ends_with(&marker))
         })
-        .filter_map(|p| peek(&p))
+        .collect()
+}
+
+fn core_id_of(path: &Path) -> Option<String> {
+    let file = path.file_name()?.to_str()?;
+    Some(
+        file.strip_suffix(dylib_suffix())
+            .unwrap_or(file)
+            .to_string(),
+    )
+}
+
+/// Ids dos cores instalados em `dir`, só pelo nome do arquivo — sem carregar
+/// nenhuma DLL (ver o cabeçalho do módulo). Ordenado.
+pub fn installed_core_ids(dir: &Path) -> Vec<String> {
+    let mut ids: Vec<String> = core_files(dir)
+        .iter()
+        .filter_map(|p| core_id_of(p))
+        .collect();
+    ids.sort();
+    ids
+}
+
+type PeekKey = (u64, Option<SystemTime>);
+type PeekCache = Mutex<HashMap<PathBuf, (PeekKey, Option<DiscoveredCore>)>>;
+
+/// O que já foi espiado: caminho → (tamanho, data, resultado).
+fn peek_cache() -> &'static PeekCache {
+    static CACHE: std::sync::OnceLock<PeekCache> = std::sync::OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// `peek` com cache por (caminho, tamanho, data de modificação).
+fn peek_cached(path: &Path) -> Option<DiscoveredCore> {
+    let meta = std::fs::metadata(path).ok()?;
+    let key: PeekKey = (meta.len(), meta.modified().ok());
+    let mut cache = peek_cache().lock().unwrap_or_else(|p| p.into_inner());
+    if let Some((k, found)) = cache.get(path) {
+        if *k == key {
+            return found.clone();
+        }
+    }
+    let found = peek(path);
+    cache.insert(path.to_path_buf(), (key, found.clone()));
+    found
+}
+
+/// Varre `dir` (não-recursivo). Diretório inexistente → lista vazia.
+/// Arquivos que não abrem como core libretro são ignorados em silêncio.
+/// Cada DLL é espiada uma vez por execução (ver o cabeçalho do módulo).
+pub fn discover_cores(dir: &Path) -> Vec<DiscoveredCore> {
+    let mut out: Vec<DiscoveredCore> = core_files(dir)
+        .iter()
+        .filter_map(|p| peek_cached(p))
         .collect();
     out.sort_by(|a, b| a.core_id.cmp(&b.core_id));
     out
@@ -77,11 +141,7 @@ fn peek(path: &Path) -> Option<DiscoveredCore> {
     let mut info: sys::retro_system_info = unsafe { std::mem::zeroed() };
     unsafe { (raw.get_system_info)(&mut info) };
 
-    let file = path.file_name()?.to_str()?;
-    let core_id = file
-        .strip_suffix(dylib_suffix())
-        .unwrap_or(file)
-        .to_string();
+    let core_id = core_id_of(path)?;
 
     Some(DiscoveredCore {
         core_id,
@@ -100,6 +160,20 @@ fn peek(path: &Path) -> Option<DiscoveredCore> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Os ids saem dos nomes dos arquivos, sem carregar nada: um arquivo que
+    /// nem é DLL entra na lista de ids e só some no `discover_cores`.
+    #[test]
+    fn installed_ids_come_from_file_names_only() {
+        let tmp = std::env::temp_dir().join(format!("reemu-ids-{}", std::process::id()));
+        std::fs::create_dir_all(&tmp).unwrap();
+        for name in ["b_libretro", "a_libretro", "outro"] {
+            std::fs::write(tmp.join(format!("{name}{}", dylib_suffix())), b"nao e dll").unwrap();
+        }
+        assert_eq!(installed_core_ids(&tmp), ["a_libretro", "b_libretro"]);
+        assert!(discover_cores(&tmp).is_empty());
+        std::fs::remove_dir_all(&tmp).ok();
+    }
 
     #[test]
     fn missing_dir_is_empty() {

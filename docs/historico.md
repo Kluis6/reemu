@@ -1748,3 +1748,10 @@ Infra:
 - `route_local_device` (`emu-session/src/session.rs`): a escolha automática da rota in-process para os cores de `VK_CAPABLE_CORES` passa a valer também no Windows. Antes só com `REEMU_HW=vulkan`, porque o flycast derrubava o app; as causas (libco em threads diferentes, `context_destroy`, versão da instância, `timelineSemaphore`) foram corrigidas no C1.
 - Validado com `vk_core_real_rom` e `REEMU_TEST_NO_FORCE=1`: flycast, Beetle PSX HW e mupen64plus_next com `parallel` vão sozinhos para Vulkan in-process; o mupen64plus_next sem `parallel` (GLideN64) segue no processo filho.
 - Continua valendo o risco conhecido: sem o isolamento do processo filho, um core desses que quebre leva a interface junto. O C3 (core Vulkan no processo filho) devolve o isolamento.
+
+## 2026-10-02 — "fatal runtime error: out of TLS indexes" instalando cores
+
+- **Sintoma:** instalando cores pelo catálogo (dice, desmume), o app fechou com `fatal runtime error: out of TLS indexes, aborting`.
+- **Causa:** `discover_cores` espiava `retro_get_system_info` carregando **cada** DLL de core no processo do app (`LoadLibrary` + `FreeLibrary`), e o catálogo (`list_core_catalog`) e a lista de cores (`list_installed_cores`) chamavam isso a cada atualização da tela. Carregar uma DLL roda a inicialização dela; várias reservam índices de TLS e não devolvem ao descarregar. O Windows tem um número fixo de índices de TLS por processo; recarregando todas as DLLs a cada instalação, eles acabaram, e o runtime do Rust aborta quando não consegue um.
+- **Correção** (`core-loader-desktop/src/discover.rs`): o catálogo usa `installed_core_ids`, que só lê os nomes dos arquivos; `discover_cores` guarda o que espiou por (caminho, tamanho, data de modificação) e carrega cada DLL uma vez por execução, de novo só se o arquivo mudar.
+- **Ainda em aberto:** a rota Vulkan in-process carrega e descarrega a DLL do core a cada jogo; se o core vaza TLS, trocar de jogo muitas vezes numa sessão longa consome índices. O C3 (core Vulkan no processo filho) resolve.
