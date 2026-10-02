@@ -1204,7 +1204,7 @@ impl FrameProcessor {
             mapped_at_creation: false,
         });
         log::info!(
-            "surface nativa: {cw}x{ch} {format:?} {present_mode:?}, latência {frame_latency}              (modos suportados: {:?})",
+            "surface nativa: {cw}x{ch} {format:?} {present_mode:?}, latência {frame_latency} (modos suportados: {:?})",
             caps.present_modes
         );
         self.viewport = (cw, ch);
@@ -1344,9 +1344,7 @@ impl FrameProcessor {
 
     /// `(get_current_texture, submit + present)` do último quadro apresentado,
     /// e zera. Pro diagnóstico `REEMU_PERF` do pump.
-    pub fn take_present_timing(
-        &mut self,
-    ) -> Option<(std::time::Duration, std::time::Duration)> {
+    pub fn take_present_timing(&mut self) -> Option<(std::time::Duration, std::time::Duration)> {
         self.last_present_timing.take()
     }
 

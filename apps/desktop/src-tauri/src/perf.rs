@@ -88,7 +88,7 @@ impl PumpDiag {
             log::info!(
                 "perf vídeo 1s: {} recebidos do core, {} apresentados, {} perdidos | \
                  {} voltas do pump ({:.1}/s, maior intervalo {:.1} ms), {} sem frame novo | \
-                 render méd {:.2} pior {:.2} ms (get_current_texture méd {:.2} pior {:.2},                  submit+present méd {:.2})",
+                 render méd {:.2} pior {:.2} ms (get_current_texture méd {:.2} pior {:.2}, submit+present méd {:.2})",
                 received,
                 self.presented,
                 received.saturating_sub(self.presented),

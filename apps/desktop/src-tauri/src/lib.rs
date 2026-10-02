@@ -45,8 +45,13 @@ pub fn run() {
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
+                    // Padrão do plugin: 40 KB e só o arquivo atual
+                    // (`KeepOne`) — com `REEMU_PERF` (1 linha/s) um teste
+                    // de 30 s apagava o anterior. 5 MB e os 5 últimos.
                     tauri_plugin_log::Builder::default()
                         .level(log::LevelFilter::Info)
+                        .max_file_size(5_000_000)
+                        .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(5))
                         .build(),
                 )?;
             }
