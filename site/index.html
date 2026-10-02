@@ -388,11 +388,17 @@
               <span data-i18n="d1.p" class="grow text-[0.93rem] text-muted">Apoio mensal ou único, direto pelo GitHub.</span>
               <fluent-anchor-button data-i18n="d1.b" class="mt-2.5" appearance="primary" target="_blank" rel="noopener">Apoiar no GitHub</fluent-anchor-button>
             </div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6" data-pix="">
+            <!-- Pix: `data-pix` = chave aleatória; `data-pix-code` = o "copia e
+                 cola" (BR Code, CRC conferido), o mesmo que está no QR
+                 (pix-qr.svg, gerado dele e decodificado de volta pra conferir). -->
+            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6" data-pix="761d76fb-b5d3-461e-b7bd-f17c0522ce7d" data-pix-code="00020126580014BR.GOV.BCB.PIX0136761d76fb-b5d3-461e-b7bd-f17c0522ce7d5204000053039865802BR5924LUIS ANTONIO DE OLIVEIRA6015DUQUE DE CAXIAS62070503***63042796">
               <strong class="text-[1.05rem]">Pix</strong>
-              <span data-i18n="d2.p" class="grow text-[0.93rem] text-muted">Transferência instantânea, sem taxa.</span>
-              <code class="pix-key mt-1.5 rounded-[var(--borderRadiusSmall,4px)] bg-surface-2 px-[5px] py-px font-mono text-[0.9em] wrap-anywhere"></code>
-              <fluent-button data-i18n="d2.b" class="pix-copy mt-2.5" appearance="primary">Copiar chave Pix</fluent-button>
+              <span data-i18n="d2.p" class="grow text-[0.93rem] text-muted">Aponte a câmera do app do banco para o QR code ou copie o código.</span>
+              <img src="pix-qr.svg" data-i18n-attr="alt=d2.qr" alt="QR code Pix para apoiar o ReEmu" width="180" height="180" class="mt-1 size-45 rounded-[var(--borderRadiusMedium,4px)] [image-rendering:pixelated]" />
+              <fluent-button data-i18n="pixcode.copy" class="pix-code-copy mt-1.5" appearance="primary">Copiar código Pix</fluent-button>
+              <span data-i18n="d2.key" class="mt-2 text-[0.85rem] text-muted">Ou use a chave aleatória:</span>
+              <code class="pix-key rounded-[var(--borderRadiusSmall,4px)] bg-surface-2 px-[5px] py-px font-mono text-[0.85em] wrap-anywhere"></code>
+              <fluent-button data-i18n="d2.b" class="pix-copy" appearance="outline">Copiar chave Pix</fluent-button>
             </div>
             <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6" data-link="">
               <strong class="text-[1.05rem]">Ko-fi</strong>

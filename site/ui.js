@@ -140,6 +140,23 @@ document.querySelectorAll(".shot-btn").forEach((btn) => {
     }
     shown++;
     card.querySelector(".pix-key").textContent = key;
+    // "Copia e cola" (BR Code) do mesmo Pix, o que está no QR code.
+    const code = card.dataset.pixCode?.trim();
+    const codeBtn = card.querySelector(".pix-code-copy");
+    if (code && codeBtn) {
+      codeBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(code);
+          codeBtn.textContent = t("pixcode.copied");
+        } catch {
+          codeBtn.textContent = t("pixcode.manual");
+        }
+        setTimeout(() => (codeBtn.textContent = t("pixcode.copy")), 2500);
+      });
+    } else {
+      codeBtn?.remove();
+      card.querySelector("img[src='pix-qr.svg']")?.remove();
+    }
     const btn = card.querySelector(".pix-copy");
     btn.addEventListener("click", async () => {
       try {
