@@ -138,9 +138,15 @@ conferir".
 
 **Fase A — caminho lento mais rápido (sem interop, vale pra qualquer GPU)**
 
-- [ ] `todo` — A0. Medir antes de mexer: `REEMU_PERF=1` com flycast (GL)
-      em 640×480 e em resolução interna alta (1920×1440). Anotar ms por
-      quadro do `read_pixels`, da cópia pro anel e do upload no app.
+- [ ] `in-progress` — A0. Medir antes de mexer: `REEMU_PERF=1` com flycast (GL)
+      em 640×480 e em resolução interna alta (1920×1440). Linha
+      `perf readback` no core-host desde 2026-10-02.
+      **640×480 (flycast e parallel_n64, RTX 3060, 2026-10-02):**
+      `glFinish` 0,6–2 ms, `glReadPixels` 0,5–1,8 ms, flip 0,1 ms; total
+      1,3–3,5 ms por quadro (picos de 8–14 ms), envio 0,17 ms. O
+      `retro_run` inteiro fica em 2,5–5 ms dos 16,7 e o readback nunca
+      estourou o orçamento. Nessa resolução o caminho lento não é
+      gargalo. **Falta 1920×1440** (10,5 MB/quadro) pra decidir o A1.
 - [ ] `todo` — A1. Readback assíncrono com PBO: `glReadPixels` num
       `GL_PIXEL_PACK_BUFFER` (2–3 buffers em anel) + `glFenceSync`; ler o
       quadro N−1 enquanto a GPU faz o N. Mapear o PBO e copiar direto pro
@@ -152,6 +158,16 @@ conferir".
       mandar `flip_y` junto do quadro e inverter na amostragem do wgpu,
       como o caminho `Hardware { flip_y }` já faz.
 - [ ] `todo` — A3. Repetir a medição do A0 e registrar no histórico.
+
+- [ ] `todo` — A4. Ritmo core × monitor (achado no A0, não é do
+      readback): no `perf vídeo` o "render" do pump fica em ~16,7 ms, a
+      espera pelo próximo refresh dentro do present/acquire, mesmo com
+      `Mailbox`. No N64 ele subiu de 0,9 pra 16,7 ms em ~5 s, sem evento
+      no log. O pump roda a 59,8 voltas/s contra 60,0 fps do core, e sobra
+      1 quadro a cada poucos segundos ("1 perdidos", tranco periódico).
+      Investigar o modo de present e o ritmo do core contra o refresh real
+      (a conferir: wgpu `PresentMode` e a spec Vulkan
+      `VkPresentModeKHR`).
 
 **Fase B — interop GL → Vulkan no Windows (zero cópia de CPU)**
 
