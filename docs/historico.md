@@ -1659,3 +1659,9 @@ Infra:
 - Correção (`b98bb56`): o `kill` espera o filho sair sozinho depois do `Shutdown` (até 3 s; passou disso, mata com aviso no log).
 - **Validado pelo usuário no Windows (2026-10-02):** com o VMU antigo (corrompido) apagado, o flycast criou um cartão novo; salvar, sair pelo menu e voltar manteve o save inteiro. O core-host encerrou sozinho ("reemu-core-host: encerrando"), sem o aviso de kill. Cópia do cartão antigo em `system/dc/vmu_save_A1.backup-2026-10-02.bin`.
 - Observado junto: com `reicast_per_content_vmus` desligado (padrão do flycast), todos os jogos de Dreamcast dividem `system/dc/vmu_save_A1.bin`, que tem 200 blocos. Não existe `dc_nvmem.bin` (flash do Dreamcast), outro arquivo que o flycast só grava no encerramento.
+
+## 2026-10-02 — Release v0.1.4
+
+- Windows: vídeo nativo (janela filha acima do WebView2) validado, sem o quadro do jogo anterior na troca; o core no ritmo do monitor (sem o quadro perdido a cada poucos segundos) e latência 1 no present; o core-host encerra sozinho antes de ser morto, o que acaba com os saves corrompidos do flycast (VMU).
+- Interface nas proporções do app Xbox do Windows (tela lógica de 1366×768), página do jogo refeita com tempo de jogo, anel de foco mais afastado, logo do site no ícone e na abertura (fade-in), e a categoria Configurações › Sistema (iniciar com o sistema, abrir em tela cheia, minimizar para a bandeja).
+- Diagnóstico: `REEMU_PERF` mede o readback GL e a espera do present.
