@@ -118,6 +118,19 @@ export const useShellStyles = makeStyles({
       // sobram dos 68.
       outlineOffset: `${FOCUS_OFFSET}px`,
     },
+    // Abas (`<Tab>` do Fluent): são `<button>` sem `tabindex`, então a regra
+    // de cima não pega — valia o anel do próprio Fluent, um `box-shadow`
+    // branco (`colorStrokeFocus2`) em vez da cor de destaque do tema. Mesmo
+    // anel do resto do app; o do Fluent sai.
+    "& .fui-Tab:focus": {
+      outlineWidth: "3px",
+      outlineStyle: "solid",
+      outlineColor: tokens.colorBrandStroke1,
+      outlineOffset: "2px",
+    },
+    "& .fui-Tab[data-fui-focus-visible]": {
+      boxShadow: "none",
+    },
     // Botões do Fluent: o foco de teclado deles (`[data-fui-focus-visible]`)
     // é uma borda + `box-shadow` rente ao botão, sem afastamento. Troca pelo
     // mesmo anel de cima. `!important`: a regra do Fluent é classe+atributo.
