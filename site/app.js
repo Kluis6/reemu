@@ -92,10 +92,11 @@ function renderNotes(md) {
   return box.childElementCount ? box : null;
 }
 
-// Botão de download grande: título + linha de detalhe, em duas linhas. Largura
-// fixa (cabe a linha de detalhe mais longa) pra os botões lado a lado ficarem
-// do mesmo tamanho, com o texto centralizado.
-const DL_BTN = "h-auto min-h-14 py-2 w-[21rem] max-w-full";
+// Botão de download grande: título + linha de detalhe, em duas linhas, com o
+// texto centralizado. Em tela pequena, largura fixa (cabe a linha de detalhe
+// mais longa) pra os botões empilhados ficarem do mesmo tamanho; a partir da
+// média (`md`), a largura acompanha o conteúdo.
+const DL_BTN = "h-auto min-h-14 py-2 w-[21rem] max-w-full md:w-auto";
 function dlStack(title, sub) {
   return el("span", { class: "flex flex-col items-center text-center leading-[1.3]" },
     el("span", { class: "font-semibold" }, title),
