@@ -405,6 +405,8 @@ fn spawn_video_pump(app: tauri::AppHandle) {
             let mut hidden = true;
             let mut diag = perf::enabled()
                 .then(|| perf::PumpDiag::new(app.state::<AppState>().session.frame_seq()));
+            // Último envio do período do monitor ao core-host (tarefa A4).
+            let mut last_period_report: Option<std::time::Instant> = None;
             loop {
                 let state = app.state::<AppState>();
                 if let Some(d) = diag.as_mut() {
@@ -573,12 +575,16 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                             if let Some(fp) = gpu.as_mut() {
                                 let t = std::time::Instant::now();
                                 fp.render_to_surface(Some(f));
-                                // Tarefa A4: o present acabou de esperar o
-                                // refresh. Avisa o core-host, que roda o
-                                // próximo quadro neste ritmo se o período
-                                // do monitor bater com o fps do core.
-                                if let Some(period) = fp.display_period() {
-                                    state.session.vsync_tick(period);
+                                // Tarefa A4: uma vez por segundo, manda o
+                                // período medido do monitor pro core-host
+                                // casar o ritmo (`RateMatch`).
+                                if last_period_report.map_or(true, |t| {
+                                    t.elapsed() >= std::time::Duration::from_secs(1)
+                                }) {
+                                    if let Some(period) = fp.display_period() {
+                                        state.session.report_display_period(period);
+                                        last_period_report = Some(std::time::Instant::now());
+                                    }
                                 }
                                 if let Some(d) = diag.as_mut() {
                                     d.presented(t.elapsed());

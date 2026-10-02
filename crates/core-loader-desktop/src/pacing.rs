@@ -53,6 +53,13 @@ impl Pacer {
         self.budget
     }
 
+    /// Ajuste fino do período sem recomeçar a contar (o próximo prazo é o
+    /// anterior + o período novo): casa o ritmo com o monitor (`RateMatch`)
+    /// sem salto no meio do jogo.
+    pub fn set_period(&mut self, budget: Duration) {
+        self.budget = budget;
+    }
+
     /// Troca o ritmo (core mudou de fps) e recomeça a contar de agora.
     pub fn set_budget(&mut self, budget: Duration) {
         self.budget = budget;
@@ -114,178 +121,67 @@ impl Pacer {
     }
 }
 
-/// Ritmo do core preso ao refresh do monitor (tarefa A4 do TASKS).
+/// Ritmo do core casado com o do monitor (tarefa A4 do TASKS).
 ///
 /// O core roda no relógio próprio (`Pacer`, 1/fps), e o monitor tem o dele.
 /// Com 60,0 fps num monitor de 59,8 Hz a fase desliza: os quadros chegam
 /// cada vez mais cedo em relação ao refresh, a espera no present cresce até
-/// um refresh inteiro e sobra 1 quadro a cada ~5 s (medido em 2026-10-02).
+/// um refresh inteiro e sobra 1 quadro a cada poucos segundos (medido em
+/// 2026-10-02, com latência 1 e 2).
 ///
-/// O pai manda um `VsyncTick` logo depois de cada present que esperou o
-/// refresh, com o período medido do monitor. Se os ticks chegam sem buraco
-/// (nunca mais de `TICK_GAP_FRAMES` quadros sem tick) e o período fica a no
-/// máximo `VSYNC_TOLERANCE` do budget por `LOCK_AFTER` ticks seguidos, o
-/// laço do filho passa a rodar um quadro por tick, e a diferença de ritmo
-/// no áudio fica com o Dynamic Rate Control (±0,5% no padrão,
-/// `AudioConfig::rate_control_delta`).
+/// O pai mede o período do monitor e manda uma vez por segundo
+/// (`ToChild::DisplayPeriod`). Se ele estiver a até
+/// `RATE_MATCH_TOLERANCE` do período pedido pelo core, o `Pacer` passa a
+/// usar o período do monitor: o deslize de fase para, e a diferença de
+/// ritmo no áudio fica com o Dynamic Rate Control (±0,5% no padrão,
+/// `AudioConfig::rate_control_delta`). Fora disso (monitor de 144 ou 50 Hz,
+/// jogo PAL), o `Pacer` volta ao período do core.
 ///
-/// Travado, o laço espera o tick só até o prazo normal do quadro
-/// (`last_run + budget + TICK_SLACK`). Se ele não vier, o quadro roda assim
-/// mesmo, sem tranco, e só depois de `MAX_MISSES` faltas seguidas o laço
-/// volta ao `Pacer`. A 1ª versão esperava 1,5 quadro e travava com ticks
-/// esparsos: deu intervalos de 36 ms a cada poucos segundos (2026-10-02).
-#[derive(Debug, Default)]
-pub struct VsyncLock {
-    locked: bool,
-    /// Ticks seguidos com período compatível e sem buraco.
-    good: u32,
-    /// Chegou tick que ainda não virou quadro.
-    pending: bool,
-    /// Último tick recebido.
-    last_tick: Option<Instant>,
-    /// Início do último quadro rodado travado.
-    last_run: Option<Instant>,
-    /// Quadros travados seguidos que rodaram sem tick.
-    misses: u32,
+/// O core nunca espera o monitor. A tentativa anterior (um quadro por tick
+/// do present) travava o laço no tick e, com o acquire bloqueando só às
+/// vezes, derrubava o jogo pra 48–56 fps.
+#[derive(Debug, Clone, Copy)]
+pub struct RateMatch {
+    core: Duration,
+    matched: bool,
 }
 
 /// Diferença máxima entre o período do monitor e o do core. Abaixo dos
 /// ±0,5% que o Dynamic Rate Control do áudio compensa.
-pub const VSYNC_TOLERANCE: f64 = 0.004;
-/// Ticks bons seguidos antes de travar (~0,5 s a 60 Hz).
-const LOCK_AFTER: u32 = 30;
-/// Mais que isto (em quadros) sem tick zera a contagem: tick esparso não é
-/// sinal do monitor.
-const TICK_GAP_FRAMES: f64 = 2.0;
-/// Folga além do prazo normal do quadro antes de rodar sem tick.
-const TICK_SLACK: Duration = Duration::from_millis(1);
-/// Faltas seguidas de tick antes de destravar (~0,5 s a 60 Hz). Sem tick o
-/// quadro roda no prazo normal, então ficar travado não acelera nada. Com 3,
-/// cada travada interna do core (o flycast tem `retro_run` de 76–83 ms)
-/// esvaziava a fila de present, os acquires seguintes não bloqueavam, e o
-/// lock caía e voltava com um intervalo de 23–24 ms a cada vez
-/// (2026-10-02).
-const MAX_MISSES: u32 = 30;
-/// Tick que chega antes disto (em quadros) depois de um quadro rodado é do
-/// quadro que já rodou (atrasado) e não dispara outro.
-const STALE_TICK_FRAMES: f64 = 0.5;
-/// Nunca roda dois quadros mais perto que isto, mesmo com tick.
-const MIN_SPACING: f64 = 0.9;
+pub const RATE_MATCH_TOLERANCE: f64 = 0.004;
 
-/// Mudança de estado do `VsyncLock`, pra log.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VsyncChange {
-    Locked,
-    Unlocked,
-}
-
-impl VsyncLock {
-    pub fn locked(&self) -> bool {
-        self.locked
-    }
-
-    /// Tick do pai com o período medido do monitor, recebido em `now`.
-    pub fn on_tick(
-        &mut self,
-        period: Duration,
-        budget: Duration,
-        now: Instant,
-    ) -> Option<VsyncChange> {
-        let ratio = period.as_secs_f64() / budget.as_secs_f64().max(f64::EPSILON);
-        let compatible = (ratio - 1.0).abs() <= VSYNC_TOLERANCE;
-        let gap = self
-            .last_tick
-            .is_some_and(|t| now.duration_since(t) > budget.mul_f64(TICK_GAP_FRAMES));
-        self.last_tick = Some(now);
-        let mut change = None;
-        if compatible && !gap {
-            self.good = self.good.saturating_add(1);
-            if !self.locked && self.good >= LOCK_AFTER {
-                self.locked = true;
-                self.misses = 0;
-                change = Some(VsyncChange::Locked);
-            }
-        } else {
-            // Período incompatível destrava na hora. Um buraco entre ticks
-            // só recomeça a contagem: travado, quem cuida são as faltas.
-            self.good = u32::from(compatible);
-            if self.locked && !compatible {
-                self.unlock();
-                change = Some(VsyncChange::Unlocked);
-            }
-        }
-        if self.locked {
-            let stale = self
-                .last_run
-                .is_some_and(|r| now.duration_since(r) < budget.mul_f64(STALE_TICK_FRAMES));
-            if !stale {
-                self.pending = true;
-            }
-        }
-        change
-    }
-
-    /// Travado e sem tick pendente: o laço espera o próximo tick até o
-    /// prazo devolvido (o prazo normal do quadro + folga).
-    pub fn wait_deadline(&self, budget: Duration) -> Option<Instant> {
-        if !self.locked || self.pending {
-            return None;
-        }
-        let base = self.last_run.unwrap_or_else(Instant::now);
-        Some(base + budget + TICK_SLACK)
-    }
-
-    /// O prazo passou sem tick: o quadro roda assim mesmo. Depois de
-    /// `MAX_MISSES` faltas seguidas, volta ao `Pacer`.
-    pub fn on_timeout(&mut self) -> Option<VsyncChange> {
-        if !self.locked {
-            return None;
-        }
-        self.misses += 1;
-        if self.misses >= MAX_MISSES {
-            self.unlock();
-            self.good = 0;
-            return Some(VsyncChange::Unlocked);
-        }
-        None
-    }
-
-    /// Antes de rodar um quadro travado: espera o espaçamento mínimo desde
-    /// o anterior, se o tick veio adiantado. Devolve quanto dormiu.
-    pub fn space_out(&self, budget: Duration) -> Duration {
-        let Some(last) = self.last_run else {
-            return Duration::ZERO;
-        };
-        let min = budget.mul_f64(MIN_SPACING);
-        let since = last.elapsed();
-        if since < min {
-            let d = min - since;
-            std::thread::sleep(d);
-            d
-        } else {
-            Duration::ZERO
+impl RateMatch {
+    pub fn new(core: Duration) -> Self {
+        Self {
+            core,
+            matched: false,
         }
     }
 
-    /// Um quadro rodou travado (com tick ou por falta dele).
-    pub fn frame_ran(&mut self, started: Instant) {
-        if self.pending {
-            self.misses = 0;
-        }
-        self.pending = false;
-        self.last_run = Some(started);
+    /// O core pediu outro fps (load, `SET_SYSTEM_AV_INFO`): volta ao
+    /// período dele até o próximo período do monitor.
+    pub fn set_core_budget(&mut self, core: Duration) {
+        self.core = core;
+        self.matched = false;
     }
 
-    /// Load, pausa, troca de fps: recomeça a contar.
-    pub fn reset(&mut self) {
-        *self = Self::default();
+    pub fn matched(&self) -> bool {
+        self.matched
     }
 
-    fn unlock(&mut self) {
-        self.locked = false;
-        self.pending = false;
-        self.last_run = None;
-        self.misses = 0;
+    /// Período pedido pelo core (1/fps).
+    pub fn core_budget(&self) -> Duration {
+        self.core
+    }
+
+    /// Período medido do monitor. Devolve o período que o `Pacer` deve usar
+    /// e, se o estado mudou, `Some(casado agora?)`.
+    pub fn on_display_period(&mut self, period: Duration) -> (Duration, Option<bool>) {
+        let ratio = period.as_secs_f64() / self.core.as_secs_f64().max(f64::EPSILON);
+        let ok = (ratio - 1.0).abs() <= RATE_MATCH_TOLERANCE;
+        let change = (ok != self.matched).then_some(ok);
+        self.matched = ok;
+        (if ok { period } else { self.core }, change)
     }
 }
 
@@ -293,111 +189,62 @@ impl VsyncLock {
 mod tests {
     use super::*;
 
-    const BUDGET: Duration = Duration::from_micros(16_667);
-
-    /// `n` ticks espaçados de `period`, a partir de `*t`.
-    fn feed(l: &mut VsyncLock, period: Duration, n: u32, t: &mut Instant) -> Option<VsyncChange> {
-        let mut last = None;
-        for _ in 0..n {
-            *t += period;
-            if let Some(c) = l.on_tick(period, BUDGET, *t) {
-                last = Some(c);
-            }
-        }
-        last
-    }
+    const CORE: Duration = Duration::from_micros(16_667);
 
     #[test]
-    fn vsync_locks_on_a_close_refresh() {
+    fn rate_matches_a_close_refresh() {
         // 59,8 Hz contra 60,0 fps: 0,33%, dentro da tolerância.
-        let (mut l, mut t) = (VsyncLock::default(), Instant::now());
-        let p = Duration::from_micros(16_722);
-        assert_eq!(feed(&mut l, p, LOCK_AFTER - 1, &mut t), None);
-        assert!(!l.locked());
-        assert_eq!(feed(&mut l, p, 1, &mut t), Some(VsyncChange::Locked));
-        assert!(l.locked());
+        let mut r = RateMatch::new(CORE);
+        let monitor = Duration::from_micros(16_722);
+        assert_eq!(r.on_display_period(monitor), (monitor, Some(true)));
+        assert!(r.matched());
+        // Mesma situação no segundo seguinte: sem mudança de estado.
+        assert_eq!(r.on_display_period(monitor), (monitor, None));
     }
 
     #[test]
-    fn vsync_ignores_other_refresh_rates() {
-        let (mut l, mut t) = (VsyncLock::default(), Instant::now());
-        // 144 Hz e 50 Hz: nunca trava.
+    fn rate_keeps_the_core_period_on_other_refresh_rates() {
+        let mut r = RateMatch::new(CORE);
+        // 144 Hz e 50 Hz: segue o core.
         assert_eq!(
-            feed(&mut l, Duration::from_micros(6_944), 100, &mut t),
-            None
+            r.on_display_period(Duration::from_micros(6_944)),
+            (CORE, None)
         );
         assert_eq!(
-            feed(&mut l, Duration::from_micros(20_000), 100, &mut t),
-            None
+            r.on_display_period(Duration::from_micros(20_000)),
+            (CORE, None)
         );
-        assert!(!l.locked());
+        assert!(!r.matched());
     }
 
     #[test]
-    fn vsync_needs_ticks_without_gaps() {
-        // Tick esparso (acquire que só bloqueia às vezes): o período bate,
-        // mas com buracos de 3 quadros entre os ticks nunca trava.
-        let (mut l, mut t) = (VsyncLock::default(), Instant::now());
-        for _ in 0..100 {
-            t += BUDGET * 3;
-            assert_eq!(l.on_tick(BUDGET, BUDGET, t), None);
-        }
-        assert!(!l.locked());
-    }
-
-    #[test]
-    fn vsync_unlocks_when_the_refresh_changes() {
-        let (mut l, mut t) = (VsyncLock::default(), Instant::now());
-        feed(&mut l, BUDGET, LOCK_AFTER, &mut t);
-        assert!(l.locked());
+    fn rate_unmatches_when_the_monitor_or_the_core_changes() {
+        let mut r = RateMatch::new(CORE);
+        r.on_display_period(Duration::from_micros(16_722));
         // Janela foi pra um monitor de 144 Hz.
-        t += BUDGET;
         assert_eq!(
-            l.on_tick(Duration::from_micros(6_944), BUDGET, t),
-            Some(VsyncChange::Unlocked)
+            r.on_display_period(Duration::from_micros(6_944)),
+            (CORE, Some(false))
         );
-        assert!(!l.locked());
+        // E o core muda de fps: volta ao período novo dele.
+        r.on_display_period(Duration::from_micros(16_722));
+        let pal = Duration::from_millis(20);
+        r.set_core_budget(pal);
+        assert!(!r.matched());
+        assert_eq!(
+            r.on_display_period(Duration::from_micros(16_722)),
+            (pal, None)
+        );
     }
 
     #[test]
-    fn vsync_missing_ticks_run_on_time_then_unlock() {
-        let (mut l, mut t) = (VsyncLock::default(), Instant::now());
-        feed(&mut l, BUDGET, LOCK_AFTER, &mut t);
-        // O tick que travou fica pendente: roda sem esperar.
-        assert!(l.wait_deadline(BUDGET).is_none());
-        let run = Instant::now();
-        l.frame_ran(run);
-        // Sem tick, o prazo é o do quadro normal + folga (não 1,5 quadro).
-        let deadline = l.wait_deadline(BUDGET).expect("travado espera tick");
-        assert_eq!(deadline, run + BUDGET + TICK_SLACK);
-        // Faltas abaixo do limite: roda no prazo e segue travado.
-        for _ in 0..MAX_MISSES - 1 {
-            assert_eq!(l.on_timeout(), None);
-            l.frame_ran(Instant::now());
-            assert!(l.locked());
-        }
-        assert_eq!(l.on_timeout(), Some(VsyncChange::Unlocked));
-        assert!(!l.locked());
-        assert!(l.wait_deadline(BUDGET).is_none());
-    }
-
-    #[test]
-    fn vsync_stale_tick_does_not_run_an_extra_frame() {
-        let (mut l, mut t) = (VsyncLock::default(), Instant::now());
-        feed(&mut l, BUDGET, LOCK_AFTER, &mut t);
-        // Quadro rodou por falta de tick; o tick atrasado chega 2 ms depois.
-        l.frame_ran(t);
-        assert_eq!(
-            l.on_tick(BUDGET, BUDGET, t + Duration::from_millis(2)),
-            None
-        );
-        assert!(
-            l.wait_deadline(BUDGET).is_some(),
-            "tick velho não vira quadro"
-        );
-        // O tick do quadro seguinte, um período depois, vale.
-        l.on_tick(BUDGET, BUDGET, t + BUDGET);
-        assert!(l.wait_deadline(BUDGET).is_none());
+    fn set_period_keeps_the_phase() {
+        // Trocar o período não recomeça a contar de agora (sem salto).
+        let mut p = Pacer::new(Duration::from_millis(4));
+        let next = p.next;
+        p.set_period(Duration::from_millis(5));
+        assert_eq!(p.next, next);
+        assert_eq!(p.budget(), Duration::from_millis(5));
     }
 
     #[test]

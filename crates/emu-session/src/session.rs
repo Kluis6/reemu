@@ -136,7 +136,7 @@ struct Shared {
     /// load" (o bug de reentrância do N64) é testável a partir disto.
     child_pid: Mutex<Option<u32>>,
     /// Canal do `reemu-core-host` ativo, pra a thread de vídeo mandar o
-    /// `VsyncTick` direto (sem passar pela thread da sessão, que roda no
+    /// `DisplayPeriod` direto (sem passar pela thread da sessão, que roda no
     /// próprio ritmo). `Channel` é seguro entre threads (ver `core_ipc`).
     child_channel: Mutex<Option<Channel>>,
     /// Handles crus do `VkDevice` do compositor, publicados pelo shell depois
@@ -520,10 +520,10 @@ impl EmuSession {
             .unwrap_or_else(|p| p.into_inner())
     }
 
-    /// A thread de vídeo apresentou um quadro e o present esperou o refresh:
-    /// avisa o `reemu-core-host` com o período medido do monitor (tarefa A4
-    /// do TASKS). Sem filho ativo, não faz nada.
-    pub fn vsync_tick(&self, display_period: Duration) {
+    /// Período do monitor medido pela thread de vídeo, pro
+    /// `reemu-core-host` casar o ritmo (tarefa A4 do TASKS). Mandar uma vez
+    /// por segundo. Sem filho ativo, não faz nada.
+    pub fn report_display_period(&self, display_period: Duration) {
         let ch = self
             .shared
             .child_channel
@@ -532,7 +532,7 @@ impl EmuSession {
             .clone();
         if let Some(ch) = ch {
             let _ = ch.send(
-                &ToChild::VsyncTick {
+                &ToChild::DisplayPeriod {
                     period_ns: display_period.as_nanos().min(u128::from(u64::MAX)) as u64,
                 },
                 &[],

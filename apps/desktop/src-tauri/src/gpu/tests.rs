@@ -1520,3 +1520,56 @@ fn canvas_viewport_sizes_viewport_passes() {
     assert_eq!(size(&mut fp), (990, 735));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Tarefa A4: o período do monitor tem que sair bem mais preciso que os
+/// ~0,3% de diferença entre core e monitor que o `RateMatch` casa. Amostras
+/// de um monitor de 59,8 Hz com jitter de ±0,8 ms, um quadro duplo de vez
+/// em quando e acquires que não bloquearam no meio.
+#[test]
+fn vblank_estimator_is_precise_despite_jitter_and_gaps() {
+    use std::time::{Duration, Instant};
+    let period = 1.0 / 59.8;
+    let t0 = Instant::now();
+    let at = |s: f64| t0 + Duration::from_secs_f64(s);
+    let mut e = VblankEstimator::default();
+    // Pseudoaleatório determinístico pro jitter.
+    let mut seed: u64 = 0x2545_F491_4F6C_DD1D;
+    let mut jitter = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        ((seed % 1601) as f64 - 800.0) * 1e-6
+    };
+    let mut k = 1.0;
+    for i in 0..1200 {
+        // Quadro duplo a cada 97 e acquire sem bloqueio a cada 131.
+        k += if i % 97 == 0 { 2.0 } else { 1.0 };
+        let vblank = k * period + 0.0005 + jitter();
+        if i % 131 == 0 {
+            e.observe(at(vblank), at(vblank)); // não bloqueou
+        } else {
+            e.observe(at(vblank - 0.010), at(vblank));
+        }
+    }
+    let got = e.period().expect("período publicado").as_secs_f64();
+    let err = (got - period).abs() / period;
+    assert!(
+        err < 0.0005,
+        "erro de {:.4}% (medido {:.4} ms)",
+        err * 100.0,
+        got * 1000.0
+    );
+}
+
+#[test]
+fn vblank_estimator_needs_blocked_samples() {
+    use std::time::{Duration, Instant};
+    let t0 = Instant::now();
+    let mut e = VblankEstimator::default();
+    // Acquire que nunca bloqueia (VRR, janela escondida): sem período.
+    for i in 0..1000 {
+        let t = t0 + Duration::from_millis(16 * i);
+        e.observe(t, t);
+    }
+    assert!(e.period().is_none());
+}

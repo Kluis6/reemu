@@ -12,9 +12,7 @@
 #[cfg(unix)]
 use core_ipc::HwPlaneMeta;
 use core_ipc::{Channel, FrameKind, PortInput, ToChild, ToParent};
-use core_loader_desktop::{
-    DesktopCore, DesktopCoreLoader, PaceStats, Pacer, VsyncChange, VsyncLock,
-};
+use core_loader_desktop::{DesktopCore, DesktopCoreLoader, PaceStats, Pacer, RateMatch};
 use domain::core_loader::{CoreId, LoadedCore};
 use domain::frame_source::{FrameOrigin, FrameSource};
 #[cfg(unix)]
@@ -241,8 +239,6 @@ struct LoopDiag {
     spun: Duration,
     late: u64,
     audio_samples: u64,
-    /// Quadros rodados no ritmo do monitor (`VsyncLock`, tarefa A4).
-    vsync_frames: u64,
 }
 
 impl Default for LoopDiag {
@@ -262,7 +258,6 @@ impl Default for LoopDiag {
             spun: Duration::ZERO,
             late: 0,
             audio_samples: 0,
-            vsync_frames: 0,
         }
     }
 }
@@ -321,7 +316,7 @@ impl LoopDiag {
             "perf core 1s: {:.1} fps (alvo {:.1}) | intervalo méd {:.2} p99 {:.2} máx {:.2} ms | \
              retro_run méd {:.2} pior {:.2} ms, {} acima do budget, {} sem frame novo | \
              envio méd {:.2} pior {:.2} ms | pacing: dormiu {:.0} ms, spin {:.1} ms \
-             ({:.1}% de 1 CPU), {} atrasados | áudio {} amostras (esperado ~{}) |              {} quadros no ritmo do monitor",
+             ({:.1}% de 1 CPU), {} atrasados | áudio {} amostras (esperado ~{})",
             self.frames as f32 / secs,
             1.0 / budget.as_secs_f32(),
             iv.iter().sum::<f32>() / iv.len().max(1) as f32,
@@ -339,7 +334,6 @@ impl LoopDiag {
             self.late,
             self.audio_samples,
             expected,
-            self.vsync_frames,
         );
         // Readback de CPU do HW render GL (fase A0 do TASKS, "GPU dos cores
         // no Windows"): já está dentro do `retro_run` acima; aqui separado
@@ -371,30 +365,14 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
     let mut core_sample_rate = 32_000u32;
     let mut pacer = Pacer::new(Duration::from_micros(16_667));
     let mut diag = diag_enabled().then(LoopDiag::default);
-    // Tarefa A4: ritmo preso ao refresh do monitor, só com
-    // `REEMU_VSYNC_PACING=1`. Desligado por padrão: no Windows com latência
-    // 1 o acquire só bloqueia às vezes, o tick chega intermitente e, travado,
-    // o core caía pra 48–56 fps (2026-10-02). Sem o lock, a latência 1 já
-    // deixou o vídeo liso.
-    let vsync_enabled = std::env::var("REEMU_VSYNC_PACING").is_ok_and(|v| v.trim() == "1");
-    let mut vsync = VsyncLock::default();
+    // Tarefa A4: ritmo do core casado com o do monitor (`RateMatch`).
+    // `REEMU_VSYNC_PACING=0` desliga (sempre o período do core).
+    let rate_match_enabled = std::env::var("REEMU_VSYNC_PACING").map_or(true, |v| v.trim() != "0");
+    let mut rate = RateMatch::new(pacer.budget());
 
     loop {
         let msg = if core.is_none() || paused {
             rx.recv().ok()
-        } else if let Some(deadline) = vsync.wait_deadline(pacer.budget()) {
-            // Travado no monitor: o próximo quadro sai no próximo tick.
-            match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-                Ok(m) => Some(m),
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    if vsync.on_timeout().is_some() {
-                        log::info!("ritmo: ticks do monitor pararam — volta ao relógio do core");
-                        pacer.reset();
-                    }
-                    None
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => break,
-            }
         } else {
             rx.try_recv().ok()
         };
@@ -413,7 +391,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 &mut frame_slot,
                 &mut core_sample_rate,
                 &mut pacer,
-                &mut vsync,
+                &mut rate,
                 &mut diag,
             );
             continue;
@@ -440,6 +418,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         let av = c.system_av_info();
                         let fps = av.timing.fps.max(1.0);
                         pacer.set_budget(Duration::from_secs_f64(1.0 / fps));
+                        rate.set_core_budget(pacer.budget());
                         core_sample_rate = (av.timing.sample_rate.round() as u32).max(1);
                         log::info!(
                             "core {core_id}: fps={:.3} sample_rate={:.0} Hz",
@@ -486,7 +465,6 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         ring = Some(new_ring);
                         frame_slot = 0;
                         paused = false;
-                        vsync.reset();
                         diag = diag_enabled().then(LoopDiag::default);
                         core = Some(c);
                     }
@@ -497,7 +475,6 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
             }
             ToChild::SetPaused(p) => {
                 paused = p;
-                vsync.reset();
                 if !p {
                     pacer.reset();
                 }
@@ -539,23 +516,23 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                     &[],
                 );
             }
-            ToChild::VsyncTick { period_ns } => {
-                if vsync_enabled && core.is_some() && !paused {
+            ToChild::DisplayPeriod { period_ns } => {
+                if rate_match_enabled && core.is_some() {
                     let period = Duration::from_nanos(period_ns);
-                    match vsync.on_tick(period, pacer.budget(), Instant::now()) {
-                        Some(VsyncChange::Locked) => log::info!(
-                            "ritmo: preso ao monitor ({:.3} ms por quadro; core pede {:.3} ms)",
-                            period.as_secs_f64() * 1000.0,
-                            pacer.budget().as_secs_f64() * 1000.0
+                    let (budget, change) = rate.on_display_period(period);
+                    pacer.set_period(budget);
+                    let ms = |d: Duration| d.as_secs_f64() * 1000.0;
+                    match change {
+                        Some(true) => log::info!(
+                            "ritmo: casado com o monitor ({:.3} ms por quadro; core pede {:.3} ms)",
+                            ms(period),
+                            ms(rate.core_budget())
                         ),
-                        Some(VsyncChange::Unlocked) => {
-                            log::info!(
-                                "ritmo: monitor ({:.3} ms) fora do ritmo do core ({:.3} ms) —                                  volta ao relógio do core",
-                                period.as_secs_f64() * 1000.0,
-                                pacer.budget().as_secs_f64() * 1000.0
-                            );
-                            pacer.reset();
-                        }
+                        Some(false) => log::info!(
+                            "ritmo: monitor ({:.3} ms) longe do core ({:.3} ms) — relógio do core",
+                            ms(period),
+                            ms(budget)
+                        ),
                         None => {}
                     }
                 }
@@ -617,7 +594,7 @@ fn run_one_frame(
     frame_slot: &mut u32,
     core_sample_rate: &mut u32,
     pacer: &mut Pacer,
-    vsync: &mut VsyncLock,
+    rate: &mut RateMatch,
     diag: &mut Option<LoopDiag>,
 ) {
     let Some(c) = core.as_mut() else { return };
@@ -625,8 +602,8 @@ fn run_one_frame(
     if let Some(t) = c.take_av_update() {
         let fps = t.fps.max(1.0);
         pacer.set_budget(Duration::from_secs_f64(1.0 / fps));
-        // fps novo: o período do monitor tem que ser reavaliado.
-        vsync.reset();
+        // fps novo: volta ao período do core até o próximo do monitor.
+        rate.set_core_budget(pacer.budget());
         *core_sample_rate = (t.sample_rate.round() as u32).max(1);
         log::info!(
             "timing atualizado em runtime: fps={:.3} sample_rate={} Hz",
@@ -635,11 +612,6 @@ fn run_one_frame(
         );
     }
 
-    // Travado no monitor: tick adiantado não faz dois quadros colados.
-    if vsync.locked() {
-        vsync.space_out(pacer.budget());
-    }
-    let frame_started = Instant::now();
     let t0 = diag.as_mut().map(|d| {
         let now = Instant::now();
         d.frame_start(now);
@@ -682,15 +654,6 @@ fn run_one_frame(
         );
     }
 
-    // Travado no monitor: quem dá o ritmo é o próximo `VsyncTick` (o laço
-    // espera por ele em `run`); sem `Pacer` aqui.
-    if vsync.locked() {
-        vsync.frame_ran(frame_started);
-        if let Some(d) = diag.as_mut() {
-            d.vsync_frames += 1;
-        }
-        return;
-    }
     let p = pacer.pace();
     if let Some(d) = diag.as_mut() {
         d.record_pace(&p);

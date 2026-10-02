@@ -51,11 +51,10 @@ pub enum ToChild {
         value: String,
     },
     GetCoreOptions,
-    /// O pai acabou de apresentar um quadro e o present esperou o refresh
-    /// (tarefa A4 do TASKS): `period_ns` é o período do monitor medido por
-    /// ele. Se bater com o fps do core, o filho roda o próximo quadro neste
-    /// ritmo em vez do relógio próprio.
-    VsyncTick {
+    /// Período do monitor medido pelo pai, mandado uma vez por segundo
+    /// (tarefa A4 do TASKS). Se bater com o fps do core, o filho casa o
+    /// ritmo do `Pacer` com ele (`RateMatch`).
+    DisplayPeriod {
         period_ns: u64,
     },
     Shutdown,

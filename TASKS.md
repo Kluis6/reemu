@@ -219,6 +219,19 @@ conferir".
       (`REEMU_VSYNC_PACING=1`). Pendente: validar latência 1 em outra GPU
       (AMD/Intel) e no Linux/Wayland; o deslize de fase de 0,3% continua
       (o Mailbox descarta o quadro sobrando sem tranco visível).
+      **4º teste:** com latência 1 e o binário novo, o acquire voltou a
+      esperar ~14,5 ms com 1 quadro perdido a cada 2–4 s. A latência 1 só
+      muda quando o deslize aparece, não resolve.
+      **Troca de abordagem (2026-10-02): casar o ritmo em vez de travar no
+      tick.** O `VsyncLock` saiu. O pump manda o período do monitor uma vez
+      por segundo (`ToChild::DisplayPeriod`), medido por soma de refreshes
+      inteiros (`VblankEstimator`; teste com jitter de ±0,8 ms: erro abaixo
+      de 0,05%). O core-host (`RateMatch`) usa esse período no `Pacer` se
+      estiver a até 0,4% do pedido pelo core (`Pacer::set_period`, sem
+      salto de fase), senão o do core. O core nunca espera o monitor.
+      `REEMU_VSYNC_PACING=0` desliga. Falta validar no jogo: o log do
+      core-host mostra `ritmo: casado com o monitor`, e o `perf vídeo` deve
+      ficar sem quadros perdidos.
 - [ ] `todo` — Testes de integração do `emu-session` no Windows: o core de
       teste (`testcore_path`) carrega sem `retro_set_environment`
       ("GetProcAddress failed"), e os 9 testes de `tests/session.rs`
