@@ -297,6 +297,7 @@ impl GlContext {
     /// Fallback quando o interop não está ativo.
     pub fn read_pixels(&self, w: u32, h: u32) -> Vec<u8> {
         let (w, h) = (w.min(self.max_w).max(1), h.min(self.max_h).max(1));
+        let t0 = std::time::Instant::now();
         let mut buf = vec![0u8; (w * h * 4) as usize];
         unsafe {
             self.gl
@@ -313,14 +314,18 @@ impl GlContext {
                 glow::PixelPackData::Slice(Some(&mut buf)),
             );
         }
+        let t1 = std::time::Instant::now();
         if self.flip {
             flip_rows_in_place(&mut buf, w, h);
         }
+        readback_stats::record_read(t1 - t0, t1.elapsed(), u64::from(w) * u64::from(h) * 4);
         buf
     }
 
     pub fn finish(&self) {
+        let t0 = std::time::Instant::now();
         unsafe { self.gl.finish() };
+        readback_stats::record_finish(t0.elapsed());
     }
 
     #[cfg(unix)]
@@ -1290,6 +1295,68 @@ unsafe fn build_fbo(
 }
 
 /// Inverte as linhas de um buffer RGBA8 `w×h` no lugar (GL bottom-left → top-left).
+/// Custo do readback de CPU (`finish` + `read_pixels`), pra fase A0 do
+/// TASKS ("GPU dos cores no Windows"): o diagnóstico `REEMU_PERF` do
+/// core-host lê e zera isto uma vez por segundo. Fora do `REEMU_PERF` só
+/// acumula (três `Instant::now` por quadro).
+pub mod readback_stats {
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    /// Totais desde a última leitura.
+    #[derive(Debug, Default, Clone, Copy)]
+    pub struct ReadbackStats {
+        pub frames: u64,
+        /// `glFinish`: espera a GPU terminar o quadro.
+        pub finish: Duration,
+        /// `glReadPixels` síncrono (GPU → CPU) + alocação do buffer.
+        pub read: Duration,
+        /// Inversão das linhas na CPU.
+        pub flip: Duration,
+        /// Pior quadro (finish + read + flip).
+        pub worst: Duration,
+        pub bytes: u64,
+    }
+
+    static STATS: Mutex<(ReadbackStats, Duration)> = Mutex::new((
+        ReadbackStats {
+            frames: 0,
+            finish: Duration::ZERO,
+            read: Duration::ZERO,
+            flip: Duration::ZERO,
+            worst: Duration::ZERO,
+            bytes: 0,
+        },
+        Duration::ZERO,
+    ));
+
+    /// `glFinish` do quadro; somado ao quadro em andamento até o `read`.
+    pub(crate) fn record_finish(d: Duration) {
+        let mut g = STATS.lock().unwrap_or_else(|p| p.into_inner());
+        g.0.finish += d;
+        g.1 = d;
+    }
+
+    pub(crate) fn record_read(read: Duration, flip: Duration, bytes: u64) {
+        let mut g = STATS.lock().unwrap_or_else(|p| p.into_inner());
+        let total = g.1 + read + flip;
+        g.1 = Duration::ZERO;
+        let s = &mut g.0;
+        s.frames += 1;
+        s.read += read;
+        s.flip += flip;
+        s.bytes += bytes;
+        s.worst = s.worst.max(total);
+    }
+
+    /// Lê e zera. `None` se nenhum quadro passou pelo readback.
+    pub fn take() -> Option<ReadbackStats> {
+        let mut g = STATS.lock().unwrap_or_else(|p| p.into_inner());
+        let s = std::mem::take(&mut g.0);
+        (s.frames > 0).then_some(s)
+    }
+}
+
 fn flip_rows_in_place(buf: &mut [u8], w: u32, h: u32) {
     let row = (w * 4) as usize;
     if row == 0 || buf.len() < row * h as usize {

@@ -50,6 +50,7 @@ pub fn set_dmabuf_import_modifiers(mods: Vec<u64>) {
     #[cfg(not(unix))]
     let _ = mods;
 }
+pub use crate::gl_context::readback_stats;
 #[cfg(all(unix, feature = "test-fixtures"))]
 pub use crate::gl_context::{render_rect_rgba_to_dmabuf, render_solid_rgba_to_dmabuf};
 pub use crate::input::{analog, libretro_joypad_id, retropad, AnalogState, RetroPadState};

@@ -335,6 +335,22 @@ impl LoopDiag {
             self.audio_samples,
             expected,
         );
+        // Readback de CPU do HW render GL (fase A0 do TASKS, "GPU dos cores
+        // no Windows"): já está dentro do `retro_run` acima; aqui separado
+        // em espera da GPU, leitura e inversão das linhas.
+        if let Some(rb) = core_loader_desktop::readback_stats::take() {
+            let k = rb.frames as f32;
+            log::info!(
+                "perf readback 1s: {} quadros, {:.1} MB/quadro | glFinish méd {:.2} ms | \
+                 glReadPixels méd {:.2} ms | flip CPU méd {:.2} ms | pior quadro {:.2} ms",
+                rb.frames,
+                rb.bytes as f32 / k / 1_048_576.0,
+                ms(rb.finish) / k,
+                ms(rb.read) / k,
+                ms(rb.flip) / k,
+                ms(rb.worst),
+            );
+        }
         let last = self.last_frame_start;
         *self = Self::default();
         self.last_frame_start = last;
