@@ -43,34 +43,19 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       troca, e isso foi corrigido limpando a surface de preto antes de
       esconder (`lib.rs`, pump). `REEMU_NATIVE_VIDEO=0` ainda volta pro
       `<canvas>`.
-- [ ] `todo` — **Testar o protótipo de overlay no Windows**
-      (`REEMU_WIN_OVERLAY`, 2026-10-01): WebView2 transparente por cima do
-      jogo. Rodar `REEMU_WIN_OVERLAY=1` (surface no HWND principal) e
-      `REEMU_WIN_OVERLAY=child` (janela filha abaixo do WebView2) e, em
-      cada um, conferir: o jogo aparece na PlayScreen; Esc abre o menu POR
-      CIMA do jogo (escurecido, sem print); avisos/toasts aparecem durante o
-      jogo; biblioteca e configurações continuam opacas; trocar de jogo não
-      mostra o anterior. A variante que funcionar vira o padrão.
-      **2026-10-02, `=1` (HWND principal): tela preta** com flycast e
-      vbam (RTX 3060, wgpu em Vulkan). O log mostra o swapchain
-      apresentando ("1º frame apresentado"), mas nada aparece através do
-      WebView2 transparente. A causa provável é que, no modo janela, o
-      WebView2 não deixa ver o swapchain do HWND pai. Isso não está
-      verificado: a página da Microsoft "Windowed vs. Visual hosting" não
-      trata desse caso. **`=child`: tela preta também** (vbam e gpsp, com
-      som e "1º frame apresentado"). Nos dois casos o WebView2 do Tauri,
-      no modo janela, não deixa ver nada por baixo. Para o protótipo
-      funcionar seria preciso hospedar o WebView2 como Visual
-      (DirectComposition), o que o Tauri/wry não faz hoje. O padrão sem a
-      flag (janela filha acima do WebView2) funcionou e segue como padrão.
+- [x] `done` — **Protótipo de overlay no Windows** (`REEMU_WIN_OVERLAY`):
+      testado em 2026-10-02, tela preta nas duas variantes (`=1` e
+      `=child`). O WebView2 em modo janela não deixa ver o que está por
+      baixo; precisaria de visual hosting (DirectComposition), que o
+      Tauri/wry não usa. O padrão (janela filha acima do WebView2) ficou.
 - [ ] `todo` — **Windows ponta a ponta**: só os testes do `core-ipc` rodaram
       numa máquina Windows real. Falta `cargo tauri dev` completo, `video.rs`
       no caminho `#[cfg(not(linux))]`, paths do buildbot de cores, instalador.
       Conferir que as capas aparecem (URL `http://cover.localhost/<id>` no
       Windows, `covers::cover_url`, corrigida sem teste em máquina real).
-- [ ] `todo` — **Publicar e instalar a `v0.1.1`**: o draft no GitHub já tem os
-      4 instaladores assinados. Publicar, instalar no Windows (`-setup.exe`) e
-      no Linux (AppImage) — é a 1ª versão com auto-update.
+- [x] `done` — **Publicar uma versão com auto-update**: superado pela
+      `v0.1.4`, publicada em 2026-10-02 (instaladores assinados e
+      `latest.json` com a 0.1.4 nas seis variantes).
 - [ ] `todo` — **Chaveiro no Windows**: `cargo test -p reemu-desktop --lib
       os_keyring -- --ignored` (Credential Manager).
 - [x] `done` — `SET_ROTATION` com um jogo vertical real: validado pelo
@@ -254,23 +239,18 @@ conferir".
       ("GetProcAddress failed"), e os 9 testes de `tests/session.rs`
       falham. Já falhavam antes de 2026-10-02 (conferido com `git stash`).
       Provável: a DLL de teste não exporta os símbolos no Windows.
-- [ ] `todo` — A5. Áudio em dobro (achado no A0): no flycast em 1920×1440,
-      depois de o core travar a ~6 fps (05:54:42), o core-host passou a
-      contar ~176 mil amostras/s contra ~88 mil esperadas. Ver se o core
-      mudou a taxa sem `SET_SYSTEM_AV_INFO` ou se o contador está errado.
-
-**Fase B — interop GL → Vulkan no Windows (zero cópia de CPU)**
-
-Fontes conferidas: `GL_EXT_memory_object_win32` / `GL_EXT_semaphore_win32`
-(registry.khronos.org, `EXT_external_objects_win32.txt`: importa memória e
-semáforos de handles Win32; tipo `HANDLE_TYPE_OPAQUE_WIN32_EXT` = 0x9587;
-importar não transfere a posse do handle, e quem importa fecha o handle NT)
-e `VK_KHR_external_memory_win32` (docs.vulkan.org: `vkGetMemoryWin32HandleKHR`
-transfere a posse do handle pra aplicação, que chama `CloseHandle`; o import
-exige memória "created on the same underlying physical device"). Nenhuma das
-duas trata de handle vindo de outro processo: isso é com o Win32
-(`DuplicateHandle`, a conferir em learn.microsoft.com).
-
+- [ ] `in-progress` — A5. Áudio em dobro no flycast. **Causa (fonte do
+      flycast, `shell/libretro/libretro.cpp`):** com Threaded Rendering
+      (padrão), o `retro_run` repete `emu.render()` até 5 vezes até achar
+      um quadro novo. Num jogo a 30 fps (Jet Set Radio), cada `retro_run`
+      emula 2 refreshes; chamado 60×/s pelo core-host, o jogo emula 120/s e
+      entrega o dobro de áudio (176 mil contra 88 mil amostras/s). A opção
+      do flycast `reicast_detect_vsync_swap_interval` ("Detect Frame Rate
+      Changes", desligada por padrão) avisa o frontend por
+      `SET_SYSTEM_AV_INFO` quando o jogo muda pra 30 fps, e o core-host já
+      ajusta o `Pacer`. Falta: confirmar com o usuário se o jogo parecia
+      acelerado e decidir se a opção vira padrão do ReEmu (a descrição dela
+      pede desligado em jogos de taxa instável).
 - [ ] `todo` — B1. Detectar suporte nos dois lados: extensões GL
       `GL_EXT_memory_object`, `GL_EXT_memory_object_win32`,
       `GL_EXT_semaphore` e `GL_EXT_semaphore_win32` no contexto WGL do filho;
