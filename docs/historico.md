@@ -1650,3 +1650,11 @@ Infra:
   - "Jogar" com 180×56 e texto de 14 regular, ações de 56×56 com 16 entre elas (antes 40 e 12);
   - destaque de 420 de altura que se dissolve no fundo por uma máscara no hero inteiro, em vez do corte reto em 340.
   - Conferido com print: capa, título e botões caem nas coordenadas do Xbox. A linha da plataforma acima do título e os selos de ano/gênero continuam, porque são do ReEmu.
+
+## 2026-10-02 — Saves do flycast corrompidos ao sair do jogo
+
+- Sintoma relatado: sair do jogo e voltar deixava o save (VMU) corrompido.
+- Causa, pelo código do flycast (`core/hw/maple/maple_devs.cpp`, repositório flyinghead/flycast): o arquivo do VMU fica aberto o jogo inteiro (`fopen` no `OnSetup`, `fclose` só no destrutor). Cada bloco salvo é `fseek` + `fwrite`, **sem `fflush`**: o que estava no buffer do stdio só chegava ao disco no `fclose`, no encerramento do core.
+- O `ChildProc::kill` mandava `Shutdown` e matava o `reemu-core-host` no mesmo instante. O core nunca recebia `retro_unload_game`/`retro_deinit` (a ordem do `libretro.h`), o `fclose` não acontecia, e o VMU ficava com parte dos blocos gravada e o índice inconsistente.
+- Correção (`b98bb56`): o `kill` espera o filho sair sozinho depois do `Shutdown` (até 3 s; passou disso, mata com aviso no log).
+- Observado junto: com `reicast_per_content_vmus` desligado (padrão do flycast), todos os jogos de Dreamcast dividem `system/dc/vmu_save_A1.bin`, que tem 200 blocos. Não existe `dc_nvmem.bin` (flash do Dreamcast), outro arquivo que o flycast só grava no encerramento.
