@@ -284,10 +284,12 @@ conferir".
 
 **Fase C — cores Vulkan no Windows**
 
-- [ ] `todo` — C1. Reproduzir com `REEMU_HW=vulkan` + flycast no Windows.
-      O crash de 2026-09-25 (`STATUS_ACCESS_VIOLATION`) tem causa provável
-      já corrigida no Linux (despachante nulo / extensões não ligadas, hook
-      do `vkCreateDevice`). Rodar com as camadas de validação.
+- [ ] `in-progress` — C1. Reproduzir com `REEMU_HW=vulkan` + flycast no Windows.
+      **2026-10-02, RTX 3060:** o flycast (Capcom vs. SNK 2) e o Beetle PSX
+      HW rodaram em Vulkan dentro do app, sem fechar: o core adotou o device
+      (7 extensões no flycast), 60 quadros/s, 0 perdidos, ~1,5 ms por quadro
+      no app. Falta: mupen64plus_next com `parallel`, sair/trocar de jogo
+      várias vezes e as camadas de validação (não instaladas).
 - [ ] `todo` — C2. Se passar, ligar a escolha automática no Windows
       (`route_local_device`: `auto` hoje é `cfg!(target_os = "linux")`) e
       validar flycast, Beetle PSX HW e mupen64plus_next com `parallel`.
@@ -296,6 +298,16 @@ conferir".
       (`VK_KHR_external_memory_win32`) e devolve só o índice + semáforo.
       Devolve o isolamento de processo aos cores Vulkan: um crash do core não
       derruba a interface. Exige o mesmo device físico nos dois lados.
+
+### Biblioteca
+
+- [ ] `todo` — Validar no Windows (2026-10-02): "Atualizar biblioteca"
+      tira as 25 cópias do Redump e os `.chd` de `naomi/`, e adiciona os 127
+      `.zip` de NAOMI e os 25 de Atomiswave (contagem da varredura nova na
+      pasta real, num banco à parte); e os jogos de NAOMI abrem no flycast.
+- [ ] `todo` — Validar no Windows: trocar de jogo não mostra mais o último
+      quadro do anterior (`SHOW_AFTER_PRESENTS` em `lib.rs`, também na rota
+      Vulkan).
 
 ### Desempenho do caminho do core
 
