@@ -641,6 +641,8 @@ pub struct FrameProcessor {
     /// Tempo do último `blit_last`: `(get_current_texture, submit + present)`.
     /// O `REEMU_PERF` do pump separa isso do "render" (tarefa A4 do TASKS).
     last_present_timing: Option<(std::time::Duration, std::time::Duration)>,
+    /// Período real do monitor, medido pelo `get_current_texture` (A4).
+    vblank: VblankEstimator,
     /// Queue family do device adotado (§Beetle) — pro command pool do blit.
     adopted_queue_family: Option<u32>,
     /// Conversor `A1R5G5B5`/packed-16 → RGBA8 pra cores Vulkan que fazem scanout
@@ -823,6 +825,7 @@ impl FrameProcessor {
             surface_fail_streak: 0,
             surface_presented: false,
             last_present_timing: None,
+            vblank: VblankEstimator::default(),
             adopted_queue_family: None,
             vk_blit: None,
             comp,
@@ -1342,6 +1345,13 @@ impl FrameProcessor {
         self.surface_redraw_pending = !presented;
     }
 
+    /// Período do monitor medido pelas esperas do `get_current_texture`
+    /// (`VblankEstimator`). `None` até ter amostras suficientes, ou se o
+    /// acquire não bloqueia (VRR, janela escondida).
+    pub fn display_period(&self) -> Option<std::time::Duration> {
+        self.vblank.period()
+    }
+
     /// `(get_current_texture, submit + present)` do último quadro apresentado,
     /// e zera. Pro diagnóstico `REEMU_PERF` do pump.
     pub fn take_present_timing(&mut self) -> Option<(std::time::Duration, std::time::Duration)> {
@@ -1439,6 +1449,7 @@ impl FrameProcessor {
                 }
             }
         };
+        self.vblank.observe(t_acquire, std::time::Instant::now());
         let view = frame_tex
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -2080,6 +2091,74 @@ impl FrameProcessor {
         for p in &mut self.passes {
             p.bound = false;
         }
+    }
+}
+
+/// Estima o período do monitor (tarefa A4 do TASKS). Quando o
+/// `get_current_texture` bloqueia, ele só volta quando o present engine
+/// libera uma imagem, ou seja, num refresh. "Calls to
+/// `Surface::get_current_texture()` will block until there is a spot in the
+/// queue" (docs.rs wgpu 30, `PresentMode::Fifo`); a spec Vulkan
+/// (`VkPresentModeKHR`) diz que, no FIFO, a fila anda um pedido por
+/// "vertical blanking period". O instante em que um acquire bloqueado volta
+/// é então uma amostra do refresh, e o intervalo entre duas amostras
+/// seguidas, um período.
+///
+/// Não verificado: que o driver libera a imagem exatamente no refresh numa
+/// janela composta pelo DWM (a doc da Khronos não cobre). Por isso só entra
+/// amostra de acquire que bloqueou de verdade, e intervalos fora de 0,5–1,5
+/// do período atual (quadro perdido, travada) são descartados.
+#[derive(Default)]
+struct VblankEstimator {
+    last: Option<std::time::Instant>,
+    /// Período em segundos (média móvel exponencial).
+    period: Option<f64>,
+    samples: u32,
+    /// O acquire mais recente bloqueou? Sem isso, um tick com a estimativa
+    /// antiga sairia mesmo com a janela minimizada (acquire volta na hora)
+    /// e o core correria sem freio.
+    last_blocked: bool,
+}
+
+impl VblankEstimator {
+    /// Acquire que esperou menos que isso não foi parado pelo refresh.
+    const MIN_BLOCK: std::time::Duration = std::time::Duration::from_millis(2);
+    /// Amostras antes de publicar o período.
+    const MIN_SAMPLES: u32 = 30;
+
+    fn observe(&mut self, started: std::time::Instant, returned: std::time::Instant) {
+        self.last_blocked = returned.duration_since(started) >= Self::MIN_BLOCK;
+        if !self.last_blocked {
+            // Não bloqueou: este instante não é um refresh, e o intervalo a
+            // partir da amostra anterior também deixa de valer.
+            self.last = None;
+            return;
+        }
+        if let Some(prev) = self.last {
+            let dt = returned.duration_since(prev).as_secs_f64();
+            match self.period {
+                None => self.period = Some(dt),
+                Some(p) if dt > p * 0.5 && dt < p * 1.5 => {
+                    self.period = Some(p * 0.95 + dt * 0.05);
+                    self.samples = self.samples.saturating_add(1);
+                }
+                // Primeira estimativa ruim (ex.: começou num quadro duplo):
+                // recomeça a partir deste intervalo.
+                Some(_) if self.samples < Self::MIN_SAMPLES => {
+                    self.period = Some(dt);
+                    self.samples = 0;
+                }
+                Some(_) => {}
+            }
+        }
+        self.last = Some(returned);
+    }
+
+    /// `None` se o último acquire não bloqueou ou ainda faltam amostras.
+    fn period(&self) -> Option<std::time::Duration> {
+        (self.last_blocked && self.samples >= Self::MIN_SAMPLES)
+            .then(|| self.period.map(std::time::Duration::from_secs_f64))
+            .flatten()
     }
 }
 

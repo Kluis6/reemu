@@ -135,6 +135,10 @@ struct Shared {
     /// Observabilidade/diagnóstico — e a garantia de "processo novo por
     /// load" (o bug de reentrância do N64) é testável a partir disto.
     child_pid: Mutex<Option<u32>>,
+    /// Canal do `reemu-core-host` ativo, pra a thread de vídeo mandar o
+    /// `VsyncTick` direto (sem passar pela thread da sessão, que roda no
+    /// próprio ritmo). `Channel` é seguro entre threads (ver `core_ipc`).
+    child_channel: Mutex<Option<Channel>>,
     /// Handles crus do `VkDevice` do compositor, publicados pelo shell depois
     /// que o `FrameProcessor` sobe (`EmuSession::attach_vulkan_device`).
     /// `Some` + `REEMU_HW=vulkan` = um core que negocia Vulkan roda
@@ -229,6 +233,7 @@ impl EmuSession {
             gamepad_disconnected: Mutex::new(Vec::new()),
             nav: Mutex::new(Vec::new()),
             child_pid: Mutex::new(None),
+            child_channel: Mutex::new(None),
             vulkan_shared_device: Mutex::new(None),
             dmabuf_modifiers: Mutex::new(Vec::new()),
             vulkan_negotiator: Mutex::new(None),
@@ -513,6 +518,26 @@ impl EmuSession {
             .child_pid
             .lock()
             .unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// A thread de vídeo apresentou um quadro e o present esperou o refresh:
+    /// avisa o `reemu-core-host` com o período medido do monitor (tarefa A4
+    /// do TASKS). Sem filho ativo, não faz nada.
+    pub fn vsync_tick(&self, display_period: Duration) {
+        let ch = self
+            .shared
+            .child_channel
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        if let Some(ch) = ch {
+            let _ = ch.send(
+                &ToChild::VsyncTick {
+                    period_ns: display_period.as_nanos().min(u128::from(u64::MAX)) as u64,
+                },
+                &[],
+            );
+        }
     }
 
     /// Identificador do core carregado (pra validar save states).
@@ -1464,6 +1489,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 ring = None;
                 current_srm = None;
                 *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner()) = None;
+                *shared
+                    .child_channel
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = None;
 
                 let target_srm = srm_path(&save_dir, &rom);
                 let initial_save_ram = std::fs::read(&target_srm).ok();
@@ -1638,6 +1667,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                     Some(id.0.clone());
                                 *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(pid);
+                                *shared
+                                    .child_channel
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner()) = Some(p.channel.clone());
                                 shared.set_state(SessionState::Running);
                                 current_srm = Some(target_srm);
                                 last_srm_flush = Instant::now();
@@ -1706,6 +1739,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 current_srm = None;
                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) = None;
                 *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner()) = None;
+                *shared
+                    .child_channel
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = None;
                 if let Some(s) = sink.as_mut() {
                     s.pause();
                 }
@@ -1905,6 +1942,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 let _ = reply.send(ok);
             }
             Command::Shutdown => {
+                *shared
+                    .child_channel
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = None;
                 teardown_vk_local(&shared, &mut sink, current_srm.as_deref());
                 if let (Some(p), Some(erx)) = (proc.as_ref(), events.as_ref()) {
                     if let (Some(bytes), Some(path)) = (

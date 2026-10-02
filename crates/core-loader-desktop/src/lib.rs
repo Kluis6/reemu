@@ -55,7 +55,7 @@ pub use crate::gl_context::readback_stats;
 pub use crate::gl_context::{render_rect_rgba_to_dmabuf, render_solid_rgba_to_dmabuf};
 pub use crate::input::{analog, libretro_joypad_id, retropad, AnalogState, RetroPadState};
 pub use crate::loader::{CoreProbe, DesktopCoreLoader};
-pub use crate::pacing::{PaceStats, Pacer};
+pub use crate::pacing::{PaceStats, Pacer, VsyncChange, VsyncLock};
 
 /// Redireciona o **stdout** do processo pra `/dev/null`, PRA SEMPRE — vários
 /// cores (Beetle PSX HW: `[hdcache]`, `Creating shader module`…) spammam via

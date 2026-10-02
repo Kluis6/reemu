@@ -573,6 +573,13 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                             if let Some(fp) = gpu.as_mut() {
                                 let t = std::time::Instant::now();
                                 fp.render_to_surface(Some(f));
+                                // Tarefa A4: o present acabou de esperar o
+                                // refresh. Avisa o core-host, que roda o
+                                // próximo quadro neste ritmo se o período
+                                // do monitor bater com o fps do core.
+                                if let Some(period) = fp.display_period() {
+                                    state.session.vsync_tick(period);
+                                }
                                 if let Some(d) = diag.as_mut() {
                                     d.presented(t.elapsed());
                                     if let Some((acq, pre)) = fp.take_present_timing() {

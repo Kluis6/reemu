@@ -186,6 +186,18 @@ conferir".
       diferença de ~0,3% no áudio é absorvida pelo Dynamic Rate Control da
       etapa 06. (3) Alinhar a fase: gerar o quadro logo depois do refresh,
       pra espera no acquire ficar perto de zero.
+      **Implementado em 2026-10-02, falta validar:** o pump mede o período
+      do monitor pelos acquires que bloquearam (`VblankEstimator`) e manda
+      `ToChild::VsyncTick` depois de cada present. O core-host
+      (`VsyncLock`, em `pacing.rs`) prende o ritmo ao monitor quando o
+      período fica a até 0,4% do budget por 30 ticks seguidos, e volta ao
+      `Pacer` fora disso ou sem tick por 1,5 quadro.
+      `REEMU_VSYNC_PACING=0` desliga.
+- [ ] `todo` — Testes de integração do `emu-session` no Windows: o core de
+      teste (`testcore_path`) carrega sem `retro_set_environment`
+      ("GetProcAddress failed"), e os 9 testes de `tests/session.rs`
+      falham. Já falhavam antes de 2026-10-02 (conferido com `git stash`).
+      Provável: a DLL de teste não exporta os símbolos no Windows.
 - [ ] `todo` — A5. Áudio em dobro (achado no A0): no flycast em 1920×1440,
       depois de o core travar a ~6 fps (05:54:42), o core-host passou a
       contar ~176 mil amostras/s contra ~88 mil esperadas. Ver se o core
