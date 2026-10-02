@@ -284,17 +284,15 @@ conferir".
 
 **Fase C — cores Vulkan no Windows**
 
-- [ ] `in-progress` — C1. Reproduzir com `REEMU_HW=vulkan` + flycast no Windows.
-      **2026-10-02, RTX 3060:** o flycast (Capcom vs. SNK 2) e o Beetle PSX
-      HW rodaram em Vulkan dentro do app, sem fechar: o core adotou o device
-      (7 extensões no flycast), 60 quadros/s, 0 perdidos, ~1,5 ms por quadro
-      no app. PPSSPP (forçado) também, depois da correção do slot não
-      liberado (`vk_frame.rs`, `begin_frame`). **Com as camadas de validação
-      (Vulkan SDK, `VK_INSTANCE_LAYERS`, 19:06–19:27):** flycast duas vezes
-      (uma delas um jogo de Atomiswave, que caiu pra 30 fps com o áudio
-      certo) e Beetle PSX HW, trocando de jogo no mesmo processo: nenhum
-      `VUID`/`SYNC-HAZARD`, 0 quadros perdidos. Falta: mupen64plus_next com
-      `parallel` (no teste ele foi pro processo filho em GL, sem a opção).
+- [x] `done` — C1. Cores Vulkan in-process no Windows (2026-10-02, RTX 3060).
+      flycast, Beetle PSX HW, PPSSPP (forçado) e mupen64plus_next com
+      ParaLLEl-RDP rodam, salvam/restauram estado e descarregam; com as
+      camadas de validação, **nenhum** `VUID`/`SYNC-HAZARD` (teste
+      `vk_core_real_rom`, agora também no Windows). Correções que isso
+      exigiu: todas as entradas do core na mesma thread (`on_vk_thread`, o
+      libco do mupen usa fibers), `context_destroy` antes de descarregar um
+      core Vulkan, instância 1.3, `timelineSemaphore` no hook do
+      `vkCreateDevice` e dois shaders WGSL. Ver `docs/historico.md`.
 - [ ] `todo` — C2. Se passar, ligar a escolha automática no Windows
       (`route_local_device`: `auto` hoje é `cfg!(target_os = "linux")`) e
       validar flycast, Beetle PSX HW e mupen64plus_next com `parallel`.
