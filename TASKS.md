@@ -166,7 +166,7 @@ conferir".
       como o caminho `Hardware { flip_y }` já faz.
 - [ ] `todo` — A3. Repetir a medição do A0 e registrar no histórico.
 
-- [ ] `in-progress` — A4. Ritmo core × monitor (achado no A0, não é do
+- [x] `done` — A4. Ritmo core × monitor (achado no A0, não é do
       readback). Medido em 2026-10-02 com o `perf vídeo` dividido
       (`e912b1c`): ~15,6 dos ~16,7 ms do "render" são espera no
       `get_current_texture`; shaders + submit + present ficam abaixo de 1
@@ -232,6 +232,11 @@ conferir".
       `REEMU_VSYNC_PACING=0` desliga. Falta validar no jogo: o log do
       core-host mostra `ritmo: casado com o monitor`, e o `perf vídeo` deve
       ficar sem quadros perdidos.
+      **Validado no Windows (2026-10-02, flycast, RTX 3060):** `alvo 59.8`
+      (casado), 0 quadros perdidos em todos os segundos, espera no acquire
+      estável em 14,5–14,7 ms (sem o serrote de 4 → 16,7 ms) e intervalo
+      do core cravado em 16,73 ms. Pendente fora daqui: validar numa
+      AMD/Intel e no Linux/Wayland.
 - [ ] `todo` — Testes de integração do `emu-session` no Windows: o core de
       teste (`testcore_path`) carrega sem `retro_set_environment`
       ("GetProcAddress failed"), e os 9 testes de `tests/session.rs`
