@@ -92,10 +92,12 @@ function renderNotes(md) {
   return box.childElementCount ? box : null;
 }
 
-// Botão de download grande: título + linha de detalhe, em duas linhas.
-const DL_BTN = "h-auto min-h-14 py-2";
+// Botão de download grande: título + linha de detalhe, em duas linhas. Largura
+// fixa (cabe a linha de detalhe mais longa) pra os botões lado a lado ficarem
+// do mesmo tamanho, com o texto centralizado.
+const DL_BTN = "h-auto min-h-14 py-2 w-[21rem] max-w-full";
 function dlStack(title, sub) {
-  return el("span", { class: "flex flex-col items-start text-left leading-[1.3]" },
+  return el("span", { class: "flex flex-col items-center text-center leading-[1.3]" },
     el("span", { class: "font-semibold" }, title),
     el("span", { class: "text-[length:var(--fontSizeBase200,12px)] font-normal opacity-85" }, sub));
 }
