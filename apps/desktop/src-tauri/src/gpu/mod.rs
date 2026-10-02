@@ -1436,10 +1436,11 @@ impl FrameProcessor {
         true
     }
 
-    /// Apresenta um frame preto opaco na surface nativa. Usado quando a surface
-    /// fica ATRÁS da interface (protótipo `REEMU_WIN_OVERLAY` no Windows): sem
-    /// jogo, limpa em vez de esconder, senão o último quadro do jogo anterior
-    /// apareceria pela `PlayScreen` transparente. Mesmo `LoadOp::Clear` do
+    /// Apresenta um frame preto opaco na surface nativa. No Windows o pump
+    /// chama isto antes de esconder a surface (sem jogo / carregando): a
+    /// janela filha escondida guarda o último quadro e podia reaparecer com o
+    /// jogo anterior; no protótipo `REEMU_WIN_OVERLAY` ele apareceria pela
+    /// `PlayScreen` transparente. Mesmo `LoadOp::Clear` do
     /// letterbox do `blit_last` (wgpu, `RenderPassColorAttachment`).
     pub fn clear_surface(&mut self) {
         let Some(s) = self.surface.as_ref() else {

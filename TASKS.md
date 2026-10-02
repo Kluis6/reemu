@@ -35,12 +35,14 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
-- [ ] `todo` — **Validar o vídeo nativo no Windows** (janela filha acima do
-      WebView2, feita em 2026-10-01 sem máquina Windows; ver o histórico):
-      jogo aparece e preenche a janela, menu de pausa esconde e volta, trocar
-      de jogo não pisca o anterior, redimensionar/tela cheia acompanha,
-      clicar no jogo não tira o teclado. Se der errado:
-      `REEMU_NATIVE_VIDEO=0` volta pro `<canvas>`.
+- [x] `done` — **Vídeo nativo no Windows** (janela filha acima do
+      WebView2): validado pelo usuário em 2026-10-02 (RTX 3060, wgpu em
+      Vulkan; vbam, gpsp, parallel_n64, fbalpha2012 vertical). O jogo
+      aparece, Esc abre o menu e volta, clicar no jogo não tira o teclado,
+      redimensionar e tela cheia acompanham. O jogo anterior piscava na
+      troca, e isso foi corrigido limpando a surface de preto antes de
+      esconder (`lib.rs`, pump). `REEMU_NATIVE_VIDEO=0` ainda volta pro
+      `<canvas>`.
 - [ ] `todo` — **Testar o protótipo de overlay no Windows**
       (`REEMU_WIN_OVERLAY`, 2026-10-01): WebView2 transparente por cima do
       jogo. Rodar `REEMU_WIN_OVERLAY=1` (surface no HWND principal) e
@@ -49,6 +51,18 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       CIMA do jogo (escurecido, sem print); avisos/toasts aparecem durante o
       jogo; biblioteca e configurações continuam opacas; trocar de jogo não
       mostra o anterior. A variante que funcionar vira o padrão.
+      **2026-10-02, `=1` (HWND principal): tela preta** com flycast e
+      vbam (RTX 3060, wgpu em Vulkan). O log mostra o swapchain
+      apresentando ("1º frame apresentado"), mas nada aparece através do
+      WebView2 transparente. A causa provável é que, no modo janela, o
+      WebView2 não deixa ver o swapchain do HWND pai. Isso não está
+      verificado: a página da Microsoft "Windowed vs. Visual hosting" não
+      trata desse caso. **`=child`: tela preta também** (vbam e gpsp, com
+      som e "1º frame apresentado"). Nos dois casos o WebView2 do Tauri,
+      no modo janela, não deixa ver nada por baixo. Para o protótipo
+      funcionar seria preciso hospedar o WebView2 como Visual
+      (DirectComposition), o que o Tauri/wry não faz hoje. O padrão sem a
+      flag (janela filha acima do WebView2) funcionou e segue como padrão.
 - [ ] `todo` — **Windows ponta a ponta**: só os testes do `core-ipc` rodaram
       numa máquina Windows real. Falta `cargo tauri dev` completo, `video.rs`
       no caminho `#[cfg(not(linux))]`, paths do buildbot de cores, instalador.

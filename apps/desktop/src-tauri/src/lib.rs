@@ -514,26 +514,36 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                             // o último frame do jogo anterior grudado no
                             // `wl_surface`.
                             if !hidden {
-                                let overlay = if let Some(vs) = state
+                                // Limpa de preto ANTES de esconder: no protótipo
+                                // REEMU_WIN_OVERLAY (surface atrás da interface
+                                // transparente) é isso que tira o jogo da tela;
+                                // na janela filha do Windows, é o que ela guarda
+                                // escondida. O present é assíncrono ("does not
+                                // guarantee the image is visible" — Vulkan,
+                                // vkQueuePresentKHR), então ao reaparecer depois
+                                // do 1º present do jogo novo ela ainda podia
+                                // mostrar o último quadro do anterior (visto em
+                                // 2026-10-02). Agora o que pisca é preto.
+                                let clear = cfg!(target_os = "windows")
+                                    && state
+                                        .video
+                                        .lock()
+                                        .unwrap_or_else(|p| p.into_inner())
+                                        .is_some();
+                                if clear {
+                                    if let Some(fp) =
+                                        state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut()
+                                    {
+                                        fp.clear_surface();
+                                    }
+                                }
+                                if let Some(vs) = state
                                     .video
                                     .lock()
                                     .unwrap_or_else(|p| p.into_inner())
                                     .as_ref()
                                 {
                                     vs.set_hidden(true);
-                                    vs.overlay()
-                                } else {
-                                    false
-                                };
-                                // Protótipo REEMU_WIN_OVERLAY: a surface fica
-                                // atrás da interface transparente — limpa de
-                                // preto em vez de esconder.
-                                if overlay {
-                                    if let Some(fp) =
-                                        state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut()
-                                    {
-                                        fp.clear_surface();
-                                    }
                                 }
                                 hidden = true;
                             }
