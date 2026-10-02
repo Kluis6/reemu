@@ -161,8 +161,12 @@ conferir".
       orientação; passou num contexto WGL 3.3 real (RTX 3060). Saiu de outro
       jeito que o planejado (`flip_y` até o wgpu): assim o protocolo entre
       os processos não muda.
-- [ ] `todo` — A3. Repetir a medição do A0 e registrar no histórico.
-
+- [x] `done` — A3. Medição depois da A1 e da A2 (2026-10-02, Jet Set
+      Radio em 1920×1440, 10,5 MB/quadro, RTX 3060): `glFinish` 0,00 ms,
+      flip na CPU 0,00 ms, leitura ~2,0–2,5 ms (só a cópia do PBO já
+      pronto). O caminho lento caiu de ~5–8 ms pra ~2–2,5 ms por quadro. O
+      resto (leitura + ~1,3 ms de envio) é a cópia de CPU de 10,5 MB; só a
+      fase B tira. 0 quadros perdidos, intervalo cravado.
 - [x] `done` — A4. Ritmo core × monitor (achado no A0, não é do
       readback). Medido em 2026-10-02 com o `perf vídeo` dividido
       (`e912b1c`): ~15,6 dos ~16,7 ms do "render" são espera no
@@ -251,6 +255,11 @@ conferir".
       ajusta o `Pacer`. Falta: confirmar com o usuário se o jogo parecia
       acelerado e decidir se a opção vira padrão do ReEmu (a descrição dela
       pede desligado em jogos de taxa instável).
+      **Validado com a opção ligada (2026-10-02):** o flycast avisa
+      `fps=29.973` quando o jogo vai pra 30 fps, o core-host passa a 30
+      chamadas/s e o áudio fica certo (88.284 amostras/s contra ~88.282
+      esperadas). Falta decidir se a opção vira padrão do ReEmu pro flycast
+      (jogos de taxa instável pedem desligado; dá pra desligar por jogo).
 - [ ] `todo` — B1. Detectar suporte nos dois lados: extensões GL
       `GL_EXT_memory_object`, `GL_EXT_memory_object_win32`,
       `GL_EXT_semaphore` e `GL_EXT_semaphore_win32` no contexto WGL do filho;
