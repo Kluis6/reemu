@@ -8,6 +8,17 @@ mod credentials;
 mod decoration;
 mod gpu;
 mod http;
+
+/// Quadros do jogo novo apresentados antes de a janela de vídeo reaparecer.
+/// No Windows são 2: o present é assíncrono e o Vulkan não garante quando a
+/// imagem fica visível (`vkQueuePresentKHR`). Pegar a imagem do 2º quadro
+/// tende a esperar o 1º sair da fila, mas a latência de quadro do wgpu é só
+/// uma sugestão ao driver ("ultimately a hint to the backend",
+/// `SurfaceConfiguration::desired_maximum_frame_latency`, wgpu-types 30).
+/// Garantia mesmo só com `VK_KHR_present_wait`, que o wgpu não expõe.
+/// **Não verificado:** a validar no Windows. No Linux, a subsurface do
+/// Wayland troca o buffer no commit: 1 basta.
+const SHOW_AFTER_PRESENTS: u32 = if cfg!(target_os = "windows") { 2 } else { 1 };
 mod perf;
 mod play_clock;
 mod profile;
@@ -316,6 +327,7 @@ pub fn run() {
             commands::set_system_core,
             commands::clear_library,
             commands::scan_library,
+            commands::rescan_library,
             commands::get_metadata_config,
             commands::set_metadata_config,
             commands::get_rom_metadata,
@@ -424,6 +436,9 @@ fn spawn_video_pump(app: tauri::AppHandle) {
             // A subsurface está escondida agora? (só o pump apresenta/esconde,
             // então este bool acompanha o estado real.)
             let mut hidden = true;
+            // Quadros do jogo novo apresentados com a janela ainda escondida
+            // (Windows: ver `SHOW_AFTER_PRESENTS`).
+            let mut presents_while_hidden: u32 = 0;
             let mut diag = perf::enabled()
                 .then(|| perf::PumpDiag::new(app.state::<AppState>().session.frame_seq()));
             // Último envio do período do monitor ao core-host (tarefa A4).
@@ -574,6 +589,7 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                                     vs.set_hidden(true);
                                 }
                                 hidden = true;
+                                presents_while_hidden = 0;
                             }
                         } else if let Some(f) = frame.as_ref() {
                             // Mostrar não é mais implícito no present (ver
@@ -614,7 +630,15 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                                     }
                                 }
                             }
-                            if hidden {
+                            // Windows: a janela filha só aparece depois de
+                            // `SHOW_AFTER_PRESENTS` quadros do jogo novo. O
+                            // present é assíncrono ("does not guarantee the
+                            // image is visible", vkQueuePresentKHR), então
+                            // mostrar logo após o 1º às vezes exibia o que a
+                            // janela guardava: o último quadro do jogo
+                            // anterior (2026-10-02, também com o core Vulkan).
+                            presents_while_hidden += 1;
+                            if hidden && presents_while_hidden >= SHOW_AFTER_PRESENTS {
                                 if let Some(vs) = state
                                     .video
                                     .lock()
@@ -623,8 +647,8 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                                 {
                                     vs.show_after_present();
                                 }
+                                hidden = false;
                             }
-                            hidden = false;
                         } else {
                             if let Some(d) = diag.as_mut() {
                                 d.empty();
