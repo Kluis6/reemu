@@ -288,7 +288,8 @@ conferir".
       **2026-10-02, RTX 3060:** o flycast (Capcom vs. SNK 2) e o Beetle PSX
       HW rodaram em Vulkan dentro do app, sem fechar: o core adotou o device
       (7 extensões no flycast), 60 quadros/s, 0 perdidos, ~1,5 ms por quadro
-      no app. Falta: mupen64plus_next com `parallel`, sair/trocar de jogo
+      no app. PPSSPP (forçado) também, depois da correção do slot não
+      liberado (`vk_frame.rs`, `begin_frame`). Falta: mupen64plus_next com `parallel`, sair/trocar de jogo
       várias vezes e as camadas de validação (não instaladas).
 - [ ] `todo` — C2. Se passar, ligar a escolha automática no Windows
       (`route_local_device`: `auto` hoje é `cfg!(target_os = "linux")`) e
