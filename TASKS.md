@@ -138,15 +138,20 @@ conferir".
 
 **Fase A — caminho lento mais rápido (sem interop, vale pra qualquer GPU)**
 
-- [ ] `in-progress` — A0. Medir antes de mexer: `REEMU_PERF=1` com flycast (GL)
-      em 640×480 e em resolução interna alta (1920×1440). Linha
-      `perf readback` no core-host desde 2026-10-02.
-      **640×480 (flycast e parallel_n64, RTX 3060, 2026-10-02):**
-      `glFinish` 0,6–2 ms, `glReadPixels` 0,5–1,8 ms, flip 0,1 ms; total
-      1,3–3,5 ms por quadro (picos de 8–14 ms), envio 0,17 ms. O
-      `retro_run` inteiro fica em 2,5–5 ms dos 16,7 e o readback nunca
-      estourou o orçamento. Nessa resolução o caminho lento não é
-      gargalo. **Falta 1920×1440** (10,5 MB/quadro) pra decidir o A1.
+- [x] `done` — A0. Medição de base, `REEMU_PERF=1`, linha `perf readback`
+      no core-host (RTX 3060, 2026-10-02). Médias por quadro:
+
+      | | 640×480 (1,2 MB) | 1920×1440 (10,5 MB) |
+      |---|---|---|
+      | `glFinish` | 0,6–2 ms | 1,3–3,7 ms |
+      | `glReadPixels` | 0,5–1,8 ms | 2,1–3,1 ms |
+      | flip na CPU | 0,1 ms | 0,75 ms |
+      | envio (cópia pro anel) | 0,17 ms | 1,1 ms |
+      | `retro_run` inteiro (de 16,7) | 2,5–5 ms | 7–14 ms |
+
+      Em 640×480 o caminho lento não pesa. Em 1920×1440 ele leva ~5–8 ms,
+      metade do quadro: com o `retro_run` em 12–14 ms apareceram 7–13
+      quadros/s acima do orçamento. Decisão: fazer A1 e A2.
 - [ ] `todo` — A1. Readback assíncrono com PBO: `glReadPixels` num
       `GL_PIXEL_PACK_BUFFER` (2–3 buffers em anel) + `glFenceSync`; ler o
       quadro N−1 enquanto a GPU faz o N. Mapear o PBO e copiar direto pro
@@ -165,9 +170,18 @@ conferir".
       `Mailbox`. No N64 ele subiu de 0,9 pra 16,7 ms em ~5 s, sem evento
       no log. O pump roda a 59,8 voltas/s contra 60,0 fps do core, e sobra
       1 quadro a cada poucos segundos ("1 perdidos", tranco periódico).
+      Em 1920×1440 o padrão ficou claro: o render começa em ~4 ms, sobe
+      sozinho até 16,7 ms em ~10 s e volta a ~4 ms depois de cada travada
+      do core. Parece a fila de present enchendo (core 60,0 contra monitor
+      59,8): com a fila cheia, cada quadro espera um refresh inteiro, até
+      ~33 ms a mais de latência de controle, mesmo com `Mailbox`.
       Investigar o modo de present e o ritmo do core contra o refresh real
       (a conferir: wgpu `PresentMode` e a spec Vulkan
       `VkPresentModeKHR`).
+- [ ] `todo` — A5. Áudio em dobro (achado no A0): no flycast em 1920×1440,
+      depois de o core travar a ~6 fps (05:54:42), o core-host passou a
+      contar ~176 mil amostras/s contra ~88 mil esperadas. Ver se o core
+      mudou a taxa sem `SET_SYSTEM_AV_INFO` ou se o contador está errado.
 
 **Fase B — interop GL → Vulkan no Windows (zero cópia de CPU)**
 
