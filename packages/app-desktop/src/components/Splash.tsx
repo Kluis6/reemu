@@ -3,8 +3,9 @@ import { useImageExists } from '../hooks/useImageExists'
 import { AnimatedBackground } from './AnimatedBackground'
 import { useTranslation } from 'react-i18next'
 
-/** Caminho da logo — coloque `reemu-logo.png` em `packages/app-desktop/public/`. */
-const LOGO_SRC = '/reemu-logo.png'
+/** Símbolo do ReEmu, o mesmo do site (`site/logo.webp`), em
+ *  `packages/app-desktop/public/`. */
+const LOGO_SRC = '/reemu-logo.webp'
 
 // Entrada: fade + leve expansão vertical (toque de CRT), sem animar filter.
 const powerOn = {
@@ -75,11 +76,13 @@ const useStyles = makeStyles({
     animationIterationCount: 'infinite',
     '@media (prefers-reduced-motion: reduce)': { animationName: 'none', opacity: 0.22 },
   },
+  // O símbolo é quadrado: ocupa ~70% da altura do palco (16:9),
+  // centralizado sobre o brilho.
   logo: {
     position: 'absolute',
-    inset: 0,
+    inset: '15% 0',
     width: '100%',
-    height: '100%',
+    height: '70%',
     objectFit: 'contain',
   },
   wordmark: {
