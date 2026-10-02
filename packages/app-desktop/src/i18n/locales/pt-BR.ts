@@ -334,6 +334,7 @@ const ptBR = {
     progress: 'Escaneando {{current}}{{total}}…',
     start: 'Escaneando…',
     result: '{{added}} adicionada(s) · {{known}} já na biblioteca · {{skipped}} ignorada(s)',
+    refreshResult: '{{added}} nova(s) · {{removed}} removida(s) · {{reclassified}} corrigida(s)',
   },
   library: {
     loading: 'Carregando biblioteca…',
@@ -361,6 +362,7 @@ const ptBR = {
     tabFav: 'Favoritos',
     addRom: 'Adicionar ROM',
     manage: 'Gerenciar biblioteca',
+    refresh: 'Atualizar biblioteca',
     allPlatforms: 'Todas as plataformas',
     clearFilter: 'Limpar filtro',
   },

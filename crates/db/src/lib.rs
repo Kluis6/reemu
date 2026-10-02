@@ -13,9 +13,10 @@ mod repositories;
 
 pub use pool::{connect, connect_in_memory, run_migrations, Db};
 pub use repositories::{
-    AudioConfigRepo, ControllerMappingsRepo, CoreOptionsRepo, DecorationRepo, DevicePortsRepo,
-    InstalledCoresRepo, KeyboardBindingsRepo, MetadataRepo, ProfileRepo, RomsRepo, SaveStateRepo,
-    ShaderChainRepo, SystemCoreRepo, SystemHotkeysRepo, VideoConfigRepo,
+    is_under, AudioConfigRepo, ControllerMappingsRepo, CoreOptionsRepo, DecorationRepo,
+    DevicePortsRepo, InstalledCoresRepo, KeyboardBindingsRepo, LibraryFoldersRepo, MetadataRepo,
+    ProfileRepo, RomsRepo, SaveStateRepo, ShaderChainRepo, SystemCoreRepo, SystemHotkeysRepo,
+    VideoConfigRepo,
 };
 
 use thiserror::Error;

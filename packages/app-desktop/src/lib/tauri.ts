@@ -450,6 +450,8 @@ export interface ScanReport {
   skippedKnown: number
   skippedUnrecognized: number
   errors: number
+  reclassified: number
+  removed: number
 }
 export interface ScanProgress {
   current: number
@@ -465,6 +467,17 @@ export async function scanLibrary(
   const ch = new Channel<ScanProgress>()
   if (onProgress) ch.onmessage = onProgress
   return raw<ScanReport>('scan_library', { path, onProgress: ch })
+}
+
+/** Varre de novo todas as pastas já adicionadas ("Atualizar biblioteca"). */
+export async function rescanLibrary(
+  onProgress?: (p: ScanProgress) => void,
+): Promise<ScanReport> {
+  if (!inTauri) throw new Error('fora do Tauri: rescan_library')
+  const { invoke: raw, Channel } = await import('@tauri-apps/api/core')
+  const ch = new Channel<ScanProgress>()
+  if (onProgress) ch.onmessage = onProgress
+  return raw<ScanReport>('rescan_library', { onProgress: ch })
 }
 
 /** Diálogo nativo de seleção de pasta. `null` se cancelado / fora do Tauri. */

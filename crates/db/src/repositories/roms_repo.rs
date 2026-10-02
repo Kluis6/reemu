@@ -39,18 +39,22 @@ impl RomsRepo {
     /// Remove todas as ROMs cujo `file_path` está sob `dir` (uma "biblioteca"
     /// inteira = uma pasta escaneada). Devolve quantas saíram.
     pub async fn remove_under_dir(&self, dir: &str) -> Result<u64, RepoError> {
-        // normaliza pra terminar com '/' e escapa curingas de LIKE.
-        let mut prefix = dir.trim_end_matches('/').to_string();
-        prefix.push('/');
-        let escaped = prefix
+        // Escapa curingas de LIKE e aceita os dois separadores: no Windows os
+        // caminhos vêm com `\` (antes só `/` casava e nada era removido).
+        let base = dir.trim_end_matches(['/', '\\']);
+        let escaped = base
             .replace('\\', "\\\\")
             .replace('%', "\\%")
             .replace('_', "\\_");
-        let r = sqlx::query("DELETE FROM roms WHERE file_path LIKE ?1 ESCAPE '\\'")
-            .bind(format!("{escaped}%"))
-            .execute(&self.db)
-            .await
-            .map_err(be)?;
+        let r = sqlx::query(
+            "DELETE FROM roms WHERE file_path LIKE ?1 ESCAPE '\\' \
+             OR file_path LIKE ?2 ESCAPE '\\'",
+        )
+        .bind(format!("{escaped}/%"))
+        .bind(format!("{escaped}\\\\%"))
+        .execute(&self.db)
+        .await
+        .map_err(be)?;
         Ok(r.rows_affected())
     }
 }

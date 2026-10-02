@@ -18,6 +18,7 @@ import {
   AddRegular,
   ArrowSortRegular,
   FilterRegular,
+  ArrowSyncRegular,
   MoreHorizontalRegular,
   WarningRegular,
 } from "@fluentui/react-icons";
@@ -38,6 +39,7 @@ import { errorPatch, errorToast, sysToast } from "../lib/toast";
 import {
   listRoms,
   removeRom,
+  rescanLibrary,
   scanLibrary,
   type RomEntry,
   type ScanProgress,
@@ -131,15 +133,18 @@ export function Library() {
 
   const roms = useQuery({ queryKey: ["roms"], queryFn: listRoms, retry: false });
 
+  // `path` = adicionar uma pasta; `null` = varrer de novo as já adicionadas.
   const scan = useMutation({
-    mutationFn: (path: string) =>
-      scanLibrary(path, (p: ScanProgress) => {
+    mutationFn: (path: string | null) => {
+      const progress = (p: ScanProgress) => {
         if (!scanId.current) return;
         updateToast(scanId.current, {
           message: t("scan.progress", { current: p.current, total: p.total ? `/${p.total}` : "" }),
           progress: p.total ? p.current / p.total : null,
         });
-      }),
+      };
+      return path === null ? rescanLibrary(progress) : scanLibrary(path, progress);
+    },
     onMutate: () => {
       const id = crypto.randomUUID();
       scanId.current = id;
@@ -152,10 +157,13 @@ export function Library() {
         progress: null,
       });
     },
-    onSuccess: (r) => {
+    onSuccess: (r, path) => {
       if (scanId.current) {
         updateToast(scanId.current, {
-          message: t("scan.result", { added: r.added, known: r.skippedKnown, skipped: r.skippedUnrecognized }),
+          message:
+            path === null
+              ? t("scan.refreshResult", { added: r.added, removed: r.removed, reclassified: r.reclassified })
+              : t("scan.result", { added: r.added, known: r.skippedKnown, skipped: r.skippedUnrecognized }),
           variant: r.errors > 0 ? "Warning" : "Success",
           durationMs: 5000,
           progress: undefined,
@@ -359,6 +367,16 @@ export function Library() {
               icon={<AddRegular />}
               aria-label={t("library.addRom")}
               onClick={() => setAddOpen(true)}
+            />
+          </Tooltip>
+          <Tooltip content={t("library.refresh")} relationship="label">
+            <Button
+              appearance="subtle"
+              className={mergeClasses(shell.navIconBtn, shell.navIconLg)}
+              icon={<ArrowSyncRegular />}
+              aria-label={t("library.refresh")}
+              disabled={scan.isPending}
+              onClick={() => scan.mutate(null)}
             />
           </Tooltip>
           <Tooltip content={t("library.manage")} relationship="label">

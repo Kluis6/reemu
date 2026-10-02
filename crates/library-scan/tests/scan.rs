@@ -233,17 +233,32 @@ async fn arcade_zip_without_a_cartridge_entry_is_catalogued_by_folder() {
 /// NAOMI/Atomiswave no formato do MAME (layout do RetroBat): o `.zip`/`.7z`
 /// inteiro é o jogo, com o sistema da pasta; o `.chd` na subpasta com o id
 /// do jogo é parte dele, não uma entrada. Entradas de uma varredura antiga
-/// (`.chd` catalogado, `.7z` como `disc`) são corrigidas.
+/// (`.chd` catalogado, imagem de disco do Redump) saem da biblioteca.
 #[tokio::test]
 async fn naomi_and_atomiswave_mame_sets() {
     let dir = scratch_dir();
     write(&dir, "naomi/azumanga.zip", b"naomi-set");
     write(&dir, "naomi/azumanga/gdl-0018.chd", b"gdrom");
     write(&dir, "naomi/18wheelr.zip", b"naomi-set-2");
-    write(&dir, "naomi/japan/Chaos Field (Japan).7z", b"7z-gdrom");
     write(&dir, "atomiswave/anmlbskt.zip", b"aw-set");
-    // .chd sem .zip irmão continua sendo disco (da pasta do sistema)
+    // Imagens de disco (Redump) em pasta de NAOMI: o flycast só roda o
+    // formato do MAME, então não entram — nem soltas, nem dentro de .7z.
     write(&dir, "naomi/solto/jogo.chd", b"chd-solto");
+    write(
+        &dir,
+        "naomi/japan/Radirgy (Japan).cue",
+        b"FILE x.bin BINARY",
+    );
+    let redump = dir.join("naomi/japan/Chaos Field (Japan).7z");
+    {
+        let mut w = sevenz_rust2::ArchiveWriter::create(&redump).unwrap();
+        w.push_archive_entry(
+            sevenz_rust2::ArchiveEntry::new_file("Chaos Field (Japan).cue"),
+            Some(std::io::Cursor::new(b"FILE x.bin BINARY".to_vec())),
+        )
+        .unwrap();
+        w.finish().unwrap();
+    }
 
     let db = db::connect_in_memory().await.unwrap();
     let repo = db::RomsRepo::new(db);
@@ -254,7 +269,12 @@ async fn naomi_and_atomiswave_mame_sets() {
     ] {
         repo.add(&domain::library::Rom {
             id: path.to_string(),
-            file_path: dir.join(path).to_string_lossy().into_owned(),
+            // separador nativo: é o caminho que a varredura vai procurar
+            file_path: path
+                .split('/')
+                .fold(dir.clone(), |p, c| p.join(c))
+                .to_string_lossy()
+                .into_owned(),
             crc32: "0".into(),
             md5: "0".into(),
             system_id: sys.into(),
@@ -266,33 +286,19 @@ async fn naomi_and_atomiswave_mame_sets() {
         .await
         .unwrap();
     }
-    repo.set_favorite("naomi/japan/Chaos Field (Japan).7z", true)
-        .await
-        .unwrap();
 
-    assert_eq!(library_scan::count_roms(&dir), 5, "o .chd do set não conta");
+    // a contagem rápida não abre o .7z: conta os 3 sets + o .7z
+    assert_eq!(library_scan::count_roms(&dir), 4);
     let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
-    assert_eq!((r.added, r.reclassified, r.removed), (4, 1, 1), "{r:?}");
+    assert_eq!((r.added, r.reclassified, r.removed), (3, 0, 2), "{r:?}");
 
     let naomi = repo.list_by_system("naomi").await.unwrap();
     let mut names: Vec<_> = naomi
         .iter()
-        .map(|r| r.file_path.rsplit('/').next().unwrap().to_string())
+        .map(|r| r.file_path.rsplit(['/', '\\']).next().unwrap().to_string())
         .collect();
     names.sort();
-    assert_eq!(
-        names,
-        [
-            "18wheelr.zip",
-            "Chaos Field (Japan).7z",
-            "azumanga.zip",
-            "jogo.chd"
-        ]
-    );
-    // o reclassificado mantém o que tinha (favorito)
-    assert!(naomi
-        .iter()
-        .any(|r| r.file_path.ends_with(".7z") && r.is_favorite));
+    assert_eq!(names, ["18wheelr.zip", "azumanga.zip"]);
     assert_eq!(repo.list_by_system("atomiswave").await.unwrap().len(), 1);
     assert!(repo.list_by_system("disc").await.unwrap().is_empty());
     let _ = std::fs::remove_dir_all(dir);
@@ -373,7 +379,12 @@ async fn dos_and_scummvm_games() {
         .await
         .unwrap()
         .into_iter()
-        .map(|r| (r.file_path.rsplit('/').next().unwrap().to_string(), r.crc32))
+        .map(|r| {
+            (
+                r.file_path.rsplit(['/', '\\']).next().unwrap().to_string(),
+                r.crc32,
+            )
+        })
         .collect();
     dos.sort();
     let zip_crc = crc_of(&std::fs::read(&zip_path).unwrap());

@@ -333,6 +333,7 @@ const en: Messages = {
     progress: 'Scanning {{current}}{{total}}…',
     start: 'Scanning…',
     result: '{{added}} added · {{known}} already in the library · {{skipped}} skipped',
+    refreshResult: '{{added}} new · {{removed}} removed · {{reclassified}} fixed',
   },
   library: {
     loading: 'Loading library…',
@@ -360,6 +361,7 @@ const en: Messages = {
     tabFav: 'Favorites',
     addRom: 'Add ROM',
     manage: 'Manage library',
+    refresh: 'Refresh library',
     allPlatforms: 'All platforms',
     clearFilter: 'Clear filter',
   },

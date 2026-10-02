@@ -200,6 +200,11 @@ pub async fn remove_rom_source(state: State<'_, AppState>, path: String) -> Resu
         .remove_under_dir(&path)
         .await
         .map_err(|e| e.to_string())?;
+    // Esquece a pasta, senão "Atualizar biblioteca" traria tudo de volta.
+    db::LibraryFoldersRepo::new(pool(&state)?)
+        .remove_under(&path)
+        .await
+        .map_err(|e| e.to_string())?;
     log::info!("biblioteca: {n} ROM(s) removida(s) de {path}");
     Ok(n)
 }
@@ -209,11 +214,15 @@ pub async fn remove_rom_source(state: State<'_, AppState>, path: String) -> Resu
 pub async fn clear_library(state: State<'_, AppState>) -> Result<u64, String> {
     let repo = db::RomsRepo::new(pool(&state)?);
     let n = repo.remove_all().await.map_err(|e| e.to_string())?;
+    db::LibraryFoldersRepo::new(pool(&state)?)
+        .clear()
+        .await
+        .map_err(|e| e.to_string())?;
     log::info!("biblioteca: limpa ({n} ROM(s) removida(s))");
     Ok(n)
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanReportDto {
     pub found: usize,
@@ -221,6 +230,23 @@ pub struct ScanReportDto {
     pub skipped_known: usize,
     pub skipped_unrecognized: usize,
     pub errors: usize,
+    /// Já catalogadas, com o sistema corrigido pela regra atual.
+    pub reclassified: usize,
+    /// Saíram da biblioteca: não são jogo que o core rode (ex.: `.chd` de
+    /// set do MAME, cópia do Redump em pasta de NAOMI).
+    pub removed: usize,
+}
+
+impl ScanReportDto {
+    fn add(&mut self, r: &library_scan::ScanReport) {
+        self.found += r.found;
+        self.added += r.added;
+        self.skipped_known += r.skipped_known;
+        self.skipped_unrecognized += r.skipped_unrecognized;
+        self.errors += r.errors;
+        self.reclassified += r.reclassified;
+        self.removed += r.removed;
+    }
 }
 
 #[derive(Serialize, Clone)]
@@ -231,6 +257,44 @@ pub struct ScanProgressDto {
     pub file: String,
 }
 
+fn now_unix() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// Varre `dirs` em sequência, com o progresso somado numa barra só.
+async fn scan_dirs(
+    repo: &db::RomsRepo,
+    dirs: &[String],
+    on_progress: &tauri::ipc::Channel<ScanProgressDto>,
+) -> Result<ScanReportDto, String> {
+    let now = now_unix();
+    let totals: Vec<usize> = dirs
+        .iter()
+        .map(|d| library_scan::count_roms(std::path::Path::new(d)))
+        .collect();
+    let total: usize = totals.iter().sum();
+    let mut done = 0;
+    let mut out = ScanReportDto::default();
+    for (dir, n) in dirs.iter().zip(&totals) {
+        let r = library_scan::scan_into(repo, std::path::Path::new(dir), now, |p| {
+            let _ = on_progress.send(ScanProgressDto {
+                current: done + p.current,
+                total,
+                file: p.file,
+            });
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+        log::info!("biblioteca: varredura de {dir}: {r:?}");
+        out.add(&r);
+        done += n;
+    }
+    Ok(out)
+}
+
 #[tauri::command]
 pub async fn scan_library(
     state: State<'_, AppState>,
@@ -238,24 +302,98 @@ pub async fn scan_library(
     on_progress: tauri::ipc::Channel<ScanProgressDto>,
 ) -> Result<ScanReportDto, String> {
     let repo = db::RomsRepo::new(pool(&state)?);
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
-    let r = library_scan::scan_into(&repo, std::path::Path::new(&path), now, |p| {
-        let _ = on_progress.send(ScanProgressDto {
-            current: p.current,
-            total: p.total,
-            file: p.file,
-        });
-    })
-    .await
-    .map_err(|e| e.to_string())?;
-    Ok(ScanReportDto {
-        found: r.found,
-        added: r.added,
-        skipped_known: r.skipped_known,
-        skipped_unrecognized: r.skipped_unrecognized,
-        errors: r.errors,
-    })
+    let r = scan_dirs(&repo, std::slice::from_ref(&path), &on_progress).await?;
+    db::LibraryFoldersRepo::new(pool(&state)?)
+        .add(&path, now_unix())
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(r)
+}
+
+/// Pastas de origem deduzidas das ROMs já catalogadas, pra bibliotecas de
+/// antes de o app guardar as pastas: a de cada ROM (dois níveis acima, como
+/// em `list_rom_sources`), sem as que estão dentro de outra.
+fn folders_from_roms(roms: &[domain::library::Rom]) -> Vec<String> {
+    let mut dirs: Vec<String> = roms
+        .iter()
+        .filter_map(|r| {
+            let p = std::path::Path::new(&r.file_path);
+            p.parent()
+                .and_then(|d| d.parent())
+                .or_else(|| p.parent())
+                .map(|d| d.to_string_lossy().into_owned())
+        })
+        .collect();
+    dirs.sort();
+    dirs.dedup();
+    let outer: Vec<String> = dirs
+        .iter()
+        .filter(|d| !dirs.iter().any(|o| o != *d && db::is_under(d, o)))
+        .cloned()
+        .collect();
+    outer
+}
+
+/// "Atualizar biblioteca": varre de novo todas as pastas adicionadas. Acha
+/// jogos novos e aplica a regra de identificação atual aos que já estavam
+/// (sistema corrigido, o que não é jogo sai). Pasta que não existe mais
+/// (disco externo desligado) é pulada, sem mexer no que veio dela.
+#[tauri::command]
+pub async fn rescan_library(
+    state: State<'_, AppState>,
+    on_progress: tauri::ipc::Channel<ScanProgressDto>,
+) -> Result<ScanReportDto, String> {
+    let repo = db::RomsRepo::new(pool(&state)?);
+    let folders = db::LibraryFoldersRepo::new(pool(&state)?);
+    let mut dirs = folders.list().await.map_err(|e| e.to_string())?;
+    if dirs.is_empty() {
+        let roms = repo.list().await.map_err(|e| e.to_string())?;
+        for d in folders_from_roms(&roms) {
+            folders
+                .add(&d, now_unix())
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+        dirs = folders.list().await.map_err(|e| e.to_string())?;
+        log::info!("biblioteca: pastas deduzidas das ROMs: {dirs:?}");
+    }
+    let (present, missing): (Vec<String>, Vec<String>) = dirs
+        .into_iter()
+        .partition(|d| std::path::Path::new(d).is_dir());
+    if !missing.is_empty() {
+        log::warn!("biblioteca: pastas não encontradas, puladas: {missing:?}");
+    }
+    scan_dirs(&repo, &present, &on_progress).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rom(path: &str) -> domain::library::Rom {
+        domain::library::Rom {
+            id: path.into(),
+            file_path: path.into(),
+            crc32: String::new(),
+            md5: String::new(),
+            system_id: String::new(),
+            added_at: 0,
+            last_played_at: None,
+            is_favorite: false,
+            user_title: None,
+        }
+    }
+
+    /// Layout do RetroBat: `roms/<sistema>/<jogo>` e `roms/<sistema>/<pasta
+    /// do jogo>/<arquivo>` viram uma pasta só, `roms`.
+    #[test]
+    fn folders_from_roms_keeps_the_outermost() {
+        let roms = [
+            rom("/r/roms/cps1/1941.zip"),
+            rom("/r/roms/naomi/azumanga/gdl-0018.chd"),
+            rom("/r/roms/dreamcast/jsr/jsr.cue"),
+            rom("/d/jogos/snes/x.sfc"),
+        ];
+        assert_eq!(folders_from_roms(&roms), ["/d/jogos", "/r/roms"]);
+    }
 }

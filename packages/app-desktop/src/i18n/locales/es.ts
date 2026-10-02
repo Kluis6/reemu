@@ -333,6 +333,7 @@ const es: Messages = {
     progress: 'Escaneando {{current}}{{total}}…',
     start: 'Escaneando…',
     result: '{{added}} añadida(s) · {{known}} ya en la biblioteca · {{skipped}} omitida(s)',
+    refreshResult: '{{added}} nueva(s) · {{removed}} eliminada(s) · {{reclassified}} corregida(s)',
   },
   library: {
     loading: 'Cargando biblioteca…',
@@ -360,6 +361,7 @@ const es: Messages = {
     tabFav: 'Favoritos',
     addRom: 'Añadir ROM',
     manage: 'Administrar biblioteca',
+    refresh: 'Actualizar biblioteca',
     allPlatforms: 'Todas las plataformas',
     clearFilter: 'Quitar filtro',
   },

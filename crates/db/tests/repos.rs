@@ -559,3 +559,39 @@ async fn system_core_prefs_upsert_and_clear() {
         vec![("n64".to_string(), "parallel_n64".to_string())]
     );
 }
+
+/// Remover uma pasta da biblioteca tira só o que está nela, com `\` (Windows)
+/// ou `/`, e sem confundir `roms` com `roms2` nem tratar `_` como curinga.
+#[tokio::test]
+async fn remove_under_dir_handles_both_separators() {
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    for (i, p) in [
+        r"E:\roms\snes\a.sfc",
+        r"E:\roms\b.sfc",
+        r"E:\roms2\c.sfc",
+        r"E:\rom_s\d.sfc",
+        "/home/u/roms/e.sfc",
+    ]
+    .iter()
+    .enumerate()
+    {
+        repo.add(&domain::library::Rom {
+            id: i.to_string(),
+            file_path: p.to_string(),
+            crc32: "0".into(),
+            md5: "0".into(),
+            system_id: "snes".into(),
+            added_at: 0,
+            last_played_at: None,
+            is_favorite: false,
+            user_title: None,
+        })
+        .await
+        .unwrap();
+    }
+    assert_eq!(repo.remove_under_dir(r"E:\roms\").await.unwrap(), 2);
+    assert_eq!(repo.remove_under_dir(r"E:\rom-s").await.unwrap(), 0);
+    assert_eq!(repo.remove_under_dir("/home/u/roms").await.unwrap(), 1);
+    assert_eq!(repo.list().await.unwrap().len(), 2);
+}

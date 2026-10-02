@@ -76,6 +76,43 @@ fn is_mame_companion(path: &Path, ext: &str) -> bool {
     })
 }
 
+/// Sistemas que o flycast só roda no formato do MAME: o `.zip`/`.7z` do set,
+/// com o `.chd` numa subpasta de mesmo nome nos jogos em GD-ROM ("Run NAOMI
+/// GD-ROM format games stored in MAME zip + chd format by running the zip
+/// file" — docs.libretro.com, library/flycast). Imagem de disco solta (`.cue`,
+/// `.chd`, `.gdi`…) ou dentro de um arquivo (cópia do Redump) o flycast abre
+/// como disco de Dreamcast, e o jogo não roda.
+const MAME_ONLY_SYSTEMS: &[&str] = &["naomi", "atomiswave"];
+
+fn is_disc_ext(ext: &str) -> bool {
+    AMBIGUOUS_DISC_EXTS.contains(&ext)
+}
+
+/// Sistema de `MAME_ONLY_SYSTEMS` vindo da pasta, se houver.
+fn mame_only_system(path: &Path, root: &Path) -> Option<&'static str> {
+    system_from_dirs(&ancestor_dirs(path, root)).filter(|s| MAME_ONLY_SYSTEMS.contains(s))
+}
+
+/// Imagem de disco (solta ou dentro de `.zip`/`.7z`) numa pasta de NAOMI ou
+/// Atomiswave: não é jogo que o core rode (ver `MAME_ONLY_SYSTEMS`).
+/// `peek` controla se abre o arquivo comprimido pra olhar dentro (a
+/// contagem rápida da barra de progresso não abre).
+fn is_unplayable_disc_dump(path: &Path, root: &Path, ext: &str, peek: bool) -> bool {
+    if mame_only_system(path, root).is_none() {
+        return false;
+    }
+    if is_disc_ext(ext) {
+        return true;
+    }
+    peek && is_supported_archive(ext)
+        && peek_archive(path).is_some_and(|a| {
+            Path::new(&a.entry)
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| is_disc_ext(&e.to_ascii_lowercase()))
+        })
+}
+
 /// Extensão reconhecida (ROM crua, arquivo comprimido suportado, ou
 /// extensão genérica dentro da pasta de um sistema que a aceita).
 fn recognized(path: &Path, root: &Path) -> bool {
@@ -83,7 +120,7 @@ fn recognized(path: &Path, root: &Path) -> bool {
         return false;
     };
     let ext = ext.to_ascii_lowercase();
-    if is_mame_companion(path, &ext) {
+    if is_mame_companion(path, &ext) || is_unplayable_disc_dump(path, root, &ext, false) {
         return false;
     }
     system_for_extension(&ext).is_some()
@@ -158,7 +195,9 @@ where
 
         // Parte de um set do MAME (`.chd` ao lado do `.zip`): não é jogo; se
         // uma varredura antiga catalogou, sai da biblioteca.
-        if is_mame_companion(path, &ext) {
+        // Idem pra imagem de disco em pasta de NAOMI/Atomiswave (o flycast
+        // só roda o formato do MAME): sai da biblioteca se já estava.
+        if is_mame_companion(path, &ext) || is_unplayable_disc_dump(path, dir, &ext, true) {
             if let Some(old) = repo.find_by_path(&path.to_string_lossy()).await? {
                 repo.remove(&old.id).await?;
                 report.removed += 1;
