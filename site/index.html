@@ -33,13 +33,13 @@
     <script type="module" src="ui.js"></script>
     <script type="module" src="app.js"></script>
   </head>
-  <body class="overflow-x-hidden bg-bg font-sans text-(length:--fontSizeBase400,16px) leading-[1.6] text-ink after:pointer-events-none after:fixed after:inset-0 after:z-50 after:bg-[repeating-linear-gradient(to_bottom,rgba(255,255,255,0.022)_0_1px,transparent_1px_3px)]">
+  <body class="overflow-x-hidden bg-bg font-sans text-[length:var(--fontSizeBase400,16px)] leading-[1.6] text-ink after:pointer-events-none after:fixed after:inset-0 after:z-50 after:bg-[repeating-linear-gradient(to_bottom,rgba(255,255,255,0.022)_0_1px,transparent_1px_3px)]">
     <!-- ↑ linhas de varredura do CRT, como na logo — sutis, por cima de tudo -->
-    <a data-i18n="skip" class="absolute left-[-9999px] focus:top-3 focus:left-4 focus:z-100 focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-ink" href="#conteudo">Pular para o conteúdo</a>
+    <a data-i18n="skip" class="absolute -left-[9999px] focus:top-3 focus:left-4 focus:z-[100] focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-ink" href="#conteudo">Pular para o conteúdo</a>
 
     <!-- topo: transparente no hero, com fundo desfocado depois de rolar (`data-scrolled`, ui.js) -->
     <header class="top sticky top-0 z-40 border-b border-transparent transition-[background-color,border-color] duration-300 data-scrolled:border-line data-scrolled:bg-bg/80 data-scrolled:backdrop-blur-[10px]">
-      <div class="mx-auto max-w-270 px-4 flex min-h-16 items-center justify-between gap-4">
+      <div class="mx-auto max-w-[1080px] px-4 flex min-h-16 items-center justify-between gap-4">
         <a data-i18n-attr="aria-label=nav.home" class="flex items-center gap-2 text-[1.45rem] font-extrabold tracking-[0.01em] text-white no-underline max-sm:gap-1.5 max-sm:text-[1.2rem]" href="./" aria-label="ReEmu — início">
           <span>Re<span class="text-green">Emu</span></span>
         </a>
@@ -63,8 +63,8 @@
       <section class="relative isolate overflow-hidden pt-6 pb-18 text-center">
         <div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
           <!-- brilho por gradiente radial (sem `filter: blur`, caro e com borda reta); o movimento é do ui.js -->
-          <span data-orb="a" class="absolute -top-50 -left-50 size-190 rounded-full bg-[radial-gradient(closest-side,rgba(61,220,47,0.24),transparent)]"></span>
-          <span data-orb="b" class="absolute top-0 -right-55 size-190 rounded-full bg-[radial-gradient(closest-side,rgba(30,139,255,0.22),transparent)]"></span>
+          <span data-orb="a" class="absolute -top-[200px] -left-[200px] size-[760px] rounded-full bg-[radial-gradient(closest-side,rgba(61,220,47,0.24),transparent)]"></span>
+          <span data-orb="b" class="absolute top-0 -right-[220px] size-[760px] rounded-full bg-[radial-gradient(closest-side,rgba(30,139,255,0.22),transparent)]"></span>
           <!-- Placa de circuito dos lados, como na arte da logo: trilhas
                sólidas que vêm da borda e dobram a 45° rumo ao centro, com
                terminais vazados e blocos de "chips". Verde à esquerda, azul à
@@ -80,7 +80,7 @@
           </svg>
         </div>
 
-        <div class="mx-auto max-w-270 px-4">
+        <div class="mx-auto max-w-[1080px] px-4">
           <img
             class="reveal js:motion-safe:opacity-0 mx-auto size-36 sm:size-44"
             src="logo.webp"
@@ -94,12 +94,12 @@
           </h1>
           <p data-i18n="hero.lead" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[64ch] text-[1.12rem] text-muted">
             ReEmu é um frontend moderno para organizar, descobrir e jogar seus jogos clássicos em
-            uma interface feita para quem gosta de jogar — não de ficar configurando.
+            uma interface pensada para o controle, feita para quem gosta de jogar — não de ficar configurando.
           </p>
-          <p data-i18n="hero.lead2" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[64ch] text-[1.12rem] text-muted">
+          <!-- <p data-i18n="hero.lead2" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[64ch] text-[1.12rem] text-muted">
             Sua coleção ganha capas, informações, favoritos, progresso, temas e uma navegação
             pensada para o controle.
-          </p>
+          </p> -->
 
           <div id="primary" class="reveal js:motion-safe:opacity-0 flex flex-wrap items-center justify-center gap-3 mt-8" aria-live="polite">
             <fluent-spinner size="small"></fluent-spinner>
@@ -118,7 +118,7 @@
 
       <!-- ─────────────── Nova vida ─────────────── -->
       <section id="vida" class="py-22" aria-labelledby="vida-titulo">
-        <div class="mx-auto max-w-270 px-4">
+        <div class="mx-auto max-w-[1080px] px-4">
           <h2 id="vida-titulo" data-i18n="life.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Dê uma nova vida à sua coleção</h2>
           <p data-i18n="life.p1" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">
             Seus jogos clássicos merecem mais do que uma pasta cheia de arquivos.
@@ -135,7 +135,7 @@
 
       <!-- ─────────────── Biblioteca ─────────────── -->
       <section id="biblioteca" class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22" aria-labelledby="biblioteca-titulo">
-        <div class="mx-auto max-w-270 px-4">
+        <div class="mx-auto max-w-[1080px] px-4">
           <h2 id="biblioteca-titulo" data-i18n="lib.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Uma biblioteca feita para jogar</h2>
 
           <div class="mt-8 grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-4">
@@ -261,7 +261,7 @@
           <h3 data-i18n="more.sub" class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-4">Uma experiência para a sua coleção inteira.</h3>
           <p data-i18n="more.lead" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">
             Do Atari ao PlayStation, dos portáteis aos arcades, o ReEmu reúne diferentes gerações
-            em uma única experiência.
+            de jogos em uma única experiência.
           </p>
           <div data-i18n-attr="aria-label=sys.aria" class="reveal js:motion-safe:opacity-0 mt-8 flex flex-wrap gap-2" role="list" aria-label="Alguns dos sistemas suportados">
             <fluent-badge role="listitem" appearance="outline" size="large">NES</fluent-badge>
