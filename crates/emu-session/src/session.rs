@@ -961,9 +961,33 @@ impl ChildProc {
     /// Mata incondicionalmente — é a garantia estrutural contra cores não
     /// re-entrantes (parallel_n64...): o próximo `Load` sempre sobe um
     /// processo NOVO, nunca reusa este.
+    /// Encerra o filho. Primeiro pede pra ele sair sozinho: no `Shutdown` o
+    /// laço do `reemu-core-host` termina e o `DesktopCore` chama
+    /// `retro_unload_game` e `retro_deinit`, a ordem que o `libretro.h`
+    /// pede antes de descarregar o core. Cores como o flycast gravam os
+    /// próprios arquivos aí (VMU e a flash do Dreamcast). Antes o processo
+    /// morria no mesmo instante do `Shutdown` e esses arquivos nunca eram
+    /// gravados por inteiro (2026-10-02). Se o filho não sair em
+    /// `SHUTDOWN_GRACE` (core travado no teardown), mata.
     fn kill(mut self) {
+        const SHUTDOWN_GRACE: Duration = Duration::from_secs(3);
         let _ = self.channel.send(&ToChild::Shutdown, &[]);
-        let _ = self.child.kill();
+        let deadline = Instant::now() + SHUTDOWN_GRACE;
+        loop {
+            match self.child.try_wait() {
+                Ok(Some(_)) => break,
+                Ok(None) if Instant::now() < deadline => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                _ => {
+                    log::warn!(
+                        "reemu-core-host não saiu em {SHUTDOWN_GRACE:?} depois do Shutdown — matando"
+                    );
+                    let _ = self.child.kill();
+                    break;
+                }
+            }
+        }
         let _ = self.child.wait();
         if let Some(r) = self.reader.take() {
             let _ = r.join();
