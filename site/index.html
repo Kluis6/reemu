@@ -47,7 +47,7 @@
           <fluent-anchor-button data-i18n="nav.library" class="max-sm:hidden" appearance="subtle" href="#biblioteca">Biblioteca</fluent-anchor-button>
           <fluent-anchor-button data-i18n="nav.start" class="max-sm:hidden" appearance="subtle" href="#comecar">Como começar</fluent-anchor-button>
           <fluent-anchor-button data-i18n="nav.support" class="max-sm:hidden" appearance="subtle" href="#apoie">Apoie</fluent-anchor-button>
-          <fluent-anchor-button data-i18n="nav.download" appearance="primary" href="#download">Baixar</fluent-anchor-button>
+          <fluent-anchor-button data-i18n="nav.download" class="max-sm:hidden" appearance="primary" href="#download">Baixar</fluent-anchor-button>
           <!-- Seletor de idioma (i18n.js): visível também no celular -->
           <div class="ml-2 flex gap-0.5 *:min-w-9" role="group" aria-label="Idioma / Language / Idioma">
             <fluent-button size="small" appearance="subtle" data-lang="pt-BR" lang="pt-BR">PT</fluent-button>
@@ -391,10 +391,10 @@
             <!-- Pix: `data-pix` = chave aleatória; `data-pix-code` = o "copia e
                  cola" (BR Code, CRC conferido), o mesmo que está no QR
                  (pix-qr.svg, gerado dele e decodificado de volta pra conferir). -->
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6" data-pix="761d76fb-b5d3-461e-b7bd-f17c0522ce7d" data-pix-code="00020126580014BR.GOV.BCB.PIX0136761d76fb-b5d3-461e-b7bd-f17c0522ce7d5204000053039865802BR5924LUIS ANTONIO DE OLIVEIRA6015DUQUE DE CAXIAS62070503***63042796">
+            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6 max-sm:items-stretch max-sm:p-5" data-pix="761d76fb-b5d3-461e-b7bd-f17c0522ce7d" data-pix-code="00020126580014BR.GOV.BCB.PIX0136761d76fb-b5d3-461e-b7bd-f17c0522ce7d5204000053039865802BR5924LUIS ANTONIO DE OLIVEIRA6015DUQUE DE CAXIAS62070503***63042796">
               <strong class="text-[1.05rem]">Pix</strong>
               <span data-i18n="d2.p" class="grow text-[0.93rem] text-muted">Aponte a câmera do app do banco para o QR code ou copie o código.</span>
-              <img src="pix-qr.svg" data-i18n-attr="alt=d2.qr" alt="QR code Pix para apoiar o ReEmu" width="180" height="180" class="mt-1 size-45 rounded-[var(--borderRadiusMedium,4px)] [image-rendering:pixelated]" />
+              <img src="pix-qr.svg" data-i18n-attr="alt=d2.qr" alt="QR code Pix para apoiar o ReEmu" width="180" height="180" class="mt-1 size-45 rounded-[var(--borderRadiusMedium,4px)] [image-rendering:pixelated] max-sm:size-52 max-sm:self-center" />
               <fluent-button data-i18n="pixcode.copy" class="pix-code-copy mt-1.5" appearance="primary">Copiar código Pix</fluent-button>
               <span data-i18n="d2.key" class="mt-2 text-[0.85rem] text-muted">Ou use a chave aleatória:</span>
               <code class="pix-key rounded-[var(--borderRadiusSmall,4px)] bg-surface-2 px-[5px] py-px font-mono text-[0.85em] wrap-anywhere"></code>
@@ -450,8 +450,8 @@
 
     <footer class="border-t border-line bg-bg-alt pt-9 pb-11 text-[0.9rem] text-muted">
       <div class="mx-auto max-w-[1080px] px-4 flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
-        <p class="flex items-center gap-2.5">
-          <a data-i18n-attr="aria-label=foot.top" class="flex items-center gap-1.5 text-[1.2rem] font-extrabold tracking-[0.01em] text-white no-underline" href="./" aria-label="ReEmu — voltar ao topo">
+        <p class="flex items-center gap-2.5 max-sm:flex-col max-sm:items-start max-sm:gap-2">
+          <a data-i18n-attr="aria-label=foot.top" class="flex shrink-0 items-center gap-1.5 text-[1.2rem] font-extrabold tracking-[0.01em] text-white no-underline" href="./" aria-label="ReEmu — voltar ao topo">
             <img src="logo.webp" alt="" width="28" height="28" class="size-7" />
             <span>Re<span class="text-green">Emu</span></span>
           </a>
@@ -464,6 +464,7 @@
         </nav>
         <fluent-divider class="basis-full"></fluent-divider>
         <p data-i18n="foot.legal" class="basis-full text-[0.85rem]">Gratuito · Código aberto · Windows · Linux</p>
+        <p data-i18n="foot.libretro" class="basis-full text-[0.8rem] leading-relaxed">O ReEmu usa cores <a class="text-green underline-offset-2 hover:underline" href="https://www.libretro.com" target="_blank" rel="noopener">libretro</a>, baixados do buildbot oficial, cada um com seus autores e sua licença. libretro e RetroArch são marcas de seus respectivos donos; o ReEmu não é afiliado nem endossado por eles.</p>
       </div>
     </footer>
 
