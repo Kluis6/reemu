@@ -5,6 +5,12 @@
   3.1.3 (Fluent UI 2 para web, licença MIT, © Microsoft). Registra todos os
   componentes `fluent-*` e exporta `setTheme`.
 - `reemu-theme.js`: tokens do tema escuro (ver o comentário no arquivo).
+- Ícones: **Fluent UI System Icons** (`@fluentui/svg-icons`, licença MIT,
+  © Microsoft) — o mesmo conjunto que o app usa via `@fluentui/react-icons`.
+  Só os usados entram, em `src/fluent-icons.css` (classes `fi fi-<nome>`,
+  herdam a cor e o tamanho do texto), gerado por `scripts/fluent-icons.mjs`
+  — a lista de ícones fica no script; pra adicionar um, inclua lá e rode
+  `node site/scripts/fluent-icons.mjs`.
 - `motion.js` (não versionado): bundle UMD do [Motion](https://motion.dev)
   (licença MIT), copiado de `node_modules` por `scripts/vendor-motion.mjs`
   no `build`/`dev`. A versão fica travada em `site/package.json`.

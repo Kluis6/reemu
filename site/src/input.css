@@ -6,6 +6,9 @@
    Fontes das classes: só os arquivos do site (o `vendor/` traz o bundle do
    Fluent, cheio de palavras que virariam classes à toa). */
 @import "tailwindcss" source(none);
+/* Ícones Fluent (os mesmos do app): classes `fi fi-<nome>`, gerado por
+   site/scripts/fluent-icons.mjs. */
+@import "./fluent-icons.css" layer(components);
 @source "../index.html";
 @source "../*.js";
 

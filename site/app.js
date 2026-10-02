@@ -103,10 +103,14 @@ function dlStack(title, sub) {
     el("span", { class: "text-[length:var(--fontSizeBase200,12px)] font-normal opacity-85" }, sub));
 }
 
+// Ícone de download (Fluent, ver src/fluent-icons.css) no slot `start` do botão.
+const dlIcon = () => el("span", { slot: "start", class: "fi fi-arrow-download text-[1.25rem]", "aria-hidden": "true" });
+
 function downloadButton(f, version, primary) {
   return el(
     "fluent-anchor-button",
     { class: DL_BTN, appearance: primary ? "primary" : "outline", size: "large", href: f.url },
+    dlIcon(),
     dlStack(t("dl.for", { os: OS_NAME[f.os], label: f.label }), `${version} · ${fmtSize(f.size)} · ${f.hint}`),
   );
 }
@@ -217,6 +221,7 @@ function renderError(message) {
   for (const id of ["primary", "primary-cta"]) {
     document.getElementById(id)?.replaceChildren(
       el("fluent-anchor-button", { class: DL_BTN, appearance: "primary", size: "large", href: `${RELEASES_PAGE}/latest` },
+        dlIcon(),
         dlStack(t("dl.fallback"), t("dl.fallbackSub"))),
     );
   }
