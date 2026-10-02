@@ -358,6 +358,24 @@ impl Drop for DesktopCore {
         // Sequência de teardown libretro; depois a lib descarrega e o
         // `_guard` zera o estado global.
         unsafe {
+            // HW render Vulkan: avisa o core antes de descarregar o jogo, na
+            // ordem do RetroArch (`core_unload_game` em `runloop.c` chama
+            // `video_driver_free_hw_context` → `context_destroy` antes do
+            // `retro_unload_game`). "A callback to be called before the context
+            // is destroyed in a controlled way by the frontend" (`libretro.h`).
+            // É aqui que o ParaLLEl-RDP do mupen64plus_next encerra o device e
+            // as threads dele (`parallel_deinit`); sem isso, no Windows, elas
+            // seguiam rodando depois do `FreeLibrary` e o app caía.
+            if self.vk.is_some() {
+                let destroy = ffi_state::lock()
+                    .as_ref()
+                    .and_then(|st| st.hw_render)
+                    .and_then(|r| r.context_destroy);
+                if let Some(f) = destroy {
+                    f();
+                }
+            }
+
             (self.raw.unload_game)();
 
             // HW render: o core solta os recursos GL dele (`context_destroy`)

@@ -171,6 +171,86 @@ struct Shared {
     /// (`serialize_state`/`restore_state` — o `retro_serialize` de alguns cores
     /// submete). A `VkQueue` NÃO é sincronizada externamente pelo Vulkan.
     vk_render_gate: Mutex<()>,
+    /// Tarefas que têm que rodar na thread que dirige o core Vulkan
+    /// in-process (carregar, salvar/restaurar estado, descarregar). Ver
+    /// `on_vk_thread`. `(id, tarefa)`.
+    vk_jobs: Mutex<std::collections::VecDeque<(u64, VkJob)>>,
+    vk_job_seq: AtomicU64,
+    /// Alguma thread já chamou `step_vk_local` (o video pump do app; num
+    /// teste, a própria thread do teste).
+    vk_driver_seen: AtomicBool,
+}
+
+type VkJob = Box<dyn FnOnce() + Send>;
+type VkCall<R> = Box<dyn FnOnce() -> R + Send>;
+
+/// Roda `f` na thread que dirige o core Vulkan in-process (a que chama
+/// `step_vk_local`), com o portão da `VkQueue` segurado, e devolve o
+/// resultado.
+///
+/// Todas as entradas do core têm que vir da MESMA thread. O libco no Windows
+/// troca de contexto com fibers: o `retro_init` do mupen64plus_next guarda a
+/// fiber da thread que o chamou (`co_active`) e o `retro_run`,
+/// `retro_serialize`/`unserialize` e `retro_unload_game` fazem `co_switch`
+/// (`SwitchToFiber`), que só vale numa thread já convertida em fiber
+/// ("you must call ConvertThreadToFiber ... before calling SwitchToFiber",
+/// learn.microsoft.com, SwitchToFiber). Com o load numa thread e o
+/// `retro_run` em outra, o app caía com `STATUS_ACCESS_VIOLATION` dentro do
+/// `SwitchToFiber` (2026-10-02, mupen com o ParaLLEl-RDP).
+///
+/// Sem thread dirigindo (modo canvas, testes que só carregam) ou se ela não
+/// pegar a tarefa em 2 s (o pump terminou), roda aqui mesmo.
+fn on_vk_thread<R: Send + 'static>(shared: &Shared, f: impl FnOnce() -> R + Send + 'static) -> R {
+    let inline = |f: VkCall<R>| {
+        let _gate = shared
+            .vk_render_gate
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        f()
+    };
+    if !shared.vk_driver_seen.load(Ordering::Acquire) {
+        return inline(Box::new(f));
+    }
+    let (tx, rx) = mpsc::sync_channel::<R>(1);
+    let id = shared.vk_job_seq.fetch_add(1, Ordering::Relaxed);
+    let slot: std::sync::Arc<Mutex<Option<VkCall<R>>>> =
+        std::sync::Arc::new(Mutex::new(Some(Box::new(f))));
+    {
+        let slot = std::sync::Arc::clone(&slot);
+        shared
+            .vk_jobs
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .push_back((
+                id,
+                Box::new(move || {
+                    let f = slot.lock().unwrap_or_else(|p| p.into_inner()).take();
+                    if let Some(f) = f {
+                        let _ = tx.send(f());
+                    }
+                }),
+            ));
+    }
+    match rx.recv_timeout(Duration::from_secs(2)) {
+        Ok(r) => r,
+        Err(_) => {
+            // Ninguém pegou: tira da fila e roda aqui. Se o pump pegou no
+            // meio-tempo, a função já saiu do `slot` — espera o resultado.
+            shared
+                .vk_jobs
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .retain(|(j, _)| *j != id);
+            let f = slot.lock().unwrap_or_else(|p| p.into_inner()).take();
+            match f {
+                Some(f) => {
+                    log::warn!("tarefa do core Vulkan sem a thread do compositor — rodando aqui");
+                    inline(f)
+                }
+                None => rx.recv().expect("tarefa do core Vulkan perdida"),
+            }
+        }
+    }
 }
 
 impl Shared {
@@ -243,6 +323,9 @@ impl EmuSession {
             vk_local_stall: AtomicU64::new(0),
             vk_local_audio: Mutex::new(Vec::new()),
             vk_render_gate: Mutex::new(()),
+            vk_jobs: Mutex::new(std::collections::VecDeque::new()),
+            vk_job_seq: AtomicU64::new(0),
+            vk_driver_seen: AtomicBool::new(false),
         });
 
         let gamepad_thread = cfg.enable_gamepad.then(|| {
@@ -336,6 +419,22 @@ impl EmuSession {
     }
 
     pub fn step_vk_local(&self) -> Option<Frame> {
+        // Esta é a thread que dirige o core: carregar/salvar/descarregar
+        // vêm pra cá (`on_vk_thread`). Quem chama já segura o portão da
+        // `VkQueue` (`lock_vk_queue`), então as tarefas não o pegam de novo.
+        self.shared.vk_driver_seen.store(true, Ordering::Release);
+        loop {
+            let job = self
+                .shared
+                .vk_jobs
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .pop_front();
+            match job {
+                Some((_, job)) => job(),
+                None => break,
+            }
+        }
         if !self.shared.vk_local_active.load(Ordering::Acquire)
             || self.shared.vk_local_paused.load(Ordering::Acquire)
         {
@@ -1360,12 +1459,15 @@ fn teardown_vk_local(
         .lock()
         .unwrap_or_else(|p| p.into_inner())
         .take();
-    if let (Some(lc), Some(path)) = (lc.as_ref(), current_srm) {
-        if let Some(bytes) = lc.save_ram() {
-            write_srm(path, &bytes);
-        }
+    // `retro_unload_game`/`retro_deinit` na thread do core (`on_vk_thread`).
+    let bytes = on_vk_thread(shared, move || {
+        let bytes = lc.as_ref().and_then(|lc| lc.save_ram());
+        drop(lc);
+        bytes
+    });
+    if let (Some(bytes), Some(path)) = (bytes, current_srm) {
+        write_srm(path, &bytes);
     }
-    drop(lc);
     let leftover = std::mem::take(
         &mut *shared
             .vk_local_audio
@@ -1557,17 +1659,18 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 .or_insert_with(|| "disabled".to_string());
                         }
                         log::info!("etapa 12: chamando LocalCore::load pra {}", id.0);
-                        match LocalCore::load(
-                            &id.0,
-                            &rom,
-                            cores_dir.clone(),
-                            system_dir.clone(),
-                            save_dir.clone(),
-                            vk_opts,
-                            initial_save_ram.clone(),
-                            device,
-                            negotiator,
-                        ) {
+                        // `retro_init` + `retro_load_game` na thread que vai
+                        // dirigir o core (`on_vk_thread`).
+                        let (core_id, rom_path) = (id.0.clone(), rom.clone());
+                        let (cdir, sdir, vdir) =
+                            (cores_dir.clone(), system_dir.clone(), save_dir.clone());
+                        let sram = initial_save_ram.clone();
+                        match on_vk_thread(&shared, move || {
+                            LocalCore::load(
+                                &core_id, &rom_path, cdir, sdir, vdir, vk_opts, sram, device,
+                                negotiator,
+                            )
+                        }) {
                             Ok((lc, av)) => {
                                 log::info!(
                                     "etapa 12: core Vulkan in-process ATIVO ({}) — {}x{}",
@@ -1825,18 +1928,17 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
             }
             Command::SaveState(reply) => {
                 let bytes = if shared.vk_local_active.load(Ordering::Acquire) {
-                    // Portão da VkQueue: o `retro_serialize` pode submeter, e o
-                    // video pump submete o wgpu na mesma queue de outra thread.
-                    let _gate = shared
-                        .vk_render_gate
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner());
-                    shared
-                        .vk_local
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner())
-                        .as_mut()
-                        .and_then(|lc| lc.serialize_state())
+                    // Na thread do core, com o portão da VkQueue (o
+                    // `retro_serialize` pode submeter e, com libco, troca de
+                    // fiber — ver `on_vk_thread`).
+                    let sh = Arc::clone(&shared);
+                    on_vk_thread(&shared, move || {
+                        sh.vk_local
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .as_mut()
+                            .and_then(|lc| lc.serialize_state())
+                    })
                 } else {
                     match (proc.as_ref(), events.as_ref()) {
                         (Some(p), Some(erx)) => {
@@ -1861,16 +1963,14 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
             }
             Command::RestoreState(data, reply) => {
                 let ok = if shared.vk_local_active.load(Ordering::Acquire) {
-                    let _gate = shared
-                        .vk_render_gate
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner());
-                    shared
-                        .vk_local
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner())
-                        .as_mut()
-                        .is_some_and(|lc| lc.restore_state(&data))
+                    let sh = Arc::clone(&shared);
+                    on_vk_thread(&shared, move || {
+                        sh.vk_local
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .as_mut()
+                            .is_some_and(|lc| lc.restore_state(&data))
+                    })
                 } else {
                     match (proc.as_ref(), events.as_ref()) {
                         (Some(p), Some(erx)) => {
