@@ -104,6 +104,12 @@ pub(crate) struct FrontendState {
     /// Opções que o PRÓPRIO core trocou (`SET_VARIABLE`), ainda não
     /// entregues ao frontend pra guardar (`take_core_set_options`).
     pub core_set_options: Vec<(String, String)>,
+    /// `retro_game_info_ext` do load em andamento (`GET_GAME_INFO_EXT` só
+    /// vale dentro do `retro_load_game`); `None` fora dele.
+    pub game_info_ext: Option<GameInfoExt>,
+    /// `SET_CONTENT_INFO_OVERRIDE`: extensão (minúscula) → (`need_fullpath`,
+    /// `persistent_data`). Só a 1ª ocorrência de cada extensão vale.
+    pub content_overrides: Vec<(String, bool, bool)>,
     /// `CString` viva por chave, pro ponteiro que devolvemos em `GET_VARIABLE`
     /// continuar válido até o valor mudar.
     option_value_cache: HashMap<String, CString>,
@@ -143,6 +149,8 @@ impl FrontendState {
             option_values: coreopts::take_pending_core_option_values(),
             options_dirty: false,
             core_set_options: Vec::new(),
+            game_info_ext: None,
+            content_overrides: Vec::new(),
             option_value_cache: HashMap::new(),
         }
     }
@@ -411,6 +419,40 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             st.core_set_options.push((key, value));
             true
         }
+        // `const struct retro_game_info_ext **`: "may only be called inside
+        // retro_load_game()" (`libretro.h`). O RustyNES não carrega sem.
+        // Array terminado em `{ NULL, false, false }`; `data` nulo só testa se
+        // existe. "If an extension is listed multiple times ... only the first
+        // instance will be registered" (`libretro.h`). Par do
+        // `GET_GAME_INFO_EXT`: o FCEUmm pede o `.nes` na memória por aqui e
+        // lê o buffer de lá.
+        sys::RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE => {
+            let mut p = data as *const sys::retro_system_content_info_override;
+            while !p.is_null() {
+                let o = &*p;
+                let Some(exts) = coreopts::cstr(o.extensions) else {
+                    break;
+                };
+                for e in exts.split('|').filter(|e| !e.is_empty()) {
+                    let e = e.to_ascii_lowercase();
+                    if !st.content_overrides.iter().any(|(x, _, _)| *x == e) {
+                        st.content_overrides
+                            .push((e, o.need_fullpath, o.persistent_data));
+                    }
+                }
+                p = p.add(1);
+            }
+            true
+        }
+        sys::RETRO_ENVIRONMENT_GET_GAME_INFO_EXT => {
+            let Some(ext) = st.game_info_ext.as_ref() else {
+                return false;
+            };
+            if !data.is_null() {
+                *(data as *mut *const sys::retro_game_info_ext) = &*ext.info;
+            }
+            true
+        }
         sys::RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE => {
             if !data.is_null() {
                 *(data as *mut bool) = st.options_dirty;
@@ -528,7 +570,20 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS
         | sys::RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO
         | sys::RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY => true,
-        _ => false,
+        other => {
+            // Uma linha por comando desconhecido (por processo): quando um core
+            // desiste do load, mostra o que ele pediu e recebeu `false`.
+            static SEEN: std::sync::Mutex<Vec<c_uint>> = std::sync::Mutex::new(Vec::new());
+            let mut seen = SEEN.lock().unwrap_or_else(|p| p.into_inner());
+            if !seen.contains(&other) {
+                seen.push(other);
+                log::info!(
+                    "environment {} (0x{other:x}) não tratado — respondido false",
+                    other & !0x10000
+                );
+            }
+            false
+        }
     }
 }
 
@@ -680,6 +735,82 @@ extern "C" fn reemu_core_log(level: c_uint, msg: *const c_char) {
         1 => log::info!(target: "core", "{text}"),
         2 => log::warn!(target: "core", "{text}"),
         _ => log::error!(target: "core", "{text}"),
+    }
+}
+
+/// Dono das strings e da `retro_game_info_ext` entregue no
+/// `GET_GAME_INFO_EXT` (os ponteiros apontam pros `CString` daqui).
+pub(crate) struct GameInfoExt {
+    _strings: Vec<CString>,
+    info: Box<sys::retro_game_info_ext>,
+}
+
+// SAFETY: só ponteiros pros próprios `CString`/buffer do load, usados na
+// thread que chama o `retro_load_game`, sob o lock do estado global.
+unsafe impl Send for GameInfoExt {}
+
+impl GameInfoExt {
+    /// `original`: o caminho que o usuário abriu (o `.zip`, se for o caso).
+    /// `content`: o arquivo que o core recebe (o extraído, se houver).
+    /// `entry`: nome dentro do arquivo comprimido. `data`: buffer passado no
+    /// `retro_game_info` (vale até o `retro_load_game` voltar).
+    pub(crate) fn new(
+        original: &std::path::Path,
+        content: &std::path::Path,
+        entry: Option<&str>,
+        data: Option<&[u8]>,
+        persistent_data: bool,
+    ) -> Self {
+        let c = |s: &str| CString::new(s).unwrap_or_default();
+        let lossy = |p: &std::path::Path| p.to_string_lossy().into_owned();
+        let in_archive = entry.is_some();
+        let stem = |p: &std::path::Path| {
+            p.file_stem()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        };
+        // Extensão do conteúdo (de dentro do arquivo, se houver), minúscula.
+        let ext = std::path::Path::new(entry.unwrap_or(&lossy(content)))
+            .extension()
+            .map(|e| e.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        let strings = vec![
+            c(&lossy(content)),
+            c(&if in_archive {
+                lossy(original)
+            } else {
+                String::new()
+            }),
+            c(entry.unwrap_or("")),
+            c(&original.parent().map(lossy).unwrap_or_default()),
+            // RetroArch: com arquivo comprimido, o nome é o do `.zip`.
+            c(&stem(original)),
+            c(&ext),
+        ];
+        let ptr = |i: usize, keep: bool| {
+            if keep {
+                strings[i].as_ptr()
+            } else {
+                std::ptr::null()
+            }
+        };
+        let info = Box::new(sys::retro_game_info_ext {
+            full_path: ptr(0, true),
+            archive_path: ptr(1, in_archive),
+            archive_file: ptr(2, in_archive),
+            dir: ptr(3, true),
+            name: ptr(4, true),
+            ext: ptr(5, true),
+            meta: std::ptr::null(),
+            data: data.map_or(std::ptr::null(), |d| d.as_ptr().cast()),
+            size: data.map_or(0, |d| d.len()),
+            file_in_archive: in_archive,
+            persistent_data: persistent_data && data.is_some(),
+        });
+        GameInfoExt {
+            _strings: strings,
+            info,
+        }
     }
 }
 

@@ -27,11 +27,17 @@ const ROM_EXTS: &[&str] = &[
 #[derive(Debug)]
 pub struct ExtractedRom {
     path: PathBuf,
+    /// Nome da entrada dentro do arquivo comprimido (ex.: `jogo.sfc`).
+    entry: String,
 }
 
 impl ExtractedRom {
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub fn entry(&self) -> &str {
+        &self.entry
     }
 }
 
@@ -112,6 +118,7 @@ fn extract_rom_zip(zip_path: &Path, temp_dir: &Path) -> std::io::Result<Extracte
     let mut entry = zip
         .by_index(idx)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let entry_name = entry.name().to_string();
     let ext = Path::new(entry.name())
         .extension()
         .and_then(|e| e.to_str())
@@ -128,14 +135,17 @@ fn extract_rom_zip(zip_path: &Path, temp_dir: &Path) -> std::io::Result<Extracte
         out.write_all(&buf[..r])?;
     }
     out.flush()?;
-    Ok(ExtractedRom { path: out_path })
+    Ok(ExtractedRom {
+        path: out_path,
+        entry: entry_name,
+    })
 }
 
 fn extract_rom_7z(archive_path: &Path, temp_dir: &Path) -> std::io::Result<ExtractedRom> {
     let mut r = ArchiveReader::open(archive_path, Password::empty())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
-    let mut result: Option<std::io::Result<PathBuf>> = None;
+    let mut result: Option<std::io::Result<(PathBuf, String)>> = None;
     r.for_each_entries(|entry, reader| {
         if result.is_some() || entry.is_directory() || !is_rom_entry(entry.name()) {
             return Ok(true);
@@ -145,18 +155,19 @@ fn extract_rom_7z(archive_path: &Path, temp_dir: &Path) -> std::io::Result<Extra
             .and_then(|e| e.to_str())
             .unwrap_or("rom")
             .to_ascii_lowercase();
-        result = Some((|| -> std::io::Result<PathBuf> {
+        let name = entry.name().to_string();
+        result = Some((|| -> std::io::Result<(PathBuf, String)> {
             let (out_path, mut out) = create_unique(temp_dir, &ext)?;
             std::io::copy(reader, &mut out)?;
             out.flush()?;
-            Ok(out_path)
+            Ok((out_path, name))
         })());
         Ok(true)
     })
     .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
     match result {
-        Some(Ok(path)) => Ok(ExtractedRom { path }),
+        Some(Ok((path, entry))) => Ok(ExtractedRom { path, entry }),
         Some(Err(e)) => Err(e),
         None => Err(std::io::Error::new(
             std::io::ErrorKind::NotFound,

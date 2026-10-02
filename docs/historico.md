@@ -1755,3 +1755,21 @@ Infra:
 - **Causa:** `discover_cores` espiava `retro_get_system_info` carregando **cada** DLL de core no processo do app (`LoadLibrary` + `FreeLibrary`), e o catálogo (`list_core_catalog`) e a lista de cores (`list_installed_cores`) chamavam isso a cada atualização da tela. Carregar uma DLL roda a inicialização dela; várias reservam índices de TLS e não devolvem ao descarregar. O Windows tem um número fixo de índices de TLS por processo; recarregando todas as DLLs a cada instalação, eles acabaram, e o runtime do Rust aborta quando não consegue um.
 - **Correção** (`core-loader-desktop/src/discover.rs`): o catálogo usa `installed_core_ids`, que só lê os nomes dos arquivos; `discover_cores` guarda o que espiou por (caminho, tamanho, data de modificação) e carrega cada DLL uma vez por execução, de novo só se o arquivo mudar.
 - **Ainda em aberto:** a rota Vulkan in-process carrega e descarrega a DLL do core a cada jogo; se o core vaza TLS, trocar de jogo muitas vezes numa sessão longa consome índices. O C3 (core Vulkan no processo filho) resolve.
+
+## 2026-10-02 — Revisão dos 96 cores instalados no Windows
+
+- **Teste de fumaça** (`reemu-core-host --probe`, um processo por core): os 96 abrem no Windows, nenhum cai nem trava.
+- **Jogo real com save state** (`savestate_real_rom`) nos 67 cores com jogo na biblioteca. Passam (carregar, rodar, salvar, restaurar, restaurar com o jogo reaberto): atari800, blastem, bsnes (todas as variantes), clownmdemu, desmume2015, fceumm, gambatte, mame (atual), mednafen (gba, pce, psx, snes, supafaust, supergrafx, vb), melonds, melondsds, mesen, mgba, nestopia, noods, pcsx_rearmed, rustynes, smsplus, snes9x2005_plus, stella2023, swanstation, tgbdual, vba_next, virtualjaguar e os 15 da avaliação anterior.
+- **RustyNES não carregava nada:** pede `RETRO_ENVIRONMENT_GET_GAME_INFO_EXT` (66) e desiste com `false` (o `libretro.h` diz que o core deveria seguir com o `retro_game_info` normal, mas o RetroArch implementa e o core conta com isso). Implementado: a `retro_game_info_ext` é montada antes do `retro_load_game` e apagada depois ("may only be called inside retro_load_game()"); com `.zip`, `archive_path`/`archive_file` e `name` = nome do `.zip`, como o RetroArch.
+- **Isso quebrou o FCEUmm**, que registra por `RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE` (65) que quer o `.nes` na memória (`need_fullpath=false`, mesmo com `true` no `retro_system_info`) e lê o buffer do `GET_GAME_INFO_EXT` (`src/drivers/libretro/libretro.c`). O `libretro.h` garante o `GET_GAME_INFO_EXT` quando o override é aceito: os dois andam juntos. Implementado o override: extensão → `need_fullpath`/`persistent_data` (só a 1ª ocorrência vale); o loader aplica pela extensão do conteúdo, e com `persistent_data` o buffer fica no core até o `retro_deinit`. FCEUmm, RustyNES, Mesen e Nestopia validados com o mesmo jogo.
+- Comandos de ambiente não tratados agora aparecem no log uma vez por processo ("environment N não tratado — respondido false").
+- **Não são defeito do ReEmu:**
+  - MAME 2000/2003/2003-plus/2003-midway/2010/2015/2016, HBMAME e FBNeo: o `1941.zip` da biblioteca é de outro conjunto de ROMs; cada versão do MAME pede o conjunto da sua época.
+  - DICE: é para arcades de lógica discreta (Pong), não CPS1.
+  - PCSX2: precisa da BIOS do PS2.
+  - blueMSX: o jogo escolhido no teste era de Master System.
+  - FixNES: não tem save state (o ReEmu já trata).
+  - IroGB: declara `.zip`, mas não abre o `.zip` na memória; com o `.gb` solto funciona. O ReEmu segue a regra do RetroArch (core que lista `zip` recebe o arquivo como está).
+  - PCSX ReARMed: na abertura do jogo quase todo quadro é repetido (duplicação de quadros ligada por padrão); o core roda a 60/s.
+- **Sem sistema na biblioteca:** TIC-80 e Commodore 128 (exceção conhecida no teste do catálogo).
+- **Sem jogo na biblioteca para testar:** 27 cores (Amiga, Amstrad CPC, CD-i, DOS, MSX, C64, ColecoVision, Lynx, Saturn, Neo Geo Pocket, PC-FX, WonderSwan, Neo Geo CD, Odyssey², Pokémon Mini, ScummVM).

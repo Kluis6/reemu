@@ -363,10 +363,30 @@ impl DesktopCoreLoader {
         } else {
             None
         };
+        let original_path = rom_path;
         let rom_path: &str = extracted
             .as_ref()
             .and_then(|e| e.path().to_str())
             .unwrap_or(rom_path);
+
+        // `SET_CONTENT_INFO_OVERRIDE` (registrado no `retro_set_environment`):
+        // troca o `need_fullpath` pela extensão do conteúdo (a de dentro do
+        // `.zip`, se houver) e diz se o buffer tem que durar até o deinit.
+        let content_ext = Path::new(rom_path)
+            .extension()
+            .map(|e| e.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        let content_override = ffi_state::lock().as_ref().and_then(|st| {
+            st.content_overrides
+                .iter()
+                .find(|(e, _, _)| *e == content_ext)
+                .map(|(_, full, persistent)| (*full, *persistent))
+        });
+        let (need_fullpath, persistent_data) = match content_override {
+            Some((full, persistent)) => (full, persistent && !full),
+            None => (need_fullpath, false),
+        };
+        let mut persistent_rom: Option<Vec<u8>> = None;
 
         let load_ok = {
             let c_path = CString::new(rom_path)
@@ -387,8 +407,25 @@ impl DesktopCoreLoader {
                 size: rom_bytes.as_ref().map_or(0, |b| b.len()),
                 meta: std::ptr::null(),
             };
+            // `GET_GAME_INFO_EXT` só responde durante o `retro_load_game`.
+            if let Some(st) = ffi_state::lock().as_mut() {
+                st.game_info_ext = Some(ffi_state::GameInfoExt::new(
+                    Path::new(original_path),
+                    Path::new(rom_path),
+                    extracted.as_ref().map(|e| e.entry()),
+                    rom_bytes.as_deref(),
+                    persistent_data,
+                ));
+            }
             let ok = unsafe { (raw.load_game)(&game) };
-            // rom_bytes/c_path vivem até aqui (o core copia o que precisa).
+            if let Some(st) = ffi_state::lock().as_mut() {
+                st.game_info_ext = None;
+            }
+            // rom_bytes/c_path vivem até aqui (o core copia o que precisa),
+            // a não ser com `persistent_data`: aí o buffer fica no core.
+            if persistent_data {
+                persistent_rom = rom_bytes;
+            }
             ok
         };
 
@@ -471,6 +508,7 @@ impl DesktopCoreLoader {
             gl,
             vk,
             extracted,
+            persistent_rom,
         ))
     }
 }

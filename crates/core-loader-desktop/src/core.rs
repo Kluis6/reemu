@@ -21,11 +21,16 @@ pub struct DesktopCore {
     vk: Option<Box<VkFrameBridge>>,
     /// ROM extraída de um `.zip` — apagada quando o core é dropado.
     _extracted: Option<ExtractedRom>,
+    /// Buffer do jogo com `persistent_data` (`SET_CONTENT_INFO_OVERRIDE`):
+    /// "valid until retro_deinit() returns" — o `Drop` chama o deinit antes
+    /// de soltar os campos.
+    _persistent_rom: Option<Vec<u8>>,
     /// Mantido vivo até o Drop: libera o slot global de "um core por processo".
     _guard: CoreGuard,
 }
 
 impl DesktopCore {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         raw: RawCore,
         av_info: SystemAvInfo,
@@ -34,6 +39,7 @@ impl DesktopCore {
         gl: Option<GlContext>,
         vk: Option<Box<VkFrameBridge>>,
         extracted: Option<ExtractedRom>,
+        persistent_rom: Option<Vec<u8>>,
     ) -> Self {
         Self {
             raw,
@@ -42,6 +48,7 @@ impl DesktopCore {
             gl,
             vk,
             _extracted: extracted,
+            _persistent_rom: persistent_rom,
             _guard: guard,
         }
     }

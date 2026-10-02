@@ -148,6 +148,37 @@ pub struct retro_game_info {
     pub meta: *const c_char,
 }
 
+/// `RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE`: `need_fullpath` por extensão.
+pub const RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE: c_uint = 65;
+
+/// `struct retro_system_content_info_override`; o array termina num
+/// elemento com `extensions` nulo.
+#[repr(C)]
+pub struct retro_system_content_info_override {
+    pub extensions: *const c_char,
+    pub need_fullpath: bool,
+    pub persistent_data: bool,
+}
+
+/// `RETRO_ENVIRONMENT_GET_GAME_INFO_EXT`: só dentro do `retro_load_game`.
+pub const RETRO_ENVIRONMENT_GET_GAME_INFO_EXT: c_uint = 66;
+
+/// `struct retro_game_info_ext`, na ordem do `libretro.h`.
+#[repr(C)]
+pub struct retro_game_info_ext {
+    pub full_path: *const c_char,
+    pub archive_path: *const c_char,
+    pub archive_file: *const c_char,
+    pub dir: *const c_char,
+    pub name: *const c_char,
+    pub ext: *const c_char,
+    pub meta: *const c_char,
+    pub data: *const c_void,
+    pub size: usize,
+    pub file_in_archive: bool,
+    pub persistent_data: bool,
+}
+
 // --- Core options (SET_VARIABLES v0 / SET_CORE_OPTIONS v1 / _V2) ---
 
 /// Par `key`/`value` de `RETRO_ENVIRONMENT_{SET_VARIABLES,GET_VARIABLE}` (v0).
