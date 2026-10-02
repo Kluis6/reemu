@@ -78,6 +78,7 @@ const en: Messages = {
       lightMode: '{{name}}: light mode',
       hue: 'Custom theme hue',
       names: {
+        reemu: 'ReEmu',
         xboxGreen: 'Xbox Green',
         xboxClassic: 'Classic Xbox',
         psBlue: 'PlayStation Blue',

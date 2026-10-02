@@ -78,6 +78,7 @@ const es: Messages = {
       lightMode: '{{name}}: modo claro',
       hue: 'Tono del tema personalizado',
       names: {
+        reemu: 'ReEmu',
         xboxGreen: 'Verde Xbox',
         xboxClassic: 'Xbox Clásico',
         psBlue: 'Azul PlayStation',

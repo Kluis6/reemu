@@ -79,6 +79,7 @@ const ptBR = {
       lightMode: '{{name}}: modo claro',
       hue: 'Matiz do tema personalizado',
       names: {
+        reemu: 'ReEmu',
         xboxGreen: 'Verde Xbox',
         xboxClassic: 'Xbox Clássico',
         psBlue: 'Azul PlayStation',

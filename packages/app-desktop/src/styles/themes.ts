@@ -28,6 +28,28 @@ import {
 
 // ---------------------------------------------------------------- rampas ----
 
+/** ReEmu — o verde neon da logo e do site (`#3DDC2F`, o `--color-green` de
+ *  site/src/input.css) no tom 90; o resto da rampa segue a mesma curva de
+ *  luminosidade das outras (ver `RAMP_L`), no matiz dele (115°). */
+const reemuGreen: BrandVariants = {
+  10: "#070E06",
+  20: "#0C1E0B",
+  30: "#12340E",
+  40: "#154C10",
+  50: "#196912",
+  60: "#1F8316",
+  70: "#26A21B",
+  80: "#2DC020",
+  90: "#3DDC2F",
+  100: "#53E047",
+  110: "#6DE562",
+  120: "#89EA80",
+  130: "#A8ECA2",
+  140: "#C6EFC2",
+  150: "#DFF3DD",
+  160: "#F2F9F1",
+};
+
 const xboxGreen: BrandVariants = {
   10: "#090D07",
   20: "#111B0D",
@@ -109,6 +131,11 @@ export interface BgPalette {
   bg4: string;
 }
 
+/** Logo do ReEmu: órbitas verdes à esquerda e azuis (`#1E8BFF`) à direita,
+ *  como o circuito do site — verde no alto/esquerda e embaixo/esquerda
+ *  (mais fundo), azul no alto/direita e embaixo/direita (mais fundo). */
+// Tons baixos: o site é quase preto com brilho suave (orbs a ~24% de opacidade).
+const reemuBg: BgPalette = { bg1: "#1B6516", bg2: "#0E3C78", bg3: "#0C3A18", bg4: "#13508F" };
 /** O da imagem de referência do dashboard do Xbox. */
 const xboxGreenBg: BgPalette = { bg1: "#1E7F74", bg2: "#2E9E4F", bg3: "#1B3F5C", bg4: "#8A3A4A" };
 /** Blades (2005): lima + oliva, com âmbar no canto quente. */
@@ -236,6 +263,25 @@ const alvaLight = {
   colorNeutralForeground3: "#6B7280",
   colorNeutralStroke1: "rgba(0, 0, 0, 0.12)",
   colorNeutralStroke2: "rgba(0, 0, 0, 0.06)",
+} satisfies Partial<Theme>;
+
+/** Neutros do site do ReEmu (site/src/input.css): preto esverdeado
+ *  (`#030605`), superfícies `#0a100e`/`#111a17`, borda `#1b2a25`, texto
+ *  `#eef4f1` e secundário `#9aaba4`. Só escuro — a logo é neon sobre preto e
+ *  o site também não tem modo claro. */
+const reemuDark = {
+  colorNeutralBackground1: "#0A100E",
+  colorNeutralBackground1Hover: "#111A17",
+  colorNeutralBackground1Pressed: "#070B0A",
+  colorNeutralBackground1Selected: "#1B2A25",
+  colorNeutralBackground2: "#0E1613",
+  colorNeutralBackground3: "#16211D",
+  colorNeutralBackground4: "#1E2C27",
+  colorNeutralForeground1: "#EEF4F1",
+  colorNeutralForeground2: "#C4D0CB",
+  colorNeutralForeground3: "#9AABA4",
+  colorNeutralStroke1: "#1B2A25",
+  colorNeutralStroke2: "rgba(238, 244, 241, 0.07)",
 } satisfies Partial<Theme>;
 
 /** Azul PlayStation (o acento do dashboard PS4/PS5). */
@@ -462,6 +508,7 @@ function makeHighContrast(): ReEmuTheme {
 // -------------------------------------------------------------- registro ----
 
 export type ThemeId =
+  | "reemu"
   | "xbox-green"
   | "xbox-classico"
   | "ps-blue"
@@ -480,6 +527,15 @@ export type ThemeId =
 // "Personalizado" deixa escolher qualquer matiz (ver seção abaixo). Os temas
 // que sobram são todos "de marca" (Xbox, PlayStation).
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
+  // Identidade do próprio ReEmu (logo + site) — o tema padrão.
+  reemu: {
+    label: "ReEmu",
+    theme: make(reemuGreen, "dark", reemuBg, {
+      neutrals: reemuDark,
+      appBg: "linear-gradient(180deg, #08100C 0%, #030605 45%)",
+      activeBg: "#16211D",
+    }),
+  },
   "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen, "dark", xboxGreenBg) },
   // Sem par "-claro" de propósito — o dashboard Blades nunca teve modo claro.
   "xbox-classico": { label: "Xbox Clássico", theme: make(xboxClassico, "dark", xboxClassicoBg) },
@@ -532,7 +588,7 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   "alto-contraste": { label: "Alto contraste", theme: makeHighContrast() },
 };
 
-export const DEFAULT_THEME_ID: ThemeId = "xbox-green";
+export const DEFAULT_THEME_ID: ThemeId = "reemu";
 
 /** Um card em Configurações › Aparência: o tema e, quando existe, o par
  *  claro — o card mostra um botão Escuro/Claro em vez de dois cards. Os
@@ -540,6 +596,7 @@ export const DEFAULT_THEME_ID: ThemeId = "xbox-green";
 export interface ThemeFamily {
   /** Chave do nome em `appearance.theme.names` (i18n). */
   nameKey:
+    | "reemu"
     | "xboxGreen"
     | "xboxClassic"
     | "psBlue"
@@ -552,6 +609,7 @@ export interface ThemeFamily {
 }
 
 export const THEME_FAMILIES: ThemeFamily[] = [
+  { nameKey: "reemu", dark: "reemu" },
   { nameKey: "xboxGreen", dark: "xbox-green", light: "claro" },
   { nameKey: "xboxClassic", dark: "xbox-classico" },
   { nameKey: "psBlue", dark: "ps-blue", light: "ps-blue-claro" },
