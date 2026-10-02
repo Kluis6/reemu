@@ -32,6 +32,11 @@ Fontes oficiais, nesta ordem de preferência:
   <https://registry.khronos.org/OpenGL/index_gl.php>, páginas de referência
   <https://registry.khronos.org/OpenGL-Refpages/gl4/> (e `gl2.1/` para o
   perfil antigo) e o OpenGL Wiki <https://www.khronos.org/opengl/wiki/>.
+- **Slang (linguagem de shader)**: <https://shader-slang.org/docs/>
+  (indicado pelo dono do projeto) — sintaxe, semântica e compilação de
+  shaders Slang para SPIR-V, GLSL, HLSL e WGSL. Para o que o Slang gera,
+  confira também a especificação da API de destino (SPIR-V/Vulkan no
+  registro Khronos, WGSL na W3C).
 - **wgpu**: <https://docs.rs/wgpu> (a versão usada está no `Cargo.lock`) e
   <https://www.w3.org/TR/webgpu/> para a semântica.
 - **Windows (WGL, DXGI, Direct3D)**: <https://learn.microsoft.com/windows/win32/>.
