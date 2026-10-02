@@ -50,6 +50,7 @@ const TABS = [
   { key: "controllers", label: "settings.tabs.controllers" },
   { key: "cores", label: "settings.tabs.cores" },
   { key: "bios", label: "settings.tabs.bios" },
+  { key: "sistema", label: "settings.tabs.system" },
 ] as const;
 
 export function SettingsLayout() {

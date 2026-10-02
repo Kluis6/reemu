@@ -50,6 +50,7 @@ const en: Messages = {
       controllers: 'Controllers',
       cores: 'Cores',
       bios: 'BIOS',
+      system: 'System',
     },
   },
   language: {
@@ -115,6 +116,7 @@ const en: Messages = {
     saveGameState: 'save the game state',
     saveAudioConfig: 'save the audio settings',
     saveVideoConfig: 'save the video settings',
+    saveSystemSettings: 'save the system settings',
     saveMetadataConfig: 'save the metadata settings',
     resetShaderParams: 'reset the shader parameters',
     resetCoreOptions: 'reset the core options',
@@ -384,6 +386,17 @@ const en: Messages = {
     quickSave: 'QuickSave',
     quickLoad: 'QuickLoad',
     quit: 'Quit game',
+  },
+  system: {
+    autostart: 'Start with the system',
+    autostartHint: 'ReEmu opens by itself when you sign in to the computer.',
+    startFullscreen: 'Open in full screen',
+    startFullscreenHint: 'ReEmu opens taking the whole screen. F11 toggles it at any time.',
+    minimizeToTray: 'Minimize to the tray',
+    minimizeToTrayHint:
+      'When minimized, ReEmu leaves the taskbar and stays as an icon near the clock. Click the icon to bring it back.',
+    trayOpen: 'Open ReEmu',
+    trayQuit: 'Quit',
   },
   video: {
     curated: {

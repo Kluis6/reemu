@@ -14,6 +14,7 @@ mod scraping;
 mod shader_pack;
 #[cfg(test)]
 mod smoke_roms;
+mod system;
 mod system_files;
 mod updates;
 mod video;
@@ -40,6 +41,10 @@ fn env_flag(key: &str, default: bool) -> bool {
 pub fn run() {
     let app = covers::register(tauri::Builder::default())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::UpdateState::default())
         .setup(|app| {
@@ -57,6 +62,14 @@ pub fn run() {
             }
             let base = data_dir(app.handle());
             log::info!("dados: {}", base.display());
+            // Configurações › Sistema. Tela cheia antes de a surface de vídeo
+            // nascer, pra ela já sair no tamanho certo.
+            let system_prefs = system::init(app.handle(), &base);
+            if system_prefs.start_fullscreen {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.set_fullscreen(true);
+                }
+            }
             let db = open_db(&base);
             let audio_config = db
                 .as_ref()
@@ -275,6 +288,11 @@ pub fn run() {
             commands::decoration_image,
             updates::update_check,
             updates::update_install,
+            system::get_system_settings,
+            system::set_autostart,
+            system::set_start_fullscreen,
+            system::set_minimize_to_tray,
+            system::set_tray_labels,
             commands::shutdown_system,
             commands::restart_system,
             commands::list_core_catalog,
@@ -335,6 +353,8 @@ pub fn run() {
             event: tauri::WindowEvent::Resized(size),
             ..
         } if label == "main" => {
+            // Configurações › Sistema: minimizada vai pra bandeja.
+            system::on_main_resized(app_handle);
             // Só REGISTRA a geometria — quem aplica (mexe na conexão Wayland +
             // no swapchain wgpu) é o `reemu-video-pump`, dono único disso.
             let state = app_handle.state::<AppState>();

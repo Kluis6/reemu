@@ -59,6 +59,22 @@ export const nativeVideoActive = () => invoke<boolean>('native_video_active')
  *  o menu de pausa fica por cima do jogo, sem print de fundo. */
 export const nativeVideoOverlay = () => invoke<boolean>('native_video_overlay')
 
+// Configurações › Sistema (src-tauri/src/system.rs).
+export interface SystemSettings {
+  autostart: boolean
+  startFullscreen: boolean
+  minimizeToTray: boolean
+}
+export const getSystemSettings = () => invoke<SystemSettings>('get_system_settings')
+export const setAutostart = (enabled: boolean) => invoke<void>('set_autostart', { enabled })
+export const setStartFullscreen = (enabled: boolean) =>
+  invoke<void>('set_start_fullscreen', { enabled })
+export const setMinimizeToTray = (enabled: boolean) =>
+  invoke<void>('set_minimize_to_tray', { enabled })
+/** Rótulos do menu do ícone da bandeja, no idioma da interface. */
+export const setTrayLabels = (open: string, quit: string) =>
+  invoke<void>('set_tray_labels', { open, quit })
+
 export interface AudioConfig {
   outputDeviceId: string | null
   outputDeviceName: string | null

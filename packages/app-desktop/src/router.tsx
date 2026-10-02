@@ -12,6 +12,7 @@ import { RomDetail } from './screens/RomDetail'
 import { SettingsAppearance } from './screens/settings/SettingsAppearance'
 import { SettingsAudio } from './screens/settings/SettingsAudio'
 import { SettingsBios } from './screens/settings/SettingsBios'
+import { SettingsSystem } from './screens/settings/SettingsSystem'
 import { SettingsControllers } from './screens/settings/SettingsControllers'
 import { SettingsCores } from './screens/settings/SettingsCores'
 import { SettingsHotkeys } from './screens/settings/SettingsHotkeys'
@@ -58,6 +59,7 @@ export const router = createHashRouter([
                   { path: 'controllers', element: <SettingsControllers /> },
                   { path: 'cores', element: <SettingsCores /> },
                   { path: 'bios', element: <SettingsBios /> },
+                  { path: 'sistema', element: <SettingsSystem /> },
                 ],
               },
             ],

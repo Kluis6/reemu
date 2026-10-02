@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { BindingCapture } from '../components/BindingCapture'
 import { Splash } from '../components/Splash'
@@ -7,7 +8,7 @@ import { ToastLayer } from '../components/ToastLayer'
 import { useFullscreenSync } from '../hooks/useFullscreen'
 import { useGamepadStatus } from '../hooks/useGamepadStatus'
 import { useMenuNav } from '../hooks/useMenuNav'
-import { getProfile } from '../lib/tauri'
+import { getProfile, setTrayLabels } from '../lib/tauri'
 
 /** Tempo mínimo da splash (estilo Xbox — não pisca em máquina rápida). */
 const SPLASH_MIN_MS = 1100
@@ -23,6 +24,13 @@ export function RootLayout() {
   useGamepadStatus()
 
   const { pathname } = useLocation()
+
+  // Menu do ícone da bandeja (Configurações › Sistema) no idioma da
+  // interface: o Rust só guarda os rótulos que vêm daqui.
+  const { t, i18n } = useTranslation()
+  useEffect(() => {
+    void setTrayLabels(t('system.trayOpen'), t('system.trayQuit')).catch(() => {})
+  }, [t, i18n.language])
   const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile, retry: false })
 
   // splash: tempo mínimo + espera o perfil resolver; depois faz o fade-out

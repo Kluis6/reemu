@@ -22,7 +22,7 @@ tauri-build = { version = "2", features = [] }
 dev-autoload = []
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-log = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -41,6 +41,8 @@ reqwest = { version = "0.12", default-features = false, features = [
 zip = { version = "2", default-features = false, features = ["deflate"] }
 md-5 = "0.10"
 tauri-plugin-dialog = "2"
+# Configurações › Sistema: iniciar junto com o sistema (v2.tauri.app/plugin/autostart).
+tauri-plugin-autostart = "2"
 tokio = { version = "1", features = ["time", "rt"] }
 
 # Crates internos (arquitetura hexagonal — o shell é um adapter). Nenhum tem
