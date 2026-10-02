@@ -82,7 +82,9 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       a antiga pelo AppImage e pelo NSIS, atualizar pelo modal e conferir o
       aviso "atualizado" depois do reinício. O `.deb` usa `pkexec`.
 - [ ] `todo` — Capturas do site em `site/screens/` (`inicio`, `biblioteca`,
-      `jogo`, `pausa`, `cores` .png).
+      `jogo`, `pausa`, `cores`, `pagina-jogo` .png). 2026-10-02: o usuário
+      mandou `biblioteca`, `jogo` e `pagina-jogo` pelo chat, mas as imagens
+      coladas não viraram arquivo: falta salvar na pasta.
 - [x] `done` — Logo e favicon do site (`site/logo.webp`, `favicon-*.png`,
       `icon-512.png`), 2026-10-01.
 
