@@ -141,6 +141,9 @@ struct Inner {
     signal_semaphore: vk::Semaphore,
     /// Frames entregues pelo core (diagnóstico/teste).
     delivered: u64,
+    /// A geração atual virou `PendingFrame` (e o `VkImageFrame` dela libera o
+    /// slot ao ser largado). Ver `begin_frame`.
+    taken: bool,
 }
 
 /// Dono do contexto Vulkan + estado por-frame. Vive num `Box` do `DesktopCore`
@@ -198,6 +201,7 @@ impl VkFrameBridge {
                 pending_cmds: Vec::new(),
                 signal_semaphore: vk::Semaphore::null(),
                 delivered: 0,
+                taken: false,
             }),
             sync: VkFrameSync::new(),
             interface,
@@ -243,10 +247,21 @@ impl VkFrameBridge {
                 }
             }
         }
+        // Geração que não chegou ao compositor (sem `set_image`, sem
+        // `video_refresh` ou quadro repetido — o PPSSPP faz isso enquanto
+        // carrega): ninguém vai ler a imagem dela, então o slot já está livre.
+        // Sem isto nada a liberava, e o `wait_sync_index` de RING quadros
+        // depois esperava para sempre, na mesma thread do compositor (o
+        // PPSSPP travou o app, 2026-10-02). A atividade de GPU do slot segue
+        // coberta pela fence-marcador acima.
+        if inner.generation > 0 && !inner.taken {
+            self.sync.release(inner.current_index, inner.generation);
+        }
         inner.generation += 1;
         inner.current_index = (inner.generation % RING as u64) as u32;
         inner.pending_image = None;
         inner.pending_cmds.clear();
+        inner.taken = false;
     }
 
     /// Depois de `retro_run`: pega (sem submeter) o trabalho que o core gravou.
@@ -257,6 +272,7 @@ impl VkFrameBridge {
         let idx = inner.current_index as usize;
         let cmds = std::mem::take(&mut inner.pending_cmds);
         inner.delivered += 1;
+        inner.taken = true;
         Some(PendingFrame {
             cmd_buffers: cmds,
             fence: inner.fences[idx],

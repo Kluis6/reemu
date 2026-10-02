@@ -1690,3 +1690,10 @@ Infra:
 - Dois testes da varredura falhavam no Windows por montar caminhos com `/` (`dos_and_scummvm_games`, `naomi_and_atomiswave_mame_sets`); corrigidos.
 - **Quadro do jogo anterior na troca:** a janela de vídeo aparecia logo após o 1º present do jogo novo, e o present é assíncrono (`vkQueuePresentKHR` não garante quando a imagem fica visível). No Windows, agora ela só aparece depois do 2º quadro (`SHOW_AFTER_PRESENTS`). A latência de quadro do wgpu é só uma sugestão ao driver (`desired_maximum_frame_latency`, wgpu-types 30), então isso **não está verificado** por documentação; a garantia exigiria `VK_KHR_present_wait`, que o wgpu não expõe.
 - **C1 (Vulkan no Windows):** flycast e Beetle PSX HW rodaram em Vulkan dentro do app sem cair; o log da `VkImage` do core saía a cada quadro e agora sai só quando tamanho ou formato mudam.
+
+## 2026-10-02 — PPSSPP em Vulkan travava o app (slot nunca liberado)
+
+- **Sintoma:** com `REEMU_HW=vulkan`, o PPSSPP carregou em Vulkan dentro do app (device do core adotado, 10 extensões), mas nenhum quadro foi apresentado: o log repetia `vk wait_sync_index slot 0: compositor atrasado (gen 6)` até o app parar.
+- **Causa:** um slot do anel de quadros em voo só era liberado quando o `VkImageFrame` daquela geração era largado pelo compositor. Num `retro_run` sem imagem entregue (sem `set_image`, sem `video_refresh` ou quadro repetido, o que o PPSSPP faz enquanto carrega), a geração não virava quadro e ninguém a liberava. RING quadros depois, o `wait_sync_index` do core esperava por ela para sempre, na thread que também roda o compositor.
+- **Correção:** o `begin_frame` libera a geração anterior quando ela não foi entregue ao compositor (`taken`). Pelo `libretro_vulkan.h` (libretro-common), o core só precisa manter a imagem até o `wait_sync_index` do índice em que ela foi entregue; imagem não entregue não é lida pelo frontend. A atividade de GPU do slot continua coberta pela fence-marcador do `begin_frame`.
+- A validar no Windows com o PPSSPP.
