@@ -161,9 +161,18 @@ conferir".
       OpenGL Wiki "Pixel Buffer Object", refpages `glReadPixels`,
       `glMapBufferRange` e `glFenceSync`. Custo: um quadro de latência.
       Medir se compensa contra o A0.
-- [ ] `todo` — A2. Tirar o flip de linhas da CPU (`flip_rows_in_place`):
-      mandar `flip_y` junto do quadro e inverter na amostragem do wgpu,
-      como o caminho `Hardware { flip_y }` já faz.
+- [x] `done` — A2. Inversão das linhas na GPU (2026-10-02): em vez de
+      `flip_rows_in_place` na CPU (~0,75 ms/quadro em 1920×1440), o
+      `read_pixels` faz um `glBlitFramebuffer` com o destino de cabeça pra
+      baixo pra um FBO à parte e lê dele ("If either the source or
+      destination rectangle specifies a negative dimension, the image is
+      reversed", EXT_framebuffer_blit; FBO separado porque blit no mesmo
+      buffer com sobreposição é indefinido). Só com GL/GLES ≥ 3.0 (refpage
+      do `glBlitFramebuffer`); abaixo disso, ou se o FBO falhar, continua na
+      CPU. Teste `fbo_clear_and_readback` estendido pra conferir a
+      orientação; passou num contexto WGL 3.3 real (RTX 3060). Saiu de outro
+      jeito que o planejado (`flip_y` até o wgpu): assim o protocolo entre
+      os processos não muda.
 - [ ] `todo` — A3. Repetir a medição do A0 e registrar no histórico.
 
 - [x] `done` — A4. Ritmo core × monitor (achado no A0, não é do
