@@ -1,5 +1,10 @@
 //! Declarações FFI de `RETRO_HW_RENDER_INTERFACE_VULKAN` (etapa 12).
 //!
+//! As declarações vêm do `libretro.h` ("Copyright (C) 2010-2024 The
+//! RetroArch team") e do `libretro_vulkan.h` ("Copyright (C) 2010-2020 The
+//! RetroArch team"), licença MIT. Aviso completo em `THIRD_PARTY_NOTICES.md`
+//! na raiz do repositório.
+//!
 //! Layout/assinaturas conferidos contra os headers oficiais do libretro
 //! (RetroArch, master), **não** implementados de memória:
 //!   - `libretro-common/include/libretro.h`

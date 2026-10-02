@@ -105,7 +105,9 @@ fn archive_url(repo: &str) -> String {
 }
 
 async fn fetch(url: &str) -> Result<reqwest::Response, String> {
-    reqwest::get(url)
+    crate::http::client()
+        .get(url)
+        .send()
         .await
         .map_err(|e| format!("download: {e}"))?
         .error_for_status()

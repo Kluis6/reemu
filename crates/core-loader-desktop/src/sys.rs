@@ -2,6 +2,11 @@
 //! `libretro-common/include/libretro.h` (RetroArch, master) — não inventar
 //! assinatura por suposição.
 //!
+//! As declarações vêm do `libretro.h`, "Copyright (C) 2010-2024 The
+//! RetroArch team", licença MIT. O aviso completo, que a licença pede junto
+//! de cópias ou partes substanciais, está em `THIRD_PARTY_NOTICES.md` na
+//! raiz do repositório.
+//!
 //! Alguns itens ainda não são consumidos (RETRO_MEMORY_*, GET_LOG_INTERFACE,
 //! ...) — entram nas etapas 05/06/08. Mantidos aqui como binding completo.
 #![allow(non_camel_case_types, dead_code)]

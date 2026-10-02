@@ -2,7 +2,8 @@
   "bundle": {
     "targets": ["deb", "appimage"],
     "resources": {
-      "../../../target/release/reemu-core-host": ""
+      "../../../target/release/reemu-core-host": "",
+      "../../../THIRD_PARTY_NOTICES.md": ""
     }
   }
 }

@@ -154,7 +154,9 @@ pub async fn download(
 /// GET com status checado. `reqwest` já segue redirects (o buildbot manda um).
 async fn fetch(url: &str) -> Result<reqwest::Response, String> {
     log::info!("baixando pacote de shaders: {url}");
-    reqwest::get(url)
+    crate::http::client()
+        .get(url)
+        .send()
         .await
         .map_err(|e| format!("download: {e}"))?
         .error_for_status()

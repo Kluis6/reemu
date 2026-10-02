@@ -7,6 +7,7 @@ mod covers;
 mod credentials;
 mod decoration;
 mod gpu;
+mod http;
 mod perf;
 mod play_clock;
 mod profile;

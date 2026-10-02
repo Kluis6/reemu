@@ -1665,3 +1665,11 @@ Infra:
 - Windows: vídeo nativo (janela filha acima do WebView2) validado, sem o quadro do jogo anterior na troca; o core no ritmo do monitor (sem o quadro perdido a cada poucos segundos) e latência 1 no present; o core-host encerra sozinho antes de ser morto, o que acaba com os saves corrompidos do flycast (VMU).
 - Interface nas proporções do app Xbox do Windows (tela lógica de 1366×768), página do jogo refeita com tempo de jogo, anel de foco mais afastado, logo do site no ícone e na abertura (fade-in), e a categoria Configurações › Sistema (iniciar com o sistema, abrir em tela cheia, minimizar para a bandeja).
 - Diagnóstico: `REEMU_PERF` mede o readback GL e a espera do present.
+
+## 2026-10-02 — Revisão das regras de uso dos cores libretro
+
+- **Situação:** o ReEmu é MIT e não distribui cores, shaders, molduras nem BIOS. O instalador leva só o app e o `reemu-core-host`. Os cores são baixados pelo usuário, sob demanda, do buildbot oficial, e o catálogo mostra a licença de cada um.
+- **API libretro:** o `libretro.h` e o `libretro_vulkan.h` são MIT ("Copyright (C) 2010-2024/2020 The RetroArch team"), e a licença pede o aviso "in all copies or substantial portions". O `sys.rs` e o `vk_sys.rs` reproduzem as declarações sem o aviso. Corrigido: `THIRD_PARTY_NOTICES.md` (também empacotado no instalador) e referência no topo dos dois arquivos.
+- **Cores não comerciais** (Genesis Plus GX, família Snes9x, FB Alpha/FBNeo, MAME 2000/2003/2003-Plus, PicoDrive e outros): "may not be sold, nor may they be used in a commercial product or activity without copyright holders' approval" (docs.libretro.com/development/licenses). O ReEmu é gratuito e não os distribui. Doação voluntária não vende o software. Se um dia houver versão paga, anúncio ou loja, esses cores precisam sair da oferta ou ter autorização dos autores.
+- **GPL:** os cores GPL rodam no processo do core-host (e os Vulkan, no do app). Quem monta essa combinação é o usuário, na própria máquina, e o ReEmu não redistribui nenhum binário de core, então não há obrigação de fonte do lado do ReEmu.
+- **Buildbot:** a documentação da libretro não tem regra publicada pra uso por outros frontends (não verificado além disso). Os downloads agora se identificam com `User-Agent: ReEmu/<versão> (+https://github.com/Kluis6/reemu)` (`http.rs`); antes saíam sem User-Agent.

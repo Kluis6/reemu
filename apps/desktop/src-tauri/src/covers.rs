@@ -130,7 +130,7 @@ async fn resolve<R: Runtime>(app: &tauri::AppHandle<R>, rom_id: &str) -> http::R
         }
     };
 
-    let Ok(resp) = reqwest::get(&url).await else {
+    let Ok(resp) = crate::http::client().get(&url).send().await else {
         return not_found();
     };
     if !resp.status().is_success() {
