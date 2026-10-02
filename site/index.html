@@ -462,10 +462,18 @@
       </div>
     </footer>
 
-    <fluent-dialog data-i18n-attr="aria-label=lightbox.aria" id="lightbox" class="[--dialog-max-width:min(1200px,94vw)]" type="modal" aria-label="Captura ampliada">
-      <fluent-dialog-body>
-        <img class="lightbox-img mx-auto block max-h-[78vh] max-w-full rounded-[var(--borderRadiusMedium,4px)]" alt="" />
-        <fluent-button data-i18n="lightbox.close" slot="close" appearance="transparent">Fechar</fluent-button>
+    <!-- Modal da galeria. Tamanho em `#lightbox::part(dialog)` (src/input.css):
+         o diálogo dos Fluent Web Components 3.1.3 fixa `max-width: 600px` e
+         não tem variável pra largura. -->
+    <fluent-dialog data-i18n-attr="aria-label=lightbox.aria" id="lightbox" type="modal" aria-label="Captura ampliada">
+      <fluent-dialog-body class="lightbox-body">
+        <!-- Slot `close`: canto superior direito; o clique fecha o diálogo. -->
+        <fluent-button data-i18n-attr="aria-label=lightbox.close" slot="close" appearance="subtle" icon-only aria-label="Fechar">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M5 5l10 10M15 5 5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+          </svg>
+        </fluent-button>
+        <img class="lightbox-img mx-auto block max-h-[calc(100dvh-7rem)] max-w-full rounded-[var(--borderRadiusMedium,4px)]" alt="" />
       </fluent-dialog-body>
     </fluent-dialog>
   </body>
