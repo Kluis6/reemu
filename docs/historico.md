@@ -1741,3 +1741,10 @@ Infra:
 - **Correção:** `RETRO_ENVIRONMENT_SET_VARIABLE` (70) implementado conforme o `libretro.h` ("After changing a core option value with this callback, it will be reflected in the frontend and GET_VARIABLE_UPDATE will return true"; `data` nulo só pergunta se existe). O core-loader valida e aplica o valor e anota a troca; o core-host repassa ao pai (`ToParent::CoreOptionSet`, antes do `Loaded`); a rota in-process recolhe direto; o app grava como opção do core (escopo do core) no fim do `load_game` e no `unload_game`. Da 2ª sessão em diante o core recebe o MAC guardado e não sorteia outro.
 - **Validado pelo usuário no Windows (2026-10-02):** com um save novo, sair e voltar ao Tekken carrega normal.
 - O save criado antes da correção ficou amarrado a um MAC sorteado que não foi guardado; é preciso criar um save novo.
+
+## 2026-10-02 — C2: Vulkan automático no Windows
+
+- O usuário validou no app o GoldenEye em Vulkan com o ParaLLEl-RDP (salvar/restaurar estado, trocar de jogo), fechando o C1.
+- `route_local_device` (`emu-session/src/session.rs`): a escolha automática da rota in-process para os cores de `VK_CAPABLE_CORES` passa a valer também no Windows. Antes só com `REEMU_HW=vulkan`, porque o flycast derrubava o app; as causas (libco em threads diferentes, `context_destroy`, versão da instância, `timelineSemaphore`) foram corrigidas no C1.
+- Validado com `vk_core_real_rom` e `REEMU_TEST_NO_FORCE=1`: flycast, Beetle PSX HW e mupen64plus_next com `parallel` vão sozinhos para Vulkan in-process; o mupen64plus_next sem `parallel` (GLideN64) segue no processo filho.
+- Continua valendo o risco conhecido: sem o isolamento do processo filho, um core desses que quebre leva a interface junto. O C3 (core Vulkan no processo filho) devolve o isolamento.

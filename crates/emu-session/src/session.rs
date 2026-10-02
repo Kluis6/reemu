@@ -870,10 +870,13 @@ fn vk_capable(base: &str, options: &HashMap<String, String>) -> bool {
 /// tela ficaria preta. Se o core acabar não sendo Vulkan, `LocalCore::load`
 /// devolve `HwRenderUnsupported` e o loop cai pro filho (+ cache).
 ///
-/// A escolha automática (b) só vale no Linux, onde o caminho foi validado. No
-/// Windows o `flycast` carregado in-process derrubou o app inteiro
-/// (`STATUS_ACCESS_VIOLATION`, 2026-09-25) — sem o isolamento do processo
-/// filho, um core que quebra leva a interface junto. Lá só com `REEMU_HW=vulkan`.
+/// A escolha automática (b) vale no Linux e, desde 2026-10-02, no Windows:
+/// lá o flycast derrubava o app (`STATUS_ACCESS_VIOLATION`, 2026-09-25) e o
+/// mupen64plus_next também (libco em threads diferentes, `on_vk_thread`).
+/// Depois das correções, flycast, Beetle PSX HW e mupen64plus_next com
+/// ParaLLEl-RDP passaram no Windows com as camadas de validação e no app
+/// (C1). Sem o isolamento do processo filho, um core que quebra leva a
+/// interface junto — por isso só os cores da lista, não qualquer um.
 fn route_local_device(
     shared: &Shared,
     core_id: &str,
@@ -889,7 +892,7 @@ fn route_local_device(
     let capable = vk_capable(base, options);
     // Nem forçando: core que sobe GL no load in-process derruba o app.
     let unsafe_gl = gl_in_load(base, options);
-    let auto = cfg!(target_os = "linux") && capable;
+    let auto = (cfg!(target_os = "linux") || cfg!(windows)) && capable;
     if unsafe_gl || (!forced && !auto) {
         return None;
     }
