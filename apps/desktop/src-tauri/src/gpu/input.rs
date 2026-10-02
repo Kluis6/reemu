@@ -159,7 +159,12 @@ impl FrameProcessor {
             );
             return None;
         };
-        log::info!("§Beetle: 1ª VkImage {w}x{h} VkFormat {vkf} → {format:?}");
+        // Só quando tamanho ou formato mudam: isto roda a cada quadro.
+        static LAST: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let key = (u64::from(w) << 48) | (u64::from(h) << 32) | u64::from(vkf);
+        if LAST.swap(key, std::sync::atomic::Ordering::Relaxed) != key {
+            log::info!("VkImage do core: {w}x{h} VkFormat {vkf} → {format:?}");
+        }
         let size = wgpu::Extent3d {
             width: w,
             height: h,
