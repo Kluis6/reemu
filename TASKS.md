@@ -193,6 +193,15 @@ conferir".
       período fica a até 0,4% do budget por 30 ticks seguidos, e volta ao
       `Pacer` fora disso ou sem tick por 1,5 quadro.
       `REEMU_VSYNC_PACING=0` desliga.
+      **1º teste (2026-10-02, Mailbox + latência 1, sem querer: a variável
+      do teste 2 ficou no PowerShell):** com latência 1 o acquire quase não
+      bloqueia (~0,03 ms) e o pump não perdeu quadro em ~60 s. O lock
+      travava com ticks esparsos e esperava 1,5 quadro pelo tick: intervalo
+      de 36 ms a cada 5–9 s. Corrigido: só trava com tick sem buraco de 2
+      quadros; travado, espera só até o prazo normal (+1 ms) e destrava
+      depois de 3 faltas; tick atrasado não gera quadro extra. Falta
+      validar de novo, e comparar latência 1 × 2 com as variáveis limpas
+      (pode ser que latência 1 deva virar o padrão).
 - [ ] `todo` — Testes de integração do `emu-session` no Windows: o core de
       teste (`testcore_path`) carrega sem `retro_set_environment`
       ("GetProcAddress failed"), e os 9 testes de `tests/session.rs`

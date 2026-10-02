@@ -385,7 +385,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 Ok(m) => Some(m),
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     if vsync.on_timeout().is_some() {
-                        log::info!("ritmo: sem tick do monitor — volta ao relógio do core");
+                        log::info!("ritmo: ticks do monitor pararam — volta ao relógio do core");
                         pacer.reset();
                     }
                     None
@@ -539,7 +539,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
             ToChild::VsyncTick { period_ns } => {
                 if vsync_enabled && core.is_some() && !paused {
                     let period = Duration::from_nanos(period_ns);
-                    match vsync.on_tick(period, pacer.budget()) {
+                    match vsync.on_tick(period, pacer.budget(), Instant::now()) {
                         Some(VsyncChange::Locked) => log::info!(
                             "ritmo: preso ao monitor ({:.3} ms por quadro; core pede {:.3} ms)",
                             period.as_secs_f64() * 1000.0,
