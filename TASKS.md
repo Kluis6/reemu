@@ -333,6 +333,14 @@ no `emu-session`, ver `docs/historico.md`).
 
 ### Infra / qualidade
 
+- [ ] `todo` — **CI no Ubuntu 26**: os workflows ficaram presos em
+      `ubuntu-24.04` (2026-10-02), porque o `ubuntu-latest` passa a ser o
+      Ubuntu 26 a partir de 19/10/2026 (aviso do GitHub Actions,
+      actions/runner-images#14748) e o build Linux instala pacotes de
+      sistema por nome (WebKitGTK, GTK, appindicator…). Migrar quando der
+      pra validar: trocar pra `ubuntu-26.04`, conferir os nomes dos pacotes
+      e rodar o Release por `workflow_dispatch`.
+
 - [x] `done` — **Teste de fumaça do catálogo, fase 1** (2026-09-25):
       workflow semanal `catalog-smoke.yml` (Linux e Windows) baixa cada core
       e abre com `reemu-core-host --probe` (`retro_init` + system info, sem

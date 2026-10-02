@@ -12,9 +12,9 @@ concurrency:
 jobs:
   rust:
     name: Rust (fmt · clippy · test)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Instalar dependências de sistema (Tauri + winit/wgpu + gilrs + glslang)
         run: |
@@ -49,9 +49,9 @@ jobs:
 
   windows-check:
     name: Windows (cargo check cruzado)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Mesmas deps do job `rust`: os build scripts de host (tauri-build,
       # webkit via pkg-config…) ainda rodam no Linux.
@@ -77,13 +77,13 @@ jobs:
 
   frontend:
     name: Frontend (lint · build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
