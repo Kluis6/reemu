@@ -1715,3 +1715,20 @@ Infra:
 - **`VUID-StandaloneSpirv-None-10684`** (aparecia só depois do anterior, porque o spirv-val parava no erro de versão): o naga punha a struct de saída (`var o: VOut`) e um `array` indexado por `vertex_index` em variáveis de função com decoração de layout. Os shaders de `gpu/mod.rs` e `gpu/pipelines.rs` agora devolvem a struct pelo construtor de valor (WGSL, W3C) e montam o triângulo de tela cheia com `select`.
 - **`03252` (timeline sem o recurso ligado):** o wgpu-hal usa semáforo timeline em device 1.2+, e o device criado pelo core não ligava `timelineSemaphore`. O hook do `vkCreateDevice` (`gpu/device_hook.rs`) liga o campo na `VkPhysicalDeviceVulkan12Features` ou na `VkPhysicalDeviceTimelineSemaphoreFeatures` que o core mandou, ou acrescenta a sua (nunca as duas, VUID-VkDeviceCreateInfo-pNext-02830), só se `vkGetPhysicalDeviceFeatures2` disser que o device suporta.
 - **Resultado (Windows, RTX 3060, validação ligada, 10 s com save state):** flycast (Jet Set Radio), Beetle PSX HW (40 Winks) e mupen64plus_next com `parallel` (GoldenEye): ~58–60 quadros/s em Vulkan, estado salvo e restaurado, descarregamento limpo, **zero** mensagens de validação. O teste `vk_core_real_rom` passou a rodar também no Windows (dados em `%APPDATA%`), e conduz o core numa thread enquanto as chamadas bloqueantes da sessão rodam em outra, como o app.
+
+## 2026-10-02 — Avaliação do save state por plataforma; FB Alpha 2012 não restaurava em sessão nova
+
+- Teste novo `savestate_real_rom` (`gpu/tests.rs`, `#[ignore]`, core e ROM reais pela sessão completa, rota padrão do app): pausado, salva → restaura → salva de novo e compara os dois estados; despausa e confere os quadros; fecha o jogo, abre de novo e restaura o estado da sessão anterior.
+- Resultado no Windows (um jogo da biblioteca por core instalado):
+
+| core | estado | salvar→restaurar→salvar | 2ª sessão |
+|---|---|---|---|
+| a5200, prosystem, gearsystem, genesis_plus_gx, gpsp, vbam, mednafen_pce_fast, snes9x2002, mednafen_psx_hw, parallel_n64 | 49 KB a 16 MB | 100% igual | ok |
+| stella | 1 KB | 99,4% | ok |
+| mupen64plus_next | 16 MB | 99,0% | ok |
+| ppsspp | 40 MB | 99,9% | ok |
+| flycast | 36 MB | 94,3% | ok |
+| fbalpha2012 | 259 KB | 100% igual | **falhava** |
+
+  Os que não dão 100% guardam contadores/relógio no estado; em todos, o jogo segue com imagem depois de restaurar.
+- **FB Alpha 2012:** o `state_size` dele começa em 0 e só é calculado no `retro_serialize_size`; o `retro_unserialize` recusa se `size != state_size` (`svn-current/trunk/src/burner/libretro/libretro.cpp`, libretro/fbalpha2012). O ReEmu restaurava sem perguntar o tamanho antes, então carregar um estado numa sessão em que ainda não se salvou falhava. O `restore_state` agora chama `retro_serialize_size` antes do `retro_unserialize`, como o RetroArch. Validado: restaura na 2ª sessão.

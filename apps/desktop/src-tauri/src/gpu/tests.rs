@@ -1600,3 +1600,122 @@ fn vblank_estimator_needs_blocked_samples() {
     }
     assert!(e.period().is_none());
 }
+
+/// Save state com core e ROM reais, pela sessão completa (rota padrão do
+/// app: processo filho pra software/GL). Mede o que importa no uso:
+/// 1. pausado, salva → restaura → salva de novo: os dois estados deveriam
+///    ser iguais (imprime a % de bytes iguais);
+/// 2. despausado, os quadros continuam e não ficam pretos;
+/// 3. fecha o jogo, abre de novo e restaura o estado da sessão anterior.
+///
+/// ```text
+/// REEMU_TEST_CORE=snes9x2002_libretro REEMU_TEST_ROM=/caminho/jogo.smc \
+///   cargo test -p reemu-desktop --lib savestate_real_rom -- --ignored --nocapture
+/// ```
+#[test]
+#[ignore = "core e ROM reais (REEMU_TEST_CORE / REEMU_TEST_ROM)"]
+fn savestate_real_rom() {
+    use emu_session::{EmuSession, SessionConfig};
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
+    let (Ok(core), Ok(rom)) = (
+        std::env::var("REEMU_TEST_CORE"),
+        std::env::var("REEMU_TEST_ROM"),
+    ) else {
+        eprintln!("defina REEMU_TEST_CORE e REEMU_TEST_ROM");
+        return;
+    };
+    let _ = env_logger::builder().is_test(true).try_init();
+    let data = if cfg!(windows) {
+        std::path::PathBuf::from(std::env::var("APPDATA").unwrap())
+    } else {
+        std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(".local/share")
+    }
+    .join("com.reemu.desktop");
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem adapter wgpu — pulando");
+        return;
+    };
+    let opts: HashMap<String, String> = std::env::var("REEMU_TEST_OPTS")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|kv| kv.split_once('='))
+        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+        .collect();
+    let tmp = std::env::temp_dir().join(format!("reemu-ssrom-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let session = EmuSession::spawn(SessionConfig::new(
+        data.join("cores"),
+        data.join("system"),
+        tmp.clone(),
+    ));
+    // Roda `secs` segundos; devolve (quadros, não-pretos).
+    let mut run = |secs: u64| {
+        let (mut frames, mut lit) = (0u32, 0u32);
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(secs) {
+            session.wait_for_frame(Duration::from_millis(100));
+            if let Some(frame) = session.take_latest_frame() {
+                frames += 1;
+                if let Some((_, _, rgba)) = fp.process(&frame) {
+                    if rgba.chunks(4).any(|p| p[0] > 16 || p[1] > 16 || p[2] > 16) {
+                        lit += 1;
+                    }
+                }
+                session.recycle_frame(frame);
+            }
+        }
+        (frames, lit)
+    };
+    let same = |a: &[u8], b: &[u8]| {
+        if a.len() != b.len() {
+            return format!("tamanhos diferentes ({} × {})", a.len(), b.len());
+        }
+        let eq = a.iter().zip(b).filter(|(x, y)| x == y).count();
+        format!(
+            "{:.2}% dos bytes iguais",
+            eq as f64 * 100.0 / a.len().max(1) as f64
+        )
+    };
+
+    session.load(&core, &rom, opts.clone()).expect("carregar");
+    let (f, l) = run(4);
+    eprintln!("jogo: {f} quadros, {l} não-pretos");
+    session.set_paused(true);
+    std::thread::sleep(Duration::from_millis(200));
+    let s1 = session
+        .save_state()
+        .expect("save_state")
+        .expect("core sem save state");
+    let ok = session.restore_state(s1.clone()).expect("restore_state");
+    let s2 = session
+        .save_state()
+        .expect("save_state 2")
+        .unwrap_or_default();
+    eprintln!(
+        "estado: {} bytes | restore {ok} | salvar→restaurar→salvar: {}",
+        s1.len(),
+        same(&s1, &s2)
+    );
+    session.set_paused(false);
+    let (f, l) = run(2);
+    eprintln!("depois de restaurar: {f} quadros, {l} não-pretos");
+    session.unload().ok();
+
+    // Outra sessão do mesmo jogo, restaurando o estado da anterior.
+    session.load(&core, &rom, opts).expect("carregar de novo");
+    // `REEMU_TEST_WAIT2`: segundos rodando antes de restaurar (padrão 1).
+    run(std::env::var("REEMU_TEST_WAIT2")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1));
+    let ok = session
+        .restore_state(s1)
+        .expect("restore_state (2ª sessão)");
+    let (f, l) = run(2);
+    eprintln!("2ª sessão: restore {ok} | {f} quadros, {l} não-pretos");
+    session.unload().ok();
+    let _ = std::fs::remove_dir_all(&tmp);
+    assert!(ok, "restaurar na 2ª sessão falhou");
+    assert!(f > 0, "sem quadros depois de restaurar");
+}

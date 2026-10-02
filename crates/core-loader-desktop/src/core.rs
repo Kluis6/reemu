@@ -132,6 +132,11 @@ impl DesktopCore {
 
     /// Restaura um estado previamente serializado (`retro_unserialize`).
     pub fn restore_state(&mut self, data: &[u8]) -> bool {
+        // Pergunta o tamanho antes, como o RetroArch: o FB Alpha 2012 só
+        // calcula o `state_size` no `retro_serialize_size` e o
+        // `retro_unserialize` recusa (`size != state_size`) se ele ainda for
+        // 0 — restaurar numa sessão nova, sem ter salvo nela, falhava.
+        let _ = unsafe { (self.raw.serialize_size)() };
         unsafe { (self.raw.unserialize)(data.as_ptr().cast(), data.len()) }
     }
 
