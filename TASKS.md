@@ -164,20 +164,28 @@ conferir".
       como o caminho `Hardware { flip_y }` já faz.
 - [ ] `todo` — A3. Repetir a medição do A0 e registrar no histórico.
 
-- [ ] `todo` — A4. Ritmo core × monitor (achado no A0, não é do
-      readback): no `perf vídeo` o "render" do pump fica em ~16,7 ms, a
-      espera pelo próximo refresh dentro do present/acquire, mesmo com
-      `Mailbox`. No N64 ele subiu de 0,9 pra 16,7 ms em ~5 s, sem evento
-      no log. O pump roda a 59,8 voltas/s contra 60,0 fps do core, e sobra
-      1 quadro a cada poucos segundos ("1 perdidos", tranco periódico).
-      Em 1920×1440 o padrão ficou claro: o render começa em ~4 ms, sobe
-      sozinho até 16,7 ms em ~10 s e volta a ~4 ms depois de cada travada
-      do core. Parece a fila de present enchendo (core 60,0 contra monitor
-      59,8): com a fila cheia, cada quadro espera um refresh inteiro, até
-      ~33 ms a mais de latência de controle, mesmo com `Mailbox`.
-      Investigar o modo de present e o ritmo do core contra o refresh real
-      (a conferir: wgpu `PresentMode` e a spec Vulkan
-      `VkPresentModeKHR`).
+- [ ] `in-progress` — A4. Ritmo core × monitor (achado no A0, não é do
+      readback). Medido em 2026-10-02 com o `perf vídeo` dividido
+      (`e912b1c`): ~15,6 dos ~16,7 ms do "render" são espera no
+      `get_current_texture`; shaders + submit + present ficam abaixo de 1
+      ms. Igual com Mailbox/latência 2 e com latência 1. Pela spec Vulkan
+      (`VkPresentModeKHR`), o Mailbox não deveria esperar o refresh; aqui
+      espera. A forma como o driver NVIDIA apresenta uma janela composta
+      no Windows não está na doc da Khronos (não verificado).
+      **Causa: deslize de fase.** O core-host roda no relógio próprio
+      (60,0 fps) e o monitor a 59,8 Hz (o pump faz 59,8 voltas/s). Os
+      quadros chegam cada vez mais cedo em relação ao refresh, a espera
+      cresce até um refresh inteiro e então sobra 1 quadro ("1 perdidos"),
+      e o ciclo recomeça a cada ~5 s. A queda da espera coincide com os
+      segundos de quadro perdido. Pro jogador: tranco a cada ~5 s e
+      latência que oscila entre ~1 e ~2 quadros, em qualquer modo de
+      present.
+      **Correção proposta:** core no ritmo do monitor. (1) Medir o refresh
+      real (Windows: conferir na doc da Microsoft a API certa, provável o
+      timing de composição do DWM). (2) Core-host roda nesse período; a
+      diferença de ~0,3% no áudio é absorvida pelo Dynamic Rate Control da
+      etapa 06. (3) Alinhar a fase: gerar o quadro logo depois do refresh,
+      pra espera no acquire ficar perto de zero.
 - [ ] `todo` — A5. Áudio em dobro (achado no A0): no flycast em 1920×1440,
       depois de o core travar a ~6 fps (05:54:42), o core-host passou a
       contar ~176 mil amostras/s contra ~88 mil esperadas. Ver se o core
