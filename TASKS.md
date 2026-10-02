@@ -81,10 +81,10 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [ ] `todo` — Validar ponta a ponta com duas Releases publicadas: instalar
       a antiga pelo AppImage e pelo NSIS, atualizar pelo modal e conferir o
       aviso "atualizado" depois do reinício. O `.deb` usa `pkexec`.
-- [ ] `todo` — Capturas do site em `site/screens/` (`inicio`, `biblioteca`,
-      `jogo`, `pausa`, `cores`, `pagina-jogo` .png). 2026-10-02: o usuário
-      mandou `biblioteca`, `jogo` e `pagina-jogo` pelo chat, mas as imagens
-      coladas não viraram arquivo: falta salvar na pasta.
+- [x] `done` — Capturas do site em `site/screens/` (2026-10-02): `jogo`,
+      `biblioteca`, `pagina-jogo`, `jogo-moldura`, `pausa` e
+      `configuracoes` .png, mandadas pelo usuário. As vagas de tela
+      inicial e de catálogo de cores saíram da galeria (sem captura).
 - [x] `done` — Logo e favicon do site (`site/logo.webp`, `favicon-*.png`,
       `icon-512.png`), 2026-10-01.
 
