@@ -91,11 +91,8 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [x] `done` — **OpenGL por hardware no Windows** (WGL): validado pelo
       usuário em 2026-10-01 pelos logs — flycast (GL 3.2), Beetle PSX HW
       (3.3) e parallel_n64 (3.0 compat) abriram contexto e renderizaram.
-- [ ] `todo` — Vulkan in-process no Windows: desligado por padrão depois
-      que o `flycast` derrubou o app (`STATUS_ACCESS_VIOLATION`). Causa
-      provável achada no Linux em 2026-09-25 (despachante do flycast nulo /
-      extensões não ligadas — corrigido pelo hook do `vkCreateDevice`);
-      falta validar num Windows antes de religar.
+- [ ] `todo` — Vulkan in-process no Windows: ver "GPU dos cores no
+      Windows" abaixo (fase C).
 
 - [x] `done` — Etapa 12: flycast e mupen64plus_next rodam em Vulkan
       in-process no Linux (2026-09-25, `REEMU_HW=vulkan`; mupen com
@@ -119,6 +116,97 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       estão nos presets recomendados). HDR / tonemapping.
 - [ ] `todo` — Shader: `test/format.slangp` (textura de inteiros) é a única
       falha de preset que sobrou por limitação do pipeline.
+
+### GPU dos cores no Windows (OpenGL, Vulkan, interop)
+
+Situação em 2026-10-02 (RTX 3060, wgpu em Vulkan):
+- **OpenGL (WGL):** funciona. Os cores rodam no `reemu-core-host` (processo
+  filho), e o quadro sai por `glReadPixels` síncrono
+  (`gl_context.rs::read_pixels`): GPU → CPU, linhas invertidas na CPU, cópia
+  pro anel de memória compartilhada (`core-ipc/shm_ring_win.rs`) e upload
+  pro wgpu no app. Esse é o **caminho lento**.
+- **Vulkan dos cores:** desligado por padrão. Todo core vai pro processo
+  filho (`route_local_device` só escolhe in-process sozinho no Linux), e lá a
+  `VkImage` não cruza o processo. No Windows, um core que prefere Vulkan
+  (flycast) roda em GL.
+- O interop do Linux (`dma_buf` + `sync_file`) não existe no Windows. O
+  equivalente oficial está abaixo, na fase B.
+
+Regra do projeto: cada decisão de GPU com a documentação oficial (CLAUDE.md).
+As fontes já conferidas estão citadas em cada item; o resto fica marcado "a
+conferir".
+
+**Fase A — caminho lento mais rápido (sem interop, vale pra qualquer GPU)**
+
+- [ ] `todo` — A0. Medir antes de mexer: `REEMU_PERF=1` com flycast (GL)
+      em 640×480 e em resolução interna alta (1920×1440). Anotar ms por
+      quadro do `read_pixels`, da cópia pro anel e do upload no app.
+- [ ] `todo` — A1. Readback assíncrono com PBO: `glReadPixels` num
+      `GL_PIXEL_PACK_BUFFER` (2–3 buffers em anel) + `glFenceSync`; ler o
+      quadro N−1 enquanto a GPU faz o N. Mapear o PBO e copiar direto pro
+      slot do anel compartilhado, sem o `Vec` intermediário. A conferir:
+      OpenGL Wiki "Pixel Buffer Object", refpages `glReadPixels`,
+      `glMapBufferRange` e `glFenceSync`. Custo: um quadro de latência.
+      Medir se compensa contra o A0.
+- [ ] `todo` — A2. Tirar o flip de linhas da CPU (`flip_rows_in_place`):
+      mandar `flip_y` junto do quadro e inverter na amostragem do wgpu,
+      como o caminho `Hardware { flip_y }` já faz.
+- [ ] `todo` — A3. Repetir a medição do A0 e registrar no histórico.
+
+**Fase B — interop GL → Vulkan no Windows (zero cópia de CPU)**
+
+Fontes conferidas: `GL_EXT_memory_object_win32` / `GL_EXT_semaphore_win32`
+(registry.khronos.org, `EXT_external_objects_win32.txt`: importa memória e
+semáforos de handles Win32; tipo `HANDLE_TYPE_OPAQUE_WIN32_EXT` = 0x9587;
+importar não transfere a posse do handle, e quem importa fecha o handle NT)
+e `VK_KHR_external_memory_win32` (docs.vulkan.org: `vkGetMemoryWin32HandleKHR`
+transfere a posse do handle pra aplicação, que chama `CloseHandle`; o import
+exige memória "created on the same underlying physical device"). Nenhuma das
+duas trata de handle vindo de outro processo: isso é com o Win32
+(`DuplicateHandle`, a conferir em learn.microsoft.com).
+
+- [ ] `todo` — B1. Detectar suporte nos dois lados: extensões GL
+      `GL_EXT_memory_object`, `GL_EXT_memory_object_win32`,
+      `GL_EXT_semaphore` e `GL_EXT_semaphore_win32` no contexto WGL do filho;
+      `VK_KHR_external_memory_win32` e `VK_KHR_external_semaphore_win32` no
+      device do wgpu. Conferir se é a mesma GPU (UUID do device no GL e
+      `VkPhysicalDeviceIDProperties` no Vulkan; a conferir na
+      `EXT_external_objects.txt`). Sem suporte, segue no readback.
+- [ ] `todo` — B2. App (Vulkan) aloca um anel de 2–3 imagens exportáveis
+      (`VkExportMemoryAllocateInfo`, tipo opaco Win32), pega o handle NT de
+      cada uma, duplica pro processo do core-host (`DuplicateHandle`) e
+      manda o valor pelo pipe. Hoje o pipe não passa handle inline
+      (`transport_win.rs`), então vai uma mensagem nova em `ToChild`.
+      Importar no wgpu como textura (o mesmo `texture_from_raw` do
+      `dma_buf` do Linux).
+- [ ] `todo` — B3. Core-host (GL) importa cada handle
+      (`glImportMemoryWin32HandleEXT` + `glTexStorageMem2DEXT`), usa como
+      color attachment do FBO do core e fecha o handle depois de importar.
+- [ ] `todo` — B4. Sincronização sem `glFinish`: semáforos exportados pelo
+      Vulkan (`VK_KHR_external_semaphore_win32`) e importados no GL
+      (`glImportSemaphoreWin32HandleEXT`). O GL sinaliza no fim do quadro
+      (`glSignalSemaphoreEXT`) e o wgpu espera antes de amostrar. Mesmo
+      papel do `sync_file` → semáforo do Linux.
+- [ ] `todo` — B5. Quadro pelo pipe como `FrameKind::Hardware` com o
+      índice do slot (sem fd). Fallback automático pro readback em qualquer
+      falha, como no Linux. `REEMU_GL_INTEROP=0` força o readback.
+- [ ] `todo` — B6. Validar com as camadas de validação do Vulkan (sync
+      incluída), na NVIDIA e, se der, numa AMD/Intel. Medir contra a fase A.
+
+**Fase C — cores Vulkan no Windows**
+
+- [ ] `todo` — C1. Reproduzir com `REEMU_HW=vulkan` + flycast no Windows.
+      O crash de 2026-09-25 (`STATUS_ACCESS_VIOLATION`) tem causa provável
+      já corrigida no Linux (despachante nulo / extensões não ligadas, hook
+      do `vkCreateDevice`). Rodar com as camadas de validação.
+- [ ] `todo` — C2. Se passar, ligar a escolha automática no Windows
+      (`route_local_device`: `auto` hoje é `cfg!(target_os = "linux")`) e
+      validar flycast, Beetle PSX HW e mupen64plus_next com `parallel`.
+- [ ] `todo` — C3. (Depois da B) Core Vulkan no processo filho: o core-host
+      cria o próprio device, renderiza em imagens exportadas pelo app
+      (`VK_KHR_external_memory_win32`) e devolve só o índice + semáforo.
+      Devolve o isolamento de processo aos cores Vulkan: um crash do core não
+      derruba a interface. Exige o mesmo device físico nos dois lados.
 
 ### Desempenho do caminho do core
 
