@@ -289,8 +289,12 @@ conferir".
       HW rodaram em Vulkan dentro do app, sem fechar: o core adotou o device
       (7 extensões no flycast), 60 quadros/s, 0 perdidos, ~1,5 ms por quadro
       no app. PPSSPP (forçado) também, depois da correção do slot não
-      liberado (`vk_frame.rs`, `begin_frame`). Falta: mupen64plus_next com `parallel`, sair/trocar de jogo
-      várias vezes e as camadas de validação (não instaladas).
+      liberado (`vk_frame.rs`, `begin_frame`). **Com as camadas de validação
+      (Vulkan SDK, `VK_INSTANCE_LAYERS`, 19:06–19:27):** flycast duas vezes
+      (uma delas um jogo de Atomiswave, que caiu pra 30 fps com o áudio
+      certo) e Beetle PSX HW, trocando de jogo no mesmo processo: nenhum
+      `VUID`/`SYNC-HAZARD`, 0 quadros perdidos. Falta: mupen64plus_next com
+      `parallel` (no teste ele foi pro processo filho em GL, sem a opção).
 - [ ] `todo` — C2. Se passar, ligar a escolha automática no Windows
       (`route_local_device`: `auto` hoje é `cfg!(target_os = "linux")`) e
       validar flycast, Beetle PSX HW e mupen64plus_next com `parallel`.

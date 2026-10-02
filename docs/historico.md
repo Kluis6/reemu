@@ -1697,3 +1697,10 @@ Infra:
 - **Causa:** um slot do anel de quadros em voo só era liberado quando o `VkImageFrame` daquela geração era largado pelo compositor. Num `retro_run` sem imagem entregue (sem `set_image`, sem `video_refresh` ou quadro repetido, o que o PPSSPP faz enquanto carrega), a geração não virava quadro e ninguém a liberava. RING quadros depois, o `wait_sync_index` do core esperava por ela para sempre, na thread que também roda o compositor.
 - **Correção:** o `begin_frame` libera a geração anterior quando ela não foi entregue ao compositor (`taken`). Pelo `libretro_vulkan.h` (libretro-common), o core só precisa manter a imagem até o `wait_sync_index` do índice em que ela foi entregue; imagem não entregue não é lida pelo frontend. A atividade de GPU do slot continua coberta pela fence-marcador do `begin_frame`.
 - **Validado no Windows (2026-10-02, RTX 3060, tela 3840×2160):** o PPSSPP roda em Vulkan dentro do app a 60 quadros/s, 0 perdidos (só 13 no 1º segundo, durante o carregamento), ~1,15 ms por quadro no app; nenhum aviso de "compositor atrasado".
+
+## 2026-10-02 — C1: cores Vulkan no Windows com as camadas de validação
+
+- Vulkan SDK instalado; o app subiu com `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation` (o loader confirma no log). O device criado pelo core é da instância do app, então a validação cobre o core também.
+- flycast (Dreamcast e um jogo de Atomiswave, que mudou pra 29,97 fps com o "Detect Frame Rate Changes") e Beetle PSX HW em Vulkan dentro do app, trocando de jogo sem fechar o app: **nenhuma** mensagem `VUID` nem `SYNC-HAZARD`, 0 quadros perdidos. Com cores em OpenGL (mupen64plus_next e parallel_n64 sem `parallel`), o compositor do app também passou sem erro.
+- Custo do shader na tela 3840×2160: `crt-guest-advanced` ~4 ms por quadro com o core Vulkan, até ~16 ms no teste com core GL (com a validação ligada, que pesa).
+- Falta o mupen64plus_next com `mupen64plus-rdp-plugin=parallel`.
