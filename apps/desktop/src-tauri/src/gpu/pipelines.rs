@@ -10,11 +10,8 @@ struct Rect { c: vec4<f32> }; // c.xy = centro (clip), c.zw = meia-extensão (cl
 struct VOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 @vertex
 fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
-    var o: VOut;
     let n = p.xy * 2.0 - vec2<f32>(1.0, 1.0);
-    o.pos = vec4<f32>(R.c.xy + n * R.c.zw, 0.0, 1.0);
-    o.uv = uv;
-    return o;
+    return VOut(vec4<f32>(R.c.xy + n * R.c.zw, 0.0, 1.0), uv);
 }
 @fragment
 fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv); }
@@ -31,14 +28,12 @@ struct Rot { c: vec4<f32> };
 struct VOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 @vertex
 fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
-    var o: VOut;
-    o.pos = vec4<f32>(p.xy * 2.0 - vec2<f32>(1.0, 1.0), 0.0, 1.0);
     // rotação linear do UV em volta do centro → per-vertex + interpolação é
     // exata. (o binding 0 aqui é lido só no vertex, igual ao COMP_WGSL.)
     let d = uv - vec2<f32>(0.5, 0.5);
-    o.uv = vec2<f32>(d.x * R.c.x - d.y * R.c.y, d.x * R.c.y + d.y * R.c.x)
+    let ruv = vec2<f32>(d.x * R.c.x - d.y * R.c.y, d.x * R.c.y + d.y * R.c.x)
          + vec2<f32>(0.5, 0.5);
-    return o;
+    return VOut(vec4<f32>(p.xy * 2.0 - vec2<f32>(1.0, 1.0), 0.0, 1.0), ruv);
 }
 @fragment
 fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv); }
@@ -115,13 +110,13 @@ pub(super) const FLIP_WGSL: &str = r#"
 @group(0) @binding(2) var<uniform> P: vec4<f32>;
 struct V { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 @vertex fn vs(@builtin(vertex_index) i: u32) -> V {
-    let p = array<vec2<f32>, 3>(vec2(-1.0, -1.0), vec2(3.0, -1.0), vec2(-1.0, 3.0));
-    var o: V;
-    o.pos = vec4<f32>(p[i], 0.0, 1.0);
-    let up = (p[i].y + 1.0) * 0.5; // 0 embaixo, 1 em cima
+    // Triângulo de tela cheia: (-1,-1), (3,-1), (-1,3). Sem `array` indexado
+    // por `i` — o naga o põe numa variável de função com `ArrayStride`, o que
+    // o spirv-val do Vulkan 1.3 recusa (VUID-StandaloneSpirv-None-10684).
+    let p = vec2<f32>(select(-1.0, 3.0, i == 1u), select(-1.0, 3.0, i == 2u));
+    let up = (p.y + 1.0) * 0.5; // 0 embaixo, 1 em cima
     let v = select(1.0 - up, up, P.z > 0.5);
-    o.uv = vec2<f32>((p[i].x + 1.0) * 0.5 * P.x, v * P.y);
-    return o;
+    return V(vec4<f32>(p, 0.0, 1.0), vec2<f32>((p.x + 1.0) * 0.5 * P.x, v * P.y));
 }
 @fragment fn fs(v: V) -> @location(0) vec4<f32> { return textureSample(T, S, v.uv); }
 "#;

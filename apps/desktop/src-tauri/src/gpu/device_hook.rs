@@ -29,6 +29,14 @@
 //! `VkPhysicalDeviceFeatures` só tem membros `VkBool32` (spec), então o OU é
 //! feito membro a membro como `u32`.
 //!
+//! `timelineSemaphore` (Vulkan 1.2): o wgpu-hal 30 usa semáforo timeline
+//! sempre que o device é 1.2+, e criar um exige o recurso ligado
+//! (VUID-VkSemaphoreTypeCreateInfo-timelineSemaphore-03252, visto com o
+//! flycast e o Beetle na validação, 2026-10-02). Se o device suporta, o hook
+//! liga o campo na `VkPhysicalDeviceVulkan12Features` ou na
+//! `VkPhysicalDeviceTimelineSemaphoreFeatures` que o core já mandou, ou põe a
+//! sua — nunca as duas (VUID-VkDeviceCreateInfo-pNext-02830).
+//!
 //! Estado global: o callback C não tem ponteiro de usuário. Só uma
 //! negociação por vez (o `emu-session` serializa o load).
 
@@ -40,6 +48,9 @@ struct Armed {
     /// `vkCreateDevice` verdadeiro, resolvido com a instância que o core
     /// passou (a spec só devolve comandos globais com instância `NULL`).
     real_create_device: Option<vk::PFN_vkCreateDevice>,
+    /// `vkGetPhysicalDeviceFeatures2` verdadeiro, pra ver se o device
+    /// suporta `timelineSemaphore` antes de ligar.
+    real_get_features2: Option<vk::PFN_vkGetPhysicalDeviceFeatures2>,
     want_exts: Vec<CString>,
     want_feats: vk::PhysicalDeviceFeatures,
     /// Preenchido pelo hook: extensões realmente ligadas.
@@ -66,6 +77,7 @@ pub(super) fn arm(
     *REAL_GIPA.lock().unwrap_or_else(|p| p.into_inner()) = Some(real_gipa);
     *STATE.lock().unwrap_or_else(|p| p.into_inner()) = Some(Armed {
         real_create_device: None,
+        real_get_features2: None,
         want_exts: want_exts.iter().map(|e| (*e).to_owned()).collect(),
         want_feats,
         enabled: None,
@@ -93,7 +105,16 @@ pub(super) unsafe extern "system" fn get_instance_proc_addr(
     let armed = STATE.lock().unwrap_or_else(|p| p.into_inner()).is_some();
     if armed && !name.is_null() && unsafe { CStr::from_ptr(name) } == c"vkCreateDevice" {
         let real_cd = (unsafe { real(instance, name) })?;
+        let real_f2 = unsafe { real(instance, c"vkGetPhysicalDeviceFeatures2".as_ptr()) };
         if let Some(a) = STATE.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+            // SAFETY: ponteiro do loader pra "vkGetPhysicalDeviceFeatures2"
+            // (core desde o Vulkan 1.1; a instância é 1.2+).
+            a.real_get_features2 = real_f2.map(|f| unsafe {
+                std::mem::transmute::<
+                    unsafe extern "system" fn(),
+                    vk::PFN_vkGetPhysicalDeviceFeatures2,
+                >(f)
+            });
             // SAFETY: ponteiro do loader pra "vkCreateDevice".
             a.real_create_device = Some(unsafe {
                 std::mem::transmute::<unsafe extern "system" fn(), vk::PFN_vkCreateDevice>(real_cd)
@@ -149,7 +170,7 @@ unsafe extern "system" fn create_device(
     p_device: *mut vk::Device,
 ) -> vk::Result {
     // Copia o necessário e SOLTA o lock antes de chamar o driver.
-    let (real, want_exts, want_feats) = {
+    let (real, real_f2, want_exts, want_feats) = {
         let guard = STATE.lock().unwrap_or_else(|p| p.into_inner());
         let Some(armed) = guard.as_ref() else {
             return vk::Result::ERROR_INITIALIZATION_FAILED;
@@ -157,8 +178,21 @@ unsafe extern "system" fn create_device(
         let Some(real) = armed.real_create_device else {
             return vk::Result::ERROR_INITIALIZATION_FAILED;
         };
-        (real, armed.want_exts.clone(), armed.want_feats)
+        (
+            real,
+            armed.real_get_features2,
+            armed.want_exts.clone(),
+            armed.want_feats,
+        )
     };
+    // O device suporta `timelineSemaphore`? (consulta pela cadeia do
+    // `vkGetPhysicalDeviceFeatures2`, como manda a spec.)
+    let timeline_supported = real_f2.is_some_and(|f| {
+        let mut tl = vk::PhysicalDeviceTimelineSemaphoreFeatures::default();
+        let mut f2 = vk::PhysicalDeviceFeatures2::default().push_next(&mut tl);
+        unsafe { f(physical_device, &mut f2) };
+        tl.timeline_semaphore == vk::TRUE
+    });
     let info = unsafe { &*p_create_info };
 
     // Extensões: as do core + as do wgpu.
@@ -171,6 +205,7 @@ unsafe extern "system" fn create_device(
     // Features: dentro da `VkPhysicalDeviceFeatures2` do pNext se houver
     // (VUID-00373), senão no `pEnabledFeatures` (cópia nossa).
     let mut feats2_found = false;
+    let mut timeline_set = false;
     let mut next = info.p_next as *mut vk::BaseOutStructure<'_>;
     while !next.is_null() {
         // SAFETY: cadeia `pNext` válida do core; só lemos `s_type`/`p_next`
@@ -180,6 +215,21 @@ unsafe extern "system" fn create_device(
             let f2 = unsafe { &mut *(next as *mut vk::PhysicalDeviceFeatures2<'_>) };
             or_features(&mut f2.features, &want_feats);
             feats2_found = true;
+        }
+        if timeline_supported
+            && base.s_type == vk::StructureType::PHYSICAL_DEVICE_VULKAN_1_2_FEATURES
+        {
+            let f12 = unsafe { &mut *(next as *mut vk::PhysicalDeviceVulkan12Features<'_>) };
+            f12.timeline_semaphore = vk::TRUE;
+            timeline_set = true;
+        }
+        if timeline_supported
+            && base.s_type == vk::StructureType::PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES
+        {
+            let tl =
+                unsafe { &mut *(next as *mut vk::PhysicalDeviceTimelineSemaphoreFeatures<'_>) };
+            tl.timeline_semaphore = vk::TRUE;
+            timeline_set = true;
         }
         next = base.p_next;
     }
@@ -193,6 +243,13 @@ unsafe extern "system" fn create_device(
     }
 
     let mut patched = *info;
+    // Nenhuma das duas structs na cadeia: a nossa vai na frente.
+    let mut our_timeline =
+        vk::PhysicalDeviceTimelineSemaphoreFeatures::default().timeline_semaphore(true);
+    if timeline_supported && !timeline_set {
+        our_timeline.p_next = info.p_next as *mut std::ffi::c_void;
+        patched.p_next = &our_timeline as *const _ as *const std::ffi::c_void;
+    }
     patched.enabled_extension_count = merged_ptrs.len() as u32;
     patched.pp_enabled_extension_names = merged_ptrs.as_ptr();
     if !feats2_found {

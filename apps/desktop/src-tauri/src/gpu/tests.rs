@@ -1140,8 +1140,13 @@ fn gl_core_real_rom() {
         eprintln!("defina REEMU_TEST_GL_CORE e REEMU_TEST_ROM");
         return;
     };
-    let data = std::path::PathBuf::from(std::env::var("HOME").unwrap())
-        .join(".local/share/com.reemu.desktop");
+    // Pasta de dados do app (cores, system/BIOS) em cada sistema.
+    let data = if cfg!(windows) {
+        std::path::PathBuf::from(std::env::var("APPDATA").unwrap())
+    } else {
+        std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(".local/share")
+    }
+    .join("com.reemu.desktop");
     let secs: u64 = std::env::var("REEMU_TEST_SECS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -1307,7 +1312,6 @@ fn diag_bezel_composition() {
 /// REEMU_TEST_VK_CORE=flycast_libretro REEMU_TEST_ROM=/caminho/jogo.cue \
 ///   cargo test -p reemu-desktop --lib vk_core_real_rom -- --ignored --nocapture --test-threads=1
 /// ```
-#[cfg(target_os = "linux")]
 #[test]
 #[ignore = "core Vulkan e ROM reais (REEMU_TEST_VK_CORE / REEMU_TEST_ROM)"]
 fn vk_core_real_rom() {
@@ -1322,8 +1326,13 @@ fn vk_core_real_rom() {
         return;
     };
     let _ = env_logger::builder().is_test(true).try_init();
-    let data = std::path::PathBuf::from(std::env::var("HOME").unwrap())
-        .join(".local/share/com.reemu.desktop");
+    // Pasta de dados do app (cores, system/BIOS) em cada sistema.
+    let data = if cfg!(windows) {
+        std::path::PathBuf::from(std::env::var("APPDATA").unwrap())
+    } else {
+        std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(".local/share")
+    }
+    .join("com.reemu.desktop");
     let secs: u64 = std::env::var("REEMU_TEST_SECS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -1359,9 +1368,25 @@ fn vk_core_real_rom() {
         .filter_map(|kv| kv.split_once('='))
         .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
         .collect();
-    session
-        .load(&core, &rom, opts)
-        .expect("carregar core Vulkan + ROM");
+    // Como o video pump do app: esta thread dirige o core, então o load
+    // (feito pela thread da sessão) vem rodar aqui (`on_vk_thread`) enquanto
+    // ela segue chamando `step_vk_local`.
+    let _ = session.step_vk_local();
+    // Chamada bloqueante da sessão (load, save state, unload) numa thread à
+    // parte, enquanto esta segue dirigindo o core.
+    fn driving<R: Send>(session: &EmuSession, call: impl FnOnce() -> R + Send) -> R {
+        std::thread::scope(|sc| {
+            let h = sc.spawn(call);
+            while !h.is_finished() {
+                let gate = session.lock_vk_queue();
+                let _ = session.step_vk_local();
+                drop(gate);
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            h.join().unwrap()
+        })
+    }
+    driving(&session, || session.load(&core, &rom, opts)).expect("carregar core Vulkan + ROM");
     if let Some(new_fp) = rebuilt.lock().unwrap().take() {
         eprintln!("device criado pelo core (negociação) — FrameProcessor refeito");
         fp = new_fp;
@@ -1378,7 +1403,9 @@ fn vk_core_real_rom() {
     let mut tick = Instant::now();
     while start.elapsed() < Duration::from_secs(secs) {
         let t = Instant::now();
+        let gate = session.lock_vk_queue();
         let frame = session.step_vk_local();
+        drop(gate);
         let dt = t.elapsed();
         step_sum += dt;
         step_max = step_max.max(dt);
@@ -1416,12 +1443,12 @@ fn vk_core_real_rom() {
         if std::env::var_os("REEMU_TEST_SAVESTATE").is_some() {
             let el = start.elapsed().as_secs();
             if el >= 6 && saved.is_none() && !restored {
-                saved = session.save_state().expect("save_state");
+                saved = driving(&session, || session.save_state()).expect("save_state");
                 eprintln!("save state: {:?} bytes", saved.as_ref().map(|b| b.len()));
             }
             if el >= 9 && !restored {
                 if let Some(b) = saved.take() {
-                    let ok = session.restore_state(b).expect("restore_state");
+                    let ok = driving(&session, || session.restore_state(b)).expect("restore_state");
                     eprintln!("restore state: {ok}");
                 }
                 restored = true;
@@ -1437,7 +1464,7 @@ fn vk_core_real_rom() {
             next += 1;
         }
     }
-    session.unload().ok();
+    driving(&session, || session.unload()).ok();
     std::env::remove_var("REEMU_HW");
     let _ = std::fs::remove_dir_all(&tmp);
     // `REEMU_TEST_EXPECT_CHILD=1`: o core TEM que ir pro filho (ex.: mupen

@@ -59,10 +59,7 @@ const BUILTIN_VS: &str = r#"
 struct VOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
 @vertex
 fn main(@location(0) position: vec4<f32>, @location(1) texcoord: vec2<f32>) -> VOut {
-    var o: VOut;
-    o.pos = vec4<f32>(position.xy * 2.0 - vec2<f32>(1.0, 1.0), 0.0, 1.0);
-    o.uv = texcoord;
-    return o;
+    return VOut(vec4<f32>(position.xy * 2.0 - vec2<f32>(1.0, 1.0), 0.0, 1.0), texcoord);
 }
 "#;
 
@@ -960,23 +957,45 @@ impl FrameProcessor {
             unsafe { ash::Entry::load() }.map_err(|e| format!("carregar loader Vulkan: {e}"))?;
 
         // apiVersion: o que o core pediu (Beetle manda VK_MAKE_VERSION(1,0,32)),
-        // com **piso em 1.2** — o wgpu-hal 30 chama `vkWaitSemaphores` (timeline,
-        // core em 1.2) no `wait_for_fence`; num device 1.1 esse ponteiro é nulo
-        // e o `ash` faz `panic!("Unable to load wait_semaphores")` no video pump.
-        // NÓS criamos a instância, então o app info 1.1 do Beetle não limita —
-        // a instância nasce 1.2 e o `create_device` do core cria um device 1.2.
-        let api_version = if neg.get_application_info != 0 {
+        // com piso na versão com que o wgpu cria as instâncias dele — 1.3 se o
+        // loader suporta (`Instance::init` do wgpu-hal 30: "the max Vulkan API
+        // version supported by wgpu-hal"), e nunca menos que 1.2.
+        //
+        // - 1.2: o wgpu-hal 30 chama `vkWaitSemaphores` (timeline, core em 1.2)
+        //   no `wait_for_fence`; num device 1.1 esse ponteiro é nulo e o `ash`
+        //   faz `panic!("Unable to load wait_semaphores")` no video pump.
+        // - 1.3: o wgpu-hal escolhe a versão do SPIR-V pela versão do device
+        //   físico (`device_api_version = properties.api_version`; ≥ 1.3 gera
+        //   SPIR-V 1.6). Funcionalidade nova do device só vale quando a do
+        //   device E a `apiVersion` da instância chegam lá ("Extending Physical
+        //   Device Core Functionality", spec Vulkan, cap. Initialization). Com a
+        //   instância em 1.2, os shaders 1.6 do wgpu davam
+        //   `VUID-VkShaderModuleCreateInfo-pCode-08737` na validação (mupen
+        //   com ParaLLEl-RDP, 2026-10-02).
+        //
+        // NÓS criamos a instância, então o app info antigo do core não limita.
+        let loader_version = unsafe { entry.try_enumerate_instance_version() }
+            .ok()
+            .flatten()
+            .unwrap_or(vk::API_VERSION_1_0);
+        let wgpu_version = if loader_version >= vk::API_VERSION_1_3 {
+            vk::API_VERSION_1_3
+        } else {
+            vk::API_VERSION_1_2
+        };
+        let core_version = if neg.get_application_info != 0 {
             let f: unsafe extern "C" fn() -> *const vk::ApplicationInfo<'static> =
                 unsafe { std::mem::transmute(neg.get_application_info) };
             let p = unsafe { f() };
             if p.is_null() {
-                vk::API_VERSION_1_2
+                0
             } else {
-                unsafe { (*p).api_version }.max(vk::API_VERSION_1_2)
+                unsafe { (*p).api_version }
             }
         } else {
-            vk::API_VERSION_1_2
+            0
         };
+        let api_version = core_version.max(wgpu_version);
 
         let flags = wgpu::InstanceFlags::from_build_config().with_env();
         let inst_exts = wgpu::hal::vulkan::Instance::desired_extensions(&entry, api_version, flags)
