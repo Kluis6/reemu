@@ -1091,7 +1091,6 @@ export const useDetailStyles = makeStyles({
     alignItems: "center",
     columnGap: "8px",
     fontSize: tokens.fontSizeBase400,
-    fontWeight: tokens.fontWeightMedium,
     color: "rgba(255, 255, 255, 0.82)",
   },
   heroStatsIcon: { fontSize: `${M.ICON}px`, flexShrink: 0 },
