@@ -31,7 +31,6 @@
 
   --radius-card: var(--borderRadiusXLarge, 12px);
   --shadow-card: var(--shadow4, none);
-  --shadow-lift: var(--shadow16, 0 12px 32px rgba(0, 0, 0, 0.45));
 
   --ease-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
