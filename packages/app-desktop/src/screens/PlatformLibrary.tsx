@@ -49,7 +49,7 @@ export function PlatformLibrary() {
       <SectionHeader
         title={platformLabel(platform)}
         right={
-          <span className={s.count}>
+          <span className={s.shelfCount}>
             {t("library.games", { count: list.length })}
           </span>
         }

@@ -494,6 +494,13 @@ export const useBrowseStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
+  // Quantidade de jogos ao lado do título da prateleira: mesmo tamanho do
+  // subtítulo da prateleira (`SectionHeader`, medido no app Xbox).
+  shelfCount: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: `${M.SECTION_SUB}px`,
+    lineHeight: `${M.SECTION_SUB_LINE}px`,
+  },
 
 
   libManage: {

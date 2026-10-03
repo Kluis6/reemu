@@ -266,7 +266,7 @@ export function Library() {
             title={platformLabel(sys)}
             onSeeAll={goAll}
             right={
-              <span className={s.count}>
+              <span className={s.shelfCount}>
                 {t("library.games", { count: plist.length })}
               </span>
             }
