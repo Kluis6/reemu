@@ -527,28 +527,30 @@ export type ThemeId =
 // "Personalizado" deixa escolher qualquer matiz (ver seção abaixo). Os temas
 // que sobram são todos "de marca" (Xbox, PlayStation).
 export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
-  // Identidade do próprio ReEmu (logo + site) — o tema padrão.
+  // Identidade do próprio ReEmu (logo + site) — o tema padrão. Os nomes
+// exibidos dos temas são próprios, sem marcas de consoles (ver os `names` em
+// i18n/locales); os IDs continuam os mesmos, que é o que fica salvo.
   reemu: {
-    label: "ReEmu",
+    label: "Neon Circuit",
     theme: make(reemuGreen, "dark", reemuBg, {
       neutrals: reemuDark,
       appBg: "linear-gradient(180deg, #08100C 0%, #030605 45%)",
       activeBg: "#16211D",
     }),
   },
-  "xbox-green": { label: "Verde Xbox", theme: make(xboxGreen, "dark", xboxGreenBg) },
+  "xbox-green": { label: "Green Modern", theme: make(xboxGreen, "dark", xboxGreenBg) },
   // Sem par "-claro" de propósito — o dashboard Blades nunca teve modo claro.
-  "xbox-classico": { label: "Xbox Clássico", theme: make(xboxClassico, "dark", xboxClassicoBg) },
-  "ps-blue": { label: "Azul PlayStation", theme: make(psBlue, "dark", psBlueBg) },
-  ps1: { label: "PlayStation Clássico", theme: make(ps1Red, "dark", ps1Bg) },
+  "xbox-classico": { label: "Lime Classic", theme: make(xboxClassico, "dark", xboxClassicoBg) },
+  "ps-blue": { label: "Blue Modern", theme: make(psBlue, "dark", psBlueBg) },
+  ps1: { label: "Crimson Retro", theme: make(ps1Red, "dark", ps1Bg) },
   // Modo claro do dashboard Xbox (Series S/X e "modo XBOX" no PC): fundo
   // branco/cinza bem claro — só a luminosidade da casca inverte, a marca
   // não muda. Uma variante claro por rampa, mesmo par light/dark que o
   // verde já tinha.
-  claro: { label: "Claro", theme: make(xboxGreen, "light", xboxGreenBg) },
-  "ps-blue-claro": { label: "Azul Claro", theme: make(psBlue, "light", psBlueBg) },
+  claro: { label: "Green Modern (claro)", theme: make(xboxGreen, "light", xboxGreenBg) },
+  "ps-blue-claro": { label: "Blue Modern (claro)", theme: make(psBlue, "light", psBlueBg) },
   "ps1-claro": {
-    label: "PlayStation Clássico Claro",
+    label: "Crimson Retro (claro)",
     theme: make(ps1Red, "light", ps1Bg),
   },
   // Alva: cores do Alvanista (alvanista.com), nos dois modos do site. No
@@ -562,7 +564,7 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
     }),
   },
   "alva-claro": {
-    label: "Alva Claro",
+    label: "Alva (claro)",
     theme: make(alvaBlue, "light", alvaBg, {
       neutrals: alvaLight,
       appBg: "linear-gradient(180deg, #F4F7FA 0%, #F0F2F5 45%)",
@@ -570,7 +572,7 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
     }),
   },
   snes: {
-    label: "Super Nintendo",
+    label: "Purple Mistique",
     theme: make(snesPurple, "dark", snesBg, {
       neutrals: snesDark,
       appBg: "linear-gradient(180deg, #1D1C23 0%, #15141A 45%)",
@@ -578,7 +580,7 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
     }),
   },
   "snes-claro": {
-    label: "Super Nintendo Claro",
+    label: "Purple Mistique (claro)",
     theme: make(snesPurple, "light", snesBg, {
       neutrals: snesLight,
       appBg: "linear-gradient(180deg, #E4E2EA 0%, #D9D7E0 45%)",
