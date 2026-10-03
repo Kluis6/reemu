@@ -376,7 +376,8 @@ export const useShellStyles = makeStyles({
     alignItems: "center",
     // Mesma cor do relógio ao lado (`clock`).
     color: tokens.colorNeutralForeground1,
-    fontSize: `${M.ICON}px`,
+    // Mesmo tamanho do ícone do botão de tela cheia ao lado (`navIconBtn`).
+    fontSize: "16px",
   },
   scroll: {
     scrollBehavior: "smooth",
