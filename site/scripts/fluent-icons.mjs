@@ -40,6 +40,15 @@ const ICONS = {
   payment: "payment",
 };
 
+// Ícones desenhados pro ReEmu no mesmo estilo do Fluent (grade 24×24, traço
+// 1,5, cantos arredondados) — o conjunto da Microsoft não tem estes.
+const CUSTOM = {
+  // Joystick estilo Atari (CX40): caixa em perspectiva 3/4, botão de tiro no
+  // canto de trás à esquerda, bastão com pega no centro.
+  joystick:
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.25 12.25h11.5L21 16v3.25A1.75 1.75 0 0 1 19.25 21H4.75A1.75 1.75 0 0 1 3 19.25V16z"/><path d="M3 16h18"/><ellipse cx="7.25" cy="14.1" rx="1.4" ry=".6"/><path d="M12 14.1V9.5"/><rect x="10" y="2.75" width="4" height="6.75" rx="2"/></svg>',
+};
+
 let pkg = process.argv[2];
 if (!pkg) {
   const dir = mkdtempSync(join(tmpdir(), "fluent-icons-"));
@@ -64,14 +73,20 @@ const out = [
   "  mask: var(--fi) center / contain no-repeat;",
   "}",
 ];
+// a máscara só usa o alfa: a cor do traço não importa
+const rule = (cls, svg) => {
+  const uri = `data:image/svg+xml,${encodeURIComponent(svg.trim().replace(/\s+/g, " ")).replace(/'/g, "%27")}`;
+  out.push(`.fi-${cls} { --fi: url("${uri}"); }`);
+};
 for (const [cls, file] of Object.entries(ICONS)) {
   const path = join(pkg, "icons", `${file}_24_regular.svg`);
   if (!existsSync(path)) throw new Error(`ícone não encontrado: ${path}`);
-  // a máscara só usa o alfa: a cor do traço não importa
-  const svg = readFileSync(path, "utf8").trim().replace(/\s+/g, " ");
-  const uri = `data:image/svg+xml,${encodeURIComponent(svg).replace(/'/g, "%27")}`;
-  out.push(`.fi-${cls} { --fi: url("${uri}"); }`);
+  rule(cls, readFileSync(path, "utf8"));
 }
+out.push("/* Desenhados pro ReEmu (mesmo estilo; não fazem parte do conjunto da Microsoft). */");
+for (const [cls, svg] of Object.entries(CUSTOM)) rule(cls, svg);
 const site = join(dirname(fileURLToPath(import.meta.url)), "..");
 writeFileSync(join(site, "src/fluent-icons.css"), out.join("\n") + "\n");
-console.log(`src/fluent-icons.css ← ${Object.keys(ICONS).length} ícones (@fluentui/svg-icons ${VERSION})`);
+console.log(
+  `src/fluent-icons.css ← ${Object.keys(ICONS).length} ícones (@fluentui/svg-icons ${VERSION}) + ${Object.keys(CUSTOM).length} próprio(s)`,
+);
