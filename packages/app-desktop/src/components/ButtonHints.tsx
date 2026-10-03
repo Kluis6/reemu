@@ -1,4 +1,5 @@
 import { mergeClasses } from '@fluentui/react-components'
+import { useGamepadStore } from '../stores/useGamepadStore'
 import { useHintStyles } from '../styles/xbox'
 
 export type Glyph = 'A' | 'B' | 'X' | 'Y' | 'MENU'
@@ -8,10 +9,13 @@ export interface Hint {
   label: string
 }
 
-/** Barra de dicas de botão do controle, canto inferior direito (estilo Xbox). */
+/** Barra de dicas de botão do controle, canto inferior direito (estilo Xbox).
+ *  Só aparece com um controle conectado (`useGamepadStore`, o mesmo do
+ *  ícone da topbar): sem controle, os glifos A/B/X/Y não servem pra nada. */
 export function ButtonHints({ hints }: { hints: readonly Hint[] }) {
   const s = useHintStyles()
-  if (hints.length === 0) return null
+  const connected = useGamepadStore((st) => st.devices.length > 0)
+  if (!connected || hints.length === 0) return null
   const color: Record<Exclude<Glyph, 'MENU'>, string> = { A: s.a, B: s.b, X: s.x, Y: s.y }
   return (
     <div className={s.hints}>
