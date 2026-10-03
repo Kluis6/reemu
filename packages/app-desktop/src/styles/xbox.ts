@@ -360,13 +360,14 @@ export const useShellStyles = makeStyles({
       outline: "none !important",
     },
   },
-  // Relógio: branco, peso regular, como no app Xbox, 24 px (pedido do
-  // usuário). Em px da tela de referência 1366×768: o zoom da interface
+  // Relógio do app Xbox no modo XBOX (print a 1366×768): "08:20" com 46 de
+  // largura e algarismos de 14 de altura, branco, regular — 20 px na Segoe
+  // UI Variable (48 × 14). Em px da tela de referência: o zoom da interface
   // (`lib/uiScale.ts`) escala junto com o resto em outros tamanhos de tela.
   clock: {
     color: tokens.colorNeutralForeground1,
     fontVariantNumeric: "tabular-nums",
-    fontSize: "24px",
+    fontSize: "20px",
     fontWeight: tokens.fontWeightRegular,
     lineHeight: 1,
     letterSpacing: "0.01em",
@@ -376,8 +377,9 @@ export const useShellStyles = makeStyles({
     alignItems: "center",
     // Mesma cor do relógio ao lado (`clock`).
     color: tokens.colorNeutralForeground1,
-    // 28 px (pedido do usuário); o relógio ao lado tem 24 — o desenho do
-    // ícone não ocupa a caixa toda.
+    // 28 px: o desenho do controle ocupa ~58% da altura da caixa (y 4,5 a
+    // 16 no quadro de 20), então fica com ~16 de altura — entre os
+    // algarismos do relógio (14) e o ícone vertical do Xbox (20).
     fontSize: "28px",
     // Caixa do tamanho exato do ícone, pra a topbar (`alignItems: center`)
     // centralizar o desenho junto com o botão de tela cheia e o relógio. Sem
