@@ -43,8 +43,12 @@ import {
 } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
-import { useBrowseStyles, useMotionStyles, useShellStyles } from "../styles/xbox";
-import { RADIUS } from "../styles/metrics";
+import {
+  useBrowseStyles,
+  useMotionStyles,
+  useShellStyles,
+  useTabStyles,
+} from "../styles/xbox";
 import { useTranslation } from "react-i18next";
 
 const useLibStyles = makeStyles({
@@ -83,61 +87,6 @@ const useLibStyles = makeStyles({
   //   de distância.
   // O indicador é o `::after` do `Tab` do Fluent (`useActiveIndicatorStyles`:
   // recuo `spacingHorizontalM` e altura `strokeWidthThicker` no medium).
-  tabs: {
-    columnGap: "8px",
-    "& .fui-Tab": {
-      paddingTop: "11px",
-      paddingBottom: "11px",
-      paddingLeft: "13px",
-      paddingRight: "13px",
-      // Raio padrão do ReEmu (`metrics.RADIUS`).
-      borderRadius: `${RADIUS}px`,
-      color: `${tokens.colorNeutralForeground1} !important`,
-    },
-    "& .fui-Tab__content": {
-      fontWeight: tokens.fontWeightSemibold,
-      color: `${tokens.colorNeutralForeground1} !important`,
-    },
-    "& .fui-Tab::after": {
-      left: "3px",
-      right: "3px",
-      height: "4px",
-      borderRadius: tokens.borderRadiusCircular,
-    },
-    "& .fui-Tab[aria-selected=\"true\"]::after": {
-      backgroundColor: tokens.colorNeutralForeground1,
-    },
-    // Estados como no app Xbox (prints da biblioteca), com a cor primária do
-    // tema no lugar do branco do Xbox:
-    // - mouse em cima: só o fundo cinza;
-    // - foco numa aba inativa: fundo cinza + anel de 2 a 5 de distância;
-    // - foco na aba ativa: fundo preenchido na cor primária, texto sobre ela
-    //   e sem o sublinhado.
-    // `!important`: ganha do anel global do `.app` (`& .fui-Tab:focus`).
-    // Propriedades separadas, como a regra global.
-    "& .fui-Tab:hover": {
-      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
-    },
-    "& .fui-Tab:focus": {
-      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
-      outlineWidth: "2px !important",
-      // Sem `!important` (o tipo do Griffel não aceita); a global já é solid.
-      outlineStyle: "solid",
-      outlineColor: `${tokens.colorBrandStroke1} !important`,
-      outlineOffset: "5px !important",
-    },
-    // Par da cor primária do ReEmu: `--reemuBrandSolid` com o texto em
-    // `--reemuOnBrand` (contraste ≥ 3:1 garantido em `themes.test.ts`).
-    "& .fui-Tab[aria-selected=\"true\"]:focus": {
-      backgroundColor: "var(--reemuBrandSolid) !important",
-    },
-    "& .fui-Tab[aria-selected=\"true\"]:focus .fui-Tab__content": {
-      color: "var(--reemuOnBrand) !important",
-    },
-    "& .fui-Tab[aria-selected=\"true\"]:focus::after": {
-      backgroundColor: "transparent",
-    },
-  },
   // `MenuItemRadio` do Fluent renderiza [checkmark, content] nessa ordem de
   // DOM (sem prop pra inverter) — reordena visualmente via flex `order`: o
   // `content` (`flexGrow: 1` já de fábrica) ocupa a esquerda e empurra o
@@ -171,6 +120,7 @@ const SORT_LABEL = {
 export function Library() {
   const { t } = useTranslation();
   const s = useBrowseStyles();
+  const tb = useTabStyles();
   const m = useMotionStyles();
   const l = useLibStyles();
   const shell = useShellStyles();
@@ -360,7 +310,7 @@ export function Library() {
     <div>
       <div className={l.bar}>
         <TabList
-          className={l.tabs}
+          className={tb.tabs}
           selectedValue={tab}
           onTabSelect={(_, d) => setTab(d.value as LibTab)}
         >

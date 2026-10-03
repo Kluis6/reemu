@@ -76,7 +76,7 @@ import {
   type ShaderScope,
 } from "../lib/tauri";
 import { formatPlayTime } from "../lib/playTime";
-import { useDetailStyles } from "../styles/xbox";
+import { useDetailStyles, useTabStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
 import { rankCores } from "../lib/coreChoice";
@@ -85,6 +85,7 @@ import { curatedText, presetTitle } from "../lib/backendText";
 export function RomDetail() {
   const { t, i18n } = useTranslation();
   const s = useDetailStyles();
+  const tb = useTabStyles();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const push = useToastStore((st) => st.push);
@@ -593,6 +594,7 @@ export function RomDetail() {
 
       <section className={mergeClasses(s.section, s.tabsOverlap)}>
         <TabList
+          className={tb.tabs}
           selectedValue={activeCfgTab}
           onTabSelect={(_, d) =>
             setCfgTab(d.value as "core" | "states" | "shader")
