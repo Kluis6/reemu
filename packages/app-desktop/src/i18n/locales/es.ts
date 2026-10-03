@@ -747,6 +747,7 @@ const es: Messages = {
     next: 'Siguiente',
     goToSlide: 'Ir al destacado {{n}}',
     seeAll: 'Ver todo — {{title}}',
+    showAll: 'Mostrar todo',
   },
   format: {
     lessThanMin: 'menos de 1 min',

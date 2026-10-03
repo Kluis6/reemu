@@ -748,6 +748,7 @@ const ptBR = {
     next: 'Próximo',
     goToSlide: 'Ir para o destaque {{n}}',
     seeAll: 'Ver tudo — {{title}}',
+    showAll: 'Mostrar tudo',
   },
   format: {
     lessThanMin: 'menos de 1 min',

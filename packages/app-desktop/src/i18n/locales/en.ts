@@ -747,6 +747,7 @@ const en: Messages = {
     next: 'Next',
     goToSlide: 'Go to highlight {{n}}',
     seeAll: 'See all — {{title}}',
+    showAll: 'Show all',
   },
   format: {
     lessThanMin: 'under 1 min',
