@@ -70,6 +70,9 @@ const useLibStyles = makeStyles({
     marginBottom: "24px",
   },
   barRight: { display: "flex", alignItems: "center", columnGap: "10px" },
+  // A 1ª prateleira já fica a 27 dos filtros (`toolbar.marginBottom`, como
+  // no Xbox) — sem somar o espaço entre prateleiras (`section`, 64).
+  firstShelf: { marginTop: 0 },
   // Abas como no app Xbox (print da biblioteca a 1366×768): texto 14
   // semibold e branco também nas inativas, ~40 entre os rótulos, indicador
   // de 4 de altura, branco, arredondado, com o texto + ~10 de cada lado,
@@ -284,7 +287,7 @@ export function Library() {
       const capped = plist.slice(0, 40);
       return (
         <section
-          className={mergeClasses(s.section, m.riseIn)}
+          className={mergeClasses(s.section, i === 0 && l.firstShelf, m.riseIn)}
           style={{ animationDelay: `${Math.min(i, 6) * 32}ms` }}
           key={sys}
         >

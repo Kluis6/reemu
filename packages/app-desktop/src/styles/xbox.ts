@@ -480,10 +480,10 @@ export const useBrowseStyles = makeStyles({
     columnGap: "10px",
     rowGap: "10px",
     marginTop: "6px",
-    // Mesmo respiro do `rowGap` da grade (20px): com os 4px de antes a
-    // primeira linha de cards ficava colada na linha de filtros, enquanto
-    // acima dela as tabs tinham 24px de folga.
-    marginBottom: `${SHELF_GAP}px`,
+    // Da última linha de filtros ao topo dos cards: 27, como na biblioteca
+    // do app Xbox (print a 1366×768: filtros 180–211, chip 230–261, cards
+    // em 289). É o espaço até a grade da aba Favoritos.
+    marginBottom: "27px",
     flexWrap: "wrap",
   },
   chip: {
