@@ -401,6 +401,20 @@ const ptBR = {
       'Ao minimizar, o ReEmu sai da barra de tarefas e fica como um ícone perto do relógio. Clique no ícone para voltar.',
     trayOpen: 'Abrir o ReEmu',
     trayQuit: 'Sair',
+    general: 'Inicialização',
+    hardware: {
+      title: 'Hardware',
+      description: 'O computador em que o ReEmu está rodando.',
+      os: 'Sistema operacional',
+      cpu: 'Processador',
+      cores: '{{cores}} núcleos, {{threads}} threads',
+      threads: '{{threads}} threads',
+      memory: 'Memória',
+      gpu: 'Placa de vídeo',
+      backend: 'API gráfica',
+      driver: 'Driver',
+      unknown: 'Não identificado',
+    },
   },
   video: {
     curated: {

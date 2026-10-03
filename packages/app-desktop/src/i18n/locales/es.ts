@@ -400,6 +400,20 @@ const es: Messages = {
       'Al minimizar, ReEmu sale de la barra de tareas y queda como un icono cerca del reloj. Haz clic en el icono para volver.',
     trayOpen: 'Abrir ReEmu',
     trayQuit: 'Salir',
+    general: 'Inicio',
+    hardware: {
+      title: 'Hardware',
+      description: 'El equipo en el que se ejecuta ReEmu.',
+      os: 'Sistema operativo',
+      cpu: 'Procesador',
+      cores: '{{cores}} núcleos, {{threads}} hilos',
+      threads: '{{threads}} hilos',
+      memory: 'Memoria',
+      gpu: 'Tarjeta gráfica',
+      backend: 'API gráfica',
+      driver: 'Controlador',
+      unknown: 'No identificado',
+    },
   },
   video: {
     curated: {

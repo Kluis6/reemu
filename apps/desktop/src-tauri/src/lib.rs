@@ -301,6 +301,7 @@ pub fn run() {
             updates::update_check,
             updates::update_install,
             system::get_system_settings,
+            commands::get_hardware_info,
             system::set_autostart,
             system::set_start_fullscreen,
             system::set_minimize_to_tray,

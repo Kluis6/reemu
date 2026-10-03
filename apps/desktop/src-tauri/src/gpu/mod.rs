@@ -1758,6 +1758,11 @@ impl FrameProcessor {
             .collect()
     }
 
+    /// Placa de vídeo em uso (Configurações › Sistema).
+    pub fn adapter_info(&self) -> wgpu::AdapterInfo {
+        self.adapter.get_info()
+    }
+
     pub fn vulkan_shared_device(&self) -> Option<VulkanSharedDevice> {
         // SAFETY: só lemos handles; nada é destruído aqui. O guard do `as_hal`
         // mantém o device vivo durante a leitura, e os handles seguem válidos

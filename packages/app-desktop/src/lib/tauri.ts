@@ -66,6 +66,22 @@ export interface SystemSettings {
   minimizeToTray: boolean
 }
 export const getSystemSettings = () => invoke<SystemSettings>('get_system_settings')
+
+/** Configurações › Sistema › Hardware (`commands/hardware.rs`). */
+export interface HardwareInfo {
+  os: string | null
+  arch: string
+  cpu: string | null
+  cpuCores: number | null
+  cpuThreads: number
+  /** Memória total em bytes. */
+  memoryBytes: number
+  gpu: string | null
+  /** API do compositor (Vulkan, Dx12, …). */
+  gpuBackend: string | null
+  gpuDriver: string | null
+}
+export const getHardwareInfo = () => invoke<HardwareInfo>('get_hardware_info')
 export const setAutostart = (enabled: boolean) => invoke<void>('set_autostart', { enabled })
 export const setStartFullscreen = (enabled: boolean) =>
   invoke<void>('set_start_fullscreen', { enabled })

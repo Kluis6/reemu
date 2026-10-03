@@ -400,6 +400,20 @@ const en: Messages = {
       'When minimized, ReEmu leaves the taskbar and stays as an icon near the clock. Click the icon to bring it back.',
     trayOpen: 'Open ReEmu',
     trayQuit: 'Quit',
+    general: 'Startup',
+    hardware: {
+      title: 'Hardware',
+      description: 'The computer ReEmu is running on.',
+      os: 'Operating system',
+      cpu: 'Processor',
+      cores: '{{cores}} cores, {{threads}} threads',
+      threads: '{{threads}} threads',
+      memory: 'Memory',
+      gpu: 'Graphics card',
+      backend: 'Graphics API',
+      driver: 'Driver',
+      unknown: 'Not identified',
+    },
   },
   video: {
     curated: {

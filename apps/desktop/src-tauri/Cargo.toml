@@ -58,6 +58,7 @@ library-scan = { path = "../../../crates/library-scan" }
 input-desktop = { path = "../../../crates/input-desktop" }
 shader-slang = { path = "../../../crates/shader-slang" }
 tauri-plugin-updater = "2"
+sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt"] }

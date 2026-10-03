@@ -4,13 +4,13 @@ import {
   Card,
   ColorPicker,
   ColorSlider,
-  Radio,
-  RadioGroup,
   Switch,
+  Tab,
+  TabList,
   Text,
   makeStyles,
+  mergeClasses,
   tokens,
-  type RadioGroupOnChangeData,
 } from "@fluentui/react-components";
 import {
   CheckmarkFilled,
@@ -22,19 +22,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  getLanguagePreference,
-  LANGUAGES,
-  setLanguagePreference,
-  type LanguagePreference,
-} from "../../i18n";
-import {
   clearWallpaper,
   pickImage,
   setWallpaperFile,
   wallpaperUrl,
 } from "../../lib/tauri";
 import { errorToast } from "../../lib/toast";
-import { UI_SCALES, getUiScale, setUiScale } from "../../lib/uiScale";
 import { useToastStore } from "../../stores/useToastStore";
 import { useThemeStore } from "../../stores/useThemeStore";
 import {
@@ -45,6 +38,7 @@ import {
   type ReEmuTheme,
   type ThemeMode,
 } from "../../styles/themes";
+import { useTabStyles } from "../../styles/xbox";
 
 const useStyles = makeStyles({
   root: {
@@ -53,27 +47,17 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalL,
     maxWidth: "1120px",
   },
-  // temas à esquerda, papel de parede numa coluna à direita; em janela
-  // estreita a coluna desce pra baixo dos temas
-  // quebra pela largura DISPONÍVEL (flex-wrap), não pela da janela: a
-  // coluna do papel de parede desce quando os temas não cabem em 2 colunas
-  columns: {
-    display: "flex",
-    flexWrap: "wrap",
-    alignItems: "flex-start",
-    gap: tokens.spacingHorizontalXXL,
-  },
+  // Tema e papel de parede, cada um na sua aba.
+  tabs: { alignSelf: "flex-start" },
   section: {
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalL,
-    flex: "1 1 520px",
     minWidth: 0,
   },
   wallCard: {
     gap: tokens.spacingVerticalM,
-    flex: "0 1 300px",
-    minWidth: "240px",
+    maxWidth: "480px",
   },
   grid: {
     display: "grid",
@@ -276,13 +260,13 @@ function ThemeCard({
   );
 }
 
-/** Configurações › Aparência — tema de cor + papel de parede da tela inicial. */
+/** Configurações › Aparência — tema de cor e papel de parede da tela
+ *  inicial, em abas. Idioma e tamanho da interface ficam em Sistema. */
 export function SettingsAppearance() {
   const { t } = useTranslation();
-  const [langPref, setLangPref] = useState<LanguagePreference>(
-    getLanguagePreference,
-  );
   const s = useStyles();
+  const tb = useTabStyles();
+  const [tab, setTab] = useState<"theme" | "wallpaper">("theme");
   const {
     selection,
     customDraft,
@@ -292,7 +276,6 @@ export function SettingsAppearance() {
     setCustomMode,
   } = useThemeStore();
   const isCustom = selection.kind === "custom";
-  const [uiScale, setUiScaleState] = useState(getUiScale);
   // Cada card guarda o próprio modo. No card selecionado o Switch aplica na
   // hora; nos outros só troca a prévia daquele card — clicar no card aplica
   // o tema no modo que está na tela. Um card nunca muda por causa de outro.
@@ -340,70 +323,20 @@ export function SettingsAppearance() {
 
   return (
     <div className={s.root}>
-      <div>
-        <Text as="strong" weight="semibold">
-          {t("language.title")}
-        </Text>
-        <Caption1 as="p" block style={{ margin: "2px 0 0" }}>
-          {t("language.description")}
-        </Caption1>
-      </div>
-      <RadioGroup
-        layout="horizontal"
-        aria-label={t("language.title")}
-        value={langPref}
-        onChange={(_, data: RadioGroupOnChangeData) => {
-          const v = data.value as LanguagePreference;
-          setLangPref(v);
-          void setLanguagePreference(v);
-        }}
+      <TabList
+        className={mergeClasses(tb.tabs, s.tabs)}
+        selectedValue={tab}
+        onTabSelect={(_, d) => setTab(d.value as "theme" | "wallpaper")}
       >
-        <Radio value="auto" label={t("language.auto")} />
-        {LANGUAGES.map((l) => (
-          // cada idioma no próprio nome (quem não lê o atual acha o seu)
-          <Radio key={l} value={l} label={t(`language.${l}`)} />
-        ))}
-      </RadioGroup>
+        <Tab value="theme">{t("appearance.theme.title")}</Tab>
+        <Tab value="wallpaper">{t("appearance.wallpaper.title")}</Tab>
+      </TabList>
 
-      <div>
-        <Text as="strong" weight="semibold">
-          {t("appearance.uiScale.title")}
-        </Text>
-        <Caption1 as="p" block style={{ margin: "2px 0 0" }}>
-          {t("appearance.uiScale.description")}
-        </Caption1>
-      </div>
-      <RadioGroup
-        layout="horizontal"
-        aria-label={t("appearance.uiScale.title")}
-        value={String(uiScale)}
-        onChange={(_, data: RadioGroupOnChangeData) => {
-          const v = Number(data.value);
-          setUiScaleState(v);
-          setUiScale(v).catch((e) =>
-            push(errorToast(e, "changeUiScale")),
-          );
-        }}
-      >
-        {UI_SCALES.map((o) => (
-          <Radio
-            key={o.value}
-            value={String(o.value)}
-            label={`${t(o.label)} (${Math.round(o.value * 100)}%)`}
-          />
-        ))}
-      </RadioGroup>
-
-      <div className={s.columns}>
+      {tab === "theme" && (
         <div className={s.section}>
-          <div>
-            <Text as="strong" weight="semibold">
-              {t("appearance.theme.title")}
-            </Text>
-            <Caption1 as="p" block style={{ margin: "2px 0 0" }}>
+          <Caption1 as="p" block style={{ margin: 0 }}>
               {t("appearance.theme.description")}
             </Caption1>
-          </div>
 
           <div className={s.grid} aria-label={t("appearance.theme.title")}>
             {THEME_FAMILIES.map((f) => {
@@ -464,16 +397,13 @@ export function SettingsAppearance() {
             </div>
           )}
         </div>
+      )}
 
+      {tab === "wallpaper" && (
         <Card className={s.wallCard} appearance="filled-alternative">
-          <div>
-            <Text as="strong" weight="semibold">
-              {t("appearance.wallpaper.title")}
-            </Text>
-            <Caption1 as="p" block style={{ margin: "2px 0 0" }}>
+          <Caption1 as="p" block style={{ margin: 0 }}>
               {t("appearance.wallpaper.description")}
             </Caption1>
-          </div>
 
           <div
             className={s.wallPreview}
@@ -506,7 +436,7 @@ export function SettingsAppearance() {
             )}
           </div>
         </Card>
-      </div>
+      )}
     </div>
   );
 }
