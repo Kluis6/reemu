@@ -47,17 +47,10 @@ import { useBrowseStyles, useMotionStyles, useShellStyles } from "../styles/xbox
 import { useTranslation } from "react-i18next";
 
 const useLibStyles = makeStyles({
-  surface: {
-    backgroundColor: "var(--reemuSurfaceSoft)",
-    color: tokens.colorNeutralForeground1,
-    ":hover": {
-      backgroundColor: "var(--reemuSurfaceSoft)",
-      color: tokens.colorNeutralForeground1,
-    },
-  },
-  // "Adicionar ROM": mesmo tom de fundo da sidebar (`rail`,
-  // `colorNeutralBackground2`) no fundo E na borda, igual aos botões
-  // Voltar/Fullscreen da topbar (`layouts/AppShell.tsx`).
+  // "Adicionar ROM" e os filtros (Plataforma, Limpar filtro, Ordenar): mesmo
+  // tom de fundo da sidebar (`rail`, `colorNeutralBackground2`) no fundo E na
+  // borda, igual aos botões Voltar/Fullscreen da topbar
+  // (`layouts/AppShell.tsx`).
   navBtn: {
     backgroundColor: `${tokens.colorNeutralBackground2} !important`,
     border: `1px solid ${tokens.colorNeutralBackground2} !important`,
@@ -337,7 +330,7 @@ export function Library() {
           onCheckedValueChange={(_, d) => setPlatform(d.checkedItems[0] ?? "all")}
         >
           <MenuTrigger disableButtonEnhancement>
-            <MenuButton appearance="subtle" className={l.surface}>
+            <MenuButton appearance="secondary" className={l.navBtn}>
               {platform === "all" ? t("common.platform") : platformLabel(platform)}
             </MenuButton>
           </MenuTrigger>
@@ -359,8 +352,8 @@ export function Library() {
             virava um quadrado cinza sem significado. */}
         {platform !== "all" && (
           <Button
-            appearance="subtle"
-            className={l.surface}
+            appearance="secondary"
+            className={l.navBtn}
             icon={<FilterRegular />}
             onClick={() => setPlatform("all")}
           >
@@ -375,7 +368,7 @@ export function Library() {
           }
         >
           <MenuTrigger disableButtonEnhancement>
-            <MenuButton appearance="subtle" className={l.surface} icon={<ArrowSortRegular />}>
+            <MenuButton appearance="secondary" className={l.navBtn} icon={<ArrowSortRegular />}>
               {t(SORT_LABEL[sort])}
             </MenuButton>
           </MenuTrigger>

@@ -902,7 +902,10 @@ export const useDetailStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     objectFit: "cover",
     // Sem borda (pedido do usuário) — a sombra já separa a capa do banner.
-    boxShadow: "0 6px 20px rgba(0, 0, 0, 0.45)",
+    // Token da escala de elevação do Fluent 2, não um rgba fixo: a capa é um
+    // "card without edge", nível 16 (fluent2.microsoft.design/elevation), e
+    // o token acompanha o tema claro/escuro.
+    boxShadow: tokens.shadow16,
     backgroundColor: tokens.colorNeutralBackground3,
   },
   heroTitleCol: {
