@@ -1257,8 +1257,9 @@
       <!-- ─────────────── Nova vida ─────────────── -->
       <section id="vida" class="py-22" aria-labelledby="vida-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <div class="grid grid-cols-12">
-            <div class="col-span-12 md:col-span-6">
+          <!-- celular: joystick embaixo do texto; a partir de `md`, lado a lado -->
+          <div class="flex w-full flex-col md:flex-row md:items-center">
+            <div class="md:w-2/3">
               <h2
                 id="vida-titulo"
                 data-i18n="life.title"
@@ -1291,9 +1292,7 @@
                 >
               </p>
             </div>
-            <div
-              class="col-span-12 mt-12 flex items-center justify-center md:col-span-6 md:mt-0"
-            >
+            <div class="mt-12 flex w-full items-center justify-center md:mt-0 md:flex-1">
               <!-- Joystick estilo Atari (ícone próprio no estilo Fluent, ver
                    site/scripts/fluent-icons.mjs) no degradê
                    verde → azul da logo; o brilho fica no invólucro porque a
