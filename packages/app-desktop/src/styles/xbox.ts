@@ -746,50 +746,57 @@ export const useCardStyles = makeStyles({
 export const useHintStyles = makeStyles({
   // Chip HUD sempre escuro, IMUNE ao tema (igual overlay de botão de
   // controle em qualquer console/jogo — inclusive no próprio Xbox, os
-  // glifos de botão ficam sobre um fundo escuro translúcido mesmo com o
-  // dashboard no modo claro). Por isso o texto é branco literal, não um
-  // token que inverteria com o tema e ficaria ilegível (branco no claro).
+  // glifos de botão ficam sobre um fundo escuro mesmo com o dashboard no
+  // modo claro). Por isso o texto é branco literal, não um token que
+  // inverteria com o tema e ficaria ilegível (branco no claro).
+  //
+  // Medidas do app Xbox no modo XBOX (print a 1366×768, "Ⓨ Pesquisar
+  // Ⓑ Voltar"): barra de 42 de altura a 25 da direita e de baixo, fundo
+  // #080809; anéis de 26 com contorno de ~2 e a letra na cor do botão;
+  // texto ~19 regular; 8 de margem interna, 9 do anel ao texto, 17 entre
+  // as dicas.
   hints: {
     position: "fixed",
-    // No canto da área segura da TV (48 × 27 epx da borda).
-    right: `${M.SAFE_X}px`,
-    bottom: `${M.SAFE_Y}px`,
+    right: "25px",
+    bottom: "25px",
     display: "flex",
-    columnGap: "12px",
-    paddingTop: "6px",
-    paddingBottom: "6px",
-    paddingLeft: "12px",
-    paddingRight: "12px",
-    // Mesmo raio do card (`useCardStyles.card`, `borderRadiusMedium`) — era
-    // `borderRadiusCircular` (pílula).
+    alignItems: "center",
+    columnGap: "17px",
+    height: "42px",
+    boxSizing: "border-box",
+    paddingLeft: "8px",
+    paddingRight: "9px",
     borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    backgroundColor: "#080809",
     border: "none",
-    // Texto secundário: mínimo de 12 epx do guia de TV.
-    fontSize: "13px",
+    fontSize: "19px",
+    fontWeight: tokens.fontWeightRegular,
+    lineHeight: 1,
     color: "#ffffff",
     zIndex: 50,
     pointerEvents: "none",
   },
-  hint: { display: "flex", alignItems: "center", columnGap: "6px" },
+  hint: { display: "flex", alignItems: "center", columnGap: "9px" },
   glyph: {
-    width: "20px",
-    height: "20px",
+    width: "26px",
+    height: "26px",
+    boxSizing: "border-box",
     borderRadius: "50%",
+    border: "2px solid currentColor",
+    backgroundColor: "transparent",
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    fontSize: "12px",
-    fontWeight: 700,
-    color: "var(--reemuOnBrand)",
+    fontSize: "13px",
+    fontWeight: tokens.fontWeightSemibold,
+    lineHeight: 1,
   },
-  a: { backgroundColor: "#16c60c" },
-  b: { backgroundColor: "#e74856" },
-  x: { backgroundColor: "#0078d4" },
-  y: { backgroundColor: "#fce100" },
+  // Cores dos botões do controle Xbox (Y e B medidas no print).
+  a: { color: "#16c60c" },
+  b: { color: "#ff0000" },
+  x: { color: "#0078d4" },
+  y: { color: "#ffb900" },
   menu: {
-    backgroundColor: "transparent",
-    border: "1px solid rgba(255, 255, 255, 0.4)",
     color: "#ffffff",
   },
 });
