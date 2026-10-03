@@ -70,6 +70,32 @@ const useLibStyles = makeStyles({
     marginBottom: "24px",
   },
   barRight: { display: "flex", alignItems: "center", columnGap: "10px" },
+  // Abas como no app Xbox (print da biblioteca a 1366×768): texto 14
+  // semibold e branco também nas inativas, ~40 entre os rótulos, indicador
+  // de 4 de altura, branco, arredondado, com o texto + ~10 de cada lado,
+  // 11 abaixo das letras. O indicador é o `::after` do `Tab` do Fluent
+  // (`useActiveIndicatorStyles`: recuo `spacingHorizontalM` e altura
+  // `strokeWidthThicker` no tamanho medium).
+  tabs: {
+    "& .fui-Tab": {
+      paddingLeft: "17px",
+      paddingRight: "17px",
+      color: `${tokens.colorNeutralForeground1} !important`,
+    },
+    "& .fui-Tab__content": {
+      fontWeight: tokens.fontWeightSemibold,
+      color: `${tokens.colorNeutralForeground1} !important`,
+    },
+    "& .fui-Tab::after": {
+      left: "7px",
+      right: "7px",
+      height: "4px",
+      borderRadius: tokens.borderRadiusCircular,
+    },
+    "& .fui-Tab[aria-selected=\"true\"]::after": {
+      backgroundColor: tokens.colorNeutralForeground1,
+    },
+  },
   // `MenuItemRadio` do Fluent renderiza [checkmark, content] nessa ordem de
   // DOM (sem prop pra inverter) — reordena visualmente via flex `order`: o
   // `content` (`flexGrow: 1` já de fábrica) ocupa a esquerda e empurra o
@@ -292,6 +318,7 @@ export function Library() {
     <div>
       <div className={l.bar}>
         <TabList
+          className={l.tabs}
           selectedValue={tab}
           onTabSelect={(_, d) => setTab(d.value as LibTab)}
         >
