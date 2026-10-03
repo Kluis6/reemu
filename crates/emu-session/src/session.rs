@@ -831,6 +831,11 @@ const VK_CAPABLE_CORES: &[(&str, Option<(&str, &str)>)] = &[
         "mupen64plus_next",
         Some(("mupen64plus-rdp-plugin", "parallel")),
     ),
+    // PPSSPP só com o backend Vulkan escolhido: validado in-process no
+    // Windows em 2026-10-02 (60 quadros/s, saves ok). Em `auto`/`opengl`
+    // segue pro filho, que roda GL. Sem isto, com `vulkan` ele ia pro filho
+    // (que ainda não faz Vulkan, C3) e caía com 0xc0000005 no load.
+    ("ppsspp", Some(("ppsspp_backend", "vulkan"))),
 ];
 
 /// Cores que, sem a opção que escolhe o renderizador Vulkan, sobem OpenGL
@@ -2239,6 +2244,10 @@ mod vk_route_tests {
         assert!(vk_capable("mupen64plus_next_libretro", &opts));
         assert!(vk_capable("flycast_libretro", &HashMap::new()));
         assert!(!vk_capable("parallel_n64_libretro", &HashMap::new()));
+        assert!(!vk_capable("ppsspp_libretro", &HashMap::new()));
+        let ppsspp_vk =
+            HashMap::from([("ppsspp_backend".to_string(), "vulkan".to_string())]);
+        assert!(vk_capable("ppsspp_libretro", &ppsspp_vk));
     }
 
     #[test]

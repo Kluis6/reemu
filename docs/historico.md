@@ -1773,3 +1773,10 @@ Infra:
   - PCSX ReARMed: na abertura do jogo quase todo quadro é repetido (duplicação de quadros ligada por padrão); o core roda a 60/s.
 - **Sem sistema na biblioteca:** TIC-80 e Commodore 128 (exceção conhecida no teste do catálogo).
 - **Sem jogo na biblioteca para testar:** 27 cores (Amiga, Amstrad CPC, CD-i, DOS, MSX, C64, ColecoVision, Lynx, Saturn, Neo Geo Pocket, PC-FX, WonderSwan, Neo Geo CD, Odyssey², Pokémon Mini, ScummVM).
+
+## 2026-10-03 — PPSSPP com backend Vulkan caía ao carregar (0xc0000005)
+
+- **Sintoma:** Tekken (PSP) não abria: "core-host: o core encerrou inesperadamente ao carregar o jogo (exit code: 0xc0000005)". O log mostrava `core ppsspp_libretro → rota processo filho (device=false, negotiator=false, known_non_vk=false)`.
+- **Causa:** o PPSSPP do usuário está com `ppsspp_backend = vulkan`, mas o core não estava em `VK_CAPABLE_CORES`. A validação de 2026-10-02 foi com `REEMU_HW=vulkan` (forçado); sem a variável, o `route_local_device` mandava o core pro processo filho, que ainda não faz Vulkan (C3), e o core quebrava no `retro_load_game`.
+- **Correção:** `("ppsspp", Some(("ppsspp_backend", "vulkan")))` em `VK_CAPABLE_CORES` (`crates/emu-session/src/session.rs`): com o backend Vulkan ele vai pra rota in-process, a mesma validada em 2026-10-02 (60 quadros/s, saves ok); em `auto`/`opengl` segue no filho. Teste em `vk_route_tests`.
+- **Em aberto:** se a rota in-process não estiver disponível (sem device Vulkan publicado), o PPSSPP com backend Vulkan ainda vai pro filho e cai do mesmo jeito.
