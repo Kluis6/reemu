@@ -457,6 +457,7 @@ const es: Messages = {
     needsPack: '{{desc}} — necesita el paquete de shaders (abajo).',
     integerScaling: 'Escalado entero',
     integerScalingHint: 'Fija el vídeo en un múltiplo entero de la resolución nativa del core — evita el desenfoque del escalado fraccionario en pixel art. Con un marco activo, el juego llena la ventana del marco y el marco entero se amplía o reduce un poco para encajar en ese múltiplo — sin franja negra entre el juego y el marco.',
+    integerScalingHelp: '¿Qué es el escalado entero?',
     gpuHint: 'Shader predeterminado para todos los juegos. Cada juego puede tener su propio shader en su pantalla de detalle.',
     noGpu: 'No hay GPU disponible — los shaders no tienen efecto en este equipo.',
     tabShaders: 'Shaders',

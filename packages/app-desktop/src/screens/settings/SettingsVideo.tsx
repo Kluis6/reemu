@@ -2,14 +2,15 @@ import {
   Body1,
   Button,
   Caption1,
-  Field,
   Radio,
   RadioGroup,
   Switch,
   Tab,
   TabList,
   Text,
+  Tooltip,
 } from '@fluentui/react-components'
+import { QuestionCircleRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { BezelLibrary } from '../../components/BezelLibrary'
@@ -70,6 +71,8 @@ export function SettingsVideo() {
     queryFn: getVideoConfig,
     retry: false,
   })
+  // tooltip do "?" do integer scaling (ver o Tooltip abaixo)
+  const [integerTip, setIntegerTip] = useState(false)
   const setIntegerScaling = useMutation({
     mutationFn: (integerScaling: boolean) => updateVideoConfig({ integerScaling }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['video-config'] }),
@@ -152,16 +155,34 @@ export function SettingsVideo() {
         maxWidth: data.gpu && tab === 'shaders' ? 860 : 460,
       }}
     >
-      <Field
-        label={t('video.integerScaling')}
-        hint={t('video.integerScalingHint')}
-      >
+      {/* Explicação num tooltip no "?" ao lado do toggle — abre no hover e
+          também no foco (navegação por controle/teclado). */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
         <Switch
+          label={t('video.integerScaling')}
           checked={videoCfg.data?.integerScaling ?? false}
           disabled={videoCfg.isLoading || setIntegerScaling.isPending}
           onChange={(_, d) => setIntegerScaling.mutate(d.checked)}
         />
-      </Field>
+        <Tooltip
+          content={t('video.integerScalingHint')}
+          relationship="description"
+          withArrow
+          visible={integerTip}
+          onVisibleChange={(_, d) => setIntegerTip(d.visible)}
+        >
+          {/* O Tooltip do Fluent só abre no foco quando detecta teclado; o
+              controle move o foco por `.focus()` (useMenuNav), então o foco
+              abre/fecha na mão. */}
+          <Button
+            appearance="subtle"
+            icon={<QuestionCircleRegular />}
+            aria-label={t('video.integerScalingHelp')}
+            onFocus={() => setIntegerTip(true)}
+            onBlur={() => setIntegerTip(false)}
+          />
+        </Tooltip>
+      </div>
 
       <Caption1>
         {data.gpu

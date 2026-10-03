@@ -458,6 +458,7 @@ const ptBR = {
     needsPack: '{{desc}} — precisa do pacote de shaders (abaixo).',
     integerScaling: 'Integer scaling',
     integerScalingHint: 'Trava o vídeo num múltiplo inteiro da resolução nativa do core — evita borrão de escala fracionária em pixel art. Com moldura/bezel ativa, o jogo preenche a janela da moldura e a moldura inteira é ampliada ou reduzida um pouco pra caber no múltiplo — sem faixa preta entre o jogo e a moldura.',
+    integerScalingHelp: 'O que é integer scaling?',
     gpuHint: 'Shader padrão pra todos os jogos. Cada jogo pode ter um shader próprio na tela de detalhe.',
     noGpu: 'Sem GPU disponível — shaders não têm efeito nesta máquina.',
     tabShaders: 'Shaders',
