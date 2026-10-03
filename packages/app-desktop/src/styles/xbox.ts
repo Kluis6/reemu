@@ -376,8 +376,10 @@ export const useShellStyles = makeStyles({
     alignItems: "center",
     // Mesma cor do relógio ao lado (`clock`).
     color: tokens.colorNeutralForeground1,
-    // Mesmo tamanho da fonte do relógio ao lado (`clock`, 20 px).
-    fontSize: "20px",
+    // Um pouco maior que a fonte do relógio ao lado (`clock`, 20 px): o
+    // desenho do ícone não ocupa a caixa toda e parecia menor (pedido do
+    // usuário).
+    fontSize: "24px",
   },
   scroll: {
     scrollBehavior: "smooth",
