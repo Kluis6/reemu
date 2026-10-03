@@ -376,8 +376,8 @@ export const useShellStyles = makeStyles({
     alignItems: "center",
     // Mesma cor do relógio ao lado (`clock`).
     color: tokens.colorNeutralForeground1,
-    // Mesmo tamanho do ícone do botão de tela cheia ao lado (`navIconBtn`).
-    fontSize: "16px",
+    // Mesmo tamanho da fonte do relógio ao lado (`clock`, 20 px).
+    fontSize: "20px",
   },
   scroll: {
     scrollBehavior: "smooth",
