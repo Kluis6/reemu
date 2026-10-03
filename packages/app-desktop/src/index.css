@@ -12,6 +12,20 @@ body,
   height: 100%;
 }
 
+/* App, não página: nada de selecionar texto arrastando o mouse (nem o
+   destaque azul num clique duplo). Campos de texto continuam selecionáveis
+   pra editar/copiar o que se digita. `-webkit-` pro WebKitGTK (Linux). */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* A janela é `transparent: true` — a surface nativa do jogo (X11 child window,
    ver apps/desktop/src-tauri/src/video.rs) renderiza atrás da webview. Cada
    rota decide se pinta um fundo opaco (AppShell: launcher) ou fica
