@@ -40,9 +40,11 @@ export const TOPBAR_TOP = SAFE_Y;
  *  respiro. */
 export const TOPBAR_CLEARANCE = TOPBAR_TOP + TARGET_MIN + 16;
 /** A topbar é mais larga que o conteúdo: o "voltar" começa 17 epx depois
- *  da rail e o botão da direita termina a 36 da borda. */
+ *  da rail; à direita, como no modo XBOX do app (com relógio), o texto do
+ *  relógio termina a ~18 da borda (print a 1366×768: 1348) — fora do modo
+ *  XBOX, sem relógio, o último botão do Xbox termina a 36. */
 export const TOPBAR_PAD_L = 17;
-export const TOPBAR_PAD_R = 36;
+export const TOPBAR_PAD_R = 13;
 /** Largura da busca, centralizada na área à direita da rail. */
 export const SEARCH_W = 500;
 

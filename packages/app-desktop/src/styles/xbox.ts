@@ -269,10 +269,7 @@ export const useShellStyles = makeStyles({
     paddingTop: `${M.TOPBAR_TOP}px`,
     paddingBottom: "16px",
     paddingLeft: TOPBAR_PAD_L,
-    // Inclui o SCROLLBAR_W: a `.scroll` reserva essa faixa pro scrollbar
-    // próprio (`scrollbarGutter: "stable"`) — a topbar não rola, então não
-    // perde essa faixa sozinha. Assim o relógio termina na mesma borda que o
-    // conteúdo (hero/cards).
+    // Relógio perto da borda, como no modo XBOX do app (ver `metrics.ts`).
     paddingRight: TOPBAR_PAD_R,
     boxSizing: "border-box",
     flexShrink: 0,
@@ -365,6 +362,10 @@ export const useShellStyles = makeStyles({
   // UI Variable (48 × 14). Em px da tela de referência: o zoom da interface
   // (`lib/uiScale.ts`) escala junto com o resto em outros tamanhos de tela.
   clock: {
+    // Centralizado pela caixa, o texto ficava 1 px abaixo do centro dos
+    // botões ao lado (medido numa réplica a 1366×768); no Xbox fica 0,5.
+    position: "relative",
+    top: "-1px",
     color: tokens.colorNeutralForeground1,
     fontVariantNumeric: "tabular-nums",
     fontSize: "20px",
