@@ -421,6 +421,10 @@ export const useShellStyles = makeStyles({
     overflowY: "auto",
     scrollbarGutter: "stable",
     boxSizing: "border-box",
+    // Camada própria: o `zIndex` de dentro (card em hover/foco = 2, abas do
+    // detalhe = 10) fica preso aqui e nunca passa por cima da `.topbar`
+    // (`zIndex: 2`, antes no DOM — no empate o card ganhava e cobria a busca).
+    isolation: "isolate",
     // Limpa a `.topbar` flutuante e deixa o respiro do Xbox (y = 116).
     paddingTop: `var(--reemuPageTop, ${PAGE_TOP})`,
     // Mesmo padding da `.topbar` — o conteúdo alinha com o botão de voltar
