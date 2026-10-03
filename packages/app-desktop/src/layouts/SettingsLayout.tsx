@@ -17,7 +17,7 @@ import { RouteTransition } from "../components/RouteTransition";
 const useStyles = makeStyles({
   root: {
     display: "grid",
-    gridTemplateColumns: "200px minmax(0, 1fr)",
+    gridTemplateColumns: "220px minmax(0, 1fr)",
     columnGap: tokens.spacingHorizontalXXXL,
     rowGap: tokens.spacingVerticalL,
     alignItems: "start",
@@ -26,6 +26,9 @@ const useStyles = makeStyles({
   nav: {
     position: "sticky",
     top: 0,
+    // Abas maiores (`size="large"`) e afastadas: alvo mais fácil de acertar
+    // com o controle e de ler de longe.
+    rowGap: tokens.spacingVerticalS,
     // Rótulos alinhados à esquerda: o Tab reserva a largura do rótulo em
     // negrito (selecionado) e centraliza o texto normal dentro dela.
     "& .fui-Tab__content": { textAlign: "left" },
@@ -67,6 +70,7 @@ export function SettingsLayout() {
       <TabList
         className={styles.nav}
         vertical
+        size="large"
         selectedValue={current}
         onTabSelect={(_, d) => navigate(`/settings/${d.value}`)}
       >
