@@ -1,5 +1,5 @@
 import { Tooltip } from "@fluentui/react-components";
-import { GamesRegular } from "@fluentui/react-icons";
+import { XboxControllerRegular } from "@fluentui/react-icons";
 import { useGamepadStore } from "../stores/useGamepadStore";
 import { useShellStyles } from "../styles/xbox";
 import { useTranslation } from "react-i18next";
@@ -24,7 +24,7 @@ export function GamepadStatus() {
   return (
     <Tooltip content={label} relationship="label">
       <span className={s.gamepadStatus} aria-label={label}>
-        <GamesRegular />
+        <XboxControllerRegular />
       </span>
     </Tooltip>
   );
