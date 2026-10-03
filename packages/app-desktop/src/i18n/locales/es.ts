@@ -610,6 +610,8 @@ const es: Messages = {
     nothing: 'No se encontró nada.',
     params: 'Parámetros del shader',
     resetParams: 'Restaurar valores',
+    credits:
+      'Shaders del proyecto slang-shaders (libretro y colaboradores), cada uno con la licencia incluida en su propio archivo. Mega Bezel: HyperspaceMadness, GPLv3.',
   },
   bezels: {
     downloadingMb: 'Descargando bezels {{label}} {{received}}{{total}} MB…',
@@ -623,6 +625,7 @@ const es: Messages = {
     reinstall: 'Reinstalar',
     download: 'Descargar',
     footer: 'Packs de The Bezel Project — 100–600 MB por sistema.',
+    credits: 'Marcos de The Bezel Project. Las imágenes pertenecen a sus respectivos autores.',
   },
   profileForm: {
     pickAvatar: 'Elige una imagen de avatar',

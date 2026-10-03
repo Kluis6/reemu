@@ -26,6 +26,8 @@ import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
+  // crédito das molduras baixadas (The Bezel Project), em texto secundário
+  credits: { color: tokens.colorNeutralForeground3 },
   list: {
     display: 'flex',
     flexDirection: 'column',
@@ -154,6 +156,7 @@ export function BezelLibrary() {
         ))}
       </div>
       <Caption1>{t('bezels.footer')}</Caption1>
+      <Caption1 className={s.credits}>{t('bezels.credits')}</Caption1>
     </div>
   )
 }

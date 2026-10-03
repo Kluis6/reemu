@@ -30,6 +30,8 @@ const ROOT_KEY = 'reemu.shaderLibRoot'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
+  // crédito do pacote baixado (slang-shaders e Mega Bezel), em texto secundário
+  credits: { color: tokens.colorNeutralForeground3 },
   bar: { display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center' },
   path: {
     flexGrow: 1,
@@ -200,6 +202,7 @@ export function ShaderLibrary({
             {t('shaders.chooseFolder')}
           </Button>
         </div>
+        <Caption1 className={s.credits}>{t('shaders.credits')}</Caption1>
       </div>
     )
   }
@@ -271,6 +274,7 @@ export function ShaderLibrary({
           </div>
         </>
       )}
+      <Caption1 className={s.credits}>{t('shaders.credits')}</Caption1>
     </div>
   )
 }

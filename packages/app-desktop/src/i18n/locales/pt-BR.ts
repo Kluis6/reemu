@@ -611,6 +611,8 @@ const ptBR = {
     nothing: 'Nada encontrado.',
     params: 'Parâmetros do shader',
     resetParams: 'Restaurar padrões',
+    credits:
+      'Shaders do projeto slang-shaders (libretro e colaboradores), cada um com a licença que vem no próprio arquivo. Mega Bezel: HyperspaceMadness, GPLv3.',
   },
   bezels: {
     downloadingMb: 'Baixando bezels {{label}} {{received}}{{total}} MB…',
@@ -624,6 +626,7 @@ const ptBR = {
     reinstall: 'Reinstalar',
     download: 'Baixar',
     footer: 'Packs do The Bezel Project — 100–600 MB por sistema.',
+    credits: 'Molduras do The Bezel Project. As imagens pertencem aos seus respectivos autores.',
   },
   profileForm: {
     pickAvatar: 'Escolha uma imagem de avatar',
