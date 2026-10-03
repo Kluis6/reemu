@@ -31,6 +31,12 @@ const useStyles = makeStyles({
   // Botão quadrado só com o chevron, logo depois do título, como no app
   // Xbox ("Jogos principais pagos  [>]", dica "Mostrar tudo").
   seeAll: {
+    // A linha já centraliza as caixas (`alignItems: center`), mas as letras
+    // do título ficam abaixo do meio da caixa de 32: o centro do botão caía
+    // 2 px acima do centro das maiúsculas. No app Xbox fica 1 px acima
+    // (medido no print, "Jogos principais pagos") — desce 1 px.
+    position: 'relative',
+    top: '1px',
     minWidth: '24px !important',
     width: '24px',
     height: '24px',

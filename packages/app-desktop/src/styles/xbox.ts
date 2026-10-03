@@ -360,11 +360,14 @@ export const useShellStyles = makeStyles({
       outline: "none !important",
     },
   },
+  // Relógio do app Xbox (print do modo XBOX, 1366×768): "07:56" com ~47 px
+  // de largura e algarismos de ~14 px de altura, branco, peso regular — bate
+  // com 20 px regular na Segoe UI Variable (48 × 14).
   clock: {
-    color: tokens.colorNeutralForeground3,
+    color: tokens.colorNeutralForeground1,
     fontVariantNumeric: "tabular-nums",
-    fontSize: tokens.fontSizeBase300,
-    fontWeight: 600,
+    fontSize: "20px",
+    fontWeight: tokens.fontWeightRegular,
     lineHeight: 1,
     letterSpacing: "0.01em",
   },
