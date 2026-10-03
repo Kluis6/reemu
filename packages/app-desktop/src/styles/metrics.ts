@@ -67,12 +67,25 @@ export const CARD_GAP = 20;
 export const CARD_W =
   Math.floor((1366 - RAIL_W - PAGE_PAD_L - PAGE_PAD_R - 5 * CARD_GAP) / 6) - 1;
 
-/** Título de seção ("Voltar a jogar" no Xbox: 24, semibold) e o espaço
- *  dele até os cards (20). */
-export const SECTION_TITLE = 24;
-export const SECTION_TITLE_GAP = 20;
-/** Do fim de uma fileira ao título da próxima. */
-export const SECTION_GAP = 40;
+/** Cabeçalho de prateleira, medido num print do app Xbox na tela de
+ *  referência (1366×768, "Jogos principais pagos"), com a largura do texto
+ *  conferida contra a Segoe UI Variable:
+ *  - título 26 semibold (268 px medidos × 271 calculados), subtítulo 16
+ *    regular (377 × 371);
+ *  - linha de base do título → do subtítulo: 24; do subtítulo → topo dos
+ *    cards: ~27; fim dos cards → linha de base do próximo título: 91.
+ *  Com as métricas da Segoe UI (ascendente 1,079 em, descendente 0,251 em),
+ *  as alturas de linha e margens abaixo reproduzem essas distâncias. */
+export const SECTION_TITLE = 26;
+export const SECTION_TITLE_LINE = 32;
+export const SECTION_SUB = 16;
+export const SECTION_SUB_LINE = 20;
+/** Do título ao subtítulo (caixa a caixa). */
+export const SECTION_SUB_GAP = 2;
+/** Do fim do cabeçalho ao topo dos cards. */
+export const SECTION_TITLE_GAP = 24;
+/** Do fim de uma fileira ao topo do próximo cabeçalho. */
+export const SECTION_GAP = 64;
 
 /** Raios (escala do Fluent). */
 export const RADIUS = 8;

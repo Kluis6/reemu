@@ -1,7 +1,14 @@
 import { Button, Text, Tooltip, makeStyles, tokens } from '@fluentui/react-components'
 import { ChevronRightRegular } from '@fluentui/react-icons'
 import type { ReactNode } from 'react'
-import { SECTION_TITLE, SECTION_TITLE_GAP } from '../styles/metrics'
+import {
+  SECTION_SUB,
+  SECTION_SUB_GAP,
+  SECTION_SUB_LINE,
+  SECTION_TITLE,
+  SECTION_TITLE_GAP,
+  SECTION_TITLE_LINE,
+} from '../styles/metrics'
 import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
@@ -13,11 +20,11 @@ const useStyles = makeStyles({
     columnGap: tokens.spacingHorizontalM,
   },
   title: {
-    // Título de seção do app Xbox ("Voltar a jogar"): 24 epx, semibold.
+    // Título de seção do app Xbox (medido, ver `metrics.ts`): 26, semibold.
     // Só texto: quem abre a prateleira é o botão ao lado (`seeAll`).
     fontSize: `${SECTION_TITLE}px`,
     fontWeight: tokens.fontWeightSemibold,
-    lineHeight: 1.15,
+    lineHeight: `${SECTION_TITLE_LINE}px`,
     // `<Text as="h2">`: sem a margem padrão do navegador (0,83em).
     margin: 0,
   },
@@ -44,8 +51,9 @@ const useStyles = makeStyles({
   seeAllIcon: { fontSize: '16px' },
   right: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS },
   sub: {
-    marginTop: '3px',
-    fontSize: tokens.fontSizeBase200,
+    marginTop: `${SECTION_SUB_GAP}px`,
+    fontSize: `${SECTION_SUB}px`,
+    lineHeight: `${SECTION_SUB_LINE}px`,
     color: tokens.colorNeutralForeground3,
   },
 })
