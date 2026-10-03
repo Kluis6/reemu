@@ -376,10 +376,16 @@ export const useShellStyles = makeStyles({
     alignItems: "center",
     // Mesma cor do relógio ao lado (`clock`).
     color: tokens.colorNeutralForeground1,
-    // Um pouco maior que a fonte do relógio ao lado (`clock`, 20 px): o
-    // desenho do ícone não ocupa a caixa toda e parecia menor (pedido do
-    // usuário).
-    fontSize: "24px",
+    // Maior que a fonte do relógio ao lado (`clock`, 20 px): o desenho do
+    // ícone não ocupa a caixa toda e parecia menor (pedido do usuário).
+    fontSize: "28px",
+    // Caixa do tamanho exato do ícone, pra a topbar (`alignItems: center`)
+    // centralizar o desenho junto com o botão de tela cheia e o relógio. Sem
+    // isto a caixa tinha a altura de linha do texto (~1,33 × 28) e o `<svg>`
+    // inline ficava na linha de base, fora do meio.
+    lineHeight: 0,
+    height: "28px",
+    "& svg": { display: "block" },
   },
   scroll: {
     scrollBehavior: "smooth",
