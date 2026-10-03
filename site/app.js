@@ -103,8 +103,10 @@ function dlStack(title, sub) {
     el("span", { class: "text-[length:var(--fontSizeBase200,12px)] font-normal opacity-85" }, sub));
 }
 
-// Ícone de download (Fluent, ver src/fluent-icons.css) no slot `start` do botão.
-const dlIcon = () => el("span", { slot: "start", class: "fi fi-arrow-download text-[1.25rem]", "aria-hidden": "true" });
+// Ícone de download (Fluent, ver src/fluent-icons.css) no slot `start` do botão,
+// com 10 px até o texto (o slot do Fluent não deixa espaço nenhum).
+const dlIcon = () =>
+  el("span", { slot: "start", class: "fi fi-arrow-download me-2.5 text-[1.25rem]", "aria-hidden": "true" });
 
 function downloadButton(f, version, primary) {
   return el(
