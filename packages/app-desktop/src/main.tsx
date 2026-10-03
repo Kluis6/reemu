@@ -28,6 +28,26 @@ document.addEventListener('securitypolicyviolation', (e) =>
   reportToRust(`CSP bloqueou ${e.blockedURI || '(inline)'} (${e.effectiveDirective})`),
 )
 
+// Botão direito do mouse bloqueado: nem o menu nativo do webview (Recarregar,
+// Inspecionar…) nem os menus de contexto do app abrem por ele. Captura na
+// janela, antes de qualquer componente. Só o clique real do botão direito
+// (`isTrusted` + `button === 2`): o botão Menu do controle (evento sintético,
+// ver hooks/useMenuNav.ts) e a tecla Menu do teclado (`button === 0`)
+// continuam abrindo os menus do app. Em desenvolvimento fica liberado, pro
+// "Inspecionar elemento".
+if (!import.meta.env.DEV) {
+  window.addEventListener(
+    'contextmenu',
+    (e) => {
+      if (e.isTrusted && e.button === 2) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    },
+    { capture: true },
+  )
+}
+
 // Escala modo Xbox (tela lógica de 1366×768 epx, ver lib/uiScale.ts) — aplicada
 // antes do 1º render, pra não piscar no tamanho errado.
 startUiScale()
