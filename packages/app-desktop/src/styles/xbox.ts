@@ -47,8 +47,13 @@ const SCROLLBAR_W = M.SCROLLBAR_W;
 // `--reemuTopbarH` em `.app` (ver abaixo) porque páginas com hero "colado no
 // topo" (RomDetail) cancelam exatamente esse valor via margin negativo.
 const TOPBAR_CLEARANCE = `${M.TOPBAR_CLEARANCE}px`;
-// Fundo do botão do avatar em hover/foco (ver `railBrand`).
-const AVATAR_HL = `color-mix(in srgb, ${tokens.colorNeutralForeground1} 8%, transparent)`;
+// Destaque dos botões da rail (hover/foco/clique), como no app Xbox: o item
+// em destaque fica bem mais claro que a rail nos prints (+22 a +35). Uma camada
+// da cor do texto por cima da rail dá isso em qualquer tema (clareia no
+// escuro, escurece no claro); o `Background3` de antes mal aparecia.
+const RAIL_HL = `color-mix(in srgb, ${tokens.colorNeutralForeground1} 12%, transparent)`;
+const RAIL_HL_PRESS = `color-mix(in srgb, ${tokens.colorNeutralForeground1} 16%, transparent)`;
+const layer = (c: string) => `linear-gradient(${c}, ${c})`;
 // Topo do conteúdo das páginas (`.scroll`), com o respiro do Xbox abaixo da
 // topbar. Publicado como `--reemuPageTop` pro hero colado no topo cancelar.
 const PAGE_TOP = `${M.PAGE_TOP}px`;
@@ -203,13 +208,22 @@ export const useShellStyles = makeStyles({
     transitionDuration: "150ms",
     transitionTimingFunction: tokens.curveEasyEase,
     ":hover": {
-      backgroundColor: tokens.colorNeutralBackground3,
+      backgroundColor: RAIL_HL,
       color: tokens.colorNeutralForeground1,
     },
+    ":focus": {
+      backgroundColor: RAIL_HL,
+      color: tokens.colorNeutralForeground1,
+    },
+    ":active": { backgroundColor: RAIL_HL_PRESS },
+    // Página atual: a cor do tema com a mesma camada por cima, pra não
+    // ficar mais apagada que o hover.
     '&[aria-current="page"]': {
       backgroundColor: "var(--reemuActiveBg)",
+      backgroundImage: layer(RAIL_HL),
       color: "var(--reemuActiveFg)",
     },
+    '&[aria-current="page"]:active': { backgroundImage: layer(RAIL_HL_PRESS) },
     // Zoom só no glifo (não na pílula inteira) — cresce suave no hover/foco
     // e volta sozinho ao sair, via transition no próprio ícone.
     // Cresce pelo TAMANHO (redesenha nítido), não por `scale` (que amplia a
@@ -250,15 +264,8 @@ export const useShellStyles = makeStyles({
   railBrand: {
     marginTop: "-7px",
     lineHeight: 0,
-    // Destaque do Xbox no item focado: +22 de brilho sobre a rail no print
-    // (37 → 59), bem mais que o `Background3` do hover da rail. 8% da cor
-    // do texto por cima da rail dá isso em qualquer tema (clareia no escuro,
-    // escurece no claro).
-    ":hover": { backgroundColor: AVATAR_HL, color: tokens.colorNeutralForeground1 },
     // `<button>` sem `tabindex`: a regra global de `.app` não pega.
     ":focus": {
-      backgroundColor: AVATAR_HL,
-      color: tokens.colorNeutralForeground1,
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
