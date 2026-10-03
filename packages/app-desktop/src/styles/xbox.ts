@@ -360,13 +360,12 @@ export const useShellStyles = makeStyles({
       outline: "none !important",
     },
   },
-  // Relógio do app Xbox (print do modo XBOX, 1366×768): "07:56" com ~47 px
-  // de largura e algarismos de ~14 px de altura, branco, peso regular — bate
-  // com 20 px regular na Segoe UI Variable (48 × 14).
+  // Relógio: branco, peso regular, como no app Xbox; no tamanho do ícone do
+  // controle ao lado (`gamepadStatus`, 28 px — pedido do usuário).
   clock: {
     color: tokens.colorNeutralForeground1,
     fontVariantNumeric: "tabular-nums",
-    fontSize: "20px",
+    fontSize: "28px",
     fontWeight: tokens.fontWeightRegular,
     lineHeight: 1,
     letterSpacing: "0.01em",
@@ -376,8 +375,7 @@ export const useShellStyles = makeStyles({
     alignItems: "center",
     // Mesma cor do relógio ao lado (`clock`).
     color: tokens.colorNeutralForeground1,
-    // Maior que a fonte do relógio ao lado (`clock`, 20 px): o desenho do
-    // ícone não ocupa a caixa toda e parecia menor (pedido do usuário).
+    // Mesmo tamanho da fonte do relógio ao lado (`clock`, 28 px).
     fontSize: "28px",
     // Caixa do tamanho exato do ícone, pra a topbar (`alignItems: center`)
     // centralizar o desenho junto com o botão de tela cheia e o relógio. Sem
