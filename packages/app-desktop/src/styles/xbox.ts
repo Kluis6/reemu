@@ -374,7 +374,8 @@ export const useShellStyles = makeStyles({
   gamepadStatus: {
     display: "flex",
     alignItems: "center",
-    color: tokens.colorNeutralForeground3,
+    // Mesma cor do relógio ao lado (`clock`).
+    color: tokens.colorNeutralForeground1,
     fontSize: `${M.ICON}px`,
   },
   scroll: {
