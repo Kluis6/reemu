@@ -107,16 +107,35 @@ const useLibStyles = makeStyles({
     "& .fui-Tab[aria-selected=\"true\"]::after": {
       backgroundColor: tokens.colorNeutralForeground1,
     },
-    // `!important`: ganha do anel global do `.app` (`& .fui-Tab:focus`,
-    // 3 px na cor de destaque) — aqui o anel é o do Xbox.
-    // Propriedades separadas, como a regra global, cada uma com `!important`.
+    // Estados como no app Xbox (prints da biblioteca), com a cor primária do
+    // tema no lugar do branco do Xbox:
+    // - mouse em cima: só o fundo cinza;
+    // - foco numa aba inativa: fundo cinza + anel de 2 a 5 de distância;
+    // - foco na aba ativa: fundo preenchido na cor primária, texto sobre ela
+    //   e sem o sublinhado.
+    // `!important`: ganha do anel global do `.app` (`& .fui-Tab:focus`).
+    // Propriedades separadas, como a regra global.
+    "& .fui-Tab:hover": {
+      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
+    },
     "& .fui-Tab:focus": {
       backgroundColor: `${tokens.colorNeutralBackground4} !important`,
       outlineWidth: "2px !important",
       // Sem `!important` (o tipo do Griffel não aceita); a global já é solid.
       outlineStyle: "solid",
-      outlineColor: `${tokens.colorNeutralForeground1} !important`,
+      outlineColor: `${tokens.colorBrandStroke1} !important`,
       outlineOffset: "5px !important",
+    },
+    // Par da cor primária do ReEmu: `--reemuBrandSolid` com o texto em
+    // `--reemuOnBrand` (contraste ≥ 3:1 garantido em `themes.test.ts`).
+    "& .fui-Tab[aria-selected=\"true\"]:focus": {
+      backgroundColor: "var(--reemuBrandSolid) !important",
+    },
+    "& .fui-Tab[aria-selected=\"true\"]:focus .fui-Tab__content": {
+      color: "var(--reemuOnBrand) !important",
+    },
+    "& .fui-Tab[aria-selected=\"true\"]:focus::after": {
+      backgroundColor: "transparent",
     },
   },
   // `MenuItemRadio` do Fluent renderiza [checkmark, content] nessa ordem de
