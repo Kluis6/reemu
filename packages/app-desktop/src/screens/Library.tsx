@@ -44,6 +44,7 @@ import {
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles, useMotionStyles, useShellStyles } from "../styles/xbox";
+import { RADIUS } from "../styles/metrics";
 import { useTranslation } from "react-i18next";
 
 const useLibStyles = makeStyles({
@@ -73,16 +74,24 @@ const useLibStyles = makeStyles({
   // A 1ª prateleira já fica a 27 dos filtros (`toolbar.marginBottom`, como
   // no Xbox) — sem somar o espaço entre prateleiras (`section`, 64).
   firstShelf: { marginTop: 0 },
-  // Abas como no app Xbox (print da biblioteca a 1366×768): texto 14
-  // semibold e branco também nas inativas, ~40 entre os rótulos, indicador
-  // de 4 de altura, branco, arredondado, com o texto + ~10 de cada lado,
-  // 11 abaixo das letras. O indicador é o `::after` do `Tab` do Fluent
-  // (`useActiveIndicatorStyles`: recuo `spacingHorizontalM` e altura
-  // `strokeWidthThicker` no tamanho medium).
+  // Abas como no app Xbox (prints da biblioteca a 1366×768):
+  // - texto 14 semibold, branco também nas inativas; ~40 entre os rótulos;
+  // - caixa da aba de 42 de altura com ~13 de cada lado do texto;
+  // - indicador branco arredondado de 4, encostado no fundo da caixa, com o
+  //   texto + ~10 de cada lado, 11 abaixo das letras;
+  // - foco: fundo cinza na caixa (#3E434B no Xbox) e anel branco de 2 a 5
+  //   de distância.
+  // O indicador é o `::after` do `Tab` do Fluent (`useActiveIndicatorStyles`:
+  // recuo `spacingHorizontalM` e altura `strokeWidthThicker` no medium).
   tabs: {
+    columnGap: "8px",
     "& .fui-Tab": {
-      paddingLeft: "17px",
-      paddingRight: "17px",
+      paddingTop: "11px",
+      paddingBottom: "11px",
+      paddingLeft: "13px",
+      paddingRight: "13px",
+      // Raio padrão do ReEmu (`metrics.RADIUS`).
+      borderRadius: `${RADIUS}px`,
       color: `${tokens.colorNeutralForeground1} !important`,
     },
     "& .fui-Tab__content": {
@@ -90,13 +99,24 @@ const useLibStyles = makeStyles({
       color: `${tokens.colorNeutralForeground1} !important`,
     },
     "& .fui-Tab::after": {
-      left: "7px",
-      right: "7px",
+      left: "3px",
+      right: "3px",
       height: "4px",
       borderRadius: tokens.borderRadiusCircular,
     },
     "& .fui-Tab[aria-selected=\"true\"]::after": {
       backgroundColor: tokens.colorNeutralForeground1,
+    },
+    // `!important`: ganha do anel global do `.app` (`& .fui-Tab:focus`,
+    // 3 px na cor de destaque) — aqui o anel é o do Xbox.
+    // Propriedades separadas, como a regra global, cada uma com `!important`.
+    "& .fui-Tab:focus": {
+      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
+      outlineWidth: "2px !important",
+      // Sem `!important` (o tipo do Griffel não aceita); a global já é solid.
+      outlineStyle: "solid",
+      outlineColor: `${tokens.colorNeutralForeground1} !important`,
+      outlineOffset: "5px !important",
     },
   },
   // `MenuItemRadio` do Fluent renderiza [checkmark, content] nessa ordem de
