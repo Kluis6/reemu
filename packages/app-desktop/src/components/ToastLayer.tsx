@@ -3,6 +3,7 @@ import {
   MessageBar,
   MessageBarActions,
   MessageBarBody,
+  MessageBarGroup,
   MessageBarTitle,
   ProgressBar,
   makeStyles,
@@ -91,8 +92,12 @@ export function ToastLayer() {
     return () => timers.forEach(window.clearTimeout);
   }, [queue, dismiss]);
 
+  // `MessageBarGroup animate="both"`: entrada com fade + deslize de cima e
+  // saída com fade (`MessageBarMotion` do Fluent, `durationGentle`); o grupo
+  // segura o toast que saiu da fila até o fade terminar. Respeita o
+  // "reduzir movimento" do sistema (motion do Fluent).
   return (
-    <div className={styles.layer}>
+    <MessageBarGroup animate="both" className={styles.layer}>
       {queue.map((t) => (
         <MessageBar
           key={t.id}
@@ -141,6 +146,6 @@ export function ToastLayer() {
           </MessageBarActions>
         </MessageBar>
       ))}
-    </div>
+    </MessageBarGroup>
   );
 }
