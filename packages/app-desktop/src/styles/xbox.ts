@@ -47,6 +47,8 @@ const SCROLLBAR_W = M.SCROLLBAR_W;
 // `--reemuTopbarH` em `.app` (ver abaixo) porque páginas com hero "colado no
 // topo" (RomDetail) cancelam exatamente esse valor via margin negativo.
 const TOPBAR_CLEARANCE = `${M.TOPBAR_CLEARANCE}px`;
+// Fundo do botão do avatar em hover/foco (ver `railBrand`).
+const AVATAR_HL = `color-mix(in srgb, ${tokens.colorNeutralForeground1} 8%, transparent)`;
 // Topo do conteúdo das páginas (`.scroll`), com o respiro do Xbox abaixo da
 // topbar. Publicado como `--reemuPageTop` pro hero colado no topo cancelar.
 const PAGE_TOP = `${M.PAGE_TOP}px`;
@@ -248,8 +250,15 @@ export const useShellStyles = makeStyles({
   railBrand: {
     marginTop: "-7px",
     lineHeight: 0,
+    // Destaque do Xbox no item focado: +22 de brilho sobre a rail no print
+    // (37 → 59), bem mais que o `Background3` do hover da rail. 8% da cor
+    // do texto por cima da rail dá isso em qualquer tema (clareia no escuro,
+    // escurece no claro).
+    ":hover": { backgroundColor: AVATAR_HL, color: tokens.colorNeutralForeground1 },
     // `<button>` sem `tabindex`: a regra global de `.app` não pega.
     ":focus": {
+      backgroundColor: AVATAR_HL,
+      color: tokens.colorNeutralForeground1,
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
