@@ -1135,8 +1135,11 @@ export const useDetailStyles = makeStyles({
     // mais alta que a versão original (`.hero` acima) e o gradiente de
     // baixo foi reforçado junto (`.heroScrim`), então ainda sobra folga
     // abaixo da linha de botões — não colide (conferido até em janela
-    // 1600×700, o caso mais apertado testado).
-    marginTop: "-56px",
+    // 1600×700, o caso mais apertado testado). -72: mais 16 pra cima
+    // (pedido do usuário); a 1366×768 ainda sobram 47 até o aviso de core.
+    marginTop: "-72px",
+    // Mais respiro entre as abas aqui que na biblioteca (8, `useTabStyles`).
+    "& [role=tablist]": { columnGap: "16px" },
   },
   sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },
   panel: {
