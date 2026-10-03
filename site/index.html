@@ -1,20 +1,31 @@
 <!doctype html>
-<html lang="pt-BR" class="scroll-smooth scroll-pt-18 scheme-dark motion-reduce:scroll-auto">
+<html
+  lang="pt-BR"
+  class="scroll-smooth scroll-pt-18 scheme-dark motion-reduce:scroll-auto"
+>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title data-i18n="meta.title">ReEmu — Seus clássicos. Sua coleção.</title>
-    <meta data-i18n-attr="content=meta.description"
+    <meta
+      data-i18n-attr="content=meta.description"
       name="description"
       content="ReEmu: seus clássicos, sua coleção, uma experiência moderna. Frontend gratuito e de código aberto para organizar e jogar seus jogos clássicos no Windows e no Linux."
     />
     <meta name="author" content="Luis Julio" />
-    <meta property="og:title" content="ReEmu — Seus clássicos. Sua coleção. Uma experiência moderna." />
-    <meta data-i18n-attr="content=meta.og"
+    <meta
+      property="og:title"
+      content="ReEmu — Seus clássicos. Sua coleção. Uma experiência moderna."
+    />
+    <meta
+      data-i18n-attr="content=meta.og"
       property="og:description"
       content="Seus clássicos. Sua coleção. Uma experiência moderna. Grátis e de código aberto, para Windows e Linux."
     />
-    <meta property="og:image" content="https://kluis6.github.io/reemu/icon-512.png" />
+    <meta
+      property="og:image"
+      content="https://kluis6.github.io/reemu/icon-512.png"
+    />
     <meta property="og:url" content="https://kluis6.github.io/reemu/" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary" />
@@ -33,26 +44,92 @@
     <script type="module" src="ui.js"></script>
     <script type="module" src="app.js"></script>
   </head>
-  <body class="overflow-x-hidden bg-bg font-sans text-[length:var(--fontSizeBase400,16px)] leading-[1.6] text-ink after:pointer-events-none after:fixed after:inset-0 after:z-50 after:bg-[repeating-linear-gradient(to_bottom,rgba(255,255,255,0.022)_0_1px,transparent_1px_3px)]">
+  <body
+    class="overflow-x-hidden bg-bg font-sans text-[length:var(--fontSizeBase400,16px)] leading-[1.6] text-ink after:pointer-events-none after:fixed after:inset-0 after:z-50 after:bg-[repeating-linear-gradient(to_bottom,rgba(255,255,255,0.022)_0_1px,transparent_1px_3px)]"
+  >
     <!-- ↑ linhas de varredura do CRT, como na logo — sutis, por cima de tudo -->
-    <a data-i18n="skip" class="absolute -left-[9999px] focus:top-3 focus:left-4 focus:z-[100] focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-ink" href="#conteudo">Pular para o conteúdo</a>
+    <a
+      data-i18n="skip"
+      class="absolute -left-[9999px] focus:top-3 focus:left-4 focus:z-[100] focus:rounded-lg focus:bg-surface focus:px-3 focus:py-2 focus:text-ink"
+      href="#conteudo"
+      >Pular para o conteúdo</a
+    >
 
     <!-- topo: transparente no hero, com fundo desfocado depois de rolar (`data-scrolled`, ui.js) -->
-    <header class="top sticky top-0 z-40 border-b border-transparent transition-[background-color,border-color] duration-300 data-scrolled:border-line data-scrolled:bg-bg/80 data-scrolled:backdrop-blur-[10px]">
-      <div class="mx-auto max-w-[1080px] px-4 flex min-h-16 items-center justify-between gap-4">
-        <a data-i18n-attr="aria-label=nav.home" class="flex items-center gap-2 text-[1.45rem] font-extrabold tracking-[0.01em] text-white no-underline max-sm:gap-1.5 max-sm:text-[1.2rem]" href="./" aria-label="ReEmu — início">
+    <header
+      class="top sticky top-0 z-40 border-b border-transparent transition-[background-color,border-color] duration-300 data-scrolled:border-line data-scrolled:bg-bg/80 data-scrolled:backdrop-blur-[10px]"
+    >
+      <div
+        class="mx-auto max-w-[1080px] px-4 flex min-h-16 items-center justify-between gap-4"
+      >
+        <a
+          data-i18n-attr="aria-label=nav.home"
+          class="flex items-center gap-2 text-[1.45rem] font-extrabold tracking-[0.01em] text-white no-underline max-sm:gap-1.5 max-sm:text-[1.2rem]"
+          href="./"
+          aria-label="ReEmu — início"
+        >
           <span>Re<span class="text-green">Emu</span></span>
         </a>
-        <nav data-i18n-attr="aria-label=nav.aria" class="flex items-center space-x-4" aria-label="Seções">
-          <fluent-anchor-button data-i18n="nav.library" class="max-sm:hidden" appearance="subtle" href="#biblioteca">Biblioteca</fluent-anchor-button>
-          <fluent-anchor-button data-i18n="nav.start" class="max-sm:hidden" appearance="subtle" href="#comecar">Como começar</fluent-anchor-button>
-          <fluent-anchor-button data-i18n="nav.support" class="max-sm:hidden" appearance="subtle" href="#apoie">Apoie</fluent-anchor-button>
-          <fluent-anchor-button data-i18n="nav.download" class="max-sm:hidden" appearance="primary" href="#download">Baixar</fluent-anchor-button>
+        <nav
+          data-i18n-attr="aria-label=nav.aria"
+          class="flex items-center space-x-4"
+          aria-label="Seções"
+        >
+          <fluent-anchor-button
+            data-i18n="nav.library"
+            class="max-sm:hidden"
+            appearance="subtle"
+            href="#biblioteca"
+            >Biblioteca</fluent-anchor-button
+          >
+          <fluent-anchor-button
+            data-i18n="nav.start"
+            class="max-sm:hidden"
+            appearance="subtle"
+            href="#comecar"
+            >Como começar</fluent-anchor-button
+          >
+          <fluent-anchor-button
+            data-i18n="nav.support"
+            class="max-sm:hidden"
+            appearance="subtle"
+            href="#apoie"
+            >Apoie</fluent-anchor-button
+          >
+          <fluent-anchor-button
+            data-i18n="nav.download"
+            class="max-sm:hidden"
+            appearance="primary"
+            href="#download"
+            >Baixar</fluent-anchor-button
+          >
           <!-- Seletor de idioma (i18n.js): visível também no celular -->
-          <div class="ml-2 flex gap-0.5 *:min-w-9" role="group" aria-label="Idioma / Language / Idioma">
-            <fluent-button size="small" appearance="subtle" data-lang="pt-BR" lang="pt-BR">PT</fluent-button>
-            <fluent-button size="small" appearance="subtle" data-lang="en" lang="en">EN</fluent-button>
-            <fluent-button size="small" appearance="subtle" data-lang="es" lang="es">ES</fluent-button>
+          <div
+            class="ml-2 flex gap-0.5 *:min-w-9"
+            role="group"
+            aria-label="Idioma / Language / Idioma"
+          >
+            <fluent-button
+              size="small"
+              appearance="subtle"
+              data-lang="pt-BR"
+              lang="pt-BR"
+              >PT</fluent-button
+            >
+            <fluent-button
+              size="small"
+              appearance="subtle"
+              data-lang="en"
+              lang="en"
+              >EN</fluent-button
+            >
+            <fluent-button
+              size="small"
+              appearance="subtle"
+              data-lang="es"
+              lang="es"
+              >ES</fluent-button
+            >
           </div>
         </nav>
       </div>
@@ -61,10 +138,19 @@
     <main id="conteudo">
       <!-- ─────────────── Hero ─────────────── -->
       <section class="relative isolate overflow-hidden pt-6 pb-18 text-center">
-        <div class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+        <div
+          class="pointer-events-none absolute inset-0 -z-10"
+          aria-hidden="true"
+        >
           <!-- brilho por gradiente radial (sem `filter: blur`, caro e com borda reta); o movimento é do ui.js -->
-          <span data-orb="a" class="absolute -top-[200px] -left-[200px] size-[760px] rounded-full bg-[radial-gradient(closest-side,rgba(61,220,47,0.24),transparent)]"></span>
-          <span data-orb="b" class="absolute top-0 -right-[220px] size-[760px] rounded-full bg-[radial-gradient(closest-side,rgba(30,139,255,0.22),transparent)]"></span>
+          <span
+            data-orb="a"
+            class="absolute -top-[200px] -left-[200px] size-[760px] rounded-full bg-[radial-gradient(closest-side,rgba(61,220,47,0.24),transparent)]"
+          ></span>
+          <span
+            data-orb="b"
+            class="absolute top-0 -right-[220px] size-[760px] rounded-full bg-[radial-gradient(closest-side,rgba(30,139,255,0.22),transparent)]"
+          ></span>
           <!-- Placa de circuito dos lados, como na arte da logo: trilhas
                sólidas que vêm da borda e dobram a 45° rumo ao centro, com
                terminais vazados e blocos de "chips". Verde à esquerda, azul à
@@ -74,11 +160,1041 @@
                tela e perto do texto do centro. As trilhas cobrem o hero de
                cima a baixo, a cada 41 unidades (gerado por
                site/scripts/hero-circuit.py). -->
-          <svg class="absolute inset-y-0 left-0 h-full w-[40%] fill-none text-green mask-[linear-gradient(90deg,transparent_2%,#000_38%,#000_60%,transparent_90%)] max-[760px]:hidden" viewBox="0 0 600 1240" preserveAspectRatio="xMidYMid slice">
-            <g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" class="*:opacity-40"><path d="M59 46.0 H294 L494.0 246.0 H492"/><path d="M94 87.0 H294 L494.0 287.0 H506"/><path d="M115 128.0 H294 L494.0 328.0 H520"/><path d="M80 169.0 H294 L494.0 369.0 H534"/><path d="M87 210.0 H294 L494.0 410.0 H548"/><path d="M24 251.0 H294 L494.0 451.0 H492"/><path d="M24 292.0 H294 L494.0 492.0 H506"/><path d="M66 333.0 H294 L494.0 533.0 H520"/><path d="M31 374.0 H294 L466.2 546.2 H534"/><path d="M45 415.0 H294 L437.5 558.5 H548"/><path d="M66 456.0 H294 L408.8 570.8 H492"/><path d="M24 497.0 H278 L364.1 583.1 H506"/><path d="M115 538.0 H262 L319.4 595.4 H520"/><path d="M45 579.0 H246 L274.7 607.7 H534"/><path d="M87 620.0 H230 L230.0 620.0 H548"/><path d="M24 661.0 H246 L274.7 632.3 H492"/><path d="M66 702.0 H262 L319.4 644.6 H506"/><path d="M24 743.0 H278 L364.1 656.9 H520"/><path d="M80 784.0 H294 L408.8 669.2 H534"/><path d="M52 825.0 H294 L437.5 681.5 H548"/><path d="M66 866.0 H294 L466.2 693.8 H492"/><path d="M38 907.0 H294 L494.0 707.0 H506"/><path d="M87 948.0 H294 L494.0 748.0 H520"/><path d="M52 989.0 H294 L494.0 789.0 H534"/><path d="M80 1030.0 H294 L494.0 830.0 H548"/><path d="M38 1071.0 H294 L494.0 871.0 H492"/><path d="M87 1112.0 H294 L494.0 912.0 H506"/><path d="M94 1153.0 H294 L494.0 953.0 H520"/><path d="M31 1194.0 H294 L494.0 994.0 H534"/><path d="M140 87.0 V107.5 H110"/><path d="M220 251.0 V230.5 H190"/><path d="M150 415.0 V435.5 H100"/><path d="M190 579.0 V558.5 H140"/><path d="M170 743.0 V763.5 H140"/><path d="M220 907.0 V886.5 H190"/><path d="M150 1071.0 V1091.5 H100"/></g><g stroke="currentColor" stroke-width="1.6" class="fill-bg *:opacity-65"><circle cx="59.0" cy="46.0" r="4.5"/><circle cx="492.0" cy="246.0" r="4.5"/><circle cx="94.0" cy="87.0" r="4.5"/><circle cx="506.0" cy="287.0" r="4.5"/><circle cx="110.0" cy="107.5" r="4.5"/><circle cx="115.0" cy="128.0" r="4.5"/><circle cx="520.0" cy="328.0" r="4.5"/><circle cx="80.0" cy="169.0" r="4.5"/><circle cx="534.0" cy="369.0" r="4.5"/><circle cx="87.0" cy="210.0" r="4.5"/><circle cx="548.0" cy="410.0" r="4.5"/><circle cx="24.0" cy="251.0" r="4.5"/><circle cx="492.0" cy="451.0" r="4.5"/><circle cx="190.0" cy="230.5" r="4.5"/><circle cx="24.0" cy="292.0" r="4.5"/><circle cx="506.0" cy="492.0" r="4.5"/><circle cx="66.0" cy="333.0" r="4.5"/><circle cx="520.0" cy="533.0" r="4.5"/><circle cx="31.0" cy="374.0" r="4.5"/><circle cx="534.0" cy="546.2" r="4.5"/><circle cx="45.0" cy="415.0" r="4.5"/><circle cx="548.0" cy="558.5" r="4.5"/><circle cx="100.0" cy="435.5" r="4.5"/><circle cx="66.0" cy="456.0" r="4.5"/><circle cx="492.0" cy="570.8" r="4.5"/><circle cx="24.0" cy="497.0" r="4.5"/><circle cx="506.0" cy="583.1" r="4.5"/><circle cx="115.0" cy="538.0" r="4.5"/><circle cx="520.0" cy="595.4" r="4.5"/><circle cx="45.0" cy="579.0" r="4.5"/><circle cx="534.0" cy="607.7" r="4.5"/><circle cx="140.0" cy="558.5" r="4.5"/><circle cx="87.0" cy="620.0" r="4.5"/><circle cx="548.0" cy="620.0" r="4.5"/><circle cx="24.0" cy="661.0" r="4.5"/><circle cx="492.0" cy="632.3" r="4.5"/><circle cx="66.0" cy="702.0" r="4.5"/><circle cx="506.0" cy="644.6" r="4.5"/><circle cx="24.0" cy="743.0" r="4.5"/><circle cx="520.0" cy="656.9" r="4.5"/><circle cx="140.0" cy="763.5" r="4.5"/><circle cx="80.0" cy="784.0" r="4.5"/><circle cx="534.0" cy="669.2" r="4.5"/><circle cx="52.0" cy="825.0" r="4.5"/><circle cx="548.0" cy="681.5" r="4.5"/><circle cx="66.0" cy="866.0" r="4.5"/><circle cx="492.0" cy="693.8" r="4.5"/><circle cx="38.0" cy="907.0" r="4.5"/><circle cx="506.0" cy="707.0" r="4.5"/><circle cx="190.0" cy="886.5" r="4.5"/><circle cx="87.0" cy="948.0" r="4.5"/><circle cx="520.0" cy="748.0" r="4.5"/><circle cx="52.0" cy="989.0" r="4.5"/><circle cx="534.0" cy="789.0" r="4.5"/><circle cx="80.0" cy="1030.0" r="4.5"/><circle cx="548.0" cy="830.0" r="4.5"/><circle cx="38.0" cy="1071.0" r="4.5"/><circle cx="492.0" cy="871.0" r="4.5"/><circle cx="100.0" cy="1091.5" r="4.5"/><circle cx="87.0" cy="1112.0" r="4.5"/><circle cx="506.0" cy="912.0" r="4.5"/><circle cx="94.0" cy="1153.0" r="4.5"/><circle cx="520.0" cy="953.0" r="4.5"/><circle cx="31.0" cy="1194.0" r="4.5"/><circle cx="534.0" cy="994.0" r="4.5"/></g><g class="fill-current *:opacity-32"><rect x="163" y="62.5" width="8" height="8" rx="1"/><rect x="176" y="62.5" width="8" height="8" rx="1"/><rect x="189" y="62.5" width="8" height="8" rx="1"/><rect x="150" y="185.5" width="8" height="8" rx="1"/><rect x="163" y="185.5" width="8" height="8" rx="1"/><rect x="176" y="185.5" width="8" height="8" rx="1"/><rect x="150" y="308.5" width="8" height="8" rx="1"/><rect x="163" y="308.5" width="8" height="8" rx="1"/><rect x="176" y="308.5" width="8" height="8" rx="1"/><rect x="202" y="554.5" width="8" height="8" rx="1"/><rect x="215" y="554.5" width="8" height="8" rx="1"/><rect x="202" y="677.5" width="8" height="8" rx="1"/><rect x="215" y="677.5" width="8" height="8" rx="1"/><rect x="228" y="677.5" width="8" height="8" rx="1"/><rect x="241" y="677.5" width="8" height="8" rx="1"/><rect x="228" y="800.5" width="8" height="8" rx="1"/><rect x="241" y="800.5" width="8" height="8" rx="1"/><rect x="228" y="1046.5" width="8" height="8" rx="1"/><rect x="241" y="1046.5" width="8" height="8" rx="1"/><rect x="254" y="1046.5" width="8" height="8" rx="1"/><rect x="267" y="1046.5" width="8" height="8" rx="1"/><rect x="163" y="1169.5" width="8" height="8" rx="1"/><rect x="176" y="1169.5" width="8" height="8" rx="1"/><rect x="189" y="1169.5" width="8" height="8" rx="1"/></g><g data-pulses fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="0.06 1.4" stroke-dashoffset="1.46" class="*:opacity-22 motion-reduce:hidden"><path pathLength="1" d="M59 46.0 H294 L494.0 246.0 H492" data-dur="3.75" data-delay="0.18"/><path pathLength="1" d="M94 87.0 H294 L494.0 287.0 H506" data-dur="2.73" data-delay="0.58"/><path pathLength="1" d="M115 128.0 H294 L494.0 328.0 H520" data-dur="4.03" data-delay="1.20"/><path pathLength="1" d="M80 169.0 H294 L494.0 369.0 H534" data-dur="3.26" data-delay="1.64"/><path pathLength="1" d="M87 210.0 H294 L494.0 410.0 H548" data-dur="3.55" data-delay="0.84"/><path pathLength="1" d="M24 251.0 H294 L494.0 451.0 H492" data-dur="4.27" data-delay="1.96"/><path pathLength="1" d="M24 292.0 H294 L494.0 492.0 H506" data-dur="3.11" data-delay="1.61"/><path pathLength="1" d="M66 333.0 H294 L494.0 533.0 H520" data-dur="3.70" data-delay="2.45"/><path pathLength="1" d="M31 374.0 H294 L466.2 546.2 H534" data-dur="4.13" data-delay="0.81"/><path pathLength="1" d="M45 415.0 H294 L437.5 558.5 H548" data-dur="4.66" data-delay="0.33"/><path pathLength="1" d="M66 456.0 H294 L408.8 570.8 H492" data-dur="3.48" data-delay="2.12"/><path pathLength="1" d="M24 497.0 H278 L364.1 583.1 H506" data-dur="2.92" data-delay="1.37"/><path pathLength="1" d="M115 538.0 H262 L319.4 595.4 H520" data-dur="2.68" data-delay="1.87"/><path pathLength="1" d="M45 579.0 H246 L274.7 607.7 H534" data-dur="4.21" data-delay="1.60"/><path pathLength="1" d="M87 620.0 H230 L230.0 620.0 H548" data-dur="4.44" data-delay="0.88"/><path pathLength="1" d="M24 661.0 H246 L274.7 632.3 H492" data-dur="4.06" data-delay="1.66"/><path pathLength="1" d="M66 702.0 H262 L319.4 644.6 H506" data-dur="3.82" data-delay="1.28"/><path pathLength="1" d="M24 743.0 H278 L364.1 656.9 H520" data-dur="4.36" data-delay="2.65"/><path pathLength="1" d="M80 784.0 H294 L408.8 669.2 H534" data-dur="3.60" data-delay="1.86"/><path pathLength="1" d="M52 825.0 H294 L437.5 681.5 H548" data-dur="2.73" data-delay="1.96"/><path pathLength="1" d="M66 866.0 H294 L466.2 693.8 H492" data-dur="3.96" data-delay="2.78"/><path pathLength="1" d="M38 907.0 H294 L494.0 707.0 H506" data-dur="4.33" data-delay="0.80"/><path pathLength="1" d="M87 948.0 H294 L494.0 748.0 H520" data-dur="3.41" data-delay="1.87"/><path pathLength="1" d="M52 989.0 H294 L494.0 789.0 H534" data-dur="2.65" data-delay="1.29"/><path pathLength="1" d="M80 1030.0 H294 L494.0 830.0 H548" data-dur="2.95" data-delay="0.33"/><path pathLength="1" d="M38 1071.0 H294 L494.0 871.0 H492" data-dur="2.72" data-delay="2.15"/><path pathLength="1" d="M87 1112.0 H294 L494.0 912.0 H506" data-dur="2.87" data-delay="0.69"/><path pathLength="1" d="M94 1153.0 H294 L494.0 953.0 H520" data-dur="3.42" data-delay="2.44"/><path pathLength="1" d="M31 1194.0 H294 L494.0 994.0 H534" data-dur="2.77" data-delay="1.26"/></g><g data-pulses fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="0.06 1.4" stroke-dashoffset="1.46" class="motion-reduce:hidden"><path pathLength="1" d="M59 46.0 H294 L494.0 246.0 H492" data-dur="3.75" data-delay="0.18"/><path pathLength="1" d="M94 87.0 H294 L494.0 287.0 H506" data-dur="2.73" data-delay="0.58"/><path pathLength="1" d="M115 128.0 H294 L494.0 328.0 H520" data-dur="4.03" data-delay="1.20"/><path pathLength="1" d="M80 169.0 H294 L494.0 369.0 H534" data-dur="3.26" data-delay="1.64"/><path pathLength="1" d="M87 210.0 H294 L494.0 410.0 H548" data-dur="3.55" data-delay="0.84"/><path pathLength="1" d="M24 251.0 H294 L494.0 451.0 H492" data-dur="4.27" data-delay="1.96"/><path pathLength="1" d="M24 292.0 H294 L494.0 492.0 H506" data-dur="3.11" data-delay="1.61"/><path pathLength="1" d="M66 333.0 H294 L494.0 533.0 H520" data-dur="3.70" data-delay="2.45"/><path pathLength="1" d="M31 374.0 H294 L466.2 546.2 H534" data-dur="4.13" data-delay="0.81"/><path pathLength="1" d="M45 415.0 H294 L437.5 558.5 H548" data-dur="4.66" data-delay="0.33"/><path pathLength="1" d="M66 456.0 H294 L408.8 570.8 H492" data-dur="3.48" data-delay="2.12"/><path pathLength="1" d="M24 497.0 H278 L364.1 583.1 H506" data-dur="2.92" data-delay="1.37"/><path pathLength="1" d="M115 538.0 H262 L319.4 595.4 H520" data-dur="2.68" data-delay="1.87"/><path pathLength="1" d="M45 579.0 H246 L274.7 607.7 H534" data-dur="4.21" data-delay="1.60"/><path pathLength="1" d="M87 620.0 H230 L230.0 620.0 H548" data-dur="4.44" data-delay="0.88"/><path pathLength="1" d="M24 661.0 H246 L274.7 632.3 H492" data-dur="4.06" data-delay="1.66"/><path pathLength="1" d="M66 702.0 H262 L319.4 644.6 H506" data-dur="3.82" data-delay="1.28"/><path pathLength="1" d="M24 743.0 H278 L364.1 656.9 H520" data-dur="4.36" data-delay="2.65"/><path pathLength="1" d="M80 784.0 H294 L408.8 669.2 H534" data-dur="3.60" data-delay="1.86"/><path pathLength="1" d="M52 825.0 H294 L437.5 681.5 H548" data-dur="2.73" data-delay="1.96"/><path pathLength="1" d="M66 866.0 H294 L466.2 693.8 H492" data-dur="3.96" data-delay="2.78"/><path pathLength="1" d="M38 907.0 H294 L494.0 707.0 H506" data-dur="4.33" data-delay="0.80"/><path pathLength="1" d="M87 948.0 H294 L494.0 748.0 H520" data-dur="3.41" data-delay="1.87"/><path pathLength="1" d="M52 989.0 H294 L494.0 789.0 H534" data-dur="2.65" data-delay="1.29"/><path pathLength="1" d="M80 1030.0 H294 L494.0 830.0 H548" data-dur="2.95" data-delay="0.33"/><path pathLength="1" d="M38 1071.0 H294 L494.0 871.0 H492" data-dur="2.72" data-delay="2.15"/><path pathLength="1" d="M87 1112.0 H294 L494.0 912.0 H506" data-dur="2.87" data-delay="0.69"/><path pathLength="1" d="M94 1153.0 H294 L494.0 953.0 H520" data-dur="3.42" data-delay="2.44"/><path pathLength="1" d="M31 1194.0 H294 L494.0 994.0 H534" data-dur="2.77" data-delay="1.26"/></g>
+          <svg
+            class="absolute inset-y-0 left-0 h-full w-[40%] fill-none text-green mask-[linear-gradient(90deg,transparent_2%,#000_38%,#000_60%,transparent_90%)] max-[760px]:hidden"
+            viewBox="0 0 600 1240"
+            preserveAspectRatio="xMidYMid slice"
+          >
+            <g
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linejoin="round"
+              class="*:opacity-40"
+            >
+              <path d="M59 46.0 H294 L494.0 246.0 H492" />
+              <path d="M94 87.0 H294 L494.0 287.0 H506" />
+              <path d="M115 128.0 H294 L494.0 328.0 H520" />
+              <path d="M80 169.0 H294 L494.0 369.0 H534" />
+              <path d="M87 210.0 H294 L494.0 410.0 H548" />
+              <path d="M24 251.0 H294 L494.0 451.0 H492" />
+              <path d="M24 292.0 H294 L494.0 492.0 H506" />
+              <path d="M66 333.0 H294 L494.0 533.0 H520" />
+              <path d="M31 374.0 H294 L466.2 546.2 H534" />
+              <path d="M45 415.0 H294 L437.5 558.5 H548" />
+              <path d="M66 456.0 H294 L408.8 570.8 H492" />
+              <path d="M24 497.0 H278 L364.1 583.1 H506" />
+              <path d="M115 538.0 H262 L319.4 595.4 H520" />
+              <path d="M45 579.0 H246 L274.7 607.7 H534" />
+              <path d="M87 620.0 H230 L230.0 620.0 H548" />
+              <path d="M24 661.0 H246 L274.7 632.3 H492" />
+              <path d="M66 702.0 H262 L319.4 644.6 H506" />
+              <path d="M24 743.0 H278 L364.1 656.9 H520" />
+              <path d="M80 784.0 H294 L408.8 669.2 H534" />
+              <path d="M52 825.0 H294 L437.5 681.5 H548" />
+              <path d="M66 866.0 H294 L466.2 693.8 H492" />
+              <path d="M38 907.0 H294 L494.0 707.0 H506" />
+              <path d="M87 948.0 H294 L494.0 748.0 H520" />
+              <path d="M52 989.0 H294 L494.0 789.0 H534" />
+              <path d="M80 1030.0 H294 L494.0 830.0 H548" />
+              <path d="M38 1071.0 H294 L494.0 871.0 H492" />
+              <path d="M87 1112.0 H294 L494.0 912.0 H506" />
+              <path d="M94 1153.0 H294 L494.0 953.0 H520" />
+              <path d="M31 1194.0 H294 L494.0 994.0 H534" />
+              <path d="M140 87.0 V107.5 H110" />
+              <path d="M220 251.0 V230.5 H190" />
+              <path d="M150 415.0 V435.5 H100" />
+              <path d="M190 579.0 V558.5 H140" />
+              <path d="M170 743.0 V763.5 H140" />
+              <path d="M220 907.0 V886.5 H190" />
+              <path d="M150 1071.0 V1091.5 H100" />
+            </g>
+            <g
+              stroke="currentColor"
+              stroke-width="1.6"
+              class="fill-bg *:opacity-65"
+            >
+              <circle cx="59.0" cy="46.0" r="4.5" />
+              <circle cx="492.0" cy="246.0" r="4.5" />
+              <circle cx="94.0" cy="87.0" r="4.5" />
+              <circle cx="506.0" cy="287.0" r="4.5" />
+              <circle cx="110.0" cy="107.5" r="4.5" />
+              <circle cx="115.0" cy="128.0" r="4.5" />
+              <circle cx="520.0" cy="328.0" r="4.5" />
+              <circle cx="80.0" cy="169.0" r="4.5" />
+              <circle cx="534.0" cy="369.0" r="4.5" />
+              <circle cx="87.0" cy="210.0" r="4.5" />
+              <circle cx="548.0" cy="410.0" r="4.5" />
+              <circle cx="24.0" cy="251.0" r="4.5" />
+              <circle cx="492.0" cy="451.0" r="4.5" />
+              <circle cx="190.0" cy="230.5" r="4.5" />
+              <circle cx="24.0" cy="292.0" r="4.5" />
+              <circle cx="506.0" cy="492.0" r="4.5" />
+              <circle cx="66.0" cy="333.0" r="4.5" />
+              <circle cx="520.0" cy="533.0" r="4.5" />
+              <circle cx="31.0" cy="374.0" r="4.5" />
+              <circle cx="534.0" cy="546.2" r="4.5" />
+              <circle cx="45.0" cy="415.0" r="4.5" />
+              <circle cx="548.0" cy="558.5" r="4.5" />
+              <circle cx="100.0" cy="435.5" r="4.5" />
+              <circle cx="66.0" cy="456.0" r="4.5" />
+              <circle cx="492.0" cy="570.8" r="4.5" />
+              <circle cx="24.0" cy="497.0" r="4.5" />
+              <circle cx="506.0" cy="583.1" r="4.5" />
+              <circle cx="115.0" cy="538.0" r="4.5" />
+              <circle cx="520.0" cy="595.4" r="4.5" />
+              <circle cx="45.0" cy="579.0" r="4.5" />
+              <circle cx="534.0" cy="607.7" r="4.5" />
+              <circle cx="140.0" cy="558.5" r="4.5" />
+              <circle cx="87.0" cy="620.0" r="4.5" />
+              <circle cx="548.0" cy="620.0" r="4.5" />
+              <circle cx="24.0" cy="661.0" r="4.5" />
+              <circle cx="492.0" cy="632.3" r="4.5" />
+              <circle cx="66.0" cy="702.0" r="4.5" />
+              <circle cx="506.0" cy="644.6" r="4.5" />
+              <circle cx="24.0" cy="743.0" r="4.5" />
+              <circle cx="520.0" cy="656.9" r="4.5" />
+              <circle cx="140.0" cy="763.5" r="4.5" />
+              <circle cx="80.0" cy="784.0" r="4.5" />
+              <circle cx="534.0" cy="669.2" r="4.5" />
+              <circle cx="52.0" cy="825.0" r="4.5" />
+              <circle cx="548.0" cy="681.5" r="4.5" />
+              <circle cx="66.0" cy="866.0" r="4.5" />
+              <circle cx="492.0" cy="693.8" r="4.5" />
+              <circle cx="38.0" cy="907.0" r="4.5" />
+              <circle cx="506.0" cy="707.0" r="4.5" />
+              <circle cx="190.0" cy="886.5" r="4.5" />
+              <circle cx="87.0" cy="948.0" r="4.5" />
+              <circle cx="520.0" cy="748.0" r="4.5" />
+              <circle cx="52.0" cy="989.0" r="4.5" />
+              <circle cx="534.0" cy="789.0" r="4.5" />
+              <circle cx="80.0" cy="1030.0" r="4.5" />
+              <circle cx="548.0" cy="830.0" r="4.5" />
+              <circle cx="38.0" cy="1071.0" r="4.5" />
+              <circle cx="492.0" cy="871.0" r="4.5" />
+              <circle cx="100.0" cy="1091.5" r="4.5" />
+              <circle cx="87.0" cy="1112.0" r="4.5" />
+              <circle cx="506.0" cy="912.0" r="4.5" />
+              <circle cx="94.0" cy="1153.0" r="4.5" />
+              <circle cx="520.0" cy="953.0" r="4.5" />
+              <circle cx="31.0" cy="1194.0" r="4.5" />
+              <circle cx="534.0" cy="994.0" r="4.5" />
+            </g>
+            <g class="fill-current *:opacity-32">
+              <rect x="163" y="62.5" width="8" height="8" rx="1" />
+              <rect x="176" y="62.5" width="8" height="8" rx="1" />
+              <rect x="189" y="62.5" width="8" height="8" rx="1" />
+              <rect x="150" y="185.5" width="8" height="8" rx="1" />
+              <rect x="163" y="185.5" width="8" height="8" rx="1" />
+              <rect x="176" y="185.5" width="8" height="8" rx="1" />
+              <rect x="150" y="308.5" width="8" height="8" rx="1" />
+              <rect x="163" y="308.5" width="8" height="8" rx="1" />
+              <rect x="176" y="308.5" width="8" height="8" rx="1" />
+              <rect x="202" y="554.5" width="8" height="8" rx="1" />
+              <rect x="215" y="554.5" width="8" height="8" rx="1" />
+              <rect x="202" y="677.5" width="8" height="8" rx="1" />
+              <rect x="215" y="677.5" width="8" height="8" rx="1" />
+              <rect x="228" y="677.5" width="8" height="8" rx="1" />
+              <rect x="241" y="677.5" width="8" height="8" rx="1" />
+              <rect x="228" y="800.5" width="8" height="8" rx="1" />
+              <rect x="241" y="800.5" width="8" height="8" rx="1" />
+              <rect x="228" y="1046.5" width="8" height="8" rx="1" />
+              <rect x="241" y="1046.5" width="8" height="8" rx="1" />
+              <rect x="254" y="1046.5" width="8" height="8" rx="1" />
+              <rect x="267" y="1046.5" width="8" height="8" rx="1" />
+              <rect x="163" y="1169.5" width="8" height="8" rx="1" />
+              <rect x="176" y="1169.5" width="8" height="8" rx="1" />
+              <rect x="189" y="1169.5" width="8" height="8" rx="1" />
+            </g>
+            <g
+              data-pulses
+              fill="none"
+              stroke="currentColor"
+              stroke-width="8"
+              stroke-linecap="round"
+              stroke-dasharray="0.06 1.4"
+              stroke-dashoffset="1.46"
+              class="*:opacity-22 motion-reduce:hidden"
+            >
+              <path
+                pathLength="1"
+                d="M59 46.0 H294 L494.0 246.0 H492"
+                data-dur="3.75"
+                data-delay="0.18"
+              />
+              <path
+                pathLength="1"
+                d="M94 87.0 H294 L494.0 287.0 H506"
+                data-dur="2.73"
+                data-delay="0.58"
+              />
+              <path
+                pathLength="1"
+                d="M115 128.0 H294 L494.0 328.0 H520"
+                data-dur="4.03"
+                data-delay="1.20"
+              />
+              <path
+                pathLength="1"
+                d="M80 169.0 H294 L494.0 369.0 H534"
+                data-dur="3.26"
+                data-delay="1.64"
+              />
+              <path
+                pathLength="1"
+                d="M87 210.0 H294 L494.0 410.0 H548"
+                data-dur="3.55"
+                data-delay="0.84"
+              />
+              <path
+                pathLength="1"
+                d="M24 251.0 H294 L494.0 451.0 H492"
+                data-dur="4.27"
+                data-delay="1.96"
+              />
+              <path
+                pathLength="1"
+                d="M24 292.0 H294 L494.0 492.0 H506"
+                data-dur="3.11"
+                data-delay="1.61"
+              />
+              <path
+                pathLength="1"
+                d="M66 333.0 H294 L494.0 533.0 H520"
+                data-dur="3.70"
+                data-delay="2.45"
+              />
+              <path
+                pathLength="1"
+                d="M31 374.0 H294 L466.2 546.2 H534"
+                data-dur="4.13"
+                data-delay="0.81"
+              />
+              <path
+                pathLength="1"
+                d="M45 415.0 H294 L437.5 558.5 H548"
+                data-dur="4.66"
+                data-delay="0.33"
+              />
+              <path
+                pathLength="1"
+                d="M66 456.0 H294 L408.8 570.8 H492"
+                data-dur="3.48"
+                data-delay="2.12"
+              />
+              <path
+                pathLength="1"
+                d="M24 497.0 H278 L364.1 583.1 H506"
+                data-dur="2.92"
+                data-delay="1.37"
+              />
+              <path
+                pathLength="1"
+                d="M115 538.0 H262 L319.4 595.4 H520"
+                data-dur="2.68"
+                data-delay="1.87"
+              />
+              <path
+                pathLength="1"
+                d="M45 579.0 H246 L274.7 607.7 H534"
+                data-dur="4.21"
+                data-delay="1.60"
+              />
+              <path
+                pathLength="1"
+                d="M87 620.0 H230 L230.0 620.0 H548"
+                data-dur="4.44"
+                data-delay="0.88"
+              />
+              <path
+                pathLength="1"
+                d="M24 661.0 H246 L274.7 632.3 H492"
+                data-dur="4.06"
+                data-delay="1.66"
+              />
+              <path
+                pathLength="1"
+                d="M66 702.0 H262 L319.4 644.6 H506"
+                data-dur="3.82"
+                data-delay="1.28"
+              />
+              <path
+                pathLength="1"
+                d="M24 743.0 H278 L364.1 656.9 H520"
+                data-dur="4.36"
+                data-delay="2.65"
+              />
+              <path
+                pathLength="1"
+                d="M80 784.0 H294 L408.8 669.2 H534"
+                data-dur="3.60"
+                data-delay="1.86"
+              />
+              <path
+                pathLength="1"
+                d="M52 825.0 H294 L437.5 681.5 H548"
+                data-dur="2.73"
+                data-delay="1.96"
+              />
+              <path
+                pathLength="1"
+                d="M66 866.0 H294 L466.2 693.8 H492"
+                data-dur="3.96"
+                data-delay="2.78"
+              />
+              <path
+                pathLength="1"
+                d="M38 907.0 H294 L494.0 707.0 H506"
+                data-dur="4.33"
+                data-delay="0.80"
+              />
+              <path
+                pathLength="1"
+                d="M87 948.0 H294 L494.0 748.0 H520"
+                data-dur="3.41"
+                data-delay="1.87"
+              />
+              <path
+                pathLength="1"
+                d="M52 989.0 H294 L494.0 789.0 H534"
+                data-dur="2.65"
+                data-delay="1.29"
+              />
+              <path
+                pathLength="1"
+                d="M80 1030.0 H294 L494.0 830.0 H548"
+                data-dur="2.95"
+                data-delay="0.33"
+              />
+              <path
+                pathLength="1"
+                d="M38 1071.0 H294 L494.0 871.0 H492"
+                data-dur="2.72"
+                data-delay="2.15"
+              />
+              <path
+                pathLength="1"
+                d="M87 1112.0 H294 L494.0 912.0 H506"
+                data-dur="2.87"
+                data-delay="0.69"
+              />
+              <path
+                pathLength="1"
+                d="M94 1153.0 H294 L494.0 953.0 H520"
+                data-dur="3.42"
+                data-delay="2.44"
+              />
+              <path
+                pathLength="1"
+                d="M31 1194.0 H294 L494.0 994.0 H534"
+                data-dur="2.77"
+                data-delay="1.26"
+              />
+            </g>
+            <g
+              data-pulses
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-dasharray="0.06 1.4"
+              stroke-dashoffset="1.46"
+              class="motion-reduce:hidden"
+            >
+              <path
+                pathLength="1"
+                d="M59 46.0 H294 L494.0 246.0 H492"
+                data-dur="3.75"
+                data-delay="0.18"
+              />
+              <path
+                pathLength="1"
+                d="M94 87.0 H294 L494.0 287.0 H506"
+                data-dur="2.73"
+                data-delay="0.58"
+              />
+              <path
+                pathLength="1"
+                d="M115 128.0 H294 L494.0 328.0 H520"
+                data-dur="4.03"
+                data-delay="1.20"
+              />
+              <path
+                pathLength="1"
+                d="M80 169.0 H294 L494.0 369.0 H534"
+                data-dur="3.26"
+                data-delay="1.64"
+              />
+              <path
+                pathLength="1"
+                d="M87 210.0 H294 L494.0 410.0 H548"
+                data-dur="3.55"
+                data-delay="0.84"
+              />
+              <path
+                pathLength="1"
+                d="M24 251.0 H294 L494.0 451.0 H492"
+                data-dur="4.27"
+                data-delay="1.96"
+              />
+              <path
+                pathLength="1"
+                d="M24 292.0 H294 L494.0 492.0 H506"
+                data-dur="3.11"
+                data-delay="1.61"
+              />
+              <path
+                pathLength="1"
+                d="M66 333.0 H294 L494.0 533.0 H520"
+                data-dur="3.70"
+                data-delay="2.45"
+              />
+              <path
+                pathLength="1"
+                d="M31 374.0 H294 L466.2 546.2 H534"
+                data-dur="4.13"
+                data-delay="0.81"
+              />
+              <path
+                pathLength="1"
+                d="M45 415.0 H294 L437.5 558.5 H548"
+                data-dur="4.66"
+                data-delay="0.33"
+              />
+              <path
+                pathLength="1"
+                d="M66 456.0 H294 L408.8 570.8 H492"
+                data-dur="3.48"
+                data-delay="2.12"
+              />
+              <path
+                pathLength="1"
+                d="M24 497.0 H278 L364.1 583.1 H506"
+                data-dur="2.92"
+                data-delay="1.37"
+              />
+              <path
+                pathLength="1"
+                d="M115 538.0 H262 L319.4 595.4 H520"
+                data-dur="2.68"
+                data-delay="1.87"
+              />
+              <path
+                pathLength="1"
+                d="M45 579.0 H246 L274.7 607.7 H534"
+                data-dur="4.21"
+                data-delay="1.60"
+              />
+              <path
+                pathLength="1"
+                d="M87 620.0 H230 L230.0 620.0 H548"
+                data-dur="4.44"
+                data-delay="0.88"
+              />
+              <path
+                pathLength="1"
+                d="M24 661.0 H246 L274.7 632.3 H492"
+                data-dur="4.06"
+                data-delay="1.66"
+              />
+              <path
+                pathLength="1"
+                d="M66 702.0 H262 L319.4 644.6 H506"
+                data-dur="3.82"
+                data-delay="1.28"
+              />
+              <path
+                pathLength="1"
+                d="M24 743.0 H278 L364.1 656.9 H520"
+                data-dur="4.36"
+                data-delay="2.65"
+              />
+              <path
+                pathLength="1"
+                d="M80 784.0 H294 L408.8 669.2 H534"
+                data-dur="3.60"
+                data-delay="1.86"
+              />
+              <path
+                pathLength="1"
+                d="M52 825.0 H294 L437.5 681.5 H548"
+                data-dur="2.73"
+                data-delay="1.96"
+              />
+              <path
+                pathLength="1"
+                d="M66 866.0 H294 L466.2 693.8 H492"
+                data-dur="3.96"
+                data-delay="2.78"
+              />
+              <path
+                pathLength="1"
+                d="M38 907.0 H294 L494.0 707.0 H506"
+                data-dur="4.33"
+                data-delay="0.80"
+              />
+              <path
+                pathLength="1"
+                d="M87 948.0 H294 L494.0 748.0 H520"
+                data-dur="3.41"
+                data-delay="1.87"
+              />
+              <path
+                pathLength="1"
+                d="M52 989.0 H294 L494.0 789.0 H534"
+                data-dur="2.65"
+                data-delay="1.29"
+              />
+              <path
+                pathLength="1"
+                d="M80 1030.0 H294 L494.0 830.0 H548"
+                data-dur="2.95"
+                data-delay="0.33"
+              />
+              <path
+                pathLength="1"
+                d="M38 1071.0 H294 L494.0 871.0 H492"
+                data-dur="2.72"
+                data-delay="2.15"
+              />
+              <path
+                pathLength="1"
+                d="M87 1112.0 H294 L494.0 912.0 H506"
+                data-dur="2.87"
+                data-delay="0.69"
+              />
+              <path
+                pathLength="1"
+                d="M94 1153.0 H294 L494.0 953.0 H520"
+                data-dur="3.42"
+                data-delay="2.44"
+              />
+              <path
+                pathLength="1"
+                d="M31 1194.0 H294 L494.0 994.0 H534"
+                data-dur="2.77"
+                data-delay="1.26"
+              />
+            </g>
           </svg>
-          <svg class="absolute inset-y-0 right-0 h-full w-[40%] fill-none text-blue mask-[linear-gradient(270deg,transparent_2%,#000_38%,#000_60%,transparent_90%)] max-[760px]:hidden" viewBox="0 0 600 1240" preserveAspectRatio="xMidYMid slice">
-            <g transform="translate(600 0) scale(-1 1)"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" class="*:opacity-40"><path d="M59 46.0 H294 L494.0 246.0 H492"/><path d="M94 87.0 H294 L494.0 287.0 H506"/><path d="M115 128.0 H294 L494.0 328.0 H520"/><path d="M80 169.0 H294 L494.0 369.0 H534"/><path d="M87 210.0 H294 L494.0 410.0 H548"/><path d="M24 251.0 H294 L494.0 451.0 H492"/><path d="M24 292.0 H294 L494.0 492.0 H506"/><path d="M66 333.0 H294 L494.0 533.0 H520"/><path d="M31 374.0 H294 L466.2 546.2 H534"/><path d="M45 415.0 H294 L437.5 558.5 H548"/><path d="M66 456.0 H294 L408.8 570.8 H492"/><path d="M24 497.0 H278 L364.1 583.1 H506"/><path d="M115 538.0 H262 L319.4 595.4 H520"/><path d="M45 579.0 H246 L274.7 607.7 H534"/><path d="M87 620.0 H230 L230.0 620.0 H548"/><path d="M24 661.0 H246 L274.7 632.3 H492"/><path d="M66 702.0 H262 L319.4 644.6 H506"/><path d="M24 743.0 H278 L364.1 656.9 H520"/><path d="M80 784.0 H294 L408.8 669.2 H534"/><path d="M52 825.0 H294 L437.5 681.5 H548"/><path d="M66 866.0 H294 L466.2 693.8 H492"/><path d="M38 907.0 H294 L494.0 707.0 H506"/><path d="M87 948.0 H294 L494.0 748.0 H520"/><path d="M52 989.0 H294 L494.0 789.0 H534"/><path d="M80 1030.0 H294 L494.0 830.0 H548"/><path d="M38 1071.0 H294 L494.0 871.0 H492"/><path d="M87 1112.0 H294 L494.0 912.0 H506"/><path d="M94 1153.0 H294 L494.0 953.0 H520"/><path d="M31 1194.0 H294 L494.0 994.0 H534"/><path d="M140 87.0 V107.5 H110"/><path d="M220 251.0 V230.5 H190"/><path d="M150 415.0 V435.5 H100"/><path d="M190 579.0 V558.5 H140"/><path d="M170 743.0 V763.5 H140"/><path d="M220 907.0 V886.5 H190"/><path d="M150 1071.0 V1091.5 H100"/></g><g stroke="currentColor" stroke-width="1.6" class="fill-bg *:opacity-65"><circle cx="59.0" cy="46.0" r="4.5"/><circle cx="492.0" cy="246.0" r="4.5"/><circle cx="94.0" cy="87.0" r="4.5"/><circle cx="506.0" cy="287.0" r="4.5"/><circle cx="110.0" cy="107.5" r="4.5"/><circle cx="115.0" cy="128.0" r="4.5"/><circle cx="520.0" cy="328.0" r="4.5"/><circle cx="80.0" cy="169.0" r="4.5"/><circle cx="534.0" cy="369.0" r="4.5"/><circle cx="87.0" cy="210.0" r="4.5"/><circle cx="548.0" cy="410.0" r="4.5"/><circle cx="24.0" cy="251.0" r="4.5"/><circle cx="492.0" cy="451.0" r="4.5"/><circle cx="190.0" cy="230.5" r="4.5"/><circle cx="24.0" cy="292.0" r="4.5"/><circle cx="506.0" cy="492.0" r="4.5"/><circle cx="66.0" cy="333.0" r="4.5"/><circle cx="520.0" cy="533.0" r="4.5"/><circle cx="31.0" cy="374.0" r="4.5"/><circle cx="534.0" cy="546.2" r="4.5"/><circle cx="45.0" cy="415.0" r="4.5"/><circle cx="548.0" cy="558.5" r="4.5"/><circle cx="100.0" cy="435.5" r="4.5"/><circle cx="66.0" cy="456.0" r="4.5"/><circle cx="492.0" cy="570.8" r="4.5"/><circle cx="24.0" cy="497.0" r="4.5"/><circle cx="506.0" cy="583.1" r="4.5"/><circle cx="115.0" cy="538.0" r="4.5"/><circle cx="520.0" cy="595.4" r="4.5"/><circle cx="45.0" cy="579.0" r="4.5"/><circle cx="534.0" cy="607.7" r="4.5"/><circle cx="140.0" cy="558.5" r="4.5"/><circle cx="87.0" cy="620.0" r="4.5"/><circle cx="548.0" cy="620.0" r="4.5"/><circle cx="24.0" cy="661.0" r="4.5"/><circle cx="492.0" cy="632.3" r="4.5"/><circle cx="66.0" cy="702.0" r="4.5"/><circle cx="506.0" cy="644.6" r="4.5"/><circle cx="24.0" cy="743.0" r="4.5"/><circle cx="520.0" cy="656.9" r="4.5"/><circle cx="140.0" cy="763.5" r="4.5"/><circle cx="80.0" cy="784.0" r="4.5"/><circle cx="534.0" cy="669.2" r="4.5"/><circle cx="52.0" cy="825.0" r="4.5"/><circle cx="548.0" cy="681.5" r="4.5"/><circle cx="66.0" cy="866.0" r="4.5"/><circle cx="492.0" cy="693.8" r="4.5"/><circle cx="38.0" cy="907.0" r="4.5"/><circle cx="506.0" cy="707.0" r="4.5"/><circle cx="190.0" cy="886.5" r="4.5"/><circle cx="87.0" cy="948.0" r="4.5"/><circle cx="520.0" cy="748.0" r="4.5"/><circle cx="52.0" cy="989.0" r="4.5"/><circle cx="534.0" cy="789.0" r="4.5"/><circle cx="80.0" cy="1030.0" r="4.5"/><circle cx="548.0" cy="830.0" r="4.5"/><circle cx="38.0" cy="1071.0" r="4.5"/><circle cx="492.0" cy="871.0" r="4.5"/><circle cx="100.0" cy="1091.5" r="4.5"/><circle cx="87.0" cy="1112.0" r="4.5"/><circle cx="506.0" cy="912.0" r="4.5"/><circle cx="94.0" cy="1153.0" r="4.5"/><circle cx="520.0" cy="953.0" r="4.5"/><circle cx="31.0" cy="1194.0" r="4.5"/><circle cx="534.0" cy="994.0" r="4.5"/></g><g class="fill-current *:opacity-32"><rect x="163" y="62.5" width="8" height="8" rx="1"/><rect x="176" y="62.5" width="8" height="8" rx="1"/><rect x="189" y="62.5" width="8" height="8" rx="1"/><rect x="150" y="185.5" width="8" height="8" rx="1"/><rect x="163" y="185.5" width="8" height="8" rx="1"/><rect x="176" y="185.5" width="8" height="8" rx="1"/><rect x="150" y="308.5" width="8" height="8" rx="1"/><rect x="163" y="308.5" width="8" height="8" rx="1"/><rect x="176" y="308.5" width="8" height="8" rx="1"/><rect x="202" y="554.5" width="8" height="8" rx="1"/><rect x="215" y="554.5" width="8" height="8" rx="1"/><rect x="202" y="677.5" width="8" height="8" rx="1"/><rect x="215" y="677.5" width="8" height="8" rx="1"/><rect x="228" y="677.5" width="8" height="8" rx="1"/><rect x="241" y="677.5" width="8" height="8" rx="1"/><rect x="228" y="800.5" width="8" height="8" rx="1"/><rect x="241" y="800.5" width="8" height="8" rx="1"/><rect x="228" y="1046.5" width="8" height="8" rx="1"/><rect x="241" y="1046.5" width="8" height="8" rx="1"/><rect x="254" y="1046.5" width="8" height="8" rx="1"/><rect x="267" y="1046.5" width="8" height="8" rx="1"/><rect x="163" y="1169.5" width="8" height="8" rx="1"/><rect x="176" y="1169.5" width="8" height="8" rx="1"/><rect x="189" y="1169.5" width="8" height="8" rx="1"/></g><g data-pulses fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round" stroke-dasharray="0.06 1.4" stroke-dashoffset="1.46" class="*:opacity-22 motion-reduce:hidden"><path pathLength="1" d="M59 46.0 H294 L494.0 246.0 H492" data-dur="3.75" data-delay="0.18"/><path pathLength="1" d="M94 87.0 H294 L494.0 287.0 H506" data-dur="2.73" data-delay="0.58"/><path pathLength="1" d="M115 128.0 H294 L494.0 328.0 H520" data-dur="4.03" data-delay="1.20"/><path pathLength="1" d="M80 169.0 H294 L494.0 369.0 H534" data-dur="3.26" data-delay="1.64"/><path pathLength="1" d="M87 210.0 H294 L494.0 410.0 H548" data-dur="3.55" data-delay="0.84"/><path pathLength="1" d="M24 251.0 H294 L494.0 451.0 H492" data-dur="4.27" data-delay="1.96"/><path pathLength="1" d="M24 292.0 H294 L494.0 492.0 H506" data-dur="3.11" data-delay="1.61"/><path pathLength="1" d="M66 333.0 H294 L494.0 533.0 H520" data-dur="3.70" data-delay="2.45"/><path pathLength="1" d="M31 374.0 H294 L466.2 546.2 H534" data-dur="4.13" data-delay="0.81"/><path pathLength="1" d="M45 415.0 H294 L437.5 558.5 H548" data-dur="4.66" data-delay="0.33"/><path pathLength="1" d="M66 456.0 H294 L408.8 570.8 H492" data-dur="3.48" data-delay="2.12"/><path pathLength="1" d="M24 497.0 H278 L364.1 583.1 H506" data-dur="2.92" data-delay="1.37"/><path pathLength="1" d="M115 538.0 H262 L319.4 595.4 H520" data-dur="2.68" data-delay="1.87"/><path pathLength="1" d="M45 579.0 H246 L274.7 607.7 H534" data-dur="4.21" data-delay="1.60"/><path pathLength="1" d="M87 620.0 H230 L230.0 620.0 H548" data-dur="4.44" data-delay="0.88"/><path pathLength="1" d="M24 661.0 H246 L274.7 632.3 H492" data-dur="4.06" data-delay="1.66"/><path pathLength="1" d="M66 702.0 H262 L319.4 644.6 H506" data-dur="3.82" data-delay="1.28"/><path pathLength="1" d="M24 743.0 H278 L364.1 656.9 H520" data-dur="4.36" data-delay="2.65"/><path pathLength="1" d="M80 784.0 H294 L408.8 669.2 H534" data-dur="3.60" data-delay="1.86"/><path pathLength="1" d="M52 825.0 H294 L437.5 681.5 H548" data-dur="2.73" data-delay="1.96"/><path pathLength="1" d="M66 866.0 H294 L466.2 693.8 H492" data-dur="3.96" data-delay="2.78"/><path pathLength="1" d="M38 907.0 H294 L494.0 707.0 H506" data-dur="4.33" data-delay="0.80"/><path pathLength="1" d="M87 948.0 H294 L494.0 748.0 H520" data-dur="3.41" data-delay="1.87"/><path pathLength="1" d="M52 989.0 H294 L494.0 789.0 H534" data-dur="2.65" data-delay="1.29"/><path pathLength="1" d="M80 1030.0 H294 L494.0 830.0 H548" data-dur="2.95" data-delay="0.33"/><path pathLength="1" d="M38 1071.0 H294 L494.0 871.0 H492" data-dur="2.72" data-delay="2.15"/><path pathLength="1" d="M87 1112.0 H294 L494.0 912.0 H506" data-dur="2.87" data-delay="0.69"/><path pathLength="1" d="M94 1153.0 H294 L494.0 953.0 H520" data-dur="3.42" data-delay="2.44"/><path pathLength="1" d="M31 1194.0 H294 L494.0 994.0 H534" data-dur="2.77" data-delay="1.26"/></g><g data-pulses fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-dasharray="0.06 1.4" stroke-dashoffset="1.46" class="motion-reduce:hidden"><path pathLength="1" d="M59 46.0 H294 L494.0 246.0 H492" data-dur="3.75" data-delay="0.18"/><path pathLength="1" d="M94 87.0 H294 L494.0 287.0 H506" data-dur="2.73" data-delay="0.58"/><path pathLength="1" d="M115 128.0 H294 L494.0 328.0 H520" data-dur="4.03" data-delay="1.20"/><path pathLength="1" d="M80 169.0 H294 L494.0 369.0 H534" data-dur="3.26" data-delay="1.64"/><path pathLength="1" d="M87 210.0 H294 L494.0 410.0 H548" data-dur="3.55" data-delay="0.84"/><path pathLength="1" d="M24 251.0 H294 L494.0 451.0 H492" data-dur="4.27" data-delay="1.96"/><path pathLength="1" d="M24 292.0 H294 L494.0 492.0 H506" data-dur="3.11" data-delay="1.61"/><path pathLength="1" d="M66 333.0 H294 L494.0 533.0 H520" data-dur="3.70" data-delay="2.45"/><path pathLength="1" d="M31 374.0 H294 L466.2 546.2 H534" data-dur="4.13" data-delay="0.81"/><path pathLength="1" d="M45 415.0 H294 L437.5 558.5 H548" data-dur="4.66" data-delay="0.33"/><path pathLength="1" d="M66 456.0 H294 L408.8 570.8 H492" data-dur="3.48" data-delay="2.12"/><path pathLength="1" d="M24 497.0 H278 L364.1 583.1 H506" data-dur="2.92" data-delay="1.37"/><path pathLength="1" d="M115 538.0 H262 L319.4 595.4 H520" data-dur="2.68" data-delay="1.87"/><path pathLength="1" d="M45 579.0 H246 L274.7 607.7 H534" data-dur="4.21" data-delay="1.60"/><path pathLength="1" d="M87 620.0 H230 L230.0 620.0 H548" data-dur="4.44" data-delay="0.88"/><path pathLength="1" d="M24 661.0 H246 L274.7 632.3 H492" data-dur="4.06" data-delay="1.66"/><path pathLength="1" d="M66 702.0 H262 L319.4 644.6 H506" data-dur="3.82" data-delay="1.28"/><path pathLength="1" d="M24 743.0 H278 L364.1 656.9 H520" data-dur="4.36" data-delay="2.65"/><path pathLength="1" d="M80 784.0 H294 L408.8 669.2 H534" data-dur="3.60" data-delay="1.86"/><path pathLength="1" d="M52 825.0 H294 L437.5 681.5 H548" data-dur="2.73" data-delay="1.96"/><path pathLength="1" d="M66 866.0 H294 L466.2 693.8 H492" data-dur="3.96" data-delay="2.78"/><path pathLength="1" d="M38 907.0 H294 L494.0 707.0 H506" data-dur="4.33" data-delay="0.80"/><path pathLength="1" d="M87 948.0 H294 L494.0 748.0 H520" data-dur="3.41" data-delay="1.87"/><path pathLength="1" d="M52 989.0 H294 L494.0 789.0 H534" data-dur="2.65" data-delay="1.29"/><path pathLength="1" d="M80 1030.0 H294 L494.0 830.0 H548" data-dur="2.95" data-delay="0.33"/><path pathLength="1" d="M38 1071.0 H294 L494.0 871.0 H492" data-dur="2.72" data-delay="2.15"/><path pathLength="1" d="M87 1112.0 H294 L494.0 912.0 H506" data-dur="2.87" data-delay="0.69"/><path pathLength="1" d="M94 1153.0 H294 L494.0 953.0 H520" data-dur="3.42" data-delay="2.44"/><path pathLength="1" d="M31 1194.0 H294 L494.0 994.0 H534" data-dur="2.77" data-delay="1.26"/></g></g>
+          <svg
+            class="absolute inset-y-0 right-0 h-full w-[40%] fill-none text-blue mask-[linear-gradient(270deg,transparent_2%,#000_38%,#000_60%,transparent_90%)] max-[760px]:hidden"
+            viewBox="0 0 600 1240"
+            preserveAspectRatio="xMidYMid slice"
+          >
+            <g transform="translate(600 0) scale(-1 1)">
+              <g
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+                class="*:opacity-40"
+              >
+                <path d="M59 46.0 H294 L494.0 246.0 H492" />
+                <path d="M94 87.0 H294 L494.0 287.0 H506" />
+                <path d="M115 128.0 H294 L494.0 328.0 H520" />
+                <path d="M80 169.0 H294 L494.0 369.0 H534" />
+                <path d="M87 210.0 H294 L494.0 410.0 H548" />
+                <path d="M24 251.0 H294 L494.0 451.0 H492" />
+                <path d="M24 292.0 H294 L494.0 492.0 H506" />
+                <path d="M66 333.0 H294 L494.0 533.0 H520" />
+                <path d="M31 374.0 H294 L466.2 546.2 H534" />
+                <path d="M45 415.0 H294 L437.5 558.5 H548" />
+                <path d="M66 456.0 H294 L408.8 570.8 H492" />
+                <path d="M24 497.0 H278 L364.1 583.1 H506" />
+                <path d="M115 538.0 H262 L319.4 595.4 H520" />
+                <path d="M45 579.0 H246 L274.7 607.7 H534" />
+                <path d="M87 620.0 H230 L230.0 620.0 H548" />
+                <path d="M24 661.0 H246 L274.7 632.3 H492" />
+                <path d="M66 702.0 H262 L319.4 644.6 H506" />
+                <path d="M24 743.0 H278 L364.1 656.9 H520" />
+                <path d="M80 784.0 H294 L408.8 669.2 H534" />
+                <path d="M52 825.0 H294 L437.5 681.5 H548" />
+                <path d="M66 866.0 H294 L466.2 693.8 H492" />
+                <path d="M38 907.0 H294 L494.0 707.0 H506" />
+                <path d="M87 948.0 H294 L494.0 748.0 H520" />
+                <path d="M52 989.0 H294 L494.0 789.0 H534" />
+                <path d="M80 1030.0 H294 L494.0 830.0 H548" />
+                <path d="M38 1071.0 H294 L494.0 871.0 H492" />
+                <path d="M87 1112.0 H294 L494.0 912.0 H506" />
+                <path d="M94 1153.0 H294 L494.0 953.0 H520" />
+                <path d="M31 1194.0 H294 L494.0 994.0 H534" />
+                <path d="M140 87.0 V107.5 H110" />
+                <path d="M220 251.0 V230.5 H190" />
+                <path d="M150 415.0 V435.5 H100" />
+                <path d="M190 579.0 V558.5 H140" />
+                <path d="M170 743.0 V763.5 H140" />
+                <path d="M220 907.0 V886.5 H190" />
+                <path d="M150 1071.0 V1091.5 H100" />
+              </g>
+              <g
+                stroke="currentColor"
+                stroke-width="1.6"
+                class="fill-bg *:opacity-65"
+              >
+                <circle cx="59.0" cy="46.0" r="4.5" />
+                <circle cx="492.0" cy="246.0" r="4.5" />
+                <circle cx="94.0" cy="87.0" r="4.5" />
+                <circle cx="506.0" cy="287.0" r="4.5" />
+                <circle cx="110.0" cy="107.5" r="4.5" />
+                <circle cx="115.0" cy="128.0" r="4.5" />
+                <circle cx="520.0" cy="328.0" r="4.5" />
+                <circle cx="80.0" cy="169.0" r="4.5" />
+                <circle cx="534.0" cy="369.0" r="4.5" />
+                <circle cx="87.0" cy="210.0" r="4.5" />
+                <circle cx="548.0" cy="410.0" r="4.5" />
+                <circle cx="24.0" cy="251.0" r="4.5" />
+                <circle cx="492.0" cy="451.0" r="4.5" />
+                <circle cx="190.0" cy="230.5" r="4.5" />
+                <circle cx="24.0" cy="292.0" r="4.5" />
+                <circle cx="506.0" cy="492.0" r="4.5" />
+                <circle cx="66.0" cy="333.0" r="4.5" />
+                <circle cx="520.0" cy="533.0" r="4.5" />
+                <circle cx="31.0" cy="374.0" r="4.5" />
+                <circle cx="534.0" cy="546.2" r="4.5" />
+                <circle cx="45.0" cy="415.0" r="4.5" />
+                <circle cx="548.0" cy="558.5" r="4.5" />
+                <circle cx="100.0" cy="435.5" r="4.5" />
+                <circle cx="66.0" cy="456.0" r="4.5" />
+                <circle cx="492.0" cy="570.8" r="4.5" />
+                <circle cx="24.0" cy="497.0" r="4.5" />
+                <circle cx="506.0" cy="583.1" r="4.5" />
+                <circle cx="115.0" cy="538.0" r="4.5" />
+                <circle cx="520.0" cy="595.4" r="4.5" />
+                <circle cx="45.0" cy="579.0" r="4.5" />
+                <circle cx="534.0" cy="607.7" r="4.5" />
+                <circle cx="140.0" cy="558.5" r="4.5" />
+                <circle cx="87.0" cy="620.0" r="4.5" />
+                <circle cx="548.0" cy="620.0" r="4.5" />
+                <circle cx="24.0" cy="661.0" r="4.5" />
+                <circle cx="492.0" cy="632.3" r="4.5" />
+                <circle cx="66.0" cy="702.0" r="4.5" />
+                <circle cx="506.0" cy="644.6" r="4.5" />
+                <circle cx="24.0" cy="743.0" r="4.5" />
+                <circle cx="520.0" cy="656.9" r="4.5" />
+                <circle cx="140.0" cy="763.5" r="4.5" />
+                <circle cx="80.0" cy="784.0" r="4.5" />
+                <circle cx="534.0" cy="669.2" r="4.5" />
+                <circle cx="52.0" cy="825.0" r="4.5" />
+                <circle cx="548.0" cy="681.5" r="4.5" />
+                <circle cx="66.0" cy="866.0" r="4.5" />
+                <circle cx="492.0" cy="693.8" r="4.5" />
+                <circle cx="38.0" cy="907.0" r="4.5" />
+                <circle cx="506.0" cy="707.0" r="4.5" />
+                <circle cx="190.0" cy="886.5" r="4.5" />
+                <circle cx="87.0" cy="948.0" r="4.5" />
+                <circle cx="520.0" cy="748.0" r="4.5" />
+                <circle cx="52.0" cy="989.0" r="4.5" />
+                <circle cx="534.0" cy="789.0" r="4.5" />
+                <circle cx="80.0" cy="1030.0" r="4.5" />
+                <circle cx="548.0" cy="830.0" r="4.5" />
+                <circle cx="38.0" cy="1071.0" r="4.5" />
+                <circle cx="492.0" cy="871.0" r="4.5" />
+                <circle cx="100.0" cy="1091.5" r="4.5" />
+                <circle cx="87.0" cy="1112.0" r="4.5" />
+                <circle cx="506.0" cy="912.0" r="4.5" />
+                <circle cx="94.0" cy="1153.0" r="4.5" />
+                <circle cx="520.0" cy="953.0" r="4.5" />
+                <circle cx="31.0" cy="1194.0" r="4.5" />
+                <circle cx="534.0" cy="994.0" r="4.5" />
+              </g>
+              <g class="fill-current *:opacity-32">
+                <rect x="163" y="62.5" width="8" height="8" rx="1" />
+                <rect x="176" y="62.5" width="8" height="8" rx="1" />
+                <rect x="189" y="62.5" width="8" height="8" rx="1" />
+                <rect x="150" y="185.5" width="8" height="8" rx="1" />
+                <rect x="163" y="185.5" width="8" height="8" rx="1" />
+                <rect x="176" y="185.5" width="8" height="8" rx="1" />
+                <rect x="150" y="308.5" width="8" height="8" rx="1" />
+                <rect x="163" y="308.5" width="8" height="8" rx="1" />
+                <rect x="176" y="308.5" width="8" height="8" rx="1" />
+                <rect x="202" y="554.5" width="8" height="8" rx="1" />
+                <rect x="215" y="554.5" width="8" height="8" rx="1" />
+                <rect x="202" y="677.5" width="8" height="8" rx="1" />
+                <rect x="215" y="677.5" width="8" height="8" rx="1" />
+                <rect x="228" y="677.5" width="8" height="8" rx="1" />
+                <rect x="241" y="677.5" width="8" height="8" rx="1" />
+                <rect x="228" y="800.5" width="8" height="8" rx="1" />
+                <rect x="241" y="800.5" width="8" height="8" rx="1" />
+                <rect x="228" y="1046.5" width="8" height="8" rx="1" />
+                <rect x="241" y="1046.5" width="8" height="8" rx="1" />
+                <rect x="254" y="1046.5" width="8" height="8" rx="1" />
+                <rect x="267" y="1046.5" width="8" height="8" rx="1" />
+                <rect x="163" y="1169.5" width="8" height="8" rx="1" />
+                <rect x="176" y="1169.5" width="8" height="8" rx="1" />
+                <rect x="189" y="1169.5" width="8" height="8" rx="1" />
+              </g>
+              <g
+                data-pulses
+                fill="none"
+                stroke="currentColor"
+                stroke-width="8"
+                stroke-linecap="round"
+                stroke-dasharray="0.06 1.4"
+                stroke-dashoffset="1.46"
+                class="*:opacity-22 motion-reduce:hidden"
+              >
+                <path
+                  pathLength="1"
+                  d="M59 46.0 H294 L494.0 246.0 H492"
+                  data-dur="3.75"
+                  data-delay="0.18"
+                />
+                <path
+                  pathLength="1"
+                  d="M94 87.0 H294 L494.0 287.0 H506"
+                  data-dur="2.73"
+                  data-delay="0.58"
+                />
+                <path
+                  pathLength="1"
+                  d="M115 128.0 H294 L494.0 328.0 H520"
+                  data-dur="4.03"
+                  data-delay="1.20"
+                />
+                <path
+                  pathLength="1"
+                  d="M80 169.0 H294 L494.0 369.0 H534"
+                  data-dur="3.26"
+                  data-delay="1.64"
+                />
+                <path
+                  pathLength="1"
+                  d="M87 210.0 H294 L494.0 410.0 H548"
+                  data-dur="3.55"
+                  data-delay="0.84"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 251.0 H294 L494.0 451.0 H492"
+                  data-dur="4.27"
+                  data-delay="1.96"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 292.0 H294 L494.0 492.0 H506"
+                  data-dur="3.11"
+                  data-delay="1.61"
+                />
+                <path
+                  pathLength="1"
+                  d="M66 333.0 H294 L494.0 533.0 H520"
+                  data-dur="3.70"
+                  data-delay="2.45"
+                />
+                <path
+                  pathLength="1"
+                  d="M31 374.0 H294 L466.2 546.2 H534"
+                  data-dur="4.13"
+                  data-delay="0.81"
+                />
+                <path
+                  pathLength="1"
+                  d="M45 415.0 H294 L437.5 558.5 H548"
+                  data-dur="4.66"
+                  data-delay="0.33"
+                />
+                <path
+                  pathLength="1"
+                  d="M66 456.0 H294 L408.8 570.8 H492"
+                  data-dur="3.48"
+                  data-delay="2.12"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 497.0 H278 L364.1 583.1 H506"
+                  data-dur="2.92"
+                  data-delay="1.37"
+                />
+                <path
+                  pathLength="1"
+                  d="M115 538.0 H262 L319.4 595.4 H520"
+                  data-dur="2.68"
+                  data-delay="1.87"
+                />
+                <path
+                  pathLength="1"
+                  d="M45 579.0 H246 L274.7 607.7 H534"
+                  data-dur="4.21"
+                  data-delay="1.60"
+                />
+                <path
+                  pathLength="1"
+                  d="M87 620.0 H230 L230.0 620.0 H548"
+                  data-dur="4.44"
+                  data-delay="0.88"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 661.0 H246 L274.7 632.3 H492"
+                  data-dur="4.06"
+                  data-delay="1.66"
+                />
+                <path
+                  pathLength="1"
+                  d="M66 702.0 H262 L319.4 644.6 H506"
+                  data-dur="3.82"
+                  data-delay="1.28"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 743.0 H278 L364.1 656.9 H520"
+                  data-dur="4.36"
+                  data-delay="2.65"
+                />
+                <path
+                  pathLength="1"
+                  d="M80 784.0 H294 L408.8 669.2 H534"
+                  data-dur="3.60"
+                  data-delay="1.86"
+                />
+                <path
+                  pathLength="1"
+                  d="M52 825.0 H294 L437.5 681.5 H548"
+                  data-dur="2.73"
+                  data-delay="1.96"
+                />
+                <path
+                  pathLength="1"
+                  d="M66 866.0 H294 L466.2 693.8 H492"
+                  data-dur="3.96"
+                  data-delay="2.78"
+                />
+                <path
+                  pathLength="1"
+                  d="M38 907.0 H294 L494.0 707.0 H506"
+                  data-dur="4.33"
+                  data-delay="0.80"
+                />
+                <path
+                  pathLength="1"
+                  d="M87 948.0 H294 L494.0 748.0 H520"
+                  data-dur="3.41"
+                  data-delay="1.87"
+                />
+                <path
+                  pathLength="1"
+                  d="M52 989.0 H294 L494.0 789.0 H534"
+                  data-dur="2.65"
+                  data-delay="1.29"
+                />
+                <path
+                  pathLength="1"
+                  d="M80 1030.0 H294 L494.0 830.0 H548"
+                  data-dur="2.95"
+                  data-delay="0.33"
+                />
+                <path
+                  pathLength="1"
+                  d="M38 1071.0 H294 L494.0 871.0 H492"
+                  data-dur="2.72"
+                  data-delay="2.15"
+                />
+                <path
+                  pathLength="1"
+                  d="M87 1112.0 H294 L494.0 912.0 H506"
+                  data-dur="2.87"
+                  data-delay="0.69"
+                />
+                <path
+                  pathLength="1"
+                  d="M94 1153.0 H294 L494.0 953.0 H520"
+                  data-dur="3.42"
+                  data-delay="2.44"
+                />
+                <path
+                  pathLength="1"
+                  d="M31 1194.0 H294 L494.0 994.0 H534"
+                  data-dur="2.77"
+                  data-delay="1.26"
+                />
+              </g>
+              <g
+                data-pulses
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-dasharray="0.06 1.4"
+                stroke-dashoffset="1.46"
+                class="motion-reduce:hidden"
+              >
+                <path
+                  pathLength="1"
+                  d="M59 46.0 H294 L494.0 246.0 H492"
+                  data-dur="3.75"
+                  data-delay="0.18"
+                />
+                <path
+                  pathLength="1"
+                  d="M94 87.0 H294 L494.0 287.0 H506"
+                  data-dur="2.73"
+                  data-delay="0.58"
+                />
+                <path
+                  pathLength="1"
+                  d="M115 128.0 H294 L494.0 328.0 H520"
+                  data-dur="4.03"
+                  data-delay="1.20"
+                />
+                <path
+                  pathLength="1"
+                  d="M80 169.0 H294 L494.0 369.0 H534"
+                  data-dur="3.26"
+                  data-delay="1.64"
+                />
+                <path
+                  pathLength="1"
+                  d="M87 210.0 H294 L494.0 410.0 H548"
+                  data-dur="3.55"
+                  data-delay="0.84"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 251.0 H294 L494.0 451.0 H492"
+                  data-dur="4.27"
+                  data-delay="1.96"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 292.0 H294 L494.0 492.0 H506"
+                  data-dur="3.11"
+                  data-delay="1.61"
+                />
+                <path
+                  pathLength="1"
+                  d="M66 333.0 H294 L494.0 533.0 H520"
+                  data-dur="3.70"
+                  data-delay="2.45"
+                />
+                <path
+                  pathLength="1"
+                  d="M31 374.0 H294 L466.2 546.2 H534"
+                  data-dur="4.13"
+                  data-delay="0.81"
+                />
+                <path
+                  pathLength="1"
+                  d="M45 415.0 H294 L437.5 558.5 H548"
+                  data-dur="4.66"
+                  data-delay="0.33"
+                />
+                <path
+                  pathLength="1"
+                  d="M66 456.0 H294 L408.8 570.8 H492"
+                  data-dur="3.48"
+                  data-delay="2.12"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 497.0 H278 L364.1 583.1 H506"
+                  data-dur="2.92"
+                  data-delay="1.37"
+                />
+                <path
+                  pathLength="1"
+                  d="M115 538.0 H262 L319.4 595.4 H520"
+                  data-dur="2.68"
+                  data-delay="1.87"
+                />
+                <path
+                  pathLength="1"
+                  d="M45 579.0 H246 L274.7 607.7 H534"
+                  data-dur="4.21"
+                  data-delay="1.60"
+                />
+                <path
+                  pathLength="1"
+                  d="M87 620.0 H230 L230.0 620.0 H548"
+                  data-dur="4.44"
+                  data-delay="0.88"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 661.0 H246 L274.7 632.3 H492"
+                  data-dur="4.06"
+                  data-delay="1.66"
+                />
+                <path
+                  pathLength="1"
+                  d="M66 702.0 H262 L319.4 644.6 H506"
+                  data-dur="3.82"
+                  data-delay="1.28"
+                />
+                <path
+                  pathLength="1"
+                  d="M24 743.0 H278 L364.1 656.9 H520"
+                  data-dur="4.36"
+                  data-delay="2.65"
+                />
+                <path
+                  pathLength="1"
+                  d="M80 784.0 H294 L408.8 669.2 H534"
+                  data-dur="3.60"
+                  data-delay="1.86"
+                />
+                <path
+                  pathLength="1"
+                  d="M52 825.0 H294 L437.5 681.5 H548"
+                  data-dur="2.73"
+                  data-delay="1.96"
+                />
+                <path
+                  pathLength="1"
+                  d="M66 866.0 H294 L466.2 693.8 H492"
+                  data-dur="3.96"
+                  data-delay="2.78"
+                />
+                <path
+                  pathLength="1"
+                  d="M38 907.0 H294 L494.0 707.0 H506"
+                  data-dur="4.33"
+                  data-delay="0.80"
+                />
+                <path
+                  pathLength="1"
+                  d="M87 948.0 H294 L494.0 748.0 H520"
+                  data-dur="3.41"
+                  data-delay="1.87"
+                />
+                <path
+                  pathLength="1"
+                  d="M52 989.0 H294 L494.0 789.0 H534"
+                  data-dur="2.65"
+                  data-delay="1.29"
+                />
+                <path
+                  pathLength="1"
+                  d="M80 1030.0 H294 L494.0 830.0 H548"
+                  data-dur="2.95"
+                  data-delay="0.33"
+                />
+                <path
+                  pathLength="1"
+                  d="M38 1071.0 H294 L494.0 871.0 H492"
+                  data-dur="2.72"
+                  data-delay="2.15"
+                />
+                <path
+                  pathLength="1"
+                  d="M87 1112.0 H294 L494.0 912.0 H506"
+                  data-dur="2.87"
+                  data-delay="0.69"
+                />
+                <path
+                  pathLength="1"
+                  d="M94 1153.0 H294 L494.0 953.0 H520"
+                  data-dur="3.42"
+                  data-delay="2.44"
+                />
+                <path
+                  pathLength="1"
+                  d="M31 1194.0 H294 L494.0 994.0 H534"
+                  data-dur="2.77"
+                  data-delay="1.26"
+                />
+              </g>
+            </g>
           </svg>
         </div>
 
@@ -91,23 +1207,43 @@
             height="512"
             onerror="this.remove()"
           />
-          <h1 data-i18n="hero.title" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[24ch] text-[clamp(2rem,5.4vw,3.4rem)] leading-[1.08] font-bold tracking-[-0.01em] [&_.grad]:bg-linear-to-r/srgb [&_.grad]:from-green [&_.grad]:via-blue [&_.grad]:to-green [&_.grad]:bg-[length:200%_100%] [&_.grad]:bg-clip-text [&_.grad]:text-transparent">
-            Seus clássicos. <br> Sua coleção. <br> Uma experiência <span class="grad">moderna</span>.
+          <h1
+            data-i18n="hero.title"
+            class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[24ch] text-[clamp(2rem,5.4vw,3.4rem)] leading-[1.08] font-bold tracking-[-0.01em] [&_.grad]:bg-linear-to-r/srgb [&_.grad]:from-green [&_.grad]:via-blue [&_.grad]:to-green [&_.grad]:bg-[length:200%_100%] [&_.grad]:bg-clip-text [&_.grad]:text-transparent"
+          >
+            Seus clássicos. <br />
+            Sua coleção. <br />
+            Uma experiência <span class="grad">moderna</span>.
           </h1>
-          <p data-i18n="hero.lead" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[64ch] text-[1.12rem] text-muted">
-            ReEmu é um frontend moderno para organizar, descobrir e jogar seus jogos clássicos em
-            uma interface pensada para o controle, feita para quem gosta de jogar — não de ficar configurando.
+          <p
+            data-i18n="hero.lead"
+            class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[64ch] text-[1.12rem] text-muted"
+          >
+            ReEmu é um frontend moderno para organizar, descobrir e jogar seus
+            jogos clássicos em uma interface pensada para o controle, feita para
+            quem gosta de jogar — não de ficar configurando.
           </p>
           <!-- <p data-i18n="hero.lead2" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[64ch] text-[1.12rem] text-muted">
             Sua coleção ganha capas, informações, favoritos, progresso, temas e uma navegação
             pensada para o controle.
           </p> -->
 
-          <div id="primary" class="reveal js:motion-safe:opacity-0 flex flex-wrap items-center justify-center gap-3 mt-8" aria-live="polite">
+          <div
+            id="primary"
+            class="reveal js:motion-safe:opacity-0 flex flex-wrap items-center justify-center gap-3 mt-8"
+            aria-live="polite"
+          >
             <fluent-spinner size="small"></fluent-spinner>
-            <fluent-text data-i18n="hero.loading" size="200">Procurando a versão mais recente…</fluent-text>
+            <fluent-text data-i18n="hero.loading" size="200"
+              >Procurando a versão mais recente…</fluent-text
+            >
           </div>
-          <p data-i18n="hero.note" class="reveal js:motion-safe:opacity-0 text-[0.9rem] text-muted mt-4">Baixe grátis · Windows · Linux · Código aberto</p>
+          <p
+            data-i18n="hero.note"
+            class="reveal js:motion-safe:opacity-0 text-[0.9rem] text-muted mt-4"
+          >
+            Baixe grátis · Windows · Linux · Código aberto
+          </p>
         </div>
       </section>
 
@@ -121,66 +1257,200 @@
       <!-- ─────────────── Nova vida ─────────────── -->
       <section id="vida" class="py-22" aria-labelledby="vida-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2 id="vida-titulo" data-i18n="life.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Dê uma nova vida à sua coleção</h2>
-          <p data-i18n="life.p1" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">
-            Seus jogos clássicos merecem mais do que uma pasta cheia de arquivos.
-          </p>
-          <p data-i18n="life.p2" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">
-            O ReEmu transforma sua coleção em uma biblioteca bonita, organizada e fácil de explorar.
-          </p>
-          <p class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8">
-            <strong data-i18n="life.punch">Encontre. Escolha. Jogue.</strong>
-            <span data-i18n="life.punch2" class="text-muted">Sem complicação.</span>
-          </p>
+          <div class="grid grid-cols-12">
+            <div class="col-span-12 md:col-span-6">
+              <h2
+                id="vida-titulo"
+                data-i18n="life.title"
+                class="reveal js:motion-safe:opacity-0 text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
+              >
+                Dê uma nova vida à sua coleção
+              </h2>
+              <p
+                data-i18n="life.p1"
+                class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
+              >
+                Seus jogos clássicos merecem mais do que uma pasta cheia de
+                arquivos.
+              </p>
+              <p
+                data-i18n="life.p2"
+                class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
+              >
+                O ReEmu transforma sua coleção em uma biblioteca dinâmica,
+                organizada e fácil de explorar.
+              </p>
+              <p
+                class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8"
+              >
+                <strong data-i18n="life.punch"
+                  >Encontre. Escolha. Jogue.</strong
+                >
+                <span data-i18n="life.punch2" class="text-muted"
+                  >Sem complicação.</span
+                >
+              </p>
+            </div>
+            <div
+              class="col-span-12 mt-12 flex items-center justify-center md:col-span-6 md:mt-0"
+            >
+              <!-- Controle (ícone Fluent, ver src/fluent-icons.css) no degradê
+                   verde → azul da logo; o brilho fica no invólucro porque a
+                   máscara do ícone cortaria um drop-shadow aplicado nele. -->
+              <span
+                class="reveal js:motion-safe:opacity-0 drop-shadow-[0_0_28px_rgba(61,220,47,0.35)]"
+                aria-hidden="true"
+              >
+                <span
+                  class="fi fi-controller block bg-linear-to-br from-green to-blue text-[9rem] md:text-[13rem]"
+                ></span>
+              </span>
+            </div>
+          </div>
         </div>
       </section>
 
       <!-- ─────────────── Biblioteca ─────────────── -->
-      <section id="biblioteca" class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22" aria-labelledby="biblioteca-titulo">
+      <section
+        id="biblioteca"
+        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
+        aria-labelledby="biblioteca-titulo"
+      >
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2 id="biblioteca-titulo" data-i18n="lib.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Uma biblioteca feita para jogar</h2>
+          <h2
+            id="biblioteca-titulo"
+            data-i18n="lib.title"
+            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
+          >
+            Uma biblioteca feita para jogar
+          </h2>
 
-          <div class="mt-8 grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-4">
-            <article class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift">
-              <span class="mb-3 grid size-10 place-items-center rounded-lg bg-green/12 text-green" aria-hidden="true"><span class="fi fi-library text-[1.375rem]"></span></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"> <span data-i18n="f1.t">Sua coleção, do seu jeito</span></h3>
-              <p data-i18n="f1.p">Aponte o ReEmu para suas pastas e deixe ele organizar o resto.</p>
-              <p data-i18n="f1.p2" class="mt-2">Seus jogos são identificados automaticamente e apresentados com capas, informações e organização por sistema.</p>
+          <div
+            class="mt-8 grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-4"
+          >
+            <article
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift"
+            >
+              <span
+                class="mb-3 grid size-10 place-items-center rounded-lg bg-green/12 text-green"
+                aria-hidden="true"
+                ><span class="fi fi-library text-[1.375rem]"></span
+              ></span>
+              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink">
+                <span data-i18n="f1.t">Sua coleção, do seu jeito</span>
+              </h3>
+              <p data-i18n="f1.p">
+                Aponte o ReEmu para suas pastas e deixe ele organizar o resto.
+              </p>
+              <p data-i18n="f1.p2" class="mt-2">
+                Seus jogos são identificados automaticamente e apresentados com
+                capas, informações e organização por sistema.
+              </p>
             </article>
-            <article class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift">
-              <span class="mb-3 grid size-10 place-items-center rounded-lg bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-games text-[1.375rem]"></span></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"> <span data-i18n="f2.t">Uma interface que parece um console</span></h3>
-              <p data-i18n="f2.p">Navegue pela sua coleção de forma rápida e intuitiva.</p>
-              <p data-i18n="f2.p2" class="mt-2">Tudo foi pensado para funcionar muito bem com controle — da biblioteca às configurações e ao menu durante o jogo.</p>
+            <article
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift"
+            >
+              <span
+                class="mb-3 grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
+                aria-hidden="true"
+                ><span class="fi fi-games text-[1.375rem]"></span
+              ></span>
+              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink">
+                <span data-i18n="f2.t"
+                  >Uma interface que parece um console</span
+                >
+              </h3>
+              <p data-i18n="f2.p">
+                Navegue pela sua coleção de forma rápida e intuitiva.
+              </p>
+              <p data-i18n="f2.p2" class="mt-2">
+                Tudo foi pensado para funcionar muito bem com controle — da
+                biblioteca às configurações e ao menu durante o jogo.
+              </p>
             </article>
-            <article class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift">
-              <span class="mb-3 grid size-10 place-items-center rounded-lg bg-green/12 text-green" aria-hidden="true"><span class="fi fi-paint-brush text-[1.375rem]"></span></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"><span data-i18n="f3.t">Seus jogos, com a aparência que você quiser</span></h3>
-              <p data-i18n="f3.p">Transforme a experiência visual dos clássicos.</p>
-              <p data-i18n="f3.p2" class="mt-2">Use shaders, molduras e diferentes estilos de apresentação para recriar aquela sensação de jogar em uma TV antiga, em um portátil ou em um arcade.</p>
+            <article
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift"
+            >
+              <span
+                class="mb-3 grid size-10 place-items-center rounded-lg bg-green/12 text-green"
+                aria-hidden="true"
+                ><span class="fi fi-paint-brush text-[1.375rem]"></span
+              ></span>
+              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink">
+                <span data-i18n="f3.t"
+                  >Seus jogos, com a aparência que você quiser</span
+                >
+              </h3>
+              <p data-i18n="f3.p">
+                Transforme a experiência visual dos clássicos.
+              </p>
+              <p data-i18n="f3.p2" class="mt-2">
+                Use shaders, molduras e diferentes estilos de apresentação para
+                recriar aquela sensação de jogar em uma TV antiga, em um
+                portátil ou em um arcade.
+              </p>
             </article>
-            <article class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift">
-              <span class="mb-3 grid size-10 place-items-center rounded-lg bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-save text-[1.375rem]"></span></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"> <span data-i18n="f4.t">Continue exatamente de onde parou</span></h3>
+            <article
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift"
+            >
+              <span
+                class="mb-3 grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
+                aria-hidden="true"
+                ><span class="fi fi-save text-[1.375rem]"></span
+              ></span>
+              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink">
+                <span data-i18n="f4.t">Continue exatamente de onde parou</span>
+              </h3>
               <p data-i18n="f4.p">Salve seu progresso quando quiser.</p>
-              <p data-i18n="f4.p2" class="mt-2">Os save states mostram uma miniatura do momento salvo para que você encontre rapidamente o ponto certo da sua aventura.</p>
+              <p data-i18n="f4.p2" class="mt-2">
+                Os save states mostram uma miniatura do momento salvo para que
+                você encontre rapidamente o ponto certo da sua aventura.
+              </p>
             </article>
-            <article class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift">
-              <span class="mb-3 grid size-10 place-items-center rounded-lg bg-green/12 text-green" aria-hidden="true"><span class="fi fi-heart text-[1.375rem]"></span></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"><span data-i18n="f5.t">Seus favoritos sempre por perto</span></h3>
+            <article
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift"
+            >
+              <span
+                class="mb-3 grid size-10 place-items-center rounded-lg bg-green/12 text-green"
+                aria-hidden="true"
+                ><span class="fi fi-heart text-[1.375rem]"></span
+              ></span>
+              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink">
+                <span data-i18n="f5.t">Seus favoritos sempre por perto</span>
+              </h3>
               <p data-i18n="f5.p">Crie sua própria seleção de jogos.</p>
-              <p data-i18n="f5.p2" class="mt-2">Favoritos, jogos recentes, destaques e busca rápida ajudam você a chegar ao que realmente quer jogar.</p>
+              <p data-i18n="f5.p2" class="mt-2">
+                Favoritos, jogos recentes, destaques e busca rápida ajudam você
+                a chegar ao que realmente quer jogar.
+              </p>
             </article>
-            <article class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift">
-              <span class="mb-3 grid size-10 place-items-center rounded-lg bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-timer text-[1.375rem]"></span></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"> <span data-i18n="f6.t">Saiba quanto você jogou</span></h3>
-              <p data-i18n="f6.p">O ReEmu acompanha seu tempo de jogo e mostra seu histórico diretamente na página de cada título.</p>
+            <article
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted transition-[translate,box-shadow] duration-300 ease-soft even:border-t-blue hover:-translate-y-1 hover:shadow-lift"
+            >
+              <span
+                class="mb-3 grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
+                aria-hidden="true"
+                ><span class="fi fi-timer text-[1.375rem]"></span
+              ></span>
+              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink">
+                <span data-i18n="f6.t">Saiba quanto você jogou</span>
+              </h3>
+              <p data-i18n="f6.p">
+                O ReEmu acompanha seu tempo de jogo e mostra seu histórico
+                diretamente na página de cada título.
+              </p>
             </article>
           </div>
 
-          <p class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8">
-            <span data-i18n="lib.close1" class="text-muted">Sua coleção deixa de ser apenas uma biblioteca.</span>
-            <strong data-i18n="lib.close2">Ela passa a contar a sua história.</strong>
+          <p
+            class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8"
+          >
+            <span data-i18n="lib.close1" class="text-muted"
+              >Sua coleção deixa de ser apenas uma biblioteca.</span
+            >
+            <strong data-i18n="lib.close2"
+              >Ela passa a contar a sua história.</strong
+            >
           </p>
         </div>
       </section>
@@ -188,75 +1458,313 @@
       <!-- ─────────────── Menos configuração ─────────────── -->
       <section id="menos" class="py-22" aria-labelledby="menos-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2 id="menos-titulo" data-i18n="less.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Menos configuração. Mais diversão.</h2>
-          <p data-i18n="less.lead" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">
-            Você não precisa transformar uma noite de nostalgia em uma sessão de configuração.
+          <h2
+            id="menos-titulo"
+            data-i18n="less.title"
+            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
+          >
+            Menos configuração. Mais diversão.
+          </h2>
+          <p
+            data-i18n="less.lead"
+            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
+          >
+            Você não precisa transformar uma noite de nostalgia em uma sessão de
+            configuração.
           </p>
-          <h3 data-i18n="less.with" class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-12">Com o ReEmu</h3>
-          <div class="mt-4 grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4">
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"><span class="fi fi-library mb-1 text-[1.375rem] text-green" aria-hidden="true"></span><strong data-i18n="w1.t">Sua coleção</strong><span data-i18n="w1.p" class="text-[0.93rem] text-muted">Organizada automaticamente em uma biblioteca visual.</span></div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"><span class="fi fi-image mb-1 text-[1.375rem] text-blue" aria-hidden="true"></span><strong data-i18n="w2.t">Capas e informações</strong><span data-i18n="w2.p" class="text-[0.93rem] text-muted">Seus jogos ficam muito mais fáceis de encontrar e explorar.</span></div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"><span class="fi fi-apps mb-1 text-[1.375rem] text-green" aria-hidden="true"></span><strong data-i18n="w3.t">Sistemas</strong><span data-i18n="w3.p" class="text-[0.93rem] text-muted">Diversas plataformas reunidas em um único lugar.</span></div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"><span class="fi fi-controller mb-1 text-[1.375rem] text-blue" aria-hidden="true"></span><strong data-i18n="w4.t">Controles</strong><span data-i18n="w4.p" class="text-[0.93rem] text-muted">Navegação completa pelo gamepad.</span></div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"><span class="fi fi-paint-brush mb-1 text-[1.375rem] text-green" aria-hidden="true"></span><strong data-i18n="w5.t">Visual</strong><span data-i18n="w5.p" class="text-[0.93rem] text-muted">Shaders, molduras e temas para personalizar sua experiência.</span></div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"><span class="fi fi-history mb-1 text-[1.375rem] text-blue" aria-hidden="true"></span><strong data-i18n="w6.t">Progresso</strong><span data-i18n="w6.p" class="text-[0.93rem] text-muted">Save states, histórico e tempo de jogo sempre à mão.</span></div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"><span class="fi fi-arrow-sync mb-1 text-[1.375rem] text-green" aria-hidden="true"></span><strong data-i18n="w7.t">Atualizações</strong><span data-i18n="w7.p" class="text-[0.93rem] text-muted">O próprio ReEmu avisa quando existe uma nova versão.</span></div>
+          <h3
+            data-i18n="less.with"
+            class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-12"
+          >
+            Com o ReEmu
+          </h3>
+          <div
+            class="mt-4 grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4"
+          >
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"
+            >
+              <span
+                class="fi fi-library mb-1 text-[1.375rem] text-green"
+                aria-hidden="true"
+              ></span
+              ><strong data-i18n="w1.t">Sua coleção</strong
+              ><span data-i18n="w1.p" class="text-[0.93rem] text-muted"
+                >Organizada automaticamente em uma biblioteca visual.</span
+              >
+            </div>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"
+            >
+              <span
+                class="fi fi-image mb-1 text-[1.375rem] text-blue"
+                aria-hidden="true"
+              ></span
+              ><strong data-i18n="w2.t">Capas e informações</strong
+              ><span data-i18n="w2.p" class="text-[0.93rem] text-muted"
+                >Seus jogos ficam muito mais fáceis de encontrar e
+                explorar.</span
+              >
+            </div>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"
+            >
+              <span
+                class="fi fi-apps mb-1 text-[1.375rem] text-green"
+                aria-hidden="true"
+              ></span
+              ><strong data-i18n="w3.t">Sistemas</strong
+              ><span data-i18n="w3.p" class="text-[0.93rem] text-muted"
+                >Diversas plataformas reunidas em um único lugar.</span
+              >
+            </div>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"
+            >
+              <span
+                class="fi fi-controller mb-1 text-[1.375rem] text-blue"
+                aria-hidden="true"
+              ></span
+              ><strong data-i18n="w4.t">Controles</strong
+              ><span data-i18n="w4.p" class="text-[0.93rem] text-muted"
+                >Navegação completa pelo gamepad.</span
+              >
+            </div>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"
+            >
+              <span
+                class="fi fi-paint-brush mb-1 text-[1.375rem] text-green"
+                aria-hidden="true"
+              ></span
+              ><strong data-i18n="w5.t">Visual</strong
+              ><span data-i18n="w5.p" class="text-[0.93rem] text-muted"
+                >Shaders, molduras e temas para personalizar sua
+                experiência.</span
+              >
+            </div>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"
+            >
+              <span
+                class="fi fi-history mb-1 text-[1.375rem] text-blue"
+                aria-hidden="true"
+              ></span
+              ><strong data-i18n="w6.t">Progresso</strong
+              ><span data-i18n="w6.p" class="text-[0.93rem] text-muted"
+                >Save states, histórico e tempo de jogo sempre à mão.</span
+              >
+            </div>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green"
+            >
+              <span
+                class="fi fi-arrow-sync mb-1 text-[1.375rem] text-green"
+                aria-hidden="true"
+              ></span
+              ><strong data-i18n="w7.t">Atualizações</strong
+              ><span data-i18n="w7.p" class="text-[0.93rem] text-muted"
+                >O próprio ReEmu avisa quando existe uma nova versão.</span
+              >
+            </div>
           </div>
         </div>
       </section>
 
       <!-- ─────────────── Sala e PC ─────────────── -->
-      <section id="telas" class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22" aria-labelledby="telas-titulo">
+      <section
+        id="telas"
+        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
+        aria-labelledby="telas-titulo"
+      >
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2 id="telas-titulo" data-i18n="room.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Feito para a sala. Perfeito para o PC.</h2>
-          <p data-i18n="room.lead" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">
-            O ReEmu foi pensado para funcionar tanto na sua mesa quanto na TV da sala.
+          <h2
+            id="telas-titulo"
+            data-i18n="room.title"
+            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
+          >
+            Feito para a sala. Perfeito para o PC.
+          </h2>
+          <p
+            data-i18n="room.lead"
+            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
+          >
+            O ReEmu foi pensado para funcionar tanto na sua mesa quanto na TV da
+            sala.
           </p>
           <ul class="reveal js:motion-safe:opacity-0 flex flex-wrap gap-2 mt-4">
-            <li data-i18n="room.b1" class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]">Interface limpa.</li>
-            <li data-i18n="room.b2" class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]">Navegação por controle.</li>
-            <li data-i18n="room.b3" class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]">Textos fáceis de ler.</li>
-            <li data-i18n="room.b4" class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]">Acesso rápido à sua coleção.</li>
+            <li
+              data-i18n="room.b1"
+              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
+            >
+              Interface limpa.
+            </li>
+            <li
+              data-i18n="room.b2"
+              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
+            >
+              Navegação por controle.
+            </li>
+            <li
+              data-i18n="room.b3"
+              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
+            >
+              Textos fáceis de ler.
+            </li>
+            <li
+              data-i18n="room.b4"
+              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
+            >
+              Acesso rápido à sua coleção.
+            </li>
           </ul>
-          <p class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8"><strong data-i18n="room.punch">Conecte o controle. Sente no sofá. Escolha um jogo.</strong></p>
+          <p
+            class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8"
+          >
+            <strong data-i18n="room.punch"
+              >Conecte o controle. Sente no sofá. Escolha um jogo.</strong
+            >
+          </p>
           <!-- Capturas em site/screens/ — enquanto o arquivo não existe, o
                quadro mostra "Captura em breve" (`data-missing`). -->
           <div class="gallery mt-8 grid grid-cols-2 gap-4 max-sm:grid-cols-1">
             <figure class="group reveal js:motion-safe:opacity-0 col-span-full">
-              <button data-i18n-attr="aria-label=sc1.btn" type="button" class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']" aria-label="Ampliar: jogo com shader">
-                <img data-i18n-attr="alt=sc1.alt" src="screens/jogo.png" alt="Jet Set Radio no Dreamcast com shader CRT e moldura" loading="lazy" class="block size-full object-cover group-data-missing:hidden" onerror="this.closest('figure').dataset.missing = ''" />
+              <button
+                data-i18n-attr="aria-label=sc1.btn"
+                type="button"
+                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
+                aria-label="Ampliar: jogo com shader"
+              >
+                <img
+                  data-i18n-attr="alt=sc1.alt"
+                  src="screens/jogo.png"
+                  alt="Jet Set Radio no Dreamcast com shader CRT e moldura"
+                  loading="lazy"
+                  class="block size-full object-cover group-data-missing:hidden"
+                  onerror="this.closest('figure').dataset.missing = ''"
+                />
               </button>
-              <figcaption data-i18n="sc1.cap" class="mt-2.5 text-[0.92rem] text-muted">Jogo com shader CRT e moldura</figcaption>
+              <figcaption
+                data-i18n="sc1.cap"
+                class="mt-2.5 text-[0.92rem] text-muted"
+              >
+                Jogo com shader CRT e moldura
+              </figcaption>
             </figure>
             <figure class="group reveal js:motion-safe:opacity-0">
-              <button data-i18n-attr="aria-label=sc2.btn" type="button" class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']" aria-label="Ampliar: biblioteca">
-                <img data-i18n-attr="alt=sc2.alt" src="screens/biblioteca.png" alt="Biblioteca do PC Engine com capas" loading="lazy" class="block size-full object-cover group-data-missing:hidden" onerror="this.closest('figure').dataset.missing = ''" />
+              <button
+                data-i18n-attr="aria-label=sc2.btn"
+                type="button"
+                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
+                aria-label="Ampliar: biblioteca"
+              >
+                <img
+                  data-i18n-attr="alt=sc2.alt"
+                  src="screens/biblioteca.png"
+                  alt="Biblioteca do PC Engine com capas"
+                  loading="lazy"
+                  class="block size-full object-cover group-data-missing:hidden"
+                  onerror="this.closest('figure').dataset.missing = ''"
+                />
               </button>
-              <figcaption data-i18n="sc2.cap" class="mt-2.5 text-[0.92rem] text-muted">Biblioteca por sistema, com capas</figcaption>
+              <figcaption
+                data-i18n="sc2.cap"
+                class="mt-2.5 text-[0.92rem] text-muted"
+              >
+                Biblioteca por sistema, com capas
+              </figcaption>
             </figure>
             <figure class="group reveal js:motion-safe:opacity-0">
-              <button data-i18n-attr="aria-label=sc3.btn" type="button" class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']" aria-label="Ampliar: página do jogo">
-                <img data-i18n-attr="alt=sc3.alt" src="screens/pagina-jogo.png" alt="Página do MSR com capa, arte de fundo, tempo de jogo e opções do emulador" loading="lazy" class="block size-full object-cover group-data-missing:hidden" onerror="this.closest('figure').dataset.missing = ''" />
+              <button
+                data-i18n-attr="aria-label=sc3.btn"
+                type="button"
+                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
+                aria-label="Ampliar: página do jogo"
+              >
+                <img
+                  data-i18n-attr="alt=sc3.alt"
+                  src="screens/pagina-jogo.png"
+                  alt="Página do MSR com capa, arte de fundo, tempo de jogo e opções do emulador"
+                  loading="lazy"
+                  class="block size-full object-cover group-data-missing:hidden"
+                  onerror="this.closest('figure').dataset.missing = ''"
+                />
               </button>
-              <figcaption data-i18n="sc3.cap" class="mt-2.5 text-[0.92rem] text-muted">Página do jogo: capa, tempo de jogo e opções do emulador</figcaption>
+              <figcaption
+                data-i18n="sc3.cap"
+                class="mt-2.5 text-[0.92rem] text-muted"
+              >
+                Página do jogo: capa, tempo de jogo e opções do emulador
+              </figcaption>
             </figure>
             <figure class="group reveal js:motion-safe:opacity-0">
-              <button data-i18n-attr="aria-label=sc4.btn" type="button" class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']" aria-label="Ampliar: jogo com moldura temática">
-                <img data-i18n-attr="alt=sc4.alt" src="screens/jogo-moldura.png" alt="The Adventures of Batman & Robin com moldura temática e shader CRT" loading="lazy" class="block size-full object-cover group-data-missing:hidden" onerror="this.closest('figure').dataset.missing = ''" />
+              <button
+                data-i18n-attr="aria-label=sc4.btn"
+                type="button"
+                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
+                aria-label="Ampliar: jogo com moldura temática"
+              >
+                <img
+                  data-i18n-attr="alt=sc4.alt"
+                  src="screens/jogo-moldura.png"
+                  alt="The Adventures of Batman & Robin com moldura temática e shader CRT"
+                  loading="lazy"
+                  class="block size-full object-cover group-data-missing:hidden"
+                  onerror="this.closest('figure').dataset.missing = ''"
+                />
               </button>
-              <figcaption data-i18n="sc4.cap" class="mt-2.5 text-[0.92rem] text-muted">Clássicos com moldura temática e shader CRT</figcaption>
+              <figcaption
+                data-i18n="sc4.cap"
+                class="mt-2.5 text-[0.92rem] text-muted"
+              >
+                Clássicos com moldura temática e shader CRT
+              </figcaption>
             </figure>
             <figure class="group reveal js:motion-safe:opacity-0">
-              <button data-i18n-attr="aria-label=sc5.btn" type="button" class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']" aria-label="Ampliar: menu de pausa">
-                <img data-i18n-attr="alt=sc5.alt" src="screens/pausa.png" alt="Menu de pausa com QuickSave e QuickLoad sobre o jogo desfocado" loading="lazy" class="block size-full object-cover group-data-missing:hidden" onerror="this.closest('figure').dataset.missing = ''" />
+              <button
+                data-i18n-attr="aria-label=sc5.btn"
+                type="button"
+                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
+                aria-label="Ampliar: menu de pausa"
+              >
+                <img
+                  data-i18n-attr="alt=sc5.alt"
+                  src="screens/pausa.png"
+                  alt="Menu de pausa com QuickSave e QuickLoad sobre o jogo desfocado"
+                  loading="lazy"
+                  class="block size-full object-cover group-data-missing:hidden"
+                  onerror="this.closest('figure').dataset.missing = ''"
+                />
               </button>
-              <figcaption data-i18n="sc5.cap" class="mt-2.5 text-[0.92rem] text-muted">Menu de pausa e save states</figcaption>
+              <figcaption
+                data-i18n="sc5.cap"
+                class="mt-2.5 text-[0.92rem] text-muted"
+              >
+                Menu de pausa e save states
+              </figcaption>
             </figure>
             <figure class="group reveal js:motion-safe:opacity-0 col-span-full">
-              <button data-i18n-attr="aria-label=sc6.btn" type="button" class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']" aria-label="Ampliar: configurações">
-                <img data-i18n-attr="alt=sc6.alt" src="screens/configuracoes.png" alt="Configurações em categorias: perfil, aparência, vídeo, controles, cores, BIOS e sistema" loading="lazy" class="block size-full object-cover group-data-missing:hidden" onerror="this.closest('figure').dataset.missing = ''" />
+              <button
+                data-i18n-attr="aria-label=sc6.btn"
+                type="button"
+                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-[3px] hover:border-blue focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
+                aria-label="Ampliar: configurações"
+              >
+                <img
+                  data-i18n-attr="alt=sc6.alt"
+                  src="screens/configuracoes.png"
+                  alt="Configurações em categorias: perfil, aparência, vídeo, controles, cores, BIOS e sistema"
+                  loading="lazy"
+                  class="block size-full object-cover group-data-missing:hidden"
+                  onerror="this.closest('figure').dataset.missing = ''"
+                />
               </button>
-              <figcaption data-i18n="sc6.cap" class="mt-2.5 text-[0.92rem] text-muted">Configurações em categorias, navegáveis pelo controle</figcaption>
+              <figcaption
+                data-i18n="sc6.cap"
+                class="mt-2.5 text-[0.92rem] text-muted"
+              >
+                Configurações em categorias, navegáveis pelo controle
+              </figcaption>
             </figure>
           </div>
         </div>
@@ -265,108 +1773,324 @@
       <!-- ─────────────── Sistemas ─────────────── -->
       <section id="sistemas" class="py-22" aria-labelledby="sistemas-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2 id="sistemas-titulo" data-i18n="more.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Mais do que uma biblioteca</h2>
-          <h3 data-i18n="more.sub" class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-4">Uma experiência para a sua coleção inteira.</h3>
-          <p data-i18n="more.lead" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">
-            Do Atari ao PlayStation, dos portáteis aos arcades, o ReEmu reúne diferentes gerações
-            de jogos em uma única experiência.
+          <h2
+            id="sistemas-titulo"
+            data-i18n="more.title"
+            class="reveal js:motion-safe:opacity-0 text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
+          >
+            Mais do que uma biblioteca
+          </h2>
+          <h3
+            data-i18n="more.sub"
+            class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-4"
+          >
+            Uma experiência para a sua coleção inteira.
+          </h3>
+          <p
+            data-i18n="more.lead"
+            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
+          >
+            Do Atari ao PlayStation, dos portáteis aos arcades, o ReEmu reúne
+            diferentes gerações de jogos em uma única experiência.
           </p>
-          <div data-i18n-attr="aria-label=sys.aria" class="reveal js:motion-safe:opacity-0 mt-8 flex flex-wrap gap-2" role="list" aria-label="Alguns dos sistemas suportados">
-            <fluent-badge role="listitem" appearance="outline" size="large">NES</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Super Nintendo</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Nintendo 64</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Game Boy</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Game Boy Color</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Game Boy Advance</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Nintendo DS</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Virtual Boy</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Master System</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Mega Drive</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Sega CD</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">32X</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Saturn</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Dreamcast</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Game Gear</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">PlayStation</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">PSP</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">PC Engine</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">PC Engine CD</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Neo Geo Pocket</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Neo Geo CD</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Arcade</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Atari 2600</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Atari 7800</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Atari Lynx</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Atari Jaguar</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">WonderSwan</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">3DO</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">MSX</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Commodore 64</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Amiga</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">ZX Spectrum</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">Amstrad CPC</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">DOS</fluent-badge>
-            <fluent-badge role="listitem" appearance="outline" size="large">ScummVM</fluent-badge>
-            <fluent-badge data-i18n="sys.more" role="listitem" appearance="ghost" size="large">e mais…</fluent-badge>
+          <div
+            data-i18n-attr="aria-label=sys.aria"
+            class="reveal js:motion-safe:opacity-0 mt-8 flex flex-wrap gap-2"
+            role="list"
+            aria-label="Alguns dos sistemas suportados"
+          >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >NES</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Super Nintendo</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Nintendo 64</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Game Boy</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Game Boy Color</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Game Boy Advance</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Nintendo DS</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Virtual Boy</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Master System</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Mega Drive</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Sega CD</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >32X</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Saturn</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Dreamcast</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Game Gear</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >PlayStation</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >PSP</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >PC Engine</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >PC Engine CD</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Neo Geo Pocket</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Neo Geo CD</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Arcade</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Atari 2600</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Atari 7800</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Atari Lynx</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Atari Jaguar</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >WonderSwan</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >3DO</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >MSX</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Commodore 64</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Amiga</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >ZX Spectrum</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >Amstrad CPC</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >DOS</fluent-badge
+            >
+            <fluent-badge role="listitem" appearance="outline" size="large"
+              >ScummVM</fluent-badge
+            >
+            <fluent-badge
+              data-i18n="sys.more"
+              role="listitem"
+              appearance="ghost"
+              size="large"
+              >e mais…</fluent-badge
+            >
           </div>
-          <p class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8">
-            <strong data-i18n="more.punch">Clássicos de várias gerações.<br />Uma única biblioteca.</strong>
+          <p
+            class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8"
+          >
+            <strong data-i18n="more.punch"
+              >Clássicos de várias gerações.<br />Uma única biblioteca.</strong
+            >
           </p>
         </div>
       </section>
 
       <!-- ─────────────── Como começar ─────────────── -->
-      <section id="comecar" class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22" aria-labelledby="comecar-titulo">
+      <section
+        id="comecar"
+        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
+        aria-labelledby="comecar-titulo"
+      >
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2 id="comecar-titulo" data-i18n="start.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Do download ao primeiro jogo</h2>
+          <h2
+            id="comecar-titulo"
+            data-i18n="start.title"
+            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
+          >
+            Do download ao primeiro jogo
+          </h2>
 
-          <ol class="mt-8 grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
-            <li class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card p-6">
-              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">1</fluent-badge>
-              <h3 data-i18n="s1.t" class="mt-3.5 mb-1.5 text-[1.17em] font-bold">Instale</h3>
-              <p data-i18n="s1.p" class="text-muted">Baixe o ReEmu para Windows ou Linux. Instalação simples, sem ficar procurando dependências.</p>
+          <ol
+            class="mt-8 grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4"
+          >
+            <li
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card p-6"
+            >
+              <fluent-badge
+                appearance="filled"
+                color="brand"
+                shape="circular"
+                size="extra-large"
+                >1</fluent-badge
+              >
+              <h3
+                data-i18n="s1.t"
+                class="mt-3.5 mb-1.5 text-[1.17em] font-bold"
+              >
+                Instale
+              </h3>
+              <p data-i18n="s1.p" class="text-muted">
+                Baixe o ReEmu para Windows ou Linux. Instalação simples, sem
+                ficar procurando dependências.
+              </p>
             </li>
-            <li class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card p-6">
-              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">2</fluent-badge>
-              <h3 data-i18n="s2.t" class="mt-3.5 mb-1.5 text-[1.17em] font-bold">Adicione sua coleção</h3>
-              <p data-i18n="s2.p" class="text-muted">Escolha onde estão seus jogos. O ReEmu identifica os sistemas e organiza sua biblioteca automaticamente.</p>
+            <li
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card p-6"
+            >
+              <fluent-badge
+                appearance="filled"
+                color="brand"
+                shape="circular"
+                size="extra-large"
+                >2</fluent-badge
+              >
+              <h3
+                data-i18n="s2.t"
+                class="mt-3.5 mb-1.5 text-[1.17em] font-bold"
+              >
+                Adicione sua coleção
+              </h3>
+              <p data-i18n="s2.p" class="text-muted">
+                Escolha onde estão seus jogos. O ReEmu identifica os sistemas e
+                organiza sua biblioteca automaticamente.
+              </p>
             </li>
-            <li class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card p-6">
-              <fluent-badge appearance="filled" color="brand" shape="circular" size="extra-large">3</fluent-badge>
-              <h3 data-i18n="s3.t" class="mt-3.5 mb-1.5 text-[1.17em] font-bold">Sente. Escolha. Jogue.</h3>
-              <p data-i18n="s3.p" class="text-muted">Pegue seu controle, escolha um jogo e comece.</p>
+            <li
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card p-6"
+            >
+              <fluent-badge
+                appearance="filled"
+                color="brand"
+                shape="circular"
+                size="extra-large"
+                >3</fluent-badge
+              >
+              <h3
+                data-i18n="s3.t"
+                class="mt-3.5 mb-1.5 text-[1.17em] font-bold"
+              >
+                Sente. Escolha. Jogue.
+              </h3>
+              <p data-i18n="s3.p" class="text-muted">
+                Pegue seu controle, escolha um jogo e comece.
+              </p>
             </li>
           </ol>
-          <p class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8"><strong data-i18n="start.punch">É assim que deveria ser.</strong></p>
+          <p
+            class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8"
+          >
+            <strong data-i18n="start.punch">É assim que deveria ser.</strong>
+          </p>
         </div>
       </section>
 
       <!-- ─────────────── Chamada ─────────────── -->
       <section id="download" class="py-22" aria-labelledby="download-titulo">
         <div class="mx-auto max-w-[1080px] px-4 text-center">
-          <h2 id="download-titulo" data-i18n="cta.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold mx-auto">Seus jogos clássicos nunca pareceram tão atuais.</h2>
-          <p class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mx-auto mt-4">
+          <h2
+            id="download-titulo"
+            data-i18n="cta.title"
+            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold mx-auto"
+          >
+            Seus jogos clássicos nunca pareceram tão atuais.
+          </h2>
+          <p
+            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mx-auto mt-4"
+          >
             <span data-i18n="cta.p1">A nostalgia está nos jogos.</span><br />
             <span data-i18n="cta.p2">A experiência pode ser moderna.</span>
           </p>
-          <h3 data-i18n="cta.sub" class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-12">Descubra o ReEmu</h3>
-          <p data-i18n="cta.lead" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mx-auto mt-4">
-            Baixe gratuitamente e transforme sua coleção em uma biblioteca feita para jogar.
+          <h3
+            data-i18n="cta.sub"
+            class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-12"
+          >
+            Descubra o ReEmu
+          </h3>
+          <p
+            data-i18n="cta.lead"
+            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mx-auto mt-4"
+          >
+            Baixe gratuitamente e transforme sua coleção em uma biblioteca feita
+            para jogar.
           </p>
           <!-- Preenchido pelo app.js com o instalador do sistema do visitante
                (mesmo do hero); sem JS, fica o link da versão mais recente. -->
-          <div id="primary-cta" class="reveal js:motion-safe:opacity-0 flex flex-wrap items-center justify-center gap-3 mt-8 [&_fluent-anchor-button]:mt-2" aria-live="polite">
-            <fluent-anchor-button appearance="primary" size="large" href="https://github.com/Kluis6/reemu/releases/latest"><span slot="start" class="fi fi-arrow-download text-[1.25rem]" aria-hidden="true"></span><span data-i18n="cta.button">Baixar ReEmu</span></fluent-anchor-button>
+          <div
+            id="primary-cta"
+            class="reveal js:motion-safe:opacity-0 flex flex-wrap items-center justify-center gap-3 mt-8 [&_fluent-anchor-button]:mt-2"
+            aria-live="polite"
+          >
+            <fluent-anchor-button
+              appearance="primary"
+              size="large"
+              href="https://github.com/Kluis6/reemu/releases/latest"
+              ><span
+                slot="start"
+                class="fi fi-arrow-download text-[1.25rem]"
+                aria-hidden="true"
+              ></span
+              ><span data-i18n="cta.button"
+                >Baixar ReEmu</span
+              ></fluent-anchor-button
+            >
           </div>
-          <p data-i18n="cta.note" class="reveal js:motion-safe:opacity-0 text-[0.9rem] text-muted mt-4">Windows · Linux · Código aberto · Gratuito</p>
-          <p class="reveal js:motion-safe:opacity-0 text-[0.9rem] text-muted mt-2"><fluent-link data-i18n="cta.all" href="#versoes">Ver todas as versões e o que mudou</fluent-link></p>
+          <p
+            data-i18n="cta.note"
+            class="reveal js:motion-safe:opacity-0 text-[0.9rem] text-muted mt-4"
+          >
+            Windows · Linux · Código aberto · Gratuito
+          </p>
+          <p
+            class="reveal js:motion-safe:opacity-0 text-[0.9rem] text-muted mt-2"
+          >
+            <fluent-link data-i18n="cta.all" href="#versoes"
+              >Ver todas as versões e o que mudou</fluent-link
+            >
+          </p>
         </div>
       </section>
 
       <!-- ─────────────── Download ─────────────── -->
-      <section id="versoes" class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22" aria-labelledby="versoes-titulo">
+      <section
+        id="versoes"
+        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
+        aria-labelledby="versoes-titulo"
+      >
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2 id="versoes-titulo" data-i18n="dl.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Todas as versões</h2>
+          <h2
+            id="versoes-titulo"
+            data-i18n="dl.title"
+            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
+          >
+            Todas as versões
+          </h2>
           <div id="releases" class="mt-8 flex flex-col gap-4"></div>
         </div>
       </section>
@@ -374,127 +2098,383 @@
       <!-- ─────────────── Apoie ─────────────── -->
       <section id="apoie" class="py-22" aria-labelledby="apoie-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2 id="apoie-titulo" data-i18n="sup.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Gratuito. Aberto. Feito para jogadores.</h2>
-          <p data-i18n="sup.lead" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">O ReEmu é gratuito e de código aberto.</p>
-          <ul class="reveal js:motion-safe:opacity-0 flex flex-wrap gap-2 mt-4">
-            <li data-i18n="sup.b1" class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]">Sem anúncios.</li>
-            <li data-i18n="sup.b2" class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]">Sem assinatura.</li>
-            <li data-i18n="sup.b3" class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]">Sem transformar sua coleção em um serviço.</li>
-          </ul>
-          <p data-i18n="sup.help" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">
-            Se você gosta do projeto, pode ajudar a mantê-lo evoluindo — contribuindo com código,
-            relatando problemas, divulgando o projeto ou apoiando seu desenvolvimento.
+          <h2
+            id="apoie-titulo"
+            data-i18n="sup.title"
+            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
+          >
+            Gratuito. Aberto. Feito para jogadores.
+          </h2>
+          <p
+            data-i18n="sup.lead"
+            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
+          >
+            O ReEmu é gratuito e de código aberto.
           </p>
-          <h3 data-i18n="sup.cta" class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-12">Apoie o ReEmu</h3>
+          <ul class="reveal js:motion-safe:opacity-0 flex flex-wrap gap-2 mt-4">
+            <li
+              data-i18n="sup.b1"
+              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
+            >
+              Sem anúncios.
+            </li>
+            <li
+              data-i18n="sup.b2"
+              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
+            >
+              Sem assinatura.
+            </li>
+            <li
+              data-i18n="sup.b3"
+              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
+            >
+              Sem transformar sua coleção em um serviço.
+            </li>
+          </ul>
+          <p
+            data-i18n="sup.help"
+            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
+          >
+            Se você gosta do projeto, pode ajudar a mantê-lo evoluindo —
+            contribuindo com código, relatando problemas, divulgando o projeto
+            ou apoiando seu desenvolvimento.
+          </p>
+          <h3
+            data-i18n="sup.cta"
+            class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-12"
+          >
+            Apoie o ReEmu
+          </h3>
 
           <!-- Formas de doação: preencha `data-link` (e `data-pix` no Pix).
                Cartão sem link fica escondido; sem nenhum, aparece o aviso
                abaixo. Nunca coloque um link que não seja seu. -->
-          <div class="mt-4 grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4" id="donate-methods">
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6" data-link="">
-              <span class="grid size-10 place-items-center rounded-lg bg-green/12 text-green" aria-hidden="true"><span class="fi fi-heart text-[1.375rem]"></span></span>
+          <div
+            class="mt-4 grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4"
+            id="donate-methods"
+          >
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
+              data-link=""
+            >
+              <span
+                class="grid size-10 place-items-center rounded-lg bg-green/12 text-green"
+                aria-hidden="true"
+                ><span class="fi fi-heart text-[1.375rem]"></span
+              ></span>
               <strong class="text-[1.05rem]">GitHub Sponsors</strong>
-              <span data-i18n="d1.p" class="grow text-[0.93rem] text-muted">Apoio mensal ou único, direto pelo GitHub.</span>
-              <fluent-anchor-button data-i18n="d1.b" class="mt-2.5" appearance="primary" target="_blank" rel="noopener">Apoiar no GitHub</fluent-anchor-button>
+              <span data-i18n="d1.p" class="grow text-[0.93rem] text-muted"
+                >Apoio mensal ou único, direto pelo GitHub.</span
+              >
+              <fluent-anchor-button
+                data-i18n="d1.b"
+                class="mt-2.5"
+                appearance="primary"
+                target="_blank"
+                rel="noopener"
+                >Apoiar no GitHub</fluent-anchor-button
+              >
             </div>
             <!-- Pix: `data-pix` = chave aleatória; `data-pix-code` = o "copia e
                  cola" (BR Code, CRC conferido), o mesmo que está no QR
                  (pix-qr.svg, gerado dele e decodificado de volta pra conferir). -->
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6 max-sm:items-stretch max-sm:p-5" data-pix="761d76fb-b5d3-461e-b7bd-f17c0522ce7d" data-pix-code="00020126580014BR.GOV.BCB.PIX0136761d76fb-b5d3-461e-b7bd-f17c0522ce7d5204000053039865802BR5924LUIS ANTONIO DE OLIVEIRA6015DUQUE DE CAXIAS62070503***63042796">
-              <span class="grid size-10 place-items-center rounded-lg bg-green/12 text-green" aria-hidden="true"><span class="fi fi-qr-code text-[1.375rem]"></span></span>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6 max-sm:items-stretch max-sm:p-5"
+              data-pix="761d76fb-b5d3-461e-b7bd-f17c0522ce7d"
+              data-pix-code="00020126580014BR.GOV.BCB.PIX0136761d76fb-b5d3-461e-b7bd-f17c0522ce7d5204000053039865802BR5924LUIS ANTONIO DE OLIVEIRA6015DUQUE DE CAXIAS62070503***63042796"
+            >
+              <span
+                class="grid size-10 place-items-center rounded-lg bg-green/12 text-green"
+                aria-hidden="true"
+                ><span class="fi fi-qr-code text-[1.375rem]"></span
+              ></span>
               <strong class="text-[1.05rem]">Pix</strong>
-              <span data-i18n="d2.p" class="grow text-[0.93rem] text-muted">Aponte a câmera do app do banco para o QR code ou copie o código.</span>
-              <img src="pix-qr.svg" data-i18n-attr="alt=d2.qr" alt="QR code Pix para apoiar o ReEmu" width="180" height="180" class="mt-1 size-45 rounded-[var(--borderRadiusMedium,4px)] [image-rendering:pixelated] max-sm:size-52 max-sm:self-center" />
-              <fluent-button data-i18n="pixcode.copy" class="pix-code-copy mt-1.5" appearance="primary">Copiar código Pix</fluent-button>
-              <span data-i18n="d2.key" class="mt-2 text-[0.85rem] text-muted">Ou use a chave aleatória:</span>
-              <code class="pix-key rounded-[var(--borderRadiusSmall,4px)] bg-surface-2 px-[5px] py-px font-mono text-[0.85em] wrap-anywhere"></code>
-              <fluent-button data-i18n="d2.b" class="pix-copy" appearance="outline">Copiar chave Pix</fluent-button>
+              <span data-i18n="d2.p" class="grow text-[0.93rem] text-muted"
+                >Aponte a câmera do app do banco para o QR code ou copie o
+                código.</span
+              >
+              <img
+                src="pix-qr.svg"
+                data-i18n-attr="alt=d2.qr"
+                alt="QR code Pix para apoiar o ReEmu"
+                width="180"
+                height="180"
+                class="mt-1 size-45 rounded-[var(--borderRadiusMedium,4px)] [image-rendering:pixelated] max-sm:size-52 max-sm:self-center"
+              />
+              <fluent-button
+                data-i18n="pixcode.copy"
+                class="pix-code-copy mt-1.5"
+                appearance="primary"
+                >Copiar código Pix</fluent-button
+              >
+              <span data-i18n="d2.key" class="mt-2 text-[0.85rem] text-muted"
+                >Ou use a chave aleatória:</span
+              >
+              <code
+                class="pix-key rounded-[var(--borderRadiusSmall,4px)] bg-surface-2 px-[5px] py-px font-mono text-[0.85em] wrap-anywhere"
+              ></code>
+              <fluent-button
+                data-i18n="d2.b"
+                class="pix-copy"
+                appearance="outline"
+                >Copiar chave Pix</fluent-button
+              >
             </div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6" data-link="">
-              <span class="grid size-10 place-items-center rounded-lg bg-green/12 text-green" aria-hidden="true"><span class="fi fi-coffee text-[1.375rem]"></span></span>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
+              data-link=""
+            >
+              <span
+                class="grid size-10 place-items-center rounded-lg bg-green/12 text-green"
+                aria-hidden="true"
+                ><span class="fi fi-coffee text-[1.375rem]"></span
+              ></span>
               <strong class="text-[1.05rem]">Ko-fi</strong>
-              <span data-i18n="d3.p" class="grow text-[0.93rem] text-muted">Pague um café para o projeto, sem cadastro.</span>
-              <fluent-anchor-button data-i18n="d3.b" class="mt-2.5" appearance="primary" target="_blank" rel="noopener">Apoiar no Ko-fi</fluent-anchor-button>
+              <span data-i18n="d3.p" class="grow text-[0.93rem] text-muted"
+                >Pague um café para o projeto, sem cadastro.</span
+              >
+              <fluent-anchor-button
+                data-i18n="d3.b"
+                class="mt-2.5"
+                appearance="primary"
+                target="_blank"
+                rel="noopener"
+                >Apoiar no Ko-fi</fluent-anchor-button
+              >
             </div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6" data-link="">
-              <span class="grid size-10 place-items-center rounded-lg bg-green/12 text-green" aria-hidden="true"><span class="fi fi-payment text-[1.375rem]"></span></span>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
+              data-link=""
+            >
+              <span
+                class="grid size-10 place-items-center rounded-lg bg-green/12 text-green"
+                aria-hidden="true"
+                ><span class="fi fi-payment text-[1.375rem]"></span
+              ></span>
               <strong class="text-[1.05rem]">PayPal</strong>
-              <span data-i18n="d4.p" class="grow text-[0.93rem] text-muted">Cartão de crédito de qualquer país.</span>
-              <fluent-anchor-button data-i18n="d4.b" class="mt-2.5" appearance="primary" target="_blank" rel="noopener">Doar pelo PayPal</fluent-anchor-button>
+              <span data-i18n="d4.p" class="grow text-[0.93rem] text-muted"
+                >Cartão de crédito de qualquer país.</span
+              >
+              <fluent-anchor-button
+                data-i18n="d4.b"
+                class="mt-2.5"
+                appearance="primary"
+                target="_blank"
+                rel="noopener"
+                >Doar pelo PayPal</fluent-anchor-button
+              >
             </div>
           </div>
-          <fluent-message-bar data-i18n="sup.soon" class="reveal js:motion-safe:opacity-0 mt-4" id="donate-soon" intent="info" layout="multiline" hidden>
-            As formas de doação estão sendo configuradas. Enquanto isso, dá para ajudar
-            de outros jeitos:
+          <fluent-message-bar
+            data-i18n="sup.soon"
+            class="reveal js:motion-safe:opacity-0 mt-4"
+            id="donate-soon"
+            intent="info"
+            layout="multiline"
+            hidden
+          >
+            As formas de doação estão sendo configuradas. Enquanto isso, dá para
+            ajudar de outros jeitos:
           </fluent-message-bar>
 
-          <div class="mt-4 grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6">
-              <span class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-star text-[1.375rem]"></span></span>
-              <strong data-i18n="h1.t" class="text-[1.05rem]">Dê uma estrela</strong>
-              <span data-i18n="h1.p" class="grow text-[0.93rem] text-muted">Ajuda mais gente a encontrar o projeto no GitHub.</span>
-              <fluent-anchor-button data-i18n="h1.b" class="mt-2.5" appearance="outline" href="https://github.com/Kluis6/reemu">Abrir no GitHub</fluent-anchor-button>
+          <div
+            class="mt-4 grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4"
+          >
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
+            >
+              <span
+                class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
+                aria-hidden="true"
+                ><span class="fi fi-star text-[1.375rem]"></span
+              ></span>
+              <strong data-i18n="h1.t" class="text-[1.05rem]"
+                >Dê uma estrela</strong
+              >
+              <span data-i18n="h1.p" class="grow text-[0.93rem] text-muted"
+                >Ajuda mais gente a encontrar o projeto no GitHub.</span
+              >
+              <fluent-anchor-button
+                data-i18n="h1.b"
+                class="mt-2.5"
+                appearance="outline"
+                href="https://github.com/Kluis6/reemu"
+                >Abrir no GitHub</fluent-anchor-button
+              >
             </div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6">
-              <span class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-bug text-[1.375rem]"></span></span>
-              <strong data-i18n="h2.t" class="text-[1.05rem]">Relate problemas</strong>
-              <span data-i18n="h2.p" class="grow text-[0.93rem] text-muted">Um jogo que não abre ou um controle que não responde: conte o que aconteceu.</span>
-              <fluent-anchor-button data-i18n="h2.b" class="mt-2.5" appearance="outline" href="https://github.com/Kluis6/reemu/issues">Abrir um relato</fluent-anchor-button>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
+            >
+              <span
+                class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
+                aria-hidden="true"
+                ><span class="fi fi-bug text-[1.375rem]"></span
+              ></span>
+              <strong data-i18n="h2.t" class="text-[1.05rem]"
+                >Relate problemas</strong
+              >
+              <span data-i18n="h2.p" class="grow text-[0.93rem] text-muted"
+                >Um jogo que não abre ou um controle que não responde: conte o
+                que aconteceu.</span
+              >
+              <fluent-anchor-button
+                data-i18n="h2.b"
+                class="mt-2.5"
+                appearance="outline"
+                href="https://github.com/Kluis6/reemu/issues"
+                >Abrir um relato</fluent-anchor-button
+              >
             </div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6">
-              <span class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-share text-[1.375rem]"></span></span>
+            <div
+              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
+            >
+              <span
+                class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
+                aria-hidden="true"
+                ><span class="fi fi-share text-[1.375rem]"></span
+              ></span>
               <strong data-i18n="h3.t" class="text-[1.05rem]">Divulgue</strong>
-              <span data-i18n="h3.p" class="grow text-[0.93rem] text-muted">Mostre o ReEmu para quem curte jogos clássicos.</span>
-              <fluent-button data-i18n="share.button" class="share-btn mt-2.5" appearance="outline">Compartilhar</fluent-button>
+              <span data-i18n="h3.p" class="grow text-[0.93rem] text-muted"
+                >Mostre o ReEmu para quem curte jogos clássicos.</span
+              >
+              <fluent-button
+                data-i18n="share.button"
+                class="share-btn mt-2.5"
+                appearance="outline"
+                >Compartilhar</fluent-button
+              >
             </div>
           </div>
         </div>
       </section>
 
       <!-- ─────────────── Sua coleção ─────────────── -->
-      <section id="colecao" class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22" aria-labelledby="colecao-titulo">
+      <section
+        id="colecao"
+        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
+        aria-labelledby="colecao-titulo"
+      >
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2 id="colecao-titulo" data-i18n="own.title" class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold">Sua coleção pertence a você.</h2>
-          <p data-i18n="own.p1" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">O ReEmu não inclui jogos nem BIOS.</p>
-          <p data-i18n="own.p2" class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4">
-            Use cópias dos jogos que você possui e respeite as leis aplicáveis à sua região.
+          <h2
+            id="colecao-titulo"
+            data-i18n="own.title"
+            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
+          >
+            Sua coleção pertence a você.
+          </h2>
+          <p
+            data-i18n="own.p1"
+            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
+          >
+            O ReEmu não inclui jogos nem BIOS.
+          </p>
+          <p
+            data-i18n="own.p2"
+            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
+          >
+            Use cópias dos jogos que você possui e respeite as leis aplicáveis à
+            sua região.
           </p>
         </div>
       </section>
     </main>
 
-    <footer class="border-t border-line bg-bg-alt pt-9 pb-11 text-[0.9rem] text-muted">
-      <div class="mx-auto max-w-[1080px] px-4 flex flex-wrap items-center justify-between gap-x-8 gap-y-4">
-        <p class="flex items-center gap-2.5 max-sm:flex-col max-sm:items-start max-sm:gap-2">
-          <a data-i18n-attr="aria-label=foot.top" class="flex shrink-0 items-center gap-1.5 text-[1.2rem] font-extrabold tracking-[0.01em] text-white no-underline" href="./" aria-label="ReEmu — voltar ao topo">
+    <footer
+      class="border-t border-line bg-bg-alt pt-9 pb-11 text-[0.9rem] text-muted"
+    >
+      <div
+        class="mx-auto max-w-[1080px] px-4 flex flex-wrap items-center justify-between gap-x-8 gap-y-4"
+      >
+        <p
+          class="flex items-center gap-2.5 max-sm:flex-col max-sm:items-start max-sm:gap-2"
+        >
+          <a
+            data-i18n-attr="aria-label=foot.top"
+            class="flex shrink-0 items-center gap-1.5 text-[1.2rem] font-extrabold tracking-[0.01em] text-white no-underline"
+            href="./"
+            aria-label="ReEmu — voltar ao topo"
+          >
             <img src="logo.webp" alt="" width="28" height="28" class="size-7" />
             <span>Re<span class="text-green">Emu</span></span>
           </a>
-          <span data-i18n="foot.tagline" class="text-ink">Seus clássicos. Sua coleção. Uma experiência moderna.</span>
+          <span data-i18n="foot.tagline" class="text-ink"
+            >Seus clássicos. Sua coleção. Uma experiência moderna.</span
+          >
         </p>
         <nav class="flex flex-wrap gap-x-5 gap-y-2" aria-label="Links">
-          <fluent-link href="https://github.com/Kluis6/reemu">GitHub</fluent-link>
-          <fluent-link data-i18n="foot.releases" href="https://github.com/Kluis6/reemu/releases">Releases</fluent-link>
-          <fluent-link data-i18n="foot.issue" href="https://github.com/Kluis6/reemu/issues">Reportar um problema</fluent-link>
+          <fluent-link href="https://github.com/Kluis6/reemu"
+            >GitHub</fluent-link
+          >
+          <fluent-link
+            data-i18n="foot.releases"
+            href="https://github.com/Kluis6/reemu/releases"
+            >Releases</fluent-link
+          >
+          <fluent-link
+            data-i18n="foot.issue"
+            href="https://github.com/Kluis6/reemu/issues"
+            >Reportar um problema</fluent-link
+          >
         </nav>
         <fluent-divider class="basis-full"></fluent-divider>
-        <p data-i18n="foot.legal" class="basis-full text-[0.85rem]">Gratuito · Código aberto · Windows · Linux</p>
-        <p data-i18n="foot.libretro" class="basis-full text-[0.8rem] leading-relaxed">O ReEmu usa cores <a class="text-green underline-offset-2 hover:underline" href="https://www.libretro.com" target="_blank" rel="noopener">libretro</a>, baixados do buildbot oficial, cada um com seus autores e sua licença. libretro e RetroArch são marcas de seus respectivos donos; o ReEmu não é afiliado nem endossado por eles.</p>
+        <p data-i18n="foot.legal" class="basis-full text-[0.85rem]">
+          Gratuito · Código aberto · Windows · Linux
+        </p>
+        <p
+          data-i18n="foot.libretro"
+          class="basis-full text-[0.8rem] leading-relaxed"
+        >
+          O ReEmu usa cores
+          <a
+            class="text-green underline-offset-2 hover:underline"
+            href="https://www.libretro.com"
+            target="_blank"
+            rel="noopener"
+            >libretro</a
+          >, baixados do buildbot oficial, cada um com seus autores e sua
+          licença. libretro e RetroArch são marcas de seus respectivos donos; o
+          ReEmu não é afiliado nem endossado por eles.
+        </p>
       </div>
     </footer>
 
     <!-- Modal da galeria. Tamanho em `#lightbox::part(dialog)` (src/input.css):
          o diálogo dos Fluent Web Components 3.1.3 fixa `max-width: 600px` e
          não tem variável pra largura. -->
-    <fluent-dialog data-i18n-attr="aria-label=lightbox.aria" id="lightbox" type="modal" aria-label="Captura ampliada">
+    <fluent-dialog
+      data-i18n-attr="aria-label=lightbox.aria"
+      id="lightbox"
+      type="modal"
+      aria-label="Captura ampliada"
+    >
       <fluent-dialog-body class="lightbox-body">
         <!-- Slot `close`: canto superior direito; o clique fecha o diálogo. -->
-        <fluent-button data-i18n-attr="aria-label=lightbox.close" slot="close" appearance="subtle" icon-only aria-label="Fechar">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M5 5l10 10M15 5 5 15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+        <fluent-button
+          data-i18n-attr="aria-label=lightbox.close"
+          slot="close"
+          appearance="subtle"
+          icon-only
+          aria-label="Fechar"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M5 5l10 10M15 5 5 15"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
           </svg>
         </fluent-button>
-        <img class="lightbox-img mx-auto block max-h-[calc(100dvh-7rem)] max-w-full rounded-[var(--borderRadiusMedium,4px)]" alt="" />
+        <img
+          class="lightbox-img mx-auto block max-h-[calc(100dvh-7rem)] max-w-full rounded-[var(--borderRadiusMedium,4px)]"
+          alt=""
+        />
       </fluent-dialog-body>
     </fluent-dialog>
   </body>
