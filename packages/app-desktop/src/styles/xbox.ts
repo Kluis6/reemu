@@ -47,6 +47,9 @@ const SCROLLBAR_W = M.SCROLLBAR_W;
 // `--reemuTopbarH` em `.app` (ver abaixo) porque páginas com hero "colado no
 // topo" (RomDetail) cancelam exatamente esse valor via margin negativo.
 const TOPBAR_CLEARANCE = `${M.TOPBAR_CLEARANCE}px`;
+// Topo do conteúdo das páginas (`.scroll`), com o respiro do Xbox abaixo da
+// topbar. Publicado como `--reemuPageTop` pro hero colado no topo cancelar.
+const PAGE_TOP = `${M.PAGE_TOP}px`;
 
 // Padding lateral compartilhado por `.topbar`/`.scroll` — um hero de sangria
 // total (RomDetail) cancela exatamente esse valor com margin negativo. A
@@ -89,6 +92,7 @@ export const useShellStyles = makeStyles({
     // poderem cancelar essa folga com margin negativo em vez de duplicar
     // o valor (ver `.hero` em `useDetailStyles`).
     ["--reemuTopbarH" as string]: TOPBAR_CLEARANCE,
+    ["--reemuPageTop" as string]: PAGE_TOP,
     overflowX: "hidden",
     overflowY: "hidden",
     // brilho de canto (1 camada só — multicamada quebra o WebKitGTK)
@@ -397,8 +401,8 @@ export const useShellStyles = makeStyles({
     overflowY: "auto",
     scrollbarGutter: "stable",
     boxSizing: "border-box",
-    // Limpa a altura da `.topbar` flutuante.
-    paddingTop: `var(--reemuTopbarH, ${TOPBAR_CLEARANCE})`,
+    // Limpa a `.topbar` flutuante e deixa o respiro do Xbox (y = 116).
+    paddingTop: `var(--reemuPageTop, ${PAGE_TOP})`,
     // Mesmo padding da `.topbar` — o conteúdo alinha com o botão de voltar
     // (esquerda) e o fim do relógio (direita).
     paddingLeft: PAGE_PAD_L,
@@ -836,9 +840,9 @@ export const useDetailStyles = makeStyles({
     position: "relative",
     // Colado no topo da página (atrás da topbar flutuante, igual à
     // referência de Store/app Xbox) — cancela a `paddingTop` que a
-    // `.scroll` reserva pra topbar (`--reemuTopbarH`) com margin negativo
+    // `.scroll` reserva pra topbar (`--reemuPageTop`) com margin negativo
     // em vez de deixar aquele vão em branco acima do hero.
-    marginTop: "calc(-1 * var(--reemuTopbarH, 0px))",
+    marginTop: "calc(-1 * var(--reemuPageTop, 0px))",
     // Sangria total nos lados também — cancela o padding lateral da
     // `.scroll` (mesmos `PAGE_PAD_L`/`SCROLL_PAD_R` que ela usa) pra o
     // hero ocupar a largura inteira da página, rente à rail de um lado e

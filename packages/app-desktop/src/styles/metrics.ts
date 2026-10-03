@@ -39,6 +39,9 @@ export const TOPBAR_TOP = SAFE_Y;
 /** Folga que a área de rolagem reserva pra topbar: topo + controle +
  *  respiro. */
 export const TOPBAR_CLEARANCE = TOPBAR_TOP + TARGET_MIN + 16;
+/** Onde começa o conteúdo das páginas: o 1º elemento do Xbox (banner do
+ *  Game Pass) começa em y = 116, 52 abaixo da busca (32 + 32). */
+export const PAGE_TOP = 116;
 /** A topbar é mais larga que o conteúdo: o "voltar" começa 17 epx depois
  *  da rail; à direita, como no modo XBOX do app (com relógio), o texto do
  *  relógio termina a ~18 da borda (print a 1366×768: 1348) — fora do modo
