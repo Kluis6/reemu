@@ -35,6 +35,7 @@ const ICONS = {
   star: "star",
   bug: "bug",
   share: "share",
+  mail: "mail",
   "qr-code": "qr_code",
   coffee: "drink_coffee",
   payment: "payment",
