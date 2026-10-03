@@ -241,16 +241,20 @@ export const useShellStyles = makeStyles({
       height: "1em",
     },
   },
+  // Botão do avatar: vai junto com `railItem` (mesmo hover, clique e anel
+  // de foco dos itens da rail, como no app Xbox). A caixa de 46 sobe 7 pra o
+  // avatar continuar centrado em y = 31, e o 1º item segue em y = 64
+  // (8 + 46 + rowGap 10).
   railBrand: {
-    // 7 + rowGap (10): o 1º item começa em y = 64, como no app Xbox.
-    marginBottom: "7px",
-    cursor: "pointer",
-    padding: 0,
-    border: "none",
-    backgroundColor: "transparent",
-    borderRadius: tokens.borderRadiusCircular,
+    marginTop: "-7px",
     lineHeight: 0,
-    outlineOffset: `${FOCUS_OFFSET}px`,
+    // `<button>` sem `tabindex`: a regra global de `.app` não pega.
+    ":focus": {
+      outlineWidth: "3px",
+      outlineStyle: "solid",
+      outlineColor: tokens.colorBrandStroke1,
+      outlineOffset: `${FOCUS_OFFSET}px`,
+    },
   },
 
   main: {

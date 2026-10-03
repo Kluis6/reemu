@@ -191,7 +191,7 @@ export function AppShell() {
         <Menu positioning={{ position: "below", align: "start", offset: 12 }}>
           <MenuTrigger disableButtonEnhancement>
             <button
-              className={s.railBrand}
+              className={mergeClasses(s.railItem, l.railRadius, s.railBrand)}
               aria-label={t("shell.profile")}
               type="button"
             >
