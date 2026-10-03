@@ -19,7 +19,6 @@ const useStyles = makeStyles({
     height: '288px',
     borderRadius: tokens.borderRadiusXLarge,
     overflow: 'hidden',
-    marginTop: '8px',
     backgroundImage: 'linear-gradient(135deg, #1a1a1f 0%, #101014 100%)',
   },
   slide: {
