@@ -769,7 +769,8 @@ export const useHintStyles = makeStyles({
     paddingLeft: "8px",
     paddingRight: "9px",
     borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: "#080809",
+    // #080809 do Xbox com leve transparência (pedido do usuário).
+    backgroundColor: "rgba(8, 8, 9, 0.85)",
     border: "none",
     fontSize: "19px",
     fontWeight: tokens.fontWeightRegular,
@@ -789,6 +790,10 @@ export const useHintStyles = makeStyles({
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
+    // A grade centraliza a caixa da linha, mas a maiúscula fica 1,5 px abaixo
+    // do meio dela (medido numa réplica); 3 px embaixo sobem o conteúdo
+    // 1,5 px e a letra cai no centro do anel.
+    paddingBottom: "3px",
     fontSize: "13px",
     fontWeight: tokens.fontWeightSemibold,
     lineHeight: 1,
