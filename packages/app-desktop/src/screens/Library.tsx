@@ -300,7 +300,7 @@ export function Library() {
         </TabList>
 
         <div className={l.barRight}>
-          <Text size={200} className={s.count}>
+          <Text className={s.shelfCount}>
             {t("library.games", { count: all.length })}
           </Text>
           <Tooltip content={t("library.addRom")} relationship="label">
