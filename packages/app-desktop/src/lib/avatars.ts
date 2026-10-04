@@ -48,8 +48,9 @@ const ART: Record<PresetId, string> = {
     '<rect x="13" y="47" width="38" height="20" rx="9" fill="#e2e8f0"/>' +
     '<circle cx="32" cy="55" r="3.5" fill="#f43f5e"/>',
   // Controle: corpo claro, direcional escuro e os 4 botões coloridos.
+  // Centrado no círculo: o desenho (getBBox) tinha o meio em y = 36,7.
   '2':
-    '<g transform="translate(32 36) scale(0.86) translate(-32 -36)">' +
+    '<g transform="translate(32 31.3) scale(0.86) translate(-32 -36)">' +
     '<path d="M18 22h28c6 0 10.5 4 11.5 10l2 12c1 6.5-6.5 10-11 5.5L43 44H21l-5.5 5.5C11 54 3.5 50.5 4.5 44l2-12C7.5 26 12 22 18 22z" fill="#fdf4ff"/>' +
     '<rect x="15" y="31.5" width="12" height="4.5" rx="1.5" fill="#3b0764"/>' +
     '<rect x="18.75" y="27.75" width="4.5" height="12" rx="1.5" fill="#3b0764"/>' +
@@ -59,8 +60,10 @@ const ART: Record<PresetId, string> = {
     '<circle cx="45" cy="39" r="2.8" fill="#eab308"/>' +
     '<rect x="29" y="31" width="6" height="2.5" rx="1.25" fill="#d8b4fe"/>' +
     '</g>',
-  // Slime: gota sorridente com brilho e bochechas.
+  // Slime: gota sorridente com brilho e bochechas. Sobe 5,3 pra ficar
+  // centrado no círculo (o meio do desenho, via getBBox, era y = 37,3).
   '3':
+    '<g transform="translate(0 -5.3)">' +
     '<path d="M10 50c0-17 10-33 22-33s22 16 22 33c0 5-4 7-8 6-3 2-7 2-10 0-3 2-7 2-10 0-4 1-8 0-8-2-4 1-8-1-8-4z" fill="#d9f99d"/>' +
     '<path d="M10 50c0-17 10-33 22-33s22 16 22 33" fill="none" stroke="#ecfccb" stroke-width="2" opacity="0.7"/>' +
     '<ellipse cx="22" cy="30" rx="3.5" ry="6" fill="#fff" opacity="0.85" transform="rotate(25 22 30)"/>' +
@@ -70,7 +73,8 @@ const ART: Record<PresetId, string> = {
     '<circle cx="39.5" cy="38.5" r="1.1" fill="#fff"/>' +
     '<circle cx="19.5" cy="46" r="2.6" fill="#fb7185" opacity="0.6"/>' +
     '<circle cx="44.5" cy="46" r="2.6" fill="#fb7185" opacity="0.6"/>' +
-    '<path d="M28.5 46.5q3.5 3.5 7 0" fill="none" stroke="#14532d" stroke-width="2" stroke-linecap="round"/>',
+    '<path d="M28.5 46.5q3.5 3.5 7 0" fill="none" stroke="#14532d" stroke-width="2" stroke-linecap="round"/>' +
+    '</g>',
   // Joystick de fliperama: bola no topo, haste e base com dois botões.
   '4':
     '<rect x="29.5" y="24" width="5" height="22" rx="2" fill="#e5e7eb"/>' +
