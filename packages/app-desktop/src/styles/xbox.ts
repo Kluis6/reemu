@@ -1426,6 +1426,11 @@ export const useTabStyles = makeStyles({
       backgroundColor: "transparent !important",
       outlineOffset: "2px !important",
     },
+    // Apertar não muda o fundo (o selecionado segue com o dele).
+    "& .fui-Tab:active": { backgroundColor: "transparent !important" },
+    '& .fui-Tab[aria-selected="true"]:active': {
+      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
+    },
     // O item escolhido com foco continua igual (fundo destacado, texto e
     // indicador normais) — sem o preenchimento na cor primária das abas.
     '& .fui-Tab[aria-selected="true"]:focus': {
