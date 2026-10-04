@@ -32,6 +32,7 @@ import {
 import { useToastStore } from '../../stores/useToastStore'
 import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
+import { useTabStyles } from '../../styles/xbox'
 
 // Presets embutidos com nome/descrição traduzidos (`video.presets.<id>`).
 const BUILTIN = ['plain', 'crt', 'lcd'] as const
@@ -46,6 +47,7 @@ export function SettingsVideo() {
   const presetDesc = (n: string) => (isBuiltin(n) ? t(`video.presets.${n}.desc`) : '')
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
+  const tb = useTabStyles()
   const [tab, setTab] = useState<VideoTab>('shaders')
   // muda a cada parâmetro gravado → refaz a prévia do shader
   const [paramsRev, setParamsRev] = useState(0)
@@ -198,6 +200,9 @@ export function SettingsVideo() {
       {data.gpu && (
         <>
           <TabList
+            // abas no estilo do app; 24 até o conteúdo (14 do `gap` + 10)
+            className={tb.tabs}
+            style={{ alignSelf: 'flex-start', marginBottom: 10 }}
             selectedValue={tab}
             onTabSelect={(_, d) => setTab(d.value as VideoTab)}
           >

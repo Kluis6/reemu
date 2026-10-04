@@ -5,6 +5,7 @@ import {
   Text,
   makeStyles,
   tokens,
+  mergeClasses,
 } from "@fluentui/react-components";
 import { ArrowSyncRegular } from "@fluentui/react-icons";
 import { platformLabel } from "../lib/platform";
@@ -18,6 +19,8 @@ const useStyles = makeStyles({
     marginTop: tokens.spacingVerticalM,
     marginBottom: tokens.spacingVerticalXS,
   },
+  // 1º item da aba Plataformas: o espaço acima já vem das abas (24).
+  sectionFirst: { marginTop: 0 },
   row: {
     display: "grid",
     gridTemplateColumns: "1fr auto minmax(160px, 1.2fr) auto",
@@ -132,7 +135,14 @@ export function ManageLibraryFields({
         <Text>{t("manage.empty")}</Text>
       ) : (
         <>
-          <div className={s.section}>{t("manage.platformsSection")}</div>
+          <div
+            className={mergeClasses(
+              s.section,
+              part === "platforms" && s.sectionFirst,
+            )}
+          >
+            {t("manage.platformsSection")}
+          </div>
           {platforms.map(([sys, n]) => (
             <div key={sys} className={s.row}>
               <Text>{platformLabel(sys)}</Text>

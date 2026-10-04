@@ -1137,8 +1137,8 @@ export const useDetailStyles = makeStyles({
     // 1600×700, o caso mais apertado testado). -72: mais 16 pra cima
     // (pedido do usuário); a 1366×768 ainda sobram 47 até o aviso de core.
     marginTop: "-72px",
-    // Abas → painel: o dobro do `rowGap` de `.section` (10).
-    rowGap: "20px",
+    // Abas → painel: 24, como nas outras abas do app.
+    rowGap: "24px",
   },
   sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },
   panel: {

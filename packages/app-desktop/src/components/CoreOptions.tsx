@@ -8,6 +8,7 @@ import {
   TabList,
   makeStyles,
   tokens,
+  mergeClasses,
 } from '@fluentui/react-components'
 import { ArrowResetRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -16,9 +17,12 @@ import { getCoreOptions, resetCoreOptions, setCoreOption } from '../lib/tauri'
 import { errorToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
 import { useTranslation } from 'react-i18next'
+import { useTabStyles } from '../styles/xbox'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
+  // abas no estilo do app; 24 até o conteúdo (8 do `gap` + 16)
+  tabs: { alignSelf: 'flex-start', marginBottom: '16px' },
   head: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' },
   hint: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
   grid: {
@@ -39,6 +43,7 @@ const useStyles = makeStyles({
 export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string }) {
   const { t } = useTranslation()
   const styles = useStyles()
+  const tb = useTabStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const [scope, setScope] = useState<'core' | 'rom'>('core')
@@ -73,6 +78,7 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
     <div className={styles.root}>
       {romId && (
         <TabList
+          className={mergeClasses(tb.tabs, styles.tabs)}
           selectedValue={scope}
           onTabSelect={(_, d) => setScope(d.value as 'core' | 'rom')}
         >

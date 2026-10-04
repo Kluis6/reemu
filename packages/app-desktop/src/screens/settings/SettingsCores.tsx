@@ -9,6 +9,7 @@ import {
   Text,
   makeStyles,
   tokens,
+  mergeClasses,
 } from '@fluentui/react-components'
 import {
   ArrowDownloadRegular,
@@ -27,10 +28,13 @@ import {
   type CatalogCore,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
+import { useTabStyles } from '../../styles/xbox'
 import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
+  // abas no estilo do app; 24 até o conteúdo (12 do `gap` + 12)
+  tabs: { alignSelf: 'flex-start', marginBottom: '12px' },
   // 2 colunas; 3 em tela larga (com o rail e a navegação de Configurações
   // ao lado, abaixo disso a 3ª coluna aperta nome + sistema + botão).
   list: {
@@ -58,11 +62,16 @@ const useStyles = makeStyles({
 export function SettingsCores() {
   const { t } = useTranslation()
   const styles = useStyles()
+  const tb = useTabStyles()
   const [tab, setTab] = useState<'installed' | 'catalog'>('installed')
 
   return (
     <div className={styles.root}>
-      <TabList selectedValue={tab} onTabSelect={(_, d) => setTab(d.value as typeof tab)}>
+      <TabList
+        className={mergeClasses(tb.tabs, styles.tabs)}
+        selectedValue={tab}
+        onTabSelect={(_, d) => setTab(d.value as typeof tab)}
+      >
         <Tab value="installed">{t('cores.installed')}</Tab>
         <Tab value="catalog">{t('cores.catalog')}</Tab>
       </TabList>

@@ -609,8 +609,9 @@ export function RomDetail() {
             <>
               <div className={s.field}>
                 <Caption1>{t("game.shader.applyTo")}</Caption1>
-                <div style={{ overflowX: "auto" }}>
+                <div>
                   <TabList
+                    className={tb.tabs}
                     selectedValue={shaderScope}
                     onTabSelect={(_, d) =>
                       setShaderScope(d.value as ShaderScope)
