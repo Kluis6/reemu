@@ -488,6 +488,7 @@ const en: Messages = {
     noGpu: 'No GPU available — shaders have no effect on this machine.',
     tabShaders: 'Shaders',
     shaderSettings: 'Shader settings',
+    backToShaders: 'Back to the shader list',
     sourceReemu: 'ReEmu shaders',
     sourcePack: 'Downloaded pack',
     shadersDesc: 'Default shader for all games, preview and parameters',

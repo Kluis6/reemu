@@ -489,6 +489,7 @@ const ptBR = {
     noGpu: 'Sem GPU disponível — shaders não têm efeito nesta máquina.',
     tabShaders: 'Shaders',
     shaderSettings: 'Configurações do shader',
+    backToShaders: 'Voltar para a lista de shaders',
     sourceReemu: 'Shaders do ReEmu',
     sourcePack: 'Pacote baixado',
     shadersDesc: 'Shader padrão de todos os jogos, prévia e parâmetros',

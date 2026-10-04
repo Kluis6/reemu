@@ -7,15 +7,12 @@ import {
   Tab,
   TabList,
   mergeClasses,
-  DrawerBody,
-  DrawerHeader,
-  DrawerHeaderTitle,
-  OverlayDrawer,
   tokens,
   shorthands,
+  Subtitle2,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { BezelLibrary } from '../../components/BezelLibrary'
 import { LoadingState } from '../../components/EmptyState'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
@@ -36,7 +33,7 @@ import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
 import { SettingsBreadcrumb, SettingsLinkList } from '../../components/SettingsNav'
 import { useTabStyles } from '../../styles/xbox'
-import { DismissRegular, FrameRegular, OptionsRegular, SparkleRegular } from '@fluentui/react-icons'
+import { ArrowLeftRegular, FrameRegular, OptionsRegular, SparkleRegular } from '@fluentui/react-icons'
 import { ShaderCard } from '../../components/ShaderCard'
 
 // Presets embutidos com nome/descrição traduzidos (`video.presets.<id>`).
@@ -73,6 +70,32 @@ const useStyles = makeStyles({
     },
   },
   activeRow: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
+  swap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    animationDuration: '300ms',
+    animationTimingFunction: tokens.curveDecelerateMax,
+    // `backwards` (não `both`): o estado final é o natural — ver RouteTransition
+    animationFillMode: 'backwards',
+    '@media (prefers-reduced-motion: reduce)': { animationName: 'none' },
+  },
+  inFwd: {
+    animationName: {
+      from: { opacity: 0, transform: 'translateX(24px)' },
+      to: { opacity: 1, transform: 'translateX(0)' },
+    },
+  },
+  inBack: {
+    animationName: {
+      from: { opacity: 0, transform: 'translateX(-24px)' },
+      to: { opacity: 1, transform: 'translateX(0)' },
+    },
+  },
+  // 24 até os parâmetros (8 do `gap` + 16)
+  panelHead: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' },
+  panelTitle: { display: 'flex', flexDirection: 'column', minWidth: 0 },
+  panelSub: { color: tokens.colorNeutralForeground3 },
   // `outline` com borda visível (ver `ShaderCard`)
   settingsBtn: {
     ...shorthands.borderColor(`${tokens.colorNeutralStrokeAccessible} !important`),
@@ -119,6 +142,18 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
   })
   const hasParams = (params.data?.length ?? 0) > 0
   const [paramsOpen, setParamsOpen] = useState(false)
+  // Direção do deslize ao trocar lista ↔ ajustes (nada no 1º render).
+  const [swapDir, setSwapDir] = useState<'fwd' | 'back' | null>(null)
+  const backRef = useRef<HTMLButtonElement>(null)
+  const openParams = (open: boolean) => {
+    setSwapDir(open ? 'fwd' : 'back')
+    setParamsOpen(open)
+  }
+  // Ao abrir os ajustes, o foco vai pro "voltar" (controle/teclado seguem
+  // dali); ao voltar, a lista recebe o foco de novo pelo próprio card.
+  useEffect(() => {
+    if (paramsOpen) backRef.current?.focus()
+  }, [paramsOpen])
 
   const pick = useMutation({
     // 'default' persiste: vale pra todos os jogos (jogos podem ter override próprio).
@@ -171,9 +206,15 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
   // Presets embutidos (plain/CRT/LCD) + curados (xBR/ScaleFX/…) — parte da
   // aba "Shaders", mas também mostrado (desabilitado) sem GPU, só pra
   // informar o que existiria.
+  const activeCurated = data.curated.find((c) => c.id === data.active)
+  const activeName = isBuiltin(data.active)
+    ? presetTitle(data.active)
+    : activeCurated
+      ? curatedText(t, activeCurated.id, 'label', activeCurated.label)
+      : (data.active.split(/[/\\]/).pop() ?? data.active)
   // Abre os ajustes do shader ativo (só ele tem os parâmetros carregados).
   const settingsFor = (id: string) =>
-    id === data.active && hasParams ? () => setParamsOpen(true) : undefined
+    id === data.active && hasParams ? () => openParams(true) : undefined
   const presetPicker = (
     <div className={st.shaderList}>
       {data.available.map((name) => (
@@ -234,96 +275,96 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
           {section === 'shaders' && (
             <div className={st.columns}>
               <div className={st.options}>
-                <TabList
-                  className={mergeClasses(tb.tabs, st.tabs)}
-                  selectedValue={source}
-                  onTabSelect={(_, d) => setSource(d.value as ShaderSource)}
-                >
-                  <Tab value="reemu">{t('video.sourceReemu')}</Tab>
-                  <Tab value="pack">{t('video.sourcePack')}</Tab>
-                </TabList>
-                {source === 'reemu' ? (
-                  presetPicker
-                ) : (
-                  <>
-                    <Caption1>{t('video.externalPreset')}</Caption1>
-                    <ShaderLibrary
-                      onPick={(p) => pick.mutate(p)}
-                      activePath={data.active}
-                      busy={pick.isPending}
-                    />
-                    <Button
-                      appearance="subtle"
-                      disabled={pick.isPending}
-                      onClick={async () => {
-                        const p = await pickSlangp()
-                        if (p) pick.mutate(p)
-                      }}
-                    >
-                      {t('game.shader.loadFile')}
-                    </Button>
-                  </>
-                )}
-                {!data.available.includes(data.active) &&
-                  !data.curated.some((c) => c.id === data.active) && (
-                    <div className={st.activeRow}>
-                      <Caption1>
-                        {t('video.active')}{' '}
-                        <Text as="strong" weight="semibold">
-                          {data.active.split(/[/\\]/).pop()}
-                        </Text>
-                      </Caption1>
-                      {hasParams && (
-                        <Button
-                          className={st.settingsBtn}
-                          appearance="outline"
-                          icon={<OptionsRegular />}
-                          onClick={() => setParamsOpen(true)}
-                        >
-                          {t('video.shaderSettings')}
-                        </Button>
-                      )}
-                    </div>
+                {/* Lista ou ajustes do shader ativo, no mesmo lugar (como uma
+                    subpágina: "voltar" em cima). Desliza pro lado ao trocar. */}
+                <div
+                  key={paramsOpen ? 'params' : 'list'}
+                  className={mergeClasses(
+                    st.swap,
+                    swapDir === 'fwd' && st.inFwd,
+                    swapDir === 'back' && st.inBack,
                   )}
+                >
+                  {paramsOpen && hasParams ? (
+                    <>
+                      <div className={st.panelHead}>
+                        <Button
+                          ref={backRef}
+                          appearance="subtle"
+                          icon={<ArrowLeftRegular />}
+                          aria-label={t('video.backToShaders')}
+                          onClick={() => openParams(false)}
+                        />
+                        <div className={st.panelTitle}>
+                          <Subtitle2>{t('video.shaderSettings')}</Subtitle2>
+                          <Caption1 className={st.panelSub}>{activeName}</Caption1>
+                        </div>
+                      </div>
+                      <ShaderParams
+                        scope="default"
+                        reloadKey={data.active}
+                        onChanged={() => setParamsRev((n) => n + 1)}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <TabList
+                        className={mergeClasses(tb.tabs, st.tabs)}
+                        selectedValue={source}
+                        onTabSelect={(_, d) => setSource(d.value as ShaderSource)}
+                      >
+                        <Tab value="reemu">{t('video.sourceReemu')}</Tab>
+                        <Tab value="pack">{t('video.sourcePack')}</Tab>
+                      </TabList>
+                      {source === 'reemu' ? (
+                        presetPicker
+                      ) : (
+                        <>
+                          <Caption1>{t('video.externalPreset')}</Caption1>
+                          <ShaderLibrary
+                            onPick={(p) => pick.mutate(p)}
+                            activePath={data.active}
+                            busy={pick.isPending}
+                          />
+                          <Button
+                            appearance="subtle"
+                            disabled={pick.isPending}
+                            onClick={async () => {
+                              const p = await pickSlangp()
+                              if (p) pick.mutate(p)
+                            }}
+                          >
+                            {t('game.shader.loadFile')}
+                          </Button>
+                        </>
+                      )}
+                      {!data.available.includes(data.active) &&
+                        !data.curated.some((c) => c.id === data.active) && (
+                          <div className={st.activeRow}>
+                            <Caption1>
+                              {t('video.active')}{' '}
+                              <Text as="strong" weight="semibold">
+                                {data.active.split(/[/\\]/).pop()}
+                              </Text>
+                            </Caption1>
+                            {hasParams && (
+                              <Button
+                                className={st.settingsBtn}
+                                appearance="outline"
+                                icon={<OptionsRegular />}
+                                onClick={() => openParams(true)}
+                              >
+                                {t('video.shaderSettings')}
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                    </>
+                  )}
+                </div>
               </div>
               <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
             </div>
-          )}
-
-          {/* Ajustes do shader ativo numa gaveta lateral ("Drawer" do Fluent:
-              sobreposta, cabeçalho com título e fechar). Abre pela esquerda e
-              sem escurecer a tela: a prévia, à direita, segue à vista e muda
-              enquanto os valores são ajustados. */}
-          {section === 'shaders' && (
-            <OverlayDrawer
-              position="start"
-              size="small"
-              modalType="non-modal"
-              open={paramsOpen && hasParams}
-              onOpenChange={(_, d) => setParamsOpen(d.open)}
-            >
-              <DrawerHeader>
-                <DrawerHeaderTitle
-                  action={
-                    <Button
-                      appearance="subtle"
-                      aria-label={t('common.close')}
-                      icon={<DismissRegular />}
-                      onClick={() => setParamsOpen(false)}
-                    />
-                  }
-                >
-                  {t('video.shaderSettings')}
-                </DrawerHeaderTitle>
-              </DrawerHeader>
-              <DrawerBody>
-                <ShaderParams
-                  scope="default"
-                  reloadKey={data.active}
-                  onChanged={() => setParamsRev((n) => n + 1)}
-                />
-              </DrawerBody>
-            </OverlayDrawer>
           )}
 
           {section === 'molduras' && (
