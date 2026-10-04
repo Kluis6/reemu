@@ -1418,6 +1418,12 @@ export const useTabStyles = makeStyles({
   // fica com o fundo destacado, além do indicador à esquerda.
   vtabs: {
     ...TAB_STATES,
+    // Anel mais rente que nas abas horizontais (5): na lista os itens ficam
+    // empilhados e o anel afastado encostava no vizinho.
+    "& .fui-Tab:focus": {
+      ...TAB_STATES["& .fui-Tab:focus"],
+      outlineOffset: "2px !important",
+    },
     '& .fui-Tab[aria-selected="true"]': {
       backgroundColor: tokens.colorNeutralBackground4,
     },
