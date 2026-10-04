@@ -15,7 +15,7 @@
 // (ultrawide) ou mais altas (16:10, 4:3) ganham espaço a mais na outra
 // dimensão, que o layout preenche (mais cards por fileira, mais linhas).
 //
-// A preferência em Configurações › Aparência só multiplica esse zoom.
+// A preferência em Configurações › Sistema só multiplica esse zoom.
 
 /** Tela lógica de referência do Xbox, em epx. */
 export const BASE_W = 1366
