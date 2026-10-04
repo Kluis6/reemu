@@ -1795,3 +1795,11 @@ Infra:
 - **Como:** `screens/Onboarding.tsx` com o `Dialog` do Fluent seguindo a página de uso dele no Fluent 2: título em cada passo, ações no rodapé, um modal fecha antes do próximo abrir (sem aninhar) e `modalType="alert"` (não fecha com Esc nem clique fora — fluxo obrigatório). O perfil só é salvo no último passo: o `set_profile` marca `onboarded` e o `RootLayout` mandaria pra Home se salvasse antes. `ProfileForm` ganhou o modo sem botão/sem salvar (`onChange`, `showBio`), e o erro de nome só aparece depois que o campo é mexido.
 - **Backlog:** passo de contas (redes sociais e lojas como a Steam) em `TASKS.md`.
 
+## 2026-10-04 — Release v0.1.5
+
+- PSP: o PPSSPP com backend Vulkan roda in-process (antes ia pro processo filho e caía com 0xc0000005 ao carregar).
+- Interface: navbar e espaçamentos medidos contra o app Xbox, raio único de 4 px, abas com o mesmo estilo e comportamento em todo o app, menu de Configurações com ícones e só o conteúdo rolando; Configurações reorganizadas (Sistema com idioma, tamanho, integer scaling e informações do hardware; Aparência, Gerenciar biblioteca, Cores e Vídeo em abas/subpáginas; Vídeo › Shaders e Vídeo › Molduras como no Windows).
+- Shaders: prévia do shader ativo na GPU numa cena 2D e numa 3D geradas pelo app, com botão pra ligar/desligar, lista em cards e ajustes do shader no lugar da lista.
+- Onboarding novo em três modais (boas-vindas em várias línguas e idioma, nome e avatar, tudo pronto).
+- Foco automático: Jogar na página do jogo e o 1º card da biblioteca.
+
