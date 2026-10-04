@@ -19,6 +19,10 @@ const useStyles = makeStyles({
   card: {
     padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
     border: `1px solid transparent`,
+    // Na lista com rolagem (coluna flex com altura máxima) o card não pode
+    // encolher pra caber: com muitos shaders eles eram espremidos e o texto
+    // saía cortado. Com isso a lista rola.
+    flexShrink: 0,
   },
   selected: { border: `1px solid ${tokens.colorBrandStroke1}` },
   disabled: { opacity: 0.5, cursor: 'default' },
