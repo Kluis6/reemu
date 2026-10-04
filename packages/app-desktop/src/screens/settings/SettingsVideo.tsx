@@ -6,6 +6,9 @@ import {
   RadioGroup,
   Text,
   makeStyles,
+  Tab,
+  TabList,
+  mergeClasses,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -27,6 +30,7 @@ import { useToastStore } from '../../stores/useToastStore'
 import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
 import { SettingsBreadcrumb, SettingsLinkList } from '../../components/SettingsNav'
+import { useTabStyles } from '../../styles/xbox'
 import { FrameRegular, SparkleRegular } from '@fluentui/react-icons'
 
 // Presets embutidos com nome/descrição traduzidos (`video.presets.<id>`).
@@ -34,7 +38,22 @@ const BUILTIN = ['plain', 'crt', 'lcd'] as const
 type Builtin = (typeof BUILTIN)[number]
 const isBuiltin = (n: string): n is Builtin => (BUILTIN as readonly string[]).includes(n)
 
-const useStyles = makeStyles({ crumb: { marginBottom: '10px' } })
+const useStyles = makeStyles({
+  crumb: { marginBottom: '10px' },
+  // Shaders: prévia numa coluna, opções na outra (uma só em tela estreita).
+  columns: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    columnGap: '48px',
+    rowGap: '24px',
+    alignItems: 'start',
+  },
+  options: { display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 },
+  // abas no estilo do app; 24 até o conteúdo (8 do `gap` + 16)
+  tabs: { alignSelf: 'flex-start', marginBottom: '16px' },
+})
+
+type ShaderSource = 'reemu' | 'pack'
 
 type VideoSection = 'shaders' | 'molduras'
 
@@ -50,7 +69,10 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
   const presetDesc = (n: string) => (isBuiltin(n) ? t(`video.presets.${n}.desc`) : '')
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
-  const crumbGap = useStyles().crumb
+  const st = useStyles()
+  const crumbGap = st.crumb
+  const tb = useTabStyles()
+  const [source, setSource] = useState<ShaderSource>('reemu')
   // muda a cada parâmetro gravado → refaz a prévia do shader
   const [paramsRev, setParamsRev] = useState(0)
 
@@ -166,7 +188,7 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
         gap: 14,
         // Molduras: cards na largura útil inteira; Shaders: 2 colunas até
         // 860; sem GPU fica no limite estreito de antes.
-        maxWidth: !data.gpu ? 460 : section === 'molduras' ? 'none' : 860,
+        maxWidth: !data.gpu ? 460 : 'none',
       }}
     >
       {/* 24 até o conteúdo: 14 do `gap` + 10 */}
@@ -185,41 +207,39 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
       {data.gpu && (
         <>
           {section === 'shaders' && (
-            <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
-          )}
-
-          {section === 'shaders' && (
-            // `auto-fit`/`minmax`: 2 colunas quando cabe, 1 coluna sozinha
-            // quando a janela é estreita — responsivo sem media query.
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                columnGap: 48,
-                rowGap: 14,
-                alignItems: 'start',
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
-                {presetPicker}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-                <Caption1>{t('video.externalPreset')}</Caption1>
-                <ShaderLibrary
-                  onPick={(p) => pick.mutate(p)}
-                  activePath={data.active}
-                  busy={pick.isPending}
-                />
-                <Button
-                  appearance="subtle"
-                  disabled={pick.isPending}
-                  onClick={async () => {
-                    const p = await pickSlangp()
-                    if (p) pick.mutate(p)
-                  }}
+            <div className={st.columns}>
+              <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
+              <div className={st.options}>
+                <TabList
+                  className={mergeClasses(tb.tabs, st.tabs)}
+                  selectedValue={source}
+                  onTabSelect={(_, d) => setSource(d.value as ShaderSource)}
                 >
-                  {t('game.shader.loadFile')}
-                </Button>
+                  <Tab value="reemu">{t('video.sourceReemu')}</Tab>
+                  <Tab value="pack">{t('video.sourcePack')}</Tab>
+                </TabList>
+                {source === 'reemu' ? (
+                  presetPicker
+                ) : (
+                  <>
+                    <Caption1>{t('video.externalPreset')}</Caption1>
+                    <ShaderLibrary
+                      onPick={(p) => pick.mutate(p)}
+                      activePath={data.active}
+                      busy={pick.isPending}
+                    />
+                    <Button
+                      appearance="subtle"
+                      disabled={pick.isPending}
+                      onClick={async () => {
+                        const p = await pickSlangp()
+                        if (p) pick.mutate(p)
+                      }}
+                    >
+                      {t('game.shader.loadFile')}
+                    </Button>
+                  </>
+                )}
                 {!data.available.includes(data.active) && (
                   <Caption1>
                     {t('video.active')} <Text as="strong" weight="semibold">{data.active}</Text>

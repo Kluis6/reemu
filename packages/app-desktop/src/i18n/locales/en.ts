@@ -487,6 +487,8 @@ const en: Messages = {
     gpuHint: 'Default shader for all games. Each game can have its own shader on its detail page.',
     noGpu: 'No GPU available — shaders have no effect on this machine.',
     tabShaders: 'Shaders',
+    sourceReemu: 'ReEmu shaders',
+    sourcePack: 'Downloaded pack',
     shadersDesc: 'Default shader for all games, preview and parameters',
     bezelsDesc: 'Download or import bezels per system',
     tabBezels: 'Bezels',
