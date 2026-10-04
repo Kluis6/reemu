@@ -1,4 +1,3 @@
-
 /**
  * Linguagem visual do "modo Xbox" (ver docs/design/xbox-mode-reference.md e
  * docs/design/fluent2.md) em **Griffel** (`makeStyles` + `tokens` do Fluent 2),
@@ -548,7 +547,6 @@ export const useBrowseStyles = makeStyles({
     lineHeight: `${M.SECTION_SUB_LINE}px`,
   },
 
-
   libManage: {
     marginTop: "14px",
     paddingTop: "12px",
@@ -840,7 +838,8 @@ export const useHintStyles = makeStyles({
 // Página do jogo: altura dos botões do hero (o app Xbox usa 55) e o
 // degradê que dissolve a arte do hero no fundo da página.
 const HERO_BTN_H = 56;
-const HERO_FADE = "linear-gradient(180deg, #000 0%, #000 70%, transparent 100%)";
+const HERO_FADE =
+  "linear-gradient(180deg, #000 0%, #000 70%, transparent 100%)";
 
 /** Página de detalhe do jogo (RomDetail) — estilo "página de jogo" do Xbox:
  *  hero com arte, título grande, botão Jogar, seções em painéis. */
@@ -1341,7 +1340,55 @@ export const usePauseStyles = makeStyles({
   },
 });
 
-/** Abas (`TabList`) no estilo do app Xbox — Biblioteca e detalhe do jogo. */
+// Estados das abas, iguais nas horizontais (biblioteca, detalhe do jogo,
+// Aparência) e na lista vertical das Configurações — como no app Xbox
+// (prints da biblioteca), com a cor primária do tema no lugar do branco:
+// - mouse em cima: só o fundo cinza; apertando: um tom acima;
+// - foco numa aba inativa: fundo cinza + anel de 2 a 5 de distância;
+// - foco na aba ativa: fundo preenchido na cor primária, texto/ícone sobre
+//   ela e sem o indicador.
+// O `::before` do Fluent (risco cinza de hover/clique) sai: o fundo já marca.
+// `!important`: ganha do anel global do `.app` (`& .fui-Tab:focus`) e das
+// regras do próprio Tab. Propriedades separadas, como a regra global.
+const TAB_STATES = {
+  "& .fui-Tab": {
+    // Raio padrão do ReEmu (`metrics.RADIUS`).
+    borderRadius: `${M.RADIUS}px`,
+    color: `${tokens.colorNeutralForeground1} !important`,
+  },
+  "& .fui-Tab__content": {
+    color: `${tokens.colorNeutralForeground1} !important`,
+  },
+  "& .fui-Tab::before": { display: "none" },
+  "& .fui-Tab:hover": {
+    backgroundColor: `${tokens.colorNeutralBackground4} !important`,
+  },
+  "& .fui-Tab:active": {
+    backgroundColor: `${tokens.colorNeutralBackground4Pressed} !important`,
+  },
+  "& .fui-Tab:focus": {
+    backgroundColor: `${tokens.colorNeutralBackground4} !important`,
+    outlineWidth: "2px !important",
+    // Sem `!important` (o tipo do Griffel não aceita); a global já é solid.
+    outlineStyle: "solid",
+    outlineColor: `${tokens.colorBrandStroke1} !important`,
+    outlineOffset: "5px !important",
+  },
+  // Par da cor primária do ReEmu: `--reemuBrandSolid` com o texto em
+  // `--reemuOnBrand` (contraste ≥ 3:1 garantido em `themes.test.ts`).
+  '& .fui-Tab[aria-selected="true"]:focus': {
+    backgroundColor: "var(--reemuBrandSolid) !important",
+  },
+  '& .fui-Tab[aria-selected="true"]:focus .fui-Tab__content, & .fui-Tab[aria-selected="true"]:focus .fui-Tab__icon':
+    { color: "var(--reemuOnBrand) !important" },
+  '& .fui-Tab[aria-selected="true"]:focus::after': {
+    backgroundColor: "transparent",
+  },
+} as const;
+
+/** Abas (`TabList`) no estilo do app Xbox: `tabs` nas horizontais
+ *  (biblioteca, detalhe do jogo, Aparência), `vtabs` na lista vertical das
+ *  Configurações. Mesmos estados (`TAB_STATES`). */
 export const useTabStyles = makeStyles({
   tabs: {
     columnGap: "8px",
@@ -1350,52 +1397,25 @@ export const useTabStyles = makeStyles({
       paddingBottom: "11px",
       paddingLeft: "13px",
       paddingRight: "13px",
-      // Raio padrão do ReEmu (`metrics.RADIUS`).
-      borderRadius: `${M.RADIUS}px`,
-      color: `${tokens.colorNeutralForeground1} !important`,
     },
-    "& .fui-Tab__content": {
-      fontWeight: tokens.fontWeightSemibold,
-      color: `${tokens.colorNeutralForeground1} !important`,
-    },
+    "& .fui-Tab__content": { fontWeight: tokens.fontWeightSemibold },
     "& .fui-Tab::after": {
       left: "3px",
       right: "3px",
       height: "4px",
       borderRadius: tokens.borderRadiusCircular,
     },
-    "& .fui-Tab[aria-selected=\"true\"]::after": {
+    '& .fui-Tab[aria-selected="true"]::after': {
       backgroundColor: tokens.colorNeutralForeground1,
     },
-    // Estados como no app Xbox (prints da biblioteca), com a cor primária do
-    // tema no lugar do branco do Xbox:
-    // - mouse em cima: só o fundo cinza;
-    // - foco numa aba inativa: fundo cinza + anel de 2 a 5 de distância;
-    // - foco na aba ativa: fundo preenchido na cor primária, texto sobre ela
-    //   e sem o sublinhado.
-    // `!important`: ganha do anel global do `.app` (`& .fui-Tab:focus`).
-    // Propriedades separadas, como a regra global.
-    "& .fui-Tab:hover": {
-      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
+    ...TAB_STATES,
+  },
+  // Lista vertical (como a das Configurações do Windows): o item escolhido
+  // fica com o fundo destacado, além do indicador à esquerda.
+  vtabs: {
+    '& .fui-Tab[aria-selected="true"]': {
+      backgroundColor: tokens.colorNeutralBackground4,
     },
-    "& .fui-Tab:focus": {
-      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
-      outlineWidth: "2px !important",
-      // Sem `!important` (o tipo do Griffel não aceita); a global já é solid.
-      outlineStyle: "solid",
-      outlineColor: `${tokens.colorBrandStroke1} !important`,
-      outlineOffset: "5px !important",
-    },
-    // Par da cor primária do ReEmu: `--reemuBrandSolid` com o texto em
-    // `--reemuOnBrand` (contraste ≥ 3:1 garantido em `themes.test.ts`).
-    "& .fui-Tab[aria-selected=\"true\"]:focus": {
-      backgroundColor: "var(--reemuBrandSolid) !important",
-    },
-    "& .fui-Tab[aria-selected=\"true\"]:focus .fui-Tab__content": {
-      color: "var(--reemuOnBrand) !important",
-    },
-    "& .fui-Tab[aria-selected=\"true\"]:focus::after": {
-      backgroundColor: "transparent",
-    },
+    ...TAB_STATES,
   },
 });

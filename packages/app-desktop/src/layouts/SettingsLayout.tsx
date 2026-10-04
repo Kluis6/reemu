@@ -6,11 +6,25 @@ import {
   mergeClasses,
   tokens,
 } from "@fluentui/react-components";
+import {
+  DesktopRegular,
+  DeveloperBoardRegular,
+  KeyboardRegular,
+  LibraryRegular,
+  PaintBrushRegular,
+  PersonRegular,
+  ShieldKeyholeRegular,
+  Speaker2Regular,
+  TagMultipleRegular,
+  VideoRegular,
+  XboxControllerRegular,
+} from "@fluentui/react-icons";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { RouteTransition } from "../components/RouteTransition";
 import * as M from "../styles/metrics";
+import { useTabStyles } from "../styles/xbox";
 
 // Folga pro anel de foco (3 + 4 de afastamento) não ser cortado pela borda
 // da área que rola.
@@ -45,11 +59,10 @@ const useStyles = makeStyles({
     // Com a interface grande a lista pode passar da altura: rola sozinha.
     overflowY: "auto",
     minHeight: 0,
-    paddingLeft: `${RING}px`,
-    paddingRight: `${RING}px`,
-    paddingBottom: `${RING}px`,
-    marginLeft: `-${RING}px`,
-    marginRight: `-${RING}px`,
+    // Folga nos quatro lados: o anel do item focado (o 1º em cima, o último
+    // embaixo) não pode ser cortado pela borda da lista.
+    padding: `${RING}px`,
+    margin: `-${RING}px`,
     scrollbarWidth: "none",
     // Abas maiores (`size="large"`) e afastadas: alvo mais fácil de acertar
     // com o controle e de ler de longe.
@@ -82,24 +95,45 @@ const useStyles = makeStyles({
 
 const WIDE_TABS = new Set(["aparencia", "cores", "bios", "controllers"]);
 
-// `key` = trecho da rota; `label` = chave de tradução.
+// `key` = trecho da rota; `label` = chave de tradução; ícone do Fluent.
 const TABS = [
-  { key: "perfil", label: "settings.tabs.profile" },
-  { key: "aparencia", label: "settings.tabs.appearance" },
-  { key: "biblioteca", label: "settings.tabs.library" },
-  { key: "audio", label: "settings.tabs.audio" },
-  { key: "video", label: "settings.tabs.video" },
-  { key: "metadata", label: "settings.tabs.metadata" },
-  { key: "hotkeys", label: "settings.tabs.hotkeys" },
-  { key: "controllers", label: "settings.tabs.controllers" },
-  { key: "cores", label: "settings.tabs.cores" },
-  { key: "bios", label: "settings.tabs.bios" },
-  { key: "sistema", label: "settings.tabs.system" },
+  { key: "perfil", label: "settings.tabs.profile", icon: <PersonRegular /> },
+  {
+    key: "aparencia",
+    label: "settings.tabs.appearance",
+    icon: <PaintBrushRegular />,
+  },
+  {
+    key: "biblioteca",
+    label: "settings.tabs.library",
+    icon: <LibraryRegular />,
+  },
+  { key: "audio", label: "settings.tabs.audio", icon: <Speaker2Regular /> },
+  { key: "video", label: "settings.tabs.video", icon: <VideoRegular /> },
+  {
+    key: "metadata",
+    label: "settings.tabs.metadata",
+    icon: <TagMultipleRegular />,
+  },
+  { key: "hotkeys", label: "settings.tabs.hotkeys", icon: <KeyboardRegular /> },
+  {
+    key: "controllers",
+    label: "settings.tabs.controllers",
+    icon: <XboxControllerRegular />,
+  },
+  {
+    key: "cores",
+    label: "settings.tabs.cores",
+    icon: <DeveloperBoardRegular />,
+  },
+  { key: "bios", label: "settings.tabs.bios", icon: <ShieldKeyholeRegular /> },
+  { key: "sistema", label: "settings.tabs.system", icon: <DesktopRegular /> },
 ] as const;
 
 export function SettingsLayout() {
   const { t } = useTranslation();
   const styles = useStyles();
+  const tb = useTabStyles();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const current =
@@ -115,14 +149,14 @@ export function SettingsLayout() {
       <div className={styles.aside}>
         <Title2 className={styles.title}>{t("settings.title")}</Title2>
         <TabList
-          className={styles.nav}
+          className={mergeClasses(styles.nav, tb.vtabs)}
           vertical
           size="large"
           selectedValue={current}
           onTabSelect={(_, d) => navigate(`/settings/${d.value}`)}
         >
           {TABS.map((tab) => (
-            <Tab key={tab.key} value={tab.key}>
+            <Tab key={tab.key} value={tab.key} icon={tab.icon}>
               {t(tab.label)}
             </Tab>
           ))}
