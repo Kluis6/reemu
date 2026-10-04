@@ -7,6 +7,7 @@ import {
   DialogSurface,
   DialogTitle,
   makeStyles,
+  tokens,
 } from "@fluentui/react-components";
 import { DismissRegular } from "@fluentui/react-icons";
 import { ManageLibraryFields } from "./ManageLibraryFields";
@@ -15,6 +16,12 @@ import { useManageLibrary } from "../lib/useManageLibrary";
 import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
+  // cards de plataforma/pasta com 12 entre si, como em Configurações
+  content: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalM,
+  },
   // Maior que o padrão do Fluent (600px, altura de sobra pro conteúdo) — a
   // linha de plataforma tem 4 colunas (nome, contagem, seletor de core,
   // remover) e a lista de plataformas cresce bastante.
@@ -71,7 +78,7 @@ export function ManageLibraryDialog({
           >
             {t("manage.title")}
           </DialogTitle>
-          <DialogContent>
+          <DialogContent className={s.content}>
             <ManageLibraryFields state={state} platforms={platforms} />
           </DialogContent>
           <DialogActions>
