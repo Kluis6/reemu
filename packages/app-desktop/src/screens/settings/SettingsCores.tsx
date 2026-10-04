@@ -15,6 +15,7 @@ import {
   ArrowDownloadRegular,
   CheckmarkCircleFilled,
   DeleteRegular,
+  DeveloperBoardRegular,
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -35,20 +36,19 @@ const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
   // abas no estilo do app; 24 até o conteúdo (12 do `gap` + 12)
   tabs: { alignSelf: 'flex-start', marginBottom: '12px' },
-  // 2 colunas; 3 em tela larga (com o rail e a navegação de Configurações
-  // ao lado, abaixo disso a 3ª coluna aperta nome + sistema + botão).
+  // 3 colunas (uma só em janela bem estreita).
   list: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
     gap: tokens.spacingVerticalM,
-    '@media (min-width: 1600px)': { gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' },
+    '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
   // mensagem de lista vazia ocupa a linha inteira do grid
   fullRow: { gridColumn: '1 / -1' },
+  // ícone | nome e sistema (cresce) | botão
   row: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: tokens.spacingHorizontalM,
     padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
     borderRadius: tokens.borderRadiusMedium,
@@ -56,7 +56,16 @@ const useStyles = makeStyles({
   },
   // `minWidth: 0` deixa o texto quebrar dentro da coluna em vez de empurrar
   // o botão pra fora do card.
-  meta: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, overflowWrap: 'anywhere' },
+  meta: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: 0,
+    flexGrow: 1,
+    overflowWrap: 'anywhere',
+  },
+  // Mesmo ícone de Cores no menu das Configurações.
+  icon: { fontSize: '24px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
 })
 
 export function SettingsCores() {
@@ -94,6 +103,7 @@ function Installed() {
     <div className={styles.list}>
       {cores.data?.map((c) => (
         <div key={c.coreId} className={styles.row}>
+          <DeveloperBoardRegular className={styles.icon} />
           <span className={styles.meta}>
             <Body1>
               <Text as="strong" weight="semibold">{c.name}</Text>
@@ -168,6 +178,7 @@ function Catalog() {
         {sorted.length === 0 && <Caption1 className={styles.fullRow}>{t('cores.noneFound')}</Caption1>}
         {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
+            <DeveloperBoardRegular className={styles.icon} />
             <span className={styles.meta}>
               <Body1>
                 <Text as="strong" weight="semibold">{c.name}</Text>
