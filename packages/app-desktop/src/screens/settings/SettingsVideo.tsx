@@ -40,7 +40,7 @@ const isBuiltin = (n: string): n is Builtin => (BUILTIN as readonly string[]).in
 
 const useStyles = makeStyles({
   crumb: { marginBottom: '10px' },
-  // Shaders: prévia numa coluna, opções na outra (uma só em tela estreita).
+  // Shaders: opções na 1ª coluna, prévia na 2ª (uma só em tela estreita).
   columns: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
@@ -208,7 +208,6 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
         <>
           {section === 'shaders' && (
             <div className={st.columns}>
-              <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
               <div className={st.options}>
                 <TabList
                   className={mergeClasses(tb.tabs, st.tabs)}
@@ -251,6 +250,7 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                   onChanged={() => setParamsRev((n) => n + 1)}
                 />
               </div>
+              <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
             </div>
           )}
 
