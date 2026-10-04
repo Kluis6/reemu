@@ -48,7 +48,8 @@ const useStyles = makeStyles({
     maxWidth: "1120px",
   },
   // Tema e papel de parede, cada um na sua aba.
-  tabs: { alignSelf: "flex-start" },
+  // 24 até o conteúdo, como na biblioteca (16 do `gap` do root + 8).
+  tabs: { alignSelf: "flex-start", marginBottom: "8px" },
   section: {
     display: "flex",
     flexDirection: "column",
