@@ -4,13 +4,10 @@ import {
   Caption1,
   Radio,
   RadioGroup,
-  Switch,
   Tab,
   TabList,
   Text,
-  Tooltip,
 } from '@fluentui/react-components'
-import { QuestionCircleRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { BezelLibrary } from '../../components/BezelLibrary'
@@ -22,12 +19,10 @@ import { errorToast, sysToast } from '../../lib/toast'
 import {
   clearDecorations,
   getShaderInfo,
-  getVideoConfig,
   importDecorationPack,
   pickFolder,
   pickSlangp,
   setShader,
-  updateVideoConfig,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
 import { curatedText } from '../../lib/backendText'
@@ -69,19 +64,6 @@ export function SettingsVideo() {
       push(sysToast(t('video.defaultShader', { name: isBuiltin(name) ? presetTitle(name) : (curated ?? base) }), 'Success'))
     },
     onError: (e) => push(errorToast(e, 'changeDefaultShader')),
-  })
-
-  const videoCfg = useQuery({
-    queryKey: ['video-config'],
-    queryFn: getVideoConfig,
-    retry: false,
-  })
-  // tooltip do "?" do integer scaling (ver o Tooltip abaixo)
-  const [integerTip, setIntegerTip] = useState(false)
-  const setIntegerScaling = useMutation({
-    mutationFn: (integerScaling: boolean) => updateVideoConfig({ integerScaling }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['video-config'] }),
-    onError: (e) => push(errorToast(e, 'saveVideoConfig')),
   })
 
   const deco = useMutation({
@@ -160,35 +142,6 @@ export function SettingsVideo() {
         maxWidth: !data.gpu ? 460 : tab === 'molduras' ? 'none' : 860,
       }}
     >
-      {/* Explicação num tooltip no "?" ao lado do toggle — abre no hover e
-          também no foco (navegação por controle/teclado). */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <Switch
-          label={t('video.integerScaling')}
-          checked={videoCfg.data?.integerScaling ?? false}
-          disabled={videoCfg.isLoading || setIntegerScaling.isPending}
-          onChange={(_, d) => setIntegerScaling.mutate(d.checked)}
-        />
-        <Tooltip
-          content={t('video.integerScalingHint')}
-          relationship="description"
-          withArrow
-          visible={integerTip}
-          onVisibleChange={(_, d) => setIntegerTip(d.visible)}
-        >
-          {/* O Tooltip do Fluent só abre no foco quando detecta teclado; o
-              controle move o foco por `.focus()` (useMenuNav), então o foco
-              abre/fecha na mão. */}
-          <Button
-            appearance="subtle"
-            icon={<QuestionCircleRegular />}
-            aria-label={t('video.integerScalingHelp')}
-            onFocus={() => setIntegerTip(true)}
-            onBlur={() => setIntegerTip(false)}
-          />
-        </Tooltip>
-      </div>
-
       <Caption1>
         {data.gpu
           ? t('video.gpuHint')

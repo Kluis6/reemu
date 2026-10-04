@@ -25,6 +25,8 @@ import {
 } from "../../i18n";
 import {
   getHardwareInfo,
+  getVideoConfig,
+  updateVideoConfig,
   getSystemSettings,
   setAutostart,
   setMinimizeToTray,
@@ -120,6 +122,17 @@ export function SettingsSystem() {
     retry: false,
     staleTime: Infinity,
   });
+  // Integer scaling (veio de Vídeo): `video-config`, o mesmo do jogo.
+  const videoCfg = useQuery({
+    queryKey: ['video-config'],
+    queryFn: getVideoConfig,
+    retry: false,
+  })
+  const setIntegerScaling = useMutation({
+    mutationFn: (integerScaling: boolean) => updateVideoConfig({ integerScaling }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['video-config'] }),
+    onError: (e) => push(errorToast(e, 'saveVideoConfig')),
+  })
   const save = useMutation({
     mutationFn: ({ key, value }: { key: Key; value: boolean }) =>
       SAVE[key](value),
@@ -252,6 +265,20 @@ export function SettingsSystem() {
               t("system.minimizeToTray"),
               t("system.minimizeToTrayHint"),
             )}
+          </section>
+
+          <section className={s.section}>
+            <Heading title={t("settings.tabs.video")} />
+            <Field
+              label={t("video.integerScaling")}
+              hint={t("video.integerScalingHint")}
+            >
+              <Switch
+                checked={videoCfg.data?.integerScaling ?? false}
+                disabled={videoCfg.isLoading || setIntegerScaling.isPending}
+                onChange={(_, d) => setIntegerScaling.mutate(d.checked)}
+              />
+            </Field>
           </section>
         </>
       )}
