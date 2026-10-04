@@ -47,7 +47,14 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     ':hover': { color: tokens.colorNeutralForeground1 },
   },
-  crumbSep: { color: tokens.colorNeutralForeground3, fontSize: '16px' },
+  // Centrada na caixa, a seta ficava 1,5 px acima do meio das letras
+  // (medido a 1366×768: texto y 180–194, seta 181–190).
+  crumbSep: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: '16px',
+    position: 'relative',
+    top: '1.5px',
+  },
 })
 
 export interface SettingsLink {
