@@ -22,7 +22,7 @@ import {
   WarningRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
 import { CardGridSkeleton } from "../components/CardGridSkeleton";
@@ -138,6 +138,22 @@ export function Library() {
   const [manageOpen, setManageOpen] = useState(false);
 
   const roms = useQuery({ queryKey: ["roms"], queryFn: listRoms, retry: false });
+
+  // Ao abrir a página, o foco vai pro 1º card da 1ª prateleira (controle e
+  // teclado já começam nele). Só uma vez por visita — trocar de aba, filtrar
+  // ou um refetch não roubam o foco de onde o usuário estiver.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusedOnLoad = useRef(false);
+  useEffect(() => {
+    if (focusedOnLoad.current || !roms.data?.length) return;
+    const first = rootRef.current
+      ?.querySelector("[data-art]")
+      ?.closest<HTMLElement>("[tabindex]");
+    if (first) {
+      first.focus({ preventScroll: true });
+      focusedOnLoad.current = true;
+    }
+  }, [roms.data]);
 
   // adicionar uma pasta (o "Atualizar biblioteca" fica em Gerenciar
   // biblioteca, ver `ManageLibraryFields`)
@@ -307,7 +323,7 @@ export function Library() {
   };
 
   return (
-    <div>
+    <div ref={rootRef}>
       <div className={l.bar}>
         <TabList
           className={tb.tabs}
