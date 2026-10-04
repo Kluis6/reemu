@@ -488,6 +488,7 @@ const ptBR = {
     gpuHint: 'Shader padrão pra todos os jogos. Cada jogo pode ter um shader próprio na tela de detalhe.',
     noGpu: 'Sem GPU disponível — shaders não têm efeito nesta máquina.',
     tabShaders: 'Shaders',
+    shaderSettings: 'Configurações do shader',
     sourceReemu: 'Shaders do ReEmu',
     sourcePack: 'Pacote baixado',
     shadersDesc: 'Shader padrão de todos os jogos, prévia e parâmetros',

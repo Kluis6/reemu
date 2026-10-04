@@ -17,6 +17,15 @@ const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
   row: { display: 'grid', gridTemplateColumns: '1fr', gap: tokens.spacingVerticalXXS },
   head: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' },
+  // título + "Restaurar padrões": centrados e o botão numa linha só (na
+  // gaveta estreita o texto quebrava em duas)
+  top: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+  },
+  reset: { whiteSpace: 'nowrap', flexShrink: 0 },
   val: { fontVariantNumeric: 'tabular-nums', color: tokens.colorNeutralForeground3 },
 })
 
@@ -79,9 +88,14 @@ export function ShaderParams({
 
   return (
     <div className={s.root}>
-      <div className={s.head}>
+      <div className={s.top}>
         <Caption1>{t('shaders.params')}</Caption1>
-        <Button appearance="subtle" icon={<ArrowResetRegular />} onClick={reset}>
+        <Button
+          className={s.reset}
+          appearance="subtle"
+          icon={<ArrowResetRegular />}
+          onClick={reset}
+        >
           {t('shaders.resetParams')}
         </Button>
       </div>

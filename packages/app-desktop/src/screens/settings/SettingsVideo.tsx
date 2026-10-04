@@ -2,13 +2,16 @@ import {
   Body1,
   Button,
   Caption1,
-  Radio,
-  RadioGroup,
   Text,
   makeStyles,
   Tab,
   TabList,
   mergeClasses,
+  DrawerBody,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  OverlayDrawer,
+  tokens,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -21,6 +24,7 @@ import { errorToast, sysToast } from '../../lib/toast'
 import {
   clearDecorations,
   getShaderInfo,
+  getShaderParams,
   importDecorationPack,
   pickFolder,
   pickSlangp,
@@ -31,7 +35,8 @@ import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
 import { SettingsBreadcrumb, SettingsLinkList } from '../../components/SettingsNav'
 import { useTabStyles } from '../../styles/xbox'
-import { FrameRegular, SparkleRegular } from '@fluentui/react-icons'
+import { DismissRegular, FrameRegular, OptionsRegular, SparkleRegular } from '@fluentui/react-icons'
+import { ShaderCard } from '../../components/ShaderCard'
 
 // Presets embutidos com nome/descrição traduzidos (`video.presets.<id>`).
 const BUILTIN = ['plain', 'crt', 'lcd'] as const
@@ -49,6 +54,18 @@ const useStyles = makeStyles({
     alignItems: 'start',
   },
   options: { display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 },
+  // Lista de shaders com rolagem própria; a folga (8) não deixa o anel de
+  // foco ser cortado pela borda da área que rola.
+  shaderList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    maxHeight: '360px',
+    overflowY: 'auto',
+    padding: '8px',
+    margin: '-8px',
+  },
+  activeRow: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
   // abas no estilo do app; 24 até o conteúdo (8 do `gap` + 16)
   tabs: { alignSelf: 'flex-start', marginBottom: '16px' },
 })
@@ -81,6 +98,16 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
     queryFn: getShaderInfo,
     retry: false,
   })
+  // Parâmetros do shader ativo — mesma chave do `ShaderParams` (scope
+  // default), então a gaveta abre já com os dados.
+  const params = useQuery({
+    queryKey: ['shader-params', 'default', null, null, data?.active ?? null],
+    queryFn: getShaderParams,
+    enabled: !!data?.gpu,
+    retry: false,
+  })
+  const hasParams = (params.data?.length ?? 0) > 0
+  const [paramsOpen, setParamsOpen] = useState(false)
 
   const pick = useMutation({
     // 'default' persiste: vale pra todos os jogos (jogos podem ter override próprio).
@@ -133,51 +160,38 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
   // Presets embutidos (plain/CRT/LCD) + curados (xBR/ScaleFX/…) — parte da
   // aba "Shaders", mas também mostrado (desabilitado) sem GPU, só pra
   // informar o que existiria.
+  // Abre os ajustes do shader ativo (só ele tem os parâmetros carregados).
+  const settingsFor = (id: string) =>
+    id === data.active && hasParams ? () => setParamsOpen(true) : undefined
   const presetPicker = (
-    <RadioGroup
-      value={
-        data.available.includes(data.active) ||
-        data.curated.some((c) => c.id === data.active)
-          ? data.active
-          : ''
-      }
-      onChange={(_, d) => pick.mutate(d.value)}
-    >
+    <div className={st.shaderList}>
       {data.available.map((name) => (
-        <Radio
+        <ShaderCard
           key={name}
-          value={name}
+          title={presetTitle(name)}
+          description={presetDesc(name)}
+          selected={data.active === name}
           disabled={pick.isPending || !data.gpu}
-          label={{
-            children: (
-              <span style={{ display: 'flex', flexDirection: 'column' }}>
-                <Text as="strong" weight="semibold">{presetTitle(name)}</Text>
-                <Caption1>{presetDesc(name)}</Caption1>
-              </span>
-            ),
-          }}
+          onSelect={() => pick.mutate(name)}
+          onSettings={settingsFor(name)}
         />
       ))}
       {data.curated.map((c) => (
-        <Radio
+        <ShaderCard
           key={c.id}
-          value={c.id}
+          title={curatedText(t, c.id, 'label', c.label)}
+          description={
+            c.available
+              ? curatedText(t, c.id, 'desc', c.desc)
+              : t('video.needsPack', { desc: curatedText(t, c.id, 'desc', c.desc) })
+          }
+          selected={data.active === c.id}
           disabled={pick.isPending || !data.gpu || !c.available}
-          label={{
-            children: (
-              <span style={{ display: 'flex', flexDirection: 'column' }}>
-                <Text as="strong" weight="semibold">{curatedText(t, c.id, 'label', c.label)}</Text>
-                <Caption1>
-                  {c.available
-                    ? curatedText(t, c.id, 'desc', c.desc)
-                    : t('video.needsPack', { desc: curatedText(t, c.id, 'desc', c.desc) })}
-                </Caption1>
-              </span>
-            ),
-          }}
+          onSelect={() => pick.mutate(c.id)}
+          onSettings={settingsFor(c.id)}
         />
       ))}
-    </RadioGroup>
+    </div>
   )
 
   return (
@@ -239,19 +253,65 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                     </Button>
                   </>
                 )}
-                {!data.available.includes(data.active) && (
-                  <Caption1>
-                    {t('video.active')} <Text as="strong" weight="semibold">{data.active}</Text>
-                  </Caption1>
-                )}
+                {!data.available.includes(data.active) &&
+                  !data.curated.some((c) => c.id === data.active) && (
+                    <div className={st.activeRow}>
+                      <Caption1>
+                        {t('video.active')}{' '}
+                        <Text as="strong" weight="semibold">
+                          {data.active.split(/[/\\]/).pop()}
+                        </Text>
+                      </Caption1>
+                      {hasParams && (
+                        <Button
+                          appearance="subtle"
+                          icon={<OptionsRegular />}
+                          onClick={() => setParamsOpen(true)}
+                        >
+                          {t('video.shaderSettings')}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+              </div>
+              <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
+            </div>
+          )}
+
+          {/* Ajustes do shader ativo numa gaveta lateral ("Drawer" do Fluent:
+              sobreposta, cabeçalho com título e fechar). Abre pela esquerda e
+              sem escurecer a tela: a prévia, à direita, segue à vista e muda
+              enquanto os valores são ajustados. */}
+          {section === 'shaders' && (
+            <OverlayDrawer
+              position="start"
+              size="small"
+              modalType="non-modal"
+              open={paramsOpen && hasParams}
+              onOpenChange={(_, d) => setParamsOpen(d.open)}
+            >
+              <DrawerHeader>
+                <DrawerHeaderTitle
+                  action={
+                    <Button
+                      appearance="subtle"
+                      aria-label={t('common.close')}
+                      icon={<DismissRegular />}
+                      onClick={() => setParamsOpen(false)}
+                    />
+                  }
+                >
+                  {t('video.shaderSettings')}
+                </DrawerHeaderTitle>
+              </DrawerHeader>
+              <DrawerBody>
                 <ShaderParams
                   scope="default"
                   reloadKey={data.active}
                   onChanged={() => setParamsRev((n) => n + 1)}
                 />
-              </div>
-              <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
-            </div>
+              </DrawerBody>
+            </OverlayDrawer>
           )}
 
           {section === 'molduras' && (

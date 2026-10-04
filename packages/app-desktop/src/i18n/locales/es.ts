@@ -487,6 +487,7 @@ const es: Messages = {
     gpuHint: 'Shader predeterminado para todos los juegos. Cada juego puede tener su propio shader en su pantalla de detalle.',
     noGpu: 'No hay GPU disponible — los shaders no tienen efecto en este equipo.',
     tabShaders: 'Shaders',
+    shaderSettings: 'Ajustes del shader',
     sourceReemu: 'Shaders de ReEmu',
     sourcePack: 'Paquete descargado',
     shadersDesc: 'Shader predeterminado de todos los juegos, vista previa y parámetros',
