@@ -1,7 +1,8 @@
 //! Cena 3D do preview de shader: um rasterizador de triângulos em software
 //! (z-buffer, iluminação direcional, neblina) que desenha uma paisagem no
-//! jeito dos jogos 3D de PS1/N64 — chão quadriculado em perspectiva, blocos,
-//! pilares e uma pirâmide sob um céu com sol. Arte gerada aqui, sem material
+//! jeito dos jogos 3D de PS1/N64 — chão quadriculado em perspectiva com
+//! sombras, paredes de tijolo, pilares, árvores, lago, pirâmide e montanhas
+//! sob um céu com sol, com saída em 15 bits e dithering como no PS1. Arte gerada aqui, sem material
 //! de terceiros. Mesma resolução da cena 2D (320×240).
 
 use super::shader_preview::{PREVIEW_H, PREVIEW_W};
@@ -39,6 +40,10 @@ enum Paint {
     Flat(V3),
     /// Chão: quadriculado de 1 m com rejunte, pelas coordenadas x/z do mundo.
     Floor,
+    /// Parede de tijolos na cor dada (textura pelas coordenadas do mundo).
+    Brick(V3),
+    /// Lago: azul com o céu refletido e brilho em ondas.
+    Water,
 }
 
 struct Tri {
@@ -52,10 +57,9 @@ fn quad(out: &mut Vec<Tri>, a: V3, b: V3, c: V3, d: V3, paint: Paint) {
 }
 
 /// Caixa alinhada aos eixos (sem a face de baixo).
-fn boxy(out: &mut Vec<Tri>, min: V3, max: V3, color: V3) {
+fn boxy(out: &mut Vec<Tri>, min: V3, max: V3, p: Paint) {
     let [x0, y0, z0] = min;
     let [x1, y1, z1] = max;
-    let p = Paint::Flat(color);
     quad(out, [x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0], p); // topo
     quad(out, [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0], p); // frente
     quad(out, [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [x0, y0, z1], p); // trás
@@ -76,6 +80,39 @@ fn pyramid(out: &mut Vec<Tri>, c: V3, half: f32, h: f32, color: V3) {
     }
 }
 
+/// Cone de `sides` lados (copa de árvore).
+fn cone(out: &mut Vec<Tri>, c: V3, r: f32, h: f32, sides: usize, color: V3) {
+    let top = [c[0], c[1] + h, c[2]];
+    for k in 0..sides {
+        let a0 = k as f32 / sides as f32 * std::f32::consts::TAU;
+        let a1 = (k + 1) as f32 / sides as f32 * std::f32::consts::TAU;
+        let p0 = [c[0] + r * a0.cos(), c[1], c[2] + r * a0.sin()];
+        let p1 = [c[0] + r * a1.cos(), c[1], c[2] + r * a1.sin()];
+        out.push(Tri { v: [p1, top, p0], paint: Paint::Flat(color) });
+    }
+}
+
+fn tree(out: &mut Vec<Tri>, x: f32, z: f32, s: f32) {
+    boxy(out, [x - 0.15 * s, 0.0, z - 0.15 * s], [x + 0.15 * s, 0.9 * s, z + 0.15 * s], Paint::Flat([0.42, 0.26, 0.14]));
+    cone(out, [x, 0.7 * s, z], 1.0 * s, 1.6 * s, 7, [0.16, 0.48, 0.24]);
+    cone(out, [x, 1.6 * s, z], 0.75 * s, 1.4 * s, 7, [0.20, 0.58, 0.28]);
+}
+
+/// Sombras no chão (x, z, raio): uma mancha escura sob cada objeto,
+/// deslocada um pouco pro lado oposto da luz.
+const SHADOWS: &[(f32, f32, f32)] = &[
+    (-4.5, 5.6, 1.8),
+    (-4.5, 8.0, 1.8),
+    (-0.3, 5.7, 0.8),
+    (6.9, 13.4, 1.8),
+    (-7.7, 14.4, 1.5),
+    (-10.6, 18.4, 1.8),
+    (-6.7, 23.4, 1.5),
+    (9.4, 16.4, 1.5),
+    (12.6, 19.4, 1.8),
+    (6.4, 21.4, 1.4),
+];
+
 fn scene() -> Vec<Tri> {
     let mut t = Vec::new();
     quad(
@@ -86,29 +123,74 @@ fn scene() -> Vec<Tri> {
         [40.0, 0.0, -10.0],
         Paint::Floor,
     );
-    // Degraus e blocos à esquerda, pilares ao longo do caminho, pirâmide ao
-    // fundo e uma "torre" à direita.
-    boxy(&mut t, [-6.0, 0.0, 4.0], [-3.5, 1.2, 6.5], [0.86, 0.36, 0.24]);
-    boxy(&mut t, [-6.0, 0.0, 6.5], [-3.5, 2.4, 9.0], [0.90, 0.55, 0.20]);
-    boxy(&mut t, [-1.0, 0.0, 5.0], [0.0, 1.0, 6.0], [0.95, 0.80, 0.25]);
+    // Lago à direita do caminho (um tico acima do chão pra ganhar no z).
+    quad(
+        &mut t,
+        [3.2, 0.02, 3.0],
+        [3.2, 0.02, 11.0],
+        [14.0, 0.02, 11.0],
+        [14.0, 0.02, 3.0],
+        Paint::Water,
+    );
+    // Montanhas no horizonte.
+    for (x, half, h, c) in [
+        (-38.0, 16.0, 16.0, [0.42, 0.36, 0.56]),
+        (-14.0, 20.0, 22.0, [0.48, 0.40, 0.62]),
+        (14.0, 18.0, 18.0, [0.44, 0.38, 0.58]),
+        (40.0, 16.0, 20.0, [0.46, 0.40, 0.60]),
+    ] {
+        pyramid(&mut t, [x, 0.0, 78.0], half, h, c);
+    }
+    // Degraus de tijolo à esquerda, pilares ao longo do caminho, pirâmide ao
+    // fundo e uma torre de tijolos à direita.
+    boxy(&mut t, [-6.0, 0.0, 4.0], [-3.5, 1.2, 6.5], Paint::Brick([0.86, 0.40, 0.26]));
+    boxy(&mut t, [-6.0, 0.0, 6.5], [-3.5, 2.4, 9.0], Paint::Brick([0.90, 0.56, 0.24]));
+    boxy(&mut t, [-1.0, 0.0, 5.0], [0.0, 1.0, 6.0], Paint::Flat([0.95, 0.80, 0.25]));
     for i in 0..5 {
         let z = 8.0 + i as f32 * 6.0;
-        boxy(&mut t, [-2.6, 0.0, z], [-2.0, 3.2, z + 0.6], [0.70, 0.72, 0.80]);
-        boxy(&mut t, [2.0, 0.0, z], [2.6, 3.2, z + 0.6], [0.70, 0.72, 0.80]);
+        let stone = Paint::Brick([0.72, 0.74, 0.80]);
+        boxy(&mut t, [-2.6, 0.0, z], [-2.0, 3.2, z + 0.6], stone);
+        boxy(&mut t, [2.0, 0.0, z], [2.6, 3.2, z + 0.6], stone);
+        boxy(&mut t, [-2.7, 3.2, z - 0.1], [-1.9, 3.5, z + 0.7], Paint::Flat([0.85, 0.86, 0.90]));
+        boxy(&mut t, [1.9, 3.2, z - 0.1], [2.7, 3.5, z + 0.7], Paint::Flat([0.85, 0.86, 0.90]));
     }
-    boxy(&mut t, [4.5, 0.0, 9.0], [7.5, 6.5, 12.0], [0.30, 0.55, 0.85]);
-    boxy(&mut t, [5.2, 6.5, 9.7], [6.8, 8.0, 11.3], [0.95, 0.85, 0.30]);
-    pyramid(&mut t, [-1.0, 0.0, 40.0], 7.0, 9.0, [0.85, 0.70, 0.45]);
+    boxy(&mut t, [5.5, 0.0, 12.0], [7.8, 4.8, 14.3], Paint::Brick([0.36, 0.56, 0.86]));
+    boxy(&mut t, [6.0, 4.8, 12.5], [7.3, 5.9, 13.8], Paint::Flat([0.95, 0.85, 0.30]));
+    pyramid(&mut t, [-1.0, 0.0, 40.0], 7.0, 9.0, [0.88, 0.72, 0.46]);
+    for (x, z, sc) in [(-8.0, 14.0, 1.4), (-11.0, 18.0, 1.7), (-7.0, 23.0, 1.4), (9.0, 16.0, 1.4), (12.0, 19.0, 1.7), (6.0, 21.0, 1.3)] {
+        tree(&mut t, x, z, sc);
+    }
     t
+}
+
+/// Ruído barato e estável por célula (variação de cor da grama/pedra).
+fn hash(x: i32, z: i32) -> f32 {
+    let mut h = (x as u32).wrapping_mul(374_761_393) ^ (z as u32).wrapping_mul(668_265_263);
+    h = (h ^ (h >> 13)).wrapping_mul(1_274_126_177);
+    (h & 0xffff) as f32 / 65535.0
+}
+
+fn brick_color(base: V3, u: f32, v: f32) -> V3 {
+    // tijolos de 0,5 × 0,25 m, fileiras alternadas
+    let row = (v / 0.25).floor();
+    let uu = u + if row as i32 % 2 == 0 { 0.0 } else { 0.25 };
+    let (fu, fv) = ((uu / 0.5).fract().abs(), (v / 0.25).fract().abs());
+    if fu < 0.06 || fv < 0.12 {
+        return [base[0] * 0.45, base[1] * 0.45, base[2] * 0.45];
+    }
+    let k = 0.85 + 0.25 * hash((uu / 0.5).floor() as i32, row as i32);
+    [base[0] * k, base[1] * k, base[2] * k]
 }
 
 fn floor_color(x: f32, z: f32) -> V3 {
     let (fx, fz) = (x.rem_euclid(1.0), z.rem_euclid(1.0));
     if fx < 0.05 || fz < 0.05 {
-        return [0.18, 0.30, 0.20];
+        // rejunte: escuro no caminho de pedra, só um tom abaixo na grama
+        return if x.abs() < 1.5 { [0.30, 0.29, 0.28] } else { [0.21, 0.44, 0.22] };
     }
     // caminho de pedra no meio, grama quadriculada dos lados
-    if x.abs() < 1.5 {
+    let n = 0.9 + 0.2 * hash((x * 3.0).floor() as i32, (z * 3.0).floor() as i32);
+    let c = if x.abs() < 1.5 {
         if (x.floor() as i32 + z.floor() as i32) % 2 == 0 {
             [0.62, 0.60, 0.58]
         } else {
@@ -118,7 +200,15 @@ fn floor_color(x: f32, z: f32) -> V3 {
         [0.30, 0.62, 0.30]
     } else {
         [0.24, 0.52, 0.26]
+    };
+    let mut k = n;
+    for &(sx, sz, r) in SHADOWS {
+        let d = ((x - sx) * (x - sx) + (z - sz) * (z - sz)).sqrt() / r;
+        if d < 1.0 {
+            k *= 0.55 + 0.45 * d * d;
+        }
     }
+    [c[0] * k, c[1] * k, c[2] * k]
 }
 
 /// Câmera: posição, inclinação para baixo e campo de visão vertical.
@@ -204,8 +294,9 @@ pub fn sample_scene_3d() -> Vec<u8> {
                 let iz = 1.0 / p[2];
                 // volta pro mundo só pra textura do chão
                 let wx = p[0] + EYE[0];
+                let wy = (p[1] * pc - p[2] * ps) + EYE[1];
                 let wz = (p[1] * ps + p[2] * pc) + EYE[2];
-                (cx + f * p[0] * iz, cy - f * p[1] * iz, iz, [wx * iz, 0.0, wz * iz])
+                (cx + f * p[0] * iz, cy - f * p[1] * iz, iz, [wx * iz, wy * iz, wz * iz])
             })
             .collect();
         for k in 1..proj.len() - 1 {
@@ -234,26 +325,53 @@ pub fn sample_scene_3d() -> Vec<u8> {
                         continue;
                     }
                     depth[i] = z;
+                    let wx = (w0 * a.3[0] + w1 * b.3[0] + w2 * c.3[0]) / iz;
+                    let wy = (w0 * a.3[1] + w1 * b.3[1] + w2 * c.3[1]) / iz;
+                    let wz = (w0 * a.3[2] + w1 * b.3[2] + w2 * c.3[2]) / iz;
                     let base = match tri.paint {
                         Paint::Flat(col) => col,
-                        Paint::Floor => {
-                            let wx = (w0 * a.3[0] + w1 * b.3[0] + w2 * c.3[0]) / iz;
-                            let wz = (w0 * a.3[2] + w1 * b.3[2] + w2 * c.3[2]) / iz;
-                            floor_color(wx, wz)
+                        Paint::Floor => floor_color(wx, wz),
+                        Paint::Brick(col) => {
+                            if n[1].abs() > 0.5 {
+                                col
+                            } else if n[0].abs() > 0.5 {
+                                brick_color(col, wz, wy)
+                            } else {
+                                brick_color(col, wx, wy)
+                            }
+                        }
+                        Paint::Water => {
+                            let reflect = mix([0.10, 0.22, 0.48], SKY_HORIZON, (z / 40.0).clamp(0.0, 0.7));
+                            let wave = ((wz * 5.0 + (wx * 1.7).sin() * 2.0).sin() * 0.5 + 0.5).powf(8.0);
+                            mix(reflect, [0.95, 0.90, 0.80], wave * 0.6)
                         }
                     };
-                    let lit = [base[0] * shade, base[1] * shade, base[2] * shade];
+                    let k = if matches!(tri.paint, Paint::Water) { 1.0 } else { shade };
+                    let lit = [base[0] * k, base[1] * k, base[2] * k];
                     // neblina na direção do horizonte
-                    let fog = ((z - 10.0) / 45.0).clamp(0.0, 0.85);
+                    let fog = ((z - 10.0) / 50.0).clamp(0.0, 0.62);
                     color[i] = mix(lit, SKY_HORIZON, fog);
                 }
             }
         }
     }
 
+    // Saída em 15 bits (5 por canal) com dithering ordenado 4×4 — o jeito
+    // do PS1, que deixa o degradê do céu e a neblina "granulados".
+    const BAYER: [[f32; 4]; 4] = [
+        [0.0, 8.0, 2.0, 10.0],
+        [12.0, 4.0, 14.0, 6.0],
+        [3.0, 11.0, 1.0, 9.0],
+        [15.0, 7.0, 13.0, 5.0],
+    ];
     let mut out = Vec::with_capacity(w * h * 4);
-    for c in color {
-        let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+    for (i, c) in color.iter().enumerate() {
+        let (x, y) = (i % w, i / w);
+        let d = (BAYER[y & 3][x & 3] + 0.5) / 16.0 - 0.5;
+        let q = |v: f32| {
+            let v5 = (v.clamp(0.0, 1.0) * 31.0 + d).round().clamp(0.0, 31.0);
+            (v5 * 255.0 / 31.0).round() as u8
+        };
         out.extend_from_slice(&[q(c[2]), q(c[1]), q(c[0]), 0xFF]);
     }
     out
