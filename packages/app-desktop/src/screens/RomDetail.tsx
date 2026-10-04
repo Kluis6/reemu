@@ -38,7 +38,7 @@ import {
   PlayRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { CoreOptions } from "../components/CoreOptions";
 import { SearchArt } from "../components/EmptyArt";
@@ -168,6 +168,13 @@ export function RomDetail() {
     : "";
 
   const rom = roms.data?.find((r) => r.id === romId);
+  // Ao abrir a página de um jogo, o foco vai pro "Jogar" (controle e teclado
+  // já começam nele). Uma vez por jogo — refetch da lista não rouba o foco.
+  const playRef = useRef<HTMLButtonElement>(null);
+  const hasRom = !!rom;
+  useEffect(() => {
+    if (hasRom) playRef.current?.focus({ preventScroll: true });
+  }, [romId, hasRom]);
   const ext = rom?.filePath.split(".").pop()?.toLowerCase() ?? "";
   const coreList = rankCores(cores.data ?? [], rom?.systemId, ext);
   const [coreId, setCoreId] = useState("");
@@ -331,10 +338,14 @@ export function RomDetail() {
 
           <div className={s.actions}>
             <Button
+              ref={playRef}
               appearance="primary"
               size="large"
               className={s.playBtn}
-              disabled={!chosenCore}
+              // `disabledFocusable` (não `disabled`): sem core o botão segue
+              // focável — recebe o foco e o leitor de tela diz que está
+              // indisponível, como o Fluent recomenda pra ação principal.
+              disabledFocusable={!chosenCore}
               onClick={() => play()}
             >
               {hasQuick ? t("game.continue") : t("game.play")}
