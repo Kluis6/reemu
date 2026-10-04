@@ -51,6 +51,9 @@ const useStyles = makeStyles({
     gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))',
     '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
+  // Linha da busca no mesmo grid do catálogo: o campo tem a largura de uma
+  // coluna e a contagem fica na seguinte (embaixo, com uma coluna só).
+  filterRow: { alignItems: 'center' },
   // mensagem de lista vazia ocupa a linha inteira do grid
   fullRow: { gridColumn: '1 / -1' },
   // ícone | nome e sistema (cresce) | botão
@@ -171,13 +174,11 @@ function Catalog() {
       <Caption1>
         <Trans i18nKey="cores.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
       </Caption1>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+      <div className={mergeClasses(styles.list, styles.catalogList, styles.filterRow)}>
         <Input
           placeholder={t('cores.filter')}
           value={filter}
           onChange={(_, d) => setFilter(d.value)}
-          // metade da linha (antes ocupava tudo até a contagem)
-          style={{ flex: '0 1 50%', minWidth: 0 }}
         />
         <Caption1>
           {t('cores.count', { shown: sorted.length, total: catalog.data?.length ?? 0 })}
