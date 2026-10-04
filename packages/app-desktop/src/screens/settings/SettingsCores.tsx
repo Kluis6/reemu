@@ -44,10 +44,11 @@ const useStyles = makeStyles({
     '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
   // Catálogo: quantas colunas couberem na largura disponível, cada uma com
-  // pelo menos 300 (nome + selo OpenGL/Vulkan + sistemas + botão sem
-  // apertar). Acompanha a janela e o tamanho da interface.
+  // pelo menos 420 — ícone + nome/sistemas (~160) + "instalado" e Remover
+  // (~190) sem espremer o texto. Acompanha a janela e o tamanho da
+  // interface: 2 colunas no padrão, 1 com a interface grande.
   catalogList: {
-    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))',
     '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
   // mensagem de lista vazia ocupa a linha inteira do grid
