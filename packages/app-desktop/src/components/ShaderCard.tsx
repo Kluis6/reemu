@@ -9,7 +9,7 @@ import {
   mergeClasses,
   tokens,
 } from '@fluentui/react-components'
-import { CheckmarkCircleFilled, OptionsRegular } from '@fluentui/react-icons'
+import { OptionsRegular } from '@fluentui/react-icons'
 import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
@@ -27,7 +27,6 @@ const useStyles = makeStyles({
   selected: { border: `1px solid ${tokens.colorBrandStroke1}` },
   disabled: { opacity: 0.5, cursor: 'default' },
   title: { display: 'inline-flex', alignItems: 'center', gap: tokens.spacingHorizontalXS },
-  check: { color: tokens.colorBrandForeground1, flexShrink: 0 },
   desc: { color: tokens.colorNeutralForeground3 },
 })
 
@@ -67,7 +66,6 @@ export function ShaderCard({
       <CardHeader
         header={
           <Text weight="semibold" className={s.title}>
-            {selected && <CheckmarkCircleFilled className={s.check} />}
             {title}
           </Text>
         }
