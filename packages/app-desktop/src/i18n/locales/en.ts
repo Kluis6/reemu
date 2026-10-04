@@ -232,6 +232,14 @@ const en: Messages = {
       },
     },
   },
+  onboarding: {
+    welcomeTitle: 'Welcome to ReEmu',
+    continue: 'Continue',
+    profileTitle: 'What should we call you?',
+    profileText: 'Pick a name and an avatar. Your profile stays on this computer only.',
+    readyTitle: 'All set, {{name}}!',
+    readyText: 'Your ReEmu is ready. Add your ROMs and start playing.',
+  },
   common: {
     cancel: 'Cancel',
     save: 'Save',

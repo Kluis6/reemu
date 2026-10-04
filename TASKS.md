@@ -342,6 +342,10 @@ no `emu-session`, ver `docs/historico.md`).
       permissão escrita do LaunchBox.
 - [ ] `todo` — Validar o TheGamesDB com uma chave real (o parser foi testado
       com JSON no formato que o ES-DE lê, não com resposta capturada).
+- [ ] `todo` — **Onboarding: passo de contas** (backlog, pedido em
+      2026-10-04): um modal a mais no onboarding, do mesmo tamanho dos outros
+      três, para entrar em redes sociais ou lojas de jogos (Steam e outras).
+      Entra entre "nome e avatar" e "tudo pronto"; pular deve ser possível.
 
 - [x] `done` — **Teclado configurável** (2026-09-26): seção Teclado em
       Configurações › Controles (botões e direções dos dois analógicos); as

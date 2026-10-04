@@ -9,7 +9,7 @@ import {
 } from '@fluentui/react-components'
 import { ImageAddRegular } from '@fluentui/react-icons'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PRESET_IDS } from '../lib/avatars'
 import { PresetAvatar } from './PresetAvatar'
 import { errorToast } from '../lib/toast'
@@ -66,10 +66,16 @@ export function ProfileForm({
   initial,
   submitLabel,
   onDone,
+  showBio = true,
+  onChange,
 }: {
   initial: Pick<Profile, 'name' | 'bio' | 'avatar'>
-  submitLabel: string
-  onDone: () => void
+  /** Sem `submitLabel`, o formulário não tem botão nem salva: só avisa os
+   *  valores por `onChange` (o onboarding salva no último passo). */
+  submitLabel?: string
+  onDone?: () => void
+  showBio?: boolean
+  onChange?: (v: Pick<Profile, 'name' | 'bio' | 'avatar'>) => void
 }) {
   const { t } = useTranslation()
   const s = useStyles()
@@ -79,6 +85,11 @@ export function ProfileForm({
   const [bio, setBio] = useState(initial.bio ?? '')
   const [avatar, setAvatar] = useState(initial.avatar)
   const [nonce, setNonce] = useState(0)
+  // o erro de nome só aparece depois que o campo foi mexido (não de cara)
+  const [touched, setTouched] = useState(false)
+  useEffect(() => {
+    onChange?.({ name: name.trim(), bio: bio.trim() || null, avatar })
+  }, [name, bio, avatar, onChange])
 
   const upload = useMutation({
     mutationFn: async () => {
@@ -108,12 +119,13 @@ export function ProfileForm({
       }
       qc.setQueryData(['profile'], next)
       qc.invalidateQueries({ queryKey: ['profile'] })
-      onDone()
+      onDone?.()
     },
     onError: (e) => push(errorToast(e, 'saveProfile')),
   })
 
-  const nameError = name.trim().length === 0 ? t('profileForm.nameRequired') : undefined
+  const nameEmpty = name.trim().length === 0
+  const nameError = nameEmpty && touched ? t('profileForm.nameRequired') : undefined
 
   return (
     <div className={s.root}>
@@ -153,11 +165,16 @@ export function ProfileForm({
         <Input
           value={name}
           maxLength={40}
-          onChange={(_, d) => setName(d.value)}
+          onChange={(_, d) => {
+            setName(d.value)
+            setTouched(true)
+          }}
+          onBlur={() => setTouched(true)}
           placeholder={t('profileForm.namePlaceholder')}
         />
       </Field>
 
+      {showBio && (
       <Field label={t('profileForm.bio')} hint={t('profileForm.bioHint')}>
         <Textarea
           value={bio}
@@ -167,16 +184,19 @@ export function ProfileForm({
           placeholder={t('profileForm.bioPlaceholder')}
         />
       </Field>
+      )}
 
+      {submitLabel && (
       <div>
         <Button
           appearance="primary"
-          disabled={!!nameError || save.isPending}
+          disabled={nameEmpty || save.isPending}
           onClick={() => save.mutate()}
         >
           {submitLabel}
         </Button>
       </div>
+      )}
     </div>
   )
 }

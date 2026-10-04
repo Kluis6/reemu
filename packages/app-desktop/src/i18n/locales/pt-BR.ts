@@ -233,6 +233,14 @@ const ptBR = {
       },
     },
   },
+  onboarding: {
+    welcomeTitle: 'Bem-vindo ao ReEmu',
+    continue: 'Continuar',
+    profileTitle: 'Como podemos te chamar?',
+    profileText: 'Escolha um nome e um avatar. O perfil fica só neste computador.',
+    readyTitle: 'Tudo pronto, {{name}}!',
+    readyText: 'Seu ReEmu está configurado. Adicione suas ROMs e comece a jogar.',
+  },
   common: {
     cancel: 'Cancelar',
     save: 'Salvar',

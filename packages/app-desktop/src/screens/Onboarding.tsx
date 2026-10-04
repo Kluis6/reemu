@@ -1,38 +1,72 @@
-import { Body1, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
-import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import {
+  Body1,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
+  Radio,
+  RadioGroup,
+  Subtitle2,
+  makeStyles,
+  mergeClasses,
+  tokens,
+  type RadioGroupOnChangeData,
+} from '@fluentui/react-components'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AnimatedBackground } from '../components/AnimatedBackground'
 import { AppLogo } from '../components/AppLogo'
 import { LoadingState } from '../components/EmptyState'
+import { ProfileAvatar } from '../components/ProfileAvatar'
 import { ProfileForm } from '../components/ProfileForm'
-import { getProfile } from '../lib/tauri'
-import { useTranslation } from 'react-i18next'
+import {
+  getLanguagePreference,
+  LANGUAGES,
+  setLanguagePreference,
+  type LanguagePreference,
+} from '../i18n'
+import { getProfile, setProfile, type Profile } from '../lib/tauri'
+import { errorToast } from '../lib/toast'
+import { useToastStore } from '../stores/useToastStore'
 
-// Primeira abertura: o fundo acende devagar, o cartão entra (fade + subida
-// curta + leve crescimento) logo depois do splash e o conteúdo vem em
-// cascata. Só opacity/transform — baratos no WebKitGTK e no WebView2 — e
-// `fill-mode: backwards`: terminada a entrada nada fica aplicado (com
-// `both` o texto perdia o ClearType no Windows, ver RouteTransition).
-const EXIT_MS = 380
-const bgIn = { from: { opacity: 0 }, to: { opacity: 1 } }
-const cardIn = {
-  from: { opacity: 0, transform: 'translateY(24px) scale(0.97)' },
-  to: { opacity: 1, transform: 'none' },
-}
-const partIn = {
+/** Tempo entre fechar um passo e abrir o próximo (a saída do Dialog). */
+const SWAP_MS = 320
+
+/** "Bem-vindo" em vários idiomas, na ordem em que aparecem. */
+const WELCOMES = [
+  'Bem-vindo',
+  'Welcome',
+  'Bienvenido',
+  'Bienvenue',
+  'Willkommen',
+  'Benvenuto',
+  'ようこそ',
+  'Добро пожаловать',
+  '환영합니다',
+  '欢迎',
+  'Welkom',
+  'Witamy',
+  'Välkommen',
+  'Hoş geldiniz',
+  'Καλώς ήρθατε',
+  'Tervetuloa',
+]
+
+const wordIn = {
   from: { opacity: 0, transform: 'translateY(10px)' },
   to: { opacity: 1, transform: 'none' },
 }
-const cardOut = {
-  from: { opacity: 1, transform: 'none' },
-  to: { opacity: 0, transform: 'translateY(-8px) scale(1.015)' },
-}
+const bgIn = { from: { opacity: 0 }, to: { opacity: 1 } }
 const noMotion = { '@media (prefers-reduced-motion: reduce)': { animationName: 'none' } }
 
 const useStyles = makeStyles({
   bg: {
-    position: 'absolute',
+    position: 'fixed',
     inset: 0,
     animationName: bgIn,
     animationDuration: '1100ms',
@@ -40,115 +74,227 @@ const useStyles = makeStyles({
     animationFillMode: 'backwards',
     ...noMotion,
   },
-  root: {
-    position: 'fixed',
-    inset: 0,
+  // Fundo do tema visível atrás do modal (sem escurecer).
+  backdrop: { backgroundColor: 'transparent' },
+  // Modal grande, quase a tela toda — o mesmo tamanho nos três passos.
+  surface: {
+    width: 'min(960px, 92vw)',
+    maxWidth: 'none',
+    height: 'min(620px, 86vh)',
+    boxSizing: 'border-box',
     display: 'flex',
-    padding: tokens.spacingHorizontalXXL,
-    overflowY: 'auto',
   },
-  card: {
-    position: 'relative',
-    zIndex: 1,
-    width: '100%',
-    maxWidth: '480px',
-    // centraliza com margem automática (não `align-items: center`): se o
-    // cartão passar da altura da tela, o topo não fica cortado — rola.
-    margin: 'auto',
+  body: { flexGrow: 1, gridTemplateRows: 'auto 1fr auto' },
+  content: {
     display: 'flex',
     flexDirection: 'column',
-    gap: tokens.spacingVerticalL,
-    backgroundColor: tokens.colorNeutralBackground1,
-    borderRadius: tokens.borderRadiusXLarge,
-    padding: tokens.spacingHorizontalXXL,
-    // Fluent 2 elevation: este card faz o papel de um painel/modal centrado
-    // (não uma side-nav ou bottom sheet, que é o que shadow28 cobre) — a
-    // tier certa é a mesma que o Dialog do Fluent usa, shadow64.
-    boxShadow: tokens.shadow64,
-    animationName: cardIn,
-    animationDuration: '720ms',
-    animationDelay: '180ms',
-    animationTimingFunction: tokens.curveDecelerateMax,
-    animationFillMode: 'backwards',
-    ...noMotion,
+    gap: tokens.spacingVerticalXL,
+    overflowY: 'auto',
   },
-  // saída ao concluir: o cartão sobe e some antes de trocar de tela
-  leaving: {
-    animationName: cardOut,
-    animationDuration: `${EXIT_MS}ms`,
-    animationDelay: '0ms',
-    animationTimingFunction: tokens.curveAccelerateMid,
-    animationFillMode: 'forwards',
-    pointerEvents: 'none',
-    ...noMotion,
+  // nuvem de "bem-vindo": cada palavra entra com fade, uma depois da outra
+  words: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'baseline',
+    columnGap: tokens.spacingHorizontalXXL,
+    rowGap: tokens.spacingVerticalM,
+    padding: `${tokens.spacingVerticalL} 0`,
   },
-  head: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
-  // conteúdo em cascata depois do cartão (logo → texto → formulário)
-  part: {
-    animationName: partIn,
-    animationDuration: '560ms',
+  word: {
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorNeutralForeground1,
+    lineHeight: 1.2,
+    animationName: wordIn,
+    animationDuration: '700ms',
     animationTimingFunction: tokens.curveDecelerateMid,
     animationFillMode: 'backwards',
     ...noMotion,
   },
-  d1: { animationDelay: '380ms' },
-  d2: { animationDelay: '470ms' },
-  d3: { animationDelay: '560ms' },
+  wordMain: { color: tokens.colorBrandForeground1 },
+  center: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: tokens.spacingVerticalM,
+    textAlign: 'center',
+  },
+  ready: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: tokens.spacingVerticalL,
+    textAlign: 'center',
+    flexGrow: 1,
+  },
+  muted: { color: tokens.colorNeutralForeground3, maxWidth: '520px' },
 })
 
+type Step = 'welcome' | 'profile' | 'ready'
+type Draft = Pick<Profile, 'name' | 'bio' | 'avatar'>
+
 /**
- * Fluxo de 1ª execução — define nome, bio e avatar do perfil local (um por
- * instalação). Fica FORA da `AppShell` (sem rail/topbar). Ao concluir,
- * `setProfile` marca `onboarded` e a `/` passa a abrir normalmente.
+ * Primeira execução, em três modais do mesmo tamanho sobre o fundo do tema:
+ * boas-vindas (várias línguas + escolha do idioma), nome e avatar, e "tudo
+ * pronto". Seguindo o Dialog do Fluent 2: título em cada passo, ações no
+ * rodapé, um modal fecha antes do próximo abrir (sem aninhar) e `alert`
+ * (não fecha com Esc nem clique fora — é um fluxo obrigatório). O perfil só
+ * é salvo no último passo: salvar marca `onboarded` e o app abre.
  */
 export function Onboarding() {
   const { t } = useTranslation()
   const s = useStyles()
+  const qc = useQueryClient()
   const navigate = useNavigate()
+  const push = useToastStore((st) => st.push)
   const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile, retry: false })
-  const [leaving, setLeaving] = useState(false)
 
-  // Concluído: anima a saída do cartão e só então troca de tela (a Home
-  // entra com a transição de rota dela).
-  const finish = () => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      navigate('/', { replace: true })
-      return
-    }
-    setLeaving(true)
-    window.setTimeout(() => navigate('/', { replace: true }), EXIT_MS)
+  const [step, setStep] = useState<Step>('welcome')
+  const [open, setOpen] = useState(true)
+  const [lang, setLang] = useState<LanguagePreference>(getLanguagePreference)
+  const [draft, setDraft] = useState<Draft | null>(null)
+  const onDraft = useCallback((v: Draft) => setDraft(v), [])
+
+  // Fecha o passo atual e abre o próximo depois da animação de saída.
+  const go = (next: Step) => {
+    setOpen(false)
+    window.setTimeout(() => {
+      setStep(next)
+      setOpen(true)
+    }, SWAP_MS)
   }
+
+  const finish = useMutation({
+    mutationFn: (d: Draft) => setProfile(d.name, d.bio, d.avatar),
+    onSuccess: (_, d) => {
+      setOpen(false)
+      window.setTimeout(() => {
+        qc.setQueryData(['profile'], { ...d, onboarded: true })
+        qc.invalidateQueries({ queryKey: ['profile'] })
+        navigate('/', { replace: true })
+      }, SWAP_MS)
+    },
+    onError: (e) => push(errorToast(e, 'saveProfile')),
+  })
 
   if (profile.isLoading) return <LoadingState />
   // já passou pelo onboarding, ou sem backend pra persistir → manda pra Home
   if (profile.data?.onboarded || profile.isError) return <Navigate to="/" replace />
 
+  const initial: Draft = draft ?? {
+    name: profile.data?.name ?? '',
+    bio: profile.data?.bio ?? null,
+    avatar: profile.data?.avatar ?? 'preset:1',
+  }
+  const nameOk = (draft?.name ?? initial.name).trim().length > 0
+
   return (
-    <div className={s.root}>
+    <>
       <div className={s.bg}>
         <AnimatedBackground />
       </div>
-      <div className={mergeClasses(s.card, leaving && s.leaving)}>
-        <div className={s.head}>
-          <div className={mergeClasses(s.part, s.d1)}>
-            <AppLogo height={72} />
-          </div>
-          <Body1 className={mergeClasses(s.part, s.d2)}>
-            {t('shell.welcome')}
-          </Body1>
-        </div>
-        <div className={mergeClasses(s.part, s.d3)}>
-          <ProfileForm
-            initial={{
-              name: profile.data?.name ?? '',
-              bio: profile.data?.bio ?? null,
-              avatar: profile.data?.avatar ?? 'preset:1',
-            }}
-            submitLabel={t('shell.start')}
-            onDone={finish}
-          />
-        </div>
-      </div>
-    </div>
+      <Dialog open={open} modalType="alert">
+        <DialogSurface className={s.surface} backdrop={{ className: s.backdrop }}>
+          <DialogBody className={s.body}>
+            {step === 'welcome' && (
+              <>
+                <DialogTitle>{t('onboarding.welcomeTitle')}</DialogTitle>
+                <DialogContent className={s.content}>
+                  <div className={s.center}>
+                    <AppLogo height={64} />
+                  </div>
+                  <div className={s.words} aria-hidden>
+                    {WELCOMES.map((w, i) => (
+                      <span
+                        key={w}
+                        className={mergeClasses(s.word, i === 0 && s.wordMain)}
+                        style={{
+                          animationDelay: `${250 + i * 220}ms`,
+                          fontSize: `${i === 0 ? 40 : [28, 22, 26, 20, 24][i % 5]}px`,
+                        }}
+                      >
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                  <div className={s.center}>
+                    <Subtitle2>{t('language.title')}</Subtitle2>
+                    <RadioGroup
+                      layout="horizontal"
+                      aria-label={t('language.title')}
+                      value={lang}
+                      onChange={(_, data: RadioGroupOnChangeData) => {
+                        const v = data.value as LanguagePreference
+                        setLang(v)
+                        void setLanguagePreference(v)
+                      }}
+                    >
+                      <Radio value="auto" label={t('language.auto')} />
+                      {LANGUAGES.map((l) => (
+                        // cada idioma no próprio nome (quem não lê o atual acha o seu)
+                        <Radio key={l} value={l} label={t(`language.${l}`)} />
+                      ))}
+                    </RadioGroup>
+                  </div>
+                </DialogContent>
+                <DialogActions>
+                  <Button appearance="primary" onClick={() => go('profile')}>
+                    {t('onboarding.continue')}
+                  </Button>
+                </DialogActions>
+              </>
+            )}
+
+            {step === 'profile' && (
+              <>
+                <DialogTitle>{t('onboarding.profileTitle')}</DialogTitle>
+                <DialogContent className={s.content}>
+                  <Body1 className={s.muted}>{t('onboarding.profileText')}</Body1>
+                  <ProfileForm initial={initial} showBio={false} onChange={onDraft} />
+                </DialogContent>
+                <DialogActions>
+                  <Button appearance="secondary" onClick={() => go('welcome')}>
+                    {t('common.back')}
+                  </Button>
+                  <Button appearance="primary" disabled={!nameOk} onClick={() => go('ready')}>
+                    {t('onboarding.continue')}
+                  </Button>
+                </DialogActions>
+              </>
+            )}
+
+            {step === 'ready' && (
+              <>
+                <DialogTitle>
+                  {t('onboarding.readyTitle', { name: draft?.name ?? initial.name })}
+                </DialogTitle>
+                <DialogContent className={s.content}>
+                  <div className={s.ready}>
+                    <ProfileAvatar
+                      profile={{ name: draft?.name ?? initial.name, avatar: draft?.avatar ?? initial.avatar }}
+                      size={96}
+                    />
+                    <Body1 className={s.muted}>{t('onboarding.readyText')}</Body1>
+                  </div>
+                </DialogContent>
+                <DialogActions>
+                  <Button appearance="secondary" onClick={() => go('profile')}>
+                    {t('common.back')}
+                  </Button>
+                  <Button
+                    appearance="primary"
+                    disabled={finish.isPending}
+                    onClick={() => finish.mutate(draft ?? initial)}
+                  >
+                    {t('shell.start')}
+                  </Button>
+                </DialogActions>
+              </>
+            )}
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </>
   )
 }
