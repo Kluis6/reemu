@@ -10,6 +10,7 @@ import {
   tokens,
   shorthands,
   Subtitle2,
+  Card,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
@@ -95,6 +96,19 @@ const useStyles = makeStyles({
   panelHead: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' },
   panelTitle: { display: 'flex', flexDirection: 'column', minWidth: 0 },
   panelSub: { color: tokens.colorNeutralForeground3 },
+  // Parâmetros num card; com muitos, rolam dentro dele (mesma altura da
+  // lista de shaders) com o scrollbar fino do app.
+  paramsCard: { padding: 0 },
+  paramsScroll: {
+    maxHeight: '360px',
+    overflowY: 'auto',
+    padding: tokens.spacingHorizontalM,
+    '::-webkit-scrollbar': { width: '6px' },
+    '::-webkit-scrollbar-thumb': {
+      backgroundColor: tokens.colorNeutralStroke2,
+      borderRadius: tokens.borderRadiusCircular,
+    },
+  },
   // `outline` com borda visível (ver `ShaderCard`)
   settingsBtn: {
     ...shorthands.borderColor(`${tokens.colorNeutralStrokeAccessible} !important`),
@@ -299,11 +313,15 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                           <Caption1 className={st.panelSub}>{activeName}</Caption1>
                         </div>
                       </div>
-                      <ShaderParams
-                        scope="default"
-                        reloadKey={data.active}
-                        onChanged={() => setParamsRev((n) => n + 1)}
-                      />
+                      <Card className={st.paramsCard}>
+                        <div className={st.paramsScroll}>
+                          <ShaderParams
+                            scope="default"
+                            reloadKey={data.active}
+                            onChanged={() => setParamsRev((n) => n + 1)}
+                          />
+                        </div>
+                      </Card>
                     </>
                   ) : (
                     <>
