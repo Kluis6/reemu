@@ -63,8 +63,9 @@ const useStyles = makeStyles({
     padding: `${RING}px`,
     margin: `-${RING}px`,
     // Abas no padrão do TabList do Fluent (`size="large"`, sem estilos
-    // próprios nos itens — pedido do usuário).
+    // próprios nos itens — pedido do usuário), só mais afastadas entre si.
     scrollbarWidth: "none",
+    rowGap: tokens.spacingVerticalS,
   },
   // Área que rola. O conteúdo começa na altura da lista (título + espaço);
   // ao rolar, some no topo da página. Mesmo scrollbar da `.scroll` do shell.
