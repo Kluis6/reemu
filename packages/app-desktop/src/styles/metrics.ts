@@ -92,6 +92,7 @@ export const SECTION_TITLE_GAP = 24;
 /** Do fim de uma fileira ao topo do próximo cabeçalho. */
 export const SECTION_GAP = 64;
 
-/** Raios (escala do Fluent). */
-export const RADIUS = 8;
-export const RADIUS_LG = 12;
+/** Raio único do app: 4 px, o mesmo dos botões e campos do Fluent
+ *  (`borderRadiusMedium`; o tema põe todos os raios do Fluent nisso). */
+export const RADIUS = 4;
+export const RADIUS_LG = 4;

@@ -430,6 +430,13 @@ function make(
     ...(light ? createLightTheme(ramp) : createDarkTheme(ramp)),
     ...(o.neutrals ?? (light ? consoleLight : consoleDark)),
     ...tvType,
+    // Um raio só no app inteiro: 4 px (o `borderRadiusMedium` do Fluent),
+    // inclusive nos componentes do Fluent que usam Small/Large/XLarge
+    // (diálogos, menus, cards). Circular (avatar, switch) fica como é.
+    borderRadiusSmall: "4px",
+    borderRadiusMedium: "4px",
+    borderRadiusLarge: "4px",
+    borderRadiusXLarge: "4px",
     // Fundo da casca: o stop mais "fraco" do gradiente é sempre igual ao
     // `colorNeutralBackground1` (o rail usa esse mesmo tom — ver `xbox.ts`),
     // só o outro stop clareia (escuro) ou clareia mais ainda (claro).
