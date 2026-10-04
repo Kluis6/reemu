@@ -677,6 +677,8 @@ const es: Messages = {
   },
   manage: {
     title: 'Gestionar biblioteca',
+    tabPlatforms: 'Plataformas',
+    tabFolders: 'Carpetas',
     refreshHint: 'Busca juegos nuevos en las carpetas de la biblioteca, quita los que ya no existen y corrige la plataforma.',
     empty: 'Biblioteca vacía.',
     platformsSection: 'Plataformas — core predeterminado y eliminación',

@@ -678,6 +678,8 @@ const ptBR = {
   },
   manage: {
     title: 'Gerenciar biblioteca',
+    tabPlatforms: 'Plataformas',
+    tabFolders: 'Pastas',
     refreshHint: 'Procura jogos novos nas pastas da biblioteca, tira os que não existem mais e corrige a plataforma.',
     empty: 'Biblioteca vazia.',
     platformsSection: 'Plataformas — core padrão e remoção',

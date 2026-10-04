@@ -677,6 +677,8 @@ const en: Messages = {
   },
   manage: {
     title: 'Manage library',
+    tabPlatforms: 'Platforms',
+    tabFolders: 'Folders',
     refreshHint: 'Looks for new games in the library folders, removes the ones that no longer exist and fixes the platform.',
     empty: 'Library is empty.',
     platformsSection: 'Platforms — default core and removal',

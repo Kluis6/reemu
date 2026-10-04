@@ -1,4 +1,11 @@
-import { Button, Select, Spinner, Text, makeStyles, tokens } from "@fluentui/react-components";
+import {
+  Button,
+  Select,
+  Spinner,
+  Text,
+  makeStyles,
+  tokens,
+} from "@fluentui/react-components";
 import { ArrowSyncRegular } from "@fluentui/react-icons";
 import { platformLabel } from "../lib/platform";
 import type { ManageLibraryState } from "../lib/useManageLibrary";
@@ -37,7 +44,10 @@ const useStyles = makeStyles({
     whiteSpace: "nowrap",
     fontSize: tokens.fontSizeBase200,
   },
-  count: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
+  count: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: tokens.fontSizeBase200,
+  },
   refreshRow: {
     display: "flex",
     alignItems: "center",
@@ -58,29 +68,50 @@ const useStyles = makeStyles({
 export function ManageLibraryFields({
   state,
   platforms,
+  part,
 }: {
   state: ManageLibraryState;
   /** `[systemId, quantidade]` presentes na biblioteca. */
   platforms: readonly (readonly [string, number])[];
+  /** Só uma parte (abas das Configurações): `platforms` = core e remoção
+   *  por plataforma; `folders` = atualizar, pastas de origem e limpar tudo.
+   *  Sem isso (modal da biblioteca), tudo junto. */
+  part?: "platforms" | "folders";
 }) {
   const { t } = useTranslation();
   const s = useStyles();
-  const { cores, sysCores, sources, setPending, confirm, setConfirm, purge, rescan, coreValue } =
-    state;
+  const {
+    cores,
+    sysCores,
+    sources,
+    setPending,
+    confirm,
+    setConfirm,
+    purge,
+    rescan,
+    coreValue,
+  } = state;
 
   const purgeBtn = (target: string, idle: string, confirmLabel: string) => (
     <Button
       appearance={confirm === target ? "primary" : "secondary"}
       disabled={purge.isPending}
-      onClick={() => (confirm === target ? purge.mutate(target) : setConfirm(target))}
+      onClick={() =>
+        confirm === target ? purge.mutate(target) : setConfirm(target)
+      }
     >
       {confirm === target ? confirmLabel : idle}
     </Button>
   );
 
+  const showPlatforms = part !== "folders";
+  const showFolders = part !== "platforms";
+  // Na aba própria a lista de pastas aparece mesmo com uma só.
+  const minSources = part === "folders" ? 0 : 1;
+
   return (
     <>
-      {(sources.data?.length ?? 0) > 0 && (
+      {showFolders && (sources.data?.length ?? 0) > 0 && (
         <div className={s.refreshRow}>
           <Text className={s.hint}>{t("manage.refreshHint")}</Text>
           <Button
@@ -95,7 +126,7 @@ export function ManageLibraryFields({
         </div>
       )}
 
-      {cores.isLoading || sysCores.isLoading ? (
+      {!showPlatforms ? null : cores.isLoading || sysCores.isLoading ? (
         <Spinner label={t("common.loading")} />
       ) : platforms.length === 0 ? (
         <Text>{t("manage.empty")}</Text>
@@ -110,7 +141,9 @@ export function ManageLibraryFields({
               </span>
               <Select
                 value={coreValue(sys)}
-                onChange={(_, d) => setPending((p) => ({ ...p, [sys]: d.value }))}
+                onChange={(_, d) =>
+                  setPending((p) => ({ ...p, [sys]: d.value }))
+                }
               >
                 <option value="">{t("manage.auto")}</option>
                 {(cores.data ?? []).map((c) => (
@@ -125,7 +158,7 @@ export function ManageLibraryFields({
         </>
       )}
 
-      {(sources.data?.length ?? 0) > 1 && (
+      {showFolders && (sources.data?.length ?? 0) > minSources && (
         <>
           <div className={s.section}>{t("manage.sources")}</div>
           {sources.data!.map((src) => (
@@ -140,10 +173,14 @@ export function ManageLibraryFields({
         </>
       )}
 
-      {platforms.length > 0 && (
+      {showFolders && platforms.length > 0 && (
         <div className={s.srcRow} style={{ marginTop: 12 }}>
           <span className={s.path}>{t("manage.all")}</span>
-          {purgeBtn("__all__", t("manage.clearAll"), t("manage.confirmClearAll"))}
+          {purgeBtn(
+            "__all__",
+            t("manage.clearAll"),
+            t("manage.confirmClearAll"),
+          )}
         </div>
       )}
     </>
