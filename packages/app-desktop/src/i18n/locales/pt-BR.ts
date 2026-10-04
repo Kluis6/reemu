@@ -402,6 +402,7 @@ const ptBR = {
     trayOpen: 'Abrir o ReEmu',
     trayQuit: 'Sair',
     general: 'Inicialização',
+    options: 'Opções',
     hardware: {
       title: 'Hardware',
       description: 'O computador em que o ReEmu está rodando.',

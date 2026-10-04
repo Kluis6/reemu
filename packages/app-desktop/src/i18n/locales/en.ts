@@ -401,6 +401,7 @@ const en: Messages = {
     trayOpen: 'Open ReEmu',
     trayQuit: 'Quit',
     general: 'Startup',
+    options: 'Options',
     hardware: {
       title: 'Hardware',
       description: 'The computer ReEmu is running on.',
