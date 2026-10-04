@@ -13,7 +13,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { renderShaderPreview, shaderPreviewSource, type PreviewScene } from '../lib/tauri'
-import { useTabStyles } from '../styles/xbox'
 
 /** Tamanho em que o shader é renderizado (3× a cena de 320×240, 4:3). */
 const OUT_W = 960
@@ -26,8 +25,8 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalS,
     maxWidth: '480px',
   },
-  // abas no estilo do app; 24 até a imagem (8 do `gap` + 16)
-  tabs: { alignSelf: 'flex-start', marginBottom: '16px' },
+  // 24 até a imagem (8 do `gap` + 16)
+  tabs: { alignSelf: 'flex-start', marginBottom: '16px', columnGap: '8px' },
   frame: {
     position: 'relative',
     width: '100%',
@@ -87,7 +86,6 @@ function useBlobUrl(buf: ArrayBuffer | undefined) {
 export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
   const { t } = useTranslation()
   const s = useStyles()
-  const tb = useTabStyles()
   const [scene, setScene] = useState<PreviewScene>('2d')
   const [on, setOn] = useState(true)
 
@@ -110,8 +108,11 @@ export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
 
   return (
     <div className={s.root}>
+      {/* Aparência de botão: `filled-circular` do próprio TabList do Fluent
+          (pílulas; a escolhida preenchida na cor do tema). */}
       <TabList
-        className={mergeClasses(tb.tabs, s.tabs)}
+        className={s.tabs}
+        appearance="filled-circular"
         selectedValue={scene}
         onTabSelect={(_, d) => setScene(d.value as PreviewScene)}
       >
