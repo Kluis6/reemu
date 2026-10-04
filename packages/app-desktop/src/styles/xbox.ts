@@ -1105,11 +1105,8 @@ export const useDetailStyles = makeStyles({
     fontSize: `${tokens.fontSizeBase300} !important`,
     fontWeight: `${tokens.fontWeightRegular} !important`,
   },
-  // Remover: cor de perigo no ícone. Mesmo espaçamento das outras ações
-  // (a margem extra que o separava deixava os ícones desiguais).
-  dangerBtn: {
-    color: `${tokens.colorPaletteRedForeground1} !important`,
-  },
+  // Remover: mesma cor de ícone das outras ações (pedido do usuário). O
+  // vermelho só aparece no 2º toque pendente, abaixo.
   // 2º toque pendente: botão vermelho cheio — a confirmação fica visível
   // sem depender do tooltip.
   dangerConfirm: {

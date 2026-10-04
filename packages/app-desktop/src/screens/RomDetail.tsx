@@ -390,7 +390,6 @@ export function RomDetail() {
                 className={mergeClasses(
                   s.noBorderButton,
                   s.heroActionBtn,
-                  s.dangerBtn,
                   confirmRemove && s.dangerConfirm,
                 )}
                 icon={confirmRemove ? <DeleteFilled /> : <DeleteRegular />}
