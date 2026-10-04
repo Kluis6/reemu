@@ -19,13 +19,21 @@ const useStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: "220px minmax(0, 1fr)",
     columnGap: tokens.spacingHorizontalXXXL,
-    rowGap: tokens.spacingVerticalL,
     alignItems: "start",
   },
-  title: { gridColumn: "1 / -1" },
-  nav: {
+  // Título + categorias parados enquanto só o conteúdo rola. `top: 0` já
+  // gruda em y = 116: o `paddingTop` da área de rolagem (`--reemuPageTop`)
+  // conta como borda do sticky. Antes só a lista era sticky e o título ia
+  // embora com a rolagem.
+  aside: {
     position: "sticky",
     top: 0,
+    display: "flex",
+    flexDirection: "column",
+    rowGap: tokens.spacingVerticalL,
+  },
+  title: { whiteSpace: "nowrap" },
+  nav: {
     // Abas maiores (`size="large"`) e afastadas: alvo mais fácil de acertar
     // com o controle e de ler de longe.
     rowGap: tokens.spacingVerticalS,
@@ -33,7 +41,12 @@ const useStyles = makeStyles({
     // negrito (selecionado) e centraliza o texto normal dentro dela.
     "& .fui-Tab__content": { textAlign: "left" },
   },
-  content: { minWidth: 0, maxWidth: "640px" },
+  // Começa na altura da lista (título + espaço), como antes.
+  content: {
+    minWidth: 0,
+    maxWidth: "640px",
+    marginTop: `calc(${tokens.lineHeightHero800} + ${tokens.spacingVerticalL})`,
+  },
   // Abas de lista em grade (Aparência, Cores, BIOS) usam a largura toda — 640
   // é bom pra formulário, mas deixava as colunas de cores espremidas.
   wide: { maxWidth: "none" },
@@ -66,20 +79,22 @@ export function SettingsLayout() {
 
   return (
     <div className={styles.root}>
-      <Title2 className={styles.title}>{t("settings.title")}</Title2>
-      <TabList
-        className={styles.nav}
-        vertical
-        size="large"
-        selectedValue={current}
-        onTabSelect={(_, d) => navigate(`/settings/${d.value}`)}
-      >
-        {TABS.map((tab) => (
-          <Tab key={tab.key} value={tab.key}>
-            {t(tab.label)}
-          </Tab>
-        ))}
-      </TabList>
+      <div className={styles.aside}>
+        <Title2 className={styles.title}>{t("settings.title")}</Title2>
+        <TabList
+          className={styles.nav}
+          vertical
+          size="large"
+          selectedValue={current}
+          onTabSelect={(_, d) => navigate(`/settings/${d.value}`)}
+        >
+          {TABS.map((tab) => (
+            <Tab key={tab.key} value={tab.key}>
+              {t(tab.label)}
+            </Tab>
+          ))}
+        </TabList>
+      </div>
       <div
         className={mergeClasses(
           styles.content,
