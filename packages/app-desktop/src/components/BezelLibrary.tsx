@@ -49,11 +49,13 @@ const useStyles = makeStyles({
     background: tokens.colorNeutralBackground2,
   },
   icon: { fontSize: '24px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
+  // Nome e selo "baixado" na mesma linha: o nome fica na mesma altura em
+  // todos os cards, baixados ou não.
   meta: {
     display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: '2px',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
     minWidth: 0,
     flexGrow: 1,
     overflowWrap: 'anywhere',
