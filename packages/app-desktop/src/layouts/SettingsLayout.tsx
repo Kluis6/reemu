@@ -62,7 +62,7 @@ const useStyles = makeStyles({
     // embaixo) não pode ser cortado pela borda da lista.
     padding: `${RING}px`,
     margin: `-${RING}px`,
-    // Abas no padrão do TabList do Fluent (`size="medium"`, sem estilos
+    // Abas no padrão do TabList do Fluent (`size="large"`, sem estilos
     // próprios nos itens — pedido do usuário).
     scrollbarWidth: "none",
   },
@@ -154,7 +154,7 @@ export function SettingsLayout() {
         <TabList
           className={styles.nav}
           vertical
-          size="medium"
+          size="large"
           selectedValue={current}
           onTabSelect={(_, d) => navigate(`/settings/${d.value}`)}
         >
