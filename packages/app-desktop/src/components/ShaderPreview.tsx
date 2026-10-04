@@ -26,7 +26,13 @@ const useStyles = makeStyles({
     maxWidth: '480px',
   },
   // 24 até a imagem (8 do `gap` + 16)
-  tabs: { alignSelf: 'flex-start', marginBottom: '16px', columnGap: '8px' },
+  tabs: {
+    alignSelf: 'flex-start',
+    marginBottom: '16px',
+    columnGap: '8px',
+    // raio padrão do ReEmu (4) no lugar da pílula do `filled-circular`
+    '& .fui-Tab': { borderRadius: tokens.borderRadiusMedium },
+  },
   frame: {
     position: 'relative',
     width: '100%',

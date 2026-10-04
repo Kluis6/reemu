@@ -12,6 +12,7 @@ import {
   DrawerHeaderTitle,
   OverlayDrawer,
   tokens,
+  shorthands,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -72,6 +73,10 @@ const useStyles = makeStyles({
     },
   },
   activeRow: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
+  // `outline` com borda visível (ver `ShaderCard`)
+  settingsBtn: {
+    ...shorthands.borderColor(`${tokens.colorNeutralStrokeAccessible} !important`),
+  },
   // abas no estilo do app; 24 até o conteúdo (8 do `gap` + 16)
   tabs: { alignSelf: 'flex-start', marginBottom: '16px' },
 })
@@ -270,7 +275,8 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                       </Caption1>
                       {hasParams && (
                         <Button
-                          appearance="subtle"
+                          className={st.settingsBtn}
+                          appearance="outline"
                           icon={<OptionsRegular />}
                           onClick={() => setParamsOpen(true)}
                         >

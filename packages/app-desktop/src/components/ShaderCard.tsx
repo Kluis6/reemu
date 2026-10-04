@@ -7,6 +7,7 @@ import {
   Tooltip,
   makeStyles,
   mergeClasses,
+  shorthands,
   tokens,
 } from '@fluentui/react-components'
 import { OptionsRegular } from '@fluentui/react-icons'
@@ -28,6 +29,12 @@ const useStyles = makeStyles({
   disabled: { opacity: 0.5, cursor: 'default' },
   title: { display: 'inline-flex', alignItems: 'center', gap: tokens.spacingHorizontalXS },
   desc: { color: tokens.colorNeutralForeground3 },
+  // `outline` com a borda visível sobre o fundo do card: o `Stroke1` do
+  // tema tem quase a cor do card; o `StrokeAccessible` é o token do Fluent
+  // feito pra ficar visível (contraste de 3:1).
+  settingsBtn: {
+    ...shorthands.borderColor(`${tokens.colorNeutralStrokeAccessible} !important`),
+  },
 })
 
 /**
@@ -74,7 +81,8 @@ export function ShaderCard({
           onSettings ? (
             <Tooltip content={t('video.shaderSettings')} relationship="label">
               <Button
-                appearance="subtle"
+                className={s.settingsBtn}
+                appearance="outline"
                 icon={<OptionsRegular />}
                 // o clique/tecla no botão não pode virar seleção do card
                 onClick={(e) => {
