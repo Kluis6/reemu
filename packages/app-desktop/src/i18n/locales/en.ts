@@ -417,6 +417,14 @@ const en: Messages = {
     },
   },
   video: {
+    preview: {
+      title: 'Preview',
+      hint: 'How the active shader looks on a sample scene. Drag to compare with the original image.',
+      original: 'Original',
+      shader: 'With shader',
+      compare: 'Compare original and with shader',
+      error: 'Could not render a preview of this shader.',
+    },
     curated: {
       xbr: {
         label: 'Smooth pixel art (xBR)',

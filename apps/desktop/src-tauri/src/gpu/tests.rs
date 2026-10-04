@@ -1719,3 +1719,53 @@ fn savestate_real_rom() {
     assert!(ok, "restaurar na 2ª sessão falhou");
     assert!(f > 0, "sem quadros depois de restaurar");
 }
+
+/// Preview de shader (Configurações › Vídeo): a cena de exemplo passa pela
+/// chain no tamanho pedido, e o CRT muda a imagem em relação ao "plain".
+#[test]
+fn shader_preview_renders_the_sample_scene() {
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem adapter wgpu — pulando preview de shader");
+        return;
+    };
+    let w = crate::commands::PREVIEW_W;
+    let h = crate::commands::PREVIEW_H;
+    let frame = || Frame {
+        origin: FrameOrigin::SoftwareRawBuffer {
+            data: crate::commands::sample_scene(),
+            pitch: w * 4,
+            format: SoftwarePixelFormat::Xrgb8888,
+        },
+        metadata: FrameMetadata {
+            native_width: w,
+            native_height: h,
+            aspect_ratio: w as f32 / h as f32,
+            rotation_degrees: 0,
+        },
+    };
+    // "plain" não escala: sai no tamanho nativo (a UI amplia).
+    let (pw, ph, _) = fp.render_still(&frame(), 960, 720, 4).expect("plain");
+    assert_eq!((pw, ph), (w, h));
+    // O CRT desenha no viewport pedido, e a máscara/scanline muda os pixels:
+    // compara com a cena ampliada por vizinho mais próximo.
+    fp.set_preset("crt").expect("crt");
+    let (cw, ch, crt) = fp.render_still(&frame(), 960, 720, 4).expect("crt");
+    eprintln!("crt → {cw}x{ch}");
+    assert!(cw > w && ch > h, "o CRT não usou o viewport: {cw}x{ch}");
+    let src = crate::commands::sample_scene();
+    let mut diff = 0usize;
+    for y in 0..ch {
+        for x in 0..cw {
+            let s = (((y * h / ch) * w + x * w / cw) * 4) as usize;
+            let d = ((y * cw + x) * 4) as usize;
+            // fonte em B,G,R,X; saída em R,G,B,A
+            if (src[s + 2] as i32 - crt[d] as i32).abs() > 24 {
+                diff += 1;
+            }
+        }
+    }
+    assert!(
+        diff > (cw * ch / 10) as usize,
+        "o CRT quase não mudou a imagem ({diff} px)"
+    );
+}

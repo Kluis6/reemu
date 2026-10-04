@@ -608,9 +608,8 @@ pub struct FrameProcessor {
     /// serializar. Fallback bloqueante só quando o slot ainda não mapeou.
     rb: ReadbackRing,
     frame_count: u64,
-    /// Buffer reusado do readback de `process()` (só nos testes — o app usa
-    /// `process_packed`, que escreve direto no `Vec` da resposta IPC).
-    #[cfg(test)]
+    /// Buffer reusado do readback de `process()` (testes e preview de shader
+    /// — o jogo usa `process_packed`, que escreve direto no `Vec` do IPC).
     readback_scratch: Vec<u8>,
     /// Frame de software convertido pra RGBA8 antes de subir pra GPU —
     /// reusado quadro a quadro (era um `Vec` novo por frame).
@@ -813,7 +812,6 @@ impl FrameProcessor {
             flip,
             interop_view: None,
             rb: ReadbackRing::default(),
-            #[cfg(test)]
             readback_scratch: Vec::new(),
             rgba_scratch: Vec::new(),
             frame_count: 0,
@@ -1858,12 +1856,33 @@ impl FrameProcessor {
 }
 
 impl FrameProcessor {
+    /// Preview de shader (Configurações › Vídeo): roda a chain `runs` vezes
+    /// sobre a mesma imagem parada, com a saída em `out_w`×`out_h`, e devolve
+    /// o último resultado (RGBA8). Várias passadas porque o readback tem 1
+    /// quadro de atraso e presets com histórico/feedback leem quadros
+    /// anteriores. Só pra processador sem surface (o viewport vem daqui).
+    pub fn render_still(
+        &mut self,
+        frame: &Frame,
+        out_w: u32,
+        out_h: u32,
+        runs: usize,
+    ) -> Option<(u32, u32, Vec<u8>)> {
+        self.set_canvas_viewport(out_w, out_h);
+        let mut last = None;
+        for _ in 0..runs.max(2) {
+            if let Some((w, h, px)) = self.process(frame) {
+                last = Some((w, h, px.to_vec()));
+            }
+        }
+        last
+    }
+
     /// Roda a chain e lê o resultado de volta pra CPU (RGBA8, sem cabeçalho).
     /// `None` se não há frame novo pronto ainda (readback com 1 quadro de
     /// atraso — ver o comentário de `rb`). O `&[u8]` é emprestado de
-    /// `self.readback_scratch`. Só os testes usam; o canvas usa
-    /// `process_packed`.
-    #[cfg(test)]
+    /// `self.readback_scratch`. Usado pelo `render_still` e pelos testes; o
+    /// canvas usa `process_packed`.
     pub fn process(&mut self, frame: &Frame) -> Option<(u32, u32, &[u8])> {
         let (slot, w, h, padded) = self.readback_frame(frame)?;
         {

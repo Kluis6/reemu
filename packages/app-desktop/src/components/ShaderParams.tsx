@@ -30,12 +30,15 @@ export function ShaderParams({
   romId,
   systemId,
   reloadKey,
+  onChanged,
 }: {
   scope: ShaderScope
   romId?: string
   systemId?: string
   /** muda quando o preset troca lá fora → refaz o fetch. */
   reloadKey?: string
+  /** Depois que um valor é gravado (ex.: refazer a prévia do shader). */
+  onChanged?: () => void
 }) {
   const { t } = useTranslation()
   const s = useStyles()
@@ -55,9 +58,9 @@ export function ShaderParams({
     setDirty((v) => ({ ...v, [name]: value }))
     clearTimeout(timers.current[name])
     timers.current[name] = setTimeout(() => {
-      void setShaderParam(name, value, scope, romId, systemId).catch((e) =>
-        push(errorToast(e, 'saveShaderParam')),
-      )
+      void setShaderParam(name, value, scope, romId, systemId)
+        .then(() => onChanged?.())
+        .catch((e) => push(errorToast(e, 'saveShaderParam')))
     }, 200)
   }
 
@@ -65,6 +68,7 @@ export function ShaderParams({
     void resetShaderParams(scope, romId, systemId)
       .then(() => {
         setDirty({})
+        onChanged?.()
         return q.refetch()
       })
       .catch((e) => push(errorToast(e, 'resetShaderParams')))

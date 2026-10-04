@@ -17,6 +17,7 @@ import { BezelLibrary } from '../../components/BezelLibrary'
 import { LoadingState } from '../../components/EmptyState'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
 import { ShaderParams } from '../../components/ShaderParams'
+import { ShaderPreview } from '../../components/ShaderPreview'
 import { errorToast, sysToast } from '../../lib/toast'
 import {
   clearDecorations,
@@ -46,6 +47,8 @@ export function SettingsVideo() {
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const [tab, setTab] = useState<VideoTab>('shaders')
+  // muda a cada parâmetro gravado → refaz a prévia do shader
+  const [paramsRev, setParamsRev] = useState(0)
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['shader-info'],
@@ -203,6 +206,10 @@ export function SettingsVideo() {
           </TabList>
 
           {tab === 'shaders' && (
+            <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
+          )}
+
+          {tab === 'shaders' && (
             // `auto-fit`/`minmax`: 2 colunas quando cabe, 1 coluna sozinha
             // quando a janela é estreita — responsivo sem media query.
             <div
@@ -239,7 +246,11 @@ export function SettingsVideo() {
                     {t('video.active')} <Text as="strong" weight="semibold">{data.active}</Text>
                   </Caption1>
                 )}
-                <ShaderParams scope="default" reloadKey={data.active} />
+                <ShaderParams
+                  scope="default"
+                  reloadKey={data.active}
+                  onChanged={() => setParamsRev((n) => n + 1)}
+                />
               </div>
             </div>
           )}

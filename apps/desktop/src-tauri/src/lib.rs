@@ -302,6 +302,8 @@ pub fn run() {
             updates::update_install,
             system::get_system_settings,
             commands::get_hardware_info,
+            commands::shader_preview_source,
+            commands::render_shader_preview,
             system::set_autostart,
             system::set_start_fullscreen,
             system::set_minimize_to_tray,

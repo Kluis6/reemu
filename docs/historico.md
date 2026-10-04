@@ -1780,3 +1780,9 @@ Infra:
 - **Causa:** o PPSSPP do usuário está com `ppsspp_backend = vulkan`, mas o core não estava em `VK_CAPABLE_CORES`. A validação de 2026-10-02 foi com `REEMU_HW=vulkan` (forçado); sem a variável, o `route_local_device` mandava o core pro processo filho, que ainda não faz Vulkan (C3), e o core quebrava no `retro_load_game`.
 - **Correção:** `("ppsspp", Some(("ppsspp_backend", "vulkan")))` em `VK_CAPABLE_CORES` (`crates/emu-session/src/session.rs`): com o backend Vulkan ele vai pra rota in-process, a mesma validada em 2026-10-02 (60 quadros/s, saves ok); em `auto`/`opengl` segue no filho. Teste em `vk_route_tests`.
 - **Em aberto:** se a rota in-process não estiver disponível (sem device Vulkan publicado), o PPSSPP com backend Vulkan ainda vai pro filho e cai do mesmo jeito.
+
+## 2026-10-03 — Prévia do shader em Configurações › Vídeo
+
+- **O que é:** na aba Shaders, uma cena de exemplo (pixel art 320×240 gerada pelo próprio app em `commands/shader_preview.rs`: céu em faixas, sol, montanhas, tijolos, o robô do avatar e um baú — arte original, sem material de terceiros) aparece com o preset ativo e os mesmos parâmetros, num comparador "original / com shader" com slider. Atualiza ao trocar de preset ou mexer num parâmetro.
+- **Como:** `render_shader_preview` usa um `FrameProcessor` só do preview (`AppState.shader_preview`, criado na 1ª vez), sem surface, então o viewport vem do pedido (960×720) e o processador do jogo não troca de preset nem de viewport. `FrameProcessor::render_still` roda a chain 4 vezes sobre a imagem parada (o readback tem 1 quadro de atraso e presets com histórico leem quadros anteriores) e o resultado vai como PNG.
+- **Validado:** teste `shader_preview_renders_the_sample_scene` na RTX 3060 (o "plain" sai no tamanho nativo, o CRT em 960×720 e muda mais de 10% dos pixels); imagens conferidas a olho (scanlines, máscara e brilho do CRT).

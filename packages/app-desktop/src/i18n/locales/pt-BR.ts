@@ -418,6 +418,14 @@ const ptBR = {
     },
   },
   video: {
+    preview: {
+      title: 'Prévia',
+      hint: 'Como o shader ativo fica numa cena de exemplo. Arraste para comparar com a imagem original.',
+      original: 'Original',
+      shader: 'Com shader',
+      compare: 'Comparar original e com shader',
+      error: 'Não foi possível gerar a prévia deste shader.',
+    },
     curated: {
       xbr: {
         label: 'Suavizar pixel art (xBR)',

@@ -57,6 +57,9 @@ pub struct AppState {
     /// Contexto GPU pro processamento de frame (etapa 04). `None` = sem
     /// adapter wgpu; `poll_frame` cai no caminho CPU (`to_rgba8`).
     pub gpu: Mutex<Option<crate::gpu::FrameProcessor>>,
+    /// Processador GPU só do preview de shader (Configurações › Vídeo),
+    /// criado na 1ª vez: não mexe no preset nem no viewport do jogo.
+    pub shader_preview: Mutex<Option<crate::gpu::FrameProcessor>>,
     /// Progresso da leva de scraping de metadata (etapa 09).
     pub scrape: Arc<crate::scraping::ScrapeProgress>,
     /// Flag de cancelamento da leva de scraping.
@@ -163,6 +166,7 @@ impl AppState {
             current_rom: Mutex::new(None),
             play_clock: Mutex::new(Default::default()),
             gpu: Mutex::new(None),
+            shader_preview: Mutex::new(None),
             scrape: Arc::new(crate::scraping::ScrapeProgress::default()),
             scrape_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_frame: Mutex::new(None),
@@ -372,6 +376,7 @@ fn pool(state: &AppState) -> Result<db::Db, String> {
 mod bios;
 mod cores;
 mod game;
+mod shader_preview;
 mod hardware;
 mod input;
 mod library;
@@ -383,6 +388,7 @@ mod shaders;
 pub use bios::*;
 pub use cores::*;
 pub use game::*;
+pub use shader_preview::*;
 pub use hardware::*;
 pub use input::*;
 pub use library::*;

@@ -417,6 +417,14 @@ const es: Messages = {
     },
   },
   video: {
+    preview: {
+      title: 'Vista previa',
+      hint: 'Cómo se ve el shader activo en una escena de ejemplo. Arrastra para comparar con la imagen original.',
+      original: 'Original',
+      shader: 'Con shader',
+      compare: 'Comparar original y con shader',
+      error: 'No se pudo generar la vista previa de este shader.',
+    },
     curated: {
       xbr: {
         label: 'Suavizar pixel art (xBR)',

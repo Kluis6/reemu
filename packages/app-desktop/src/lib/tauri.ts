@@ -82,6 +82,12 @@ export interface HardwareInfo {
   gpuDriver: string | null
 }
 export const getHardwareInfo = () => invoke<HardwareInfo>('get_hardware_info')
+
+/** Prévia de shader (Configurações › Vídeo): a cena de exemplo sem shader
+ *  (PNG 320×240) e com o preset ativo, renderizada em `width`×`height`. */
+export const shaderPreviewSource = () => invoke<ArrayBuffer>('shader_preview_source')
+export const renderShaderPreview = (width: number, height: number) =>
+  invoke<ArrayBuffer>('render_shader_preview', { width, height })
 export const setAutostart = (enabled: boolean) => invoke<void>('set_autostart', { enabled })
 export const setStartFullscreen = (enabled: boolean) =>
   invoke<void>('set_start_fullscreen', { enabled })
