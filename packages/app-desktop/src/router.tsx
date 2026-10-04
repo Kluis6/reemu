@@ -54,6 +54,8 @@ export const router = createHashRouter([
                   { path: 'biblioteca', element: <SettingsLibrary /> },
                   { path: 'audio', element: <SettingsAudio /> },
                   { path: 'video', element: <SettingsVideo /> },
+                  { path: 'video/shaders', element: <SettingsVideo section="shaders" /> },
+                  { path: 'video/molduras', element: <SettingsVideo section="molduras" /> },
                   { path: 'metadata', element: <SettingsMetadata /> },
                   { path: 'hotkeys', element: <SettingsHotkeys /> },
                   { path: 'controllers', element: <SettingsControllers /> },

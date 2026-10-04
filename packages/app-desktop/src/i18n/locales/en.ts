@@ -487,6 +487,8 @@ const en: Messages = {
     gpuHint: 'Default shader for all games. Each game can have its own shader on its detail page.',
     noGpu: 'No GPU available — shaders have no effect on this machine.',
     tabShaders: 'Shaders',
+    shadersDesc: 'Default shader for all games, preview and parameters',
+    bezelsDesc: 'Download or import bezels per system',
     tabBezels: 'Bezels',
     externalPreset: 'External preset — a .slangp file of your own. Most work well; some glow effects may look slightly different.',
     active: 'Active:',

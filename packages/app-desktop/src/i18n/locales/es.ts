@@ -487,6 +487,8 @@ const es: Messages = {
     gpuHint: 'Shader predeterminado para todos los juegos. Cada juego puede tener su propio shader en su pantalla de detalle.',
     noGpu: 'No hay GPU disponible — los shaders no tienen efecto en este equipo.',
     tabShaders: 'Shaders',
+    shadersDesc: 'Shader predeterminado de todos los juegos, vista previa y parámetros',
+    bezelsDesc: 'Descargar o importar marcos por sistema',
     tabBezels: 'Marcos',
     externalPreset: 'Preset externo — un archivo .slangp propio. La mayoría funciona bien; algunos efectos de brillo pueden verse un poco distintos.',
     active: 'Activo:',

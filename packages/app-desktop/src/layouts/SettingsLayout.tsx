@@ -143,12 +143,15 @@ export function SettingsLayout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const current =
-    TABS.find((tab) => pathname.endsWith(`/${tab.key}`))?.key ?? "audio";
-  // Categoria nova começa do topo (a área que rola é a mesma entre elas).
+    // 1º trecho depois de /settings (subseções como video/shaders contam
+    // como a categoria "video")
+    TABS.find((tab) => pathname.split("/")[2] === tab.key)?.key ?? "audio";
+  // Página nova (categoria ou subseção) começa do topo — a área que rola é
+  // a mesma entre elas.
   const paneRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (paneRef.current) paneRef.current.scrollTop = 0;
-  }, [current]);
+  }, [pathname]);
 
   return (
     <div className={styles.root}>
@@ -175,7 +178,7 @@ export function SettingsLayout() {
             WIDE_TABS.has(current) && styles.wide,
           )}
         >
-          <RouteTransition routeKey={current}>
+          <RouteTransition routeKey={pathname}>
             <Outlet />
           </RouteTransition>
         </div>

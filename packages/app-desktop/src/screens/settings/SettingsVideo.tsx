@@ -4,9 +4,8 @@ import {
   Caption1,
   Radio,
   RadioGroup,
-  Tab,
-  TabList,
   Text,
+  makeStyles,
 } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -27,23 +26,31 @@ import {
 import { useToastStore } from '../../stores/useToastStore'
 import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
-import { useTabStyles } from '../../styles/xbox'
+import { SettingsBreadcrumb, SettingsLinkList } from '../../components/SettingsNav'
+import { FrameRegular, SparkleRegular } from '@fluentui/react-icons'
 
 // Presets embutidos com nome/descrição traduzidos (`video.presets.<id>`).
 const BUILTIN = ['plain', 'crt', 'lcd'] as const
 type Builtin = (typeof BUILTIN)[number]
 const isBuiltin = (n: string): n is Builtin => (BUILTIN as readonly string[]).includes(n)
 
-type VideoTab = 'shaders' | 'molduras'
+const useStyles = makeStyles({ crumb: { marginBottom: '10px' } })
 
-export function SettingsVideo() {
+type VideoSection = 'shaders' | 'molduras'
+
+/**
+ * Configurações › Vídeo. Como nas Configurações do Windows: sem `section`
+ * é a página da categoria, com um card por subseção; `shaders` e
+ * `molduras` são as subseções (rotas `video/shaders` e `video/molduras`),
+ * com o caminho "Vídeo › …" no topo.
+ */
+export function SettingsVideo({ section }: { section?: VideoSection }) {
   const { t } = useTranslation()
   const presetTitle = (n: string) => (isBuiltin(n) ? t(`video.presets.${n}.title`) : n)
   const presetDesc = (n: string) => (isBuiltin(n) ? t(`video.presets.${n}.desc`) : '')
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
-  const tb = useTabStyles()
-  const [tab, setTab] = useState<VideoTab>('shaders')
+  const crumbGap = useStyles().crumb
   // muda a cada parâmetro gravado → refaz a prévia do shader
   const [paramsRev, setParamsRev] = useState(0)
 
@@ -77,6 +84,26 @@ export function SettingsVideo() {
     onSuccess: () => push(sysToast(t('video.bezelsRemoved'), 'Success')),
     onError: (e) => push(errorToast(e, 'clearBezels')),
   })
+
+  if (!section)
+    return (
+      <SettingsLinkList
+        items={[
+          {
+            to: 'shaders',
+            icon: <SparkleRegular />,
+            title: t('video.tabShaders'),
+            description: t('video.shadersDesc'),
+          },
+          {
+            to: 'molduras',
+            icon: <FrameRegular />,
+            title: t('video.tabBezels'),
+            description: t('video.bezelsDesc'),
+          },
+        ]}
+      />
+    )
 
   if (isLoading) return <LoadingState />
   if (isError || !data) return <Body1>{t('video.unavailable')}</Body1>
@@ -139,35 +166,29 @@ export function SettingsVideo() {
         gap: 14,
         // Molduras: cards na largura útil inteira; Shaders: 2 colunas até
         // 860; sem GPU fica no limite estreito de antes.
-        maxWidth: !data.gpu ? 460 : tab === 'molduras' ? 'none' : 860,
+        maxWidth: !data.gpu ? 460 : section === 'molduras' ? 'none' : 860,
       }}
     >
-      <Caption1>
-        {data.gpu
-          ? t('video.gpuHint')
-          : t('video.noGpu')}
-      </Caption1>
+      {/* 24 até o conteúdo: 14 do `gap` + 10 */}
+      <SettingsBreadcrumb
+        className={crumbGap}
+        parent={t('settings.tabs.video')}
+        parentTo="/settings/video"
+        current={section === 'shaders' ? t('video.tabShaders') : t('video.tabBezels')}
+      />
+      {section === 'shaders' && (
+        <Caption1>{data.gpu ? t('video.gpuHint') : t('video.noGpu')}</Caption1>
+      )}
 
-      {!data.gpu && presetPicker}
+      {!data.gpu && section === 'shaders' && presetPicker}
 
       {data.gpu && (
         <>
-          <TabList
-            // abas no estilo do app; 24 até o conteúdo (14 do `gap` + 10)
-            className={tb.tabs}
-            style={{ alignSelf: 'flex-start', marginBottom: 10 }}
-            selectedValue={tab}
-            onTabSelect={(_, d) => setTab(d.value as VideoTab)}
-          >
-            <Tab value="shaders">{t('video.tabShaders')}</Tab>
-            <Tab value="molduras">{t('video.tabBezels')}</Tab>
-          </TabList>
-
-          {tab === 'shaders' && (
+          {section === 'shaders' && (
             <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
           )}
 
-          {tab === 'shaders' && (
+          {section === 'shaders' && (
             // `auto-fit`/`minmax`: 2 colunas quando cabe, 1 coluna sozinha
             // quando a janela é estreita — responsivo sem media query.
             <div
@@ -213,7 +234,7 @@ export function SettingsVideo() {
             </div>
           )}
 
-          {tab === 'molduras' && (
+          {section === 'molduras' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <Caption1>{t('video.bezelsHint')}</Caption1>
               <BezelLibrary />

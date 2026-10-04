@@ -488,6 +488,8 @@ const ptBR = {
     gpuHint: 'Shader padrão pra todos os jogos. Cada jogo pode ter um shader próprio na tela de detalhe.',
     noGpu: 'Sem GPU disponível — shaders não têm efeito nesta máquina.',
     tabShaders: 'Shaders',
+    shadersDesc: 'Shader padrão de todos os jogos, prévia e parâmetros',
+    bezelsDesc: 'Baixar ou importar molduras por sistema',
     tabBezels: 'Molduras',
     externalPreset: 'Preset externo — um arquivo .slangp seu. A maioria funciona bem; alguns efeitos de brilho podem ficar um pouco diferentes.',
     active: 'Ativo:',
