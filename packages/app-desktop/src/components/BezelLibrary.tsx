@@ -1,6 +1,8 @@
 import {
+  Badge,
   Body1,
   Button,
+  Text,
   Caption1,
   Spinner,
   makeStyles,
@@ -9,7 +11,8 @@ import {
 import {
   ArrowDownloadRegular,
   ArrowSyncRegular,
-  CheckmarkCircleRegular,
+  CheckmarkCircleFilled,
+  FrameRegular,
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef } from 'react'
@@ -25,25 +28,37 @@ import { errorPatch } from '../lib/toast'
 import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
+  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
   // crédito das molduras baixadas (The Bezel Project), em texto secundário
   credits: { color: tokens.colorNeutralForeground3 },
+  // Cards em 2 colunas, como a lista de cores (uma só em janela estreita).
+  // Sem rolagem própria: a área das Configurações já rola.
   list: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalXXS,
-    maxHeight: '300px',
-    overflowY: 'auto',
-    paddingRight: tokens.spacingHorizontalXS,
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gap: tokens.spacingVerticalM,
+    '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
+  // ícone | sistema e status (cresce) | botão — mesmo card da lista de cores
   row: {
     display: 'flex',
     alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalM,
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    borderRadius: tokens.borderRadiusMedium,
+    background: tokens.colorNeutralBackground2,
   },
-  name: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalXS },
-  done: { color: tokens.colorPaletteGreenForeground1 },
+  icon: { fontSize: '24px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
+  meta: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: '2px',
+    minWidth: 0,
+    flexGrow: 1,
+    overflowWrap: 'anywhere',
+  },
+  action: { flexShrink: 0 },
 })
 
 const mb = (n: number) => (n / 1048576).toFixed(0)
@@ -130,13 +145,21 @@ export function BezelLibrary() {
       <div className={s.list}>
         {rows.map((c) => (
           <div key={c.systemId} className={s.row}>
-            <span className={s.name}>
+            <FrameRegular className={s.icon} />
+            <span className={s.meta}>
+              <Body1>
+                <Text as="strong" weight="semibold">
+                  {platformLabel(c.systemId)}
+                </Text>
+              </Body1>
               {c.installed && (
-                <CheckmarkCircleRegular className={s.done} aria-label={t('bezels.downloaded')} />
+                <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
+                  {t('bezels.downloaded')}
+                </Badge>
               )}
-              <Body1>{platformLabel(c.systemId)}</Body1>
             </span>
             <Button
+              className={s.action}
               appearance={c.installed ? 'subtle' : 'secondary'}
               icon={
                 dl.isPending && dl.variables === c.systemId ? (

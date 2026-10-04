@@ -155,9 +155,9 @@ export function SettingsVideo() {
         display: 'flex',
         flexDirection: 'column',
         gap: 14,
-        // A aba Shaders precisa de mais largura pras 2 colunas — o resto
-        // (sem GPU / Molduras) fica no mesmo limite estreito de antes.
-        maxWidth: data.gpu && tab === 'shaders' ? 860 : 460,
+        // Shaders e Molduras usam 2 colunas e precisam de mais largura; sem
+        // GPU fica no limite estreito de antes.
+        maxWidth: data.gpu ? 860 : 460,
       }}
     >
       {/* Explicação num tooltip no "?" ao lado do toggle — abre no hover e
