@@ -1418,11 +1418,23 @@ export const useTabStyles = makeStyles({
   // fica com o fundo destacado, além do indicador à esquerda.
   vtabs: {
     ...TAB_STATES,
-    // Anel mais rente que nas abas horizontais (5): na lista os itens ficam
-    // empilhados e o anel afastado encostava no vizinho.
+    // Foco só com o anel (sem mudar o fundo) e mais rente que nas abas
+    // horizontais (5): na lista os itens ficam empilhados e o anel afastado
+    // encostava no vizinho.
     "& .fui-Tab:focus": {
       ...TAB_STATES["& .fui-Tab:focus"],
+      backgroundColor: "transparent !important",
       outlineOffset: "2px !important",
+    },
+    // O item escolhido com foco continua igual (fundo destacado, texto e
+    // indicador normais) — sem o preenchimento na cor primária das abas.
+    '& .fui-Tab[aria-selected="true"]:focus': {
+      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
+    },
+    '& .fui-Tab[aria-selected="true"]:focus .fui-Tab__content, & .fui-Tab[aria-selected="true"]:focus .fui-Tab__icon':
+      { color: "inherit !important" },
+    '& .fui-Tab[aria-selected="true"]:focus::after': {
+      backgroundColor: tokens.colorCompoundBrandStroke,
     },
     '& .fui-Tab[aria-selected="true"]': {
       backgroundColor: tokens.colorNeutralBackground4,
