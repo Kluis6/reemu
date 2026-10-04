@@ -43,6 +43,13 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalM,
     '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
+  // Catálogo: quantas colunas couberem na largura disponível, cada uma com
+  // pelo menos 300 (nome + selo OpenGL/Vulkan + sistemas + botão sem
+  // apertar). Acompanha a janela e o tamanho da interface.
+  catalogList: {
+    gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+    '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
+  },
   // mensagem de lista vazia ocupa a linha inteira do grid
   fullRow: { gridColumn: '1 / -1' },
   // ícone | nome e sistema (cresce) | botão
@@ -168,13 +175,14 @@ function Catalog() {
           placeholder={t('cores.filter')}
           value={filter}
           onChange={(_, d) => setFilter(d.value)}
-          style={{ flex: 1 }}
+          // metade da linha (antes ocupava tudo até a contagem)
+          style={{ flex: '0 1 50%', minWidth: 0 }}
         />
         <Caption1>
           {t('cores.count', { shown: sorted.length, total: catalog.data?.length ?? 0 })}
         </Caption1>
       </div>
-      <div className={styles.list}>
+      <div className={mergeClasses(styles.list, styles.catalogList)}>
         {sorted.length === 0 && <Caption1 className={styles.fullRow}>{t('cores.noneFound')}</Caption1>}
         {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
