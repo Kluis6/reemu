@@ -1391,14 +1391,19 @@ const TAB_STATES = {
  *  Configurações. Mesmos estados (`TAB_STATES`). */
 export const useTabStyles = makeStyles({
   tabs: {
+    ...TAB_STATES,
     columnGap: "8px",
     "& .fui-Tab": {
+      ...TAB_STATES["& .fui-Tab"],
       paddingTop: "11px",
       paddingBottom: "11px",
       paddingLeft: "13px",
       paddingRight: "13px",
     },
-    "& .fui-Tab__content": { fontWeight: tokens.fontWeightSemibold },
+    "& .fui-Tab__content": {
+      ...TAB_STATES["& .fui-Tab__content"],
+      fontWeight: tokens.fontWeightSemibold,
+    },
     "& .fui-Tab::after": {
       left: "3px",
       right: "3px",
@@ -1408,14 +1413,13 @@ export const useTabStyles = makeStyles({
     '& .fui-Tab[aria-selected="true"]::after': {
       backgroundColor: tokens.colorNeutralForeground1,
     },
-    ...TAB_STATES,
   },
   // Lista vertical (como a das Configurações do Windows): o item escolhido
   // fica com o fundo destacado, além do indicador à esquerda.
   vtabs: {
+    ...TAB_STATES,
     '& .fui-Tab[aria-selected="true"]': {
       backgroundColor: tokens.colorNeutralBackground4,
     },
-    ...TAB_STATES,
   },
 });
