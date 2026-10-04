@@ -319,7 +319,6 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                         presetPicker
                       ) : (
                         <>
-                          <Caption1>{t('video.externalPreset')}</Caption1>
                           <ShaderLibrary
                             onPick={(p) => pick.mutate(p)}
                             activePath={data.active}

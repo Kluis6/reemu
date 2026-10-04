@@ -495,7 +495,6 @@ const ptBR = {
     shadersDesc: 'Shader padrão de todos os jogos, prévia e parâmetros',
     bezelsDesc: 'Baixar ou importar molduras por sistema',
     tabBezels: 'Molduras',
-    externalPreset: 'Preset externo — um arquivo .slangp seu. A maioria funciona bem; alguns efeitos de brilho podem ficar um pouco diferentes.',
     active: 'Ativo:',
     bezelsHint: 'Baixe molduras por sistema direto do The Bezel Project, ou importe sua própria pasta (formato Bezel Project).',
     importBezels: 'Importar pasta de bezels…',

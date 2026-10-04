@@ -494,7 +494,6 @@ const es: Messages = {
     shadersDesc: 'Shader predeterminado de todos los juegos, vista previa y parámetros',
     bezelsDesc: 'Descargar o importar marcos por sistema',
     tabBezels: 'Marcos',
-    externalPreset: 'Preset externo — un archivo .slangp propio. La mayoría funciona bien; algunos efectos de brillo pueden verse un poco distintos.',
     active: 'Activo:',
     bezelsHint: 'Descarga marcos por sistema directamente de The Bezel Project, o importa tu propia carpeta (formato Bezel Project).',
     importBezels: 'Importar carpeta de marcos…',

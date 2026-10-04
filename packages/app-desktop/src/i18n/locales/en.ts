@@ -494,7 +494,6 @@ const en: Messages = {
     shadersDesc: 'Default shader for all games, preview and parameters',
     bezelsDesc: 'Download or import bezels per system',
     tabBezels: 'Bezels',
-    externalPreset: 'External preset — a .slangp file of your own. Most work well; some glow effects may look slightly different.',
     active: 'Active:',
     bezelsHint: 'Download bezels per system straight from The Bezel Project, or import your own folder (Bezel Project format).',
     importBezels: 'Import bezels folder…',
