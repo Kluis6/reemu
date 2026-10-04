@@ -419,10 +419,14 @@ const en: Messages = {
   video: {
     preview: {
       title: 'Preview',
-      hint: 'How the active shader looks on a sample scene. Drag to compare with the original image.',
+      hint: 'How the active shader looks on a sample scene. Use the button on the image to compare with and without the shader.',
       original: 'Original',
       shader: 'With shader',
-      compare: 'Compare original and with shader',
+      on: 'Shader on',
+      off: 'Shader off',
+      toggle: 'Turn the shader on or off in the preview',
+      scene2d: '2D scene',
+      scene3d: '3D scene',
       error: 'Could not render a preview of this shader.',
     },
     curated: {

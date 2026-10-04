@@ -419,10 +419,14 @@ const es: Messages = {
   video: {
     preview: {
       title: 'Vista previa',
-      hint: 'Cómo se ve el shader activo en una escena de ejemplo. Arrastra para comparar con la imagen original.',
+      hint: 'Cómo se ve el shader activo en una escena de ejemplo. Usa el botón sobre la imagen para comparar con y sin el shader.',
       original: 'Original',
       shader: 'Con shader',
-      compare: 'Comparar original y con shader',
+      on: 'Shader activado',
+      off: 'Shader desactivado',
+      toggle: 'Activar o desactivar el shader en la vista previa',
+      scene2d: 'Escena 2D',
+      scene3d: 'Escena 3D',
       error: 'No se pudo generar la vista previa de este shader.',
     },
     curated: {

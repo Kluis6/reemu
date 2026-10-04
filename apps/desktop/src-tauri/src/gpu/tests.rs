@@ -1768,4 +1768,23 @@ fn shader_preview_renders_the_sample_scene() {
         diff > (cw * ch / 10) as usize,
         "o CRT quase não mudou a imagem ({diff} px)"
     );
+
+    // A cena 3D também passa pela chain no tamanho pedido.
+    let scene3d = crate::commands::sample_scene_3d();
+    assert_eq!(scene3d.len(), (w * h * 4) as usize);
+    let frame3d = Frame {
+        origin: FrameOrigin::SoftwareRawBuffer {
+            data: scene3d,
+            pitch: w * 4,
+            format: SoftwarePixelFormat::Xrgb8888,
+        },
+        metadata: FrameMetadata {
+            native_width: w,
+            native_height: h,
+            aspect_ratio: w as f32 / h as f32,
+            rotation_degrees: 0,
+        },
+    };
+    let (w3, h3, _) = fp.render_still(&frame3d, 960, 720, 4).expect("crt 3d");
+    assert_eq!((w3, h3), (960, 720));
 }

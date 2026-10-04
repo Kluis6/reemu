@@ -190,10 +190,20 @@ pub fn sample_scene() -> Vec<u8> {
     out
 }
 
-fn scene_frame() -> Frame {
+/// Cena escolhida na prévia: `"3d"` = paisagem 3D (`shader_preview_3d`);
+/// qualquer outra coisa = a cena 2D de pixel art.
+fn scene_pixels(scene: &str) -> Vec<u8> {
+    if scene == "3d" {
+        super::sample_scene_3d()
+    } else {
+        sample_scene()
+    }
+}
+
+fn scene_frame(scene: &str) -> Frame {
     Frame {
         origin: FrameOrigin::SoftwareRawBuffer {
-            data: sample_scene(),
+            data: scene_pixels(scene),
             pitch: PREVIEW_W * 4,
             format: SoftwarePixelFormat::Xrgb8888,
         },
@@ -219,8 +229,8 @@ fn encode_png(w: u32, h: u32, rgba: &[u8]) -> Result<Vec<u8>, String> {
 
 /// A cena original, sem shader (320×240, PNG) — o "antes" do comparador.
 #[tauri::command]
-pub fn shader_preview_source() -> Result<tauri::ipc::Response, String> {
-    let bgrx = sample_scene();
+pub fn shader_preview_source(scene: String) -> Result<tauri::ipc::Response, String> {
+    let bgrx = scene_pixels(&scene);
     let mut rgba = Vec::with_capacity(bgrx.len());
     for p in bgrx.chunks_exact(4) {
         rgba.extend_from_slice(&[p[2], p[1], p[0], 0xFF]);
@@ -236,6 +246,7 @@ pub async fn render_shader_preview(
     state: State<'_, AppState>,
     width: u32,
     height: u32,
+    scene: String,
 ) -> Result<tauri::ipc::Response, String> {
     let (source, params) = {
         let guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
@@ -263,7 +274,7 @@ pub async fn render_shader_preview(
         fp.set_shader_param(name, *value);
     }
     let (w, h, rgba) = fp
-        .render_still(&scene_frame(), width.clamp(64, 2048), height.clamp(48, 2048), 4)
+        .render_still(&scene_frame(&scene), width.clamp(64, 2048), height.clamp(48, 2048), 4)
         .ok_or("shader: o preview não gerou imagem")?;
     encode_png(w, h, &rgba).map(tauri::ipc::Response::new)
 }

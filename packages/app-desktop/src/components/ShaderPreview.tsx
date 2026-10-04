@@ -1,8 +1,19 @@
-import { Caption1, Slider, Spinner, makeStyles, tokens } from '@fluentui/react-components'
+import {
+  Caption1,
+  Spinner,
+  Tab,
+  TabList,
+  ToggleButton,
+  makeStyles,
+  mergeClasses,
+  tokens,
+} from '@fluentui/react-components'
+import { EyeOffRegular, EyeRegular } from '@fluentui/react-icons'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { renderShaderPreview, shaderPreviewSource } from '../lib/tauri'
+import { renderShaderPreview, shaderPreviewSource, type PreviewScene } from '../lib/tauri'
+import { useTabStyles } from '../styles/xbox'
 
 /** Tamanho em que o shader é renderizado (3× a cena de 320×240, 4:3). */
 const OUT_W = 960
@@ -15,6 +26,8 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalS,
     maxWidth: '480px',
   },
+  // abas no estilo do app; 24 até a imagem (8 do `gap` + 16)
+  tabs: { alignSelf: 'flex-start', marginBottom: '16px' },
   frame: {
     position: 'relative',
     width: '100%',
@@ -33,25 +46,16 @@ const useStyles = makeStyles({
     imageRendering: 'pixelated',
     userSelect: 'none',
   },
-  divider: {
+  // Botão sobre a imagem, no canto de baixo: liga/desliga o shader já
+  // carregado (troca entre as duas imagens, sem renderizar de novo).
+  toggle: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: '2px',
-    marginLeft: '-1px',
-    backgroundColor: '#fff',
-    boxShadow: '0 0 4px rgba(0, 0, 0, 0.6)',
-    pointerEvents: 'none',
+    right: tokens.spacingHorizontalS,
+    bottom: tokens.spacingVerticalS,
   },
-  tag: {
-    position: 'absolute',
-    top: tokens.spacingVerticalS,
-    paddingLeft: tokens.spacingHorizontalS,
-    paddingRight: tokens.spacingHorizontalS,
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    color: '#fff',
-    pointerEvents: 'none',
+  toggleOff: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6) !important',
+    color: '#fff !important',
   },
   busy: {
     position: 'absolute',
@@ -75,65 +79,70 @@ function useBlobUrl(buf: ArrayBuffer | undefined) {
 }
 
 /**
- * Prévia do shader ativo numa cena de exemplo (pixel art gerada pelo app),
- * com comparador "antes / depois": o slider move a divisão entre a cena
- * original (à esquerda) e a com shader (à direita). Renderizada na GPU pelo
- * mesmo código do jogo (`render_shader_preview`), com os mesmos parâmetros.
+ * Prévia do shader ativo numa cena de exemplo gerada pelo app (2D em pixel
+ * art ou 3D no jeito de PS1/N64). O botão sobre a imagem liga e desliga o
+ * shader já carregado. Renderizada na GPU pelo mesmo código do jogo
+ * (`render_shader_preview`), com os mesmos parâmetros.
  */
 export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
   const { t } = useTranslation()
   const s = useStyles()
-  const [split, setSplit] = useState(50)
+  const tb = useTabStyles()
+  const [scene, setScene] = useState<PreviewScene>('2d')
+  const [on, setOn] = useState(true)
 
   const source = useQuery({
-    queryKey: ['shader-preview-source'],
-    queryFn: shaderPreviewSource,
+    queryKey: ['shader-preview-source', scene],
+    queryFn: () => shaderPreviewSource(scene),
     staleTime: Infinity,
     retry: false,
   })
   const preview = useQuery({
-    queryKey: ['shader-preview', reloadKey],
-    queryFn: () => renderShaderPreview(OUT_W, OUT_H),
+    queryKey: ['shader-preview', scene, reloadKey],
+    queryFn: () => renderShaderPreview(OUT_W, OUT_H, scene),
     retry: false,
     // mantém a imagem anterior na tela enquanto a nova é gerada
     placeholderData: (prev) => prev,
   })
   const before = useBlobUrl(source.data)
   const after = useBlobUrl(preview.data)
+  const shown = on ? after : before
 
   return (
     <div className={s.root}>
+      <TabList
+        className={mergeClasses(tb.tabs, s.tabs)}
+        selectedValue={scene}
+        onTabSelect={(_, d) => setScene(d.value as PreviewScene)}
+      >
+        <Tab value="2d">{t('video.preview.scene2d')}</Tab>
+        <Tab value="3d">{t('video.preview.scene3d')}</Tab>
+      </TabList>
       <div className={s.frame}>
-        {after && <img className={s.img} src={after} alt={t('video.preview.shader')} draggable={false} />}
-        {before && (
+        {shown && (
           <img
             className={s.img}
-            src={before}
-            alt={t('video.preview.original')}
+            src={shown}
+            alt={on ? t('video.preview.shader') : t('video.preview.original')}
             draggable={false}
-            style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}
           />
         )}
-        <div className={s.divider} style={{ left: `${split}%` }} />
-        <Caption1 className={s.tag} style={{ left: tokens.spacingHorizontalS }}>
-          {t('video.preview.original')}
-        </Caption1>
-        <Caption1 className={s.tag} style={{ right: tokens.spacingHorizontalS }}>
-          {t('video.preview.shader')}
-        </Caption1>
-        {preview.isFetching && (
+        {on && preview.isFetching && (
           <div className={s.busy}>
             <Spinner size="small" />
           </div>
         )}
+        <ToggleButton
+          className={mergeClasses(s.toggle, !on && s.toggleOff)}
+          checked={on}
+          appearance={on ? 'primary' : 'secondary'}
+          icon={on ? <EyeRegular /> : <EyeOffRegular />}
+          aria-label={t('video.preview.toggle')}
+          onClick={() => setOn((v) => !v)}
+        >
+          {on ? t('video.preview.on') : t('video.preview.off')}
+        </ToggleButton>
       </div>
-      <Slider
-        min={0}
-        max={100}
-        value={split}
-        onChange={(_, d) => setSplit(d.value)}
-        aria-label={t('video.preview.compare')}
-      />
       <Caption1>
         {preview.isError ? t('video.preview.error') : t('video.preview.hint')}
       </Caption1>

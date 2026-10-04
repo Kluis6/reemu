@@ -420,10 +420,14 @@ const ptBR = {
   video: {
     preview: {
       title: 'Prévia',
-      hint: 'Como o shader ativo fica numa cena de exemplo. Arraste para comparar com a imagem original.',
+      hint: 'Como o shader ativo fica numa cena de exemplo. Use o botão sobre a imagem para comparar com e sem o shader.',
       original: 'Original',
       shader: 'Com shader',
-      compare: 'Comparar original e com shader',
+      on: 'Shader ligado',
+      off: 'Shader desligado',
+      toggle: 'Ligar ou desligar o shader na prévia',
+      scene2d: 'Cena 2D',
+      scene3d: 'Cena 3D',
       error: 'Não foi possível gerar a prévia deste shader.',
     },
     curated: {
