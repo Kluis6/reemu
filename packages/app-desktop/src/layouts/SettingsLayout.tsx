@@ -24,7 +24,6 @@ import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { RouteTransition } from "../components/RouteTransition";
 import * as M from "../styles/metrics";
-import { useTabStyles } from "../styles/xbox";
 
 // Folga pro anel de foco (3 + 4 de afastamento) não ser cortado pela borda
 // da área que rola.
@@ -63,13 +62,9 @@ const useStyles = makeStyles({
     // embaixo) não pode ser cortado pela borda da lista.
     padding: `${RING}px`,
     margin: `-${RING}px`,
+    // Abas no padrão do TabList do Fluent (`size="medium"`, sem estilos
+    // próprios nos itens — pedido do usuário).
     scrollbarWidth: "none",
-    // Abas maiores (`size="large"`) e afastadas: alvo mais fácil de acertar
-    // com o controle e de ler de longe.
-    rowGap: tokens.spacingVerticalS,
-    // Rótulos alinhados à esquerda: o Tab reserva a largura do rótulo em
-    // negrito (selecionado) e centraliza o texto normal dentro dela.
-    "& .fui-Tab__content": { textAlign: "left" },
   },
   // Área que rola. O conteúdo começa na altura da lista (título + espaço);
   // ao rolar, some no topo da página. Mesmo scrollbar da `.scroll` do shell.
@@ -139,7 +134,6 @@ const TABS = [
 export function SettingsLayout() {
   const { t } = useTranslation();
   const styles = useStyles();
-  const tb = useTabStyles();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const current =
@@ -158,9 +152,9 @@ export function SettingsLayout() {
       <div className={styles.aside}>
         <Title2 className={styles.title}>{t("settings.title")}</Title2>
         <TabList
-          className={mergeClasses(styles.nav, tb.vtabs)}
+          className={styles.nav}
           vertical
-          size="large"
+          size="medium"
           selectedValue={current}
           onTabSelect={(_, d) => navigate(`/settings/${d.value}`)}
         >

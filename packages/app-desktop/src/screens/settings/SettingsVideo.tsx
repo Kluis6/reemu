@@ -25,7 +25,6 @@ import {
   getShaderParams,
   importDecorationPack,
   pickFolder,
-  pickSlangp,
   setShader,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
@@ -326,16 +325,6 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                             activePath={data.active}
                             busy={pick.isPending}
                           />
-                          <Button
-                            appearance="subtle"
-                            disabled={pick.isPending}
-                            onClick={async () => {
-                              const p = await pickSlangp()
-                              if (p) pick.mutate(p)
-                            }}
-                          >
-                            {t('game.shader.loadFile')}
-                          </Button>
                         </>
                       )}
                       {!data.available.includes(data.active) &&

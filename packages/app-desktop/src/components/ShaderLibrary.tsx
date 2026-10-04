@@ -209,15 +209,6 @@ export function ShaderLibrary({
 
   return (
     <div className={s.root}>
-      <div className={s.bar}>
-        <span className={s.path} title={root}>
-          {root}
-        </span>
-        <Button appearance="subtle" onClick={chooseRoot}>
-          {t('shaders.change')}
-        </Button>
-      </div>
-
       {q.isLoading && <Spinner size="tiny" label={t('shaders.scanning')} />}
       {q.isError && <Body1>{t('shaders.readFailed', { error: String(q.error) })}</Body1>}
 

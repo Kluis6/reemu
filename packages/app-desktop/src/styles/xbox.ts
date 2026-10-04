@@ -1337,8 +1337,8 @@ export const usePauseStyles = makeStyles({
   },
 });
 
-// Estados das abas, iguais nas horizontais (biblioteca, detalhe do jogo,
-// Aparência) e na lista vertical das Configurações — como no app Xbox
+// Estados das abas horizontais (biblioteca, detalhe do jogo,
+// Configurações) — como no app Xbox
 // (prints da biblioteca), com a cor primária do tema no lugar do branco:
 // - mouse em cima: só o fundo cinza; apertando: um tom acima;
 // - foco numa aba inativa: fundo cinza + anel de 2 a 5 de distância;
@@ -1383,9 +1383,9 @@ const TAB_STATES = {
   },
 } as const;
 
-/** Abas (`TabList`) no estilo do app Xbox: `tabs` nas horizontais
- *  (biblioteca, detalhe do jogo, Aparência), `vtabs` na lista vertical das
- *  Configurações. Mesmos estados (`TAB_STATES`). */
+/** Abas horizontais (`TabList`) no estilo do app Xbox: biblioteca, detalhe
+ *  do jogo, Configurações. A lista vertical das Configurações usa o padrão do
+ *  Fluent. */
 export const useTabStyles = makeStyles({
   tabs: {
     ...TAB_STATES,
@@ -1409,37 +1409,6 @@ export const useTabStyles = makeStyles({
     },
     '& .fui-Tab[aria-selected="true"]::after': {
       backgroundColor: tokens.colorNeutralForeground1,
-    },
-  },
-  // Lista vertical (como a das Configurações do Windows): o item escolhido
-  // fica com o fundo destacado, além do indicador à esquerda.
-  vtabs: {
-    ...TAB_STATES,
-    // Foco só com o anel (sem mudar o fundo) e mais rente que nas abas
-    // horizontais (5): na lista os itens ficam empilhados e o anel afastado
-    // encostava no vizinho.
-    "& .fui-Tab:focus": {
-      ...TAB_STATES["& .fui-Tab:focus"],
-      backgroundColor: "transparent !important",
-      outlineOffset: "2px !important",
-    },
-    // Apertar não muda o fundo (o selecionado segue com o dele).
-    "& .fui-Tab:active": { backgroundColor: "transparent !important" },
-    '& .fui-Tab[aria-selected="true"]:active': {
-      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
-    },
-    // O item escolhido com foco continua igual (fundo destacado, texto e
-    // indicador normais) — sem o preenchimento na cor primária das abas.
-    '& .fui-Tab[aria-selected="true"]:focus': {
-      backgroundColor: `${tokens.colorNeutralBackground4} !important`,
-    },
-    '& .fui-Tab[aria-selected="true"]:focus .fui-Tab__content, & .fui-Tab[aria-selected="true"]:focus .fui-Tab__icon':
-      { color: "inherit !important" },
-    '& .fui-Tab[aria-selected="true"]:focus::after': {
-      backgroundColor: tokens.colorCompoundBrandStroke,
-    },
-    '& .fui-Tab[aria-selected="true"]': {
-      backgroundColor: tokens.colorNeutralBackground4,
     },
   },
 });
