@@ -155,9 +155,9 @@ export function SettingsVideo() {
         display: 'flex',
         flexDirection: 'column',
         gap: 14,
-        // Shaders e Molduras usam 2 colunas e precisam de mais largura; sem
-        // GPU fica no limite estreito de antes.
-        maxWidth: data.gpu ? 860 : 460,
+        // Molduras: cards na largura útil inteira; Shaders: 2 colunas até
+        // 860; sem GPU fica no limite estreito de antes.
+        maxWidth: !data.gpu ? 460 : tab === 'molduras' ? 'none' : 860,
       }}
     >
       {/* Explicação num tooltip no "?" ao lado do toggle — abre no hover e

@@ -93,7 +93,13 @@ const useStyles = makeStyles({
   wide: { maxWidth: "none" },
 });
 
-const WIDE_TABS = new Set(["aparencia", "cores", "bios", "controllers"]);
+const WIDE_TABS = new Set([
+  "aparencia",
+  "cores",
+  "bios",
+  "controllers",
+  "video",
+]);
 
 // `key` = trecho da rota; `label` = chave de tradução; ícone do Fluent.
 const TABS = [
