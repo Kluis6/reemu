@@ -88,8 +88,10 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [x] `done` — **OpenGL por hardware no Windows** (WGL): validado pelo
       usuário em 2026-10-01 pelos logs — flycast (GL 3.2), Beetle PSX HW
       (3.3) e parallel_n64 (3.0 compat) abriram contexto e renderizaram.
-- [ ] `todo` — Vulkan in-process no Windows: ver "GPU dos cores no
-      Windows" abaixo (fase C).
+- [x] `done` — Vulkan in-process no Windows: feito e automático (fase C,
+      C1 e C2, 2026-10-02; reconferido no código em 2026-10-08:
+      `route_local_device` escolhe in-process no Windows os cores de
+      `VK_CAPABLE_CORES`). Falta só o C3 (Vulkan no processo filho).
 
 - [x] `done` — Etapa 12: flycast e mupen64plus_next rodam em Vulkan
       in-process no Linux (2026-09-25, `REEMU_HW=vulkan`; mupen com
