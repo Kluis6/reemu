@@ -360,6 +360,39 @@ no `emu-session`, ver `docs/historico.md`).
       2026-10-04): um modal a mais no onboarding, do mesmo tamanho dos outros
       três, para entrar em redes sociais ou lojas de jogos (Steam e outras).
       Entra entre "nome e avatar" e "tudo pronto"; pular deve ser possível.
+- [ ] `todo` — **Presets de qualidade nos emuladores** (backlog, pedido em
+      2026-10-08): Desempenho, Padrão, Qualidade, Ultra e Personalizado, com
+      os valores que a comunidade libretro costuma usar já configurados.
+      - **Só nos cores 3D**, onde a resolução interna faz diferença: flycast
+        (Dreamcast/NAOMI), Beetle PSX HW, mupen64plus_next / parallel_n64
+        (ParaLLEl-RDP) e PPSSPP. Nos 2D o seletor não aparece (a "qualidade"
+        ali é shader, que é gosto, não desempenho).
+      - **Base já existe:** opções por core e por jogo no banco
+        (`set_core_option`/`reset_core_options`, `CoreOptionsRepo`), aplicadas
+        na hora quando o core está carregado; `FRONTEND_DEFAULTS` em
+        `core-loader-desktop/src/coreopts.rs`. Um preset = um conjunto de
+        valores gravado de uma vez no escopo do core ou do jogo; "Personalizado"
+        aparece sozinho quando uma opção do preset é mudada à mão.
+      - **Chaves e valores só da fonte oficial** de cada core
+        (`libretro_core_options.h`), nunca de memória: flyinghead/flycast
+        `shell/libretro/`, libretro/beetle-psx-libretro (raiz),
+        libretro/mupen64plus-libretro-nx `libretro/`, hrydgard/ppsspp
+        `libretro/`, libretro/parallel-n64 `libretro/`. Já conferido no PPSSPP
+        (2026-10-08): `ppsspp_internal_resolution` (480x272 … 4800x2720),
+        `ppsspp_mulitsample_level` (Disabled/x2/x4/x8, com o erro de grafia
+        do próprio core), `ppsspp_texture_anisotropic_filtering`,
+        `ppsspp_texture_scaling_level`/`_type`, `ppsspp_texture_filtering`,
+        `ppsspp_frameskip`, `ppsspp_lower_resolution_for_effects`. Nos outros
+        quatro o formato do arquivo é diferente (macros/arrays por idioma) e
+        o extrator ainda não leu — fazer de novo antes de montar as tabelas.
+      - **Pesquisa da comunidade** (a fazer): documentação de cada core em
+        docs.libretro.com, fórum forums.libretro.com e guias da comunidade —
+        anotar a fonte de cada valor escolhido.
+      - **Cuidados:** não mexer em opção que quebra save state (tipo de
+        emulação da CPU, plugin de vídeo do N64); avisar "aplica no próximo
+        jogo" nas que o core só lê ao carregar; Ultra pode ser pesado em GPU
+        fraca (opcional: sugerir o preset inicial pela GPU que o wgpu
+        detecta). Validar cada core jogando um título pesado em cada nível.
 
 - [x] `done` — **Teclado configurável** (2026-09-26): seção Teclado em
       Configurações › Controles (botões e direções dos dois analógicos); as
