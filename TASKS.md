@@ -363,10 +363,31 @@ no `emu-session`, ver `docs/historico.md`).
 - [ ] `todo` — **Presets de qualidade nos emuladores** (backlog, pedido em
       2026-10-08): Desempenho, Padrão, Qualidade, Ultra e Personalizado, com
       os valores que a comunidade libretro costuma usar já configurados.
-      - **Só nos cores 3D**, onde a resolução interna faz diferença: flycast
+      - **Cores 3D**, onde a resolução interna faz diferença: flycast
         (Dreamcast/NAOMI), Beetle PSX HW, mupen64plus_next / parallel_n64
-        (ParaLLEl-RDP) e PPSSPP. Nos 2D o seletor não aparece (a "qualidade"
-        ali é shader, que é gosto, não desempenho).
+        (ParaLLEl-RDP) e PPSSPP.
+      - **Cores 2D** (acrescentado em 2026-10-08): sem resolução interna, mas
+        com opções de core que corrigem a imagem conforme o hardware original.
+        Num preset "Qualidade" pra 2D:
+        - **Correção de cor dos portáteis** — GBA/GBC (mGBA, Gambatte): as
+          telas originais eram escuras e os jogos saturavam as cores pra
+          compensar; sem a correção, estouram num monitor atual.
+        - **Mistura de quadros / LCD ghosting** (mGBA, Gambatte…): jogos que
+          piscavam sprites pra simular transparência/sombra contavam com a
+          tela lenta; sem isso, pisca-pisca.
+        - **Remover o limite de sprites por linha** (NES, Mega Drive, PC
+          Engine): tira a cintilação com muitos objetos na linha (poucos
+          jogos usavam o efeito de propósito).
+        - **Paleta do NES** (Nestopia, Mesen, FCEUmm): trocar a padrão por uma
+          mais fiel (as "FBX", por exemplo).
+        - **Transparências da TV**: filtro NTSC do Genesis Plus GX (dithering
+          do Mega Drive vira transparência, ex. cachoeiras de Sonic) e
+          "Hi-Res Blending" do Snes9x (Kirby's Dream Land 3, Jurassic Park).
+        - **Cortar overscan** onde o core oferece.
+        Os shaders (CRT, NTSC, xBR/ScaleFX, sharp-bilinear, LCD) e o integer
+        scaling, que o ReEmu já tem, ficam fora dos presets: são gosto, não
+        qualidade/desempenho. Nomes das opções citados de memória — conferir
+        no `libretro_core_options.h` de cada core antes de montar a tabela.
       - **Base já existe:** opções por core e por jogo no banco
         (`set_core_option`/`reset_core_options`, `CoreOptionsRepo`), aplicadas
         na hora quando o core está carregado; `FRONTEND_DEFAULTS` em
