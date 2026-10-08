@@ -31,7 +31,7 @@ import {
 import { useToastStore } from '../../stores/useToastStore'
 import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
-import { SettingsBreadcrumb, SettingsLinkList } from '../../components/SettingsNav'
+import { SettingsLinkList } from '../../components/SettingsNav'
 import { useTabStyles } from '../../styles/xbox'
 import { ArrowLeftRegular, FrameRegular, OptionsRegular, SparkleRegular } from '@fluentui/react-icons'
 import { ShaderCard } from '../../components/ShaderCard'
@@ -42,7 +42,6 @@ type Builtin = (typeof BUILTIN)[number]
 const isBuiltin = (n: string): n is Builtin => (BUILTIN as readonly string[]).includes(n)
 
 const useStyles = makeStyles({
-  crumb: { marginBottom: '10px' },
   // Shaders: opções na 1ª coluna, prévia na 2ª (uma só em tela estreita).
   columns: {
     display: 'grid',
@@ -125,7 +124,7 @@ type VideoSection = 'shaders' | 'molduras'
  * Configurações › Vídeo. Como nas Configurações do Windows: sem `section`
  * é a página da categoria, com um card por subseção; `shaders` e
  * `molduras` são as subseções (rotas `video/shaders` e `video/molduras`),
- * com o caminho "Vídeo › …" no topo.
+ * com o caminho "Configurações › Vídeo › …" no topo (do `SettingsLayout`).
  */
 export function SettingsVideo({ section }: { section?: VideoSection }) {
   const { t } = useTranslation()
@@ -134,7 +133,6 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const st = useStyles()
-  const crumbGap = st.crumb
   const tb = useTabStyles()
   const [source, setSource] = useState<ShaderSource>('reemu')
   // muda a cada parâmetro gravado → refaz a prévia do shader
@@ -270,13 +268,6 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
         maxWidth: !data.gpu ? 460 : 'none',
       }}
     >
-      {/* 24 até o conteúdo: 14 do `gap` + 10 */}
-      <SettingsBreadcrumb
-        className={crumbGap}
-        parent={t('settings.tabs.video')}
-        parentTo="/settings/video"
-        current={section === 'shaders' ? t('video.tabShaders') : t('video.tabBezels')}
-      />
       {section === 'shaders' && (
         <Caption1>{data.gpu ? t('video.gpuHint') : t('video.noGpu')}</Caption1>
       )}

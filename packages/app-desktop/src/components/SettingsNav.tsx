@@ -1,9 +1,7 @@
 import {
   Body1,
   Caption1,
-  Subtitle1,
   makeStyles,
-  mergeClasses,
   tokens,
 } from '@fluentui/react-components'
 import { ChevronRightRegular } from '@fluentui/react-icons'
@@ -12,8 +10,8 @@ import { Link } from 'react-router-dom'
 
 // Navegação dentro de uma categoria das Configurações, como nas
 // Configurações do Windows: a categoria lista as subseções em cards com uma
-// seta (`SettingsLinkList`), e a subseção mostra o caminho no topo
-// ("Vídeo › Shaders", `SettingsBreadcrumb`) com a categoria clicável.
+// seta (`SettingsLinkList`); o caminho no topo ("Configurações › Vídeo ›
+// Shaders") é do `SettingsLayout`.
 
 const useStyles = makeStyles({
   list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
@@ -36,25 +34,6 @@ const useStyles = makeStyles({
   text: { display: 'flex', flexDirection: 'column', gap: '2px', flexGrow: 1, minWidth: 0 },
   desc: { color: tokens.colorNeutralForeground3 },
   chevron: { fontSize: '16px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
-  crumb: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-  },
-  crumbLink: {
-    color: tokens.colorNeutralForeground3,
-    textDecorationLine: 'none',
-    borderRadius: tokens.borderRadiusMedium,
-    ':hover': { color: tokens.colorNeutralForeground1 },
-  },
-  // Centrada na caixa, a seta ficava 1,5 px acima do meio das letras
-  // (medido a 1366×768: texto y 180–194, seta 181–190).
-  crumbSep: {
-    color: tokens.colorNeutralForeground3,
-    fontSize: '16px',
-    position: 'relative',
-    top: '1.5px',
-  },
 })
 
 export interface SettingsLink {
@@ -80,31 +59,5 @@ export function SettingsLinkList({ items }: { items: SettingsLink[] }) {
         </Link>
       ))}
     </nav>
-  )
-}
-
-/** Caminho no topo da subseção: categoria (link de volta) › subseção. O
- *  espaço até o conteúdo (24, como abaixo das abas) vem de quem usa, que
- *  sabe o `gap` do próprio layout. */
-export function SettingsBreadcrumb({
-  parent,
-  parentTo,
-  current,
-  className,
-}: {
-  parent: string
-  parentTo: string
-  current: string
-  className?: string
-}) {
-  const s = useStyles()
-  return (
-    <div className={mergeClasses(s.crumb, className)}>
-      <Link to={parentTo} className={s.crumbLink}>
-        <Subtitle1>{parent}</Subtitle1>
-      </Link>
-      <ChevronRightRegular className={s.crumbSep} />
-      <Subtitle1>{current}</Subtitle1>
-    </div>
   )
 }

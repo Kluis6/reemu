@@ -37,15 +37,17 @@ const useStyles = makeStyles({
  */
 export function RouteTransition({
   routeKey,
+  className,
   children,
 }: {
   routeKey: string;
+  className?: string;
   children: ReactNode;
 }) {
   const s = useStyles();
   const back = useNavigationType() === "POP";
   return (
-    <div key={routeKey} className={mergeClasses(s.layer, back ? s.back : s.fwd)}>
+    <div key={routeKey} className={mergeClasses(s.layer, back ? s.back : s.fwd, className)}>
       {children}
     </div>
   );

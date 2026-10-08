@@ -1803,3 +1803,9 @@ Infra:
 - Onboarding novo em três modais (boas-vindas em várias línguas e idioma, nome e avatar, tudo pronto).
 - Foco automático: Jogar na página do jogo e o 1º card da biblioteca.
 
+
+## 2026-10-08 — Configurações em hub bento
+
+- **O que é:** `/settings` deixou de abrir no Perfil com menu lateral: agora mostra só o título e uma grade bento com um card por categoria (ícone, nome e o que tem dentro; Perfil maior, com avatar e nome). A grade ocupa a área útil sem rolar. Clicar abre a categoria com o caminho "Configurações › Categoria" no topo (níveis de cima clicáveis; em Vídeo, "Configurações › Vídeo › Shaders") e o conteúdo dentro de um card que rola por dentro.
+- **Como:** `screens/settings/SettingsHome.tsx` (rota índice) e `layouts/settingsSections.tsx` (lista única das categorias); `SettingsLayout` monta o caminho e o card; o `SettingsBreadcrumb` próprio do Vídeo saiu. Card clicável seguindo o Card do Fluent 2 (superfície inteira navega, hover/pressionado no fundo, elevação no hover), `<a>` pra ganhar o anel de foco do app. Transições: a página entra com o `RouteTransition` e os cards em cascata (30 ms entre eles, `backwards`, sem animação com `prefers-reduced-motion`).
+- **Colunas pela proporção, não pela largura:** com o zoom da interface a tela lógica continua 16:9 e só encolhe (Maior = 1051×591); por largura caía em 3 colunas × 4 linhas e rolava. Agora 4 colunas (3 linhas) em tela larga, 3 em janela ≤ 3:2; em altura ≤ 640 o card fica em linha (ícone ao lado do texto). Medido sem rolagem em 1366×768, 1188×668, 1051×591, 1920×1080, 1024×768 e 1280×1024.
