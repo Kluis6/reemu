@@ -399,6 +399,17 @@ export interface GameMetadata {
   releaseDate: string | null
   genre: string | null
   providerSource: string | null
+  // ficha técnica (ScreenScraper); `null` quando o provedor não tem
+  developer: string | null
+  publisher: string | null
+  /** "1", "1-2", "1-4"… como o provedor escreve */
+  players: string | null
+  /** nota de 0 a 100 */
+  rating: number | null
+  /** já com o órgão: "PEGI 12", "ESRB T" */
+  ageRating: string | null
+  /** separados por ", " */
+  modes: string | null
 }
 export const getRomMetadata = (romId: string) =>
   invoke<GameMetadata | null>('get_rom_metadata', { romId })

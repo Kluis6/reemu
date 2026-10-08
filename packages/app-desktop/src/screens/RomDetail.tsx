@@ -190,6 +190,7 @@ export function RomDetail() {
   // (lib/metadataFormat.ts).
   const releaseText = formatReleaseDate(meta.data?.releaseDate);
   const genres = splitGenres(meta.data?.genre);
+  const modes = splitGenres(meta.data?.modes);
   const descParas = descriptionParagraphs(meta.data?.description);
   const sourceText = providerLabel(meta.data?.providerSource);
   const releaseYear = meta.data?.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
@@ -550,6 +551,55 @@ export function RomDetail() {
                         </Badge>
                       ))}
                     </dd>
+                  </>
+                )}
+                {/* Ficha técnica: cada linha só aparece se o provedor trouxe */}
+                {meta.data?.developer && (
+                  <>
+                    <dt className={s.infoLabel}>{t("game.developer")}</dt>
+                    <dd className={s.infoValue}>{meta.data.developer}</dd>
+                  </>
+                )}
+                {meta.data?.publisher && (
+                  <>
+                    <dt className={s.infoLabel}>{t("game.publisher")}</dt>
+                    <dd className={s.infoValue}>{meta.data.publisher}</dd>
+                  </>
+                )}
+                {meta.data?.players && (
+                  <>
+                    <dt className={s.infoLabel}>{t("game.players")}</dt>
+                    <dd className={s.infoValue}>{meta.data.players}</dd>
+                  </>
+                )}
+                {modes.length > 0 && (
+                  <>
+                    <dt className={s.infoLabel}>{t("game.modes")}</dt>
+                    <dd className={mergeClasses(s.infoValue, s.infoTags)}>
+                      {modes.map((m) => (
+                        <Badge key={m} appearance="tint" color="informative" shape="rounded" size="large">
+                          {m}
+                        </Badge>
+                      ))}
+                    </dd>
+                  </>
+                )}
+                {meta.data?.rating != null && (
+                  <>
+                    <dt className={s.infoLabel}>{t("game.rating")}</dt>
+                    <dd className={s.infoValue}>
+                      {t("game.ratingValue", {
+                        value: (meta.data.rating / 10).toLocaleString(i18n.language, {
+                          maximumFractionDigits: 1,
+                        }),
+                      })}
+                    </dd>
+                  </>
+                )}
+                {meta.data?.ageRating && (
+                  <>
+                    <dt className={s.infoLabel}>{t("game.ageRating")}</dt>
+                    <dd className={s.infoValue}>{meta.data.ageRating}</dd>
                   </>
                 )}
                 {sourceText && (

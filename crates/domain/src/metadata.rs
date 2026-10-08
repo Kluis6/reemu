@@ -27,6 +27,25 @@ pub enum MatchStatus {
     NoMatch,
 }
 
+/// Ficha técnica do jogo além do básico (título, descrição, data, gênero),
+/// como o ScreenScraper devolve no `jeuInfos.php` (doc da API v2:
+/// `developpeur`, `editeur`, `joueurs`, `note`, `classifications`, `modes`).
+/// `serde(default)`: correspondências gravadas antes não têm o campo.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct GameDetails {
+    pub developer: Option<String>,
+    pub publisher: Option<String>,
+    /// Como o provedor escreve: "1", "1-2", "1-4"…
+    pub players: Option<String>,
+    /// Nota de 0 a 100 (o ScreenScraper dá de 0 a 20).
+    pub rating: Option<u8>,
+    /// Classificação etária, já com o órgão: "PEGI 12", "ESRB T"…
+    pub age_rating: Option<String>,
+    /// Modos de jogo separados por ", " (ex.: "1 jogador, Cooperativo").
+    pub modes: Option<String>,
+}
+
 /// Um resultado de provedor pra uma ROM: metadata + os dois critérios que
 /// podem disparar auto-aplicação.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,6 +65,8 @@ pub struct ScrapeCandidate {
     /// linhas gravadas antes desta mudança não têm este campo no JSON.
     #[serde(default)]
     pub exact_filename_match: bool,
+    #[serde(default)]
+    pub details: GameDetails,
 }
 
 impl ScrapeCandidate {
@@ -88,6 +109,8 @@ pub struct GameMetadata {
     pub release_date: Option<String>,
     pub genre: Option<String>,
     pub provider_source: Option<String>,
+    #[serde(default)]
+    pub details: GameDetails,
 }
 
 /// Uma correspondência aguardando revisão do usuário (`scrape_matches` com

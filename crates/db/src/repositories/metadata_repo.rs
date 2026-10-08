@@ -35,6 +35,7 @@ fn meta_from_candidate(rom_id: &str, c: &ScrapeCandidate) -> GameMetadata {
         release_date: c.release_date.clone(),
         genre: c.genre.clone(),
         provider_source: Some(c.provider.clone()),
+        details: c.details.clone(),
     }
 }
 
@@ -47,6 +48,17 @@ fn row_to_meta(row: &sqlx::sqlite::SqliteRow) -> Result<GameMetadata, RepoError>
         release_date: row.try_get("release_date").map_err(be)?,
         genre: row.try_get("genre").map_err(be)?,
         provider_source: row.try_get("provider_source").map_err(be)?,
+        details: domain::metadata::GameDetails {
+            developer: row.try_get("developer").map_err(be)?,
+            publisher: row.try_get("publisher").map_err(be)?,
+            players: row.try_get("players").map_err(be)?,
+            rating: row
+                .try_get::<Option<i64>, _>("rating")
+                .map_err(be)?
+                .and_then(|r| u8::try_from(r).ok()),
+            age_rating: row.try_get("age_rating").map_err(be)?,
+            modes: row.try_get("modes").map_err(be)?,
+        },
     })
 }
 
@@ -86,7 +98,8 @@ impl MetadataRepository for MetadataRepo {
 
     async fn get_metadata(&self, rom_id: &str) -> Result<Option<GameMetadata>, RepoError> {
         let row = sqlx::query(
-            "SELECT rom_id, title, description, cover_url, release_date, genre, provider_source \
+            "SELECT rom_id, title, description, cover_url, release_date, genre, provider_source, \
+             developer, publisher, players, rating, age_rating, modes \
              FROM game_metadata WHERE rom_id = ?1",
         )
         .bind(rom_id)
@@ -99,12 +112,16 @@ impl MetadataRepository for MetadataRepo {
     async fn upsert_metadata(&self, m: &GameMetadata) -> Result<(), RepoError> {
         sqlx::query(
             "INSERT INTO game_metadata \
-             (id, rom_id, title, description, cover_url, release_date, genre, provider_source) \
-             VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7) \
+             (id, rom_id, title, description, cover_url, release_date, genre, provider_source, \
+              developer, publisher, players, rating, age_rating, modes) \
+             VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) \
              ON CONFLICT(rom_id) DO UPDATE SET \
                title = excluded.title, description = excluded.description, \
                cover_url = excluded.cover_url, release_date = excluded.release_date, \
-               genre = excluded.genre, provider_source = excluded.provider_source",
+               genre = excluded.genre, provider_source = excluded.provider_source, \
+               developer = excluded.developer, publisher = excluded.publisher, \
+               players = excluded.players, rating = excluded.rating, \
+               age_rating = excluded.age_rating, modes = excluded.modes",
         )
         .bind(&m.rom_id)
         .bind(&m.title)
@@ -113,6 +130,12 @@ impl MetadataRepository for MetadataRepo {
         .bind(&m.release_date)
         .bind(&m.genre)
         .bind(&m.provider_source)
+        .bind(&m.details.developer)
+        .bind(&m.details.publisher)
+        .bind(&m.details.players)
+        .bind(m.details.rating.map(i64::from))
+        .bind(&m.details.age_rating)
+        .bind(&m.details.modes)
         .execute(&self.db)
         .await
         .map_err(be)?;

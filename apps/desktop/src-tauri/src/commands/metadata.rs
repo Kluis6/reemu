@@ -53,6 +53,13 @@ pub struct GameMetadataDto {
     pub release_date: Option<String>,
     pub genre: Option<String>,
     pub provider_source: Option<String>,
+    pub developer: Option<String>,
+    pub publisher: Option<String>,
+    pub players: Option<String>,
+    /// 0 a 100
+    pub rating: Option<u8>,
+    pub age_rating: Option<String>,
+    pub modes: Option<String>,
 }
 
 impl From<GameMetadata> for GameMetadataDto {
@@ -64,6 +71,12 @@ impl From<GameMetadata> for GameMetadataDto {
             release_date: m.release_date,
             genre: m.genre,
             provider_source: m.provider_source,
+            developer: m.details.developer,
+            publisher: m.details.publisher,
+            players: m.details.players,
+            rating: m.details.rating,
+            age_rating: m.details.age_rating,
+            modes: m.details.modes,
         }
     }
 }

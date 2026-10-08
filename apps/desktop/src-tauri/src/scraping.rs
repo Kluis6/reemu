@@ -23,7 +23,8 @@ use std::sync::Arc;
 
 use domain::library::RomRepository;
 use domain::metadata::{
-    GameMetadata, MatchStatus, MetadataConfig, MetadataRepository, ScrapeCandidate, ScrapeQuery,
+    GameDetails, GameMetadata, MatchStatus, MetadataConfig, MetadataRepository, ScrapeCandidate,
+    ScrapeQuery,
 };
 use serde_json::Value;
 
@@ -203,6 +204,7 @@ fn parse_tgdb_game(v: &Value) -> Option<ScrapeCandidate> {
         // Busca por nome: nunca auto-aplica (ver comentário do módulo).
         exact_hash_match: false,
         exact_filename_match: false,
+        details: Default::default(),
     })
 }
 
@@ -418,7 +420,70 @@ fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCan
         genre,
         exact_hash_match: exact_hash,
         exact_filename_match,
+        details: parse_details(jeu),
     })
+}
+
+/// Texto de um campo do `jeu` que pode vir como string, como `{ "text": .. }`
+/// ou como lista por idioma/região (`[{ "langue"/"region", "text" }]`).
+fn field_text(v: &Value) -> Option<String> {
+    let t = match v {
+        Value::String(s) => Some(s.as_str()),
+        Value::Object(o) => o.get("text").and_then(Value::as_str),
+        Value::Array(_) => first_text(v, &["pt", "en", "wor", "us", "eu", "ss", "jp"]),
+        _ => None,
+    }?;
+    let t = t.trim();
+    (!t.is_empty()).then(|| t.to_string())
+}
+
+/// Nomes de um grupo (`modes`, `genres`…): cada item com `noms` por idioma.
+fn group_names(v: &Value) -> Option<String> {
+    let mut names: Vec<String> = Vec::new();
+    for x in v.as_array()? {
+        if let Some(n) = x.get("noms").and_then(|n| first_text(n, &["pt", "en", "wor"])) {
+            let n = n.trim().to_string();
+            if !n.is_empty() && !names.contains(&n) {
+                names.push(n);
+            }
+        }
+    }
+    (!names.is_empty()).then(|| names.join(", "))
+}
+
+/// Ficha técnica do `jeuInfos.php` (doc da API v2 do ScreenScraper):
+/// `developpeur`, `editeur`, `joueurs`, `note` (de 0 a 20), `classifications`
+/// (um item por órgão — `type` + `text`) e `modes`.
+fn parse_details(jeu: &Value) -> GameDetails {
+    let get = |k: &str| jeu.get(k).and_then(field_text);
+    let rating = get("note")
+        .and_then(|n| n.replace(',', ".").parse::<f32>().ok())
+        .filter(|n| (0.0..=20.0).contains(n))
+        .map(|n| (n * 5.0).round() as u8);
+    // PEGI primeiro (o público do app é BR/EU), depois ESRB, depois o 1º.
+    let age_rating = jeu.get("classifications").and_then(Value::as_array).and_then(|arr| {
+        let fmt = |x: &Value| {
+            let org = x.get("type").and_then(Value::as_str)?.trim();
+            let val = x.get("text").and_then(Value::as_str)?.trim();
+            (!val.is_empty()).then(|| format!("{org} {val}").trim().to_string())
+        };
+        ["PEGI", "ESRB"]
+            .iter()
+            .find_map(|org| {
+                arr.iter()
+                    .find(|x| x.get("type").and_then(Value::as_str) == Some(*org))
+                    .and_then(fmt)
+            })
+            .or_else(|| arr.iter().find_map(fmt))
+    });
+    GameDetails {
+        developer: get("developpeur"),
+        publisher: get("editeur"),
+        players: get("joueurs"),
+        rating,
+        age_rating,
+        modes: jeu.get("modes").and_then(group_names),
+    }
 }
 
 /// Uma consulta ao ScreenScraper. `Ok(None)` = não catalogado (404).
@@ -608,6 +673,7 @@ pub async fn scrape_pending(
                             release_date: c.release_date.clone(),
                             genre: c.genre.clone(),
                             provider_source: Some(c.provider.clone()),
+                            details: c.details.clone(),
                         })
                         .await
                         .is_ok();
@@ -633,6 +699,7 @@ pub async fn scrape_pending(
                             genre: None,
                             exact_hash_match: false,
                             exact_filename_match: false,
+                            details: Default::default(),
                         },
                         MatchStatus::NoMatch,
                     )
@@ -702,6 +769,35 @@ mod tests {
             .collect();
         assert!(no_ss.is_empty(), "sem id no ScreenScraper: {no_ss:?}");
         assert!(no_tgdb.is_empty(), "sem id no TheGamesDB: {no_tgdb:?}");
+    }
+
+    #[test]
+    fn parse_details_reads_the_jeu_fields() {
+        // Campos do `jeuInfos.php` (doc da API v2): texto direto ou
+        // `{ "text": .. }`, nota de 0 a 20, classificações por órgão.
+        let jeu = serde_json::json!({
+            "developpeur": {"id": "3", "text": "Sonic Team"},
+            "editeur": {"id": "1", "text": "Sega"},
+            "joueurs": {"text": "1-2"},
+            "note": {"text": "17"},
+            "classifications": [
+                {"type": "ESRB", "text": "E"},
+                {"type": "PEGI", "text": "3"}
+            ],
+            "modes": [
+                {"id": "1", "noms": [{"langue": "en", "text": "1 player"}]},
+                {"id": "2", "noms": [{"langue": "en", "text": "Co-op"}]}
+            ]
+        });
+        let d = parse_details(&jeu);
+        assert_eq!(d.developer.as_deref(), Some("Sonic Team"));
+        assert_eq!(d.publisher.as_deref(), Some("Sega"));
+        assert_eq!(d.players.as_deref(), Some("1-2"));
+        assert_eq!(d.rating, Some(85));
+        assert_eq!(d.age_rating.as_deref(), Some("PEGI 3"));
+        assert_eq!(d.modes.as_deref(), Some("1 player, Co-op"));
+        // nada disso no `jeu` → ficha vazia, sem erro
+        assert_eq!(parse_details(&serde_json::json!({})), GameDetails::default());
     }
 
     #[test]

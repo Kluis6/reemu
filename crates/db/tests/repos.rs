@@ -186,6 +186,7 @@ fn candidate(title: &str, exact: bool) -> ScrapeCandidate {
         genre: Some("Platform".into()),
         exact_hash_match: exact,
         exact_filename_match: false,
+        details: Default::default(),
     }
 }
 
@@ -240,6 +241,14 @@ async fn metadata_config_scrape_and_pending_review() {
         release_date: Some("1990".into()),
         genre: Some("Platform".into()),
         provider_source: Some("screenscraper".into()),
+        details: domain::metadata::GameDetails {
+            developer: Some("Nintendo EAD".into()),
+            publisher: Some("Nintendo".into()),
+            players: Some("1-2".into()),
+            rating: Some(90),
+            age_rating: Some("PEGI 3".into()),
+            modes: Some("1 jogador, 2 jogadores (alternado)".into()),
+        },
     })
     .await
     .unwrap();
@@ -247,6 +256,12 @@ async fn metadata_config_scrape_and_pending_review() {
         m.get_metadata("r1").await.unwrap().unwrap().title,
         "Super Mario World"
     );
+    // a ficha técnica vai e volta do banco
+    let d = m.get_metadata("r1").await.unwrap().unwrap().details;
+    assert_eq!(d.developer.as_deref(), Some("Nintendo EAD"));
+    assert_eq!(d.players.as_deref(), Some("1-2"));
+    assert_eq!(d.rating, Some(90));
+    assert_eq!(d.age_rating.as_deref(), Some("PEGI 3"));
 
     // match por nome → pending; não aplica metadata até revisão
     m.record_match(
