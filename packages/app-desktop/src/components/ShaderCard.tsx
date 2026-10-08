@@ -25,7 +25,14 @@ const useStyles = makeStyles({
     // saía cortado. Com isso a lista rola.
     flexShrink: 0,
   },
-  selected: { border: `1px solid ${tokens.colorBrandStroke1}` },
+  // Escolhido: borda e fundo na cor do TEMA. O `Background2Selected` do
+  // Fluent é um cinza neutro que não segue a cor do tema.
+  selected: {
+    border: `1px solid ${tokens.colorBrandStroke1}`,
+    backgroundColor: tokens.colorBrandBackground2,
+    ':hover': { backgroundColor: tokens.colorBrandBackground2Hover },
+    ':active': { backgroundColor: tokens.colorBrandBackground2Pressed },
+  },
   disabled: { opacity: 0.5, cursor: 'default' },
   title: { display: 'inline-flex', alignItems: 'center', gap: tokens.spacingHorizontalXS },
   desc: { color: tokens.colorNeutralForeground3 },
@@ -62,6 +69,11 @@ export function ShaderCard({
   const s = useStyles()
   return (
     <Card
+      // `filled-alternative`: fundo `colorNeutralBackground2` (e Hover/
+      // Pressed/Selected), o tom dos outros cards das Configurações. O
+      // padrão (`filled`) usa o `Background1` — o mesmo do card que envolve
+      // a página, então a lista ficava sem contraste.
+      appearance="filled-alternative"
       className={mergeClasses(s.card, selected && s.selected, disabled && s.disabled)}
       selected={selected}
       onSelectionChange={() => {
