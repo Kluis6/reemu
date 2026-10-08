@@ -1190,7 +1190,7 @@ fn create_platform(cfg: &GlConfig) -> Result<(PlatCtx, glow::Context), String> {
         "WGL {major}.{} ({profile:?}) pra HW render",
         cfg.version_minor
     );
-    let gl = unsafe { glow::Context::from_loader_function_cstr(|s| wgl::proc_address(s)) };
+    let gl = unsafe { glow::Context::from_loader_function_cstr(wgl::proc_address) };
     Ok((PlatCtx(ctx), gl))
 }
 
