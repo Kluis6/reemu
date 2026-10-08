@@ -1067,6 +1067,17 @@ impl ChildProc {
         if let Some((k, v)) = env {
             cmd.env(k, v);
         }
+        // O `reemu-core-host` é programa de console; aberto pelo app instalado
+        // (subsistema "windows", sem console), o Windows criava uma janela de
+        // terminal pra ele a cada jogo. `CREATE_NO_WINDOW` (0x08000000, "Process
+        // Creation Flags" na documentação do Win32) roda sem janela; stdout/
+        // stderr herdados continuam indo pro terminal do `tauri dev`.
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
         let child = cmd
             .spawn()
             .map_err(|e| format!("spawn reemu-core-host: {e}"))?;
