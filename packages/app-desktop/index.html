@@ -5,6 +5,10 @@
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ReEmu</title>
+    <!-- Fundo escuro já no 1º quadro, antes do JS/CSS: sem isto o WebView2
+         pintava branco até a splash montar. Mesma cor da splash e do
+         `backgroundColor` da janela (tauri.conf.json). -->
+    <style>html, body { background: #050506; }</style>
   </head>
   <body>
     <div id="root"></div>

@@ -1815,3 +1815,8 @@ Infra:
 - **Sintoma:** no app instalado no Windows, cada jogo abria uma janela de terminal junto (no Linux não).
 - **Causa:** o core roda no processo filho `reemu-core-host`, que é programa de console. O app instalado não tem console (subsistema "windows" no release), então o Windows criava um console novo — com janela — pro filho. No `tauri dev` não aparecia porque o filho herdava o terminal do dev.
 - **Correção:** `emu-session` cria o filho com `CREATE_NO_WINDOW` (0x08000000), conforme "Process Creation Flags" (learn.microsoft.com/windows/win32/procthread/process-creation-flags). stdout/stderr herdados continuam funcionando.
+
+## 2026-10-08 — Tela branca com bordas pretas ao abrir o app
+
+- **Causa:** antes do JS montar a splash (escura), o WebView2 pinta o fundo padrão dele (branco), e a janela atrás, entrando em tela cheia, aparecia preta nas laterais.
+- **Correção:** `backgroundColor: "#050506"` na janela do `tauri.conf.json` — "Set the window and webview background color" (docs.rs `tauri_utils::config::WindowConfig::background_color`; formato hex conferido no `FromStr` de `Color` da tauri-utils 2.10.1) — e o mesmo fundo num `<style>` do `index.html`, antes do CSS do bundle. Mesma cor da splash, então a abertura fica escura do 1º quadro até o app.
