@@ -113,12 +113,13 @@ const useStyles = makeStyles({
     gap: "2px",
     minWidth: 0,
   },
+  // Descrição numa linha só: com controle conectado a barra de dicas
+  // (canto inferior direito) cobria a 2ª linha do card de Sistema.
   desc: {
     color: tokens.colorNeutralForeground3,
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
     overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
   },
   // Tela baixa (card em linha): título menor e podendo quebrar linha, senão
   // nomes longos ("Gerenciar biblioteca") saíam cortados.

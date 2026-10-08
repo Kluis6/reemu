@@ -63,7 +63,7 @@ const en: Messages = {
       controllers: 'Connected controllers and mapping',
       cores: 'Installed emulators and catalog',
       bios: 'System BIOS files',
-      system: 'Language, interface size and hardware',
+      system: 'Language, interface and hardware',
     },
   },
   language: {
