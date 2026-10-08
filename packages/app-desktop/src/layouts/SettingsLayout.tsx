@@ -24,6 +24,14 @@ const useStyles = makeStyles({
     height: `calc(100vh - var(--reemuPageTop, ${M.PAGE_TOP}px) - ${M.PAGE_PAD_B}px)`,
     minHeight: "240px",
   },
+  // Numa categoria o card desce até a área segura de baixo (32 px da borda),
+  // 56 px a mais que o hub: a margem de 88 da `.scroll` reserva a barra de
+  // dicas do controle, mas ela só ocupa o canto direito. A margem negativa
+  // devolve esses 56 pra `.scroll` não ganhar rolagem.
+  tall: {
+    height: `calc(100vh - var(--reemuPageTop, ${M.PAGE_TOP}px) - ${M.SAFE_Y}px)`,
+    marginBottom: `-${M.PAGE_PAD_B - M.SAFE_Y}px`,
+  },
   page: {
     height: "100%",
     display: "flex",
@@ -69,6 +77,10 @@ const useStyles = makeStyles({
     scrollbarGutter: "stable",
     padding: tokens.spacingHorizontalXXL,
     paddingRight: `calc(${tokens.spacingHorizontalXXL} - ${M.SCROLLBAR_W}px)`,
+    // Com controle conectado, a barra de dicas (fixa, 25–67 px da borda de
+    // baixo) cobre o canto do card: folga no fim da rolagem pra o último
+    // item não ficar escondido atrás dela.
+    paddingBottom: `${M.PAGE_PAD_B - M.SAFE_Y + 24}px`,
     "::-webkit-scrollbar": { width: `${M.SCROLLBAR_W}px` },
     "::-webkit-scrollbar-thumb": {
       backgroundColor: tokens.colorNeutralStroke2,
@@ -113,7 +125,7 @@ export function SettingsLayout() {
   }
 
   return (
-    <div className={styles.root}>
+    <div className={mergeClasses(styles.root, section && styles.tall)}>
       {/* Remonta a cada rota: a página nova entra com a transição do app
           (e o conteúdo começa do topo). */}
       <RouteTransition routeKey={pathname} className={styles.page}>
