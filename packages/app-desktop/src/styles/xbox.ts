@@ -119,7 +119,10 @@ export const useShellStyles = makeStyles({
     // programático — e o usuário não via onde estava o foco.
     // Cor de marca (verde no tema padrão/claro) — igual ao destaque do item
     // selecionado no dashboard Xbox de verdade, não um cinza neutro.
-    "& a:focus, & input:focus, & [tabindex]:focus": {
+    // Campos de texto NÃO entram (pedido do usuário): o `<Input>` do Fluent
+    // já marca o foco com a barra animada embaixo (`:focus-within`, então
+    // aparece também no foco programático do controle).
+    "& a:focus, & [tabindex]:focus": {
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
@@ -359,14 +362,8 @@ export const useShellStyles = makeStyles({
   // é sobrescrito abaixo pro mesmo tom da sidebar (`colorNeutralBackground2`)
   // em vez do `colorNeutralBackground3` que "filled-darker" traria.
   //
-  // O foco em si o Fluent já resolve sozinho, SEM outline: o `<Input>`
-  // (base do SearchBox) marca `:focus-within{ outline: 2px solid
-  // transparent }` de propósito e desenha o realce como uma barrinha
-  // animada embaixo (`::after`, cor `colorCompoundBrandStroke`, já do
-  // tema). O `<input>` cru lá dentro não tem cantos arredondados — a
-  // regra global `.app "& input:focus"` (pro resto do app) desenhava um
-  // outline colorido normal EM CIMA disso, quadrado, por cima do fundo
-  // arredondado do SearchBox. Desliga essa regra global só aqui.
+  // O foco o Fluent resolve sozinho, sem outline: a barrinha animada embaixo
+  // do `<Input>` (base do SearchBox), na cor do tema.
   search: {
     position: "absolute",
     left: "50%",
@@ -376,9 +373,6 @@ export const useShellStyles = makeStyles({
     width: `${M.SEARCH_W}px`,
     maxWidth: "calc(100% - 160px)",
     backgroundColor: `${tokens.colorNeutralBackground2} !important`,
-    "& input:focus": {
-      outline: "none !important",
-    },
   },
   // Relógio do app Xbox no modo XBOX (print a 1366×768): "08:20" com 46 de
   // largura e algarismos de 14 de altura, branco, regular — 20 px na Segoe
