@@ -21,7 +21,6 @@ const VERSION = "1.1.343";
 // classe → arquivo (sem `_24_regular.svg`)
 const ICONS = {
   library: "library",
-  games: "games",
   "paint-brush": "paint_brush",
   save: "save",
   heart: "heart",
