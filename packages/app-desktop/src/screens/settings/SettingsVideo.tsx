@@ -304,7 +304,7 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                           <Caption1 className={st.panelSub}>{activeName}</Caption1>
                         </div>
                       </div>
-                      <Card className={st.paramsCard}>
+                      <Card className={st.paramsCard} appearance="filled-alternative">
                         <div className={st.paramsScroll}>
                           <ShaderParams
                             scope="default"
