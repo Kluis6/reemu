@@ -176,6 +176,7 @@ function Catalog() {
       </Caption1>
       <div className={mergeClasses(styles.list, styles.catalogList, styles.filterRow)}>
         <Input
+          appearance="filled-darker"
           placeholder={t('cores.filter')}
           value={filter}
           onChange={(_, d) => setFilter(d.value)}

@@ -216,6 +216,7 @@ export function ShaderLibrary({
         <>
           <div className={s.bar}>
             <Input
+              appearance="filled-darker"
               placeholder={t('shaders.filter')}
               value={filter}
               onChange={(_, d) => setFilter(d.value)}

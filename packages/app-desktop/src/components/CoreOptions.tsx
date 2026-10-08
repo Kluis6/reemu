@@ -118,6 +118,7 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
               }
             >
               <Select
+                appearance="filled-darker"
                 value={cur}
                 disabled={change.isPending}
                 onChange={(_, d) => change.mutate({ key: o.key, value: d.value })}

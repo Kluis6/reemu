@@ -53,6 +53,7 @@ export function SettingsAudio() {
       </Field>
       <Field label={t('audio.delta')} hint={t('audio.deltaHint')}>
         <Input
+          appearance="filled-darker"
           type="number"
           step={0.001}
           value={String(draft.rateControlDelta)}
@@ -61,6 +62,7 @@ export function SettingsAudio() {
       </Field>
       <Field label={t('audio.device')}>
         <Input
+          appearance="filled-darker"
           value={draft.outputDeviceId ?? ''}
           placeholder={t('audio.systemDefault')}
           onChange={(_, d) => set('outputDeviceId', d.value === '' ? null : d.value)}

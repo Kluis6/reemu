@@ -163,6 +163,7 @@ export function ProfileForm({
 
       <Field label={t('profileForm.name')} required validationMessage={nameError}>
         <Input
+          appearance="filled-darker"
           value={name}
           maxLength={40}
           onChange={(_, d) => {
@@ -177,6 +178,7 @@ export function ProfileForm({
       {showBio && (
       <Field label={t('profileForm.bio')} hint={t('profileForm.bioHint')}>
         <Textarea
+          appearance="filled-darker"
           value={bio}
           maxLength={280}
           resize="vertical"

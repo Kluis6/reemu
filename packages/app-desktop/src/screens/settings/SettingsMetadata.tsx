@@ -122,12 +122,14 @@ export function SettingsMetadata() {
       <div className={s.form}>
         <Field label={t('metadata.ssUser')}>
           <Input
+            appearance="filled-darker"
             value={form.screenscraperUser ?? ''}
             onChange={(_, d) => setForm({ ...form, screenscraperUser: d.value || null })}
           />
         </Field>
         <Field label={t('metadata.ssPassword')}>
           <Input
+            appearance="filled-darker"
             type="password"
             value={form.screenscraperPassword ?? ''}
             onChange={(_, d) => setForm({ ...form, screenscraperPassword: d.value || null })}
@@ -138,6 +140,7 @@ export function SettingsMetadata() {
           hint={t('metadata.tgdbKeyHint')}
         >
           <Input
+            appearance="filled-darker"
             type="password"
             value={form.thegamesdbApiKey ?? ''}
             onChange={(_, d) => setForm({ ...form, thegamesdbApiKey: d.value || null })}

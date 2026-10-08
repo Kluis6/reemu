@@ -130,6 +130,7 @@ export function ControllerMappings() {
                   {dev.connected ? t('controllers.connected') : t('controllers.saved')}
                 </Badge>
                 <Select
+                  appearance="filled-darker"
                   value={portFor(guid) === null ? '' : String(portFor(guid))}
                   disabled={assignPort.isPending}
                   onChange={(_, d) =>

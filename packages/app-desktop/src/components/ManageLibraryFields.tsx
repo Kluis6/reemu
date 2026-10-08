@@ -166,6 +166,7 @@ export function ManageLibraryFields({
                 {t("library.games", { count: n })}
               </span>
               <Select
+                appearance="filled-darker"
                 value={coreValue(sys)}
                 onChange={(_, d) =>
                   setPending((p) => ({ ...p, [sys]: d.value }))
