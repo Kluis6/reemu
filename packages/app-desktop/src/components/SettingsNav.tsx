@@ -14,7 +14,8 @@ import { Link } from 'react-router-dom'
 // Shaders") é do `SettingsLayout`.
 
 const useStyles = makeStyles({
-  list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
+  // 12 entre os cards: o mesmo espaço da grade do hub das Configurações.
+  list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
   // `<a>`: ganha o anel de foco global do app (controle/teclado).
   card: {
     display: 'flex',
