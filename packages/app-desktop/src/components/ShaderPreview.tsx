@@ -5,7 +5,6 @@ import {
   TabList,
   ToggleButton,
   makeStyles,
-  mergeClasses,
   tokens,
 } from '@fluentui/react-components'
 import { EyeOffRegular, EyeRegular } from '@fluentui/react-icons'
@@ -18,27 +17,36 @@ import { renderShaderPreview, shaderPreviewSource, type PreviewScene } from '../
 const OUT_W = 960
 const OUT_H = 720
 
+// Ocupa a coluna inteira, limitada pela altura útil do card das
+// Configurações: a imagem começa a 283 px do topo da tela e o card acaba a
+// 32 + 24 (padding) da borda de baixo → altura máx. = 100vh − 340 (4:3).
+// `vh` já está em px da interface (zoom nativo, `uiScale.ts`).
+const FRAME_W = 'min(100%, calc((100vh - 340px) * 4 / 3))'
+
 const useStyles = makeStyles({
   root: {
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalS,
   },
-  // 24 até a imagem (8 do `gap` + 16)
-  tabs: {
-    alignSelf: 'flex-start',
+  // Barra acima da imagem, da mesma largura dela: cenas à esquerda, ligar/
+  // desligar o shader à direita. 24 até a imagem (8 do `gap` + 16).
+  bar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: tokens.spacingHorizontalM,
+    width: FRAME_W,
     marginBottom: '16px',
+  },
+  tabs: {
     columnGap: '8px',
     // raio padrão do ReEmu (4) no lugar da pílula do `filled-circular`
     '& .fui-Tab': { borderRadius: tokens.borderRadiusMedium },
   },
-  // Ocupa a coluna inteira, limitada pela altura útil do card das
-  // Configurações: a imagem começa a 283 px do topo da tela e o card acaba a
-  // 32 + 24 (padding) da borda de baixo → altura máx. = 100vh − 340 (4:3).
-  // `vh` já está em px da interface (zoom nativo, `uiScale.ts`).
   frame: {
     position: 'relative',
-    width: 'min(100%, calc((100vh - 340px) * 4 / 3))',
+    width: FRAME_W,
     aspectRatio: '4 / 3',
     overflow: 'hidden',
     borderRadius: tokens.borderRadiusMedium,
@@ -53,17 +61,6 @@ const useStyles = makeStyles({
     height: '100%',
     imageRendering: 'pixelated',
     userSelect: 'none',
-  },
-  // Botão sobre a imagem, no canto de baixo: liga/desliga o shader já
-  // carregado (troca entre as duas imagens, sem renderizar de novo).
-  toggle: {
-    position: 'absolute',
-    right: tokens.spacingHorizontalS,
-    bottom: tokens.spacingVerticalS,
-  },
-  toggleOff: {
-    backgroundColor: 'rgba(0, 0, 0, 0.6) !important',
-    color: '#fff !important',
   },
   busy: {
     position: 'absolute',
@@ -119,15 +116,28 @@ export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
     <div className={s.root}>
       {/* Aparência de botão: `filled-circular` do próprio TabList do Fluent
           (pílulas; a escolhida preenchida na cor do tema). */}
-      <TabList
-        className={s.tabs}
-        appearance="filled-circular"
-        selectedValue={scene}
-        onTabSelect={(_, d) => setScene(d.value as PreviewScene)}
-      >
-        <Tab value="2d">{t('video.preview.scene2d')}</Tab>
-        <Tab value="3d">{t('video.preview.scene3d')}</Tab>
-      </TabList>
+      <div className={s.bar}>
+        <TabList
+          className={s.tabs}
+          appearance="filled-circular"
+          selectedValue={scene}
+          onTabSelect={(_, d) => setScene(d.value as PreviewScene)}
+        >
+          <Tab value="2d">{t('video.preview.scene2d')}</Tab>
+          <Tab value="3d">{t('video.preview.scene3d')}</Tab>
+        </TabList>
+        {/* liga/desliga o shader já carregado: troca entre as duas imagens,
+            sem renderizar de novo */}
+        <ToggleButton
+          checked={on}
+          appearance={on ? 'primary' : 'secondary'}
+          icon={on ? <EyeRegular /> : <EyeOffRegular />}
+          aria-label={t('video.preview.toggle')}
+          onClick={() => setOn((v) => !v)}
+        >
+          {on ? t('video.preview.on') : t('video.preview.off')}
+        </ToggleButton>
+      </div>
       <div className={s.frame}>
         {shown && (
           <img
@@ -142,16 +152,6 @@ export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
             <Spinner size="small" />
           </div>
         )}
-        <ToggleButton
-          className={mergeClasses(s.toggle, !on && s.toggleOff)}
-          checked={on}
-          appearance={on ? 'primary' : 'secondary'}
-          icon={on ? <EyeRegular /> : <EyeOffRegular />}
-          aria-label={t('video.preview.toggle')}
-          onClick={() => setOn((v) => !v)}
-        >
-          {on ? t('video.preview.on') : t('video.preview.off')}
-        </ToggleButton>
       </div>
       {/* sem texto de ajuda embaixo; só o erro, se a prévia falhar */}
       {preview.isError && <Caption1>{t('video.preview.error')}</Caption1>}
