@@ -51,14 +51,13 @@ const useStyles = makeStyles({
   // `<a>`: ganha o anel de foco global do app (controle/teclado). Card
   // clicável do Fluent 2: a superfície inteira navega, hover/pressionado
   // mudam o fundo e a elevação sobe no hover.
-  // Ícone e texto juntos no ALTO do card, embaixo fica livre: a grade desce
-  // até a área segura de baixo (como o card das categorias), e com controle
-  // conectado a barra de dicas (canto inferior direito) cobre o pé do card
-  // de Sistema — com o nome lá embaixo, ela escondia o texto.
+  // Ícone no alto, nome e descrição no pé do card (pedido do usuário). Com
+  // controle conectado, a barra de dicas (canto inferior direito, fixa)
+  // fica por cima do pé do card de Sistema.
   card: {
     display: "flex",
     flexDirection: "column",
-    justifyContent: "flex-start",
+    justifyContent: "space-between",
     gap: tokens.spacingVerticalL,
     minWidth: 0,
     padding: tokens.spacingHorizontalXXL,
