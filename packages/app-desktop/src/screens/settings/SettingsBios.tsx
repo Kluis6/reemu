@@ -3,6 +3,7 @@ import {
   CheckmarkCircleFilled,
   DeleteRegular,
   DocumentArrowUpRegular,
+  PuzzlePieceRegular,
   WarningFilled,
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -25,14 +26,15 @@ import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
-  // Um bloco por sistema em COLUNAS CORRIDAS (2, ou 3 em tela larga): cada
-  // coluna empilha os blocos direto um embaixo do outro. Em grade, a linha
-  // inteira tomava a altura do maior bloco (PlayStation, 3 arquivos) e o
-  // vizinho menor (Saturn, 1) ficava com um buraco embaixo.
+  // Um bloco por sistema numa coluna só; 2 COLUNAS CORRIDAS só em tela
+  // grande (≥ 1600 px úteis: interface Compacta ou monitor ultrawide — num
+  // 16:9 o zoom da interface mantém ~1366). Colunas corridas e não grade:
+  // cada coluna empilha os blocos direto, sem o buraco que a grade deixava
+  // embaixo do bloco menor.
   groups: {
-    columnCount: 2,
+    columnCount: 1,
     columnGap: tokens.spacingHorizontalXL,
-    '@media (min-width: 1600px)': { columnCount: 3 },
+    '@media (min-width: 1600px)': { columnCount: 2 },
   },
   // `inline-flex` + largura cheia: bloco inline nunca é partido entre duas
   // colunas (mais garantido que só `breakInside` no WebKitGTK). O espaço
@@ -55,7 +57,16 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
   },
-  meta: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, overflowWrap: 'anywhere' },
+  meta: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    flexGrow: 1,
+    minWidth: 0,
+    overflowWrap: 'anywhere',
+  },
+  // ícone de BIOS (peça de quebra-cabeça), o mesmo do card no hub
+  icon: { fontSize: '24px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
   // Selos + botão: nunca encolhem nem quebram — quem quebra linha é a nota
   // à esquerda (sem isto, "presente, hash não bate" vazava da pílula e o
   // "Remover" era cortado nas colunas estreitas).
@@ -142,6 +153,7 @@ export function SettingsBios() {
                   (doRemove.isPending && sameKey(doRemove.variables, key))
                 return (
                   <div key={f.filename} className={styles.row}>
+                    <PuzzlePieceRegular className={styles.icon} aria-hidden />
                     <span className={styles.meta}>
                       <Body1>
                         <code>{shownName(f)}</code>
@@ -200,6 +212,7 @@ export function SettingsBios() {
             <Text as="strong" weight="semibold">{platformLabel('psp').toUpperCase()}</Text>
           </Body1>
           <div className={styles.row}>
+            <PuzzlePieceRegular className={styles.icon} aria-hidden />
             <span className={styles.meta}>
               <Body1>
                 <code>PPSSPP/</code>
