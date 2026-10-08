@@ -150,9 +150,8 @@ export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
           {on ? t('video.preview.on') : t('video.preview.off')}
         </ToggleButton>
       </div>
-      <Caption1>
-        {preview.isError ? t('video.preview.error') : t('video.preview.hint')}
-      </Caption1>
+      {/* sem texto de ajuda embaixo; só o erro, se a prévia falhar */}
+      {preview.isError && <Caption1>{t('video.preview.error')}</Caption1>}
     </div>
   )
 }

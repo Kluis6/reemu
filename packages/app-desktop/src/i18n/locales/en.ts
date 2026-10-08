@@ -440,7 +440,6 @@ const en: Messages = {
   video: {
     preview: {
       title: 'Preview',
-      hint: 'How the active shader looks on a sample scene. Use the button on the image to compare with and without the shader.',
       original: 'Original',
       shader: 'With shader',
       on: 'Shader on',

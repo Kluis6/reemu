@@ -440,7 +440,6 @@ const es: Messages = {
   video: {
     preview: {
       title: 'Vista previa',
-      hint: 'Cómo se ve el shader activo en una escena de ejemplo. Usa el botón sobre la imagen para comparar con y sin el shader.',
       original: 'Original',
       shader: 'Con shader',
       on: 'Shader activado',

@@ -441,7 +441,6 @@ const ptBR = {
   video: {
     preview: {
       title: 'Prévia',
-      hint: 'Como o shader ativo fica numa cena de exemplo. Use o botão sobre a imagem para comparar com e sem o shader.',
       original: 'Original',
       shader: 'Com shader',
       on: 'Shader ligado',
