@@ -1,0 +1,23 @@
+# Quebra de linha: LF em todo checkout, em qualquer sistema (o `core.autocrlf`
+# do Windows não decide mais). O repositório já guarda tudo em LF; sem esta
+# regra o checkout do Windows trocava pra CRLF e um arquivo novo escrito em
+# LF ficava misturado. Foi o que mudou o checksum de uma migration do sqlx e
+# deixou o app sem banco em 2026-10-08 (ver docs/historico.md).
+* text=auto eol=lf
+
+# binários: sem conversão nenhuma
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.gif binary
+*.wav binary
+*.ogg binary
+*.zip binary
+*.7z binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.db binary
