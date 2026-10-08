@@ -58,7 +58,7 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       `=child`). O WebView2 em modo janela não deixa ver o que está por
       baixo; precisaria de visual hosting (DirectComposition), que o
       Tauri/wry não usa. O padrão (janela filha acima do WebView2) ficou.
-- [ ] `todo` — **Windows ponta a ponta**: só os testes do `core-ipc` rodaram
+- [x] `done` — **Windows ponta a ponta**: validado pelo usuário em 2026-10-08. Antes, só os testes do `core-ipc` rodavam
       numa máquina Windows real. Falta `cargo tauri dev` completo, `video.rs`
       no caminho `#[cfg(not(linux))]`, paths do buildbot de cores, instalador.
       Conferir que as capas aparecem (URL `http://cover.localhost/<id>` no
@@ -66,7 +66,7 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [x] `done` — **Publicar uma versão com auto-update**: superado pela
       `v0.1.4`, publicada em 2026-10-02 (instaladores assinados e
       `latest.json` com a 0.1.4 nas seis variantes).
-- [ ] `todo` — **Chaveiro no Windows**: `cargo test -p reemu-desktop --lib
+- [x] `done` — **Chaveiro no Windows** (validado pelo usuário em 2026-10-08): `cargo test -p reemu-desktop --lib
       os_keyring -- --ignored` (Credential Manager).
 - [x] `done` — `SET_ROTATION` com um jogo vertical real: validado pelo
       usuário em 2026-09-25 (shooter vertical de arcade em pé, sem espelhar).
@@ -321,11 +321,11 @@ conferir".
 
 ### Biblioteca
 
-- [ ] `todo` — Validar no Windows (2026-10-02): "Atualizar biblioteca"
+- [x] `done` — Validado no Windows (validado pelo usuário em 2026-10-08): "Atualizar biblioteca"
       tira as 25 cópias do Redump e os `.chd` de `naomi/`, e adiciona os 127
       `.zip` de NAOMI e os 25 de Atomiswave (contagem da varredura nova na
       pasta real, num banco à parte); e os jogos de NAOMI abrem no flycast.
-- [ ] `todo` — Validar no Windows: trocar de jogo não mostra mais o último
+- [x] `done` — Validado no Windows (validado pelo usuário em 2026-10-08): trocar de jogo não mostra mais o último
       quadro do anterior (`SHOW_AFTER_PRESENTS` em `lib.rs`, também na rota
       Vulkan).
 
