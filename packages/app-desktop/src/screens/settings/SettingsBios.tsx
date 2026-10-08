@@ -1,6 +1,5 @@
 import { Badge, Body1, Button, Caption1, Text, makeStyles, tokens } from '@fluentui/react-components'
 import {
-  ArrowDownloadRegular,
   CheckmarkCircleFilled,
   DeleteRegular,
   DocumentArrowUpRegular,
@@ -21,6 +20,7 @@ import { LoadingState } from '../../components/EmptyState'
 import { errorToast, sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
 import { biosNote } from '../../lib/backendText'
+import { DownloadButton } from '../../components/DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
@@ -212,14 +212,12 @@ export function SettingsBios() {
                   {t('bios.installed')}
                 </Badge>
               )}
-              <Button
+              <DownloadButton
                 appearance={ppsspp.data ? 'subtle' : 'primary'}
-                icon={<ArrowDownloadRegular />}
-                disabled={getPpsspp.isPending}
+                label={getPpsspp.isPending ? t('bios.downloading') : ppsspp.data ? t('bios.update') : t('bios.download')}
+                busy={getPpsspp.isPending}
                 onClick={() => getPpsspp.mutate()}
-              >
-                {getPpsspp.isPending ? t('bios.downloading') : ppsspp.data ? t('bios.update') : t('bios.download')}
-              </Button>
+              />
             </span>
           </div>
         </div>

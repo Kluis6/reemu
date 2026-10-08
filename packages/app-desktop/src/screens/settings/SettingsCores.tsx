@@ -12,7 +12,6 @@ import {
   mergeClasses,
 } from '@fluentui/react-components'
 import {
-  ArrowDownloadRegular,
   CheckmarkCircleFilled,
   DeleteRegular,
   DeveloperBoardRegular,
@@ -30,6 +29,7 @@ import {
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
 import { useTabStyles } from '../../styles/xbox'
+import { DownloadButton } from '../../components/DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
@@ -223,14 +223,12 @@ function Catalog() {
                 </Button>
               </span>
             ) : (
-              <Button
+              <DownloadButton
                 appearance="primary"
-                icon={<ArrowDownloadRegular />}
-                disabled={busy(c.coreId)}
+                label={busy(c.coreId) ? t('cores.downloading') : t('cores.install')}
+                busy={busy(c.coreId)}
                 onClick={() => install.mutate(c.coreId)}
-              >
-                {busy(c.coreId) ? t('cores.downloading') : t('cores.install')}
-              </Button>
+              />
             )}
           </div>
         ))}

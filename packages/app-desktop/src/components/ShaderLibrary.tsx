@@ -12,7 +12,7 @@ import {
   mergeClasses,
   tokens,
 } from '@fluentui/react-components'
-import { ArrowDownloadRegular, FolderRegular } from '@fluentui/react-icons'
+import { FolderRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
 import {
@@ -24,6 +24,7 @@ import {
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
 import { errorPatch } from '../lib/toast'
+import { DownloadButton } from './DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
 
 const ROOT_KEY = 'reemu.shaderLibRoot'
@@ -190,14 +191,12 @@ export function ShaderLibrary({
           <Trans i18nKey="shaders.intro" components={{ code: <code /> }} />
         </Caption1>
         <div className={s.bar}>
-          <Button
+          <DownloadButton
             appearance="primary"
-            icon={<ArrowDownloadRegular />}
-            disabled={dl.isPending}
+            label={dl.isPending ? t('shaders.downloading') : t('shaders.download')}
+            busy={dl.isPending}
             onClick={() => dl.mutate()}
-          >
-            {dl.isPending ? t('shaders.downloading') : t('shaders.download')}
-          </Button>
+          />
           <Button icon={<FolderRegular />} onClick={chooseRoot}>
             {t('shaders.chooseFolder')}
           </Button>

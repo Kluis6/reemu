@@ -9,7 +9,6 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import {
-  ArrowDownloadRegular,
   ArrowSyncRegular,
   CheckmarkCircleFilled,
   FrameRegular,
@@ -25,6 +24,7 @@ import {
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
 import { errorPatch } from '../lib/toast'
+import { DownloadButton } from './DownloadButton'
 import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
@@ -160,23 +160,31 @@ export function BezelLibrary() {
                 </Badge>
               )}
             </span>
-            <Button
-              className={s.action}
-              appearance={c.installed ? 'subtle' : 'secondary'}
-              icon={
-                dl.isPending && dl.variables === c.systemId ? (
-                  <Spinner size="tiny" />
-                ) : c.installed ? (
-                  <ArrowSyncRegular />
-                ) : (
-                  <ArrowDownloadRegular />
-                )
-              }
-              disabled={dl.isPending}
-              onClick={() => dl.mutate(c.systemId)}
-            >
-              {c.installed ? t('bezels.reinstall') : t('bezels.download')}
-            </Button>
+            {c.installed ? (
+              <Button
+                className={s.action}
+                appearance="subtle"
+                icon={
+                  dl.isPending && dl.variables === c.systemId ? (
+                    <Spinner size="tiny" />
+                  ) : (
+                    <ArrowSyncRegular />
+                  )
+                }
+                disabled={dl.isPending}
+                onClick={() => dl.mutate(c.systemId)}
+              >
+                {t('bezels.reinstall')}
+              </Button>
+            ) : (
+              <DownloadButton
+                className={s.action}
+                label={t('bezels.download')}
+                busy={dl.isPending && dl.variables === c.systemId}
+                disabled={dl.isPending}
+                onClick={() => dl.mutate(c.systemId)}
+              />
+            )}
           </div>
         ))}
       </div>
