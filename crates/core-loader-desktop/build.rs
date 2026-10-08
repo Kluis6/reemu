@@ -36,9 +36,12 @@ fn main() {
     let tool = cc::Build::new().get_compiler();
     let mut cmd = tool.to_command();
     if tool.is_like_msvc() {
+        // `/Fo:` manda o .obj pro OUT_DIR — sem isto o cl.exe o escrevia na
+        // pasta do crate (e ele acabou versionado).
         cmd.arg("/LD")
             .arg("-O1")
             .arg("fixtures/testcore.c")
+            .arg(format!("/Fo:{}\\", out.display()))
             .arg(format!("/Fe:{}", so.display()));
     } else {
         let link_args: &[&str] = match target_os.as_str() {

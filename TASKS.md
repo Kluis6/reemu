@@ -250,7 +250,9 @@ conferir".
       estável em 14,5–14,7 ms (sem o serrote de 4 → 16,7 ms) e intervalo
       do core cravado em 16,73 ms. Pendente fora daqui: validar numa
       AMD/Intel e no Linux/Wayland.
-- [ ] `todo` — Testes de integração do `emu-session` no Windows: o core de
+- [x] `done` — Testes de integração do `emu-session` no Windows (corrigido em
+      2026-10-08: `RETRO_API` = `__declspec(dllexport)` no `testcore.c`, como o
+      `libretro.h` oficial; workspace inteiro passa no Windows). Era: o core de
       teste (`testcore_path`) carrega sem `retro_set_environment`
       ("GetProcAddress failed"), e os 9 testes de `tests/session.rs`
       falham. Já falhavam antes de 2026-10-02 (conferido com `git stash`).

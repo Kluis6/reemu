@@ -8,6 +8,17 @@
 #include <stdint.h>
 #include <string.h>
 
+/* Exportar as funções da DLL: no MSVC só sai na tabela de exports o que for
+ * `__declspec(dllexport)` — sem isto a DLL do Windows não exportava nada e o
+ * loader falhava em `GetProcAddress`. Mesma definição do `libretro.h`
+ * oficial (libretro-common): `RETRO_API` = `__declspec(dllexport)` no
+ * Windows, visibilidade padrão no resto. */
+#if defined(_WIN32)
+#define RETRO_API __declspec(dllexport)
+#else
+#define RETRO_API __attribute__((visibility("default")))
+#endif
+
 typedef bool (*retro_environment_t)(unsigned, void *);
 typedef void (*retro_video_refresh_t)(const void *, unsigned, unsigned, size_t);
 typedef void (*retro_audio_sample_t)(int16_t, int16_t);
@@ -87,7 +98,7 @@ static unsigned frame_n;
    o valor atual da core option `testcore_mark` a cada `retro_run`. */
 static unsigned char testcore_sram[64] = {0xA5, 0x5A};
 
-void retro_set_environment(retro_environment_t cb) {
+RETRO_API void retro_set_environment(retro_environment_t cb) {
    env_cb = cb;
    struct retro_variable vars[] = {
       {"testcore_speed", "Velocidade; normal|turbo|lento"},
@@ -97,13 +108,13 @@ void retro_set_environment(retro_environment_t cb) {
    if (cb)
       cb(RETRO_ENVIRONMENT_SET_VARIABLES, vars);
 }
-void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
-void retro_set_audio_sample(retro_audio_sample_t cb) { audio_sample_cb = cb; }
-void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
-void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; }
-void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; }
+RETRO_API void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
+RETRO_API void retro_set_audio_sample(retro_audio_sample_t cb) { audio_sample_cb = cb; }
+RETRO_API void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_batch_cb = cb; }
+RETRO_API void retro_set_input_poll(retro_input_poll_t cb) { input_poll_cb = cb; }
+RETRO_API void retro_set_input_state(retro_input_state_t cb) { input_state_cb = cb; }
 
-unsigned retro_api_version(void) { return 1; }
+RETRO_API unsigned retro_api_version(void) { return 1; }
 #define RETRO_ENVIRONMENT_GET_LOG_INTERFACE 27 /* libretro.h */
 typedef void (*log_printf_t)(unsigned level, const char *fmt, ...);
 struct log_callback { log_printf_t log; };
@@ -115,7 +126,7 @@ struct log_callback { log_printf_t log; };
 struct controller_description { const char *desc; unsigned id; };
 struct controller_info { const struct controller_description *types; unsigned num_types; };
 
-void retro_init(void) {
+RETRO_API void retro_init(void) {
    struct log_callback log = { 0 };
    static const struct controller_description pad[] = { { "RetroPad", 1 } };
    static const struct controller_info ports[] = { { pad, 1 }, { pad, 1 }, { 0, 0 } };
@@ -125,9 +136,9 @@ void retro_init(void) {
    env_cb(RETRO_ENVIRONMENT_GET_LOG_INTERFACE, &log);
    log.log(1, "testcore: init %d\n", 42);
 }
-void retro_deinit(void) {}
+RETRO_API void retro_deinit(void) {}
 
-void retro_get_system_info(struct retro_system_info *info) {
+RETRO_API void retro_get_system_info(struct retro_system_info *info) {
    memset(info, 0, sizeof(*info));
    info->library_name = "reemu-testcore";
    info->library_version = "0.1.0";
@@ -136,7 +147,7 @@ void retro_get_system_info(struct retro_system_info *info) {
    info->block_extract = false;
 }
 
-void retro_get_system_av_info(struct retro_system_av_info *info) {
+RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info) {
    info->geometry.base_width = FB_W;
    info->geometry.base_height = FB_H;
    info->geometry.max_width = FB_W;
@@ -149,11 +160,11 @@ void retro_get_system_av_info(struct retro_system_av_info *info) {
 /* Portas que o frontend configurou como RETRO_DEVICE_JOYPAD (1) — bit N =
    porta N, espelhado em SRAM[6]. Como o flycast, este core declara 2 portas
    (SET_CONTROLLER_INFO no retro_init) e espera o frontend ligá-las. */
-void retro_set_controller_port_device(unsigned port, unsigned device) {
+RETRO_API void retro_set_controller_port_device(unsigned port, unsigned device) {
    if (device == 1 && port < 8)
       testcore_sram[6] |= (unsigned char)(1u << port);
 }
-void retro_reset(void) { frame_n = 0; }
+RETRO_API void retro_reset(void) { frame_n = 0; }
 
 /* Como um core real: pergunta se o frontend suporta bitmask e, se sim,
    lê todos os botões da porta 0 de uma vez — espelhados em SRAM[4..6]. */
@@ -163,7 +174,7 @@ static int has_bitmasks = 0;
    `SET_GEOMETRY` com proporção 2.0 — testa a mudança em runtime. */
 static int geometry_test = 0;
 
-bool retro_load_game(const struct retro_game_info *game) {
+RETRO_API bool retro_load_game(const struct retro_game_info *game) {
    enum { fmt = RETRO_PIXEL_FORMAT_RGB565 };
    unsigned pf = RETRO_PIXEL_FORMAT_RGB565;
    if (env_cb)
@@ -187,16 +198,16 @@ bool retro_load_game(const struct retro_game_info *game) {
    return true;
 }
 
-void retro_unload_game(void) {}
-unsigned retro_get_region(void) { return 0; }
-bool retro_load_game_special(unsigned t, const struct retro_game_info *i, size_t n) {
+RETRO_API void retro_unload_game(void) {}
+RETRO_API unsigned retro_get_region(void) { return 0; }
+RETRO_API bool retro_load_game_special(unsigned t, const struct retro_game_info *i, size_t n) {
    (void)t;
    (void)i;
    (void)n;
    return false;
 }
 
-void retro_run(void) {
+RETRO_API void retro_run(void) {
    if (input_poll_cb)
       input_poll_cb();
 
@@ -236,8 +247,8 @@ void retro_run(void) {
  * >512KB de proposito — exercita o caminho IPC de datagrama grande
  * (SNES real passa de 800KB), que ja truncou em silencio. */
 #define TESTCORE_STATE_SIZE (4u * 1024u * 1024u)  /* > INLINE_MAX do core-ipc: exercita o caminho memfd */
-size_t retro_serialize_size(void) { return TESTCORE_STATE_SIZE; }
-bool retro_serialize(void *data, size_t size) {
+RETRO_API size_t retro_serialize_size(void) { return TESTCORE_STATE_SIZE; }
+RETRO_API bool retro_serialize(void *data, size_t size) {
    if (size < TESTCORE_STATE_SIZE)
       return false;
    unsigned char *p = (unsigned char *)data;
@@ -246,24 +257,24 @@ bool retro_serialize(void *data, size_t size) {
       p[i] = (unsigned char)((i * 31u + frame_n) & 0xFF);
    return true;
 }
-bool retro_unserialize(const void *data, size_t size) {
+RETRO_API bool retro_unserialize(const void *data, size_t size) {
    if (size < sizeof(frame_n))
       return false;
    memcpy(&frame_n, data, sizeof(frame_n));
    return true;
 }
-void retro_cheat_reset(void) {}
-void retro_cheat_set(unsigned index, bool enabled, const char *code) {
+RETRO_API void retro_cheat_reset(void) {}
+RETRO_API void retro_cheat_set(unsigned index, bool enabled, const char *code) {
    (void)index;
    (void)enabled;
    (void)code;
 }
-void *retro_get_memory_data(unsigned id) {
+RETRO_API void *retro_get_memory_data(unsigned id) {
    if (id == 0 /* RETRO_MEMORY_SAVE_RAM */)
       return testcore_sram;
    return NULL;
 }
-size_t retro_get_memory_size(unsigned id) {
+RETRO_API size_t retro_get_memory_size(unsigned id) {
    if (id == 0 /* RETRO_MEMORY_SAVE_RAM */)
       return sizeof(testcore_sram);
    return 0;

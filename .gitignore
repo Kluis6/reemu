@@ -52,3 +52,6 @@ Thumbs.db
 # Site: gerados no build (`pnpm --filter reemu-site build`, ver pages.yml)
 site/tailwind.css
 site/vendor/motion.js
+
+# objeto do cl.exe (MSVC) compilando fixtures em C
+*.obj
