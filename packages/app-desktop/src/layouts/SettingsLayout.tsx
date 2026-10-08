@@ -74,10 +74,6 @@ const useStyles = makeStyles({
     scrollbarGutter: "stable",
     padding: tokens.spacingHorizontalXXL,
     paddingRight: `calc(${tokens.spacingHorizontalXXL} - ${M.SCROLLBAR_W}px)`,
-    // Com controle conectado, a barra de dicas (fixa, 25–67 px da borda de
-    // baixo) cobre o canto do card: folga no fim da rolagem pra o último
-    // item não ficar escondido atrás dela.
-    paddingBottom: `${M.PAGE_PAD_B - M.SAFE_Y + 24}px`,
     "::-webkit-scrollbar": { width: `${M.SCROLLBAR_W}px` },
     "::-webkit-scrollbar-thumb": {
       backgroundColor: tokens.colorNeutralStroke2,

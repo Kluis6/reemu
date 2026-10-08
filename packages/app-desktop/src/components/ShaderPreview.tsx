@@ -23,7 +23,6 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalS,
-    maxWidth: '480px',
   },
   // 24 até a imagem (8 do `gap` + 16)
   tabs: {
@@ -33,9 +32,13 @@ const useStyles = makeStyles({
     // raio padrão do ReEmu (4) no lugar da pílula do `filled-circular`
     '& .fui-Tab': { borderRadius: tokens.borderRadiusMedium },
   },
+  // Ocupa a coluna inteira, limitada pela altura útil do card das
+  // Configurações: a imagem começa a 283 px do topo da tela e o card acaba a
+  // 32 + 24 (padding) da borda de baixo → altura máx. = 100vh − 340 (4:3).
+  // `vh` já está em px da interface (zoom nativo, `uiScale.ts`).
   frame: {
     position: 'relative',
-    width: '100%',
+    width: 'min(100%, calc((100vh - 340px) * 4 / 3))',
     aspectRatio: '4 / 3',
     overflow: 'hidden',
     borderRadius: tokens.borderRadiusMedium,
