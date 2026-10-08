@@ -549,6 +549,7 @@ const es: Messages = {
   },
   bios: {
     notes: {
+      pcsx2_bios: 'BIOS de PlayStation 2 — sirve cualquier región o revisión; LRPS2 no funciona sin ella',
       naomi_zip: 'BIOS de la placa NAOMI (set de MAME) — los juegos de NAOMI no funcionan sin ella',
       naomi2_zip: 'BIOS de NAOMI 2 (set de MAME) — solo para los juegos de NAOMI 2',
       hod2bios_zip: 'BIOS propia de The House of the Dead 2',

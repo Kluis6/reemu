@@ -11,6 +11,7 @@ pub struct BiosStatusDto {
     pub note: String,
     pub present: bool,
     pub hash_ok: Option<bool>,
+    pub any_of_folder: Option<String>,
 }
 
 /// Confere `<dados>/system` contra a tabela de BIOS conhecida
@@ -26,6 +27,7 @@ pub fn list_bios_status(state: State<'_, AppState>) -> Vec<BiosStatusDto> {
             note: s.note,
             present: s.present,
             hash_ok: s.hash_ok,
+            any_of_folder: s.any_of_folder,
         })
         .collect()
 }

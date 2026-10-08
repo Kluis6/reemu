@@ -69,6 +69,8 @@ const useStyles = makeStyles({
 })
 
 type Key = { systemId: string; filename: string }
+/** O que aparece no lugar do nome: a pasta, numa entrada "qualquer um destes". */
+const shownName = (f: BiosStatus) => (f.anyOfFolder ? `${f.anyOfFolder}/` : f.filename)
 const sameKey = (a?: Key, b?: Key) => a?.systemId === b?.systemId && a?.filename === b?.filename
 
 export function SettingsBios() {
@@ -92,16 +94,16 @@ export function SettingsBios() {
   // O picker abre dentro do `mutationFn` — `isPending`/`variables` cobrem o
   // diálogo nativo + a cópia, então o botão fica "ocupado" o tempo todo.
   const doImport = useMutation({
-    mutationFn: async ({ systemId, filename }: Key) => {
+    mutationFn: async ({ systemId, filename }: Key & { label: string }) => {
       const path = await pickBiosFile()
       if (!path) return false // cancelado no diálogo
       await importBiosFile(systemId, filename, path)
       return true
     },
-    onSuccess: (imported, { filename }) => {
+    onSuccess: (imported, { label }) => {
       if (!imported) return
       refresh()
-      push(sysToast(t('bios.imported', { file: filename }), 'Success'))
+      push(sysToast(t('bios.imported', { file: label }), 'Success'))
     },
     onError: (e) => push(errorToast(e, 'importBios')),
   })
@@ -142,14 +144,14 @@ export function SettingsBios() {
                   <div key={f.filename} className={styles.row}>
                     <span className={styles.meta}>
                       <Body1>
-                        <code>{f.filename}</code>
+                        <code>{shownName(f)}</code>
                         {f.required && (
                           <Badge appearance="tint" color="danger" style={{ marginLeft: 8 }}>
                             {t('bios.required')}
                           </Badge>
                         )}
                       </Body1>
-                      <Caption1>{biosNote(t, f.filename, f.note)}</Caption1>
+                      <Caption1>{biosNote(t, f.anyOfFolder ?? f.filename, f.note)}</Caption1>
                     </span>
                     <span className={styles.actions}>
                       {!f.present && (
@@ -181,7 +183,7 @@ export function SettingsBios() {
                           appearance="primary"
                           icon={<DocumentArrowUpRegular />}
                           disabled={busy}
-                          onClick={() => doImport.mutate(key)}
+                          onClick={() => doImport.mutate({ ...key, label: shownName(f) })}
                         >
                           {busy ? t('bios.importing') : t('bios.import')}
                         </Button>

@@ -325,6 +325,9 @@ export interface BiosStatus {
   /** `true`/`false` = presente e MD5 conhecido conferido; `null` = ausente
    *  ou sem MD5 documentado pra esse arquivo. */
   hashOk: boolean | null
+  /** Entrada "qualquer um destes" (o PS2): a pasta onde basta um dump —
+   *  aí `filename` é só a chave `"*"`. */
+  anyOfFolder: string | null
 }
 export const listBiosStatus = () => invoke<BiosStatus[]>('list_bios_status')
 export const importBiosFile = (systemId: string, filename: string, path: string) =>

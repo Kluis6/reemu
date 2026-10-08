@@ -550,6 +550,7 @@ const ptBR = {
   },
   bios: {
     notes: {
+      pcsx2_bios: 'BIOS do PlayStation 2 — qualquer região ou revisão serve; o LRPS2 não roda sem',
       naomi_zip: 'BIOS da placa NAOMI (set do MAME) — os jogos de NAOMI não rodam sem',
       naomi2_zip: 'BIOS da NAOMI 2 (set do MAME) — só pros jogos de NAOMI 2',
       hod2bios_zip: 'BIOS própria de The House of the Dead 2',

@@ -549,6 +549,7 @@ const en: Messages = {
   },
   bios: {
     notes: {
+      pcsx2_bios: 'PlayStation 2 BIOS — any region or revision works; LRPS2 does not run without it',
       naomi_zip: 'NAOMI board BIOS (MAME set) — NAOMI games won\'t run without it',
       naomi2_zip: 'NAOMI 2 BIOS (MAME set) — only for NAOMI 2 games',
       hod2bios_zip: 'The House of the Dead 2\'s own BIOS',

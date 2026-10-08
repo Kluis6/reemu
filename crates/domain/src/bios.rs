@@ -39,6 +39,10 @@ pub struct BiosFile {
     pub required: bool,
     /// Região/variante ou observação (mostrado na UI).
     pub note: &'static str,
+    /// Não vazio = entrada "qualquer um destes": vários dumps equivalentes
+    /// (nome, MD5) na pasta `subfolder`, e basta um (o PS2: qualquer BIOS em
+    /// `pcsx2/bios/`). `filename` vira só a chave da entrada (`"*"`).
+    pub any_of: &'static [(&'static str, &'static str)],
 }
 
 const PSX: &[BiosFile] = &[
@@ -48,6 +52,7 @@ const PSX: &[BiosFile] = &[
         md5: &["8dd7d5296a650fac7319bce665a6a53c"],
         required: false,
         note: "NTSC-J (Japão) — Beetle PSX cai pro OpenBIOS embutido se faltar",
+        any_of: &[],
     },
     BiosFile {
         filename: "scph5501.bin",
@@ -55,6 +60,7 @@ const PSX: &[BiosFile] = &[
         md5: &["490f666e1afb15b7362b406ed1cea246"],
         required: false,
         note: "NTSC-U (EUA) — Beetle PSX cai pro OpenBIOS embutido se faltar",
+        any_of: &[],
     },
     BiosFile {
         filename: "scph5502.bin",
@@ -62,6 +68,7 @@ const PSX: &[BiosFile] = &[
         md5: &["32736f17079d0b2b7024407c39bd3050"],
         required: false,
         note: "PAL (Europa) — Beetle PSX cai pro OpenBIOS embutido se faltar",
+        any_of: &[],
     },
 ];
 
@@ -71,6 +78,7 @@ const SATURN: &[BiosFile] = &[BiosFile {
     md5: &["af5828fdff51384f99b3c4926be27762"],
     required: true,
     note: "Kronos NÃO faz HLE — precisa de um BIOS real de Saturn pra rodar",
+    any_of: &[],
 }];
 
 const DREAMCAST: &[BiosFile] = &[BiosFile {
@@ -79,6 +87,7 @@ const DREAMCAST: &[BiosFile] = &[BiosFile {
     md5: &["e10c53c2f8b90bab96ead2d368858623"],
     required: false,
     note: "Flycast tem opção \"Enable HLE BIOS\" — roda sem, com menos precisão",
+    any_of: &[],
 }];
 
 /// NAOMI / NAOMI 2 no Flycast: BIOS do MAME em `dc/` (docs.libretro.com,
@@ -92,6 +101,7 @@ const NAOMI: &[BiosFile] = &[
         md5: &[],
         required: true,
         note: "BIOS da placa NAOMI (set do MAME) — os jogos de NAOMI não rodam sem",
+        any_of: &[],
     },
     BiosFile {
         filename: "naomi2.zip",
@@ -99,6 +109,7 @@ const NAOMI: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "BIOS da NAOMI 2 (set do MAME) — só pros jogos de NAOMI 2",
+        any_of: &[],
     },
     BiosFile {
         filename: "hod2bios.zip",
@@ -106,6 +117,7 @@ const NAOMI: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "BIOS própria de The House of the Dead 2",
+        any_of: &[],
     },
     BiosFile {
         filename: "f355bios.zip",
@@ -113,6 +125,7 @@ const NAOMI: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "BIOS de Ferrari F355 Challenge (twin/deluxe)",
+        any_of: &[],
     },
     BiosFile {
         filename: "f355dlx.zip",
@@ -120,6 +133,7 @@ const NAOMI: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "BIOS de Ferrari F355 Challenge (deluxe)",
+        any_of: &[],
     },
     BiosFile {
         filename: "airlbios.zip",
@@ -127,6 +141,7 @@ const NAOMI: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "BIOS de Airline Pilots (deluxe)",
+        any_of: &[],
     },
 ];
 
@@ -136,6 +151,7 @@ const ATOMISWAVE: &[BiosFile] = &[BiosFile {
     md5: &[],
     required: true,
     note: "BIOS da placa Atomiswave (set do MAME) — os jogos não rodam sem",
+    any_of: &[],
 }];
 
 const ARCADE: &[BiosFile] = &[
@@ -145,6 +161,7 @@ const ARCADE: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "Jogos de Neo Geo (MVS/AES) do FBNeo pedem isso",
+        any_of: &[],
     },
     BiosFile {
         filename: "neocdz.zip",
@@ -152,6 +169,7 @@ const ARCADE: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "Neo Geo CD — precisa também do neogeo.zip",
+        any_of: &[],
     },
     BiosFile {
         filename: "coleco.zip",
@@ -159,6 +177,7 @@ const ARCADE: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "ColecoVision via FBNeo",
+        any_of: &[],
     },
     BiosFile {
         filename: "pgm.zip",
@@ -166,6 +185,7 @@ const ARCADE: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "PGM System (IGS) via FBNeo",
+        any_of: &[],
     },
     BiosFile {
         filename: "decocass.zip",
@@ -173,6 +193,7 @@ const ARCADE: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "DECO Cassette System via FBNeo",
+        any_of: &[],
     },
     BiosFile {
         filename: "fdsbios.zip",
@@ -180,6 +201,7 @@ const ARCADE: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "Famicom Disk System via FBNeo",
+        any_of: &[],
     },
 ];
 
@@ -195,6 +217,7 @@ const SEGA_CD: &[BiosFile] = &[
         ],
         required: false,
         note: "Sega CD (EUA) — obrigatório pros jogos dos EUA",
+        any_of: &[],
     },
     BiosFile {
         filename: "bios_CD_E.bin",
@@ -202,6 +225,7 @@ const SEGA_CD: &[BiosFile] = &[
         md5: &["e66fa1dc5820d254611fdcdba0662372"],
         required: false,
         note: "Mega-CD (Europa) — obrigatório pros jogos europeus",
+        any_of: &[],
     },
     BiosFile {
         filename: "bios_CD_J.bin",
@@ -209,6 +233,7 @@ const SEGA_CD: &[BiosFile] = &[
         md5: &["278a9397d192149e84e820ac621a8edd"],
         required: false,
         note: "Mega-CD (Japão) — obrigatório pros jogos japoneses",
+        any_of: &[],
     },
 ];
 
@@ -219,6 +244,7 @@ const PC_ENGINE_CD: &[BiosFile] = &[
         md5: &["38179df8f4ac870017db21ebcbf53114"],
         required: true,
         note: "Super CD-ROM² System 3.x — o padrão dos cores Beetle PCE",
+        any_of: &[],
     },
     BiosFile {
         filename: "syscard2.pce",
@@ -226,6 +252,7 @@ const PC_ENGINE_CD: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "CD-ROM² System 2.x — alternativa (opção \"CD BIOS\" do core)",
+        any_of: &[],
     },
     BiosFile {
         filename: "syscard1.pce",
@@ -233,6 +260,7 @@ const PC_ENGINE_CD: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "CD-ROM² System 1.x — alternativa (opção \"CD BIOS\" do core)",
+        any_of: &[],
     },
     BiosFile {
         filename: "gexpress.pce",
@@ -240,6 +268,7 @@ const PC_ENGINE_CD: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "Game Express CD Card — só pros jogos da Games Express",
+        any_of: &[],
     },
 ];
 
@@ -249,6 +278,7 @@ const PC_FX: &[BiosFile] = &[BiosFile {
     md5: &["08e36edbea28a017f79f8d4f7ff9b6d7"],
     required: true,
     note: "BIOS v1.00 — o Beetle PC-FX não roda sem",
+    any_of: &[],
 }];
 
 const AMIGA: &[BiosFile] = &[
@@ -258,6 +288,7 @@ const AMIGA: &[BiosFile] = &[
         md5: &["82a21c1890cae844b3df741f2762d48d"],
         required: false,
         note: "Kickstart 1.3 (A500) — o da maioria dos jogos. PUAE usa AROS embutido se faltar",
+        any_of: &[],
     },
     BiosFile {
         filename: "kick37175.A500",
@@ -265,6 +296,7 @@ const AMIGA: &[BiosFile] = &[
         md5: &["dc10d7bdd1b6f450773dfb558477c230"],
         required: false,
         note: "Kickstart 2.04 (A500+)",
+        any_of: &[],
     },
     BiosFile {
         filename: "kick40063.A600",
@@ -272,6 +304,7 @@ const AMIGA: &[BiosFile] = &[
         md5: &["e40a5dfb3d017ba8779faba30cbd1c8e"],
         required: false,
         note: "Kickstart 3.1 (A600)",
+        any_of: &[],
     },
     BiosFile {
         filename: "kick40068.A1200",
@@ -279,6 +312,7 @@ const AMIGA: &[BiosFile] = &[
         md5: &["646773759326fbac3b2311fd8c8793ee"],
         required: false,
         note: "Kickstart 3.1 (A1200) — jogos AGA",
+        any_of: &[],
     },
     BiosFile {
         filename: "kick40060.CD32",
@@ -290,6 +324,7 @@ const AMIGA: &[BiosFile] = &[
         ],
         required: false,
         note: "Kickstart 3.1 do CD32 (sozinho ou já combinado com o extended)",
+        any_of: &[],
     },
     BiosFile {
         filename: "kick40060.CD32.ext",
@@ -297,6 +332,7 @@ const AMIGA: &[BiosFile] = &[
         md5: &["bb72565701b1b6faece07d68ea5da639"],
         required: false,
         note: "CD32 extended ROM (dispensável se o kick40060.CD32 já é o combinado)",
+        any_of: &[],
     },
 ];
 const ATARI_5200: &[BiosFile] = &[BiosFile {
@@ -305,6 +341,7 @@ const ATARI_5200: &[BiosFile] = &[BiosFile {
     md5: &["281f20ea4320404ec820fb7ec0693b38"],
     required: false,
     note: "atari800 exige; o a5200 roda sem",
+    any_of: &[],
 }];
 const ATARI_8BIT: &[BiosFile] = &[
     BiosFile {
@@ -313,6 +350,7 @@ const ATARI_8BIT: &[BiosFile] = &[
         md5: &["06daac977823773a3eea3422fd26a703"],
         required: false,
         note: "OS do Atari XL/XE — o atari800 pede pra jogos de XL/XE",
+        any_of: &[],
     },
     BiosFile {
         filename: "ATARIBAS.ROM",
@@ -320,6 +358,7 @@ const ATARI_8BIT: &[BiosFile] = &[
         md5: &["0bac0c6a50104045d902df4503a4c30b"],
         required: false,
         note: "Interpretador BASIC",
+        any_of: &[],
     },
     BiosFile {
         filename: "ATARIOSA.ROM",
@@ -327,6 +366,7 @@ const ATARI_8BIT: &[BiosFile] = &[
         md5: &["eb1f32f5d9f382db1bbfb8d7f9cb343a"],
         required: false,
         note: "OS do Atari 400/800 (PAL)",
+        any_of: &[],
     },
     BiosFile {
         filename: "ATARIOSB.ROM",
@@ -334,6 +374,7 @@ const ATARI_8BIT: &[BiosFile] = &[
         md5: &["a3e8d617c95d08031fe1b20d541434b2"],
         required: false,
         note: "OS do Atari 400/800 (NTSC)",
+        any_of: &[],
     },
 ];
 const MSX: &[BiosFile] = &[
@@ -343,6 +384,7 @@ const MSX: &[BiosFile] = &[
         md5: &["364a1a579fe5cb8dba54519bcfcdac0d"],
         required: false,
         note: "MSX1 — fMSX exige; o blueMSX usa as pastas Machines/Databases",
+        any_of: &[],
     },
     BiosFile {
         filename: "MSX2.ROM",
@@ -350,6 +392,7 @@ const MSX: &[BiosFile] = &[
         md5: &["ec3a01c91f24fbddcbcab0ad301bc9ef"],
         required: false,
         note: "MSX2 — fMSX exige",
+        any_of: &[],
     },
     BiosFile {
         filename: "MSX2EXT.ROM",
@@ -357,6 +400,7 @@ const MSX: &[BiosFile] = &[
         md5: &["2183c2aff17cf4297bdb496de78c2e8a"],
         required: false,
         note: "MSX2 ExtROM — fMSX exige",
+        any_of: &[],
     },
     BiosFile {
         filename: "MSX2P.ROM",
@@ -364,6 +408,7 @@ const MSX: &[BiosFile] = &[
         md5: &["847cc025ffae665487940ff2639540e5"],
         required: false,
         note: "MSX2+ — fMSX exige",
+        any_of: &[],
     },
     BiosFile {
         filename: "MSX2PEXT.ROM",
@@ -371,6 +416,7 @@ const MSX: &[BiosFile] = &[
         md5: &["7c8243c71d8f143b2531f01afa6a05dc"],
         required: false,
         note: "MSX2+ ExtROM — fMSX exige",
+        any_of: &[],
     },
     BiosFile {
         filename: "DISK.ROM",
@@ -378,6 +424,7 @@ const MSX: &[BiosFile] = &[
         md5: &["80dcd1ad1a4cf65d64b7ba10504e8190"],
         required: false,
         note: "DiskROM/BDOS — jogos em disquete no fMSX",
+        any_of: &[],
     },
 ];
 const NDS: &[BiosFile] = &[
@@ -387,6 +434,7 @@ const NDS: &[BiosFile] = &[
         md5: &["df692a80a5b1bc90728bc3dfc76cd948"],
         required: false,
         note: "ARM7 — melonDS tem BIOS livre embutida; DeSmuME só usa com a opção de BIOS externa",
+        any_of: &[],
     },
     BiosFile {
         filename: "bios9.bin",
@@ -394,6 +442,7 @@ const NDS: &[BiosFile] = &[
         md5: &["a392174eb3e572fed6447e956bde4b25"],
         required: false,
         note: "ARM9 — mesma situação do bios7.bin",
+        any_of: &[],
     },
     BiosFile {
         filename: "firmware.bin",
@@ -402,12 +451,34 @@ const NDS: &[BiosFile] = &[
         md5: &[],
         required: false,
         note: "Firmware do DS — opcional; o MD5 varia por console",
+        any_of: &[],
     },
 ];
 
-/// Arquivos de sistema conhecidos pra um `system_id`. `&[]` = o sistema não
-/// precisa de nada além da ROM (a maioria — cartucho puro).
-pub fn bios_files_for_system(system_id: &str) -> &'static [BiosFile] {
+/// Arquivos de sistema conhecidos pra um `system_id`: a tabela à mão (com
+/// as notas conferidas core a core) e, depois, o que só a gerada tem
+/// (`bios_generated.rs`, de `scripts/gen_bios_table.py` — System.dat +
+/// libretro-core-info). Vazio = o sistema não precisa de nada além da ROM.
+pub fn bios_files_for_system(system_id: &str) -> Vec<BiosFile> {
+    let mut out = handwritten(system_id).to_vec();
+    out.extend(
+        crate::bios_generated::GENERATED
+            .iter()
+            .filter(|(s, _)| *s == system_id)
+            .map(|(_, f)| *f),
+    );
+    out
+}
+
+/// Todos os `system_id` com algum BIOS conhecido (os da tabela à mão
+/// primeiro, na ordem dela) — pro painel de Configurações varrer tudo.
+pub fn known_systems() -> Vec<&'static str> {
+    let mut out = HANDWRITTEN_SYSTEMS.to_vec();
+    out.extend_from_slice(crate::bios_generated::GENERATED_SYSTEMS);
+    out
+}
+
+fn handwritten(system_id: &str) -> &'static [BiosFile] {
     match system_id {
         "psx" => PSX,
         "saturn" => SATURN,
@@ -427,9 +498,8 @@ pub fn bios_files_for_system(system_id: &str) -> &'static [BiosFile] {
     }
 }
 
-/// Todos os `system_id` que este módulo conhece BIOS pra — pra quem quiser
-/// varrer tudo de uma vez (ex: painel de Configurações).
-pub const KNOWN_SYSTEMS: &[&str] = &[
+/// Sistemas da tabela à mão (ver `known_systems` pra lista completa).
+const HANDWRITTEN_SYSTEMS: &[&str] = &[
     "psx",
     "saturn",
     "dreamcast",
@@ -452,7 +522,7 @@ mod tests {
 
     #[test]
     fn psx_has_three_region_variants_all_optional() {
-        let files = bios_files_for_system("psx");
+        let files = handwritten("psx");
         assert_eq!(files.len(), 3);
         assert!(files.iter().all(|f| !f.required));
         assert!(files.iter().all(|f| !f.md5.is_empty()));
@@ -460,7 +530,7 @@ mod tests {
 
     #[test]
     fn saturn_bios_is_required() {
-        let files = bios_files_for_system("saturn");
+        let files = handwritten("saturn");
         assert_eq!(files.len(), 1);
         assert!(files[0].required);
         assert_eq!(files[0].subfolder, Some("kronos"));
@@ -469,7 +539,7 @@ mod tests {
     #[test]
     fn sega_cd_us_accepts_both_documented_revisions() {
         let us = bios_files_for_system("segacd")
-            .iter()
+            .into_iter()
             .find(|f| f.filename == "bios_CD_U.bin")
             .unwrap();
         assert_eq!(us.md5.len(), 2);
@@ -503,9 +573,9 @@ mod tests {
 
     #[test]
     fn documented_md5s_are_lowercase_hex() {
-        for sys in KNOWN_SYSTEMS {
+        for sys in known_systems() {
             for f in bios_files_for_system(sys) {
-                for h in f.md5 {
+                for h in f.md5.iter().chain(f.any_of.iter().map(|(_, h)| h)) {
                     assert_eq!(h.len(), 32, "{sys}/{}", f.filename);
                     assert!(
                         h.chars()
@@ -520,13 +590,51 @@ mod tests {
 
     #[test]
     fn unknown_system_has_no_bios() {
-        assert_eq!(bios_files_for_system("nes"), &[] as &[BiosFile]);
-        assert_eq!(bios_files_for_system("whatever"), &[] as &[BiosFile]);
+        assert!(bios_files_for_system("whatever").is_empty());
+        // cartucho puro: nada além da ROM
+        assert!(bios_files_for_system("atari2600").is_empty());
+    }
+
+    #[test]
+    fn ps2_is_one_any_of_entry_required() {
+        let ps2: Vec<_> = bios_files_for_system("ps2")
+            .into_iter()
+            .filter(|f| !f.any_of.is_empty())
+            .collect();
+        assert_eq!(ps2.len(), 1);
+        assert!(ps2[0].required);
+        assert_eq!(ps2[0].subfolder, Some("pcsx2/bios"));
+        assert!(ps2[0].any_of.len() > 10);
+    }
+
+    #[test]
+    fn generated_does_not_repeat_handwritten_files() {
+        for sys in known_systems() {
+            let mut seen = std::collections::HashSet::new();
+            for f in bios_files_for_system(sys) {
+                assert!(
+                    seen.insert((f.subfolder, f.filename)),
+                    "{sys}: {:?}/{} repetido",
+                    f.subfolder,
+                    f.filename
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn odyssey2_only_requires_the_default_bios() {
+        let req: Vec<_> = bios_files_for_system("odyssey2")
+            .into_iter()
+            .filter(|f| f.required)
+            .map(|f| f.filename)
+            .collect();
+        assert_eq!(req, vec!["o2rom.bin"]);
     }
 
     #[test]
     fn known_systems_all_resolve_to_non_empty() {
-        for sys in KNOWN_SYSTEMS {
+        for sys in known_systems() {
             assert!(
                 !bios_files_for_system(sys).is_empty(),
                 "{sys} devia ter pelo menos 1 BiosFile"
