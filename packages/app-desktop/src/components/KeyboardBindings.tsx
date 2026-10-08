@@ -26,7 +26,9 @@ const useStyles = makeStyles({
   head: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacingHorizontalM },
   groups: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    // 340: o que uma linha precisa (nome + tecla + Trocar + Limpar). Com 260
+    // as colunas encolhiam e os botões passavam por cima da tecla.
+    gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
     gap: tokens.spacingHorizontalXL,
   },
   group: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
@@ -38,8 +40,16 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
   },
-  name: { minWidth: '88px' },
-  key: { flex: 1, minWidth: 0 },
+  name: { minWidth: '72px', flexShrink: 0 },
+  key: {
+    flex: 1,
+    minWidth: 0,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  // botões pequenos no tamanho do texto (o padrão tem 96 px de mínimo)
+  btn: { minWidth: 'auto', flexShrink: 0 },
   none: { color: tokens.colorNeutralForeground3 },
 })
 
@@ -170,12 +180,16 @@ export function KeyboardBindings() {
                     )}
                   </span>
                   <Button
+                    className={s.btn}
+                    size="small"
                     disabled={set.isPending}
                     onClick={() => setCapturing(capturing === target ? null : target)}
                   >
                     {t('keyboard.change')}
                   </Button>
                   <Button
+                    className={s.btn}
+                    size="small"
                     appearance="subtle"
                     disabled={set.isPending || !code}
                     onClick={() => set.mutate({ target, code: '' })}
