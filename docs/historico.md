@@ -1820,3 +1820,9 @@ Infra:
 
 - **Causa:** antes do JS montar a splash (escura), o WebView2 pinta o fundo padrão dele (branco), e a janela atrás, entrando em tela cheia, aparecia preta nas laterais.
 - **Correção:** `backgroundColor: "#050506"` na janela do `tauri.conf.json` — "Set the window and webview background color" (docs.rs `tauri_utils::config::WindowConfig::background_color`; formato hex conferido no `FromStr` de `Color` da tauri-utils 2.10.1) — e o mesmo fundo num `<style>` do `index.html`, antes do CSS do bundle. Mesma cor da splash, então a abertura fica escura do 1º quadro até o app.
+
+## 2026-10-08 — "banco de dados indisponível" ao trocar o shader (checksum de migration por quebra de linha)
+
+- **Sintoma:** no `tauri dev`, toda configuração falhava com "banco de dados indisponível". O log: `migration 13 was previously applied but has been modified`.
+- **Causa:** o sqlx guarda o SHA-384 do texto de cada migration aplicada (`sqlx-core` 0.8.6, `Migration::new`). No checkout do Windows (`core.autocrlf`) as migrations 0001–0012 estão em CRLF e a 0013 ficou em LF; o banco do usuário tinha as 13 aplicadas com CRLF. O binário do dev embutiu a 0013 em LF → checksum diferente → o sqlx recusa e o app segue sem banco.
+- **Correção:** `db::run_migrations` corrige antes de migrar o checksum guardado que bate com o MESMO texto só com a outra quebra de linha (LF↔CRLF); mudança real de conteúdo continua recusada. Fixar uma quebra só no `.gitattributes` não resolveria: bancos do Windows têm checksums CRLF e os do Linux, LF. Testes em `crates/db/tests/migration_checksum.rs`; conferido abrindo uma cópia do banco real.
