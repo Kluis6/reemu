@@ -99,6 +99,11 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Credenciais de desenvolvedor do ScreenScraper (pedidas no fórum
+          # deles); embutidas no binário via `option_env!` em scraping.rs.
+          # Sem elas a busca de metadados no ScreenScraper recebe 403.
+          REEMU_SS_DEVID: ${{ secrets.REEMU_SS_DEVID }}
+          REEMU_SS_DEVPASSWORD: ${{ secrets.REEMU_SS_DEVPASSWORD }}
         run: |
           os=$([ "$RUNNER_OS" = Windows ] && echo windows || echo linux)
           args=(--config apps/desktop/src-tauri/tauri.conf.json --config "apps/desktop/src-tauri/tauri.bundle.$os.json")

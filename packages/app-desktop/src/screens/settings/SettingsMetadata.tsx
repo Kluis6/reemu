@@ -5,6 +5,9 @@ import {
   Field,
   Image,
   Input,
+  MessageBar,
+  MessageBarBody,
+  MessageBarTitle,
   ProgressBar,
   Text,
   makeStyles,
@@ -95,7 +98,10 @@ export function SettingsMetadata() {
   })
   const scan = useMutation({
     mutationFn: () => startMetadataScan(),
-    onSuccess: () => progress.refetch(),
+    onSuccess: () => {
+      push(sysToast(t('metadata.started'), 'Info'))
+      progress.refetch()
+    },
     onError: (e) => push(errorToast(e, 'fetchMetadata')),
   })
   const resolve = useMutation({
@@ -172,11 +178,25 @@ export function SettingsMetadata() {
         </div>
         {p && (p.running || p.done > 0) && (
           <>
-            <ProgressBar value={p.total ? p.done / p.total : undefined} />
+            {/* sem total ainda (montando a fila) = barra indeterminada */}
+            <ProgressBar
+              thickness="large"
+              value={p.total ? p.done / p.total : undefined}
+              color={p.error ? 'warning' : 'brand'}
+            />
             <Caption1 className={s.dim}>
+              {p.total ? `${Math.floor((p.done / p.total) * 100)}% · ` : ''}
               {t('metadata.progress', { done: p.done, total: p.total, auto: p.auto, pending: p.pending, failed: p.failed })}
             </Caption1>
           </>
+        )}
+        {p?.error === 'ss_dev_login' && (
+          <MessageBar intent="warning">
+            <MessageBarBody>
+              <MessageBarTitle>{t('metadata.errors.ssDevLoginTitle')}</MessageBarTitle>
+              {t('metadata.errors.ssDevLogin')}
+            </MessageBarBody>
+          </MessageBar>
         )}
       </div>
 

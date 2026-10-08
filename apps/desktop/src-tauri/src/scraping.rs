@@ -33,6 +33,17 @@ const REQUEST_DELAY: std::time::Duration = std::time::Duration::from_millis(1200
 /// (`remaining_monthly_allowance`), então sem pressa.
 const TGDB_DELAY: std::time::Duration = std::time::Duration::from_millis(1000);
 
+/// Credenciais de DESENVOLVEDOR do ScreenScraper (as do software, não as do
+/// usuário). A API responde 403 "Erreur de login : Vérifier vos identifiants
+/// développeur !" sem elas — api.screenscraper.fr/webapi2.php: o dev pede as
+/// suas "via le forum". Vêm do build (segredo do CI), nunca do repositório.
+const SS_DEVID: Option<&str> = option_env!("REEMU_SS_DEVID");
+const SS_DEVPASSWORD: Option<&str> = option_env!("REEMU_SS_DEVPASSWORD");
+
+/// Código de erro da leva (a UI traduz): o ScreenScraper recusou as
+/// credenciais de desenvolvedor do ReEmu.
+pub const ERR_SS_DEV_LOGIN: &str = "ss_dev_login";
+
 /// `system_id` canônico do ReEmu → `systemeid` do ScreenScraper (tabela do
 /// ES-DE, ver comentário do módulo). `disc` fica de fora: sem saber o sistema,
 /// não há o que perguntar.
@@ -279,9 +290,17 @@ pub struct ScrapeProgress {
     pub auto: AtomicUsize,
     pub pending: AtomicUsize,
     pub failed: AtomicUsize,
+    /// Por que a leva parou antes do fim (código, ver `ERR_*`).
+    pub error: std::sync::Mutex<Option<String>>,
 }
 
 impl ScrapeProgress {
+    pub fn error(&self) -> Option<String> {
+        self.error.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+    fn set_error(&self, code: &str) {
+        *self.error.lock().unwrap_or_else(|p| p.into_inner()) = Some(code.to_string());
+    }
     pub fn snapshot(&self) -> (bool, usize, usize, usize, usize, usize) {
         (
             self.running.load(Ordering::Relaxed),
@@ -298,6 +317,7 @@ impl ScrapeProgress {
         self.auto.store(0, Ordering::Relaxed);
         self.pending.store(0, Ordering::Relaxed);
         self.failed.store(0, Ordering::Relaxed);
+        *self.error.lock().unwrap_or_else(|p| p.into_inner()) = None;
         self.running.store(true, Ordering::Relaxed);
     }
 }
@@ -424,6 +444,12 @@ async fn query_screenscraper(
         if !q.hash.md5.is_empty() {
             qp.append_pair("md5", &q.hash.md5.to_lowercase());
         }
+        // segredo ausente no CI chega como string vazia
+        if let (Some(id), Some(pw)) = (SS_DEVID, SS_DEVPASSWORD) {
+            if !id.is_empty() {
+                qp.append_pair("devid", id).append_pair("devpassword", pw);
+            }
+        }
         if let (Some(u), Some(p)) = (&cfg.screenscraper_user, &cfg.screenscraper_password) {
             if !u.is_empty() {
                 qp.append_pair("ssid", u).append_pair("sspassword", p);
@@ -441,6 +467,10 @@ async fn query_screenscraper(
 
     if status.as_u16() == 404 || body.contains("Erreur : Rom/Iso/Dossier non trouv") {
         return Ok(None);
+    }
+    if status.as_u16() == 403 {
+        // a doc da API: 403 = credenciais de desenvolvedor erradas/ausentes
+        return Err(ERR_SS_DEV_LOGIN.to_string());
     }
     if !status.is_success() {
         // 429/430/431 = quota; 400 = credencial ruim; etc.
@@ -503,6 +533,11 @@ pub async fn scrape_pending(
         .build()
         .map_err(|e| e.to_string())?;
 
+    // ScreenScraper recusou as credenciais de desenvolvedor: não adianta
+    // perguntar de novo pras outras milhares de ROMs (cada falha custava
+    // ~16 s). Segue só com o TheGamesDB, se tiver chave; senão a leva para.
+    let mut ss_ok = true;
+
     for rom_id in ids {
         if stop.load(Ordering::Relaxed) {
             log::info!("metadata: scraping cancelado");
@@ -533,7 +568,20 @@ pub async fn scrape_pending(
         // Cascata: ScreenScraper (hash) primeiro; se ele não achar e houver
         // chave do TheGamesDB, tenta por nome lá — sempre pra revisão.
         let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
-        let mut result = query_screenscraper(&client, &cfg, &q).await;
+        let mut result = if ss_ok {
+            query_screenscraper(&client, &cfg, &q).await
+        } else {
+            Ok(None)
+        };
+        if matches!(&result, Err(e) if e == ERR_SS_DEV_LOGIN) {
+            log::warn!("metadata: ScreenScraper recusou as credenciais de desenvolvedor do ReEmu");
+            ss_ok = false;
+            progress.set_error(ERR_SS_DEV_LOGIN);
+            if tgdb_key.is_none() {
+                break;
+            }
+            result = Ok(None);
+        }
         if let (Ok(None), Some(key)) = (&result, tgdb_key) {
             tokio::time::sleep(REQUEST_DELAY).await;
             result = query_thegamesdb(&client, key, &q).await;

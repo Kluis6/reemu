@@ -627,6 +627,11 @@ const es: Messages = {
     progress: '{{done}}/{{total}} — {{auto}} automáticas · {{pending}} para revisar · {{failed}} con error',
     review: 'Revisar ({{count}}) — coincidencias dudosas',
     accept: 'Aceptar',
+    started: 'Búsqueda de metadatos iniciada — el progreso aparece en Configuración › Metadatos.',
+    errors: {
+      ssDevLoginTitle: 'ScreenScraper rechazó el acceso de ReEmu',
+      ssDevLogin: 'La API de ScreenScraper exige credenciales de desarrollador de ReEmu, que esta versión aún no tiene. No se descargó nada de ahí; con una clave de TheGamesDB, la búsqueda sigue por allí.',
+    },
   },
   hotkeys: {
     actions: {

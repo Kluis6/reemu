@@ -141,6 +141,8 @@ pub struct ScrapeProgressDto {
     pub auto: usize,
     pub pending: usize,
     pub failed: usize,
+    /// Por que a leva parou (código: `ss_dev_login`), `None` se não parou.
+    pub error: Option<String>,
 }
 
 #[tauri::command]
@@ -153,6 +155,7 @@ pub fn metadata_scan_progress(state: State<'_, AppState>) -> ScrapeProgressDto {
         auto,
         pending,
         failed,
+        error: state.scrape.error(),
     }
 }
 

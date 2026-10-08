@@ -423,6 +423,8 @@ export interface ScrapeProgress {
   auto: number
   pending: number
   failed: number
+  /** Por que a leva parou antes do fim (`ss_dev_login`), ou `null`. */
+  error: string | null
 }
 export const metadataScanProgress = () => invoke<ScrapeProgress>('metadata_scan_progress')
 export const startMetadataScan = () => invoke<void>('start_metadata_scan')

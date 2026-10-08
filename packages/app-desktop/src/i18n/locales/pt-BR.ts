@@ -628,6 +628,11 @@ const ptBR = {
     progress: '{{done}}/{{total}} — {{auto}} automáticas · {{pending}} p/ revisão · {{failed}} falha',
     review: 'Revisar ({{count}}) — correspondências incertas',
     accept: 'Aceitar',
+    started: 'Busca de metadados iniciada — o progresso aparece em Configurações › Metadados.',
+    errors: {
+      ssDevLoginTitle: 'O ScreenScraper recusou o acesso do ReEmu',
+      ssDevLogin: 'A API do ScreenScraper exige credenciais de desenvolvedor do ReEmu, que ainda não foram configuradas nesta versão. Nada foi baixado dele; com uma chave do TheGamesDB, a busca continua por lá.',
+    },
   },
   hotkeys: {
     actions: {

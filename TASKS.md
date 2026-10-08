@@ -33,6 +33,16 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ## Em aberto
 
+### Depende do dono do projeto
+
+- [ ] `todo` — **Credenciais de desenvolvedor do ScreenScraper** (2026-10-08):
+      sem `devid`/`devpassword` a API responde 403 em toda busca e nenhum
+      metadado vem do ScreenScraper. Pedir no fórum do screenscraper.fr
+      (apresentar o ReEmu) e cadastrar como secrets `REEMU_SS_DEVID` e
+      `REEMU_SS_DEVPASSWORD` no GitHub — o `release.yml` já repassa ao build
+      e o `scraping.rs` envia quando existem. Pra testar local: exportar as
+      duas variáveis antes do `cargo tauri dev`.
+
 ### Validação (precisa de hardware/máquina que não é esta)
 
 - [x] `done` — **Vídeo nativo no Windows** (janela filha acima do

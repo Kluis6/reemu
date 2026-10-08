@@ -627,6 +627,11 @@ const en: Messages = {
     progress: '{{done}}/{{total}} — {{auto}} automatic · {{pending}} to review · {{failed}} failed',
     review: 'Review ({{count}}) — uncertain matches',
     accept: 'Accept',
+    started: 'Metadata search started — progress shows in Settings › Metadata.',
+    errors: {
+      ssDevLoginTitle: 'ScreenScraper refused ReEmu\'s access',
+      ssDevLogin: 'The ScreenScraper API requires ReEmu developer credentials, which this version doesn\'t have yet. Nothing was downloaded from it; with a TheGamesDB key, the search continues there.',
+    },
   },
   hotkeys: {
     actions: {
