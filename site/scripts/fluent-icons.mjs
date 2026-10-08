@@ -36,6 +36,7 @@ const ICONS = {
   bug: "bug",
   share: "share",
   mail: "mail",
+  community: "people_community",
   "qr-code": "qr_code",
   coffee: "drink_coffee",
   payment: "payment",
