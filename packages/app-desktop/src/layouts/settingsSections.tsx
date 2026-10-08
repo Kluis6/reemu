@@ -5,7 +5,7 @@ import {
   LibraryRegular,
   PaintBrushRegular,
   PersonRegular,
-  ShieldKeyholeRegular,
+  PuzzlePieceRegular,
   Speaker2Regular,
   TagMultipleRegular,
   VideoRegular,
@@ -26,7 +26,7 @@ export const SETTINGS_SECTIONS = [
   { key: "hotkeys", id: "hotkeys", Icon: KeyboardRegular },
   { key: "controllers", id: "controllers", Icon: XboxControllerRegular },
   { key: "cores", id: "cores", Icon: DeveloperBoardRegular },
-  { key: "bios", id: "bios", Icon: ShieldKeyholeRegular },
+  { key: "bios", id: "bios", Icon: PuzzlePieceRegular },
   { key: "sistema", id: "system", Icon: DesktopRegular },
 ] as const satisfies readonly {
   key: string;
