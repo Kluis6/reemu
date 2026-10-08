@@ -8,7 +8,7 @@ import {
   PuzzlePieceRegular,
   Speaker2Regular,
   TagMultipleRegular,
-  VideoRegular,
+  TvRegular,
   XboxControllerRegular,
 } from "@fluentui/react-icons";
 import type { FluentIcon } from "@fluentui/react-icons";
@@ -21,7 +21,7 @@ export const SETTINGS_SECTIONS = [
   { key: "aparencia", id: "appearance", Icon: PaintBrushRegular },
   { key: "biblioteca", id: "library", Icon: LibraryRegular },
   { key: "audio", id: "audio", Icon: Speaker2Regular },
-  { key: "video", id: "video", Icon: VideoRegular },
+  { key: "video", id: "video", Icon: TvRegular },
   { key: "metadata", id: "metadata", Icon: TagMultipleRegular },
   { key: "hotkeys", id: "hotkeys", Icon: KeyboardRegular },
   { key: "controllers", id: "controllers", Icon: XboxControllerRegular },
