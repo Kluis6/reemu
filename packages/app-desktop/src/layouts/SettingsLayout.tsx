@@ -20,17 +20,14 @@ import { SETTINGS_SECTIONS } from "./settingsSections";
 // mesma não rola. `vh` já está em px da interface: o tamanho vem do zoom
 // nativo do webview (`uiScale.ts`).
 const useStyles = makeStyles({
+  // O hub e o card da categoria descem até a área segura de baixo (32 px da
+  // borda). A `.scroll` reserva 88 px embaixo pra barra de dicas do
+  // controle, mas ela só ocupa o canto direito; a margem negativa devolve os
+  // 56 de diferença pra `.scroll` não ganhar rolagem.
   root: {
-    height: `calc(100vh - var(--reemuPageTop, ${M.PAGE_TOP}px) - ${M.PAGE_PAD_B}px)`,
-    minHeight: "240px",
-  },
-  // Numa categoria o card desce até a área segura de baixo (32 px da borda),
-  // 56 px a mais que o hub: a margem de 88 da `.scroll` reserva a barra de
-  // dicas do controle, mas ela só ocupa o canto direito. A margem negativa
-  // devolve esses 56 pra `.scroll` não ganhar rolagem.
-  tall: {
     height: `calc(100vh - var(--reemuPageTop, ${M.PAGE_TOP}px) - ${M.SAFE_Y}px)`,
     marginBottom: `-${M.PAGE_PAD_B - M.SAFE_Y}px`,
+    minHeight: "240px",
   },
   page: {
     height: "100%",
@@ -125,7 +122,7 @@ export function SettingsLayout() {
   }
 
   return (
-    <div className={mergeClasses(styles.root, section && styles.tall)}>
+    <div className={styles.root}>
       {/* Remonta a cada rota: a página nova entra com a transição do app
           (e o conteúdo começa do topo). */}
       <RouteTransition routeKey={pathname} className={styles.page}>

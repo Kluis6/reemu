@@ -1,7 +1,7 @@
 import {
-  Caption1,
+  Body1,
   Subtitle1,
-  Subtitle2,
+  Title3,
   makeStyles,
   mergeClasses,
   tokens,
@@ -51,13 +51,17 @@ const useStyles = makeStyles({
   // `<a>`: ganha o anel de foco global do app (controle/teclado). Card
   // clicável do Fluent 2: a superfície inteira navega, hover/pressionado
   // mudam o fundo e a elevação sobe no hover.
+  // Ícone e texto juntos no ALTO do card, embaixo fica livre: a grade desce
+  // até a área segura de baixo (como o card das categorias), e com controle
+  // conectado a barra de dicas (canto inferior direito) cobre o pé do card
+  // de Sistema — com o nome lá embaixo, ela escondia o texto.
   card: {
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between",
-    gap: tokens.spacingVerticalS,
+    justifyContent: "flex-start",
+    gap: tokens.spacingVerticalL,
     minWidth: 0,
-    padding: tokens.spacingHorizontalXL,
+    padding: tokens.spacingHorizontalXXL,
     boxSizing: "border-box",
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
@@ -98,7 +102,8 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalXL,
   },
   icon: {
-    fontSize: "32px",
+    fontSize: "40px",
+    "@media (max-height: 640px)": { fontSize: "32px" },
     flexShrink: 0,
     color: tokens.colorBrandForeground1,
   },
@@ -114,6 +119,15 @@ const useStyles = makeStyles({
     WebkitLineClamp: 2,
     WebkitBoxOrient: "vertical",
     overflow: "hidden",
+  },
+  // Tela baixa (card em linha): título menor e podendo quebrar linha, senão
+  // nomes longos ("Gerenciar biblioteca") saíam cortados.
+  name: {
+    "@media (max-height: 640px)": {
+      fontSize: tokens.fontSizeBase400,
+      lineHeight: tokens.lineHeightBase400,
+      whiteSpace: "normal",
+    },
   },
   ellipsis: {
     overflow: "hidden",
@@ -150,19 +164,19 @@ export function SettingsHome() {
               style={delay}
             >
               {profile.data ? (
-                <ProfileAvatar profile={profile.data} size={72} />
+                <ProfileAvatar profile={profile.data} size={96} />
               ) : (
                 <Icon className={s.icon} />
               )}
               <span className={s.text}>
-                <Subtitle1 className={s.ellipsis}>
+                <Title3 className={s.ellipsis}>
                   {name || t("settings.tabs.profile")}
-                </Subtitle1>
-                <Caption1 className={s.desc}>
+                </Title3>
+                <Body1 className={s.desc}>
                   {name
                     ? `${t("settings.tabs.profile")} · ${t("settings.desc.profile")}`
                     : t("settings.desc.profile")}
-                </Caption1>
+                </Body1>
               </span>
             </Link>
           );
@@ -171,10 +185,10 @@ export function SettingsHome() {
           <Link key={key} to={key} className={s.card} style={delay}>
             <Icon className={s.icon} />
             <span className={s.text}>
-              <Subtitle2 className={s.ellipsis}>
+              <Subtitle1 className={mergeClasses(s.ellipsis, s.name)}>
                 {t(`settings.tabs.${id}`)}
-              </Subtitle2>
-              <Caption1 className={s.desc}>{t(`settings.desc.${id}`)}</Caption1>
+              </Subtitle1>
+              <Body1 className={s.desc}>{t(`settings.desc.${id}`)}</Body1>
             </span>
           </Link>
         );
