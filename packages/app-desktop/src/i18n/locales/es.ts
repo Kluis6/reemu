@@ -319,6 +319,14 @@ const es: Messages = {
       core: 'Emulador',
       states: 'Save states',
       shader: 'Shader',
+      media: 'Galería',
+    },
+    media: {
+      screenshot: 'Captura de pantalla',
+      titleScreen: 'Pantalla de título',
+      fanart: 'Arte',
+      logo: 'Logo',
+      video: 'Video',
     },
     shader: {
       applyTo: 'Aplicar a',

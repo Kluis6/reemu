@@ -58,6 +58,11 @@ fn row_to_meta(row: &sqlx::sqlite::SqliteRow) -> Result<GameMetadata, RepoError>
                 .and_then(|r| u8::try_from(r).ok()),
             age_rating: row.try_get("age_rating").map_err(be)?,
             modes: row.try_get("modes").map_err(be)?,
+            screenshot_url: row.try_get("screenshot_url").map_err(be)?,
+            title_screen_url: row.try_get("title_screen_url").map_err(be)?,
+            fanart_url: row.try_get("fanart_url").map_err(be)?,
+            logo_url: row.try_get("logo_url").map_err(be)?,
+            video_url: row.try_get("video_url").map_err(be)?,
         },
     })
 }
@@ -99,7 +104,8 @@ impl MetadataRepository for MetadataRepo {
     async fn get_metadata(&self, rom_id: &str) -> Result<Option<GameMetadata>, RepoError> {
         let row = sqlx::query(
             "SELECT rom_id, title, description, cover_url, release_date, genre, provider_source, \
-             developer, publisher, players, rating, age_rating, modes \
+             developer, publisher, players, rating, age_rating, modes, \
+             screenshot_url, title_screen_url, fanart_url, logo_url, video_url \
              FROM game_metadata WHERE rom_id = ?1",
         )
         .bind(rom_id)
@@ -113,15 +119,21 @@ impl MetadataRepository for MetadataRepo {
         sqlx::query(
             "INSERT INTO game_metadata \
              (id, rom_id, title, description, cover_url, release_date, genre, provider_source, \
-              developer, publisher, players, rating, age_rating, modes) \
-             VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) \
+              developer, publisher, players, rating, age_rating, modes, \
+              screenshot_url, title_screen_url, fanart_url, logo_url, video_url) \
+             VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, \
+                     ?14, ?15, ?16, ?17, ?18) \
              ON CONFLICT(rom_id) DO UPDATE SET \
                title = excluded.title, description = excluded.description, \
                cover_url = excluded.cover_url, release_date = excluded.release_date, \
                genre = excluded.genre, provider_source = excluded.provider_source, \
                developer = excluded.developer, publisher = excluded.publisher, \
                players = excluded.players, rating = excluded.rating, \
-               age_rating = excluded.age_rating, modes = excluded.modes",
+               age_rating = excluded.age_rating, modes = excluded.modes, \
+               screenshot_url = excluded.screenshot_url, \
+               title_screen_url = excluded.title_screen_url, \
+               fanart_url = excluded.fanart_url, logo_url = excluded.logo_url, \
+               video_url = excluded.video_url",
         )
         .bind(&m.rom_id)
         .bind(&m.title)
@@ -136,6 +148,11 @@ impl MetadataRepository for MetadataRepo {
         .bind(m.details.rating.map(i64::from))
         .bind(&m.details.age_rating)
         .bind(&m.details.modes)
+        .bind(&m.details.screenshot_url)
+        .bind(&m.details.title_screen_url)
+        .bind(&m.details.fanart_url)
+        .bind(&m.details.logo_url)
+        .bind(&m.details.video_url)
         .execute(&self.db)
         .await
         .map_err(be)?;

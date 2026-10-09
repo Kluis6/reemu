@@ -410,6 +410,12 @@ export interface GameMetadata {
   ageRating: string | null
   /** separados por ", " */
   modes: string | null
+  // mídias pra galeria (URLs do provedor)
+  screenshotUrl: string | null
+  titleScreenUrl: string | null
+  fanartUrl: string | null
+  logoUrl: string | null
+  videoUrl: string | null
 }
 export const getRomMetadata = (romId: string) =>
   invoke<GameMetadata | null>('get_rom_metadata', { romId })

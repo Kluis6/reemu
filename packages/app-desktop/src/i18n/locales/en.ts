@@ -319,6 +319,14 @@ const en: Messages = {
       core: 'Emulator',
       states: 'Save states',
       shader: 'Shader',
+      media: 'Gallery',
+    },
+    media: {
+      screenshot: 'Screenshot',
+      titleScreen: 'Title screen',
+      fanart: 'Artwork',
+      logo: 'Logo',
+      video: 'Video',
     },
     shader: {
       applyTo: 'Apply to',

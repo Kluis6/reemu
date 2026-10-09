@@ -1192,6 +1192,30 @@ export const useDetailStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
   },
   // Seções da gaveta (Sobre o jogo / Descrição / Na sua biblioteca).
+  // Galeria (aba da página do jogo): logo, vídeo e as capturas em grade
+  // responsiva — 2 a 3 por linha na tela de referência.
+  gallery: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL },
+  galleryLogo: { maxHeight: "96px", maxWidth: "320px", objectFit: "contain", alignSelf: "flex-start" },
+  galleryVideo: {
+    width: "100%",
+    maxWidth: "720px",
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: "#000",
+  },
+  galleryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    gap: tokens.spacingHorizontalL,
+  },
+  galleryItem: { margin: 0, display: "flex", flexDirection: "column", gap: tokens.spacingVerticalXS },
+  galleryShot: {
+    width: "100%",
+    aspectRatio: "4 / 3",
+    objectFit: "cover",
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  galleryCaption: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
   // "Buscar dados de novo" no fim de "Sobre o jogo": botão do tamanho do
   // texto, alinhado à esquerda como as linhas da lista.
   infoRescrape: { alignSelf: "flex-start", marginTop: tokens.spacingVerticalS },

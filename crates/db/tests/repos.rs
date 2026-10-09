@@ -248,6 +248,8 @@ async fn metadata_config_scrape_and_pending_review() {
             rating: Some(90),
             age_rating: Some("PEGI 3".into()),
             modes: Some("1 jogador, 2 jogadores (alternado)".into()),
+            screenshot_url: Some("https://x/ss.png".into()),
+            ..Default::default()
         },
     })
     .await
@@ -262,6 +264,7 @@ async fn metadata_config_scrape_and_pending_review() {
     assert_eq!(d.players.as_deref(), Some("1-2"));
     assert_eq!(d.rating, Some(90));
     assert_eq!(d.age_rating.as_deref(), Some("PEGI 3"));
+    assert_eq!(d.screenshot_url.as_deref(), Some("https://x/ss.png"));
 
     // match por nome → pending; não aplica metadata até revisão
     m.record_match(

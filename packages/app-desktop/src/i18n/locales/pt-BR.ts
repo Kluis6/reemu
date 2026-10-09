@@ -320,6 +320,14 @@ const ptBR = {
       core: 'Emulador',
       states: 'Save states',
       shader: 'Shader',
+      media: 'Galeria',
+    },
+    media: {
+      screenshot: 'Captura de tela',
+      titleScreen: 'Tela de título',
+      fanart: 'Arte',
+      logo: 'Logo',
+      video: 'Vídeo',
     },
     shader: {
       applyTo: 'Aplicar a',

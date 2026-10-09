@@ -216,10 +216,17 @@ export function RomDetail() {
   const descParas = descriptionParagraphs(meta.data?.description);
   const sourceText = providerLabel(meta.data?.providerSource);
   const releaseYear = meta.data?.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
-  const [cfgTab, setCfgTab] = useState<"core" | "states" | "shader">("core");
+  const [cfgTab, setCfgTab] = useState<"core" | "states" | "shader" | "media">("core");
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   const hasCoreCfg = !!chosenCore;
-  const cfgTabOk = { shader: hasShaderCfg, core: hasCoreCfg, states: true };
+  // Galeria: só as mídias que o provedor trouxe.
+  const shots = [
+    { key: "screenshot", url: meta.data?.screenshotUrl },
+    { key: "titleScreen", url: meta.data?.titleScreenUrl },
+    { key: "fanart", url: meta.data?.fanartUrl },
+  ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
+  const hasMedia = shots.length > 0 || !!meta.data?.videoUrl || !!meta.data?.logoUrl;
+  const cfgTabOk = { shader: hasShaderCfg, core: hasCoreCfg, states: true, media: hasMedia };
   const activeCfgTab = cfgTabOk[cfgTab]
     ? cfgTab
     : hasCoreCfg
@@ -688,12 +695,13 @@ export function RomDetail() {
           className={tb.tabs}
           selectedValue={activeCfgTab}
           onTabSelect={(_, d) =>
-            setCfgTab(d.value as "core" | "states" | "shader")
+            setCfgTab(d.value as "core" | "states" | "shader" | "media")
           }
         >
           {hasCoreCfg && <Tab value="core">{t("game.tabs.core")}</Tab>}
           <Tab value="states">{t("game.tabs.states")}</Tab>
           {hasShaderCfg && <Tab value="shader">{t("game.tabs.shader")}</Tab>}
+          {hasMedia && <Tab value="media">{t("game.tabs.media")}</Tab>}
         </TabList>
         <div className={s.panel}>
           {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
@@ -807,6 +815,31 @@ export function RomDetail() {
               </Field>
               <CoreOptions coreId={chosenCore} romId={romId} />
             </>
+          )}
+          {activeCfgTab === "media" && (
+            <div className={s.gallery}>
+              {meta.data?.logoUrl && (
+                <img className={s.galleryLogo} src={meta.data.logoUrl} alt={t("game.media.logo")} />
+              )}
+              {meta.data?.videoUrl && (
+                <video
+                  className={s.galleryVideo}
+                  src={meta.data.videoUrl}
+                  controls
+                  muted
+                  preload="metadata"
+                  aria-label={t("game.media.video")}
+                />
+              )}
+              <div className={s.galleryGrid}>
+                {shots.map((m) => (
+                  <figure key={m.key} className={s.galleryItem}>
+                    <img className={s.galleryShot} src={m.url} alt={t(`game.media.${m.key}`)} loading="lazy" />
+                    <figcaption className={s.galleryCaption}>{t(`game.media.${m.key}`)}</figcaption>
+                  </figure>
+                ))}
+              </div>
+            </div>
           )}
           {activeCfgTab === "states" && (
             <>

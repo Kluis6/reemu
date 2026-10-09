@@ -60,6 +60,11 @@ pub struct GameMetadataDto {
     pub rating: Option<u8>,
     pub age_rating: Option<String>,
     pub modes: Option<String>,
+    pub screenshot_url: Option<String>,
+    pub title_screen_url: Option<String>,
+    pub fanart_url: Option<String>,
+    pub logo_url: Option<String>,
+    pub video_url: Option<String>,
 }
 
 impl From<GameMetadata> for GameMetadataDto {
@@ -77,6 +82,11 @@ impl From<GameMetadata> for GameMetadataDto {
             rating: m.details.rating,
             age_rating: m.details.age_rating,
             modes: m.details.modes,
+            screenshot_url: m.details.screenshot_url,
+            title_screen_url: m.details.title_screen_url,
+            fanart_url: m.details.fanart_url,
+            logo_url: m.details.logo_url,
+            video_url: m.details.video_url,
         }
     }
 }

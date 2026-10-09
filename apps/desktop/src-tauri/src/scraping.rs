@@ -476,6 +476,7 @@ fn parse_details(jeu: &Value) -> GameDetails {
             })
             .or_else(|| arr.iter().find_map(fmt))
     });
+    let media = |types: &[&str]| media_url(jeu, types);
     GameDetails {
         developer: get("developpeur"),
         publisher: get("editeur"),
@@ -483,7 +484,40 @@ fn parse_details(jeu: &Value) -> GameDetails {
         rating,
         age_rating,
         modes: jeu.get("modes").and_then(group_names),
+        // Tipos de mídia do ScreenScraper (os mesmos do `mediaJeu.php` na doc
+        // da API v2): `ss` = captura, `sstitle` = tela de título, `fanart`,
+        // `wheel` = logo, `video-normalized` (tamanho padronizado) ou `video`.
+        screenshot_url: media(&["ss"]),
+        title_screen_url: media(&["sstitle"]),
+        fanart_url: media(&["fanart"]),
+        logo_url: media(&["wheel-hd", "wheel"]),
+        video_url: media(&["video-normalized", "video"]),
     }
+}
+
+/// URL da 1ª mídia de `jeu.medias` de um dos `types` (na ordem dada),
+/// preferindo a região mundial/americana/europeia, como a capa.
+fn media_url(jeu: &Value, types: &[&str]) -> Option<String> {
+    let arr = jeu.get("medias")?.as_array()?;
+    let region_rank = |x: &Value| {
+        let r = x.get("region").and_then(Value::as_str).unwrap_or("");
+        ["wor", "us", "eu", "ss", "br", "jp"]
+            .iter()
+            .position(|p| *p == r)
+            .unwrap_or(99)
+    };
+    for t in types {
+        let best = arr
+            .iter()
+            .filter(|x| x.get("type").and_then(Value::as_str) == Some(*t))
+            .min_by_key(|x| region_rank(x));
+        if let Some(u) = best.and_then(|x| x.get("url")).and_then(Value::as_str) {
+            if !u.is_empty() {
+                return Some(u.to_string());
+            }
+        }
+    }
+    None
 }
 
 /// Uma consulta ao ScreenScraper. `Ok(None)` = não catalogado (404).
@@ -878,6 +912,19 @@ mod tests {
         assert_eq!(d.rating, Some(85));
         assert_eq!(d.age_rating.as_deref(), Some("PEGI 3"));
         assert_eq!(d.modes.as_deref(), Some("1 player, Co-op"));
+        // mídias: tipo pedido, região preferida (wor antes de jp)
+        let jeu = serde_json::json!({"medias": [
+            {"type": "ss", "region": "jp", "url": "https://x/ss-jp.png"},
+            {"type": "ss", "region": "wor", "url": "https://x/ss-wor.png"},
+            {"type": "wheel", "region": "wor", "url": "https://x/logo.png"},
+            {"type": "video", "url": "https://x/v.mp4"},
+            {"type": "video-normalized", "url": "https://x/vn.mp4"}
+        ]});
+        let m = parse_details(&jeu);
+        assert_eq!(m.screenshot_url.as_deref(), Some("https://x/ss-wor.png"));
+        assert_eq!(m.logo_url.as_deref(), Some("https://x/logo.png"));
+        assert_eq!(m.video_url.as_deref(), Some("https://x/vn.mp4"));
+        assert_eq!(m.title_screen_url, None);
         // nada disso no `jeu` → ficha vazia, sem erro
         assert_eq!(parse_details(&serde_json::json!({})), GameDetails::default());
     }

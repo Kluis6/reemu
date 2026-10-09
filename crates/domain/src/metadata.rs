@@ -44,6 +44,13 @@ pub struct GameDetails {
     pub age_rating: Option<String>,
     /// Modos de jogo separados por ", " (ex.: "1 jogador, Cooperativo").
     pub modes: Option<String>,
+    /// Mídias do jogo (URLs do provedor), pra galeria da página do jogo:
+    /// captura de tela, tela de título, arte de fundo, logo e vídeo.
+    pub screenshot_url: Option<String>,
+    pub title_screen_url: Option<String>,
+    pub fanart_url: Option<String>,
+    pub logo_url: Option<String>,
+    pub video_url: Option<String>,
 }
 
 /// Um resultado de provedor pra uma ROM: metadata + os dois critérios que
