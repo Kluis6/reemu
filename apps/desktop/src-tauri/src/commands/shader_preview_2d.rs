@@ -19,7 +19,9 @@ struct Canvas {
 
 impl Canvas {
     fn new() -> Self {
-        Self { px: vec![(0, 0, 0); (W * H) as usize] }
+        Self {
+            px: vec![(0, 0, 0); (W * H) as usize],
+        }
     }
     fn put(&mut self, x: i32, y: i32, c: Rgb) {
         if (0..W).contains(&x) && (0..H).contains(&y) {
@@ -50,11 +52,24 @@ impl Canvas {
             }
         }
     }
-    fn sprite(&mut self, rows: &[&str], ox: i32, oy: i32, scale: i32, pal: fn(char) -> Option<Rgb>) {
+    fn sprite(
+        &mut self,
+        rows: &[&str],
+        ox: i32,
+        oy: i32,
+        scale: i32,
+        pal: fn(char) -> Option<Rgb>,
+    ) {
         for (j, row) in rows.iter().enumerate() {
             for (i, ch) in row.chars().enumerate() {
                 if let Some(c) = pal(ch) {
-                    self.rect(ox + i as i32 * scale, oy + j as i32 * scale, scale, scale, c);
+                    self.rect(
+                        ox + i as i32 * scale,
+                        oy + j as i32 * scale,
+                        scale,
+                        scale,
+                        c,
+                    );
                 }
             }
         }
@@ -91,7 +106,13 @@ fn text(cv: &mut Canvas, s: &str, x: i32, y: i32, scale: i32, c: Rgb) {
             for (i, b) in row.chars().enumerate() {
                 if b == '#' {
                     let (px, py) = (x + (k as i32 * 4 + i as i32) * scale, y + j as i32 * scale);
-                    cv.rect(px + scale / 2 + 1, py + scale / 2 + 1, scale, scale, (16, 12, 32));
+                    cv.rect(
+                        px + scale / 2 + 1,
+                        py + scale / 2 + 1,
+                        scale,
+                        scale,
+                        (16, 12, 32),
+                    );
                     cv.rect(px, py, scale, scale, c);
                 }
             }
@@ -136,7 +157,9 @@ const CHEST: [&str; 12] = [
 ];
 
 /// Coração do HUD, 7×6.
-const HEART: [&str; 6] = [".RR.RR.", "RrRRRRR", "RRRRRRR", ".RRRRR.", "..RRR..", "...R..."];
+const HEART: [&str; 6] = [
+    ".RR.RR.", "RrRRRRR", "RRRRRRR", ".RRRRR.", "..RRR..", "...R...",
+];
 
 /// Moeda genérica com brilho, 8×8.
 const COIN: [&str; 8] = [
@@ -191,7 +214,16 @@ pub fn sample_scene() -> Vec<u8> {
         }
     }
     // Estrelas no alto (algumas maiores, em cruz).
-    for (x, y, big) in [(18, 14, true), (44, 30, false), (96, 10, false), (132, 36, true), (170, 16, false), (292, 20, true), (306, 44, false), (230, 8, false)] {
+    for (x, y, big) in [
+        (18, 14, true),
+        (44, 30, false),
+        (96, 10, false),
+        (132, 36, true),
+        (170, 16, false),
+        (292, 20, true),
+        (306, 44, false),
+        (230, 8, false),
+    ] {
         cv.put(x, y, (255, 255, 255));
         if big {
             for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
@@ -205,10 +237,24 @@ pub fn sample_scene() -> Vec<u8> {
         for x in sx - 34..=sx + 34 {
             let d = (((x - sx) * (x - sx) + (y - sy) * (y - sy)) as f32).sqrt();
             if d <= 16.0 {
-                cv.put(x, y, if d <= 12.0 { (255, 244, 200) } else { (255, 222, 140) });
+                cv.put(
+                    x,
+                    y,
+                    if d <= 12.0 {
+                        (255, 244, 200)
+                    } else {
+                        (255, 222, 140)
+                    },
+                );
             } else if d <= 34.0 {
                 let base = cv.get(x, y);
-                cv.dither(x, y, base, (255, 200, 140), (1.0 - (d - 16.0) / 18.0) * 0.55);
+                cv.dither(
+                    x,
+                    y,
+                    base,
+                    (255, 200, 140),
+                    (1.0 - (d - 16.0) / 18.0) * 0.55,
+                );
             }
         }
     }
@@ -221,7 +267,11 @@ pub fn sample_scene() -> Vec<u8> {
             for y in by - r..=by + r {
                 for x in bx - r..=bx + r {
                     if (x - bx) * (x - bx) + (y - by) * (y - by) <= r * r {
-                        let shade = if y > by + r / 3 { (196, 186, 214) } else { (250, 248, 255) };
+                        let shade = if y > by + r / 3 {
+                            (196, 186, 214)
+                        } else {
+                            (250, 248, 255)
+                        };
                         cv.put(x, y, shade);
                     }
                 }
@@ -243,7 +293,11 @@ pub fn sample_scene() -> Vec<u8> {
         for y in top..horizon {
             let snow = y < top + 6 && top < 112;
             let c = if snow {
-                if lit { (240, 240, 252) } else { (186, 190, 220) }
+                if lit {
+                    (240, 240, 252)
+                } else {
+                    (186, 190, 220)
+                }
             } else if lit {
                 (118, 96, 150)
             } else {
@@ -253,11 +307,20 @@ pub fn sample_scene() -> Vec<u8> {
         }
     }
     // Colinas com pinheiros.
-    let hill = |x: i32| 150 + ((x as f32 / 26.0).sin() * 9.0 + (x as f32 / 11.0).cos() * 3.0) as i32;
+    let hill =
+        |x: i32| 150 + ((x as f32 / 26.0).sin() * 9.0 + (x as f32 / 11.0).cos() * 3.0) as i32;
     for x in 0..W {
         let top = hill(x);
         for y in top..horizon {
-            cv.put(x, y, if y < top + 2 { (88, 168, 96) } else { (48, 116, 72) });
+            cv.put(
+                x,
+                y,
+                if y < top + 2 {
+                    (88, 168, 96)
+                } else {
+                    (48, 116, 72)
+                },
+            );
         }
     }
     for tx in (6..W).step_by(19) {
@@ -287,17 +350,31 @@ pub fn sample_scene() -> Vec<u8> {
             cv.rect(x, y, w, 1, (255, 226, 150));
         }
     }
-    for (x, y, w) in [(222, 188, 10), (290, 196, 12), (236, 214, 8), (300, 226, 9), (226, 232, 6)] {
+    for (x, y, w) in [
+        (222, 188, 10),
+        (290, 196, 12),
+        (236, 214, 8),
+        (300, 226, 9),
+        (226, 232, 6),
+    ] {
         cv.rect(x, y, w, 1, (150, 196, 240));
     }
     // Chão: grama com tufos, terra com pedras e camadas.
     for y in horizon..H {
         for x in 0..212 {
             let c = if y < horizon + 5 {
-                if y == horizon { (150, 224, 96) } else { (76, 168, 64) }
+                if y == horizon {
+                    (150, 224, 96)
+                } else {
+                    (76, 168, 64)
+                }
             } else {
                 let band = ((y - horizon) / 14) % 2 == 0;
-                if band { (156, 92, 48) } else { (138, 80, 42) }
+                if band {
+                    (156, 92, 48)
+                } else {
+                    (138, 80, 42)
+                }
             };
             cv.put(x, y, c);
         }
@@ -306,7 +383,15 @@ pub fn sample_scene() -> Vec<u8> {
         cv.put(x, horizon - 1, (150, 224, 96));
         cv.put(x + 1, horizon - 2, (150, 224, 96));
     }
-    for (x, y, r) in [(20, 196, 3), (64, 214, 2), (110, 204, 3), (150, 224, 2), (186, 200, 3), (40, 230, 2), (130, 236, 3)] {
+    for (x, y, r) in [
+        (20, 196, 3),
+        (64, 214, 2),
+        (110, 204, 3),
+        (150, 224, 2),
+        (186, 200, 3),
+        (40, 230, 2),
+        (130, 236, 3),
+    ] {
         cv.disc(x, y, r, (110, 100, 96));
         cv.put(x - 1, y - 1, (170, 160, 150));
     }
@@ -316,7 +401,13 @@ pub fn sample_scene() -> Vec<u8> {
         cv.put(213, y, (120, 82, 48));
     }
     // Flores na grama.
-    for (x, c) in [(28, (255, 90, 120)), (36, (255, 220, 80)), (118, (255, 90, 120)), (196, (255, 220, 80)), (204, (180, 120, 255))] {
+    for (x, c) in [
+        (28, (255, 90, 120)),
+        (36, (255, 220, 80)),
+        (118, (255, 90, 120)),
+        (196, (255, 220, 80)),
+        (204, (180, 120, 255)),
+    ] {
         cv.put(x, horizon + 1, c);
         cv.put(x, horizon + 2, (40, 120, 50));
     }

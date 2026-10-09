@@ -476,7 +476,10 @@ fn field_text(v: &Value) -> Option<String> {
 fn group_names(v: &Value) -> Option<String> {
     let mut names: Vec<String> = Vec::new();
     for x in v.as_array()? {
-        if let Some(n) = x.get("noms").and_then(|n| first_text(n, &["pt", "en", "wor"])) {
+        if let Some(n) = x
+            .get("noms")
+            .and_then(|n| first_text(n, &["pt", "en", "wor"]))
+        {
             let n = n.trim().to_string();
             if !n.is_empty() && !names.contains(&n) {
                 names.push(n);
@@ -496,21 +499,24 @@ fn parse_details(jeu: &Value) -> GameDetails {
         .filter(|n| (0.0..=20.0).contains(n))
         .map(|n| (n * 5.0).round() as u8);
     // PEGI primeiro (o público do app é BR/EU), depois ESRB, depois o 1º.
-    let age_rating = jeu.get("classifications").and_then(Value::as_array).and_then(|arr| {
-        let fmt = |x: &Value| {
-            let org = x.get("type").and_then(Value::as_str)?.trim();
-            let val = x.get("text").and_then(Value::as_str)?.trim();
-            (!val.is_empty()).then(|| format!("{org} {val}").trim().to_string())
-        };
-        ["PEGI", "ESRB"]
-            .iter()
-            .find_map(|org| {
-                arr.iter()
-                    .find(|x| x.get("type").and_then(Value::as_str) == Some(*org))
-                    .and_then(fmt)
-            })
-            .or_else(|| arr.iter().find_map(fmt))
-    });
+    let age_rating = jeu
+        .get("classifications")
+        .and_then(Value::as_array)
+        .and_then(|arr| {
+            let fmt = |x: &Value| {
+                let org = x.get("type").and_then(Value::as_str)?.trim();
+                let val = x.get("text").and_then(Value::as_str)?.trim();
+                (!val.is_empty()).then(|| format!("{org} {val}").trim().to_string())
+            };
+            ["PEGI", "ESRB"]
+                .iter()
+                .find_map(|org| {
+                    arr.iter()
+                        .find(|x| x.get("type").and_then(Value::as_str) == Some(*org))
+                        .and_then(fmt)
+                })
+                .or_else(|| arr.iter().find_map(fmt))
+        });
     let media = |types: &[&str]| media_url(jeu, types);
     GameDetails {
         developer: get("developpeur"),
@@ -961,7 +967,10 @@ mod tests {
         assert_eq!(m.video_url.as_deref(), Some("https://x/vn.mp4"));
         assert_eq!(m.title_screen_url, None);
         // nada disso no `jeu` → ficha vazia, sem erro
-        assert_eq!(parse_details(&serde_json::json!({})), GameDetails::default());
+        assert_eq!(
+            parse_details(&serde_json::json!({})),
+            GameDetails::default()
+        );
     }
 
     #[test]

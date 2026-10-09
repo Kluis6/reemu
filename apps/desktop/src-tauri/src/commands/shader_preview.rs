@@ -95,7 +95,12 @@ pub async fn render_shader_preview(
         fp.set_shader_param(name, *value);
     }
     let (w, h, rgba) = fp
-        .render_still(&scene_frame(&scene), width.clamp(64, 2048), height.clamp(48, 2048), 4)
+        .render_still(
+            &scene_frame(&scene),
+            width.clamp(64, 2048),
+            height.clamp(48, 2048),
+            4,
+        )
         .ok_or("shader: o preview não gerou imagem")?;
     encode_png(w, h, &rgba).map(tauri::ipc::Response::new)
 }

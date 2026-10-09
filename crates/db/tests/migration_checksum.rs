@@ -43,7 +43,9 @@ async fn other_line_ending_is_healed() {
     };
     set_checksum(&db, 1, Sha384::digest(other.as_bytes()).as_slice()).await;
 
-    run_migrations(&db).await.expect("só a quebra de linha mudou: abre");
+    run_migrations(&db)
+        .await
+        .expect("só a quebra de linha mudou: abre");
     assert_eq!(checksum(&db, 1).await, original);
 }
 

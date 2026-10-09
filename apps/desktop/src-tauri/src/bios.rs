@@ -84,8 +84,7 @@ fn status_of(system_dir: &Path, file: &BiosFile) -> (bool, Option<bool>) {
     let path = path_for(system_dir, file);
     let present = path.is_file();
     let hash_ok = (present && !file.md5.is_empty()).then(|| {
-        md5_hex(&path)
-            .is_some_and(|got| file.md5.iter().any(|want| got.eq_ignore_ascii_case(want)))
+        md5_hex(&path).is_some_and(|got| file.md5.iter().any(|want| got.eq_ignore_ascii_case(want)))
     });
     (present, hash_ok)
 }

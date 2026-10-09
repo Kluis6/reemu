@@ -222,7 +222,10 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), Strin
 /// terminar e devolve o resultado: `"auto"` (metadado aplicado), `"pending"`
 /// (foi pra revisão) ou `"none"` (nenhum provedor achou).
 #[tauri::command]
-pub async fn rescrape_rom(state: State<'_, AppState>, rom_id: String) -> Result<&'static str, String> {
+pub async fn rescrape_rom(
+    state: State<'_, AppState>,
+    rom_id: String,
+) -> Result<&'static str, String> {
     let outcome =
         crate::scraping::scrape_one(pool(&state)?, state.covers_dir.clone(), &rom_id).await?;
     Ok(match outcome {

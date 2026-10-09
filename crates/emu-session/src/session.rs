@@ -2256,8 +2256,7 @@ mod vk_route_tests {
         assert!(vk_capable("flycast_libretro", &HashMap::new()));
         assert!(!vk_capable("parallel_n64_libretro", &HashMap::new()));
         assert!(!vk_capable("ppsspp_libretro", &HashMap::new()));
-        let ppsspp_vk =
-            HashMap::from([("ppsspp_backend".to_string(), "vulkan".to_string())]);
+        let ppsspp_vk = HashMap::from([("ppsspp_backend".to_string(), "vulkan".to_string())]);
         assert!(vk_capable("ppsspp_libretro", &ppsspp_vk));
     }
 
