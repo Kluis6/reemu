@@ -1,7 +1,7 @@
 {
   "name": "reemu",
   "private": true,
-  "version": "0.1.5",
+  "version": "0.1.6",
   "packageManager": "pnpm@12.8.1",
   "scripts": {
     "dev:desktop": "pnpm --filter app-desktop dev",

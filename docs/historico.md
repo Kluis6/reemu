@@ -1859,3 +1859,12 @@ Infra:
 - **Busca automática (8):** depois de uma varredura que trouxe jogos novos, a busca de metadados começa sozinha (`useAutoMetadataScan`), com o mesmo toast de início.
 - **Buscar de novo (9):** botão na gaveta de informações; comando `rescrape_rom` → `scraping::scrape_one`, a mesma cascata e a mesma gravação da leva (`record_result`, extraído do laço).
 - **Achado no caminho:** os toasts tinham `z-index` 9999 e ficavam atrás dos portais do Fluent (gaveta, diálogos), que usam 1000000 (`usePortalMountNodeStyles`). Subiu pra 1000001.
+
+## 2026-10-08 — Release v0.1.6
+
+- **Configurações:** hub em cards (bento) no lugar do menu lateral; cada categoria abre num card próprio, com caminho "Configurações › …" no topo; camadas internas com contraste em qualquer tema (claro ou escuro); a página para acima da barra de dicas quando há controle conectado.
+- **BIOS:** tabela gerada das fontes oficiais da libretro pra todos os sistemas do catálogo — PS2 e mais 20 sistemas que não tinham nada —, busca e filtro "só da minha biblioteca", uma coluna.
+- **Metadados:** ficha técnica do jogo (desenvolvedora, publicadora, jogadores, modos, nota, classificação), aba Galeria (captura, tela de título, arte, logo, vídeo), "Buscar dados de novo" por jogo, busca automática depois de uma varredura, toast e barra de progresso. TheGamesDB com capa na mesma requisição (metade da cota). O ScreenScraper ainda depende das credenciais de desenvolvedor (ver TASKS).
+- **Correções:** banco que não abria por causa da quebra de linha de uma migration; janela de terminal ao abrir jogo no Windows; tela branca na abertura; toasts atrás da gaveta e dos diálogos; erro "banco de dados indisponível" ao trocar o shader.
+- **Interface:** prévia do shader maior e com o botão de ligar/desligar na barra das cenas; botões de baixar só com o ícone da nuvem; ícones de Cores/BIOS/Vídeo unificados com o site; teclado em Controles sem sobreposição em nenhuma resolução.
+- **Qualidade:** testes do emulador voltam a rodar no Windows (o core de teste não exportava as funções da DLL); clippy do workspace inteiro limpo; `.gitattributes` com LF; `scripts/ui-smoke.py` (teste visual das Configurações em 5 tamanhos).
