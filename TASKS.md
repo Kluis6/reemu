@@ -354,8 +354,11 @@ no `emu-session`, ver `docs/historico.md`).
       publica termos de uso (só política de privacidade, sobre contas), então
       não há autorização pra usar o banco num app distribuído. Só com
       permissão escrita do LaunchBox.
-- [ ] `todo` — Validar o TheGamesDB com uma chave real (o parser foi testado
-      com JSON no formato que o ES-DE lê, não com resposta capturada).
+- [x] `done` — Validar o TheGamesDB com uma chave real (2026-10-08, chave do
+      usuário, 1 requisição): `/v1/Games/ByGameName` com `fields=overview,
+      players,rating,coop` e `include=boxart` devolve o formato do spec.yaml
+      oficial (api.thegamesdb.net/spec.yaml) — o parser bate. Cota: 1000
+      requisições/mês por chave; com a capa no `include`, ~1 por jogo.
 - [ ] `todo` — **Onboarding: passo de contas** (backlog, pedido em
       2026-10-04): um modal a mais no onboarding, do mesmo tamanho dos outros
       três, para entrar em redes sociais ou lojas de jogos (Steam e outras).

@@ -204,12 +204,38 @@ fn parse_tgdb_game(v: &Value) -> Option<ScrapeCandidate> {
         // Busca por nome: nunca auto-aplica (ver comentário do módulo).
         exact_hash_match: false,
         exact_filename_match: false,
-        details: Default::default(),
+        // `players` (inteiro), `rating` (classificação, ex.: "E - Everyone") e
+        // `coop` ("Yes"/"No") do spec.yaml. Publicadora/desenvolvedora vêm só
+        // como ids (outra chamada por jogo pra ter o nome) — ficam de fora.
+        details: GameDetails {
+            players: game
+                .get("players")
+                .and_then(Value::as_u64)
+                .filter(|n| *n > 0)
+                .map(|n| n.to_string()),
+            age_rating: text("rating"),
+            modes: (text("coop").as_deref() == Some("Yes")).then(|| "Co-op".to_string()),
+            ..Default::default()
+        },
     })
 }
 
 /// Capa (boxart frontal) do `/v1/Games/Images`: `data.base_url.large` +
 /// o `filename` do item `type: boxart, side: front` do jogo `game_id`.
+/// Capa frontal do `include.boxart` da própria busca (`base_url.large` +
+/// `filename` do item `side: front` do jogo), como no spec.yaml.
+fn parse_tgdb_included_boxart(v: &Value, game_id: &str) -> Option<String> {
+    let bx = v.get("include")?.get("boxart")?;
+    let base = bx.get("base_url")?.get("large")?.as_str()?;
+    let front = bx
+        .get("data")?
+        .get(game_id)?
+        .as_array()?
+        .iter()
+        .find(|i| i.get("side").and_then(Value::as_str) == Some("front"))?;
+    Some(format!("{base}{}", front.get("filename")?.as_str()?))
+}
+
 fn parse_tgdb_boxart(v: &Value, game_id: &str) -> Option<String> {
     let data = v.get("data")?;
     let base = data.get("base_url")?.get("large")?.as_str()?;
@@ -262,7 +288,12 @@ async fn query_thegamesdb(
             &[
                 ("name", title.as_str()),
                 ("filter[platform]", platforms),
-                ("fields", "overview"),
+                // Campos e `include` do `/v1/Games/ByGameName` no spec.yaml
+                // oficial (api.thegamesdb.net/spec.yaml): a capa vem na mesma
+                // resposta (`include.boxart`), sem a 2ª chamada — a cota é de
+                // 1000 requisições/mês por chave.
+                ("fields", "overview,players,rating,coop"),
+                ("include", "boxart"),
             ],
         )
         .await
@@ -272,7 +303,11 @@ async fn query_thegamesdb(
     let Some(mut c) = parse_tgdb_game(&found) else {
         return Ok(None);
     };
-    // Capa: segunda chamada. Falhar aqui não perde o resto da metadata.
+    c.cover_url = parse_tgdb_included_boxart(&found, &c.external_id);
+    if c.cover_url.is_some() {
+        return Ok(Some(c));
+    }
+    // Sem capa no `include`: segunda chamada. Falhar aqui não perde o resto.
     match get("Games/Images", &[("games_id", c.external_id.as_str())]).await {
         Ok(resp) => match read(resp).await {
             Ok(v) => c.cover_url = parse_tgdb_boxart(&v, &c.external_id),
@@ -1007,6 +1042,33 @@ mod tests {
         assert!(!c.auto_matches(), "busca por nome vai sempre pra revisão");
         assert!(parse_tgdb_game(&json!({"data": {"games": []}})).is_none());
         assert!(parse_tgdb_game(&json!({"code": 403})).is_none());
+    }
+
+    // Formato do exemplo do `/v1/Games/ByGameName` no spec.yaml oficial
+    // (api.thegamesdb.net/spec.yaml), com `fields` e `include=boxart`.
+    #[test]
+    fn tgdb_fields_and_included_boxart() {
+        let v = json!({
+            "data": {"games": [{"id": 53, "game_title": "Sonic the Hedgehog",
+                "release_date": "1991-06-23", "platform": 18, "players": 1,
+                "rating": "E - Everyone", "coop": "No"}]},
+            "include": {"boxart": {
+                "base_url": {"large": "https://cdn.thegamesdb.net/images/large/"},
+                "data": {"53": [
+                    {"id": 1, "type": "boxart", "side": "back", "filename": "boxart/back/53-1.jpg"},
+                    {"id": 2, "type": "boxart", "side": "front", "filename": "boxart/front/53-1.jpg"}
+                ]}
+            }}
+        });
+        let c = parse_tgdb_game(&v).expect("candidato");
+        assert_eq!(c.details.players.as_deref(), Some("1"));
+        assert_eq!(c.details.age_rating.as_deref(), Some("E - Everyone"));
+        assert_eq!(c.details.modes, None, "coop No não vira modo");
+        assert_eq!(
+            parse_tgdb_included_boxart(&v, "53").as_deref(),
+            Some("https://cdn.thegamesdb.net/images/large/boxart/front/53-1.jpg")
+        );
+        assert_eq!(parse_tgdb_included_boxart(&v, "99"), None);
     }
 
     #[test]
