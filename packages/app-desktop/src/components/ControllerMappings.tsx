@@ -33,9 +33,11 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalXS,
-    padding: tokens.spacingVerticalS,
+    // mesmo tom dos outros cards internos das Configurações (o card da página
+    // redefine o Background2 como a camada mais clara — ver SettingsLayout)
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalM}`,
     borderRadius: tokens.borderRadiusMedium,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    backgroundColor: tokens.colorNeutralBackground2,
   },
   deviceHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   grid: {
