@@ -9,6 +9,7 @@ import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { RouteTransition } from "../components/RouteTransition";
+import { useGamepadStore } from "../stores/useGamepadStore";
 import * as M from "../styles/metrics";
 import { SETTINGS_SECTIONS } from "./settingsSections";
 
@@ -32,6 +33,13 @@ const useStyles = makeStyles({
     height: `calc(100vh - var(--reemuPageTop, ${M.PAGE_TOP}px) - ${M.SAFE_Y}px)`,
     marginBottom: `-${M.PAGE_PAD_B - M.SAFE_Y}px`,
     minHeight: "240px",
+  },
+  // Com controle conectado a barra de dicas aparece (canto inferior
+  // direito, fixa): aí a página para acima dela, na margem que a `.scroll`
+  // já reserva, pra barra não cobrir o pé dos cards.
+  withHints: {
+    height: `calc(100vh - var(--reemuPageTop, ${M.PAGE_TOP}px) - ${M.PAGE_PAD_B}px)`,
+    marginBottom: 0,
   },
   page: {
     height: "100%",
@@ -119,6 +127,8 @@ export function SettingsLayout() {
   const { t } = useTranslation();
   const styles = useStyles();
   const { pathname } = useLocation();
+  // mesma condição da barra de dicas (`ButtonHints`)
+  const hints = useGamepadStore((st) => st.devices.length > 0);
   // ["", "settings", categoria?, subseção?]
   const [, , catKey, sub] = pathname.split("/");
   const section = SETTINGS_SECTIONS.find((s) => s.key === catKey);
@@ -140,7 +150,7 @@ export function SettingsLayout() {
   }
 
   return (
-    <div className={styles.root}>
+    <div className={mergeClasses(styles.root, hints && styles.withHints)}>
       {/* Remonta a cada rota: a página nova entra com a transição do app
           (e o conteúdo começa do topo). */}
       <RouteTransition routeKey={pathname} className={styles.page}>
