@@ -335,7 +335,59 @@ const consoleLight = {
 } satisfies Partial<Theme>;
 
 /** Tokens custom do ReEmu, emitidos como `--reemu*` pelo `FluentProvider`. */
-export interface ReEmuTokens {
+/** Camadas dentro de um card `colorNeutralBackground1` (o card das
+ *  Configurações): linhas/cards (`Surface2*`) e campos (`Surface3*`). Ver
+ *  `liftTokens`. */
+export interface ReEmuLiftTokens {
+  /** Fundo do próprio card. */
+  reemuSurface1: string;
+  reemuSurface2: string;
+  reemuSurface2Hover: string;
+  reemuSurface2Pressed: string;
+  reemuSurface2Selected: string;
+  reemuSurface3: string;
+  reemuSurface3Hover: string;
+  reemuSurface3Pressed: string;
+  reemuSurface3Selected: string;
+}
+
+/**
+ * Fluent 2 › Color: "Use lighter neutrals on surfaces" — a camada de dentro
+ * é mais CLARA que a de fora. As escalas de neutros dos temas não garantem
+ * isso (em vários o Background2 fica a 4–8% do Background1, e nos claros o
+ * Background3 é mais escuro), então as camadas saem de um passo fixo a
+ * partir do fundo do card:
+ * - escuro / alto contraste: misturando a cor do texto (clareia);
+ * - claro: misturando branco (clareia), como os cards brancos sobre cinza
+ *   das Configurações do Windows. Hover/pressionado ficam um pouco mais
+ *   escuros que o repouso (no Fluent o controle escurece ao interagir).
+ * `var(--…)`: resolve no elemento, com o tema que estiver aplicado.
+ */
+function liftTokens(light: boolean): ReEmuLiftTokens {
+  const toward = light ? "#ffffff" : "var(--colorNeutralForeground1)";
+  const mix = (pct: number) =>
+    `color-mix(in srgb, var(--colorNeutralBackground1), ${toward} ${pct}%)`;
+  // [repouso, hover, pressionado, selecionado]
+  const rows = light ? [65, 50, 40, 75] : [8, 12, 6, 14];
+  const fields = light ? [90, 80, 70, 95] : [14, 18, 12, 20];
+  return {
+    // No claro o card desce 4% (Alva Claro tem o Background1 quase branco,
+    // #F0F2F5: sem isto não sobrava espaço pras camadas brancas aparecerem).
+    reemuSurface1: light
+      ? "color-mix(in srgb, var(--colorNeutralBackground1), #000000 4%)"
+      : "var(--colorNeutralBackground1)",
+    reemuSurface2: mix(rows[0]),
+    reemuSurface2Hover: mix(rows[1]),
+    reemuSurface2Pressed: mix(rows[2]),
+    reemuSurface2Selected: mix(rows[3]),
+    reemuSurface3: mix(fields[0]),
+    reemuSurface3Hover: mix(fields[1]),
+    reemuSurface3Pressed: mix(fields[2]),
+    reemuSurface3Selected: mix(fields[3]),
+  };
+}
+
+export interface ReEmuTokens extends ReEmuLiftTokens {
   /** Fundo da casca (`.app`) — cinza neutro suave, sem matiz. */
   reemuAppBg: string;
   /** Realce translúcido neutro (brilho de canto, chip ativo). */
@@ -477,6 +529,7 @@ function make(
     // `colorBrandForeground1` pra garantir AA (>4.5:1) contra os neutros
     // customizados do tema claro em qualquer rampa cadastrada.
     reemuBrandText: light ? ramp[40] : ramp[90],
+    ...liftTokens(light),
   };
   if (o.appBg) t.reemuAppBg = o.appBg;
   if (o.activeBg) t.reemuActiveBg = o.activeBg;
@@ -509,6 +562,7 @@ function makeHighContrast(): ReEmuTheme {
     reemuActiveFg: t.colorNeutralForegroundOnBrand,
     reemuFillWeak: "rgba(255, 255, 255, 0.08)",
     reemuBrandText: t.colorBrandForeground1,
+    ...liftTokens(false),
   };
 }
 

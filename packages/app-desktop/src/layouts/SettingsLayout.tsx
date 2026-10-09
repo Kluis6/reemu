@@ -20,10 +20,6 @@ import { SETTINGS_SECTIONS } from "./settingsSections";
 // tela (do topo do conteúdo até a margem de baixo da `.scroll`), então ela
 // mesma não rola. `vh` já está em px da interface: o tamanho vem do zoom
 // nativo do webview (`uiScale.ts`).
-/** Fundo do card misturado com a cor do texto do tema (`pct` %). */
-const SURFACE = (pct: number) =>
-  `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} ${pct}%)`;
-
 const useStyles = makeStyles({
   // O hub e o card da categoria descem até a área segura de baixo (32 px da
   // borda). A `.scroll` reserva 88 px embaixo pra barra de dicas do
@@ -72,29 +68,27 @@ const useStyles = makeStyles({
     flexGrow: 1,
     minHeight: 0,
     display: "flex",
-    backgroundColor: tokens.colorNeutralBackground1,
+    // `Background1`, um pouco mais fechado nos temas claros (`liftTokens`)
+    backgroundColor: "var(--reemuSurface1)",
     // Sem borda; a separação do fundo é a sombra baixa (Fluent 2 ›
     // Elevation: "low-elevation shadows" pra cards).
     borderRadius: tokens.borderRadiusMedium,
     boxShadow: tokens.shadow4,
     overflow: "hidden",
-    // Camadas de dentro (cards, linhas, campos): Fluent 2 › Color, "Use
-    // lighter neutrals on surfaces" pra criar hierarquia. As escalas de
-    // neutros dos temas variam muito (em vários escuros o Background2 fica
-    // só 4–8% acima do Background1 e as linhas sumiam no card), então aqui
-    // dentro os tokens viram um passo FIXO a partir do fundo do card,
-    // misturando a cor do texto do tema: clareia no escuro, escurece no
-    // claro, sempre visível. Os componentes do Fluent leem esses mesmos
-    // tokens (são variáveis CSS), então tudo aqui dentro acompanha.
-    "--colorNeutralBackground2": SURFACE(8),
-    "--colorNeutralBackground2Hover": SURFACE(12),
-    "--colorNeutralBackground2Pressed": SURFACE(6),
-    "--colorNeutralBackground2Selected": SURFACE(14),
+    // Camadas de dentro (cards, linhas, campos): os tokens do Fluent viram
+    // os `reemuSurface*` do tema — um passo fixo e sempre mais claro que o
+    // fundo do card, em qualquer tema (ver `liftTokens` em themes.ts). Os
+    // componentes do Fluent leem esses mesmos tokens (variáveis CSS), então
+    // tudo aqui dentro acompanha.
+    "--colorNeutralBackground2": "var(--reemuSurface2)",
+    "--colorNeutralBackground2Hover": "var(--reemuSurface2Hover)",
+    "--colorNeutralBackground2Pressed": "var(--reemuSurface2Pressed)",
+    "--colorNeutralBackground2Selected": "var(--reemuSurface2Selected)",
     // campos (`filled-darker`) e superfícies de 3º nível
-    "--colorNeutralBackground3": SURFACE(14),
-    "--colorNeutralBackground3Hover": SURFACE(18),
-    "--colorNeutralBackground3Pressed": SURFACE(12),
-    "--colorNeutralBackground3Selected": SURFACE(20),
+    "--colorNeutralBackground3": "var(--reemuSurface3)",
+    "--colorNeutralBackground3Hover": "var(--reemuSurface3Hover)",
+    "--colorNeutralBackground3Pressed": "var(--reemuSurface3Pressed)",
+    "--colorNeutralBackground3Selected": "var(--reemuSurface3Selected)",
   },
   // Área que rola, dentro do card. Mesmo scrollbar da `.scroll` do shell.
   pane: {
