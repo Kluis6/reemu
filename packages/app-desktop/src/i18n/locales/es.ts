@@ -555,6 +555,10 @@ const es: Messages = {
     install: 'Instalar',
   },
   bios: {
+    search: 'Buscar sistema o archivo…',
+    onlyMine: 'Solo sistemas de mi biblioteca',
+    showing: '{{shown}} de {{total}} sistemas',
+    noneFound: 'Ningún sistema con este filtro.',
     notes: {
       pcsx2_bios: 'BIOS de PlayStation 2 — sirve cualquier región o revisión; LRPS2 no funciona sin ella',
       naomi_zip: 'BIOS de la placa NAOMI (set de MAME) — los juegos de NAOMI no funcionan sin ella',

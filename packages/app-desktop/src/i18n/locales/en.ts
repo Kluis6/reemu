@@ -555,6 +555,10 @@ const en: Messages = {
     install: 'Install',
   },
   bios: {
+    search: 'Search system or file…',
+    onlyMine: 'Only systems in my library',
+    showing: '{{shown}} of {{total}} systems',
+    noneFound: 'No system matches this filter.',
     notes: {
       pcsx2_bios: 'PlayStation 2 BIOS — any region or revision works; LRPS2 does not run without it',
       naomi_zip: 'NAOMI board BIOS (MAME set) — NAOMI games won\'t run without it',

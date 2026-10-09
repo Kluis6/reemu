@@ -556,6 +556,10 @@ const ptBR = {
     install: 'Instalar',
   },
   bios: {
+    search: 'Buscar sistema ou arquivo…',
+    onlyMine: 'Só sistemas da minha biblioteca',
+    showing: '{{shown}} de {{total}} sistemas',
+    noneFound: 'Nenhum sistema com esse filtro.',
     notes: {
       pcsx2_bios: 'BIOS do PlayStation 2 — qualquer região ou revisão serve; o LRPS2 não roda sem',
       naomi_zip: 'BIOS da placa NAOMI (set do MAME) — os jogos de NAOMI não rodam sem',

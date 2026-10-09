@@ -1,4 +1,14 @@
-import { Badge, Body1, Button, Caption1, Text, makeStyles, tokens } from '@fluentui/react-components'
+import {
+  Badge,
+  Body1,
+  Button,
+  Caption1,
+  SearchBox,
+  Switch,
+  Text,
+  makeStyles,
+  tokens,
+} from '@fluentui/react-components'
 import {
   CheckmarkCircleFilled,
   DeleteRegular,
@@ -7,10 +17,12 @@ import {
   WarningFilled,
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import {
   downloadPpssppAssets,
   importBiosFile,
   listBiosStatus,
+  listRoms,
   pickBiosFile,
   ppssppAssetsInstalled,
   removeBiosFile,
@@ -26,6 +38,15 @@ import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
+  // busca + "só da minha biblioteca" + contagem, numa linha que quebra
+  filters: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
+  },
+  search: { width: '320px', maxWidth: '100%' },
+  count: { color: tokens.colorNeutralForeground3 },
   // Um bloco por sistema numa coluna só; 2 COLUNAS CORRIDAS só em tela
   // grande (≥ 1600 px úteis: interface Compacta ou monitor ultrawide — num
   // 16:9 o zoom da interface mantém ~1366). Colunas corridas e não grade:
@@ -124,6 +145,19 @@ export function SettingsBios() {
     onError: (e) => push(errorToast(e, 'removeBios')),
   })
 
+  // Filtros: a lista cobre ~35 sistemas. Por padrão mostra só os que têm
+  // jogo na biblioteca (se ela tiver algum); a busca casa com o nome do
+  // sistema, o arquivo ou a nota.
+  const roms = useQuery({ queryKey: ['roms'], queryFn: listRoms, retry: false })
+  const mine = new Set((roms.data ?? []).map((r) => r.systemId))
+  const [onlyMineChoice, setOnlyMine] = useState<boolean | null>(null)
+  const onlyMine = onlyMineChoice ?? mine.size > 0
+  const [query, setQuery] = useState('')
+  const q = query.trim().toLowerCase()
+  const shows = (systemId: string, texts: string[]) =>
+    (!onlyMine || mine.has(systemId)) &&
+    (!q || [platformLabel(systemId), ...texts].some((x) => x.toLowerCase().includes(q)))
+
   if (bios.isLoading) return <LoadingState label={t('bios.checking')} />
   if (bios.isError) return <Body1>{t('bios.unavailable')}</Body1>
 
@@ -134,13 +168,43 @@ export function SettingsBios() {
     bySystem.set(b.systemId, list)
   }
 
+  const allSystems = [...bySystem.keys(), 'psp']
+  const visible = [...bySystem.entries()].filter(([systemId, files]) =>
+    shows(
+      systemId,
+      files.flatMap((f) => [shownName(f), biosNote(t, f.anyOfFolder ?? f.filename, f.note)]),
+    ),
+  )
+  const showPsp = shows('psp', ['PPSSPP', t('bios.ppssppNote')])
+  const shownCount = visible.length + (showPsp ? 1 : 0)
+
   return (
     <div className={styles.root}>
       <Caption1>
         <Trans i18nKey="bios.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
       </Caption1>
+      <div className={styles.filters}>
+        <SearchBox
+          className={styles.search}
+          appearance="filled-darker"
+          placeholder={t('bios.search')}
+          aria-label={t('bios.search')}
+          value={query}
+          onChange={(_, d) => setQuery(d.value)}
+        />
+        <Switch
+          label={t('bios.onlyMine')}
+          checked={onlyMine}
+          disabled={mine.size === 0}
+          onChange={(_, d) => setOnlyMine(d.checked)}
+        />
+        <Caption1 className={styles.count}>
+          {t('bios.showing', { shown: shownCount, total: allSystems.length })}
+        </Caption1>
+      </div>
+      {shownCount === 0 && <Caption1>{t('bios.noneFound')}</Caption1>}
       <div className={styles.groups}>
-        {[...bySystem.entries()].map(([systemId, files]) => (
+        {visible.map(([systemId, files]) => (
           <div key={systemId} className={styles.system}>
             <Body1>
               <Text as="strong" weight="semibold">{platformLabel(systemId).toUpperCase()}</Text>
@@ -207,6 +271,7 @@ export function SettingsBios() {
             </div>
           </div>
         ))}
+        {showPsp && (
         <div className={styles.system}>
           <Body1>
             <Text as="strong" weight="semibold">{platformLabel('psp').toUpperCase()}</Text>
@@ -234,6 +299,7 @@ export function SettingsBios() {
             </span>
           </div>
         </div>
+        )}
       </div>
     </div>
   )
