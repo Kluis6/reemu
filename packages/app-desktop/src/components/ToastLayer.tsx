@@ -28,7 +28,11 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalM,
-    zIndex: 9999,
+    // Acima dos portais do Fluent (gaveta, diálogos, menus): o nó de
+    // montagem deles tem `z-index: 1000000` (`usePortalMountNodeStyles` do
+    // @fluentui/react-portal). Com 9999 o aviso ficava atrás da gaveta de
+    // informações do jogo, que ocupa justo o canto dos toasts.
+    zIndex: 1000001,
     pointerEvents: "none",
     width: "360px",
     maxWidth: "calc(100vw - 32px)",
