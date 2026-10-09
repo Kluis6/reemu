@@ -21,6 +21,7 @@ import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles, useMotionStyles } from "../styles/xbox";
 import { errorPatch } from "../lib/toast";
 import { useTranslation } from "react-i18next";
+import { useAutoMetadataScan } from "../lib/useAutoMetadataScan";
 
 /** Uma faixa curada da Início (cabeçalho + prateleira). */
 function Row({
@@ -73,6 +74,7 @@ export function Home() {
 
   const [addOpen, setAddOpen] = useState(false);
   const scanId = useRef<string | null>(null);
+  const autoMetadata = useAutoMetadataScan();
   // Mesmo fluxo de scan da Library (modal → toast de progresso) — só
   // acionado daqui, pra não precisar navegar até "Meus jogos" primeiro.
   const scan = useMutation({
@@ -107,6 +109,7 @@ export function Home() {
       }
       qc.invalidateQueries({ queryKey: ["roms"] });
       qc.invalidateQueries({ queryKey: ["romSources"] });
+      autoMetadata(r.added);
     },
     onError: (e) => {
       if (scanId.current) {

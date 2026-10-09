@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useToastStore } from "../stores/useToastStore";
 import { rescanLibrary, scanLibrary, type ScanProgress } from "./tauri";
 import { errorPatch } from "./toast";
+import { useAutoMetadataScan } from "./useAutoMetadataScan";
 
 /**
  * Varredura da biblioteca com aviso de progresso: `mutate(pasta)` adiciona uma
@@ -18,6 +19,7 @@ export function useLibraryScan() {
   const push = useToastStore((s) => s.push);
   const updateToast = useToastStore((s) => s.update);
   const scanId = useRef<string | null>(null);
+  const autoMetadata = useAutoMetadataScan();
 
   return useMutation({
     mutationFn: (path: string | null) => {
@@ -56,6 +58,7 @@ export function useLibraryScan() {
       }
       qc.invalidateQueries({ queryKey: ["roms"] });
       qc.invalidateQueries({ queryKey: ["romSources"] });
+      autoMetadata(r.added);
     },
     onError: (e) => {
       if (scanId.current) {
