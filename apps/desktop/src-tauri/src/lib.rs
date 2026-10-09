@@ -339,6 +339,7 @@ pub fn run() {
             commands::metadata_scan_progress,
             commands::cancel_metadata_scan,
             commands::start_metadata_scan,
+            commands::rescrape_rom,
             commands::save_state,
             commands::list_save_states,
             commands::load_save_state,

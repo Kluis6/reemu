@@ -1192,6 +1192,9 @@ export const useDetailStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
   },
   // Seções da gaveta (Sobre o jogo / Descrição / Na sua biblioteca).
+  // "Buscar dados de novo" no fim de "Sobre o jogo": botão do tamanho do
+  // texto, alinhado à esquerda como as linhas da lista.
+  infoRescrape: { alignSelf: "flex-start", marginTop: tokens.spacingVerticalS },
   infoSection: {
     display: "flex",
     flexDirection: "column",

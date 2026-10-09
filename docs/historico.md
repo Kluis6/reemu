@@ -1852,3 +1852,10 @@ Infra:
 
 - **Causa:** o `fixtures/testcore.c` não marcava as funções com `__declspec(dllexport)`; no MSVC a DLL saía sem exports e todo teste que carrega o core-fake falhava em `GetProcAddress` (`load_run` do `core-loader-desktop` e os 9 de `emu-session/tests/session.rs`). O `cl.exe` também escrevia `testcore.obj` na pasta do crate, e ele estava versionado.
 - **Correção:** `RETRO_API` no `testcore.c` com a mesma definição do `libretro.h` oficial (libretro-common): `__declspec(dllexport)` no Windows, visibilidade padrão no resto; `/Fo:` manda o `.obj` pro `OUT_DIR`; `*.obj` no `.gitignore`. `cargo test --workspace` e `cargo clippy --workspace --all-targets -D warnings` passam no Windows 11. Os testes de sessão sobem o processo filho de verdade, então também validam o `CREATE_NO_WINDOW` do mesmo dia.
+
+## 2026-10-08 — Itens 6, 8 e 9 da lista de melhorias
+
+- **Contraste nos temas claros (6):** a camada de dentro do card das Configurações escurecia nos temas claros (cinza sobre cinza). `liftTokens` (themes.ts) define `reemuSurface1..3` por modo — escuro/alto contraste misturam a cor do texto, claro mistura branco e fecha o card 4% — seguindo "Use lighter neutrals on surfaces" (Fluent 2 › Color). Medido na tela de BIOS: linha × card entre 1,18 e 1,35 em todos os temas, sempre mais clara que o card.
+- **Busca automática (8):** depois de uma varredura que trouxe jogos novos, a busca de metadados começa sozinha (`useAutoMetadataScan`), com o mesmo toast de início.
+- **Buscar de novo (9):** botão na gaveta de informações; comando `rescrape_rom` → `scraping::scrape_one`, a mesma cascata e a mesma gravação da leva (`record_result`, extraído do laço).
+- **Achado no caminho:** os toasts tinham `z-index` 9999 e ficavam atrás dos portais do Fluent (gaveta, diálogos), que usam 1000000 (`usePortalMountNodeStyles`). Subiu pra 1000001.

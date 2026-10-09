@@ -439,6 +439,10 @@ export interface ScrapeProgress {
 }
 export const metadataScanProgress = () => invoke<ScrapeProgress>('metadata_scan_progress')
 export const startMetadataScan = () => invoke<void>('start_metadata_scan')
+/** "Buscar de novo" de um jogo: `auto` = aplicado, `pending` = foi pra revisão,
+ *  `none` = nenhum provedor achou. Erro `ss_dev_login` = ScreenScraper recusou o app. */
+export const rescrapeRom = (romId: string) =>
+  invoke<'auto' | 'pending' | 'none'>('rescrape_rom', { romId })
 export const cancelMetadataScan = () => invoke<void>('cancel_metadata_scan')
 
 export interface RomSource {

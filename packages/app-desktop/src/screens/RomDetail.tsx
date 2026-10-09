@@ -3,6 +3,7 @@ import {
   Text,
   Badge,
   Button,
+  Spinner,
   Caption1,
   Dialog,
   DialogActions,
@@ -27,6 +28,7 @@ import {
 } from "@fluentui/react-components";
 import {
   ArrowResetRegular,
+  ArrowSyncRegular,
   ClockRegular,
   DeleteFilled,
   DeleteRegular,
@@ -60,6 +62,7 @@ import { errorToast, sysToast } from "../lib/toast";
 import {
   deleteSaveState,
   getRomMetadata,
+  rescrapeRom,
   getRomShader,
   getShaderInfo,
   listBiosStatus,
@@ -124,6 +127,25 @@ export function RomDetail() {
     queryKey: ["rom-metadata", romId],
     queryFn: () => getRomMetadata(romId),
     retry: false,
+  });
+  // "Buscar de novo" na gaveta de informações: consulta os provedores só
+  // pra este jogo e conta o resultado num toast.
+  const rescrape = useMutation({
+    mutationFn: () => rescrapeRom(romId),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["rom-metadata", romId] });
+      qc.invalidateQueries({ queryKey: ["roms"] });
+      qc.invalidateQueries({ queryKey: ["pending-matches"] });
+      const key =
+        r === "auto" ? "game.rescrapeAuto" : r === "pending" ? "game.rescrapePending" : "game.rescrapeNone";
+      push(sysToast(t(key), r === "auto" ? "Success" : "Info"));
+    },
+    onError: (e) =>
+      push(
+        String(e).includes("ss_dev_login")
+          ? sysToast(t("metadata.errors.ssDevLoginTitle"), "Warning")
+          : errorToast(e, "fetchMetadata"),
+      ),
   });
   const shaderInfo = useQuery({
     queryKey: ["shader-info"],
@@ -609,6 +631,15 @@ export function RomDetail() {
                   </>
                 )}
               </dl>
+              <Button
+                className={s.infoRescrape}
+                appearance="secondary"
+                icon={rescrape.isPending ? <Spinner size="tiny" /> : <ArrowSyncRegular />}
+                disabled={rescrape.isPending}
+                onClick={() => rescrape.mutate()}
+              >
+                {rescrape.isPending ? t("game.rescraping") : t("game.rescrape")}
+              </Button>
             </section>
 
             {descParas.length > 0 && (

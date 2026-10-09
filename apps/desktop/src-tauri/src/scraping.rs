@@ -571,6 +571,127 @@ fn rom_hash_matches(jeu: &Value, q: &ScrapeQuery<'_>) -> bool {
     crc || md5
 }
 
+/// O que aconteceu com uma ROM depois de consultar os provedores.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    /// Correspondência exata: metadado aplicado.
+    Auto,
+    /// Correspondência incerta: foi pra revisão (Configurações › Metadados).
+    Pending,
+    /// Nenhum provedor achou o jogo.
+    NoMatch,
+}
+
+/// Grava o resultado de uma consulta: aplica o metadado (exato), manda pra
+/// revisão (incerto) ou marca "sem correspondência". Comum à leva
+/// (`scrape_pending`) e ao "buscar de novo" de um jogo (`scrape_one`).
+async fn record_result(
+    repo: &db::MetadataRepo,
+    rom_id: &str,
+    stem: &str,
+    candidate: Option<ScrapeCandidate>,
+    covers_dir: &std::path::Path,
+) -> Result<Outcome, String> {
+    let Some(c) = candidate else {
+        let none = ScrapeCandidate {
+            provider: "screenscraper".into(),
+            external_id: String::new(),
+            title: stem.to_string(),
+            description: None,
+            cover_url: None,
+            release_date: None,
+            genre: None,
+            exact_hash_match: false,
+            exact_filename_match: false,
+            details: Default::default(),
+        };
+        let _ = repo.record_match(rom_id, &none, MatchStatus::NoMatch).await;
+        return Ok(Outcome::NoMatch);
+    };
+    let auto = c.auto_matches();
+    let status = if auto {
+        MatchStatus::AutoMatched
+    } else {
+        MatchStatus::PendingReview
+    };
+    repo.record_match(rom_id, &c, status)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !auto {
+        return Ok(Outcome::Pending);
+    }
+    let ok = repo
+        .upsert_metadata(&GameMetadata {
+            rom_id: rom_id.to_string(),
+            title: c.title.clone(),
+            description: c.description.clone(),
+            cover_url: c.cover_url.clone(),
+            release_date: c.release_date.clone(),
+            genre: c.genre.clone(),
+            provider_source: Some(c.provider.clone()),
+            details: c.details.clone(),
+        })
+        .await
+        .is_ok();
+    if ok {
+        crate::covers::invalidate(covers_dir, rom_id);
+    }
+    Ok(Outcome::Auto)
+}
+
+/// "Buscar de novo" de UM jogo (gaveta de informações): consulta os
+/// provedores na mesma cascata da leva — ScreenScraper pelo hash, depois o
+/// TheGamesDB pelo nome se houver chave — e grava como a leva grava. Erro de
+/// credencial do ScreenScraper volta como `ERR_SS_DEV_LOGIN` (a UI traduz).
+pub async fn scrape_one(
+    pool: db::Db,
+    covers_dir: std::path::PathBuf,
+    rom_id: &str,
+) -> Result<Outcome, String> {
+    let repo = db::MetadataRepo::new(pool.clone());
+    let rom = db::RomsRepo::new(pool)
+        .get(rom_id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("jogo não encontrado na biblioteca")?;
+    let cfg = crate::credentials::load_config(&repo, &crate::credentials::OsKeyring).await?;
+    let client = reqwest::Client::builder()
+        .user_agent("reemu/0.1")
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let stem = std::path::Path::new(&rom.file_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let hash = domain::metadata::RomHash {
+        crc32: rom.crc32.clone(),
+        md5: rom.md5.clone(),
+    };
+    let q = ScrapeQuery {
+        hash: &hash,
+        system_id: &rom.system_id,
+        file_stem: &stem,
+    };
+    let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
+    let mut result = query_screenscraper(&client, &cfg, &q).await;
+    // sem credencial no ScreenScraper, ainda dá pra tentar o TheGamesDB
+    let ss_refused = matches!(&result, Err(e) if e == ERR_SS_DEV_LOGIN);
+    if ss_refused && tgdb_key.is_some() {
+        result = Ok(None);
+    }
+    if let (Ok(None), Some(key)) = (&result, tgdb_key) {
+        result = query_thegamesdb(&client, key, &q).await;
+    }
+    let candidate = result?;
+    if candidate.is_none() && ss_refused {
+        // o TheGamesDB não achou e o ScreenScraper nem foi consultado
+        return Err(ERR_SS_DEV_LOGIN.to_string());
+    }
+    record_result(&repo, rom_id, &stem, candidate, &covers_dir).await
+}
+
 /// Roda uma leva de scraping sobre as ROMs sem match. Bloqueante (chamar de
 /// `spawn_blocking`/task). `stop` permite cancelar. `covers_dir`: descarta o
 /// cache de capa (`covers.rs`) de qualquer rom que ganhar uma `cover_url`
@@ -653,58 +774,19 @@ pub async fn scrape_pending(
             tokio::time::sleep(TGDB_DELAY).await;
         }
         match result {
-            Ok(Some(c)) => {
-                let auto = c.auto_matches();
-                let status = if auto {
-                    MatchStatus::AutoMatched
-                } else {
-                    MatchStatus::PendingReview
-                };
-                if let Err(e) = repo.record_match(&rom_id, &c, status).await {
-                    log::warn!("metadata: gravar match de {stem}: {e}");
-                    progress.failed.fetch_add(1, Ordering::Relaxed);
-                } else if auto {
-                    let ok = repo
-                        .upsert_metadata(&GameMetadata {
-                            rom_id: rom_id.clone(),
-                            title: c.title.clone(),
-                            description: c.description.clone(),
-                            cover_url: c.cover_url.clone(),
-                            release_date: c.release_date.clone(),
-                            genre: c.genre.clone(),
-                            provider_source: Some(c.provider.clone()),
-                            details: c.details.clone(),
-                        })
-                        .await
-                        .is_ok();
-                    if ok {
-                        crate::covers::invalidate(&covers_dir, &rom_id);
-                    }
+            Ok(c) => match record_result(&repo, &rom_id, &stem, c, &covers_dir).await {
+                Ok(Outcome::Auto) => {
                     progress.auto.fetch_add(1, Ordering::Relaxed);
-                } else {
+                }
+                Ok(Outcome::Pending) => {
                     progress.pending.fetch_add(1, Ordering::Relaxed);
                 }
-            }
-            Ok(None) => {
-                let _ = repo
-                    .record_match(
-                        &rom_id,
-                        &ScrapeCandidate {
-                            provider: "screenscraper".into(),
-                            external_id: String::new(),
-                            title: stem.clone(),
-                            description: None,
-                            cover_url: None,
-                            release_date: None,
-                            genre: None,
-                            exact_hash_match: false,
-                            exact_filename_match: false,
-                            details: Default::default(),
-                        },
-                        MatchStatus::NoMatch,
-                    )
-                    .await;
-            }
+                Ok(Outcome::NoMatch) => {}
+                Err(e) => {
+                    log::warn!("metadata: gravar match de {stem}: {e}");
+                    progress.failed.fetch_add(1, Ordering::Relaxed);
+                }
+            },
             Err(e) => {
                 log::warn!("metadata: {stem}: {e}");
                 progress.failed.fetch_add(1, Ordering::Relaxed);
