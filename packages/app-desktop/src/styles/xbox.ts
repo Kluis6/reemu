@@ -976,7 +976,9 @@ export const useDetailStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
     fontWeight: 600,
     letterSpacing: "0.02em",
-    color: "var(--reemuBrandText)",
+    // mesma cor do título do jogo (branco sobre o `heroScrim`, em qualquer
+    // tema) — pedido do usuário; antes era a cor de marca do tema
+    color: "#fff",
     marginBottom: "4px",
   },
   title: {
