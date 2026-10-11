@@ -4,8 +4,6 @@ import {
   Caption1,
   Text,
   makeStyles,
-  Tab,
-  TabList,
   mergeClasses,
   tokens,
   shorthands,
@@ -16,7 +14,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { BezelLibrary } from '../../components/BezelLibrary'
 import { LoadingState } from '../../components/EmptyState'
-import { ShaderLibrary } from '../../components/ShaderLibrary'
 import { ShaderParams } from '../../components/ShaderParams'
 import { PREVIEW_BAR_SPACE, ShaderPreview } from '../../components/ShaderPreview'
 import { errorToast, sysToast } from '../../lib/toast'
@@ -32,9 +29,8 @@ import { useToastStore } from '../../stores/useToastStore'
 import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
 import { SettingsLinkList } from '../../components/SettingsNav'
-import { useTabStyles } from '../../styles/xbox'
 import { ArrowLeftRegular, FrameRegular, OptionsRegular, SparkleRegular } from '@fluentui/react-icons'
-import { ShaderCard } from '../../components/ShaderCard'
+import { ShaderPicker, ShaderPresetList } from '../../components/ShaderPicker'
 
 // Presets embutidos com nome/descrição traduzidos (`video.presets.<id>`).
 const BUILTIN = ['plain', 'crt', 'lcd'] as const
@@ -64,24 +60,6 @@ const useStyles = makeStyles({
     gap: '8px',
     minWidth: 0,
     contain: 'size',
-  },
-  // Lista de shaders com rolagem própria, na altura que sobrar; a folga (8)
-  // não deixa o anel de foco ser cortado pela borda da área que rola.
-  shaderList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalS,
-    flexGrow: 1,
-    minHeight: 0,
-    overflowY: 'auto',
-    padding: '8px',
-    margin: '-8px',
-    // mesmo scrollbar fino do resto do app (`.scroll` do shell)
-    '::-webkit-scrollbar': { width: '6px' },
-    '::-webkit-scrollbar-thumb': {
-      backgroundColor: tokens.colorNeutralStroke2,
-      borderRadius: tokens.borderRadiusCircular,
-    },
   },
   activeRow: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
   swap: {
@@ -130,13 +108,7 @@ const useStyles = makeStyles({
   settingsBtn: {
     ...shorthands.borderColor(`${tokens.colorNeutralStrokeAccessible} !important`),
   },
-  // abas no estilo do app (42 de altura). A lista começa na altura da imagem
-  // da prévia, cuja barra tem 32 + 24: aqui são 10 a mais de aba e 10 a
-  // menos de espaço (8 do `gap` + 6).
-  tabs: { alignSelf: 'flex-start', marginBottom: '6px' },
 })
-
-type ShaderSource = 'reemu' | 'pack'
 
 type VideoSection = 'shaders' | 'molduras'
 
@@ -149,12 +121,9 @@ type VideoSection = 'shaders' | 'molduras'
 export function SettingsVideo({ section }: { section?: VideoSection }) {
   const { t } = useTranslation()
   const presetTitle = (n: string) => (isBuiltin(n) ? t(`video.presets.${n}.title`) : n)
-  const presetDesc = (n: string) => (isBuiltin(n) ? t(`video.presets.${n}.desc`) : '')
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const st = useStyles()
-  const tb = useTabStyles()
-  const [source, setSource] = useState<ShaderSource>('reemu')
   // muda a cada parâmetro gravado → refaz a prévia do shader
   const [paramsRev, setParamsRev] = useState(0)
 
@@ -247,34 +216,13 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
   const settingsFor = (id: string) =>
     id === data.active && hasParams ? () => openParams(true) : undefined
   const presetPicker = (
-    <div className={st.shaderList}>
-      {data.available.map((name) => (
-        <ShaderCard
-          key={name}
-          title={presetTitle(name)}
-          description={presetDesc(name)}
-          selected={data.active === name}
-          disabled={pick.isPending || !data.gpu}
-          onSelect={() => pick.mutate(name)}
-          onSettings={settingsFor(name)}
-        />
-      ))}
-      {data.curated.map((c) => (
-        <ShaderCard
-          key={c.id}
-          title={curatedText(t, c.id, 'label', c.label)}
-          description={
-            c.available
-              ? curatedText(t, c.id, 'desc', c.desc)
-              : t('video.needsPack', { desc: curatedText(t, c.id, 'desc', c.desc) })
-          }
-          selected={data.active === c.id}
-          disabled={pick.isPending || !data.gpu || !c.available}
-          onSelect={() => pick.mutate(c.id)}
-          onSettings={settingsFor(c.id)}
-        />
-      ))}
-    </div>
+    <ShaderPresetList
+      info={data}
+      selected={data.active}
+      busy={pick.isPending}
+      onPick={(n) => pick.mutate(n)}
+      settingsFor={settingsFor}
+    />
   )
 
   return (
@@ -338,26 +286,14 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                       </>
                     ) : (
                       <>
-                        <TabList
-                          className={mergeClasses(tb.tabs, st.tabs)}
-                          selectedValue={source}
-                          onTabSelect={(_, d) => setSource(d.value as ShaderSource)}
-                        >
-                          <Tab value="reemu">{t('video.sourceReemu')}</Tab>
-                          <Tab value="pack">{t('video.sourcePack')}</Tab>
-                        </TabList>
-                        {source === 'reemu' ? (
-                          presetPicker
-                        ) : (
-                          <>
-                            <ShaderLibrary
-                              onPick={(p) => pick.mutate(p)}
-                              activePath={data.active}
-                              busy={pick.isPending}
-                              fill
-                            />
-                          </>
-                        )}
+                        <ShaderPicker
+                          info={data}
+                          selected={data.active}
+                          busy={pick.isPending}
+                          onPick={(n) => pick.mutate(n)}
+                          settingsFor={settingsFor}
+                          fill
+                        />
                         {!data.available.includes(data.active) &&
                           !data.curated.some((c) => c.id === data.active) && (
                             <div className={st.activeRow}>

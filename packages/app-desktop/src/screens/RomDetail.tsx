@@ -27,7 +27,6 @@ import {
   Tooltip,
 } from "@fluentui/react-components";
 import {
-  ArrowResetRegular,
   ArrowSyncRegular,
   ClockRegular,
   DeleteFilled,
@@ -46,7 +45,7 @@ import { CoreOptions } from "../components/CoreOptions";
 import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { SaveStateThumb } from "../components/SaveStateThumb";
-import { ShaderLibrary } from "../components/ShaderLibrary";
+import { ShaderPicker } from "../components/ShaderPicker";
 import { ShaderParams } from "../components/ShaderParams";
 import {
   descriptionParagraphs,
@@ -83,7 +82,6 @@ import { useDetailStyles, useTabStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
 import { rankCores } from "../lib/coreChoice";
-import { curatedText, presetTitle } from "../lib/backendText";
 
 export function RomDetail() {
   const { t, i18n } = useTranslation();
@@ -732,37 +730,23 @@ export function RomDetail() {
                         : t("game.shader.activeNone")}
                 </Caption1>
               </div>
-              <Select
-                value={currentGameShader}
-                disabled={shaderPick.isPending}
-                onChange={(_, d) => shaderPick.mutate(d.value)}
-              >
-                <option value="">
-                  {shaderScope === "default" ? t("common.none") : t("game.shader.inherit")}
-                </option>
-                {shaderInfo.data.available.map((n) => (
-                  <option key={n} value={n}>
-                    {presetTitle(t, n)}
-                  </option>
-                ))}
-                {shaderInfo.data.curated.map((c) => (
-                  <option key={c.id} value={c.id} disabled={!c.available}>
-                    {curatedText(t, c.id, "label", c.label)}
-                    {c.available ? "" : t("game.shader.needsPack")}
-                  </option>
-                ))}
-                {shaderAtScope &&
-                  !shaderInfo.data.available.includes(shaderAtScope) &&
-                  !shaderInfo.data.curated.some((c) => c.id === shaderAtScope) && (
-                    <option value={shaderAtScope}>{currentGameShader}</option>
-                  )}
-              </Select>
-              <ShaderLibrary
-                onPick={(p) => shaderPick.mutate(p)}
-                activePath={shaderInfo.data.active}
-                busy={shaderPick.isPending}
-              />
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {/* Mesma escolha das Configurações (abas Shaders do ReEmu /
+                  Pacote de shaders, em cards), sem a prévia; "Herdar" no
+                  topo tira a escolha deste escopo. */}
+              <div className={s.shaderPicker}>
+                <ShaderPicker
+                  info={shaderInfo.data}
+                  selected={shaderAtScope}
+                  busy={shaderPick.isPending}
+                  onPick={(n) => shaderPick.mutate(n)}
+                  inherit={
+                    shaderScope === "rom"
+                      ? t("game.shader.inheritRom")
+                      : t("game.shader.inheritSystem")
+                  }
+                />
+              </div>
+              <div>
                 <Button
                   appearance="subtle"
                   disabled={shaderPick.isPending}
@@ -773,16 +757,6 @@ export function RomDetail() {
                 >
                   {t("game.shader.loadFile")}
                 </Button>
-                {shaderAtScope && shaderScope !== "default" && (
-                  <Button
-                    appearance="subtle"
-                    icon={<ArrowResetRegular />}
-                    disabled={shaderPick.isPending}
-                    onClick={() => shaderPick.mutate("")}
-                  >
-                    {t("game.shader.inheritRemove")}
-                  </Button>
-                )}
               </div>
               {shaderAtScope && (
                 <ShaderParams

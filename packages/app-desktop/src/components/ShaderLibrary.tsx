@@ -25,6 +25,7 @@ import {
 import { useToastStore } from '../stores/useToastStore'
 import { errorPatch } from '../lib/toast'
 import { DownloadButton } from './DownloadButton'
+import { ShaderCard } from './ShaderCard'
 import { Trans, useTranslation } from 'react-i18next'
 
 const ROOT_KEY = 'reemu.shaderLibRoot'
@@ -52,7 +53,9 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalXXS,
     maxHeight: '340px',
     overflowY: 'auto',
-    paddingRight: tokens.spacingHorizontalXS,
+    // folga (8) pro anel de foco dos cards não ser cortado pela borda que rola
+    padding: '8px',
+    margin: '-8px',
     // mesmo scrollbar fino do resto do app (`.scroll` do shell)
     '::-webkit-scrollbar': { width: '6px' },
     '::-webkit-scrollbar-thumb': {
@@ -60,15 +63,8 @@ const useStyles = makeStyles({
       borderRadius: tokens.borderRadiusCircular,
     },
   },
-  panel: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
-  item: {
-    justifyContent: 'flex-start',
-    fontWeight: tokens.fontWeightRegular,
-  },
-  itemOn: {
-    backgroundColor: tokens.colorBrandBackground2,
-    ':hover': { backgroundColor: tokens.colorBrandBackground2Hover },
-  },
+  // cards do grupo, no mesmo espaçamento da lista de Shaders do ReEmu
+  panel: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
 })
 
 /**
@@ -256,19 +252,13 @@ export function ShaderLibrary({
                   </AccordionHeader>
                   <AccordionPanel className={s.panel}>
                     {items.map((e) => (
-                      <Button
+                      <ShaderCard
                         key={e.path}
-                        appearance="subtle"
+                        title={e.name}
+                        selected={e.path === activePath}
                         disabled={busy}
-                        className={mergeClasses(
-                          s.item,
-                          e.path === activePath && s.itemOn,
-                        )}
-                        onClick={() => onPick(e.path)}
-                        title={e.path}
-                      >
-                        {e.name}
-                      </Button>
+                        onSelect={() => onPick(e.path)}
+                      />
                     ))}
                   </AccordionPanel>
                 </AccordionItem>

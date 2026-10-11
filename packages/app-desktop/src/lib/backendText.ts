@@ -30,3 +30,8 @@ export function biosNote(t: TFunction, filename: string, fallback: string): stri
 export function presetTitle(t: TFunction, name: string): string {
   return lookup(t, `video.presets.${keyPart(name)}.title`, name)
 }
+
+/** Descrição de um preset embutido; outros ficam sem. */
+export function presetDesc(t: TFunction, name: string): string {
+  return lookup(t, `video.presets.${keyPart(name)}.desc`, '')
+}

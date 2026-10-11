@@ -1152,6 +1152,21 @@ export const useDetailStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
   },
   field: { display: "flex", flexDirection: "column", rowGap: "4px" },
+  // Escolha de shader (abas + lista de cards), na largura da coluna de
+  // opções das Configurações › Shaders.
+  shaderPicker: {
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "8px",
+    maxWidth: "560px",
+    // O painel já é `Background2`, o fundo dos cards: aqui eles sobem uma
+    // camada (`reemuSurface3`, um passo mais claro — ver `liftTokens`), como
+    // os cards sobre o card das Configurações.
+    "--colorNeutralBackground2": "var(--reemuSurface3)",
+    "--colorNeutralBackground2Hover": "var(--reemuSurface3Hover)",
+    "--colorNeutralBackground2Pressed": "var(--reemuSurface3Pressed)",
+    "--colorNeutralBackground2Selected": "var(--reemuSurface3Selected)",
+  },
   // Mesma matemática do grid de 3 colunas do `CoreOptions` (`repeat(3,
   // minmax(0, 1fr))` + `columnGap: spacingHorizontalM`) — alinha a borda
   // direita do seletor de core com a da 1ª coluna das opções do core.
