@@ -370,12 +370,24 @@ conferir".
       de ~1005 livres, o app abortaria ("out of TLS indexes") depois de
       ~1000 trocas numa sessão com esses dois cores. Risco distante, mas
       real — mais um motivo pro C3.
-- [ ] `todo` — C3. (Desbloqueado: a fase B terminou em 2026-10-11 e o anel
-      Win32 dela é a base) Core Vulkan no processo filho: o core-host
-      cria o próprio device, renderiza em imagens exportadas pelo app
-      (`VK_KHR_external_memory_win32`) e devolve só o índice + semáforo.
-      Devolve o isolamento de processo aos cores Vulkan: um crash do core não
-      derruba a interface. Exige o mesmo device físico nos dois lados.
+- [x] `done` — C3a (2026-10-11, opt-in `REEMU_VK_CHILD=1`): core Vulkan
+      da lista no **processo filho**, com device próprio. O filho cria o
+      device (ou chama o `create_device` do core, caso do Beetle e do
+      flycast), submete o trabalho do core e copia a imagem por um passe de
+      desenho (`textureLoad`, só exige `SAMPLED` — o flycast não dá
+      `TRANSFER_SRC`) pra RGBA8 e dali pra CPU; o quadro vai pelo anel de
+      memória, como o readback do GL. Teste `vk_core_in_child`: Beetle PSX HW
+      e mupen64plus_next (ParaLLEl) a 60 fps, flycast rodando, imagens
+      conferidas, camadas de validação sem VUID, e **0 índice de TLS
+      perdido no app** trocando de jogo.
+- [ ] `todo` — C3b. Zero-cópia: o filho importa o anel Win32 do app
+      (`VK_KHR_external_memory_win32`/`_semaphore_win32`, mesmo device físico
+      pelo UUID) e o passe de desenho escreve direto no slot; o app reusa o
+      caminho do B5 (`done`/`free`, `InteropSlotFree`). Conferir na spec
+      Vulkan a transferência de ownership com `VK_QUEUE_FAMILY_EXTERNAL`
+      entre os dois devices.
+- [ ] `todo` — C3c. Ligar por padrão no Windows (fim da rota in-process
+      pros cores da lista), validar com sync e medir contra o in-process.
 
 ### Biblioteca
 

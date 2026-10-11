@@ -33,6 +33,7 @@ mod sys;
 mod vfs;
 mod vk_context;
 mod vk_frame;
+mod vk_present;
 mod vk_sys;
 
 pub use crate::core::DesktopCore;

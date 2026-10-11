@@ -128,6 +128,14 @@ pub(crate) struct PendingFrame {
     pub image: vk::Image,
     pub view: vk::ImageView,
     pub format: vk::Format,
+    /// Layout em que o core deixou a imagem (`retro_vulkan_image::image_layout`:
+    /// `GENERAL` ou `SHADER_READ_ONLY_OPTIMAL`, `libretro_vulkan.h`).
+    pub layout: vk::ImageLayout,
+    /// Semáforos do `set_image`: sem `set_command_buffers`, "Semaphores
+    /// provided by a single call to set_image will only be waited for once"
+    /// pelo frontend (`libretro_vulkan.h`). Com `set_command_buffers`, o
+    /// frontend não espera nenhum (vazio).
+    pub wait_semaphores: Vec<vk::Semaphore>,
     pub sync_index: u32,
     pub generation: u64,
 }
@@ -137,6 +145,7 @@ struct Inner {
     generation: u64,
     fences: [vk::Fence; RING],
     pending_image: Option<vk_sys::retro_vulkan_image>,
+    pending_semaphores: Vec<vk::Semaphore>,
     pending_cmds: Vec<vk::CommandBuffer>,
     signal_semaphore: vk::Semaphore,
     /// Frames entregues pelo core (diagnóstico/teste).
@@ -198,6 +207,7 @@ impl VkFrameBridge {
                 generation: 0,
                 fences,
                 pending_image: None,
+                pending_semaphores: Vec::new(),
                 pending_cmds: Vec::new(),
                 signal_semaphore: vk::Semaphore::null(),
                 delivered: 0,
@@ -260,6 +270,7 @@ impl VkFrameBridge {
         inner.generation += 1;
         inner.current_index = (inner.generation % RING as u64) as u32;
         inner.pending_image = None;
+        inner.pending_semaphores.clear();
         inner.pending_cmds.clear();
         inner.taken = false;
     }
@@ -271,6 +282,10 @@ impl VkFrameBridge {
         let image = inner.pending_image.take()?;
         let idx = inner.current_index as usize;
         let cmds = std::mem::take(&mut inner.pending_cmds);
+        let mut wait_semaphores = std::mem::take(&mut inner.pending_semaphores);
+        if !cmds.is_empty() {
+            wait_semaphores.clear();
+        }
         inner.delivered += 1;
         inner.taken = true;
         Some(PendingFrame {
@@ -279,6 +294,8 @@ impl VkFrameBridge {
             image: image.create_info.image,
             view: image.image_view,
             format: image.create_info.format,
+            layout: image.image_layout,
+            wait_semaphores,
             sync_index: inner.current_index,
             generation: inner.generation,
         })
@@ -320,17 +337,38 @@ unsafe fn bridge<'a>(handle: *mut c_void) -> &'a VkFrameBridge {
 unsafe extern "C" fn cb_set_image(
     handle: *mut c_void,
     image: *const vk_sys::retro_vulkan_image,
-    _num_semaphores: u32,
-    _semaphores: *const vk::Semaphore,
-    _src_queue_family: u32,
+    num_semaphores: u32,
+    semaphores: *const vk::Semaphore,
+    src_queue_family: u32,
 ) {
     if handle.is_null() || image.is_null() {
         return;
     }
-    // Os cores-alvo passam 0 semáforos e `src_queue_family == IGNORED` — sem
-    // transferência de ownership. A sincronização vem do barrier que o core
-    // grava no próprio command buffer (release pra SHADER_READ_ONLY_OPTIMAL).
-    bridge(handle).inner.lock().unwrap().pending_image = Some(*image);
+    let b = bridge(handle);
+    // Transferência de ownership entre famílias de fila: nenhum core da
+    // lista pede (registra se um pedir — a ponte não faz a transferência).
+    if src_queue_family != vk::QUEUE_FAMILY_IGNORED && src_queue_family != b.ctx.queue_family_index
+    {
+        static ONCE: std::sync::Once = std::sync::Once::new();
+        ONCE.call_once(|| {
+            log::warn!(
+                "set_image com src_queue_family {src_queue_family} (fila do frontend: {}) — \
+                 transferência de ownership não suportada",
+                b.ctx.queue_family_index
+            )
+        });
+    }
+    let mut inner = b.inner.lock().unwrap();
+    inner.pending_image = Some(*image);
+    inner.pending_semaphores.clear();
+    if num_semaphores > 0 && !semaphores.is_null() {
+        inner
+            .pending_semaphores
+            .extend_from_slice(std::slice::from_raw_parts(
+                semaphores,
+                num_semaphores as usize,
+            ));
+    }
 }
 
 unsafe extern "C" fn cb_set_command_buffers(

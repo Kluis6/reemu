@@ -2475,3 +2475,97 @@ fn vk_core_tls_leak() {
         (fls0 as f64 - last.1 as f64) / f64::from(cycles)
     );
 }
+
+/// C3a: o core Vulkan da lista roda no processo filho (`REEMU_VK_CHILD=1`),
+/// com device próprio, e o quadro chega ao app como RGBA. Troca de jogo
+/// `REEMU_TEST_CYCLES` vezes (padrão 3, ~4 s cada) conferindo que os quadros
+/// vêm do filho e com imagem, e mede os índices de TLS do app — o core não
+/// é mais carregado aqui, então não pode vazar. `REEMU_TEST_VK_CORE`,
+/// `REEMU_TEST_ROM` e `REEMU_TEST_OPTS` como no `vk_core_real_rom`;
+/// `REEMU_TEST_DUMP=arquivo.png` salva o último quadro.
+#[cfg(windows)]
+#[test]
+#[ignore = "precisa de GPU Vulkan, de um core Vulkan e de uma ROM"]
+fn vk_core_in_child() {
+    use emu_session::{EmuSession, SessionConfig};
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
+    let (Ok(core), Ok(rom)) = (
+        std::env::var("REEMU_TEST_VK_CORE"),
+        std::env::var("REEMU_TEST_ROM"),
+    ) else {
+        eprintln!("defina REEMU_TEST_VK_CORE e REEMU_TEST_ROM");
+        return;
+    };
+    // SAFETY: teste `--ignored` de processo único pra esta variável; o
+    // filho herda o ambiente.
+    unsafe { std::env::set_var("REEMU_VK_CHILD", "1") };
+    let _ = env_logger::builder().is_test(true).try_init();
+    let cycles: u32 = std::env::var("REEMU_TEST_CYCLES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(3);
+    let secs: u64 = std::env::var("REEMU_TEST_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(4);
+    let data =
+        std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("com.reemu.desktop");
+    let tmp = std::env::temp_dir().join(format!("reemu-vkchild-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let session = EmuSession::spawn(SessionConfig::new(
+        data.join("cores"),
+        data.join("system"),
+        tmp.clone(),
+    ));
+    let opts: HashMap<String, String> = std::env::var("REEMU_TEST_OPTS")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|kv| kv.split_once('='))
+        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+        .collect();
+    let (tls0, _) = free_tls_fls_indexes();
+    let mut last: Option<(u32, u32, Vec<u8>)> = None;
+    for n in 1..=cycles {
+        session.load(&core, &rom, opts.clone()).expect("carregar");
+        assert!(session.debug_child_pid().is_some(), "core ficou in-process");
+        let (mut frames, mut lit) = (0u32, 0u32);
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(secs) {
+            session.wait_for_frame(Duration::from_millis(100));
+            if let Some(f) = session.take_latest_frame() {
+                if let FrameOrigin::SoftwareRawBuffer { data, .. } = &f.origin {
+                    frames += 1;
+                    if data
+                        .chunks_exact(4)
+                        .any(|p| p[0] > 16 || p[1] > 16 || p[2] > 16)
+                    {
+                        lit += 1;
+                        last = Some((
+                            f.metadata.native_width,
+                            f.metadata.native_height,
+                            data.clone(),
+                        ));
+                    }
+                }
+                session.recycle_frame(f);
+            }
+        }
+        let _ = session.unload();
+        let (tls, _) = free_tls_fls_indexes();
+        eprintln!(
+            "volta {n}: {frames} quadros do filho ({:.0}/s), {lit} com imagem | TLS livres no app {tls} ({:+})",
+            f64::from(frames) / secs as f64,
+            tls as i64 - tls0 as i64
+        );
+        assert!(lit > 0, "nenhum quadro com imagem na volta {n}");
+    }
+    if let (Ok(path), Some((w, h, px))) = (std::env::var("REEMU_TEST_DUMP"), last) {
+        let mut enc = png::Encoder::new(std::fs::File::create(&path).unwrap(), w, h);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().unwrap().write_image_data(&px).unwrap();
+        eprintln!("quadro salvo em {path}");
+    }
+    let _ = std::fs::remove_dir_all(&tmp);
+}

@@ -1959,3 +1959,23 @@ Infra:
   | Beetle PSX HW (40 Winks) | 0 (só −1 no 1º load) | 0 |
 
 - **Leitura:** o Beetle passa pela mesma rota do ReEmu e não vaza, então o índice perdido deve ser reservado pela própria DLL do flycast e do mupen e não devolvido ao descarregar. **Não verificado:** a causa exata dentro dessas DLLs. Com essa taxa, o abort "out of TLS indexes" exigiria ~1000 trocas de jogo numa sessão. O C3 (core Vulkan no processo filho) elimina o problema: cada jogo ganha um processo novo.
+
+## 2026-10-11 — C3a: core Vulkan no processo filho (device próprio, quadro por cópia)
+
+- **O quê:** com `REEMU_VK_CHILD=1`, os cores da lista Vulkan (`VK_CAPABLE_CORES`) rodam no `reemu-core-host` em vez de dentro do app. Volta o isolamento de processo (um crash do core não derruba a interface), e a DLL do core não é mais carregada no app (fim do vazamento de TLS medido no `vk_core_tls_leak`). O quadro ainda é copiado pra CPU; o C3b troca a cópia pelo anel compartilhado.
+- **Como:**
+  - O `Load` leva `vulkan_in_child`, e o loader do filho responde Vulkan no `GET_PREFERRED_HW_RENDER`.
+  - O device é do filho. Se o core registra `create_device` na negociação (Beetle, flycast), o filho chama esse `create_device` com a própria instância (`VkContext::from_core_negotiation`). "Device provided to frontend is owned by the frontend" (`libretro_vulkan.h`), então o device e a instância são do filho. O `destroy_device` do core roda antes de descarregar a DLL.
+  - O `vk_present::VkReadback` faz o papel do compositor: submete os command buffers do core e, no mesmo lote, um passe de desenho que lê a imagem do core e escreve num RGBA8, que é copiado pra um buffer visível pela CPU.
+- **Por que passe de desenho e não blit:** o `libretro_vulkan.h` pede `TRANSFER_SRC` e `SAMPLED` na imagem do `set_image`, mas o flycast entrega sem `TRANSFER_SRC` (a validação acusou VUID-vkCmdBlitImage-srcImage-00219). O fragment shader usa `textureLoad`, que vira `OpImageFetch` ("No sampler is used", spec Vulkan, Textures), só exige `SAMPLED`, converte o formato do core e não muda o layout da imagem. O descritor usa o `image_layout` informado pelo core, porque um layout diferente do real devolve "poison". O shader é WGSL compilado pelo naga 30 (a mesma versão do wgpu) pra SPIR-V 1.0 no load.
+- **Também corrigido:**
+  - A ponte passa a guardar os semáforos do `set_image` e o filho espera por eles quando não há `set_command_buffers` ("Semaphores provided by a single call to set_image will only be waited for once").
+  - Registra no log se um core pedir transferência de ownership (`src_queue_family`).
+  - O flycast liga `VK_KHR_swapchain` no device dele, o que exige `VK_KHR_surface` na instância (VUID de `vkCreateDevice`); a instância do filho liga a extensão quando existe.
+- **Medido** (RTX 3060, teste `vk_core_in_child`, camadas de validação ligadas no filho, nenhum VUID; nenhum índice de TLS perdido no app em todas as trocas de jogo):
+
+  | Core e jogo | Resultado |
+  |---|---|
+  | Beetle PSX HW, 40 Winks | 60 fps, abertura da Eurocom conferida |
+  | mupen64plus_next com ParaLLEl-RDP, Mario Kart 64 | 60 fps, título conferido (640×240 do ParaLLEl) |
+  | flycast, Soulcalibur | abertura conferida |

@@ -41,6 +41,10 @@ pub enum ToChild {
         // `Box`: sem ele a variante `Load` fica grande demais perto das
         // outras (clippy::large_enum_variant).
         vk_interop: Option<Box<domain::gpu_interop::VkInteropId>>,
+        /// C3: core Vulkan roda NESTE processo filho (device próprio), não
+        /// in-process no pai — ver `DesktopCoreLoader::vulkan_in_child`.
+        #[serde(default)]
+        vulkan_in_child: bool,
     },
     SetPaused(bool),
     SaveState,

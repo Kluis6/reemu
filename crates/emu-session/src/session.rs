@@ -944,6 +944,22 @@ fn vk_capable(base: &str, options: &HashMap<String, String>) -> bool {
 /// ParaLLEl-RDP passaram no Windows com as camadas de validação e no app
 /// (C1). Sem o isolamento do processo filho, um core que quebra leva a
 /// interface junto — por isso só os cores da lista, não qualquer um.
+/// C3: o core da lista Vulkan (`VK_CAPABLE_CORES`) roda no processo filho,
+/// com device próprio, em vez de in-process — o isolamento de processo volta
+/// (um crash do core não derruba a interface) e a DLL não é carregada no app
+/// (sem o vazamento de TLS medido no `vk_core_tls_leak`). Por enquanto
+/// opt-in (`REEMU_VK_CHILD=1`): o quadro ainda sai copiado pra CPU (C3a).
+fn vk_in_child(core_id: &str, options: &HashMap<String, String>) -> bool {
+    let wanted = matches!(
+        std::env::var("REEMU_VK_CHILD")
+            .map(|v| v.trim().to_ascii_lowercase())
+            .as_deref(),
+        Ok("1") | Ok("true") | Ok("on") | Ok("yes")
+    );
+    let base = core_id.rsplit(['/', '\\']).next().unwrap_or(core_id);
+    wanted && vk_capable(base, options)
+}
+
 fn route_local_device(
     shared: &Shared,
     core_id: &str,
@@ -1864,7 +1880,14 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 // negociar Vulkan, `LocalCore::load` devolve
                 // `HwRenderUnsupported` e caímos pro processo filho (que isola
                 // cores não re-entrantes).
-                let route = route_local_device(&shared, &id.0, &initial_option_values);
+                // C3: core Vulkan no processo filho em vez de in-process.
+                let vk_child = vk_in_child(&id.0, &initial_option_values);
+                let route = if vk_child {
+                    log::info!("C3: core {} → Vulkan no processo filho", id.0);
+                    None
+                } else {
+                    route_local_device(&shared, &id.0, &initial_option_values)
+                };
                 log::info!(
                     "etapa 12: core {} → rota {} (device={}, negotiator={}, known_non_vk={})",
                     id.0,
@@ -1968,6 +1991,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                     .lock()
                                     .unwrap_or_else(|p| p.into_inner())
                                     .clone(),
+                                vulkan_in_child: vk_child,
                                 vk_interop: shared
                                     .vk_interop
                                     .lock()

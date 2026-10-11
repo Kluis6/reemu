@@ -39,6 +39,11 @@ pub struct DesktopCoreLoader {
     /// `true` (só no probe do `emu-session`) = aborta o load na hora se o core
     /// não for Vulkan, SEM montar contexto GL no processo do compositor.
     vulkan_only: bool,
+    /// `true` (só no `reemu-core-host`, C3) = o core Vulkan roda NESTE
+    /// processo, sem compositor: `GET_PREFERRED_HW_RENDER` responde Vulkan,
+    /// o device é nosso (ou do `create_device` do core) e o quadro sai pelo
+    /// `vk_present::VkReadback`.
+    vulkan_in_child: bool,
 }
 
 impl DesktopCoreLoader {
@@ -56,7 +61,14 @@ impl DesktopCoreLoader {
             vk_shared_device: None,
             vk_negotiator: None,
             vulkan_only: false,
+            vulkan_in_child: false,
         }
+    }
+
+    /// Core Vulkan no processo filho (C3) — ver `vulkan_in_child`.
+    pub fn vulkan_in_child(mut self) -> Self {
+        self.vulkan_in_child = true;
+        self
     }
 
     /// Faz os cores de HW render Vulkan adotarem o `VkDevice` do compositor
@@ -288,8 +300,8 @@ impl DesktopCoreLoader {
 
         // O guard inicializa o estado global e garante um-core-por-processo.
         let guard = ffi_state::acquire(&self.system_dir, &self.save_dir)?;
-        if self.vulkan_only {
-            // Rota in-process (etapa 12): só Vulkan serve aqui, então é o que
+        if self.vulkan_only || self.vulkan_in_child {
+            // Rota in-process (etapa 12) ou Vulkan no filho (C3): só Vulkan serve aqui, então é o que
             // `GET_PREFERRED_HW_RENDER` responde — o flycast escolhe o
             // renderizador por essa resposta (libretro.cpp: `preferred ==
             // RETRO_HW_CONTEXT_VULKAN` → `set_vulkan_hw_render()`).
@@ -494,13 +506,25 @@ impl DesktopCoreLoader {
                     &req,
                     self.vk_shared_device,
                     self.vk_negotiator.clone(),
+                    self.vulkan_in_child,
                 )
                 .inspect_err(|_| teardown(&raw))?;
                 (None, Some(bridge))
             }
         };
 
-        Ok(DesktopCore::new(
+        let readback = match (&vk, self.vulkan_in_child) {
+            (Some(bridge), true) => Some(crate::vk_present::VkReadback::new(&bridge.ctx).map_err(
+                |e| {
+                    CoreLoadError::HwRenderUnsupported(format!(
+                        "{}: cópia Vulkan no processo filho: {e}",
+                        core_id.0
+                    ))
+                },
+            )?),
+            _ => None,
+        };
+        let mut core = DesktopCore::new(
             raw,
             av_info,
             render_reqs,
@@ -509,7 +533,11 @@ impl DesktopCoreLoader {
             vk,
             extracted,
             persistent_rom,
-        ))
+        );
+        if let Some(rb) = readback {
+            core.set_vk_readback(rb);
+        }
+        Ok(core)
     }
 }
 
@@ -580,6 +608,7 @@ fn setup_vk_context(
     req: &HwRenderRequest,
     shared: Option<domain::core_loader::VulkanSharedDevice>,
     negotiator: Option<domain::core_loader::VulkanDeviceNegotiator>,
+    in_child: bool,
 ) -> Result<Box<VkFrameBridge>, CoreLoadError> {
     // O core registrou um `create_device` na negociação? (Beetle EXIGE que o
     // frontend o chame — o `context_reset` dele aborta se `context == NULL`.)
@@ -616,7 +645,30 @@ fn setup_vk_context(
         })
     };
 
+    // Processo filho (C3): o core que exige criar o device cria aqui mesmo,
+    // na nossa instância; recusou → device nosso.
+    let child_owned = || -> Option<VkContext> {
+        let p = ffi_state::lock().as_ref().and_then(|s| s.vk_negotiation)?;
+        // SAFETY: como acima — interface viva na DLL do core.
+        let iface =
+            unsafe { &*(p as *const vk_sys::retro_hw_render_context_negotiation_interface_vulkan) };
+        let mut cfg = VkConfig::default();
+        if req.version_major >= 0x0040_0000 {
+            cfg.api_version = req.version_major;
+        }
+        match unsafe { VkContext::from_core_negotiation(iface, &cfg) } {
+            Ok(ctx) => Some(ctx),
+            Err(e) => {
+                log::warn!("{core_id}: create_device do core no processo filho: {e}");
+                None
+            }
+        }
+    };
     let ctx = match (core_owned, negotiator, shared) {
+        (Some(_), _, _) if in_child => match child_owned() {
+            Some(ctx) => ctx,
+            None => bring_up()?,
+        },
         // Beetle & cia: o core cria o device; o shell reconstrói o wgpu sobre
         // ele e devolve os handles. Se a fábrica falhar, cai pro frontend-owned.
         (Some(neg), Some(factory), _) => match factory(neg) {

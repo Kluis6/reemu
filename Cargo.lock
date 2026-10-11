@@ -992,6 +992,7 @@ dependencies = [
  "khronos-egl",
  "libloading 0.8.9",
  "log",
+ "naga",
  "rustix 1.1.4",
  "sevenz-rust2",
  "thiserror 1.0.69",

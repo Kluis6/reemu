@@ -19,6 +19,9 @@ pub struct DesktopCore {
     /// `Some` = core de HW render Vulkan (etapa 12). Dono do `VkContext` +
     /// fence ring; `interface.handle` do core aponta pra dentro deste `Box`.
     vk: Option<Box<VkFrameBridge>>,
+    /// `Some` = core Vulkan no processo filho (C3): sem compositor no mesmo
+    /// device, o quadro sai copiado pra CPU por aqui.
+    vk_readback: Option<crate::vk_present::VkReadback>,
     /// ROM extraída de um `.zip` — apagada quando o core é dropado.
     _extracted: Option<ExtractedRom>,
     /// Buffer do jogo com `persistent_data` (`SET_CONTENT_INFO_OVERRIDE`):
@@ -30,6 +33,11 @@ pub struct DesktopCore {
 }
 
 impl DesktopCore {
+    /// Liga o apresentador do processo filho (C3) — ver `vk_readback`.
+    pub(crate) fn set_vk_readback(&mut self, rb: crate::vk_present::VkReadback) {
+        self.vk_readback = Some(rb);
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         raw: RawCore,
@@ -47,6 +55,7 @@ impl DesktopCore {
             render_reqs,
             gl,
             vk,
+            vk_readback: None,
             _extracted: extracted,
             _persistent_rom: persistent_rom,
             _guard: guard,
@@ -370,6 +379,26 @@ impl DesktopCore {
         let pending = vk.take_pending()?;
         let sync = vk.sync();
         let ar = self.aspect_ratio(w, h);
+        // Processo filho (C3): nós somos o compositor — submete o trabalho do
+        // core, copia pra CPU e libera o slot.
+        if let Some(rb) = self.vk_readback.as_mut() {
+            // SAFETY: `pending` veio deste bridge, na thread do core.
+            let data = unsafe { rb.read(&vk.ctx, &pending, w, h) };
+            sync.release(pending.sync_index, pending.generation);
+            return Some(Frame {
+                origin: FrameOrigin::SoftwareRawBuffer {
+                    data: data?,
+                    pitch: w * 4,
+                    format: SoftwarePixelFormat::Rgba8888,
+                },
+                metadata: FrameMetadata {
+                    native_width: w,
+                    native_height: h,
+                    aspect_ratio: ar,
+                    rotation_degrees,
+                },
+            });
+        }
         Some(Frame {
             origin: FrameOrigin::HardwareVulkanImage(Box::new(crate::vk_frame::VkImageFrame::new(
                 pending, w, h, sync,
@@ -435,6 +464,19 @@ impl Drop for DesktopCore {
             self.gl = None;
 
             (self.raw.deinit)();
+
+            // Core Vulkan no processo filho (C3): o apresentador cai antes do
+            // device; o `destroy_device` do core roda com a DLL ainda
+            // carregada (o `raw`, 1º campo, a descarrega) e antes de o
+            // `VkContext` destruir device e instância.
+            self.vk_readback = None;
+            if let Some(vk) = self.vk.as_mut() {
+                if let Some(f) = vk.ctx.take_core_destroy() {
+                    let _ = vk.ctx.device.device_wait_idle();
+                    f();
+                }
+            }
+            self.vk = None;
         }
     }
 }

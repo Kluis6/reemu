@@ -408,13 +408,18 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 initial_save_ram,
                 dmabuf_modifiers,
                 vk_interop,
+                vulkan_in_child,
             } => {
                 core = None; // não deveria haver um core já — o pai mata e sobe de novo a cada troca.
                 core_loader_desktop::set_dmabuf_import_modifiers(dmabuf_modifiers);
                 core_loader_desktop::set_vk_interop(vk_interop.map(|b| *b));
                 core_loader_desktop::silence_core_stdout();
                 core_loader_desktop::set_pending_core_option_values(initial_option_values);
-                let loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir);
+                let mut loader = DesktopCoreLoader::new(cores_dir, system_dir, save_dir);
+                if vulkan_in_child {
+                    // C3: o core Vulkan roda aqui, com device próprio.
+                    loader = loader.vulkan_in_child();
+                }
                 match loader.open_core(&CoreId(core_id.clone()), &rom_path) {
                     Ok(mut c) => {
                         let av = c.system_av_info();

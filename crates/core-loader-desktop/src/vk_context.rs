@@ -91,6 +91,12 @@ pub(crate) struct VkContext {
     _entry: Option<ash::Entry>,
     /// `false` = handles do compositor; o `Drop` não destrói nada.
     owns: bool,
+    /// `destroy_device` da negociação, quando o device veio do
+    /// `create_device` do core (C3, processo filho). "destroy_device will
+    /// always be called before the VkInstance ... is destroyed"
+    /// (`libretro_vulkan.h`) — o `DesktopCore` chama (`take_core_destroy`)
+    /// antes de descarregar a DLL do core.
+    core_destroy_device: Option<unsafe extern "C" fn()>,
 }
 
 // SAFETY: `ash::Device`/`Instance` são `Send + Sync` (só handles + tabelas de
@@ -192,7 +198,130 @@ impl VkContext {
             instance,
             _entry: Some(entry),
             owns: true,
+            core_destroy_device: None,
         })
+    }
+
+    /// Processo filho (C3): o core EXIGE criar o device (Beetle PSX HW — o
+    /// `context_reset` dele aborta sem device). Criamos a instância (versão
+    /// pedida pelo `get_application_info` do core, piso `cfg.api_version`) e
+    /// chamamos o `create_device` v1 dele com as extensões de
+    /// `cfg.extra_device_extensions`. "Device provided to frontend is owned by
+    /// the frontend" (`libretro_vulkan.h`): somos donos do device e da
+    /// instância. `Err` = o core recusou; o chamador cai no `create`.
+    ///
+    /// # Safety
+    /// `neg` aponta pra interface viva na DLL do core.
+    pub unsafe fn from_core_negotiation(
+        neg: &crate::vk_sys::retro_hw_render_context_negotiation_interface_vulkan,
+        cfg: &VkConfig,
+    ) -> Result<Self, String> {
+        let create_device = neg.create_device.ok_or("o core não tem create_device")?;
+        let entry = ash::Entry::load().map_err(|e| format!("libvulkan indisponível: {e}"))?;
+        let core_version = neg
+            .get_application_info
+            .map(|f| f())
+            .filter(|p| !p.is_null())
+            .map_or(0, |p| (*p).api_version);
+        let api_version = core_version.max(cfg.api_version);
+        let app_info = vk::ApplicationInfo::default()
+            .application_name(&cfg.app_name)
+            .engine_name(&cfg.app_name)
+            .api_version(api_version);
+        let (layers, mut instance_exts) = validation_bits(&entry, cfg.validation);
+        // `VK_KHR_surface` na instância quando existir: cores que ligam
+        // `VK_KHR_swapchain` no device deles (o flycast liga) precisam dela —
+        // "All required device extensions for each extension ... must also
+        // be present" (VUID de `vkCreateDevice`; o swapchain depende do
+        // surface).
+        let has_surface = entry
+            .enumerate_instance_extension_properties(None)
+            .unwrap_or_default()
+            .iter()
+            .any(|e| e.extension_name_as_c_str() == Ok(ash::khr::surface::NAME));
+        if has_surface {
+            instance_exts.push(ash::khr::surface::NAME.as_ptr());
+        }
+        let instance = entry
+            .create_instance(
+                &vk::InstanceCreateInfo::default()
+                    .application_info(&app_info)
+                    .enabled_layer_names(&layers)
+                    .enabled_extension_names(&instance_exts),
+                None,
+            )
+            .map_err(|e| format!("vkCreateInstance: {e}"))?;
+        let debug = if cfg.validation && instance_exts.len() > usize::from(has_surface) {
+            setup_debug_messenger(&entry, &instance)
+        } else {
+            None
+        };
+        let cleanup = |instance: &ash::Instance, debug: &Option<DebugMessenger>| {
+            if let Some(d) = debug {
+                d.loader.destroy_debug_utils_messenger(d.handle, None);
+            }
+            instance.destroy_instance(None);
+        };
+        let gpu = match Self::pick_physical_device(&instance) {
+            Ok(g) => g,
+            Err(e) => {
+                cleanup(&instance, &debug);
+                return Err(e);
+            }
+        };
+        let ext_ptrs: Vec<*const c_char> = cfg
+            .extra_device_extensions
+            .iter()
+            .map(|c| c.as_ptr())
+            .collect();
+        let features = vk::PhysicalDeviceFeatures::default();
+        let mut rctx: crate::vk_sys::retro_vulkan_context = std::mem::zeroed();
+        let gipa = entry.static_fn().get_instance_proc_addr;
+        let ok = create_device(
+            &mut rctx,
+            instance.handle(),
+            gpu,
+            vk::SurfaceKHR::null(),
+            gipa,
+            ext_ptrs.as_ptr(),
+            ext_ptrs.len() as _,
+            std::ptr::null(),
+            0,
+            &features,
+        );
+        if !ok || rctx.device == vk::Device::null() {
+            cleanup(&instance, &debug);
+            return Err("o create_device do core devolveu false".into());
+        }
+        let physical_device = if rctx.gpu == vk::PhysicalDevice::null() {
+            gpu
+        } else {
+            rctx.gpu
+        };
+        let device = ash::Device::load(instance.fp_v1_0(), rctx.device);
+        log::info!(
+            "core criou o VkDevice no processo filho (queue family {})",
+            rctx.queue_family_index
+        );
+        Ok(VkContext {
+            get_instance_proc_addr: gipa,
+            device,
+            physical_device,
+            queue: rctx.queue,
+            queue_family_index: rctx.queue_family_index,
+            queue_lock: Mutex::new(()),
+            debug,
+            instance,
+            _entry: Some(entry),
+            owns: true,
+            core_destroy_device: neg.destroy_device,
+        })
+    }
+
+    /// O `destroy_device` do core, se o device veio do `create_device` dele
+    /// (consome: chamar uma vez, com a DLL ainda carregada).
+    pub fn take_core_destroy(&mut self) -> Option<unsafe extern "C" fn()> {
+        self.core_destroy_device.take()
     }
 
     /// Adota o device que o compositor já criou (`VulkanSharedDevice`) em vez de
@@ -240,6 +369,7 @@ impl VkContext {
             instance,
             _entry: None,
             owns: false,
+            core_destroy_device: None,
         };
         log::info!(
             "contexto Vulkan ADOTADO do compositor ({}, queue family {})",

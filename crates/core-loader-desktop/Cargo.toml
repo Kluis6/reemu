@@ -20,6 +20,10 @@ log = "0.4"
 # faltar, só os cores GL falham (com erro claro), os software seguem.
 khronos-egl = { version = "6", features = ["dynamic"] }
 glow = "0.17"
+# Shader do passe de cópia do Vulkan no processo filho (C3, `vk_present.rs`):
+# WGSL → SPIR-V em tempo de execução, uma vez. Mesma versão que o wgpu 30
+# já resolve (Cargo.lock), sem compilar outra.
+naga = { version = "30", features = ["wgsl-in", "spv-out"] }
 # Tipos FFI Vulkan (`RETRO_HW_RENDER_INTERFACE_VULKAN`, etapa 12) + criação do
 # device no processo-filho. Mesma versão que o wgpu 30 já resolve. `loaded`
 # carrega libvulkan em runtime: se faltar, só os cores Vulkan-first falham.
