@@ -32,12 +32,12 @@ const useLocalStyles = makeStyles({
     width: "20px",
     height: "20px",
     borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
-    // Coração sobre a arte com fundo escuro (rgba 0,45) em qualquer tema:
-    // o tom primário do tema (80), que é vivo sobre o escuro também nos
-    // temas claros (o `reemuBrandAccent` do claro é escurecido pro fundo
-    // claro e sumiria aqui).
-    color: "var(--reemuBrandSolid)",
+    // Fundo opaco na cor da página do tema e o coração no destaque do tema:
+    // o par que `pickAccent` garante com 3:1 (WCAG 1.4.11) em todos os temas
+    // (`themes.test.ts`). Antes era preto translúcido + tom 80, que em temas
+    // de primário escuro (Crimson, Blue, Purple) quase sumia.
+    backgroundColor: tokens.colorNeutralBackground1,
+    color: "var(--reemuBrandAccent)",
     fontSize: "12px",
     pointerEvents: "none",
   },
