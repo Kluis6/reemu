@@ -2160,3 +2160,14 @@ Infra:
 - **Resultado por tema:** 13 dos 15 usam o primário exato.
   - Ajustados: Green Modern claro (#52B72A → #3A7920, o verde não tinha 3:1 sobre o cinza claro) e Purple Mistique escuro (#5B4FCF → #7E74DC).
   - Teste em `themes.test.ts`: 3:1 em todos os temas e indicadores do Fluent iguais ao destaque.
+
+## 2026-10-11 — Card de jogo: sem sombra; brilho na cor do tema no hover/foco (teste)
+
+- Pedido do usuário como teste: tirar a sombra dos cards de jogo e, no hover/foco, mostrar um brilho leve na cor primária do tema, "como no menu do Xbox Series X".
+- **Referência oficial:** "Reveal Focus" da Microsoft para Xbox/10-foot (<https://learn.microsoft.com/windows/uwp/ui-input/reveal-focus>): "an animated glow around the element's border", com borda principal de 2 px e o brilho por fora, na cor `SystemAccentColor` por padrão.
+  - A busca não achou documentação específica do destaque do dashboard do Series X além do sistema de cores de destaque.
+- **No ReEmu:**
+  - Em repouso, `boxShadow: none` (o `<Card>` do Fluent punha `shadow4`).
+  - No hover e no foco: `0 0 18px 2px` do `reemuBrandAccent` a 55%, junto do anel de foco que já existia (`useCardStyles.card`). Sem a animação de pulso.
+  - Também vale para o card 2×2 do fim das prateleiras. Conferido em capturas no Neon Circuit, no Crimson Retro e no Simple Vibes.
+- **Para voltar ao estado anterior:** `git revert` deste commit.

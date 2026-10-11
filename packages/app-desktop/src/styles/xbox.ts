@@ -717,6 +717,20 @@ export const useCardStyles = makeStyles({
     "&:hover, &:focus-within, &:focus-visible": {
       zIndex: 2,
     },
+    // Sem sombra em repouso (o <Card> do Fluent põe `shadow4`); no hover/foco,
+    // um brilho leve na cor de destaque do tema em volta do card — o "Reveal
+    // Focus" do Xbox/10-foot da Microsoft: "an animated glow around the
+    // element's border", cor padrão `SystemAccentColor`
+    // (learn.microsoft.com/windows/uwp/ui-input/reveal-focus). Aqui sem a
+    // animação de pulso, só o brilho estático junto do anel de foco.
+    boxShadow: "none !important",
+    transitionProperty: "box-shadow",
+    transitionDuration: tokens.durationNormal,
+    transitionTimingFunction: tokens.curveEasyEase,
+    "&:hover, &:focus, &:focus-visible, &:focus-within": {
+      boxShadow:
+        "0 0 18px 2px color-mix(in srgb, var(--reemuBrandAccent) 55%, transparent) !important",
+    },
     // zoom da imagem (não do card) — sutil, não um "salto"
     "&:hover [data-art] img, &:focus-within [data-art] img": {
       transform: "scale(1.045)",
