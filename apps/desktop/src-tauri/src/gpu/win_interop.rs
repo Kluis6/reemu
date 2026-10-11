@@ -127,6 +127,57 @@ impl Drop for ExportedImage {
     }
 }
 
+/// Usos de imagem que as features do formato permitem (o mapa feature → uso
+/// das "Format Feature" da spec Vulkan). `INPUT_ATTACHMENT` vale pra formato
+/// de color attachment.
+fn usage_from_features(f: vk::FormatFeatureFlags) -> vk::ImageUsageFlags {
+    use vk::{FormatFeatureFlags as F, ImageUsageFlags as U};
+    let mut u = U::empty();
+    for (feat, usage) in [
+        (F::SAMPLED_IMAGE, U::SAMPLED),
+        (F::STORAGE_IMAGE, U::STORAGE),
+        (
+            F::COLOR_ATTACHMENT,
+            U::COLOR_ATTACHMENT | U::INPUT_ATTACHMENT,
+        ),
+        (F::TRANSFER_SRC, U::TRANSFER_SRC),
+        (F::TRANSFER_DST, U::TRANSFER_DST),
+    ] {
+        if f.contains(feat) {
+            u |= usage;
+        }
+    }
+    u
+}
+
+/// A GPU exporta `FORMAT` com esses flags/usos como handle NT opaco?
+/// (`vkGetPhysicalDeviceImageFormatProperties2` +
+/// `VkPhysicalDeviceExternalImageFormatInfo` → `VkExternalImageFormatProperties`.)
+fn exportable(
+    instance: &ash::Instance,
+    phys: vk::PhysicalDevice,
+    flags: vk::ImageCreateFlags,
+    usage: vk::ImageUsageFlags,
+) -> bool {
+    let mut ext_info =
+        vk::PhysicalDeviceExternalImageFormatInfo::default().handle_type(HANDLE_TYPE);
+    let info = vk::PhysicalDeviceImageFormatInfo2::default()
+        .format(FORMAT)
+        .ty(vk::ImageType::TYPE_2D)
+        .tiling(vk::ImageTiling::OPTIMAL)
+        .usage(usage)
+        .flags(flags)
+        .push_next(&mut ext_info);
+    let mut ext_props = vk::ExternalImageFormatProperties::default();
+    let mut props = vk::ImageFormatProperties2::default().push_next(&mut ext_props);
+    unsafe { instance.get_physical_device_image_format_properties2(phys, &info, &mut props) }
+        .is_ok()
+        && ext_props
+            .external_memory_properties
+            .external_memory_features
+            .contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE)
+}
+
 /// Aloca `n` imagens `w`×`h` exportáveis como handle NT opaco.
 pub(super) fn allocate_ring(
     device: &wgpu::Device,
@@ -142,32 +193,33 @@ pub(super) fn allocate_ring(
     let hal_dev =
         unsafe { device.as_hal::<wgpu::hal::api::Vulkan>() }.ok_or("device não é Vulkan")?;
     let raw = hal_dev.raw_device().clone();
-    let usage = vk::ImageUsageFlags::COLOR_ATTACHMENT
+    // A imagem vai virar textura no GL do filho (B3). EXT_external_objects,
+    // issue 13: "Require all supported usage flags be specified by the
+    // application on the Vulkan side if the image is intended to alias with
+    // an OpenGL texture" — então os usos saem das features do formato
+    // (`vkGetPhysicalDeviceFormatProperties`, `optimalTilingFeatures`).
+    // Issue 17: com GL ≥ 4.3 / texture_view no outro lado, "Vulkan
+    // applications will be required to set the mutable format bit" →
+    // `VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT`.
+    let flags = vk::ImageCreateFlags::MUTABLE_FORMAT;
+    let fmt = unsafe { instance.get_physical_device_format_properties(phys, FORMAT) };
+    let usage = usage_from_features(fmt.optimal_tiling_features);
+    let base = vk::ImageUsageFlags::COLOR_ATTACHMENT
         | vk::ImageUsageFlags::SAMPLED
         | vk::ImageUsageFlags::TRANSFER_SRC
         | vk::ImageUsageFlags::TRANSFER_DST;
-
-    // A GPU exporta esse formato/uso como handle NT opaco?
-    // (`vkGetPhysicalDeviceImageFormatProperties2` +
-    // `VkPhysicalDeviceExternalImageFormatInfo` → `VkExternalImageFormatProperties`.)
-    let mut ext_info =
-        vk::PhysicalDeviceExternalImageFormatInfo::default().handle_type(HANDLE_TYPE);
-    let info = vk::PhysicalDeviceImageFormatInfo2::default()
-        .format(FORMAT)
-        .ty(vk::ImageType::TYPE_2D)
-        .tiling(vk::ImageTiling::OPTIMAL)
-        .usage(usage)
-        .push_next(&mut ext_info);
-    let mut ext_props = vk::ExternalImageFormatProperties::default();
-    let mut props = vk::ImageFormatProperties2::default().push_next(&mut ext_props);
-    unsafe { instance.get_physical_device_image_format_properties2(phys, &info, &mut props) }
-        .map_err(|e| format!("formato não suportado pra export: {e}"))?;
-    let feats = ext_props
-        .external_memory_properties
-        .external_memory_features;
-    if !feats.contains(vk::ExternalMemoryFeatureFlags::EXPORTABLE) {
+    // Sem export com todos os usos, tenta os mínimos (o GL pode recusar —
+    // aí o filho cai no readback).
+    let usage = if exportable(&instance, phys, flags, usage) {
+        usage
+    } else if exportable(&instance, phys, flags, base) {
+        log::warn!(
+            "interop GL→Vulkan: export com todos os usos ({usage:?}) recusado — só {base:?}"
+        );
+        base
+    } else {
         return Err("a GPU não exporta essa imagem como handle Win32 opaco".into());
-    }
+    };
 
     let mem_props = unsafe { instance.get_physical_device_memory_properties(phys) };
     let win32 = ash::khr::external_memory_win32::Device::new(&instance, &raw);
@@ -175,6 +227,7 @@ pub(super) fn allocate_ring(
     for i in 0..n {
         let mut ext_img = vk::ExternalMemoryImageCreateInfo::default().handle_types(HANDLE_TYPE);
         let img_info = vk::ImageCreateInfo::default()
+            .flags(flags)
             .image_type(vk::ImageType::TYPE_2D)
             .format(FORMAT)
             .extent(vk::Extent3D {

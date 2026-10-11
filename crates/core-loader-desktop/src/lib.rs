@@ -66,7 +66,28 @@ pub fn take_interop_request() -> Option<(u32, u32)> {
         .unwrap_or_else(|p| p.into_inner())
         .take()
 }
+/// Anel do interop GL → Vulkan que o pai mandou (B3, Windows). O
+/// `GlContext` importa no próximo quadro e fica dono dos handles; uma oferta
+/// nova (ou `None`) antes disso fecha os da anterior. Fora do Windows, a
+/// oferta só cai.
+pub fn offer_interop_images(offer: Option<InteropOffer>) {
+    #[cfg(not(windows))]
+    let offer: Option<InteropOffer> = {
+        drop(offer);
+        None
+    };
+    let old = std::mem::replace(
+        &mut *crate::gl_context::OFFERED_RING
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()),
+        offer,
+    );
+    drop(old);
+}
 pub use crate::gl_context::readback_stats;
+#[cfg(all(windows, feature = "test-fixtures"))]
+pub use crate::gl_context::render_solid_into_interop_offer;
+pub use crate::gl_context::InteropOffer;
 #[cfg(all(unix, feature = "test-fixtures"))]
 pub use crate::gl_context::{render_rect_rgba_to_dmabuf, render_solid_rgba_to_dmabuf};
 pub use crate::input::{analog, libretro_joypad_id, retropad, AnalogState, RetroPadState};

@@ -295,9 +295,17 @@ conferir".
       (`transport_win.rs`), então vai uma mensagem nova em `ToChild`.
       Importar no wgpu como textura (o mesmo `texture_from_raw` do
       `dma_buf` do Linux).
-- [ ] `todo` — B3. Core-host (GL) importa cada handle
-      (`glImportMemoryWin32HandleEXT` + `glTexStorageMem2DEXT`), usa como
-      color attachment do FBO do core e fecha o handle depois de importar.
+- [x] `done` — B3 (2026-10-11, atrás de `REEMU_GL_INTEROP=1`): o
+      `GlContext` do Windows importa o anel no próximo quadro
+      (`glCreateMemoryObjectsEXT` → `DEDICATED_MEMORY_OBJECT_EXT` →
+      `glImportMemoryWin32HandleEXT` → `TEXTURE_TILING_EXT` ótimo →
+      `glTexStorageMem2DEXT(GL_RGBA8)`) e o `bind_write_slot` gira o color
+      attachment do FBO entre as texturas; o quadro ainda sai por readback.
+      Os handles ficam abertos até o anel sumir (a spec do GL não diz que
+      dá pra fechar logo depois do import). Do lado Vulkan, a imagem passou
+      a ter todos os usos do formato e `MUTABLE_FORMAT` (issues 13 e 17 da
+      EXT_external_objects). Teste: `win32_interop_ring_imports_into_gl`
+      (RTX 3060, camadas de validação sem VUID).
 - [ ] `todo` — B4. Sincronização sem `glFinish`: semáforos exportados pelo
       Vulkan (`VK_KHR_external_semaphore_win32`) e importados no GL
       (`glImportSemaphoreWin32HandleEXT`). O GL sinaliza no fim do quadro

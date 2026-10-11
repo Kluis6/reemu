@@ -228,6 +228,48 @@ pub struct GlContext {
     /// modo é `Native` e o display tem as extensões.
     #[cfg(unix)]
     native_fence: Option<NativeFence>,
+    /// Anel do interop GL → Vulkan (B3, Windows): texturas GL sobre a memória
+    /// das imagens Vulkan do pai. O core desenha nelas; o quadro ainda sai
+    /// pelo readback até o B5.
+    #[cfg(windows)]
+    win_interop: Option<WinInteropRing>,
+}
+
+/// Anel do interop GL → Vulkan recebido do pai (B2/B3, Windows): os handles
+/// NT já valem neste processo. Quem tem a oferta é dono dos handles — o
+/// `Drop` fecha: "Importing a Windows handle does not transfer ownership of
+/// the handle to the GL implementation. For handle types defined as NT
+/// handles, the application must release the handle using an appropriate
+/// system call when it is no longer needed" (EXT_external_objects_win32).
+pub struct InteropOffer {
+    pub width: u32,
+    pub height: u32,
+    /// Alocação dedicada no Vulkan → `DEDICATED_MEMORY_OBJECT_EXT` no import.
+    pub dedicated: bool,
+    /// `(handle NT, tamanho da alocação)` de cada imagem.
+    pub images: Vec<(u64, u64)>,
+}
+
+impl Drop for InteropOffer {
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        for &(h, _) in &self.images {
+            // SAFETY: handle duplicado pelo pai pra este processo, ainda aberto
+            // (só esta oferta o fecha).
+            unsafe { windows_sys::Win32::Foundation::CloseHandle(h as _) };
+        }
+    }
+}
+
+/// Texturas GL importadas de um `InteropOffer`. A oferta fica junto: os
+/// handles só fecham quando o anel some (depois das texturas e dos memory
+/// objects — ver `GlContext::free_win_interop`).
+#[cfg(windows)]
+struct WinInteropRing {
+    offer: InteropOffer,
+    /// `(memory object, textura)` de cada imagem.
+    slots: Vec<(u32, glow::Texture)>,
+    write: usize,
 }
 
 /// Um alvo compartilhado: BO do GBM + `EGLImage` + textura GL respaldada por ele.
@@ -350,6 +392,8 @@ impl GlContext {
             sync,
             #[cfg(unix)]
             native_fence: None,
+            #[cfg(windows)]
+            win_interop: None,
         })
     }
 
@@ -781,10 +825,211 @@ impl GlContext {
         }
     }
 
-    /// Sem interop no Windows — o FBO já aponta pra `self.color` (montado em
-    /// `build_fbo`) e o frame sai por `read_pixels`. No-op, chamado todo frame.
+    /// Windows (B3): importa o anel que o pai mandou, se chegou um, e aponta
+    /// o FBO pra próxima textura dele. Sem anel, o FBO segue em `self.color`.
+    /// O quadro continua saindo por `read_pixels`, que lê o FBO — qualquer
+    /// que seja a textura ligada nele.
     #[cfg(windows)]
-    pub fn bind_write_slot(&self) {}
+    pub fn bind_write_slot(&mut self) {
+        let offer = OFFERED_RING
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .take();
+        if let Some(offer) = offer {
+            self.adopt_offer(offer);
+        }
+        let Some(ring) = self.win_interop.as_mut() else {
+            return;
+        };
+        let tex = ring.slots[ring.write].1;
+        ring.write = (ring.write + 1) % ring.slots.len();
+        unsafe {
+            self.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
+            self.gl.framebuffer_texture_2d(
+                glow::FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                Some(tex),
+                0,
+            );
+        }
+    }
+
+    /// Troca o anel atual (se houver) pelo da oferta. Falhou → volta pra
+    /// `self.color` e segue no readback; a oferta cai e fecha os handles.
+    #[cfg(windows)]
+    fn adopt_offer(&mut self, offer: InteropOffer) {
+        self.free_win_interop();
+        if offer.width < self.max_w || offer.height < self.max_h {
+            log::warn!(
+                "interop GL→Vulkan: anel {}x{} menor que o FBO {}x{} — segue no readback",
+                offer.width,
+                offer.height,
+                self.max_w,
+                self.max_h
+            );
+            return;
+        }
+        let n = offer.images.len();
+        match unsafe { self.import_offer(offer) } {
+            Ok(ring) => {
+                log::info!(
+                    "interop GL→Vulkan: {n} textura(s) GL importada(s) da memória Vulkan — \
+                     o core desenha nelas (quadro ainda via readback até o B5)"
+                );
+                self.win_interop = Some(ring);
+            }
+            Err(e) => {
+                log::warn!("interop GL→Vulkan: importar o anel no GL: {e} — segue no readback")
+            }
+        }
+    }
+
+    /// Importa cada handle num memory object e cria a textura sobre ele
+    /// (EXT_memory_object + EXT_memory_object_win32, registry.khronos.org):
+    /// `glCreateMemoryObjectsEXT` → `glMemoryObjectParameterivEXT(
+    /// DEDICATED_MEMORY_OBJECT_EXT)` — antes do import, porque depois os
+    /// parâmetros ficam imutáveis ("INVALID_OPERATION ... if <memoryObject>
+    /// is immutable") — → `glImportMemoryWin32HandleEXT(OPAQUE_WIN32)` →
+    /// `TEXTURE_TILING_EXT = OPTIMAL_TILING_EXT` (a imagem Vulkan é
+    /// `VK_IMAGE_TILING_OPTIMAL`; a spec não diz o valor inicial, então vai
+    /// explícito, antes da alocação) → `glTexStorageMem2DEXT(GL_RGBA8)`
+    /// (= `VK_FORMAT_R8G8B8A8_UNORM`, offset 0: alocação dedicada).
+    #[cfg(windows)]
+    unsafe fn import_offer(&self, offer: InteropOffer) -> Result<WinInteropRing, String> {
+        if offer.images.is_empty() {
+            return Err("anel vazio".into());
+        }
+        let f = wgl::MemoryObjectFns::load()?;
+        let gl = &self.gl;
+        let prev_tex = gl.get_parameter_texture(glow::TEXTURE_BINDING_2D);
+        while gl.get_error() != glow::NO_ERROR {}
+        let mut ring = WinInteropRing {
+            slots: Vec::with_capacity(offer.images.len()),
+            write: 0,
+            offer,
+        };
+        let mut result = Ok(());
+        for &(handle, size) in &ring.offer.images {
+            let mut mem = 0u32;
+            (f.create)(1, &mut mem);
+            if mem == 0 {
+                result = Err("glCreateMemoryObjectsEXT devolveu 0".to_string());
+                break;
+            }
+            if ring.offer.dedicated {
+                let yes = 1i32;
+                (f.parameteriv)(mem, wgl::DEDICATED_MEMORY_OBJECT_EXT, &yes);
+            }
+            (f.import)(
+                mem,
+                size,
+                wgl::HANDLE_TYPE_OPAQUE_WIN32_EXT,
+                handle as usize as *mut c_void,
+            );
+            let tex = match gl.create_texture() {
+                Ok(t) => t,
+                Err(e) => {
+                    (f.delete)(1, &mem);
+                    result = Err(format!("glGenTextures: {e}"));
+                    break;
+                }
+            };
+            gl.bind_texture(glow::TEXTURE_2D, Some(tex));
+            gl.tex_parameter_i32(
+                glow::TEXTURE_2D,
+                wgl::TEXTURE_TILING_EXT,
+                wgl::OPTIMAL_TILING_EXT as i32,
+            );
+            (f.tex_storage_2d)(
+                glow::TEXTURE_2D,
+                1,
+                glow::RGBA8,
+                ring.offer.width as i32,
+                ring.offer.height as i32,
+                mem,
+                0,
+            );
+            for (pname, v) in [
+                (glow::TEXTURE_MIN_FILTER, glow::LINEAR),
+                (glow::TEXTURE_MAG_FILTER, glow::LINEAR),
+                (glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE),
+                (glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE),
+            ] {
+                gl.tex_parameter_i32(glow::TEXTURE_2D, pname, v as i32);
+            }
+            ring.slots.push((mem, tex));
+            let err = gl.get_error();
+            if err != glow::NO_ERROR {
+                result = Err(format!(
+                    "erro GL 0x{err:x} no import da imagem {}",
+                    ring.slots.len() - 1
+                ));
+                break;
+            }
+        }
+        gl.bind_texture(glow::TEXTURE_2D, prev_tex);
+
+        // O FBO fecha com a textura importada? (mesma checagem do `build_fbo`)
+        if result.is_ok() {
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
+            gl.framebuffer_texture_2d(
+                glow::FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::TEXTURE_2D,
+                Some(ring.slots[0].1),
+                0,
+            );
+            let status = gl.check_framebuffer_status(glow::FRAMEBUFFER);
+            if status != glow::FRAMEBUFFER_COMPLETE {
+                result = Err(format!(
+                    "FBO com a textura importada incompleto: 0x{status:x}"
+                ));
+            }
+        }
+        if let Err(e) = result {
+            Self::delete_win_ring(gl, &f, ring, self.fbo, self.color);
+            return Err(e);
+        }
+        Ok(ring)
+    }
+
+    /// Solta o anel do interop: devolve `self.color` ao FBO, apaga texturas e
+    /// memory objects e, por último, fecha os handles (o `Drop` da oferta).
+    #[cfg(windows)]
+    fn free_win_interop(&mut self) {
+        let Some(ring) = self.win_interop.take() else {
+            return;
+        };
+        match wgl::MemoryObjectFns::load() {
+            Ok(f) => unsafe { Self::delete_win_ring(&self.gl, &f, ring, self.fbo, self.color) },
+            // Sem as funções não haveria anel; só por garantia.
+            Err(e) => log::warn!("interop GL→Vulkan: soltar o anel: {e}"),
+        }
+    }
+
+    #[cfg(windows)]
+    unsafe fn delete_win_ring(
+        gl: &glow::Context,
+        f: &wgl::MemoryObjectFns,
+        ring: WinInteropRing,
+        fbo: glow::Framebuffer,
+        color: glow::Texture,
+    ) {
+        gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
+        gl.framebuffer_texture_2d(
+            glow::FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::TEXTURE_2D,
+            Some(color),
+            0,
+        );
+        for &(mem, tex) in &ring.slots {
+            gl.delete_texture(tex);
+            (f.delete)(1, &mem);
+        }
+        drop(ring);
+    }
 
     /// O core renderiza com origem bottom-left → o consumidor (wgpu) inverte Y.
     pub fn flip_y(&self) -> bool {
@@ -966,6 +1211,8 @@ impl domain::frame_source::GpuTextureHandle for GlInteropHandle {
 
 impl Drop for GlContext {
     fn drop(&mut self) {
+        #[cfg(windows)]
+        self.free_win_interop();
         #[cfg(unix)]
         if let Some(ring) = self.interop.take() {
             let egl = egl();
@@ -1268,6 +1515,68 @@ mod wgl {
         }
         caps
     }
+    // EXT_external_objects.txt / EXT_external_objects_win32.txt.
+    pub(super) const TEXTURE_TILING_EXT: u32 = 0x9580;
+    pub(super) const DEDICATED_MEMORY_OBJECT_EXT: u32 = 0x9581;
+    pub(super) const OPTIMAL_TILING_EXT: u32 = 0x9584;
+    pub(super) const HANDLE_TYPE_OPAQUE_WIN32_EXT: u32 = 0x9587;
+
+    type CreateMemoryObjects = unsafe extern "system" fn(i32, *mut u32);
+    type DeleteMemoryObjects = unsafe extern "system" fn(i32, *const u32);
+    type MemoryObjectParameteriv = unsafe extern "system" fn(u32, u32, *const i32);
+    type ImportMemoryWin32Handle = unsafe extern "system" fn(u32, u64, u32, *mut c_void);
+    type TexStorageMem2D = unsafe extern "system" fn(u32, i32, u32, i32, i32, u32, u64);
+
+    /// Funções do GL_EXT_memory_object(+_win32) pro import do anel (B3).
+    /// Assinaturas da seção "New Procedures and Functions" das specs.
+    pub(super) struct MemoryObjectFns {
+        /// `void CreateMemoryObjectsEXT(sizei n, uint *memoryObjects)`
+        pub create: CreateMemoryObjects,
+        /// `void DeleteMemoryObjectsEXT(sizei n, const uint *memoryObjects)`
+        pub delete: DeleteMemoryObjects,
+        /// `void MemoryObjectParameterivEXT(uint memoryObject, enum pname, const int *params)`
+        pub parameteriv: MemoryObjectParameteriv,
+        /// `void ImportMemoryWin32HandleEXT(uint memory, uint64 size, enum handleType, void *handle)`
+        pub import: ImportMemoryWin32Handle,
+        /// `void TexStorageMem2DEXT(enum target, sizei levels, enum internalFormat,
+        /// sizei width, sizei height, uint memory, uint64 offset)`
+        pub tex_storage_2d: TexStorageMem2D,
+    }
+
+    impl MemoryObjectFns {
+        /// Precisa do contexto atual (`wglGetProcAddress`).
+        pub fn load() -> Result<Self, String> {
+            fn get(name: &CStr) -> Result<*const c_void, String> {
+                let p = proc_address(name);
+                if p.is_null() {
+                    Err(format!("sem {}", name.to_string_lossy()))
+                } else {
+                    Ok(p)
+                }
+            }
+            // SAFETY: ponteiros do driver pra funções com essas assinaturas.
+            unsafe {
+                Ok(Self {
+                    create: std::mem::transmute::<*const c_void, CreateMemoryObjects>(get(
+                        c"glCreateMemoryObjectsEXT",
+                    )?),
+                    delete: std::mem::transmute::<*const c_void, DeleteMemoryObjects>(get(
+                        c"glDeleteMemoryObjectsEXT",
+                    )?),
+                    parameteriv: std::mem::transmute::<*const c_void, MemoryObjectParameteriv>(
+                        get(c"glMemoryObjectParameterivEXT")?,
+                    ),
+                    import: std::mem::transmute::<*const c_void, ImportMemoryWin32Handle>(get(
+                        c"glImportMemoryWin32HandleEXT",
+                    )?),
+                    tex_storage_2d: std::mem::transmute::<*const c_void, TexStorageMem2D>(get(
+                        c"glTexStorageMem2DEXT",
+                    )?),
+                })
+            }
+        }
+    }
+
     use std::ffi::{c_void, CStr};
     use std::sync::OnceLock;
     use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
@@ -1516,6 +1825,11 @@ fn open_display(egl: &EglInstance) -> Result<egl::Display, String> {
 /// Anel de imagens a pedir ao pai (B2): `(largura, altura)` máximas do core.
 /// O core-host lê com `take_interop_request` e manda o `InteropRequest`.
 pub(crate) static INTEROP_REQUEST: std::sync::Mutex<Option<(u32, u32)>> =
+    std::sync::Mutex::new(None);
+
+/// Anel que o pai mandou e o `GlContext` ainda não importou (B3) — ver
+/// `offer_interop_images`. Trocar a oferta fecha os handles da anterior.
+pub(crate) static OFFERED_RING: std::sync::Mutex<Option<InteropOffer>> =
     std::sync::Mutex::new(None);
 
 /// Identidade do Vulkan do pai pro interop (B1) — ver `set_vk_interop`.
@@ -1794,6 +2108,50 @@ fn render_solid_impl(
         fourcc: plane.fourcc,
     };
     Ok((info, sync_fd))
+}
+
+/// Importa um anel do interop GL → Vulkan (B3, Windows) num `GlContext`
+/// novo e desenha `rgba` em cada textura dele, uma por quadro, pelo mesmo
+/// caminho do core (`bind_write_slot` + o FBO). Devolve o 1º pixel lido de
+/// volta em cada quadro. `Err` se o import falhou. Pro teste do app, que
+/// tem o lado Vulkan (`gpu/tests.rs`). Feature `test-fixtures`.
+#[cfg(all(windows, feature = "test-fixtures"))]
+pub fn render_solid_into_interop_offer(
+    offer: InteropOffer,
+    rgba: [u8; 4],
+) -> Result<Vec<[u8; 4]>, String> {
+    let cfg = GlConfig {
+        context_type: sys::RETRO_HW_CONTEXT_OPENGL_CORE,
+        version_major: 3,
+        version_minor: 3,
+        depth: true,
+        stencil: false,
+        bottom_left_origin: false,
+    };
+    let n = offer.images.len();
+    let mut ctx = GlContext::create(&cfg, offer.width, offer.height)?;
+    *OFFERED_RING.lock().unwrap_or_else(|p| p.into_inner()) = Some(offer);
+    let mut out = Vec::with_capacity(n);
+    for _ in 0..n {
+        ctx.bind_write_slot();
+        if ctx.win_interop.is_none() {
+            return Err("o anel não foi importado (ver o log)".into());
+        }
+        unsafe {
+            ctx.gl.viewport(0, 0, 4, 4);
+            ctx.gl.clear_color(
+                rgba[0] as f32 / 255.0,
+                rgba[1] as f32 / 255.0,
+                rgba[2] as f32 / 255.0,
+                rgba[3] as f32 / 255.0,
+            );
+            ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+        ctx.finish();
+        let px = ctx.read_pixels(4, 4);
+        out.push([px[0], px[1], px[2], px[3]]);
+    }
+    Ok(out)
 }
 
 #[cfg(test)]

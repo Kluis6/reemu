@@ -1838,6 +1838,37 @@ fn win32_interop_ring_exports_handles() {
     );
 }
 
+/// B3 numa GPU real: o anel Vulkan exportado (com os handles duplicados
+/// pro próprio processo, como o filho os recebe) importa no GL
+/// (`GL_EXT_memory_object_win32`) e cada textura vira o alvo do FBO.
+#[cfg(windows)]
+#[test]
+#[ignore = "precisa de GPU (WGL + Vulkan com external_memory_win32)"]
+fn win32_interop_ring_imports_into_gl() {
+    let _ = env_logger::builder().is_test(true).try_init();
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem GPU");
+        return;
+    };
+    let reply = fp
+        .install_interop_ring(64, 48, std::process::id())
+        .expect("alocar e duplicar o anel");
+    let offer = core_loader_desktop::InteropOffer {
+        width: reply.width,
+        height: reply.height,
+        dedicated: reply.dedicated,
+        images: reply
+            .images
+            .iter()
+            .map(|i| (i.handle, i.alloc_size))
+            .collect(),
+    };
+    let px = core_loader_desktop::render_solid_into_interop_offer(offer, [255, 0, 0, 255])
+        .expect("importar o anel no GL");
+    assert_eq!(px.len(), 3);
+    assert!(px.iter().all(|p| *p == [255, 0, 0, 255]), "{px:?}");
+}
+
 /// B2 de ponta a ponta numa GPU real: o core-fake com um "jogo" `HW` pede GL
 /// 3.3 no processo filho; o filho confere o B1, pede o anel
 /// (`InteropRequest`), o app aloca 3 imagens exportáveis, duplica os handles

@@ -215,7 +215,7 @@ impl DesktopCore {
 
 impl FrameSource for DesktopCore {
     fn next_frame(&mut self) -> Option<Frame> {
-        if let Some(gl) = &self.gl {
+        if let Some(gl) = self.gl.as_mut() {
             // Interop: aponta o FBO pro slot de escrita do ring antes do run.
             gl.bind_write_slot();
         }

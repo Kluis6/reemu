@@ -548,18 +548,25 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 dedicated,
                 images,
             } => {
-                // B2: guarda os handles (o B3 importa no GL). Um anel novo
-                // substitui o anterior, cujos handles fecham aqui.
+                // B3: o contexto GL importa no próximo quadro e fica dono
+                // dos handles. Um anel novo substitui o anterior.
                 log::info!(
                     "interop GL→Vulkan: anel recebido — {} imagem(ns) {width}x{height}, dedicada={dedicated}",
                     images.len()
                 );
-                interop_handles::replace(images.iter().map(|i| i.handle).collect());
+                core_loader_desktop::offer_interop_images(Some(
+                    core_loader_desktop::InteropOffer {
+                        width,
+                        height,
+                        dedicated,
+                        images: images.iter().map(|i| (i.handle, i.alloc_size)).collect(),
+                    },
+                ));
             }
             ToChild::Shutdown => break,
         }
     }
-    interop_handles::replace(Vec::new());
+    core_loader_desktop::offer_interop_images(None);
     // `core` dropa aqui (se ainda `Some`) → `DesktopCore::Drop` faz o
     // teardown libretro/GL. O processo sai logo em seguida de qualquer jeito
     // — não importa mais se esse teardown deixa estado global sujo.
@@ -780,26 +787,5 @@ fn send_frame(
 fn forward_core_set_options(channel: &core_ipc::Channel) {
     for (key, value) in core_loader_desktop::take_core_set_options() {
         let _ = channel.send(&ToParent::CoreOptionSet { key, value }, &[]);
-    }
-}
-
-/// Handles NT do anel do interop GL → Vulkan (B2), já válidos neste
-/// processo. Ficam abertos até o B3 importar no GL; um anel novo ou o fim do
-/// processo fecha os antigos — o handle NT é de quem o recebeu ("must release
-/// ownership of them using the CloseHandle system call", spec Vulkan).
-mod interop_handles {
-    use std::sync::Mutex;
-
-    static HANDLES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
-
-    pub fn replace(new: Vec<u64>) {
-        let old = std::mem::replace(&mut *HANDLES.lock().unwrap_or_else(|p| p.into_inner()), new);
-        #[cfg(windows)]
-        for h in old {
-            // SAFETY: handle duplicado pelo pai pra este processo, ainda aberto.
-            unsafe { windows_sys::Win32::Foundation::CloseHandle(h as _) };
-        }
-        #[cfg(not(windows))]
-        let _ = old;
     }
 }
