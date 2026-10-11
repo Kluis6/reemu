@@ -383,14 +383,24 @@ impl DesktopCore {
         // core, copia pra CPU e libera o slot.
         if let Some(rb) = self.vk_readback.as_mut() {
             // SAFETY: `pending` veio deste bridge, na thread do core.
-            let data = unsafe { rb.read(&vk.ctx, &pending, w, h) };
+            let out = unsafe { rb.present(&vk.ctx, &pending, w, h) };
             sync.release(pending.sync_index, pending.generation);
-            return Some(Frame {
-                origin: FrameOrigin::SoftwareRawBuffer {
-                    data: data?,
+            let origin = match out? {
+                crate::vk_present::Presented::Rgba(data) => FrameOrigin::SoftwareRawBuffer {
+                    data,
                     pitch: w * 4,
                     format: SoftwarePixelFormat::Rgba8888,
                 },
+                // C3b: só o índice do slot do anel, como o GL (B5).
+                #[cfg(windows)]
+                crate::vk_present::Presented::Slot(slot) => FrameOrigin::HardwareTexture(Box::new(
+                    crate::gl_context::GlInteropHandle::new(slot, false, None, None),
+                )),
+                #[cfg(not(windows))]
+                crate::vk_present::Presented::Slot(_) => return None,
+            };
+            return Some(Frame {
+                origin,
                 metadata: FrameMetadata {
                     native_width: w,
                     native_height: h,

@@ -79,6 +79,13 @@ pub enum ToChild {
         /// `DEDICATED_MEMORY_OBJECT_EXT` no import.
         dedicated: bool,
         images: Vec<InteropImage>,
+        /// `VkImageCreateFlags`/`VkImageUsageFlags` com que o app criou as
+        /// imagens: um filho Vulkan recria a `VkImage` com os mesmos
+        /// parâmetros pra importar a memória (C3b).
+        #[serde(default)]
+        image_flags: u32,
+        #[serde(default)]
+        image_usage: u32,
     },
     /// B5 (Windows): o app terminou de ler o slot `slot` do anel e já
     /// submeteu o `free` dele — o filho pode desenhar nele de novo (e espera
@@ -143,6 +150,11 @@ pub enum ToParent {
     InteropRequest {
         max_w: u32,
         max_h: u32,
+        /// C3b: quem vai escrever no anel é um core Vulkan no filho (não o
+        /// GL) — o app faz o *acquire* de `VK_QUEUE_FAMILY_EXTERNAL` antes de
+        /// amostrar.
+        #[serde(default)]
+        vulkan: bool,
     },
     /// O core leu o analógico pela 1ª vez (`RETRO_DEVICE_ANALOG`). Mandado
     /// uma vez: a partir daí o pai para de dobrar o stick esquerdo como
@@ -203,4 +215,8 @@ pub struct InteropImage {
     /// Handle NT do semáforo que o app sinaliza quando termina de ler esta
     /// imagem (o GL espera antes de desenhar de novo) — B4.
     pub free_sem: u64,
+    /// `memoryTypeIndex` da alocação: o import Vulkan (C3b) tem que repetir
+    /// (VUID-VkMemoryAllocateInfo-allocationSize-01743).
+    #[serde(default)]
+    pub memory_type: u32,
 }

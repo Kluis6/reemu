@@ -380,12 +380,16 @@ conferir".
       e mupen64plus_next (ParaLLEl) a 60 fps, flycast rodando, imagens
       conferidas, camadas de validação sem VUID, e **0 índice de TLS
       perdido no app** trocando de jogo.
-- [ ] `todo` — C3b. Zero-cópia: o filho importa o anel Win32 do app
-      (`VK_KHR_external_memory_win32`/`_semaphore_win32`, mesmo device físico
-      pelo UUID) e o passe de desenho escreve direto no slot; o app reusa o
-      caminho do B5 (`done`/`free`, `InteropSlotFree`). Conferir na spec
-      Vulkan a transferência de ownership com `VK_QUEUE_FAMILY_EXTERNAL`
-      entre os dois devices.
+- [x] `done` — C3b (2026-10-11, ainda atrás de `REEMU_VK_CHILD=1`):
+      zero-cópia do core Vulkan no filho. O filho escolhe a GPU do app pelo
+      UUID, liga as extensões Win32 (também no device que o flycast cria,
+      pelo hook `vk_hook`), importa o anel do app (mesmos parâmetros de
+      imagem, `allocationSize` e `memoryTypeIndex`), desenha no slot, faz o
+      *release* pra `VK_QUEUE_FAMILY_EXTERNAL` e sinaliza o `done`; o app
+      faz o *acquire* (`AcquireCmds`) antes de amostrar. Teste
+      `win32_interop_real_gl_core` com `REEMU_VK_CHILD=1`: flycast,
+      mupen64plus_next (ParaLLEl) e Beetle PSX HW pelo anel, imagens
+      conferidas, camadas de validação dos dois lados sem VUID.
 - [ ] `todo` — C3c. Ligar por padrão no Windows (fim da rota in-process
       pros cores da lista), validar com sync e medir contra o in-process.
 

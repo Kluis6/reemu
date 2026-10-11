@@ -33,6 +33,7 @@ mod sys;
 mod vfs;
 mod vk_context;
 mod vk_frame;
+mod vk_hook;
 mod vk_present;
 mod vk_sys;
 
@@ -61,7 +62,8 @@ pub fn set_vk_interop(id: Option<domain::gpu_interop::VkInteropId>) {
 }
 /// Pedido de anel do interop GL → Vulkan (B2), uma vez por contexto GL:
 /// `(largura, altura)` máximas. O core-host manda `ToParent::InteropRequest`.
-pub fn take_interop_request() -> Option<(u32, u32)> {
+/// O 3º campo: o produtor é um core Vulkan (C3b), não o GL.
+pub fn take_interop_request() -> Option<(u32, u32, bool)> {
     crate::gl_context::INTEROP_REQUEST
         .lock()
         .unwrap_or_else(|p| p.into_inner())

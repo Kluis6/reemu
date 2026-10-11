@@ -246,6 +246,10 @@ pub struct InteropOffer {
     pub height: u32,
     /// Alocação dedicada no Vulkan → `DEDICATED_MEMORY_OBJECT_EXT` no import.
     pub dedicated: bool,
+    /// `VkImageCreateFlags`/`VkImageUsageFlags` das imagens do app (C3b: o
+    /// filho Vulkan recria a imagem igual pra importar a memória).
+    pub image_flags: u32,
+    pub image_usage: u32,
     pub images: Vec<OfferedImage>,
 }
 
@@ -260,6 +264,8 @@ pub struct OfferedImage {
     pub done_sem: u64,
     /// O app sinaliza ao terminar de ler; o GL espera antes de redesenhar.
     pub free_sem: u64,
+    /// `memoryTypeIndex` da alocação no app (import Vulkan, C3b).
+    pub memory_type: u32,
 }
 
 impl Drop for InteropOffer {
@@ -372,7 +378,7 @@ impl GlContext {
                     // `REEMU_GL_INTEROP=0` fica no readback).
                     if crate::gl_interop_wanted() {
                         *INTEROP_REQUEST.lock().unwrap_or_else(|p| p.into_inner()) =
-                            Some((max_w, max_h));
+                            Some((max_w, max_h, false));
                     }
                 }
                 Err(why) => log::info!("interop GL→Vulkan: não ({why}) — segue no readback"),
@@ -2049,7 +2055,7 @@ fn open_display(egl: &EglInstance) -> Result<egl::Display, String> {
 /// registry.khronos.org/OpenGL, extensão `KHR_debug`.
 /// Anel de imagens a pedir ao pai (B2): `(largura, altura)` máximas do core.
 /// O core-host lê com `take_interop_request` e manda o `InteropRequest`.
-pub(crate) static INTEROP_REQUEST: std::sync::Mutex<Option<(u32, u32)>> =
+pub(crate) static INTEROP_REQUEST: std::sync::Mutex<Option<(u32, u32, bool)>> =
     std::sync::Mutex::new(None);
 
 /// Slots que o app devolveu (`ToChild::InteropSlotFree`, B5) e o

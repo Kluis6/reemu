@@ -586,6 +586,14 @@ pub struct FrameProcessor {
     /// `done`/`free` já postos na fila do wgpu-hal.
     #[cfg(windows)]
     win_staged: Vec<u32>,
+    /// C3b: quem escreve no anel é um core Vulkan no filho — antes de
+    /// amostrar, o *acquire* de `VK_QUEUE_FAMILY_EXTERNAL` (ver
+    /// `stage_win_slot`). `false` = o GL (B5).
+    #[cfg(windows)]
+    interop_vk_producer: bool,
+    /// O *acquire* por slot quando o produtor é Vulkan (C3b).
+    #[cfg(windows)]
+    interop_acquire: Option<win_interop::AcquireCmds>,
     imported: Vec<Option<(wgpu::Texture, wgpu::TextureView)>>,
     /// Espera na GPU pela fence de fim de render do core GL (no lugar do
     /// `glFinish` dele) — `None` = device sem `VK_KHR_external_semaphore_fd`
@@ -822,6 +830,10 @@ impl FrameProcessor {
             interop_ring: Vec::new(),
             #[cfg(windows)]
             win_staged: Vec::new(),
+            #[cfg(windows)]
+            interop_vk_producer: false,
+            #[cfg(windows)]
+            interop_acquire: None,
             #[cfg(target_os = "linux")]
             sync_fd: None,
             imported: Vec::new(),
@@ -1790,6 +1802,7 @@ impl FrameProcessor {
         w: u32,
         h: u32,
         pid: u32,
+        vulkan: bool,
     ) -> Result<emu_session::InteropReply, String> {
         /// 3 imagens: o core desenha numa enquanto o app mostra outra.
         const RING: usize = 3;
@@ -1802,6 +1815,7 @@ impl FrameProcessor {
                     alloc_size: img.alloc_size,
                     done_sem: win_interop::duplicate_into(pid, img.done_handle)?,
                     free_sem: win_interop::duplicate_into(pid, img.free_handle)?,
+                    memory_type: img.memory_type,
                 })
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -1818,8 +1832,20 @@ impl FrameProcessor {
             .collect();
         self.flip_tgt.clear();
         self.win_staged.clear();
+        self.interop_acquire = None;
+        if vulkan {
+            let images: Vec<ash::vk::Image> = ring.iter().map(|i| i.image).collect();
+            self.interop_acquire = Some(win_interop::AcquireCmds::new(
+                &self.device,
+                &self.queue,
+                &images,
+            )?);
+        }
         self.interop_ring = ring;
+        self.interop_vk_producer = vulkan;
         Ok(emu_session::InteropReply {
+            image_flags: self.interop_ring.first().map_or(0, |i| i.flags),
+            image_usage: self.interop_ring.first().map_or(0, |i| i.usage),
             width: w,
             height: h,
             // `allocate_ring` sempre usa `VkMemoryDedicatedAllocateInfo`
@@ -1857,11 +1883,21 @@ impl FrameProcessor {
             return false;
         };
         let (done, free) = (img.done_sem, img.free_sem);
+        // C3b: produtor Vulkan — espera o `done` e faz o *acquire* num lote
+        // próprio, antes do lote do wgpu que amostra.
+        if self.interop_vk_producer {
+            match &self.interop_acquire {
+                Some(acq) if acq.submit(slot as usize, done) => {}
+                _ => return false,
+            }
+        }
         // SAFETY: semáforos deste device, vivos enquanto o anel existir.
         let Some(q) = (unsafe { self.queue.as_hal::<wgpu::hal::api::Vulkan>() }) else {
             return false;
         };
-        q.add_wait_semaphore(done, None, ash::vk::PipelineStageFlags::FRAGMENT_SHADER);
+        if !self.interop_vk_producer {
+            q.add_wait_semaphore(done, None, ash::vk::PipelineStageFlags::FRAGMENT_SHADER);
+        }
         q.add_signal_semaphore(free, None);
         drop(q);
         self.win_staged.push(slot);

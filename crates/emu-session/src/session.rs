@@ -1331,7 +1331,11 @@ fn handle_event(
         }
         ToParent::SaveRamRestored(None) => {}
         ToParent::Warn(msg) => log::warn!("core-host: {msg}"),
-        ToParent::InteropRequest { max_w, max_h } => answer_interop_request(shared, max_w, max_h),
+        ToParent::InteropRequest {
+            max_w,
+            max_h,
+            vulkan,
+        } => answer_interop_request(shared, max_w, max_h, vulkan),
         ToParent::AnalogUsed => PARENT_ANALOG.mark_used(),
         ToParent::CoreOptionSet { key, value } => {
             log::info!("core trocou a opção '{key}' para '{value}'");
@@ -1344,7 +1348,7 @@ fn handle_event(
 /// B2: o filho pediu o anel do interop GL → Vulkan. O provedor do app aloca e
 /// duplica os handles; a resposta vai pelo canal do filho. Sem provedor ou
 /// com erro, nada é mandado e o filho segue no readback.
-fn answer_interop_request(shared: &Shared, max_w: u32, max_h: u32) {
+fn answer_interop_request(shared: &Shared, max_w: u32, max_h: u32, vulkan: bool) {
     // Anel novo: devoluções pendentes do anterior não valem mais.
     shared
         .interop_dropped
@@ -1361,7 +1365,7 @@ fn answer_interop_request(shared: &Shared, max_w: u32, max_h: u32) {
         log::info!("interop GL→Vulkan: pedido do filho sem provedor no app — segue no readback");
         return;
     };
-    match provider(max_w, max_h, pid) {
+    match provider(max_w, max_h, pid, vulkan) {
         Ok(reply) => {
             let n = reply.images.len();
             let sent = shared
@@ -1376,6 +1380,8 @@ fn answer_interop_request(shared: &Shared, max_w: u32, max_h: u32) {
                             height: reply.height,
                             dedicated: reply.dedicated,
                             images: reply.images,
+                            image_flags: reply.image_flags,
+                            image_usage: reply.image_usage,
                         },
                         &[],
                     )
@@ -1400,11 +1406,16 @@ pub struct InteropReply {
     pub height: u32,
     pub dedicated: bool,
     pub images: Vec<core_ipc::InteropImage>,
+    /// `VkImageCreateFlags`/`VkImageUsageFlags` das imagens (C3b).
+    pub image_flags: u32,
+    pub image_usage: u32,
 }
 
 /// Aloca o anel do interop pra `(largura, altura, pid do filho)` — ver
 /// `EmuSession::set_interop_provider`.
-pub type InteropProvider = Arc<dyn Fn(u32, u32, u32) -> Result<InteropReply, String> + Send + Sync>;
+/// O 4º argumento: o produtor é um core Vulkan no filho (C3b).
+pub type InteropProvider =
+    Arc<dyn Fn(u32, u32, u32, bool) -> Result<InteropReply, String> + Send + Sync>;
 
 /// Reconstrói o `Frame` de domínio a partir de um `FrameReady`: caminho
 /// software lê do anel de shared memory, caminho HW/interop empacota o fd

@@ -1851,7 +1851,7 @@ fn win32_interop_ring_imports_into_gl() {
         return;
     };
     let reply = fp
-        .install_interop_ring(64, 48, std::process::id())
+        .install_interop_ring(64, 48, std::process::id(), false)
         .expect("alocar e duplicar o anel");
     let px =
         core_loader_desktop::render_solid_into_interop_offer(offer_of(&reply), [255, 0, 0, 255])
@@ -1867,6 +1867,8 @@ fn offer_of(reply: &emu_session::InteropReply) -> core_loader_desktop::InteropOf
         width: reply.width,
         height: reply.height,
         dedicated: reply.dedicated,
+        image_flags: reply.image_flags,
+        image_usage: reply.image_usage,
         images: reply
             .images
             .iter()
@@ -1875,6 +1877,7 @@ fn offer_of(reply: &emu_session::InteropReply) -> core_loader_desktop::InteropOf
                 alloc_size: i.alloc_size,
                 done_sem: i.done_sem,
                 free_sem: i.free_sem,
+                memory_type: i.memory_type,
             })
             .collect(),
     }
@@ -1899,7 +1902,7 @@ fn win32_interop_semaphores_round_trip() {
     };
     let (w, h) = (64u32, 48u32);
     let reply = fp
-        .install_interop_ring(w, h, std::process::id())
+        .install_interop_ring(w, h, std::process::id(), false)
         .expect("alocar e duplicar o anel");
     let mut probe =
         core_loader_desktop::InteropGlProbe::new(offer_of(&reply)).expect("contexto GL");
@@ -2127,8 +2130,11 @@ fn win32_interop_ring_reaches_the_core_process() {
     session.set_vk_interop(vk);
     let rings = Arc::new(AtomicUsize::new(0));
     let (fp2, rings2) = (fp.clone(), rings.clone());
-    session.set_interop_provider(Arc::new(move |w, h, pid| {
-        let reply = fp2.lock().unwrap().install_interop_ring(w, h, pid)?;
+    session.set_interop_provider(Arc::new(move |w, h, pid, vulkan| {
+        let reply = fp2
+            .lock()
+            .unwrap()
+            .install_interop_ring(w, h, pid, vulkan)?;
         eprintln!(
             "anel pedido pelo filho (pid {pid}): {} imagens {w}x{h}, handles {:?}",
             reply.images.len(),
@@ -2189,8 +2195,8 @@ fn drive_interop_session(
     let session = EmuSession::spawn(SessionConfig::new(tmp.clone(), tmp.clone(), tmp.clone()));
     session.set_vk_interop(vk);
     let fp2 = fp.clone();
-    session.set_interop_provider(Arc::new(move |w, h, pid| {
-        fp2.lock().unwrap().install_interop_ring(w, h, pid)
+    session.set_interop_provider(Arc::new(move |w, h, pid, vulkan| {
+        fp2.lock().unwrap().install_interop_ring(w, h, pid, vulkan)
     }));
     // `REEMU_TEST_GL_OPTS="chave=valor;..."`: opções do core (ex.: a
     // resolução interna, pra medir o readback em 1920×1440 como na fase A).

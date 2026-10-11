@@ -154,11 +154,11 @@ pub fn run() {
                         if gpu::win_interop::requested() {
                             let handle = app.handle().clone();
                             state.session.set_interop_provider(std::sync::Arc::new(
-                                move |w, h, pid| {
+                                move |w, h, pid, vulkan| {
                                     let st = handle.state::<AppState>();
                                     let mut gpu = st.gpu.lock().unwrap_or_else(|p| p.into_inner());
                                     let fp = gpu.as_mut().ok_or("sem GPU")?;
-                                    fp.install_interop_ring(w, h, pid)
+                                    fp.install_interop_ring(w, h, pid, vulkan)
                                 },
                             ));
                         }

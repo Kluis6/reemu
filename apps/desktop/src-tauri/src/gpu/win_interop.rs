@@ -143,6 +143,17 @@ pub struct ExportedImage {
     /// Handles NT exportados de `done_sem`/`free_sem`.
     pub done_handle: usize,
     pub free_handle: usize,
+    /// `VkImageCreateFlags`/`VkImageUsageFlags` da criação (o filho Vulkan
+    /// recria a imagem igual pra importar a memória, C3b).
+    pub flags: u32,
+    pub usage: u32,
+    /// Tipo de memória da alocação: no import de um handle opaco, "the values
+    /// of allocationSize and memoryTypeIndex must match those specified when
+    /// the payload being imported was created"
+    /// (VUID-VkMemoryAllocateInfo-allocationSize-01743).
+    pub memory_type: u32,
+    /// A `VkImage` crua (dona: `texture`) — pro *acquire* do C3b.
+    pub image: vk::Image,
 }
 
 impl Drop for ExportedImage {
@@ -435,6 +446,10 @@ pub(super) fn allocate_ring(
             free_sem,
             done_handle,
             free_handle,
+            flags: flags.as_raw(),
+            usage: usage.as_raw(),
+            memory_type: type_index,
+            image,
         });
     }
     Ok(ring)
@@ -469,5 +484,139 @@ pub fn duplicate_into(pid: u32, handle: usize) -> Result<u64, String> {
             return Err(format!("DuplicateHandle: {err}"));
         }
         Ok(out as u64)
+    }
+}
+
+/// *Acquire* do anel quando quem escreve é um core Vulkan no processo filho
+/// (C3b). Recursos compartilhados entre instâncias "must also explicitly
+/// manage ownership transfers between local and external queues ...
+/// regardless of the VkSharingMode" (spec Vulkan, Queue Family Ownership
+/// Transfer): o filho faz o *release* pra `VK_QUEUE_FAMILY_EXTERNAL`
+/// (`COLOR_ATTACHMENT_OPTIMAL` → `SHADER_READ_ONLY_OPTIMAL`) e sinaliza o
+/// `done`; aqui, um lote que espera o `done` em `ALL_COMMANDS` ("the only
+/// valid stage to wait on or wait for these operations") e roda a barreira
+/// de *acquire* com os MESMOS `oldLayout`/`newLayout` ("must be equal to
+/// values of oldLayout and newLayout in the acquire operation's memory
+/// barrier"). A amostragem do wgpu vem depois na ordem de submissão, coberta
+/// pelo 2º escopo da barreira. A volta (app → filho) não transfere: o filho
+/// descarta o conteúdo ("If an application does not need the contents ... the
+/// ownership transfer should be skipped").
+pub(super) struct AcquireCmds {
+    device: ash::Device,
+    queue: vk::Queue,
+    pool: vk::CommandPool,
+    /// Um command buffer gravado uma vez por slot (`SIMULTANEOUS_USE`: o
+    /// mesmo pode voltar à fila antes do anterior terminar).
+    cmds: Vec<vk::CommandBuffer>,
+}
+
+impl AcquireCmds {
+    pub(super) fn new(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        images: &[vk::Image],
+    ) -> Result<Self, String> {
+        // SAFETY: handles do device/fila do wgpu; os objetos daqui são nossos.
+        unsafe {
+            let hd = device
+                .as_hal::<wgpu::hal::api::Vulkan>()
+                .ok_or("device não é Vulkan")?;
+            let raw = hd.raw_device().clone();
+            let family = hd.queue_family_index();
+            drop(hd);
+            let q = queue
+                .as_hal::<wgpu::hal::api::Vulkan>()
+                .ok_or("fila não é Vulkan")?
+                .as_raw();
+            let pool = raw
+                .create_command_pool(
+                    &vk::CommandPoolCreateInfo::default().queue_family_index(family),
+                    None,
+                )
+                .map_err(|e| format!("vkCreateCommandPool: {e}"))?;
+            let mut me = Self {
+                device: raw.clone(),
+                queue: q,
+                pool,
+                cmds: Vec::new(),
+            };
+            let cmds = raw
+                .allocate_command_buffers(
+                    &vk::CommandBufferAllocateInfo::default()
+                        .command_pool(pool)
+                        .level(vk::CommandBufferLevel::PRIMARY)
+                        .command_buffer_count(images.len() as u32),
+                )
+                .map_err(|e| format!("vkAllocateCommandBuffers: {e}"))?;
+            let sub = vk::ImageSubresourceRange::default()
+                .aspect_mask(vk::ImageAspectFlags::COLOR)
+                .level_count(1)
+                .layer_count(1);
+            for (&cmd, &image) in cmds.iter().zip(images) {
+                raw.begin_command_buffer(
+                    cmd,
+                    &vk::CommandBufferBeginInfo::default()
+                        .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE),
+                )
+                .map_err(|e| format!("vkBeginCommandBuffer: {e}"))?;
+                raw.cmd_pipeline_barrier(
+                    cmd,
+                    vk::PipelineStageFlags::ALL_COMMANDS,
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    vk::DependencyFlags::empty(),
+                    &[],
+                    &[],
+                    &[vk::ImageMemoryBarrier::default()
+                        .src_access_mask(vk::AccessFlags::empty())
+                        .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                        .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                        .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                        .src_queue_family_index(vk::QUEUE_FAMILY_EXTERNAL)
+                        .dst_queue_family_index(family)
+                        .image(image)
+                        .subresource_range(sub)],
+                );
+                raw.end_command_buffer(cmd)
+                    .map_err(|e| format!("vkEndCommandBuffer: {e}"))?;
+            }
+            me.cmds = cmds;
+            Ok(me)
+        }
+    }
+
+    /// Espera o `done` do slot e faz o *acquire* dele, num lote próprio na
+    /// fila do wgpu (thread do compositor, como o `submit_vulkan_cmds`).
+    pub(super) fn submit(&self, slot: usize, done: vk::Semaphore) -> bool {
+        let Some(&cmd) = self.cmds.get(slot) else {
+            return false;
+        };
+        let waits = [done];
+        let stages = [vk::PipelineStageFlags::ALL_COMMANDS];
+        let cmds = [cmd];
+        let submit = vk::SubmitInfo::default()
+            .wait_semaphores(&waits)
+            .wait_dst_stage_mask(&stages)
+            .command_buffers(&cmds);
+        // SAFETY: fila do wgpu, sem submit concorrente nesta thread.
+        match unsafe {
+            self.device
+                .queue_submit(self.queue, &[submit], vk::Fence::null())
+        } {
+            Ok(()) => true,
+            Err(e) => {
+                log::warn!("interop Vulkan→app: acquire do slot {slot}: {e}");
+                false
+            }
+        }
+    }
+}
+
+impl Drop for AcquireCmds {
+    fn drop(&mut self) {
+        // SAFETY: espera a fila (os lotes daqui terminam) antes de soltar.
+        unsafe {
+            let _ = self.device.queue_wait_idle(self.queue);
+            self.device.destroy_command_pool(self.pool, None);
+        }
     }
 }

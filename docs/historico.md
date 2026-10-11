@@ -1979,3 +1979,29 @@ Infra:
   | Beetle PSX HW, 40 Winks | 60 fps, abertura da Eurocom conferida |
   | mupen64plus_next com ParaLLEl-RDP, Mario Kart 64 | 60 fps, título conferido (640×240 do ParaLLEl) |
   | flycast, Soulcalibur | abertura conferida |
+
+## 2026-10-11 — C3b: core Vulkan no processo filho sem cópia (anel compartilhado)
+
+- **O quê:** com `REEMU_VK_CHILD=1`, o core Vulkan no processo filho desenha direto numa imagem do anel que o app alocou (o mesmo do GL, B2–B5) e manda só o índice. Sem slot livre, aquele quadro cai na cópia pra CPU do C3a.
+- **Mesma GPU:** o filho escolhe o device físico pelo `deviceUUID`/`driverUUID` que o app manda (`VkPhysicalDeviceIDProperties`). É a condição do `VK_QUEUE_FAMILY_EXTERNAL`: "the same underlying ... physical device, and the same driver version".
+- **Extensões no device do core:** `VK_KHR_external_memory_win32` e `VK_KHR_external_semaphore_win32` entram no `create` do filho e na lista do `create_device` do core. O flycast ignora essa lista, então um hook mínimo do `vkCreateDevice` (`vk_hook.rs`, a mesma ideia do `device_hook` do app) soma as duas extensões e confirma que foram ligadas. Também passou a valer o piso Vulkan 1.1 na instância: o Beetle pede 1.0.32, e numa instância 1.0 a validação acusava as extensões Win32 sem `VK_KHR_external_memory` e o import.
+- **Import (spec Vulkan, capítulo Memory):**
+  - A imagem é recriada com os mesmos parâmetros da do app: o app manda `flags`, `usage` e o `memoryTypeIndex`.
+  - A alocação é dedicada (VUID-VkMemoryDedicatedAllocateInfo-image-01876) e usa o mesmo `allocationSize`/`memoryTypeIndex` (VUID-VkMemoryAllocateInfo-allocationSize-01743).
+  - Os semáforos entram por `vkImportSemaphoreWin32HandleKHR`.
+  - Importar não passa a posse do handle NT, então o filho fecha os handles quando o anel cai.
+- **Posse entre as filas (spec Vulkan, Queue Family Ownership Transfer):**
+  - Recurso compartilhado entre instâncias "must also explicitly manage ownership transfers ... regardless of the VkSharingMode".
+  - O filho faz o *release* pra `VK_QUEUE_FAMILY_EXTERNAL` (`COLOR_ATTACHMENT_OPTIMAL` → `SHADER_READ_ONLY_OPTIMAL`) e sinaliza o `done`.
+  - O app (`AcquireCmds`) espera o `done` em `ALL_COMMANDS` ("the only valid stage to wait on") e faz o *acquire* com os mesmos layouts, num lote próprio antes do lote do wgpu que amostra.
+  - A volta pro filho não transfere, porque o conteúdo é descartado ("the ownership transfer should be skipped"; o render pass começa em `UNDEFINED`).
+  - O GL (B5) segue sem *acquire*: a issue 9 da EXT_external_objects deixa isso em aberto.
+- **Medido** (RTX 3060, `win32_interop_real_gl_core` com `REEMU_VK_CHILD=1`, 15 s cada, camadas de validação no app e no filho, nenhum VUID):
+
+  | Core e jogo | Pelo anel | Pela cópia |
+  |---|---|---|
+  | flycast, Soulcalibur | 706 | 1 |
+  | mupen64plus_next com ParaLLEl, Mario Kart 64 | 883 | 1 |
+  | Beetle PSX HW, 40 Winks | 899 | 1 |
+
+  Imagens do flycast e do mupen conferidas. Os 6 testes do anel GL seguem passando.

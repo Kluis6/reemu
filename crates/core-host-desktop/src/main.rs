@@ -552,6 +552,8 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 height,
                 dedicated,
                 images,
+                image_flags,
+                image_usage,
             } => {
                 // B3: o contexto GL importa no próximo quadro e fica dono
                 // dos handles. Um anel novo substitui o anterior.
@@ -564,6 +566,8 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         width,
                         height,
                         dedicated,
+                        image_flags,
+                        image_usage,
                         images: images
                             .iter()
                             .map(|i| core_loader_desktop::OfferedImage {
@@ -571,6 +575,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                                 alloc_size: i.alloc_size,
                                 done_sem: i.done_sem,
                                 free_sem: i.free_sem,
+                                memory_type: i.memory_type,
                             })
                             .collect(),
                     },
@@ -672,9 +677,16 @@ fn run_one_frame(
     }
     forward_core_set_options(channel);
     // B2: contexto GL compatível + interop pedido → pede o anel ao pai.
-    if let Some((max_w, max_h)) = core_loader_desktop::take_interop_request() {
+    if let Some((max_w, max_h, vulkan)) = core_loader_desktop::take_interop_request() {
         log::info!("interop GL→Vulkan: pedindo o anel de imagens ({max_w}x{max_h})");
-        let _ = channel.send(&ToParent::InteropRequest { max_w, max_h }, &[]);
+        let _ = channel.send(
+            &ToParent::InteropRequest {
+                max_w,
+                max_h,
+                vulkan,
+            },
+            &[],
+        );
     }
     if let (Some(frame), Some(ring)) = (produced, ring.as_ref()) {
         let ts = diag.as_ref().map(|_| Instant::now());

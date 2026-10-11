@@ -38,6 +38,10 @@ pub(crate) struct VkConfig {
     /// sincronização do HW render é fácil de errar em silêncio, então vale
     /// muito rodar com isso ligado durante o desenvolvimento.
     pub validation: bool,
+    /// C3b (processo filho): escolhe a GPU do app (`deviceUUID` do
+    /// `set_vk_interop`) e liga as extensões do anel compartilhado
+    /// (`interop_device_extensions`) quando a GPU tem.
+    pub interop: bool,
 }
 
 /// Layer de validação da Khronos (pacote `vulkan-validationlayers` no Debian/
@@ -56,7 +60,41 @@ impl Default for VkConfig {
                     .as_deref(),
                 Ok("1") | Ok("true") | Ok("on") | Ok("yes")
             ),
+            interop: false,
         }
+    }
+}
+
+/// Extensões de device do anel GL/Vulkan → app no Windows (C3b): memória e
+/// semáforo exportáveis/importáveis como handle NT. Fora do Windows, nada.
+fn interop_device_extensions() -> Vec<&'static CStr> {
+    if cfg!(windows) {
+        vec![
+            ash::khr::external_memory_win32::NAME,
+            ash::khr::external_semaphore_win32::NAME,
+        ]
+    } else {
+        Vec::new()
+    }
+}
+
+/// As de `interop_device_extensions` que o device `pd` suporta — todas ou
+/// nenhuma (sem as duas, o anel não serve).
+fn supported_interop_extensions(
+    instance: &ash::Instance,
+    pd: vk::PhysicalDevice,
+) -> Vec<&'static CStr> {
+    let want = interop_device_extensions();
+    // SAFETY: instância e device físico válidos.
+    let have = unsafe { instance.enumerate_device_extension_properties(pd) }.unwrap_or_default();
+    let all = want.iter().all(|w| {
+        have.iter()
+            .any(|h| h.extension_name_as_c_str().is_ok_and(|n| n == *w))
+    });
+    if all {
+        want
+    } else {
+        Vec::new()
     }
 }
 
@@ -97,6 +135,9 @@ pub(crate) struct VkContext {
     /// (`libretro_vulkan.h`) — o `DesktopCore` chama (`take_core_destroy`)
     /// antes de descarregar a DLL do core.
     core_destroy_device: Option<unsafe extern "C" fn()>,
+    /// C3b: o device tem as extensões do anel (`interop_device_extensions`)
+    /// e está na GPU do app — o apresentador do filho pode importar o anel.
+    pub interop_ready: bool,
 }
 
 // SAFETY: `ash::Device`/`Instance` são `Send + Sync` (só handles + tabelas de
@@ -115,7 +156,11 @@ impl VkContext {
             .application_version(0)
             .engine_name(&cfg.app_name)
             .engine_version(0)
-            .api_version(cfg.api_version);
+            // Piso 1.1 (o core pode pedir 1.0 — o Beetle pede 1.0.32): memória/
+            // semáforo externos e `VkPhysicalDeviceIDProperties` são do núcleo
+            // 1.1; numa instância 1.0 a validação acusa as extensões Win32 sem
+            // `VK_KHR_external_memory` e o import do anel.
+            .api_version(cfg.api_version.max(vk::API_VERSION_1_1));
         // Validação é opt-in e best-effort: se o layer/extensão não estiverem
         // instalados, avisa e segue sem.
         let (layers, instance_exts) = validation_bits(&entry, cfg.validation);
@@ -142,12 +187,17 @@ impl VkContext {
         };
         let cleanup_instance = |instance: &ash::Instance| cleanup(instance, &debug);
 
-        let physical_device = match Self::pick_physical_device(&instance) {
+        let physical_device = match Self::pick_physical_device(&instance, cfg.interop) {
             Ok(pd) => pd,
             Err(e) => {
                 cleanup_instance(&instance);
                 return Err(e);
             }
+        };
+        let interop_exts = if cfg.interop {
+            supported_interop_extensions(&instance, physical_device)
+        } else {
+            Vec::new()
         };
 
         let queue_family_index = match Self::pick_queue_family(&instance, physical_device) {
@@ -158,11 +208,12 @@ impl VkContext {
             }
         };
 
-        let ext_ptrs: Vec<*const c_char> = cfg
+        let mut ext_ptrs: Vec<*const c_char> = cfg
             .extra_device_extensions
             .iter()
             .map(|c| c.as_ptr())
             .collect();
+        ext_ptrs.extend(interop_exts.iter().map(|e| e.as_ptr()));
         let priorities = [1.0f32];
         let queue_ci = [vk::DeviceQueueCreateInfo::default()
             .queue_family_index(queue_family_index)
@@ -199,6 +250,7 @@ impl VkContext {
             _entry: Some(entry),
             owns: true,
             core_destroy_device: None,
+            interop_ready: !interop_exts.is_empty(),
         })
     }
 
@@ -223,7 +275,8 @@ impl VkContext {
             .map(|f| f())
             .filter(|p| !p.is_null())
             .map_or(0, |p| (*p).api_version);
-        let api_version = core_version.max(cfg.api_version);
+        // Piso 1.1, como no `create`.
+        let api_version = core_version.max(cfg.api_version).max(vk::API_VERSION_1_1);
         let app_info = vk::ApplicationInfo::default()
             .application_name(&cfg.app_name)
             .engine_name(&cfg.app_name)
@@ -262,33 +315,61 @@ impl VkContext {
             }
             instance.destroy_instance(None);
         };
-        let gpu = match Self::pick_physical_device(&instance) {
+        let gpu = match Self::pick_physical_device(&instance, cfg.interop) {
             Ok(g) => g,
             Err(e) => {
                 cleanup(&instance, &debug);
                 return Err(e);
             }
         };
-        let ext_ptrs: Vec<*const c_char> = cfg
+        let interop_exts = if cfg.interop {
+            supported_interop_extensions(&instance, gpu)
+        } else {
+            Vec::new()
+        };
+        let mut ext_ptrs: Vec<*const c_char> = cfg
             .extra_device_extensions
             .iter()
             .map(|c| c.as_ptr())
             .collect();
+        ext_ptrs.extend(interop_exts.iter().map(|e| e.as_ptr()));
         let features = vk::PhysicalDeviceFeatures::default();
         let mut rctx: crate::vk_sys::retro_vulkan_context = std::mem::zeroed();
         let gipa = entry.static_fn().get_instance_proc_addr;
+        // O core recebe o NOSSO `vkGetInstanceProcAddr` quando há extensões
+        // do interop a garantir (o flycast ignora a lista; ver `vk_hook`).
+        let core_gipa: vk::PFN_vkGetInstanceProcAddr = if interop_exts.is_empty() {
+            gipa
+        } else {
+            crate::vk_hook::arm(gipa, &interop_exts);
+            crate::vk_hook::get_instance_proc_addr
+        };
         let ok = create_device(
             &mut rctx,
             instance.handle(),
             gpu,
             vk::SurfaceKHR::null(),
-            gipa,
+            core_gipa,
             ext_ptrs.as_ptr(),
             ext_ptrs.len() as _,
             std::ptr::null(),
             0,
             &features,
         );
+        let enabled = if interop_exts.is_empty() {
+            None
+        } else {
+            crate::vk_hook::disarm()
+        };
+        // Pronto pro anel só se o hook viu as extensões ligadas e o core
+        // ficou na GPU que pedimos.
+        let interop_ready = !interop_exts.is_empty()
+            && (rctx.gpu == vk::PhysicalDevice::null() || rctx.gpu == gpu)
+            && enabled.as_ref().is_some_and(|list| {
+                interop_exts
+                    .iter()
+                    .all(|w| list.iter().any(|e| e.as_c_str() == *w))
+            });
         if !ok || rctx.device == vk::Device::null() {
             cleanup(&instance, &debug);
             return Err("o create_device do core devolveu false".into());
@@ -315,6 +396,7 @@ impl VkContext {
             _entry: Some(entry),
             owns: true,
             core_destroy_device: neg.destroy_device,
+            interop_ready,
         })
     }
 
@@ -370,6 +452,7 @@ impl VkContext {
             _entry: None,
             owns: false,
             core_destroy_device: None,
+            interop_ready: false,
         };
         log::info!(
             "contexto Vulkan ADOTADO do compositor ({}, queue family {})",
@@ -396,12 +479,36 @@ impl VkContext {
         self.instance.fp_v1_0().get_device_proc_addr
     }
 
-    fn pick_physical_device(instance: &ash::Instance) -> Result<vk::PhysicalDevice, String> {
+    fn pick_physical_device(
+        instance: &ash::Instance,
+        match_app: bool,
+    ) -> Result<vk::PhysicalDevice, String> {
         // SAFETY: instância válida.
         let devices = unsafe { instance.enumerate_physical_devices() }
             .map_err(|e| format!("vkEnumeratePhysicalDevices: {e}"))?;
         if devices.is_empty() {
             return Err("nenhum VkPhysicalDevice".into());
+        }
+        // C3b: a GPU do app, pelo `deviceUUID` (`VkPhysicalDeviceIDProperties`,
+        // Vulkan 1.1): o anel compartilhado exige o mesmo device físico — é o
+        // que `VK_QUEUE_FAMILY_EXTERNAL` pressupõe ("the same underlying ...
+        // physical device, and the same driver version ... as indicated by
+        // VkPhysicalDeviceIDProperties::deviceUUID and ... driverUUID").
+        let app = crate::gl_context::VK_INTEROP
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        if let (true, Some(app)) = (match_app, app) {
+            for &pd in &devices {
+                let mut id = vk::PhysicalDeviceIDProperties::default();
+                let mut props = vk::PhysicalDeviceProperties2::default().push_next(&mut id);
+                // SAFETY: instância ≥ 1.1 (piso do `VkConfig`).
+                unsafe { instance.get_physical_device_properties2(pd, &mut props) };
+                if id.device_uuid == app.device_uuid && id.driver_uuid == app.driver_uuid {
+                    return Ok(pd);
+                }
+            }
+            log::warn!("Vulkan no processo filho: GPU do app não encontrada pelo UUID");
         }
         // Prefere discreta (fase B: casar com o GPU que o wgpu escolheu, por
         // UUID / `REEMU_GPU`).

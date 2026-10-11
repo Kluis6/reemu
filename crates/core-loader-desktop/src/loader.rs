@@ -514,14 +514,22 @@ impl DesktopCoreLoader {
         };
 
         let readback = match (&vk, self.vulkan_in_child) {
-            (Some(bridge), true) => Some(crate::vk_present::VkReadback::new(&bridge.ctx).map_err(
-                |e| {
+            (Some(bridge), true) => Some(
+                crate::vk_present::VkReadback::new(
+                    &bridge.ctx,
+                    av_info.geometry.max_width.max(av_info.geometry.base_width),
+                    av_info
+                        .geometry
+                        .max_height
+                        .max(av_info.geometry.base_height),
+                )
+                .map_err(|e| {
                     CoreLoadError::HwRenderUnsupported(format!(
                         "{}: cópia Vulkan no processo filho: {e}",
                         core_id.0
                     ))
-                },
-            )?),
+                })?,
+            ),
             _ => None,
         };
         let mut core = DesktopCore::new(
@@ -631,7 +639,10 @@ fn setup_vk_context(
         });
 
     let bring_up = || -> Result<VkContext, CoreLoadError> {
-        let mut cfg = VkConfig::default();
+        let mut cfg = VkConfig {
+            interop: in_child,
+            ..Default::default()
+        };
         if req.version_major >= 0x0040_0000 {
             cfg.api_version = req.version_major;
         }
@@ -652,7 +663,10 @@ fn setup_vk_context(
         // SAFETY: como acima — interface viva na DLL do core.
         let iface =
             unsafe { &*(p as *const vk_sys::retro_hw_render_context_negotiation_interface_vulkan) };
-        let mut cfg = VkConfig::default();
+        let mut cfg = VkConfig {
+            interop: true,
+            ..Default::default()
+        };
         if req.version_major >= 0x0040_0000 {
             cfg.api_version = req.version_major;
         }
@@ -687,8 +701,13 @@ fn setup_vk_context(
         _ => bring_up()?,
     };
     log::info!(
-        "contexto Vulkan pronto pra {core_id} ({})",
-        ctx.device_name()
+        "contexto Vulkan pronto pra {core_id} ({}){}",
+        ctx.device_name(),
+        if ctx.interop_ready {
+            " — pronto pro anel compartilhado com o app"
+        } else {
+            ""
+        }
     );
 
     let bridge = VkFrameBridge::new(ctx).map_err(|e| {
