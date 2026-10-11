@@ -13,6 +13,7 @@ const en: Messages = {
     search: 'Search',
     options: 'Options',
     back: 'Back',
+    lightDark: 'Light/dark',
   },
   shell: {
     myProfile: 'My profile',

@@ -36,6 +36,9 @@ pub enum NavPulse {
     /* Y (North) = busca · Start (☰) = menu de contexto — como no dashboard Xbox */
     Search,
     Context,
+    /// X (West): ação secundária do item focado (ex.: claro/escuro no card
+    /// de tema em Configurações › Aparência).
+    Action,
 }
 
 /// Índices de d-pad (numeração de [`gilrs_button_index`]) que o stick esquerdo
@@ -254,6 +257,7 @@ pub struct GamepadPoller {
     nav_confirm_down: bool,
     nav_search_down: bool,
     nav_context_down: bool,
+    nav_action_down: bool,
     nav_back_down: bool,
     /// Zero calibrado de L2/R2 por conexão física (ver [`TriggerCal`]).
     triggers: HashMap<(GamepadId, Button), TriggerCal>,
@@ -301,6 +305,7 @@ impl GamepadPoller {
             nav_confirm_down: false,
             nav_search_down: false,
             nav_context_down: false,
+            nav_action_down: false,
             nav_back_down: false,
             triggers: HashMap::new(),
         })
@@ -361,6 +366,11 @@ impl GamepadPoller {
             out.push(NavPulse::Context);
         }
         self.nav_context_down = context;
+        let action = held.contains(&3); // West / X
+        if action && !self.nav_action_down {
+            out.push(NavPulse::Action);
+        }
+        self.nav_action_down = action;
         out
     }
 

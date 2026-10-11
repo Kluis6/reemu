@@ -235,6 +235,7 @@ pub(crate) fn nav_pulse_name(p: input_desktop::NavPulse) -> &'static str {
         Back => "back",
         Search => "search",
         Context => "context",
+        Action => "action",
     }
 }
 

@@ -14,6 +14,7 @@ const ptBR = {
     search: 'Buscar',
     options: 'Opções',
     back: 'Voltar',
+    lightDark: 'Claro/escuro',
   },
   shell: {
     myProfile: 'Meu perfil',

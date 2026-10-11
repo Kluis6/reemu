@@ -2171,3 +2171,13 @@ Infra:
   - No hover e no foco: `0 0 18px 2px` do `reemuBrandAccent` a 55%, junto do anel de foco que já existia (`useCardStyles.card`). Sem a animação de pulso.
   - Também vale para o card 2×2 do fim das prateleiras. Conferido em capturas no Neon Circuit, no Crimson Retro e no Simple Vibes.
 - **Para voltar ao estado anterior:** `git revert` deste commit.
+
+## 2026-10-11 — Cards de tema: anel de foco padrão e X do controle para claro/escuro
+
+- **Anel:** os cards de tema em Configurações › Aparência usavam o anel do `<Card>` do Fluent (um `::after` com borda). Agora usam o anel padrão do app: 3 px na cor de destaque, afastado 4 px. Num card selecionável, o foco fica no checkbox escondido do Fluent (`.fui-Card__checkbox`), então o anel vai no card por `:has(> .fui-Card__checkbox:focus)`.
+- **X do controle:**
+  - Novo `NavPulse::Action`, botão West do gilrs, índice 3 em `gilrs_button_index`, emitido como `menu-nav` = `action`.
+  - `useMenuNav` dispara o evento `reemu-action` no elemento focado, e ele borbulha. O card de tema escuta e troca claro/escuro (só nos temas que têm os dois modos).
+  - A barra de dicas mostra "X Claro/escuro" nessa tela (pt-BR, en, es).
+- **Conferido no navegador headless:** foco no card, anel 3 px a 4 px na cor do tema, e o evento do X liga e desliga o Switch "Claro". `cargo clippy -D warnings`, `cargo fmt --check` e os testes do `input-desktop` (23) passaram.
+- **Não testado com controle físico.**

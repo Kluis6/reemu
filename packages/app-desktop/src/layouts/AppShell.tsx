@@ -180,10 +180,16 @@ export function AppShell() {
         { glyph: "Y", label: t("hints.search") },
         { glyph: "MENU", label: t("hints.options") },
       ] as const)
-    : ([
-        { glyph: "A", label: t("hints.select") },
-        { glyph: "B", label: t("hints.back") },
-      ] as const);
+    : pathname === "/settings/aparencia"
+      ? ([
+          { glyph: "A", label: t("hints.select") },
+          { glyph: "X", label: t("hints.lightDark") },
+          { glyph: "B", label: t("hints.back") },
+        ] as const)
+      : ([
+          { glyph: "A", label: t("hints.select") },
+          { glyph: "B", label: t("hints.back") },
+        ] as const);
   return (
     <div className={s.app}>
       <AnimatedBackground showWallpaper={atRoot} />

@@ -19,7 +19,7 @@ import {
   WeatherSunnyFilled,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   clearWallpaper,
@@ -27,6 +27,7 @@ import {
   setWallpaperFile,
   wallpaperUrl,
 } from "../../lib/tauri";
+import { REEMU_ACTION } from "../../hooks/useMenuNav";
 import { errorToast } from "../../lib/toast";
 import { useToastStore } from "../../stores/useToastStore";
 import { useThemeStore } from "../../stores/useThemeStore";
@@ -80,6 +81,21 @@ const useStyles = makeStyles({
     // Sem a sombra do <Card> do Fluent (`shadow4`, e a do hover) — pedido do
     // usuário; a separação fica com a borda e o fundo do próprio tema.
     boxShadow: "none !important",
+    // Anel de foco padrão do app (o mesmo dos cards de jogo e da rail:
+    // 3 px na cor de destaque, afastado 4 px) no lugar do anel do <Card> do
+    // Fluent, que desenha o próprio via `::after` com borda. Num card
+    // selecionável o foco fica no checkbox escondido do Fluent
+    // (`.fui-Card__checkbox`), então o anel vai no card quando ELE tem foco
+    // (o Switch "Claro" de dentro tem o anel dele).
+    "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
+      border: "none !important",
+    },
+    "&:has(> .fui-Card__checkbox:focus)": {
+      outlineWidth: "3px",
+      outlineStyle: "solid",
+      outlineColor: tokens.colorBrandStroke1,
+      outlineOffset: "4px",
+    },
   },
   // nome à esquerda, Switch "Claro" à direita; altura fixa pra alinhar os
   // cards que não têm o Switch
@@ -186,8 +202,18 @@ function ThemeCard({
 }) {
   const { t: tr } = useTranslation();
   const s = useStyles();
+  // X do controle (`REEMU_ACTION`) com o card focado: troca claro/escuro.
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !onModeChange) return;
+    const toggle = () => onModeChange(mode === "light" ? "dark" : "light");
+    el.addEventListener(REEMU_ACTION, toggle);
+    return () => el.removeEventListener(REEMU_ACTION, toggle);
+  }, [mode, onModeChange]);
   return (
     <Card
+      ref={ref}
       className={s.card}
       selected={selected}
       onSelectionChange={onSelect}

@@ -13,6 +13,7 @@ const es: Messages = {
     search: 'Buscar',
     options: 'Opciones',
     back: 'Volver',
+    lightDark: 'Claro/oscuro',
   },
   shell: {
     myProfile: 'Mi perfil',

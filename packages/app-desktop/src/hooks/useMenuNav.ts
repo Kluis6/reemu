@@ -12,8 +12,14 @@ import { useSearchStore } from '../stores/useSearchStore'
  *
  * `confirm` (A) = clica o foco · `back` (B) = volta / retoma o jogo ·
  * `search` (Y / `/`) = abre a busca · `context` (☰ / tecla ContextMenu) =
- * menu de contexto do item focado. No `/play/:id` só age com o jogo pausado.
+ * menu de contexto do item focado · `action` (X) = ação secundária do item
+ * focado, entregue como o evento `reemu-action` (ver `REEMU_ACTION`) que
+ * sobe a partir do foco. No `/play/:id` só age com o jogo pausado.
  */
+/** Evento da ação secundária (X do controle), disparado no elemento focado
+ *  e borbulhando — quem tem uma ação secundária escuta no próprio elemento. */
+export const REEMU_ACTION = 'reemu-action'
+
 export function useMenuNav() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -33,6 +39,9 @@ export function useMenuNav() {
     const openSearch = () => {
       navigate('/library')
       setSearchOpen(true)
+    }
+    const secondaryAction = () => {
+      document.activeElement?.dispatchEvent(new CustomEvent(REEMU_ACTION, { bubbles: true }))
     }
     const contextMenu = () => {
       const el = document.activeElement as HTMLElement | null
@@ -93,6 +102,9 @@ export function useMenuNav() {
           break
         case 'context':
           contextMenu()
+          break
+        case 'action':
+          secondaryAction()
           break
         default:
           moveFocus(nav as NavDir)
