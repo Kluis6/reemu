@@ -46,7 +46,8 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalL,
-    maxWidth: "1120px",
+    // Sem teto de largura: a grade de temas ocupa a largura útil do card
+    // das Configurações (o card do papel de parede tem o próprio limite).
   },
   // Tema e papel de parede, cada um na sua aba.
   // 24 até o conteúdo, como na biblioteca (16 do `gap` do root + 8).
@@ -63,9 +64,13 @@ const useStyles = makeStyles({
   },
   grid: {
     display: "grid",
-    // quatro colunas (pedido do usuário; uma só em janela bem estreita)
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    "@media (max-width: 640px)": { gridTemplateColumns: "minmax(0, 1fr)" },
+    // Até 4 colunas que esticam pra encher a largura do card (pedido do
+    // usuário). O mínimo de cada coluna é o maior entre 200 px e 1/4 da
+    // linha: com espaço, sempre 4; quando 1/4 ficaria menor que 200 (tela
+    // estreita / interface Maior), o `auto-fill` cai pra 3, 2 ou 1 — sem
+    // card espremido. 12 px = `spacingHorizontalM`, o `gap` abaixo.
+    gridTemplateColumns:
+      "repeat(auto-fill, minmax(max(200px, calc((100% - 3 * 12px) / 4)), 1fr))",
     gap: tokens.spacingHorizontalM,
   },
   // Cor de fundo/borda/texto vêm inline do PRÓPRIO tema sendo mostrado (`t`),
