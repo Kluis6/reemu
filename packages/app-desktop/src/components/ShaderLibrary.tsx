@@ -35,8 +35,6 @@ const useStyles = makeStyles({
   // `fill`: ocupa a altura que o pai der, e a lista rola dentro dela
   rootFill: { flexGrow: 1, minHeight: 0 },
   listFill: { flexGrow: 1, minHeight: 0, maxHeight: 'none' },
-  // crédito do pacote baixado (slang-shaders e Mega Bezel), em texto secundário
-  credits: { color: tokens.colorNeutralForeground3 },
   bar: { display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center' },
   path: {
     flexGrow: 1,
@@ -209,7 +207,6 @@ export function ShaderLibrary({
             {t('shaders.chooseFolder')}
           </Button>
         </div>
-        <Caption1 className={s.credits}>{t('shaders.credits')}</Caption1>
       </div>
     )
   }
@@ -267,7 +264,6 @@ export function ShaderLibrary({
           </div>
         </>
       )}
-      <Caption1 className={s.credits}>{t('shaders.credits')}</Caption1>
     </div>
   )
 }

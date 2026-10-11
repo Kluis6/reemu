@@ -457,6 +457,45 @@ const en: Messages = {
       unknown: 'Not identified',
     },
   },
+  about: {
+    tab: 'About & licenses',
+    reemu: {
+      version: 'Version {{version}}',
+      license: 'Open source under the MIT license. © 2026 ReEmu contributors.',
+      source: 'Source code: github.com/Kluis6/reemu',
+      showText: 'Show the license text',
+    },
+    cores: {
+      title: 'Cores (emulators)',
+      body: 'Not included with ReEmu: each core is downloaded on demand from the official libretro buildbot and follows its own license (GPL, LGPL, MIT, MPL or non-commercial), shown in Settings › Cores.',
+      nonCommercial: 'Non-commercial cores may not be sold or used in a commercial product or activity without the authors\' approval.',
+    },
+    shaders: {
+      title: 'Shaders',
+      builtin: 'None, CRT and Handheld LCD are ReEmu\'s own (MIT).',
+      pack: 'The shader pack comes from the slang-shaders project (libretro and contributors), and each shader follows the license in its own file.',
+      megaBezel: 'Mega Bezel: HyperspaceMadness, GPLv3.',
+    },
+    bezels: {
+      title: 'Bezels',
+      body: 'Downloaded from The Bezel Project. The images belong to their respective authors.',
+    },
+    data: {
+      title: 'Covers and metadata',
+      body: 'Covers from libretro-thumbnails; game data from ScreenScraper and TheGamesDB. Images and texts belong to these services and their contributors.',
+    },
+    libs: {
+      title: 'Libraries',
+      main: 'ReEmu is built with open source libraries. The main ones:',
+      total: 'In total, the installed app ships {{rust}} Rust and {{js}} JavaScript libraries. By license:',
+      others: 'Others',
+      publicDomain: 'Public domain',
+    },
+    trademarks: {
+      title: 'Trademarks',
+      body: 'Console, game and company names are trademarks of their owners. ReEmu is not affiliated with any manufacturer or with libretro, and does not provide games or BIOS files.',
+    },
+  },
   video: {
     preview: {
       title: 'Preview',
@@ -632,7 +671,7 @@ const en: Messages = {
     present: 'present',
     importing: 'Importing…',
     import: 'Import…',
-    ppssppNote: 'Not a BIOS: fonts and files of the PPSSPP emulator itself (GPL, downloaded from libretro\'s buildbot). Without them, some games show broken text in system dialogs.',
+    ppssppNote: 'Not a BIOS: fonts and files of the PPSSPP emulator itself. Without them, some games show broken text in system dialogs.',
     installed: 'installed',
     downloading: 'Downloading…',
     update: 'Update',
@@ -692,8 +731,6 @@ const en: Messages = {
     nothing: 'Nothing found.',
     params: 'Shader parameters',
     resetParams: 'Restore defaults',
-    credits:
-      'Shaders from the slang-shaders project (libretro and contributors), each under the license included in its own file. Mega Bezel: HyperspaceMadness, GPLv3.',
   },
   bezels: {
     downloadingMb: 'Downloading {{label}} bezels {{received}}{{total}} MB…',
@@ -707,7 +744,6 @@ const en: Messages = {
     reinstall: 'Reinstall',
     download: 'Download',
     footer: 'Packs from The Bezel Project — 100–600 MB per system.',
-    credits: 'Bezels from The Bezel Project. The images belong to their respective authors.',
   },
   profileForm: {
     pickAvatar: 'Choose an avatar image',

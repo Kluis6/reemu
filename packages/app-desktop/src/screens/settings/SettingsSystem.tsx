@@ -16,6 +16,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { AboutLicenses } from "../../components/AboutLicenses";
 import { LoadingState } from "../../components/EmptyState";
 import {
   getLanguagePreference,
@@ -97,13 +98,15 @@ function Heading({
 }
 
 /** Configurações › Sistema: idioma, tamanho da interface, inicialização
- *  (iniciar com o sistema, tela cheia, bandeja — `src-tauri/src/system.rs`)
- *  e o hardware em que o app roda (`commands/hardware.rs`). */
+ *  (iniciar com o sistema, tela cheia, bandeja — `src-tauri/src/system.rs`),
+ *  o hardware em que o app roda (`commands/hardware.rs`) e as informações e
+ *  licenças (`AboutLicenses` — o único lugar do app com créditos e
+ *  licenças de terceiros). */
 export function SettingsSystem() {
   const { t, i18n } = useTranslation();
   const s = useStyles();
   const tb = useTabStyles();
-  const [tab, setTab] = useState<"options" | "hardware">("options");
+  const [tab, setTab] = useState<"options" | "hardware" | "about">("options");
   const qc = useQueryClient();
   const push = useToastStore((st) => st.push);
   const [langPref, setLangPref] = useState<LanguagePreference>(
@@ -190,10 +193,11 @@ export function SettingsSystem() {
       <TabList
         className={mergeClasses(tb.tabs, s.tabs)}
         selectedValue={tab}
-        onTabSelect={(_, d) => setTab(d.value as "options" | "hardware")}
+        onTabSelect={(_, d) => setTab(d.value as "options" | "hardware" | "about")}
       >
         <Tab value="options">{t("system.options")}</Tab>
         <Tab value="hardware">{t("system.hardware.title")}</Tab>
+        <Tab value="about">{t("about.tab")}</Tab>
       </TabList>
 
       {tab === "options" && (
@@ -312,6 +316,8 @@ export function SettingsSystem() {
           )}
         </section>
       )}
+
+      {tab === "about" && <AboutLicenses />}
     </div>
   );
 }

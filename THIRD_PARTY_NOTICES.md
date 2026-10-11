@@ -4,6 +4,12 @@ O ReEmu é distribuído sob a licença MIT (ver `LICENSE`). Ele inclui
 declarações derivadas dos arquivos abaixo, cujos avisos de copyright e
 permissão são reproduzidos aqui, como as licenças deles pedem.
 
+No app, o resumo destas licenças e das bibliotecas usadas fica em
+Configurações › Sistema › Informações e licenças. A contagem de bibliotecas
+por licença vem de `node scripts/licenses-summary.mjs`
+(`packages/app-desktop/src/data/licenses.json`); rode de novo ao mudar
+dependências.
+
 ## libretro API (`libretro.h`)
 
 Origem: <https://github.com/libretro/libretro-common/blob/master/include/libretro.h>.

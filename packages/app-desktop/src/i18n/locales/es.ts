@@ -457,6 +457,45 @@ const es: Messages = {
       unknown: 'No identificado',
     },
   },
+  about: {
+    tab: 'Información y licencias',
+    reemu: {
+      version: 'Versión {{version}}',
+      license: 'Código abierto bajo la licencia MIT. © 2026 colaboradores de ReEmu.',
+      source: 'Código fuente: github.com/Kluis6/reemu',
+      showText: 'Ver el texto de la licencia',
+    },
+    cores: {
+      title: 'Cores (emuladores)',
+      body: 'No vienen con ReEmu: cada core se descarga bajo demanda del buildbot oficial de libretro y sigue su propia licencia (GPL, LGPL, MIT, MPL o no comercial), mostrada en Configuración › Cores.',
+      nonCommercial: 'Los cores con licencia no comercial no pueden venderse ni usarse en un producto o actividad comercial sin autorización de sus autores.',
+    },
+    shaders: {
+      title: 'Shaders',
+      builtin: 'Ninguno, CRT y LCD portátil son del propio ReEmu (MIT).',
+      pack: 'El paquete de shaders viene del proyecto slang-shaders (libretro y colaboradores), y cada shader sigue la licencia de su propio archivo.',
+      megaBezel: 'Mega Bezel: HyperspaceMadness, GPLv3.',
+    },
+    bezels: {
+      title: 'Marcos',
+      body: 'Descargados de The Bezel Project. Las imágenes pertenecen a sus respectivos autores.',
+    },
+    data: {
+      title: 'Portadas y metadatos',
+      body: 'Portadas de libretro-thumbnails; datos de los juegos de ScreenScraper y TheGamesDB. Las imágenes y los textos pertenecen a esos servicios y a sus colaboradores.',
+    },
+    libs: {
+      title: 'Bibliotecas',
+      main: 'ReEmu está hecho con bibliotecas de código abierto. Las principales:',
+      total: 'En total, la app instalada incluye {{rust}} bibliotecas Rust y {{js}} JavaScript. Por licencia:',
+      others: 'Otras',
+      publicDomain: 'Dominio público',
+    },
+    trademarks: {
+      title: 'Marcas',
+      body: 'Los nombres de consolas, juegos y empresas son marcas de sus dueños. ReEmu no está afiliado a ningún fabricante ni a libretro, y no proporciona juegos ni BIOS.',
+    },
+  },
   video: {
     preview: {
       title: 'Vista previa',
@@ -632,7 +671,7 @@ const es: Messages = {
     present: 'presente',
     importing: 'Importando…',
     import: 'Importar…',
-    ppssppNote: 'No es BIOS: fuentes y archivos del propio emulador PPSSPP (GPL, descargados del buildbot de libretro). Sin ellos, algunos juegos muestran texto roto en los diálogos del sistema.',
+    ppssppNote: 'No es BIOS: fuentes y archivos del propio emulador PPSSPP. Sin ellos, algunos juegos muestran texto roto en los diálogos del sistema.',
     installed: 'instalado',
     downloading: 'Descargando…',
     update: 'Actualizar',
@@ -692,8 +731,6 @@ const es: Messages = {
     nothing: 'No se encontró nada.',
     params: 'Parámetros del shader',
     resetParams: 'Restaurar valores',
-    credits:
-      'Shaders del proyecto slang-shaders (libretro y colaboradores), cada uno con la licencia incluida en su propio archivo. Mega Bezel: HyperspaceMadness, GPLv3.',
   },
   bezels: {
     downloadingMb: 'Descargando bezels {{label}} {{received}}{{total}} MB…',
@@ -707,7 +744,6 @@ const es: Messages = {
     reinstall: 'Reinstalar',
     download: 'Descargar',
     footer: 'Packs de The Bezel Project — 100–600 MB por sistema.',
-    credits: 'Marcos de The Bezel Project. Las imágenes pertenecen a sus respectivos autores.',
   },
   profileForm: {
     pickAvatar: 'Elige una imagen de avatar',
