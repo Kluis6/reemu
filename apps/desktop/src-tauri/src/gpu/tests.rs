@@ -2334,3 +2334,144 @@ fn win32_interop_real_gl_core() {
         assert!(readback > 0);
     }
 }
+
+/// Índices livres de TLS (`TlsAlloc`) e de FLS (`FlsAlloc`) neste processo:
+/// aloca até a API devolver `TLS_OUT_OF_INDEXES`/`FLS_OUT_OF_INDEXES`
+/// (learn.microsoft.com, `TlsAlloc`/`FlsAlloc`) e devolve tudo. A página do
+/// `TlsAlloc` não dá o limite por processo — por isso medir. Por um instante
+/// não sobra índice: só com o processo quieto (entre um jogo e outro).
+#[cfg(windows)]
+fn free_tls_fls_indexes() -> (usize, usize) {
+    use windows_sys::Win32::System::Threading::{
+        FlsAlloc, FlsFree, TlsAlloc, TlsFree, FLS_OUT_OF_INDEXES, TLS_OUT_OF_INDEXES,
+    };
+    // SAFETY: só índices alocados aqui, devolvidos logo em seguida.
+    unsafe {
+        let mut tls = Vec::new();
+        loop {
+            let i = TlsAlloc();
+            if i == TLS_OUT_OF_INDEXES {
+                break;
+            }
+            tls.push(i);
+        }
+        let mut fls = Vec::new();
+        loop {
+            let i = FlsAlloc(None);
+            if i == FLS_OUT_OF_INDEXES {
+                break;
+            }
+            fls.push(i);
+        }
+        for i in &tls {
+            TlsFree(*i);
+        }
+        for i in &fls {
+            FlsFree(*i);
+        }
+        (tls.len(), fls.len())
+    }
+}
+
+/// Vazamento de índices de TLS/FLS da rota Vulkan in-process (Windows): o
+/// core é carregado e descarregado `REEMU_TEST_CYCLES` vezes (padrão 8) no
+/// processo do app, como ao trocar de jogo, e os índices livres são medidos
+/// a cada volta. `REEMU_TEST_VK_CORE`, `REEMU_TEST_ROM` e `REEMU_TEST_OPTS`
+/// como no `vk_core_real_rom`. Só mede e imprime — o C3 tira o core do
+/// processo do app.
+#[cfg(windows)]
+#[test]
+#[ignore = "precisa de GPU Vulkan, de um core Vulkan e de uma ROM"]
+fn vk_core_tls_leak() {
+    use emu_session::{EmuSession, SessionConfig};
+    use std::collections::HashMap;
+    use std::time::{Duration, Instant};
+    let (Ok(core), Ok(rom)) = (
+        std::env::var("REEMU_TEST_VK_CORE"),
+        std::env::var("REEMU_TEST_ROM"),
+    ) else {
+        eprintln!("defina REEMU_TEST_VK_CORE e REEMU_TEST_ROM");
+        return;
+    };
+    let cycles: u32 = std::env::var("REEMU_TEST_CYCLES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8);
+    let data =
+        std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("com.reemu.desktop");
+    let fp = FrameProcessor::new().expect("adapter wgpu");
+    let shared = fp.vulkan_shared_device().expect("backend Vulkan");
+    std::env::set_var("REEMU_HW", "vulkan");
+    let tmp = std::env::temp_dir().join(format!("reemu-tls-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let session = EmuSession::spawn(SessionConfig::new(
+        data.join("cores"),
+        data.join("system"),
+        tmp.clone(),
+    ));
+    session.attach_vulkan_device(shared);
+    session.attach_vulkan_negotiator(std::sync::Arc::new(|neg| {
+        let (_fp, shared) = unsafe { FrameProcessor::from_core_negotiation(neg) }?;
+        Ok(shared)
+    }));
+    let opts: HashMap<String, String> = std::env::var("REEMU_TEST_OPTS")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|kv| kv.split_once('='))
+        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+        .collect();
+    let _ = session.step_vk_local();
+    // Chamada bloqueante da sessão enquanto esta thread dirige o core.
+    fn driving<R: Send>(session: &EmuSession, call: impl FnOnce() -> R + Send) -> R {
+        std::thread::scope(|sc| {
+            let h = sc.spawn(call);
+            while !h.is_finished() {
+                let gate = session.lock_vk_queue();
+                let _ = session.step_vk_local();
+                drop(gate);
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            h.join().unwrap()
+        })
+    }
+
+    let (tls0, fls0) = free_tls_fls_indexes();
+    eprintln!("antes: {tls0} índices TLS livres, {fls0} FLS");
+    let mut last = (tls0, fls0);
+    for n in 1..=cycles {
+        driving(&session, || session.load(&core, &rom, opts.clone())).expect("carregar");
+        assert!(
+            session.debug_child_pid().is_none(),
+            "core foi pro processo filho"
+        );
+        let start = Instant::now();
+        let mut frames = 0u32;
+        while start.elapsed() < Duration::from_secs(2) {
+            let gate = session.lock_vk_queue();
+            if session.step_vk_local().is_some() {
+                frames += 1;
+            }
+            drop(gate);
+            std::thread::sleep(Duration::from_millis(16));
+        }
+        driving(&session, || session.unload()).ok();
+        let now = free_tls_fls_indexes();
+        eprintln!(
+            "volta {n}: {frames} quadros | TLS livres {} ({:+}) | FLS livres {} ({:+})",
+            now.0,
+            now.0 as i64 - last.0 as i64,
+            now.1,
+            now.1 as i64 - last.1 as i64
+        );
+        last = now;
+    }
+    std::env::remove_var("REEMU_HW");
+    let _ = std::fs::remove_dir_all(&tmp);
+    eprintln!(
+        "total em {cycles} voltas: TLS {:+}, FLS {:+} (por jogo: TLS {:.1}, FLS {:.1})",
+        last.0 as i64 - tls0 as i64,
+        last.1 as i64 - fls0 as i64,
+        (tls0 as f64 - last.0 as f64) / f64::from(cycles),
+        (fls0 as f64 - last.1 as f64) / f64::from(cycles)
+    );
+}

@@ -363,10 +363,13 @@ conferir".
       Linux. Validado com `vk_core_real_rom` sem `REEMU_HW`, e o mupen sem
       `parallel` segue no processo filho. Falta só conferir no app, sem a
       variável.
-- [ ] `todo` — Medir o vazamento de índices de TLS da rota Vulkan
-      in-process: cada jogo carrega e descarrega a DLL do core no processo
-      do app (ver "out of TLS indexes" em `docs/historico.md`). Trocar de
-      jogo várias vezes e contar com `TlsAlloc` num teste; o C3 elimina.
+- [x] `done` — Medir o vazamento de índices de TLS da rota Vulkan
+      in-process (2026-10-11, teste `vk_core_tls_leak`, 8 trocas de jogo
+      por core): flycast e mupen64plus_next (ParaLLEl) perdem **1 índice de
+      TLS por jogo**; Beetle PSX HW, nenhum; FLS, nenhum nos três. Partindo
+      de ~1005 livres, o app abortaria ("out of TLS indexes") depois de
+      ~1000 trocas numa sessão com esses dois cores. Risco distante, mas
+      real — mais um motivo pro C3.
 - [ ] `todo` — C3. (Desbloqueado: a fase B terminou em 2026-10-11 e o anel
       Win32 dela é a base) Core Vulkan no processo filho: o core-host
       cria o próprio device, renderiza em imagens exportadas pelo app

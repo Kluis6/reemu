@@ -1946,3 +1946,16 @@ Infra:
   - Em 1920×1440, o `glReadPixels` sozinho custava 2,17 ms e o envio de 10,5 MB pelo pipe, 1,37 ms (525 MB/s a 50 fps).
   - O tempo do app inclui a leitura de saída do próprio teste, igual nos dois casos; a diferença é a subida da imagem pra GPU, que deixou de existir.
   - Além do custo, o anel tira 1 quadro de latência: o readback por PBO (fase A) entregava o quadro anterior.
+
+## 2026-10-11 — Vazamento de TLS da rota Vulkan in-process, medido
+
+- **Como:** teste `vk_core_tls_leak` (Windows, `--ignored`). Ele carrega e descarrega o core Vulkan no processo do app `REEMU_TEST_CYCLES` vezes, como ao trocar de jogo, rodando ~2 s por volta, e mede os índices livres depois de cada volta. A medição aloca com `TlsAlloc`/`FlsAlloc` até `TLS_OUT_OF_INDEXES`/`FLS_OUT_OF_INDEXES` e devolve tudo, porque a página oficial do `TlsAlloc` (learn.microsoft.com) não informa o limite por processo.
+- **Resultado** (RTX 3060, 8 voltas por core, ~1005 índices de TLS e 4060 de FLS livres no início):
+
+  | Core | TLS por jogo | FLS |
+  |---|---|---|
+  | flycast (Soulcalibur) | −1 | 0 |
+  | mupen64plus_next com ParaLLEl-RDP (Mario Kart 64) | −1 | 0 |
+  | Beetle PSX HW (40 Winks) | 0 (só −1 no 1º load) | 0 |
+
+- **Leitura:** o Beetle passa pela mesma rota do ReEmu e não vaza, então o índice perdido deve ser reservado pela própria DLL do flycast e do mupen e não devolvido ao descarregar. **Não verificado:** a causa exata dentro dessas DLLs. Com essa taxa, o abort "out of TLS indexes" exigiria ~1000 trocas de jogo numa sessão. O C3 (core Vulkan no processo filho) elimina o problema: cada jogo ganha um processo novo.
