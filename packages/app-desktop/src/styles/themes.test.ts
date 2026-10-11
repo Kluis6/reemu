@@ -107,9 +107,13 @@ describe('temas de fundo simples', () => {
     // Configurações sobem um degrau cada.
     const page = t.colorNeutralBackground1
     expect(contrast(t.colorNeutralBackground2, page)).toBeGreaterThanOrEqual(1.18)
-    expect(contrast(t.reemuSurface1, page)).toBeGreaterThanOrEqual(1.08)
+    expect(contrast(t.reemuSurface1, page)).toBeGreaterThanOrEqual(1.18)
     expect(contrast(t.reemuSurface2, t.reemuSurface1)).toBeGreaterThanOrEqual(1.15)
-    expect(contrast(t.reemuSurface3, t.reemuSurface2)).toBeGreaterThanOrEqual(1.12)
+    expect(contrast(t.reemuSurface3, t.reemuSurface2)).toBeGreaterThanOrEqual(1.15)
+    // texto secundário legível (AA) em todas as camadas
+    for (const back of [t.reemuSurface1, t.reemuSurface2, t.reemuSurface3]) {
+      expect(contrast(t.colorNeutralForeground3, back)).toBeGreaterThanOrEqual(4.5)
+    }
   })
 
   it('Simple Vibes é só claro e Serene só escuro', () => {

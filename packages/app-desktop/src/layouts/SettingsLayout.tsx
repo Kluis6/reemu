@@ -65,9 +65,12 @@ const useStyles = makeStyles({
     display: "flex",
     // `Background1`, um pouco mais fechado nos temas claros (`liftTokens`)
     backgroundColor: "var(--reemuSurface1)",
-    // Sem borda; a separação do fundo é a sombra baixa (Fluent 2 ›
-    // Elevation: "low-elevation shadows" pra cards).
+    // Sombra baixa (Fluent 2 › Elevation: `shadow4` em cards) e traço de
+    // 1 px: no escuro a sombra quase some sobre fundo escuro, e "Windows
+    // uses strokes instead of key shadows to outline an object" (mesma
+    // página) — o card das Configurações do Windows 11 também tem traço.
     borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
     boxShadow: tokens.shadow4,
     overflow: "hidden",
     // Camadas de dentro (cards, linhas, campos): os tokens do Fluent viram

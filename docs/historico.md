@@ -2107,3 +2107,8 @@ Infra:
   - Fontes da Fluent 2: › Color, "Use lighter neutrals on surfaces to highlight areas of primary focus"; › Elevation, "Windows uses strokes instead of key shadows". As bordas dos controles subiram de 12% para 20% de branco, perto da borda dos filtros do Xbox.
   - O card das Configurações, que tinha a cor da página e só se separava pela sombra, sobe um degrau (#212429). Linhas e campos sobem mais um cada (nova opção `lift` em `make()`).
 - **Testes:** `themes.test.ts` confere o destaque branco, o contraste do texto sobre o botão pressionado e a diferença mínima entre página, card, linha e campo.
+- **Ajuste no mesmo dia (print do Perfil no Serene):**
+  - O card das Configurações ainda ficava perto da página (#212429 sobre #1A1C20, 1,08:1). Agora usa a cor das superfícies (#262A2F, 1,18:1, a distância página → superfície do Xbox), e linhas e campos sobem mais um degrau de 1,18:1 cada.
+  - O texto secundário foi para #A9B0B9, que passa AA também sobre os campos.
+  - O card das Configurações ganhou um traço de 1 px (`colorNeutralStroke2`) em todos os temas. No escuro, o `shadow4` quase some sobre fundo escuro, e "Windows uses strokes instead of key shadows" (Fluent 2 › Elevation).
+  - Obs.: os prints anteriores do usuário ainda mostravam o Serene antigo (#15191E, botão azul): a janela do `tauri dev` precisa ser recarregada (Ctrl+R) para ler o `themes.ts` novo.

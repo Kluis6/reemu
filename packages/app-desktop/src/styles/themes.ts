@@ -390,7 +390,8 @@ const sereneDark = {
   colorNeutralBackground4: "#3B4047",
   colorNeutralForeground1: "#F2F3F5",
   colorNeutralForeground2: "#C8CDD3",
-  colorNeutralForeground3: "#A0A7B0",
+  // AA também sobre os campos (#3B4148), não só sobre a página
+  colorNeutralForeground3: "#A9B0B9",
   // borda dos controles: a dos filtros do Xbox (#66707F sobre #3E434B)
   colorNeutralStroke1: "rgba(255, 255, 255, 0.20)",
   colorNeutralStroke2: "rgba(255, 255, 255, 0.10)",
@@ -403,18 +404,20 @@ const sereneDark = {
 
 /** Camadas do card das Configurações no Serene: com o fundo liso (sem os
  *  brilhos coloridos), o card na cor da página só se separava pela sombra.
- *  O card sobe um degrau e linhas/campos mais um cada (mesma regra
- *  "superfície mais clara = mais à frente"). */
+ *  Cada camada sobe um degrau de ~1,18:1 sobre a de baixo — a mesma
+ *  distância página → superfície do modo XBOX (#1A1B1E → #25282C): card na
+ *  cor das superfícies (`Background2`), linhas e campos acima dele
+ *  (Fluent 2 › Color: "Use lighter neutrals on surfaces"). */
 const sereneLift: ReEmuLiftTokens = {
-  reemuSurface1: "#212429",
-  reemuSurface2: "#2C3036",
-  reemuSurface2Hover: "#33383E",
-  reemuSurface2Pressed: "#282C31",
-  reemuSurface2Selected: "#383D44",
-  reemuSurface3: "#363B42",
-  reemuSurface3Hover: "#3D434A",
-  reemuSurface3Pressed: "#31363C",
-  reemuSurface3Selected: "#424850",
+  reemuSurface1: "#262A2F",
+  reemuSurface2: "#31363C",
+  reemuSurface2Hover: "#383D44",
+  reemuSurface2Pressed: "#2C3036",
+  reemuSurface2Selected: "#3D434A",
+  reemuSurface3: "#3B4148",
+  reemuSurface3Hover: "#42484F",
+  reemuSurface3Pressed: "#363B42",
+  reemuSurface3Selected: "#474D55",
 };
 
 // --------------------------------------------------------------- fábrica ----
