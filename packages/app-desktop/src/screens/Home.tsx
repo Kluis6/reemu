@@ -231,17 +231,17 @@ export function Home() {
       </div>
 
       <Row
-        title={t("home.continue")}
-        subtitle={t("home.continueSub")}
-        items={recent}
+        title={t("home.recent")}
+        subtitle={t("home.recentSub")}
+        items={added}
         onMore={() => navigate("/library")}
         render={card}
         index={0}
       />
       <Row
-        title={t("home.recent")}
-        subtitle={t("home.recentSub")}
-        items={added}
+        title={t("home.continue")}
+        subtitle={t("home.continueSub")}
+        items={recent}
         onMore={() => navigate("/library")}
         render={card}
         index={1}
