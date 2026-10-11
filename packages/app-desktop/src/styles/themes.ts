@@ -304,6 +304,83 @@ const psBlue: BrandVariants = {
   160: "#F3F4F5",
 };
 
+/** Simple Vibes — só brancos e cinzas: a "marca" é um cinza neutro (matiz
+ *  220, 4% de saturação, na mesma curva de luminosidade do Personalizado),
+ *  então botões e seleção ficam em grafite, sem cor. */
+const simpleGray: BrandVariants = {
+  10: "#0A0A0A",
+  20: "#141415",
+  30: "#202123",
+  40: "#2C2D30",
+  50: "#3B3D40",
+  60: "#494B50",
+  70: "#5B5D62",
+  80: "#6B6E74",
+  90: "#808389",
+  100: "#8F9298",
+  110: "#A0A2A7",
+  120: "#B2B4B8",
+  130: "#C5C6C9",
+  140: "#D7D8DA",
+  150: "#E7E8E9",
+  160: "#F5F5F5",
+};
+
+/** Casca cinza bem clara e superfícies brancas (como as Configurações do
+ *  Windows no claro). Fundo de uma cor só: o próprio `Background1`. */
+const simpleLight = {
+  colorNeutralBackground1: "#F0F0F1",
+  colorNeutralBackground1Hover: "#E5E5E7",
+  colorNeutralBackground1Pressed: "#DCDCDF",
+  colorNeutralBackground1Selected: "#DCDCDF",
+  colorNeutralBackground2: "#FFFFFF",
+  colorNeutralBackground3: "#F7F7F8",
+  colorNeutralBackground4: "#E4E4E6",
+  colorNeutralForeground1: "#1B1B1D",
+  colorNeutralForeground2: "#3E3E43",
+  colorNeutralForeground3: "#626268",
+  colorNeutralStroke1: "rgba(0, 0, 0, 0.12)",
+  colorNeutralStroke2: "rgba(0, 0, 0, 0.06)",
+} satisfies Partial<Theme>;
+
+/** Serene — azul-ardósia apagado (matiz 212, ~38% de saturação), calmo
+ *  sobre o escuro. */
+const sereneSlate: BrandVariants = {
+  10: "#070A0D",
+  20: "#0E141B",
+  30: "#16212D",
+  40: "#1D2D3E",
+  50: "#263C55",
+  60: "#2F4B6A",
+  70: "#3B5C83",
+  80: "#456D9A",
+  90: "#5681B3",
+  100: "#6A91BC",
+  110: "#81A1C6",
+  120: "#99B3D1",
+  130: "#B3C6DB",
+  140: "#CBD8E6",
+  150: "#E1E8EF",
+  160: "#F2F5F8",
+};
+
+/** Cinzas escuros levemente azulados, no mesmo matiz da rampa. Fundo de uma
+ *  cor só: o próprio `Background1`. */
+const sereneDark = {
+  colorNeutralBackground1: "#15191E",
+  colorNeutralBackground1Hover: "#1C2128",
+  colorNeutralBackground1Pressed: "#111418",
+  colorNeutralBackground1Selected: "#242A32",
+  colorNeutralBackground2: "#1A1F25",
+  colorNeutralBackground3: "#20262D",
+  colorNeutralBackground4: "#283039",
+  colorNeutralForeground1: "#E6EAEF",
+  colorNeutralForeground2: "#BCC4CE",
+  colorNeutralForeground3: "#8E98A5",
+  colorNeutralStroke1: "rgba(255, 255, 255, 0.10)",
+  colorNeutralStroke2: "rgba(255, 255, 255, 0.06)",
+} satisfies Partial<Theme>;
+
 // --------------------------------------------------------------- fábrica ----
 
 /** Neutros do "console look" — casam com o antigo `brand` (bg/bgElev/bgElev2)
@@ -460,6 +537,11 @@ interface ThemeOverrides {
   appBg?: string;
   /** Pílula do item ativo no rail (`reemuActiveBg`). */
   activeBg?: string;
+  /** Fundo de uma cor só: sem os brilhos coloridos nos cantos (os 4 viram
+   *  esta cor, como no alto contraste) e casca lisa. */
+  solidBg?: string;
+  /** Texto de marca (`reemuBrandText`) quando o tom padrão não passa AA. */
+  brandText?: string;
 }
 
 /** Tipografia do app Xbox do Windows: corpo de 14 epx (o `Base300` padrão
@@ -533,6 +615,14 @@ function make(
   };
   if (o.appBg) t.reemuAppBg = o.appBg;
   if (o.activeBg) t.reemuActiveBg = o.activeBg;
+  if (o.brandText) t.reemuBrandText = o.brandText;
+  if (o.solidBg) {
+    const c = o.solidBg;
+    t.reemuBg1 = t.reemuBg2 = t.reemuBg3 = t.reemuBg4 = c;
+    t.reemuGlowVeil = c;
+    // `backgroundImage` na casca (xbox.ts): gradiente de uma cor só
+    t.reemuAppBg = `linear-gradient(${c}, ${c})`;
+  }
   return t;
 }
 
@@ -581,6 +671,8 @@ export type ThemeId =
   | "alva-claro"
   | "snes"
   | "snes-claro"
+  | "simple-vibes"
+  | "serene"
   | "alto-contraste";
 
 // "Roxo"/"Âmbar" (e seus pares "-claro") foram removidos: eram só uma rampa
@@ -648,6 +740,26 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
       activeBg: snesPurple[80],
     }),
   },
+  // Fundo simples, de uma cor só. Simple Vibes só existe no claro e Serene
+  // só no escuro (cada um é um tema de um modo, sem o Switch Claro).
+  "simple-vibes": {
+    label: "Simple Vibes",
+    theme: make(simpleGray, "light", { bg1: "", bg2: "", bg3: "", bg4: "" }, {
+      neutrals: simpleLight,
+      activeBg: simpleGray[70],
+      solidBg: simpleLight.colorNeutralBackground1,
+    }),
+  },
+  serene: {
+    label: "Serene",
+    theme: make(sereneSlate, "dark", { bg1: "", bg2: "", bg3: "", bg4: "" }, {
+      neutrals: sereneDark,
+      activeBg: "#2A323C",
+      solidBg: sereneDark.colorNeutralBackground1,
+      // o tom 90 (padrão) dá 4,1:1 nas superfícies; o 100 passa AA
+      brandText: sereneSlate[100],
+    }),
+  },
   "alto-contraste": { label: "Alto contraste", theme: makeHighContrast() },
 };
 
@@ -666,9 +778,14 @@ export interface ThemeFamily {
     | "psClassic"
     | "alva"
     | "snes"
+    | "simpleVibes"
+    | "serene"
     | "highContrast";
+  /** O tema da família (escuro, ou o único quando `lightOnly`). */
   dark: ThemeId;
   light?: ThemeId;
+  /** Tema só claro, sem versão escura (o `dark` acima é ele). */
+  lightOnly?: true;
 }
 
 export const THEME_FAMILIES: ThemeFamily[] = [
@@ -679,13 +796,15 @@ export const THEME_FAMILIES: ThemeFamily[] = [
   { nameKey: "psClassic", dark: "ps1", light: "ps1-claro" },
   { nameKey: "alva", dark: "alva", light: "alva-claro" },
   { nameKey: "snes", dark: "snes", light: "snes-claro" },
+  { nameKey: "simpleVibes", dark: "simple-vibes", lightOnly: true },
+  { nameKey: "serene", dark: "serene" },
   { nameKey: "highContrast", dark: "alto-contraste" },
 ];
 
 /** Família e modo de um tema salvo. */
 export function familyOf(id: ThemeId): { family: ThemeFamily; mode: ThemeMode } {
   for (const family of THEME_FAMILIES) {
-    if (family.dark === id) return { family, mode: "dark" };
+    if (family.dark === id) return { family, mode: family.lightOnly ? "light" : "dark" };
     if (family.light === id) return { family, mode: "light" };
   }
   throw new Error(`tema sem família: ${id}`);

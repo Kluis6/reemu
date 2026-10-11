@@ -98,6 +98,8 @@ const es: Messages = {
         psClassic: 'Crimson Retro',
         alva: 'Alva',
         snes: 'Purple Mistique',
+        simpleVibes: 'Simple Vibes',
+        serene: 'Serene',
         highContrast: 'Alto contraste',
         custom: 'Personalizado',
       },

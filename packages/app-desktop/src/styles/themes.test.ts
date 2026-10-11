@@ -6,7 +6,7 @@ describe('THEME_FAMILIES', () => {
     const ids = THEME_FAMILIES.flatMap((f) => [f.dark, ...(f.light ? [f.light] : [])])
     expect([...ids].sort()).toEqual(Object.keys(THEMES).sort())
     for (const f of THEME_FAMILIES) {
-      expect(familyOf(f.dark)).toEqual({ family: f, mode: 'dark' })
+      expect(familyOf(f.dark)).toEqual({ family: f, mode: f.lightOnly ? 'light' : 'dark' })
       if (f.light) expect(familyOf(f.light as ThemeId)).toEqual({ family: f, mode: 'light' })
     }
   })
@@ -75,5 +75,33 @@ describe('tema Alva', () => {
     // preenchimento sólido de marca = tom 80 da rampa = #0094D3 do site
     expect(THEMES.alva.theme.reemuBrandSolid.toLowerCase()).toBe('#0094d3')
     expect(THEMES['alva-claro'].theme.reemuActiveBg.toLowerCase()).toBe('#0094d3')
+  })
+})
+
+describe('temas de fundo simples', () => {
+  it.each(['simple-vibes', 'serene'] as const)('%s: fundo de uma cor só', (id) => {
+    const t = THEMES[id].theme
+    const bg = t.colorNeutralBackground1
+    expect([t.reemuBg1, t.reemuBg2, t.reemuBg3, t.reemuBg4, t.reemuGlowVeil]).toEqual([bg, bg, bg, bg, bg])
+  })
+
+  it.each(['simple-vibes', 'serene'] as const)('%s: texto legível (AA)', (id) => {
+    const t = THEMES[id].theme
+    for (const back of [t.colorNeutralBackground1, t.colorNeutralBackground2]) {
+      expect(contrast(t.colorNeutralForeground1, back)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(t.colorNeutralForeground2, back)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(t.colorNeutralForeground3, back)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(t.reemuBrandText, back)).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(contrast(t.reemuOnBrand, t.reemuBrandSolid)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(t.reemuActiveFg, t.reemuActiveBg)).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(t.colorNeutralForegroundOnBrand, t.colorBrandBackground)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('Simple Vibes é só claro e Serene só escuro', () => {
+    expect(familyOf('simple-vibes').mode).toBe('light')
+    expect(familyOf('simple-vibes').family.light).toBeUndefined()
+    expect(familyOf('serene').mode).toBe('dark')
+    expect(familyOf('serene').family.light).toBeUndefined()
   })
 })

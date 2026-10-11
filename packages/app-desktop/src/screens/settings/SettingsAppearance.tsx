@@ -178,7 +178,7 @@ function ThemeCard({
   selected: boolean;
   onSelect: () => void;
   mode: ThemeMode;
-  /** Ausente = tema só escuro: sem Switch (o rodapé mantém a altura). */
+  /** Ausente = tema de um modo só: sem Switch (o rodapé mantém a altura). */
   onModeChange?: (m: ThemeMode) => void;
 }) {
   const { t: tr } = useTranslation();
@@ -346,7 +346,9 @@ export function SettingsAppearance() {
                 ? active.mode
                 : f.light
                   ? previewMode(f.dark, "dark")
-                  : "dark";
+                  : f.lightOnly
+                    ? "light"
+                    : "dark";
               const id = mode === "light" && f.light ? f.light : f.dark;
               const light = f.light;
               const changeMode = (m: ThemeMode) => {

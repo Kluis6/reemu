@@ -212,7 +212,7 @@ export function Home() {
       <div className={s.toolbar} style={{ marginTop: 12 }}>
         <Button
           shape="circular"
-          appearance="subtle"
+          appearance="outline"
           icon={<GridRegular />}
           onClick={() => navigate("/library")}
         >
@@ -220,7 +220,7 @@ export function Home() {
         </Button>
         <Button
           shape="circular"
-          appearance="subtle"
+          appearance="outline"
           icon={<AddRegular />}
           onClick={() => setAddOpen(true)}
         >

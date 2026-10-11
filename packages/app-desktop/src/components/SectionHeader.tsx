@@ -49,18 +49,8 @@ const useStyles = makeStyles({
     width: `${TARGET_MIN}px`,
     height: `${TARGET_MIN}px`,
     padding: '0 !important',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: `${tokens.colorNeutralBackground3} !important`,
-    border: `1px solid ${tokens.colorNeutralBackground3} !important`,
-    color: tokens.colorNeutralForeground2,
-    ':hover': {
-      backgroundColor: `${tokens.colorNeutralBackground3Hover} !important`,
-      border: `1px solid ${tokens.colorNeutralBackground3Hover} !important`,
-      color: tokens.colorNeutralForeground1,
-    },
-    ':active': {
-      backgroundColor: `${tokens.colorNeutralBackground3Pressed} !important`,
-    },
+    // `appearance="subtle"`: sem fundo em repouso (como no print do app
+    // Xbox), o fundo e a cor do hover/pressionado são os do Fluent.
     // O slot de ícone do <Button> é fixo em 20 no tamanho medium; garante.
     '& .fui-Button__icon': { fontSize: `${ICON}px`, width: `${ICON}px`, height: `${ICON}px` },
   },
@@ -106,7 +96,7 @@ export function SectionHeader({
         {onSeeAll && (
           <Tooltip content={t('shell2.showAll')} relationship="description">
             <Button
-              appearance="secondary"
+              appearance="subtle"
               className={s.seeAll}
               onClick={onSeeAll}
               aria-label={seeAllLabel ?? t('shell2.seeAll', { title })}

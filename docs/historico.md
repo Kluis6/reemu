@@ -2062,3 +2062,14 @@ Infra:
   - Faltavam guardas de `prefers-reduced-motion` em dois lugares, que agora têm: o zoom das setas do destaque e o deslocamento da página de jogo carregando.
   - A entrada do onboarding (fundo de 1,1 s, palavras de 700 ms) ficou como está, porque é o momento de abertura.
 - **Elevação** (<https://fluent2.microsoft.design/elevation>): os cards já seguiam a escala (`shadow4` em cards, `shadow16` na capa sem borda, diálogos e popovers com as sombras padrão do Fluent). Os cards do hub de Configurações já subiam para `shadow8` no hover; agora também descem para `shadow2` quando pressionados. Os cards de jogo continuam sem sombra: no Windows, a orientação é usar borda em vez de sombra principal.
+
+## 2026-10-11 — Temas Simple Vibes e Serene; botões da Início
+
+- **Simple Vibes:** tema só claro, sem a opção de escuro. É todo em brancos e cinzas: casca `#F0F0F1`, superfícies brancas, e a "marca" é uma rampa cinza (matiz 220, 4% de saturação), então botões e seleção ficam em grafite.
+- **Serene:** tema só escuro. Cinzas escuros levemente azulados com acento azul-ardósia apagado (matiz 212). O texto de marca usa o tom 100: o 90 dava 4,1:1 nas superfícies, abaixo do AA.
+- **Fundo de uma cor só nos dois:** nova opção `solidBg` em `make()`. Os 4 brilhos dos cantos e o véu viram a cor do `Background1`, como no alto contraste, e a casca fica lisa. O papel de parede, se a pessoa escolher um, continua aparecendo na Início.
+- **Família de tema só claro:** `ThemeFamily.lightOnly`, e `familyOf` devolve `light` para ela.
+- **Testes** (`themes.test.ts`): fundo de uma cor só, contraste AA (texto, marca, item ativo, botão primário) e modo único de cada um.
+- **Início:**
+  - "Mostrar tudo" das prateleiras passou a `appearance="subtle"`, sem fundo em repouso, como no app Xbox.
+  - "Todos os jogos" e "Adicionar ROMs" passaram a `outline`.
