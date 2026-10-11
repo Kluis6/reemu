@@ -1817,6 +1817,8 @@ impl FrameProcessor {
         win_interop::allocate_ring(&self.device, &self.adapter, n, w, h)
     }
 
+    // só o Windows usa (lib.rs); no Linux o interop é por `dma_buf`
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub fn vk_interop_id(&self) -> Option<domain::gpu_interop::VkInteropId> {
         use ash::vk;
         let hal = unsafe { self.adapter.as_hal::<wgpu::hal::api::Vulkan>() }?;
