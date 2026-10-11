@@ -287,10 +287,17 @@ impl GlContext {
             let gl_caps = unsafe { wgl::interop_caps(&gl) };
             let vk = VK_INTEROP.lock().unwrap_or_else(|p| p.into_inner()).clone();
             match domain::gpu_interop::interop_compatible(&gl_caps, vk.as_ref()) {
-                Ok(()) => log::info!(
-                    "interop GL→Vulkan: possível nesta GPU (mesmo deviceUUID/driverUUID, \
-                     extensões Win32 dos dois lados) — ainda via readback (B2–B5)"
-                ),
+                Ok(()) => {
+                    log::info!(
+                        "interop GL→Vulkan: possível nesta GPU (mesmo deviceUUID/driverUUID, \
+                         extensões Win32 dos dois lados) — ainda via readback (B2–B5)"
+                    );
+                    // B2: com o interop pedido, o filho pede o anel ao pai.
+                    if std::env::var("REEMU_GL_INTEROP").is_ok_and(|v| v.trim() == "1") {
+                        *INTEROP_REQUEST.lock().unwrap_or_else(|p| p.into_inner()) =
+                            Some((max_w, max_h));
+                    }
+                }
                 Err(why) => log::info!("interop GL→Vulkan: não ({why}) — segue no readback"),
             }
         }
@@ -1506,6 +1513,11 @@ fn open_display(egl: &EglInstance) -> Result<egl::Display, String> {
 /// backtrace bate com a chamada culpada). Ligado por `REEMU_GL_DEBUG` — o
 /// diagnóstico de "tela preta" num core GL no hardware do usuário. Spec:
 /// registry.khronos.org/OpenGL, extensão `KHR_debug`.
+/// Anel de imagens a pedir ao pai (B2): `(largura, altura)` máximas do core.
+/// O core-host lê com `take_interop_request` e manda o `InteropRequest`.
+pub(crate) static INTEROP_REQUEST: std::sync::Mutex<Option<(u32, u32)>> =
+    std::sync::Mutex::new(None);
+
 /// Identidade do Vulkan do pai pro interop (B1) — ver `set_vk_interop`.
 pub(crate) static VK_INTEROP: std::sync::Mutex<Option<domain::gpu_interop::VkInteropId>> =
     std::sync::Mutex::new(None);

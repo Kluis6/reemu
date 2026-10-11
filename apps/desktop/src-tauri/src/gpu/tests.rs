@@ -1807,3 +1807,98 @@ fn vk_interop_id_reads_this_device() {
     assert_ne!(id.device_uuid, [0; 16]);
     assert_ne!(id.driver_uuid, [0; 16]);
 }
+
+/// B2 numa GPU real: com `REEMU_GL_INTEROP=1`, o device abre com as extensões
+/// Win32, o anel de imagens exportáveis é alocado, cada imagem tem um handle
+/// NT, e o handle se duplica pra um processo (aqui, o próprio).
+#[cfg(windows)]
+#[test]
+#[ignore = "precisa de GPU (Vulkan com external_memory_win32)"]
+fn win32_interop_ring_exports_handles() {
+    // SAFETY: teste de processo único pra esta variável (`--ignored`).
+    unsafe { std::env::set_var("REEMU_GL_INTEROP", "1") };
+    let Some(fp) = FrameProcessor::new() else {
+        eprintln!("sem GPU");
+        return;
+    };
+    let ring = fp.export_interop_ring(3, 640, 480).expect("alocar o anel");
+    assert_eq!(ring.len(), 3);
+    for img in &ring {
+        assert_ne!(img.handle, 0);
+        assert!(img.alloc_size >= 640 * 480 * 4);
+    }
+    let dup = win_interop::duplicate_into(std::process::id(), ring[0].handle).expect("duplicar");
+    assert_ne!(dup, 0);
+    // SAFETY: handle duplicado agora, no próprio processo.
+    unsafe { windows_sys::Win32::Foundation::CloseHandle(dup as _) };
+    eprintln!(
+        "anel: {} imagens, {} bytes cada",
+        ring.len(),
+        ring[0].alloc_size
+    );
+}
+
+/// B2 de ponta a ponta numa GPU real: o core-fake com um "jogo" `HW` pede GL
+/// 3.3 no processo filho; o filho confere o B1, pede o anel
+/// (`InteropRequest`), o app aloca 3 imagens exportáveis, duplica os handles
+/// pro filho e manda o `InteropImages`. Confere que o pedido chegou e que o
+/// anel foi alocado e duplicado (o filho registra o recebimento no log).
+#[cfg(windows)]
+#[test]
+#[ignore = "precisa de GPU (WGL + Vulkan com external_memory_win32)"]
+fn win32_interop_ring_reaches_the_core_process() {
+    use emu_session::{EmuSession, SessionConfig};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+    // SAFETY: teste de processo único pra esta variável (`--ignored`); o
+    // filho herda o ambiente e também vê o pedido.
+    unsafe { std::env::set_var("REEMU_GL_INTEROP", "1") };
+    let _ = env_logger::builder().is_test(true).try_init();
+    let Some(fp) = FrameProcessor::new() else {
+        eprintln!("sem GPU");
+        return;
+    };
+    let vk = fp.vk_interop_id();
+    let fp = Arc::new(Mutex::new(fp));
+    let tmp = std::env::temp_dir().join(format!("reemu-interop-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let rom = tmp.join("hw.bin");
+    std::fs::write(&rom, b"HW conteudo do jogo").unwrap();
+
+    let session = EmuSession::spawn(SessionConfig::new(tmp.clone(), tmp.clone(), tmp.clone()));
+    session.set_vk_interop(vk);
+    let rings = Arc::new(AtomicUsize::new(0));
+    let (fp2, rings2) = (fp.clone(), rings.clone());
+    session.set_interop_provider(Arc::new(move |w, h, pid| {
+        let reply = fp2.lock().unwrap().install_interop_ring(w, h, pid)?;
+        eprintln!(
+            "anel pedido pelo filho (pid {pid}): {} imagens {w}x{h}, handles {:?}",
+            reply.images.len(),
+            reply.images.iter().map(|i| i.handle).collect::<Vec<_>>()
+        );
+        rings2.fetch_add(1, Ordering::SeqCst);
+        Ok(reply)
+    }));
+    session
+        .load(
+            core_loader_desktop::testcore_path(),
+            rom.to_str().unwrap(),
+            Default::default(),
+        )
+        .expect("carregar o core-fake com HW render");
+    let start = Instant::now();
+    while rings.load(Ordering::SeqCst) == 0 && start.elapsed() < Duration::from_secs(10) {
+        session.wait_for_frame(Duration::from_millis(100));
+        if let Some(f) = session.take_latest_frame() {
+            session.recycle_frame(f);
+        }
+    }
+    let _ = session.unload();
+    let _ = std::fs::remove_dir_all(&tmp);
+    assert_eq!(
+        rings.load(Ordering::SeqCst),
+        1,
+        "o filho devia pedir o anel uma vez"
+    );
+}

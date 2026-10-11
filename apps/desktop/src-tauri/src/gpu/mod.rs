@@ -577,6 +577,11 @@ pub struct FrameProcessor {
     /// Interop zero-cópia: `dma_buf` do core (GL) importado como textura wgpu,
     /// um por slot do ring. `interop_ok` = o device tem a feature.
     interop_ok: bool,
+    /// Anel do interop GL → Vulkan (B2, Windows): as imagens exportadas pro
+    /// processo do core. Vivem aqui (a textura é dona da memória) até um
+    /// anel novo substituir.
+    #[cfg(windows)]
+    interop_ring: Vec<win_interop::ExportedImage>,
     imported: Vec<Option<(wgpu::Texture, wgpu::TextureView)>>,
     /// Espera na GPU pela fence de fim de render do core GL (no lugar do
     /// `glFinish` dele) — `None` = device sem `VK_KHR_external_semaphore_fd`
@@ -694,7 +699,12 @@ impl FrameProcessor {
         // do core GL como semáforo); senão, o device de sempre.
         #[cfg(target_os = "linux")]
         let with_sync = sync_fd::create_device(&instance, wanted);
-        #[cfg(not(target_os = "linux"))]
+        // Windows: com `REEMU_GL_INTEROP=1`, o device já abre com as
+        // extensões Win32 do interop GL → Vulkan (B2, `win_interop`).
+        #[cfg(windows)]
+        let with_sync =
+            win_interop::create_device(&instance, wanted).map(|(a, d, q, f)| (a, d, q, f, false));
+        #[cfg(not(any(target_os = "linux", windows)))]
         let with_sync: Option<(
             wgpu::Adapter,
             wgpu::Device,
@@ -804,6 +814,8 @@ impl FrameProcessor {
             history_depth: r.history_depth,
             viewport: (0, 0),
             interop_ok,
+            #[cfg(windows)]
+            interop_ring: Vec::new(),
             #[cfg(target_os = "linux")]
             sync_fd: None,
             imported: Vec::new(),
@@ -1761,6 +1773,50 @@ impl FrameProcessor {
     /// be used to determine whether a particular external object can be
     /// shared", spec Vulkan) e se as extensões `VK_KHR_external_memory_win32`
     /// e `VK_KHR_external_semaphore_win32` existem. `None` fora do Vulkan.
+    /// Anel de `n` imagens `w`×`h` exportáveis pro interop GL → Vulkan no
+    /// Windows (B2): cada uma com o handle NT pra duplicar pro processo do
+    /// core. Precisa do device aberto com as extensões (`REEMU_GL_INTEROP=1`).
+    /// B2: aloca o anel pra um pedido do filho, duplica os handles pro
+    /// processo `pid` e guarda as imagens. Devolve o que vai na mensagem.
+    #[cfg(windows)]
+    pub fn install_interop_ring(
+        &mut self,
+        w: u32,
+        h: u32,
+        pid: u32,
+    ) -> Result<emu_session::InteropReply, String> {
+        /// 3 imagens: o core desenha numa enquanto o app mostra outra.
+        const RING: usize = 3;
+        let ring = self.export_interop_ring(RING, w, h)?;
+        let images = ring
+            .iter()
+            .map(|img| {
+                Ok(emu_session::InteropImage {
+                    handle: win_interop::duplicate_into(pid, img.handle)?,
+                    alloc_size: img.alloc_size,
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        self.interop_ring = ring;
+        Ok(emu_session::InteropReply {
+            width: w,
+            height: h,
+            // `allocate_ring` sempre usa `VkMemoryDedicatedAllocateInfo`
+            dedicated: true,
+            images,
+        })
+    }
+
+    #[cfg(windows)]
+    pub fn export_interop_ring(
+        &self,
+        n: usize,
+        w: u32,
+        h: u32,
+    ) -> Result<Vec<win_interop::ExportedImage>, String> {
+        win_interop::allocate_ring(&self.device, &self.adapter, n, w, h)
+    }
+
     pub fn vk_interop_id(&self) -> Option<domain::gpu_interop::VkInteropId> {
         use ash::vk;
         let hal = unsafe { self.adapter.as_hal::<wgpu::hal::api::Vulkan>() }?;
@@ -2267,6 +2323,8 @@ mod sync_fd;
 mod tests;
 mod textures;
 mod vk_blit;
+#[cfg(windows)]
+pub(crate) mod win_interop;
 
 use pipelines::*;
 use specs::*;

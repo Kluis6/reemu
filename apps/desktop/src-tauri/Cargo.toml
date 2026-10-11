@@ -84,11 +84,15 @@ pollster = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
+# `block_on` da abertura do device com as extensões do interop (gpu/win_interop.rs)
+pollster = "0.4"
 # janela filha da surface nativa de vídeo (`video.rs`, módulo `win`)
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_System_LibraryLoader",
+    # OpenProcess/DuplicateHandle: handles do interop GL → Vulkan (gpu/win_interop.rs)
+    "Win32_System_Threading",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

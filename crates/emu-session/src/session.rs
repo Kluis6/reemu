@@ -150,6 +150,9 @@ struct Shared {
     /// Identidade/extensões do Vulkan do app pro interop GL → Vulkan no
     /// Windows (B1) — vai no `Load` (ver `set_vk_interop`).
     vk_interop: Mutex<Option<domain::gpu_interop::VkInteropId>>,
+    /// Quem aloca o anel do interop GL → Vulkan no Windows (B2) quando o
+    /// filho pede — o app (`set_interop_provider`).
+    interop_provider: Mutex<Option<InteropProvider>>,
     /// Fábrica pra cores Vulkan "donos do device" (Beetle PSX HW) — publicada
     /// pelo shell junto do `vulkan_shared_device`. Ver `docs/ai-context/12`
     /// §Beetle (D2/D3).
@@ -326,6 +329,7 @@ impl EmuSession {
             vulkan_shared_device: Mutex::new(None),
             dmabuf_modifiers: Mutex::new(Vec::new()),
             vk_interop: Mutex::new(None),
+            interop_provider: Mutex::new(None),
             vulkan_negotiator: Mutex::new(None),
             vk_local: Mutex::new(None),
             vk_local_active: AtomicBool::new(false),
@@ -409,6 +413,18 @@ impl EmuSession {
             .vk_interop
             .lock()
             .unwrap_or_else(|p| p.into_inner()) = id;
+    }
+
+    /// Registra quem aloca o anel do interop GL → Vulkan (B2, Windows): a
+    /// função recebe `(largura, altura, pid do filho)` e devolve as imagens
+    /// com os handles já duplicados pro filho. Chamada fora das travas da
+    /// sessão, na thread que lê os eventos do filho.
+    pub fn set_interop_provider(&self, provider: InteropProvider) {
+        *self
+            .shared
+            .interop_provider
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(provider);
     }
 
     pub fn attach_vulkan_negotiator(
@@ -1267,6 +1283,7 @@ fn handle_event(
         }
         ToParent::SaveRamRestored(None) => {}
         ToParent::Warn(msg) => log::warn!("core-host: {msg}"),
+        ToParent::InteropRequest { max_w, max_h } => answer_interop_request(shared, max_w, max_h),
         ToParent::AnalogUsed => PARENT_ANALOG.mark_used(),
         ToParent::CoreOptionSet { key, value } => {
             log::info!("core trocou a opção '{key}' para '{value}'");
@@ -1275,6 +1292,65 @@ fn handle_event(
         other => log::debug!("evento do core-host fora de um round-trip: {other:?}"),
     }
 }
+
+/// B2: o filho pediu o anel do interop GL → Vulkan. O provedor do app aloca e
+/// duplica os handles; a resposta vai pelo canal do filho. Sem provedor ou
+/// com erro, nada é mandado e o filho segue no readback.
+fn answer_interop_request(shared: &Shared, max_w: u32, max_h: u32) {
+    let provider = shared
+        .interop_provider
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone();
+    let pid = *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner());
+    let (Some(provider), Some(pid)) = (provider, pid) else {
+        log::info!("interop GL→Vulkan: pedido do filho sem provedor no app — segue no readback");
+        return;
+    };
+    match provider(max_w, max_h, pid) {
+        Ok(reply) => {
+            let n = reply.images.len();
+            let sent = shared
+                .child_channel
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .as_ref()
+                .map(|ch| {
+                    ch.send(
+                        &ToChild::InteropImages {
+                            width: reply.width,
+                            height: reply.height,
+                            dedicated: reply.dedicated,
+                            images: reply.images,
+                        },
+                        &[],
+                    )
+                });
+            match sent {
+                Some(Ok(())) => log::info!(
+                    "interop GL→Vulkan: anel de {n} imagem(ns) {}x{} mandado ao filho",
+                    reply.width,
+                    reply.height
+                ),
+                Some(Err(e)) => log::warn!("interop GL→Vulkan: mandar o anel: {e}"),
+                None => log::warn!("interop GL→Vulkan: sem canal com o filho"),
+            }
+        }
+        Err(e) => log::warn!("interop GL→Vulkan: alocar o anel: {e} — segue no readback"),
+    }
+}
+
+/// Anel do interop GL → Vulkan pronto pra mandar ao filho (B2).
+pub struct InteropReply {
+    pub width: u32,
+    pub height: u32,
+    pub dedicated: bool,
+    pub images: Vec<core_ipc::InteropImage>,
+}
+
+/// Aloca o anel do interop pra `(largura, altura, pid do filho)` — ver
+/// `EmuSession::set_interop_provider`.
+pub type InteropProvider = Arc<dyn Fn(u32, u32, u32) -> Result<InteropReply, String> + Send + Sync>;
 
 /// Reconstrói o `Frame` de domínio a partir de um `FrameReady`: caminho
 /// software lê do anel de shared memory, caminho HW/interop empacota o fd

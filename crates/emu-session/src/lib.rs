@@ -13,8 +13,12 @@ mod focus;
 mod local_core;
 mod session;
 
+/// Imagem do anel do interop GL → Vulkan (B2) — o app monta o `InteropReply`.
+pub use core_ipc::InteropImage;
 pub use focus::FocusController;
-pub use session::{EmuSession, SessionConfig, SessionError, SessionState};
+pub use session::{
+    EmuSession, InteropProvider, InteropReply, SessionConfig, SessionError, SessionState,
+};
 
 pub use core_loader_desktop::{AnalogState, RetroPadState};
 /// Estado do RetroPad/analógico **deste processo** (o pai) — a thread de

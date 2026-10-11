@@ -64,6 +64,18 @@ pub enum ToChild {
     DisplayPeriod {
         period_ns: u64,
     },
+    /// Resposta ao `ToParent::InteropRequest` (B2, Windows): o anel de
+    /// imagens Vulkan exportáveis, com os handles NT JÁ duplicados pro
+    /// processo do filho (o número vale lá). O filho importa no GL (B3) e
+    /// fecha os handles.
+    InteropImages {
+        width: u32,
+        height: u32,
+        /// Alocação dedicada (`VkMemoryDedicatedAllocateInfo`): o GL pede
+        /// `DEDICATED_MEMORY_OBJECT_EXT` no import.
+        dedicated: bool,
+        images: Vec<InteropImage>,
+    },
     Shutdown,
 }
 
@@ -114,6 +126,13 @@ pub enum ToParent {
     PausedAck,
     /// Erro fatal que não impede o processo de seguir vivo (loga no pai).
     Warn(String),
+    /// O contexto GL do filho é compatível com o Vulkan do pai e o interop
+    /// foi pedido (`REEMU_GL_INTEROP=1`): o filho quer o anel de imagens
+    /// (B2, Windows) do tamanho máximo do core.
+    InteropRequest {
+        max_w: u32,
+        max_h: u32,
+    },
     /// O core leu o analógico pela 1ª vez (`RETRO_DEVICE_ANALOG`). Mandado
     /// uma vez: a partir daí o pai para de dobrar o stick esquerdo como
     /// d-pad (senão mexer o stick aperta/solta as setas junto).
@@ -156,4 +175,13 @@ pub struct HwPlaneMeta {
     pub offset: u32,
     pub modifier: u64,
     pub fourcc: u32,
+}
+
+/// Uma imagem do anel do interop GL → Vulkan (ver `ToChild::InteropImages`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InteropImage {
+    /// Handle NT da memória, já válido no processo do filho.
+    pub handle: u64,
+    /// Tamanho da alocação (o `size` do `glImportMemoryWin32HandleEXT`).
+    pub alloc_size: u64,
 }

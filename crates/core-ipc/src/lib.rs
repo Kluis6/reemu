@@ -20,7 +20,7 @@ mod shm_ring_win;
 #[cfg(windows)]
 mod transport_win;
 
-pub use message::{FrameKind, HwPlaneMeta, PortInput, ToChild, ToParent};
+pub use message::{FrameKind, HwPlaneMeta, InteropImage, PortInput, ToChild, ToParent};
 
 #[cfg(unix)]
 pub use shm_ring::{FrameRing, SLOTS};

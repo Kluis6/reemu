@@ -542,9 +542,24 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                     }
                 }
             }
+            ToChild::InteropImages {
+                width,
+                height,
+                dedicated,
+                images,
+            } => {
+                // B2: guarda os handles (o B3 importa no GL). Um anel novo
+                // substitui o anterior, cujos handles fecham aqui.
+                log::info!(
+                    "interop GL→Vulkan: anel recebido — {} imagem(ns) {width}x{height}, dedicada={dedicated}",
+                    images.len()
+                );
+                interop_handles::replace(images.iter().map(|i| i.handle).collect());
+            }
             ToChild::Shutdown => break,
         }
     }
+    interop_handles::replace(Vec::new());
     // `core` dropa aqui (se ainda `Some`) → `DesktopCore::Drop` faz o
     // teardown libretro/GL. O processo sai logo em seguida de qualquer jeito
     // — não importa mais se esse teardown deixa estado global sujo.
@@ -635,6 +650,11 @@ fn run_one_frame(
         let _ = channel.send(&ToParent::AnalogUsed, &[]);
     }
     forward_core_set_options(channel);
+    // B2: contexto GL compatível + interop pedido → pede o anel ao pai.
+    if let Some((max_w, max_h)) = core_loader_desktop::take_interop_request() {
+        log::info!("interop GL→Vulkan: pedindo o anel de imagens ({max_w}x{max_h})");
+        let _ = channel.send(&ToParent::InteropRequest { max_w, max_h }, &[]);
+    }
     if let (Some(frame), Some(ring)) = (produced, ring.as_ref()) {
         let ts = diag.as_ref().map(|_| Instant::now());
         if let Some(buf) = send_frame(channel, ring, frame_slot, frame) {
@@ -760,5 +780,26 @@ fn send_frame(
 fn forward_core_set_options(channel: &core_ipc::Channel) {
     for (key, value) in core_loader_desktop::take_core_set_options() {
         let _ = channel.send(&ToParent::CoreOptionSet { key, value }, &[]);
+    }
+}
+
+/// Handles NT do anel do interop GL → Vulkan (B2), já válidos neste
+/// processo. Ficam abertos até o B3 importar no GL; um anel novo ou o fim do
+/// processo fecha os antigos — o handle NT é de quem o recebeu ("must release
+/// ownership of them using the CloseHandle system call", spec Vulkan).
+mod interop_handles {
+    use std::sync::Mutex;
+
+    static HANDLES: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+
+    pub fn replace(new: Vec<u64>) {
+        let old = std::mem::replace(&mut *HANDLES.lock().unwrap_or_else(|p| p.into_inner()), new);
+        #[cfg(windows)]
+        for h in old {
+            // SAFETY: handle duplicado pelo pai pra este processo, ainda aberto.
+            unsafe { windows_sys::Win32::Foundation::CloseHandle(h as _) };
+        }
+        #[cfg(not(windows))]
+        let _ = old;
     }
 }

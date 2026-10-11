@@ -149,6 +149,19 @@ pub fn run() {
                             }
                         );
                         state.session.set_vk_interop(id);
+                        // B2: com o interop pedido, o app aloca o anel quando
+                        // o filho pedir.
+                        if gpu::win_interop::requested() {
+                            let handle = app.handle().clone();
+                            state.session.set_interop_provider(std::sync::Arc::new(
+                                move |w, h, pid| {
+                                    let st = handle.state::<AppState>();
+                                    let mut gpu = st.gpu.lock().unwrap_or_else(|p| p.into_inner());
+                                    let fp = gpu.as_mut().ok_or("sem GPU")?;
+                                    fp.install_interop_ring(w, h, pid)
+                                },
+                            ));
+                        }
                     }
                     state.gpu.lock().unwrap().replace(fp);
                 }

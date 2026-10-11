@@ -281,7 +281,14 @@ conferir".
       device do wgpu. Conferir se é a mesma GPU (UUID do device no GL e
       `VkPhysicalDeviceIDProperties` no Vulkan; a conferir na
       `EXT_external_objects.txt`). Sem suporte, segue no readback.
-- [ ] `todo` — B2. App (Vulkan) aloca um anel de 2–3 imagens exportáveis
+- [x] `done` — B2 (2026-10-11, atrás de `REEMU_GL_INTEROP=1` até o B5):
+      `gpu/win_interop.rs` abre o device com as extensões Win32, aloca 3
+      imagens exportáveis (memória dedicada, handle NT opaco), embrulha no
+      wgpu e duplica os handles pro filho; `ToParent::InteropRequest` →
+      provedor do app (`EmuSession::set_interop_provider`) →
+      `ToChild::InteropImages`. Testado na RTX 3060 de ponta a ponta
+      (`win32_interop_ring_reaches_the_core_process`) e com as camadas de
+      validação, sem nenhum VUID. Texto original: App (Vulkan) aloca um anel de 2–3 imagens exportáveis
       (`VkExportMemoryAllocateInfo`, tipo opaco Win32), pega o handle NT de
       cada uma, duplica pro processo do core-host (`DuplicateHandle`) e
       manda o valor pelo pipe. Hoje o pipe não passa handle inline

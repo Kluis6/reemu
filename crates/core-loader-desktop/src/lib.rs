@@ -58,6 +58,14 @@ pub fn set_vk_interop(id: Option<domain::gpu_interop::VkInteropId>) {
         .lock()
         .unwrap_or_else(|p| p.into_inner()) = id;
 }
+/// Pedido de anel do interop GL → Vulkan (B2), uma vez por contexto GL:
+/// `(largura, altura)` máximas. O core-host manda `ToParent::InteropRequest`.
+pub fn take_interop_request() -> Option<(u32, u32)> {
+    crate::gl_context::INTEROP_REQUEST
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take()
+}
 pub use crate::gl_context::readback_stats;
 #[cfg(all(unix, feature = "test-fixtures"))]
 pub use crate::gl_context::{render_rect_rgba_to_dmabuf, render_solid_rgba_to_dmabuf};
