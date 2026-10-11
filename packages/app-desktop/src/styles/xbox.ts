@@ -295,7 +295,7 @@ export const useShellStyles = makeStyles({
     paddingTop: `${M.TOPBAR_TOP}px`,
     paddingBottom: "16px",
     paddingLeft: TOPBAR_PAD_L,
-    // Relógio perto da borda, como no modo XBOX do app (ver `metrics.ts`).
+    // Mesmas margens do conteúdo (ver `metrics.ts`).
     paddingRight: TOPBAR_PAD_R,
     boxSizing: "border-box",
     flexShrink: 0,

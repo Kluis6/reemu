@@ -2080,3 +2080,8 @@ Infra:
 - A folga lateral da prateleira (`SHELF_PAD`) era 8, e o `overflow-x: clip` cortava 1 px do traço à esquerda do 1º card. O mesmo valia para a direita do último.
 - Medido numa captura com o card focado: 2 px à esquerda contra 3 nos outros lados.
 - Com `SHELF_PAD` = 12 o traço fica inteiro. A posição dos cards não muda, porque a margem negativa do `.wrap` acompanha a constante.
+
+## 2026-10-11 — Topbar alinhada ao conteúdo
+
+- O botão de voltar e o relógio agora seguem as margens do conteúdo (`SAFE_X`, 47 epx dos dois lados). Antes a topbar era mais larga, como no app Xbox: 17 à esquerda e 13 à direita.
+- Medido com os dados de teste: o voltar começa em x = 115, a borda esquerda do destaque e dos cards. O texto do relógio termina em x = 1319 a 1366 px de largura e em 1873 a 1920 px, a borda direita do destaque. A busca continua centralizada.
