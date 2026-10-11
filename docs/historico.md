@@ -2096,3 +2096,14 @@ Infra:
 - "Todos os jogos" e "Adicionar ROMs" viraram pílulas como os filtros da biblioteca do app Xbox (`useBrowseStyles.pillBtn`). Medido num print a 3840×2160: 32 epx de altura, texto regular, preenchimento #3E434B sobre a página #1A1B1E e borda de 1 epx #6B7584.
 - As cores saem do tema ativo, misturando o fundo da página (`colorNeutralBackground1`) com a cor do texto: 14% no preenchimento e 32% na borda, mais forte no hover e mais fraco ao pressionar. No escuro a pílula fica um cinza mais claro que o fundo; no claro (Simple Vibes), um cinza mais escuro.
 - Ajuste no mesmo dia, a pedido do usuário: o preenchimento das pílulas passou a ser o dos outros botões do tema (`colorNeutralBackground2`, como o voltar, a tela cheia e os filtros da biblioteca). A borda continua derivada do tema.
+
+## 2026-10-11 — Serene: branco como destaque e superfícies mais separadas
+
+- **Destaque branco:** como no modo XBOX do app Xbox (print do usuário, 3840×2160), ficam brancos a aba selecionada, o anel de foco, o switch e o rádio marcados e o botão primário. Os tons 70–160 da rampa são brancos ou quase, e os 10–50 cinzas escuros. É o mapeamento do `createDarkTheme`: `colorBrandBackground` = 70, foreground e traço de marca = 100.
+  - Ajustes à mão: o texto sobre o branco é escuro (`colorNeutralForegroundOnBrand` #111316, como o chip "Instalado" do Xbox, preto sobre #E9E9E9). O pressionado do botão primário, que seria o tom 40, escuro, vira cinza claro.
+  - O item ativo do rail é cinza claro (#62666C) com ícone branco, como no Xbox (#67696C).
+- **Superfícies:**
+  - Cards, rail e botões estavam quase da cor da página: #1A1F25 sobre #15191E, cerca de 1,06:1. Agora seguem as proporções medidas no Xbox (página #1A1B1E, superfícies #25282C): página #1A1C20 e superfícies #262A2F, cerca de 1,2:1.
+  - Fontes da Fluent 2: › Color, "Use lighter neutrals on surfaces to highlight areas of primary focus"; › Elevation, "Windows uses strokes instead of key shadows". As bordas dos controles subiram de 12% para 20% de branco, perto da borda dos filtros do Xbox.
+  - O card das Configurações, que tinha a cor da página e só se separava pela sombra, sobe um degrau (#212429). Linhas e campos sobem mais um cada (nova opção `lift` em `make()`).
+- **Testes:** `themes.test.ts` confere o destaque branco, o contraste do texto sobre o botão pressionado e a diferença mínima entre página, card, linha e campo.

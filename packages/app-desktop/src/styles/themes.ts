@@ -343,43 +343,79 @@ const simpleLight = {
   colorNeutralStroke2: "rgba(0, 0, 0, 0.06)",
 } satisfies Partial<Theme>;
 
-/** Serene — azul-ardósia apagado (matiz 212, ~38% de saturação), calmo
- *  sobre o escuro. */
-const sereneSlate: BrandVariants = {
-  10: "#070A0D",
-  20: "#0E141B",
-  30: "#16212D",
-  40: "#1D2D3E",
-  50: "#263C55",
-  60: "#2F4B6A",
-  70: "#3B5C83",
-  80: "#456D9A",
-  90: "#5681B3",
-  100: "#6A91BC",
-  110: "#81A1C6",
-  120: "#99B3D1",
-  130: "#B3C6DB",
-  140: "#CBD8E6",
-  150: "#E1E8EF",
-  160: "#F2F5F8",
+/** Serene — branco como cor de destaque, como o modo XBOX do app Xbox
+ *  (aba selecionada, chip ativo e anel de foco brancos; print de
+ *  2026-10-11). Tons 10–50 são cinzas escuros (fundos "de marca" sutis,
+ *  `colorBrandBackground2`, `colorBrandStroke2`) e do 60 pra cima vai pro
+ *  branco: `colorBrandBackground` (70), o texto/ícone de marca (100) e o
+ *  traço de foco/seleção (100) ficam brancos no escuro (mapeamento do
+ *  `createDarkTheme`, @fluentui/tokens `alias/darkColor`). */
+const sereneWhite: BrandVariants = {
+  10: "#0B0C0E",
+  20: "#16181B",
+  30: "#202328",
+  40: "#2B2F35",
+  50: "#3A3F46",
+  60: "#C9CCD1",
+  70: "#E9E9E9",
+  80: "#F2F2F3",
+  90: "#D7DADE",
+  100: "#FFFFFF",
+  110: "#FFFFFF",
+  120: "#FFFFFF",
+  130: "#FFFFFF",
+  140: "#FFFFFF",
+  150: "#FFFFFF",
+  160: "#FFFFFF",
 };
 
-/** Cinzas escuros levemente azulados, no mesmo matiz da rampa. Fundo de uma
- *  cor só: o próprio `Background1`. */
+/** Neutros do Serene nas proporções do modo XBOX (print a 3840×2160):
+ *  página #1A1B1E e superfícies (cards, rail, botões) #25282C, um degrau
+ *  mais claro — Fluent 2 › Color: "Use lighter neutrals on surfaces to
+ *  highlight areas of primary focus". Levemente azulados. Fundo de uma cor
+ *  só: o próprio `Background1`. */
 const sereneDark = {
-  colorNeutralBackground1: "#15191E",
-  colorNeutralBackground1Hover: "#1C2128",
-  colorNeutralBackground1Pressed: "#111418",
-  colorNeutralBackground1Selected: "#242A32",
-  colorNeutralBackground2: "#1A1F25",
-  colorNeutralBackground3: "#20262D",
-  colorNeutralBackground4: "#283039",
-  colorNeutralForeground1: "#E6EAEF",
-  colorNeutralForeground2: "#BCC4CE",
-  colorNeutralForeground3: "#8E98A5",
-  colorNeutralStroke1: "rgba(255, 255, 255, 0.10)",
-  colorNeutralStroke2: "rgba(255, 255, 255, 0.06)",
+  colorNeutralBackground1: "#1A1C20",
+  colorNeutralBackground1Hover: "#22252A",
+  colorNeutralBackground1Pressed: "#16181B",
+  colorNeutralBackground1Selected: "#2A2E33",
+  colorNeutralBackground2: "#262A2F",
+  colorNeutralBackground2Hover: "#2F3339",
+  colorNeutralBackground2Pressed: "#212428",
+  colorNeutralBackground2Selected: "#353A40",
+  colorNeutralBackground3: "#30353B",
+  colorNeutralBackground3Hover: "#393E45",
+  colorNeutralBackground3Pressed: "#2B2F35",
+  colorNeutralBackground3Selected: "#3F444C",
+  colorNeutralBackground4: "#3B4047",
+  colorNeutralForeground1: "#F2F3F5",
+  colorNeutralForeground2: "#C8CDD3",
+  colorNeutralForeground3: "#A0A7B0",
+  // borda dos controles: a dos filtros do Xbox (#66707F sobre #3E434B)
+  colorNeutralStroke1: "rgba(255, 255, 255, 0.20)",
+  colorNeutralStroke2: "rgba(255, 255, 255, 0.10)",
+  // Branco como destaque: o pressionado do botão primário seria o tom 40
+  // (escuro) — fica um cinza claro; e o texto sobre o branco é escuro
+  // (chip "Instalado" do Xbox: preto sobre #E9E9E9).
+  colorBrandBackgroundPressed: "#C9CCD1",
+  colorNeutralForegroundOnBrand: "#111316",
 } satisfies Partial<Theme>;
+
+/** Camadas do card das Configurações no Serene: com o fundo liso (sem os
+ *  brilhos coloridos), o card na cor da página só se separava pela sombra.
+ *  O card sobe um degrau e linhas/campos mais um cada (mesma regra
+ *  "superfície mais clara = mais à frente"). */
+const sereneLift: ReEmuLiftTokens = {
+  reemuSurface1: "#212429",
+  reemuSurface2: "#2C3036",
+  reemuSurface2Hover: "#33383E",
+  reemuSurface2Pressed: "#282C31",
+  reemuSurface2Selected: "#383D44",
+  reemuSurface3: "#363B42",
+  reemuSurface3Hover: "#3D434A",
+  reemuSurface3Pressed: "#31363C",
+  reemuSurface3Selected: "#424850",
+};
 
 // --------------------------------------------------------------- fábrica ----
 
@@ -542,6 +578,9 @@ interface ThemeOverrides {
   solidBg?: string;
   /** Texto de marca (`reemuBrandText`) quando o tom padrão não passa AA. */
   brandText?: string;
+  /** Camadas do card das Configurações no lugar das derivadas
+   *  (`liftTokens`). */
+  lift?: ReEmuLiftTokens;
 }
 
 /** Tipografia do app Xbox do Windows: corpo de 14 epx (o `Base300` padrão
@@ -616,6 +655,7 @@ function make(
   if (o.appBg) t.reemuAppBg = o.appBg;
   if (o.activeBg) t.reemuActiveBg = o.activeBg;
   if (o.brandText) t.reemuBrandText = o.brandText;
+  if (o.lift) Object.assign(t, o.lift);
   if (o.solidBg) {
     const c = o.solidBg;
     t.reemuBg1 = t.reemuBg2 = t.reemuBg3 = t.reemuBg4 = c;
@@ -752,12 +792,14 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   },
   serene: {
     label: "Serene",
-    theme: make(sereneSlate, "dark", { bg1: "", bg2: "", bg3: "", bg4: "" }, {
+    theme: make(sereneWhite, "dark", { bg1: "", bg2: "", bg3: "", bg4: "" }, {
       neutrals: sereneDark,
-      activeBg: "#2A323C",
+      // item ativo do rail: o cinza claro do modo XBOX (#67696C), ícone
+      // branco
+      activeBg: "#62666C",
       solidBg: sereneDark.colorNeutralBackground1,
-      // o tom 90 (padrão) dá 4,1:1 nas superfícies; o 100 passa AA
-      brandText: sereneSlate[100],
+      brandText: sereneWhite[100],
+      lift: sereneLift,
     }),
   },
   "alto-contraste": { label: "Alto contraste", theme: makeHighContrast() },

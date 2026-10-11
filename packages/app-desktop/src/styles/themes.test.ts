@@ -98,6 +98,20 @@ describe('temas de fundo simples', () => {
     expect(contrast(t.colorNeutralForegroundOnBrand, t.colorBrandBackground)).toBeGreaterThanOrEqual(4.5)
   })
 
+  it('Serene: branco como destaque e superfícies um degrau acima da página', () => {
+    const t = THEMES.serene.theme
+    expect(t.colorBrandBackground.toLowerCase()).toBe('#e9e9e9')
+    expect(t.colorBrandStroke1.toLowerCase()).toBe('#ffffff')
+    expect(contrast(t.colorNeutralForegroundOnBrand, t.colorBrandBackgroundPressed)).toBeGreaterThanOrEqual(4.5)
+    // Xbox: página #1A1B1E, superfície #25282C (~1,2:1). Card e linhas das
+    // Configurações sobem um degrau cada.
+    const page = t.colorNeutralBackground1
+    expect(contrast(t.colorNeutralBackground2, page)).toBeGreaterThanOrEqual(1.18)
+    expect(contrast(t.reemuSurface1, page)).toBeGreaterThanOrEqual(1.08)
+    expect(contrast(t.reemuSurface2, t.reemuSurface1)).toBeGreaterThanOrEqual(1.15)
+    expect(contrast(t.reemuSurface3, t.reemuSurface2)).toBeGreaterThanOrEqual(1.12)
+  })
+
   it('Simple Vibes é só claro e Serene só escuro', () => {
     expect(familyOf('simple-vibes').mode).toBe('light')
     expect(familyOf('simple-vibes').family.light).toBeUndefined()
