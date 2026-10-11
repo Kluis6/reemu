@@ -25,7 +25,7 @@ continue da próxima tarefa em aberto").
 | 09 | Scraping de Metadata (ScreenScraper) | `done` (MVP) |
 | 10 | Catálogo e Download de Cores | `done` |
 | 11 | Port Android | `todo`: adiado pelo usuário (2026-08-30) |
-| 12 | Vulkan HW Render Fase 2 | `in-progress`: Beetle PSX HW ok; faltam 2º/3º core e Fase C |
+| 12 | Vulkan HW Render Fase 2 | `done`: Beetle PSX HW, flycast e mupen64plus_next (Linux 2026-09-25, Windows 2026-10-02) e a fase C; resta o C3 (Vulkan no processo filho, Windows) |
 
 Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 "Etapas de implementação" e o "Estado atual" de cada doc em
