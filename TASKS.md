@@ -328,8 +328,18 @@ conferir".
       3060: mupen64plus_next (GoldenEye, Mario Kart 64) ~59 fps pelo anel,
       flycast (Soulcalibur) 700 quadros sem nenhum readback; orientação e
       cores conferidas num PNG; camadas de validação sem VUID.
-- [ ] `todo` — B6. Validar com as camadas de validação do Vulkan (sync
-      incluída), na NVIDIA e, se der, numa AMD/Intel. Medir contra a fase A.
+- [x] `done` — B6 (2026-10-11, NVIDIA): camadas de validação com a de
+      sincronização (`VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`, do
+      `Config/vk_layer_settings.sh` do SDK 1.4.363) sem nenhum aviso em
+      todos os testes do interop, com mupen64plus_next e flycast; um
+      conflito plantado de propósito gerou `SYNC-HAZARD-WRITE-AFTER-WRITE`,
+      o que prova que a camada estava ativa. Medido contra o readback da fase A:
+      flycast em 1920×1440, processo do core 4,45 → 1,27 ms/quadro, app
+      5,12 → 2,14 ms/quadro, 10,5 MB/quadro a menos e 1 quadro a menos
+      de latência (o PBO entregava o quadro anterior).
+- [ ] `todo` — B6b. Repetir o B6 numa GPU AMD e numa Intel (esta máquina só
+      tem a RTX 3060): `win32_interop_*` com as camadas de validação e
+      `REEMU_TEST_GL_CORE`/`REEMU_TEST_GL_ROM`.
 
 **Fase C — cores Vulkan no Windows**
 

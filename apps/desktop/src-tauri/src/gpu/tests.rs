@@ -2178,9 +2178,8 @@ fn drive_interop_session(
     use emu_session::{EmuSession, SessionConfig};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
-    // SAFETY: testes `--ignored` de processo único pra esta variável; o
-    // filho herda o ambiente.
-    unsafe { std::env::set_var("REEMU_GL_INTEROP", "1") };
+    // Ligado por padrão; um `REEMU_GL_INTEROP=0` de fora mede o readback
+    // (B6). O filho herda o ambiente.
     let _ = env_logger::builder().is_test(true).try_init();
     let fp = FrameProcessor::new().expect("GPU");
     let vk = fp.vk_interop_id();
@@ -2193,11 +2192,21 @@ fn drive_interop_session(
     session.set_interop_provider(Arc::new(move |w, h, pid| {
         fp2.lock().unwrap().install_interop_ring(w, h, pid)
     }));
+    // `REEMU_TEST_GL_OPTS="chave=valor;..."`: opções do core (ex.: a
+    // resolução interna, pra medir o readback em 1920×1440 como na fase A).
+    let opts: std::collections::HashMap<String, String> = std::env::var("REEMU_TEST_GL_OPTS")
+        .unwrap_or_default()
+        .split(';')
+        .filter_map(|kv| kv.split_once('='))
+        .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+        .collect();
     session
-        .load(core, rom.to_str().unwrap(), Default::default())
+        .load(core, rom.to_str().unwrap(), opts)
         .expect("carregar o core");
 
     let (mut ring_frames, mut readback_frames) = (0u32, 0u32);
+    // Tempo do app por quadro: entrada da chain + passes + leitura do teste.
+    let mut app_time = Duration::ZERO;
     let start = Instant::now();
     while ring_frames < frames && start.elapsed() < timeout {
         session.wait_for_frame(Duration::from_millis(100));
@@ -2210,7 +2219,10 @@ fn drive_interop_session(
             }
             {
                 let mut g = fp.lock().unwrap();
-                check(is_ring, g.process(&frame));
+                let t = Instant::now();
+                let out = g.process(&frame);
+                app_time += t.elapsed();
+                check(is_ring, out);
             }
             session.recycle_frame(frame);
         }
@@ -2223,8 +2235,9 @@ fn drive_interop_session(
     let _ = session.unload();
     let _ = std::fs::remove_dir_all(&tmp);
     eprintln!(
-        "quadros: {ring_frames} pelo anel, {readback_frames} pelo readback em {:.1} s",
-        start.elapsed().as_secs_f32()
+        "quadros: {ring_frames} pelo anel, {readback_frames} pelo readback em {:.1} s;          app {:.3} ms/quadro",
+        start.elapsed().as_secs_f32(),
+        app_time.as_secs_f64() * 1000.0 / f64::from((ring_frames + readback_frames).max(1))
     );
     (ring_frames, readback_frames)
 }
@@ -2238,6 +2251,8 @@ fn drive_interop_session(
 #[test]
 #[ignore = "precisa de GPU (WGL + Vulkan com external_memory/semaphore_win32)"]
 fn win32_interop_frames_flow_through_the_ring() {
+    // SAFETY: teste `--ignored` de processo único pra esta variável.
+    unsafe { std::env::set_var("REEMU_GL_INTEROP", "1") };
     let tmp = std::env::temp_dir().join(format!("reemu-b5-rom-{}", std::process::id()));
     std::fs::create_dir_all(&tmp).unwrap();
     let rom = tmp.join("hwd.bin");
@@ -2308,9 +2323,14 @@ fn win32_interop_real_gl_core() {
         enc.write_header().unwrap().write_image_data(&px).unwrap();
         eprintln!("quadro salvo em {path}");
     }
-    assert!(
-        ring > 0,
-        "nenhum quadro veio pelo anel ({readback} pelo readback)"
-    );
-    assert!(lit > 0, "todos os quadros do anel vieram pretos");
+    if emu_session::gl_interop_wanted() {
+        assert!(
+            ring > 0,
+            "nenhum quadro veio pelo anel ({readback} pelo readback)"
+        );
+        assert!(lit > 0, "todos os quadros do anel vieram pretos");
+    } else {
+        assert_eq!(ring, 0, "REEMU_GL_INTEROP=0 devia ficar no readback");
+        assert!(readback > 0);
+    }
 }

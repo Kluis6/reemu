@@ -1926,3 +1926,23 @@ Infra:
     - Mario Kart 64: tela de título conferida num PNG, com orientação e cores certas.
     - flycast com Soulcalibur: 700 quadros pelo anel, 0 pelo readback.
 - **Próximo:** B6 (validação de sincronização, outras GPUs, medir contra a fase A).
+
+## 2026-10-11 — B6: validação de sincronização e medição do interop GL → Vulkan (Windows, NVIDIA)
+
+- **Validação:**
+  - Camada `VK_LAYER_KHRONOS_validation` do SDK 1.4.363, com a validação de sincronização ligada. O nome da opção é `validate_sync` no `VkLayer_khronos_validation.json`; a variável `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true` vem do `Config/vk_layer_settings.sh` do próprio SDK, e também foi ligada pelo `VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT`.
+  - Resultado: nenhum aviso em todos os testes `win32_interop_*`, com mupen64plus_next (Mario Kart 64) e flycast (Soulcalibur).
+  - Prova de que a camada estava ativa: uma 2ª cópia sem barreira, plantada de propósito no teste do B4, gerou `SYNC-HAZARD-WRITE-AFTER-WRITE` (alteração desfeita).
+  - Limite: a camada só enxerga o lado Vulkan; o lado OpenGL não tem validador equivalente.
+- **GPUs:** só a RTX 3060 (driver 32.0.16.1692) nesta máquina; AMD e Intel ficam no B6b.
+- **Medição** (`REEMU_PERF`, `win32_interop_real_gl_core`, 15 s cada; `REEMU_GL_INTEROP=0` é o readback da fase A). O processo do core soma `retro_run` (que inclui o readback) e o envio; o app é o tempo do `process` por quadro.
+
+  | Jogo | Readback (core / app) | Anel (core / app) |
+  |---|---|---|
+  | mupen64plus_next, Mario Kart 64, 640×480 | ~1,3–2,1 ms / 1,36 ms | ~0,7–1,5 ms / 0,84 ms |
+  | flycast, Soulcalibur, 640×480 | ~1,7 ms / 1,36 ms | ~1,2 ms / 0,88 ms |
+  | flycast, 1920×1440 | 4,45 ms / 5,12 ms | 1,27 ms / 2,14 ms |
+
+  - Em 1920×1440, o `glReadPixels` sozinho custava 2,17 ms e o envio de 10,5 MB pelo pipe, 1,37 ms (525 MB/s a 50 fps).
+  - O tempo do app inclui a leitura de saída do próprio teste, igual nos dois casos; a diferença é a subida da imagem pra GPU, que deixou de existir.
+  - Além do custo, o anel tira 1 quadro de latência: o readback por PBO (fase A) entregava o quadro anterior.
