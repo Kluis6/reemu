@@ -110,9 +110,14 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [x] `done` — Integer scaling com moldura (2026-09-26): a moldura ganha um
       zoom perto de 1 e o jogo preenche a janela dela no múltiplo inteiro —
       sem faixa preta entre os dois.
-- [ ] `todo` — CAS (AMD FidelityFX, licença MIT) não vem no pacote de shaders
-      do libretro — portar como `.slang` se fizer falta (FSR, RCAS e NIS já
-      estão nos presets recomendados). HDR / tonemapping.
+- [x] `done` — CAS (2026-10-11): AMD FidelityFX CAS portado do `ffx_cas.h`
+      oficial (GPUOpen-Effects/FidelityFX-CAS, MIT) como shader próprio
+      embutido (`apps/desktop/src-tauri/shaders/cas`, preset curado
+      "Nitidez adaptativa (AMD CAS)", não depende do pacote). Teste
+      `cas_matches_the_reference_math`: a saída da GPU bate pixel a pixel com a
+      referência das fórmulas da AMD.
+- [ ] `todo` — HDR: saída HDR de verdade (superfície scRGB/HDR10 do wgpu 30,
+      `SurfaceColorSpace`), com brilho do branco de papel e pico do monitor.
 - [x] `decidido` — Shader: `test/format.slangp` (textura de inteiros) fica
       sem suporte (2026-10-11). É um preset de teste do RetroArch: o passe 0
       grava em `R32_UINT` e o 1 lê com `usampler2D` + `texelFetch`. No pacote

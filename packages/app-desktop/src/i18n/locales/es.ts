@@ -468,7 +468,8 @@ const es: Messages = {
     },
     shaders: {
       title: 'Shaders',
-      builtin: 'Ninguno, CRT y LCD portátil son del propio ReEmu (MIT).',
+      builtin:
+        'Ninguno, CRT y LCD portátil son del propio ReEmu (MIT). La nitidez adaptativa viene de AMD FidelityFX CAS (MIT, Advanced Micro Devices).',
       pack: 'El paquete de shaders viene del proyecto slang-shaders (libretro y colaboradores), y cada shader sigue la licencia de su propio archivo.',
       megaBezel: 'Mega Bezel: HyperspaceMadness, GPLv3.',
     },
@@ -536,6 +537,10 @@ const es: Messages = {
       rcas: {
         label: 'Solo nitidez (RCAS)',
         desc: 'Realza los bordes sin ampliar — deja el 3D menos borroso.',
+      },
+      cas: {
+        label: 'Nitidez adaptativa (AMD CAS)',
+        desc: 'Realza los detalles según el contraste local, sin ampliar — bueno para 3D.',
       },
     },
     presets: {

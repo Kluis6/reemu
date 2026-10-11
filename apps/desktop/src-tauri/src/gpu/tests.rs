@@ -2583,3 +2583,97 @@ fn vk_core_in_child() {
     }
     let _ = std::fs::remove_dir_all(&tmp);
 }
+
+/// CAS (AMD FidelityFX, `shaders/cas`, embutido): o preset roda na GPU e cada
+/// pixel bate com uma referência em CPU das mesmas fórmulas do `ffx_cas.h`
+/// (caminho sem escala, 5 amostras, pesos do verde, gama 2.0 na entrada e
+/// raiz na saída, `sharpness` = 0, o padrão da AMD). Confere também que a
+/// borda de fato ganha nitidez.
+#[test]
+fn cas_matches_the_reference_math() {
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem adapter wgpu — pulando");
+        return;
+    };
+    let dir = std::env::temp_dir().join(format!("reemu-cas-{}", std::process::id()));
+    crate::bundled_shaders::install(&dir);
+    let preset = crate::bundled_shaders::dir(&dir).join("cas/cas.slangp");
+    fp.set_preset(preset.to_str().unwrap())
+        .expect("compilar o CAS");
+
+    // Degraus verticais de 8 px (cinzas 0x40/0xA0/0x60) + um ponto claro.
+    let (w, h) = (32u32, 16u32);
+    let gray = |x: u32, y: u32| -> u8 {
+        if (x, y) == (20, 8) {
+            return 0xF0;
+        }
+        [0x40u8, 0xA0, 0x60, 0xA0][(x / 8) as usize]
+    };
+    let mut data = vec![0u8; (w * h * 4) as usize];
+    for y in 0..h {
+        for x in 0..w {
+            let v = gray(x, y);
+            let i = ((y * w + x) * 4) as usize;
+            data[i..i + 4].copy_from_slice(&[v, v, v, 0xFF]);
+        }
+    }
+    let frame = Frame {
+        origin: FrameOrigin::SoftwareRawBuffer {
+            data,
+            pitch: w * 4,
+            format: SoftwarePixelFormat::Xrgb8888,
+        },
+        metadata: FrameMetadata {
+            native_width: w,
+            native_height: h,
+            aspect_ratio: w as f32 / h as f32,
+            rotation_degrees: 0,
+        },
+    };
+    let _ = fp.process(&frame); // o readback devolve o quadro anterior
+    let (ow, oh, out) = fp.process(&frame).expect("quadro");
+    assert_eq!((ow, oh), (w, h));
+
+    // Referência (f32): CasLoad + CasInput (quadrado), mín/máx do círculo,
+    // amp = sqrt(sat(min(mn, 1 - mx) / mx)), peak = -1/lerp(8, 5, 0).
+    let load = |x: i32, y: i32| -> f32 {
+        let x = x.clamp(0, w as i32 - 1) as u32;
+        let y = y.clamp(0, h as i32 - 1) as u32;
+        let v = gray(x, y) as f32 / 255.0;
+        v * v
+    };
+    let mut changed = 0;
+    for y in 0..h as i32 {
+        for x in 0..w as i32 {
+            let (b, d, e, f, hh) = (
+                load(x, y - 1),
+                load(x - 1, y),
+                load(x, y),
+                load(x + 1, y),
+                load(x, y + 1),
+            );
+            let mn = b.min(d).min(e).min(f).min(hh);
+            let mx = b.max(d).max(e).max(f).max(hh);
+            let amp = if mx > 0.0 {
+                ((mn.min(1.0 - mx)) / mx).clamp(0.0, 1.0).sqrt()
+            } else {
+                0.0
+            };
+            let peak = -1.0 / 8.0;
+            let wgt = amp * peak;
+            let pix = ((b + d + f + hh) * wgt + e) / (1.0 + 4.0 * wgt);
+            let want = (pix.clamp(0.0, 1.0).sqrt() * 255.0).round() as i32;
+            let got = out[((y as u32 * w + x as u32) * 4 + 1) as usize] as i32;
+            assert!(
+                (got - want).abs() <= 2,
+                "pixel ({x},{y}): GPU {got}, referência {want}"
+            );
+            if got != gray(x as u32, y as u32) as i32 {
+                changed += 1;
+            }
+        }
+    }
+    eprintln!("CAS: {changed} pixels realçados de {}", w * h);
+    assert!(changed > 0, "o CAS não mudou nada");
+    let _ = std::fs::remove_dir_all(&dir);
+}

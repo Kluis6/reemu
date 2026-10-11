@@ -131,6 +131,8 @@ impl AppState {
         let system_dir = base.join("system");
         let shaders_dir = base.join("shaders");
         crate::gpu::set_shader_root(crate::shader_pack::install_dir(&shaders_dir));
+        crate::bundled_shaders::install(&shaders_dir);
+        crate::gpu::set_bundled_shader_root(crate::bundled_shaders::dir(&shaders_dir));
         let decorations_dir = base.join("decorations");
         let profile_dir = base.join("profile");
         let appearance_dir = base.join("appearance");

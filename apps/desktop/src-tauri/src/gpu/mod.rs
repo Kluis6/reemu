@@ -159,8 +159,11 @@ pub struct Curated {
     pub id: &'static str,
     pub label: &'static str,
     pub desc: &'static str,
-    /// Caminho relativo à raiz do `slang-shaders`.
+    /// Caminho relativo à raiz do `slang-shaders` (ou, com `bundled`, à
+    /// pasta dos shaders próprios — `bundled_shaders`).
     pub relpath: &'static str,
+    /// Shader próprio do ReEmu, embutido no app: não depende do pacote.
+    pub bundled: bool,
 }
 
 /// Só entram aqui presets confirmados no `docs/shaders/working-presets.txt`.
@@ -170,30 +173,35 @@ pub const CURATED: &[Curated] = &[
         label: "Suavizar pixel art (xBR)",
         desc: "Deixa o 2D liso sem borrar — ideal pra 8/16-bit.",
         relpath: "edge-smoothing/xbr/other presets/xbr-lv2-standalone.slangp",
+        bundled: false,
     },
     Curated {
         id: "scalefx",
         label: "Suavizar pixel art (ScaleFX)",
         desc: "Alternativa ao xBR; segura melhor os detalhes finos.",
         relpath: "edge-smoothing/scalefx/scalefx.slangp",
+        bundled: false,
     },
     Curated {
         id: "super-xbr",
         label: "Suavizar 2D e 3D (Super-xBR)",
         desc: "Também serve pra consoles 3D (PS1/N64).",
         relpath: "edge-smoothing/xbr/super-xbr.slangp",
+        bundled: false,
     },
     Curated {
         id: "ntsc",
         label: "Cor de TV antiga (NTSC)",
         desc: "Sangramento de vídeo composto — a cara certa de NES/Mega Drive.",
         relpath: "ntsc/ntsc-adaptive.slangp",
+        bundled: false,
     },
     Curated {
         id: "crt-guest",
         label: "CRT avançado (Guest)",
         desc: "Tubo completo: máscara de fósforo, brilho e geometria.",
         relpath: "crt/crt-guest-advanced.slangp",
+        bundled: false,
     },
     // Ampliação/nitidez espaciais (sem histórico de quadros — servem pra
     // emulação). FSR 1 = EASU (amplia pra resolução da tela) + RCAS
@@ -205,18 +213,32 @@ pub const CURATED: &[Curated] = &[
         label: "Ampliar com nitidez (AMD FSR)",
         desc: "Amplia e realça as bordas — bom pro 3D de PS1, N64 e PSP.",
         relpath: "edge-smoothing/fsr/fsr.slangp",
+        bundled: false,
     },
     Curated {
         id: "nis",
         label: "Ampliar com nitidez (NVIDIA NIS)",
         desc: "Alternativa ao FSR, com nitidez um pouco mais forte.",
         relpath: "edge-smoothing/nis/nis.slangp",
+        bundled: false,
     },
     Curated {
         id: "rcas",
         label: "Só nitidez (RCAS)",
         desc: "Realça as bordas sem ampliar — deixa o 3D menos borrado.",
         relpath: "sharpen/rca_sharpen.slangp",
+        bundled: false,
+    },
+    // AMD FidelityFX CAS (MIT), portado da fonte oficial
+    // (GPUOpen-Effects/FidelityFX-CAS, `ffx_cas.h`) — o pacote da libretro não
+    // tem. Só nitidez: a ampliação do CAS vai até 4x de área
+    // (`CAS_AREA_LIMIT`), abaixo do que a emulação pede.
+    Curated {
+        id: "cas",
+        label: "Nitidez adaptativa (AMD CAS)",
+        desc: "Realça detalhes conforme o contraste local, sem ampliar.",
+        relpath: "cas/cas.slangp",
+        bundled: true,
     },
 ];
 
@@ -233,9 +255,23 @@ pub fn set_shader_root(dir: std::path::PathBuf) {
     let _ = SHADER_ROOT.set(dir);
 }
 
-/// Caminho absoluto do `.slangp` de um preset curado, se o pacote já existe.
+static BUNDLED_SHADER_ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Pasta dos shaders próprios (`bundled_shaders::dir`). Setada uma vez no
+/// startup, depois de gravá-los.
+pub fn set_bundled_shader_root(dir: std::path::PathBuf) {
+    let _ = BUNDLED_SHADER_ROOT.set(dir);
+}
+
+/// Caminho absoluto do `.slangp` de um preset curado, se o arquivo existe
+/// (o do pacote, ou o próprio gravado no startup).
 pub fn curated_slangp(c: &Curated) -> Option<std::path::PathBuf> {
-    let p = SHADER_ROOT.get()?.join(c.relpath);
+    let root = if c.bundled {
+        BUNDLED_SHADER_ROOT.get()?
+    } else {
+        SHADER_ROOT.get()?
+    };
+    let p = root.join(c.relpath);
     p.is_file().then_some(p)
 }
 

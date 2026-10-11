@@ -66,7 +66,8 @@ SOFTWARE.
 
 ## Cores libretro, shaders, molduras e BIOS
 
-O ReEmu **não inclui** cores, shaders, molduras nem BIOS. Os cores são
+O ReEmu **não inclui** cores, molduras nem BIOS; dos shaders, inclui só os
+próprios e o CAS da AMD (seção abaixo). Os cores são
 baixados pelo próprio usuário, sob demanda, do buildbot oficial da libretro
 (<https://buildbot.libretro.com>); shaders e molduras, do buildbot e do
 GitHub dos projetos de origem. Cada um segue a sua licença (GPL, LGPL, MIT,
@@ -76,3 +77,30 @@ Os cores de licença não comercial (por exemplo Genesis Plus GX, Snes9x,
 FB Alpha/FBNeo e versões antigas do MAME) "may not be sold, nor may they be
 used in a commercial product or activity without copyright holders'
 approval" (<https://docs.libretro.com/development/licenses/>).
+
+## AMD FidelityFX CAS (`ffx_cas.h`)
+
+Origem: <https://github.com/GPUOpen-Effects/FidelityFX-CAS/blob/master/ffx-cas/ffx_cas.h>.
+Portado (caminho só de nitidez) em `apps/desktop/src-tauri/shaders/cas/cas.slang`.
+
+```
+Copyright (c) 2017-2019 Advanced Micro Devices, Inc. All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+

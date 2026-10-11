@@ -2020,3 +2020,14 @@ Infra:
   | Beetle PSX HW | 899 quadros; app 0,85 ms/quadro | 888 quadros; passo do core 2,9 ms |
 
   O passo do core in-process roda na thread de vídeo do app. No filho, ele roda no processo do core (`retro_run` de 1,2 a 4,9 ms lá), e o app só amostra. Mesma taxa de quadros; no mupen, mais quadros entregues no filho.
+
+## 2026-10-11 — CAS: nitidez adaptativa da AMD como shader próprio
+
+- **O quê:** o AMD FidelityFX CAS (Contrast Adaptive Sharpening), que o pacote `slang-shaders` da libretro não tem, virou um shader próprio do ReEmu embutido no app (`apps/desktop/src-tauri/shaders/cas`), oferecido como o preset curado "Nitidez adaptativa (AMD CAS)". Os shaders próprios são gravados em `<dados>/shaders/reemu` no startup (`bundled_shaders.rs`), fora da pasta do pacote, e funcionam sem baixar o pacote.
+- **Fonte oficial:** `ffx_cas.h` 1.20190610 de GPUOpen-Effects/FidelityFX-CAS (MIT; aviso em `THIRD_PARTY_NOTICES.md` e na tela de licenças). O que foi seguido:
+  - Caminho só de nitidez (`noScaling`): a ampliação do CAS é limitada a 4× de área (`CAS_AREA_LIMIT`), abaixo do que a emulação pede.
+  - Build padrão do filtro: círculo de 5 amostras (sem `CAS_BETTER_DIAGONALS`) e pesos do verde (sem `CAS_SLOW`); `rcp`/`sqrt` exatos no lugar das aproximações de hardware.
+  - "This is designed to be a linear filter. Running CAS on perceptual inputs will yield over-sharpening" → com entrada UNORM, a conversão documentada: quadrado na entrada (gama 2.0) e raiz na saída.
+  - `sharpness` 0 a 1, padrão 0 ("0 := default (lower ringing)"), com peso `-1/lerp(8, 5, sharpness)`.
+  - Uma guarda que a fonte não tem: vizinhança toda preta (máximo 0) não divide por zero.
+- **Teste:** `cas_matches_the_reference_math` roda o preset na GPU com degraus de cinza e um ponto claro e compara cada pixel com uma referência em Rust das mesmas fórmulas (diferença ≤ 2 em 0–255); 101 dos 512 pixels saem realçados.

@@ -468,7 +468,8 @@ const en: Messages = {
     },
     shaders: {
       title: 'Shaders',
-      builtin: 'None, CRT and Handheld LCD are ReEmu\'s own (MIT).',
+      builtin:
+        'None, CRT and Handheld LCD are ReEmu\'s own (MIT). Adaptive sharpening comes from AMD FidelityFX CAS (MIT, Advanced Micro Devices).',
       pack: 'The shader pack comes from the slang-shaders project (libretro and contributors), and each shader follows the license in its own file.',
       megaBezel: 'Mega Bezel: HyperspaceMadness, GPLv3.',
     },
@@ -536,6 +537,10 @@ const en: Messages = {
       rcas: {
         label: 'Sharpen only (RCAS)',
         desc: 'Sharpens edges without upscaling — makes 3D less blurry.',
+      },
+      cas: {
+        label: 'Adaptive sharpening (AMD CAS)',
+        desc: 'Sharpens detail based on local contrast, without upscaling — good for 3D.',
       },
     },
     presets: {

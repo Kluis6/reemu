@@ -1,6 +1,7 @@
 mod appearance;
 mod bezel_pack;
 mod bios;
+mod bundled_shaders;
 mod commands;
 mod core_catalog;
 mod covers;
