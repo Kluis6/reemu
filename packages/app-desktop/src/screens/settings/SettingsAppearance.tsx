@@ -62,8 +62,8 @@ const useStyles = makeStyles({
   },
   grid: {
     display: "grid",
-    // três colunas (uma só em janela bem estreita)
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    // quatro colunas (pedido do usuário; uma só em janela bem estreita)
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     "@media (max-width: 640px)": { gridTemplateColumns: "minmax(0, 1fr)" },
     gap: tokens.spacingHorizontalM,
   },
