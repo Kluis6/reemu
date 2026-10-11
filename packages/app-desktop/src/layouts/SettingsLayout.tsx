@@ -107,6 +107,9 @@ const useStyles = makeStyles({
   // Abas de lista em grade (Aparência, Cores, BIOS…) usam a largura toda —
   // 640 é bom pra formulário, mas deixava as colunas espremidas.
   wide: { maxWidth: "none" },
+  // Página que se ajusta à altura útil do card em vez de rolar (Shaders: a
+  // lista e a prévia descem até o padding de baixo).
+  fill: { height: "100%" },
 });
 
 const WIDE_TABS = new Set([
@@ -172,6 +175,7 @@ export function SettingsLayout() {
                   className={mergeClasses(
                     styles.content,
                     WIDE_TABS.has(section.key) && styles.wide,
+                    section.key === "video" && sub === "shaders" && styles.fill,
                   )}
                 >
                   <Outlet />

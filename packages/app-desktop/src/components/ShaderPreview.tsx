@@ -17,11 +17,10 @@ import { renderShaderPreview, shaderPreviewSource, type PreviewScene } from '../
 const OUT_W = 960
 const OUT_H = 720
 
-// Ocupa a coluna inteira, limitada pela altura útil do card das
-// Configurações: a imagem começa a 283 px do topo da tela e o card acaba a
-// 32 + 24 (padding) da borda de baixo → altura máx. = 100vh − 340 (4:3).
-// `vh` já está em px da interface (zoom nativo, `uiScale.ts`).
-const FRAME_W = 'min(100%, calc((100vh - 340px) * 4 / 3))'
+/** Altura da barra acima da imagem (botões de 32) + o espaço até ela (8 do
+ *  `gap` + 16): quem põe a prévia numa coluna desconta isso da altura pra
+ *  saber a largura em que a imagem 4:3 cabe (ver SettingsVideo). */
+export const PREVIEW_BAR_SPACE = 56
 
 const useStyles = makeStyles({
   root: {
@@ -36,7 +35,7 @@ const useStyles = makeStyles({
     alignItems: 'center',
     justifyContent: 'space-between',
     columnGap: tokens.spacingHorizontalM,
-    width: FRAME_W,
+    minHeight: '32px',
     marginBottom: '16px',
   },
   tabs: {
@@ -46,7 +45,8 @@ const useStyles = makeStyles({
   },
   frame: {
     position: 'relative',
-    width: FRAME_W,
+    // a coluna inteira; a altura sai do 4:3
+    width: '100%',
     aspectRatio: '4 / 3',
     overflow: 'hidden',
     borderRadius: tokens.borderRadiusMedium,

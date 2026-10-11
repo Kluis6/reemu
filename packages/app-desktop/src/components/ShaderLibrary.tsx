@@ -31,6 +31,9 @@ const ROOT_KEY = 'reemu.shaderLibRoot'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
+  // `fill`: ocupa a altura que o pai der, e a lista rola dentro dela
+  rootFill: { flexGrow: 1, minHeight: 0 },
+  listFill: { flexGrow: 1, minHeight: 0, maxHeight: 'none' },
   // crédito do pacote baixado (slang-shaders e Mega Bezel), em texto secundário
   credits: { color: tokens.colorNeutralForeground3 },
   bar: { display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center' },
@@ -50,6 +53,12 @@ const useStyles = makeStyles({
     maxHeight: '340px',
     overflowY: 'auto',
     paddingRight: tokens.spacingHorizontalXS,
+    // mesmo scrollbar fino do resto do app (`.scroll` do shell)
+    '::-webkit-scrollbar': { width: '6px' },
+    '::-webkit-scrollbar-thumb': {
+      backgroundColor: tokens.colorNeutralStroke2,
+      borderRadius: tokens.borderRadiusCircular,
+    },
   },
   panel: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXXS },
   item: {
@@ -72,10 +81,13 @@ export function ShaderLibrary({
   onPick,
   activePath,
   busy,
+  fill = false,
 }: {
   onPick: (path: string) => void
   activePath: string
   busy: boolean
+  /** Lista na altura que sobrar no pai (flex em coluna), em vez da fixa. */
+  fill?: boolean
 }) {
   const { t } = useTranslation()
   const s = useStyles()
@@ -207,7 +219,7 @@ export function ShaderLibrary({
   }
 
   return (
-    <div className={s.root}>
+    <div className={mergeClasses(s.root, fill && s.rootFill)}>
       {q.isLoading && <Spinner size="tiny" label={t('shaders.scanning')} />}
       {q.isError && <Body1>{t('shaders.readFailed', { error: String(q.error) })}</Body1>}
 
@@ -223,7 +235,7 @@ export function ShaderLibrary({
             />
             <Caption1>{t('shaders.presets', { count: q.data.length })}</Caption1>
           </div>
-          <div className={s.list}>
+          <div className={mergeClasses(s.list, fill && s.listFill)}>
             {groups.length === 0 && <Caption1>{t('shaders.nothing')}</Caption1>}
             <Accordion
               multiple

@@ -18,7 +18,7 @@ import { BezelLibrary } from '../../components/BezelLibrary'
 import { LoadingState } from '../../components/EmptyState'
 import { ShaderLibrary } from '../../components/ShaderLibrary'
 import { ShaderParams } from '../../components/ShaderParams'
-import { ShaderPreview } from '../../components/ShaderPreview'
+import { PREVIEW_BAR_SPACE, ShaderPreview } from '../../components/ShaderPreview'
 import { errorToast, sysToast } from '../../lib/toast'
 import {
   clearDecorations,
@@ -42,22 +42,37 @@ type Builtin = (typeof BUILTIN)[number]
 const isBuiltin = (n: string): n is Builtin => (BUILTIN as readonly string[]).includes(n)
 
 const useStyles = makeStyles({
-  // Shaders: opções na 1ª coluna, prévia na 2ª (uma só em tela estreita).
+  // Página de Shaders na altura útil do card (o SettingsLayout dá a altura).
+  // A área das colunas é um container de tamanho, pra coluna da prévia
+  // calcular a largura pela altura que sobra.
+  fill: { height: '100%' },
+  columnsBox: { flexGrow: 1, minHeight: '200px', containerType: 'size' },
+  // Opções na 1ª coluna, prévia na 2ª. A da prévia tem a largura em que a
+  // imagem 4:3 ocupa a altura inteira (menos a barra de cima), limitada pra
+  // sobrar ao menos 320 pras opções.
   columns: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+    gridTemplateColumns: `minmax(320px, 1fr) min(calc((100cqh - ${PREVIEW_BAR_SPACE}px) * 4 / 3), calc(100cqw - 368px))`,
     columnGap: '48px',
-    rowGap: '24px',
-    alignItems: 'start',
   },
-  options: { display: 'flex', flexDirection: 'column', gap: '8px', minWidth: 0 },
-  // Lista de shaders com rolagem própria; a folga (8) não deixa o anel de
-  // foco ser cortado pela borda da área que rola.
+  // A altura da linha é a da prévia: as opções não contam (`contain: size`)
+  // e esticam até ela, com a lista rolando dentro — terminam junto com a
+  // imagem mesmo quando ela é limitada pela largura (tela 4:3).
+  options: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    minWidth: 0,
+    contain: 'size',
+  },
+  // Lista de shaders com rolagem própria, na altura que sobrar; a folga (8)
+  // não deixa o anel de foco ser cortado pela borda da área que rola.
   shaderList: {
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalS,
-    maxHeight: '360px',
+    flexGrow: 1,
+    minHeight: 0,
     overflowY: 'auto',
     padding: '8px',
     margin: '-8px',
@@ -73,6 +88,8 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: '8px',
+    flexGrow: 1,
+    minHeight: 0,
     animationDuration: '300ms',
     animationTimingFunction: tokens.curveDecelerateMax,
     // `backwards` (não `both`): o estado final é o natural — ver RouteTransition
@@ -95,11 +112,12 @@ const useStyles = makeStyles({
   panelHead: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' },
   panelTitle: { display: 'flex', flexDirection: 'column', minWidth: 0 },
   panelSub: { color: tokens.colorNeutralForeground3 },
-  // Parâmetros num card; com muitos, rolam dentro dele (mesma altura da
-  // lista de shaders) com o scrollbar fino do app.
-  paramsCard: { padding: 0 },
+  // Parâmetros num card que desce até o fim da prévia; com muitos, rolam
+  // dentro dele com o scrollbar fino do app.
+  paramsCard: { padding: 0, flexGrow: 1, minHeight: 0 },
   paramsScroll: {
-    maxHeight: '360px',
+    flexGrow: 1,
+    minHeight: 0,
     overflowY: 'auto',
     padding: tokens.spacingHorizontalM,
     '::-webkit-scrollbar': { width: '6px' },
@@ -112,8 +130,10 @@ const useStyles = makeStyles({
   settingsBtn: {
     ...shorthands.borderColor(`${tokens.colorNeutralStrokeAccessible} !important`),
   },
-  // abas no estilo do app; 24 até o conteúdo (8 do `gap` + 16)
-  tabs: { alignSelf: 'flex-start', marginBottom: '16px' },
+  // abas no estilo do app (42 de altura). A lista começa na altura da imagem
+  // da prévia, cuja barra tem 32 + 24: aqui são 10 a mais de aba e 10 a
+  // menos de espaço (8 do `gap` + 6).
+  tabs: { alignSelf: 'flex-start', marginBottom: '6px' },
 })
 
 type ShaderSource = 'reemu' | 'pack'
@@ -259,6 +279,7 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
 
   return (
     <div
+      className={section === 'shaders' ? st.fill : undefined}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -277,90 +298,93 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
       {data.gpu && (
         <>
           {section === 'shaders' && (
-            <div className={st.columns}>
-              <div className={st.options}>
-                {/* Lista ou ajustes do shader ativo, no mesmo lugar (como uma
-                    subpágina: "voltar" em cima). Desliza pro lado ao trocar. */}
-                <div
-                  key={paramsOpen ? 'params' : 'list'}
-                  className={mergeClasses(
-                    st.swap,
-                    swapDir === 'fwd' && st.inFwd,
-                    swapDir === 'back' && st.inBack,
-                  )}
-                >
-                  {paramsOpen && hasParams ? (
-                    <>
-                      <div className={st.panelHead}>
-                        <Button
-                          ref={backRef}
-                          appearance="subtle"
-                          icon={<ArrowLeftRegular />}
-                          aria-label={t('video.backToShaders')}
-                          onClick={() => openParams(false)}
-                        />
-                        <div className={st.panelTitle}>
-                          <Subtitle2>{t('video.shaderSettings')}</Subtitle2>
-                          <Caption1 className={st.panelSub}>{activeName}</Caption1>
-                        </div>
-                      </div>
-                      <Card className={st.paramsCard} appearance="filled-alternative">
-                        <div className={st.paramsScroll}>
-                          <ShaderParams
-                            scope="default"
-                            reloadKey={data.active}
-                            onChanged={() => setParamsRev((n) => n + 1)}
+            <div className={st.columnsBox}>
+              <div className={st.columns}>
+                <div className={st.options}>
+                  {/* Lista ou ajustes do shader ativo, no mesmo lugar (como uma
+                      subpágina: "voltar" em cima). Desliza pro lado ao trocar. */}
+                  <div
+                    key={paramsOpen ? 'params' : 'list'}
+                    className={mergeClasses(
+                      st.swap,
+                      swapDir === 'fwd' && st.inFwd,
+                      swapDir === 'back' && st.inBack,
+                    )}
+                  >
+                    {paramsOpen && hasParams ? (
+                      <>
+                        <div className={st.panelHead}>
+                          <Button
+                            ref={backRef}
+                            appearance="subtle"
+                            icon={<ArrowLeftRegular />}
+                            aria-label={t('video.backToShaders')}
+                            onClick={() => openParams(false)}
                           />
-                        </div>
-                      </Card>
-                    </>
-                  ) : (
-                    <>
-                      <TabList
-                        className={mergeClasses(tb.tabs, st.tabs)}
-                        selectedValue={source}
-                        onTabSelect={(_, d) => setSource(d.value as ShaderSource)}
-                      >
-                        <Tab value="reemu">{t('video.sourceReemu')}</Tab>
-                        <Tab value="pack">{t('video.sourcePack')}</Tab>
-                      </TabList>
-                      {source === 'reemu' ? (
-                        presetPicker
-                      ) : (
-                        <>
-                          <ShaderLibrary
-                            onPick={(p) => pick.mutate(p)}
-                            activePath={data.active}
-                            busy={pick.isPending}
-                          />
-                        </>
-                      )}
-                      {!data.available.includes(data.active) &&
-                        !data.curated.some((c) => c.id === data.active) && (
-                          <div className={st.activeRow}>
-                            <Caption1>
-                              {t('video.active')}{' '}
-                              <Text as="strong" weight="semibold">
-                                {data.active.split(/[/\\]/).pop()}
-                              </Text>
-                            </Caption1>
-                            {hasParams && (
-                              <Button
-                                className={st.settingsBtn}
-                                appearance="outline"
-                                icon={<OptionsRegular />}
-                                onClick={() => openParams(true)}
-                              >
-                                {t('video.shaderSettings')}
-                              </Button>
-                            )}
+                          <div className={st.panelTitle}>
+                            <Subtitle2>{t('video.shaderSettings')}</Subtitle2>
+                            <Caption1 className={st.panelSub}>{activeName}</Caption1>
                           </div>
+                        </div>
+                        <Card className={st.paramsCard} appearance="filled-alternative">
+                          <div className={st.paramsScroll}>
+                            <ShaderParams
+                              scope="default"
+                              reloadKey={data.active}
+                              onChanged={() => setParamsRev((n) => n + 1)}
+                            />
+                          </div>
+                        </Card>
+                      </>
+                    ) : (
+                      <>
+                        <TabList
+                          className={mergeClasses(tb.tabs, st.tabs)}
+                          selectedValue={source}
+                          onTabSelect={(_, d) => setSource(d.value as ShaderSource)}
+                        >
+                          <Tab value="reemu">{t('video.sourceReemu')}</Tab>
+                          <Tab value="pack">{t('video.sourcePack')}</Tab>
+                        </TabList>
+                        {source === 'reemu' ? (
+                          presetPicker
+                        ) : (
+                          <>
+                            <ShaderLibrary
+                              onPick={(p) => pick.mutate(p)}
+                              activePath={data.active}
+                              busy={pick.isPending}
+                              fill
+                            />
+                          </>
                         )}
-                    </>
-                  )}
+                        {!data.available.includes(data.active) &&
+                          !data.curated.some((c) => c.id === data.active) && (
+                            <div className={st.activeRow}>
+                              <Caption1>
+                                {t('video.active')}{' '}
+                                <Text as="strong" weight="semibold">
+                                  {data.active.split(/[/\\]/).pop()}
+                                </Text>
+                              </Caption1>
+                              {hasParams && (
+                                <Button
+                                  className={st.settingsBtn}
+                                  appearance="outline"
+                                  icon={<OptionsRegular />}
+                                  onClick={() => openParams(true)}
+                                >
+                                  {t('video.shaderSettings')}
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                      </>
+                    )}
+                  </div>
                 </div>
+                <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
               </div>
-              <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
             </div>
           )}
 
