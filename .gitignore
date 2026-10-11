@@ -55,3 +55,6 @@ site/vendor/motion.js
 
 # objeto do cl.exe (MSVC) compilando fixtures em C
 *.obj
+
+# bytecode do Python (scripts/)
+__pycache__/
