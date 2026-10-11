@@ -286,7 +286,7 @@ const ptBR = {
     edit: 'Editar nome e plataforma',
     info: 'Informações completas',
     remove: 'Remover da biblioteca',
-    removeConfirm: 'Aperte de novo para confirmar a remoção',
+    removeConfirm: 'Aperte de novo para remover da biblioteca. O arquivo do jogo continua no computador.',
     noCore: 'Nenhum core instalado para {{platform}} — é ele que roda o jogo.',
     editTitle: 'Editar ROM',
     platformHint: 'Corrige ROMs que o scan não identificou (ficam em \'Disco\').',

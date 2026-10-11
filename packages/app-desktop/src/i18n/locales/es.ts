@@ -285,7 +285,7 @@ const es: Messages = {
     edit: 'Editar nombre y plataforma',
     info: 'Información completa',
     remove: 'Quitar de la biblioteca',
-    removeConfirm: 'Pulsa de nuevo para confirmar',
+    removeConfirm: 'Pulsa de nuevo para quitarlo de la biblioteca. El archivo del juego se queda en tu equipo.',
     noCore: 'No hay un núcleo instalado para {{platform}} — es el que ejecuta el juego.',
     editTitle: 'Editar ROM',
     platformHint: 'Corrige ROMs que el escaneo no identificó (aparecen en \'Disco\').',

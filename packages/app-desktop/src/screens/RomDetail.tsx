@@ -213,6 +213,10 @@ export function RomDetail() {
   const chosenCore =
     coreId || systemDefaultCore || coreList[0]?.coreId || "";
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // Dica do "Remover": abre sozinha no 1º clique (a confirmação) e fica
+  // aberta enquanto ela vale — com controle ou toque não há hover pra
+  // mostrá-la. Fora disso, abre no hover/foco como as outras.
+  const [removeTipHover, setRemoveTipHover] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editSystem, setEditSystem] = useState("");
@@ -433,6 +437,10 @@ export function RomDetail() {
                 confirmRemove ? t("game.removeConfirm") : t("game.remove")
               }
               relationship="label"
+              // `visible`/`onVisibleChange`: visibilidade controlada (props
+              // do <Tooltip> do Fluent v9)
+              visible={confirmRemove || removeTipHover}
+              onVisibleChange={(_, d) => setRemoveTipHover(d.visible)}
             >
               <Button
                 size="large"
@@ -448,7 +456,8 @@ export function RomDetail() {
                   if (confirmRemove) remove.mutate();
                   else {
                     setConfirmRemove(true);
-                    window.setTimeout(() => setConfirmRemove(false), 3000);
+                    // tempo pra ler a dica e apertar de novo
+                    window.setTimeout(() => setConfirmRemove(false), 5000);
                   }
                 }}
               />

@@ -285,7 +285,7 @@ const en: Messages = {
     edit: 'Edit name and platform',
     info: 'Full details',
     remove: 'Remove from the library',
-    removeConfirm: 'Press again to confirm removal',
+    removeConfirm: 'Press again to remove it from the library. The game file stays on your computer.',
     noCore: 'No core installed for {{platform}} — that\'s what runs the game.',
     editTitle: 'Edit ROM',
     platformHint: 'Fixes ROMs the scan didn\'t identify (they show up under \'Disc\').',
