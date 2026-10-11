@@ -2143,3 +2143,4 @@ Infra:
   - Sombra: `shadow4`, que a Fluent 2 indica para cards.
   - Traço: 1 px de `colorNeutralStroke2` ("Windows uses strokes instead of key shadows").
   - Os cards de jogo de dentro ficam mais um degrau acima. Conferido em capturas no Serene, no Neon Circuit, no Simple Vibes e no Alva claro.
+- Borda tirada a pedido do usuário. Depois ganhou um degradê leve na diagonal: o canto de cima à esquerda puxa 10% para a cor de destaque do tema e some até 60% do card. Conferido no Neon Circuit (esverdeado), no Serene e no Alva claro (azulado).
