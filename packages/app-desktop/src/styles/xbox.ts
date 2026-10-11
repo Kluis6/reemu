@@ -476,18 +476,17 @@ export const useBrowseStyles = makeStyles({
   // mede a própria largura (`Shelf`) e reajusta quantos cards cabem e o
   // tamanho deles (pedido do usuário).
   //
-  // Fundo, traço e sombra iguais aos do card das Configurações
+  // Fundo e sombra iguais aos do card das Configurações
   // (`SettingsLayout.card`), pela escala de elevação do Fluent 2: superfície
   // um degrau acima da página (`reemuSurface1`, que acompanha o tema — no
-  // Serene, #262A2F sobre #1A1C20), `shadow4` ("cards") e traço de 1 px
-  // ("Windows uses strokes instead of key shadows to outline an object").
+  // Serene, #262A2F sobre #1A1C20) e `shadow4` ("cards"). Sem traço
+  // (pedido do usuário).
   // Os cards de jogo dentro (`Background4` → `Background3`) ficam mais um
   // degrau acima.
   featured: {
     padding: "32px",
     borderRadius: "16px",
     backgroundColor: "var(--reemuSurface1)",
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
     boxShadow: tokens.shadow4,
   },
 
