@@ -31,7 +31,11 @@ const useStyles = makeStyles({
     gridTemplateColumns: "1fr 1fr",
     gridTemplateRows: "1fr 1fr",
     gap: TILE_GAP,
-    backgroundColor: tokens.colorNeutralBackground1,
+    // O mesmo fundo dos cards de jogo ao lado (`Background4` → `Background3`,
+    // o `elevGradient` de `styles/xbox.ts`): com `Background1` este card
+    // tinha a cor da própria página e sumia no fim da prateleira (Fluent 2 ›
+    // Color: "Use lighter neutrals on surfaces").
+    backgroundImage: `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`,
     padding: TILE_GAP,
   },
   cell: {
@@ -42,7 +46,9 @@ const useStyles = makeStyles({
     overflowX: "hidden",
     overflowY: "hidden",
     borderRadius: tokens.borderRadiusSmall,
-    backgroundColor: tokens.colorNeutralBackground4,
+    // célula sem capa: o tom das superfícies (`Background2`), diferente do
+    // card em volta em claro e escuro
+    backgroundColor: tokens.colorNeutralBackground2,
     "& img": {
       width: "100%",
       height: "100%",

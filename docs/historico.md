@@ -2118,3 +2118,9 @@ Infra:
 - Medido no print do usuário (app Xbox, "Jogar com mouse e teclado", 3840×2160): caixa de 24×24 epx, a 18 epx do fim do título, e fundo #4E535B sobre a página #1A1B1E no hover/foco.
 - O ReEmu estava com 32 px e a 6 px do título. Agora tem 24 px, ícone de 20 e 18 px de distância (conferido: título termina em 303 e o botão começa em 321).
 - No foco (teclado ou controle), o fundo acende como no hover. A cor é o fundo da página misturado a 22% com a cor do texto do tema, perto do #4E535B do Xbox no escuro.
+
+## 2026-10-11 — Último card das prateleiras ("ver todos" 2×2) destacado do fundo
+
+- O card 2×2 do fim de cada prateleira tinha fundo `colorNeutralBackground1`, a cor da própria página, e sumia, sobretudo nos temas de fundo liso.
+- Agora usa o mesmo fundo dos cards de jogo ao lado (`Background4` → `Background3`), e as células sem capa ficam em `Background2`.
+- Conferido em capturas nos temas Serene, Simple Vibes e Neon Circuit. Uma 1ª tentativa, misturando o fundo com a cor do texto, deixava o card cinza-escuro no tema claro, destoando dos cards claros ao lado.
