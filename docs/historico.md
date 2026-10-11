@@ -2194,3 +2194,26 @@ Infra:
   - Escuro: céu noturno azul-marinho. Claro: céu claro com superfícies brancas.
 - **Testes:** contraste AA de texto e marca nos dois modos. O destaque de ícones (`pickAccent`) passa 3:1 no teste geral.
 - O "Personalizado" continua o último da lista de temas.
+
+## 2026-10-11 — Release v0.1.7
+
+- **GPU (Windows):**
+  - Os cores OpenGL desenham direto nas imagens Vulkan do app, sem cópia (B1–B6: anel compartilhado, semáforos, validação de sincronização limpa). Medido a 1920×1440: 2,14 ms por quadro no app, antes 5,12.
+  - Os cores Vulkan (flycast, Beetle PSX HW, mupen64plus/ParaLLEl, PPSSPP) rodam no processo filho com device próprio e anel compartilhado, como padrão. Isso tira do app o vazamento de TLS desses cores (C3a–C3c).
+- **Vídeo:**
+  - Saída HDR (scRGB) na janela do jogo, com branco SDR e pico lidos do monitor e realce de brilhos.
+  - Shader AMD FidelityFX CAS embutido.
+- **Interface:**
+  - Movimento e elevação pelo Fluent 2 (troca de tela só com fade, tokens de duração e curva).
+  - Tamanhos medidos no app Xbox: chevron "Mostrar tudo", setas do destaque, pílulas "Todos os jogos" / "Adicionar ROMs", topbar alinhada ao conteúdo.
+  - "Adicionados recentemente" vem primeiro, num card com degradê na cor do tema.
+  - Brilho na cor do tema no hover/foco dos cards de jogo.
+  - Anel de foco inteiro no 1º card das prateleiras.
+  - Dica do "Remover" que abre sozinha.
+- **Temas:**
+  - Novos: Simple Vibes (claro), Serene (escuro, destaque branco) e Dream Sky (menu do Dreamcast, escuro e claro).
+  - Ícones e indicadores na cor primária do tema com 3:1 garantido (`reemuBrandAccent`), nos modos claro e escuro.
+  - Superfícies mais separadas do fundo.
+  - Aparência: aba "Temas" em até 4 colunas, anel de foco padrão e X do controle para claro/escuro.
+- **Controle:** botão X chega à interface (`menu-nav` "action"). As Configurações têm a mesma altura com ou sem controle.
+- **Linux:** release no Ubuntu 22.04 (glibc 2.35).
