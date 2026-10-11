@@ -509,23 +509,23 @@ export const useBrowseStyles = makeStyles({
     flexWrap: "wrap",
   },
   // Botão-pílula dos filtros da biblioteca do app Xbox (print a 3840×2160,
-  // 3,07 px por epx): 32 de altura, preenchimento um pouco mais claro que a
-  // página (#3E434B sobre #1A1B1E, ~14% rumo ao branco) e borda de 1 epx
-  // mais clara ainda (#6B7584, ~32%). Aqui as duas cores saem do tema
-  // ativo — o fundo da página misturado com a cor do texto —, então no
-  // claro a pílula fica cinza sobre o fundo claro.
+  // 3,07 px por epx): 32 de altura, texto regular e borda de 1 epx mais
+  // clara que o preenchimento (#6B7584 sobre #3E434B). O preenchimento é o
+  // mesmo dos outros botões do tema (voltar, tela cheia, filtros da
+  // biblioteca: `colorNeutralBackground2`, pedido do usuário); a borda sai
+  // do tema ativo — o fundo da página misturado com a cor do texto.
   pillBtn: {
     height: "32px",
     fontWeight: `${tokens.fontWeightRegular} !important`,
-    backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 14%) !important`,
+    backgroundColor: `${tokens.colorNeutralBackground2} !important`,
     border: `1px solid color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 32%) !important`,
     color: `${tokens.colorNeutralForeground1} !important`,
     ":hover": {
-      backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 20%) !important`,
+      backgroundColor: `${tokens.colorNeutralBackground2Hover} !important`,
       border: `1px solid color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 42%) !important`,
     },
     ":active": {
-      backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 10%) !important`,
+      backgroundColor: `${tokens.colorNeutralBackground2Pressed} !important`,
     },
   },
   chip: {

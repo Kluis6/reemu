@@ -2095,3 +2095,4 @@ Infra:
 
 - "Todos os jogos" e "Adicionar ROMs" viraram pílulas como os filtros da biblioteca do app Xbox (`useBrowseStyles.pillBtn`). Medido num print a 3840×2160: 32 epx de altura, texto regular, preenchimento #3E434B sobre a página #1A1B1E e borda de 1 epx #6B7584.
 - As cores saem do tema ativo, misturando o fundo da página (`colorNeutralBackground1`) com a cor do texto: 14% no preenchimento e 32% na borda, mais forte no hover e mais fraco ao pressionar. No escuro a pílula fica um cinza mais claro que o fundo; no claro (Simple Vibes), um cinza mais escuro.
+- Ajuste no mesmo dia, a pedido do usuário: o preenchimento das pílulas passou a ser o dos outros botões do tema (`colorNeutralBackground2`, como o voltar, a tela cheia e os filtros da biblioteca). A borda continua derivada do tema.
