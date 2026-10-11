@@ -482,14 +482,16 @@ export const useBrowseStyles = makeStyles({
   // Serene, #262A2F sobre #1A1C20) e `shadow4` ("cards"). Sem traço
   // (pedido do usuário).
   // Os cards de jogo dentro (`Background4` → `Background3`) ficam mais um
-  // degrau acima. Degradê leve na diagonal: o canto de cima à esquerda puxa
-  // 10% pra cor de destaque do tema e some até 60% do card (como o tom do
-  // card "Transmita seu próprio jogo" do app Xbox).
+  // degrau acima. Degradê leve na diagonal entre a cor do sidebar (o rail,
+  // `colorNeutralBackground2`) e a cor de destaque do tema: o canto de cima
+  // à esquerda é o tom do rail com 14% do destaque e some no tom do rail
+  // até 60% do card (pedido do usuário; o tom lembra o card "Transmita seu
+  // próprio jogo" do app Xbox).
   featured: {
     padding: "32px",
     borderRadius: "16px",
-    backgroundColor: "var(--reemuSurface1)",
-    backgroundImage: `linear-gradient(135deg, color-mix(in srgb, var(--reemuSurface1), ${tokens.colorBrandBackground} 10%) 0%, var(--reemuSurface1) 60%)`,
+    backgroundColor: tokens.colorNeutralBackground2,
+    backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${tokens.colorNeutralBackground2}, ${tokens.colorBrandBackground} 14%) 0%, ${tokens.colorNeutralBackground2} 60%)`,
     boxShadow: tokens.shadow4,
   },
 
