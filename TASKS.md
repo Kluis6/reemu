@@ -113,8 +113,17 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 - [ ] `todo` — CAS (AMD FidelityFX, licença MIT) não vem no pacote de shaders
       do libretro — portar como `.slang` se fizer falta (FSR, RCAS e NIS já
       estão nos presets recomendados). HDR / tonemapping.
-- [ ] `todo` — Shader: `test/format.slangp` (textura de inteiros) é a única
-      falha de preset que sobrou por limitação do pipeline.
+- [x] `decidido` — Shader: `test/format.slangp` (textura de inteiros) fica
+      sem suporte (2026-10-11). É um preset de teste do RetroArch: o passe 0
+      grava em `R32_UINT` e o 1 lê com `usampler2D` + `texelFetch`. No pacote
+      inteiro, `usampler2D`/`isampler2D` só aparecem nele; o outro
+      `#pragma format R32_UINT` (`nes_raw_palette/.../int_stock.slang`) grava
+      `vec4` comum e nenhum `.slangp` o usa (o `cgwg-famicom-geom.slangp`
+      funciona). Suportar exigiria `usampler2D` → `utexture2D` no
+      `shader-slang` (hoje `contains("sampler2D")` casa com `usampler2D` e o
+      declara como float — erro do glslang no `unpackUnorm4x8`) e bind groups
+      com tipo de amostra Uint, sem filtragem nem blending no wgpu. Reabrir se
+      um preset de verdade passar a usar.
 
 ### GPU dos cores no Windows (OpenGL, Vulkan, interop)
 
