@@ -2138,3 +2138,8 @@ Infra:
   - O card não passa mais das margens da página: vai de 115 a 1319 a 1366 px, as mesmas bordas do destaque.
   - O conteúdo fica com 32 de padding nos 4 lados. A prateleira mede a própria largura e reajusta quantos cards cabem e o tamanho deles.
   - Medido a 1366, 1051 e 1920 px: 32/32/32/32 em todas, com 5, 4 e 8 cards.
+- **Fundo pela escala de elevação:** o card de "Adicionados recentemente" deixou o tom da cor de destaque e passou a usar a mesma superfície, traço e sombra do card das Configurações.
+  - Superfície: `reemuSurface1`, um degrau acima da página e acompanhando o tema.
+  - Sombra: `shadow4`, que a Fluent 2 indica para cards.
+  - Traço: 1 px de `colorNeutralStroke2` ("Windows uses strokes instead of key shadows").
+  - Os cards de jogo de dentro ficam mais um degrau acima. Conferido em capturas no Serene, no Neon Circuit, no Simple Vibes e no Alva claro.

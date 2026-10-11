@@ -474,14 +474,21 @@ export const useBrowseStyles = makeStyles({
   // página (mesmas bordas do destaque e das outras prateleiras) e o
   // conteúdo dentro dele com o mesmo padding nos 4 lados — a prateleira
   // mede a própria largura (`Shelf`) e reajusta quantos cards cabem e o
-  // tamanho deles (pedido do usuário). O fundo do Xbox é a página com um
-  // leve tom da cor (#1B282E sobre #1A1B1E); aqui, o fundo do tema com 8%
-  // da cor de destaque, pra seguir qualquer tema (com 12% o card do Serene,
-  // de destaque branco, ficava da cor dos cards de jogo de dentro).
+  // tamanho deles (pedido do usuário).
+  //
+  // Fundo, traço e sombra iguais aos do card das Configurações
+  // (`SettingsLayout.card`), pela escala de elevação do Fluent 2: superfície
+  // um degrau acima da página (`reemuSurface1`, que acompanha o tema — no
+  // Serene, #262A2F sobre #1A1C20), `shadow4` ("cards") e traço de 1 px
+  // ("Windows uses strokes instead of key shadows to outline an object").
+  // Os cards de jogo dentro (`Background4` → `Background3`) ficam mais um
+  // degrau acima.
   featured: {
     padding: "32px",
     borderRadius: "16px",
-    backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorBrandBackground} 8%)`,
+    backgroundColor: "var(--reemuSurface1)",
+    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    boxShadow: tokens.shadow4,
   },
 
   grid: {
