@@ -790,8 +790,10 @@ export const useHintStyles = makeStyles({
     paddingLeft: "8px",
     paddingRight: "9px",
     borderRadius: tokens.borderRadiusMedium,
-    // #080809 do Xbox com leve transparência (pedido do usuário).
-    backgroundColor: "rgba(8, 8, 9, 0.85)",
+    // #080809 do Xbox com transparência (pedidos do usuário: 0,85 e, em
+    // 2026-10-11, um pouco mais transparente). O texto branco segue bem
+    // acima de AA mesmo sobre fundo claro (a barra escurece o que passa).
+    backgroundColor: "rgba(8, 8, 9, 0.72)",
     border: "none",
     fontSize: "19px",
     fontWeight: tokens.fontWeightRegular,
