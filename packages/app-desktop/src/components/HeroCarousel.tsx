@@ -86,8 +86,9 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
     fontWeight: tokens.fontWeightBold,
     letterSpacing: '0.02em',
-    // tom sólido da marca: legível sobre o véu escuro nos dois modos
-    color: 'var(--reemuBrandSolid)',
+    // Mesma cor do nome do jogo (o branco do `body`, sobre o véu escuro da
+    // arte), em qualquer tema — pedido do usuário; antes era a cor de marca.
+    color: 'inherit',
   },
   title: {
     // "Title" da rampa tipográfica do Windows (28 epx).
