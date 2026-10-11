@@ -2124,3 +2124,13 @@ Infra:
 - O card 2×2 do fim de cada prateleira tinha fundo `colorNeutralBackground1`, a cor da própria página, e sumia, sobretudo nos temas de fundo liso.
 - Agora usa o mesmo fundo dos cards de jogo ao lado (`Background4` → `Background3`), e as células sem capa ficam em `Background2`.
 - Conferido em capturas nos temas Serene, Simple Vibes e Neon Circuit. Uma 1ª tentativa, misturando o fundo com a cor do texto, deixava o card cinza-escuro no tema claro, destoando dos cards claros ao lado.
+
+## 2026-10-11 — "Adicionados recentemente" dentro de um card na Início
+
+- Como "Transmita seu próprio jogo" no app Xbox. Medido no print do usuário (3840×2160, 3,07 px por epx):
+  - o card passa 32 epx dos cards de jogo para cada lado, e o conteúdo continua alinhado com o resto da página;
+  - 33 epx embaixo, o "T" do título a 18 epx do topo e cantos de 16;
+  - o fundo é a página com um leve tom de cor (#1B282E sobre #1A1B1E).
+- No ReEmu (`useBrowseStyles.featured`, prop `featured` da `Row` da Início), o fundo é o do tema com 8% da cor de destaque.
+- Com 12%, o card do Serene (destaque branco) ficava da cor dos cards de jogo de dentro. Conferido em capturas no Serene, no Neon Circuit e no Simple Vibes.
+- Os cantos de 16 fogem do raio único de 4 do app, de propósito: é o raio do card do Xbox, pedido pelo usuário.

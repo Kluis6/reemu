@@ -31,6 +31,7 @@ function Row({
   onMore,
   render,
   index = 0,
+  featured = false,
 }: {
   title: string;
   subtitle?: string;
@@ -38,13 +39,15 @@ function Row({
   onMore?: () => void;
   render: (r: RomEntry) => ReactNode;
   index?: number;
+  /** Dentro de um card (prateleira em destaque, como no app Xbox). */
+  featured?: boolean;
 }) {
   const s = useBrowseStyles();
   const m = useMotionStyles();
   if (items.length === 0) return null;
   return (
     <section
-      className={mergeClasses(s.section, m.riseIn)}
+      className={mergeClasses(s.section, featured && s.featured, m.riseIn)}
       style={{ animationDelay: `${40 + index * 40}ms` }}
     >
       <SectionHeader title={title} subtitle={subtitle} onSeeAll={onMore} />
@@ -237,6 +240,7 @@ export function Home() {
         onMore={() => navigate("/library")}
         render={card}
         index={0}
+        featured
       />
       <Row
         title={t("home.continue")}

@@ -468,6 +468,25 @@ export const useMotionStyles = makeStyles({
 export const useBrowseStyles = makeStyles({
   // Do fim de uma fileira ao título da próxima (app Xbox, metrics.ts).
   section: { marginTop: `${M.SECTION_GAP}px` },
+  // Prateleira em destaque dentro de um card, como "Transmita seu próprio
+  // jogo" no app Xbox (print a 3840×2160, 3,07 px por epx): o card passa 32
+  // epx dos cards de jogo pra cada lado (o conteúdo fica alinhado com o
+  // resto da página), 33 embaixo, o "T" do título a 18 do topo (aqui: 10 de
+  // padding + o respiro da linha de 32 do título) e cantos de 16. O fundo do
+  // Xbox é a página com um leve tom da cor (#1B282E sobre #1A1B1E); aqui, o
+  // fundo do tema com 8% da cor de destaque, pra seguir qualquer tema (com
+  // 12% o card do Serene, de destaque branco, ficava da cor dos cards de
+  // jogo de dentro).
+  featured: {
+    marginLeft: "-32px",
+    marginRight: "-32px",
+    paddingTop: "10px",
+    paddingBottom: "33px",
+    paddingLeft: "32px",
+    paddingRight: "32px",
+    borderRadius: "16px",
+    backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorBrandBackground} 8%)`,
+  },
 
   grid: {
     display: "grid",
