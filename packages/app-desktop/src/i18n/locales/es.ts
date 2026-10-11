@@ -55,7 +55,7 @@ const es: Messages = {
     },
     desc: {
       profile: 'Nombre, avatar y bio',
-      appearance: 'Tema de color y fondo de pantalla',
+      appearance: 'Temas y fondo de pantalla',
       library: 'Plataformas y carpetas de juegos',
       audio: 'Sincronía y salida de audio',
       video: 'Shaders y marcos',
@@ -86,8 +86,7 @@ const es: Messages = {
       larger: 'Más grande',
     },
     theme: {
-      title: 'Tema de color',
-      description: 'Cambia el color de acento y el fondo de la app.',
+      title: 'Temas',
       card: 'Tema {{name}}',
       lightMode: '{{name}}: modo claro',
       hue: 'Tono del tema personalizado',

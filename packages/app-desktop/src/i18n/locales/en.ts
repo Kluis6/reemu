@@ -55,7 +55,7 @@ const en: Messages = {
     },
     desc: {
       profile: 'Name, avatar and bio',
-      appearance: 'Color theme and wallpaper',
+      appearance: 'Themes and wallpaper',
       library: 'Platforms and game folders',
       audio: 'Audio sync and output device',
       video: 'Shaders and bezels',
@@ -86,8 +86,7 @@ const en: Messages = {
       larger: 'Larger',
     },
     theme: {
-      title: 'Color theme',
-      description: 'Changes the accent and background colors of the app.',
+      title: 'Themes',
       card: '{{name}} theme',
       lightMode: '{{name}}: light mode',
       hue: 'Custom theme hue',

@@ -364,10 +364,6 @@ export function SettingsAppearance() {
 
       {tab === "theme" && (
         <div className={s.section}>
-          <Caption1 as="p" block style={{ margin: 0 }}>
-              {t("appearance.theme.description")}
-            </Caption1>
-
           <div className={s.grid} aria-label={t("appearance.theme.title")}>
             {THEME_FAMILIES.map((f) => {
               const on = active?.family === f;

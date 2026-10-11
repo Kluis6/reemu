@@ -56,7 +56,7 @@ const ptBR = {
     },
     desc: {
       profile: 'Nome, avatar e bio',
-      appearance: 'Tema de cor e papel de parede',
+      appearance: 'Temas e papel de parede',
       library: 'Plataformas e pastas de jogos',
       audio: 'Sincronia e saída de áudio',
       video: 'Shaders e molduras',
@@ -87,8 +87,7 @@ const ptBR = {
       larger: 'Maior',
     },
     theme: {
-      title: 'Tema de cor',
-      description: 'Muda a cor de destaque e do fundo do app.',
+      title: 'Temas',
       card: 'Tema {{name}}',
       lightMode: '{{name}}: modo claro',
       hue: 'Matiz do tema personalizado',
