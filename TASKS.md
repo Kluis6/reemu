@@ -493,7 +493,14 @@ no `emu-session`, ver `docs/historico.md`).
       actions/runner-images#14748) e o build Linux instala pacotes de
       sistema por nome (WebKitGTK, GTK, appindicator…). Migrar quando der
       pra validar: trocar pra `ubuntu-26.04`, conferir os nomes dos pacotes
-      e rodar o Release por `workflow_dispatch`.
+      e rodar o Release por `workflow_dispatch`. **Exceção: o build Linux do
+      Release fica no `ubuntu-22.04`** (2026-10-11) — o AppImage/.deb exige
+      a glibc do sistema de build ou mais nova, e a doc do Tauri manda
+      "build using the oldest base system you intend to support". No 24.04
+      os binários exigiam GLIBC 2.39 (fora Ubuntu 22.04, Debian 12, Mint 21);
+      no 22.04 exigem GLIBC_2.34 (run 38130076079, passo "glibc mínima").
+      Só os checks de CI migram; o Release só sobe de base quando o 22.04
+      sair dos runners.
 
 - [x] `done` — **Teste de fumaça do catálogo, fase 1** (2026-09-25):
       workflow semanal `catalog-smoke.yml` (Linux e Windows) baixa cada core
