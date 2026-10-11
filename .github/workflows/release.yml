@@ -32,7 +32,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        # Linux no Ubuntu 22.04, não no mais novo: o AppImage e o .deb exigem
+        # a glibc do sistema de build ou mais nova. A doc do Tauri (AppImage):
+        # "build your Tauri application using the oldest base system you
+        # intend to support" — 22.04 (glibc 2.35) cobre Ubuntu 22.04+, Debian
+        # 12, Mint 21+; no 24.04 (glibc 2.39) esses ficavam de fora.
+        os: [ubuntu-22.04, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -113,6 +118,19 @@ jobs:
             echo "::warning::sem TAURI_SIGNING_PRIVATE_KEY — build sem auto-update"
           fi
           cargo tauri build "${args[@]}"
+
+      # Registra a glibc mínima que o executável e o core-host exigem (a
+      # maior versão de símbolo GLIBC_ que eles usam) — tem que ser a do
+      # sistema de build acima, nunca mais nova.
+      - name: glibc mínima exigida (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          for bin in target/release/reemu-desktop target/release/ReEmu target/release/reemu-core-host; do
+            [ -f "$bin" ] || continue
+            v=$(objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+            echo "$bin: $v"
+            echo "::notice title=glibc mínima::$(basename "$bin") exige $v"
+          done
 
       - name: Notas da versão (commits desde a tag anterior)
         if: startsWith(github.ref, 'refs/tags/')
