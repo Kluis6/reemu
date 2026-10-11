@@ -466,7 +466,9 @@ export function RomDetail() {
               </span>
             </div>
           )}
-          {coreList.length === 0 && (
+          {/* Só depois de carregar a lista de cores: antes ela vem vazia e o
+              aviso piscava ao abrir a página. */}
+          {cores.isSuccess && coreList.length === 0 && (
             <MessageBar intent="warning" className={s.noCoreBar}>
               <MessageBarBody>
                 {t("game.noCore", { platform: platformLabel(rom.systemId) })}

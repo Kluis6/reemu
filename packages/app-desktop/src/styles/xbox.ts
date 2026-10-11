@@ -938,7 +938,12 @@ export const useDetailStyles = makeStyles({
     // conteúdo (tabs, título das seções) em vez de ficar colado na rail.
     paddingLeft: PAGE_PAD_L,
     paddingRight: "26px",
-    paddingBottom: "26px",
+    // As abas de baixo sobem 72 sobre o hero (`tabsOverlap`); o conteúdo
+    // termina 24 acima delas (o TabList começa 20 abaixo do topo da seção):
+    // 72 − 20 + 24 = 76. Com o hero no tamanho mínimo isso não muda nada;
+    // quando o conteúdo cresce (capa, aviso de core), o hero cresce junto
+    // e as abas não sobem por cima do aviso.
+    paddingBottom: "76px",
     // O hero agora cola no topo (por baixo da topbar flutuante — ver
     // `marginTop` negativo em `.hero`) — o próprio conteúdo (ícone/título)
     // precisa dessa folga de volta, senão nasce escondido atrás da busca/
@@ -1109,8 +1114,8 @@ export const useDetailStyles = makeStyles({
     backgroundColor: `${tokens.colorPaletteRedBackground3} !important`,
     color: "#ffffff !important",
   },
+  // Mesmo espaço dos outros itens do hero (o `rowGap` de 16), sem margem a mais.
   noCoreBar: {
-    marginTop: "14px",
     maxWidth: "720px",
   },
   section: { display: "flex", flexDirection: "column", rowGap: "10px" },
