@@ -77,6 +77,9 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalS,
     padding: tokens.spacingHorizontalM,
     border: "2px solid transparent",
+    // Sem a sombra do <Card> do Fluent (`shadow4`, e a do hover) — pedido do
+    // usuário; a separação fica com a borda e o fundo do próprio tema.
+    boxShadow: "none !important",
   },
   // nome à esquerda, Switch "Claro" à direita; altura fixa pra alinhar os
   // cards que não têm o Switch
