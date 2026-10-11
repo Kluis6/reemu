@@ -184,4 +184,10 @@ pub struct InteropImage {
     pub handle: u64,
     /// Tamanho da alocação (o `size` do `glImportMemoryWin32HandleEXT`).
     pub alloc_size: u64,
+    /// Handle NT do semáforo que o GL sinaliza quando termina de desenhar
+    /// nesta imagem (o app espera antes de amostrar) — B4.
+    pub done_sem: u64,
+    /// Handle NT do semáforo que o app sinaliza quando termina de ler esta
+    /// imagem (o GL espera antes de desenhar de novo) — B4.
+    pub free_sem: u64,
 }

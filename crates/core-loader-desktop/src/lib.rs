@@ -85,11 +85,11 @@ pub fn offer_interop_images(offer: Option<InteropOffer>) {
     drop(old);
 }
 pub use crate::gl_context::readback_stats;
-#[cfg(all(windows, feature = "test-fixtures"))]
-pub use crate::gl_context::render_solid_into_interop_offer;
-pub use crate::gl_context::InteropOffer;
 #[cfg(all(unix, feature = "test-fixtures"))]
 pub use crate::gl_context::{render_rect_rgba_to_dmabuf, render_solid_rgba_to_dmabuf};
+#[cfg(all(windows, feature = "test-fixtures"))]
+pub use crate::gl_context::{render_solid_into_interop_offer, InteropGlProbe};
+pub use crate::gl_context::{InteropOffer, OfferedImage};
 pub use crate::input::{analog, libretro_joypad_id, retropad, AnalogState, RetroPadState};
 pub use crate::loader::{CoreProbe, DesktopCoreLoader};
 pub use crate::pacing::{PaceStats, Pacer, RateMatch};

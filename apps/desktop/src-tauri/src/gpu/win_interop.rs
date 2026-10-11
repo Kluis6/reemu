@@ -20,6 +20,17 @@
 //!   `VkMemoryDedicatedAllocateInfo`; aqui a alocação é SEMPRE dedicada
 //!   (permitido em qualquer caso desde o Vulkan 1.1), e o filho é avisado
 //!   (o GL pede `DEDICATED_MEMORY_OBJECT_EXT` nesse caso — B3).
+//!
+//! Sincronização (B4), no molde do exemplo oficial `open_gl_interop` do
+//! Vulkan-Samples: dois semáforos binários exportáveis por imagem — `done`
+//! (o GL sinaliza ao terminar o quadro, o app espera antes de amostrar) e
+//! `free` (o app sinaliza ao terminar de ler, o GL espera antes de desenhar
+//! de novo). Handles NT: "owned by the application ... must release
+//! ownership of them using the CloseHandle system call"
+//! (`vkGetSemaphoreWin32HandleKHR`), um export por semáforo
+//! (VUID-VkSemaphoreGetWin32HandleInfoKHR-handleType-01127). A imagem passa
+//! de um lado pro outro em `SHADER_READ_ONLY_OPTIMAL` (= `TextureUses::RESOURCE`
+//! do wgpu, = `GL_LAYOUT_SHADER_READ_ONLY_EXT`).
 
 use ash::vk;
 use windows_sys::Win32::Foundation::{CloseHandle, DuplicateHandle, DUPLICATE_SAME_ACCESS, HANDLE};
@@ -27,6 +38,8 @@ use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcess, PROC
 
 const HANDLE_TYPE: vk::ExternalMemoryHandleTypeFlags =
     vk::ExternalMemoryHandleTypeFlags::OPAQUE_WIN32;
+const SEM_HANDLE_TYPE: vk::ExternalSemaphoreHandleTypeFlags =
+    vk::ExternalSemaphoreHandleTypeFlags::OPAQUE_WIN32;
 /// Formato do quadro do core (o FBO do GL é RGBA8).
 const FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 
@@ -116,13 +129,47 @@ pub struct ExportedImage {
     pub handle: usize,
     /// Tamanho da alocação — o GL precisa dele no import (`glImportMemoryWin32HandleEXT`).
     pub alloc_size: u64,
+    /// O GL sinaliza ao terminar de desenhar; o app espera antes de amostrar.
+    /// Destruído junto com a textura (callback de drop do wgpu, depois da
+    /// GPU largar a imagem).
+    #[allow(dead_code)] // lido no B5 (e no teste do B4)
+    pub done_sem: vk::Semaphore,
+    /// O app sinaliza ao terminar de ler; o GL espera antes de redesenhar.
+    #[allow(dead_code)] // lido no B5 (e no teste do B4)
+    pub free_sem: vk::Semaphore,
+    /// Handles NT exportados de `done_sem`/`free_sem`.
+    pub done_handle: usize,
+    pub free_handle: usize,
 }
 
 impl Drop for ExportedImage {
     fn drop(&mut self) {
-        if self.handle != 0 {
-            // SAFETY: handle NT nosso, ainda não fechado.
-            unsafe { CloseHandle(self.handle as HANDLE) };
+        for h in [self.handle, self.done_handle, self.free_handle] {
+            if h != 0 {
+                // SAFETY: handle NT nosso, ainda não fechado.
+                unsafe { CloseHandle(h as HANDLE) };
+            }
+        }
+    }
+}
+
+/// Semáforo binário exportável como handle NT opaco + o handle.
+fn exportable_semaphore(
+    raw: &ash::Device,
+    win32: &ash::khr::external_semaphore_win32::Device,
+) -> Result<(vk::Semaphore, usize), String> {
+    let mut export = vk::ExportSemaphoreCreateInfo::default().handle_types(SEM_HANDLE_TYPE);
+    let info = vk::SemaphoreCreateInfo::default().push_next(&mut export);
+    let sem = unsafe { raw.create_semaphore(&info, None) }
+        .map_err(|e| format!("vkCreateSemaphore (export): {e}"))?;
+    let get = vk::SemaphoreGetWin32HandleInfoKHR::default()
+        .semaphore(sem)
+        .handle_type(SEM_HANDLE_TYPE);
+    match unsafe { win32.get_semaphore_win32_handle(&get) } {
+        Ok(h) => Ok((sem, h as usize)),
+        Err(e) => {
+            unsafe { raw.destroy_semaphore(sem, None) };
+            Err(format!("vkGetSemaphoreWin32HandleKHR: {e}"))
         }
     }
 }
@@ -221,6 +268,22 @@ pub(super) fn allocate_ring(
         return Err("a GPU não exporta essa imagem como handle Win32 opaco".into());
     };
 
+    // O semáforo exporta como handle NT opaco?
+    // (`vkGetPhysicalDeviceExternalSemaphoreProperties`.)
+    let sem_props = unsafe {
+        let info = vk::PhysicalDeviceExternalSemaphoreInfo::default().handle_type(SEM_HANDLE_TYPE);
+        let mut props = vk::ExternalSemaphoreProperties::default();
+        instance.get_physical_device_external_semaphore_properties(phys, &info, &mut props);
+        props
+    };
+    if !sem_props
+        .external_semaphore_features
+        .contains(vk::ExternalSemaphoreFeatureFlags::EXPORTABLE)
+    {
+        return Err("a GPU não exporta semáforo como handle Win32 opaco".into());
+    }
+    let sem_win32 = ash::khr::external_semaphore_win32::Device::new(&instance, &raw);
+
     let mem_props = unsafe { instance.get_physical_device_memory_properties(phys) };
     let win32 = ash::khr::external_memory_win32::Device::new(&instance, &raw);
     let mut ring = Vec::with_capacity(n);
@@ -287,6 +350,27 @@ pub(super) fn allocate_ring(
                 return Err(format!("vkGetMemoryWin32HandleKHR: {e}"));
             }
         };
+        let close = |h: usize| unsafe {
+            CloseHandle(h as HANDLE);
+        };
+        let (done_sem, done_handle) = match exportable_semaphore(&raw, &sem_win32) {
+            Ok(s) => s,
+            Err(e) => {
+                close(handle);
+                cleanup(&raw);
+                return Err(e);
+            }
+        };
+        let (free_sem, free_handle) = match exportable_semaphore(&raw, &sem_win32) {
+            Ok(s) => s,
+            Err(e) => {
+                close(handle);
+                close(done_handle);
+                unsafe { raw.destroy_semaphore(done_sem, None) };
+                cleanup(&raw);
+                return Err(e);
+            }
+        };
 
         // A textura do wgpu passa a ser a dona: destrói imagem e memória
         // quando for solta.
@@ -315,6 +399,8 @@ pub(super) fn allocate_ring(
                 Some(Box::new(move || {
                     raw_drop.destroy_image(image, None);
                     raw_drop.free_memory(memory, None);
+                    raw_drop.destroy_semaphore(done_sem, None);
+                    raw_drop.destroy_semaphore(free_sem, None);
                 })),
                 wgpu::hal::vulkan::TextureMemory::External,
             )
@@ -342,6 +428,10 @@ pub(super) fn allocate_ring(
             texture,
             handle,
             alloc_size: req.size,
+            done_sem,
+            free_sem,
+            done_handle,
+            free_handle,
         });
     }
     Ok(ring)

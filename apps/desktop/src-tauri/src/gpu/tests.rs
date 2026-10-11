@@ -1853,20 +1853,243 @@ fn win32_interop_ring_imports_into_gl() {
     let reply = fp
         .install_interop_ring(64, 48, std::process::id())
         .expect("alocar e duplicar o anel");
-    let offer = core_loader_desktop::InteropOffer {
+    let px =
+        core_loader_desktop::render_solid_into_interop_offer(offer_of(&reply), [255, 0, 0, 255])
+            .expect("importar o anel no GL");
+    assert_eq!(px.len(), 3);
+    assert!(px.iter().all(|p| *p == [255, 0, 0, 255]), "{px:?}");
+}
+
+/// A resposta do provedor como o filho a recebe (`InteropOffer`).
+#[cfg(windows)]
+fn offer_of(reply: &emu_session::InteropReply) -> core_loader_desktop::InteropOffer {
+    core_loader_desktop::InteropOffer {
         width: reply.width,
         height: reply.height,
         dedicated: reply.dedicated,
         images: reply
             .images
             .iter()
-            .map(|i| (i.handle, i.alloc_size))
+            .map(|i| core_loader_desktop::OfferedImage {
+                memory: i.handle,
+                alloc_size: i.alloc_size,
+                done_sem: i.done_sem,
+                free_sem: i.free_sem,
+            })
             .collect(),
+    }
+}
+
+/// B4 numa GPU real, ida e volta: o GL desenha uma cor em cada imagem e
+/// sinaliza `done`; o Vulkan espera `done`, copia a imagem pra um buffer
+/// (SHADER_READ_ONLY → TRANSFER_SRC → SHADER_READ_ONLY) e sinaliza `free`;
+/// o GL redesenha no mesmo slot depois de esperar `free`. Confere as cores
+/// lidas do lado Vulkan — prova que a memória é a mesma e que os semáforos
+/// ordenam os dois lados. Submit cru na fila do wgpu: nada mais submete
+/// neste teste.
+#[cfg(windows)]
+#[test]
+#[ignore = "precisa de GPU (WGL + Vulkan com external_memory/semaphore_win32)"]
+fn win32_interop_semaphores_round_trip() {
+    use ash::vk;
+    let _ = env_logger::builder().is_test(true).try_init();
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem GPU");
+        return;
     };
-    let px = core_loader_desktop::render_solid_into_interop_offer(offer, [255, 0, 0, 255])
-        .expect("importar o anel no GL");
-    assert_eq!(px.len(), 3);
-    assert!(px.iter().all(|p| *p == [255, 0, 0, 255]), "{px:?}");
+    let (w, h) = (64u32, 48u32);
+    let reply = fp
+        .install_interop_ring(w, h, std::process::id())
+        .expect("alocar e duplicar o anel");
+    let mut probe =
+        core_loader_desktop::InteropGlProbe::new(offer_of(&reply)).expect("contexto GL");
+
+    let hal_dev = unsafe { fp.device.as_hal::<wgpu::hal::api::Vulkan>() }.expect("Vulkan");
+    let raw = hal_dev.raw_device().clone();
+    let queue = hal_dev.raw_queue();
+    let family = hal_dev.queue_family_index();
+    let mem_props = unsafe {
+        hal_dev
+            .shared_instance()
+            .raw_instance()
+            .get_physical_device_memory_properties(hal_dev.raw_physical_device())
+    };
+    drop(hal_dev);
+    let images: Vec<(vk::Image, vk::Semaphore, vk::Semaphore)> = fp
+        .interop_ring
+        .iter()
+        .map(|img| {
+            let t = unsafe { img.texture.as_hal::<wgpu::hal::api::Vulkan>() }.expect("Vulkan");
+            (unsafe { t.raw_handle() }, img.done_sem, img.free_sem)
+        })
+        .collect();
+
+    // Buffer de leitura (HOST_VISIBLE | HOST_COHERENT).
+    let size = u64::from(w * h * 4);
+    unsafe {
+        let buf = raw
+            .create_buffer(
+                &vk::BufferCreateInfo::default()
+                    .size(size)
+                    .usage(vk::BufferUsageFlags::TRANSFER_DST),
+                None,
+            )
+            .unwrap();
+        let req = raw.get_buffer_memory_requirements(buf);
+        let want = vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
+        let ty = (0..mem_props.memory_type_count)
+            .find(|&t| {
+                req.memory_type_bits & (1 << t) != 0
+                    && mem_props.memory_types[t as usize]
+                        .property_flags
+                        .contains(want)
+            })
+            .expect("memória visível pro host");
+        let mem = raw
+            .allocate_memory(
+                &vk::MemoryAllocateInfo::default()
+                    .allocation_size(req.size)
+                    .memory_type_index(ty),
+                None,
+            )
+            .unwrap();
+        raw.bind_buffer_memory(buf, mem, 0).unwrap();
+        let pool = raw
+            .create_command_pool(
+                &vk::CommandPoolCreateInfo::default()
+                    .queue_family_index(family)
+                    .flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER),
+                None,
+            )
+            .unwrap();
+        let cmd = raw
+            .allocate_command_buffers(
+                &vk::CommandBufferAllocateInfo::default()
+                    .command_pool(pool)
+                    .command_buffer_count(1),
+            )
+            .unwrap()[0];
+        let fence = raw
+            .create_fence(&vk::FenceCreateInfo::default(), None)
+            .unwrap();
+        let range = vk::ImageSubresourceRange::default()
+            .aspect_mask(vk::ImageAspectFlags::COLOR)
+            .level_count(1)
+            .layer_count(1);
+
+        // Lê o slot `i` do lado Vulkan: espera `done`, copia, sinaliza `free`.
+        let read_slot = |i: usize| -> [u8; 4] {
+            let (image, done, free) = images[i];
+            raw.reset_command_buffer(cmd, vk::CommandBufferResetFlags::empty())
+                .unwrap();
+            raw.begin_command_buffer(
+                cmd,
+                &vk::CommandBufferBeginInfo::default()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT),
+            )
+            .unwrap();
+            let to_src = vk::ImageMemoryBarrier::default()
+                .src_access_mask(vk::AccessFlags::empty())
+                .dst_access_mask(vk::AccessFlags::TRANSFER_READ)
+                .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .image(image)
+                .subresource_range(range);
+            raw.cmd_pipeline_barrier(
+                cmd,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[],
+                &[to_src],
+            );
+            let region = vk::BufferImageCopy::default()
+                .image_subresource(
+                    vk::ImageSubresourceLayers::default()
+                        .aspect_mask(vk::ImageAspectFlags::COLOR)
+                        .layer_count(1),
+                )
+                .image_extent(vk::Extent3D {
+                    width: w,
+                    height: h,
+                    depth: 1,
+                });
+            raw.cmd_copy_image_to_buffer(
+                cmd,
+                image,
+                vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                buf,
+                &[region],
+            );
+            let back = vk::ImageMemoryBarrier::default()
+                .src_access_mask(vk::AccessFlags::TRANSFER_READ)
+                .dst_access_mask(vk::AccessFlags::empty())
+                .old_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .image(image)
+                .subresource_range(range);
+            let host = vk::BufferMemoryBarrier::default()
+                .src_access_mask(vk::AccessFlags::TRANSFER_WRITE)
+                .dst_access_mask(vk::AccessFlags::HOST_READ)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .buffer(buf)
+                .size(vk::WHOLE_SIZE);
+            raw.cmd_pipeline_barrier(
+                cmd,
+                vk::PipelineStageFlags::TRANSFER,
+                vk::PipelineStageFlags::BOTTOM_OF_PIPE | vk::PipelineStageFlags::HOST,
+                vk::DependencyFlags::empty(),
+                &[],
+                &[host],
+                &[back],
+            );
+            raw.end_command_buffer(cmd).unwrap();
+            let waits = [done];
+            let stages = [vk::PipelineStageFlags::TRANSFER];
+            let signals = [free];
+            let cmds = [cmd];
+            let submit = vk::SubmitInfo::default()
+                .wait_semaphores(&waits)
+                .wait_dst_stage_mask(&stages)
+                .command_buffers(&cmds)
+                .signal_semaphores(&signals);
+            raw.queue_submit(queue, &[submit], fence).unwrap();
+            raw.wait_for_fences(&[fence], true, 5_000_000_000)
+                .expect("o Vulkan esperou o done do GL");
+            raw.reset_fences(&[fence]).unwrap();
+            let p = raw
+                .map_memory(mem, 0, size, vk::MemoryMapFlags::empty())
+                .unwrap() as *const u8;
+            let px = [*p, *p.add(1), *p.add(2), *p.add(3)];
+            raw.unmap_memory(mem);
+            px
+        };
+
+        // 1ª volta: uma cor por slot.
+        let colors = [[255, 0, 0, 255], [0, 255, 0, 255], [0, 0, 255, 255]];
+        for (i, c) in colors.iter().enumerate() {
+            assert_eq!(probe.draw(*c).unwrap(), i as u32);
+            assert_eq!(read_slot(i), *c, "slot {i}, 1ª volta");
+        }
+        // 2ª volta: o GL espera o `free` de cada slot antes de redesenhar.
+        for i in 0..3 {
+            let c = [255, 255, 0, 255];
+            assert_eq!(probe.draw(c).unwrap(), i as u32);
+            assert_eq!(read_slot(i), c, "slot {i}, 2ª volta");
+        }
+
+        drop(probe);
+        raw.destroy_fence(fence, None);
+        raw.destroy_command_pool(pool, None);
+        raw.destroy_buffer(buf, None);
+        raw.free_memory(mem, None);
+    }
 }
 
 /// B2 de ponta a ponta numa GPU real: o core-fake com um "jogo" `HW` pede GL

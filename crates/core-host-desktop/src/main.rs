@@ -559,7 +559,15 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         width,
                         height,
                         dedicated,
-                        images: images.iter().map(|i| (i.handle, i.alloc_size)).collect(),
+                        images: images
+                            .iter()
+                            .map(|i| core_loader_desktop::OfferedImage {
+                                memory: i.handle,
+                                alloc_size: i.alloc_size,
+                                done_sem: i.done_sem,
+                                free_sem: i.free_sem,
+                            })
+                            .collect(),
                     },
                 ));
             }

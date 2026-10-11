@@ -246,30 +246,58 @@ pub struct InteropOffer {
     pub height: u32,
     /// Alocação dedicada no Vulkan → `DEDICATED_MEMORY_OBJECT_EXT` no import.
     pub dedicated: bool,
-    /// `(handle NT, tamanho da alocação)` de cada imagem.
-    pub images: Vec<(u64, u64)>,
+    pub images: Vec<OfferedImage>,
+}
+
+/// Uma imagem do anel oferecido: handles NT da memória e dos dois semáforos
+/// (B4) — ver `ToChild::InteropImages` no core-ipc.
+#[derive(Debug, Clone, Copy)]
+pub struct OfferedImage {
+    pub memory: u64,
+    /// Tamanho da alocação (o `size` do `glImportMemoryWin32HandleEXT`).
+    pub alloc_size: u64,
+    /// O GL sinaliza ao terminar de desenhar nesta imagem.
+    pub done_sem: u64,
+    /// O app sinaliza ao terminar de ler; o GL espera antes de redesenhar.
+    pub free_sem: u64,
 }
 
 impl Drop for InteropOffer {
     fn drop(&mut self) {
         #[cfg(windows)]
-        for &(h, _) in &self.images {
-            // SAFETY: handle duplicado pelo pai pra este processo, ainda aberto
-            // (só esta oferta o fecha).
-            unsafe { windows_sys::Win32::Foundation::CloseHandle(h as _) };
+        for img in &self.images {
+            for h in [img.memory, img.done_sem, img.free_sem] {
+                // SAFETY: handle duplicado pelo pai pra este processo, ainda
+                // aberto (só esta oferta o fecha).
+                unsafe { windows_sys::Win32::Foundation::CloseHandle(h as _) };
+            }
         }
     }
 }
 
-/// Texturas GL importadas de um `InteropOffer`. A oferta fica junto: os
-/// handles só fecham quando o anel some (depois das texturas e dos memory
-/// objects — ver `GlContext::free_win_interop`).
+/// Texturas e semáforos GL importados de um `InteropOffer`. A oferta fica
+/// junto: os handles só fecham quando o anel some (depois dos objetos GL —
+/// ver `GlContext::free_win_interop`).
 #[cfg(windows)]
 struct WinInteropRing {
     offer: InteropOffer,
-    /// `(memory object, textura)` de cada imagem.
-    slots: Vec<(u32, glow::Texture)>,
+    slots: Vec<WinSlot>,
+    /// Próximo slot a receber o desenho do core.
     write: usize,
+    /// Slot ligado no FBO agora (entre `bind_write_slot` e `hand_over_slot`).
+    current: Option<usize>,
+}
+
+#[cfg(windows)]
+struct WinSlot {
+    memory: u32,
+    tex: glow::Texture,
+    /// Semáforos GL (`glGenSemaphoresEXT`); 0 = não criado.
+    done: u32,
+    free: u32,
+    /// Entregue ao app (`done` sinalizado) e ainda não devolvido: antes de
+    /// redesenhar, o GL espera `free`.
+    lent: bool,
 }
 
 /// Um alvo compartilhado: BO do GBM + `EGLImage` + textura GL respaldada por ele.
@@ -841,8 +869,25 @@ impl GlContext {
         let Some(ring) = self.win_interop.as_mut() else {
             return;
         };
-        let tex = ring.slots[ring.write].1;
+        let idx = ring.write;
         ring.write = (ring.write + 1) % ring.slots.len();
+        ring.current = Some(idx);
+        let slot = &mut ring.slots[idx];
+        let tex = slot.tex;
+        if slot.lent {
+            // O app devolve a imagem em SHADER_READ_ONLY: o GL espera o
+            // `free` dele antes de desenhar por cima. "Because an external
+            // API may have changed texture layouts, the caller passes the
+            // current layout" (EXT_semaphore, WaitSemaphoreEXT).
+            slot.lent = false;
+            match wgl::SemaphoreFns::load() {
+                Ok(f) => unsafe {
+                    let layout = wgl::LAYOUT_SHADER_READ_ONLY_EXT;
+                    (f.wait)(slot.free, 0, std::ptr::null(), 1, &tex.0.get(), &layout);
+                },
+                Err(e) => log::warn!("interop GL→Vulkan: {e}"),
+            }
+        }
         unsafe {
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
             self.gl.framebuffer_texture_2d(
@@ -853,6 +898,41 @@ impl GlContext {
                 0,
             );
         }
+    }
+
+    /// Windows (B4): fim do quadro no slot atual — sinaliza o `done` dele com
+    /// a textura em `GL_LAYOUT_SHADER_READ_ONLY_EXT` (=
+    /// `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL`, tabela 4.4 da
+    /// EXT_external_objects) e devolve o índice. O `SignalSemaphoreEXT`
+    /// "flushes the stream as if a Flush were inserted right after it" — no
+    /// lugar do `glFinish`. Até o app devolver (`free`), o slot fica
+    /// emprestado. `None` sem anel.
+    #[cfg(windows)]
+    #[cfg_attr(not(feature = "test-fixtures"), allow(dead_code))] // o B5 usa
+    pub fn hand_over_slot(&mut self) -> Option<u32> {
+        let ring = self.win_interop.as_mut()?;
+        let idx = ring.current.take()?;
+        let f = match wgl::SemaphoreFns::load() {
+            Ok(f) => f,
+            Err(e) => {
+                log::warn!("interop GL→Vulkan: {e}");
+                return None;
+            }
+        };
+        let slot = &mut ring.slots[idx];
+        unsafe {
+            let layout = wgl::LAYOUT_SHADER_READ_ONLY_EXT;
+            (f.signal)(
+                slot.done,
+                0,
+                std::ptr::null(),
+                1,
+                &slot.tex.0.get(),
+                &layout,
+            );
+        }
+        slot.lent = true;
+        Some(idx as u32)
     }
 
     /// Troca o anel atual (se houver) pelo da oferta. Falhou → volta pra
@@ -901,16 +981,19 @@ impl GlContext {
             return Err("anel vazio".into());
         }
         let f = wgl::MemoryObjectFns::load()?;
+        let sf = wgl::SemaphoreFns::load()?;
         let gl = &self.gl;
         let prev_tex = gl.get_parameter_texture(glow::TEXTURE_BINDING_2D);
         while gl.get_error() != glow::NO_ERROR {}
         let mut ring = WinInteropRing {
             slots: Vec::with_capacity(offer.images.len()),
             write: 0,
+            current: None,
             offer,
         };
         let mut result = Ok(());
-        for &(handle, size) in &ring.offer.images {
+        for img in &ring.offer.images {
+            let (handle, size) = (img.memory, img.alloc_size);
             let mut mem = 0u32;
             (f.create)(1, &mut mem);
             if mem == 0 {
@@ -958,7 +1041,31 @@ impl GlContext {
             ] {
                 gl.tex_parameter_i32(glow::TEXTURE_2D, pname, v as i32);
             }
-            ring.slots.push((mem, tex));
+            // B4: os dois semáforos (EXT_semaphore + EXT_semaphore_win32):
+            // `glGenSemaphoresEXT` → `glImportSemaphoreWin32HandleEXT(
+            // HANDLE_TYPE_OPAQUE_WIN32_EXT)`.
+            let mut sems = [0u32; 2];
+            (sf.gen)(2, sems.as_mut_ptr());
+            for (sem, h) in sems.iter().zip([img.done_sem, img.free_sem]) {
+                if *sem != 0 {
+                    (sf.import)(
+                        *sem,
+                        wgl::HANDLE_TYPE_OPAQUE_WIN32_EXT,
+                        h as usize as *mut c_void,
+                    );
+                }
+            }
+            ring.slots.push(WinSlot {
+                memory: mem,
+                tex,
+                done: sems[0],
+                free: sems[1],
+                lent: false,
+            });
+            if sems.contains(&0) {
+                result = Err("glGenSemaphoresEXT devolveu 0".to_string());
+                break;
+            }
             let err = gl.get_error();
             if err != glow::NO_ERROR {
                 result = Err(format!(
@@ -977,7 +1084,7 @@ impl GlContext {
                 glow::FRAMEBUFFER,
                 glow::COLOR_ATTACHMENT0,
                 glow::TEXTURE_2D,
-                Some(ring.slots[0].1),
+                Some(ring.slots[0].tex),
                 0,
             );
             let status = gl.check_framebuffer_status(glow::FRAMEBUFFER);
@@ -988,7 +1095,7 @@ impl GlContext {
             }
         }
         if let Err(e) = result {
-            Self::delete_win_ring(gl, &f, ring, self.fbo, self.color);
+            Self::delete_win_ring(gl, &f, &sf, ring, self.fbo, self.color);
             return Err(e);
         }
         Ok(ring)
@@ -1001,8 +1108,10 @@ impl GlContext {
         let Some(ring) = self.win_interop.take() else {
             return;
         };
-        match wgl::MemoryObjectFns::load() {
-            Ok(f) => unsafe { Self::delete_win_ring(&self.gl, &f, ring, self.fbo, self.color) },
+        match wgl::MemoryObjectFns::load().and_then(|f| Ok((f, wgl::SemaphoreFns::load()?))) {
+            Ok((f, sf)) => unsafe {
+                Self::delete_win_ring(&self.gl, &f, &sf, ring, self.fbo, self.color)
+            },
             // Sem as funções não haveria anel; só por garantia.
             Err(e) => log::warn!("interop GL→Vulkan: soltar o anel: {e}"),
         }
@@ -1012,6 +1121,7 @@ impl GlContext {
     unsafe fn delete_win_ring(
         gl: &glow::Context,
         f: &wgl::MemoryObjectFns,
+        sf: &wgl::SemaphoreFns,
         ring: WinInteropRing,
         fbo: glow::Framebuffer,
         color: glow::Texture,
@@ -1024,9 +1134,17 @@ impl GlContext {
             Some(color),
             0,
         );
-        for &(mem, tex) in &ring.slots {
-            gl.delete_texture(tex);
-            (f.delete)(1, &mem);
+        // Um `done` pode estar por sinalizar na GPU: o `glFinish` garante que
+        // o GL acabou com tudo antes de apagar.
+        gl.finish();
+        for s in &ring.slots {
+            gl.delete_texture(s.tex);
+            (f.delete)(1, &s.memory);
+            for sem in [s.done, s.free] {
+                if sem != 0 {
+                    (sf.delete)(1, &sem);
+                }
+            }
         }
         drop(ring);
     }
@@ -1520,6 +1638,9 @@ mod wgl {
     pub(super) const DEDICATED_MEMORY_OBJECT_EXT: u32 = 0x9581;
     pub(super) const OPTIMAL_TILING_EXT: u32 = 0x9584;
     pub(super) const HANDLE_TYPE_OPAQUE_WIN32_EXT: u32 = 0x9587;
+    /// = `VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL` (tabela 4.4; valor do
+    /// `glext.h` do registro Khronos).
+    pub(super) const LAYOUT_SHADER_READ_ONLY_EXT: u32 = 0x9591;
 
     type CreateMemoryObjects = unsafe extern "system" fn(i32, *mut u32);
     type DeleteMemoryObjects = unsafe extern "system" fn(i32, *const u32);
@@ -1571,6 +1692,61 @@ mod wgl {
                     )?),
                     tex_storage_2d: std::mem::transmute::<*const c_void, TexStorageMem2D>(get(
                         c"glTexStorageMem2DEXT",
+                    )?),
+                })
+            }
+        }
+    }
+
+    type GenSemaphores = unsafe extern "system" fn(i32, *mut u32);
+    type DeleteSemaphores = unsafe extern "system" fn(i32, *const u32);
+    type ImportSemaphoreWin32Handle = unsafe extern "system" fn(u32, u32, *mut c_void);
+    type SemaphoreOp = unsafe extern "system" fn(u32, u32, *const u32, u32, *const u32, *const u32);
+
+    /// Funções do GL_EXT_semaphore(+_win32) pro B4. Assinaturas dos
+    /// `PFNGL*SEMAPHORE*EXTPROC` do `glext.h` do registro Khronos.
+    pub(super) struct SemaphoreFns {
+        /// `void GenSemaphoresEXT(sizei n, uint *semaphores)`
+        pub gen: GenSemaphores,
+        /// `void DeleteSemaphoresEXT(sizei n, const uint *semaphores)`
+        pub delete: DeleteSemaphores,
+        /// `void ImportSemaphoreWin32HandleEXT(uint semaphore, enum handleType, void *handle)`
+        pub import: ImportSemaphoreWin32Handle,
+        /// `void WaitSemaphoreEXT(uint semaphore, uint numBufferBarriers, const uint *buffers,
+        /// uint numTextureBarriers, const uint *textures, const enum *srcLayouts)`
+        pub wait: SemaphoreOp,
+        /// `void SignalSemaphoreEXT(...)`, mesmos parâmetros com `dstLayouts`.
+        pub signal: SemaphoreOp,
+    }
+
+    impl SemaphoreFns {
+        /// Precisa do contexto atual (`wglGetProcAddress`).
+        pub fn load() -> Result<Self, String> {
+            fn get(name: &CStr) -> Result<*const c_void, String> {
+                let p = proc_address(name);
+                if p.is_null() {
+                    Err(format!("sem {}", name.to_string_lossy()))
+                } else {
+                    Ok(p)
+                }
+            }
+            // SAFETY: ponteiros do driver pra funções com essas assinaturas.
+            unsafe {
+                Ok(Self {
+                    gen: std::mem::transmute::<*const c_void, GenSemaphores>(get(
+                        c"glGenSemaphoresEXT",
+                    )?),
+                    delete: std::mem::transmute::<*const c_void, DeleteSemaphores>(get(
+                        c"glDeleteSemaphoresEXT",
+                    )?),
+                    import: std::mem::transmute::<*const c_void, ImportSemaphoreWin32Handle>(get(
+                        c"glImportSemaphoreWin32HandleEXT",
+                    )?),
+                    wait: std::mem::transmute::<*const c_void, SemaphoreOp>(get(
+                        c"glWaitSemaphoreEXT",
+                    )?),
+                    signal: std::mem::transmute::<*const c_void, SemaphoreOp>(get(
+                        c"glSignalSemaphoreEXT",
                     )?),
                 })
             }
@@ -2152,6 +2328,52 @@ pub fn render_solid_into_interop_offer(
         out.push([px[0], px[1], px[2], px[3]]);
     }
     Ok(out)
+}
+
+/// O lado GL do interop (B4) pro teste do app: um `GlContext` com o anel
+/// importado, que desenha uma cor por quadro e entrega o slot ao app
+/// (`hand_over_slot`, semáforo `done`). O quadro seguinte no mesmo slot
+/// espera o `free` do app. Feature `test-fixtures`.
+#[cfg(all(windows, feature = "test-fixtures"))]
+pub struct InteropGlProbe {
+    ctx: GlContext,
+}
+
+#[cfg(all(windows, feature = "test-fixtures"))]
+impl InteropGlProbe {
+    pub fn new(offer: InteropOffer) -> Result<Self, String> {
+        let cfg = GlConfig {
+            context_type: sys::RETRO_HW_CONTEXT_OPENGL_CORE,
+            version_major: 3,
+            version_minor: 3,
+            depth: true,
+            stencil: false,
+            bottom_left_origin: false,
+        };
+        let ctx = GlContext::create(&cfg, offer.width, offer.height)?;
+        *OFFERED_RING.lock().unwrap_or_else(|p| p.into_inner()) = Some(offer);
+        Ok(Self { ctx })
+    }
+
+    /// Desenha `rgba` no próximo slot e o entrega ao app. Devolve o índice.
+    pub fn draw(&mut self, rgba: [u8; 4]) -> Result<u32, String> {
+        self.ctx.bind_write_slot();
+        if self.ctx.win_interop.is_none() {
+            return Err("o anel não foi importado (ver o log)".into());
+        }
+        unsafe {
+            self.ctx.gl.clear_color(
+                rgba[0] as f32 / 255.0,
+                rgba[1] as f32 / 255.0,
+                rgba[2] as f32 / 255.0,
+                rgba[3] as f32 / 255.0,
+            );
+            self.ctx.gl.clear(glow::COLOR_BUFFER_BIT);
+        }
+        self.ctx
+            .hand_over_slot()
+            .ok_or_else(|| "hand_over_slot sem slot".to_string())
+    }
 }
 
 #[cfg(test)]

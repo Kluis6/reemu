@@ -306,13 +306,21 @@ conferir".
       a ter todos os usos do formato e `MUTABLE_FORMAT` (issues 13 e 17 da
       EXT_external_objects). Teste: `win32_interop_ring_imports_into_gl`
       (RTX 3060, camadas de validação sem VUID).
-- [ ] `todo` — B4. Sincronização sem `glFinish`: semáforos exportados pelo
-      Vulkan (`VK_KHR_external_semaphore_win32`) e importados no GL
-      (`glImportSemaphoreWin32HandleEXT`). O GL sinaliza no fim do quadro
-      (`glSignalSemaphoreEXT`) e o wgpu espera antes de amostrar. Mesmo
-      papel do `sync_file` → semáforo do Linux.
+- [x] `done` — B4 (2026-10-11): dois semáforos binários exportáveis por
+      imagem (molde do `open_gl_interop` do Vulkan-Samples): `done` (o GL
+      sinaliza no fim do quadro, `GlContext::hand_over_slot`, com a textura
+      em `GL_LAYOUT_SHADER_READ_ONLY_EXT`) e `free` (o app sinaliza ao
+      terminar de ler; o `bind_write_slot` espera antes de redesenhar no
+      slot). Vão no `InteropImages` com a memória; o filho importa com
+      `glImportSemaphoreWin32HandleEXT`. Teste de ida e volta
+      `win32_interop_semaphores_round_trip` (RTX 3060, sem VUID). Em uso
+      real só a partir do B5 (o `hand_over_slot` ainda não é chamado no
+      quadro do core).
 - [ ] `todo` — B5. Quadro pelo pipe como `FrameKind::Hardware` com o
-      índice do slot (sem fd). Fallback automático pro readback em qualquer
+      índice do slot (sem fd). O app espera `done` (`add_wait_semaphore`
+      do wgpu-hal) antes de amostrar e sinaliza `free`
+      (`add_signal_semaphore`) depois — também nos quadros descartados,
+      senão o GL fica esperando. Fallback automático pro readback em qualquer
       falha, como no Linux. `REEMU_GL_INTEROP=0` força o readback.
 - [ ] `todo` — B6. Validar com as camadas de validação do Vulkan (sync
       incluída), na NVIDIA e, se der, numa AMD/Intel. Medir contra a fase A.

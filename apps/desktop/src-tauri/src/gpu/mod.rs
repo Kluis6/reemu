@@ -1794,6 +1794,8 @@ impl FrameProcessor {
                 Ok(emu_session::InteropImage {
                     handle: win_interop::duplicate_into(pid, img.handle)?,
                     alloc_size: img.alloc_size,
+                    done_sem: win_interop::duplicate_into(pid, img.done_handle)?,
+                    free_sem: win_interop::duplicate_into(pid, img.free_handle)?,
                 })
             })
             .collect::<Result<Vec<_>, String>>()?;
