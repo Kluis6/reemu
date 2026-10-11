@@ -2112,3 +2112,9 @@ Infra:
   - O texto secundário foi para #A9B0B9, que passa AA também sobre os campos.
   - O card das Configurações ganhou um traço de 1 px (`colorNeutralStroke2`) em todos os temas. No escuro, o `shadow4` quase some sobre fundo escuro, e "Windows uses strokes instead of key shadows" (Fluent 2 › Elevation).
   - Obs.: os prints anteriores do usuário ainda mostravam o Serene antigo (#15191E, botão azul): a janela do `tauri dev` precisa ser recarregada (Ctrl+R) para ler o `themes.ts` novo.
+
+## 2026-10-11 — Botão "Mostrar tudo" das prateleiras: espaço e foco
+
+- Medido no print do usuário (app Xbox, "Jogar com mouse e teclado", 3840×2160): caixa de 24×24 epx, a 18 epx do fim do título, e fundo #4E535B sobre a página #1A1B1E no hover/foco.
+- O ReEmu estava com 32 px e a 6 px do título. Agora tem 24 px, ícone de 20 e 18 px de distância (conferido: título termina em 303 e o botão começa em 321).
+- No foco (teclado ou controle), o fundo acende como no hover. A cor é o fundo da página misturado a 22% com a cor do texto do tema, perto do #4E535B do Xbox no escuro.

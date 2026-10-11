@@ -9,7 +9,6 @@ import {
   SECTION_TITLE,
   SECTION_TITLE_GAP,
   SECTION_TITLE_LINE,
-  TARGET_MIN,
 } from '../styles/metrics'
 import { useTranslation } from 'react-i18next'
 
@@ -19,10 +18,9 @@ const useStyles = makeStyles({
   row: {
     display: 'flex',
     alignItems: 'center',
-    // Do fim do título ao botão: 6 epx. Com o ícone de 20 centrado no botão
-    // de 32, o traço do chevron começa ~19,5 epx depois do título, como no
-    // app Xbox (print a 3840×2160, 3,07 px por epx: 60 px).
-    columnGap: tokens.spacingHorizontalSNudge,
+    // Do fim do título à caixa do botão: 18 epx, como no app Xbox (print a
+    // 3840×2160, "Jogar com mouse e teclado": 57 px a 3,07 px por epx).
+    columnGap: '18px',
   },
   title: {
     // Título de seção do app Xbox (medido, ver `metrics.ts`): 26, semibold.
@@ -34,9 +32,9 @@ const useStyles = makeStyles({
     margin: 0,
   },
   // Botão quadrado só com o chevron, logo depois do título, como no app
-  // Xbox ("Jogos principais pagos  [>]", dica "Mostrar tudo"). Alvo mínimo
-  // de 32 epx e ícone de 20 (o chevron do Xbox mede 6×12 epx, o traço do
-  // `ChevronRight` de 20; o de 16 ficava 4,8×9,6).
+  // Xbox ("Jogar com mouse e teclado  [>]", dica "Mostrar tudo"): caixa de
+  // 24×24 epx com o `ChevronRight` de 20 (traço de 6×12 epx, o mesmo do
+  // Xbox), medidos no print a 3840×2160.
   seeAll: {
     // A linha centraliza as caixas, mas o meio das maiúsculas do título fica
     // ~1,7 px abaixo do meio da linha de 32 (Segoe UI: ascendente 1,079 em,
@@ -44,13 +42,22 @@ const useStyles = makeStyles({
     // o das maiúsculas — desce 2 px.
     position: 'relative',
     top: '2px',
-    minWidth: `${TARGET_MIN}px !important`,
-    maxWidth: `${TARGET_MIN}px !important`,
-    width: `${TARGET_MIN}px`,
-    height: `${TARGET_MIN}px`,
+    minWidth: '24px !important',
+    maxWidth: '24px !important',
+    width: '24px',
+    height: '24px',
     padding: '0 !important',
-    // `appearance="subtle"`: sem fundo em repouso (como no print do app
-    // Xbox), o fundo e a cor do hover/pressionado são os do Fluent.
+    // `appearance="subtle"`: sem fundo em repouso (como no Xbox). No hover
+    // E no foco (teclado/controle) o fundo acende igual: no Xbox, #4E535B
+    // sobre a página #1A1B1E (~22% rumo ao branco) — aqui o fundo da página
+    // misturado com a cor do texto do tema, pra acompanhar claro/escuro.
+    '&:hover, &:focus, &:focus-visible': {
+      backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 22%) !important`,
+      color: `${tokens.colorNeutralForeground1} !important`,
+    },
+    ':active': {
+      backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 15%) !important`,
+    },
     // O slot de ícone do <Button> é fixo em 20 no tamanho medium; garante.
     '& .fui-Button__icon': { fontSize: `${ICON}px`, width: `${ICON}px`, height: `${ICON}px` },
   },
