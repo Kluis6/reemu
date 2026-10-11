@@ -331,10 +331,6 @@ const es: Messages = {
     shader: {
       applyTo: 'Aplicar a',
       scopeGame: 'Juego',
-      activeRom: 'Activo: definido en este juego.',
-      activeSystem: 'Activo: heredado de la plataforma.',
-      activeDefault: 'Activo: heredado de todos los juegos.',
-      activeNone: 'Activo: ninguno (shader \'plain\').',
       inherit: 'Heredar',
       inheritRom: 'Usa el shader de la plataforma o el predeterminado de todos los juegos.',
       inheritSystem: 'Usa el shader predeterminado de todos los juegos.',

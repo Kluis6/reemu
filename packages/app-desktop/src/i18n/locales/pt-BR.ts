@@ -332,10 +332,6 @@ const ptBR = {
     shader: {
       applyTo: 'Aplicar a',
       scopeGame: 'Jogo',
-      activeRom: 'Ativo: definido neste jogo.',
-      activeSystem: 'Ativo: herdado da plataforma.',
-      activeDefault: 'Ativo: herdado de todos os jogos.',
-      activeNone: 'Ativo: nenhum (shader \'plain\').',
       inherit: 'Herdar',
       inheritRom: 'Usa o shader da plataforma ou o padrão de todos os jogos.',
       inheritSystem: 'Usa o shader padrão de todos os jogos.',

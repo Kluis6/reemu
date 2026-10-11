@@ -1152,6 +1152,26 @@ export const useDetailStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
   },
   field: { display: "flex", flexDirection: "column", rowGap: "4px" },
+  // Aba Shader: escolha à esquerda, ajustes do shader escolhido à direita.
+  shaderCols: {
+    display: "grid",
+    gridTemplateColumns: "minmax(320px, 560px) minmax(320px, 1fr)",
+    columnGap: "48px",
+    rowGap: tokens.spacingVerticalL,
+    alignItems: "start",
+  },
+  // Ajustes num card, rolando dentro dele com muitos parâmetros (na altura
+  // das abas + lista de shaders ao lado) e o scrollbar fino do app.
+  shaderParams: {
+    maxHeight: "420px",
+    overflowY: "auto",
+    padding: tokens.spacingHorizontalM,
+    "::-webkit-scrollbar": { width: "6px" },
+    "::-webkit-scrollbar-thumb": {
+      backgroundColor: tokens.colorNeutralStroke2,
+      borderRadius: tokens.borderRadiusCircular,
+    },
+  },
   // Escolha de shader (abas + lista de cards), na largura da coluna de
   // opções das Configurações › Shaders.
   shaderPicker: {

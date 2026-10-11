@@ -5,6 +5,7 @@ import {
   Button,
   Spinner,
   Caption1,
+  Card,
   Dialog,
   DialogActions,
   DialogBody,
@@ -64,6 +65,7 @@ import {
   rescrapeRom,
   getRomShader,
   getShaderInfo,
+  getShaderParams,
   listBiosStatus,
   listInstalledCores,
   listRoms,
@@ -186,6 +188,15 @@ export function RomDetail() {
   const currentGameShader = shaderAtScope
     ? (shaderAtScope.split(/[/\\]/).pop() ?? shaderAtScope)
     : "";
+  // Parâmetros do shader escolhido no escopo — mesma chave do
+  // `ShaderParams`, só pra saber se a coluna de ajustes aparece.
+  const shaderParamsKey = `${shaderScope}:${currentGameShader}`;
+  const shaderParams = useQuery({
+    queryKey: ["shader-params", shaderScope, romId, shaderSystemId, shaderParamsKey],
+    queryFn: getShaderParams,
+    enabled: !!shaderAtScope,
+    retry: false,
+  });
 
   const rom = roms.data?.find((r) => r.id === romId);
   // Ao abrir a página de um jogo, o foco vai pro "Jogar" (controle e teclado
@@ -720,52 +731,48 @@ export function RomDetail() {
                     </Tab>
                   </TabList>
                 </div>
-                <Caption1 className={s.hint}>
-                  {romShader.data?.resolvedScope === "rom"
-                    ? t("game.shader.activeRom")
-                    : romShader.data?.resolvedScope === "system"
-                      ? t("game.shader.activeSystem")
-                      : romShader.data?.resolvedScope === "default"
-                        ? t("game.shader.activeDefault")
-                        : t("game.shader.activeNone")}
-                </Caption1>
               </div>
               {/* Mesma escolha das Configurações (abas Shaders do ReEmu /
                   Pacote de shaders, em cards), sem a prévia; "Herdar" no
-                  topo tira a escolha deste escopo. */}
-              <div className={s.shaderPicker}>
-                <ShaderPicker
-                  info={shaderInfo.data}
-                  selected={shaderAtScope}
-                  busy={shaderPick.isPending}
-                  onPick={(n) => shaderPick.mutate(n)}
-                  inherit={
-                    shaderScope === "rom"
-                      ? t("game.shader.inheritRom")
-                      : t("game.shader.inheritSystem")
-                  }
-                />
+                  topo tira a escolha deste escopo. Os ajustes do shader
+                  escolhido (se ele tiver) ficam na coluna ao lado. */}
+              <div className={s.shaderCols}>
+                <div className={s.shaderPicker}>
+                  <ShaderPicker
+                    info={shaderInfo.data}
+                    selected={shaderAtScope}
+                    busy={shaderPick.isPending}
+                    onPick={(n) => shaderPick.mutate(n)}
+                    inherit={
+                      shaderScope === "rom"
+                        ? t("game.shader.inheritRom")
+                        : t("game.shader.inheritSystem")
+                    }
+                  />
+                  <div>
+                    <Button
+                      appearance="subtle"
+                      disabled={shaderPick.isPending}
+                      onClick={async () => {
+                        const p = await pickSlangp();
+                        if (p) shaderPick.mutate(p);
+                      }}
+                    >
+                      {t("game.shader.loadFile")}
+                    </Button>
+                  </div>
+                </div>
+                {shaderAtScope && (shaderParams.data?.length ?? 0) > 0 && (
+                  <Card className={s.shaderParams} appearance="filled-alternative">
+                    <ShaderParams
+                      scope={shaderScope}
+                      romId={romId}
+                      systemId={shaderSystemId}
+                      reloadKey={shaderParamsKey}
+                    />
+                  </Card>
+                )}
               </div>
-              <div>
-                <Button
-                  appearance="subtle"
-                  disabled={shaderPick.isPending}
-                  onClick={async () => {
-                    const p = await pickSlangp();
-                    if (p) shaderPick.mutate(p);
-                  }}
-                >
-                  {t("game.shader.loadFile")}
-                </Button>
-              </div>
-              {shaderAtScope && (
-                <ShaderParams
-                  scope={shaderScope}
-                  romId={romId}
-                  systemId={shaderSystemId}
-                  reloadKey={`${shaderScope}:${currentGameShader}`}
-                />
-              )}
             </>
           )}
           {activeCfgTab === "core" && chosenCore && (
