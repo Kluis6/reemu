@@ -2073,3 +2073,10 @@ Infra:
 - **Início:**
   - "Mostrar tudo" das prateleiras passou a `appearance="subtle"`, sem fundo em repouso, como no app Xbox.
   - "Todos os jogos" e "Adicionar ROMs" passaram a `outline`.
+
+## 2026-10-11 — Anel de foco do 1º card das prateleiras
+
+- O anel do card vai 9 epx para fora: 6 de afastamento mais 3 de traço.
+- A folga lateral da prateleira (`SHELF_PAD`) era 8, e o `overflow-x: clip` cortava 1 px do traço à esquerda do 1º card. O mesmo valia para a direita do último.
+- Medido numa captura com o card focado: 2 px à esquerda contra 3 nos outros lados.
+- Com `SHELF_PAD` = 12 o traço fica inteiro. A posição dos cards não muda, porque a margem negativa do `.wrap` acompanha a constante.

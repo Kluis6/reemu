@@ -13,12 +13,15 @@ import { CARD_GAP, CARD_W } from "../styles/metrics";
 export const SHELF_GAP = CARD_GAP;
 /** Padding horizontal do `.shelf` (cada lado) — folga pro anel de foco do
  *  1º/último card não ser cortado pelo `overflow` do scroller (ver
- *  `useShelfStyles.shelf`/`.wrap` em `styles/xbox.ts`). `clientWidth` do
+ *  `useShelfStyles.shelf`/`.wrap` em `styles/xbox.ts`). O anel do card vai
+ *  9 epx pra fora (afastamento de 6 + traço de 3, `useCardStyles.card`):
+ *  com 8 o 1º card perdia 1 px do traço à esquerda (medido, 2026-10-11);
+ *  12 deixa 3 de sobra. `clientWidth` do
  *  `.shelf` inclui esse padding; subtraído antes de calcular capacidade/
  *  preenchimento, senão a conta "acha" 2×isto de espaço a mais pros cards
  *  do que realmente existe — sobrando um resto na borda direita.
  */
-export const SHELF_PAD = 8;
+export const SHELF_PAD = 12;
 
 /** Largura pronta pro `width` / `grid-template-columns`. */
 export const cardSizeCss = `${CARD_W}px`;
