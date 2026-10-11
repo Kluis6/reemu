@@ -102,6 +102,9 @@ struct Shared {
     /// próximo quadro do mesmo slot; esvaziado a cada `Load` (os slots são
     /// do processo filho).
     orphan_planes: Mutex<HashMap<u32, OrphanPlane>>,
+    /// B5 (Windows): slots do anel de quadros que foram descartados sem o
+    /// app amostrar — o app devolve (`take_dropped_interop_slots`).
+    interop_dropped: Arc<Mutex<Vec<u32>>>,
     /// Sinaliza `latest_frame` preenchido — quem apresenta espera nisto em
     /// vez de dormir um tempo fixo (ver `wait_for_frame`).
     frame_ready: Condvar,
@@ -312,6 +315,7 @@ impl EmuSession {
             latest_frame: Mutex::new(None),
             spare_bufs: Mutex::new(Vec::new()),
             orphan_planes: Mutex::new(HashMap::new()),
+            interop_dropped: Arc::new(Mutex::new(Vec::new())),
             frame_ready: Condvar::new(),
             audio: Mutex::new(Vec::new()),
             state: Mutex::new(SessionState::Idle),
@@ -720,6 +724,33 @@ impl EmuSession {
     /// alocar. Opcional — quem não devolve só perde o reuso.
     pub fn recycle_frame(&self, frame: Frame) {
         self.shared.recycle(frame);
+    }
+
+    /// B5 (Windows): slots do anel cujos quadros foram descartados sem ser
+    /// amostrados. O app espera o `done` e sinaliza o `free` de cada um e
+    /// depois chama `release_interop_slot`.
+    pub fn take_dropped_interop_slots(&self) -> Vec<u32> {
+        std::mem::take(
+            &mut *self
+                .shared
+                .interop_dropped
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()),
+        )
+    }
+
+    /// B5 (Windows): o `free` do slot já foi submetido no Vulkan — avisa o
+    /// filho que ele pode desenhar nesse slot de novo.
+    pub fn release_interop_slot(&self, slot: u32) {
+        if let Some(ch) = self
+            .shared
+            .child_channel
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+        {
+            let _ = ch.send(&ToChild::InteropSlotFree { slot }, &[]);
+        }
     }
 
     /// Bloqueia até existir um frame não consumido ou `timeout` passar — NÃO
@@ -1246,6 +1277,7 @@ fn handle_event(
                 ev.fds,
                 spare,
                 &shared.orphan_planes,
+                Some(&shared.interop_dropped),
             ) {
                 shared.frame_seq.fetch_add(1, Ordering::Relaxed);
                 let replaced = shared
@@ -1297,6 +1329,12 @@ fn handle_event(
 /// duplica os handles; a resposta vai pelo canal do filho. Sem provedor ou
 /// com erro, nada é mandado e o filho segue no readback.
 fn answer_interop_request(shared: &Shared, max_w: u32, max_h: u32) {
+    // Anel novo: devoluções pendentes do anterior não valem mais.
+    shared
+        .interop_dropped
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clear();
     let provider = shared
         .interop_provider
         .lock()
@@ -1356,6 +1394,7 @@ pub type InteropProvider = Arc<dyn Fn(u32, u32, u32) -> Result<InteropReply, Str
 /// software lê do anel de shared memory, caminho HW/interop empacota o fd
 /// recebido (se houver) num `GpuTextureHandle` — `gpu.rs` não sabe a
 /// diferença entre isto e o `GlInteropHandle` de quando tudo era 1 processo.
+#[allow(clippy::too_many_arguments)]
 fn reconstruct_frame(
     ring: Option<&core_ipc::FrameRing>,
     slot: u32,
@@ -1364,6 +1403,7 @@ fn reconstruct_frame(
     fds: Vec<core_ipc::InlineHandle>,
     spare: Option<Vec<u8>>,
     orphans: &Mutex<HashMap<u32, OrphanPlane>>,
+    interop_dropped: Option<&Arc<Mutex<Vec<u32>>>>,
 ) -> Option<Frame> {
     match kind {
         FrameKind::Software { pitch, format } => {
@@ -1414,6 +1454,14 @@ fn reconstruct_frame(
                     flip_y,
                     plane: Mutex::new(plane),
                     sync_fd: Mutex::new(sync_fd),
+                    // Só o anel do Windows devolve slots (no Linux o
+                    // `dma_buf` não tem dono do outro lado esperando).
+                    returns: if cfg!(windows) {
+                        interop_dropped.cloned()
+                    } else {
+                        None
+                    },
+                    claimed: std::sync::atomic::AtomicBool::new(false),
                 })),
                 metadata: meta,
             })
@@ -1452,11 +1500,9 @@ fn dmabuf_plane_info(meta: HwPlaneMeta, fd: Option<core_ipc::InlineHandle>) -> D
     }
 }
 
-// dma_buf não existe no Windows (ver `core-host-desktop::send_frame` —
-// `FrameOrigin::HardwareTexture` ali só loga e descarta, nunca manda
-// `FrameReady{kind: Hardware, ..}`) — este caminho nunca é exercitado na
-// prática ali, mas o tipo da mensagem IPC é compartilhado, então precisa
-// compilar.
+// dma_buf não existe no Windows: lá o `FrameReady{kind: Hardware}` é o
+// índice do anel do interop GL → Vulkan (B5), sem plano — este caminho só
+// existe porque o tipo da mensagem IPC é compartilhado.
 #[cfg(windows)]
 fn dmabuf_plane_info(meta: HwPlaneMeta, _fd: Option<core_ipc::InlineHandle>) -> DmabufPlaneInfo {
     DmabufPlaneInfo {
@@ -1505,12 +1551,24 @@ struct IpcGpuTextureHandle {
     flip_y: bool,
     plane: Mutex<Option<DmabufPlaneInfo>>,
     sync_fd: Mutex<Option<i32>>,
+    /// B5 (Windows): pra onde vai o slot se ninguém o reivindicar.
+    returns: Option<Arc<Mutex<Vec<u32>>>>,
+    claimed: std::sync::atomic::AtomicBool,
 }
 
 impl Drop for IpcGpuTextureHandle {
     /// Quadro descartado sem ninguém pegar a fence / o plano: fecha os fds
-    /// (o plano normalmente já foi resgatado por `Shared::recycle`).
+    /// (o plano normalmente já foi resgatado por `Shared::recycle`). No
+    /// Windows, um slot não reivindicado volta pra lista de devolução.
     fn drop(&mut self) {
+        if let Some(returns) = &self.returns {
+            if !self.claimed.load(Ordering::Relaxed) {
+                returns
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .push(self.slot);
+            }
+        }
         #[cfg(unix)]
         {
             use rustix::fd::FromRawFd;
@@ -1547,6 +1605,10 @@ impl GpuTextureHandle for IpcGpuTextureHandle {
 
     fn flip_y(&self) -> bool {
         self.flip_y
+    }
+
+    fn claim(&self) -> bool {
+        !self.claimed.swap(true, Ordering::Relaxed)
     }
 }
 
@@ -2307,7 +2369,7 @@ mod orphan_plane_tests {
             plane,
             sync: false,
         };
-        reconstruct_frame(None, 1, frame_meta, kind, fds, None, orphans).unwrap()
+        reconstruct_frame(None, 1, frame_meta, kind, fds, None, orphans, None).unwrap()
     }
 
     /// Regressão da "metade dos quadros some" com interop: o plano só vem no

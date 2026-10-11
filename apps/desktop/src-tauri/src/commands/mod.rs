@@ -400,3 +400,24 @@ pub use shader_preview::*;
 pub use shader_preview_2d::*;
 pub use shader_preview_3d::*;
 pub use shaders::*;
+
+/// B5 (Windows): devolve ao processo do core os slots do anel do interop
+/// GL → Vulkan — os amostrados neste quadro e os de quadros descartados. O
+/// `FrameProcessor` submete o `free` de cada um e só então o filho é avisado.
+/// Sem `FrameProcessor`, os descartados ficam emprestados e o filho segue no
+/// readback (nunca trava esperando).
+pub(crate) fn flush_interop_slots(state: &AppState) {
+    #[cfg(windows)]
+    {
+        let dropped = state.session.take_dropped_interop_slots();
+        let freed = match state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+            Some(fp) => fp.flush_interop(&dropped),
+            None => Vec::new(),
+        };
+        for slot in freed {
+            state.session.release_interop_slot(slot);
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = state;
+}

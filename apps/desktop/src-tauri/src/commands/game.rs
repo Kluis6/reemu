@@ -507,6 +507,8 @@ pub fn set_video_viewport(state: State<'_, AppState>, width: u32, height: u32) {
 #[tauri::command]
 pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
     use domain::frame_source::{rotate_rgba, to_rgba8, to_rgba8_slice, FrameOrigin};
+    // Slots do interop de quadros anteriores (Windows, B5) voltam ao core.
+    super::flush_interop_slots(&state);
     let Some(frame) = state.session.take_latest_frame() else {
         return tauri::ipc::Response::new(Vec::new());
     };
@@ -521,6 +523,7 @@ pub fn poll_frame(state: State<'_, AppState>) -> tauri::ipc::Response {
                 drop(gpu);
                 // a GPU já copiou o quadro: o buffer volta pro pool da sessão
                 state.session.recycle_frame(frame);
+                super::flush_interop_slots(&state);
                 let w = u32::from_le_bytes(packed[0..4].try_into().unwrap_or_default());
                 let h = u32::from_le_bytes(packed[4..8].try_into().unwrap_or_default());
                 cache_thumb_frame(&state, w, h, &packed[FRAME_HEADER..]);

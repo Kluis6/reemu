@@ -2076,12 +2076,15 @@ fn win32_interop_semaphores_round_trip() {
         for (i, c) in colors.iter().enumerate() {
             assert_eq!(probe.draw(*c).unwrap(), i as u32);
             assert_eq!(read_slot(i), *c, "slot {i}, 1ª volta");
+            // B5: o `free` foi submetido — o GL pode reusar o slot.
+            core_loader_desktop::interop_slot_freed(i as u32);
         }
         // 2ª volta: o GL espera o `free` de cada slot antes de redesenhar.
         for i in 0..3 {
             let c = [255, 255, 0, 255];
             assert_eq!(probe.draw(c).unwrap(), i as u32);
             assert_eq!(read_slot(i), c, "slot {i}, 2ª volta");
+            core_loader_desktop::interop_slot_freed(i as u32);
         }
 
         drop(probe);
@@ -2155,4 +2158,159 @@ fn win32_interop_ring_reaches_the_core_process() {
         1,
         "o filho devia pedir o anel uma vez"
     );
+}
+
+/// Roda `core` com `rom` pelo `EmuSession` com o interop GL → Vulkan do
+/// Windows ligado, como a bomba de vídeo do app: pega o quadro, passa pela
+/// chain (`process`), recicla e devolve os slots (`flush_interop` →
+/// `release_interop_slot`). Para em `frames` quadros pelo anel ou em
+/// `timeout`. `check(quadro_do_anel, rgba_lido)` vê cada quadro lido (o
+/// readback do `process` é atrasado em um quadro — o 1º vem `None`).
+#[cfg(windows)]
+fn drive_interop_session(
+    core: &str,
+    rom: &std::path::Path,
+    frames: u32,
+    timeout: std::time::Duration,
+    mut check: impl FnMut(bool, Option<(u32, u32, &[u8])>),
+) -> (u32, u32) {
+    use domain::frame_source::FrameOrigin;
+    use emu_session::{EmuSession, SessionConfig};
+    use std::sync::{Arc, Mutex};
+    use std::time::{Duration, Instant};
+    // SAFETY: testes `--ignored` de processo único pra esta variável; o
+    // filho herda o ambiente.
+    unsafe { std::env::set_var("REEMU_GL_INTEROP", "1") };
+    let _ = env_logger::builder().is_test(true).try_init();
+    let fp = FrameProcessor::new().expect("GPU");
+    let vk = fp.vk_interop_id();
+    let fp = Arc::new(Mutex::new(fp));
+    let tmp = std::env::temp_dir().join(format!("reemu-b5-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let session = EmuSession::spawn(SessionConfig::new(tmp.clone(), tmp.clone(), tmp.clone()));
+    session.set_vk_interop(vk);
+    let fp2 = fp.clone();
+    session.set_interop_provider(Arc::new(move |w, h, pid| {
+        fp2.lock().unwrap().install_interop_ring(w, h, pid)
+    }));
+    session
+        .load(core, rom.to_str().unwrap(), Default::default())
+        .expect("carregar o core");
+
+    let (mut ring_frames, mut readback_frames) = (0u32, 0u32);
+    let start = Instant::now();
+    while ring_frames < frames && start.elapsed() < timeout {
+        session.wait_for_frame(Duration::from_millis(100));
+        if let Some(frame) = session.take_latest_frame() {
+            let is_ring = matches!(frame.origin, FrameOrigin::HardwareTexture(_));
+            if is_ring {
+                ring_frames += 1;
+            } else {
+                readback_frames += 1;
+            }
+            {
+                let mut g = fp.lock().unwrap();
+                check(is_ring, g.process(&frame));
+            }
+            session.recycle_frame(frame);
+        }
+        let dropped = session.take_dropped_interop_slots();
+        let freed = fp.lock().unwrap().flush_interop(&dropped);
+        for slot in freed {
+            session.release_interop_slot(slot);
+        }
+    }
+    let _ = session.unload();
+    let _ = std::fs::remove_dir_all(&tmp);
+    eprintln!(
+        "quadros: {ring_frames} pelo anel, {readback_frames} pelo readback em {:.1} s",
+        start.elapsed().as_secs_f32()
+    );
+    (ring_frames, readback_frames)
+}
+
+/// B5 de ponta a ponta na GPU real: o core-fake (`HWD`) desenha magenta via
+/// GL no FBO do frontend; o quadro chega ao app só como índice do anel
+/// (`HardwareTexture`), a chain amostra a imagem compartilhada (esperando o
+/// `done`), o `flush_interop` submete o `free` e o filho é avisado. Confere
+/// a cor e que os quadros continuam vindo pelo anel (nada trava).
+#[cfg(windows)]
+#[test]
+#[ignore = "precisa de GPU (WGL + Vulkan com external_memory/semaphore_win32)"]
+fn win32_interop_frames_flow_through_the_ring() {
+    let tmp = std::env::temp_dir().join(format!("reemu-b5-rom-{}", std::process::id()));
+    std::fs::create_dir_all(&tmp).unwrap();
+    let rom = tmp.join("hwd.bin");
+    std::fs::write(&rom, b"HWD desenha via GL").unwrap();
+    let mut checked = 0u32;
+    let (ring, _) = drive_interop_session(
+        core_loader_desktop::testcore_path(),
+        &rom,
+        120,
+        std::time::Duration::from_secs(20),
+        |_, px| {
+            // O core-fake pinta todo quadro de magenta, pelo anel ou não.
+            if let Some((_, _, px)) = px {
+                checked += 1;
+                assert_eq!(&px[..4], &[255, 0, 255, 255], "quadro {checked}");
+            }
+        },
+    );
+    let _ = std::fs::remove_dir_all(&tmp);
+    assert!(ring >= 120, "o anel parou de entregar quadros");
+    assert!(checked >= 100, "a chain devia ter lido os quadros");
+}
+
+/// B5 com um core GL de verdade: `REEMU_TEST_GL_CORE` (DLL do core) e
+/// `REEMU_TEST_GL_ROM`. Roda ~15 s e confere que os quadros vêm pelo anel e
+/// que a imagem não é toda preta.
+#[cfg(windows)]
+#[test]
+#[ignore = "precisa de GPU e de REEMU_TEST_GL_CORE/REEMU_TEST_GL_ROM"]
+fn win32_interop_real_gl_core() {
+    let (Ok(core), Ok(rom)) = (
+        std::env::var("REEMU_TEST_GL_CORE"),
+        std::env::var("REEMU_TEST_GL_ROM"),
+    ) else {
+        eprintln!("sem REEMU_TEST_GL_CORE/REEMU_TEST_GL_ROM");
+        return;
+    };
+    let mut lit = 0u32;
+    // `REEMU_TEST_GL_DUMP=arquivo.png` salva o último quadro do anel com
+    // imagem — pra conferir a orientação a olho.
+    let dump = std::env::var("REEMU_TEST_GL_DUMP").ok();
+    let mut last: Option<(u32, u32, Vec<u8>)> = None;
+    let (ring, readback) = drive_interop_session(
+        &core,
+        std::path::Path::new(&rom),
+        900,
+        std::time::Duration::from_secs(15),
+        |is_ring, px| {
+            if let (true, Some((w, h, px))) = (is_ring, px) {
+                if px
+                    .chunks_exact(4)
+                    .any(|p| p[0] > 16 || p[1] > 16 || p[2] > 16)
+                {
+                    lit += 1;
+                    if dump.is_some() {
+                        last = Some((w, h, px.to_vec()));
+                    }
+                }
+            }
+        },
+    );
+    eprintln!("quadros do anel com imagem: {lit}");
+    if let (Some(path), Some((w, h, px))) = (dump, last) {
+        let file = std::fs::File::create(&path).unwrap();
+        let mut enc = png::Encoder::new(std::io::BufWriter::new(file), w, h);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.write_header().unwrap().write_image_data(&px).unwrap();
+        eprintln!("quadro salvo em {path}");
+    }
+    assert!(
+        ring > 0,
+        "nenhum quadro veio pelo anel ({readback} pelo readback)"
+    );
+    assert!(lit > 0, "todos os quadros do anel vieram pretos");
 }

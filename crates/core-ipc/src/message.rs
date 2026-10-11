@@ -76,6 +76,13 @@ pub enum ToChild {
         dedicated: bool,
         images: Vec<InteropImage>,
     },
+    /// B5 (Windows): o app terminou de ler o slot `slot` do anel e já
+    /// submeteu o `free` dele — o filho pode desenhar nele de novo (e espera
+    /// esse `free` no GL antes). Sem este aviso, o GL esperaria um semáforo
+    /// sem sinal enviado, o que a spec deixa indefinido.
+    InteropSlotFree {
+        slot: u32,
+    },
     Shutdown,
 }
 
@@ -127,7 +134,7 @@ pub enum ToParent {
     /// Erro fatal que não impede o processo de seguir vivo (loga no pai).
     Warn(String),
     /// O contexto GL do filho é compatível com o Vulkan do pai e o interop
-    /// foi pedido (`REEMU_GL_INTEROP=1`): o filho quer o anel de imagens
+    /// está ligado (padrão; `REEMU_GL_INTEROP=0` desliga): o filho quer o anel de imagens
     /// (B2, Windows) do tamanho máximo do core.
     InteropRequest {
         max_w: u32,
@@ -153,7 +160,9 @@ pub enum FrameKind {
     },
     /// Frame de HW render já importado como `dma_buf`. `plane` vem junto (+ o
     /// fd fora de banda) só na 1ª vez que este `slot` aparece — depois o pai
-    /// já tem a textura importada e cacheada.
+    /// já tem a textura importada e cacheada. No Windows (B5), `slot` é o
+    /// índice do anel do interop (`InteropImages`), sem plano nem fence: o
+    /// `done` do slot faz o papel da fence.
     Hardware {
         flip_y: bool,
         plane: Option<HwPlaneMeta>,

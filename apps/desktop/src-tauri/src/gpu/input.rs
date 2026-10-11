@@ -245,6 +245,18 @@ impl FrameProcessor {
                 super::sync_fd::cpu_wait(fd, 50);
             }
         }
+        // Windows (B5): o slot é uma imagem do anel, já embrulhada no
+        // `install_interop_ring`. Reivindica o quadro (a devolução do slot
+        // passa a ser nossa) e põe `done`/`free` na fila. Um quadro já
+        // reivindicado não é amostrado de novo: o `free` dele já foi posto e
+        // o GL pode estar desenhando por cima.
+        #[cfg(windows)]
+        {
+            if !handle.claim() || !self.stage_win_slot(handle.slot()) {
+                return false;
+            }
+        }
+        #[cfg(not(windows))]
         if !self.interop_ok {
             return false;
         }

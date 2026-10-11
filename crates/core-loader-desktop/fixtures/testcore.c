@@ -74,6 +74,19 @@ struct retro_hw_render_callback {
 #define RETRO_DEVICE_ID_JOYPAD_MASK 256
 #define RETRO_PIXEL_FORMAT_RGB565 2
 #define RETRO_HW_CONTEXT_OPENGL_CORE 3
+/* libretro.h: `RETRO_HW_FRAME_BUFFER_VALID ((void*)-1)`. */
+#define RETRO_HW_FRAME_BUFFER_VALID ((void *)-1)
+#if defined(_WIN32)
+#define TESTCORE_GLAPI __stdcall
+#else
+#define TESTCORE_GLAPI
+#endif
+/* Tokens do GL (glext.h do registro Khronos). */
+#define TESTCORE_GL_FRAMEBUFFER 0x8D40
+#define TESTCORE_GL_COLOR_BUFFER_BIT 0x00004000
+typedef void (TESTCORE_GLAPI *tc_clear_color_t)(float, float, float, float);
+typedef void (TESTCORE_GLAPI *tc_clear_t)(unsigned);
+typedef void (TESTCORE_GLAPI *tc_bind_fb_t)(unsigned, unsigned);
 
 struct retro_variable {
    const char *key;
@@ -92,6 +105,12 @@ static retro_input_state_t input_state_cb;
 
 static uint16_t fb[FB_W * FB_H];
 static unsigned frame_n;
+
+/* Modo "HWD": HW render que DESENHA (limpa o FBO do frontend de magenta via
+   GL) e entrega `RETRO_HW_FRAME_BUFFER_VALID` — exercita o caminho de quadro
+   de hardware de ponta a ponta. */
+static bool hw_draw;
+static struct retro_hw_render_callback hw_cb;
 
 /* SAVE_RAM de 64 bytes, pré-carregada com um padrão reconhecível — deixa o
    `emu-session` exercitar o fluxo de battery save de verdade. SRAM[2] recebe
@@ -194,6 +213,9 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game) {
       hw.depth = true;
       if (env_cb)
          env_cb(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw);
+      /* O frontend preenche `get_current_framebuffer`/`get_proc_address`. */
+      hw_cb = hw;
+      hw_draw = game->size >= 3 && memcmp(game->data, "HWD", 3) == 0;
    }
    return true;
 }
@@ -228,6 +250,21 @@ RETRO_API void retro_run(void) {
    if (geometry_test && frame_n == 2 && env_cb) {
       struct retro_game_geometry g = {FB_W, FB_H, FB_W, FB_H, 2.0f};
       env_cb(RETRO_ENVIRONMENT_SET_GEOMETRY, &g);
+   }
+
+   if (hw_draw && hw_cb.get_proc_address && hw_cb.get_current_framebuffer) {
+      tc_bind_fb_t bind = (tc_bind_fb_t)hw_cb.get_proc_address("glBindFramebuffer");
+      tc_clear_color_t clear_color = (tc_clear_color_t)hw_cb.get_proc_address("glClearColor");
+      tc_clear_t clear = (tc_clear_t)hw_cb.get_proc_address("glClear");
+      if (bind && clear_color && clear) {
+         bind(TESTCORE_GL_FRAMEBUFFER, (unsigned)hw_cb.get_current_framebuffer());
+         clear_color(1.0f, 0.0f, 1.0f, 1.0f);
+         clear(TESTCORE_GL_COLOR_BUFFER_BIT);
+      }
+      frame_n++;
+      if (video_cb)
+         video_cb(RETRO_HW_FRAME_BUFFER_VALID, FB_W, FB_H, 0);
+      return;
    }
 
    uint16_t color = (uint16_t)(frame_n * 111u + 1u);

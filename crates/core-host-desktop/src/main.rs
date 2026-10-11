@@ -571,6 +571,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                     },
                 ));
             }
+            ToChild::InteropSlotFree { slot } => core_loader_desktop::interop_slot_freed(slot),
             ToChild::Shutdown => break,
         }
     }
@@ -734,16 +735,22 @@ fn send_frame(
             log::error!("frame Vulkan no core-host (bug): HW render Vulkan é in-process");
             None
         }
-        // dma_buf (GBM/DRM) é um conceito de interop gráfico específico do
-        // Linux (padrão; `REEMU_GL_INTEROP=0` desliga) — não existe
-        // equivalente no Windows (lá seria D3D11/D3D12 shared handle, um
-        // subsistema totalmente diferente, fora do escopo desta porta de
-        // IPC). No Windows este caminho não é alcançado na prática (nada em
-        // `core-loader-desktop` produz `HardwareTexture` lá), mas precisa
-        // compilar — loga e descarta o frame em vez de travar.
+        // Windows (B5): `slot` é o índice do anel do interop GL → Vulkan; o
+        // GL já sinalizou o `done` dele. Sem plano nem fence.
         #[cfg(windows)]
-        FrameOrigin::HardwareTexture(_handle) => {
-            log::error!("frame HardwareTexture (dma_buf) no core-host: sem suporte no Windows");
+        FrameOrigin::HardwareTexture(handle) => {
+            let _ = channel.send(
+                &ToParent::FrameReady {
+                    slot: handle.slot(),
+                    meta: frame.metadata,
+                    kind: FrameKind::Hardware {
+                        flip_y: handle.flip_y(),
+                        plane: None,
+                        sync: false,
+                    },
+                },
+                &[],
+            );
             None
         }
         #[cfg(unix)]

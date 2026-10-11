@@ -1903,3 +1903,26 @@ Infra:
   - Vulkan (refpages): `VkExportSemaphoreCreateInfo` com `OPAQUE_WIN32`, conferido em `vkGetPhysicalDeviceExternalSemaphoreProperties` (`EXPORTABLE`); `vkGetSemaphoreWin32HandleKHR` uma vez por semáforo (VUID-VkSemaphoreGetWin32HandleInfoKHR-handleType-01127); o handle NT é do app e fecha com `CloseHandle`; `vkDestroySemaphore` só depois de "all submitted batches that refer to semaphore" terminarem, por isso os semáforos morrem no callback de drop da textura do wgpu.
 - **Protocolo:** a imagem passa de um lado pro outro sempre em `SHADER_READ_ONLY_OPTIMAL`, que é o `TextureUses::RESOURCE` com que o wgpu a embrulha. O GL só espera `free` num slot que já entregou (o 1º uso de cada slot não tem sinal pendente).
 - **Medido (RTX 3060, Windows 11):** `win32_interop_semaphores_round_trip` faz o GL desenhar vermelho/verde/azul nos 3 slots e sinalizar; o Vulkan espera, copia a imagem pra um buffer e lê as cores certas; o GL espera o `free` e redesenha amarelo, que o Vulkan lê de novo. Camadas de validação: nenhum VUID. Próximo: B5 (o app esperar `done` e sinalizar `free` no próprio quadro do wgpu e o quadro sair pelo índice do slot).
+
+## 2026-10-11 — B5: o quadro do core OpenGL chega ao app sem cópia (Windows)
+
+- **O quê:** no Windows, o quadro de um core OpenGL (N64, Dreamcast, PSP…) deixa de passar pela CPU (`glReadPixels` + cópia pelo pipe). O core desenha numa das 3 imagens compartilhadas e o processo do core manda só o número dela; o app mostra direto da memória da GPU. Ligado por padrão; `REEMU_GL_INTEROP=0` volta ao readback.
+- **Protocolo:**
+  1. Filho: `bind_write_slot` escolhe o próximo slot livre. Se o slot foi devolvido, espera o `free` com `glWaitSemaphoreEXT`.
+  2. Depois do `retro_run`, o `hand_over_slot` sinaliza o `done` (`glSignalSemaphoreEXT`, que já faz flush) e manda `FrameReady { kind: Hardware }` com o índice.
+  3. App: o `bind_interop_input` reivindica o quadro (`claim`) e põe na fila do wgpu-hal a espera do `done` e o sinal do `free`, na mesma submissão que amostra a imagem.
+  4. O `flush_interop` garante a submissão (um `submit` vazio, se o quadro não chegou a submeter) e só então a sessão avisa o filho (`ToChild::InteropSlotFree`).
+  5. Quadros que ninguém amostrou (substituídos na sessão, menus, falha da chain) voltam pela mesma via (`take_dropped_interop_slots`).
+- **Base oficial:**
+  - EXT_external_objects: "Calling WaitSemaphoreEXT on a semaphore that has not had a signal flushed or submitted since it was created or last waited on results in undefined behavior". Por isso o aviso só sai depois do submit do `free`, e o filho nunca espera um semáforo sem sinal.
+  - Spec Vulkan (`vkQueueSubmit`): a operação de sinal de semáforo tem como 1º escopo os comandos do mesmo lote, então o `free` só dispara depois da leitura.
+  - Exemplo `open_gl_interop` do Vulkan-Samples para o par de semáforos.
+  - **Não verificado na spec:** o wgpu-hal aplica `add_wait_semaphore`/`add_signal_semaphore` na próxima submissão da fila (comportamento do código do wgpu-hal 30, o mesmo usado pelo `sync_file` do Linux).
+- **Sem travar:** sem slot livre (o app atrasou 3 quadros), o filho desenha na textura própria e manda aquele quadro pelo readback síncrono. Qualquer falha antes disso (GPU sem as extensões, UUIDs diferentes, import recusado) também fica no readback.
+- **Medido (RTX 3060, Windows 11, camadas de validação ligadas, nenhum VUID):**
+  - `win32_interop_frames_flow_through_the_ring` (core-fake `HWD`, que limpa de magenta via GL): 120 quadros pelo anel, cor conferida na saída da chain.
+  - `win32_interop_real_gl_core`:
+    - mupen64plus_next com GoldenEye: 889 quadros pelo anel e 1 pelo readback em 15 s (~59 fps).
+    - Mario Kart 64: tela de título conferida num PNG, com orientação e cores certas.
+    - flycast com Soulcalibur: 700 quadros pelo anel, 0 pelo readback.
+- **Próximo:** B6 (validação de sincronização, outras GPUs, medir contra a fase A).

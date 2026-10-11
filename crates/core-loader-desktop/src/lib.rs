@@ -84,6 +84,27 @@ pub fn offer_interop_images(offer: Option<InteropOffer>) {
     );
     drop(old);
 }
+/// Interop GL zero-cópia ligado? É o padrão (Linux: `dma_buf`; Windows: o
+/// anel GL → Vulkan, B5); `REEMU_GL_INTEROP=0` (ou `false`/`off`/`no`)
+/// força o readback via CPU. O app (Windows) usa a mesma regra pra abrir o
+/// device com as extensões do interop.
+pub fn gl_interop_wanted() -> bool {
+    !matches!(
+        std::env::var("REEMU_GL_INTEROP")
+            .map(|v| v.trim().to_ascii_lowercase())
+            .as_deref(),
+        Ok("0") | Ok("false") | Ok("off") | Ok("no")
+    )
+}
+
+/// O app terminou de ler o slot `slot` do anel e já submeteu o `free` dele
+/// (B5, `ToChild::InteropSlotFree`): o próximo quadro pode desenhar nele.
+pub fn interop_slot_freed(slot: u32) {
+    crate::gl_context::FREED_SLOTS
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .push(slot);
+}
 pub use crate::gl_context::readback_stats;
 #[cfg(all(unix, feature = "test-fixtures"))]
 pub use crate::gl_context::{render_rect_rgba_to_dmabuf, render_solid_rgba_to_dmabuf};

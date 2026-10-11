@@ -20,7 +20,7 @@ pub use session::{
     EmuSession, InteropProvider, InteropReply, SessionConfig, SessionError, SessionState,
 };
 
-pub use core_loader_desktop::{AnalogState, RetroPadState};
+pub use core_loader_desktop::{gl_interop_wanted, AnalogState, RetroPadState};
 /// Estado do RetroPad/analógico **deste processo** (o pai) — a thread de
 /// gamepad e o teclado do shell escrevem aqui; a `EmuSession` manda o
 /// snapshot pro processo filho por IPC. Não confundir com

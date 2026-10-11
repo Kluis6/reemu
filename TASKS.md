@@ -316,12 +316,18 @@ conferir".
       `win32_interop_semaphores_round_trip` (RTX 3060, sem VUID). Em uso
       real só a partir do B5 (o `hand_over_slot` ainda não é chamado no
       quadro do core).
-- [ ] `todo` — B5. Quadro pelo pipe como `FrameKind::Hardware` com o
-      índice do slot (sem fd). O app espera `done` (`add_wait_semaphore`
-      do wgpu-hal) antes de amostrar e sinaliza `free`
-      (`add_signal_semaphore`) depois — também nos quadros descartados,
-      senão o GL fica esperando. Fallback automático pro readback em qualquer
-      falha, como no Linux. `REEMU_GL_INTEROP=0` força o readback.
+- [x] `done` — B5 (2026-10-11): o quadro do core GL sai pelo pipe como
+      `FrameKind::Hardware` com o índice do slot do anel; o app amostra a
+      imagem compartilhada esperando o `done` e sinalizando o `free` na
+      mesma submissão do wgpu (`add_wait_semaphore`/`add_signal_semaphore`)
+      e, depois de submeter, avisa o filho (`ToChild::InteropSlotFree`) —
+      o GL só espera um `free` já enviado. Quadros descartados devolvem o
+      slot do mesmo jeito (`take_dropped_interop_slots` → `flush_interop`).
+      Sem slot livre, o quadro vai pelo readback (nunca trava). **Ligado
+      por padrão**; `REEMU_GL_INTEROP=0` força o readback. Medido na RTX
+      3060: mupen64plus_next (GoldenEye, Mario Kart 64) ~59 fps pelo anel,
+      flycast (Soulcalibur) 700 quadros sem nenhum readback; orientação e
+      cores conferidas num PNG; camadas de validação sem VUID.
 - [ ] `todo` — B6. Validar com as camadas de validação do Vulkan (sync
       incluída), na NVIDIA e, se der, numa AMD/Intel. Medir contra a fase A.
 

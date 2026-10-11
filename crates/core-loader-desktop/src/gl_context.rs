@@ -295,9 +295,15 @@ struct WinSlot {
     /// Semáforos GL (`glGenSemaphoresEXT`); 0 = não criado.
     done: u32,
     free: u32,
-    /// Entregue ao app (`done` sinalizado) e ainda não devolvido: antes de
-    /// redesenhar, o GL espera `free`.
+    /// Entregue ao app (`done` sinalizado) e ainda não devolvido: não é
+    /// escolhido pra desenhar até o app avisar (`interop_slot_freed`).
     lent: bool,
+    /// Devolvido pelo app: o `free` já foi submetido no Vulkan e o GL espera
+    /// por ele antes do próximo desenho. Esperar sem sinal enviado é
+    /// indefinido ("Calling WaitSemaphoreEXT on a semaphore that has not had
+    /// a signal flushed or submitted ... results in undefined behavior",
+    /// EXT_external_objects) — por isso só depois do aviso.
+    needs_wait: bool,
 }
 
 /// Um alvo compartilhado: BO do GBM + `EGLImage` + textura GL respaldada por ele.
@@ -360,10 +366,11 @@ impl GlContext {
                 Ok(()) => {
                     log::info!(
                         "interop GL→Vulkan: possível nesta GPU (mesmo deviceUUID/driverUUID, \
-                         extensões Win32 dos dois lados) — ainda via readback (B2–B5)"
+                         extensões Win32 dos dois lados)"
                     );
-                    // B2: com o interop pedido, o filho pede o anel ao pai.
-                    if std::env::var("REEMU_GL_INTEROP").is_ok_and(|v| v.trim() == "1") {
+                    // B2/B5: o filho pede o anel ao pai (padrão;
+                    // `REEMU_GL_INTEROP=0` fica no readback).
+                    if crate::gl_interop_wanted() {
                         *INTEROP_REQUEST.lock().unwrap_or_else(|p| p.into_inner()) =
                             Some((max_w, max_h));
                     }
@@ -717,11 +724,10 @@ impl GlContext {
         }
     }
 
-    /// Sem `dma_buf` no Windows — sempre cai no readback via `read_pixels`.
-    /// `REEMU_GL_INTEROP` (Linux) não tem efeito aqui.
+    /// Sem `dma_buf` no Windows: lá o interop é o anel GL → Vulkan (B2–B5),
+    /// que o `bind_write_slot` importa quando o app manda.
     #[cfg(windows)]
     pub fn try_enable_interop(&mut self) -> bool {
-        log::warn!("interop dma_buf indisponível (sem suporte no Windows) — usando readback");
         false
     }
 
@@ -869,17 +875,45 @@ impl GlContext {
         let Some(ring) = self.win_interop.as_mut() else {
             return;
         };
-        let idx = ring.write;
-        ring.write = (ring.write + 1) % ring.slots.len();
+        // Slots que o app devolveu desde o último quadro.
+        for s in std::mem::take(&mut *FREED_SLOTS.lock().unwrap_or_else(|p| p.into_inner())) {
+            if let Some(slot) = ring.slots.get_mut(s as usize) {
+                if slot.lent {
+                    slot.lent = false;
+                    slot.needs_wait = true;
+                }
+            }
+        }
+        // O próximo slot livre na ordem do anel. Todos emprestados (o app
+        // atrasou): este quadro vai pelo readback, em `self.color`.
+        let n = ring.slots.len();
+        let Some(idx) = (0..n)
+            .map(|k| (ring.write + k) % n)
+            .find(|&i| !ring.slots[i].lent)
+        else {
+            ring.current = None;
+            unsafe {
+                self.gl.bind_framebuffer(glow::FRAMEBUFFER, Some(self.fbo));
+                self.gl.framebuffer_texture_2d(
+                    glow::FRAMEBUFFER,
+                    glow::COLOR_ATTACHMENT0,
+                    glow::TEXTURE_2D,
+                    Some(self.color),
+                    0,
+                );
+            }
+            return;
+        };
+        ring.write = (idx + 1) % n;
         ring.current = Some(idx);
         let slot = &mut ring.slots[idx];
         let tex = slot.tex;
-        if slot.lent {
+        if slot.needs_wait {
             // O app devolve a imagem em SHADER_READ_ONLY: o GL espera o
             // `free` dele antes de desenhar por cima. "Because an external
             // API may have changed texture layouts, the caller passes the
             // current layout" (EXT_semaphore, WaitSemaphoreEXT).
-            slot.lent = false;
+            slot.needs_wait = false;
             match wgl::SemaphoreFns::load() {
                 Ok(f) => unsafe {
                     let layout = wgl::LAYOUT_SHADER_READ_ONLY_EXT;
@@ -908,7 +942,6 @@ impl GlContext {
     /// lugar do `glFinish`. Até o app devolver (`free`), o slot fica
     /// emprestado. `None` sem anel.
     #[cfg(windows)]
-    #[cfg_attr(not(feature = "test-fixtures"), allow(dead_code))] // o B5 usa
     pub fn hand_over_slot(&mut self) -> Option<u32> {
         let ring = self.win_interop.as_mut()?;
         let idx = ring.current.take()?;
@@ -935,6 +968,21 @@ impl GlContext {
         Some(idx as u32)
     }
 
+    /// Windows (B5): este quadro está num slot do anel (vai sem cópia)?
+    #[cfg(windows)]
+    pub fn win_slot_active(&self) -> bool {
+        self.win_interop
+            .as_ref()
+            .is_some_and(|r| r.current.is_some())
+    }
+
+    /// Windows (B5): o anel está importado (mesmo que este quadro tenha
+    /// caído no readback por falta de slot livre).
+    #[cfg(windows)]
+    pub fn win_ring_active(&self) -> bool {
+        self.win_interop.is_some()
+    }
+
     /// Troca o anel atual (se houver) pelo da oferta. Falhou → volta pra
     /// `self.color` e segue no readback; a oferta cai e fecha os handles.
     #[cfg(windows)]
@@ -955,7 +1003,7 @@ impl GlContext {
             Ok(ring) => {
                 log::info!(
                     "interop GL→Vulkan: {n} textura(s) GL importada(s) da memória Vulkan — \
-                     o core desenha nelas (quadro ainda via readback até o B5)"
+                     o quadro vai ao app sem cópia"
                 );
                 self.win_interop = Some(ring);
             }
@@ -1061,6 +1109,7 @@ impl GlContext {
                 done: sems[0],
                 free: sems[1],
                 lent: false,
+                needs_wait: false,
             });
             if sems.contains(&0) {
                 result = Err("glGenSemaphoresEXT devolveu 0".to_string());
@@ -2002,6 +2051,10 @@ fn open_display(egl: &EglInstance) -> Result<egl::Display, String> {
 /// O core-host lê com `take_interop_request` e manda o `InteropRequest`.
 pub(crate) static INTEROP_REQUEST: std::sync::Mutex<Option<(u32, u32)>> =
     std::sync::Mutex::new(None);
+
+/// Slots que o app devolveu (`ToChild::InteropSlotFree`, B5) e o
+/// `bind_write_slot` ainda não viu — ver `interop_slot_freed`.
+pub(crate) static FREED_SLOTS: std::sync::Mutex<Vec<u32>> = std::sync::Mutex::new(Vec::new());
 
 /// Anel que o pai mandou e o `GlContext` ainda não importou (B3) — ver
 /// `offer_interop_images`. Trocar a oferta fecha os handles da anterior.

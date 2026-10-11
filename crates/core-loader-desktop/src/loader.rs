@@ -558,13 +558,7 @@ fn setup_gl_context(
     // com jogo rodando (teste `gl_core_real_rom`), e com a fence nativa no
     // lugar do `glFinish`.
     let mut ctx = ctx;
-    let want_interop = !matches!(
-        std::env::var("REEMU_GL_INTEROP")
-            .map(|v| v.trim().to_ascii_lowercase())
-            .as_deref(),
-        Ok("0") | Ok("false") | Ok("off") | Ok("no")
-    );
-    if want_interop {
+    if crate::gl_interop_wanted() {
         ctx.try_enable_interop();
     }
     log::info!(

@@ -284,6 +284,35 @@ impl DesktopCore {
         };
 
         let gl = self.gl.as_mut()?;
+        // Windows (B5): o core desenhou num slot do anel compartilhado com o
+        // Vulkan do app — sinaliza `done` e manda só o índice, sem cópia.
+        #[cfg(windows)]
+        if gl.win_slot_active() {
+            let flip_y = gl.flip_y();
+            let slot = gl.hand_over_slot()?;
+            return Some(Frame {
+                origin: FrameOrigin::HardwareTexture(Box::new(
+                    crate::gl_context::GlInteropHandle::new(slot, flip_y, None, None),
+                )),
+                metadata: meta,
+            });
+        }
+        // Anel ativo mas sem slot livre: este quadro foi em `self.color` e
+        // sai pelo readback síncrono (o PBO guardaria um quadro de outro
+        // alvo).
+        #[cfg(windows)]
+        if gl.win_ring_active() {
+            gl.finish();
+            let data = gl.read_pixels(w, h);
+            return Some(Frame {
+                origin: FrameOrigin::SoftwareRawBuffer {
+                    data,
+                    pitch: w * 4,
+                    format: domain::frame_source::SoftwarePixelFormat::Rgba8888,
+                },
+                metadata: meta,
+            });
+        }
         if gl.interop_active() {
             let flip_y = gl.flip_y();
             let (slot, plane, sync_fd) = gl.finish_write_slot()?;

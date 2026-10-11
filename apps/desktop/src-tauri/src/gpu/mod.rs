@@ -582,6 +582,10 @@ pub struct FrameProcessor {
     /// anel novo substituir.
     #[cfg(windows)]
     interop_ring: Vec<win_interop::ExportedImage>,
+    /// B5 (Windows): slots amostrados desde o último `flush_interop`, com o
+    /// `done`/`free` já postos na fila do wgpu-hal.
+    #[cfg(windows)]
+    win_staged: Vec<u32>,
     imported: Vec<Option<(wgpu::Texture, wgpu::TextureView)>>,
     /// Espera na GPU pela fence de fim de render do core GL (no lugar do
     /// `glFinish` dele) — `None` = device sem `VK_KHR_external_semaphore_fd`
@@ -699,8 +703,8 @@ impl FrameProcessor {
         // do core GL como semáforo); senão, o device de sempre.
         #[cfg(target_os = "linux")]
         let with_sync = sync_fd::create_device(&instance, wanted);
-        // Windows: com `REEMU_GL_INTEROP=1`, o device já abre com as
-        // extensões Win32 do interop GL → Vulkan (B2, `win_interop`).
+        // Windows: o device já abre com as extensões Win32 do interop
+        // GL → Vulkan (`win_interop`; `REEMU_GL_INTEROP=0` desliga).
         #[cfg(windows)]
         let with_sync =
             win_interop::create_device(&instance, wanted).map(|(a, d, q, f)| (a, d, q, f, false));
@@ -816,6 +820,8 @@ impl FrameProcessor {
             interop_ok,
             #[cfg(windows)]
             interop_ring: Vec::new(),
+            #[cfg(windows)]
+            win_staged: Vec::new(),
             #[cfg(target_os = "linux")]
             sync_fd: None,
             imported: Vec::new(),
@@ -1775,7 +1781,7 @@ impl FrameProcessor {
     /// e `VK_KHR_external_semaphore_win32` existem. `None` fora do Vulkan.
     /// Anel de `n` imagens `w`×`h` exportáveis pro interop GL → Vulkan no
     /// Windows (B2): cada uma com o handle NT pra duplicar pro processo do
-    /// core. Precisa do device aberto com as extensões (`REEMU_GL_INTEROP=1`).
+    /// core. Precisa do device aberto com as extensões (`win_interop::create_device`).
     /// B2: aloca o anel pra um pedido do filho, duplica os handles pro
     /// processo `pid` e guarda as imagens. Devolve o que vai na mensagem.
     #[cfg(windows)]
@@ -1799,6 +1805,19 @@ impl FrameProcessor {
                 })
             })
             .collect::<Result<Vec<_>, String>>()?;
+        // B5: as texturas do anel são a entrada da chain por slot (o
+        // `bind_interop_input` do Windows não importa nada por quadro).
+        self.imported = ring
+            .iter()
+            .map(|img| {
+                let view = img
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+                Some((img.texture.clone(), view))
+            })
+            .collect();
+        self.flip_tgt.clear();
+        self.win_staged.clear();
         self.interop_ring = ring;
         Ok(emu_session::InteropReply {
             width: w,
@@ -1807,6 +1826,46 @@ impl FrameProcessor {
             dedicated: true,
             images,
         })
+    }
+
+    /// B5 (Windows): fecha a devolução dos slots do anel. Pros `dropped`
+    /// (quadros descartados sem amostrar), põe a espera do `done` e o sinal
+    /// do `free` na fila; um `submit` vazio garante que tudo o que foi posto
+    /// (inclusive pelos slots amostrados, se o quadro não chegou a submeter)
+    /// sai agora. Devolve os slots cujo `free` já foi submetido — o chamador
+    /// avisa o filho (`EmuSession::release_interop_slot`) só depois disso.
+    #[cfg(windows)]
+    pub fn flush_interop(&mut self, dropped: &[u32]) -> Vec<u32> {
+        for &slot in dropped {
+            self.stage_win_slot(slot);
+        }
+        if self.win_staged.is_empty() {
+            return Vec::new();
+        }
+        self.queue.submit([]);
+        std::mem::take(&mut self.win_staged)
+    }
+
+    /// Põe na próxima submissão do wgpu a espera do `done` do slot (antes de
+    /// amostrar) e o sinal do `free` (depois): "the first synchronization
+    /// scope includes every command submitted in the same batch" (spec
+    /// Vulkan, sinal de semáforo no `vkQueueSubmit`) — o `free` só dispara
+    /// depois da leitura. `false` se o slot não existe no anel.
+    #[cfg(windows)]
+    pub(super) fn stage_win_slot(&mut self, slot: u32) -> bool {
+        let Some(img) = self.interop_ring.get(slot as usize) else {
+            return false;
+        };
+        let (done, free) = (img.done_sem, img.free_sem);
+        // SAFETY: semáforos deste device, vivos enquanto o anel existir.
+        let Some(q) = (unsafe { self.queue.as_hal::<wgpu::hal::api::Vulkan>() }) else {
+            return false;
+        };
+        q.add_wait_semaphore(done, None, ash::vk::PipelineStageFlags::FRAGMENT_SHADER);
+        q.add_signal_semaphore(free, None);
+        drop(q);
+        self.win_staged.push(slot);
+        true
     }
 
     #[cfg(windows)]

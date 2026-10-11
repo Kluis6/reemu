@@ -76,6 +76,12 @@ pub trait GpuTextureHandle: Send {
     fn take_sync_fd(&self) -> Option<i32> {
         None
     }
+    /// Quem amostra a textura assume a devolução do slot ao produtor
+    /// (interop do Windows, B5): `true` só na 1ª chamada. Um quadro que
+    /// ninguém reivindicou é devolvido por quem o descarta.
+    fn claim(&self) -> bool {
+        true
+    }
 }
 
 /// Handle pra a `VkImage` que um core de HW render Vulkan (etapa 12) entregou.

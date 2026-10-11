@@ -757,6 +757,7 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                 if let (Some(f), false) = (frame, stepped_vk) {
                     state.session.recycle_frame(f);
                 }
+                commands::flush_interop_slots(&state);
                 if let Some(d) = diag.as_mut() {
                     d.maybe_report(state.session.frame_seq());
                 }

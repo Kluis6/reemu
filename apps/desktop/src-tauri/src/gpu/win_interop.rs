@@ -6,7 +6,9 @@
 //! duplicado pro processo do core. O filho importa (B3), desenha nelas e
 //! avisa por semáforo (B4); o app amostra sem cópia (B5).
 //!
-//! Desligado por padrão até o B5: só com `REEMU_GL_INTEROP=1`.
+//! Ligado por padrão desde o B5 (2026-10-11); `REEMU_GL_INTEROP=0` força o
+//! readback. Qualquer falha (GPU sem as extensões, UUIDs diferentes, import
+//! recusado, nenhum slot livre) cai no readback sem travar.
 //!
 //! Regras da especificação Vulkan seguidas (docs.vulkan.org):
 //! - a imagem declara o tipo de handle em `VkExternalMemoryImageCreateInfo`;
@@ -43,9 +45,10 @@ const SEM_HANDLE_TYPE: vk::ExternalSemaphoreHandleTypeFlags =
 /// Formato do quadro do core (o FBO do GL é RGBA8).
 const FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
 
-/// O interop está pedido? (`REEMU_GL_INTEROP=1`.)
+/// O interop está ligado? (Padrão; `REEMU_GL_INTEROP=0` desliga — mesma
+/// regra do processo do core, `core_loader_desktop::gl_interop_wanted`.)
 pub fn requested() -> bool {
-    std::env::var("REEMU_GL_INTEROP").is_ok_and(|v| v.trim() == "1")
+    emu_session::gl_interop_wanted()
 }
 
 /// Abre o device com `VK_KHR_external_memory_win32` e
