@@ -2145,3 +2145,18 @@ Infra:
   - Os cards de jogo de dentro ficam mais um degrau acima. Conferido em capturas no Serene, no Neon Circuit, no Simple Vibes e no Alva claro.
 - Borda tirada a pedido do usuário. Depois ganhou um degradê leve na diagonal: o canto de cima à esquerda puxa 10% para a cor de destaque do tema e some até 60% do card. Conferido no Neon Circuit (esverdeado), no Serene e no Alva claro (azulado).
 - Degradê refeito a pedido do usuário: agora vai da cor do sidebar (o rail, `colorNeutralBackground2`) com 14% da cor de destaque, no canto de cima à esquerda, ao tom do rail puro aos 60%. O fundo do card passa a ser o tom do rail. Conferido no Neon Circuit (verde-escuro do rail, esverdeado no canto), no Simple Vibes (branco do rail) e no Serene.
+
+## 2026-10-11 — Cor de destaque dos ícones e indicadores (claro e escuro)
+
+- **Problema:** no escuro, o `createDarkTheme` do Fluent pinta switch, rádio, checkbox, traço de foco e de item selecionado com o tom 100 da rampa, e o texto de marca com o 100 ou o 90 (`@fluentui/tokens`, `alias/darkColor`). Em várias rampas esses tons ficam desbotados, longe da cor do tema.
+  - O favorito usava `reemuBrandText` (tom 90 no escuro, 40, quase preto, no claro), e a aba ativa tinha o indicador sempre branco.
+- **Correção:** token `reemuBrandAccent` para ícones e indicadores.
+  - É o tom primário (80, o mesmo do `reemuBrandSolid` e do botão primário no claro) sempre que ele tem 3:1 com a página e as superfícies (WCAG 2.2, 1.4.11 "Non-text Contrast").
+  - Senão, é o tom mais próximo que tenha: mais claro no escuro, mais escuro no claro (`pickAccent`).
+  - Os tokens de indicador do Fluent (`colorCompoundBrand*`, `colorBrandStroke1`) apontam para ele.
+  - O texto de marca continua com o tom AA (4,5:1).
+- **Usam o destaque:** favorito na página do jogo, indicador da aba ativa, ícones do hub de Configurações, notificação não lida, switch, rádio, checkbox, foco e borda de item selecionado.
+  - O coração sobre a capa dos cards usa o tom 80 puro, porque fica sempre sobre fundo escuro.
+- **Resultado por tema:** 13 dos 15 usam o primário exato.
+  - Ajustados: Green Modern claro (#52B72A → #3A7920, o verde não tinha 3:1 sobre o cinza claro) e Purple Mistique escuro (#5B4FCF → #7E74DC).
+  - Teste em `themes.test.ts`: 3:1 em todos os temas e indicadores do Fluent iguais ao destaque.

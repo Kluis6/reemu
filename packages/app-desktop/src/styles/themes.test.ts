@@ -101,7 +101,7 @@ describe('temas de fundo simples', () => {
   it('Serene: branco como destaque e superfícies um degrau acima da página', () => {
     const t = THEMES.serene.theme
     expect(t.colorBrandBackground.toLowerCase()).toBe('#e9e9e9')
-    expect(t.colorBrandStroke1.toLowerCase()).toBe('#ffffff')
+    expect(t.colorBrandStroke1.toLowerCase()).toBe('#f2f2f3')
     expect(contrast(t.colorNeutralForegroundOnBrand, t.colorBrandBackgroundPressed)).toBeGreaterThanOrEqual(4.5)
     // Xbox: página #1A1B1E, superfície #25282C (~1,2:1). Card e linhas das
     // Configurações sobem um degrau cada.
@@ -121,5 +121,25 @@ describe('temas de fundo simples', () => {
     expect(familyOf('simple-vibes').family.light).toBeUndefined()
     expect(familyOf('serene').mode).toBe('dark')
     expect(familyOf('serene').family.light).toBeUndefined()
+  })
+})
+
+describe('destaque de ícones e indicadores', () => {
+  it.each(Object.keys(THEMES) as ThemeId[])('%s: 3:1 com página e superfícies', (id) => {
+    const t = THEMES[id].theme
+    for (const bg of [t.colorNeutralBackground1, t.colorNeutralBackground2, t.colorNeutralBackground3]) {
+      if (!/^#[0-9a-fA-F]{6}$/.test(bg)) continue
+      expect(contrast(t.reemuBrandAccent, bg), `${id} sobre ${bg}`).toBeGreaterThanOrEqual(3)
+    }
+    // os indicadores do Fluent seguem o mesmo destaque
+    if (id !== 'alto-contraste') {
+      expect(t.colorCompoundBrandBackground).toBe(t.reemuBrandAccent)
+      expect(t.colorBrandStroke1).toBe(t.reemuBrandAccent)
+    }
+  })
+
+  it('usa o tom primário (80) quando ele já tem contraste', () => {
+    expect(THEMES.serene.theme.reemuBrandAccent).toBe(THEMES.serene.theme.reemuBrandSolid)
+    expect(THEMES.reemu.theme.reemuBrandAccent).toBe(THEMES.reemu.theme.reemuBrandSolid)
   })
 })

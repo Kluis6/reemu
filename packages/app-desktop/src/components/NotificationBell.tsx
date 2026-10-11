@@ -45,7 +45,8 @@ const useStyles = makeStyles({
   },
   itemText: { display: "flex", flexDirection: "column", rowGap: "2px", minWidth: 0 },
   itemTitle: { fontWeight: tokens.fontWeightSemibold },
-  unread: { color: tokens.colorBrandForeground1 },
+  // ícone/indicador: destaque do tema (`reemuBrandAccent`)
+  unread: { color: "var(--reemuBrandAccent)" },
   meta: { color: tokens.colorNeutralForeground3 },
   empty: {
     color: tokens.colorNeutralForeground3,

@@ -555,10 +555,72 @@ export interface ReEmuTokens extends ReEmuLiftTokens {
    *  `colorBrandForeground1` sempre que a cor de marca for aplicada como
    *  `color` de texto/ícone direto sobre o fundo da casca. */
   reemuBrandText: string;
+  /** Cor de destaque pra ÍCONES e INDICADORES (favorito, aba ativa, foco,
+   *  switch/rádio/checkbox marcados, borda de item selecionado): o tom
+   *  primário do tema (80 da rampa, o mesmo do `reemuBrandSolid` e do
+   *  botão primário no claro) sempre que ele tem contraste de 3:1 com as
+   *  superfícies (WCAG 1.4.11, componentes não-texto); senão o tom mais
+   *  próximo que tenha — mais claro no escuro, mais escuro no claro. Ver
+   *  `pickAccent`. */
+  reemuBrandAccent: string;
 }
 
 export type ReEmuTheme = Theme & ReEmuTokens;
 
+
+/** Luminância relativa WCAG 2.x de `#rrggbb`. */
+function luminance(hex: string): number {
+  const n = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const c = parseInt(n.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Razão de contraste WCAG 2.x entre duas cores `#rrggbb`. */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+/**
+ * Tom de destaque pra ícones/indicadores: começa no 80 (o primário do tema)
+ * e anda pela rampa — pro claro no escuro, pro escuro no claro — até ter
+ * 3:1 com todas as `surfaces` (WCAG 2.2, 1.4.11 "Non-text Contrast"). No
+ * modo escuro o Fluent usa o tom 100 pra isso (`createDarkTheme`), que em
+ * várias rampas fica desbotado, longe da cor do tema.
+ */
+function pickAccent(ramp: BrandVariants, light: boolean, surfaces: string[]): string {
+  const steps = (light ? [80, 70, 60, 50, 40, 30] : [80, 90, 100, 110, 120, 130]) as (keyof BrandVariants)[];
+  const bgs = surfaces.filter((c) => HEX.test(c));
+  for (const k of steps) {
+    if (bgs.every((bg) => contrastRatio(ramp[k], bg) >= 3)) return ramp[k];
+  }
+  return ramp[steps[steps.length - 1]];
+}
+
+/** Tokens do Fluent que pintam indicadores com a marca, apontados pro
+ *  destaque (`pickAccent`). Texto de marca (`colorBrandForeground*`,
+ *  links) fica como está: precisa de 4,5:1, não 3:1. */
+function accentTokens(accent: string): Partial<Theme> {
+  return {
+    // switch/checkbox marcados, indicador da aba (Fluent), traço de foco e
+    // de item selecionado, bolinha do rádio
+    colorCompoundBrandBackground: accent,
+    colorCompoundBrandBackgroundHover: accent,
+    colorCompoundBrandBackgroundPressed: accent,
+    colorCompoundBrandStroke: accent,
+    colorCompoundBrandStrokeHover: accent,
+    colorCompoundBrandStrokePressed: accent,
+    colorCompoundBrandForeground1: accent,
+    colorCompoundBrandForeground1Hover: accent,
+    colorCompoundBrandForeground1Pressed: accent,
+    colorBrandStroke1: accent,
+  };
+}
 
 function readableOn(hex: string): string {
   const n = hex.replace("#", "");
@@ -653,12 +715,21 @@ function make(
     // `colorBrandForeground1` pra garantir AA (>4.5:1) contra os neutros
     // customizados do tema claro em qualquer rampa cadastrada.
     reemuBrandText: light ? ramp[40] : ramp[90],
+    reemuBrandAccent: "",
     ...liftTokens(light),
   };
   if (o.appBg) t.reemuAppBg = o.appBg;
   if (o.activeBg) t.reemuActiveBg = o.activeBg;
   if (o.brandText) t.reemuBrandText = o.brandText;
   if (o.lift) Object.assign(t, o.lift);
+  // Destaque de ícones/indicadores contra a página e as superfícies (rail,
+  // cards, botões) — depois dos overrides de neutros.
+  t.reemuBrandAccent = pickAccent(ramp, light, [
+    t.colorNeutralBackground1,
+    t.colorNeutralBackground2,
+    t.colorNeutralBackground3,
+  ]);
+  Object.assign(t, accentTokens(t.reemuBrandAccent));
   if (o.solidBg) {
     const c = o.solidBg;
     t.reemuBg1 = t.reemuBg2 = t.reemuBg3 = t.reemuBg4 = c;
@@ -695,6 +766,7 @@ function makeHighContrast(): ReEmuTheme {
     reemuActiveFg: t.colorNeutralForegroundOnBrand,
     reemuFillWeak: "rgba(255, 255, 255, 0.08)",
     reemuBrandText: t.colorBrandForeground1,
+    reemuBrandAccent: t.colorBrandStroke1,
     ...liftTokens(false),
   };
 }

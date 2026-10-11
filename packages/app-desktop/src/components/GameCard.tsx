@@ -33,10 +33,11 @@ const useLocalStyles = makeStyles({
     height: "20px",
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
-    // Mesma cor de marca do coração da página do jogo (RomDetail) —
-    // `--reemuBrandText`, não `colorBrandForeground1` (falha contraste AA
-    // no tema claro, ver `styles/themes.ts::ReEmuTokens.reemuBrandText`).
-    color: "var(--reemuBrandText)",
+    // Coração sobre a arte com fundo escuro (rgba 0,45) em qualquer tema:
+    // o tom primário do tema (80), que é vivo sobre o escuro também nos
+    // temas claros (o `reemuBrandAccent` do claro é escurecido pro fundo
+    // claro e sumiria aqui).
+    color: "var(--reemuBrandSolid)",
     fontSize: "12px",
     pointerEvents: "none",
   },

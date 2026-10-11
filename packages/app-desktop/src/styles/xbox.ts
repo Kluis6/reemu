@@ -1146,7 +1146,8 @@ export const useDetailStyles = makeStyles({
   // Coração de favorito preenchido: cor de marca (mesmo token do "Nintendo
   // 64" no kicker do hero) em vez do branco padrão dos outros ícones —
   // destaca visualmente que está favoritado.
-  favIconOn: { color: "var(--reemuBrandText)" },
+  // ícone (não texto): o destaque do tema, 3:1 garantido (`pickAccent`)
+  favIconOn: { color: "var(--reemuBrandAccent)" },
   // Botão "Jogar": 180×56 epx com texto de 14 regular, como o
   // "Reproduzir" do app Xbox (180×55).
   playBtn: {
@@ -1519,8 +1520,10 @@ export const useTabStyles = makeStyles({
       height: "4px",
       borderRadius: tokens.borderRadiusCircular,
     },
+    // Indicador da aba ativa na cor de destaque do tema (no Serene, branco
+    // como no app Xbox).
     '& .fui-Tab[aria-selected="true"]::after': {
-      backgroundColor: tokens.colorNeutralForeground1,
+      backgroundColor: "var(--reemuBrandAccent)",
     },
   },
 });

@@ -109,7 +109,8 @@ const useStyles = makeStyles({
     fontSize: "40px",
     "@media (max-height: 640px)": { fontSize: "32px" },
     flexShrink: 0,
-    color: tokens.colorBrandForeground1,
+    // ícone: destaque do tema (`reemuBrandAccent`, 3:1 garantido)
+    color: "var(--reemuBrandAccent)",
   },
   text: {
     display: "flex",
