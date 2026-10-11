@@ -127,18 +127,14 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### GPU dos cores no Windows (OpenGL, Vulkan, interop)
 
-Situação em 2026-10-02 (RTX 3060, wgpu em Vulkan):
-- **OpenGL (WGL):** funciona. Os cores rodam no `reemu-core-host` (processo
-  filho), e o quadro sai por `glReadPixels` síncrono
-  (`gl_context.rs::read_pixels`): GPU → CPU, linhas invertidas na CPU, cópia
-  pro anel de memória compartilhada (`core-ipc/shm_ring_win.rs`) e upload
-  pro wgpu no app. Esse é o **caminho lento**.
-- **Vulkan dos cores:** desligado por padrão. Todo core vai pro processo
-  filho (`route_local_device` só escolhe in-process sozinho no Linux), e lá a
-  `VkImage` não cruza o processo. No Windows, um core que prefere Vulkan
-  (flycast) roda em GL.
-- O interop do Linux (`dma_buf` + `sync_file`) não existe no Windows. O
-  equivalente oficial está abaixo, na fase B.
+Situação em 2026-10-11 (RTX 3060, wgpu em Vulkan):
+- **OpenGL (WGL):** os cores rodam no `reemu-core-host` (processo filho) e,
+  desde o B5, o quadro chega ao app **sem cópia**: o core desenha num anel de
+  imagens Vulkan compartilhadas (`EXT_external_objects_win32`) e o filho
+  manda só o índice. GPU sem suporte, import recusado ou nenhum slot livre
+  → readback (fase A). `REEMU_GL_INTEROP=0` força o readback.
+- **Vulkan dos cores:** in-process automático pros cores de
+  `VK_CAPABLE_CORES` (fase C, C1/C2). Falta o C3 (Vulkan no processo filho).
 
 Regra do projeto: cada decisão de GPU com a documentação oficial (CLAUDE.md).
 As fontes já conferidas estão citadas em cada item; o resto fica marcado "a
@@ -371,7 +367,8 @@ conferir".
       in-process: cada jogo carrega e descarrega a DLL do core no processo
       do app (ver "out of TLS indexes" em `docs/historico.md`). Trocar de
       jogo várias vezes e contar com `TlsAlloc` num teste; o C3 elimina.
-- [ ] `todo` — C3. (Depois da B) Core Vulkan no processo filho: o core-host
+- [ ] `todo` — C3. (Desbloqueado: a fase B terminou em 2026-10-11 e o anel
+      Win32 dela é a base) Core Vulkan no processo filho: o core-host
       cria o próprio device, renderiza em imagens exportadas pelo app
       (`VK_KHR_external_memory_win32`) e devolve só o índice + semáforo.
       Devolve o isolamento de processo aos cores Vulkan: um crash do core não
