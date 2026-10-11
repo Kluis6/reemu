@@ -2085,3 +2085,8 @@ Infra:
 
 - O botão de voltar e o relógio agora seguem as margens do conteúdo (`SAFE_X`, 47 epx dos dois lados). Antes a topbar era mais larga, como no app Xbox: 17 à esquerda e 13 à direita.
 - Medido com os dados de teste: o voltar começa em x = 115, a borda esquerda do destaque e dos cards. O texto do relógio termina em x = 1319 a 1366 px de largura e em 1873 a 1920 px, a borda direita do destaque. A busca continua centralizada.
+
+## 2026-10-11 — Configurações com a mesma altura com ou sem controle
+
+- Com controle conectado, a página das Configurações encolhia 56 px para a barra de dicas (A/B…) não cobrir o pé dos cards.
+- Agora a altura é sempre a mesma, e a barra flutua por cima do canto inferior direito do card, como no app Xbox. Foi o pedido do usuário, entre as duas opções oferecidas.
