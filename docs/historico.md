@@ -2181,3 +2181,16 @@ Infra:
   - A barra de dicas mostra "X Claro/escuro" nessa tela (pt-BR, en, es).
 - **Conferido no navegador headless:** foco no card, anel 3 px a 4 px na cor do tema, e o evento do X liga e desliga o Switch "Claro". `cargo clippy -D warnings`, `cargo fmt --check` e os testes do `input-desktop` (23) passaram.
 - **Não testado com controle físico.**
+
+## 2026-10-11 — Tema Dream Sky (menu do Dreamcast)
+
+- **Pesquisa:**
+  - O menu do Dreamcast tem "a blue background that looks like the sky", com Play/File/Music/Settings (GameFAQs, top 10 boot menus).
+  - O logo é a espiral laranja nos consoles americanos e azul nos PAL, por marca registrada (AVID wiki; GameSpot).
+  - Não há códigos de cor oficiais publicados: as cores abaixo são escolhidas a partir dessas descrições, não amostradas de material oficial.
+- **Tema "Dream Sky"** (sem a marca no nome, como os outros), escuro e claro:
+  - Marca no laranja da espiral (matiz 26, na curva do "Personalizado").
+  - Brilhos do fundo: céu azul, azul-claro de nuvem, azul fundo e laranja da espiral.
+  - Escuro: céu noturno azul-marinho. Claro: céu claro com superfícies brancas.
+- **Testes:** contraste AA de texto e marca nos dois modos. O destaque de ícones (`pickAccent`) passa 3:1 no teste geral.
+- O "Personalizado" continua o último da lista de temas.

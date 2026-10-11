@@ -420,6 +420,68 @@ const sereneLift: ReEmuLiftTokens = {
   reemuSurface3Selected: "#474D55",
 };
 
+/** Dream Sky — o menu do Dreamcast: céu azul com nuvens ao fundo ("a blue
+ *  background that looks like the sky", com Play/File/Music/Settings) e a
+ *  espiral laranja do logo (versão americana; a europeia é azul). Sem
+ *  códigos oficiais publicados: a rampa é o laranja da espiral (matiz 26)
+ *  na mesma curva do "Personalizado". */
+const dreamOrange: BrandVariants = {
+  10: "#0F0905",
+  20: "#211308",
+  30: "#3A1E09",
+  40: "#552907",
+  50: "#763605",
+  60: "#934306",
+  70: "#B55308",
+  80: "#D76209",
+  90: "#F57614",
+  100: "#F68631",
+  110: "#F8984F",
+  120: "#F9AC71",
+  130: "#F7C097",
+  140: "#F5D5BC",
+  150: "#F6E6DA",
+  160: "#FAF4F0",
+};
+
+/** Céu do menu nos cantos (azul alto/esquerda, azul-claro de nuvem
+ *  alto/direita, azul fundo embaixo/esquerda) e a espiral laranja
+ *  embaixo/direita. */
+const dreamBg: BgPalette = { bg1: "#2F7FD0", bg2: "#D76209", bg3: "#163F7A", bg4: "#7FB8E8" };
+
+/** Escuro: céu noturno, azul-marinho. */
+const dreamDark = {
+  colorNeutralBackground1: "#0D1828",
+  colorNeutralBackground1Hover: "#132136",
+  colorNeutralBackground1Pressed: "#0A1220",
+  colorNeutralBackground1Selected: "#1A2A42",
+  colorNeutralBackground2: "#142238",
+  colorNeutralBackground3: "#1B2D48",
+  colorNeutralBackground4: "#243957",
+  colorNeutralForeground1: "#EEF4FB",
+  colorNeutralForeground2: "#C3D2E4",
+  colorNeutralForeground3: "#9AAFC8",
+  colorNeutralStroke1: "rgba(255, 255, 255, 0.14)",
+  colorNeutralStroke2: "rgba(255, 255, 255, 0.08)",
+} satisfies Partial<Theme>;
+
+/** Claro: o céu claro do menu, com superfícies brancas (o branco do
+ *  console). */
+const dreamLight = {
+  colorNeutralBackground1: "#DCEAF7",
+  colorNeutralBackground1Hover: "#D0E2F3",
+  colorNeutralBackground1Pressed: "#C4DAEF",
+  colorNeutralBackground1Selected: "#C4DAEF",
+  colorNeutralBackground2: "#FFFFFF",
+  colorNeutralBackground3: "#EEF5FC",
+  colorNeutralBackground4: "#CFE1F2",
+  colorNeutralForeground1: "#0E1B2C",
+  colorNeutralForeground2: "#24364D",
+  colorNeutralForeground3: "#4A5E77",
+  colorNeutralStroke1: "rgba(14, 27, 44, 0.16)",
+  colorNeutralStroke2: "rgba(14, 27, 44, 0.08)",
+} satisfies Partial<Theme>;
+
 // --------------------------------------------------------------- fábrica ----
 
 /** Neutros do "console look" — casam com o antigo `brand` (bg/bgElev/bgElev2)
@@ -786,6 +848,8 @@ export type ThemeId =
   | "alva-claro"
   | "snes"
   | "snes-claro"
+  | "dream"
+  | "dream-claro"
   | "simple-vibes"
   | "serene"
   | "alto-contraste";
@@ -855,6 +919,23 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
       activeBg: snesPurple[80],
     }),
   },
+  // Dream Sky: o menu do Dreamcast (céu azul + espiral laranja).
+  dream: {
+    label: "Dream Sky",
+    theme: make(dreamOrange, "dark", dreamBg, {
+      neutrals: dreamDark,
+      appBg: "linear-gradient(180deg, #12223A 0%, #0D1828 45%)",
+      activeBg: "#24395A",
+    }),
+  },
+  "dream-claro": {
+    label: "Dream Sky (claro)",
+    theme: make(dreamOrange, "light", dreamBg, {
+      neutrals: dreamLight,
+      appBg: "linear-gradient(180deg, #E8F2FB 0%, #DCEAF7 45%)",
+      activeBg: dreamOrange[70],
+    }),
+  },
   // Fundo simples, de uma cor só. Simple Vibes só existe no claro e Serene
   // só no escuro (cada um é um tema de um modo, sem o Switch Claro).
   "simple-vibes": {
@@ -895,6 +976,7 @@ export interface ThemeFamily {
     | "psClassic"
     | "alva"
     | "snes"
+    | "dream"
     | "simpleVibes"
     | "serene"
     | "highContrast";
@@ -913,6 +995,7 @@ export const THEME_FAMILIES: ThemeFamily[] = [
   { nameKey: "psClassic", dark: "ps1", light: "ps1-claro" },
   { nameKey: "alva", dark: "alva", light: "alva-claro" },
   { nameKey: "snes", dark: "snes", light: "snes-claro" },
+  { nameKey: "dream", dark: "dream", light: "dream-claro" },
   { nameKey: "simpleVibes", dark: "simple-vibes", lightOnly: true },
   { nameKey: "serene", dark: "serene" },
   { nameKey: "highContrast", dark: "alto-contraste" },

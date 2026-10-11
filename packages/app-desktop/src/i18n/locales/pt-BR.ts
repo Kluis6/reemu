@@ -99,6 +99,7 @@ const ptBR = {
         psClassic: 'Crimson Retro',
         alva: 'Alva',
         snes: 'Purple Mistique',
+        dream: 'Dream Sky',
         simpleVibes: 'Simple Vibes',
         serene: 'Serene',
         highContrast: 'Alto contraste',

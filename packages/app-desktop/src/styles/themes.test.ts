@@ -143,3 +143,17 @@ describe('destaque de ícones e indicadores', () => {
     expect(THEMES.reemu.theme.reemuBrandAccent).toBe(THEMES.reemu.theme.reemuBrandSolid)
   })
 })
+
+describe('tema Dream Sky', () => {
+  it.each(['dream', 'dream-claro'] as const)('%s: texto legível (AA) sobre os fundos', (id) => {
+    const t = THEMES[id].theme
+    for (const back of [t.colorNeutralBackground1, t.colorNeutralBackground2]) {
+      expect(contrast(t.colorNeutralForeground1, back)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(t.colorNeutralForeground2, back)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(t.colorNeutralForeground3, back)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(t.reemuBrandText, back)).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(contrast(t.reemuOnBrand, t.reemuBrandSolid)).toBeGreaterThanOrEqual(3)
+    expect(contrast(t.reemuActiveFg, t.reemuActiveBg)).toBeGreaterThanOrEqual(3)
+  })
+})
