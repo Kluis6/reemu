@@ -2134,3 +2134,7 @@ Infra:
 - No ReEmu (`useBrowseStyles.featured`, prop `featured` da `Row` da Início), o fundo é o do tema com 8% da cor de destaque.
 - Com 12%, o card do Serene (destaque branco) ficava da cor dos cards de jogo de dentro. Conferido em capturas no Serene, no Neon Circuit e no Simple Vibes.
 - Os cantos de 16 fogem do raio único de 4 do app, de propósito: é o raio do card do Xbox, pedido pelo usuário.
+- **Ajuste no mesmo dia (pedido do usuário):**
+  - O card não passa mais das margens da página: vai de 115 a 1319 a 1366 px, as mesmas bordas do destaque.
+  - O conteúdo fica com 32 de padding nos 4 lados. A prateleira mede a própria largura e reajusta quantos cards cabem e o tamanho deles.
+  - Medido a 1366, 1051 e 1920 px: 32/32/32/32 em todas, com 5, 4 e 8 cards.
