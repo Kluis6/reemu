@@ -268,7 +268,13 @@ conferir".
       Validado no Jet Set Radio (2026-10-02): 30 chamadas/s e 88.284
       amostras/s de áudio contra ~88.282 esperadas. Jogo de taxa instável
       (Ecco, Unreal Tournament) pode desligar a opção por jogo.
-- [ ] `todo` — B1. Detectar suporte nos dois lados: extensões GL
+- [x] `done` — B1 (2026-10-11): `domain::gpu_interop::interop_compatible`
+      (4 extensões GL + 2 Vulkan + deviceUUID e driverUUID iguais); o app
+      manda o `VkInteropId` no `Load`, o filho compara com o contexto WGL e
+      registra no log. RTX 3060: tudo presente e UUIDs idênticos — interop
+      possível. Testes `wgl_interop_caps_read_this_gpu` e
+      `vk_interop_id_reads_this_device` (`--ignored`, GPU real). Texto
+      original: Detectar suporte nos dois lados: extensões GL
       `GL_EXT_memory_object`, `GL_EXT_memory_object_win32`,
       `GL_EXT_semaphore` e `GL_EXT_semaphore_win32` no contexto WGL do filho;
       `VK_KHR_external_memory_win32` e `VK_KHR_external_semaphore_win32` no

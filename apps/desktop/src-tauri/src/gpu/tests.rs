@@ -1788,3 +1788,22 @@ fn shader_preview_renders_the_sample_scene() {
     let (w3, h3, _) = fp.render_still(&frame3d, 960, 720, 4).expect("crt 3d");
     assert_eq!((w3, h3), (960, 720));
 }
+
+/// B1 numa GPU real: identidade do device Vulkan do wgpu e as extensões Win32
+/// de memória/semáforo externos. Imprime pra comparar com o
+/// `wgl_interop_caps_read_this_gpu` (core-loader-desktop).
+#[test]
+#[ignore = "precisa de GPU"]
+fn vk_interop_id_reads_this_device() {
+    let Some(fp) = FrameProcessor::new() else {
+        eprintln!("sem GPU");
+        return;
+    };
+    let Some(id) = fp.vk_interop_id() else {
+        eprintln!("wgpu fora do Vulkan");
+        return;
+    };
+    eprintln!("Vulkan interop: {id:?}");
+    assert_ne!(id.device_uuid, [0; 16]);
+    assert_ne!(id.driver_uuid, [0; 16]);
+}

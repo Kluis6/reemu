@@ -147,6 +147,9 @@ struct Shared {
     /// Modificadores DRM que o Vulkan do app importa — vão no `Load` pro
     /// GBM do interop GL do filho (ver `set_dmabuf_modifiers`).
     dmabuf_modifiers: Mutex<Vec<u64>>,
+    /// Identidade/extensões do Vulkan do app pro interop GL → Vulkan no
+    /// Windows (B1) — vai no `Load` (ver `set_vk_interop`).
+    vk_interop: Mutex<Option<domain::gpu_interop::VkInteropId>>,
     /// Fábrica pra cores Vulkan "donos do device" (Beetle PSX HW) — publicada
     /// pelo shell junto do `vulkan_shared_device`. Ver `docs/ai-context/12`
     /// §Beetle (D2/D3).
@@ -322,6 +325,7 @@ impl EmuSession {
             child_channel: Mutex::new(None),
             vulkan_shared_device: Mutex::new(None),
             dmabuf_modifiers: Mutex::new(Vec::new()),
+            vk_interop: Mutex::new(None),
             vulkan_negotiator: Mutex::new(None),
             vk_local: Mutex::new(None),
             vk_local_active: AtomicBool::new(false),
@@ -394,6 +398,17 @@ impl EmuSession {
             .dmabuf_modifiers
             .lock()
             .unwrap_or_else(|p| p.into_inner()) = mods;
+    }
+
+    /// O que o Vulkan do app oferece pro interop GL → Vulkan no Windows
+    /// (`FrameProcessor::vk_interop_id`). O filho compara com o contexto GL
+    /// dele e registra se o interop seria possível (B1).
+    pub fn set_vk_interop(&self, id: Option<domain::gpu_interop::VkInteropId>) {
+        *self
+            .shared
+            .vk_interop
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = id;
     }
 
     pub fn attach_vulkan_negotiator(
@@ -1815,6 +1830,12 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                     .lock()
                                     .unwrap_or_else(|p| p.into_inner())
                                     .clone(),
+                                vk_interop: shared
+                                    .vk_interop
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner())
+                                    .clone()
+                                    .map(Box::new),
                             },
                             &[],
                         );

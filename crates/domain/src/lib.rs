@@ -17,6 +17,7 @@ pub mod core_options;
 pub mod decoration;
 pub mod focus;
 pub mod frame_source;
+pub mod gpu_interop;
 pub mod hotkeys;
 pub mod input;
 pub mod library;

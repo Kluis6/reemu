@@ -280,6 +280,21 @@ impl GlContext {
         let (max_w, max_h) = (max_w.max(1), max_h.max(1));
         let (plat, mut gl) = create_platform(cfg)?;
 
+        // B1: o interop GL → Vulkan daria nesta máquina? Só registra — o
+        // quadro continua pelo readback até B2–B5.
+        #[cfg(windows)]
+        {
+            let gl_caps = unsafe { wgl::interop_caps(&gl) };
+            let vk = VK_INTEROP.lock().unwrap_or_else(|p| p.into_inner()).clone();
+            match domain::gpu_interop::interop_compatible(&gl_caps, vk.as_ref()) {
+                Ok(()) => log::info!(
+                    "interop GL→Vulkan: possível nesta GPU (mesmo deviceUUID/driverUUID, \
+                     extensões Win32 dos dois lados) — ainda via readback (B2–B5)"
+                ),
+                Err(why) => log::info!("interop GL→Vulkan: não ({why}) — segue no readback"),
+            }
+        }
+
         if std::env::var_os("REEMU_GL_DEBUG").is_some() {
             unsafe { enable_gl_debug(&mut gl) };
         }
@@ -1200,6 +1215,52 @@ mod wgl {
     //! oculta (a WGL exige um HDC com pixel format), contexto temporário pra
     //! obter `wglCreateContextAttribsARB` e, com ele, o contexto na versão e
     //! perfil que o core pediu. Tudo na thread do core, como no EGL.
+
+    /// Extensões e UUIDs do contexto WGL atual pro interop (B1). Tokens e
+    /// funções de EXT_external_objects.txt (`NUM_DEVICE_UUIDS_EXT` 0x9596,
+    /// `DEVICE_UUID_EXT` 0x9597, `DRIVER_UUID_EXT` 0x9598, `UUID_SIZE_EXT` 16;
+    /// `glGetUnsignedBytevEXT`/`glGetUnsignedBytei_vEXT`); nomes Win32 de
+    /// EXT_external_objects_win32.txt. Só consulta — não muda estado.
+    pub(super) unsafe fn interop_caps(gl: &glow::Context) -> domain::gpu_interop::GlInteropCaps {
+        use domain::gpu_interop::{GlInteropCaps, UUID_SIZE};
+        use glow::HasContext;
+        const NUM_DEVICE_UUIDS_EXT: u32 = 0x9596;
+        const DEVICE_UUID_EXT: u32 = 0x9597;
+        const DRIVER_UUID_EXT: u32 = 0x9598;
+        let exts = gl.supported_extensions();
+        let mut caps = GlInteropCaps {
+            memory_object: exts.contains("GL_EXT_memory_object"),
+            memory_object_win32: exts.contains("GL_EXT_memory_object_win32"),
+            semaphore: exts.contains("GL_EXT_semaphore"),
+            semaphore_win32: exts.contains("GL_EXT_semaphore_win32"),
+            ..Default::default()
+        };
+        // Os UUIDs são do GL_EXT_memory_object/semaphore: sem eles, as
+        // funções de consulta nem existem.
+        if !(caps.memory_object || caps.semaphore) {
+            return caps;
+        }
+        type GetBytes = unsafe extern "system" fn(u32, *mut u8);
+        type GetBytesI = unsafe extern "system" fn(u32, u32, *mut u8);
+        let get_v = proc_address(c"glGetUnsignedBytevEXT");
+        let get_i = proc_address(c"glGetUnsignedBytei_vEXT");
+        if !get_v.is_null() {
+            let f: GetBytes = std::mem::transmute(get_v);
+            let mut id = [0u8; UUID_SIZE];
+            f(DRIVER_UUID_EXT, id.as_mut_ptr());
+            caps.driver_uuid = Some(id);
+        }
+        if !get_i.is_null() {
+            let f: GetBytesI = std::mem::transmute(get_i);
+            let n = gl.get_parameter_i32(NUM_DEVICE_UUIDS_EXT).max(0) as u32;
+            for i in 0..n {
+                let mut id = [0u8; UUID_SIZE];
+                f(DEVICE_UUID_EXT, i, id.as_mut_ptr());
+                caps.device_uuids.push(id);
+            }
+        }
+        caps
+    }
     use std::ffi::{c_void, CStr};
     use std::sync::OnceLock;
     use windows_sys::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
@@ -1445,6 +1506,10 @@ fn open_display(egl: &EglInstance) -> Result<egl::Display, String> {
 /// backtrace bate com a chamada culpada). Ligado por `REEMU_GL_DEBUG` — o
 /// diagnóstico de "tela preta" num core GL no hardware do usuário. Spec:
 /// registry.khronos.org/OpenGL, extensão `KHR_debug`.
+/// Identidade do Vulkan do pai pro interop (B1) — ver `set_vk_interop`.
+pub(crate) static VK_INTEROP: std::sync::Mutex<Option<domain::gpu_interop::VkInteropId>> =
+    std::sync::Mutex::new(None);
+
 unsafe fn enable_gl_debug(gl: &mut glow::Context) {
     let exts = gl.supported_extensions().clone();
     if !exts.contains("GL_KHR_debug") {
@@ -1760,6 +1825,31 @@ mod tests {
             &[255, 0, 0, 255],
             "linha de baixo vermelha"
         );
+    }
+
+    /// B1 numa GPU real: com `GL_EXT_memory_object`/`GL_EXT_semaphore`, os
+    /// UUIDs (EXT_external_objects.txt) vêm preenchidos. Imprime o que leu
+    /// pra comparar com o `vk_interop_id` do app (gpu/tests.rs).
+    #[cfg(windows)]
+    #[test]
+    #[ignore = "precisa de GPU com WGL real"]
+    fn wgl_interop_caps_read_this_gpu() {
+        let cfg = GlConfig {
+            context_type: sys::RETRO_HW_CONTEXT_OPENGL_CORE,
+            version_major: 3,
+            version_minor: 3,
+            depth: false,
+            stencil: false,
+            bottom_left_origin: true,
+        };
+        let ctx = GlContext::create(&cfg, 16, 16).expect("criar contexto GL");
+        let caps = unsafe { wgl::interop_caps(&ctx.gl) };
+        eprintln!("GL interop: {caps:?}");
+        if caps.memory_object || caps.semaphore {
+            assert!(caps.driver_uuid.is_some_and(|u| u != [0; 16]));
+            assert!(!caps.device_uuids.is_empty());
+            assert!(caps.device_uuids.iter().all(|u| *u != [0; 16]));
+        }
     }
 
     #[test]

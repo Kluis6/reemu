@@ -51,6 +51,13 @@ pub fn set_dmabuf_import_modifiers(mods: Vec<u64>) {
     #[cfg(not(unix))]
     let _ = mods;
 }
+/// O que o Vulkan do pai oferece pro interop GL → Vulkan no Windows (B1). O
+/// `GlContext` do Windows compara com o contexto WGL e registra no log.
+pub fn set_vk_interop(id: Option<domain::gpu_interop::VkInteropId>) {
+    *crate::gl_context::VK_INTEROP
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = id;
+}
 pub use crate::gl_context::readback_stats;
 #[cfg(all(unix, feature = "test-fixtures"))]
 pub use crate::gl_context::{render_rect_rgba_to_dmabuf, render_solid_rgba_to_dmabuf};

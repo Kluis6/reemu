@@ -34,6 +34,13 @@ pub enum ToChild {
         /// só com eles. Vazio = pai sem Vulkan / não informou.
         #[serde(default)]
         dmabuf_modifiers: Vec<u64>,
+        /// Identidade e extensões do Vulkan do pai pro interop GL → Vulkan
+        /// no Windows (B1: o filho só detecta e registra). `None` = pai sem
+        /// Vulkan / não informou.
+        #[serde(default)]
+        // `Box`: sem ele a variante `Load` fica grande demais perto das
+        // outras (clippy::large_enum_variant).
+        vk_interop: Option<Box<domain::gpu_interop::VkInteropId>>,
     },
     SetPaused(bool),
     SaveState,

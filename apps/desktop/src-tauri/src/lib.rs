@@ -133,6 +133,23 @@ pub fn run() {
                         );
                         state.session.set_dmabuf_modifiers(mods);
                     }
+                    // Interop GL → Vulkan no Windows (B1): o filho compara com
+                    // o contexto WGL dele e registra se seria possível.
+                    #[cfg(windows)]
+                    {
+                        let id = fp.vk_interop_id();
+                        log::info!(
+                            "interop GL→Vulkan: Vulkan do app {}",
+                            match &id {
+                                Some(v) => format!(
+                                    "com external_memory_win32={} external_semaphore_win32={}",
+                                    v.external_memory_win32, v.external_semaphore_win32
+                                ),
+                                None => "indisponível".into(),
+                            }
+                        );
+                        state.session.set_vk_interop(id);
+                    }
                     state.gpu.lock().unwrap().replace(fp);
                 }
                 None => log::warn!("sem GPU wgpu — frame do core vai cru pro canvas"),

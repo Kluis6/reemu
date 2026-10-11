@@ -1756,6 +1756,28 @@ impl FrameProcessor {
             .collect()
     }
 
+    /// O que este device Vulkan oferece pro interop GL → Vulkan no Windows
+    /// (B1): `VkPhysicalDeviceIDProperties` (deviceUUID/driverUUID — "must
+    /// be used to determine whether a particular external object can be
+    /// shared", spec Vulkan) e se as extensões `VK_KHR_external_memory_win32`
+    /// e `VK_KHR_external_semaphore_win32` existem. `None` fora do Vulkan.
+    pub fn vk_interop_id(&self) -> Option<domain::gpu_interop::VkInteropId> {
+        use ash::vk;
+        let hal = unsafe { self.adapter.as_hal::<wgpu::hal::api::Vulkan>() }?;
+        let caps = hal.physical_device_capabilities();
+        let instance = hal.shared_instance().raw_instance();
+        let mut id = vk::PhysicalDeviceIDProperties::default();
+        let mut props2 = vk::PhysicalDeviceProperties2::default().push_next(&mut id);
+        unsafe { instance.get_physical_device_properties2(hal.raw_physical_device(), &mut props2) };
+        Some(domain::gpu_interop::VkInteropId {
+            device_uuid: id.device_uuid,
+            driver_uuid: id.driver_uuid,
+            external_memory_win32: caps.supports_extension(ash::khr::external_memory_win32::NAME),
+            external_semaphore_win32: caps
+                .supports_extension(ash::khr::external_semaphore_win32::NAME),
+        })
+    }
+
     /// Placa de vídeo em uso (Configurações › Sistema).
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {
         self.adapter.get_info()
