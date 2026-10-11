@@ -117,6 +117,7 @@ pub fn run() {
                 Some(mut fp) => {
                     let state = app.state::<AppState>();
                     fp.set_integer_scaling(video_config.integer_scaling);
+                    fp.set_hdr(commands::hdr_settings(&video_config));
                     // Etapa 12 B3b: publica os handles do `VkDevice` do
                     // compositor na sessão. Com `REEMU_HW=vulkan`, um core que
                     // negocia Vulkan passa a rodar in-process no mesmo device.
@@ -299,6 +300,7 @@ pub fn run() {
             commands::update_audio_config,
             commands::get_video_config,
             commands::update_video_config,
+            commands::video_hdr_status,
             commands::list_installed_cores,
             commands::get_core_options,
             commands::set_core_option,
@@ -529,6 +531,9 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                     let prev_integer_scaling =
                         slot.as_ref().map(|f| f.integer_scaling()).unwrap_or(false);
                     new_fp.set_integer_scaling(prev_integer_scaling);
+                    if let Some(h) = slot.as_ref().map(|f| f.hdr_settings()) {
+                        new_fp.set_hdr(h);
+                    }
                     // idem o viewport do modo canvas (o da surface nativa vem
                     // do `attach_surface` do novo FP)
                     if let Some((w, h)) = slot.as_ref().map(|f| f.viewport()) {

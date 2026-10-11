@@ -119,8 +119,30 @@ export interface VideoConfig {
    *  ultrapassa. A largura segue a proporção correta do core (PAR), não o
    *  fator bruto. A moldura em si nunca é redimensionada. */
   integerScaling: boolean
+  /** Saída HDR na janela do jogo (scRGB) quando monitor e sistema permitem. */
+  hdr: boolean
+  /** Branco SDR em nits; 0 = automático (o do sistema). */
+  hdrPaperWhiteNits: number
+  /** Realce de brilhos (expande os tons claros até o pico). */
+  hdrHighlights: boolean
+  /** Pico do realce em nits; 0 = automático (o do monitor em tela cheia). */
+  hdrPeakNits: number
 }
 export const getVideoConfig = () => invoke<VideoConfig>('get_video_config')
+
+/** Estado do HDR na janela do jogo (`video_hdr_status`). */
+export interface HdrStatus {
+  surface: boolean
+  capable: boolean
+  active: boolean
+  systemHdr: boolean | null
+  sdrWhiteNits: number | null
+  peakNits: number | null
+  fullFrameNits: number | null
+  paperWhiteUsed: number
+  peakUsed: number
+}
+export const getHdrStatus = () => invoke<HdrStatus>('video_hdr_status')
 export const updateVideoConfig = (config: VideoConfig) =>
   invoke<void>('update_video_config', { config })
 

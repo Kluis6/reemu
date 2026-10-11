@@ -724,6 +724,8 @@ pub struct FrameProcessor {
     /// desenhado pra aquele retângulo exato). `false` por padrão — muda ao
     /// vivo via `set_integer_scaling` (chamado por `update_video_config`).
     integer_scaling: bool,
+    /// Saída HDR pedida (aplicada quando houver surface nativa).
+    hdr: HdrSettings,
 }
 
 /// Alvo de apresentação nativo: a `wgpu::Surface` de uma `wl_subsurface` (ou da
@@ -732,7 +734,49 @@ struct SurfaceOut {
     surface: wgpu::Surface<'static>,
     config: wgpu::SurfaceConfiguration,
     blit_pipeline: wgpu::RenderPipeline,
+    /// 32 bytes: o retângulo do jogo (16) + os parâmetros do HDR (16).
     blit_rect: wgpu::Buffer,
+    /// Formato SDR escolhido no `attach_surface` (volta pra ele sem HDR).
+    sdr_format: wgpu::TextureFormat,
+    /// A surface aceita `Rgba16Float` em `ExtendedSrgbLinear` (scRGB).
+    hdr_capable: bool,
+    /// Configurada em scRGB agora.
+    hdr_active: bool,
+    /// O que o sistema informa do monitor (`Surface::display_hdr_info`).
+    display: wgpu::DisplayHdrInfo,
+    /// Branco SDR e pico usados agora, em nits.
+    hdr_used: (f32, f32),
+}
+
+/// Saída HDR (Configurações › Sistema › Vídeo) — ver
+/// `domain::video::VideoConfig`. `0` nos nits = automático.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct HdrSettings {
+    pub enabled: bool,
+    pub paper_white_nits: u32,
+    pub highlights: bool,
+    pub peak_nits: u32,
+}
+
+/// Estado do HDR pra interface.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HdrStatus {
+    /// Há uma janela de jogo nativa (o HDR vale só nela).
+    pub surface: bool,
+    /// A janela aceita scRGB (FP16).
+    pub capable: bool,
+    /// Saindo em HDR agora.
+    pub active: bool,
+    /// HDR ligado no sistema (Windows: "Usar HDR"), se o sistema informa.
+    pub system_hdr: Option<bool>,
+    /// Branco SDR do sistema, pico e brilho sustentado em tela cheia (nits).
+    pub sdr_white_nits: Option<f32>,
+    pub peak_nits: Option<f32>,
+    pub full_frame_nits: Option<f32>,
+    /// Valores em uso (automáticos ou escolhidos).
+    pub paper_white_used: f32,
+    pub peak_used: f32,
 }
 
 impl FrameProcessor {
@@ -900,6 +944,7 @@ impl FrameProcessor {
             split_decoration: false,
             surface: None,
             integer_scaling: false,
+            hdr: HdrSettings::default(),
         })
     }
 
@@ -1288,9 +1333,16 @@ impl FrameProcessor {
         let surface: wgpu::Surface<'static> = unsafe { std::mem::transmute(surface) };
 
         let blit_pipeline = blit_pipeline(&self.device, &self.comp.bgl, format);
+        // HDR: a surface aceita FP16 em scRGB? (`format_capabilities`.)
+        let hdr_capable = caps.format_capabilities.iter().any(|fc| {
+            fc.format == wgpu::TextureFormat::Rgba16Float
+                && fc
+                    .color_spaces
+                    .contains(wgpu::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR)
+        });
         let blit_rect = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("blit rect"),
-            size: 16,
+            size: 32,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1304,21 +1356,119 @@ impl FrameProcessor {
             config,
             blit_pipeline,
             blit_rect,
+            sdr_format: format,
+            hdr_capable,
+            hdr_active: false,
+            display: Default::default(),
+            hdr_used: (0.0, 0.0),
         });
+        self.apply_hdr();
         true
+    }
+
+    /// Aplica a configuração de HDR à surface: scRGB (`Rgba16Float` +
+    /// `ExtendedSrgbLinear`, a opção 1 da Microsoft, "the only option that
+    /// works for all types of Advanced Color displays") quando pedida e
+    /// suportada; senão o formato SDR de sempre. Relê o monitor
+    /// (`display_hdr_info`: o branco SDR "moves with the brightness slider")
+    /// e grava os parâmetros do passe final.
+    pub fn set_hdr(&mut self, s: HdrSettings) {
+        self.hdr = s;
+        self.apply_hdr();
+    }
+
+    fn apply_hdr(&mut self) {
+        let settings = self.hdr;
+        let Some(s) = self.surface.as_mut() else {
+            return;
+        };
+        s.display = s.surface.display_hdr_info(&self.adapter);
+        let want = settings.enabled && s.hdr_capable;
+        let (format, color_space) = if want {
+            (
+                wgpu::TextureFormat::Rgba16Float,
+                wgpu::SurfaceColorSpace::ExtendedSrgbLinear,
+            )
+        } else {
+            (s.sdr_format, wgpu::SurfaceColorSpace::Auto)
+        };
+        if s.config.format != format || s.config.color_space != color_space {
+            s.config.format = format;
+            s.config.color_space = color_space;
+            s.surface.configure(&self.device, &s.config);
+            s.blit_pipeline = blit_pipeline_for(&self.device, &self.comp.bgl, format, want);
+            log::info!(
+                "surface nativa: {format:?} {color_space:?} (HDR {})",
+                if want { "ligado" } else { "desligado" }
+            );
+        }
+        s.hdr_active = want;
+        let lum = s.display.luminance.unwrap_or_default();
+        // Sem o valor do sistema: "On desktop HDR monitors, SDR reference
+        // white levels are typically set to around 200 nits" (Microsoft).
+        let paper = match settings.paper_white_nits {
+            0 => lum.sdr_white_nits.unwrap_or(200.0),
+            n => n as f32,
+        }
+        .max(1.0);
+        // Pico automático: o brilho sustentado em tela cheia — "Prefer it
+        // over max_nits for large bright regions" (wgpu, `DisplayLuminance`);
+        // tela clara inteira é comum em jogo antigo.
+        let peak = match settings.peak_nits {
+            0 => lum.max_full_frame_nits.or(lum.max_nits).unwrap_or(1000.0),
+            n => n as f32,
+        };
+        let k = if settings.highlights && peak > paper {
+            1.0 - paper / peak
+        } else {
+            0.0
+        };
+        s.hdr_used = (paper, peak.max(paper));
+        self.queue
+            .write_buffer(&s.blit_rect, 16, f32s_bytes(&[paper / 80.0, k, 0.0, 0.0]));
+    }
+
+    /// A configuração de HDR pedida (pra repassar a um `FrameProcessor` novo).
+    pub fn hdr_settings(&self) -> HdrSettings {
+        self.hdr
+    }
+
+    /// Estado do HDR pra interface (`video_hdr_status`).
+    pub fn hdr_status(&self) -> HdrStatus {
+        let Some(s) = self.surface.as_ref() else {
+            return HdrStatus::default();
+        };
+        let lum = s.display.luminance.unwrap_or_default();
+        HdrStatus {
+            surface: true,
+            capable: s.hdr_capable,
+            active: s.hdr_active,
+            system_hdr: s.display.coarse.and_then(|c| c.high_dynamic_range),
+            sdr_white_nits: lum.sdr_white_nits,
+            peak_nits: lum.max_nits,
+            full_frame_nits: lum.max_full_frame_nits,
+            paper_white_used: s.hdr_used.0,
+            peak_used: s.hdr_used.1,
+        }
     }
 
     pub fn resize_surface(&mut self, w: u32, h: u32) {
         let cap = self.device.limits().max_texture_dimension_2d;
         let (w, h) = (w.clamp(1, cap), h.clamp(1, cap));
         self.viewport = (w, h);
+        let mut resized = false;
         if let Some(s) = &mut self.surface {
             if (s.config.width, s.config.height) != (w, h) {
                 s.config.width = w;
                 s.config.height = h;
                 s.surface.configure(&self.device, &s.config);
                 self.surface_fail_streak = 0;
+                resized = true;
             }
+        }
+        // A janela pode ter mudado de monitor: relê o HDR dele.
+        if resized {
+            self.apply_hdr();
         }
         // `scale_type = viewport` mudou de tamanho → realoca alvos.
         for p in &mut self.passes {

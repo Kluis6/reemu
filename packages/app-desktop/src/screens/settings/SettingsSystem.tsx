@@ -17,6 +17,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AboutLicenses } from "../../components/AboutLicenses";
+import { HdrSettings } from "../../components/HdrSettings";
 import { LoadingState } from "../../components/EmptyState";
 import {
   getLanguagePreference,
@@ -132,7 +133,11 @@ export function SettingsSystem() {
     retry: false,
   })
   const setIntegerScaling = useMutation({
-    mutationFn: (integerScaling: boolean) => updateVideoConfig({ integerScaling }),
+    // A config inteira: mandar só este campo apagaria a do HDR.
+    mutationFn: (integerScaling: boolean) =>
+      videoCfg.data
+        ? updateVideoConfig({ ...videoCfg.data, integerScaling })
+        : Promise.resolve(),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['video-config'] }),
     onError: (e) => push(errorToast(e, 'saveVideoConfig')),
   })
@@ -283,6 +288,7 @@ export function SettingsSystem() {
                 onChange={(_, d) => setIntegerScaling.mutate(d.checked)}
               />
             </Field>
+            <HdrSettings />
           </section>
         </>
       )}

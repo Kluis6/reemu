@@ -2677,3 +2677,305 @@ fn cas_matches_the_reference_math() {
     assert!(changed > 0, "o CAS não mudou nada");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Diagnóstico de HDR (Windows): numa janela oculta, o que a superfície
+/// oferece (formatos × espaços de cor, `format_capabilities`) e o que o
+/// Windows informa do monitor (`display_hdr_info`: branco SDR e pico, via
+/// `DISPLAYCONFIG_SDR_WHITE_LEVEL` e DXGI). Só imprime.
+#[cfg(windows)]
+#[test]
+#[ignore = "precisa de GPU e de um monitor"]
+fn hdr_surface_diagnostics() {
+    use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassW, ShowWindow, SW_SHOWNA,
+        WNDCLASSW, WS_POPUP,
+    };
+    unsafe extern "system" fn wndproc(
+        h: windows_sys::Win32::Foundation::HWND,
+        m: u32,
+        w: usize,
+        l: isize,
+    ) -> isize {
+        unsafe { DefWindowProcW(h, m, w, l) }
+    }
+    let Some(fp) = FrameProcessor::new() else {
+        eprintln!("sem GPU");
+        return;
+    };
+    let class: Vec<u16> = "ReEmuHdrDiag\0".encode_utf16().collect();
+    // SAFETY: janela oculta só pra criar a surface; destruída no fim.
+    let hwnd = unsafe {
+        let hinst = GetModuleHandleW(std::ptr::null());
+        let wc = WNDCLASSW {
+            lpfnWndProc: Some(wndproc),
+            hInstance: hinst,
+            lpszClassName: class.as_ptr(),
+            ..std::mem::zeroed()
+        };
+        RegisterClassW(&wc);
+        CreateWindowExW(
+            0,
+            class.as_ptr(),
+            class.as_ptr(),
+            WS_POPUP,
+            0,
+            0,
+            64,
+            64,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            hinst,
+            std::ptr::null(),
+        )
+    };
+    assert!(!hwnd.is_null());
+    // Visível (sem ativar): o Windows associa a janela a um monitor.
+    unsafe { ShowWindow(hwnd, SW_SHOWNA) };
+    let mut win = raw_window_handle::Win32WindowHandle::new(
+        std::num::NonZeroIsize::new(hwnd as isize).unwrap(),
+    );
+    // `VkWin32SurfaceCreateInfoKHR` precisa do `hinstance` da janela.
+    win.hinstance =
+        std::num::NonZeroIsize::new(unsafe { GetModuleHandleW(std::ptr::null()) } as isize);
+    let surface = unsafe {
+        fp.instance
+            .create_surface_unsafe(wgpu::SurfaceTargetUnsafe::RawHandle {
+                raw_display_handle: Some(raw_window_handle::RawDisplayHandle::Windows(
+                    raw_window_handle::WindowsDisplayHandle::new(),
+                )),
+                raw_window_handle: raw_window_handle::RawWindowHandle::Win32(win),
+            })
+    }
+    .expect("surface");
+    let caps = surface.get_capabilities(&fp.adapter);
+    eprintln!("formatos: {:?}", caps.formats);
+    for fc in &caps.format_capabilities {
+        eprintln!("formato {:?}: {:?}", fc.format, fc.color_spaces);
+    }
+    eprintln!("monitor: {:?}", surface.display_hdr_info(&fp.adapter));
+    drop(surface);
+
+    // O caminho do app: `attach_surface` + `set_hdr` + quadros apresentados.
+    let mut fp = fp;
+    let disp = raw_window_handle::RawDisplayHandle::Windows(
+        raw_window_handle::WindowsDisplayHandle::new(),
+    );
+    assert!(unsafe {
+        fp.attach_surface(disp, raw_window_handle::RawWindowHandle::Win32(win), 64, 64)
+    });
+    fp.set_hdr(HdrSettings {
+        enabled: true,
+        paper_white_nits: 0,
+        highlights: true,
+        peak_nits: 0,
+    });
+    let st = fp.hdr_status();
+    eprintln!("HDR ligado: {st:?}");
+    for _ in 0..5 {
+        fp.render_to_surface(Some(&checker_frame(32, 32)));
+    }
+    if st.capable {
+        assert!(st.active, "a surface aceita scRGB e o HDR não ligou");
+    }
+    fp.set_hdr(HdrSettings::default());
+    fp.render_to_surface(Some(&checker_frame(32, 32)));
+    assert!(
+        !fp.hdr_status().active,
+        "desligar o HDR devia voltar pro SDR"
+    );
+    drop(fp);
+    unsafe { DestroyWindow(hwnd) };
+}
+
+/// Passe final em HDR (`HDR_BLIT_WGSL`) numa textura `Rgba16Float` fora da
+/// tela: sRGB → linear (IEC 61966-2-1), realce pela inversa do Reinhard
+/// estendido e escala branco SDR/80 (scRGB, 1.0 = 80 nits). Com branco SDR
+/// 240 e pico 799 nits: branco vai ao pico (799/80), cinza 128 fica perto
+/// do SDR escalado e o preto continua preto.
+#[test]
+fn hdr_blit_maps_sdr_to_scrgb() {
+    let Some(fp) = FrameProcessor::new() else {
+        eprintln!("sem adapter wgpu — pulando");
+        return;
+    };
+    let d = &fp.device;
+    let (paper, peak) = (240.0f32, 799.0f32);
+    let k = 1.0 - paper / peak;
+    // Fonte 3×1 RGBA8 (valores sRGB codificados, como a chain entrega).
+    let src = d.create_texture(&wgpu::TextureDescriptor {
+        label: Some("hdr src"),
+        size: wgpu::Extent3d {
+            width: 3,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let px: [u8; 12] = [0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255];
+    fp.queue.write_texture(
+        src.as_image_copy(),
+        &px,
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(12),
+            rows_per_image: Some(1),
+        },
+        wgpu::Extent3d {
+            width: 3,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+    );
+    let dst = d.create_texture(&wgpu::TextureDescriptor {
+        label: Some("hdr dst"),
+        size: wgpu::Extent3d {
+            width: 3,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba16Float,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let params = d.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("hdr params"),
+        size: 32,
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    // Retângulo cheio (centro 0,0; meia-extensão 1,1) + [branco/80, k].
+    fp.queue.write_buffer(
+        &params,
+        0,
+        f32s_bytes(&[0.0, 0.0, 1.0, 1.0, paper / 80.0, k, 0.0, 0.0]),
+    );
+    let pipeline = blit_pipeline_for(d, &fp.comp.bgl, wgpu::TextureFormat::Rgba16Float, true);
+    let src_view = src.create_view(&Default::default());
+    let bg = d.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("hdr bg"),
+        layout: &fp.comp.bgl,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: params.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&src_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Sampler(&fp.sampler_nearest),
+            },
+        ],
+    });
+    let readback = d.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("hdr readback"),
+        size: 256,
+        usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+    let dst_view = dst.create_view(&Default::default());
+    let mut enc = d.create_command_encoder(&Default::default());
+    {
+        let mut rp = enc.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("hdr test"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &dst_view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+        rp.set_pipeline(&pipeline);
+        rp.set_bind_group(0, &bg, &[]);
+        rp.set_vertex_buffer(0, fp.quad.slice(..));
+        rp.draw(0..4, 0..1);
+    }
+    enc.copy_texture_to_buffer(
+        dst.as_image_copy(),
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(256),
+                rows_per_image: Some(1),
+            },
+        },
+        wgpu::Extent3d {
+            width: 3,
+            height: 1,
+            depth_or_array_layers: 1,
+        },
+    );
+    fp.queue.submit([enc.finish()]);
+    readback.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+    let _ = d.poll(wgpu::PollType::wait_indefinitely());
+    let data = readback.slice(..).get_mapped_range().unwrap();
+    // f16 → f32 (IEEE 754 meia precisão).
+    let half = |i: usize| -> f32 {
+        let h = u16::from_le_bytes([data[i], data[i + 1]]);
+        let (s, e, m) = (
+            (h >> 15) as i32,
+            ((h >> 10) & 0x1f) as i32,
+            (h & 0x3ff) as f32,
+        );
+        let v = if e == 0 {
+            m / 1024.0 * 2f32.powi(-14)
+        } else {
+            (1.0 + m / 1024.0) * 2f32.powi(e - 15)
+        };
+        if s == 1 {
+            -v
+        } else {
+            v
+        }
+    };
+    // Referência: sRGB → linear, inversa do Reinhard estendido, × branco/80.
+    let expect = |c: f32| -> f32 {
+        let lin = if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        };
+        let x = if lin > 1e-4 {
+            lin / (1.0 - lin * k)
+        } else {
+            lin
+        };
+        x * paper / 80.0
+    };
+    for (i, c) in [0.0f32, 128.0 / 255.0, 1.0].into_iter().enumerate() {
+        let got = half(i * 8);
+        let want = expect(c);
+        eprintln!(
+            "entrada {:.3} → scRGB {got:.4} (referência {want:.4}, {:.0} nits)",
+            c,
+            got * 80.0
+        );
+        assert!(
+            (got - want).abs() <= want.max(0.01) * 0.01,
+            "pixel {i}: {got} vs {want}"
+        );
+    }
+    assert!(
+        (half(16) * 80.0 - peak).abs() < peak * 0.01,
+        "branco SDR devia ir ao pico"
+    );
+}

@@ -613,3 +613,20 @@ async fn remove_under_dir_handles_both_separators() {
     assert_eq!(repo.remove_under_dir("/home/u/roms").await.unwrap(), 1);
     assert_eq!(repo.list().await.unwrap().len(), 2);
 }
+
+#[tokio::test]
+async fn video_config_hdr_roundtrip_and_defaults() {
+    use domain::video::{VideoConfig, VideoConfigRepository};
+    let repo = db::VideoConfigRepo::new(mem_db().await);
+    // A migration 0016 semeia: HDR desligado, nits automáticos, realce ligado.
+    assert_eq!(repo.get().await.unwrap(), VideoConfig::default());
+    let cfg = VideoConfig {
+        integer_scaling: true,
+        hdr: true,
+        hdr_paper_white_nits: 260,
+        hdr_highlights: false,
+        hdr_peak_nits: 1000,
+    };
+    repo.update(&cfg).await.unwrap();
+    assert_eq!(repo.get().await.unwrap(), cfg);
+}

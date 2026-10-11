@@ -116,8 +116,14 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       "Nitidez adaptativa (AMD CAS)", não depende do pacote). Teste
       `cas_matches_the_reference_math`: a saída da GPU bate pixel a pixel com a
       referência das fórmulas da AMD.
-- [ ] `todo` — HDR: saída HDR de verdade (superfície scRGB/HDR10 do wgpu 30,
-      `SurfaceColorSpace`), com brilho do branco de papel e pico do monitor.
+- [x] `done` — HDR (2026-10-11): saída HDR na janela do jogo
+      (Configurações › Sistema › Vídeo): superfície `Rgba16Float` +
+      `ExtendedSrgbLinear` (scRGB) do wgpu 30, branco SDR e pico
+      automáticos lidos do monitor (`display_hdr_info`) ou escolhidos, e
+      realce de brilhos (inversa do Reinhard estendido). Testes:
+      `hdr_blit_maps_sdr_to_scrgb` (matemática na GPU),
+      `hdr_surface_diagnostics` (janela real, monitor HDR desta máquina),
+      `video_config_hdr_roundtrip_and_defaults`. Falta conferir a olho no app.
 - [x] `decidido` — Shader: `test/format.slangp` (textura de inteiros) fica
       sem suporte (2026-10-11). É um preset de teste do RetroArch: o passe 0
       grava em `R32_UINT` e o 1 lê com `usampler2D` + `texelFetch`. No pacote

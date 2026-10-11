@@ -2031,3 +2031,23 @@ Infra:
   - `sharpness` 0 a 1, padrão 0 ("0 := default (lower ringing)"), com peso `-1/lerp(8, 5, sharpness)`.
   - Uma guarda que a fonte não tem: vizinhança toda preta (máximo 0) não divide por zero.
 - **Teste:** `cas_matches_the_reference_math` roda o preset na GPU com degraus de cinza e um ponto claro e compara cada pixel com uma referência em Rust das mesmas fórmulas (diferença ≤ 2 em 0–255); 101 dos 512 pixels saem realçados.
+
+## 2026-10-11 — Saída HDR na janela do jogo
+
+- **O quê:** com "Saída HDR" ligada (Configurações › Sistema › Vídeo), a janela do jogo sai em HDR quando o monitor e o sistema estão com HDR ligado; senão continua em SDR, sem mudança. Há também o "Realce de brilhos" (ligado por padrão), o "Brilho do branco" e o "Pico do realce", estes dois automáticos por padrão. Os shaders do pacote seguem rodando em SDR; o HDR é feito no passe final.
+- **Formato (Microsoft, "Use DirectX with Advanced Color on high/standard dynamic range displays"):**
+  - FP16 em scRGB, a "Option 1", que "is the only option that works for all types of Advanced Color displays", em que "scRGB (1.0, 1.0, 1.0) encodes the standard D65 white at 80 nits".
+  - No wgpu 30: `TextureFormat::Rgba16Float` + `SurfaceColorSpace::ExtendedSrgbLinear`, conferido em `SurfaceCapabilities::format_capabilities`.
+  - Num monitor SDR, a Microsoft diz que o DWM corta o que passa de [0, 1]; o ReEmu só liga o scRGB quando a superfície aceita.
+- **Branco SDR:** "multiply the SDR color value by SdrWhiteLevelInNits / 80" (mesma página). O automático vem de `Surface::display_hdr_info` → `DisplayLuminance::sdr_white_nits`, que o wgpu lê do `DISPLAYCONFIG_SDR_WHITE_LEVEL` indicado pela Microsoft. Sem esse valor, usa 200 nits ("typically set to around 200 nits").
+- **Realce de brilhos:** "there's no single standard algorithm" (Microsoft); a página mostra um Reinhard simplificado `x / (1 + x)`.
+  - O ReEmu usa a inversa do Reinhard estendido que leva o branco SDR ao pico: `x = y / (1 − y·k)`, com `k = 1 − branco/pico`, aplicada sobre o maior canal pra não mudar o matiz.
+  - Pico automático: `max_full_frame_nits` ("Prefer it over max_nits for large bright regions", wgpu `DisplayLuminance`), porque tela inteira clara é comum em jogo antigo.
+  - O código de HDR do RetroArch não foi usado: é GPLv3, e o ReEmu é MIT.
+- **Interface (Fluent 2):** Switch com rótulo substantivo e efeito imediato; Slider padrão sem passos visíveis ("brightness controls", "imprecise values"), com o valor atual à vista e "Usar automático"; o valor grava 300 ms depois do último movimento.
+- **Medido nesta máquina** (RTX 3060, monitor HDR com HDR ligado no Windows):
+  - O monitor informa pico de 1499 nits, 799 nits em tela cheia e branco SDR de 240 nits.
+  - A superfície oferece `Rgba16Float` em `EXTENDED_SRGB_LINEAR` e `Rgb10a2Unorm` em `BT2100_PQ`.
+  - `hdr_surface_diagnostics`: liga o scRGB numa janela real, apresenta quadros e volta pro SDR, sem VUID com as camadas de validação.
+  - `hdr_blit_maps_sdr_to_scrgb`: preto fica em 0, cinza 128 vai a 61 nits e branco ao pico de 799 nits, iguais à referência na GPU.
+- **Também:** o binding 0 do `comp.bgl` passou a ser visível no fragment shader (o passe HDR lê os parâmetros ali), e salvar o integer scaling manda a configuração de vídeo inteira (antes mandava só o campo, o que apagaria o HDR).

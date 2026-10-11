@@ -74,12 +74,22 @@ pub async fn update_audio_config(
 #[serde(rename_all = "camelCase")]
 pub struct VideoConfigDto {
     pub integer_scaling: bool,
+    pub hdr: bool,
+    /// 0 = automático (branco SDR do sistema).
+    pub hdr_paper_white_nits: u32,
+    pub hdr_highlights: bool,
+    /// 0 = automático (brilho do monitor em tela cheia).
+    pub hdr_peak_nits: u32,
 }
 
 impl From<VideoConfig> for VideoConfigDto {
     fn from(c: VideoConfig) -> Self {
         Self {
             integer_scaling: c.integer_scaling,
+            hdr: c.hdr,
+            hdr_paper_white_nits: c.hdr_paper_white_nits,
+            hdr_highlights: c.hdr_highlights,
+            hdr_peak_nits: c.hdr_peak_nits,
         }
     }
 }
@@ -88,8 +98,34 @@ impl From<VideoConfigDto> for VideoConfig {
     fn from(c: VideoConfigDto) -> Self {
         Self {
             integer_scaling: c.integer_scaling,
+            hdr: c.hdr,
+            hdr_paper_white_nits: c.hdr_paper_white_nits,
+            hdr_highlights: c.hdr_highlights,
+            hdr_peak_nits: c.hdr_peak_nits,
         }
     }
+}
+
+/// `VideoConfig` → o que o `FrameProcessor` aplica na surface.
+pub(crate) fn hdr_settings(c: &VideoConfig) -> crate::gpu::HdrSettings {
+    crate::gpu::HdrSettings {
+        enabled: c.hdr,
+        paper_white_nits: c.hdr_paper_white_nits,
+        highlights: c.hdr_highlights,
+        peak_nits: c.hdr_peak_nits,
+    }
+}
+
+/// Estado do HDR na janela do jogo (Configurações › Sistema › Vídeo).
+#[tauri::command]
+pub fn video_hdr_status(state: State<'_, AppState>) -> crate::gpu::HdrStatus {
+    state
+        .gpu
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .as_ref()
+        .map(|fp| fp.hdr_status())
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -110,6 +146,7 @@ pub async fn update_video_config(
     // Aplica ao vivo: o próximo `render_to_surface` já lê o valor novo.
     if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
         fp.set_integer_scaling(cfg.integer_scaling);
+        fp.set_hdr(hdr_settings(&cfg));
     }
     Ok(())
 }

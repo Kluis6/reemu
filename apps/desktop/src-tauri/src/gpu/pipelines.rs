@@ -17,6 +17,51 @@ fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
 fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv); }
 "#;
 
+/// Passe final em HDR (superfície `Rgba16Float` + `ExtendedSrgbLinear`, o
+/// scRGB). O resultado da chain é sRGB codificado; aqui vira linear
+/// (função de transferência por partes do sRGB, IEC 61966-2-1), ganha o
+/// realce de brilhos (opcional) e é escalado pro branco SDR escolhido.
+///
+/// - scRGB: "scRGB (1.0, 1.0, 1.0) encodes the standard D65 white at 80
+///   nits"; conteúdo SDR: "multiply the SDR color value by
+///   SdrWhiteLevelInNits / 80" (learn.microsoft.com, "Use DirectX with
+///   Advanced Color on high/standard dynamic range displays") → `H.hdr.x`.
+/// - Realce: a inversa do Reinhard estendido. O exemplo de tone mapping da
+///   mesma página comprime `x / (1 + x)`; a versão que leva o pico `P` (em
+///   múltiplos do branco) a 1 é `y = x / (1 + x·k)`, `k = 1 − 1/P`, e a
+///   inversa, `x = y / (1 − y·k)`, leva o branco SDR (y = 1) ao pico e quase
+///   não mexe nos tons escuros. Aplicada no maior canal e escalando os três,
+///   pra não mudar o matiz. `H.hdr.y` = `k` (0 = sem realce).
+///
+/// Binding 0 com 32 bytes: o retângulo (`c`, como no `COMP_WGSL`) + `hdr`.
+pub(super) const HDR_BLIT_WGSL: &str = r#"
+struct Params { c: vec4<f32>, hdr: vec4<f32> };
+@group(0) @binding(0) var<uniform> R: Params;
+@group(0) @binding(1) var Tex: texture_2d<f32>;
+@group(0) @binding(2) var Smp: sampler;
+struct VOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
+@vertex
+fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
+    let n = p.xy * 2.0 - vec2<f32>(1.0, 1.0);
+    return VOut(vec4<f32>(R.c.xy + n * R.c.zw, 0.0, 1.0), uv);
+}
+fn srgb_to_linear(c: vec3<f32>) -> vec3<f32> {
+    let lo = c / 12.92;
+    let hi = pow((c + vec3<f32>(0.055)) / 1.055, vec3<f32>(2.4));
+    return select(hi, lo, c <= vec3<f32>(0.04045));
+}
+@fragment
+fn fs(v: VOut) -> @location(0) vec4<f32> {
+    var lin = srgb_to_linear(clamp(textureSample(Tex, Smp, v.uv).rgb, vec3<f32>(0.0), vec3<f32>(1.0)));
+    let m = max(lin.r, max(lin.g, lin.b));
+    if (R.hdr.y > 0.0 && m > 0.0001) {
+        let x = m / max(1.0 - m * R.hdr.y, 0.0001);
+        lin = lin * (x / m);
+    }
+    return vec4<f32>(lin * R.hdr.x, 1.0);
+}
+"#;
+
 /// Rotaciona uma textura em múltiplos de 90° (`SET_ROTATION`). Reusa o
 /// `comp.bgl` (uniforme no binding 0, textura 1, sampler 2). `R.c.xy` = (cos,
 /// sin) da rotação aplicada em `uv - 0.5` (giro do UV = giro inverso da imagem).
@@ -215,6 +260,16 @@ pub(super) fn blit_pipeline(
     bgl: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
 ) -> wgpu::RenderPipeline {
+    blit_pipeline_for(device, bgl, format, false)
+}
+
+/// `hdr` = o passe final em scRGB (`HDR_BLIT_WGSL`).
+pub(super) fn blit_pipeline_for(
+    device: &wgpu::Device,
+    bgl: &wgpu::BindGroupLayout,
+    format: wgpu::TextureFormat,
+    hdr: bool,
+) -> wgpu::RenderPipeline {
     let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("blit layout"),
         bind_group_layouts: &[Some(bgl)],
@@ -222,7 +277,7 @@ pub(super) fn blit_pipeline(
     });
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("blit"),
-        source: wgpu::ShaderSource::Wgsl(COMP_WGSL.into()),
+        source: wgpu::ShaderSource::Wgsl(if hdr { HDR_BLIT_WGSL } else { COMP_WGSL }.into()),
     });
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("blit pipeline"),
@@ -275,7 +330,9 @@ pub(super) fn build_composite(device: &wgpu::Device) -> Composite {
         entries: &[
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX,
+                // Fragment também: o passe final em HDR lê os parâmetros dele
+                // (`HDR_BLIT_WGSL`).
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
