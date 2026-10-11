@@ -68,7 +68,7 @@ const useStyles = makeStyles({
     gap: '8px',
     flexGrow: 1,
     minHeight: 0,
-    animationDuration: '300ms',
+    animationDuration: tokens.durationSlow,
     animationTimingFunction: tokens.curveDecelerateMax,
     // `backwards` (não `both`): o estado final é o natural — ver RouteTransition
     animationFillMode: 'backwards',

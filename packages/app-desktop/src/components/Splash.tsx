@@ -46,15 +46,16 @@ const useStyles = makeStyles({
     width: 'min(78vw, 880px)',
     maxWidth: '100%',
     aspectRatio: '16 / 9',
-    // 800 ms com ease-out cúbico: acelera no começo e assenta devagar,
-    // sem tranco no fim. O atraso de 80 ms evita que o 1º quadro pinte a
+    // `durationUltraSlow` (500 ms, o maior da escala do Fluent: a logo é o
+    // maior elemento da tela) com desaceleração: acelera no começo e
+    // assenta devagar, sem tranco no fim. O atraso de 80 ms evita que o 1º quadro pinte a
     // animação já no meio. Cabe no mínimo de 1,1 s da splash
     // (`SPLASH_MIN_MS` no RootLayout): a logo fica inteira antes do
     // fade-out.
     animationName: fadeIn,
-    animationDuration: '800ms',
+    animationDuration: tokens.durationUltraSlow,
     animationDelay: '80ms',
-    animationTimingFunction: 'cubic-bezier(0.33, 1, 0.68, 1)',
+    animationTimingFunction: tokens.curveDecelerateMid,
     animationFillMode: 'both',
     '@media (prefers-reduced-motion: reduce)': {
       animationDuration: '300ms',
@@ -115,7 +116,9 @@ const useStyles = makeStyles({
   },
   leaving: {
     opacity: 0,
-    transition: 'opacity 240ms ease',
+    transitionProperty: 'opacity',
+    transitionDuration: tokens.durationGentle,
+    transitionTimingFunction: tokens.curveEasyEase,
     pointerEvents: 'none',
   },
   // Scanlines de CRT — ESTÁTICO: só um `repeating-linear-gradient` (sem

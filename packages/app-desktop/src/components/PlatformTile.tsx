@@ -52,7 +52,8 @@ const useStyles = makeStyles({
       // imagem ainda decodificando).
       opacity: 0,
       transitionProperty: "opacity",
-      transitionDuration: "220ms",
+      transitionDuration: tokens.durationGentle,
+      transitionTimingFunction: tokens.curveEasyEase,
       "&[data-loaded]": { opacity: 1 },
     },
   },

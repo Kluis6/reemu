@@ -2051,3 +2051,14 @@ Infra:
   - `hdr_surface_diagnostics`: liga o scRGB numa janela real, apresenta quadros e volta pro SDR, sem VUID com as camadas de validação.
   - `hdr_blit_maps_sdr_to_scrgb`: preto fica em 0, cinza 128 vai a 61 nits e branco ao pico de 799 nits, iguais à referência na GPU.
 - **Também:** o binding 0 do `comp.bgl` passou a ser visível no fragment shader (o passe HDR lê os parâmetros ali), e salvar o integer scaling manda a configuração de vídeo inteira (antes mandava só o campo, o que apagaria o HDR).
+
+## 2026-10-11 — Movimento e elevação pelo Fluent 2; chevrons do tamanho do Xbox
+
+- **Chevron "Mostrar tudo"** (cabeçalho das prateleiras na Início e na Biblioteca): medido num print do app Xbox a 3840×2160 (3,07 px por epx), o traço do chevron tem 6×12 epx, que é o `ChevronRight` de 20. O do ReEmu era o de 16, num botão de 24. Agora é ícone de 20 (`ICON`) num botão de 32 (`TARGET_MIN`), 6 epx depois do título, centrado nas maiúsculas.
+- **Setas do destaque da Início:** de 32/16 para 40/24. A seta das prateleiras do Xbox tem 45 epx e um chevron de ~23 epx de altura.
+- **Movimento** (<https://fluent2.microsoft.design/motion>):
+  - Troca de tela só com fade ("Top level: use a quick fade. Avoid sliding large elements"). Antes, a tela subia 14 px ou vinha da esquerda no "voltar". Duração e curva do `Fade` do Fluent: `durationNormal` e `curveEasyEase`.
+  - Durações e curvas soltas (150, 170, 190, 220, 240, 260, 320, 360, 380 e 800 ms, `ease-in`/`ease-out` e cúbicas próprias) passaram para os tokens do Fluent (`durationFaster` … `durationUltraSlow`, `curveDecelerate*`, `curveAccelerateMid`, `curveEasyEase`), com os valores conferidos no `@fluentui/tokens` instalado. A saída do menu de pausa ficou mais curta que a entrada e acelerando.
+  - Faltavam guardas de `prefers-reduced-motion` em dois lugares, que agora têm: o zoom das setas do destaque e o deslocamento da página de jogo carregando.
+  - A entrada do onboarding (fundo de 1,1 s, palavras de 700 ms) ficou como está, porque é o momento de abertura.
+- **Elevação** (<https://fluent2.microsoft.design/elevation>): os cards já seguiam a escala (`shadow4` em cards, `shadow16` na capa sem borda, diálogos e popovers com as sombras padrão do Fluent). Os cards do hub de Configurações já subiam para `shadow8` no hover; agora também descem para `shadow2` quando pressionados. Os cards de jogo continuam sem sombra: no Windows, a orientação é usar borda em vez de sombra principal.

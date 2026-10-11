@@ -75,10 +75,15 @@ const useStyles = makeStyles({
       backgroundColor: tokens.colorNeutralBackground2Hover,
       boxShadow: tokens.shadow8,
     },
-    ":active": { backgroundColor: tokens.colorNeutralBackground2Pressed },
+    // Pressionado volta pra perto da superfície (Fluent 2 › Motion ›
+    // Elevation: profundidade nos estados do botão).
+    ":active": {
+      backgroundColor: tokens.colorNeutralBackground2Pressed,
+      boxShadow: tokens.shadow2,
+    },
     // entrada em cascata (o atraso vem do índice, no `style`)
     animationName: cardIn,
-    animationDuration: "380ms",
+    animationDuration: tokens.durationSlower,
     animationTimingFunction: tokens.curveDecelerateMid,
     // `backwards`: ver o comentário em RouteTransition (ClearType no WebView2)
     animationFillMode: "backwards",

@@ -33,7 +33,9 @@ const useStyles = makeStyles({
     backgroundColor: 'transparent',
     opacity: 0,
     transitionProperty: 'opacity',
-    transitionDuration: '360ms',
+    // Elemento grande: um passo acima do fade padrão (Fluent 2 › Motion,
+    // "give larger elements more time").
+    transitionDuration: tokens.durationSlow,
     transitionTimingFunction: tokens.curveEasyEase,
     pointerEvents: 'none',
   },
@@ -107,16 +109,18 @@ const useStyles = makeStyles({
     backgroundColor: 'rgba(0,0,0,0.45)',
     color: "#ffffff",
     transitionProperty: 'background-color, transform',
-    transitionDuration: '150ms',
+    transitionDuration: tokens.durationFast,
     transitionTimingFunction: tokens.curveEasyEase,
-    // Alvo mínimo de 32 epx. `max-width`/`min-width`: o Fluent injeta um
-    // `max-width` próprio em botão circular icon-only que vence o `width`
-    // mesmo com `!important` (mesmo caso da topbar em `xbox.ts`).
-    width: "32px !important",
-    height: "32px !important",
+    // 40 epx com ícone de 24: a seta das prateleiras do app Xbox tem 45 epx
+    // e um chevron de ~23 epx de altura; com 32/16 a nossa ficava pequena
+    // sobre a arte. `max-width`/`min-width`: o Fluent injeta um `max-width`
+    // próprio em botão circular icon-only que vence o `width` mesmo com
+    // `!important` (mesmo caso da topbar em `xbox.ts`).
+    width: "40px !important",
+    height: "40px !important",
     minWidth: "0 !important",
-    maxWidth: "32px !important",
-    fontSize: "16px !important",
+    maxWidth: "40px !important",
+    fontSize: "24px !important",
     "& .fui-Button__icon": {
       fontSize: "1em",
       width: "1em",
@@ -126,6 +130,9 @@ const useStyles = makeStyles({
       backgroundColor: 'rgba(0,0,0,0.72)',
       color: "#ffffff",
       transform: 'translateY(-50%) scale(1.06)',
+    },
+    '@media (prefers-reduced-motion: reduce)': {
+      ':hover': { transform: 'translateY(-50%)' },
     },
   },
   arrowL: { left: '12px' },
@@ -148,7 +155,7 @@ const useStyles = makeStyles({
     cursor: 'pointer',
     backgroundColor: 'rgba(255,255,255,0.35)',
     transitionProperty: 'width, background-color',
-    transitionDuration: '200ms',
+    transitionDuration: tokens.durationNormal,
     transitionTimingFunction: tokens.curveEasyEase,
   },
   dotOn: { width: '20px', backgroundColor: "#ffffff" },

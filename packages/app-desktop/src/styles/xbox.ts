@@ -207,7 +207,7 @@ export const useShellStyles = makeStyles({
     backgroundColor: "transparent",
     cursor: "pointer",
     transitionProperty: "background-color, color",
-    transitionDuration: "150ms",
+    transitionDuration: tokens.durationFast,
     transitionTimingFunction: tokens.curveEasyEase,
     ":hover": {
       backgroundColor: RAIL_HL,
@@ -233,7 +233,7 @@ export const useShellStyles = makeStyles({
     "& svg": {
       fontSize: "1em",
       transitionProperty: "font-size, transform",
-      transitionDuration: "220ms",
+      transitionDuration: tokens.durationGentle,
       transitionTimingFunction: tokens.curveEasyEase,
     },
     "&:hover svg, &:focus svg, &:focus-visible svg": {
@@ -442,7 +442,7 @@ export const useMotionStyles = makeStyles({
       from: { opacity: 0, transform: "translateY(10px)" },
       to: { opacity: 1, transform: "translateY(0)" },
     },
-    animationDuration: "260ms",
+    animationDuration: tokens.durationGentle,
     animationTimingFunction: tokens.curveDecelerateMid,
     // `backwards`: ver RouteTransition (texto nítido depois da entrada)
     animationFillMode: "backwards",
@@ -454,7 +454,7 @@ export const useMotionStyles = makeStyles({
   },
   fadeIn: {
     animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
-    animationDuration: "200ms",
+    animationDuration: tokens.durationNormal,
     animationTimingFunction: tokens.curveEasyEase,
     animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": {
@@ -712,7 +712,7 @@ export const useCardStyles = makeStyles({
       opacity: 0,
       transitionProperty: "transform, opacity",
       // Zoom suave mas sem arrastar: nem o "salto" de antes nem lento demais.
-      transitionDuration: "320ms, 220ms",
+      transitionDuration: `${tokens.durationSlow}, ${tokens.durationGentle}`,
       transitionTimingFunction: tokens.curveEasyEase,
       "&[data-loaded]": { opacity: 1 },
     },
@@ -740,7 +740,7 @@ export const useCardStyles = makeStyles({
     opacity: 0,
     transform: "translateY(6px)",
     transitionProperty: "opacity, transform",
-    transitionDuration: "200ms",
+    transitionDuration: tokens.durationNormal,
     transitionTimingFunction: tokens.curveEasyEase,
     pointerEvents: "none",
     "@media (prefers-reduced-motion: reduce)": { transform: "none" },
@@ -846,11 +846,14 @@ export const useDetailStyles = makeStyles({
     opacity: 1,
     transform: "translateY(0)",
     transitionProperty: "opacity, transform",
-    transitionDuration: "240ms",
+    transitionDuration: tokens.durationGentle,
     transitionTimingFunction: tokens.curveEasyEase,
     '&[data-loading="true"]': {
       opacity: 0.72,
       transform: "translateY(6px)",
+    },
+    "@media (prefers-reduced-motion: reduce)": {
+      '&[data-loading="true"]': { transform: "none" },
     },
   },
   hero: {

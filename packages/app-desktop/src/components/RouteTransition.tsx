@@ -1,20 +1,17 @@
 import { makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
 import type { ReactNode } from "react";
-import { useNavigationType } from "react-router-dom";
-
-const enterFwd = {
-  from: { opacity: 0, transform: "translateY(14px)" },
-  to: { opacity: 1, transform: "translateY(0)" },
-};
-const enterBack = {
-  from: { opacity: 0, transform: "translateX(-16px)" },
-  to: { opacity: 1, transform: "translateX(0)" },
-};
 
 const useStyles = makeStyles({
+  // Fluent 2 › Motion › Top level: "For navigating between major
+  // destinations, use a quick fade. Avoid sliding large elements" — a tela
+  // inteira só faz fade (antes subia 14 px, ou vinha da esquerda no
+  // "voltar"). Duração e curva do `Fade` do Fluent
+  // (@fluentui/react-motion-components-preview: `durationNormal`,
+  // `curveEasyEase`).
   layer: {
-    animationDuration: "400ms",
-    animationTimingFunction: tokens.curveDecelerateMax,
+    animationName: { from: { opacity: 0 }, to: { opacity: 1 } },
+    animationDuration: tokens.durationNormal,
+    animationTimingFunction: tokens.curveEasyEase,
     // `backwards`, não `both`: com `both` o estado final ficava aplicado pra
     // sempre — a tela inteira presa numa camada composta, e o WebView2 troca
     // o ClearType do texto por antialias em cinza (letras serrilhadas no
@@ -23,14 +20,11 @@ const useStyles = makeStyles({
     animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
   },
-  fwd: { animationName: enterFwd },
-  back: { animationName: enterBack },
 });
 
 /**
- * Transição de rota estilo modo XBOX: a tela nova entra com fade + subida (ou
- * deslizando da esquerda quando é "voltar"). Remonta o conteúdo via `key` e
- * roda a animação de entrada.
+ * Transição de rota: a tela nova entra com um fade rápido. Remonta o
+ * conteúdo via `key` e roda a animação de entrada.
  *
  * `routeKey` identifica a "tela" (pathname, ou `/settings` pra não remontar o
  * layout de configurações a cada sub-aba).
@@ -45,9 +39,8 @@ export function RouteTransition({
   children: ReactNode;
 }) {
   const s = useStyles();
-  const back = useNavigationType() === "POP";
   return (
-    <div key={routeKey} className={mergeClasses(s.layer, back ? s.back : s.fwd, className)}>
+    <div key={routeKey} className={mergeClasses(s.layer, className)}>
       {children}
     </div>
   );
