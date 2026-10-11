@@ -108,6 +108,8 @@ pub(crate) struct VkReadback {
     /// C3b: o anel importado do app (Windows).
     #[cfg(windows)]
     ring: Option<ring::VkRing>,
+    /// Família da fila do device (o *release* do anel, só no Windows).
+    #[cfg_attr(not(windows), allow(dead_code))]
     queue_family: u32,
 }
 
