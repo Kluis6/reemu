@@ -929,6 +929,25 @@ fn vk_capable(base: &str, options: &HashMap<String, String>) -> bool {
     })
 }
 
+/// C3: o core da lista Vulkan (`VK_CAPABLE_CORES`) roda no processo filho,
+/// com device próprio, em vez de in-process — o isolamento de processo volta
+/// (um crash do core não derruba a interface) e a DLL não é carregada no app
+/// (sem o vazamento de TLS medido no `vk_core_tls_leak`). O quadro vem pelo
+/// anel compartilhado com o app (C3b) ou, sem ele, copiado pra CPU (C3a).
+/// **Padrão no Windows** desde o C3c (2026-10-11); `REEMU_VK_CHILD=0` volta
+/// pra rota in-process. No Linux segue opt-in (`REEMU_VK_CHILD=1`): lá o
+/// in-process já é zero-cópia e o anel compartilhado é só do Windows.
+fn vk_in_child(core_id: &str, options: &HashMap<String, String>) -> bool {
+    let env = std::env::var("REEMU_VK_CHILD").map(|v| v.trim().to_ascii_lowercase());
+    let wanted = match env.as_deref() {
+        Ok("1") | Ok("true") | Ok("on") | Ok("yes") => true,
+        Ok("0") | Ok("false") | Ok("off") | Ok("no") => false,
+        _ => cfg!(windows),
+    };
+    let base = core_id.rsplit(['/', '\\']).next().unwrap_or(core_id);
+    wanted && vk_capable(base, options)
+}
+
 /// Se um core deve rodar in-process (etapa 12): precisa de um caminho de device
 /// publicado pelo shell (`attach_vulkan_device` / `attach_vulkan_negotiator`)
 /// E ou (a) `REEMU_HW=vulkan` (força qualquer core), ou (b) o core está na
@@ -944,22 +963,6 @@ fn vk_capable(base: &str, options: &HashMap<String, String>) -> bool {
 /// ParaLLEl-RDP passaram no Windows com as camadas de validação e no app
 /// (C1). Sem o isolamento do processo filho, um core que quebra leva a
 /// interface junto — por isso só os cores da lista, não qualquer um.
-/// C3: o core da lista Vulkan (`VK_CAPABLE_CORES`) roda no processo filho,
-/// com device próprio, em vez de in-process — o isolamento de processo volta
-/// (um crash do core não derruba a interface) e a DLL não é carregada no app
-/// (sem o vazamento de TLS medido no `vk_core_tls_leak`). Por enquanto
-/// opt-in (`REEMU_VK_CHILD=1`): o quadro ainda sai copiado pra CPU (C3a).
-fn vk_in_child(core_id: &str, options: &HashMap<String, String>) -> bool {
-    let wanted = matches!(
-        std::env::var("REEMU_VK_CHILD")
-            .map(|v| v.trim().to_ascii_lowercase())
-            .as_deref(),
-        Ok("1") | Ok("true") | Ok("on") | Ok("yes")
-    );
-    let base = core_id.rsplit(['/', '\\']).next().unwrap_or(core_id);
-    wanted && vk_capable(base, options)
-}
-
 fn route_local_device(
     shared: &Shared,
     core_id: &str,

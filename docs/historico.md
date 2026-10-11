@@ -2005,3 +2005,18 @@ Infra:
   | Beetle PSX HW, 40 Winks | 899 | 1 |
 
   Imagens do flycast e do mupen conferidas. Os 6 testes do anel GL seguem passando.
+
+## 2026-10-11 — C3c: core Vulkan no processo filho vira o padrão no Windows
+
+- **O quê:** no Windows, os cores da lista Vulkan (flycast, Beetle PSX HW, mupen64plus_next com ParaLLEl-RDP, PPSSPP com `ppsspp_backend=vulkan`) passam a rodar no `reemu-core-host`, com o quadro pelo anel compartilhado (C3b). `REEMU_VK_CHILD=0` volta pra rota in-process. No Linux continua opt-in (`REEMU_VK_CHILD=1`): lá o in-process já é zero-cópia por `dma_buf` e o anel Win32 não existe.
+- **Por quê:** um crash do core volta a ficar isolado do app (a razão do processo filho); a DLL do core não é carregada no app (fim do vazamento de TLS do flycast e do mupen, ver `vk_core_tls_leak`); e a thread de vídeo do app deixa de emular o core.
+- **Validação** (RTX 3060, camadas com a validação de sincronização nos dois processos, `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`): nenhum VUID nem SYNC-HAZARD com flycast, mupen64plus_next e Beetle PSX HW. O PPSSPP (Tekken: Dark Resurrection) roda pelo anel, 865 quadros em 15 s, sem VUID. Antes ele caía no filho com `0xc0000005`. A imagem foi conferida (o PPSSPP escreve alfa 0, como já fazia in-process).
+- **Medido contra o in-process** (sem validação, 15 s, mesmo jogo):
+
+  | Core | Filho (padrão) | In-process |
+  |---|---|---|
+  | flycast | 50 fps; app 1,1 ms/quadro | 50 fps; passo do core 20,6 ms (inclui a espera interna do flycast) |
+  | mupen64plus_next | 881 quadros, 60 fps; app 0,86 ms/quadro | 835 quadros; passo do core 5,8 ms |
+  | Beetle PSX HW | 899 quadros; app 0,85 ms/quadro | 888 quadros; passo do core 2,9 ms |
+
+  O passo do core in-process roda na thread de vídeo do app. No filho, ele roda no processo do core (`retro_run` de 1,2 a 4,9 ms lá), e o app só amostra. Mesma taxa de quadros; no mupen, mais quadros entregues no filho.

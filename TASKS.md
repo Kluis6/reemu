@@ -25,7 +25,7 @@ continue da próxima tarefa em aberto").
 | 09 | Scraping de Metadata (ScreenScraper) | `done` (MVP) |
 | 10 | Catálogo e Download de Cores | `done` |
 | 11 | Port Android | `todo`: adiado pelo usuário (2026-08-30) |
-| 12 | Vulkan HW Render Fase 2 | `done`: Beetle PSX HW, flycast e mupen64plus_next (Linux 2026-09-25, Windows 2026-10-02) e a fase C; resta o C3 (Vulkan no processo filho, Windows) |
+| 12 | Vulkan HW Render Fase 2 | `done`: Beetle PSX HW, flycast e mupen64plus_next (Linux 2026-09-25, Windows 2026-10-02), a fase C e o C3 (Vulkan no processo filho, Windows, 2026-10-11) |
 
 Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 "Etapas de implementação" e o "Estado atual" de cada doc em
@@ -133,8 +133,10 @@ Situação em 2026-10-11 (RTX 3060, wgpu em Vulkan):
   imagens Vulkan compartilhadas (`EXT_external_objects_win32`) e o filho
   manda só o índice. GPU sem suporte, import recusado ou nenhum slot livre
   → readback (fase A). `REEMU_GL_INTEROP=0` força o readback.
-- **Vulkan dos cores:** in-process automático pros cores de
-  `VK_CAPABLE_CORES` (fase C, C1/C2). Falta o C3 (Vulkan no processo filho).
+- **Vulkan dos cores:** desde o C3c, os cores de `VK_CAPABLE_CORES` rodam
+  no processo filho com device próprio e o quadro chega ao app pelo mesmo
+  anel compartilhado do GL (sem cópia). Um crash do core não derruba mais a
+  interface. `REEMU_VK_CHILD=0` volta pra rota in-process (C1/C2).
 
 Regra do projeto: cada decisão de GPU com a documentação oficial (CLAUDE.md).
 As fontes já conferidas estão citadas em cada item; o resto fica marcado "a
@@ -390,8 +392,13 @@ conferir".
       `win32_interop_real_gl_core` com `REEMU_VK_CHILD=1`: flycast,
       mupen64plus_next (ParaLLEl) e Beetle PSX HW pelo anel, imagens
       conferidas, camadas de validação dos dois lados sem VUID.
-- [ ] `todo` — C3c. Ligar por padrão no Windows (fim da rota in-process
-      pros cores da lista), validar com sync e medir contra o in-process.
+- [x] `done` — C3c (2026-10-11): processo filho é o **padrão no Windows**
+      pros cores Vulkan da lista (`REEMU_VK_CHILD=0` volta pro in-process; no
+      Linux segue opt-in). Validação com sync nos dois processos sem nenhum
+      aviso (flycast, mupen64plus_next com ParaLLEl, Beetle PSX HW); PPSSPP
+      com `ppsspp_backend=vulkan` também roda (antes caía no filho). Medido
+      contra o in-process: mesma taxa de quadros, e a thread de vídeo do app
+      só amostra o quadro (~0,8–1,1 ms) em vez de também emular o core.
 
 ### Biblioteca
 

@@ -1318,6 +1318,10 @@ fn vk_core_real_rom() {
     use emu_session::{EmuSession, SessionConfig};
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
+    // Rota in-process (o padrão no Windows virou o processo filho, C3c).
+    if std::env::var_os("REEMU_VK_CHILD").is_none() {
+        std::env::set_var("REEMU_VK_CHILD", "0");
+    }
     let (Ok(core), Ok(rom)) = (
         std::env::var("REEMU_TEST_VK_CORE"),
         std::env::var("REEMU_TEST_ROM"),
@@ -2392,6 +2396,10 @@ fn vk_core_tls_leak() {
     use emu_session::{EmuSession, SessionConfig};
     use std::collections::HashMap;
     use std::time::{Duration, Instant};
+    // Rota in-process (o padrão no Windows virou o processo filho, C3c).
+    if std::env::var_os("REEMU_VK_CHILD").is_none() {
+        std::env::set_var("REEMU_VK_CHILD", "0");
+    }
     let (Ok(core), Ok(rom)) = (
         std::env::var("REEMU_TEST_VK_CORE"),
         std::env::var("REEMU_TEST_ROM"),
