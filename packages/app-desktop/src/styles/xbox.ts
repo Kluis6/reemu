@@ -476,11 +476,8 @@ export const useBrowseStyles = makeStyles({
   // mede a própria largura (`Shelf`) e reajusta quantos cards cabem e o
   // tamanho deles (pedido do usuário).
   //
-  // Fundo e sombra iguais aos do card das Configurações
-  // (`SettingsLayout.card`), pela escala de elevação do Fluent 2: superfície
-  // um degrau acima da página (`reemuSurface1`, que acompanha o tema — no
-  // Serene, #262A2F sobre #1A1C20) e `shadow4` ("cards"). Sem traço
-  // (pedido do usuário).
+  // Fundo no tom do sidebar (abaixo), um degrau acima da página pela escala
+  // do Fluent 2 ("Use lighter neutrals on surfaces").
   // Os cards de jogo dentro (`Background4` → `Background3`) ficam mais um
   // degrau acima. Degradê leve na diagonal entre a cor do sidebar (o rail,
   // `colorNeutralBackground2`) e a cor de destaque do tema: o canto de cima
@@ -492,7 +489,8 @@ export const useBrowseStyles = makeStyles({
     borderRadius: "16px",
     backgroundColor: tokens.colorNeutralBackground2,
     backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${tokens.colorNeutralBackground2}, ${tokens.colorBrandBackground} 14%) 0%, ${tokens.colorNeutralBackground2} 60%)`,
-    boxShadow: tokens.shadow4,
+    // sem sombra nem borda (pedidos do usuário): a separação da página é só
+    // o tom do card
   },
 
   grid: {
