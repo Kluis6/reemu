@@ -708,28 +708,39 @@ export const useCardStyles = makeStyles({
     "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
       border: "none !important",
     },
-    // Afasta mais o anel de foco (o global do `.app` usa 4px) — com o zoom
-    // da imagem por baixo, rente ficava apertado. `!important`: precisa
-    // ganhar do `.app [tabindex]:focus`, que tem mais specificity.
-    "&:focus, &:focus-visible": {
-      outlineOffset: `${FOCUS_OFFSET + 2}px !important`,
-    },
     "&:hover, &:focus-within, &:focus-visible": {
       zIndex: 2,
     },
-    // Sem sombra em repouso (o <Card> do Fluent põe `shadow4`); no hover/foco,
-    // um brilho leve na cor de destaque do tema em volta do card — o "Reveal
-    // Focus" do Xbox/10-foot da Microsoft: "an animated glow around the
-    // element's border", cor padrão `SystemAccentColor`
-    // (learn.microsoft.com/windows/uwp/ui-input/reveal-focus). Aqui sem a
-    // animação de pulso, só o brilho estático junto do anel de foco.
+    // Anel de foco do dashboard do Xbox (prints do usuário, 2026-10-12,
+    // medidos a 1926×1080 e convertidos pra epx): de fora pra dentro, um
+    // brilho curto (~7 epx) na cor de destaque, uma borda de ~2 epx num tom
+    // mais claro do destaque e uma faixa ESCURA de ~3 epx colada no card —
+    // as três camadas do "Reveal Focus" da Microsoft (borda principal,
+    // secundária escura por dentro e o brilho; cor `SystemAccentColor`,
+    // learn.microsoft.com/windows/uwp/ui-input/reveal-focus), sem o pulso.
+    // Feito com `box-shadow` (segue o raio do card), no lugar do `outline`
+    // global do `.app`. Fica dentro da folga da prateleira (`SHELF_PAD`, 12):
+    // 5 de anel + ~7 de brilho.
     boxShadow: "none !important",
     transitionProperty: "box-shadow",
     transitionDuration: tokens.durationNormal,
     transitionTimingFunction: tokens.curveEasyEase,
+    "&:focus, &:focus-visible": {
+      outline: "none !important",
+    },
     "&:hover, &:focus, &:focus-visible, &:focus-within": {
-      boxShadow:
-        "0 0 18px 2px color-mix(in srgb, var(--reemuBrandAccent) 55%, transparent) !important",
+      boxShadow: [
+        // faixa escura colada no card
+        `0 0 0 3px color-mix(in srgb, ${tokens.colorNeutralBackground1}, #000000 55%)`,
+        // borda no destaque clareado
+        "0 0 0 5px color-mix(in srgb, var(--reemuBrandAccent), #ffffff 25%)",
+        // brilho curto
+        "0 0 8px 4px color-mix(in srgb, var(--reemuBrandAccent) 45%, transparent)",
+      ].join(", ") + " !important",
+    },
+    // o card focado clareia um pouco, como no Xbox (#303030 → #454545)
+    "&:hover [data-art]::after, &:focus-within [data-art]::after": {
+      opacity: 1,
     },
     // zoom da imagem (não do card) — sutil, não um "salto"
     "&:hover [data-art] img, &:focus-within [data-art] img": {
@@ -759,6 +770,18 @@ export const useCardStyles = makeStyles({
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
+    // véu claro do card focado (ver `card`)
+    "::after": {
+      content: '""',
+      position: "absolute",
+      inset: 0,
+      backgroundColor: "rgba(255, 255, 255, 0.08)",
+      opacity: 0,
+      transitionProperty: "opacity",
+      transitionDuration: tokens.durationNormal,
+      transitionTimingFunction: tokens.curveEasyEase,
+      pointerEvents: "none",
+    },
     "& img": {
       width: "100%",
       height: "100%",

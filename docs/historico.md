@@ -2217,3 +2217,17 @@ Infra:
   - Aparência: aba "Temas" em até 4 colunas, anel de foco padrão e X do controle para claro/escuro.
 - **Controle:** botão X chega à interface (`menu-nav` "action"). As Configurações têm a mesma altura com ou sem controle.
 - **Linux:** release no Ubuntu 22.04 (glibc 2.35).
+
+## 2026-10-12 — Anel de foco dos cards de jogo no estilo do dashboard do Xbox (teste)
+
+- **Medido em prints do usuário** (Configurações do Xbox, 1926×1080, card "Enable 4k UHD resolution"), de fora para dentro:
+  - brilho de ~10 px na cor de destaque;
+  - borda de 3 px num verde mais claro (#4E9148) que o verde Xbox;
+  - faixa escura de ~4 px (#1C3414) colada no card;
+  - o card focado clareia (#303030 → #454545).
+  - No menu-guia, o botão "Store" segue o mesmo padrão. São as três camadas do Reveal Focus da Microsoft: borda principal, secundária escura e brilho.
+- **No ReEmu** (`useCardStyles.card`):
+  - `box-shadow` em camadas, que segue o raio do card, no lugar do `outline` global: 3 px do fundo do tema escurecido, borda até 5 px no destaque com 25% de branco e brilho `0 0 8px 4px` do destaque a 45%.
+  - Véu branco de 8% sobre a arte do card focado (`[data-art]::after`). Vale no hover e no foco.
+  - Cabe na folga da prateleira (`SHELF_PAD` = 12).
+- **Substitui** o brilho largo do teste anterior (`4961fe8`). Para voltar a ele: `git revert` deste commit.
