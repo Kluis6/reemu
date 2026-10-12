@@ -718,25 +718,41 @@ export const useCardStyles = makeStyles({
     // as três camadas do "Reveal Focus" da Microsoft (borda principal,
     // secundária escura por dentro e o brilho; cor `SystemAccentColor`,
     // learn.microsoft.com/windows/uwp/ui-input/reveal-focus), sem o pulso.
-    // Feito com `box-shadow` (segue o raio do card), no lugar do `outline`
-    // global do `.app`. Fica dentro da folga da prateleira (`SHELF_PAD`, 12):
-    // 5 de anel + ~7 de brilho.
+    // A faixa escura do Xbox ficou transparente (pedido do usuário). Fica
+    // dentro da folga da prateleira (`SHELF_PAD`, 12): 5 de anel + brilho.
     boxShadow: "none !important",
     transitionProperty: "box-shadow",
     transitionDuration: tokens.durationNormal,
     transitionTimingFunction: tokens.curveEasyEase,
-    "&:focus, &:focus-visible": {
-      outline: "none !important",
-    },
+    // Borda de 2 px num tom mais claro do destaque, afastada 3 px do card
+    // com a faixa entre os dois TRANSPARENTE (pedido do usuário; no Xbox ela
+    // é escura). `outline` porque deixa o vão vazio — com `box-shadow` a
+    // borda pintaria até a beira do card — e o `outline` acompanha o raio do
+    // card no Chromium/WebView2 e no WebKit atual. O brilho curto fica no
+    // `box-shadow`.
     "&:hover, &:focus, &:focus-visible, &:focus-within": {
-      boxShadow: [
-        // faixa escura colada no card
-        `0 0 0 3px color-mix(in srgb, ${tokens.colorNeutralBackground1}, #000000 55%)`,
-        // borda no destaque clareado
-        "0 0 0 5px color-mix(in srgb, var(--reemuBrandAccent), #ffffff 25%)",
-        // brilho curto
-        "0 0 8px 4px color-mix(in srgb, var(--reemuBrandAccent) 45%, transparent)",
-      ].join(", ") + " !important",
+      outlineWidth: "2px !important",
+      outlineStyle: "solid",
+      outlineColor: "color-mix(in srgb, var(--reemuBrandAccent), #ffffff 25%) !important",
+      outlineOffset: "3px !important",
+    },
+    // Brilho curto POR FORA do anel: num pseudo-elemento do tamanho da borda
+    // externa do anel (3 de vão + 2 de borda), assim o `box-shadow` (que só
+    // pinta pra fora da caixa) não invade o vão transparente.
+    "::before": {
+      content: '""',
+      position: "absolute",
+      inset: "-5px",
+      borderRadius: `calc(${tokens.borderRadiusMedium} + 5px)`,
+      boxShadow: "0 0 8px 3px color-mix(in srgb, var(--reemuBrandAccent) 45%, transparent)",
+      opacity: 0,
+      transitionProperty: "opacity",
+      transitionDuration: tokens.durationNormal,
+      transitionTimingFunction: tokens.curveEasyEase,
+      pointerEvents: "none",
+    },
+    "&:hover::before, &:focus::before, &:focus-visible::before, &:focus-within::before": {
+      opacity: 1,
     },
     // o card focado clareia um pouco, como no Xbox (#303030 → #454545)
     "&:hover [data-art]::after, &:focus-within [data-art]::after": {

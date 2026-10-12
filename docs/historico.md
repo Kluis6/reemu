@@ -2238,3 +2238,7 @@ Infra:
 - **No ReEmu** (`useDetailStyles.infoDrawer`): o fundo da gaveta (`Background1`) até 35% da altura e, no pé, o mesmo fundo com 25% de `reemuBrandAccent`.
 - **Por que 25%:** é o máximo em que o texto principal e o secundário seguem AA (4,5:1) em todos os temas. O mais apertado é o Serene, com 4,9:1 no secundário. Com 35–40%, Serene e os temas claros caem abaixo de 4,5. O Xbox usa um verde mais forte embaixo.
 - Conferido em capturas no Neon Circuit, no Serene e no Alva claro.
+- **Ajuste (pedido do usuário):** a faixa entre o card e o anel ficou transparente.
+  - O anel virou `outline` de 2 px, afastado 3 px, num tom mais claro do destaque. Ele acompanha o raio do card no Chromium/WebView2 e no WebKit atual.
+  - O brilho passou para um `::before` do tamanho da borda externa do anel, para o `box-shadow` não pintar o vão.
+  - Conferido no Neon Circuit e no Simple Vibes.
