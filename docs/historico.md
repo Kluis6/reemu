@@ -2258,3 +2258,12 @@ Infra:
   - a cor do anel é a do tema (pedido do usuário: o padrão do app);
   - o vão é transparente (pedido do usuário; no Xbox o brilho tinge o vão);
   - o tile do Xbox focado cresce e mostra o nome numa faixa, o do ReEmu não.
+
+## 2026-10-12 — O foco do card de jogo vira o foco padrão do app
+
+- **Pedido do usuário:** o mesmo efeito do card de jogo em todo o app. Constantes em `styles/xbox.ts`:
+  - `FOCUS_OFFSET` foi de 4 para 3;
+  - novo `FOCUS_GLOW`: `0 0 12px` do `colorBrandStroke1` a 45%.
+- **Aplicado em:** regra global `.app a:focus, [tabindex]:focus` (rail, cards do hub, links), abas (`.fui-Tab` global e `useTabStyles`: antes 2 px a 5 px), botões do Fluent em foco de teclado, logo da rail, botões da página de jogo e da pausa e cards de tema da Aparência. O anel é sempre 3 px na cor de destaque, afastado 3 px, com o brilho.
+- **Fora do card de jogo,** o brilho sai da borda do elemento e tinge de leve o vão até o anel, como no Xbox. Nos outros elementos não há um pseudo-elemento livre: o Fluent usa `::before`/`::after` em botões, abas e cards. No card de jogo o vão continua transparente, com o brilho no `::before`.
+- **Conferido** em capturas (rail e aba focadas). Testes do frontend (95) e `ui-smoke` passaram.

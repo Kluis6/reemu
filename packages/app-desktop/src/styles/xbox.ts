@@ -35,8 +35,14 @@ const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4},
 // lib/shelf.ts): 6 por fileira numa tela 16:9.
 const gameCardSize = cardSizeCss;
 
-// Distância do anel de foco até o elemento (o anel tem 3 epx).
-const FOCUS_OFFSET = 4;
+// Foco padrão do ReEmu (o do card de jogo, calibrado pelo dashboard do
+// Xbox — ver `useCardStyles.card` e docs/historico.md 2026-10-12): anel de
+// 3 epx na cor de destaque, afastado 3 epx do elemento, e um brilho curto
+// (~12 epx) do destaque a 45%. Fora do card de jogo o brilho sai da borda do
+// elemento e tinge de leve o vão até o anel, como no Xbox; no card de jogo o
+// vão fica transparente (pedido do usuário) e o brilho vai num `::before`.
+const FOCUS_OFFSET = 3;
+const FOCUS_GLOW = `0 0 12px color-mix(in srgb, ${tokens.colorBrandStroke1} 45%, transparent)`;
 
 // Largura do scrollbar customizado da `.scroll` (`::-webkit-scrollbar`
 // abaixo) — a `.topbar` compensa exatamente esse valor no próprio padding.
@@ -126,10 +132,10 @@ export const useShellStyles = makeStyles({
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
-      // 4 epx: o anel respira em volta do item (pedido do usuário). Na rail
-      // ele ocupa 4 + 3 = 7 de cada lado do item de 50 e cabe nos 9 que
-      // sobram dos 68.
+      // Na rail ocupa 3 + 3 = 6 de cada lado do item de 50 e cabe nos 9
+      // que sobram dos 68.
       outlineOffset: `${FOCUS_OFFSET}px`,
+      boxShadow: FOCUS_GLOW,
     },
     // Abas (`<Tab>` do Fluent): são `<button>` sem `tabindex`, então a regra
     // de cima não pega — valia o anel do próprio Fluent, um `box-shadow`
@@ -139,10 +145,11 @@ export const useShellStyles = makeStyles({
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
-      outlineOffset: "2px",
+      outlineOffset: `${FOCUS_OFFSET}px`,
+      boxShadow: FOCUS_GLOW,
     },
     "& .fui-Tab[data-fui-focus-visible]": {
-      boxShadow: "none",
+      boxShadow: FOCUS_GLOW,
     },
     // Botões do Fluent: o foco de teclado deles (`[data-fui-focus-visible]`)
     // é uma borda + `box-shadow` rente ao botão, sem afastamento. Troca pelo
@@ -151,7 +158,7 @@ export const useShellStyles = makeStyles({
       // Griffel não aceita a abreviada `borderColor`; `shorthands` expande nas
       // quatro bordas.
       ...shorthands.borderColor("transparent !important"),
-      boxShadow: "none !important",
+      boxShadow: `${FOCUS_GLOW} !important`,
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,
     },
@@ -272,6 +279,7 @@ export const useShellStyles = makeStyles({
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
       outlineOffset: `${FOCUS_OFFSET}px`,
+      boxShadow: FOCUS_GLOW,
     },
   },
 
@@ -1156,11 +1164,12 @@ export const useDetailStyles = makeStyles({
     // do gamepad foca via `.focus()` sem keydown).
     "& .fui-Button[data-fui-focus-visible]": {
       border: "1px solid transparent !important",
-      boxShadow: "none !important",
+      boxShadow: `${FOCUS_GLOW} !important`,
     },
     "& button:focus": {
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,
+      boxShadow: `${FOCUS_GLOW} !important`,
     },
   },
   // Favoritar/Editar/Informações: `appearance="secondary"` sem a borda
@@ -1454,6 +1463,7 @@ export const usePauseStyles = makeStyles({
     "& a:focus, & button:focus": {
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,
+      boxShadow: `${FOCUS_GLOW} !important`,
     },
     // O <Button> do Fluent NÃO usa `::after` pra isso — muda a própria
     // `border-color` e desenha um `box-shadow` inset direto no elemento
@@ -1542,11 +1552,13 @@ const TAB_STATES = {
   },
   "& .fui-Tab:focus": {
     backgroundColor: `${tokens.colorNeutralBackground4} !important`,
-    outlineWidth: "2px !important",
+    // Foco padrão do app (ver `FOCUS_GLOW`).
+    outlineWidth: "3px !important",
     // Sem `!important` (o tipo do Griffel não aceita); a global já é solid.
     outlineStyle: "solid",
     outlineColor: `${tokens.colorBrandStroke1} !important`,
-    outlineOffset: "5px !important",
+    outlineOffset: `${FOCUS_OFFSET}px !important`,
+    boxShadow: `${FOCUS_GLOW} !important`,
   },
   // Par da cor primária do ReEmu: `--reemuBrandSolid` com o texto em
   // `--reemuOnBrand` (contraste ≥ 3:1 garantido em `themes.test.ts`).

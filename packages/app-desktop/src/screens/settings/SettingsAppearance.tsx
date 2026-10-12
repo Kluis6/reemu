@@ -87,7 +87,7 @@ const useStyles = makeStyles({
     // usuário; a separação fica com a borda e o fundo do próprio tema.
     boxShadow: "none !important",
     // Anel de foco padrão do app (o mesmo dos cards de jogo e da rail:
-    // 3 px na cor de destaque, afastado 4 px) no lugar do anel do <Card> do
+    // 3 px na cor de destaque, afastado 3 px, com o brilho) no lugar do anel do <Card> do
     // Fluent, que desenha o próprio via `::after` com borda. Num card
     // selecionável o foco fica no checkbox escondido do Fluent
     // (`.fui-Card__checkbox`), então o anel vai no card quando ELE tem foco
@@ -99,7 +99,9 @@ const useStyles = makeStyles({
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
-      outlineOffset: "4px",
+      outlineOffset: "3px",
+      // brilho do foco padrão (ver `FOCUS_GLOW` em styles/xbox.ts)
+      boxShadow: `0 0 12px color-mix(in srgb, ${tokens.colorBrandStroke1} 45%, transparent) !important`,
     },
   },
   // nome à esquerda, Switch "Claro" à direita; altura fixa pra alinhar os
