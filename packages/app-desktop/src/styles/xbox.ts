@@ -719,31 +719,33 @@ export const useCardStyles = makeStyles({
     // secundária escura por dentro e o brilho; cor `SystemAccentColor`,
     // learn.microsoft.com/windows/uwp/ui-input/reveal-focus), sem o pulso.
     // A faixa escura do Xbox ficou transparente (pedido do usuário). Fica
-    // dentro da folga da prateleira (`SHELF_PAD`, 12): 5 de anel + brilho.
+    // dentro da folga da prateleira (`SHELF_PAD`, 12): 6 de anel + brilho.
     boxShadow: "none !important",
     transitionProperty: "box-shadow",
     transitionDuration: tokens.durationNormal,
     transitionTimingFunction: tokens.curveEasyEase,
-    // Borda de 2 px num tom mais claro do destaque, afastada 3 px do card
+    // Anel afastado 3 px do card
     // com a faixa entre os dois TRANSPARENTE (pedido do usuário; no Xbox ela
     // é escura). `outline` porque deixa o vão vazio — com `box-shadow` a
     // borda pintaria até a beira do card — e o `outline` acompanha o raio do
     // card no Chromium/WebView2 e no WebKit atual. O brilho curto fica no
     // `box-shadow`.
     "&:hover, &:focus, &:focus-visible, &:focus-within": {
-      outlineWidth: "2px !important",
+      // Espessura e cor do anel padrão do app (o `.app [tabindex]:focus`:
+      // 3 px em `colorBrandStroke1`, o destaque do tema) — pedido do usuário.
+      outlineWidth: "3px !important",
       outlineStyle: "solid",
-      outlineColor: "color-mix(in srgb, var(--reemuBrandAccent), #ffffff 25%) !important",
+      outlineColor: `${tokens.colorBrandStroke1} !important`,
       outlineOffset: "3px !important",
     },
     // Brilho curto POR FORA do anel: num pseudo-elemento do tamanho da borda
-    // externa do anel (3 de vão + 2 de borda), assim o `box-shadow` (que só
+    // externa do anel (3 de vão + 3 de anel), assim o `box-shadow` (que só
     // pinta pra fora da caixa) não invade o vão transparente.
     "::before": {
       content: '""',
       position: "absolute",
-      inset: "-5px",
-      borderRadius: `calc(${tokens.borderRadiusMedium} + 5px)`,
+      inset: "-6px",
+      borderRadius: `calc(${tokens.borderRadiusMedium} + 6px)`,
       boxShadow: "0 0 8px 3px color-mix(in srgb, var(--reemuBrandAccent) 45%, transparent)",
       opacity: 0,
       transitionProperty: "opacity",
