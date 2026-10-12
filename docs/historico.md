@@ -2266,4 +2266,4 @@ Infra:
   - novo `FOCUS_GLOW`: `0 0 12px` do `colorBrandStroke1` a 45%.
 - **Aplicado em:** regra global `.app a:focus, [tabindex]:focus` (rail, cards do hub, links), abas (`.fui-Tab` global e `useTabStyles`: antes 2 px a 5 px), botões do Fluent em foco de teclado, logo da rail, botões da página de jogo e da pausa e cards de tema da Aparência. O anel é sempre 3 px na cor de destaque, afastado 3 px, com o brilho.
 - **Fora do card de jogo,** o brilho sai da borda do elemento e tinge de leve o vão até o anel, como no Xbox. Nos outros elementos não há um pseudo-elemento livre: o Fluent usa `::before`/`::after` em botões, abas e cards. No card de jogo o vão continua transparente, com o brilho no `::before`.
-- **Conferido** em capturas (rail e aba focadas). Testes do frontend (95) e `ui-smoke` passaram.
+- **Conferido** em capturas (rail e aba focadas). Testes do frontend (99) e `ui-smoke` passaram.
