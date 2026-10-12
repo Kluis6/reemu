@@ -1306,6 +1306,12 @@ export const useDetailStyles = makeStyles({
   // isso, então sobrescreve a CSS var interna que o Fluent usa pra largura.
   infoDrawer: {
     ["--fui-Drawer--size" as string]: "33.34vw",
+    // Degradê do menu-guia do Xbox (print do usuário, 2026-10-12): cinza
+    // escuro em cima até ~1/3 e descendo pra cor de destaque embaixo. Aqui
+    // o fundo da gaveta (`Background1`) com até 25% do destaque do tema no
+    // pé — o máximo em que o texto principal e o secundário seguem AA
+    // (4,5:1) em todos os temas (o mais apertado é o Serene, 4,9:1).
+    backgroundImage: `linear-gradient(180deg, ${tokens.colorNeutralBackground1} 0%, ${tokens.colorNeutralBackground1} 35%, color-mix(in srgb, ${tokens.colorNeutralBackground1}, var(--reemuBrandAccent) 25%) 100%) !important`,
   },
   infoBody: {
     display: "flex",

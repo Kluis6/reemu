@@ -2231,3 +2231,10 @@ Infra:
   - Véu branco de 8% sobre a arte do card focado (`[data-art]::after`). Vale no hover e no foco.
   - Cabe na folga da prateleira (`SHELF_PAD` = 12).
 - **Substitui** o brilho largo do teste anterior (`4961fe8`). Para voltar a ele: `git revert` deste commit.
+
+## 2026-10-12 — Gaveta de informações do jogo com o degradê do menu-guia do Xbox
+
+- **Referência:** print do menu-guia do Xbox enviado pelo usuário: cinza escuro até ~1/3 da altura (abaixo de "My games & apps"), depois desce para a cor de destaque, verde, com o texto branco por cima.
+- **No ReEmu** (`useDetailStyles.infoDrawer`): o fundo da gaveta (`Background1`) até 35% da altura e, no pé, o mesmo fundo com 25% de `reemuBrandAccent`.
+- **Por que 25%:** é o máximo em que o texto principal e o secundário seguem AA (4,5:1) em todos os temas. O mais apertado é o Serene, com 4,9:1 no secundário. Com 35–40%, Serene e os temas claros caem abaixo de 4,5. O Xbox usa um verde mais forte embaixo.
+- Conferido em capturas no Neon Circuit, no Serene e no Alva claro.
