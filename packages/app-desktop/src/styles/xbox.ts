@@ -746,7 +746,7 @@ export const useCardStyles = makeStyles({
       position: "absolute",
       inset: "-6px",
       borderRadius: `calc(${tokens.borderRadiusMedium} + 6px)`,
-      boxShadow: "0 0 8px 3px color-mix(in srgb, var(--reemuBrandAccent) 45%, transparent)",
+      boxShadow: "0 0 10px 3px color-mix(in srgb, var(--reemuBrandAccent) 65%, transparent)",
       opacity: 0,
       transitionProperty: "opacity",
       transitionDuration: tokens.durationNormal,
