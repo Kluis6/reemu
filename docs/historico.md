@@ -2242,3 +2242,19 @@ Infra:
   - O anel virou `outline` de 2 px, afastado 3 px, num tom mais claro do destaque. Ele acompanha o raio do card no Chromium/WebView2 e no WebKit atual.
   - O brilho passou para um `::before` do tamanho da borda externa do anel, para o `box-shadow` não pintar o vão.
   - Conferido no Neon Circuit e no Simple Vibes.
+
+## 2026-10-12 — Brilho do foco comparado com o Xbox (e o corte que o escondia)
+
+- **Comparação medida,** com o ReEmu capturado na escala do print do Xbox (1080p sobre a tela de 768: ×1,406). Tile do Starfield na tela inicial do Xbox, 1920×1080, de fora para dentro:
+  - brilho de ~13 px (G +5 → +35 sobre o fundo);
+  - borda de 4 px (#40924A);
+  - vão de ~4–5 px levemente esverdeado pelo brilho;
+  - o card.
+- **Achado:** o brilho dos testes anteriores nunca aparecia. O `<Card>` do Fluent põe `overflow: hidden` na raiz e cortava o `::before`, que fica fora da caixa. Agora o card fica com `overflow: visible`; quem recorta a arte é o `.art`.
+- **Calibrado para o perfil do Xbox:**
+  - `0 0 12px` do destaque a 45%, sem spread, some em ~13 px como no Xbox;
+  - a folga da prateleira (`SHELF_PAD`) e o padding vertical subiram para 16, para o brilho não ser cortado no 1º/último card. A posição dos cards não muda.
+- **Diferenças que ficam:**
+  - a cor do anel é a do tema (pedido do usuário: o padrão do app);
+  - o vão é transparente (pedido do usuário; no Xbox o brilho tinge o vão);
+  - o tile do Xbox focado cresce e mostra o nome numa faixa, o do ReEmu não.

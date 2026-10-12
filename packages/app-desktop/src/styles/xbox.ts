@@ -627,8 +627,8 @@ export const useShelfStyles = makeStyles({
     // Compensa o padding do `.shelf` (folga pro anel de foco não ser
     // cortado pelo `overflow` do scroller — o 1º/último card de cada linha
     // só tem essa margem pra respirar, os do meio ainda têm o SHELF_GAP).
-    marginTop: "-14px",
-    marginBottom: "-14px",
+    marginTop: "-16px",
+    marginBottom: "-16px",
   },
   // Prateleira que só mostra o que cabe (`fill`): não rola. `clip` (não
   // `hidden`) não cria contêiner de rolagem — o `scrollIntoView` do foco por
@@ -660,8 +660,8 @@ export const useShelfStyles = makeStyles({
     // scrollIntoView; isto dá a margem).
     scrollPaddingLeft: "48px",
     scrollPaddingRight: "48px",
-    paddingTop: "14px",
-    paddingBottom: "14px",
+    paddingTop: "16px",
+    paddingBottom: "16px",
     paddingLeft: `${SHELF_PAD}px`,
     paddingRight: `${SHELF_PAD}px`,
     "::-webkit-scrollbar": { display: "none" },
@@ -719,7 +719,7 @@ export const useCardStyles = makeStyles({
     // secundária escura por dentro e o brilho; cor `SystemAccentColor`,
     // learn.microsoft.com/windows/uwp/ui-input/reveal-focus), sem o pulso.
     // A faixa escura do Xbox ficou transparente (pedido do usuário). Fica
-    // dentro da folga da prateleira (`SHELF_PAD`, 12): 6 de anel + brilho.
+    // dentro da folga da prateleira (`SHELF_PAD`, 16): 6 de anel + brilho.
     boxShadow: "none !important",
     transitionProperty: "box-shadow",
     transitionDuration: tokens.durationNormal,
@@ -746,16 +746,19 @@ export const useCardStyles = makeStyles({
       position: "absolute",
       inset: "-6px",
       borderRadius: `calc(${tokens.borderRadiusMedium} + 6px)`,
-      boxShadow: "0 0 10px 3px color-mix(in srgb, var(--reemuBrandAccent) 65%, transparent)",
+      boxShadow: "0 0 12px 0px color-mix(in srgb, var(--reemuBrandAccent) 45%, transparent)",
       opacity: 0,
       transitionProperty: "opacity",
       transitionDuration: tokens.durationNormal,
       transitionTimingFunction: tokens.curveEasyEase,
       pointerEvents: "none",
     },
-    "&:hover::before, &:focus::before, &:focus-visible::before, &:focus-within::before": {
-      opacity: 1,
-    },
+    // O <Card> do Fluent põe `overflow: hidden` na raiz — cortava o brilho
+    // (que fica fora da caixa). Quem recorta a arte/zoom é o `.art`.
+    overflow: "visible !important",
+    "&:hover::before": { opacity: 1 },
+    "&:focus::before": { opacity: 1 },
+    "&:focus-within::before": { opacity: 1 },
     // o card focado clareia um pouco, como no Xbox (#303030 → #454545)
     "&:hover [data-art]::after, &:focus-within [data-art]::after": {
       opacity: 1,
