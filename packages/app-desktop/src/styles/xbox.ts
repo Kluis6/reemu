@@ -387,6 +387,13 @@ export const useShellStyles = makeStyles({
   //
   // O foco o Fluent resolve sozinho, sem outline: a barrinha animada embaixo
   // do `<Input>` (base do SearchBox), na cor do tema.
+  // Busca aberta pelo controle (Y): o foco do DOM fica nas teclas do
+  // teclado na tela, mas o campo mostra o foco padrão do Fluent (a linha na
+  // cor de destaque embaixo, o `::after` do Input em `:focus-within`), pra
+  // ficar claro onde o texto está indo.
+  searchTyping: {
+    "::after": { transform: "scaleX(1) !important" },
+  },
   search: {
     position: "absolute",
     left: "50%",

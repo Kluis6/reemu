@@ -319,7 +319,7 @@ export function AppShell() {
           )}
           <SearchBox
             ref={searchRef}
-            className={s.search}
+            className={mergeClasses(s.search, search.keyboard && s.searchTyping)}
             data-nav-skip
             appearance="filled-darker"
             value={search.query}
