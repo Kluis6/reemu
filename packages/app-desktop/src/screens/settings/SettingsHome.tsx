@@ -64,22 +64,19 @@ const useStyles = makeStyles({
     boxSizing: "border-box",
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
-    boxShadow: tokens.shadow4,
+    // Sem sombra (pedido do usuário, como os cards do modo XBOX): o card se
+    // destaca da página só pela cor; hover/pressionado mudam o fundo.
     color: tokens.colorNeutralForeground1,
     textDecorationLine: "none",
     overflow: "hidden",
-    transitionProperty: "background-color, box-shadow",
+    transitionProperty: "background-color",
     transitionDuration: tokens.durationFaster,
     transitionTimingFunction: tokens.curveEasyEase,
     ":hover": {
       backgroundColor: tokens.colorNeutralBackground2Hover,
-      boxShadow: tokens.shadow8,
     },
-    // Pressionado volta pra perto da superfície (Fluent 2 › Motion ›
-    // Elevation: profundidade nos estados do botão).
     ":active": {
       backgroundColor: tokens.colorNeutralBackground2Pressed,
-      boxShadow: tokens.shadow2,
     },
     // entrada em cascata (o atraso vem do índice, no `style`)
     animationName: cardIn,
