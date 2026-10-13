@@ -2422,3 +2422,12 @@ Infra:
 - **Ajuste (print do usuário):**
   - O painel do teclado ganhou a sombra `shadow28`, a que o Fluent 2 › Elevation indica para "bottom sheets", porque ele flutua sobre a página.
   - O anel de foco das teclas era cortado pelas vizinhas: o anel vai 6 px para fora e o vão era de 4 px. O vão subiu para 8 px (`spacingHorizontalS`), e a tecla em foco fica por cima (`z-index`). Conferido em captura ampliada no Alva claro.
+
+## 2026-10-13 — Foco nas abas
+
+- **Problema** (print do usuário): com foco de teclado/controle, a aba ganhava um anel duplo e grosso e perdia o traço de aba selecionada.
+  - Causa: a regra global de foco (`index.css`, regra 1) restiliza o `::after` dos elementos com `[data-fui-focus-visible]` como anel.
+  - Na `Tab` do Fluent, o `::after` é o traço de selecionada, então virava um segundo anel por cima do anel da aba (`useTabStyles`).
+- **Correção:** a regra 1 exclui `.fui-Tab`. A aba fica com o anel padrão (3 px a 3 px, com brilho) e o traço embaixo.
+- Conferido com foco de teclado real (seta no `TabList`, que liga o `data-fui-focus-visible`). Os testes anteriores só focavam por `.focus()`, que não liga o atributo, por isso não pegavam o defeito.
+- Antes, no mesmo dia: a aba selecionada em foco deixou de ter o fundo cheio na cor do tema; a estrela do estado vazio de Favoritos passou a caber inteira.

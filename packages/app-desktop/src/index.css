@@ -113,8 +113,11 @@ kbd {
    (`createFocusOutlineStyle`, @fluentui/react-tabster). Mesma caixa, outro
    anel: 3 px a 3 px do elemento, com o brilho. Os cards de jogo e de tema
    apagam esse `::after` com uma regra mais específica e usam o anel deles. */
-[data-fui-focus-visible]::after,
-[data-fui-focus-within]::after {
+/* Aba (`Tab`) fica de fora: o `::after` dela é o TRAÇO de aba selecionada,
+   não o anel — virava um anel por cima do anel (`useTabStyles`) e o traço
+   sumia (print do usuário, foco de teclado/controle). */
+:not(.fui-Tab)[data-fui-focus-visible]::after,
+:not(.fui-Tab)[data-fui-focus-within]::after {
   border: 3px solid var(--colorBrandStroke1) !important;
   top: -6px !important;
   right: -6px !important;
