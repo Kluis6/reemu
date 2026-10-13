@@ -55,7 +55,9 @@ export function StarArt() {
   return (
     <Frame>
       <g {...COMMON}>
-        <path d="M80 26 l16 34 37 5 -27 26 7 37 -33 -18 -33 18 7 -37 -27 -26 37 -5 Z" />
+        {/* 102 de altura (pontas de y=9 a 111): começava em 26 e as pontas
+            de baixo passavam do viewBox de 120 e eram cortadas */}
+        <path d="M80 9 l16 34 37 5 -27 26 7 37 -33 -18 -33 18 7 -37 -27 -26 37 -5 Z" />
       </g>
     </Frame>
   )

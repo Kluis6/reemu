@@ -1562,16 +1562,9 @@ const TAB_STATES = {
     outlineOffset: `${FOCUS_OFFSET}px !important`,
     boxShadow: `${FOCUS_GLOW} !important`,
   },
-  // Par da cor primária do ReEmu: `--reemuBrandSolid` com o texto em
-  // `--reemuOnBrand` (contraste ≥ 3:1 garantido em `themes.test.ts`).
-  '& .fui-Tab[aria-selected="true"]:focus': {
-    backgroundColor: "var(--reemuBrandSolid) !important",
-  },
-  '& .fui-Tab[aria-selected="true"]:focus .fui-Tab__content, & .fui-Tab[aria-selected="true"]:focus .fui-Tab__icon':
-    { color: "var(--reemuOnBrand) !important" },
-  '& .fui-Tab[aria-selected="true"]:focus::after': {
-    backgroundColor: "transparent",
-  },
+  // A aba selecionada em foco fica igual às outras em foco (fundo de realce
+  // + anel) e mantém o traço de baixo: o fundo cheio na cor de destaque
+  // dentro do anel parecia um botão duplo (print do usuário, 2026-10-13).
 } as const;
 
 /** Abas horizontais (`TabList`) no estilo do app Xbox: biblioteca, detalhe
