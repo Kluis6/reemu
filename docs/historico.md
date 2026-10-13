@@ -2419,3 +2419,6 @@ Infra:
 - **Por que próprio:** o Fluent não tem componente de teclado na tela. O teclado virtual do Windows (TabTip) é feito para toque, não abre com o controle e não existe no Linux.
 - **Achado no teste:** com Maiúsculas, o array de teclas novo a cada render recriava o handler do controle, que se re-registrava na store e re-renderizava sem parar ("Maximum update depth"). As linhas maiúsculas agora são constantes.
 - **Conferido no navegador** simulando os pulsos do controle (evento `menu-nav`): digitar "mario", alternar maiúsculas, apagar, fechar com ☰ e com B no campo vazio, e o foco voltando ao 1º card. Captura no Neon Circuit e no Simple Vibes. Textos em pt-BR/en/es. Não testado com controle físico.
+- **Ajuste (print do usuário):**
+  - O painel do teclado ganhou a sombra `shadow28`, a que o Fluent 2 › Elevation indica para "bottom sheets", porque ele flutua sobre a página.
+  - O anel de foco das teclas era cortado pelas vizinhas: o anel vai 6 px para fora e o vão era de 4 px. O vão subiu para 8 px (`spacingHorizontalS`), e a tecla em foco fica por cima (`z-index`). Conferido em captura ampliada no Alva claro.

@@ -71,6 +71,9 @@ const useStyles = makeStyles({
     boxSizing: 'border-box',
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground1,
+    // Fica por cima da página (painel flutuante preso embaixo): sombra da
+    // escala do Fluent 2 › Elevation pra "bottom sheets" (`shadow28`).
+    boxShadow: tokens.shadow28,
     display: 'flex',
     flexDirection: 'column',
     rowGap: tokens.spacingVerticalS,
@@ -106,7 +109,9 @@ const useStyles = makeStyles({
   grid: {
     display: 'grid',
     gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))`,
-    gap: tokens.spacingHorizontalXS,
+    // 8 px entre as teclas: o anel de foco vai 6 px pra fora (3 de vão + 3
+    // de traço) e com 4 a tecla vizinha cobria o anel
+    gap: tokens.spacingHorizontalS,
   },
   key: {
     minWidth: '0 !important',
@@ -122,6 +127,8 @@ const useStyles = makeStyles({
     border: 'none !important',
     ':hover': { backgroundColor: `${tokens.colorNeutralBackground3Hover} !important` },
     ':active': { backgroundColor: `${tokens.colorNeutralBackground3Pressed} !important` },
+    // a tecla em foco por cima das vizinhas (o brilho do anel não some atrás)
+    ':focus': { position: 'relative', zIndex: 1 },
   },
   action: { backgroundColor: `${tokens.colorNeutralBackground4} !important` },
   on: {
