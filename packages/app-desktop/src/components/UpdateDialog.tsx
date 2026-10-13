@@ -1,4 +1,6 @@
 import {
+  List,
+  ListItem,
   Button,
   Caption1,
   Dialog,
@@ -58,9 +60,13 @@ const useStyles = makeStyles({
     ":not(:first-child)": { marginTop: tokens.spacingVerticalS },
   },
   action: { whiteSpace: "nowrap" },
+  // `List` do Fluent (lista sem marcador por padrão): os marcadores das
+  // notas de versão voltam pelo `listStyleType` (e o item como list-item).
   list: {
     margin: 0,
     paddingLeft: tokens.spacingHorizontalXL,
+    listStyleType: "disc",
+    "& > li": { display: "list-item" },
     display: "flex",
     flexDirection: "column",
     rowGap: tokens.spacingVerticalXS,
@@ -175,11 +181,11 @@ function UpdateDialogOpen({ dialog }: { dialog: UpdateDialogState }) {
                     {b.text}
                   </Subtitle2>
                 ) : b.type === "list" ? (
-                  <ul key={i} className={s.list}>
+                  <List key={i} className={s.list}>
                     {b.items.map((it, j) => (
-                      <li key={j}>{it}</li>
+                      <ListItem key={j}>{it}</ListItem>
                     ))}
-                  </ul>
+                  </List>
                 ) : (
                   <p key={i} className={s.paragraph}>
                     {b.text}

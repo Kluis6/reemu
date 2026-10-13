@@ -1,4 +1,8 @@
 import {
+  Accordion,
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
   Body1,
   Caption1,
   Button,
@@ -157,7 +161,8 @@ const useStyles = makeStyles({
     maxWidth: "100%",
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
-    "& summary": { cursor: "pointer" },
+    // `Accordion` do Fluent no lugar do `<details>` do HTML: mesmo estilo,
+    // estados e foco dos outros recolhíveis do app (ex.: licenças).
     "& code": {
       display: "block",
       marginTop: "6px",
@@ -793,10 +798,14 @@ export function PlayScreen() {
               {t("errors.copyDetails")}
             </Button>
           </div>
-          <details className={styles.errorDetails}>
-            <summary>{t("errors.technicalDetails")}</summary>
-            <code>{err.technical}</code>
-          </details>
+          <Accordion collapsible className={styles.errorDetails}>
+            <AccordionItem value="technical">
+              <AccordionHeader size="small">{t("errors.technicalDetails")}</AccordionHeader>
+              <AccordionPanel>
+                <code>{err.technical}</code>
+              </AccordionPanel>
+            </AccordionItem>
+          </Accordion>
         </div>
       </div>
     );

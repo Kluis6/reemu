@@ -196,10 +196,12 @@ export function AppShell() {
       <nav className={s.rail}>
         <Menu positioning={{ position: "below", align: "start", offset: 12 }}>
           <MenuTrigger disableButtonEnhancement>
-            <button
+            {/* `Button` do Fluent (sem fundo próprio: o do `railItem`), no
+                lugar do `<button>` do HTML — estados e foco padrão. */}
+            <Button
+              appearance="transparent"
               className={mergeClasses(s.railItem, l.railRadius, s.railBrand)}
               aria-label={t("shell.profile")}
-              type="button"
             >
               <ProfileAvatar
                 profile={
@@ -210,7 +212,7 @@ export function AppShell() {
                 ring={SHOW_AVATAR_RING}
                 badge={SHOW_AVATAR_BADGE ? "available" : undefined}
               />
-            </button>
+            </Button>
           </MenuTrigger>
           <MenuPopover className={l.menuPopover}>
             {/* SEM `hasIcons`: só os itens que passam `icon` (Perfil,
