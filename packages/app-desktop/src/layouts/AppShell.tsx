@@ -347,7 +347,7 @@ export function AppShell() {
           >
             <Button
               appearance="secondary"
-              className={mergeClasses(l.navBtn, s.navIconBtn)}
+              className={mergeClasses(l.navBtn, s.navIconBtn, s.navIconLg)}
               aria-label={
                 fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen")
               }

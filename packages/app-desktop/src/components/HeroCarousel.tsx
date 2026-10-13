@@ -99,6 +99,7 @@ const useStyles = makeStyles({
   title: {
     // "Title" da rampa tipográfica do Windows (28 epx).
     fontSize: '28px',
+    fontFamily: 'var(--reemuFontDisplay)',
     fontWeight: tokens.fontWeightBold,
     lineHeight: 1.12,
     margin: '4px 0 2px',

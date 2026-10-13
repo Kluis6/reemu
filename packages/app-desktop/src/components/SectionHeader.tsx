@@ -26,6 +26,8 @@ const useStyles = makeStyles({
     // Título de seção do app Xbox (medido, ver `metrics.ts`): 26, semibold.
     // Só texto: quem abre a prateleira é o botão ao lado (`seeAll`).
     fontSize: `${SECTION_TITLE}px`,
+    // título (26 px): Segoe UI Variable Display, como na rampa do Windows 11
+    fontFamily: "var(--reemuFontDisplay)",
     fontWeight: tokens.fontWeightSemibold,
     lineHeight: `${SECTION_TITLE_LINE}px`,
     // `<Text as="h2">`: sem a margem padrão do navegador (0,83em).

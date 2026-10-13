@@ -55,6 +55,7 @@ const useStyles = makeStyles({
   },
   crumbButton: {
     fontSize: tokens.fontSizeHero700,
+    fontFamily: "var(--reemuFontDisplay)",
     lineHeight: tokens.lineHeightHero700,
     fontWeight: tokens.fontWeightSemibold,
     height: "auto",

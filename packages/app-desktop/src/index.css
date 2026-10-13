@@ -162,3 +162,15 @@ html[data-nav-focus] .fui-CarouselCard > button:not(.fui-Card):focus,
   outline-offset: -6px !important;
   box-shadow: none !important;
 }
+
+/* Títulos na Segoe UI Variable Display (a rampa tipográfica do Windows 11
+   usa "Display semibold" do Subtitle, 20 px, pra cima; o corpo fica na
+   Text — `fontFamilyBase`, ver `segoeVariable` em styles/themes.ts). */
+.fui-Subtitle1,
+.fui-Title3,
+.fui-Title2,
+.fui-Title1,
+.fui-LargeTitle,
+.fui-Display {
+  font-family: var(--reemuFontDisplay) !important;
+}

@@ -2351,3 +2351,15 @@ Infra:
 - **Usados em:** arte do card de jogo (por trás da capa), card sem capa e card 2×2. As células do 2×2 passam a ter a cor da página, o que dá contraste com o card nos dois modos.
 - **Teste novo:** escuro com topo ≥ 1,3:1 e base ≥ 1,15:1; claro com topo ≥ 1,08:1 e traço visível, em todos os temas.
 - Conferido em captura no Simple Vibes, no Blue Modern e no Green Modern claro.
+
+## 2026-10-13 — Fonte do Windows 11 e o texto serrilhado
+
+- **Serrilhado:** no PC do usuário a opção do Windows "Suavizar bordas das fontes de tela" está desligada (`HKCU\Control Panel\Desktop\FontSmoothing = 0`, `SPI_GETFONTSMOOTHING = 0`).
+  - O Chromium, e portanto o WebView2, segue essa opção e desenha o texto sem antialiasing: 0 tons intermediários na borda das letras, medido no app e no Chrome headless.
+  - As Configurações do Windows (WinUI) suavizam por conta própria, por isso parecem lisas.
+  - Não é o CSS do ReEmu: desligar `-webkit-font-smoothing`/`text-rendering` e trocar a fonte não mudou nada. A correção é ligar a opção no Windows.
+- **Fonte:**
+  - O Fluent usa "Segoe UI" (a estática do Windows 10). O Windows 11 usa a Segoe UI Variable (learn.microsoft.com/windows/apps/design/signature-experiences/typography: "When using HTML ... you will need to specify the Segoe UI Variable font in CSS").
+  - No Chromium os nomes que casam são "Segoe UI Variable Text" e "Segoe UI Variable Display"; "Segoe UI Variable" sozinho cai na fonte de reserva (medido com `CSS.getPlatformFontsForNode`).
+  - Agora `fontFamilyBase` começa com a Text, e os títulos (`Subtitle1` e acima, título de prateleira, caminho das Configurações, título do destaque) usam a Display (`--reemuFontDisplay`), como a rampa do Windows ("Display semibold" do Subtitle de 20 px para cima). A pilha do Fluent continua depois, para o Linux.
+- **Tela cheia:** o ícone tinha 16 px. Agora tem 20 px, como o voltar e os outros botões de ícone da topbar (`navIconLg`).

@@ -632,10 +632,32 @@ export interface ReEmuTokens extends ReEmuLiftTokens {
   reemuCardTop: string;
   reemuCardBottom: string;
   reemuCardStroke: string;
+  /** Fonte dos títulos (≥ 20 px): Segoe UI Variable Display — ver
+   *  `segoeVariable`. */
+  reemuFontDisplay: string;
 }
 
 export type ReEmuTheme = Theme & ReEmuTokens;
 
+
+/**
+ * Fonte do Windows 11: Segoe UI Variable (learn.microsoft.com/windows/apps/
+ * design/signature-experiences/typography — "When using HTML, optical
+ * scaling is also automatic, but you will need to specify the Segoe UI
+ * Variable font in CSS"). No Chromium/WebView2 o nome da família é por
+ * instância: "Segoe UI Variable Text" (corpo, até 18 px) e "Segoe UI
+ * Variable Display" (subtítulo 20 px e títulos — a rampa do Windows usa
+ * "Display semibold" do Subtitle pra cima); "Segoe UI Variable" sozinho não
+ * casa (medido com `CSS.getPlatformFontsForNode`). Antes vem a pilha do
+ * Fluent ("Segoe UI" estática do Windows 10, depois as de outros sistemas),
+ * que segue valendo no Linux.
+ */
+function segoeVariable(base: string): { text: string; display: string } {
+  return {
+    text: `'Segoe UI Variable Text', ${base}`,
+    display: `'Segoe UI Variable Display', ${base}`,
+  };
+}
 
 /** Mistura `a` com `b` na proporção `p` (0–1), em sRGB. */
 function mixHex(a: string, b: string, p: number): string {
@@ -829,6 +851,7 @@ function make(
     reemuCardTop: "",
     reemuCardBottom: "",
     reemuCardStroke: "",
+    reemuFontDisplay: "",
     ...liftTokens(light),
   };
   if (o.appBg) t.reemuAppBg = o.appBg;
@@ -843,6 +866,9 @@ function make(
     t.colorNeutralBackground3,
   ]);
   Object.assign(t, accentTokens(t.reemuBrandAccent));
+  const fonts = segoeVariable(t.fontFamilyBase);
+  t.fontFamilyBase = fonts.text;
+  t.reemuFontDisplay = fonts.display;
   // Depois dos neutros finais (overrides incluídos).
   Object.assign(
     t,
@@ -889,6 +915,8 @@ function makeHighContrast(): ReEmuTheme {
     reemuCardTop: bg,
     reemuCardBottom: bg,
     reemuCardStroke: t.colorNeutralStroke1,
+    fontFamilyBase: segoeVariable(t.fontFamilyBase).text,
+    reemuFontDisplay: segoeVariable(t.fontFamilyBase).display,
     ...liftTokens(false),
   };
 }
