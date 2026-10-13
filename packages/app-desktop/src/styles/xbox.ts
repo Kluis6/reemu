@@ -1559,8 +1559,13 @@ const TAB_STATES = {
   "& .fui-Tab:active": {
     backgroundColor: `${tokens.colorNeutralBackground4Pressed} !important`,
   },
+  // Foco como nas abas do app Xbox (prints do usuário, 2026-10-13): a aba
+  // focada ganha o fundo de realce (#3E434B no Xbox = `Background3`, o
+  // degrau acima da superfície); a SELECIONADA e focada fica invertida —
+  // fundo na cor do texto e texto na cor da página (branco/escuro no Xbox) —
+  // sem o traço de baixo. O anel é o padrão do app.
   "& .fui-Tab:focus": {
-    backgroundColor: `${tokens.colorNeutralBackground4} !important`,
+    backgroundColor: `${tokens.colorNeutralBackground3} !important`,
     // Foco padrão do app (ver `FOCUS_GLOW`).
     outlineWidth: "3px !important",
     // Sem `!important` (o tipo do Griffel não aceita); a global já é solid.
@@ -1569,9 +1574,14 @@ const TAB_STATES = {
     outlineOffset: `${FOCUS_OFFSET}px !important`,
     boxShadow: `${FOCUS_GLOW} !important`,
   },
-  // A aba selecionada em foco fica igual às outras em foco (fundo de realce
-  // + anel) e mantém o traço de baixo: o fundo cheio na cor de destaque
-  // dentro do anel parecia um botão duplo (print do usuário, 2026-10-13).
+  '& .fui-Tab[aria-selected="true"]:focus': {
+    backgroundColor: `${tokens.colorNeutralForeground1} !important`,
+  },
+  '& .fui-Tab[aria-selected="true"]:focus .fui-Tab__content, & .fui-Tab[aria-selected="true"]:focus .fui-Tab__icon':
+    { color: "var(--reemuPage) !important" },
+  '& .fui-Tab[aria-selected="true"]:focus::after': {
+    opacity: 0,
+  },
 } as const;
 
 /** Abas horizontais (`TabList`) no estilo do app Xbox: biblioteca, detalhe

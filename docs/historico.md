@@ -2431,3 +2431,8 @@ Infra:
 - **Correção:** a regra 1 exclui `.fui-Tab`. A aba fica com o anel padrão (3 px a 3 px, com brilho) e o traço embaixo.
 - Conferido com foco de teclado real (seta no `TabList`, que liga o `data-fui-focus-visible`). Os testes anteriores só focavam por `.focus()`, que não liga o atributo, por isso não pegavam o defeito.
 - Antes, no mesmo dia: a aba selecionada em foco deixou de ter o fundo cheio na cor do tema; a estrela do estado vazio de Favoritos passou a caber inteira.
+- **Foco nas abas como no app Xbox** (prints do usuário, medidos):
+  - A aba selecionada e focada fica invertida: fundo branco (#FFFFFF), texto escuro e sem o traço de baixo.
+  - A aba focada não selecionada ganha o fundo de realce (#3E434B, um degrau acima da superfície), e o traço continua na selecionada.
+  - No ReEmu: selecionada+foco = fundo `colorNeutralForeground1` e texto `reemuPage`, invertido em qualquer tema, sem o traço; foco = `colorNeutralBackground3`. O anel é o padrão do app.
+  - Conferido em captura com foco de teclado real nos dois casos.
