@@ -2296,3 +2296,4 @@ Infra:
 - **Exceções que continuam com o anel próprio:** cards de jogo (vão transparente) e cards de tema.
 - Os campos de texto, que antes ficavam de fora a pedido do usuário, agora entram, pelo pedido novo de "todos os componentes".
 - **Resultado:** a varredura não acha nenhum elemento sem o anel. No teclado (Tab) também conferido. 99 testes e `ui-smoke` (12/12) passaram.
+- **Diálogos (ajuste do mesmo dia, print do diálogo "Encerrar"):** o anel das opções, que ocupam a largura toda, era cortado nas laterais pelo `overflow-y: auto` do `DialogContent`. O Fluent já reserva 2 px de respiro com margem negativa para o anel dele (`useDialogContentStyles`). O ReEmu usa o mesmo truque com 12 px, em todos os diálogos e sem mover o conteúdo. Conferido em captura.

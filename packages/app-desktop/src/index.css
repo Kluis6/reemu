@@ -142,3 +142,14 @@ html[data-nav-focus] :is([role="menuitem"], [role="menuitemradio"], [role="menui
   border-radius: var(--borderRadiusMedium) !important;
   box-shadow: none !important;
 }
+
+/* Conteúdo de diálogo: o Fluent dá 2 px de respiro (padding) e devolve com
+   margem negativa (`useDialogContentStyles`: `padding: strokeWidthThick;
+   margin: calc(strokeWidthThick * -1)`) pro anel de foco dele não ser
+   cortado pelo `overflow-y: auto`. O anel do ReEmu vai até 6 px pra fora
+   (3 de vão + 3 de traço) mais o brilho: o mesmo truque com 12 px. O
+   conteúdo fica no mesmo lugar. */
+.fui-DialogContent {
+  padding: 12px !important;
+  margin: -12px !important;
+}
