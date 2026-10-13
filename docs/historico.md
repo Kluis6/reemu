@@ -2400,3 +2400,22 @@ Infra:
   - O card geral das Configurações ficou **sem borda e sem sombra**, a pedido do usuário. Separa-se só pela cor.
   - **Teste novo** em todos os temas: ordem página → superfície → realces, contraste mínimo entre os degraus e texto AA em todos.
   - Conferido em captura no Blue Modern, no Neon Circuit, no Simple Vibes e no Alva claro. 147 testes e `ui-smoke` (12/12) passaram.
+
+## 2026-10-13 — Teclado na tela para a busca com o controle
+
+- **Antes:** o Y do controle abria a busca, mas só dava para digitar com teclado físico.
+- **Agora** (`components/OnScreenKeyboard.tsx`): o Y abre a busca já com o teclado na tela, no estilo do teclado do Xbox.
+  - Grade QWERTY com números, ç e acentos do português (á à ã â é ê í ó õ ú), - : ', e uma linha de ações: Maiúsculas, Espaço, Apagar, Concluir e Fechar.
+  - Teclas em `Button` do Fluent, na escada de elevação do tema, sem borda nem sombra.
+  - A tecla em foco recebe o foco do DOM, com o anel padrão.
+- **Controle:**
+  - direcional anda na grade;
+  - A digita;
+  - B apaga, e com o campo vazio fecha;
+  - X dá espaço, Y alterna maiúsculas, ☰ conclui.
+  - Enquanto o teclado está aberto, ele recebe os pulsos antes da navegação normal (`useSearchStore.keyboardNav`, chamado no `useMenuNav`).
+  - Ao fechar, o foco vai para o 1º resultado (ou para a busca).
+  - A biblioteca filtra enquanto se digita, pela mesma busca do teclado físico. A barra de dicas fica escondida e o painel mostra as próprias dicas.
+- **Por que próprio:** o Fluent não tem componente de teclado na tela. O teclado virtual do Windows (TabTip) é feito para toque, não abre com o controle e não existe no Linux.
+- **Achado no teste:** com Maiúsculas, o array de teclas novo a cada render recriava o handler do controle, que se re-registrava na store e re-renderizava sem parar ("Maximum update depth"). As linhas maiúsculas agora são constantes.
+- **Conferido no navegador** simulando os pulsos do controle (evento `menu-nav`): digitar "mario", alternar maiúsculas, apagar, fechar com ☰ e com B no campo vazio, e o foco voltando ao 1º card. Captura no Neon Circuit e no Simple Vibes. Textos em pt-BR/en/es. Não testado com controle físico.

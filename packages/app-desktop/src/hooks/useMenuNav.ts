@@ -40,6 +40,11 @@ export function useMenuNav() {
       navigate('/library')
       setSearchOpen(true)
     }
+    // Pelo controle (Y): além do campo, abre o teclado na tela.
+    const openSearchPad = () => {
+      navigate('/library')
+      useSearchStore.getState().setKeyboard(true)
+    }
     const secondaryAction = () => {
       document.activeElement?.dispatchEvent(new CustomEvent(REEMU_ACTION, { bubbles: true }))
     }
@@ -88,6 +93,9 @@ export function useMenuNav() {
       if (nav === lastKind && now - last < 90) return
       last = now
       lastKind = nav
+      // Teclado na tela aberto: ele recebe os pulsos primeiro.
+      const kbd = useSearchStore.getState().keyboardNav
+      if (kbd && kbd(nav)) return
 
       switch (nav) {
         case 'confirm':
@@ -98,7 +106,7 @@ export function useMenuNav() {
           else navigate(-1)
           break
         case 'search':
-          openSearch()
+          openSearchPad()
           break
         case 'context':
           contextMenu()

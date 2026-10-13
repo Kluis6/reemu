@@ -34,6 +34,7 @@ import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { ButtonHints } from "../components/ButtonHints";
+import { OnScreenKeyboard } from "../components/OnScreenKeyboard";
 import { Clock } from "../components/Clock";
 import { GamepadStatus } from "../components/GamepadStatus";
 import { NotificationBell } from "../components/NotificationBell";
@@ -373,7 +374,8 @@ export function AppShell() {
         </div>
       </div>
 
-      <ButtonHints hints={hints} />
+      <ButtonHints hints={search.keyboard ? [] : hints} />
+      {search.keyboard && <OnScreenKeyboard />}
     </div>
   );
 }
