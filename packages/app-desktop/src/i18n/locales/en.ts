@@ -489,6 +489,7 @@ const en: Messages = {
       main: 'ReEmu is built with open source libraries. The main ones:',
       total: 'In total, the installed app ships {{rust}} Rust and {{js}} JavaScript libraries. By license:',
       others: 'Others',
+      selawik: 'Selawik (font, when Segoe UI is missing)',
       publicDomain: 'Public domain',
     },
     trademarks: {

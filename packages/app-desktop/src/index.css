@@ -12,6 +12,50 @@ body,
   height: 100%;
 }
 
+/* Selawik (Microsoft, SIL OFL 1.1 — assets/fonts/selawik/OFL.txt): fonte
+   aberta com as MESMAS métricas da Segoe UI, feita pra apps em sistemas sem
+   a Segoe ("intended for apps on other platforms that don't want to bundle
+   Segoe UI", learn.microsoft.com/windows/apps/design/signature-experiences/
+   typography). Entra na pilha logo depois da Segoe (`segoeVariable` em
+   styles/themes.ts): no Windows a Segoe UI Variable vence e estes arquivos
+   nem são baixados; no Linux (WebKitGTK) o texto fica igual ao do Windows
+   em tamanho e quebra de linha, em vez da sans-serif de cada distro. */
+@font-face {
+  font-family: "Selawik";
+  src: url("./assets/fonts/selawik/selawkl.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selawik";
+  src: url("./assets/fonts/selawik/selawksl.woff2") format("woff2");
+  font-weight: 350;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selawik";
+  src: url("./assets/fonts/selawik/selawk.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selawik";
+  src: url("./assets/fonts/selawik/selawksb.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Selawik";
+  src: url("./assets/fonts/selawik/selawkb.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* App, não página: nada de selecionar texto arrastando o mouse (nem o
    destaque azul num clique duplo). Campos de texto continuam selecionáveis
    pra editar/copiar o que se digita. `-webkit-` pro WebKitGTK (Linux). */

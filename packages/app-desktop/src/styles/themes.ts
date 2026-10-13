@@ -649,13 +649,15 @@ export type ReEmuTheme = Theme & ReEmuTokens;
  * Variable Display" (subtítulo 20 px e títulos — a rampa do Windows usa
  * "Display semibold" do Subtitle pra cima); "Segoe UI Variable" sozinho não
  * casa (medido com `CSS.getPlatformFontsForNode`). Antes vem a pilha do
- * Fluent ("Segoe UI" estática do Windows 10, depois as de outros sistemas),
- * que segue valendo no Linux.
+ * Fluent ("Segoe UI" estática do Windows 10 …). Sem Segoe (Linux), entra a
+ * Selawik — fonte aberta da Microsoft com as métricas da Segoe UI, embutida
+ * no app (index.css, `@font-face`) — e só depois o resto da pilha do Fluent.
  */
 function segoeVariable(base: string): { text: string; display: string } {
+  const rest = `'Segoe UI', 'Selawik', ${base}`;
   return {
-    text: `'Segoe UI Variable Text', ${base}`,
-    display: `'Segoe UI Variable Display', ${base}`,
+    text: `'Segoe UI Variable Text', ${rest}`,
+    display: `'Segoe UI Variable Display', ${rest}`,
   };
 }
 

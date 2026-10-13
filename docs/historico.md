@@ -2363,3 +2363,14 @@ Infra:
   - No Chromium os nomes que casam são "Segoe UI Variable Text" e "Segoe UI Variable Display"; "Segoe UI Variable" sozinho cai na fonte de reserva (medido com `CSS.getPlatformFontsForNode`).
   - Agora `fontFamilyBase` começa com a Text, e os títulos (`Subtitle1` e acima, título de prateleira, caminho das Configurações, título do destaque) usam a Display (`--reemuFontDisplay`), como a rampa do Windows ("Display semibold" do Subtitle de 20 px para cima). A pilha do Fluent continua depois, para o Linux.
 - **Tela cheia:** o ícone tinha 16 px. Agora tem 20 px, como o voltar e os outros botões de ícone da topbar (`navIconLg`).
+
+## 2026-10-13 — Selawik como fonte no Linux
+
+- **Problema:** no Linux não há Segoe, e a pilha do Fluent caía na `sans-serif` de cada distro (DejaVu, Noto, Cantarell…). O visual e a quebra das linhas mudavam de distro para distro.
+- **Correção:** embutida a **Selawik** (Microsoft, <https://github.com/microsoft/Selawik>, release 1.01, SIL OFL 1.1). É a fonte aberta com as métricas da Segoe UI que a própria página de tipografia do Windows indica para apps fora do Windows.
+  - Arquivos: os 5 pesos em `.woff2` (300/350/400/600/700, ~73 KB no total), sem modificação, com `OFL.txt` ao lado.
+  - `@font-face` em `index.css`.
+  - Pilha (`segoeVariable`): Segoe UI Variable Text/Display → Segoe UI → **Selawik** → resto do Fluent.
+  - Créditos em `THIRD_PARTY_NOTICES.md` e em Sistema › Informações e licenças (pt-BR/en/es).
+- **Conferido no Chrome:** no Windows a Segoe UI Variable continua vencendo e nenhum arquivo da Selawik é baixado. Com só a Selawik, uma frase com acentos do pt-BR, ç/ã/õ/ñ/¿/«» e travessão sai inteira nela (Regular e Semibold), sem fallback. O build do Vite inclui os `.woff2`.
+- **Não testado num Linux de verdade.**

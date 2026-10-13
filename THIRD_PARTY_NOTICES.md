@@ -104,3 +104,18 @@ AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
+
+## Selawik (fonte)
+
+Origem: <https://github.com/microsoft/Selawik> (release 1.01). Arquivos
+`.woff2` sem modificação em `packages/app-desktop/src/assets/fonts/selawik/`,
+com a licença completa em `OFL.txt` ao lado. Usada só quando a Segoe UI não
+existe no sistema (ex.: Linux).
+
+```
+Copyright 2015, Microsoft Corporation (www.microsoft.com), with Reserved Font
+Name Selawik. All Rights Reserved. Selawik is a trademark of Microsoft
+Corporation in the United States and/or other countries.
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+```

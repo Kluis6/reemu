@@ -188,6 +188,7 @@ export function AboutLicenses() {
               rows={[
                 ...MAIN_LIBS,
                 ['SQLite', t('about.libs.publicDomain')],
+                [t('about.libs.selawik'), 'OFL-1.1 (© Microsoft)'],
                 ['libretro.h, libretro_vulkan.h', 'MIT (© The RetroArch team)'],
               ]}
             />

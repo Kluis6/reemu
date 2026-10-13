@@ -490,6 +490,7 @@ const ptBR = {
       main: 'O ReEmu é feito com bibliotecas de código aberto. As principais:',
       total: 'No total, vão no app instalado {{rust}} bibliotecas Rust e {{js}} JavaScript. Por licença:',
       others: 'Outras',
+      selawik: 'Selawik (fonte, sem a Segoe UI no sistema)',
       publicDomain: 'Domínio público',
     },
     trademarks: {
