@@ -2331,3 +2331,7 @@ Infra:
   - os cards de navegação das Configurações, que são links e o `Card` não vira link;
   - dicas do controle, relógio, splash, fundo animado, avatares prontos (exibidos dentro do `Avatar`), estados vazios e `<kbd>` nos atalhos.
 - **Não conferidos na tela:** o "Detalhes técnicos" (o erro de core não sai com os mocks) e as notas de versão. Ficam pela checagem de tipos e pelo DOM do Fluent (`List` → `ul`, `ListItem` → `li`).
+- **Ajuste (pedido do usuário):** o carrossel ficou sem o botão de pausar/retomar e avança sozinho.
+  - O avanço liga por `enableAutoplay` do contexto do `Carousel` (`useCarouselContext_unstable`), o mesmo que o botão chama. O Fluent continua pausando com o mouse ou o foco em cima.
+  - Fica registrado que o Fluent 2 recomenda o controle de pausa ("the user must always have the option of pausing the auto-play feature").
+  - Conferido: slide 0 → 1 em 8 s → 2 em 15 s. O texto voltou para `bottom: 24px`.

@@ -8,7 +8,9 @@ import {
   CarouselViewport,
   makeStyles,
   tokens,
+  useCarouselContext_unstable as useCarouselContext,
 } from '@fluentui/react-components'
+import { useEffect } from 'react'
 import { initials } from '../lib/initials'
 import { platformLabel } from '../lib/platform'
 import type { RomEntry } from '../lib/tauri'
@@ -69,9 +71,7 @@ const useStyles = makeStyles({
   body: {
     position: 'absolute',
     left: '24px',
-    // acima da linha de controles do `CarouselNavContainer` (pausar e
-    // pontos, ~32 epx a partir de 12 da borda)
-    bottom: '56px',
+    bottom: '24px',
     maxWidth: '62%',
     zIndex: 1,
     // kicker / título / sistema são <span> (dentro de <button>) — em coluna,
@@ -122,23 +122,30 @@ const useStyles = makeStyles({
     '& .fui-Button__icon': { fontSize: '1em', width: '1em', height: '1em' },
     ':hover': { backgroundColor: 'rgba(0,0,0,0.72) !important' },
   },
-  // Pausar/retomar o avanço automático (Fluent 2 › Carousel: "the user must
-  // always have the option of pausing the auto-play feature") — sobre a arte.
-  autoplay: {
-    backgroundColor: 'rgba(0,0,0,0.45) !important',
-    color: '#ffffff !important',
-    ':hover': { backgroundColor: 'rgba(0,0,0,0.72) !important' },
-  },
 })
 
 /**
  * Carrossel de destaque da Início (modelo modo XBOX) com o `Carousel` do
  * Fluent 2: 1 slide por vez em fade (`motion="fade"`), setas nas laterais e
  * pontos embaixo (`layout="overlay-expanded"`), avanço automático a cada 7 s
- * com botão de pausar (o Fluent pede: "the user must always have the option
- * of pausing the auto-play feature") e o anúncio do slide pra leitor de tela.
- * Cada slide abre o jogo.
+ * e o anúncio do slide pra leitor de tela. Cada slide abre o jogo.
+ *
+ * Sem o botão de pausar/retomar (pedido do usuário: "o carousel deve ser
+ * automático") — o Fluent 2 recomenda ter um ("the user must always have the
+ * option of pausing the auto-play feature"). O avanço liga por
+ * `enableAutoplay` do contexto do Carousel (`AutoAdvance`), o mesmo que o
+ * botão chama; o Fluent pausa sozinho com o mouse ou o foco no carrossel.
  */
+function AutoAdvance() {
+  const enableAutoplay = useCarouselContext((ctx) => ctx.enableAutoplay)
+  useEffect(() => {
+    enableAutoplay(true)
+    return () => enableAutoplay(false)
+  }, [enableAutoplay])
+  return null
+}
+
+/** Carrossel de destaque da Início (ver `AutoAdvance`). */
 export function HeroCarousel({
   items,
   onOpen,
@@ -161,6 +168,7 @@ export function HeroCarousel({
       aria-roledescription={t('shell2.carousel')}
       announcement={(index, total) => t('shell2.slideOf', { n: index + 1, total })}
     >
+      {n > 1 && <AutoAdvance />}
       <CarouselViewport>
         <CarouselSlider>
           {items.map((r, i) => (
@@ -193,11 +201,6 @@ export function HeroCarousel({
           layout="overlay-expanded"
           next={{ className: s.arrow, 'aria-label': t('shell2.next') }}
           prev={{ className: s.arrow, 'aria-label': t('shell2.previous') }}
-          autoplay={{
-            className: s.autoplay,
-            defaultChecked: true,
-            'aria-label': t('shell2.autoplay'),
-          }}
         >
           <CarouselNav>
             {(index) => (
