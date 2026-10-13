@@ -1590,6 +1590,12 @@ export const useTabStyles = makeStyles({
   tabs: {
     ...TAB_STATES,
     columnGap: "8px",
+    // O texto da 1ª aba na mesma coluna do conteúdo de baixo, como nas
+    // Configurações do Windows 11 (título da seção, rótulos e controles
+    // começam no mesmo x): a aba tem 13 de padding + 2 do conteúdo do
+    // Fluent, então a lista volta 15 — o fundo do hover/o anel da 1ª aba
+    // ficam na margem (medido: texto em 155 com o conteúdo em 140).
+    marginLeft: "-15px",
     "& .fui-Tab": {
       ...TAB_STATES["& .fui-Tab"],
       paddingTop: "11px",

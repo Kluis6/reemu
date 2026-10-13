@@ -2297,3 +2297,9 @@ Infra:
 - Os campos de texto, que antes ficavam de fora a pedido do usuário, agora entram, pelo pedido novo de "todos os componentes".
 - **Resultado:** a varredura não acha nenhum elemento sem o anel. No teclado (Tab) também conferido. 99 testes e `ui-smoke` (12/12) passaram.
 - **Diálogos (ajuste do mesmo dia, print do diálogo "Encerrar"):** o anel das opções, que ocupam a largura toda, era cortado nas laterais pelo `overflow-y: auto` do `DialogContent`. O Fluent já reserva 2 px de respiro com margem negativa para o anel dele (`useDialogContentStyles`). O ReEmu usa o mesmo truque com 12 px, em todos os diálogos e sem mover o conteúdo. Conferido em captura.
+
+## 2026-10-13 — Abas alinhadas com o conteúdo, como nas Configurações do Windows
+
+- **Comparado** com o print das Configurações do Windows 11 (Personalização › Tela de fundo): título da seção, rótulos e controles começam todos no mesmo x (393).
+- **No ReEmu,** o texto da 1ª aba ficava 15 px para dentro do conteúdo, por causa dos 13 px de padding da aba e dos 2 px do conteúdo do Fluent. Medido: texto em 155 com a grade em 140 (Aparência, Sistema) e texto em 130 com os cards em 115 (Biblioteca, página do jogo).
+- **Correção:** `useTabStyles.tabs` com `marginLeft: -15px`. O texto agora coincide com o conteúdo em todas as telas com abas. O fundo do hover e o anel de foco da 1ª aba usam a margem.
