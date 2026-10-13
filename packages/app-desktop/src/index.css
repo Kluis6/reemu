@@ -218,3 +218,12 @@ html[data-nav-focus] .fui-CarouselCard > button:not(.fui-Card):focus,
 .fui-Display {
   font-family: var(--reemuFontDisplay) !important;
 }
+
+/* Busca da topbar sem o anel de foco (pedido do usuário): o campo já marca o
+   foco com a barra embaixo do Fluent, e com o controle quem recebe o foco é o
+   teclado na tela. A regra 3 da seção "foco" acima é que punha o anel. */
+:is(.fui-SearchBox):has(:focus-visible),
+html[data-nav-focus] .fui-SearchBox:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+}
