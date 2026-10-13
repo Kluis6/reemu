@@ -2303,3 +2303,11 @@ Infra:
 - **Comparado** com o print das Configurações do Windows 11 (Personalização › Tela de fundo): título da seção, rótulos e controles começam todos no mesmo x (393).
 - **No ReEmu,** o texto da 1ª aba ficava 15 px para dentro do conteúdo, por causa dos 13 px de padding da aba e dos 2 px do conteúdo do Fluent. Medido: texto em 155 com a grade em 140 (Aparência, Sistema) e texto em 130 com os cards em 115 (Biblioteca, página do jogo).
 - **Correção:** `useTabStyles.tabs` com `marginLeft: -15px`. O texto agora coincide com o conteúdo em todas as telas com abas. O fundo do hover e o anel de foco da 1ª aba usam a margem.
+
+## 2026-10-13 — Caminho das Configurações com o `Breadcrumb` do Fluent 2
+
+- O caminho "Configurações › Vídeo › Molduras" era montado à mão (links + `Title2` + chevrons). Agora usa `Breadcrumb` / `BreadcrumbItem` / `BreadcrumbButton` / `BreadcrumbDivider` do Fluent.
+- Segue a página de uso do Fluent 2 (fluent2.microsoft.design/components/web/react/core/breadcrumb/usage): `nav` com `aria-label`, lista ordenada, divisores fora do foco e da leitura, `aria-current="page"` no último item.
+- **Tamanho:** o maior do Fluent é 16 px. O texto vai em `fontSizeHero700` (28 px, semibold), como o título-caminho das Configurações do Windows 11. Níveis de cima em `Foreground3`, que vai para `Foreground1` no hover; o atual em `Foreground1`.
+- **Alinhamento,** comparado com o print do Windows Update, em que o caminho começa na mesma coluna do conteúdo: o botão tem 8 px de padding, então a lista volta 8 px. O texto "Configurações" fica em x = 116, na borda do card (115).
+- Foco: varredura sem falhas (anel padrão). `ui-smoke` 12/12.

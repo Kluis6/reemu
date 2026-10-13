@@ -1,13 +1,16 @@
 import {
+  Breadcrumb,
+  BreadcrumbButton,
+  BreadcrumbDivider,
+  BreadcrumbItem,
   Title2,
   makeStyles,
   mergeClasses,
   tokens,
 } from "@fluentui/react-components";
-import { ChevronRightRegular } from "@fluentui/react-icons";
 import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { RouteTransition } from "../components/RouteTransition";
 import * as M from "../styles/metrics";
 import { SETTINGS_SECTIONS } from "./settingsSections";
@@ -39,23 +42,30 @@ const useStyles = makeStyles({
     rowGap: tokens.spacingVerticalXL,
   },
   title: { whiteSpace: "nowrap" },
+  // Caminho "Configurações › Vídeo › Molduras" com o `Breadcrumb` do Fluent 2
+  // (nav + lista ordenada, divisores fora do foco, `aria-current` no último
+  // — fluent2.microsoft.design/components/web/react/core/breadcrumb/usage),
+  // no tamanho de título como nas Configurações do Windows 11 (o maior
+  // tamanho do Fluent é 16 px). O texto do 1º item começa na borda do card
+  // de baixo, como no Windows: o botão tem padding, então a lista volta o
+  // mesmo tanto (medido).
   crumbs: {
-    display: "flex",
-    alignItems: "center",
-    flexWrap: "wrap",
-    columnGap: tokens.spacingHorizontalS,
-    minWidth: 0,
+    marginLeft: "calc(-1 * var(--reemuCrumbPad, 8px))",
+    "& ol": { flexWrap: "nowrap" },
   },
-  crumbLink: {
+  crumbButton: {
+    fontSize: tokens.fontSizeHero700,
+    lineHeight: tokens.lineHeightHero700,
+    fontWeight: tokens.fontWeightSemibold,
+    height: "auto",
+    whiteSpace: "nowrap",
     color: tokens.colorNeutralForeground3,
-    textDecorationLine: "none",
-    borderRadius: tokens.borderRadiusMedium,
     ":hover": { color: tokens.colorNeutralForeground1 },
   },
+  crumbCurrent: { color: `${tokens.colorNeutralForeground1} !important` },
   crumbSep: {
     color: tokens.colorNeutralForeground3,
-    fontSize: "20px",
-    flexShrink: 0,
+    "& svg": { fontSize: "20px", width: "20px", height: "20px" },
   },
   // Card do conteúdo: `Background1` com sombra baixa; os de dentro usam
   // `Background2`, redefinido abaixo pra ter contraste em qualquer tema.
@@ -122,6 +132,7 @@ export function SettingsLayout() {
   const { t } = useTranslation();
   const styles = useStyles();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   // mesma condição da barra de dicas (`ButtonHints`)
   // ["", "settings", categoria?, subseção?]
   const [, , catKey, sub] = pathname.split("/");
@@ -150,22 +161,34 @@ export function SettingsLayout() {
       <RouteTransition routeKey={pathname} className={styles.page}>
         {section ? (
           <>
-            <nav className={styles.crumbs} aria-label={t("settings.title")}>
+            <Breadcrumb
+              className={styles.crumbs}
+              size="large"
+              aria-label={t("settings.title")}
+            >
               {crumbs.map((c, i) => (
                 <Fragment key={i}>
-                  {i > 0 && <ChevronRightRegular className={styles.crumbSep} />}
-                  {c.to ? (
-                    <Link to={c.to} className={styles.crumbLink}>
-                      <Title2 className={styles.title}>{c.label}</Title2>
-                    </Link>
-                  ) : (
-                    <Title2 className={styles.title} aria-current="page">
-                      {c.label}
-                    </Title2>
-                  )}
+                  {i > 0 && <BreadcrumbDivider className={styles.crumbSep} />}
+                  <BreadcrumbItem>
+                    {c.to ? (
+                      <BreadcrumbButton
+                        className={styles.crumbButton}
+                        onClick={() => navigate(c.to!)}
+                      >
+                        {c.label}
+                      </BreadcrumbButton>
+                    ) : (
+                      <BreadcrumbButton
+                        className={mergeClasses(styles.crumbButton, styles.crumbCurrent)}
+                        current
+                      >
+                        {c.label}
+                      </BreadcrumbButton>
+                    )}
+                  </BreadcrumbItem>
                 </Fragment>
               ))}
-            </nav>
+            </Breadcrumb>
             <div className={styles.card}>
               <div className={styles.pane}>
                 <div
