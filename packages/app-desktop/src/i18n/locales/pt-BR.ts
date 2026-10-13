@@ -59,7 +59,7 @@ const ptBR = {
       appearance: 'Aparência',
       library: 'Gerenciar biblioteca',
       audio: 'Áudio',
-      video: 'Vídeo',
+      video: 'Decorações',
       metadata: 'Metadados',
       hotkeys: 'Atalhos',
       controllers: 'Controles',

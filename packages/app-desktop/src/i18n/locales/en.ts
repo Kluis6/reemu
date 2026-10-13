@@ -58,7 +58,7 @@ const en: Messages = {
       appearance: 'Appearance',
       library: 'Manage library',
       audio: 'Audio',
-      video: 'Video',
+      video: 'Decorations',
       metadata: 'Metadata',
       hotkeys: 'Hotkeys',
       controllers: 'Controllers',

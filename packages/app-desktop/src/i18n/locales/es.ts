@@ -58,7 +58,7 @@ const es: Messages = {
       appearance: 'Apariencia',
       library: 'Administrar biblioteca',
       audio: 'Audio',
-      video: 'Video',
+      video: 'Decoraciones',
       metadata: 'Metadatos',
       hotkeys: 'Atajos',
       controllers: 'Controles',
