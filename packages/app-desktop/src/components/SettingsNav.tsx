@@ -17,10 +17,15 @@ const useStyles = makeStyles({
   // 12 entre os cards: o mesmo espaço da grade do hub das Configurações.
   list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
   // `<a>`: ganha o anel de foco global do app (controle/teclado).
+  // Grade: ícone · nome · chevron na 1ª linha (centrados com o NOME — pedido
+  // do usuário), descrição embaixo do nome; o conjunto no meio do card.
   card: {
-    display: 'flex',
+    display: 'grid',
+    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
     alignItems: 'center',
-    gap: tokens.spacingHorizontalL,
+    alignContent: 'center',
+    columnGap: tokens.spacingHorizontalL,
+    rowGap: '2px',
     minHeight: '68px',
     padding: `0 ${tokens.spacingHorizontalL}`,
     borderRadius: tokens.borderRadiusMedium,
@@ -31,10 +36,16 @@ const useStyles = makeStyles({
     ':hover': { backgroundColor: tokens.colorNeutralBackground2Hover },
     ':active': { backgroundColor: tokens.colorNeutralBackground2Pressed },
   },
-  icon: { fontSize: '24px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
-  text: { display: 'flex', flexDirection: 'column', gap: '2px', flexGrow: 1, minWidth: 0 },
-  desc: { color: tokens.colorNeutralForeground3 },
-  chevron: { fontSize: '16px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
+  icon: {
+    gridColumn: 1,
+    gridRow: 1,
+    display: 'flex',
+    fontSize: '24px',
+    color: tokens.colorNeutralForeground2,
+  },
+  title: { gridColumn: 2, gridRow: 1 },
+  desc: { gridColumn: 2, gridRow: 2, color: tokens.colorNeutralForeground3 },
+  chevron: { gridColumn: 3, gridRow: 1, fontSize: '16px', color: tokens.colorNeutralForeground2 },
 })
 
 export interface SettingsLink {
@@ -52,10 +63,8 @@ export function SettingsLinkList({ items }: { items: SettingsLink[] }) {
       {items.map((it) => (
         <Link key={it.to} to={it.to} className={s.card}>
           <span className={s.icon}>{it.icon}</span>
-          <span className={s.text}>
-            <Body1>{it.title}</Body1>
-            <Caption1 className={s.desc}>{it.description}</Caption1>
-          </span>
+          <Body1 className={s.title}>{it.title}</Body1>
+          <Caption1 className={s.desc}>{it.description}</Caption1>
           <ChevronRightRegular className={s.chevron} />
         </Link>
       ))}
