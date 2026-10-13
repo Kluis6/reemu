@@ -125,9 +125,10 @@ export const useShellStyles = makeStyles({
     // programático — e o usuário não via onde estava o foco.
     // Cor de marca (verde no tema padrão/claro) — igual ao destaque do item
     // selecionado no dashboard Xbox de verdade, não um cinza neutro.
-    // Campos de texto NÃO entram (pedido do usuário): o `<Input>` do Fluent
-    // já marca o foco com a barra animada embaixo (`:focus-within`, então
-    // aparece também no foco programático do controle).
+    // Campos, switches, rádios, sliders e os portais do Fluent (menus,
+    // diálogos) ganham o mesmo anel pelo CSS global (`index.css`, seção
+    // "foco") — pedido do usuário, 2026-10-13: o foco padrão em todo
+    // componente focável.
     "& a:focus, & [tabindex]:focus": {
       outlineWidth: "3px",
       outlineStyle: "solid",

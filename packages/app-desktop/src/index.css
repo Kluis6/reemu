@@ -54,3 +54,91 @@ kbd {
   opacity: 0.7;
 }
 
+
+/* ---------------------------------------------------------------- foco ----
+   Foco padrão do ReEmu em TODO componente focável, inclusive nos portais do
+   Fluent (menus, diálogos, gavetas, que ficam fora do `.app`): anel de 3 px
+   na cor de destaque (`--colorBrandStroke1`), afastado 3 px, com um brilho
+   curto do destaque a 45% — o efeito do card de jogo, calibrado pelo
+   dashboard do Xbox (docs/historico.md, 2026-10-12). Os tokens do Fluent são
+   variáveis CSS do `FluentProvider` (e dos nós de portal), então resolvem em
+   qualquer elemento. `!important`: as regras do Fluent (Griffel) vêm depois. */
+
+/* 1. Foco de TECLADO desenhado pelo próprio Fluent: um `::after` com borda
+   sob `[data-fui-focus-visible]` / `[data-fui-focus-within]`
+   (`createFocusOutlineStyle`, @fluentui/react-tabster). Mesma caixa, outro
+   anel: 3 px a 3 px do elemento, com o brilho. Os cards de jogo e de tema
+   apagam esse `::after` com uma regra mais específica e usam o anel deles. */
+[data-fui-focus-visible]::after,
+[data-fui-focus-within]::after {
+  border: 3px solid var(--colorBrandStroke1) !important;
+  top: -6px !important;
+  right: -6px !important;
+  bottom: -6px !important;
+  left: -6px !important;
+  border-radius: calc(var(--borderRadiusMedium) + 6px) !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
+}
+
+/* Botão do Fluent no teclado: ele não usa o `::after` — troca a própria
+   borda e põe um `box-shadow` rente. Vale também nos portais. */
+.fui-Button[data-fui-focus-visible],
+.fui-MenuButton[data-fui-focus-visible],
+.fui-ToggleButton[data-fui-focus-visible] {
+  border-color: transparent !important;
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
+}
+
+/* 2. Foco pelo CONTROLE (ou setas): `moveFocus` marca o `<html>` com
+   `data-nav-focus` (lib/focusNav.ts) e o `.focus()` não liga os atributos
+   do Fluent. O anel vai no elemento focado — ou, quando o foco cai num
+   `<input>` escondido (switch, rádio, checkbox, slider, card selecionável),
+   no componente visível que o contém. Os cards de jogo têm o anel próprio
+   (vão transparente). */
+html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):not(.fui-Card, .fui-Dropdown__button):focus,
+html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):focus-within,
+html[data-nav-focus] .fui-Card:not([role="button"]):has(> .fui-Card__checkbox:focus) {
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
+}
+
+/* 3. Campos (texto, busca, área de texto, seletor): o anel em volta do
+   campo inteiro quando o foco é visível — num campo de texto o foco é
+   sempre visível (é onde se digita), e no controle entra pela regra 2 de
+   novo, aqui no componente. A barra de baixo do Fluent continua. */
+:is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):has(:focus-visible),
+html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):focus-within {
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
+}
+
+/* Ajustes do anel por componente:
+   - Switch/Rádio/Checkbox não têm raio: o anel ganha o raio padrão; o Switch
+     estica na linha do `<Field>` e o anel ficava da largura toda — no foco ele
+     encolhe pro conteúdo (sem mexer no layout: o conteúdo já é à esquerda).
+   - Itens de menu/lista ficam dentro de uma caixa com `overflow` (o popover):
+     o anel vai pra DENTRO do item (−3 px), senão era cortado. */
+html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox):focus-within {
+  border-radius: var(--borderRadiusMedium);
+}
+html[data-nav-focus] .fui-Switch:focus-within {
+  width: fit-content;
+}
+/* `[tabindex]:not(.fui-Card)` só pra ganhar da regra geral do controle
+   (mais específica que um `:is([role])`). */
+html[data-nav-focus] :is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="treeitem"])[tabindex]:not(.fui-Card):focus {
+  outline-offset: -3px !important;
+  box-shadow: none !important;
+}
+:is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="treeitem"]):is([data-fui-focus-visible], [data-fui-focus-within])::after {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  border-radius: var(--borderRadiusMedium) !important;
+  box-shadow: none !important;
+}

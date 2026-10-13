@@ -2275,3 +2275,24 @@ Infra:
   - `moveFocus` marca o `<html>` com `data-nav-focus`, e o primeiro `pointerdown` (mouse/toque) tira a marca.
   - Com a marca, o `.app` (`useShellStyles`) mostra o anel padrão em `button:focus`: 3 px na cor de destaque, a 3 px, com o brilho. O mouse continua sem deixar anel nos botões clicados.
 - **Conferido no navegador headless:** setas ativam a marca, o botão focado mostra `solid 3px` a 3 px, e o clique desliga a marca.
+
+## 2026-10-13 — Foco padrão em todo componente focável
+
+- **Pedido do usuário,** depois de aprovar o efeito: o mesmo foco (anel de 3 px na cor de destaque, a 3 px, com brilho curto) em todo componente que recebe foco.
+- **Varredura** (navegador headless: foca cada elemento focável de 16 telas no modo de controle e lê o anel). Faltavam:
+  - campos de texto e busca, `Select`;
+  - switch, rádio, slider;
+  - cards selecionáveis de shader;
+  - botões da rail ("Encerrar", sino);
+  - os portais do Fluent (menus, diálogos, gavetas), que ficam fora do `.app` e não pegavam as regras do Griffel.
+- **CSS global** (`index.css`, seção "foco"), que vale também nos portais, porque os tokens são variáveis CSS do `FluentProvider` e dos nós de portal:
+  1. **Teclado:** o anel do próprio Fluent (`::after` sob `[data-fui-focus-visible]`/`[data-fui-focus-within]`, `createFocusOutlineStyle` do `@fluentui/react-tabster`) é restilizado para 3 px a 3 px com o brilho. Botões do Fluent no teclado (`.fui-Button[data-fui-focus-visible]`) também.
+  2. **Controle/setas** (`html[data-nav-focus]`): anel no elemento focado ou, quando o foco cai num `<input>` escondido, no componente visível (switch, rádio, checkbox, slider, card selecionável).
+  3. **Campos:** anel em volta do campo inteiro quando o foco é visível. A barra de baixo do Fluent continua.
+- **Ajustes:**
+  - switch/rádio/checkbox ganham o raio padrão;
+  - o switch encolhe para o conteúdo no foco, porque esticava na linha do `<Field>`;
+  - itens de menu/lista (`menuitem`, `option`, `treeitem`) usam o anel por dentro (−3 px), senão o `overflow` do popover cortava.
+- **Exceções que continuam com o anel próprio:** cards de jogo (vão transparente) e cards de tema.
+- Os campos de texto, que antes ficavam de fora a pedido do usuário, agora entram, pelo pedido novo de "todos os componentes".
+- **Resultado:** a varredura não acha nenhum elemento sem o anel. No teclado (Tab) também conferido. 99 testes e `ui-smoke` (12/12) passaram.
