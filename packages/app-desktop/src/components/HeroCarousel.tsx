@@ -102,11 +102,26 @@ const useStyles = makeStyles({
     fontWeight: tokens.fontWeightBold,
     lineHeight: 1.12,
     margin: '4px 0 2px',
+    // no máximo 2 linhas (com "…"): nome muito comprido subia até a seta da
+    // esquerda, que fica no meio da altura
+    display: '-webkit-box',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 2,
+    overflow: 'hidden',
   },
   sub: {
     fontSize: tokens.fontSizeBase300,
     color: 'rgba(255, 255, 255, 0.82)',
   },
+  // Pontos no canto de baixo à DIREITA (pedido do usuário; o Fluent centraliza
+  // com `justify-content: center`): o texto do jogo fica embaixo à esquerda e
+  // nome comprido não encosta nos controles. 24 da borda, como o texto.
+  navContainer: {
+    justifyContent: 'flex-end !important',
+    paddingRight: '24px',
+    boxSizing: 'border-box',
+  },
+  nav: { marginLeft: 'auto !important', marginRight: '0 !important' },
   // Setas do `CarouselNavContainer` (layout "overlay-expanded": nas laterais,
   // no meio da altura). 40 epx com ícone de 24: a seta das prateleiras do app
   // Xbox tem 45 epx e um chevron de ~23 epx; com 32/16 ficava pequena.
@@ -198,11 +213,12 @@ export function HeroCarousel({
       </CarouselViewport>
       {n > 1 && (
         <CarouselNavContainer
+          className={s.navContainer}
           layout="overlay-expanded"
           next={{ className: s.arrow, 'aria-label': t('shell2.next') }}
           prev={{ className: s.arrow, 'aria-label': t('shell2.previous') }}
         >
-          <CarouselNav>
+          <CarouselNav className={s.nav}>
             {(index) => (
               <CarouselNavButton aria-label={t('shell2.goToSlide', { n: index + 1 })} />
             )}

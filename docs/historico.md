@@ -2335,3 +2335,7 @@ Infra:
   - O avanço liga por `enableAutoplay` do contexto do `Carousel` (`useCarouselContext_unstable`), o mesmo que o botão chama. O Fluent continua pausando com o mouse ou o foco em cima.
   - Fica registrado que o Fluent 2 recomenda o controle de pausa ("the user must always have the option of pausing the auto-play feature").
   - Conferido: slide 0 → 1 em 8 s → 2 em 15 s. O texto voltou para `bottom: 24px`.
+- **Ajuste (pedido do usuário: nomes grandes encostavam nos controles):**
+  - Os pontos do carrossel foram para o canto de baixo à direita, a 24 px da borda, como o texto à esquerda (o Fluent centraliza). O texto continua embaixo à esquerda, como no Xbox.
+  - O título vai a no máximo 2 linhas com "…", porque um nome muito comprido subia até a seta da esquerda. O nome inteiro segue no texto do botão para o leitor de tela.
+  - Conferido com um título de 2+ linhas: o texto termina em x = 885 e os pontos começam em 1151.
