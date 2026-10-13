@@ -12,8 +12,30 @@ function navSkipped(el: HTMLElement): boolean {
   return ti === '-1'
 }
 
+/**
+ * Marca no `<html>` que o foco está vindo da navegação (controle ou setas):
+ * `data-nav-focus`. O `<Button>` do Fluent só desenha foco quando ele vem
+ * do TECLADO (`data-fui-focus-visible`), e o `.focus()` daqui não conta —
+ * o botão focado pelo controle ficava sem anel. Com a marca, o `.app`
+ * (`useShellStyles`) mostra o anel padrão em `button:focus`. Sai no
+ * primeiro clique/toque, pra o mouse não deixar anel nos botões clicados.
+ */
+export const NAV_FOCUS_ATTR = 'data-nav-focus'
+let navFocusListening = false
+function markNavFocus() {
+  document.documentElement.setAttribute(NAV_FOCUS_ATTR, '')
+  if (navFocusListening) return
+  navFocusListening = true
+  window.addEventListener(
+    'pointerdown',
+    () => document.documentElement.removeAttribute(NAV_FOCUS_ATTR),
+    { capture: true },
+  )
+}
+
 /** Move o foco do DOM geometricamente na direção dada (bom pra grades). */
 export function moveFocus(dir: NavDir) {
+  markNavFocus()
   // Nada de `offsetParent` aqui: no WebKitGTK ele volta `null` pra elementos
   // dentro de um container `position: fixed` (o overlay de pausa), o que
   // zerava a lista e a navegação do menu de pausa não funcionava.

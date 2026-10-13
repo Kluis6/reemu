@@ -162,6 +162,16 @@ export const useShellStyles = makeStyles({
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,
     },
+    // Botões focados pelo CONTROLE (ou pelas setas): o `.focus()` da
+    // navegação não liga o `data-fui-focus-visible` do Fluent, então o anel
+    // vem daqui enquanto o `<html>` tem `data-nav-focus` (ver
+    // lib/focusNav.ts — sai no primeiro clique do mouse).
+    ":global(html[data-nav-focus]) & button:focus": {
+      ...shorthands.borderColor("transparent !important"),
+      boxShadow: `${FOCUS_GLOW} !important`,
+      outline: `3px solid ${tokens.colorBrandStroke1} !important`,
+      outlineOffset: `${FOCUS_OFFSET}px !important`,
+    },
   },
 
   rail: {

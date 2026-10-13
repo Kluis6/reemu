@@ -2267,3 +2267,11 @@ Infra:
 - **Aplicado em:** regra global `.app a:focus, [tabindex]:focus` (rail, cards do hub, links), abas (`.fui-Tab` global e `useTabStyles`: antes 2 px a 5 px), botões do Fluent em foco de teclado, logo da rail, botões da página de jogo e da pausa e cards de tema da Aparência. O anel é sempre 3 px na cor de destaque, afastado 3 px, com o brilho.
 - **Fora do card de jogo,** o brilho sai da borda do elemento e tinge de leve o vão até o anel, como no Xbox. Nos outros elementos não há um pseudo-elemento livre: o Fluent usa `::before`/`::after` em botões, abas e cards. No card de jogo o vão continua transparente, com o brilho no `::before`.
 - **Conferido** em capturas (rail e aba focadas). Testes do frontend (99) e `ui-smoke` passaram.
+
+## 2026-10-12 — Anel nos botões focados pelo controle
+
+- **Problema:** o `<Button>` do Fluent só desenha foco quando ele vem do teclado (`data-fui-focus-visible`). O `moveFocus` do controle e das setas chama `.focus()`, que não conta, e os botões focados pelo controle (ex.: "Plataforma" na Biblioteca) ficavam sem anel.
+- **Correção:**
+  - `moveFocus` marca o `<html>` com `data-nav-focus`, e o primeiro `pointerdown` (mouse/toque) tira a marca.
+  - Com a marca, o `.app` (`useShellStyles`) mostra o anel padrão em `button:focus`: 3 px na cor de destaque, a 3 px, com o brilho. O mouse continua sem deixar anel nos botões clicados.
+- **Conferido no navegador headless:** setas ativam a marca, o botão focado mostra `solid 3px` a 3 px, e o clique desliga a marca.
