@@ -625,10 +625,58 @@ export interface ReEmuTokens extends ReEmuLiftTokens {
    *  próximo que tenha — mais claro no escuro, mais escuro no claro. Ver
    *  `pickAccent`. */
   reemuBrandAccent: string;
+  /** Superfície dos cards de jogo sem capa e do card 2×2 das prateleiras
+   *  (degradê do topo pra base) e o traço deles. Os `Background3/4` dos
+   *  temas ficavam a 1,04–1,20:1 da página (cards sumiam, sobretudo nos
+   *  claros) — ver `cardSurface`. */
+  reemuCardTop: string;
+  reemuCardBottom: string;
+  reemuCardStroke: string;
 }
 
 export type ReEmuTheme = Theme & ReEmuTokens;
 
+
+/** Mistura `a` com `b` na proporção `p` (0–1), em sRGB. */
+function mixHex(a: string, b: string, p: number): string {
+  const ch = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16)
+  const out = [0, 1, 2].map((i) => Math.round(ch(a, i) * (1 - p) + ch(b, i) * p))
+  return `#${out.map((v) => v.toString(16).padStart(2, "0")).join("")}`.toUpperCase()
+}
+
+/**
+ * Superfície dos cards (jogo sem capa, 2×2 das prateleiras) a partir da
+ * página. Fluent 2 › Color: "Use lighter neutrals on surfaces" — no ESCURO
+ * o card é a página clareada pela cor do texto (14% no topo, 8% na base:
+ * ~1,4 e ~1,2:1 sobre a página); no CLARO é a superfície branca do tema
+ * (`Background2`) indo um pouco pro tom da página, com um traço fino —
+ * "Windows uses strokes instead of key shadows to outline an object"
+ * (Fluent 2 › Elevation), como os cards das Configurações do Windows.
+ */
+function cardSurface(
+  light: boolean,
+  page: string,
+  surface: string,
+  text: string,
+): Pick<ReEmuTokens, "reemuCardTop" | "reemuCardBottom" | "reemuCardStroke"> {
+  if (!HEX.test(page)) {
+    return { reemuCardTop: page, reemuCardBottom: page, reemuCardStroke: "transparent" };
+  }
+  if (light) {
+    const top = HEX.test(surface) ? surface : "#FFFFFF";
+    return {
+      reemuCardTop: top,
+      reemuCardBottom: mixHex(top, page, 0.35),
+      reemuCardStroke: "rgba(0, 0, 0, 0.12)",
+    };
+  }
+  const ink = HEX.test(text) ? text : "#FFFFFF";
+  return {
+    reemuCardTop: mixHex(page, ink, 0.14),
+    reemuCardBottom: mixHex(page, ink, 0.08),
+    reemuCardStroke: "rgba(255, 255, 255, 0.06)",
+  };
+}
 
 /** Luminância relativa WCAG 2.x de `#rrggbb`. */
 function luminance(hex: string): number {
@@ -778,6 +826,9 @@ function make(
     // customizados do tema claro em qualquer rampa cadastrada.
     reemuBrandText: light ? ramp[40] : ramp[90],
     reemuBrandAccent: "",
+    reemuCardTop: "",
+    reemuCardBottom: "",
+    reemuCardStroke: "",
     ...liftTokens(light),
   };
   if (o.appBg) t.reemuAppBg = o.appBg;
@@ -792,6 +843,11 @@ function make(
     t.colorNeutralBackground3,
   ]);
   Object.assign(t, accentTokens(t.reemuBrandAccent));
+  // Depois dos neutros finais (overrides incluídos).
+  Object.assign(
+    t,
+    cardSurface(light, t.colorNeutralBackground1, t.colorNeutralBackground2, t.colorNeutralForeground1),
+  );
   if (o.solidBg) {
     const c = o.solidBg;
     t.reemuBg1 = t.reemuBg2 = t.reemuBg3 = t.reemuBg4 = c;
@@ -829,6 +885,10 @@ function makeHighContrast(): ReEmuTheme {
     reemuFillWeak: "rgba(255, 255, 255, 0.08)",
     reemuBrandText: t.colorBrandForeground1,
     reemuBrandAccent: t.colorBrandStroke1,
+    // alto contraste: card preto com traço branco
+    reemuCardTop: bg,
+    reemuCardBottom: bg,
+    reemuCardStroke: t.colorNeutralStroke1,
     ...liftTokens(false),
   };
 }

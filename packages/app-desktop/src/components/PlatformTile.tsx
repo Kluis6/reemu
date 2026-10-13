@@ -35,7 +35,8 @@ const useStyles = makeStyles({
     // o `elevGradient` de `styles/xbox.ts`): com `Background1` este card
     // tinha a cor da própria página e sumia no fim da prateleira (Fluent 2 ›
     // Color: "Use lighter neutrals on surfaces").
-    backgroundImage: `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`,
+    backgroundImage: "linear-gradient(160deg, var(--reemuCardTop), var(--reemuCardBottom))",
+    boxShadow: "inset 0 0 0 1px var(--reemuCardStroke)",
     padding: TILE_GAP,
   },
   cell: {
@@ -46,9 +47,9 @@ const useStyles = makeStyles({
     overflowX: "hidden",
     overflowY: "hidden",
     borderRadius: tokens.borderRadiusSmall,
-    // célula sem capa: o tom das superfícies (`Background2`), diferente do
-    // card em volta em claro e escuro
-    backgroundColor: tokens.colorNeutralBackground2,
+    // célula sem capa: a cor da página — mais escura que o card no escuro,
+    // cinza sobre o card branco no claro
+    backgroundColor: tokens.colorNeutralBackground1,
     "& img": {
       width: "100%",
       height: "100%",

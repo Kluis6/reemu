@@ -157,3 +157,22 @@ describe('tema Dream Sky', () => {
     expect(contrast(t.reemuActiveFg, t.reemuActiveBg)).toBeGreaterThanOrEqual(3)
   })
 })
+
+describe('superfície dos cards', () => {
+  it.each(Object.keys(THEMES).filter((id) => id !== 'alto-contraste') as ThemeId[])(
+    '%s: card se separa da página',
+    (id) => {
+      const t = THEMES[id].theme
+      const page = t.colorNeutralBackground1
+      // escuro: topo ≥ 1,3:1 e base ≥ 1,15:1; claro: branco + traço
+      const dark = contrast(t.colorNeutralForeground1, '#000000') > contrast(t.colorNeutralForeground1, '#ffffff')
+      if (dark) {
+        expect(contrast(t.reemuCardTop, page), id).toBeGreaterThanOrEqual(1.3)
+        expect(contrast(t.reemuCardBottom, page), id).toBeGreaterThanOrEqual(1.15)
+      } else {
+        expect(contrast(t.reemuCardTop, page), id).toBeGreaterThanOrEqual(1.08)
+        expect(t.reemuCardStroke).not.toBe('transparent')
+      }
+    },
+  )
+})

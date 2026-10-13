@@ -53,7 +53,10 @@ const useLocalStyles = makeStyles({
     gap: "6px",
     padding: "12%",
     textAlign: "center",
-    backgroundImage: `linear-gradient(160deg, ${tokens.colorNeutralBackground3}, ${tokens.colorNeutralBackground1})`,
+    // superfície de card do tema (ver `cardSurface` em styles/themes.ts):
+    // antes terminava na cor da própria página e o card sumia
+    backgroundImage: "linear-gradient(160deg, var(--reemuCardTop), var(--reemuCardBottom))",
+    boxShadow: "inset 0 0 0 1px var(--reemuCardStroke)",
   },
   noArtTitle: {
     color: tokens.colorNeutralForeground1,

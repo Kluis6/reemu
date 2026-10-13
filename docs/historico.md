@@ -2339,3 +2339,15 @@ Infra:
   - Os pontos do carrossel foram para o canto de baixo à direita, a 24 px da borda, como o texto à esquerda (o Fluent centraliza). O texto continua embaixo à esquerda, como no Xbox.
   - O título vai a no máximo 2 linhas com "…", porque um nome muito comprido subia até a seta da esquerda. O nome inteiro segue no texto do botão para o leitor de tela.
   - Conferido com um título de 2+ linhas: o texto termina em x = 885 e os pontos começam em 1151.
+
+## 2026-10-13 — Cards que se separam da página em todos os temas
+
+- **Print do usuário (Simple Vibes, Biblioteca):** os cards de jogo sem capa quase não se viam.
+- **Medido em todos os temas** (contraste com a página): `Background3`/`Background4`, o degradê dos cards, ficavam a 1,04–1,11:1 nos claros e a 1,10–1,20:1 nos escuros de console. O card sem capa ainda terminava o degradê na própria cor da página.
+- **Tokens novos** `reemuCardTop`/`reemuCardBottom`/`reemuCardStroke` (`cardSurface` em `themes.ts`), calculados a partir da página de cada tema:
+  - **Escuro:** página clareada pela cor do texto, 14% no topo e 8% na base (~1,4 e ~1,2:1). Fluent 2 › Color, "Use lighter neutrals on surfaces".
+  - **Claro:** a superfície branca do tema (`Background2`), indo 35% para a página na base, com traço de 1 px a 12% de preto. Fluent 2 › Elevation, "Windows uses strokes instead of key shadows", como os cards das Configurações do Windows.
+  - **Alto contraste:** preto com traço branco.
+- **Usados em:** arte do card de jogo (por trás da capa), card sem capa e card 2×2. As células do 2×2 passam a ter a cor da página, o que dá contraste com o card nos dois modos.
+- **Teste novo:** escuro com topo ≥ 1,3:1 e base ≥ 1,15:1; claro com topo ≥ 1,08:1 e traço visível, em todos os temas.
+- Conferido em captura no Simple Vibes, no Blue Modern e no Green Modern claro.

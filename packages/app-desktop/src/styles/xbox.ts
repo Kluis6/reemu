@@ -30,6 +30,10 @@ export const shell = {
 
 // Gradiente de superfície elevada (cartões, hero) a partir dos neutros do tema.
 const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`;
+/** Fundo dos cards de jogo/2×2 (tokens `reemuCard*`, ver `cardSurface` em
+ *  themes.ts) e o traço deles por dentro (não muda o tamanho do card). */
+const cardGradient = "linear-gradient(160deg, var(--reemuCardTop), var(--reemuCardBottom))";
+const cardStroke = "inset 0 0 0 1px var(--reemuCardStroke)";
 
 // Largura de um card (a mesma que o JS usa pra contar quantos cabem — ver
 // lib/shelf.ts): 6 por fileira numa tela 16:9.
@@ -792,7 +796,8 @@ export const useCardStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     overflowX: "hidden",
     overflowY: "hidden",
-    backgroundImage: elevGradient,
+    backgroundImage: cardGradient,
+    boxShadow: cardStroke,
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
