@@ -730,42 +730,28 @@ export const useCardStyles = makeStyles({
     "&:hover, &:focus-within, &:focus-visible": {
       zIndex: 2,
     },
-    // Anel de foco do dashboard do Xbox (prints do usuário, 2026-10-12,
-    // medidos a 1926×1080 e convertidos pra epx): de fora pra dentro, um
-    // brilho curto (~7 epx) na cor de destaque, uma borda de ~2 epx num tom
-    // mais claro do destaque e uma faixa ESCURA de ~3 epx colada no card —
-    // as três camadas do "Reveal Focus" da Microsoft (borda principal,
-    // secundária escura por dentro e o brilho; cor `SystemAccentColor`,
-    // learn.microsoft.com/windows/uwp/ui-input/reveal-focus), sem o pulso.
-    // A faixa escura do Xbox ficou transparente (pedido do usuário). Fica
-    // dentro da folga da prateleira (`SHELF_PAD`, 16): 6 de anel + brilho.
+    // Foco do card de jogo = foco padrão do app (ver `FOCUS_GLOW`): anel de
+    // 3 px na cor de destaque, afastado 3 px, e um brilho curto por fora —
+    // calibrado nos prints do dashboard do Xbox (docs/historico.md,
+    // 2026-10-12; é o "Reveal Focus" da Microsoft, sem o pulso). Aqui o vão
+    // entre o card e o anel é TRANSPARENTE (pedido do usuário): o anel é
+    // `outline` (deixa o vão vazio e segue o raio do card no Chromium e no
+    // WebKit atual) e o brilho vai num `::before` do tamanho da borda externa
+    // do anel, porque `box-shadow` só pinta pra fora da caixa. Cabe na folga
+    // da prateleira (`SHELF_PAD`, 16). Sem a sombra do <Card> em repouso.
     boxShadow: "none !important",
-    transitionProperty: "box-shadow",
-    transitionDuration: tokens.durationNormal,
-    transitionTimingFunction: tokens.curveEasyEase,
-    // Anel afastado 3 px do card
-    // com a faixa entre os dois TRANSPARENTE (pedido do usuário; no Xbox ela
-    // é escura). `outline` porque deixa o vão vazio — com `box-shadow` a
-    // borda pintaria até a beira do card — e o `outline` acompanha o raio do
-    // card no Chromium/WebView2 e no WebKit atual. O brilho curto fica no
-    // `box-shadow`.
     "&:hover, &:focus, &:focus-visible, &:focus-within": {
-      // Espessura e cor do anel padrão do app (o `.app [tabindex]:focus`:
-      // 3 px em `colorBrandStroke1`, o destaque do tema) — pedido do usuário.
       outlineWidth: "3px !important",
       outlineStyle: "solid",
       outlineColor: `${tokens.colorBrandStroke1} !important`,
-      outlineOffset: "3px !important",
+      outlineOffset: `${FOCUS_OFFSET}px !important`,
     },
-    // Brilho curto POR FORA do anel: num pseudo-elemento do tamanho da borda
-    // externa do anel (3 de vão + 3 de anel), assim o `box-shadow` (que só
-    // pinta pra fora da caixa) não invade o vão transparente.
     "::before": {
       content: '""',
       position: "absolute",
       inset: "-6px",
       borderRadius: `calc(${tokens.borderRadiusMedium} + 6px)`,
-      boxShadow: "0 0 12px 0px color-mix(in srgb, var(--reemuBrandAccent) 45%, transparent)",
+      boxShadow: FOCUS_GLOW,
       opacity: 0,
       transitionProperty: "opacity",
       transitionDuration: tokens.durationNormal,
