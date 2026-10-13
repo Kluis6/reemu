@@ -57,6 +57,9 @@ const useLocalStyles = makeStyles({
     // antes terminava na cor da própria página e o card sumia
     backgroundImage: "linear-gradient(160deg, var(--reemuCardTop), var(--reemuCardBottom))",
     boxShadow: "inset 0 0 0 1px var(--reemuCardStroke)",
+    // raio padrão do ReEmu (o mesmo da `.art` que o recorta): sem ele o traço
+    // reto era cortado no arco e o canto ficava sem borda
+    borderRadius: tokens.borderRadiusMedium,
   },
   noArtTitle: {
     color: tokens.colorNeutralForeground1,
