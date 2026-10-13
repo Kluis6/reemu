@@ -49,7 +49,7 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusSmall,
     // célula sem capa: a cor da página — mais escura que o card no escuro,
     // cinza sobre o card branco no claro
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: "var(--reemuPage)",
     "& img": {
       width: "100%",
       height: "100%",

@@ -2374,3 +2374,20 @@ Infra:
   - Créditos em `THIRD_PARTY_NOTICES.md` e em Sistema › Informações e licenças (pt-BR/en/es).
 - **Conferido no Chrome:** no Windows a Segoe UI Variable continua vencendo e nenhum arquivo da Selawik é baixado. Com só a Selawik, uma frase com acentos do pt-BR, ç/ã/õ/ñ/¿/«» e travessão sai inteira nela (Regular e Semibold), sem fallback. O build do Vite inclui os `.woff2`.
 - **Não testado num Linux de verdade.**
+
+## 2026-10-13 — Elevação como no Fluent e no modo XBOX
+
+- **Comparado** com prints do app Xbox (Biblioteca e menu suspenso "Plataforma"):
+  - página #1A1B1E;
+  - UMA superfície um degrau acima, #25282C (~1,2:1), para cards, rail, botão voltar, busca e o próprio menu suspenso, sem borda nem sombra;
+  - o item selecionado clareia mais um degrau (#4E535B).
+- **No ReEmu o problema era de semântica de token.** No Fluent o `colorNeutralBackground1` é a superfície mais à frente: branco no claro, grey[16] no escuro, e os números maiores vão para o fundo. Menus, Popover, Dialog, Input, Button secondary e Tooltip pintam o fundo com ele. Os temas do ReEmu tinham o `Background1` como PÁGINA, então o painel de notificações e os menus saíam da cor da página (print: popover #DCDAE1 com a página #DADBE6 e os cards #E5E5EB).
+- **Correção** (`surfaceTokens` em `themes.ts`):
+  - O `Background1` que o tema define vira o token `reemuPage`.
+  - O `Background1` do Fluent passa a ser a superfície: o `Background2` do tema quando já fica ≥ 1,15:1 da página (claro: ≥ 1,08:1 e mais claro); senão, a página clareada pela cor do texto (escuro) ou puxada para o branco (claro).
+  - Hover/pressionado/selecionado calculados a partir dela.
+  - Os `Background2`–`4` dos temas não mudam.
+  - Os usos que eram "página" passam para `var(--reemuPage)`: fundo animado, células do 2×2, selo do favorito, botão "Mostrar tudo", bordas das pílulas, fundo da tela de jogo.
+- **Teste novo:** em todos os temas, superfície mais clara e ≥ 1,08:1 da página, com texto AA sobre ela.
+- Conferido em captura: popover de notificações e diálogo "Encerrar" no Purple Mistique claro e no Neon Circuit. 131 testes e `ui-smoke` (12/12) passaram.
+- Antes disso, a pedido do usuário: cards sem borda (o Xbox destaca só pela cor; o alto contraste mantém) e cards do hub de Configurações sem sombra.

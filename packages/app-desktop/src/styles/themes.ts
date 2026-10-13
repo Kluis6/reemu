@@ -566,6 +566,12 @@ function liftTokens(light: boolean): ReEmuLiftTokens {
 }
 
 export interface ReEmuTokens extends ReEmuLiftTokens {
+  /** Cor da PÁGINA (o fundo atrás de tudo). No Fluent o `Background1` é a
+   *  superfície mais à frente (menus, diálogos, campos, botões — branco no
+   *  claro, o cinza mais claro no escuro) e os números maiores vão pro
+   *  fundo; aqui o `Background1` do tema vira essa superfície e a página
+   *  fica neste token — ver `surfaceTokens`. */
+  reemuPage: string;
   /** Fundo da casca (`.app`) — cinza neutro suave, sem matiz. */
   reemuAppBg: string;
   /** Realce translúcido neutro (brilho de canto, chip ativo). */
@@ -700,6 +706,52 @@ function cardSurface(
     reemuCardTop: mixHex(page, ink, 0.14),
     reemuCardBottom: mixHex(page, ink, 0.08),
     reemuCardStroke: "transparent",
+  };
+}
+
+/**
+ * Elevação como no Fluent e no modo XBOX do app Xbox: a página atrás e UMA
+ * superfície um degrau acima pra tudo que fica sobre ela — no Xbox, página
+ * #1A1B1E e superfície #25282C (cards, rail, menu suspenso, busca), ~1,2:1,
+ * sem borda nem sombra; o item em foco/selecionado clareia mais um degrau
+ * (#4E535B no menu). No Fluent o `colorNeutralBackground1` é essa
+ * superfície (os componentes — Menu, Popover, Dialog, Input, Button
+ * secondary, Tooltip — pintam o fundo com ele; branco no claro, grey[16] no
+ * escuro, e os números maiores vão pro fundo). Os temas do ReEmu tinham o
+ * `Background1` como PÁGINA, então menus/diálogos saíam da cor da página.
+ *
+ * Superfície: o `Background2` do tema quando ele já fica ≥ 1,15:1 da página
+ * (claro: ≥ 1,08:1 e mais claro que ela); senão a página clareada pela cor
+ * do texto (escuro) ou puxada pro branco (claro) até isso.
+ */
+function surfaceTokens(
+  light: boolean,
+  page: string,
+  authored: string,
+  text: string,
+): Partial<Theme> {
+  if (!HEX.test(page)) return {};
+  let s = authored;
+  const lighter = HEX.test(s) && luminance(s) > luminance(page);
+  if (light) {
+    if (!(lighter && contrastRatio(s, page) >= 1.08)) s = mixHex(page, "#FFFFFF", 0.75);
+    return {
+      colorNeutralBackground1: s,
+      colorNeutralBackground1Hover: mixHex(s, page, 0.35),
+      colorNeutralBackground1Pressed: mixHex(s, page, 0.55),
+      colorNeutralBackground1Selected: mixHex(s, page, 0.45),
+    };
+  }
+  const ink = HEX.test(text) ? text : "#FFFFFF";
+  if (!(lighter && contrastRatio(s, page) >= 1.15)) {
+    s = page;
+    for (let p = 0.04; p <= 0.2 && contrastRatio(s, page) < 1.18; p += 0.01) s = mixHex(page, ink, p);
+  }
+  return {
+    colorNeutralBackground1: s,
+    colorNeutralBackground1Hover: mixHex(s, ink, 0.08),
+    colorNeutralBackground1Pressed: mixHex(s, page, 0.4),
+    colorNeutralBackground1Selected: mixHex(s, ink, 0.12),
   };
 }
 
@@ -855,6 +907,7 @@ function make(
     reemuCardBottom: "",
     reemuCardStroke: "",
     reemuFontDisplay: "",
+    reemuPage: "",
     ...liftTokens(light),
   };
   if (o.appBg) t.reemuAppBg = o.appBg;
@@ -863,7 +916,13 @@ function make(
   if (o.lift) Object.assign(t, o.lift);
   // Destaque de ícones/indicadores contra a página e as superfícies (rail,
   // cards, botões) — depois dos overrides de neutros.
+  // Página = o `Background1` que o tema definiu; o `Background1` do Fluent
+  // vira a superfície um degrau acima (`surfaceTokens`).
+  const page = t.colorNeutralBackground1;
+  t.reemuPage = page;
+  Object.assign(t, surfaceTokens(light, page, t.colorNeutralBackground2, t.colorNeutralForeground1));
   t.reemuBrandAccent = pickAccent(ramp, light, [
+    page,
     t.colorNeutralBackground1,
     t.colorNeutralBackground2,
     t.colorNeutralBackground3,
@@ -875,7 +934,7 @@ function make(
   // Depois dos neutros finais (overrides incluídos).
   Object.assign(
     t,
-    cardSurface(light, t.colorNeutralBackground1, t.colorNeutralBackground2, t.colorNeutralForeground1),
+    cardSurface(light, page, t.colorNeutralBackground2, t.colorNeutralForeground1),
   );
   if (o.solidBg) {
     const c = o.solidBg;
@@ -920,6 +979,7 @@ function makeHighContrast(): ReEmuTheme {
     reemuCardStroke: t.colorNeutralStroke1,
     fontFamilyBase: segoeVariable(t.fontFamilyBase).text,
     reemuFontDisplay: segoeVariable(t.fontFamilyBase).display,
+    reemuPage: bg,
     ...liftTokens(false),
   };
 }

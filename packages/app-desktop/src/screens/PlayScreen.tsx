@@ -177,7 +177,7 @@ const useStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: tokens.colorNeutralBackground1,
+    background: "var(--reemuPage)",
   },
   splash: {
     position: "fixed",

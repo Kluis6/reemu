@@ -81,7 +81,7 @@ describe('tema Alva', () => {
 describe('temas de fundo simples', () => {
   it.each(['simple-vibes', 'serene'] as const)('%s: fundo de uma cor só', (id) => {
     const t = THEMES[id].theme
-    const bg = t.colorNeutralBackground1
+    const bg = t.reemuPage
     expect([t.reemuBg1, t.reemuBg2, t.reemuBg3, t.reemuBg4, t.reemuGlowVeil]).toEqual([bg, bg, bg, bg, bg])
   })
 
@@ -105,7 +105,7 @@ describe('temas de fundo simples', () => {
     expect(contrast(t.colorNeutralForegroundOnBrand, t.colorBrandBackgroundPressed)).toBeGreaterThanOrEqual(4.5)
     // Xbox: página #1A1B1E, superfície #25282C (~1,2:1). Card e linhas das
     // Configurações sobem um degrau cada.
-    const page = t.colorNeutralBackground1
+    const page = t.reemuPage
     expect(contrast(t.colorNeutralBackground2, page)).toBeGreaterThanOrEqual(1.18)
     expect(contrast(t.reemuSurface1, page)).toBeGreaterThanOrEqual(1.18)
     expect(contrast(t.reemuSurface2, t.reemuSurface1)).toBeGreaterThanOrEqual(1.15)
@@ -163,7 +163,7 @@ describe('superfície dos cards', () => {
     '%s: card se separa da página',
     (id) => {
       const t = THEMES[id].theme
-      const page = t.colorNeutralBackground1
+      const page = t.reemuPage
       // escuro: topo ≥ 1,3:1 e base ≥ 1,15:1; claro: superfície branca (sem
       // traço, como no app Xbox)
       const dark = contrast(t.colorNeutralForeground1, '#000000') > contrast(t.colorNeutralForeground1, '#ffffff')
@@ -174,6 +174,22 @@ describe('superfície dos cards', () => {
         expect(contrast(t.reemuCardTop, page), id).toBeGreaterThanOrEqual(1.08)
         expect(t.reemuCardStroke).toBe('transparent')
       }
+    },
+  )
+})
+
+describe('elevação (Fluent: Background1 = superfície acima da página)', () => {
+  it.each(Object.keys(THEMES).filter((id) => id !== 'alto-contraste') as ThemeId[])(
+    '%s: Background1 um degrau acima da página',
+    (id) => {
+      const t = THEMES[id].theme
+      // escuro: superfície mais CLARA que a página (≥ 1,15:1, o Xbox tem ~1,2);
+      // claro: superfície mais clara (branca) que a página (≥ 1,08:1)
+      expect(contrast(t.colorNeutralBackground1, t.reemuPage), id).toBeGreaterThanOrEqual(1.08)
+      const lum = (h: string) => parseInt(h.slice(1, 3), 16) + parseInt(h.slice(3, 5), 16) + parseInt(h.slice(5, 7), 16)
+      expect(lum(t.colorNeutralBackground1), id).toBeGreaterThan(lum(t.reemuPage))
+      // texto continua legível na superfície
+      expect(contrast(t.colorNeutralForeground1, t.colorNeutralBackground1), id).toBeGreaterThanOrEqual(4.5)
     },
   )
 })

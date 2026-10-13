@@ -36,7 +36,7 @@ const useLocalStyles = makeStyles({
     // o par que `pickAccent` garante com 3:1 (WCAG 1.4.11) em todos os temas
     // (`themes.test.ts`). Antes era preto translúcido + tom 80, que em temas
     // de primário escuro (Crimson, Blue, Purple) quase sumia.
-    backgroundColor: tokens.colorNeutralBackground1,
+    backgroundColor: "var(--reemuPage)",
     color: "var(--reemuBrandAccent)",
     fontSize: "12px",
     pointerEvents: "none",

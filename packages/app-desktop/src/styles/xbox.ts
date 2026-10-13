@@ -565,11 +565,11 @@ export const useBrowseStyles = makeStyles({
     height: "32px",
     fontWeight: `${tokens.fontWeightRegular} !important`,
     backgroundColor: `${tokens.colorNeutralBackground2} !important`,
-    border: `1px solid color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 32%) !important`,
+    border: `1px solid color-mix(in srgb, var(--reemuPage), ${tokens.colorNeutralForeground1} 32%) !important`,
     color: `${tokens.colorNeutralForeground1} !important`,
     ":hover": {
       backgroundColor: `${tokens.colorNeutralBackground2Hover} !important`,
-      border: `1px solid color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 42%) !important`,
+      border: `1px solid color-mix(in srgb, var(--reemuPage), ${tokens.colorNeutralForeground1} 42%) !important`,
     },
     ":active": {
       backgroundColor: `${tokens.colorNeutralBackground2Pressed} !important`,

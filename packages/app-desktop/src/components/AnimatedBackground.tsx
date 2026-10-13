@@ -1,4 +1,4 @@
-import { makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
+import { makeStyles, mergeClasses } from '@fluentui/react-components'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { wallpaperUrl } from '../lib/tauri'
@@ -49,7 +49,8 @@ const useStyles = makeStyles({
     overflowX: 'hidden',
     overflowY: 'hidden',
     pointerEvents: 'none',
-    backgroundColor: tokens.colorNeutralBackground1,
+    // cor da página (ver `reemuPage` em styles/themes.ts)
+    backgroundColor: 'var(--reemuPage)',
     contain: 'strict',
   },
   wallpaper: {

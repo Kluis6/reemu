@@ -54,11 +54,11 @@ const useStyles = makeStyles({
     // sobre a página #1A1B1E (~22% rumo ao branco) — aqui o fundo da página
     // misturado com a cor do texto do tema, pra acompanhar claro/escuro.
     '&:hover, &:focus, &:focus-visible': {
-      backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 22%) !important`,
+      backgroundColor: `color-mix(in srgb, var(--reemuPage), ${tokens.colorNeutralForeground1} 22%) !important`,
       color: `${tokens.colorNeutralForeground1} !important`,
     },
     ':active': {
-      backgroundColor: `color-mix(in srgb, ${tokens.colorNeutralBackground1}, ${tokens.colorNeutralForeground1} 15%) !important`,
+      backgroundColor: `color-mix(in srgb, var(--reemuPage), ${tokens.colorNeutralForeground1} 15%) !important`,
     },
     // O slot de ícone do <Button> é fixo em 20 no tamanho medium; garante.
     '& .fui-Button__icon': { fontSize: `${ICON}px`, width: `${ICON}px`, height: `${ICON}px` },
