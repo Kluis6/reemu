@@ -673,9 +673,10 @@ function mixHex(a: string, b: string, p: number): string {
  * página. Fluent 2 › Color: "Use lighter neutrals on surfaces" — no ESCURO
  * o card é a página clareada pela cor do texto (14% no topo, 8% na base:
  * ~1,4 e ~1,2:1 sobre a página); no CLARO é a superfície branca do tema
- * (`Background2`) indo um pouco pro tom da página, com um traço fino —
- * "Windows uses strokes instead of key shadows to outline an object"
- * (Fluent 2 › Elevation), como os cards das Configurações do Windows.
+ * (`Background2`) indo um pouco pro tom da página. SEM traço (pedido do
+ * usuário, comparando com o modo XBOX do app Xbox: os cards se destacam só
+ * pela cor, #25282C sobre a página #1A1B1E, sem borda) — só o alto
+ * contraste mantém o traço.
  */
 function cardSurface(
   light: boolean,
@@ -691,14 +692,14 @@ function cardSurface(
     return {
       reemuCardTop: top,
       reemuCardBottom: mixHex(top, page, 0.35),
-      reemuCardStroke: "rgba(0, 0, 0, 0.12)",
+      reemuCardStroke: "transparent",
     };
   }
   const ink = HEX.test(text) ? text : "#FFFFFF";
   return {
     reemuCardTop: mixHex(page, ink, 0.14),
     reemuCardBottom: mixHex(page, ink, 0.08),
-    reemuCardStroke: "rgba(255, 255, 255, 0.06)",
+    reemuCardStroke: "transparent",
   };
 }
 

@@ -164,14 +164,15 @@ describe('superfície dos cards', () => {
     (id) => {
       const t = THEMES[id].theme
       const page = t.colorNeutralBackground1
-      // escuro: topo ≥ 1,3:1 e base ≥ 1,15:1; claro: branco + traço
+      // escuro: topo ≥ 1,3:1 e base ≥ 1,15:1; claro: superfície branca (sem
+      // traço, como no app Xbox)
       const dark = contrast(t.colorNeutralForeground1, '#000000') > contrast(t.colorNeutralForeground1, '#ffffff')
       if (dark) {
         expect(contrast(t.reemuCardTop, page), id).toBeGreaterThanOrEqual(1.3)
         expect(contrast(t.reemuCardBottom, page), id).toBeGreaterThanOrEqual(1.15)
       } else {
         expect(contrast(t.reemuCardTop, page), id).toBeGreaterThanOrEqual(1.08)
-        expect(t.reemuCardStroke).not.toBe('transparent')
+        expect(t.reemuCardStroke).toBe('transparent')
       }
     },
   )
