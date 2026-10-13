@@ -1561,9 +1561,10 @@ const TAB_STATES = {
   },
   // Foco como nas abas do app Xbox (prints do usuário, 2026-10-13): a aba
   // focada ganha o fundo de realce (#3E434B no Xbox = `Background3`, o
-  // degrau acima da superfície); a SELECIONADA e focada fica invertida —
-  // fundo na cor do texto e texto na cor da página (branco/escuro no Xbox) —
-  // sem o traço de baixo. O anel é o padrão do app.
+  // degrau acima da superfície); a SELECIONADA e focada é preenchida com a
+  // cor primária do tema (`reemuBrandSolid`, texto em `reemuOnBrand` — par
+  // com contraste garantido em `themes.test.ts`; no Xbox é o branco), sem o
+  // traço de baixo. O anel é o padrão do app.
   "& .fui-Tab:focus": {
     backgroundColor: `${tokens.colorNeutralBackground3} !important`,
     // Foco padrão do app (ver `FOCUS_GLOW`).
@@ -1575,10 +1576,10 @@ const TAB_STATES = {
     boxShadow: `${FOCUS_GLOW} !important`,
   },
   '& .fui-Tab[aria-selected="true"]:focus': {
-    backgroundColor: `${tokens.colorNeutralForeground1} !important`,
+    backgroundColor: "var(--reemuBrandSolid) !important",
   },
   '& .fui-Tab[aria-selected="true"]:focus .fui-Tab__content, & .fui-Tab[aria-selected="true"]:focus .fui-Tab__icon':
-    { color: "var(--reemuPage) !important" },
+    { color: "var(--reemuOnBrand) !important" },
   '& .fui-Tab[aria-selected="true"]:focus::after': {
     opacity: 0,
   },
