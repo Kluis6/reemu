@@ -885,6 +885,8 @@ const en: Messages = {
     featured: 'Featured',
     previous: 'Previous',
     next: 'Next',
+    slideOf: 'Featured {{n}} of {{total}}',
+    autoplay: 'Advance automatically',
     goToSlide: 'Go to highlight {{n}}',
     seeAll: 'See all — {{title}}',
     showAll: 'Show all',

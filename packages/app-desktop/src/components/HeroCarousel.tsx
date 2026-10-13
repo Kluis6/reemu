@@ -1,6 +1,14 @@
-import { Button, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
-import { ChevronLeftRegular, ChevronRightRegular } from '@fluentui/react-icons'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  Carousel,
+  CarouselCard,
+  CarouselNav,
+  CarouselNavButton,
+  CarouselNavContainer,
+  CarouselSlider,
+  CarouselViewport,
+  makeStyles,
+  tokens,
+} from '@fluentui/react-components'
 import { initials } from '../lib/initials'
 import { platformLabel } from '../lib/platform'
 import type { RomEntry } from '../lib/tauri'
@@ -20,26 +28,22 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusXLarge,
     overflow: 'hidden',
     backgroundImage: 'linear-gradient(135deg, #1a1a1f 0%, #101014 100%)',
+    // viewport/slider/card do `Carousel` ocupam a altura toda
+    '& .fui-CarouselViewport, & .fui-CarouselSlider': { height: '100%' },
   },
+  card: { height: '100%' },
   slide: {
-    position: 'absolute',
-    inset: 0,
+    position: 'relative',
+    display: 'block',
+    width: '100%',
+    height: '100%',
     border: 'none',
     padding: 0,
-    width: '100%',
     textAlign: 'left',
     color: 'inherit',
     cursor: 'pointer',
     backgroundColor: 'transparent',
-    opacity: 0,
-    transitionProperty: 'opacity',
-    // Elemento grande: um passo acima do fade padrão (Fluent 2 › Motion,
-    // "give larger elements more time").
-    transitionDuration: tokens.durationSlow,
-    transitionTimingFunction: tokens.curveEasyEase,
-    pointerEvents: 'none',
   },
-  slideOn: { opacity: 1, pointerEvents: 'auto' },
   img: {
     position: 'absolute',
     inset: 0,
@@ -65,7 +69,9 @@ const useStyles = makeStyles({
   body: {
     position: 'absolute',
     left: '24px',
-    bottom: '24px',
+    // acima da linha de controles do `CarouselNavContainer` (pausar e
+    // pontos, ~32 epx a partir de 12 da borda)
+    bottom: '56px',
     maxWidth: '62%',
     zIndex: 1,
     // kicker / título / sistema são <span> (dentro de <button>) — em coluna,
@@ -101,71 +107,37 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase300,
     color: 'rgba(255, 255, 255, 0.82)',
   },
+  // Setas do `CarouselNavContainer` (layout "overlay-expanded": nas laterais,
+  // no meio da altura). 40 epx com ícone de 24: a seta das prateleiras do app
+  // Xbox tem 45 epx e um chevron de ~23 epx; com 32/16 ficava pequena.
   arrow: {
-    position: 'absolute',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    zIndex: 2,
     borderRadius: tokens.borderRadiusCircular,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    color: "#ffffff",
-    transitionProperty: 'background-color, transform',
-    transitionDuration: tokens.durationFast,
-    transitionTimingFunction: tokens.curveEasyEase,
-    // 40 epx com ícone de 24: a seta das prateleiras do app Xbox tem 45 epx
-    // e um chevron de ~23 epx de altura; com 32/16 a nossa ficava pequena
-    // sobre a arte. `max-width`/`min-width`: o Fluent injeta um `max-width`
-    // próprio em botão circular icon-only que vence o `width` mesmo com
-    // `!important` (mesmo caso da topbar em `xbox.ts`).
-    width: "40px !important",
-    height: "40px !important",
-    minWidth: "0 !important",
-    maxWidth: "40px !important",
-    fontSize: "24px !important",
-    "& .fui-Button__icon": {
-      fontSize: "1em",
-      width: "1em",
-      height: "1em",
-    },
-    ':hover': {
-      backgroundColor: 'rgba(0,0,0,0.72)',
-      color: "#ffffff",
-      transform: 'translateY(-50%) scale(1.06)',
-    },
-    '@media (prefers-reduced-motion: reduce)': {
-      ':hover': { transform: 'translateY(-50%)' },
-    },
+    backgroundColor: 'rgba(0,0,0,0.45) !important',
+    color: '#ffffff !important',
+    width: '40px !important',
+    height: '40px !important',
+    minWidth: '0 !important',
+    maxWidth: '40px !important',
+    fontSize: '24px !important',
+    '& .fui-Button__icon': { fontSize: '1em', width: '1em', height: '1em' },
+    ':hover': { backgroundColor: 'rgba(0,0,0,0.72) !important' },
   },
-  arrowL: { left: '12px' },
-  arrowR: { right: '12px' },
-  dots: {
-    position: 'absolute',
-    bottom: '12px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    display: 'flex',
-    gap: '6px',
-    zIndex: 2,
+  // Pausar/retomar o avanço automático (Fluent 2 › Carousel: "the user must
+  // always have the option of pausing the auto-play feature") — sobre a arte.
+  autoplay: {
+    backgroundColor: 'rgba(0,0,0,0.45) !important',
+    color: '#ffffff !important',
+    ':hover': { backgroundColor: 'rgba(0,0,0,0.72) !important' },
   },
-  dot: {
-    width: '7px',
-    height: '7px',
-    borderRadius: tokens.borderRadiusCircular,
-    border: 'none',
-    padding: 0,
-    cursor: 'pointer',
-    backgroundColor: 'rgba(255,255,255,0.35)',
-    transitionProperty: 'width, background-color',
-    transitionDuration: tokens.durationNormal,
-    transitionTimingFunction: tokens.curveEasyEase,
-  },
-  dotOn: { width: '20px', backgroundColor: "#ffffff" },
 })
 
 /**
- * Carrossel de destaque da Início (modelo modo XBOX): 1 slide por vez,
- * crossfade, setas circulares + dots, avanço automático a cada 7s (pausa no
- * hover/foco e quando a aba está oculta). Cada slide abre o jogo.
+ * Carrossel de destaque da Início (modelo modo XBOX) com o `Carousel` do
+ * Fluent 2: 1 slide por vez em fade (`motion="fade"`), setas nas laterais e
+ * pontos embaixo (`layout="overlay-expanded"`), avanço automático a cada 7 s
+ * com botão de pausar (o Fluent pede: "the user must always have the option
+ * of pausing the auto-play feature") e o anúncio do slide pra leitor de tela.
+ * Cada slide abre o jogo.
  */
 export function HeroCarousel({
   items,
@@ -176,89 +148,64 @@ export function HeroCarousel({
 }) {
   const { t } = useTranslation()
   const s = useStyles()
-  const [rawIdx, setRawIdx] = useState(0)
-  const [paused, setPaused] = useState(false)
   const n = items.length
-  // a lista pode encolher entre renders — clampa aqui, sem efeito
-  const idx = n > 0 ? ((rawIdx % n) + n) % n : 0
-  const go = useCallback((next: number) => setRawIdx(next), [])
-
-  useEffect(() => {
-    if (n <= 1 || paused) return
-    const timer = setInterval(() => {
-      if (!document.hidden) setRawIdx((i) => i + 1)
-    }, ADVANCE_MS)
-    return () => clearInterval(timer)
-  }, [n, paused])
-
   if (n === 0) return null
 
   return (
-    <div
+    <Carousel
       className={s.wrap}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
+      groupSize={1}
+      circular
+      motion="fade"
+      autoplayInterval={ADVANCE_MS}
       aria-roledescription={t('shell2.carousel')}
+      announcement={(index, total) => t('shell2.slideOf', { n: index + 1, total })}
     >
-      {items.map((r, i) => (
-        <button
-          key={r.id}
-          type="button"
-          className={mergeClasses(s.slide, i === idx && s.slideOn)}
-          onClick={() => onOpen(r.id)}
-          aria-hidden={i !== idx}
-          tabIndex={i === idx ? 0 : -1}
-        >
-          {r.boxart ? (
-            <img className={s.img} src={r.boxart} alt="" />
-          ) : (
-            <span className={s.fallback}>{initials(r.title)}</span>
-          )}
-          <span className={s.scrim} />
-          <span className={s.body}>
-            <span className={s.kicker}>
-              {r.lastPlayedAt ? t('shell2.continue') : t('shell2.featured')}
-            </span>
-            <span className={s.title}>{r.title}</span>
-            <span className={s.sub}>{platformLabel(r.systemId)}</span>
-          </span>
-        </button>
-      ))}
-
+      <CarouselViewport>
+        <CarouselSlider>
+          {items.map((r, i) => (
+            <CarouselCard
+              key={r.id}
+              className={s.card}
+              aria-label={t('shell2.slideOf', { n: i + 1, total: n })}
+            >
+              <button type="button" className={s.slide} onClick={() => onOpen(r.id)}>
+                {r.boxart ? (
+                  <img className={s.img} src={r.boxart} alt="" />
+                ) : (
+                  <span className={s.fallback}>{initials(r.title)}</span>
+                )}
+                <span className={s.scrim} />
+                <span className={s.body}>
+                  <span className={s.kicker}>
+                    {r.lastPlayedAt ? t('shell2.continue') : t('shell2.featured')}
+                  </span>
+                  <span className={s.title}>{r.title}</span>
+                  <span className={s.sub}>{platformLabel(r.systemId)}</span>
+                </span>
+              </button>
+            </CarouselCard>
+          ))}
+        </CarouselSlider>
+      </CarouselViewport>
       {n > 1 && (
-        <>
-          <Button
-            shape="circular"
-            appearance="subtle"
-            className={mergeClasses(s.arrow, s.arrowL)}
-            icon={<ChevronLeftRegular />}
-            aria-label={t('shell2.previous')}
-            onClick={() => go(idx - 1)}
-          />
-          <Button
-            shape="circular"
-            appearance="subtle"
-            className={mergeClasses(s.arrow, s.arrowR)}
-            icon={<ChevronRightRegular />}
-            aria-label={t('shell2.next')}
-            onClick={() => go(idx + 1)}
-          />
-          <div className={s.dots}>
-            {items.map((r, i) => (
-              <button
-                key={r.id}
-                type="button"
-                className={mergeClasses(s.dot, i === idx && s.dotOn)}
-                aria-label={t('shell2.goToSlide', { n: i + 1 })}
-                aria-current={i === idx}
-                onClick={() => go(i)}
-              />
-            ))}
-          </div>
-        </>
+        <CarouselNavContainer
+          layout="overlay-expanded"
+          next={{ className: s.arrow, 'aria-label': t('shell2.next') }}
+          prev={{ className: s.arrow, 'aria-label': t('shell2.previous') }}
+          autoplay={{
+            className: s.autoplay,
+            defaultChecked: true,
+            'aria-label': t('shell2.autoplay'),
+          }}
+        >
+          <CarouselNav>
+            {(index) => (
+              <CarouselNavButton aria-label={t('shell2.goToSlide', { n: index + 1 })} />
+            )}
+          </CarouselNav>
+        </CarouselNavContainer>
       )}
-    </div>
+    </Carousel>
   )
 }

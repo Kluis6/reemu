@@ -2311,3 +2311,23 @@ Infra:
 - **Tamanho:** o maior do Fluent é 16 px. O texto vai em `fontSizeHero700` (28 px, semibold), como o título-caminho das Configurações do Windows 11. Níveis de cima em `Foreground3`, que vai para `Foreground1` no hover; o atual em `Foreground1`.
 - **Alinhamento,** comparado com o print do Windows Update, em que o caminho começa na mesma coluna do conteúdo: o botão tem 8 px de padding, então a lista volta 8 px. O texto "Configurações" fica em x = 116, na borda do card (115).
 - Foco: varredura sem falhas (anel padrão). `ui-smoke` 12/12.
+
+## 2026-10-13 — Revisão dos componentes: o que não usava o Fluent 2
+
+- **Levantamento:** o app já usava o Fluent em quase tudo: Button, Field/Input, TabList, Card, Dialog, Menu, MessageBar, toasts, Accordion, Skeleton, Avatar, ColorPicker, Breadcrumb e outros. Elementos HTML soltos eram poucos.
+- **Trocados pelo componente do Fluent:**
+  1. **Carrossel da Início:** `Carousel` (`@fluentui/react-carousel`, no `react-components` 9.74), com `motion="fade"`, `layout="overlay-expanded"` (setas nas laterais, pontos embaixo), `autoplayInterval` de 7 s e o botão de pausar.
+     - O Fluent 2 pede: "the user must always have the option of pausing the auto-play feature"; o antigo só pausava com o mouse em cima.
+     - Anúncio do slide para leitor de tela (`announcement`, "Destaque N de M").
+     - Os slides inativos ficam `inert`.
+     - Visual mantido: altura, véu, texto branco, setas de 40 px.
+     - O texto subiu para ficar acima da linha de controles. O anel do slide ativo vai por dentro, porque o carrossel corta o que passa da borda.
+  2. **"Detalhes técnicos" no erro do jogo:** `Accordion` no lugar de `<details>`/`<summary>`.
+  3. **Avatar da rail:** `Button` (transparente) no lugar de `<button>`.
+  4. **Notas de versão (janela de atualização):** `List`/`ListItem` no lugar de `<ul>`/`<li>`, com os marcadores mantidos por CSS.
+- **Mantidos próprios** (o Fluent não tem equivalente que sirva):
+  - a rail estilo Xbox: o `Nav` do Fluent é gaveta com texto, sem modo só de ícones;
+  - a prateleira (`Shelf`), sobre `Card`;
+  - os cards de navegação das Configurações, que são links e o `Card` não vira link;
+  - dicas do controle, relógio, splash, fundo animado, avatares prontos (exibidos dentro do `Avatar`), estados vazios e `<kbd>` nos atalhos.
+- **Não conferidos na tela:** o "Detalhes técnicos" (o erro de core não sai com os mocks) e as notas de versão. Ficam pela checagem de tipos e pelo DOM do Fluent (`List` → `ul`, `ListItem` → `li`).

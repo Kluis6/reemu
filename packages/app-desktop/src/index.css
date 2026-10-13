@@ -153,3 +153,12 @@ html[data-nav-focus] :is([role="menuitem"], [role="menuitemradio"], [role="menui
   padding: 12px !important;
   margin: -12px !important;
 }
+
+/* Slide do carrossel da Início: o botão ocupa o carrossel inteiro, que corta
+   o que passa da borda (`overflow: hidden`) — o anel vai pra DENTRO. */
+html[data-nav-focus] .fui-CarouselCard > button:not(.fui-Card):focus,
+.fui-CarouselCard > button:focus-visible {
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: -6px !important;
+  box-shadow: none !important;
+}

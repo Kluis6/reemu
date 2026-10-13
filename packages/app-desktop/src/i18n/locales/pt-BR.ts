@@ -886,6 +886,8 @@ const ptBR = {
     featured: 'Destaque',
     previous: 'Anterior',
     next: 'Próximo',
+    slideOf: 'Destaque {{n}} de {{total}}',
+    autoplay: 'Avançar automaticamente',
     goToSlide: 'Ir para o destaque {{n}}',
     seeAll: 'Ver tudo — {{title}}',
     showAll: 'Mostrar tudo',

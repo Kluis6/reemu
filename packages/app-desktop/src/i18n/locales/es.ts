@@ -885,6 +885,8 @@ const es: Messages = {
     featured: 'Destacado',
     previous: 'Anterior',
     next: 'Siguiente',
+    slideOf: 'Destacado {{n}} de {{total}}',
+    autoplay: 'Avanzar automáticamente',
     goToSlide: 'Ir al destacado {{n}}',
     seeAll: 'Ver todo — {{title}}',
     showAll: 'Mostrar todo',
