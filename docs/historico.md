@@ -2391,3 +2391,12 @@ Infra:
 - **Teste novo:** em todos os temas, superfície mais clara e ≥ 1,08:1 da página, com texto AA sobre ela.
 - Conferido em captura: popover de notificações e diálogo "Encerrar" no Purple Mistique claro e no Neon Circuit. 131 testes e `ui-smoke` (12/12) passaram.
 - Antes disso, a pedido do usuário: cards sem borda (o Xbox destaca só pela cor; o alto contraste mantém) e cards do hub de Configurações sem sombra.
+- **Revisão da escada em todos os temas (mesmo dia):** os `Background2`–`4` dos temas não seguiam uma ordem. Nos escuros de console, o `2` (cards, rail, botões) ficava abaixo da superfície; nos claros, o `4` era mais escuro que a página.
+  - Agora `surfaceTokens` gera a escada inteira: `Background1` = `Background2` = a superfície (uma só, como o #25282C do Xbox), e `3`/`4` são os degraus de realce.
+    - **Escuro:** cada degrau clareia pela cor do texto, como os filtros #3E434B e o selecionado #4E535B do Xbox.
+    - **Claro:** a superfície é branca e os realces escurecem, com ≥ 1,1:1 garantido.
+    - Hover/pressionado/selecionado derivados de cada degrau.
+  - Camadas do card das Configurações (`liftTokens`): o card é a própria superfície; linhas e campos clareiam no escuro e descem para a página no claro.
+  - O card geral das Configurações ficou **sem borda e sem sombra**, a pedido do usuário. Separa-se só pela cor.
+  - **Teste novo** em todos os temas: ordem página → superfície → realces, contraste mínimo entre os degraus e texto AA em todos.
+  - Conferido em captura no Blue Modern, no Neon Circuit, no Simple Vibes e no Alva claro. 147 testes e `ui-smoke` (12/12) passaram.

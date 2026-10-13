@@ -542,18 +542,19 @@ export interface ReEmuLiftTokens {
  * `var(--…)`: resolve no elemento, com o tema que estiver aplicado.
  */
 function liftTokens(light: boolean): ReEmuLiftTokens {
-  const toward = light ? "#ffffff" : "var(--colorNeutralForeground1)";
+  // Escuro: as camadas de dentro CLAREIAM a partir do card (misturando a cor
+  // do texto). Claro: o card é a superfície branca e as camadas de dentro
+  // descem em direção à página (`--reemuPage`) — o mesmo sentido do hover do
+  // Fluent no claro. Sem borda nem sombra no card (como no modo XBOX), a
+  // separação é só a cor.
+  const toward = light ? "var(--reemuPage)" : "var(--colorNeutralForeground1)";
   const mix = (pct: number) =>
     `color-mix(in srgb, var(--colorNeutralBackground1), ${toward} ${pct}%)`;
   // [repouso, hover, pressionado, selecionado]
-  const rows = light ? [65, 50, 40, 75] : [8, 12, 6, 14];
-  const fields = light ? [90, 80, 70, 95] : [14, 18, 12, 20];
+  const rows = light ? [55, 70, 85, 65] : [8, 12, 6, 14];
+  const fields = light ? [30, 45, 60, 40] : [14, 18, 12, 20];
   return {
-    // No claro o card desce 4% (Alva Claro tem o Background1 quase branco,
-    // #F0F2F5: sem isto não sobrava espaço pras camadas brancas aparecerem).
-    reemuSurface1: light
-      ? "color-mix(in srgb, var(--colorNeutralBackground1), #000000 4%)"
-      : "var(--colorNeutralBackground1)",
+    reemuSurface1: "var(--colorNeutralBackground1)",
     reemuSurface2: mix(rows[0]),
     reemuSurface2Hover: mix(rows[1]),
     reemuSurface2Pressed: mix(rows[2]),
@@ -722,7 +723,9 @@ function cardSurface(
  *
  * Superfície: o `Background2` do tema quando ele já fica ≥ 1,15:1 da página
  * (claro: ≥ 1,08:1 e mais claro que ela); senão a página clareada pela cor
- * do texto (escuro) ou puxada pro branco (claro) até isso.
+ * do texto (escuro) ou puxada pro branco (claro) até isso. O `Background2`
+ * vira a MESMA superfície (o app usa ele em cards, rail e botões) e o 3 e o
+ * 4 são os degraus de realce acima dela — uma escada só em todos os temas.
  */
 function surfaceTokens(
   light: boolean,
@@ -731,27 +734,56 @@ function surfaceTokens(
   text: string,
 ): Partial<Theme> {
   if (!HEX.test(page)) return {};
+  const ink = HEX.test(text) ? text : light ? "#000000" : "#FFFFFF";
   let s = authored;
   const lighter = HEX.test(s) && luminance(s) > luminance(page);
   if (light) {
     if (!(lighter && contrastRatio(s, page) >= 1.08)) s = mixHex(page, "#FFFFFF", 0.75);
-    return {
-      colorNeutralBackground1: s,
-      colorNeutralBackground1Hover: mixHex(s, page, 0.35),
-      colorNeutralBackground1Pressed: mixHex(s, page, 0.55),
-      colorNeutralBackground1Selected: mixHex(s, page, 0.45),
-    };
-  }
-  const ink = HEX.test(text) ? text : "#FFFFFF";
-  if (!(lighter && contrastRatio(s, page) >= 1.15)) {
+  } else if (!(lighter && contrastRatio(s, page) >= 1.15)) {
     s = page;
     for (let p = 0.04; p <= 0.2 && contrastRatio(s, page) < 1.18; p += 0.01) s = mixHex(page, ink, p);
   }
+  // Escada única (Xbox: página #1A1B1E → superfície #25282C → filtros
+  // #3E434B → selecionado #4E535B). Escuro: cada degrau clareia pela cor do
+  // texto. Claro: a superfície é branca e os realces escurecem (o hover do
+  // Fluent no claro escurece) — o 4 fica um pouco mais escuro que a PÁGINA,
+  // pra aba/hover sobre a página também aparecer.
+  const l1 = s;
+  // degrau até ter `min` de contraste com `ref` (e nunca menos que `start`)
+  const stepFrom = (from: string, ref: string, start: number, min: number) => {
+    let c = mixHex(from, ink, start);
+    for (let p = start; p <= 0.3 && contrastRatio(c, ref) < min; p += 0.01) c = mixHex(from, ink, p);
+    return c;
+  };
+  const l2 = light ? stepFrom(mixHex(s, page, 0.55), s, 0, 1.1) : mixHex(s, ink, 0.1);
+  const l3 = light ? stepFrom(page, page, 0.06, 1.1) : mixHex(s, ink, 0.17);
+  const states = (base: string, up: number) =>
+    light
+      ? { hover: mixHex(base, ink, 0.04), pressed: mixHex(base, ink, 0.08), selected: mixHex(base, ink, 0.06) }
+      : { hover: mixHex(base, ink, up), pressed: mixHex(base, page, 0.35), selected: mixHex(base, ink, up + 0.04) };
+  const s1 = states(l1, 0.08);
+  const s2 = states(l2, 0.07);
+  const s3 = states(l3, 0.07);
   return {
-    colorNeutralBackground1: s,
-    colorNeutralBackground1Hover: mixHex(s, ink, 0.08),
-    colorNeutralBackground1Pressed: mixHex(s, page, 0.4),
-    colorNeutralBackground1Selected: mixHex(s, ink, 0.12),
+    // superfície: menus, diálogos, campos (Fluent) e cards/rail/botões (app)
+    colorNeutralBackground1: l1,
+    colorNeutralBackground1Hover: s1.hover,
+    colorNeutralBackground1Pressed: s1.pressed,
+    colorNeutralBackground1Selected: s1.selected,
+    colorNeutralBackground2: l1,
+    colorNeutralBackground2Hover: s1.hover,
+    colorNeutralBackground2Pressed: s1.pressed,
+    colorNeutralBackground2Selected: s1.selected,
+    // realce sobre a superfície (filtros, chips, campos, células)
+    colorNeutralBackground3: l2,
+    colorNeutralBackground3Hover: s2.hover,
+    colorNeutralBackground3Pressed: s2.pressed,
+    colorNeutralBackground3Selected: s2.selected,
+    // realce maior (hover de aba, item em destaque)
+    colorNeutralBackground4: l3,
+    colorNeutralBackground4Hover: s3.hover,
+    colorNeutralBackground4Pressed: s3.pressed,
+    colorNeutralBackground4Selected: s3.selected,
   };
 }
 

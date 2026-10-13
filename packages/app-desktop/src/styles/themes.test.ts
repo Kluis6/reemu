@@ -193,3 +193,34 @@ describe('elevação (Fluent: Background1 = superfície acima da página)', () =
     },
   )
 })
+
+describe('escada de elevação', () => {
+  const lum = (h: string) => parseInt(h.slice(1, 3), 16) + parseInt(h.slice(3, 5), 16) + parseInt(h.slice(5, 7), 16)
+  it.each(Object.keys(THEMES).filter((id) => id !== 'alto-contraste') as ThemeId[])(
+    '%s: página → superfície → realces em ordem',
+    (id) => {
+      const t = THEMES[id].theme
+      const p = t.reemuPage
+      // superfície única (Background1 = Background2)
+      expect(t.colorNeutralBackground2, id).toBe(t.colorNeutralBackground1)
+      const dark = lum(t.colorNeutralForeground1) > lum(p)
+      if (dark) {
+        // escuro: cada degrau mais claro
+        expect(lum(t.colorNeutralBackground1)).toBeGreaterThan(lum(p))
+        expect(lum(t.colorNeutralBackground3)).toBeGreaterThan(lum(t.colorNeutralBackground1))
+        expect(lum(t.colorNeutralBackground4)).toBeGreaterThan(lum(t.colorNeutralBackground3))
+      } else {
+        // claro: superfície mais clara que a página; realces abaixo dela
+        expect(lum(t.colorNeutralBackground1)).toBeGreaterThan(lum(p))
+        expect(lum(t.colorNeutralBackground3)).toBeLessThan(lum(t.colorNeutralBackground1))
+      }
+      // o realce maior aparece sobre a página (hover de aba) e sobre a superfície
+      expect(contrast(t.colorNeutralBackground4, p), id).toBeGreaterThanOrEqual(1.08)
+      expect(contrast(t.colorNeutralBackground3, t.colorNeutralBackground1), id).toBeGreaterThanOrEqual(1.08)
+      // texto legível em todos os degraus
+      for (const bg of [t.colorNeutralBackground1, t.colorNeutralBackground3, t.colorNeutralBackground4]) {
+        expect(contrast(t.colorNeutralForeground1, bg), id).toBeGreaterThanOrEqual(4.5)
+      }
+    },
+  )
+})
