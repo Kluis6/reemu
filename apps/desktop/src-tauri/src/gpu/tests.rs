@@ -1189,6 +1189,9 @@ fn gl_core_real_rom() {
 
     let (mut frames, mut hw, mut lit, mut out) = (0u32, 0u32, 0u32, 0u32);
     let mut last_dims = (0, 0);
+    // Tempo do app por quadro (entrada da chain + passes + leitura do
+    // teste), a mesma medida do `drive_interop_session` do Windows (B6).
+    let mut app_time = Duration::ZERO;
     let start = Instant::now();
     let mut next_report = 1;
     while start.elapsed() < Duration::from_secs(secs) {
@@ -1199,7 +1202,10 @@ fn gl_core_real_rom() {
                 hw += 1;
             }
             last_dims = (frame.metadata.native_width, frame.metadata.native_height);
-            if let Some((_, _, rgba)) = fp.process(&frame) {
+            let t = Instant::now();
+            let processed = fp.process(&frame);
+            app_time += t.elapsed();
+            if let Some((_, _, rgba)) = processed {
                 out += 1;
                 if rgba.chunks(4).any(|p| p[0] > 16 || p[1] > 16 || p[2] > 16) {
                     lit += 1;
@@ -1217,6 +1223,11 @@ fn gl_core_real_rom() {
     }
     session.unload().ok();
     let _ = std::fs::remove_dir_all(&tmp);
+    eprintln!(
+        "quadros: {frames} ({hw} HW) em {:.1} s; app {:.3} ms/quadro",
+        start.elapsed().as_secs_f32(),
+        app_time.as_secs_f64() * 1000.0 / f64::from(frames.max(1))
+    );
     assert!(frames > 0, "nenhum quadro chegou");
     assert!(lit > 0, "todos os quadros saíram pretos");
 }
@@ -1400,6 +1411,8 @@ fn vk_core_real_rom() {
 
     let (mut frames, mut vk, mut lit) = (0u32, 0u32, 0u32);
     let (mut step_sum, mut step_max) = (Duration::ZERO, Duration::ZERO);
+    // Tempo do app por quadro, a mesma medida do `gl_core_real_rom`.
+    let mut app_time = Duration::ZERO;
     let start = Instant::now();
     let mut next = 1;
     let mut last_dump = u64::MAX;
@@ -1418,7 +1431,10 @@ fn vk_core_real_rom() {
             if matches!(frame.origin, FrameOrigin::HardwareVulkanImage(_)) {
                 vk += 1;
             }
-            if let Some((w, h, rgba)) = fp.process(&frame) {
+            let t = Instant::now();
+            let processed = fp.process(&frame);
+            app_time += t.elapsed();
+            if let Some((w, h, rgba)) = processed {
                 if rgba.chunks(4).any(|p| p[0] > 16 || p[1] > 16 || p[2] > 16) {
                     lit += 1;
                 }
@@ -1468,6 +1484,11 @@ fn vk_core_real_rom() {
             next += 1;
         }
     }
+    eprintln!(
+        "quadros: {frames} ({vk} Vulkan) em {:.1} s; app {:.3} ms/quadro",
+        start.elapsed().as_secs_f32(),
+        app_time.as_secs_f64() * 1000.0 / f64::from(frames.max(1))
+    );
     driving(&session, || session.unload()).ok();
     std::env::remove_var("REEMU_HW");
     let _ = std::fs::remove_dir_all(&tmp);
