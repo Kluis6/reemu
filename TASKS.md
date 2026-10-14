@@ -51,9 +51,9 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       `stella2023_libretro` (Stella 7) passam do limite de 60 s rodando a ROM
       de teste do Atari 2600 ("FALHA: travou"). No Linux os dois rodam os 180
       quadros, e o `stella2014_libretro` passa nos dois sistemas. A falha
-      começou depois do VFS v3 (2026-09-26, `core-loader-desktop/src/vfs.rs`),
-      que os Stella novos usam e o 2014 não: suspeita de caminho de VFS
-      específico do Windows. Em 2026-10-12 o `ppsspp_libretro` também travou
+      começou dois dias depois do VFS v3 (2026-09-26,
+      `core-loader-desktop/src/vfs.rs`); suspeita, não confirmada, de um
+      caminho do VFS específico do Windows. Em 2026-10-12 o `ppsspp_libretro` também travou
       no Windows, ainda no `retro_init` (> 60 s); precisa ver se repete.
       Reproduzir numa máquina Windows com `reemu-core-host` e a ROM do teste.
 
