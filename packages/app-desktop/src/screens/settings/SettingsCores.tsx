@@ -4,8 +4,6 @@ import {
   Button,
   Caption1,
   Input,
-  Tab,
-  TabList,
   Text,
   makeStyles,
   tokens,
@@ -23,19 +21,16 @@ import { errorToast, sysToast } from '../../lib/toast'
 import {
   downloadCore,
   listCoreCatalog,
-  listInstalledCores,
   removeCore,
   type CatalogCore,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
-import { useTabStyles } from '../../styles/xbox'
 import { DownloadButton } from '../../components/DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
   // abas no estilo do app; 24 até o conteúdo (12 do `gap` + 12)
-  tabs: { alignSelf: 'flex-start', marginBottom: '12px' },
   // 3 colunas (uma só em janela bem estreita).
   list: {
     display: 'grid',
@@ -79,54 +74,16 @@ const useStyles = makeStyles({
   icon: { fontSize: '24px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
 })
 
+/**
+ * Configurações › Cores: só o catálogo (pedido do usuário — a aba
+ * "Instalados" saiu). Os instalados aparecem no próprio catálogo, com o
+ * selo "Instalado" e o botão de remover.
+ */
 export function SettingsCores() {
-  const { t } = useTranslation()
   const styles = useStyles()
-  const tb = useTabStyles()
-  const [tab, setTab] = useState<'installed' | 'catalog'>('installed')
-
   return (
     <div className={styles.root}>
-      <TabList
-        className={mergeClasses(tb.tabs, styles.tabs)}
-        selectedValue={tab}
-        onTabSelect={(_, d) => setTab(d.value as typeof tab)}
-      >
-        <Tab value="installed">{t('cores.installed')}</Tab>
-        <Tab value="catalog">{t('cores.catalog')}</Tab>
-      </TabList>
-      {tab === 'installed' ? <Installed /> : <Catalog />}
-    </div>
-  )
-}
-
-function Installed() {
-  const { t } = useTranslation()
-  const styles = useStyles()
-  const cores = useQuery({ queryKey: ['installed-cores'], queryFn: listInstalledCores, retry: false })
-
-  if (cores.isLoading) return <LoadingState label={t('cores.reading')} />
-  if (cores.isError) return <Body1>{t('cores.loadFailed')}</Body1>
-  if ((cores.data?.length ?? 0) === 0)
-    return <Caption1>{t('cores.noneYet')}</Caption1>
-
-  return (
-    <div className={styles.list}>
-      {cores.data?.map((c) => (
-        <div key={c.coreId} className={styles.row}>
-          <DeveloperBoardRegular className={styles.icon} />
-          <span className={styles.meta}>
-            <Body1>
-              <Text as="strong" weight="semibold">{c.name}</Text>
-            </Body1>
-            <Caption1>
-              {c.version || t('cores.noVersion')}
-              {c.renderBackend ? ` · ${c.renderBackend}` : ''}
-              {c.extensions.length > 0 ? ` · .${c.extensions.slice(0, 5).join(' .')}` : ''}
-            </Caption1>
-          </span>
-        </div>
-      ))}
+      <Catalog />
     </div>
   )
 }
