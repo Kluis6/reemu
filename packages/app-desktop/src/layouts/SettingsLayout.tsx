@@ -125,6 +125,9 @@ const WIDE_TABS = new Set([
   "video",
 ]);
 
+/** Categorias que abrem numa grade de cards (subcategorias). */
+const HUB_SECTIONS = new Set(["aparencia", "video"]);
+
 export function SettingsLayout() {
   const { t } = useTranslation();
   const styles = useStyles();
@@ -145,6 +148,11 @@ export function SettingsLayout() {
       crumbs.push({ label, to: "/settings/video" });
       crumbs.push({
         label: sub === "shaders" ? t("video.tabShaders") : t("video.tabBezels"),
+      });
+    } else if (section.key === "aparencia" && (sub === "temas" || sub === "papel-de-parede")) {
+      crumbs.push({ label, to: "/settings/aparencia" });
+      crumbs.push({
+        label: sub === "temas" ? t("appearance.theme.title") : t("appearance.wallpaper.title"),
       });
     } else {
       crumbs.push({ label });
@@ -186,19 +194,26 @@ export function SettingsLayout() {
                 </Fragment>
               ))}
             </Breadcrumb>
-            <div className={styles.card}>
-              <div className={styles.pane}>
-                <div
-                  className={mergeClasses(
-                    styles.content,
-                    WIDE_TABS.has(section.key) && styles.wide,
-                    section.key === "video" && sub === "shaders" && styles.fill,
-                  )}
-                >
-                  <Outlet />
+            {/* Entrada de uma subcategoria (Aparência, Decorações): os cards
+                das opções direto na página, sem o card geral — ele só
+                aparece dentro da opção escolhida. */}
+            {HUB_SECTIONS.has(section.key) && !sub ? (
+              <Outlet />
+            ) : (
+              <div className={styles.card}>
+                <div className={styles.pane}>
+                  <div
+                    className={mergeClasses(
+                      styles.content,
+                      WIDE_TABS.has(section.key) && styles.wide,
+                      section.key === "video" && sub === "shaders" && styles.fill,
+                    )}
+                  >
+                    <Outlet />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </>
         ) : (
           <>

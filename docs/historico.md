@@ -2444,3 +2444,11 @@ Infra:
   - Agora o foco é `focus({ preventScroll: true })`. Dentro do carrossel, quem vai para a tela é o carrossel inteiro (`scrollIntoView` no `.fui-Carousel`); nas prateleiras, o card continua centralizando na horizontal.
   - A área de rolagem ganhou `scroll-padding-top` igual ao topo da página, para a rolagem do foco contar a topbar como coberta. Voltando para o destaque, a página rola até ele aparecer inteiro (medido: de 66 px rolados para 0, topo do carrossel em 116).
 - **"Mostrar tudo"** (título das prateleiras): hover e foco passam a ter o mesmo fundo dos outros botões do tema (`colorNeutralBackground2Hover`/`Pressed`), no lugar da mistura própria.
+
+## 2026-10-16 — Aparência e Decorações abrem em cards, como o hub
+
+- **Pedido do usuário:** as opções de Aparência e Decorações em cards com a cara dos cards do menu principal das Configurações, SEM o card geral atrás. O card geral só aparece dentro da opção escolhida.
+- `SettingsHubCards` (em `SettingsHome.tsx`): os mesmos cards do hub (ícone, nome e descrição), numa fileira de 180 px. A entrada de uma subcategoria (`HUB_SECTIONS` em `SettingsLayout`) renderiza sem o card geral.
+- **Aparência:** as abas Temas e Papel de parede viraram páginas próprias, `/settings/aparencia/temas` e `/settings/aparencia/papel-de-parede`, com o caminho "Configurações › Aparência › Temas".
+- **Decorações:** a lista de links (`SettingsLinkList`) foi trocada pelos mesmos cards; o `components/SettingsNav.tsx` ficou sem uso e saiu.
+- `ui-smoke` em 2 tamanhos (10/10) e 147 testes passaram.

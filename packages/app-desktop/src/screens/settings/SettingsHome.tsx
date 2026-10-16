@@ -7,6 +7,7 @@ import {
   tokens,
 } from "@fluentui/react-components";
 import { useQuery } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ProfileAvatar } from "../../components/ProfileAvatar";
@@ -137,7 +138,44 @@ const useStyles = makeStyles({
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  // Subcategoria (Aparência, Decorações): os mesmos cards do hub, numa
+  // fileira de altura fixa (não estica até o fim da página).
+  subGrid: {
+    flexGrow: 0,
+    gridAutoRows: "180px",
+    "@media (max-height: 640px)": { gridAutoRows: "minmax(72px, 120px)" },
+  },
 });
+
+export interface SettingsHubItem {
+  to: string;
+  icon: ReactElement;
+  title: string;
+  description: string;
+}
+
+/**
+ * Cards de uma subcategoria das Configurações (Aparência › Temas / Papel de
+ * parede, Decorações › Shaders / Molduras) com a MESMA cara dos cards do
+ * hub, direto na página (sem o card geral atrás — ele só aparece dentro da
+ * opção escolhida; pedido do usuário).
+ */
+export function SettingsHubCards({ items, label }: { items: SettingsHubItem[]; label: string }) {
+  const s = useStyles();
+  return (
+    <nav className={mergeClasses(s.grid, s.subGrid)} aria-label={label}>
+      {items.map((it, i) => (
+        <Link key={it.to} to={it.to} className={s.card} style={{ animationDelay: `${i * 30}ms` }}>
+          <span className={s.icon}>{it.icon}</span>
+          <span className={s.text}>
+            <Subtitle1 className={mergeClasses(s.ellipsis, s.name)}>{it.title}</Subtitle1>
+            <Body1 className={s.desc}>{it.description}</Body1>
+          </span>
+        </Link>
+      ))}
+    </nav>
+  );
+}
 
 /**
  * Entrada das Configurações: um card por categoria em grade bento, que ocupa a

@@ -100,6 +100,7 @@ const en: Messages = {
     },
     theme: {
       title: 'Themes',
+      cardDesc: 'Accent and background colors of the app',
       card: '{{name}} theme',
       lightMode: '{{name}}: light mode',
       hue: 'Custom theme hue',

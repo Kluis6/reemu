@@ -101,6 +101,7 @@ const ptBR = {
     },
     theme: {
       title: 'Temas',
+      cardDesc: 'Cores de destaque e do fundo do app',
       card: 'Tema {{name}}',
       lightMode: '{{name}}: modo claro',
       hue: 'Matiz do tema personalizado',

@@ -5,16 +5,15 @@ import {
   ColorPicker,
   ColorSlider,
   Switch,
-  Tab,
-  TabList,
   Text,
   makeStyles,
-  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
 import {
   CheckmarkFilled,
+  ColorRegular,
   ImageAddRegular,
+  ImageRegular,
   WeatherMoonFilled,
   WeatherSunnyFilled,
 } from "@fluentui/react-icons";
@@ -39,7 +38,7 @@ import {
   type ReEmuTheme,
   type ThemeMode,
 } from "../../styles/themes";
-import { useTabStyles } from "../../styles/xbox";
+import { SettingsHubCards } from "./SettingsHome";
 
 const useStyles = makeStyles({
   root: {
@@ -49,9 +48,6 @@ const useStyles = makeStyles({
     // Sem teto de largura: a grade de temas ocupa a largura útil do card
     // das Configurações (o card do papel de parede tem o próprio limite).
   },
-  // Tema e papel de parede, cada um na sua aba.
-  // 24 até o conteúdo, como na biblioteca (16 do `gap` do root + 8).
-  tabs: { alignSelf: "flex-start", marginBottom: "8px" },
   section: {
     display: "flex",
     flexDirection: "column",
@@ -299,11 +295,15 @@ function ThemeCard({
 
 /** Configurações › Aparência — tema de cor e papel de parede da tela
  *  inicial, em abas. Idioma e tamanho da interface ficam em Sistema. */
-export function SettingsAppearance() {
+export function SettingsAppearance({
+  section,
+}: {
+  /** `undefined` = entrada da Aparência (cards das opções). */
+  section?: "temas" | "papel-de-parede";
+}) {
   const { t } = useTranslation();
   const s = useStyles();
-  const tb = useTabStyles();
-  const [tab, setTab] = useState<"theme" | "wallpaper">("theme");
+  const tab = section === "papel-de-parede" ? "wallpaper" : "theme";
   const {
     selection,
     customDraft,
@@ -358,16 +358,29 @@ export function SettingsAppearance() {
     onError: (e) => push(errorToast(e, "removeWallpaper")),
   });
 
+  if (!section)
+    return (
+      <SettingsHubCards
+        label={t("settings.tabs.appearance")}
+        items={[
+          {
+            to: "temas",
+            icon: <ColorRegular />,
+            title: t("appearance.theme.title"),
+            description: t("appearance.theme.cardDesc"),
+          },
+          {
+            to: "papel-de-parede",
+            icon: <ImageRegular />,
+            title: t("appearance.wallpaper.title"),
+            description: t("appearance.wallpaper.description"),
+          },
+        ]}
+      />
+    );
+
   return (
     <div className={s.root}>
-      <TabList
-        className={mergeClasses(tb.tabs, s.tabs)}
-        selectedValue={tab}
-        onTabSelect={(_, d) => setTab(d.value as "theme" | "wallpaper")}
-      >
-        <Tab value="theme">{t("appearance.theme.title")}</Tab>
-        <Tab value="wallpaper">{t("appearance.wallpaper.title")}</Tab>
-      </TabList>
 
       {tab === "theme" && (
         <div className={s.section}>

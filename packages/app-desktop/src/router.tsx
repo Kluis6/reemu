@@ -52,6 +52,8 @@ export const router = createHashRouter([
                   { index: true, element: <SettingsHome /> },
                   { path: 'perfil', element: <SettingsProfile /> },
                   { path: 'aparencia', element: <SettingsAppearance /> },
+                  { path: 'aparencia/temas', element: <SettingsAppearance section="temas" /> },
+                  { path: 'aparencia/papel-de-parede', element: <SettingsAppearance section="papel-de-parede" /> },
                   { path: 'biblioteca', element: <SettingsLibrary /> },
                   { path: 'audio', element: <SettingsAudio /> },
                   { path: 'video', element: <SettingsVideo /> },

@@ -28,7 +28,7 @@ import {
 import { useToastStore } from '../../stores/useToastStore'
 import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
-import { SettingsLinkList } from '../../components/SettingsNav'
+import { SettingsHubCards } from './SettingsHome'
 import { ArrowLeftRegular, FrameRegular, OptionsRegular, SparkleRegular } from '@fluentui/react-icons'
 import { ShaderPicker, ShaderPresetList } from '../../components/ShaderPicker'
 
@@ -182,7 +182,8 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
 
   if (!section)
     return (
-      <SettingsLinkList
+      <SettingsHubCards
+        label={t('settings.tabs.video')}
         items={[
           {
             to: 'shaders',
