@@ -37,6 +37,10 @@ const BUILTIN = ['plain', 'crt', 'lcd'] as const
 type Builtin = (typeof BUILTIN)[number]
 const isBuiltin = (n: string): n is Builtin => (BUILTIN as readonly string[]).includes(n)
 
+// Importar pack de molduras de uma pasta: escondido por ora (pedido do
+// usuário); a importação ficou no backlog (TASKS.md › Funcionalidades).
+const SHOW_BEZEL_IMPORT = false
+
 const useStyles = makeStyles({
   // Página de Shaders na altura útil do card (o SettingsLayout dá a altura).
   // A área das colunas é um container de tamanho, pra coluna da prévia
@@ -330,15 +334,17 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
               <Caption1>{t('video.bezelsHint')}</Caption1>
               <BezelLibrary />
               <div style={{ display: 'flex', gap: 8 }}>
-                <Button
-                  disabled={deco.isPending}
-                  onClick={async () => {
-                    const p = await pickFolder(t('dialogs.pickBezelFolder'))
-                    if (p) deco.mutate(p)
-                  }}
-                >
-                  {t('video.importBezels')}
-                </Button>
+                {SHOW_BEZEL_IMPORT && (
+                  <Button
+                    disabled={deco.isPending}
+                    onClick={async () => {
+                      const p = await pickFolder(t('dialogs.pickBezelFolder'))
+                      if (p) deco.mutate(p)
+                    }}
+                  >
+                    {t('video.importBezels')}
+                  </Button>
+                )}
                 <Button
                   appearance="subtle"
                   disabled={decoClear.isPending}

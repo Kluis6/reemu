@@ -434,6 +434,11 @@ no `emu-session`, ver `docs/historico.md`).
 
 ### Funcionalidades
 
+- [ ] `todo` — Molduras: repensar a importação de packs de bezels por pasta.
+      O botão "Importar molduras" (Configurações › Decorações › Molduras)
+      está escondido (`SHOW_BEZEL_IMPORT` em `SettingsVideo.tsx`) a pedido
+      do dono do projeto (2026-10-16); o comando `import_decoration_pack` e
+      o texto do i18n continuam. Decidir o fluxo antes de voltar a mostrar.
 - [ ] `blocked` — Metadata: IGDB como 3º provedor. Bloqueado por falta de
       fonte pública confiável pros ids de plataforma do IGDB (a lista só
       sai da API autenticada) — não implementar de memória. Alternativa
