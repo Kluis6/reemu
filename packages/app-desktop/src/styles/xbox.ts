@@ -933,7 +933,8 @@ export const useHintStyles = makeStyles({
     height: "26px",
     boxSizing: "border-box",
     borderRadius: "50%",
-    border: "2px solid currentColor",
+    // sem borda (pedido do usuário): o círculo é só o preenchimento
+    border: "none",
     backgroundColor: "transparent",
     display: "grid",
     alignItems: "center",
@@ -950,11 +951,11 @@ export const useHintStyles = makeStyles({
   // círculo PREENCHIDO (pedido do usuário) e a letra na cor de mais
   // contraste com o preenchimento: preta no verde/vermelho/amarelo/branco
   // (5–19:1), branca no azul (4,5:1).
-  a: { backgroundColor: "#16c60c", borderColor: "#16c60c", color: "#000000" },
-  b: { backgroundColor: "#ff0000", borderColor: "#ff0000", color: "#000000" },
-  x: { backgroundColor: "#0078d4", borderColor: "#0078d4", color: "#ffffff" },
-  y: { backgroundColor: "#ffb900", borderColor: "#ffb900", color: "#000000" },
-  menu: { backgroundColor: "#ffffff", borderColor: "#ffffff", color: "#000000" },
+  a: { backgroundColor: "#16c60c", color: "#000000" },
+  b: { backgroundColor: "#ff0000", color: "#000000" },
+  x: { backgroundColor: "#0078d4", color: "#ffffff" },
+  y: { backgroundColor: "#ffb900", color: "#000000" },
+  menu: { backgroundColor: "#ffffff", color: "#000000" },
 });
 
 // Página do jogo: altura dos botões do hero (o app Xbox usa 55) e o
