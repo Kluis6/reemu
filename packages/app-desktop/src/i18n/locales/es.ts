@@ -456,6 +456,7 @@ const es: Messages = {
     trayQuit: 'Salir',
     general: 'Inicio',
     options: 'Opciones',
+    optionsDesc: 'Idioma, tamaño de la interfaz, inicio y vídeo',
     hardware: {
       title: 'Hardware',
       description: 'El equipo en el que se ejecuta ReEmu.',
@@ -472,6 +473,7 @@ const es: Messages = {
   },
   about: {
     tab: 'Información y licencias',
+    cardDesc: 'Versión de ReEmu, créditos y licencias de terceros',
     reemu: {
       version: 'Versión {{version}}',
       license: 'Código abierto bajo la licencia MIT. © 2026 colaboradores de ReEmu.',

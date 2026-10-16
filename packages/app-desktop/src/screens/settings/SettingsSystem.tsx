@@ -5,11 +5,8 @@ import {
   Radio,
   RadioGroup,
   Switch,
-  Tab,
-  TabList,
   Text,
   makeStyles,
-  mergeClasses,
   tokens,
   type RadioGroupOnChangeData,
 } from "@fluentui/react-components";
@@ -38,7 +35,12 @@ import {
 import { errorToast } from "../../lib/toast";
 import { UI_SCALES, getUiScale, setUiScale } from "../../lib/uiScale";
 import { useToastStore } from "../../stores/useToastStore";
-import { useTabStyles } from "../../styles/xbox";
+import {
+  DeveloperBoardRegular,
+  InfoRegular,
+  OptionsRegular,
+} from "@fluentui/react-icons";
+import { SettingsHubCards } from "./SettingsHome";
 
 const useStyles = makeStyles({
   root: {
@@ -52,8 +54,6 @@ const useStyles = makeStyles({
     flexDirection: "column",
     rowGap: tokens.spacingVerticalL,
   },
-  // Opções e hardware, cada um na sua aba (24 até o conteúdo: o `rowGap`).
-  tabs: { alignSelf: "flex-start" },
   hwCard: { maxWidth: "720px" },
   // rótulo à esquerda, valor à direita; em tela estreita um embaixo do outro
   hwList: {
@@ -102,12 +102,16 @@ function Heading({
  *  (iniciar com o sistema, tela cheia, bandeja — `src-tauri/src/system.rs`),
  *  o hardware em que o app roda (`commands/hardware.rs`) e as informações e
  *  licenças (`AboutLicenses` — o único lugar do app com créditos e
- *  licenças de terceiros). */
-export function SettingsSystem() {
+ *  licenças de terceiros). Abre nos cards das três partes, como Aparência e
+ *  Decorações (pedido do usuário); cada uma tem a sua rota. */
+export function SettingsSystem({
+  section,
+}: {
+  /** `undefined` = entrada do Sistema (cards das opções). */
+  section?: "opcoes" | "hardware" | "sobre";
+}) {
   const { t, i18n } = useTranslation();
   const s = useStyles();
-  const tb = useTabStyles();
-  const [tab, setTab] = useState<"options" | "hardware" | "about">("options");
   const qc = useQueryClient();
   const push = useToastStore((st) => st.push);
   const [langPref, setLangPref] = useState<LanguagePreference>(
@@ -147,6 +151,33 @@ export function SettingsSystem() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["system-settings"] }),
     onError: (e) => push(errorToast(e, "saveSystemSettings")),
   });
+
+  if (!section)
+    return (
+      <SettingsHubCards
+        label={t("settings.tabs.system")}
+        items={[
+          {
+            to: "opcoes",
+            icon: <OptionsRegular />,
+            title: t("system.options"),
+            description: t("system.optionsDesc"),
+          },
+          {
+            to: "hardware",
+            icon: <DeveloperBoardRegular />,
+            title: t("system.hardware.title"),
+            description: t("system.hardware.description"),
+          },
+          {
+            to: "sobre",
+            icon: <InfoRegular />,
+            title: t("about.tab"),
+            description: t("about.cardDesc"),
+          },
+        ]}
+      />
+    );
 
   if (settings.isLoading) return <LoadingState />;
 
@@ -195,17 +226,7 @@ export function SettingsSystem() {
 
   return (
     <div className={s.root}>
-      <TabList
-        className={mergeClasses(tb.tabs, s.tabs)}
-        selectedValue={tab}
-        onTabSelect={(_, d) => setTab(d.value as "options" | "hardware" | "about")}
-      >
-        <Tab value="options">{t("system.options")}</Tab>
-        <Tab value="hardware">{t("system.hardware.title")}</Tab>
-        <Tab value="about">{t("about.tab")}</Tab>
-      </TabList>
-
-      {tab === "options" && (
+      {section === "opcoes" && (
         <>
           <section className={s.section}>
             <Heading
@@ -293,7 +314,7 @@ export function SettingsSystem() {
         </>
       )}
 
-      {tab === "hardware" && (
+      {section === "hardware" && (
         <section className={s.section}>
           <Caption1 as="p" block style={{ margin: 0 }}>
             {t("system.hardware.description")}
@@ -323,7 +344,7 @@ export function SettingsSystem() {
         </section>
       )}
 
-      {tab === "about" && <AboutLicenses />}
+      {section === "sobre" && <AboutLicenses />}
     </div>
   );
 }

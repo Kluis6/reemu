@@ -457,6 +457,7 @@ const ptBR = {
     trayQuit: 'Sair',
     general: 'Inicialização',
     options: 'Opções',
+    optionsDesc: 'Idioma, tamanho da interface, inicialização e vídeo',
     hardware: {
       title: 'Hardware',
       description: 'O computador em que o ReEmu está rodando.',
@@ -473,6 +474,7 @@ const ptBR = {
   },
   about: {
     tab: 'Informações e licenças',
+    cardDesc: 'Versão do ReEmu, créditos e licenças de terceiros',
     reemu: {
       version: 'Versão {{version}}',
       license: 'Código aberto sob a licença MIT. © 2026 colaboradores do ReEmu.',

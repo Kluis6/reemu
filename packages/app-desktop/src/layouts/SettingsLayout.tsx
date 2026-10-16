@@ -130,7 +130,7 @@ const WIDE_TABS = new Set([
 ]);
 
 /** Categorias que abrem numa grade de cards (subcategorias). */
-const HUB_SECTIONS = new Set(["aparencia", "video"]);
+const HUB_SECTIONS = new Set(["aparencia", "video", "sistema"]);
 
 export function SettingsLayout() {
   const { t } = useTranslation();
@@ -157,6 +157,19 @@ export function SettingsLayout() {
       crumbs.push({ label, to: "/settings/aparencia" });
       crumbs.push({
         label: sub === "temas" ? t("appearance.theme.title") : t("appearance.wallpaper.title"),
+      });
+    } else if (
+      section.key === "sistema" &&
+      (sub === "opcoes" || sub === "hardware" || sub === "sobre")
+    ) {
+      crumbs.push({ label, to: "/settings/sistema" });
+      crumbs.push({
+        label:
+          sub === "opcoes"
+            ? t("system.options")
+            : sub === "hardware"
+              ? t("system.hardware.title")
+              : t("about.tab"),
       });
     } else {
       crumbs.push({ label });

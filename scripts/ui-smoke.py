@@ -49,6 +49,8 @@ SIZES = [(1366, 768), (1188, 668), (1051, 591), (1024, 768), (1920, 1080)]
 ROUTES = [
     "/settings",
     "/settings/sistema",
+    "/settings/sistema/opcoes",
+    "/settings/sistema/hardware",
     "/settings/video/shaders",
     "/settings/controllers",
     "/settings/bios",
