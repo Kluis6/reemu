@@ -10,7 +10,7 @@ import {
   tokens,
 } from "@fluentui/react-components";
 import {
-  CheckmarkFilled,
+  CheckmarkCircleFilled,
   ColorRegular,
   ImageAddRegular,
   ImageRegular,
@@ -118,6 +118,21 @@ const useStyles = makeStyles({
     overflow: "hidden",
   },
   seg: { flexGrow: 1 },
+  // Selo do tema ativo: check cheio de 28 no canto de cima da amostra, num
+  // círculo da cor do card (destaca sobre qualquer cor da amostra).
+  check: {
+    position: "absolute",
+    top: tokens.spacingVerticalS,
+    right: tokens.spacingHorizontalS,
+    width: "32px",
+    height: "32px",
+    borderRadius: tokens.borderRadiusCircular,
+    display: "grid",
+    placeItems: "center",
+    fontSize: "28px",
+    lineHeight: 0,
+    pointerEvents: "none",
+  },
   // bolinha do Switch (18 px, o tamanho do círculo original da Fluent)
   // com o ícone dentro
   thumb: {
@@ -224,21 +239,27 @@ function ThemeCard({
       aria-label={tr("appearance.theme.card", { name: label })}
       style={{
         backgroundColor: t.colorNeutralBackground2,
-        borderColor: selected ? t.colorBrandStroke1 : t.colorNeutralStroke2,
+        // a mesma borda em todos: o ativo é marcado só pelo selo de check
+        // (pedido do usuário), não pela borda na cor do tema
+        borderColor: t.colorNeutralStroke2,
       }}
     >
       <Swatch t={t} />
+      {selected && (
+        <span
+          className={s.check}
+          style={{ backgroundColor: t.colorNeutralBackground2, color: t.reemuBrandText }}
+          aria-hidden
+        >
+          <CheckmarkCircleFilled />
+        </span>
+      )}
       <div className={s.footer}>
         <Text
           className={s.name}
           weight={selected ? "semibold" : "regular"}
           style={{ color: t.colorNeutralForeground1 }}
         >
-          {selected && (
-            <CheckmarkFilled
-              style={{ color: t.reemuBrandText, flexShrink: 0 }}
-            />
-          )}
           {label}
         </Text>
         {onModeChange ? (
