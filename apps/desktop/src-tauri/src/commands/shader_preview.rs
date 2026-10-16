@@ -12,12 +12,13 @@ pub const PREVIEW_W: u32 = 320;
 pub const PREVIEW_H: u32 = 240;
 
 /// Cena escolhida na prévia: `"3d"` = paisagem 3D (`shader_preview_3d`);
-/// qualquer outra coisa = a cena 2D de pixel art.
+/// `"space"` = o shoot 'em up de nave; qualquer outra coisa = a cena 2D de
+/// plataforma (as duas 2D em `shader_preview_2d`).
 fn scene_pixels(scene: &str) -> Vec<u8> {
-    if scene == "3d" {
-        super::sample_scene_3d()
-    } else {
-        super::sample_scene()
+    match scene {
+        "3d" => super::sample_scene_3d(),
+        "space" => super::sample_scene_space(),
+        _ => super::sample_scene(),
     }
 }
 

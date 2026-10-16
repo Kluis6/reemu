@@ -521,6 +521,7 @@ const ptBR = {
       off: 'Shader desligado',
       toggle: 'Ligar ou desligar o shader na prévia',
       scene2d: 'Cena 2D',
+      sceneSpace: 'Cena espacial',
       scene3d: 'Cena 3D',
       error: 'Não foi possível gerar a prévia deste shader.',
     },

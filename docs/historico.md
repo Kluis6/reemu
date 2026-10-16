@@ -2475,3 +2475,23 @@ Infra:
   - O carrossel passou o recorte para o viewport.
   - Os cards do hub de Configurações também clareiam no foco, como o card de jogo, e a grade ganhou 20 px de folga para o brilho.
 - **A varredura agora confere também:** brilho por fora, nenhum brilho rente e o elemento sem cortar o `::before`. Passou nas 20 telas. Capturas do card do hub, do botão "Plataforma" e do carrossel. 147 testes e `ui-smoke` 12/12.
+
+## 2026-10-16 — Prévia dos shaders com os avatares do ReEmu
+
+- **Pedido do usuário:** a cena 2D de teste dos shaders deve usar os personagens dos avatares, em pixel art. Depois pediu outra cena com um tema de jogo diferente, que ponha os avatares em contexto.
+- **Cena 2D (plataforma):** o robô continua como herói. Os outros quatro avatares entraram como sprites no mesmo estilo:
+  - o slime é o inimigo no chão;
+  - o joystick de fliperama fica sobre um bloco;
+  - a nave cruza o céu;
+  - o controle aparece como item.
+- **Cena espacial (nova, terceira aba da prévia):** um shoot 'em up de rolagem lateral no estilo Gradius/R-Type.
+  - A nave do avatar é o jogador: o sprite foi girado para a direita (`rotate_cw`).
+  - Os slimes formam a esquadrilha inimiga, o robô gigante é o chefe atrás de um escudo, e o controle e o joystick são power-ups em cápsulas.
+  - Fundo: degradê e nebulosa em dithering, estrelas em 3 camadas, planeta com anel e asteroides.
+  - O HUD fica numa faixa embaixo, como nos shmups horizontais.
+  - É desenhada em código (`sample_scene_space`, 320×240), sem material de terceiros.
+- **Referências do gênero:**
+  - CPCWiki "Shoot them Up": HUD numa faixa e parallax em camadas.
+  - Fórum do Defold sobre star field parallax: estrelas em várias camadas, com o planeta numa camada própria.
+  - Pacotes Space Backgrounds da Ansimuz: camadas separadas para planetas e asteroides.
+- **Conferência:** o teste `sample_scene_has_the_expected_size` grava as cenas em PPM quando recebe `REEMU_DUMP_SCENE` ou `REEMU_DUMP_SPACE`, e as duas foram conferidas a olho.

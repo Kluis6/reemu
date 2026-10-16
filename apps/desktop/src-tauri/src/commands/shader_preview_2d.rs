@@ -557,6 +557,196 @@ pub fn sample_scene() -> Vec<u8> {
     out
 }
 
+/// Gira um sprite 90° no sentido horário (a nave do avatar aponta pra cima;
+/// na cena espacial ela voa pra direita).
+fn rotate_cw(rows: &[&str]) -> Vec<String> {
+    let grid: Vec<Vec<char>> = rows.iter().map(|r| r.chars().collect()).collect();
+    (0..grid[0].len())
+        .map(|x| grid.iter().rev().map(|row| row[x]).collect())
+        .collect()
+}
+
+/// Segunda cena 2D do preview: um shoot 'em up de rolagem lateral no jeito de
+/// Gradius/R-Type (16 bits), com os avatares do ReEmu em papéis do gênero — a
+/// nave é o jogador, os slimes a esquadrilha inimiga, o robô o chefe, e o
+/// controle e o joystick de fliperama os power-ups. Espaço com nebulosa em
+/// dithering, estrelas em 3 camadas, planeta com anel e o HUD numa faixa
+/// embaixo, como nos shmups horizontais. Desenhada aqui, sem material de
+/// terceiros.
+pub fn sample_scene_space() -> Vec<u8> {
+    let mut cv = Canvas::new();
+    let hud = 220;
+
+    // Espaço: degradê do azul quase preto ao roxo, com dithering.
+    let deep: [Rgb; 4] = [(6, 6, 20), (12, 10, 36), (26, 14, 56), (40, 18, 70)];
+    for y in 0..hud {
+        let f = y as f32 / hud as f32 * (deep.len() - 1) as f32;
+        let (i, t) = (f.floor() as usize, f.fract());
+        let (a, b) = (deep[i], deep[(i + 1).min(deep.len() - 1)]);
+        for x in 0..W {
+            cv.dither(x, y, a, b, t);
+        }
+    }
+    // Nebulosa: manchas magenta e azul em dithering.
+    for (cx, cy, r, c, k) in [
+        (90, 70, 70, (150, 40, 140), 0.45f32),
+        (170, 150, 60, (40, 70, 170), 0.4),
+        (40, 180, 40, (110, 40, 150), 0.35),
+    ] {
+        for y in (cy - r).max(0)..(cy + r).min(hud) {
+            for x in (cx - r).max(0)..(cx + r).min(W) {
+                let d = (((x - cx) * (x - cx) + (y - cy) * (y - cy)) as f32).sqrt() / r as f32;
+                if d < 1.0 {
+                    let base = cv.get(x, y);
+                    cv.dither(x, y, base, c, (1.0 - d) * k);
+                }
+            }
+        }
+    }
+    // Estrelas em 3 camadas: distantes, médias e próximas (com rastro).
+    let mut seed: u32 = 0x5eed_cafe;
+    let mut rnd = |m: i32| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        (seed % m as u32) as i32
+    };
+    for _ in 0..90 {
+        let (x, y) = (rnd(W), rnd(hud));
+        cv.put(x, y, (110, 110, 160));
+    }
+    for _ in 0..30 {
+        let (x, y) = (rnd(W), rnd(hud));
+        cv.put(x, y, (220, 220, 255));
+    }
+    for _ in 0..8 {
+        let (x, y) = (rnd(W), rnd(hud - 4) + 2);
+        cv.rect(x - 7, y, 6, 1, (80, 80, 130));
+        for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+            cv.put(x + dx, y + dy, (170, 180, 255));
+        }
+        cv.put(x, y, (255, 255, 255));
+    }
+    // Planeta com faixas e anel, sombreado em dithering (luz da esquerda).
+    let (px, py, pr) = (262, 52, 34);
+    let ring = |x: i32, k: i32| py + 6 + ((x - px) as f32 / 52.0 * 10.0) as i32 + k;
+    // metade de trás do anel, antes do planeta
+    for k in 0..2 {
+        for x in px..=px + 52 {
+            cv.put(x, ring(x, k) - 4, (150, 110, 100));
+        }
+    }
+    for y in py - pr..=py + pr {
+        for x in px - pr..=px + pr {
+            let (dx, dy) = ((x - px) as f32, (y - py) as f32);
+            if (dx * dx + dy * dy).sqrt() <= pr as f32 {
+                let base = if ((y - py + pr) / 9) % 2 == 0 {
+                    (224, 132, 88)
+                } else {
+                    (196, 104, 70)
+                };
+                let shade = ((dx + dy * 0.4) / pr as f32 + 0.2).clamp(0.0, 1.0);
+                cv.dither(x, y, base, (70, 30, 50), shade);
+            }
+        }
+    }
+    for k in 0..2 {
+        for x in px - 52..=px + 52 {
+            let c = if k == 0 {
+                (250, 220, 170)
+            } else {
+                (170, 130, 110)
+            };
+            cv.put(x, ring(x, k), c);
+        }
+    }
+    // Asteroides.
+    for (ax, ay, r) in [(150, 30, 6), (200, 200, 5), (28, 36, 4)] {
+        cv.disc(ax, ay, r, (96, 84, 92));
+        cv.disc(ax - 1, ay - 1, r - 2, (132, 118, 124));
+        cv.put(ax + 1, ay + 1, (60, 52, 60));
+    }
+
+    // Power-ups em cápsulas: o controle e o joystick de fliperama.
+    for (cx, cy) in [(132, 180), (206, 96)] {
+        cv.disc(cx, cy, 14, (60, 90, 170));
+        cv.disc(cx, cy, 12, (16, 20, 48));
+        cv.rect(cx - 8, cy - 9, 2, 2, (210, 235, 255));
+    }
+    cv.sprite(&PAD, 124, 176, 1, pal);
+    cv.sprite(&STICK, 200, 89, 1, pal);
+
+    // Esquadrilha de slimes em onda.
+    for (k, (x, y)) in [(150, 60), (178, 84), (150, 122), (178, 146)]
+        .into_iter()
+        .enumerate()
+    {
+        cv.sprite(&SLIME, x, y, if k % 2 == 0 { 2 } else { 1 }, pal);
+    }
+    // Explosão do slime que levou o tiro.
+    let (ex, ey) = (124, 100);
+    for (r, c) in [
+        (9, (255, 120, 40)),
+        (6, (255, 200, 80)),
+        (3, (255, 250, 220)),
+    ] {
+        cv.disc(ex, ey, r, c);
+    }
+    for (dx, dy) in [(-13, -4), (12, 6), (-4, 13), (6, -13), (14, -9)] {
+        cv.rect(ex + dx, ey + dy, 2, 2, (255, 180, 60));
+    }
+
+    // Chefe: o robô gigante atrás de um escudo de energia, carregando o raio.
+    cv.sprite(&HERO, 248, 112, 4, pal);
+    for y in 104..186 {
+        for x in 238..241 {
+            let base = cv.get(x, y);
+            cv.put(
+                x,
+                y,
+                lerp(base, (90, 220, 255), 0.25 + 0.2 * (x - 238) as f32),
+            );
+        }
+    }
+    cv.disc(230, 160, 5, (90, 220, 255));
+    cv.disc(230, 160, 2, (230, 250, 255));
+
+    // Jogador: a nave virada pra direita, com a chama do motor e os tiros.
+    let ship = rotate_cw(&ROCKET);
+    let ship: Vec<&str> = ship.iter().map(String::as_str).collect();
+    let (sx, sy) = (30, 96);
+    cv.sprite(&ship, sx, sy, 3, pal);
+    for (k, c) in [(220, 80, 40), (255, 170, 60), (255, 240, 160)]
+        .into_iter()
+        .enumerate()
+    {
+        let k = k as i32;
+        cv.rect(sx - 14 + k * 4, sy + 12 + k, 14 - k * 4, 6 - k * 2, c);
+    }
+    for (bx, by) in [(84, 106), (104, 106), (84, 115)] {
+        cv.rect(bx, by, 8, 2, (255, 246, 160));
+        cv.put(bx + 8, by, (255, 255, 255));
+    }
+
+    // HUD embaixo: vidas, barra de power e pontos.
+    cv.rect(0, hud, W, H - hud, (14, 12, 28));
+    cv.rect(0, hud, W, 1, (90, 80, 140));
+    for k in 0..3 {
+        cv.sprite(&HEART, 8 + k * 10, hud + 7, 1, pal);
+    }
+    for k in 0..6 {
+        let c = if k < 4 { (90, 220, 255) } else { (50, 50, 80) };
+        cv.rect(54 + k * 9, hud + 7, 7, 6, c);
+    }
+    text(&mut cv, "SCORE 098760", 210, hud + 5, 2, (255, 255, 255));
+
+    let mut out = Vec::with_capacity((W * H * 4) as usize);
+    for (r, g, b) in cv.px {
+        out.extend_from_slice(&[b, g, r, 0xFF]);
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     /// Grava a cena em PPM quando `REEMU_DUMP_SCENE` aponta pra um arquivo
@@ -565,6 +755,15 @@ mod tests {
     fn sample_scene_has_the_expected_size() {
         let px = super::sample_scene();
         assert_eq!(px.len(), (super::W * super::H * 4) as usize);
+        let space = super::sample_scene_space();
+        assert_eq!(space.len(), px.len());
+        if let Ok(path) = std::env::var("REEMU_DUMP_SPACE") {
+            let mut out = format!("P6\n{} {}\n255\n", super::W, super::H).into_bytes();
+            for p in space.chunks(4) {
+                out.extend_from_slice(&[p[2], p[1], p[0]]);
+            }
+            std::fs::write(path, out).unwrap();
+        }
         if let Ok(path) = std::env::var("REEMU_DUMP_SCENE") {
             let mut out = format!("P6\n{} {}\n255\n", super::W, super::H).into_bytes();
             for p in px.chunks(4) {
