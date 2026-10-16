@@ -131,8 +131,10 @@ const useStyles = makeStyles({
   // Setas do `CarouselNavContainer` (layout "overlay-expanded": nas laterais,
   // no meio da altura). 40 epx com ícone de 24: a seta das prateleiras do app
   // Xbox tem 45 epx e um chevron de ~23 epx; com 32/16 ficava pequena.
+  // Formato dos outros botões do ReEmu (pedido do usuário): quadrado com o
+  // raio padrão (`borderRadiusMedium`), não o círculo do Fluent.
   arrow: {
-    borderRadius: tokens.borderRadiusCircular,
+    borderRadius: `${tokens.borderRadiusMedium} !important`,
     backgroundColor: 'rgba(0,0,0,0.45) !important',
     color: '#ffffff !important',
     width: '40px !important',

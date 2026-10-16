@@ -133,6 +133,8 @@ function Catalog() {
       </Caption1>
       <div className={mergeClasses(styles.list, styles.catalogList, styles.filterRow)}>
         <Input
+          // sem o anel de foco (pedido do usuário; ver `reemu-no-ring` no index.css)
+          className="reemu-no-ring"
           appearance="filled-darker"
           placeholder={t('cores.filter')}
           value={filter}

@@ -229,11 +229,13 @@ html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
   font-family: var(--reemuFontDisplay) !important;
 }
 
-/* Busca da topbar sem o anel de foco (pedido do usuário): o campo já marca o
-   foco com a barra embaixo do Fluent, e com o controle quem recebe o foco é o
-   teclado na tela. A regra 3 da seção "foco" acima é que punha o anel. */
-.reemu-topbar-search.fui-SearchBox:has(:focus-visible),
-html[data-nav-focus] .reemu-topbar-search.fui-SearchBox:focus-within {
+/* Campos sem o anel de foco (`reemu-no-ring`, pedido do usuário): a busca da
+   topbar e o filtro do catálogo de cores. O campo já marca o foco com a
+   barra embaixo do Fluent, e na busca da topbar, com o controle, quem recebe
+   o foco é o teclado na tela. A regra 3 da seção "foco" acima é que punha o
+   anel. */
+.reemu-no-ring:has(:focus-visible),
+html[data-nav-focus] .reemu-no-ring:focus-within {
   outline: none !important;
   box-shadow: none !important;
 }
@@ -259,9 +261,13 @@ html[data-nav-focus] .reemu-topbar-search.fui-SearchBox:focus-within {
   :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus
 ):not(.fui-Card, .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
   [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"],
-  [role="treeitem"], .fui-CarouselCard > button) {
+  [role="treeitem"], .fui-CarouselCard > button, .fui-CarouselButton) {
   position: relative;
 }
+/* As setas do carrossel já são `absolute` (laterais, no meio da altura) e
+   servem de base pro `::before`; com o `relative` acima elas pulavam de
+   lugar ao receber foco — a classe do Fluent que as posiciona perde pra
+   esta regra na ordem do CSS. */
 /* O brilho é um filho (`::before`): quem corta o que passa da borda
    (`overflow: hidden` — o Button do Fluent, o Card, a Tab) o esconderia.
    Enquanto em foco, deixa aparecer (o texto já corta com reticências no
@@ -275,8 +281,8 @@ html[data-nav-focus] .reemu-topbar-search.fui-SearchBox:focus-within {
   :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus,
   html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):focus-within,
   .fui-Card:not([role="button"]):has(> .fui-Card__checkbox:focus),
-  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-topbar-search):has(:focus-visible),
-  html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-topbar-search):focus-within,
+  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):has(:focus-visible),
+  html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):focus-within,
   html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
   .fui-Carousel:has(.fui-CarouselCard > button:focus-visible)
 ):not(.fui-Card[role="button"], .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
@@ -294,8 +300,8 @@ html[data-nav-focus] .reemu-topbar-search.fui-SearchBox:focus-within {
   :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus,
   html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):focus-within,
   .fui-Card:not([role="button"]):has(> .fui-Card__checkbox:focus),
-  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-topbar-search):has(:focus-visible),
-  html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-topbar-search):focus-within,
+  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):has(:focus-visible),
+  html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):focus-within,
   html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
   .fui-Carousel:has(.fui-CarouselCard > button:focus-visible)
 ):not(.fui-Card[role="button"], .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
