@@ -118,7 +118,10 @@ const es: Messages = {
     },
     wallpaper: {
       title: 'Fondo de pantalla',
-      description: 'Una imagen de fondo para la pantalla de inicio. Opcional.',
+      description: 'Una imagen de fondo para la app. Opcional.',
+      scope: 'Dónde mostrarla',
+      scopeHome: 'Solo en la pantalla de inicio',
+      scopeAll: 'En todas las pantallas (menos la página del juego)',
       choose: 'Elegir imagen…',
       change: 'Cambiar imagen…',
       remove: 'Quitar',

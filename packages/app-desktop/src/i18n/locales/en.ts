@@ -118,7 +118,10 @@ const en: Messages = {
     },
     wallpaper: {
       title: 'Wallpaper',
-      description: 'A background image for the home screen. Optional.',
+      description: 'A background image for the app. Optional.',
+      scope: 'Where to show it',
+      scopeHome: 'Home screen only',
+      scopeAll: 'On every screen (except the game page)',
       choose: 'Choose image…',
       change: 'Change image…',
       remove: 'Remove',

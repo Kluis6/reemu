@@ -34,6 +34,7 @@ import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { ButtonHints } from "../components/ButtonHints";
+import { useWallpaperStore } from "../stores/useWallpaperStore";
 import { OnScreenKeyboard } from "../components/OnScreenKeyboard";
 import { Clock } from "../components/Clock";
 import { GamepadStatus } from "../components/GamepadStatus";
@@ -139,6 +140,7 @@ export function AppShell() {
   const { pathname } = useLocation();
   const { on: fullscreen, toggle: toggleFullscreen } = useFullscreen();
   const atRoot = pathname === "/";
+  const wallpaperScope = useWallpaperStore((st) => st.scope);
   const atBrowse = pathname === "/" || pathname === "/library";
   const [powerOpen, setPowerOpen] = useState(false);
   useUpdateCheck();
@@ -193,10 +195,12 @@ export function AppShell() {
         ] as const);
   return (
     <div className={s.app}>
-      {/* Papel de parede em todas as telas menos a página do jogo (que tem a
-          arte do jogo no hero) — TESTE do usuário (2026-10-16); se não for
-          aprovado, volta a `showWallpaper={atRoot}` (só a tela inicial). */}
-      <AnimatedBackground showWallpaper={!pathname.startsWith("/rom/")} />
+      {/* Papel de parede: só na tela inicial ou em todas as telas (escolha em
+          Aparência › Papel de parede); nunca na página do jogo, que tem a
+          arte do jogo no hero. */}
+      <AnimatedBackground
+        showWallpaper={wallpaperScope === "all" ? !pathname.startsWith("/rom/") : atRoot}
+      />
       <nav className={s.rail}>
         <Menu positioning={{ position: "below", align: "start", offset: 12 }}>
           <MenuTrigger disableButtonEnhancement>

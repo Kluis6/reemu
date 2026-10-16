@@ -119,7 +119,10 @@ const ptBR = {
     },
     wallpaper: {
       title: 'Papel de parede',
-      description: 'Uma imagem de fundo pra tela inicial. Opcional.',
+      description: 'Uma imagem de fundo pro app. Opcional.',
+      scope: 'Onde mostrar',
+      scopeHome: 'Só na tela inicial',
+      scopeAll: 'Em todas as telas (menos a página do jogo)',
       choose: 'Escolher imagem…',
       change: 'Trocar imagem…',
       remove: 'Remover',

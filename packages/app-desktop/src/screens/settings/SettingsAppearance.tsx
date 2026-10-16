@@ -4,6 +4,9 @@ import {
   Card,
   ColorPicker,
   ColorSlider,
+  Field,
+  Radio,
+  RadioGroup,
   Switch,
   Text,
   makeStyles,
@@ -26,6 +29,7 @@ import {
   setWallpaperFile,
   wallpaperUrl,
 } from "../../lib/tauri";
+import { useWallpaperStore, type WallpaperScope } from "../../stores/useWallpaperStore";
 import { REEMU_ACTION } from "../../hooks/useMenuNav";
 import { errorToast } from "../../lib/toast";
 import { useToastStore } from "../../stores/useToastStore";
@@ -317,6 +321,8 @@ export function SettingsAppearance({
   const { t } = useTranslation();
   const s = useStyles();
   const tab = section === "papel-de-parede" ? "wallpaper" : "theme";
+  const wallScope = useWallpaperStore((st) => st.scope);
+  const setWallScope = useWallpaperStore((st) => st.setScope);
   const {
     selection,
     customDraft,
@@ -496,6 +502,16 @@ export function SettingsAppearance({
               </Button>
             )}
           </div>
+          {/* onde aparece; a página do jogo fica sempre sem (arte do jogo) */}
+          <Field label={t("appearance.wallpaper.scope")}>
+            <RadioGroup
+              value={wallScope}
+              onChange={(_, d) => setWallScope(d.value as WallpaperScope)}
+            >
+              <Radio value="home" label={t("appearance.wallpaper.scopeHome")} />
+              <Radio value="all" label={t("appearance.wallpaper.scopeAll")} />
+            </RadioGroup>
+          </Field>
         </Card>
       )}
     </div>
