@@ -110,6 +110,14 @@ const useStyles = makeStyles({
       overflow: "visible !important",
       backgroundImage:
         "linear-gradient(rgba(128, 128, 128, 0.14), rgba(128, 128, 128, 0.14))",
+      // A borda de 2 px do card (cor do tema, inline) ficava logo dentro do
+      // anel e somava com ele — parecia um anel mais grosso que o padrão. No
+      // foco/hover ela some, como no card de jogo (que não tem borda).
+      // (as 4 propriedades: o Griffel não aceita o atalho `borderColor`)
+      borderTopColor: "transparent !important",
+      borderRightColor: "transparent !important",
+      borderBottomColor: "transparent !important",
+      borderLeftColor: "transparent !important",
     },
     "&:hover::before": {
       content: '""',
