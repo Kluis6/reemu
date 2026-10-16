@@ -946,14 +946,15 @@ export const useHintStyles = makeStyles({
     fontWeight: tokens.fontWeightSemibold,
     lineHeight: 1,
   },
-  // Cores dos botões do controle Xbox (Y e B medidas no print).
-  a: { color: "#16c60c" },
-  b: { color: "#ff0000" },
-  x: { color: "#0078d4" },
-  y: { color: "#ffb900" },
-  menu: {
-    color: "#ffffff",
-  },
+  // Cores dos botões do controle Xbox (Y e B medidas no print), com o
+  // círculo PREENCHIDO (pedido do usuário) e a letra na cor de mais
+  // contraste com o preenchimento: preta no verde/vermelho/amarelo/branco
+  // (5–19:1), branca no azul (4,5:1).
+  a: { backgroundColor: "#16c60c", borderColor: "#16c60c", color: "#000000" },
+  b: { backgroundColor: "#ff0000", borderColor: "#ff0000", color: "#000000" },
+  x: { backgroundColor: "#0078d4", borderColor: "#0078d4", color: "#ffffff" },
+  y: { backgroundColor: "#ffb900", borderColor: "#ffb900", color: "#000000" },
+  menu: { backgroundColor: "#ffffff", borderColor: "#ffffff", color: "#000000" },
 });
 
 // Página do jogo: altura dos botões do hero (o app Xbox usa 55) e o
