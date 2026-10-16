@@ -1222,6 +1222,9 @@ export const useDetailStyles = makeStyles({
       width: "1em",
       height: "1em",
     },
+    // Foco igual ao do card de jogo (pedido do usuário): além do anel e do
+    // brilho, o botão clareia — o fundo do hover do `secondary`.
+    ":focus": { backgroundColor: tokens.colorNeutralBackground1Hover },
   },
   // Linha de tempo de jogo abaixo das ações (página de jogo do app Xbox:
   // texto de 16 com ícone, logo abaixo dos botões). Branco translúcido:
@@ -1246,6 +1249,8 @@ export const useDetailStyles = makeStyles({
     height: `${HERO_BTN_H}px !important`,
     fontSize: `${tokens.fontSizeBase300} !important`,
     fontWeight: `${tokens.fontWeightRegular} !important`,
+    // foco igual ao do card de jogo: clareia como no hover do `primary`
+    ":focus": { backgroundColor: tokens.colorBrandBackgroundHover },
   },
   // Remover: mesma cor de ícone das outras ações (pedido do usuário). O
   // vermelho só aparece no 2º toque pendente, abaixo.
