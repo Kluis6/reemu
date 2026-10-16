@@ -109,7 +109,8 @@ const useStyles = makeStyles({
     justifyContent: "flex-start",
     gap: tokens.spacingHorizontalXL,
   },
-  // Ícone à DIREITA e no dobro do tamanho (pedido do usuário; era 40/32),
+  // Ícone à DIREITA e maior (pedido do usuário: o dobro, era 40/32, e
+  // depois um pouco menor — 64/52),
   // com o texto onde já estava. Fora do fluxo (`absolute`), pra não somar
   // altura ao card: a grade do hub continua cabendo na tela sem rolar. No
   // canto de cima; no card em linha (tela baixa), no meio da altura.
@@ -117,13 +118,13 @@ const useStyles = makeStyles({
     position: "absolute",
     top: tokens.spacingHorizontalXXL,
     right: tokens.spacingHorizontalXXL,
-    fontSize: "80px",
+    fontSize: "64px",
     lineHeight: 0,
     "@media (max-height: 640px)": {
       top: "50%",
       right: tokens.spacingHorizontalL,
       transform: "translateY(-50%)",
-      fontSize: "64px",
+      fontSize: "52px",
     },
     flexShrink: 0,
     // ícone: destaque do tema (`reemuBrandAccent`, 3:1 garantido)
@@ -137,10 +138,10 @@ const useStyles = makeStyles({
   },
   // Nome e descrição no pé do card, onde já ficavam (o ícone saiu do
   // fluxo). No card em linha, na borda da esquerda como no card normal, com
-  // espaço à direita pro ícone (64 + folga).
+  // espaço à direita pro ícone (52 + folga).
   textEnd: {
     marginTop: "auto",
-    "@media (max-height: 640px)": { marginTop: 0, marginRight: "72px" },
+    "@media (max-height: 640px)": { marginTop: 0, marginRight: "60px" },
   },
   // Descrição numa linha só: com controle conectado a barra de dicas
   // (canto inferior direito) cobria a 2ª linha do card de Sistema.
