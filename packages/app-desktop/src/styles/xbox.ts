@@ -500,7 +500,7 @@ export const useBrowseStyles = makeStyles({
   section: { marginTop: `${M.SECTION_GAP}px` },
   // Prateleira em destaque dentro de um card, como "Transmita seu próprio
   // jogo" no app Xbox (print a 3840×2160, 3,07 px por epx: 32 epx do card
-  // aos cards de jogo, cantos de 16). O card fica dentro das margens da
+  // aos cards de jogo; os cantos usam o raio padrão do ReEmu, 4 px). O card fica dentro das margens da
   // página (mesmas bordas do destaque e das outras prateleiras) e o
   // conteúdo dentro dele com o mesmo padding nos 4 lados — a prateleira
   // mede a própria largura (`Shelf`) e reajusta quantos cards cabem e o
