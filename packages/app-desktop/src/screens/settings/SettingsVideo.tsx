@@ -37,9 +37,10 @@ const BUILTIN = ['plain', 'crt', 'lcd'] as const
 type Builtin = (typeof BUILTIN)[number]
 const isBuiltin = (n: string): n is Builtin => (BUILTIN as readonly string[]).includes(n)
 
-// Importar pack de molduras de uma pasta: escondido por ora (pedido do
-// usuário); a importação ficou no backlog (TASKS.md › Funcionalidades).
-const SHOW_BEZEL_IMPORT = false
+// Importar pack de molduras de uma pasta e remover os bezels: escondidos por
+// ora (pedido do usuário); a importação ficou no backlog (TASKS.md ›
+// Funcionalidades).
+const SHOW_BEZEL_PACK_TOOLS = false
 
 const useStyles = makeStyles({
   // Página de Shaders na altura útil do card (o SettingsLayout dá a altura).
@@ -333,8 +334,8 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <Caption1>{t('video.bezelsHint')}</Caption1>
               <BezelLibrary />
-              <div style={{ display: 'flex', gap: 8 }}>
-                {SHOW_BEZEL_IMPORT && (
+              {SHOW_BEZEL_PACK_TOOLS && (
+                <div style={{ display: 'flex', gap: 8 }}>
                   <Button
                     disabled={deco.isPending}
                     onClick={async () => {
@@ -344,15 +345,15 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                   >
                     {t('video.importBezels')}
                   </Button>
-                )}
-                <Button
-                  appearance="subtle"
-                  disabled={decoClear.isPending}
-                  onClick={() => decoClear.mutate()}
-                >
-                  {t('video.removeBezels')}
-                </Button>
-              </div>
+                  <Button
+                    appearance="subtle"
+                    disabled={decoClear.isPending}
+                    onClick={() => decoClear.mutate()}
+                  >
+                    {t('video.removeBezels')}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </>

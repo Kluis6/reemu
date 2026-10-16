@@ -2491,3 +2491,19 @@ Infra:
   - Fórum do Defold sobre star field parallax: estrelas em várias camadas, com o planeta numa camada própria.
   - Pacotes Space Backgrounds da Ansimuz: camadas separadas para planetas e asteroides.
 - **Conferência:** o teste `sample_scene_has_the_expected_size` grava a cena em PPM quando recebe `REEMU_DUMP_SCENE`, e ela foi conferida a olho.
+
+## 2026-10-16 — Cena 2D da prévia a partir da imagem de referência
+
+- **Pedido do usuário:** a cena 2D de teste dos shaders deve partir de uma imagem de referência que ele mandou, uma fase de plataforma ao pôr do sol. Os avatares não precisam aparecer.
+- **O que mudou:** a cena espacial com os avatares saiu. A nova `sample_scene` (320×240) redesenha a referência pixel a pixel em código, porque a imagem original não tem grade de pixels exata e o teste de shader precisa de pixels nítidos. Ela tem:
+  - céu em degradê com dithering, sol com halo, nuvens e montanhas em duas camadas;
+  - a ilha com o castelo, o lago com o reflexo do sol e a margem com pinheiros;
+  - a árvore, as plataformas de pedra com grama e tufos, a cachoeira, a água com espuma e a ponte;
+  - a placa, os blocos (tijolo e "?"), as moedas, o herói de capa e o inimigo;
+  - o HUD em cima: retrato ×03, corações, SCORE, moedas ×12 e STAGE 1-2.
+- **Fonte do HUD:** ganhou T, A, G e "-".
+- **Novo teste:** confere que todos os sprites são retangulares.
+- **Molduras (Configurações › Decorações › Molduras), também a pedido:**
+  - Os botões "Importar pasta de bezels…" e "Remover bezels" foram escondidos (`SHOW_BEZEL_PACK_TOOLS`). A importação ficou no backlog (TASKS.md).
+  - O tamanho dos packs (100–600 MB por sistema) subiu do rodapé para o texto do topo, junto com as outras informações.
+

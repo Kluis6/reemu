@@ -186,7 +186,6 @@ export function BezelLibrary() {
           </div>
         ))}
       </div>
-      <Caption1>{t('bezels.footer')}</Caption1>
     </div>
   )
 }
