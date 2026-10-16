@@ -156,6 +156,69 @@ const CHEST: [&str; 12] = [
     "kkkkkkkkkkkkkkkk",
 ];
 
+/// Os outros avatares do ReEmu em pixel art, mesma paleta dos SVGs
+/// (`lib/avatars.ts`): slime (preset 3), controle (2), joystick de
+/// fliperama (4) e nave (5). O robô (1) é o `HERO`.
+const SLIME: [&str; 11] = [
+    "....kkkkkk....",
+    "..kkLLLLLLkk..",
+    ".kLLlLLLLLLLk.",
+    ".kLlLLLLLLLLk.",
+    "kLLLLLLLLLLLLk",
+    "kLLLeLLLLeLLLk",
+    "kLLLeLLLLeLLLk",
+    "kLpLLLLLLLLpLk",
+    "kLLLLLmmLLLLLk",
+    "kLLLLLLLLLLLLk",
+    ".kkkkkkkkkkkk.",
+];
+
+const PAD: [&str; 8] = [
+    "..kkkkkkkkkkkk..",
+    ".kFFFFFFFFFFFFk.",
+    "kFFPFFFFFFFFaFFk",
+    "kFPPPFFFFFFbFcFk",
+    "kFFPFFFQQFFFdFFk",
+    "kFFFFFkkkkFFFFFk",
+    ".kFFFk....kFFFk.",
+    "..kkk......kkk..",
+];
+
+const STICK: [&str; 14] = [
+    "....kkkk....",
+    "...kJJJJk...",
+    "..kJjJJJJk..",
+    "..kJJJJJJk..",
+    "..kJJJJJJk..",
+    "...kJJJJk...",
+    "....kTTk....",
+    "....kTTk....",
+    "....kTTk....",
+    ".kkkkTTkkkk.",
+    "kBBBBBBBBBBk",
+    "kBqBBBBBBvBk",
+    "kBBBBBBBBBBk",
+    ".kkkkkkkkkk.",
+];
+
+const ROCKET: [&str; 15] = [
+    "....kk....",
+    "...kWWk...",
+    "..kWWWWk..",
+    "..kWWWWk..",
+    "..kWzzWk..",
+    "..kWzzWk..",
+    "..kWWWWk..",
+    "..kWWWWk..",
+    ".kRkWWkRk.",
+    "kRRkWWkRRk",
+    "kRRkkkkRRk",
+    "kkk.gg.kkk",
+    "....YY....",
+    "....Yf....",
+    ".....f....",
+];
+
 /// Coração do HUD, 7×6.
 const HEART: [&str; 6] = [
     ".RR.RR.", "RrRRRRR", "RRRRRRR", ".RRRRR.", "..RRR..", "...R...",
@@ -181,6 +244,30 @@ fn pal(c: char) -> Option<Rgb> {
         'O' => (158, 86, 34),
         'o' => (112, 58, 22),
         'k' => (22, 18, 30),
+        // slime
+        'L' => (217, 249, 157),
+        'l' => (236, 252, 203),
+        'e' => (20, 83, 45),
+        'm' => (20, 83, 45),
+        'p' => (251, 113, 133),
+        // controle
+        'F' => (253, 244, 255),
+        'P' => (59, 7, 100),
+        'Q' => (216, 180, 254),
+        'a' => (34, 197, 94),
+        'b' => (59, 130, 246),
+        'c' => (239, 68, 68),
+        'd' => (234, 179, 8),
+        // joystick de fliperama
+        'J' => (253, 224, 71),
+        'j' => (255, 255, 255),
+        'T' => (229, 231, 235),
+        'B' => (31, 41, 55),
+        'q' => (34, 211, 238),
+        'v' => (163, 230, 53),
+        // nave
+        'z' => (56, 189, 248),
+        'f' => (249, 115, 22),
         _ => return None,
     })
 }
@@ -429,14 +516,30 @@ pub fn sample_scene() -> Vec<u8> {
         }
     }
     cv.rect(px0, py0 + 10, pw, 1, (40, 20, 16));
-    for k in 0..4 {
+    // moedas nas pontas e o joystick de fliperama (avatar 4) no meio
+    for k in [0, 3] {
         cv.sprite(&COIN, px0 + 6 + k * 15, py0 - 14, 1, pal);
     }
-    // Robô e baú no chão.
+    cv.sprite(&STICK, px0 + 20, py0 - 28, 2, pal);
+    // Nave (avatar 5) voando entre as nuvens, com rastro.
+    cv.sprite(&ROCKET, 112, 40, 2, pal);
+    for (k, y) in (0..4).zip([72, 76, 80, 84]) {
+        cv.put(121 + (k % 2), y, (255, 226, 150));
+    }
+    // Controle (avatar 2) flutuando como item, com brilho em volta.
+    cv.sprite(&PAD, 12, 112, 2, pal);
+    for (x, y) in [(8, 108), (48, 110), (30, 132)] {
+        cv.put(x, y, (255, 255, 255));
+        for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
+            cv.put(x + dx, y + dy, (255, 236, 160));
+        }
+    }
+    // Robô (avatar 1), slime (avatar 3) e baú no chão.
     cv.sprite(&HERO, 52, horizon - 32, 2, pal);
+    cv.sprite(&SLIME, 98, horizon - 22, 2, pal);
     cv.sprite(&CHEST, 150, horizon - 24, 2, pal);
     // sombras no chão
-    for x in 52..76 {
+    for x in (52..76).chain(100..124) {
         let p = cv.get(x, horizon + 1);
         cv.put(x, horizon + 1, lerp(p, (20, 40, 20), 0.5));
     }
@@ -452,4 +555,22 @@ pub fn sample_scene() -> Vec<u8> {
         out.extend_from_slice(&[b, g, r, 0xFF]);
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    /// Grava a cena em PPM quando `REEMU_DUMP_SCENE` aponta pra um arquivo
+    /// (pra conferir o desenho a olho); sem a variável, só confere o tamanho.
+    #[test]
+    fn sample_scene_has_the_expected_size() {
+        let px = super::sample_scene();
+        assert_eq!(px.len(), (super::W * super::H * 4) as usize);
+        if let Ok(path) = std::env::var("REEMU_DUMP_SCENE") {
+            let mut out = format!("P6\n{} {}\n255\n", super::W, super::H).into_bytes();
+            for p in px.chunks(4) {
+                out.extend_from_slice(&[p[2], p[1], p[0]]);
+            }
+            std::fs::write(path, out).unwrap();
+        }
+    }
 }
