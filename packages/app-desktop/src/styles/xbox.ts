@@ -956,7 +956,13 @@ export const useHintStyles = makeStyles({
   b: { backgroundColor: "#ff0000", color: "#000000" },
   x: { backgroundColor: "#0078d4", color: "#ffffff" },
   y: { backgroundColor: "#ffb900", color: "#000000" },
-  menu: { backgroundColor: "#ffffff", color: "#000000" },
+  // o ícone (svg) não tem a folga da letra: sem o `paddingBottom` do glifo
+  menu: {
+    backgroundColor: "#ffffff",
+    color: "#000000",
+    paddingBottom: 0,
+    "& svg": { width: "18px", height: "18px" },
+  },
 });
 
 // Página do jogo: altura dos botões do hero (o app Xbox usa 55) e o

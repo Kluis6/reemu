@@ -1,4 +1,5 @@
 import { mergeClasses } from '@fluentui/react-components'
+import { LineHorizontal3Regular } from '@fluentui/react-icons'
 import { useGamepadStore } from '../stores/useGamepadStore'
 import { useHintStyles } from '../styles/xbox'
 
@@ -22,7 +23,11 @@ export function ButtonHints({ hints }: { hints: readonly Hint[] }) {
       {hints.map((h) => (
         <span key={h.glyph} className={s.hint}>
           {h.glyph === 'MENU' ? (
-            <span className={mergeClasses(s.glyph, s.menu)}>☰</span>
+            // ícone de menu do Fluent: o caractere ☰ (trigrama) saía grosso e
+            // fora do centro do círculo
+            <span className={mergeClasses(s.glyph, s.menu)}>
+              <LineHorizontal3Regular />
+            </span>
           ) : (
             <span className={mergeClasses(s.glyph, color[h.glyph])}>{h.glyph}</span>
           )}
