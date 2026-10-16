@@ -1,8 +1,7 @@
-//! Cena 2D do preview de shader: pixel art no jeito dos jogos de 16 bits,
-//! com os avatares do ReEmu num shoot 'em up de nave, desenhada aqui (sem
-//! material de terceiros) em 320×240. Tem o que mais
-//! mostra a diferença entre shaders: degradê com dithering, bordas duras,
-//! contornos de 1 px, texto pequeno e cores chapadas lado a lado.
+//! Cena 2D do preview de shader: fase de plataforma em pixel art no jeito
+//! dos jogos de 16 bits, desenhada aqui em 320×240. Tem o que mais mostra a
+//! diferença entre shaders: degradê com dithering, bordas duras, contornos
+//! de 1 px, texto pequeno e cores chapadas lado a lado.
 
 use super::shader_preview::{PREVIEW_H, PREVIEW_W};
 
@@ -97,6 +96,10 @@ fn glyph(c: char) -> [&'static str; 5] {
         '8' => ["###", "#.#", "###", "#.#", "###"],
         '9' => ["###", "#.#", "###", "..#", "###"],
         'x' => ["...", "#.#", ".#.", "#.#", "..."],
+        'T' => ["###", ".#.", ".#.", ".#.", ".#."],
+        'A' => [".#.", "#.#", "###", "#.#", "#.#"],
+        'G' => ["###", "#..", "#.#", "#.#", "###"],
+        '-' => ["...", "...", "###", "...", "..."],
         _ => ["...", "...", "...", "...", "..."],
     }
 }
@@ -121,87 +124,47 @@ fn text(cv: &mut Canvas, s: &str, x: i32, y: i32, scale: i32, c: Rgb) {
     }
 }
 
-/// O robô do avatar do ReEmu, 12×16, com sombreado (`.` = transparente).
-const HERO: [&str; 16] = [
-    ".....Yy.....",
-    ".....gg.....",
-    "..kkkkkkkk..",
-    ".kWWWWWWWwk.",
-    ".kWDDDDDDwk.",
-    ".kWDCDDCDwk.",
-    ".kWDDDDDDwk.",
-    ".kWWWWWWwwk.",
-    "..kkkkkkkk..",
-    ".kWWWWWWWwk.",
-    "gkWWWRrWWwkg",
-    "gkWWWrrWWwkg",
-    ".kwWWWWWwwk.",
-    "..kkkkkkkk..",
-    "..kgGk.kgGk.",
-    "..kkkk.kkkk.",
+/// Herói de capa pulando, 16×17 (`.` = transparente).
+const HERO: [&str; 17] = [
+    "......kkkkk.....",
+    ".....kHhHHHk....",
+    "....kHHHHhHHk...",
+    "....kHSSSSHk....",
+    "....kHSSkSEk....",
+    ".....kSSSSSk....",
+    "..kk..kssk......",
+    ".kRRk.kBBBk.kk..",
+    "kRRRRkBBBBBkSSk.",
+    "kRcRRkBBBBBBkk..",
+    ".kcRRkBYYYBk....",
+    "..kcckbBBBbk....",
+    "...kkkbbkbbk....",
+    "....kbbk.kbbk...",
+    "...kNNk...kNNk..",
+    "...kNNNk...kNNk.",
+    "....kkk.....kkk.",
 ];
 
-/// Os outros avatares do ReEmu em pixel art, mesma paleta dos SVGs
-/// (`lib/avatars.ts`): slime (preset 3), controle (2), joystick de
-/// fliperama (4) e nave (5). O robô (1) é o `HERO`.
-const SLIME: [&str; 11] = [
-    "....kkkkkk....",
-    "..kkLLLLLLkk..",
-    ".kLLlLLLLLLLk.",
-    ".kLlLLLLLLLLk.",
-    "kLLLLLLLLLLLLk",
-    "kLLLeLLLLeLLLk",
-    "kLLLeLLLLeLLLk",
-    "kLpLLLLLLLLpLk",
-    "kLLLLLmmLLLLLk",
-    "kLLLLLLLLLLLLk",
-    ".kkkkkkkkkkkk.",
+/// Inimigo: bolinha escura com espinhos, 16×12.
+const ENEMY: [&str; 12] = [
+    ".....k.k.k......",
+    "....kVkVkVk.....",
+    "...kVVVVVVVk....",
+    "..kVvVVVVVVVk...",
+    ".kVvVVVVVVVVVk..",
+    ".kVVVWkVVWkVVk..",
+    "kVVVVWkVVWkVVVk.",
+    "kVVVVVVVVVVVVVk.",
+    "kVVVVVVVVVVVVVk.",
+    ".kVVVVVVVVVVVk..",
+    "..kVkkVVVkkVk...",
+    "...k..kkk..k....",
 ];
 
-const PAD: [&str; 8] = [
-    "..kkkkkkkkkkkk..",
-    ".kFFFFFFFFFFFFk.",
-    "kFFPFFFFFFFFaFFk",
-    "kFPPPFFFFFFbFcFk",
-    "kFFPFFFQQFFFdFFk",
-    "kFFFFFkkkkFFFFFk",
-    ".kFFFk....kFFFk.",
-    "..kkk......kkk..",
-];
-
-const STICK: [&str; 14] = [
-    "....kkkk....",
-    "...kJJJJk...",
-    "..kJjJJJJk..",
-    "..kJJJJJJk..",
-    "..kJJJJJJk..",
-    "...kJJJJk...",
-    "....kTTk....",
-    "....kTTk....",
-    "....kTTk....",
-    ".kkkkTTkkkk.",
-    "kBBBBBBBBBBk",
-    "kBqBBBBBBvBk",
-    "kBBBBBBBBBBk",
-    ".kkkkkkkkkk.",
-];
-
-const ROCKET: [&str; 15] = [
-    "....kk....",
-    "...kWWk...",
-    "..kWWWWk..",
-    "..kWWWWk..",
-    "..kWzzWk..",
-    "..kWzzWk..",
-    "..kWWWWk..",
-    "..kWWWWk..",
-    ".kRkWWkRk.",
-    "kRRkWWkRRk",
-    "kRRkkkkRRk",
-    "kkk.gg.kkk",
-    "....YY....",
-    "....Yf....",
-    ".....f....",
+/// Moeda, 8×12.
+const COIN: [&str; 12] = [
+    "..kkkk..", ".kYYYYk.", "kYyYYYOk", "kYyOOYOk", "kYyOYYOk", "kYyOYYOk", "kYyOYYOk", "kYyOYYOk",
+    "kYyOOYOk", "kYYYYYOk", ".kOOOOk.", "..kkkk..",
 ];
 
 /// Coração do HUD, 7×6.
@@ -209,45 +172,34 @@ const HEART: [&str; 6] = [
     ".RR.RR.", "RrRRRRR", "RRRRRRR", ".RRRRR.", "..RRR..", "...R...",
 ];
 
+/// "?" do bloco, 6×8.
+const QMARK: [&str; 8] = [
+    ".####.", "##..##", "....##", "...##.", "..##..", "..##..", "......", "..##..",
+];
+
 fn pal(c: char) -> Option<Rgb> {
     Some(match c {
-        'W' => (244, 247, 250),
-        'w' => (190, 200, 214),
-        'D' => (18, 24, 44),
-        'C' => (40, 216, 242),
-        'Y' => (252, 214, 64),
-        'y' => (255, 246, 190),
-        'G' => (148, 160, 184),
-        'g' => (100, 110, 132),
-        'R' => (232, 56, 84),
-        'r' => (255, 150, 160),
-        'O' => (158, 86, 34),
-        'o' => (112, 58, 22),
         'k' => (22, 18, 30),
-        // slime
-        'L' => (217, 249, 157),
-        'l' => (236, 252, 203),
-        'e' => (20, 83, 45),
-        'm' => (20, 83, 45),
-        'p' => (251, 113, 133),
-        // controle
-        'F' => (253, 244, 255),
-        'P' => (59, 7, 100),
-        'Q' => (216, 180, 254),
-        'a' => (34, 197, 94),
-        'b' => (59, 130, 246),
-        'c' => (239, 68, 68),
-        'd' => (234, 179, 8),
-        // joystick de fliperama
-        'J' => (253, 224, 71),
-        'j' => (255, 255, 255),
-        'T' => (229, 231, 235),
-        'B' => (31, 41, 55),
-        'q' => (34, 211, 238),
-        'v' => (163, 230, 53),
-        // nave
-        'z' => (56, 189, 248),
-        'f' => (249, 115, 22),
+        // herói
+        'H' => (120, 62, 30),
+        'h' => (176, 100, 48),
+        'S' => (252, 204, 160),
+        's' => (214, 150, 112),
+        'E' => (20, 20, 40),
+        'B' => (52, 90, 210),
+        'b' => (30, 50, 140),
+        'R' => (226, 52, 60),
+        'r' => (255, 150, 160),
+        'c' => (150, 30, 34),
+        'N' => (96, 50, 26),
+        // inimigo
+        'V' => (36, 44, 96),
+        'v' => (84, 104, 170),
+        'W' => (240, 240, 250),
+        // moeda e cinto
+        'Y' => (250, 190, 40),
+        'y' => (255, 240, 150),
+        'O' => (196, 118, 24),
         _ => return None,
     })
 }
@@ -257,188 +209,360 @@ fn lerp(a: Rgb, b: Rgb, t: f32) -> Rgb {
     (f(a.0, b.0), f(a.1, b.1), f(a.2, b.2))
 }
 
-/// Gira um sprite 90° no sentido horário (a nave do avatar aponta pra cima;
-/// na cena espacial ela voa pra direita).
-fn rotate_cw(rows: &[&str]) -> Vec<String> {
-    let grid: Vec<Vec<char>> = rows.iter().map(|r| r.chars().collect()).collect();
-    (0..grid[0].len())
-        .map(|x| grid.iter().rev().map(|row| row[x]).collect())
-        .collect()
+/// Gerador pseudoaleatório fixo (xorshift): a cena sai sempre igual.
+struct Rng(u32);
+
+impl Rng {
+    fn next(&mut self, m: i32) -> i32 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 17;
+        self.0 ^= self.0 << 5;
+        (self.0 % m as u32) as i32
+    }
 }
 
-/// Cena 2D do preview em XRGB8888 (B, G, R, X): um shoot 'em up de rolagem lateral no jeito de
-/// Gradius/R-Type (16 bits), com os avatares do ReEmu em papéis do gênero — a
-/// nave é o jogador, os slimes a esquadrilha inimiga, o robô o chefe, e o
-/// controle e o joystick de fliperama os power-ups. Espaço com nebulosa em
-/// dithering, estrelas em 3 camadas, planeta com anel e o HUD numa faixa
-/// embaixo, como nos shmups horizontais. Desenhada aqui, sem material de
-/// terceiros.
-pub fn sample_scene() -> Vec<u8> {
-    let mut cv = Canvas::new();
-    let hud = 220;
-
-    // Espaço: degradê do azul quase preto ao roxo, com dithering.
-    let deep: [Rgb; 4] = [(6, 6, 20), (12, 10, 36), (26, 14, 56), (40, 18, 70)];
-    for y in 0..hud {
-        let f = y as f32 / hud as f32 * (deep.len() - 1) as f32;
-        let (i, t) = (f.floor() as usize, f.fract());
-        let (a, b) = (deep[i], deep[(i + 1).min(deep.len() - 1)]);
-        for x in 0..W {
-            cv.dither(x, y, a, b, t);
+/// Plataforma de terra com pedras encaixadas e grama no topo.
+fn ground(cv: &mut Canvas, rng: &mut Rng, x0: i32, y0: i32, w: i32, h: i32) {
+    for y in y0..y0 + h {
+        for x in x0..x0 + w {
+            let (lx, ly) = (x - x0, y - y0);
+            let off = if (ly / 9) % 2 == 0 { 0 } else { 6 };
+            let (cx, cy) = ((lx + off) % 12, ly % 9);
+            let corner = (cx == 1 || cx == 11) && (cy == 1 || cy == 8);
+            let c = if lx == 0 || lx == w - 1 {
+                (40, 20, 12)
+            } else if cx == 0 || cy == 0 || corner {
+                (70, 34, 18)
+            } else if cy == 1 || cx == 1 {
+                (178, 100, 52)
+            } else if cy == 8 || cx == 11 {
+                (116, 58, 28)
+            } else {
+                (150, 78, 38)
+            };
+            cv.put(x, y, c);
         }
     }
-    // Nebulosa: manchas magenta e azul em dithering.
-    for (cx, cy, r, c, k) in [
-        (90, 70, 70, (150, 40, 140), 0.45f32),
-        (170, 150, 60, (40, 70, 170), 0.4),
-        (40, 180, 40, (110, 40, 150), 0.35),
+    // grama: faixa clara, faixa escura e pingos irregulares
+    for x in x0..x0 + w {
+        cv.put(x, y0 - 3, (30, 80, 30));
+        cv.rect(x, y0 - 2, 1, 2, (120, 206, 64));
+        cv.rect(x, y0, 1, 3, (70, 160, 45));
+        let drip = rng.next(5);
+        cv.rect(x, y0 + 3, 1, drip, (50, 128, 40));
+        cv.put(x, y0 + 3 + drip, (30, 80, 30));
+    }
+    // tufos
+    let mut x = x0 + 3 + rng.next(6);
+    while x < x0 + w - 3 {
+        for (dx, hgt) in [(0, 3), (1, 5), (2, 2)] {
+            cv.rect(x + dx, y0 - 3 - hgt, 1, hgt, (90, 180, 56));
+        }
+        x += 9 + rng.next(14);
+    }
+}
+
+/// Nuvem de pôr do sol: base reta, sombra embaixo e brilho em cima.
+fn cloud(cv: &mut Canvas, cx: i32, base: i32, bumps: &[(i32, i32)]) {
+    for (dy, c) in [
+        (2, (196, 96, 140)),
+        (0, (250, 150, 120)),
+        (-2, (255, 196, 150)),
     ] {
-        for y in (cy - r).max(0)..(cy + r).min(hud) {
-            for x in (cx - r).max(0)..(cx + r).min(W) {
-                let d = (((x - cx) * (x - cx) + (y - cy) * (y - cy)) as f32).sqrt() / r as f32;
-                if d < 1.0 {
-                    let base = cv.get(x, y);
-                    cv.dither(x, y, base, c, (1.0 - d) * k);
+        for &(bx, r) in bumps {
+            let r = if dy < 0 { r - 3 } else { r };
+            for y in base - r..=base {
+                for x in cx + bx - r..=cx + bx + r {
+                    let (ex, ey) = (x - cx - bx, y - base);
+                    if ex * ex + ey * ey <= r * r && y + dy <= base {
+                        cv.put(x, y + dy, c);
+                    }
                 }
             }
         }
     }
-    // Estrelas em 3 camadas: distantes, médias e próximas (com rastro).
-    let mut seed: u32 = 0x5eed_cafe;
-    let mut rnd = |m: i32| {
-        seed ^= seed << 13;
-        seed ^= seed >> 17;
-        seed ^= seed << 5;
-        (seed % m as u32) as i32
+}
+
+/// Bloco do cenário, 14×14: tijolo ou "?".
+fn block(cv: &mut Canvas, x0: i32, y0: i32, question: bool) {
+    let (base, hi) = if question {
+        ((232, 140, 40), (255, 204, 96))
+    } else {
+        ((150, 80, 40), (186, 108, 56))
     };
-    for _ in 0..90 {
-        let (x, y) = (rnd(W), rnd(hud));
-        cv.put(x, y, (110, 110, 160));
-    }
-    for _ in 0..30 {
-        let (x, y) = (rnd(W), rnd(hud));
-        cv.put(x, y, (220, 220, 255));
-    }
-    for _ in 0..8 {
-        let (x, y) = (rnd(W), rnd(hud - 4) + 2);
-        cv.rect(x - 7, y, 6, 1, (80, 80, 130));
-        for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
-            cv.put(x + dx, y + dy, (170, 180, 255));
+    cv.rect(x0, y0, 14, 14, (70, 34, 18));
+    cv.rect(x0 + 1, y0 + 1, 12, 12, base);
+    cv.rect(x0 + 1, y0 + 1, 12, 1, hi);
+    cv.rect(x0 + 1, y0 + 1, 1, 12, hi);
+    if question {
+        for (x, y) in [(2, 2), (11, 2), (2, 11), (11, 11)] {
+            cv.put(x0 + x, y0 + y, (110, 56, 20));
         }
-        cv.put(x, y, (255, 255, 255));
+        for (j, row) in QMARK.iter().enumerate() {
+            for (i, b) in row.chars().enumerate() {
+                if b == '#' {
+                    let (x, y) = (x0 + 4 + i as i32, y0 + 3 + j as i32);
+                    cv.put(x + 1, y + 1, (110, 56, 20));
+                    cv.put(x, y, (255, 236, 170));
+                }
+            }
+        }
+    } else {
+        cv.rect(x0 + 1, y0 + 7, 12, 1, (90, 45, 20));
+        cv.rect(x0 + 7, y0 + 1, 1, 6, (90, 45, 20));
+        cv.rect(x0 + 4, y0 + 8, 1, 5, (90, 45, 20));
     }
-    // Planeta com faixas e anel, sombreado em dithering (luz da esquerda).
-    let (px, py, pr) = (262, 52, 34);
-    let ring = |x: i32, k: i32| py + 6 + ((x - px) as f32 / 52.0 * 10.0) as i32 + k;
-    // metade de trás do anel, antes do planeta
-    for k in 0..2 {
-        for x in px..=px + 52 {
-            cv.put(x, ring(x, k) - 4, (150, 110, 100));
+}
+
+/// Cena 2D do preview em XRGB8888 (B, G, R, X), 320×240: fase de plataforma
+/// ao pôr do sol, a partir de uma imagem de referência do dono do projeto
+/// (redesenhada aqui pixel a pixel). Céu em degradê com dithering, nuvens,
+/// montanhas, castelo, lago com o reflexo do sol, árvore, plataformas de
+/// terra com grama, cachoeira, ponte, blocos, moedas, herói, inimigo e o HUD
+/// em cima.
+pub fn sample_scene() -> Vec<u8> {
+    let mut cv = Canvas::new();
+    let mut rng = Rng(0x5eed_cafe);
+    let horizon = 126;
+
+    // Céu: azul-escuro em cima, roxo, rosa e laranja no horizonte.
+    let sky: [Rgb; 5] = [
+        (28, 30, 104),
+        (60, 44, 140),
+        (128, 60, 150),
+        (222, 96, 112),
+        (250, 156, 84),
+    ];
+    for y in 0..horizon {
+        let f = y as f32 / horizon as f32 * (sky.len() - 1) as f32;
+        let (i, t) = (f.floor() as usize, f.fract());
+        for x in 0..W {
+            cv.dither(x, y, sky[i], sky[(i + 1).min(sky.len() - 1)], t);
         }
     }
-    for y in py - pr..=py + pr {
-        for x in px - pr..=px + pr {
-            let (dx, dy) = ((x - px) as f32, (y - py) as f32);
-            if (dx * dx + dy * dy).sqrt() <= pr as f32 {
-                let base = if ((y - py + pr) / 9) % 2 == 0 {
-                    (224, 132, 88)
-                } else {
-                    (196, 104, 70)
-                };
-                let shade = ((dx + dy * 0.4) / pr as f32 + 0.2).clamp(0.0, 1.0);
-                cv.dither(x, y, base, (70, 30, 50), shade);
+    // Sol com halo.
+    cv.disc(238, 100, 20, (252, 188, 96));
+    cv.disc(238, 100, 16, (255, 220, 110));
+    cv.disc(234, 96, 9, (255, 238, 160));
+    // Nuvens.
+    cloud(
+        &mut cv,
+        104,
+        68,
+        &[(-26, 8), (-12, 12), (4, 15), (20, 10), (32, 6)],
+    );
+    cloud(&mut cv, 192, 54, &[(-20, 6), (-6, 10), (8, 12), (22, 7)]);
+    cloud(&mut cv, 300, 42, &[(-18, 6), (-4, 10), (12, 12), (26, 8)]);
+    cloud(&mut cv, 164, 78, &[(-10, 4), (0, 6), (10, 4)]);
+
+    // Montanhas distantes (lado iluminado à esquerda do pico) e morros.
+    for (peaks, lit, dark) in [
+        (
+            &[
+                (50, 74, 0.9f32),
+                (164, 82, 0.8),
+                (190, 96, 0.7),
+                (110, 98, 0.6),
+            ][..],
+            (128, 108, 196),
+            (92, 80, 164),
+        ),
+        (
+            &[(20, 104, 0.5f32), (110, 110, 0.45), (200, 114, 0.5)][..],
+            (64, 70, 140),
+            (50, 56, 122),
+        ),
+    ] {
+        for x in 0..250i32 {
+            let (mut top, mut side) = (horizon, true);
+            for &(px, py, s) in peaks {
+                let y = py + ((x - px).abs() as f32 * s) as i32;
+                if y < top {
+                    top = y;
+                    side = x < px;
+                }
+            }
+            for y in top..horizon {
+                cv.put(x, y, if side { lit } else { dark });
             }
         }
     }
-    for k in 0..2 {
-        for x in px - 52..=px + 52 {
-            let c = if k == 0 {
-                (250, 220, 170)
-            } else {
-                (170, 130, 110)
-            };
-            cv.put(x, ring(x, k), c);
+
+    // Ilha com o castelo à direita.
+    for x in 252..W {
+        let top = horizon - ((x - 252) as f32 * 0.7).min(30.0) as i32;
+        cv.rect(x, top, 1, horizon - top, (44, 56, 104));
+        cv.put(x, top, (76, 92, 136));
+    }
+    let castle = (66, 56, 132);
+    for (x, y, w) in [(278, 78, 9), (292, 64, 12), (306, 74, 9)] {
+        cv.rect(x, y, w, 100 - y, castle);
+        for k in (0..w).step_by(3) {
+            cv.rect(x + k, y - 2, 2, 2, castle);
+        }
+        cv.rect(x + w / 2 - 1, y + 6, 2, 4, (36, 30, 80));
+    }
+    cv.rect(278, 88, 37, 12, castle);
+    cv.rect(297, 52, 1, 12, castle);
+    cv.rect(298, 52, 6, 4, castle);
+
+    // Lago: degradê, reflexo do sol e brilhos.
+    for y in horizon..H {
+        let t = (y - horizon) as f32 / (H - horizon) as f32;
+        for x in 0..W {
+            cv.dither(x, y, (44, 64, 168), (20, 30, 104), t);
         }
     }
-    // Asteroides.
-    for (ax, ay, r) in [(150, 30, 6), (200, 200, 5), (28, 36, 4)] {
-        cv.disc(ax, ay, r, (96, 84, 92));
-        cv.disc(ax - 1, ay - 1, r - 2, (132, 118, 124));
-        cv.put(ax + 1, ay + 1, (60, 52, 60));
+    for k in 0..16 {
+        let y = horizon + 2 + k * 3;
+        let w = 26 - k + rng.next(6);
+        let c = if k < 6 {
+            (255, 220, 120)
+        } else {
+            (250, 160, 90)
+        };
+        cv.rect(238 - w / 2 + rng.next(5) - 2, y, w, 1, c);
     }
-
-    // Power-ups em cápsulas: o controle e o joystick de fliperama.
-    for (cx, cy) in [(132, 180), (206, 96)] {
-        cv.disc(cx, cy, 14, (60, 90, 170));
-        cv.disc(cx, cy, 12, (16, 20, 48));
-        cv.rect(cx - 8, cy - 9, 2, 2, (210, 235, 255));
+    for _ in 0..40 {
+        let (x, y) = (rng.next(W), horizon + 2 + rng.next(H - horizon - 2));
+        let base = cv.get(x, y);
+        cv.rect(x, y, 4 + rng.next(6), 1, lerp(base, (140, 170, 255), 0.5));
     }
-    cv.sprite(&PAD, 124, 176, 1, pal);
-    cv.sprite(&STICK, 200, 89, 1, pal);
-
-    // Esquadrilha de slimes em onda.
-    for (k, (x, y)) in [(150, 60), (178, 84), (150, 122), (178, 146)]
-        .into_iter()
-        .enumerate()
-    {
-        cv.sprite(&SLIME, x, y, if k % 2 == 0 { 2 } else { 1 }, pal);
-    }
-    // Explosão do slime que levou o tiro.
-    let (ex, ey) = (124, 100);
-    for (r, c) in [
-        (9, (255, 120, 40)),
-        (6, (255, 200, 80)),
-        (3, (255, 250, 220)),
-    ] {
-        cv.disc(ex, ey, r, c);
-    }
-    for (dx, dy) in [(-13, -4), (12, 6), (-4, 13), (6, -13), (14, -9)] {
-        cv.rect(ex + dx, ey + dy, 2, 2, (255, 180, 60));
-    }
-
-    // Chefe: o robô gigante atrás de um escudo de energia, carregando o raio.
-    cv.sprite(&HERO, 248, 112, 4, pal);
-    for y in 104..186 {
-        for x in 238..241 {
-            let base = cv.get(x, y);
-            cv.put(
-                x,
-                y,
-                lerp(base, (90, 220, 255), 0.25 + 0.2 * (x - 238) as f32),
-            );
+    // Margem distante com pinheiros.
+    cv.rect(88, 150, 96, 10, (28, 58, 78));
+    let mut x = 90;
+    while x < 180 {
+        let hgt = 8 + rng.next(9);
+        for j in 0..hgt {
+            let half = j / 3;
+            cv.rect(x - half, 150 - hgt + j, half * 2 + 1, 1, (30, 72, 90));
         }
-    }
-    cv.disc(230, 160, 5, (90, 220, 255));
-    cv.disc(230, 160, 2, (230, 250, 255));
-
-    // Jogador: a nave virada pra direita, com a chama do motor e os tiros.
-    let ship = rotate_cw(&ROCKET);
-    let ship: Vec<&str> = ship.iter().map(String::as_str).collect();
-    let (sx, sy) = (30, 96);
-    cv.sprite(&ship, sx, sy, 3, pal);
-    for (k, c) in [(220, 80, 40), (255, 170, 60), (255, 240, 160)]
-        .into_iter()
-        .enumerate()
-    {
-        let k = k as i32;
-        cv.rect(sx - 14 + k * 4, sy + 12 + k, 14 - k * 4, 6 - k * 2, c);
-    }
-    for (bx, by) in [(84, 106), (104, 106), (84, 115)] {
-        cv.rect(bx, by, 8, 2, (255, 246, 160));
-        cv.put(bx + 8, by, (255, 255, 255));
+        x += 6 + rng.next(5);
     }
 
-    // HUD embaixo: vidas, barra de power e pontos.
-    cv.rect(0, hud, W, H - hud, (14, 12, 28));
-    cv.rect(0, hud, W, 1, (90, 80, 140));
-    for k in 0..3 {
-        cv.sprite(&HEART, 8 + k * 10, hud + 7, 1, pal);
-    }
+    // Árvore no canto superior esquerdo.
+    cv.rect(4, 26, 18, 84, (110, 58, 30));
+    cv.rect(4, 26, 3, 84, (150, 86, 44));
+    cv.rect(19, 26, 3, 84, (70, 36, 20));
     for k in 0..6 {
-        let c = if k < 4 { (90, 220, 255) } else { (50, 50, 80) };
-        cv.rect(54 + k * 9, hud + 7, 7, 6, c);
+        cv.rect(9 + (k % 3) * 3, 34 + k * 12, 1, 7, (70, 36, 20));
     }
-    text(&mut cv, "SCORE 098760", 210, hud + 5, 2, (255, 255, 255));
+    let leaves = [
+        (10, 8, 22),
+        (40, 6, 18),
+        (62, 26, 13),
+        (30, 34, 17),
+        (4, 46, 13),
+        (50, 46, 11),
+    ];
+    for &(lx, ly, r) in &leaves {
+        cv.disc(lx, ly, r, (24, 80, 40));
+    }
+    for &(lx, ly, r) in &leaves {
+        cv.disc(lx - 2, ly - 3, r - 4, (44, 124, 52));
+    }
+    for &(lx, ly, r) in &leaves {
+        for y in ly - r..ly - r / 3 {
+            for x in lx - r..lx {
+                let (dx, dy) = (x - lx + 3, y - ly + 4);
+                if dx * dx + dy * dy <= (r - 5) * (r - 5) {
+                    let base = cv.get(x, y);
+                    cv.dither(x, y, base, (96, 172, 64), 0.4);
+                }
+            }
+        }
+    }
+
+    // Plataformas, de trás pra frente.
+    ground(&mut cv, &mut rng, 0, 106, 43, 60);
+    ground(&mut cv, &mut rng, 48, 122, 48, 40);
+    ground(&mut cv, &mut rng, 0, 156, 77, 84);
+    ground(&mut cv, &mut rng, 76, 175, 51, 65);
+    ground(&mut cv, &mut rng, 172, 149, 56, 72);
+    ground(&mut cv, &mut rng, 159, 187, 40, 33);
+
+    // Cachoeira entre as plataformas do meio.
+    for y in 186..220 {
+        for x in 127..159 {
+            let stripe = (x * 3 + y / 2) % 7;
+            let c = match stripe {
+                0 => (220, 240, 255),
+                1 | 2 => (120, 190, 255),
+                _ => (60, 140, 240),
+            };
+            cv.put(x, y, c);
+        }
+    }
+    cv.rect(127, 186, 32, 2, (230, 246, 255));
+    // Água da frente, com ondas e espuma.
+    for y in 205..H {
+        for x in 125..283 {
+            cv.dither(x, y, (40, 100, 220), (24, 56, 160), (y - 205) as f32 / 35.0);
+        }
+    }
+    for x in 125..283 {
+        let wave = (x / 4) % 2;
+        cv.put(x, 205 - wave, (200, 230, 255));
+        cv.put(x, 206, (100, 170, 255));
+    }
+    for (x, w) in [(127, 32)] {
+        for k in 0..w {
+            let y = 219 + (k % 3);
+            cv.put(x + k, y, (230, 246, 255));
+        }
+    }
+
+    // Ponte de madeira.
+    cv.rect(227, 166, 57, 6, (150, 85, 40));
+    cv.rect(227, 166, 57, 1, (196, 124, 64));
+    cv.rect(227, 171, 57, 1, (70, 36, 20));
+    for x in (231..283).step_by(7) {
+        cv.rect(x, 167, 1, 4, (90, 45, 22));
+    }
+    for x in [230, 279] {
+        cv.rect(x, 158, 3, 8, (120, 66, 30));
+        cv.put(x + 1, 158, (176, 108, 56));
+    }
+    for k in 0..12 {
+        cv.rect(232 + k, 172 + k, 2, 1, (110, 58, 28));
+        cv.rect(278 - k, 172 + k, 2, 1, (110, 58, 28));
+    }
+    ground(&mut cv, &mut rng, 283, 158, 37, 82);
+
+    // Placa com a seta.
+    cv.rect(59, 141, 3, 15, (110, 58, 30));
+    cv.rect(50, 129, 22, 13, (70, 34, 18));
+    cv.rect(51, 130, 20, 11, (164, 96, 48));
+    cv.rect(51, 130, 20, 1, (200, 130, 70));
+    cv.rect(55, 134, 9, 3, (246, 214, 170));
+    for k in 0..4 {
+        cv.rect(64 + k, 132 + k, 1, 7 - k * 2, (246, 214, 170));
+    }
+
+    // Blocos, moedas, inimigo e herói.
+    block(&mut cv, 117, 124, false);
+    block(&mut cv, 131, 124, true);
+    block(&mut cv, 145, 124, false);
+    for (x, y) in [(122, 94), (139, 98), (156, 103), (290, 139)] {
+        cv.sprite(&COIN, x, y, 1, pal);
+    }
+    cv.sprite(&ENEMY, 195, 137, 1, pal);
+    cv.sprite(&HERO, 88, 84, 1, pal);
+
+    // HUD: retrato e vidas, corações, pontos, moedas e fase.
+    cv.rect(7, 7, 20, 20, (236, 236, 244));
+    cv.rect(8, 8, 18, 18, (52, 104, 196));
+    cv.sprite(&HERO[..9], 9, 12, 1, pal);
+    let white = (255, 255, 255);
+    text(&mut cv, "x03", 31, 12, 2, white);
+    for k in 0..3 {
+        cv.sprite(&HEART, 70 + k * 15, 11, 2, pal);
+    }
+    text(&mut cv, "SCORE", 138, 4, 2, white);
+    text(&mut cv, "000420", 134, 17, 2, white);
+    cv.sprite(&COIN, 205, 10, 1, pal);
+    text(&mut cv, "x12", 216, 12, 2, white);
+    text(&mut cv, "STAGE 1-2", 247, 12, 2, white);
 
     let mut out = Vec::with_capacity((W * H * 4) as usize);
     for (r, g, b) in cv.px {
@@ -461,6 +585,21 @@ mod tests {
                 out.extend_from_slice(&[p[2], p[1], p[0]]);
             }
             std::fs::write(path, out).unwrap();
+        }
+    }
+
+    /// Todo sprite precisa ser retangular (linhas do mesmo tamanho).
+    #[test]
+    fn sprites_are_rectangular() {
+        let all: [&[&str]; 5] = [
+            &super::HERO,
+            &super::ENEMY,
+            &super::COIN,
+            &super::HEART,
+            &super::QMARK,
+        ];
+        for rows in all {
+            assert!(rows.iter().all(|r| r.len() == rows[0].len()), "{rows:?}");
         }
     }
 }
