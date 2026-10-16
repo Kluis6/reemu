@@ -88,9 +88,10 @@ const useStyles = makeStyles({
     // selecionável o foco fica no checkbox escondido do Fluent
     // (`.fui-Card__checkbox`), então o anel vai no card quando ELE tem foco
     // (o Switch "Claro" de dentro tem o anel dele).
-    "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
-      border: "none !important",
-    },
+    // Sem o traço do `::after` do Fluent em nenhum estado: no card
+    // selecionado ele punha uma borda de 1 px por cima (pedido do usuário: a
+    // borda do tema ativo é a mesma dos outros); o foco é o anel abaixo.
+    "::after": { border: "none !important" },
     "&:has(> .fui-Card__checkbox:focus)": {
       outlineWidth: "3px",
       outlineStyle: "solid",
@@ -118,21 +119,8 @@ const useStyles = makeStyles({
     overflow: "hidden",
   },
   seg: { flexGrow: 1 },
-  // Selo do tema ativo: check cheio de 28 no canto de cima da amostra, num
-  // círculo da cor do card (destaca sobre qualquer cor da amostra).
-  check: {
-    position: "absolute",
-    top: tokens.spacingVerticalS,
-    right: tokens.spacingHorizontalS,
-    width: "32px",
-    height: "32px",
-    borderRadius: tokens.borderRadiusCircular,
-    display: "grid",
-    placeItems: "center",
-    fontSize: "28px",
-    lineHeight: 0,
-    pointerEvents: "none",
-  },
+  // check do tema ativo, depois do nome
+  check: { fontSize: "20px", flexShrink: 0 },
   // bolinha do Switch (18 px, o tamanho do círculo original da Fluent)
   // com o ícone dentro
   thumb: {
@@ -245,15 +233,6 @@ function ThemeCard({
       }}
     >
       <Swatch t={t} />
-      {selected && (
-        <span
-          className={s.check}
-          style={{ backgroundColor: t.colorNeutralBackground2, color: t.reemuBrandText }}
-          aria-hidden
-        >
-          <CheckmarkCircleFilled />
-        </span>
-      )}
       <div className={s.footer}>
         <Text
           className={s.name}
@@ -261,6 +240,15 @@ function ThemeCard({
           style={{ color: t.colorNeutralForeground1 }}
         >
           {label}
+          {/* tema ativo: check cheio depois do nome (pedido do usuário), na
+              cor de destaque do próprio tema */}
+          {selected && (
+            <CheckmarkCircleFilled
+              className={s.check}
+              style={{ color: t.reemuBrandText }}
+              aria-hidden
+            />
+          )}
         </Text>
         {onModeChange ? (
           // o clique/tecla no Switch não pode chegar no Card — ele
