@@ -28,10 +28,15 @@ const useStyles = makeStyles({
     // referência (768 epx).
     height: '288px',
     borderRadius: tokens.borderRadiusMedium,
-    overflow: 'hidden',
     backgroundImage: 'linear-gradient(135deg, #1a1a1f 0%, #101014 100%)',
-    // viewport/slider/card do `Carousel` ocupam a altura toda
+    // viewport/slider/card do `Carousel` ocupam a altura toda. O recorte
+    // (cantos e o que passa da borda) fica no viewport, não na raiz: o
+    // brilho do foco (`::before` da raiz, index.css) vai por fora dela.
     '& .fui-CarouselViewport, & .fui-CarouselSlider': { height: '100%' },
+    '& .fui-CarouselViewport': {
+      overflow: 'hidden',
+      borderRadius: tokens.borderRadiusMedium,
+    },
   },
   card: { height: '100%' },
   slide: {

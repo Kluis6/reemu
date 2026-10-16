@@ -96,8 +96,9 @@ const useStyles = makeStyles({
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
       outlineOffset: "3px",
-      // brilho do foco padrão (ver `FOCUS_GLOW` em styles/xbox.ts)
-      boxShadow: `0 0 12px color-mix(in srgb, ${tokens.colorBrandStroke1} 45%, transparent) !important`,
+      // o brilho vem do `::before` global (index.css, regra 4), por fora do
+      // anel; o card precisa deixar o `::before` aparecer fora dele
+      overflow: "visible !important",
     },
   },
   // nome à esquerda, Switch "Claro" à direita; altura fixa pra alinhar os

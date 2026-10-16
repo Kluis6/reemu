@@ -2463,3 +2463,15 @@ Infra:
   - itens de menu e de lista com o anel por dentro, porque o popover corta;
   - busca da topbar com a linha do Fluent no lugar do anel, a pedido do usuário;
   - cards de jogo com o vão transparente.
+
+## 2026-10-16 — Todo foco igual ao do card de jogo
+
+- **Pedido do usuário:** o foco do menu de Configurações não estava igual ao do card de jogo. Todos os focos iguais a ele.
+- **Diferença:** nos outros componentes o brilho era um `box-shadow` no próprio elemento. Ele sai rente à borda e pinta o vão até o anel. No card de jogo, o vão é transparente e o brilho fica por fora do anel (um `::before` com −6 px).
+- **Correção** (`index.css`, regra 4):
+  - Todo elemento que mostra o anel (teclado, controle, links/`[tabindex]`, abas, switch/rádio/slider, campos, cards selecionáveis e o carrossel) ganha o mesmo `::before` de brilho, e o `box-shadow` rente saiu das regras do Griffel e do CSS.
+  - A posição relativa vai em `:where` (especificidade 0), então quem já é `absolute` continua.
+  - Enquanto em foco, `overflow: visible`, porque o Button, o Card e a Tab do Fluent cortavam o brilho.
+  - O carrossel passou o recorte para o viewport.
+  - Os cards do hub de Configurações também clareiam no foco, como o card de jogo, e a grade ganhou 20 px de folga para o brilho.
+- **A varredura agora confere também:** brilho por fora, nenhum brilho rente e o elemento sem cortar o `::before`. Passou nas 20 telas. Capturas do card do hub, do botão "Plataforma" e do carrossel. 147 testes e `ui-smoke` 12/12.

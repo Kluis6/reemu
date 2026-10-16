@@ -140,7 +140,7 @@ export const useShellStyles = makeStyles({
       // Na rail ocupa 3 + 3 = 6 de cada lado do item de 50 e cabe nos 9
       // que sobram dos 68.
       outlineOffset: `${FOCUS_OFFSET}px`,
-      boxShadow: FOCUS_GLOW,
+      boxShadow: "none",
     },
     // Abas (`<Tab>` do Fluent): são `<button>` sem `tabindex`, então a regra
     // de cima não pega — valia o anel do próprio Fluent, um `box-shadow`
@@ -151,10 +151,10 @@ export const useShellStyles = makeStyles({
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
       outlineOffset: `${FOCUS_OFFSET}px`,
-      boxShadow: FOCUS_GLOW,
+      boxShadow: "none",
     },
     "& .fui-Tab[data-fui-focus-visible]": {
-      boxShadow: FOCUS_GLOW,
+      boxShadow: "none",
     },
     // Botões do Fluent: o foco de teclado deles (`[data-fui-focus-visible]`)
     // é uma borda + `box-shadow` rente ao botão, sem afastamento. Troca pelo
@@ -163,7 +163,7 @@ export const useShellStyles = makeStyles({
       // Griffel não aceita a abreviada `borderColor`; `shorthands` expande nas
       // quatro bordas.
       ...shorthands.borderColor("transparent !important"),
-      boxShadow: `${FOCUS_GLOW} !important`,
+      boxShadow: "none !important",
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,
     },
@@ -173,7 +173,7 @@ export const useShellStyles = makeStyles({
     // lib/focusNav.ts — sai no primeiro clique do mouse).
     ":global(html[data-nav-focus]) & button:focus": {
       ...shorthands.borderColor("transparent !important"),
-      boxShadow: `${FOCUS_GLOW} !important`,
+      boxShadow: "none !important",
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,
     },
@@ -294,7 +294,7 @@ export const useShellStyles = makeStyles({
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
       outlineOffset: `${FOCUS_OFFSET}px`,
-      boxShadow: FOCUS_GLOW,
+      boxShadow: "none",
     },
   },
 
@@ -1181,12 +1181,12 @@ export const useDetailStyles = makeStyles({
     // do gamepad foca via `.focus()` sem keydown).
     "& .fui-Button[data-fui-focus-visible]": {
       border: "1px solid transparent !important",
-      boxShadow: `${FOCUS_GLOW} !important`,
+      boxShadow: "none !important",
     },
     "& button:focus": {
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,
-      boxShadow: `${FOCUS_GLOW} !important`,
+      boxShadow: "none !important",
     },
   },
   // Favoritar/Editar/Informações: `appearance="secondary"` sem a borda
@@ -1480,7 +1480,7 @@ export const usePauseStyles = makeStyles({
     "& a:focus, & button:focus": {
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,
-      boxShadow: `${FOCUS_GLOW} !important`,
+      boxShadow: "none !important",
     },
     // O <Button> do Fluent NÃO usa `::after` pra isso — muda a própria
     // `border-color` e desenha um `box-shadow` inset direto no elemento
@@ -1581,7 +1581,7 @@ const TAB_STATES = {
     outlineStyle: "solid",
     outlineColor: `${tokens.colorBrandStroke1} !important`,
     outlineOffset: `${FOCUS_OFFSET}px !important`,
-    boxShadow: `${FOCUS_GLOW} !important`,
+    boxShadow: "none !important",
   },
   '& .fui-Tab[aria-selected="true"]:focus': {
     backgroundColor: "var(--reemuBrandSolid) !important",

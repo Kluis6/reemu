@@ -14,9 +14,10 @@ import { ProfileAvatar } from "../../components/ProfileAvatar";
 import { SETTINGS_SECTIONS } from "../../layouts/settingsSections";
 import { getProfile } from "../../lib/tauri";
 
-// Folga pro anel de foco (3 + 4 de afastamento) não ser cortado pela borda
-// da grade, que rola se a tela for baixa demais.
-const RING = 8;
+// Folga pro anel de foco (3 de vão + 3 de traço) e o brilho de fora (~12)
+// não serem cortados pela borda da grade, que rola se a tela for baixa
+// demais.
+const RING = 20;
 
 const cardIn = {
   from: { opacity: 0, transform: "translateY(12px) scale(0.98)" },
@@ -69,11 +70,14 @@ const useStyles = makeStyles({
     // destaca da página só pela cor; hover/pressionado mudam o fundo.
     color: tokens.colorNeutralForeground1,
     textDecorationLine: "none",
-    overflow: "hidden",
+    // visível: o brilho do foco (`::before`, index.css) fica fora do card;
+    // o texto corta com reticências nele mesmo
+    overflow: "visible",
     transitionProperty: "background-color",
     transitionDuration: tokens.durationFaster,
     transitionTimingFunction: tokens.curveEasyEase,
-    ":hover": {
+    // foco igual ao card de jogo: além do anel, o card clareia
+    "&:hover, &:focus, &:focus-visible": {
       backgroundColor: tokens.colorNeutralBackground2Hover,
     },
     ":active": {

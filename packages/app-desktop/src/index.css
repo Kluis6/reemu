@@ -135,7 +135,7 @@ kbd {
   border-color: transparent !important;
   outline: 3px solid var(--colorBrandStroke1) !important;
   outline-offset: 3px !important;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
+  box-shadow: none !important;
 }
 
 /* 2. Foco pelo CONTROLE (ou setas): `moveFocus` marca o `<html>` com
@@ -149,7 +149,7 @@ html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):fo
 html[data-nav-focus] .fui-Card:not([role="button"]):has(> .fui-Card__checkbox:focus) {
   outline: 3px solid var(--colorBrandStroke1) !important;
   outline-offset: 3px !important;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
+  box-shadow: none !important;
 }
 
 /* 3. Campos (texto, busca, área de texto, seletor): o anel em volta do
@@ -160,7 +160,7 @@ html[data-nav-focus] .fui-Card:not([role="button"]):has(> .fui-Card__checkbox:fo
 html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):focus-within {
   outline: 3px solid var(--colorBrandStroke1) !important;
   outline-offset: 3px !important;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
+  box-shadow: none !important;
 }
 
 /* Ajustes do anel por componente:
@@ -214,7 +214,7 @@ html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
 .fui-Carousel:has(.fui-CarouselCard > button:focus-visible) {
   outline: 3px solid var(--colorBrandStroke1) !important;
   outline-offset: 3px !important;
-  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
+  box-shadow: none !important;
 }
 
 /* Títulos na Segoe UI Variable Display (a rampa tipográfica do Windows 11
@@ -237,3 +237,76 @@ html[data-nav-focus] .reemu-topbar-search.fui-SearchBox:focus-within {
   outline: none !important;
   box-shadow: none !important;
 }
+
+/* 4. Brilho do foco POR FORA do anel, igual ao card de jogo (pedido do
+   usuário, 2026-10-16: todos os focos iguais ao do card de jogo). O anel é
+   `outline` 3 px a 3 px; o brilho é um `::before` do tamanho da borda
+   externa do anel (−6 px), então o vão entre o elemento e o anel fica
+   transparente — com `box-shadow` no próprio elemento o brilho pintava o
+   vão. Vale onde o anel aparece: foco de teclado (`:focus-visible` e o
+   `data-fui-focus-visible` do Fluent), foco do controle (`data-nav-focus`),
+   links/`[tabindex]` e abas (o anel deles aparece em qualquer foco). Fica
+   de fora quem tem anel próprio ou por dentro: card de jogo, itens de
+   menu/lista, slide do carrossel. `::before` livre nesses componentes
+   (conferido no DOM); a posição relativa vai em `:where` (especificidade 0),
+   então quem já é `absolute` continua `absolute`. */
+:where(
+  .fui-Button[data-fui-focus-visible],
+  .fui-MenuButton[data-fui-focus-visible],
+  .fui-ToggleButton[data-fui-focus-visible],
+  :is(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible,
+  html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):focus,
+  :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus
+):not(.fui-Card, .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
+  [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"],
+  [role="treeitem"], .fui-CarouselCard > button) {
+  position: relative;
+}
+/* O brilho é um filho (`::before`): quem corta o que passa da borda
+   (`overflow: hidden` — o Button do Fluent, o Card, a Tab) o esconderia.
+   Enquanto em foco, deixa aparecer (o texto já corta com reticências no
+   próprio rótulo). */
+:is(
+  .fui-Button[data-fui-focus-visible],
+  .fui-MenuButton[data-fui-focus-visible],
+  .fui-ToggleButton[data-fui-focus-visible],
+  :is(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible,
+  html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):focus,
+  :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus,
+  html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):focus-within,
+  .fui-Card:not([role="button"]):has(> .fui-Card__checkbox:focus),
+  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-topbar-search):has(:focus-visible),
+  html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-topbar-search):focus-within,
+  html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
+  .fui-Carousel:has(.fui-CarouselCard > button:focus-visible)
+):not(.fui-Card[role="button"], .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
+  [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"],
+  [role="treeitem"], .fui-CarouselCard > button) {
+  overflow: visible !important;
+}
+
+:is(
+  .fui-Button[data-fui-focus-visible],
+  .fui-MenuButton[data-fui-focus-visible],
+  .fui-ToggleButton[data-fui-focus-visible],
+  :is(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible,
+  html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):focus,
+  :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus,
+  html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):focus-within,
+  .fui-Card:not([role="button"]):has(> .fui-Card__checkbox:focus),
+  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-topbar-search):has(:focus-visible),
+  html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-topbar-search):focus-within,
+  html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
+  .fui-Carousel:has(.fui-CarouselCard > button:focus-visible)
+):not(.fui-Card[role="button"], .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
+  [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"],
+  [role="treeitem"], .fui-CarouselCard > button)::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: calc(var(--borderRadiusMedium) + 6px);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent);
+  pointer-events: none;
+}
+/* Anéis em `::after` do Fluent (teclado) que não são botões: o brilho já
+   sai por fora do próprio anel (regra 1). */
