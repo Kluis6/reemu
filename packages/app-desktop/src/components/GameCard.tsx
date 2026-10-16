@@ -23,14 +23,15 @@ const useLocalStyles = makeStyles({
   // já que não há mais ação de favoritar aqui (fica na tela do jogo).
   favBadge: {
     position: "absolute",
-    top: "5px",
-    right: "5px",
+    top: "8px",
+    right: "8px",
     display: "grid",
     alignItems: "center",
     justifyItems: "center",
-    // Card de ~126 epx (6 por fileira, ver styles/metrics.ts).
-    width: "20px",
-    height: "20px",
+    // Card de ~184 epx (6 por fileira, ver styles/metrics.ts): 28 com ícone
+    // de 16 (múltiplo de 4, o SVG não borra) — antes 20/12, pequeno demais.
+    width: "28px",
+    height: "28px",
     borderRadius: tokens.borderRadiusMedium,
     // Fundo opaco na cor da página do tema e o coração no destaque do tema:
     // o par que `pickAccent` garante com 3:1 (WCAG 1.4.11) em todos os temas
@@ -38,7 +39,7 @@ const useLocalStyles = makeStyles({
     // de primário escuro (Crimson, Blue, Purple) quase sumia.
     backgroundColor: "var(--reemuPage)",
     color: "var(--reemuBrandAccent)",
-    fontSize: "12px",
+    fontSize: "16px",
     pointerEvents: "none",
   },
   // Sem capa: o NOME do jogo no próprio card (antes eram só as iniciais —
