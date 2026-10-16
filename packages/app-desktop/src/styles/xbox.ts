@@ -921,7 +921,8 @@ export const useHintStyles = makeStyles({
     backgroundColor: "rgba(8, 8, 9, 0.72)",
     border: "none",
     fontSize: "19px",
-    fontWeight: tokens.fontWeightRegular,
+    // semibold (pedido do usuário, 2026-10-16: letras mais pesadas)
+    fontWeight: tokens.fontWeightSemibold,
     lineHeight: 1,
     color: "#ffffff",
     zIndex: 50,
