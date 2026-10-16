@@ -90,11 +90,14 @@ export function ShaderLibrary({
   onPick,
   activePath,
   busy,
+  settingsFor,
   fill = false,
 }: {
   onPick: (path: string) => void
   activePath: string
   busy: boolean
+  /** Botão de ajustes no card do shader, igual à lista do ReEmu. */
+  settingsFor?: (path: string) => (() => void) | undefined
   /** Lista na altura que sobrar no pai (flex em coluna), em vez da fixa. */
   fill?: boolean
 }) {
@@ -273,6 +276,7 @@ export function ShaderLibrary({
                         selected={e.path === activePath}
                         disabled={busy}
                         onSelect={() => onPick(e.path)}
+                        onSettings={settingsFor?.(e.path)}
                       />
                     ))}
                   </AccordionPanel>

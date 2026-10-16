@@ -141,6 +141,7 @@ export function ShaderPicker(props: Common) {
           onPick={props.onPick}
           activePath={selected}
           busy={!!props.busy}
+          settingsFor={props.settingsFor}
           fill={props.fill}
         />
       )}

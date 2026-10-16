@@ -2,11 +2,9 @@ import {
   Body1,
   Button,
   Caption1,
-  Text,
   makeStyles,
   mergeClasses,
   tokens,
-  shorthands,
   Subtitle2,
   Card,
 } from '@fluentui/react-components'
@@ -29,7 +27,7 @@ import { useToastStore } from '../../stores/useToastStore'
 import { curatedText } from '../../lib/backendText'
 import { useTranslation } from 'react-i18next'
 import { SettingsHubCards } from './SettingsHome'
-import { ArrowLeftRegular, FrameRegular, OptionsRegular, SparkleRegular } from '@fluentui/react-icons'
+import { ArrowLeftRegular, FrameRegular, SparkleRegular } from '@fluentui/react-icons'
 import { ShaderPicker, ShaderPresetList } from '../../components/ShaderPicker'
 
 // Presets embutidos com nome/descrição traduzidos (`video.presets.<id>`).
@@ -66,7 +64,6 @@ const useStyles = makeStyles({
     minWidth: 0,
     contain: 'size',
   },
-  activeRow: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' },
   swap: {
     display: 'flex',
     flexDirection: 'column',
@@ -108,10 +105,6 @@ const useStyles = makeStyles({
       backgroundColor: tokens.colorNeutralStroke2,
       borderRadius: tokens.borderRadiusCircular,
     },
-  },
-  // `outline` com borda visível (ver `ShaderCard`)
-  settingsBtn: {
-    ...shorthands.borderColor(`${tokens.colorNeutralStrokeAccessible} !important`),
   },
 })
 
@@ -291,37 +284,14 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                         </Card>
                       </>
                     ) : (
-                      <>
-                        <ShaderPicker
-                          info={data}
-                          selected={data.active}
-                          busy={pick.isPending}
-                          onPick={(n) => pick.mutate(n)}
-                          settingsFor={settingsFor}
-                          fill
-                        />
-                        {!data.available.includes(data.active) &&
-                          !data.curated.some((c) => c.id === data.active) && (
-                            <div className={st.activeRow}>
-                              <Caption1>
-                                {t('video.active')}{' '}
-                                <Text as="strong" weight="semibold">
-                                  {data.active.split(/[/\\]/).pop()}
-                                </Text>
-                              </Caption1>
-                              {hasParams && (
-                                <Button
-                                  className={st.settingsBtn}
-                                  appearance="outline"
-                                  icon={<OptionsRegular />}
-                                  onClick={() => openParams(true)}
-                                >
-                                  {t('video.shaderSettings')}
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                      </>
+                      <ShaderPicker
+                        info={data}
+                        selected={data.active}
+                        busy={pick.isPending}
+                        onPick={(n) => pick.mutate(n)}
+                        settingsFor={settingsFor}
+                        fill
+                      />
                     )}
                   </div>
                 </div>

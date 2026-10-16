@@ -610,7 +610,6 @@ const ptBR = {
     shadersDesc: 'Shader padrão de todos os jogos, prévia e parâmetros',
     bezelsDesc: 'Baixar molduras por sistema',
     tabBezels: 'Molduras',
-    active: 'Ativo:',
     bezelsHint: 'Baixe molduras por sistema direto do The Bezel Project — 100–600 MB por sistema.',
     importBezels: 'Importar pasta de bezels…',
     removeBezels: 'Remover bezels',

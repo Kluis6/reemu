@@ -609,7 +609,6 @@ const en: Messages = {
     shadersDesc: 'Default shader for all games, preview and parameters',
     bezelsDesc: 'Download bezels per system',
     tabBezels: 'Bezels',
-    active: 'Active:',
     bezelsHint: 'Download bezels per system straight from The Bezel Project — 100–600 MB per system.',
     importBezels: 'Import bezels folder…',
     removeBezels: 'Remove bezels',

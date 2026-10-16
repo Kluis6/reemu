@@ -609,7 +609,6 @@ const es: Messages = {
     shadersDesc: 'Shader predeterminado de todos los juegos, vista previa y parámetros',
     bezelsDesc: 'Descargar marcos por sistema',
     tabBezels: 'Marcos',
-    active: 'Activo:',
     bezelsHint: 'Descarga marcos por sistema directamente de The Bezel Project — 100–600 MB por sistema.',
     importBezels: 'Importar carpeta de marcos…',
     removeBezels: 'Quitar marcos',
