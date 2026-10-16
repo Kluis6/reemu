@@ -16,11 +16,8 @@ const ptBR = {
     backspace: 'Apagar',
     done: 'Concluir',
     close: 'Fechar teclado',
-    hintA: 'A digitar',
-    hintB: 'B apagar',
-    hintX: 'X espaço',
-    hintY: 'Y maiúsculas',
-    hintMenu: '☰ concluir',
+    letters: 'Letras',
+    symbols: 'Números e símbolos',
   },
   hints: {
     select: 'Selecionar',

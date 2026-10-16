@@ -15,11 +15,8 @@ const es: Messages = {
     backspace: 'Borrar',
     done: 'Listo',
     close: 'Cerrar teclado',
-    hintA: 'A escribir',
-    hintB: 'B borrar',
-    hintX: 'X espacio',
-    hintY: 'Y mayúsculas',
-    hintMenu: '☰ listo',
+    letters: 'Letras',
+    symbols: 'Números y símbolos',
   },
   hints: {
     select: 'Seleccionar',

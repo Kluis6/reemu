@@ -15,11 +15,8 @@ const en: Messages = {
     backspace: 'Backspace',
     done: 'Done',
     close: 'Close keyboard',
-    hintA: 'A type',
-    hintB: 'B delete',
-    hintX: 'X space',
-    hintY: 'Y shift',
-    hintMenu: '☰ done',
+    letters: 'Letters',
+    symbols: 'Numbers and symbols',
   },
   hints: {
     select: 'Select',
