@@ -2507,3 +2507,13 @@ Infra:
   - Os botões "Importar pasta de bezels…" e "Remover bezels" foram escondidos (`SHOW_BEZEL_PACK_TOOLS`). A importação ficou no backlog (TASKS.md).
   - O tamanho dos packs (100–600 MB por sistema) subiu do rodapé para o texto do topo, junto com as outras informações.
 
+## 2026-10-16 — Cena 2D da prévia é a própria imagem de referência
+
+- **Pedido do usuário:** usar a imagem enviada (fase de plataforma ao pôr do sol, 1536×1024) como a cena 2D de teste dos shaders, no lugar do redesenho em código.
+- **Ajuste ao 4:3:** a cena da prévia é 320×240, igual à 3D, e a interface mostra a prévia em 4:3. Para caber sem cortar o HUD nem achatar a imagem:
+  - a faixa de terra e água de baixo (64 px) foi repetida duas vezes, levando a imagem a 1536×1152;
+  - depois ela foi reduzida 4,8× com filtro box para 320×240.
+  - A grade da arte tem uns 320 px de largura, então a redução quase coincide com os pixels dela.
+- **Arquivo:** `apps/desktop/src-tauri/assets/shader-preview-2d.png` (RGB, 138 KB). Fica embutido com `include_bytes!` e é decodificado com o crate `png`, que o app já usava.
+- **Código:** o desenho procedural da cena 2D saiu de `shader_preview_2d.rs`.
+

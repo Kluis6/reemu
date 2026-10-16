@@ -1,6 +1,6 @@
 //! Preview de shader (Configurações › Vídeo): o preset ativo aplicado a uma
-//! cena de exemplo desenhada pelo app (2D em `shader_preview_2d`, 3D em
-//! `shader_preview_3d` — sem arte de terceiros), num
+//! cena de exemplo (2D em `shader_preview_2d`, uma imagem do dono do
+//! projeto; 3D em `shader_preview_3d`, desenhada pelo app), num
 //! `FrameProcessor` só do preview — o do jogo não muda de preset nem de
 //! viewport.
 
