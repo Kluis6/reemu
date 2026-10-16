@@ -921,8 +921,7 @@ export const useHintStyles = makeStyles({
     backgroundColor: "rgba(8, 8, 9, 0.72)",
     border: "none",
     fontSize: "19px",
-    // semibold (pedido do usuário, 2026-10-16: letras mais pesadas)
-    fontWeight: tokens.fontWeightSemibold,
+    fontWeight: tokens.fontWeightRegular,
     lineHeight: 1,
     color: "#ffffff",
     zIndex: 50,
@@ -944,7 +943,8 @@ export const useHintStyles = makeStyles({
     // do meio dela (medido numa réplica); 3 px embaixo sobem o conteúdo
     // 1,5 px e a letra cai no centro do anel.
     paddingBottom: "3px",
-    fontSize: "13px",
+    // letra maior dentro do círculo de 26 (pedido do usuário; era 13)
+    fontSize: "17px",
     fontWeight: tokens.fontWeightSemibold,
     lineHeight: 1,
   },

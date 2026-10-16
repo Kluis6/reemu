@@ -70,6 +70,8 @@ const useStyles = makeStyles({
     // destaca da página só pela cor; hover/pressionado mudam o fundo.
     color: tokens.colorNeutralForeground1,
     textDecorationLine: "none",
+    // base do ícone (`absolute`, no canto de cima à direita)
+    position: "relative",
     // visível: o brilho do foco (`::before`, index.css) fica fora do card;
     // o texto corta com reticências nele mesmo
     overflow: "visible",
@@ -107,9 +109,22 @@ const useStyles = makeStyles({
     justifyContent: "flex-start",
     gap: tokens.spacingHorizontalXL,
   },
+  // Ícone à DIREITA e no dobro do tamanho (pedido do usuário; era 40/32),
+  // com o texto onde já estava. Fora do fluxo (`absolute`), pra não somar
+  // altura ao card: a grade do hub continua cabendo na tela sem rolar. No
+  // canto de cima; no card em linha (tela baixa), no meio da altura.
   icon: {
-    fontSize: "40px",
-    "@media (max-height: 640px)": { fontSize: "32px" },
+    position: "absolute",
+    top: tokens.spacingHorizontalXXL,
+    right: tokens.spacingHorizontalXXL,
+    fontSize: "80px",
+    lineHeight: 0,
+    "@media (max-height: 640px)": {
+      top: "50%",
+      right: tokens.spacingHorizontalL,
+      transform: "translateY(-50%)",
+      fontSize: "64px",
+    },
     flexShrink: 0,
     // ícone: destaque do tema (`reemuBrandAccent`, 3:1 garantido)
     color: "var(--reemuBrandAccent)",
@@ -119,6 +134,13 @@ const useStyles = makeStyles({
     flexDirection: "column",
     gap: "2px",
     minWidth: 0,
+  },
+  // Nome e descrição no pé do card, onde já ficavam (o ícone saiu do
+  // fluxo). No card em linha, na borda da esquerda como no card normal, com
+  // espaço à direita pro ícone (64 + folga).
+  textEnd: {
+    marginTop: "auto",
+    "@media (max-height: 640px)": { marginTop: 0, marginRight: "72px" },
   },
   // Descrição numa linha só: com controle conectado a barra de dicas
   // (canto inferior direito) cobria a 2ª linha do card de Sistema.
@@ -171,7 +193,7 @@ export function SettingsHubCards({ items, label }: { items: SettingsHubItem[]; l
       {items.map((it, i) => (
         <Link key={it.to} to={it.to} className={s.card} style={{ animationDelay: `${i * 30}ms` }}>
           <span className={s.icon}>{it.icon}</span>
-          <span className={s.text}>
+          <span className={mergeClasses(s.text, s.textEnd)}>
             <Subtitle1 className={mergeClasses(s.ellipsis, s.name)}>{it.title}</Subtitle1>
             <Body1 className={s.desc}>{it.description}</Body1>
           </span>
@@ -229,7 +251,7 @@ export function SettingsHome() {
         return (
           <Link key={key} to={key} className={s.card} style={delay}>
             <Icon className={s.icon} />
-            <span className={s.text}>
+            <span className={mergeClasses(s.text, s.textEnd)}>
               <Subtitle1 className={mergeClasses(s.ellipsis, s.name)}>
                 {t(`settings.tabs.${id}`)}
               </Subtitle1>
