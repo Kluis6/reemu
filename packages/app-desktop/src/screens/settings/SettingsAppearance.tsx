@@ -96,6 +96,17 @@ const useStyles = makeStyles({
     // selecionado ele punha uma borda de 1 px por cima (pedido do usuário: a
     // borda do tema ativo é a mesma dos outros); o foco é o anel abaixo.
     "::after": { border: "none !important" },
+    // E no foco marcado pelo Fluent (teclado/controle no app): a regra 1 do
+    // index.css (`:not(.fui-Tab)[data-fui-focus-within]::after`, anel de 3 px
+    // a −6 px) tem especificidade maior que o `::after` acima e ganhava. Como
+    // o `::after` é posicionado dentro da borda de 2 px do card, esse anel
+    // caía 2 px mais pra dentro que o `outline` e os dois somavam: 5 px de
+    // anel e 1 px de vão no controle, 3 + 3 no mouse (print do usuário).
+    // Mesma especificidade da regra 1, injetada depois: ganha.
+    "&[data-fui-focus-visible]::after, &[data-fui-focus-within]::after": {
+      border: "none !important",
+      boxShadow: "none !important",
+    },
     // Igual ao card de jogo (pedido do usuário): anel e brilho no foco E no
     // hover, e o card muda de tom. O tom é uma camada cinza translúcida por
     // cima do fundo (que vem inline, do próprio tema): clareia os escuros e
