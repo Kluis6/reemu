@@ -231,11 +231,10 @@ export function SettingsHome() {
               className={mergeClasses(s.card, s.profile)}
               style={delay}
             >
-              {profile.data ? (
-                <ProfileAvatar profile={profile.data} size={96} />
-              ) : (
-                <Icon className={s.icon} />
-              )}
+              {profile.data && <ProfileAvatar profile={profile.data} size={96} />}
+              {/* ícone da pessoa à direita, como nos outros cards (pedido do
+                  usuário); sem perfil carregado é o único ícone do card */}
+              <Icon className={s.icon} />
               <span className={s.text}>
                 <Title3 className={s.ellipsis}>
                   {name || t("settings.tabs.profile")}
