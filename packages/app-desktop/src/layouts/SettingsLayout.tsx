@@ -66,6 +66,10 @@ const useStyles = makeStyles({
   crumbCurrent: { color: `${tokens.colorNeutralForeground1} !important` },
   crumbSep: {
     color: tokens.colorNeutralForeground3,
+    // mais respiro entre o nome e o chevron (pedido do usuário): 8 de cada
+    // lado, além do padding dos botões do caminho
+    marginLeft: tokens.spacingHorizontalS,
+    marginRight: tokens.spacingHorizontalS,
     "& svg": { fontSize: "20px", width: "20px", height: "20px" },
   },
   // Card do conteúdo: `Background1` com sombra baixa; os de dentro usam
