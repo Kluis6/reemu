@@ -30,6 +30,13 @@ import { Trans, useTranslation } from 'react-i18next'
 
 const ROOT_KEY = 'reemu.shaderLibRoot'
 
+/** Caminho do preset relativo à pasta do pacote (`crt/crt-geom.slangp`). */
+const relPath = (path: string, root: string) => {
+  const p = path.replace(/\\/g, '/')
+  const r = root.replace(/\\/g, '/').replace(/\/+$/, '')
+  return p.toLowerCase().startsWith(r.toLowerCase() + '/') ? p.slice(r.length + 1) : p
+}
+
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
   // `fill`: ocupa a altura que o pai der, e a lista rola dentro dela
@@ -61,8 +68,16 @@ const useStyles = makeStyles({
       borderRadius: tokens.borderRadiusCircular,
     },
   },
-  // cards do grupo, no mesmo espaçamento da lista de Shaders do ReEmu
-  panel: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
+  // Cards do grupo iguais aos da lista de Shaders do ReEmu: mesmo
+  // espaçamento e a largura toda (sem a margem lateral do AccordionPanel).
+  panel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    marginLeft: 0,
+    marginRight: 0,
+    paddingBottom: tokens.spacingVerticalS,
+  },
 })
 
 /**
@@ -252,6 +267,9 @@ export function ShaderLibrary({
                       <ShaderCard
                         key={e.path}
                         title={e.name}
+                        // 2ª linha como a descrição dos shaders do ReEmu: o
+                        // arquivo dentro do pacote
+                        description={relPath(e.path, root)}
                         selected={e.path === activePath}
                         disabled={busy}
                         onSelect={() => onPick(e.path)}
