@@ -20,6 +20,9 @@ const useStyles = makeStyles({
   card: {
     padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
     border: `1px solid transparent`,
+    // sem a sombra do <Card> do Fluent (pedido do usuário): destaque só pela
+    // cor, como os outros cards
+    boxShadow: 'none !important',
     // Na lista com rolagem (coluna flex com altura máxima) o card não pode
     // encolher pra caber: com muitos shaders eles eram espremidos e o texto
     // saía cortado. Com isso a lista rola.

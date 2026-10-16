@@ -30,7 +30,9 @@ const useStyles = makeStyles({
   // Abas no estilo do app (42 de altura). Nas Configurações a lista começa
   // na altura da imagem da prévia, cuja barra tem 32 + 24: aqui são 10 a
   // mais de aba e 10 a menos de espaço (8 do `gap` do pai + 6).
-  tabs: { alignSelf: 'flex-start', marginBottom: '6px' },
+  // A aba começa na borda da lista de baixo (respeita o padding do card),
+  // sem o recuo de −15 px das outras abas (`useTabStyles`).
+  tabs: { alignSelf: 'flex-start', marginBottom: '6px', marginLeft: '0 !important' },
 })
 
 type Common = {
