@@ -2979,3 +2979,77 @@ fn hdr_blit_maps_sdr_to_scrgb() {
         "branco SDR devia ir ao pico"
     );
 }
+
+/// Prévia de verdade (o que a tela de Shaders faz) em cada `.slangp` do
+/// pacote: monta os pipelines no wgpu (`set_preset`) e roda a chain na cena
+/// 2D (`render_still`). Pega o que o `field_validate_real_presets` não vê —
+/// erros de validação do WebGPU ao criar pipeline/shader module e chain que
+/// não gera imagem. Um `FrameProcessor` novo por preset (reaproveitar um só
+/// esgotava a memória da GPU no Mega Bezel). Ignorado (precisa do pacote):
+///   REEMU_SHADER_DIR=…/slang-shaders [REEMU_SHADER_FILTER=downsample/] \
+///   cargo test -p reemu-desktop --lib field_render_real_presets -- --ignored --nocapture
+#[test]
+#[ignore]
+fn field_render_real_presets() {
+    let dir = std::env::var("REEMU_SHADER_DIR").unwrap_or_else(|_| {
+        format!(
+            "{}/.local/share/com.reemu.desktop/shaders/slang-shaders",
+            std::env::var("HOME").unwrap_or_default()
+        )
+    });
+    let filter = std::env::var("REEMU_SHADER_FILTER").unwrap_or_default();
+    let _ = env_logger::builder().is_test(true).try_init();
+    let root = std::path::Path::new(&dir);
+    let mut presets = Vec::new();
+    collect_slangp(root, &mut presets);
+    presets.sort();
+    let w = crate::commands::PREVIEW_W;
+    let h = crate::commands::PREVIEW_H;
+    let frame = Frame {
+        origin: FrameOrigin::SoftwareRawBuffer {
+            data: crate::commands::sample_scene(),
+            pitch: w * 4,
+            format: SoftwarePixelFormat::Xrgb8888,
+        },
+        metadata: FrameMetadata {
+            native_width: w,
+            native_height: h,
+            aspect_ratio: w as f32 / h as f32,
+            rotation_degrees: 0,
+        },
+    };
+    let mut by_dir: std::collections::BTreeMap<String, (usize, usize)> = Default::default();
+    for p in &presets {
+        let rel = p
+            .strip_prefix(root)
+            .unwrap_or(p)
+            .to_string_lossy()
+            .replace('\\', "/");
+        if !rel.contains(&filter) {
+            continue;
+        }
+        let Some(mut fp) = FrameProcessor::new() else {
+            eprintln!("sem adapter wgpu — pulando");
+            return;
+        };
+        let res = fp.set_preset(p.to_str().unwrap()).and_then(|_| {
+            fp.render_still(&frame, 960, 720, 2)
+                .ok_or_else(|| "sem imagem".to_string())
+        });
+        let top = rel.split('/').next().unwrap_or("").to_string();
+        let e = by_dir.entry(top).or_default();
+        e.1 += 1;
+        match res {
+            Ok(_) => e.0 += 1,
+            Err(err) => {
+                let last = err.lines().rfind(|l| !l.trim().is_empty()).unwrap_or("");
+                eprintln!("FALHOU {rel}: {}", last.trim());
+            }
+        }
+    }
+    let (ok, total) = by_dir.values().fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1));
+    eprintln!("\n=== {ok}/{total} renderizaram ===");
+    for (d, (o, t)) in &by_dir {
+        eprintln!("{o:>5}/{t:<5} {d}");
+    }
+}

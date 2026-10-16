@@ -69,13 +69,20 @@ const useStyles = makeStyles({
     placeItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
   },
+  // sobre o fundo preto do quadro, em qualquer tema
+  error: { color: '#ffffff', padding: tokens.spacingHorizontalL, textAlign: 'center' },
 })
 
-/** `ArrayBuffer` de PNG → URL de blob, revogada quando troca. */
+/** `ArrayBuffer` de PNG → URL de blob, revogada quando troca. Sem buffer
+ *  (a prévia falhou) volta a `null`: a URL anterior já foi revogada e, se
+ *  ficasse, a tela mostrava o ícone de imagem quebrada. */
 function useBlobUrl(buf: ArrayBuffer | undefined) {
   const [url, setUrl] = useState<string | null>(null)
   useEffect(() => {
-    if (!buf) return
+    if (!buf) {
+      setUrl(null)
+      return
+    }
     const u = URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
     setUrl(u)
     return () => URL.revokeObjectURL(u)
@@ -152,9 +159,14 @@ export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
             <Spinner size="small" />
           </div>
         )}
+        {/* a prévia falhou (preset que o WebGPU recusa): o aviso no lugar
+            da imagem */}
+        {on && preview.isError && !preview.isFetching && (
+          <div className={s.busy}>
+            <Caption1 className={s.error}>{t('video.preview.error')}</Caption1>
+          </div>
+        )}
       </div>
-      {/* sem texto de ajuda embaixo; só o erro, se a prévia falhar */}
-      {preview.isError && <Caption1>{t('video.preview.error')}</Caption1>}
     </div>
   )
 }

@@ -2172,8 +2172,19 @@ impl FrameProcessor {
 
     pub fn set_preset(&mut self, name: &str) -> Result<(), String> {
         let built = build_specs(name).map_err(|e| format!("shader: {e}"))?;
-        let r = realize(&self.device, &self.queue, built)
-            .ok_or("shader: falha ao criar os pipelines")?;
+        // Erro de validação do WebGPU ao montar os pipelines (ex.: o fragment
+        // lê uma entrada que o vertex não escreve — o Vulkan aceita, o WebGPU
+        // não) vira `Err` aqui, e o preset atual continua. Sem o escopo ele ia
+        // pro handler de erro não capturado do wgpu, que entra em pânico.
+        // `push_error_scope`/`pop` do wgpu 30 (docs.rs/wgpu, `Device`); o
+        // `pop` resolve na hora nos backends nativos.
+        let scope = self.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let r = realize(&self.device, &self.queue, built);
+        if let Some(e) = pollster::block_on(scope.pop()) {
+            log::warn!("preset de shader '{name}' recusado pelo WebGPU: {e}");
+            return Err(format!("shader: {e}"));
+        }
+        let r = r.ok_or("shader: falha ao criar os pipelines")?;
         self.passes = r.passes;
         self.params = r.params;
         self.param_meta = r.param_meta;
@@ -2232,11 +2243,18 @@ impl FrameProcessor {
         runs: usize,
     ) -> Option<(u32, u32, Vec<u8>)> {
         self.set_canvas_viewport(out_w, out_h);
+        // Erro de validação no meio da chain (ver `set_preset`) vira "sem
+        // imagem" em vez de pânico no handler de erro não capturado.
+        let scope = self.device.push_error_scope(wgpu::ErrorFilter::Validation);
         let mut last = None;
         for _ in 0..runs.max(2) {
             if let Some((w, h, px)) = self.process(frame) {
                 last = Some((w, h, px.to_vec()));
             }
+        }
+        if let Some(e) = pollster::block_on(scope.pop()) {
+            log::warn!("preview do shader '{}' falhou: {e}", self.preset_name);
+            return None;
         }
         last
     }

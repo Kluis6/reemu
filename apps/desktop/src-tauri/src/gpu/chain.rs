@@ -723,7 +723,8 @@ impl FrameProcessor {
                 } else {
                     wgpu::FilterMode::Nearest
                 };
-                self.device.create_sampler(&sampler_desc(f, wrap))
+                self.device
+                    .create_sampler(&sampler_desc(f, wrap, self.device.features()))
             })
             .clone()
     }

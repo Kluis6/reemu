@@ -2517,3 +2517,15 @@ Infra:
 - **Arquivo:** `apps/desktop/src-tauri/assets/shader-preview-2d.png` (RGB, 138 KB). Fica embutido com `include_bytes!` e é decodificado com o crate `png`, que o app já usava.
 - **Código:** o desenho procedural da cena 2D saiu de `shader_preview_2d.rs`.
 
+## 2026-10-16 — Prévia de shader quebrava com alguns presets do pacote
+
+- **Sintoma (relato do usuário):** ao escolher alguns presets do pacote, a prévia ficava com o ícone de imagem quebrada, mesmo depois de voltar para "Nenhum".
+- **Causa:** erros de validação do WebGPU, ao montar o pipeline ou ao renderizar, iam para o handler de erro não capturado do wgpu, que entra em pânico. No front, a URL de blob anterior era revogada e continuava na tela.
+- **Correções:**
+  - **`set_preset` e `render_still`:** rodam dentro de `push_error_scope(Validation)` / `pop`, segundo a doc do wgpu 30 (`Device::push_error_scope`, `ErrorScopeGuard::pop`). Um preset recusado vira `Err` e o shader anterior continua; um render recusado vira "sem imagem". O `pollster` passou para as dependências gerais por causa do `block_on` do `pop`.
+  - **Sampler `clamp_to_border`:** exige `Features::ADDRESS_MODE_CLAMP_TO_BORDER`, ou `ADDRESS_MODE_CLAMP_TO_ZERO` com `SamplerBorderColor::Zero` (docs do `wgpu-types` 30). Sem nenhuma das duas no device, cai para `ClampToEdge`, que é uma aproximação. A cor de borda do RetroArch não foi conferida.
+  - **Último passe:** sai sempre no formato de saída de 8 bits, ignorando `float_framebuffer` e `srgb_framebuffer`, conforme `spec/SHADER_SPEC.md` e `README.md` do libretro/slang-shaders ("all filter chains terminate by rendering to the backbuffer"; "the final pass will not be an sRGB backbuffer"). A exceção é quando ele é lido como feedback. Antes, o readback copiava `Rgba16Float` com `bytes_per_row` de 4 bytes por pixel.
+  - **Prévia no front:** sem buffer, volta a `null`, e o aviso de erro aparece dentro do quadro.
+- **Teste novo:** `field_render_real_presets` (ignorado; precisa do pacote) monta e renderiza cada `.slangp`. Usa um `FrameProcessor` por preset, porque reaproveitar um só esgotava a memória da GPU no Mega Bezel.
+- **Placar e o que ficou em aberto:** no TASKS.md (Vídeo / GPU).
+

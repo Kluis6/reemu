@@ -147,6 +147,19 @@ pub(super) fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
     for (spec, need) in specs.iter_mut().zip(needs_feedback) {
         spec.feedback = need;
     }
+    // O último passe vai pro "backbuffer" (spec/SHADER_SPEC.md e README.md do
+    // libretro/slang-shaders: "all filter chains terminate by rendering to the
+    // backbuffer"; "the final pass will not be an sRGB backbuffer"), então
+    // `float_framebuffer`/`srgb_framebuffer` não valem nele: sai no formato
+    // de saída (8 bits), o que a tela e o readback (4 bytes por pixel)
+    // esperam. Com `Rgba16Float` aqui o readback copiava com `bytes_per_row`
+    // menor que a linha e o WebGPU recusava (ex.: blurs/dual_filter_*). Se o
+    // último passe é lido como feedback, o formato fica como está.
+    if let Some(last) = specs.last_mut() {
+        if !last.feedback {
+            last.fmt = FMT;
+        }
+    }
     // valores do `.slangp` sobrescrevem os defaults dos `#pragma parameter`
     for (k, v) in &preset.parameters {
         params.insert(k.clone(), *v);
@@ -286,7 +299,7 @@ pub(super) fn realize(
         } else {
             wgpu::FilterMode::Nearest
         };
-        let sampler = device.create_sampler(&sampler_desc(filter, l.wrap));
+        let sampler = device.create_sampler(&sampler_desc(filter, l.wrap, device.features()));
         luts.insert(l.name, (tex, view, sampler, l.w, l.h));
     }
 
@@ -310,11 +323,32 @@ pub(super) fn wrap_address(w: WrapMode) -> wgpu::AddressMode {
     }
 }
 
+/// `features` = as do device. `clamp_to_border` (borda preta transparente,
+/// a cor que o app já usava; a do RetroArch não foi conferida) precisa de `Features::ADDRESS_MODE_CLAMP_TO_BORDER` com
+/// `SamplerBorderColor::TransparentBlack`, ou de `ADDRESS_MODE_CLAMP_TO_ZERO`
+/// com `SamplerBorderColor::Zero` (= `TransparentBlack` fora do Metal) —
+/// docs do `wgpu-types` 30 (`AddressMode::ClampToBorder`, `Features`). Sem
+/// nenhuma das duas, cai pra `ClampToEdge`: fora da textura repete a borda em
+/// vez de dar preto (aproximação; o preset roda em vez de travar o device).
 pub(super) fn sampler_desc(
     filter: wgpu::FilterMode,
     wrap: WrapMode,
+    features: wgpu::Features,
 ) -> wgpu::SamplerDescriptor<'static> {
-    let a = wrap_address(wrap);
+    let border = if !matches!(wrap, WrapMode::ClampToBorder) {
+        None
+    } else if features.contains(wgpu::Features::ADDRESS_MODE_CLAMP_TO_BORDER) {
+        Some(wgpu::SamplerBorderColor::TransparentBlack)
+    } else if features.contains(wgpu::Features::ADDRESS_MODE_CLAMP_TO_ZERO) {
+        Some(wgpu::SamplerBorderColor::Zero)
+    } else {
+        None
+    };
+    let a = if matches!(wrap, WrapMode::ClampToBorder) && border.is_none() {
+        wgpu::AddressMode::ClampToEdge
+    } else {
+        wrap_address(wrap)
+    };
     wgpu::SamplerDescriptor {
         label: Some("etapa04 sampler"),
         address_mode_u: a,
@@ -327,8 +361,7 @@ pub(super) fn sampler_desc(
         } else {
             wgpu::MipmapFilterMode::Nearest
         },
-        border_color: matches!(wrap, WrapMode::ClampToBorder)
-            .then_some(wgpu::SamplerBorderColor::TransparentBlack),
+        border_color: border,
         ..Default::default()
     }
 }

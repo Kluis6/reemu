@@ -85,6 +85,23 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Vídeo / GPU
 
+- [ ] `todo` — Shaders do pacote que o WebGPU recusa na prévia (2026-10-16,
+      `field_render_real_presets`: monta os pipelines e renderiza a cena 2D;
+      o `field_validate_real_presets` só compila e não pega isto). Placar
+      depois das correções do dia: fora do Mega Bezel ~86% (1006/1164 antes
+      do ajuste do último passe); **Mega Bezel 0/1494**. Erros, por grupo:
+      - `Parser recursion limit exceeded` do naga ao criar o shader module
+        (487, quase todo Mega Bezel);
+      - Mega Bezel: "passe 28 não conseguiu resolver uma textura de bind
+        group" (alias/histórico na chain) — o quadro é pulado;
+      - vertex com mais saídas que `max_inter_stage_shader_variables` (~200);
+      - fragment lê `location` que o vertex não escreve (90; o Vulkan aceita,
+        o WebGPU não — ex.: `downsample/mixed-res-4x-crt-hyllian`);
+      - último passe lido como feedback em `Rgba16Float` × blit `Rgba8Unorm`
+        (`blurs/dual_filter_bloom*`).
+      Hoje esses presets voltam como erro (o shader anterior continua e a
+      prévia mostra o aviso) em vez de derrubar o wgpu.
+
 - [x] `done` — **OpenGL por hardware no Windows** (WGL): validado pelo
       usuário em 2026-10-01 pelos logs — flycast (GL 3.2), Beetle PSX HW
       (3.3) e parallel_n64 (3.0 compat) abriram contexto e renderizaram.

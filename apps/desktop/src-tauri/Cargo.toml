@@ -33,6 +33,9 @@ wgpu = "30"
 # MESMO VkDevice do wgpu. Mesma versao que o wgpu 30 ja resolve.
 ash = { version = "0.38", default-features = false }
 png = "0.17"
+# `block_on`: abertura do device com as extensões do interop (gpu/win_interop.rs,
+# Linux) e o `pop` do escopo de erro do wgpu no `set_preset`
+pollster = "0.4"
 uuid = { version = "1", features = ["v4"] }
 thiserror.workspace = true
 reqwest = { version = "0.12", default-features = false, features = [
@@ -78,14 +81,11 @@ wayland-client = { version = "0.31", features = ["system", "dlopen"] }
 # Service via libdbus — que o tao/Tauri já linka, sem pacote de sistema novo.
 keyring = { version = "3", features = ["sync-secret-service", "crypto-rust"] }
 # Interop GL: espera a fence `sync_file` do core (gpu/sync_fd.rs) — `poll()`
-# no fallback de CPU e o `block_on` da abertura do device com a extensão.
+# no fallback de CPU.
 rustix = { version = "1", features = ["event", "std"] }
-pollster = "0.4"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
-# `block_on` da abertura do device com as extensões do interop (gpu/win_interop.rs)
-pollster = "0.4"
 # janela filha da surface nativa de vídeo (`video.rs`, módulo `win`)
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
