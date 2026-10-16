@@ -49,16 +49,16 @@ const useStyles = makeStyles({
     width: '24px',
     height: '24px',
     padding: '0 !important',
-    // `appearance="subtle"`: sem fundo em repouso (como no Xbox). No hover
-    // E no foco (teclado/controle) o fundo acende igual: no Xbox, #4E535B
-    // sobre a página #1A1B1E (~22% rumo ao branco) — aqui o fundo da página
-    // misturado com a cor do texto do tema, pra acompanhar claro/escuro.
+    // `appearance="subtle"`: sem fundo em repouso (como no Xbox). Hover e
+    // foco (teclado/controle) com o MESMO fundo dos outros botões do tema
+    // (voltar, tela cheia, filtros: `colorNeutralBackground2` no hover/foco,
+    // `…Pressed` ao clicar) — pedido do usuário.
     '&:hover, &:focus, &:focus-visible': {
-      backgroundColor: `color-mix(in srgb, var(--reemuPage), ${tokens.colorNeutralForeground1} 22%) !important`,
+      backgroundColor: `${tokens.colorNeutralBackground2Hover} !important`,
       color: `${tokens.colorNeutralForeground1} !important`,
     },
     ':active': {
-      backgroundColor: `color-mix(in srgb, var(--reemuPage), ${tokens.colorNeutralForeground1} 15%) !important`,
+      backgroundColor: `${tokens.colorNeutralBackground2Pressed} !important`,
     },
     // O slot de ícone do <Button> é fixo em 20 no tamanho medium; garante.
     '& .fui-Button__icon': { fontSize: `${ICON}px`, width: `${ICON}px`, height: `${ICON}px` },

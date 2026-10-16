@@ -46,7 +46,7 @@ export function moveFocus(dir: NavDir) {
   if (els.length === 0) return
   const cur = document.activeElement as HTMLElement | null
   if (!cur || !els.includes(cur)) {
-    els[0].focus()
+    focusAndReveal(els[0])
     return
   }
   const c = cur.getBoundingClientRect()
@@ -68,10 +68,25 @@ export function moveFocus(dir: NavDir) {
       best = el
     }
   }
-  if (best) {
-    best.focus()
-    // Centraliza na horizontal (faixa rolável estilo Xbox), sem pular na
-    // vertical mais que o necessário.
-    best.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
-  }
+  if (best) focusAndReveal(best)
+}
+
+/**
+ * Foca sem a rolagem automática do navegador e rola só a página: o
+ * `.focus()`/`scrollIntoView` padrão rola TODOS os ancestrais, inclusive
+ * caixas com `overflow: hidden` — no carrossel da Início (Fluent `Carousel`)
+ * isso deslocava o slide pro lado e a página pra cima, e o destaque ficava
+ * cortado pela metade embaixo da topbar (print do usuário, controle). Dentro
+ * do carrossel quem aparece na tela é o carrossel inteiro; nas prateleiras
+ * o card centraliza na horizontal (faixa rolável estilo Xbox).
+ */
+function focusAndReveal(el: HTMLElement) {
+  el.focus({ preventScroll: true })
+  const carousel = el.closest<HTMLElement>('.fui-Carousel')
+  const target = carousel ?? el
+  target.scrollIntoView({
+    block: 'nearest',
+    inline: carousel ? 'nearest' : 'center',
+    behavior: 'smooth',
+  })
 }

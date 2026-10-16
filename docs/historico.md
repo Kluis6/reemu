@@ -2436,3 +2436,11 @@ Infra:
   - A aba focada não selecionada ganha o fundo de realce (#3E434B, um degrau acima da superfície), e o traço continua na selecionada.
   - No ReEmu: selecionada+foco = fundo `colorNeutralForeground1` e texto `reemuPage`, invertido em qualquer tema, sem o traço; foco = `colorNeutralBackground3`. O anel é o padrão do app.
   - Conferido em captura com foco de teclado real nos dois casos.
+
+## 2026-10-16 — Carrossel com o controle; botão "Mostrar tudo"
+
+- **Carrossel** (print do usuário: slide deslocado para o lado e a página rolada para cima, com o destaque cortado embaixo da topbar).
+  - O `moveFocus` chamava `.focus()` e `scrollIntoView`, que rolam TODOS os ancestrais, inclusive o `overflow: hidden` do `Carousel` do Fluent.
+  - Agora o foco é `focus({ preventScroll: true })`. Dentro do carrossel, quem vai para a tela é o carrossel inteiro (`scrollIntoView` no `.fui-Carousel`); nas prateleiras, o card continua centralizando na horizontal.
+  - A área de rolagem ganhou `scroll-padding-top` igual ao topo da página, para a rolagem do foco contar a topbar como coberta. Voltando para o destaque, a página rola até ele aparecer inteiro (medido: de 66 px rolados para 0, topo do carrossel em 116).
+- **"Mostrar tudo"** (título das prateleiras): hover e foco passam a ter o mesmo fundo dos outros botões do tema (`colorNeutralBackground2Hover`/`Pressed`), no lugar da mistura própria.

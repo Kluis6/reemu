@@ -450,6 +450,11 @@ export const useShellStyles = makeStyles({
     isolation: "isolate",
     // Limpa a `.topbar` flutuante e deixa o respiro do Xbox (y = 116).
     paddingTop: `var(--reemuPageTop, ${PAGE_TOP})`,
+    // A rolagem do foco (`scrollIntoView`, lib/focusNav.ts) conta a topbar
+    // como área coberta: voltando com o controle pro destaque, a página
+    // rola até ele aparecer INTEIRO abaixo da topbar (antes ficava cortado
+    // embaixo dela, print do usuário).
+    scrollPaddingTop: `var(--reemuPageTop, ${PAGE_TOP})`,
     // Mesmo padding da `.topbar` — o conteúdo alinha com o botão de voltar
     // (esquerda) e o fim do relógio (direita).
     paddingLeft: PAGE_PAD_L,
