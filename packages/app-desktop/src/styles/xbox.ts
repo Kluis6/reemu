@@ -516,7 +516,8 @@ export const useBrowseStyles = makeStyles({
   // próprio jogo" do app Xbox).
   featured: {
     padding: "32px",
-    borderRadius: "16px",
+    // raio padrão do ReEmu (4 px); antes 16, o do card do app Xbox
+    borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
     backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${tokens.colorNeutralBackground2}, ${tokens.colorBrandBackground} 14%) 0%, ${tokens.colorNeutralBackground2} 60%)`,
     // sem sombra nem borda (pedidos do usuário): a separação da página é só
