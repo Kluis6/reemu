@@ -96,14 +96,28 @@ const useStyles = makeStyles({
     // selecionado ele punha uma borda de 1 px por cima (pedido do usuário: a
     // borda do tema ativo é a mesma dos outros); o foco é o anel abaixo.
     "::after": { border: "none !important" },
-    "&:has(> .fui-Card__checkbox:focus)": {
+    // Igual ao card de jogo (pedido do usuário): anel e brilho no foco E no
+    // hover, e o card muda de tom. O tom é uma camada cinza translúcida por
+    // cima do fundo (que vem inline, do próprio tema): clareia os escuros e
+    // escurece os claros.
+    "&:hover, &:has(> .fui-Card__checkbox:focus)": {
       outlineWidth: "3px",
       outlineStyle: "solid",
       outlineColor: tokens.colorBrandStroke1,
       outlineOffset: "3px",
-      // o brilho vem do `::before` global (index.css, regra 4), por fora do
-      // anel; o card precisa deixar o `::before` aparecer fora dele
+      // o brilho vem do `::before` (o do index.css, regra 4, no foco; o de
+      // baixo no hover), por fora do anel; o card deixa ele aparecer
       overflow: "visible !important",
+      backgroundImage:
+        "linear-gradient(rgba(128, 128, 128, 0.14), rgba(128, 128, 128, 0.14))",
+    },
+    "&:hover::before": {
+      content: '""',
+      position: "absolute",
+      inset: "-6px",
+      borderRadius: `calc(${tokens.borderRadiusMedium} + 6px)`,
+      boxShadow: `0 0 12px color-mix(in srgb, ${tokens.colorBrandStroke1} 45%, transparent)`,
+      pointerEvents: "none",
     },
   },
   // nome à esquerda, Switch "Claro" à direita; altura fixa pra alinhar os
