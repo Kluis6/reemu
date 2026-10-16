@@ -243,8 +243,11 @@ function ThemeCard({
         </Text>
         {onModeChange ? (
           // o clique/tecla no Switch não pode chegar no Card — ele
-          // re-escolheria a versão que estava na tela
+          // re-escolheria a versão que estava na tela. `data-nav-skip`: o
+          // controle não para no Switch (pedido do usuário) — com ele, claro/
+          // escuro troca pelo atalho X; mouse e Tab do teclado continuam.
           <span
+            data-nav-skip
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >

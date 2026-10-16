@@ -181,7 +181,7 @@ export function AppShell() {
         { glyph: "Y", label: t("hints.search") },
         { glyph: "MENU", label: t("hints.options") },
       ] as const)
-    : pathname === "/settings/aparencia"
+    : pathname === "/settings/aparencia/temas"
       ? ([
           { glyph: "A", label: t("hints.select") },
           { glyph: "X", label: t("hints.lightDark") },
