@@ -114,8 +114,8 @@ const useStyles = makeStyles({
 
 /**
  * `showWallpaper`: se o usuário escolheu um papel de parede, mostra SÓ ele
- * (sem as cores do tema). Quem decide é a tela: o `AppShell` liga só na
- * tela inicial; Splash e Onboarding ficam sempre com as cores do tema (o
+ * (sem as cores do tema). Quem decide é a tela: o `AppShell` liga em todas
+ * as telas menos a página do jogo; Splash e Onboarding ficam sempre com as cores do tema (o
  * boot é um momento de marca fixo, como o power-on de um console).
  */
 /** `true` com a janela escondida/minimizada ou sem foco. */

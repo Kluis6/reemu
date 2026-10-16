@@ -193,7 +193,10 @@ export function AppShell() {
         ] as const);
   return (
     <div className={s.app}>
-      <AnimatedBackground showWallpaper={atRoot} />
+      {/* Papel de parede em todas as telas menos a página do jogo (que tem a
+          arte do jogo no hero) — TESTE do usuário (2026-10-16); se não for
+          aprovado, volta a `showWallpaper={atRoot}` (só a tela inicial). */}
+      <AnimatedBackground showWallpaper={!pathname.startsWith("/rom/")} />
       <nav className={s.rail}>
         <Menu positioning={{ position: "below", align: "start", offset: 12 }}>
           <MenuTrigger disableButtonEnhancement>
