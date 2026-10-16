@@ -1190,10 +1190,23 @@ export const useDetailStyles = makeStyles({
       border: "1px solid transparent !important",
       boxShadow: "none !important",
     },
-    "& button:focus": {
+    // Hover igual ao foco, como no card de jogo (pedido do usuário): anel e
+    // brilho também com o mouse em cima. O brilho é um `::before` do tamanho
+    // da borda externa do anel (o mesmo do index.css, regra 4).
+    "& button:focus, & button:hover": {
       outline: `3px solid ${tokens.colorBrandStroke1} !important`,
       outlineOffset: `${FOCUS_OFFSET}px !important`,
       boxShadow: "none !important",
+      overflow: "visible !important",
+    },
+    "& button": { position: "relative" },
+    "& button:hover::before": {
+      content: '""',
+      position: "absolute",
+      inset: "-6px",
+      borderRadius: `calc(${tokens.borderRadiusMedium} + 6px)`,
+      boxShadow: FOCUS_GLOW,
+      pointerEvents: "none",
     },
   },
   // Favoritar/Editar/Informações: `appearance="secondary"` sem a borda
