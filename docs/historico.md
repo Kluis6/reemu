@@ -2452,3 +2452,14 @@ Infra:
 - **Aparência:** as abas Temas e Papel de parede viraram páginas próprias, `/settings/aparencia/temas` e `/settings/aparencia/papel-de-parede`, com o caminho "Configurações › Aparência › Temas".
 - **Decorações:** a lista de links (`SettingsLinkList`) foi trocada pelos mesmos cards; o `components/SettingsNav.tsx` ficou sem uso e saiu.
 - `ui-smoke` em 2 tamanhos (10/10) e 147 testes passaram.
+
+## 2026-10-16 — Revisão do foco em todos os componentes
+
+- **Varredura** (navegador headless, modo controle) em 20 telas, foco a foco, conferindo o anel padrão: 3 px na cor de destaque, a 3 px, com o brilho de 12 px. Dois desvios:
+  1. **Slide do carrossel:** o anel ficava por dentro e sem brilho, porque o carrossel corta o que passa da borda. Agora o anel padrão vai no próprio carrossel (`.fui-Carousel:has(slide em foco)`), que não é cortado, e o botão do slide fica sem anel.
+  2. **Busca da BIOS:** estava sem anel, porque a regra que tira o anel da busca da topbar pegava qualquer `SearchBox`. Agora vale só para a busca da topbar (`reemu-topbar-search`).
+- Depois disso, a varredura não acha desvio em nenhuma das 20 telas. No teclado (Tab) também conferido.
+- **Exceções de propósito:**
+  - itens de menu e de lista com o anel por dentro, porque o popover corta;
+  - busca da topbar com a linha do Fluent no lugar do anel, a pedido do usuário;
+  - cards de jogo com o vão transparente.

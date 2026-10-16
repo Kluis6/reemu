@@ -319,7 +319,8 @@ export function AppShell() {
           )}
           <SearchBox
             ref={searchRef}
-            className={mergeClasses(s.search, search.keyboard && s.searchTyping)}
+            // `reemu-topbar-search`: só esta busca fica sem o anel (index.css)
+            className={mergeClasses("reemu-topbar-search", s.search, search.keyboard && s.searchTyping)}
             data-nav-skip
             appearance="filled-darker"
             value={search.query}

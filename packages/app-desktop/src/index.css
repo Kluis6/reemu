@@ -202,12 +202,19 @@ html[data-nav-focus] :is([role="menuitem"], [role="menuitemradio"], [role="menui
 }
 
 /* Slide do carrossel da Início: o botão ocupa o carrossel inteiro, que corta
-   o que passa da borda (`overflow: hidden`) — o anel vai pra DENTRO. */
+   o que passa da borda (`overflow: hidden`). O anel padrão (3 px a 3 px, com
+   o brilho) vai no PRÓPRIO carrossel, que não é cortado; o botão em si fica
+   sem anel. */
 html[data-nav-focus] .fui-CarouselCard > button:not(.fui-Card):focus,
 .fui-CarouselCard > button:focus-visible {
-  outline: 3px solid var(--colorBrandStroke1) !important;
-  outline-offset: -6px !important;
+  outline: none !important;
   box-shadow: none !important;
+}
+html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
+.fui-Carousel:has(.fui-CarouselCard > button:focus-visible) {
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
 }
 
 /* Títulos na Segoe UI Variable Display (a rampa tipográfica do Windows 11
@@ -225,8 +232,8 @@ html[data-nav-focus] .fui-CarouselCard > button:not(.fui-Card):focus,
 /* Busca da topbar sem o anel de foco (pedido do usuário): o campo já marca o
    foco com a barra embaixo do Fluent, e com o controle quem recebe o foco é o
    teclado na tela. A regra 3 da seção "foco" acima é que punha o anel. */
-:is(.fui-SearchBox):has(:focus-visible),
-html[data-nav-focus] .fui-SearchBox:focus-within {
+.reemu-topbar-search.fui-SearchBox:has(:focus-visible),
+html[data-nav-focus] .reemu-topbar-search.fui-SearchBox:focus-within {
   outline: none !important;
   box-shadow: none !important;
 }
