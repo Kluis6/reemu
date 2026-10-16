@@ -2479,12 +2479,8 @@ Infra:
 ## 2026-10-16 — Prévia dos shaders com os avatares do ReEmu
 
 - **Pedido do usuário:** a cena 2D de teste dos shaders deve usar os personagens dos avatares, em pixel art. Depois pediu outra cena com um tema de jogo diferente, que ponha os avatares em contexto.
-- **Cena 2D (plataforma):** o robô continua como herói. Os outros quatro avatares entraram como sprites no mesmo estilo:
-  - o slime é o inimigo no chão;
-  - o joystick de fliperama fica sobre um bloco;
-  - a nave cruza o céu;
-  - o controle aparece como item.
-- **Cena espacial (nova, terceira aba da prévia):** um shoot 'em up de rolagem lateral no estilo Gradius/R-Type.
+- **Primeiro, uma cena de plataforma com os avatares;** depois o usuário quis uma cena 2D só, com tema novo. A cena espacial substituiu a de plataforma (que está no histórico do git, commit 54baf8e), e a aba continua "Cena 2D".
+- **Cena espacial:** um shoot 'em up de rolagem lateral no estilo Gradius/R-Type.
   - A nave do avatar é o jogador: o sprite foi girado para a direita (`rotate_cw`).
   - Os slimes formam a esquadrilha inimiga, o robô gigante é o chefe atrás de um escudo, e o controle e o joystick são power-ups em cápsulas.
   - Fundo: degradê e nebulosa em dithering, estrelas em 3 camadas, planeta com anel e asteroides.
@@ -2494,4 +2490,4 @@ Infra:
   - CPCWiki "Shoot them Up": HUD numa faixa e parallax em camadas.
   - Fórum do Defold sobre star field parallax: estrelas em várias camadas, com o planeta numa camada própria.
   - Pacotes Space Backgrounds da Ansimuz: camadas separadas para planetas e asteroides.
-- **Conferência:** o teste `sample_scene_has_the_expected_size` grava as cenas em PPM quando recebe `REEMU_DUMP_SCENE` ou `REEMU_DUMP_SPACE`, e as duas foram conferidas a olho.
+- **Conferência:** o teste `sample_scene_has_the_expected_size` grava a cena em PPM quando recebe `REEMU_DUMP_SCENE`, e ela foi conferida a olho.

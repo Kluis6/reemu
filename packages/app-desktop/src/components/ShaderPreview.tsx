@@ -124,7 +124,6 @@ export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
           onTabSelect={(_, d) => setScene(d.value as PreviewScene)}
         >
           <Tab value="2d">{t('video.preview.scene2d')}</Tab>
-          <Tab value="space">{t('video.preview.sceneSpace')}</Tab>
           <Tab value="3d">{t('video.preview.scene3d')}</Tab>
         </TabList>
         {/* liga/desliga o shader já carregado: troca entre as duas imagens,

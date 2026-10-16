@@ -1,5 +1,6 @@
 //! Cena 2D do preview de shader: pixel art no jeito dos jogos de 16 bits,
-//! desenhada aqui (sem material de terceiros) em 320×240. Tem o que mais
+//! com os avatares do ReEmu num shoot 'em up de nave, desenhada aqui (sem
+//! material de terceiros) em 320×240. Tem o que mais
 //! mostra a diferença entre shaders: degradê com dithering, bordas duras,
 //! contornos de 1 px, texto pequeno e cores chapadas lado a lado.
 
@@ -140,22 +141,6 @@ const HERO: [&str; 16] = [
     "..kkkk.kkkk.",
 ];
 
-/// Baú 16×12.
-const CHEST: [&str; 12] = [
-    "..kkkkkkkkkkkk..",
-    ".kOOOOOOOOOOOOk.",
-    "kOoOOOOOOOOOOoOk",
-    "kOOOOOOOOOOOOOOk",
-    "kYYYYYYYYYYYYYYk",
-    "kooooooYYooooook",
-    "kOOOOOYkkYOOOOOk",
-    "kOOOOOOYYOOOOOOk",
-    "kOOOOOOOOOOOOOOk",
-    "kYYYYYYYYYYYYYYk",
-    "kooooooooooooook",
-    "kkkkkkkkkkkkkkkk",
-];
-
 /// Os outros avatares do ReEmu em pixel art, mesma paleta dos SVGs
 /// (`lib/avatars.ts`): slime (preset 3), controle (2), joystick de
 /// fliperama (4) e nave (5). O robô (1) é o `HERO`.
@@ -224,11 +209,6 @@ const HEART: [&str; 6] = [
     ".RR.RR.", "RrRRRRR", "RRRRRRR", ".RRRRR.", "..RRR..", "...R...",
 ];
 
-/// Moeda genérica com brilho, 8×8.
-const COIN: [&str; 8] = [
-    "..kkkk..", ".kYYYYk.", "kYyYYYYk", "kYyOOYYk", "kYyOYYYk", "kYYOYYYk", ".kYYYYk.", "..kkkk..",
-];
-
 fn pal(c: char) -> Option<Rgb> {
     Some(match c {
         'W' => (244, 247, 250),
@@ -277,286 +257,6 @@ fn lerp(a: Rgb, b: Rgb, t: f32) -> Rgb {
     (f(a.0, b.0), f(a.1, b.1), f(a.2, b.2))
 }
 
-/// Cena 2D em XRGB8888 (B, G, R, X), 320×240.
-pub fn sample_scene() -> Vec<u8> {
-    let mut cv = Canvas::new();
-    let horizon = 176;
-
-    // Céu: degradê do anil ao pêssego em faixas com dithering entre elas.
-    let sky: [Rgb; 7] = [
-        (22, 18, 64),
-        (40, 34, 104),
-        (72, 52, 140),
-        (122, 74, 160),
-        (186, 100, 150),
-        (236, 142, 128),
-        (252, 196, 140),
-    ];
-    for y in 0..horizon {
-        let f = y as f32 / horizon as f32 * (sky.len() - 1) as f32;
-        let (i, t) = (f.floor() as usize, f.fract());
-        let (a, b) = (sky[i], sky[(i + 1).min(sky.len() - 1)]);
-        for x in 0..W {
-            cv.dither(x, y, a, b, t);
-        }
-    }
-    // Estrelas no alto (algumas maiores, em cruz).
-    for (x, y, big) in [
-        (18, 14, true),
-        (44, 30, false),
-        (96, 10, false),
-        (132, 36, true),
-        (170, 16, false),
-        (292, 20, true),
-        (306, 44, false),
-        (230, 8, false),
-    ] {
-        cv.put(x, y, (255, 255, 255));
-        if big {
-            for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
-                cv.put(x + dx, y + dy, (200, 200, 255));
-            }
-        }
-    }
-    // Sol com halo em dithering.
-    let (sx, sy) = (250, 64);
-    for y in sy - 34..=sy + 34 {
-        for x in sx - 34..=sx + 34 {
-            let d = (((x - sx) * (x - sx) + (y - sy) * (y - sy)) as f32).sqrt();
-            if d <= 16.0 {
-                cv.put(
-                    x,
-                    y,
-                    if d <= 12.0 {
-                        (255, 244, 200)
-                    } else {
-                        (255, 222, 140)
-                    },
-                );
-            } else if d <= 34.0 {
-                let base = cv.get(x, y);
-                cv.dither(
-                    x,
-                    y,
-                    base,
-                    (255, 200, 140),
-                    (1.0 - (d - 16.0) / 18.0) * 0.55,
-                );
-            }
-        }
-    }
-    // Nuvens com luz por cima e sombra por baixo.
-    for (cx, cy, s) in [(56, 46, 1.0f32), (150, 30, 0.8), (200, 92, 0.7)] {
-        let blobs = [(-14, 2, 9), (-4, -4, 12), (8, -1, 10), (18, 3, 7)];
-        for (dx, dy, r) in blobs {
-            let r = (r as f32 * s) as i32;
-            let (bx, by) = (cx + (dx as f32 * s) as i32, cy + (dy as f32 * s) as i32);
-            for y in by - r..=by + r {
-                for x in bx - r..=bx + r {
-                    if (x - bx) * (x - bx) + (y - by) * (y - by) <= r * r {
-                        let shade = if y > by + r / 3 {
-                            (196, 186, 214)
-                        } else {
-                            (250, 248, 255)
-                        };
-                        cv.put(x, y, shade);
-                    }
-                }
-            }
-        }
-    }
-    // Montanhas ao fundo: face iluminada à esquerda, sombra à direita, neve.
-    let peaks = [(30, 96, 60), (96, 84, 70), (170, 100, 56), (300, 90, 72)];
-    for x in 0..W {
-        let mut top = horizon;
-        let mut lit = false;
-        for &(px, py, half) in &peaks {
-            let h = py + ((x - px).abs() * (horizon - py)) / half;
-            if h < top {
-                top = h;
-                lit = x < px;
-            }
-        }
-        for y in top..horizon {
-            let snow = y < top + 6 && top < 112;
-            let c = if snow {
-                if lit {
-                    (240, 240, 252)
-                } else {
-                    (186, 190, 220)
-                }
-            } else if lit {
-                (118, 96, 150)
-            } else {
-                (86, 68, 120)
-            };
-            cv.put(x, y, c);
-        }
-    }
-    // Colinas com pinheiros.
-    let hill =
-        |x: i32| 150 + ((x as f32 / 26.0).sin() * 9.0 + (x as f32 / 11.0).cos() * 3.0) as i32;
-    for x in 0..W {
-        let top = hill(x);
-        for y in top..horizon {
-            cv.put(
-                x,
-                y,
-                if y < top + 2 {
-                    (88, 168, 96)
-                } else {
-                    (48, 116, 72)
-                },
-            );
-        }
-    }
-    for tx in (6..W).step_by(19) {
-        let base = hill(tx) + 4;
-        for j in 0..18 {
-            let half = j / 2 + 1;
-            for i in -half..=half {
-                let c = if i < 0 { (34, 98, 60) } else { (22, 72, 46) };
-                cv.put(tx + i, base - 18 + j, c);
-            }
-        }
-        cv.rect(tx - 1, base, 3, 4, (92, 58, 30));
-    }
-    // Lago à direita: água com brilho e o reflexo do sol.
-    for y in horizon..H {
-        for x in 212..W {
-            let depth = (y - horizon) as f32 / (H - horizon) as f32;
-            let c = lerp((70, 120, 190), (28, 54, 120), depth);
-            cv.put(x, y, c);
-        }
-    }
-    for k in 0..26 {
-        let y = horizon + 3 + k * 2;
-        let w = 18 - k / 2;
-        let x = sx - w / 2 + if k % 2 == 0 { 0 } else { 3 };
-        if y < H && w > 1 {
-            cv.rect(x, y, w, 1, (255, 226, 150));
-        }
-    }
-    for (x, y, w) in [
-        (222, 188, 10),
-        (290, 196, 12),
-        (236, 214, 8),
-        (300, 226, 9),
-        (226, 232, 6),
-    ] {
-        cv.rect(x, y, w, 1, (150, 196, 240));
-    }
-    // Chão: grama com tufos, terra com pedras e camadas.
-    for y in horizon..H {
-        for x in 0..212 {
-            let c = if y < horizon + 5 {
-                if y == horizon {
-                    (150, 224, 96)
-                } else {
-                    (76, 168, 64)
-                }
-            } else {
-                let band = ((y - horizon) / 14) % 2 == 0;
-                if band {
-                    (156, 92, 48)
-                } else {
-                    (138, 80, 42)
-                }
-            };
-            cv.put(x, y, c);
-        }
-    }
-    for x in (2..210).step_by(7) {
-        cv.put(x, horizon - 1, (150, 224, 96));
-        cv.put(x + 1, horizon - 2, (150, 224, 96));
-    }
-    for (x, y, r) in [
-        (20, 196, 3),
-        (64, 214, 2),
-        (110, 204, 3),
-        (150, 224, 2),
-        (186, 200, 3),
-        (40, 230, 2),
-        (130, 236, 3),
-    ] {
-        cv.disc(x, y, r, (110, 100, 96));
-        cv.put(x - 1, y - 1, (170, 160, 150));
-    }
-    // margem do lago
-    for y in horizon..H {
-        cv.put(212, y, (96, 66, 40));
-        cv.put(213, y, (120, 82, 48));
-    }
-    // Flores na grama.
-    for (x, c) in [
-        (28, (255, 90, 120)),
-        (36, (255, 220, 80)),
-        (118, (255, 90, 120)),
-        (196, (255, 220, 80)),
-        (204, (180, 120, 255)),
-    ] {
-        cv.put(x, horizon + 1, c);
-        cv.put(x, horizon + 2, (40, 120, 50));
-    }
-    // Plataforma de tijolos flutuando, com as moedas em cima.
-    let (px0, py0, pw) = (104, 120, 64);
-    for y in py0..py0 + 10 {
-        for x in px0..px0 + pw {
-            let row = (y - py0) / 5;
-            let off = if row % 2 == 0 { 0 } else { 4 };
-            let mortar = (y - py0) % 5 == 4 || (x - px0 + off) % 8 == 7;
-            let c = if mortar {
-                (90, 40, 24)
-            } else if (y - py0) % 5 == 0 {
-                (236, 140, 84)
-            } else {
-                (200, 100, 56)
-            };
-            cv.put(x, y, c);
-        }
-    }
-    cv.rect(px0, py0 + 10, pw, 1, (40, 20, 16));
-    // moedas nas pontas e o joystick de fliperama (avatar 4) no meio
-    for k in [0, 3] {
-        cv.sprite(&COIN, px0 + 6 + k * 15, py0 - 14, 1, pal);
-    }
-    cv.sprite(&STICK, px0 + 20, py0 - 28, 2, pal);
-    // Nave (avatar 5) voando entre as nuvens, com rastro.
-    cv.sprite(&ROCKET, 112, 40, 2, pal);
-    for (k, y) in (0..4).zip([72, 76, 80, 84]) {
-        cv.put(121 + (k % 2), y, (255, 226, 150));
-    }
-    // Controle (avatar 2) flutuando como item, com brilho em volta.
-    cv.sprite(&PAD, 12, 112, 2, pal);
-    for (x, y) in [(8, 108), (48, 110), (30, 132)] {
-        cv.put(x, y, (255, 255, 255));
-        for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
-            cv.put(x + dx, y + dy, (255, 236, 160));
-        }
-    }
-    // Robô (avatar 1), slime (avatar 3) e baú no chão.
-    cv.sprite(&HERO, 52, horizon - 32, 2, pal);
-    cv.sprite(&SLIME, 98, horizon - 22, 2, pal);
-    cv.sprite(&CHEST, 150, horizon - 24, 2, pal);
-    // sombras no chão
-    for x in (52..76).chain(100..124) {
-        let p = cv.get(x, horizon + 1);
-        cv.put(x, horizon + 1, lerp(p, (20, 40, 20), 0.5));
-    }
-    // HUD: vidas e pontos.
-    for k in 0..3 {
-        cv.sprite(&HEART, 8 + k * 10, 8, 1, pal);
-    }
-    text(&mut cv, "x3", 40, 9, 1, (255, 255, 255));
-    text(&mut cv, "SCORE 012340", 218, 8, 2, (255, 255, 255));
-
-    let mut out = Vec::with_capacity((W * H * 4) as usize);
-    for (r, g, b) in cv.px {
-        out.extend_from_slice(&[b, g, r, 0xFF]);
-    }
-    out
-}
-
 /// Gira um sprite 90° no sentido horário (a nave do avatar aponta pra cima;
 /// na cena espacial ela voa pra direita).
 fn rotate_cw(rows: &[&str]) -> Vec<String> {
@@ -566,14 +266,14 @@ fn rotate_cw(rows: &[&str]) -> Vec<String> {
         .collect()
 }
 
-/// Segunda cena 2D do preview: um shoot 'em up de rolagem lateral no jeito de
+/// Cena 2D do preview em XRGB8888 (B, G, R, X): um shoot 'em up de rolagem lateral no jeito de
 /// Gradius/R-Type (16 bits), com os avatares do ReEmu em papéis do gênero — a
 /// nave é o jogador, os slimes a esquadrilha inimiga, o robô o chefe, e o
 /// controle e o joystick de fliperama os power-ups. Espaço com nebulosa em
 /// dithering, estrelas em 3 camadas, planeta com anel e o HUD numa faixa
 /// embaixo, como nos shmups horizontais. Desenhada aqui, sem material de
 /// terceiros.
-pub fn sample_scene_space() -> Vec<u8> {
+pub fn sample_scene() -> Vec<u8> {
     let mut cv = Canvas::new();
     let hud = 220;
 
@@ -755,15 +455,6 @@ mod tests {
     fn sample_scene_has_the_expected_size() {
         let px = super::sample_scene();
         assert_eq!(px.len(), (super::W * super::H * 4) as usize);
-        let space = super::sample_scene_space();
-        assert_eq!(space.len(), px.len());
-        if let Ok(path) = std::env::var("REEMU_DUMP_SPACE") {
-            let mut out = format!("P6\n{} {}\n255\n", super::W, super::H).into_bytes();
-            for p in space.chunks(4) {
-                out.extend_from_slice(&[p[2], p[1], p[0]]);
-            }
-            std::fs::write(path, out).unwrap();
-        }
         if let Ok(path) = std::env::var("REEMU_DUMP_SCENE") {
             let mut out = format!("P6\n{} {}\n255\n", super::W, super::H).into_bytes();
             for p in px.chunks(4) {

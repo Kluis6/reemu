@@ -520,7 +520,6 @@ const es: Messages = {
       off: 'Shader desactivado',
       toggle: 'Activar o desactivar el shader en la vista previa',
       scene2d: 'Escena 2D',
-      sceneSpace: 'Escena espacial',
       scene3d: 'Escena 3D',
       error: 'No se pudo generar la vista previa de este shader.',
     },

@@ -85,7 +85,7 @@ export const getHardwareInfo = () => invoke<HardwareInfo>('get_hardware_info')
 
 /** Prévia de shader (Configurações › Vídeo): a cena de exemplo sem shader
  *  (PNG 320×240) e com o preset ativo, renderizada em `width`×`height`. */
-export type PreviewScene = '2d' | 'space' | '3d'
+export type PreviewScene = '2d' | '3d'
 export const shaderPreviewSource = (scene: PreviewScene) =>
   invoke<ArrayBuffer>('shader_preview_source', { scene })
 export const renderShaderPreview = (width: number, height: number, scene: PreviewScene) =>

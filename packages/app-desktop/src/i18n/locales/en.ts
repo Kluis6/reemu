@@ -520,7 +520,6 @@ const en: Messages = {
       off: 'Shader off',
       toggle: 'Turn the shader on or off in the preview',
       scene2d: '2D scene',
-      sceneSpace: 'Space scene',
       scene3d: '3D scene',
       error: 'Could not render a preview of this shader.',
     },
