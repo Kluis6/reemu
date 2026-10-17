@@ -45,8 +45,9 @@ const useStyles = makeStyles({
     gridTemplateColumns: `minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 0.8fr) ${ACTION_W}`,
     alignItems: 'center',
     columnGap: tokens.spacingHorizontalL,
-    minHeight: '68px',
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
+    // o mesmo padding nos 4 lados (pedido do usuário); a altura sai do
+    // quadrado do ícone (48) + 12 + 12
+    padding: tokens.spacingHorizontalM,
     boxSizing: 'border-box',
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
