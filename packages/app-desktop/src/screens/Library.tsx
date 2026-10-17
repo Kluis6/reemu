@@ -81,6 +81,10 @@ const useLibStyles = makeStyles({
     marginTop: "-5px",
   },
   barRight: { display: "flex", alignItems: "center", columnGap: "10px" },
+  // A aba (caixa e traço de selecionada) começa na coluna dos filtros e das
+  // prateleiras, sem o recuo de −15 px do `useTabStyles` — que alinhava só o
+  // texto (pedido do usuário).
+  tabsAligned: { marginLeft: "0 !important" },
   // A 1ª prateleira já fica a 27 dos filtros (`toolbar.marginBottom`, como
   // no Xbox) — sem somar o espaço entre prateleiras (`section`, 64).
   firstShelf: { marginTop: 0 },
@@ -332,7 +336,7 @@ export function Library() {
     <div ref={rootRef}>
       <div className={l.bar}>
         <TabList
-          className={tb.tabs}
+          className={mergeClasses(tb.tabs, l.tabsAligned)}
           selectedValue={tab}
           onTabSelect={(_, d) => setTab(d.value as LibTab)}
         >
