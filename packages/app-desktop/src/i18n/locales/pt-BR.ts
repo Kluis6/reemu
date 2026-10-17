@@ -66,7 +66,7 @@ const ptBR = {
     },
     desc: {
       profile: 'Nome, avatar e bio',
-      appearance: 'Temas e papel de parede',
+      appearance: 'Temas e plano de fundo',
       library: 'Plataformas e pastas de jogos',
       audio: 'Sincronia e saída de áudio',
       video: 'Shaders e molduras',
@@ -118,7 +118,7 @@ const ptBR = {
       },
     },
     wallpaper: {
-      title: 'Papel de parede',
+      title: 'Plano de fundo',
       description: 'Uma imagem de fundo pro app. Opcional.',
       scope: 'Onde mostrar',
       scopeHome: 'Só na tela inicial',
@@ -126,7 +126,7 @@ const ptBR = {
       choose: 'Escolher imagem…',
       change: 'Trocar imagem…',
       remove: 'Remover',
-      pickTitle: 'Escolha um papel de parede',
+      pickTitle: 'Escolha uma imagem de plano de fundo',
     },
   },
   actions: {
@@ -153,7 +153,7 @@ const ptBR = {
     resetShaderParams: 'restaurar os parâmetros do shader',
     resetCoreOptions: 'restaurar as opções do core',
     resolveMatch: 'resolver a correspondência',
-    removeWallpaper: 'remover o papel de parede',
+    removeWallpaper: 'remover o plano de fundo',
     removeCore: 'remover o core',
     removeFromLibrary: 'remover da biblioteca',
     removeBios: 'remover a BIOS',
