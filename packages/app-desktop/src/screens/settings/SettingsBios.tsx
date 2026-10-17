@@ -11,8 +11,6 @@ import {
 } from '@fluentui/react-components'
 import {
   CheckmarkCircleFilled,
-  DeleteRegular,
-  DocumentArrowUpRegular,
   PuzzlePieceRegular,
   WarningFilled,
 } from '@fluentui/react-icons'
@@ -35,6 +33,11 @@ import { useToastStore } from '../../stores/useToastStore'
 import { biosNote } from '../../lib/backendText'
 import { DownloadButton } from '../../components/DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
+
+// Colunas fixas (iguais em todas as linhas): situação e botão, como na
+// lista de Cores.
+const STATUS_W = '210px'
+const ACTION_W = '120px'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -68,36 +71,46 @@ const useStyles = makeStyles({
     breakInside: 'avoid',
     marginBottom: tokens.spacingVerticalXL,
   },
-  list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
+  list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
+  // Linhas como as da lista de Cores (Biblioteca da Microsoft Store): ícone
+  // num quadrado + arquivo e nota | situação | botão de largura fixa, com o
+  // mesmo padding nos 4 lados.
   row: {
-    display: 'flex',
+    display: 'grid',
+    gridTemplateColumns: `minmax(0, 1fr) ${STATUS_W} ${ACTION_W}`,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: tokens.spacingHorizontalM,
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    columnGap: tokens.spacingHorizontalL,
+    padding: tokens.spacingHorizontalM,
+    boxSizing: 'border-box',
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
+    // coluna estreita: a situação encolhe pro tamanho do selo
+    '@media (max-width: 760px)': { gridTemplateColumns: `minmax(0, 1fr) auto ${ACTION_W}` },
+  },
+  lead: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM, minWidth: 0 },
+  // ícone de BIOS (peça de quebra-cabeça, o do card no hub) num quadrado
+  tile: {
+    width: '48px',
+    height: '48px',
+    flexShrink: 0,
+    display: 'grid',
+    placeItems: 'center',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: 'var(--reemuBrandAccent)',
+    fontSize: '28px',
   },
   meta: {
     display: 'flex',
     flexDirection: 'column',
     gap: '2px',
-    flexGrow: 1,
     minWidth: 0,
     overflowWrap: 'anywhere',
   },
-  // ícone de BIOS (peça de quebra-cabeça), o mesmo do card no hub
-  icon: { fontSize: '24px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
-  // Selos + botão: nunca encolhem nem quebram — quem quebra linha é a nota
-  // à esquerda (sem isto, "presente, hash não bate" vazava da pílula e o
-  // "Remover" era cortado nas colunas estreitas).
-  actions: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalS,
-    alignItems: 'center',
-    flexShrink: 0,
-    whiteSpace: 'nowrap',
-  },
+  note: { color: tokens.colorNeutralForeground3 },
+  // selo da situação: não quebra nem vaza da pílula
+  status: { minWidth: 0, whiteSpace: 'nowrap' },
+  action: { width: ACTION_W, minWidth: '0 !important', maxWidth: 'none !important' },
 })
 
 type Key = { systemId: string; filename: string }
@@ -217,19 +230,25 @@ export function SettingsBios() {
                   (doRemove.isPending && sameKey(doRemove.variables, key))
                 return (
                   <div key={f.filename} className={styles.row}>
-                    <PuzzlePieceRegular className={styles.icon} aria-hidden />
-                    <span className={styles.meta}>
-                      <Body1>
-                        <code>{shownName(f)}</code>
-                        {f.required && (
-                          <Badge appearance="tint" color="danger" style={{ marginLeft: 8 }}>
-                            {t('bios.required')}
-                          </Badge>
-                        )}
-                      </Body1>
-                      <Caption1>{biosNote(t, f.anyOfFolder ?? f.filename, f.note)}</Caption1>
+                    <span className={styles.lead}>
+                      <span className={styles.tile} aria-hidden>
+                        <PuzzlePieceRegular />
+                      </span>
+                      <span className={styles.meta}>
+                        <Body1>
+                          <code>{shownName(f)}</code>
+                          {f.required && (
+                            <Badge appearance="tint" color="danger" style={{ marginLeft: 8 }}>
+                              {t('bios.required')}
+                            </Badge>
+                          )}
+                        </Body1>
+                        <Caption1 className={styles.note}>
+                          {biosNote(t, f.anyOfFolder ?? f.filename, f.note)}
+                        </Caption1>
+                      </span>
                     </span>
-                    <span className={styles.actions}>
+                    <span className={styles.status}>
                       {!f.present && (
                         <Badge appearance="tint" color={f.required ? 'danger' : 'informative'}>
                           {t('bios.missing')}
@@ -245,26 +264,28 @@ export function SettingsBios() {
                           {t('bios.present')}
                         </Badge>
                       )}
-                      {f.present ? (
-                        <Button
-                          appearance="subtle"
-                          icon={<DeleteRegular />}
-                          disabled={busy}
-                          onClick={() => doRemove.mutate(key)}
-                        >
-                          {t('common.remove')}
-                        </Button>
-                      ) : (
-                        <Button
-                          appearance="primary"
-                          icon={<DocumentArrowUpRegular />}
-                          disabled={busy}
-                          onClick={() => doImport.mutate({ ...key, label: shownName(f) })}
-                        >
-                          {busy ? t('bios.importing') : t('bios.import')}
-                        </Button>
-                      )}
                     </span>
+                    {/* Importar em primary e Remover em secondary, só com o
+                        texto (como na lista de Cores) */}
+                    {f.present ? (
+                      <Button
+                        className={styles.action}
+                        appearance="secondary"
+                        disabled={busy}
+                        onClick={() => doRemove.mutate(key)}
+                      >
+                        {t('common.remove')}
+                      </Button>
+                    ) : (
+                      <Button
+                        className={styles.action}
+                        appearance="primary"
+                        disabled={busy}
+                        onClick={() => doImport.mutate({ ...key, label: shownName(f) })}
+                      >
+                        {busy ? t('bios.importing') : t('bios.import')}
+                      </Button>
+                    )}
                   </div>
                 )
               })}
@@ -277,26 +298,32 @@ export function SettingsBios() {
             <Text as="strong" weight="semibold">{platformLabel('psp').toUpperCase()}</Text>
           </Body1>
           <div className={styles.row}>
-            <PuzzlePieceRegular className={styles.icon} aria-hidden />
-            <span className={styles.meta}>
-              <Body1>
-                <code>PPSSPP/</code>
-              </Body1>
-              <Caption1>{t('bios.ppssppNote')}</Caption1>
+            <span className={styles.lead}>
+              <span className={styles.tile} aria-hidden>
+                <PuzzlePieceRegular />
+              </span>
+              <span className={styles.meta}>
+                <Body1>
+                  <code>PPSSPP/</code>
+                </Body1>
+                <Caption1 className={styles.note}>{t('bios.ppssppNote')}</Caption1>
+              </span>
             </span>
-            <span className={styles.actions}>
+            <span className={styles.status}>
               {ppsspp.data && (
                 <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
                   {t('bios.installed')}
                 </Badge>
               )}
-              <DownloadButton
-                appearance={ppsspp.data ? 'subtle' : 'primary'}
-                label={getPpsspp.isPending ? t('bios.downloading') : ppsspp.data ? t('bios.update') : t('bios.download')}
-                busy={getPpsspp.isPending}
-                onClick={() => getPpsspp.mutate()}
-              />
             </span>
+            {/* baixar em primary; já instalado, atualizar em secondary */}
+            <DownloadButton
+              className={styles.action}
+              appearance={ppsspp.data ? 'secondary' : 'primary'}
+              label={getPpsspp.isPending ? t('bios.downloading') : ppsspp.data ? t('bios.update') : t('bios.download')}
+              busy={getPpsspp.isPending}
+              onClick={() => getPpsspp.mutate()}
+            />
           </div>
         </div>
         )}
