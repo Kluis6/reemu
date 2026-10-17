@@ -1014,9 +1014,11 @@ export const useDetailStyles = makeStyles({
     // continua maior que o quanto a faixa sobe, então não colide).
     // Cabe topbar + capa + ações + aviso de core e ainda sobra a faixa que
     // as abas sobrepõem (`.tabsOverlap`). 420 epx: a arte do app Xbox se
-    // dissolve no fundo por volta de y = 420 (1366×768).
-    minHeight: "420px",
-    maxHeight: "72vh",
+    // dissolve no fundo por volta de y = 420 (1366×768). Depois, mais alto
+    // ainda (pedido do usuário, 2026-10-17): o conteúdo desceu 36 pra
+    // começar no `PAGE_TOP` (ver `heroBody`) e a arte ganhou mais ~64.
+    minHeight: "520px",
+    maxHeight: "80vh",
     // Sem raio: hero de sangria total (encosta na rail e na borda da
     // janela) não tem mais canto pra arredondar, igual à referência.
     borderRadius: 0,
@@ -1083,11 +1085,12 @@ export const useDetailStyles = makeStyles({
     // quando o conteúdo cresce (capa, aviso de core), o hero cresce junto
     // e as abas não sobem por cima do aviso.
     paddingBottom: "76px",
-    // O hero agora cola no topo (por baixo da topbar flutuante — ver
-    // `marginTop` negativo em `.hero`) — o próprio conteúdo (ícone/título)
-    // precisa dessa folga de volta, senão nasce escondido atrás da busca/
-    // relógio. A capa começa logo abaixo dela (y = 80; 79 no app Xbox).
-    paddingTop: "var(--reemuTopbarH, 0px)",
+    // O hero cola no topo (por baixo da topbar flutuante — ver `marginTop`
+    // negativo em `.hero`); o conteúdo devolve a folga do topo da página
+    // (`--reemuPageTop`, o `PAGE_TOP` de 116): a capa começa na mesma altura
+    // do destaque da Início e dos títulos das outras telas (pedido do
+    // usuário; antes ficava logo abaixo da topbar, em y = 80).
+    paddingTop: "var(--reemuPageTop, 116px)",
     maxWidth: "min(85%, 900px)",
   },
   heroHeader: {
