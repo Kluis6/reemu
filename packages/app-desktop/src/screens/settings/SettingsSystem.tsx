@@ -36,7 +36,7 @@ import { errorToast } from "../../lib/toast";
 import { UI_SCALES, getUiScale, setUiScale } from "../../lib/uiScale";
 import { useToastStore } from "../../stores/useToastStore";
 import {
-  DeveloperBoardRegular,
+  DesktopTowerRegular,
   InfoRegular,
   OptionsRegular,
 } from "@fluentui/react-icons";
@@ -165,7 +165,7 @@ export function SettingsSystem({
           },
           {
             to: "hardware",
-            icon: <DeveloperBoardRegular />,
+            icon: <DesktopTowerRegular />,
             title: t("system.hardware.title"),
             description: t("system.hardware.description"),
           },
