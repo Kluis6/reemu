@@ -242,14 +242,15 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
 
 /* Busca das listas das Configurações (Cores, BIOS): o `filled-darker` do
    Fluent pinta o campo com o `Background3`, que em vários temas fica quase
-   da cor do card (claros: branco sobre branco; escuros: ~1,1:1 — pedido do
-   usuário). Aqui o campo tem o fundo das linhas da lista (`Background2`) e
-   uma borda de 1 px no `colorNeutralStrokeAccessible`, o token do Fluent
-   feito pra ficar visível (3:1) em qualquer tema. Classe simples porque o
-   `SearchBox` junta as classes do Griffel com as dele por último. */
+   da cor do card (pedido do usuário). O card é o `Background1` do tema, que
+   em vários temas é translúcido (o plano de fundo aparece através dele), e
+   qualquer cor tirada dele herda a transparência. Aqui o fundo do campo é
+   uma camada translúcida da cor do texto por cima do que estiver atrás:
+   clareia nos temas escuros e escurece nos claros, sempre com a mesma
+   diferença pro card. Sem borda (pedido do usuário). Classe simples porque
+   o `SearchBox` junta as classes do Griffel com as dele por último. */
 .reemu-list-search.fui-Input {
-  background-color: var(--colorNeutralBackground2) !important;
-  border: 1px solid var(--colorNeutralStrokeAccessible) !important;
+  background-color: color-mix(in srgb, var(--colorNeutralForeground1) 12%, transparent) !important;
 }
 
 /* 4. Brilho do foco POR FORA do anel, igual ao card de jogo (pedido do
