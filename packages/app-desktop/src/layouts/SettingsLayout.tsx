@@ -3,7 +3,6 @@ import {
   BreadcrumbButton,
   BreadcrumbDivider,
   BreadcrumbItem,
-  Title2,
   makeStyles,
   mergeClasses,
   tokens,
@@ -41,7 +40,6 @@ const useStyles = makeStyles({
     flexDirection: "column",
     rowGap: tokens.spacingVerticalXL,
   },
-  title: { whiteSpace: "nowrap" },
   // Caminho "Configurações › Vídeo › Molduras" com o `Breadcrumb` do Fluent 2
   // (nav + lista ordenada, divisores fora do foco, `aria-current` no último
   // — fluent2.microsoft.design/components/web/react/core/breadcrumb/usage),
@@ -50,7 +48,9 @@ const useStyles = makeStyles({
   // de baixo, como no Windows: o botão tem padding, então a lista volta o
   // mesmo tanto (medido).
   crumbs: {
-    marginLeft: "calc(-1 * var(--reemuCrumbPad, 8px))",
+    // 9 = 1 de borda + 8 de padding do botão (medido): o texto do 1º item
+    // fica na mesma coluna da borda dos cards (com 8 sobrava 1 px)
+    marginLeft: "-9px",
     "& ol": { flexWrap: "nowrap" },
   },
   crumbButton: {
@@ -143,8 +143,12 @@ export function SettingsLayout() {
   const section = SETTINGS_SECTIONS.find((s) => s.key === catKey);
 
   // Caminho do topo: cada nível acima do atual é um link.
+  // Na entrada (`/settings`) é só "Configurações", já como item atual: o
+  // mesmo componente nas duas telas, então o título e o começo dos cards
+  // ficam no mesmo lugar (antes o hub usava um `Title2` 8 px mais alto e os
+  // cards subiam 18 px — pedido do usuário).
   const crumbs: { label: string; to?: string }[] = [
-    { label: t("settings.title"), to: "/settings" },
+    { label: t("settings.title"), to: section ? "/settings" : undefined },
   ];
   if (section) {
     const label = t(`settings.tabs.${section.id}`);
@@ -181,36 +185,36 @@ export function SettingsLayout() {
       {/* Remonta a cada rota: a página nova entra com a transição do app
           (e o conteúdo começa do topo). */}
       <RouteTransition routeKey={pathname} className={styles.page}>
+        <Breadcrumb
+          className={styles.crumbs}
+          size="large"
+          aria-label={t("settings.title")}
+        >
+          {crumbs.map((c, i) => (
+            <Fragment key={i}>
+              {i > 0 && <BreadcrumbDivider className={styles.crumbSep} />}
+              <BreadcrumbItem>
+                {c.to ? (
+                  <BreadcrumbButton
+                    className={styles.crumbButton}
+                    onClick={() => navigate(c.to!)}
+                  >
+                    {c.label}
+                  </BreadcrumbButton>
+                ) : (
+                  <BreadcrumbButton
+                    className={mergeClasses(styles.crumbButton, styles.crumbCurrent)}
+                    current
+                  >
+                    {c.label}
+                  </BreadcrumbButton>
+                )}
+              </BreadcrumbItem>
+            </Fragment>
+          ))}
+        </Breadcrumb>
         {section ? (
           <>
-            <Breadcrumb
-              className={styles.crumbs}
-              size="large"
-              aria-label={t("settings.title")}
-            >
-              {crumbs.map((c, i) => (
-                <Fragment key={i}>
-                  {i > 0 && <BreadcrumbDivider className={styles.crumbSep} />}
-                  <BreadcrumbItem>
-                    {c.to ? (
-                      <BreadcrumbButton
-                        className={styles.crumbButton}
-                        onClick={() => navigate(c.to!)}
-                      >
-                        {c.label}
-                      </BreadcrumbButton>
-                    ) : (
-                      <BreadcrumbButton
-                        className={mergeClasses(styles.crumbButton, styles.crumbCurrent)}
-                        current
-                      >
-                        {c.label}
-                      </BreadcrumbButton>
-                    )}
-                  </BreadcrumbItem>
-                </Fragment>
-              ))}
-            </Breadcrumb>
             {/* Entrada de uma subcategoria (Aparência, Decorações): os cards
                 das opções direto na página, sem o card geral — ele só
                 aparece dentro da opção escolhida. */}
@@ -233,10 +237,7 @@ export function SettingsLayout() {
             )}
           </>
         ) : (
-          <>
-            <Title2 className={styles.title}>{t("settings.title")}</Title2>
-            <Outlet />
-          </>
+          <Outlet />
         )}
       </RouteTransition>
     </div>
