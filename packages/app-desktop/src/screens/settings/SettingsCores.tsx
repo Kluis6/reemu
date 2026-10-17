@@ -64,8 +64,13 @@ const useStyles = makeStyles({
     display: 'grid',
     placeItems: 'center',
     borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground3,
-    color: 'var(--reemuBrandAccent)',
+    // Cor sólida do tema com o ícone na cor de contraste dela (o par do
+    // tema, `reemuBrandSolid`/`reemuOnBrand`), como os ícones coloridos da
+    // Store: destaca do cinza da linha em qualquer tema. Com o
+    // `Background3` neutro (e depois o `BrandBackground2`), nos temas
+    // claros o quadrado sumia (print do usuário).
+    backgroundColor: 'var(--reemuBrandSolid)',
+    color: 'var(--reemuOnBrand)',
     fontSize: '28px',
   },
   // `minWidth: 0` deixa o texto quebrar dentro da coluna
