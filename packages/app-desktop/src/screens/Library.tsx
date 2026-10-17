@@ -73,6 +73,12 @@ const useLibStyles = makeStyles({
     // Respiro entre as tabs (Meus jogos/Favoritos) e a linha de filtros
     // abaixo, igual ao modo Xbox de verdade (tabs bem separadas do filtro).
     marginBottom: "24px",
+    // A linha tem 42 (a altura da aba) e os botões de 32 ficam no meio: o
+    // que aparece começava 5 px abaixo do topo do conteúdo. Sobe 5 pra os
+    // botões começarem em `PAGE_TOP`, na altura do destaque da Início e do
+    // título das Configurações (pedido do usuário); o texto das abas fica
+    // centralizado com eles.
+    marginTop: "-5px",
   },
   barRight: { display: "flex", alignItems: "center", columnGap: "10px" },
   // A 1ª prateleira já fica a 27 dos filtros (`toolbar.marginBottom`, como
