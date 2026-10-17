@@ -7,6 +7,7 @@ import {
   Switch,
   Text,
   makeStyles,
+  mergeClasses,
   tokens,
 } from '@fluentui/react-components'
 import {
@@ -203,7 +204,9 @@ export function SettingsBios() {
       </Caption1>
       <div className={styles.filters}>
         <SearchBox
-          className={styles.search}
+          // sem anel de foco (pedido do usuário) e com fundo/borda visíveis
+          // em qualquer tema (`reemu-list-search`, index.css)
+          className={mergeClasses('reemu-no-ring reemu-list-search', styles.search)}
           appearance="filled-darker"
           placeholder={t('bios.search')}
           aria-label={t('bios.search')}

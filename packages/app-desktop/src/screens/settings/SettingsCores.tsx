@@ -151,8 +151,9 @@ function Catalog() {
       </Caption1>
       <div className={styles.filterRow}>
         <Input
-          // sem o anel de foco (pedido do usuário; ver `reemu-no-ring` no index.css)
-          className="reemu-no-ring"
+          // sem o anel de foco (pedido do usuário; ver `reemu-no-ring` no
+          // index.css) e com fundo/borda visíveis em qualquer tema
+          className="reemu-no-ring reemu-list-search"
           appearance="filled-darker"
           placeholder={t('cores.filter')}
           value={filter}
