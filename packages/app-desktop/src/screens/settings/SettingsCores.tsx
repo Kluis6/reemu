@@ -7,13 +7,8 @@ import {
   Text,
   makeStyles,
   tokens,
-  mergeClasses,
 } from '@fluentui/react-components'
-import {
-  CheckmarkCircleFilled,
-  DeleteRegular,
-  DeveloperBoardRegular,
-} from '@fluentui/react-icons'
+import { CheckmarkCircleFilled, DeveloperBoardRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { LoadingState } from '../../components/EmptyState'
@@ -28,50 +23,67 @@ import { useToastStore } from '../../stores/useToastStore'
 import { DownloadButton } from '../../components/DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
 
+// Largura do botão da direita (Baixar/Remover), igual em todas as linhas —
+// como o "Abrir" da Biblioteca da Microsoft Store.
+const ACTION_W = '120px'
+
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
-  // abas no estilo do app; 24 até o conteúdo (12 do `gap` + 12)
-  // 3 colunas (uma só em janela bem estreita).
-  list: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    gap: tokens.spacingVerticalM,
-    '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
-  },
-  // Catálogo: quantas colunas couberem na largura disponível, cada uma com
-  // pelo menos 420 — ícone + nome/sistemas (~160) + "instalado" e Remover
-  // (~190) sem espremer o texto. Acompanha a janela e o tamanho da
-  // interface: 2 colunas no padrão, 1 com a interface grande.
-  catalogList: {
-    gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))',
-    '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
-  },
-  // Linha da busca no mesmo grid do catálogo: o campo tem a largura de uma
-  // coluna e a contagem fica na seguinte (embaixo, com uma coluna só).
-  filterRow: { alignItems: 'center' },
-  // mensagem de lista vazia ocupa a linha inteira do grid
-  fullRow: { gridColumn: '1 / -1' },
-  // ícone | nome e sistema (cresce) | botão
-  row: {
+  // Busca: o campo com largura de leitura e a contagem ao lado.
+  filterRow: {
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalM,
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    '& .fui-Input': { width: 'min(420px, 100%)' },
+  },
+  // Lista em linhas, como a Biblioteca da Microsoft Store (print do usuário):
+  // uma coluna, cada core numa faixa da largura toda.
+  list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
+  // ícone + nome | sistemas | situação | botão
+  row: {
+    display: 'grid',
+    gridTemplateColumns: `minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 0.8fr) ${ACTION_W}`,
+    alignItems: 'center',
+    columnGap: tokens.spacingHorizontalL,
+    minHeight: '68px',
+    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalL}`,
+    boxSizing: 'border-box',
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
+    // janela estreita / interface grande: sistemas e situação vão pra
+    // baixo do nome
+    '@media (max-width: 900px)': { gridTemplateColumns: `minmax(0, 1fr) ${ACTION_W}` },
   },
-  // `minWidth: 0` deixa o texto quebrar dentro da coluna em vez de empurrar
-  // o botão pra fora do card.
+  // ícone dentro de um quadrado (o "ícone do app" da Store)
+  lead: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM, minWidth: 0 },
+  tile: {
+    width: '48px',
+    height: '48px',
+    flexShrink: 0,
+    display: 'grid',
+    placeItems: 'center',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: 'var(--reemuBrandAccent)',
+    fontSize: '28px',
+  },
+  // `minWidth: 0` deixa o texto quebrar dentro da coluna
   meta: {
     display: 'flex',
     flexDirection: 'column',
     gap: '2px',
     minWidth: 0,
-    flexGrow: 1,
     overflowWrap: 'anywhere',
   },
-  // Mesmo ícone de Cores no menu das Configurações.
-  icon: { fontSize: '24px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
+  sub: { color: tokens.colorNeutralForeground3 },
+  // colunas do meio: some na janela estreita (o nome mostra os sistemas)
+  col: {
+    minWidth: 0,
+    overflowWrap: 'anywhere',
+    '@media (max-width: 900px)': { display: 'none' },
+  },
+  narrowOnly: { display: 'none', '@media (max-width: 900px)': { display: 'inline' } },
+  action: { width: ACTION_W, minWidth: '0 !important', maxWidth: 'none !important' },
 })
 
 /**
@@ -131,7 +143,7 @@ function Catalog() {
       <Caption1>
         <Trans i18nKey="cores.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
       </Caption1>
-      <div className={mergeClasses(styles.list, styles.catalogList, styles.filterRow)}>
+      <div className={styles.filterRow}>
         <Input
           // sem o anel de foco (pedido do usuário; ver `reemu-no-ring` no index.css)
           className="reemu-no-ring"
@@ -144,45 +156,55 @@ function Catalog() {
           {t('cores.count', { shown: sorted.length, total: catalog.data?.length ?? 0 })}
         </Caption1>
       </div>
-      <div className={mergeClasses(styles.list, styles.catalogList)}>
-        {sorted.length === 0 && <Caption1 className={styles.fullRow}>{t('cores.noneFound')}</Caption1>}
+      <div className={styles.list}>
+        {sorted.length === 0 && <Caption1>{t('cores.noneFound')}</Caption1>}
         {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
-            <DeveloperBoardRegular className={styles.icon} />
-            <span className={styles.meta}>
-              <Body1>
-                <Text as="strong" weight="semibold">{c.name}</Text>
-                {c.hw === 'opengl' && (
-                  <Badge appearance="outline" color="informative" style={{ marginLeft: 8 }}>
-                    OpenGL
-                  </Badge>
-                )}
-                {c.hw === 'vulkan' && (
-                  <Badge appearance="outline" color="severe" style={{ marginLeft: 8 }}>
-                    Vulkan
-                  </Badge>
-                )}
-              </Body1>
-              <Caption1>
-                {c.systems} · {c.license}
-              </Caption1>
+            <span className={styles.lead}>
+              <span className={styles.tile} aria-hidden>
+                <DeveloperBoardRegular />
+              </span>
+              <span className={styles.meta}>
+                <Body1>
+                  <Text as="strong" weight="semibold">{c.name}</Text>
+                  {c.hw === 'opengl' && (
+                    <Badge appearance="outline" color="informative" style={{ marginLeft: 8 }}>
+                      OpenGL
+                    </Badge>
+                  )}
+                  {c.hw === 'vulkan' && (
+                    <Badge appearance="outline" color="severe" style={{ marginLeft: 8 }}>
+                      Vulkan
+                    </Badge>
+                  )}
+                </Body1>
+                <Caption1 className={styles.sub}>
+                  <span className={styles.narrowOnly}>{c.systems} · </span>
+                  {c.license}
+                </Caption1>
+              </span>
             </span>
-            {c.installed ? (
-              <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, whiteSpace: 'nowrap' }}>
+            <Body1 className={styles.col}>{c.systems}</Body1>
+            <span className={styles.col}>
+              {c.installed && (
                 <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
                   {t('cores.installedBadge')}
                 </Badge>
-                <Button
-                  appearance="subtle"
-                  icon={<DeleteRegular />}
-                  disabled={busy(c.coreId)}
-                  onClick={() => uninstall.mutate(c.coreId)}
-                >
-                  {t('common.remove')}
-                </Button>
-              </span>
+              )}
+            </span>
+            {c.installed ? (
+              // Remover: secondary, só o texto (pedido do usuário)
+              <Button
+                className={styles.action}
+                appearance="secondary"
+                disabled={busy(c.coreId)}
+                onClick={() => uninstall.mutate(c.coreId)}
+              >
+                {t('common.remove')}
+              </Button>
             ) : (
               <DownloadButton
+                className={styles.action}
                 appearance="primary"
                 label={busy(c.coreId) ? t('cores.downloading') : t('cores.install')}
                 busy={busy(c.coreId)}
