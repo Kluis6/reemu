@@ -59,6 +59,11 @@ const useStyles = makeStyles({
     lineHeight: tokens.lineHeightHero700,
     fontWeight: tokens.fontWeightSemibold,
     height: "auto",
+    // sem o padding vertical do botão: a caixa tem a altura do texto e a
+    // distância até os cards é só o `rowGap` da página (20, XL) — com ele
+    // sobravam 9 px a mais embaixo do título (pedido do usuário)
+    paddingTop: "0 !important",
+    paddingBottom: "0 !important",
     whiteSpace: "nowrap",
     color: tokens.colorNeutralForeground3,
     ":hover": { color: tokens.colorNeutralForeground1 },
