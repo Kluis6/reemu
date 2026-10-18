@@ -1113,6 +1113,36 @@ export const useDetailStyles = makeStyles({
     boxShadow: tokens.shadow16,
     backgroundColor: tokens.colorNeutralBackground3,
   },
+  // Capa ausente: igual ao `noArt` do `GameCard` (a galeria), no tamanho
+  // da capa daqui (128).
+  heroNoArt: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "4px",
+    padding: "10px",
+    boxSizing: "border-box",
+    textAlign: "center",
+    backgroundImage: "linear-gradient(160deg, var(--reemuCardTop), var(--reemuCardBottom))",
+    // contorno de 1 px do card, com a sombra de elevação da capa
+    boxShadow: `inset 0 0 0 1px var(--reemuCardStroke), ${tokens.shadow16}`,
+  },
+  heroNoArtTitle: {
+    color: tokens.colorNeutralForeground1,
+    fontWeight: tokens.fontWeightSemibold,
+    fontSize: "14px",
+    lineHeight: 1.25,
+    overflowWrap: "anywhere",
+    display: "-webkit-box",
+    WebkitLineClamp: "3",
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+  },
+  heroNoArtSub: {
+    color: tokens.colorNeutralForeground3,
+    fontSize: "12px",
+  },
   heroTitleCol: {
     display: "flex",
     flexDirection: "column",

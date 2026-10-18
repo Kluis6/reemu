@@ -218,6 +218,8 @@ export function RomDetail() {
   // mostrá-la. Fora disso, abre no hover/foco como as outras.
   const [removeTipHover, setRemoveTipHover] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  // capa que não carregou (URL quebrada): cai no card sem imagem
+  const [brokenCover, setBrokenCover] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editSystem, setEditSystem] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
@@ -364,7 +366,22 @@ export function RomDetail() {
         <div className={s.heroScrim} />
         <div className={s.heroBody}>
           <div className={s.heroHeader}>
-            {cover && <img className={s.heroIcon} src={cover} alt="" />}
+            {cover && cover !== brokenCover ? (
+              <img
+                className={s.heroIcon}
+                src={cover}
+                alt=""
+                onError={() => setBrokenCover(cover)}
+              />
+            ) : (
+              // Sem capa: o mesmo card da galeria sem imagem (superfície de
+              // card do tema, contorno fino, nome e plataforma no meio) —
+              // pedido do usuário; antes o quadrado sumia.
+              <span className={mergeClasses(s.heroIcon, s.heroNoArt)} aria-hidden>
+                <span className={s.heroNoArtTitle}>{title}</span>
+                <span className={s.heroNoArtSub}>{platformLabel(rom.systemId)}</span>
+              </span>
+            )}
             <div className={s.heroTitleCol}>
               <span className={s.platform}>{platformLabel(rom.systemId)}</span>
               <Text as="h1" className={s.title}>
