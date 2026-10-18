@@ -101,6 +101,16 @@ const useLibStyles = makeStyles({
   // DOM (sem prop pra inverter) — reordena visualmente via flex `order`: o
   // `content` (`flexGrow: 1` já de fábrica) ocupa a esquerda e empurra o
   // checkmark pro fim da linha. Usado nos dois dropdowns (Plataforma/Ordenar).
+  // com `autoSize` o popover ganha altura máxima; a lista rola dentro dele
+  menuPopover: {
+    overflowY: "auto",
+    // mesmo scrollbar fino do resto do app (`.scroll` do shell)
+    "::-webkit-scrollbar": { width: "6px" },
+    "::-webkit-scrollbar-thumb": {
+      backgroundColor: tokens.colorNeutralStroke2,
+      borderRadius: tokens.borderRadiusCircular,
+    },
+  },
   radioMenuList: {
     "& .fui-MenuItemRadio__content": {
       order: 1,
@@ -371,6 +381,10 @@ export function Library() {
 
       <div className={s.toolbar}>
         <Menu
+          // a lista cabe na altura livre da janela e rola por dentro: com
+          // muitas plataformas ela passava do fundo da janela, a página
+          // ganhava barra de rolagem e as prateleiras mudavam de tamanho
+          positioning={{ autoSize: "height" }}
           checkedValues={{ plat: [platform] }}
           onCheckedValueChange={(_, d) => setPlatform(d.checkedItems[0] ?? "all")}
         >
@@ -379,7 +393,7 @@ export function Library() {
               {platform === "all" ? t("common.platform") : platformLabel(platform)}
             </MenuButton>
           </MenuTrigger>
-          <MenuPopover>
+          <MenuPopover className={l.menuPopover}>
             <MenuList className={l.radioMenuList}>
               <MenuItemRadio name="plat" value="all">
                 {t("library.allPlatforms")}
@@ -407,6 +421,7 @@ export function Library() {
         )}
 
         <Menu
+          positioning={{ autoSize: "height" }}
           checkedValues={{ sort: [sort] }}
           onCheckedValueChange={(_, d) =>
             setSort((d.checkedItems[0] as LibSort) ?? "name")
@@ -417,7 +432,7 @@ export function Library() {
               {t(SORT_LABEL[sort])}
             </MenuButton>
           </MenuTrigger>
-          <MenuPopover>
+          <MenuPopover className={l.menuPopover}>
             <MenuList className={l.radioMenuList}>
               {(Object.keys(SORT_LABEL) as LibSort[]).map((k) => (
                 <MenuItemRadio key={k} name="sort" value={k}>

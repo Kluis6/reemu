@@ -12,6 +12,15 @@ body,
   height: 100%;
 }
 
+/* A janela nunca rola: quem rola é a área de conteúdo de cada tela. Sem
+   isto, um popover mais alto que a janela (o menu de plataformas da
+   Biblioteca) dava barra de rolagem à página, a largura útil encolhia ~15 px
+   e as prateleiras se reorganizavam (print do usuário). */
+html,
+body {
+  overflow: hidden;
+}
+
 /* Selawik (Microsoft, SIL OFL 1.1 — assets/fonts/selawik/OFL.txt): fonte
    aberta com as MESMAS métricas da Segoe UI, feita pra apps em sistemas sem
    a Segoe ("intended for apps on other platforms that don't want to bundle
