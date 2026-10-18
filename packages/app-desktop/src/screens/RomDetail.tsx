@@ -729,7 +729,7 @@ export function RomDetail() {
 
       <section className={mergeClasses(s.section, s.tabsOverlap)}>
         <TabList
-          className={tb.tabs}
+          className={mergeClasses(tb.tabs, s.tabsAligned)}
           selectedValue={activeCfgTab}
           onTabSelect={(_, d) =>
             setCfgTab(d.value as "core" | "states" | "shader" | "media")

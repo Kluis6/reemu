@@ -1143,6 +1143,10 @@ export const useDetailStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: "12px",
   },
+  // Abas Emulador/Save states/Shader: a aba (caixa e traço) começa na
+  // coluna da capa e dos botões, sem o recuo de −15 px do `useTabStyles`,
+  // que alinhava só o texto (pedido do usuário; o mesmo da Biblioteca).
+  tabsAligned: { marginLeft: "0 !important" },
   heroTitleCol: {
     display: "flex",
     flexDirection: "column",
