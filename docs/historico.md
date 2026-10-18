@@ -2529,3 +2529,35 @@ Infra:
 - **Teste novo:** `field_render_real_presets` (ignorado; precisa do pacote) monta e renderiza cada `.slangp`. Usa um `FrameProcessor` por preset, porque reaproveitar um só esgotava a memória da GPU no Mega Bezel.
 - **Placar e o que ficou em aberto:** no TASKS.md (Vídeo / GPU).
 
+## 2026-10-17 — Pesquisa: projetos de recomp e decomp de jogos
+
+- **Pedido do usuário:** pesquisar os projetos de recompilação e decompilação de jogos, ver quais são de código livre e avaliar portar para Rust e trazer para o ReEmu. Ficou no backlog (TASKS.md › Funcionalidades), para avaliar no futuro.
+- **Tipos de projeto:**
+  - **Decomp:** C reescrito à mão até compilar idêntico à ROM, depois portado para PC.
+  - **Recomp:** uma ferramenta traduz o código de máquina para C/C++, compilado junto com um runtime.
+  - Em ambos, os assets vêm da ROM do usuário.
+- **Licenças**, lidas na API do GitHub (`gh api repos/...`):
+  - **MIT:** N64Recomp, RT64, XenonRecomp, XenosRecomp, libultraship, perfect_dark (fgsfds).
+  - **GPL-3.0:** N64ModernRuntime (arquivo COPYING), Zelda64Recomp, UnleashedRecomp, PS2Recomp.
+  - **CC0:** n64decomp/sm64, 2ship2harkinian.
+  - **Licença própria, derivada do Xenia:** rexglue-sdk.
+  - **Sem licença detectada pelo GitHub:** zeldaret/oot, zeldaret/mm, Shipwright, sm64ex, pret/pokeemerald, pret/pokered.
+- **Avaliação:** não portar para Rust nem copiar código.
+  - O volume é enorme, e cada port serve para um jogo só.
+  - Traduzir código GPL obrigaria o ReEmu (MIT) a virar GPL; código sem licença não pode ser copiado.
+  - Mesmo o código CC0/MIT reproduz jogos com direitos autorais.
+  - Em Rust só existem experimentos: psprecomp (GPL-2.0, gera C++) e um GCRecomp para GameCube que geraria Rust.
+- **Caminho proposto:** abrir o port como processo separado, como os cores (detalhes no item do TASKS).
+- **Fontes:**
+  - github.com/N64Recomp/N64Recomp e a wiki
+  - github.com/N64Recomp/N64ModernRuntime
+  - github.com/Zelda64Recomp/Zelda64Recomp
+  - cdn.jsdelivr.net/gh/hedge-dev/XenonRecomp@main/README.md
+  - sourceforge.net/projects/unleashed-recompiled.mirror
+  - timeextension.com (2025/03, ferramenta de recompilação de Xbox 360)
+  - readonlymemo.com/rexglue-xbox-360-recompilation-interview
+  - github.com/n64decomp/sm64
+  - nintendolife.com (2021/08, decomp do OoT)
+  - github.com/wizardengineer/psprecomp
+  - tomevault.io/tome/KaiserGranatapfel/GameCubeRecompiled
+

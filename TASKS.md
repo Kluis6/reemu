@@ -451,6 +451,31 @@ no `emu-session`, ver `docs/historico.md`).
 
 ### Funcionalidades
 
+- [ ] `todo` — Avaliar no futuro: **ports nativos (recomp/decomp)** como
+      launcher externo (pedido do dono do projeto, 2026-10-17). Pesquisa e
+      licenças conferidas no GitHub:
+      - Ferramentas MIT: N64Recomp, RT64, XenonRecomp/XenosRecomp,
+        libultraship. Runtime GPL-3.0: N64ModernRuntime. Ports GPL-3.0:
+        Zelda64Recomp, UnleashedRecomp, PS2Recomp. CC0: n64decomp/sm64,
+        2ship2harkinian. MIT: perfect_dark (fgsfds). Sem licença detectada
+        (conferir no repositório): zeldaret/oot, zeldaret/mm, Shipwright,
+        sm64ex, pret/*.
+      - **Não portar pra Rust nem copiar código pro ReEmu**: centenas de
+        milhares de linhas por jogo, código GPL obrigaria o ReEmu (MIT) a
+        virar GPL, os sem licença não podem ser copiados, e mesmo o código
+        CC0/MIT reproduz a lógica de jogos com direitos autorais (a Nintendo
+        já agiu contra mods feitos sobre a decomp do SM64).
+      - Proposta: o ReEmu abre o executável do port como um processo
+        separado, como faz com os cores (executar um programa GPL à parte
+        não contamina o ReEmu). Cadastro manual do executável e associação
+        ao jogo da biblioteca (pelo hash da ROM, que os ports já exigem);
+        botão Jogar com a opção "Port nativo"; tempo de jogo e volta ao
+        frontend quando o processo fecha; opcional: baixar as versões
+        oficiais publicadas no GitHub. Compilar o port a partir da ROM fica
+        de fora.
+      - Em Rust só existem experimentos (psprecomp, GPL-2.0, gera C++; um
+        GCRecomp que geraria Rust). Detalhes e fontes em docs/historico.md
+        (2026-10-17).
 - [ ] `todo` — Molduras: repensar a importação de packs de bezels por pasta.
       Os botões "Importar pasta de bezels…" e "Remover bezels"
       (Configurações › Decorações › Molduras) estão escondidos
