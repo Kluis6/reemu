@@ -1079,12 +1079,12 @@ export const useDetailStyles = makeStyles({
     // conteúdo (tabs, título das seções) em vez de ficar colado na rail.
     paddingLeft: PAGE_PAD_L,
     paddingRight: "26px",
-    // As abas de baixo sobem 120 sobre o hero (`tabsOverlap`); o conteúdo
+    // As abas de baixo sobem 96 sobre o hero (`tabsOverlap`); o conteúdo
     // termina 24 acima delas (o TabList começa 20 abaixo do topo da seção):
-    // 120 − 20 + 24 = 124. Com o hero no tamanho mínimo isso não muda nada;
+    // 96 − 20 + 24 = 100. Com o hero no tamanho mínimo isso não muda nada;
     // quando o conteúdo cresce (capa, aviso de core), o hero cresce junto
     // e as abas não sobem por cima do aviso.
-    paddingBottom: "124px",
+    paddingBottom: "100px",
     // O hero cola no topo (por baixo da topbar flutuante — ver `marginTop`
     // negativo em `.hero`); o conteúdo devolve a folga do topo da página
     // (`--reemuPageTop`, o `PAGE_TOP` de 116): a capa começa na mesma altura
@@ -1330,9 +1330,9 @@ export const useDetailStyles = makeStyles({
     // abaixo da linha de botões — não colide (conferido até em janela
     // 1600×700, o caso mais apertado testado). -72: mais 16 pra cima
     // (pedido do usuário); a 1366×768 ainda sobram 47 até o aviso de core.
-    // -120: mais 48 pra cima (pedido do usuário, 2026-10-17), com o
-    // `paddingBottom` do `heroBody` acompanhando.
-    marginTop: "-120px",
+    // -96: subiu pra -120 e desceu 24 (pedidos do usuário, 2026-10-17),
+    // com o `paddingBottom` do `heroBody` acompanhando.
+    marginTop: "-96px",
     // Abas → painel: 24, como nas outras abas do app.
     rowGap: "24px",
   },
