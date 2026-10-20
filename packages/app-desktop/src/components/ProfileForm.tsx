@@ -54,6 +54,20 @@ const useStyles = makeStyles({
   choiceOn: {
     border: `2px solid ${tokens.colorBrandStroke1}`,
   },
+  // Adicionar foto: um círculo como os avatares (raio total — o hover do
+  // Fluent desenhava um quadrado; pedido do usuário), com fundo e o ícone
+  // maior pra se ler como botão.
+  addPhoto: {
+    borderRadius: `${tokens.borderRadiusCircular} !important`,
+    // o Fluent trava botão só-ícone em 32 de largura (`max-width`): sem
+    // isto o círculo virava uma pílula estreita
+    maxWidth: 'none !important',
+    minWidth: '0 !important',
+    backgroundColor: tokens.colorNeutralBackground3,
+    ':hover': { backgroundColor: tokens.colorNeutralBackground3Hover },
+    ':active': { backgroundColor: tokens.colorNeutralBackground3Pressed },
+    '& .fui-Button__icon': { fontSize: '24px', width: '24px', height: '24px' },
+  },
   // `layout="columns"` (Configurações › Perfil): os avatares à esquerda e
   // nome, bio e salvar à direita; uma coluna só em janela estreita.
   columns: {
@@ -67,12 +81,41 @@ const useStyles = makeStyles({
     '@media (max-width: 860px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
   col: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL, minWidth: 0 },
+  // avatar ativo grande e centralizado na coluna, com as opções embaixo,
+  // também centralizadas (pedido do usuário)
   avatarCol: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: tokens.spacingVerticalL,
     minWidth: 0,
+    textAlign: 'center',
+    '& .fui-Field': { justifyItems: 'center' },
+  },
+  choicesCentered: { justifyContent: 'center' },
+  // Prévia de 200: o `Avatar` do Fluent só aceita tamanhos fixos até 128
+  // (com outro valor cai no padrão), então vai no 128 e a raiz estica — a
+  // imagem ocupa a raiz inteira.
+  previewLg: {
+    width: '200px !important',
+    height: '200px !important',
+    '& img': { width: '100%', height: '100%' },
+  },
+  // Bio mais alta nas Configurações (pedido do usuário); continua podendo
+  // esticar na vertical
+  bioLg: { '& textarea': { minHeight: '140px' } },
+  // Opção de avatar maior nas Configurações: 72 (botão de 76); na coluna
+  // estreita (interface Maior, ~400 px) 56, pra as 6 caberem numa linha.
+  // A imagem acompanha o botão (`& img`), descontada a borda de 2 + folga.
+  choiceLg: {
+    width: '76px',
+    height: '76px',
+    '& img': { width: '72px', height: '72px' },
+    '@media (max-width: 1200px)': {
+      width: '60px',
+      height: '60px',
+      '& img': { width: '56px', height: '56px' },
+    },
   },
 })
 
@@ -151,24 +194,29 @@ export function ProfileForm({
   const nameEmpty = name.trim().length === 0
   const nameError = nameEmpty && touched ? t('profileForm.nameRequired') : undefined
 
+  const big = layout === 'columns'
   const choices = (
-    <div className={s.choices}>
+    <div className={mergeClasses(s.choices, big && s.choicesCentered)}>
       {PRESET_IDS.map((id) => (
         <Button
           key={id}
           appearance="subtle"
-          className={mergeClasses(s.choice, avatar === `preset:${id}` && s.choiceOn)}
+          className={mergeClasses(
+            s.choice,
+            big && s.choiceLg,
+            avatar === `preset:${id}` && s.choiceOn,
+          )}
           onClick={() => setAvatar(`preset:${id}`)}
           aria-label={t('profileForm.avatarLabel', { name: t(`profileForm.presets.${id}`) })}
           title={t(`profileForm.presets.${id}`)}
           aria-pressed={avatar === `preset:${id}`}
         >
-          <PresetAvatar id={id} size={48} style={{ borderRadius: '50%' }} />
+          <PresetAvatar id={id} size={big ? 72 : 48} style={{ borderRadius: '50%' }} />
         </Button>
       ))}
       <Button
         appearance="subtle"
-        className={s.choice}
+        className={mergeClasses(s.choice, big && s.choiceLg, s.addPhoto)}
         icon={<ImageAddRegular />}
         disabled={upload.isPending}
         onClick={() => upload.mutate()}
@@ -196,6 +244,7 @@ export function ProfileForm({
       {showBio && (
         <Field label={t('profileForm.bio')} hint={t('profileForm.bioHint')}>
           <Textarea
+            className={big ? s.bioLg : undefined}
             appearance="filled-darker"
             value={bio}
             maxLength={280}
@@ -224,7 +273,12 @@ export function ProfileForm({
     return (
       <div className={s.columns}>
         <div className={s.avatarCol}>
-          <ProfileAvatar profile={{ name, avatar }} size={96} nonce={nonce} />
+          <ProfileAvatar
+            profile={{ name, avatar }}
+            size={128}
+            nonce={nonce}
+            className={s.previewLg}
+          />
           <Field label={t('profileForm.avatar')} hint={t('profileForm.avatarHint')}>
             {choices}
           </Field>
