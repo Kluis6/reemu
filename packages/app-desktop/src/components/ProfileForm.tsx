@@ -202,6 +202,15 @@ export function ProfileForm({
   const big = layout === 'columns'
   const choices = (
     <div className={mergeClasses(s.choices, big && s.choicesCentered)}>
+      {/* adicionar foto primeiro na lista (pedido do usuário) */}
+      <Button
+        appearance="subtle"
+        className={mergeClasses(s.choice, big && s.choiceLg, s.addPhoto)}
+        icon={<ImageAddRegular />}
+        disabled={upload.isPending}
+        onClick={() => upload.mutate()}
+        aria-label={t('profileForm.chooseImage')}
+      />
       {PRESET_IDS.map((id) => (
         <Button
           key={id}
@@ -219,14 +228,6 @@ export function ProfileForm({
           <PresetAvatar id={id} size={big ? 72 : 48} style={{ borderRadius: '50%' }} />
         </Button>
       ))}
-      <Button
-        appearance="subtle"
-        className={mergeClasses(s.choice, big && s.choiceLg, s.addPhoto)}
-        icon={<ImageAddRegular />}
-        disabled={upload.isPending}
-        onClick={() => upload.mutate()}
-        aria-label={t('profileForm.chooseImage')}
-      />
     </div>
   )
 
