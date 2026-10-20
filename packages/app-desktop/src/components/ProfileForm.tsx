@@ -285,8 +285,12 @@ export function ProfileForm({
             nonce={nonce}
             className={s.previewLg}
           />
-          <Field label={t('profileForm.avatar')} hint={t('profileForm.avatarHint')}>
-            {choices}
+          {/* sem o rótulo "Avatar" em cima (pedido do usuário): a lista é
+              um grupo com nome acessível, e a dica fica embaixo */}
+          <Field hint={t('profileForm.avatarHint')}>
+            <div role="group" aria-label={t('profileForm.avatar')}>
+              {choices}
+            </div>
           </Field>
         </div>
         <div className={s.col}>{fields}</div>
