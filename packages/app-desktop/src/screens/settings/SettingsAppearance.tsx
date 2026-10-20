@@ -58,7 +58,11 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalL,
     minWidth: 0,
   },
+  // Conteúdo do plano de fundo direto no card geral das Configurações (sem
+  // um card interno — pedido do usuário).
   wallCard: {
+    display: "flex",
+    flexDirection: "column",
     gap: tokens.spacingVerticalM,
     maxWidth: "480px",
   },
@@ -500,7 +504,7 @@ export function SettingsAppearance({
       )}
 
       {tab === "wallpaper" && (
-        <Card className={s.wallCard} appearance="filled-alternative">
+        <div className={s.wallCard}>
           <Caption1 as="p" block style={{ margin: 0 }}>
               {t("appearance.wallpaper.description")}
             </Caption1>
@@ -545,7 +549,7 @@ export function SettingsAppearance({
               <Radio value="all" label={t("appearance.wallpaper.scopeAll")} />
             </RadioGroup>
           </Field>
-        </Card>
+        </div>
       )}
     </div>
   );
