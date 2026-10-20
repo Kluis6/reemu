@@ -54,6 +54,24 @@ const useStyles = makeStyles({
   choiceOn: {
     border: `2px solid ${tokens.colorBrandStroke1}`,
   },
+  // `layout="columns"` (Configurações › Perfil): nome, bio e salvar de um
+  // lado, os avatares do outro; uma coluna só em janela estreita.
+  columns: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(0, 440px) minmax(0, 1fr)',
+    alignItems: 'start',
+    columnGap: tokens.spacingHorizontalXXXL,
+    rowGap: tokens.spacingVerticalL,
+    '@media (max-width: 860px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
+  },
+  col: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL, minWidth: 0 },
+  avatarCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: tokens.spacingVerticalL,
+    minWidth: 0,
+  },
 })
 
 /**
@@ -68,6 +86,7 @@ export function ProfileForm({
   onDone,
   showBio = true,
   onChange,
+  layout = 'stack',
 }: {
   initial: Pick<Profile, 'name' | 'bio' | 'avatar'>
   /** Sem `submitLabel`, o formulário não tem botão nem salva: só avisa os
@@ -76,6 +95,9 @@ export function ProfileForm({
   onDone?: () => void
   showBio?: boolean
   onChange?: (v: Pick<Profile, 'name' | 'bio' | 'avatar'>) => void
+  /** `stack`: tudo numa coluna (onboarding). `columns`: campos de um lado e
+   *  avatares do outro (Configurações › Perfil). */
+  layout?: 'stack' | 'columns'
 }) {
   const { t } = useTranslation()
   const s = useStyles()
@@ -127,40 +149,34 @@ export function ProfileForm({
   const nameEmpty = name.trim().length === 0
   const nameError = nameEmpty && touched ? t('profileForm.nameRequired') : undefined
 
-  return (
-    <div className={s.root}>
-      <div className={s.avatarRow}>
-        <ProfileAvatar profile={{ name, avatar }} size={72} nonce={nonce} />
-        <Field label={t('profileForm.avatar')} hint={t('profileForm.avatarHint')}>
-          <div className={s.choices}>
-            {PRESET_IDS.map((id) => (
-              <Button
-                key={id}
-                appearance="subtle"
-                className={mergeClasses(
-                  s.choice,
-                  avatar === `preset:${id}` && s.choiceOn,
-                )}
-                onClick={() => setAvatar(`preset:${id}`)}
-                aria-label={t('profileForm.avatarLabel', { name: t(`profileForm.presets.${id}`) })}
-                title={t(`profileForm.presets.${id}`)}
-                aria-pressed={avatar === `preset:${id}`}
-              >
-                <PresetAvatar id={id} size={48} style={{ borderRadius: '50%' }} />
-              </Button>
-            ))}
-            <Button
-              appearance="subtle"
-              className={s.choice}
-              icon={<ImageAddRegular />}
-              disabled={upload.isPending}
-              onClick={() => upload.mutate()}
-              aria-label={t('profileForm.chooseImage')}
-            />
-          </div>
-        </Field>
-      </div>
+  const choices = (
+    <div className={s.choices}>
+      {PRESET_IDS.map((id) => (
+        <Button
+          key={id}
+          appearance="subtle"
+          className={mergeClasses(s.choice, avatar === `preset:${id}` && s.choiceOn)}
+          onClick={() => setAvatar(`preset:${id}`)}
+          aria-label={t('profileForm.avatarLabel', { name: t(`profileForm.presets.${id}`) })}
+          title={t(`profileForm.presets.${id}`)}
+          aria-pressed={avatar === `preset:${id}`}
+        >
+          <PresetAvatar id={id} size={48} style={{ borderRadius: '50%' }} />
+        </Button>
+      ))}
+      <Button
+        appearance="subtle"
+        className={s.choice}
+        icon={<ImageAddRegular />}
+        disabled={upload.isPending}
+        onClick={() => upload.mutate()}
+        aria-label={t('profileForm.chooseImage')}
+      />
+    </div>
+  )
 
+  const fields = (
+    <>
       <Field label={t('profileForm.name')} required validationMessage={nameError}>
         <Input
           appearance="filled-darker"
@@ -176,29 +192,54 @@ export function ProfileForm({
       </Field>
 
       {showBio && (
-      <Field label={t('profileForm.bio')} hint={t('profileForm.bioHint')}>
-        <Textarea
-          appearance="filled-darker"
-          value={bio}
-          maxLength={280}
-          resize="vertical"
-          onChange={(_, d) => setBio(d.value)}
-          placeholder={t('profileForm.bioPlaceholder')}
-        />
-      </Field>
+        <Field label={t('profileForm.bio')} hint={t('profileForm.bioHint')}>
+          <Textarea
+            appearance="filled-darker"
+            value={bio}
+            maxLength={280}
+            resize="vertical"
+            onChange={(_, d) => setBio(d.value)}
+            placeholder={t('profileForm.bioPlaceholder')}
+          />
+        </Field>
       )}
 
       {submitLabel && (
-      <div>
-        <Button
-          appearance="primary"
-          disabled={nameEmpty || save.isPending}
-          onClick={() => save.mutate()}
-        >
-          {submitLabel}
-        </Button>
-      </div>
+        <div>
+          <Button
+            appearance="primary"
+            disabled={nameEmpty || save.isPending}
+            onClick={() => save.mutate()}
+          >
+            {submitLabel}
+          </Button>
+        </div>
       )}
+    </>
+  )
+
+  if (layout === 'columns')
+    return (
+      <div className={s.columns}>
+        <div className={s.col}>{fields}</div>
+        <div className={s.avatarCol}>
+          <ProfileAvatar profile={{ name, avatar }} size={96} nonce={nonce} />
+          <Field label={t('profileForm.avatar')} hint={t('profileForm.avatarHint')}>
+            {choices}
+          </Field>
+        </div>
+      </div>
+    )
+
+  return (
+    <div className={s.root}>
+      <div className={s.avatarRow}>
+        <ProfileAvatar profile={{ name, avatar }} size={72} nonce={nonce} />
+        <Field label={t('profileForm.avatar')} hint={t('profileForm.avatarHint')}>
+          {choices}
+        </Field>
+      </div>
+      {fields}
     </div>
   )
 }

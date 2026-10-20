@@ -127,6 +127,8 @@ const useStyles = makeStyles({
 });
 
 const WIDE_TABS = new Set([
+  // Perfil em duas colunas (campos | avatares)
+  "perfil",
   "aparencia",
   "cores",
   "bios",

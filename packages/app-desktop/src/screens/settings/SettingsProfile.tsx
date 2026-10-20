@@ -31,6 +31,8 @@ export function SettingsProfile() {
           avatar: profile.data?.avatar ?? 'preset:1',
         }}
         submitLabel={t('common.save')}
+        // campos de um lado, avatares do outro (pedido do usuário)
+        layout="columns"
         onDone={() => {
           qc.invalidateQueries({ queryKey: ['profile'] })
           push(sysToast(t('profile.updated'), 'Success'))
