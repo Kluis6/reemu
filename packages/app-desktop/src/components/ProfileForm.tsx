@@ -58,10 +58,9 @@ const useStyles = makeStyles({
   // nome, bio e salvar à direita; uma coluna só em janela estreita.
   columns: {
     display: 'grid',
-    // a coluna dos avatares tem a largura deles e as duas encostam à
-    // esquerda (com `auto` a 1ª esticava e os campos iam pro canto direito)
-    gridTemplateColumns: 'max-content minmax(0, 440px)',
-    justifyContent: 'start',
+    // duas colunas iguais ocupando a largura toda do card (pedido do
+    // usuário)
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
     alignItems: 'start',
     columnGap: tokens.spacingHorizontalXXXL,
     rowGap: tokens.spacingVerticalL,
