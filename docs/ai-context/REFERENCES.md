@@ -180,3 +180,19 @@ mensagens de controle têm alinhamento/`CMSG_*` chatos de montar à mão).
 | `unix(7)` (`SCM_RIGHTS`, passagem de fd) | https://man7.org/linux/man-pages/man7/unix.7.html |
 | `memfd_create(2)` | https://man7.org/linux/man-pages/man2/memfd_create.2.html |
 | `bincode` 2 (serialização do protocolo) | https://docs.rs/bincode/latest/bincode/ |
+
+## Ports nativos — recomp/decomp (doc 15, backlog)
+
+| O quê | Onde |
+|---|---|
+| N64Recomp (recompilador MIT, metadados por ELF + TOML) | https://github.com/N64Recomp/N64Recomp |
+| N64ModernRuntime (runtime GPL-3.0 dos ports de N64) | https://github.com/N64Recomp/N64ModernRuntime |
+| RT64 (renderizador MIT) | https://github.com/rt64/rt64 |
+| XenonRecomp / XenosRecomp (Xbox 360, MIT) | https://github.com/hedge-dev/XenonRecomp |
+| cps2recomp (kit + ports de CPS-2, GPL-3.0; CLI `--play`/`--rom`) | https://github.com/tmcleroy/cps2recomp |
+| rabbitizer (decodificador MIPS, MIT, bindings Rust) | https://github.com/Decompollaborate/rabbitizer |
+| decomp-toolkit (GameCube/Wii em Rust, Apache-2.0) | https://github.com/encounter/decomp-toolkit |
+| Diretório de ports (acompanhar status) | https://recompedia.com/ |
+
+Licenças mudam: conferir com `gh api repos/<owner>/<repo>` antes de usar.
+

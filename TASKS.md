@@ -474,8 +474,11 @@ no `emu-session`, ver `docs/historico.md`).
         oficiais publicadas no GitHub. Compilar o port a partir da ROM fica
         de fora.
       - Em Rust só existem experimentos (psprecomp, GPL-2.0, gera C++; um
-        GCRecomp que geraria Rust). Detalhes e fontes em docs/historico.md
-        (2026-10-17).
+        GCRecomp que geraria Rust). **Pesquisa completa, catálogo com
+        licenças, como a recompilação funciona, o que dá pra usar em Rust e a
+        arquitetura proposta do launcher:**
+        [`docs/ai-context/15-ports-nativos-recomp-decomp.md`](docs/ai-context/15-ports-nativos-recomp-decomp.md)
+        (2026-10-20).
 - [ ] `todo` — Molduras: repensar a importação de packs de bezels por pasta.
       Os botões "Importar pasta de bezels…" e "Remover bezels"
       (Configurações › Decorações › Molduras) estão escondidos

@@ -2561,3 +2561,20 @@ Infra:
   - github.com/wizardengineer/psprecomp
   - tomevault.io/tome/KaiserGranatapfel/GameCubeRecompiled
 
+## 2026-10-20 — Pesquisa avançada: recomp e decomp (documento 15)
+
+- **Pedido do usuário:** pesquisar a fundo os projetos de recompilação e decompilação de jogos e deixar documentado, para consultar no desenvolvimento futuro de launchers desses jogos no ReEmu e de versões em Rust.
+- **Documento:** `docs/ai-context/15-ports-nativos-recomp-decomp.md`, linkado no README de ai-context e no item do backlog do TASKS. Cobre:
+  - decomp × recomp × reimplementação;
+  - o pipeline da recompilação estática, com detalhes do README do N64Recomp e do cps2recomp;
+  - o catálogo de ferramentas e ports, com licenças conferidas na API do GitHub em 2026-10-20;
+  - as regras de licença e direito autoral para o ReEmu;
+  - o que existe em Rust: rabbitizer (MIT), decomp-toolkit e objdiff (Apache-2.0), spimdisasm, ppc750cl, além de experimentos GPL;
+  - dois caminhos: launcher agora, recompilador próprio em Rust no longo prazo;
+  - a proposta de arquitetura do launcher (modelo `NativePort`, fluxo, pontos de atenção);
+  - perguntas em aberto e fontes.
+- **Conclusão mantida:**
+  - não traduzir nem copiar código dos ports;
+  - o primeiro passo é abrir os executáveis oficiais como processos separados;
+  - um recompilador próprio em Rust só depois do doc 14, com runtime escrito do zero.
+
