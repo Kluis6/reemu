@@ -451,6 +451,38 @@ no `emu-session`, ver `docs/historico.md`).
 
 ### Funcionalidades
 
+- [ ] `todo` — Avaliar integração **GameKave / Alvanista** (pedido do dono
+      do projeto, 2026-10-20). A GameKave (Tellurian Corp) é a
+      "infraestrutura de identidade gamer" por trás da Alvanista, rede social
+      brasileira de jogos. API pública em OpenAPI 3.0
+      (`https://api.gamekave.net/api-docs/openapi.json`), **v0.1.0**, 68
+      endpoints, OAuth 2.0 (authorization code e client credentials) + JWT.
+      - **Serve:** `games/{id}/assets` (capa, hero, logo, screenshots,
+        manuais, trilha, vídeos; conquistas de Steam e RetroAchievements),
+        `lists` (sincronizar a biblioteca com a coleção do perfil), `gas`
+        (o app envia sinais de jogo assinados com HMAC, com limite por minuto,
+        e o jogador ganha conquistas e nível no perfil).
+      - **Não serve como fonte de metadados por enquanto:** não tem busca por
+        nome nem por hash de ROM (só por ID); sem termos de uso, licença dos
+        dados nem limites publicados; dados de jogos vêm do IGDB
+        (`igdb_id`), então os termos do IGDB também contam. Inconsistência:
+        a documentação diz que tudo exige token, mas
+        `GET /games/filters/platforms` respondeu sem token.
+      - **Antes de codar, perguntar à Tellurian:**
+        1. termos de uso e licença dos dados (inclusive o que vem do IGDB);
+        2. como registrar o ReEmu como cliente OAuth e como app do GAS, e se
+           o client ID pode ir embutido num app de código aberto;
+        3. limites de uso;
+        4. se vai haver busca por nome e por hash de ROM;
+        5. estabilidade da API (a 0.1.0 deve mudar).
+      - **Escopo do protótipo (só se os termos permitirem):** opção
+        "Conectar conta Alvanista" em Configurações › Perfil, via OAuth
+        (token no chaveiro do sistema, como a chave do TheGamesDB),
+        desligada por padrão, com consentimento explícito e botão para
+        desconectar (LGPD). Começar só pelo que o ReEmu **envia**: sessões e
+        tempo de jogo pelo GAS. Depois, hero e logo de jogos já identificados
+        para o carrossel e a página do jogo. ScreenScraper e TheGamesDB
+        continuam como fontes principais, e o app funciona sem a GameKave.
 - [ ] `todo` — Avaliar no futuro: **ports nativos (recomp/decomp)** como
       launcher externo (pedido do dono do projeto, 2026-10-17). Pesquisa e
       licenças conferidas no GitHub:

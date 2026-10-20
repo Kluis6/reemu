@@ -2578,3 +2578,14 @@ Infra:
   - o primeiro passo é abrir os executáveis oficiais como processos separados;
   - um recompilador próprio em Rust só depois do doc 14, com runtime escrito do zero.
 
+## 2026-10-20 — Avaliação da GameKave / Alvanista
+
+- **Pedido do usuário:** avaliar a gamekave.net para integração de dados de jogos e da rede social Alvanista.
+- **Achados**, lidos na própria API em 2026-10-20 (`api.gamekave.net`, `/api/info`, OpenAPI):
+  - plataforma da Tellurian Corp que alimenta a Alvanista;
+  - API v0.1.0 com 68 endpoints, OAuth 2.0 + JWT;
+  - serviços: `games` (assets e conquistas), `lists` (coleção), `gas` (conquistas por sinais HMAC), `social` e `trophies`;
+  - 339 plataformas, com IDs do IGDB.
+- **Conclusão:** promissora para integração social opcional (enviar tempo de jogo pelo GAS e sincronizar a coleção). Ainda não serve como fonte de metadados: não há busca por nome nem por hash, e faltam termos de uso e licença dos dados.
+- **Próximo passo:** falar com a Tellurian antes de qualquer código. As perguntas e o escopo do protótipo estão no TASKS.md › Funcionalidades.
+
