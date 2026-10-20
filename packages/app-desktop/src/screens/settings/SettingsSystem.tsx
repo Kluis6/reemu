@@ -1,6 +1,5 @@
 import {
   Caption1,
-  Card,
   Field,
   Radio,
   RadioGroup,
@@ -322,7 +321,8 @@ export function SettingsSystem({
           {hardware.isLoading ? (
             <LoadingState />
           ) : (
-            <Card className={s.hwCard} appearance="filled-alternative">
+            // direto no card geral, sem card interno (pedido do usuário)
+            <div className={s.hwCard}>
               <dl className={s.hwList}>
                 {(hw
                   ? rows
@@ -339,7 +339,7 @@ export function SettingsSystem({
                   </div>
                 ))}
               </dl>
-            </Card>
+            </div>
           )}
         </section>
       )}
