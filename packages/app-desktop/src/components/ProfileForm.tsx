@@ -93,13 +93,18 @@ const useStyles = makeStyles({
     '& .fui-Field': { justifyItems: 'center' },
   },
   choicesCentered: { justifyContent: 'center' },
-  // Prévia de 200: o `Avatar` do Fluent só aceita tamanhos fixos até 128
-  // (com outro valor cai no padrão), então vai no 128 e a raiz estica — a
-  // imagem ocupa a raiz inteira.
+  // Prévia de 240 (200 em tela baixa, pra coluna caber no card): o `Avatar`
+  // do Fluent só aceita tamanhos fixos até 128 (com outro valor cai no
+  // padrão), então vai no 128 e a raiz estica — a imagem ocupa a raiz
+  // inteira.
   previewLg: {
-    width: '200px !important',
-    height: '200px !important',
+    width: '240px !important',
+    height: '240px !important',
     '& img': { width: '100%', height: '100%' },
+    '@media (max-height: 640px)': {
+      width: '200px !important',
+      height: '200px !important',
+    },
   },
   // Bio mais alta nas Configurações (pedido do usuário); continua podendo
   // esticar na vertical
