@@ -54,11 +54,14 @@ const useStyles = makeStyles({
   choiceOn: {
     border: `2px solid ${tokens.colorBrandStroke1}`,
   },
-  // `layout="columns"` (Configurações › Perfil): nome, bio e salvar de um
-  // lado, os avatares do outro; uma coluna só em janela estreita.
+  // `layout="columns"` (Configurações › Perfil): os avatares à esquerda e
+  // nome, bio e salvar à direita; uma coluna só em janela estreita.
   columns: {
     display: 'grid',
-    gridTemplateColumns: 'minmax(0, 440px) minmax(0, 1fr)',
+    // a coluna dos avatares tem a largura deles e as duas encostam à
+    // esquerda (com `auto` a 1ª esticava e os campos iam pro canto direito)
+    gridTemplateColumns: 'max-content minmax(0, 440px)',
+    justifyContent: 'start',
     alignItems: 'start',
     columnGap: tokens.spacingHorizontalXXXL,
     rowGap: tokens.spacingVerticalL,
@@ -221,13 +224,13 @@ export function ProfileForm({
   if (layout === 'columns')
     return (
       <div className={s.columns}>
-        <div className={s.col}>{fields}</div>
         <div className={s.avatarCol}>
           <ProfileAvatar profile={{ name, avatar }} size={96} nonce={nonce} />
           <Field label={t('profileForm.avatar')} hint={t('profileForm.avatarHint')}>
             {choices}
           </Field>
         </div>
+        <div className={s.col}>{fields}</div>
       </div>
     )
 
