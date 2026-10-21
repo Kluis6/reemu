@@ -2589,3 +2589,13 @@ Infra:
 - **Conclusão:** promissora para integração social opcional (enviar tempo de jogo pelo GAS e sincronizar a coleção). Ainda não serve como fonte de metadados: não há busca por nome nem por hash, e faltam termos de uso e licença dos dados.
 - **Próximo passo:** falar com a Tellurian antes de qualquer código. As perguntas e o escopo do protótipo estão no TASKS.md › Funcionalidades.
 
+## 2026-10-20 — Cenas 2D e 3D da prévia de shaders trocadas por imagens novas
+
+- **Pedido do usuário:** usar duas imagens novas como cenas de teste dos shaders:
+  - 2D: fase de plataforma ao pôr do sol, com HUD de SCORE, LIVES, moedas e WORLD 1-1;
+  - 3D: aventura no jeito de PS1/N64, com cachoeira, templo, ponte de corda e minimapa.
+- **Preparo:** as duas originais têm 1448×1086, já em 4:3, então só foram reduzidas para 320×240 com filtro box, sem corte nem extensão.
+- **Arquivos:** `apps/desktop/src-tauri/assets/shader-preview-2d.png` e `shader-preview-3d.png`, PNG RGB de 8 bits, embutidos com `include_bytes!` e decodificados com o crate `png`.
+- **Código:** o rasterizador de triângulos em software da cena 3D (`shader_preview_3d.rs`, ~500 linhas) saiu. `sample_scene_3d()` mantém a mesma assinatura, então o comando da prévia e o teste da GPU não mudaram.
+- **Testes:** os das duas cenas e `shader_preview_renders_the_sample_scene` (CRT na GPU, com as duas cenas) passaram; clippy sem avisos.
+

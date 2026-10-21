@@ -3,10 +3,9 @@
 //! mostra a diferença entre shaders: degradê com dithering, bordas duras,
 //! contornos finos, texto pequeno e cores chapadas lado a lado.
 //!
-//! A original é 1536×1024 (3:2). Pra caber no 4:3 da cena sem cortar o HUD
-//! nem achatar, a faixa de terra e água de baixo foi repetida até
-//! 1536×1152, e a imagem reduzida 4,8× (filtro box) — a grade da arte é
-//! ~320 px de largura, então a redução quase coincide com os pixels dela.
+//! A original é 1448×1086, já em 4:3: só foi reduzida pra 320×240 (filtro
+//! box, ~4,5×) — a grade da arte tem ~320 px de largura, então a redução
+//! quase coincide com os pixels dela.
 
 use super::shader_preview::{PREVIEW_H, PREVIEW_W};
 
