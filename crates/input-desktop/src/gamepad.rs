@@ -6,10 +6,10 @@
 //! conectada = porta 0, a próxima = porta 1, etc. Eixos analógicos e a UI de
 //! binding vêm depois.
 
+use crate::pad_source::{Axis, Button, PadEvent, PadId, Source};
 use crate::{capture, held, mappings};
 use core_loader_desktop::{AnalogState, RetroPadState};
 use domain::input::{RawInputEvent, RetroPadButton};
-use crate::pad_source::{Axis, Button, PadEvent, PadId, Source};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -423,13 +423,7 @@ impl GamepadPoller {
     /// Recompõe o RetroPad da `port` a partir dos índices segurados: usa o
     /// override do `guid` (`mappings`) se houver, senão o mapa fixo.
     /// Faz o diff contra o último estado aplicado (trata combinação e release).
-    fn recompute(
-        &mut self,
-        id: PadId,
-        uuid: [u8; 16],
-        pad: &RetroPadState,
-        analog: &AnalogState,
-    ) {
+    fn recompute(&mut self, id: PadId, uuid: [u8; 16], pad: &RetroPadState, analog: &AnalogState) {
         let port = self.port_for(id, uuid);
         // Core lendo analógico (N64…): o stick esquerdo não dobra como d-pad.
         let stick_as_dpad = !analog.is_used();
@@ -656,22 +650,10 @@ mod tests {
 
     #[test]
     fn button_mapping_libretro_convention() {
-        assert_eq!(
-            button_to_retropad(Button::South),
-            Some(RetroPadButton::B)
-        );
-        assert_eq!(
-            button_to_retropad(Button::East),
-            Some(RetroPadButton::A)
-        );
-        assert_eq!(
-            button_to_retropad(Button::West),
-            Some(RetroPadButton::Y)
-        );
-        assert_eq!(
-            button_to_retropad(Button::North),
-            Some(RetroPadButton::X)
-        );
+        assert_eq!(button_to_retropad(Button::South), Some(RetroPadButton::B));
+        assert_eq!(button_to_retropad(Button::East), Some(RetroPadButton::A));
+        assert_eq!(button_to_retropad(Button::West), Some(RetroPadButton::Y));
+        assert_eq!(button_to_retropad(Button::North), Some(RetroPadButton::X));
         assert_eq!(
             button_to_retropad(Button::DPadLeft),
             Some(RetroPadButton::Left)

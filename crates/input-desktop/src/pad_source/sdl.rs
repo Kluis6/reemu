@@ -77,7 +77,10 @@ pub fn init_on_main_thread() {
         // when the application is in the background. (default)".
         SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, c"1".as_ptr());
         if !SDL_Init(SDL_INIT_GAMEPAD) {
-            log::warn!("SDL: SDL_Init(GAMEPAD) falhou: {} — sem controle", sdl_error());
+            log::warn!(
+                "SDL: SDL_Init(GAMEPAD) falhou: {} — sem controle",
+                sdl_error()
+            );
             return;
         }
         // Ninguém drena a fila de eventos (ver o cabeçalho do módulo): o
@@ -141,8 +144,12 @@ impl Source {
         };
 
         // Saíram
-        let left: Vec<SDL_JoystickID> =
-            self.pads.keys().filter(|k| !ids.contains(k)).copied().collect();
+        let left: Vec<SDL_JoystickID> = self
+            .pads
+            .keys()
+            .filter(|k| !ids.contains(k))
+            .copied()
+            .collect();
         for jid in left {
             if let Some(pad) = self.pads.remove(&jid) {
                 // SAFETY: handle aberto por nós, fechado uma vez só.
