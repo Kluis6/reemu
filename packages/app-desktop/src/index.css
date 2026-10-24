@@ -160,6 +160,12 @@ html[data-nav-focus] .fui-Card:not([role="button"]):has(> .fui-Card__checkbox:fo
   outline-offset: 3px !important;
   box-shadow: none !important;
 }
+/* Botão do Fluent pelo controle: a borda some como no foco de teclado
+   (regra acima do 2) — antes a borda cinza ficava dentro do anel só no
+   controle (botões-pílula da página inicial, pedido do usuário). */
+html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus {
+  border-color: transparent !important;
+}
 
 /* 3. Campos (texto, busca, área de texto, seletor): o anel em volta do
    campo inteiro quando o foco é visível — num campo de texto o foco é

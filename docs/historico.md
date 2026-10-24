@@ -2778,3 +2778,14 @@ Infra:
 - **Interface:**
   - `ControllerDriver.tsx` no topo de Configurações › Controles, com `RadioGroup` vertical e a descrição de cada opção abaixo do nome, no mesmo padrão da tela Sistema.
   - Textos em pt-BR, en e es; nova ação de erro `setControllerDriver`.
+
+## 2026-10-24 — Sistema › Opções em cards; foco dos botões-pílula da página inicial
+
+- **Sistema › Opções (pedido do usuário):**
+  - Idioma, Tamanho da interface, Inicialização e Vídeo viraram cards internos sem sombra, dentro do card geral, que continua.
+  - Os cards usam o mesmo tom dos outros cards das Configurações: `colorNeutralBackground2`, `borderRadiusMedium`, padding L, 16 px entre cards.
+  - A aba passou a usar a largura toda (até os 1120 px do `SettingsSystem`). Na coluna de 640 px, os cards ocupavam só a metade esquerda.
+- **Botões "Todos os jogos" e "Adicionar ROMs" (pedido do usuário: "comportamento estranho" no foco):**
+  - Medido no DOM: o anel (`outline`) acompanha o raio de pílula do botão (10000px), mas o brilho (`::before` da regra 4 do `index.css`) usava o raio dos botões retangulares (`Medium` + 6 = 10px). Dava um retângulo arredondado em volta do anel redondo.
+  - O `pillBtn` agora põe `borderRadiusCircular` no `::before`.
+  - Pelo controle, a borda cinza do botão continuava dentro do anel; no teclado o Fluent a esconde. Agora o foco do controle também a esconde em todos os botões do Fluent (`.fui-Button`, `.fui-MenuButton`, `.fui-ToggleButton`).

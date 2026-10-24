@@ -587,6 +587,11 @@ export const useBrowseStyles = makeStyles({
     ":active": {
       backgroundColor: `${tokens.colorNeutralBackground2Pressed} !important`,
     },
+    // Brilho do foco (`::before` do index.css, regra 4): lá o raio é o dos
+    // botões retangulares (Medium + 6) — na pílula virava um retângulo de
+    // cantos arredondados em volta do anel redondo (o `outline` acompanha o
+    // raio do botão). Aqui ele acompanha a pílula.
+    "::before": { borderRadius: `${tokens.borderRadiusCircular} !important` },
   },
   chip: {
     display: "inline-flex",

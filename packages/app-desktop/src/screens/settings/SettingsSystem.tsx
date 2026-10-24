@@ -6,6 +6,7 @@ import {
   Switch,
   Text,
   makeStyles,
+  mergeClasses,
   tokens,
   type RadioGroupOnChangeData,
 } from "@fluentui/react-components";
@@ -52,6 +53,20 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     rowGap: tokens.spacingVerticalL,
+  },
+  // Opções: cada seção num card interno sem sombra, no tom dos outros cards
+  // das Configurações (o card da página redefine o Background2 como a camada
+  // mais clara — ver SettingsLayout); o card geral continua (pedido do
+  // usuário).
+  cards: {
+    display: "flex",
+    flexDirection: "column",
+    rowGap: tokens.spacingVerticalL,
+  },
+  card: {
+    padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalL}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
   },
   hwCard: { maxWidth: "720px" },
   // rótulo à esquerda, valor à direita; em tela estreita um embaixo do outro
@@ -226,8 +241,8 @@ export function SettingsSystem({
   return (
     <div className={s.root}>
       {section === "opcoes" && (
-        <>
-          <section className={s.section}>
+        <div className={s.cards}>
+          <section className={mergeClasses(s.section, s.card)}>
             <Heading
               title={t("language.title")}
               description={t("language.description")}
@@ -250,7 +265,7 @@ export function SettingsSystem({
             </RadioGroup>
           </section>
 
-          <section className={s.section}>
+          <section className={mergeClasses(s.section, s.card)}>
             <Heading
               title={t("appearance.uiScale.title")}
               description={t("appearance.uiScale.description")}
@@ -277,7 +292,7 @@ export function SettingsSystem({
             </RadioGroup>
           </section>
 
-          <section className={s.section}>
+          <section className={mergeClasses(s.section, s.card)}>
             <Heading title={t("system.general")} />
             {toggle(
               "autostart",
@@ -296,7 +311,7 @@ export function SettingsSystem({
             )}
           </section>
 
-          <section className={s.section}>
+          <section className={mergeClasses(s.section, s.card)}>
             <Heading title={t("settings.tabs.video")} />
             <Field
               label={t("video.integerScaling")}
@@ -310,7 +325,7 @@ export function SettingsSystem({
             </Field>
             <HdrSettings />
           </section>
-        </>
+        </div>
       )}
 
       {section === "hardware" && (
