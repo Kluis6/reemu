@@ -45,6 +45,18 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
+- [ ] `todo` — **Stella trava no Windows na fumaça do catálogo**
+      (2026-10-14): desde 2026-09-28 o `catalog-smoke.yml` falha toda
+      semana só no Windows porque `stella_libretro` (Stella 8) e
+      `stella2023_libretro` (Stella 7) passam do limite de 60 s rodando a ROM
+      de teste do Atari 2600 ("FALHA: travou"). No Linux os dois rodam os 180
+      quadros, e o `stella2014_libretro` passa nos dois sistemas. A falha
+      começou dois dias depois do VFS v3 (2026-09-26,
+      `core-loader-desktop/src/vfs.rs`); suspeita, não confirmada, de um
+      caminho do VFS específico do Windows. Em 2026-10-12 o `ppsspp_libretro` também travou
+      no Windows, ainda no `retro_init` (> 60 s); precisa ver se repete.
+      Reproduzir numa máquina Windows com `reemu-core-host` e a ROM do teste.
+
 - [x] `done` — **Vídeo nativo no Windows** (janela filha acima do
       WebView2): validado pelo usuário em 2026-10-02 (RTX 3060, wgpu em
       Vulkan; vbam, gpsp, parallel_n64, fbalpha2012 vertical). O jogo

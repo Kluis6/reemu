@@ -2437,6 +2437,24 @@ Infra:
   - No ReEmu: selecionada+foco = fundo `colorNeutralForeground1` e texto `reemuPage`, invertido em qualquer tema, sem o traço; foco = `colorNeutralBackground3`. O anel é o padrão do app.
   - Conferido em captura com foco de teclado real nos dois casos.
 
+## 2026-10-14 — Desempenho no Linux, medido com os jogos do Windows
+
+- **Como:** os mesmos jogos da medição do B6 (Windows), 20 s cada com `REEMU_PERF=1`, numa RTX 3060 (driver NVIDIA 595.99.02, kernel 7.0, Wayland). Cores OpenGL pelo `gl_core_real_rom` (processo filho; `REEMU_GL_INTEROP=0` é a cópia pela CPU); cores Vulkan pelo `vk_core_real_rom` (dentro do processo do app). Os dois testes passaram a imprimir o tempo do app por quadro (`process` da chain + leitura do teste), a mesma medida do `drive_interop_session` do Windows.
+- **Core** = mediana do `retro_run` + envio ao app nos segundos estáveis (fps no alvo e nenhum quadro acima do orçamento; os outros são o jogo carregando do disco, com `retro_run` de ~100 ms dentro do core).
+
+  | Jogo | Cópia pela CPU (core / app) | Sem cópia, dma_buf (core / app) |
+  |---|---|---|
+  | mupen64plus_next, Mario Kart 64, 640×480 | 1,04 ms / 1,27 ms | 0,73 ms / 0,70 ms |
+  | flycast, Soulcalibur, 640×480 | 1,48 ms / 1,28 ms | 1,24 ms / 0,73 ms |
+  | flycast, Soulcalibur, 1920×1440 | 4,07 ms / 5,69 ms | 1,34 ms / 2,53 ms |
+  | flycast, Metropolis Street Racer, 640×480 | 4,76 ms / 1,27 ms | 4,58 ms / 0,93 ms |
+  | flycast, Metropolis Street Racer, 1920×1440 | 7,82 ms / 5,36 ms | 4,55 ms / 2,48 ms |
+
+  - Todos no ritmo: p99 do intervalo entre quadros igual ao período (16,68 ms; 20,0 ms no Soulcalibur europeu, que passa a 50 Hz depois da abertura e o app acompanha).
+  - Em 1920×1440 a cópia custa ~3,3 ms no core (o `glReadPixels` e ~1,35 ms de envio de 10,5 MB) e ~2,9 ms no app — a mesma diferença do Windows (3,2 ms e 3,0 ms).
+- **Cores Vulkan (dentro do app):** Beetle PSX HW (40 Winks), mupen64plus_next com ParaLLEl-RDP (Mario Kart 64) e flycast (Soulcalibur), todos com o quadro em imagem Vulkan, a 60 fps (50 no Soulcalibur PAL); o app gasta 0,16–0,20 ms por quadro, porque amostra a imagem do core direto, sem sincronização externa.
+- **Não medido:** GPUs AMD e Intel; a apresentação na tela (o pump do app real) e o uso de CPU por jogo.
+
 ## 2026-10-16 — Carrossel com o controle; botão "Mostrar tudo"
 
 - **Carrossel** (print do usuário: slide deslocado para o lado e a página rolada para cima, com o destaque cortado embaixo da topbar).
@@ -2629,4 +2647,3 @@ Infra:
   - Preset recusado pelo WebGPU agora vira aviso em vez de derrubar a prévia, e mais presets do pacote renderizam (`clamp_to_border` e o formato do último passe).
 - **Molduras:** importar e remover packs escondidos (backlog).
 - **Biblioteca:** menu de plataformas cabe na janela e rola por dentro.
-
