@@ -9,7 +9,6 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import {
-  ArrowSyncRegular,
   CheckmarkCircleFilled,
   FrameRegular,
 } from '@fluentui/react-icons'
@@ -37,16 +36,28 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalM,
     '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
-  // ícone | sistema e status (cresce) | botão — mesmo card da lista de cores
+  // ícone num quadrado | sistema e status (cresce) | botão — o mesmo desenho
+  // das listas de Cores e BIOS, com o mesmo padding nos 4 lados
   row: {
     display: 'flex',
     alignItems: 'center',
     gap: tokens.spacingHorizontalM,
-    padding: `${tokens.spacingVerticalS} ${tokens.spacingHorizontalM}`,
+    padding: tokens.spacingHorizontalM,
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
   },
-  icon: { fontSize: '24px', flexShrink: 0, color: tokens.colorNeutralForeground2 },
+  // ícone de moldura num quadrado na cor sólida do tema (visível em todos)
+  tile: {
+    width: '48px',
+    height: '48px',
+    flexShrink: 0,
+    display: 'grid',
+    placeItems: 'center',
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: 'var(--reemuBrandSolid)',
+    color: 'var(--reemuOnBrand)',
+    fontSize: '28px',
+  },
   // Nome e selo "baixado" na mesma linha: o nome fica na mesma altura em
   // todos os cards, baixados ou não.
   meta: {
@@ -58,7 +69,13 @@ const useStyles = makeStyles({
     flexGrow: 1,
     overflowWrap: 'anywhere',
   },
-  action: { flexShrink: 0 },
+  // Baixar e Reinstalar com a mesma largura, como nas listas de Cores e BIOS
+  action: {
+    flexShrink: 0,
+    width: '120px',
+    minWidth: '0 !important',
+    maxWidth: 'none !important',
+  },
 })
 
 const mb = (n: number) => (n / 1048576).toFixed(0)
@@ -145,7 +162,9 @@ export function BezelLibrary() {
       <div className={s.list}>
         {rows.map((c) => (
           <div key={c.systemId} className={s.row}>
-            <FrameRegular className={s.icon} />
+            <span className={s.tile} aria-hidden>
+              <FrameRegular />
+            </span>
             <span className={s.meta}>
               <Body1>
                 <Text as="strong" weight="semibold">
@@ -159,16 +178,11 @@ export function BezelLibrary() {
               )}
             </span>
             {c.installed ? (
+              // Reinstalar: secondary, só o texto, sem ícone (como o Remover das
+              // outras listas); o progresso aparece no toast
               <Button
                 className={s.action}
-                appearance="subtle"
-                icon={
-                  dl.isPending && dl.variables === c.systemId ? (
-                    <Spinner size="tiny" />
-                  ) : (
-                    <ArrowSyncRegular />
-                  )
-                }
+                appearance="secondary"
                 disabled={dl.isPending}
                 onClick={() => dl.mutate(c.systemId)}
               >
@@ -177,6 +191,7 @@ export function BezelLibrary() {
             ) : (
               <DownloadButton
                 className={s.action}
+                appearance="primary"
                 label={t('bezels.download')}
                 busy={dl.isPending && dl.variables === c.systemId}
                 disabled={dl.isPending}
