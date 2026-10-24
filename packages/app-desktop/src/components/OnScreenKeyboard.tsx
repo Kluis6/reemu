@@ -6,7 +6,7 @@ import {
   KeyboardShiftRegular,
   LineHorizontal3Regular,
 } from '@fluentui/react-icons'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchStore } from '../stores/useSearchStore'
 
@@ -316,7 +316,7 @@ export function OnScreenKeyboard() {
             : symbols
               ? t('osk.letters')
               : t('osk.symbols')
-  const icon = (a: Action): ReactNode =>
+  const icon = (a: Action): ReactElement | undefined =>
     a === 'shift' ? (
       <KeyboardShiftRegular />
     ) : a === 'back' ? (
