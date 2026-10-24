@@ -33,8 +33,9 @@
 //!   child's mouse input messages to the parent window" (Window Features ›
 //!   Disabled Windows) — clicar no jogo não tira o foco do teclado do
 //!   WebView2, que é quem recebe as teclas do jogo e o Esc do menu.
-//! - `WS_CLIPSIBLINGS`: a irmã (WebView2) não desenha por cima da nossa área
-//!   (Window Features › Child Windows).
+//! - `WS_CLIPSIBLINGS` nas DUAS: o estilo recorta quem desenha, não quem é
+//!   coberto — no WebView2 (`clip_siblings`) é o que impede ele de pintar
+//!   por cima da nossa área (Window Styles). Só na nossa, a tela ficava branca.
 //! - `SWP_ASYNCWINDOWPOS`: quem mexe na janela é o `reemu-video-pump`, não a
 //!   thread que a criou (a principal, do event loop). Com a flag, "the system
 //!   posts the request to the thread that owns the window. This prevents the
@@ -302,10 +303,11 @@ mod win {
     use windows_sys::Win32::Graphics::Gdi::{GetStockObject, BLACK_BRUSH};
     use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        CreateWindowExW, DefWindowProcW, PostMessageW, RegisterClassExW, SetWindowPos, HWND_BOTTOM,
-        HWND_TOP, SWP_ASYNCWINDOWPOS, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-        SWP_NOZORDER, SWP_SHOWWINDOW, WM_CLOSE, WNDCLASSEXW, WS_CHILD, WS_CLIPSIBLINGS,
-        WS_DISABLED,
+        CreateWindowExW, DefWindowProcW, GetWindow, GetWindowLongW, PostMessageW, RegisterClassExW,
+        SetWindowLongW, SetWindowPos, GWL_STYLE, GW_CHILD, GW_HWNDNEXT, HWND_BOTTOM, HWND_TOP,
+        SWP_ASYNCWINDOWPOS, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
+        SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, WM_CLOSE, WNDCLASSEXW, WS_CHILD,
+        WS_CLIPSIBLINGS, WS_DISABLED,
     };
 
     pub struct ChildWindow {
@@ -322,6 +324,41 @@ mod win {
 
     fn wide(s: &str) -> Vec<u16> {
         s.encode_utf16().chain(Some(0)).collect()
+    }
+
+    /// Liga `WS_CLIPSIBLINGS` nas outras filhas do pai (o `WRY_WEBVIEW`). O
+    /// estilo vale pra quem DESENHA: "If WS_CLIPSIBLINGS is not specified and
+    /// child windows overlap, it is possible, when drawing within the client
+    /// area of a child window, to draw within the client area of a neighboring
+    /// child window" (Window Styles). Sem ele o WebView2 cobria a nossa janela
+    /// mesmo com ela visível e no topo — a tela branca de 2026-10-24. O
+    /// `SetWindowPos` com `SWP_FRAMECHANGED` aplica o estilo: "changes you make
+    /// using SetWindowLongPtr will not take effect until you call the
+    /// SetWindowPos function" (SetWindowLongPtrW).
+    ///
+    /// SAFETY: `parent` e `ours` válidos; chamar na thread principal, a dona
+    /// das janelas (o `SetWindowPos` aqui é síncrono).
+    unsafe fn clip_siblings(parent: HWND, ours: HWND) {
+        let mut c = GetWindow(parent, GW_CHILD);
+        while !c.is_null() {
+            if c != ours {
+                let st = GetWindowLongW(c, GWL_STYLE) as u32;
+                if st & WS_CLIPSIBLINGS == 0 {
+                    SetWindowLongW(c, GWL_STYLE, (st | WS_CLIPSIBLINGS) as i32);
+                    SetWindowPos(
+                        c,
+                        std::ptr::null_mut(),
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+                    );
+                    log::info!("vídeo: WS_CLIPSIBLINGS ligado numa irmã da janela do jogo");
+                }
+            }
+            c = GetWindow(c, GW_HWNDNEXT);
+        }
     }
 
     impl ChildWindow {
@@ -372,6 +409,9 @@ mod win {
                 if hwnd.is_null() {
                     log::warn!("CreateWindowExW falhou: {}", GetLastError());
                     return None;
+                }
+                if !below {
+                    clip_siblings(parent as HWND, hwnd);
                 }
                 Some(Self {
                     hwnd: hwnd as isize,

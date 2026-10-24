@@ -2691,3 +2691,22 @@ Infra:
     - no Windows, diz por que o instalador não abriu (por exemplo, UAC recusado);
     - no Linux, a atualização do AppImage não falha mais com `/tmp` em outro mount;
     - libera a memória de um download anterior.
+
+## 2026-10-24 — Tela branca em todos os jogos: o WebView2 pintava por cima da janela de vídeo
+
+- **Relato do usuário:** qualquer jogo abre com a tela branca, e só o menu aparece. No modo canvas (`REEMU_NATIVE_VIDEO=0`) o jogo aparece.
+- **Investigação:**
+  - Uma sonda externa (`EnumChildWindows` e `GetWindow` em ordem Z, mais `IsWindowVisible`) mostrou a `ReEmuVideo` visível e no topo das irmãs. O log também tinha "1º frame apresentado".
+  - O `WRY_WEBVIEW` estava com o estilo `0x52000000`: WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN, **sem WS_CLIPSIBLINGS**.
+  - Teste A/B com o jogo rodando (Jet Set Radio, com moldura), ligando e desligando o flag no `WRY_WEBVIEW` por fora:
+    - com o flag, o jogo aparece;
+    - sem o flag, a tela fica branca.
+- **Causa:** o código supunha que WS_CLIPSIBLINGS na nossa janela impedia o WebView2 de desenhar por cima. O estilo recorta quem desenha, não quem é coberto.
+- **Fontes:** Microsoft Learn:
+  - Window Styles, WS_CLIPSIBLINGS: "If WS_CLIPSIBLINGS is not specified and child windows overlap, it is possible, when drawing within the client area of a child window, to draw within the client area of a neighboring child window";
+  - SetWindowLongPtrW: "changes you make using SetWindowLongPtr will not take effect until you call the SetWindowPos function".
+- **Correção:**
+  - Ao criar a janela de vídeo acima do WebView2, `clip_siblings` (`video.rs`) liga WS_CLIPSIBLINGS nas irmãs.
+  - Em seguida chama `SetWindowPos` com `SWP_FRAMECHANGED`.
+  - Roda na thread principal, a dona das janelas.
+- **Não explicado:** por que funcionava em 09 e 11/10. Talvez uma atualização do runtime do WebView2 ou do Windows (build 26300) tenha mudado como ele pinta. Não verificado.
