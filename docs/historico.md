@@ -2599,3 +2599,34 @@ Infra:
 - **Código:** o rasterizador de triângulos em software da cena 3D (`shader_preview_3d.rs`, ~500 linhas) saiu. `sample_scene_3d()` mantém a mesma assinatura, então o comando da prévia e o teste da GPU não mudaram.
 - **Testes:** os das duas cenas e `shader_preview_renders_the_sample_scene` (CRT na GPU, com as duas cenas) passaram; clippy sem avisos.
 
+## 2026-10-24 — Release v0.1.8
+
+- **Foco:**
+  - O efeito do card de jogo (anel de 3 px a 3 px, vão transparente e brilho na cor do tema) virou o foco padrão de todos os componentes.
+  - O controle e o mouse mostram o mesmo anel.
+  - O carrossel não desloca o slide no foco.
+- **Configurações:**
+  - Aparência, Decorações (antigo Vídeo) e Sistema abrem em cards; o card geral só aparece dentro da opção escolhida.
+  - O caminho no topo usa o Breadcrumb do Fluent 2, e o título e os cards ficam na mesma altura em todas as telas.
+  - Cores e BIOS em linhas no estilo da Microsoft Store.
+  - Perfil em duas colunas, com o avatar ativo grande.
+  - "Plano de fundo" com a opção de aparecer só na tela inicial ou em todas as telas (nunca na página do jogo).
+- **Temas:**
+  - Elevação única: página → superfície → realces, sem bordas nem sombras nos cards, como no modo XBOX.
+  - O tema ativo é marcado por um check depois do nome.
+- **Controle:**
+  - Teclado na tela para a busca, com o visual do teclado do Windows 11 com controle.
+  - Barra de botões com os círculos A/B/X/Y preenchidos.
+- **Fonte:** Segoe UI Variable no Windows 11 e Selawik (OFL) embutida para o Linux.
+- **Início:** carrossel de destaque com o Carousel do Fluent 2, com avanço automático.
+- **Página do jogo:**
+  - Capa na altura do destaque da Início e arte de fundo mais alta.
+  - Card sem capa igual ao da galeria.
+  - Botões do hero com o foco padrão.
+- **Shaders:**
+  - Novas cenas 2D e 3D na prévia.
+  - Itens do pacote iguais aos da lista do ReEmu.
+  - Preset recusado pelo WebGPU agora vira aviso em vez de derrubar a prévia, e mais presets do pacote renderizam (`clamp_to_border` e o formato do último passe).
+- **Molduras:** importar e remover packs escondidos (backlog).
+- **Biblioteca:** menu de plataformas cabe na janela e rola por dentro.
+
