@@ -24,7 +24,14 @@ const useStyles = makeStyles({
     gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))',
     gap: tokens.spacingVerticalL,
   },
-  card: { display: 'flex', flexDirection: 'column', rowGap: tokens.spacingVerticalS },
+  // sem a sombra do `filled-alternative` (pedido do usuário, como os cards
+  // de Sistema › Opções)
+  card: {
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: tokens.spacingVerticalS,
+    boxShadow: 'none',
+  },
   wide: { gridColumn: '1 / -1' },
   muted: { color: tokens.colorNeutralForeground3 },
   p: { margin: 0 },
