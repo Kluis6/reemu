@@ -2670,3 +2670,24 @@ Infra:
   - A moldura é composta antes do blit, então mantém a transparência.
 - **Falta:** conferir no app com o jogo. O teste não cobre a superfície nem a composição do Windows.
 
+
+## 2026-10-24 — Tauri atualizado para a última 2.x estável
+
+- **Pedido do usuário:** atualizar o Tauri para a versão mais atual, sem a 3.0 alpha. Base: <https://tauri.app/release/>.
+- **Versões:**
+  - Crates: `tauri` 2.12.1 → 2.12.5; `tauri-build` 2.7.1 → 2.7.4; `tauri-runtime-wry` 2.12.1 → 2.12.3; `wry` 0.57.0 → 0.57.1; `tao` 0.37.1 → 0.37.2.
+  - Plugins: `tauri-plugin-updater` 2.12.0 → 2.14.0; `tauri-plugin-dialog` 2.7.3 → 2.8.3; `tauri-plugin-log` 2.9.1 → 2.10.1; `tauri-plugin-fs` 2.5.2 → 2.7.1. O `tauri-plugin-autostart` já estava na última (2.7.0).
+  - npm: `@tauri-apps/api` 2.11.1 → 2.12.4; `@tauri-apps/plugin-dialog` 2.7.2 → 2.8.3.
+  - O CLI local foi para a última 2.x. O CI já instala com `--version "^2"`.
+- **Cuidado com o lock:**
+  - Um `cargo update --recursive` quebrou o `wgpu-hal`. O resolvedor passou o `gpu-allocator` para `windows` 0.61 enquanto o `wgpu-hal` usa 0.62: "multiple different versions of crate `windows`".
+  - A atualização foi refeita só nos crates do Tauri.
+  - `gpu-allocator` e `gilrs-core` voltaram para `windows` 0.62.2, como antes, para não mexer no backend do controle.
+- **O que ajuda o ReEmu (changelogs oficiais):**
+  - tauri 2.12.3: um `Channel` continua entregando mensagens depois que o `onmessage` lança erro. É o canal do progresso de download de molduras e pacotes de shader.
+  - tauri 2.12.4: corrige um pânico no handler de IPC com URI de caminho vazio.
+  - updater 2.14.0:
+    - verifica os bytes do pacote antes de instalar;
+    - no Windows, diz por que o instalador não abriu (por exemplo, UAC recusado);
+    - no Linux, a atualização do AppImage não falha mais com `/tmp` em outro mount;
+    - libera a memória de um download anterior.
