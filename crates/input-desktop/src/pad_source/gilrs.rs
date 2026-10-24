@@ -1,12 +1,17 @@
 //! Fonte `gilrs` (Linux/macOS): repassa os eventos dele no vocabulário
 //! comum. `gilrs::Gilrs` não é `Sync` — a fonte fica na thread do poller.
 
-use super::{Axis, Button, PadEvent, PadId};
+use super::{Axis, Button, Driver, PadEvent, PadId};
 use gilrs::{EventType, GamepadId, Gilrs, GilrsBuilder};
 use std::collections::HashMap;
 
 /// Nada a preparar na thread principal.
-pub fn init_on_main_thread() {}
+pub fn init_on_main_thread(_driver: Driver) {}
+
+/// Sem escolha de driver fora do Windows ([`super::DRIVER_CHOICE_SUPPORTED`]).
+pub fn set_driver_on_main_thread(_driver: Driver) -> Result<(), String> {
+    Ok(())
+}
 
 pub struct Source {
     gilrs: Gilrs,

@@ -95,6 +95,21 @@ export const setStartFullscreen = (enabled: boolean) =>
   invoke<void>('set_start_fullscreen', { enabled })
 export const setMinimizeToTray = (enabled: boolean) =>
   invoke<void>('set_minimize_to_tray', { enabled })
+
+/** Driver de controle do SDL (Configurações › Controles, só no Windows —
+ *  `input_desktop::pad_source::Driver`). */
+export type ControllerDriver = 'auto' | 'xinput' | 'directinput' | 'wgi'
+export const CONTROLLER_DRIVERS: ControllerDriver[] = ['auto', 'xinput', 'directinput', 'wgi']
+export interface ControllerDriverSettings {
+  driver: ControllerDriver
+  /** `false` fora do Windows: lá não há escolha. */
+  supported: boolean
+}
+export const getControllerDriver = () =>
+  invoke<ControllerDriverSettings>('get_controller_driver')
+/** Troca na hora (reinicia só a leitura dos controles) e salva. */
+export const setControllerDriver = (driver: ControllerDriver) =>
+  invoke<void>('set_controller_driver', { driver })
 /** Rótulos do menu do ícone da bandeja, no idioma da interface. */
 export const setTrayLabels = (open: string, quit: string) =>
   invoke<void>('set_tray_labels', { open, quit })

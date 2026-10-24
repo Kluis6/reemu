@@ -9,10 +9,14 @@
 //!   pasta de dados. O Rust precisa delas antes da interface carregar (a
 //!   janela já abre em tela cheia; o minimizar é tratado no evento da
 //!   janela), por isso não ficam no `localStorage`.
+//! - Driver de controle (Configurações › Controles, só no Windows): também
+//!   no `app-settings.json` — o SDL precisa dele antes de iniciar
+//!   (`input_desktop::pad_source`).
 //! - Bandeja: `tauri::tray` com o recurso `tray-icon`
 //!   (v2.tauri.app/learn/system-tray). O ícone só existe enquanto a janela
 //!   está escondida nela; restaurar remove o ícone.
 
+use input_desktop::pad_source::{self, Driver};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -30,6 +34,15 @@ const TRAY_ID: &str = "reemu-tray";
 pub struct SystemPrefs {
     pub start_fullscreen: bool,
     pub minimize_to_tray: bool,
+    /// Chave do `input_desktop::pad_source::Driver`; vazio/desconhecido =
+    /// automático.
+    pub controller_driver: String,
+}
+
+impl SystemPrefs {
+    pub fn controller_driver(&self) -> Driver {
+        Driver::from_key(&self.controller_driver).unwrap_or_default()
+    }
 }
 
 /// Rótulos do menu da bandeja, no idioma da interface (o frontend manda via
@@ -126,6 +139,32 @@ pub fn set_start_fullscreen(state: State<'_, SystemState>, enabled: bool) -> Res
 #[tauri::command]
 pub fn set_minimize_to_tray(state: State<'_, SystemState>, enabled: bool) -> Result<(), String> {
     state.update(|p| p.minimize_to_tray = enabled)
+}
+
+/// Driver de controle atual e se dá pra escolher neste sistema.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ControllerDriverSettings {
+    driver: &'static str,
+    supported: bool,
+}
+
+#[tauri::command]
+pub fn get_controller_driver(state: State<'_, SystemState>) -> ControllerDriverSettings {
+    ControllerDriverSettings {
+        driver: state.prefs().controller_driver().key(),
+        supported: pad_source::DRIVER_CHOICE_SUPPORTED,
+    }
+}
+
+/// Síncrono de propósito: "Commands without the async keyword are executed on
+/// the main thread" (v2.tauri.app/develop/calling-rust) — e o SDL só
+/// reinicia nela. Salva só se a troca deu certo.
+#[tauri::command]
+pub fn set_controller_driver(state: State<'_, SystemState>, driver: String) -> Result<(), String> {
+    let d = Driver::from_key(&driver).ok_or_else(|| format!("driver desconhecido: {driver}"))?;
+    pad_source::set_driver_on_main_thread(d)?;
+    state.update(|p| p.controller_driver = d.key().to_string())
 }
 
 #[tauri::command]

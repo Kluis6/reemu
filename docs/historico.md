@@ -2747,3 +2747,34 @@ Infra:
   - L2 e R2 não variaram.
   - Validar no app.
 - **Efeito colateral:** o GUID do controle mudou com o SDL, porque o GUID do HIDAPI tem CRC do nome e o driver `h`. Remapeamentos salvos para o DualSense precisam ser refeitos.
+
+## 2026-10-24 — Escolha do driver de controle (Configurações › Controles, Windows)
+
+- **Pedido do usuário:** poder escolher o driver do controle além da detecção automática do SDL.
+- **Opções:**
+  - **Automático:** padrão do SDL. HIDAPI para PlayStation, Switch e Xbox, mais XInput e DirectInput.
+  - **Só XInput:** controles Xbox e virtuais (DS4Windows, DSX).
+  - **Só DirectInput.**
+  - **Windows.Gaming.Input:** o caminho de antes.
+  - RawInput fica sempre no padrão "0".
+  - Salvo em `app-settings.json` (`controllerDriver`), lido no `setup` antes do `SDL_Init`.
+  - Fora do Windows a seção não aparece, porque o `gilrs` não tem escolha.
+- **Troca com o app aberto:**
+  - Os hints `SDL_HINT_XINPUT_ENABLED`, `SDL_HINT_JOYSTICK_DIRECTINPUT` e `SDL_HINT_JOYSTICK_WGI` "should be set before SDL is initialized" (SDL_hints.h 3.4.18). Por isso a troca faz `SDL_Quit`, aplica os hints e chama o `SDL_Init`.
+  - A wiki não diz que dá para iniciar de novo depois do `SDL_Quit`. O fonte diz (SDL.c 3.4.18): ele zera a contagem dos subsistemas e chama `SDL_QuitHints()`, então os hints são postos de novo a cada início.
+  - Os drivers leem os hints na própria inicialização: `SDL_xinputjoystick.c:49`, `SDL_dinputjoystick.c:406` e `SDL_windows_gaming_input.c:589`.
+  - Antes do `SDL_Quit`, a thread do poller fecha os controles e avisa. A thread principal desliga `READY` e espera o `PARKED` da geração atual, por no máximo 1 s. Se o tempo esgotar, a troca desiste.
+  - Se o driver novo não iniciar, a troca volta ao anterior.
+  - O comando `set_controller_driver` é síncrono porque "Commands without the async keyword are executed on the main thread" (v2.tauri.app/develop/calling-rust), e o `SDL_Init`/`SDL_Quit` exigem a thread principal.
+- **Testado no hardware** (DualSense por Bluetooth), trocando de driver com uma thread lendo o controle:
+
+  | Driver | Resultado | Tempo da troca |
+  |---|---|---|
+  | XInput | nenhum controle (o DualSense não é XInput) | 5 ms |
+  | DirectInput | "PS5 Controller" | 75 ms |
+  | WGI | nenhum controle (como no gilrs) | 14 ms |
+  | Automático | "DualSense Wireless Controller" de volta | 97 ms |
+
+- **Interface:**
+  - `ControllerDriver.tsx` no topo de Configurações › Controles, com `RadioGroup` vertical e a descrição de cada opção abaixo do nome, no mesmo padrão da tela Sistema.
+  - Textos em pt-BR, en e es; nova ação de erro `setControllerDriver`.

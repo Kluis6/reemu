@@ -111,7 +111,7 @@ pub fn run() {
             // Controles: o SDL (Windows) exige o `SDL_Init` na thread
             // principal — o `setup` roda nela; o `AppState::new` liga a
             // thread que lê os controles.
-            input_desktop::pad_source::init_on_main_thread();
+            input_desktop::pad_source::init_on_main_thread(system_prefs.controller_driver());
             app.manage(AppState::new(base, db, audio_config, hotkeys));
 
             // Contexto GPU pro processamento de frame (etapa 04 — shader chain).
@@ -344,6 +344,8 @@ pub fn run() {
             system::set_autostart,
             system::set_start_fullscreen,
             system::set_minimize_to_tray,
+            system::get_controller_driver,
+            system::set_controller_driver,
             system::set_tray_labels,
             commands::shutdown_system,
             commands::restart_system,
