@@ -234,9 +234,12 @@ export function SettingsLayout() {
                     className={mergeClasses(
                       styles.content,
                       WIDE_TABS.has(section.key) && styles.wide,
-                      // Sistema › Opções: seções em cards (largura toda, até
-                      // os 1120 do próprio SettingsSystem)
-                      section.key === "sistema" && sub === "opcoes" && styles.wide,
+                      // Sistema › Opções e › Informações e licenças: seções
+                      // em cards (largura toda, até os 1120 do próprio
+                      // SettingsSystem; as licenças viram duas colunas)
+                      section.key === "sistema" &&
+                        (sub === "opcoes" || sub === "sobre") &&
+                        styles.wide,
                       section.key === "video" && sub === "shaders" && styles.fill,
                     )}
                   >
