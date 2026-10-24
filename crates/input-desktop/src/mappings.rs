@@ -3,7 +3,7 @@
 //! banco) lê daqui. O app popula com `set()` no startup e sempre que o usuário
 //! edita um binding.
 //!
-//! Sem entrada pro `guid` = o poller usa o mapa fixo do `gilrs` (que já
+//! Sem entrada pro `guid` = o poller usa o mapa fixo dele (que já
 //! normaliza pelo SDL_GameControllerDB embutido).
 
 use domain::input::{ControllerLayoutEntry, ControllerMapping, RawInputEvent, RetroPadButton};
@@ -67,7 +67,7 @@ fn entry_matches(entry: &ControllerLayoutEntry, held: &[u32]) -> bool {
 
 /// Botões RetroPad que devem estar pressionados no `guid`, dado o conjunto de
 /// índices físicos segurados agora. `None` = sem override pra esse `guid`
-/// (o caller cai no mapa fixo do `gilrs`).
+/// (o caller cai no mapa fixo).
 pub fn resolve(guid: &str, held: &[u32]) -> Option<HashSet<RetroPadButton>> {
     let guard = store().read().unwrap_or_else(|p| p.into_inner());
     let mapping = guard.iter().find(|m| m.guid == guid)?;

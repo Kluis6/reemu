@@ -108,6 +108,10 @@ pub fn run() {
                 tauri::async_runtime::block_on(commands::load_controller_mappings(pool));
                 tauri::async_runtime::block_on(commands::seed_builtin_shader_presets(pool));
             }
+            // Controles: o SDL (Windows) exige o `SDL_Init` na thread
+            // principal — o `setup` roda nela; o `AppState::new` liga a
+            // thread que lê os controles.
+            input_desktop::pad_source::init_on_main_thread();
             app.manage(AppState::new(base, db, audio_config, hotkeys));
 
             // Contexto GPU pro processamento de frame (etapa 04 — shader chain).

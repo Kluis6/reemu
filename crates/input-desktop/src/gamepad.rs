@@ -1,6 +1,6 @@
-//! Gamepad físico via `gilrs` (que já normaliza os botões usando o
-//! SDL_GameControllerDB embutido). `GamepadPoller` é confinado a uma thread
-//! — `gilrs::Gilrs` não é `Sync`.
+//! Gamepad físico: os eventos vêm de [`crate::pad_source`] (SDL3 no
+//! Windows, `gilrs` nos outros), já normalizados. `GamepadPoller` é confinado
+//! a uma thread — a fonte não é `Sync`.
 //!
 //! Escopo: botões digitais + d-pad → `RetroPadState`, primeira controle
 //! conectada = porta 0, a próxima = porta 1, etc. Eixos analógicos e a UI de
@@ -9,7 +9,7 @@
 use crate::{capture, held, mappings};
 use core_loader_desktop::{AnalogState, RetroPadState};
 use domain::input::{RawInputEvent, RetroPadButton};
-use gilrs::{Axis, Button, Event, EventType, GamepadId, Gilrs, GilrsBuilder};
+use crate::pad_source::{Axis, Button, PadEvent, PadId, Source};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
@@ -41,9 +41,9 @@ pub enum NavPulse {
     Action,
 }
 
-/// Índices de d-pad (numeração de [`gilrs_button_index`]) que o stick esquerdo
-/// implica agora, dado `(x, y)` já com deadzone aplicada pelo `gilrs`.
-/// Convenção `gilrs`: Y positivo = cima.
+/// Índices de d-pad (numeração de [`button_index`]) que o stick esquerdo
+/// implica agora, dado `(x, y)` normalizado (Y positivo = cima). O limiar de
+/// 50% dispensa zona morta aqui.
 fn stick_dpad(x: f32, y: f32) -> Vec<u32> {
     let mut v = Vec::new();
     if y >= STICK_THRESHOLD {
@@ -59,7 +59,7 @@ fn stick_dpad(x: f32, y: f32) -> Vec<u32> {
     v
 }
 
-/// `f32` normalizado do `gilrs` (`-1.0..=1.0`) → eixo libretro
+/// `f32` normalizado da fonte (`-1.0..=1.0`) → eixo libretro
 /// (`-0x8000..=0x7fff`).
 /// Zona morta RADIAL dos analógicos. O mapeamento SDL do `gilrs` não traz
 /// zona morta pra todo controle (DualSense: `deadzone = 0.0`), e um stick
@@ -88,11 +88,14 @@ const TRIGGER_RELEASE: f32 = 0.15;
 const TRIGGER_DEADZONE: f32 = 0.04;
 
 impl TriggerCal {
-    /// 1º valor visto vira o zero — exceto 1.0 (gatilho digital apertado, ou
-    /// o analógico já no fundo), que conta como zero em 0.
+    /// 1º valor visto vira o zero — mesmo 1.0. Um DualSense no relatório
+    /// estendido do Bluetooth (0x31) mandava L2/R2 = 255 soltos (2026-10-24,
+    /// lido no HID cru): com "1.0 = zero em 0" os dois ficavam apertados para
+    /// sempre. Gatilho segurado na conexão só conta depois de solto uma vez
+    /// (o zero desce pro menor valor visto).
     fn new(first: f32) -> Self {
         Self {
-            rest: if first >= 0.99 { 0.0 } else { first },
+            rest: first,
             pressed: false,
             level: 0.0,
         }
@@ -138,7 +141,7 @@ fn to_axis(v: f32) -> i16 {
     (v.clamp(-1.0, 1.0) * 32767.0).round() as i16
 }
 
-/// `[u8;16]` (uuid do gamepad, via `gilrs`) → string hex minúscula, o
+/// `[u8;16]` (GUID do gamepad no formato do SDL) → string hex minúscula, o
 /// `device_guid` que vai em `RawInputEvent` e na tabela `controller_mappings`.
 pub fn guid_hex(uuid: [u8; 16]) -> String {
     use std::fmt::Write;
@@ -148,10 +151,10 @@ pub fn guid_hex(uuid: [u8; 16]) -> String {
     })
 }
 
-/// Índice estável do botão `gilrs` (já normalizado pelo SDL_GameControllerDB)
+/// Índice estável do botão normalizado (ver [`crate::pad_source`])
 /// para uso em `RawInputEvent::GamepadButton`. É a nossa própria numeração —
 /// só precisa ser consistente entre captura e resolução.
-pub fn gilrs_button_index(b: Button) -> u32 {
+pub fn button_index(b: Button) -> u32 {
     match b {
         Button::South => 0,
         Button::East => 1,
@@ -172,11 +175,10 @@ pub fn gilrs_button_index(b: Button) -> u32 {
         Button::DPadDown => 16,
         Button::DPadLeft => 17,
         Button::DPadRight => 18,
-        _ => u32::MAX,
     }
 }
 
-/// Inverso de [`gilrs_button_index`] + [`gilrs_button_to_retropad`]: índice
+/// Inverso de [`button_index`] + [`button_to_retropad`]: índice
 /// físico → RetroPad no mapa fixo. `None` p/ `C`/`Z`/`Mode` (4/5/12).
 pub fn retropad_from_index(i: u32) -> Option<RetroPadButton> {
     use RetroPadButton::*;
@@ -201,9 +203,9 @@ pub fn retropad_from_index(i: u32) -> Option<RetroPadButton> {
     })
 }
 
-/// `gilrs::Button` (já normalizado) → RetroPad. `None` = não mapeia
+/// [`Button`] (já normalizado) → RetroPad. `None` = não mapeia
 /// (ex: `Mode`/`C`/`Z`). Convenção libretro: South→B, East→A, West→Y, North→X.
-pub fn gilrs_button_to_retropad(b: Button) -> Option<RetroPadButton> {
+pub fn button_to_retropad(b: Button) -> Option<RetroPadButton> {
     use RetroPadButton::*;
     Some(match b {
         Button::South => B,
@@ -227,27 +229,27 @@ pub fn gilrs_button_to_retropad(b: Button) -> Option<RetroPadButton> {
 }
 
 pub struct GamepadPoller {
-    gilrs: Gilrs,
-    /// `GamepadId` (a CONEXÃO física — não confundir com o GUID do
+    source: Source,
+    /// `PadId` (a CONEXÃO física — não confundir com o GUID do
     /// SDL_GameControllerDB, que é por MODELO) → porta RetroPad (0..3).
     /// Atribuída na 1ª conexão. Duas unidades idênticas (mesmo GUID) têm
-    /// `GamepadId`s distintos, então cada uma ganha a sua própria porta —
+    /// `PadId`s distintos, então cada uma ganha a sua própria porta —
     /// indexar por GUID aqui fazia as duas colidirem na mesma porta e
     /// misturar os botões de uma no estado da outra.
-    ports: HashMap<GamepadId, usize>,
+    ports: HashMap<PadId, usize>,
     next_port: usize,
-    /// Botões físicos (numeração de [`gilrs_button_index`]) segurados agora,
+    /// Botões físicos (numeração de [`button_index`]) segurados agora,
     /// por conexão física — base pra recompor o RetroPad a cada evento.
-    down: HashMap<GamepadId, Vec<u32>>,
+    down: HashMap<PadId, Vec<u32>>,
     /// Posição atual `(x, y)` do stick esquerdo, por conexão física — vira
     /// direção de d-pad em [`Self::held_indices`] (só quando o core não lê
     /// analógico) e vai sempre pro `RETRO_DEVICE_ANALOG` esquerdo.
-    stick: HashMap<GamepadId, (f32, f32)>,
+    stick: HashMap<PadId, (f32, f32)>,
     /// Idem para o stick direito → `RETRO_DEVICE_ANALOG` direito.
-    rstick: HashMap<GamepadId, (f32, f32)>,
+    rstick: HashMap<PadId, (f32, f32)>,
     /// Posição atual `(x, y)` do d-pad quando ele chega como eixo/hat (ex:
     /// DualSense) em vez de botões. Mesma convenção do stick (Y+ = cima).
-    hat: HashMap<GamepadId, (f32, f32)>,
+    hat: HashMap<PadId, (f32, f32)>,
     /// Último conjunto RetroPad aplicado por porta — pro diff de press/release.
     applied: HashMap<usize, HashSet<RetroPadButton>>,
     /// Auto-repeat da navegação de menu: direção segurada → instante do
@@ -260,7 +262,7 @@ pub struct GamepadPoller {
     nav_action_down: bool,
     nav_back_down: bool,
     /// Zero calibrado de L2/R2 por conexão física (ver [`TriggerCal`]).
-    triggers: HashMap<(GamepadId, Button), TriggerCal>,
+    triggers: HashMap<(PadId, Button), TriggerCal>,
 }
 
 /// O que o poll observou de interessante além do RetroPad (pro caller
@@ -285,15 +287,9 @@ pub struct PollOutcome {
 }
 
 impl GamepadPoller {
-    pub fn new() -> Result<Self, Box<gilrs::Error>> {
+    pub fn new() -> Result<Self, String> {
         Ok(Self {
-            // Gatilho analógico vira botão a partir de 25% do curso (solta
-            // abaixo de 15%). O padrão do gilrs é 75%/65% — no DualSense, de
-            // curso longo, meia pressão não contava e o jogo não acelerava.
-            gilrs: GilrsBuilder::new()
-                .set_axis_to_btn(0.25, 0.15)
-                .build()
-                .map_err(Box::new)?,
+            source: Source::new()?,
             ports: HashMap::new(),
             next_port: 0,
             down: HashMap::new(),
@@ -315,7 +311,7 @@ impl GamepadPoller {
     /// todos os gamepads): d-pad/stick → setas (com auto-repeat), A/B →
     /// confirm/back (borda de subida). Chamado uma vez por `poll`.
     fn nav_pulses(&mut self) -> Vec<NavPulse> {
-        let ids: Vec<GamepadId> = self.gilrs.gamepads().map(|(id, _)| id).collect();
+        let ids = self.source.pads();
         let mut held: HashSet<u32> = HashSet::new();
         for id in ids {
             // Navegação de menu: o stick esquerdo sempre conta como direção.
@@ -375,10 +371,10 @@ impl GamepadPoller {
     }
 
     /// Botões físicos segurados + d-pad-como-eixo (hat), para esta conexão
-    /// (`GamepadId`). O stick esquerdo só entra como d-pad quando
+    /// (`PadId`). O stick esquerdo só entra como d-pad quando
     /// `stick_as_dpad` (menu, ou core sem analógico) — no jogo com analógico
     /// ele vai só pro `RETRO_DEVICE_ANALOG`.
-    fn held_indices(&self, id: GamepadId, stick_as_dpad: bool) -> Vec<u32> {
+    fn held_indices(&self, id: PadId, stick_as_dpad: bool) -> Vec<u32> {
         let mut v = self.down.get(&id).cloned().unwrap_or_default();
         let mut sticks = vec![self.hat.get(&id)];
         if stick_as_dpad {
@@ -395,22 +391,22 @@ impl GamepadPoller {
     }
 
     /// Manda a posição atual dos dois sticks pro `RETRO_DEVICE_ANALOG` da porta.
-    fn push_analog(&mut self, id: GamepadId, uuid: [u8; 16], analog: &AnalogState) {
+    fn push_analog(&mut self, id: PadId, uuid: [u8; 16], analog: &AnalogState) {
         let port = self.port_for(id, uuid);
         let (lx, ly) = radial_deadzone(self.stick.get(&id).copied().unwrap_or((0.0, 0.0)));
         let (rx, ry) = radial_deadzone(self.rstick.get(&id).copied().unwrap_or((0.0, 0.0)));
-        // `gilrs`: Y+ = cima; libretro: Y+ = baixo → inverte Y.
+        // fonte: Y+ = cima; libretro: Y+ = baixo → inverte Y.
         analog.set_stick(port, 0, to_axis(lx), to_axis(-ly));
         analog.set_stick(port, 1, to_axis(rx), to_axis(-ry));
     }
 
-    /// `id` identifica a conexão física (uma porta por `GamepadId`, mesmo se
+    /// `id` identifica a conexão física (uma porta por `PadId`, mesmo se
     /// duas unidades tiverem o mesmo `uuid`/GUID); `uuid` só entra pra achar
     /// a atribuição FIXA salva pelo usuário (`device_port_assignment`), que é
     /// por modelo — duas unidades idênticas com override salvo ainda
     /// competem pela mesma porta preferida, mas isso é inerente ao GUID do
     /// SDL não ter número de série (mesma limitação do RetroArch).
-    fn port_for(&mut self, id: GamepadId, uuid: [u8; 16]) -> usize {
+    fn port_for(&mut self, id: PadId, uuid: [u8; 16]) -> usize {
         // Atribuição fixa do usuário vence a ordem de conexão.
         if let Some(p) = mappings::port_for(&guid_hex(uuid)) {
             self.ports.insert(id, p);
@@ -425,11 +421,11 @@ impl GamepadPoller {
     }
 
     /// Recompõe o RetroPad da `port` a partir dos índices segurados: usa o
-    /// override do `guid` (`mappings`) se houver, senão o mapa fixo do `gilrs`.
+    /// override do `guid` (`mappings`) se houver, senão o mapa fixo.
     /// Faz o diff contra o último estado aplicado (trata combinação e release).
     fn recompute(
         &mut self,
-        id: GamepadId,
+        id: PadId,
         uuid: [u8; 16],
         pad: &RetroPadState,
         analog: &AnalogState,
@@ -460,19 +456,19 @@ impl GamepadPoller {
         let capturing = capture::is_capturing();
         static DEBUG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         let debug = *DEBUG.get_or_init(|| std::env::var_os("REEMU_INPUT_DEBUG").is_some());
-        while let Some(Event { id, event, .. }) = self.gilrs.next_event() {
-            let uuid = self.gilrs.gamepad(id).uuid();
-            // Diagnóstico: evento cru do gilrs (botão/eixo + valor + código
-            // evdev) — pra ver o que um controle manda de verdade.
-            if debug && !matches!(event, EventType::AxisChanged(_, v, _) if v.abs() < 0.05) {
-                log::info!("controle {}: {event:?}", self.gilrs.gamepad(id).name());
+        self.source.refresh();
+        while let Some((id, event)) = self.source.next_event() {
+            let uuid = self.source.uuid(id);
+            // Diagnóstico: evento já normalizado (botão/eixo + valor) — pra
+            // ver o que um controle manda de verdade.
+            if debug && !matches!(event, PadEvent::AxisChanged(_, v) if v.abs() < 0.05) {
+                log::info!("controle {}: {event:?}", self.source.name(id));
             }
             match event {
-                EventType::Connected => {
-                    let name = self.gilrs.gamepad(id).name().to_string();
-                    out.connected.push((guid_hex(uuid), name));
+                PadEvent::Connected => {
+                    out.connected.push((guid_hex(uuid), self.source.name(id)));
                 }
-                EventType::Disconnected => {
+                PadEvent::Disconnected => {
                     out.disconnected.push(guid_hex(uuid));
                     self.down.remove(&id);
                     self.stick.remove(&id);
@@ -491,9 +487,9 @@ impl GamepadPoller {
                         }
                     }
                 }
-                // Stick esquerdo e d-pad-como-eixo → d-pad (o `gilrs` já
-                // aplicou deadzone). Só fora do modo de captura (só botão).
-                EventType::AxisChanged(axis, value, _) if !capturing => {
+                // Stick esquerdo e d-pad-como-eixo → d-pad. Só fora do modo
+                // de captura (só botão).
+                PadEvent::AxisChanged(axis, value) if !capturing => {
                     match axis {
                         Axis::LeftStickX => self.stick.entry(id).or_insert((0.0, 0.0)).0 = value,
                         Axis::LeftStickY => self.stick.entry(id).or_insert((0.0, 0.0)).1 = value,
@@ -501,14 +497,13 @@ impl GamepadPoller {
                         Axis::RightStickY => self.rstick.entry(id).or_insert((0.0, 0.0)).1 = value,
                         Axis::DPadX => self.hat.entry(id).or_insert((0.0, 0.0)).0 = value,
                         Axis::DPadY => self.hat.entry(id).or_insert((0.0, 0.0)).1 = value,
-                        _ => continue,
                     }
                     self.push_analog(id, uuid, analog);
                     self.recompute(id, uuid, pad, analog);
                 }
                 // L2/R2: aperto decidido aqui, pelo valor com o zero calibrado
-                // — o press/release do gilrs usa o valor cru.
-                EventType::ButtonChanged(btn, value, _) if is_analog_trigger(btn) => {
+                // — o press/release da fonte usa o valor cru.
+                PadEvent::ButtonChanged(btn, value) if is_analog_trigger(btn) => {
                     let changed = match self.triggers.entry((id, btn)) {
                         std::collections::hash_map::Entry::Vacant(e) => {
                             e.insert(TriggerCal::new(value)).update(value)
@@ -524,10 +519,10 @@ impl GamepadPoller {
                         self.button_edge(id, uuid, btn, pressed, capturing, &mut out, pad, analog);
                     }
                 }
-                EventType::ButtonPressed(btn, _) | EventType::ButtonReleased(btn, _)
+                PadEvent::ButtonPressed(btn) | PadEvent::ButtonReleased(btn)
                     if is_analog_trigger(btn) => {}
-                EventType::ButtonPressed(btn, _) | EventType::ButtonReleased(btn, _) => {
-                    let pressed = matches!(event, EventType::ButtonPressed(..));
+                PadEvent::ButtonPressed(btn) | PadEvent::ButtonReleased(btn) => {
+                    let pressed = matches!(event, PadEvent::ButtonPressed(..));
                     self.button_edge(id, uuid, btn, pressed, capturing, &mut out, pad, analog);
                 }
                 _ => {}
@@ -535,15 +530,16 @@ impl GamepadPoller {
         }
         out.nav = self.nav_pulses();
         out.gamepads = self
-            .gilrs
-            .gamepads()
-            .map(|(_, g)| (guid_hex(g.uuid()), g.name().to_string()))
+            .source
+            .pads()
+            .into_iter()
+            .map(|id| (guid_hex(self.source.uuid(id)), self.source.name(id)))
             .collect();
         out
     }
 
     /// Pressão calibrada de L2/R2 desta conexão → `analog` da porta dela.
-    fn push_triggers(&mut self, id: GamepadId, uuid: [u8; 16], analog: &AnalogState) {
+    fn push_triggers(&mut self, id: PadId, uuid: [u8; 16], analog: &AnalogState) {
         let port = self.port_for(id, uuid);
         let level = |b| {
             self.triggers
@@ -562,7 +558,7 @@ impl GamepadPoller {
     #[allow(clippy::too_many_arguments)]
     fn button_edge(
         &mut self,
-        id: GamepadId,
+        id: PadId,
         uuid: [u8; 16],
         btn: Button,
         pressed: bool,
@@ -571,7 +567,7 @@ impl GamepadPoller {
         pad: &RetroPadState,
         analog: &AnalogState,
     ) {
-        let index = gilrs_button_index(btn);
+        let index = button_index(btn);
         if capturing {
             // Em captura, só o press interessa (o frontend agrupa a
             // combinação); nada vai pro RetroPad.
@@ -649,8 +645,11 @@ mod tests {
         assert_eq!(t.update(0.3), Some(true));
         assert_eq!(t.update(0.2), None); // histerese: só solta abaixo de 15%
         assert_eq!(t.update(0.1), Some(false));
-        // gatilho digital: 1º evento já é o fundo → zero em 0
+        // 1º valor no fundo (segurado na conexão, ou o DualSense com L2/R2
+        // presos em 255): não conta até soltar uma vez
         let mut d = TriggerCal::new(1.0);
+        assert_eq!(d.update(1.0), None);
+        assert_eq!(d.update(0.0), None); // o zero desce pra 0
         assert_eq!(d.update(1.0), Some(true));
         assert_eq!(d.update(0.0), Some(false));
     }
@@ -658,27 +657,27 @@ mod tests {
     #[test]
     fn button_mapping_libretro_convention() {
         assert_eq!(
-            gilrs_button_to_retropad(Button::South),
+            button_to_retropad(Button::South),
             Some(RetroPadButton::B)
         );
         assert_eq!(
-            gilrs_button_to_retropad(Button::East),
+            button_to_retropad(Button::East),
             Some(RetroPadButton::A)
         );
         assert_eq!(
-            gilrs_button_to_retropad(Button::West),
+            button_to_retropad(Button::West),
             Some(RetroPadButton::Y)
         );
         assert_eq!(
-            gilrs_button_to_retropad(Button::North),
+            button_to_retropad(Button::North),
             Some(RetroPadButton::X)
         );
         assert_eq!(
-            gilrs_button_to_retropad(Button::DPadLeft),
+            button_to_retropad(Button::DPadLeft),
             Some(RetroPadButton::Left)
         );
-        assert_eq!(gilrs_button_to_retropad(Button::Mode), None);
-        assert_eq!(gilrs_button_to_retropad(Button::C), None);
+        assert_eq!(button_to_retropad(Button::Mode), None);
+        assert_eq!(button_to_retropad(Button::C), None);
     }
 
     #[test]
@@ -717,7 +716,7 @@ mod tests {
             Button::Start,
             Button::DPadUp,
         ];
-        let mut seen: Vec<u32> = known.iter().map(|b| gilrs_button_index(*b)).collect();
+        let mut seen: Vec<u32> = known.iter().map(|b| button_index(*b)).collect();
         seen.sort_unstable();
         seen.dedup();
         assert_eq!(seen.len(), known.len());

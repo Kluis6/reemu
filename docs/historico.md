@@ -2710,3 +2710,40 @@ Infra:
   - Em seguida chama `SetWindowPos` com `SWP_FRAMECHANGED`.
   - Roda na thread principal, a dona das janelas.
 - **Não explicado:** por que funcionava em 09 e 11/10. Talvez uma atualização do runtime do WebView2 ou do Windows (build 26300) tenha mudado como ele pinta. Não verificado.
+
+## 2026-10-24 — Controles no Windows pelo SDL3 (o Windows.Gaming.Input deixou de ver o DualSense)
+
+- **Relato do usuário:** o joystick é reconhecido, mas não funciona.
+- **Investigação:** com o DualSense pareado por Bluetooth e conectado (`DEVPKEY_Device_IsConnected`):
+  - o Windows o lista como "Controlador de jogo compatível com HID" (VID 054C, PID 0CE6);
+  - a winmm o enxerga;
+  - o Windows.Gaming.Input não lista nenhum controle (`RawGameControllers` vazio), nem com uma janela em primeiro plano.
+  - Até 20/10 o gilrs, que usa o WGI no Windows, reconhecia o "PS5 Controller".
+  - Com o DS4Windows, só aparecia o Xbox 360 virtual (ViGEm), sem eventos na sonda.
+  - O backend `xinput` do gilrs não atende o DualSense.
+  - Lido o HID cru pelo hidapi do SDL, o controle estava no relatório estendido do Bluetooth (0x31). O DS4Windows e o DSX ligam esse modo, e ele fica até o controle ser desligado. Provável motivo de a winmm só ver eixos no centro. Não verificado se é também a causa no WGI.
+- **Decisão:** no Windows, o `GamepadPoller` lê o SDL3 em vez do gilrs, que continua no Linux e no macOS.
+  - A lógica do poller (calibração, zona morta, portas, navegação, captura) não mudou.
+  - A fonte dos eventos virou `input_desktop::pad_source`, com vocabulário próprio (`Button`, `Axis`, `PadEvent`).
+- **Fontes:** headers do SDL 3.4.18 e wiki SDL3:
+  - `SDL_Init`: "This function should only be called on the main thread". Chamado no `setup` do Tauri, antes do `AppState::new`.
+  - `SDL_PollEvent`: "should only be called on the main thread". Por isso a fila de eventos não é usada, e os eventos de gamepad e joystick ficam desligados.
+  - Por rodada, na thread do poller: `SDL_UpdateGamepads` ("Manually pump gamepad updates if not using the loop"), `SDL_GetGamepads` (o array vai para o `SDL_free`), `SDL_OpenGamepad`, `SDL_GetGamepadButton` e `SDL_GetGamepadAxis`. Todos "safe to call from any thread". Os eventos saem da diferença com a rodada anterior.
+  - `SDL_GetGamepadAxis`: sticks de -32768 (cima/esquerda) a 32767; gatilhos de 0 a 32767. O Y é invertido para a convenção do poller (Y+ = cima).
+  - `SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS=1`: sem janela do SDL, o padrão "0" descarta o input do app em segundo plano.
+  - `SDL_HINT_JOYSTICK_WGI`: "WGI is not used (default)".
+- **Build:**
+  - `sdl3-sys` 0.7 (Zlib) com `build-from-source` e `link-static`, só `sdl-joystick` e `sdl-hidapi`. Precisa de CMake.
+  - Na máquina do dono, o CMake do VS Build Tools vai por `[env] CMAKE` em `~/.cargo/config.toml`, fora do repositório. O `windows-latest` do CI tem CMake.
+  - O `scripts/check-windows.sh` (cross-check no Linux) usa `DOCS_RS=1` para o `sdl3-sys` pular o build nativo.
+  - SDL e HIDAPI (opção BSD) entraram no `THIRD_PARTY_NOTICES.md`, e o `licenses.json` foi refeito.
+- **Gatilho preso:**
+  - O DualSense do usuário manda L2 e R2 em 255 soltos no relatório 0x31. Os bytes 6 e 7 estão em `ff ff` no HID cru.
+  - A calibração tratava "1º valor 1.0" como zero em 0, e os dois ficariam apertados para sempre.
+  - Agora o 1º valor é sempre o repouso, e um gatilho segurado na conexão só conta depois de solto.
+- **Testado no hardware:** pela sonda com a `pad_source`, chegaram face, d-pad, analógicos, L1/R1, Options e Share.
+- **Pendente:**
+  - O botão PS não apareceu na gravação.
+  - L2 e R2 não variaram.
+  - Validar no app.
+- **Efeito colateral:** o GUID do controle mudou com o SDL, porque o GUID do HIDAPI tem CRC do nome e o driver `h`. Remapeamentos salvos para o DualSense precisam ser refeitos.

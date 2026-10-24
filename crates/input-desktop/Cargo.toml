@@ -7,6 +7,20 @@ description = "Input desktop: SDL_GameControllerDB, hotkeys com combinação, ke
 [dependencies]
 domain = { path = "../domain" }
 core-loader-desktop = { path = "../core-loader-desktop" }
-gilrs = "0.11"
 thiserror.workspace = true
 log = "0.4"
+
+# Controles: SDL3 no Windows (lê o DualSense/DS4 direto pelo HIDAPI, sem
+# depender do Windows.Gaming.Input), gilrs nos outros sistemas. SDL compilado
+# do fonte e ligado estático, só com joystick + HIDAPI (precisa de CMake).
+[target.'cfg(windows)'.dependencies]
+sdl3-sys = { version = "0.7", features = [
+    "build-from-source",
+    "link-static",
+    "no-default-subsystems",
+    "sdl-joystick",
+    "sdl-hidapi",
+] }
+
+[target.'cfg(not(windows))'.dependencies]
+gilrs = "0.11"

@@ -39,7 +39,7 @@ pub struct SessionConfig {
     pub system_dir: PathBuf,
     pub save_dir: PathBuf,
     pub audio_sink: Option<AudioSinkFactory>,
-    /// Liga o poll de gamepad físico (`gilrs`) numa thread própria.
+    /// Liga o poll de gamepad físico (`input_desktop::pad_source`) numa thread própria.
     pub enable_gamepad: bool,
 }
 

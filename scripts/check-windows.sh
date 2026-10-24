@@ -45,7 +45,13 @@ for tool in gcc g++ windres; do
   ln -sf fake "$FAKE/x86_64-w64-mingw32-$tool"
 done
 
+# `DOCS_RS=1`: o sdl3-sys (controles no Windows) compila o SDL pelo CMake, o
+# que o compilador falso não aguenta; com a variável ele pula o build nativo
+# ("don't build/link ... on docs.rs", build-common.rs do sdl3-sys). Nos outros
+# crates do grafo ela só pula o build nativo do glslang (que já é falso aqui)
+# e muda algo do tauri-plugin-dialog só no Android.
 PATH="$PWD/$FAKE:$PATH" \
+  DOCS_RS=1 \
   CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc \
   CXX_x86_64_pc_windows_gnu=x86_64-w64-mingw32-g++ \
   AR_x86_64_pc_windows_gnu=ar \
