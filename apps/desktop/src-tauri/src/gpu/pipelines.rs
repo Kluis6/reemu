@@ -17,6 +17,31 @@ fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
 fn fs(v: VOut) -> @location(0) vec4<f32> { return textureSample(Tex, Smp, v.uv); }
 "#;
 
+/// Passe final em SDR, pra superfície: igual ao `COMP_WGSL`, mas grava o
+/// alfa como 1. O alfa do quadro do core não vale nada — `libretro.h`,
+/// `RETRO_PIXEL_FORMAT_XRGB8888`: "The most significant byte (the X) is
+/// ignored" — e o PPSSPP manda 0 (medido, God of War: alfa 0 em todos os
+/// quadros). Com a superfície num modo que respeita o alfa (`Inherit`/
+/// `PreMultiplied`), o compositor deixava o jogo transparente e a tela
+/// ficava branca. O passe HDR abaixo já grava 1. A moldura é composta antes
+/// (no `comp`), então isto não tira a transparência dela.
+pub(super) const BLIT_WGSL: &str = r#"
+struct Rect { c: vec4<f32> };
+@group(0) @binding(0) var<uniform> R: Rect;
+@group(0) @binding(1) var Tex: texture_2d<f32>;
+@group(0) @binding(2) var Smp: sampler;
+struct VOut { @builtin(position) pos: vec4<f32>, @location(0) uv: vec2<f32> };
+@vertex
+fn vs(@location(0) p: vec4<f32>, @location(1) uv: vec2<f32>) -> VOut {
+    let n = p.xy * 2.0 - vec2<f32>(1.0, 1.0);
+    return VOut(vec4<f32>(R.c.xy + n * R.c.zw, 0.0, 1.0), uv);
+}
+@fragment
+fn fs(v: VOut) -> @location(0) vec4<f32> {
+    return vec4<f32>(textureSample(Tex, Smp, v.uv).rgb, 1.0);
+}
+"#;
+
 /// Passe final em HDR (superfície `Rgba16Float` + `ExtendedSrgbLinear`, o
 /// scRGB). O resultado da chain é sRGB codificado; aqui vira linear
 /// (função de transferência por partes do sRGB, IEC 61966-2-1), ganha o
@@ -263,12 +288,37 @@ pub(super) fn blit_pipeline(
     blit_pipeline_for(device, bgl, format, false)
 }
 
-/// `hdr` = o passe final em scRGB (`HDR_BLIT_WGSL`).
+/// Blit que preserva o alfa (o `COMP_WGSL`): pra gerar os mipmaps da chain,
+/// em que um passe pode ler o alfa da entrada. Só a superfície força alfa 1.
+pub(super) fn mip_blit_pipeline(
+    device: &wgpu::Device,
+    bgl: &wgpu::BindGroupLayout,
+    format: wgpu::TextureFormat,
+) -> wgpu::RenderPipeline {
+    blit_with(device, bgl, format, COMP_WGSL)
+}
+
+/// `hdr` = o passe final em scRGB (`HDR_BLIT_WGSL`); senão o SDR com alfa 1
+/// (`BLIT_WGSL`).
 pub(super) fn blit_pipeline_for(
     device: &wgpu::Device,
     bgl: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
     hdr: bool,
+) -> wgpu::RenderPipeline {
+    blit_with(
+        device,
+        bgl,
+        format,
+        if hdr { HDR_BLIT_WGSL } else { BLIT_WGSL },
+    )
+}
+
+fn blit_with(
+    device: &wgpu::Device,
+    bgl: &wgpu::BindGroupLayout,
+    format: wgpu::TextureFormat,
+    wgsl: &str,
 ) -> wgpu::RenderPipeline {
     let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("blit layout"),
@@ -277,7 +327,7 @@ pub(super) fn blit_pipeline_for(
     });
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("blit"),
-        source: wgpu::ShaderSource::Wgsl(if hdr { HDR_BLIT_WGSL } else { COMP_WGSL }.into()),
+        source: wgpu::ShaderSource::Wgsl(wgsl.into()),
     });
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some("blit pipeline"),

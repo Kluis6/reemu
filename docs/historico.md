@@ -2647,3 +2647,26 @@ Infra:
   - Preset recusado pelo WebGPU agora vira aviso em vez de derrubar a prévia, e mais presets do pacote renderizam (`clamp_to_border` e o formato do último passe).
 - **Molduras:** importar e remover packs escondidos (backlog).
 - **Biblioteca:** menu de plataformas cabe na janela e rola por dentro.
+
+## 2026-10-24 — Tela branca no PSP (God of War): alfa zero do core na superfície
+
+- **Relato do usuário:** God of War: Ghost of Sparta no PPSSPP abre com a tela branca. Já tinha rodado antes (909 s de jogo registrados).
+- **Investigação:**
+  - O teste `win32_interop_real_gl_core` reproduziu o caso com o PPSSPP e o ISO do usuário.
+  - Com um diagnóstico temporário (já removido), os quadros têm conteúdo escuro, de brilho médio 0–12, iguais no interop e na cópia pela CPU (`REEMU_GL_INTEROP=0`).
+  - O **alfa é 0 em todos os quadros**.
+  - O shader FSR do pacote não é a causa: `field_render_upscalers` gera imagem normal.
+- **Causa:**
+  - O blit SDR da superfície usava o `COMP_WGSL`, que repassa o alfa da textura.
+  - A superfície era configurada com `caps.alpha_modes[0]`, que pode ser `Inherit`. Com a janela de vídeo por cima do WebView2, o compositor respeitava o alfa 0 e o jogo ficava transparente.
+- **Fontes:**
+  - `libretro.h`, `RETRO_PIXEL_FORMAT_XRGB8888`: "The most significant byte (the X) is ignored".
+  - wgpu-types 30, `CompositeAlphaMode::Opaque`: "the alpha channel ... is ignored in the compositing process ... treated as if it has a constant alpha of 1.0".
+  - wgpu-types 30, `SurfaceCapabilities::alpha_modes`: "at least one element, Opaque or Inherit".
+- **Correção:**
+  - A superfície usa `Opaque` quando a GPU oferece, e o modo escolhido vai para o log.
+  - O blit SDR ganhou o `BLIT_WGSL`, que grava alfa 1, como o passe HDR já fazia.
+  - Os mipmaps da chain continuam com o `COMP_WGSL` (`mip_blit_pipeline`), que preserva o alfa.
+  - A moldura é composta antes do blit, então mantém a transparência.
+- **Falta:** conferir no app com o jogo. O teste não cobre a superfície nem a composição do Windows.
+

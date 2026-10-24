@@ -875,7 +875,7 @@ impl FrameProcessor {
         let comp = build_composite(&device);
         let flip = build_flip(&device);
         let rot_pipeline = rotate_pipeline(&device, &comp.bgl);
-        let mip_pipeline = blit_pipeline(&device, &comp.bgl, FMT);
+        let mip_pipeline = mip_blit_pipeline(&device, &comp.bgl, FMT);
         let mip_rect = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("mip rect"),
             size: 16,
@@ -1317,6 +1317,22 @@ impl FrameProcessor {
         if (cw, ch) != (w, h) {
             log::warn!("surface nativa: {w}x{h} > teto {cap} — limitando a {cw}x{ch}");
         }
+        // `Opaque` quando a superfície tiver: "the alpha channel ... is
+        // ignored in the compositing process ... treated as if it has a
+        // constant alpha of 1.0" (wgpu-types 30, `CompositeAlphaMode`). A
+        // lista traz "at least one element, Opaque or Inherit"; com `Inherit`
+        // (o 1º em algumas plataformas) quem decide é o compositor, e o alfa 0
+        // de alguns cores (PPSSPP) deixava o jogo transparente — tela branca.
+        // O blit também grava alfa 1 (`BLIT_WGSL`), pros casos sem `Opaque`.
+        let alpha_mode = if caps.alpha_modes.contains(&wgpu::CompositeAlphaMode::Opaque) {
+            wgpu::CompositeAlphaMode::Opaque
+        } else {
+            caps.alpha_modes[0]
+        };
+        log::info!(
+            "surface nativa: alfa {alpha_mode:?} (modos: {:?})",
+            caps.alpha_modes
+        );
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
@@ -1324,7 +1340,7 @@ impl FrameProcessor {
             width: cw,
             height: ch,
             present_mode,
-            alpha_mode: caps.alpha_modes[0],
+            alpha_mode,
             view_formats: vec![],
             desired_maximum_frame_latency: frame_latency,
         };
