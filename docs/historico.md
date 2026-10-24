@@ -2789,3 +2789,15 @@ Infra:
   - Medido no DOM: o anel (`outline`) acompanha o raio de pílula do botão (10000px), mas o brilho (`::before` da regra 4 do `index.css`) usava o raio dos botões retangulares (`Medium` + 6 = 10px). Dava um retângulo arredondado em volta do anel redondo.
   - O `pillBtn` agora põe `borderRadiusCircular` no `::before`.
   - Pelo controle, a borda cinza do botão continuava dentro do anel; no teclado o Fluent a esconde. Agora o foco do controle também a esconde em todos os botões do Fluent (`.fui-Button`, `.fui-MenuButton`, `.fui-ToggleButton`).
+
+## 2026-10-24 — Diálogos: conteúdo não passa mais por baixo dos botões; barra de rolagem do app
+
+- **Relato do usuário (print do Gerenciar biblioteca):** o conteúdo rolava por baixo dos botões Fechar e Salvar, e a barra de rolagem era a padrão do Windows.
+- **Medido no DOM:**
+  - A linha do conteúdo no grid do `DialogBody` tinha 484 px, e o `DialogContent` tinha 508 px, começando 12 px antes.
+  - Era a regra global `margin: -12px` (index.css), que abre espaço para o anel de foco não ser cortado pela rolagem. Na vertical, ela fazia a caixa invadir o título e o rodapé.
+- **Correção:**
+  - A margem negativa ficou só na horizontal (`margin: 0 -12px`).
+  - O padding de 12 px continua, então o anel do primeiro e do último item cabe nele.
+  - O conteúdo agora ocupa exatamente a linha (142–626 px, com o rodapé em 634).
+  - A barra de rolagem dos diálogos ganhou o estilo da `.scroll` do app: 6 px, polegar `colorNeutralStroke2` arredondado.

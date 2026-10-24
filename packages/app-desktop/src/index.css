@@ -209,11 +209,24 @@ html[data-nav-focus] :is([role="menuitem"], [role="menuitemradio"], [role="menui
    margem negativa (`useDialogContentStyles`: `padding: strokeWidthThick;
    margin: calc(strokeWidthThick * -1)`) pro anel de foco dele não ser
    cortado pelo `overflow-y: auto`. O anel do ReEmu vai até 6 px pra fora
-   (3 de vão + 3 de traço) mais o brilho: o mesmo truque com 12 px. O
-   conteúdo fica no mesmo lugar. */
+   (3 de vão + 3 de traço) mais o brilho: o mesmo truque com 12 px — só na
+   horizontal. Na vertical a margem negativa fazia a caixa crescer 24 px além
+   da linha dela no grid do `DialogBody`: num diálogo de altura fixa
+   (Gerenciar biblioteca, 80vh) o conteúdo rolava por baixo do título e dos
+   botões Fechar/Salvar (print do usuário, 2026-10-24). O padding de 12 em
+   cima e embaixo continua: o anel do primeiro/último item cabe nele. */
 .fui-DialogContent {
   padding: 12px !important;
-  margin: -12px !important;
+  margin: 0 -12px !important;
+}
+/* Barra de rolagem do diálogo igual à do resto do app (`.scroll`, xbox.ts):
+   6 px, polegar arredondado, sem as setas da barra padrão do Windows. */
+.fui-DialogContent::-webkit-scrollbar {
+  width: 6px;
+}
+.fui-DialogContent::-webkit-scrollbar-thumb {
+  background-color: var(--colorNeutralStroke2);
+  border-radius: var(--borderRadiusCircular);
 }
 
 /* Slide do carrossel da Início: o botão ocupa o carrossel inteiro, que corta
