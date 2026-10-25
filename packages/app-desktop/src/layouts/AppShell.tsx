@@ -35,7 +35,6 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatedBackground } from "../components/AnimatedBackground";
 import { ButtonHints } from "../components/ButtonHints";
 import { useWallpaperStore } from "../stores/useWallpaperStore";
-import { OnScreenKeyboard } from "../components/OnScreenKeyboard";
 import { Clock } from "../components/Clock";
 import { GamepadStatus } from "../components/GamepadStatus";
 import { NotificationBell } from "../components/NotificationBell";
@@ -327,7 +326,7 @@ export function AppShell() {
           <SearchBox
             ref={searchRef}
             // `reemu-no-ring`: busca sem o anel de foco (index.css)
-            className={mergeClasses("reemu-no-ring", s.search, search.keyboard && s.searchTyping)}
+            className={mergeClasses("reemu-no-ring", s.search, search.keyboard && !search.keyboardTarget && s.searchTyping)}
             data-nav-skip
             appearance="filled-darker"
             value={search.query}
@@ -383,7 +382,6 @@ export function AppShell() {
       </div>
 
       <ButtonHints hints={search.keyboard ? [] : hints} />
-      {search.keyboard && <OnScreenKeyboard />}
     </div>
   );
 }

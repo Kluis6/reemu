@@ -20,6 +20,17 @@ import { useSearchStore } from '../stores/useSearchStore'
  *  e borbulhando — quem tem uma ação secundária escuta no próprio elemento. */
 export const REEMU_ACTION = 'reemu-action'
 
+/** Tipos de `<input>` em que se digita texto (o A abre o teclado na tela). */
+const TEXT_INPUT = new Set(['text', 'search', 'email', 'url', 'tel', 'password', ''])
+
+/** O foco é um campo de texto editável? */
+function textField(el: Element | null): HTMLInputElement | HTMLTextAreaElement | null {
+  if (el instanceof HTMLTextAreaElement) return el.readOnly || el.disabled ? null : el
+  if (el instanceof HTMLInputElement && TEXT_INPUT.has(el.type))
+    return el.readOnly || el.disabled ? null : el
+  return null
+}
+
 export function useMenuNav() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -98,9 +109,14 @@ export function useMenuNav() {
       if (kbd && kbd(nav)) return
 
       switch (nav) {
-        case 'confirm':
-          ;(document.activeElement as HTMLElement | null)?.click()
+        case 'confirm': {
+          // Campo de texto: o A abre o teclado na tela pra ele (com o
+          // controle não há outro jeito de digitar); o resto, clica.
+          const field = textField(document.activeElement)
+          if (field) useSearchStore.getState().openKeyboardFor(field)
+          else (document.activeElement as HTMLElement | null)?.click()
           break
+        }
         case 'back':
           if (locRef.current.startsWith('/play/')) void toggleFocus().catch(() => {})
           else navigate(-1)

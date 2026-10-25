@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { BindingCapture } from '../components/BindingCapture'
+import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { Splash } from '../components/Splash'
 import { ToastLayer } from '../components/ToastLayer'
 import { useFullscreenSync } from '../hooks/useFullscreen'
@@ -16,7 +17,8 @@ const SPLASH_FADE_MS = 240
 
 /**
  * Envolve todas as rotas. Global: splash de abertura, gate de onboarding, fila
- * de toasts, captura de binding.
+ * de toasts, captura de binding e o teclado na tela (aqui, e não no
+ * `AppShell`, pra valer também no onboarding).
  */
 export function RootLayout() {
   useMenuNav()
@@ -62,6 +64,7 @@ export function RootLayout() {
 
       <BindingCapture />
       <ToastLayer />
+      <OnScreenKeyboard />
     </>
   )
 }

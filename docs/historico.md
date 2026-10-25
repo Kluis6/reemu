@@ -2801,3 +2801,19 @@ Infra:
   - O padding de 12 px continua, então o anel do primeiro e do último item cabe nele.
   - O conteúdo agora ocupa exatamente a linha (142–626 px, com o rodapé em 634).
   - A barra de rolagem dos diálogos ganhou o estilo da `.scroll` do app: 6 px, polegar `colorNeutralStroke2` arredondado.
+
+## 2026-10-25 — Teclado na tela em qualquer campo de texto (A do controle)
+
+- **Pedido do usuário:** ao selecionar o campo Nome do onboarding com o joystick, o teclado na tela deve aparecer.
+- **Antes:** o `OnScreenKeyboard` só servia à busca (Y). Ele editava o `useSearchStore.query` e era montado no `AppShell`, que não envolve o onboarding.
+- **Agora:**
+  - O A (confirmar) do controle num campo de texto focado abre o teclado para esse campo (`useMenuNav`). Valem `<input>` de texto, busca, e-mail, URL, telefone e senha, e `<textarea>`, desde que não sejam somente leitura nem desabilitados.
+  - O `useSearchStore` ganhou `keyboardTarget` e `openKeyboardFor(campo)`. Sem campo, o teclado edita a busca, como antes.
+  - Para escrever no campo controlado pelo React, o teclado usa o setter nativo de `value` e um evento `input` que borbulha; atribuir `el.value` direto o React ignora. Respeita o `maxLength`.
+  - Ao fechar, o foco volta ao campo editado.
+  - O teclado é montado no `RootLayout`. Com um Dialog do Fluent aberto, ele vai para dentro do `DialogSurface` por portal, porque o Dialog fica num portal por cima do app e prende o foco no próprio conteúdo.
+  - O realce de "digitando" da busca só aparece quando o teclado edita a busca.
+- **Testado** na página de teste, com uma simulação que guarda o `listen` do Tauri para disparar `menu-nav`:
+  - onboarding: o A no Nome abre o teclado dentro do modal; Q, E, X (espaço), Y (maiúscula) e E dão "qe E" e habilitam o Continuar; o B apaga; o ☰ fecha e devolve o foco ao campo;
+  - busca: o Y abre, digita e fecha.
+  - Nota do teste: o unlisten do `@tauri-apps/api` 2.12 chama `window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener` antes do `invoke`. Sem isso no mock, o StrictMode deixava dois ouvintes e cada pulso contava duas vezes.

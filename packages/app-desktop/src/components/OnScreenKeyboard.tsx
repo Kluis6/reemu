@@ -7,11 +7,14 @@ import {
   LineHorizontal3Regular,
 } from '@fluentui/react-icons'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { useSearchStore } from '../stores/useSearchStore'
+import { useSearchStore, type KeyboardField } from '../stores/useSearchStore'
 
 /**
- * Teclado na tela pra digitar na busca com o controle (o Fluent não tem
+ * Teclado na tela pra digitar com o controle — na busca (Y) ou num campo de
+ * texto confirmado com o A (`useMenuNav`), como o nome do perfil no
+ * onboarding (o Fluent não tem
  * componente de teclado, e o teclado virtual do Windows é feito pra toque e
  * não existe no Linux). Na cara do teclado do Windows 11 com controle (print
  * do usuário): barra de título com alça e fechar, 4 linhas — letras com os
@@ -51,6 +54,18 @@ const SYMBOLS: KeyDef[][] = [
 ]
 
 const span = (k: KeyDef) => ('action' in k ? k.span : (k.span ?? 1))
+
+/**
+ * Escreve num campo controlado pelo React: o setter nativo de `value` e um
+ * evento `input` que borbulha — é o que o React escuta pra chamar o
+ * `onChange` (atribuir `el.value` direto ele ignora). Corta no `maxLength`.
+ */
+function writeField(el: KeyboardField, value: string) {
+  const v = el.maxLength > 0 ? Array.from(value).slice(0, el.maxLength).join('') : value
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+  Object.getOwnPropertyDescriptor(proto, 'value')?.set?.call(el, v)
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
 
 /** Coluna (0–11) onde cada tecla começa, por linha. */
 const starts = (rows: KeyDef[][]) =>
@@ -203,20 +218,32 @@ export function OnScreenKeyboard() {
     rowsRef.current = rows
   }, [rows])
 
-  const type = useCallback((txt: string) => setQuery(useSearchStore.getState().query + txt), [setQuery])
-  const backspace = useCallback(() => {
-    const q = useSearchStore.getState().query
-    setQuery(Array.from(q).slice(0, -1).join(''))
-  }, [setQuery])
-  // Fecha e devolve o foco pro primeiro resultado (ou pra busca), pra o
-  // controle continuar navegando a partir dali.
+  // Texto editado: o do campo escolhido, ou a busca.
+  const read = useCallback(() => {
+    const st = useSearchStore.getState()
+    return st.keyboardTarget ? st.keyboardTarget.value : st.query
+  }, [])
+  const write = useCallback(
+    (v: string) => {
+      const field = useSearchStore.getState().keyboardTarget
+      if (field) writeField(field, v)
+      else setQuery(v)
+    },
+    [setQuery],
+  )
+  const type = useCallback((txt: string) => write(read() + txt), [read, write])
+  const backspace = useCallback(() => write(Array.from(read()).slice(0, -1).join('')), [read, write])
+  // Fecha e devolve o foco: ao campo editado, ou (busca) ao primeiro
+  // resultado / à busca, pra o controle continuar navegando dali.
   const close = useCallback(() => {
+    const field = useSearchStore.getState().keyboardTarget
     setKeyboard(false)
     requestAnimationFrame(() => {
-      const first =
+      const next =
+        field ??
         document.querySelector<HTMLElement>('[data-art]')?.closest<HTMLElement>('[tabindex]') ??
         document.querySelector<HTMLElement>('.fui-SearchBox input')
-      first?.focus()
+      next?.focus()
     })
   }, [setKeyboard])
 
@@ -271,7 +298,7 @@ export function OnScreenKeyboard() {
           return true
         }
         case 'back':
-          if (useSearchStore.getState().query) backspace()
+          if (read()) backspace()
           else close()
           return true
         case 'action':
@@ -289,7 +316,7 @@ export function OnScreenKeyboard() {
     }
     setKeyboardNav(handler)
     return () => setKeyboardNav(null)
-  }, [open, move, press, backspace, close, type, setKeyboardNav])
+  }, [open, move, press, backspace, close, type, read, setKeyboardNav])
 
   // A tecla em foco recebe o foco do DOM (anel padrão do app).
   useLayoutEffect(() => {
@@ -334,7 +361,7 @@ export function OnScreenKeyboard() {
     )
   }
 
-  return (
+  const panel = (
     <div className={s.panel} role="dialog" aria-label={t('osk.title')} data-nav-skip>
       <div className={s.titleBar}>
         <span className={s.grip} aria-hidden />
@@ -388,4 +415,9 @@ export function OnScreenKeyboard() {
       </div>
     </div>
   )
+  // Com um modal aberto (ex.: o onboarding), o teclado vai DENTRO dele: o
+  // Dialog do Fluent fica num portal por cima do app e prende o foco no
+  // próprio conteúdo — fora dele as teclas ficariam atrás e sem foco.
+  const surface = document.querySelector<HTMLElement>('.fui-DialogSurface')
+  return surface ? createPortal(panel, surface) : panel
 }
