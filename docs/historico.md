@@ -2817,3 +2817,27 @@ Infra:
   - onboarding: o A no Nome abre o teclado dentro do modal; Q, E, X (espaço), Y (maiúscula) e E dão "qe E" e habilitam o Continuar; o B apaga; o ☰ fecha e devolve o foco ao campo;
   - busca: o Y abre, digita e fecha.
   - Nota do teste: o unlisten do `@tauri-apps/api` 2.12 chama `window.__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener` antes do `invoke`. Sem isso no mock, o StrictMode deixava dois ouvintes e cada pulso contava duas vezes.
+
+## 2026-10-25 — Onboarding revisado (pedidos do usuário, com o `scripts/first-run.ps1`)
+
+- **Primeira abertura sem tocar nos dados reais:** `scripts/first-run.ps1` abre o app com `REEMU_DATA_DIR` e `WEBVIEW2_USER_DATA_FOLDER` numa pasta temporária. O WebView2 usa a variável no lugar da pasta que o Tauri passa (Microsoft Learn, `CreateCoreWebView2EnvironmentWithOptions`).
+- **Boas-vindas:**
+  - duas colunas, com 64 px entre elas;
+  - à esquerda, "Escolha o idioma" e os idiomas como botões grandes, num `radiogroup`. Os não escolhidos têm fundo `Background3`, porque o `secondary` some sobre o modal;
+  - à direita, "Bem-vindo" grande no idioma escolhido, na cor primária, e a nuvem de "bem-vindo";
+  - Continuar grande;
+  - o modal tem até 1200×760, em 92vw×82vh.
+- **Perfil:**
+  - mesmo layout de Configurações › Perfil, sem a bio;
+  - a coluna dos avatares fica no meio da altura, e a dica ficou mais afastada;
+  - campo Nome grande, e Voltar e Continuar grandes;
+  - o brilho do foco das opções de avatar ficou redondo;
+  - o A do controle no Nome abre o teclado na tela (ver a entrada anterior).
+- **Final:**
+  - no lugar de "Tudo pronto", um modal com o avatar escolhido entrando (escala + fade), "Bem-vindo, {nome}!" grande e a frase de baixo, uma depois da outra;
+  - o botão "Tudo pronto para começar" fica no centro, embaixo (`DialogActions` com `justify-self: center`);
+  - o perfil é salvo ao continuar no passo do nome. O cache só marca `onboarded` no botão final, porque antes disso o `RootLayout` já tiraria do onboarding.
+- **Controle no onboarding:**
+  - as dicas ficam no centro, embaixo, num `Portal` próprio acima do Dialog. O nó do portal do Fluent é `z-index: 1000000`, e dentro do `DialogSurface` o `position: fixed` ficava preso ao modal;
+  - A em todos os passos, B onde dá para voltar;
+  - o B volta um passo (evento `reemu-onboarding-back`) em vez do `navigate(-1)`.

@@ -271,7 +271,8 @@ const en: Messages = {
     continue: 'Continue',
     profileTitle: 'What should we call you?',
     profileText: 'Pick a name and an avatar.',
-    readyTitle: 'All set, {{name}}!',
+    welcomeUser: 'Welcome, {{name}}!',
+    allSet: 'All set, let\'s start',
     readyText: 'Your ReEmu is ready. Add your ROMs and start playing.',
   },
   common: {

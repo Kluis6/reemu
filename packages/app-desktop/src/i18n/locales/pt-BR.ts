@@ -272,7 +272,8 @@ const ptBR = {
     continue: 'Continuar',
     profileTitle: 'Como podemos te chamar?',
     profileText: 'Escolha um nome e um avatar.',
-    readyTitle: 'Tudo pronto, {{name}}!',
+    welcomeUser: 'Bem-vindo, {{name}}!',
+    allSet: 'Tudo pronto para começar',
     readyText: 'Seu ReEmu está configurado. Adicione suas ROMs e comece a jogar.',
   },
   common: {

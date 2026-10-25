@@ -162,14 +162,69 @@ const useStyles = makeStyles({
     animationFillMode: 'backwards',
     ...noMotion,
   },
-  ready: {
+  // Final, no modal: o avatar escolhido cresce e aparece, depois "Bem-vindo,
+  // fulano!" grande e a frase de baixo, uma depois da outra; o botão
+  // "Tudo pronto para começar" fica no centro, embaixo (pedido do usuário).
+  done: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: tokens.spacingVerticalL,
-    textAlign: 'center',
+    rowGap: tokens.spacingVerticalXXL,
     flexGrow: 1,
+    textAlign: 'center',
+  },
+  // o `DialogActions` se alinha ao fim da grade do `DialogBody`
+  // (`justify-self`): aqui ocupa a linha toda e centraliza o botão
+  doneActions: { gridColumn: '1 / -1', justifySelf: 'center' },
+  // o título do Dialog (nome acessível) fica só pro leitor de tela: o
+  // "Bem-vindo, fulano!" visível é o grande do meio
+  srOnly: {
+    position: 'absolute',
+    width: '1px',
+    height: '1px',
+    overflow: 'hidden',
+    clipPath: 'inset(50%)',
+    whiteSpace: 'nowrap',
+  },
+  // anel da cor primária com o brilho do foco do app em volta do avatar
+  doneAvatar: {
+    width: '220px !important',
+    height: '220px !important',
+    boxShadow: `0 0 0 4px ${tokens.colorBrandStroke1}, 0 0 48px color-mix(in srgb, ${tokens.colorBrandStroke1} 55%, transparent)`,
+    '& img': { width: '100%', height: '100%' },
+    animationName: {
+      from: { opacity: 0, transform: 'scale(0.6)' },
+      to: { opacity: 1, transform: 'none' },
+    },
+    animationDuration: '800ms',
+    animationTimingFunction: tokens.curveDecelerateMax,
+    animationFillMode: 'backwards',
+    ...noMotion,
+  },
+  doneTitle: {
+    fontSize: tokens.fontSizeHero1000,
+    lineHeight: tokens.lineHeightHero1000,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorBrandForeground1,
+    overflowWrap: 'anywhere',
+    animationName: wordIn,
+    animationDuration: '700ms',
+    animationDelay: '450ms',
+    animationTimingFunction: tokens.curveDecelerateMid,
+    animationFillMode: 'backwards',
+    ...noMotion,
+  },
+  doneText: {
+    color: tokens.colorNeutralForeground2,
+    fontSize: tokens.fontSizeBase500,
+    lineHeight: tokens.lineHeightBase500,
+    animationName: wordIn,
+    animationDuration: '700ms',
+    animationDelay: '850ms',
+    animationTimingFunction: tokens.curveDecelerateMid,
+    animationFillMode: 'backwards',
+    ...noMotion,
   },
   muted: { color: tokens.colorNeutralForeground3, maxWidth: '520px' },
   hintsLayer: { zIndex: '1000001 !important' },
@@ -182,16 +237,19 @@ const useStyles = makeStyles({
   },
 })
 
-type Step = 'welcome' | 'profile' | 'ready'
+type Step = 'welcome' | 'profile' | 'done'
 type Draft = Pick<Profile, 'name' | 'bio' | 'avatar'>
 
 /**
  * Primeira execução, em três modais do mesmo tamanho sobre o fundo do tema:
- * boas-vindas (várias línguas + escolha do idioma), nome e avatar, e "tudo
- * pronto". Seguindo o Dialog do Fluent 2: título em cada passo, ações no
- * rodapé, um modal fecha antes do próximo abrir (sem aninhar) e `alert`
- * (não fecha com Esc nem clique fora — é um fluxo obrigatório). O perfil só
- * é salvo no último passo: salvar marca `onboarded` e o app abre.
+ * boas-vindas (várias línguas + escolha do idioma), nome e avatar, e a
+ * animação de boas-vindas com o avatar e o nome, com o botão "Tudo pronto
+ * para começar". Seguindo o Dialog do Fluent 2: título em cada passo, ações
+ * no rodapé, um modal fecha antes do próximo abrir (sem aninhar) e `alert`
+ * (não fecha com Esc nem clique fora — é um fluxo obrigatório). O perfil é
+ * salvo ao continuar no passo do nome (marca `onboarded`); o cache só é
+ * atualizado no botão final — antes disso o `RootLayout` já tiraria do
+ * onboarding.
  */
 export function Onboarding() {
   const { t } = useTranslation()
@@ -225,7 +283,7 @@ export function Onboarding() {
   })
   useEffect(() => {
     const back = () => {
-      const prev: Record<Step, Step | null> = { welcome: null, profile: 'welcome', ready: 'profile' }
+      const prev: Record<Step, Step | null> = { welcome: null, profile: 'welcome', done: null }
       const to = prev[stepRef.current]
       if (to) goRef.current(to)
     }
@@ -238,19 +296,12 @@ export function Onboarding() {
   const keyboard = useSearchStore((st) => st.keyboard)
   const hints: Hint[] = [
     { glyph: 'A', label: t('hints.select') },
-    ...(step === 'welcome' ? [] : [{ glyph: 'B' as const, label: t('hints.back') }]),
+    ...(step === 'profile' ? [{ glyph: 'B' as const, label: t('hints.back') }] : []),
   ]
 
   const finish = useMutation({
     mutationFn: (d: Draft) => setProfile(d.name, d.bio, d.avatar),
-    onSuccess: (_, d) => {
-      setOpen(false)
-      window.setTimeout(() => {
-        qc.setQueryData(['profile'], { ...d, onboarded: true })
-        qc.invalidateQueries({ queryKey: ['profile'] })
-        navigate('/', { replace: true })
-      }, SWAP_MS)
-    },
+    onSuccess: () => go('done'),
     onError: (e) => push(errorToast(e, 'saveProfile')),
   })
 
@@ -264,6 +315,17 @@ export function Onboarding() {
     avatar: profile.data?.avatar ?? 'preset:1',
   }
   const nameOk = (draft?.name ?? initial.name).trim().length > 0
+
+  // "Tudo pronto para começar": fecha o modal e abre a página inicial.
+  const start = () => {
+    const d = draft ?? initial
+    setOpen(false)
+    window.setTimeout(() => {
+      qc.setQueryData(['profile'], { ...d, onboarded: true })
+      qc.invalidateQueries({ queryKey: ['profile'] })
+      navigate('/', { replace: true })
+    }, SWAP_MS)
+  }
 
   return (
     <>
@@ -361,8 +423,8 @@ export function Onboarding() {
                   <Button
                     appearance="primary"
                     size="large"
-                    disabled={!nameOk}
-                    onClick={() => go('ready')}
+                    disabled={!nameOk || finish.isPending}
+                    onClick={() => finish.mutate(draft ?? initial)}
                   >
                     {t('onboarding.continue')}
                   </Button>
@@ -370,30 +432,25 @@ export function Onboarding() {
               </>
             )}
 
-            {step === 'ready' && (
+            {step === 'done' && (
               <>
-                <DialogTitle>
-                  {t('onboarding.readyTitle', { name: draft?.name ?? initial.name })}
+                <DialogTitle className={s.srOnly}>
+                  {t('onboarding.welcomeUser', { name: (draft?.name ?? initial.name).trim() })}
                 </DialogTitle>
-                <DialogContent className={s.content}>
-                  <div className={s.ready}>
-                    <ProfileAvatar
-                      profile={{ name: draft?.name ?? initial.name, avatar: draft?.avatar ?? initial.avatar }}
-                      size={96}
-                    />
-                    <Body1 className={s.muted}>{t('onboarding.readyText')}</Body1>
+                <DialogContent className={mergeClasses(s.content, s.done)}>
+                  <ProfileAvatar
+                    profile={{ name: draft?.name ?? initial.name, avatar: draft?.avatar ?? initial.avatar }}
+                    size={128}
+                    className={s.doneAvatar}
+                  />
+                  <div className={s.doneTitle} aria-hidden>
+                    {t('onboarding.welcomeUser', { name: (draft?.name ?? initial.name).trim() })}
                   </div>
+                  <div className={s.doneText}>{t('onboarding.readyText')}</div>
                 </DialogContent>
-                <DialogActions>
-                  <Button appearance="secondary" onClick={() => go('profile')}>
-                    {t('common.back')}
-                  </Button>
-                  <Button
-                    appearance="primary"
-                    disabled={finish.isPending}
-                    onClick={() => finish.mutate(draft ?? initial)}
-                  >
-                    {t('shell.start')}
+                <DialogActions className={s.doneActions}>
+                  <Button appearance="primary" size="large" onClick={start}>
+                    {t('onboarding.allSet')}
                   </Button>
                 </DialogActions>
               </>
