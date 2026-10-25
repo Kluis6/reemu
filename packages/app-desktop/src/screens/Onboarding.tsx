@@ -76,9 +76,9 @@ const useStyles = makeStyles({
   backdrop: { backgroundColor: 'transparent' },
   // Modal grande, quase a tela toda — o mesmo tamanho nos três passos.
   surface: {
-    width: 'min(960px, 92vw)',
+    width: 'min(1200px, 92vw)',
     maxWidth: 'none',
-    height: 'min(620px, 86vh)',
+    height: 'min(760px, 88vh)',
     boxSizing: 'border-box',
     display: 'flex',
   },
