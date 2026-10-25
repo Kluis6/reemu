@@ -265,6 +265,9 @@ const es: Messages = {
   },
   onboarding: {
     welcomeTitle: 'Bienvenido a ReEmu',
+    /** "Bem-vindo" sozinho, em destaque, no idioma escolhido. */
+    hello: 'Bienvenido',
+    chooseLanguage: 'Elige el idioma',
     continue: 'Continuar',
     profileTitle: '¿Cómo te llamamos?',
     profileText: 'Elige un nombre y un avatar. El perfil se queda solo en este equipo.',

@@ -265,6 +265,9 @@ const en: Messages = {
   },
   onboarding: {
     welcomeTitle: 'Welcome to ReEmu',
+    /** "Bem-vindo" sozinho, em destaque, no idioma escolhido. */
+    hello: 'Welcome',
+    chooseLanguage: 'Choose your language',
     continue: 'Continue',
     profileTitle: 'What should we call you?',
     profileText: 'Pick a name and an avatar. Your profile stays on this computer only.',

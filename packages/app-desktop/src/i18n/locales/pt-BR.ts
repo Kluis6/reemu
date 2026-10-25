@@ -266,6 +266,9 @@ const ptBR = {
   },
   onboarding: {
     welcomeTitle: 'Bem-vindo ao ReEmu',
+    /** "Bem-vindo" sozinho, em destaque, no idioma escolhido. */
+    hello: 'Bem-vindo',
+    chooseLanguage: 'Escolha o idioma',
     continue: 'Continuar',
     profileTitle: 'Como podemos te chamar?',
     profileText: 'Escolha um nome e um avatar. O perfil fica só neste computador.',

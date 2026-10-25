@@ -18,7 +18,6 @@ import { useCallback, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AnimatedBackground } from '../components/AnimatedBackground'
-import { AppLogo } from '../components/AppLogo'
 import { LoadingState } from '../components/EmptyState'
 import { ProfileAvatar } from '../components/ProfileAvatar'
 import { ProfileForm } from '../components/ProfileForm'
@@ -104,8 +103,30 @@ const useStyles = makeStyles({
     justifyContent: 'center',
     rowGap: tokens.spacingVerticalM,
   },
+  // "Escolha o idioma" mais afastado dos botões que da lista entre si
+  langTitle: { marginBottom: tokens.spacingVerticalL },
   // botões grandes na largura da coluna, texto à esquerda como numa lista
   langBtn: { width: '100%', justifyContent: 'flex-start' },
+  // Não escolhido: preenchimento neutro visível sobre o modal (o `secondary`
+  // do tema tem o mesmo fundo da superfície e sumia — print do usuário).
+  langOff: {
+    backgroundColor: tokens.colorNeutralBackground3,
+    ':hover': { backgroundColor: tokens.colorNeutralBackground3Hover },
+    ':hover:active': { backgroundColor: tokens.colorNeutralBackground3Pressed },
+  },
+  // "Bem-vindo" no idioma escolhido, em destaque no lugar do logo; entra de
+  // novo (fade) a cada troca de idioma
+  helloWord: {
+    fontSize: tokens.fontSizeHero1000,
+    lineHeight: tokens.lineHeightHero1000,
+    fontWeight: tokens.fontWeightSemibold,
+    color: tokens.colorBrandForeground1,
+    textAlign: 'center',
+    animationName: wordIn,
+    animationDuration: '500ms',
+    animationTimingFunction: tokens.curveDecelerateMid,
+    ...noMotion,
+  },
   hello: {
     display: 'flex',
     flexDirection: 'column',
@@ -133,7 +154,6 @@ const useStyles = makeStyles({
     animationFillMode: 'backwards',
     ...noMotion,
   },
-  wordMain: { color: tokens.colorBrandForeground1 },
   ready: {
     display: 'flex',
     flexDirection: 'column',
@@ -217,7 +237,9 @@ export function Onboarding() {
                 <DialogTitle>{t('onboarding.welcomeTitle')}</DialogTitle>
                 <DialogContent className={mergeClasses(s.content, s.welcome)}>
                   <div className={s.langs}>
-                    <Subtitle2 id="onboarding-lang">{t('language.title')}</Subtitle2>
+                    <Subtitle2 id="onboarding-lang" className={s.langTitle}>
+                      {t('onboarding.chooseLanguage')}
+                    </Subtitle2>
                     {/* Escolha única em botões grandes: o grupo é um
                         `radiogroup` e cada botão um `radio` (leitor de tela);
                         o escolhido fica em destaque, com o check. */}
@@ -235,7 +257,7 @@ export function Onboarding() {
                           appearance={lang === l ? 'primary' : 'secondary'}
                           icon={lang === l ? <CheckmarkRegular /> : undefined}
                           iconPosition="after"
-                          className={s.langBtn}
+                          className={mergeClasses(s.langBtn, lang !== l && s.langOff)}
                           onClick={() => {
                             setLang(l)
                             void setLanguagePreference(l)
@@ -248,15 +270,17 @@ export function Onboarding() {
                     </div>
                   </div>
                   <div className={s.hello}>
-                    <AppLogo height={64} />
+                    <div key={lang} className={s.helloWord}>
+                      {t('onboarding.hello')}
+                    </div>
                     <div className={s.words} aria-hidden>
                     {WELCOMES.map((w, i) => (
                       <span
                         key={w}
-                        className={mergeClasses(s.word, i === 0 && s.wordMain)}
+                        className={s.word}
                         style={{
                           animationDelay: `${250 + i * 220}ms`,
-                          fontSize: `${i === 0 ? 40 : [28, 22, 26, 20, 24][i % 5]}px`,
+                          fontSize: `${[28, 22, 26, 20, 24][i % 5]}px`,
                         }}
                       >
                         {w}
@@ -266,7 +290,7 @@ export function Onboarding() {
                   </div>
                 </DialogContent>
                 <DialogActions>
-                  <Button appearance="primary" onClick={() => go('profile')}>
+                  <Button appearance="primary" size="large" onClick={() => go('profile')}>
                     {t('onboarding.continue')}
                   </Button>
                 </DialogActions>
