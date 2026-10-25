@@ -95,6 +95,9 @@ const useStyles = makeStyles({
     minWidth: 0,
     textAlign: 'center',
     '& .fui-Field': { justifyItems: 'center' },
+    // dica ("5 opções ou uma imagem sua…") mais longe das opções (pedido do
+    // usuário)
+    '& .fui-Field__hint': { marginTop: tokens.spacingVerticalM },
   },
   choicesCentered: { justifyContent: 'center' },
   // Prévia de 240 (200 em tela baixa, pra coluna caber no card): o `Avatar`
@@ -142,6 +145,7 @@ export function ProfileForm({
   onChange,
   layout = 'stack',
   inputSize = 'medium',
+  className,
 }: {
   initial: Pick<Profile, 'name' | 'bio' | 'avatar'>
   /** Sem `submitLabel`, o formulário não tem botão nem salva: só avisa os
@@ -155,6 +159,8 @@ export function ProfileForm({
   layout?: 'stack' | 'columns'
   /** Tamanho do campo de nome (`large` no onboarding, como os botões dele). */
   inputSize?: 'medium' | 'large'
+  /** Classe extra na raiz (o onboarding estica o formulário na altura). */
+  className?: string
 }) {
   const { t } = useTranslation()
   const s = useStyles()
@@ -285,7 +291,7 @@ export function ProfileForm({
 
   if (layout === 'columns')
     return (
-      <div className={s.columns}>
+      <div className={mergeClasses(s.columns, className)}>
         <div className={s.avatarCol}>
           <ProfileAvatar
             profile={{ name, avatar }}
@@ -306,7 +312,7 @@ export function ProfileForm({
     )
 
   return (
-    <div className={s.root}>
+    <div className={mergeClasses(s.root, className)}>
       <div className={s.avatarRow}>
         <ProfileAvatar profile={{ name, avatar }} size={72} nonce={nonce} />
         <Field label={t('profileForm.avatar')} hint={t('profileForm.avatarHint')}>

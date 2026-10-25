@@ -166,6 +166,13 @@ const useStyles = makeStyles({
     flexGrow: 1,
   },
   muted: { color: tokens.colorNeutralForeground3, maxWidth: '520px' },
+  // Perfil: o formulário ocupa a altura livre e a coluna dos avatares fica
+  // no meio dela (a linha do grid estica até a altura; o nome continua no
+  // topo da coluna dele) — pedido do usuário.
+  profileForm: {
+    flexGrow: 1,
+    '& > :first-child': { alignSelf: 'center' },
+  },
 })
 
 type Step = 'welcome' | 'profile' | 'ready'
@@ -311,6 +318,7 @@ export function Onboarding() {
                     showBio={false}
                     layout="columns"
                     inputSize="large"
+                    className={s.profileForm}
                     onChange={onDraft}
                   />
                 </DialogContent>
