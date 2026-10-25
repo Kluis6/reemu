@@ -14,6 +14,7 @@ import {
 import { DismissRegular, FolderRegular } from "@fluentui/react-icons";
 import { useState } from "react";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
+import { useModalButtonStyles } from "../styles/buttons";
 import { pickFolder } from "../lib/tauri";
 import { useTranslation } from "react-i18next";
 
@@ -41,6 +42,7 @@ export function AddRomsDialog({
 }) {
   const { t } = useTranslation();
   const s = useStyles();
+  const btn = useModalButtonStyles();
   const [dir, setDir] = useState("");
 
   return (
@@ -68,12 +70,15 @@ export function AddRomsDialog({
               <div className={s.row}>
                 <Input
                   className={s.input}
+                  // o campo preenchido dos outros formulários do ReEmu
+                  appearance="filled-darker"
                   value={dir}
                   placeholder={t("shell2.addRomsPlaceholder")}
                   contentBefore={<FolderRegular />}
                   onChange={(_, d) => setDir(d.value)}
                 />
                 <Button
+                  className={btn.secondary}
                   icon={<FolderRegular />}
                   onClick={async () => {
                     const p = await pickFolder();
@@ -86,7 +91,11 @@ export function AddRomsDialog({
             </Field>
           </DialogContent>
           <DialogActions>
-            <Button appearance="secondary" onClick={() => onOpenChange(false)}>
+            <Button
+              appearance="secondary"
+              className={btn.secondary}
+              onClick={() => onOpenChange(false)}
+            >
               {t("common.cancel")}
             </Button>
             <Button

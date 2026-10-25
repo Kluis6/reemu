@@ -2841,3 +2841,20 @@ Infra:
   - as dicas ficam no centro, embaixo, num `Portal` próprio acima do Dialog. O nó do portal do Fluent é `z-index: 1000000`, e dentro do `DialogSurface` o `position: fixed` ficava preso ao modal;
   - A em todos os passos, B onde dá para voltar;
   - o B volta um passo (evento `reemu-onboarding-back`) em vez do `navigate(-1)`.
+
+## 2026-10-25 — Bordas de campos e botões de modal visíveis em todos os temas
+
+- **Pedido do usuário:** no modal "Adicionar ROMs", os botões fora do padrão e as bordas do campo e do botão quase invisíveis; verificar em outros temas e componentes.
+- **Medido** no modal, nos 17 temas, contra a superfície do Dialog:
+  - fundo do campo e dos botões: 1,11 a 1,36:1;
+  - borda dos botões: 1,08 (ReEmu) a 2,87:1;
+  - campo preenchido: sem borda;
+  - a WCAG 1.4.11 pede 3:1 para o limite de um componente;
+  - o `colorNeutralStroke1` dos temas tem só 12 a 20% de opacidade.
+- **Correção:**
+  - campos (`Input`, `Textarea`, `SearchBox`, `Select`, `Dropdown`, `Combobox`, `SpinButton`) com `border-color: var(--reemuFieldStroke, cor do texto do tema a 50%)` no `index.css`, fora as buscas sem borda a pedido (`.reemu-list-search`, `.reemu-no-ring`);
+  - o alto contraste define `reemuFieldStroke` com o traço branco dele;
+  - botão secundário de modal (`styles/buttons.ts`, `useModalButtonStyles`): fundo `Background3` e o mesmo contorno, em Adicionar ROMs (Procurar e Cancelar), Gerenciar biblioteca (Fechar) e onboarding (idiomas e Voltar). Antes o `secondary` sumia sobre o modal.
+  - o campo de pasta do Adicionar ROMs passou a `filled-darker`, como os outros formulários.
+- **Depois:** a borda medida ficou entre 3,39 e 3,82:1 nos temas claros, entre 4,93 e 5,86:1 nos escuros, e em 21:1 no alto contraste.
+- **Nota do teste:** o `getComputedStyle` devolve o `color-mix` como `color(srgb r g b / a)`, com os canais de 0 a 1. Lido como RGB de 0 a 255, os temas escuros pareciam 1:1.

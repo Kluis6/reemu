@@ -13,6 +13,7 @@ import { DismissRegular } from "@fluentui/react-icons";
 import { ManageLibraryFields } from "./ManageLibraryFields";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { useManageLibrary } from "../lib/useManageLibrary";
+import { useModalButtonStyles } from "../styles/buttons";
 import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
@@ -51,6 +52,7 @@ export function ManageLibraryDialog({
 }) {
   const { t } = useTranslation();
   const s = useStyles();
+  const btn = useModalButtonStyles();
   const state = useManageLibrary(open);
 
   const close = () => {
@@ -82,7 +84,7 @@ export function ManageLibraryDialog({
             <ManageLibraryFields state={state} platforms={platforms} />
           </DialogContent>
           <DialogActions>
-            <Button appearance="secondary" onClick={close}>
+            <Button appearance="secondary" className={btn.secondary} onClick={close}>
               {t("common.close")}
             </Button>
             <Button

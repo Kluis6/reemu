@@ -22,6 +22,7 @@ import { AnimatedBackground } from '../components/AnimatedBackground'
 import { ButtonHints, type Hint } from '../components/ButtonHints'
 import { REEMU_ONBOARDING_BACK } from '../hooks/useMenuNav'
 import { useSearchStore } from '../stores/useSearchStore'
+import { useModalButtonStyles } from '../styles/buttons'
 import { LoadingState } from '../components/EmptyState'
 import { ProfileAvatar } from '../components/ProfileAvatar'
 import { ProfileForm } from '../components/ProfileForm'
@@ -115,13 +116,6 @@ const useStyles = makeStyles({
   langTitle: { marginBottom: tokens.spacingVerticalL },
   // botões grandes na largura da coluna, texto à esquerda como numa lista
   langBtn: { width: '100%', justifyContent: 'flex-start' },
-  // Não escolhido: preenchimento neutro visível sobre o modal (o `secondary`
-  // do tema tem o mesmo fundo da superfície e sumia — print do usuário).
-  langOff: {
-    backgroundColor: tokens.colorNeutralBackground3,
-    ':hover': { backgroundColor: tokens.colorNeutralBackground3Hover },
-    ':hover:active': { backgroundColor: tokens.colorNeutralBackground3Pressed },
-  },
   // "Bem-vindo" no idioma escolhido, em destaque no lugar do logo; entra de
   // novo (fade) a cada troca de idioma
   helloWord: {
@@ -254,6 +248,7 @@ type Draft = Pick<Profile, 'name' | 'bio' | 'avatar'>
 export function Onboarding() {
   const { t } = useTranslation()
   const s = useStyles()
+  const btn = useModalButtonStyles()
   const qc = useQueryClient()
   const navigate = useNavigate()
   const push = useToastStore((st) => st.push)
@@ -360,7 +355,8 @@ export function Onboarding() {
                           appearance={lang === l ? 'primary' : 'secondary'}
                           icon={lang === l ? <CheckmarkRegular /> : undefined}
                           iconPosition="after"
-                          className={mergeClasses(s.langBtn, lang !== l && s.langOff)}
+                          // não escolhido: o secundário preenchido dos modais
+                          className={mergeClasses(s.langBtn, lang !== l && btn.secondary)}
                           onClick={() => {
                             setLang(l)
                             void setLanguagePreference(l)
@@ -417,7 +413,12 @@ export function Onboarding() {
                   />
                 </DialogContent>
                 <DialogActions>
-                  <Button appearance="secondary" size="large" onClick={() => go('welcome')}>
+                  <Button
+                    appearance="secondary"
+                    size="large"
+                    className={btn.secondary}
+                    onClick={() => go('welcome')}
+                  >
                     {t('common.back')}
                   </Button>
                   <Button

@@ -178,6 +178,18 @@ html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select,
   box-shadow: none !important;
 }
 
+/* Borda dos campos visível em todos os temas (pedido do usuário, 2026-10-25).
+   O `colorNeutralStroke1` dos temas é 12–20% de opacidade e o campo
+   preenchido nem tem borda: medido no modal "Adicionar ROMs", o contorno
+   ficava entre 1,08:1 e 2,87:1 contra a superfície — a WCAG 1.4.11 pede 3:1
+   pro limite de um campo. A cor do texto do tema a 50% passa disso nos
+   claros e nos escuros; o alto contraste define `--reemuFieldStroke` (o
+   traço branco dele). Fora: as buscas sem borda a pedido
+   (`.reemu-list-search`, busca do topo `.reemu-no-ring`). */
+:is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select__select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search) {
+  border-color: var(--reemuFieldStroke, color-mix(in srgb, var(--colorNeutralForeground1) 50%, transparent)) !important;
+}
+
 /* Ajustes do anel por componente:
    - Switch/Rádio/Checkbox não têm raio: o anel ganha o raio padrão; o Switch
      estica na linha do `<Field>` e o anel ficava da largura toda — no foco ele

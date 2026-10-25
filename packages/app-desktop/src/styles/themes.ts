@@ -642,6 +642,11 @@ export interface ReEmuTokens extends ReEmuLiftTokens {
   /** Fonte dos títulos (≥ 20 px): Segoe UI Variable Display — ver
    *  `segoeVariable`. */
   reemuFontDisplay: string;
+  /** Borda de campo e de botão secundário de modal (`index.css`,
+   *  `styles/buttons.ts`). Sem ela vale a cor do texto do tema a 50% (≥ 3:1
+   *  contra a superfície, medido nos temas); só o alto contraste define, pra
+   *  manter o traço branco dele. */
+  reemuFieldStroke?: string;
 }
 
 export type ReEmuTheme = Theme & ReEmuTokens;
@@ -1009,6 +1014,7 @@ function makeHighContrast(): ReEmuTheme {
     reemuCardTop: bg,
     reemuCardBottom: bg,
     reemuCardStroke: t.colorNeutralStroke1,
+    reemuFieldStroke: t.colorNeutralStroke1,
     fontFamilyBase: segoeVariable(t.fontFamilyBase).text,
     reemuFontDisplay: segoeVariable(t.fontFamilyBase).display,
     reemuPage: bg,
