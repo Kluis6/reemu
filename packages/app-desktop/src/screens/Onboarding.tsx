@@ -304,13 +304,25 @@ export function Onboarding() {
                 <DialogTitle>{t('onboarding.profileTitle')}</DialogTitle>
                 <DialogContent className={s.content}>
                   <Body1 className={s.muted}>{t('onboarding.profileText')}</Body1>
-                  <ProfileForm initial={initial} showBio={false} onChange={onDraft} />
+                  {/* como em Configurações › Perfil (avatar grande | campos),
+                      sem a bio (pedido do usuário) */}
+                  <ProfileForm
+                    initial={initial}
+                    showBio={false}
+                    layout="columns"
+                    onChange={onDraft}
+                  />
                 </DialogContent>
                 <DialogActions>
-                  <Button appearance="secondary" onClick={() => go('welcome')}>
+                  <Button appearance="secondary" size="large" onClick={() => go('welcome')}>
                     {t('common.back')}
                   </Button>
-                  <Button appearance="primary" disabled={!nameOk} onClick={() => go('ready')}>
+                  <Button
+                    appearance="primary"
+                    size="large"
+                    disabled={!nameOk}
+                    onClick={() => go('ready')}
+                  >
                     {t('onboarding.continue')}
                   </Button>
                 </DialogActions>
