@@ -7,14 +7,12 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
-  Radio,
-  RadioGroup,
   Subtitle2,
   makeStyles,
   mergeClasses,
   tokens,
-  type RadioGroupOnChangeData,
 } from '@fluentui/react-components'
+import { CheckmarkRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
@@ -91,6 +89,30 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalXL,
     overflowY: 'auto',
   },
+  // Boas-vindas em duas colunas (pedido do usuário): idiomas à esquerda,
+  // logo + nuvem de "bem-vindo" à direita (mais larga, pras palavras).
+  welcome: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(240px, 2fr) 3fr',
+    columnGap: tokens.spacingHorizontalXXXL,
+    flexGrow: 1,
+    minHeight: 0,
+  },
+  langs: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    rowGap: tokens.spacingVerticalM,
+  },
+  // botões grandes na largura da coluna, texto à esquerda como numa lista
+  langBtn: { width: '100%', justifyContent: 'flex-start' },
+  hello: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    rowGap: tokens.spacingVerticalL,
+  },
   // nuvem de "bem-vindo": cada palavra entra com fade, uma depois da outra
   words: {
     display: 'flex',
@@ -112,13 +134,6 @@ const useStyles = makeStyles({
     ...noMotion,
   },
   wordMain: { color: tokens.colorBrandForeground1 },
-  center: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: tokens.spacingVerticalM,
-    textAlign: 'center',
-  },
   ready: {
     display: 'flex',
     flexDirection: 'column',
@@ -200,11 +215,41 @@ export function Onboarding() {
             {step === 'welcome' && (
               <>
                 <DialogTitle>{t('onboarding.welcomeTitle')}</DialogTitle>
-                <DialogContent className={s.content}>
-                  <div className={s.center}>
-                    <AppLogo height={64} />
+                <DialogContent className={mergeClasses(s.content, s.welcome)}>
+                  <div className={s.langs}>
+                    <Subtitle2 id="onboarding-lang">{t('language.title')}</Subtitle2>
+                    {/* Escolha única em botões grandes: o grupo é um
+                        `radiogroup` e cada botão um `radio` (leitor de tela);
+                        o escolhido fica em destaque, com o check. */}
+                    <div
+                      role="radiogroup"
+                      aria-labelledby="onboarding-lang"
+                      style={{ display: 'contents' }}
+                    >
+                      {(['auto', ...LANGUAGES] as LanguagePreference[]).map((l) => (
+                        <Button
+                          key={l}
+                          size="large"
+                          role="radio"
+                          aria-checked={lang === l}
+                          appearance={lang === l ? 'primary' : 'secondary'}
+                          icon={lang === l ? <CheckmarkRegular /> : undefined}
+                          iconPosition="after"
+                          className={s.langBtn}
+                          onClick={() => {
+                            setLang(l)
+                            void setLanguagePreference(l)
+                          }}
+                        >
+                          {/* cada idioma no próprio nome (quem não lê o atual acha o seu) */}
+                          {t(l === 'auto' ? 'language.auto' : `language.${l}`)}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                  <div className={s.words} aria-hidden>
+                  <div className={s.hello}>
+                    <AppLogo height={64} />
+                    <div className={s.words} aria-hidden>
                     {WELCOMES.map((w, i) => (
                       <span
                         key={w}
@@ -217,25 +262,7 @@ export function Onboarding() {
                         {w}
                       </span>
                     ))}
-                  </div>
-                  <div className={s.center}>
-                    <Subtitle2>{t('language.title')}</Subtitle2>
-                    <RadioGroup
-                      layout="horizontal"
-                      aria-label={t('language.title')}
-                      value={lang}
-                      onChange={(_, data: RadioGroupOnChangeData) => {
-                        const v = data.value as LanguagePreference
-                        setLang(v)
-                        void setLanguagePreference(v)
-                      }}
-                    >
-                      <Radio value="auto" label={t('language.auto')} />
-                      {LANGUAGES.map((l) => (
-                        // cada idioma no próprio nome (quem não lê o atual acha o seu)
-                        <Radio key={l} value={l} label={t(`language.${l}`)} />
-                      ))}
-                    </RadioGroup>
+                    </div>
                   </div>
                 </DialogContent>
                 <DialogActions>
