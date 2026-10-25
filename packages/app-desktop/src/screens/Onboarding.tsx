@@ -93,7 +93,9 @@ const useStyles = makeStyles({
   welcome: {
     display: 'grid',
     gridTemplateColumns: 'minmax(240px, 2fr) 3fr',
-    columnGap: tokens.spacingHorizontalXXXL,
+    // o dobro do maior token (XXXL = 32): as colunas respiram (pedido do
+    // usuário)
+    columnGap: `calc(${tokens.spacingHorizontalXXXL} * 2)`,
     flexGrow: 1,
     minHeight: 0,
   },
