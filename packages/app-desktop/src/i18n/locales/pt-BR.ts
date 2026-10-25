@@ -408,8 +408,6 @@ const ptBR = {
     remove: 'Remover da biblioteca',
     unavailable: 'Biblioteca indisponível',
     unavailableHint: 'O backend não conseguiu abrir o banco de dados.',
-    empty: 'Nenhuma ROM ainda',
-    emptyHint: 'Aponte a pasta das suas ROMs pra montar a biblioteca.',
     addRoms: 'Adicionar ROMs…',
     noFavorites: 'Sem favoritos',
     noFavoritesHint: 'Favorite um jogo na tela dele.',
@@ -429,6 +427,8 @@ const ptBR = {
   home: {
     seeLibrary: 'Ver biblioteca',
     welcome: 'Bem-vindo ao ReEmu',
+    /** Título da página sem jogos com o nome do perfil. */
+    welcomeName: 'Bem-vindo, {{name}}!',
     welcomeHint: 'Adicione suas ROMs pra montar a biblioteca.',
     allGames: 'Todos os jogos ({{count}})',
     addRoms: 'Adicionar ROMs',

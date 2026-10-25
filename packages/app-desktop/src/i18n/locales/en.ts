@@ -407,8 +407,6 @@ const en: Messages = {
     remove: 'Remove from the library',
     unavailable: 'Library unavailable',
     unavailableHint: 'The backend couldn\'t open the database.',
-    empty: 'No ROMs yet',
-    emptyHint: 'Point to your ROMs folder to build the library.',
     addRoms: 'Add ROMs…',
     noFavorites: 'No favorites',
     noFavoritesHint: 'Favorite a game on its page.',
@@ -428,6 +426,8 @@ const en: Messages = {
   home: {
     seeLibrary: 'See library',
     welcome: 'Welcome to ReEmu',
+    /** Título da página sem jogos com o nome do perfil. */
+    welcomeName: 'Welcome, {{name}}!',
     welcomeHint: 'Add your ROMs to build the library.',
     allGames: 'All games ({{count}})',
     addRoms: 'Add ROMs',

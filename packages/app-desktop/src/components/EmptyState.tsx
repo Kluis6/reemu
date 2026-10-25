@@ -29,21 +29,34 @@ const useStyles = makeStyles({
   action: { marginTop: tokens.spacingVerticalS },
   // `size="large"` (página inicial sem jogos, pedido do usuário): no meio da
   // altura útil da página, ilustração e textos maiores. A altura útil é a da
-  // janela menos o topo da página e a margem de baixo do shell.
+  // janela menos o topo da página, a margem de baixo do shell e o que a página
+  // tiver acima (`--reemuEmptyOffset`: o cabeçalho da Biblioteca).
   rootLg: {
-    minHeight: 'calc(100vh - var(--reemuPageTop, 116px) - 100px)',
+    minHeight: 'calc(100vh - var(--reemuPageTop, 116px) - 100px - var(--reemuEmptyOffset, 0px))',
     justifyContent: 'center',
-    rowGap: tokens.spacingVerticalL,
+    // título e frase juntos (pedido do usuário); o ícone e o botão têm a
+    // margem própria
+    rowGap: tokens.spacingVerticalXS,
     paddingBlock: 0,
   },
-  artLg: { fontSize: '112px', lineHeight: 1, '& svg': { display: 'block' } },
+  artLg: {
+    fontSize: '160px',
+    // janela baixa (ex.: 1024×600): ícone menor pro bloco caber sem rolar
+    // embaixo do cabeçalho da Biblioteca
+    '@media (max-height: 700px)': { fontSize: '96px' },
+    lineHeight: 1,
+    marginBottom: tokens.spacingVerticalM,
+    '& svg': { display: 'block' },
+  },
   titleLg: {
+    // sem a margem padrão do `<h2>`, que afastava a frase de baixo
+    margin: 0,
     fontSize: tokens.fontSizeHero800,
     lineHeight: tokens.lineHeightHero800,
     fontWeight: tokens.fontWeightSemibold,
   },
   textLg: { fontSize: tokens.fontSizeBase500, lineHeight: tokens.lineHeightBase500 },
-  actionLg: { marginTop: tokens.spacingVerticalM },
+  actionLg: { marginTop: tokens.spacingVerticalXL },
   loading: {
     display: 'flex',
     justifyContent: 'center',

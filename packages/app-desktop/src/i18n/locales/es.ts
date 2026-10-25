@@ -407,8 +407,6 @@ const es: Messages = {
     remove: 'Quitar de la biblioteca',
     unavailable: 'Biblioteca no disponible',
     unavailableHint: 'El backend no pudo abrir la base de datos.',
-    empty: 'Todavía no hay ROMs',
-    emptyHint: 'Indica la carpeta de tus ROMs para armar la biblioteca.',
     addRoms: 'Añadir ROMs…',
     noFavorites: 'Sin favoritos',
     noFavoritesHint: 'Marca un juego como favorito en su pantalla.',
@@ -428,6 +426,8 @@ const es: Messages = {
   home: {
     seeLibrary: 'Ver biblioteca',
     welcome: 'Bienvenido a ReEmu',
+    /** Título da página sem jogos com o nome do perfil. */
+    welcomeName: '¡Bienvenido, {{name}}!',
     welcomeHint: 'Añade tus ROMs para armar la biblioteca.',
     allGames: 'Todos los juegos ({{count}})',
     addRoms: 'Añadir ROMs',

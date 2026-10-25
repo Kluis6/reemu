@@ -26,8 +26,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
 import { CardGridSkeleton } from "../components/CardGridSkeleton";
-import { GamepadArt, SearchArt, StarArt } from "../components/EmptyArt";
+import { SearchArt, StarArt } from "../components/EmptyArt";
 import { EmptyState } from "../components/EmptyState";
+import { NoGamesState } from "../components/NoGamesState";
 import { GameCard } from "../components/GameCard";
 import { SectionHeader } from "../components/SectionHeader";
 import { PlatformTile } from "../components/PlatformTile";
@@ -273,21 +274,11 @@ export function Library() {
       );
     if (all.length === 0)
       return (
-        <EmptyState
-          art={<GamepadArt />}
-          title={t("library.empty")}
-          action={
-            <Button
-              appearance="primary"
-              icon={<AddRegular />}
-              onClick={() => setAddOpen(true)}
-            >
-              {t("library.addRoms")}
-            </Button>
-          }
-        >
-          {t("library.emptyHint")}
-        </EmptyState>
+        // a mesma tela da Início sem jogos (pedido do usuário), descontando o
+        // cabeçalho da página (título + abas, 108 px medidos) pra não rolar
+        <div style={{ ["--reemuEmptyOffset" as string]: "112px" }}>
+          <NoGamesState onAdd={() => setAddOpen(true)} />
+        </div>
       );
     if (view.length === 0) {
       if (tab === "fav")
