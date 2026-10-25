@@ -2858,3 +2858,21 @@ Infra:
   - o campo de pasta do Adicionar ROMs passou a `filled-darker`, como os outros formulários.
 - **Depois:** a borda medida ficou entre 3,39 e 3,82:1 nos temas claros, entre 4,93 e 5,86:1 nos escuros, e em 21:1 no alto contraste.
 - **Nota do teste:** o `getComputedStyle` devolve o `color-mix` como `color(srgb r g b / a)`, com os canais de 0 a 1. Lido como RGB de 0 a 255, os temas escuros pareciam 1:1.
+
+## 2026-10-25 — Release v0.1.9
+
+- **Pedido do usuário:** push e nova build.
+- **Versão:** 0.1.8 → 0.1.9 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`, com o `Cargo.lock` atualizado.
+- **Antes da tag:** o CI do `main` passou nos três jobs: Rust (fmt, clippy, test), check cruzado do Windows e frontend.
+- **O que entra, desde a v0.1.8:**
+  - tela branca dos jogos no Windows (`WS_CLIPSIBLINGS` no WebView2) e alfa zero do PPSSPP;
+  - controles pelo SDL3 no Windows, com a escolha de driver;
+  - teclado na tela em campos de texto;
+  - onboarding refeito;
+  - Início e Biblioteca sem jogos;
+  - contornos de campos e botões de modal em todos os temas;
+  - Sistema e licenças em cards;
+  - foco dos botões redondos;
+  - modais sem conteúdo por baixo dos botões;
+  - Tauri 2.12.5.
+- **Primeira release com o SDL3:** o `windows-latest` do CI precisa compilar o SDL com o CMake dele.

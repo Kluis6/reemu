@@ -400,7 +400,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "audio-desktop"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "cpal",
  "domain",
@@ -962,7 +962,7 @@ dependencies = [
 
 [[package]]
 name = "core-host-desktop"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "core-ipc",
  "core-loader-desktop",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "core-ipc"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bincode",
  "domain",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "core-loader-desktop"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "ash",
  "async-trait",
@@ -1208,7 +1208,7 @@ checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
 
 [[package]]
 name = "db"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "async-trait",
  "domain",
@@ -1461,7 +1461,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "async-trait",
  "serde",
@@ -1548,7 +1548,7 @@ checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
 
 [[package]]
 name = "emu-session"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "core-ipc",
  "core-loader-desktop",
@@ -2741,7 +2741,7 @@ dependencies = [
 
 [[package]]
 name = "input-desktop"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "core-loader-desktop",
  "domain",
@@ -3081,7 +3081,7 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "library-scan"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "crc32fast",
  "db",
@@ -4726,7 +4726,7 @@ dependencies = [
 
 [[package]]
 name = "reemu-desktop"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "ash",
  "audio-desktop",
@@ -5510,7 +5510,7 @@ dependencies = [
 
 [[package]]
 name = "shader-slang"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "glslang",
  "log",
@@ -7085,7 +7085,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "video-surface"
-version = "0.1.8"
+version = "0.1.9"
 dependencies = [
  "bytemuck",
  "core-loader-desktop",
