@@ -1,10 +1,9 @@
 import { Button, mergeClasses } from "@fluentui/react-components";
-import { AddRegular, GridRegular } from "@fluentui/react-icons";
+import { AddRegular, GridRegular, JoystickRegular } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddRomsDialog } from "../components/AddRomsDialog";
-import { GamepadArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
 import { HeroCarousel } from "../components/HeroCarousel";
@@ -185,12 +184,16 @@ export function Home() {
   if (!roms.isError && all.length === 0) {
     return (
       <>
+        {/* joystick de fliperama do Fluent: lembra mais um controle retrô
+            que o gamepad de linha (pedido do usuário) */}
         <EmptyState
-          art={<GamepadArt />}
+          size="large"
+          art={<JoystickRegular />}
           title={t("home.welcome")}
           action={
             <Button
               appearance="primary"
+              size="large"
               icon={<AddRegular />}
               onClick={() => setAddOpen(true)}
             >
