@@ -270,7 +270,7 @@ const es: Messages = {
     chooseLanguage: 'Elige el idioma',
     continue: 'Continuar',
     profileTitle: '¿Cómo te llamamos?',
-    profileText: 'Elige un nombre y un avatar. El perfil se queda solo en este equipo.',
+    profileText: 'Elige un nombre y un avatar.',
     readyTitle: '¡Todo listo, {{name}}!',
     readyText: 'Tu ReEmu está configurado. Agrega tus ROMs y empieza a jugar.',
   },

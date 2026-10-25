@@ -270,7 +270,7 @@ const en: Messages = {
     chooseLanguage: 'Choose your language',
     continue: 'Continue',
     profileTitle: 'What should we call you?',
-    profileText: 'Pick a name and an avatar. Your profile stays on this computer only.',
+    profileText: 'Pick a name and an avatar.',
     readyTitle: 'All set, {{name}}!',
     readyText: 'Your ReEmu is ready. Add your ROMs and start playing.',
   },

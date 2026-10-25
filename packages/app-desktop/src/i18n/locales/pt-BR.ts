@@ -271,7 +271,7 @@ const ptBR = {
     chooseLanguage: 'Escolha o idioma',
     continue: 'Continuar',
     profileTitle: 'Como podemos te chamar?',
-    profileText: 'Escolha um nome e um avatar. O perfil fica só neste computador.',
+    profileText: 'Escolha um nome e um avatar.',
     readyTitle: 'Tudo pronto, {{name}}!',
     readyText: 'Seu ReEmu está configurado. Adicione suas ROMs e comece a jogar.',
   },

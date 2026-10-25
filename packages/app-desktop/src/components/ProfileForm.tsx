@@ -50,6 +50,10 @@ const useStyles = makeStyles({
     // WebKitGTK (mesmo bug do GameCard). O SVG já se arredonda sozinho
     // (border-radius inline no <PresetAvatar>).
     border: `2px solid transparent`,
+    // Brilho do foco (`::before` do index.css, regra 4) no círculo: lá o raio
+    // é o dos botões retangulares e ficava um quadrado em volta do anel
+    // redondo (mesmo caso dos botões-pílula da início).
+    '::before': { borderRadius: `${tokens.borderRadiusCircular} !important` },
   },
   choiceOn: {
     border: `2px solid ${tokens.colorBrandStroke1}`,
@@ -137,6 +141,7 @@ export function ProfileForm({
   showBio = true,
   onChange,
   layout = 'stack',
+  inputSize = 'medium',
 }: {
   initial: Pick<Profile, 'name' | 'bio' | 'avatar'>
   /** Sem `submitLabel`, o formulário não tem botão nem salva: só avisa os
@@ -145,9 +150,11 @@ export function ProfileForm({
   onDone?: () => void
   showBio?: boolean
   onChange?: (v: Pick<Profile, 'name' | 'bio' | 'avatar'>) => void
-  /** `stack`: tudo numa coluna (onboarding). `columns`: campos de um lado e
-   *  avatares do outro (Configurações › Perfil). */
+  /** `stack`: tudo numa coluna. `columns`: avatares de um lado e campos do
+   *  outro (Configurações › Perfil e onboarding). */
   layout?: 'stack' | 'columns'
+  /** Tamanho do campo de nome (`large` no onboarding, como os botões dele). */
+  inputSize?: 'medium' | 'large'
 }) {
   const { t } = useTranslation()
   const s = useStyles()
@@ -236,6 +243,7 @@ export function ProfileForm({
       <Field label={t('profileForm.name')} required validationMessage={nameError}>
         <Input
           appearance="filled-darker"
+          size={inputSize}
           value={name}
           maxLength={40}
           onChange={(_, d) => {

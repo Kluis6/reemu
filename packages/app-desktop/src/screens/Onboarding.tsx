@@ -310,6 +310,7 @@ export function Onboarding() {
                     initial={initial}
                     showBio={false}
                     layout="columns"
+                    inputSize="large"
                     onChange={onDraft}
                   />
                 </DialogContent>
