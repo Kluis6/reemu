@@ -932,6 +932,14 @@ export const useHintStyles = makeStyles({
     zIndex: 50,
     pointerEvents: "none",
   },
+  // Variante no meio da tela, embaixo (onboarding: o modal ocupa o centro e
+  // o canto direito ficava colado nele — pedido do usuário).
+  hintsCentered: {
+    right: "auto",
+    left: "50%",
+    bottom: "12px",
+    transform: "translateX(-50%)",
+  },
   hint: { display: "flex", alignItems: "center", columnGap: "9px" },
   glyph: {
     width: "26px",

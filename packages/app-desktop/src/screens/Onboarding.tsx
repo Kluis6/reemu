@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogSurface,
   DialogTitle,
+  Portal,
   Subtitle2,
   makeStyles,
   mergeClasses,
@@ -14,10 +15,13 @@ import {
 } from '@fluentui/react-components'
 import { CheckmarkRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AnimatedBackground } from '../components/AnimatedBackground'
+import { ButtonHints, type Hint } from '../components/ButtonHints'
+import { REEMU_ONBOARDING_BACK } from '../hooks/useMenuNav'
+import { useSearchStore } from '../stores/useSearchStore'
 import { LoadingState } from '../components/EmptyState'
 import { ProfileAvatar } from '../components/ProfileAvatar'
 import { ProfileForm } from '../components/ProfileForm'
@@ -77,7 +81,9 @@ const useStyles = makeStyles({
   surface: {
     width: 'min(1200px, 92vw)',
     maxWidth: 'none',
-    height: 'min(760px, 88vh)',
+    // 82vh: a barra de dicas do controle (centro, embaixo) cabe abaixo do
+    // modal sem encostar nele
+    height: 'min(760px, 82vh)',
     boxSizing: 'border-box',
     display: 'flex',
   },
@@ -166,6 +172,7 @@ const useStyles = makeStyles({
     flexGrow: 1,
   },
   muted: { color: tokens.colorNeutralForeground3, maxWidth: '520px' },
+  hintsLayer: { zIndex: '1000001 !important' },
   // Perfil: o formulário ocupa a altura livre e a coluna dos avatares fica
   // no meio dela (a linha do grid estica até a altura; o nome continua no
   // topo da coluna dele) — pedido do usuário.
@@ -208,6 +215,31 @@ export function Onboarding() {
       setOpen(true)
     }, SWAP_MS)
   }
+
+  // B do controle (`useMenuNav`): volta um passo — o mesmo que o botão Voltar.
+  const goRef = useRef(go)
+  const stepRef = useRef(step)
+  useEffect(() => {
+    goRef.current = go
+    stepRef.current = step
+  })
+  useEffect(() => {
+    const back = () => {
+      const prev: Record<Step, Step | null> = { welcome: null, profile: 'welcome', ready: 'profile' }
+      const to = prev[stepRef.current]
+      if (to) goRef.current(to)
+    }
+    window.addEventListener(REEMU_ONBOARDING_BACK, back)
+    return () => window.removeEventListener(REEMU_ONBOARDING_BACK, back)
+  }, [])
+
+  // Dicas do controle: A em todos os passos, B onde dá pra voltar. Somem com
+  // o teclado na tela aberto (ele mostra os glifos dele).
+  const keyboard = useSearchStore((st) => st.keyboard)
+  const hints: Hint[] = [
+    { glyph: 'A', label: t('hints.select') },
+    ...(step === 'welcome' ? [] : [{ glyph: 'B' as const, label: t('hints.back') }]),
+  ]
 
   const finish = useMutation({
     mutationFn: (d: Draft) => setProfile(d.name, d.bio, d.avatar),
@@ -369,6 +401,14 @@ export function Onboarding() {
           </DialogBody>
         </DialogSurface>
       </Dialog>
+      {/* Portal próprio, uma camada acima do Dialog (o nó do portal do Fluent
+          é `z-index: 1000000`): dentro do DialogSurface o `position: fixed`
+          ficava preso ao modal, e fora de um portal o modal cobria a barra. */}
+      {!keyboard && (
+        <Portal mountNode={{ className: s.hintsLayer }}>
+          <ButtonHints hints={hints} centered />
+        </Portal>
+      )}
     </>
   )
 }

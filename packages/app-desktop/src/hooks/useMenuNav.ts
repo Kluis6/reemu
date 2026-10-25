@@ -20,6 +20,10 @@ import { useSearchStore } from '../stores/useSearchStore'
  *  e borbulhando — quem tem uma ação secundária escuta no próprio elemento. */
 export const REEMU_ACTION = 'reemu-action'
 
+/** B do controle no onboarding: volta um passo do fluxo (a tela escuta este
+ *  evento na `window`) em vez de voltar no histórico. */
+export const REEMU_ONBOARDING_BACK = 'reemu-onboarding-back'
+
 /** Tipos de `<input>` em que se digita texto (o A abre o teclado na tela). */
 const TEXT_INPUT = new Set(['text', 'search', 'email', 'url', 'tel', 'password', ''])
 
@@ -119,6 +123,8 @@ export function useMenuNav() {
         }
         case 'back':
           if (locRef.current.startsWith('/play/')) void toggleFocus().catch(() => {})
+          else if (locRef.current === '/onboarding')
+            window.dispatchEvent(new CustomEvent(REEMU_ONBOARDING_BACK))
           else navigate(-1)
           break
         case 'search':

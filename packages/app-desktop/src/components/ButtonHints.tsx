@@ -10,16 +10,23 @@ export interface Hint {
   label: string
 }
 
-/** Barra de dicas de botão do controle, canto inferior direito (estilo Xbox).
- *  Só aparece com um controle conectado (`useGamepadStore`, o mesmo do
- *  ícone da topbar): sem controle, os glifos A/B/X/Y não servem pra nada. */
-export function ButtonHints({ hints }: { hints: readonly Hint[] }) {
+/** Barra de dicas de botão do controle, canto inferior direito (estilo Xbox)
+ *  ou, com `centered`, no meio embaixo. Só aparece com um controle conectado
+ *  (`useGamepadStore`, o mesmo do ícone da topbar): sem controle, os glifos
+ *  A/B/X/Y não servem pra nada. */
+export function ButtonHints({
+  hints,
+  centered = false,
+}: {
+  hints: readonly Hint[]
+  centered?: boolean
+}) {
   const s = useHintStyles()
   const connected = useGamepadStore((st) => st.devices.length > 0)
   if (!connected || hints.length === 0) return null
   const color: Record<Exclude<Glyph, 'MENU'>, string> = { A: s.a, B: s.b, X: s.x, Y: s.y }
   return (
-    <div className={s.hints}>
+    <div className={mergeClasses(s.hints, centered && s.hintsCentered)}>
       {hints.map((h) => (
         <span key={h.glyph} className={s.hint}>
           {h.glyph === 'MENU' ? (
