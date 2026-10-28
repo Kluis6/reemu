@@ -2933,7 +2933,7 @@ Infra:
   - O contexto responde `NORMAL`; o ponteiro NULL só pergunta se o comando existe.
   - Os bits ficam em `domain::core_loader::serialization_quirk`.
   - Chegam ao app pelo `ToParent::SerializationQuirks`, antes do `Loaded`, ou direto no core Vulkan local, e ficam em `EmuSession::serialization_quirks()`.
-- **Defeito corrigido:** o save state por slot e o salvar rápido recusavam nada e gravavam em disco o estado de core `SINGLE_SESSION` ("can only be loaded during the same session"), que não carregaria depois. Agora recusam, com mensagem.
+- **Defeito corrigido:** o save state por slot e o salvar rápido gravavam em disco o estado de core `SINGLE_SESSION` ("can only be loaded during the same session"), que não carregaria depois. Agora recusam, com mensagem.
   - Com `MUST_INITIALIZE`, a falha diz que o core ainda está iniciando, em vez de "não suporta save state".
 - **Medição:** novo teste `crates/core-loader-desktop/tests/measure_state.rs` (ignorado; `REEMU_MEASURE_CORE`/`ROM`/`SYSTEM`/`FRAMES`). A tabela está no doc 17.
   - De 5 KB no nestopia a 83 MB no flycast.
