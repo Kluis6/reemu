@@ -140,6 +140,27 @@ pub struct SystemAvInfo {
     pub timing: SystemTiming,
 }
 
+/// Bits de `RETRO_SERIALIZATION_QUIRK_*` (libretro.h), que o core informa por
+/// `RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS`. Os comentários citam o
+/// `libretro.h`.
+pub mod serialization_quirk {
+    /// "should not be relied upon for frame-sensitive frontend features such
+    /// as netplay or rerecording" — vale pro rewind (doc 17).
+    pub const INCOMPLETE: u64 = 1 << 0;
+    /// `retro_serialize*` "will initially fail" até o core inicializar.
+    pub const MUST_INITIALIZE: u64 = 1 << 1;
+    /// "serialization size may change within a session".
+    pub const CORE_VARIABLE_SIZE: u64 = 1 << 2;
+    /// "Set by the frontend to acknowledge that it supports variable-sized
+    /// states".
+    pub const FRONT_VARIABLE_SIZE: u64 = 1 << 3;
+    /// "Serialized state can only be loaded during the same session" — não
+    /// vai pra disco.
+    pub const SINGLE_SESSION: u64 = 1 << 4;
+    pub const ENDIAN_DEPENDENT: u64 = 1 << 5;
+    pub const PLATFORM_DEPENDENT: u64 = 1 << 6;
+}
+
 #[derive(Debug, Error)]
 pub enum CoreLoadError {
     #[error("core não encontrado: {0}")]

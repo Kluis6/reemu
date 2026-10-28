@@ -194,6 +194,9 @@ struct Shared {
     /// Core do `Load` em andamento: o filho manda o `CoreOptionSet` do load
     /// antes do `Loaded`, quando `loaded_core` ainda não foi preenchido.
     loading_core: Mutex<Option<String>>,
+    /// Quirks de serialização do core carregado
+    /// (`domain::core_loader::serialization_quirk`); 0 sem core.
+    serialization_quirks: AtomicU64,
 }
 
 type VkJob = Box<dyn FnOnce() + Send>;
@@ -346,6 +349,7 @@ impl EmuSession {
             vk_driver_seen: AtomicBool::new(false),
             core_set_options: Mutex::new(Vec::new()),
             loading_core: Mutex::new(None),
+            serialization_quirks: AtomicU64::new(0),
         });
 
         let gamepad_thread = cfg.enable_gamepad.then(|| {
@@ -459,6 +463,13 @@ impl EmuSession {
             .vk_render_gate
             .lock()
             .unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Quirks de serialização do core carregado
+    /// (`domain::core_loader::serialization_quirk`); 0 sem core ou sem quirks.
+    /// O app recusa gravar em disco o estado de core `SINGLE_SESSION`.
+    pub fn serialization_quirks(&self) -> u64 {
+        self.shared.serialization_quirks.load(Ordering::Acquire)
     }
 
     /// Opções que o core trocou sozinho (`RETRO_ENVIRONMENT_SET_VARIABLE`)
@@ -1344,6 +1355,12 @@ fn handle_event(
             log::info!("core trocou a opção '{key}' para '{value}'");
             note_core_set_option(shared, key, value);
         }
+        ToParent::SerializationQuirks(quirks) => {
+            if quirks != 0 {
+                log::info!("core: quirks de serialização 0x{quirks:x}");
+            }
+            shared.serialization_quirks.store(quirks, Ordering::Release);
+        }
         other => log::debug!("evento do core-host fora de um round-trip: {other:?}"),
     }
 }
@@ -1852,6 +1869,8 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     .loading_core
                     .lock()
                     .unwrap_or_else(|p| p.into_inner()) = Some(id.0.clone());
+                // os quirks do core anterior não valem pro novo
+                shared.serialization_quirks.store(0, Ordering::Release);
                 // Salva a save RAM do jogo anterior e mata o processo
                 // incondicionalmente — o novo `Load` SEMPRE sobe um processo
                 // novo, mesmo que o anterior fosse o mesmo core (é essa
@@ -1952,6 +1971,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 *shared.vk_local.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(lc);
                                 collect_local_core_set_options(&shared);
+                                shared.serialization_quirks.store(
+                                    core_loader_desktop::serialization_quirks(),
+                                    Ordering::Release,
+                                );
                                 shared.vk_local_paused.store(false, Ordering::Release);
                                 shared.vk_local_active.store(true, Ordering::Release);
                                 shared.set_state(SessionState::Running);

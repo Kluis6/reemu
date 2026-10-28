@@ -113,6 +113,9 @@ pub enum ToParent {
     /// Resposta do `Load`. O fd do anel de frame (memfd) viaja junto, fora de
     /// banda, só quando `Ok`.
     Loaded(Result<SystemAvInfo, String>),
+    /// Quirks de serialização do core (`domain::core_loader::serialization_quirk`),
+    /// mandados logo antes do `Loaded`.
+    SerializationQuirks(u64),
     FrameReady {
         slot: u32,
         meta: FrameMetadata,

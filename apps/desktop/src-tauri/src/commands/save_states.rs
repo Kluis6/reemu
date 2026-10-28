@@ -15,6 +15,32 @@ pub struct SaveStateDto {
     pub play_time_at_save: Option<u64>,
 }
 
+/// Um save state em disco precisa carregar numa sessão futura: o de core com
+/// `SINGLE_SESSION` "can only be loaded during the same session"
+/// (libretro.h), então não é gravado.
+pub(super) fn check_disk_savable(state: &AppState) -> Result<(), String> {
+    use domain::core_loader::serialization_quirk as q;
+    if state.session.serialization_quirks() & q::SINGLE_SESSION != 0 {
+        return Err(
+            "este core não permite salvar o estado em disco: o estado dele só vale enquanto o \
+             jogo está aberto"
+                .into(),
+        );
+    }
+    Ok(())
+}
+
+/// Por que o core não devolveu um estado: o de `MUST_INITIALIZE` falha
+/// "initially" (libretro.h), antes de terminar de iniciar o jogo.
+pub(super) fn no_state_error(state: &AppState) -> String {
+    use domain::core_loader::serialization_quirk as q;
+    if state.session.serialization_quirks() & q::MUST_INITIALIZE != 0 {
+        "o core ainda está iniciando o jogo; tente salvar de novo em instantes".into()
+    } else {
+        "o core não suporta save state".into()
+    }
+}
+
 fn save_dto(m: domain::save_state::SaveStateMetadata) -> SaveStateDto {
     SaveStateDto {
         id: m.id,
@@ -63,11 +89,12 @@ pub async fn save_state(
         .session
         .loaded_core()
         .ok_or_else(|| "nenhum core carregado".to_string())?;
+    check_disk_savable(&state)?;
     let bytes = state
         .session
         .save_state()
         .map_err(|e| e.to_string())?
-        .ok_or_else(|| "o core não suporta save state".to_string())?;
+        .ok_or_else(|| no_state_error(&state))?;
     let thumb = {
         let f = state.last_frame.lock().unwrap_or_else(|p| p.into_inner());
         f.as_ref()

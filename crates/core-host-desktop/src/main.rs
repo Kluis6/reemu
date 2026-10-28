@@ -467,6 +467,12 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         // Opções que o core fixou no load (o MAC do PPSSPP)
                         // chegam ao pai antes da resposta do load.
                         forward_core_set_options(&channel);
+                        let _ = channel.send(
+                            &ToParent::SerializationQuirks(
+                                core_loader_desktop::serialization_quirks(),
+                            ),
+                            &[],
+                        );
                         #[cfg(unix)]
                         let _ = channel.send(&ToParent::Loaded(Ok(av)), &[new_ring.fd()]);
                         #[cfg(windows)]

@@ -2925,3 +2925,19 @@ Infra:
   - Cheats de memória, com o mapa de memória das conquistas.
   - Bloqueio no hardcore.
   - Nada copiado do RetroArch (GPL).
+
+## 2026-10-28 — Cheats e rewind, fase 0: quirks de serialização e medição dos estados
+
+- **Quirks:** o `core-loader-desktop` agora trata `RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS` (44), o `_2` (87, "Legacy compatibility shim") e `GET_SAVESTATE_CONTEXT` (72 | experimental).
+  - Pelo `libretro.h`, "The frontend will set the flags of the quirks it supports and clear the flags of those it doesn't". O ReEmu aceita todos e confirma o tamanho variável com `FRONT_VARIABLE_SIZE`.
+  - O contexto responde `NORMAL`; o ponteiro NULL só pergunta se o comando existe.
+  - Os bits ficam em `domain::core_loader::serialization_quirk`.
+  - Chegam ao app pelo `ToParent::SerializationQuirks`, antes do `Loaded`, ou direto no core Vulkan local, e ficam em `EmuSession::serialization_quirks()`.
+- **Defeito corrigido:** o save state por slot e o salvar rápido recusavam nada e gravavam em disco o estado de core `SINGLE_SESSION` ("can only be loaded during the same session"), que não carregaria depois. Agora recusam, com mensagem.
+  - Com `MUST_INITIALIZE`, a falha diz que o core ainda está iniciando, em vez de "não suporta save state".
+- **Medição:** novo teste `crates/core-loader-desktop/tests/measure_state.rs` (ignorado; `REEMU_MEASURE_CORE`/`ROM`/`SYSTEM`/`FRAMES`). A tabela está no doc 17.
+  - De 5 KB no nestopia a 83 MB no flycast.
+  - Quirks vistos: genesis_plus_gx `PLATFORM_DEPENDENT`, mednafen_psx `CORE_VARIABLE_SIZE`, parallel_n64 `MUST_INITIALIZE`. Nenhum `SINGLE_SESSION`.
+  - O PPSSPP não devolve estado fora do app.
+  - O pcsx_rearmed muda o modo do FPU do processo, e os tempos em `f64` saíam absurdos. O teste mede em microssegundos inteiros.
+- **Testes:** teste de unidade do `environment_cb` (quirks, `_2` e contexto). O loader (34), o `core-ipc` e o `emu-session` passam. Os testes de sessão precisaram do `reemu-core-host` recompilado, porque o IPC ganhou uma mensagem.

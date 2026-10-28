@@ -109,14 +109,50 @@ só manda "começar/parar rewind".
 
 ## Plano de ação
 
-### Fase 0 — Base comum
-- [ ] Tratar `SET_SERIALIZATION_QUIRKS` e `GET_SAVESTATE_CONTEXT` no
-      `core-loader-desktop`, e guardar os quirks do core.
-- [ ] Corrigir o defeito atual: não gravar em disco o save state de core com
-      `SINGLE_SESSION`, avisando o jogador.
-- [ ] Medir `retro_serialize_size` e o tempo de `retro_serialize` nos cores
-      da biblioteca (snes9x, genesis_plus_gx, mGBA, pcsx_rearmed ou beetle,
-      parallel_n64, PPSSPP, flycast). Registrar no doc.
+### Fase 0 — Base comum (feita em 2026-10-28)
+- [x] Tratar `SET_SERIALIZATION_QUIRKS` (44 e o `_2`, 87) e
+      `GET_SAVESTATE_CONTEXT` no `core-loader-desktop`, guardando os quirks
+      do core. Eles chegam ao app pelo `ToParent::SerializationQuirks` e ficam
+      em `EmuSession::serialization_quirks()`.
+- [x] Corrigir o defeito atual: o save state por slot e o salvar rápido
+      recusam gravar em disco o estado de core com `SINGLE_SESSION`, avisando
+      o jogador. Com `MUST_INITIALIZE`, a falha diz que o core ainda está
+      iniciando, em vez de "não suporta save state".
+- [x] Medir o estado nos cores da biblioteca
+      (`tests/measure_state.rs`, ignorado). Resultado abaixo.
+
+#### Medições (2026-10-28, RTX 3060, depois de 10 s de jogo)
+
+| Core | Sistema | Estado | Salvar | Restaurar | Quirks |
+|---|---|---|---|---|---|
+| nestopia | NES | 5 KB | 0,04 ms | 0,02 ms | — |
+| mgba | GBA | 516 KB | 0,67 ms | 0,55 ms | — |
+| snes9x | SNES | 804 KB | 0,24 ms | 0,43 ms | — |
+| genesis_plus_gx | Mega Drive | 1012 KB | 0,05 ms | 0,05 ms | `PLATFORM_DEPENDENT` |
+| mednafen_psx | PS1 | 3,6 MB | 5,19 ms | 2,98 ms | `CORE_VARIABLE_SIZE` |
+| pcsx_rearmed | PS1 | 4,3 MB | 0,86 ms | 0,53 ms | — |
+| swanstation | PS1 | 11 MB | 3,88 ms | 31,77 ms | — |
+| parallel_n64 | N64 | 16 MB | 5,12 ms | 2,87 ms | `MUST_INITIALIZE` |
+| mupen64plus_next | N64 | 16 MB | 7,26 ms | 7,87 ms | — |
+| flycast | Dreamcast | 83 MB | 6,31 ms | 14,06 ms | — |
+| ppsspp | PSP | — | — | — | sem estado fora do app |
+
+- Nenhum desses cores marcou `SINGLE_SESSION`.
+- O PPSSPP não devolve save state no teste nem depois de 30 s de jogo;
+  provavelmente precisa do contexto de GPU do app. Medir dentro do app.
+- O pcsx_rearmed muda o modo do FPU do processo: tempos calculados com `f64`
+  saíam absurdos. O teste usa microssegundos inteiros.
+
+**Para o rewind** (um quadro dura 16,7 ms):
+- **NES, GBA, SNES e Mega Drive:** captura a cada quadro, porque salvar leva
+  menos de 1 ms e o estado tem até 1 MB.
+- **PS1 e N64:** estados de 3,6 a 16 MB e salvar entre 0,9 e 7 ms. Captura a
+  cada 2 a 6 quadros, com delta.
+- **Swanstation:** restaurar leva 32 ms, então voltar quadro a quadro fica
+  lento. Intervalo maior.
+- **Dreamcast:** 83 MB por estado. Mesmo com delta, comparar e comprimir 83 MB
+  a cada captura custa caro. Desligado por padrão, ou com intervalo grande.
+- **PSP:** sem dado ainda.
 
 ### Fase 1 — Cheats por código
 - [ ] Resolver `retro_cheat_reset` e `retro_cheat_set` no core-loader e

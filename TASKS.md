@@ -510,9 +510,12 @@ no `emu-session`, ver `docs/historico.md`).
         depois cheats de memória.
       - **Rewind:** buffer circular de estados com delta comprimido, no
         processo do core.
-      - **Primeiro passo:** tratar `SET_SERIALIZATION_QUIRKS` e
-        `GET_SAVESTATE_CONTEXT`, medir o tamanho dos estados por core e não
-        gravar em disco estados de core `SINGLE_SESSION` (defeito atual).
+      - **Fase 0 feita (2026-10-28):**
+        - quirks e `GET_SAVESTATE_CONTEXT` tratados;
+        - estado de core `SINGLE_SESSION` não vai mais para disco;
+        - estados medidos em 10 cores, de 5 KB (NES) a 83 MB (Dreamcast).
+          O PPSSPP fica para medir dentro do app.
+      - **Próximo:** fase 1 (cheats por código).
       - No hardcore do RetroAchievements, os dois ficam proibidos.
 
 - [ ] `todo` — Avaliar integração **GameKave / Alvanista** (pedido do dono

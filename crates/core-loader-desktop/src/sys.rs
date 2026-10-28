@@ -11,7 +11,7 @@
 //! ...) — entram nas etapas 05/06/08. Mantidos aqui como binding completo.
 #![allow(non_camel_case_types, dead_code)]
 
-use std::os::raw::{c_char, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uint, c_void};
 
 pub const RETRO_API_VERSION: c_uint = 1;
 
@@ -42,6 +42,13 @@ pub const RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: c_uint = 31;
 pub const RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: c_uint = 32;
 pub const RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO: c_uint = 34;
 pub const RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: c_uint = 35;
+pub const RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS: c_uint = 44;
+/// "Legacy compatibility shim to RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS".
+pub const RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS_2: c_uint = 87;
+pub const RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT: c_uint = 72 | RETRO_ENVIRONMENT_EXPERIMENTAL;
+/// `enum retro_savestate_context`: estado escrito em disco ("May be loaded at
+/// any time, even in a separate session or on another device").
+pub const RETRO_SAVESTATE_CONTEXT_NORMAL: c_int = 0;
 pub const RETRO_ENVIRONMENT_SET_GEOMETRY: c_uint = 37;
 pub const RETRO_ENVIRONMENT_GET_LANGUAGE: c_uint = 39;
 pub const RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER: c_uint = 56;

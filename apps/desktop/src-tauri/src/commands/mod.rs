@@ -273,11 +273,12 @@ async fn quick_state<R: tauri::Runtime>(app: &AppHandle<R>, save: bool) -> Resul
     let repo = db::SaveStateRepo::new(pool(&state)?);
 
     if save {
+        save_states::check_disk_savable(&state)?;
         let bytes = state
             .session
             .save_state()
             .map_err(|e| e.to_string())?
-            .ok_or("o core não suporta save state")?;
+            .ok_or_else(|| save_states::no_state_error(&state))?;
         let thumb = {
             let f = state.last_frame.lock().unwrap_or_else(|p| p.into_inner());
             f.as_ref()

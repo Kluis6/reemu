@@ -17,7 +17,7 @@ use domain::core_loader::CoreLoadError;
 use domain::frame_source::SoftwarePixelFormat;
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::os::raw::{c_char, c_uint, c_void};
+use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -71,6 +71,12 @@ pub(crate) struct FrontendState {
     pub hw_frame: Option<(u32, u32)>,
     /// Rotação da tela pedida via `SET_ROTATION` (0/90/180/270°, anti-horário).
     pub rotation_degrees: u16,
+    /// Quirks de serialização que o core informou (`SET_SERIALIZATION_QUIRKS`,
+    /// bits em `domain::core_loader::serialization_quirk`); 0 = nenhum.
+    pub serialization_quirks: u64,
+    /// O que responder em `GET_SAVESTATE_CONTEXT`. Hoje sempre `NORMAL` (save
+    /// state em disco); o rewind (doc 17) usa `RUNAHEAD_SAME_INSTANCE`.
+    pub savestate_context: c_int,
     /// `(fps, sample_rate)` novos pedidos pelo core em runtime via
     /// `SET_SYSTEM_AV_INFO` — a thread do core drena e reconfigura o pacing e o
     /// resampler. `parallel_n64` faz isso logo após o load (32040 → ~26807 Hz).
@@ -137,6 +143,8 @@ impl FrontendState {
             ),
             hw_frame: None,
             rotation_degrees: 0,
+            serialization_quirks: 0,
+            savestate_context: sys::RETRO_SAVESTATE_CONTEXT_NORMAL,
             av_update: None,
             geometry_update: None,
             controller_ports: 0,
@@ -219,6 +227,12 @@ static STATE: Mutex<Option<FrontendState>> = Mutex::new(None);
 
 pub(crate) fn lock() -> std::sync::MutexGuard<'static, Option<FrontendState>> {
     STATE.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// Quirks de serialização do core carregado (0 sem core ou sem quirks) — o
+/// processo do core manda ao app (`ToParent::SerializationQuirks`).
+pub fn serialization_quirks() -> u64 {
+    lock().as_ref().map_or(0, |st| st.serialization_quirks)
 }
 
 /// Guarda que representa "há um core carregado". Enquanto viver, um novo
@@ -563,6 +577,42 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             }
             true
         }
+        // libretro.h: "The frontend will set the flags of the quirks it
+        // supports and clear the flags of those it doesn't". O ReEmu lida com
+        // todos: o tamanho é perguntado a cada save (variável aceito, e
+        // confirma com FRONT_VARIABLE_SIZE), falha no início vira erro, e o
+        // estado SINGLE_SESSION não vai pra disco (comando do app). O `_2` é
+        // o "Legacy compatibility shim" do mesmo comando.
+        sys::RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS
+        | sys::RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS_2 => {
+            if data.is_null() {
+                return false;
+            }
+            use domain::core_loader::serialization_quirk as q;
+            let quirks = *(data as *const u64);
+            st.serialization_quirks = quirks;
+            let mut answer = quirks
+                & (q::INCOMPLETE
+                    | q::MUST_INITIALIZE
+                    | q::CORE_VARIABLE_SIZE
+                    | q::SINGLE_SESSION
+                    | q::ENDIAN_DEPENDENT
+                    | q::PLATFORM_DEPENDENT);
+            if quirks & q::CORE_VARIABLE_SIZE != 0 {
+                answer |= q::FRONT_VARIABLE_SIZE;
+            }
+            *(data as *mut u64) = answer;
+            log::info!("core: quirks de serialização 0x{quirks:x}");
+            true
+        }
+        // "May be NULL, in which case the environment call will return true
+        // to indicate its availability" (libretro.h).
+        sys::RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT => {
+            if !data.is_null() {
+                *(data as *mut c_int) = st.savestate_context;
+            }
+            true
+        }
         // Reconhecidos, sem efeito ainda.
         sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
         | sys::RETRO_ENVIRONMENT_SET_MESSAGE
@@ -839,5 +889,60 @@ mod input_state_tests {
         assert_eq!(q(sys::RETRO_DEVICE_ID_JOYPAD_R2), 0x7fff);
         crate::input::retropad().set(3, RetroPadButton::R2, false);
         assert_eq!(q(sys::RETRO_DEVICE_ID_JOYPAD_R2), 0);
+    }
+}
+
+#[cfg(test)]
+mod serialization_tests {
+    use super::*;
+    use domain::core_loader::serialization_quirk as q;
+
+    #[test]
+    fn quirks_are_kept_and_answered_as_libretro_asks() {
+        let dir = std::env::temp_dir();
+        let _guard = acquire(&dir, &dir).expect("estado do core");
+        // o core manda os quirks dele; o frontend devolve os que suporta
+        let mut quirks: u64 = q::SINGLE_SESSION | q::CORE_VARIABLE_SIZE | q::INCOMPLETE;
+        let ok = unsafe {
+            environment_cb(
+                sys::RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS,
+                (&mut quirks as *mut u64).cast(),
+            )
+        };
+        assert!(ok);
+        assert_eq!(
+            quirks,
+            q::SINGLE_SESSION | q::CORE_VARIABLE_SIZE | q::INCOMPLETE | q::FRONT_VARIABLE_SIZE,
+            "confirma o tamanho variável com FRONT_VARIABLE_SIZE"
+        );
+        assert_eq!(
+            serialization_quirks(),
+            q::SINGLE_SESSION | q::CORE_VARIABLE_SIZE | q::INCOMPLETE,
+            "guarda o que o core informou"
+        );
+        // o `_2` é o mesmo comando
+        let mut only_single: u64 = q::SINGLE_SESSION;
+        assert!(unsafe {
+            environment_cb(
+                sys::RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS_2,
+                (&mut only_single as *mut u64).cast(),
+            )
+        });
+        assert_eq!(serialization_quirks(), q::SINGLE_SESSION);
+        // contexto: NULL só pergunta se existe; com ponteiro, NORMAL
+        assert!(unsafe {
+            environment_cb(
+                sys::RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT,
+                std::ptr::null_mut(),
+            )
+        });
+        let mut ctx: c_int = -1;
+        assert!(unsafe {
+            environment_cb(
+                sys::RETRO_ENVIRONMENT_GET_SAVESTATE_CONTEXT,
+                (&mut ctx as *mut c_int).cast(),
+            )
+        });
+        assert_eq!(ctx, sys::RETRO_SAVESTATE_CONTEXT_NORMAL);
     }
 }
