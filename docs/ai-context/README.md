@@ -37,6 +37,7 @@ trabalhar de memória (ver `00-visao-geral.md`).
 | `13-multi-plataforma.md` | Windows/macOS | 02–10 |
 | `14-emuladores-nativos-rust.md` | Emuladores nativos em Rust substituindo cores libretro (**bloqueado**) | compatibilidade total com libretro |
 | `15-ports-nativos-recomp-decomp.md` | Ports nativos (recomp/decomp) abertos pela biblioteca: pesquisa, licenças e arquitetura do launcher (**backlog**) | 01, 10 (catálogo) |
+| `16-retroachievements.md` | Conquistas do RetroAchievements (rcheevos/`rc_client`): o que a documentação exige, onde encaixa no ReEmu e o plano em 8 fases (**planejado**) | 01, 06/07, save states |
 
 Docs 04 a 10 podem ser feitos em paralelo/qualquer ordem entre si, desde
 que 01-03 já estejam prontos.

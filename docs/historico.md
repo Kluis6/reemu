@@ -2876,3 +2876,19 @@ Infra:
   - modais sem conteúdo por baixo dos botões;
   - Tauri 2.12.5.
 - **Primeira release com o SDL3:** o `windows-latest` do CI precisa compilar o SDL com o CMake dele.
+
+## 2026-10-28 — Pesquisa e plano: conquistas do RetroAchievements
+
+- **Pedido do usuário:** iniciar as conquistas (RetroAchievements) com pesquisa e plano de ação.
+- **Fontes:**
+  - rcheevos (MIT, v12.5.0 de 2026-09-14), com a wiki do `rc_client`, o `src/libretro/rc_libretro.h` e a página de identificação de jogos do RA;
+  - o crate `rcheevos-sys` 0.1.0 está parado desde 2024-11.
+- **Achados no código do ReEmu:**
+  - o `SET_MEMORY_MAPS` (environment 36) ainda não é tratado;
+  - o `retro_get_memory_data` já é resolvido;
+  - o `archive.rs` extrai `.zip`/`.7z` para um arquivo temporário (serve ao `rc_hash`, menos no fliperama, que é por nome de arquivo);
+  - não há rewind, câmera lenta nem cheats, então o hardcore bloqueia só carregar save state, opções de core e pausa;
+  - com o vídeo nativo, os avisos precisam ser desenhados no wgpu.
+- **Plano:** `docs/ai-context/16-retroachievements.md`, com 8 fases.
+  - A fase 0 é do dono do projeto: registrar o User-Agent com a equipe do RA. Sem ele o hardcore vira softcore no servidor.
+  - O item foi para o `TASKS.md` › Funcionalidades.

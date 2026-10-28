@@ -463,6 +463,17 @@ no `emu-session`, ver `docs/historico.md`).
 
 ### Funcionalidades
 
+- [ ] `todo` — **Conquistas (RetroAchievements)**, pedido do dono do projeto
+      (2026-10-28). Plano completo em
+      [`docs/ai-context/16-retroachievements.md`](docs/ai-context/16-retroachievements.md):
+      rcheevos (MIT) compilado num crate nosso; `rc_client` no processo do
+      core; HTTPS pelo app com o User-Agent do ReEmu.
+      - **Antes do código:** registrar o User-Agent com a equipe do RA. Sem
+        isso o servidor rebaixa o hardcore para softcore. Tarefa do dono do
+        projeto.
+      - **Primeiro passo de código:** tratar o
+        `RETRO_ENVIRONMENT_SET_MEMORY_MAPS`, que hoje cai em "não tratado".
+
 - [ ] `todo` — Avaliar integração **GameKave / Alvanista** (pedido do dono
       do projeto, 2026-10-20). A GameKave (Tellurian Corp) é a
       "infraestrutura de identidade gamer" por trás da Alvanista, rede social
