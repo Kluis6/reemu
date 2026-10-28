@@ -5,6 +5,7 @@
 //! pública.
 
 mod audio_config_repo;
+mod cheats_repo;
 mod controller_mappings_repo;
 mod core_options_repo;
 mod decoration_repo;
@@ -22,6 +23,7 @@ mod system_hotkeys_repo;
 mod video_config_repo;
 
 pub use audio_config_repo::AudioConfigRepo;
+pub use cheats_repo::CheatsRepo;
 pub use controller_mappings_repo::ControllerMappingsRepo;
 pub use core_options_repo::CoreOptionsRepo;
 pub use decoration_repo::DecorationRepo;

@@ -605,6 +605,22 @@ export const saveState = (romId: string, slot: number | null) =>
   invoke<SaveState>('save_state', { romId, slot })
 export const listSaveStates = (romId: string) =>
   invoke<SaveState[]>('list_save_states', { romId })
+
+/** Cheat por código de um jogo (`commands/cheats.rs`, doc 17). */
+export interface Cheat {
+  id: number
+  romId: string
+  description: string
+  code: string
+  enabled: boolean
+}
+export const listCheats = (romId: string) => invoke<Cheat[]>('list_cheats', { romId })
+/** Entra ligado; vale na hora no jogo aberto. */
+export const addCheat = (romId: string, description: string, code: string) =>
+  invoke<Cheat>('add_cheat', { romId, description, code })
+export const updateCheat = (id: number, description: string, code: string, enabled: boolean) =>
+  invoke<Cheat>('update_cheat', { id, description, code, enabled })
+export const deleteCheat = (id: number) => invoke<void>('delete_cheat', { id })
 export const loadSaveState = (stateId: string) =>
   invoke<void>('load_save_state', { stateId })
 export const deleteSaveState = (stateId: string) =>

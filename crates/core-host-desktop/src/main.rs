@@ -496,6 +496,11 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 }
                 let _ = channel.send(&ToParent::PausedAck, &[]);
             }
+            ToChild::SetCheats(cheats) => {
+                if let Some(c) = core.as_mut() {
+                    c.set_cheats(&cheats);
+                }
+            }
             ToChild::SaveState => {
                 let bytes = core.as_mut().and_then(|c| c.serialize_state());
                 let _ = channel.send(&ToParent::SaveStateResult(bytes), &[]);

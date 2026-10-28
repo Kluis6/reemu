@@ -146,6 +146,23 @@ impl DesktopCore {
         ok.then_some(buf)
     }
 
+    /// Troca a lista de cheats: `retro_cheat_reset` ("Reset all the active
+    /// cheats to their default disabled state") e um `retro_cheat_set` por
+    /// cheat ligado, com a posição na lista como `index`. O core decide se
+    /// entende o código; um código que ele não aceita é ignorado por ele.
+    pub fn set_cheats(&mut self, cheats: &[domain::cheats::CheatCode]) {
+        unsafe { (self.raw.cheat_reset)() };
+        for (index, cheat) in cheats.iter().enumerate() {
+            if !cheat.enabled {
+                continue;
+            }
+            let Ok(code) = std::ffi::CString::new(cheat.code.trim()) else {
+                continue; // `\0` no meio: não dá pra passar ao C
+            };
+            unsafe { (self.raw.cheat_set)(index as std::os::raw::c_uint, true, code.as_ptr()) };
+        }
+    }
+
     /// Restaura um estado previamente serializado (`retro_unserialize`).
     pub fn restore_state(&mut self, data: &[u8]) -> bool {
         // Pergunta o tamanho antes, como o RetroArch: o FB Alpha 2012 só
@@ -154,6 +171,21 @@ impl DesktopCore {
         // 0 — restaurar numa sessão nova, sem ter salvo nela, falhava.
         let _ = unsafe { (self.raw.serialize_size)() };
         unsafe { (self.raw.unserialize)(data.as_ptr().cast(), data.len()) }
+    }
+
+    /// Cópia da RAM principal do sistema (`RETRO_MEMORY_SYSTEM_RAM`). `None`
+    /// se o core não expõe. Base dos cheats de memória e das conquistas
+    /// (docs 16 e 17).
+    pub fn system_ram(&self) -> Option<Vec<u8>> {
+        let size = unsafe { (self.raw.get_memory_size)(sys::RETRO_MEMORY_SYSTEM_RAM) };
+        if size == 0 {
+            return None;
+        }
+        let ptr = unsafe { (self.raw.get_memory_data)(sys::RETRO_MEMORY_SYSTEM_RAM) };
+        if ptr.is_null() {
+            return None;
+        }
+        Some(unsafe { std::slice::from_raw_parts(ptr.cast::<u8>(), size) }.to_vec())
     }
 
     /// Cópia da save RAM (SRAM de cartucho / battery save) do core. `None` se

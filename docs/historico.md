@@ -2941,3 +2941,27 @@ Infra:
   - O PPSSPP não devolve estado fora do app.
   - O pcsx_rearmed muda o modo do FPU do processo, e os tempos em `f64` saíam absurdos. O teste mede em microssegundos inteiros.
 - **Testes:** teste de unidade do `environment_cb` (quirks, `_2` e contexto). O loader (34), o `core-ipc` e o `emu-session` passam. Os testes de sessão precisaram do `reemu-core-host` recompilado, porque o IPC ganhou uma mensagem.
+
+## 2026-10-28 — Cheats e rewind, fase 1: cheats por código
+
+- **Core:**
+  - o `core-loader-desktop` passou a resolver `retro_cheat_reset` e `retro_cheat_set`;
+  - o `DesktopCore::set_cheats` faz o reset ("Reset all the active cheats to their default disabled state") e um `retro_cheat_set(index, true, code)` por cheat ligado, com a posição na lista como `index`;
+  - vai pelo `ToChild::SetCheats` ao processo do core, ou na thread do core Vulkan local (`on_vk_thread`).
+- **Banco:**
+  - migração `0017_cheats.sql` (`cheats`, com `ON DELETE CASCADE` da ROM) e o `CheatsRepo` (listar, acrescentar no fim, atualizar, apagar);
+  - tipos em `domain::cheats` (`Cheat`, `CheatCode`).
+- **App:**
+  - comandos `list_cheats`, `add_cheat` (entra ligado), `update_cheat` e `delete_cheat` (`commands/cheats.rs`);
+  - o `load_game` aplica os cheats do jogo;
+  - mudanças no jogo aberto valem na hora.
+- **Tela:**
+  - menu de pausa › Cheats (`CheatsPanel`): lista com interruptor e apagar, formulário de descrição e código, e Voltar;
+  - o aviso diz que quem aplica é o core, porque o `libretro.h` não permite saber se um core aceita códigos;
+  - textos em pt-BR, en e es;
+  - o menu volta aos botões de sempre a cada vez que abre (ajuste de estado no render, como a documentação do React indica).
+- **Testes:**
+  - `tests/cheats_real.rs` (ignorado): o snes9x com `7E0100AB` escreve `0xAB` na WRAM `0x0100`;
+  - repositório (`crates/db/tests/cheats.rs`) e a limpeza do código (`commands/cheats.rs`);
+  - a tela, conferida na página de teste.
+- **Falta:** editar um cheat na tela.

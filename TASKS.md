@@ -515,7 +515,9 @@ no `emu-session`, ver `docs/historico.md`).
         - estado de core `SINGLE_SESSION` não vai mais para disco;
         - estados medidos em 10 cores, de 5 KB (NES) a 83 MB (Dreamcast).
           O PPSSPP fica para medir dentro do app.
-      - **Próximo:** fase 1 (cheats por código).
+      - **Fase 1 feita (2026-10-28):** cheats por código no menu de pausa,
+        salvos por jogo e aplicados ao carregar. Falta editar na tela.
+      - **Próximo:** fase 2 (banco `.cht` do libretro).
       - No hardcore do RetroAchievements, os dois ficam proibidos.
 
 - [ ] `todo` — Avaliar integração **GameKave / Alvanista** (pedido do dono

@@ -128,6 +128,11 @@ pub async fn load_game(
         let _ = db::RomsRepo::new(pool).mark_played(rid, now).await;
     }
 
+    // Cheats ligados deste jogo (doc 17) — o core aplica a partir daqui.
+    if let Some(rid) = rom_id.as_deref() {
+        super::cheats::apply_cheats(&state, rid).await;
+    }
+
     // Shader atribuído (rom → sistema → default, ou `plain`); depois a
     // decoração — pulada se o shader já desenha a própria moldura.
     let shader_has_bezel = apply_resolved_shader(&state, rom_id.as_deref()).await;

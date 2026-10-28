@@ -49,6 +49,8 @@ pub enum ToChild {
     SetPaused(bool),
     SaveState,
     RestoreState(Vec<u8>),
+    /// Lista de cheats do jogo (doc 17): o filho troca a do core.
+    SetCheats(Vec<domain::cheats::CheatCode>),
     /// Save RAM (battery) — lida periodicamente pelo pai pra flush em disco.
     GetSaveRam,
     SetSaveRam(Vec<u8>),

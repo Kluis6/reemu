@@ -85,6 +85,7 @@ enum Command {
     ReloadAudio(AudioSinkFactory, Sender<()>),
     GetCoreOptions(Sender<(Vec<CoreOptionDefinition>, HashMap<String, String>)>),
     SetCoreOption(String, String, Sender<bool>),
+    SetCheats(Vec<domain::cheats::CheatCode>, Sender<()>),
     Shutdown,
 }
 
@@ -606,6 +607,11 @@ impl EmuSession {
     pub fn set_core_option(&self, key: &str, value: &str) -> bool {
         self.call(|reply| Command::SetCoreOption(key.to_string(), value.to_string(), reply))
             .unwrap_or(false)
+    }
+
+    /// Troca a lista de cheats do jogo carregado (doc 17). Sem jogo, nada.
+    pub fn set_cheats(&self, cheats: Vec<domain::cheats::CheatCode>) {
+        let _ = self.call(|reply| Command::SetCheats(cheats, reply));
     }
 
     pub fn state(&self) -> SessionState {
@@ -2334,6 +2340,25 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     }
                 };
                 let _ = reply.send(result.unwrap_or_default());
+            }
+            Command::SetCheats(cheats, reply) => {
+                if shared.vk_local_active.load(Ordering::Acquire) {
+                    // na thread do core, como o save state (`on_vk_thread`)
+                    let sh = Arc::clone(&shared);
+                    on_vk_thread(&shared, move || {
+                        if let Some(lc) = sh
+                            .vk_local
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .as_mut()
+                        {
+                            lc.set_cheats(&cheats);
+                        }
+                    });
+                } else if let Some(p) = proc.as_ref() {
+                    let _ = p.channel.send(&ToChild::SetCheats(cheats), &[]);
+                }
+                let _ = reply.send(());
             }
             Command::SetCoreOption(key, value, reply) => {
                 let ok = if shared.vk_local_active.load(Ordering::Acquire) {

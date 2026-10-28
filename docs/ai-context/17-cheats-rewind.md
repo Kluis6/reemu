@@ -154,16 +154,25 @@ só manda "começar/parar rewind".
   a cada captura custa caro. Desligado por padrão, ou com intervalo grande.
 - **PSP:** sem dado ainda.
 
-### Fase 1 — Cheats por código
-- [ ] Resolver `retro_cheat_reset` e `retro_cheat_set` no core-loader e
-      expor pelo IPC (`ToChild::SetCheats(Vec<Cheat>)`).
-- [ ] Banco: tabela de cheats por ROM (descrição, código, ligado, origem:
-      usuário ou banco), aplicados ao carregar o jogo.
-- [ ] Menu de pausa › Cheats: lista com interruptores, adicionar código à
-      mão (com o teclado na tela pelo controle), editar e apagar. Textos em
-      pt-BR, en e es.
-- [ ] Aviso quando o core não suporta cheats por código (descobrir como
-      detectar; se não houver jeito, deixar claro que depende do core).
+### Fase 1 — Cheats por código (feita em 2026-10-28)
+- [x] `retro_cheat_reset` e `retro_cheat_set` no core-loader
+      (`DesktopCore::set_cheats`: reset e um `set` por cheat ligado, com a
+      posição na lista como `index`). Pelo IPC com `ToChild::SetCheats`; no
+      core Vulkan local, na thread do core (`on_vk_thread`).
+- [x] Banco: tabela `cheats` (migração 0017: descrição, código, ligado,
+      posição; some com a ROM) e o `CheatsRepo`. Aplicados no `load_game` e a
+      cada mudança no jogo aberto.
+- [x] Menu de pausa › Cheats: lista com interruptor e apagar, e formulário de
+      descrição e código (com o controle, o A no campo abre o teclado na
+      tela). Textos em pt-BR, en e es.
+- [x] Aviso: o `libretro.h` não tem como o core dizer se aceita códigos, então
+      a tela avisa que quem aplica é o core ("se ele não entender o código,
+      nada muda").
+- [ ] Editar um cheat na tela (o comando `update_cheat` já existe; hoje dá
+      para apagar e acrescentar de novo).
+- **Testado:** num core real (`tests/cheats_real.rs`, ignorado), o snes9x
+  com `7E0100AB` (Pro Action Replay) escreve `0xAB` na WRAM `0x0100`.
+  Repositório (`crates/db/tests/cheats.rs`) e a tela na página de teste.
 
 ### Fase 2 — Banco de cheats do libretro
 - [ ] Baixar o `.cht` do jogo sob demanda do `libretro-database`, pelo

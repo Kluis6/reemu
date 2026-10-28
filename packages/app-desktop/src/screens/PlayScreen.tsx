@@ -19,6 +19,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
+import { CheatsPanel } from "../components/CheatsPanel";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { useFocusBridge } from "../hooks/useFocusBridge";
 import { useFullscreen } from "../hooks/useFullscreen";
@@ -405,6 +406,16 @@ export function PlayScreen() {
   // Menu de pausa: fica montado durante a animação de saída; no vídeo nativo
   // busca o print do jogo capturado pelo Rust pra usar de fundo.
   const menuOpen = focus === "MenuFocused";
+  // Conteúdo do menu de pausa: os botões de sempre ou a lista de cheats
+  // (doc 17); volta pros botões a cada vez que o menu abre.
+  const [pauseView, setPauseView] = useState<"main" | "cheats">("main");
+  // ajuste no render quando o menu abre (react.dev, "Adjusting some state
+  // when a prop changes"), sem efeito
+  const [menuWasOpen, setMenuWasOpen] = useState(menuOpen);
+  if (menuOpen !== menuWasOpen) {
+    setMenuWasOpen(menuOpen);
+    if (menuOpen) setPauseView("main");
+  }
   const [closing, setClosing] = useState(false);
   const menuMounted = menuOpen || closing;
   const wasOpen = useRef(false);
@@ -845,8 +856,12 @@ export function PlayScreen() {
           )}
           <div className={pause.panel}>
             <Title3 as="h2" className={pause.title}>
-              {t("play.paused")}
+              {pauseView === "cheats" ? t("cheats.title") : t("play.paused")}
             </Title3>
+            {pauseView === "cheats" ? (
+              <CheatsPanel romId={romId} onBack={() => setPauseView("main")} />
+            ) : (
+            <>
             <Button appearance="primary" onClick={resume}>
               {t("play.continue")}
             </Button>
@@ -898,9 +913,16 @@ export function PlayScreen() {
             <Button appearance="subtle" onClick={() => void toggleFullscreen()}>
               {fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen")}
             </Button>
+            {romId && (
+              <Button appearance="subtle" onClick={() => setPauseView("cheats")}>
+                {t("play.cheats")}
+              </Button>
+            )}
             <Button appearance="subtle" onClick={quit}>
               {t("play.quit")}
             </Button>
+            </>
+            )}
           </div>
         </div>
       )}

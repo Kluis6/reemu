@@ -149,6 +149,10 @@ impl LocalCore {
         self.core.restore_state(data)
     }
 
+    pub(crate) fn set_cheats(&mut self, cheats: &[domain::cheats::CheatCode]) {
+        self.core.set_cheats(cheats)
+    }
+
     pub(crate) fn save_ram(&self) -> Option<Vec<u8>> {
         self.core.save_ram()
     }
