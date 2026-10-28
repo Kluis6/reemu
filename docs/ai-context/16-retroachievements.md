@@ -103,10 +103,12 @@ pontos e proíbe ajudas.
   - o **limite de pausas** (`rc_client_can_pause`).
 - **Avisos durante o jogo:** no Windows o vídeo é uma janela nativa **por
   cima** do WebView2, então o `ToastLayer` da interface fica escondido
-  enquanto se joga. Os avisos de conquista precisam ser desenhados **na
-  própria imagem do jogo**, com o wgpu. A decisão exata (biblioteca de texto
-  para wgpu, como o `glyphon`) fica para a fase 4, consultando a documentação
-  oficial do wgpu, como manda o `CLAUDE.md`.
+  enquanto se joga. Como mostrar os avisos de conquista sobre o jogo (wgpu,
+  recorte na janela do jogo ou uma segunda janela transparente) está no
+  backlog "Menus e avisos por cima do jogo em movimento" do `TASKS.md`, com o
+  teste do "Window to Visual" de 2026-10-28, que deu tela branca. Até lá, a
+  fase 4 entra sem os avisos durante o jogo. Em GPU, a documentação oficial
+  vale em cada decisão, como manda o `CLAUDE.md`.
 - **Segredo:** o token do RA vai para o cofre do sistema (Gerenciador de
   Credenciais do Windows, Secret Service no Linux), não para o banco nem para
   o `app-settings.json`.
