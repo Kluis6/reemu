@@ -2892,3 +2892,16 @@ Infra:
 - **Plano:** `docs/ai-context/16-retroachievements.md`, com 8 fases.
   - A fase 0 é do dono do projeto: registrar o User-Agent com a equipe do RA. Sem ele o hardcore vira softcore no servidor.
   - O item foi para o `TASKS.md` › Funcionalidades.
+
+## 2026-10-28 — Teste: WebView2 em "Window to Visual" por cima do jogo (tela branca); tema no backlog
+
+- **Pergunta do usuário:** com o Tauri novo, dá para pôr uma camada transparente sobre a janela nativa e mostrar menus e avisos durante o jogo?
+- **Pesquisa:**
+  - os changelogs do wry 0.57.1 e do Tauri 2.12.5 não mudam o modo de hospedagem do WebView2 no Windows;
+  - a Microsoft ("Windowed vs. Visual hosting") descreve o modo "Window to Visual", ligado só pela variável `COREWEBVIEW2_FORCED_HOSTING_MODE`, mas fala apenas de DPI e entrada, não de transparência sobre outras janelas.
+- **Teste do usuário:** `REEMU_WIN_OVERLAY=child` com o "Window to Visual", em 4K (3840×2160).
+  - Resultado: **tela branca** sobre o jogo.
+  - A árvore de janelas confirmou a troca de modo: `WRY_WEBVIEW` › `Chrome_WidgetWin_0`, sem a janela do navegador por baixo.
+  - Em 02/10, no modo janela, tinha dado tela preta.
+- **Antes do teste:** o `cargo` falhou com "Acesso negado" ao substituir o `reemu-desktop.exe`, porque um ReEmu de outra sessão estava aberto. Encerrei, a pedido do usuário, o `reemu-desktop` (PID 3804) e o `cargo` (PID 21352).
+- **Decisão do usuário:** fica no backlog (`TASKS.md` › Vídeo / GPU), com as cinco opções levantadas. Por ora, menus e avisos seguem como estão.

@@ -97,6 +97,35 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Vídeo / GPU
 
+- [ ] `backlog` — **Menus e avisos por cima do jogo em movimento (Windows)**,
+      pedido do dono do projeto (2026-10-28): fica para depois. Por ora seguem
+      como estão: o menu de pausa esconde o vídeo e usa a foto do quadro, e os
+      avisos e as conquistas da fase 4 esperam esta decisão.
+      - **Testado em 2026-10-28:** o WebView2 transparente em "Window to
+        Visual" (`COREWEBVIEW2_FORCED_HOSTING_MODE=COREWEBVIEW2_HOSTING_MODE_WINDOW_TO_VISUAL`,
+        com `REEMU_WIN_OVERLAY=child`) deu **tela branca**, sem o jogo.
+        - O modo mudou de fato: só sobrou a janela de hospedagem do WebView2
+          no nosso processo.
+        - Antes, no modo janela, deu tela preta (2026-10-02).
+        - Provável causa, não verificada: aparece o fundo da própria janela do
+          WebView, não a janela do jogo embaixo.
+      - **O Tauri 2.12.5 e o wry 0.57.1 não mudam isso:** os changelogs só
+        trazem transparência para macOS e iOS. O modo visual completo
+        (composition controller) exigiria mudar o wry e encaminhar mouse e
+        teclado à mão.
+      - **Opções levantadas:**
+        1. Recorte na janela do jogo (`SetWindowRgn`) onde fica o aviso
+           HTML. Rápido, mas o aviso fica opaco.
+        2. Avisos ou menu desenhados no wgpu (texto com `glyphon`, ou `egui`).
+           Interface duplicada fora do React.
+        3. Segunda janela transparente, sem borda e sempre por cima, com um
+           WebView próprio. O menu fica em HTML sobre o jogo ao vivo, mas é
+           preciso acompanhar posição, minimização e foco. Sugestão para o
+           menu.
+        4. Modo canvas (`REEMU_NATIVE_VIDEO=0`), que já existe, com o custo da
+           cópia de cada quadro.
+        5. `TextureStream` do WebView2: só proposta, sem API estável.
+
 - [ ] `todo` — Shaders do pacote que o WebGPU recusa na prévia (2026-10-16,
       `field_render_real_presets`: monta os pipelines e renderiza a cena 2D;
       o `field_validate_real_presets` só compila e não pega isto). Placar
