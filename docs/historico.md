@@ -2905,3 +2905,23 @@ Infra:
   - Em 02/10, no modo janela, tinha dado tela preta.
 - **Antes do teste:** o `cargo` falhou com "Acesso negado" ao substituir o `reemu-desktop.exe`, porque um ReEmu de outra sessão estava aberto. Encerrei, a pedido do usuário, o `reemu-desktop` (PID 3804) e o `cargo` (PID 21352).
 - **Decisão do usuário:** fica no backlog (`TASKS.md` › Vídeo / GPU), com as cinco opções levantadas. Por ora, menus e avisos seguem como estão.
+
+## 2026-10-28 — Pesquisa e plano: cheats e rewind
+
+- **Pedido do usuário:** pesquisar e planejar cheats e rewind no ReEmu.
+- **Fontes:**
+  - `libretro.h` (libretro-common, master): `retro_cheat_reset`, `retro_cheat_set(index, enabled, code)`, `RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS` (44) com os `RETRO_SERIALIZATION_QUIRK_*`, e `GET_SAVESTATE_CONTEXT` (72 | experimental), cujo `RUNAHEAD_SAME_INSTANCE` "generally implies the use of runahead or rewinding";
+  - libretro-database (`cht/`, licença CC-BY-SA 4.0), com o formato `.cht` conferido num arquivo real.
+- **Achados no código do ReEmu:**
+  - nenhum suporte a cheats: o `retro_cheat_*` nem é resolvido;
+  - o save state já roda no processo do core, pelo IPC;
+  - quirks e contexto de save state não são tratados. **Defeito atual:** um core `SINGLE_SESSION` grava save state em disco que não carrega depois;
+  - não há avanço rápido nem câmera lenta.
+- **Plano:** `docs/ai-context/17-cheats-rewind.md`, com 6 fases.
+  - Base de quirks e medição do tamanho dos estados.
+  - Cheats por código.
+  - Banco `.cht` baixado sob demanda.
+  - Rewind com delta comprimido no processo do core.
+  - Cheats de memória, com o mapa de memória das conquistas.
+  - Bloqueio no hardcore.
+  - Nada copiado do RetroArch (GPL).

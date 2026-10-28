@@ -502,6 +502,18 @@ no `emu-session`, ver `docs/historico.md`).
         projeto.
       - **Primeiro passo de código:** tratar o
         `RETRO_ENVIRONMENT_SET_MEMORY_MAPS`, que hoje cai em "não tratado".
+- [ ] `todo` — **Cheats e rewind**, pedido do dono do projeto (2026-10-28).
+      Plano em
+      [`docs/ai-context/17-cheats-rewind.md`](docs/ai-context/17-cheats-rewind.md).
+      - **Cheats:** código pelo `retro_cheat_set`; banco `.cht` do
+        libretro-database (CC-BY-SA 4.0, baixado sob demanda com crédito);
+        depois cheats de memória.
+      - **Rewind:** buffer circular de estados com delta comprimido, no
+        processo do core.
+      - **Primeiro passo:** tratar `SET_SERIALIZATION_QUIRKS` e
+        `GET_SAVESTATE_CONTEXT`, medir o tamanho dos estados por core e não
+        gravar em disco estados de core `SINGLE_SESSION` (defeito atual).
+      - No hardcore do RetroAchievements, os dois ficam proibidos.
 
 - [ ] `todo` — Avaliar integração **GameKave / Alvanista** (pedido do dono
       do projeto, 2026-10-20). A GameKave (Tellurian Corp) é a

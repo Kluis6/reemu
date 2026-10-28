@@ -95,7 +95,8 @@ pontos e proíbe ajudas.
   - **CHD** precisa de um leitor próprio no `rc_hash` (libchdr, BSD-3);
   - **jogos com vários discos** (`.m3u`) usam o `rc_libretro_hash_set_*`.
 - **O que o hardcore bloqueia no ReEmu:** hoje não há rewind, câmera lenta,
-  cheats nem avanço quadro a quadro. Fica:
+  cheats nem avanço quadro a quadro. Cheats e rewind estão planejados
+  (`17-cheats-rewind.md`) e entram nesta lista quando existirem. Fica:
   - **carregar save state** (salvar continua livre);
   - as **opções de core proibidas**
     (`rc_libretro_get_disallowed_settings`) e os pares core/sistema não
