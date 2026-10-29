@@ -3109,3 +3109,18 @@ Infra:
 
 - **Problema:** o binário de testes do `reemu-desktop` deixou de abrir (`STATUS_ENTRYPOINT_NOT_FOUND`). O `run_chain` chamava direto o `shader_failure::report`, que usa o `AppHandle`, e com isso o runtime do Tauri entrava no binário de teste junto com a importação de `TaskDialogIndirect` (comctl32 v6). Esse binário não tem o manifesto do comctl32 v6 e carregava a v5.82.
 - **Correção:** a GPU chama um gancho (`gpu::set_shader_failure_hook`, um ponteiro de função) registrado no `setup`. Nos testes não há gancho e fica só o log. Os 72 testes do app e a suíte do workspace passam. Clippy com `-D warnings` e `cargo fmt` limpos; o frontend (lint, 147 testes e build) também.
+
+## 2026-10-29 — Release v0.1.10
+
+- **Pedido do usuário:** publicar a versão 0.1.10.
+- **Versão:** 0.1.9 → 0.1.10 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 12 crates do workspace.
+- **Antes da tag:** o CI do `main` (commit `38efefd`) passou nos três jobs.
+- **O que entra, desde a v0.1.9:**
+  - cheats por código (fase 1) e quirks de serialização (fase 0);
+  - menu de pausa num drawer à esquerda, com abas de ícone, LB/RB e o rodapé de ações; sem piscar em branco no vídeo nativo;
+  - aba Cheats na página do jogo;
+  - shaders: erro da GPU não derruba mais a imagem do jogo; mipmaps e passe final em ponto flutuante corrigidos; shader que impede o jogo de aparecer sai sozinho e vira aviso no sino;
+  - miniatura do save state no vídeo nativo;
+  - scan de arcade: mais nomes de pasta, BIOS fora da lista de jogos e aviso de zips sem jogo;
+  - foco com anel e brilho em todos os botões e abas, tooltips à direita, botões dos modais visíveis em todos os temas;
+  - arte da página do jogo até 70% da tela, texto branco com sombra sobre ela e drawers flutuantes.
