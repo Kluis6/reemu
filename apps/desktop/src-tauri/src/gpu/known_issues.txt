@@ -1,0 +1,6 @@
+# Presets do pacote slang-shaders com problema conhecido (ver known_issues.rs).
+# Gerado pelo teste field_render_all_presets (REEMU_SHADER_ISSUES_OUT), numa
+# RTX 3060 (Vulkan, Windows). Formato: <gpu-hang|render-error><TAB><caminho>.
+gpu-hang	bezel/Mega_Bezel/Presets/Base_CRT_Presets/MBZ__5__POTATO__GDV-NTSC.slangp
+gpu-hang	bezel/Mega_Bezel/Presets/Variations/Screen-Only/Max-Int-Scale/_5__POTATO__NTSC.slangp
+render-error	test/feedback-noncausal.slangp

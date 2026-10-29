@@ -21,8 +21,10 @@ import { useTabStyles } from '../styles/xbox'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
-  // abas no estilo do app; 24 até o conteúdo (8 do `gap` + 16)
-  tabs: { alignSelf: 'flex-start', marginBottom: '16px' },
+  // abas no estilo do app; 24 até o conteúdo (8 do `gap` + 16). Dentro do
+  // card a aba (fundo e indicador) começa na mesma borda dos campos — sem o
+  // recuo de -15 do `useTabStyles`, que alinha só o texto (print do usuário).
+  tabs: { alignSelf: 'flex-start', marginBottom: '16px', marginLeft: 0 },
   head: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' },
   hint: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
   grid: {

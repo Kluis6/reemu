@@ -13,6 +13,12 @@ export function sysToast(message: string, variant: ToastVariant = 'Info'): Toast
   }
 }
 
+/** Aviso de shader com problema conhecido na GPU: amarelo e com tempo de
+ *  leitura (é uma instrução, não uma confirmação). */
+export function shaderIssueToast(message: string): ToastItem {
+  return { ...sysToast(message, 'Warning'), durationMs: 9000 }
+}
+
 /** Onde fica a solução de cada tipo de erro (rotas do HashRouter). */
 const FIX_ROUTES: Record<ErrorFix, string> = {
   cores: '#/settings/cores',

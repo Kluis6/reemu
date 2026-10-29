@@ -233,8 +233,10 @@ pub(super) async fn apply_resolved_shader_ex(
     };
     let system = system_of(&pool, rom_id).await;
     let sc = db::ShaderChainRepo::new(pool);
+    let mut active = None;
     let (target, has_bezel, overrides) = match sc.resolve(&system, rom_id).await {
         Ok(Some(a)) => {
+            let origin = (a.scope, a.system_id.clone(), a.rom_id.clone());
             let (src, bezel) = sc
                 .list_presets()
                 .await
@@ -242,15 +244,43 @@ pub(super) async fn apply_resolved_shader_ex(
                 .and_then(|ps| ps.into_iter().find(|p| p.id == a.preset_id))
                 .map(|p| (p.source_path, p.includes_bezel))
                 .unwrap_or_else(|| ("plain".into(), false));
+            active = Some(crate::shader_failure::ActiveShader {
+                source: src.clone(),
+                scope: origin.0,
+                system_id: origin.1,
+                rom_id: origin.2,
+            });
             (src, bezel, a.parameter_overrides)
         }
         _ => ("plain".into(), false, Default::default()),
     };
+    *state
+        .active_shader
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = active;
+    use crate::shader_failure::{report, FailureKind};
     let mut guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
     if let Some(fp) = guard.as_mut() {
+        // Shader que impede o jogo de aparecer (pedido do usuário,
+        // 2026-10-29): os que travam a GPU (`gpu::known_issues`) nem são
+        // aplicados; os que não montam também não. Nos dois casos o jogo roda
+        // no `plain`, o shader sai da atribuição e o aviso vai pro sino.
+        let hang = crate::gpu::shader_issue(&target) == Some(crate::gpu::ShaderIssue::GpuHang);
+        if hang {
+            let _ = fp.set_preset("plain");
+            report(
+                &target,
+                FailureKind::KnownGpuHang,
+                "o preset trava a GPU (lista de problemas conhecidos do ReEmu)".into(),
+            );
+            return false;
+        }
         if force || fp.preset_source() != target {
             if let Err(e) = fp.set_preset(&target) {
                 log::warn!("shader do jogo: {e}");
+                let _ = fp.set_preset("plain");
+                report(&target, FailureKind::Build, e);
+                return false;
             }
         }
         for (k, v) in &overrides {

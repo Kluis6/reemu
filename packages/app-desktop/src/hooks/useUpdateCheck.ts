@@ -91,13 +91,14 @@ export function useUpdateCheck() {
       const prev = useNotificationStore
         .getState()
         .items.find((i) => i.id === "update");
+      const same = prev?.kind === "update" && prev.update.version === info.version;
       upsert({
         id: "update",
         kind: "update",
         title: i18n.t("updates.availableTitle", { version: info.version }),
         summary: i18n.t("updates.availableSummary", { version: info.currentVersion }),
-        at: prev?.update.version === info.version ? prev.at : Date.now(),
-        read: prev?.update.version === info.version ? prev.read : false,
+        at: same && prev ? prev.at : Date.now(),
+        read: same && prev ? prev.read : false,
         update: info,
       });
       if (toastedVersion === info.version) return;

@@ -344,6 +344,7 @@ const es: Messages = {
       states: 'Save states',
       shader: 'Shader',
       media: 'Galería',
+      cheats: 'Trucos',
     },
     media: {
       screenshot: 'Captura de pantalla',
@@ -396,6 +397,7 @@ const es: Messages = {
     start: 'Escaneando…',
     result: '{{added}} añadida(s) · {{known}} ya en la biblioteca · {{skipped}} omitida(s)',
     refreshResult: '{{added}} nueva(s) · {{removed}} eliminada(s) · {{reclassified}} corregida(s)',
+    archivesHint: '{{count}} archivo(s) .zip/.7z sin juego reconocido. Si son de arcade (FinalBurn Neo, MAME), ponlos en una carpeta llamada arcade, fbneo o mame.',
   },
   library: {
     loading: 'Cargando biblioteca…',
@@ -451,6 +453,11 @@ const es: Messages = {
     quickLoad: 'QuickLoad',
     quit: 'Salir del juego',
     cheats: 'Trucos',
+    tabStates: 'Save states',
+    tabs: 'Menú de pausa',
+    loadState: 'Cargar',
+    achievements: 'Logros',
+    achievementsSoon: 'Los logros de RetroAchievements aparecerán aquí en una próxima versión de ReEmu.',
   },
   cheats: {
     title: 'Trucos',
@@ -597,6 +604,10 @@ const es: Messages = {
       },
     },
     defaultShader: 'Shader predeterminado: {{name}}',
+    shaderIssue: {
+      gpuHang: 'El shader "{{name}}" bloquea la GPU en las pruebas de ReEmu (la imagen del juego se detiene) y no se aplicó. Elige otro.',
+      renderError: 'El shader "{{name}}" dio un error en la GPU en las pruebas de ReEmu. Si impide que el juego aparezca, ReEmu lo quita y te avisa en la campana.',
+    },
     bezelsImported: 'Marcos importados — {{count}} asignación(es). Se aplica en el próximo juego.',
     bezelsRemoved: 'Marcos quitados.',
     unavailable: 'Información de shader no disponible.',
@@ -871,6 +882,23 @@ const es: Messages = {
     restarts: 'ReEmu se reinicia solo al terminar.',
     updating: 'Actualizando…',
     updateNow: 'Actualizar ahora',
+  },
+  shaderFailure: {
+    title: 'Shader quitado: {{name}}',
+    summary: 'Impidió que el juego apareciera; el juego usó el predeterminado',
+    summaryRemoved: 'Impidió que el juego apareciera y se quitó de la asignación',
+    dialogTitle: 'Shader quitado: {{name}}',
+    kind: {
+      build: 'Este shader no se pudo montar en esta GPU, así que el juego no tendría imagen. ReEmu usó el shader predeterminado.',
+      knownGpuHang: 'Este shader bloquea la GPU en las pruebas de ReEmu (la imagen del juego se detiene y el sonido sigue). ReEmu no lo aplicó: el juego abrió con el shader predeterminado.',
+      gpu: 'Este shader dio un error en la GPU durante el juego y la imagen se detuvo. ReEmu volvió al shader predeterminado.',
+    },
+    scopeRom: 'Estaba asignado a este juego y se quitó. Puedes elegir otro en la pestaña Shader de la página del juego.',
+    scopeSystem: 'Estaba asignado a la plataforma {{platform}} y se quitó. Puedes elegir otro en la pestaña Shader de la página de uno de sus juegos.',
+    scopeDefault: 'Era el shader predeterminado de todos los juegos y se quitó. Puedes elegir otro en Ajustes › Decoraciones.',
+    scopeNone: 'No estaba guardado en ningún juego, así que no había nada que quitar.',
+    file: 'Archivo',
+    error: 'Mensaje del error',
   },
   notifications: {
     title: 'Notificaciones',

@@ -90,6 +90,9 @@ pub struct AppState {
     /// "Carregando…"). Fecha a janela de corrida entre navegar e o pump ver
     /// `Idle`.
     pub loading_game: std::sync::atomic::AtomicBool,
+    /// De qual atribuição veio o shader do jogo aberto — sai dela se o
+    /// shader impedir o jogo de aparecer (`shader_failure`).
+    pub active_shader: Mutex<Option<crate::shader_failure::ActiveShader>>,
 }
 
 /// Estado da transição jogo↔menu no vídeo nativo. O `reemu-video-pump` dirige.
@@ -178,6 +181,7 @@ impl AppState {
             pending_gpu: Mutex::new(None),
             vk_reattach: Mutex::new(None),
             loading_game: std::sync::atomic::AtomicBool::new(false),
+            active_shader: Mutex::new(None),
         }
     }
 }
@@ -236,6 +240,8 @@ pub(crate) fn nav_pulse_name(p: input_desktop::NavPulse) -> &'static str {
         Search => "search",
         Context => "context",
         Action => "action",
+        TabPrev => "tabPrev",
+        TabNext => "tabNext",
     }
 }
 
@@ -279,11 +285,7 @@ async fn quick_state<R: tauri::Runtime>(app: &AppHandle<R>, save: bool) -> Resul
             .save_state()
             .map_err(|e| e.to_string())?
             .ok_or_else(|| save_states::no_state_error(&state))?;
-        let thumb = {
-            let f = state.last_frame.lock().unwrap_or_else(|p| p.into_inner());
-            f.as_ref()
-                .and_then(|c| thumbnail_png(c.w, c.h, &c.rgba, 320))
-        };
+        let thumb = save_states::save_thumbnail(&state);
         save_svc::save(
             &repo,
             &state.save_dir,
@@ -340,7 +342,10 @@ pub(crate) fn toggle_and_emit<R: tauri::Runtime>(app: &AppHandle<R>) -> &'static
         let mut vm = state.video_menu.lock().unwrap_or_else(|p| p.into_inner());
         *vm = match now {
             InputFocus::MenuFocused => VideoMenu::Opening(2),
-            InputFocus::GameFocused => VideoMenu::Closing(10),
+            // ~15 ms por tick: 20 cobre a saída do menu de pausa (OverlayDrawer
+            // `small` do Fluent, durationGentle = 250 ms) antes de o jogo voltar
+            // por cima da webview.
+            InputFocus::GameFocused => VideoMenu::Closing(20),
         };
     }
     let s = focus_str(now);

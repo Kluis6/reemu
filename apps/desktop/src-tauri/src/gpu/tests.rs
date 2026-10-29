@@ -1022,6 +1022,139 @@ fn checker_frame(w: u32, h: u32) -> Frame {
     }
 }
 
+/// Roda de verdade (GPU) cada `.slangp` do pacote que compila, num viewport
+/// 1920×1080, e lista os que dão erro do wgpu DURANTE a renderização — o erro
+/// que antes derrubava a thread do vídeo (jogo sem imagem, som tocando; ver
+/// `install_gpu_error_handler`). Confere também que, depois do erro, o
+/// quadro seguinte já roda no `plain`. Ignorado por padrão (precisa do pacote
+/// e de GPU); `REEMU_SHADER_FILTER` limita aos caminhos que contêm o texto:
+///   REEMU_SHADER_DIR=… cargo test -p reemu-desktop --lib field_render_all_presets -- --ignored --nocapture
+#[test]
+#[ignore]
+fn field_render_all_presets() {
+    let dir = std::env::var("REEMU_SHADER_DIR").unwrap_or_else(|_| {
+        format!(
+            "{}/.local/share/com.reemu.desktop/shaders/slang-shaders",
+            std::env::var("HOME").unwrap_or_default()
+        )
+    });
+    let root = std::path::Path::new(&dir);
+    let mut presets = Vec::new();
+    collect_slangp(root, &mut presets);
+    presets.sort();
+    let norm = |p: &std::path::PathBuf| p.to_string_lossy().replace('\\', "/");
+    if let Ok(f) = std::env::var("REEMU_SHADER_FILTER") {
+        presets.retain(|p| norm(p).contains(&f));
+    }
+    // `REEMU_SHADER_EXCLUDE`: tira os caminhos que contêm o texto (ex.: o
+    // Mega Bezel, centenas de presets lentos de montar)
+    if let Ok(f) = std::env::var("REEMU_SHADER_EXCLUDE") {
+        presets.retain(|p| !norm(p).contains(&f));
+    }
+    // `REEMU_SHADER_EVERY=N`: só 1 a cada N (amostra)
+    if let Some(n) = std::env::var("REEMU_SHADER_EVERY")
+        .ok()
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|&n| n > 1)
+    {
+        presets = presets.into_iter().step_by(n).collect();
+    }
+    assert!(!presets.is_empty(), "nenhum .slangp em {dir}");
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem adapter wgpu — pulando");
+        return;
+    };
+    let (mut rendered, mut skipped) = (0usize, 0usize);
+    let mut failed: Vec<(String, String)> = Vec::new();
+    for p in &presets {
+        let rel = p.strip_prefix(root).unwrap_or(p).display().to_string();
+        if std::env::var_os("REEMU_SHADER_VERBOSE").is_some() {
+            eprintln!("→ {rel}");
+        }
+        if fp.set_preset(p.to_str().unwrap()).is_err() {
+            skipped += 1; // não compila: o `set_preset` já recusa, fora daqui
+            continue;
+        }
+        fp.set_canvas_viewport(1920, 1080);
+        // lê o erro logo depois de cada quadro: o `run_chain` do quadro
+        // seguinte já o consome (e volta pro `plain`)
+        let mut msg = None;
+        // device perdido (GPU travada, TDR): o `Device::poll` do wgpu 30 é
+        // fatal (`handle_error_fatal`) — vira pânico aqui; registra e recria
+        // o processador pra seguir a varredura
+        let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            for _ in 0..2 {
+                let _ = fp.process(&checker_frame(256, 224));
+                msg = fp.gpu_error.last.lock().unwrap().clone();
+                if msg.is_some() {
+                    break;
+                }
+            }
+        }));
+        rendered += 1;
+        if run.is_err() {
+            eprintln!("DEVICE PERDIDO {rel}");
+            failed.push((rel, "device perdido".into()));
+            match FrameProcessor::new() {
+                Some(n) => fp = n,
+                None => break,
+            }
+            continue;
+        }
+        if let Some(msg) = msg {
+            // o quadro seguinte tem que cair no `plain` e sair inteiro
+            let _ = fp.process(&checker_frame(256, 224));
+            assert_eq!(fp.preset_source(), "plain", "{rel}: não voltou pro plain");
+            // a mensagem do wgpu começa com linhas vazias; junta as que têm
+            // texto, numa linha só
+            let first: String = msg
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty())
+                .collect::<Vec<_>>()
+                .join(" | ");
+            eprintln!("FALHA {rel}: {first}");
+            failed.push((rel, first));
+        }
+    }
+    eprintln!(
+        "\n=== {rendered} renderizados · {} com erro na GPU · {skipped} não compilam ===",
+        failed.len()
+    );
+    // `REEMU_SHADER_ISSUES_OUT=<arquivo>`: as linhas de `known_issues.txt`
+    if let Ok(out) = std::env::var("REEMU_SHADER_ISSUES_OUT") {
+        let lines: Vec<String> = failed
+            .iter()
+            .map(|(rel, msg)| {
+                let kind = if msg == "device perdido" {
+                    "gpu-hang"
+                } else {
+                    "render-error"
+                };
+                format!("{kind}\t{}", rel.replace('\\', "/"))
+            })
+            .collect();
+        std::fs::write(&out, lines.join("\n") + "\n").unwrap();
+        eprintln!("{} linha(s) gravadas em {out}", lines.len());
+    }
+    // agrupa pela causa (sem os rótulos/números que mudam de preset pra preset)
+    let mut by_cause: std::collections::BTreeMap<String, Vec<&str>> = Default::default();
+    for (rel, msg) in &failed {
+        let key: String = msg
+            .chars()
+            .filter(|c| !c.is_ascii_digit())
+            .take(220)
+            .collect();
+        by_cause.entry(key).or_default().push(rel);
+    }
+    for (cause, files) in &by_cause {
+        eprintln!("\n[{}×] {cause}", files.len());
+        for f in files.iter().take(3) {
+            eprintln!("      {f}");
+        }
+    }
+}
+
 /// Roda de verdade (GPU) os presets de ampliação/nitidez do pacote: FSR 1
 /// (EASU + RCAS, AMD), só EASU, RCAS e NIS (NVIDIA). Confere o tamanho da
 /// saída — passe `viewport` sem superfície amplia pra 3× o nativo — e que a

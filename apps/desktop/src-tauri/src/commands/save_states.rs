@@ -52,6 +52,47 @@ fn save_dto(m: domain::save_state::SaveStateMetadata) -> SaveStateDto {
     }
 }
 
+/// PNG da miniatura do save state: o jogo no momento do save.
+///
+/// No modo canvas é o último frame mandado pro `<canvas>` (`last_frame`). No
+/// vídeo nativo (janela/subsurface própria) o frame não passa pelo canvas e o
+/// `last_frame` fica vazio — aí vale o frame capturado quando o menu de pausa
+/// abriu (`pause_bg`, o que estava na tela) ou, fora do menu (QuickSave pela
+/// hotkey) e no protótipo de overlay, uma captura na hora da saída da cadeia
+/// de shader (`capture_surface_frame`).
+pub(super) fn save_thumbnail(state: &AppState) -> Option<Vec<u8>> {
+    let canvas = {
+        let f = state.last_frame.lock().unwrap_or_else(|p| p.into_inner());
+        f.as_ref()
+            .and_then(|c| thumbnail_png(c.w, c.h, &c.rgba, 320))
+    };
+    if canvas.is_some() {
+        return canvas;
+    }
+    let menu_up = matches!(
+        *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()),
+        VideoMenu::MenuUp
+    );
+    let paused = if menu_up {
+        state
+            .pause_bg
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+    } else {
+        None
+    };
+    let (w, h, rgba) = paused.or_else(|| {
+        state
+            .gpu
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_mut()
+            .and_then(|fp| fp.capture_surface_frame())
+    })?;
+    thumbnail_png(w, h, &rgba, 320)
+}
+
 /// Reduz o frame RGBA8 pra no máximo `max_w` de largura (nearest) e codifica
 /// como PNG — o thumbnail do save state.
 pub(super) fn thumbnail_png(w: u32, h: u32, rgba: &[u8], max_w: u32) -> Option<Vec<u8>> {
@@ -95,11 +136,7 @@ pub async fn save_state(
         .save_state()
         .map_err(|e| e.to_string())?
         .ok_or_else(|| no_state_error(&state))?;
-    let thumb = {
-        let f = state.last_frame.lock().unwrap_or_else(|p| p.into_inner());
-        f.as_ref()
-            .and_then(|c| thumbnail_png(c.w, c.h, &c.rgba, 320))
-    };
+    let thumb = save_thumbnail(&state);
     let repo = db::SaveStateRepo::new(pool(&state)?);
     let meta = save_svc::save(
         &repo,

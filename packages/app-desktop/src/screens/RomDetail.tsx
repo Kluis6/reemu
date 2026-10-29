@@ -45,6 +45,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { CoreOptions } from "../components/CoreOptions";
 import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
+import { CheatsPanel } from "../components/CheatsPanel";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { ShaderPicker } from "../components/ShaderPicker";
 import { ShaderParams } from "../components/ShaderParams";
@@ -58,7 +59,7 @@ import {
 } from "../lib/metadataFormat";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { knownPlatforms, platformLabel } from "../lib/platform";
-import { errorToast, sysToast } from "../lib/toast";
+import { errorToast, sysToast, shaderIssueToast } from "../lib/toast";
 import {
   deleteSaveState,
   getRomMetadata,
@@ -84,6 +85,7 @@ import { useDetailStyles, useTabStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
 import { rankCores } from "../lib/coreChoice";
+import { TOOLTIP_POSITION } from "../lib/tooltip";
 
 export function RomDetail() {
   const { t, i18n } = useTranslation();
@@ -172,9 +174,14 @@ export function RomDetail() {
   const shaderPick = useMutation({
     mutationFn: (name: string) =>
       setShader(name, shaderScope, romId, shaderSystemId),
-    onSuccess: () => {
+    onSuccess: (issue, name) => {
       qc.invalidateQueries({ queryKey: ["rom-shader", romId] });
       qc.invalidateQueries({ queryKey: ["shader-info"] });
+      // preset com problema conhecido na GPU (gpu/known_issues.txt)
+      if (issue) {
+        const label = name.split(/[/\\]/).pop()?.replace(/\.slangp$/i, "") ?? name;
+        push(shaderIssueToast(t(`video.shaderIssue.${issue}`, { name: label })));
+      }
     },
     onError: (e) => push(errorToast(e, "changeGameShader")),
   });
@@ -231,7 +238,7 @@ export function RomDetail() {
   const descParas = descriptionParagraphs(meta.data?.description);
   const sourceText = providerLabel(meta.data?.providerSource);
   const releaseYear = meta.data?.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
-  const [cfgTab, setCfgTab] = useState<"core" | "states" | "shader" | "media">("core");
+  const [cfgTab, setCfgTab] = useState<"core" | "states" | "shader" | "cheats" | "media">("core");
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   const hasCoreCfg = !!chosenCore;
   // Galeria: só as mídias que o provedor trouxe.
@@ -241,7 +248,14 @@ export function RomDetail() {
     { key: "fanart", url: meta.data?.fanartUrl },
   ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
   const hasMedia = shots.length > 0 || !!meta.data?.videoUrl || !!meta.data?.logoUrl;
-  const cfgTabOk = { shader: hasShaderCfg, core: hasCoreCfg, states: true, media: hasMedia };
+  const cfgTabOk = {
+    shader: hasShaderCfg,
+    core: hasCoreCfg,
+    states: true,
+    // cheats por código (doc 17): a lista é do jogo, vale ao abrir
+    cheats: true,
+    media: hasMedia,
+  };
   const activeCfgTab = cfgTabOk[cfgTab]
     ? cfgTab
     : hasCoreCfg
@@ -353,17 +367,19 @@ export function RomDetail() {
   return (
     <div className={s.root} data-loading={meta.isPending ? "true" : "false"}>
       <div className={s.hero}>
-        {cover && (
-          <img
-            className={s.heroArt}
-            src={cover}
-            alt=""
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-            }}
-          />
-        )}
-        <div className={s.heroScrim} />
+        <div className={s.heroBackdrop} aria-hidden>
+          {cover && (
+            <img
+              className={s.heroArt}
+              src={cover}
+              alt=""
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          )}
+          <div className={s.heroScrim} />
+        </div>
         <div className={s.heroBody}>
           <div className={s.heroHeader}>
             {cover && cover !== brokenCover ? (
@@ -412,7 +428,7 @@ export function RomDetail() {
             </Button>
             {/* Ações secundárias só com ícone (pedido do usuário); o nome vem
                 pelo tooltip e pelo aria-label. */}
-            <Tooltip
+            <Tooltip positioning={TOOLTIP_POSITION}
               content={rom.isFavorite ? t("game.favoriteRemove") : t("game.favoriteAdd")}
               relationship="label"
             >
@@ -431,7 +447,7 @@ export function RomDetail() {
                 onClick={() => fav.mutate(!rom.isFavorite)}
               />
             </Tooltip>
-            <Tooltip content={t("game.edit")} relationship="label">
+            <Tooltip positioning={TOOLTIP_POSITION} content={t("game.edit")} relationship="label">
               <Button
                 size="large"
                 appearance="secondary"
@@ -440,7 +456,7 @@ export function RomDetail() {
                 onClick={openEdit}
               />
             </Tooltip>
-            <Tooltip content={t("game.info")} relationship="label">
+            <Tooltip positioning={TOOLTIP_POSITION} content={t("game.info")} relationship="label">
               <Button
                 size="large"
                 appearance="secondary"
@@ -449,7 +465,7 @@ export function RomDetail() {
                 onClick={() => setInfoOpen(true)}
               />
             </Tooltip>
-            <Tooltip
+            <Tooltip positioning={TOOLTIP_POSITION}
               content={
                 confirmRemove ? t("game.removeConfirm") : t("game.remove")
               }
@@ -732,12 +748,13 @@ export function RomDetail() {
           className={mergeClasses(tb.tabs, s.tabsAligned)}
           selectedValue={activeCfgTab}
           onTabSelect={(_, d) =>
-            setCfgTab(d.value as "core" | "states" | "shader" | "media")
+            setCfgTab(d.value as "core" | "states" | "shader" | "cheats" | "media")
           }
         >
           {hasCoreCfg && <Tab value="core">{t("game.tabs.core")}</Tab>}
           <Tab value="states">{t("game.tabs.states")}</Tab>
           {hasShaderCfg && <Tab value="shader">{t("game.tabs.shader")}</Tab>}
+          <Tab value="cheats">{t("game.tabs.cheats")}</Tab>
           {hasMedia && <Tab value="media">{t("game.tabs.media")}</Tab>}
         </TabList>
         <div className={s.panel}>
@@ -747,7 +764,7 @@ export function RomDetail() {
                 <Caption1>{t("game.shader.applyTo")}</Caption1>
                 <div>
                   <TabList
-                    className={tb.tabs}
+                    className={mergeClasses(tb.tabs, s.innerTabs)}
                     selectedValue={shaderScope}
                     onTabSelect={(_, d) =>
                       setShaderScope(d.value as ShaderScope)
@@ -825,6 +842,7 @@ export function RomDetail() {
               <CoreOptions coreId={chosenCore} romId={romId} />
             </>
           )}
+          {activeCfgTab === "cheats" && <CheatsPanel romId={romId} />}
           {activeCfgTab === "media" && (
             <div className={s.gallery}>
               {meta.data?.logoUrl && (

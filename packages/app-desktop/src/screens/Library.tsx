@@ -51,6 +51,7 @@ import {
   useTabStyles,
 } from "../styles/xbox";
 import { useTranslation } from "react-i18next";
+import { TOOLTIP_POSITION } from "../lib/tooltip";
 
 const useLibStyles = makeStyles({
   // "Adicionar ROM" e os filtros (Plataforma, Limpar filtro, Ordenar): mesmo
@@ -349,7 +350,7 @@ export function Library() {
           <Text className={s.shelfCount}>
             {t("library.games", { count: all.length })}
           </Text>
-          <Tooltip content={t("library.addRom")} relationship="label">
+          <Tooltip positioning={TOOLTIP_POSITION} content={t("library.addRom")} relationship="label">
             <Button
               appearance="secondary"
               className={mergeClasses(l.navBtn, shell.navIconBtn, shell.navIconLg)}
@@ -358,7 +359,7 @@ export function Library() {
               onClick={() => setAddOpen(true)}
             />
           </Tooltip>
-          <Tooltip content={t("library.manage")} relationship="label">
+          <Tooltip positioning={TOOLTIP_POSITION} content={t("library.manage")} relationship="label">
             <Button
               appearance="subtle"
               className={mergeClasses(shell.navIconBtn, shell.navIconLg)}

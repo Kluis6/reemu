@@ -233,8 +233,10 @@ pub struct ScanReportDto {
     /// Já catalogadas, com o sistema corrigido pela regra atual.
     pub reclassified: usize,
     /// Saíram da biblioteca: não são jogo que o core rode (ex.: `.chd` de
-    /// set do MAME, cópia do Redump em pasta de NAOMI).
+    /// set do MAME, cópia do Redump em pasta de NAOMI, BIOS de arcade).
     pub removed: usize,
+    /// `.zip`/`.7z` sem jogo reconhecido fora de pasta de arcade.
+    pub unrecognized_archives: usize,
 }
 
 impl ScanReportDto {
@@ -246,6 +248,7 @@ impl ScanReportDto {
         self.errors += r.errors;
         self.reclassified += r.reclassified;
         self.removed += r.removed;
+        self.unrecognized_archives += r.unrecognized_archives;
     }
 }
 

@@ -17,6 +17,7 @@ import {
   type RomEntry,
   type ScanProgress,
 } from "../lib/tauri";
+import { archivesHint } from "../lib/useLibraryScan";
 import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles, useMotionStyles } from "../styles/xbox";
 import { errorPatch } from "../lib/toast";
@@ -110,6 +111,8 @@ export function Home() {
           progress: undefined,
         });
       }
+      const hint = archivesHint(t, r);
+      if (hint) push(hint);
       qc.invalidateQueries({ queryKey: ["roms"] });
       qc.invalidateQueries({ queryKey: ["romSources"] });
       autoMetadata(r.added);

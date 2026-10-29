@@ -76,6 +76,102 @@ fn is_mame_companion(path: &Path, ext: &str) -> bool {
     })
 }
 
+/// Sets de arcade que não são jogo: BIOS de placa e dispositivos que os
+/// cores (FBNeo, MAME) carregam junto com o jogo — `neogeo.zip` pros jogos de
+/// Neo Geo, `pgm.zip` pros de PGM, `qsound.zip` pros de CPS2… Ficam na pasta
+/// dos jogos (é onde o core procura), mas abrir um deles não roda nada.
+/// Nomes dos sets no FBNeo e no MAME; a lista não é completa — com o `.dat`
+/// (próxima etapa) o próprio arquivo diz quem é BIOS/dispositivo.
+const ARCADE_NON_GAMES: &[&str] = &[
+    "neogeo",
+    "neocdz",
+    "pgm",
+    "decocass",
+    "skns",
+    "stvbios",
+    "cpzn1",
+    "cpzn2",
+    "isgsm",
+    "bubsys",
+    "coleco",
+    "fdsbios",
+    "msx",
+    "spectrum",
+    "spec128",
+    "spec1282a",
+    "ngp",
+    "qsound",
+    "nmk004",
+    "ym2608",
+    "ym2413",
+    "namcoc69",
+    "namcoc70",
+    "namcoc75",
+    "namco51",
+    "namco52",
+    "namco53",
+    "namco54",
+    "midssio",
+    "cvs",
+    "megatech",
+    "megaplay",
+    "playch10",
+    "nss",
+    "konamigx",
+    "hng64",
+    "naomi",
+    "naomi2",
+    "awbios",
+    "hod2bios",
+    "f355bios",
+    "f355dlx",
+    "airlbios",
+    "crysbios",
+    "sys246",
+    "sys256",
+    "sys573",
+    "taitofx1",
+    "taitogn",
+    "coh1000a",
+    "coh1000c",
+    "coh1000t",
+    "coh1001l",
+    "coh1002e",
+    "coh1002m",
+    "coh1002v",
+    "coh3002c",
+    "coh3002t",
+    "konamigv",
+    "chihiro",
+    "triforce",
+    "mpu4",
+    "aleck64",
+    "n64",
+    "pgm2",
+    "segasp",
+    "cubo",
+    "galgbios",
+    "ar_bios",
+    "gq863",
+    "konendev",
+    "sammymdl",
+];
+
+/// Set de BIOS/dispositivo de arcade (ver [`ARCADE_NON_GAMES`]): `.zip`/`.7z`
+/// numa pasta de arcade com o nome de um deles.
+fn is_arcade_non_game(path: &Path, root: &Path, ext: &str) -> bool {
+    if !is_supported_archive(ext) || system_from_dirs(&ancestor_dirs(path, root)) != Some("arcade")
+    {
+        return false;
+    }
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    ARCADE_NON_GAMES.contains(&stem.as_str())
+}
+
 /// Sistemas que o flycast só roda no formato do MAME: o `.zip`/`.7z` do set,
 /// com o `.chd` numa subpasta de mesmo nome nos jogos em GD-ROM ("Run NAOMI
 /// GD-ROM format games stored in MAME zip + chd format by running the zip
@@ -143,8 +239,12 @@ pub struct ScanReport {
     pub errors: usize,
     /// Já catalogadas com outro sistema, corrigidas pela regra atual.
     pub reclassified: usize,
-    /// Catalogadas antes mas que não são jogo (`.chd` de set do MAME).
+    /// Catalogadas antes mas que não são jogo (`.chd` de set do MAME, BIOS
+    /// de arcade).
     pub removed: usize,
+    /// `.zip`/`.7z` fora de pasta de arcade sem cartucho reconhecível dentro
+    /// — em geral um set de arcade numa pasta com outro nome (a tela avisa).
+    pub unrecognized_archives: usize,
 }
 
 /// Progresso da varredura (arquivo `current` de `total` reconhecidos).
@@ -197,7 +297,11 @@ where
         // uma varredura antiga catalogou, sai da biblioteca.
         // Idem pra imagem de disco em pasta de NAOMI/Atomiswave (o flycast
         // só roda o formato do MAME): sai da biblioteca se já estava.
-        if is_mame_companion(path, &ext) || is_unplayable_disc_dump(path, dir, &ext, true) {
+        // BIOS/dispositivo de arcade (`neogeo.zip`…): não é jogo; sai também.
+        if is_mame_companion(path, &ext)
+            || is_unplayable_disc_dump(path, dir, &ext, true)
+            || is_arcade_non_game(path, dir, &ext)
+        {
             if let Some(old) = repo.find_by_path(&path.to_string_lossy()).await? {
                 repo.remove(&old.id).await?;
                 report.removed += 1;
@@ -238,6 +342,7 @@ where
                         Some(a) => (a.system_id, Some(a.entry)),
                         None => {
                             report.skipped_unrecognized += 1;
+                            report.unrecognized_archives += 1;
                             continue;
                         }
                     }

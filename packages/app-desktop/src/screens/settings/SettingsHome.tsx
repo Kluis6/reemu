@@ -78,8 +78,10 @@ const useStyles = makeStyles({
     transitionProperty: "background-color",
     transitionDuration: tokens.durationFaster,
     transitionTimingFunction: tokens.curveEasyEase,
-    // foco igual ao card de jogo: além do anel, o card clareia
-    "&:hover, &:focus, &:focus-visible": {
+    // No foco só o anel (index.css): o fundo não muda — no tema claro o
+    // `Background2Hover` escurecia o card focado (print do usuário,
+    // 2026-10-29). O hover continua mudando o fundo.
+    ":hover": {
       backgroundColor: tokens.colorNeutralBackground2Hover,
     },
     ":active": {

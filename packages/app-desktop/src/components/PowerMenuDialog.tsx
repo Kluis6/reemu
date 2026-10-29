@@ -7,6 +7,7 @@ import {
   DialogSurface,
   DialogTitle,
   makeStyles,
+  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
 import {
@@ -16,6 +17,7 @@ import {
 } from "@fluentui/react-icons";
 import { useMutation } from "@tanstack/react-query";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
+import { useModalButtonStyles } from "../styles/buttons";
 import { quitApp, restartSystem, shutdownSystem } from "../lib/tauri";
 import { errorToast } from "../lib/toast";
 import { useToastStore } from "../stores/useToastStore";
@@ -23,7 +25,9 @@ import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
   surface: { maxWidth: "360px" },
-  content: { display: "flex", flexDirection: "column", rowGap: tokens.spacingVerticalXS },
+  // 8 entre as opções: com o contorno visível (`btn.secondary`) os 4 de
+  // antes deixavam os botões grudados (print do usuário, 2026-10-29)
+  content: { display: "flex", flexDirection: "column", rowGap: tokens.spacingVerticalS },
   row: {
     justifyContent: "flex-start",
     columnGap: tokens.spacingHorizontalM,
@@ -46,6 +50,7 @@ export function PowerMenuDialog({
 }) {
   const { t } = useTranslation();
   const s = useStyles();
+  const btn = useModalButtonStyles();
   const push = useToastStore((st) => st.push);
 
   const shutdown = useMutation({
@@ -70,8 +75,7 @@ export function PowerMenuDialog({
           <DialogTitle>{t("shell2.power")}</DialogTitle>
           <DialogContent className={s.content}>
             <Button
-              className={s.row}
-              appearance="subtle"
+              className={mergeClasses(s.row, btn.secondary)}
               icon={<ArrowExitRegular />}
               disabled={busy}
               onClick={() => void quitApp()}
@@ -79,8 +83,7 @@ export function PowerMenuDialog({
               {t("shell2.quit")}
             </Button>
             <Button
-              className={s.row}
-              appearance="subtle"
+              className={mergeClasses(s.row, btn.secondary)}
               icon={<ArrowClockwiseRegular />}
               disabled={busy}
               onClick={() => restart.mutate()}
@@ -88,8 +91,7 @@ export function PowerMenuDialog({
               {t("shell2.restart")}
             </Button>
             <Button
-              className={s.row}
-              appearance="subtle"
+              className={mergeClasses(s.row, btn.secondary)}
               icon={<PowerRegular />}
               disabled={busy}
               onClick={() => shutdown.mutate()}
@@ -98,7 +100,7 @@ export function PowerMenuDialog({
             </Button>
           </DialogContent>
           <DialogActions>
-            <Button appearance="secondary" onClick={() => onOpenChange(false)}>
+            <Button className={btn.secondary} onClick={() => onOpenChange(false)}>
               {t("common.cancel")}
             </Button>
           </DialogActions>

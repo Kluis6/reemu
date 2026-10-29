@@ -193,10 +193,32 @@ fn preset_id_of(name: &str) -> (String, String, bool) {
 /// escopo: `"default"` (todos os jogos), `"system"` (uma plataforma —
 /// `system_id` ou derivado de `rom_id`) ou `"rom"` (um jogo). `name` vazio =
 /// limpar a atribuição desse escopo (volta pra cascata).
+///
+/// Devolve a chave do problema conhecido do preset (`gpuHang` /
+/// `renderError`, ver `gpu::known_issues`), pra tela avisar; `None` = nada.
 #[tauri::command]
 pub async fn set_shader(
     state: State<'_, AppState>,
     name: String,
+    scope: Option<String>,
+    system_id: Option<String>,
+    rom_id: Option<String>,
+) -> Result<Option<&'static str>, String> {
+    let issue = crate::gpu::shader_issue(&name);
+    if let Some(i) = issue {
+        log::warn!("shader '{name}': problema conhecido ({})", i.key());
+    }
+    // Trava a GPU: não aplica nem salva — a tela avisa que não foi aplicado.
+    if issue == Some(crate::gpu::ShaderIssue::GpuHang) {
+        return Ok(Some("gpuHang"));
+    }
+    set_shader_inner(&state, &name, scope, system_id, rom_id).await?;
+    Ok(issue.map(|i| i.key()))
+}
+
+async fn set_shader_inner(
+    state: &AppState,
+    name: &str,
     scope: Option<String>,
     system_id: Option<String>,
     rom_id: Option<String>,
@@ -207,11 +229,11 @@ pub async fn set_shader(
         let Some(fp) = guard.as_mut() else {
             return Err("sem GPU — shader indisponível".into());
         };
-        fp.set_preset(&name).inspect_err(|e| log::warn!("{e}"))?;
+        fp.set_preset(name).inspect_err(|e| log::warn!("{e}"))?;
     }
 
     let Some(scope) = scope else { return Ok(()) };
-    let pool = pool(&state)?;
+    let pool = pool(state)?;
     let (sc_scope, sys, rid) =
         shader_scope_args(&pool, &scope, system_id.as_deref(), rom_id.as_deref()).await?;
     let sc = db::ShaderChainRepo::new(pool);
@@ -221,14 +243,14 @@ pub async fn set_shader(
             .await
             .map_err(|e| e.to_string());
     }
-    let (id, pname, is_builtin) = preset_id_of(&name);
+    let (id, pname, is_builtin) = preset_id_of(name);
     // heurística: presets com "bezel" no nome já desenham a moldura → o
     // DecorationResolver é pulado (exclusão mútua).
     let includes_bezel = name.to_lowercase().contains("bezel");
     sc.upsert_preset(&domain::shader_chain::ShaderPreset {
         id: id.clone(),
         name: pname,
-        source_path: name.clone(),
+        source_path: name.to_string(),
         format: domain::shader_chain::ShaderFormat::Slang,
         is_builtin,
         includes_bezel,

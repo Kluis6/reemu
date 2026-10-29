@@ -14,7 +14,7 @@ import { BezelLibrary } from '../../components/BezelLibrary'
 import { LoadingState } from '../../components/EmptyState'
 import { ShaderParams } from '../../components/ShaderParams'
 import { PREVIEW_BAR_SPACE, ShaderPreview } from '../../components/ShaderPreview'
-import { errorToast, sysToast } from '../../lib/toast'
+import { errorToast, sysToast, shaderIssueToast } from '../../lib/toast'
 import {
   clearDecorations,
   getShaderInfo,
@@ -156,12 +156,15 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
   const pick = useMutation({
     // 'default' persiste: vale pra todos os jogos (jogos podem ter override próprio).
     mutationFn: (name: string) => setShader(name, 'default'),
-    onSuccess: (_, name) => {
+    onSuccess: (issue, name) => {
       qc.invalidateQueries({ queryKey: ['shader-info'] })
       const c = data?.curated.find((x) => x.id === name)
       const curated = c && curatedText(t, c.id, 'label', c.label)
       const base = name.split(/[/\\]/).pop() ?? name
-      push(sysToast(t('video.defaultShader', { name: isBuiltin(name) ? presetTitle(name) : (curated ?? base) }), 'Success'))
+      const label = isBuiltin(name) ? presetTitle(name) : (curated ?? base)
+      push(sysToast(t('video.defaultShader', { name: label }), 'Success'))
+      // preset com problema conhecido na GPU (gpu/known_issues.txt)
+      if (issue) push(shaderIssueToast(t(`video.shaderIssue.${issue}`, { name: label })))
     },
     onError: (e) => push(errorToast(e, 'changeDefaultShader')),
   })

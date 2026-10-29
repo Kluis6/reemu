@@ -160,6 +160,37 @@ pub(super) fn build_specs(want: &str) -> Result<BuiltSpecs, String> {
             last.fmt = FMT;
         }
     }
+    // Último passe lido como feedback E em outro formato: ele continua como
+    // está (o preset lê o próprio quadro anterior nesse formato) e a saída
+    // passa por um passe de cópia em `FMT`, escala 1× da entrada. Sem isso o
+    // readback do canvas e a captura do fundo do menu de pausa copiavam com
+    // 4 bytes por pixel uma textura de 8 (`Rgba16Float`) — erro de validação
+    // a cada quadro (presets POTATO do Mega Bezel, 2026-10-29). O passe novo
+    // entra no fim, então os índices `PassOutputN`/`PassFeedbackN` do preset
+    // não mudam.
+    if specs.last().is_some_and(|l| l.fmt != FMT) {
+        if let Some(copy) = BUILTINS
+            .iter()
+            .find(|b| b.name == "plain")
+            .and_then(|b| b.passes.first())
+        {
+            specs.push(PassSpec {
+                scale_x: Scale::Source(1.0),
+                scale_y: Scale::Source(1.0),
+                linear: false,
+                wrap: WrapMode::ClampToEdge,
+                vs_wgsl: BUILTIN_VS.to_string(),
+                fs_wgsl: format!("{BUILTIN_FS_PRELUDE}\n{}", copy.fs),
+                uniform: UniformMode::Fixed,
+                textures: Vec::new(),
+                fmt: FMT,
+                frame_count_mod: 0,
+                alias: None,
+                feedback: false,
+                mipmap_input: false,
+            });
+        }
+    }
     // valores do `.slangp` sobrescrevem os defaults dos `#pragma parameter`
     for (k, v) in &preset.parameters {
         params.insert(k.clone(), *v);

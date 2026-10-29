@@ -11,6 +11,7 @@ import {
   SECTION_TITLE_LINE,
 } from '../styles/metrics'
 import { useTranslation } from 'react-i18next'
+import { TOOLTIP_POSITION } from '../lib/tooltip'
 
 const useStyles = makeStyles({
   // Espaço até os cards, como no app Xbox (metrics.ts).
@@ -53,12 +54,15 @@ const useStyles = makeStyles({
     // foco (teclado/controle) com o MESMO fundo dos outros botões do tema
     // (voltar, tela cheia, filtros: `colorNeutralBackground2` no hover/foco,
     // `…Pressed` ao clicar) — pedido do usuário.
+    // O fundo é o de repouso dos botões Voltar/Tela cheia (`navBtn` no
+    // AppShell: `Background2`), não o hover deles (print do usuário,
+    // 2026-10-29: no claro o `Background2Hover` sumia na página).
     '&:hover, &:focus, &:focus-visible': {
-      backgroundColor: `${tokens.colorNeutralBackground2Hover} !important`,
+      backgroundColor: `${tokens.colorNeutralBackground2} !important`,
       color: `${tokens.colorNeutralForeground1} !important`,
     },
     ':active': {
-      backgroundColor: `${tokens.colorNeutralBackground2Pressed} !important`,
+      backgroundColor: `${tokens.colorNeutralBackground2Hover} !important`,
     },
     // O slot de ícone do <Button> é fixo em 20 no tamanho medium; garante.
     '& .fui-Button__icon': { fontSize: `${ICON}px`, width: `${ICON}px`, height: `${ICON}px` },
@@ -103,7 +107,7 @@ export function SectionHeader({
           {title}
         </Text>
         {onSeeAll && (
-          <Tooltip content={t('shell2.showAll')} relationship="description">
+          <Tooltip positioning={TOOLTIP_POSITION} content={t('shell2.showAll')} relationship="description">
             <Button
               appearance="subtle"
               className={s.seeAll}

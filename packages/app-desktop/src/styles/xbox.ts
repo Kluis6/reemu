@@ -13,6 +13,7 @@
  */
 import { makeStyles, shorthands, tokens } from "@fluentui/react-components";
 import { cardSizeCss, SHELF_GAP, SHELF_PAD } from "../lib/shelf";
+import { STROKE } from "./buttons";
 import * as M from "./metrics";
 
 // Só os valores NÃO-cor do "console look". Cor de marca, elevações e o fundo
@@ -524,7 +525,11 @@ export const useBrowseStyles = makeStyles({
     // raio padrão do ReEmu (4 px); antes 16, o do card do app Xbox
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
-    backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${tokens.colorNeutralBackground2}, ${tokens.colorBrandBackground} 14%) 0%, ${tokens.colorNeutralBackground2} 60%)`,
+    // Destaque do tema (`reemuBrandAccent`) a 35%, não a marca a 14%: com a
+    // marca o canto ficava de 1,07:1 a 1,49:1 do fundo do card e o degradê
+    // quase sumia (print do usuário, 2026-10-29); assim, medido nos 15
+    // temas, fica de 1,52:1 (Alva claro) a 3,01:1 (alto contraste).
+    backgroundImage: `linear-gradient(135deg, color-mix(in srgb, ${tokens.colorNeutralBackground2}, var(--reemuBrandAccent) 35%) 0%, ${tokens.colorNeutralBackground2} 60%)`,
     // sem sombra nem borda (pedidos do usuário): a separação da página é só
     // o tom do card
   },
@@ -981,8 +986,31 @@ export const useHintStyles = makeStyles({
 // Página do jogo: altura dos botões do hero (o app Xbox usa 55) e o
 // degradê que dissolve a arte do hero no fundo da página.
 const HERO_BTN_H = 56;
+// A arte fica inteira até 70% da altura da tela e se dissolve no fundo da
+// página até 85% (pedido do usuário, 2026-10-29) — a camada `heroBackdrop`
+// tem 85vh, então os stops em `vh` caem no lugar certo.
+// Sombra curta e escura do texto branco por cima da arte do jogo (abas,
+// nome, plataforma, tempo jogado): separa o texto de qualquer arte, mesmo
+// das partes claras, sem véu nem fundo atrás (pedidos do usuário, 2026-10-29).
+const HERO_TEXT_SHADOW = "0 1px 3px rgba(0, 0, 0, 0.6), 0 0 8px rgba(0, 0, 0, 0.35)";
+
 const HERO_FADE =
-  "linear-gradient(180deg, #000 0%, #000 70%, transparent 100%)";
+  "linear-gradient(180deg, #000 0, #000 70vh, transparent 85vh)";
+
+/** Drawer flutuante (menu de pausa, Informações do jogo): afastado 24 das
+ *  bordas e com o raio grande do app, como o guia do Xbox (pedido do usuário,
+ *  2026-10-29). A raiz do OverlayDrawer do Fluent já é `position: fixed` com
+ *  `top`/`bottom: 0` — o afastamento vai nos próprios `top`/`bottom` e no
+ *  lado em que ele encosta (`side`), não em `margin`. */
+const floatingDrawer = (side: "left" | "right") =>
+  ({
+    top: `${DRAWER_GAP}px`,
+    bottom: `${DRAWER_GAP}px`,
+    [side]: `${DRAWER_GAP}px`,
+    borderRadius: shell.radiusLg,
+    overflow: "hidden",
+  }) as const;
+const DRAWER_GAP = 24;
 
 /** Página de detalhe do jogo (RomDetail) — estilo "página de jogo" do Xbox:
  *  hero com arte, título grande, botão Jogar, seções em painéis. */
@@ -1035,18 +1063,29 @@ export const useDetailStyles = makeStyles({
     // Sem raio: hero de sangria total (encosta na rail e na borda da
     // janela) não tem mais canto pra arredondar, igual à referência.
     borderRadius: 0,
-    overflowX: "hidden",
-    overflowY: "hidden",
     display: "flex",
     // Modelo "página de produto de loja" (não mais "hub Xbox" com texto
     // ancorado embaixo): ícone + título + botões ficam no TOPO do hero, o
     // resto do banner só é pano de fundo decorativo.
     alignItems: "flex-start",
+  },
+  // Fundo do hero (degradê, arte e véu) numa camada própria, mais alta que
+  // o hero: o hero segura o lugar das abas (`tabsOverlap` sobe sobre ele) e
+  // a arte desce até 70% da tela por trás das abas e do painel. `zIndex -1`
+  // dentro do contexto de empilhamento do `root` (o `transform` cria um):
+  // fica atrás de todo o conteúdo da página. A máscara vai na camada
+  // inteira — arte, véu e fundo somem juntos, sem corte reto, como na
+  // página de jogo do app Xbox.
+  heroBackdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "max(85vh, 100%)",
+    zIndex: -1,
+    overflow: "hidden",
+    pointerEvents: "none",
     backgroundImage: elevGradient,
-    // Arte, véu e fundo somem juntos no fundo da página em vez de terminar
-    // num corte reto, como na página de jogo do app Xbox. A máscara vai no
-    // hero inteiro: nos filhos o fundo do próprio hero continuava marcando
-    // a borda. Os botões terminam bem antes do início do degradê.
     maskImage: HERO_FADE,
     WebkitMaskImage: HERO_FADE,
   },
@@ -1066,17 +1105,13 @@ export const useDetailStyles = makeStyles({
     right: 0,
     bottom: 0,
     left: 0,
-    // A arte de fundo (plano de fundo do jogo) continua dominando o meio
-    // do hero, com 3 camadas de gradiente (mais escuras que a 1ª versão)
-    // garantindo contraste nas duas pontas: canto SUPERIOR-esquerdo
-    // (ícone/título) e faixa DE BAIXO (onde a seção de tabs sobrepõe —
-    // ver `.tabsOverlap` — sem um fundo sólido atrás dela, é este
-    // gradiente que sustenta a legibilidade ali).
+    // A arte de fundo (plano de fundo do jogo) domina o hero; o véu só
+    // escurece o canto SUPERIOR-esquerdo (ícone/título, texto branco). A
+    // faixa das abas embaixo não tem véu: o texto delas é branco com sombra
+    // própria (`tabsAligned`), e a arte se dissolve no fundo da página pela
+    // máscara do `heroBackdrop`.
     backgroundImage: [
       "linear-gradient(90deg, rgba(0,0,0,0.45) 0%, transparent 45%)",
-      // Reforçada (pedido do usuário) — mais opaca rente à borda de baixo
-      // e alcança mais alto, acompanhando o `.tabsOverlap` maior abaixo.
-      "linear-gradient(0deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.6) 20%, rgba(0,0,0,0.22) 38%, transparent 55%)",
       "linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.22) 32%, transparent 58%)",
     ].join(", "),
   },
@@ -1159,7 +1194,35 @@ export const useDetailStyles = makeStyles({
   // Abas Emulador/Save states/Shader: a aba (caixa e traço) começa na
   // coluna da capa e dos botões, sem o recuo de −15 px do `useTabStyles`,
   // que alinhava só o texto (pedido do usuário; o mesmo da Biblioteca).
-  tabsAligned: { marginLeft: "0 !important" },
+  // Abas DENTRO do painel (escopo do shader): começam na mesma borda dos
+  // campos e da lista, sem o recuo de -15 do `useTabStyles` (igual às abas
+  // do `CoreOptions` e do `ShaderPicker`; print do usuário, 2026-10-29).
+  innerTabs: { marginLeft: "0 !important" },
+  // Abas da página do jogo, sem fundo próprio (pedido do usuário,
+  // 2026-10-29: o "card" das abas saiu). A caixa da 1ª aba começa na borda
+  // do conteúdo da página (capa, botão Jogar, painel), como as abas de
+  // dentro do painel começam na borda dos campos.
+  tabsAligned: {
+    marginLeft: "0 !important",
+    alignSelf: "flex-start",
+    // mais espaço entre as abas que o 8 do `useTabStyles` (pedido do usuário)
+    columnGap: "16px !important",
+    // Texto branco por cima da arte, como o título do jogo, com uma sombra
+    // curta e escura que o separa de qualquer arte — inclusive das partes
+    // claras — sem véu nem fundo atrás das abas (pedidos do usuário,
+    // 2026-10-29). O fundo de hover/foco vira um véu escuro: o cinza-claro
+    // do tema claro apagava o branco. A aba ativa focada continua com a cor
+    // primária (regra do `TAB_STATES`, mais específica).
+    "& .fui-Tab .fui-Tab__content": {
+      color: "#ffffff !important",
+      textShadow: HERO_TEXT_SHADOW,
+    },
+    // aba ativa (selecionada) sem a sombra (pedido do usuário)
+    '& .fui-Tab[aria-selected="true"] .fui-Tab__content': { textShadow: "none" },
+    "& .fui-Tab:hover, & .fui-Tab:focus": {
+      backgroundColor: "rgba(0, 0, 0, 0.32) !important",
+    },
+  },
   heroTitleCol: {
     display: "flex",
     flexDirection: "column",
@@ -1173,6 +1236,7 @@ export const useDetailStyles = makeStyles({
     // mesma cor do título do jogo (branco sobre o `heroScrim`, em qualquer
     // tema) — pedido do usuário; antes era a cor de marca do tema
     color: "#fff",
+    textShadow: HERO_TEXT_SHADOW,
     marginBottom: "4px",
   },
   title: {
@@ -1185,6 +1249,7 @@ export const useDetailStyles = makeStyles({
     // tema (claro ou escuro) — a cor do tema (`colorNeutralForeground1`)
     // ficaria ilegível no tema claro.
     color: "#fff",
+    textShadow: HERO_TEXT_SHADOW,
   },
   badges: {
     display: "flex",
@@ -1298,6 +1363,9 @@ export const useDetailStyles = makeStyles({
     columnGap: "8px",
     fontSize: tokens.fontSizeBase400,
     color: "rgba(255, 255, 255, 0.82)",
+    textShadow: HERO_TEXT_SHADOW,
+    // o ícone do relógio é SVG: a sombra dele vem do `filter`
+    "& svg": { filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6))" },
   },
   heroStatsIcon: { fontSize: `${M.ICON}px`, flexShrink: 0 },
   // Coração de favorito preenchido: cor de marca (mesmo token do "Nintendo
@@ -1429,7 +1497,8 @@ export const useDetailStyles = makeStyles({
   // 1/3 da largura da tela — nenhum dos presets do Drawer (`size`) bate com
   // isso, então sobrescreve a CSS var interna que o Fluent usa pra largura.
   infoDrawer: {
-    ["--fui-Drawer--size" as string]: "33.34vw",
+    ["--fui-Drawer--size" as string]: `min(33.34vw, calc(100vw - ${2 * DRAWER_GAP}px))`,
+    ...floatingDrawer("right"),
     // Degradê do menu-guia do Xbox (print do usuário, 2026-10-12): cinza
     // escuro em cima até ~1/3 e descendo pra cor de destaque embaixo. Aqui
     // o fundo da gaveta (`Background1`) com até 25% do destaque do tema no
@@ -1535,89 +1604,6 @@ export const useDetailStyles = makeStyles({
   },
 });
 
-/** Menu de pausa da PlayScreen (fora do `.xb-app`, então tem seu próprio
- *  anel de foco pra navegação por controle). */
-export const usePauseStyles = makeStyles({
-  scrim: {
-    position: "fixed",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: "rgba(0, 0, 0, 0.62)",
-    display: "grid",
-    alignItems: "center",
-    justifyItems: "center",
-    zIndex: 100,
-    // Anel de foco no `:focus` (não só `:focus-visible`): a navegação por
-    // controle foca via `.focus()` sem keydown e o WebKitGTK não marca
-    // `:focus-visible` aí. `!important`: o `.r1f29ykk[data-fui-focus-visible]`
-    // do próprio Button (ver abaixo) tem mais especificidade que isto
-    // (classe+atributo vs classe+pseudo) e ganharia o `outline` sem isso.
-    "& a:focus, & button:focus": {
-      outline: `3px solid ${tokens.colorBrandStroke1} !important`,
-      outlineOffset: `${FOCUS_OFFSET}px !important`,
-      boxShadow: "none !important",
-    },
-    // O <Button> do Fluent NÃO usa `::after` pra isso — muda a própria
-    // `border-color` e desenha um `box-shadow` inset direto no elemento
-    // quando `[data-fui-focus-visible]` (raiz `.fui-Button`, não um
-    // pseudo). Neutraliza os dois; o anel que sobra é só o outline acima.
-    "& .fui-Button[data-fui-focus-visible]": {
-      border: "1px solid transparent !important",
-      boxShadow: "none !important",
-    },
-  },
-  panel: {
-    display: "flex",
-    flexDirection: "column",
-    rowGap: "8px",
-    minWidth: "280px",
-    paddingTop: "22px",
-    paddingBottom: "22px",
-    paddingLeft: "22px",
-    paddingRight: "22px",
-    borderRadius: shell.radiusLg,
-    backgroundColor: tokens.colorNeutralBackground2,
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    color: tokens.colorNeutralForeground1,
-  },
-  title: { fontSize: "18px", fontWeight: 700, margin: "0 0 6px" },
-  states: {
-    display: "flex",
-    flexDirection: "column",
-    rowGap: "4px",
-    maxHeight: "220px",
-    overflowY: "auto",
-    marginTop: "2px",
-    marginBottom: "2px",
-  },
-  stateRow: {
-    display: "flex",
-    alignItems: "center",
-    columnGap: "10px",
-    padding: "6px",
-    // Raio padrão do <Button> do Fluent (não `shell.radius`) — pedido
-    // direto pra não destoar do resto dos botões do menu.
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
-    backgroundColor: "var(--reemuFillWeak)",
-    color: tokens.colorNeutralForeground1,
-    cursor: "pointer",
-    textAlign: "left",
-    font: "inherit",
-    ":hover": { backgroundColor: tokens.colorNeutralBackground3 },
-  },
-  stateLabel: {
-    fontSize: tokens.fontSizeBase200,
-    lineHeight: 1.3,
-    minWidth: 0,
-  },
-  stateDate: {
-    fontSize: tokens.fontSizeBase100,
-    color: tokens.colorNeutralForeground3,
-  },
-});
-
 // Estados das abas horizontais (biblioteca, detalhe do jogo,
 // Configurações) — como no app Xbox
 // (prints da biblioteca), com a cor primária do tema no lugar do branco:
@@ -1625,7 +1611,8 @@ export const usePauseStyles = makeStyles({
 // - foco numa aba inativa: fundo cinza + anel de 2 a 5 de distância;
 // - foco na aba ativa: fundo preenchido na cor primária, texto/ícone sobre
 //   ela e sem o indicador.
-// O `::before` do Fluent (risco cinza de hover/clique) sai: o fundo já marca.
+// O `::before` do Fluent (risco cinza de hover/clique) sai: o fundo já marca
+// (no foco ele vira o brilho, ver abaixo).
 // `!important`: ganha do anel global do `.app` (`& .fui-Tab:focus`) e das
 // regras do próprio Tab. Propriedades separadas, como a regra global.
 const TAB_STATES = {
@@ -1637,7 +1624,16 @@ const TAB_STATES = {
   "& .fui-Tab__content": {
     color: `${tokens.colorNeutralForeground1} !important`,
   },
-  "& .fui-Tab::before": { display: "none" },
+  // Fora do foco o `::before` some; no foco ele vira o brilho por fora do
+  // anel (index.css, regra 4) — sem isto as abas eram o único foco sem o
+  // brilho do card de jogo (auditoria de foco, 2026-10-29). O fundo e a
+  // altura do traço do Fluent saem pra sobrar só o brilho.
+  "& .fui-Tab:not(:focus)::before": { display: "none" },
+  "& .fui-Tab:focus::before": {
+    backgroundColor: "transparent !important",
+    height: "auto !important",
+    width: "auto !important",
+  },
   "& .fui-Tab:hover": {
     backgroundColor: `${tokens.colorNeutralBackground4} !important`,
   },
@@ -1669,6 +1665,169 @@ const TAB_STATES = {
     opacity: 0,
   },
 } as const;
+
+/** Menu de pausa da PlayScreen (fora do `.xb-app`, então tem seu próprio
+ *  anel de foco pra navegação por controle). */
+export const usePauseStyles = makeStyles({
+  // Superfície do OverlayDrawer do menu de pausa: 480 de largura (a variável
+  // do Fluent, como a gaveta de Informações da página do jogo). O drawer
+  // fica num portal fora do `.xb-app`, então traz o próprio anel de foco
+  // (`:focus`, não só `:focus-visible`: o controle foca via `.focus()`).
+  drawer: {
+    ["--fui-Drawer--size" as string]: `min(480px, calc(100vw - ${2 * DRAWER_GAP}px))`,
+    ...floatingDrawer("left"),
+    backgroundColor: tokens.colorNeutralBackground2,
+    color: tokens.colorNeutralForeground1,
+    "& a:focus, & button:focus": {
+      outline: `3px solid ${tokens.colorBrandStroke1} !important`,
+      outlineOffset: `${FOCUS_OFFSET}px !important`,
+      boxShadow: "none !important",
+    },
+    // O <Button> do Fluent muda a própria borda e põe um box-shadow no foco
+    // de teclado; o anel que sobra é o outline acima.
+    "& .fui-Button[data-fui-focus-visible]": {
+      border: "1px solid transparent !important",
+      boxShadow: "none !important",
+    },
+  },
+  // Cabeçalho: as abas e, embaixo, o título da aba ativa.
+  header: {
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "8px",
+    paddingBottom: "4px",
+  },
+  // Corpo do drawer: é ele que rola (`DrawerBody`); o espaço lateral deixa o
+  // anel de foco dos itens sem corte.
+  drawerBody: {
+    paddingTop: "8px",
+    paddingBottom: "8px",
+    paddingLeft: "22px",
+    paddingRight: "22px",
+  },
+  title: { fontSize: "18px", fontWeight: 700, margin: "8px 0 6px" },
+  // Abas só de ícone no topo, com LB/RB (ou Q/E) nas pontas como no guia
+  // do Xbox; separadas do conteúdo por um traço.
+  tabsRow: {
+    display: "flex",
+    alignItems: "center",
+    columnGap: "8px",
+    paddingBottom: "8px",
+    borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  tabs: {
+    ...TAB_STATES,
+    flexGrow: 1,
+    justifyContent: "space-around",
+    "& .fui-Tab": {
+      ...TAB_STATES["& .fui-Tab"],
+      padding: "10px 14px",
+    },
+    "& .fui-Tab__icon": { fontSize: `${M.ICON}px`, width: "1em", height: "1em" },
+    "& .fui-Tab::after": {
+      left: "8px",
+      right: "8px",
+      height: "4px",
+      borderRadius: tokens.borderRadiusCircular,
+    },
+    '& .fui-Tab[aria-selected="true"]::after': {
+      backgroundColor: "var(--reemuBrandAccent)",
+    },
+  },
+  // Aba Conquistas antes do RetroAchievements: ícone grande e o aviso
+  soon: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    rowGap: "12px",
+    color: tokens.colorNeutralForeground2,
+  },
+  soonIcon: { fontSize: "48px", color: "var(--reemuBrandAccent)" },
+  // LB/RB: só a dica visual do atalho (o leitor de tela já tem as abas)
+  shoulder: {
+    minWidth: "32px",
+    padding: "4px 8px",
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorNeutralStroke1}`,
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground1,
+    fontFamily: "inherit",
+    fontSize: tokens.fontSizeBase200,
+    fontWeight: tokens.fontWeightSemibold,
+    textAlign: "center",
+  },
+  // Conteúdo da aba: rola sozinho, as abas ficam paradas em cima. O padding
+  // (com a margem negativa) deixa espaço pro anel de foco não ser cortado.
+  body: {
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "8px",
+    padding: "6px",
+    margin: "-6px",
+  },
+  // Item da aba Jogo: linha inteira com ícone, como as do guia do Xbox
+  item: {
+    justifyContent: "flex-start",
+    width: "100%",
+    maxWidth: "none",
+    columnGap: "12px",
+  },
+  // Fileira de baixo: botões quadrados só de ícone (guia do Xbox)
+  footer: {
+    display: "flex",
+    columnGap: "12px",
+    paddingTop: "14px",
+    borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  footerBtn: {
+    width: "56px",
+    height: "56px",
+    minWidth: 0,
+    maxWidth: "56px",
+    padding: 0,
+    fontSize: `${M.ICON}px`,
+    "& .fui-Button__icon": { fontSize: "1em", width: "1em", height: "1em" },
+  },
+  states: {
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "8px",
+    marginTop: "2px",
+    marginBottom: "2px",
+  },
+  // Card do save state: miniatura à esquerda e, ao lado, nome, data e os
+  // botões Carregar/Apagar — tudo alinhado à esquerda. Mesmo fundo e
+  // contorno dos botões (`STROKE`, ≥3:1 em todos os temas).
+  stateRow: {
+    display: "flex",
+    alignItems: "center",
+    columnGap: "12px",
+    padding: "8px",
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${STROKE}`,
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground1,
+  },
+  stateInfo: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    rowGap: "6px",
+    flexGrow: 1,
+    minWidth: 0,
+  },
+  stateLabel: {
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: 1.3,
+    minWidth: 0,
+  },
+  stateActions: { display: "flex", columnGap: "8px" },
+  stateDate: {
+    fontSize: tokens.fontSizeBase100,
+    color: tokens.colorNeutralForeground3,
+  },
+});
+
 
 /** Abas horizontais (`TabList`) no estilo do app Xbox: biblioteca, detalhe
  *  do jogo, Configurações. A lista vertical das Configurações usa o padrão do

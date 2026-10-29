@@ -176,8 +176,13 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         "3do" | "the 3do company - 3do" => "3do",
         "pcfx" | "pc-fx" | "pc fx" | "nec - pc-fx" => "pcfx",
         // --- arcade ---
+        // Nomes de pasta dos romsets do FBNeo/FB Alpha e das versões do MAME
+        // que o libretro distribui (mame2003, mame2003-plus, mame2010…).
         "arcade" | "mame" | "fbneo" | "fba" | "finalburn neo" | "neogeo" | "neo geo" | "cps1"
-        | "cps2" | "cps3" => "arcade",
+        | "cps2" | "cps3" | "fbn" | "fb neo" | "finalburnneo" | "finalburn" | "fbalpha"
+        | "fb alpha" | "fba2012" | "fbalpha2012" | "mame2000" | "mame2003" | "mame 2003"
+        | "mame2003-plus" | "mame2003plus" | "mame 2003-plus" | "mame2010" | "mame2015"
+        | "mame2016" | "mamearcade" => "arcade",
         _ => return None,
     })
 }
@@ -453,7 +458,18 @@ mod tests {
 
     #[test]
     fn folder_name_recognizes_arcade_aliases() {
-        for alias in ["arcade", "mame", "fbneo", "FBA", "neogeo", "cps2"] {
+        for alias in [
+            "arcade",
+            "mame",
+            "fbneo",
+            "FBA",
+            "neogeo",
+            "cps2",
+            "fbalpha",
+            "mame2003-plus",
+            "MAME 2003-Plus",
+            "fba2012",
+        ] {
             assert_eq!(system_from_folder_name(alias), Some("arcade"), "{alias}");
         }
     }

@@ -345,6 +345,7 @@ const ptBR = {
       states: 'Save states',
       shader: 'Shader',
       media: 'Galeria',
+      cheats: 'Cheats',
     },
     media: {
       screenshot: 'Captura de tela',
@@ -397,6 +398,7 @@ const ptBR = {
     start: 'Escaneando…',
     result: '{{added}} adicionada(s) · {{known}} já na biblioteca · {{skipped}} ignorada(s)',
     refreshResult: '{{added}} nova(s) · {{removed}} removida(s) · {{reclassified}} corrigida(s)',
+    archivesHint: '{{count}} arquivo(s) .zip/.7z sem jogo reconhecido. Se forem de arcade (FinalBurn Neo, MAME), coloque numa pasta chamada arcade, fbneo ou mame.',
   },
   library: {
     loading: 'Carregando biblioteca…',
@@ -452,6 +454,11 @@ const ptBR = {
     quickLoad: 'QuickLoad',
     quit: 'Sair do jogo',
     cheats: 'Cheats',
+    tabStates: 'Save states',
+    tabs: 'Menu de pausa',
+    loadState: 'Carregar',
+    achievements: 'Conquistas',
+    achievementsSoon: 'As conquistas do RetroAchievements vão aparecer aqui numa próxima versão do ReEmu.',
   },
   cheats: {
     title: 'Cheats',
@@ -598,6 +605,10 @@ const ptBR = {
       },
     },
     defaultShader: 'Shader padrão: {{name}}',
+    shaderIssue: {
+      gpuHang: 'O shader "{{name}}" trava a GPU nos testes do ReEmu (a imagem do jogo para) e não foi aplicado. Escolha outro.',
+      renderError: 'O shader "{{name}}" deu erro na GPU nos testes do ReEmu. Se ele impedir o jogo de aparecer, o ReEmu tira ele e avisa no sino.',
+    },
     bezelsImported: 'Bezels importados — {{count}} atribuição(ões). Aplica no próximo jogo.',
     bezelsRemoved: 'Bezels removidos.',
     unavailable: 'Informação de shader indisponível.',
@@ -872,6 +883,23 @@ const ptBR = {
     restarts: 'O ReEmu reinicia sozinho no fim.',
     updating: 'Atualizando…',
     updateNow: 'Atualizar agora',
+  },
+  shaderFailure: {
+    title: 'Shader removido: {{name}}',
+    summary: 'Impediu o jogo de aparecer; o jogo usou o padrão',
+    summaryRemoved: 'Impediu o jogo de aparecer e saiu da atribuição',
+    dialogTitle: 'Shader removido: {{name}}',
+    kind: {
+      build: 'Este shader não montou nesta GPU, então o jogo não teria imagem. O ReEmu usou o shader padrão.',
+      knownGpuHang: 'Este shader trava a GPU nos testes do ReEmu (a imagem do jogo para e o som continua). O ReEmu nem chegou a aplicar: o jogo abriu com o shader padrão.',
+      gpu: 'Este shader deu erro na GPU durante o jogo e a imagem parou. O ReEmu voltou para o shader padrão.',
+    },
+    scopeRom: 'Ele estava atribuído a este jogo e foi removido. Dá para escolher outro na aba Shader da página do jogo.',
+    scopeSystem: 'Ele estava atribuído à plataforma {{platform}} e foi removido. Dá para escolher outro na aba Shader da página de um jogo dela.',
+    scopeDefault: 'Ele era o shader padrão de todos os jogos e foi removido. Dá para escolher outro em Configurações › Decorações.',
+    scopeNone: 'Ele não estava salvo em nenhum jogo, então não havia o que remover.',
+    file: 'Arquivo',
+    error: 'Mensagem do erro',
   },
   notifications: {
     title: 'Notificações',

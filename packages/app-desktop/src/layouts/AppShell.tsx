@@ -42,11 +42,14 @@ import { PowerMenuDialog } from "../components/PowerMenuDialog";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
 import { UpdateDialog } from "../components/UpdateDialog";
+import { ShaderFailureDialog } from "../components/ShaderFailureDialog";
+import { useShaderFailures } from "../hooks/useShaderFailures";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useUpdateCheck } from "../hooks/useUpdateCheck";
 import { getProfile, listPendingMatches, quitApp } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
+import { TOOLTIP_POSITION } from "../lib/tooltip";
 
 const useLocalStyles = makeStyles({
   // ícones da sidebar com o border-radius padrão do botão do Fluent
@@ -143,6 +146,7 @@ export function AppShell() {
   const atBrowse = pathname === "/" || pathname === "/library";
   const [powerOpen, setPowerOpen] = useState(false);
   useUpdateCheck();
+  useShaderFailures();
   // Correspondências de metadata esperando revisão (Configurações ›
   // Metadata). Mesma query da tela de revisão: resolver lá atualiza aqui.
   const pending = useQuery({
@@ -296,7 +300,7 @@ export function AppShell() {
           className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
         />
         <div className={s.railSep} />
-        <Tooltip content={t("shell.shutdown")} relationship="label">
+        <Tooltip positioning={TOOLTIP_POSITION} content={t("shell.shutdown")} relationship="label">
           <Button
             className={mergeClasses(s.railItem, s.railQuit, l.railRadius)}
             onClick={() => setPowerOpen(true)}
@@ -309,11 +313,12 @@ export function AppShell() {
 
       <PowerMenuDialog open={powerOpen} onOpenChange={setPowerOpen} />
       <UpdateDialog />
+      <ShaderFailureDialog />
 
       <div className={s.main}>
         <div className={s.topbar}>
           {!atRoot && (
-            <Tooltip content={t("shell.backTooltip")} relationship="label">
+            <Tooltip positioning={TOOLTIP_POSITION} content={t("shell.backTooltip")} relationship="label">
               <Button
                 appearance="secondary"
                 className={mergeClasses(l.navBtn, s.navIconBtn, s.navIconLg)}
@@ -345,7 +350,7 @@ export function AppShell() {
             }}
           />
           <div className={s.topbarSpacer} />
-          <Tooltip
+          <Tooltip positioning={TOOLTIP_POSITION}
             content={
               fullscreen
                 ? t("shell.exitFullscreenTip")

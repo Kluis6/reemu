@@ -344,6 +344,7 @@ const en: Messages = {
       states: 'Save states',
       shader: 'Shader',
       media: 'Gallery',
+      cheats: 'Cheats',
     },
     media: {
       screenshot: 'Screenshot',
@@ -396,6 +397,7 @@ const en: Messages = {
     start: 'Scanning…',
     result: '{{added}} added · {{known}} already in the library · {{skipped}} skipped',
     refreshResult: '{{added}} new · {{removed}} removed · {{reclassified}} fixed',
+    archivesHint: '{{count}} .zip/.7z file(s) with no recognized game. If they are arcade sets (FinalBurn Neo, MAME), put them in a folder named arcade, fbneo or mame.',
   },
   library: {
     loading: 'Loading library…',
@@ -451,6 +453,11 @@ const en: Messages = {
     quickLoad: 'QuickLoad',
     quit: 'Quit game',
     cheats: 'Cheats',
+    tabStates: 'Save states',
+    tabs: 'Pause menu',
+    loadState: 'Load',
+    achievements: 'Achievements',
+    achievementsSoon: 'RetroAchievements achievements will show up here in a future ReEmu version.',
   },
   cheats: {
     title: 'Cheats',
@@ -597,6 +604,10 @@ const en: Messages = {
       },
     },
     defaultShader: 'Default shader: {{name}}',
+    shaderIssue: {
+      gpuHang: 'The "{{name}}" shader hangs the GPU in ReEmu tests (the game picture freezes) and was not applied. Pick another one.',
+      renderError: 'The "{{name}}" shader hit a GPU error in ReEmu tests. If it keeps the game from showing, ReEmu removes it and lets you know in the bell.',
+    },
     bezelsImported: 'Bezels imported — {{count}} assignment(s). Applies on the next game.',
     bezelsRemoved: 'Bezels removed.',
     unavailable: 'Shader information unavailable.',
@@ -871,6 +882,23 @@ const en: Messages = {
     restarts: 'ReEmu restarts by itself when done.',
     updating: 'Updating…',
     updateNow: 'Update now',
+  },
+  shaderFailure: {
+    title: 'Shader removed: {{name}}',
+    summary: 'It kept the game from showing; the game used the default',
+    summaryRemoved: 'It kept the game from showing and was unassigned',
+    dialogTitle: 'Shader removed: {{name}}',
+    kind: {
+      build: 'This shader would not build on this GPU, so the game would have no picture. ReEmu used the default shader.',
+      knownGpuHang: 'This shader hangs the GPU in ReEmu tests (the game picture freezes while sound keeps playing). ReEmu did not apply it: the game opened with the default shader.',
+      gpu: 'This shader hit a GPU error during the game and the picture stopped. ReEmu switched back to the default shader.',
+    },
+    scopeRom: 'It was assigned to this game and was removed. You can pick another one in the Shader tab of the game page.',
+    scopeSystem: 'It was assigned to the {{platform}} platform and was removed. You can pick another one in the Shader tab of one of its games.',
+    scopeDefault: 'It was the default shader for all games and was removed. You can pick another one in Settings › Decorations.',
+    scopeNone: 'It was not saved for any game, so there was nothing to remove.',
+    file: 'File',
+    error: 'Error message',
   },
   notifications: {
     title: 'Notifications',

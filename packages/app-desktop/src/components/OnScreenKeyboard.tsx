@@ -418,6 +418,7 @@ export function OnScreenKeyboard() {
   // Com um modal aberto (ex.: o onboarding), o teclado vai DENTRO dele: o
   // Dialog do Fluent fica num portal por cima do app e prende o foco no
   // próprio conteúdo — fora dele as teclas ficariam atrás e sem foco.
-  const surface = document.querySelector<HTMLElement>('.fui-DialogSurface')
+  // O OverlayDrawer (menu de pausa) também é modal e prende o foco.
+  const surface = document.querySelector<HTMLElement>('.fui-DialogSurface, .fui-OverlayDrawer')
   return surface ? createPortal(panel, surface) : panel
 }

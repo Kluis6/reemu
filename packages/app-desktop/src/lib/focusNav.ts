@@ -71,6 +71,12 @@ export function moveFocus(dir: NavDir) {
   if (best) focusAndReveal(best)
 }
 
+/** Foca `el` como se viesse do controle/teclado (com o anel de foco). */
+export function focusFromNav(el: HTMLElement) {
+  markNavFocus()
+  focusAndReveal(el)
+}
+
 /**
  * Foca sem a rolagem automática do navegador e rola só a página: o
  * `.focus()`/`scrollIntoView` padrão rola TODOS os ancestrais, inclusive

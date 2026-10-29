@@ -50,6 +50,7 @@ async fn scans_recursively_infers_system_and_dedups() {
             errors: 0,
             reclassified: 0,
             removed: 0,
+            unrecognized_archives: 0,
         }
     );
 
@@ -227,6 +228,78 @@ async fn arcade_zip_without_a_cartridge_entry_is_catalogued_by_folder() {
     // hash é do .zip INTEIRO (não tem "a ROM crua" — o set é a unidade).
     let whole_zip = std::fs::read(&zip_path).unwrap();
     assert_eq!(arcade[0].crc32, crc_of(&whole_zip));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Zip de set de arcade (chip dumps, sem cartucho dentro).
+fn write_arcade_zip(path: &std::path::Path) {
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let f = std::fs::File::create(path).unwrap();
+    let mut zw = zip::ZipWriter::new(f);
+    let opts =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    zw.start_file("chip.p1", opts).unwrap();
+    zw.write_all(path.to_string_lossy().as_bytes()).unwrap();
+    zw.finish().unwrap();
+}
+
+/// FinalBurn Neo sem `.dat`: o set entra pela pasta (inclusive nomes como
+/// `fbalpha` e `mame2003-plus`); BIOS de placa (`neogeo.zip`, `pgm.zip`) não
+/// entra como jogo e sai se uma varredura antiga a catalogou; um set numa
+/// pasta sem nome de arcade é contado à parte pra tela avisar.
+#[tokio::test]
+async fn arcade_bios_skipped_aliases_and_unrecognized_archives() {
+    let dir = scratch_dir();
+    write_arcade_zip(&dir.join("fbneo/kof98.zip"));
+    write_arcade_zip(&dir.join("fbneo/neogeo.zip"));
+    write_arcade_zip(&dir.join("fbalpha/mslug.zip"));
+    write_arcade_zip(&dir.join("mame2003-plus/pgm.zip"));
+    write_arcade_zip(&dir.join("mame2003-plus/1941.zip"));
+    write_arcade_zip(&dir.join("jogos/sf2.zip"));
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    // varredura antiga catalogou a BIOS como jogo
+    repo.add(&domain::library::Rom {
+        id: "velho".into(),
+        file_path: dir
+            .join("fbneo")
+            .join("neogeo.zip")
+            .to_string_lossy()
+            .into_owned(),
+        crc32: String::new(),
+        md5: String::new(),
+        system_id: "arcade".into(),
+        added_at: 0,
+        last_played_at: None,
+        is_favorite: false,
+        user_title: None,
+    })
+    .await
+    .unwrap();
+
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!(r.added, 3, "kof98, mslug e 1941");
+    assert_eq!(r.removed, 1, "a neogeo.zip antiga sai");
+    assert_eq!(
+        r.unrecognized_archives, 1,
+        "sf2.zip fora de pasta de arcade"
+    );
+    let mut names: Vec<String> = repo
+        .list_by_system("arcade")
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|r| {
+            std::path::Path::new(&r.file_path)
+                .file_stem()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    assert_eq!(names, ["1941", "kof98", "mslug"]);
     let _ = std::fs::remove_dir_all(dir);
 }
 

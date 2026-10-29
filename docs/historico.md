@@ -2965,3 +2965,147 @@ Infra:
   - repositório (`crates/db/tests/cheats.rs`) e a limpeza do código (`commands/cheats.rs`);
   - a tela, conferida na página de teste.
 - **Falta:** editar um cheat na tela.
+
+## 2026-10-29 — Menu de pausa em abas de ícone, com LB/RB e Q/E
+
+- **Pedido do usuário:** menu de pausa com abas só de ícone, como no guia do Xbox (print), trocando de aba com LB/RB no controle e Q/E no teclado.
+- **Tela:**
+  - painel encostado à esquerda, da altura da tela, com três abas: Jogo (continuar, tela cheia, sair), Save states (QuickSave, QuickLoad e a lista de estados) e Cheats (`CheatsPanel`, que perdeu o Voltar);
+  - a aba Cheats só aparece com jogo da biblioteca;
+  - o nome da aba ativa fica como título do painel;
+  - nas pontas das abas, a tecla do atalho: LB/RB com controle conectado, Q/E sem;
+  - o menu volta para a aba Jogo a cada vez que abre.
+- **Fluent 2 (Tabs › Usage):** aba só de ícone precisa de `aria-label` e de tooltip. O `Tooltip` com `relationship="label"` dá os dois. Todas as abas usam o mesmo formato, só ícone.
+- **Atalho:**
+  - o `GamepadPoller` gera `NavPulse::TabPrev`/`TabNext` na borda de subida de LB/RB (os ombros do SDL, índices 6 e 8), e o evento `menu-nav` os envia como `tabPrev`/`tabNext`;
+  - o `useMenuNav` transforma esses pulsos, e o Q/E fora de campo de texto, no evento `reemu-tab` (`REEMU_TAB`) na `window`;
+  - o menu de pausa escuta esse evento quando está aberto;
+  - trocando de aba pelo atalho, o foco vai para o primeiro item da aba nova, como no Xbox.
+- **Testes:**
+  - `cargo test -p input-desktop`, `tsc -b`, oxlint e o teste de idiomas passam;
+  - a tela foi conferida na página de teste, com troca por `tabNext` e por Q, foco e tooltip.
+
+## 2026-10-29 — Menu de pausa: ações no rodapé, card de save e botões visíveis
+
+- **Pedido do usuário (prints):**
+  - botões pouco visíveis em alguns temas;
+  - card de save alinhado à esquerda, com Carregar e Apagar;
+  - Continuar, tela cheia e Sair fora das abas, no pé do painel, só ícone;
+  - revisar os botões do modal Encerrar.
+- **Ações no rodapé:** a aba Jogo saiu. As abas são Save states e Cheats, e o menu abre em Save states. Continuar (primário), tela cheia e Sair viram botões quadrados de 56 px só com ícone no rodapé, cada um com `Tooltip` `relationship="label"` (Fluent 2, Tabs/ícone sozinho: rótulo acessível e tooltip).
+- **Botões visíveis:** os itens do menu de pausa e as três opções e o Cancelar do `PowerMenuDialog` usam `useModalButtonStyles().secondary` (fundo `Background3` e o contorno `STROKE`, ≥3:1 em todos os temas, agora exportado de `styles/buttons.ts`) no lugar do `subtle`/`secondary` do Fluent.
+- **Card de save state:** miniatura à esquerda e, ao lado, nome, data e os botões Carregar (`play.loadState`) e Apagar (`deleteSaveState`, que atualiza a lista), tudo alinhado à esquerda.
+- **Conferido na página de teste:** temas `claro`, `dream-claro` e `ps-blue`.
+
+## 2026-10-29 — Menu de pausa: aba Conquistas, sem atalho de teclado; miniatura do save no vídeo nativo; arte da página do jogo até 70% da tela
+
+- **Menu de pausa:**
+  - o atalho Q/E saiu (pedido do usuário). Só LB/RB trocam de aba, e a dica LB/RB só aparece com controle conectado;
+  - nova aba **Conquistas** (ícone de troféu), por enquanto com o aviso de que as conquistas do RetroAchievements chegam numa próxima versão (doc 16).
+- **Defeito corrigido: botões sem o estilo visível.** Eu tinha juntado duas classes do Griffel numa string (`${a} ${b}`) no `className` de componentes do Fluent. Medido: o contorno saía `rgb(27,42,37)` sobre o painel `rgb(28,34,32)`. O Griffel só combina classes de forma confiável pelo `mergeClasses`, e o `btn.secondary` era descartado. Agora `mergeClasses` no menu de pausa e no `PowerMenuDialog`; o contorno passa a `Foreground1` a 50% e o fundo a `Background3`.
+- **Miniatura do save state:** saía vazia no Windows. O `last_frame` só é preenchido pelo `poll_frame` (modo canvas), e o vídeo nativo não passa por ele. A nova `save_thumbnail` usa, nessa ordem:
+  - o `last_frame` (canvas);
+  - o `pause_bg` com o menu aberto (o frame na tela quando o menu abriu);
+  - uma captura na hora pela `capture_surface_frame` (QuickSave pela hotkey e o protótipo de overlay). Ela lê a saída da cadeia de shader, não o swapchain.
+  Vale para o save por slot e para o QuickSave.
+- **Página do jogo:**
+  - o degradê, a arte e o véu foram para a camada `heroBackdrop`, com 85vh e `zIndex -1`;
+  - a máscara deixa a arte inteira até 70vh e a dissolve até 85vh. O hero e as abas ficaram no mesmo lugar (medido: abas em x = 115, mesma altura);
+  - o véu de baixo virou a cor de fundo da página em vez de preto, porque com a arte atrás das abas o texto escuro do tema claro não dava para ler.
+- **Testes:**
+  - `cargo check -p reemu-desktop`, `tsc -b`, oxlint e o teste de idiomas passam;
+  - conferido na página de teste em `claro`, `ps-blue` e `reemu`. A miniatura no vídeo nativo não dá para testar lá.
+
+## 2026-10-29 — Botões com o mesmo foco dos cards de jogo
+
+- **Pedido do usuário (print do modal Encerrar):** o foco dos botões igual ao dos cards de jogo.
+- **Regra global no `index.css` (1b):** vale para `.fui-Button`, `.fui-MenuButton` e `.fui-ToggleButton` habilitados, no mouse em cima, no foco de teclado (`data-fui-focus-visible`) e no foco pelo controle (`data-nav-focus`). Como o card:
+  - anel de 3 px na cor de destaque, a 3 px do botão, com o vão transparente;
+  - brilho por fora num `::before` (`inset: -6px`, `0 0 12px` a 45%).
+- **Detalhes:**
+  - o Fluent põe `overflow: hidden` na raiz do botão (`useButtonStyles.styles.raw.js`) e não dá `position`;
+  - o overflow abre só no estado com anel;
+  - o `position: relative` vai num `:where(...)`, com especificidade zero, para não vencer botões que o Griffel posiciona.
+- **Modal Encerrar:** 8 px entre as opções (`spacingVerticalS`).
+- **Conferido** na página de teste, com o mouse em cima, no modal e na pílula da Início (tema Dream).
+
+## 2026-10-29 — Shaders: jogo sem imagem com o som tocando
+
+- **Relato:** com alguns shaders o jogo não aparece, mas o som continua.
+- **Causa:** o wgpu 30 trata erro fora de escopo como fatal: `default_error_handler` faz `panic!` (wgpu-30.0.1/src/backend/wgpu_core.rs). O pânico derrubava a thread `reemu-video-pump`, e o core e o áudio continuavam em outras threads. No log desta máquina: 2026-10-16 18:14:50, preset `ossc_slot`, "Handling wgpu errors as fatal by default".
+- **Correções:**
+  - `install_gpu_error_handler` (`Device::on_uncaptured_error` e `set_device_lost_callback`, docs.rs/wgpu 30.0.1): o erro vai para o log com a mensagem e o `run_chain` volta para o `plain` no quadro seguinte (`recover_from_gpu_error`);
+  - hook de pânico em `run()`: todo pânico vai para o log com o nome da thread;
+  - mipmaps de passe (`mipmap_input`): um pipeline por formato de alvo (`FMT`, `Rgba16Float`, `Rgba8UnormSrgb`). Antes só existia o de `FMT`, e o WebGPU exige o formato do color attachment igual ao do pipeline: era erro de validação a cada quadro nos presets do Mega Bezel;
+  - último passe lido como feedback em `float_framebuffer`: ele fica como está e a saída passa por um passe de cópia em `FMT`, porque o readback e a captura do fundo do menu de pausa copiam 4 bytes por pixel.
+- **Varredura** (teste `field_render_all_presets`, ignorado, renderiza cada preset na GPU num viewport 1920×1080; RTX 3060, Vulkan):
+  - fora do Mega Bezel: 1.537 renderizam, 1 com erro (`test/feedback-noncausal`) e 461 não compilam (o `set_preset` já recusa);
+  - Mega Bezel: só uma amostra (1 a cada 60). A família POTATO trava a GPU (device perdido, TDR). Nesse caso o `Device::poll` do wgpu é fatal mesmo com o handler, então esses presets ainda derrubam a imagem.
+- **Aviso na tela:**
+  - `gpu/known_issues.txt` (gerado pelo teste com `REEMU_SHADER_ISSUES_OUT`) lista os presets com problema conhecido;
+  - o `set_shader` devolve o problema e Configurações › Vídeo e a página do jogo mostram o aviso;
+  - o `load_game` também devolve o problema e a `PlayScreen` avisa ao abrir o jogo. No vídeo nativo do Windows, esse aviso pode ficar atrás da janela do jogo (backlog dos avisos por cima do jogo).
+- **Pendente:**
+  - varrer o Mega Bezel inteiro (660 presets, cerca de 1 h, com TDR a cada preset que trava);
+  - recuperar o vídeo depois de um device perdido (recriar o `FrameProcessor` na thread do vídeo);
+  - o log só existe em build de desenvolvimento (`cfg!(debug_assertions)` em `lib.rs`), então os relatos de usuário chegam sem log.
+
+## 2026-10-29 — Scan de arcade (FinalBurn Neo) sem `.dat`
+
+- **Pergunta do usuário:** o FBNeo precisa de `.dat` para listar os jogos? Não: o set entra pelo nome da pasta (`systems.rs`). Sem `.dat`, os títulos são os nomes curtos, as BIOS entram como jogo e os clones ficam soltos.
+- **Feito:**
+  - mais nomes de pasta de arcade: `fbn`, `fb neo`, `fbalpha`, `fba2012`, `mame2003`, `mame2003-plus`, `mame2010` e outros;
+  - `ARCADE_NON_GAMES` (BIOS e dispositivos do FBNeo e do MAME: `neogeo`, `pgm`, `qsound`, `stvbios`…) não entra como jogo e sai se já estava. Na biblioteca do usuário havia 9;
+  - `.zip`/`.7z` sem jogo reconhecido fora de pasta de arcade é contado (`unrecognized_archives`) e a tela avisa como resolver.
+- **Teste:** `arcade_bios_skipped_aliases_and_unrecognized_archives`; os 31 testes do `library-scan` passam.
+- **Próxima etapa:** `.dat` do FBNeo baixado sob demanda, para nome completo, original/clone e marca de BIOS. A licença ainda está por conferir.
+
+## 2026-10-29 — Shader que impede o jogo de aparecer: removido e avisado no sino
+
+- **Pedido do usuário:** sem aviso de shader durante o jogo. Por padrão, o shader que impede o jogo de aparecer é removido, e o aviso vai para o sino, com um modal de detalhes.
+- **Backend (`shader_failure.rs`):**
+  - `report()` remove a atribuição (jogo, plataforma ou padrão) que trouxe o shader. Ela vem de `AppState.active_shader`, gravado em `apply_resolved_shader_ex`;
+  - emite `shader-failed` (`source`, `name`, `kind`, `scope`, `systemId`, `error`);
+  - o `AppHandle` fica guardado no `setup`, porque o caso da GPU nasce dentro do `FrameProcessor`.
+- **Quando dispara:**
+  - na abertura do jogo, se o preset está na lista dos que travam a GPU (`knownGpuHang`, nem chega a ser aplicado) ou não monta (`build`); o jogo roda no `plain`;
+  - no meio do jogo, num erro do wgpu (`gpu`, `recover_from_gpu_error`, que já volta para o `plain`).
+- **Escolha de shader:** o `set_shader` não aplica nem salva preset que trava a GPU e devolve `gpuHang`, para a tela avisar que não foi aplicado. O `renderError` ainda é aplicado, com aviso.
+- **Tela:**
+  - saiu o aviso da `PlayScreen` (e o `shaderIssue` do `load_game`);
+  - `useShaderFailures` coloca o aviso no sino (`kind: "shaderFailed"`) e recarrega as telas de shader;
+  - `ShaderFailureDialog` mostra o que aconteceu, de onde o shader saiu, o arquivo e a mensagem técnica;
+  - textos em pt-BR, en e es. Conferido na página de teste.
+
+## 2026-10-29 — Menu de pausa num OverlayDrawer à esquerda
+
+- **Pedido do usuário:** trocar o painel feito à mão do menu de pausa pelo Drawer do Fluent, à esquerda.
+- **Fluent 2 (Drawer › Usage):**
+  - cabeçalho com título (obrigatório), corpo no `DrawerBody` (o que rola) e rodapé para as ações principais;
+  - navegação fica à esquerda;
+  - overlay é modal por padrão.
+  - No ReEmu: as abas e o título da aba no `DrawerHeader`, o conteúdo da aba no `DrawerBody` e os três botões de ícone no `DrawerFooter`. `position="start"`, `size="small"`, largura 480 pela variável `--fui-Drawer--size` (como a gaveta de Informações).
+- **Fechar:**
+  - clique fora (`backdropClick`) retoma o jogo, como o Continuar;
+  - o Esc não é tratado pelo drawer (`escapeKeyDown` é ignorado), porque o backend já alterna o menu com ele (`commands/input.rs`) e fechar pelos dois caminhos reabria;
+  - o B do controle segue pelo `toggleFocus`.
+- **Vídeo nativo:**
+  - a saída do drawer `small` dura `durationGentle`, 250 ms (react-drawer 9.13, `shared/drawerMotions.js`);
+  - `VideoMenu::Closing` passou de 10 para 20 ticks (cerca de 300 ms), para o jogo não voltar por cima da animação;
+  - o print do jogo atrás do menu ficou `fixed`, com `z-index` 99, acima do jogo e abaixo do portal do drawer;
+  - a limpeza do print espera 260 ms.
+- **Teclado na tela:** além de `.fui-DialogSurface`, entra também em `.fui-OverlayDrawer`, porque o drawer é modal e prende o foco.
+- **Conferido** na página de teste (temas ReEmu e Crimson Retro claro): abas por LB/RB com o foco no primeiro item, cheats, save states e rodapé. A espera do vídeo nativo só dá para testar no app.
+
+## 2026-10-29 — Menu de pausa sem piscar em branco; drawers flutuantes
+
+- **Tela piscando em branco ao abrir o menu (vídeo nativo):**
+  - a janela do jogo some e a página é transparente. O painel antigo cobria tudo na hora; o escurecido do OverlayDrawer é animado (250 ms, a partir de transparente), e o fundo branco da WebView aparecia;
+  - agora uma camada preta (`pauseLayer`, `z-index` 99, abaixo do portal do drawer) aparece no 1º quadro, e o print do jogo entra por cima;
+  - no fechamento ela fica 340 ms, até a janela do jogo voltar (`Closing(20)`, cerca de 300 ms).
+- **Drawers flutuantes (pedido do usuário):** o menu de pausa e as Informações do jogo ficam a 24 px das bordas, com o raio grande do app (`floatingDrawer`). A raiz do OverlayDrawer já é `position: fixed` com `top`/`bottom: 0` (`useOverlayDrawerStyles.styles.raw.js`), então o afastamento vai em `top`, `bottom` e no lado em que o drawer encosta, não em `margin`. A largura respeita a tela menos as margens.
+
+## 2026-10-29 — Testes do app voltam a abrir no Windows
+
+- **Problema:** o binário de testes do `reemu-desktop` deixou de abrir (`STATUS_ENTRYPOINT_NOT_FOUND`). O `run_chain` chamava direto o `shader_failure::report`, que usa o `AppHandle`, e com isso o runtime do Tauri entrava no binário de teste junto com a importação de `TaskDialogIndirect` (comctl32 v6). Esse binário não tem o manifesto do comctl32 v6 e carregava a v5.82.
+- **Correção:** a GPU chama um gancho (`gpu::set_shader_failure_hook`, um ponteiro de função) registrado no `setup`. Nos testes não há gancho e fica só o log. Os 72 testes do app e a suíte do workspace passam. Clippy com `-D warnings` e `cargo fmt` limpos; o frontend (lint, 147 testes e build) também.

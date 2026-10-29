@@ -1,4 +1,9 @@
 import {
+  DrawerBody,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  OverlayDrawer,
   Accordion,
   AccordionHeader,
   AccordionItem,
@@ -7,10 +12,25 @@ import {
   Caption1,
   Button,
   Spinner,
+  Tab,
+  TabList,
   Title3,
+  Tooltip,
   makeStyles,
+  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
+import {
+  ArrowExitRegular,
+  DeleteRegular,
+  FullScreenMaximizeRegular,
+  FullScreenMinimizeRegular,
+  HistoryRegular,
+  PlayRegular,
+  SaveRegular,
+  TrophyRegular,
+  WandRegular,
+} from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
@@ -24,7 +44,8 @@ import { SaveStateThumb } from "../components/SaveStateThumb";
 import { useFocusBridge } from "../hooks/useFocusBridge";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useKeyboardInput } from "../hooks/useKeyboardInput";
-import { moveFocus } from "../lib/focusNav";
+import { focusFromNav, moveFocus } from "../lib/focusNav";
+import { REEMU_TAB } from "../hooks/useMenuNav";
 import { formatPlayTime } from "../lib/playTime";
 import { createFrameRenderer, type FrameRenderer } from "../lib/frameRenderer";
 import { initials } from "../lib/initials";
@@ -33,6 +54,7 @@ import { platformLabel } from "../lib/platform";
 import { copyErrorDetails, errorToast, fixRoute, sysToast } from "../lib/toast";
 import {
   currentFocus,
+  deleteSaveState,
   listRoms,
   listSaveStates,
   loadGame,
@@ -50,10 +72,13 @@ import {
   unloadGame,
   jsLog,
 } from "../lib/tauri";
+import { useModalButtonStyles } from "../styles/buttons";
 import { usePauseStyles } from "../styles/xbox";
 import { useFocusStore } from "../stores/useFocusStore";
+import { useGamepadStore } from "../stores/useGamepadStore";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
+import { TOOLTIP_POSITION } from "../lib/tooltip";
 
 const useStyles = makeStyles({
   // Opaco: no modo canvas o frame vai num <canvas>; no vídeo nativo (subsurface)
@@ -67,11 +92,18 @@ const useStyles = makeStyles({
   },
   // Fundo do menu de pausa no vídeo nativo: o frame que estava na tela,
   // borrado e escurecido por animação (a subsurface do jogo some).
+  // Camada atrás do menu de pausa no vídeo nativo: opaca desde o 1º quadro,
+  // por cima do jogo e abaixo do drawer (o portal do Fluent fica em
+  // z-index 1000000).
+  pauseLayer: {
+    position: "fixed",
+    inset: 0,
+    zIndex: 99,
+    backgroundColor: "#000",
+  },
   pauseBg: {
     position: "absolute",
     inset: 0,
-    // atrás do painel (que é não-posicionado) mas sobre o scrim.
-    zIndex: -1,
     objectFit: "cover",
     width: "100%",
     height: "100%",
@@ -235,6 +267,7 @@ export function PlayScreen() {
   const { t, i18n } = useTranslation();
   const styles = useStyles();
   const pause = usePauseStyles();
+  const btn = useModalButtonStyles();
   const navigate = useNavigate();
   // Vídeo numa surface nativa atrás da webview → esta tela fica transparente e
   // não roda o loop do canvas.
@@ -406,16 +439,58 @@ export function PlayScreen() {
   // Menu de pausa: fica montado durante a animação de saída; no vídeo nativo
   // busca o print do jogo capturado pelo Rust pra usar de fundo.
   const menuOpen = focus === "MenuFocused";
-  // Conteúdo do menu de pausa: os botões de sempre ou a lista de cheats
-  // (doc 17); volta pros botões a cada vez que o menu abre.
-  const [pauseView, setPauseView] = useState<"main" | "cheats">("main");
+  // Abas do menu de pausa, só ícone, como o guia do Xbox (print do usuário,
+  // 2026-10-29); volta pra 1ª a cada vez que o menu abre. Continuar, tela
+  // cheia e sair ficam fora das abas, no rodapé do painel. LB/RB
+  // trocam (`REEMU_TAB`). Cheats só com jogo da biblioteca (precisa do id).
+  const pauseTabs = useMemo(
+    () => [
+      { id: "states" as const, label: "play.tabStates" as const, icon: <SaveRegular /> },
+      ...(romId
+        ? [{ id: "cheats" as const, label: "play.cheats" as const, icon: <WandRegular /> }]
+        : []),
+      // RetroAchievements (doc 16): por enquanto só o aviso de que vem aí
+      {
+        id: "achievements" as const,
+        label: "play.achievements" as const,
+        icon: <TrophyRegular />,
+      },
+    ],
+    [romId],
+  );
+  type PauseTab = (typeof pauseTabs)[number]["id"];
+  const [pauseTab, setPauseTab] = useState<PauseTab>("states");
   // ajuste no render quando o menu abre (react.dev, "Adjusting some state
   // when a prop changes"), sem efeito
   const [menuWasOpen, setMenuWasOpen] = useState(menuOpen);
   if (menuOpen !== menuWasOpen) {
     setMenuWasOpen(menuOpen);
-    if (menuOpen) setPauseView("main");
+    if (menuOpen) setPauseTab("states");
   }
+  const pauseBodyRef = useRef<HTMLDivElement>(null);
+  // Trocou de aba pelo atalho: o foco vai pro 1º item da aba nova, como no
+  // Xbox (o clique na aba deixa o foco nela).
+  const focusTabBody = useRef(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onTab = (e: Event) => {
+      const step = (e as CustomEvent<number>).detail;
+      const ids = pauseTabs.map((x) => x.id);
+      setPauseTab((cur) => ids[(ids.indexOf(cur) + step + ids.length) % ids.length]);
+      focusTabBody.current = true;
+    };
+    window.addEventListener(REEMU_TAB, onTab);
+    return () => window.removeEventListener(REEMU_TAB, onTab);
+  }, [menuOpen, pauseTabs]);
+  useEffect(() => {
+    if (!focusTabBody.current) return;
+    focusTabBody.current = false;
+    const first = pauseBodyRef.current?.querySelector<HTMLElement>(
+      "button:not([disabled]), input:not([disabled])",
+    );
+    if (first) focusFromNav(first);
+  }, [pauseTab]);
+  const padConnected = useGamepadStore((st) => st.devices.length > 0);
   const [closing, setClosing] = useState(false);
   const menuMounted = menuOpen || closing;
   const wasOpen = useRef(false);
@@ -446,7 +521,10 @@ export function PlayScreen() {
         if (u) URL.revokeObjectURL(u);
         return null;
       });
-    }, 175);
+    }, 340);
+    // 340: além da saída do drawer (`small`, durationGentle = 250 ms), a
+    // camada opaca do vídeo nativo fica até a janela do jogo voltar
+    // (`VideoMenu::Closing(20)`, ~300 ms) — sair antes mostrava o branco.
     return () => clearTimeout(t);
   }, [menuOpen, nativeVideo, overlay]);
 
@@ -636,6 +714,7 @@ export function PlayScreen() {
               : g.baseWidth / g.baseHeight || 4 / 3;
           declaredAspectRef.current = a;
           setAspect(a);
+
           // "Jogar daqui": carrega o save state pedido na URL antes de mostrar.
           const wantState = params.get("loadState");
           if (wantState) {
@@ -713,6 +792,11 @@ export function PlayScreen() {
       resume();
     },
     onError: (e) => push(errorToast(e, "loadGameState")),
+  });
+  const delState = useMutation({
+    mutationFn: (id: string) => deleteSaveState(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["save-states", romId] }),
+    onError: (e) => push(errorToast(e, "deleteSaveState")),
   });
 
   const resume = () => {
@@ -847,85 +931,178 @@ export function PlayScreen() {
         </div>
       )}
 
-      {menuMounted && (
-        <div
-          className={`${pause.scrim} ${menuOpen ? styles.menuIn : styles.menuOut}`}
-        >
-          {nativeVideo && pauseBg && (
-            <img className={styles.pauseBg} src={pauseBg} alt="" aria-hidden />
-          )}
-          <div className={pause.panel}>
-            <Title3 as="h2" className={pause.title}>
-              {pauseView === "cheats" ? t("cheats.title") : t("play.paused")}
-            </Title3>
-            {pauseView === "cheats" ? (
-              <CheatsPanel romId={romId} onBack={() => setPauseView("main")} />
-            ) : (
-            <>
-            <Button appearance="primary" onClick={resume}>
-              {t("play.continue")}
-            </Button>
-            <Button
-              disabled={quickSave.isPending}
-              onClick={() => quickSave.mutate()}
-            >
-              {t("play.quickSave")}
-            </Button>
-            <Button
-              disabled={quickLoad.isPending}
-              onClick={() => quickLoad.mutate()}
-            >
-              {t("play.quickLoad")}
-            </Button>
-
-            {(stateList.data?.length ?? 0) > 0 && (
-              <div className={pause.states}>
-                {stateList.data!.map((st) => (
-                  <Button
-                    key={st.id}
-                    appearance="subtle"
-                    className={pause.stateRow}
-                    disabled={loadAny.isPending}
-                    onClick={() => loadAny.mutate(st.id)}
-                  >
-                    <SaveStateThumb
-                      stateId={st.id}
-                      hasThumbnail={st.hasThumbnail}
-                    />
-                    <span className={pause.stateLabel}>
-                      {st.slot === 0
-                        ? t("play.quickSave")
-                        : st.slot != null
-                          ? t("game.slot", { n: st.slot })
-                          : t("game.auto")}
-                      <br />
-                      <span className={pause.stateDate}>
-                        {new Date(st.createdAt * 1000).toLocaleString(i18n.language)}
-                        {st.playTimeAtSave != null &&
-                          t("game.playedFor", { time: formatPlayTime(st.playTimeAtSave) })}
-                      </span>
-                    </span>
-                  </Button>
-                ))}
-              </div>
-            )}
-
-            <Button appearance="subtle" onClick={() => void toggleFullscreen()}>
-              {fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen")}
-            </Button>
-            {romId && (
-              <Button appearance="subtle" onClick={() => setPauseView("cheats")}>
-                {t("play.cheats")}
-              </Button>
-            )}
-            <Button appearance="subtle" onClick={quit}>
-              {t("play.quit")}
-            </Button>
-            </>
-            )}
-          </div>
+      {/* Vídeo nativo: a janela do jogo some enquanto o menu está aberto e a
+          página é transparente — sem uma camada opaca JÁ no 1º quadro, o
+          fundo branco da WebView aparecia até o escurecido do drawer
+          (animado, 250 ms) e o print chegarem ("tela pisca em branco",
+          2026-10-29). Preto na hora; o print do jogo entra por cima. */}
+      {menuMounted && nativeVideo && !overlay && (
+        <div className={styles.pauseLayer} aria-hidden>
+          {pauseBg && <img className={styles.pauseBg} src={pauseBg} alt="" />}
         </div>
       )}
+      {/* Menu de pausa num drawer do Fluent à esquerda (pedido do usuário,
+          2026-10-29; guia de uso do Drawer no Fluent 2: cabeçalho com
+          título, corpo que rola, rodapé com as ações; navegação à
+          esquerda). O Esc NÃO fecha por aqui: o backend já alterna o menu
+          com ele (`commands/input.rs`) — fechar pelos dois reabria. Clicar
+          fora retoma o jogo, como o Continuar. */}
+      <OverlayDrawer
+        open={menuOpen}
+        position="start"
+        size="small"
+        className={pause.drawer}
+        aria-label={t("play.paused")}
+        onOpenChange={(_, d) => {
+          if (!d.open && d.type === "backdropClick") resume();
+        }}
+      >
+        <DrawerHeader className={pause.header}>
+            <div className={pause.tabsRow}>
+              {/* nome do botão do controle, igual em todo idioma; sem
+                  controle não há atalho e a dica some */}
+              {padConnected && (
+                <kbd className={pause.shoulder} aria-hidden>
+                  LB
+                </kbd>
+              )}
+              <TabList
+                className={pause.tabs}
+                size="large"
+                aria-label={t("play.tabs")}
+                selectedValue={pauseTab}
+                onTabSelect={(_, d) => setPauseTab(d.value as PauseTab)}
+              >
+                {pauseTabs.map((tab) => (
+                  <Tooltip positioning={TOOLTIP_POSITION} key={tab.id} content={t(tab.label)} relationship="label">
+                    <Tab value={tab.id} icon={tab.icon} />
+                  </Tooltip>
+                ))}
+              </TabList>
+              {padConnected && (
+                <kbd className={pause.shoulder} aria-hidden>
+                  RB
+                </kbd>
+              )}
+            </div>
+            <DrawerHeaderTitle heading={{ as: "h2", className: pause.title }}>
+              {t(pauseTabs.find((x) => x.id === pauseTab)?.label ?? "play.tabStates")}
+            </DrawerHeaderTitle>
+          </DrawerHeader>
+
+          <DrawerBody className={pause.drawerBody}>
+            <div ref={pauseBodyRef} className={pause.body} role="tabpanel">
+              {pauseTab === "states" && (
+                <>
+                  <Button
+                    size="large"
+                    className={mergeClasses(pause.item, btn.secondary)}
+                    icon={<SaveRegular />}
+                    disabled={quickSave.isPending}
+                    onClick={() => quickSave.mutate()}
+                  >
+                    {t("play.quickSave")}
+                  </Button>
+                  <Button
+                    size="large"
+                    className={mergeClasses(pause.item, btn.secondary)}
+                    icon={<HistoryRegular />}
+                    disabled={quickLoad.isPending}
+                    onClick={() => quickLoad.mutate()}
+                  >
+                    {t("play.quickLoad")}
+                  </Button>
+                  {(stateList.data?.length ?? 0) > 0 && (
+                    <div className={pause.states}>
+                      {stateList.data!.map((st) => (
+                        <div key={st.id} className={pause.stateRow}>
+                          <SaveStateThumb stateId={st.id} hasThumbnail={st.hasThumbnail} />
+                          <div className={pause.stateInfo}>
+                            <span className={pause.stateLabel}>
+                              {st.slot === 0
+                                ? t("play.quickSave")
+                                : st.slot != null
+                                  ? t("game.slot", { n: st.slot })
+                                  : t("game.auto")}
+                              <br />
+                              <span className={pause.stateDate}>
+                                {new Date(st.createdAt * 1000).toLocaleString(i18n.language)}
+                                {st.playTimeAtSave != null &&
+                                  t("game.playedFor", { time: formatPlayTime(st.playTimeAtSave) })}
+                              </span>
+                            </span>
+                            <div className={pause.stateActions}>
+                              <Button
+                                className={btn.secondary}
+                                icon={<HistoryRegular />}
+                                disabled={loadAny.isPending}
+                                onClick={() => loadAny.mutate(st.id)}
+                              >
+                                {t("play.loadState")}
+                              </Button>
+                              <Button
+                                className={btn.secondary}
+                                icon={<DeleteRegular />}
+                                disabled={delState.isPending}
+                                onClick={() => delState.mutate(st.id)}
+                              >
+                                {t("common.delete")}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {pauseTab === "cheats" && romId && <CheatsPanel romId={romId} />}
+
+              {pauseTab === "achievements" && (
+                <div className={pause.soon}>
+                  <TrophyRegular className={pause.soonIcon} aria-hidden />
+                  <Body1>{t("play.achievementsSoon")}</Body1>
+                </div>
+              )}
+            </div>
+
+          </DrawerBody>
+
+            {/* Ações do jogo, só ícone, no pé do painel como a fileira de baixo
+                do guia do Xbox; o nome vem no tooltip (Fluent 2: ícone sozinho
+                pede rótulo acessível e tooltip). */}
+            <DrawerFooter className={pause.footer}>
+              <Tooltip positioning={TOOLTIP_POSITION} content={t("play.continue")} relationship="label">
+                <Button
+                  appearance="primary"
+                  size="large"
+                  className={pause.footerBtn}
+                  icon={<PlayRegular />}
+                  onClick={resume}
+                />
+              </Tooltip>
+              <Tooltip positioning={TOOLTIP_POSITION}
+                content={fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen")}
+                relationship="label"
+              >
+                <Button
+                  size="large"
+                  className={mergeClasses(pause.footerBtn, btn.secondary)}
+                  icon={fullscreen ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />}
+                  onClick={() => void toggleFullscreen()}
+                />
+              </Tooltip>
+              <Tooltip positioning={TOOLTIP_POSITION} content={t("play.quit")} relationship="label">
+                <Button
+                  size="large"
+                  className={mergeClasses(pause.footerBtn, btn.secondary)}
+                  icon={<ArrowExitRegular />}
+                  onClick={quit}
+                />
+              </Tooltip>
+            </DrawerFooter>
+      </OverlayDrawer>
     </div>
   );
 }

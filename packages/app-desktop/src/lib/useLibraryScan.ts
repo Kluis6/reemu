@@ -3,7 +3,21 @@ import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToastStore } from "../stores/useToastStore";
 import { rescanLibrary, scanLibrary, type ScanProgress } from "./tauri";
-import { errorPatch } from "./toast";
+import { errorPatch, sysToast } from "./toast";
+import type { ScanReport } from "./tauri";
+import type { TFunction } from "i18next";
+import type { ToastItem } from "../stores/useToastStore";
+
+/** Aviso dos `.zip`/`.7z` que o scan pulou por não achar jogo dentro — quase
+ *  sempre um set de arcade numa pasta que não diz que é arcade. Tempo maior
+ *  que o de um aviso comum: é uma instrução pra ler. */
+export function archivesHint(t: TFunction, r: ScanReport): ToastItem | null {
+  if (r.unrecognizedArchives <= 0) return null;
+  return {
+    ...sysToast(t("scan.archivesHint", { count: r.unrecognizedArchives }), "Warning"),
+    durationMs: 9000,
+  };
+}
 import { useAutoMetadataScan } from "./useAutoMetadataScan";
 
 /**
@@ -56,6 +70,8 @@ export function useLibraryScan() {
           progress: undefined,
         });
       }
+      const hint = archivesHint(t, r);
+      if (hint) push(hint);
       qc.invalidateQueries({ queryKey: ["roms"] });
       qc.invalidateQueries({ queryKey: ["romSources"] });
       autoMetadata(r.added);

@@ -21,7 +21,7 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     rowGap: tokens.spacingVerticalM,
-    width: 'min(520px, 80vw)',
+    width: '100%',
   },
   hint: { color: tokens.colorNeutralForeground3 },
   list: {
@@ -48,10 +48,12 @@ const useStyles = makeStyles({
   },
   form: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr auto',
+    gridTemplateColumns: '1fr 1fr',
     columnGap: tokens.spacingHorizontalS,
+    rowGap: tokens.spacingVerticalS,
     alignItems: 'end',
   },
+  addBtn: { gridColumn: '1 / -1', justifySelf: 'start' },
 })
 
 /**
@@ -60,7 +62,7 @@ const useStyles = makeStyles({
  * hora: o app manda a lista pro core (`retro_cheat_set`). Quem entende o
  * código é o core — o aviso de cima diz isso.
  */
-export function CheatsPanel({ romId, onBack }: { romId: string; onBack: () => void }) {
+export function CheatsPanel({ romId }: { romId: string }) {
   const { t } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
@@ -145,6 +147,7 @@ export function CheatsPanel({ romId, onBack }: { romId: string; onBack: () => vo
         </Field>
         <Button
           appearance="primary"
+          className={s.addBtn}
           icon={<AddRegular />}
           disabled={!code.trim() || add.isPending}
           onClick={() => add.mutate()}
@@ -153,9 +156,6 @@ export function CheatsPanel({ romId, onBack }: { romId: string; onBack: () => vo
         </Button>
       </div>
 
-      <Button appearance="subtle" onClick={onBack}>
-        {t('common.back')}
-      </Button>
     </div>
   )
 }

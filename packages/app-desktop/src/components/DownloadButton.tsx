@@ -7,6 +7,7 @@ import {
   type ButtonProps,
 } from '@fluentui/react-components'
 import { CloudArrowDownRegular } from '@fluentui/react-icons'
+import { TOOLTIP_POSITION } from '../lib/tooltip'
 
 const useStyles = makeStyles({
   // Mais largo que o quadrado do botão só-ícone, como o "baixar" da
@@ -37,7 +38,7 @@ export function DownloadButton({
 }) {
   const s = useStyles()
   return (
-    <Tooltip content={label} relationship="label">
+    <Tooltip positioning={TOOLTIP_POSITION} content={label} relationship="label">
       <Button
         className={mergeClasses(s.btn, className)}
         appearance={appearance}

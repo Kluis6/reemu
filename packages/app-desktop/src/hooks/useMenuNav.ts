@@ -24,6 +24,13 @@ export const REEMU_ACTION = 'reemu-action'
  *  evento na `window`) em vez de voltar no histórico. */
 export const REEMU_ONBOARDING_BACK = 'reemu-onboarding-back'
 
+/** LB/RB do controle: aba anterior (`detail: -1`) ou próxima (`detail: 1`),
+ *  disparado na `window` — quem tem abas escuta (o menu de pausa). Sem
+ *  atalho de teclado (pedido do usuário). */
+export const REEMU_TAB = 'reemu-tab'
+const switchTab = (step: -1 | 1) =>
+  window.dispatchEvent(new CustomEvent(REEMU_TAB, { detail: step }))
+
 /** Tipos de `<input>` em que se digita texto (o A abre o teclado na tela). */
 const TEXT_INPUT = new Set(['text', 'search', 'email', 'url', 'tel', 'password', ''])
 
@@ -135,6 +142,10 @@ export function useMenuNav() {
           break
         case 'action':
           secondaryAction()
+          break
+        case 'tabPrev':
+        case 'tabNext':
+          switchTab(nav === 'tabPrev' ? -1 : 1)
           break
         default:
           moveFocus(nav as NavDir)

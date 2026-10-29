@@ -3,6 +3,39 @@
 use super::*;
 
 impl FrameProcessor {
+    /// Um erro do wgpu fora de escopo chegou desde o último quadro (ver
+    /// `install_gpu_error_handler`): o preset que estava rodando quebrou nesta
+    /// GPU (validação, memória). Volta pro `plain` pro jogo continuar
+    /// aparecendo — o preset escolhido fica salvo e é tentado de novo no
+    /// próximo jogo. Com o `plain` falhando também não há pra onde voltar; o
+    /// erro já foi pro log.
+    fn recover_from_gpu_error(&mut self) {
+        let Some(e) = self
+            .gpu_error
+            .last
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .take()
+        else {
+            return;
+        };
+        if self.preset_source == "plain" {
+            return;
+        }
+        log::error!(
+            "shader '{}' falhou na GPU ({e}) — voltando pro 'plain'",
+            self.preset_name
+        );
+        // sai da atribuição e vira aviso no sino (não pega o lock da GPU)
+        if let Some(hook) = SHADER_FAILURE_HOOK.get() {
+            hook(&self.preset_source, e);
+        }
+        if let Err(err) = self.set_preset("plain") {
+            log::error!("GPU: não deu pra voltar pro 'plain': {err}");
+        }
+        self.history.clear();
+    }
+
     /// Roda a cadeia inteira (entrada + N passes + composição da moldura)
     /// gravando em `enc`. Devolve `(out_w, out_h, com_moldura)` — a textura
     /// final ainda não foi consumida (readback ou blit fica pro chamador).
@@ -11,6 +44,7 @@ impl FrameProcessor {
         frame: &Frame,
         enc: &mut wgpu::CommandEncoder,
     ) -> Option<(u32, u32, bool)> {
+        self.recover_from_gpu_error();
         let nw = frame.metadata.native_width;
         let nh = frame.metadata.native_height;
         if nw == 0 || nh == 0 {
@@ -557,6 +591,11 @@ impl FrameProcessor {
         tex: &wgpu::Texture,
         levels: u32,
     ) {
+        let Some((_, pipeline)) = self.mip_pipelines.iter().find(|(f, _)| *f == tex.format())
+        else {
+            log::warn!("mips: alvo em {:?} sem pipeline — sem mips", tex.format());
+            return;
+        };
         for i in 1..levels {
             let src_view = tex.create_view(&wgpu::TextureViewDescriptor {
                 base_mip_level: i - 1,
@@ -602,7 +641,7 @@ impl FrameProcessor {
                 occlusion_query_set: None,
                 multiview_mask: None,
             });
-            rp.set_pipeline(&self.mip_pipeline);
+            rp.set_pipeline(pipeline);
             rp.set_bind_group(0, &bg, &[]);
             rp.set_vertex_buffer(0, self.quad.slice(..));
             rp.draw(0..4, 0..1);

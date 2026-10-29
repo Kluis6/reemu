@@ -190,6 +190,10 @@ export interface ShaderInfo {
 export const getShaderInfo = () => invoke<ShaderInfo>('get_shader_info')
 
 export type ShaderScope = 'default' | 'system' | 'rom'
+/** Problema conhecido de um preset na GPU (lista em `gpu/known_issues.txt`):
+ *  `gpuHang` = trava a GPU (a imagem para); `renderError` = erro ao
+ *  renderizar (o ReEmu volta pro padrão sozinho). */
+export type ShaderIssue = 'gpuHang' | 'renderError'
 /** `scope`: undefined = só nesta sessão; 'default' = todos os jogos;
  *  'system' (+`systemId` ou derivado do `romId`) = uma plataforma;
  *  'rom' (+`romId`) = só esse jogo (`name` vazio = limpar a atribuição). */
@@ -199,7 +203,8 @@ export const setShader = (
   romId?: string,
   systemId?: string,
 ) =>
-  invoke<void>('set_shader', {
+  // devolve o problema conhecido do preset escolhido, se houver
+  invoke<ShaderIssue | null>('set_shader', {
     name,
     scope: scope ?? null,
     systemId: systemId ?? null,
@@ -539,6 +544,8 @@ export interface ScanReport {
   errors: number
   reclassified: number
   removed: number
+  /** `.zip`/`.7z` sem jogo reconhecido fora de pasta de arcade */
+  unrecognizedArchives: number
 }
 export interface ScanProgress {
   current: number
@@ -750,6 +757,9 @@ export type MenuNav =
   | 'back'
   | 'search'
   | 'context'
+  | 'action'
+  | 'tabPrev'
+  | 'tabNext'
 
 export async function onMenuNav(cb: (nav: MenuNav) => void): Promise<() => void> {
   if (!inTauri) return () => {}
@@ -881,6 +891,25 @@ export const checkForUpdate = () => invoke<UpdateInfo | null>('update_check')
 
 /** Baixa, instala e reinicia o app — só retorna se der erro. */
 export const installUpdate = () => invoke<void>('update_install')
+
+/** Shader que impediu o jogo de aparecer e saiu da atribuição
+ *  (`shader_failure.rs`, evento `shader-failed`). */
+export interface ShaderFailure {
+  source: string
+  name: string
+  /** `build` = não montou; `knownGpuHang` = trava a GPU (nem aplicado);
+   *  `gpu` = erro da GPU no meio do jogo */
+  kind: 'build' | 'knownGpuHang' | 'gpu'
+  /** de onde saiu; null = não estava atribuído */
+  scope: 'rom' | 'system' | 'default' | null
+  systemId: string | null
+  error: string
+}
+export async function onShaderFailed(cb: (f: ShaderFailure) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<ShaderFailure>('shader-failed', (e) => cb(e.payload))
+}
 
 export async function onUpdateProgress(
   cb: (p: { downloaded: number; total: number | null }) => void,

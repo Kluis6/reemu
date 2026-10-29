@@ -3,6 +3,7 @@ import { XboxControllerRegular } from "@fluentui/react-icons";
 import { useGamepadStore } from "../stores/useGamepadStore";
 import { useShellStyles } from "../styles/xbox";
 import { useTranslation } from "react-i18next";
+import { TOOLTIP_POSITION } from "../lib/tooltip";
 
 /**
  * Ícone na topbar, ao lado do relógio — só aparece com ≥1 controle
@@ -22,7 +23,7 @@ export function GamepadStatus() {
       : t("controllers.statusMany", { count: devices.length });
 
   return (
-    <Tooltip content={label} relationship="label">
+    <Tooltip positioning={TOOLTIP_POSITION} content={label} relationship="label">
       <span className={s.gamepadStatus} aria-label={label}>
         <XboxControllerRegular />
       </span>

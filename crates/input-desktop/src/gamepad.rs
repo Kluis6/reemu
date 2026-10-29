@@ -39,6 +39,9 @@ pub enum NavPulse {
     /// X (West): ação secundária do item focado (ex.: claro/escuro no card
     /// de tema em Configurações › Aparência).
     Action,
+    /// LB / RB: aba anterior / próxima (abas do menu de pausa).
+    TabPrev,
+    TabNext,
 }
 
 /// Índices de d-pad (numeração de [`button_index`]) que o stick esquerdo
@@ -260,6 +263,8 @@ pub struct GamepadPoller {
     nav_search_down: bool,
     nav_context_down: bool,
     nav_action_down: bool,
+    nav_tab_prev_down: bool,
+    nav_tab_next_down: bool,
     nav_back_down: bool,
     /// Zero calibrado de L2/R2 por conexão física (ver [`TriggerCal`]).
     triggers: HashMap<(PadId, Button), TriggerCal>,
@@ -302,6 +307,8 @@ impl GamepadPoller {
             nav_search_down: false,
             nav_context_down: false,
             nav_action_down: false,
+            nav_tab_prev_down: false,
+            nav_tab_next_down: false,
             nav_back_down: false,
             triggers: HashMap::new(),
         })
@@ -367,6 +374,16 @@ impl GamepadPoller {
             out.push(NavPulse::Action);
         }
         self.nav_action_down = action;
+        let tab_prev = held.contains(&6); // LB
+        if tab_prev && !self.nav_tab_prev_down {
+            out.push(NavPulse::TabPrev);
+        }
+        self.nav_tab_prev_down = tab_prev;
+        let tab_next = held.contains(&8); // RB
+        if tab_next && !self.nav_tab_next_down {
+            out.push(NavPulse::TabNext);
+        }
+        self.nav_tab_next_down = tab_next;
         out
     }
 

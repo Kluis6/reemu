@@ -24,6 +24,7 @@ mod perf;
 mod play_clock;
 mod profile;
 mod scraping;
+mod shader_failure;
 mod shader_pack;
 #[cfg(test)]
 mod smoke_roms;
@@ -52,6 +53,20 @@ fn env_flag(key: &str, default: bool) -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Pânico em qualquer thread vai pro log com o nome dela, além do stderr
+    // de sempre. Sem isso, a thread do vídeo morria (ex.: erro do wgpu
+    // tratado como fatal, ver `gpu::install_gpu_error_handler`) e o log só
+    // dizia "Handling wgpu errors as fatal by default", sem a causa.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let thread = std::thread::current();
+        log::error!(
+            "pânico na thread '{}': {info}",
+            thread.name().unwrap_or("?")
+        );
+        default_hook(info);
+    }));
+
     let app = covers::register(tauri::Builder::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
@@ -61,6 +76,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::UpdateState::default())
         .setup(|app| {
+            shader_failure::init(app.handle().clone());
+            gpu::set_shader_failure_hook(|source, error| {
+                shader_failure::report(source, shader_failure::FailureKind::Gpu, error)
+            });
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     // Padrão do plugin: 40 KB e só o arquivo atual

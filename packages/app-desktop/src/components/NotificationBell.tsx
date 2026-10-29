@@ -15,11 +15,13 @@ import {
   AlertRegular,
   ArrowCircleUpRegular,
   SparkleRegular,
+  WarningRegular,
 } from "@fluentui/react-icons";
 import { useState } from "react";
 import { useNotificationStore, type AppNotification } from "../stores/useNotificationStore";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
+import { TOOLTIP_POSITION } from "../lib/tooltip";
 
 const useStyles = makeStyles({
   badge: { position: "absolute", top: "2px", right: "2px", pointerEvents: "none" },
@@ -65,7 +67,8 @@ function ago(at: number): string {
 
 /**
  * Sino da barra lateral (acima do botão Encerrar): avisos do sistema —
- * versão nova, novidades depois de atualizar. Contador = não lidas; abrir a
+ * versão nova, novidades depois de atualizar, shader removido por impedir o
+ * jogo de aparecer. Contador = não lidas; abrir a
  * lista marca tudo como lido. Clicar num aviso abre o modal da atualização.
  */
 export function NotificationBell({ className }: { className?: string }) {
@@ -74,12 +77,14 @@ export function NotificationBell({ className }: { className?: string }) {
   const items = useNotificationStore((n) => n.items);
   const markAllRead = useNotificationStore((n) => n.markAllRead);
   const openDialog = useNotificationStore((n) => n.openDialog);
+  const openShaderDialog = useNotificationStore((n) => n.openShaderDialog);
   const [open, setOpen] = useState(false);
   const unread = items.filter((i) => !i.read).length;
 
   const select = (n: AppNotification) => {
     setOpen(false);
-    openDialog({ mode: n.kind === "update" ? "update" : "whatsNew", info: n.update });
+    if (n.kind === "shaderFailed") openShaderDialog(n.shader);
+    else openDialog({ mode: n.kind === "update" ? "update" : "whatsNew", info: n.update });
   };
 
   return (
@@ -95,7 +100,7 @@ export function NotificationBell({ className }: { className?: string }) {
       trapFocus
     >
       <PopoverTrigger disableButtonEnhancement>
-        <Tooltip content={t("notifications.title")} relationship="label">
+        <Tooltip positioning={TOOLTIP_POSITION} content={t("notifications.title")} relationship="label">
           <Button
             className={className}
             appearance="subtle"
@@ -130,6 +135,8 @@ export function NotificationBell({ className }: { className?: string }) {
                 icon={
                   n.kind === "update" ? (
                     <ArrowCircleUpRegular className={mergeClasses(!n.read && s.unread)} />
+                  ) : n.kind === "shaderFailed" ? (
+                    <WarningRegular className={mergeClasses(!n.read && s.unread)} />
                   ) : (
                     <SparkleRegular className={mergeClasses(!n.read && s.unread)} />
                   )

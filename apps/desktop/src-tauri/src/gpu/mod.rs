@@ -15,7 +15,7 @@
 
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 
 use domain::core_loader::VulkanSharedDevice;
@@ -248,6 +248,19 @@ pub fn curated_by_wire(wire: &str) -> Option<&'static Curated> {
 }
 
 static SHADER_ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Quem avisa o app quando o shader falha na GPU no meio do jogo
+/// (`shader_failure::report`), registrado no `setup`. É um ponteiro de função,
+/// não uma chamada direta, pra que o código da GPU não alcance o runtime do
+/// Tauri: o binário dos testes não tem o manifesto do comctl32 v6 que o
+/// runtime pede (`TaskDialogIndirect`) e nem abria
+/// (`STATUS_ENTRYPOINT_NOT_FOUND`). Sem gancho (testes), só o log.
+static SHADER_FAILURE_HOOK: std::sync::OnceLock<fn(&str, String)> = std::sync::OnceLock::new();
+
+/// Registra o gancho de [`SHADER_FAILURE_HOOK`]. Uma vez, no startup.
+pub fn set_shader_failure_hook(hook: fn(&str, String)) {
+    let _ = SHADER_FAILURE_HOOK.set(hook);
+}
 
 /// Raiz do pacote `slang-shaders` (`<dados>/shaders/slang-shaders`), usada pra
 /// resolver os presets `curated:<id>`. Setada uma vez no startup.
@@ -671,8 +684,13 @@ pub struct FrameProcessor {
     /// passe (`mipmap_input`) — wgpu não tem "generate mipmaps" embutido
     /// (ver `generate_mips`). Reusa a `bgl`/shader do `comp` (mesmo layout:
     /// rect uniforme + textura + sampler), só o pipeline é próprio porque o
-    /// formato do alvo pode divergir do formato de composição.
-    mip_pipeline: wgpu::RenderPipeline,
+    /// formato do alvo pode divergir do formato de composição. Um por formato
+    /// de alvo de passe (`FMT`, `float_framebuffer` → `Rgba16Float`,
+    /// `srgb_framebuffer` → `Rgba8UnormSrgb`, ver `specs.rs`): o WebGPU exige
+    /// o formato do color attachment igual ao do pipeline. Só com o de `FMT`,
+    /// o mip de um alvo float era erro de validação a cada quadro (presets do
+    /// Mega Bezel; jogo sem imagem com o som tocando, 2026-10-29).
+    mip_pipelines: Vec<(wgpu::TextureFormat, wgpu::RenderPipeline)>,
     /// Rect fixo `[0,0,1,1]` (quad cheio) — reusado em todo blit de mip.
     mip_rect: wgpu::Buffer,
     /// `(w, h, com_moldura)` da última chamada de `render_to_surface` — pra
@@ -726,6 +744,47 @@ pub struct FrameProcessor {
     integer_scaling: bool,
     /// Saída HDR pedida (aplicada quando houver surface nativa).
     hdr: HdrSettings,
+    /// Último erro do wgpu fora de um escopo (ver [`install_gpu_error_handler`])
+    /// — o `run_chain` volta pro preset `plain` quando ele aparece.
+    gpu_error: Arc<GpuErrorSlot>,
+}
+
+/// Erro do wgpu que nenhum `push_error_scope` pegou, guardado pelo handler do
+/// device até o próximo quadro.
+#[derive(Default)]
+struct GpuErrorSlot {
+    last: std::sync::Mutex<Option<String>>,
+    /// Quantos já chegaram — o log para de repetir depois de alguns (um
+    /// erro que se repete a cada quadro encheria o arquivo).
+    count: AtomicU32,
+}
+
+/// Troca o handler de erro não capturado do device. O padrão do wgpu 30 é
+/// fatal: `default_error_handler` faz `panic!("wgpu error: …")`
+/// (wgpu-30.0.1/src/backend/wgpu_core.rs). Um erro de validação de um passe
+/// de shader no meio do jogo derrubava a thread do vídeo
+/// (`reemu-video-pump`) — o core e o áudio seguiam em outras threads, então o
+/// jogo "sumia" com o som tocando (relato de usuários, 2026-10-29; no log
+/// desta máquina, 2026-10-16 18:14:50, preset `ossc_slot`). Aqui o erro vai
+/// pro log com a mensagem e fica guardado pro `run_chain` se recuperar.
+/// `Device::on_uncaptured_error` e `set_device_lost_callback`: docs.rs/wgpu
+/// 30.0.1, `Device`.
+fn install_gpu_error_handler(device: &wgpu::Device) -> Arc<GpuErrorSlot> {
+    let slot = Arc::new(GpuErrorSlot::default());
+    let s = slot.clone();
+    device.on_uncaptured_error(Arc::new(move |e: wgpu::Error| {
+        let n = s.count.fetch_add(1, Ordering::Relaxed);
+        if n < 5 {
+            log::error!("GPU: erro do wgpu fora de escopo: {e}");
+        } else if n == 5 {
+            log::error!("GPU: mais erros do wgpu — o log para de repetir");
+        }
+        *s.last.lock().unwrap_or_else(|p| p.into_inner()) = Some(e.to_string());
+    }));
+    device.set_device_lost_callback(|reason, msg| {
+        log::error!("GPU: device perdido ({reason:?}): {msg}");
+    });
+    slot
 }
 
 /// Alvo de apresentação nativo: a `wgpu::Surface` de uma `wl_subsurface` (ou da
@@ -872,10 +931,18 @@ impl FrameProcessor {
             r.history_depth
         );
 
+        let gpu_error = install_gpu_error_handler(&device);
         let comp = build_composite(&device);
         let flip = build_flip(&device);
         let rot_pipeline = rotate_pipeline(&device, &comp.bgl);
-        let mip_pipeline = mip_blit_pipeline(&device, &comp.bgl, FMT);
+        let mip_pipelines = [
+            FMT,
+            wgpu::TextureFormat::Rgba16Float,
+            wgpu::TextureFormat::Rgba8UnormSrgb,
+        ]
+        .into_iter()
+        .map(|f| (f, mip_blit_pipeline(&device, &comp.bgl, f)))
+        .collect();
         let mip_rect = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("mip rect"),
             size: 16,
@@ -893,7 +960,7 @@ impl FrameProcessor {
             device,
             queue,
             quad,
-            mip_pipeline,
+            mip_pipelines,
             mip_rect,
             preset_name: r.preset_name,
             preset_source: source,
@@ -945,6 +1012,7 @@ impl FrameProcessor {
             surface: None,
             integer_scaling: false,
             hdr: HdrSettings::default(),
+            gpu_error,
         })
     }
 
@@ -2634,6 +2702,7 @@ impl VblankEstimator {
 mod chain;
 mod device_hook;
 mod input;
+mod known_issues;
 mod pipelines;
 mod specs;
 #[cfg(target_os = "linux")]
@@ -2645,6 +2714,7 @@ mod vk_blit;
 #[cfg(windows)]
 pub(crate) mod win_interop;
 
+pub use known_issues::{shader_issue, ShaderIssue};
 use pipelines::*;
 use specs::*;
 use textures::*;

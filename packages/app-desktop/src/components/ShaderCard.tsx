@@ -12,6 +12,7 @@ import {
 } from '@fluentui/react-components'
 import { OptionsRegular } from '@fluentui/react-icons'
 import { useTranslation } from 'react-i18next'
+import { TOOLTIP_POSITION } from '../lib/tooltip'
 
 const useStyles = makeStyles({
   // Card selecionável do Fluent: a superfície inteira escolhe o shader
@@ -94,7 +95,7 @@ export function ShaderCard({
         description={description ? <Caption1 className={s.desc}>{description}</Caption1> : undefined}
         action={
           onSettings ? (
-            <Tooltip content={t('video.shaderSettings')} relationship="label">
+            <Tooltip positioning={TOOLTIP_POSITION} content={t('video.shaderSettings')} relationship="label">
               <Button
                 className={s.settingsBtn}
                 appearance="outline"

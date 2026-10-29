@@ -147,6 +147,36 @@ kbd {
   box-shadow: none !important;
 }
 
+/* 1b. Botões com o MESMO foco dos cards de jogo (pedido do usuário,
+   2026-10-29; o card está em `useGameCardStyles`/`FOCUS_GLOW`): anel de 3 px
+   afastado 3 px, vão transparente e um brilho por fora — no mouse em cima,
+   no foco de teclado e no foco pelo controle, como no card. O brilho é um
+   `::before` do tamanho da borda externa do anel (o `box-shadow` do próprio
+   botão pintaria o vão); o Fluent põe `overflow: hidden` na raiz do botão,
+   então o overflow abre só nesse estado. `position: relative` com
+   especificidade zero (`:where`): o botão que o Griffel posiciona continua
+   como está. */
+:where(.fui-Button, .fui-MenuButton, .fui-ToggleButton) {
+  position: relative;
+}
+:is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):not(:disabled, [aria-disabled="true"]):is(:hover, [data-fui-focus-visible]),
+html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus {
+  border-color: transparent !important;
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: 3px !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+:is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):not(:disabled, [aria-disabled="true"]):is(:hover, [data-fui-focus-visible])::before,
+html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent);
+  pointer-events: none;
+}
+
 /* 2. Foco pelo CONTROLE (ou setas): `moveFocus` marca o `<html>` com
    `data-nav-focus` (lib/focusNav.ts) e o `.focus()` não liga os atributos
    do Fluent. O anel vai no elemento focado — ou, quando o foco cai num
@@ -170,7 +200,8 @@ html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus 
 /* 3. Campos (texto, busca, área de texto, seletor): o anel em volta do
    campo inteiro quando o foco é visível — num campo de texto o foco é
    sempre visível (é onde se digita), e no controle entra pela regra 2 de
-   novo, aqui no componente. A barra de baixo do Fluent continua. */
+   novo, aqui no componente. A borda e a barra de baixo do Fluent saem
+   com o anel (regra logo abaixo da borda dos campos). */
 :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):has(:focus-visible),
 html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):focus-within {
   outline: 3px solid var(--colorBrandStroke1) !important;
@@ -188,6 +219,25 @@ html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select,
    (`.reemu-list-search`, busca do topo `.reemu-no-ring`). */
 :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select__select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search) {
   border-color: var(--reemuFieldStroke, color-mix(in srgb, var(--colorNeutralForeground1) 50%, transparent)) !important;
+}
+
+/* Com o anel, a borda do próprio componente some (pedido do usuário,
+   2026-10-29, print do app Xbox: o filtro focado só tem o anel). Campos: a
+   borda forçada acima e a barra de baixo do Fluent (`::after`) saem quando o
+   campo está com o anel (regra 3). O `Select` desenha a borda no `<select>`
+   de dentro (`.fui-Select__select`). Botões e links com borda própria (chips,
+   cards de save) seguem a mesma regra — os do Fluent já estão na 1b. */
+:is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search):has(:focus-visible),
+html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search):focus-within,
+.fui-Select:has(:focus-visible) .fui-Select__select,
+html[data-nav-focus] .fui-Select:focus-within .fui-Select__select,
+:is(button, a[href], [tabindex]:not(i)):not(.fui-Card):focus-visible,
+html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):not(.fui-Card):focus {
+  border-color: transparent !important;
+}
+:is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search, [data-fui-focus-within]):has(:focus-visible)::after,
+html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search, [data-fui-focus-within]):focus-within::after {
+  opacity: 0;
 }
 
 /* Ajustes do anel por componente:
