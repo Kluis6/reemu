@@ -3124,3 +3124,16 @@ Infra:
   - scan de arcade: mais nomes de pasta, BIOS fora da lista de jogos e aviso de zips sem jogo;
   - foco com anel e brilho em todos os botões e abas, tooltips à direita, botões dos modais visíveis em todos os temas;
   - arte da página do jogo até 70% da tela, texto branco com sombra sobre ela e drawers flutuantes.
+
+## 2026-10-29 — Fumaça do catálogo: Stella "travava" no Windows
+
+- **Sintoma:** a fumaça semanal falhava desde 2026-09-28, só no `windows-latest`, com `stella_libretro` e `stella2023_libretro` em "FALHA: travou".
+- **Causa (reproduzida nesta máquina):** o `reemu-core-host --run` rodava os 180 quadros e imprimia `REEMU_RUN_OK 180 179 184448`, mas o processo não saía. O `std::process::exit` (`ExitProcess`) roda o `DLL_PROCESS_DETACH` das DLLs, e, com o jogo ainda carregado (o modo pula o `retro_deinit` de propósito), os destrutores globais do Stella não terminam ali. O teste esperava 60 s e marcava "travou". Ficou um processo com uma thread presa no kernel, que nem o `Stop-Process` encerrava.
+- **Correção:** o modo `--run` sai por `TerminateProcess(GetCurrentProcess())`, depois de esvaziar o stdout. Pela documentação da Microsoft, ele encerra sem a limpeza global das DLLs ("The state of global data maintained by DLLs may be compromised if TerminateProcess is used rather than ExitProcess"), o que o modo já fazia ao pular o `retro_deinit`.
+- **Resultado:** os dois Stella rodam 180 quadros com imagem e áudio, e o teste leva 1,24 s.
+- **No app:** o fechamento de jogo já pede `Shutdown` e mata o filho depois do tempo de espera (`emu-session`), então lá o caso só atrasava o fim do processo filho.
+
+## 2026-10-29 — Roteiro de teste visual (`scripts/ui-render.py`)
+
+- **O quê:** um roteiro que abre uma tela do frontend no Vite da porta 1430, com o backend do Tauri trocado por respostas fixas (os mocks, o navegador e o cliente CDP vêm do `ui-smoke.py`), e executa passos em ordem: esperar, mandar evento do Tauri, pulso do controle, focar, passar o mouse, clicar, capturar, ler valores do DOM e auditar o foco (anel e brilho).
+- **Por quê:** substitui os scripts soltos usados nas conferências de interface desta sessão. A skill local `teste-visual` (em `.claude/`, fora do git) explica o uso e as armadilhas.

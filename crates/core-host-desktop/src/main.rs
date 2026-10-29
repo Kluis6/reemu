@@ -159,7 +159,31 @@ fn run_rom(args: &[String]) -> ! {
         }
     };
     drop(sandbox);
-    std::process::exit(code);
+    exit_without_dll_teardown(code);
+}
+
+/// Sai sem a limpeza das DLLs carregadas. No Windows o `std::process::exit`
+/// (`ExitProcess`) roda o `DLL_PROCESS_DETACH` de cada DLL, e com o jogo
+/// ainda carregado os destrutores globais do Stella (8 e 2023) não terminam
+/// ali: o `--run` imprimia `REEMU_RUN_OK` com os 180 quadros e o processo
+/// nunca saía — a fumaça do catálogo marcava "travou" toda semana desde
+/// 2026-09-28 (reproduzido nesta máquina, 2026-10-29). O `TerminateProcess`
+/// encerra sem essa etapa ("The state of global data maintained by DLLs may
+/// be compromised if TerminateProcess is used rather than ExitProcess",
+/// learn.microsoft.com/windows/win32/api/processthreadsapi/
+/// nf-processthreadsapi-terminateprocess) — o que este modo já faz de
+/// propósito ao pular o `retro_deinit`. O stdout é esvaziado antes.
+fn exit_without_dll_teardown(code: i32) -> ! {
+    use std::io::Write as _;
+    let _ = std::io::stdout().flush();
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
+        // SAFETY: pseudo-handle do próprio processo; terminar a si mesmo não
+        // volta.
+        unsafe { TerminateProcess(GetCurrentProcess(), code as u32) };
+    }
+    std::process::exit(code)
 }
 
 fn main() {
