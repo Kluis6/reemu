@@ -40,13 +40,24 @@ uuid = { version = "1", features = ["v4"] }
 thiserror.workspace = true
 reqwest = { version = "0.12", default-features = false, features = [
     "rustls-tls",
+    "json",
 ] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 md-5 = "0.10"
 tauri-plugin-dialog = "2"
 # Configurações › Sistema: iniciar junto com o sistema (v2.tauri.app/plugin/autostart).
 tauri-plugin-autostart = "2"
-tokio = { version = "1", features = ["time", "rt"] }
+tokio = { version = "1", features = ["time", "rt", "sync"] }
+# Entrar com Alvanista (src/alvanista/): PKCE (SHA-256 + base64url), callback
+# em 127.0.0.1 e abertura do navegador de sistema. O `open` é o que o
+# tauri-plugin-opener usa por baixo (mesmos recursos); direto, sem o plugin,
+# não entra o zbus 5 nem permissão nova no webview: só o Rust abre URLs, e
+# só do site do Alvanista.
+open = { version = "5", features = ["shellexecute-on-windows"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.8"
+url = "2"
 
 # Crates internos (arquitetura hexagonal — o shell é um adapter). Nenhum tem
 # código específico de Linux (core-loader-desktop já trata windows/macos em

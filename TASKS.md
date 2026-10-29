@@ -563,6 +563,20 @@ no `emu-session`, ver `docs/historico.md`).
         3. limites de uso;
         4. se vai haver busca por nome e por hash de ROM;
         5. estabilidade da API (a 0.1.0 deve mudar).
+      - **Respostas da Tellurian (2026-10-29)**, na ordem das perguntas:
+        1. os Termos de Uso do Alvanista cobrem os apps parceiros. A primeira
+           peça só lê o perfil (nome e avatar), nenhum dado de jogo, então a
+           licença do IGDB ainda não entra;
+        2. o ReEmu está cadastrado como o cliente `reemu`: público, sem
+           segredo, protegido pelo PKCE (S256). Embutir o client ID num app de
+           código aberto é o modelo previsto. O cadastro no GAS fica para
+           quando as conquistas entrarem;
+        3. limites: 60 pedidos por minuto por IP no endpoint de token, e 60
+           por minuto por app e pessoa na API de parceiros
+           (`/api/partner/v1`). O 429 traz `retry_after`;
+        4. busca por nome e por hash de ROM: ainda sem resposta;
+        5. o login usa a API de parceiros do Alvanista, com a versão no
+           caminho (`/api/partner/v1`), e não a API 0.1.0 da GameKave.
       - **Escopo do protótipo (só se os termos permitirem):** opção
         "Conectar conta Alvanista" em Configurações › Perfil, via OAuth
         (token no chaveiro do sistema, como a chave do TheGamesDB),
@@ -571,6 +585,15 @@ no `emu-session`, ver `docs/historico.md`).
         tempo de jogo pelo GAS. Depois, hero e logo de jogos já identificados
         para o carrossel e a página do jogo. ScreenScraper e TheGamesDB
         continuam como fontes principais, e o app funciona sem a GameKave.
+      - **Primeira peça (2026-10-29): só o perfil**, no lugar do GAS.
+        "Entrar com Alvanista" em Configurações › Perfil, desligado por
+        padrão, pelo navegador do sistema com PKCE; tokens no chaveiro (com
+        reserva no SQLite e aviso quando não há chaveiro); nome e avatar do
+        Alvanista só para leitura no rail, no hub e na saudação; "Desconectar"
+        revoga e volta ao perfil local. Detalhes em `docs/historico.md`
+        (2026-10-29). Conquistas pelo GAS e amigos vêm depois, quando o
+        Alvanista abrir essas partes da API de parceiros; hero e logo de
+        jogos seguem como no escopo acima.
 - [ ] `todo` — Avaliar no futuro: **ports nativos (recomp/decomp)** como
       launcher externo (pedido do dono do projeto, 2026-10-17). Pesquisa e
       licenças conferidas no GitHub:

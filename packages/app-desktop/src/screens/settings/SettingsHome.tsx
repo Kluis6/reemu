@@ -6,13 +6,12 @@ import {
   mergeClasses,
   tokens,
 } from "@fluentui/react-components";
-import { useQuery } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { ProfileAvatar } from "../../components/ProfileAvatar";
+import { useEffectiveProfile } from "../../hooks/useEffectiveProfile";
 import { SETTINGS_SECTIONS } from "../../layouts/settingsSections";
-import { getProfile } from "../../lib/tauri";
 
 // Folga pro anel de foco (3 de vão + 3 de traço) e o brilho de fora (~12)
 // não serem cortados pela borda da grade, que rola se a tela for baixa
@@ -209,23 +208,20 @@ export function SettingsHubCards({ items, label }: { items: SettingsHubItem[]; l
 /**
  * Entrada das Configurações: um card por categoria em grade bento, que ocupa a
  * área útil da página sem rolar. O card de Perfil é o maior e mostra o avatar
- * e o nome; os outros, ícone, nome e o que tem dentro.
+ * e o nome (os do Alvanista, se conectado); os outros, ícone, nome e o que
+ * tem dentro.
  */
 export function SettingsHome() {
   const { t } = useTranslation();
   const s = useStyles();
-  const profile = useQuery({
-    queryKey: ["profile"],
-    queryFn: getProfile,
-    retry: false,
-  });
+  const profile = useEffectiveProfile();
 
   return (
     <nav className={s.grid} aria-label={t("settings.title")}>
       {SETTINGS_SECTIONS.map(({ key, id, Icon }, i) => {
         const delay = { animationDelay: `${i * 30}ms` };
         if (id === "profile") {
-          const name = profile.data?.name ?? "";
+          const name = profile?.name ?? "";
           return (
             <Link
               key={key}
@@ -233,7 +229,7 @@ export function SettingsHome() {
               className={mergeClasses(s.card, s.profile)}
               style={delay}
             >
-              {profile.data && <ProfileAvatar profile={profile.data} size={96} />}
+              {profile && <ProfileAvatar profile={profile} size={96} />}
               {/* ícone da pessoa à direita, como nos outros cards (pedido do
                   usuário); sem perfil carregado é o único ícone do card */}
               <Icon className={s.icon} />

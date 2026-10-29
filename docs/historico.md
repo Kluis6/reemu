@@ -3196,3 +3196,28 @@ Infra:
 - **Medido:** em 1080p, o texto principal do ReEmu tem ~20 px contra os 30 px recomendados pela Microsoft para TV. No PC, o zoom encolhe tudo em janelas pequenas (8,2 px em 800×600), e o layout aguenta sem esse zoom.
 - **Decisão corrigida:** a ideia de "uma interface só" virou mesmos layout e componentes, com perfis de densidade TV e PC. Elevação, layout e interações espelham o Xbox em todos os perfis, por pedido do dono do projeto.
 - **Pendente:** capturas do console para a etapa 0; os valores de elevação e animação não estão em nenhuma fonte encontrada.
+
+## 2026-10-29 — Entrar com Alvanista: conectar a conta e espelhar o perfil
+
+- **Pedido:** o item GameKave / Alvanista do TASKS.md › Funcionalidades (2026-10-20). Esta é a primeira peça, feita com a equipe do Alvanista, e cobre **só o perfil**. Conquistas (GAS) e amigos vêm depois, quando o Alvanista abrir essas partes da API de parceiros. As respostas às perguntas do item estão no próprio TASKS.md.
+- **O que a pessoa vê:**
+  - em Configurações › Perfil, o botão "Entrar com Alvanista". A integração fica desligada até a pessoa clicar, e o app funciona igual sem ela;
+  - o navegador do sistema abre a tela de consentimento do Alvanista. Ao aprovar, o ReEmu passa a mostrar o nome e o avatar de lá no rail, no card de Perfil das Configurações e no "Bem-vindo, {nome}!". Sem avatar no Alvanista, vale o preset do ReEmu;
+  - conectado, os campos de nome e avatar dão lugar a "Editar no Alvanista", que abre o perfil no navegador. O perfil é editado só lá;
+  - "Desconectar" volta ao perfil local, que nunca é gravado por esta integração.
+- **Login (RFC 8252 + PKCE):**
+  - nada de webview embutido: o login acontece no navegador da pessoa, e o código volta para um servidor de uma conexão só em `127.0.0.1`, numa porta livre, que espera até 5 minutos e confere o `state`;
+  - PKCE S256 com o cliente `reemu`, que é público e não tem segredo. O código é trocado no Rust (`apps/desktop/src-tauri/src/alvanista/`): toda a rede passa por ali, nunca pelo webview, e o escopo é só `profile:read`;
+  - cada instalação gera um `device_id`, e o Alvanista separa as sessões por aparelho com ele;
+  - o navegador abre pelo crate `open` (o mesmo que o tauri-plugin-opener usa por baixo), só para URLs do site do Alvanista. Sem plugin novo e sem permissão nova no webview.
+- **Tokens:**
+  - no chaveiro do sistema (conta `alvanista`, pelo mesmo `SecretStore` dos segredos do scraper). Sem chaveiro (Linux sem Secret Service), o par vai para a tabela `secret_fallback` (migration 0019) e a tela avisa que a sessão ficou com menos proteção;
+  - o refresh token troca a cada uso, e reusar um antigo encerra a sessão no servidor. Por isso há uma renovação por vez no processo, o par novo é gravado antes de ser usado e fica na memória se a gravação falhar. Cada cópia leva a hora em que foi gravada, e a leitura fica sempre com a mais nova;
+  - os tokens nunca vão para o log nem para a tela: o webview só recebe o nome, o avatar, a URL do perfil e os avisos.
+- **Espelho do perfil:** o último perfil lido fica em `alvanista_state` (migration 0019), só para leitura. Ele se renova ao abrir o app, em segundo plano sem segurar a abertura, e ao abrir Configurações › Perfil, que aparece na hora com o que está guardado e se atualiza quando o Alvanista responde. Sem rede, mostra o último perfil com o aviso "Sem conexão".
+- **Fim da conexão:**
+  - "Desconectar" revoga a sessão no Alvanista e apaga os tokens e o espelho. Sem rede, apaga do mesmo jeito. Só falha (e avisa) quando o par vivo está no chaveiro, o chaveiro não deixa apagar e o servidor não confirmou a revogação: aí ainda haveria tokens vivos no aparelho, e ninguém saberia;
+  - se a pessoa remover o ReEmu no site (ou o app for suspenso), a renovação responde `invalid_grant`: o ReEmu apaga a sessão, mostra "Conexão com o Alvanista encerrada" e volta ao perfil local;
+  - 429, erros 5xx, falta de rede e tempo esgotado não desconectam.
+- **Limitação conhecida:** duas instâncias do ReEmu abertas ao mesmo tempo podem renovar o mesmo refresh token juntas. O Alvanista vê o reuso e encerra a sessão daquele aparelho, e basta conectar de novo. Uma instância nunca grava o par dela por cima de um que a outra gravou depois.
+- **Testes:** em Rust, com um Alvanista falso em `127.0.0.1` (troca do código, renovação, revogação, cancelamento, chaveiro quebrado ou só de leitura, banco fechado). No frontend, com vitest (tela de Perfil, botão, perfil mostrado no resto do app). Em build de debug, `REEMU_ALVANISTA_BASE` aponta para um Alvanista local.

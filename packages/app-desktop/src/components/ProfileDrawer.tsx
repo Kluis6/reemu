@@ -106,8 +106,9 @@ export function ProfileDrawer({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  profile: Pick<Profile, "name" | "avatar" | "bio">;
-  /** Imagem do banner (rede social, futuramente). Sem ela, as cores do tema. */
+  /** O perfil efetivo (`useEffectiveProfile`): conectado ao Alvanista, o de lá. */
+  profile: Pick<Profile, "name" | "avatar" | "bio"> & { avatarUrl?: string | null };
+  /** Imagem do banner (a capa do Alvanista). Sem ela, as cores do tema. */
   bannerUrl?: string | null;
 }) {
   const { t } = useTranslation();

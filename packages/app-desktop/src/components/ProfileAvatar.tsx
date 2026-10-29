@@ -11,6 +11,9 @@ import { profileAvatarUrl, type Profile } from '../lib/tauri'
  *
  * `badge` e `ring` ficam desligados por padrão — entram quando tivermos
  * presença/status (rede social).
+ *
+ * `avatarUrl` (o avatar da conta do Alvanista conectada) passa na frente do
+ * `avatar`; se a imagem não carregar, o Fluent mostra as iniciais.
  */
 export function ProfileAvatar({
   profile,
@@ -20,7 +23,7 @@ export function ProfileAvatar({
   ring = false,
   className,
 }: {
-  profile: Pick<Profile, 'name' | 'avatar'>
+  profile: Pick<Profile, 'name' | 'avatar'> & { avatarUrl?: string | null }
   size?: number
   nonce?: number
   badge?: 'available' | 'away' | 'busy' | 'offline'
@@ -29,7 +32,8 @@ export function ProfileAvatar({
   className?: string
 }) {
   const preset = presetOf(profile.avatar)
-  const isFile = profile.avatar === 'file'
+  const remote = profile.avatarUrl || null
+  const isFile = !remote && profile.avatar === 'file'
 
   const file = useQuery({
     queryKey: ['profile-avatar', nonce],
@@ -54,7 +58,9 @@ export function ProfileAvatar({
       color={ring ? 'colorful' : 'neutral'}
       badge={badge ? { status: badge } : undefined}
       image={
-        isFile && file.data
+        remote
+          ? { src: remote }
+          : isFile && file.data
           ? { src: file.data }
           : preset
             ? { src: presetDataUri(preset) }
