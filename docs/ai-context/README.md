@@ -39,7 +39,8 @@ trabalhar de memória (ver `00-visao-geral.md`).
 | `15-ports-nativos-recomp-decomp.md` | Ports nativos (recomp/decomp) abertos pela biblioteca: pesquisa, licenças e arquitetura do launcher (**backlog**) | 01, 10 (catálogo) |
 | `16-retroachievements.md` | Conquistas do RetroAchievements (rcheevos/`rc_client`): o que a documentação exige, onde encaixa no ReEmu e o plano em 8 fases (**planejado**) | 01, 06/07, save states |
 | `17-cheats-rewind.md` | Cheats (código pelo `retro_cheat_set`, banco `.cht` do libretro, cheats de memória) e rewind (estados com delta no processo do core): pesquisa e plano em 6 fases (**planejado**) | 01, 06/07, save states, 16 (memória e hardcore) |
-| `18-experiencia-console-tv.md` | Experiência de console espelhando o Xbox, na TV e no PC: comparação, medidas e plano em 9 etapas (**planejado**) | 05, 07 |
+| `18-experiencia-console-tv.md` | Menus confortáveis para TV e controle, com o layout do Xbox para Windows: comparação, medidas e plano em 9 etapas (**planejado**) | 05, 07 |
+| `19-plano-unificado.md` | Avaliação do projeto, robustez e frontend juntos: 9 fases, etapas locais até aprovar, riscos, portão de desempenho e mudanças que exigem aviso (**planejado**) | 18 |
 
 Docs 04 a 10 podem ser feitos em paralelo/qualquer ordem entre si, desde
 que 01-03 já estejam prontos.

@@ -1005,6 +1005,8 @@ mod tests {
 
         // (core, sistemas, resultado do probe, detalhe, jogo)
         let mut rows: Vec<(&str, &str, &str, String, String)> = Vec::new();
+        // (core, situação na tabela do aviso de atualização)
+        let mut updates: Vec<(&str, String)> = Vec::new();
         for c in CATALOG {
             if only
                 .as_ref()
@@ -1027,6 +1029,15 @@ mod tests {
             ];
             let (status, out, hang_info) = run_host(&host, &path, &probe_args, &out_path);
             let line = out.lines().find(|l| l.starts_with("REEMU_PROBE_"));
+            let probe_version = line
+                .filter(|l| l.starts_with("REEMU_PROBE_OK"))
+                .and_then(|l| l.split('\t').nth(2))
+                .map(str::to_owned);
+            if let Some(version) = &probe_version {
+                if let Some(state) = crate::core_updates::table_check(c.id, version).await {
+                    updates.push((c.id, state));
+                }
+            }
             let row = match (status, line) {
                 (None, _) => ("travou", format!("mais de 60 s no retro_init{hang_info}")),
                 (Some(st), Some(l)) if st.success() && l.starts_with("REEMU_PROBE_OK") => {
@@ -1124,6 +1135,15 @@ mod tests {
                 game.replace('|', "/")
             );
         }
+        let _ = writeln!(
+            md,
+            "\n## Aviso de atualização\n\n| core | situação |\n|---|---|"
+        );
+        updates.sort_by_key(|u| (!u.1.starts_with("FALHA"), u.0));
+        for (id, state) in &updates {
+            let _ = writeln!(md, "| `{id}` | {} |", state.replace('|', "/"));
+        }
+        let table_failed = updates.iter().filter(|u| u.1.starts_with("FALHA")).count();
         println!("{md}");
         if let Some(p) = std::env::var_os("GITHUB_STEP_SUMMARY") {
             let _ = std::fs::write(p, &md);
@@ -1131,6 +1151,10 @@ mod tests {
         assert_eq!(
             failed, 0,
             "{failed} core(s) não abriram ou não rodaram a ROM de teste — ver a tabela acima"
+        );
+        assert_eq!(
+            table_failed, 0,
+            "{table_failed} core(s) com problema na tabela do aviso de atualização — ver acima"
         );
     }
 }

@@ -1,22 +1,28 @@
-# 18 — Experiência de console: referência do Xbox, na TV e no PC
+# 18 — Menus confortáveis para tela grande e controle, na TV e no PC
 
-**Estado: planejado (2026-10-30). Próximo passo: etapa 0, que depende das
-capturas do console.** Nada deste plano foi implementado ainda.
+**Estado: planejado (revisado em 2026-10-30). Etapa 0 feita, a partir de vídeos em
+360p.** Nada deste plano foi implementado ainda.
 
 ## Objetivo
 
-O ReEmu deve se comportar como o dashboard do Xbox Series X|S quando usado na
-TV com controle, e continuar confortável no PC com mouse e teclado.
+O frontend atual fica, com ajustes. O objetivo é deixá-lo confortável em tela grande
+e com controle, sem copiar o dashboard do console.
 
-Regras do dono do projeto:
+Regras do dono do projeto (revisão de 2026-10-30, substitui o espelhamento completo
+do Xbox que estava aqui antes):
 
-- **Elevação, layout e interações espelham o Xbox** em todos os perfis. O PC só
-  adapta tamanho e formas de entrada, não inventa outro comportamento.
-- Alguns usuários seguem no PC, com teclado e mouse, em telas menores que uma
-  TV: a interface precisa responder bem a isso.
+- **Layout da aplicação: app Xbox para Windows**, como já é hoje (barra lateral, busca
+  no topo, fileiras).
+- **Menus: as configurações do console Xbox são o modelo**, por serem as mais
+  confortáveis com controle.
+- **O card mantém o comportamento atual:** não cresce em layout nem empurra vizinhos.
+- **Cada etapa fica só local.** Commit e push depois que o dono do projeto testar e
+  aprovar aquela etapa.
+- Alguns usuários seguem no PC, com teclado e mouse, em telas menores que uma TV.
 - Sem atalho de teclado para trocar as abas do menu de pausa (pedido anterior).
 - Avisos não aparecem durante o jogo: vão para o sino.
-- Espelhar o comportamento, não a marca: sem logotipos nem identidade do Xbox.
+- Usar o comportamento como referência, não a marca: sem logotipos nem identidade do
+  Xbox.
 
 ## Fontes e o quanto valem
 
@@ -38,8 +44,8 @@ Regras do dono do projeto:
   e [Thurrott](https://www.thurrott.com/games/xbox/329563/hands-on-windows-11-full-screen-experience).
   Análises de terceiros.
 
-**Não confirmado em nenhuma fonte:** os valores de elevação e de animação do
-console e os atalhos do teclado virtual dele. A etapa 0 existe por isso.
+**Sem fonte escrita:** os valores de elevação e de animação do console e os atalhos
+do teclado virtual dele. A etapa 0 mede o que os vídeos permitem.
 
 ## Xbox × ReEmu (auditoria de 2026-10-30)
 
@@ -92,21 +98,66 @@ Medido com o zoom desligado e sem texto maior (`ui-smoke.py`, `ui-render.py`):
   Nasceu como "uma interface só", mas o texto que serve para a TV fica grande
   demais num monitor.
 - **Barra lateral fica:** segue o modelo do app Xbox para Windows e foi pedida
-  pelo dono do projeto. O acesso rápido no topo fica de fora, para não haver
-  dois menus.
+  pelo dono do projeto. O acesso rápido do console fica de fora.
 - **Comportamento primeiro, visual depois:** as etapas 1 e 2 sustentam o resto.
-- **Guia abre pelo View.** O botão Xbox fica como extra, porque o Windows pode
-  capturá-lo para a Game Bar.
+- **View abre a barra lateral**, levando o foco até ela. O guia global saiu do plano.
 
 ## Etapas
 
 ### 0. Referência do Xbox
 
-Medir em capturas e vídeos do console e do app Xbox: elevação, tempos de
-animação, proporção dos cards e posição do foco. Fontes: gravação do dono do
-projeto ou vídeos do Series X|S a partir de 2023, com a data conferida.
-Resultado: uma tabela de valores nesta página, marcando o que é medição e o que
-é estimativa.
+**Primeira leitura feita em 2026-10-30**, com os 4 vídeos locais de `videosxbox/`
+(fora do git): console em versões recentes e Insider, e o app Xbox no Windows.
+
+**Limites:** vídeos do YouTube em 360p, editados e a ~25 quadros por segundo. As
+medidas são porcentagem da tela, com erro de cerca de 1 ponto, e os tempos têm
+erro de ±40 ms. O tempo de abertura do guia e dos menus não pôde ser medido, porque
+os cortes da edição escondem a transição. Sombra fina não aparece nessa resolução.
+
+**Medido na Home do console:**
+
+| Item | Valor |
+|---|---|
+| Fileira de recentes | de 59% a 73% da altura |
+| Cards da segunda linha | de 77% a 97% da altura; ~21% de largura |
+| Margens laterais | ~5,5% |
+| Card normal | ~8% de largura × ~14% de altura |
+| Card em foco | ~13,5% × ~24%, ou seja, **~1,65× maior** |
+| Como cresce | **Empurra os vizinhos e sobe**, com a base quase fixa; não é sobreposição |
+| Conteúdo do card em foco | Só nele aparecem título e estado |
+| Tempo da troca de foco | **~120 a 160 ms**, com o card antigo encolhendo junto |
+| Pulo longo com reordenação | ~170 ms no foco; cards entram com cor sólida e a imagem surge em ~300 a 500 ms |
+
+**Observado:**
+
+- **Home:** fundo em tela cheia; o conteúdo só ocupa os 40% de baixo. No topo, perfil
+  à esquerda, atalhos em ícones no centro e status e relógio à direita.
+- **Foco:** contorno na cor de destaque do usuário (verde, laranja, azul), com leve
+  brilho. Os botões de lista e configurações seguem a mesma cor; no menu de contexto
+  o contorno aparece branco.
+- **Dica contextual:** só a ação do item em foco, numa pílula (ex.: `X Ejetar`).
+- **Guia:** painel flutuante à esquerda, com ~28% de largura, separado das bordas.
+  Abas só com ícones no topo, tela escurecida atrás, relógio grande à direita.
+  Painéis podem abrir por cima, como o de perfil.
+- **Menu de contexto:** painel centralizado, ~23% de largura, com o nome do jogo no
+  topo, ícone mais texto em cada item e o primeiro item em foco; fundo escurecido.
+- **Biblioteca e configurações:** coluna à esquerda de ~23% com ícone e texto, contagem
+  e item ativo marcado; conteúdo à direita. Nas configurações, o item ativo é
+  preenchido com a cor de destaque.
+- **Teclado virtual:** painel flutuante de ~52% de largura, centralizado embaixo,
+  deixando ver o campo. Tem sugestões, números na grade, setas de cursor com ícone de
+  gatilho e os ícones X em apagar e Y em espaço.
+- **App Xbox no Windows:** barra lateral, busca no topo, `Jump back in`, `Featured` e
+  fileiras. Em tela muito larga o conteúdo fica centralizado, com largura limitada. A
+  biblioteca tem abas e filtros em pílulas. Há um botão `Xbox mode` e um diálogo que
+  explica os controles ao entrar nesse modo.
+
+**O que vale para o plano:** só o que se refere a menus (guia e Home ficam como
+registro). O modelo principal são as configurações do console: coluna de categorias à
+esquerda, item ativo preenchido com a cor de destaque, opções em blocos grandes à
+direita, descrição junto da opção e rótulos sempre visíveis. Menu de contexto e teclado
+virtual seguem as observações acima. A elevação de menus vem de contorno e fundo
+escurecido, sem sombra forte.
 
 ### 1. Tirar os becos sem saída
 
@@ -127,7 +178,7 @@ com controle.
 
 ### 2. Mapa único de botões e foco
 
-- LB/RB trocam abas em toda parte; LT/RT paginam; View abre o guia.
+- LB/RB trocam abas em toda parte; LT/RT paginam; View leva o foco à barra lateral.
 - Memória de foco ao voltar e foco inicial definido em toda tela.
 - Dicas de botão conforme o item em foco, inclusive em diálogos, com ícones de
   LB, RB, LT e RT.
@@ -166,46 +217,54 @@ Pontos de quebra do perfil PC (aplicados nas etapas 3 a 7):
 **Pronto quando:** a leitura estiver confortável numa TV real, a cerca de 3 m, em
 tema claro e escuro, e nos tamanhos de PC abaixo.
 
-### 4. Guia global
+### 4. Configurações no modelo do console
 
-Painel com abas: Início e recentes, Notificações, Perfil e sistema (com desligar).
-Substitui o popover do sino e o drawer de perfil, com o mesmo componente do menu
-de pausa.
+- Coluna de categorias sempre visível à esquerda, em vez de voltar ao hub para trocar de
+  seção; item ativo preenchido com a cor de destaque.
+- Opções em blocos grandes, com descrição, dois ou três por linha; subpáginas com o mesmo
+  padrão.
+- Sliders e seletores que funcionem com controle.
+- No perfil PC, a mesma estrutura, mais compacta, com a coluna recolhendo em janela
+  estreita.
 
-### 5. Novo Início
+### 5. Demais menus
 
-- Fundo em tela cheia, que segue o jogo em foco.
-- Primeira fileira: "Continuar", com o jogo mais recente em destaque.
-- Fileiras com rolagem de verdade e um card final "Ver tudo".
-- Até 3 jogos fixados e opção de menos cards, como a Home de 2025.
+- Menu do jogo (botão Menu no card): centralizado, com o nome do jogo no topo, ícone e
+  texto em cada item, primeiro item em foco e fundo escurecido.
+- Menu de pausa, drawer de perfil, sino e diálogos: mesmos tamanhos, foco, botões e
+  fundo escurecido.
+- Dicas de botão só com ações do item em foco.
 
 ### 6. Biblioteca e página do jogo
 
-- Biblioteca: pular por letra, filtros em painel, aviso de busca ativa e lista
-  otimizada para acervos grandes.
-- Jogo: "Jogar" como foco inicial, ações secundárias no botão Menu e confirmação
-  ao apagar save state.
-- Texto longo: rolagem pelo analógico direito.
+Sem mudar o layout. Biblioteca: pular por letra, aviso de busca ativa e lista otimizada
+para acervos grandes. Jogo: "Jogar" como foco inicial, nomes visíveis nas ações e
+confirmação ao apagar save state. Texto longo: rolagem pelo analógico direito.
 
-### 7. Configurações e entrada de dados
+### 7. Entrada de dados
 
-- Lista de seções sempre visível, sem voltar ao hub para trocar de categoria.
-- Navegador de arquivos dentro do app: as janelas do Windows não funcionam com
-  controle.
-- Teclado virtual com cursor e layout conforme o idioma.
+- Navegador de arquivos dentro do app: as janelas do Windows não funcionam com controle.
+- Teclado virtual flutuante, deixando o campo visível, com cursor, sugestões e layout
+  conforme o idioma.
 
 ### 8. Acabamento e identidade
 
 Sons e vibração com opção de desligar, animações consistentes, opção de reduzir
 movimento, revisão de todos os temas numa TV.
 
-## Elevação, layout e interações: o que espelhar
+## Fora do plano (decisão de 2026-10-30)
 
-| Tema | Em todos os perfis |
-|---|---|
-| Elevação | Quatro níveis: fundo, card em foco, painel, modal com camada escura. Valores vêm da etapa 0 |
-| Layout | Fundo do jogo, fileiras na mesma ordem, guia com abas, jogo em destaque |
-| Interações | Mesma ação e mesma ordem em controle, mouse e teclado; B, Esc e Voltar sempre fazem o mesmo |
+- Card que cresce e empurra os vizinhos: o card atual fica.
+- Home no estilo do console: fundo em tela cheia e conteúdo nos 40% de baixo. O Início
+  atual fica.
+- Guia global: barra lateral, drawer de perfil e sino continuam como estão, só ganhando
+  os ajustes da etapa 5.
+
+## Como aprovar cada etapa
+
+1. A etapa é implementada só localmente, sem commit.
+2. O dono do projeto recebe o roteiro de teste e testa.
+3. Com a aprovação, commit e push daquela etapa. Só então começa a próxima.
 
 ## Como testar cada etapa
 

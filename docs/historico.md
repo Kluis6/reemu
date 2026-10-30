@@ -3196,3 +3196,40 @@ Infra:
 - **Medido:** em 1080p, o texto principal do ReEmu tem ~20 px contra os 30 px recomendados pela Microsoft para TV. No PC, o zoom encolhe tudo em janelas pequenas (8,2 px em 800×600), e o layout aguenta sem esse zoom.
 - **Decisão corrigida:** a ideia de "uma interface só" virou mesmos layout e componentes, com perfis de densidade TV e PC. Elevação, layout e interações espelham o Xbox em todos os perfis, por pedido do dono do projeto.
 - **Pendente:** capturas do console para a etapa 0; os valores de elevação e animação não estão em nenhuma fonte encontrada.
+
+## 2026-10-30 — Plano unificado de robustez e frontend
+
+- **Plano:** `docs/ai-context/19-plano-unificado.md`, com 9 fases, riscos, portão de desempenho e mudanças que exigem aviso. Nada foi implementado.
+- **Correção:** o isolamento em processo filho não vale para cores Vulkan, que rodam no processo do app. Isolá-los ficou fora do plano pelo risco e pelo custo.
+- **Achado:** a CI só faz `cargo check` cruzado para Windows e não executa os testes de GPU (28 ignorados em `gpu/tests.rs`).
+- **Regra do dono do projeto:** mudança estrutural em core, Vulkan ou OpenGL exige aviso antes de começar.
+
+## 2026-10-30 — Etapa 0: leitura dos vídeos do Xbox
+
+- **Fonte:** 4 vídeos em 360p em `videosxbox/`, fora do git; quadros extraídos com o Chrome em modo headless, sem instalar ffmpeg.
+- **Medido:** o card em foco na Home do console fica ~1,65× maior, empurra os vizinhos e leva ~120 a 160 ms. A elevação vem de tamanho, contorno e fundo escurecido. Detalhes em `docs/ai-context/18-experiencia-console-tv.md`.
+- **Limite:** tempos de abertura do guia e dos menus e sombra fina não puderam ser medidos.
+
+## 2026-10-30 — Revisão do plano de frontend
+
+- **Decisão do dono do projeto:** o frontend atual fica, com o layout do app Xbox para Windows. Os menus seguem as configurações do console, por serem as mais confortáveis com controle.
+- **Fora do plano:** card que empurra os vizinhos, Home no estilo do console e guia global.
+- **Processo:** cada etapa fica só local; commit e push depois do teste e da aprovação dele.
+
+## 2026-10-30 — Fase 0: medir e proteger
+
+- **Desempenho:** `scripts/perf-capture.ps1`, `scripts/perf-report.py` e `docs/perf/README.md`. A captura usa o terminal porque o `perf core` sai no stderr do processo do core e não entra no `ReEmu.log`.
+- **CI:** job `windows-tests`, com `cargo test --workspace` em Windows real. O job anterior só conferia se compilava.
+- **Fumaça do catálogo:** passa a conferir a tabela do aviso de atualização; falha se o repositório não responder ou o core parar de declarar o commit.
+
+## 2026-10-30 — Primeira captura de desempenho (não usada como referência)
+
+- **Validou o medidor:** o relatório leu o log real; as medianas ficaram estáveis, com o p99 a menos de 0,1 ms do intervalo médio.
+- **Por que não vale como referência:** o link do core-host falhou e os jogos rodaram com o binário antigo; os cenários ficaram trocados (Flycast usou Vulkan, PPSSPP usou OpenGL) e o cenário `software` estava com shader.
+- **Correção:** o relatório agora mostra core, render e shader de cada trecho e recusa sessão com core-host desatualizado; a captura roda sem compilação incremental.
+- **Correção de uma afirmação do plano:** no Windows, core Vulkan roda no processo filho (C3c); a rota dentro do app é o padrão só no Linux. Confirmado no `session.rs` e no log.
+
+## 2026-10-30 — Referência de desempenho
+
+- **Medida:** `docs/perf/baseline.json`, com o core-host atual, RTX 3060 e tela 4K. Todos os cenários ficaram no ritmo do alvo, com o p99 a no máximo 0,01 ms da média.
+- **A observar:** o Flycast com Vulkan teve picos de ~150 ms no `retro_run` (0,22 quadro atrasado por segundo). A causa não foi investigada.

@@ -75,6 +75,37 @@ jobs:
       - name: cargo check (x86_64-pc-windows-gnu)
         run: scripts/check-windows.sh
 
+  # Executa os testes no Windows de verdade (o job acima só confere se compila).
+  # Sem GPU: os testes que precisam dela ficam em `#[ignore]` e rodam à mão.
+  windows-tests:
+    name: Windows (testes)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Preparar toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-tests
+
+      # O crate do app embute o frontend (`frontendDist`) ao compilar.
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter app-desktop build
+
+      - name: test
+        run: cargo test --workspace
+
   frontend:
     name: Frontend (lint · build)
     runs-on: ubuntu-24.04

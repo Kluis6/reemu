@@ -42,25 +42,30 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       `REEMU_SS_DEVPASSWORD` no GitHub — o `release.yml` já repassa ao build
       e o `scraping.rs` envia quando existem. Pra testar local: exportar as
       duas variáveis antes do `cargo tauri dev`.
-- [ ] `todo` — **Referência do Xbox para a experiência de console** (2026-10-30):
-      capturas ou vídeo do Series X|S na Home, no guia, na biblioteca e na
-      página de um jogo. Sem isso, os valores de elevação e animação da etapa 0
-      seriam estimativas. Ver a próxima seção.
+- [x] `done` — **Referência de desempenho medida** (2026-10-30), com jogos reais de
+      software, OpenGL e Vulkan: [`docs/perf/README.md`](docs/perf/README.md).
+- [ ] `todo` — **Testar e aprovar cada etapa do plano unificado**: as etapas ficam só
+      locais até a aprovação; depois vão com commit e push.
 
-### Experiência de console (TV e PC)
+### Plano unificado: robustez e menus para TV e controle
 
-Plano completo em
+Plano, riscos e portão de desempenho em
+[`docs/ai-context/19-plano-unificado.md`](docs/ai-context/19-plano-unificado.md);
+detalhe da interface em
 [`docs/ai-context/18-experiencia-console-tv.md`](docs/ai-context/18-experiencia-console-tv.md).
+Mudança estrutural em core, Vulkan ou OpenGL exige aviso ao dono do projeto antes
+de começar. Layout do Xbox para Windows; menus no modelo das configurações do console;
+o card atual fica.
 
-- [ ] `todo` — Etapa 0: referência do Xbox (elevação, animação, proporções).
-- [ ] `todo` — Etapa 1: tirar os becos sem saída do controle.
-- [ ] `todo` — Etapa 2: mapa único de botões, memória de foco e visual por entrada.
-- [ ] `todo` — Etapa 3: perfis de densidade TV e PC, e pontos de quebra.
-- [ ] `todo` — Etapa 4: guia global.
-- [ ] `todo` — Etapa 5: novo Início.
-- [ ] `todo` — Etapa 6: biblioteca e página do jogo.
-- [ ] `todo` — Etapa 7: configurações, navegador de arquivos e teclado virtual.
-- [ ] `todo` — Etapa 8: sons, vibração, animações e revisão dos temas.
+- [ ] `todo` — Fase 0: linha de base de desempenho, CI no Windows e fumaça agendada (referência do Xbox já feita).
+- [ ] `todo` — Fase 1: tipos gerados entre Rust e TypeScript, erros tipados.
+- [ ] `todo` — Fase 2: becos sem saída do controle, mapa de botões e camada de foco.
+- [ ] `todo` — Fase 3: perfis de densidade e tokens (**exige aviso**: escala e vídeo nativo).
+- [ ] `todo` — Fase 4: configurações no modelo do console.
+- [ ] `todo` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados.
+- [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates.
+- [ ] `todo` — Fase 7: acabamento, diagnóstico exportável e registro de decisões.
+- [ ] `todo` — Fase 8: estrutura de core e GPU (**cada item exige aviso**).
 
 ### Validação (precisa de hardware/máquina que não é esta)
 

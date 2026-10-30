@@ -8,7 +8,9 @@ name: Fumaça do catálogo
 #   System, PC Engine, Atari 2600), carrega uma ROM mínima gerada pelo
 #   próprio teste (smoke_roms.rs) com `--run` e roda 180 quadros.
 # Pega core que sumiu do buildbot, que não abre na plataforma, que cai no
-# retro_init ou que não roda um jogo. A tabela sai no resumo do job.
+# retro_init ou que não roda um jogo. Também confere a tabela do aviso de
+# atualização (core_updates.rs): repositório fora do ar ou core que deixou de
+# declarar o commit fazem o job falhar. A tabela sai no resumo do job.
 # Semanal — os nightlies do buildbot mudam sozinhos.
 
 on:

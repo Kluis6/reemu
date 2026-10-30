@@ -212,6 +212,26 @@ async fn remote_head(repo: &str) -> Option<String> {
     parse_ls_refs(&body)
 }
 
+/// Situação de um core da tabela, para a fumaça do catálogo; `None` = fora dela.
+/// HEAD à frente não é falha: o buildbot pode estar um dia atrás.
+#[cfg(test)]
+pub(crate) async fn table_check(core_id: &str, version: &str) -> Option<String> {
+    let repo = upstream_repo(core_id)?;
+    let Some(commit) = commit_in_version(version) else {
+        return Some(format!("FALHA: `{version}` não traz o commit"));
+    };
+    let mut head = remote_head(repo).await;
+    if head.is_none() {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        head = remote_head(repo).await;
+    }
+    Some(match head {
+        None => format!("FALHA: sem HEAD em {repo}"),
+        Some(h) if h.starts_with(commit) => format!("em dia ({commit})"),
+        Some(h) => format!("HEAD à frente ({commit} → {})", &h[..7]),
+    })
+}
+
 /// Quantos repositórios consultar de uma vez.
 const HEAD_REQUESTS: usize = 8;
 
