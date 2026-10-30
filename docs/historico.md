@@ -3189,3 +3189,10 @@ Infra:
 - **Conferido só no Windows:** no Linux, confirmei que o código do índice é o CRC da biblioteca no `stella`; a tabela vale por repositório, mas não medi o aviso em Linux e macOS.
 - **Volta:** o buildbot só tem a última compilação. Atualizar guarda a DLL anterior em `cores/previous/` (uma por core) e a tela ganha "Versão anterior", que troca as duas. Mover funciona com a DLL carregada; sobrescrever, no Windows, não.
 - **Interface:** selo e botão em Configurações › Cores, "Atualizar N cores" e o aviso no sino, que abre essa tela. Nada aparece durante o jogo: a checagem vive no `AppShell`.
+
+## 2026-10-30 — Plano da experiência de console
+
+- **Plano:** `docs/ai-context/18-experiencia-console-tv.md`, com 9 etapas e a comparação com o Xbox. Nada foi implementado.
+- **Medido:** em 1080p, o texto principal do ReEmu tem ~20 px contra os 30 px recomendados pela Microsoft para TV. No PC, o zoom encolhe tudo em janelas pequenas (8,2 px em 800×600), e o layout aguenta sem esse zoom.
+- **Decisão corrigida:** a ideia de "uma interface só" virou mesmos layout e componentes, com perfis de densidade TV e PC. Elevação, layout e interações espelham o Xbox em todos os perfis, por pedido do dono do projeto.
+- **Pendente:** capturas do console para a etapa 0; os valores de elevação e animação não estão em nenhuma fonte encontrada.
