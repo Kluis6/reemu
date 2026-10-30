@@ -1,3 +1,4 @@
+mod alvanista;
 mod appearance;
 mod bezel_pack;
 mod bios;
@@ -133,6 +134,18 @@ pub fn run() {
             // principal — o `setup` roda nela; o `AppState::new` liga a
             // thread que lê os controles.
             input_desktop::pad_source::init_on_main_thread(system_prefs.controller_driver());
+            // "Entrar com Alvanista": um cliente e um armazenamento para todos os
+            // comandos (sem SQLite não há onde guardar a sessão: ficam sem estado).
+            if let Some(pool) = db.clone() {
+                let store =
+                    alvanista::store::Store::new(pool, std::sync::Arc::new(credentials::OsKeyring));
+                app.manage(alvanista::Alvanista::new(alvanista::client::Client::new(
+                    store,
+                )));
+                // Renova o espelho do perfil em segundo plano (não segura a
+                // abertura nem derruba o app se a rede falhar).
+                alvanista::refresh_on_start(app.handle());
+            }
             app.manage(AppState::new(base, db, audio_config, hotkeys));
 
             // Contexto GPU pro processamento de frame (etapa 04 — shader chain).
@@ -310,6 +323,12 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            alvanista::alvanista_connect,
+            alvanista::alvanista_status,
+            alvanista::alvanista_cached_status,
+            alvanista::alvanista_disconnect,
+            alvanista::alvanista_cancel,
+            alvanista::alvanista_open_profile,
             commands::js_log,
             commands::current_focus,
             commands::toggle_focus,

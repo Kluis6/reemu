@@ -1,9 +1,9 @@
 {
   "rust": {
-    "total": 541,
+    "total": 544,
     "byLicense": {
       "Apache-2.0 OR MIT": 338,
-      "MIT": 120,
+      "MIT": 123,
       "Unicode-3.0": 18,
       "MIT OR Unlicense": 11,
       "Apache-2.0": 9,

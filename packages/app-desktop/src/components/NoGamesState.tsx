@@ -1,8 +1,7 @@
 import { Button } from '@fluentui/react-components'
 import { AddRegular, JoystickRegular } from '@fluentui/react-icons'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { getProfile } from '../lib/tauri'
+import { useEffectiveProfile } from '../hooks/useEffectiveProfile'
 import { EmptyState } from './EmptyState'
 
 /**
@@ -10,12 +9,12 @@ import { EmptyState } from './EmptyState'
  * usuário): joystick de fliperama do Fluent (lembra mais um controle retrô
  * que o gamepad de linha), "Bem-vindo, fulano!" com o nome do perfil (sem
  * nome, "Bem-vindo ao ReEmu") e o botão de adicionar ROMs, tudo grande e no
- * meio da página (`EmptyState size="large"`).
+ * meio da página (`EmptyState size="large"`). Conectado ao Alvanista, o nome
+ * é o de lá (`useEffectiveProfile`).
  */
 export function NoGamesState({ onAdd }: { onAdd: () => void }) {
   const { t } = useTranslation()
-  const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile, retry: false })
-  const name = profile.data?.name?.trim()
+  const name = useEffectiveProfile()?.name?.trim()
   return (
     <EmptyState
       size="large"

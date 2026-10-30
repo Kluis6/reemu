@@ -677,6 +677,47 @@ export async function saveThumbnailUrl(stateId: string): Promise<string | null> 
   return URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
 }
 
+// --- Entrar com Alvanista ----------------------------------------------
+
+/** Estado da conexão com o Alvanista. Nunca leva token. */
+export interface AlvanistaStatus {
+  connected: boolean
+  username: string | null
+  avatar_url: string | null
+  /** Capa do perfil: o banner do drawer de perfil. */
+  hero_url: string | null
+  bio: string | null
+  profile_url: string | null
+  /** Mostrando o último perfil guardado: o Alvanista não respondeu. */
+  offline: boolean
+  /** A sessão está no SQLite porque o chaveiro do sistema falhou. */
+  insecure_storage: boolean
+  /** A conexão acabou (revogada no site): voltar ao perfil local. */
+  ended: boolean
+}
+
+/** Códigos de erro do `alvanista_connect`. */
+export type AlvanistaConnectError = 'cancelled' | 'denied' | 'timeout' | 'offline' | 'failed'
+
+/** Confirma com o Alvanista (rede, até ~15 s) e renova o espelho. */
+export const alvanistaStatus = () => invoke<AlvanistaStatus>('alvanista_status')
+/** Só o que está no aparelho, sem rede: para a tela abrir na hora. */
+export const alvanistaCachedStatus = () => invoke<AlvanistaStatus>('alvanista_cached_status')
+/** Abre o navegador e espera a aprovação (até 5 minutos). `lang` é o idioma da
+ *  página que o navegador mostra no fim. Rejeita com um `AlvanistaConnectError`. */
+export const alvanistaConnect = (lang: string = i18n.language) =>
+  invoke<AlvanistaStatus>('alvanista_connect', { lang })
+export const alvanistaCancel = () => invoke<void>('alvanista_cancel')
+export const alvanistaDisconnect = () => invoke<void>('alvanista_disconnect')
+/** Abre o perfil do Alvanista no navegador do sistema. */
+export const alvanistaOpenProfile = () => invoke<void>('alvanista_open_profile')
+/** Resultado da renovação que o app faz sozinho ao abrir (evento do Rust). */
+export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<AlvanistaStatus>('alvanista-status', (e) => cb(e.payload))
+}
+
 // --- perfil local (um por instalação) ----------------------------------
 
 export interface Profile {

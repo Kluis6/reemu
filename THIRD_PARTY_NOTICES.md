@@ -181,3 +181,12 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ```
+
+## Símbolo do Alvanista (`alvanista-symbol.svg`)
+
+Origem: <https://www.alvanista.com/assets/images/logo/alvanista-symbol.svg>,
+copiado para `packages/app-desktop/src/assets/alvanista-symbol.svg`. Aparece
+só no botão "Entrar com Alvanista" (Configurações › Perfil).
+
+O símbolo é marca da Tellurian Corp / Alvanista, usada com permissão apenas
+nesse botão. **Não** é coberto pela licença MIT do ReEmu.

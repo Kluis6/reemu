@@ -3196,3 +3196,36 @@ Infra:
 - **Medido:** em 1080p, o texto principal do ReEmu tem ~20 px contra os 30 px recomendados pela Microsoft para TV. No PC, o zoom encolhe tudo em janelas pequenas (8,2 px em 800×600), e o layout aguenta sem esse zoom.
 - **Decisão corrigida:** a ideia de "uma interface só" virou mesmos layout e componentes, com perfis de densidade TV e PC. Elevação, layout e interações espelham o Xbox em todos os perfis, por pedido do dono do projeto.
 - **Pendente:** capturas do console para a etapa 0; os valores de elevação e animação não estão em nenhuma fonte encontrada.
+
+## 2026-10-29 — Entrar com Alvanista: conectar a conta e espelhar o perfil
+
+- **Pedido:** o item GameKave / Alvanista do TASKS.md › Funcionalidades (2026-10-20). Esta é a primeira peça, feita com a equipe do Alvanista, e cobre **só o perfil**. Conquistas (GAS) e amigos vêm depois, quando o Alvanista abrir essas partes da API de parceiros. As respostas às perguntas do item estão no próprio TASKS.md.
+- **O que a pessoa vê:**
+  - em Configurações › Perfil, o botão "Entrar com Alvanista". A integração fica desligada até a pessoa clicar, e o app funciona igual sem ela;
+  - o navegador do sistema abre a tela de consentimento do Alvanista. Ao aprovar, o ReEmu passa a mostrar o nome e o avatar de lá no rail, no card de Perfil das Configurações e no "Bem-vindo, {nome}!". Sem avatar no Alvanista, vale o preset do ReEmu;
+  - o `ProfileDrawer` usa o mesmo perfil efetivo (`useEffectiveProfile`): conectado, nome, avatar, bio e a capa do Alvanista como banner (sem bio, nenhuma, nunca a local); desconectado, o perfil local, com as cores do tema no banner;
+  - conectado, os campos de nome e avatar dão lugar a "Editar no Alvanista", que abre o perfil no navegador. O perfil é editado só lá;
+  - "Desconectar" volta ao perfil local, que nunca é gravado por esta integração.
+- **Login (RFC 8252 + PKCE):**
+  - nada de webview embutido: o login acontece no navegador da pessoa, e o código volta para um servidor de uma conexão só em `127.0.0.1`, numa porta livre, que espera até 5 minutos e confere o `state`;
+  - PKCE S256 com o cliente `reemu`, que é público e não tem segredo. O código é trocado no Rust (`apps/desktop/src-tauri/src/alvanista/`): toda a rede passa por ali, nunca pelo webview, e o escopo é só `profile:read`;
+  - cada instalação gera um `device_id`, e o Alvanista separa as sessões por aparelho com ele;
+  - o navegador abre pelo crate `open` (o mesmo que o tauri-plugin-opener usa por baixo), só para URLs do site do Alvanista. Sem plugin novo e sem permissão nova no webview.
+- **Tokens:**
+  - no chaveiro do sistema (conta `alvanista`, pelo mesmo `SecretStore` dos segredos do scraper). Sem chaveiro (Linux sem Secret Service), o par vai para a tabela `secret_fallback` (migration 0019) e a tela avisa que a sessão ficou com menos proteção;
+  - o refresh token troca a cada uso, e reusar um antigo encerra a sessão no servidor. Por isso há uma renovação por vez no processo, o par novo é gravado antes de ser usado e fica na memória se a gravação falhar. Cada cópia leva a hora em que foi gravada, e a leitura fica sempre com a mais nova;
+  - os tokens nunca vão para o log nem para a tela: o webview só recebe o perfil (nome, avatar, bio, capa e URL) e os avisos;
+  - **marcador de sessão** (`session` em `alvanista_state`): sem ele o app não lê o chaveiro e não chama a rede, nem ao abrir (`refresh_on_start` sai antes), nem em Configurações › Perfil, nem ao desconectar. No Linux, ler um chaveiro trancado pode pedir a senha, e quem nunca conectou não pode ser incomodado. O marcador entra antes do par ao conectar (se o app cair no meio, sobra um marcador sem par, que a primeira leitura apaga) e sai ao desconectar, quando o servidor encerra a sessão (`invalid_grant`, ou 401 depois de renovar) e quando o chaveiro e a reserva estão vazios.
+- **Banco (migration 0019; a 0018 é a `aspect_assignments`):** builds de pré-lançamento (o fork da Tellurian e a primeira versão do PR) aplicaram esta migration como 0017 ou 0018, e com essa linha o sqlx recusaria o banco. `forget_prerelease_alvanista` (`crates/db/src/pool.rs`) tira só essa linha do `_sqlx_migrations`, a 0019 adota as tabelas (`IF NOT EXISTS`) e, se a integração já foi usada naquele banco (`device_id`, espelho ou par na reserva), marca a sessão para o app conferir o chaveiro uma vez. Num banco da v0.1.10 as tabelas nascem vazias e nada mais muda.
+- **Espelho do perfil:** o último perfil lido fica em `alvanista_state` (migration 0019), só para leitura. Ele se renova ao abrir o app, em segundo plano sem segurar a abertura, e ao abrir Configurações › Perfil, que aparece na hora com o que está guardado e se atualiza quando o Alvanista responde. Sem rede, mostra o último perfil com o aviso "Sem conexão".
+- **Fim da conexão:**
+  - "Desconectar" revoga a sessão no Alvanista e apaga os tokens e o espelho. Sem rede, apaga do mesmo jeito. Só falha (e avisa) quando o par vivo está no chaveiro, o chaveiro não deixa apagar e o servidor não confirmou a revogação: aí ainda haveria tokens vivos no aparelho, e ninguém saberia;
+  - se a pessoa remover o ReEmu no site (ou o app for suspenso), a renovação responde `invalid_grant`: o ReEmu apaga a sessão, mostra "Conexão com o Alvanista encerrada" e volta ao perfil local;
+  - 429, erros 5xx, falta de rede e tempo esgotado não desconectam.
+- **Limitação conhecida:** duas instâncias do ReEmu abertas ao mesmo tempo podem renovar o mesmo refresh token juntas. O Alvanista vê o reuso e encerra a sessão daquele aparelho, e basta conectar de novo. A janela é curta: a renovação só acontece com o token de acesso vencido (1 hora), e cada instância relê o par guardado antes de renovar, então só cai se as duas renovarem no mesmo instante. Uma instância nunca grava o par dela por cima de um que a outra gravou depois. Bloquear a segunda instância é decisão em aberto com o dono do projeto.
+- **Testes:** em Rust, com um Alvanista falso em `127.0.0.1` (troca do código, renovação, revogação, cancelamento, chaveiro quebrado ou só de leitura, banco fechado). No frontend, com vitest (tela de Perfil, botão, perfil mostrado no resto do app e no `ProfileDrawer`). Em build de debug, `REEMU_ALVANISTA_BASE` aponta para um Alvanista local.
+- **Testes de não interferência (pedidos na revisão do PR):**
+  - sem sessão, o `SecretStore` e o cliente HTTP nunca são chamados (`without_a_session_the_keyring_and_the_network_are_never_called`: estado guardado, status, renovação da abertura e desconectar, contando cada chamada);
+  - banco da v0.1.10 migra sem perder dados (`crates/db/tests/alvanista_migration.rs`: todas as linhas de todas as tabelas iguais antes e depois; bancos de pré-lançamento na 0017 e na 0018 abrem e ficam com a sessão);
+  - sem rede, o app abre com o perfil certo (`offline_the_app_opens_with_the_right_profile`: sem sessão, nada do Alvanista; conectado, o último perfil guardado inteiro, como offline);
+  - desconectar devolve o perfil local exatamente como estava (`disconnect_gives_back_the_local_profile_exactly_as_it_was`, comparando a linha do `profile` antes de conectar e depois de desconectar).

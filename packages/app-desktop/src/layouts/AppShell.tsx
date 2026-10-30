@@ -37,9 +37,10 @@ import { UpdateDialog } from "../components/UpdateDialog";
 import { ShaderFailureDialog } from "../components/ShaderFailureDialog";
 import { useCoreUpdates } from "../hooks/useCoreUpdates";
 import { useShaderFailures } from "../hooks/useShaderFailures";
+import { useAlvanistaStatusEvents, useEffectiveProfile } from "../hooks/useEffectiveProfile";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useUpdateCheck } from "../hooks/useUpdateCheck";
-import { getProfile, listPendingMatches } from "../lib/tauri";
+import { listPendingMatches } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
@@ -132,11 +133,10 @@ export function AppShell() {
   });
   const pendingCount = pending.data?.length ?? 0;
 
-  const profile = useQuery({
-    queryKey: ["profile"],
-    queryFn: getProfile,
-    retry: false,
-  });
+  // Conectado ao Alvanista, o perfil de lá no rail e no drawer (nome, avatar,
+  // bio e capa); o perfil local fica guardado e volta ao desconectar.
+  const profile = useEffectiveProfile();
+  useAlvanistaStatusEvents();
   const search = useSearchStore();
   const searchRef = useRef<HTMLInputElement>(null);
   // Rolagem por wheel é NATIVA (o WebKitGTK já entrega inércia/suavidade
@@ -191,7 +191,7 @@ export function AppShell() {
           onClick={() => setProfileOpen(true)}
         >
           <ProfileAvatar
-            profile={profile.data ?? { name: "Jogador", avatar: "preset:1" }}
+            profile={profile ?? { name: "Jogador", avatar: "preset:1" }}
             size={32}
             className={s.railAvatarSize}
             ring={SHOW_AVATAR_RING}
@@ -252,7 +252,8 @@ export function AppShell() {
       <ProfileDrawer
         open={profileOpen}
         onOpenChange={setProfileOpen}
-        profile={profile.data ?? { name: "Jogador", avatar: "preset:1", bio: null }}
+        profile={profile ?? { name: "Jogador", avatar: "preset:1", bio: null }}
+        bannerUrl={profile?.bannerUrl}
       />
       <UpdateDialog />
       <ShaderFailureDialog />
