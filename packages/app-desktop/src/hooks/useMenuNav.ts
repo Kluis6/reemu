@@ -128,12 +128,27 @@ export function useMenuNav() {
           else (document.activeElement as HTMLElement | null)?.click()
           break
         }
-        case 'back':
+        case 'back': {
+          // Drawer ou modal aberto (perfil, Informações, Encerrar...): o B
+          // fecha ele, como o Esc do teclado — o Fluent fecha no `keydown`
+          // de Escape dentro da superfície. Antes o B voltava a página por
+          // trás do painel aberto.
+          const modal = document.querySelector<HTMLElement>('.fui-OverlayDrawer, .fui-DialogSurface')
           if (locRef.current.startsWith('/play/')) void toggleFocus().catch(() => {})
+          // o onboarding é um modal também, mas o B nele volta um passo
           else if (locRef.current === '/onboarding')
             window.dispatchEvent(new CustomEvent(REEMU_ONBOARDING_BACK))
-          else navigate(-1)
+          else if (modal) {
+            const target =
+              document.activeElement instanceof HTMLElement && modal.contains(document.activeElement)
+                ? document.activeElement
+                : modal
+            target.dispatchEvent(
+              new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }),
+            )
+          } else navigate(-1)
           break
+        }
         case 'search':
           openSearchPad()
           break

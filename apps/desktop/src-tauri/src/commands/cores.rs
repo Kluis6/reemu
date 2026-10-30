@@ -13,6 +13,8 @@ pub struct CatalogCoreDto {
     /// `"software"` = buffer cru; `"opengl"` = renderiza em GL (o frontend cria
     /// o contexto offscreen; precisa de GPU + libEGL).
     pub hw: &'static str,
+    /// Tem versão anterior guardada, de uma atualização.
+    pub has_previous: bool,
 }
 
 #[tauri::command]
@@ -32,6 +34,7 @@ pub fn list_core_catalog(state: State<'_, AppState>) -> Vec<CatalogCoreDto> {
             license: e.license.to_string(),
             installed: installed.contains(e.id),
             hw: e.hw.as_str(),
+            has_previous: crate::core_catalog::has_previous(&state.cores_dir, e.id),
         })
         .collect()
 }
@@ -47,4 +50,19 @@ pub async fn download_core(state: State<'_, AppState>, core_id: String) -> Resul
 #[tauri::command]
 pub fn remove_core(state: State<'_, AppState>, core_id: String) -> Result<(), String> {
     crate::core_catalog::remove(&state.cores_dir, &core_id)
+}
+
+/// Os cores instalados com versão nova no buildbot (`core_updates`).
+#[tauri::command]
+pub async fn check_core_updates(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let dir = state.cores_dir.clone();
+    crate::core_updates::check(&dir).await
+}
+
+/// Volta um core para a versão guardada na última atualização.
+#[tauri::command]
+pub fn restore_previous_core(state: State<'_, AppState>, core_id: String) -> Result<(), String> {
+    crate::core_catalog::restore_previous(&state.cores_dir, &core_id)?;
+    log::info!("core de volta à versão anterior: {core_id}");
+    Ok(())
 }

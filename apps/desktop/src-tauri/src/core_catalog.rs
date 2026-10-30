@@ -639,7 +639,7 @@ fn systems_from_text(text: &str) -> Vec<&'static str> {
     out
 }
 
-fn buildbot_os() -> &'static str {
+pub(crate) fn buildbot_os() -> &'static str {
     if cfg!(target_os = "windows") {
         "windows"
     } else if cfg!(target_os = "macos") {
@@ -649,7 +649,7 @@ fn buildbot_os() -> &'static str {
     }
 }
 
-fn dylib_ext() -> &'static str {
+pub(crate) fn dylib_ext() -> &'static str {
     if cfg!(target_os = "windows") {
         "dll"
     } else if cfg!(target_os = "macos") {
@@ -694,30 +694,128 @@ pub async fn download(cores_dir: &Path, core_id: &str) -> Result<PathBuf, String
         let mut entry = zip
             .by_name(&so_name)
             .map_err(|_| format!("`{so_name}` não está no zip"))?;
-        let dest = cores_dir.join(&so_name);
         let tmp = cores_dir.join(format!("{so_name}.part"));
         let mut out = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
         std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
         drop(out);
-        std::fs::rename(&tmp, &dest).map_err(|e| e.to_string())?;
-        Ok(dest)
+        install_keeping_previous(&cores_dir, &so_name, &tmp)
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
-/// Remove o dylib de um core instalado.
+/// Pasta da versão anterior de cada core. A descoberta não entra em subpastas.
+fn previous_dir(cores_dir: &Path) -> PathBuf {
+    cores_dir.join("previous")
+}
+
+/// Põe `tmp` no lugar do core e guarda o que estava lá como versão anterior: o
+/// buildbot só tem a última compilação, então é a única volta possível. Mover
+/// funciona mesmo com a DLL carregada; sobrescrever, no Windows, não.
+fn install_keeping_previous(
+    cores_dir: &Path,
+    so_name: &str,
+    tmp: &Path,
+) -> Result<PathBuf, String> {
+    let dest = cores_dir.join(so_name);
+    if !dest.is_file() {
+        std::fs::rename(tmp, &dest).map_err(|e| e.to_string())?;
+        return Ok(dest);
+    }
+    let previous = previous_dir(cores_dir);
+    std::fs::create_dir_all(&previous).map_err(|e| e.to_string())?;
+    let kept = previous.join(so_name);
+    // a anterior da anterior não fica: uma cópia por core
+    let aside = previous.join(format!("{so_name}.old"));
+    let had_kept = kept.is_file();
+    if had_kept {
+        std::fs::rename(&kept, &aside).map_err(|e| e.to_string())?;
+    }
+    let swapped = std::fs::rename(&dest, &kept).and_then(|()| std::fs::rename(tmp, &dest));
+    if let Err(e) = swapped {
+        // desfaz: o core instalado continua o que estava
+        if !dest.is_file() {
+            let _ = std::fs::rename(&kept, &dest);
+        }
+        if had_kept {
+            let _ = std::fs::rename(&aside, &kept);
+        }
+        let _ = std::fs::remove_file(tmp);
+        return Err(e.to_string());
+    }
+    let _ = std::fs::remove_file(&aside);
+    Ok(dest)
+}
+
+/// Tem versão anterior guardada?
+pub fn has_previous(cores_dir: &Path, core_id: &str) -> bool {
+    previous_dir(cores_dir)
+        .join(format!("{core_id}.{}", dylib_ext()))
+        .is_file()
+}
+
+/// Volta para a versão anterior; a que estava instalada passa a ser a anterior.
+pub fn restore_previous(cores_dir: &Path, core_id: &str) -> Result<(), String> {
+    let so_name = format!("{core_id}.{}", dylib_ext());
+    let kept = previous_dir(cores_dir).join(&so_name);
+    if !kept.is_file() {
+        return Err("não há versão anterior".into());
+    }
+    let tmp = cores_dir.join(format!("{so_name}.part"));
+    std::fs::rename(&kept, &tmp).map_err(|e| e.to_string())?;
+    install_keeping_previous(cores_dir, &so_name, &tmp).map(|_| ())
+}
+
+/// Remove o dylib de um core instalado e a versão anterior dele.
 pub fn remove(cores_dir: &Path, core_id: &str) -> Result<(), String> {
     let path = cores_dir.join(format!("{core_id}.{}", dylib_ext()));
     if !path.is_file() {
         return Err("core não está instalado".into());
     }
-    std::fs::remove_file(&path).map_err(|e| e.to_string())
+    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    let _ =
+        std::fs::remove_file(previous_dir(cores_dir).join(format!("{core_id}.{}", dylib_ext())));
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_keeps_one_previous_and_restores() {
+        let dir = std::env::temp_dir().join(format!("reemu-core-prev-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let so = format!("x_libretro.{}", dylib_ext());
+        let install = |content: &str| {
+            let tmp = dir.join("novo.part");
+            std::fs::write(&tmp, content).unwrap();
+            install_keeping_previous(&dir, &so, &tmp).unwrap();
+        };
+        let read = |p: PathBuf| std::fs::read_to_string(p).unwrap();
+
+        install("v1");
+        assert!(!has_previous(&dir, "x_libretro"));
+        install("v2");
+        install("v3");
+        assert_eq!(read(dir.join(&so)), "v3");
+        assert_eq!(read(previous_dir(&dir).join(&so)), "v2");
+        assert_eq!(std::fs::read_dir(previous_dir(&dir)).unwrap().count(), 1);
+
+        // voltar troca as duas, então dá para desfazer
+        restore_previous(&dir, "x_libretro").unwrap();
+        assert_eq!(read(dir.join(&so)), "v2");
+        assert_eq!(read(previous_dir(&dir).join(&so)), "v3");
+
+        remove(&dir, "x_libretro").unwrap();
+        assert!(!has_previous(&dir, "x_libretro"));
+        assert_eq!(
+            restore_previous(&dir, "x_libretro").unwrap_err(),
+            "não há versão anterior"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn catalog_ids_are_libretro_stems_and_unique() {

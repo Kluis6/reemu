@@ -1002,7 +1002,7 @@ const HERO_FADE =
  *  2026-10-29). A raiz do OverlayDrawer do Fluent já é `position: fixed` com
  *  `top`/`bottom: 0` — o afastamento vai nos próprios `top`/`bottom` e no
  *  lado em que ele encosta (`side`), não em `margin`. */
-const floatingDrawer = (side: "left" | "right") =>
+export const floatingDrawer = (side: "left" | "right") =>
   ({
     top: `${DRAWER_GAP}px`,
     bottom: `${DRAWER_GAP}px`,

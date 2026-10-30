@@ -4,6 +4,7 @@ mod bios;
 mod bundled_shaders;
 mod commands;
 mod core_catalog;
+mod core_updates;
 mod covers;
 mod credentials;
 mod decoration;
@@ -80,6 +81,7 @@ pub fn run() {
             gpu::set_shader_failure_hook(|source, error| {
                 shader_failure::report(source, shader_failure::FailureKind::Gpu, error)
             });
+            gpu::set_wide_bezel_hook(shader_failure::report_wide_bezel);
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     // Padrão do plugin: 40 KB e só o arquivo atual
@@ -371,6 +373,8 @@ pub fn run() {
             commands::list_core_catalog,
             commands::download_core,
             commands::remove_core,
+            commands::check_core_updates,
+            commands::restore_previous_core,
             commands::list_bios_status,
             commands::import_bios_file,
             commands::remove_bios_file,
@@ -400,6 +404,8 @@ pub fn run() {
             commands::rescrape_rom,
             commands::save_state,
             commands::list_save_states,
+            commands::get_aspect,
+            commands::set_aspect,
             commands::list_cheats,
             commands::add_cheat,
             commands::update_cheat,

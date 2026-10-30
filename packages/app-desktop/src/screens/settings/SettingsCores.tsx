@@ -8,24 +8,33 @@ import {
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
-import { CheckmarkCircleFilled, DeveloperBoardRegular } from '@fluentui/react-icons'
+import {
+  ArrowCircleUpRegular,
+  CheckmarkCircleFilled,
+  DeveloperBoardRegular,
+} from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { LoadingState } from '../../components/EmptyState'
+import { CORE_UPDATES_KEY, CORE_UPDATES_STALE_MS } from '../../hooks/useCoreUpdates'
 import { errorToast, sysToast } from '../../lib/toast'
 import {
+  checkCoreUpdates,
   downloadCore,
   listCoreCatalog,
   removeCore,
+  restorePreviousCore,
   type CatalogCore,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
 import { DownloadButton } from '../../components/DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
 
-// Largura do botão da direita (Baixar/Remover), igual em todas as linhas —
-// como o "Abrir" da Biblioteca da Microsoft Store.
+// Largura dos botões da direita, igual em todas as linhas — como o "Abrir" da
+// Biblioteca da Microsoft Store. Duas vagas, para os botões não mudarem de
+// lugar nas linhas com Atualizar ou Versão anterior.
 const ACTION_W = '120px'
+const ACTIONS_W = `calc(2 * ${ACTION_W} + ${tokens.spacingHorizontalS})`
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -36,13 +45,14 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalM,
     '& .fui-Input': { width: 'min(420px, 100%)' },
   },
+  updateAll: { marginLeft: 'auto', flexShrink: 0 },
   // Lista em linhas, como a Biblioteca da Microsoft Store (print do usuário):
   // uma coluna, cada core numa faixa da largura toda.
   list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
   // ícone + nome | sistemas | situação | botão
   row: {
     display: 'grid',
-    gridTemplateColumns: `minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 0.8fr) ${ACTION_W}`,
+    gridTemplateColumns: `minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 0.8fr) ${ACTIONS_W}`,
     alignItems: 'center',
     columnGap: tokens.spacingHorizontalL,
     // o mesmo padding nos 4 lados (pedido do usuário); a altura sai do
@@ -90,6 +100,13 @@ const useStyles = makeStyles({
   },
   narrowOnly: { display: 'none', '@media (max-width: 900px)': { display: 'inline' } },
   action: { width: ACTION_W, minWidth: '0 !important', maxWidth: 'none !important' },
+  actions: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    columnGap: tokens.spacingHorizontalS,
+    rowGap: tokens.spacingVerticalS,
+    '@media (max-width: 900px)': { flexDirection: 'column' },
+  },
 })
 
 /**
@@ -112,7 +129,53 @@ function Catalog() {
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const catalog = useQuery({ queryKey: ['core-catalog'], queryFn: listCoreCatalog, retry: false })
+  const updates = useQuery({
+    queryKey: CORE_UPDATES_KEY,
+    queryFn: checkCoreUpdates,
+    staleTime: CORE_UPDATES_STALE_MS,
+    retry: false,
+  })
+  const outdated = updates.data ?? []
   const [filter, setFilter] = useState('')
+
+  // Atualizou: sai da lista sem consultar tudo de novo. A DLL nova é tão nova
+  // quanto a última compilação, e o backend diria o mesmo.
+  const updated = (coreId: string) => {
+    qc.setQueryData<string[]>(CORE_UPDATES_KEY, (ids) => ids?.filter((id) => id !== coreId))
+    qc.invalidateQueries({ queryKey: ['core-catalog'] })
+    qc.invalidateQueries({ queryKey: ['installed-cores'] })
+  }
+  const update = useMutation({
+    mutationFn: (coreId: string) => downloadCore(coreId),
+    onSuccess: (_d, coreId) => {
+      updated(coreId)
+      push(sysToast(t('cores.updatedToast', { id: coreId }), 'Success'))
+    },
+    onError: (e) => push(errorToast(e, 'downloadCore')),
+  })
+  const updateAll = useMutation({
+    mutationFn: async (ids: string[]) => {
+      // um por vez: cada um é um download de dezenas de MB
+      for (const id of ids) {
+        await downloadCore(id)
+        updated(id)
+      }
+    },
+    onSuccess: (_d, ids) =>
+      push(sysToast(t('cores.updatedAllToast', { count: ids.length }), 'Success')),
+    onError: (e) => push(errorToast(e, 'downloadCore')),
+  })
+  const restore = useMutation({
+    mutationFn: (coreId: string) => restorePreviousCore(coreId),
+    onSuccess: (_d, coreId) => {
+      qc.invalidateQueries({ queryKey: ['core-catalog'] })
+      qc.invalidateQueries({ queryKey: ['installed-cores'] })
+      // a versão de volta é antiga: o aviso de atualização pode voltar
+      qc.invalidateQueries({ queryKey: CORE_UPDATES_KEY })
+      push(sysToast(t('cores.restoredToast', { id: coreId }), 'Success'))
+    },
+    onError: (e) => push(errorToast(e, 'restoreCore')),
+  })
 
   const install = useMutation({
     mutationFn: (coreId: string) => downloadCore(coreId),
@@ -137,7 +200,10 @@ function Catalog() {
 
   const busy = (id: string) =>
     (install.isPending && install.variables === id) ||
-    (uninstall.isPending && uninstall.variables === id)
+    (uninstall.isPending && uninstall.variables === id) ||
+    (update.isPending && update.variables === id) ||
+    (restore.isPending && restore.variables === id) ||
+    updateAll.isPending
 
   const f = filter.trim().toLowerCase()
   const sorted = [...(catalog.data ?? [])]
@@ -162,6 +228,17 @@ function Catalog() {
         <Caption1>
           {t('cores.count', { shown: sorted.length, total: catalog.data?.length ?? 0 })}
         </Caption1>
+        {outdated.length > 0 && (
+          <Button
+            className={styles.updateAll}
+            appearance="primary"
+            icon={<ArrowCircleUpRegular />}
+            disabled={updateAll.isPending || update.isPending}
+            onClick={() => updateAll.mutate(outdated)}
+          >
+            {updateAll.isPending ? t('cores.updating') : t('cores.updateAll', { count: outdated.length })}
+          </Button>
+        )}
       </div>
       <div className={styles.list}>
         {sorted.length === 0 && <Caption1>{t('cores.noneFound')}</Caption1>}
@@ -193,31 +270,60 @@ function Catalog() {
             </span>
             <Body1 className={styles.col}>{c.systems}</Body1>
             <span className={styles.col}>
-              {c.installed && (
-                <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                  {t('cores.installedBadge')}
-                </Badge>
+              {c.installed &&
+                (outdated.includes(c.coreId) ? (
+                  <Badge appearance="tint" color="brand" icon={<ArrowCircleUpRegular />}>
+                    {t('cores.updateBadge')}
+                  </Badge>
+                ) : (
+                  <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
+                    {t('cores.installedBadge')}
+                  </Badge>
+                ))}
+            </span>
+            <span className={styles.actions}>
+              {c.installed && outdated.includes(c.coreId) ? (
+                <Button
+                  className={styles.action}
+                  appearance="primary"
+                  disabled={busy(c.coreId)}
+                  onClick={() => update.mutate(c.coreId)}
+                >
+                  {busy(c.coreId) ? t('cores.updating') : t('cores.update')}
+                </Button>
+              ) : (
+                c.installed &&
+                c.hasPrevious && (
+                  <Button
+                    className={styles.action}
+                    appearance="secondary"
+                    disabled={busy(c.coreId)}
+                    onClick={() => restore.mutate(c.coreId)}
+                  >
+                    {t('cores.restorePrevious')}
+                  </Button>
+                )
+              )}
+              {c.installed ? (
+                // Remover: secondary, só o texto (pedido do usuário)
+                <Button
+                  className={styles.action}
+                  appearance="secondary"
+                  disabled={busy(c.coreId)}
+                  onClick={() => uninstall.mutate(c.coreId)}
+                >
+                  {t('common.remove')}
+                </Button>
+              ) : (
+                <DownloadButton
+                  className={styles.action}
+                  appearance="primary"
+                  label={busy(c.coreId) ? t('cores.downloading') : t('cores.install')}
+                  busy={busy(c.coreId)}
+                  onClick={() => install.mutate(c.coreId)}
+                />
               )}
             </span>
-            {c.installed ? (
-              // Remover: secondary, só o texto (pedido do usuário)
-              <Button
-                className={styles.action}
-                appearance="secondary"
-                disabled={busy(c.coreId)}
-                onClick={() => uninstall.mutate(c.coreId)}
-              >
-                {t('common.remove')}
-              </Button>
-            ) : (
-              <DownloadButton
-                className={styles.action}
-                appearance="primary"
-                label={busy(c.coreId) ? t('cores.downloading') : t('cores.install')}
-                busy={busy(c.coreId)}
-                onClick={() => install.mutate(c.coreId)}
-              />
-            )}
           </div>
         ))}
       </div>

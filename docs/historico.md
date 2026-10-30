@@ -3137,3 +3137,55 @@ Infra:
 
 - **O quê:** um roteiro que abre uma tela do frontend no Vite da porta 1430, com o backend do Tauri trocado por respostas fixas (os mocks, o navegador e o cliente CDP vêm do `ui-smoke.py`), e executa passos em ordem: esperar, mandar evento do Tauri, pulso do controle, focar, passar o mouse, clicar, capturar, ler valores do DOM e auditar o foco (anel e brilho).
 - **Por quê:** substitui os scripts soltos usados nas conferências de interface desta sessão. A skill local `teste-visual` (em `.claude/`, fora do git) explica o uso e as armadilhas.
+
+## 2026-10-29 — Perfil num drawer, no lugar do menu do avatar
+
+- **Pedido do usuário (print do guia de perfil do Xbox):** o menu suspenso do avatar do rail virou um drawer à esquerda, flutuante como o menu de pausa (`floatingDrawer`, agora exportado de `styles/xbox.ts`).
+- **`ProfileDrawer`:**
+  - banner no topo com a prop `bannerUrl`, que no futuro virá da rede social; sem ela, as cores do tema (degradê do destaque para a cor de marca);
+  - avatar de 120 px (o `Avatar` do Fluent só aceita a escala 20…128) metade sobre o banner, com nome e bio;
+  - ações embaixo: Meu perfil, Conquistas, Rede e Status (desabilitados, como no menu) e Sair.
+- **B do controle:** com um drawer ou modal aberto fora do jogo, o B manda Escape para o foco dentro da superfície, e o Fluent fecha o painel como no teclado. Antes ele voltava a página por trás do painel. O onboarding (que também é modal) continua voltando um passo.
+- **Conferido** com o `scripts/ui-render.py` nos temas ReEmu e claro: drawer de 24 a 424 × 24 a 744 (1366×768); o B fecha e a rota não muda (`#/library`).
+
+## 2026-10-30 — Proporção da imagem e widescreen 16:9
+
+- **Pesquisa:** `libretro.h` ("A frontend may ignore this setting" em `aspect_ratio`), proporções do RetroArch (`video_defines.h`, só leitura; GPL, nada copiado) e documentação dos cores.
+- **Vulkan e OpenGL não dão widescreen real ao frontend:**
+  - `VkViewport` e `glViewport` só mapeiam as coordenadas normalizadas para o framebuffer ou a janela (a especificação fala em deslocamento e escala, e não trata de projeção);
+  - `VK_EXT_swapchain_maintenance1` define como uma imagem pronta é apresentada numa surface de outro tamanho;
+  - `glBlitFramebuffer` só copia com filtro nearest ou linear.
+  - Nenhum desses muda o que o core desenha: mudar o viewport só estica. A cena extra sai da projeção do jogo, ou seja, das opções do core. Conclusão por leitura das páginas; elas não tratam do caso de um frontend libretro.
+- **Proporção (`aspect_assignments`, migração 0018; `AspectRepo`):** Do core, 4:3, 16:9 ou Tela cheia, em cascata jogo → plataforma → todos. `AspectMode` no `FrameProcessor`, usado na surface nativa e no cabeçalho do canvas. Na aba Emulador (`GameImageOptions`); vale na hora.
+- **Widescreen:** interruptor por jogo, só para cores com a opção declarada (`lib/widescreen.ts`); grava a opção do core no jogo. Ficam de fora as opções que só esticam.
+- **Integer scaling (vídeo nativo):** altura em múltiplo inteiro e largura pela proporção de exibição (`integer_scale_rect`). Antes usava a largura crua do core e deformava cores de pixel não quadrado.
+- **Moldura:** sai quando a imagem é larga (a partir de 16:10) e mais de 15% mais larga que a janela da moldura, para não tirar as feitas para 16:9, como as de PSP. O aviso vai para o sino (`wide-bezel-off`), nunca por cima do jogo.
+- **Testes:** `aspect_mode_parse_and_integer_rect`, `crates/db/tests/aspect.rs` e `widescreen.test.ts`. O `split_decoration_sends_game_only` passou a usar um quadro 4:3. Uma execução do binário de testes do app caiu com `STATUS_ACCESS_VIOLATION`, sem repetir em 5 execuções seguintes (causa não identificada).
+- **Não testado com jogo real:** o efeito das opções em cada core. As chaves de Beetle, SwanStation, bsnes-hd e PCSX2 vieram de texto nas DLLs; se o core não declarar a chave e o valor, o interruptor não aparece.
+
+## 2026-10-30 — Interruptor de widescreen liga também os patches do Flycast
+
+- **Teste do usuário:** o hack genérico funcionou (`AR 1.778`), mas o Jet Set Radio manteve faixas pretas na área 4:3 e o KOF XI revelou áreas sem cenário.
+- **Mudança:** no Flycast, o interruptor liga `reicast_widescreen_cheats` (patches por jogo, `core/cheats.cpp`, com o Jet Set Radio USA, PAL e JP na lista) e `reicast_widescreen_hack`. Só fica ligado quando as duas estão ligadas.
+- **Base (leitura do código do Flycast, GPL, nada copiado):** com patch ativo o core usa `ScreenStretching` 134, e o trecho do mouse/pistola em `libretro.cpp` só considera `Widescreen` com ele em 100. Isso sugere que os dois não se somam. Não verificado em jogo.
+
+## 2026-10-30 — Flycast: patch e hack de widescreen se somam
+
+- **Medido no teste do usuário (Jet Set Radio PAL):** com patch e hack ligados, o core declarou `AR 1.787` e depois `2.382` (1,787 × 4/3), e a imagem saiu com faixas pretas. A nota anterior, de que os dois não se somavam, estava errada: era dedução da leitura do código.
+- **Correção:** o interruptor controla só `reicast_widescreen_cheats` e, ao ligar, devolve `reicast_widescreen_hack` ao padrão naquele jogo. Com os dois ligados ele aparece desligado, para corrigir com um toque.
+- **Limite:** o ReEmu não sabe quais jogos têm patch. Nos que não têm, o interruptor não muda nada; o hack genérico fica na lista de opções do core, e a dica da tela explica isso.
+
+## 2026-10-30 — Presets de dedither testados na GPU
+
+- **Teste novo:** `field_dedither_effect` (ignorado, precisa do pacote). Quadro sintético com xadrez de 1 pixel, Bayer 4×4 e uma borda dura; mede quanto do padrão resta em relação ao `plain`, a largura da borda e a média.
+- **Resultado (RTX 3060; xadrez/Bayer restantes):** `checkerboard-dedither` 0%/25% (média sobe de 128 para 136 no xadrez), `sgenpt-mix-multipass` 0%/25% (idem), `ps1-dedither-boxblur` 0%/26%, `mdapt` 0%/31%, `jinc2-dedither` 0%/41%, `gdapt` 0%/45%, `sgenpt-mix` 0%/47%, `cbod_v1` 0%/100%. Borda dura preservada em todos esses.
+- **Limite:** padrão sintético; a qualidade em jogo real não foi avaliada.
+
+## 2026-10-30 — Aviso de atualização dos cores
+
+- **O plano inicial não funcionava.** A ideia era comparar o CRC32 da DLL instalada com o código do `.index-extended`, que é o CRC da DLL dentro do zip. Medido com 127 DLLs de 08/10: as 127 diferem, inclusive o snes9x, cujo último commit (19/09) é anterior à DLL. O buildbot recompila quase tudo toda noite e a DLL grava a data da compilação (8 a 10 bytes diferentes em binários do mesmo código). O tamanho também não serve: o vecx mudou de commit sem mudar de tamanho.
+- **O sinal usado:** o commit em `library_version` contra o HEAD do repositório, mais a data do índice maior que a da DLL. A data evita aviso eterno quando o HEAD anda e a compilação não (MAME: última compilação em 16/10). O HEAD vem de um `ls-refs` do protocolo Git v2 (documentação oficial do Git: gitprotocol-v2 e gitprotocol-http), ~50 bytes por repositório.
+- **Tabela core → repositório (`core_updates.rs`):** 85 cores, cada um conferido: o commit instalado era o HEAD (58) ou o HEAD estava dentro da DLL noturna (27). Ficaram de fora 15 em que o HEAD não está no binário noturno (outro branch ou repositório), os que não declaram commit (ex.: `fixnes`, `amiberry`) e 2 cujo repositório não foi achado. Esses não recebem aviso, e o aviso errado seria pior. Ninguém é atualizado sozinho.
+- **Conferido só no Windows:** no Linux, confirmei que o código do índice é o CRC da biblioteca no `stella`; a tabela vale por repositório, mas não medi o aviso em Linux e macOS.
+- **Volta:** o buildbot só tem a última compilação. Atualizar guarda a DLL anterior em `cores/previous/` (uma por core) e a tela ganha "Versão anterior", que troca as duas. Mover funciona com a DLL carregada; sobrescrever, no Windows, não.
+- **Interface:** selo e botão em Configurações › Cores, "Atualizar N cores" e o aviso no sino, que abre essa tela. Nada aparece durante o jogo: a checagem vive no `AppShell`.

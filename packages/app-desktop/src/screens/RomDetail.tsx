@@ -43,6 +43,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { CoreOptions } from "../components/CoreOptions";
+import { GameImageOptions } from "../components/GameImageOptions";
 import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { CheatsPanel } from "../components/CheatsPanel";
@@ -839,6 +840,7 @@ export function RomDetail() {
                   ))}
                 </Select>
               </Field>
+              <GameImageOptions coreId={chosenCore} romId={romId} />
               <CoreOptions coreId={chosenCore} romId={romId} />
             </>
           )}

@@ -6,22 +6,13 @@ import {
   HomeRegular,
   LibraryFilled,
   LibraryRegular,
-  PeopleRegular,
-  PersonRegular,
   PowerRegular,
   SettingsFilled,
   SettingsRegular,
-  TrophyRegular,
 } from "@fluentui/react-icons";
 import {
   Button,
   CounterBadge,
-  Menu,
-  MenuDivider,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
   SearchBox,
   Tooltip,
   makeStyles,
@@ -39,14 +30,16 @@ import { Clock } from "../components/Clock";
 import { GamepadStatus } from "../components/GamepadStatus";
 import { NotificationBell } from "../components/NotificationBell";
 import { PowerMenuDialog } from "../components/PowerMenuDialog";
+import { ProfileDrawer } from "../components/ProfileDrawer";
 import { ProfileAvatar } from "../components/ProfileAvatar";
 import { RouteTransition } from "../components/RouteTransition";
 import { UpdateDialog } from "../components/UpdateDialog";
 import { ShaderFailureDialog } from "../components/ShaderFailureDialog";
+import { useCoreUpdates } from "../hooks/useCoreUpdates";
 import { useShaderFailures } from "../hooks/useShaderFailures";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useUpdateCheck } from "../hooks/useUpdateCheck";
-import { getProfile, listPendingMatches, quitApp } from "../lib/tauri";
+import { getProfile, listPendingMatches } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
@@ -75,20 +68,6 @@ const useLocalStyles = makeStyles({
       backgroundColor: `${tokens.colorNeutralBackground2Hover} !important`,
       border: `1px solid ${tokens.colorNeutralBackground2Hover} !important`,
     },
-  },
-  // Menu do avatar — proporções do menu do modo XBOX de verdade: mais
-  // largo, com respiro no CORPO da lista (mesmo valor nos 4 lados — o
-  // `<MenuList>` do Fluent vem com padding horizontal menor que o
-  // vertical por padrão), não em cada item — as linhas continuam com o
-  // padding "medium" padrão do Fluent.
-  menuPopover: { minWidth: "236px" },
-  menuBody: { padding: tokens.spacingVerticalS },
-  // O <MenuDivider> do Fluent vem com só 4px de margem vertical — some
-  // fácil entre linhas com o padding maior do body. `!important`: o
-  // componente injeta a própria classe (`margin: 4px -5px 4px -5px`)
-  // depois da nossa.
-  menuDivider: {
-    margin: `${tokens.spacingVerticalS} -5px !important`,
   },
 });
 
@@ -127,12 +106,6 @@ const RAIL = [
   },
 ] as const;
 
-// Menu do avatar. Conquistas/rede ainda não têm tela — ficam desabilitados.
-// "Sair" fecha o app.
-const PROFILE_EXTRA = [
-  { icon: <TrophyRegular />, label: "nav.achievements" },
-  { icon: <PeopleRegular />, label: "nav.network" },
-] as const;
 
 export function AppShell() {
   const { t } = useTranslation();
@@ -145,8 +118,10 @@ export function AppShell() {
   const wallpaperScope = useWallpaperStore((st) => st.scope);
   const atBrowse = pathname === "/" || pathname === "/library";
   const [powerOpen, setPowerOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   useUpdateCheck();
   useShaderFailures();
+  useCoreUpdates();
   // Correspondências de metadata esperando revisão (Configurações ›
   // Metadata). Mesma query da tela de revisão: resolver lá atualiza aqui.
   const pending = useQuery({
@@ -205,62 +180,24 @@ export function AppShell() {
         showWallpaper={wallpaperScope === "all" ? !pathname.startsWith("/rom/") : atRoot}
       />
       <nav className={s.rail}>
-        <Menu positioning={{ position: "below", align: "start", offset: 12 }}>
-          <MenuTrigger disableButtonEnhancement>
-            {/* `Button` do Fluent (sem fundo próprio: o do `railItem`), no
-                lugar do `<button>` do HTML — estados e foco padrão. */}
-            <Button
-              appearance="transparent"
-              className={mergeClasses(s.railItem, l.railRadius, s.railBrand)}
-              aria-label={t("shell.profile")}
-            >
-              <ProfileAvatar
-                profile={
-                  profile.data ?? { name: "Jogador", avatar: "preset:1" }
-                }
-                size={32}
-                className={s.railAvatarSize}
-                ring={SHOW_AVATAR_RING}
-                badge={SHOW_AVATAR_BADGE ? "available" : undefined}
-              />
-            </Button>
-          </MenuTrigger>
-          <MenuPopover className={l.menuPopover}>
-            {/* SEM `hasIcons`: só os itens que passam `icon` (Perfil,
-                conquistas, rede) ficam indentados — Status/Sair, sem
-                `icon`, ficam alinhados à esquerda. */}
-            <MenuList className={l.menuBody}>
-              <MenuItem
-                icon={<PersonRegular />}
-                onClick={() => navigate("/settings/perfil")}
-              >
-                {t("shell.myProfile")}
-              </MenuItem>
-              {PROFILE_EXTRA.map((m) => (
-                <MenuItem key={m.label} icon={m.icon} disabled>
-                  {t(m.label)}
-                </MenuItem>
-              ))}
-              <MenuDivider />
-              <Menu>
-                <MenuTrigger disableButtonEnhancement>
-                  <MenuItem disabled>{t("shell.status")}</MenuItem>
-                </MenuTrigger>
-                <MenuPopover className={l.menuPopover}>
-                  <MenuList className={l.menuBody}>
-                    <MenuItem>{t("shell.online")}</MenuItem>
-                    <MenuItem>{t("shell.away")}</MenuItem>
-                    <MenuItem>{t("shell.playing")}</MenuItem>
-                  </MenuList>
-                </MenuPopover>
-              </Menu>
-
-              <MenuItem onClick={() => void quitApp()}>
-                {t("shell.quit")}
-              </MenuItem>
-            </MenuList>
-          </MenuPopover>
-        </Menu>
+        {/* Avatar: abre o perfil num drawer à esquerda (era um menu suspenso;
+            pedido do usuário, 2026-10-29). `Button` do Fluent sem fundo
+            próprio (o do `railItem`) — estados e foco padrão. */}
+        <Button
+          appearance="transparent"
+          className={mergeClasses(s.railItem, l.railRadius, s.railBrand)}
+          aria-label={t("shell.profile")}
+          aria-haspopup="dialog"
+          onClick={() => setProfileOpen(true)}
+        >
+          <ProfileAvatar
+            profile={profile.data ?? { name: "Jogador", avatar: "preset:1" }}
+            size={32}
+            className={s.railAvatarSize}
+            ring={SHOW_AVATAR_RING}
+            badge={SHOW_AVATAR_BADGE ? "available" : undefined}
+          />
+        </Button>
 
         {RAIL.map((it) => (
           <NavLink
@@ -312,6 +249,11 @@ export function AppShell() {
       </nav>
 
       <PowerMenuDialog open={powerOpen} onOpenChange={setPowerOpen} />
+      <ProfileDrawer
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        profile={profile.data ?? { name: "Jogador", avatar: "preset:1", bio: null }}
+      />
       <UpdateDialog />
       <ShaderFailureDialog />
 

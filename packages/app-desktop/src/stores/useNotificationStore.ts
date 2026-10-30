@@ -8,7 +8,7 @@ import type { ShaderFailure, UpdateInfo } from "../lib/tauri";
  */
 /** `shaderFailed`: shader que impediu o jogo de aparecer e saiu da
  *  atribuição (`hooks/useShaderFailures.ts`). */
-export type NotificationKind = "update" | "whatsNew" | "shaderFailed";
+export type NotificationKind = "update" | "whatsNew" | "shaderFailed" | "notice";
 
 interface NotificationBase {
   id: string;
@@ -21,7 +21,9 @@ interface NotificationBase {
 }
 export type AppNotification =
   | (NotificationBase & { kind: "update" | "whatsNew"; update: UpdateInfo })
-  | (NotificationBase & { kind: "shaderFailed"; shader: ShaderFailure });
+  | (NotificationBase & { kind: "shaderFailed"; shader: ShaderFailure })
+  // aviso simples: o texto basta, sem modal; `route` = tela que abre ao clicar
+  | (NotificationBase & { kind: "notice"; route?: string; count?: number });
 
 /** O que o modal mostra: oferecer a atualização ou só as novidades. */
 export interface UpdateDialogState {
@@ -36,6 +38,7 @@ interface NotificationState {
   shaderDialog: ShaderFailure | null;
   /** Substitui a notificação do mesmo `id` (ex.: `update` só existe uma). */
   upsert: (n: AppNotification) => void;
+  remove: (id: string) => void;
   markAllRead: () => void;
   openDialog: (d: UpdateDialogState) => void;
   closeDialog: () => void;
@@ -49,6 +52,7 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   shaderDialog: null,
   upsert: (n) =>
     set((s) => ({ items: [n, ...s.items.filter((i) => i.id !== n.id)] })),
+  remove: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
   markAllRead: () =>
     set((s) => ({ items: s.items.map((i) => (i.read ? i : { ...i, read: true })) })),
   openDialog: (dialog) => set({ dialog }),

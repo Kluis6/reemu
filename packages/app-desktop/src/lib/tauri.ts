@@ -317,6 +317,27 @@ export interface InstalledCore {
 }
 export const listInstalledCores = () => invoke<InstalledCore[]>('list_installed_cores')
 
+/** Proporção da imagem: a do core, fixa, ou a janela inteira. */
+export type AspectValue = 'core' | '4:3' | '16:9' | 'fill'
+export type AspectScope = 'rom' | 'system' | 'default'
+export interface AspectInfo {
+  /** o que está atribuído EXATAMENTE em cada escopo (null = herda) */
+  atRom: AspectValue | null
+  atSystem: AspectValue | null
+  atDefault: AspectValue | null
+  systemId: string
+}
+export const getAspect = (romId: string) => invoke<AspectInfo>('get_aspect', { romId })
+/** `aspect` null = volta a herdar. Com um jogo aberto, vale na hora. */
+export const setAspect = (scope: AspectScope, romId: string, aspect: AspectValue | null) =>
+  invoke<void>('set_aspect', { scope, romId, aspect })
+/** A moldura saiu porque a imagem do jogo está larga demais pra ela. */
+export async function onWideBezelOff(cb: () => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen('wide-bezel-off', () => cb())
+}
+
 export interface CoreOption {
   key: string
   displayName: string
@@ -351,10 +372,16 @@ export interface CatalogCore {
   /** 'software' = buffer cru; 'opengl' = renderiza em GL; 'vulkan' = roda
    *  in-process no device do compositor (zero cópia). */
   hw: 'software' | 'opengl' | 'vulkan'
+  /** Tem versão anterior guardada, de uma atualização. */
+  hasPrevious: boolean
 }
 export const listCoreCatalog = () => invoke<CatalogCore[]>('list_core_catalog')
 export const downloadCore = (coreId: string) => invoke<void>('download_core', { coreId })
 export const removeCore = (coreId: string) => invoke<void>('remove_core', { coreId })
+/** Ids dos cores instalados com versão nova no buildbot. */
+export const checkCoreUpdates = () => invoke<string[]>('check_core_updates')
+export const restorePreviousCore = (coreId: string) =>
+  invoke<void>('restore_previous_core', { coreId })
 
 /** Arquivo de sistema (BIOS) — status contra `<dados>/system`. Nunca baixa
  *  nada (copyright da fabricante); só confere o que já está no disco. */

@@ -133,6 +133,8 @@ pub async fn load_game(
         super::cheats::apply_cheats(&state, rid).await;
     }
 
+    // Proporção da imagem (rom → sistema → todos, ou a do core).
+    apply_resolved_aspect(&state, rom_id.as_deref()).await;
     // Shader atribuído (rom → sistema → default, ou `plain`); depois a
     // decoração — pulada se o shader já desenha a própria moldura.
     let shader_has_bezel = apply_resolved_shader(&state, rom_id.as_deref()).await;
@@ -140,10 +142,10 @@ pub async fn load_game(
 
     let display_aspect = {
         let guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
-        guard
-            .as_ref()
-            .and_then(|fp| fp.decoration_aspect())
-            .unwrap_or(av.geometry.aspect_ratio)
+        guard.as_ref().map_or(av.geometry.aspect_ratio, |fp| {
+            fp.decoration_aspect()
+                .unwrap_or_else(|| fp.effective_aspect(av.geometry.aspect_ratio))
+        })
     };
 
     // Guarda o `rom_id` (do DB) pro QuickSave/QuickLoad; `None` se o jogo veio
@@ -210,6 +212,85 @@ async fn system_of(pool: &db::Db, rom_id: Option<&str>) -> String {
             .unwrap_or_default(),
         None => String::new(),
     }
+}
+
+/// Resolve a proporção do jogo (cascata rom → sistema → todos) e aplica no
+/// `FrameProcessor`.
+pub(super) async fn apply_resolved_aspect(state: &AppState, rom_id: Option<&str>) {
+    let Some(pool) = state.db.clone() else {
+        return;
+    };
+    let system = system_of(&pool, rom_id).await;
+    let aspect = db::AspectRepo::new(pool)
+        .get(rom_id, &system)
+        .await
+        .map(|a| a.resolved().to_string())
+        .unwrap_or_else(|_| "core".into());
+    if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+        fp.set_aspect_mode(crate::gpu::AspectMode::parse(&aspect));
+    }
+}
+
+/// O que está atribuído em cada escopo da proporção do jogo.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AspectInfo {
+    at_rom: Option<String>,
+    at_system: Option<String>,
+    at_default: Option<String>,
+    system_id: String,
+}
+
+#[tauri::command]
+pub async fn get_aspect(state: State<'_, AppState>, rom_id: String) -> Result<AspectInfo, String> {
+    let pool = pool(&state)?;
+    let system_id = system_of(&pool, Some(&rom_id)).await;
+    let a = db::AspectRepo::new(pool)
+        .get(Some(&rom_id), &system_id)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(AspectInfo {
+        at_rom: a.at_rom,
+        at_system: a.at_system,
+        at_default: a.at_default,
+        system_id,
+    })
+}
+
+/// Grava a proporção no escopo (`rom`, `system` ou `default`); `aspect` `None`
+/// volta a herdar. Com um jogo aberto, vale na hora.
+#[tauri::command]
+pub async fn set_aspect(
+    state: State<'_, AppState>,
+    scope: String,
+    rom_id: String,
+    aspect: Option<String>,
+) -> Result<(), String> {
+    if let Some(a) = aspect.as_deref() {
+        if !matches!(a, "core" | "4:3" | "16:9" | "fill") {
+            return Err(format!("proporção desconhecida: {a}"));
+        }
+    }
+    let pool = pool(&state)?;
+    let target = match scope.as_str() {
+        "rom" => rom_id,
+        "system" => system_of(&pool, Some(&rom_id)).await,
+        "default" => String::new(),
+        other => return Err(format!("escopo desconhecido: {other}")),
+    };
+    db::AspectRepo::new(pool)
+        .set(&scope, &target, aspect.as_deref())
+        .await
+        .map_err(|e| e.to_string())?;
+    let current = state
+        .current_rom
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone();
+    if current.is_some() {
+        apply_resolved_aspect(&state, current.as_deref()).await;
+    }
+    Ok(())
 }
 
 /// Resolve o shader do jogo e aplica no `FrameProcessor`. Devolve se o preset

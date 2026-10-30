@@ -4,6 +4,7 @@
 //! `domain::error::RepoError`. Nenhum tipo do sqlx aparece na assinatura
 //! pública.
 
+mod aspect_repo;
 mod audio_config_repo;
 mod cheats_repo;
 mod controller_mappings_repo;
@@ -22,6 +23,7 @@ mod system_core_repo;
 mod system_hotkeys_repo;
 mod video_config_repo;
 
+pub use aspect_repo::{AspectAssignments, AspectRepo};
 pub use audio_config_repo::AudioConfigRepo;
 pub use cheats_repo::CheatsRepo;
 pub use controller_mappings_repo::ControllerMappingsRepo;

@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import i18n from "../i18n";
-import { onShaderFailed } from "../lib/tauri";
+import { onShaderFailed, onWideBezelOff } from "../lib/tauri";
 import { useNotificationStore } from "../stores/useNotificationStore";
 
 /**
@@ -14,7 +14,23 @@ export function useShaderFailures() {
   const qc = useQueryClient();
   useEffect(() => {
     let off: (() => void) | undefined;
+    let offBezel: (() => void) | undefined;
     let alive = true;
+    // Moldura fora por causa da imagem larga: também só no sino, e um aviso
+    // só (mesmo `id`) por mais jogos que passem por isso.
+    void onWideBezelOff(() => {
+      useNotificationStore.getState().upsert({
+        id: "wide-bezel-off",
+        kind: "notice",
+        title: i18n.t("game.image.bezelOffTitle"),
+        summary: i18n.t("game.image.bezelOffSummary"),
+        at: Date.now(),
+        read: false,
+      });
+    }).then((fn) => {
+      if (alive) offBezel = fn;
+      else fn();
+    });
     void onShaderFailed((f) => {
       useNotificationStore.getState().upsert({
         id: crypto.randomUUID(),
@@ -36,6 +52,7 @@ export function useShaderFailures() {
     return () => {
       alive = false;
       off?.();
+      offBezel?.();
     };
   }, [qc]);
 }

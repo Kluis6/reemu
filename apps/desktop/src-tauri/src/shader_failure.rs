@@ -125,3 +125,12 @@ pub fn report(source: &str, kind: FailureKind, error: String) {
         );
     });
 }
+
+/// A moldura saiu porque a imagem do jogo está larga (16:10 pra cima). Vai pro
+/// sino: aviso nenhum aparece por cima do jogo.
+pub fn report_wide_bezel() {
+    log::info!("decoração: fora, a imagem do jogo está larga");
+    if let Some(app) = APP.get() {
+        let _ = app.emit("wide-bezel-off", ());
+    }
+}

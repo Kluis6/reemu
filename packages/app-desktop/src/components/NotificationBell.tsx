@@ -18,6 +18,7 @@ import {
   WarningRegular,
 } from "@fluentui/react-icons";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useNotificationStore, type AppNotification } from "../stores/useNotificationStore";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
@@ -74,6 +75,7 @@ function ago(at: number): string {
 export function NotificationBell({ className }: { className?: string }) {
   const { t } = useTranslation();
   const s = useStyles();
+  const navigate = useNavigate();
   const items = useNotificationStore((n) => n.items);
   const markAllRead = useNotificationStore((n) => n.markAllRead);
   const openDialog = useNotificationStore((n) => n.openDialog);
@@ -83,6 +85,10 @@ export function NotificationBell({ className }: { className?: string }) {
 
   const select = (n: AppNotification) => {
     setOpen(false);
+    if (n.kind === "notice") {
+      if (n.route) navigate(n.route);
+      return;
+    }
     if (n.kind === "shaderFailed") openShaderDialog(n.shader);
     else openDialog({ mode: n.kind === "update" ? "update" : "whatsNew", info: n.update });
   };
@@ -135,7 +141,7 @@ export function NotificationBell({ className }: { className?: string }) {
                 icon={
                   n.kind === "update" ? (
                     <ArrowCircleUpRegular className={mergeClasses(!n.read && s.unread)} />
-                  ) : n.kind === "shaderFailed" ? (
+                  ) : n.kind === "shaderFailed" || n.kind === "notice" ? (
                     <WarningRegular className={mergeClasses(!n.read && s.unread)} />
                   ) : (
                     <SparkleRegular className={mergeClasses(!n.read && s.unread)} />

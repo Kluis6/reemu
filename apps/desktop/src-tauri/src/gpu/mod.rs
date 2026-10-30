@@ -249,6 +249,52 @@ pub fn curated_by_wire(wire: &str) -> Option<&'static Curated> {
 
 static SHADER_ROOT: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
 
+/// Proporção da imagem pedida pelo usuário. O `libretro.h` deixa o frontend
+/// ignorar o `aspect_ratio` do core ("A frontend may ignore this setting").
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AspectMode {
+    /// A que o core declara (`retro_game_geometry`, `SET_GEOMETRY`).
+    Core,
+    /// Fixa (largura / altura).
+    Ratio(f32),
+    /// A janela inteira, esticando a imagem.
+    Fill,
+}
+
+impl AspectMode {
+    /// `core` | `4:3` | `16:9` | `fill` (coluna `aspect_assignments.aspect`).
+    /// O que não reconhece vale como `core`.
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "4:3" => Self::Ratio(4.0 / 3.0),
+            "16:9" => Self::Ratio(16.0 / 9.0),
+            "fill" => Self::Fill,
+            _ => Self::Core,
+        }
+    }
+}
+
+/// A moldura sai quando a imagem é larga (16:10 pra cima) E bem mais larga que
+/// a janela da própria moldura (a sobra abaixo). Só o primeiro critério
+/// tiraria as molduras feitas pra jogos 16:9, como as de PSP.
+const WIDE_ASPECT: f32 = 1.6;
+const WIDE_OVER_WINDOW: f32 = 1.15;
+
+/// Retângulo do integer scaling, em metades da saída `(hw, hh)`: altura em
+/// múltiplo inteiro da nativa e largura pela proporção de exibição — com a
+/// largura `nativa × fator` os cores de pixel não quadrado saíam deformados e
+/// o widescreen era ignorado. Se a largura não couber, o fator desce; nunca
+/// abaixo de 1.
+fn integer_scale_rect(dw: u32, dh: u32, nh: u32, aspect: f32) -> (f32, f32) {
+    let (dw_f, nh) = (dw as f32, nh.max(1));
+    let mut factor = (dh / nh).max(1);
+    while factor > 1 && (nh * factor) as f32 * aspect > dw_f {
+        factor -= 1;
+    }
+    let h = (nh * factor) as f32;
+    ((h * aspect / dw_f).min(1.0), (h / dh as f32).min(1.0))
+}
+
 /// Quem avisa o app quando o shader falha na GPU no meio do jogo
 /// (`shader_failure::report`), registrado no `setup`. É um ponteiro de função,
 /// não uma chamada direta, pra que o código da GPU não alcance o runtime do
@@ -260,6 +306,15 @@ static SHADER_FAILURE_HOOK: std::sync::OnceLock<fn(&str, String)> = std::sync::O
 /// Registra o gancho de [`SHADER_FAILURE_HOOK`]. Uma vez, no startup.
 pub fn set_shader_failure_hook(hook: fn(&str, String)) {
     let _ = SHADER_FAILURE_HOOK.set(hook);
+}
+
+/// Avisa o app que a moldura saiu porque a imagem está larga — vai pro sino,
+/// nunca por cima do jogo. Ponteiro pelo mesmo motivo do de cima.
+static WIDE_BEZEL_HOOK: std::sync::OnceLock<fn()> = std::sync::OnceLock::new();
+
+/// Registra o gancho de [`WIDE_BEZEL_HOOK`]. Uma vez, no startup.
+pub fn set_wide_bezel_hook(hook: fn()) {
+    let _ = WIDE_BEZEL_HOOK.set(hook);
 }
 
 /// Raiz do pacote `slang-shaders` (`<dados>/shaders/slang-shaders`), usada pra
@@ -744,6 +799,12 @@ pub struct FrameProcessor {
     integer_scaling: bool,
     /// Saída HDR pedida (aplicada quando houver surface nativa).
     hdr: HdrSettings,
+    /// Proporção pedida pelo usuário (`set_aspect_mode`).
+    aspect_mode: AspectMode,
+    /// A imagem está larga demais pra moldura atual: ela não é composta.
+    deco_suppressed: bool,
+    /// Geração da moldura cuja saída já foi avisada (um aviso por moldura).
+    deco_notified_gen: u32,
     /// Último erro do wgpu fora de um escopo (ver [`install_gpu_error_handler`])
     /// — o `run_chain` volta pro preset `plain` quando ele aparece.
     gpu_error: Arc<GpuErrorSlot>,
@@ -1012,6 +1073,9 @@ impl FrameProcessor {
             surface: None,
             integer_scaling: false,
             hdr: HdrSettings::default(),
+            aspect_mode: AspectMode::Core,
+            deco_suppressed: false,
+            deco_notified_gen: 0,
             gpu_error,
         })
     }
@@ -1626,10 +1690,11 @@ impl FrameProcessor {
         // Com rotação de 90°/270° e sem moldura, a AR do core inverte — mais
         // simples usar as dimensões (já rotacionadas) da saída.
         let quarter = matches!(frame.metadata.rotation_degrees % 360, 90 | 270);
+        let core_ar = self.effective_aspect(frame.metadata.aspect_ratio);
         let ar_src = self
             .decoration_aspect()
             .filter(|_| use_comp)
-            .or(Some(frame.metadata.aspect_ratio).filter(|a| *a > 0.0 && !quarter))
+            .or(Some(core_ar).filter(|a| *a > 0.0 && !quarter))
             .unwrap_or(out_w as f32 / out_h.max(1) as f32);
 
         let s = self.surface.as_ref().unwrap();
@@ -1640,21 +1705,15 @@ impl FrameProcessor {
         // já foi desenhada pro retângulo dela (`decoration_aspect()` acima).
         // `native_width/height` não giram sozinhos com `SET_ROTATION`; troca
         // W↔H no giro de 90/270° igual ao `ar_src` acima.
-        let (hw, hh) = if self.integer_scaling && !use_comp {
-            let (nw, nh) = if quarter {
-                (
-                    frame.metadata.native_height.max(1),
-                    frame.metadata.native_width.max(1),
-                )
+        let (hw, hh) = if self.aspect_mode == AspectMode::Fill && !use_comp {
+            (1.0, 1.0)
+        } else if self.integer_scaling && !use_comp {
+            let nh = if quarter {
+                frame.metadata.native_width
             } else {
-                (
-                    frame.metadata.native_width.max(1),
-                    frame.metadata.native_height.max(1),
-                )
+                frame.metadata.native_height
             };
-            let factor = (dw / nw).min(dh / nh).max(1);
-            let (out_w, out_h) = ((nw * factor) as f32, (nh * factor) as f32);
-            (out_w / dw as f32, out_h / dh as f32)
+            integer_scale_rect(dw, dh, nh, ar_src)
         } else if ar_src > ar_dst {
             (1.0, ar_dst / ar_src)
         } else {
@@ -1920,7 +1979,55 @@ impl FrameProcessor {
     pub fn decoration_aspect(&self) -> Option<f32> {
         self.decoration
             .as_ref()
+            .filter(|_| !self.deco_suppressed)
             .map(|d| d.w as f32 / d.h.max(1) as f32)
+    }
+
+    /// Proporção pedida pelo usuário. Vale no próximo quadro.
+    pub fn set_aspect_mode(&mut self, mode: AspectMode) {
+        self.aspect_mode = mode;
+    }
+
+    /// A proporção de exibição do quadro: a do core, ou a pedida pelo
+    /// usuário. Na tela cheia, a da saída (surface; no canvas, o viewport).
+    pub(crate) fn effective_aspect(&self, core: f32) -> f32 {
+        match self.aspect_mode {
+            AspectMode::Core => core,
+            AspectMode::Ratio(r) => r,
+            AspectMode::Fill => {
+                let (w, h) = self
+                    .surface
+                    .as_ref()
+                    .map(|s| (s.config.width, s.config.height))
+                    .unwrap_or(self.viewport);
+                if w > 0 && h > 0 {
+                    w as f32 / h as f32
+                } else {
+                    core
+                }
+            }
+        }
+    }
+
+    /// Decide se a moldura entra neste quadro: fora, se a imagem é larga demais
+    /// pra janela dela (ver [`WIDE_ASPECT`]) — espremeria a cena. Avisa uma vez
+    /// por moldura, pelo sino.
+    pub(crate) fn update_deco_suppressed(&mut self, frame: &Frame) {
+        let ar = self.effective_aspect(frame.metadata.aspect_ratio);
+        let wide = self.decoration.as_ref().is_some_and(|d| {
+            let window = match d.vp {
+                Some(v) => v.w / v.h.max(1.0),
+                None => d.w as f32 / d.h.max(1) as f32,
+            };
+            ar >= WIDE_ASPECT && ar > window * WIDE_OVER_WINDOW
+        });
+        if wide && self.deco_notified_gen != self.deco_gen {
+            self.deco_notified_gen = self.deco_gen;
+            if let Some(hook) = WIDE_BEZEL_HOOK.get() {
+                hook();
+            }
+        }
+        self.deco_suppressed = wide;
     }
 
     /// Define (ou tira, com `None`) a moldura. `rgba` é a imagem RGBA8
@@ -2403,7 +2510,7 @@ impl FrameProcessor {
             out.extend_from_slice(&w.to_le_bytes());
             out.extend_from_slice(&h.to_le_bytes());
             if split_header {
-                let gen = if self.decoration.is_some() {
+                let gen = if self.decoration.is_some() && !self.deco_suppressed {
                     self.deco_gen
                 } else {
                     0
@@ -2412,7 +2519,11 @@ impl FrameProcessor {
                 for v in self.game_rect {
                     out.extend_from_slice(&v.to_le_bytes());
                 }
-                out.extend_from_slice(&frame.metadata.aspect_ratio.to_le_bytes());
+                out.extend_from_slice(
+                    &self
+                        .effective_aspect(frame.metadata.aspect_ratio)
+                        .to_le_bytes(),
+                );
                 out.extend_from_slice(&self.deco_zoom.to_le_bytes());
             }
             for y in 0..h as usize {

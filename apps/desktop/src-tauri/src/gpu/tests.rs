@@ -956,7 +956,7 @@ fn split_decoration_sends_game_only() {
             h: 200.0,
         }),
     )));
-    let frame = || grey_frame(50, 30, 0x7A);
+    let frame = || grey_frame(40, 30, 0x7A);
     assert!(
         fp.process_packed_split(&frame()).is_none(),
         "1º quadro: pipeline"
@@ -968,10 +968,10 @@ fn split_decoration_sends_game_only() {
     let f32_at = |i: usize| f32::from_le_bytes(out[i..i + 4].try_into().unwrap());
     assert_eq!(
         (u32_at(0), u32_at(4)),
-        (50, 30),
+        (40, 30),
         "tamanho do jogo, não da moldura"
     );
-    assert_eq!(out.len(), 36 + 50 * 30 * 4);
+    assert_eq!(out.len(), 36 + 40 * 30 * 4);
     assert_eq!(
         f32_at(32),
         1.0,
@@ -1020,6 +1020,34 @@ fn checker_frame(w: u32, h: u32) -> Frame {
             rotation_degrees: 0,
         },
     }
+}
+
+#[test]
+fn aspect_mode_parse_and_integer_rect() {
+    assert_eq!(AspectMode::parse("core"), AspectMode::Core);
+    assert_eq!(AspectMode::parse("qualquer"), AspectMode::Core);
+    assert_eq!(AspectMode::parse("fill"), AspectMode::Fill);
+    assert_eq!(AspectMode::parse("16:9"), AspectMode::Ratio(16.0 / 9.0));
+
+    let near = |a: f32, b: f32| (a - b).abs() < 0.001;
+    // PS1 320x240 num 1920x1080: altura 4x (960) e largura pela proporção 4:3
+    // (1280), não 320 × 4 também por acaso; com pixel não quadrado a diferença
+    // aparece abaixo.
+    let (hw, hh) = integer_scale_rect(1920, 1080, 240, 4.0 / 3.0);
+    assert!(near(hh, 960.0 / 1080.0) && near(hw, 1280.0 / 1920.0));
+    // Mega Drive 320x224: 4x = 896 de altura; a largura sai de 4:3 (1194,67),
+    // não de 320 × 4 = 1280
+    let (hw, hh) = integer_scale_rect(1920, 1080, 224, 4.0 / 3.0);
+    assert!(near(hh, 896.0 / 1080.0) && near(hw, 896.0 * (4.0 / 3.0) / 1920.0));
+    // 16:9 em tela 16:9: preenche em 3x de 360
+    let (hw, hh) = integer_scale_rect(1920, 1080, 360, 16.0 / 9.0);
+    assert!(near(hh, 1.0) && near(hw, 1.0));
+    // não cabe na largura: o fator desce (janela 4:3 com jogo 16:9)
+    let (hw, hh) = integer_scale_rect(1024, 768, 240, 16.0 / 9.0);
+    assert!(near(hh, 480.0 / 768.0) && near(hw, 480.0 * (16.0 / 9.0) / 1024.0));
+    // maior que a janela: fator 1 e nunca passa de 1
+    let (hw, hh) = integer_scale_rect(640, 360, 720, 16.0 / 9.0);
+    assert!(near(hh, 1.0) && near(hw, 1.0));
 }
 
 /// Roda de verdade (GPU) cada `.slangp` do pacote que compila, num viewport
@@ -1151,6 +1179,144 @@ fn field_render_all_presets() {
         eprintln!("\n[{}×] {cause}", files.len());
         for f in files.iter().take(3) {
             eprintln!("      {f}");
+        }
+    }
+}
+
+/// Quadro de teste de dedither, em 3 faixas: xadrez de 1 pixel, matriz de Bayer
+/// 4×4 (o padrão do PS1) e uma borda dura vertical no meio da 3ª faixa.
+fn dither_frame(w: u32, h: u32) -> Frame {
+    const BAYER: [[i32; 4]; 4] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+    // `REEMU_DITHER_CELL=2`: cada ponto do padrão com 2 pixels, como num core
+    // com resolução interna 2x
+    let cell: u32 = std::env::var("REEMU_DITHER_CELL")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(1);
+    let mut data = vec![0u8; (w * h * 4) as usize];
+    for py in 0..h {
+        for px in 0..w {
+            let (x, y) = (px, py);
+            let (qx, qy) = (px / cell, py / cell);
+            let v = if x < w / 3 {
+                if (qx + qy) % 2 == 0 {
+                    0x50
+                } else {
+                    0xB0
+                }
+            } else if x < 2 * w / 3 {
+                (0x80 + (BAYER[(qy % 4) as usize][(qx % 4) as usize] - 8) * 6) as u8
+            } else if x < 5 * w / 6 {
+                0x20
+            } else {
+                0xE0
+            };
+            let i = ((y * w + x) * 4) as usize;
+            data[i..i + 4].copy_from_slice(&[v, v, v, 0xFF]);
+        }
+    }
+    Frame {
+        origin: FrameOrigin::SoftwareRawBuffer {
+            data,
+            pitch: w * 4,
+            format: SoftwarePixelFormat::Xrgb8888,
+        },
+        metadata: FrameMetadata {
+            native_width: w,
+            native_height: h,
+            aspect_ratio: w as f32 / h as f32,
+            rotation_degrees: 0,
+        },
+    }
+}
+
+/// Mede o EFEITO dos presets de dedither (não só se renderizam): resíduo do
+/// xadrez e do Bayer (desvio-padrão do verde na faixa, em relação ao `plain`;
+/// 100% = não tirou nada) e a largura da borda dura em pixels da entrada (10%
+/// a 90%). Passa `REEMU_SHADER_FILTER` para escolher os presets. Ignorado:
+///   REEMU_SHADER_DIR=… cargo test -p reemu-desktop --lib field_dedither_effect -- --ignored --nocapture
+#[test]
+#[ignore]
+fn field_dedither_effect() {
+    let dir = std::env::var("REEMU_SHADER_DIR").unwrap_or_default();
+    let root = std::path::Path::new(&dir);
+    let filter = std::env::var("REEMU_SHADER_FILTER").unwrap_or_else(|_| "dithering/".into());
+    let mut presets = Vec::new();
+    collect_slangp(root, &mut presets);
+    presets.retain(|p| p.to_string_lossy().replace('\\', "/").contains(&filter));
+    presets.sort();
+    let Some(mut fp) = FrameProcessor::new() else {
+        eprintln!("sem adapter wgpu — pulando");
+        return;
+    };
+    const W: u32 = 240;
+    const H: u32 = 224;
+    // (desvio xadrez, desvio Bayer, largura da borda, média xadrez, média Bayer)
+    let measure = |fp: &mut FrameProcessor| -> Option<(u32, u32, [f32; 5])> {
+        fp.set_canvas_viewport(W * 4, H * 4);
+        let mut last = None;
+        for _ in 0..4 {
+            if let Some((w, h, d)) = fp.process(&dither_frame(W, H)) {
+                last = Some((w, h, d.to_vec()));
+            }
+        }
+        let (w, h, d) = last?;
+        let px = |x: u32, y: u32| d[((y * w + x) * 4 + 1) as usize] as f32;
+        // miolo de cada faixa, longe das divisas
+        let stats = |x0: f32, x1: f32| {
+            let (mut n, mut sum, mut sq) = (0f32, 0f32, 0f32);
+            for y in h / 4..3 * h / 4 {
+                for x in (x0 * w as f32) as u32..(x1 * w as f32) as u32 {
+                    let v = px(x, y);
+                    n += 1.0;
+                    sum += v;
+                    sq += v * v;
+                }
+            }
+            let mean = sum / n;
+            ((sq / n - mean * mean).max(0.0).sqrt(), mean)
+        };
+        let (s_chk, m_chk) = stats(0.08, 0.25);
+        let (s_bay, m_bay) = stats(0.42, 0.58);
+        // borda em 5/6 da largura, numa linha do meio
+        let y = h / 2;
+        let (lo, hi) = (px(3 * w / 4, y), px(23 * w / 24, y));
+        let (a, b) = (lo + (hi - lo) * 0.1, lo + (hi - lo) * 0.9);
+        let cols = (3 * w / 4..23 * w / 24)
+            .filter(|&x| px(x, y) > a && px(x, y) < b)
+            .count() as f32;
+        Some((
+            w,
+            h,
+            [s_chk, s_bay, cols * W as f32 / w as f32, m_chk, m_bay],
+        ))
+    };
+    fp.set_preset("plain").unwrap();
+    let (_, _, base) = measure(&mut fp).expect("plain renderiza");
+    eprintln!(
+        "plain: xadrez σ={:.1} Bayer σ={:.1} borda={:.1}px",
+        base[0], base[1], base[2]
+    );
+    eprintln!("preset | saída | xadrez resta | Bayer resta | borda (px) | média xadrez/Bayer");
+    for p in &presets {
+        let rel = p.strip_prefix(root).unwrap_or(p).display().to_string();
+        if let Err(e) = fp.set_preset(p.to_str().unwrap()) {
+            eprintln!(
+                "{rel} | não compila: {}",
+                e.chars().take(100).collect::<String>()
+            );
+            continue;
+        }
+        match measure(&mut fp) {
+            Some((w, h, m)) => eprintln!(
+                "{rel} | {w}x{h} | {:.0}% | {:.0}% | {:.1} | {:.0}/{:.0}",
+                100.0 * m[0] / base[0],
+                100.0 * m[1] / base[1],
+                m[2],
+                m[3],
+                m[4]
+            ),
+            None => eprintln!("{rel} | sem quadro"),
         }
     }
 }
