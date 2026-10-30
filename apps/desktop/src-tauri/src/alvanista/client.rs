@@ -163,9 +163,18 @@ impl Client {
                 if let Err(e) = self.store.clear_tokens_unlocked().await {
                     log::warn!("alvanista: não deu pra apagar a sessão: {e}");
                 }
+                self.session_ended().await;
                 Err(ClientError::AuthEnded)
             }
             Err(e) => Err(e),
+        }
+    }
+
+    /// O servidor encerrou a sessão: o marcador sai mesmo que o chaveiro não
+    /// tenha deixado apagar, porque o par que sobrou lá já está morto.
+    async fn session_ended(&self) {
+        if let Err(e) = self.store.unmark_session().await {
+            log::warn!("alvanista: marcador de sessão não apagado: {e}");
         }
     }
 
@@ -228,6 +237,7 @@ impl Client {
                 if let Err(e) = self.store.clear_tokens().await {
                     log::warn!("alvanista: não deu pra apagar a sessão: {e}");
                 }
+                self.session_ended().await;
                 Err(ClientError::AuthEnded)
             }
             Err(MeError::Failed(e)) => Err(e),
@@ -497,7 +507,7 @@ mod tests {
         })
         .await;
         if let Some(t) = seed {
-            store.save_tokens(t).await.unwrap();
+            store.start_session(t).await.unwrap();
             // O save semeado não conta na ordem do teste.
             fake.log.lock().unwrap().clear();
         }
@@ -564,6 +574,8 @@ mod tests {
             .count();
         assert_eq!(refreshes, 1);
         assert_eq!(client.store().load_tokens().await.unwrap(), None);
+        // A sessão acabou no servidor: sai o marcador.
+        assert!(!client.store().has_session().await.unwrap());
     }
 
     #[tokio::test]
@@ -585,6 +597,8 @@ mod tests {
         let mut t = tokens(&old);
         assert_eq!(client.me(&mut t).await, Err(ClientError::AuthEnded));
         assert_eq!(client.store().load_tokens().await.unwrap(), None);
+        // A sessão acabou no servidor: sai o marcador.
+        assert!(!client.store().has_session().await.unwrap());
     }
 
     #[tokio::test]

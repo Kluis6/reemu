@@ -11,6 +11,11 @@
 //! chaveiro pode falhar só numa gravação e continuar legível, as duas cópias
 //! podem divergir; a leitura devolve sempre a mais nova, porque o refresh
 //! token da mais velha já foi gasto no servidor.
+//!
+//! O marcador `session` em `alvanista_state` diz se há sessão. Sem ele
+//! ninguém lê o chaveiro nem chama a rede: num chaveiro trancado do Linux a
+//! leitura pode pedir a senha, e quem nunca conectou não pode ser incomodado.
+//! Ele entra antes do par ao conectar e sai quando a sessão acaba.
 
 use super::client::Me;
 use super::pkce::random_token;
@@ -23,6 +28,8 @@ use std::sync::Arc;
 const ACCOUNT: &str = "alvanista";
 const DEVICE_ID_KEY: &str = "device_id";
 const MIRROR_KEY: &str = "mirror";
+/// Marcador de sessão (ver o topo do arquivo). O valor não importa.
+const SESSION_KEY: &str = "session";
 
 /// Uma renovação (ou desconexão) por vez em todo o processo, mesmo que
 /// existam vários `Client`/`Store`.
@@ -229,12 +236,38 @@ impl Store {
     }
 
     /// Começa uma sessão nova (depois do `exchange`): sob `REFRESH_LOCK`,
-    /// esquece as rotações de qualquer sessão anterior e grava o par. É o
-    /// caminho do fluxo de conectar.
+    /// esquece as rotações de qualquer sessão anterior, marca a sessão e grava
+    /// o par. É o caminho do fluxo de conectar.
+    ///
+    /// O marcador vem antes do par: se o app cair entre os dois, sobra um
+    /// marcador sem sessão, que a próxima leitura apaga. Na ordem inversa
+    /// sobraria uma sessão que ninguém lê.
     pub async fn start_session(&self, tokens: &Tokens) -> Result<(), String> {
         let _one_at_a_time = REFRESH_LOCK.lock().await;
         forget_all_rotations();
+        self.repo
+            .state_set(SESSION_KEY, "1")
+            .await
+            .map_err(|e| e.to_string())?;
         self.save_tokens(tokens).await
+    }
+
+    /// `true` se há sessão marcada. Só lê o SQLite.
+    pub async fn has_session(&self) -> Result<bool, String> {
+        self.repo
+            .state_get(SESSION_KEY)
+            .await
+            .map(|v| v.is_some())
+            .map_err(|e| e.to_string())
+    }
+
+    /// A sessão acabou (desconectou, o servidor a encerrou, ou o marcador
+    /// ficou sem par): sai o marcador.
+    pub async fn unmark_session(&self) -> Result<(), String> {
+        self.repo
+            .state_delete(SESSION_KEY)
+            .await
+            .map_err(|e| e.to_string())
     }
 
     /// Só para dentro do módulo: a renovação (que já segura `REFRESH_LOCK`) e
@@ -272,7 +305,9 @@ impl Store {
         self.clear_tokens_unlocked().await
     }
 
-    /// Para quem já segura `REFRESH_LOCK`.
+    /// Para quem já segura `REFRESH_LOCK`. Com as duas cópias apagadas, sai
+    /// também o marcador; se o chaveiro recusou, ele fica (uma cópia viva
+    /// pode ter ficado lá) e quem chama decide.
     pub(super) async fn clear_tokens_unlocked(&self) -> Result<(), ClearError> {
         // Antes de qualquer leitura: mesmo que o chaveiro falhe aqui, nada
         // da sessão que acabou pode sobreviver na memória.
@@ -284,7 +319,8 @@ impl Store {
             .await
             .map_err(|e| ClearError::Other(e.to_string()))?;
         // Cópia que não saiu do chaveiro voltaria a carregar como conectado.
-        keyring.map_err(ClearError::Keyring)
+        keyring.map_err(ClearError::Keyring)?;
+        self.unmark_session().await.map_err(ClearError::Other)
     }
 
     /// `true` se o par que `load_tokens` devolve está no SQLite porque o
@@ -373,10 +409,13 @@ pub(super) mod test_support {
         /// Quantas leituras o chaveiro recebeu (cada uma pode pedir a senha
         /// num chaveiro trancado).
         pub gets: AtomicUsize,
+        /// Quantas chamadas de qualquer tipo (ler, gravar, apagar).
+        pub calls: AtomicUsize,
     }
 
     impl SecretStore for MemSecrets {
         fn get(&self, account: &str) -> Result<Option<String>, String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
             self.gets.fetch_add(1, Ordering::SeqCst);
             if self.broken {
                 return Err("sem Secret Service".into());
@@ -384,6 +423,7 @@ pub(super) mod test_support {
             Ok(self.secrets.lock().unwrap().get(account).cloned())
         }
         fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
             if self.broken
                 || self.readonly.load(Ordering::SeqCst)
                 || self.fail_next_set.swap(false, Ordering::SeqCst)
@@ -400,6 +440,7 @@ pub(super) mod test_support {
             Ok(())
         }
         fn delete(&self, account: &str) -> Result<(), String> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
             if self.broken || self.readonly.load(Ordering::SeqCst) {
                 return Err("sem Secret Service".into());
             }
@@ -409,9 +450,23 @@ pub(super) mod test_support {
     }
 
     pub async fn store_with(secrets: MemSecrets) -> (Store, Arc<MemSecrets>) {
+        let (store, secrets, _) = store_and_db(secrets).await;
+        (store, secrets)
+    }
+
+    /// Como `store_with`, mais o banco (para conferir outras tabelas).
+    pub async fn store_and_db(secrets: MemSecrets) -> (Store, Arc<MemSecrets>, db::Db) {
         let secrets = Arc::new(secrets);
         let db = db::connect_in_memory().await.unwrap();
-        (Store::new(db, secrets.clone()), secrets)
+        (Store::new(db.clone(), secrets.clone()), secrets, db)
+    }
+
+    /// Marca a sessão sem gravar par (como um chaveiro que não abre).
+    pub async fn mark_session(db: &db::Db) {
+        AlvanistaRepo::new(db.clone())
+            .state_set(SESSION_KEY, "1")
+            .await
+            .unwrap();
     }
 
     /// Os testes que mexem na memória de rotações (que é do processo) ou
@@ -603,6 +658,28 @@ mod tests {
             !shown.contains("alp_") && !shown.contains("alr_"),
             "{shown}"
         );
+    }
+
+    #[tokio::test]
+    async fn the_session_marker_follows_the_session() {
+        let _serial = SERIAL.lock().await;
+        let (store, _) = store_with(MemSecrets::default()).await;
+        assert!(!store.has_session().await.unwrap());
+        store.start_session(&tokens("m1")).await.unwrap();
+        assert!(store.has_session().await.unwrap());
+        store.clear_tokens().await.unwrap();
+        assert!(!store.has_session().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn the_marker_stays_when_the_keyring_refuses_the_delete() {
+        let _serial = SERIAL.lock().await;
+        let (store, secrets) = store_with(MemSecrets::default()).await;
+        store.start_session(&tokens("m2")).await.unwrap();
+        secrets.readonly.store(true, Ordering::SeqCst);
+        assert!(store.clear_tokens().await.is_err());
+        // A cópia viva continua no chaveiro: a sessão não pode sumir da vista.
+        assert!(store.has_session().await.unwrap());
     }
 
     #[tokio::test]

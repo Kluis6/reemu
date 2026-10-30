@@ -46,11 +46,35 @@ pub async fn connect_in_memory() -> Result<Db, DbError> {
 }
 
 pub async fn run_migrations(pool: &Db) -> Result<(), DbError> {
+    forget_prerelease_alvanista(pool).await?;
     heal_line_ending_checksums(pool).await?;
     MIGRATOR
         .run(pool)
         .await
         .map_err(|e| DbError::Migration(e.to_string()))
+}
+
+/// Builds de pré-lançamento do "Entrar com Alvanista" (o fork da Tellurian e
+/// a primeira versão do PR) aplicaram a migration `alvanista` como 0017 ou
+/// 0018, números que aqui são `cheats` e `aspect_assignments`. Com essa
+/// linha o sqlx recusa o banco ("migration 17 was previously applied but has
+/// been modified"). A linha sai e as tabelas ficam: as migrations de verdade
+/// rodam por cima, e a 0019 adota as tabelas (`IF NOT EXISTS`) e marca a
+/// sessão que houver nelas.
+async fn forget_prerelease_alvanista(pool: &Db) -> Result<(), DbError> {
+    let has_table: Option<(String,)> = sqlx::query_as(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_sqlx_migrations'",
+    )
+    .fetch_optional(pool)
+    .await?;
+    if has_table.is_some() {
+        sqlx::query(
+            "DELETE FROM _sqlx_migrations WHERE version IN (17, 18) AND description = 'alvanista'",
+        )
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
 }
 
 /// O sqlx guarda o SHA-384 do texto de cada migration aplicada e recusa abrir

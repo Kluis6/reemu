@@ -564,9 +564,12 @@ no `emu-session`, ver `docs/historico.md`).
         4. se vai haver busca por nome e por hash de ROM;
         5. estabilidade da API (a 0.1.0 deve mudar).
       - **Respostas da Tellurian (2026-10-29)**, na ordem das perguntas:
-        1. os Termos de Uso do Alvanista cobrem os apps parceiros. A primeira
-           peça só lê o perfil (nome e avatar), nenhum dado de jogo, então a
-           licença do IGDB ainda não entra;
+        1. os apps parceiros entram nos Termos de Uso
+           (<https://www.alvanista.com/terms>) e na Política de Privacidade
+           (<https://www.alvanista.com/privacy>) do Alvanista, num parágrafo
+           sobre "Entrar com Alvanista". A primeira peça só lê o perfil (nome,
+           avatar, bio e capa), nenhum dado de jogo, então a licença do IGDB
+           ainda não entra;
         2. o ReEmu está cadastrado como o cliente `reemu`: público, sem
            segredo, protegido pelo PKCE (S256). Embutir o client ID num app de
            código aberto é o modelo previsto. O cadastro no GAS fica para
@@ -589,8 +592,9 @@ no `emu-session`, ver `docs/historico.md`).
         "Entrar com Alvanista" em Configurações › Perfil, desligado por
         padrão, pelo navegador do sistema com PKCE; tokens no chaveiro (com
         reserva no SQLite e aviso quando não há chaveiro); nome e avatar do
-        Alvanista só para leitura no rail, no hub e na saudação; "Desconectar"
-        revoga e volta ao perfil local. Detalhes em `docs/historico.md`
+        Alvanista só para leitura no rail, no drawer de perfil, no hub e na
+        saudação; "Desconectar" revoga e volta ao perfil local. Sem sessão, o
+        app não lê o chaveiro nem chama a rede. Detalhes em `docs/historico.md`
         (2026-10-29). Conquistas pelo GAS e amigos vêm depois, quando o
         Alvanista abrir essas partes da API de parceiros; hero e logo de
         jogos seguem como no escopo acima.

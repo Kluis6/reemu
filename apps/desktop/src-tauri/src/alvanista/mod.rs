@@ -23,7 +23,7 @@ use serde::Serialize;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use store::{ClearError, Mirror, Store};
+use store::{ClearError, Loaded, Mirror, Store};
 use tauri::{AppHandle, Manager};
 
 /// Quanto o navegador tem para o usuário aprovar.
@@ -189,12 +189,28 @@ impl Alvanista {
         })
     }
 
+    /// A sessão guardada, só quando há o marcador: sem ele não se toca no
+    /// chaveiro (nem, depois, na rede). Marcador sem par (o app caiu no meio
+    /// de conectar, ou o chaveiro foi limpo por fora) sai aqui.
+    async fn stored_session(&self) -> Result<Option<Loaded>, String> {
+        if !self.store().has_session().await? {
+            return Ok(None);
+        }
+        let loaded = self.store().load().await?;
+        if loaded.is_none() {
+            if let Err(e) = self.store().unmark_session().await {
+                log::warn!("alvanista: marcador de sessão não apagado: {e}");
+            }
+        }
+        Ok(loaded)
+    }
+
     /// O estado só com o que está no aparelho (sem rede): há sessão? qual o
     /// espelho? Serve para a tela aparecer na hora; `status` confirma depois.
-    /// Lê o chaveiro uma vez só.
+    /// Lê o chaveiro uma vez só, e só com sessão marcada.
     pub async fn cached_status(&self) -> AlvanistaStatus {
         let mirror = self.store().mirror_get().await.ok().flatten();
-        match self.store().load().await {
+        match self.stored_session().await {
             Ok(Some(session)) => match mirror {
                 Some(m) => AlvanistaStatus::from_mirror(m, false, session.from_fallback),
                 None => AlvanistaStatus {
@@ -215,7 +231,8 @@ impl Alvanista {
         }
     }
 
-    /// O estado da conexão, renovando o espelho quando há rede. Lê o
+    /// O estado da conexão, renovando o espelho quando há rede. Sem sessão
+    /// marcada, volta sem tocar no chaveiro nem na rede. Com ela, lê o
     /// chaveiro uma vez (mais uma só quando o par foi renovado, para saber
     /// onde o par novo ficou).
     pub async fn status(&self) -> AlvanistaStatus {
@@ -226,7 +243,7 @@ impl Alvanista {
                 None
             }
         };
-        let session = match self.store().load().await {
+        let session = match self.stored_session().await {
             Ok(Some(session)) => session,
             Ok(None) => {
                 if mirror.is_some() {
@@ -303,8 +320,16 @@ impl Alvanista {
     ///
     /// Fora disso, o par do chaveiro é o vivo e a revogação não chegou:
     /// desconectar falha, para não deixar tokens vivos sem ninguém saber.
+    ///
+    /// Sem sessão marcada não há o que revogar nem apagar: só sai o espelho.
     pub async fn disconnect(&self) -> Result<(), String> {
         self.cancel();
+        if matches!(self.store().has_session().await, Ok(false)) {
+            if let Err(e) = self.store().mirror_clear().await {
+                log::warn!("alvanista: espelho não apagado: {e}");
+            }
+            return Ok(());
+        }
         let (revoked, nothing_alive_in_keyring) = match self.store().load().await {
             Ok(Some(session)) => (
                 self.client.revoke(&session.tokens).await,
@@ -330,10 +355,28 @@ impl Alvanista {
         if !done {
             return Err("failed".into());
         }
+        // Quando o chaveiro recusou o apagar, `clear_tokens` deixou o
+        // marcador; aqui a sessão já vale como encerrada.
+        if let Err(e) = self.store().unmark_session().await {
+            log::warn!("alvanista: marcador de sessão não apagado: {e}");
+        }
         if let Err(e) = self.store().mirror_clear().await {
             log::warn!("alvanista: espelho não apagado: {e}");
         }
         Ok(())
+    }
+
+    /// O `status` da abertura do app, só com sessão marcada. Sem ela devolve
+    /// `None` sem ler o chaveiro nem chamar a rede.
+    pub async fn refresh_if_connected(&self) -> Option<AlvanistaStatus> {
+        match self.store().has_session().await {
+            Ok(true) => Some(self.status().await),
+            Ok(false) => None,
+            Err(e) => {
+                log::warn!("alvanista: não leu o marcador de sessão: {e}");
+                None
+            }
+        }
     }
 
     /// URL do perfil no Alvanista, só se for do próprio site.
@@ -378,7 +421,8 @@ pub const STATUS_EVENT: &str = "alvanista-status";
 /// o par juntas, o `REFRESH_LOCK` põe uma atrás da outra. Sem banco não há
 /// estado gerenciado e nada roda.
 /// O resultado vai para a interface em `STATUS_EVENT` (a conexão pode ter
-/// acabado no site, ou o nome mudado); sem conexão, nem toca na rede.
+/// acabado no site, ou o nome mudado). Sem sessão marcada não lê o chaveiro,
+/// não toca na rede e não manda o evento.
 pub fn refresh_on_start(app: &AppHandle) {
     if app.try_state::<Alvanista>().is_none() {
         return;
@@ -388,7 +432,9 @@ pub fn refresh_on_start(app: &AppHandle) {
         let Some(alva) = app.try_state::<Alvanista>() else {
             return;
         };
-        let status = alva.status().await;
+        let Some(status) = alva.refresh_if_connected().await else {
+            return;
+        };
         if let Err(e) = tauri::Emitter::emit(&app, STATUS_EVENT, &status) {
             log::warn!("alvanista: não avisou a interface da renovação: {e}");
         }
@@ -716,11 +762,12 @@ mod tests {
         let _serial = SERIAL.lock().await;
         // Como uma desconexão antiga deixava a máquina: chaveiro inacessível,
         // reserva vazia e só o espelho, mostrado como "conectado, sem rede".
-        let (store, _) = store_with(MemSecrets {
+        let (store, _, db) = store_and_db(MemSecrets {
             broken: true,
             ..Default::default()
         })
         .await;
+        mark_session(&db).await;
         let alva = Alvanista::new(Client::with_api("http://127.0.0.1:9".into(), store));
         alva.store().mirror_put(&me_named("toy")).await.unwrap();
         let stuck = alva.cached_status().await;
@@ -831,6 +878,150 @@ mod tests {
         assert!(st.connected && !st.offline && !st.ended);
         assert_eq!(st.username.as_deref(), Some("toy"));
         assert_eq!(hits.load(Ordering::SeqCst), 0);
+    }
+
+    fn me_full(username: &str) -> client::Me {
+        client::Me {
+            hero_url: Some(format!("https://cdn.alvanista.com/h/{username}.png")),
+            bio: Some(format!("bio de {username}")),
+            avatar_url: Some(format!("https://cdn.alvanista.com/a/{username}.png")),
+            ..me_named(username)
+        }
+    }
+
+    #[tokio::test]
+    async fn without_a_session_the_keyring_and_the_network_are_never_called() {
+        let _serial = SERIAL.lock().await;
+        let (api, hits) = counting_api_with(200);
+        let (store, secrets) = store_with(MemSecrets::default()).await;
+        let alva = Alvanista::new(Client::with_api(api, store));
+        // Um espelho perdido (de uma desconexão que não o apagou) não muda nada.
+        alva.store().mirror_put(&me_named("toy")).await.unwrap();
+
+        assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
+        assert_eq!(alva.status().await, AlvanistaStatus::default());
+        assert_eq!(alva.refresh_if_connected().await, None);
+        assert_eq!(alva.disconnect().await, Ok(()));
+        assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
+
+        assert_eq!(secrets.calls.load(Ordering::SeqCst), 0, "SecretStore");
+        assert_eq!(hits.load(Ordering::SeqCst), 0, "HTTP");
+    }
+
+    #[tokio::test]
+    async fn a_marker_without_a_pair_is_dropped_on_the_first_read() {
+        let _serial = SERIAL.lock().await;
+        let (api, hits) = counting_api();
+        let (store, secrets) = store_with(MemSecrets::default()).await;
+        let alva = Alvanista::new(Client::with_api(api, store));
+        alva.store().start_session(&tokens("m4")).await.unwrap();
+        // O chaveiro foi limpo por fora do ReEmu.
+        secrets.secrets.lock().unwrap().clear();
+
+        assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
+        assert!(!alva.store().has_session().await.unwrap());
+        // Dali em diante, nem o chaveiro.
+        secrets.calls.store(0, Ordering::SeqCst);
+        assert_eq!(alva.refresh_if_connected().await, None);
+        assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
+        assert_eq!(secrets.calls.load(Ordering::SeqCst), 0);
+        assert_eq!(hits.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn offline_the_app_opens_with_the_right_profile() {
+        let _serial = SERIAL.lock().await;
+        // Porta fechada: sem rede.
+        let alva = alva_against("http://127.0.0.1:9".into()).await;
+
+        // Sem sessão: nada do Alvanista (a tela fica com o perfil local).
+        assert_eq!(alva.refresh_if_connected().await, None);
+        assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
+
+        // Conectado: o último perfil guardado, inteiro, como offline.
+        alva.store().start_session(&tokens("m5")).await.unwrap();
+        alva.store().mirror_put(&me_full("toy")).await.unwrap();
+        let cached = alva.cached_status().await;
+        assert!(cached.connected && !cached.offline, "{cached:?}");
+        let boot = alva.refresh_if_connected().await.unwrap();
+        assert!(boot.connected && boot.offline && !boot.ended, "{boot:?}");
+        for st in [&cached, &boot] {
+            assert_eq!(st.username.as_deref(), Some("toy"));
+            assert_eq!(
+                st.avatar_url.as_deref(),
+                Some("https://cdn.alvanista.com/a/toy.png")
+            );
+            assert_eq!(st.bio.as_deref(), Some("bio de toy"));
+            assert_eq!(
+                st.hero_url.as_deref(),
+                Some("https://cdn.alvanista.com/h/toy.png")
+            );
+        }
+        // Sem rede a sessão continua.
+        assert!(alva.store().has_session().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn disconnect_gives_back_the_local_profile_exactly_as_it_was() {
+        use domain::profile::{Profile, ProfileRepository};
+        let _serial = SERIAL.lock().await;
+        let (api, _) = counting_api_with(200);
+        let (store, _, db) = store_and_db(MemSecrets::default()).await;
+        let profiles = db::ProfileRepo::new(db);
+        profiles
+            .update(&Profile {
+                name: "Local".into(),
+                bio: Some("bio local".into()),
+                avatar: "preset:3".into(),
+                onboarded: true,
+            })
+            .await
+            .unwrap();
+        let before = profiles.get().await.unwrap();
+
+        let alva = Alvanista::new(Client::with_api(api, store));
+        alva.store().start_session(&tokens("m6")).await.unwrap();
+        alva.store().mirror_put(&me_full("toy")).await.unwrap();
+        assert_eq!(profiles.get().await.unwrap(), before, "conectado");
+
+        assert_eq!(alva.disconnect().await, Ok(()));
+        assert_eq!(profiles.get().await.unwrap(), before, "desconectado");
+        assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
+        assert!(!alva.store().has_session().await.unwrap());
+        assert_eq!(alva.store().mirror_get().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn disconnect_with_a_keyring_that_refuses_the_delete_still_drops_the_marker() {
+        let _serial = SERIAL.lock().await;
+        // O servidor confirma a revogação; o chaveiro não deixa apagar.
+        let (api, _) = counting_api_with(200);
+        let (store, secrets) = store_with(MemSecrets::default()).await;
+        let alva = Alvanista::new(Client::with_api(api, store));
+        alva.store().start_session(&tokens("m7")).await.unwrap();
+        secrets.readonly.store(true, Ordering::SeqCst);
+        assert_eq!(alva.disconnect().await, Ok(()));
+        assert!(!alva.store().has_session().await.unwrap());
+        // E a próxima abertura não lê o chaveiro.
+        secrets.calls.store(0, Ordering::SeqCst);
+        assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
+        assert_eq!(secrets.calls.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn a_session_from_before_the_marker_shows_up_once_the_migration_marks_it() {
+        let _serial = SERIAL.lock().await;
+        let (store, _, db) = store_and_db(MemSecrets::default()).await;
+        let alva = Alvanista::new(Client::with_api("http://127.0.0.1:9".into(), store));
+        // Build de pré-lançamento: par e espelho gravados, sem marcador.
+        alva.store().save_tokens(&tokens("m8")).await.unwrap();
+        alva.store().mirror_put(&me_named("toy")).await.unwrap();
+        assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
+        // O que a migration 0019 faz num banco desses.
+        mark_session(&db).await;
+        let st = alva.cached_status().await;
+        assert!(st.connected, "{st:?}");
+        assert_eq!(st.username.as_deref(), Some("toy"));
     }
 
     #[test]
