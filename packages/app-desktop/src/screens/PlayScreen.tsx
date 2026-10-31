@@ -247,6 +247,7 @@ const useStyles = makeStyles({
     boxShadow: tokens.shadow16,
   },
   splashTitle: {
+    fontFamily: "var(--reemuFontDisplay)",
     fontSize: "22px",
     fontWeight: 700,
     textAlign: "center",

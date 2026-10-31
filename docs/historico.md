@@ -3301,3 +3301,5 @@ Infra:
 - **CI:** um job falhou por falta de disco no servidor; o cache do GitHub Actions foi limpo a pedido do usuário.
 - **Configurações do core:** nova tela em Configurações › Cores, com informações e opções para todos os jogos do core; o ajuste do jogo tem prioridade. As opções só aparecem depois da primeira execução, porque é ao carregar um jogo que o ReEmu as grava. O usuário decidiu manter assim, com um aviso na tela, em vez de capturá-las sem jogo pelo `--probe`.
 - **Menu de pausa e avisos:** as ações do menu de pausa mostram o nome, porque na TV não há tooltip. Os avisos usam a superfície dos menus e ficam abaixo da barra superior, sem cobrir o relógio.
+- **Fontes como no dashboard do Xbox Series:** título em DIN (Bahnschrift, identificada pela aparência) com seção em negrito e página em regular; corpo, botões e nomes de jogo em regular; só a aba ativa em negrito. Padrão em `18-experiencia-console-tv.md`.
+- **Cards das subcategorias:** dividem a largura útil em partes iguais.

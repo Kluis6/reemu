@@ -52,6 +52,7 @@ const useStyles = makeStyles({
   titleLg: {
     // sem a margem padrão do `<h2>`, que afastava a frase de baixo
     margin: 0,
+    fontFamily: 'var(--reemuFontDisplay)',
     fontSize: tokens.fontSizeHero800,
     lineHeight: tokens.lineHeightHero800,
     fontWeight: tokens.fontWeightSemibold,

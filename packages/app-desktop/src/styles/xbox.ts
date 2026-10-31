@@ -415,14 +415,14 @@ export const useShellStyles = makeStyles({
   // UI Variable (48 × 14). Em px da tela de referência: o zoom da interface
   // (`lib/uiScale.ts`) escala junto com o resto em outros tamanhos de tela.
   clock: {
-    // Centralizado pela caixa, o texto ficava 1 px abaixo do centro dos
-    // botões ao lado (medido numa réplica a 1366×768); no Xbox fica 0,5.
+    // Centralizado pela caixa, a DIN fica acima do centro dos botões ao lado.
     position: "relative",
-    top: "-1px",
+    top: "1px",
     color: tokens.colorNeutralForeground1,
     fontVariantNumeric: "tabular-nums",
+    fontFamily: "var(--reemuFontDisplay)",
     fontSize: "20px",
-    fontWeight: tokens.fontWeightRegular,
+    fontWeight: tokens.fontWeightSemibold,
     lineHeight: 1,
     letterSpacing: "0.01em",
   },
@@ -882,7 +882,7 @@ export const useCardStyles = makeStyles({
   },
   titleText: {
     fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightSemibold,
+    fontWeight: tokens.fontWeightRegular,
     lineHeight: 1.2,
     color: "#ffffff",
     display: "-webkit-box",
@@ -1187,7 +1187,7 @@ export const useDetailStyles = makeStyles({
   },
   heroNoArtTitle: {
     color: tokens.colorNeutralForeground1,
-    fontWeight: tokens.fontWeightSemibold,
+    fontWeight: tokens.fontWeightRegular,
     fontSize: "14px",
     lineHeight: 1.25,
     overflowWrap: "anywhere",
@@ -1223,7 +1223,7 @@ export const useDetailStyles = makeStyles({
   platform: {
     display: "block",
     fontSize: tokens.fontSizeBase300,
-    fontWeight: 600,
+    fontWeight: tokens.fontWeightRegular,
     letterSpacing: "0.02em",
     // mesma cor do título do jogo (branco sobre o `heroScrim`, em qualquer
     // tema) — pedido do usuário; antes era a cor de marca do tema
@@ -1232,6 +1232,7 @@ export const useDetailStyles = makeStyles({
   },
   title: {
     // Título da página de jogo do app Xbox: ~36 epx, semibold.
+    fontFamily: "var(--reemuFontDisplay)",
     fontSize: "36px",
     fontWeight: tokens.fontWeightSemibold,
     lineHeight: 1.2,
@@ -1404,7 +1405,7 @@ export const useDetailStyles = makeStyles({
     // Abas → painel: 24, como nas outras abas do app.
     rowGap: "24px",
   },
-  sectionTitle: { fontSize: "16px", fontWeight: 700, margin: 0 },
+  sectionTitle: { fontSize: "16px", fontWeight: tokens.fontWeightSemibold, margin: 0 },
   panel: {
     display: "flex",
     flexDirection: "column",
@@ -1683,7 +1684,12 @@ export const usePauseStyles = makeStyles({
     paddingLeft: "22px",
     paddingRight: "22px",
   },
-  title: { fontSize: "18px", fontWeight: 700, margin: "8px 0 6px" },
+  title: {
+    fontFamily: "var(--reemuFontDisplay)",
+    fontSize: "18px",
+    fontWeight: tokens.fontWeightSemibold,
+    margin: "8px 0 6px",
+  },
   // Abas só de ícone no topo, com LB/RB (ou Q/E) nas pontas como no guia
   // do Xbox; separadas do conteúdo por um traço.
   tabsRow: {
@@ -1823,7 +1829,11 @@ export const useTabStyles = makeStyles({
     },
     "& .fui-Tab__content": {
       ...TAB_STATES["& .fui-Tab__content"],
-      fontWeight: tokens.fontWeightSemibold,
+      fontWeight: tokens.fontWeightRegular,
+    },
+    // como no console: só a aba ativa em negrito
+    '& .fui-Tab[aria-selected="true"] .fui-Tab__content': {
+      fontWeight: tokens.fontWeightBold,
     },
     "& .fui-Tab::after": {
       left: "3px",

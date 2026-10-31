@@ -192,7 +192,12 @@ export interface SettingsHubItem {
 export function SettingsHubCards({ items, label }: { items: SettingsHubItem[]; label: string }) {
   const s = useStyles();
   return (
-    <nav className={mergeClasses(s.grid, s.subGrid)} aria-label={label}>
+    // os cards dividem a largura útil da página em partes iguais
+    <nav
+      className={mergeClasses(s.grid, s.subGrid)}
+      style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
+      aria-label={label}
+    >
       {items.map((it, i) => (
         <Link key={it.to} to={it.to} className={s.card} style={{ animationDelay: `${i * 30}ms` }}>
           <span className={s.icon}>{it.icon}</span>

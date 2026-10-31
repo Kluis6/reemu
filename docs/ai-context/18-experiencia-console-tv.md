@@ -183,6 +183,15 @@ e dados de terceiros, então não devem ser publicadas. Medidas aproximadas nas 
 - **Painel de perfil:** banner com imagem no topo, avatar grande, nome, medalhas em uma
   fileira e lista de ações em linhas grandes; abre sobre o guia e deixa o resto escuro.
 
+**Padrão de fontes do dashboard (2026-10-31, nas 27 capturas e em 12 quadros dos vídeos),
+identificado pela aparência, sem fonte escrita:**
+
+- **Título de página:** fonte DIN, seção em negrito e página em regular, na mesma cor. O ReEmu
+  usa a Bahnschrift, a DIN do Windows; no Linux cai na Selawik.
+- **Corpo:** Segoe em regular, inclusive botões, listas, blocos, títulos de grupo e nomes de jogo
+  nos cards. O secundário é regular com cor apagada.
+- **Negrito ou semibold:** só aba ativa, título de painel e título de seção.
+
 ### 1. Tirar os becos sem saída
 
 Os itens "(confirmar)" são deduções da leitura do código: começar por um roteiro

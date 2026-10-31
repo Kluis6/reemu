@@ -669,7 +669,9 @@ function segoeVariable(base: string): { text: string; display: string } {
   const rest = `'Segoe UI', 'Selawik', ${base}`;
   return {
     text: `'Segoe UI Variable Text', ${rest}`,
-    display: `'Segoe UI Variable Display', ${rest}`,
+    // Títulos como no dashboard do Xbox Series: DIN, que no Windows é a Bahnschrift
+    // (identificada pela aparência, sem fonte escrita).
+    display: `'Bahnschrift', 'Segoe UI Variable Display', ${rest}`,
   };
 }
 

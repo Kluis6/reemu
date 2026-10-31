@@ -95,6 +95,7 @@ const useStyles = makeStyles({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    fontFamily: 'var(--reemuFontDisplay)',
     fontSize: '72px',
     fontWeight: tokens.fontWeightBold,
     letterSpacing: '0.03em',

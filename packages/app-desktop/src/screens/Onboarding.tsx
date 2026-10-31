@@ -119,6 +119,7 @@ const useStyles = makeStyles({
   // "Bem-vindo" no idioma escolhido, em destaque no lugar do logo; entra de
   // novo (fade) a cada troca de idioma
   helloWord: {
+    fontFamily: 'var(--reemuFontDisplay)',
     fontSize: tokens.fontSizeHero1000,
     lineHeight: tokens.lineHeightHero1000,
     fontWeight: tokens.fontWeightSemibold,
@@ -197,6 +198,7 @@ const useStyles = makeStyles({
     ...noMotion,
   },
   doneTitle: {
+    fontFamily: 'var(--reemuFontDisplay)',
     fontSize: tokens.fontSizeHero1000,
     lineHeight: tokens.lineHeightHero1000,
     fontWeight: tokens.fontWeightSemibold,

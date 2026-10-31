@@ -57,9 +57,10 @@ const useStyles = makeStyles({
   },
   crumbButton: {
     fontSize: tokens.fontSizeHero700,
+    // Título do console: seção em negrito e página em regular, na mesma cor.
     fontFamily: "var(--reemuFontDisplay)",
     lineHeight: tokens.lineHeightHero700,
-    fontWeight: tokens.fontWeightSemibold,
+    fontWeight: tokens.fontWeightBold,
     height: "auto",
     // sem o padding vertical do botão: a caixa tem a altura do texto e a
     // distância até os cards é só o `rowGap` da página (20, XL) — com ele
@@ -67,10 +68,10 @@ const useStyles = makeStyles({
     paddingTop: "0 !important",
     paddingBottom: "0 !important",
     whiteSpace: "nowrap",
-    color: tokens.colorNeutralForeground3,
-    ":hover": { color: tokens.colorNeutralForeground1 },
+    color: tokens.colorNeutralForeground1,
   },
   crumbCurrent: { color: `${tokens.colorNeutralForeground1} !important` },
+  crumbPage: { fontWeight: tokens.fontWeightRegular },
   bodyPage: {
     flexGrow: 1,
     minWidth: 0,
@@ -221,7 +222,11 @@ export function SettingsLayout() {
                   </BreadcrumbButton>
                 ) : (
                   <BreadcrumbButton
-                    className={mergeClasses(styles.crumbButton, styles.crumbCurrent)}
+                    className={mergeClasses(
+                      styles.crumbButton,
+                      styles.crumbCurrent,
+                      i > 0 && styles.crumbPage,
+                    )}
                     current
                   >
                     {c.label}

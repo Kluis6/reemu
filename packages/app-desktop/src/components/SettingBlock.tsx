@@ -7,7 +7,6 @@ import {
   MenuList,
   MenuPopover,
   MenuTrigger,
-  Subtitle2,
   Switch,
   makeStyles,
   mergeClasses,
@@ -82,7 +81,7 @@ export function BlockGroup({ title, children }: { title?: string; children: Reac
   const s = useStyles();
   return (
     <section className={s.group}>
-      {title && <Subtitle2 as="h3" style={{ margin: 0 }}>{title}</Subtitle2>}
+      {title && <Body1 as="h3" style={{ margin: 0 }}>{title}</Body1>}
       <div className={s.grid}>{children}</div>
     </section>
   );

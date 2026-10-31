@@ -79,7 +79,7 @@ const useLocalStyles = makeStyles({
   },
   noArtTitle: {
     color: tokens.colorNeutralForeground1,
-    fontWeight: tokens.fontWeightSemibold,
+    fontWeight: tokens.fontWeightRegular,
     // texto principal: mínimo de 15 epx do guia de TV
     fontSize: "15px",
     lineHeight: 1.25,

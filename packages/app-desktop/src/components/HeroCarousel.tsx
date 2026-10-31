@@ -97,7 +97,7 @@ const useStyles = makeStyles({
   // junto (senão "Continuar"/"Destaque" minúsculo ficava esparramado).
   kicker: {
     fontSize: tokens.fontSizeBase200,
-    fontWeight: tokens.fontWeightBold,
+    fontWeight: tokens.fontWeightRegular,
     letterSpacing: '0.02em',
     // Mesma cor do nome do jogo (o branco do `body`, sobre o véu escuro da
     // arte), em qualquer tema — pedido do usuário; antes era a cor de marca.
@@ -107,7 +107,7 @@ const useStyles = makeStyles({
     // "Title" da rampa tipográfica do Windows (28 epx).
     fontSize: '28px',
     fontFamily: 'var(--reemuFontDisplay)',
-    fontWeight: tokens.fontWeightBold,
+    fontWeight: tokens.fontWeightRegular,
     lineHeight: 1.12,
     margin: '4px 0 2px',
     // no máximo 2 linhas (com "…"): nome muito comprido subia até a seta da

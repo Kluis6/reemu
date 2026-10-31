@@ -297,10 +297,9 @@ html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
   box-shadow: none !important;
 }
 
-/* Títulos na Segoe UI Variable Display (a rampa tipográfica do Windows 11
-   usa "Display semibold" do Subtitle, 20 px, pra cima; o corpo fica na
-   Text — `fontFamilyBase`, ver `segoeVariable` em styles/themes.ts). */
-.fui-Subtitle1,
+/* Títulos na fonte de título do app (`reemuFontDisplay`, DIN como no dashboard
+   do console). Nome de bloco e de card (`Subtitle1`) fica na do corpo, como
+   "Sound" nas capturas (ver `segoeVariable` em styles/themes.ts). */
 .fui-Title3,
 .fui-Title2,
 .fui-Title1,
@@ -490,4 +489,10 @@ html[data-nav-focus] .reemu-block :is(.fui-Switch, .fui-Slider):focus-within {
 *::-webkit-scrollbar-thumb {
   background-color: var(--colorNeutralStroke2);
   border-radius: var(--borderRadiusCircular);
+}
+
+/* Pesos como no dashboard do console (capturas e vídeos de referência): texto de
+   botão regular, inclusive no botão principal. O semibold fica para títulos. */
+:is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):not(.fui-BreadcrumbButton) {
+  font-weight: var(--fontWeightRegular) !important;
 }
