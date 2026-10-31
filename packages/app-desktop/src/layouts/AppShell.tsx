@@ -160,7 +160,7 @@ export function AppShell() {
 
   const hints = useNavHints(() => scrollRef.current);
   return (
-    <div className={s.app}>
+    <div className={mergeClasses("reemu-app", s.app)}>
       {/* Papel de parede: só na tela inicial ou em todas as telas (escolha em
           Aparência › Papel de parede); nunca na página do jogo, que tem a
           arte do jogo no hero. */}
@@ -188,12 +188,11 @@ export function AppShell() {
         </Button>
 
         {RAIL.map((it) => (
+          <Tooltip key={it.to} positioning={TOOLTIP_POSITION} content={t(it.label)} relationship="label">
           <NavLink
-            key={it.to}
             to={it.to}
             end={it.end}
             className={mergeClasses(s.railItem, l.railRadius)}
-            title={t(it.label)}
             aria-label={
               it.to === "/settings" && pendingCount > 0
                 ? t("shell.pendingMetadata", {
@@ -218,6 +217,7 @@ export function AppShell() {
               </>
             )}
           </NavLink>
+          </Tooltip>
         ))}
         <div className={s.railSpacer} />
 
@@ -246,7 +246,7 @@ export function AppShell() {
       <ShaderFailureDialog />
 
       <div className={s.main}>
-        <div className={s.topbar}>
+        <div className={s.topbar} data-nav-topbar>
           {!atRoot && (
             <Tooltip positioning={TOOLTIP_POSITION} content={t("shell.backTooltip")} relationship="label">
               <Button
@@ -308,7 +308,7 @@ export function AppShell() {
           <NetworkStatus />
           <Clock />
         </div>
-        <div className={s.scroll} ref={scrollRef} data-nav-content>
+        <div className={s.scroll} ref={scrollRef} data-nav-content={pathname.startsWith("/rom/") ? "bleed" : ""}>
           <RouteTransition
             routeKey={pathname.startsWith("/settings") ? "/settings" : pathname}
           >

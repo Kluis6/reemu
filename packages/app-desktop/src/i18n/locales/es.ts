@@ -94,6 +94,13 @@ const es: Messages = {
     es: 'Español',
   },
   appearance: {
+    overscan: {
+      title: 'Margen de TV',
+      description: 'Aleja la interfaz de los bordes en pantalla completa si tu TV recorta la imagen.',
+      none: 'Ninguno',
+      small: 'Pequeño (2,5 %)',
+      large: 'Grande (5 %)',
+    },
     uiScale: {
       title: 'Tamaño de la interfaz',
       description:

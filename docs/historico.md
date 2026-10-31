@@ -3267,3 +3267,16 @@ Infra:
 - **Mouse e controle:** com o controle em uso, somem cursor, hover e botão Voltar; mexer o mouse, clicar ou rolar traz de volta.
 - **Teclado virtual:** campos numéricos abrem o teclado, e a camada de símbolos ganhou `@ _ \ # $ % = " * ; [ ]`.
 - **Não testado:** controle físico (LT, RT e View reais); os testes no navegador simulam os pulsos.
+
+## 2026-10-30 — Capturas de referência do Xbox
+
+- **Fonte:** imagens enviadas pelo dono do projeto, em `docs/design/screenshots/referencia-xbox/`, fora do git, porque algumas têm conversas e dados de terceiros.
+- **Registro:** medidas e padrões no doc 18, etapa 0. Servem de base para as configurações, o teclado virtual e o drawer de perfil.
+
+## 2026-10-30 — Fase 3: escala igual à do app Xbox
+
+- **1ª versão, desfeita no teste do dono do projeto:** perfis TV e PC, com texto de 21 epx e controles de 44 epx na TV, a partir dos 30 px da Microsoft ("Designing for Xbox and TV"). Na largura de 2000, a barra lateral foi de 107 no app Xbox para 150, e o texto de ~22 para ~30.
+- **Decisão:** as capturas mostram as mesmas proporções em janela e no modo Xbox, e o layout de referência do projeto é o do app. Uma escala só: `zoom = max(1, min(L/1280, A/720))` vezes a preferência. A base era 1366×768 e deixava tudo ~6,5% menor que as capturas; a de 1280×720 fica a até 3%. O conteúdo chegou a ficar centralizado com 1000 de largura lógica, como nas capturas, mas o usuário pediu menos espaço lateral no teste: voltou à margem da página (47 lógicos), em todas as telas, e o alinhamento da topbar pedido em 2026-10-11 se mantém.
+- **Janela menor que 1366×768:** o zoom para em 1 e a tela se reorganiza, sem encolher o texto. Busca que encolhe, carrossel mais baixo em tela baixa e a linha de Shaders que quebrava foram mantidos.
+- **Margem da TV:** opcional, só em tela cheia, 0 por padrão; os itens recuam e os fundos vão até a borda.
+- **Vídeo:** a janela nativa usa o tamanho físico da janela do app e o `<canvas>` mede em pixels do dispositivo, então nenhum depende do zoom pela leitura do código. Falta confirmar no app e medir com o `perf-capture`.

@@ -30,7 +30,7 @@ const useStyles = makeStyles({
   // inferior direito do card, como no app Xbox (pedido do usuário,
   // 2026-10-11 — antes a página encolhia 56 px pra ela).
   root: {
-    height: `calc(100vh - var(--reemuPageTop, ${M.PAGE_TOP}px) - ${M.SAFE_Y}px)`,
+    height: `calc(100vh - var(--reemuOverscan, 0) * 1vh - var(--reemuPageTop, ${M.PAGE_TOP}px) - ${M.SAFE_Y}px)`,
     marginBottom: `-${M.PAGE_PAD_B - M.SAFE_Y}px`,
     minHeight: "240px",
   },

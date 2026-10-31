@@ -95,6 +95,13 @@ const ptBR = {
     es: 'Español',
   },
   appearance: {
+    overscan: {
+      title: 'Margem da TV',
+      description: 'Afasta a interface das bordas em tela cheia, se a sua TV corta a imagem.',
+      none: 'Nenhuma',
+      small: 'Pequena (2,5%)',
+      large: 'Grande (5%)',
+    },
     uiScale: {
       title: 'Tamanho da interface',
       description:

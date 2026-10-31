@@ -38,6 +38,7 @@ apps/mobile/src-tauri/gen/android/local.properties
 # docs/design/xbox-mode-reference.md descreve os padrões por escrito.
 /docs/design/screenshots/*.png
 /docs/design/screenshots/*.jpg
+/docs/design/screenshots/referencia-xbox/
 # Vídeos do dashboard do Xbox, só para consulta local (conteúdo de terceiros)
 /videosxbox/
 

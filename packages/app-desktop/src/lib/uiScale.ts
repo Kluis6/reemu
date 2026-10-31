@@ -16,10 +16,18 @@
 // dimensão, que o layout preenche (mais cards por fileira, mais linhas).
 //
 // A preferência em Configurações › Sistema só multiplica esse zoom.
+//
+// Janela menor que a tela lógica não encolhe: o zoom para em 1 e a tela se
+// reorganiza. Janela maior escala igual em tela cheia e em janela, como o app Xbox
+// (capturas de 2026-10-30, ver docs/ai-context/18-experiencia-console-tv.md). O vídeo
+// do jogo não depende do zoom: a janela nativa usa o tamanho físico da janela do
+// app, e o `<canvas>` mede em pixels do dispositivo.
 
 /** Tela lógica de referência do Xbox, em epx. */
-export const BASE_W = 1366
-export const BASE_H = 768
+// 1280×720, e não 1366×768: nas capturas de 2026-10-30 (4K), barra lateral, busca,
+// texto e cards do app Xbox batem com esta base, com diferença de até 3%.
+export const BASE_W = 1280
+export const BASE_H = 720
 
 // `label` = chave de tradução (i18n).
 export const UI_SCALES = [
@@ -40,12 +48,40 @@ export function getUiScale(): number {
   }
 }
 
-/** Zoom que encaixa a tela lógica de 1366×768 epx numa janela de `w`×`h` px
- *  lógicos (já sem a escala de DPI do sistema), vezes a preferência. */
+const OVERSCAN_KEY = 'reemu.overscan'
+
+/** Margem contra o corte das bordas de uma TV, em % da tela. */
+export const OVERSCANS = [
+  { value: 0, label: 'appearance.overscan.none' },
+  { value: 2.5, label: 'appearance.overscan.small' },
+  { value: 5, label: 'appearance.overscan.large' },
+] as const
+
+export function getOverscan(): number {
+  try {
+    const v = Number(localStorage.getItem(OVERSCAN_KEY))
+    return OVERSCANS.some((o) => o.value === v) ? v : 0
+  } catch {
+    return 0
+  }
+}
+
+let isFullscreen = false
+
+/** Em janela, a margem não faz sentido: só a tela cheia pode ser cortada pela TV. */
+function applyOverscan() {
+  document.documentElement.style.setProperty(
+    '--reemuOverscan',
+    String(isFullscreen ? getOverscan() : 0),
+  )
+}
+
+/** Zoom de uma janela de `w`×`h` px lógicos (já sem a escala de DPI do sistema):
+ *  encaixa a tela lógica de 1366×768 epx quando ela cabe, sem encolher abaixo
+ *  dela, vezes a preferência. */
 export function fitZoom(w: number, h: number, user: number): number {
-  const fit = Math.min(w / BASE_W, h / BASE_H)
-  // Piso só pra janela minúscula não virar zoom ~0 (texto ilegível).
-  return Math.max(0.5, fit * user)
+  const fit = Math.max(1, Math.min(w / BASE_W, h / BASE_H))
+  return fit * user
 }
 
 // Reaplica o zoom pro tamanho atual da janela. `null` fora do Tauri.
@@ -63,7 +99,13 @@ export async function startUiScale(): Promise<void> {
   const webview = getCurrentWebview()
   let current = 0
   reapply = async () => {
-    const [size, sf] = await Promise.all([win.innerSize(), win.scaleFactor()])
+    const [size, sf, fullscreen] = await Promise.all([
+      win.innerSize(),
+      win.scaleFactor(),
+      win.isFullscreen(),
+    ])
+    isFullscreen = fullscreen
+    applyOverscan()
     const z = fitZoom(size.width / sf, size.height / sf, getUiScale())
     // Arredonda pra não refazer o layout por diferenças de arredondamento.
     if (Math.abs(z - current) < 0.005) return
@@ -82,4 +124,13 @@ export async function setUiScale(scale: number): Promise<void> {
     // sem storage: vale só até fechar o app
   }
   await reapply?.()
+}
+
+export function setOverscan(percent: number) {
+  try {
+    localStorage.setItem(OVERSCAN_KEY, String(percent))
+  } catch {
+    // sem storage: vale só até fechar o app
+  }
+  applyOverscan()
 }

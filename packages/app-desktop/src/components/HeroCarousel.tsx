@@ -27,6 +27,8 @@ const useStyles = makeStyles({
     // pouco: o destaque e a 1ª fileira de jogos aparecem juntos na tela de
     // referência (768 epx).
     height: '288px',
+    // janela baixa: os jogos continuam aparecendo sem rolar
+    '@media (max-height: 700px)': { height: '220px' },
     borderRadius: tokens.borderRadiusMedium,
     backgroundImage: 'linear-gradient(135deg, #1a1a1f 0%, #101014 100%)',
     // viewport/slider/card do `Carousel` ocupam a altura toda. O recorte

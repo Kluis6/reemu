@@ -26,7 +26,7 @@ export function ButtonHints({
   if (!connected || hints.length === 0) return null
   const color: Partial<Record<Glyph, string>> = { A: s.a, B: s.b, X: s.x, Y: s.y }
   return (
-    <div className={mergeClasses(s.hints, centered && s.hintsCentered)}>
+    <div className={mergeClasses('reemu-hints', s.hints, centered && s.hintsCentered)}>
       {hints.map((h) => (
         <span key={h.glyph} className={s.hint}>
           {h.glyph === 'MENU' ? (

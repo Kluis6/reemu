@@ -440,3 +440,31 @@ html[data-nav-focus] .reemu-nav-back {
   outline-offset: 3px;
   box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent);
 }
+
+/* Margem opcional contra o corte das bordas da TV, em tela cheia: só os itens recuam, e os fundos vão até a
+   borda (Microsoft, "Designing for Xbox and TV", TV-safe area). A página do jogo fica
+   sem o recuo do conteúdo, porque a arte dela vai de ponta a ponta. */
+html .reemu-app {
+  --reemuInsetX: calc(var(--reemuOverscan, 0) * 1vw);
+  --reemuInsetY: calc(var(--reemuOverscan, 0) * 1vh);
+  grid-template-columns: calc(var(--reemuRailW) + var(--reemuInsetX)) 1fr;
+}
+html nav[data-nav-rail] {
+  padding-left: var(--reemuInsetX);
+  padding-top: calc(15px + var(--reemuInsetY));
+  padding-bottom: calc(15px + var(--reemuInsetY));
+}
+html [data-nav-topbar] {
+  padding-top: calc(32px + var(--reemuInsetY));
+  padding-right: calc(47px + var(--reemuInsetX));
+}
+/* A lista vai até a borda da tela e a folga fica por dentro dela: com margem, os
+   cards eram cortados numa linha antes da borda. */
+html [data-nav-content=""] {
+  padding-right: calc(var(--reemuScrollPadR) + var(--reemuInsetX));
+  padding-bottom: calc(var(--reemuScrollPadB) + var(--reemuInsetY));
+  scroll-padding-bottom: calc(var(--reemuScrollPadB) + var(--reemuInsetY));
+}
+html .reemu-hints {
+  transform: translate(calc(-1 * var(--reemuInsetX)), calc(-1 * var(--reemuInsetY)));
+}

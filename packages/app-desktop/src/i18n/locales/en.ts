@@ -94,6 +94,13 @@ const en: Messages = {
     es: 'Español',
   },
   appearance: {
+    overscan: {
+      title: 'TV margin',
+      description: 'Moves the interface away from the edges in full screen if your TV crops the picture.',
+      none: 'None',
+      small: 'Small (2.5%)',
+      large: 'Large (5%)',
+    },
     uiScale: {
       title: 'Interface size',
       description:

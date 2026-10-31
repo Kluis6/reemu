@@ -33,7 +33,14 @@ import {
   type SystemSettings,
 } from "../../lib/tauri";
 import { errorToast } from "../../lib/toast";
-import { UI_SCALES, getUiScale, setUiScale } from "../../lib/uiScale";
+import {
+  OVERSCANS,
+  UI_SCALES,
+  getOverscan,
+  getUiScale,
+  setOverscan,
+  setUiScale,
+} from "../../lib/uiScale";
 import { useToastStore } from "../../stores/useToastStore";
 import {
   DesktopTowerRegular,
@@ -132,6 +139,7 @@ export function SettingsSystem({
     getLanguagePreference,
   );
   const [uiScale, setUiScaleState] = useState(getUiScale);
+  const [overscan, setOverscanState] = useState(getOverscan);
 
   const settings = useQuery({
     queryKey: ["system-settings"],
@@ -288,6 +296,27 @@ export function SettingsSystem({
                   value={String(o.value)}
                   label={`${t(o.label)} (${Math.round(o.value * 100)}%)`}
                 />
+              ))}
+            </RadioGroup>
+          </section>
+
+          <section className={mergeClasses(s.section, s.card)}>
+            <Heading
+              title={t("appearance.overscan.title")}
+              description={t("appearance.overscan.description")}
+            />
+            <RadioGroup
+              layout="horizontal"
+              aria-label={t("appearance.overscan.title")}
+              value={String(overscan)}
+              onChange={(_, data: RadioGroupOnChangeData) => {
+                const v = Number(data.value);
+                setOverscanState(v);
+                setOverscan(v);
+              }}
+            >
+              {OVERSCANS.map((o) => (
+                <Radio key={o.value} value={String(o.value)} label={t(o.label)} />
               ))}
             </RadioGroup>
           </section>

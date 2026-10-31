@@ -110,8 +110,8 @@ Etapas 1 e 2 do doc 18, com uma camada única de foco (zonas e memória por tela
 
 ### Fase 3 — Densidade e tokens
 
-Etapa 3 do doc 18, mais os tokens de design para tamanhos, foco e fundo escurecido.
-O layout e os cards atuais ficam. **Exige aviso** por causa da `uiScale.ts`.
+Etapa 3 do doc 18: escala igual à do app Xbox, sem perfis separados. Tokens de design
+ficam para a fase 4. **Exige aviso** por causa da `uiScale.ts`.
 
 ### Fase 4 — Configurações no modelo do console
 

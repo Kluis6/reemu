@@ -94,9 +94,7 @@ Medido com o zoom desligado e sem texto maior (`ui-smoke.py`, `ui-render.py`):
 
 ## Decisões
 
-- **Mesmos layout e componentes, com dois perfis de densidade (TV e PC).**
-  Nasceu como "uma interface só", mas o texto que serve para a TV fica grande
-  demais num monitor.
+- **Uma escala só, a do app Xbox.** Sem perfis TV e PC separados (ver etapa 3).
 - **Barra lateral fica:** segue o modelo do app Xbox para Windows e foi pedida
   pelo dono do projeto. O acesso rápido do console fica de fora.
 - **Comportamento primeiro, visual depois:** as etapas 1 e 2 sustentam o resto.
@@ -159,6 +157,32 @@ direita, descrição junto da opção e rótulos sempre visíveis. Menu de conte
 virtual seguem as observações acima. A elevação de menus vem de contorno e fundo
 escurecido, sem sombra forte.
 
+**Capturas do dono do projeto (2026-10-30), em
+`docs/design/screenshots/referencia-xbox/`, fora do git:** algumas mostram conversas
+e dados de terceiros, então não devem ser publicadas. Medidas aproximadas nas imagens:
+
+- **App Xbox no Windows (layout do ReEmu):** barra lateral ~5,3% da largura, com itens
+  de ícone, ~4% × 6,7%. Busca centralizada em ~39%. Conteúdo com colunas de ~14% e vão
+  de ~1,7%, 5 cards por fileira. Abas com sublinhado, filtros em pílulas e aviso do filtro
+  ativo com X. Painel de amigos à esquerda, com fundo escurecido. No modo Xbox, relógio no
+  canto e opção de sair do modo.
+- **Configurações do console (modelo dos menus):** fundo liso escuro, sem imagem. Título em
+  duas partes, seção em negrito e página em regular. Sem coluna fixa nas subpáginas.
+  Blocos com ~22% × 8,5% da tela, vão vertical de ~1,5% e colunas a ~3,5%. Grupos com
+  título acima. Bloco claro sobre o fundo; em foco, fica mais claro e ganha contorno de ~4 px
+  na cor de destaque, com brilho.
+- **Tipos de bloco:** caixa de seleção à direita; seta para baixo à direita, com rótulo e
+  valor em duas linhas; bloco só de texto com descrição, inclusive maior e sem foco; slider
+  dentro do bloco, com marcas e rótulos nas pontas, e o foco contorna o bloco inteiro. Item
+  desativado com texto apagado. A lista de um seletor abre no lugar, sobre o bloco, com o
+  item atual em foco.
+- **Área à direita:** texto de ajuda ou prévia ao vivo (cores, controle, TV).
+- **Teclado virtual:** flutuante e centralizado embaixo, deixando o campo visível, com
+  sugestões, números fixos e, com ícone: `LB`/`RB` movem o cursor, `LT` troca a camada,
+  `X` apaga, `Y` dá espaço e Menu confirma.
+- **Painel de perfil:** banner com imagem no topo, avatar grande, nome, medalhas em uma
+  fileira e lista de ações em linhas grandes; abre sobre o guia e deixa o resto escuro.
+
 ### 1. Tirar os becos sem saída
 
 Os itens "(confirmar)" são deduções da leitura do código: começar por um roteiro
@@ -192,30 +216,26 @@ com controle.
 **Pronto quando:** voltar de um jogo cair no mesmo card, e a dica na tela sempre
 corresponder ao que o botão faz.
 
-### 3. Dois perfis de densidade
+### 3. Escala igual à do app Xbox
 
-| | Perfil TV | Perfil PC |
-|---|---|---|
-| Tamanho | Tela lógica fixa, texto na medida da TV | Segue o DPI do Windows |
-| Janela menor | Não se aplica | Reorganiza a tela, sem encolher o texto |
-| Texto principal | ~30 px em 1080p | 14 px, com piso de 12 px |
-| Margem segura | 5%, ajustável | Só a margem normal |
+**Decisão de 2026-10-30, depois do teste do dono do projeto:** nada de aumentar texto e
+botões para TV. A 1ª versão seguia os 30 px da Microsoft e quebrou as proporções. As
+capturas mostram que o app Xbox mantém as mesmas proporções em janela e no modo Xbox:
+na largura de 2000, barra lateral de 107, texto de ~22, controles de ~50.
 
-- **Escolha:** automática, com opção manual no onboarding e em Configurações. O
-  automático usa TV quando o app abre em tela cheia com controle.
-- **Sem troca no meio do uso:** muda só ao abrir o app ou sair da tela cheia.
-- **Limite:** o app não tem como saber com certeza se a tela é uma TV.
-- Barra lateral com rótulos ao receber foco, na TV.
+- **Tela igual ou maior que 1280×720:** escala por igual, em janela e em tela cheia. A base
+  era 1366×768; com 1280×720, as medidas ficam a até 3% das capturas.
+- **Janela menor:** o zoom para em 1 e a tela se reorganiza, sem encolher o texto.
+- **Conteúdo com a margem lateral da página (47 lógicos), sem coluna centralizada:** pedido do
+  usuário no teste, que achou grande o espaço lateral de 106 medido nas capturas. Todas as
+  telas usam a mesma margem, e os cards crescem para preencher a fileira.
+- **Margem da TV:** opcional, em tela cheia, de 0 (padrão), 2,5% ou 5%.
+- Nomes da barra lateral em tooltip ao receber foco.
 
-Pontos de quebra do perfil PC (aplicados nas etapas 3 a 7):
+Ler de longe fica com "Tamanho da interface" (até 130%).
 
-- Abaixo de ~1100 px: cards menores e carrossel/fundo mais baixos.
-- Abaixo de ~900 px: barra lateral só com ícones, linhas de configuração
-  empilhadas.
-- Largura máxima de leitura em ultrawide, nas telas de texto e formulário.
-
-**Pronto quando:** a leitura estiver confortável numa TV real, a cerca de 3 m, em
-tema claro e escuro, e nos tamanhos de PC abaixo.
+**Pronto quando:** as proporções baterem com as capturas e a tela se reorganizar em janelas
+pequenas.
 
 ### 4. Configurações no modelo do console
 

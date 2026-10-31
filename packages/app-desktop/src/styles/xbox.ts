@@ -110,6 +110,8 @@ export const useShellStyles = makeStyles({
     // o valor (ver `.hero` em `useDetailStyles`).
     ["--reemuTopbarH" as string]: TOPBAR_CLEARANCE,
     ["--reemuPageTop" as string]: PAGE_TOP,
+    ["--reemuScrollPadR" as string]: SCROLL_PAD_R,
+    ["--reemuScrollPadB" as string]: `${M.PAGE_PAD_B}px`,
     overflowX: "hidden",
     overflowY: "hidden",
     // brilho de canto (1 camada só — multicamada quebra o WebKitGTK)
@@ -402,7 +404,10 @@ export const useShellStyles = makeStyles({
     // 500 epx, como a busca do app Xbox — centralizada na área à direita da
     // rail.
     width: `${M.SEARCH_W}px`,
-    maxWidth: "calc(100% - 160px)",
+    // Centralizada, então reserva dos dois lados o que os botões da direita ocupam:
+    // em janela estreita ela encolhe em vez de cobri-los.
+    maxWidth: "calc(100% - 480px)",
+    minWidth: "160px",
     backgroundColor: `${tokens.colorNeutralBackground2} !important`,
   },
   // Relógio do app Xbox no modo XBOX (print a 1366×768): "08:20" com 46 de
