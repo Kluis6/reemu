@@ -4,27 +4,18 @@ import {
   Field,
   Select,
   Spinner,
-  Tab,
-  TabList,
   makeStyles,
   tokens,
-  mergeClasses,
 } from '@fluentui/react-components'
 import { ArrowResetRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
 import { getCoreOptions, resetCoreOptions, setCoreOption } from '../lib/tauri'
 import { errorToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
 import { useTranslation } from 'react-i18next'
-import { useTabStyles } from '../styles/xbox'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
-  // abas no estilo do app; 24 até o conteúdo (8 do `gap` + 16). Dentro do
-  // card a aba (fundo e indicador) começa na mesma borda dos campos — sem o
-  // recuo de -15 do `useTabStyles`, que alinha só o texto (print do usuário).
-  tabs: { alignSelf: 'flex-start', marginBottom: '16px', marginLeft: 0 },
   head: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' },
   hint: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
   grid: {
@@ -39,17 +30,17 @@ const useStyles = makeStyles({
  * Opções de core **geradas do schema** que o próprio core declarou
  * (`retro_core_options*`). O schema só existe depois do core rodar uma vez.
  *
- * `romId` (opcional): habilita a aba "Este jogo" — os valores gravados ali
- * vencem os valores por core só quando essa ROM está carregada.
+ * `romId`: edita só este jogo — os valores gravados ali vencem os valores por
+ * core quando essa ROM está carregada. Sem ele, edita os valores do core; a
+ * página do jogo não oferece isso (pedido do usuário, 2026-10-31), e o ajuste
+ * por core vai para as Configurações.
  */
 export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string }) {
   const { t } = useTranslation()
   const styles = useStyles()
-  const tb = useTabStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
-  const [scope, setScope] = useState<'core' | 'rom'>('core')
-  const scopeRomId = scope === 'rom' ? romId : undefined
+  const scope = romId ? 'rom' : 'core'
 
   const key = ['core-options', coreId, romId ?? null] as const
   const opts = useQuery({
@@ -61,12 +52,12 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
 
   const change = useMutation({
     mutationFn: (v: { key: string; value: string }) =>
-      setCoreOption(coreId, v.key, v.value, scopeRomId),
+      setCoreOption(coreId, v.key, v.value, romId),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
     onError: (e) => push(errorToast(e, 'applyCoreOption')),
   })
   const reset = useMutation({
-    mutationFn: () => resetCoreOptions(coreId, scopeRomId),
+    mutationFn: () => resetCoreOptions(coreId, romId),
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
     onError: (e) => push(errorToast(e, 'resetCoreOptions')),
   })
@@ -78,16 +69,6 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
 
   return (
     <div className={styles.root}>
-      {romId && (
-        <TabList
-          className={mergeClasses(tb.tabs, styles.tabs)}
-          selectedValue={scope}
-          onTabSelect={(_, d) => setScope(d.value as 'core' | 'rom')}
-        >
-          <Tab value="core">{t('coreOptions.thisCore')}</Tab>
-          <Tab value="rom">{t('coreOptions.thisGame')}</Tab>
-        </TabList>
-      )}
       <div className={styles.head}>
         <Caption1 className={styles.hint}>
           {scope === 'rom'

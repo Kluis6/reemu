@@ -313,13 +313,9 @@ const en: Messages = {
   game: {
     image: {
       aspect: 'Image aspect ratio',
-      applyTo: 'Apply to',
       inherit: 'Inherit',
       core: 'From the core',
       fill: 'Full screen (stretch)',
-      scopeRom: 'This game',
-      scopeSystem: 'This platform',
-      scopeDefault: 'All games',
       aspectHint: 'Changes the shape of the image on screen, stretching it if needed. Takes effect right away.',
       widescreen: 'Widescreen 16:9 for this game',
       widescreenHint: 'The core draws more of the scene at the sides. Works best in 3D games; may glitch in the new areas and in games with 2D. Takes effect when the game opens.',
@@ -378,6 +374,7 @@ const en: Messages = {
       shader: 'Shader',
       media: 'Gallery',
       cheats: 'Cheats',
+      achievements: 'Achievements',
     },
     media: {
       screenshot: 'Screenshot',
@@ -387,11 +384,8 @@ const en: Messages = {
       video: 'Video',
     },
     shader: {
-      applyTo: 'Apply to',
-      scopeGame: 'Game',
       inherit: 'Inherit',
       inheritRom: 'Uses the platform shader or the default for all games.',
-      inheritSystem: 'Uses the default shader for all games.',
       loadFile: 'Load a standalone .slangp…',
     },
     core: 'Core',
@@ -880,8 +874,6 @@ const en: Messages = {
   coreOptions: {
     loading: 'Loading options…',
     none: 'No options — or the core hasn\'t run yet.',
-    thisCore: 'This core',
-    thisGame: 'This game only',
     romHint: 'This game\'s overrides — they win while it\'s loaded.',
     coreHint: 'Apply to every game on this core.',
     reset: 'Reset',

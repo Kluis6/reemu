@@ -1,5 +1,5 @@
 import { Button, mergeClasses } from "@fluentui/react-components";
-import { AddRegular, GridRegular } from "@fluentui/react-icons";
+import { AddRegular, GridRegular, LibraryRegular, OpenRegular } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
@@ -173,10 +173,12 @@ export function Home() {
       menu={[
         {
           label: t("library.open"),
+          icon: <OpenRegular />,
           onClick: () => navigate(`/rom/${r.id}`),
         },
         {
           label: t("home.seeLibrary"),
+          icon: <LibraryRegular />,
           onClick: () => navigate("/library"),
         },
       ]}

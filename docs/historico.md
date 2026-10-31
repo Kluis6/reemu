@@ -3291,3 +3291,11 @@ Infra:
 - **Pulo dos cards ao entrar na Biblioteca:** `useShelfCapacity` media em `useEffect`, depois da pintura; o 1º quadro saía com 183 px e o seguinte com 207,6. Com `useLayoutEffect`, a medição quadro a quadro mostra só 207,6.
 - **Barras de rolagem:** regra única em `index.css`, com o estilo de Início e Meus jogos, no lugar das cópias por componente (pedido do usuário).
 - **Fim da fase 4:** HDR, Metadados e Plano de fundo também passam a usar blocos; o slider fica dentro do bloco, com o foco contornando o bloco inteiro, como nas capturas do console. O ajuste dos sliders numa tela HDR real não foi conferido por mim.
+
+## 2026-10-31 — Fase 5, primeira parte: menu do jogo e página do jogo
+
+- **Menu do jogo:** `Dialog` centralizado, com o nome no topo, ícone e texto em cada item e o primeiro em foco, como nas capturas do console. O `Dialog` não devolvia o foco vindo do controle, então o card o recupera ao fechar.
+- **Erro ao abrir um jogo:** a mensagem passa a ficar num painel.
+- **Página do jogo (pedidos do usuário):** abas centralizadas no mesmo card do conteúdo, aba Conquistas ainda sem dados, sem sombra de texto e com escurecimento de 25% na arte de fundo.
+- **Só este jogo:** Emulador, Shader e proporção da imagem deixam de editar core, plataforma e todos os jogos. Os valores já gravados continuam valendo por herança; o ajuste geral fica para um componente nas Configurações (`TASKS.md`).
+- **CI:** um job falhou por falta de disco no servidor; o cache do GitHub Actions foi limpo a pedido do usuário.

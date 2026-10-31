@@ -1,3 +1,4 @@
+import { DeleteRegular, OpenRegular } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -72,9 +73,10 @@ export function PlatformLibrary() {
               favorite={r.isFavorite}
               onClick={() => navigate(`/rom/${r.id}`)}
               menu={[
-                { label: t("library.open"), onClick: () => navigate(`/rom/${r.id}`) },
+                { label: t("library.open"), icon: <OpenRegular />, onClick: () => navigate(`/rom/${r.id}`) },
                 {
                   label: t("library.remove"),
+                  icon: <DeleteRegular />,
                   onClick: () => del.mutate(r.id),
                 },
               ]}

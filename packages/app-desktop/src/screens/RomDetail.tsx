@@ -38,6 +38,7 @@ import {
   HeartRegular,
   InfoRegular,
   PlayRegular,
+  TrophyRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -79,7 +80,6 @@ import {
   setRomMetadata,
   setShader,
   getRomPlayTime,
-  type ShaderScope,
 } from "../lib/tauri";
 import { formatPlayTime } from "../lib/playTime";
 import { useDetailStyles, useTabStyles } from "../styles/xbox";
@@ -167,14 +167,12 @@ export function RomDetail() {
     queryFn: () => getRomShader(romId),
     retry: false,
   });
-  // Escopo onde as edições de shader são gravadas: este jogo / a plataforma /
-  // todos os jogos.
-  const [shaderScope, setShaderScope] = useState<ShaderScope>("rom");
+  // A página do jogo só edita o shader deste jogo (pedido do usuário, 2026-10-31).
   // backend deriva de `romId` se vazio; preenche quando `romShader` carrega.
   const shaderSystemId = romShader.data?.systemId ?? "";
   const shaderPick = useMutation({
     mutationFn: (name: string) =>
-      setShader(name, shaderScope, romId, shaderSystemId),
+      setShader(name, "rom", romId, shaderSystemId),
     onSuccess: (issue, name) => {
       qc.invalidateQueries({ queryKey: ["rom-shader", romId] });
       qc.invalidateQueries({ queryKey: ["shader-info"] });
@@ -186,21 +184,16 @@ export function RomDetail() {
     },
     onError: (e) => push(errorToast(e, "changeGameShader")),
   });
-  // O que está atribuído EXATAMENTE no escopo selecionado ("" = herda).
-  const shaderAtScope =
-    (shaderScope === "rom"
-      ? romShader.data?.atRom
-      : shaderScope === "system"
-        ? romShader.data?.atSystem
-        : romShader.data?.atDefault) ?? "";
+  // O que está atribuído exatamente a este jogo ("" = herda).
+  const shaderAtScope = romShader.data?.atRom ?? "";
   const currentGameShader = shaderAtScope
     ? (shaderAtScope.split(/[/\\]/).pop() ?? shaderAtScope)
     : "";
-  // Parâmetros do shader escolhido no escopo — mesma chave do
+  // Parâmetros do shader do jogo — mesma chave do
   // `ShaderParams`, só pra saber se a coluna de ajustes aparece.
-  const shaderParamsKey = `${shaderScope}:${currentGameShader}`;
+  const shaderParamsKey = `rom:${currentGameShader}`;
   const shaderParams = useQuery({
-    queryKey: ["shader-params", shaderScope, romId, shaderSystemId, shaderParamsKey],
+    queryKey: ["shader-params", "rom", romId, shaderSystemId, shaderParamsKey],
     queryFn: getShaderParams,
     enabled: !!shaderAtScope,
     retry: false,
@@ -239,7 +232,7 @@ export function RomDetail() {
   const descParas = descriptionParagraphs(meta.data?.description);
   const sourceText = providerLabel(meta.data?.providerSource);
   const releaseYear = meta.data?.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
-  const [cfgTab, setCfgTab] = useState<"core" | "states" | "shader" | "cheats" | "media">("core");
+  const [cfgTab, setCfgTab] = useState<"core" | "states" | "shader" | "cheats" | "achievements" | "media">("core");
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   const hasCoreCfg = !!chosenCore;
   // Galeria: só as mídias que o provedor trouxe.
@@ -255,6 +248,7 @@ export function RomDetail() {
     states: true,
     // cheats por código (doc 17): a lista é do jogo, vale ao abrir
     cheats: true,
+    achievements: true,
     media: hasMedia,
   };
   const activeCfgTab = cfgTabOk[cfgTab]
@@ -744,43 +738,25 @@ export function RomDetail() {
         </DrawerBody>
       </OverlayDrawer>
 
-      <section className={mergeClasses(s.section, s.tabsOverlap)}>
+      <section className={mergeClasses(s.section, s.tabsOverlap, s.tabsCard)}>
         <TabList
           className={mergeClasses(tb.tabs, s.tabsAligned)}
           selectedValue={activeCfgTab}
-          onTabSelect={(_, d) =>
-            setCfgTab(d.value as "core" | "states" | "shader" | "cheats" | "media")
-          }
+          onTabSelect={(_, d) => setCfgTab(d.value as typeof cfgTab)}
         >
           {hasCoreCfg && <Tab value="core">{t("game.tabs.core")}</Tab>}
           <Tab value="states">{t("game.tabs.states")}</Tab>
           {hasShaderCfg && <Tab value="shader">{t("game.tabs.shader")}</Tab>}
           <Tab value="cheats">{t("game.tabs.cheats")}</Tab>
+          <Tab value="achievements">{t("game.tabs.achievements")}</Tab>
           {hasMedia && <Tab value="media">{t("game.tabs.media")}</Tab>}
         </TabList>
         <div className={s.panel}>
           {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
             <>
-              <div className={s.field}>
-                <Caption1>{t("game.shader.applyTo")}</Caption1>
-                <div>
-                  <TabList
-                    className={mergeClasses(tb.tabs, s.innerTabs)}
-                    selectedValue={shaderScope}
-                    onTabSelect={(_, d) =>
-                      setShaderScope(d.value as ShaderScope)
-                    }
-                  >
-                    <Tab value="rom">{t("game.shader.scopeGame")}</Tab>
-                    <Tab value="system">
-                      {rom ? platformLabel(rom.systemId) : t("common.platform")}
-                    </Tab>
-                  </TabList>
-                </div>
-              </div>
               {/* Mesma escolha das Configurações (abas Shaders do ReEmu /
                   Pacote de shaders, em cards), sem a prévia; "Herdar" no
-                  topo tira a escolha deste escopo. Os ajustes do shader
+                  topo tira a escolha deste jogo. Os ajustes do shader
                   escolhido (se ele tiver) ficam na coluna ao lado. */}
               <div className={s.shaderCols}>
                 <div className={s.shaderPicker}>
@@ -789,11 +765,7 @@ export function RomDetail() {
                     selected={shaderAtScope}
                     busy={shaderPick.isPending}
                     onPick={(n) => shaderPick.mutate(n)}
-                    inherit={
-                      shaderScope === "rom"
-                        ? t("game.shader.inheritRom")
-                        : t("game.shader.inheritSystem")
-                    }
+                    inherit={t("game.shader.inheritRom")}
                   />
                   <div>
                     <Button
@@ -811,7 +783,7 @@ export function RomDetail() {
                 {shaderAtScope && (shaderParams.data?.length ?? 0) > 0 && (
                   <Card className={s.shaderParams} appearance="filled-alternative">
                     <ShaderParams
-                      scope={shaderScope}
+                      scope="rom"
                       romId={romId}
                       systemId={shaderSystemId}
                       reloadKey={shaderParamsKey}
@@ -845,6 +817,16 @@ export function RomDetail() {
             </>
           )}
           {activeCfgTab === "cheats" && <CheatsPanel romId={romId} />}
+          {/* Conquistas deste jogo: ainda sem dados, como no menu de pausa. */}
+          {activeCfgTab === "achievements" && (
+            <EmptyState
+              art={<TrophyRegular style={{ color: "var(--reemuBrandAccent)", fontSize: "44px" }} />}
+              artAccent
+              title={t("game.tabs.achievements")}
+            >
+              {t("play.achievementsSoon")}
+            </EmptyState>
+          )}
           {activeCfgTab === "media" && (
             <div className={s.gallery}>
               {meta.data?.logoUrl && (

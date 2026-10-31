@@ -314,13 +314,9 @@ const ptBR = {
   game: {
     image: {
       aspect: 'Proporção da imagem',
-      applyTo: 'Aplicar a',
       inherit: 'Herdar',
       core: 'Do core',
       fill: 'Tela cheia (estica)',
-      scopeRom: 'Este jogo',
-      scopeSystem: 'Esta plataforma',
-      scopeDefault: 'Todos os jogos',
       aspectHint: 'Muda o formato da imagem na tela, esticando se preciso. Vale na hora.',
       widescreen: 'Widescreen 16:9 neste jogo',
       widescreenHint: 'O core desenha mais cena nas laterais. Funciona melhor em jogos 3D; pode dar defeitos nas áreas novas e em jogos com 2D. Vale ao abrir o jogo.',
@@ -379,6 +375,7 @@ const ptBR = {
       shader: 'Shader',
       media: 'Galeria',
       cheats: 'Cheats',
+      achievements: 'Conquistas',
     },
     media: {
       screenshot: 'Captura de tela',
@@ -388,11 +385,8 @@ const ptBR = {
       video: 'Vídeo',
     },
     shader: {
-      applyTo: 'Aplicar a',
-      scopeGame: 'Jogo',
       inherit: 'Herdar',
       inheritRom: 'Usa o shader da plataforma ou o padrão de todos os jogos.',
-      inheritSystem: 'Usa o shader padrão de todos os jogos.',
       loadFile: 'Carregar .slangp avulso…',
     },
     core: 'Core',
@@ -881,8 +875,6 @@ const ptBR = {
   coreOptions: {
     loading: 'Carregando opções…',
     none: 'Sem opções — ou o core ainda não foi executado nenhuma vez.',
-    thisCore: 'Este core',
-    thisGame: 'Só este jogo',
     romHint: 'Overrides deste jogo — vencem quando ele está carregado.',
     coreHint: 'Valem pra todos os jogos deste core.',
     reset: 'Resetar',

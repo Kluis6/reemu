@@ -62,7 +62,7 @@ o card atual fica.
 - [x] `done` — Fase 2: becos sem saída do controle, mapa de botões e camada de foco (2026-10-30).
 - [x] `done` — Fase 3: escala igual à do app Xbox e janelas pequenas, aprovada pelo usuário (2026-10-31). Desempenho comparado com `docs/perf/baseline.json`: só o `run_med` do Vulkan marcado (4,33 → 4,95 ms), a confirmar com nova captura na mesma cena.
 - [x] `done` — Fase 4: configurações no modelo do console, aprovada pelo usuário (2026-10-31). Blocos em Sistema, Áudio, Metadados e Plano de fundo; listas, Perfil, Temas, Shaders e Molduras mantêm o layout próprio; sem coluna de categorias, a pedido.
-- [ ] `todo` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados.
+- [ ] `in-progress` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados; menu do jogo e painel de erro locais, aguardando teste.
       Inclui redesenhar as mensagens de erro (tela ao abrir um jogo e avisos).
 - [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates.
 - [ ] `todo` — Fase 7: acabamento, diagnóstico exportável e registro de decisões.
@@ -577,6 +577,13 @@ no `emu-session`, ver `docs/historico.md`).
         tempo de jogo pelo GAS. Depois, hero e logo de jogos já identificados
         para o carrossel e a página do jogo. ScreenScraper e TheGamesDB
         continuam como fontes principais, e o app funciona sem a GameKave.
+- [ ] `todo` — **Ajuste por core nas Configurações** (pedido do dono do projeto,
+      2026-10-31): um componente para as opções gerais de cada core. A página do
+      jogo agora só edita o próprio jogo, então os valores por core já gravados
+      continuam valendo, mas não têm onde ser alterados até lá. `CoreOptions`
+      sem `romId` já edita esses valores. O shader e a proporção da imagem por
+      plataforma e para todos os jogos ficaram na mesma situação e podem entrar
+      junto.
 - [ ] `todo` — **Novas telas para a rede social** (pedido do dono do projeto,
       2026-10-31): a Alvanista será a rede social do ReEmu, então virão mais rotas
       como `/conquistas`, sem ícone na barra lateral e abertas pelo drawer de

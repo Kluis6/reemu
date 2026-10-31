@@ -1,24 +1,39 @@
 import {
+  Button,
   Card,
-  Menu,
-  MenuItem,
-  MenuList,
-  MenuPopover,
-  MenuTrigger,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
   makeStyles,
+  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
 import { HeartFilled } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useRef, useState, type ReactElement } from "react";
+import { DIALOG_FADE_ONLY } from "../lib/motion";
+import { useModalButtonStyles } from "../styles/buttons";
 import { useCardStyles } from "../styles/xbox";
 import { useTranslation } from "react-i18next";
 
 export interface CardMenuItem {
   label: string;
+  icon?: ReactElement;
   onClick: () => void;
 }
 
 const useLocalStyles = makeStyles({
+  // Menu do jogo como nas capturas do console: centralizado, com o nome no topo.
+  menuSurface: { maxWidth: "360px" },
+  menuTitle: { overflowWrap: "anywhere" },
+  menuList: { display: "flex", flexDirection: "column", rowGap: tokens.spacingVerticalS },
+  menuItem: {
+    justifyContent: "flex-start",
+    columnGap: tokens.spacingHorizontalM,
+    paddingTop: tokens.spacingVerticalM,
+    paddingBottom: tokens.spacingVerticalM,
+  },
   // Só indicador — não é botão. Sempre visível (não depende de hover),
   // já que não há mais ação de favoritar aqui (fica na tela do jogo).
   favBadge: {
@@ -108,6 +123,16 @@ export function GameCard({
   const l = useLocalStyles();
   const [broken, setBroken] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const btn = useModalButtonStyles();
+  const cardRef = useRef<HTMLDivElement>(null);
+  // O foco vindo do controle não conta para a restauração do `Dialog`: ao fechar,
+  // ele ficava no documento, e o controle perdia o card.
+  const closeMenu = () => {
+    setMenuOpen(false);
+    requestAnimationFrame(() => cardRef.current?.focus({ preventScroll: true }));
+  };
+  const hasMenu = !!menu && menu.length > 0;
   const showArt = boxart && !broken;
 
   // `<Card>` do Fluent com `onClick` já vira focável, mas NÃO ganha
@@ -119,7 +144,16 @@ export function GameCard({
       appearance="filled"
       role="button"
       aria-label={title}
-      data-nav-menu={menu && menu.length > 0 ? "" : undefined}
+      data-nav-menu={hasMenu ? "" : undefined}
+      ref={cardRef}
+      onContextMenu={
+        hasMenu
+          ? (e) => {
+              e.preventDefault();
+              setMenuOpen(true);
+            }
+          : undefined
+      }
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -168,20 +202,37 @@ export function GameCard({
     </Card>
   );
 
-  if (!menu || menu.length === 0) return card;
+  if (!hasMenu) return card;
 
   return (
-    <Menu openOnContext>
-      <MenuTrigger disableButtonEnhancement>{card}</MenuTrigger>
-      <MenuPopover>
-        <MenuList>
-          {menu.map((m) => (
-            <MenuItem key={m.label} onClick={m.onClick}>
-              {m.label}
-            </MenuItem>
-          ))}
-        </MenuList>
-      </MenuPopover>
-    </Menu>
+    <>
+      {card}
+      <Dialog
+        open={menuOpen}
+        onOpenChange={(_, d) => (d.open ? setMenuOpen(true) : closeMenu())}
+        surfaceMotion={DIALOG_FADE_ONLY}
+      >
+        <DialogSurface className={l.menuSurface}>
+          <DialogBody>
+            <DialogTitle className={l.menuTitle}>{title}</DialogTitle>
+            <DialogContent className={l.menuList}>
+              {menu.map((m) => (
+                <Button
+                  key={m.label}
+                  className={mergeClasses(l.menuItem, btn.secondary)}
+                  icon={m.icon}
+                  onClick={() => {
+                    closeMenu();
+                    m.onClick();
+                  }}
+                >
+                  {m.label}
+                </Button>
+              ))}
+            </DialogContent>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
+    </>
   );
 }

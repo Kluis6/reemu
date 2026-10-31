@@ -1004,11 +1004,6 @@ const HERO_BTN_H = 56;
 // A arte fica inteira até 70% da altura da tela e se dissolve no fundo da
 // página até 85% (pedido do usuário, 2026-10-29) — a camada `heroBackdrop`
 // tem 85vh, então os stops em `vh` caem no lugar certo.
-// Sombra curta e escura do texto branco por cima da arte do jogo (abas,
-// nome, plataforma, tempo jogado): separa o texto de qualquer arte, mesmo
-// das partes claras, sem véu nem fundo atrás (pedidos do usuário, 2026-10-29).
-const HERO_TEXT_SHADOW = "0 1px 3px rgba(0, 0, 0, 0.6), 0 0 8px rgba(0, 0, 0, 0.35)";
-
 const HERO_FADE =
   "linear-gradient(180deg, #000 0, #000 70vh, transparent 85vh)";
 
@@ -1120,12 +1115,11 @@ export const useDetailStyles = makeStyles({
     right: 0,
     bottom: 0,
     left: 0,
-    // A arte de fundo (plano de fundo do jogo) domina o hero; o véu só
-    // escurece o canto SUPERIOR-esquerdo (ícone/título, texto branco). A
-    // faixa das abas embaixo não tem véu: o texto delas é branco com sombra
-    // própria (`tabsAligned`), e a arte se dissolve no fundo da página pela
-    // máscara do `heroBackdrop`.
+    // Escurecimento leve na arte inteira (pedido do usuário, 2026-10-31) e um
+    // véu mais forte no canto SUPERIOR-esquerdo (ícone/título, texto branco).
+    // A arte se dissolve no fundo da página pela máscara do `heroBackdrop`.
     backgroundImage: [
+      "linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.25))",
       "linear-gradient(90deg, rgba(0,0,0,0.45) 0%, transparent 45%)",
       "linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.22) 32%, transparent 58%)",
     ].join(", "),
@@ -1206,37 +1200,20 @@ export const useDetailStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: "12px",
   },
-  // Abas Emulador/Save states/Shader: a aba (caixa e traço) começa na
-  // coluna da capa e dos botões, sem o recuo de −15 px do `useTabStyles`,
-  // que alinhava só o texto (pedido do usuário; o mesmo da Biblioteca).
-  // Abas DENTRO do painel (escopo do shader): começam na mesma borda dos
-  // campos e da lista, sem o recuo de -15 do `useTabStyles` (igual às abas
-  // do `CoreOptions` e do `ShaderPicker`; print do usuário, 2026-10-29).
-  innerTabs: { marginLeft: "0 !important" },
-  // Abas da página do jogo, sem fundo próprio (pedido do usuário,
-  // 2026-10-29: o "card" das abas saiu). A caixa da 1ª aba começa na borda
-  // do conteúdo da página (capa, botão Jogar, painel), como as abas de
-  // dentro do painel começam na borda dos campos.
+  // Abas da página do jogo: abas e conteúdo num card só, as abas centralizadas e
+  // o respiro de cima igual ao do painel (pedido do usuário, 2026-10-31). A cor
+  // do texto volta a ser a do tema.
+  tabsCard: {
+    rowGap: 0,
+    paddingTop: "14px",
+    borderRadius: shell.radius,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
   tabsAligned: {
+    alignSelf: "center",
     marginLeft: "0 !important",
-    alignSelf: "flex-start",
     // mais espaço entre as abas que o 8 do `useTabStyles` (pedido do usuário)
     columnGap: "16px !important",
-    // Texto branco por cima da arte, como o título do jogo, com uma sombra
-    // curta e escura que o separa de qualquer arte — inclusive das partes
-    // claras — sem véu nem fundo atrás das abas (pedidos do usuário,
-    // 2026-10-29). O fundo de hover/foco vira um véu escuro: o cinza-claro
-    // do tema claro apagava o branco. A aba ativa focada continua com a cor
-    // primária (regra do `TAB_STATES`, mais específica).
-    "& .fui-Tab .fui-Tab__content": {
-      color: "#ffffff !important",
-      textShadow: HERO_TEXT_SHADOW,
-    },
-    // aba ativa (selecionada) sem a sombra (pedido do usuário)
-    '& .fui-Tab[aria-selected="true"] .fui-Tab__content': { textShadow: "none" },
-    "& .fui-Tab:hover, & .fui-Tab:focus": {
-      backgroundColor: "rgba(0, 0, 0, 0.32) !important",
-    },
   },
   heroTitleCol: {
     display: "flex",
@@ -1251,7 +1228,6 @@ export const useDetailStyles = makeStyles({
     // mesma cor do título do jogo (branco sobre o `heroScrim`, em qualquer
     // tema) — pedido do usuário; antes era a cor de marca do tema
     color: "#fff",
-    textShadow: HERO_TEXT_SHADOW,
     marginBottom: "4px",
   },
   title: {
@@ -1264,7 +1240,6 @@ export const useDetailStyles = makeStyles({
     // tema (claro ou escuro) — a cor do tema (`colorNeutralForeground1`)
     // ficaria ilegível no tema claro.
     color: "#fff",
-    textShadow: HERO_TEXT_SHADOW,
   },
   badges: {
     display: "flex",
@@ -1378,9 +1353,6 @@ export const useDetailStyles = makeStyles({
     columnGap: "8px",
     fontSize: tokens.fontSizeBase400,
     color: "rgba(255, 255, 255, 0.82)",
-    textShadow: HERO_TEXT_SHADOW,
-    // o ícone do relógio é SVG: a sombra dele vem do `filter`
-    "& svg": { filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6))" },
   },
   heroStatsIcon: { fontSize: `${M.ICON}px`, flexShrink: 0 },
   // Coração de favorito preenchido: cor de marca (mesmo token do "Nintendo

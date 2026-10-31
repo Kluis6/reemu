@@ -17,8 +17,10 @@ import {
 import {
   AddRegular,
   ArrowSortRegular,
+  DeleteRegular,
   FilterRegular,
   MoreHorizontalRegular,
+  OpenRegular,
   WarningRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -239,9 +241,9 @@ export function Library() {
 
   const cardMenu = (r: RomEntry) =>
     [
-      { label: t("library.open"), onClick: () => navigate(`/rom/${r.id}`) },
-      { label: t("library.remove"), onClick: () => del.mutate(r.id) },
-    ] as const;
+      { label: t("library.open"), icon: <OpenRegular />, onClick: () => navigate(`/rom/${r.id}`) },
+      { label: t("library.remove"), icon: <DeleteRegular />, onClick: () => del.mutate(r.id) },
+    ];
 
   const card = (r: RomEntry) => (
     <GameCard

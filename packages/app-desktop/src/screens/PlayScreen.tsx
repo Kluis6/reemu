@@ -178,8 +178,13 @@ const useStyles = makeStyles({
     flexDirection: "column",
     alignItems: "center",
     gap: "12px",
-    maxWidth: "520px",
+    width: "min(520px, calc(100vw - 48px))",
+    boxSizing: "border-box",
     padding: tokens.spacingHorizontalXXL,
+    // painel como os menus: o erro não fica solto sobre o fundo
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground2,
+    color: tokens.colorNeutralForeground1,
   },
   errorGame: { color: tokens.colorNeutralForeground3 },
   errorActions: {

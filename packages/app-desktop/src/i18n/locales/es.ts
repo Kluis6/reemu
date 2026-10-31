@@ -313,13 +313,9 @@ const es: Messages = {
   game: {
     image: {
       aspect: 'Proporción de la imagen',
-      applyTo: 'Aplicar a',
       inherit: 'Heredar',
       core: 'Del núcleo',
       fill: 'Pantalla completa (estira)',
-      scopeRom: 'Este juego',
-      scopeSystem: 'Esta plataforma',
-      scopeDefault: 'Todos los juegos',
       aspectHint: 'Cambia la forma de la imagen en pantalla, estirándola si hace falta. Se aplica al momento.',
       widescreen: 'Widescreen 16:9 en este juego',
       widescreenHint: 'El núcleo dibuja más escena a los lados. Funciona mejor en juegos 3D; puede dar defectos en las zonas nuevas y en juegos con 2D. Se aplica al abrir el juego.',
@@ -378,6 +374,7 @@ const es: Messages = {
       shader: 'Shader',
       media: 'Galería',
       cheats: 'Trucos',
+      achievements: 'Logros',
     },
     media: {
       screenshot: 'Captura de pantalla',
@@ -387,11 +384,8 @@ const es: Messages = {
       video: 'Video',
     },
     shader: {
-      applyTo: 'Aplicar a',
-      scopeGame: 'Juego',
       inherit: 'Heredar',
       inheritRom: 'Usa el shader de la plataforma o el predeterminado de todos los juegos.',
-      inheritSystem: 'Usa el shader predeterminado de todos los juegos.',
       loadFile: 'Cargar un .slangp suelto…',
     },
     core: 'Núcleo',
@@ -880,8 +874,6 @@ const es: Messages = {
   coreOptions: {
     loading: 'Cargando opciones…',
     none: 'Sin opciones — o el core todavía no se ha ejecutado.',
-    thisCore: 'Este core',
-    thisGame: 'Solo este juego',
     romHint: 'Ajustes de este juego — tienen prioridad cuando está cargado.',
     coreHint: 'Se aplican a todos los juegos de este core.',
     reset: 'Restablecer',

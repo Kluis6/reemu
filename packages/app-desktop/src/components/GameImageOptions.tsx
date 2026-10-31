@@ -1,13 +1,11 @@
 import { Caption1, Field, Select, Switch, makeStyles, tokens } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   getAspect,
   getCoreOptions,
   setAspect,
   setCoreOption,
-  type AspectScope,
   type AspectValue,
 } from '../lib/tauri'
 import { errorToast } from '../lib/toast'
@@ -27,7 +25,7 @@ const useStyles = makeStyles({
 
 /**
  * Formato da imagem do jogo, na aba Emulador. Proporção: decisão do ReEmu, em
- * cascata jogo → plataforma → todos. Widescreen 16:9: opção do próprio core,
+ * cascata jogo → plataforma → todos; aqui se edita só o jogo. Widescreen 16:9: opção do próprio core,
  * que desenha mais cena (só aparece se ele tiver; ver `lib/widescreen.ts`).
  */
 export function GameImageOptions({ coreId, romId }: { coreId: string; romId: string }) {
@@ -35,18 +33,12 @@ export function GameImageOptions({ coreId, romId }: { coreId: string; romId: str
   const s = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((st) => st.push)
-  const [scope, setScope] = useState<AspectScope>('rom')
 
   const aspectKey = ['aspect', romId]
   const aspect = useQuery({ queryKey: aspectKey, queryFn: () => getAspect(romId), retry: false })
-  const atScope =
-    (scope === 'rom'
-      ? aspect.data?.atRom
-      : scope === 'system'
-        ? aspect.data?.atSystem
-        : aspect.data?.atDefault) ?? ''
+  const atRom = aspect.data?.atRom ?? ''
   const change = useMutation({
-    mutationFn: (value: string) => setAspect(scope, romId, (value || null) as AspectValue | null),
+    mutationFn: (value: string) => setAspect('rom', romId, (value || null) as AspectValue | null),
     onSuccess: () => qc.invalidateQueries({ queryKey: aspectKey }),
     onError: (e) => push(errorToast(e, 'changeAspect')),
   })
@@ -81,7 +73,7 @@ export function GameImageOptions({ coreId, romId }: { coreId: string; romId: str
       <div className={s.row}>
         <Field label={t('game.image.aspect')}>
           <Select
-            value={atScope}
+            value={atRom}
             disabled={change.isPending}
             onChange={(_, d) => change.mutate(d.value)}
           >
@@ -90,13 +82,6 @@ export function GameImageOptions({ coreId, romId }: { coreId: string; romId: str
             <option value="4:3">4:3</option>
             <option value="16:9">16:9</option>
             <option value="fill">{t('game.image.fill')}</option>
-          </Select>
-        </Field>
-        <Field label={t('game.image.applyTo')}>
-          <Select value={scope} onChange={(_, d) => setScope(d.value as AspectScope)}>
-            <option value="rom">{t('game.image.scopeRom')}</option>
-            <option value="system">{t('game.image.scopeSystem')}</option>
-            <option value="default">{t('game.image.scopeDefault')}</option>
           </Select>
         </Field>
       </div>
