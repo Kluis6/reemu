@@ -3290,3 +3290,4 @@ Infra:
 - **Ícones A, B, X e Y:** `react-icons` 5.7 (Tabler, MIT), pedido do usuário. O pacote não tem LB, RB, LT e RT, que seguem como pílulas.
 - **Pulo dos cards ao entrar na Biblioteca:** `useShelfCapacity` media em `useEffect`, depois da pintura; o 1º quadro saía com 183 px e o seguinte com 207,6. Com `useLayoutEffect`, a medição quadro a quadro mostra só 207,6.
 - **Barras de rolagem:** regra única em `index.css`, com o estilo de Início e Meus jogos, no lugar das cópias por componente (pedido do usuário).
+- **Fim da fase 4:** HDR, Metadados e Plano de fundo também passam a usar blocos; o slider fica dentro do bloco, com o foco contornando o bloco inteiro, como nas capturas do console. O ajuste dos sliders numa tela HDR real não foi conferido por mim.

@@ -4,14 +4,12 @@ import {
   Card,
   ColorPicker,
   ColorSlider,
-  Field,
-  Radio,
-  RadioGroup,
   Switch,
   Text,
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
+import { BlockGroup, SelectBlock } from "../../components/SettingBlock";
 import {
   CheckmarkCircleFilled,
   ColorRegular,
@@ -541,15 +539,17 @@ export function SettingsAppearance({
             )}
           </div>
           {/* onde aparece; a página do jogo fica sempre sem (arte do jogo) */}
-          <Field label={t("appearance.wallpaper.scope")}>
-            <RadioGroup
+          <BlockGroup>
+            <SelectBlock
+              label={t("appearance.wallpaper.scope")}
               value={wallScope}
-              onChange={(_, d) => setWallScope(d.value as WallpaperScope)}
-            >
-              <Radio value="home" label={t("appearance.wallpaper.scopeHome")} />
-              <Radio value="all" label={t("appearance.wallpaper.scopeAll")} />
-            </RadioGroup>
-          </Field>
+              options={[
+                { value: "home", label: t("appearance.wallpaper.scopeHome") },
+                { value: "all", label: t("appearance.wallpaper.scopeAll") },
+              ]}
+              onChange={(v) => setWallScope(v as WallpaperScope)}
+            />
+          </BlockGroup>
         </div>
       )}
     </div>

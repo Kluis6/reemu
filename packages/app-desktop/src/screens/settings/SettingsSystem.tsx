@@ -11,7 +11,6 @@ import { HdrSettings } from "../../components/HdrSettings";
 import { LoadingState } from "../../components/EmptyState";
 import {
   BlockGroup,
-  FieldBlock,
   SelectBlock,
   ToggleBlock,
 } from "../../components/SettingBlock";
@@ -277,9 +276,7 @@ export function SettingsSystem({
               disabled={videoCfg.isLoading || setIntegerScaling.isPending}
               onChange={(checked) => setIntegerScaling.mutate(checked)}
             />
-            <FieldBlock wide>
-              <HdrSettings />
-            </FieldBlock>
+            <HdrSettings />
           </BlockGroup>
         </div>
       )}

@@ -17,6 +17,7 @@ import { CheckmarkRegular, DismissRegular, SearchRegular } from '@fluentui/react
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { LoadingState } from '../../components/EmptyState'
+import { BlockGroup, FieldBlock } from '../../components/SettingBlock'
 import { errorToast, sysToast } from '../../lib/toast'
 import {
   cancelMetadataScan,
@@ -32,8 +33,8 @@ import { useToastStore } from '../../stores/useToastStore'
 import { Trans, useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL, maxWidth: '520px' },
-  form: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS, maxWidth: '360px' },
+  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL },
+  save: { alignSelf: 'flex-start' },
   pending: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
   row: {
     display: 'flex',
@@ -125,41 +126,45 @@ export function SettingsMetadata() {
         <Trans i18nKey="metadata.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
       </Caption1>
 
-      <div className={s.form}>
-        <Field label={t('metadata.ssUser')}>
-          <Input
-            appearance="filled-darker"
-            value={form.screenscraperUser ?? ''}
-            onChange={(_, d) => setForm({ ...form, screenscraperUser: d.value || null })}
-          />
-        </Field>
-        <Field label={t('metadata.ssPassword')}>
-          <Input
-            appearance="filled-darker"
-            type="password"
-            value={form.screenscraperPassword ?? ''}
-            onChange={(_, d) => setForm({ ...form, screenscraperPassword: d.value || null })}
-          />
-        </Field>
-        <Field
-          label={t('metadata.tgdbKey')}
-          hint={t('metadata.tgdbKeyHint')}
-        >
-          <Input
-            appearance="filled-darker"
-            type="password"
-            value={form.thegamesdbApiKey ?? ''}
-            onChange={(_, d) => setForm({ ...form, thegamesdbApiKey: d.value || null })}
-          />
-        </Field>
-        <Button
-          appearance="primary"
-          disabled={save.isPending}
-          onClick={() => save.mutate(form)}
-        >
-          {t('common.save')}
-        </Button>
-      </div>
+      <BlockGroup>
+        <FieldBlock>
+          <Field label={t('metadata.ssUser')}>
+            <Input
+              appearance="filled-darker"
+              value={form.screenscraperUser ?? ''}
+              onChange={(_, d) => setForm({ ...form, screenscraperUser: d.value || null })}
+            />
+          </Field>
+        </FieldBlock>
+        <FieldBlock>
+          <Field label={t('metadata.ssPassword')}>
+            <Input
+              appearance="filled-darker"
+              type="password"
+              value={form.screenscraperPassword ?? ''}
+              onChange={(_, d) => setForm({ ...form, screenscraperPassword: d.value || null })}
+            />
+          </Field>
+        </FieldBlock>
+        <FieldBlock>
+          <Field label={t('metadata.tgdbKey')} hint={t('metadata.tgdbKeyHint')}>
+            <Input
+              appearance="filled-darker"
+              type="password"
+              value={form.thegamesdbApiKey ?? ''}
+              onChange={(_, d) => setForm({ ...form, thegamesdbApiKey: d.value || null })}
+            />
+          </Field>
+        </FieldBlock>
+      </BlockGroup>
+      <Button
+        className={s.save}
+        appearance="primary"
+        disabled={save.isPending}
+        onClick={() => save.mutate(form)}
+      >
+        {t('common.save')}
+      </Button>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', gap: 8 }}>

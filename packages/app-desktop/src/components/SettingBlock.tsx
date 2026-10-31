@@ -188,8 +188,21 @@ export function SelectBlock({
   );
 }
 
-/** Bloco para o que não é liga/desliga nem lista, como campos de texto e sliders. */
-export function FieldBlock({ wide, children }: { wide?: boolean; children: ReactNode }) {
+/** Bloco para o que não é liga/desliga nem lista, como campos de texto e sliders.
+ *  `focusBlock`: o foco contorna o bloco, como no slider das capturas do console. */
+export function FieldBlock({
+  wide,
+  focusBlock,
+  children,
+}: {
+  wide?: boolean;
+  focusBlock?: boolean;
+  children: ReactNode;
+}) {
   const s = useStyles();
-  return <div className={mergeClasses(s.block, s.field, wide && s.wide)}>{children}</div>;
+  return (
+    <div className={mergeClasses(focusBlock && "reemu-block", s.block, s.field, wide && s.wide)}>
+      {children}
+    </div>
+  );
 }

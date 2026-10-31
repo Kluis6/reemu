@@ -1,9 +1,8 @@
 import {
   Body1,
   Button,
-  Field,
+  Caption1,
   Slider,
-  Switch,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
@@ -20,9 +19,9 @@ import {
 } from '../lib/tauri'
 import { errorToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
+import { FieldBlock, ToggleBlock } from './SettingBlock'
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', rowGap: tokens.spacingVerticalL },
   // Slider: rótulo e valor atual na mesma linha, a faixa embaixo.
   // Rótulo e valor alinhados com a largura da faixa.
   head: {
@@ -30,10 +29,10 @@ const useStyles = makeStyles({
     alignItems: 'baseline',
     justifyContent: 'space-between',
     columnGap: tokens.spacingHorizontalM,
-    maxWidth: '480px',
   },
   value: { color: tokens.colorNeutralForeground2, fontVariantNumeric: 'tabular-nums' },
-  slider: { maxWidth: '480px', width: '100%' },
+  slider: { width: '100%' },
+  hint: { color: tokens.colorNeutralForeground3 },
   reset: { alignSelf: 'flex-start' },
 })
 
@@ -47,7 +46,6 @@ const DEBOUNCE_MS = 300
  */
 export function HdrSettings() {
   const { t } = useTranslation()
-  const s = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((st) => st.push)
   const cfg = useQuery({ queryKey: ['video-config'], queryFn: getVideoConfig, retry: false })
@@ -91,23 +89,23 @@ export function HdrSettings() {
             : t('video.hdr.hintOff')
 
   return (
-    <div className={s.root}>
-      <Field label={t('video.hdr.label')} hint={hint}>
-        <Switch
-          checked={c?.hdr ?? false}
-          disabled={!c || save.isPending || (!usable && !c.hdr)}
-          onChange={(_, d) => save.mutate({ hdr: d.checked })}
-        />
-      </Field>
+    <>
+      <ToggleBlock
+        label={t('video.hdr.label')}
+        description={hint}
+        checked={c?.hdr ?? false}
+        disabled={!c || save.isPending || (!usable && !c.hdr)}
+        onChange={(hdr) => save.mutate({ hdr })}
+      />
       {c?.hdr && st?.active && (
         <>
-          <Field label={t('video.hdr.highlights')} hint={t('video.hdr.highlightsHint')}>
-            <Switch
-              checked={c.hdrHighlights}
-              disabled={save.isPending}
-              onChange={(_, d) => save.mutate({ hdrHighlights: d.checked })}
-            />
-          </Field>
+          <ToggleBlock
+            label={t('video.hdr.highlights')}
+            description={t('video.hdr.highlightsHint')}
+            checked={c.hdrHighlights}
+            disabled={save.isPending}
+            onChange={(hdrHighlights) => save.mutate({ hdrHighlights })}
+          />
           <NitsSlider
             label={t('video.hdr.paperWhite')}
             hint={t('video.hdr.paperWhiteHint')}
@@ -130,7 +128,7 @@ export function HdrSettings() {
           )}
         </>
       )}
-    </div>
+    </>
   )
 }
 
@@ -174,7 +172,7 @@ function NitsSlider(props: {
     : t('video.hdr.nits', { n: value })
 
   return (
-    <Field hint={hint}>
+    <FieldBlock focusBlock>
       <div className={s.head}>
         <Body1>{label}</Body1>
         <Body1 className={s.value}>{valueText}</Body1>
@@ -191,6 +189,7 @@ function NitsSlider(props: {
         // 2); o valor vai de 10 em 10 nits.
         onChange={(_, d) => setDraft(Math.round(d.value / 10) * 10)}
       />
+      <Caption1 className={s.hint}>{hint}</Caption1>
       {!auto && (
         <Button
           className={s.reset}
@@ -202,6 +201,6 @@ function NitsSlider(props: {
           {t('video.hdr.useAuto')}
         </Button>
       )}
-    </Field>
+    </FieldBlock>
   )
 }
