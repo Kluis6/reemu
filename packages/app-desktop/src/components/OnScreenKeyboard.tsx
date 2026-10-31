@@ -6,7 +6,7 @@ import {
   KeyboardShiftRegular,
   LineHorizontal3Regular,
 } from '@fluentui/react-icons'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useSearchStore, type KeyboardField } from '../stores/useSearchStore'
@@ -25,7 +25,9 @@ import { useSearchStore, type KeyboardField } from '../stores/useSearchStore'
  * Botões (vêm do `useMenuNav` via `useSearchStore.keyboardNav`, enquanto o
  * teclado está aberto ele recebe os pulsos antes da navegação normal):
  * A digita a tecla em foco · B apaga (com o campo vazio, fecha) · X espaço ·
- * Y maiúsculas/minúsculas · ☰ (Menu) conclui e fecha. A biblioteca filtra
+ * Y maiúsculas/minúsculas · LB/RB movem o cursor · LT/RT trocam letras e símbolos ·
+ * ☰ (Menu) conclui e fecha. O texto aparece no próprio teclado, porque o painel
+ * pode cobrir o campo. A biblioteca filtra
  * enquanto se digita (a busca é a mesma do teclado físico).
  */
 
@@ -35,15 +37,19 @@ type KeyDef = { char: string; hint?: string; span?: number } | { action: Action;
 /** 12 colunas por linha; tecla de letra = 1, especiais = `span`. */
 const COLS = 12
 
-const LETTERS: KeyDef[][] = [
-  [
-    ...'qwertyuiop'.split('').map((c, i) => ({ char: c, hint: String((i + 1) % 10) })),
-    { action: 'back', span: 2 },
-  ],
-  [...'asdfghjklç'.split('').map((c) => ({ char: c })), { action: 'done', span: 2 }],
-  [{ action: 'shift', span: 2 }, ...'zxcvbnm,.-'.split('').map((c) => ({ char: c }))],
-  [{ action: 'layer', span: 2 }, { action: 'space', span: 10 }],
-]
+const lettersFor = (language: string): KeyDef[][] => {
+  // a tecla depois do L muda com o idioma, como nos teclados de cada um
+  const extra = language.startsWith('es') ? 'ñ' : language.startsWith('en') ? "'" : 'ç'
+  return [
+    [
+      ...'qwertyuiop'.split('').map((c, i) => ({ char: c, hint: String((i + 1) % 10) })),
+      { action: 'back', span: 2 },
+    ],
+    [...`asdfghjkl${extra}`.split('').map((c) => ({ char: c })), { action: 'done', span: 2 }],
+    [{ action: 'shift', span: 2 }, ...'zxcvbnm,.-'.split('').map((c) => ({ char: c }))],
+    [{ action: 'layer', span: 2 }, { action: 'space', span: 10 }],
+  ]
+}
 
 /** Camada "&123": números, acentos e símbolos. */
 const SYMBOLS: KeyDef[][] = [
@@ -117,15 +123,22 @@ const useStyles = makeStyles({
     paddingRight: tokens.spacingHorizontalXS,
     borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
   },
-  grip: {
-    position: 'absolute',
-    left: '50%',
-    top: '50%',
-    transform: 'translate(-50%, -50%)',
-    width: '44px',
-    height: '3px',
-    borderRadius: tokens.borderRadiusCircular,
-    backgroundColor: tokens.colorNeutralForeground3,
+  // O que está sendo digitado, à vista mesmo com o campo coberto pelo painel.
+  preview: {
+    flexGrow: 1,
+    minWidth: 0,
+    paddingLeft: tokens.spacingHorizontalM,
+    whiteSpace: 'pre',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    fontSize: tokens.fontSizeBase300,
+  },
+  caret: {
+    display: 'inline-block',
+    width: '1px',
+    height: '1em',
+    verticalAlign: 'text-bottom',
+    backgroundColor: tokens.colorNeutralForeground1,
   },
   grid: {
     display: 'grid',
@@ -196,9 +209,18 @@ const useStyles = makeStyles({
 })
 
 export function OnScreenKeyboard() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const s = useStyles()
   const open = useSearchStore((st) => st.keyboard)
+  const query = useSearchStore((st) => st.query)
+  const target = useSearchStore((st) => st.keyboardTarget)
+  // Cursor: quantos caracteres ficam depois dele (0 = no fim).
+  const [fromEnd, setFromEnd] = useState(0)
+  const fromEndRef = useRef(0)
+  const setCursor = useCallback((n: number) => {
+    fromEndRef.current = n
+    setFromEnd(n)
+  }, [])
   const setQuery = useSearchStore((st) => st.setQuery)
   const setKeyboard = useSearchStore((st) => st.setKeyboard)
   const setKeyboardNav = useSearchStore((st) => st.setKeyboardNav)
@@ -213,7 +235,8 @@ export function OnScreenKeyboard() {
   }, [pos])
 
   // as duas camadas têm a mesma geometria: a posição vale nas duas
-  const rows = symbols ? SYMBOLS : LETTERS
+  const letters = useMemo(() => lettersFor(i18n.language), [i18n.language])
+  const rows = symbols ? SYMBOLS : letters
   const rowsRef = useRef(rows)
   useEffect(() => {
     rowsRef.current = rows
@@ -232,8 +255,21 @@ export function OnScreenKeyboard() {
     },
     [setQuery],
   )
-  const type = useCallback((txt: string) => write(read() + txt), [read, write])
-  const backspace = useCallback(() => write(Array.from(read()).slice(0, -1).join('')), [read, write])
+  const type = useCallback(
+    (txt: string) => {
+      const chars = Array.from(read())
+      chars.splice(chars.length - fromEndRef.current, 0, txt)
+      write(chars.join(''))
+    },
+    [read, write],
+  )
+  const backspace = useCallback(() => {
+    const chars = Array.from(read())
+    const at = chars.length - fromEndRef.current
+    if (at <= 0) return
+    chars.splice(at - 1, 1)
+    write(chars.join(''))
+  }, [read, write])
   // Fecha e devolve o foco: ao campo editado, ou (busca) ao primeiro
   // resultado / à busca, pra o controle continuar navegando dali.
   const close = useCallback(() => {
@@ -311,13 +347,28 @@ export function OnScreenKeyboard() {
         case 'context':
           close()
           return true
+        case 'tabPrev':
+          setCursor(Math.min(fromEndRef.current + 1, Array.from(read()).length))
+          return true
+        case 'tabNext':
+          setCursor(Math.max(fromEndRef.current - 1, 0))
+          return true
+        case 'pageUp':
+        case 'pageDown':
+          setSymbols((v) => !v)
+          return true
         default:
           return false
       }
     }
     setKeyboardNav(handler)
     return () => setKeyboardNav(null)
-  }, [open, move, press, backspace, close, type, read, setKeyboardNav])
+  }, [open, move, press, backspace, close, type, read, setCursor, setKeyboardNav])
+
+  // Cada abertura começa com o cursor no fim do texto.
+  useEffect(() => {
+    if (open) setCursor(0)
+  }, [open, setCursor])
 
   // A tecla em foco recebe o foco do DOM (anel padrão do app).
   useLayoutEffect(() => {
@@ -362,10 +413,18 @@ export function OnScreenKeyboard() {
     )
   }
 
+  const text = Array.from(target ? target.value : query)
+  const shown = target?.type === 'password' ? text.map(() => '•') : text
+  const caret = shown.length - Math.min(fromEnd, shown.length)
+
   const panel = (
     <div className={s.panel} role="dialog" aria-label={t('osk.title')} data-nav-skip>
       <div className={s.titleBar}>
-        <span className={s.grip} aria-hidden />
+        <span className={s.preview} aria-live="polite">
+          {shown.slice(0, caret).join('')}
+          <span className={s.caret} aria-hidden />
+          {shown.slice(caret).join('')}
+        </span>
         <Button
           appearance="subtle"
           size="small"

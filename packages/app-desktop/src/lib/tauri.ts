@@ -3,6 +3,8 @@
 // caso os comandos rejeitam e os listeners viram no-op.
 
 import i18n from '../i18n'
+import { useFilePickerStore } from '../stores/useFilePickerStore'
+import { inNavMode } from './focusNav'
 import type { InputFocus } from '../stores/useFocusStore'
 // Gerados do Rust (`cargo test`, ts-rs). Não editar à mão.
 import type { CatalogCore } from './bindings/CatalogCore'
@@ -16,6 +18,7 @@ import type { ControllerDriverSettings } from './bindings/ControllerDriverSettin
 import type { CoreOption } from './bindings/CoreOption'
 import type { CuratedPreset } from './bindings/CuratedPreset'
 import type { DevicePort } from './bindings/DevicePort'
+import type { DirListing } from './bindings/DirListing'
 import type { GameMetadata } from './bindings/GameMetadata'
 import type { Gamepad } from './bindings/Gamepad'
 import type { HardwareInfo } from './bindings/HardwareInfo'
@@ -296,10 +299,34 @@ export const downloadPpssppAssets = () => invoke<number>('download_ppsspp_assets
 
 /** Diálogo nativo de seleção de um arquivo de BIOS (sem filtro de extensão —
  *  vem em `.bin`/`.zip`/etc conforme o sistema). */
-export async function pickBiosFile(): Promise<string | null> {
+export function pickBiosFile(): Promise<string | null> {
+  return pickPath({ title: i18n.t('dialogs.pickBios') })
+}
+
+export const browseDir = (path: string | null, extensions: string[], dirsOnly: boolean) =>
+  invoke<DirListing>('browse_dir', { path, extensions, dirsOnly })
+
+/** Com o controle, o navegador do app; com mouse e teclado, a janela do sistema. */
+async function pickPath({
+  title,
+  directory = false,
+  extensions = [],
+  filterName = '',
+}: {
+  title: string
+  directory?: boolean
+  extensions?: string[]
+  filterName?: string
+}): Promise<string | null> {
   if (!inTauri) return null
+  if (inNavMode()) return useFilePickerStore.getState().ask({ title, directory, extensions })
   const { open } = await import('@tauri-apps/plugin-dialog')
-  const sel = await open({ multiple: false, title: i18n.t('dialogs.pickBios') })
+  const sel = await open({
+    directory,
+    multiple: false,
+    title,
+    filters: extensions.length > 0 ? [{ name: filterName, extensions }] : undefined,
+  })
   return typeof sel === 'string' ? sel : null
 }
 
@@ -402,23 +429,17 @@ export async function rescanLibrary(
 }
 
 /** Diálogo nativo de seleção de pasta. `null` se cancelado / fora do Tauri. */
-export async function pickFolder(title = i18n.t('dialogs.pickRomFolder')): Promise<string | null> {
-  if (!inTauri) return null
-  const { open } = await import('@tauri-apps/plugin-dialog')
-  const sel = await open({ directory: true, multiple: false, title })
-  return typeof sel === 'string' ? sel : null
+export function pickFolder(title = i18n.t('dialogs.pickRomFolder')): Promise<string | null> {
+  return pickPath({ title, directory: true })
 }
 
 /** Diálogo nativo de seleção de arquivo `.slangp`. */
-export async function pickSlangp(): Promise<string | null> {
-  if (!inTauri) return null
-  const { open } = await import('@tauri-apps/plugin-dialog')
-  const sel = await open({
-    multiple: false,
+export function pickSlangp(): Promise<string | null> {
+  return pickPath({
     title: i18n.t('dialogs.pickSlangp'),
-    filters: [{ name: 'slang preset', extensions: ['slangp'] }],
+    extensions: ['slangp'],
+    filterName: 'slang preset',
   })
-  return typeof sel === 'string' ? sel : null
 }
 
 export type { SaveState }
@@ -487,15 +508,8 @@ export async function profileAvatarUrl(): Promise<string | null> {
 }
 
 /** Diálogo nativo pra escolher uma imagem (avatar, papel de parede…). */
-export async function pickImage(title = i18n.t('dialogs.pickImage')): Promise<string | null> {
-  if (!inTauri) return null
-  const { open } = await import('@tauri-apps/plugin-dialog')
-  const sel = await open({
-    multiple: false,
-    title,
-    filters: [{ name: i18n.t('dialogs.imageFilter'), extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'] }],
-  })
-  return typeof sel === 'string' ? sel : null
+export function pickImage(title = i18n.t('dialogs.pickImage')): Promise<string | null> {
+  return pickPath({ title, extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif'], filterName: i18n.t('dialogs.imageFilter') })
 }
 
 // --- papel de parede da tela inicial (opcional) --------------------------

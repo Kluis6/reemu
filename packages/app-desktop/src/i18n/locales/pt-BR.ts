@@ -420,6 +420,13 @@ const ptBR = {
       guide: 'Guia',
     },
   },
+  filePicker: {
+    start: 'Unidades e pasta pessoal',
+    up: 'Pasta acima',
+    empty: 'Esta pasta está vazia.',
+    error: 'Não foi possível abrir esta pasta.',
+    chooseFolder: 'Escolher esta pasta',
+  },
   dialogs: {
     pickBios: 'Escolha o arquivo de BIOS',
     pickRomFolder: 'Escolha a pasta das ROMs',

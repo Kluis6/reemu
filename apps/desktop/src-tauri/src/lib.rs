@@ -381,6 +381,7 @@ pub fn run() {
             commands::remove_bios_file,
             commands::ppsspp_assets_installed,
             commands::download_ppsspp_assets,
+            commands::browse_dir,
             commands::list_roms,
             commands::remove_rom,
             commands::set_rom_favorite,

@@ -5,6 +5,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { BindingCapture } from '../components/BindingCapture'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
 import { Splash } from '../components/Splash'
+import { FilePicker } from '../components/FilePicker'
 import { ToastLayer } from '../components/ToastLayer'
 import { useFullscreenSync } from '../hooks/useFullscreen'
 import { useGamepadStatus } from '../hooks/useGamepadStatus'
@@ -65,6 +66,7 @@ export function RootLayout() {
       <BindingCapture />
       <ToastLayer />
       <OnScreenKeyboard />
+      <FilePicker />
     </>
   )
 }

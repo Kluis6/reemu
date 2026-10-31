@@ -388,6 +388,7 @@ fn pool(state: &AppState) -> Result<db::Db, String> {
 mod bios;
 mod cheats;
 mod cores;
+mod files;
 mod game;
 mod hardware;
 mod input;
@@ -403,6 +404,7 @@ mod shaders;
 pub use bios::*;
 pub use cheats::*;
 pub use cores::*;
+pub use files::*;
 pub use game::*;
 pub use hardware::*;
 pub use input::*;

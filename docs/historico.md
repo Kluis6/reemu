@@ -3311,3 +3311,8 @@ Infra:
 - **Presets:** Desempenho, Normal, Qualidade e Personalizado na aba Emulador, ainda sem configuração. Só Personalizado mostra as opções, e a escolha fica no armazenamento local.
 - **Sino:** abre um drawer no padrão do perfil.
 - **Barra superior:** continua transparente ao rolar, por decisão do usuário.
+
+## 2026-10-31 — Fase 5, parte 4: entrada de dados
+
+- **Navegador de arquivos:** com o controle, a escolha de pasta ou arquivo abre `FilePicker`, com o comando `browse_dir`, que só lista nomes. Com mouse e teclado, segue a janela do sistema.
+- **Teclado virtual:** mostra o texto digitado, tem cursor em LB/RB, troca de camada em LT/RT e tecla conforme o idioma. Sugestões de palavras ficaram de fora: exigiriam dicionários por idioma e ajudam pouco em nomes de jogos e pastas.

@@ -419,6 +419,13 @@ const en: Messages = {
       guide: 'Guide',
     },
   },
+  filePicker: {
+    start: 'Drives and home folder',
+    up: 'Up one folder',
+    empty: 'This folder is empty.',
+    error: 'This folder could not be opened.',
+    chooseFolder: 'Choose this folder',
+  },
   dialogs: {
     pickBios: 'Choose the BIOS file',
     pickRomFolder: 'Choose the ROM folder',

@@ -419,6 +419,13 @@ const es: Messages = {
       guide: 'Guía',
     },
   },
+  filePicker: {
+    start: 'Unidades y carpeta personal',
+    up: 'Carpeta superior',
+    empty: 'Esta carpeta está vacía.',
+    error: 'No se pudo abrir esta carpeta.',
+    chooseFolder: 'Elegir esta carpeta',
+  },
   dialogs: {
     pickBios: 'Elige el archivo de BIOS',
     pickRomFolder: 'Elige la carpeta de ROMs',
