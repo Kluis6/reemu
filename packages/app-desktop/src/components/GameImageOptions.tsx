@@ -1,4 +1,3 @@
-import { Field, Select, Switch, makeStyles, tokens } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -12,16 +11,7 @@ import {
 import { errorToast } from '../lib/toast'
 import { widescreenActive, widescreenOption } from '../lib/widescreen'
 import { useToastStore } from '../stores/useToastStore'
-
-const useStyles = makeStyles({
-  row: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    alignItems: 'start',
-    columnGap: tokens.spacingHorizontalM,
-    rowGap: tokens.spacingVerticalS,
-  },
-})
+import { BlockGroup, SelectBlock, ToggleBlock } from './SettingBlock'
 
 /**
  * Formato da imagem do jogo, na aba Emulador. Proporção: decisão do ReEmu, em
@@ -39,7 +29,6 @@ export function GameImageOptions({
   leading?: ReactNode
 }) {
   const { t } = useTranslation()
-  const s = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((st) => st.push)
 
@@ -78,33 +67,33 @@ export function GameImageOptions({
   })
 
   return (
-    <div className={s.row}>
+    <BlockGroup>
       {leading}
-      <Field label={t('game.image.aspect')} hint={t('game.image.aspectHint')}>
-        <Select
-          value={atRom}
-          disabled={change.isPending}
-          onChange={(_, d) => change.mutate(d.value)}
-        >
-          <option value="">{t('game.image.inherit')}</option>
-          <option value="core">{t('game.image.core')}</option>
-          <option value="4:3">4:3</option>
-          <option value="16:9">16:9</option>
-          <option value="fill">{t('game.image.fill')}</option>
-        </Select>
-      </Field>
+      <SelectBlock
+        label={t('game.image.aspect')}
+        description={t('game.image.aspectHint')}
+        value={atRom}
+        disabled={change.isPending}
+        options={[
+          { value: '', label: t('game.image.inherit') },
+          { value: 'core', label: t('game.image.core') },
+          { value: '4:3', label: '4:3' },
+          { value: '16:9', label: '16:9' },
+          { value: 'fill', label: t('game.image.fill') },
+        ]}
+        onChange={(value) => change.mutate(value)}
+      />
       {wide && (
-        <Field
+        <ToggleBlock
           label={t('game.image.widescreen')}
-          hint={t(wide.conflicts.length > 0 ? 'game.image.widescreenPatchHint' : 'game.image.widescreenHint')}
-        >
-          <Switch
-            checked={widescreenActive(wide)}
-            disabled={toggle.isPending}
-            onChange={(_, d) => toggle.mutate(d.checked)}
-          />
-        </Field>
+          description={t(
+            wide.conflicts.length > 0 ? 'game.image.widescreenPatchHint' : 'game.image.widescreenHint',
+          )}
+          checked={widescreenActive(wide)}
+          disabled={toggle.isPending}
+          onChange={(on) => toggle.mutate(on)}
+        />
       )}
-    </div>
+    </BlockGroup>
   )
 }

@@ -311,6 +311,14 @@ const en: Messages = {
     openCores: 'Open Cores',
   },
   game: {
+    preset: {
+      title: 'Preset',
+      performance: 'Performance',
+      normal: 'Normal',
+      quality: 'Quality',
+      custom: 'Custom',
+      pending: 'This preset does not change the core options yet. To adjust them, use Custom.',
+    },
     image: {
       aspect: 'Image aspect ratio',
       inherit: 'Inherit',
@@ -453,6 +461,9 @@ const en: Messages = {
     refresh: 'Refresh library',
     allPlatforms: 'All platforms',
     clearFilter: 'Clear filter',
+    searchActive: 'Search: {{query}}',
+    clearSearch: 'Clear the search for {{query}}',
+    jumpToLetter: 'Go to letter {{letter}}',
   },
   home: {
     seeLibrary: 'See library',

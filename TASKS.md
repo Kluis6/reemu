@@ -62,7 +62,7 @@ o card atual fica.
 - [x] `done` — Fase 2: becos sem saída do controle, mapa de botões e camada de foco (2026-10-30).
 - [x] `done` — Fase 3: escala igual à do app Xbox e janelas pequenas, aprovada pelo usuário (2026-10-31). Desempenho comparado com `docs/perf/baseline.json`: só o `run_med` do Vulkan marcado (4,33 → 4,95 ms), a confirmar com nova captura na mesma cena.
 - [x] `done` — Fase 4: configurações no modelo do console, aprovada pelo usuário (2026-10-31). Blocos em Sistema, Áudio, Metadados e Plano de fundo; listas, Perfil, Temas, Shaders e Molduras mantêm o layout próprio; sem coluna de categorias, a pedido.
-- [ ] `in-progress` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados; menu do jogo e página do jogo publicados; avisos e menu de pausa locais, aguardando teste.
+- [ ] `in-progress` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados; menu do jogo e página do jogo publicados; menus, biblioteca, opções de core em blocos, presets e sino publicados. Falta a entrada de dados.
       Inclui redesenhar as mensagens de erro (tela ao abrir um jogo e avisos).
 - [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates.
 - [ ] `todo` — Fase 7: acabamento, diagnóstico exportável e registro de decisões.
@@ -577,7 +577,6 @@ no `emu-session`, ver `docs/historico.md`).
         tempo de jogo pelo GAS. Depois, hero e logo de jogos já identificados
         para o carrossel e a página do jogo. ScreenScraper e TheGamesDB
         continuam como fontes principais, e o app funciona sem a GameKave.
-- [ ] `todo` — **Barra superior na página do jogo:** ao rolar, título e botões passam por baixo do Voltar e da busca (captura do dono do projeto, 2026-10-31). Sugestão: dar fundo à barra quando a página rolar.
 - [ ] `todo` — **Shader e proporção gerais nas Configurações:** a página do jogo só
       edita o próprio jogo (pedido do dono do projeto, 2026-10-31), então os valores
       por plataforma e para todos os jogos continuam valendo, mas precisam de um

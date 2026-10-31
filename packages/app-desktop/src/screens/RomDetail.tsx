@@ -43,8 +43,9 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { CoreOptions } from "../components/CoreOptions";
+import { GamePresets } from "../components/GamePresets";
 import { GameImageOptions } from "../components/GameImageOptions";
+import { SelectBlock } from "../components/SettingBlock";
 import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { CheatsPanel } from "../components/CheatsPanel";
@@ -799,26 +800,23 @@ export function RomDetail() {
                 coreId={chosenCore}
                 romId={romId}
                 leading={
-                  <Field label={t("game.core")}>
-                    <Select
-                      value={chosenCore}
-                      disabled={coreList.length === 0}
-                      onChange={(_, d) => setCoreId(d.value)}
-                    >
-                      {coreList.length === 0 && (
-                        <option value="">{t("game.noneInstalled")}</option>
-                      )}
-                      {coreList.map((c) => (
-                        <option key={c.coreId} value={c.coreId}>
-                          {c.name}
-                          {c.extensions.includes(ext) ? " ✓" : ""}
-                        </option>
-                      ))}
-                    </Select>
-                  </Field>
+                  <SelectBlock
+                    label={t("game.core")}
+                    value={chosenCore}
+                    disabled={coreList.length === 0}
+                    options={
+                      coreList.length === 0
+                        ? [{ value: "", label: t("game.noneInstalled") }]
+                        : coreList.map((c) => ({
+                            value: c.coreId,
+                            label: `${c.name}${c.extensions.includes(ext) ? " ✓" : ""}`,
+                          }))
+                    }
+                    onChange={setCoreId}
+                  />
                 }
               />
-              <CoreOptions coreId={chosenCore} romId={romId} />
+              <GamePresets coreId={chosenCore} romId={romId} />
             </>
           )}
           {activeCfgTab === "cheats" && <CheatsPanel romId={romId} />}

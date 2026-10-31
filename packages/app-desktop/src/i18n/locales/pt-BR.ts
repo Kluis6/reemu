@@ -312,6 +312,14 @@ const ptBR = {
     openCores: 'Abrir Cores',
   },
   game: {
+    preset: {
+      title: 'Predefinição',
+      performance: 'Desempenho',
+      normal: 'Normal',
+      quality: 'Qualidade',
+      custom: 'Personalizado',
+      pending: 'Esta predefinição ainda não muda as opções do core. Para ajustá-las, use Personalizado.',
+    },
     image: {
       aspect: 'Proporção da imagem',
       inherit: 'Herdar',
@@ -454,6 +462,9 @@ const ptBR = {
     refresh: 'Atualizar biblioteca',
     allPlatforms: 'Todas as plataformas',
     clearFilter: 'Limpar filtro',
+    searchActive: 'Busca: {{query}}',
+    clearSearch: 'Limpar a busca por {{query}}',
+    jumpToLetter: 'Ir para a letra {{letter}}',
   },
   home: {
     seeLibrary: 'Ver biblioteca',

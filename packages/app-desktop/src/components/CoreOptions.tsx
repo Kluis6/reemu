@@ -1,10 +1,8 @@
 import {
   Button,
   Caption1,
-  Field,
   MessageBar,
   MessageBarBody,
-  Select,
   Spinner,
   makeStyles,
   tokens,
@@ -13,19 +11,15 @@ import { ArrowResetRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getCoreOptions, resetCoreOptions, setCoreOption } from '../lib/tauri'
 import { errorToast } from '../lib/toast'
+import { toggleValues } from '../lib/coreOptions'
 import { useToastStore } from '../stores/useToastStore'
 import { useTranslation } from 'react-i18next'
+import { BlockGroup, SelectBlock, ToggleBlock } from './SettingBlock'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
   head: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' },
   hint: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    columnGap: tokens.spacingHorizontalM,
-    rowGap: tokens.spacingVerticalS,
-  },
 })
 
 /**
@@ -93,39 +87,46 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
           {t('coreOptions.reset')}
         </Button>
       </div>
-      <div className={styles.grid}>
+      <BlockGroup>
         {opts.data.map((o) => {
+          // Só nas opções do core: no jogo também existe o "Herdar", um 3º estado.
+          const toggle = romId ? null : toggleValues(o.choices)
           // "rom": mostra o override ("" = herda). "core": o valor por core,
           // ou o default do schema.
           const cur =
             scope === 'rom' ? (o.romValue ?? '') : (o.coreValue ?? o.defaultValue)
+          if (toggle)
+            return (
+              <ToggleBlock
+                key={o.key}
+                label={o.displayName}
+                checked={cur === toggle.on}
+                disabled={change.isPending}
+                onChange={(on) =>
+                  change.mutate({ key: o.key, value: on ? toggle.on : toggle.off })
+                }
+              />
+            )
           return (
-            <Field
+            <SelectBlock
               key={o.key}
               label={o.displayName}
-              hint={
-                scope === 'rom' && o.romValue == null
-                  ? t('coreOptions.inheriting', { value: o.value })
-                  : undefined
-              }
-            >
-              <Select
-                appearance="filled-darker"
-                value={cur}
-                disabled={change.isPending}
-                onChange={(_, d) => change.mutate({ key: o.key, value: d.value })}
-              >
-                {scope === 'rom' && <option value="">{t('coreOptions.inherit', { value: o.value })}</option>}
-                {o.choices.map((c) => (
-                  <option key={c} value={c}>
-                    {c === o.defaultValue ? t('coreOptions.default', { value: c }) : c}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+              value={cur}
+              disabled={change.isPending}
+              options={[
+                ...(scope === 'rom'
+                  ? [{ value: '', label: t('coreOptions.inherit', { value: o.value }) }]
+                  : []),
+                ...o.choices.map((c) => ({
+                  value: c,
+                  label: c === o.defaultValue ? t('coreOptions.default', { value: c }) : c,
+                })),
+              ]}
+              onChange={(value) => change.mutate({ key: o.key, value })}
+            />
           )
         })}
-      </div>
+      </BlockGroup>
     </div>
   )
 }

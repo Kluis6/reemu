@@ -73,7 +73,7 @@ const useStyles = makeStyles({
   chevron: { flexShrink: 0, fontSize: "20px" },
   // Sem o espaço do `Switch`, que desalinhava a borda direita dos blocos.
   switch: { flexShrink: 0, "& .fui-Switch__indicator": { margin: 0 } },
-  popover: { maxWidth: "none" },
+  popover: { maxWidth: "none", overflowY: "auto" },
 });
 
 /** Grupo de blocos, com título opcional acima. */
@@ -127,10 +127,12 @@ export function SelectBlock({
   description,
   value,
   options,
+  disabled,
   onChange,
 }: {
   label: string;
   description?: string;
+  disabled?: boolean;
   value: string;
   options: readonly { value: string; label: string }[];
   onChange: (value: string) => void;
@@ -158,13 +160,21 @@ export function SelectBlock({
         const next = d.checkedItems[0];
         if (next !== undefined) onChange(next);
       }}
-      positioning={{ position: "below", align: "start", coverTarget: true, matchTargetSize: "width" }}
+      // `autoSize`: lista longa de um core rola por dentro, sem passar da janela
+      positioning={{
+        position: "below",
+        align: "start",
+        coverTarget: true,
+        matchTargetSize: "width",
+        autoSize: "height",
+      }}
     >
       <MenuTrigger disableButtonEnhancement>
         <Button
           appearance="transparent"
           className={mergeClasses(s.block, s.pressable, s.selectBlock)}
           aria-label={`${label}: ${current}`}
+          disabled={disabled}
           aria-description={description}
         >
           <span className={s.text}>

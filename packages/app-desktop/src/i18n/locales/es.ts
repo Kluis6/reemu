@@ -311,6 +311,14 @@ const es: Messages = {
     openCores: 'Abrir Núcleos',
   },
   game: {
+    preset: {
+      title: 'Ajuste predefinido',
+      performance: 'Rendimiento',
+      normal: 'Normal',
+      quality: 'Calidad',
+      custom: 'Personalizado',
+      pending: 'Este ajuste todavía no cambia las opciones del core. Para ajustarlas, usa Personalizado.',
+    },
     image: {
       aspect: 'Proporción de la imagen',
       inherit: 'Heredar',
@@ -453,6 +461,9 @@ const es: Messages = {
     refresh: 'Actualizar biblioteca',
     allPlatforms: 'Todas las plataformas',
     clearFilter: 'Quitar filtro',
+    searchActive: 'Búsqueda: {{query}}',
+    clearSearch: 'Borrar la búsqueda de {{query}}',
+    jumpToLetter: 'Ir a la letra {{letter}}',
   },
   home: {
     seeLibrary: 'Ver biblioteca',

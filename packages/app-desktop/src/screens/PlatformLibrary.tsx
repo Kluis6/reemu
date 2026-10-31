@@ -1,19 +1,38 @@
 import { DeleteRegular, OpenRegular } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { Button, makeStyles, tokens } from "@fluentui/react-components";
+import { useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { CardGridSkeleton } from "../components/CardGridSkeleton";
 import { SearchArt } from "../components/EmptyArt";
 import { EmptyState } from "../components/EmptyState";
 import { GameCard } from "../components/GameCard";
+import { SearchChip } from "../components/SearchChip";
 import { SectionHeader } from "../components/SectionHeader";
+import { VirtualGrid, type VirtualGridHandle } from "../components/VirtualGrid";
 import { platformLabel } from "../lib/platform";
+import { letterIndex } from "../lib/virtualGrid";
+import type { RomEntry } from "../lib/tauri";
 import { errorToast, sysToast } from "../lib/toast";
 import { listRoms, removeRom } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
 import { useBrowseStyles } from "../styles/xbox";
 import { useTranslation } from "react-i18next";
+
+// Abaixo disso a lista cabe em poucas telas e pular por letra não ajuda.
+const LETTERS_MIN_ITEMS = 30;
+
+const useStyles = makeStyles({
+  tools: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+    marginBottom: tokens.spacingVerticalL,
+  },
+  letter: { minWidth: "36px", maxWidth: "36px", paddingLeft: 0, paddingRight: 0 },
+});
 
 /**
  * `/library/:platform` — grade completa de uma plataforma só. A tela
@@ -22,6 +41,8 @@ import { useTranslation } from "react-i18next";
 export function PlatformLibrary() {
   const { t } = useTranslation();
   const s = useBrowseStyles();
+  const l = useStyles();
+  const grid = useRef<VirtualGridHandle>(null);
   const qc = useQueryClient();
   const navigate = useNavigate();
   const push = useToastStore((t) => t.push);
@@ -45,6 +66,30 @@ export function PlatformLibrary() {
     onError: (e) => push(errorToast(e, "removeGame")),
   });
 
+  const letters = useMemo(
+    () => (list.length >= LETTERS_MIN_ITEMS ? letterIndex(list.map((r) => r.title)) : []),
+    [list],
+  );
+
+  const card = (r: RomEntry) => (
+    <GameCard
+      key={r.id}
+      title={r.title}
+      badge={platformLabel(r.systemId)}
+      boxart={r.boxart}
+      favorite={r.isFavorite}
+      onClick={() => navigate(`/rom/${r.id}`)}
+      menu={[
+        { label: t("library.open"), icon: <OpenRegular />, onClick: () => navigate(`/rom/${r.id}`) },
+        {
+          label: t("library.remove"),
+          icon: <DeleteRegular />,
+          onClick: () => del.mutate(r.id),
+        },
+      ]}
+    />
+  );
+
   return (
     <div>
       <SectionHeader
@@ -56,6 +101,22 @@ export function PlatformLibrary() {
         }
       />
 
+      <div className={l.tools}>
+        <SearchChip />
+        {letters.length > 1 &&
+          letters.map(({ letter, index }) => (
+            <Button
+              key={letter}
+              className={l.letter}
+              appearance="subtle"
+              aria-label={t("library.jumpToLetter", { letter })}
+              onClick={() => grid.current?.focusIndex(index)}
+            >
+              {letter}
+            </Button>
+          ))}
+      </div>
+
       {roms.isLoading ? (
         <CardGridSkeleton />
       ) : list.length === 0 ? (
@@ -63,26 +124,7 @@ export function PlatformLibrary() {
           {t("home.emptyPlatformHint")}
         </EmptyState>
       ) : (
-        <div className={s.grid}>
-          {list.map((r) => (
-            <GameCard
-              key={r.id}
-              title={r.title}
-              badge={platformLabel(r.systemId)}
-              boxart={r.boxart}
-              favorite={r.isFavorite}
-              onClick={() => navigate(`/rom/${r.id}`)}
-              menu={[
-                { label: t("library.open"), icon: <OpenRegular />, onClick: () => navigate(`/rom/${r.id}`) },
-                {
-                  label: t("library.remove"),
-                  icon: <DeleteRegular />,
-                  onClick: () => del.mutate(r.id),
-                },
-              ]}
-            />
-          ))}
-        </div>
+        <VirtualGrid className={s.grid} items={list} render={card} handle={grid} />
       )}
     </div>
   );

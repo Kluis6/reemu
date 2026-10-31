@@ -53,6 +53,8 @@ import {
   useTabStyles,
 } from "../styles/xbox";
 import { useTranslation } from "react-i18next";
+import { SearchChip } from "../components/SearchChip";
+import { VirtualGrid } from "../components/VirtualGrid";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
 
 const useLibStyles = makeStyles({
@@ -258,7 +260,7 @@ export function Library() {
   );
 
   const grid = (list: readonly RomEntry[]) => (
-    <div className={mergeClasses(s.grid, m.fadeIn)}>{list.map(card)}</div>
+    <VirtualGrid className={mergeClasses(s.grid, m.fadeIn)} items={list} render={card} />
   );
 
   const body = () => {
@@ -407,6 +409,8 @@ export function Library() {
             {t("library.clearFilter")}
           </Button>
         )}
+
+        <SearchChip />
 
         <Menu
           positioning={{ autoSize: "height" }}

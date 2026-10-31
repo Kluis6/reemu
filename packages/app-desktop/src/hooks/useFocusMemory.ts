@@ -20,7 +20,8 @@ function findRemembered(root: HTMLElement, saved: Remembered): HTMLElement | nul
   const els = navCandidates(root)
   return (
     (saved.label ? els.find((el) => el.getAttribute('aria-label') === saved.label) : null) ??
-    els[saved.index] ??
+    // Na grade virtual a posição na lista muda com a rolagem: só vale o nome.
+    (root.querySelector('[data-virtual-grid]') ? null : els[saved.index]) ??
     null
   )
 }
@@ -60,6 +61,8 @@ export function useFocusMemory(contentRef: RefObject<HTMLElement | null>) {
       // Tela com foco próprio, ou o usuário já se mexeu: não toma o foco de volta.
       if (!saved && root.contains(document.activeElement)) return
       if (navScope() !== document) return
+      // Antes de procurar: a grade virtual só renderiza o que está perto da tela.
+      if (saved) root.scrollTop = saved.scrollTop
       const target = saved
         ? findRemembered(root, saved)
         : (navCandidates(root).find((el) => {
@@ -67,8 +70,9 @@ export function useFocusMemory(contentRef: RefObject<HTMLElement | null>) {
             return !el.matches(INITIAL_SKIP) && r.top >= 0 && r.bottom <= window.innerHeight
           }) ?? null)
       if (target) {
-        if (saved) root.scrollTop = saved.scrollTop
         target.focus({ preventScroll: true })
+        // a rolagem guardada é de antes do foco chegar ao item
+        if (saved) target.scrollIntoView({ block: 'nearest' })
         return
       }
       if (performance.now() - started < WAIT_MS) frame = requestAnimationFrame(attempt)

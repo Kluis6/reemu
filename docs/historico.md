@@ -3303,3 +3303,11 @@ Infra:
 - **Menu de pausa e avisos:** as ações do menu de pausa mostram o nome, porque na TV não há tooltip. Os avisos usam a superfície dos menus e ficam abaixo da barra superior, sem cobrir o relógio.
 - **Fontes como no dashboard do Xbox Series:** título em DIN (Bahnschrift, identificada pela aparência) com seção em negrito e página em regular; corpo, botões e nomes de jogo em regular; só a aba ativa em negrito. Padrão em `18-experiencia-console-tv.md`.
 - **Cards das subcategorias:** dividem a largura útil em partes iguais.
+
+## 2026-10-31 — Fase 5, parte 3: biblioteca grande, opções de core, presets e sino
+
+- **Lista grande:** a partir de 120 jogos, `VirtualGrid` só mantém no DOM o que está perto da tela. Com 3.000 jogos simulados, abrir a plataforma caiu de 1.882 para 113 ms e mover o foco de ~95 para 2–3 ms. Inclui pulo por letra e aviso de busca ativa.
+- **Opções de core:** blocos no padrão de Sistema › Opções. Descrições e categorias declaradas pelos cores não são guardadas; aproveitá-las mexe no carregamento do core e no banco, e exige aviso antes.
+- **Presets:** Desempenho, Normal, Qualidade e Personalizado na aba Emulador, ainda sem configuração. Só Personalizado mostra as opções, e a escolha fica no armazenamento local.
+- **Sino:** abre um drawer no padrão do perfil.
+- **Barra superior:** continua transparente ao rolar, por decisão do usuário.

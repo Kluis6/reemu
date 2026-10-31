@@ -2,10 +2,10 @@ import {
   Button,
   Caption1,
   CounterBadge,
-  Popover,
-  PopoverSurface,
-  PopoverTrigger,
-  Subtitle2,
+  DrawerBody,
+  DrawerHeader,
+  DrawerHeaderTitle,
+  OverlayDrawer,
   Tooltip,
   makeStyles,
   mergeClasses,
@@ -17,25 +17,32 @@ import {
   SparkleRegular,
   WarningRegular,
 } from "@fluentui/react-icons";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotificationStore, type AppNotification } from "../stores/useNotificationStore";
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
+import { useModalButtonStyles } from "../styles/buttons";
+import { floatingDrawer } from "../styles/xbox";
 
 const useStyles = makeStyles({
   badge: { position: "absolute", top: "2px", right: "2px", pointerEvents: "none" },
-  surface: {
-    width: "340px",
-    maxWidth: "calc(100vw - 32px)",
-    padding: tokens.spacingVerticalM,
+  // Flutuante à esquerda, como o drawer de perfil e o menu de pausa.
+  drawer: {
+    ["--fui-Drawer--size" as string]: "min(420px, calc(100vw - 48px))",
+    ...floatingDrawer("left"),
+    backgroundColor: tokens.colorNeutralBackground2,
+    color: tokens.colorNeutralForeground1,
+  },
+  // a folga em cima não deixa o corpo do drawer cortar o anel de foco
+  list: {
     display: "flex",
     flexDirection: "column",
     rowGap: tokens.spacingVerticalS,
+    paddingTop: "12px",
+    paddingBottom: "12px",
   },
-  header: { paddingLeft: tokens.spacingHorizontalS },
-  list: { display: "flex", flexDirection: "column", rowGap: tokens.spacingVerticalXS },
   item: {
     justifyContent: "flex-start",
     textAlign: "left",
@@ -44,7 +51,7 @@ const useStyles = makeStyles({
     paddingTop: tokens.spacingVerticalS,
     paddingBottom: tokens.spacingVerticalS,
     width: "100%",
-    fontWeight: tokens.fontWeightRegular,
+    maxWidth: "none",
   },
   itemText: { display: "flex", flexDirection: "column", rowGap: "2px", minWidth: 0 },
   itemTitle: { fontWeight: tokens.fontWeightSemibold },
@@ -53,7 +60,6 @@ const useStyles = makeStyles({
   meta: { color: tokens.colorNeutralForeground3 },
   empty: {
     color: tokens.colorNeutralForeground3,
-    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalS}`,
   },
 });
 
@@ -69,12 +75,14 @@ function ago(at: number): string {
 /**
  * Sino da barra lateral (acima do botão Encerrar): avisos do sistema —
  * versão nova, novidades depois de atualizar, shader removido por impedir o
- * jogo de aparecer. Contador = não lidas; abrir a
- * lista marca tudo como lido. Clicar num aviso abre o modal da atualização.
+ * jogo de aparecer, abertos num drawer. Contador = não lidas; fechar a lista
+ * marca tudo como lido. Clicar num aviso abre o modal da atualização.
  */
 export function NotificationBell({ className }: { className?: string }) {
   const { t } = useTranslation();
   const s = useStyles();
+  const btn = useModalButtonStyles();
+  const bell = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const items = useNotificationStore((n) => n.items);
   const markAllRead = useNotificationStore((n) => n.markAllRead);
@@ -83,8 +91,16 @@ export function NotificationBell({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const unread = items.filter((i) => !i.read).length;
 
-  const select = (n: AppNotification) => {
+  // marca ao FECHAR: enquanto a lista está aberta o destaque de "não lida"
+  // continua visível. O foco vindo do controle não volta sozinho ao sino.
+  const close = () => {
     setOpen(false);
+    markAllRead();
+    requestAnimationFrame(() => bell.current?.focus({ preventScroll: true }));
+  };
+
+  const select = (n: AppNotification) => {
+    close();
     if (n.kind === "notice") {
       if (n.route) navigate(n.route);
       return;
@@ -94,74 +110,73 @@ export function NotificationBell({ className }: { className?: string }) {
   };
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(_, d) => {
-        setOpen(d.open);
-        // marca ao FECHAR: enquanto a lista está aberta o destaque de
-        // "não lida" continua visível
-        if (!d.open) markAllRead();
-      }}
-      positioning={{ position: "after", align: "end", offset: 12 }}
-      trapFocus
-    >
-      <PopoverTrigger disableButtonEnhancement>
-        <Tooltip positioning={TOOLTIP_POSITION} content={t("notifications.title")} relationship="label">
-          <Button
-            className={className}
-            appearance="subtle"
-            icon={<AlertRegular />}
-            aria-label={unread > 0 ? t("notifications.titleUnread", { count: unread }) : t("notifications.title")}
-          >
-            {unread > 0 && (
-              <CounterBadge
-                className={s.badge}
-                count={unread}
-                overflowCount={9}
-                size="small"
-                color="brand"
-              />
-            )}
-          </Button>
-        </Tooltip>
-      </PopoverTrigger>
-      <PopoverSurface className={s.surface}>
-        <Subtitle2 className={s.header}>{t("notifications.title")}</Subtitle2>
-        {items.length === 0 ? (
-          <Caption1 className={s.empty}>
-            {t("notifications.empty")}
-          </Caption1>
-        ) : (
-          <div className={s.list}>
-            {items.map((n) => (
-              <Button
-                key={n.id}
-                className={s.item}
-                appearance="subtle"
-                icon={
-                  n.kind === "update" ? (
-                    <ArrowCircleUpRegular className={mergeClasses(!n.read && s.unread)} />
-                  ) : n.kind === "shaderFailed" || n.kind === "notice" ? (
-                    <WarningRegular className={mergeClasses(!n.read && s.unread)} />
-                  ) : (
-                    <SparkleRegular className={mergeClasses(!n.read && s.unread)} />
-                  )
-                }
-                onClick={() => select(n)}
-              >
-                <span className={s.itemText}>
-                  <span className={mergeClasses(s.itemTitle, !n.read && s.unread)}>
-                    {n.title}
-                  </span>
-                  <Caption1 className={s.meta}>
-                    {n.summary} · {ago(n.at)}
-                  </Caption1>
-                </span>
-              </Button>
-            ))}
-          </div>
-        )}
-      </PopoverSurface>
-    </Popover>
+    <>
+      <Tooltip positioning={TOOLTIP_POSITION} content={t("notifications.title")} relationship="label">
+        <Button
+          ref={bell}
+          className={className}
+          appearance="subtle"
+          icon={<AlertRegular />}
+          aria-label={unread > 0 ? t("notifications.titleUnread", { count: unread }) : t("notifications.title")}
+          onClick={() => setOpen(true)}
+        >
+          {unread > 0 && (
+            <CounterBadge
+              className={s.badge}
+              count={unread}
+              overflowCount={9}
+              size="small"
+              color="brand"
+            />
+          )}
+        </Button>
+      </Tooltip>
+      <OverlayDrawer
+        open={open}
+        onOpenChange={(_, d) => (d.open ? setOpen(true) : close())}
+        position="start"
+        className={s.drawer}
+        aria-label={t("notifications.title")}
+      >
+        <DrawerHeader>
+          <DrawerHeaderTitle>{t("notifications.title")}</DrawerHeaderTitle>
+        </DrawerHeader>
+        <DrawerBody>
+          {items.length === 0 ? (
+            <Caption1 className={s.empty}>{t("notifications.empty")}</Caption1>
+          ) : (
+            <div className={s.list}>
+              {items.map((n) => {
+                const iconClass = mergeClasses(!n.read && s.unread);
+                return (
+                  <Button
+                    key={n.id}
+                    className={mergeClasses(s.item, btn.secondary)}
+                    icon={
+                      n.kind === "update" ? (
+                        <ArrowCircleUpRegular className={iconClass} />
+                      ) : n.kind === "shaderFailed" || n.kind === "notice" ? (
+                        <WarningRegular className={iconClass} />
+                      ) : (
+                        <SparkleRegular className={iconClass} />
+                      )
+                    }
+                    onClick={() => select(n)}
+                  >
+                    <span className={s.itemText}>
+                      <span className={mergeClasses(s.itemTitle, !n.read && s.unread)}>
+                        {n.title}
+                      </span>
+                      <Caption1 className={s.meta}>{n.summary}</Caption1>
+                      <Caption1 className={s.meta}>{ago(n.at)}</Caption1>
+                    </span>
+                  </Button>
+                );
+              })}
+            </div>
+          )}
+        </DrawerBody>
+      </OverlayDrawer>
+    </>
   );
 }

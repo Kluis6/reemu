@@ -1207,7 +1207,16 @@ export const useDetailStyles = makeStyles({
     rowGap: 0,
     paddingTop: "14px",
     borderRadius: shell.radius,
-    backgroundColor: tokens.colorNeutralBackground2,
+    backgroundColor: "var(--reemuSurface1)",
+    // Blocos e campos de dentro em camada mais clara, como no card das Configurações.
+    "--colorNeutralBackground2": "var(--reemuSurface2)",
+    "--colorNeutralBackground2Hover": "var(--reemuSurface2Hover)",
+    "--colorNeutralBackground2Pressed": "var(--reemuSurface2Pressed)",
+    "--colorNeutralBackground2Selected": "var(--reemuSurface2Selected)",
+    "--colorNeutralBackground3": "var(--reemuSurface3)",
+    "--colorNeutralBackground3Hover": "var(--reemuSurface3Hover)",
+    "--colorNeutralBackground3Pressed": "var(--reemuSurface3Pressed)",
+    "--colorNeutralBackground3Selected": "var(--reemuSurface3Selected)",
   },
   tabsAligned: {
     alignSelf: "center",
@@ -1418,10 +1427,10 @@ export const useDetailStyles = makeStyles({
     // Borda na MESMA cor do fundo (pedido do usuário) — fica "sem borda"
     // visualmente, sem tirar a propriedade (mantém a caixa com o mesmo
     // tamanho de antes, sem o realce de contorno).
-    border: `1px solid ${tokens.colorNeutralBackground2}`,
+    border: "1px solid var(--reemuSurface1)",
     // Sólido (não `--reemuFillWeak`, que é translúcido) — e sem `maxWidth`:
     // acompanha a largura do hero/ações acima, como o resto da página.
-    backgroundColor: tokens.colorNeutralBackground2,
+    backgroundColor: "var(--reemuSurface1)",
   },
   field: { display: "flex", flexDirection: "column", rowGap: "4px" },
   // Aba Shader: escolha à esquerda, ajustes do shader escolhido à direita.
