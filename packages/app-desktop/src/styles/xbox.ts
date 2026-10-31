@@ -1751,20 +1751,14 @@ export const usePauseStyles = makeStyles({
     columnGap: "12px",
   },
   // Fileira de baixo: botões quadrados só de ícone (guia do Xbox)
+  // Ações com o nome à vista: na TV não há tooltip para explicar o ícone.
   footer: {
     display: "flex",
-    columnGap: "12px",
+    flexDirection: "column",
+    alignItems: "stretch",
+    rowGap: "8px",
     paddingTop: "14px",
     borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-  },
-  footerBtn: {
-    width: "56px",
-    height: "56px",
-    minWidth: 0,
-    maxWidth: "56px",
-    padding: 0,
-    fontSize: `${M.ICON}px`,
-    "& .fui-Button__icon": { fontSize: "1em", width: "1em", height: "1em" },
   },
   states: {
     display: "flex",

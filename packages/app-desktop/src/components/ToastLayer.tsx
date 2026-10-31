@@ -23,7 +23,8 @@ const useStyles = makeStyles({
   // captura input (`pointerEvents: none`), nunca pausa o core.
   layer: {
     position: "fixed",
-    top: tokens.spacingVerticalM,
+    // abaixo da barra superior: em cima dela, cobria o relógio e os ícones
+    top: "72px",
     right: tokens.spacingHorizontalM,
     display: "flex",
     flexDirection: "column",
@@ -38,8 +39,17 @@ const useStyles = makeStyles({
     maxWidth: "calc(100vw - 32px)",
   },
   // O `MessageBar` da Fluent vem bem justo — mais respiro em volta do texto.
+  // Painel como os menus: a superfície do app, com a cor só no ícone. O fundo
+  // tingido do `MessageBar` ficava escuro demais e destoava em cada tema.
   bar: {
     pointerEvents: "auto",
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "transparent",
+    borderLeftColor: "transparent",
+    borderRadius: tokens.borderRadiusMedium,
+    boxShadow: tokens.shadow16,
     overflowWrap: "anywhere",
     paddingTop: tokens.spacingVerticalM,
     paddingBottom: tokens.spacingVerticalM,

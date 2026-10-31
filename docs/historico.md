@@ -3300,3 +3300,4 @@ Infra:
 - **Só este jogo:** Emulador, Shader e proporção da imagem deixam de editar core, plataforma e todos os jogos. Os valores já gravados continuam valendo por herança; o ajuste geral fica para um componente nas Configurações (`TASKS.md`).
 - **CI:** um job falhou por falta de disco no servidor; o cache do GitHub Actions foi limpo a pedido do usuário.
 - **Configurações do core:** nova tela em Configurações › Cores, com informações e opções para todos os jogos do core; o ajuste do jogo tem prioridade. As opções só aparecem depois da primeira execução, porque é ao carregar um jogo que o ReEmu as grava. O usuário decidiu manter assim, com um aviso na tela, em vez de capturá-las sem jogo pelo `--probe`.
+- **Menu de pausa e avisos:** as ações do menu de pausa mostram o nome, porque na TV não há tooltip. Os avisos usam a superfície dos menus e ficam abaixo da barra superior, sem cobrir o relógio.

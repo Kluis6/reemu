@@ -1078,34 +1078,28 @@ export function PlayScreen() {
                 do guia do Xbox; o nome vem no tooltip (Fluent 2: ícone sozinho
                 pede rótulo acessível e tooltip). */}
             <DrawerFooter className={pause.footer}>
-              <Tooltip positioning={TOOLTIP_POSITION} content={t("play.continue")} relationship="label">
-                <Button
-                  appearance="primary"
-                  size="large"
-                  className={pause.footerBtn}
-                  icon={<PlayRegular />}
-                  onClick={resume}
-                />
-              </Tooltip>
-              <Tooltip positioning={TOOLTIP_POSITION}
-                content={fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen")}
-                relationship="label"
+              <Button
+                appearance="primary"
+                className={pause.item}
+                icon={<PlayRegular />}
+                onClick={resume}
               >
-                <Button
-                  size="large"
-                  className={mergeClasses(pause.footerBtn, btn.secondary)}
-                  icon={fullscreen ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />}
-                  onClick={() => void toggleFullscreen()}
-                />
-              </Tooltip>
-              <Tooltip positioning={TOOLTIP_POSITION} content={t("play.quit")} relationship="label">
-                <Button
-                  size="large"
-                  className={mergeClasses(pause.footerBtn, btn.secondary)}
-                  icon={<ArrowExitRegular />}
-                  onClick={quit}
-                />
-              </Tooltip>
+                {t("play.continue")}
+              </Button>
+              <Button
+                className={mergeClasses(pause.item, btn.secondary)}
+                icon={fullscreen ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />}
+                onClick={() => void toggleFullscreen()}
+              >
+                {fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen")}
+              </Button>
+              <Button
+                className={mergeClasses(pause.item, btn.secondary)}
+                icon={<ArrowExitRegular />}
+                onClick={quit}
+              >
+                {t("play.quit")}
+              </Button>
             </DrawerFooter>
       </OverlayDrawer>
     </div>
