@@ -72,6 +72,7 @@ pub fn input_key(
 /// Um alvo do teclado com a tecla efetiva (padrão ou do usuário).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "KeyboardBinding"))]
 pub struct KeyboardBindingDto {
     pub target: String,
     /// `KeyboardEvent.code`; vazio = sem tecla.
@@ -318,6 +319,7 @@ pub async fn clear_device_port(state: State<'_, AppState>, guid: String) -> Resu
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "DevicePort"))]
 pub struct DevicePortDto {
     pub guid: String,
     pub port: u8,
@@ -337,6 +339,7 @@ pub async fn list_device_ports(state: State<'_, AppState>) -> Result<Vec<DeviceP
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "Gamepad"))]
 pub struct GamepadDto {
     pub guid: String,
     pub name: String,

@@ -881,6 +881,7 @@ pub struct HdrSettings {
 /// Estado do HDR pra interface.
 #[derive(Debug, Clone, Default, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "HdrStatus"))]
 pub struct HdrStatus {
     /// Há uma janela de jogo nativa (o HDR vale só nela).
     pub surface: bool,

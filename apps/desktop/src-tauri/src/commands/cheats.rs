@@ -6,6 +6,7 @@ use super::*;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "Cheat"))]
 pub struct CheatDto {
     pub id: i64,
     pub rom_id: String,

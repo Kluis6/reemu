@@ -6,6 +6,8 @@
 
 import i18n from '../i18n'
 import type { Messages } from '../i18n/types'
+import type { AppError } from './bindings/AppError'
+import type { ErrorCode } from './bindings/ErrorCode'
 
 /** Lugar do app que resolve o problema — vira um botão na tela de erro. */
 export type ErrorFix = 'cores' | 'bios' | 'metadata' | 'library'
@@ -36,6 +38,14 @@ export function errorText(e: unknown): string {
 
 /** Chave da regra em `errors.rules.<id>` (título + dica, i18n). */
 type RuleId = keyof Messages['errors']['rules']
+
+/** Código enviado pelo backend, quando a causa é conhecida. Todo código tem que
+ *  ser uma regra: um código novo sem regra não compila aqui. */
+function errorCode(e: unknown): RuleId | null {
+  if (!e || typeof e !== 'object' || !('code' in e)) return null
+  const code: ErrorCode | null = (e as AppError).code
+  return code
+}
 
 interface Rule {
   test: RegExp
@@ -138,7 +148,8 @@ export function describeError(e: unknown, action: ActionKey): FriendlyError {
   const technical = errorText(e)
     .replace(/^Error:\s*/i, '')
     .trim()
-  const rule = RULES.find((r) => r.test.test(technical))
+  const code = errorCode(e)
+  const rule = RULES.find((r) => (code ? r.id === code : r.test.test(technical)))
   if (rule) {
     const hint = i18n.t(`errors.rules.${rule.id}.hint`)
     return {

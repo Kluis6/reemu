@@ -65,6 +65,7 @@ pub fn pack_root(decorations_dir: &Path) -> PathBuf {
 
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "BezelCatalogItem"))]
 pub struct CatalogItem {
     pub system_id: String,
     /// `true` se já há `<pack_root>/<system_id>/` com conteúdo.
@@ -73,12 +74,14 @@ pub struct CatalogItem {
 
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "BezelProgress"))]
 pub struct DownloadProgress {
     pub system_id: String,
     pub received: u64,
     /// 0 se o servidor não mandou `Content-Length`.
     pub total: u64,
     /// `"download"` | `"extract"` | `"import"`.
+    #[cfg_attr(test, ts(type = "'download' | 'extract' | 'import'"))]
     pub phase: &'static str,
 }
 

@@ -4,6 +4,7 @@ use super::*;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "RomEntry"))]
 pub struct RomDto {
     pub id: String,
     pub title: String,
@@ -104,6 +105,7 @@ pub async fn set_rom_favorite(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "RomSource"))]
 pub struct RomSourceDto {
     /// Pasta raiz (dois níveis acima do arquivo, ex.: `.../RetroBat/roms`).
     pub path: String,
@@ -224,6 +226,7 @@ pub async fn clear_library(state: State<'_, AppState>) -> Result<u64, String> {
 
 #[derive(Serialize, Default)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ScanReport"))]
 pub struct ScanReportDto {
     pub found: usize,
     pub added: usize,
@@ -254,6 +257,7 @@ impl ScanReportDto {
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ScanProgress"))]
 pub struct ScanProgressDto {
     pub current: usize,
     pub total: usize,

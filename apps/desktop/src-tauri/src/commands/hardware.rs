@@ -4,6 +4,7 @@ use super::*;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "HardwareInfo"))]
 pub struct HardwareInfo {
     /// Ex.: "Windows 11 Pro 26300".
     pub os: Option<String>,

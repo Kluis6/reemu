@@ -28,6 +28,7 @@ import { ButtonHints } from "../components/ButtonHints";
 import { useWallpaperStore } from "../stores/useWallpaperStore";
 import { Clock } from "../components/Clock";
 import { GamepadStatus } from "../components/GamepadStatus";
+import { NetworkStatus } from "../components/NetworkStatus";
 import { NotificationBell } from "../components/NotificationBell";
 import { PowerMenuDialog } from "../components/PowerMenuDialog";
 import { ProfileDrawer } from "../components/ProfileDrawer";
@@ -317,6 +318,7 @@ export function AppShell() {
             />
           </Tooltip>
           <GamepadStatus />
+          <NetworkStatus />
           <Clock />
         </div>
         <div className={s.scroll} ref={scrollRef}>

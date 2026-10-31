@@ -6,6 +6,7 @@ use domain::metadata::{GameMetadata, MetadataConfig, MetadataRepository};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "MetadataConfig"))]
 pub struct MetadataConfigDto {
     pub provider: String,
     pub screenscraper_user: Option<String>,
@@ -46,6 +47,7 @@ pub async fn set_metadata_config(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "GameMetadata"))]
 pub struct GameMetadataDto {
     pub title: String,
     pub description: Option<String>,
@@ -105,6 +107,7 @@ pub async fn get_rom_metadata(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "PendingMatch"))]
 pub struct PendingMatchDto {
     pub rom_id: String,
     pub file_stem: String,
@@ -157,6 +160,7 @@ pub async fn resolve_pending_match(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ScrapeProgress"))]
 pub struct ScrapeProgressDto {
     pub running: bool,
     pub done: usize,

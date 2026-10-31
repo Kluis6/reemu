@@ -1,9 +1,11 @@
 //! Catálogo de cores (etapa 10, MVP).
 
 use super::*;
+use crate::app_error::AppError;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "CatalogCore"))]
 pub struct CatalogCoreDto {
     pub core_id: String,
     pub name: String,
@@ -12,6 +14,7 @@ pub struct CatalogCoreDto {
     pub installed: bool,
     /// `"software"` = buffer cru; `"opengl"` = renderiza em GL (o frontend cria
     /// o contexto offscreen; precisa de GPU + libEGL).
+    #[cfg_attr(test, ts(type = "'software' | 'opengl' | 'vulkan'"))]
     pub hw: &'static str,
     /// Tem versão anterior guardada, de uma atualização.
     pub has_previous: bool,
@@ -40,7 +43,7 @@ pub fn list_core_catalog(state: State<'_, AppState>) -> Vec<CatalogCoreDto> {
 }
 
 #[tauri::command]
-pub async fn download_core(state: State<'_, AppState>, core_id: String) -> Result<(), String> {
+pub async fn download_core(state: State<'_, AppState>, core_id: String) -> Result<(), AppError> {
     let dir = state.cores_dir.clone();
     crate::core_catalog::download(&dir, &core_id).await?;
     log::info!("core instalado: {core_id}");
@@ -48,20 +51,20 @@ pub async fn download_core(state: State<'_, AppState>, core_id: String) -> Resul
 }
 
 #[tauri::command]
-pub fn remove_core(state: State<'_, AppState>, core_id: String) -> Result<(), String> {
+pub fn remove_core(state: State<'_, AppState>, core_id: String) -> Result<(), AppError> {
     crate::core_catalog::remove(&state.cores_dir, &core_id)
 }
 
 /// Os cores instalados com versão nova no buildbot (`core_updates`).
 #[tauri::command]
-pub async fn check_core_updates(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+pub async fn check_core_updates(state: State<'_, AppState>) -> Result<Vec<String>, AppError> {
     let dir = state.cores_dir.clone();
     crate::core_updates::check(&dir).await
 }
 
 /// Volta um core para a versão guardada na última atualização.
 #[tauri::command]
-pub fn restore_previous_core(state: State<'_, AppState>, core_id: String) -> Result<(), String> {
+pub fn restore_previous_core(state: State<'_, AppState>, core_id: String) -> Result<(), AppError> {
     crate::core_catalog::restore_previous(&state.cores_dir, &core_id)?;
     log::info!("core de volta à versão anterior: {core_id}");
     Ok(())

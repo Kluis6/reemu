@@ -1,0 +1,5 @@
+# Tipos gerados do Rust para o frontend (ts-rs, só em `cargo test`). `u64` chega ao
+# frontend como número comum, pelo JSON do Tauri, e não como bigint.
+[env]
+TS_RS_EXPORT_DIR = { value = "packages/app-desktop/src/lib/bindings", relative = true }
+TS_RS_LARGE_INT = "number"

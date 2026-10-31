@@ -91,9 +91,16 @@ Sem mudar o app.
 
 ### Fase 1 — Contratos
 
-- Tipos gerados de Rust para TypeScript. Candidato: `tauri-specta`; confirmar
-  compatibilidade com a versão do Tauri antes de adotar.
-- Erros com código, traduzidos na interface, começando por cores, jogo e shaders.
+- Tipos gerados de Rust para TypeScript com o `ts-rs` 12, só em `cargo test`, em
+  `lib/bindings`. O `tauri-specta` para Tauri 2 ainda é versão candidata
+  (`2.0.0-rc.26`), presa a uma versão exata do `specta`.
+- O `ts-rs` não vê os comandos: `lib/commands.test.ts` confere os nomes. Os parâmetros
+  continuam sem conferência.
+- Erros com código (`app_error.rs`), usados primeiro em carregar jogo e em cores. Sem
+  código, a interface segue as regras de texto de `lib/errors.ts`.
+- **Ficam para depois:** `HotkeyBinding`, `ControllerEntry` e `ControllerMapping`, que
+  usam tipos do crate `domain`; `ShaderFailure` e `HotkeyActionEvent`, que são eventos;
+  e os códigos de erro nos comandos de shader.
 
 **Pronto quando:** renomear um campo em Rust quebrar o `tsc -b`.
 
@@ -187,4 +194,3 @@ release. As demais fases rodam só os cenários 1 e 5, como conferência.
 
 - Quantas travas de `session.rs` estão no caminho de quadro.
 - De onde vêm as coordenadas do vídeo nativo em relação ao zoom.
-- Compatibilidade do `tauri-specta` com a versão em uso.

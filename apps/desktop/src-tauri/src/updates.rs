@@ -23,6 +23,7 @@ pub struct UpdateState(Mutex<Option<Update>>);
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "UpdateInfo"))]
 pub struct UpdateInfo {
     pub version: String,
     pub current_version: String,

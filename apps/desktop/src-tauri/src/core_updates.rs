@@ -16,6 +16,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::app_error::AppError;
 use crate::core_catalog::{buildbot_os, dylib_ext};
 
 /// Core → repositório. Só entra o que foi conferido em 2026-10-30: ou o commit
@@ -245,7 +246,7 @@ struct Candidate {
 
 /// Os cores instalados com versão nova. Sem o índice, erro; sem o HEAD de um
 /// repositório, aquele core só não entra.
-pub async fn check(cores_dir: &Path) -> Result<Vec<String>, String> {
+pub async fn check(cores_dir: &Path) -> Result<Vec<String>, AppError> {
     let url = format!(
         "https://buildbot.libretro.com/nightly/{}/x86_64/latest/.index-extended",
         buildbot_os()
@@ -254,12 +255,12 @@ pub async fn check(cores_dir: &Path) -> Result<Vec<String>, String> {
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("índice dos cores: {e}"))?
+        .map_err(|e| AppError::from_http("índice dos cores", e))?
         .error_for_status()
-        .map_err(|e| format!("índice dos cores: {e}"))?
+        .map_err(|e| AppError::from_http("índice dos cores", e))?
         .text()
         .await
-        .map_err(|e| format!("índice dos cores: {e}"))?;
+        .map_err(|e| AppError::from_http("índice dos cores", e))?;
     let built = parse_index(&index, dylib_ext());
 
     // Ler `library_version` abre as DLLs (uma vez por execução; ver `discover`).

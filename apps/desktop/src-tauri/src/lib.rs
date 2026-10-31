@@ -1,3 +1,4 @@
+mod app_error;
 mod appearance;
 mod bezel_pack;
 mod bios;

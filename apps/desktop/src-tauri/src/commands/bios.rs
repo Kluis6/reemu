@@ -4,6 +4,7 @@ use super::*;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "BiosStatus"))]
 pub struct BiosStatusDto {
     pub system_id: String,
     pub filename: String,
@@ -62,6 +63,7 @@ pub fn remove_bios_file(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "CoreOption"))]
 pub struct CoreOptionDto {
     pub key: String,
     pub display_name: String,

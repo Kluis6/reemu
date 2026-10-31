@@ -13,6 +13,7 @@ const AVATAR_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif"];
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "Profile"))]
 pub struct ProfileDto {
     pub name: String,
     pub bio: Option<String>,

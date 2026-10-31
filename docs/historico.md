@@ -3233,3 +3233,24 @@ Infra:
 
 - **Medida:** `docs/perf/baseline.json`, com o core-host atual, RTX 3060 e tela 4K. Todos os cenários ficaram no ritmo do alvo, com o p99 a no máximo 0,01 ms da média.
 - **A observar:** o Flycast com Vulkan teve picos de ~150 ms no `retro_run` (0,22 quadro atrasado por segundo). A causa não foi investigada.
+
+## 2026-10-30 — Fase 1: tipos gerados e erros com código
+
+- **Tipos:** 36 tipos do `tauri.ts` passam a vir do Rust, por `ts-rs` 12 (documentação em docs.rs). O crate só entra em `cargo test`, então o app publicado não muda. A CI falha se `lib/bindings` estiver desatualizado no commit.
+- **Por que não `tauri-specta`:** para Tauri 2 ele só tem versão candidata, presa a uma versão exata do `specta`.
+- **Comparação campo a campo:** os tipos escritos à mão batiam com o Rust; só quatro tinham uniões que o gerador não conhece, restauradas com `#[ts(type)]`.
+- **Comandos:** `lib/commands.test.ts` falha se o frontend chamar comando não registrado. Os parâmetros continuam sem conferência.
+- **Erros:** `app_error.rs` devolve código e texto em carregar jogo e nos comandos de cores. Sem código, valem as regras de texto de `lib/errors.ts`. O `load_game` antes passava o erro por `String(e)` na tela do jogo; agora mantém o objeto.
+
+## 2026-10-30 — Download sem internet e ícone de rede
+
+- **Causa principal:** sem internet, o React Query pausava a operação no modo padrão `online`, sem chamar o backend e sem erro (documentação de Network Mode do TanStack Query). Agora o modo é `always`, porque os comandos do Tauri são locais; isso vale para todas as telas.
+- **Segunda causa:** o cliente HTTP não tinha limite de tempo, e o padrão do `reqwest` é não ter nenhum (documentação de `ClientBuilder` em docs.rs).
+- **Correção do HTTP:** 15 s para conectar e 30 s entre leituras. Não há limite total, para não interromper core grande em rede lenta. Vale para todos os downloads que usam `http::client()`.
+- **Ícone:** ao lado do relógio, a partir de `navigator.onLine`, sem consultar nenhum servidor. Ele mostra se o sistema tem rede, não garante que a internet responde.
+
+## 2026-10-30 — Botão de opções do controle
+
+- **Problema:** o menu do card abria no canto da tela, porque o evento sintético não levava coordenadas, e o B voltava a página em vez de fechar o menu.
+- **Correção:** o evento leva o centro do item em foco, e o B fecha menu e popover, incluindo o sino, antes de drawer e modal.
+- **Ícone de rede:** Wi-Fi do Fluent. O app não sabe o tipo de conexão, então o desenho vale também para cabo.

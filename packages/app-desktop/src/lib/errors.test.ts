@@ -3,6 +3,25 @@ import i18n from '../i18n'
 import { describeError, errorText } from './errors'
 
 describe('describeError', () => {
+  it('usa o código do backend em vez de adivinhar pelo texto', () => {
+    // o texto sozinho cairia na regra de arquivo, pelo "não encontrado"
+    const e = { code: 'noCore', message: 'não encontrado em lugar nenhum: x' }
+    const d = describeError(e, 'openGame')
+    expect(d.fix).toBe('cores')
+    expect(d.title).toMatch(/Não há um core/)
+    expect(d.technical).toBe(e.message)
+  })
+
+  it('download sem internet avisa, sem depender do texto do reqwest', () => {
+    const d = describeError({ code: 'offline', message: 'download: falhou' }, 'downloadCore')
+    expect(d.title).toMatch(/Sem conexão/)
+  })
+
+  it('sem código, segue as regras de texto', () => {
+    const d = describeError({ code: null, message: 'core-host não respondeu (timeout)' }, 'openGame')
+    expect(d.title).toMatch(/travou ao abrir/)
+  })
+
   it.each([
     // mensagens reais do reqwest / do sistema / do Rust do ReEmu
     ['error sending request for url (https://buildbot.libretro.com/x.zip)', /Sem conexão/, undefined],

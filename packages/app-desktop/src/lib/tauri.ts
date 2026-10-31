@@ -4,6 +4,43 @@
 
 import i18n from '../i18n'
 import type { InputFocus } from '../stores/useFocusStore'
+// Gerados do Rust (`cargo test`, ts-rs). Não editar à mão.
+import type { CatalogCore } from './bindings/CatalogCore'
+import type { AspectInfo } from './bindings/AspectInfo'
+import type { AudioConfig } from './bindings/AudioConfig'
+import type { BezelCatalogItem } from './bindings/BezelCatalogItem'
+import type { BezelProgress } from './bindings/BezelProgress'
+import type { BiosStatus } from './bindings/BiosStatus'
+import type { Cheat } from './bindings/Cheat'
+import type { ControllerDriverSettings } from './bindings/ControllerDriverSettings'
+import type { CoreOption } from './bindings/CoreOption'
+import type { CuratedPreset } from './bindings/CuratedPreset'
+import type { DevicePort } from './bindings/DevicePort'
+import type { GameMetadata } from './bindings/GameMetadata'
+import type { Gamepad } from './bindings/Gamepad'
+import type { HardwareInfo } from './bindings/HardwareInfo'
+import type { HdrStatus } from './bindings/HdrStatus'
+import type { KeyboardBinding } from './bindings/KeyboardBinding'
+import type { MetadataConfig } from './bindings/MetadataConfig'
+import type { PendingMatch } from './bindings/PendingMatch'
+import type { Profile } from './bindings/Profile'
+import type { RomEntry } from './bindings/RomEntry'
+import type { RomShader } from './bindings/RomShader'
+import type { RomSource } from './bindings/RomSource'
+import type { SaveState } from './bindings/SaveState'
+import type { ScanProgress } from './bindings/ScanProgress'
+import type { ScanReport } from './bindings/ScanReport'
+import type { ScrapeProgress } from './bindings/ScrapeProgress'
+import type { ShaderInfo } from './bindings/ShaderInfo'
+import type { ShaderPackProgress } from './bindings/ShaderPackProgress'
+import type { ShaderPackStatus } from './bindings/ShaderPackStatus'
+import type { ShaderParam } from './bindings/ShaderParam'
+import type { SlangpEntry } from './bindings/SlangpEntry'
+import type { SystemSettings } from './bindings/SystemSettings'
+import type { UpdateInfo } from './bindings/UpdateInfo'
+import type { VideoConfig } from './bindings/VideoConfig'
+import type { InstalledCore } from './bindings/InstalledCore'
+import type { LoadedGame } from './bindings/LoadedGame'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -25,14 +62,7 @@ export const inputKey = (code: string, pressed: boolean) =>
 export const currentFocus = () => invoke<InputFocus>('current_focus')
 export const sessionState = () => invoke<'Idle' | 'Running' | 'Paused'>('session_state')
 
-export interface LoadedGame {
-  baseWidth: number
-  baseHeight: number
-  fps: number
-  sampleRate: number
-  /** Proporção de exibição do core (0 = usar baseWidth/baseHeight). */
-  aspectRatio: number
-}
+export type { LoadedGame }
 export const loadGame = (coreId: string, romPath: string, romId?: string) =>
   invoke<LoadedGame>('load_game', { coreId, romPath, romId: romId ?? null })
 export const unloadGame = () => invoke<void>('unload_game')
@@ -60,27 +90,11 @@ export const nativeVideoActive = () => invoke<boolean>('native_video_active')
 export const nativeVideoOverlay = () => invoke<boolean>('native_video_overlay')
 
 // Configurações › Sistema (src-tauri/src/system.rs).
-export interface SystemSettings {
-  autostart: boolean
-  startFullscreen: boolean
-  minimizeToTray: boolean
-}
+export type { SystemSettings }
 export const getSystemSettings = () => invoke<SystemSettings>('get_system_settings')
 
 /** Configurações › Sistema › Hardware (`commands/hardware.rs`). */
-export interface HardwareInfo {
-  os: string | null
-  arch: string
-  cpu: string | null
-  cpuCores: number | null
-  cpuThreads: number
-  /** Memória total em bytes. */
-  memoryBytes: number
-  gpu: string | null
-  /** API do compositor (Vulkan, Dx12, …). */
-  gpuBackend: string | null
-  gpuDriver: string | null
-}
+export type { HardwareInfo }
 export const getHardwareInfo = () => invoke<HardwareInfo>('get_hardware_info')
 
 /** Prévia de shader (Configurações › Vídeo): a cena de exemplo sem shader
@@ -100,11 +114,7 @@ export const setMinimizeToTray = (enabled: boolean) =>
  *  `input_desktop::pad_source::Driver`). */
 export type ControllerDriver = 'auto' | 'xinput' | 'directinput' | 'wgi'
 export const CONTROLLER_DRIVERS: ControllerDriver[] = ['auto', 'xinput', 'directinput', 'wgi']
-export interface ControllerDriverSettings {
-  driver: ControllerDriver
-  /** `false` fora do Windows: lá não há escolha. */
-  supported: boolean
-}
+export type { ControllerDriverSettings }
 export const getControllerDriver = () =>
   invoke<ControllerDriverSettings>('get_controller_driver')
 /** Troca na hora (reinicia só a leitura dos controles) e salva. */
@@ -114,49 +124,16 @@ export const setControllerDriver = (driver: ControllerDriver) =>
 export const setTrayLabels = (open: string, quit: string) =>
   invoke<void>('set_tray_labels', { open, quit })
 
-export interface AudioConfig {
-  outputDeviceId: string | null
-  outputDeviceName: string | null
-  rateControlEnabled: boolean
-  rateControlDelta: number
-  sampleRatePreference: number | null
-}
+export type { AudioConfig }
 export const getAudioConfig = () => invoke<AudioConfig>('get_audio_config')
 export const updateAudioConfig = (config: AudioConfig) =>
   invoke<void>('update_audio_config', { config })
 
-export interface VideoConfig {
-  /** Trava a altura do retângulo do jogo num múltiplo inteiro da resolução
-   *  nativa do core (evita o borrão de escala não-inteira em pixel art).
-   *  Com moldura/bezel ativa, arredonda pro fator MAIS PRÓXIMO (não sempre
-   *  pra cima) — minimiza o erro em pixels entre deixar uma barra preta
-   *  fina ou cortar um pouco a borda do jogo, cortado pela GPU quando
-   *  ultrapassa. A largura segue a proporção correta do core (PAR), não o
-   *  fator bruto. A moldura em si nunca é redimensionada. */
-  integerScaling: boolean
-  /** Saída HDR na janela do jogo (scRGB) quando monitor e sistema permitem. */
-  hdr: boolean
-  /** Branco SDR em nits; 0 = automático (o do sistema). */
-  hdrPaperWhiteNits: number
-  /** Realce de brilhos (expande os tons claros até o pico). */
-  hdrHighlights: boolean
-  /** Pico do realce em nits; 0 = automático (o do monitor em tela cheia). */
-  hdrPeakNits: number
-}
+export type { VideoConfig }
 export const getVideoConfig = () => invoke<VideoConfig>('get_video_config')
 
 /** Estado do HDR na janela do jogo (`video_hdr_status`). */
-export interface HdrStatus {
-  surface: boolean
-  capable: boolean
-  active: boolean
-  systemHdr: boolean | null
-  sdrWhiteNits: number | null
-  peakNits: number | null
-  fullFrameNits: number | null
-  paperWhiteUsed: number
-  peakUsed: number
-}
+export type { HdrStatus }
 export const getHdrStatus = () => invoke<HdrStatus>('video_hdr_status')
 export const updateVideoConfig = (config: VideoConfig) =>
   invoke<void>('update_video_config', { config })
@@ -172,21 +149,8 @@ export const isFullscreen = () => invoke<boolean>('is_fullscreen')
 export const setFullscreen = (value: boolean) => invoke<void>('set_fullscreen', { value })
 
 /** Preset "de 1 clique" que aponta pro pacote `slang-shaders`. */
-export interface CuratedPreset {
-  /** wire id — `curated:<id>`, o que `setShader` espera. */
-  id: string
-  label: string
-  desc: string
-  /** false = o pacote de shaders ainda não foi baixado. */
-  available: boolean
-}
-export interface ShaderInfo {
-  active: string
-  available: string[]
-  curated: CuratedPreset[]
-  /** false = sem adapter wgpu; trocar de preset não tem efeito. */
-  gpu: boolean
-}
+export type { CuratedPreset }
+export type { ShaderInfo }
 export const getShaderInfo = () => invoke<ShaderInfo>('get_shader_info')
 
 export type ShaderScope = 'default' | 'system' | 'rom'
@@ -211,40 +175,18 @@ export const setShader = (
     romId: romId ?? null,
   })
 
-export interface RomShader {
-  sourcePath: string | null
-  fromRom: boolean
-  /** de qual escopo o `sourcePath` veio: 'rom' | 'system' | 'default' | 'none' */
-  resolvedScope: string
-  systemId: string
-  /** o que está atribuído EXATAMENTE em cada escopo (null = herda). */
-  atRom: string | null
-  atSystem: string | null
-  atDefault: string | null
-}
+export type { RomShader }
 export const getRomShader = (romId: string) => invoke<RomShader>('get_rom_shader', { romId })
 
 /** Um `.slangp` achado varrendo a pasta de shaders do usuário. `category` é a
  *  subpasta de topo (`crt`, `handheld`…) ou `''` pros presets na raiz. */
-export interface SlangpEntry {
-  path: string
-  name: string
-  category: string
-}
+export type { SlangpEntry }
 export const listSlangpDir = (root: string) =>
   invoke<SlangpEntry[]>('list_slangp_dir', { root })
 
 /** Parâmetro ajustável do shader ativo (`#pragma parameter`). Vazio pros
  *  builtins (plain/crt/lcd). */
-export interface ShaderParam {
-  name: string
-  label: string
-  value: number
-  default: number
-  min: number
-  max: number
-  step: number
-}
+export type { ShaderParam }
 export const getShaderParams = () => invoke<ShaderParam[]>('get_shader_params')
 /** Ajusta um parâmetro agora; `scope` (+`systemId`/`romId`) persiste. */
 export const setShaderParam = (
@@ -280,19 +222,11 @@ export const importDecorationPack = (path: string) =>
 export const clearDecorations = () => invoke<void>('clear_decorations')
 
 /** Um sistema do catálogo de bezels do The Bezel Project. */
-export interface BezelCatalogItem {
-  systemId: string
-  installed: boolean
-}
+export type { BezelCatalogItem }
 export const bezelCatalog = () =>
   invoke<BezelCatalogItem[]>('bezel_catalog')
 
-export interface BezelProgress {
-  systemId: string
-  received: number
-  total: number
-  phase: 'download' | 'extract' | 'import'
-}
+export type { BezelProgress }
 /** Baixa o pack de bezels de um sistema (The Bezel Project) e re-importa a
  *  árvore. Devolve o total de atribuições gravadas. */
 export async function downloadBezelPack(
@@ -306,27 +240,13 @@ export async function downloadBezelPack(
   return raw<number>('download_bezel_pack', { systemId, onProgress: ch })
 }
 
-export interface InstalledCore {
-  coreId: string
-  name: string
-  version: string
-  extensions: string[]
-  renderBackend: string | null
-  /** Sistemas (ids da varredura) que o core atende, pelo catálogo. */
-  systems: string[]
-}
+export type { InstalledCore }
 export const listInstalledCores = () => invoke<InstalledCore[]>('list_installed_cores')
 
 /** Proporção da imagem: a do core, fixa, ou a janela inteira. */
 export type AspectValue = 'core' | '4:3' | '16:9' | 'fill'
 export type AspectScope = 'rom' | 'system' | 'default'
-export interface AspectInfo {
-  /** o que está atribuído EXATAMENTE em cada escopo (null = herda) */
-  atRom: AspectValue | null
-  atSystem: AspectValue | null
-  atDefault: AspectValue | null
-  systemId: string
-}
+export type { AspectInfo }
 export const getAspect = (romId: string) => invoke<AspectInfo>('get_aspect', { romId })
 /** `aspect` null = volta a herdar. Com um jogo aberto, vale na hora. */
 export const setAspect = (scope: AspectScope, romId: string, aspect: AspectValue | null) =>
@@ -338,18 +258,7 @@ export async function onWideBezelOff(cb: () => void): Promise<() => void> {
   return listen('wide-bezel-off', () => cb())
 }
 
-export interface CoreOption {
-  key: string
-  displayName: string
-  choices: string[]
-  defaultValue: string
-  /** valor efetivo (jogo → core → default) */
-  value: string
-  /** valor salvo por core (null = usa o default do schema) */
-  coreValue: string | null
-  /** override deste jogo (null = herda o valor por core); só com `romId` */
-  romValue: string | null
-}
+export type { CoreOption }
 export const getCoreOptions = (coreId: string, romId?: string) =>
   invoke<CoreOption[]>('get_core_options', { coreId, romId: romId ?? null })
 /** `romId` ausente = valor por core; presente = override do jogo. `value`
@@ -363,18 +272,7 @@ export const setCoreOption = (
 export const resetCoreOptions = (coreId: string, romId?: string) =>
   invoke<void>('reset_core_options', { coreId, romId: romId ?? null })
 
-export interface CatalogCore {
-  coreId: string
-  name: string
-  systems: string
-  license: string
-  installed: boolean
-  /** 'software' = buffer cru; 'opengl' = renderiza em GL; 'vulkan' = roda
-   *  in-process no device do compositor (zero cópia). */
-  hw: 'software' | 'opengl' | 'vulkan'
-  /** Tem versão anterior guardada, de uma atualização. */
-  hasPrevious: boolean
-}
+export type { CatalogCore }
 export const listCoreCatalog = () => invoke<CatalogCore[]>('list_core_catalog')
 export const downloadCore = (coreId: string) => invoke<void>('download_core', { coreId })
 export const removeCore = (coreId: string) => invoke<void>('remove_core', { coreId })
@@ -385,19 +283,7 @@ export const restorePreviousCore = (coreId: string) =>
 
 /** Arquivo de sistema (BIOS) — status contra `<dados>/system`. Nunca baixa
  *  nada (copyright da fabricante); só confere o que já está no disco. */
-export interface BiosStatus {
-  systemId: string
-  filename: string
-  required: boolean
-  note: string
-  present: boolean
-  /** `true`/`false` = presente e MD5 conhecido conferido; `null` = ausente
-   *  ou sem MD5 documentado pra esse arquivo. */
-  hashOk: boolean | null
-  /** Entrada "qualquer um destes" (o PS2): a pasta onde basta um dump —
-   *  aí `filename` é só a chave `"*"`. */
-  anyOfFolder: string | null
-}
+export type { BiosStatus }
 export const listBiosStatus = () => invoke<BiosStatus[]>('list_bios_status')
 export const importBiosFile = (systemId: string, filename: string, path: string) =>
   invoke<void>('import_bios_file', { systemId, filename, path })
@@ -417,19 +303,7 @@ export async function pickBiosFile(): Promise<string | null> {
   return typeof sel === 'string' ? sel : null
 }
 
-export interface RomEntry {
-  id: string
-  title: string
-  systemId: string
-  filePath: string
-  boxart: string | null
-  /** Unix (s) do último load — pra "Continuar jogando". */
-  lastPlayedAt: number | null
-  /** Unix (s) de quando entrou na biblioteca — pra "Adicionados recentemente". */
-  addedAt: number
-  /** Aba "Favoritos" da biblioteca. */
-  isFavorite: boolean
-}
+export type { RomEntry }
 export const listRoms = () => invoke<RomEntry[]>('list_roms')
 export const removeRom = (romId: string) => invoke<void>('remove_rom', { romId })
 export const setRomFavorite = (romId: string, favorite: boolean) =>
@@ -449,69 +323,21 @@ export const setRomMetadata = (
   })
 
 // --- metadata / scraping (etapa 09) ---
-export interface MetadataConfig {
-  provider: string
-  screenscraperUser: string | null
-  screenscraperPassword: string | null
-  /** Chave de API do TheGamesDB — provedor de reserva (busca por nome, sempre
-   *  pra revisão). Fica no chaveiro do sistema, como a senha. */
-  thegamesdbApiKey: string | null
-}
+export type { MetadataConfig }
 export const getMetadataConfig = () => invoke<MetadataConfig>('get_metadata_config')
 export const setMetadataConfig = (config: MetadataConfig) =>
   invoke<void>('set_metadata_config', { config })
 
-export interface GameMetadata {
-  title: string
-  description: string | null
-  coverUrl: string | null
-  releaseDate: string | null
-  genre: string | null
-  providerSource: string | null
-  // ficha técnica (ScreenScraper); `null` quando o provedor não tem
-  developer: string | null
-  publisher: string | null
-  /** "1", "1-2", "1-4"… como o provedor escreve */
-  players: string | null
-  /** nota de 0 a 100 */
-  rating: number | null
-  /** já com o órgão: "PEGI 12", "ESRB T" */
-  ageRating: string | null
-  /** separados por ", " */
-  modes: string | null
-  // mídias pra galeria (URLs do provedor)
-  screenshotUrl: string | null
-  titleScreenUrl: string | null
-  fanartUrl: string | null
-  logoUrl: string | null
-  videoUrl: string | null
-}
+export type { GameMetadata }
 export const getRomMetadata = (romId: string) =>
   invoke<GameMetadata | null>('get_rom_metadata', { romId })
 
-export interface PendingMatch {
-  romId: string
-  fileStem: string
-  title: string
-  description: string | null
-  coverUrl: string | null
-  releaseDate: string | null
-  genre: string | null
-}
+export type { PendingMatch }
 export const listPendingMatches = () => invoke<PendingMatch[]>('list_pending_matches')
 export const resolvePendingMatch = (romId: string, accept: boolean) =>
   invoke<void>('resolve_pending_match', { romId, accept })
 
-export interface ScrapeProgress {
-  running: boolean
-  done: number
-  total: number
-  auto: number
-  pending: number
-  failed: number
-  /** Por que a leva parou antes do fim (`ss_dev_login`), ou `null`. */
-  error: string | null
-}
+export type { ScrapeProgress }
 export const metadataScanProgress = () => invoke<ScrapeProgress>('metadata_scan_progress')
 export const startMetadataScan = () => invoke<void>('start_metadata_scan')
 /** "Buscar de novo" de um jogo: `auto` = aplicado, `pending` = foi pra revisão,
@@ -520,11 +346,7 @@ export const rescrapeRom = (romId: string) =>
   invoke<'auto' | 'pending' | 'none'>('rescrape_rom', { romId })
 export const cancelMetadataScan = () => invoke<void>('cancel_metadata_scan')
 
-export interface RomSource {
-  /** Pasta raiz da biblioteca (ex.: `.../RetroBat/roms`). */
-  path: string
-  count: number
-}
+export type { RomSource }
 export const listRomSources = () => invoke<RomSource[]>('list_rom_sources')
 /** Remove todas as ROMs sob `path`. Devolve quantas saíram. */
 export const removeRomSource = (path: string) => invoke<number>('remove_rom_source', { path })
@@ -534,18 +356,10 @@ export const removeRomSystem = (systemId: string) =>
 /** Esvazia a biblioteca inteira. Devolve quantas ROMs saíram. */
 export const clearLibrary = () => invoke<number>('clear_library')
 
-export interface ShaderPackStatus {
-  installed: boolean
-  path: string | null
-  presetCount: number
-}
+export type { ShaderPackStatus }
 export const shaderPackStatus = () =>
   invoke<ShaderPackStatus>('shader_pack_status')
-export interface ShaderPackProgress {
-  received: number
-  total: number
-  phase: 'download' | 'extract'
-}
+export type { ShaderPackProgress }
 /** Baixa o pacote de slang shaders (buildbot da libretro; GitHub como
  * fallback) — os mesmos que o RetroArch usa. Devolve o caminho instalado. */
 export async function downloadShaderPack(
@@ -563,22 +377,8 @@ export const listSystemCores = () =>
 export const setSystemCore = (systemId: string, coreId: string) =>
   invoke<void>('set_system_core', { systemId, coreId })
 
-export interface ScanReport {
-  found: number
-  added: number
-  skippedKnown: number
-  skippedUnrecognized: number
-  errors: number
-  reclassified: number
-  removed: number
-  /** `.zip`/`.7z` sem jogo reconhecido fora de pasta de arcade */
-  unrecognizedArchives: number
-}
-export interface ScanProgress {
-  current: number
-  total: number
-  file: string
-}
+export type { ScanReport }
+export type { ScanProgress }
 export async function scanLibrary(
   path: string,
   onProgress?: (p: ScanProgress) => void,
@@ -621,15 +421,7 @@ export async function pickSlangp(): Promise<string | null> {
   return typeof sel === 'string' ? sel : null
 }
 
-export interface SaveState {
-  id: string
-  slot: number | null
-  createdAt: number
-  filePath: string
-  hasThumbnail: boolean
-  /** Tempo de jogo (s) quando foi salvo; `null` em saves antigos. */
-  playTimeAtSave: number | null
-}
+export type { SaveState }
 /** JSON da escolha de tema salva no Rust (`""` se nunca escolheu). */
 export const getThemeSelection = () => invoke<string>('get_theme_selection')
 export const setThemeSelection = (json: string) => invoke<void>('set_theme_selection', { json })
@@ -641,13 +433,7 @@ export const listSaveStates = (romId: string) =>
   invoke<SaveState[]>('list_save_states', { romId })
 
 /** Cheat por código de um jogo (`commands/cheats.rs`, doc 17). */
-export interface Cheat {
-  id: number
-  romId: string
-  description: string
-  code: string
-  enabled: boolean
-}
+export type { Cheat }
 export const listCheats = (romId: string) => invoke<Cheat[]>('list_cheats', { romId })
 /** Entra ligado; vale na hora no jogo aberto. */
 export const addCheat = (romId: string, description: string, code: string) =>
@@ -679,13 +465,7 @@ export async function saveThumbnailUrl(stateId: string): Promise<string | null> 
 
 // --- perfil local (um por instalação) ----------------------------------
 
-export interface Profile {
-  name: string
-  bio: string | null
-  /** 'preset:1'..'preset:5' ou 'file'. */
-  avatar: string
-  onboarded: boolean
-}
+export type { Profile }
 export const getProfile = () => invoke<Profile>('get_profile')
 
 /** `name` obrigatório; `avatar` = 'preset:N' (1..5) ou 'file'. Marca o
@@ -825,19 +605,12 @@ export const listControllerMappings = () =>
 export const clearControllerMapping = (guid: string) =>
   invoke<void>('clear_controller_mapping', { guid })
 
-export interface Gamepad {
-  guid: string
-  name: string
-}
+export type { Gamepad }
 export const listGamepads = () => invoke<Gamepad[]>('list_gamepads')
 
 /** Um alvo do teclado (botão do RetroPad ou direção de analógico) e a tecla
  *  dele (`KeyboardEvent.code`; vazio = sem tecla). */
-export interface KeyboardBinding {
-  target: string
-  code: string
-  isDefault: boolean
-}
+export type { KeyboardBinding }
 export const listKeyboardBindings = () => invoke<KeyboardBinding[]>('list_keyboard_bindings')
 export const setKeyboardBinding = (target: string, code: string) =>
   invoke<void>('set_keyboard_binding', { target, code })
@@ -857,10 +630,7 @@ export async function onGamepadDisconnected(cb: (guid: string) => void): Promise
   return listen<string>('gamepad-disconnected', (e) => cb(e.payload))
 }
 
-export interface DevicePort {
-  guid: string
-  port: number
-}
+export type { DevicePort }
 export const listDevicePorts = () => invoke<DevicePort[]>('list_device_ports')
 export const setDevicePort = (guid: string, port: number) =>
   invoke<void>('set_device_port', { guid, port })
@@ -904,14 +674,7 @@ export const jsLog = (level: 'info' | 'warn' | 'error', message: string) =>
 
 // ── Atualização do app (`src-tauri/src/updates.rs`) ─────────────────────
 
-export interface UpdateInfo {
-  version: string
-  currentVersion: string
-  /** Markdown do corpo da Release no GitHub. */
-  notes: string | null
-  /** RFC 3339. */
-  date: string | null
-}
+export type { UpdateInfo }
 
 /** `null` = já está na última versão (ou auto-update sem chave configurada). */
 export const checkForUpdate = () => invoke<UpdateInfo | null>('update_check')

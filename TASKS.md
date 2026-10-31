@@ -57,12 +57,13 @@ Mudança estrutural em core, Vulkan ou OpenGL exige aviso ao dono do projeto ant
 de começar. Layout do Xbox para Windows; menus no modelo das configurações do console;
 o card atual fica.
 
-- [ ] `todo` — Fase 0: linha de base de desempenho, CI no Windows e fumaça agendada (referência do Xbox já feita).
-- [ ] `todo` — Fase 1: tipos gerados entre Rust e TypeScript, erros tipados.
+- [x] `done` — Fase 0: linha de base de desempenho, CI no Windows e fumaça agendada (2026-10-30).
+- [x] `done` — Fase 1: tipos gerados entre Rust e TypeScript, erros com código (2026-10-30). Pendências em `19-plano-unificado.md`.
 - [ ] `todo` — Fase 2: becos sem saída do controle, mapa de botões e camada de foco.
 - [ ] `todo` — Fase 3: perfis de densidade e tokens (**exige aviso**: escala e vídeo nativo).
 - [ ] `todo` — Fase 4: configurações no modelo do console.
 - [ ] `todo` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados.
+      Inclui redesenhar as mensagens de erro (tela ao abrir um jogo e avisos).
 - [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates.
 - [ ] `todo` — Fase 7: acabamento, diagnóstico exportável e registro de decisões.
 - [ ] `todo` — Fase 8: estrutura de core e GPU (**cada item exige aviso**).

@@ -4,6 +4,7 @@ use super::*;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "SaveState"))]
 pub struct SaveStateDto {
     pub id: String,
     pub slot: Option<u32>,

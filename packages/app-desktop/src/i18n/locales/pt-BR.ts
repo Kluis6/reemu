@@ -27,6 +27,8 @@ const ptBR = {
     lightDark: 'Claro/escuro',
   },
   shell: {
+    networkOnline: 'Conectado à internet',
+    networkOffline: 'Sem conexão com a internet',
     myProfile: 'Meu perfil',
     fullscreenTip: 'Ocupar a tela inteira (F11)',
     exitFullscreenTip: 'Sair da tela cheia (F11)',

@@ -101,6 +101,7 @@ pub fn init<R: Runtime>(app: &AppHandle<R>, data_dir: &Path) -> SystemPrefs {
 /// Estado completo pra tela de Configurações.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "SystemSettings"))]
 pub struct SystemSettings {
     autostart: bool,
     start_fullscreen: bool,
@@ -144,7 +145,13 @@ pub fn set_minimize_to_tray(state: State<'_, SystemState>, enabled: bool) -> Res
 /// Driver de controle atual e se dá pra escolher neste sistema.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(
+    test,
+    derive(ts_rs::TS),
+    ts(export, rename = "ControllerDriverSettings")
+)]
 pub struct ControllerDriverSettings {
+    #[cfg_attr(test, ts(type = "'auto' | 'xinput' | 'directinput' | 'wgi'"))]
     driver: &'static str,
     supported: bool,
 }

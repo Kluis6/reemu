@@ -353,7 +353,7 @@ export function PlayScreen() {
     romId,
   ]);
 
-  const [status, setStatus] = useState<"loading" | "ready" | { error: string }>(
+  const [status, setStatus] = useState<"loading" | "ready" | { error: unknown }>(
     "loading",
   );
   const [artBroken, setArtBroken] = useState(false);
@@ -728,7 +728,7 @@ export function PlayScreen() {
           setFocus("GameFocused");
           setStatus("ready");
         } catch (e) {
-          if (loadedKey.current === key) setStatus({ error: String(e) });
+          if (loadedKey.current === key) setStatus({ error: e });
         }
       })();
     }

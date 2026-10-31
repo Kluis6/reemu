@@ -16,6 +16,7 @@
 //!   (etapa 12); o `VkImage` do scanout vira textura do wgpu sem cópia. Cai
 //!   pro processo filho (GL/sw) se a negociação Vulkan não rolar.
 
+use crate::app_error::{AppError, ErrorCode};
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -670,9 +671,9 @@ fn download_url(core_id: &str) -> String {
 
 /// Baixa o `<core_id>` do buildbot e extrai o dylib pra `cores_dir`.
 /// Devolve o caminho instalado.
-pub async fn download(cores_dir: &Path, core_id: &str) -> Result<PathBuf, String> {
+pub async fn download(cores_dir: &Path, core_id: &str) -> Result<PathBuf, AppError> {
     if find(core_id).is_none() {
-        return Err(format!("`{core_id}` não está no catálogo"));
+        return Err(format!("`{core_id}` não está no catálogo").into());
     }
     let url = download_url(core_id);
     log::info!("baixando core: {url}");
@@ -680,28 +681,31 @@ pub async fn download(cores_dir: &Path, core_id: &str) -> Result<PathBuf, String
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("download: {e}"))?
+        .map_err(|e| AppError::from_http("download", e))?
         .error_for_status()
-        .map_err(|e| format!("download: {e}"))?;
-    let bytes = resp.bytes().await.map_err(|e| format!("download: {e}"))?;
+        .map_err(|e| AppError::from_http("download", e))?;
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| AppError::from_http("download", e))?;
 
     let cores_dir = cores_dir.to_path_buf();
     let so_name = format!("{core_id}.{}", dylib_ext());
-    tauri::async_runtime::spawn_blocking(move || -> Result<PathBuf, String> {
-        std::fs::create_dir_all(&cores_dir).map_err(|e| e.to_string())?;
+    tauri::async_runtime::spawn_blocking(move || -> Result<PathBuf, AppError> {
+        std::fs::create_dir_all(&cores_dir)?;
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
-            .map_err(|e| format!("zip inválido: {e}"))?;
-        let mut entry = zip
-            .by_name(&so_name)
-            .map_err(|_| format!("`{so_name}` não está no zip"))?;
+            .map_err(|e| AppError::new(ErrorCode::Corrupt, format!("zip inválido: {e}")))?;
+        let mut entry = zip.by_name(&so_name).map_err(|_| {
+            AppError::new(ErrorCode::Corrupt, format!("`{so_name}` não está no zip"))
+        })?;
         let tmp = cores_dir.join(format!("{so_name}.part"));
-        let mut out = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
-        std::io::copy(&mut entry, &mut out).map_err(|e| e.to_string())?;
+        let mut out = std::fs::File::create(&tmp)?;
+        std::io::copy(&mut entry, &mut out)?;
         drop(out);
         install_keeping_previous(&cores_dir, &so_name, &tmp)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| AppError::from(e.to_string()))?
 }
 
 /// Pasta da versão anterior de cada core. A descoberta não entra em subpastas.
@@ -716,20 +720,20 @@ fn install_keeping_previous(
     cores_dir: &Path,
     so_name: &str,
     tmp: &Path,
-) -> Result<PathBuf, String> {
+) -> Result<PathBuf, AppError> {
     let dest = cores_dir.join(so_name);
     if !dest.is_file() {
-        std::fs::rename(tmp, &dest).map_err(|e| e.to_string())?;
+        std::fs::rename(tmp, &dest)?;
         return Ok(dest);
     }
     let previous = previous_dir(cores_dir);
-    std::fs::create_dir_all(&previous).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&previous)?;
     let kept = previous.join(so_name);
     // a anterior da anterior não fica: uma cópia por core
     let aside = previous.join(format!("{so_name}.old"));
     let had_kept = kept.is_file();
     if had_kept {
-        std::fs::rename(&kept, &aside).map_err(|e| e.to_string())?;
+        std::fs::rename(&kept, &aside)?;
     }
     let swapped = std::fs::rename(&dest, &kept).and_then(|()| std::fs::rename(tmp, &dest));
     if let Err(e) = swapped {
@@ -741,7 +745,7 @@ fn install_keeping_previous(
             let _ = std::fs::rename(&aside, &kept);
         }
         let _ = std::fs::remove_file(tmp);
-        return Err(e.to_string());
+        return Err(e.into());
     }
     let _ = std::fs::remove_file(&aside);
     Ok(dest)
@@ -755,24 +759,24 @@ pub fn has_previous(cores_dir: &Path, core_id: &str) -> bool {
 }
 
 /// Volta para a versão anterior; a que estava instalada passa a ser a anterior.
-pub fn restore_previous(cores_dir: &Path, core_id: &str) -> Result<(), String> {
+pub fn restore_previous(cores_dir: &Path, core_id: &str) -> Result<(), AppError> {
     let so_name = format!("{core_id}.{}", dylib_ext());
     let kept = previous_dir(cores_dir).join(&so_name);
     if !kept.is_file() {
-        return Err("não há versão anterior".into());
+        return Err(AppError::new(ErrorCode::NotFound, "não há versão anterior"));
     }
     let tmp = cores_dir.join(format!("{so_name}.part"));
-    std::fs::rename(&kept, &tmp).map_err(|e| e.to_string())?;
+    std::fs::rename(&kept, &tmp)?;
     install_keeping_previous(cores_dir, &so_name, &tmp).map(|_| ())
 }
 
 /// Remove o dylib de um core instalado e a versão anterior dele.
-pub fn remove(cores_dir: &Path, core_id: &str) -> Result<(), String> {
+pub fn remove(cores_dir: &Path, core_id: &str) -> Result<(), AppError> {
     let path = cores_dir.join(format!("{core_id}.{}", dylib_ext()));
     if !path.is_file() {
-        return Err("core não está instalado".into());
+        return Err(AppError::new(ErrorCode::NoCore, "core não está instalado"));
     }
-    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    std::fs::remove_file(&path)?;
     let _ =
         std::fs::remove_file(previous_dir(cores_dir).join(format!("{core_id}.{}", dylib_ext())));
     Ok(())
@@ -811,7 +815,9 @@ mod tests {
         remove(&dir, "x_libretro").unwrap();
         assert!(!has_previous(&dir, "x_libretro"));
         assert_eq!(
-            restore_previous(&dir, "x_libretro").unwrap_err(),
+            restore_previous(&dir, "x_libretro")
+                .unwrap_err()
+                .to_string(),
             "não há versão anterior"
         );
         let _ = std::fs::remove_dir_all(&dir);
@@ -1017,7 +1023,7 @@ mod tests {
             let path = match download(&cores_dir, c.id).await {
                 Ok(p) => p,
                 Err(e) => {
-                    rows.push((c.id, c.systems, "download", e, "—".into()));
+                    rows.push((c.id, c.systems, "download", e.to_string(), "—".into()));
                     continue;
                 }
             };

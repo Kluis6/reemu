@@ -26,6 +26,8 @@ const es: Messages = {
     lightDark: 'Claro/oscuro',
   },
   shell: {
+    networkOnline: 'Conectado a internet',
+    networkOffline: 'Sin conexión a internet',
     myProfile: 'Mi perfil',
     fullscreenTip: 'Ocupar toda la pantalla (F11)',
     exitFullscreenTip: 'Salir de pantalla completa (F11)',

@@ -4,6 +4,7 @@ use super::*;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "AudioConfig"))]
 pub struct AudioConfigDto {
     pub output_device_id: Option<String>,
     pub output_device_name: Option<String>,
@@ -72,6 +73,7 @@ pub async fn update_audio_config(
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "VideoConfig"))]
 pub struct VideoConfigDto {
     pub integer_scaling: bool,
     pub hdr: bool,
@@ -153,6 +155,7 @@ pub async fn update_video_config(
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "InstalledCore"))]
 pub struct InstalledCoreDto {
     pub core_id: String,
     /// Nome amigável do core (`retro_system_info.library_name`).

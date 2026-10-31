@@ -5,6 +5,9 @@ import { QueryClient } from '@tanstack/react-query'
 // dados só mudam em ações explícitas, que já invalidam a query.
 export const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { refetchOnWindowFocus: false, staleTime: 5 * 60_000 },
+    // Tudo aqui é comando local do Tauri, que funciona sem rede. No modo padrão
+    // (`online`), sem internet a operação ficava pausada para sempre, sem erro.
+    mutations: { networkMode: 'always' },
+    queries: { networkMode: 'always', refetchOnWindowFocus: false, staleTime: 5 * 60_000 },
   },
 })

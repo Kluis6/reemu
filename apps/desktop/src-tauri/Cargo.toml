@@ -67,6 +67,8 @@ sysinfo = { version = "0.36.1", default-features = false, features = ["system"] 
 tokio = { version = "1", features = ["macros", "rt"] }
 # logs do lado do app nos testes de hardware (ex.: diagnóstico de áudio)
 env_logger = "0.11"
+# Tipos do frontend (`lib/bindings`), gerados só em `cargo test`: o app não leva o crate.
+ts-rs = "12"
 # Teste ponta-a-ponta do HW render Vulkan (etapa 12): carrega o core de teste
 # adotando o VkDevice do compositor. `test-fixtures` também expõe
 # `render_solid_rgba_to_dmabuf` (interop GL — teste do lado consumidor/wgpu).

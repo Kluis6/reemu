@@ -47,6 +47,12 @@ jobs:
       - name: test
         run: cargo test --workspace
 
+      # `cargo test` regenera os tipos do frontend; o que mudou tem que estar no commit.
+      - name: tipos do frontend em dia
+        run: |
+          git add -N packages/app-desktop/src/lib/bindings
+          git diff --exit-code -- packages/app-desktop/src/lib/bindings
+
   windows-check:
     name: Windows (cargo check cruzado)
     runs-on: ubuntu-24.04

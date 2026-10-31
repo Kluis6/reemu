@@ -23,16 +23,19 @@ pub fn install_dir(shaders_dir: &Path) -> PathBuf {
 
 #[derive(serde::Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ShaderPackProgress"))]
 pub struct DownloadProgress {
     pub received: u64,
     /// 0 se o servidor não mandou `Content-Length`.
     pub total: u64,
     /// `"download"` | `"extract"`.
+    #[cfg_attr(test, ts(type = "'download' | 'extract'"))]
     pub phase: &'static str,
 }
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ShaderPackStatus"))]
 pub struct PackStatus {
     pub installed: bool,
     pub path: Option<String>,

@@ -4,6 +4,7 @@ use super::*;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "LoadedGame"))]
 pub struct LoadedGame {
     base_width: u32,
     base_height: u32,
@@ -20,7 +21,7 @@ pub async fn load_game(
     core_id: String,
     rom_path: String,
     rom_id: Option<String>,
-) -> Result<LoadedGame, String> {
+) -> Result<LoadedGame, crate::app_error::AppError> {
     use domain::core_options::CoreOptionsStore;
     let state = app.state::<AppState>();
     let session = Arc::clone(&state.session);
@@ -70,13 +71,13 @@ pub async fn load_game(
                 state
                     .loading_game
                     .store(false, std::sync::atomic::Ordering::Relaxed);
-                return Err(e.to_string());
+                return Err(e.into());
             }
             Err(e) => {
                 state
                     .loading_game
                     .store(false, std::sync::atomic::Ordering::Relaxed);
-                return Err(e.to_string());
+                return Err(e.to_string().into());
             }
         }
     };
@@ -234,9 +235,13 @@ pub(super) async fn apply_resolved_aspect(state: &AppState, rom_id: Option<&str>
 /// O que está atribuído em cada escopo da proporção do jogo.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "AspectInfo"))]
 pub struct AspectInfo {
+    #[cfg_attr(test, ts(type = "'core' | '4:3' | '16:9' | 'fill' | null"))]
     at_rom: Option<String>,
+    #[cfg_attr(test, ts(type = "'core' | '4:3' | '16:9' | 'fill' | null"))]
     at_system: Option<String>,
+    #[cfg_attr(test, ts(type = "'core' | '4:3' | '16:9' | 'fill' | null"))]
     at_default: Option<String>,
     system_id: String,
 }

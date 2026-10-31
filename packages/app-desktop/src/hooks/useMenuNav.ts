@@ -72,8 +72,18 @@ export function useMenuNav() {
     }
     const contextMenu = () => {
       const el = document.activeElement as HTMLElement | null
-      el?.dispatchEvent(
-        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, view: window }),
+      if (!el) return
+      // O Fluent abre o menu nas coordenadas do evento; sem elas, ele ia para o
+      // canto da tela, longe do item em foco.
+      const box = el.getBoundingClientRect()
+      el.dispatchEvent(
+        new MouseEvent('contextmenu', {
+          bubbles: true,
+          cancelable: true,
+          view: window,
+          clientX: box.left + box.width / 2,
+          clientY: box.top + box.height / 2,
+        }),
       )
     }
 
@@ -133,7 +143,10 @@ export function useMenuNav() {
           // fecha ele, como o Esc do teclado — o Fluent fecha no `keydown`
           // de Escape dentro da superfície. Antes o B voltava a página por
           // trás do painel aberto.
-          const modal = document.querySelector<HTMLElement>('.fui-OverlayDrawer, .fui-DialogSurface')
+          // Menu e popover vêm antes: podem estar abertos dentro de um drawer.
+          const modal =
+            document.querySelector<HTMLElement>('[role="menu"], .fui-PopoverSurface') ??
+            document.querySelector<HTMLElement>('.fui-OverlayDrawer, .fui-DialogSurface')
           if (locRef.current.startsWith('/play/')) void toggleFocus().catch(() => {})
           // o onboarding é um modal também, mas o B nele volta um passo
           else if (locRef.current === '/onboarding')

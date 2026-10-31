@@ -4,6 +4,7 @@ use super::*;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "CuratedPreset"))]
 pub struct CuratedPresetInfo {
     /// Wire id — `curated:<id>` (o que `set_shader` espera).
     pub id: String,
@@ -15,6 +16,7 @@ pub struct CuratedPresetInfo {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ShaderInfo"))]
 pub struct ShaderInfo {
     /// Preset ativo — nome do builtin, `curated:<id>` ou caminho `.slangp`.
     pub active: String,
@@ -61,6 +63,7 @@ pub fn get_shader_info(state: State<'_, AppState>) -> ShaderInfo {
 /// …) ou `""` pros presets na raiz.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "SlangpEntry"))]
 pub struct SlangpEntry {
     pub path: String,
     pub name: String,
@@ -267,6 +270,7 @@ async fn set_shader_inner(
 /// = de onde veio o `sourcePath` ("rom" | "system" | "default" | "none").
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "RomShader"))]
 pub struct RomShader {
     pub source_path: Option<String>,
     /// mantido por compat: `resolvedScope == "rom"`.
@@ -347,6 +351,7 @@ pub async fn get_rom_shader(
 /// default min max step`).
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ShaderParam"))]
 pub struct ShaderParamDto {
     pub name: String,
     pub label: String,

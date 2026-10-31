@@ -235,6 +235,9 @@ tema claro e escuro, e nos tamanhos de PC abaixo.
   fundo escurecido.
 - Dicas de botão só com ações do item em foco.
 
+- **Mensagens de erro (pedido do dono do projeto, 2026-10-30):** redesenhar a tela de
+  erro ao abrir um jogo e os avisos de erro, seguindo o padrão dos menus.
+
 ### 6. Biblioteca e página do jogo
 
 Sem mudar o layout. Biblioteca: pular por letra, aviso de busca ativa e lista otimizada
