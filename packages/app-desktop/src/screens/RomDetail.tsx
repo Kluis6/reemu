@@ -795,24 +795,29 @@ export function RomDetail() {
           )}
           {activeCfgTab === "core" && chosenCore && (
             <>
-              <Field label={t("game.core")} className={s.coreField}>
-                <Select
-                  value={chosenCore}
-                  disabled={coreList.length === 0}
-                  onChange={(_, d) => setCoreId(d.value)}
-                >
-                  {coreList.length === 0 && (
-                    <option value="">{t("game.noneInstalled")}</option>
-                  )}
-                  {coreList.map((c) => (
-                    <option key={c.coreId} value={c.coreId}>
-                      {c.name}
-                      {c.extensions.includes(ext) ? " ✓" : ""}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <GameImageOptions coreId={chosenCore} romId={romId} />
+              <GameImageOptions
+                coreId={chosenCore}
+                romId={romId}
+                leading={
+                  <Field label={t("game.core")}>
+                    <Select
+                      value={chosenCore}
+                      disabled={coreList.length === 0}
+                      onChange={(_, d) => setCoreId(d.value)}
+                    >
+                      {coreList.length === 0 && (
+                        <option value="">{t("game.noneInstalled")}</option>
+                      )}
+                      {coreList.map((c) => (
+                        <option key={c.coreId} value={c.coreId}>
+                          {c.name}
+                          {c.extensions.includes(ext) ? " ✓" : ""}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                }
+              />
               <CoreOptions coreId={chosenCore} romId={romId} />
             </>
           )}

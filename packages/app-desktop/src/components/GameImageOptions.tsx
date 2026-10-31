@@ -1,5 +1,6 @@
-import { Caption1, Field, Select, Switch, makeStyles, tokens } from '@fluentui/react-components'
+import { Field, Select, Switch, makeStyles, tokens } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   getAspect,
@@ -13,14 +14,13 @@ import { widescreenActive, widescreenOption } from '../lib/widescreen'
 import { useToastStore } from '../stores/useToastStore'
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', rowGap: tokens.spacingVerticalS },
   row: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    alignItems: 'start',
     columnGap: tokens.spacingHorizontalM,
     rowGap: tokens.spacingVerticalS,
   },
-  hint: { color: tokens.colorNeutralForeground3 },
 })
 
 /**
@@ -28,7 +28,16 @@ const useStyles = makeStyles({
  * cascata jogo → plataforma → todos; aqui se edita só o jogo. Widescreen 16:9: opção do próprio core,
  * que desenha mais cena (só aparece se ele tiver; ver `lib/widescreen.ts`).
  */
-export function GameImageOptions({ coreId, romId }: { coreId: string; romId: string }) {
+export function GameImageOptions({
+  coreId,
+  romId,
+  leading,
+}: {
+  coreId: string
+  romId: string
+  /** Primeira coluna da linha: o seletor de core. */
+  leading?: ReactNode
+}) {
   const { t } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
@@ -69,35 +78,32 @@ export function GameImageOptions({ coreId, romId }: { coreId: string; romId: str
   })
 
   return (
-    <div className={s.root}>
-      <div className={s.row}>
-        <Field label={t('game.image.aspect')}>
-          <Select
-            value={atRom}
-            disabled={change.isPending}
-            onChange={(_, d) => change.mutate(d.value)}
-          >
-            <option value="">{t('game.image.inherit')}</option>
-            <option value="core">{t('game.image.core')}</option>
-            <option value="4:3">4:3</option>
-            <option value="16:9">16:9</option>
-            <option value="fill">{t('game.image.fill')}</option>
-          </Select>
-        </Field>
-      </div>
-      <Caption1 className={s.hint}>{t('game.image.aspectHint')}</Caption1>
+    <div className={s.row}>
+      {leading}
+      <Field label={t('game.image.aspect')} hint={t('game.image.aspectHint')}>
+        <Select
+          value={atRom}
+          disabled={change.isPending}
+          onChange={(_, d) => change.mutate(d.value)}
+        >
+          <option value="">{t('game.image.inherit')}</option>
+          <option value="core">{t('game.image.core')}</option>
+          <option value="4:3">4:3</option>
+          <option value="16:9">16:9</option>
+          <option value="fill">{t('game.image.fill')}</option>
+        </Select>
+      </Field>
       {wide && (
-        <>
+        <Field
+          label={t('game.image.widescreen')}
+          hint={t(wide.conflicts.length > 0 ? 'game.image.widescreenPatchHint' : 'game.image.widescreenHint')}
+        >
           <Switch
-            label={t('game.image.widescreen')}
             checked={widescreenActive(wide)}
             disabled={toggle.isPending}
             onChange={(_, d) => toggle.mutate(d.checked)}
           />
-          <Caption1 className={s.hint}>
-            {t(wide.conflicts.length > 0 ? 'game.image.widescreenPatchHint' : 'game.image.widescreenHint')}
-          </Caption1>
-        </>
+        </Field>
       )}
     </div>
   )

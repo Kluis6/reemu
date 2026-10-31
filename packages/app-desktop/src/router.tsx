@@ -15,6 +15,7 @@ import { SettingsAudio } from './screens/settings/SettingsAudio'
 import { SettingsBios } from './screens/settings/SettingsBios'
 import { SettingsSystem } from './screens/settings/SettingsSystem'
 import { SettingsControllers } from './screens/settings/SettingsControllers'
+import { SettingsCoreDetail } from './screens/settings/SettingsCoreDetail'
 import { SettingsCores } from './screens/settings/SettingsCores'
 import { SettingsHome } from './screens/settings/SettingsHome'
 import { SettingsHotkeys } from './screens/settings/SettingsHotkeys'
@@ -65,6 +66,7 @@ export const router = createHashRouter([
                   { path: 'hotkeys', element: <SettingsHotkeys /> },
                   { path: 'controllers', element: <SettingsControllers /> },
                   { path: 'cores', element: <SettingsCores /> },
+                  { path: 'cores/:coreId', element: <SettingsCoreDetail /> },
                   { path: 'bios', element: <SettingsBios /> },
                   { path: 'sistema', element: <SettingsSystem /> },
                   { path: 'sistema/opcoes', element: <SettingsSystem section="opcoes" /> },

@@ -1456,10 +1456,6 @@ export const useDetailStyles = makeStyles({
   // Mesma matemática do grid de 3 colunas do `CoreOptions` (`repeat(3,
   // minmax(0, 1fr))` + `columnGap: spacingHorizontalM`) — alinha a borda
   // direita do seletor de core com a da 1ª coluna das opções do core.
-  coreField: {
-    width: `calc((100% - 2 * ${tokens.spacingHorizontalM}) / 3)`,
-    minWidth: "200px",
-  },
   stateRow: {
     display: "flex",
     alignItems: "center",

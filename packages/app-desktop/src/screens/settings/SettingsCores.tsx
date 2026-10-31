@@ -29,12 +29,13 @@ import {
 import { useToastStore } from '../../stores/useToastStore'
 import { DownloadButton } from '../../components/DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 
 // Largura dos botões da direita, igual em todas as linhas — como o "Abrir" da
-// Biblioteca da Microsoft Store. Duas vagas, para os botões não mudarem de
+// Biblioteca da Microsoft Store. Três vagas, para os botões não mudarem de
 // lugar nas linhas com Atualizar ou Versão anterior.
 const ACTION_W = '120px'
-const ACTIONS_W = `calc(2 * ${ACTION_W} + ${tokens.spacingHorizontalS})`
+const ACTIONS_W = `calc(3 * ${ACTION_W} + 2 * ${tokens.spacingHorizontalS})`
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -128,6 +129,7 @@ function Catalog() {
   const styles = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
+  const navigate = useNavigate()
   const catalog = useQuery({ queryKey: ['core-catalog'], queryFn: listCoreCatalog, retry: false })
   const updates = useQuery({
     queryKey: CORE_UPDATES_KEY,
@@ -303,6 +305,15 @@ function Catalog() {
                     {t('cores.restorePrevious')}
                   </Button>
                 )
+              )}
+              {c.installed && (
+                <Button
+                  className={styles.action}
+                  appearance="secondary"
+                  onClick={() => navigate(`/settings/cores/${c.coreId}`)}
+                >
+                  {t('settings.title')}
+                </Button>
               )}
               {c.installed ? (
                 // Remover: secondary, só o texto (pedido do usuário)

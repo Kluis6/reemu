@@ -6,9 +6,11 @@ import {
   mergeClasses,
   tokens,
 } from "@fluentui/react-components";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { RouteTransition } from "../components/RouteTransition";
+import { listCoreCatalog } from "../lib/tauri";
 import * as M from "../styles/metrics";
 import { SETTINGS_SECTIONS } from "./settingsSections";
 
@@ -147,6 +149,13 @@ export function SettingsLayout() {
   // ["", "settings", categoria?, subseção?]
   const [, , catKey, sub] = pathname.split("/");
   const section = SETTINGS_SECTIONS.find((s) => s.key === catKey);
+  // nome do core no caminho de Configurações › Cores › core
+  const catalog = useQuery({
+    queryKey: ["core-catalog"],
+    queryFn: listCoreCatalog,
+    retry: false,
+    enabled: catKey === "cores" && !!sub,
+  });
 
   // Caminho do topo: cada nível acima do atual é um link.
   // Na entrada (`/settings`) é só "Configurações", já como item atual: o
@@ -180,6 +189,11 @@ export function SettingsLayout() {
             : sub === "hardware"
               ? t("system.hardware.title")
               : t("about.tab"),
+      });
+    } else if (section.key === "cores" && sub) {
+      crumbs.push({ label, to: "/settings/cores" });
+      crumbs.push({
+        label: catalog.data?.find((c) => c.coreId === sub)?.name ?? sub,
       });
     } else {
       crumbs.push({ label });

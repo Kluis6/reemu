@@ -577,13 +577,12 @@ no `emu-session`, ver `docs/historico.md`).
         tempo de jogo pelo GAS. Depois, hero e logo de jogos já identificados
         para o carrossel e a página do jogo. ScreenScraper e TheGamesDB
         continuam como fontes principais, e o app funciona sem a GameKave.
-- [ ] `todo` — **Ajuste por core nas Configurações** (pedido do dono do projeto,
-      2026-10-31): um componente para as opções gerais de cada core. A página do
-      jogo agora só edita o próprio jogo, então os valores por core já gravados
-      continuam valendo, mas não têm onde ser alterados até lá. `CoreOptions`
-      sem `romId` já edita esses valores. O shader e a proporção da imagem por
-      plataforma e para todos os jogos ficaram na mesma situação e podem entrar
-      junto.
+- [ ] `todo` — **Barra superior na página do jogo:** ao rolar, título e botões passam por baixo do Voltar e da busca (captura do dono do projeto, 2026-10-31). Sugestão: dar fundo à barra quando a página rolar.
+- [ ] `todo` — **Shader e proporção gerais nas Configurações:** a página do jogo só
+      edita o próprio jogo (pedido do dono do projeto, 2026-10-31), então os valores
+      por plataforma e para todos os jogos continuam valendo, mas precisam de um
+      lugar para serem alterados. As opções por core já têm tela em Configurações ›
+      Cores › Configurações.
 - [ ] `todo` — **Novas telas para a rede social** (pedido do dono do projeto,
       2026-10-31): a Alvanista será a rede social do ReEmu, então virão mais rotas
       como `/conquistas`, sem ícone na barra lateral e abertas pelo drawer de

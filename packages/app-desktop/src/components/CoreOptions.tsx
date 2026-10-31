@@ -2,6 +2,8 @@ import {
   Button,
   Caption1,
   Field,
+  MessageBar,
+  MessageBarBody,
   Select,
   Spinner,
   makeStyles,
@@ -65,7 +67,14 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
   if (!coreId) return null
   if (opts.isLoading) return <Spinner size="tiny" label={t('coreOptions.loading')} />
   if (!opts.data || opts.data.length === 0)
-    return <Caption1>{t('coreOptions.none')}</Caption1>
+    // O core só informa as opções ao carregar um jogo; o ReEmu as guarda nessa hora.
+    return romId ? (
+      <Caption1>{t('coreOptions.none')}</Caption1>
+    ) : (
+      <MessageBar intent="info">
+        <MessageBarBody>{t('coreOptions.notRunYet')}</MessageBarBody>
+      </MessageBar>
+    )
 
   return (
     <div className={styles.root}>
