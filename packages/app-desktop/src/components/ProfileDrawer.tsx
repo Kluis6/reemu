@@ -95,8 +95,8 @@ const useStyles = makeStyles({
 /**
  * Perfil num drawer à esquerda, no lugar do menu suspenso do avatar do rail
  * (pedido do usuário, 2026-10-29, print do guia de perfil do Xbox): banner,
- * avatar grande, nome e bio no topo; as ações embaixo. Conquistas, rede e
- * status ainda não têm tela — desabilitados, como no menu de antes.
+ * avatar grande, nome e bio no topo; as ações embaixo. Rede e status ainda não
+ * têm tela — desabilitados, como no menu de antes.
  */
 export function ProfileDrawer({
   open,
@@ -154,7 +154,12 @@ export function ProfileDrawer({
           >
             {t("shell.myProfile")}
           </Button>
-          <Button size="large" className={item} icon={<TrophyRegular />} disabled>
+          <Button
+            size="large"
+            className={item}
+            icon={<TrophyRegular />}
+            onClick={() => go("/conquistas")}
+          >
             {t("nav.achievements")}
           </Button>
           <Button size="large" className={item} icon={<PeopleRegular />} disabled>

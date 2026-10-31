@@ -2,6 +2,7 @@ import { createHashRouter, Navigate } from 'react-router-dom'
 import { AppShell } from './layouts/AppShell'
 import { RootLayout } from './layouts/RootLayout'
 import { SettingsLayout } from './layouts/SettingsLayout'
+import { Achievements } from './screens/Achievements'
 import { Home } from './screens/Home'
 import { Library } from './screens/Library'
 import { Onboarding } from './screens/Onboarding'
@@ -45,6 +46,7 @@ export const router = createHashRouter([
               { path: 'library', element: <Library /> },
               { path: 'library/:platform', element: <PlatformLibrary /> },
               { path: 'rom/:romId', element: <RomDetail /> },
+              { path: 'conquistas', element: <Achievements /> },
               {
                 path: 'settings',
                 element: <SettingsLayout />,

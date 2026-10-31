@@ -577,6 +577,12 @@ no `emu-session`, ver `docs/historico.md`).
         tempo de jogo pelo GAS. Depois, hero e logo de jogos já identificados
         para o carrossel e a página do jogo. ScreenScraper e TheGamesDB
         continuam como fontes principais, e o app funciona sem a GameKave.
+- [ ] `todo` — **Novas telas para a rede social** (pedido do dono do projeto,
+      2026-10-31): a Alvanista será a rede social do ReEmu, então virão mais rotas
+      como `/conquistas`, sem ícone na barra lateral e abertas pelo drawer de
+      perfil. A primeira a seguir é "Minha rede", hoje desativada no drawer. As
+      telas e os itens ainda não foram definidos, e a integração segue pendente
+      do item acima e do PR #1.
 - [ ] `todo` — Avaliar no futuro: **ports nativos (recomp/decomp)** como
       launcher externo (pedido do dono do projeto, 2026-10-17). Pesquisa e
       licenças conferidas no GitHub:
