@@ -66,7 +66,7 @@ o card atual fica.
       Inclui redesenhar as mensagens de erro (tela ao abrir um jogo e avisos).
 - [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates.
 - [x] `done` — Fase 7: sons, reduzir movimento, diagnóstico e registro de decisões, aprovada pelo usuário (2026-10-31). Pendentes: vibração, que precisa de suporte no código de entrada, e revisão dos temas numa TV.
-- [ ] `todo` — Fase 8: estrutura de core e GPU (**cada item exige aviso**).
+- [ ] `in-progress` — Fase 8: estrutura de core e GPU (**cada item exige aviso**). Item 1 publicado; mapa das travas em `20-mapa-travas-session.md`; separar travas e item 3 parados até haver motivo.
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
