@@ -3323,3 +3323,8 @@ Infra:
 - **Diagnóstico:** gerado só sob pedido, em arquivo local, sem a pasta do usuário nem valores de campos sensíveis. O log do app passou a ser gravado também na versão instalada.
 - **Decisões:** resumo em `docs/decisoes.md`.
 - **Fase 6:** extração adiada, porque nenhum dos arquivos precisa mudar agora.
+
+## 2026-10-31 — Fase 8, item 1: divisão de `gpu/mod.rs`
+
+- **Mudança:** só movimentação de código para `surface.rs`, `process.rs`, `interop.rs`, `presets.rs`, `vblank.rs` e `readback.rs`; `mod.rs` caiu de 2.833 para 1.337 linhas. Nenhuma decisão de GPU foi alterada, então não houve consulta nova à documentação.
+- **Desempenho:** Soulcalibur (Flycast, Vulkan), ~5 min em cada versão: desenho de 1,46 ms nas duas, core de 3,80 ms sem a divisão e 4,10 ms com ela, atrasos de 0,424/s e 0,282/s. Sem sinal de perda. Uma captura anterior da mesma versão deu 1,76 ms e 0,489/s, o que mostra a variação entre capturas; o limite de 2% do portão fica sensível demais para uma captura só.
