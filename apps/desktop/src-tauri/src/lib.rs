@@ -83,7 +83,8 @@ pub fn run() {
                 shader_failure::report(source, shader_failure::FailureKind::Gpu, error)
             });
             gpu::set_wide_bezel_hook(shader_failure::report_wide_bezel);
-            if cfg!(debug_assertions) {
+            // Também na versão instalada: é o log que entra no diagnóstico.
+            {
                 app.handle().plugin(
                     // Padrão do plugin: 40 KB e só o arquivo atual
                     // (`KeepOne`) — com `REEMU_PERF` (1 linha/s) um teste
@@ -382,6 +383,7 @@ pub fn run() {
             commands::ppsspp_assets_installed,
             commands::download_ppsspp_assets,
             commands::browse_dir,
+            commands::export_diagnostics,
             commands::list_roms,
             commands::remove_rom,
             commands::set_rom_favorite,

@@ -65,7 +65,7 @@ o card atual fica.
 - [x] `done` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados, aprovada pelo usuário (2026-10-31). Sugestões de palavras no teclado virtual ficaram de fora.
       Inclui redesenhar as mensagens de erro (tela ao abrir um jogo e avisos).
 - [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates.
-- [ ] `todo` — Fase 7: acabamento, diagnóstico exportável e registro de decisões.
+- [x] `done` — Fase 7: sons, reduzir movimento, diagnóstico e registro de decisões, aprovada pelo usuário (2026-10-31). Pendentes: vibração, que precisa de suporte no código de entrada, e revisão dos temas numa TV.
 - [ ] `todo` — Fase 8: estrutura de core e GPU (**cada item exige aviso**).
 
 ### Validação (precisa de hardware/máquina que não é esta)
@@ -577,6 +577,7 @@ no `emu-session`, ver `docs/historico.md`).
         tempo de jogo pelo GAS. Depois, hero e logo de jogos já identificados
         para o carrossel e a página do jogo. ScreenScraper e TheGamesDB
         continuam como fontes principais, e o app funciona sem a GameKave.
+- [ ] `todo` — **`ui-smoke` não acusa app que não abre:** com um erro no início do `main.tsx`, ele terminou sem falhas (2026-10-31). Fazer a varredura falhar quando a tela não montar.
 - [ ] `todo` — **Shader e proporção gerais nas Configurações:** a página do jogo só
       edita o próprio jogo (pedido do dono do projeto, 2026-10-31), então os valores
       por plataforma e para todos os jogos continuam valendo, mas precisam de um

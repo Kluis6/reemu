@@ -13,6 +13,7 @@ import {
   type NavDir,
 } from '../lib/focusNav'
 import { onMenuNav, toggleFocus } from '../lib/tauri'
+import { playUiSound } from '../lib/uiPrefs'
 import { useFocusStore } from '../stores/useFocusStore'
 import { useSearchStore } from '../stores/useSearchStore'
 
@@ -138,9 +139,19 @@ export function useMenuNav() {
       lastKind = nav
       // Teclado na tela aberto: ele recebe os pulsos primeiro.
       const kbd = useSearchStore.getState().keyboardNav
-      if (kbd && kbd(nav)) return
+      if (kbd && kbd(nav)) {
+        if (nav === 'confirm') playUiSound('confirm')
+        else if (['up', 'down', 'left', 'right'].includes(nav)) playUiSound('move')
+        return
+      }
 
       // Seletor ou slider em ajuste: as setas mudam o valor; A ou B saem.
+      // Som só fora do jogo: no menu de pausa ele continua, com o jogo parado.
+      if (nav === 'confirm') playUiSound('confirm')
+      else if (nav === 'back') playUiSound('back')
+      else if (nav === 'up' || nav === 'down' || nav === 'left' || nav === 'right')
+        playUiSound('move')
+
       if (engagedControl()) {
         if (nav === 'left' || nav === 'down') adjustEngaged(-1)
         else if (nav === 'right' || nav === 'up') adjustEngaged(1)

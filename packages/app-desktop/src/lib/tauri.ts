@@ -303,6 +303,10 @@ export function pickBiosFile(): Promise<string | null> {
   return pickPath({ title: i18n.t('dialogs.pickBios') })
 }
 
+/** Grava o diagnóstico num arquivo local e devolve o caminho. */
+export const exportDiagnostics = (report: string) =>
+  invoke<string>('export_diagnostics', { report })
+
 export const browseDir = (path: string | null, extensions: string[], dirsOnly: boolean) =>
   invoke<DirListing>('browse_dir', { path, extensions, dirsOnly })
 

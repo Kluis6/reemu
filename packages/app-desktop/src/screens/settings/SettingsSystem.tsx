@@ -1,8 +1,10 @@
 import {
+  Button,
   Caption1,
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
+import { getVersion } from "@tauri-apps/api/app";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -21,7 +23,9 @@ import {
   type LanguagePreference,
 } from "../../i18n";
 import {
+  exportDiagnostics,
   getHardwareInfo,
+  listInstalledCores,
   getVideoConfig,
   updateVideoConfig,
   getSystemSettings,
@@ -30,7 +34,14 @@ import {
   setStartFullscreen,
   type SystemSettings,
 } from "../../lib/tauri";
-import { errorToast } from "../../lib/toast";
+import { formatDiagnostics } from "../../lib/diagnostics";
+import {
+  getReduceMotion,
+  getUiSounds,
+  setReduceMotion,
+  setUiSounds,
+} from "../../lib/uiPrefs";
+import { errorToast, sysToast } from "../../lib/toast";
 import {
   OVERSCANS,
   UI_SCALES,
@@ -66,6 +77,13 @@ const useStyles = makeStyles({
     rowGap: tokens.spacingVerticalXXL,
   },
   hwCard: { maxWidth: "720px" },
+  diagnostics: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    rowGap: tokens.spacingVerticalS,
+    marginTop: tokens.spacingVerticalL,
+  },
   // rótulo à esquerda, valor à direita; em tela estreita um embaixo do outro
   hwList: {
     display: "grid",
@@ -109,6 +127,33 @@ export function SettingsSystem({
   );
   const [uiScale, setUiScaleState] = useState(getUiScale);
   const [overscan, setOverscanState] = useState(getOverscan);
+  const [uiSounds, setUiSoundsState] = useState(getUiSounds);
+  const [reduceMotion, setReduceMotionState] = useState(getReduceMotion);
+  const diagnostics = useMutation({
+    mutationFn: async () => {
+      const [appVersion, hw, cores, video] = await Promise.all([
+        getVersion().catch(() => ""),
+        getHardwareInfo().catch(() => undefined),
+        listInstalledCores().catch(() => undefined),
+        getVideoConfig().catch(() => undefined),
+      ]);
+      return exportDiagnostics(
+        formatDiagnostics(
+          {
+            appVersion,
+            language: i18n.language,
+            window: `${window.innerWidth}x${window.innerHeight}`,
+            hardware: hw,
+            cores,
+            video,
+          },
+          new Date(),
+        ),
+      );
+    },
+    onSuccess: (path) => push(sysToast(t("system.diagnosticsSaved", { path }), "Success")),
+    onError: (e) => push(errorToast(e, "exportDiagnostics")),
+  });
 
   const settings = useQuery({
     queryKey: ["system-settings"],
@@ -268,6 +313,27 @@ export function SettingsSystem({
             {toggle("minimizeToTray", t("system.minimizeToTray"), t("system.minimizeToTrayHint"))}
           </BlockGroup>
 
+          <BlockGroup title={t("system.feedback")}>
+            <ToggleBlock
+              label={t("system.uiSounds")}
+              description={t("system.uiSoundsHint")}
+              checked={uiSounds}
+              onChange={(on) => {
+                setUiSoundsState(on);
+                setUiSounds(on);
+              }}
+            />
+            <ToggleBlock
+              label={t("system.reduceMotion")}
+              description={t("system.reduceMotionHint")}
+              checked={reduceMotion}
+              onChange={(on) => {
+                setReduceMotionState(on);
+                setReduceMotion(on);
+              }}
+            />
+          </BlockGroup>
+
           <BlockGroup title={t("settings.tabs.video")}>
             <ToggleBlock
               label={t("video.integerScaling")}
@@ -309,6 +375,14 @@ export function SettingsSystem({
               </dl>
             </div>
           )}
+          <div className={s.diagnostics}>
+            <Caption1 as="p" block style={{ margin: 0 }}>
+              {t("system.diagnosticsHint")}
+            </Caption1>
+            <Button disabled={diagnostics.isPending} onClick={() => diagnostics.mutate()}>
+              {t("system.diagnostics")}
+            </Button>
+          </div>
         </section>
       )}
 

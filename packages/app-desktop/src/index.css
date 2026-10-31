@@ -496,3 +496,12 @@ html[data-nav-focus] .reemu-block :is(.fui-Switch, .fui-Slider):focus-within {
 :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):not(.fui-BreadcrumbButton) {
   font-weight: var(--fontWeightRegular) !important;
 }
+
+/* Reduzir movimento (Configurações › Sistema): vale além do ajuste do sistema. */
+html[data-reduce-motion] *,
+html[data-reduce-motion] *::before,
+html[data-reduce-motion] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

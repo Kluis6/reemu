@@ -5,6 +5,7 @@ import './index.css'
 // idiomas (pt-BR/en/es) — inicializa antes do 1º render
 import './i18n'
 import { startUiScale } from './lib/uiScale'
+import { applyReduceMotion } from './lib/uiPrefs'
 
 // A webview é opaca (o vídeo do jogo é desenhado num canvas dentro dela, não
 // atrás) — ver apps/desktop/src-tauri/src/main.rs pro histórico.
@@ -48,6 +49,7 @@ window.addEventListener(
 
 // Escala modo Xbox (tela lógica de 1366×768 epx, ver lib/uiScale.ts) — aplicada
 // antes do 1º render, pra não piscar no tamanho errado.
+applyReduceMotion()
 startUiScale()
   .catch((e) => reportToRust(`escala da interface: ${String(e)}`))
   .finally(() =>

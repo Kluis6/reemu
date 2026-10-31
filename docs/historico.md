@@ -3316,3 +3316,10 @@ Infra:
 
 - **Navegador de arquivos:** com o controle, a escolha de pasta ou arquivo abre `FilePicker`, com o comando `browse_dir`, que só lista nomes. Com mouse e teclado, segue a janela do sistema.
 - **Teclado virtual:** mostra o texto digitado, tem cursor em LB/RB, troca de camada em LT/RT e tecla conforme o idioma. Sugestões de palavras ficaram de fora: exigiriam dicionários por idioma e ajudam pouco em nomes de jogos e pastas.
+
+## 2026-10-31 — Fase 7: acabamento e diagnóstico
+
+- **Sons e movimento:** sons de navegação gerados na hora, só nos menus, e opção de reduzir movimento, ambos em Sistema › Opções.
+- **Diagnóstico:** gerado só sob pedido, em arquivo local, sem a pasta do usuário nem valores de campos sensíveis. O log do app passou a ser gravado também na versão instalada.
+- **Decisões:** resumo em `docs/decisoes.md`.
+- **Fase 6:** extração adiada, porque nenhum dos arquivos precisa mudar agora.
