@@ -3289,3 +3289,4 @@ Infra:
 - **Barra de dicas:** desfoque por trás, mantendo a transparência pedida em 2026-10-11, e folga no fim das listas das Configurações. No hub, ela segue sobre o pé do card Sistema, como pedido na mesma data.
 - **Ícones A, B, X e Y:** `react-icons` 5.7 (Tabler, MIT), pedido do usuário. O pacote não tem LB, RB, LT e RT, que seguem como pílulas.
 - **Pulo dos cards ao entrar na Biblioteca:** `useShelfCapacity` media em `useEffect`, depois da pintura; o 1º quadro saía com 183 px e o seguinte com 207,6. Com `useLayoutEffect`, a medição quadro a quadro mostra só 207,6.
+- **Barras de rolagem:** regra única em `index.css`, com o estilo de Início e Meus jogos, no lugar das cópias por componente (pedido do usuário).

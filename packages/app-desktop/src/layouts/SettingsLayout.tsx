@@ -121,10 +121,6 @@ const useStyles = makeStyles({
     paddingRight: `calc(${tokens.spacingHorizontalXXL} - ${M.SCROLLBAR_W}px)`,
     // O fim da lista sobe além da barra de dicas, que flutua sobre o card.
     paddingBottom: `${M.PAGE_PAD_B - M.SAFE_Y + 24}px`,
-    "::-webkit-scrollbar": { width: `${M.SCROLLBAR_W}px` },
-    "::-webkit-scrollbar-thumb": {
-      backgroundColor: tokens.colorNeutralStroke2,
-    },
   },
   content: { minWidth: 0, maxWidth: "640px" },
   // Abas de lista em grade (Aparência, Cores, BIOS…) usam a largura toda —

@@ -106,12 +106,6 @@ const useLibStyles = makeStyles({
   // com `autoSize` o popover ganha altura máxima; a lista rola dentro dele
   menuPopover: {
     overflowY: "auto",
-    // mesmo scrollbar fino do resto do app (`.scroll` do shell)
-    "::-webkit-scrollbar": { width: "6px" },
-    "::-webkit-scrollbar-thumb": {
-      backgroundColor: tokens.colorNeutralStroke2,
-      borderRadius: tokens.borderRadiusCircular,
-    },
   },
   radioMenuList: {
     "& .fui-MenuItemRadio__content": {

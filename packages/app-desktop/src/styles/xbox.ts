@@ -467,11 +467,6 @@ export const useShellStyles = makeStyles({
     paddingRight: SCROLL_PAD_R,
     // Área segura de baixo + a barra de dicas, que não pode cobrir nada.
     paddingBottom: `${M.PAGE_PAD_B}px`,
-    "::-webkit-scrollbar": { width: `${SCROLLBAR_W}px` },
-    "::-webkit-scrollbar-thumb": {
-      backgroundColor: tokens.colorNeutralStroke2,
-      borderRadius: tokens.borderRadiusCircular,
-    },
   },
 });
 
@@ -1470,11 +1465,6 @@ export const useDetailStyles = makeStyles({
     maxHeight: "420px",
     overflowY: "auto",
     padding: tokens.spacingHorizontalM,
-    "::-webkit-scrollbar": { width: "6px" },
-    "::-webkit-scrollbar-thumb": {
-      backgroundColor: tokens.colorNeutralStroke2,
-      borderRadius: tokens.borderRadiusCircular,
-    },
   },
   // Escolha de shader (abas + lista de cards), na largura da coluna de
   // opções das Configurações › Shaders.

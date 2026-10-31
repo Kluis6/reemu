@@ -281,16 +281,6 @@ html[data-nav-focus] :is([role="menuitem"], [role="menuitemradio"], [role="menui
   padding: 12px !important;
   margin: 0 -12px !important;
 }
-/* Barra de rolagem do diálogo igual à do resto do app (`.scroll`, xbox.ts):
-   6 px, polegar arredondado, sem as setas da barra padrão do Windows. */
-.fui-DialogContent::-webkit-scrollbar {
-  width: 6px;
-}
-.fui-DialogContent::-webkit-scrollbar-thumb {
-  background-color: var(--colorNeutralStroke2);
-  border-radius: var(--borderRadiusCircular);
-}
-
 /* Slide do carrossel da Início: o botão ocupa o carrossel inteiro, que corta
    o que passa da borda (`overflow: hidden`). O anel padrão (3 px a 3 px, com
    o brilho) vai no PRÓPRIO carrossel, que não é cortado; o botão em si fica
@@ -484,4 +474,20 @@ html[data-nav-focus] .reemu-block .fui-Switch:focus-within {
 .reemu-block .fui-Switch__indicator::after,
 .reemu-block .fui-Switch[data-fui-focus-within]::after {
   display: none;
+}
+
+/* Barra de rolagem de todo o app, a das páginas Início e Meus jogos: 6 px, polegar
+   arredondado, sem as setas do Windows. A espessura vale nos dois eixos. Quem esconde
+   a barra (prateleiras) ganha desta regra por ter classe própria. */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--colorNeutralStroke2);
+  border-radius: var(--borderRadiusCircular);
 }

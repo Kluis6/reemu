@@ -18,12 +18,6 @@ const useStyles = makeStyles({
     overflowY: 'auto',
     padding: '8px',
     margin: '-8px',
-    // mesmo scrollbar fino do resto do app (`.scroll` do shell)
-    '::-webkit-scrollbar': { width: '6px' },
-    '::-webkit-scrollbar-thumb': {
-      backgroundColor: tokens.colorNeutralStroke2,
-      borderRadius: tokens.borderRadiusCircular,
-    },
   },
   // `fill`: a lista ocupa a altura que o pai (flex em coluna) der
   listFill: { flexGrow: 1, minHeight: 0, maxHeight: 'none' },

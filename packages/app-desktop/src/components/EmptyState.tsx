@@ -25,6 +25,7 @@ const useStyles = makeStyles({
   // falha contraste AA contra os neutros customizados do tema claro (ver
   // `styles/themes.ts::ReEmuTokens.reemuBrandText`).
   art: { color: "var(--reemuBrandText)", opacity: 0.85 },
+  artAccent: { opacity: 1 },
   title: { color: tokens.colorNeutralForeground1 },
   action: { marginTop: tokens.spacingVerticalS },
   // `size="large"` (página inicial sem jogos, pedido do usuário): no meio da
@@ -72,6 +73,7 @@ const useStyles = makeStyles({
 export function EmptyState({
   icon,
   art,
+  artAccent = false,
   title,
   children,
   action,
@@ -81,6 +83,8 @@ export function EmptyState({
   icon?: ReactNode
   /** Ilustração de linha (`components/EmptyArt`) — no lugar do `icon`. */
   art?: ReactNode
+  /** Ilustração sem transparência, na cor que ela mesma trouxer. */
+  artAccent?: boolean
   title: string
   /** Uma frase curta explicando o que fazer. */
   children?: ReactNode
@@ -93,7 +97,7 @@ export function EmptyState({
   const lg = size === 'large'
   return (
     <div className={mergeClasses(s.root, lg && s.rootLg)}>
-      <div className={mergeClasses(art ? s.art : s.icon, lg && s.artLg)} aria-hidden>
+      <div className={mergeClasses(art ? s.art : s.icon, artAccent && s.artAccent, lg && s.artLg)} aria-hidden>
         {art ?? icon}
       </div>
       <Subtitle1 as="h2" className={mergeClasses(s.title, lg && s.titleLg)}>

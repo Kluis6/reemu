@@ -6,7 +6,12 @@ import { EmptyState } from "../components/EmptyState";
 export function Achievements() {
   const { t } = useTranslation();
   return (
-    <EmptyState size="large" icon={<TrophyRegular />} title={t("nav.achievements")}>
+    <EmptyState
+      size="large"
+      art={<TrophyRegular style={{ color: "var(--reemuBrandAccent)" }} />}
+      artAccent
+      title={t("nav.achievements")}
+    >
       {t("play.achievementsSoon")}
     </EmptyState>
   );

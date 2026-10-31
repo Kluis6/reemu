@@ -61,12 +61,6 @@ const useStyles = makeStyles({
     // folga (8) pro anel de foco dos cards não ser cortado pela borda que rola
     padding: '8px',
     margin: '-8px',
-    // mesmo scrollbar fino do resto do app (`.scroll` do shell)
-    '::-webkit-scrollbar': { width: '6px' },
-    '::-webkit-scrollbar-thumb': {
-      backgroundColor: tokens.colorNeutralStroke2,
-      borderRadius: tokens.borderRadiusCircular,
-    },
   },
   // Cards do grupo iguais aos da lista de Shaders do ReEmu: mesmo
   // espaçamento e a largura toda (sem a margem lateral do AccordionPanel).

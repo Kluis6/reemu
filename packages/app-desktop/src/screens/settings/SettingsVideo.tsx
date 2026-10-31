@@ -100,11 +100,6 @@ const useStyles = makeStyles({
     minHeight: 0,
     overflowY: 'auto',
     padding: tokens.spacingHorizontalM,
-    '::-webkit-scrollbar': { width: '6px' },
-    '::-webkit-scrollbar-thumb': {
-      backgroundColor: tokens.colorNeutralStroke2,
-      borderRadius: tokens.borderRadiusCircular,
-    },
   },
 })
 
