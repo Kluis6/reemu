@@ -3279,4 +3279,13 @@ Infra:
 - **Decisão:** as capturas mostram as mesmas proporções em janela e no modo Xbox, e o layout de referência do projeto é o do app. Uma escala só: `zoom = max(1, min(L/1280, A/720))` vezes a preferência. A base era 1366×768 e deixava tudo ~6,5% menor que as capturas; a de 1280×720 fica a até 3%. O conteúdo chegou a ficar centralizado com 1000 de largura lógica, como nas capturas, mas o usuário pediu menos espaço lateral no teste: voltou à margem da página (47 lógicos), em todas as telas, e o alinhamento da topbar pedido em 2026-10-11 se mantém.
 - **Janela menor que 1366×768:** o zoom para em 1 e a tela se reorganiza, sem encolher o texto. Busca que encolhe, carrossel mais baixo em tela baixa e a linha de Shaders que quebrava foram mantidos.
 - **Margem da TV:** opcional, só em tela cheia, 0 por padrão; os itens recuam e os fundos vão até a borda.
-- **Vídeo:** a janela nativa usa o tamanho físico da janela do app e o `<canvas>` mede em pixels do dispositivo, então nenhum depende do zoom pela leitura do código. Falta confirmar no app e medir com o `perf-capture`.
+- **Vídeo:** a janela nativa usa o tamanho físico da janela do app e o `<canvas>` mede em pixels do dispositivo, então nenhum depende do zoom pela leitura do código.
+- **Desempenho (2026-10-31, `perf-report --compare` contra a referência da fase 0):** dos 28 valores, só o `run_med` do Vulkan foi marcado como pior: 4,33 → 4,95 ms, com ritmo de quadros (`int_med`, `int_p99`), `render_med` e perdidos dentro do limite. A fase 3 não mexeu em código nativo. O mesmo `run_med` caiu de 1,2 para 0,64 ms no cenário de shader, sem mudança relacionada, então a causa provável é variação da cena jogada; não verificada, porque houve uma só captura. Abrir e fechar o menu de pausa e trocar de jogo não foram medidos.
+
+## 2026-10-31 — Fase 4, primeira parte: blocos nas Configurações
+
+- **Coluna de categorias:** testada e removida a pedido do usuário; troca-se de seção pelo hub. O caminho do topo fica só para mouse e teclado: com o controle, o foco entra direto nas opções e B volta.
+- **Blocos:** `Switch` para efeito imediato (Fluent 2, Switch › usage). O seletor usa `Menu` com `MenuItemRadio` e `coverTarget` para abrir sobre o bloco; o uso do Menu no Fluent 2 sugere `Dropdown` para coletar dados, mas só `role="menu"` já é camada na navegação por controle.
+- **Barra de dicas:** desfoque por trás, mantendo a transparência pedida em 2026-10-11, e folga no fim das listas das Configurações. No hub, ela segue sobre o pé do card Sistema, como pedido na mesma data.
+- **Ícones A, B, X e Y:** `react-icons` 5.7 (Tabler, MIT), pedido do usuário. O pacote não tem LB, RB, LT e RT, que seguem como pílulas.
+- **Pulo dos cards ao entrar na Biblioteca:** `useShelfCapacity` media em `useEffect`, depois da pintura; o 1º quadro saía com 183 px e o seguinte com 207,6. Com `useLayoutEffect`, a medição quadro a quadro mostra só 207,6.

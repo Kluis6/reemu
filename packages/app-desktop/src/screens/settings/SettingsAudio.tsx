@@ -1,14 +1,16 @@
-import { Body1, Button, Field, Input, Switch, makeStyles, tokens } from '@fluentui/react-components'
+import { Body1, Button, Field, Input, makeStyles, tokens } from '@fluentui/react-components'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { LoadingState } from '../../components/EmptyState'
+import { BlockGroup, FieldBlock, ToggleBlock } from '../../components/SettingBlock'
 import { errorToast, sysToast } from '../../lib/toast'
 import { getAudioConfig, updateAudioConfig, type AudioConfig } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
 import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
-  section: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM, maxWidth: '440px' },
+  section: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL },
+  save: { alignSelf: 'flex-start' },
 })
 
 export function SettingsAudio() {
@@ -45,30 +47,37 @@ export function SettingsAudio() {
 
   return (
     <div className={styles.section}>
-      <Field label={t('audio.drc')} hint={t('audio.drcHint')}>
-        <Switch
+      <BlockGroup>
+        <ToggleBlock
+          label={t('audio.drc')}
+          description={t('audio.drcHint')}
           checked={draft.rateControlEnabled}
-          onChange={(_, d) => set('rateControlEnabled', d.checked)}
+          onChange={(checked) => set('rateControlEnabled', checked)}
         />
-      </Field>
-      <Field label={t('audio.delta')} hint={t('audio.deltaHint')}>
-        <Input
-          appearance="filled-darker"
-          type="number"
-          step={0.001}
-          value={String(draft.rateControlDelta)}
-          onChange={(_, d) => set('rateControlDelta', Number(d.value))}
-        />
-      </Field>
-      <Field label={t('audio.device')}>
-        <Input
-          appearance="filled-darker"
-          value={draft.outputDeviceId ?? ''}
-          placeholder={t('audio.systemDefault')}
-          onChange={(_, d) => set('outputDeviceId', d.value === '' ? null : d.value)}
-        />
-      </Field>
+        <FieldBlock>
+          <Field label={t('audio.delta')} hint={t('audio.deltaHint')}>
+            <Input
+              appearance="filled-darker"
+              type="number"
+              step={0.001}
+              value={String(draft.rateControlDelta)}
+              onChange={(_, d) => set('rateControlDelta', Number(d.value))}
+            />
+          </Field>
+        </FieldBlock>
+        <FieldBlock>
+          <Field label={t('audio.device')}>
+            <Input
+              appearance="filled-darker"
+              value={draft.outputDeviceId ?? ''}
+              placeholder={t('audio.systemDefault')}
+              onChange={(_, d) => set('outputDeviceId', d.value === '' ? null : d.value)}
+            />
+          </Field>
+        </FieldBlock>
+      </BlockGroup>
       <Button
+        className={styles.save}
         appearance="primary"
         disabled={save.isPending || Object.keys(edits).length === 0}
         onClick={() => save.mutate(draft)}

@@ -1,14 +1,7 @@
 import {
   Caption1,
-  Field,
-  Radio,
-  RadioGroup,
-  Switch,
-  Text,
   makeStyles,
-  mergeClasses,
   tokens,
-  type RadioGroupOnChangeData,
 } from "@fluentui/react-components";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
@@ -16,6 +9,12 @@ import { useTranslation } from "react-i18next";
 import { AboutLicenses } from "../../components/AboutLicenses";
 import { HdrSettings } from "../../components/HdrSettings";
 import { LoadingState } from "../../components/EmptyState";
+import {
+  BlockGroup,
+  FieldBlock,
+  SelectBlock,
+  ToggleBlock,
+} from "../../components/SettingBlock";
 import {
   getLanguagePreference,
   LANGUAGES,
@@ -61,19 +60,11 @@ const useStyles = makeStyles({
     flexDirection: "column",
     rowGap: tokens.spacingVerticalL,
   },
-  // Opções: cada seção num card interno sem sombra, no tom dos outros cards
-  // das Configurações (o card da página redefine o Background2 como a camada
-  // mais clara — ver SettingsLayout); o card geral continua (pedido do
-  // usuário).
+  // Opções: grupos de blocos, sobre o card geral (pedido do usuário).
   cards: {
     display: "flex",
     flexDirection: "column",
-    rowGap: tokens.spacingVerticalL,
-  },
-  card: {
-    padding: `${tokens.spacingVerticalL} ${tokens.spacingHorizontalL}`,
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground2,
+    rowGap: tokens.spacingVerticalXXL,
   },
   hwCard: { maxWidth: "720px" },
   // rótulo à esquerda, valor à direita; em tela estreita um embaixo do outro
@@ -97,27 +88,6 @@ const SAVE: Record<Key, (enabled: boolean) => Promise<void>> = {
   startFullscreen: setStartFullscreen,
   minimizeToTray: setMinimizeToTray,
 };
-
-function Heading({
-  title,
-  description,
-}: {
-  title: string;
-  description?: string;
-}) {
-  return (
-    <div>
-      <Text as="strong" weight="semibold">
-        {title}
-      </Text>
-      {description && (
-        <Caption1 as="p" block style={{ margin: "2px 0 0" }}>
-          {description}
-        </Caption1>
-      )}
-    </div>
-  );
-}
 
 /** Configurações › Sistema: idioma, tamanho da interface, inicialização
  *  (iniciar com o sistema, tela cheia, bandeja — `src-tauri/src/system.rs`),
@@ -204,13 +174,13 @@ export function SettingsSystem({
   if (settings.isLoading) return <LoadingState />;
 
   const toggle = (key: Key, label: string, hint: string) => (
-    <Field label={label} hint={hint}>
-      <Switch
-        checked={settings.data?.[key] ?? false}
-        disabled={!settings.data || save.isPending}
-        onChange={(_, d) => save.mutate({ key, value: d.checked })}
-      />
-    </Field>
+    <ToggleBlock
+      label={label}
+      description={hint}
+      checked={settings.data?.[key] ?? false}
+      disabled={!settings.data || save.isPending}
+      onChange={(value) => save.mutate({ key, value })}
+    />
   );
 
   const hw = hardware.data;
@@ -250,110 +220,67 @@ export function SettingsSystem({
     <div className={s.root}>
       {section === "opcoes" && (
         <div className={s.cards}>
-          <section className={mergeClasses(s.section, s.card)}>
-            <Heading
-              title={t("language.title")}
+          <BlockGroup>
+            <SelectBlock
+              label={t("language.title")}
               description={t("language.description")}
-            />
-            <RadioGroup
-              layout="horizontal"
-              aria-label={t("language.title")}
               value={langPref}
-              onChange={(_, data: RadioGroupOnChangeData) => {
-                const v = data.value as LanguagePreference;
+              options={[
+                { value: "auto", label: t("language.auto") },
+                // cada idioma no próprio nome (quem não lê o atual acha o seu)
+                ...LANGUAGES.map((l) => ({ value: l, label: t(`language.${l}`) })),
+              ]}
+              onChange={(value) => {
+                const v = value as LanguagePreference;
                 setLangPref(v);
                 void setLanguagePreference(v);
               }}
-            >
-              <Radio value="auto" label={t("language.auto")} />
-              {LANGUAGES.map((l) => (
-                // cada idioma no próprio nome (quem não lê o atual acha o seu)
-                <Radio key={l} value={l} label={t(`language.${l}`)} />
-              ))}
-            </RadioGroup>
-          </section>
-
-          <section className={mergeClasses(s.section, s.card)}>
-            <Heading
-              title={t("appearance.uiScale.title")}
+            />
+            <SelectBlock
+              label={t("appearance.uiScale.title")}
               description={t("appearance.uiScale.description")}
-            />
-            <RadioGroup
-              layout="horizontal"
-              aria-label={t("appearance.uiScale.title")}
               value={String(uiScale)}
-              onChange={(_, data: RadioGroupOnChangeData) => {
-                const v = Number(data.value);
+              options={UI_SCALES.map((o) => ({
+                value: String(o.value),
+                label: `${t(o.label)} (${Math.round(o.value * 100)}%)`,
+              }))}
+              onChange={(value) => {
+                const v = Number(value);
                 setUiScaleState(v);
-                setUiScale(v).catch((e) =>
-                  push(errorToast(e, "changeUiScale")),
-                );
+                setUiScale(v).catch((e) => push(errorToast(e, "changeUiScale")));
               }}
-            >
-              {UI_SCALES.map((o) => (
-                <Radio
-                  key={o.value}
-                  value={String(o.value)}
-                  label={`${t(o.label)} (${Math.round(o.value * 100)}%)`}
-                />
-              ))}
-            </RadioGroup>
-          </section>
-
-          <section className={mergeClasses(s.section, s.card)}>
-            <Heading
-              title={t("appearance.overscan.title")}
-              description={t("appearance.overscan.description")}
             />
-            <RadioGroup
-              layout="horizontal"
-              aria-label={t("appearance.overscan.title")}
+            <SelectBlock
+              label={t("appearance.overscan.title")}
+              description={t("appearance.overscan.description")}
               value={String(overscan)}
-              onChange={(_, data: RadioGroupOnChangeData) => {
-                const v = Number(data.value);
+              options={OVERSCANS.map((o) => ({ value: String(o.value), label: t(o.label) }))}
+              onChange={(value) => {
+                const v = Number(value);
                 setOverscanState(v);
                 setOverscan(v);
               }}
-            >
-              {OVERSCANS.map((o) => (
-                <Radio key={o.value} value={String(o.value)} label={t(o.label)} />
-              ))}
-            </RadioGroup>
-          </section>
+            />
+          </BlockGroup>
 
-          <section className={mergeClasses(s.section, s.card)}>
-            <Heading title={t("system.general")} />
-            {toggle(
-              "autostart",
-              t("system.autostart"),
-              t("system.autostartHint"),
-            )}
-            {toggle(
-              "startFullscreen",
-              t("system.startFullscreen"),
-              t("system.startFullscreenHint"),
-            )}
-            {toggle(
-              "minimizeToTray",
-              t("system.minimizeToTray"),
-              t("system.minimizeToTrayHint"),
-            )}
-          </section>
+          <BlockGroup title={t("system.general")}>
+            {toggle("autostart", t("system.autostart"), t("system.autostartHint"))}
+            {toggle("startFullscreen", t("system.startFullscreen"), t("system.startFullscreenHint"))}
+            {toggle("minimizeToTray", t("system.minimizeToTray"), t("system.minimizeToTrayHint"))}
+          </BlockGroup>
 
-          <section className={mergeClasses(s.section, s.card)}>
-            <Heading title={t("settings.tabs.video")} />
-            <Field
+          <BlockGroup title={t("settings.tabs.video")}>
+            <ToggleBlock
               label={t("video.integerScaling")}
-              hint={t("video.integerScalingHint")}
-            >
-              <Switch
-                checked={videoCfg.data?.integerScaling ?? false}
-                disabled={videoCfg.isLoading || setIntegerScaling.isPending}
-                onChange={(_, d) => setIntegerScaling.mutate(d.checked)}
-              />
-            </Field>
-            <HdrSettings />
-          </section>
+              description={t("video.integerScalingHint")}
+              checked={videoCfg.data?.integerScaling ?? false}
+              disabled={videoCfg.isLoading || setIntegerScaling.isPending}
+              onChange={(checked) => setIntegerScaling.mutate(checked)}
+            />
+            <FieldBlock wide>
+              <HdrSettings />
+            </FieldBlock>
+          </BlockGroup>
         </div>
       )}
 

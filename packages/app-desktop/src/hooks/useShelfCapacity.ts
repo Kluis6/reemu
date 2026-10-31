@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { SHELF_PAD } from "../lib/shelf";
 
 /**
@@ -18,7 +18,9 @@ export function useShelfCapacity(): readonly [
   const ref = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(0);
 
-  useEffect(() => {
+  // Antes da pintura: com `useEffect`, o 1º quadro saía com a largura nominal e o
+  // card pulava para a largura final ao entrar na tela.
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const measure = () =>

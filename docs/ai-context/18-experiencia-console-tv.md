@@ -239,13 +239,16 @@ pequenas.
 
 ### 4. Configurações no modelo do console
 
-- Coluna de categorias sempre visível à esquerda, em vez de voltar ao hub para trocar de
-  seção; item ativo preenchido com a cor de destaque.
+- **Sem coluna de categorias:** testada e removida a pedido do dono do projeto (2026-10-31).
+  Troca-se de seção pelo hub, como nas subpáginas do console.
 - Opções em blocos grandes, com descrição, dois ou três por linha; subpáginas com o mesmo
   padrão.
 - Sliders e seletores que funcionem com controle.
-- No perfil PC, a mesma estrutura, mais compacta, com a coluna recolhendo em janela
-  estreita.
+- No perfil PC, a mesma estrutura, mais compacta, reorganizada em janela estreita.
+
+**Primeira parte (2026-10-31, local):** o hub de `/settings` continua na entrada.
+`components/SettingBlock.tsx` tem os blocos de liga/desliga, de seletor e de campo, usados em
+Sistema › Opções e Áudio. As outras páginas ainda não usam os blocos.
 
 ### 5. Demais menus
 

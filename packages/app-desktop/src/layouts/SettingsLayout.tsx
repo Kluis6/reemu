@@ -77,6 +77,13 @@ const useStyles = makeStyles({
     marginRight: tokens.spacingHorizontalS,
     "& svg": { fontSize: "20px", width: "20px", height: "20px" },
   },
+  bodyPage: {
+    flexGrow: 1,
+    minWidth: 0,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+  },
   // Card do conteúdo: `Background1` com sombra baixa; os de dentro usam
   // `Background2`, redefinido abaixo pra ter contraste em qualquer tema.
   card: {
@@ -112,6 +119,8 @@ const useStyles = makeStyles({
     scrollbarGutter: "stable",
     padding: tokens.spacingHorizontalXXL,
     paddingRight: `calc(${tokens.spacingHorizontalXXL} - ${M.SCROLLBAR_W}px)`,
+    // O fim da lista sobe além da barra de dicas, que flutua sobre o card.
+    paddingBottom: `${M.PAGE_PAD_B - M.SAFE_Y + 24}px`,
     "::-webkit-scrollbar": { width: `${M.SCROLLBAR_W}px` },
     "::-webkit-scrollbar-thumb": {
       backgroundColor: tokens.colorNeutralStroke2,
@@ -129,6 +138,7 @@ const useStyles = makeStyles({
 const WIDE_TABS = new Set([
   // Perfil em duas colunas (campos | avatares)
   "perfil",
+  "audio",
   "aparencia",
   "cores",
   "bios",
@@ -189,11 +199,11 @@ export function SettingsLayout() {
 
   return (
     <div className={styles.root}>
-      {/* Remonta a cada rota: a página nova entra com a transição do app
-          (e o conteúdo começa do topo). */}
-      <RouteTransition routeKey={pathname} className={styles.page}>
+      <div className={styles.page}>
         <Breadcrumb
           className={styles.crumbs}
+          // com o controle, B volta; o foco entra direto nas opções
+          data-nav-skip
           size="large"
           aria-label={t("settings.title")}
         >
@@ -222,37 +232,43 @@ export function SettingsLayout() {
         </Breadcrumb>
         {section ? (
           <>
-            {/* Entrada de uma subcategoria (Aparência, Decorações): os cards
-                das opções direto na página, sem o card geral — ele só
-                aparece dentro da opção escolhida. */}
-            {HUB_SECTIONS.has(section.key) && !sub ? (
-              <Outlet />
-            ) : (
-              <div className={styles.card}>
-                <div className={styles.pane}>
-                  <div
-                    className={mergeClasses(
-                      styles.content,
-                      WIDE_TABS.has(section.key) && styles.wide,
-                      // Sistema › Opções e › Informações e licenças: seções
-                      // em cards (largura toda, até os 1120 do próprio
-                      // SettingsSystem; as licenças viram duas colunas)
-                      section.key === "sistema" &&
-                        (sub === "opcoes" || sub === "sobre") &&
-                        styles.wide,
-                      section.key === "video" && sub === "shaders" && styles.fill,
-                    )}
-                  >
-                    <Outlet />
+            {/* Remonta a cada rota: a página nova entra com a transição do app
+                (e o conteúdo começa do topo). */}
+            <RouteTransition routeKey={pathname} className={styles.bodyPage}>
+              {/* Entrada de uma subcategoria (Aparência, Decorações): os cards
+                  das opções direto na página, sem o card geral — ele só
+                  aparece dentro da opção escolhida. */}
+              {HUB_SECTIONS.has(section.key) && !sub ? (
+                <Outlet />
+              ) : (
+                <div className={styles.card}>
+                  <div className={styles.pane}>
+                    <div
+                      className={mergeClasses(
+                        styles.content,
+                        WIDE_TABS.has(section.key) && styles.wide,
+                        // Sistema › Opções e › Informações e licenças: seções
+                        // em cards (largura toda, até os 1120 do próprio
+                        // SettingsSystem; as licenças viram duas colunas)
+                        section.key === "sistema" &&
+                          (sub === "opcoes" || sub === "sobre") &&
+                          styles.wide,
+                        section.key === "video" && sub === "shaders" && styles.fill,
+                      )}
+                    >
+                      <Outlet />
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </RouteTransition>
           </>
         ) : (
-          <Outlet />
+          <RouteTransition routeKey={pathname} className={styles.bodyPage}>
+            <Outlet />
+          </RouteTransition>
         )}
-      </RouteTransition>
+      </div>
     </div>
   );
 }

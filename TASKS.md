@@ -60,8 +60,8 @@ o card atual fica.
 - [x] `done` — Fase 0: linha de base de desempenho, CI no Windows e fumaça agendada (2026-10-30).
 - [x] `done` — Fase 1: tipos gerados entre Rust e TypeScript, erros com código (2026-10-30). Pendências em `19-plano-unificado.md`.
 - [x] `done` — Fase 2: becos sem saída do controle, mapa de botões e camada de foco (2026-10-30).
-- [x] `done` — Fase 3: escala igual à do app Xbox e janelas pequenas, aprovada pelo usuário (2026-10-31). A comparação com `docs/perf/baseline.json` não foi registrada.
-- [ ] `todo` — Fase 4: configurações no modelo do console.
+- [x] `done` — Fase 3: escala igual à do app Xbox e janelas pequenas, aprovada pelo usuário (2026-10-31). Desempenho comparado com `docs/perf/baseline.json`: só o `run_med` do Vulkan marcado (4,33 → 4,95 ms), a confirmar com nova captura na mesma cena.
+- [ ] `in-progress` — Fase 4: configurações no modelo do console; seletores e blocos em Sistema e Áudio, local, aguardando teste. Faltam as demais páginas.
 - [ ] `todo` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados.
       Inclui redesenhar as mensagens de erro (tela ao abrir um jogo e avisos).
 - [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates.

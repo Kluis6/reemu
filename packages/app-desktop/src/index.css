@@ -467,4 +467,21 @@ html [data-nav-content=""] {
 }
 html .reemu-hints {
   transform: translate(calc(-1 * var(--reemuInsetX)), calc(-1 * var(--reemuInsetY)));
+  /* A barra é translúcida a pedido: sem o desfoque, o texto de trás se misturava ao dela. */
+  backdrop-filter: blur(16px);
+}
+
+/* Bloco de opção: o foco contorna o bloco inteiro, não o `Switch` de dentro. */
+.reemu-block:has(:focus-visible),
+html[data-nav-focus] .reemu-block:focus-within {
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: 3px !important;
+}
+.reemu-block .fui-Switch:has(:focus-visible),
+html[data-nav-focus] .reemu-block .fui-Switch:focus-within {
+  outline: none !important;
+}
+.reemu-block .fui-Switch__indicator::after,
+.reemu-block .fui-Switch[data-fui-focus-within]::after {
+  display: none;
 }
