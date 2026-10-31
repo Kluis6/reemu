@@ -1,13 +1,11 @@
 import {
   Breadcrumb,
   BreadcrumbButton,
-  BreadcrumbDivider,
   BreadcrumbItem,
   makeStyles,
   mergeClasses,
   tokens,
 } from "@fluentui/react-components";
-import { Fragment } from "react";
 import { useTranslation } from "react-i18next";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { RouteTransition } from "../components/RouteTransition";
@@ -51,7 +49,9 @@ const useStyles = makeStyles({
     // 9 = 1 de borda + 8 de padding do botão (medido): o texto do 1º item
     // fica na mesma coluna da borda dos cards (com 8 sobrava 1 px)
     marginLeft: "-9px",
-    "& ol": { flexWrap: "nowrap" },
+    // sem o chevron do Fluent (pedido do usuário): os níveis se separam pelo
+    // espaço e pela cor, como no título das configurações do console
+    "& ol": { flexWrap: "nowrap", columnGap: tokens.spacingHorizontalS },
   },
   crumbButton: {
     fontSize: tokens.fontSizeHero700,
@@ -69,14 +69,6 @@ const useStyles = makeStyles({
     ":hover": { color: tokens.colorNeutralForeground1 },
   },
   crumbCurrent: { color: `${tokens.colorNeutralForeground1} !important` },
-  crumbSep: {
-    color: tokens.colorNeutralForeground3,
-    // mais respiro entre o nome e o chevron (pedido do usuário): 8 de cada
-    // lado, além do padding dos botões do caminho
-    marginLeft: tokens.spacingHorizontalS,
-    marginRight: tokens.spacingHorizontalS,
-    "& svg": { fontSize: "20px", width: "20px", height: "20px" },
-  },
   bodyPage: {
     flexGrow: 1,
     minWidth: 0,
@@ -205,9 +197,7 @@ export function SettingsLayout() {
           aria-label={t("settings.title")}
         >
           {crumbs.map((c, i) => (
-            <Fragment key={i}>
-              {i > 0 && <BreadcrumbDivider className={styles.crumbSep} />}
-              <BreadcrumbItem>
+              <BreadcrumbItem key={i}>
                 {c.to ? (
                   <BreadcrumbButton
                     className={styles.crumbButton}
@@ -224,7 +214,6 @@ export function SettingsLayout() {
                   </BreadcrumbButton>
                 )}
               </BreadcrumbItem>
-            </Fragment>
           ))}
         </Breadcrumb>
         {section ? (
