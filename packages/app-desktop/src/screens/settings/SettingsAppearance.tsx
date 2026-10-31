@@ -262,6 +262,7 @@ function ThemeCard({
   return (
     <Card
       ref={ref}
+      data-nav-action={onModeChange ? "" : undefined}
       className={s.card}
       selected={selected}
       onSelectionChange={onSelect}

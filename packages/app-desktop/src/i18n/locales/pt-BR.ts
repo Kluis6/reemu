@@ -20,6 +20,12 @@ const ptBR = {
     symbols: 'Números e símbolos',
   },
   hints: {
+    adjust: 'Ajustar',
+    done: 'Concluir',
+    type: 'Digitar',
+    close: 'Fechar',
+    tabs: 'Abas',
+    page: 'Página',
     select: 'Selecionar',
     search: 'Buscar',
     options: 'Opções',

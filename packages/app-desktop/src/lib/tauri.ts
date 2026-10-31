@@ -567,6 +567,9 @@ export type MenuNav =
   | 'action'
   | 'tabPrev'
   | 'tabNext'
+  | 'pageUp'
+  | 'pageDown'
+  | 'view'
 
 export async function onMenuNav(cb: (nav: MenuNav) => void): Promise<() => void> {
   if (!inTauri) return () => {}

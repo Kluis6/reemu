@@ -50,6 +50,7 @@ const SYMBOLS: KeyDef[][] = [
   [...'1234567890'.split('').map((c) => ({ char: c })), { action: 'back', span: 2 }],
   [...'áàãâéêíóõú'.split('').map((c) => ({ char: c })), { action: 'done', span: 2 }],
   [{ action: 'shift', span: 2 }, ..."':!?&()+/ü".split('').map((c) => ({ char: c }))],
+  [...'@_\\#$%="*;'.split('').map((c) => ({ char: c })), { char: '[' }, { char: ']' }],
   [{ action: 'layer', span: 2 }, { action: 'space', span: 10 }],
 ]
 

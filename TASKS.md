@@ -59,7 +59,7 @@ o card atual fica.
 
 - [x] `done` — Fase 0: linha de base de desempenho, CI no Windows e fumaça agendada (2026-10-30).
 - [x] `done` — Fase 1: tipos gerados entre Rust e TypeScript, erros com código (2026-10-30). Pendências em `19-plano-unificado.md`.
-- [ ] `todo` — Fase 2: becos sem saída do controle, mapa de botões e camada de foco.
+- [x] `done` — Fase 2: becos sem saída do controle, mapa de botões e camada de foco (2026-10-30).
 - [ ] `todo` — Fase 3: perfis de densidade e tokens (**exige aviso**: escala e vídeo nativo).
 - [ ] `todo` — Fase 4: configurações no modelo do console.
 - [ ] `todo` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados.

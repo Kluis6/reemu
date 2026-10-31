@@ -419,3 +419,24 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
 }
 /* Anéis em `::after` do Fluent (teclado) que não são botões: o brilho já
    sai por fora do próprio anel (regra 1). */
+
+/* Controle em uso (`data-nav-focus`, ver lib/focusNav.ts): sem cursor, sem hover e
+   sem botão Voltar, porque o B já volta. O mouse desfaz isso ao se mexer. */
+html[data-nav-focus],
+html[data-nav-focus] * {
+  cursor: none !important;
+}
+html[data-nav-focus] body {
+  pointer-events: none;
+}
+html[data-nav-focus] .reemu-nav-back {
+  visibility: hidden;
+}
+
+/* Seletor ou slider em ajuste com o controle (A entra, B sai). */
+.fui-Select:has([data-nav-engaged]),
+.fui-Slider:has([data-nav-engaged]) {
+  outline: 3px solid var(--colorBrandStroke1);
+  outline-offset: 3px;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent);
+}

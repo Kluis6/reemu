@@ -3254,3 +3254,16 @@ Infra:
 - **Problema:** o menu do card abria no canto da tela, porque o evento sintético não levava coordenadas, e o B voltava a página em vez de fechar o menu.
 - **Correção:** o evento leva o centro do item em foco, e o B fecha menu e popover, incluindo o sino, antes de drawer e modal.
 - **Ícone de rede:** Wi-Fi do Fluent. O app não sabe o tipo de conexão, então o desenho vale também para cabo.
+
+## 2026-10-30 — Fase 2: controle sem becos sem saída
+
+- **Camadas:** o foco fica dentro do menu, popover, modal ou drawer aberto (`focusNav.ts`), e o B fecha a camada de cima. Sem camada, o B no Início não faz nada; sem histórico, volta ao Início.
+- **Barra lateral:** só se entra e sai dela na horizontal; descer no fim do conteúdo saltava para o sino.
+- **Seletor e slider:** A entra no ajuste, as setas mudam o valor, A ou B saem. É o "focus engagement" da Microsoft (Gamepad and remote control interactions). `click()` não abre um `<select>` nativo, e as setas prendiam o foco.
+- **Botões:** LB/RB trocam abas em toda parte, LT/RT pulam cerca de uma tela e View leva o foco à barra lateral e de volta. Pulsos novos em `input-desktop`, só para menus, sem mudar a entrada do jogo.
+- **Slider de HDR:** não declarava o passo e arredondava para 10 nits, então cada toque (+1) voltava ao mesmo valor. Agora tem `step={10}`, e o ajuste por controle cruza qualquer slider em cerca de 50 toques.
+- **Foco:** memória por tela ao voltar e foco inicial ao entrar, só com controle ou setas em uso (`useFocusMemory.ts`).
+- **Dicas:** dependem do item em foco e da camada aberta (`useNavHints.ts`).
+- **Mouse e controle:** com o controle em uso, somem cursor, hover e botão Voltar; mexer o mouse, clicar ou rolar traz de volta.
+- **Teclado virtual:** campos numéricos abrem o teclado, e a camada de símbolos ganhou `@ _ \ # $ % = " * ; [ ]`.
+- **Não testado:** controle físico (LT, RT e View reais); os testes no navegador simulam os pulsos.

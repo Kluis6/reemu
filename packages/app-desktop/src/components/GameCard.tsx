@@ -119,6 +119,7 @@ export function GameCard({
       appearance="filled"
       role="button"
       aria-label={title}
+      data-nav-menu={menu && menu.length > 0 ? "" : undefined}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {

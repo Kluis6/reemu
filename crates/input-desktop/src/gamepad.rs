@@ -39,9 +39,14 @@ pub enum NavPulse {
     /// X (West): ação secundária do item focado (ex.: claro/escuro no card
     /// de tema em Configurações › Aparência).
     Action,
-    /// LB / RB: aba anterior / próxima (abas do menu de pausa).
+    /// LB / RB: aba anterior / próxima.
     TabPrev,
     TabNext,
+    /// LT / RT: sobe / desce cerca de uma tela.
+    PageUp,
+    PageDown,
+    /// View: leva o foco à barra lateral.
+    View,
 }
 
 /// Índices de d-pad (numeração de [`button_index`]) que o stick esquerdo
@@ -262,6 +267,9 @@ pub struct GamepadPoller {
     nav_confirm_down: bool,
     nav_search_down: bool,
     nav_context_down: bool,
+    nav_page_up_down: bool,
+    nav_page_down_down: bool,
+    nav_view_down: bool,
     nav_action_down: bool,
     nav_tab_prev_down: bool,
     nav_tab_next_down: bool,
@@ -306,6 +314,9 @@ impl GamepadPoller {
             nav_confirm_down: false,
             nav_search_down: false,
             nav_context_down: false,
+            nav_page_up_down: false,
+            nav_page_down_down: false,
+            nav_view_down: false,
             nav_action_down: false,
             nav_tab_prev_down: false,
             nav_tab_next_down: false,
@@ -384,6 +395,21 @@ impl GamepadPoller {
             out.push(NavPulse::TabNext);
         }
         self.nav_tab_next_down = tab_next;
+        let page_up = held.contains(&7); // LT
+        if page_up && !self.nav_page_up_down {
+            out.push(NavPulse::PageUp);
+        }
+        self.nav_page_up_down = page_up;
+        let page_down = held.contains(&9); // RT
+        if page_down && !self.nav_page_down_down {
+            out.push(NavPulse::PageDown);
+        }
+        self.nav_page_down_down = page_down;
+        let view = held.contains(&10); // Select / View
+        if view && !self.nav_view_down {
+            out.push(NavPulse::View);
+        }
+        self.nav_view_down = view;
         out
     }
 

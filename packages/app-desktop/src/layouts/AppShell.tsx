@@ -37,6 +37,8 @@ import { RouteTransition } from "../components/RouteTransition";
 import { UpdateDialog } from "../components/UpdateDialog";
 import { ShaderFailureDialog } from "../components/ShaderFailureDialog";
 import { useCoreUpdates } from "../hooks/useCoreUpdates";
+import { useFocusMemory } from "../hooks/useFocusMemory";
+import { useNavHints } from "../hooks/useNavHints";
 import { useShaderFailures } from "../hooks/useShaderFailures";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useUpdateCheck } from "../hooks/useUpdateCheck";
@@ -117,7 +119,6 @@ export function AppShell() {
   const { on: fullscreen, toggle: toggleFullscreen } = useFullscreen();
   const atRoot = pathname === "/";
   const wallpaperScope = useWallpaperStore((st) => st.scope);
-  const atBrowse = pathname === "/" || pathname === "/library";
   const [powerOpen, setPowerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   useUpdateCheck();
@@ -155,23 +156,9 @@ export function AppShell() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, [pathname]);
+  useFocusMemory(scrollRef);
 
-  const hints = atBrowse
-    ? ([
-        { glyph: "A", label: t("hints.select") },
-        { glyph: "Y", label: t("hints.search") },
-        { glyph: "MENU", label: t("hints.options") },
-      ] as const)
-    : pathname === "/settings/aparencia/temas"
-      ? ([
-          { glyph: "A", label: t("hints.select") },
-          { glyph: "X", label: t("hints.lightDark") },
-          { glyph: "B", label: t("hints.back") },
-        ] as const)
-      : ([
-          { glyph: "A", label: t("hints.select") },
-          { glyph: "B", label: t("hints.back") },
-        ] as const);
+  const hints = useNavHints(() => scrollRef.current);
   return (
     <div className={s.app}>
       {/* Papel de parede: só na tela inicial ou em todas as telas (escolha em
@@ -180,7 +167,7 @@ export function AppShell() {
       <AnimatedBackground
         showWallpaper={wallpaperScope === "all" ? !pathname.startsWith("/rom/") : atRoot}
       />
-      <nav className={s.rail}>
+      <nav className={s.rail} data-nav-rail>
         {/* Avatar: abre o perfil num drawer à esquerda (era um menu suspenso;
             pedido do usuário, 2026-10-29). `Button` do Fluent sem fundo
             próprio (o do `railItem`) — estados e foco padrão. */}
@@ -264,7 +251,7 @@ export function AppShell() {
             <Tooltip positioning={TOOLTIP_POSITION} content={t("shell.backTooltip")} relationship="label">
               <Button
                 appearance="secondary"
-                className={mergeClasses(l.navBtn, s.navIconBtn, s.navIconLg)}
+                className={mergeClasses("reemu-nav-back", l.navBtn, s.navIconBtn, s.navIconLg)}
                 icon={<ChevronLeftRegular />}
                 aria-label={t("hints.back")}
                 onClick={() => navigate(-1)}
@@ -321,7 +308,7 @@ export function AppShell() {
           <NetworkStatus />
           <Clock />
         </div>
-        <div className={s.scroll} ref={scrollRef}>
+        <div className={s.scroll} ref={scrollRef} data-nav-content>
           <RouteTransition
             routeKey={pathname.startsWith("/settings") ? "/settings" : pathname}
           >

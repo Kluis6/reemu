@@ -981,6 +981,17 @@ export const useHintStyles = makeStyles({
     paddingBottom: 0,
     "& svg": { width: "18px", height: "18px" },
   },
+  // botões de ombro: pílula, porque o nome não cabe no círculo
+  shoulder: {
+    width: "auto",
+    borderRadius: "13px",
+    paddingLeft: "8px",
+    paddingRight: "8px",
+    paddingBottom: 0,
+    fontSize: "13px",
+    backgroundColor: "#ffffff",
+    color: "#000000",
+  },
 });
 
 // Página do jogo: altura dos botões do hero (o app Xbox usa 55) e o

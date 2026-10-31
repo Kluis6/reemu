@@ -185,6 +185,7 @@ function NitsSlider(props: {
         aria-valuetext={valueText}
         min={min}
         max={max}
+        step={10}
         value={Math.min(max, Math.max(min, value))}
         // Slider padrão, sem passos visíveis ("brightness controls", Fluent
         // 2); o valor vai de 10 em 10 nits.

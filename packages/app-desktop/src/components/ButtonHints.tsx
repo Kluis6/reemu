@@ -1,9 +1,9 @@
 import { mergeClasses } from '@fluentui/react-components'
-import { LineHorizontal3Regular } from '@fluentui/react-icons'
+import { ArrowBidirectionalLeftRightRegular, LineHorizontal3Regular } from '@fluentui/react-icons'
 import { useGamepadStore } from '../stores/useGamepadStore'
 import { useHintStyles } from '../styles/xbox'
 
-export type Glyph = 'A' | 'B' | 'X' | 'Y' | 'MENU'
+export type Glyph = 'A' | 'B' | 'X' | 'Y' | 'MENU' | 'LB/RB' | 'LT/RT' | 'DPAD'
 
 export interface Hint {
   glyph: Glyph
@@ -24,7 +24,7 @@ export function ButtonHints({
   const s = useHintStyles()
   const connected = useGamepadStore((st) => st.devices.length > 0)
   if (!connected || hints.length === 0) return null
-  const color: Record<Exclude<Glyph, 'MENU'>, string> = { A: s.a, B: s.b, X: s.x, Y: s.y }
+  const color: Partial<Record<Glyph, string>> = { A: s.a, B: s.b, X: s.x, Y: s.y }
   return (
     <div className={mergeClasses(s.hints, centered && s.hintsCentered)}>
       {hints.map((h) => (
@@ -35,6 +35,12 @@ export function ButtonHints({
             <span className={mergeClasses(s.glyph, s.menu)}>
               <LineHorizontal3Regular />
             </span>
+          ) : h.glyph === 'DPAD' ? (
+            <span className={mergeClasses(s.glyph, s.menu)}>
+              <ArrowBidirectionalLeftRightRegular />
+            </span>
+          ) : h.glyph === 'LB/RB' || h.glyph === 'LT/RT' ? (
+            <span className={mergeClasses(s.glyph, s.shoulder)}>{h.glyph}</span>
           ) : (
             <span className={mergeClasses(s.glyph, color[h.glyph])}>{h.glyph}</span>
           )}

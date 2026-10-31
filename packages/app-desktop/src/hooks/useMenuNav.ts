@@ -1,6 +1,17 @@
 import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { moveFocus, type NavDir } from '../lib/focusNav'
+import {
+  adjustEngaged,
+  cycleTab,
+  disengage,
+  engage,
+  engagedControl,
+  isAdjustable,
+  moveFocus,
+  pageFocus,
+  toggleRailFocus,
+  type NavDir,
+} from '../lib/focusNav'
 import { onMenuNav, toggleFocus } from '../lib/tauri'
 import { useFocusStore } from '../stores/useFocusStore'
 import { useSearchStore } from '../stores/useSearchStore'
@@ -24,15 +35,15 @@ export const REEMU_ACTION = 'reemu-action'
  *  evento na `window`) em vez de voltar no histórico. */
 export const REEMU_ONBOARDING_BACK = 'reemu-onboarding-back'
 
-/** LB/RB do controle: aba anterior (`detail: -1`) ou próxima (`detail: 1`),
- *  disparado na `window` — quem tem abas escuta (o menu de pausa). Sem
- *  atalho de teclado (pedido do usuário). */
+/** LB/RB do controle no jogo: aba anterior (`detail: -1`) ou próxima (`detail: 1`),
+ *  disparado na `window` — o menu de pausa escuta. Fora do jogo, `cycleTab` troca
+ *  a aba direto. Sem atalho de teclado (pedido do usuário). */
 export const REEMU_TAB = 'reemu-tab'
 const switchTab = (step: -1 | 1) =>
   window.dispatchEvent(new CustomEvent(REEMU_TAB, { detail: step }))
 
 /** Tipos de `<input>` em que se digita texto (o A abre o teclado na tela). */
-const TEXT_INPUT = new Set(['text', 'search', 'email', 'url', 'tel', 'password', ''])
+const TEXT_INPUT = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number', ''])
 
 /** O foco é um campo de texto editável? */
 function textField(el: Element | null): HTMLInputElement | HTMLTextAreaElement | null {
@@ -129,13 +140,23 @@ export function useMenuNav() {
       const kbd = useSearchStore.getState().keyboardNav
       if (kbd && kbd(nav)) return
 
+      // Seletor ou slider em ajuste: as setas mudam o valor; A ou B saem.
+      if (engagedControl()) {
+        if (nav === 'left' || nav === 'down') adjustEngaged(-1)
+        else if (nav === 'right' || nav === 'up') adjustEngaged(1)
+        else if (nav === 'confirm' || nav === 'back') disengage()
+        return
+      }
+
       switch (nav) {
         case 'confirm': {
           // Campo de texto: o A abre o teclado na tela pra ele (com o
           // controle não há outro jeito de digitar); o resto, clica.
           const field = textField(document.activeElement)
+          const el = document.activeElement
           if (field) useSearchStore.getState().openKeyboardFor(field)
-          else (document.activeElement as HTMLElement | null)?.click()
+          else if (isAdjustable(el)) engage(el)
+          else (el as HTMLElement | null)?.click()
           break
         }
         case 'back': {
@@ -159,7 +180,13 @@ export function useMenuNav() {
             target.dispatchEvent(
               new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }),
             )
-          } else navigate(-1)
+          } else if (locRef.current !== '/') {
+            // Sem histórico (a tela abriu direto), volta ao Início. No Início,
+            // o B não tem para onde ir.
+            const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0
+            if (idx > 0) navigate(-1)
+            else navigate('/', { replace: true })
+          }
           break
         }
         case 'search':
@@ -173,7 +200,15 @@ export function useMenuNav() {
           break
         case 'tabPrev':
         case 'tabNext':
-          switchTab(nav === 'tabPrev' ? -1 : 1)
+          if (locRef.current.startsWith('/play/')) switchTab(nav === 'tabPrev' ? -1 : 1)
+          else cycleTab(nav === 'tabPrev' ? -1 : 1)
+          break
+        case 'pageUp':
+        case 'pageDown':
+          pageFocus(nav === 'pageUp' ? -1 : 1)
+          break
+        case 'view':
+          toggleRailFocus()
           break
         default:
           moveFocus(nav as NavDir)

@@ -19,6 +19,12 @@ const es: Messages = {
     symbols: 'Números y símbolos',
   },
   hints: {
+    adjust: 'Ajustar',
+    done: 'Listo',
+    type: 'Escribir',
+    close: 'Cerrar',
+    tabs: 'Pestañas',
+    page: 'Página',
     select: 'Seleccionar',
     search: 'Buscar',
     options: 'Opciones',
