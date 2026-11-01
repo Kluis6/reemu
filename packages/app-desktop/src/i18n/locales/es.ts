@@ -320,7 +320,10 @@ const es: Messages = {
       custom: 'Personalizado',
       customTitle: 'Opciones del core para este juego',
       customHint: 'Las opciones de este juego se abren en Personalizado.',
-      pending: 'Este ajuste todavía no cambia las opciones del core. Para ajustarlas, usa Personalizado.',
+      performanceHint: 'Menos resolución y salto automático de cuadros, para ir más ligero. Se aplica al abrir el juego.',
+      normalHint: 'Usa las opciones generales de este core.',
+      qualityHint: 'Más resolución y filtros. Requiere una GPU mejor. Se aplica al abrir el juego.',
+      needsRun: 'Juega una vez para activar las predefiniciones de este core.',
     },
     image: {
       aspect: 'Proporción de la imagen',

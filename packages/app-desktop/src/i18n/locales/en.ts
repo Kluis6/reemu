@@ -320,7 +320,10 @@ const en: Messages = {
       custom: 'Custom',
       customTitle: 'Core options for this game',
       customHint: "This game's options open from Custom.",
-      pending: 'This preset does not change the core options yet. To adjust them, use Custom.',
+      performanceHint: 'Lower resolution and automatic frame skipping, to run lighter. Applies when the game opens.',
+      normalHint: "Uses this core's general options.",
+      qualityHint: 'Higher resolution and filters. Needs a stronger GPU. Applies when the game opens.',
+      needsRun: 'Play once to unlock the presets for this core.',
     },
     image: {
       aspect: 'Image aspect ratio',

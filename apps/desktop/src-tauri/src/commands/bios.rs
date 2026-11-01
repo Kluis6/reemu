@@ -93,10 +93,17 @@ pub async fn get_core_options(
     let live_matches = state.session.loaded_core().as_deref() == Some(core_id.as_str());
     let (defs, core_values, rom_values) = if let Some(pool) = state.db.clone() {
         let repo = db::CoreOptionsRepo::new(pool);
-        let defs = if live_matches {
+        // Saindo do jogo, o core ainda consta como carregado mas já não responde:
+        // lista vazia cai no schema guardado.
+        let live_defs = if live_matches {
             state.session.core_options().0
         } else {
+            Vec::new()
+        };
+        let defs = if live_defs.is_empty() {
             repo.schema_for(&core_id).await.map_err(|e| e.to_string())?
+        } else {
+            live_defs
         };
         let core_values = repo.values_for(&core_id).await.map_err(|e| e.to_string())?;
         let rom_values = match &rom_id {

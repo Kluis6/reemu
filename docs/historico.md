@@ -3331,6 +3331,11 @@ Infra:
 - **Item 2, primeira metade:** mapa das travas de `session.rs` em `20-mapa-travas-session.md`, sem alterar código. O restante do item e o item 3 ficam parados até haver motivo.
 - **Patch widescreen 16:9:** novo nome da opção, com explicação de uma linha.
 
+## 2026-11-01 — Primeira predefinição real: PPSSPP
+
+- **Decisão:** Desempenho e Qualidade gravam nas opções do jogo, Normal limpa essas chaves, e o botão marcado vem dos valores salvos. Só aplica opção e valor que a versão instalada oferece. Core sem predefinição mostra só Personalizado.
+- **Base:** `libretro/libretro_core_options.h` do PPSSPP e docs.libretro.com/library/ppsspp. A resolução e os filtros afetam a GPU, mas passam pelas opções do próprio core, sem mudança no ReEmu. Valores ainda não testados em jogos reais.
+
 ## 2026-11-01 — Controle de colaboradores e de releases no GitHub
 
 - **Entrada na `main`:** regra `main protegida` com pull request, revisão do dono (`CODEOWNERS`), os 4 jobs do CI, conversas resolvidas e merge em squash. O administrador pode ignorá-la, para seguir enviando direto.

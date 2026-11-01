@@ -321,7 +321,10 @@ const ptBR = {
       custom: 'Personalizado',
       customTitle: 'Opções do core para este jogo',
       customHint: 'As opções deste jogo abrem em Personalizado.',
-      pending: 'Esta predefinição ainda não muda as opções do core. Para ajustá-las, use Personalizado.',
+      performanceHint: 'Menos resolução e pulo automático de quadros, para rodar mais leve. Vale ao abrir o jogo.',
+      normalHint: 'Usa as opções gerais deste core.',
+      qualityHint: 'Mais resolução e filtros. Exige uma GPU melhor. Vale ao abrir o jogo.',
+      needsRun: 'Jogue uma vez para liberar as predefinições deste core.',
     },
     image: {
       aspect: 'Proporção da imagem',
