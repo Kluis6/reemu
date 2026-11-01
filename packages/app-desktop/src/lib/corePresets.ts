@@ -4,6 +4,8 @@ import type { CoreOption } from './bindings/CoreOption'
 export interface CorePreset {
   performance: Record<string, string>
   quality: Record<string, string>
+  /** Sem predefinição pronta: muda só a resolução. */
+  resolutionOnly?: boolean
 }
 
 export type PresetLevel = 'performance' | 'normal' | 'quality' | 'custom'
@@ -34,8 +36,59 @@ const PRESETS: Record<string, CorePreset> = {
   },
 }
 
-export function corePreset(coreId: string): CorePreset | undefined {
-  return PRESETS[coreId]
+/** Escala de resolução dos cores 3D. Fica de fora quem só muda o tamanho da tela 2D
+ *  (`atari800_resolution`, `fbneo-resolution`). */
+const RESOLUTION_KEY =
+  /internal_resolution|opengl_resolution|screensize|resolutionscale|parallel-rdp-upscaling|upscale_multiplier/i
+/** Largura e fator-alvo da Qualidade, cerca de 4x nos consoles 3D de 240p. */
+const QUALITY_WIDTH = 1920
+const QUALITY_FACTOR = 4
+
+/** Tamanho comparável de um valor: largura de `640x480`, ou o fator de `4x` e `4`. */
+function resolutionSize(value: string): { kind: 'width' | 'factor'; size: number } | null {
+  const pixels = /^(\d+)x\d+/.exec(value)
+  if (pixels) return { kind: 'width', size: Number(pixels[1]) }
+  const factor = /^(\d+(?:\.\d+)?)x?(?:\s|$)/.exec(value)
+  return factor ? { kind: 'factor', size: Number(factor[1]) } : null
+}
+
+/** O maior valor até o alvo; sem nenhum, o padrão do core. */
+function qualityResolution(option: CoreOption): string {
+  let best = option.defaultValue
+  let bestSize = -1
+  for (const value of option.choices) {
+    const parsed = resolutionSize(value)
+    if (!parsed) continue
+    const limit = parsed.kind === 'width' ? QUALITY_WIDTH : QUALITY_FACTOR
+    if (parsed.size <= limit && parsed.size > bestSize) {
+      best = value
+      bestSize = parsed.size
+    }
+  }
+  return best
+}
+
+/** Por enquanto só resolução: Desempenho no padrão do core, em geral a nativa, e
+ *  Qualidade perto de 4x. */
+function resolutionPreset(options: readonly CoreOption[]): CorePreset {
+  const performance: Record<string, string> = {}
+  const quality: Record<string, string> = {}
+  for (const option of options) {
+    if (!RESOLUTION_KEY.test(option.key)) continue
+    performance[option.key] = option.defaultValue
+    quality[option.key] = qualityResolution(option)
+  }
+  return { performance, quality, resolutionOnly: true }
+}
+
+/** A predefinição completa do core ou, sem ela, a só de resolução. */
+export function corePreset(coreId: string, options: readonly CoreOption[]): CorePreset {
+  return PRESETS[coreId] ?? resolutionPreset(options)
+}
+
+/** `false` se o core não oferece nenhuma opção que a predefinição possa mudar. */
+export function presetHasOptions(preset: CorePreset): boolean {
+  return Object.keys(preset.quality).length > 0 || Object.keys(preset.performance).length > 0
 }
 
 /** O nível que os valores gravados no jogo representam. Só contam as chaves das

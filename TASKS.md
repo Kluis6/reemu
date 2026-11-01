@@ -671,6 +671,7 @@ no `emu-session`, ver `docs/historico.md`).
       - **Antes de publicar um preset:** testar valores em jogos reais, com a versão do core
         anotada. Opções de GPU seguem a regra de documentação oficial do `CLAUDE.md`.
       - **Depois:** exceções por jogo e sugestão pelo hardware da máquina.
+- [ ] `todo` — **Carregar `.slangp` avulso na página do jogo** (dono do projeto, 2026-11-01): o botão apresentou erro e foi ocultado do dialog de shaders. Voltar em uma atualização futura, com o erro investigado.
 - [ ] `todo` — Avaliar no futuro: **ports nativos (recomp/decomp)** como
       launcher externo (pedido do dono do projeto, 2026-10-17). Pesquisa e
       licenças conferidas no GitHub:

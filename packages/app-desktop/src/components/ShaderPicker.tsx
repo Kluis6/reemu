@@ -18,9 +18,16 @@ const useStyles = makeStyles({
     overflowY: 'auto',
     padding: '8px',
     margin: '-8px',
+    // Para no card inteiro, com folga no início e no fim. `proximity`: o `mandatory`
+    // puxava de volta a rolagem do foco do controle. A folga (8) cobre o anel de foco.
+    scrollSnapType: 'y proximity',
+    scrollPaddingTop: '8px',
+    scrollPaddingBottom: '8px',
+    '& > *': { flexShrink: 0, scrollSnapAlign: 'start' },
+    '& > *:last-child': { scrollSnapAlign: 'end' },
   },
   // `fill`: a lista ocupa a altura que o pai (flex em coluna) der
-  listFill: { flexGrow: 1, minHeight: 0, maxHeight: 'none' },
+  listFill: { flexGrow: 1, minHeight: 0, maxHeight: 'none', marginBottom: 0 },
   // Abas no estilo do app (42 de altura). Nas Configurações a lista começa
   // na altura da imagem da prévia, cuja barra tem 32 + 24: aqui são 10 a
   // mais de aba e 10 a menos de espaço (8 do `gap` do pai + 6).

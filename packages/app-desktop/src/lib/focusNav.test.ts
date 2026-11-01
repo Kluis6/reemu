@@ -79,6 +79,35 @@ describe('ajuste com o controle', () => {
   })
 })
 
+describe('guardas de foco do Fluent', () => {
+  it('no fim da lista o foco fica no último item, sem cair na guarda invisível', () => {
+    document.body.innerHTML = `
+      <div class="fui-DialogSurface" data-box="0,0">
+        <button id="ultimo" data-box="0,100">último</button>
+        <i tabindex="0" data-tabster-dummy="" data-box="0,110"></i>
+      </div>`
+    document.getElementById('ultimo')!.focus()
+    moveFocus('down')
+    expect(document.activeElement?.id).toBe('ultimo')
+  })
+})
+
+describe('rolagem do foco', () => {
+  it('revela o card inteiro quando o foco está no input dele', () => {
+    document.body.innerHTML = `
+      <button id="a" data-box="0,0">a</button>
+      <div class="fui-Card" id="card"><input id="b" data-box="0,100" /></div>`
+    const revealed: string[] = []
+    Element.prototype.scrollIntoView = function (this: Element) {
+      revealed.push(this.id)
+    }
+    document.getElementById('a')!.focus()
+    moveFocus('down')
+    expect(document.activeElement?.id).toBe('b')
+    expect(revealed).toEqual(['card'])
+  })
+})
+
 describe('barra lateral', () => {
   it('descer no fim do conteúdo não salta para a barra', () => {
     document.body.innerHTML = `

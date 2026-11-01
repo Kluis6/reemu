@@ -73,10 +73,21 @@ afterEach(async () => {
 })
 
 describe('GamePresets', () => {
-  it('a core without a preset shows only Personalizado', async () => {
+  it('every core keeps the four buttons; without a resolution option, the presets stay off', async () => {
     api.getCoreOptions.mockResolvedValue([option('x', ['a', 'b'])])
     await mount('snes9x_libretro')
-    expect(radios().map((b) => b.textContent)).toEqual(['Personalizado'])
+    expect(radios().map((b) => b.textContent)).toEqual(['Desempenho', 'Normal', 'Qualidade', 'Personalizado'])
+    expect(radio('Qualidade').disabled).toBe(true)
+    expect(radio('Normal').getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('a core without a ready preset writes only the resolution', async () => {
+    api.getCoreOptions.mockResolvedValue([option('flycast_internal_resolution', ['640x480', '1920x1440']), option('y', ['a', 'b'])])
+    await mount('flycast_libretro')
+    await act(async () => radio('Qualidade').click())
+    await settle()
+    expect(api.setCoreOption).toHaveBeenCalledTimes(1)
+    expect(api.setCoreOption).toHaveBeenCalledWith('flycast_libretro', 'flycast_internal_resolution', '1920x1440', 'r1')
   })
 
   it('Qualidade writes the preset values for this game', async () => {

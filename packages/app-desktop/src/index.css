@@ -466,6 +466,25 @@ html .reemu-hints {
   backdrop-filter: blur(16px);
 }
 
+/* Badge com ícone: na Segoe, o texto fica opticamente ~1 px abaixo do meio. Sobe o
+   conteúdo com o padding e devolve o ícone ao centro. */
+.fui-Badge:has(.fui-Badge__icon) {
+  padding-bottom: 2px;
+}
+.fui-Badge__icon {
+  position: relative;
+  top: 1px;
+}
+
+/* Folga ao revelar o item focado numa lista: o anel de foco (3 + 3) não é cortado. */
+button,
+a,
+input,
+label,
+.fui-Card {
+  scroll-margin-block: 12px;
+}
+
 /* Bloco de opção: o foco contorna o bloco inteiro, não o `Switch` de dentro. */
 .reemu-block:has(:focus-visible),
 html[data-nav-focus] .reemu-block:focus-within {

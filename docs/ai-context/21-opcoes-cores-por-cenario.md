@@ -5,6 +5,9 @@ arquivos de opções de cada core e do docs.libretro.com; os efeitos vêm do que
 afirmam, salvo quando marcado como relato. Nenhum valor foi testado no ReEmu. Conferir as
 chaves na versão instalada, porque mudam entre versões.
 
+Decisão do dono do projeto: todos os cores mostram os botões. Quem não tem predefinição completa
+muda só a resolução (`resolutionPreset` em `lib/corePresets.ts`).
+
 ## Padrão entre os cores
 
 | Tipo de opção | Mais FPS | Mais compatibilidade | Mais qualidade |

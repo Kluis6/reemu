@@ -1494,6 +1494,8 @@ export const useDetailStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     rowGap: "16px",
+    // afasta a capa do cabeçalho do drawer
+    paddingTop: "16px",
     paddingBottom: "24px",
   },
   infoCover: {

@@ -324,6 +324,9 @@ const en: Messages = {
       normalHint: "Uses this core's general options.",
       qualityHint: 'Higher resolution and filters. Needs a stronger GPU. Applies when the game opens.',
       needsRun: 'Play once to unlock the presets for this core.',
+      performanceResolutionHint: 'Uses the core default resolution. For now, it only changes the resolution. Applies when the game opens.',
+      qualityResolutionHint: 'Raises the resolution. Needs a stronger GPU. For now, it only changes the resolution. Applies when the game opens.',
+      noOptions: 'This core has no resolution option to adjust.',
     },
     image: {
       aspect: 'Image aspect ratio',

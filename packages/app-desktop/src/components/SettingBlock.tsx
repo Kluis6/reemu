@@ -73,7 +73,12 @@ const useStyles = makeStyles({
   chevron: { flexShrink: 0, fontSize: "20px" },
   // Sem o espaço do `Switch`, que desalinhava a borda direita dos blocos.
   switch: { flexShrink: 0, "& .fui-Switch__indicator": { margin: 0 } },
-  popover: { maxWidth: "none", overflowY: "auto" },
+  // O Fluent limita o item a 290 px: sem isso, o texto quebra num menu mais largo.
+  popover: {
+    maxWidth: "none",
+    overflowY: "auto",
+    "& [role^='menuitem']": { maxWidth: "none" },
+  },
 });
 
 /** Grupo de blocos, com título opcional acima. */

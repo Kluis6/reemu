@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CoreOption } from './bindings/CoreOption'
-import { corePreset, detectLevel, presetChanges, type CorePreset } from './corePresets'
+import { corePreset, detectLevel, presetChanges, presetHasOptions, type CorePreset } from './corePresets'
 
 const preset: CorePreset = {
   performance: { res: '1x', skip: 'on' },
@@ -25,9 +25,32 @@ const base = (res: string | null, skip: string | null, aa: string | null) => [
 ]
 
 describe('corePresets', () => {
-  it('only PPSSPP has a preset for now', () => {
-    expect(corePreset('ppsspp_libretro')).toBeDefined()
-    expect(corePreset('snes9x_libretro')).toBeUndefined()
+  it('PPSSPP has a complete preset', () => {
+    const psp = corePreset('ppsspp_libretro', [])
+    expect(psp.resolutionOnly).toBeUndefined()
+    expect(psp.quality.ppsspp_internal_resolution).toBe('1920x1088')
+  })
+
+  it('other cores change only the resolution, from the default to about 4x', () => {
+    const fly = corePreset('flycast_libretro', [
+      { ...option('reicast_internal_resolution', ['320x240', '640x480', '1920x1440', '2560x1920']), defaultValue: '640x480' },
+      option('reicast_texupscale', ['1', '2', '4']),
+    ])
+    expect(fly.resolutionOnly).toBe(true)
+    expect(fly.performance).toEqual({ reicast_internal_resolution: '640x480' })
+    expect(fly.quality).toEqual({ reicast_internal_resolution: '1920x1440' })
+  })
+
+  it('reads factor and plain number scales', () => {
+    const quality = (key: string, choices: string[]) => corePreset('x', [option(key, choices)]).quality[key]
+    expect(quality('beetle_psx_hw_internal_resolution', ['1x', '2x', '4x', '8x'])).toBe('4x')
+    expect(quality('swanstation_GPU_ResolutionScale', ['1', '2', '4', '8'])).toBe('4')
+    expect(quality('virtualjaguar_internal_resolution', ['1x', '2x'])).toBe('2x')
+  })
+
+  it('a 2D core has nothing to change', () => {
+    const preset2d = corePreset('fbneo_libretro', [option('fbneo-resolution', ['640x480', '1920x1440'])])
+    expect(presetHasOptions(preset2d)).toBe(false)
   })
 
   it('detects the level from the stored values', () => {

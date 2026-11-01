@@ -324,6 +324,9 @@ const es: Messages = {
       normalHint: 'Usa las opciones generales de este core.',
       qualityHint: 'Más resolución y filtros. Requiere una GPU mejor. Se aplica al abrir el juego.',
       needsRun: 'Juega una vez para activar las predefiniciones de este core.',
+      performanceResolutionHint: 'Usa la resolución predeterminada del core. Por ahora, solo cambia la resolución. Se aplica al abrir el juego.',
+      qualityResolutionHint: 'Aumenta la resolución. Requiere una GPU mejor. Por ahora, solo cambia la resolución. Se aplica al abrir el juego.',
+      noOptions: 'Este core no tiene opción de resolución para ajustar.',
     },
     image: {
       aspect: 'Proporción de la imagen',

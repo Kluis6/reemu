@@ -14,6 +14,7 @@ import {
 import {
   AlertRegular,
   ArrowCircleUpRegular,
+  DismissRegular,
   SparkleRegular,
   WarningRegular,
 } from "@fluentui/react-icons";
@@ -139,7 +140,18 @@ export function NotificationBell({ className }: { className?: string }) {
         aria-label={t("notifications.title")}
       >
         <DrawerHeader>
-          <DrawerHeaderTitle>{t("notifications.title")}</DrawerHeaderTitle>
+          <DrawerHeaderTitle
+            action={
+              <Button
+                appearance="subtle"
+                icon={<DismissRegular />}
+                aria-label={t("common.close")}
+                onClick={close}
+              />
+            }
+          >
+            {t("notifications.title")}
+          </DrawerHeaderTitle>
         </DrawerHeader>
         <DrawerBody>
           {items.length === 0 ? (

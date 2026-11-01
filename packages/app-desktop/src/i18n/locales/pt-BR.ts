@@ -325,6 +325,9 @@ const ptBR = {
       normalHint: 'Usa as opções gerais deste core.',
       qualityHint: 'Mais resolução e filtros. Exige uma GPU melhor. Vale ao abrir o jogo.',
       needsRun: 'Jogue uma vez para liberar as predefinições deste core.',
+      performanceResolutionHint: 'Usa a resolução padrão do core. Por enquanto, muda só a resolução. Vale ao abrir o jogo.',
+      qualityResolutionHint: 'Aumenta a resolução. Exige uma GPU melhor. Por enquanto, muda só a resolução. Vale ao abrir o jogo.',
+      noOptions: 'Este core não tem opção de resolução para ajustar.',
     },
     image: {
       aspect: 'Proporção da imagem',

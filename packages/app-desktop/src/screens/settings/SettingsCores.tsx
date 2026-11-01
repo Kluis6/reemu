@@ -4,20 +4,26 @@ import {
   Button,
   Caption1,
   Input,
+  Spinner,
   Text,
+  Tooltip,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
 import {
   ArrowCircleUpRegular,
   CheckmarkCircleFilled,
+  DeleteRegular,
   DeveloperBoardRegular,
+  HistoryRegular,
+  SettingsRegular,
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, type ReactElement } from 'react'
 import { LoadingState } from '../../components/EmptyState'
 import { CORE_UPDATES_KEY, CORE_UPDATES_STALE_MS } from '../../hooks/useCoreUpdates'
 import { errorToast, sysToast } from '../../lib/toast'
+import { TOOLTIP_POSITION } from '../../lib/tooltip'
 import {
   checkCoreUpdates,
   downloadCore,
@@ -31,10 +37,11 @@ import { DownloadButton } from '../../components/DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
-// Largura dos botões da direita, igual em todas as linhas — como o "Abrir" da
-// Biblioteca da Microsoft Store. Três vagas, para os botões não mudarem de
-// lugar nas linhas com Atualizar ou Versão anterior.
-const ACTION_W = '120px'
+// Botões da direita quadrados, só com ícone. Três vagas, para não mudarem de lugar nas
+// linhas com Atualizar ou Versão anterior.
+const ACTION_W = '40px'
+// Cabe "atualização disponível" numa linha, nos três idiomas.
+const STATUS_W = '190px'
 const ACTIONS_W = `calc(3 * ${ACTION_W} + 2 * ${tokens.spacingHorizontalS})`
 
 const useStyles = makeStyles({
@@ -53,7 +60,7 @@ const useStyles = makeStyles({
   // ícone + nome | sistemas | situação | botão
   row: {
     display: 'grid',
-    gridTemplateColumns: `minmax(0, 2fr) minmax(0, 1.4fr) minmax(0, 0.8fr) ${ACTIONS_W}`,
+    gridTemplateColumns: `minmax(0, 2fr) minmax(0, 1.4fr) ${STATUS_W} ${ACTIONS_W}`,
     alignItems: 'center',
     columnGap: tokens.spacingHorizontalL,
     // o mesmo padding nos 4 lados (pedido do usuário); a altura sai do
@@ -64,7 +71,7 @@ const useStyles = makeStyles({
     background: tokens.colorNeutralBackground2,
     // janela estreita / interface grande: sistemas e situação vão pra
     // baixo do nome
-    '@media (max-width: 900px)': { gridTemplateColumns: `minmax(0, 1fr) ${ACTION_W}` },
+    '@media (max-width: 900px)': { gridTemplateColumns: `minmax(0, 1fr) ${ACTIONS_W}` },
   },
   // ícone dentro de um quadrado (o "ícone do app" da Store)
   lead: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM, minWidth: 0 },
@@ -100,15 +107,49 @@ const useStyles = makeStyles({
     '@media (max-width: 900px)': { display: 'none' },
   },
   narrowOnly: { display: 'none', '@media (max-width: 900px)': { display: 'inline' } },
-  action: { width: ACTION_W, minWidth: '0 !important', maxWidth: 'none !important' },
+  action: {
+    width: ACTION_W,
+    height: ACTION_W,
+    padding: '0 !important',
+    minWidth: '0 !important',
+    maxWidth: 'none !important',
+  },
+  badge: { whiteSpace: 'nowrap' },
   actions: {
     display: 'flex',
     justifyContent: 'flex-end',
     columnGap: tokens.spacingHorizontalS,
-    rowGap: tokens.spacingVerticalS,
-    '@media (max-width: 900px)': { flexDirection: 'column' },
   },
 })
+
+/** Só com ícone: o nome vai na dica e no rótulo acessível (Fluent 2, Button). */
+function IconAction({
+  label,
+  icon,
+  className,
+  primary = false,
+  disabled,
+  onClick,
+}: {
+  label: string
+  icon: ReactElement
+  className: string
+  primary?: boolean
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <Tooltip positioning={TOOLTIP_POSITION} content={label} relationship="label">
+      <Button
+        className={className}
+        appearance={primary ? 'primary' : 'secondary'}
+        icon={icon}
+        disabled={disabled}
+        onClick={onClick}
+      />
+    </Tooltip>
+  )
+}
 
 /**
  * Configurações › Cores: só o catálogo (pedido do usuário — a aba
@@ -274,57 +315,53 @@ function Catalog() {
             <span className={styles.col}>
               {c.installed &&
                 (outdated.includes(c.coreId) ? (
-                  <Badge appearance="tint" color="brand" icon={<ArrowCircleUpRegular />}>
+                  <Badge className={styles.badge} appearance="tint" color="brand" icon={<ArrowCircleUpRegular />}>
                     {t('cores.updateBadge')}
                   </Badge>
                 ) : (
-                  <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
+                  <Badge className={styles.badge} appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
                     {t('cores.installedBadge')}
                   </Badge>
                 ))}
             </span>
             <span className={styles.actions}>
               {c.installed && outdated.includes(c.coreId) ? (
-                <Button
+                <IconAction
                   className={styles.action}
-                  appearance="primary"
+                  primary
+                  label={busy(c.coreId) ? t('cores.updating') : t('cores.update')}
+                  icon={busy(c.coreId) ? <Spinner size="tiny" /> : <ArrowCircleUpRegular />}
                   disabled={busy(c.coreId)}
                   onClick={() => update.mutate(c.coreId)}
-                >
-                  {busy(c.coreId) ? t('cores.updating') : t('cores.update')}
-                </Button>
+                />
               ) : (
                 c.installed &&
                 c.hasPrevious && (
-                  <Button
+                  <IconAction
                     className={styles.action}
-                    appearance="secondary"
+                    label={t('cores.restorePrevious')}
+                    icon={<HistoryRegular />}
                     disabled={busy(c.coreId)}
                     onClick={() => restore.mutate(c.coreId)}
-                  >
-                    {t('cores.restorePrevious')}
-                  </Button>
+                  />
                 )
               )}
               {c.installed && (
-                <Button
+                <IconAction
                   className={styles.action}
-                  appearance="secondary"
+                  label={t('settings.title')}
+                  icon={<SettingsRegular />}
                   onClick={() => navigate(`/settings/cores/${c.coreId}`)}
-                >
-                  {t('settings.title')}
-                </Button>
+                />
               )}
               {c.installed ? (
-                // Remover: secondary, só o texto (pedido do usuário)
-                <Button
+                <IconAction
                   className={styles.action}
-                  appearance="secondary"
+                  label={t('common.remove')}
+                  icon={<DeleteRegular />}
                   disabled={busy(c.coreId)}
                   onClick={() => uninstall.mutate(c.coreId)}
-                >
-                  {t('common.remove')}
-                </Button>
+                />
               ) : (
                 <DownloadButton
                   className={styles.action}

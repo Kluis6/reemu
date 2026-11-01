@@ -16,6 +16,8 @@ export const NAV_STATE_EVENT = 'reemu-nav-state'
  *  focá-lo dispara `onFocus` → abre a busca / troca de rota). */
 function navSkipped(el: HTMLElement): boolean {
   if (el.closest('[data-nav-skip]')) return true
+  // Guardas de foco do Fluent (Tabster): invisíveis, o foco sumia ao parar nelas.
+  if (el.hasAttribute('data-tabster-dummy')) return true
   // `<button tabindex="-1">` continua batendo em `button:not([disabled])`.
   const ti = el.getAttribute('tabindex')
   return ti === '-1'
@@ -272,7 +274,9 @@ export function focusFromNav(el: HTMLElement) {
 function focusAndReveal(el: HTMLElement) {
   el.focus({ preventScroll: true })
   const carousel = el.closest<HTMLElement>('.fui-Carousel')
-  const target = carousel ?? el
+  // O foco de um card selecionável ou de um `<label>` fica num `input` por dentro:
+  // revelar só ele deixava o resto do card cortado.
+  const target = carousel ?? el.closest<HTMLElement>('.fui-Card, label') ?? el
   target.scrollIntoView({
     block: 'nearest',
     inline: carousel ? 'nearest' : 'center',

@@ -41,7 +41,7 @@ const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
   // `fill`: ocupa a altura que o pai der, e a lista rola dentro dela
   rootFill: { flexGrow: 1, minHeight: 0 },
-  listFill: { flexGrow: 1, minHeight: 0, maxHeight: 'none' },
+  listFill: { flexGrow: 1, minHeight: 0, maxHeight: 'none', marginBottom: 0 },
   bar: { display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center' },
   path: {
     flexGrow: 1,
@@ -61,6 +61,13 @@ const useStyles = makeStyles({
     // folga (8) pro anel de foco dos cards não ser cortado pela borda que rola
     padding: '8px',
     margin: '-8px',
+    // Para no card inteiro, com folga no início e no fim. `proximity`: o `mandatory`
+    // puxava de volta a rolagem do foco do controle. A folga (8) cobre o anel de foco.
+    scrollSnapType: 'y proximity',
+    scrollPaddingTop: '8px',
+    scrollPaddingBottom: '8px',
+    '& > *': { flexShrink: 0, scrollSnapAlign: 'start' },
+    '& > *:last-child': { scrollSnapAlign: 'end' },
   },
   // Cards do grupo iguais aos da lista de Shaders do ReEmu: mesmo
   // espaçamento e a largura toda (sem a margem lateral do AccordionPanel).

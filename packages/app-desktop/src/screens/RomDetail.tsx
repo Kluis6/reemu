@@ -72,7 +72,6 @@ import {
   listInstalledCores,
   listRoms,
   listSaveStates,
-  pickSlangp,
   listSystemCores,
   removeRom,
   setRomFavorite,
@@ -838,18 +837,6 @@ export function RomDetail() {
                     inherit={t("game.shader.inheritRom")}
                     fill
                   />
-                  <div>
-                    <Button
-                      appearance="subtle"
-                      disabled={shaderPick.isPending}
-                      onClick={async () => {
-                        const p = await pickSlangp();
-                        if (p) shaderPick.mutate(p);
-                      }}
-                    >
-                      {t("game.shader.loadFile")}
-                    </Button>
-                  </div>
                 </div>
                 <div className={s.shaderParams}>
                   {shaderAtScope && (shaderParams.data?.length ?? 0) > 0 ? (
