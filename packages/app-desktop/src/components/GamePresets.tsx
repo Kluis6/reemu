@@ -1,22 +1,11 @@
-import {
-  Button,
-  Caption1,
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
-  makeStyles,
-  mergeClasses,
-  tokens,
-} from "@fluentui/react-components";
-import { DismissRegular } from "@fluentui/react-icons";
+import { Button, Caption1, makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { getCoreOptions } from "../lib/tauri";
+import { useModalButtonStyles } from "../styles/buttons";
 import { CoreOptions } from "./CoreOptions";
+import { FullscreenDialog } from "./FullscreenDialog";
 
 const PRESETS = ["performance", "normal", "quality", "custom"] as const;
 type Preset = (typeof PRESETS)[number];
@@ -40,42 +29,7 @@ const useStyles = makeStyles({
     columnGap: tokens.spacingHorizontalM,
   },
   button: { maxWidth: "none", minHeight: "48px" },
-  // Mesmo fundo dos seletores de core (`SettingBlock`), sem cor na borda.
-  idle: {
-    backgroundColor: tokens.colorNeutralBackground2,
-    borderTopColor: "transparent",
-    borderRightColor: "transparent",
-    borderBottomColor: "transparent",
-    borderLeftColor: "transparent",
-    ":hover": {
-      backgroundColor: tokens.colorNeutralBackground2Hover,
-      borderTopColor: "transparent",
-      borderRightColor: "transparent",
-      borderBottomColor: "transparent",
-      borderLeftColor: "transparent",
-    },
-    ":hover:active": {
-      backgroundColor: tokens.colorNeutralBackground2Pressed,
-      borderTopColor: "transparent",
-      borderRightColor: "transparent",
-      borderBottomColor: "transparent",
-      borderLeftColor: "transparent",
-    },
-  },
   hint: { color: tokens.colorNeutralForeground3 },
-  // Ocupa a janela toda; em % para acompanhar o zoom da interface.
-  surface: {
-    width: "100%",
-    height: "100%",
-    maxWidth: "none",
-    maxHeight: "none",
-    boxSizing: "border-box",
-    borderRadius: 0,
-    // na cor da página: nestes temas `Background1` é igual ao fundo dos blocos de opção
-    backgroundColor: "var(--reemuPage)",
-  },
-  body: { height: "100%", maxHeight: "none", gridTemplateRows: "auto minmax(0, 1fr)" },
-  content: { maxHeight: "none" },
 });
 
 /**
@@ -86,6 +40,7 @@ const useStyles = makeStyles({
 export function GamePresets({ coreId, romId }: { coreId: string; romId: string }) {
   const { t } = useTranslation();
   const s = useStyles();
+  const btn = useModalButtonStyles();
   const [chosen, setChosen] = useState<Preset | null>(() => savedPreset(romId));
   const [customOpen, setCustomOpen] = useState(false);
   // mesma chave de `CoreOptions`: as duas telas enxergam a mesma lista
@@ -114,7 +69,7 @@ export function GamePresets({ coreId, romId }: { coreId: string; romId: string }
         {PRESETS.map((p) => (
           <Button
             key={p}
-            className={mergeClasses(s.button, preset !== p && s.idle)}
+            className={mergeClasses(s.button, preset !== p && btn.block)}
             role="radio"
             aria-checked={preset === p}
             appearance={preset === p ? "primary" : "secondary"}
@@ -127,31 +82,13 @@ export function GamePresets({ coreId, romId }: { coreId: string; romId: string }
       <Caption1 className={s.hint}>
         {t(preset === "custom" ? "game.preset.customHint" : "game.preset.pending")}
       </Caption1>
-      <Dialog
+      <FullscreenDialog
         open={customOpen}
-        onOpenChange={(_, d) => setCustomOpen(d.open)}
-        surfaceMotion={DIALOG_FADE_ONLY}
+        onClose={() => setCustomOpen(false)}
+        title={t("game.preset.customTitle")}
       >
-        <DialogSurface className={s.surface}>
-          <DialogBody className={s.body}>
-            <DialogTitle
-              action={
-                <Button
-                  appearance="subtle"
-                  icon={<DismissRegular />}
-                  aria-label={t("common.close")}
-                  onClick={() => setCustomOpen(false)}
-                />
-              }
-            >
-              {t("game.preset.customTitle")}
-            </DialogTitle>
-            <DialogContent className={s.content}>
-              <CoreOptions coreId={coreId} romId={romId} />
-            </DialogContent>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
+        <CoreOptions coreId={coreId} romId={romId} />
+      </FullscreenDialog>
     </div>
   );
 }

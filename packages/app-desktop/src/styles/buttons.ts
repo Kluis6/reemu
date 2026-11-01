@@ -13,6 +13,28 @@ export const STROKE = `var(--reemuFieldStroke, color-mix(in srgb, ${tokens.color
  * continua o do Fluent.
  */
 export const useModalButtonStyles = makeStyles({
+  // Mesmo fundo dos seletores de core (`SettingBlock`), sem cor na borda.
+  block: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "transparent",
+    borderLeftColor: "transparent",
+    ":hover": {
+      backgroundColor: tokens.colorNeutralBackground2Hover,
+      borderTopColor: "transparent",
+      borderRightColor: "transparent",
+      borderBottomColor: "transparent",
+      borderLeftColor: "transparent",
+    },
+    ":hover:active": {
+      backgroundColor: tokens.colorNeutralBackground2Pressed,
+      borderTopColor: "transparent",
+      borderRightColor: "transparent",
+      borderBottomColor: "transparent",
+      borderLeftColor: "transparent",
+    },
+  },
   secondary: {
     backgroundColor: tokens.colorNeutralBackground3,
     // longhands: o atalho `borderColor` do Griffel some sem aviso

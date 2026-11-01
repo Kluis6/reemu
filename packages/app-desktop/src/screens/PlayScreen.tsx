@@ -4,6 +4,7 @@ import {
   DrawerHeader,
   DrawerHeaderTitle,
   OverlayDrawer,
+  mergeClasses,
   Accordion,
   AccordionHeader,
   AccordionItem,
@@ -17,7 +18,6 @@ import {
   Title3,
   Tooltip,
   makeStyles,
-  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
 import {
@@ -72,10 +72,10 @@ import {
   unloadGame,
   jsLog,
 } from "../lib/tauri";
-import { useModalButtonStyles } from "../styles/buttons";
 import { usePauseStyles } from "../styles/xbox";
 import { useFocusStore } from "../stores/useFocusStore";
 import { useGamepadStore } from "../stores/useGamepadStore";
+import { useModalButtonStyles } from "../styles/buttons";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
@@ -1002,7 +1002,8 @@ export function PlayScreen() {
                 <>
                   <Button
                     size="large"
-                    className={mergeClasses(pause.item, btn.secondary)}
+                    appearance="subtle"
+                    className={pause.item}
                     icon={<SaveRegular />}
                     disabled={quickSave.isPending}
                     onClick={() => quickSave.mutate()}
@@ -1011,7 +1012,8 @@ export function PlayScreen() {
                   </Button>
                   <Button
                     size="large"
-                    className={mergeClasses(pause.item, btn.secondary)}
+                    appearance="subtle"
+                    className={pause.item}
                     icon={<HistoryRegular />}
                     disabled={quickLoad.isPending}
                     onClick={() => quickLoad.mutate()}
@@ -1039,7 +1041,7 @@ export function PlayScreen() {
                             </span>
                             <div className={pause.stateActions}>
                               <Button
-                                className={btn.secondary}
+                                appearance="subtle"
                                 icon={<HistoryRegular />}
                                 disabled={loadAny.isPending}
                                 onClick={() => loadAny.mutate(st.id)}
@@ -1047,7 +1049,7 @@ export function PlayScreen() {
                                 {t("play.loadState")}
                               </Button>
                               <Button
-                                className={btn.secondary}
+                                appearance="subtle"
                                 icon={<DeleteRegular />}
                                 disabled={delState.isPending}
                                 onClick={() => delState.mutate(st.id)}
@@ -1079,28 +1081,24 @@ export function PlayScreen() {
                 do guia do Xbox; o nome vem no tooltip (Fluent 2: ícone sozinho
                 pede rótulo acessível e tooltip). */}
             <DrawerFooter className={pause.footer}>
-              <Button
-                appearance="primary"
-                className={pause.item}
-                icon={<PlayRegular />}
-                onClick={resume}
-              >
-                {t("play.continue")}
-              </Button>
-              <Button
-                className={mergeClasses(pause.item, btn.secondary)}
-                icon={fullscreen ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />}
-                onClick={() => void toggleFullscreen()}
-              >
-                {fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen")}
-              </Button>
-              <Button
-                className={mergeClasses(pause.item, btn.secondary)}
-                icon={<ArrowExitRegular />}
-                onClick={quit}
-              >
-                {t("play.quit")}
-              </Button>
+              {[
+                { label: t("play.continue"), icon: <PlayRegular />, onClick: resume },
+                {
+                  label: fullscreen ? t("shell.exitFullscreen") : t("shell.fullscreen"),
+                  icon: fullscreen ? <FullScreenMinimizeRegular /> : <FullScreenMaximizeRegular />,
+                  onClick: () => void toggleFullscreen(),
+                },
+                { label: t("play.quit"), icon: <ArrowExitRegular />, onClick: quit },
+              ].map((a) => (
+                <Tooltip key={a.label} content={a.label} relationship="label" positioning="above">
+                  <Button
+                    size="large"
+                    className={mergeClasses(pause.iconAction, btn.secondary)}
+                    icon={a.icon}
+                    onClick={a.onClick}
+                  />
+                </Tooltip>
+              ))}
             </DrawerFooter>
       </OverlayDrawer>
     </div>

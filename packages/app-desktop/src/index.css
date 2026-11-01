@@ -454,6 +454,12 @@ html [data-nav-content=""] {
   padding-bottom: calc(var(--reemuScrollPadB) + var(--reemuInsetY));
   scroll-padding-bottom: calc(var(--reemuScrollPadB) + var(--reemuInsetY));
 }
+/* Página do jogo: sem a faixa reservada à barra de rolagem, para a arte chegar à
+   borda da janela. Os 6 px voltam no padding e o conteúdo segue alinhado à topbar. */
+html [data-nav-content="bleed"] {
+  scrollbar-gutter: auto;
+  padding-right: calc(var(--reemuScrollPadR) + 6px);
+}
 html .reemu-hints {
   transform: translate(calc(-1 * var(--reemuInsetX)), calc(-1 * var(--reemuInsetY)));
   /* A barra é translúcida a pedido: sem o desfoque, o texto de trás se misturava ao dela. */

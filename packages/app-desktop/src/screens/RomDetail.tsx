@@ -23,8 +23,6 @@ import {
   MessageBarBody,
   OverlayDrawer,
   Select,
-  Tab,
-  TabList,
   Tooltip,
 } from "@fluentui/react-components";
 import {
@@ -43,6 +41,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { FullscreenDialog } from "../components/FullscreenDialog";
 import { GamePresets } from "../components/GamePresets";
 import { GameImageOptions } from "../components/GameImageOptions";
 import { SelectBlock } from "../components/SettingBlock";
@@ -83,7 +82,8 @@ import {
   getRomPlayTime,
 } from "../lib/tauri";
 import { formatPlayTime } from "../lib/playTime";
-import { useDetailStyles, useTabStyles } from "../styles/xbox";
+import { useModalButtonStyles } from "../styles/buttons";
+import { useDetailStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
 import { rankCores } from "../lib/coreChoice";
@@ -92,7 +92,7 @@ import { TOOLTIP_POSITION } from "../lib/tooltip";
 export function RomDetail() {
   const { t, i18n } = useTranslation();
   const s = useDetailStyles();
-  const tb = useTabStyles();
+  const btn = useModalButtonStyles();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const push = useToastStore((st) => st.push);
@@ -233,9 +233,9 @@ export function RomDetail() {
   const descParas = descriptionParagraphs(meta.data?.description);
   const sourceText = providerLabel(meta.data?.providerSource);
   const releaseYear = meta.data?.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
-  const [cfgTab, setCfgTab] = useState<"core" | "states" | "shader" | "cheats" | "achievements" | "media">("core");
+  // Dialog de tela cheia aberto; o conteúdo de Emulador fica na própria página.
+  const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "media" | null>(null);
   const hasShaderCfg = !!shaderInfo.data?.gpu;
-  const hasCoreCfg = !!chosenCore;
   // Galeria: só as mídias que o provedor trouxe.
   const shots = [
     { key: "screenshot", url: meta.data?.screenshotUrl },
@@ -243,22 +243,14 @@ export function RomDetail() {
     { key: "fanart", url: meta.data?.fanartUrl },
   ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
   const hasMedia = shots.length > 0 || !!meta.data?.videoUrl || !!meta.data?.logoUrl;
-  const cfgTabOk = {
-    shader: hasShaderCfg,
-    core: hasCoreCfg,
-    states: true,
+  const panels = [
+    { key: "states", show: true },
+    { key: "shader", show: hasShaderCfg },
     // cheats por código (doc 17): a lista é do jogo, vale ao abrir
-    cheats: true,
-    achievements: true,
-    media: hasMedia,
-  };
-  const activeCfgTab = cfgTabOk[cfgTab]
-    ? cfgTab
-    : hasCoreCfg
-      ? "core"
-      : hasShaderCfg
-        ? "shader"
-        : "states";
+    { key: "cheats", show: true },
+    { key: "achievements", show: true },
+    { key: "media", show: hasMedia },
+  ] as const;
 
   const del = useMutation({
     mutationFn: (id: string) => deleteSaveState(id),
@@ -740,26 +732,109 @@ export function RomDetail() {
       </OverlayDrawer>
 
       <section className={mergeClasses(s.section, s.tabsOverlap, s.tabsCard)}>
-        <TabList
-          className={mergeClasses(tb.tabs, s.tabsAligned)}
-          selectedValue={activeCfgTab}
-          onTabSelect={(_, d) => setCfgTab(d.value as typeof cfgTab)}
-        >
-          {hasCoreCfg && <Tab value="core">{t("game.tabs.core")}</Tab>}
-          <Tab value="states">{t("game.tabs.states")}</Tab>
-          {hasShaderCfg && <Tab value="shader">{t("game.tabs.shader")}</Tab>}
-          <Tab value="cheats">{t("game.tabs.cheats")}</Tab>
-          <Tab value="achievements">{t("game.tabs.achievements")}</Tab>
-          {hasMedia && <Tab value="media">{t("game.tabs.media")}</Tab>}
-        </TabList>
         <div className={s.panel}>
-          {activeCfgTab === "shader" && shaderInfo.data?.gpu && (
+          {chosenCore && (
+            <>
+              <GameImageOptions
+                coreId={chosenCore}
+                romId={romId}
+                leading={
+                  <SelectBlock
+                    label={t("game.core")}
+                    value={chosenCore}
+                    disabled={coreList.length === 0}
+                    options={
+                      coreList.length === 0
+                        ? [{ value: "", label: t("game.noneInstalled") }]
+                        : coreList.map((c) => ({
+                            value: c.coreId,
+                            label: `${c.name}${c.extensions.includes(ext) ? " ✓" : ""}`,
+                          }))
+                    }
+                    onChange={setCoreId}
+                  />
+                }
+              />
+              <GamePresets coreId={chosenCore} romId={romId} />
+            </>
+          )}
+        <div className={s.panelButtons}>
+          {panels
+            .filter((p) => p.show)
+            .map((p) => (
+              <Button
+                key={p.key}
+                className={mergeClasses(s.panelButton, btn.block)}
+                onClick={() => setPanel(p.key)}
+              >
+                {t(`game.tabs.${p.key}`)}
+              </Button>
+            ))}
+        </div>
+        </div>
+      </section>
+
+      <FullscreenDialog
+        open={panel !== null}
+        onClose={() => setPanel(null)}
+        title={panel ? t(`game.tabs.${panel}`) : ""}
+      >
+        <div className={mergeClasses(s.panel, panel === "shader" && s.panelFill)}>
+          {panel === "states" && (
+            <>
+              {states.data?.length === 0 && (
+                <Caption1>{t("game.noStates")}</Caption1>
+              )}
+              {states.data?.map((st) => (
+                <div key={st.id} className={s.stateRow} style={{ gap: 12 }}>
+                  <SaveStateThumb
+                    stateId={st.id}
+                    hasThumbnail={st.hasThumbnail}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <Body1>
+                      {st.slot === 0
+                        ? "QuickSave"
+                        : st.slot != null
+                          ? t("game.slot", { n: st.slot })
+                          : t("game.auto")}
+                    </Body1>
+                    <Caption1 block className={s.hint}>
+                      {new Date(st.createdAt * 1000).toLocaleString(i18n.language)}
+                      {st.playTimeAtSave != null &&
+                        t("game.playedFor", { time: formatPlayTime(st.playTimeAtSave) })}
+                    </Caption1>
+                  </div>
+                  <Button
+                    icon={<PlayRegular />}
+                    disabled={!chosenCore}
+                    onClick={() => play(st.id)}
+                  >
+                    {t("game.playFromHere")}
+                  </Button>
+                  <Button
+                    appearance="subtle"
+                    disabled={del.isPending}
+                    onClick={() => del.mutate(st.id)}
+                  >
+                    {t("common.delete")}
+                  </Button>
+                </div>
+              ))}
+            </>
+          )}
+          {panel === "shader" && shaderInfo.data?.gpu && (
             <>
               {/* Mesma escolha das Configurações (abas Shaders do ReEmu /
                   Pacote de shaders, em cards), sem a prévia; "Herdar" no
                   topo tira a escolha deste jogo. Os ajustes do shader
                   escolhido (se ele tiver) ficam na coluna ao lado. */}
-              <div className={s.shaderCols}>
+              <div
+                className={mergeClasses(
+                  s.shaderCols,
+                  !(shaderAtScope && (shaderParams.data?.length ?? 0) > 0) && s.shaderColsSingle,
+                )}
+              >
                 <div className={s.shaderPicker}>
                   <ShaderPicker
                     info={shaderInfo.data}
@@ -767,6 +842,7 @@ export function RomDetail() {
                     busy={shaderPick.isPending}
                     onPick={(n) => shaderPick.mutate(n)}
                     inherit={t("game.shader.inheritRom")}
+                    fill
                   />
                   <div>
                     <Button
@@ -794,34 +870,9 @@ export function RomDetail() {
               </div>
             </>
           )}
-          {activeCfgTab === "core" && chosenCore && (
-            <>
-              <GameImageOptions
-                coreId={chosenCore}
-                romId={romId}
-                leading={
-                  <SelectBlock
-                    label={t("game.core")}
-                    value={chosenCore}
-                    disabled={coreList.length === 0}
-                    options={
-                      coreList.length === 0
-                        ? [{ value: "", label: t("game.noneInstalled") }]
-                        : coreList.map((c) => ({
-                            value: c.coreId,
-                            label: `${c.name}${c.extensions.includes(ext) ? " ✓" : ""}`,
-                          }))
-                    }
-                    onChange={setCoreId}
-                  />
-                }
-              />
-              <GamePresets coreId={chosenCore} romId={romId} />
-            </>
-          )}
-          {activeCfgTab === "cheats" && <CheatsPanel romId={romId} />}
+          {panel === "cheats" && <CheatsPanel romId={romId} />}
           {/* Conquistas deste jogo: ainda sem dados, como no menu de pausa. */}
-          {activeCfgTab === "achievements" && (
+          {panel === "achievements" && (
             <EmptyState
               art={<TrophyRegular style={{ color: "var(--reemuBrandAccent)", fontSize: "44px" }} />}
               artAccent
@@ -830,7 +881,7 @@ export function RomDetail() {
               {t("play.achievementsSoon")}
             </EmptyState>
           )}
-          {activeCfgTab === "media" && (
+          {panel === "media" && (
             <div className={s.gallery}>
               {meta.data?.logoUrl && (
                 <img className={s.galleryLogo} src={meta.data.logoUrl} alt={t("game.media.logo")} />
@@ -855,57 +906,9 @@ export function RomDetail() {
               </div>
             </div>
           )}
-          {activeCfgTab === "states" && (
-            <>
-              {states.data?.length === 0 && (
-                <Caption1>{t("game.noStates")}</Caption1>
-              )}
-              {states.data?.map((st) => (
-                <div key={st.id} className={s.stateRow} style={{ gap: 12 }}>
-                  <SaveStateThumb
-                    stateId={st.id}
-                    hasThumbnail={st.hasThumbnail}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Body1>
-                      {st.slot === 0
-                        ? "QuickSave"
-                        : st.slot != null
-                          ? t("game.slot", { n: st.slot })
-                          : t("game.auto")}
-                    </Body1>
-                    <Caption1 className={s.hint}>
-                      {new Date(st.createdAt * 1000).toLocaleString(i18n.language)}
-                      {st.playTimeAtSave != null &&
-                        t("game.playedFor", { time: formatPlayTime(st.playTimeAtSave) })}
-                    </Caption1>
-                  </div>
-                  <Button
-                    icon={<PlayRegular />}
-                    disabled={!chosenCore}
-                    onClick={() => play(st.id)}
-                  >
-                    {t("game.playFromHere")}
-                  </Button>
-                  <Button
-                    appearance="subtle"
-                    disabled={del.isPending}
-                    onClick={() => del.mutate(st.id)}
-                  >
-                    {t("common.delete")}
-                  </Button>
-                </div>
-              ))}
-            </>
-          )}
         </div>
-      </section>
+      </FullscreenDialog>
 
-      {meta.data?.description && (
-        <Text as="p" block className={s.desc}>
-          {meta.data.description}
-        </Text>
-      )}
 
     </div>
   );

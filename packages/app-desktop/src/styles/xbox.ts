@@ -1022,11 +1022,12 @@ const DRAWER_GAP = 24;
 /** Página de detalhe do jogo (RomDetail) — estilo "página de jogo" do Xbox:
  *  hero com arte, título grande, botão Jogar, seções em painéis. */
 export const useDetailStyles = makeStyles({
+  // A página na altura da tela, com o card no pé: só rola se o conteúdo não
+  // couber (janela pequena, interface ampliada), e nesse caso nada é cortado.
   root: {
     display: "flex",
     flexDirection: "column",
     rowGap: "20px",
-    paddingBottom: "48px",
     opacity: 1,
     transform: "translateY(0)",
     transitionProperty: "opacity, transform",
@@ -1039,6 +1040,8 @@ export const useDetailStyles = makeStyles({
     "@media (prefers-reduced-motion: reduce)": {
       '&[data-loading="true"]': { transform: "none" },
     },
+    minHeight: `calc(100vh - var(--reemuOverscan, 0) * 1vh - var(--reemuPageTop, ${PAGE_TOP}px) - ${M.SAFE_Y}px)`,
+    marginBottom: `-${M.PAGE_PAD_B - M.SAFE_Y}px`,
   },
   hero: {
     position: "relative",
@@ -1055,7 +1058,7 @@ export const useDetailStyles = makeStyles({
     // devolve esse respiro pro conteúdo (ícone/título) não ficar colado
     // na rail.
     marginLeft: `calc(-1 * ${PAGE_PAD_L})`,
-    marginRight: `calc(-1 * ${SCROLL_PAD_R})`,
+    marginRight: `-${M.PAGE_PAD_R}px`,
     // Mais alto ainda (pedido do usuário) — a imagem precisa continuar
     // visível por trás da faixa de tabs, não só encostar nela. Calibrado
     // junto com `.tabsOverlap` (folga sobrando abaixo da linha de botões
@@ -1065,8 +1068,8 @@ export const useDetailStyles = makeStyles({
     // dissolve no fundo por volta de y = 420 (1366×768). Depois, mais alto
     // ainda (pedido do usuário, 2026-10-17): o conteúdo desceu 36 pra
     // começar no `PAGE_TOP` (ver `heroBody`) e a arte ganhou mais ~64.
-    minHeight: "520px",
-    maxHeight: "80vh",
+    // Ocupa o que sobra acima do card; o mínimo é a altura do próprio conteúdo.
+    flexGrow: 1,
     // Sem raio: hero de sangria total (encosta na rail e na borda da
     // janela) não tem mais canto pra arredondar, igual à referência.
     borderRadius: 0,
@@ -1200,12 +1203,9 @@ export const useDetailStyles = makeStyles({
   // Abas da página do jogo: abas e conteúdo num card só, as abas centralizadas e
   // o respiro de cima igual ao do painel (pedido do usuário, 2026-10-31). A cor
   // do texto volta a ser a do tema.
+  // Sem caixa própria: só passa aos blocos de dentro a camada mais clara, como no
+  // card das Configurações. O card visível é o `panel`.
   tabsCard: {
-    rowGap: 0,
-    paddingTop: "14px",
-    borderRadius: shell.radius,
-    backgroundColor: "var(--reemuSurface1)",
-    // Blocos e campos de dentro em camada mais clara, como no card das Configurações.
     "--colorNeutralBackground2": "var(--reemuSurface2)",
     "--colorNeutralBackground2Hover": "var(--reemuSurface2Hover)",
     "--colorNeutralBackground2Pressed": "var(--reemuSurface2Pressed)",
@@ -1215,12 +1215,14 @@ export const useDetailStyles = makeStyles({
     "--colorNeutralBackground3Pressed": "var(--reemuSurface3Pressed)",
     "--colorNeutralBackground3Selected": "var(--reemuSurface3Selected)",
   },
-  tabsAligned: {
-    alignSelf: "center",
-    marginLeft: "0 !important",
-    // mais espaço entre as abas que o 8 do `useTabStyles` (pedido do usuário)
-    columnGap: "16px !important",
+  // Botões que abrem os dialogs da página do jogo, em colunas iguais como as
+  // predefinições.
+  panelButtons: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gap: tokens.spacingHorizontalM,
   },
+  panelButton: { maxWidth: "none", minHeight: "48px", fontWeight: tokens.fontWeightRegular },
   heroTitleCol: {
     display: "flex",
     flexDirection: "column",
@@ -1271,17 +1273,6 @@ export const useDetailStyles = makeStyles({
   // Descrição: fora do hero agora (modelo "página de loja" — banner só
   // com ícone/título/ações, sinopse vem depois, sobre o fundo normal da
   // página) — `.root` já dá o espaçamento (`rowGap`) entre ela e o hero.
-  desc: {
-    fontSize: tokens.fontSizeBase300,
-    lineHeight: 1.5,
-    color: tokens.colorNeutralForeground2,
-    display: "-webkit-box",
-    WebkitLineClamp: 4,
-    WebkitBoxOrient: "vertical",
-    overflowX: "hidden",
-    overflowY: "hidden",
-    maxWidth: "min(85%, 760px)",
-  },
   actions: {
     display: "flex",
     // 16 epx entre os botões, como no app Xbox.
@@ -1431,27 +1422,30 @@ export const useDetailStyles = makeStyles({
   },
   field: { display: "flex", flexDirection: "column", rowGap: "4px" },
   // Aba Shader: escolha à esquerda, ajustes do shader escolhido à direita.
+  // Dialog de shaders: o painel ocupa a altura do dialog, e cada coluna rola por
+  // dentro em vez de rolar o dialog inteiro.
+  panelFill: { height: "100%", minHeight: 0, boxSizing: "border-box" },
   shaderCols: {
+    flexGrow: 1,
+    minHeight: 0,
     display: "grid",
-    gridTemplateColumns: "minmax(320px, 560px) minmax(320px, 1fr)",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+    gridTemplateRows: "minmax(0, 1fr)",
     columnGap: "48px",
-    rowGap: tokens.spacingVerticalL,
-    alignItems: "start",
   },
-  // Ajustes num card, rolando dentro dele com muitos parâmetros (na altura
-  // das abas + lista de shaders ao lado) e o scrollbar fino do app.
+  // Sem ajustes para mostrar, a lista fica com a largura toda.
+  shaderColsSingle: { gridTemplateColumns: "minmax(0, 1fr)" },
   shaderParams: {
-    maxHeight: "420px",
+    minHeight: 0,
     overflowY: "auto",
     padding: tokens.spacingHorizontalM,
   },
-  // Escolha de shader (abas + lista de cards), na largura da coluna de
-  // opções das Configurações › Shaders.
+  // Escolha de shader (abas + lista de cards), na altura da coluna.
   shaderPicker: {
     display: "flex",
     flexDirection: "column",
     rowGap: "8px",
-    maxWidth: "560px",
+    minHeight: 0,
     // O painel já é `Background2`, o fundo dos cards: aqui eles sobem uma
     // camada (`reemuSurface3`, um passo mais claro — ver `liftTokens`), como
     // os cards sobre o card das Configurações.
@@ -1751,26 +1745,34 @@ export const usePauseStyles = makeStyles({
   body: {
     display: "flex",
     flexDirection: "column",
-    rowGap: "8px",
+    rowGap: "4px",
     padding: "6px",
     margin: "-6px",
   },
-  // Item da aba Jogo: linha inteira com ícone, como as do guia do Xbox
+  // Linha inteira com ícone e sem caixa em repouso, como no drawer de perfil.
   item: {
     justifyContent: "flex-start",
     width: "100%",
     maxWidth: "none",
+    minHeight: "48px",
     columnGap: "12px",
+    fontWeight: tokens.fontWeightRegular,
   },
   // Fileira de baixo: botões quadrados só de ícone (guia do Xbox)
-  // Ações com o nome à vista: na TV não há tooltip para explicar o ícone.
   footer: {
     display: "flex",
-    flexDirection: "column",
-    alignItems: "stretch",
-    rowGap: "8px",
+    flexDirection: "row",
+    justifyContent: "center",
+    columnGap: "12px",
     paddingTop: "14px",
     borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+  },
+  iconAction: {
+    width: "56px",
+    height: "56px",
+    minWidth: "56px",
+    maxWidth: "56px",
+    padding: 0,
   },
   states: {
     display: "flex",
