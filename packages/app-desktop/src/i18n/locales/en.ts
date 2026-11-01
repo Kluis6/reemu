@@ -318,6 +318,8 @@ const en: Messages = {
       normal: 'Normal',
       quality: 'Quality',
       custom: 'Custom',
+      customTitle: 'Core options for this game',
+      customHint: "This game's options open from Custom.",
       pending: 'This preset does not change the core options yet. To adjust them, use Custom.',
     },
     image: {

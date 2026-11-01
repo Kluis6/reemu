@@ -319,6 +319,8 @@ const ptBR = {
       normal: 'Normal',
       quality: 'Qualidade',
       custom: 'Personalizado',
+      customTitle: 'Opções do core para este jogo',
+      customHint: 'As opções deste jogo abrem em Personalizado.',
       pending: 'Esta predefinição ainda não muda as opções do core. Para ajustá-las, use Personalizado.',
     },
     image: {

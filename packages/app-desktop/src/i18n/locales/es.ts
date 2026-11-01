@@ -318,6 +318,8 @@ const es: Messages = {
       normal: 'Normal',
       quality: 'Calidad',
       custom: 'Personalizado',
+      customTitle: 'Opciones del core para este juego',
+      customHint: 'Las opciones de este juego se abren en Personalizado.',
       pending: 'Este ajuste todavía no cambia las opciones del core. Para ajustarlas, usa Personalizado.',
     },
     image: {
