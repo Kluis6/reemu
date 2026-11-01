@@ -619,6 +619,39 @@ no `emu-session`, ver `docs/historico.md`).
         vencido não aparece; opção em
         Configurações para desligar; nada durante o jogo; textos fixos em pt-BR, en
         e es; navegação por controle igual à dos outros slides.
+- [ ] `blocked` — **Mais dados do Alvanista: aguardando resposta da Tellurian**
+      (decisão do dono do projeto, 2026-10-31). Nada aqui começa antes disso. Base:
+      especificação pública da GameKave 0.1.0, conferida em 2026-10-31, sem testar
+      chamadas reais. O login atual só tem `profile:read`, então cada item depende
+      de novas permissões.
+      - **Perguntas para a Tellurian:**
+        1. Quais escopos o ReEmu pode pedir, além de `profile:read`?
+        2. Termos de uso, licença dos dados (inclusive os do IGDB) e limites?
+        3. Busca de jogos por hash (CRC, MD5, SHA-1) e por nome com plataforma?
+        4. Endpoint da lista de amigos, com presença e jogo atual?
+        5. Como assinar os sinais do GAS em um app de código aberto sem expor a
+           chave (chave por conta, por exemplo)?
+        6. Há plano de guardar saves? Quem paga o armazenamento?
+        7. Endpoint de artigos e reviews para o hero (item acima)?
+      - **Ordem combinada:**
+        1. **Exibir conquistas e troféus** em `/conquistas`
+           (`gas/v1/users/{id}/achievements`, `trophies/users/{id}`). O
+           RetroAchievements segue como fonte das conquistas dentro do jogo; somar
+           os dados dele só se os termos permitirem.
+        2. **Lista de amigos, só leitura**, na tela "Minha rede". Hoje a API só tem
+           enviar pedido e ver um usuário por ID. Mostrar online e jogo atual é
+           escolha do usuário, desligada por padrão.
+        3. **Ganhar conquistas jogando** (`gas/v1/signals`), depois de resolver a
+           chave da pergunta 5.
+        4. **Saves na nuvem:** a API não tem nada hoje. Começar pelos `.srm`, porque
+           save state costuma quebrar ao trocar a versão do core, e definir como
+           tratar conflitos entre computadores. Alternativa independente: escolher
+           a pasta de saves e sincronizar por OneDrive ou similar.
+      - **Metadados de jogos:** sem a busca da pergunta 3, não há como identificar a
+        ROM, porque a API só aceita ID. Se vier, começar por hero e logo como fonte
+        adicional, com ScreenScraper e TheGamesDB como principais, comparar a
+        cobertura com jogos retrô, guardar em cache local e nunca exigir login. Depois,
+        ligar a biblioteca à coleção do Alvanista pelo ID em comum.
 - [ ] `todo` — Avaliar no futuro: **ports nativos (recomp/decomp)** como
       launcher externo (pedido do dono do projeto, 2026-10-17). Pesquisa e
       licenças conferidas no GitHub:

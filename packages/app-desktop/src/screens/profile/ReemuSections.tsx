@@ -1,4 +1,4 @@
-import { Button, makeStyles, tokens } from '@fluentui/react-components'
+import { Button, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -9,6 +9,7 @@ import { formatPlayTime } from '../../lib/playTime'
 import { platformLabel } from '../../lib/platform'
 import type { RomEntry } from '../../lib/tauri'
 import { profileStats } from './profileData'
+import { useBrowseStyles } from '../../styles/xbox'
 import { relativeAge } from './relativeAge'
 
 const useStyles = makeStyles({
@@ -133,15 +134,17 @@ export function ReemuNumbers({ roms, failed = false }: { roms: RomEntry[]; faile
   )
 }
 
-/** "Jogados recentemente": a prateleira da Home, com os jogos já ordenados. */
+/** "Jogados recentemente": prateleira em destaque, como "Adicionados
+ *  recentemente" na Home, com o tempo e a data embaixo de cada capa. */
 export function RecentRow({ roms }: { roms: RomEntry[] }) {
   const { t, i18n } = useTranslation()
   const s = useStyles()
+  const browse = useBrowseStyles()
   const navigate = useNavigate()
   const [now] = useState(() => Date.now())
   if (roms.length === 0) return null
   return (
-    <section className={s.section} data-testid="profile-recent">
+    <section className={mergeClasses(browse.section, browse.featured)} data-testid="profile-recent">
       <SectionHeader title={t('profilePage.recent')} />
       <Shelf>
         {roms.map((r) => (

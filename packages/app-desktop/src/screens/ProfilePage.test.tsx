@@ -216,14 +216,16 @@ describe('ProfilePage', () => {
     ])
     await mount()
     const first = (id: string) => section(id)!.querySelector('button, [role="button"]')!
-    expect(first('profile-recent').getAttribute('aria-label')).toBe('Novo')
+    // as capas, da mais recente
+    const covers = () => section('profile-recent')!.querySelectorAll<HTMLElement>('.fui-Card')
+    expect(covers()[0].getAttribute('aria-label')).toBe('Novo')
     // a linha de "Mais jogados" se nomeia pelo conteúdo: título e tempo, só spans
     const row = first('profile-most-played')
     expect(row.getAttribute('aria-label')).toBeNull()
     expect(row.textContent).toContain('Antigo')
     expect(row.textContent).toContain('2 h 30 min')
     expect(section('profile-most-played')!.querySelector('button div')).toBeNull()
-    await act(async () => (section('profile-recent')!.querySelector('button, [role="button"]') as HTMLElement).click())
+    await act(async () => covers()[0].click())
     await settle()
     expect(document.body.textContent).toContain('tela do jogo')
   })
