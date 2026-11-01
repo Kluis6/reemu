@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getCoreOptions } from "../lib/tauri";
-import { useModalButtonStyles } from "../styles/buttons";
 import { CoreOptions } from "./CoreOptions";
 
 const PRESETS = ["performance", "normal", "quality", "custom"] as const;
@@ -28,6 +27,28 @@ const useStyles = makeStyles({
     columnGap: tokens.spacingHorizontalM,
   },
   button: { maxWidth: "none", minHeight: "48px" },
+  // Mesmo fundo dos seletores de core (`SettingBlock`), sem cor na borda.
+  idle: {
+    backgroundColor: tokens.colorNeutralBackground2,
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "transparent",
+    borderLeftColor: "transparent",
+    ":hover": {
+      backgroundColor: tokens.colorNeutralBackground2Hover,
+      borderTopColor: "transparent",
+      borderRightColor: "transparent",
+      borderBottomColor: "transparent",
+      borderLeftColor: "transparent",
+    },
+    ":hover:active": {
+      backgroundColor: tokens.colorNeutralBackground2Pressed,
+      borderTopColor: "transparent",
+      borderRightColor: "transparent",
+      borderBottomColor: "transparent",
+      borderLeftColor: "transparent",
+    },
+  },
   hint: { color: tokens.colorNeutralForeground3 },
 });
 
@@ -39,7 +60,6 @@ const useStyles = makeStyles({
 export function GamePresets({ coreId, romId }: { coreId: string; romId: string }) {
   const { t } = useTranslation();
   const s = useStyles();
-  const btn = useModalButtonStyles();
   const [chosen, setChosen] = useState<Preset | null>(() => savedPreset(romId));
   // mesma chave de `CoreOptions`: as duas telas enxergam a mesma lista
   const options = useQuery({
@@ -66,7 +86,7 @@ export function GamePresets({ coreId, romId }: { coreId: string; romId: string }
         {PRESETS.map((p) => (
           <Button
             key={p}
-            className={mergeClasses(s.button, preset !== p && btn.secondary)}
+            className={mergeClasses(s.button, preset !== p && s.idle)}
             role="radio"
             aria-checked={preset === p}
             appearance={preset === p ? "primary" : "secondary"}

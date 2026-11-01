@@ -15,6 +15,19 @@ impl RomsRepo {
         Self { db }
     }
 
+    /// Tempo de jogo (s) de todas as ROMs numa query só (`id → segundos`), para
+    /// quem soma ou ordena (o perfil).
+    pub async fn play_times(&self) -> Result<std::collections::HashMap<String, u64>, RepoError> {
+        let rows: Vec<(String, i64)> = sqlx::query_as("SELECT id, play_time_secs FROM roms")
+            .fetch_all(&self.db)
+            .await
+            .map_err(be)?;
+        Ok(rows
+            .into_iter()
+            .map(|(id, secs)| (id, secs.max(0) as u64))
+            .collect())
+    }
+
     /// Remove TODAS as ROMs da biblioteca (só os registros — arquivos em disco
     /// ficam). Save states / metadata caem em cascata. Devolve quantas saíram.
     pub async fn remove_all(&self) -> Result<u64, RepoError> {

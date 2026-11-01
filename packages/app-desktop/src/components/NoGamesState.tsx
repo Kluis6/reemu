@@ -1,8 +1,7 @@
 import { Button } from '@fluentui/react-components'
 import { AddRegular, JoystickRegular } from '@fluentui/react-icons'
-import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { getProfile } from '../lib/tauri'
+import { useEffectiveProfile } from '../hooks/useEffectiveProfile'
 import { EmptyState } from './EmptyState'
 
 /**
@@ -14,8 +13,7 @@ import { EmptyState } from './EmptyState'
  */
 export function NoGamesState({ onAdd }: { onAdd: () => void }) {
   const { t } = useTranslation()
-  const profile = useQuery({ queryKey: ['profile'], queryFn: getProfile, retry: false })
-  const name = profile.data?.name?.trim()
+  const name = useEffectiveProfile()?.name?.trim()
   return (
     <EmptyState
       size="large"

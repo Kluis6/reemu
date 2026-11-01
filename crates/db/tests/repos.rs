@@ -310,6 +310,18 @@ async fn play_time_accumulates_per_rom() {
 }
 
 #[tokio::test]
+async fn play_times_maps_every_rom() {
+    let repo = RomsRepo::new(mem_db().await);
+    repo.add(&rom("a", "AA", "nes")).await.unwrap();
+    repo.add(&rom("b", "BB", "nes")).await.unwrap();
+    repo.add_play_time("a", 90).await.unwrap();
+    let m = repo.play_times().await.unwrap();
+    assert_eq!(m.len(), 2);
+    assert_eq!(m["a"], 90);
+    assert_eq!(m["b"], 0);
+}
+
+#[tokio::test]
 async fn roms_duplicate_path_is_error() {
     let repo = RomsRepo::new(mem_db().await);
     repo.add(&rom("r1", "AA", "nes")).await.unwrap();

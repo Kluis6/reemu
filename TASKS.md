@@ -545,6 +545,7 @@ no `emu-session`, ver `docs/historico.md`).
       - **Próximo:** fase 2 (banco `.cht` do libretro).
       - No hardcore do RetroAchievements, os dois ficam proibidos.
 
+- [ ] `in-progress` — **Entrar com Alvanista, trazido do PR #1 em etapas:** núcleo, botão em Perfil, perfil no drawer e página Meu perfil (`/perfil`) publicados; falta testar o cartão com a conta real. A PR segue aberta para os extras, e não será feito merge da versão atual.
 - [ ] `todo` — Avaliar integração **GameKave / Alvanista** (pedido do dono
       do projeto, 2026-10-20). A GameKave (Tellurian Corp) é a
       "infraestrutura de identidade gamer" por trás da Alvanista, rede social

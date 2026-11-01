@@ -1,4 +1,4 @@
-import { makeStyles, tokens } from '@fluentui/react-components'
+import { makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { useEffect, useState } from 'react'
 import { saveThumbnailUrl } from '../lib/tauri'
 
@@ -18,9 +18,12 @@ const useStyles = makeStyles({
 export function SaveStateThumb({
   stateId,
   hasThumbnail,
+  className,
 }: {
   stateId: string
   hasThumbnail: boolean
+  /** Troca o tamanho padrão (96×72), como o perfil faz nos "momentos". */
+  className?: string
 }) {
   const s = useStyles()
   const [url, setUrl] = useState<string | null>(null)
@@ -43,5 +46,5 @@ export function SaveStateThumb({
     }
   }, [stateId, hasThumbnail])
 
-  return <img className={s.box} src={url ?? undefined} alt="" />
+  return <img className={mergeClasses(s.box, className)} src={url ?? undefined} alt="" />
 }

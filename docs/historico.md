@@ -3330,3 +3330,15 @@ Infra:
 - **Desempenho:** Soulcalibur (Flycast, Vulkan), ~5 min em cada versão: desenho de 1,46 ms nas duas, core de 3,80 ms sem a divisão e 4,10 ms com ela, atrasos de 0,424/s e 0,282/s. Sem sinal de perda. Uma captura anterior da mesma versão deu 1,76 ms e 0,489/s, o que mostra a variação entre capturas; o limite de 2% do portão fica sensível demais para uma captura só.
 - **Item 2, primeira metade:** mapa das travas de `session.rs` em `20-mapa-travas-session.md`, sem alterar código. O restante do item e o item 3 ficam parados até haver motivo.
 - **Patch widescreen 16:9:** novo nome da opção, com explicação de uma linha.
+
+## 2026-10-31 — Entrar com Alvanista, trazido do PR #1
+
+- **Origem:** núcleo e telas do PR #1, de Edward Facundo (Tellurian), trazidos para o `main` atual em vez do merge, de comum acordo com o autor. A PR pode seguir aberta para os extras.
+- **Mudanças em relação à PR:** tokens só no chaveiro, sem reserva no SQLite; sem a adoção de bancos de pré-lançamento; nova falha `keyring`, que revoga os tokens emitidos.
+- **Sem sessão:** o app não lê o chaveiro nem acessa a rede.
+- **Meu perfil (`/perfil`):** vinda da `main` do fork. Topo com capa, nível, plano e título; "No ReEmu" com tempo jogado, jogos, sistemas e favoritos; jogados recentemente; mais jogados; seus momentos; "No Alvanista" com o cartão do `/me`, ou o convite; e a conexão. O "Meu perfil" do drawer leva para ela, e a edição local segue em Configurações › Perfil.
+- **Regras da conta:** o espelho sai ao começar uma sessão; um `/me` sem cartão só mantém o guardado da mesma conta; leituras em voo são descartadas ao conectar e desconectar. `alvanista_open_site` só abre `edit` e `apps`.
+- **Adaptações da página:** sem o aviso de armazenamento inseguro, sem bordas nos cards, sem negrito fora dos títulos e sem sombra de texto, conforme o padrão atual.
+- **Ajustes de interface:** explicação curta do integer scaling; botões de predefinição do jogo com o fundo dos seletores de core e sem cor na borda; título "Tela" na primeira linha de Configurações › Opções.
+- **Teste de migração:** `crates/db/tests/migration_alvanista.rs` leva um banco de antes da 19 até a 19 sem perder dados.
+- **Licenças:** `scripts/licenses-summary.mjs` passou a rodar no Windows. A autorização do símbolo do Alvanista está pendente por escrito (`THIRD_PARTY_NOTICES.md`).

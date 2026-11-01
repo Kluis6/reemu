@@ -14,6 +14,25 @@ impl SaveStateRepo {
     pub fn new(db: Db) -> Self {
         Self { db }
     }
+
+    /// Os save states mais recentes de todos os jogos que têm miniatura, do
+    /// mais novo para o mais antigo ("Seus momentos", no perfil). Estado cuja
+    /// ROM saiu da biblioteca fica de fora já aqui, para não gastar o `LIMIT`.
+    pub async fn recent_with_thumbnail(
+        &self,
+        limit: u32,
+    ) -> Result<Vec<SaveStateMetadata>, RepoError> {
+        let rows = sqlx::query(&format!(
+            "{STATE_COLS} WHERE thumbnail_path IS NOT NULL \
+             AND EXISTS (SELECT 1 FROM roms r WHERE r.id = save_states.rom_id) \
+             ORDER BY created_at DESC, id LIMIT ?1"
+        ))
+        .bind(limit as i64)
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
+        rows.iter().map(row_to_state).collect()
+    }
 }
 
 const STATE_COLS: &str = "SELECT id, rom_id, core_id, slot, file_path, thumbnail_path, \

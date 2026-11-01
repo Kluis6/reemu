@@ -165,3 +165,54 @@ async fn save_ram_is_one_per_rom_core_and_upserts() {
         "/saves/rom1-vba.srm"
     );
 }
+
+#[tokio::test]
+async fn recent_with_thumbnail_orders_newest_first_and_skips_missing_thumbnails() {
+    let db = mem_db().await;
+    seed_rom(&db, "rom1", "nes").await;
+    seed_rom(&db, "rom2", "snes").await;
+    let repo = SaveStateRepo::new(db);
+
+    repo.record_state(&state("a", "rom1", "mesen", Some(0), 100))
+        .await
+        .unwrap();
+    // o mais novo de todos, mas sem miniatura: fica de fora
+    let mut sem_thumb = state("b", "rom2", "snes9x", Some(0), 300);
+    sem_thumb.thumbnail_path = None;
+    repo.record_state(&sem_thumb).await.unwrap();
+    repo.record_state(&state("c", "rom2", "snes9x", Some(1), 200))
+        .await
+        .unwrap();
+
+    let list = repo.recent_with_thumbnail(2).await.unwrap();
+    assert_eq!(
+        list.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+        ["c", "a"]
+    );
+}
+
+/// Estado cuja ROM saiu da biblioteca fica fora da lista, no próprio SQL.
+#[tokio::test]
+async fn recent_with_thumbnail_skips_a_state_whose_rom_is_gone() {
+    let db = mem_db().await;
+    seed_rom(&db, "rom1", "nes").await;
+    let repo = SaveStateRepo::new(db.clone());
+    repo.record_state(&state("ok", "rom1", "mesen", Some(0), 100))
+        .await
+        .unwrap();
+    // O pool in-memory tem uma conexão só, então o PRAGMA vale para ela: com
+    // FK desligada o estado órfão entra (o cascade o apagaria).
+    sqlx::query("PRAGMA foreign_keys = OFF")
+        .execute(&db)
+        .await
+        .unwrap();
+    repo.record_state(&state("orfao", "removida", "mesen", Some(0), 200))
+        .await
+        .unwrap();
+
+    let list = repo.recent_with_thumbnail(10).await.unwrap();
+    assert_eq!(
+        list.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+        ["ok"]
+    );
+}

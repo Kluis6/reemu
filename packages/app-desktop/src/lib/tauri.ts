@@ -457,6 +457,19 @@ export const saveState = (romId: string, slot: number | null) =>
 export const listSaveStates = (romId: string) =>
   invoke<SaveState[]>('list_save_states', { romId })
 
+/** Save state recente de qualquer jogo (`list_recent_save_states`); a miniatura
+ *  carrega por `SaveStateThumb` com `stateId`. */
+export interface RecentSaveState {
+  id: string
+  romId: string
+  romTitle: string
+  slot: number | null
+  createdAt: number
+  playTimeAtSave: number | null
+}
+export const listRecentSaveStates = (limit: number) =>
+  invoke<RecentSaveState[]>('list_recent_save_states', { limit })
+
 /** Cheat por código de um jogo (`commands/cheats.rs`, doc 17). */
 export type { Cheat }
 export const listCheats = (romId: string) => invoke<Cheat[]>('list_cheats', { romId })
@@ -486,6 +499,77 @@ export async function saveThumbnailUrl(stateId: string): Promise<string | null> 
   const buf = await invoke<ArrayBuffer>('read_save_thumbnail', { stateId })
   if (buf.byteLength === 0) return null
   return URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
+}
+
+// --- Entrar com Alvanista ----------------------------------------------
+
+/** O cartão do perfil, como o servidor o manda: todo campo é opcional. */
+export interface AlvanistaCard {
+  /** O ano em que a conta começou (2010), não um instante Unix. */
+  member_since?: number
+  identity?: {
+    location?: string
+    level?: number
+    hero_position_x?: number
+    hero_position_y?: number
+    tier?: { slug: string; rank: number; name?: Record<string, string> }
+  }
+  reino_title_text?: Record<string, string>
+  palette?: { base: string; mid: string; accent: string; source: string }
+  proofs?: {
+    collection?: { games: number; platforms?: number }
+    trophies?: { count: number; networks: string[] }
+  }
+  ledger?: { hours?: number; finished?: number; checkins?: number; gamers?: number }
+  badges?: { count: number; recent: { name: string; icon_url: string; names?: Record<string, string> }[] }
+  playing_now?: { title: string; cover_url?: string }
+  partial?: string[]
+  computed_at?: string
+}
+
+/** Estado da conexão com o Alvanista. Nunca leva token. */
+export interface AlvanistaStatus {
+  connected: boolean
+  username: string | null
+  avatar_url: string | null
+  /** Capa do perfil: o banner do drawer de perfil. */
+  hero_url: string | null
+  bio: string | null
+  profile_url: string | null
+  /** Mostrando o último perfil guardado: o Alvanista não respondeu. */
+  offline: boolean
+  /** A conexão acabou (revogada no site): voltar ao perfil local. */
+  ended: boolean
+  /** O cartão do perfil que o `/me` mandou (ou o último guardado). */
+  card: AlvanistaCard | null
+  /** Quando o perfil foi lido do Alvanista (segundos Unix). */
+  fetched_at: number | null
+  /** Quando esta conexão começou (segundos Unix); null em sessões antigas. */
+  connected_at: number | null
+  /** O rótulo deste aparelho no Alvanista, quando conectado. */
+  device_label: string | null
+}
+
+/** Confirma com o Alvanista (rede, até ~15 s) e renova o espelho. */
+export const alvanistaStatus = () => invoke<AlvanistaStatus>('alvanista_status')
+/** Só o que está no aparelho, sem rede: para a tela abrir na hora. */
+export const alvanistaCachedStatus = () => invoke<AlvanistaStatus>('alvanista_cached_status')
+/** Abre o navegador e espera a aprovação (até 5 minutos). `lang` é o idioma da
+ *  página que o navegador mostra no fim. Rejeita com um código curto: `cancelled`,
+ *  `denied`, `timeout`, `offline`, `keyring` ou `failed`. */
+export const alvanistaConnect = (lang: string = i18n.language) =>
+  invoke<AlvanistaStatus>('alvanista_connect', { lang })
+export const alvanistaCancel = () => invoke<void>('alvanista_cancel')
+export const alvanistaDisconnect = () => invoke<void>('alvanista_disconnect')
+/** Abre o perfil do Alvanista no navegador do sistema. */
+export const alvanistaOpenProfile = () => invoke<void>('alvanista_open_profile')
+/** Abre "editar perfil" ou "apps conectados" no site do Alvanista. */
+export const alvanistaOpenSite = (page: 'edit' | 'apps') => invoke<void>('alvanista_open_site', { page })
+/** Resultado da renovação que o app faz sozinho ao abrir (evento do Rust). */
+export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<AlvanistaStatus>('alvanista-status', (e) => cb(e.payload))
 }
 
 // --- perfil local (um por instalação) ----------------------------------

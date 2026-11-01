@@ -16,7 +16,13 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const run = (cmd, args, cwd = root) =>
-  execFileSync(cmd, args, { cwd, encoding: "utf8", maxBuffer: 256 << 20 });
+  // No Windows o `pnpm` é um `.cmd`, que só roda via shell.
+  execFileSync(cmd, args, {
+    cwd,
+    encoding: "utf8",
+    maxBuffer: 256 << 20,
+    shell: process.platform === "win32",
+  });
 
 // Executáveis distribuídos: o app (apps/desktop/src-tauri) e o core-host.
 const BINARIES = ["reemu-desktop", "core-host-desktop"];

@@ -214,3 +214,139 @@ pub async fn delete_save_state(state: State<'_, AppState>, state_id: String) -> 
         .await
         .map_err(|e| e.to_string())
 }
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentSaveStateDto {
+    pub id: String,
+    pub rom_id: String,
+    pub rom_title: String,
+    pub slot: Option<u32>,
+    pub created_at: i64,
+    pub play_time_at_save: Option<u64>,
+}
+
+/// Os save states mais recentes com miniatura, de todos os jogos. Estado cuja
+/// ROM saiu da biblioteca fica de fora (no SQL), e o de miniatura que sumiu do
+/// disco também (aqui). A miniatura carrega por `read_save_thumbnail`.
+#[tauri::command]
+pub async fn list_recent_save_states(
+    state: State<'_, AppState>,
+    limit: u32,
+) -> Result<Vec<RecentSaveStateDto>, String> {
+    let pool = pool(&state)?;
+    recent_states_with_titles(
+        &db::SaveStateRepo::new(pool.clone()),
+        &db::RomsRepo::new(pool),
+        limit,
+    )
+    .await
+}
+
+/// Junta cada estado recente ao título da sua ROM. Pula o estado cuja
+/// miniatura não está mais no disco (seria um quadro vazio na fileira).
+async fn recent_states_with_titles(
+    states: &db::SaveStateRepo,
+    roms: &db::RomsRepo,
+    limit: u32,
+) -> Result<Vec<RecentSaveStateDto>, String> {
+    use domain::library::RomRepository;
+    let recent = states
+        .recent_with_thumbnail(limit.clamp(1, 24))
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut out = Vec::with_capacity(recent.len());
+    for m in recent {
+        let thumbnail_on_disk = m
+            .thumbnail_path
+            .as_deref()
+            .is_some_and(|p| std::path::Path::new(p).exists());
+        if !thumbnail_on_disk {
+            continue;
+        }
+        // O SQL já tira o estado de ROM ausente; este `continue` cobre a ROM
+        // removida entre a lista e esta leitura.
+        let Some(rom) = roms.get(&m.rom_id).await.map_err(|e| e.to_string())? else {
+            continue;
+        };
+        out.push(RecentSaveStateDto {
+            rom_title: rom_title(&rom),
+            id: m.id,
+            rom_id: m.rom_id,
+            slot: m.slot,
+            created_at: m.created_at,
+            play_time_at_save: m.play_time_at_save,
+        });
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use domain::library::{Rom, RomRepository};
+    use domain::save_state::{SaveStateMetadata, SaveStateRepository};
+
+    fn meta(
+        id: &str,
+        rom_id: &str,
+        created_at: i64,
+        thumbnail: &std::path::Path,
+    ) -> SaveStateMetadata {
+        SaveStateMetadata {
+            id: id.into(),
+            rom_id: rom_id.into(),
+            core_id: "core".into(),
+            slot: Some(0),
+            file_path: format!("/saves/{id}.state"),
+            thumbnail_path: Some(thumbnail.to_string_lossy().into_owned()),
+            created_at,
+            play_time_at_save: None,
+        }
+    }
+
+    /// Miniatura apagada do disco: o estado some da lista e o resto volta
+    /// com o título da ROM.
+    #[tokio::test]
+    async fn recent_states_skip_a_state_whose_thumbnail_file_is_gone() {
+        let dir = std::env::temp_dir().join(format!("reemu-recent-thumbs-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let present = dir.join("ok.png");
+        std::fs::write(&present, b"png").unwrap();
+        let missing = dir.join("sumiu.png");
+        let _ = std::fs::remove_file(&missing);
+
+        let pool = db::connect_in_memory().await.unwrap();
+        let roms = db::RomsRepo::new(pool.clone());
+        let states = db::SaveStateRepo::new(pool);
+        roms.add(&Rom {
+            id: "vivo".into(),
+            file_path: "/roms/Super Game.zip".into(),
+            crc32: "C".into(),
+            md5: "M".into(),
+            system_id: "nes".into(),
+            added_at: 0,
+            last_played_at: None,
+            is_favorite: false,
+            user_title: None,
+        })
+        .await
+        .unwrap();
+        states
+            .record_state(&meta("ok", "vivo", 100, &present))
+            .await
+            .unwrap();
+        states
+            .record_state(&meta("sumiu", "vivo", 200, &missing))
+            .await
+            .unwrap();
+
+        let out = recent_states_with_titles(&states, &roms, 10).await.unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            out.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+            ["ok"]
+        );
+        assert_eq!(out[0].rom_title, "Super Game");
+    }
+}

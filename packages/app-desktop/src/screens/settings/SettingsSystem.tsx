@@ -264,7 +264,7 @@ export function SettingsSystem({
     <div className={s.root}>
       {section === "opcoes" && (
         <div className={s.cards}>
-          <BlockGroup>
+          <BlockGroup title={t("system.screen")}>
             <SelectBlock
               label={t("language.title")}
               description={t("language.description")}
