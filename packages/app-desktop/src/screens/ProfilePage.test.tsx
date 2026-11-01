@@ -466,53 +466,6 @@ describe('ProfilePage', () => {
       await mount()
       expect(section('profile-alvanista')).toBeNull()
       expect(section('profile-alvanista-invite')).toBeNull()
-      expect(section('profile-connection')).toBeTruthy()
-    })
-
-    it('connection card: device label, connected since, keychain, Gerenciar apps opens apps, Desconectar returns to the local profile without reload', async () => {
-      connect()
-      await mount()
-      const c = section('profile-connection')!
-      expect(c.textContent).toContain('toy')
-      expect(c.textContent).toContain('alvanista.com/u/toy')
-      expect(c.textContent).toContain('ReEmu (Windows)')
-      expect(c.textContent).toContain('conectado desde')
-      expect(c.textContent).toContain('guardada no chaveiro do sistema')
-      const back = section('profile-connection-back')!
-      expect(back.textContent).toContain('Local')
-      await act(async () => byText('Gerenciar apps conectados no Alvanista')!.click())
-      expect(api.alvanistaOpenSite).toHaveBeenCalledWith('apps')
-      // depois de desconectar, o estado guardado já é o desconectado
-      api.alvanistaCachedStatus.mockResolvedValue(OFF)
-      api.alvanistaStatus.mockResolvedValue(OFF)
-      await act(async () => byText('Desconectar')!.click())
-      await settle()
-      expect(api.alvanistaDisconnect).toHaveBeenCalledTimes(1)
-      expect(section('profile-connection')).toBeNull()
-      expect(section('profile-alvanista')).toBeNull()
-      expect(section('profile-chips')).toBeNull()
-      expect(section('profile-alvanista-invite')).toBeTruthy()
-      expect(host.textContent).toContain('bio local')
-      expect(useToastStore.getState().queue.map((x) => x.message)).toContain(
-        'Desconectado do Alvanista. Seu perfil local voltou.',
-      )
-    })
-
-    it('disconnect drops the stored card at once, even before the cached state is re-read', async () => {
-      connect()
-      await mount()
-      // a releitura do estado guardado nunca chega: o topo não pode esperar por ela
-      api.alvanistaCachedStatus.mockReturnValue(new Promise(() => {}))
-      await act(async () => byText('Desconectar')!.click())
-      await settle()
-      expect(section('profile-alvanista')).toBeNull()
-      expect(section('profile-connection')).toBeNull()
-      expect(section('profile-alvanista-invite')).toBeTruthy()
-      const hero = section('profile-hero')!
-      expect(hero.textContent).toContain('Local')
-      expect(hero.textContent).not.toContain('toy')
-      expect(byText('Ver no Alvanista')).toBeUndefined()
-      expect(byText('Editar no Alvanista')).toBeUndefined()
     })
 
     it('member_since is a year: shown as is, hidden when it is not a plausible year', async () => {
@@ -545,20 +498,11 @@ describe('ProfilePage', () => {
     })
 
 
-    it('connected_at null hides connected since', async () => {
-      connect({ connected_at: null })
-      await mount()
-      const c = section('profile-connection')!
-      expect(c.textContent).not.toContain('conectado desde')
-      expect(c.textContent).toContain('ReEmu (Windows)')
-    })
-
-    it('local state shows the invitation with the Entrar com Alvanista button and no connection card', async () => {
+    it('local state shows the invitation with the Entrar com Alvanista button', async () => {
       await mount()
       const inv = section('profile-alvanista-invite')!
       expect(inv).toBeTruthy()
       expect(inv.textContent).toContain('Entrar com Alvanista')
-      expect(section('profile-connection')).toBeNull()
       expect(section('profile-alvanista')).toBeNull()
       expect(api.alvanistaConnect).not.toHaveBeenCalled()
     })
@@ -574,7 +518,6 @@ describe('ProfilePage', () => {
       await settle()
       expect(api.alvanistaConnect).toHaveBeenCalledTimes(1)
       expect(section('profile-alvanista')).toBeTruthy()
-      expect(section('profile-connection')).toBeTruthy()
     })
 
     it('a failed connect shows the outcome in the invitation', async () => {

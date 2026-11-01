@@ -5,24 +5,22 @@ import {
   OverlayDrawer,
   Title3,
   makeStyles,
-  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
 import {
-  ArrowExitRegular,
   ChevronRightRegular,
-  PeopleRegular,
-  PersonRegular,
-  TrophyRegular,
 } from "@fluentui/react-icons";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { quitApp, type Profile } from "../lib/tauri";
-import { useModalButtonStyles } from "../styles/buttons";
+import symbol from "../assets/alvanista-symbol.svg";
+import { ALVANISTA_CACHED_KEY } from "../hooks/useEffectiveProfile";
+import { alvanistaCachedStatus, quitApp, type Profile } from "../lib/tauri";
+import { BadgeIcon } from "../screens/profile/AlvanistaCardBlock";
+import { isHexColor, pickText, readableInk } from "../screens/profile/profileData";
 import { floatingDrawer } from "../styles/xbox";
 import { ProfileAvatar } from "./ProfileAvatar";
 
-const BANNER_H = 148;
 // tamanho da escala do `Avatar` do Fluent (20…128); fora dela ele cai no padrão
 const AVATAR = 120;
 
@@ -39,33 +37,38 @@ const useStyles = makeStyles({
     flexDirection: "column",
     padding: 0,
   },
-  // Banner do perfil: a imagem da rede social quando houver; sem ela, as
-  // cores do tema (o destaque descendo pra cor de marca) — pedido do
-  // usuário, 2026-10-29.
+  // Como o guia de perfil do Xbox: a capa ocupa todo o topo, atrás da
+  // identidade. Sem capa, as cores do tema (o destaque descendo para a cor de
+  // marca).
   banner: {
     position: "relative",
-    height: `${BANNER_H}px`,
     flexShrink: 0,
     backgroundImage: `linear-gradient(160deg, var(--reemuBrandAccent) 0%, ${tokens.colorBrandBackground} 100%)`,
     backgroundSize: "cover",
     backgroundPosition: "center",
   },
-  // véu embaixo do banner pra o avatar se separar de qualquer imagem
+  // véu para o texto se separar de qualquer imagem
   bannerShade: {
     position: "absolute",
     inset: 0,
-    backgroundImage: `linear-gradient(180deg, transparent 40%, ${tokens.colorNeutralBackground2} 100%)`,
+    backgroundImage: `linear-gradient(180deg, transparent 0%, ${tokens.colorNeutralBackground2} 75%)`,
   },
+  // linha de cima: o nível à esquerda e a marca da conta à direita
+  top: {
+    position: "relative",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: "24px",
+    padding: "16px 22px 0",
+  },
+  symbol: { width: "24px", height: "24px", marginLeft: "auto" },
   identity: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
     rowGap: "4px",
-    // o avatar sobe metade sobre o banner
-    marginTop: `-${AVATAR / 2}px`,
-    paddingLeft: "24px",
-    paddingRight: "24px",
-    paddingBottom: "20px",
+    padding: "8px 24px 16px",
     position: "relative",
     textAlign: "center",
   },
@@ -76,27 +79,58 @@ const useStyles = makeStyles({
   },
   name: { margin: 0, overflowWrap: "anywhere" },
   bio: { color: tokens.colorNeutralForeground3, overflowWrap: "anywhere" },
+  nameRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "8px",
+  },
+  chip: {
+    padding: "1px 8px",
+    borderRadius: tokens.borderRadiusCircular,
+    fontSize: "12px",
+    backgroundColor: tokens.colorNeutralBackground3,
+    color: tokens.colorNeutralForeground1,
+  },
+  reino: { color: tokens.colorNeutralForeground2 },
+  // fileira das badges recentes do Alvanista
+  badges: {
+    position: "relative",
+    display: "flex",
+    justifyContent: "center",
+    columnGap: "16px",
+    margin: "0 16px",
+    padding: "12px",
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+    // nenhuma imagem carregou: sem a faixa vazia
+    ":empty": { display: "none" },
+  },
+  badge: { width: "48px", height: "48px", objectFit: "contain" },
+  // Lista só de texto, sem caixa em repouso, como no Xbox.
   list: {
     display: "flex",
     flexDirection: "column",
-    rowGap: "8px",
-    padding: "16px 22px 22px",
+    rowGap: "4px",
+    padding: "12px 10px 22px",
   },
   item: {
     justifyContent: "flex-start",
     width: "100%",
     maxWidth: "none",
-    columnGap: "12px",
+    minHeight: "48px",
+    fontWeight: tokens.fontWeightRegular,
   },
   // seta à direita do item que abre um submenu (Status), como no Xbox
   chevron: { marginLeft: "auto", fontSize: "16px" },
 });
 
 /**
- * Perfil num drawer à esquerda, no lugar do menu suspenso do avatar do rail
- * (pedido do usuário, 2026-10-29, print do guia de perfil do Xbox): banner,
- * avatar grande, nome e bio no topo; as ações embaixo. Rede e status ainda não
- * têm tela — desabilitados, como no menu de antes.
+ * Perfil num drawer à esquerda, como o guia de perfil do Xbox: a capa atrás do
+ * avatar, do nome e da bio, as badges recentes numa fileira e a lista de ações
+ * só de texto. Nível, plano, título e badges vêm do cartão do Alvanista e somem
+ * sem ele. Rede e status ainda não têm tela: ficam desabilitados.
  */
 export function ProfileDrawer({
   open,
@@ -111,15 +145,32 @@ export function ProfileDrawer({
   /** Imagem do banner (a capa do Alvanista). Sem ela, as cores do tema. */
   bannerUrl?: string | null;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const s = useStyles();
-  const btn = useModalButtonStyles();
   const navigate = useNavigate();
   const go = (to: string) => {
     onOpenChange(false);
     navigate(to);
   };
-  const item = mergeClasses(s.item, btn.secondary);
+  const alva = useQuery({
+    queryKey: ALVANISTA_CACHED_KEY,
+    queryFn: alvanistaCachedStatus,
+    retry: false,
+    enabled: open,
+  });
+  const connected = !!alva.data?.connected;
+  const card = connected ? alva.data?.card : null;
+  const level = card?.identity?.level;
+  const tier = pickText(card?.identity?.tier?.name, i18n.language);
+  const reino = pickText(card?.reino_title_text, i18n.language);
+  const mid = card?.palette?.mid;
+  const tint = isHexColor(mid) ? mid : null;
+  const badges = (card?.badges?.recent ?? []).slice(0, 5);
+  const item = (to: string, label: string) => (
+    <Button size="large" appearance="subtle" className={s.item} onClick={() => go(to)}>
+      {label}
+    </Button>
+  );
 
   return (
     <OverlayDrawer
@@ -134,48 +185,50 @@ export function ProfileDrawer({
         <div
           className={s.banner}
           style={bannerUrl ? { backgroundImage: `url(${JSON.stringify(bannerUrl)})` } : undefined}
-          aria-hidden
         >
-          <div className={s.bannerShade} />
-        </div>
-        <div className={s.identity}>
-          <ProfileAvatar profile={profile} size={AVATAR} className={s.avatar} />
-          <Title3 as="h2" className={s.name}>
-            {profile.name}
-          </Title3>
-          {profile.bio && <Caption1 className={s.bio}>{profile.bio}</Caption1>}
+          <div className={s.bannerShade} aria-hidden />
+          <div className={s.top}>
+            {level != null && <span className={s.chip}>{t("profilePage.chipLevel", { level })}</span>}
+            {connected && <img className={s.symbol} src={symbol} alt="" aria-hidden draggable={false} />}
+          </div>
+          <div className={s.identity}>
+            <ProfileAvatar profile={profile} size={AVATAR} className={s.avatar} />
+            <div className={s.nameRow}>
+              <Title3 as="h2" className={s.name}>
+                {profile.name}
+              </Title3>
+              {tier && (
+                <span
+                  className={s.chip}
+                  style={tint ? { backgroundColor: tint, color: readableInk(tint) } : undefined}
+                >
+                  {tier}
+                </span>
+              )}
+            </div>
+            {reino && <Caption1 className={s.reino}>{reino}</Caption1>}
+            {profile.bio && <Caption1 className={s.bio}>{profile.bio}</Caption1>}
+          </div>
+          {badges.length > 0 && (
+            <div className={s.badges} data-testid="drawer-badges">
+              {badges.map((b, i) => (
+                <BadgeIcon key={`${b.name}-${i}`} badge={b} className={s.badge} />
+              ))}
+            </div>
+          )}
         </div>
 
         <div className={s.list}>
-          <Button
-            size="large"
-            className={item}
-            icon={<PersonRegular />}
-            onClick={() => go("/perfil")}
-          >
-            {t("shell.myProfile")}
-          </Button>
-          <Button
-            size="large"
-            className={item}
-            icon={<TrophyRegular />}
-            onClick={() => go("/conquistas")}
-          >
-            {t("nav.achievements")}
-          </Button>
-          <Button size="large" className={item} icon={<PeopleRegular />} disabled>
+          {item("/perfil", t("shell.myProfile"))}
+          {item("/conquistas", t("nav.achievements"))}
+          <Button size="large" appearance="subtle" className={s.item} disabled>
             {t("nav.network")}
           </Button>
-          <Button size="large" className={item} disabled>
+          <Button size="large" appearance="subtle" className={s.item} disabled>
             {t("shell.status")}
             <ChevronRightRegular className={s.chevron} aria-hidden />
           </Button>
-          <Button
-            size="large"
-            className={item}
-            icon={<ArrowExitRegular />}
-            onClick={() => void quitApp()}
-          >
+          <Button size="large" appearance="subtle" className={s.item} onClick={() => void quitApp()}>
             {t("shell.quit")}
           </Button>
         </div>

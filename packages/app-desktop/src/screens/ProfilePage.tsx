@@ -13,7 +13,6 @@ import {
   listRoms,
 } from '../lib/tauri'
 import { AlvanistaCardBlock, AlvanistaInvite } from './profile/AlvanistaCardBlock'
-import { ConnectionCard } from './profile/ConnectionCard'
 import { MomentsRow } from './profile/MomentsRow'
 import { ProfileHero } from './profile/ProfileHero'
 import { hasCardContent, mostPlayed, recentlyPlayed } from './profile/profileData'
@@ -35,7 +34,7 @@ const useStyles = makeStyles({
 /**
  * Meu perfil (`/perfil`), tela cheia na área de conteúdo da casca: o topo,
  * "No ReEmu", "Jogados recentemente", "Mais jogados no ReEmu" e "Seus
- * momentos", "No Alvanista" (ou o convite) e "Conexão com o Alvanista". Só lê a
+ * momentos" e "No Alvanista" (ou o convite). Só lê a
  * biblioteca, os saves, o perfil local e o status do Alvanista (guardado e completo); sem sessão não toca no chaveiro nem na rede.
  */
 export function ProfilePage() {
@@ -111,7 +110,6 @@ export function ProfilePage() {
         </div>
       )}
       <MomentsRow states={saves.data ?? []} />
-      {connected && status && <ConnectionCard status={status} />}
     </div>
   )
 }

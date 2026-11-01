@@ -590,6 +590,35 @@ no `emu-session`, ver `docs/historico.md`).
       perfil. A primeira a seguir é "Minha rede", hoje desativada no drawer. As
       telas e os itens ainda não foram definidos, e a integração segue pendente
       do item acima e do PR #1.
+- [ ] `todo` — **Novidades do Alvanista no hero da página inicial** (pedido do dono
+      do projeto, 2026-10-31). Hoje o `HeroCarousel` só mostra jogos da biblioteca.
+      - **O que existe (conferido em 2026-10-31):** o ReEmu usa `/me`, com escopo
+        `profile:read`. O sitemap do site lista artigos, reviews, comunidades e
+        trading. A API GameKave 0.1.0 tem `social/posts`, `social/communities` e
+        imagens de jogos (`hero`, `logo`, `background`). Nenhuma das duas mostra
+        um feed de novidades ou de promoções; a API do parceiro não publica
+        documentação (`/api-docs` responde 404).
+      - **Não fazer:** extrair conteúdo do HTML do site. Depende de uma fonte
+        combinada com a Tellurian.
+      - **Etapa 1, sem depender da Tellurian:** slides além de jogo no
+        `HeroCarousel`. Sem conexão, convite para entrar no Alvanista. Conectado,
+        "Jogando agora" do cartão, com a regra de 30 minutos, e novas badges.
+      - **Etapa 2, combinar com a Tellurian:** endpoint público, sem exigir login,
+        ex. `GET /api/partner/v1/home?lang=pt-BR`. Cada item: `id`, `kind` (`article`,
+        `review`), `title`, `summary`, `image_url`,
+        `url`, `starts_at`, `ends_at`, `sponsored`. Perguntar: quem faz a curadoria,
+        limite de chamadas, direito de uso das imagens,
+        e se o conteúdo tem filtro de idade.
+      - **Etapa 3, no ReEmu:** buscar pelo Rust ao abrir o app, no máximo a cada
+        algumas horas, com cópia no SQLite. Sem internet, só os slides locais. A
+        tela nunca escolhe a URL: abrir só o site do Alvanista, no navegador do
+        sistema (`is_site_url`), e parceiros somente com lista combinada.
+      - **Conteúdo:** só artigos e reviews. Promoção paga não entra por enquanto
+        (decisão do dono do projeto, 2026-10-31).
+      - **Regras:** no máximo 2 novidades entre os slides, depois dos jogos; item
+        vencido não aparece; opção em
+        Configurações para desligar; nada durante o jogo; textos fixos em pt-BR, en
+        e es; navegação por controle igual à dos outros slides.
 - [ ] `todo` — Avaliar no futuro: **ports nativos (recomp/decomp)** como
       launcher externo (pedido do dono do projeto, 2026-10-17). Pesquisa e
       licenças conferidas no GitHub:

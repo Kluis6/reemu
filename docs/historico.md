@@ -3340,5 +3340,6 @@ Infra:
 - **Regras da conta:** o espelho sai ao começar uma sessão; um `/me` sem cartão só mantém o guardado da mesma conta; leituras em voo são descartadas ao conectar e desconectar. `alvanista_open_site` só abre `edit` e `apps`.
 - **Adaptações da página:** sem o aviso de armazenamento inseguro, sem bordas nos cards, sem negrito fora dos títulos e sem sombra de texto, conforme o padrão atual.
 - **Ajustes de interface:** explicação curta do integer scaling; botões de predefinição do jogo com o fundo dos seletores de core e sem cor na borda; título "Tela" na primeira linha de Configurações › Opções.
+- **Depois da aprovação:** drawer de perfil no modelo do guia do Xbox (capa no topo, badges, lista só de texto) e remoção do cartão de conexão do Meu perfil; desconectar fica em Configurações › Perfil.
 - **Teste de migração:** `crates/db/tests/migration_alvanista.rs` leva um banco de antes da 19 até a 19 sem perder dados.
 - **Licenças:** `scripts/licenses-summary.mjs` passou a rodar no Windows. A autorização do símbolo do Alvanista está pendente por escrito (`THIRD_PARTY_NOTICES.md`).

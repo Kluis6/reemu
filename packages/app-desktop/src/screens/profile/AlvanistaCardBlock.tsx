@@ -64,7 +64,7 @@ const useStyles = makeStyles({
 })
 
 /** Ícone de badge; se a imagem não carrega, some em vez de mostrar o ícone quebrado. */
-function BadgeIcon({ badge, className }: { badge: NonNullable<AlvanistaCard['badges']>['recent'][number]; className: string }) {
+export function BadgeIcon({ badge, className }: { badge: NonNullable<AlvanistaCard['badges']>['recent'][number]; className: string }) {
   const { i18n } = useTranslation()
   const [broken, setBroken] = useState(false)
   if (broken) return null
