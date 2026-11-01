@@ -17,7 +17,8 @@ import symbol from "../assets/alvanista-symbol.svg";
 import { ALVANISTA_CACHED_KEY } from "../hooks/useEffectiveProfile";
 import { alvanistaCachedStatus, quitApp, type Profile } from "../lib/tauri";
 import { BadgeIcon } from "../screens/profile/AlvanistaCardBlock";
-import { isHexColor, pickText, readableInk } from "../screens/profile/profileData";
+import { tierAccent } from "../lib/tierRing";
+import { pickText, readableInk } from "../screens/profile/profileData";
 import { floatingDrawer } from "../styles/xbox";
 import { ProfileAvatar } from "./ProfileAvatar";
 
@@ -75,11 +76,13 @@ const useStyles = makeStyles({
   avatar: {
     borderRadius: tokens.borderRadiusCircular,
     boxShadow: `0 0 0 4px ${tokens.colorNeutralBackground2}`,
-    marginBottom: "8px",
   },
   name: { margin: 0, overflowWrap: "anywhere" },
   bio: { color: tokens.colorNeutralForeground3, overflowWrap: "anywhere" },
   nameRow: {
+    // o respiro abaixo do avatar (fora dele: com o anel do plano, margem no
+    // avatar entraria no invólucro do anel)
+    marginTop: "8px",
     display: "flex",
     flexWrap: "wrap",
     alignItems: "center",
@@ -163,8 +166,8 @@ export function ProfileDrawer({
   const level = card?.identity?.level;
   const tier = pickText(card?.identity?.tier?.name, i18n.language);
   const reino = pickText(card?.reino_title_text, i18n.language);
-  const mid = card?.palette?.mid;
-  const tint = isHexColor(mid) ? mid : null;
+  const tierColors = card?.identity?.tier?.colors;
+  const tint = tierAccent(tierColors);
   const badges = (card?.badges?.recent ?? []).slice(0, 5);
   const item = (to: string, label: string) => (
     <Button size="large" appearance="subtle" className={s.item} onClick={() => go(to)}>
@@ -192,7 +195,7 @@ export function ProfileDrawer({
             {connected && <img className={s.symbol} src={symbol} alt="" aria-hidden draggable={false} />}
           </div>
           <div className={s.identity}>
-            <ProfileAvatar profile={profile} size={AVATAR} className={s.avatar} />
+            <ProfileAvatar profile={profile} size={AVATAR} className={s.avatar} tier={tierColors} />
             <div className={s.nameRow}>
               <Title3 as="h2" className={s.name}>
                 {profile.name}

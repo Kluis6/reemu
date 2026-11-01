@@ -69,6 +69,7 @@ export function ProfilePage() {
           bio: null,
           bannerUrl: null,
           source: 'local',
+          tierColors: null,
         }
       : undefined)
 

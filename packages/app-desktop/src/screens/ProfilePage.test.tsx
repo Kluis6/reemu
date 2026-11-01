@@ -133,6 +133,7 @@ describe('ProfilePage', () => {
     expect(host.textContent).toContain('Local')
     expect(host.textContent).toContain('bio local')
     expect(section('profile-chips')).toBeNull()
+    expect(host.querySelector('[data-testid="tier-ring"]')).toBeNull()
     expect(byText('Ver no Alvanista')).toBeUndefined()
     await act(async () => byText('Editar perfil')!.click())
     await settle()
@@ -348,7 +349,16 @@ describe('ProfilePage', () => {
       identity: {
         location: 'Newcastle Upon Tyne',
         level: 19,
-        tier: { slug: 'collector', rank: 3, name: { pt: 'Colecionador', en: 'Collector' } },
+        tier: {
+          slug: 'collector',
+          rank: 3,
+          name: { pt: 'Colecionador', en: 'Collector' },
+          colors: {
+            ring: { kind: 'linear', angle: 140, stops: ['#d1fae5', '#34d399', '#059669'] },
+            glow: { color: '#34d399', alpha: 0.55 },
+            accent: '#22d3ee',
+          },
+        },
       },
       reino_title_text: { pt: 'Conde de Lola', en: 'Count of Lola' },
       palette: { base: '#111111', mid: '#e0b84a', accent: '#ffffff', source: 'cover' },
@@ -518,25 +528,37 @@ describe('ProfilePage', () => {
       expect(section('profile-alvanista-invite')!.textContent).toContain('Você não autorizou o acesso')
     })
 
-    it('tier chip ink comes from readableInk(palette.mid)', async () => {
+    it('tier chip takes the tier accent, not the cover palette', async () => {
       connect()
       await mount()
       const chip = host.querySelector('[data-chip="tier"]') as HTMLElement
       const probe = document.createElement('span')
-      probe.style.color = readableInk('#e0b84a')
+      probe.style.backgroundColor = '#22d3ee'
+      probe.style.color = readableInk('#22d3ee')
+      expect(chip.style.backgroundColor).toBe(probe.style.backgroundColor)
       expect(chip.style.color).toBe(probe.style.color)
-      expect(chip.style.color).not.toBe('')
       const level = host.querySelector('[data-chip="level"]') as HTMLElement
       expect(level.style.color).toBe('')
     })
 
-    it('a palette mid that is not #rrggbb leaves the tier chip in the default style', async () => {
-      connect({}, { ...FULL, palette: { base: '#111111', mid: 'gold', accent: '#ffffff', source: 'hero' } })
+    it('without tier colors the tier chip keeps the default style, whatever the palette', async () => {
+      connect({}, { ...FULL, identity: { ...FULL.identity, tier: { slug: 'collector', rank: 2, name: { pt: 'Colecionador' } } } })
       await mount()
       const chip = host.querySelector('[data-chip="tier"]') as HTMLElement
       expect(chip.textContent).toBe('Colecionador')
       expect(chip.style.color).toBe('')
       expect(chip.style.backgroundColor).toBe('')
+      expect(section('profile-hero')!.querySelector('[data-testid="tier-ring"]')).toBeNull()
+    })
+
+    it('the hero avatar wears the tier ring from the card, pulsing', async () => {
+      connect()
+      await mount()
+      const ring = section('profile-hero')!.querySelector('[data-testid="tier-ring"]') as HTMLElement
+      expect(ring).toBeTruthy()
+      expect(ring.hasAttribute('data-pulse')).toBe(true)
+      const layer = ring.querySelector('[data-tier-ring-layer]') as HTMLElement
+      expect(layer.getAttribute('style')).toContain('#34d399')
     })
 
     it('one platform reads in the singular', async () => {

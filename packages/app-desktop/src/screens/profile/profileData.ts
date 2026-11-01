@@ -42,11 +42,6 @@ export function pickText(map: Record<string, string> | undefined, lang: string):
   return Object.values(map).find((v) => !!v) ?? null
 }
 
-/** Cor `#rrggbb`: a única que o chip do plano aceita para se tingir. */
-export function isHexColor(v: string | undefined): v is string {
-  return !!v && /^#[0-9a-f]{6}$/i.test(v)
-}
-
 /** Tinta (preto ou branco) com o maior contraste sobre `bg` (`#rrggbb`). */
 export function readableInk(bg: string): '#000000' | '#ffffff' {
   return contrastRatio(bg, '#000000') >= contrastRatio(bg, '#ffffff') ? '#000000' : '#ffffff'
