@@ -652,6 +652,25 @@ no `emu-session`, ver `docs/historico.md`).
         adicional, com ScreenScraper e TheGamesDB como principais, comparar a
         cobertura com jogos retrô, guardar em cache local e nunca exigir login. Depois,
         ligar a biblioteca à coleção do Alvanista pelo ID em comum.
+- [ ] `todo` — **Predefinições reais dos cores** (pesquisa iniciada em 2026-11-01). Hoje
+      Desempenho, Normal e Qualidade não mudam nada.
+      - **Encontrado:** não achei um conjunto de presets pronto e confiável. A comunidade
+        traz relatos por máquina, e o Batocera define padrões por sistema, sem níveis. As
+        fontes de chaves e efeitos são os `libretro_core_options.h` e o docs.libretro.com.
+      - **Opções por cenário:** `docs/ai-context/21-opcoes-cores-por-cenario.md`.
+      - **Formato:** arquivo de dados por core, ex. `{ core, version, performance: {chave:
+        valor}, quality: {chave: valor} }`. Normal limpa as chaves do preset e volta ao
+        padrão do core. Personalizado é o ajuste manual de hoje.
+      - **Aplicação:** gravar nos valores do jogo, que já existem (`set_core_option` com
+        `rom_id`). Só aplicar chave que exista e valor que esteja em `choices`, porque as
+        opções mudam entre versões. Alterar um valor à mão marca Personalizado.
+      - **Limites a resolver:** as opções só aparecem depois de o core rodar uma vez, e
+        algumas só valem ao reiniciar o jogo.
+      - **Primeiros cores:** ppsspp, flycast, melonds, pcsx_rearmed, mednafen_psx_hw,
+        swanstation, mupen64plus_next e pcsx2. Core sem preset não mostra os três botões.
+      - **Antes de publicar um preset:** testar valores em jogos reais, com a versão do core
+        anotada. Opções de GPU seguem a regra de documentação oficial do `CLAUDE.md`.
+      - **Depois:** exceções por jogo e sugestão pelo hardware da máquina.
 - [ ] `todo` — Avaliar no futuro: **ports nativos (recomp/decomp)** como
       launcher externo (pedido do dono do projeto, 2026-10-17). Pesquisa e
       licenças conferidas no GitHub:

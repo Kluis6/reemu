@@ -5,7 +5,6 @@ import {
   Button,
   Spinner,
   Caption1,
-  Card,
   Dialog,
   DialogActions,
   DialogBody,
@@ -779,7 +778,7 @@ export function RomDetail() {
         onClose={() => setPanel(null)}
         title={panel ? t(`game.tabs.${panel}`) : ""}
       >
-        <div className={mergeClasses(s.panel, panel === "shader" && s.panelFill)}>
+        <div className={s.dialogPanel}>
           {panel === "states" && (
             <>
               {states.data?.length === 0 && (
@@ -829,12 +828,7 @@ export function RomDetail() {
                   Pacote de shaders, em cards), sem a prévia; "Herdar" no
                   topo tira a escolha deste jogo. Os ajustes do shader
                   escolhido (se ele tiver) ficam na coluna ao lado. */}
-              <div
-                className={mergeClasses(
-                  s.shaderCols,
-                  !(shaderAtScope && (shaderParams.data?.length ?? 0) > 0) && s.shaderColsSingle,
-                )}
-              >
+              <div className={s.shaderCols}>
                 <div className={s.shaderPicker}>
                   <ShaderPicker
                     info={shaderInfo.data}
@@ -857,16 +851,18 @@ export function RomDetail() {
                     </Button>
                   </div>
                 </div>
-                {shaderAtScope && (shaderParams.data?.length ?? 0) > 0 && (
-                  <Card className={s.shaderParams} appearance="filled-alternative">
+                <div className={s.shaderParams}>
+                  {shaderAtScope && (shaderParams.data?.length ?? 0) > 0 ? (
                     <ShaderParams
                       scope="rom"
                       romId={romId}
                       systemId={shaderSystemId}
                       reloadKey={shaderParamsKey}
                     />
-                  </Card>
-                )}
+                  ) : (
+                    <Caption1 className={s.hint}>{t("game.shader.noParams")}</Caption1>
+                  )}
+                </div>
               </div>
             </>
           )}

@@ -1422,9 +1422,16 @@ export const useDetailStyles = makeStyles({
   },
   field: { display: "flex", flexDirection: "column", rowGap: "4px" },
   // Aba Shader: escolha à esquerda, ajustes do shader escolhido à direita.
-  // Dialog de shaders: o painel ocupa a altura do dialog, e cada coluna rola por
-  // dentro em vez de rolar o dialog inteiro.
-  panelFill: { height: "100%", minHeight: 0, boxSizing: "border-box" },
+  // Conteúdo dos dialogs de tela cheia: sem card de fundo, na altura do dialog.
+  // Nos shaders cada coluna rola por dentro.
+  dialogPanel: {
+    display: "flex",
+    flexDirection: "column",
+    rowGap: "12px",
+    height: "100%",
+    minHeight: 0,
+    boxSizing: "border-box",
+  },
   shaderCols: {
     flexGrow: 1,
     minHeight: 0,
@@ -1433,8 +1440,6 @@ export const useDetailStyles = makeStyles({
     gridTemplateRows: "minmax(0, 1fr)",
     columnGap: "48px",
   },
-  // Sem ajustes para mostrar, a lista fica com a largura toda.
-  shaderColsSingle: { gridTemplateColumns: "minmax(0, 1fr)" },
   shaderParams: {
     minHeight: 0,
     overflowY: "auto",

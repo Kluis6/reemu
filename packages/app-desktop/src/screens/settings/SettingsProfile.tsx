@@ -1,12 +1,13 @@
 import {
-  Avatar,
   Badge,
+  Body1,
   Body1Strong,
   Button,
   Caption1,
   MessageBar,
   MessageBarBody,
   Spinner,
+  Title3,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
@@ -41,7 +42,36 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalS,
   },
   waiting: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM },
-  identity: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalL },
+  banner: {
+    position: 'relative',
+    height: '180px',
+    borderRadius: tokens.borderRadiusMedium,
+    overflow: 'hidden',
+    backgroundImage: `linear-gradient(160deg, var(--reemuBrandAccent) 0%, ${tokens.colorBrandBackground} 100%)`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  },
+  bannerShade: {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: 'linear-gradient(180deg, transparent 45%, rgba(0, 0, 0, 0.55) 100%)',
+  },
+  // O avatar sobe metade sobre a capa.
+  identity: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'flex-end',
+    gap: tokens.spacingHorizontalL,
+    marginTop: '-76px',
+    paddingLeft: tokens.spacingHorizontalXL,
+  },
+  avatar: {
+    flexShrink: 0,
+    borderRadius: tokens.borderRadiusCircular,
+    boxShadow: `0 0 0 4px ${tokens.colorNeutralBackground1}`,
+  },
+  name: { margin: 0, overflowWrap: 'anywhere' },
+  bio: { color: tokens.colorNeutralForeground2, overflowWrap: 'anywhere' },
   actions: { display: 'flex', flexWrap: 'wrap', gap: tokens.spacingHorizontalS },
 })
 
@@ -77,21 +107,25 @@ export function SettingsProfile() {
   if (status.connected) {
     return (
       <div className={s.root}>
+        {/* Capa do Alvanista; sem ela, as cores do tema, como no drawer de perfil. */}
+        <div
+          className={s.banner}
+          style={status.hero_url ? { backgroundImage: `url(${JSON.stringify(status.hero_url)})` } : undefined}
+          aria-hidden
+        >
+          <div className={s.bannerShade} />
+        </div>
         <div className={s.identity}>
-          {status.avatar_url ? (
-            <Avatar
-              size={96}
-              name={status.username ?? t('alvanista.unknownUser')}
-              image={{ src: status.avatar_url }}
-            />
-          ) : (
-            <ProfileAvatar
-              profile={{ name: status.username ?? t('alvanista.unknownUser'), avatar: 'preset:1' }}
-              size={96}
-            />
-          )}
+          <ProfileAvatar
+            profile={{ name: status.username ?? t('alvanista.unknownUser'), avatar: 'preset:1', avatarUrl: status.avatar_url }}
+            size={128}
+            className={s.avatar}
+          />
           <div className={s.block}>
-            <Body1Strong>{status.username ?? t('alvanista.unknownUser')}</Body1Strong>
+            <Title3 as="h2" className={s.name}>
+              {status.username ?? t('alvanista.unknownUser')}
+            </Title3>
+            {status.bio && <Body1 className={s.bio}>{status.bio}</Body1>}
             {status.offline && (
               <Badge appearance="tint" color="warning">
                 {t('alvanista.offlineBadge')}
