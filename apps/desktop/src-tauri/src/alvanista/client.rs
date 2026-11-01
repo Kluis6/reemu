@@ -611,6 +611,7 @@ mod tests {
 
     #[tokio::test]
     async fn transient_failures_keep_the_tokens() {
+        let _serial = SERIAL.lock().await;
         let (old, _new) = names();
         for (status, on_refresh) in [
             (503, false),
