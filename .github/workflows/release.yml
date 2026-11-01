@@ -29,6 +29,8 @@ jobs:
   build:
     name: Build (${{ matrix.os }})
     if: github.event_name != 'release'
+    # Espera a aprovação do dono do projeto, e só aqui há a chave de assinatura.
+    environment: release
     strategy:
       fail-fast: false
       matrix:
@@ -175,6 +177,7 @@ jobs:
   updater-manifest:
     name: Manifesto do auto-update (latest.json)
     if: github.event_name == 'release'
+    environment: release
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5

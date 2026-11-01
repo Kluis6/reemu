@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+# Código de pull request roda só com leitura e sem os segredos do projeto.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

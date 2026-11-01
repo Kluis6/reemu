@@ -3331,6 +3331,13 @@ Infra:
 - **Item 2, primeira metade:** mapa das travas de `session.rs` em `20-mapa-travas-session.md`, sem alterar código. O restante do item e o item 3 ficam parados até haver motivo.
 - **Patch widescreen 16:9:** novo nome da opção, com explicação de uma linha.
 
+## 2026-11-01 — Controle de colaboradores e de releases no GitHub
+
+- **Entrada na `main`:** regra `main protegida` com pull request, revisão do dono (`CODEOWNERS`), os 4 jobs do CI, conversas resolvidas e merge em squash. O administrador pode ignorá-la, para seguir enviando direto.
+- **Fork:** todo colaborador externo precisa de liberação para rodar o CI.
+- **Build:** tags `v*` só pelo administrador, e os jobs de `release.yml` esperam a aprovação no ambiente `release`, restrito à `main` e às tags `v*`.
+- **Segredos:** em conta pessoal, colaborador tem escrita e poderia ler segredos do repositório com um workflow em outra branch. Por isso a chave de assinatura deve ficar só no ambiente `release`.
+
 ## 2026-10-31 — Entrar com Alvanista, trazido do PR #1
 
 - **Origem:** núcleo e telas do PR #1, de Edward Facundo (Tellurian), trazidos para o `main` atual em vez do merge, de comum acordo com o autor. A PR pode seguir aberta para os extras.
