@@ -205,7 +205,6 @@ export function Home() {
 
       <div className={s.toolbar} style={{ marginTop: 12 }}>
         <Button
-          shape="circular"
           appearance="secondary"
           className={s.pillBtn}
           icon={<GridRegular />}
@@ -214,7 +213,6 @@ export function Home() {
           {t("home.allGames", { count: all.length })}
         </Button>
         <Button
-          shape="circular"
           appearance="secondary"
           className={s.pillBtn}
           icon={<AddRegular />}

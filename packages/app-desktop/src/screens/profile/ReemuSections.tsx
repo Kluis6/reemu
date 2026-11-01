@@ -1,5 +1,4 @@
 import { Button, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { GameCard } from '../../components/GameCard'
@@ -10,7 +9,6 @@ import { platformLabel } from '../../lib/platform'
 import type { RomEntry } from '../../lib/tauri'
 import { profileStats } from './profileData'
 import { useBrowseStyles } from '../../styles/xbox'
-import { relativeAge } from './relativeAge'
 
 const useStyles = makeStyles({
   section: { marginTop: '26px' },
@@ -27,14 +25,6 @@ const useStyles = makeStyles({
   },
   statValue: { fontSize: '26px', fontFamily: 'var(--reemuFontDisplay)', lineHeight: 1.2 },
   statLabel: { color: tokens.colorNeutralForeground3, fontSize: '12.5px', marginTop: '2px' },
-  caption: {
-    marginTop: '8px',
-    color: tokens.colorNeutralForeground3,
-    fontSize: '12px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
   invite: { color: tokens.colorNeutralForeground2 },
   card: {
     backgroundColor: tokens.colorNeutralBackground2,
@@ -135,36 +125,25 @@ export function ReemuNumbers({ roms, failed = false }: { roms: RomEntry[]; faile
 }
 
 /** "Jogados recentemente": prateleira em destaque, como "Adicionados
- *  recentemente" na Home, com o tempo e a data embaixo de cada capa. */
+ *  recentemente" na Home. */
 export function RecentRow({ roms }: { roms: RomEntry[] }) {
-  const { t, i18n } = useTranslation()
-  const s = useStyles()
+  const { t } = useTranslation()
   const browse = useBrowseStyles()
   const navigate = useNavigate()
-  const [now] = useState(() => Date.now())
   if (roms.length === 0) return null
   return (
     <section className={mergeClasses(browse.section, browse.featured)} data-testid="profile-recent">
       <SectionHeader title={t('profilePage.recent')} />
       <Shelf>
         {roms.map((r) => (
-          <div key={r.id}>
-            <GameCard
-              title={r.title}
-              badge={platformLabel(r.systemId)}
-              boxart={r.boxart}
-              favorite={r.isFavorite}
-              onClick={() => navigate(`/rom/${r.id}`)}
-            />
-            <div className={s.caption} data-caption>
-              {[
-                r.playTimeSecs > 0 ? formatPlayTime(r.playTimeSecs) : null,
-                r.lastPlayedAt != null ? relativeAge(r.lastPlayedAt, now, i18n.language) : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </div>
-          </div>
+          <GameCard
+            key={r.id}
+            title={r.title}
+            badge={platformLabel(r.systemId)}
+            boxart={r.boxart}
+            favorite={r.isFavorite}
+            onClick={() => navigate(`/rom/${r.id}`)}
+          />
         ))}
       </Shelf>
     </section>

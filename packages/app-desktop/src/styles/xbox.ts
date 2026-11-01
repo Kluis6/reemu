@@ -579,24 +579,21 @@ export const useBrowseStyles = makeStyles({
   // mesmo dos outros botões do tema (voltar, tela cheia, filtros da
   // biblioteca: `colorNeutralBackground2`, pedido do usuário); a borda sai
   // do tema ativo — o fundo da página misturado com a cor do texto.
+  // Mesmo fundo, borda e raio do botão de tela cheia da barra superior
+  // (`navBtn` no AppShell).
   pillBtn: {
     height: "32px",
     fontWeight: `${tokens.fontWeightRegular} !important`,
     backgroundColor: `${tokens.colorNeutralBackground2} !important`,
-    border: `1px solid color-mix(in srgb, var(--reemuPage), ${tokens.colorNeutralForeground1} 32%) !important`,
+    border: `1px solid ${tokens.colorNeutralBackground2} !important`,
     color: `${tokens.colorNeutralForeground1} !important`,
     ":hover": {
       backgroundColor: `${tokens.colorNeutralBackground2Hover} !important`,
-      border: `1px solid color-mix(in srgb, var(--reemuPage), ${tokens.colorNeutralForeground1} 42%) !important`,
+      border: `1px solid ${tokens.colorNeutralBackground2Hover} !important`,
     },
     ":active": {
       backgroundColor: `${tokens.colorNeutralBackground2Pressed} !important`,
     },
-    // Brilho do foco (`::before` do index.css, regra 4): lá o raio é o dos
-    // botões retangulares (Medium + 6) — na pílula virava um retângulo de
-    // cantos arredondados em volta do anel redondo (o `outline` acompanha o
-    // raio do botão). Aqui ele acompanha a pílula.
-    "::before": { borderRadius: `${tokens.borderRadiusCircular} !important` },
   },
   chip: {
     display: "inline-flex",

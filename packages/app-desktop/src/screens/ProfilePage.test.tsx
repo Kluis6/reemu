@@ -342,18 +342,6 @@ describe('ProfilePage', () => {
     expect(section('profile-cols')).toBeNull()
   })
 
-  it('recent shows play time and relative date under the cover', async () => {
-    const now = Math.floor(Date.now() / 1000)
-    api.listRoms.mockResolvedValue([
-      rom('a', { title: 'Kuon', lastPlayedAt: now - 3 * 86400, playTimeSecs: 3600 }),
-      rom('b', { title: 'Zero', lastPlayedAt: now - 5 * 86400, playTimeSecs: 0 }),
-    ])
-    await mount()
-    const lines = [...section('profile-recent')!.querySelectorAll('[data-caption]')].map((e) => e.textContent)
-    expect(lines[0]).toBe('1 h · há 3 dias')
-    expect(lines[1]).toBe('há 5 dias')
-  })
-
   describe('Alvanista card', () => {
     const FULL: AlvanistaCard = {
       member_since: 2010,
