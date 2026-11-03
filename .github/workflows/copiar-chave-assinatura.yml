@@ -1,0 +1,55 @@
+name: Copiar chave de assinatura para o ambiente release
+
+# Uso único (TASKS › "Chave de assinatura do auto-update no ambiente
+# `release`", opção 2): copia o segredo de repositório
+# TAURI_SIGNING_PRIVATE_KEY para o ambiente `release`. Segredo não pode ser
+# lido de volta, então a cópia é feita aqui dentro, sem o valor passar por
+# fora do GitHub nem aparecer no log.
+#
+# Precisa do segredo de repositório COPIAR_CHAVE_TOKEN: token fine-grained
+# só deste repositório, com "Environments: Read and write" (a permissão que a
+# documentação do GitHub lista para PUT
+# /repos/{owner}/{repo}/environments/{environment_name}/secrets/{secret_name})
+# e validade curta. O GITHUB_TOKEN do workflow não grava segredos.
+#
+# Depois de rodar: apagar este arquivo, o segredo COPIAR_CHAVE_TOKEN e o token.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  copiar:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Conferir a chave de origem (sem mostrar o valor)
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::segredo de repositório TAURI_SIGNING_PRIVATE_KEY vazio ou ausente"
+            exit 1
+          fi
+          # A chave do `tauri signer` é um texto em base64 que começa com
+          # "untrusted comment:" (formato minisign).
+          if ! printf '%s' "$KEY" | base64 -d 2>/dev/null | head -c 64 | grep -q "untrusted comment"; then
+            echo "::error::o segredo não tem o formato de uma chave privada do tauri signer"
+            exit 1
+          fi
+          echo "chave de origem: formato ok"
+
+      - name: Gravar no ambiente release
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          GH_TOKEN: ${{ secrets.COPIAR_CHAVE_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::falta o segredo de repositório COPIAR_CHAVE_TOKEN"
+            exit 1
+          fi
+          # Pela entrada padrão: o valor não vai para a linha de comando.
+          printf '%s' "$KEY" | gh secret set TAURI_SIGNING_PRIVATE_KEY \
+            --env release --repo "$GITHUB_REPOSITORY"
+          gh api "repos/$GITHUB_REPOSITORY/environments/release/secrets" \
+            --jq '.secrets[] | .name + " atualizado em " + .updated_at'
