@@ -152,12 +152,31 @@ kbd {
    afastado 3 px, vão transparente e um brilho por fora — no mouse em cima,
    no foco de teclado e no foco pelo controle, como no card. O brilho é um
    `::before` do tamanho da borda externa do anel (o `box-shadow` do próprio
-   botão pintaria o vão); o Fluent põe `overflow: hidden` na raiz do botão,
-   então o overflow abre só nesse estado. `position: relative` com
-   especificidade zero (`:where`): o botão que o Griffel posiciona continua
-   como está. */
+   botão pintaria o vão). `position: relative` com especificidade zero
+   (`:where`): o botão que o Griffel posiciona continua como está. */
 :where(.fui-Button, .fui-MenuButton, .fui-ToggleButton) {
   position: relative;
+}
+/* A área do anel e do brilho existe SEMPRE, transparente em repouso: o hover
+   e o foco só mudam a cor. Antes o hover abria o `overflow` (o Fluent põe
+   `hidden` na raiz do botão) e criava o `::before`; ao sair, a área de fora
+   do botão sumia junto, e o WebKitGTK sem compositing (NVIDIA, ver
+   src-tauri/src/main.rs) só repintava a caixa do botão: o brilho e o anel
+   ficavam na tela (print do usuário, 2026-11-03). Com a mesma geometria nos
+   dois estados, a área repintada é a mesma ao entrar e ao sair. Especificidade
+   zero: as regras de estado (com `!important` e mais específicas) vencem. */
+:where(.fui-Button, .fui-MenuButton, .fui-ToggleButton):where(:not(:disabled, [aria-disabled="true"])) {
+  overflow: visible !important;
+  outline: 3px solid transparent !important;
+  outline-offset: 3px !important;
+}
+:where(.fui-Button, .fui-MenuButton, .fui-ToggleButton):where(:not(:disabled, [aria-disabled="true"]))::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: inherit;
+  box-shadow: 0 0 12px transparent;
+  pointer-events: none;
 }
 :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):not(:disabled, [aria-disabled="true"]):is(:hover, [data-fui-focus-visible]),
 html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus {
