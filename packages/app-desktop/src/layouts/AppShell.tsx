@@ -183,6 +183,7 @@ export function AppShell() {
             size={32}
             className={s.railAvatarSize}
             ring={SHOW_AVATAR_RING}
+            tier={profile?.tierColors}
             badge={SHOW_AVATAR_BADGE ? "available" : undefined}
           />
         </Button>

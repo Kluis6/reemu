@@ -7,7 +7,8 @@ import symbol from '../../assets/alvanista-symbol.svg'
 import { ProfileAvatar } from '../../components/ProfileAvatar'
 import type { EffectiveProfile } from '../../hooks/useEffectiveProfile'
 import { alvanistaOpenProfile, alvanistaOpenSite, type AlvanistaStatus } from '../../lib/tauri'
-import { isHexColor, pickText, readableInk } from './profileData'
+import { tierAccent } from '../../lib/tierRing'
+import { pickText, readableInk } from './profileData'
 import { relativeAge } from './relativeAge'
 
 const BANNER_H = 210
@@ -119,9 +120,9 @@ export function ProfileHero({
   const card = connected ? status?.card : null
   const tierName = pickText(identity?.tier?.name, i18n.language)
   const reino = pickText(card?.reino_title_text, i18n.language)
-  // Só uma cor `#rrggbb` tinge o chip do plano; outra fica no estilo padrão.
-  const mid = card?.palette?.mid
-  const tint = isHexColor(mid) ? mid : null
+  // As cores do plano vêm do Alvanista: o anel do avatar e o chip.
+  const tierColors = card?.identity?.tier?.colors
+  const tint = tierAccent(tierColors)
   const memberYear = card?.member_since != null && card.member_since >= 1900 ? card.member_since : null
   const location = identity?.location || null
 
@@ -131,7 +132,7 @@ export function ProfileHero({
         <div className={s.shade} />
       </div>
       <div className={s.body}>
-        <ProfileAvatar profile={profile} size={AVATAR} className={s.avatar} />
+        <ProfileAvatar profile={profile} size={AVATAR} className={s.avatar} tier={tierColors} pulse />
         <div className={s.ident}>
           <Title1 as="h1" className={s.name}>
             {profile.name}
@@ -147,7 +148,7 @@ export function ProfileHero({
                 <span
                   className={s.chip}
                   data-chip="tier"
-                  // A paleta só tinge este chip; a tinta é a de melhor contraste sobre o tom.
+                  // A cor do plano tinge o chip; a tinta é a de melhor contraste sobre ela.
                   style={tint ? { backgroundColor: tint, color: readableInk(tint), borderColor: tint } : undefined}
                 >
                   {tierName}

@@ -52,6 +52,16 @@ const ON: AlvanistaStatus = {
   bio: 'bio do Alvanista',
   profile_url: 'https://www.alvanista.com/users/toy',
 }
+const TIER = {
+  slug: 'collector',
+  rank: 2,
+  name: { pt: 'Colecionador' },
+  colors: {
+    ring: { kind: 'linear', angle: 140, stops: ['#d1fae5', '#34d399', '#059669'] },
+    glow: { color: '#34d399', alpha: 0.55 },
+    accent: '#22d3ee',
+  },
+}
 const LOCAL = { name: 'Local', bio: 'bio local', avatar: 'preset:2', onboarded: true }
 
 let host: HTMLDivElement
@@ -113,6 +123,7 @@ describe('useEffectiveProfile', () => {
       bio: 'bio local',
       bannerUrl: null,
       source: 'local',
+      tierColors: null,
     })
   })
 
@@ -126,7 +137,14 @@ describe('useEffectiveProfile', () => {
       bio: 'bio do Alvanista',
       bannerUrl: 'https://cdn.alvanista.com/h/toy.png',
       source: 'alvanista',
+      tierColors: null,
     })
+  })
+
+  it('connected with a paid tier: the tier colors from the card', async () => {
+    api.alvanistaCachedStatus.mockResolvedValue({ ...ON, card: { identity: { tier: TIER } } })
+    await mount(<Probe />)
+    expect(seen()?.tierColors).toEqual(TIER.colors)
   })
 
   it('connected without bio: no bio, never the local one', async () => {
@@ -238,11 +256,24 @@ describe('ProfileDrawer', () => {
     expect(document.body.innerHTML).toContain('https://cdn.alvanista.com/h/toy.png')
   })
 
+  it('connected with a paid tier: the avatar wears the ring and the chip takes the accent', async () => {
+    api.alvanistaCachedStatus.mockResolvedValue({ ...ON, card: { identity: { tier: TIER } } })
+    await mount(<Drawer />)
+    const ring = document.body.querySelector('[data-testid="tier-ring"]') as HTMLElement
+    expect(ring).toBeTruthy()
+    expect(ring.hasAttribute('data-pulse')).toBe(false)
+    const chip = [...document.body.querySelectorAll('span')].find((e) => e.textContent === 'Colecionador') as HTMLElement
+    const probe = document.createElement('span')
+    probe.style.backgroundColor = '#22d3ee'
+    expect(chip.style.backgroundColor).toBe(probe.style.backgroundColor)
+  })
+
   it('disconnected: the local name and bio, theme colors in the banner', async () => {
     await mount(<Drawer />)
     const text = document.body.textContent ?? ''
     expect(text).toContain('Local')
     expect(text).toContain('bio local')
     expect(document.body.innerHTML).not.toContain('cdn.alvanista.com')
+    expect(document.body.querySelector('[data-testid="tier-ring"]')).toBeNull()
   })
 })

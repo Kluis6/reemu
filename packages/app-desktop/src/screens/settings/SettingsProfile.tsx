@@ -120,6 +120,7 @@ export function SettingsProfile() {
             profile={{ name: status.username ?? t('alvanista.unknownUser'), avatar: 'preset:1', avatarUrl: status.avatar_url }}
             size={128}
             className={s.avatar}
+            tier={status.card?.identity?.tier?.colors}
           />
           <div className={s.block}>
             <Title3 as="h2" className={s.name}>
