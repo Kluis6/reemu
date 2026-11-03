@@ -35,25 +35,17 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Depende do dono do projeto
 
-- [ ] `todo` — **Chave de assinatura do auto-update no ambiente `release`** (2026-11-03).
-      **Não convidar colaboradores antes de terminar.**
-      - **O que aconteceu:** a chave antiga (`C1829D421AB43D0C`) foi copiada para o ambiente
-        `release`, mas a senha do ambiente (de 2026-11-01) não era a dela, e os segredos do
-        repositório (com a senha certa) já tinham sido apagados. A senha não foi encontrada
-        (gerada no modo interativo em 2026-09-24, fora do histórico; vazia também não é).
-      - **Chave nova:** `B6070D7C1CFAAE82`, gerada pelo dono do projeto em
-        `~/.tauri/reemu-2026.key`, com a senha guardada num gerenciador de senhas. A chave
-        pública já está no `tauri.conf.json`; chave e senha estão no ambiente `release`
-        (os segredos do repositório não existem mais).
-      - **Falta:**
-        1. Rodar o `release.yml` à mão na `main` (só gera artefatos, não publica) e conferir
-           que os instaladores saem assinados.
-        2. Na próxima versão, avisar nas notas: quem tem a `v0.1.10` ou anterior não recebe
-           esta versão pelo auto-update (a assinatura nova não bate com a chave antiga do app)
-           e precisa instalar à mão uma vez; depois o auto-update volta ao normal.
-        3. Guardar a chave antiga (`~/.tauri/reemu.key`): se a senha aparecer, ela ainda
-           assina uma versão de transição para quem ficou na `v0.1.10`.
-        4. Com o passo 1 confirmado, os colaboradores podem entrar.
+- [x] `done` — **Chave de assinatura do auto-update no ambiente `release`** (2026-11-03).
+      Chave nova `B6070D7C1CFAAE82` (a senha da antiga, `C1829D421AB43D0C`, se perdeu
+      depois que os segredos do repositório foram apagados). Chave e senha só no ambiente
+      `release`; o repositório não tem mais segredos. Conferido no build manual da `main`
+      (run 41647706613): `.msi`, `.exe`, `.deb` e `.AppImage` saíram com `.sig`. Com isso
+      os colaboradores já podem entrar.
+- [ ] `todo` — **Aviso da troca de chave na próxima versão:** nas notas, dizer que quem tem a
+      `v0.1.10` ou anterior não recebe esta versão pelo auto-update (a assinatura nova não bate
+      com a chave antiga do app) e precisa instalar à mão uma vez; depois o auto-update volta
+      ao normal. Guardar a chave antiga (`~/.tauri/reemu.key`): se a senha aparecer, ela ainda
+      assina uma versão de transição para quem ficou na `v0.1.10`.
 - [ ] `todo` — **Ambiente de homologação** (proposta de 2026-11-03, aguardando o dono do
       projeto): build de teste do instalador de Windows em cada pull request, sem assinatura nem
       segredos, para baixar e testar antes do merge; depois, canal beta com tags
