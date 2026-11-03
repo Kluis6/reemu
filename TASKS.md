@@ -86,6 +86,27 @@ o card atual fica.
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
+- [ ] `todo` — **`zip` 4.6.1 no auto-update do Windows** (2026-11-03): a migração para a
+      `zip` 9 (PR #10) cobre o app, mas o `tauri-plugin-updater` 2.14.0 ainda traz a 4.6.1
+      (alertas críticos e altos do Dependabot). A 2.14.1 já usa `zip` 9, só que leva o Cargo
+      a versões antigas da crate `windows` (0.62 → 0.61, `windows-sys` 0.61 → 0.60) e o
+      `gpu-allocator` do `wgpu-hal` deixa de compilar no Windows. Risco baixo: o plugin
+      confere a assinatura do arquivo baixado antes de abrir o zip. Tentar de novo quando
+      sair uma versão do plugin, do `wgpu` ou do `gpu-allocator` compatível; conferir com
+      `scripts/check-windows.sh`.
+- [ ] `todo` — **Testes de GPU com SIGSEGV nesta máquina Linux** (2026-11-03):
+      `hw_render_core_detects_requirements_and_negotiates` (core-loader, OpenGL) e
+      `gpu::tests::canvas_viewport_sizes_viewport_passes` (app, wgpu/Vulkan) caem com falha de
+      segmentação, também na `main`. Passavam em 2026-10-14; desde então o kernel foi para
+      7.0.0-42 (driver NVIDIA 595.99.02, módulo e biblioteca na mesma versão). O app em si abre
+      normalmente. No CI do GitHub esses testes não rodam com GPU, então não aparecem lá.
+- [ ] `todo` — **Testes do `emu-session` usam o `reemu-core-host` instalado** (2026-11-03):
+      sem o binário ao lado do executável de teste, `core_host_path` cai em
+      `/usr/lib/ReEmu/reemu-core-host` (o ReEmu instalado no sistema, aqui o 0.1.7), com o
+      protocolo antigo, e 6 testes falham com `bincode decode: UnexpectedEnd`. Com
+      `cargo build -p core-host-desktop` antes, passam. Fazer o teste preferir o binário do
+      próprio `target` ou falhar com mensagem clara em vez de usar o instalado.
+
 - [ ] `todo` — **Stella trava no Windows na fumaça do catálogo**
       (2026-10-14): desde 2026-09-28 o `catalog-smoke.yml` falha toda
       semana só no Windows porque `stella_libretro` (Stella 8) e
