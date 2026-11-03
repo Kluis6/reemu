@@ -1,7 +1,8 @@
 # Como contribuir com o ReEmu
 
-Toda mudança entra na `main` por pull request e passa pela revisão do dono do
-projeto. Não é possível enviar direto para a `main`.
+Toda mudança de colaborador entra na `main` por pull request e passa pela
+revisão do dono do projeto: colaboradores não conseguem enviar direto para a
+`main`. Só o dono do projeto, como administrador, pode fazer isso.
 
 ## Fluxo
 

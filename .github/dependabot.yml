@@ -1,0 +1,10 @@
+# Mantém em dia as actions dos workflows, que ficam fixadas pelo hash do commit
+# (ver release.yml): o Dependabot abre um PR por semana com as versões novas.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
