@@ -50,6 +50,10 @@ fn install_zip(system_dir: &Path, bytes: &[u8]) -> Result<usize, String> {
     let mut files = 0;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
+        // link simbólico de dentro do zip não vira arquivo aqui
+        if entry.is_symlink() {
+            continue;
+        }
         // Só `PPSSPP/...`, sem `..` nem caminho absoluto (zip malicioso não
         // escreve fora da pasta).
         let Some(rel) = entry.enclosed_name().and_then(|p| strip_root(&p)) else {
