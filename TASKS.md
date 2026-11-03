@@ -41,11 +41,11 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       `release`; o repositório não tem mais segredos. Conferido no build manual da `main`
       (run 41647706613): `.msi`, `.exe`, `.deb` e `.AppImage` saíram com `.sig`. Com isso
       os colaboradores já podem entrar.
-- [ ] `todo` — **Aviso da troca de chave na próxima versão:** nas notas, dizer que quem tem a
-      `v0.1.10` ou anterior não recebe esta versão pelo auto-update (a assinatura nova não bate
-      com a chave antiga do app) e precisa instalar à mão uma vez; depois o auto-update volta
-      ao normal. Guardar a chave antiga (`~/.tauri/reemu.key`): se a senha aparecer, ela ainda
-      assina uma versão de transição para quem ficou na `v0.1.10`.
+- [x] `done` — **Aviso da troca de chave na v0.1.11** (2026-11-03): as notas da Release
+      abrem com o pedido de instalação manual para quem tem a `v0.1.10` ou anterior. O
+      `latest.json` publicado traz a 0.1.11 nas 6 plataformas, assinadas pela chave
+      `B6070D7C1CFAAE82`, a mesma do app. Guardar a chave antiga (`~/.tauri/reemu.key`): se a
+      senha aparecer, ela ainda assina uma versão de transição para quem ficou na `v0.1.10`.
 - [ ] `todo` — **Ambiente de homologação** (proposta de 2026-11-03, aguardando o dono do
       projeto): build de teste do instalador de Windows em cada pull request, sem assinatura nem
       segredos, para baixar e testar antes do merge; depois, canal beta com tags
