@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { alvanistaCachedStatus, getProfile, onAlvanistaStatus } from '../lib/tauri'
+import { alvanistaCachedStatus, getProfile, onAlvanistaStatus, type AlvanistaTierColors } from '../lib/tauri'
 import { sysToast } from '../lib/toast'
 import { useToastStore } from '../stores/useToastStore'
 
@@ -23,6 +23,8 @@ export interface EffectiveProfile {
    *  tem capa (o drawer usa as cores do tema). */
   bannerUrl: string | null
   source: 'alvanista' | 'local'
+  /** Cores do plano do Alvanista, para o anel do avatar; `null` sem plano pago. */
+  tierColors: AlvanistaTierColors | null
 }
 
 /**
@@ -52,6 +54,7 @@ export function useEffectiveProfile(): EffectiveProfile | undefined {
       bio: st.bio,
       bannerUrl: st.hero_url,
       source: 'alvanista',
+      tierColors: st.card?.identity?.tier?.colors ?? null,
     }
   }
   if (!profile.data) return undefined
@@ -62,6 +65,7 @@ export function useEffectiveProfile(): EffectiveProfile | undefined {
     bio: profile.data.bio,
     bannerUrl: null,
     source: 'local',
+    tierColors: null,
   }
 }
 

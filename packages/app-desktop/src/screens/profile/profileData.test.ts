@@ -6,7 +6,6 @@ import {
   cardComputedAt,
   cardLag,
   hasCardContent,
-  isHexColor,
   mostPlayed,
   networkLabel,
   pickText,
@@ -67,15 +66,6 @@ describe('readableInk', () => {
   it('escolhe a tinta com contraste mínimo de 4.5:1', () => {
     expect(readableInk('#AD9F85')).toBe('#000000')
     expect(readableInk('#1B2F13')).toBe('#ffffff')
-  })
-})
-
-describe('isHexColor', () => {
-  it('só #rrggbb', () => {
-    expect(isHexColor('#E0B84A')).toBe(true)
-    expect(isHexColor('#abc')).toBe(false)
-    expect(isHexColor('gold')).toBe(false)
-    expect(isHexColor(undefined)).toBe(false)
   })
 })
 

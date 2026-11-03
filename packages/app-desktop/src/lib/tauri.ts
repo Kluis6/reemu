@@ -503,6 +503,14 @@ export async function saveThumbnailUrl(stateId: string): Promise<string | null> 
 
 // --- Entrar com Alvanista ----------------------------------------------
 
+/** As cores do plano, como o Alvanista desenha o anel e o chip. Vêm do servidor
+ *  para o ReEmu não guardar a tabela; `lib/tierRing` confere antes de usar. */
+export interface AlvanistaTierColors {
+  ring?: { kind?: string; angle?: number; stops?: string[] }
+  glow?: { color?: string; alpha?: number }
+  accent?: string
+}
+
 /** O cartão do perfil, como o servidor o manda: todo campo é opcional. */
 export interface AlvanistaCard {
   /** O ano em que a conta começou (2010), não um instante Unix. */
@@ -512,7 +520,7 @@ export interface AlvanistaCard {
     level?: number
     hero_position_x?: number
     hero_position_y?: number
-    tier?: { slug: string; rank: number; name?: Record<string, string> }
+    tier?: { slug: string; rank: number; name?: Record<string, string>; colors?: AlvanistaTierColors }
   }
   reino_title_text?: Record<string, string>
   palette?: { base: string; mid: string; accent: string; source: string }

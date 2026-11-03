@@ -233,7 +233,7 @@ export function SettingsHome() {
               className={mergeClasses(s.card, s.profile)}
               style={delay}
             >
-              {profile && <ProfileAvatar profile={profile} size={96} />}
+              {profile && <ProfileAvatar profile={profile} size={96} tier={profile.tierColors} />}
               {/* ícone da pessoa à direita, como nos outros cards (pedido do
                   usuário); sem perfil carregado é o único ícone do card */}
               <Icon className={s.icon} />
