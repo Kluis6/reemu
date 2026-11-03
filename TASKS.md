@@ -35,28 +35,23 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Depende do dono do projeto
 
-- [ ] `blocked` — **Chave de assinatura do auto-update no ambiente `release`** (2026-11-03).
-      **Não convidar colaboradores antes disto:** com permissão de escrita, um colaborador
-      poderia ler os segredos do repositório com um workflow em outra branch.
-      - **Situação:** o ambiente `release` já tem `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; falta
-        `TAURI_SIGNING_PRIVATE_KEY`. Os dois continuam nos segredos do repositório, e é de lá
-        que o build pega a chave hoje. Não apagar esses segredos antes de cadastrar a chave no
-        ambiente, senão as versões saem sem assinatura e o auto-update para.
-      - **Por que a chave não vem do GitHub:** segredo não pode ser lido de volta. O arquivo
-        `.key` não está neste computador (busca por nome em C:, D: e E:, sem `~/.tauri`).
-      - **Opção 1, em andamento:** o dono do projeto vai procurar o arquivo `.key` privado
-        (sem `.pub`) no computador onde o projeto começou. No PowerShell:
-        `Get-ChildItem -Path C:\ -Recurse -Filter *.key -ErrorAction SilentlyContinue`.
-        Achando, cadastrar no PowerShell com
-        `Get-Content -Raw "<caminho>" | gh secret set TAURI_SIGNING_PRIVATE_KEY --env release --repo Kluis6/reemu`
-        e conferir que o par bate com o `pubkey` de `apps/desktop/src-tauri/tauri.conf.json`.
-      - **Opção 2, se não achar:** workflow manual, rodado uma vez, que copia o segredo do
-        repositório para o ambiente com um token de escrita em segredos, só deste repositório e
-        de validade curta. O valor não aparece em log. Depois, apagar o workflow e o token.
-      - **Opção 3, último caso:** chave nova. Quebra o auto-update de quem tem a `v0.1.10` ou
-        anterior, que vai precisar instalar a versão nova à mão.
-      - **Ao final:** apagar `TAURI_SIGNING_PRIVATE_KEY` e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
-        dos segredos do repositório e rodar uma versão para confirmar a assinatura.
+- [ ] `todo` — **Chave de assinatura do auto-update no ambiente `release`** (2026-11-03).
+      **Não convidar colaboradores antes de terminar:** com permissão de escrita, um
+      colaborador poderia ler os segredos do repositório com um workflow em outra branch.
+      - **Feito (2026-11-03):** a chave foi copiada do segredo do repositório para o ambiente
+        `release` por um workflow de uso único (opção 2; run 41639377625, a 1ª tentativa caiu
+        num HTTP 503 do GitHub e a 2ª passou), com um token fine-grained só deste repositório
+        e só "Environments: Read and write". O workflow já foi apagado. O ambiente tem agora
+        `TAURI_SIGNING_PRIVATE_KEY` e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; como os jobs do
+        `release.yml` usam `environment: release`, o segredo do ambiente passa a valer no
+        lugar do de mesmo nome do repositório.
+      - **Falta, com o dono do projeto:**
+        1. Apagar o segredo de repositório `COPIAR_CHAVE_TOKEN` e revogar o token
+           `reemu-copiar-chave` (Settings › Developer settings › Fine-grained tokens).
+        2. Na próxima versão, conferir que os `.sig` saem e que o `latest.json` é publicado.
+        3. Só depois disso, apagar `TAURI_SIGNING_PRIVATE_KEY` e
+           `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` dos segredos do repositório. A partir daí
+           os colaboradores podem entrar.
 - [ ] `todo` — **Ambiente de homologação** (proposta de 2026-11-03, aguardando o dono do
       projeto): build de teste do instalador de Windows em cada pull request, sem assinatura nem
       segredos, para baixar e testar antes do merge; depois, canal beta com tags
