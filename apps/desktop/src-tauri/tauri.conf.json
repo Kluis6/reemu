@@ -63,7 +63,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMxODI5RDQyMUFCNDNEMEMKUldRTVBiUWFRcDJDd2Q3WmxLd2p6L0szT1BJY1MyRzhydjV5Mm0ybGl1TU82b0xLSTVhbXluTDgK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI2MDcwRDdDMUNGQUFFODIKUldTQ3J2b2NmQTBIdHYydThGbVZTMnYxOVlHcmR1MkVoVFNlNXM4cUNyZmRJdWNBTXZETjlqcmIK",
       "endpoints": [
         "https://github.com/Kluis6/reemu/releases/latest/download/latest.json"
       ],

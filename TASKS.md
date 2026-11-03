@@ -36,22 +36,24 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 ### Depende do dono do projeto
 
 - [ ] `todo` — **Chave de assinatura do auto-update no ambiente `release`** (2026-11-03).
-      **Não convidar colaboradores antes de terminar:** com permissão de escrita, um
-      colaborador poderia ler os segredos do repositório com um workflow em outra branch.
-      - **Feito (2026-11-03):** a chave foi copiada do segredo do repositório para o ambiente
-        `release` por um workflow de uso único (opção 2; run 41639377625, a 1ª tentativa caiu
-        num HTTP 503 do GitHub e a 2ª passou), com um token fine-grained só deste repositório
-        e só "Environments: Read and write". O workflow já foi apagado. O ambiente tem agora
-        `TAURI_SIGNING_PRIVATE_KEY` e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; como os jobs do
-        `release.yml` usam `environment: release`, o segredo do ambiente passa a valer no
-        lugar do de mesmo nome do repositório.
-      - **Falta, com o dono do projeto:**
-        1. Apagar o segredo de repositório `COPIAR_CHAVE_TOKEN` e revogar o token
-           `reemu-copiar-chave` (Settings › Developer settings › Fine-grained tokens).
-        2. Na próxima versão, conferir que os `.sig` saem e que o `latest.json` é publicado.
-        3. Só depois disso, apagar `TAURI_SIGNING_PRIVATE_KEY` e
-           `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` dos segredos do repositório. A partir daí
-           os colaboradores podem entrar.
+      **Não convidar colaboradores antes de terminar.**
+      - **O que aconteceu:** a chave antiga (`C1829D421AB43D0C`) foi copiada para o ambiente
+        `release`, mas a senha do ambiente (de 2026-11-01) não era a dela, e os segredos do
+        repositório (com a senha certa) já tinham sido apagados. A senha não foi encontrada
+        (gerada no modo interativo em 2026-09-24, fora do histórico; vazia também não é).
+      - **Chave nova:** `B6070D7C1CFAAE82`, gerada pelo dono do projeto em
+        `~/.tauri/reemu-2026.key`, com a senha guardada num gerenciador de senhas. A chave
+        pública já está no `tauri.conf.json`; chave e senha estão no ambiente `release`
+        (os segredos do repositório não existem mais).
+      - **Falta:**
+        1. Rodar o `release.yml` à mão na `main` (só gera artefatos, não publica) e conferir
+           que os instaladores saem assinados.
+        2. Na próxima versão, avisar nas notas: quem tem a `v0.1.10` ou anterior não recebe
+           esta versão pelo auto-update (a assinatura nova não bate com a chave antiga do app)
+           e precisa instalar à mão uma vez; depois o auto-update volta ao normal.
+        3. Guardar a chave antiga (`~/.tauri/reemu.key`): se a senha aparecer, ela ainda
+           assina uma versão de transição para quem ficou na `v0.1.10`.
+        4. Com o passo 1 confirmado, os colaboradores podem entrar.
 - [ ] `todo` — **Ambiente de homologação** (proposta de 2026-11-03, aguardando o dono do
       projeto): build de teste do instalador de Windows em cada pull request, sem assinatura nem
       segredos, para baixar e testar antes do merge; depois, canal beta com tags
