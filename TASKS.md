@@ -35,6 +35,33 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Depende do dono do projeto
 
+- [ ] `blocked` — **Chave de assinatura do auto-update no ambiente `release`** (2026-11-03).
+      **Não convidar colaboradores antes disto:** com permissão de escrita, um colaborador
+      poderia ler os segredos do repositório com um workflow em outra branch.
+      - **Situação:** o ambiente `release` já tem `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; falta
+        `TAURI_SIGNING_PRIVATE_KEY`. Os dois continuam nos segredos do repositório, e é de lá
+        que o build pega a chave hoje. Não apagar esses segredos antes de cadastrar a chave no
+        ambiente, senão as versões saem sem assinatura e o auto-update para.
+      - **Por que a chave não vem do GitHub:** segredo não pode ser lido de volta. O arquivo
+        `.key` não está neste computador (busca por nome em C:, D: e E:, sem `~/.tauri`).
+      - **Opção 1, em andamento:** o dono do projeto vai procurar o arquivo `.key` privado
+        (sem `.pub`) no computador onde o projeto começou. No PowerShell:
+        `Get-ChildItem -Path C:\ -Recurse -Filter *.key -ErrorAction SilentlyContinue`.
+        Achando, cadastrar no PowerShell com
+        `Get-Content -Raw "<caminho>" | gh secret set TAURI_SIGNING_PRIVATE_KEY --env release --repo Kluis6/reemu`
+        e conferir que o par bate com o `pubkey` de `apps/desktop/src-tauri/tauri.conf.json`.
+      - **Opção 2, se não achar:** workflow manual, rodado uma vez, que copia o segredo do
+        repositório para o ambiente com um token de escrita em segredos, só deste repositório e
+        de validade curta. O valor não aparece em log. Depois, apagar o workflow e o token.
+      - **Opção 3, último caso:** chave nova. Quebra o auto-update de quem tem a `v0.1.10` ou
+        anterior, que vai precisar instalar a versão nova à mão.
+      - **Ao final:** apagar `TAURI_SIGNING_PRIVATE_KEY` e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+        dos segredos do repositório e rodar uma versão para confirmar a assinatura.
+- [ ] `todo` — **Ambiente de homologação** (proposta de 2026-11-03, aguardando o dono do
+      projeto): build de teste do instalador de Windows em cada pull request, sem assinatura nem
+      segredos, para baixar e testar antes do merge; depois, canal beta com tags
+      `vX.Y.Z-beta.N`. Antes do beta, conferir que o `latest.json` do auto-update ignora
+      pré-release, para os usuários atuais não receberem a versão de teste.
 - [ ] `todo` — **Credenciais de desenvolvedor do ScreenScraper** (2026-10-08):
       sem `devid`/`devpassword` a API responde 403 em toda busca e nenhum
       metadado vem do ScreenScraper. Pedir no fórum do screenscraper.fr
