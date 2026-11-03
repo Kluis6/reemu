@@ -3355,3 +3355,11 @@ Infra:
 - **Depois da aprovação:** drawer de perfil no modelo do guia do Xbox (capa no topo, badges, lista só de texto) e remoção do cartão de conexão do Meu perfil; desconectar fica em Configurações › Perfil.
 - **Teste de migração:** `crates/db/tests/migration_alvanista.rs` leva um banco de antes da 19 até a 19 sem perder dados.
 - **Licenças:** `scripts/licenses-summary.mjs` passou a rodar no Windows. A autorização do símbolo do Alvanista está pendente por escrito (`THIRD_PARTY_NOTICES.md`).
+
+## 2026-11-03 — Release v0.1.11
+
+- **Pedido do usuário:** publicar a versão 0.1.11.
+- **Versão:** 0.1.10 → 0.1.11 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 12 crates do workspace.
+- **Antes da tag:** o CI do `main` (commit `0c905bb`) passou nos quatro jobs, e o build manual do `release.yml` na `main` (run 41647706613) saiu com os quatro instaladores assinados pela chave nova.
+- **Primeira versão com a chave de assinatura nova** (`B6070D7C1CFAAE82`): quem tem a v0.1.10 ou anterior não recebe esta versão pelo auto-update, porque o app antigo confere com a chave antiga, e precisa instalar à mão uma vez. As notas da Release avisam no topo.
+- **O que entra, desde a v0.1.10:** experiência de console (fases 0 a 7 do plano unificado: controle sem becos sem saída, escala do app Xbox, blocos nas Configurações, página e menu do jogo, biblioteca grande, navegador de arquivos e teclado virtual, sons e reduzir movimento, diagnóstico); predefinições por core (PPSSPP com valores próprios, os outros só com resolução); proporção da imagem e widescreen por jogo; aviso de atualização dos cores; Entrar com Alvanista e Meu perfil; drawer de perfil; ícone de rede e downloads sem travar sem internet; foco dos botões sem restos no WebKitGTK; X de fechar só sem controle.
