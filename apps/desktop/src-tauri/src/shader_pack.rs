@@ -121,6 +121,10 @@ pub async fn download(
         let strip_root = zip_common_root(&mut zip);
         for i in 0..zip.len() {
             let mut f = zip.by_index(i).map_err(|e| e.to_string())?;
+            // link simbólico de dentro do zip não vira arquivo aqui
+            if f.is_symlink() {
+                continue;
+            }
             let Some(name) = f.enclosed_name() else {
                 continue;
             };

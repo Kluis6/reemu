@@ -53,7 +53,12 @@ fn peek_zip(path: &Path) -> Option<ArchivedRom> {
         if !e.is_file() {
             continue;
         }
-        let name = e.name().to_string();
+        // zip 9: nome que não se lê de forma consistente vira erro; essa
+        // entrada é pulada.
+        let Ok(name) = e.name() else {
+            continue;
+        };
+        let name = name.into_owned();
         if let Some(sys) = Path::new(&name)
             .extension()
             .and_then(|x| x.to_str())

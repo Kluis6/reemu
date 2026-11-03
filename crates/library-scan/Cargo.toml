@@ -14,7 +14,7 @@ thiserror.workspace = true
 log = "0.4"
 # ROMs de N64/disco costumam vir em .zip — o scan olha dentro e o loader
 # extrai. Só deflate/store (formato dominante); sem bzip2/zstd/aes.
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 # .7z (comum em sets de ROM fora do padrão No-Intro/Redump). Puro Rust (sem
 # libarchive/7z nativo — precisa compilar limpo no CI Windows+Linux). LZMA/
 # LZMA2 (o padrão do 7-Zip) não precisam de feature; sem aes256/bzip2/ppmd

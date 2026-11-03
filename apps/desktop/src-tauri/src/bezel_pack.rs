@@ -172,7 +172,8 @@ pub async fn download(
         let _ = std::fs::remove_dir_all(&tmp);
         for i in 0..zip.len() {
             let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-            if entry.is_dir() {
+            // pasta ou link simbólico: nada a gravar
+            if !entry.is_file() {
                 continue;
             }
             let Some(name) = entry.enclosed_name() else {

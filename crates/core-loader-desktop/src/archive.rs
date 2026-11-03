@@ -105,7 +105,7 @@ fn extract_rom_zip(zip_path: &Path, temp_dir: &Path) -> std::io::Result<Extracte
 
     let idx = (0..zip.len()).find(|&i| {
         zip.by_index(i)
-            .map(|e| e.is_file() && is_rom_entry(e.name()))
+            .map(|e| e.is_file() && e.name().is_ok_and(|n| is_rom_entry(&n)))
             .unwrap_or(false)
     });
     let Some(idx) = idx else {
@@ -118,8 +118,14 @@ fn extract_rom_zip(zip_path: &Path, temp_dir: &Path) -> std::io::Result<Extracte
     let mut entry = zip
         .by_index(idx)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    let entry_name = entry.name().to_string();
-    let ext = Path::new(entry.name())
+    // zip 9: `name()` falha quando o nome não se lê de forma consistente.
+    // A ROM sai sempre com o nome gerado por `create_unique`, nunca o de
+    // dentro do zip.
+    let entry_name = entry
+        .name()
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?
+        .into_owned();
+    let ext = Path::new(&entry_name)
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("rom")
