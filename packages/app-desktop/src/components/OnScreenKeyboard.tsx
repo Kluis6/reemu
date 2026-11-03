@@ -2,7 +2,6 @@ import { Button, makeStyles, mergeClasses, tokens } from '@fluentui/react-compon
 import {
   ArrowEnterLeftRegular,
   BackspaceRegular,
-  DismissRegular,
   KeyboardShiftRegular,
   LineHorizontal3Regular,
 } from '@fluentui/react-icons'
@@ -10,6 +9,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { useSearchStore, type KeyboardField } from '../stores/useSearchStore'
+import { CloseButton } from './CloseButton'
 
 /**
  * Teclado na tela pra digitar com o controle — na busca (Y) ou num campo de
@@ -425,14 +425,7 @@ export function OnScreenKeyboard() {
           <span className={s.caret} aria-hidden />
           {shown.slice(caret).join('')}
         </span>
-        <Button
-          appearance="subtle"
-          size="small"
-          icon={<DismissRegular />}
-          aria-label={t('osk.close')}
-          tabIndex={-1}
-          onClick={close}
-        />
+        <CloseButton size="small" label={t('osk.close')} tabIndex={-1} onClick={close} />
       </div>
       <div className={s.grid} role="group">
         {rows.map((r, ri) =>

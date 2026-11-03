@@ -1,5 +1,4 @@
 import {
-  Button,
   Dialog,
   DialogBody,
   DialogContent,
@@ -7,10 +6,9 @@ import {
   DialogTitle,
   makeStyles,
 } from "@fluentui/react-components";
-import { DismissRegular } from "@fluentui/react-icons";
 import type { ReactNode } from "react";
-import { useTranslation } from "react-i18next";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
+import { CloseButton } from "./CloseButton";
 
 const useStyles = makeStyles({
   // Ocupa a janela toda; em % para acompanhar o zoom da interface.
@@ -41,7 +39,6 @@ export function FullscreenDialog({
   title: string;
   children: ReactNode;
 }) {
-  const { t } = useTranslation();
   const s = useStyles();
   return (
     <Dialog
@@ -54,14 +51,7 @@ export function FullscreenDialog({
       <DialogSurface className={s.surface}>
         <DialogBody className={s.body}>
           <DialogTitle
-            action={
-              <Button
-                appearance="subtle"
-                icon={<DismissRegular />}
-                aria-label={t("common.close")}
-                onClick={onClose}
-              />
-            }
+            action={<CloseButton onClick={onClose} />}
           >
             {title}
           </DialogTitle>

@@ -9,12 +9,12 @@ import {
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
-import { DismissRegular } from "@fluentui/react-icons";
 import { ManageLibraryFields } from "./ManageLibraryFields";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { useManageLibrary } from "../lib/useManageLibrary";
 import { useModalButtonStyles } from "../styles/buttons";
 import { useTranslation } from "react-i18next";
+import { CloseButton } from "./CloseButton";
 
 const useStyles = makeStyles({
   // cards de plataforma/pasta com 12 entre si, como em Configurações
@@ -69,14 +69,7 @@ export function ManageLibraryDialog({
       <DialogSurface className={s.surface}>
         <DialogBody className={s.body}>
           <DialogTitle
-            action={
-              <Button
-                appearance="subtle"
-                aria-label={t("common.close")}
-                icon={<DismissRegular />}
-                onClick={close}
-              />
-            }
+            action={<CloseButton onClick={close} />}
           >
             {t("manage.title")}
           </DialogTitle>

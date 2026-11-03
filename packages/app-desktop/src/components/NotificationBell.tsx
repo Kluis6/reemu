@@ -14,7 +14,6 @@ import {
 import {
   AlertRegular,
   ArrowCircleUpRegular,
-  DismissRegular,
   SparkleRegular,
   WarningRegular,
 } from "@fluentui/react-icons";
@@ -26,6 +25,7 @@ import i18n from "../i18n";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
 import { useModalButtonStyles } from "../styles/buttons";
 import { floatingDrawer } from "../styles/xbox";
+import { CloseButton } from "./CloseButton";
 
 const useStyles = makeStyles({
   badge: { position: "absolute", top: "2px", right: "2px", pointerEvents: "none" },
@@ -141,14 +141,7 @@ export function NotificationBell({ className }: { className?: string }) {
       >
         <DrawerHeader>
           <DrawerHeaderTitle
-            action={
-              <Button
-                appearance="subtle"
-                icon={<DismissRegular />}
-                aria-label={t("common.close")}
-                onClick={close}
-              />
-            }
+            action={<CloseButton onClick={close} />}
           >
             {t("notifications.title")}
           </DrawerHeaderTitle>

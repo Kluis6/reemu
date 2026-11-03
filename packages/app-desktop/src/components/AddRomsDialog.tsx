@@ -11,12 +11,13 @@ import {
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
-import { DismissRegular, FolderRegular } from "@fluentui/react-icons";
+import { FolderRegular } from "@fluentui/react-icons";
 import { useState } from "react";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { useModalButtonStyles } from "../styles/buttons";
 import { pickFolder } from "../lib/tauri";
 import { useTranslation } from "react-i18next";
+import { CloseButton } from "./CloseButton";
 
 const useStyles = makeStyles({
   row: {
@@ -54,14 +55,7 @@ export function AddRomsDialog({
       <DialogSurface>
         <DialogBody>
           <DialogTitle
-            action={
-              <Button
-                appearance="subtle"
-                aria-label={t("common.close")}
-                icon={<DismissRegular />}
-                onClick={() => onOpenChange(false)}
-              />
-            }
+            action={<CloseButton onClick={() => onOpenChange(false)} />}
           >
             {t("shell2.addRomsTitle")}
           </DialogTitle>

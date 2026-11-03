@@ -29,7 +29,6 @@ import {
   ClockRegular,
   DeleteFilled,
   DeleteRegular,
-  DismissRegular,
   EditRegular,
   HeartFilled,
   HeartRegular,
@@ -86,6 +85,7 @@ import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
 import { rankCores } from "../lib/coreChoice";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
+import { CloseButton } from "../components/CloseButton";
 
 export function RomDetail() {
   const { t, i18n } = useTranslation();
@@ -578,14 +578,7 @@ export function RomDetail() {
       >
         <DrawerHeader>
           <DrawerHeaderTitle
-            action={
-              <Button
-                appearance="subtle"
-                aria-label={t("common.close")}
-                icon={<DismissRegular />}
-                onClick={() => setInfoOpen(false)}
-              />
-            }
+            action={<CloseButton onClick={() => setInfoOpen(false)} />}
           >
             {t("game.infoTitle")}
           </DrawerHeaderTitle>
