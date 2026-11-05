@@ -1,0 +1,99 @@
+name: Homologação
+
+# Instalador de teste do Windows em cada pull request, para baixar e testar
+# antes do merge (TASKS › "Ambiente de homologação"). Sem segredos e sem
+# assinatura: roda com `pull_request` (nunca `pull_request_target`), então o
+# código do PR não alcança a chave de assinatura nem as credenciais do
+# ScreenScraper, que ficam no ambiente `release`. PR de fork só roda depois
+# que o dono do projeto libera, como o CI.
+#
+# O instalador sai sem auto-update e sem a busca de metadados no
+# ScreenScraper (credenciais de desenvolvedor ficam fora), e o Windows mostra
+# o aviso do SmartScreen por não ser assinado.
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "site/**"
+
+permissions:
+  contents: read
+
+# Um build por PR: um envio novo cancela o anterior.
+concurrency:
+  group: homologacao-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Instalador de teste (Windows)
+    # PRs do Dependabot só trocam dependências; o CI já cobre.
+    if: github.actor != 'dependabot[bot]'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # O canal/componentes vêm de rust-toolchain.toml (mesmo padrão do ci.yml).
+      - name: Preparar toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      # Cache próprio (o do release roda em tag; o do PR fica restrito ao PR).
+      # Guarda também o ~/.cargo/bin, então o Tauri CLI só compila na 1ª vez.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: homologacao
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Instalar Tauri CLI
+        shell: bash
+        run: command -v cargo-tauri || cargo install tauri-cli --version "^2" --locked
+
+      # O core-host vai dentro do instalador (bundle.resources); ver release.yml.
+      - name: Build reemu-core-host (release)
+        run: cargo build --release -p core-host-desktop
+
+      # Só o instalador NSIS (.exe): basta para testar e é mais rápido que
+      # gerar também o .msi. Sem tauri.updater.json: nada de auto-update.
+      # "ReEmu Teste" com identificador próprio: instala ao lado do oficial,
+      # com pasta de dados separada (banco, biblioteca, configurações), então
+      # uma migração de banco do PR não chega aos dados do ReEmu de verdade.
+      - name: Build do instalador de teste
+        shell: bash
+        run: >
+          cargo tauri build --bundles nsis
+          --config apps/desktop/src-tauri/tauri.conf.json
+          --config apps/desktop/src-tauri/tauri.bundle.windows.json
+          --config '{"productName":"ReEmu Teste","identifier":"com.reemu.desktop.teste"}'
+
+      - name: Subir o instalador
+        uses: actions/upload-artifact@v7
+        with:
+          name: ReEmu-teste-PR${{ github.event.pull_request.number }}-windows
+          path: target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Como testar
+        shell: bash
+        run: |
+          {
+            echo "## Instalador de teste do PR #${{ github.event.pull_request.number }}"
+            echo
+            echo "Baixe o artefato **ReEmu-teste-PR${{ github.event.pull_request.number }}-windows** no fim desta página (vale 7 dias)."
+            echo
+            echo "- Instala como **ReEmu Teste**, ao lado do ReEmu oficial, com biblioteca, saves e configurações próprios: comece adicionando uma pasta de ROMs."
+            echo "- Não é assinado: o Windows mostra o aviso do SmartScreen (Mais informações › Executar assim mesmo)."
+            echo "- Sem auto-update e sem a busca de metadados no ScreenScraper."
+            echo "- As senhas guardadas no Windows (ScreenScraper, Alvanista) são as mesmas do ReEmu oficial."
+            echo "- Para remover: Configurações do Windows › Aplicativos › ReEmu Teste."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -15,6 +15,15 @@ revisão do dono do projeto: colaboradores não conseguem enviar direto para a
 5. Com a aprovação, o CI verde e as conversas resolvidas, o dono do projeto faz o
    merge em squash.
 
+## Instalador de teste
+
+Todo pull request que muda código gera um instalador de teste do Windows
+(workflow `Homologação`). Ele aparece como artefato
+`ReEmu-teste-PR<número>-windows` na página da execução, vale 7 dias e instala
+como **ReEmu Teste**, ao lado do ReEmu oficial e com dados próprios. Não é
+assinado (o Windows mostra o aviso do SmartScreen), não tem auto-update nem a
+busca de metadados no ScreenScraper.
+
 ## Antes de abrir o pull request
 
 No frontend (`packages/app-desktop`):

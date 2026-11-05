@@ -46,11 +46,17 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       `latest.json` publicado traz a 0.1.11 nas 6 plataformas, assinadas pela chave
       `B6070D7C1CFAAE82`, a mesma do app. Guardar a chave antiga (`~/.tauri/reemu.key`): se a
       senha aparecer, ela ainda assina uma versão de transição para quem ficou na `v0.1.10`.
-- [ ] `todo` — **Ambiente de homologação** (proposta de 2026-11-03, aguardando o dono do
-      projeto): build de teste do instalador de Windows em cada pull request, sem assinatura nem
-      segredos, para baixar e testar antes do merge; depois, canal beta com tags
-      `vX.Y.Z-beta.N`. Antes do beta, conferir que o `latest.json` do auto-update ignora
-      pré-release, para os usuários atuais não receberem a versão de teste.
+- [ ] `todo` — **Ambiente de homologação** (2026-11-05):
+      - **Feito:** workflow `homologacao.yml`: instalador de teste do Windows (NSIS) em cada
+        pull request que muda código, sem segredos e sem assinatura (`pull_request`, nunca
+        `pull_request_target`), como artefato de 7 dias. Instala como "ReEmu Teste"
+        (`com.reemu.desktop.teste`), ao lado do oficial e com pasta de dados própria; as
+        senhas do chaveiro (`credentials.rs`, nome fixo) são as mesmas do oficial.
+        PRs do Dependabot ficam de fora. Documentado no `CONTRIBUTING.md`.
+      - **Falta:** canal beta com tags `vX.Y.Z-beta.N`. Antes dele: no `release.yml`, tag
+        com `-beta` sai como pré-release e o job do `latest.json` não roda em pré-release
+        (o app consulta `releases/latest`, que ignora pré-release); e decidir o endereço
+        próprio do auto-update da beta, para quem instalar a beta receber as betas seguintes.
 - [ ] `todo` — **Credenciais de desenvolvedor do ScreenScraper** (2026-10-08):
       sem `devid`/`devpassword` a API responde 403 em toda busca e nenhum
       metadado vem do ScreenScraper. Pedir no fórum do screenscraper.fr
