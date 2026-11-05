@@ -94,12 +94,12 @@ o card atual fica.
       confere a assinatura do arquivo baixado antes de abrir o zip. Tentar de novo quando
       sair uma versão do plugin, do `wgpu` ou do `gpu-allocator` compatível; conferir com
       `scripts/check-windows.sh`.
-- [ ] `todo` — **Testes de GPU com SIGSEGV nesta máquina Linux** (2026-11-03):
-      `hw_render_core_detects_requirements_and_negotiates` (core-loader, OpenGL) e
-      `gpu::tests::canvas_viewport_sizes_viewport_passes` (app, wgpu/Vulkan) caem com falha de
-      segmentação, também na `main`. Passavam em 2026-10-14; desde então o kernel foi para
-      7.0.0-42 (driver NVIDIA 595.99.02, módulo e biblioteca na mesma versão). O app em si abre
-      normalmente. No CI do GitHub esses testes não rodam com GPU, então não aparecem lá.
+- [x] `done` — **Testes de GPU com SIGSEGV nesta máquina Linux** (2026-11-03, resolvido em
+      2026-11-05): `hw_render_core_detects_requirements_and_negotiates` e
+      `gpu::tests::canvas_viewport_sizes_viewport_passes` caíam também na `main`, depois da
+      atualização do kernel para 7.0.0-42 e antes de reiniciar. Depois do reinício
+      (2026-11-05) a suíte inteira passa, com os testes de GPU: 430 testes, 0 falhas.
+      Não era o código.
 - [x] `done` — **Testes do `emu-session` usavam o `reemu-core-host` instalado** (2026-11-05):
       o `cargo build` de dentro do teste compilava no `target/` padrão quando o teste rodava
       com outro `CARGO_TARGET_DIR`; a sessão não achava o binário e caía em
