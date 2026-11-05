@@ -46,11 +46,9 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       `latest.json` publicado traz a 0.1.11 nas 6 plataformas, assinadas pela chave
       `B6070D7C1CFAAE82`, a mesma do app. Guardar a chave antiga (`~/.tauri/reemu.key`): se a
       senha aparecer, ela ainda assina uma versão de transição para quem ficou na `v0.1.10`.
-- [ ] `todo` — **Ambiente de homologação** (proposta de 2026-11-03, aguardando o dono do
-      projeto): build de teste do instalador de Windows em cada pull request, sem assinatura nem
-      segredos, para baixar e testar antes do merge; depois, canal beta com tags
-      `vX.Y.Z-beta.N`. Antes do beta, conferir que o `latest.json` do auto-update ignora
-      pré-release, para os usuários atuais não receberem a versão de teste.
+- [x] `decidido` — **Sem versão de teste** (dono do projeto, 2026-11-05): só a versão
+      oficial é distribuída. Ficam fora o instalador de teste por pull request (PR #12,
+      fechado) e o canal beta (`vX.Y.Z-beta.N`). Os pull requests seguem conferidos pelo CI.
 - [ ] `todo` — **Credenciais de desenvolvedor do ScreenScraper** (2026-10-08):
       sem `devid`/`devpassword` a API responde 403 em toda busca e nenhum
       metadado vem do ScreenScraper. Pedir no fórum do screenscraper.fr
