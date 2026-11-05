@@ -23,8 +23,25 @@ fn lock() -> std::sync::MutexGuard<'static, ()> {
     // então lá isto é no-op rápido.
     static BUILT: std::sync::Once = std::sync::Once::new();
     BUILT.call_once(|| {
+        // Na mesma pasta `target` deste teste (`<target>/debug/deps/<teste>`),
+        // que é onde a sessão procura o binário. Sem `--target-dir`, o `cargo`
+        // de dentro do teste compilava no `target/` padrão quando o teste rodava
+        // com outro `CARGO_TARGET_DIR`; a sessão não achava o binário e caía no
+        // ReEmu instalado em `/usr/lib/ReEmu`, com um IPC de outra versão.
+        let exe = std::env::current_exe().expect("caminho do teste");
+        let target_dir = exe
+            .ancestors()
+            .nth(3)
+            .expect("teste fora de <target>/<perfil>/deps");
         let ok = std::process::Command::new(env!("CARGO"))
-            .args(["build", "-p", "core-host-desktop", "--quiet"])
+            .args([
+                "build",
+                "-p",
+                "core-host-desktop",
+                "--quiet",
+                "--target-dir",
+            ])
+            .arg(target_dir)
             .status()
             .map(|s| s.success())
             .unwrap_or(false);

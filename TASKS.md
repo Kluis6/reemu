@@ -100,12 +100,11 @@ o card atual fica.
       segmentação, também na `main`. Passavam em 2026-10-14; desde então o kernel foi para
       7.0.0-42 (driver NVIDIA 595.99.02, módulo e biblioteca na mesma versão). O app em si abre
       normalmente. No CI do GitHub esses testes não rodam com GPU, então não aparecem lá.
-- [ ] `todo` — **Testes do `emu-session` usam o `reemu-core-host` instalado** (2026-11-03):
-      sem o binário ao lado do executável de teste, `core_host_path` cai em
-      `/usr/lib/ReEmu/reemu-core-host` (o ReEmu instalado no sistema, aqui o 0.1.7), com o
-      protocolo antigo, e 6 testes falham com `bincode decode: UnexpectedEnd`. Com
-      `cargo build -p core-host-desktop` antes, passam. Fazer o teste preferir o binário do
-      próprio `target` ou falhar com mensagem clara em vez de usar o instalado.
+- [x] `done` — **Testes do `emu-session` usavam o `reemu-core-host` instalado** (2026-11-05):
+      o `cargo build` de dentro do teste compilava no `target/` padrão quando o teste rodava
+      com outro `CARGO_TARGET_DIR`; a sessão não achava o binário e caía em
+      `/usr/lib/ReEmu/reemu-core-host`, com o IPC de outra versão. Agora o teste compila com
+      `--target-dir` igual ao da pasta de onde roda; os 9 testes passam nos dois casos.
 
 - [ ] `todo` — **Stella trava no Windows na fumaça do catálogo**
       (2026-10-14): desde 2026-09-28 o `catalog-smoke.yml` falha toda
