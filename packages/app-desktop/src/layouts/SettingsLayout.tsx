@@ -134,6 +134,8 @@ const WIDE_TABS = new Set([
   "aparencia",
   "cores",
   "bios",
+  // Gerenciar biblioteca: lista em faixas, como Cores
+  "biblioteca",
   "controllers",
   "video",
 ]);

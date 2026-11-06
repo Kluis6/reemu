@@ -75,6 +75,9 @@ const useStyles = makeStyles({
     width: '120px',
     minWidth: '0 !important',
     maxWidth: 'none !important',
+    // com o fundo do botão, sem a borda (pedido do usuário, 2026-11-06); 1 px
+    // transparente, não `none`, para o tamanho não mudar no foco
+    border: '1px solid transparent !important',
   },
 })
 

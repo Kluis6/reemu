@@ -45,4 +45,28 @@ export const useModalButtonStyles = makeStyles({
     ':hover': { backgroundColor: tokens.colorNeutralBackground3Hover },
     ':hover:active': { backgroundColor: tokens.colorNeutralBackground3Pressed },
   },
+  // O mesmo preenchimento, sem contorno (Gerenciar biblioteca, pedido do
+  // usuário, 2026-11-06). Borda de 1 px transparente, não `none`: o tamanho
+  // não muda e o foco continua no anel de fora (index.css).
+  secondaryFlat: {
+    backgroundColor: tokens.colorNeutralBackground3,
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "transparent",
+    borderLeftColor: "transparent",
+    ':hover': {
+      backgroundColor: tokens.colorNeutralBackground3Hover,
+      borderTopColor: "transparent",
+      borderRightColor: "transparent",
+      borderBottomColor: "transparent",
+      borderLeftColor: "transparent",
+    },
+    ':hover:active': {
+      backgroundColor: tokens.colorNeutralBackground3Pressed,
+      borderTopColor: "transparent",
+      borderRightColor: "transparent",
+      borderBottomColor: "transparent",
+      borderLeftColor: "transparent",
+    },
+  },
 })

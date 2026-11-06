@@ -9,6 +9,7 @@ import {
   Tooltip,
   makeStyles,
   tokens,
+  mergeClasses,
 } from '@fluentui/react-components'
 import {
   ArrowCircleUpRegular,
@@ -113,8 +114,30 @@ const useStyles = makeStyles({
     padding: '0 !important',
     minWidth: '0 !important',
     maxWidth: 'none !important',
+    // com o fundo do botão, sem a borda (pedido do usuário, 2026-11-06); 1 px
+    // transparente, não `none`, para o tamanho não mudar no foco
+    border: '1px solid transparent !important',
+  },
+  // Botões claros (não o principal): o fundo não muda no hover nem no foco
+  // (pedido do usuário, 2026-11-06), o cinza do `secondary` sai. O que marca
+  // o estado é o anel e o brilho de sempre (index.css).
+  keepBg: {
+    ':hover, :hover:active, :focus, :focus-visible': {
+      backgroundColor: `${tokens.colorNeutralBackground1} !important`,
+      color: `${tokens.colorNeutralForeground1} !important`,
+    },
   },
   badge: { whiteSpace: 'nowrap' },
+  // Selo da API de vídeo do core, preenchido (pedido do usuário, 2026-11-06):
+  // Vulkan em vermelho (`danger` do Fluent), OpenGL em azul. O azul é fixo da
+  // paleta do Fluent, não a cor de destaque, que muda com o tema; com o texto
+  // branco passa de 4.5:1.
+  hwBadge: { marginLeft: '8px' },
+  hwOpenGl: {
+    marginLeft: '8px',
+    backgroundColor: tokens.colorPaletteBlueBorderActive,
+    color: tokens.colorNeutralForegroundOnBrand,
+  },
   actions: {
     display: 'flex',
     justifyContent: 'flex-end',
@@ -122,7 +145,7 @@ const useStyles = makeStyles({
   },
 })
 
-/** Só com ícone e sem borda (subtle): o nome vai na dica, acima do botão, e no
+/** Só com ícone, com fundo e sem borda: o nome vai na dica, acima do botão, e no
  *  rótulo acessível (Fluent 2, Button). */
 function IconAction({
   label,
@@ -139,11 +162,12 @@ function IconAction({
   disabled?: boolean
   onClick: () => void
 }) {
+  const s = useStyles()
   return (
     <Tooltip positioning={TOOLTIP_ABOVE} content={label} relationship="label">
       <Button
-        className={className}
-        appearance={primary ? 'primary' : 'subtle'}
+        className={mergeClasses(className, !primary && s.keepBg)}
+        appearance={primary ? 'primary' : 'secondary'}
         icon={icon}
         disabled={disabled}
         onClick={onClick}
@@ -296,12 +320,12 @@ function Catalog() {
                 <Body1>
                   <Text as="strong" weight="semibold">{c.name}</Text>
                   {c.hw === 'opengl' && (
-                    <Badge appearance="outline" color="informative" style={{ marginLeft: 8 }}>
+                    <Badge appearance="filled" className={styles.hwOpenGl}>
                       OpenGL
                     </Badge>
                   )}
                   {c.hw === 'vulkan' && (
-                    <Badge appearance="outline" color="severe" style={{ marginLeft: 8 }}>
+                    <Badge appearance="filled" color="danger" className={styles.hwBadge}>
                       Vulkan
                     </Badge>
                   )}

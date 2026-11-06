@@ -24,7 +24,10 @@ const useStyles = makeStyles({
   },
   saveRow: { display: "flex", justifyContent: "flex-end" },
   // 24 até o conteúdo, como nas outras abas (12 do `gap` + 12).
-  tabs: { alignSelf: "flex-start", marginBottom: "12px" },
+  // O traço da aba ativa começa na borda das faixas da lista (pedido do
+  // usuário, 2026-11-06): o traço fica 3 px para dentro da aba, então a lista
+  // de abas volta só esses 3 (o padrão volta 15, alinhando o texto).
+  tabs: { alignSelf: "flex-start", marginBottom: "12px", marginLeft: "-3px" },
 });
 
 /**

@@ -53,7 +53,7 @@ export function ManageLibraryDialog({
       title={t("manage.title")}
       actions={
         <>
-          <Button appearance="secondary" className={btn.secondary} onClick={close}>
+          <Button appearance="secondary" className={btn.secondaryFlat} onClick={close}>
             {t("common.close")}
           </Button>
           <Button
