@@ -39,6 +39,7 @@ const ICONS = {
   "qr-code": "qr_code",
   coffee: "drink_coffee",
   payment: "payment",
+  "hand-wave": "hand_wave",
 };
 
 // Ícones desenhados pro ReEmu no mesmo estilo do Fluent (grade 24×24, traço

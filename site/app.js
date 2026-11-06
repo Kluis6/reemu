@@ -186,16 +186,14 @@ function renderRelease(r, isLatest) {
 
   const notes = renderNotes(r.body);
   if (notes) {
-    // Só a mais recente abre as notas; as antigas ficam recolhidas.
-    if (isLatest) card.append(notes);
-    else {
-      card.append(
-        el("fluent-accordion", { class: "mt-2" },
-          el("fluent-accordion-item", {},
-            el("span", { slot: "heading" }, t("dl.changes")),
-            notes)),
-      );
-    }
+    // As notas ficam num acordeão do Fluent, recolhido, pra o card começar
+    // pelos downloads.
+    card.append(
+      el("fluent-accordion", { class: "mt-2" },
+        el("fluent-accordion-item", {},
+          el("span", { slot: "heading" }, t("dl.changes")),
+          notes)),
+    );
   }
 
   const files = installers(r);
