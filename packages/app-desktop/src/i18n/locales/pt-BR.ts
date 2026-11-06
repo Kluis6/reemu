@@ -1052,6 +1052,8 @@ const ptBR = {
     now: 'agora',
     minAgo: 'há {{count}} min',
     hAgo: 'há {{count}} h',
+    onlyUnread: 'Mostrar apenas não lidas',
+    noUnread: 'Nenhuma notificação não lida.',
   },
   controllers: {
     mapRemoved: 'Mapa de controle removido (volta ao padrão).',

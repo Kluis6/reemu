@@ -1051,6 +1051,8 @@ const es: Messages = {
     now: 'ahora',
     minAgo: 'hace {{count}} min',
     hAgo: 'hace {{count}} h',
+    onlyUnread: 'Mostrar solo no leídas',
+    noUnread: 'No hay notificaciones sin leer.',
   },
   controllers: {
     mapRemoved: 'Mapa del mando eliminado (vuelve al predeterminado).',

@@ -1051,6 +1051,8 @@ const en: Messages = {
     now: 'now',
     minAgo: '{{count}} min ago',
     hAgo: '{{count}} h ago',
+    onlyUnread: 'Show unread only',
+    noUnread: 'No unread notifications.',
   },
   controllers: {
     mapRemoved: 'Controller map removed (back to default).',

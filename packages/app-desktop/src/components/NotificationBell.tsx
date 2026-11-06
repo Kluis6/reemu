@@ -1,4 +1,5 @@
 import {
+  Body1,
   Button,
   Caption1,
   CounterBadge,
@@ -6,9 +7,9 @@ import {
   DrawerHeader,
   DrawerHeaderTitle,
   OverlayDrawer,
+  Switch,
   Tooltip,
   makeStyles,
-  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
 import {
@@ -23,7 +24,6 @@ import { useNotificationStore, type AppNotification } from "../stores/useNotific
 import { useTranslation } from "react-i18next";
 import i18n from "../i18n";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
-import { useModalButtonStyles } from "../styles/buttons";
 import { floatingDrawer } from "../styles/xbox";
 import { CloseButton } from "./CloseButton";
 
@@ -36,31 +36,83 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground2,
     color: tokens.colorNeutralForeground1,
   },
-  // a folga em cima não deixa o corpo do drawer cortar o anel de foco
+  // Cabeçalho com a mesma margem do corpo (24): o X termina na borda dos cards.
+  // Laterais do drawer de perfil: 10 na lista (o respiro de 16 fica dentro de
+  // cada item). O cabeçalho acompanha: o título começa onde começa o texto do
+  // filtro e o ícone dos itens (10 + 16), e o X termina na borda deles (10).
+  // O Fluent puxa o botão de ação 8 px pra fora; aqui ele para na margem.
+  header: {
+    paddingLeft: "26px",
+    paddingRight: "10px",
+    "& .fui-DrawerHeaderTitle__action": { marginRight: 0 },
+  },
+  body: { paddingLeft: "10px", paddingRight: "10px" },
+  // Filtro "só não lidas" numa faixa preenchida, como no app Xbox.
+  filter: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    columnGap: tokens.spacingHorizontalM,
+    marginTop: "8px",
+    padding: "6px 4px 6px 16px",
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  // Folga em cima: o anel e o brilho do foco não encostam no filtro.
   list: {
     display: "flex",
     flexDirection: "column",
-    rowGap: tokens.spacingVerticalS,
-    paddingTop: "12px",
+    rowGap: "4px",
+    paddingTop: "20px",
     paddingBottom: "12px",
   },
+  // Linha: imagem quadrada, título e texto, e o tempo à direita. Sem borda e
+  // sem fundo: a cor só aparece no hover e no foco, como no app Xbox.
   item: {
-    justifyContent: "flex-start",
-    textAlign: "left",
-    alignItems: "flex-start",
-    columnGap: tokens.spacingHorizontalM,
-    paddingTop: tokens.spacingVerticalS,
-    paddingBottom: tokens.spacingVerticalS,
+    display: "grid",
+    gridTemplateColumns: "48px minmax(0, 1fr) auto",
+    alignItems: "start",
+    columnGap: "16px",
     width: "100%",
     maxWidth: "none",
+    minHeight: "64px",
+    padding: "12px 16px",
+    textAlign: "left",
+    fontWeight: tokens.fontWeightRegular,
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "transparent",
+    borderLeftColor: "transparent",
+    backgroundColor: "transparent",
+    ":focus-visible, :global(html[data-nav-focus]) &:focus": {
+      backgroundColor: tokens.colorNeutralBackground3,
+    },
+    ":hover, :hover:active": {
+      backgroundColor: tokens.colorNeutralBackground3Hover,
+      borderTopColor: "transparent",
+      borderRightColor: "transparent",
+      borderBottomColor: "transparent",
+      borderLeftColor: "transparent",
+    },
+  },
+  // ícone num quadrado na cor de destaque do tema, como o troféu do Xbox
+  thumb: {
+    display: "grid",
+    placeItems: "center",
+    width: "48px",
+    height: "48px",
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorBrandBackground,
+    color: tokens.colorNeutralForegroundOnBrand,
+    fontSize: "26px",
   },
   itemText: { display: "flex", flexDirection: "column", rowGap: "2px", minWidth: 0 },
-  itemTitle: { fontWeight: tokens.fontWeightSemibold },
-  // ícone/indicador: destaque do tema (`reemuBrandAccent`)
-  unread: { color: "var(--reemuBrandAccent)" },
-  meta: { color: tokens.colorNeutralForeground3 },
+  itemTitle: { fontWeight: tokens.fontWeightSemibold, color: tokens.colorNeutralForeground1 },
+  summary: { color: tokens.colorNeutralForeground2 },
+  time: { color: tokens.colorNeutralForeground3, whiteSpace: "nowrap", paddingTop: "2px" },
   empty: {
     color: tokens.colorNeutralForeground3,
+    paddingTop: "20px",
   },
 });
 
@@ -82,7 +134,6 @@ function ago(at: number): string {
 export function NotificationBell({ className }: { className?: string }) {
   const { t } = useTranslation();
   const s = useStyles();
-  const btn = useModalButtonStyles();
   const bell = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
   const items = useNotificationStore((n) => n.items);
@@ -90,7 +141,9 @@ export function NotificationBell({ className }: { className?: string }) {
   const openDialog = useNotificationStore((n) => n.openDialog);
   const openShaderDialog = useNotificationStore((n) => n.openShaderDialog);
   const [open, setOpen] = useState(false);
+  const [onlyUnread, setOnlyUnread] = useState(false);
   const unread = items.filter((i) => !i.read).length;
+  const shown = onlyUnread ? items.filter((i) => !i.read) : items;
 
   // marca ao FECHAR: enquanto a lista está aberta o destaque de "não lida"
   // continua visível. O foco vindo do controle não volta sozinho ao sino.
@@ -139,45 +192,46 @@ export function NotificationBell({ className }: { className?: string }) {
         className={s.drawer}
         aria-label={t("notifications.title")}
       >
-        <DrawerHeader>
+        <DrawerHeader className={s.header}>
           <DrawerHeaderTitle
             action={<CloseButton onClick={close} />}
           >
             {t("notifications.title")}
           </DrawerHeaderTitle>
         </DrawerHeader>
-        <DrawerBody>
-          {items.length === 0 ? (
-            <Caption1 className={s.empty}>{t("notifications.empty")}</Caption1>
+        <DrawerBody className={s.body}>
+          <label className={s.filter}>
+            <Body1>{t("notifications.onlyUnread")}</Body1>
+            <Switch checked={onlyUnread} onChange={(_, d) => setOnlyUnread(d.checked)} />
+          </label>
+          {shown.length === 0 ? (
+            <Caption1 className={s.empty}>
+              {items.length === 0 ? t("notifications.empty") : t("notifications.noUnread")}
+            </Caption1>
           ) : (
             <div className={s.list}>
-              {items.map((n) => {
-                const iconClass = mergeClasses(!n.read && s.unread);
-                return (
-                  <Button
-                    key={n.id}
-                    className={mergeClasses(s.item, btn.secondary)}
-                    icon={
-                      n.kind === "update" ? (
-                        <ArrowCircleUpRegular className={iconClass} />
-                      ) : n.kind === "shaderFailed" || n.kind === "notice" ? (
-                        <WarningRegular className={iconClass} />
-                      ) : (
-                        <SparkleRegular className={iconClass} />
-                      )
-                    }
-                    onClick={() => select(n)}
-                  >
-                    <span className={s.itemText}>
-                      <span className={mergeClasses(s.itemTitle, !n.read && s.unread)}>
-                        {n.title}
-                      </span>
-                      <Caption1 className={s.meta}>{n.summary}</Caption1>
-                      <Caption1 className={s.meta}>{ago(n.at)}</Caption1>
-                    </span>
-                  </Button>
-                );
-              })}
+              {shown.map((n) => (
+                <Button
+                  key={n.id}
+                  className={s.item}
+                  onClick={() => select(n)}
+                >
+                  <span className={s.thumb} aria-hidden>
+                    {n.kind === "update" ? (
+                      <ArrowCircleUpRegular />
+                    ) : n.kind === "shaderFailed" || n.kind === "notice" ? (
+                      <WarningRegular />
+                    ) : (
+                      <SparkleRegular />
+                    )}
+                  </span>
+                  <span className={s.itemText}>
+                    <span className={s.itemTitle}>{n.title}</span>
+                    <Caption1 className={s.summary}>{n.summary}</Caption1>
+                  </span>
+                  <Caption1 className={s.time}>{ago(n.at)}</Caption1>
+                </Button>
+              ))}
             </div>
           )}
         </DrawerBody>
