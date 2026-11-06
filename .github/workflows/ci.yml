@@ -60,6 +60,8 @@ jobs:
   windows-check:
     name: Windows (cargo check cruzado)
     runs-on: ubuntu-24.04
+    # o apt-get do runner já travou por mais de uma hora (run 42245969623)
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
