@@ -859,6 +859,27 @@ no `emu-session`, ver `docs/historico.md`).
       quando o mobile for o 2º consumidor. Esta máquina ainda precisa de NDK,
       JDK 17, `cmdline-tools` e targets Rust `*-linux-android*`.
 
+- [ ] `backlog` — **Porte para macOS** (avaliado em 2026-11-06; decisão do dono do
+      projeto: fica em backlog). Mexe na estrutura de cores e de GPU, então cada passo
+      exige aviso antes. O que já serve: Tauri/WebView, áudio, controle, banco, o
+      processo do core e o IPC (caminho `cfg(unix)`), o catálogo e o carregador de cores
+      (já têm o ramo `macos`, `.dylib` do buildbot em x86_64 e arm64) e o wgpu (Metal).
+      O que falta:
+      1. **Cores OpenGL**: o contexto hoje é EGL, que o macOS não tem; lá o OpenGL vai
+         até 4.1 e está obsoleto. Caminho a decidir (CGL ou ANGLE sobre Metal) com a
+         documentação oficial — **não verificado**.
+      2. **Cores Vulkan**: só via MoltenVK (subconjunto de portabilidade); conferir core
+         a core (PSX-HW, paraLLEl N64) — **não verificado**.
+      3. **Quadros sem cópia**: dma_buf (Linux) e anel compartilhado (Windows) não
+         existem lá; IOSurface seria o equivalente. Até lá, a leitura pela CPU
+         (`gpu/readback.rs`).
+      4. **Distribuição**: conta Apple Developer, assinatura e notarização; os cores
+         baixados não são assinados (o app precisa da permissão para carregar
+         bibliotecas de terceiros).
+      5. **CI**: runner `macos-latest` nos testes e no `release.yml`.
+      Ordem proposta: app abrindo com os cores de software e leitura pela CPU → CI e
+      assinatura → cores 3D. Precisa de um Mac (ou do runner) para testar.
+
 ## Projeto futuro: emuladores nativos em Rust
 
 `blocked` — só começa quando o ReEmu for **totalmente compatível com cores
