@@ -11,3 +11,13 @@ export const TOOLTIP_POSITION: PositioningShorthand = {
   align: 'center',
   offset: 10,
 }
+
+/**
+ * Acima do componente, centralizado: para botões numa linha de lista, em que
+ * a dica à direita cobriria o botão vizinho (pedido do usuário, 2026-11-06).
+ */
+export const TOOLTIP_ABOVE: PositioningShorthand = {
+  position: 'above',
+  align: 'center',
+  offset: 8,
+}

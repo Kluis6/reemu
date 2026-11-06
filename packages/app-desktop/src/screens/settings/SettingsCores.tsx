@@ -23,7 +23,7 @@ import { useState, type ReactElement } from 'react'
 import { LoadingState } from '../../components/EmptyState'
 import { CORE_UPDATES_KEY, CORE_UPDATES_STALE_MS } from '../../hooks/useCoreUpdates'
 import { errorToast, sysToast } from '../../lib/toast'
-import { TOOLTIP_POSITION } from '../../lib/tooltip'
+import { TOOLTIP_ABOVE } from '../../lib/tooltip'
 import {
   checkCoreUpdates,
   downloadCore,
@@ -122,7 +122,8 @@ const useStyles = makeStyles({
   },
 })
 
-/** Só com ícone: o nome vai na dica e no rótulo acessível (Fluent 2, Button). */
+/** Só com ícone e sem borda (subtle): o nome vai na dica, acima do botão, e no
+ *  rótulo acessível (Fluent 2, Button). */
 function IconAction({
   label,
   icon,
@@ -139,10 +140,10 @@ function IconAction({
   onClick: () => void
 }) {
   return (
-    <Tooltip positioning={TOOLTIP_POSITION} content={label} relationship="label">
+    <Tooltip positioning={TOOLTIP_ABOVE} content={label} relationship="label">
       <Button
         className={className}
-        appearance={primary ? 'primary' : 'secondary'}
+        appearance={primary ? 'primary' : 'subtle'}
         icon={icon}
         disabled={disabled}
         onClick={onClick}
