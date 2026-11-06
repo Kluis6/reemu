@@ -135,8 +135,8 @@ const useStyles = makeStyles({
     "&:hover::before": {
       content: '""',
       position: "absolute",
-      inset: "-6px",
-      borderRadius: `calc(${tokens.borderRadiusMedium} + 6px)`,
+      inset: "-4px",
+      borderRadius: `calc(${tokens.borderRadiusMedium} + 4px)`,
       boxShadow: `0 0 12px color-mix(in srgb, ${tokens.colorBrandStroke1} 45%, transparent)`,
       pointerEvents: "none",
     },

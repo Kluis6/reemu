@@ -46,6 +46,11 @@ const gameCardSize = cardSizeCss;
 // (~12 epx) do destaque a 45%. Fora do card de jogo o brilho sai da borda do
 // elemento e tinge de leve o vão até o anel, como no Xbox; no card de jogo o
 // vão fica transparente (pedido do usuário) e o brilho vai num `::before`.
+// Esse `::before` fica a −4 px (raio + 4), no meio do traço do anel (de −3 a
+// −6), e não rente à borda externa dele: rente, com zoom ou DPI fracionado
+// sobrava meio pixel sem cor entre o anel e o brilho, uma linha clara em
+// volta do anel (print do usuário, 2026-11-06). O anel é opaco e cobre o
+// começo do brilho.
 const FOCUS_OFFSET = 3;
 const FOCUS_GLOW = `0 0 12px color-mix(in srgb, ${tokens.colorBrandStroke1} 45%, transparent)`;
 
@@ -773,8 +778,8 @@ export const useCardStyles = makeStyles({
     "::before": {
       content: '""',
       position: "absolute",
-      inset: "-6px",
-      borderRadius: `calc(${tokens.borderRadiusMedium} + 6px)`,
+      inset: "-4px",
+      borderRadius: `calc(${tokens.borderRadiusMedium} + 4px)`,
       boxShadow: FOCUS_GLOW,
       opacity: 0,
       transitionProperty: "opacity",
@@ -1306,8 +1311,8 @@ export const useDetailStyles = makeStyles({
     "& button:hover::before": {
       content: '""',
       position: "absolute",
-      inset: "-6px",
-      borderRadius: `calc(${tokens.borderRadiusMedium} + 6px)`,
+      inset: "-4px",
+      borderRadius: `calc(${tokens.borderRadiusMedium} + 4px)`,
       boxShadow: FOCUS_GLOW,
       pointerEvents: "none",
     },

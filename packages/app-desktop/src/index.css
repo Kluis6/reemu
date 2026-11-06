@@ -173,8 +173,10 @@ kbd {
 :where(.fui-Button, .fui-MenuButton, .fui-ToggleButton):where(:not(:disabled, [aria-disabled="true"]))::before {
   content: "";
   position: absolute;
-  inset: -6px;
-  border-radius: inherit;
+  inset: -4px;
+  /* o raio do anel (outline a 3 px de distância, 3 de traço): o do botão + 4 (o brilho nasce 2 px por baixo do anel, ver `FOCUS_GLOW`).
+     Com `inherit` os cantos do brilho ficavam mais retos que os do anel. */
+  border-radius: calc(var(--borderRadiusMedium) + 4px);
   box-shadow: 0 0 12px transparent;
   pointer-events: none;
 }
@@ -190,8 +192,10 @@ html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus 
 html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus::before {
   content: "";
   position: absolute;
-  inset: -6px;
-  border-radius: inherit;
+  inset: -4px;
+  /* o raio do anel (outline a 3 px de distância, 3 de traço): o do botão + 4 (o brilho nasce 2 px por baixo do anel, ver `FOCUS_GLOW`).
+     Com `inherit` os cantos do brilho ficavam mais retos que os do anel. */
+  border-radius: calc(var(--borderRadiusMedium) + 4px);
   box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent);
   pointer-events: none;
 }
@@ -250,7 +254,7 @@ html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select,
 html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search):focus-within,
 .fui-Select:has(:focus-visible) .fui-Select__select,
 html[data-nav-focus] .fui-Select:focus-within .fui-Select__select,
-:is(button, a[href], [tabindex]:not(i)):not(.fui-Card):focus-visible,
+:is(button, a[href], [tabindex]:not(i)):not(.fui-Card, .fui-Button, .fui-MenuButton, .fui-ToggleButton):focus-visible,
 html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):not(.fui-Card):focus {
   border-color: transparent !important;
 }
@@ -351,7 +355,12 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   background-color: color-mix(in srgb, var(--colorNeutralForeground1) 12%, transparent) !important;
 }
 
-/* 4. Brilho do foco POR FORA do anel, igual ao card de jogo (pedido do
+/* 4. Botões do Fluent ficam de fora do `:focus-visible` genérico abaixo: o
+   navegador marca como visível o foco que um drawer ou diálogo põe sozinho
+   ao abrir, e o brilho aparecia sem o anel (que segue o atributo do Fluent).
+   O deles vem da regra 1b.
+
+   Brilho do foco POR FORA do anel, igual ao card de jogo (pedido do
    usuário, 2026-10-16: todos os focos iguais ao do card de jogo). O anel é
    `outline` 3 px a 3 px; o brilho é um `::before` do tamanho da borda
    externa do anel (−6 px), então o vão entre o elemento e o anel fica
@@ -367,7 +376,7 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   .fui-Button[data-fui-focus-visible],
   .fui-MenuButton[data-fui-focus-visible],
   .fui-ToggleButton[data-fui-focus-visible],
-  :is(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible,
+  :is(a[href], button:not(.fui-Button, .fui-MenuButton, .fui-ToggleButton), [tabindex]:not([tabindex="-1"])):focus-visible,
   html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):focus,
   :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus
 ):not(.fui-Card, .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
@@ -387,7 +396,7 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   .fui-Button[data-fui-focus-visible],
   .fui-MenuButton[data-fui-focus-visible],
   .fui-ToggleButton[data-fui-focus-visible],
-  :is(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible,
+  :is(a[href], button:not(.fui-Button, .fui-MenuButton, .fui-ToggleButton), [tabindex]:not([tabindex="-1"])):focus-visible,
   html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):focus,
   :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus,
   html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):focus-within,
@@ -406,7 +415,7 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   .fui-Button[data-fui-focus-visible],
   .fui-MenuButton[data-fui-focus-visible],
   .fui-ToggleButton[data-fui-focus-visible],
-  :is(a[href], button, [tabindex]:not([tabindex="-1"])):focus-visible,
+  :is(a[href], button:not(.fui-Button, .fui-MenuButton, .fui-ToggleButton), [tabindex]:not([tabindex="-1"])):focus-visible,
   html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):focus,
   :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus,
   html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):focus-within,
@@ -420,8 +429,8 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   [role="treeitem"], .fui-CarouselCard > button)::before {
   content: "";
   position: absolute;
-  inset: -6px;
-  border-radius: calc(var(--borderRadiusMedium) + 6px);
+  inset: -4px;
+  border-radius: calc(var(--borderRadiusMedium) + 4px);
   box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent);
   pointer-events: none;
 }
