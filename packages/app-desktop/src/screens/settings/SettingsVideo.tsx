@@ -13,7 +13,8 @@ import { useEffect, useRef, useState } from 'react'
 import { BezelLibrary } from '../../components/BezelLibrary'
 import { LoadingState } from '../../components/EmptyState'
 import { ShaderParams } from '../../components/ShaderParams'
-import { PREVIEW_BAR_SPACE, ShaderPreview } from '../../components/ShaderPreview'
+import { ShaderPreview } from '../../components/ShaderPreview'
+import * as M from '../../styles/metrics'
 import { errorToast, sysToast, shaderIssueToast } from '../../lib/toast'
 import {
   clearDecorations,
@@ -44,14 +45,21 @@ const useStyles = makeStyles({
   // Página de Shaders na altura útil do card (o SettingsLayout dá a altura).
   // A área das colunas é um container de tamanho, pra coluna da prévia
   // calcular a largura pela altura que sobra.
-  fill: { height: '100%' },
+  // O card reserva embaixo o espaço da barra de dicas do controle; a página
+  // de Shaders usa essa área (a margem negativa a devolve), e lista e prévia
+  // descem até a margem de baixo do card, a mesma das laterais.
+  fill: {
+    height: `calc(100% + ${M.PAGE_PAD_B - M.SAFE_Y}px)`,
+    marginBottom: `-${M.PAGE_PAD_B - M.SAFE_Y}px`,
+  },
   columnsBox: { flexGrow: 1, minHeight: '200px', containerType: 'size' },
-  // Opções na 1ª coluna, prévia na 2ª. A da prévia tem a largura em que a
-  // imagem 4:3 ocupa a altura inteira (menos a barra de cima), limitada pra
-  // sobrar ao menos 320 pras opções.
+  // Opções na 1ª coluna, prévia na 2ª, na altura inteira do card: a lista
+  // rola por dentro e a prévia cobre o espaço que sobra (pedido do usuário).
   columns: {
     display: 'grid',
-    gridTemplateColumns: `minmax(320px, 1fr) min(calc((100cqh - ${PREVIEW_BAR_SPACE}px) * 4 / 3), calc(100cqw - 368px))`,
+    height: '100%',
+    gridTemplateColumns: 'minmax(320px, 5fr) minmax(0, 6fr)',
+    gridTemplateRows: 'minmax(0, 1fr)',
     columnGap: '48px',
   },
   // A altura da linha é a da prévia: as opções não contam (`contain: size`)
@@ -94,7 +102,8 @@ const useStyles = makeStyles({
   panelSub: { color: tokens.colorNeutralForeground3 },
   // Parâmetros num card que desce até o fim da prévia; com muitos, rolam
   // dentro dele com o scrollbar fino do app.
-  paramsCard: { padding: 0, flexGrow: 1, minHeight: 0 },
+  // sem sombra (pedido do usuário): o card se destaca só pelo fundo
+  paramsCard: { padding: 0, flexGrow: 1, minHeight: 0, boxShadow: 'none' },
   paramsScroll: {
     flexGrow: 1,
     minHeight: 0,
@@ -293,7 +302,7 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                     )}
                   </div>
                 </div>
-                <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} />
+                <ShaderPreview reloadKey={`${data.active}#${paramsRev}`} fill />
               </div>
             </div>
           )}

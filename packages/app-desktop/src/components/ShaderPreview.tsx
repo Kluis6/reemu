@@ -5,6 +5,7 @@ import {
   TabList,
   ToggleButton,
   makeStyles,
+  mergeClasses,
   tokens,
 } from '@fluentui/react-components'
 import { EyeOffRegular, EyeRegular } from '@fluentui/react-icons'
@@ -17,17 +18,16 @@ import { renderShaderPreview, shaderPreviewSource, type PreviewScene } from '../
 const OUT_W = 960
 const OUT_H = 720
 
-/** Altura da barra acima da imagem (botões de 32) + o espaço até ela (8 do
- *  `gap` + 16): quem põe a prévia numa coluna desconta isso da altura pra
- *  saber a largura em que a imagem 4:3 cabe (ver SettingsVideo). */
-export const PREVIEW_BAR_SPACE = 56
-
 const useStyles = makeStyles({
   root: {
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalS,
   },
+  // `fill`: a prévia na altura inteira da coluna, a imagem cobrindo o quadro
+  rootFill: { height: '100%', minHeight: 0 },
+  frameFill: { aspectRatio: 'auto', flexGrow: 1, minHeight: 0 },
+  imgCover: { objectFit: 'cover' },
   // Barra acima da imagem, da mesma largura dela: cenas à esquerda, ligar/
   // desligar o shader à direita. 24 até a imagem (8 do `gap` + 16).
   bar: {
@@ -98,7 +98,7 @@ function useBlobUrl(buf: ArrayBuffer | undefined) {
  * shader já carregado. Renderizada na GPU pelo mesmo código do jogo
  * (`render_shader_preview`), com os mesmos parâmetros.
  */
-export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
+export function ShaderPreview({ reloadKey, fill = false }: { reloadKey: string; fill?: boolean }) {
   const { t } = useTranslation()
   const s = useStyles()
   const [scene, setScene] = useState<PreviewScene>('2d')
@@ -122,7 +122,7 @@ export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
   const shown = on ? after : before
 
   return (
-    <div className={s.root}>
+    <div className={mergeClasses(s.root, fill && s.rootFill)}>
       {/* Aparência de botão: `filled-circular` do próprio TabList do Fluent
           (pílulas; a escolhida preenchida na cor do tema). */}
       <div className={s.bar}>
@@ -147,10 +147,10 @@ export function ShaderPreview({ reloadKey }: { reloadKey: string }) {
           {on ? t('video.preview.on') : t('video.preview.off')}
         </ToggleButton>
       </div>
-      <div className={s.frame}>
+      <div className={mergeClasses(s.frame, fill && s.frameFill)}>
         {shown && (
           <img
-            className={s.img}
+            className={mergeClasses(s.img, fill && s.imgCover)}
             src={shown}
             alt={on ? t('video.preview.shader') : t('video.preview.original')}
             draggable={false}
