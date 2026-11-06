@@ -173,7 +173,7 @@ function renderDownloads(files) {
 function renderRelease(r, isLatest) {
   // A mais recente (a primeira) com a borda verde.
   const card = el("article", {
-    class: "rounded-card border border-line bg-surface p-6 shadow-card first:border-green/45",
+    class: "rounded-card border border-green/45 bg-surface p-6 shadow-card",
     id: r.tag_name,
   });
   card.append(
@@ -216,7 +216,32 @@ function renderList(releases) {
     return;
   }
   const latest = releases.find((r) => !r.prerelease) || releases[0];
-  for (const r of releases) box.append(renderRelease(r, r === latest));
+  box.append(renderRelease(latest, true));
+  const older = releases.filter((r) => r !== latest);
+  if (!older.length) return;
+  // As anteriores numa lista só, recolhida: uma linha por versão, com os
+  // instaladores e o link das notas no GitHub.
+  const list = el("div", { class: "divide-y divide-line" }, ...older.map(renderOlder));
+  box.append(
+    el("fluent-accordion", { class: "rounded-card border border-line bg-surface px-2" },
+      el("fluent-accordion-item", {},
+        el("span", { slot: "heading" }, `${t("dl.older")} · ${older.length}`),
+        list)),
+  );
+}
+
+function renderOlder(r) {
+  const files = installers(r);
+  return el("div", { class: "flex flex-wrap items-center gap-x-4 gap-y-2 px-2 py-3.5" },
+    el("span", { class: "min-w-20 font-bold" }, r.name || r.tag_name),
+    el("fluent-text", { size: "200", class: "min-w-36 text-muted" }, fmtDate(r.published_at)),
+    r.prerelease && el("fluent-badge", { appearance: "tint", color: "warning" }, t("dl.pre")),
+    el("span", { class: "flex grow flex-wrap gap-2" },
+      ...files.map((f) =>
+        el("fluent-anchor-button", { appearance: "subtle", size: "small", href: f.url },
+          `${OS_NAME[f.os]} · ${f.label}`))),
+    el("fluent-link", { href: r.html_url }, t("dl.viewGithub")),
+  );
 }
 
 function renderError(message) {

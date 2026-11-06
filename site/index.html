@@ -1243,257 +1243,150 @@
         </div>
       </section>
 
-      <!-- Ritmo vertical (escala de 8 pt, em pilha): cada filho do bloco da
-           seção traz só a margem de cima, pelo tipo do que chega —
-           título → texto e texto → texto: mt-4 · → bloco (grade, lista,
-           cartões, botões) e → frase de efeito: mt-8 · → subtítulo (h3):
-           mt-12; colado no h2: mt-4 · subtítulo → conteúdo: mt-4.
-           Cartões: 16 entre eles, padding 24 (20 nos compactos). -->
+      <!-- Ritmo: cada seção abre com a barra verde → azul e o título; os
+           layouts variam (lado a lado, bento, lista, faixa em movimento,
+           linha do tempo) para a página não virar uma pilha de cartões. -->
 
       <!-- ─────────────── Nova vida ─────────────── -->
-      <section id="vida" class="py-22" aria-labelledby="vida-titulo">
-        <div class="mx-auto max-w-[1080px] px-4">
-          <!-- celular: joystick embaixo do texto; a partir de `md`, lado a lado -->
-          <div class="flex w-full flex-col md:flex-row md:items-center">
-            <div class="md:w-2/3">
-              <h2
-                id="vida-titulo"
-                data-i18n="life.title"
-                class="reveal js:motion-safe:opacity-0 text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
-              >
-                Dê uma nova vida à sua coleção
-              </h2>
-              <p
-                data-i18n="life.p1"
-                class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
-              >
-                Seus jogos clássicos merecem mais do que uma pasta cheia de
-                arquivos.
-              </p>
-              <p
-                data-i18n="life.p2"
-                class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
-              >
-                O ReEmu transforma sua coleção em uma biblioteca dinâmica,
-                organizada e fácil de explorar.
-              </p>
-              <p
-                class="reveal js:motion-safe:opacity-0 flex flex-col gap-1 text-[clamp(1.15rem,2.4vw,1.45rem)] leading-[1.35] mt-8"
-              >
-                <strong data-i18n="life.punch"
-                  >Encontre. Escolha. Jogue.</strong
-                >
-                <span data-i18n="life.punch2" class="text-muted"
-                  >Sem complicação.</span
-                >
-              </p>
-            </div>
-            <div class="mt-12 flex w-full items-center justify-center md:mt-0 md:flex-1">
-              <!-- Joystick estilo Atari (ícone próprio no estilo Fluent, ver
-                   site/scripts/fluent-icons.mjs) no degradê
-                   verde → azul da logo; o brilho fica no invólucro porque a
-                   máscara do ícone cortaria um drop-shadow aplicado nele. -->
-              <span
-                class="reveal js:motion-safe:opacity-0 drop-shadow-[0_0_28px_rgba(61,220,47,0.35)]"
-                aria-hidden="true"
-              >
-                <span
-                  class="fi fi-joystick block bg-linear-to-br from-green to-blue text-[9rem] md:text-[13rem]"
-                ></span>
-              </span>
-            </div>
+      <section id="vida" class="py-28" aria-labelledby="vida-titulo">
+        <div class="mx-auto grid max-w-[1080px] items-center gap-12 px-4 md:grid-cols-[1.25fr_1fr]">
+          <div>
+            <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
+            <h2 id="vida-titulo" data-i18n="life.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Dê uma nova vida à sua coleção</h2>
+            <p data-i18n="life.p1" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">Seus jogos clássicos merecem mais do que uma pasta cheia de arquivos.</p>
+            <p data-i18n="life.p2" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">O ReEmu transforma sua coleção em uma biblioteca dinâmica, organizada e fácil de explorar.</p>
+            <p class="reveal js:motion-safe:opacity-0 mt-10 flex flex-col gap-1 leading-[1.2]">
+              <strong data-i18n="life.punch" class="bg-linear-to-r from-green to-blue bg-clip-text text-[clamp(1.6rem,3.4vw,2.3rem)] font-bold text-transparent">Encontre. Escolha. Jogue.</strong>
+              <span data-i18n="life.punch2" class="text-[1.2rem] text-muted">Sem complicação.</span>
+            </p>
+          </div>
+          <!-- joystick no degradê da logo, flutuando devagar (ui.js, `data-float`) -->
+          <div class="relative flex items-center justify-center py-6">
+            <span class="absolute size-64 rounded-full bg-[radial-gradient(circle,rgba(61,220,47,0.22),rgba(30,139,255,0.12)_45%,transparent_70%)] blur-2xl" aria-hidden="true"></span>
+            <span class="reveal js:motion-safe:opacity-0 relative drop-shadow-[0_0_28px_rgba(61,220,47,0.35)]" aria-hidden="true">
+              <span data-float class="fi fi-joystick block bg-linear-to-br from-green to-blue text-[10rem] md:text-[14rem]"></span>
+            </span>
           </div>
         </div>
       </section>
 
-      <!-- ─────────────── Biblioteca ─────────────── -->
-      <section
-        id="biblioteca"
-        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
-        aria-labelledby="biblioteca-titulo"
-      >
+      <!-- ─────────────── Biblioteca (bento) ─────────────── -->
+      <section id="biblioteca" class="border-y border-line bg-bg-alt py-28" aria-labelledby="biblioteca-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2
-            id="biblioteca-titulo"
-            data-i18n="lib.title"
-            class="reveal js:motion-safe:opacity-0 text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
-          >
-            Uma biblioteca feita para jogar
-          </h2>
-
-          <div
-            class="mt-8 grid grid-cols-[repeat(auto-fill,minmax(290px,1fr))] gap-4"
-          >
-            <article
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted even:border-t-blue"
-            >
-              <span
-                class="mb-3 grid size-10 place-items-center rounded-lg bg-green/12 text-green"
-                aria-hidden="true"
-                ><span class="fi fi-library text-[1.375rem]"></span
-              ></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"><span data-i18n="f1.t">Organização automática</span>
-              </h3>
-              <p data-i18n="f1.p">Aponte o ReEmu para suas pastas: ele identifica cada jogo e monta a biblioteca por sistema, com capas e informações.</p>
+          <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
+          <h2 id="biblioteca-titulo" data-i18n="lib.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Uma biblioteca feita para jogar</h2>
+          <div class="mt-12 grid gap-4 md:grid-cols-6">
+            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 flex flex-col md:col-span-4 md:row-span-2">
+              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
+              <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-library text-[1.45rem]"></span></span>
+              <h3 class="mt-4 text-[1.35rem] font-bold text-ink"><span data-i18n="f1.t">Organização automática</span></h3>
+              <p data-i18n="f1.p" class="mt-1.5 max-w-[52ch] text-[0.98rem] text-muted">Aponte o ReEmu para suas pastas: ele identifica cada jogo e monta a biblioteca por sistema, com capas e informações.</p>
+              <img src="screens/biblioteca.png" data-i18n-attr="alt=sc2.alt" alt="Biblioteca do PC Engine com capas" loading="lazy" class="mt-6 w-full grow rounded-lg border border-line object-cover object-top transition-transform duration-500 ease-soft group-hover:scale-[1.02] motion-reduce:transition-none" onerror="this.remove()" />
             </article>
-            <article
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted even:border-t-blue"
-            >
-              <span
-                class="mb-3 grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
-                aria-hidden="true"
-                ><span class="fi fi-controller text-[1.375rem]"></span
-              ></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"><span data-i18n="f2.t"
-                  >Feito para o controle</span
-                >
-              </h3>
-              <p data-i18n="f2.p">Biblioteca, configurações e menus: tudo navega pelo controle, sem precisar do teclado.</p>
+            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
+              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
+              <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-controller text-[1.45rem]"></span></span>
+              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f2.t">Feito para o controle</span></h3>
+              <p data-i18n="f2.p" class="mt-1.5 text-[0.95rem] text-muted">Biblioteca, configurações e menus: tudo navega pelo controle, sem precisar do teclado.</p>
             </article>
-            <article
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted even:border-t-blue"
-            >
-              <span
-                class="mb-3 grid size-10 place-items-center rounded-lg bg-green/12 text-green"
-                aria-hidden="true"
-                ><span class="fi fi-paint-brush text-[1.375rem]"></span
-              ></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"><span data-i18n="f3.t"
-                  >Efeitos personalizados</span
-                >
-              </h3>
-              <p data-i18n="f3.p">Shaders e molduras recriam a TV de tubo, o portátil e o fliperama.</p>
+            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
+              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
+              <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-paint-brush text-[1.45rem]"></span></span>
+              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f3.t">Efeitos personalizados</span></h3>
+              <p data-i18n="f3.p" class="mt-1.5 text-[0.95rem] text-muted">Shaders e molduras recriam a TV de tubo, o portátil e o fliperama.</p>
             </article>
-            <article
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted even:border-t-blue"
-            >
-              <span
-                class="mb-3 grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
-                aria-hidden="true"
-                ><span class="fi fi-save text-[1.375rem]"></span
-              ></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"><span data-i18n="f4.t">Continue de onde parou</span>
-              </h3>
-              <p data-i18n="f4.p">Save states com miniatura do momento salvo, para achar o ponto certo num relance.</p>
+            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
+              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
+              <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-save text-[1.45rem]"></span></span>
+              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f4.t">Continue de onde parou</span></h3>
+              <p data-i18n="f4.p" class="mt-1.5 text-[0.95rem] text-muted">Save states com miniatura do momento salvo, para achar o ponto certo num relance.</p>
             </article>
-            <article
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted even:border-t-blue"
-            >
-              <span
-                class="mb-3 grid size-10 place-items-center rounded-lg bg-green/12 text-green"
-                aria-hidden="true"
-                ><span class="fi fi-heart text-[1.375rem]"></span
-              ></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"><span data-i18n="f5.t">Seus favoritos por perto</span>
-              </h3>
-              <p data-i18n="f5.p">Favoritos, jogos recentes e busca levam direto ao que você quer jogar.</p>
+            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
+              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
+              <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-heart text-[1.45rem]"></span></span>
+              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f5.t">Seus favoritos por perto</span></h3>
+              <p data-i18n="f5.p" class="mt-1.5 text-[0.95rem] text-muted">Favoritos, jogos recentes e busca levam direto ao que você quer jogar.</p>
             </article>
-            <article
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card border-t-2 border-t-green p-6 text-[0.95rem] text-muted even:border-t-blue"
-            >
-              <span
-                class="mb-3 grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
-                aria-hidden="true"
-                ><span class="fi fi-timer text-[1.375rem]"></span
-              ></span>
-              <h3 class="mb-1.5 text-[1.1rem] font-bold text-ink"><span data-i18n="f6.t">Seu histórico de jogo</span>
-              </h3>
-              <p data-i18n="f6.p">O ReEmu conta o tempo de cada jogo e mostra na página dele.</p>
+            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
+              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
+              <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-timer text-[1.45rem]"></span></span>
+              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f6.t">Seu histórico de jogo</span></h3>
+              <p data-i18n="f6.p" class="mt-1.5 text-[0.95rem] text-muted">O ReEmu conta o tempo de cada jogo e mostra na página dele.</p>
             </article>
-          </div>
-
-        </div>
-      </section>
-
-      <!-- ─────────────── Menos configuração ─────────────── -->
-      <section id="menos" class="py-22" aria-labelledby="menos-titulo">
-        <div class="mx-auto max-w-[1080px] px-4">
-          <h2
-            id="menos-titulo"
-            data-i18n="less.title"
-            class="reveal js:motion-safe:opacity-0  text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
-          >
-            Menos configuração. <br> Mais diversão.
-          </h2>
-          <p
-            data-i18n="less.lead"
-            class="reveal js:motion-safe:opacity-0  text-[1.05rem] text-muted mt-4"
-          >
-            Você não precisa transformar uma noite de nostalgia em uma sessão de
-            configuração.
-          </p>
-          <h3
-            data-i18n="less.with"
-            class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-12"
-          >O ReEmu cuida disso</h3>
-          <div
-            class="mt-4 grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4"
-          >
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green">
-              <span class="fi fi-developer-board mb-1 text-[1.375rem] text-green" aria-hidden="true"></span>
-              <strong data-i18n="w1.t">Emuladores</strong>
-              <span data-i18n="w1.p" class="text-[0.93rem] text-muted">Os cores do libretro saem do catálogo com um clique, e o ReEmu escolhe o certo para cada sistema.</span>
-            </div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green">
-              <span class="fi fi-puzzle-piece mb-1 text-[1.375rem] text-blue" aria-hidden="true"></span>
-              <strong data-i18n="w2.t">BIOS</strong>
-              <span data-i18n="w2.p" class="text-[0.93rem] text-muted">Mostra quais arquivos cada sistema precisa e se já estão no lugar.</span>
-            </div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green">
-              <span class="fi fi-image mb-1 text-[1.375rem] text-green" aria-hidden="true"></span>
-              <strong data-i18n="w3.t">Capas e informações</strong>
-              <span data-i18n="w3.p" class="text-[0.93rem] text-muted">Buscadas na internet para cada jogo da biblioteca.</span>
-            </div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green">
-              <span class="fi fi-controller mb-1 text-[1.375rem] text-blue" aria-hidden="true"></span>
-              <strong data-i18n="w4.t">Controles</strong>
-              <span data-i18n="w4.p" class="text-[0.93rem] text-muted">Reconhecidos ao conectar, com os botões já mapeados.</span>
-            </div>
-            <div class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col gap-1 border-l-3 border-l-blue p-5 odd:border-l-green">
-              <span class="fi fi-arrow-sync mb-1 text-[1.375rem] text-green" aria-hidden="true"></span>
-              <strong data-i18n="w5.t">Atualizações</strong>
-              <span data-i18n="w5.p" class="text-[0.93rem] text-muted">O próprio ReEmu avisa quando sai uma versão nova e se atualiza.</span>
-            </div>
           </div>
         </div>
       </section>
 
-      <!-- ─────────────── Sala e PC ─────────────── -->
-      <section
-        id="telas"
-        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
-        aria-labelledby="telas-titulo"
-      >
+      <!-- ─────────────── Menos configuração (lista) ─────────────── -->
+      <section id="menos" class="py-28" aria-labelledby="menos-titulo">
+        <div class="mx-auto grid max-w-[1080px] gap-12 px-4 md:grid-cols-[1fr_1.25fr]">
+          <div class="md:sticky md:top-28 md:self-start">
+            <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
+            <h2 id="menos-titulo" data-i18n="less.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Menos configuração. <br> Mais diversão.</h2>
+            <p data-i18n="less.lead" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">Você não precisa transformar uma noite de nostalgia em uma sessão de configuração.</p>
+          </div>
+          <div>
+            <h3 data-i18n="less.with" class="reveal js:motion-safe:opacity-0 text-[0.85rem] font-semibold tracking-[0.14em] text-green uppercase">O ReEmu cuida disso</h3>
+            <ul class="mt-2 divide-y divide-line border-y border-line">
+              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
+                <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-developer-board text-[1.45rem]"></span></span>
+                <div class="flex flex-col gap-1">
+                  <strong data-i18n="w1.t" class="text-[1.05rem] text-ink">Emuladores</strong>
+                  <span data-i18n="w1.p" class="text-[0.95rem] text-muted">Os cores do libretro saem do catálogo com um clique, e o ReEmu escolhe o certo para cada sistema.</span>
+                </div>
+              </li>
+              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
+                <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-puzzle-piece text-[1.45rem]"></span></span>
+                <div class="flex flex-col gap-1">
+                  <strong data-i18n="w2.t" class="text-[1.05rem] text-ink">BIOS</strong>
+                  <span data-i18n="w2.p" class="text-[0.95rem] text-muted">Mostra quais arquivos cada sistema precisa e se já estão no lugar.</span>
+                </div>
+              </li>
+              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
+                <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-image text-[1.45rem]"></span></span>
+                <div class="flex flex-col gap-1">
+                  <strong data-i18n="w3.t" class="text-[1.05rem] text-ink">Capas e informações</strong>
+                  <span data-i18n="w3.p" class="text-[0.95rem] text-muted">Buscadas na internet para cada jogo da biblioteca.</span>
+                </div>
+              </li>
+              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
+                <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-controller text-[1.45rem]"></span></span>
+                <div class="flex flex-col gap-1">
+                  <strong data-i18n="w4.t" class="text-[1.05rem] text-ink">Controles</strong>
+                  <span data-i18n="w4.p" class="text-[0.95rem] text-muted">Reconhecidos ao conectar, com os botões já mapeados.</span>
+                </div>
+              </li>
+              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
+                <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-arrow-sync text-[1.45rem]"></span></span>
+                <div class="flex flex-col gap-1">
+                  <strong data-i18n="w5.t" class="text-[1.05rem] text-ink">Atualizações</strong>
+                  <span data-i18n="w5.p" class="text-[0.95rem] text-muted">O próprio ReEmu avisa quando sai uma versão nova e se atualiza.</span>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ─────────────── Sala e PC (galeria) ─────────────── -->
+      <section id="telas" class="border-y border-line bg-bg-alt py-28" aria-labelledby="telas-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2
-            id="telas-titulo"
-            data-i18n="room.title"
-            class="reveal js:motion-safe:opacity-0 text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
-          >
-            Feito para a sala. <br> Perfeito para o PC.
-          </h2>
-          <p
-            data-i18n="room.lead"
-            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
-          >Funciona na mesa e na TV da sala, em tela cheia ou em janela.</p>
-          <ul class="reveal js:motion-safe:opacity-0 flex flex-wrap gap-2 mt-4">
-            <li
-              data-i18n="room.b1"
-              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
-            >Proporções de console em qualquer tela.</li>
-            <li
-              data-i18n="room.b2"
-              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
-            >Textos legíveis do sofá.</li>
-            <li
-              data-i18n="room.b3"
-              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
-            >Tamanho da interface ajustável.</li>
-          </ul>
+          <div class="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
+            <div>
+              <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
+              <h2 id="telas-titulo" data-i18n="room.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Feito para a sala. <br> Perfeito para o PC.</h2>
+              <p data-i18n="room.lead" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">Funciona na mesa e na TV da sala, em tela cheia ou em janela.</p>
+            </div>
+            <ul class="reveal js:motion-safe:opacity-0 flex max-w-[30rem] flex-wrap gap-2">
+              <li data-i18n="room.b1" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Proporções de console em qualquer tela.</li>
+              <li data-i18n="room.b2" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Textos legíveis do sofá.</li>
+              <li data-i18n="room.b3" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Tamanho da interface ajustável.</li>
+            </ul>
+          </div>
           <!-- Capturas em site/screens/ — enquanto o arquivo não existe, o
                quadro mostra "Captura em breve" (`data-missing`). -->
-          <div class="gallery mt-8 grid grid-cols-2 gap-4 max-sm:grid-cols-1">
-            <figure class="group reveal js:motion-safe:opacity-0 col-span-full">
+          <div class="gallery mt-12 grid gap-4 md:grid-cols-6">
+            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-6">
               <button
                 data-i18n-attr="aria-label=sc1.btn"
                 type="button"
@@ -1505,7 +1398,7 @@
                   src="screens/jogo.png"
                   alt="Jet Set Radio no Dreamcast com shader CRT e moldura"
                   loading="lazy"
-                  class="block size-full object-cover group-data-missing:hidden"
+                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
                   onerror="this.closest('figure').dataset.missing = ''"
                 />
               </button>
@@ -1516,7 +1409,7 @@
                 Jogo com shader CRT e moldura
               </figcaption>
             </figure>
-            <figure class="group reveal js:motion-safe:opacity-0">
+            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-2">
               <button
                 data-i18n-attr="aria-label=sc2.btn"
                 type="button"
@@ -1528,7 +1421,7 @@
                   src="screens/biblioteca.png"
                   alt="Biblioteca do PC Engine com capas"
                   loading="lazy"
-                  class="block size-full object-cover group-data-missing:hidden"
+                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
                   onerror="this.closest('figure').dataset.missing = ''"
                 />
               </button>
@@ -1539,7 +1432,7 @@
                 Biblioteca por sistema, com capas
               </figcaption>
             </figure>
-            <figure class="group reveal js:motion-safe:opacity-0">
+            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-2">
               <button
                 data-i18n-attr="aria-label=sc3.btn"
                 type="button"
@@ -1551,7 +1444,7 @@
                   src="screens/pagina-jogo.png"
                   alt="Página do MSR com capa, arte de fundo, tempo de jogo e opções do emulador"
                   loading="lazy"
-                  class="block size-full object-cover group-data-missing:hidden"
+                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
                   onerror="this.closest('figure').dataset.missing = ''"
                 />
               </button>
@@ -1562,7 +1455,7 @@
                 Página do jogo: capa, tempo de jogo e opções do emulador
               </figcaption>
             </figure>
-            <figure class="group reveal js:motion-safe:opacity-0">
+            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-2">
               <button
                 data-i18n-attr="aria-label=sc4.btn"
                 type="button"
@@ -1574,7 +1467,7 @@
                   src="screens/jogo-moldura.png"
                   alt="The Adventures of Batman & Robin com moldura temática e shader CRT"
                   loading="lazy"
-                  class="block size-full object-cover group-data-missing:hidden"
+                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
                   onerror="this.closest('figure').dataset.missing = ''"
                 />
               </button>
@@ -1585,7 +1478,7 @@
                 Clássicos com moldura temática e shader CRT
               </figcaption>
             </figure>
-            <figure class="group reveal js:motion-safe:opacity-0">
+            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-3">
               <button
                 data-i18n-attr="aria-label=sc5.btn"
                 type="button"
@@ -1597,7 +1490,7 @@
                   src="screens/pausa.png"
                   alt="Menu de pausa com QuickSave e QuickLoad sobre o jogo desfocado"
                   loading="lazy"
-                  class="block size-full object-cover group-data-missing:hidden"
+                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
                   onerror="this.closest('figure').dataset.missing = ''"
                 />
               </button>
@@ -1608,7 +1501,7 @@
                 Menu de pausa e save states
               </figcaption>
             </figure>
-            <figure class="group reveal js:motion-safe:opacity-0 col-span-full">
+            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-3">
               <button
                 data-i18n-attr="aria-label=sc6.btn"
                 type="button"
@@ -1620,7 +1513,7 @@
                   src="screens/configuracoes.png"
                   alt="Configurações em cartões: perfil, aparência, biblioteca, áudio, vídeo, metadados, atalhos, controles, cores, BIOS e sistema"
                   loading="lazy"
-                  class="block size-full object-cover group-data-missing:hidden"
+                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
                   onerror="this.closest('figure').dataset.missing = ''"
                 />
               </button>
@@ -1635,229 +1528,139 @@
         </div>
       </section>
 
-      <!-- ─────────────── Sistemas ─────────────── -->
-      <section id="sistemas" class="py-22" aria-labelledby="sistemas-titulo">
-        <div class="mx-auto max-w-[1080px] px-4">
-          <h2
-            id="sistemas-titulo"
-            data-i18n="more.title"
-            class="reveal js:motion-safe:opacity-0 text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
-          >Do Atari ao PlayStation</h2>
-          <p
-            data-i18n="more.lead"
-            class="reveal js:motion-safe:opacity-0  text-[1.05rem] text-muted mt-4"
-          >Consoles, portáteis, fliperamas e computadores de várias gerações, na mesma biblioteca.</p>
-          <div
-            data-i18n-attr="aria-label=sys.aria"
-            class="reveal js:motion-safe:opacity-0 mt-8 flex flex-wrap gap-2"
-            role="list"
-            aria-label="Alguns dos sistemas suportados"
-          >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >NES</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Super Nintendo</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Nintendo 64</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Game Boy</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Game Boy Color</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Game Boy Advance</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Nintendo DS</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Virtual Boy</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Master System</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Mega Drive</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Sega CD</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >32X</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Saturn</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Dreamcast</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Game Gear</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >PlayStation</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >PSP</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >PC Engine</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >PC Engine CD</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Neo Geo Pocket</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Neo Geo CD</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Arcade</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Atari 2600</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Atari 7800</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Atari Lynx</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Atari Jaguar</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >WonderSwan</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >3DO</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >MSX</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Commodore 64</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Amiga</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >ZX Spectrum</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >Amstrad CPC</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >DOS</fluent-badge
-            >
-            <fluent-badge role="listitem" appearance="outline" size="large"
-              >ScummVM</fluent-badge
-            >
-            <fluent-badge
-              data-i18n="sys.more"
-              role="listitem"
-              appearance="ghost"
-              size="large"
-              >e mais…</fluent-badge
-            >
-          </div>
+      <!-- ─────────────── Sistemas (faixas em movimento) ─────────────── -->
+      <section id="sistemas" class="overflow-hidden py-28" aria-labelledby="sistemas-titulo">
+        <div class="mx-auto max-w-[1080px] px-4 text-center">
+          <span class="reveal js:motion-safe:opacity-0 mx-auto mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
+          <h2 id="sistemas-titulo" data-i18n="more.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Do Atari ao PlayStation</h2>
+          <p data-i18n="more.lead" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4 mx-auto">Consoles, portáteis, fliperamas e computadores de várias gerações, na mesma biblioteca.</p>
+        </div>
+        <div data-i18n-attr="aria-label=sys.aria" aria-label="Alguns dos sistemas suportados" role="group"
+          class="reveal js:motion-safe:opacity-0 group mt-12 flex flex-col gap-3 [mask-image:linear-gradient(90deg,transparent,#000_12%,#000_88%,transparent)] motion-reduce:[mask-image:none] motion-reduce:px-4">
+            <div class="flex w-max gap-3 animate-marquee group-hover:[animation-play-state:paused] motion-reduce:w-auto motion-reduce:animate-none motion-reduce:flex-wrap motion-reduce:justify-center">
+              <ul class="flex gap-3 motion-reduce:flex-wrap motion-reduce:justify-center" role="list">
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">NES</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Super Nintendo</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Nintendo 64</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy Color</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy Advance</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Nintendo DS</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Virtual Boy</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Master System</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Mega Drive</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Sega CD</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">32X</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Saturn</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Dreamcast</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Gear</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PlayStation</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PSP</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PC Engine</li>
+              </ul>
+              <ul class="flex gap-3 motion-reduce:hidden" aria-hidden="true">
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">NES</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Super Nintendo</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Nintendo 64</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy Color</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy Advance</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Nintendo DS</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Virtual Boy</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Master System</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Mega Drive</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Sega CD</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">32X</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Saturn</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Dreamcast</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Gear</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PlayStation</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PSP</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PC Engine</li>
+              </ul>
+            </div>
+            <div class="flex w-max gap-3 animate-marquee-rev group-hover:[animation-play-state:paused] motion-reduce:w-auto motion-reduce:animate-none motion-reduce:flex-wrap motion-reduce:justify-center">
+              <ul class="flex gap-3 motion-reduce:flex-wrap motion-reduce:justify-center" role="list">
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PC Engine CD</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Neo Geo Pocket</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Neo Geo CD</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Arcade</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari 2600</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari 7800</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari Lynx</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari Jaguar</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">WonderSwan</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">3DO</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">MSX</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Commodore 64</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Amiga</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">ZX Spectrum</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Amstrad CPC</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">DOS</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">ScummVM</li>
+                <li data-i18n="sys.more" class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink border-dashed text-muted">e mais…</li>
+              </ul>
+              <ul class="flex gap-3 motion-reduce:hidden" aria-hidden="true">
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PC Engine CD</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Neo Geo Pocket</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Neo Geo CD</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Arcade</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari 2600</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari 7800</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari Lynx</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari Jaguar</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">WonderSwan</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">3DO</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">MSX</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Commodore 64</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Amiga</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">ZX Spectrum</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Amstrad CPC</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">DOS</li>
+                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">ScummVM</li>
+              </ul>
+            </div>
         </div>
       </section>
 
-      <!-- ─────────────── Como começar ─────────────── -->
-      <section
-        id="comecar"
-        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
-        aria-labelledby="comecar-titulo"
-      >
+      <!-- ─────────────── Como começar (linha do tempo) ─────────────── -->
+      <section id="comecar" class="border-y border-line bg-bg-alt py-28" aria-labelledby="comecar-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2
-            id="comecar-titulo"
-            data-i18n="start.title"
-            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
-          >
-            Do download ao primeiro jogo
-          </h2>
-
-          <ol
-            class="mt-8 grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4"
-          >
-            <li
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card p-6"
-            >
-              <fluent-badge
-                appearance="filled"
-                color="brand"
-                shape="circular"
-                size="extra-large"
-                >1</fluent-badge
-              >
-              <h3
-                data-i18n="s1.t"
-                class="mt-3.5 mb-1.5 text-[1.17em] font-bold"
-              >
-                Instale
-              </h3>
-              <p data-i18n="s1.p" class="text-muted">Baixe para Windows ou Linux e instale — sem dependências para procurar.</p>
+          <div class="md:text-center">
+            <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue md:mx-auto" aria-hidden="true"></span>
+            <h2 id="comecar-titulo" data-i18n="start.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Do download ao primeiro jogo</h2>
+          </div>
+          <ol class="relative mt-14 grid gap-10 md:grid-cols-3 md:gap-6">
+            <!-- a linha que liga os passos (só lado a lado) -->
+            <span class="absolute top-7 right-[16%] left-[16%] hidden h-0.5 bg-linear-to-r from-green via-green/60 to-blue md:block" aria-hidden="true"></span>
+            <li class="reveal js:motion-safe:opacity-0 relative flex flex-col items-start md:items-center md:text-center">
+              <span class="relative z-10 grid size-14 place-items-center rounded-full border-2 border-green bg-bg text-[1.35rem] font-bold text-green shadow-[0_0_24px_rgba(61,220,47,0.25)]">1</span>
+              <h3 data-i18n="s1.t" class="mt-5 text-[1.2rem] font-bold">Instale</h3>
+              <p data-i18n="s1.p" class="mt-1.5 max-w-[30ch] text-muted">Baixe para Windows ou Linux e instale — sem dependências para procurar.</p>
             </li>
-            <li
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card p-6"
-            >
-              <fluent-badge
-                appearance="filled"
-                color="brand"
-                shape="circular"
-                size="extra-large"
-                >2</fluent-badge
-              >
-              <h3
-                data-i18n="s2.t"
-                class="mt-3.5 mb-1.5 text-[1.17em] font-bold"
-              >Adicione seus jogos</h3>
-              <p data-i18n="s2.p" class="text-muted">Escolha as pastas: o ReEmu identifica os sistemas e monta a biblioteca.</p>
+            <li class="reveal js:motion-safe:opacity-0 relative flex flex-col items-start md:items-center md:text-center">
+              <span class="relative z-10 grid size-14 place-items-center rounded-full border-2 border-green bg-bg text-[1.35rem] font-bold text-green shadow-[0_0_24px_rgba(61,220,47,0.25)]">2</span>
+              <h3 data-i18n="s2.t" class="mt-5 text-[1.2rem] font-bold">Adicione seus jogos</h3>
+              <p data-i18n="s2.p" class="mt-1.5 max-w-[30ch] text-muted">Escolha as pastas: o ReEmu identifica os sistemas e monta a biblioteca.</p>
             </li>
-            <li
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card p-6"
-            >
-              <fluent-badge
-                appearance="filled"
-                color="brand"
-                shape="circular"
-                size="extra-large"
-                >3</fluent-badge
-              >
-              <h3
-                data-i18n="s3.t"
-                class="mt-3.5 mb-1.5 text-[1.17em] font-bold"
-              >Jogue</h3>
-              <p data-i18n="s3.p" class="text-muted">Pegue o controle e escolha um jogo.</p>
+            <li class="reveal js:motion-safe:opacity-0 relative flex flex-col items-start md:items-center md:text-center">
+              <span class="relative z-10 grid size-14 place-items-center rounded-full border-2 border-green bg-bg text-[1.35rem] font-bold text-green shadow-[0_0_24px_rgba(61,220,47,0.25)]">3</span>
+              <h3 data-i18n="s3.t" class="mt-5 text-[1.2rem] font-bold">Jogue</h3>
+              <p data-i18n="s3.p" class="mt-1.5 max-w-[30ch] text-muted">Pegue o controle e escolha um jogo.</p>
             </li>
           </ol>
         </div>
       </section>
 
       <!-- ─────────────── Chamada ─────────────── -->
-      <section id="download" class="py-22" aria-labelledby="download-titulo">
-        <div class="mx-auto max-w-[1080px] px-4 text-center">
-          <h2
-            id="download-titulo"
-            data-i18n="cta.title"
-            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold mx-auto"
-          >
-            Seus jogos clássicos nunca pareceram tão atuais.
-          </h2>
-          <p
-            data-i18n="cta.lead"
-            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mx-auto mt-4"
-          >Grátis, de código aberto e pronto para Windows e Linux.</p>
-          <!-- Preenchido pelo app.js com o instalador do sistema do visitante
-               (mesmo do hero); sem JS, fica o link da versão mais recente. -->
-          <div
+      <section id="download" class="py-28" aria-labelledby="download-titulo">
+        <div class="mx-auto max-w-[1080px] px-4">
+          <div class="reveal js:motion-safe:opacity-0 relative isolate overflow-hidden rounded-[28px] border border-line bg-surface px-6 py-16 text-center sm:px-12">
+            <span class="absolute -top-32 -left-24 -z-10 size-96 rounded-full bg-green/25 blur-3xl" aria-hidden="true"></span>
+            <span class="absolute -right-24 -bottom-32 -z-10 size-96 rounded-full bg-blue/25 blur-3xl" aria-hidden="true"></span>
+            <h2 id="download-titulo" data-i18n="cta.title" class="mx-auto max-w-[22ch] text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Seus jogos clássicos nunca pareceram tão atuais.</h2>
+            <p data-i18n="cta.lead" class="mx-auto mt-4 max-w-[58ch] text-[1.08rem] text-muted">Grátis, de código aberto e pronto para Windows e Linux.</p>
+            <div
             id="primary-cta"
             class="reveal js:motion-safe:opacity-0 flex flex-wrap items-center justify-center gap-3 mt-8 [&_fluent-anchor-button]:mt-2"
             aria-live="polite"
@@ -1876,82 +1679,43 @@
               ></fluent-anchor-button
             >
           </div>
-          <p
-            class="reveal js:motion-safe:opacity-0 text-[0.9rem] text-muted mt-4"
-          >
-            <fluent-link data-i18n="cta.all" href="#versoes"
-              >Ver todas as versões e o que mudou</fluent-link
-            >
-          </p>
+            <p class="mt-6 text-[0.9rem] text-muted">
+              <fluent-link data-i18n="cta.all" href="#versoes">Ver todas as versões e o que mudou</fluent-link>
+            </p>
+          </div>
         </div>
       </section>
 
-      <!-- ─────────────── Download ─────────────── -->
-      <section
-        id="versoes"
-        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
-        aria-labelledby="versoes-titulo"
-      >
+      <!-- ─────────────── Versões ─────────────── -->
+      <section id="versoes" class="border-y border-line bg-bg-alt py-28" aria-labelledby="versoes-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2
-            id="versoes-titulo"
-            data-i18n="dl.title"
-            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
-          >
-            Todas as versões
-          </h2>
-          <div id="releases" class="mt-8 flex flex-col gap-4"></div>
+          <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
+          <h2 id="versoes-titulo" data-i18n="dl.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Todas as versões</h2>
+          <!-- app.js: a mais recente aberta; as anteriores numa lista compacta -->
+          <div id="releases" class="mt-10 flex flex-col gap-4"></div>
         </div>
       </section>
 
       <!-- ─────────────── Apoie ─────────────── -->
-      <section id="apoie" class="py-22" aria-labelledby="apoie-titulo">
+      <section id="apoie" class="py-28" aria-labelledby="apoie-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2
-            id="apoie-titulo"
-            data-i18n="sup.title"
-            class="reveal js:motion-safe:opacity-0  text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
-          >
-            Gratuito. Aberto. <br> Feito para jogadores.
-          </h2>
-          <ul class="reveal js:motion-safe:opacity-0 flex flex-wrap gap-2 mt-4">
-            <li
-              data-i18n="sup.b1"
-              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
-            >
-              Sem anúncios.
-            </li>
-            <li
-              data-i18n="sup.b2"
-              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
-            >
-              Sem assinatura.
-            </li>
-            <li
-              data-i18n="sup.b3"
-              class="rounded-full border border-line bg-bg-alt px-3.5 py-2 text-[0.95rem]"
-            >
-              Sem transformar sua coleção em um serviço.
-            </li>
-          </ul>
-          <p
-            data-i18n="sup.help"
-            class="reveal js:motion-safe:opacity-0  text-[1.05rem] text-muted mt-4"
-          >Gosta do projeto? Ajude com uma doação, relatando problemas ou divulgando o ReEmu.</p>
-          <h3
-            data-i18n="sup.cta"
-            class="reveal js:motion-safe:opacity-0 text-[1.25rem] font-bold mt-12"
-          >
-            Apoie o ReEmu
-          </h3>
-
-          <!-- Formas de doação: preencha `data-link` (e `data-pix` no Pix).
-               Cartão sem link fica escondido; sem nenhum, aparece o aviso
-               abaixo. Nunca coloque um link que não seja seu. -->
-          <div
-            class="mt-4 grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-4"
-            id="donate-methods"
-          >
+          <div class="grid items-start gap-12 lg:grid-cols-[1fr_1.15fr]">
+            <div>
+              <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
+              <h2 id="apoie-titulo" data-i18n="sup.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Gratuito. Aberto. <br> Feito para jogadores.</h2>
+              <ul class="reveal js:motion-safe:opacity-0 mt-6 flex flex-wrap gap-2">
+                <li data-i18n="sup.b1" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Sem anúncios.</li>
+                <li data-i18n="sup.b2" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Sem assinatura.</li>
+                <li data-i18n="sup.b3" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Sem transformar sua coleção em um serviço.</li>
+              </ul>
+              <p data-i18n="sup.help" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">Gosta do projeto? Ajude com uma doação, relatando problemas ou divulgando o ReEmu.</p>
+            </div>
+            <div>
+              <h3 data-i18n="sup.cta" class="reveal js:motion-safe:opacity-0 text-[0.85rem] font-semibold tracking-[0.14em] text-green uppercase">Apoie o ReEmu</h3>
+              <!-- Formas de doação: preencha `data-link` (e `data-pix` no Pix).
+                   Cartão sem link fica escondido; sem nenhum, aparece o aviso
+                   abaixo. Nunca coloque um link que não seja seu. -->
+              <div class="mt-4 grid gap-4 sm:grid-cols-2" id="donate-methods">
             <div
               class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
               data-link="https://github.com/sponsors/Kluis6"
@@ -2063,8 +1827,8 @@
                 >Doar pelo PayPal</fluent-anchor-button
               >
             </div>
-          </div>
-          <fluent-message-bar
+              </div>
+              <fluent-message-bar
             data-i18n="sup.soon"
             class="reveal js:motion-safe:opacity-0 mt-4"
             id="donate-soon"
@@ -2075,10 +1839,10 @@
             As formas de doação estão sendo configuradas. Enquanto isso, dá para
             ajudar de outros jeitos:
           </fluent-message-bar>
-
-          <div
-            class="mt-4 grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4 lg:grid-cols-3"
-          >
+            </div>
+          </div>
+          <h3 data-i18n="sup.more" class="reveal js:motion-safe:opacity-0 mt-16 text-[0.85rem] font-semibold tracking-[0.14em] text-green uppercase">Outras formas de ajudar</h3>
+          <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div
               class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
             >
@@ -2096,7 +1860,7 @@
               >
               <fluent-anchor-button
                 data-i18n="h5.b"
-                class="mt-2.5"
+                class="mt-auto pt-3"
                 appearance="outline"
                 href="https://www.alvanista.com/communities/reemu"
                 target="_blank"
@@ -2120,7 +1884,7 @@
               >
               <fluent-anchor-button
                 data-i18n="h1.b"
-                class="mt-2.5"
+                class="mt-auto pt-3"
                 appearance="outline"
                 href="https://github.com/Kluis6/reemu"
                 >Abrir no GitHub</fluent-anchor-button
@@ -2143,7 +1907,7 @@
               >
               <fluent-anchor-button
                 data-i18n="h2.b"
-                class="mt-2.5"
+                class="mt-auto pt-3"
                 appearance="outline"
                 href="https://github.com/Kluis6/reemu/issues"
                 >Abrir um relato</fluent-anchor-button
@@ -2185,7 +1949,7 @@
               >
               <fluent-anchor-button
                 data-i18n="h4.b"
-                class="mt-2.5"
+                class="mt-auto pt-3"
                 appearance="outline"
                 href="mailto:reemucontact@gmail.com"
                 >Enviar e-mail</fluent-anchor-button
@@ -2195,33 +1959,17 @@
         </div>
       </section>
 
-      <!-- ─────────────── Sua coleção ─────────────── -->
-      <section
-        id="colecao"
-        class="border-y border-line bg-linear-to-b from-bg-alt to-bg py-22"
-        aria-labelledby="colecao-titulo"
-      >
+      <!-- ─────────────── Sua coleção (aviso) ─────────────── -->
+      <section id="colecao" class="pb-24" aria-labelledby="colecao-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <h2
-            id="colecao-titulo"
-            data-i18n="own.title"
-            class="reveal js:motion-safe:opacity-0 max-w-[26ch] text-[clamp(1.6rem,3.6vw,2.3rem)] leading-[1.15] font-bold"
-          >
-            Sua coleção pertence a você.
-          </h2>
-          <p
-            data-i18n="own.p1"
-            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
-          >
-            O ReEmu não inclui jogos nem BIOS.
-          </p>
-          <p
-            data-i18n="own.p2"
-            class="reveal js:motion-safe:opacity-0 max-w-[62ch] text-[1.05rem] text-muted mt-4"
-          >
-            Use cópias dos jogos que você possui e respeite as leis aplicáveis à
-            sua região.
-          </p>
+          <div class="reveal js:motion-safe:opacity-0 flex gap-5 rounded-card border border-line bg-bg-alt p-6 sm:p-8">
+            <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-library text-[1.45rem]"></span></span>
+            <div>
+              <h2 id="colecao-titulo" data-i18n="own.title" class="text-[1.3rem] font-bold">Sua coleção pertence a você.</h2>
+              <p data-i18n="own.p1" class="mt-2 text-muted">O ReEmu não inclui jogos nem BIOS.</p>
+              <p data-i18n="own.p2" class="mt-1 text-muted">Use cópias dos jogos que você possui e respeite as leis aplicáveis à sua região.</p>
+            </div>
+          </div>
         </div>
       </section>
     </main>

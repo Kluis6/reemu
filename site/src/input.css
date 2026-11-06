@@ -35,6 +35,21 @@
   --ease-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
+/* Faixas de sistemas (#sistemas): cada faixa tem a lista duas vezes e anda
+   metade da própria largura, então o laço não tem emenda. */
+@theme {
+  --animate-marquee: marquee 60s linear infinite;
+  --animate-marquee-rev: marquee 60s linear infinite reverse;
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+}
+
 /* `js:` = só com JS ativo (o <head> põe a classe `js` no <html>). Usado
    para esconder os blocos que entram ao rolar — sem JS, tudo visível. */
 @custom-variant js (&:where(.js *));

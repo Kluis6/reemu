@@ -78,6 +78,10 @@ if (!reduceMotion) {
   if (orbA) animate(orbA, { x: 140, y: 90, scale: 1.15 }, { ...drift, duration: 18 });
   if (orbB) animate(orbB, { x: -120, y: 120, scale: 0.9 }, { ...drift, duration: 22 });
 
+  // Joystick da seção "Nova vida": sobe e desce devagar.
+  for (const el of document.querySelectorAll("[data-float]"))
+    animate(el, { y: [0, -14] }, { duration: 3.2, ease: "easeInOut", repeat: Infinity, repeatType: "reverse" });
+
   // Pulso de sinal correndo em cada trilha do circuito, da borda pro centro.
   // `pathLength=1` + traço `0.06 1.4`: o deslocamento vai de 1.46 (um
   // período) a 0, igual em qualquer trilha. Duração e atraso de cada uma
