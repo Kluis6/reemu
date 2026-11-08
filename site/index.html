@@ -76,18 +76,18 @@
           aria-label="Seções"
         >
           <fluent-anchor-button
-            data-i18n="nav.library"
+            data-i18n="nav.features"
             class="max-sm:hidden"
             appearance="subtle"
-            href="#biblioteca"
-            >Biblioteca</fluent-anchor-button
+            href="#recursos"
+            >Recursos</fluent-anchor-button
           >
           <fluent-anchor-button
-            data-i18n="nav.start"
+            data-i18n="nav.systems"
             class="max-sm:hidden"
             appearance="subtle"
-            href="#comecar"
-            >Como começar</fluent-anchor-button
+            href="#sistemas"
+            >Sistemas</fluent-anchor-button
           >
           <fluent-anchor-button
             data-i18n="nav.support"
@@ -1200,7 +1200,7 @@
 
         <div class="mx-auto max-w-[1080px] px-4">
           <img
-            class="reveal js:motion-safe:opacity-0 mx-auto size-36 sm:size-44"
+            class="reveal js:motion-safe:opacity-0 mx-auto size-20 sm:size-24"
             src="logo.webp"
             alt="ReEmu"
             width="512"
@@ -1209,24 +1209,19 @@
           />
           <h1
             data-i18n="hero.title"
-            class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[24ch] text-[clamp(2rem,5.4vw,3.4rem)] leading-[1.08] font-bold tracking-[-0.01em] [&_.grad]:bg-linear-to-r/srgb [&_.grad]:from-green [&_.grad]:via-blue [&_.grad]:to-green [&_.grad]:bg-[length:200%_100%] [&_.grad]:bg-clip-text [&_.grad]:text-transparent"
-          >
-            Seus clássicos. <br />
-            Sua coleção. <br />
-            Uma experiência <span class="grad">moderna</span>.
-          </h1>
+            class="reveal js:motion-safe:opacity-0 mx-auto mt-5 max-w-[24ch] text-[clamp(2rem,5.4vw,3.4rem)] leading-[1.08] font-bold tracking-[-0.01em] [&_.grad]:bg-linear-to-r/srgb [&_.grad]:from-green [&_.grad]:via-blue [&_.grad]:to-green [&_.grad]:bg-[length:200%_100%] [&_.grad]:bg-clip-text [&_.grad]:text-transparent"
+          >Seus clássicos. <br />Sua coleção. <br />Uma experiência <span class="grad">moderna</span>.</h1>
           <p
             data-i18n="hero.lead"
-            class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[64ch] text-[1.12rem] text-muted"
-          >Organize, descubra e jogue seus clássicos numa interface feita para o controle — para quem gosta de jogar, não de configurar.</p>
-          <!-- <p data-i18n="hero.lead2" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[64ch] text-[1.12rem] text-muted">
-            Sua coleção ganha capas, informações, favoritos, progresso, temas e uma navegação
-            pensada para o controle.
-          </p> -->
+            class="reveal js:motion-safe:opacity-0 mx-auto mt-5 max-w-[46ch] text-[1.15rem] text-muted"
+          >O ReEmu cuida de tudo: emuladores, capas, controle e visual. Você só escolhe o jogo.</p>
 
+          <!-- app.js: só o instalador recomendado para o sistema de quem visita
+               e o link para as outras opções (#download) -->
           <div
             id="primary"
-            class="reveal js:motion-safe:opacity-0 flex flex-wrap items-center justify-center gap-3 mt-8"
+            data-compact
+            class="reveal js:motion-safe:opacity-0 flex flex-col items-center gap-3 mt-8"
             aria-live="polite"
           >
             <fluent-spinner size="small"></fluent-spinner>
@@ -1234,742 +1229,273 @@
               >Procurando a versão mais recente…</fluent-text
             >
           </div>
-          <p
-            data-i18n="hero.note"
-            class="reveal js:motion-safe:opacity-0 text-[0.9rem] text-muted mt-4"
-          >
-            Baixe grátis · Windows · Linux · Código aberto
-          </p>
-        </div>
-      </section>
 
-      <!-- Ritmo: cada seção abre com a barra verde → azul e o título; os
-           layouts variam (lado a lado, bento, lista, faixa em movimento,
-           linha do tempo) para a página não virar uma pilha de cartões. -->
-
-      <!-- ─────────────── Nova vida ─────────────── -->
-      <section id="vida" class="py-28" aria-labelledby="vida-titulo">
-        <div class="mx-auto grid max-w-[1080px] items-center gap-12 px-4 md:grid-cols-[1.25fr_1fr]">
-          <div>
-            <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
-            <h2 id="vida-titulo" data-i18n="life.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Dê uma nova vida à sua coleção</h2>
-            <p data-i18n="life.p1" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">Seus jogos clássicos merecem mais do que uma pasta cheia de arquivos.</p>
-            <p data-i18n="life.p2" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">O ReEmu transforma sua coleção em uma biblioteca dinâmica, organizada e fácil de explorar.</p>
-            <p class="reveal js:motion-safe:opacity-0 mt-10 flex flex-col gap-1 leading-[1.2]">
-              <strong data-i18n="life.punch" class="bg-linear-to-r from-green to-blue bg-clip-text text-[clamp(1.6rem,3.4vw,2.3rem)] font-bold text-transparent">Encontre. Escolha. Jogue.</strong>
-              <span data-i18n="life.punch2" class="text-[1.2rem] text-muted">Sem complicação.</span>
-            </p>
-          </div>
-          <!-- joystick no degradê da logo, flutuando devagar (ui.js, `data-float`) -->
-          <div class="relative flex items-center justify-center py-6">
-            <span class="absolute size-64 rounded-full bg-[radial-gradient(circle,rgba(61,220,47,0.22),rgba(30,139,255,0.12)_45%,transparent_70%)] blur-2xl" aria-hidden="true"></span>
-            <span class="reveal js:motion-safe:opacity-0 relative drop-shadow-[0_0_28px_rgba(61,220,47,0.35)]" aria-hidden="true">
-              <span data-float class="fi fi-joystick block bg-linear-to-br from-green to-blue text-[10rem] md:text-[14rem]"></span>
-            </span>
-          </div>
-        </div>
-      </section>
-
-      <!-- ─────────────── Biblioteca (bento) ─────────────── -->
-      <section id="biblioteca" class="border-y border-line bg-bg-alt py-28" aria-labelledby="biblioteca-titulo">
-        <div class="mx-auto max-w-[1080px] px-4">
-          <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
-          <h2 id="biblioteca-titulo" data-i18n="lib.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Uma biblioteca feita para jogar</h2>
-          <div class="mt-12 grid gap-4 md:grid-cols-6">
-            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 flex flex-col md:col-span-4 md:row-span-2">
-              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
-              <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-library text-[1.45rem]"></span></span>
-              <h3 class="mt-4 text-[1.35rem] font-bold text-ink"><span data-i18n="f1.t">Organização automática</span></h3>
-              <p data-i18n="f1.p" class="mt-1.5 max-w-[52ch] text-[0.98rem] text-muted">Aponte o ReEmu para suas pastas: ele identifica cada jogo e monta a biblioteca por sistema, com capas e informações.</p>
-              <img src="screens/biblioteca.png" data-i18n-attr="alt=sc2.alt" alt="Biblioteca do PC Engine com capas" loading="lazy" class="mt-6 w-full grow rounded-lg border border-line object-cover object-top transition-transform duration-500 ease-soft group-hover:scale-[1.02] motion-reduce:transition-none" onerror="this.remove()" />
-            </article>
-            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
-              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
-              <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-controller text-[1.45rem]"></span></span>
-              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f2.t">Feito para o controle</span></h3>
-              <p data-i18n="f2.p" class="mt-1.5 text-[0.95rem] text-muted">Biblioteca, configurações e menus: tudo navega pelo controle, sem precisar do teclado.</p>
-            </article>
-            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
-              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
-              <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-paint-brush text-[1.45rem]"></span></span>
-              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f3.t">Efeitos personalizados</span></h3>
-              <p data-i18n="f3.p" class="mt-1.5 text-[0.95rem] text-muted">Shaders e molduras recriam a TV de tubo, o portátil e o fliperama.</p>
-            </article>
-            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
-              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
-              <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-save text-[1.45rem]"></span></span>
-              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f4.t">Continue de onde parou</span></h3>
-              <p data-i18n="f4.p" class="mt-1.5 text-[0.95rem] text-muted">Save states com miniatura do momento salvo, para achar o ponto certo num relance.</p>
-            </article>
-            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
-              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
-              <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-heart text-[1.45rem]"></span></span>
-              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f5.t">Seus favoritos por perto</span></h3>
-              <p data-i18n="f5.p" class="mt-1.5 text-[0.95rem] text-muted">Favoritos, jogos recentes e busca levam direto ao que você quer jogar.</p>
-            </article>
-            <article class="reveal js:motion-safe:opacity-0 group relative isolate overflow-hidden rounded-card border border-line bg-surface p-6 transition-[translate,border-color] duration-300 ease-soft hover:-translate-y-1 hover:border-green/40 motion-reduce:transition-none motion-reduce:hover:translate-y-0 md:col-span-2">
-              <span class="pointer-events-none absolute -inset-px -z-10 bg-[radial-gradient(420px_circle_at_20%_0%,rgba(61,220,47,0.10),transparent_60%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100" aria-hidden="true"></span>
-              <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-hand-wave text-[1.45rem]"></span></span>
-              <h3 class="mt-4 text-[1.15rem] font-bold text-ink"><span data-i18n="f6.t">Fácil para quem está começando</span></h3>
-              <p data-i18n="f6.p" class="mt-1.5 text-[0.95rem] text-muted">Sem configurar emulador nem decorar atalhos: escolha o jogo e jogue. O ReEmu já vem pronto para o controle e mostra na tela os botões de cada momento.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <!-- ─────────────── Menos configuração (lista) ─────────────── -->
-      <section id="menos" class="py-28" aria-labelledby="menos-titulo">
-        <div class="mx-auto grid max-w-[1080px] gap-12 px-4 md:grid-cols-[1fr_1.25fr]">
-          <div class="md:sticky md:top-28 md:self-start">
-            <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
-            <h2 id="menos-titulo" data-i18n="less.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Menos configuração. <br> Mais diversão.</h2>
-            <p data-i18n="less.lead" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">Você não precisa transformar uma noite de nostalgia em uma sessão de configuração.</p>
-          </div>
-          <div>
-            <h3 data-i18n="less.with" class="reveal js:motion-safe:opacity-0 text-[0.85rem] font-semibold tracking-[0.14em] text-green uppercase">O ReEmu cuida disso</h3>
-            <ul class="mt-2 divide-y divide-line border-y border-line">
-              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
-                <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-developer-board text-[1.45rem]"></span></span>
-                <div class="flex flex-col gap-1">
-                  <strong data-i18n="w1.t" class="text-[1.05rem] text-ink">Emuladores</strong>
-                  <span data-i18n="w1.p" class="text-[0.95rem] text-muted">Os cores do libretro saem do catálogo com um clique, e o ReEmu escolhe o certo para cada sistema.</span>
-                </div>
-              </li>
-              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
-                <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-puzzle-piece text-[1.45rem]"></span></span>
-                <div class="flex flex-col gap-1">
-                  <strong data-i18n="w2.t" class="text-[1.05rem] text-ink">BIOS</strong>
-                  <span data-i18n="w2.p" class="text-[0.95rem] text-muted">Mostra quais arquivos cada sistema precisa e se já estão no lugar.</span>
-                </div>
-              </li>
-              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
-                <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-image text-[1.45rem]"></span></span>
-                <div class="flex flex-col gap-1">
-                  <strong data-i18n="w3.t" class="text-[1.05rem] text-ink">Capas e informações</strong>
-                  <span data-i18n="w3.p" class="text-[0.95rem] text-muted">Buscadas na internet para cada jogo da biblioteca.</span>
-                </div>
-              </li>
-              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
-                <span class="grid size-11 place-items-center rounded-xl bg-blue/12 text-blue" aria-hidden="true"><span class="fi fi-controller text-[1.45rem]"></span></span>
-                <div class="flex flex-col gap-1">
-                  <strong data-i18n="w4.t" class="text-[1.05rem] text-ink">Controles</strong>
-                  <span data-i18n="w4.p" class="text-[0.95rem] text-muted">Reconhecidos ao conectar, com os botões já mapeados.</span>
-                </div>
-              </li>
-              <li class="reveal js:motion-safe:opacity-0 flex gap-4 py-5">
-                <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-arrow-sync text-[1.45rem]"></span></span>
-                <div class="flex flex-col gap-1">
-                  <strong data-i18n="w5.t" class="text-[1.05rem] text-ink">Atualizações</strong>
-                  <span data-i18n="w5.p" class="text-[0.95rem] text-muted">O próprio ReEmu avisa quando sai uma versão nova e se atualiza.</span>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <!-- ─────────────── Sala e PC (galeria) ─────────────── -->
-      <section id="telas" class="border-y border-line bg-bg-alt py-28" aria-labelledby="telas-titulo">
-        <div class="mx-auto max-w-[1080px] px-4">
-          <div class="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
-            <div>
-              <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
-              <h2 id="telas-titulo" data-i18n="room.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Feito para a sala. <br> Perfeito para o PC.</h2>
-              <p data-i18n="room.lead" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">Funciona na mesa e na TV da sala, em tela cheia ou em janela.</p>
+          <!-- Carrossel de capturas logo abaixo do botão: o produto antes do
+               texto. Os slides são os <li data-slide>; o ui.js troca a cada 6 s
+               (para com o mouse em cima, com o foco dentro e com "reduzir
+               movimento") e monta os pontinhos. Com 1 slide, sem controles. -->
+          <figure data-carousel role="region" aria-roledescription="carrossel" data-i18n-attr="aria-label=car.aria" aria-label="Capturas do ReEmu" class="reveal js:motion-safe:opacity-0 relative mt-14">
+            <span class="pointer-events-none absolute inset-x-[8%] -bottom-6 -z-10 h-24 rounded-full bg-[radial-gradient(closest-side,rgba(61,220,47,0.28),rgba(30,139,255,0.18)_55%,transparent)]" aria-hidden="true"></span>
+            <div class="relative aspect-[1366/768] overflow-hidden rounded-xl border border-line bg-surface shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)]">
+              <ul class="absolute inset-0">
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none" data-active>
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car1.alt" src="screens/carrossel/01-soulcalibur.webp" alt="SoulCalibur no Dreamcast com a moldura do console" width="1366" height="768" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car2.alt" src="screens/carrossel/02-inicio.webp" alt="Tela inicial com Continuar e os jogos adicionados recentemente" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car3.alt" src="screens/carrossel/03-zelda.webp" alt="The Legend of Zelda: Ocarina of Time no Nintendo 64 com moldura" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car4.alt" src="screens/carrossel/04-pagina-chrono.webp" alt="Página de Chrono Trigger, do Super Nintendo, com core, proporção e predefinições" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car5.alt" src="screens/carrossel/05-aladdin.webp" alt="Aladdin no Super Nintendo com moldura temática" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car6.alt" src="screens/carrossel/06-pausa.webp" alt="Menu de pausa com QuickSave e QuickLoad" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car7.alt" src="screens/carrossel/07-batman.webp" alt="The Adventures of Batman &amp; Robin no Super Nintendo com moldura temática" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car8.alt" src="screens/carrossel/08-biblioteca.webp" alt="Biblioteca com as fileiras do Master System e do Mega Drive" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car9.alt" src="screens/carrossel/09-iss98.webp" alt="International Superstar Soccer '98 no Nintendo 64 com moldura temática" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car10.alt" src="screens/carrossel/10-shader-fsr.webp" alt="Parâmetros do shader AMD FSR com a prévia ao lado" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car11.alt" src="screens/carrossel/11-configuracoes.webp" alt="Configurações em blocos, num tema claro" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car12.alt" src="screens/carrossel/12-pagina-castlevania.webp" alt="Página de Castlevania: Circle of the Moon, do Game Boy Advance, num tema claro" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+                <li data-slide aria-roledescription="slide" class="absolute inset-0 opacity-0 transition-opacity duration-700 ease-soft data-active:opacity-100 motion-reduce:transition-none">
+                  <button data-i18n-attr="aria-label=car.zoom" type="button" class="shot-btn block size-full cursor-zoom-in focus-visible:outline-2 focus-visible:-outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar a imagem">
+                    <img data-i18n-attr="alt=car13.alt" src="screens/carrossel/13-pagina-iss98.webp" alt="Página de International Superstar Soccer '98 com o patch widescreen 16:9" width="1366" height="768" loading="lazy" class="block size-full object-cover" />
+                  </button>
+                </li>
+              </ul>
+              <button data-car-ctrl data-prev type="button" data-i18n-attr="aria-label=car.prev" aria-label="Imagem anterior" class="absolute top-1/2 z-10 grid size-11 -translate-y-1/2 place-items-center rounded-full border border-line bg-bg/75 text-ink backdrop-blur-[6px] transition-colors hover:bg-bg/95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] max-sm:size-9 left-3"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button data-car-ctrl data-next type="button" data-i18n-attr="aria-label=car.next" aria-label="Próxima imagem" class="absolute top-1/2 z-10 grid size-11 -translate-y-1/2 place-items-center rounded-full border border-line bg-bg/75 text-ink backdrop-blur-[6px] transition-colors hover:bg-bg/95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] max-sm:size-9 right-3"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
-            <ul class="reveal js:motion-safe:opacity-0 flex max-w-[30rem] flex-wrap gap-2">
-              <li data-i18n="room.b1" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Proporções de console em qualquer tela.</li>
-              <li data-i18n="room.b2" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Textos legíveis do sofá.</li>
-              <li data-i18n="room.b3" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Tamanho da interface ajustável.</li>
-            </ul>
-          </div>
-          <!-- Capturas em site/screens/ — enquanto o arquivo não existe, o
-               quadro mostra "Captura em breve" (`data-missing`). -->
-          <div class="gallery mt-12 grid gap-4 md:grid-cols-6">
-            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-6">
-              <button
-                data-i18n-attr="aria-label=sc1.btn"
-                type="button"
-                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
-                aria-label="Ampliar: jogo com shader"
-              >
-                <img
-                  data-i18n-attr="alt=sc1.alt"
-                  src="screens/jogo.png"
-                  alt="Jet Set Radio no Dreamcast com shader CRT e moldura"
-                  loading="lazy"
-                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
-                  onerror="this.closest('figure').dataset.missing = ''"
-                />
-              </button>
-              <figcaption
-                data-i18n="sc1.cap"
-                class="mt-2.5 text-[0.92rem] text-muted"
-              >
-                Jogo com shader CRT e moldura
-              </figcaption>
-            </figure>
-            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-2">
-              <button
-                data-i18n-attr="aria-label=sc2.btn"
-                type="button"
-                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
-                aria-label="Ampliar: biblioteca"
-              >
-                <img
-                  data-i18n-attr="alt=sc2.alt"
-                  src="screens/biblioteca.png"
-                  alt="Biblioteca do PC Engine com capas"
-                  loading="lazy"
-                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
-                  onerror="this.closest('figure').dataset.missing = ''"
-                />
-              </button>
-              <figcaption
-                data-i18n="sc2.cap"
-                class="mt-2.5 text-[0.92rem] text-muted"
-              >
-                Biblioteca por sistema, com capas
-              </figcaption>
-            </figure>
-            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-2">
-              <button
-                data-i18n-attr="aria-label=sc3.btn"
-                type="button"
-                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
-                aria-label="Ampliar: página do jogo"
-              >
-                <img
-                  data-i18n-attr="alt=sc3.alt"
-                  src="screens/pagina-jogo.png"
-                  alt="Página do MSR com capa, arte de fundo, tempo de jogo e opções do emulador"
-                  loading="lazy"
-                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
-                  onerror="this.closest('figure').dataset.missing = ''"
-                />
-              </button>
-              <figcaption
-                data-i18n="sc3.cap"
-                class="mt-2.5 text-[0.92rem] text-muted"
-              >
-                Página do jogo: capa, tempo de jogo e opções do emulador
-              </figcaption>
-            </figure>
-            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-2">
-              <button
-                data-i18n-attr="aria-label=sc4.btn"
-                type="button"
-                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
-                aria-label="Ampliar: jogo com moldura temática"
-              >
-                <img
-                  data-i18n-attr="alt=sc4.alt"
-                  src="screens/jogo-moldura.png"
-                  alt="The Adventures of Batman & Robin com moldura temática e shader CRT"
-                  loading="lazy"
-                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
-                  onerror="this.closest('figure').dataset.missing = ''"
-                />
-              </button>
-              <figcaption
-                data-i18n="sc4.cap"
-                class="mt-2.5 text-[0.92rem] text-muted"
-              >
-                Clássicos com moldura temática e shader CRT
-              </figcaption>
-            </figure>
-            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-3">
-              <button
-                data-i18n-attr="aria-label=sc5.btn"
-                type="button"
-                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
-                aria-label="Ampliar: menu de pausa"
-              >
-                <img
-                  data-i18n-attr="alt=sc5.alt"
-                  src="screens/pausa.png"
-                  alt="Menu de pausa com QuickSave e QuickLoad sobre o jogo desfocado"
-                  loading="lazy"
-                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
-                  onerror="this.closest('figure').dataset.missing = ''"
-                />
-              </button>
-              <figcaption
-                data-i18n="sc5.cap"
-                class="mt-2.5 text-[0.92rem] text-muted"
-              >
-                Menu de pausa e save states
-              </figcaption>
-            </figure>
-            <figure class="group reveal js:motion-safe:opacity-0 md:col-span-3">
-              <button
-                data-i18n-attr="aria-label=sc6.btn"
-                type="button"
-                class="shot-btn block aspect-video w-full cursor-zoom-in overflow-hidden rounded-card border border-line bg-surface focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)] group-data-missing:pointer-events-none group-data-missing:grid group-data-missing:place-items-center group-data-missing:border-dashed group-data-missing:bg-[linear-gradient(135deg,rgba(61,220,47,0.05),rgba(30,139,255,0.05))] group-data-missing:after:text-[0.95rem] group-data-missing:after:text-muted group-data-missing:after:content-['Captura_em_breve']"
-                aria-label="Ampliar: configurações"
-              >
-                <img
-                  data-i18n-attr="alt=sc6.alt"
-                  src="screens/configuracoes.png"
-                  alt="Configurações em cartões: perfil, aparência, biblioteca, áudio, vídeo, metadados, atalhos, controles, cores, BIOS e sistema"
-                  loading="lazy"
-                  class="block size-full object-cover transition-transform duration-500 ease-soft group-hover:scale-[1.03] motion-reduce:transition-none group-data-missing:hidden"
-                  onerror="this.closest('figure').dataset.missing = ''"
-                />
-              </button>
-              <figcaption
-                data-i18n="sc6.cap"
-                class="mt-2.5 text-[0.92rem] text-muted"
-              >
-                Configurações em cartões, navegáveis pelo controle
-              </figcaption>
-            </figure>
-          </div>
+            <div data-car-ctrl data-dots class="mt-5 flex justify-center gap-2"></div>
+          </figure>
         </div>
       </section>
 
-      <!-- ─────────────── Sistemas (faixas em movimento) ─────────────── -->
-      <section id="sistemas" class="overflow-hidden py-28" aria-labelledby="sistemas-titulo">
-        <div class="mx-auto max-w-[1080px] px-4 text-center">
-          <span class="reveal js:motion-safe:opacity-0 mx-auto mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
-          <h2 id="sistemas-titulo" data-i18n="more.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Do Atari ao PlayStation</h2>
-          <p data-i18n="more.lead" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4 mx-auto">Consoles, portáteis, fliperamas e computadores de várias gerações, na mesma biblioteca.</p>
-        </div>
-        <div data-i18n-attr="aria-label=sys.aria" aria-label="Alguns dos sistemas suportados" role="group"
-          class="reveal js:motion-safe:opacity-0 group mt-12 flex flex-col gap-3 [mask-image:linear-gradient(90deg,transparent,#000_12%,#000_88%,transparent)] motion-reduce:[mask-image:none] motion-reduce:px-4">
-            <div class="flex w-max gap-3 animate-marquee group-hover:[animation-play-state:paused] motion-reduce:w-auto motion-reduce:animate-none motion-reduce:flex-wrap motion-reduce:justify-center">
-              <ul class="flex gap-3 motion-reduce:flex-wrap motion-reduce:justify-center" role="list">
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">NES</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Super Nintendo</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Nintendo 64</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy Color</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy Advance</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Nintendo DS</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Virtual Boy</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Master System</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Mega Drive</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Sega CD</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">32X</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Saturn</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Dreamcast</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Gear</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PlayStation</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PSP</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PC Engine</li>
-              </ul>
-              <ul class="flex gap-3 motion-reduce:hidden" aria-hidden="true">
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">NES</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Super Nintendo</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Nintendo 64</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy Color</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Boy Advance</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Nintendo DS</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Virtual Boy</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Master System</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Mega Drive</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Sega CD</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">32X</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Saturn</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Dreamcast</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Game Gear</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PlayStation</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PSP</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PC Engine</li>
-              </ul>
-            </div>
-            <div class="flex w-max gap-3 animate-marquee-rev group-hover:[animation-play-state:paused] motion-reduce:w-auto motion-reduce:animate-none motion-reduce:flex-wrap motion-reduce:justify-center">
-              <ul class="flex gap-3 motion-reduce:flex-wrap motion-reduce:justify-center" role="list">
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PC Engine CD</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Neo Geo Pocket</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Neo Geo CD</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Arcade</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari 2600</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari 7800</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari Lynx</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari Jaguar</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">WonderSwan</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">3DO</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">MSX</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Commodore 64</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Amiga</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">ZX Spectrum</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Amstrad CPC</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">DOS</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">ScummVM</li>
-                <li data-i18n="sys.more" class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink border-dashed text-muted">e mais…</li>
-              </ul>
-              <ul class="flex gap-3 motion-reduce:hidden" aria-hidden="true">
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">PC Engine CD</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Neo Geo Pocket</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Neo Geo CD</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Arcade</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari 2600</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari 7800</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari Lynx</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Atari Jaguar</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">WonderSwan</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">3DO</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">MSX</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Commodore 64</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Amiga</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">ZX Spectrum</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">Amstrad CPC</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">DOS</li>
-                <li class="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-[0.95rem] whitespace-nowrap text-ink">ScummVM</li>
-              </ul>
-            </div>
-        </div>
-      </section>
-
-      <!-- ─────────────── Como começar (linha do tempo) ─────────────── -->
-      <section id="comecar" class="border-y border-line bg-bg-alt py-28" aria-labelledby="comecar-titulo">
+      <!-- ─────────────── Destaques: título, uma linha e a captura grande ─────────────── -->
+      <section id="recursos" class="pt-32 pb-12 text-center" aria-labelledby="show1-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <div class="md:text-center">
-            <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue md:mx-auto" aria-hidden="true"></span>
-            <h2 id="comecar-titulo" data-i18n="start.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Do download ao primeiro jogo</h2>
-          </div>
-          <ol class="relative mt-14 grid gap-10 md:grid-cols-3 md:gap-6">
-            <!-- a linha que liga os passos (só lado a lado) -->
-            <span class="absolute top-7 right-[16%] left-[16%] hidden h-0.5 bg-linear-to-r from-green via-green/60 to-blue md:block" aria-hidden="true"></span>
-            <li class="reveal js:motion-safe:opacity-0 relative flex flex-col items-start md:items-center md:text-center">
-              <span class="relative z-10 grid size-14 place-items-center rounded-full border-2 border-green bg-bg text-[1.35rem] font-bold text-green shadow-[0_0_24px_rgba(61,220,47,0.25)]">1</span>
-              <h3 data-i18n="s1.t" class="mt-5 text-[1.2rem] font-bold">Instale</h3>
-              <p data-i18n="s1.p" class="mt-1.5 max-w-[30ch] text-muted">Baixe para Windows ou Linux e instale — sem dependências para procurar.</p>
-            </li>
-            <li class="reveal js:motion-safe:opacity-0 relative flex flex-col items-start md:items-center md:text-center">
-              <span class="relative z-10 grid size-14 place-items-center rounded-full border-2 border-green bg-bg text-[1.35rem] font-bold text-green shadow-[0_0_24px_rgba(61,220,47,0.25)]">2</span>
-              <h3 data-i18n="s2.t" class="mt-5 text-[1.2rem] font-bold">Adicione seus jogos</h3>
-              <p data-i18n="s2.p" class="mt-1.5 max-w-[30ch] text-muted">Escolha as pastas: o ReEmu identifica os sistemas e monta a biblioteca.</p>
-            </li>
-            <li class="reveal js:motion-safe:opacity-0 relative flex flex-col items-start md:items-center md:text-center">
-              <span class="relative z-10 grid size-14 place-items-center rounded-full border-2 border-green bg-bg text-[1.35rem] font-bold text-green shadow-[0_0_24px_rgba(61,220,47,0.25)]">3</span>
-              <h3 data-i18n="s3.t" class="mt-5 text-[1.2rem] font-bold">Jogue</h3>
-              <p data-i18n="s3.p" class="mt-1.5 max-w-[30ch] text-muted">Pegue o controle e escolha um jogo.</p>
-            </li>
-          </ol>
+          <h2 id="show1-titulo" data-i18n="show1.t" class="reveal js:motion-safe:opacity-0 text-[clamp(2rem,4.4vw,3.2rem)] leading-[1.08] font-bold tracking-[-0.02em]">Sua coleção organizada</h2>
+          <p data-i18n="show1.p" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[52ch] text-[1.1rem] text-muted">Aponte as pastas: capas, sistemas e busca prontos, com milhares de jogos rolando sem travar.</p>
+          <figure class="group reveal js:motion-safe:opacity-0 mx-auto mt-12 max-w-[960px]">
+            <button data-i18n-attr="aria-label=sc2.btn" type="button" class="shot-btn block w-full cursor-zoom-in overflow-hidden rounded-xl border border-line bg-surface shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar: biblioteca">
+              <img data-i18n-attr="alt=sc2.alt" src="screens/biblioteca.webp" alt="Biblioteca do PC Engine com capas e o pulo por letra" width="1366" height="768" loading="lazy" class="block w-full" />
+            </button>
+          </figure>
         </div>
       </section>
 
-      <!-- ─────────────── Chamada ─────────────── -->
-      <section id="download" class="py-28" aria-labelledby="download-titulo">
+      <section class="py-28 text-center" aria-labelledby="show2-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <div class="reveal js:motion-safe:opacity-0 relative isolate overflow-hidden rounded-[28px] border border-line bg-surface px-6 py-16 text-center sm:px-12">
-            <span class="absolute -top-32 -left-24 -z-10 size-96 rounded-full bg-green/25 blur-3xl" aria-hidden="true"></span>
-            <span class="absolute -right-24 -bottom-32 -z-10 size-96 rounded-full bg-blue/25 blur-3xl" aria-hidden="true"></span>
-            <h2 id="download-titulo" data-i18n="cta.title" class="mx-auto max-w-[22ch] text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Seus jogos clássicos nunca pareceram tão atuais.</h2>
-            <p data-i18n="cta.lead" class="mx-auto mt-4 max-w-[58ch] text-[1.08rem] text-muted">Grátis, de código aberto e pronto para Windows e Linux.</p>
-            <div
+          <h2 id="show2-titulo" data-i18n="show2.t" class="reveal js:motion-safe:opacity-0 text-[clamp(2rem,4.4vw,3.2rem)] leading-[1.08] font-bold tracking-[-0.02em]">Aperte Jogar. Ou ajuste tudo.</h2>
+          <p data-i18n="show2.p" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[56ch] text-[1.1rem] text-muted">Core, proporção, widescreen, predefinições, save states, shader, cheats e conquistas na página de cada jogo.</p>
+          <figure class="group reveal js:motion-safe:opacity-0 mx-auto mt-12 max-w-[960px]">
+            <button data-i18n-attr="aria-label=sc3.btn" type="button" class="shot-btn block w-full cursor-zoom-in overflow-hidden rounded-xl border border-line bg-surface shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar: página do jogo">
+              <img data-i18n-attr="alt=sc3.alt" src="screens/pagina-jogo.webp" alt="Página de MSR com core, proporção da imagem, widescreen 16:9 e as predefinições" width="1366" height="768" loading="lazy" class="block w-full" />
+            </button>
+          </figure>
+          <div class="reveal js:motion-safe:opacity-0 mx-auto mt-4 grid max-w-[960px] gap-4 sm:grid-cols-2">
+            <figure class="group">
+              <button data-i18n-attr="aria-label=sc8.btn" type="button" class="shot-btn block w-full cursor-zoom-in overflow-hidden rounded-xl border border-line bg-surface shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar: opções do core">
+                <img data-i18n-attr="alt=sc8.alt" src="screens/opcoes-core.webp" alt="Opções do core só para este jogo, com o valor herdado de cada uma" width="1366" height="768" loading="lazy" class="block w-full" />
+              </button>
+            </figure>
+            <figure class="group">
+              <button data-i18n-attr="aria-label=sc9.btn" type="button" class="shot-btn block w-full cursor-zoom-in overflow-hidden rounded-xl border border-line bg-surface shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar: shader do jogo">
+                <img data-i18n-attr="alt=sc9.alt" src="screens/shader-jogo.webp" alt="Shader do jogo com os parâmetros do ScaleFX ao lado" width="1366" height="768" loading="lazy" class="block w-full" />
+              </button>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="pt-12 pb-32 text-center" aria-labelledby="show3-titulo">
+        <div class="mx-auto max-w-[1080px] px-4">
+          <h2 id="show3-titulo" data-i18n="show3.t" class="reveal js:motion-safe:opacity-0 text-[clamp(2rem,4.4vw,3.2rem)] leading-[1.08] font-bold tracking-[-0.02em]">O visual retrô</h2>
+          <p data-i18n="show3.p" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[52ch] text-[1.1rem] text-muted">Shaders de TV de tubo e LCD com prévia, e molduras do The Bezel Project.</p>
+          <figure class="group reveal js:motion-safe:opacity-0 mx-auto mt-12 max-w-[960px]">
+            <button data-i18n-attr="aria-label=sc4.btn" type="button" class="shot-btn block w-full cursor-zoom-in overflow-hidden rounded-xl border border-line bg-surface shadow-[0_40px_90px_-40px_rgba(0,0,0,0.9)] focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]" aria-label="Ampliar: shaders">
+              <img data-i18n-attr="alt=sc4.alt" src="screens/shaders.webp" alt="Lista de shaders com a prévia ao lado, em cena 2D" width="1366" height="768" loading="lazy" class="block w-full" />
+            </button>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ─────────────── Muito além de jogar: nome e uma linha ─────────────── -->
+      <section id="mais" class="border-y border-line bg-bg-alt py-28" aria-labelledby="mais-titulo">
+        <div class="mx-auto max-w-[1080px] px-4">
+          <h2 id="mais-titulo" data-i18n="more2.title" class="reveal js:motion-safe:opacity-0 text-[clamp(2rem,4.4vw,3.2rem)] leading-[1.08] font-bold tracking-[-0.02em]">Muito além de jogar</h2>
+          <dl class="mt-12 grid gap-x-16 gap-y-9 sm:grid-cols-2 [&_dt]:text-[1.2rem] [&_dt]:text-green [&_dd]:mt-1.5 [&_dd]:text-[1.02rem] [&_dd]:text-muted">
+            <div class="reveal js:motion-safe:opacity-0"><dt data-i18n="m1.t">Só com o controle</dt><dd data-i18n="m1.p">Menus, teclado virtual e navegador de arquivos sem tocar no teclado.</dd></div>
+            <div class="reveal js:motion-safe:opacity-0"><dt data-i18n="m2.t">Emuladores em um clique</dt><dd data-i18n="m2.p">Os cores libretro saem do catálogo, já certos para cada sistema.</dd></div>
+            <div class="reveal js:motion-safe:opacity-0"><dt data-i18n="m3.t">Save states com miniatura</dt><dd data-i18n="m3.p">Salve e carregue pelo menu de pausa.</dd></div>
+            <div class="reveal js:motion-safe:opacity-0"><dt data-i18n="m4.t">Verificador de BIOS</dt><dd data-i18n="m4.p">Mostra o que cada sistema pede e o que já está no lugar. BIOS não incluídas.</dd></div>
+            <div class="reveal js:motion-safe:opacity-0"><dt data-i18n="m5.t">Onze temas</dt><dd data-i18n="m5.p">Claros, escuros, alto contraste e um com a sua cara.</dd></div>
+            <div class="reveal js:motion-safe:opacity-0"><dt data-i18n="m6.t">Cores sempre em dia</dt><dd data-i18n="m6.p">O sino avisa quando há versão nova, e dá para voltar à anterior.</dd></div>
+            <div class="reveal js:motion-safe:opacity-0"><dt data-i18n="m7.t">Atualiza sozinho</dt><dd data-i18n="m7.p">O ReEmu avisa e instala a versão nova.</dd></div>
+            <div class="reveal js:motion-safe:opacity-0"><dt data-i18n="m8.t">Grátis e aberto</dt><dd data-i18n="m8.p">Licença MIT, sem anúncios e sem assinatura.</dd></div>
+          </dl>
+        </div>
+      </section>
+
+      <!-- ─────────────── Sistemas: uma linha corrida ─────────────── -->
+      <section id="sistemas" class="py-32 text-center" aria-labelledby="sistemas-titulo">
+        <div class="mx-auto max-w-[960px] px-4">
+          <h2 id="sistemas-titulo" data-i18n="more.title" class="reveal js:motion-safe:opacity-0 text-[clamp(2rem,4.4vw,3.2rem)] leading-[1.08] font-bold tracking-[-0.02em]">Do Atari ao PlayStation 2</h2>
+          <p data-i18n="more.lead" class="reveal js:motion-safe:opacity-0 mt-4 text-[1.1rem] text-muted">Quase 50 sistemas no mesmo controle.</p>
+          <!-- o que o scanner reconhece (crates/library-scan/src/systems.rs) -->
+          <ul class="reveal js:motion-safe:opacity-0 mx-auto mt-12 flex max-w-[1000px] flex-wrap items-center justify-center gap-x-4 gap-y-3 text-[clamp(1.15rem,2.1vw,1.5rem)] leading-tight font-semibold tracking-[-0.01em] text-ink [&>li]:flex [&>li]:items-center [&>li]:gap-4 [&>li]:transition-colors [&>li:hover]:text-green [&>li:not(:last-child)]:after:size-1.5 [&>li:not(:last-child)]:after:rounded-full [&>li:not(:last-child)]:after:bg-green/70 [&>li:not(:last-child)]:after:content-['']"><li>NES</li><li>Super Nintendo</li><li>Nintendo 64</li><li>Game Boy</li><li>Game Boy Color</li><li>Game Boy Advance</li><li>Nintendo DS</li><li>Virtual Boy</li><li>Pokémon Mini</li><li>SG-1000</li><li>Master System</li><li>Mega Drive</li><li>Sega CD</li><li>32X</li><li>Saturn</li><li>Dreamcast</li><li>Game Gear</li><li>PlayStation</li><li>PlayStation 2</li><li>PSP</li><li>Atari 2600</li><li>Atari 5200</li><li>Atari 7800</li><li>Atari 8-bit</li><li>Atari Lynx</li><li>Atari Jaguar</li><li>PC Engine</li><li>PC Engine CD</li><li>SuperGrafx</li><li>PC-FX</li><li>Neo Geo Pocket</li><li>Neo Geo CD</li><li>WonderSwan</li><li>Supervision</li><li>3DO</li><li>CD-i</li><li>ColecoVision</li><li>Intellivision</li><li>Vectrex</li><li>Odyssey²</li><li>Arcade</li><li>Atomiswave</li><li>MSX</li><li>Commodore 64</li><li>Amiga</li><li>ZX Spectrum</li><li>Amstrad CPC</li><li>DOS</li><li>ScummVM</li></ul>
+        </div>
+      </section>
+
+      <!-- ─────────────── Baixar ─────────────── -->
+      <section id="download" class="border-y border-line bg-bg-alt py-32 text-center" aria-labelledby="download-titulo">
+        <div class="mx-auto max-w-[1080px] px-4">
+          <h2 id="download-titulo" data-i18n="dl2.title" class="reveal js:motion-safe:opacity-0 text-[clamp(2rem,4.4vw,3.2rem)] leading-[1.08] font-bold tracking-[-0.02em]">Baixe o ReEmu</h2>
+          <p data-i18n="dl2.lead" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[52ch] text-[1.1rem] text-muted">Grátis. Ele se atualiza sozinho, então você só baixa uma vez.</p>
+          <div
             id="primary-cta"
-            class="reveal js:motion-safe:opacity-0 flex flex-wrap items-center justify-center gap-3 mt-8 [&_fluent-anchor-button]:mt-2"
+            class="reveal js:motion-safe:opacity-0 mt-10 flex flex-wrap items-center justify-center gap-3"
             aria-live="polite"
           >
             <fluent-anchor-button
               appearance="primary"
               size="large"
               href="https://github.com/Kluis6/reemu/releases/latest"
-              ><span
-                slot="start"
-                class="fi fi-arrow-download me-2.5 text-[1.25rem]"
-                aria-hidden="true"
-              ></span
-              ><span data-i18n="cta.button"
-                >Baixar ReEmu</span
-              ></fluent-anchor-button
+              ><span slot="start" class="fi fi-arrow-download me-2.5 text-[1.25rem]" aria-hidden="true"></span
+              ><span data-i18n="cta.button">Baixar ReEmu</span></fluent-anchor-button
             >
           </div>
-            <p class="mt-6 text-[0.9rem] text-muted">
-              <fluent-link data-i18n="cta.all" href="#versoes">Ver todas as versões e o que mudou</fluent-link>
-            </p>
-          </div>
+          <p data-i18n="req.line" class="reveal js:motion-safe:opacity-0 mt-8 text-[0.95rem] text-muted">Windows 10 e 11 (64 bits) · Linux 64 bits, AppImage ou .deb · Controle Xbox, PlayStation ou genérico</p>
+          <p data-i18n="own.p1" class="reveal js:motion-safe:opacity-0 mt-2 text-[0.95rem] text-muted">O ReEmu não inclui jogos nem BIOS.</p>
+          <p class="reveal js:motion-safe:opacity-0 mt-6 text-[0.95rem]">
+            <fluent-link data-i18n="cta.all" href="#versoes">Ver todas as versões e o que mudou</fluent-link>
+          </p>
         </div>
       </section>
 
       <!-- ─────────────── Versões ─────────────── -->
-      <section id="versoes" class="border-y border-line bg-bg-alt py-28" aria-labelledby="versoes-titulo">
+      <section id="versoes" class="py-28" aria-labelledby="versoes-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
-          <h2 id="versoes-titulo" data-i18n="dl.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Todas as versões</h2>
+          <h2 id="versoes-titulo" data-i18n="dl.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.75rem,3.6vw,2.5rem)] leading-[1.1] font-bold tracking-[-0.015em]">Todas as versões</h2>
           <!-- app.js: a mais recente aberta; as anteriores numa lista compacta -->
           <div id="releases" class="mt-10 flex flex-col gap-4"></div>
         </div>
       </section>
 
       <!-- ─────────────── Apoie ─────────────── -->
-      <section id="apoie" class="py-28" aria-labelledby="apoie-titulo">
+      <section id="apoie" class="border-t border-line bg-bg-alt py-28" aria-labelledby="apoie-titulo">
         <div class="mx-auto max-w-[1080px] px-4">
-          <div class="grid items-start gap-12 lg:grid-cols-[1fr_1.15fr]">
-            <div>
-              <span class="reveal js:motion-safe:opacity-0 mb-5 block h-1 w-12 rounded-full bg-linear-to-r from-green to-blue" aria-hidden="true"></span>
-              <h2 id="apoie-titulo" data-i18n="sup.title" class="reveal js:motion-safe:opacity-0 text-[clamp(1.85rem,4.2vw,2.9rem)] leading-[1.06] font-bold tracking-[-0.02em]">Gratuito. Aberto. <br> Feito para jogadores.</h2>
-              <ul class="reveal js:motion-safe:opacity-0 mt-6 flex flex-wrap gap-2">
-                <li data-i18n="sup.b1" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Sem anúncios.</li>
-                <li data-i18n="sup.b2" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Sem assinatura.</li>
-                <li data-i18n="sup.b3" class="rounded-full border border-line bg-surface px-3.5 py-2 text-[0.92rem]">Sem transformar sua coleção em um serviço.</li>
-              </ul>
-              <p data-i18n="sup.help" class="reveal js:motion-safe:opacity-0 max-w-[58ch] text-[1.08rem] text-muted mt-4">Gosta do projeto? Ajude com uma doação, relatando problemas ou divulgando o ReEmu.</p>
-            </div>
-            <div>
-              <h3 data-i18n="sup.cta" class="reveal js:motion-safe:opacity-0 text-[0.85rem] font-semibold tracking-[0.14em] text-green uppercase">Apoie o ReEmu</h3>
-              <!-- Formas de doação: preencha `data-link` (e `data-pix` no Pix).
-                   Cartão sem link fica escondido; sem nenhum, aparece o aviso
-                   abaixo. Nunca coloque um link que não seja seu. -->
-              <div class="mt-4 grid gap-4 sm:grid-cols-2" id="donate-methods">
-            <div
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
-              data-link="https://github.com/sponsors/Kluis6"
-            >
-              <span
-                class="grid size-10 place-items-center rounded-lg bg-green/12 text-green"
-                aria-hidden="true"
-                ><span class="fi fi-heart text-[1.375rem]"></span
-              ></span>
-              <strong class="text-[1.05rem]">GitHub Sponsors</strong>
-              <span data-i18n="d1.p" class="grow text-[0.93rem] text-muted"
-                >Apoio mensal ou único, direto pelo GitHub.</span
-              >
-              <fluent-anchor-button
-                data-i18n="d1.b"
-                class="mt-2.5"
-                appearance="primary"
-                target="_blank"
-                rel="noopener"
-                >Apoiar no GitHub</fluent-anchor-button
-              >
-            </div>
-            <!-- Pix: `data-pix` = chave aleatória; `data-pix-code` = o "copia e
-                 cola" (BR Code, CRC conferido), o mesmo que está no QR
-                 (pix-qr.svg, gerado dele e decodificado de volta pra conferir). -->
-            <div
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6 max-sm:items-stretch max-sm:p-5"
-              data-pix="761d76fb-b5d3-461e-b7bd-f17c0522ce7d"
-              data-pix-code="00020126580014BR.GOV.BCB.PIX0136761d76fb-b5d3-461e-b7bd-f17c0522ce7d5204000053039865802BR5924LUIS ANTONIO DE OLIVEIRA6015DUQUE DE CAXIAS62070503***63042796"
-            >
-              <span
-                class="grid size-10 place-items-center rounded-lg bg-green/12 text-green"
-                aria-hidden="true"
-                ><span class="fi fi-qr-code text-[1.375rem]"></span
-              ></span>
-              <strong class="text-[1.05rem]">Pix</strong>
-              <span data-i18n="d2.p" class="grow text-[0.93rem] text-muted"
-                >Aponte a câmera do app do banco para o QR code ou copie o
-                código.</span
-              >
-              <img
-                src="pix-qr.svg"
-                data-i18n-attr="alt=d2.qr"
-                alt="QR code Pix para apoiar o ReEmu"
-                width="180"
-                height="180"
-                class="mt-1 size-45 rounded-[var(--borderRadiusMedium,4px)] [image-rendering:pixelated] max-sm:size-52 max-sm:self-center"
-              />
-              <fluent-button
-                data-i18n="pixcode.copy"
-                class="pix-code-copy mt-1.5"
-                appearance="primary"
-                >Copiar código Pix</fluent-button
-              >
-              <span data-i18n="d2.key" class="mt-2 text-[0.85rem] text-muted"
-                >Ou use a chave aleatória:</span
-              >
-              <code
-                class="pix-key rounded-[var(--borderRadiusSmall,4px)] bg-surface-2 px-[5px] py-px font-mono text-[0.85em] wrap-anywhere"
-              ></code>
-              <fluent-button
-                data-i18n="d2.b"
-                class="pix-copy"
-                appearance="outline"
-                >Copiar chave Pix</fluent-button
-              >
-            </div>
-            <div
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
-              data-link=""
-            >
-              <span
-                class="grid size-10 place-items-center rounded-lg bg-green/12 text-green"
-                aria-hidden="true"
-                ><span class="fi fi-coffee text-[1.375rem]"></span
-              ></span>
-              <strong class="text-[1.05rem]">Ko-fi</strong>
-              <span data-i18n="d3.p" class="grow text-[0.93rem] text-muted"
-                >Pague um café para o projeto, sem cadastro.</span
-              >
-              <fluent-anchor-button
-                data-i18n="d3.b"
-                class="mt-2.5"
-                appearance="primary"
-                target="_blank"
-                rel="noopener"
-                >Apoiar no Ko-fi</fluent-anchor-button
-              >
-            </div>
-            <div
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
-              data-link=""
-            >
-              <span
-                class="grid size-10 place-items-center rounded-lg bg-green/12 text-green"
-                aria-hidden="true"
-                ><span class="fi fi-payment text-[1.375rem]"></span
-              ></span>
-              <strong class="text-[1.05rem]">PayPal</strong>
-              <span data-i18n="d4.p" class="grow text-[0.93rem] text-muted"
-                >Cartão de crédito de qualquer país.</span
-              >
-              <fluent-anchor-button
-                data-i18n="d4.b"
-                class="mt-2.5"
-                appearance="primary"
-                target="_blank"
-                rel="noopener"
-                >Doar pelo PayPal</fluent-anchor-button
-              >
-            </div>
+          <div class="text-center">
+            <h2 id="apoie-titulo" data-i18n="sup.title" class="reveal js:motion-safe:opacity-0 text-[clamp(2rem,4.4vw,3.2rem)] leading-[1.08] font-bold tracking-[-0.02em]">Apoie o ReEmu</h2>
+            <p data-i18n="sup.lead" class="reveal js:motion-safe:opacity-0 mx-auto mt-4 max-w-[52ch] text-[1.1rem] text-muted">Sem anúncios e sem assinatura. Se ele te ajudou, retribua como puder.</p>
+          </div>
+          <div class="mx-auto mt-12 max-w-[760px] text-left">
+            <div class="mt-4 grid items-start gap-4 sm:grid-cols-2" id="donate-methods">
+                <div
+                  class="reveal js:motion-safe:opacity-0 flex flex-col items-start gap-2 rounded-card border border-line bg-surface p-6"
+                  data-link="https://github.com/sponsors/Kluis6"
+                >
+                  <strong class="text-[1.05rem]">GitHub Sponsors</strong>
+                  <span data-i18n="d1.p" class="grow text-[0.93rem] text-muted">Apoio mensal ou único, direto pelo GitHub.</span>
+                  <fluent-anchor-button data-i18n="d1.b" class="mt-2.5" appearance="primary" target="_blank" rel="noopener">Apoiar no GitHub</fluent-anchor-button>
+                </div>
+                <!-- Pix: `data-pix` = chave aleatória; `data-pix-code` = o "copia e
+                     cola" (BR Code, CRC conferido), o mesmo que está no QR
+                     (pix-qr.svg, gerado dele e decodificado de volta pra conferir). -->
+                <div
+                  class="reveal js:motion-safe:opacity-0 flex flex-col items-start gap-2 rounded-card border border-line bg-surface p-6 max-sm:items-stretch max-sm:p-5"
+                  data-pix="761d76fb-b5d3-461e-b7bd-f17c0522ce7d"
+                  data-pix-code="00020126580014BR.GOV.BCB.PIX0136761d76fb-b5d3-461e-b7bd-f17c0522ce7d5204000053039865802BR5924LUIS ANTONIO DE OLIVEIRA6015DUQUE DE CAXIAS62070503***63042796"
+                >
+                  <strong class="text-[1.05rem]">Pix</strong>
+                  <span data-i18n="d2.p" class="grow text-[0.93rem] text-muted">Aponte a câmera do app do banco para o QR code ou copie o código.</span>
+                  <img
+                    src="pix-qr.svg"
+                    data-i18n-attr="alt=d2.qr"
+                    alt="QR code Pix para apoiar o ReEmu"
+                    width="180"
+                    height="180"
+                    class="mt-1 size-45 rounded-[var(--borderRadiusMedium,4px)] [image-rendering:pixelated] max-sm:size-52 max-sm:self-center"
+                  />
+                  <fluent-button data-i18n="pixcode.copy" class="pix-code-copy mt-1.5" appearance="primary">Copiar código Pix</fluent-button>
+                  <span data-i18n="d2.key" class="mt-2 text-[0.85rem] text-muted">Ou use a chave aleatória:</span>
+                  <code class="pix-key rounded-[var(--borderRadiusSmall,4px)] bg-surface-2 px-[5px] py-px font-mono text-[0.85em] wrap-anywhere"></code>
+                  <fluent-button data-i18n="d2.b" class="pix-copy" appearance="outline">Copiar chave Pix</fluent-button>
+                </div>
+                <div
+                  class="reveal js:motion-safe:opacity-0 flex flex-col items-start gap-2 rounded-card border border-line bg-surface p-6"
+                  data-link=""
+                >
+                  <strong class="text-[1.05rem]">Ko-fi</strong>
+                  <span data-i18n="d3.p" class="grow text-[0.93rem] text-muted">Pague um café para o projeto, sem cadastro.</span>
+                  <fluent-anchor-button data-i18n="d3.b" class="mt-2.5" appearance="primary" target="_blank" rel="noopener">Apoiar no Ko-fi</fluent-anchor-button>
+                </div>
+                <div
+                  class="reveal js:motion-safe:opacity-0 flex flex-col items-start gap-2 rounded-card border border-line bg-surface p-6"
+                  data-link=""
+                >
+                  <strong class="text-[1.05rem]">PayPal</strong>
+                  <span data-i18n="d4.p" class="grow text-[0.93rem] text-muted">Cartão de crédito de qualquer país.</span>
+                  <fluent-anchor-button data-i18n="d4.b" class="mt-2.5" appearance="primary" target="_blank" rel="noopener">Doar pelo PayPal</fluent-anchor-button>
+                </div>
               </div>
               <fluent-message-bar
-            data-i18n="sup.soon"
-            class="reveal js:motion-safe:opacity-0 mt-4"
-            id="donate-soon"
-            intent="info"
-            layout="multiline"
-            hidden
-          >
-            As formas de doação estão sendo configuradas. Enquanto isso, dá para
-            ajudar de outros jeitos:
-          </fluent-message-bar>
-            </div>
+                data-i18n="sup.soon"
+                class="reveal js:motion-safe:opacity-0 mt-4"
+                id="donate-soon"
+                intent="info"
+                layout="multiline"
+                hidden
+              >As formas de doação estão sendo configuradas. Enquanto isso, dá para ajudar de outros jeitos:</fluent-message-bar>
           </div>
-          <h3 data-i18n="sup.more" class="reveal js:motion-safe:opacity-0 mt-16 text-[0.85rem] font-semibold tracking-[0.14em] text-green uppercase">Outras formas de ajudar</h3>
-          <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
-            >
-              <span
-                class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
-                aria-hidden="true"
-                ><span class="fi fi-community text-[1.375rem]"></span
-              ></span>
-              <strong data-i18n="h5.t" class="text-[1.05rem]"
-                >Participe da comunidade</strong
-              >
-              <span data-i18n="h5.p" class="grow text-[0.93rem] text-muted"
-                >Converse com outros jogadores, tire dúvidas e acompanhe as
-                novidades no Alvanista.</span
-              >
-              <fluent-anchor-button
-                data-i18n="h5.b"
-                class="mt-auto pt-3"
-                appearance="outline"
-                href="https://www.alvanista.com/communities/reemu"
-                target="_blank"
-                rel="noopener"
-                >Entrar na comunidade</fluent-anchor-button
-              >
-            </div>
-            <div
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
-            >
-              <span
-                class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
-                aria-hidden="true"
-                ><span class="fi fi-star text-[1.375rem]"></span
-              ></span>
-              <strong data-i18n="h1.t" class="text-[1.05rem]"
-                >Dê uma estrela</strong
-              >
-              <span data-i18n="h1.p" class="grow text-[0.93rem] text-muted"
-                >Ajuda mais gente a encontrar o projeto no GitHub.</span
-              >
-              <fluent-anchor-button
-                data-i18n="h1.b"
-                class="mt-auto pt-3"
-                appearance="outline"
-                href="https://github.com/Kluis6/reemu"
-                >Abrir no GitHub</fluent-anchor-button
-              >
-            </div>
-            <div
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
-            >
-              <span
-                class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
-                aria-hidden="true"
-                ><span class="fi fi-bug text-[1.375rem]"></span
-              ></span>
-              <strong data-i18n="h2.t" class="text-[1.05rem]"
-                >Relate problemas</strong
-              >
-              <span data-i18n="h2.p" class="grow text-[0.93rem] text-muted"
-                >Um jogo que não abre ou um controle que não responde: conte o
-                que aconteceu.</span
-              >
-              <fluent-anchor-button
-                data-i18n="h2.b"
-                class="mt-auto pt-3"
-                appearance="outline"
-                href="https://github.com/Kluis6/reemu/issues"
-                >Abrir um relato</fluent-anchor-button
-              >
-            </div>
-            <div
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
-            >
-              <span
-                class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
-                aria-hidden="true"
-                ><span class="fi fi-share text-[1.375rem]"></span
-              ></span>
-              <strong data-i18n="h3.t" class="text-[1.05rem]">Divulgue</strong>
-              <span data-i18n="h3.p" class="grow text-[0.93rem] text-muted"
-                >Mostre o ReEmu para quem curte jogos clássicos.</span
-              >
-              <fluent-button
-                data-i18n="share.button"
-                class="share-btn mt-2.5"
-                appearance="outline"
-                >Compartilhar</fluent-button
-              >
-            </div>
-            <div
-              class="reveal js:motion-safe:opacity-0 rounded-card border border-line bg-surface shadow-card flex flex-col items-start gap-2 p-6"
-            >
-              <span
-                class="grid size-10 place-items-center rounded-lg bg-blue/12 text-blue"
-                aria-hidden="true"
-                ><span class="fi fi-mail text-[1.375rem]"></span
-              ></span>
-              <strong data-i18n="h4.t" class="text-[1.05rem]"
-                >Fale com a gente</strong
-              >
-              <span class="grow text-[0.93rem] text-muted"
-                ><span data-i18n="h4.p">Dúvidas, sugestões ou parcerias:</span>
-                <span class="wrap-anywhere text-ink">reemucontact@gmail.com</span></span
-              >
-              <fluent-anchor-button
-                data-i18n="h4.b"
-                class="mt-auto pt-3"
-                appearance="outline"
-                href="mailto:reemucontact@gmail.com"
-                >Enviar e-mail</fluent-anchor-button
-              >
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ─────────────── Sua coleção (aviso) ─────────────── -->
-      <section id="colecao" class="pb-24" aria-labelledby="colecao-titulo">
-        <div class="mx-auto max-w-[1080px] px-4">
-          <div class="reveal js:motion-safe:opacity-0 flex gap-5 rounded-card border border-line bg-bg-alt p-6 sm:p-8">
-            <span class="grid size-11 place-items-center rounded-xl bg-green/12 text-green" aria-hidden="true"><span class="fi fi-library text-[1.45rem]"></span></span>
-            <div>
-              <h2 id="colecao-titulo" data-i18n="own.title" class="text-[1.3rem] font-bold">Sua coleção pertence a você.</h2>
-              <p data-i18n="own.p1" class="mt-2 text-muted">O ReEmu não inclui jogos nem BIOS.</p>
-              <p data-i18n="own.p2" class="mt-1 text-muted">Use cópias dos jogos que você possui e respeite as leis aplicáveis à sua região.</p>
-            </div>
-          </div>
+          <nav data-i18n-attr="aria-label=sup.more" aria-label="Outras formas de ajudar" class="reveal js:motion-safe:opacity-0 mt-12 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-[0.98rem]">
+            <fluent-link data-i18n="foot.community" href="https://www.alvanista.com/communities/reemu" target="_blank" rel="noopener">Comunidade no Alvanista</fluent-link>
+            <fluent-link data-i18n="foot.issue" href="https://github.com/Kluis6/reemu/issues">Reportar um problema</fluent-link>
+            <fluent-link data-i18n="sup.star" href="https://github.com/Kluis6/reemu">Dar uma estrela no GitHub</fluent-link>
+            <fluent-link href="mailto:reemucontact@gmail.com">reemucontact@gmail.com</fluent-link>
+            <fluent-button data-i18n="share.button" class="share-btn" appearance="outline" size="small">Compartilhar</fluent-button>
+          </nav>
         </div>
       </section>
     </main>

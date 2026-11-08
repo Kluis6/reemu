@@ -142,7 +142,12 @@ function fillPrimary(box, latest) {
   const order = os
     ? files.filter((f) => f.os === os).sort((a, b) => Number(!!b.main) - Number(!!a.main))
     : files.filter((f) => f.main);
-  order.forEach((f, i) => box.append(downloadButton(f, latest.tag_name, i === 0 && !!os)));
+  // `data-compact` (topo): só o recomendado do sistema de quem visita e um
+  // link para as outras opções, na seção de download.
+  const compact = "compact" in box.dataset && !!os && order.length > 0;
+  (compact ? order.slice(0, 1) : order).forEach((f, i) =>
+    box.append(downloadButton(f, latest.tag_name, i === 0 && !!os)));
+  if (compact) box.append(el("fluent-link", { href: "#download" }, t("dl.more")));
   if (!os) box.append(el("fluent-text", { size: "200", block: true }, t("dl.otherOs")));
   if (order.length === 0) {
     box.append(

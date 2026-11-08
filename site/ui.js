@@ -109,6 +109,79 @@ if (!reduceMotion) {
   addEventListener("reemu-lang", startShine);
 }
 
+// Carrossel do topo (`[data-carousel]`): troca o slide a cada 6 s. Para com o
+// mouse em cima, com o foco dentro e com "reduzir movimento" (aí só pelas
+// setas e pontinhos). Os slides fora da tela ficam `inert`.
+for (const car of document.querySelectorAll("[data-carousel]")) {
+  const slides = [...car.querySelectorAll("[data-slide]")];
+  if (slides.length < 2) {
+    car.querySelectorAll("[data-car-ctrl]").forEach((e) => e.remove());
+    continue;
+  }
+  const dotsBox = car.querySelector("[data-dots]");
+  const dots = slides.map((_, n) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className =
+      "h-1.5 w-6 rounded-full bg-ink/25 transition-[width,background-color] duration-300 hover:bg-ink/50 data-active:w-10 data-active:bg-green focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[var(--colorStrokeFocus2,#fff)]";
+    b.addEventListener("click", () => {
+      go(n);
+      restart();
+    });
+    dotsBox.append(b);
+    return b;
+  });
+  let cur = 0;
+  let timer = null;
+  const go = (n) => {
+    cur = (n + slides.length) % slides.length;
+    slides.forEach((s, k) => {
+      const on = k === cur;
+      s.toggleAttribute("data-active", on);
+      s.inert = !on;
+      s.setAttribute("aria-hidden", String(!on));
+    });
+    dots.forEach((b, k) => {
+      b.toggleAttribute("data-active", k === cur);
+      b.setAttribute("aria-current", String(k === cur));
+    });
+  };
+  const label = () => {
+    slides.forEach((s, k) => s.setAttribute("aria-label", t("car.slide", { n: k + 1, total: slides.length })));
+    dots.forEach((b, k) => b.setAttribute("aria-label", t("car.goto", { n: k + 1 })));
+  };
+  const autoplay = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const stop = () => {
+    clearInterval(timer);
+    timer = null;
+  };
+  const start = () => {
+    if (autoplay && !timer) timer = setInterval(() => go(cur + 1), 6000);
+  };
+  const restart = () => {
+    stop();
+    if (!car.matches(":hover, :focus-within")) start();
+  };
+  car.querySelector("[data-prev]").addEventListener("click", () => {
+    go(cur - 1);
+    restart();
+  });
+  car.querySelector("[data-next]").addEventListener("click", () => {
+    go(cur + 1);
+    restart();
+  });
+  car.addEventListener("pointerenter", stop);
+  car.addEventListener("pointerleave", restart);
+  car.addEventListener("focusin", stop);
+  car.addEventListener("focusout", (e) => {
+    if (!car.contains(e.relatedTarget)) restart();
+  });
+  label();
+  addEventListener("reemu-lang", label);
+  go(0);
+  start();
+}
+
 // Ampliador das capturas (só as que existem — quadros "em breve" ignoram).
 const lightbox = document.getElementById("lightbox");
 const big = lightbox?.querySelector(".lightbox-img");
