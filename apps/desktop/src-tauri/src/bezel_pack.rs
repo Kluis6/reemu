@@ -15,7 +15,9 @@ use std::path::{Path, PathBuf};
 
 use tauri::ipc::Channel;
 
-use crate::repo_version::{installed_at, is_outdated, latest_commit, now_secs, Commit};
+use crate::repo_version::{
+    head_commit, installed_at, is_outdated, now_secs, refresh_latest, Commit,
+};
 
 /// `system_id` do ReEmu → repo `bezelproject-<X>` (família overlay/RetroArch).
 /// Só sistemas que a família publica; PSP/PS2/DS não têm bezel (widescreen).
@@ -135,9 +137,9 @@ pub async fn download(
     // 0. o commit do `master` agora: é o que o zip vai trazer, e fica
     //    registrado pra saber depois se o repositório mudou. Sem a API (limite
     //    do GitHub, sem rede), o download segue sem registrar.
-    let head = latest_commit("thebezelproject", repo).await;
-    if let Err(e) = &head {
-        log::warn!("bezel: commit de {repo} não consultado: {e}");
+    let head = head_commit("thebezelproject", repo).await;
+    if head.is_none() {
+        log::warn!("bezel: commit de {repo} não consultado");
     }
 
     // 1. baixa o zip pra um arquivo temporário (packs passam de 500 MB — não
@@ -208,7 +210,7 @@ pub async fn download(
     .await
     .map_err(|e| e.to_string())??;
 
-    if let Ok(head) = head {
+    if let Some(head) = head {
         let mut v = Versions::load(&root);
         v.installed.insert(system_id.to_string(), head.clone());
         v.latest.insert(system_id.to_string(), head);
@@ -274,14 +276,20 @@ pub async fn updates(decorations_dir: &Path, force: bool) -> Vec<String> {
     if force || now_secs().saturating_sub(v.checked_at) >= CHECK_EVERY_SECS {
         let mut ok = true;
         for (sid, repo) in &installed {
-            match latest_commit("thebezelproject", repo).await {
-                Ok(c) => {
+            let got = refresh_latest(
+                "thebezelproject",
+                repo,
+                v.installed.get(*sid),
+                v.latest.get(*sid),
+            )
+            .await;
+            match got {
+                Some(c) => {
                     v.latest.insert((*sid).to_string(), c);
                 }
-                Err(e) => {
-                    log::warn!("bezel: commit de {repo} não consultado: {e}");
+                None => {
+                    log::warn!("bezel: commit de {repo} não consultado");
                     ok = false;
-                    break;
                 }
             }
         }

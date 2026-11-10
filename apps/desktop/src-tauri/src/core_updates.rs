@@ -184,33 +184,10 @@ fn parse_index(text: &str, ext: &str) -> HashMap<String, i64> {
         .collect()
 }
 
+use crate::repo_version::remote_head;
+
 fn is_outdated(commit: &str, head: &str, built_day: i64, dll_day: i64) -> bool {
     built_day > dll_day && !head.starts_with(commit)
-}
-
-/// O HEAD na resposta do `ls-refs` (pkt-line: `0032<oid> HEAD\n0000`).
-fn parse_ls_refs(body: &str) -> Option<String> {
-    let oid = body.get(4..)?.split_whitespace().next()?;
-    (oid.len() == 40 && oid.chars().all(|c| c.is_ascii_hexdigit())).then(|| oid.to_string())
-}
-
-/// `ls-refs` do protocolo Git v2 (gitprotocol-v2 e gitprotocol-http): pede só o
-/// HEAD, ~50 bytes de resposta mesmo num repositório como o do MAME.
-async fn remote_head(repo: &str) -> Option<String> {
-    let body = crate::http::client()
-        .post(format!("https://github.com/{repo}.git/git-upload-pack"))
-        .header("Content-Type", "application/x-git-upload-pack-request")
-        .header("Git-Protocol", "version=2")
-        .body("0014command=ls-refs\n00010014ref-prefix HEAD\n0000")
-        .send()
-        .await
-        .ok()?
-        .error_for_status()
-        .ok()?
-        .text()
-        .await
-        .ok()?;
-    parse_ls_refs(&body)
 }
 
 /// Situação de um core da tabela, para a fumaça do catálogo; `None` = fora dela.
@@ -322,6 +299,7 @@ pub async fn check(cores_dir: &Path) -> Result<Vec<String>, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::repo_version::parse_ls_refs;
 
     #[tokio::test]
     #[ignore = "usa a rede e os cores de REEMU_TEST_CORES_DIR"]

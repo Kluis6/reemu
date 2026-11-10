@@ -10,6 +10,7 @@ use std::path::Path;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct Commit {
     pub sha: String,
+    #[serde(default)]
     /// ISO 8601 (data do commit), pra comparar com pacotes baixados antes de o
     /// ReEmu registrar o SHA.
     pub date: String,
@@ -22,6 +23,76 @@ pub fn now_secs() -> u64 {
         .unwrap_or(0)
 }
 
+/// O HEAD na resposta do `ls-refs` (pkt-line: `0032<oid> HEAD\n0000`).
+pub fn parse_ls_refs(body: &str) -> Option<String> {
+    let oid = body.get(4..)?.split_whitespace().next()?;
+    (oid.len() == 40 && oid.chars().all(|c| c.is_ascii_hexdigit())).then(|| oid.to_string())
+}
+
+/// `ls-refs` do protocolo Git v2 (gitprotocol-v2 e gitprotocol-http): pede só o
+/// HEAD, ~50 bytes de resposta mesmo num repositório como o do MAME. Não passa
+/// pela API REST, então não gasta o limite de 60 consultas por hora. `repo` =
+/// `dono/nome`.
+pub async fn remote_head(repo: &str) -> Option<String> {
+    let body = crate::http::client()
+        .post(format!("https://github.com/{repo}.git/git-upload-pack"))
+        .header("Content-Type", "application/x-git-upload-pack-request")
+        .header("Git-Protocol", "version=2")
+        .body("0014command=ls-refs\n00010014ref-prefix HEAD\n0000")
+        .send()
+        .await
+        .ok()?
+        .error_for_status()
+        .ok()?
+        .text()
+        .await
+        .ok()?;
+    parse_ls_refs(&body)
+}
+
+/// O commit atual do `master` pelo `ls-refs` (sem a data, que só a API traz).
+pub async fn head_commit(owner: &str, repo: &str) -> Option<Commit> {
+    remote_head(&format!("{owner}/{repo}"))
+        .await
+        .map(|sha| Commit {
+            sha,
+            date: String::new(),
+        })
+}
+
+/// O "último commit" a guardar depois de consultar o repositório, ou `None`
+/// se a consulta falhou (fica o guardado). O HEAD vem pelo `ls-refs`, sem
+/// gastar a API. A API REST só entra pro pacote baixado antes de o ReEmu
+/// registrar o commit (`installed` vazio), que precisa da data do commit, e só
+/// quando o HEAD mudou desde a última consulta.
+pub async fn refresh_latest(
+    owner: &str,
+    repo: &str,
+    installed: Option<&Commit>,
+    cached: Option<&Commit>,
+) -> Option<Commit> {
+    let head = remote_head(&format!("{owner}/{repo}")).await?;
+    if let Some(c) = cached.filter(|c| c.sha == head && (installed.is_some() || !c.date.is_empty()))
+    {
+        return Some(c.clone());
+    }
+    if installed.is_some() {
+        return Some(Commit {
+            sha: head,
+            date: String::new(),
+        });
+    }
+    match latest_commit(owner, repo).await {
+        Ok(c) => Some(c),
+        Err(e) => {
+            log::warn!("versão: data do commit de {owner}/{repo} não consultada: {e}");
+            None
+        }
+    }
+}
+
+/// Último commit pela API REST (com a data). Gasta o limite de 60 por hora:
+/// só pro caso de [`refresh_latest`] que precisa da data.
 pub async fn latest_commit(owner: &str, repo: &str) -> Result<Commit, String> {
     #[derive(serde::Deserialize)]
     struct Api {
@@ -90,7 +161,7 @@ pub fn iso_utc(secs: u64) -> String {
 pub fn is_outdated(installed: Option<&Commit>, latest: &Commit, dir_date: Option<&str>) -> bool {
     match installed {
         Some(c) => c.sha != latest.sha,
-        None => dir_date.is_some_and(|d| latest.date.as_str() > d),
+        None => !latest.date.is_empty() && dir_date.is_some_and(|d| latest.date.as_str() > d),
     }
 }
 
@@ -118,6 +189,12 @@ mod tests {
         assert!(is_outdated(None, &latest, Some("2026-06-01T00:00:00Z")));
         assert!(!is_outdated(None, &latest, Some("2026-11-01T00:00:00Z")));
         assert!(!is_outdated(None, &latest, None));
+        // HEAD sem a data (só `ls-refs`): pacote antigo não acusa
+        let no_date = Commit {
+            sha: "b".into(),
+            date: String::new(),
+        };
+        assert!(!is_outdated(None, &no_date, Some("2026-06-01T00:00:00Z")));
     }
 
     #[test]

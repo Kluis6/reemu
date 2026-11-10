@@ -11,7 +11,9 @@
 use std::path::{Path, PathBuf};
 use tauri::ipc::Channel;
 
-use crate::repo_version::{installed_at, is_outdated, latest_commit, now_secs, Commit};
+use crate::repo_version::{
+    head_commit, installed_at, is_outdated, now_secs, refresh_latest, Commit,
+};
 
 const ARCHIVE_URL: &str = "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip";
 /// Usado se o buildbot estiver fora do ar. Vem com dir raiz `slang-shaders-master/`.
@@ -87,9 +89,9 @@ pub async fn download(
     // o commit do `master` agora, registrado pra saber depois se o repositório
     // mudou. O zip do buildbot é refeito a partir do repositório (todo dia); o
     // do GitHub é o próprio `master`. Sem a API, o download segue sem registrar.
-    let head = latest_commit("libretro", "slang-shaders").await;
-    if let Err(e) = &head {
-        log::warn!("shaders: commit do slang-shaders não consultado: {e}");
+    let head = head_commit("libretro", "slang-shaders").await;
+    if head.is_none() {
+        log::warn!("shaders: commit do slang-shaders não consultado");
     }
     let mut resp = match fetch(ARCHIVE_URL).await {
         Ok(r) => r,
@@ -165,7 +167,7 @@ pub async fn download(
     })
     .await
     .map_err(|e| e.to_string())??;
-    if let Ok(head) = head {
+    if let Some(head) = head {
         let v = Version {
             installed: Some(head.clone()),
             latest: Some(head),
@@ -219,13 +221,20 @@ pub async fn update_available(shaders_dir: &Path, force: bool) -> bool {
     }
     let mut v = Version::load(shaders_dir);
     if force || now_secs().saturating_sub(v.checked_at) >= CHECK_EVERY_SECS {
-        match latest_commit("libretro", "slang-shaders").await {
-            Ok(c) => {
+        let got = refresh_latest(
+            "libretro",
+            "slang-shaders",
+            v.installed.as_ref(),
+            v.latest.as_ref(),
+        )
+        .await;
+        match got {
+            Some(c) => {
                 v.latest = Some(c);
                 v.checked_at = now_secs();
                 v.save(shaders_dir);
             }
-            Err(e) => log::warn!("shaders: commit do slang-shaders não consultado: {e}"),
+            None => log::warn!("shaders: commit do slang-shaders não consultado"),
         }
     }
     let Some(latest) = &v.latest else {
