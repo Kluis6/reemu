@@ -29,13 +29,20 @@ const useStyles = makeStyles({
     // saía cortado. Com isso a lista rola.
     flexShrink: 0,
   },
-  // Escolhido: borda e fundo na cor do TEMA. O `Background2Selected` do
-  // Fluent é um cinza neutro que não segue a cor do tema.
+  // Escolhido: fundo na cor primária do tema (a do botão primary e do
+  // quadrado dos ícones), com o texto legível sobre ela (pedido do usuário,
+  // 2026-11-10). Antes era o `BrandBackground2`, um tom claro quase igual ao
+  // dos outros itens. Borda transparente de 1 px: o tamanho não muda.
   selected: {
-    border: `1px solid ${tokens.colorBrandStroke1}`,
-    backgroundColor: tokens.colorBrandBackground2,
-    ':hover': { backgroundColor: tokens.colorBrandBackground2Hover },
-    ':active': { backgroundColor: tokens.colorBrandBackground2Pressed },
+    border: '1px solid transparent',
+    backgroundColor: 'var(--reemuBrandSolid)',
+    color: 'var(--reemuOnBrand)',
+    ':hover': { backgroundColor: 'var(--reemuBrandSolid)' },
+    ':active': { backgroundColor: 'var(--reemuBrandSolid)' },
+    '& .fui-Text, & .fui-Caption1, & .fui-CardHeader__description': {
+      color: 'var(--reemuOnBrand)',
+    },
+    '& .fui-Button': { color: 'var(--reemuOnBrand)' },
   },
   disabled: { opacity: 0.5, cursor: 'default' },
   title: { display: 'inline-flex', alignItems: 'center', gap: tokens.spacingHorizontalXS },
