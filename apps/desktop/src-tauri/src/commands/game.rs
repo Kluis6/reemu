@@ -513,6 +513,17 @@ pub fn bezel_catalog(state: State<'_, AppState>) -> Vec<crate::bezel_pack::Catal
     crate::bezel_pack::catalog(&state.decorations_dir)
 }
 
+/// Sistemas com molduras baixadas que têm versão nova no The Bezel Project
+/// (consulta o GitHub no máximo a cada 6 h; `force` consulta agora).
+#[tauri::command]
+pub async fn bezel_updates(
+    state: State<'_, AppState>,
+    force: Option<bool>,
+) -> Result<Vec<String>, String> {
+    let dir = state.decorations_dir.clone();
+    Ok(crate::bezel_pack::updates(&dir, force.unwrap_or(false)).await)
+}
+
 /// Baixa o pack de bezels de `system_id` (The Bezel Project) e re-importa a
 /// árvore. Devolve o total de atribuições gravadas.
 #[tauri::command]

@@ -15,6 +15,8 @@ use std::path::{Path, PathBuf};
 
 use tauri::ipc::Channel;
 
+use crate::repo_version::{installed_at, is_outdated, latest_commit, now_secs, Commit};
+
 /// `system_id` do ReEmu → repo `bezelproject-<X>` (família overlay/RetroArch).
 /// Só sistemas que a família publica; PSP/PS2/DS não têm bezel (widescreen).
 const CATALOG: &[(&str, &str)] = &[
@@ -130,6 +132,14 @@ pub async fn download(
     let root = pack_root(decorations_dir);
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
 
+    // 0. o commit do `master` agora: é o que o zip vai trazer, e fica
+    //    registrado pra saber depois se o repositório mudou. Sem a API (limite
+    //    do GitHub, sem rede), o download segue sem registrar.
+    let head = latest_commit("thebezelproject", repo).await;
+    if let Err(e) = &head {
+        log::warn!("bezel: commit de {repo} não consultado: {e}");
+    }
+
     // 1. baixa o zip pra um arquivo temporário (packs passam de 500 MB — não
     //    dá pra segurar tudo na RAM como o slang-shaders).
     let url = archive_url(repo);
@@ -198,6 +208,13 @@ pub async fn download(
     .await
     .map_err(|e| e.to_string())??;
 
+    if let Ok(head) = head {
+        let mut v = Versions::load(&root);
+        v.installed.insert(system_id.to_string(), head.clone());
+        v.latest.insert(system_id.to_string(), head);
+        v.save(&root);
+    }
+
     // 3. re-importa a árvore inteira (todos os sistemas já baixados).
     let _ = progress.send(DownloadProgress {
         system_id: system_id.to_string(),
@@ -206,6 +223,83 @@ pub async fn download(
         phase: "import",
     });
     crate::decoration::import_pack(pool, &root).await
+}
+
+/// `<pack_root>/.versions.json`: o commit de cada sistema baixado e a última
+/// consulta ao GitHub. O scan de decorações só lê `.png`, então o arquivo não
+/// atrapalha a importação.
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct Versions {
+    #[serde(default)]
+    installed: std::collections::BTreeMap<String, Commit>,
+    #[serde(default)]
+    latest: std::collections::BTreeMap<String, Commit>,
+    /// Epoch em segundos da última consulta (todas as instaladas).
+    #[serde(default)]
+    checked_at: u64,
+}
+
+impl Versions {
+    fn path(root: &Path) -> PathBuf {
+        root.join(".versions.json")
+    }
+    fn load(root: &Path) -> Self {
+        std::fs::read(Self::path(root))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+    fn save(&self, root: &Path) {
+        if let Ok(b) = serde_json::to_vec_pretty(self) {
+            let _ = std::fs::write(Self::path(root), b);
+        }
+    }
+}
+
+/// A API do GitHub sem login aceita 60 consultas por hora por IP; com o
+/// resultado guardado por 6 h, abrir Molduras não gasta consultas.
+const CHECK_EVERY_SECS: u64 = 6 * 60 * 60;
+
+/// Sistemas baixados com versão nova no The Bezel Project. Consulta o GitHub
+/// no máximo a cada 6 h (`force` ignora o prazo); sem rede, usa a última
+/// consulta guardada.
+pub async fn updates(decorations_dir: &Path, force: bool) -> Vec<String> {
+    let root = pack_root(decorations_dir);
+    let mut v = Versions::load(&root);
+    let installed: Vec<(&str, &str)> = CATALOG
+        .iter()
+        .filter(|(sid, _)| dir_has_files(&root.join(sid)))
+        .map(|(s, r)| (*s, *r))
+        .collect();
+    if force || now_secs().saturating_sub(v.checked_at) >= CHECK_EVERY_SECS {
+        let mut ok = true;
+        for (sid, repo) in &installed {
+            match latest_commit("thebezelproject", repo).await {
+                Ok(c) => {
+                    v.latest.insert((*sid).to_string(), c);
+                }
+                Err(e) => {
+                    log::warn!("bezel: commit de {repo} não consultado: {e}");
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if ok {
+            v.checked_at = now_secs();
+        }
+        v.save(&root);
+    }
+    installed
+        .iter()
+        .filter(|(sid, _)| {
+            v.latest.get(*sid).is_some_and(|latest| {
+                let dir_date = installed_at(&root.join(sid));
+                is_outdated(v.installed.get(*sid), latest, dir_date.as_deref())
+            })
+        })
+        .map(|(sid, _)| (*sid).to_string())
+        .collect()
 }
 
 /// Traduz uma entrada do zip do Bezel Project pra o caminho relativo dentro de

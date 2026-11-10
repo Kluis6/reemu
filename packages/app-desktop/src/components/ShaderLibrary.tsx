@@ -13,13 +13,14 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import { FolderRegular } from '@fluentui/react-icons'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef, useState } from 'react'
 import {
   downloadShaderPack,
   listSlangpDir,
   pickFolder,
   shaderPackStatus,
+  shaderPackUpdate,
   type SlangpEntry,
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
@@ -122,6 +123,16 @@ export function ShaderLibrary({
     queryFn: shaderPackStatus,
     retry: false,
   })
+  // Versão nova do pacote no `libretro/slang-shaders` (o backend guarda a
+  // consulta por 6 h). Falha não mostra nada.
+  const qc = useQueryClient()
+  const packUpdate = useQuery({
+    queryKey: ['shader-pack-update'],
+    queryFn: () => shaderPackUpdate(),
+    enabled: !!pack.data?.installed,
+    retry: false,
+    staleTime: 60 * 60 * 1000,
+  })
 
   const dl = useMutation({
     mutationFn: () =>
@@ -157,6 +168,7 @@ export function ShaderLibrary({
       }
       setRoot(path)
       pack.refetch()
+      qc.invalidateQueries({ queryKey: ['shader-pack-update'] })
       if (dlId.current)
         updateToast(dlId.current, {
           message: t('shaders.installed'),
@@ -244,6 +256,17 @@ export function ShaderLibrary({
               style={{ flex: 1 }}
             />
             <Caption1>{t('shaders.presets', { count: q.data.length })}</Caption1>
+            {/* só pra pasta do pacote baixado (uma pasta escolhida à mão não
+                tem de onde atualizar) */}
+            {packUpdate.data && pack.data?.path === root && (
+              <Button
+                appearance="primary"
+                disabled={dl.isPending}
+                onClick={() => dl.mutate()}
+              >
+                {dl.isPending ? t('shaders.downloading') : t('shaders.updatePack')}
+              </Button>
+            )}
           </div>
           <div className={mergeClasses(s.list, fill && s.listFill)}>
             {groups.length === 0 && <Caption1>{t('shaders.nothing')}</Caption1>}

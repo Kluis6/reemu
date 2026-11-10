@@ -228,6 +228,14 @@ export const clearDecorations = () => invoke<void>('clear_decorations')
 export type { BezelCatalogItem }
 export const bezelCatalog = () =>
   invoke<BezelCatalogItem[]>('bezel_catalog')
+/** Sistemas com molduras baixadas que têm versão nova no The Bezel Project.
+ *  O backend consulta o GitHub no máximo a cada 6 h; `force` consulta agora. */
+export const bezelUpdates = (force = false) =>
+  invoke<string[]>('bezel_updates', { force })
+/** O pacote `slang-shaders` baixado tem versão nova no GitHub? O backend
+ *  consulta no máximo a cada 6 h; `force` consulta agora. */
+export const shaderPackUpdate = (force = false) =>
+  invoke<boolean>('shader_pack_update', { force })
 
 export type { BezelProgress }
 /** Baixa o pack de bezels de um sistema (The Bezel Project) e re-importa a

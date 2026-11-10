@@ -12,6 +12,7 @@ mod credentials;
 mod decoration;
 mod gpu;
 mod http;
+mod repo_version;
 
 /// Quadros do jogo novo apresentados antes de a janela de vídeo reaparecer.
 /// No Windows são 2: o present é assíncrono e o Vulkan não garante quando a
@@ -364,6 +365,8 @@ pub fn run() {
             commands::import_decoration_pack,
             commands::clear_decorations,
             commands::bezel_catalog,
+            commands::bezel_updates,
+            commands::shader_pack_update,
             commands::download_bezel_pack,
             profile::get_profile,
             profile::read_profile_avatar,

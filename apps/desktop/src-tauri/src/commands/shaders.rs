@@ -79,6 +79,17 @@ pub fn shader_pack_status(state: State<'_, AppState>) -> crate::shader_pack::Pac
     crate::shader_pack::status(&state.shaders_dir)
 }
 
+/// O pacote de shaders baixado tem versão nova no `libretro/slang-shaders`?
+/// Consulta o GitHub no máximo a cada 6 h; `force` consulta agora.
+#[tauri::command]
+pub async fn shader_pack_update(
+    state: State<'_, AppState>,
+    force: Option<bool>,
+) -> Result<bool, String> {
+    let dir = state.shaders_dir.clone();
+    Ok(crate::shader_pack::update_available(&dir, force.unwrap_or(false)).await)
+}
+
 /// Baixa o pacote `libretro/slang-shaders` (~130 MB) e o extrai pra
 /// `<dados>/shaders/slang-shaders`. Devolve o caminho instalado; a
 /// `ShaderLibrary` aponta a raiz pra ele.

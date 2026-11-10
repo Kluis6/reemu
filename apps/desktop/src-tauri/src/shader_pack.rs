@@ -11,6 +11,8 @@
 use std::path::{Path, PathBuf};
 use tauri::ipc::Channel;
 
+use crate::repo_version::{installed_at, is_outdated, latest_commit, now_secs, Commit};
+
 const ARCHIVE_URL: &str = "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip";
 /// Usado se o buildbot estiver fora do ar. Vem com dir raiz `slang-shaders-master/`.
 const FALLBACK_URL: &str =
@@ -82,6 +84,13 @@ pub async fn download(
     shaders_dir: &Path,
     progress: Channel<DownloadProgress>,
 ) -> Result<PathBuf, String> {
+    // o commit do `master` agora, registrado pra saber depois se o repositório
+    // mudou. O zip do buildbot é refeito a partir do repositório (todo dia); o
+    // do GitHub é o próprio `master`. Sem a API, o download segue sem registrar.
+    let head = latest_commit("libretro", "slang-shaders").await;
+    if let Err(e) = &head {
+        log::warn!("shaders: commit do slang-shaders não consultado: {e}");
+    }
     let mut resp = match fetch(ARCHIVE_URL).await {
         Ok(r) => r,
         Err(e) => {
@@ -110,7 +119,7 @@ pub async fn download(
     });
 
     let dest = install_dir(shaders_dir);
-    tauri::async_runtime::spawn_blocking(move || -> Result<PathBuf, String> {
+    let path = tauri::async_runtime::spawn_blocking(move || -> Result<PathBuf, String> {
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
             .map_err(|e| format!("zip inválido: {e}"))?;
         let tmp = dest.with_extension("part");
@@ -155,7 +164,75 @@ pub async fn download(
         Ok(dest)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())??;
+    if let Ok(head) = head {
+        let v = Version {
+            installed: Some(head.clone()),
+            latest: Some(head),
+            checked_at: now_secs(),
+        };
+        v.save(shaders_dir);
+    }
+    Ok(path)
+}
+
+/// `<dados>/shaders/slang-shaders.version.json`: fora da pasta do pacote, que
+/// é apagada e trocada inteira a cada download.
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct Version {
+    #[serde(default)]
+    installed: Option<Commit>,
+    #[serde(default)]
+    latest: Option<Commit>,
+    /// Epoch em segundos da última consulta.
+    #[serde(default)]
+    checked_at: u64,
+}
+
+impl Version {
+    fn path(shaders_dir: &Path) -> PathBuf {
+        shaders_dir.join("slang-shaders.version.json")
+    }
+    fn load(shaders_dir: &Path) -> Self {
+        std::fs::read(Self::path(shaders_dir))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+    fn save(&self, shaders_dir: &Path) {
+        if let Ok(b) = serde_json::to_vec_pretty(self) {
+            let _ = std::fs::write(Self::path(shaders_dir), b);
+        }
+    }
+}
+
+/// Consulta o GitHub no máximo a cada 6 h (limite da API sem login).
+const CHECK_EVERY_SECS: u64 = 6 * 60 * 60;
+
+/// O pacote instalado tem versão nova no `libretro/slang-shaders`? `false`
+/// sem pacote instalado. `force` consulta agora; sem rede, usa a última
+/// consulta guardada.
+pub async fn update_available(shaders_dir: &Path, force: bool) -> bool {
+    let dir = install_dir(shaders_dir);
+    if !dir.is_dir() {
+        return false;
+    }
+    let mut v = Version::load(shaders_dir);
+    if force || now_secs().saturating_sub(v.checked_at) >= CHECK_EVERY_SECS {
+        match latest_commit("libretro", "slang-shaders").await {
+            Ok(c) => {
+                v.latest = Some(c);
+                v.checked_at = now_secs();
+                v.save(shaders_dir);
+            }
+            Err(e) => log::warn!("shaders: commit do slang-shaders não consultado: {e}"),
+        }
+    }
+    let Some(latest) = &v.latest else {
+        return false;
+    };
+    let dir_date = installed_at(&dir);
+    is_outdated(v.installed.as_ref(), latest, dir_date.as_deref())
 }
 
 /// GET com status checado. `reqwest` já segue redirects (o buildbot manda um).

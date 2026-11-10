@@ -9,6 +9,7 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import {
+  ArrowCircleUpRegular,
   CheckmarkCircleFilled,
   FrameRegular,
 } from '@fluentui/react-icons'
@@ -17,6 +18,7 @@ import { useRef } from 'react'
 import { platformLabel } from '../lib/platform'
 import {
   bezelCatalog,
+  bezelUpdates,
   downloadBezelPack,
   listRoms,
   type BezelProgress,
@@ -28,13 +30,12 @@ import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
-  // Cards em 2 colunas, como a lista de cores (uma só em janela estreita).
+  // Uma coluna, uma faixa por sistema (pedido do usuário, 2026-11-09).
   // Sem rolagem própria: a área das Configurações já rola.
   list: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    gridTemplateColumns: 'minmax(0, 1fr)',
     gap: tokens.spacingVerticalM,
-    '@media (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
   },
   // ícone num quadrado | sistema e status (cresce) | botão — o mesmo desenho
   // das listas de Cores e BIOS, com o mesmo padding nos 4 lados
@@ -99,6 +100,15 @@ export function BezelLibrary() {
 
   const cat = useQuery({ queryKey: ['bezel-catalog'], queryFn: bezelCatalog, retry: false })
   const roms = useQuery({ queryKey: ['roms'], queryFn: listRoms, retry: false })
+  // Versão nova no repositório do The Bezel Project. Falha (sem rede, limite
+  // da API) não mostra nada: o "Reinstalar" continua lá.
+  const updates = useQuery({
+    queryKey: ['bezel-updates'],
+    queryFn: () => bezelUpdates(),
+    retry: false,
+    staleTime: 60 * 60 * 1000,
+  })
+  const outdated = new Set(updates.data ?? [])
 
   const dl = useMutation({
     mutationFn: (systemId: string) =>
@@ -137,6 +147,7 @@ export function BezelLibrary() {
           progress: undefined,
         })
       qc.invalidateQueries({ queryKey: ['bezel-catalog'] })
+      qc.invalidateQueries({ queryKey: ['bezel-updates'] })
     },
     onError: (e) => {
       if (dlId.current)
@@ -174,13 +185,27 @@ export function BezelLibrary() {
                   {platformLabel(c.systemId)}
                 </Text>
               </Body1>
-              {c.installed && (
+              {c.installed && outdated.has(c.systemId) ? (
+                <Badge appearance="tint" color="brand" icon={<ArrowCircleUpRegular />}>
+                  {t('bezels.updateAvailable')}
+                </Badge>
+              ) : c.installed ? (
                 <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
                   {t('bezels.downloaded')}
                 </Badge>
-              )}
+              ) : null}
             </span>
-            {c.installed ? (
+            {c.installed && outdated.has(c.systemId) ? (
+              // versão nova no repositório: a ação principal da faixa
+              <Button
+                className={s.action}
+                appearance="primary"
+                disabled={dl.isPending}
+                onClick={() => dl.mutate(c.systemId)}
+              >
+                {t('bezels.update')}
+              </Button>
+            ) : c.installed ? (
               // Reinstalar: secondary, só o texto, sem ícone (como o Remover das
               // outras listas); o progresso aparece no toast
               <Button
