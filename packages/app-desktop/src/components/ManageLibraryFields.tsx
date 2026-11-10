@@ -1,21 +1,19 @@
 import {
   Button,
-  Select,
   Spinner,
+  Tab,
+  TabList,
   Text,
   makeStyles,
   tokens,
   mergeClasses,
 } from "@fluentui/react-components";
-import {
-  ArrowSyncRegular,
-  FolderRegular,
-  GamesRegular,
-  LibraryRegular,
-} from "@fluentui/react-icons";
+import { FolderRegular, GamesRegular } from "@fluentui/react-icons";
 import { platformLabel } from "../lib/platform";
 import type { ManageLibraryState } from "../lib/useManageLibrary";
 import { useModalButtonStyles } from "../styles/buttons";
+import { SelectBlock } from "./SettingBlock";
+import { useTabStyles } from "../styles/xbox";
 import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
@@ -25,8 +23,6 @@ const useStyles = makeStyles({
     marginTop: tokens.spacingVerticalM,
     marginBottom: tokens.spacingVerticalXS,
   },
-  // 1º item da aba Plataformas: o espaço acima já vem das abas (24).
-  sectionFirst: { marginTop: 0 },
   // Cada plataforma/pasta numa faixa igual à da lista de Cores (pedido do
   // usuário, 2026-11-06): o mesmo padding nos 4 lados, o ícone num quadrado
   // de 48 na cor do tema. ícone | nome | … | ações.
@@ -70,8 +66,6 @@ const useStyles = makeStyles({
     minWidth: "120px",
     border: "1px solid transparent !important",
   },
-  // os cards já têm 12 de espaço entre si (gap da página)
-  cardTop: { marginTop: tokens.spacingVerticalM },
   path: {
     flexGrow: 1,
     minWidth: 0,
@@ -84,14 +78,18 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: tokens.fontSizeBase200,
   },
-  refreshRow: {
+  // abas à esquerda; "Atualizar biblioteca" e "Limpar tudo" à direita, na
+  // mesma linha (pedido do usuário, 2026-11-10)
+  header: {
     display: "flex",
     alignItems: "center",
+    justifyContent: "space-between",
     columnGap: tokens.spacingHorizontalM,
-    paddingBottom: tokens.spacingVerticalS,
+    marginBottom: "12px",
   },
-  hint: { flexGrow: 1, color: tokens.colorNeutralForeground3 },
-  refreshBtn: { flexShrink: 0, whiteSpace: "nowrap" },
+  // o traço da aba ativa começa na borda das faixas (ver SettingsLibrary)
+  tabs: { marginLeft: "-3px" },
+  headerActions: { display: "flex", columnGap: tokens.spacingHorizontalS },
 });
 
 /**
@@ -125,14 +123,15 @@ export function ManageLibraryFields({
     confirm,
     setConfirm,
     purge,
-    rescan,
     coreValue,
   } = state;
 
   const purgeBtn = (target: string, idle: string, confirmLabel: string) => (
     <Button
       appearance={confirm === target ? "primary" : "secondary"}
-      className={s.action}
+      // com fundo e sem borda, como o "Atualizar biblioteca"; na confirmação
+      // fica o primary
+      className={mergeClasses(s.action, confirm !== target && btn.secondaryFlat)}
       disabled={purge.isPending}
       onClick={() =>
         confirm === target ? purge.mutate(target) : setConfirm(target)
@@ -149,37 +148,12 @@ export function ManageLibraryFields({
 
   return (
     <>
-      {showFolders && (sources.data?.length ?? 0) > 0 && (
-        <div className={s.refreshRow}>
-          <Text className={s.hint}>{t("manage.refreshHint")}</Text>
-          <Button
-            appearance="secondary"
-            // fora das faixas, direto no fundo do card: o preenchimento neutro
-            // (o do `secondary` some no fundo claro)
-            className={mergeClasses(s.refreshBtn, s.action, btn.secondaryFlat)}
-            icon={<ArrowSyncRegular />}
-            disabled={rescan.isPending}
-            onClick={() => rescan.mutate(null)}
-          >
-            {t("library.refresh")}
-          </Button>
-        </div>
-      )}
-
       {!showPlatforms ? null : cores.isLoading || sysCores.isLoading ? (
         <Spinner label={t("common.loading")} />
       ) : platforms.length === 0 ? (
         <Text>{t("manage.empty")}</Text>
       ) : (
         <>
-          <div
-            className={mergeClasses(
-              s.section,
-              part === "platforms" && s.sectionFirst,
-            )}
-          >
-            {t("manage.platformsSection")}
-          </div>
           {platforms.map(([sys, n]) => (
             <div key={sys} className={mergeClasses(s.card, s.row)}>
               <span className={s.icon} aria-hidden><GamesRegular /></span>
@@ -187,20 +161,17 @@ export function ManageLibraryFields({
               <span className={s.count}>
                 {t("library.games", { count: n })}
               </span>
-              <Select
-                appearance="filled-darker"
+              <SelectBlock
+                compact
+                raised
+                label={t("manage.coreLabel")}
                 value={coreValue(sys)}
-                onChange={(_, d) =>
-                  setPending((p) => ({ ...p, [sys]: d.value }))
-                }
-              >
-                <option value="">{t("manage.auto")}</option>
-                {(cores.data ?? []).map((c) => (
-                  <option key={c.coreId} value={c.coreId}>
-                    {c.name}
-                  </option>
-                ))}
-              </Select>
+                options={[
+                  { value: "", label: t("manage.auto") },
+                  ...(cores.data ?? []).map((c) => ({ value: c.coreId, label: c.name })),
+                ]}
+                onChange={(v) => setPending((p) => ({ ...p, [sys]: v }))}
+              />
               {purgeBtn(`sys:${sys}`, t("common.remove"), t("manage.confirm"))}
             </div>
           ))}
@@ -223,17 +194,66 @@ export function ManageLibraryFields({
         </>
       )}
 
-      {showFolders && platforms.length > 0 && (
-        <div className={mergeClasses(s.card, s.srcRow, s.cardTop)}>
-          <span className={s.icon} aria-hidden><LibraryRegular /></span>
-          <span className={s.path}>{t("manage.all")}</span>
-          {purgeBtn(
-            "__all__",
-            t("manage.clearAll"),
-            t("manage.confirmClearAll"),
-          )}
-        </div>
-      )}
     </>
+  );
+}
+
+export type ManageTab = "platforms" | "folders";
+
+/**
+ * Linha das abas de "Gerenciar biblioteca": Plataformas e Pastas à esquerda;
+ * "Atualizar biblioteca" (só texto) e "Limpar tudo" à direita. "Limpar tudo"
+ * pede confirmação no segundo clique, como os "Remover".
+ */
+export function ManageLibraryHeader({
+  state,
+  tab,
+  onTab,
+  hasGames,
+}: {
+  state: ManageLibraryState;
+  tab: ManageTab;
+  onTab: (tab: ManageTab) => void;
+  hasGames: boolean;
+}) {
+  const { t } = useTranslation();
+  const s = useStyles();
+  const tb = useTabStyles();
+  const btn = useModalButtonStyles();
+  const { confirm, setConfirm, purge, rescan, sources } = state;
+  const confirming = confirm === "__all__";
+  return (
+    <div className={s.header}>
+      <TabList
+        className={mergeClasses(tb.tabs, s.tabs)}
+        selectedValue={tab}
+        onTabSelect={(_, d) => onTab(d.value as ManageTab)}
+      >
+        <Tab value="platforms">{t("manage.tabPlatforms")}</Tab>
+        <Tab value="folders">{t("manage.tabFolders")}</Tab>
+      </TabList>
+      <div className={s.headerActions}>
+        {(sources.data?.length ?? 0) > 0 && (
+          <Button
+            appearance="secondary"
+            className={mergeClasses(s.action, btn.secondaryFlat)}
+            disabled={rescan.isPending}
+            onClick={() => rescan.mutate(null)}
+          >
+            {t("library.refresh")}
+          </Button>
+        )}
+        {hasGames && (
+          <Button
+            appearance={confirming ? "primary" : "secondary"}
+            className={mergeClasses(s.action, !confirming && btn.secondaryFlat)}
+            disabled={purge.isPending}
+            onClick={() => (confirming ? purge.mutate("__all__") : setConfirm("__all__"))}
+          >
+            {confirming ? t("manage.confirmClearAll") : t("manage.clearAll")}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

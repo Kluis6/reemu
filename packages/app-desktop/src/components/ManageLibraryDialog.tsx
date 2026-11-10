@@ -1,9 +1,6 @@
-import {
-  Button,
-  makeStyles,
-  tokens,
-} from "@fluentui/react-components";
-import { ManageLibraryFields } from "./ManageLibraryFields";
+import { Button, makeStyles, tokens } from "@fluentui/react-components";
+import { useState } from "react";
+import { ManageLibraryFields, ManageLibraryHeader, type ManageTab } from "./ManageLibraryFields";
 import { FullscreenDialog } from "./FullscreenDialog";
 import { useManageLibrary } from "../lib/useManageLibrary";
 import { useModalButtonStyles } from "../styles/buttons";
@@ -39,10 +36,14 @@ export function ManageLibraryDialog({
   const { t } = useTranslation();
   const s = useStyles();
   const btn = useModalButtonStyles();
+  // Plataformas (core padrão e remoção) e Pastas (atualizar, pastas de origem,
+  // limpar tudo) em abas, como em Configurações.
+  const [tab, setTab] = useState<ManageTab>("platforms");
   const state = useManageLibrary(open);
 
   const close = () => {
     state.reset();
+    setTab("platforms");
     onOpenChange(false);
   };
 
@@ -67,7 +68,8 @@ export function ManageLibraryDialog({
       }
     >
       <div className={s.content}>
-        <ManageLibraryFields state={state} platforms={platforms} />
+        <ManageLibraryHeader state={state} tab={tab} onTab={setTab} hasGames={platforms.length > 0} />
+        <ManageLibraryFields state={state} platforms={platforms} part={tab} />
       </div>
     </FullscreenDialog>
   );

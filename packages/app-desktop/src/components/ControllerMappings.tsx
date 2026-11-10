@@ -2,7 +2,6 @@ import {
   Badge,
   Button,
   Caption1,
-  Select,
   Spinner,
   Subtitle2,
   Text,
@@ -22,6 +21,7 @@ import {
   type ControllerMapping,
 } from '../lib/tauri'
 import { EmptyState } from './EmptyState'
+import { SelectBlock } from './SettingBlock'
 import { useBindingCaptureStore } from '../stores/useBindingCaptureStore'
 import { useToastStore } from '../stores/useToastStore'
 import { errorToast } from '../lib/toast'
@@ -53,6 +53,9 @@ const useStyles = makeStyles({
     fontSize: tokens.fontSizeBase200,
   },
   bound: { color: tokens.colorNeutralForeground3 },
+  // `SelectBlock` (padrão dos seletores) sobre o card do controle, que já é
+  // `Background2`: o fundo um tom acima, como os botões do app.
+  portSelect: { width: '200px' },
 })
 
 const toast = (message: string, variant: 'Success' | 'Error') => ({
@@ -131,21 +134,22 @@ export function ControllerMappings() {
                 <Badge appearance="tint" color={dev.connected ? 'success' : 'informative'}>
                   {dev.connected ? t('controllers.connected') : t('controllers.saved')}
                 </Badge>
-                <Select
-                  appearance="filled-darker"
+                <SelectBlock
+                  compact
+                  raised
+                  className={styles.portSelect}
+                  label={t('controllers.portLabel')}
                   value={portFor(guid) === null ? '' : String(portFor(guid))}
                   disabled={assignPort.isPending}
-                  onChange={(_, d) =>
-                    assignPort.mutate({ guid, port: d.value === '' ? null : Number(d.value) })
-                  }
-                >
-                  <option value="">{t('controllers.portAuto')}</option>
-                  {[0, 1, 2, 3].map((p) => (
-                    <option key={p} value={String(p)}>
-                      {t('controllers.port', { n: p + 1 })}
-                    </option>
-                  ))}
-                </Select>
+                  options={[
+                    { value: '', label: t('controllers.portAuto') },
+                    ...[0, 1, 2, 3].map((p) => ({
+                      value: String(p),
+                      label: t('controllers.port', { n: p + 1 }),
+                    })),
+                  ]}
+                  onChange={(v) => assignPort.mutate({ guid, port: v === '' ? null : Number(v) })}
+                />
                 {dev.mapping && (
                   <Button
                     appearance="subtle"

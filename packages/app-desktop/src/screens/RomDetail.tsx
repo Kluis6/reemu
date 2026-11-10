@@ -21,8 +21,8 @@ import {
   MessageBarActions,
   MessageBarBody,
   OverlayDrawer,
-  Select,
   Tooltip,
+  tokens,
 } from "@fluentui/react-components";
 import {
   ArrowSyncRegular,
@@ -529,26 +529,24 @@ export function RomDetail() {
                   placeholder={rom.title}
                 />
               </Field>
-              <Field
-                label={t("common.platform")}
-                hint={t("game.platformHint")}
-              >
-                <Select
+              {/* seletor no padrão dos blocos (o mesmo da página do jogo) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <SelectBlock
+                  raised
+                  label={t("common.platform")}
                   value={editSystem}
-                  onChange={(_, d) => setEditSystem(d.value)}
-                >
-                  {!knownPlatforms().some(([id]) => id === editSystem) && (
-                    <option value={editSystem}>
-                      {platformLabel(editSystem)}
-                    </option>
-                  )}
-                  {knownPlatforms().map(([id, label]) => (
-                    <option key={id} value={id}>
-                      {label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+                  options={[
+                    ...(knownPlatforms().some(([id]) => id === editSystem)
+                      ? []
+                      : [{ value: editSystem, label: platformLabel(editSystem) }]),
+                    ...knownPlatforms().map(([id, label]) => ({ value: id, label })),
+                  ]}
+                  onChange={setEditSystem}
+                />
+                <Caption1 style={{ color: tokens.colorNeutralForeground3 }}>
+                  {t("game.platformHint")}
+                </Caption1>
+              </div>
             </DialogContent>
             <DialogActions>
               <Button

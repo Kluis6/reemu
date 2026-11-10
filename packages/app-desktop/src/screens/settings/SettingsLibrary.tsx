@@ -1,19 +1,15 @@
-import {
-  Button,
-  Tab,
-  TabList,
-  makeStyles,
-  mergeClasses,
-  tokens,
-} from "@fluentui/react-components";
+import { Button, makeStyles, tokens } from "@fluentui/react-components";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { LoadingState } from "../../components/EmptyState";
-import { ManageLibraryFields } from "../../components/ManageLibraryFields";
+import {
+  ManageLibraryFields,
+  ManageLibraryHeader,
+  type ManageTab,
+} from "../../components/ManageLibraryFields";
 import { platformLabel } from "../../lib/platform";
 import { listRoms } from "../../lib/tauri";
 import { useManageLibrary } from "../../lib/useManageLibrary";
-import { useTabStyles } from "../../styles/xbox";
 import { useTranslation } from "react-i18next";
 
 const useStyles = makeStyles({
@@ -23,11 +19,6 @@ const useStyles = makeStyles({
     gap: tokens.spacingVerticalM,
   },
   saveRow: { display: "flex", justifyContent: "flex-end" },
-  // 24 até o conteúdo, como nas outras abas (12 do `gap` + 12).
-  // O traço da aba ativa começa na borda das faixas da lista (pedido do
-  // usuário, 2026-11-06): o traço fica 3 px para dentro da aba, então a lista
-  // de abas volta só esses 3 (o padrão volta 15, alinhando o texto).
-  tabs: { alignSelf: "flex-start", marginBottom: "12px", marginLeft: "-3px" },
 });
 
 /**
@@ -39,8 +30,7 @@ const useStyles = makeStyles({
 export function SettingsLibrary() {
   const { t } = useTranslation();
   const s = useStyles();
-  const tb = useTabStyles();
-  const [tab, setTab] = useState<"platforms" | "folders">("platforms");
+  const [tab, setTab] = useState<ManageTab>("platforms");
   const roms = useQuery({
     queryKey: ["roms"],
     queryFn: listRoms,
@@ -61,14 +51,7 @@ export function SettingsLibrary() {
 
   return (
     <div className={s.root}>
-      <TabList
-        className={mergeClasses(tb.tabs, s.tabs)}
-        selectedValue={tab}
-        onTabSelect={(_, d) => setTab(d.value as "platforms" | "folders")}
-      >
-        <Tab value="platforms">{t("manage.tabPlatforms")}</Tab>
-        <Tab value="folders">{t("manage.tabFolders")}</Tab>
-      </TabList>
+      <ManageLibraryHeader state={state} tab={tab} onTab={setTab} hasGames={platforms.length > 0} />
       <ManageLibraryFields state={state} platforms={platforms} part={tab} />
       {tab === "platforms" && (
         <div className={s.saveRow}>

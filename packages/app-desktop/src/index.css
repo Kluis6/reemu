@@ -264,12 +264,15 @@ html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select,
 }
 
 /* Ajustes do anel por componente:
-   - Switch/Rádio/Checkbox não têm raio: o anel ganha o raio padrão; o Switch
+   - Switch/Rádio/Checkbox/Slider não têm raio: o anel ganha o raio padrão
+     (sem ele, o anel do slider saía com cantos retos em volta do brilho
+     arredondado); o Switch
      estica na linha do `<Field>` e o anel ficava da largura toda — no foco ele
      encolhe pro conteúdo (sem mexer no layout: o conteúdo já é à esquerda).
    - Itens de menu/lista ficam dentro de uma caixa com `overflow` (o popover):
      o anel vai pra DENTRO do item (−3 px), senão era cortado. */
-html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox):focus-within {
+html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):focus-within,
+.fui-Slider:has([data-nav-engaged]) {
   border-radius: var(--borderRadiusMedium);
 }
 html[data-nav-focus] .fui-Switch:focus-within {
@@ -436,6 +439,82 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
 }
 /* Anéis em `::after` do Fluent (teclado) que não são botões: o brilho já
    sai por fora do próprio anel (regra 1). */
+
+/* 5. Mouse em cima = o foco DO PRÓPRIO componente (pedido do usuário,
+   2026-11-09). Os botões do Fluent (regra 1b) e os cards de jogo/plataforma
+   (`useGameCardStyles`) já faziam isso; aqui vai o resto, cada um com o anel
+   do seu foco:
+   - botões comuns, links e abas: anel 3 px a 3 px, com o brilho;
+   - campos (texto, busca, seletor): anel em volta do campo, sem a borda;
+   - switch, rádio, checkbox, slider: anel no componente, com o raio padrão;
+   - bloco de opção (`reemu-block`): anel no bloco, não no switch de dentro;
+   - card selecionável (temas): anel no card;
+   - itens de menu e lista: anel por dentro do item (o popover corta o de fora);
+   - carrossel da Início: anel no carrossel.
+   Com o controle em uso (`data-nav-focus`) o `body` ignora o mouse, então o
+   hover não briga com o foco do controle. Desabilitado fica de fora. */
+:is(a[href], button, [role="button"], [role="tab"]):not(.fui-Card, .fui-Button, .fui-MenuButton, .fui-ToggleButton,
+  .fui-Dropdown__button, .fui-CarouselCard > button, [role="menuitem"], [role="menuitemradio"],
+  [role="menuitemcheckbox"], [role="option"], [role="treeitem"], :disabled, [aria-disabled="true"]):hover,
+:is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):not(.reemu-block *):hover,
+.fui-Card:not([role="button"]):has(> .fui-Card__checkbox):hover,
+.reemu-block:hover,
+.fui-Carousel:has(.fui-CarouselCard > button:hover) {
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: 3px !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  overflow: visible !important;
+}
+:is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):not(.reemu-block *):hover {
+  border-radius: var(--borderRadiusMedium);
+}
+:is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring):hover {
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: 3px !important;
+  box-shadow: none !important;
+}
+:is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search):hover,
+.fui-Select:not(.reemu-no-ring):hover .fui-Select__select {
+  border-color: transparent !important;
+}
+:is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring):hover::after {
+  opacity: 0;
+}
+:is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="treeitem"]):not([aria-disabled="true"]):hover {
+  outline: 3px solid var(--colorBrandStroke1) !important;
+  outline-offset: -3px !important;
+  border-radius: var(--borderRadiusMedium);
+}
+/* o brilho por fora do anel, nos mesmos que levam o brilho no foco */
+:where(
+  :is(a[href], button, [role="button"], [role="tab"]):not(.fui-Card, .fui-Button, .fui-MenuButton, .fui-ToggleButton,
+    .fui-Dropdown__button, .fui-CarouselCard > button, .fui-CarouselButton, [role="menuitem"], [role="menuitemradio"],
+    [role="menuitemcheckbox"], [role="option"], [role="treeitem"], :disabled, [aria-disabled="true"]):hover,
+  :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):not(.reemu-block *):hover,
+  .fui-Card:not([role="button"]):has(> .fui-Card__checkbox):hover,
+  .reemu-block:hover,
+  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):hover
+) {
+  position: relative;
+}
+:is(
+  :is(a[href], button, [role="button"], [role="tab"]):not(.fui-Card, .fui-Button, .fui-MenuButton, .fui-ToggleButton,
+    .fui-Dropdown__button, .fui-CarouselCard > button, [role="menuitem"], [role="menuitemradio"],
+    [role="menuitemcheckbox"], [role="option"], [role="treeitem"], :disabled, [aria-disabled="true"]):hover,
+  :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):not(.reemu-block *):hover,
+  .fui-Card:not([role="button"]):has(> .fui-Card__checkbox):hover,
+  .reemu-block:hover,
+  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):hover,
+  .fui-Carousel:has(.fui-CarouselCard > button:hover)
+)::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: calc(var(--borderRadiusMedium) + 4px);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent);
+  pointer-events: none;
+}
 
 /* Controle em uso (`data-nav-focus`, ver lib/focusNav.ts): sem cursor, sem hover e
    sem botão Voltar, porque o B já volta. O mouse desfaz isso ao se mexer. */

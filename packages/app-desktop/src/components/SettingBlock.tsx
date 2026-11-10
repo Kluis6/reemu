@@ -63,6 +63,19 @@ const useStyles = makeStyles({
     rowGap: tokens.spacingVerticalS,
   },
   wide: { gridColumn: "1 / -1" },
+  // Dentro de uma faixa de lista (Gerenciar biblioteca, Controles): mais baixo,
+  // pra caber na altura da faixa sem empurrá-la.
+  compact: {
+    minHeight: "48px",
+    padding: `${tokens.spacingVerticalXS} ${tokens.spacingHorizontalM}`,
+  },
+  // Sobre uma superfície da mesma cor do bloco (faixa de lista, card, dialog):
+  // um tom acima, o fundo dos botões do app.
+  raised: {
+    backgroundColor: tokens.colorNeutralBackground3,
+    ":hover": { backgroundColor: tokens.colorNeutralBackground3Hover },
+    ":hover:active": { backgroundColor: tokens.colorNeutralBackground3Pressed },
+  },
   text: {
     display: "flex",
     flexDirection: "column",
@@ -134,6 +147,9 @@ export function SelectBlock({
   options,
   disabled,
   onChange,
+  compact,
+  raised,
+  className,
 }: {
   label: string;
   description?: string;
@@ -141,6 +157,11 @@ export function SelectBlock({
   value: string;
   options: readonly { value: string; label: string }[];
   onChange: (value: string) => void;
+  /** Mais baixo, pra faixas de lista. */
+  compact?: boolean;
+  /** Fundo um tom acima, pra quando fica sobre a cor do próprio bloco. */
+  raised?: boolean;
+  className?: string;
 }) {
   const s = useStyles();
   const [open, setOpen] = useState(false);
@@ -177,7 +198,7 @@ export function SelectBlock({
       <MenuTrigger disableButtonEnhancement>
         <Button
           appearance="transparent"
-          className={mergeClasses(s.block, s.pressable, s.selectBlock)}
+          className={mergeClasses(s.block, s.pressable, s.selectBlock, compact && s.compact, raised && s.raised, className)}
           aria-label={`${label}: ${current}`}
           disabled={disabled}
           aria-description={description}

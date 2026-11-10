@@ -28,7 +28,20 @@ import { floatingDrawer } from "../styles/xbox";
 import { CloseButton } from "./CloseButton";
 
 const useStyles = makeStyles({
-  badge: { position: "absolute", top: "2px", right: "2px", pointerEvents: "none" },
+  // O sino no centro do botão e o badge no canto de baixo à direita DO SINO,
+  // por cima dele (pedido do usuário, 2026-11-10). O badge ia como filho do `Button`: o
+  // Fluent tratava o botão como "ícone + texto" e empurrava o sino pro lado,
+  // e o badge ficava no canto do botão. Agora os dois vão no slot do ícone.
+  bellIcon: { position: "relative", display: "inline-flex" },
+  badge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    // como os badges da barra lateral do VS Code: o badge cobre o quarto de
+    // baixo à direita do ícone e passa só 4 px da borda dele
+    transform: "translate(25%, 25%)",
+    pointerEvents: "none",
+  },
   // Flutuante à esquerda, como o drawer de perfil e o menu de pausa.
   drawer: {
     ["--fui-Drawer--size" as string]: "min(420px, calc(100vw - 48px))",
@@ -170,20 +183,23 @@ export function NotificationBell({ className }: { className?: string }) {
           ref={bell}
           className={className}
           appearance="subtle"
-          icon={<AlertRegular />}
+          icon={
+            <span className={s.bellIcon}>
+              <AlertRegular />
+              {unread > 0 && (
+                <CounterBadge
+                  className={s.badge}
+                  count={unread}
+                  overflowCount={9}
+                  size="small"
+                  color="brand"
+                />
+              )}
+            </span>
+          }
           aria-label={unread > 0 ? t("notifications.titleUnread", { count: unread }) : t("notifications.title")}
           onClick={() => setOpen(true)}
-        >
-          {unread > 0 && (
-            <CounterBadge
-              className={s.badge}
-              count={unread}
-              overflowCount={9}
-              size="small"
-              color="brand"
-            />
-          )}
-        </Button>
+        />
       </Tooltip>
       <OverlayDrawer
         open={open}

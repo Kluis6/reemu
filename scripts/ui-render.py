@@ -155,7 +155,10 @@ def main():
 
         def center(selector):
             r = page.eval(f"(() => {{ const e = document.querySelector({json.dumps(selector)}); if (!e) return null;"
-                          " const b = e.getBoundingClientRect(); return [b.x + b.width / 2, b.y + b.height / 2] }})()")
+                          " const b = e.getBoundingClientRect();"
+                          " return JSON.stringify([b.x + b.width / 2, b.y + b.height / 2]) })()")
+            # em JSON: o `eval` devolve só valores simples (um array vinha `None`)
+            r = json.loads(r) if r else None
             if not r:
                 print(f"  (não achei {selector})")
             return r
