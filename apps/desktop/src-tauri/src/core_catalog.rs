@@ -939,6 +939,35 @@ mod tests {
              (sem jogo, sem as ROMs opcionais do Enterprise) — binário sem símbolos",
     )];
 
+    /// Só no Windows (no Linux rodam os 180 quadros). Desde 2026-09-28 a fumaça
+    /// semanal ficava vermelha toda segunda por causa deles, e uma regressão
+    /// real passaria batida (TASKS.md, "Stella trava no Windows na fumaça do
+    /// catálogo"). Continuam na tabela como "conhecido"; a investigação segue
+    /// no TASKS.
+    const KNOWN_BROKEN_WINDOWS: &[(&str, &str)] = &[
+        (
+            "stella_libretro",
+            "passa de 60 s rodando a ROM de teste só no Windows (desde o VFS v3, 2026-09-26)",
+        ),
+        (
+            "stella2023_libretro",
+            "passa de 60 s rodando a ROM de teste só no Windows (desde o VFS v3, 2026-09-26)",
+        ),
+    ];
+
+    /// Motivo conhecido de falha de `core_id` neste sistema, se houver.
+    fn known_broken(core_id: &str) -> Option<&'static str> {
+        KNOWN_BROKEN
+            .iter()
+            .chain(if cfg!(windows) {
+                KNOWN_BROKEN_WINDOWS
+            } else {
+                &[]
+            })
+            .find(|k| k.0 == core_id)
+            .map(|k| k.1)
+    }
+
     /// Roda o `reemu-core-host` com `args` (probe ou run) e espera até 60 s.
     /// Devolve o status (`None` = travou e foi morto), o stdout e, se travou,
     /// o diagnóstico das threads.
@@ -1059,8 +1088,8 @@ mod tests {
                 ),
                 (Some(st), None) => ("caiu", format!("{st}")),
             };
-            let row = match KNOWN_BROKEN.iter().find(|k| k.0 == c.id) {
-                Some((_, why)) if row.0 != "ok" => ("conhecido", format!("{}: {why}", row.1)),
+            let row = match known_broken(c.id) {
+                Some(why) if row.0 != "ok" => ("conhecido", format!("{}: {why}", row.1)),
                 _ => row,
             };
             // Fase 2: com o core aberto, carrega uma ROM gerada do sistema
@@ -1107,8 +1136,8 @@ mod tests {
                 ("ok", None) => "sem ROM de teste".into(),
                 _ => "—".into(),
             };
-            let game = match KNOWN_BROKEN.iter().find(|k| k.0 == c.id) {
-                Some((_, why)) if game.starts_with("FALHA") => format!("conhecido: {why}"),
+            let game = match known_broken(c.id) {
+                Some(why) if game.starts_with("FALHA") => format!("conhecido: {why}"),
                 _ => game,
             };
             rows.push((c.id, c.systems, row.0, row.1, game));
