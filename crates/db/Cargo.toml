@@ -11,6 +11,7 @@ thiserror.workspace = true
 async-trait.workspace = true
 # mesmo SHA-384 que o sqlx usa no checksum das migrations (ver pool.rs)
 sha2 = "0.10"
+log = "0.4"
 sqlx = { version = "0.8", default-features = false, features = [
     "sqlite",
     "runtime-tokio",
