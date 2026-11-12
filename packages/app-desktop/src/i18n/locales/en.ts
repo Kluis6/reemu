@@ -1094,6 +1094,8 @@ const en: Messages = {
     routeError: 'Something went wrong on this screen',
     goHome: 'Back to home',
     routeErrorHint: 'Your games and settings weren\'t affected. If it keeps happening, report the problem with the text below.',
+    appCrashed: 'ReEmu ran into an error and needs to reload.',
+    appCrashedHint: 'Your games and settings weren\'t affected. If it keeps happening, export the diagnostics in Settings › System and report the problem.',
     power: 'Power',
     quit: 'Quit ReEmu',
     restart: 'Restart the computer',

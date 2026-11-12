@@ -1095,6 +1095,8 @@ const ptBR = {
     routeError: 'Algo deu errado nesta tela',
     goHome: 'Voltar ao início',
     routeErrorHint: 'Seus jogos e configurações não foram afetados. Se continuar acontecendo, relate o problema com o texto abaixo.',
+    appCrashed: 'O ReEmu encontrou um erro e precisa recarregar.',
+    appCrashedHint: 'Seus jogos e configurações não foram afetados. Se continuar acontecendo, exporte o diagnóstico em Configurações › Sistema e relate o problema.',
     power: 'Encerrar',
     quit: 'Fechar o ReEmu',
     restart: 'Reiniciar o computador',

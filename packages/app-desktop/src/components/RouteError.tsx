@@ -45,7 +45,7 @@ export function RouteError() {
   }, [error, detail])
 
   return (
-    <div className={s.root} role="alert">
+    <div className={s.root} role="alert" data-route-error>
       <EmptyState
         title={t('shell2.routeError')}
         action={

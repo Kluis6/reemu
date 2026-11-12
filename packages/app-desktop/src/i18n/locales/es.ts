@@ -1094,6 +1094,8 @@ const es: Messages = {
     routeError: 'Algo salió mal en esta pantalla',
     goHome: 'Volver al inicio',
     routeErrorHint: 'Tus juegos y ajustes no se vieron afectados. Si sigue ocurriendo, informa del problema con el texto de abajo.',
+    appCrashed: 'ReEmu encontró un error y necesita recargarse.',
+    appCrashedHint: 'Tus juegos y ajustes no se vieron afectados. Si sigue ocurriendo, exporta el diagnóstico en Configuración › Sistema e informa del problema.',
     power: 'Apagar',
     quit: 'Cerrar ReEmu',
     restart: 'Reiniciar el equipo',

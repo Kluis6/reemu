@@ -104,6 +104,12 @@ CHECKS = r"""
 (() => {
   const out = [];
   const path = location.hash.slice(1);
+  // 0. O app abriu? Raiz vazia = erro antes do 1º render (ex.: main.tsx);
+  //    tela de erro = `AppErrorBoundary` ou `RouteError` no lugar da página.
+  const root = document.getElementById('root');
+  if (!root || root.children.length === 0) out.push('app não abriu (raiz vazia)');
+  const crash = document.querySelector('[data-app-error], [data-route-error]');
+  if (crash) out.push('tela de erro: ' + (crash.textContent || '').slice(0, 80));
   // 1. Configurações: a página não rola (quem rola é o card de dentro).
   if (path.startsWith('/settings')) {
     const page = document.scrollingElement;
@@ -213,7 +219,13 @@ def main():
                       deviceScaleFactor=1, mobile=False)
             for route in routes:
                 page.call("Page.navigate", url=f"{args.url}/#{route}")
-                time.sleep(2.0)  # rota + animação de entrada
+                # espera o 1º render (o Vite compila os módulos na 1ª rota; a
+                # raiz vazia depois disso é falha de verdade, conferida abaixo)
+                for _ in range(75):
+                    if page.eval("(document.getElementById('root')?.children.length ?? 0) > 0"):
+                        break
+                    time.sleep(0.2)
+                time.sleep(2.0)  # animação de entrada
                 problems = page.eval(CHECKS) or []
                 shot = page.call("Page.captureScreenshot", format="png")
                 name = f"{w}x{h}{route.replace('/', '_')}.png"

@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { queryClient } from './lib/queryClient'
 import { router } from './router'
+import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { useThemeStore } from './stores/useThemeStore'
 import { resolveTheme } from './styles/themes'
 
@@ -17,10 +18,12 @@ export function App() {
   const selection = useThemeStore((s) => s.selection)
   const theme = useMemo(() => resolveTheme(selection), [selection])
   return (
-    <FluentProvider theme={theme} style={{ minHeight: '100%' }}>
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>
-    </FluentProvider>
+    <AppErrorBoundary>
+      <FluentProvider theme={theme} style={{ minHeight: '100%' }}>
+        <QueryClientProvider client={queryClient}>
+          <RouterProvider router={router} />
+        </QueryClientProvider>
+      </FluentProvider>
+    </AppErrorBoundary>
   )
 }
