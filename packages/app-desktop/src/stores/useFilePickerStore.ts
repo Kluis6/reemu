@@ -11,6 +11,8 @@ export interface FilePickerRequest {
 interface FilePickerState {
   request: FilePickerRequest | null
   resolve: ((path: string | null) => void) | null
+  /** Quem tinha o foco ao abrir: o foco volta pra ele ao fechar. */
+  opener: HTMLElement | null
   /** Abre o navegador e devolve o caminho escolhido (`null` = cancelou). */
   ask: (request: FilePickerRequest) => Promise<string | null>
   finish: (path: string | null) => void
@@ -19,13 +21,15 @@ interface FilePickerState {
 export const useFilePickerStore = create<FilePickerState>((set, get) => ({
   request: null,
   resolve: null,
+  opener: null,
   ask: (request) =>
     new Promise((resolve) => {
       get().resolve?.(null)
-      set({ request, resolve })
+      const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      set({ request, resolve, opener })
     }),
   finish: (path) => {
     get().resolve?.(path)
-    set({ request: null, resolve: null })
+    set({ request: null, resolve: null, opener: null })
   },
 }))

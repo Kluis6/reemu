@@ -20,7 +20,7 @@ import {
   HardDriveRegular,
 } from "@fluentui/react-icons";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { browseDir } from "../lib/tauri";
@@ -57,14 +57,12 @@ const useStyles = makeStyles({
 export function FilePicker() {
   const request = useFilePickerStore((s) => s.request);
   const finish = useFilePickerStore((s) => s.finish);
-  // Volta o foco a quem abriu: o controle continua de onde estava.
-  const opener = useRef<HTMLElement | null>(null);
-  if (request && !opener.current) opener.current = document.activeElement as HTMLElement;
 
   if (!request) return null;
   const done = (path: string | null) => {
-    const el = opener.current;
-    opener.current = null;
+    // Volta o foco a quem abriu (guardado pelo store no `ask`): o controle
+    // continua de onde estava.
+    const el = useFilePickerStore.getState().opener;
     finish(path);
     requestAnimationFrame(() => el?.focus({ preventScroll: true }));
   };

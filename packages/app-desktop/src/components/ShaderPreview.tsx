@@ -10,7 +10,7 @@ import {
 } from '@fluentui/react-components'
 import { EyeOffRegular, EyeRegular } from '@fluentui/react-icons'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { renderShaderPreview, shaderPreviewSource, type PreviewScene } from '../lib/tauri'
 
@@ -79,16 +79,15 @@ const useStyles = makeStyles({
  *  (a prévia falhou) volta a `null`: a URL anterior já foi revogada e, se
  *  ficasse, a tela mostrava o ícone de imagem quebrada. */
 function useBlobUrl(buf: ArrayBuffer | undefined) {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    if (!buf) {
-      setUrl(null)
-      return
-    }
-    const u = URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
-    setUrl(u)
-    return () => URL.revokeObjectURL(u)
-  }, [buf])
+  // derivada do buffer, sem estado (um `setState` no efeito re-renderizava
+  // duas vezes a cada prévia); a URL anterior é revogada quando troca ou sai
+  const url = useMemo(
+    () => (buf ? URL.createObjectURL(new Blob([buf], { type: 'image/png' })) : null),
+    [buf],
+  )
+  useEffect(() => () => {
+    if (url) URL.revokeObjectURL(url)
+  }, [url])
   return url
 }
 

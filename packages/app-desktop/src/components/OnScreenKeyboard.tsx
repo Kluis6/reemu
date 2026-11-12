@@ -221,6 +221,11 @@ export function OnScreenKeyboard() {
     fromEndRef.current = n
     setFromEnd(n)
   }, [])
+  // o ref acompanha o estado também quando ele muda fora do `setCursor`
+  // (reset ao abrir, abaixo)
+  useEffect(() => {
+    fromEndRef.current = fromEnd
+  }, [fromEnd])
   const setQuery = useSearchStore((st) => st.setQuery)
   const setKeyboard = useSearchStore((st) => st.setKeyboard)
   const setKeyboardNav = useSearchStore((st) => st.setKeyboardNav)
@@ -365,10 +370,14 @@ export function OnScreenKeyboard() {
     return () => setKeyboardNav(null)
   }, [open, move, press, backspace, close, type, read, setCursor, setKeyboardNav])
 
-  // Cada abertura começa com o cursor no fim do texto.
-  useEffect(() => {
-    if (open) setCursor(0)
-  }, [open, setCursor])
+  // Cada abertura começa com o cursor no fim do texto: ajuste de estado
+  // durante o render ao mudar `open` (padrão do React pra derivar de prop),
+  // em vez de um efeito que re-renderizava.
+  const [wasOpen, setWasOpen] = useState(open)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) setFromEnd(0)
+  }
 
   // A tecla em foco recebe o foco do DOM (anel padrão do app).
   useLayoutEffect(() => {
