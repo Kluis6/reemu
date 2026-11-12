@@ -3048,7 +3048,7 @@ Infra:
 - **Pendente:**
   - varrer o Mega Bezel inteiro (660 presets, cerca de 1 h, com TDR a cada preset que trava);
   - recuperar o vídeo depois de um device perdido (recriar o `FrameProcessor` na thread do vídeo);
-  - o log só existe em build de desenvolvimento (`cfg!(debug_assertions)` em `lib.rs`), então os relatos de usuário chegam sem log.
+  - o log só existe em build de desenvolvimento (`cfg!(debug_assertions)` em `lib.rs`), então os relatos de usuário chegam sem log. **Resolvido depois:** o `tauri-plugin-log` entra em todos os builds (commit `0d31663`), 5 arquivos de 5 MB em `app_log_dir`; é o que o diagnóstico exporta.
 
 ## 2026-10-29 — Scan de arcade (FinalBurn Neo) sem `.dat`
 
@@ -3370,3 +3370,14 @@ Infra:
 - **Versão:** 0.1.11 → 0.1.12 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 12 crates do workspace.
 - **Testes antes da tag (Windows, esta máquina):** `cargo test --workspace` com 379 ok; 13 testes de GPU ignorados (WGL, Vulkan, interop win32) ok; do pacote de shaders, 4 de 5 ok — o `field_render_real_presets` cai no Mega Bezel (`MBZ__0__SMOOTH-ADV-GLASS__GDV-NTSC`: TDR, device perdido e pânico no `Device::poll` do wgpu), o problema já registrado em 2026-10-29.
 - **O que entra, desde a v0.1.11:** drawer de notificações no estilo do app Xbox; lista e prévia de shaders na altura do card; brilho do foco alinhado ao anel; Gerenciar biblioteca em tela cheia, com a lista no estilo da de Cores; botões de Cores, da biblioteca e das molduras com fundo e sem borda; selos Vulkan (vermelho) e OpenGL (azul) preenchidos; anel do plano do Alvanista no avatar; dependências de segurança (zip 9.3.0, rustls 0.23.46, vitest 5.1.0).
+
+## 2026-11-12 — Análise do projeto: primeiras correções
+
+- **Pedido do usuário:** analisar o projeto inteiro e propor mudanças; aprovou começar pelos itens 1 a 5 da lista.
+- **Log em release era alarme falso:** o `tauri-plugin-log` já entra em todos os builds desde o commit `0d31663`; a nota de 2026-10-29 ficou corrigida.
+- **`AppErrorBoundary`** (`components/AppErrorBoundary.tsx`) envolve o `FluentProvider` em `App.tsx`: um erro de render fora das rotas (tema, provedores, casca) mostrava página em branco sem log. O fallback é HTML puro (o tema pode ser a causa), registra pelo `js_log` e oferece recarregar. As rotas continuam com o `RouteError`.
+- **`ui-smoke`** espera o 1º render (até 15 s; o Vite compila na 1ª rota) e acusa raiz vazia ou tela de erro. Fecha o item de 2026-10-31 do TASKS.
+- **SQLite** (`crates/db/src/pool.rs`): `journal_mode=WAL`, `synchronous=NORMAL` e `busy_timeout` de 5 s (SQLite, "Write-Ahead Logging" e "PRAGMA busy_timeout"; sqlx 0.8 `SqliteConnectOptions`). Antes de uma migration pendente, `VACUUM INTO '<banco>.db.bak'` guarda uma cópia íntegra; se a cópia falhar, a migration segue como antes. Testes: `file_path` da URL e abrir/copiar/reabrir um banco em arquivo.
+- **Fumaça do catálogo:** `stella_libretro` e `stella2023_libretro` viram "conhecido" só no Windows (`KNOWN_BROKEN_WINDOWS`), para o job semanal voltar a ficar verde e acusar só regressão nova. A causa segue no TASKS.
+- **`oxlint` zerado:** `useBlobUrl` (ShaderPreview) derivado com `useMemo` em vez de `setState` no efeito; o `FilePicker` guarda quem tinha o foco no `ask` do store em vez de ler um ref no render; o teclado na tela zera o cursor ao abrir com o padrão de ajuste no render.
+

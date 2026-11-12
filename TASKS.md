@@ -115,6 +115,9 @@ o card atual fica.
       caminho do VFS específico do Windows. Em 2026-10-12 o `ppsspp_libretro` também travou
       no Windows, ainda no `retro_init` (> 60 s); precisa ver se repete.
       Reproduzir numa máquina Windows com `reemu-core-host` e a ROM do teste.
+      Desde 2026-11-12 a fumaça marca `stella_libretro` e `stella2023_libretro` como
+      "conhecido" só no Windows (`KNOWN_BROKEN_WINDOWS` em `core_catalog.rs`), para o job
+      semanal voltar a acusar só regressão nova; a causa continua em aberto.
 
 - [x] `done` — **Vídeo nativo no Windows** (janela filha acima do
       WebView2): validado pelo usuário em 2026-10-02 (RTX 3060, wgpu em
@@ -612,7 +615,8 @@ no `emu-session`, ver `docs/historico.md`).
         tempo de jogo pelo GAS. Depois, hero e logo de jogos já identificados
         para o carrossel e a página do jogo. ScreenScraper e TheGamesDB
         continuam como fontes principais, e o app funciona sem a GameKave.
-- [ ] `todo` — **`ui-smoke` não acusa app que não abre:** com um erro no início do `main.tsx`, ele terminou sem falhas (2026-10-31). Fazer a varredura falhar quando a tela não montar.
+- [x] `done` — **`ui-smoke` não acusa app que não abre:** com um erro no início do `main.tsx`, ele terminou sem falhas (2026-10-31). Fazer a varredura falhar quando a tela não montar.
+      Feito em 2026-11-12: a varredura espera o 1º render e acusa raiz vazia ou tela de erro (`data-app-error`, `data-route-error`); o `AppErrorBoundary` em `App.tsx` cobre o que fica fora das rotas.
 - [ ] `todo` — **Shader e proporção gerais nas Configurações:** a página do jogo só
       edita o próprio jogo (pedido do dono do projeto, 2026-10-31), então os valores
       por plataforma e para todos os jogos continuam valendo, mas precisam de um
