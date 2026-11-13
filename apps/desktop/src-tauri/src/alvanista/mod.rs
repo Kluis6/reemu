@@ -1,6 +1,7 @@
 //! "Entrar com Alvanista": OAuth 2.0 com PKCE contra o provedor do Alvanista
 //! (rede social de jogos), com o navegador do sistema e um callback em
-//! `127.0.0.1` (RFC 8252). Só `profile:read`: o ReEmu espelha o perfil.
+//! `127.0.0.1` (RFC 8252). `profile:read` espelha o perfil; `saves` entra
+//! quando a pessoa liga o cloud save.
 //!
 //! Núcleo trazido do PR #1, de Edward Facundo (Tellurian), sem a reserva dos
 //! tokens no SQLite e sem a adoção de bancos de pré-lançamento.
@@ -19,6 +20,8 @@ pub mod config;
 pub mod loopback;
 pub mod pkce;
 pub mod store;
+#[cfg(test)]
+pub(crate) mod test_api;
 
 use crate::sync::SyncService;
 use client::{Client, ClientError};
@@ -149,6 +152,43 @@ impl Alvanista {
         self.client.refresh(current).await
     }
 
+    /// Há sessão marcada? Só o SQLite: o sync decide por aqui e lê o par do
+    /// chaveiro uma vez, quando vai usá-lo.
+    pub(crate) async fn has_session(&self) -> bool {
+        match self.store().has_session().await {
+            Ok(on) => on,
+            Err(e) => {
+                log::warn!("alvanista: não leu o marcador de sessão: {e}");
+                false
+            }
+        }
+    }
+
+    /// O plano libera o sync de saves? Pelo espelho, sem chaveiro nem rede.
+    pub(crate) async fn mirrored_save_sync(&self) -> Option<bool> {
+        match self.store().mirror_get().await {
+            Ok(mirror) => mirror.and_then(|m| m.save_sync),
+            Err(e) => {
+                log::warn!("alvanista: espelho ilegível: {e}");
+                None
+            }
+        }
+    }
+
+    /// O servidor recusou o aparelho pelo plano (402): o espelho passa a dizer
+    /// isso, e o estado da página confere no `/me` da próxima vez.
+    pub(crate) async fn note_no_save_sync(&self) {
+        if let Err(e) = self.store().mirror_set_save_sync(false).await {
+            log::warn!("alvanista: plano não anotado no espelho: {e}");
+        }
+    }
+
+    /// Relê o perfil (e o plano) com o par que quem chama já leu: o espelho se
+    /// grava, e uma conexão que acabou no site sai como em `status`.
+    pub(crate) async fn refresh_profile(&self, tokens: Tokens) {
+        let _ = self.status_from(tokens, None).await;
+    }
+
     /// Cancela a tentativa em andamento (se houver).
     pub fn cancel(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
@@ -165,13 +205,16 @@ impl Alvanista {
     where
         F: FnOnce(&str) -> Result<(), String>,
     {
-        self.connect_with(config::SCOPE_PROFILE, false, lang, open)
-            .await
+        self.connect_with(config::SCOPE_PROFILE, lang, open).await
     }
 
-    /// Refaz a conexão pedindo também `saves`. O par anterior só é revogado
-    /// depois que a sessão nova foi guardada, e o resultado da revogação
-    /// não muda nada. Os erros são os de `connect`.
+    /// Conecta pedindo também `saves`. Com uma sessão viva é a mesma conta
+    /// pedindo mais um escopo: o par novo toma o lugar do guardado e nenhum
+    /// par é revogado. No Alvanista a concessão é uma por conta e app, todo
+    /// token vale com os escopos dela, e revogar um par encerra todos os da
+    /// mesma concessão e do mesmo `device_id`, o novo junto. Sem sessão é a
+    /// primeira conexão, com os dois escopos num consentimento só (a página
+    /// Sincronização). Os erros são os de `connect`.
     pub async fn reconnect_with_saves<F>(
         &self,
         lang: Lang,
@@ -181,15 +224,13 @@ impl Alvanista {
         F: FnOnce(&str) -> Result<(), String>,
     {
         let scope = format!("{} {}", config::SCOPE_PROFILE, config::SCOPE_SAVES);
-        self.connect_with(&scope, true, lang, open).await
+        self.connect_with(&scope, lang, open).await
     }
 
     /// `scope`: lista separada por espaço, como vai na URL de consentimento.
-    /// `replace`: revoga o par anterior depois de guardar a sessão nova.
     async fn connect_with<F>(
         &self,
         scope: &str,
-        replace: bool,
         lang: Lang,
         open: F,
     ) -> Result<AlvanistaStatus, String>
@@ -236,19 +277,14 @@ impl Alvanista {
             Err(_) => return Err("failed".into()),
         };
         let scopes: Vec<&str> = scope.split_whitespace().collect();
-        let previous = self
-            .complete(
-                mine,
-                &code,
-                &pkce.verifier,
-                &config::redirect_uri(port),
-                &scopes,
-                replace,
-            )
-            .await?;
-        if let Some(old) = previous {
-            let _ = self.client.revoke(&old).await;
-        }
+        self.complete(
+            mine,
+            &code,
+            &pkce.verifier,
+            &config::redirect_uri(port),
+            &scopes,
+        )
+        .await?;
         Ok(self.status().await)
     }
 
@@ -263,6 +299,11 @@ impl Alvanista {
     /// Troca o code e começa a sessão, a menos que a tentativa tenha sido
     /// cancelada: uma cancelada nunca chama `exchange` nem grava tokens,
     /// mesmo que o callback dela tenha chegado.
+    ///
+    /// Com uma sessão viva (pedir `saves` depois de conectar), o par novo
+    /// toma o lugar do guardado, e os tokens novos que não ficam (cancelou
+    /// durante a troca, o chaveiro recusou) só são largados: são da mesma
+    /// família da sessão viva no servidor, e revogá-los a encerraria.
     async fn complete(
         &self,
         mine: u64,
@@ -270,8 +311,7 @@ impl Alvanista {
         verifier: &str,
         redirect_uri: &str,
         scopes: &[&str],
-        take_previous: bool,
-    ) -> Result<Option<Tokens>, String> {
+    ) -> Result<(), String> {
         if !self.is_current(mine) {
             return Err("cancelled".into());
         }
@@ -287,9 +327,14 @@ impl Alvanista {
                 ClientError::Transient(_) => "offline".to_owned(),
                 _ => "failed".to_owned(),
             })?;
+        // Lido depois da troca, perto de decidir. Sem leitura vale como viva:
+        // na dúvida, nada se revoga.
+        let live = self.store().has_session().await.unwrap_or(true);
         // Cancelou durante a troca: os tokens recém-emitidos não ficam.
         if !self.is_current(mine) {
-            self.client.revoke(&tokens).await;
+            if !live {
+                self.client.revoke(&tokens).await;
+            }
             return Err("cancelled".into());
         }
         // O que o servidor disse ter concedido vale; sem isso, o que se pediu.
@@ -298,20 +343,21 @@ impl Alvanista {
             .map(|g| g.split_whitespace().collect::<Vec<_>>())
             .filter(|g| !g.is_empty());
         let scopes = granted.as_deref().unwrap_or(scopes);
-        // O par anterior é lido só agora: uma renovação que o girou durante o
-        // consentimento é o par que se revoga.
-        let previous = if take_previous && self.store().has_session().await.unwrap_or(false) {
-            self.store().load_tokens().await.unwrap_or(None)
+        let stored = if live {
+            self.store().replace_session(&tokens, scopes).await
         } else {
-            None
+            self.store().start_session(&tokens, scopes).await
         };
-        // Sem chaveiro não há onde guardar: os tokens emitidos não ficam vivos.
-        if let Err(e) = self.store().start_session(&tokens, scopes).await {
+        // Sem chaveiro não há onde guardar. Sem sessão viva, os tokens emitidos
+        // não ficam vivos; com ela, a sessão anterior segue como estava.
+        if let Err(e) = stored {
             log::warn!("alvanista: não guardou a sessão: {e}");
-            self.client.revoke(&tokens).await;
+            if !live {
+                self.client.revoke(&tokens).await;
+            }
             return Err("keyring".into());
         }
-        Ok(previous)
+        Ok(())
     }
 
     /// A sessão guardada, só quando há o marcador: sem ele não se toca no
@@ -414,7 +460,11 @@ impl Alvanista {
                 };
             }
         };
-        let mut tokens = session.tokens;
+        self.status_from(session.tokens, mirror).await
+    }
+
+    /// O `/me` com o par já lido. `mirror`: o que mostrar se não houver rede.
+    async fn status_from(&self, mut tokens: Tokens, mirror: Option<Mirror>) -> AlvanistaStatus {
         let connected_at = self.connected_at().await;
         match self.client.me(&mut tokens).await {
             Ok(me) => AlvanistaStatus {
@@ -591,14 +641,21 @@ fn state_of(app: &AppHandle) -> Result<tauri::State<'_, Alvanista>, String> {
         .ok_or_else(|| "failed".to_owned())
 }
 
+/// `saves`: pede também o escopo do cloud save no mesmo consentimento (a
+/// página Sincronização, onde a pessoa já disse que quer sincronizar).
 #[tauri::command]
 pub async fn alvanista_connect(
     app: AppHandle,
     lang: Option<String>,
+    saves: Option<bool>,
 ) -> Result<AlvanistaStatus, String> {
     let alva = state_of(&app)?;
     let lang = Lang::from_tag(lang.as_deref().unwrap_or("pt-BR"));
-    alva.connect(lang, open_in_browser).await
+    if saves == Some(true) {
+        alva.reconnect_with_saves(lang, open_in_browser).await
+    } else {
+        alva.connect(lang, open_in_browser).await
+    }
 }
 
 #[tauri::command]
@@ -663,6 +720,7 @@ pub async fn alvanista_open_site(page: String) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::store::test_support::*;
+    use super::test_api::{browser, get, query, FamilyApi};
     use super::*;
     use std::io::{Read, Write};
     use std::net::TcpListener;
@@ -705,22 +763,6 @@ mod tests {
         Alvanista::new(Client::with_api(api, store))
     }
 
-    fn get(port: u16, target: &str) {
-        let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
-        write!(s, "GET {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").unwrap();
-        let mut out = String::new();
-        let _ = s.read_to_string(&mut out);
-    }
-
-    fn query(url: &str, key: &str) -> String {
-        url::Url::parse(url)
-            .unwrap()
-            .query_pairs()
-            .find(|(k, _)| k == key)
-            .map(|(_, v)| v.into_owned())
-            .unwrap()
-    }
-
     #[tokio::test]
     async fn a_cancelled_generation_never_exchanges() {
         let _serial = SERIAL.lock().await;
@@ -729,14 +771,7 @@ mod tests {
         let mine = alva.generation.fetch_add(1, Ordering::SeqCst) + 1;
         alva.cancel();
         let r = alva
-            .complete(
-                mine,
-                "code",
-                "verifier",
-                "http://x",
-                &["profile:read"],
-                false,
-            )
+            .complete(mine, "code", "verifier", "http://x", &["profile:read"])
             .await;
         assert_eq!(r, Err("cancelled".to_owned()));
         assert_eq!(hits.load(Ordering::SeqCst), 0, "exchange was called");
@@ -866,14 +901,7 @@ mod tests {
         let alva = Alvanista::new(Client::with_api(api, store));
         let mine = alva.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let r = alva
-            .complete(
-                mine,
-                "code",
-                "verifier",
-                "http://x",
-                &["profile:read"],
-                false,
-            )
+            .complete(mine, "code", "verifier", "http://x", &["profile:read"])
             .await;
         assert_eq!(r, Err("keyring".to_owned()));
         assert_eq!(revokes.load(Ordering::SeqCst), 1);
@@ -1363,167 +1391,164 @@ mod tests {
         assert_eq!(st.save_sync, Some(true));
     }
 
-    /// API do fluxo de conectar: `/token` devolve `alr_new` (com o `scope`
-    /// dado, se houver) e `/revoke` responde `revoke_status`. Cada chamada
-    /// entra em `events` (`token`, `revoke:<refresh>`), o mesmo registro em
-    /// que o chaveiro anota `save`: dá a ordem entre os três.
-    fn flow_api(
-        events: Arc<std::sync::Mutex<Vec<String>>>,
-        token_scope: Option<&'static str>,
-        revoke_status: u16,
-    ) -> String {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        listener.set_nonblocking(true).unwrap();
-        let base = format!("http://{}", listener.local_addr().unwrap());
-        std::thread::spawn(move || {
-            let until = std::time::Instant::now() + Duration::from_secs(30);
-            while std::time::Instant::now() < until {
-                let Ok((mut s, _)) = listener.accept() else {
-                    std::thread::sleep(Duration::from_millis(5));
-                    continue;
-                };
-                let _ = s.set_nonblocking(false);
-                let mut buf = [0u8; 4096];
-                let n = s.read(&mut buf).unwrap_or(0);
-                let req = String::from_utf8_lossy(&buf[..n]).into_owned();
-                let (status, body) = if req.contains("/v1/me") {
-                    (404, String::new())
-                } else if req.contains("/oauth/revoke") {
-                    let token = req
-                        .split("token=")
-                        .nth(1)
-                        .and_then(|t| t.split('&').next())
-                        .unwrap_or("")
-                        .to_owned();
-                    events.lock().unwrap().push(format!("revoke:{token}"));
-                    (revoke_status, String::new())
-                } else {
-                    events.lock().unwrap().push("token".into());
-                    let scope = token_scope
-                        .map(|v| format!(r#","scope":"{v}""#))
-                        .unwrap_or_default();
-                    (
-                        200,
-                        format!(
-                            r#"{{"access_token":"alp_new","token_type":"Bearer","refresh_token":"alr_new"{scope}}}"#
-                        ),
-                    )
-                };
-                let _ = write!(
-                    s,
-                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                    body.len()
-                );
-            }
-        });
-        base
+    async fn family() -> FamilyApi {
+        FamilyApi::start(Arc::new(std::sync::Mutex::new(Vec::new()))).await
     }
 
-    /// Um navegador de mentira: aprova (`code`) ou nega o consentimento.
-    fn browser(approve: bool) -> impl FnOnce(&str) -> Result<(), String> {
-        move |url: &str| {
-            let port: u16 = url::Url::parse(&query(url, "redirect_uri"))
-                .unwrap()
-                .port()
-                .unwrap();
-            let state = query(url, "state");
-            std::thread::spawn(move || {
-                let target = if approve {
-                    format!("/callback?code=c&state={state}")
-                } else {
-                    format!("/callback?error=access_denied&state={state}")
-                };
-                get(port, &target);
-            });
-            Ok(())
-        }
-    }
-
-    async fn alva_with_events(
-        api: String,
-        events: Arc<std::sync::Mutex<Vec<String>>>,
-    ) -> Alvanista {
-        let (store, _) = store_with(MemSecrets {
-            events: Some(events),
+    /// Alvanista contra o servidor de família, com a sessão `old` (só
+    /// `profile:read`) guardada e conhecida do servidor, no mesmo `device_id`.
+    /// O chaveiro anota `save` no registro de eventos do servidor.
+    async fn alva_with_session(api: &FamilyApi) -> (Alvanista, Arc<MemSecrets>) {
+        let (store, secrets) = store_with(MemSecrets {
+            events: Some(api.events.clone()),
             ..Default::default()
         })
         .await;
-        Alvanista::new(Client::with_api(api, store))
-    }
-
-    #[tokio::test]
-    async fn reconnect_with_saves_exchanges_stores_then_revokes_the_old_pair() {
-        let _serial = SERIAL.lock().await;
-        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let alva = alva_with_events(flow_api(events.clone(), None, 200), events.clone()).await;
+        let alva = Alvanista::new(Client::with_api(api.uri(), store));
+        let device = alva.store().device_id().await.unwrap();
+        api.seed(&tokens("old"), &device, &["profile:read"]);
         alva.store()
             .start_session(&tokens("old"), &["profile:read"])
             .await
             .unwrap();
-        events.lock().unwrap().clear();
-        let r = alva.reconnect_with_saves(Lang::PtBr, browser(true)).await;
-        assert!(r.is_ok(), "{r:?}");
-        assert_eq!(
-            *events.lock().unwrap(),
-            vec!["token", "save", "revoke:alr_old"]
-        );
-        assert_eq!(
-            alva.store().load_tokens().await.unwrap(),
-            Some(Tokens {
-                access_token: "alp_new".into(),
-                refresh_token: "alr_new".into()
-            })
-        );
-        // O servidor não informou o escopo: vale o que se pediu.
+        api.events.lock().unwrap().clear();
+        (alva, secrets)
+    }
+
+    #[tokio::test]
+    async fn reconnect_with_saves_keeps_the_session_alive_and_revokes_nothing() {
+        let _serial = SERIAL.lock().await;
+        let api = family().await;
+        let (alva, _) = alva_with_session(&api).await;
+        let st = alva
+            .reconnect_with_saves(Lang::PtBr, browser(true))
+            .await
+            .unwrap();
+        // Revogar qualquer par aqui encerraria o novo junto (a mesma família).
+        assert_eq!(api.events(), vec!["token", "save"]);
+        assert!(st.connected && !st.ended && !st.offline, "{st:?}");
+        let new = alva.store().load_tokens().await.unwrap().unwrap();
+        assert_ne!(new, tokens("old"));
+        assert!(api.is_live(&new.access_token) && api.is_live(&new.refresh_token));
+        // O par antigo só saiu do chaveiro: vence sozinho no servidor.
+        assert!(api.is_live("alr_old"));
         assert_eq!(
             alva.store().scopes().await.unwrap(),
             vec!["profile:read", "saves"]
         );
+        let again = alva.status().await;
+        assert!(again.connected && !again.ended, "{again:?}");
+    }
+
+    /// O servidor de mentira encerra a família inteira, como o Alvanista: é
+    /// o que deixa os testes de reconectar honestos.
+    #[tokio::test]
+    async fn revoking_the_old_pair_after_a_reconnect_would_end_the_new_one() {
+        let _serial = SERIAL.lock().await;
+        let api = family().await;
+        let (alva, _) = alva_with_session(&api).await;
+        alva.reconnect_with_saves(Lang::PtBr, browser(true))
+            .await
+            .unwrap();
+        let new = alva.store().load_tokens().await.unwrap().unwrap();
+        // O que a versão anterior fazia depois de guardar o par novo.
+        assert!(alva.client.revoke(&tokens("old")).await);
+        assert!(!api.is_live(&new.access_token) && !api.is_live(&new.refresh_token));
+        // O /me dá 401 e a renovação, invalid_grant: a sessão acabou.
+        let mut current = new.clone();
+        assert_eq!(
+            alva.client.me(&mut current).await,
+            Err(ClientError::AuthEnded)
+        );
+        assert_eq!(
+            alva.client.refresh(&tokens("old")).await,
+            Err(ClientError::AuthEnded)
+        );
+        assert!(!alva.store().has_session().await.unwrap());
     }
 
     #[tokio::test]
-    async fn a_failing_revoke_still_succeeds_and_keeps_the_new_session() {
+    async fn a_keyring_that_refuses_the_new_pair_keeps_the_live_session_and_revokes_nothing() {
         let _serial = SERIAL.lock().await;
-        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let alva = alva_with_events(flow_api(events.clone(), None, 500), events.clone()).await;
-        alva.store()
-            .start_session(&tokens("old"), &["profile:read"])
-            .await
-            .unwrap();
+        let api = family().await;
+        let (alva, secrets) = alva_with_session(&api).await;
+        secrets.fail_next_set.store(true, Ordering::SeqCst);
         let r = alva.reconnect_with_saves(Lang::PtBr, browser(true)).await;
-        assert!(r.is_ok(), "{r:?}");
-        assert!(events
-            .lock()
-            .unwrap()
-            .contains(&"revoke:alr_old".to_owned()));
+        assert_eq!(r, Err("keyring".to_owned()));
+        assert_eq!(api.events(), vec!["token"]);
         assert_eq!(
-            alva.store()
-                .load_tokens()
-                .await
-                .unwrap()
-                .unwrap()
-                .refresh_token,
-            "alr_new"
+            alva.store().load_tokens().await.unwrap(),
+            Some(tokens("old"))
         );
+        assert_eq!(alva.store().scopes().await.unwrap(), vec!["profile:read"]);
+        let st = alva.status().await;
+        assert!(st.connected && !st.ended && !st.offline, "{st:?}");
+    }
+
+    /// Cancela enquanto o servidor responde à troca do code.
+    async fn cancel_during_the_exchange(alva: &Alvanista, api: &FamilyApi) -> Result<(), String> {
+        api.delay_exchange(Duration::from_millis(400));
+        let mine = alva.generation.fetch_add(1, Ordering::SeqCst) + 1;
+        let cancel = async {
+            while !api.events().contains(&"token".to_owned()) {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            alva.cancel();
+        };
+        let both = async {
+            tokio::join!(
+                alva.complete(
+                    mine,
+                    "profile:read saves",
+                    "verifier",
+                    "http://x",
+                    &["profile:read", "saves"],
+                ),
+                cancel
+            )
+        };
+        tokio::time::timeout(Duration::from_secs(10), both)
+            .await
+            .expect("a troca não chegou ao servidor")
+            .0
+    }
+
+    #[tokio::test]
+    async fn a_reconnect_cancelled_during_the_exchange_revokes_nothing() {
+        let _serial = SERIAL.lock().await;
+        let api = family().await;
+        let (alva, _) = alva_with_session(&api).await;
+        let r = cancel_during_the_exchange(&alva, &api).await;
+        assert_eq!(r, Err("cancelled".to_owned()));
+        assert_eq!(api.events(), vec!["token"]);
+        assert_eq!(
+            alva.store().load_tokens().await.unwrap(),
+            Some(tokens("old"))
+        );
+        assert!(alva.status().await.connected);
+    }
+
+    #[tokio::test]
+    async fn a_first_connection_cancelled_during_the_exchange_revokes_the_new_pair() {
+        let _serial = SERIAL.lock().await;
+        let api = family().await;
+        let alva = alva_against(api.uri()).await;
+        let r = cancel_during_the_exchange(&alva, &api).await;
+        assert_eq!(r, Err("cancelled".to_owned()));
+        // Sem sessão viva, nada a proteger: os tokens que não ficam morrem.
+        assert_eq!(api.events(), vec!["token", "revoke:alr_f1"]);
+        assert!(!api.is_live("alr_f1"));
+        assert_eq!(alva.store().load_tokens().await.unwrap(), None);
     }
 
     #[tokio::test]
     async fn a_denied_reconnect_leaves_the_old_session_and_revokes_nothing() {
         let _serial = SERIAL.lock().await;
-        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let alva = alva_with_events(flow_api(events.clone(), None, 200), events.clone()).await;
-        alva.store()
-            .start_session(&tokens("old"), &["profile:read"])
-            .await
-            .unwrap();
-        events.lock().unwrap().clear();
+        let api = family().await;
+        let (alva, _) = alva_with_session(&api).await;
         let r = alva.reconnect_with_saves(Lang::PtBr, browser(false)).await;
         assert_eq!(r, Err("denied".to_owned()));
-        assert!(
-            events.lock().unwrap().is_empty(),
-            "{:?}",
-            events.lock().unwrap()
-        );
+        assert!(api.events().is_empty(), "{:?}", api.events());
         assert_eq!(
             alva.store().load_tokens().await.unwrap(),
             Some(tokens("old"))
@@ -1532,55 +1557,54 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_pair_rotated_during_consent_is_the_one_revoked() {
+    async fn the_scopes_the_server_granted_win_over_the_requested_ones() {
         let _serial = SERIAL.lock().await;
-        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let alva = alva_with_events(flow_api(events.clone(), None, 200), events.clone()).await;
-        alva.store()
-            .start_session(&tokens("old"), &["profile:read"])
-            .await
-            .unwrap();
-        // Uma renovação gira o par enquanto o navegador está aberto.
-        let store_ref = alva.store();
-        let rotate = async {
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            store_ref.save_tokens(&tokens("rot")).await.unwrap();
-        };
-        let (r, ()) = tokio::join!(
-            alva.reconnect_with_saves(Lang::PtBr, |url: &str| {
-                let url = url.to_owned();
-                std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_millis(400));
-                    let port: u16 = url::Url::parse(&query(&url, "redirect_uri"))
-                        .unwrap()
-                        .port()
-                        .unwrap();
-                    get(
-                        port,
-                        &format!("/callback?code=c&state={}", query(&url, "state")),
-                    );
-                });
-                Ok(())
-            }),
-            rotate
-        );
+        let api = family().await;
+        // O app não pode pedir `saves`: a troca informa só `profile:read`.
+        api.allow(&["profile:read"]);
+        let alva = alva_against(api.uri()).await;
+        let r = alva.reconnect_with_saves(Lang::PtBr, browser(true)).await;
         assert!(r.is_ok(), "{r:?}");
-        assert!(events
-            .lock()
-            .unwrap()
-            .contains(&"revoke:alr_rot".to_owned()));
+        assert_eq!(alva.store().scopes().await.unwrap(), vec!["profile:read"]);
     }
 
     #[tokio::test]
-    async fn the_scopes_the_server_granted_win_over_the_requested_ones() {
+    async fn without_a_reported_scope_the_requested_ones_are_kept() {
         let _serial = SERIAL.lock().await;
-        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
-        let api = flow_api(events.clone(), Some("profile:read"), 200);
-        let alva = alva_with_events(api, events).await;
+        let api = family().await;
+        api.report_scope(false);
+        let (alva, _) = alva_with_session(&api).await;
         let r = alva.reconnect_with_saves(Lang::PtBr, browser(true)).await;
         assert!(r.is_ok(), "{r:?}");
-        // Pediu `profile:read saves`, o servidor só concedeu `profile:read`.
-        assert_eq!(alva.store().scopes().await.unwrap(), vec!["profile:read"]);
+        assert_eq!(
+            alva.store().scopes().await.unwrap(),
+            vec!["profile:read", "saves"]
+        );
+    }
+
+    /// A página Sincronização sem conta: um consentimento só, com os dois
+    /// escopos, e a sessão começa como numa conexão comum.
+    #[tokio::test]
+    async fn connecting_from_scratch_with_saves_asks_both_scopes_in_one_consent() {
+        let _serial = SERIAL.lock().await;
+        let api = family().await;
+        let alva = alva_against(api.uri()).await;
+        let asked = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let seen = asked.clone();
+        let st = alva
+            .reconnect_with_saves(Lang::PtBr, move |url: &str| {
+                seen.lock().unwrap().push(query(url, "scope"));
+                browser(true)(url)
+            })
+            .await
+            .unwrap();
+        assert_eq!(*asked.lock().unwrap(), vec!["profile:read saves"]);
+        assert_eq!(api.events(), vec!["token"]);
+        assert!(st.connected && !st.ended, "{st:?}");
+        assert_eq!(
+            alva.store().scopes().await.unwrap(),
+            vec!["profile:read", "saves"]
+        );
     }
 
     /// Alvanista com sessão e com o cloud save ligado, os dois contra o

@@ -11,8 +11,46 @@ const LOG_LINES: usize = 300;
 /// Nomes de campo cujo valor nunca deve sair no relatório.
 const SECRET_FIELDS: [&str; 6] = ["password", "passwd", "apikey", "api_key", "token", "secret"];
 
-/// Tira do texto a pasta do usuário e os valores de campos sensíveis (`campo=valor`).
+/// Prefixos dos tokens do Alvanista: o do aparelho do cloud save e o par do
+/// "Entrar com Alvanista" (acesso e renovação). Onde quer que apareçam, o que
+/// vem depois do prefixo não sai no relatório.
+const TOKEN_PREFIXES: [&str; 3] = ["asv_", "alp_", "alr_"];
+
+/// Tira do texto a pasta do usuário, os valores de campos sensíveis
+/// (`campo=valor`) e os tokens do Alvanista.
 fn redact(text: &str, home: Option<&str>) -> String {
+    mask_tokens(&redact_fields(text, home))
+}
+
+fn is_token_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_' || c == '-'
+}
+
+/// `asv_...`, `alp_...` e `alr_...` viram `asv_<oculto>` (o prefixo fica, para
+/// o relatório ainda dizer de que token se tratava).
+fn mask_tokens(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some((at, len)) = TOKEN_PREFIXES
+        .iter()
+        .filter_map(|p| rest.find(p).map(|i| (i, p.len())))
+        .min_by_key(|(i, _)| *i)
+    {
+        let after = &rest[at + len..];
+        let end = after
+            .find(|c: char| !is_token_char(c))
+            .unwrap_or(after.len());
+        out.push_str(&rest[..at + len]);
+        if end > 0 {
+            out.push_str("<oculto>");
+        }
+        rest = &after[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn redact_fields(text: &str, home: Option<&str>) -> String {
     let text = match home.filter(|h| !h.is_empty()) {
         Some(home) => text.replace(home, "<usuario>"),
         None => text.to_string(),
@@ -98,6 +136,23 @@ mod tests {
             text,
             "url?ssid=x&sspassword=<oculto>&devid=1 apikey=<oculto> fim"
         );
+    }
+
+    #[test]
+    fn tira_os_tokens_do_alvanista() {
+        let text = redact(
+            "Bearer asv_AbC-12_x ok; {\"access_token\":\"alp_k9\",\"refresh_token\":\"alr_Z-1\"} fim alp_",
+            None,
+        );
+        assert_eq!(
+            text,
+            "Bearer asv_<oculto> ok; {\"access_token\":\"alp_<oculto>\",\"refresh_token\":\"alr_<oculto>\"} fim alp_"
+        );
+        for token in ["asv_", "alp_", "alr_"] {
+            let secret = format!("{token}segredo");
+            assert!(!redact(&format!("x={secret}"), None).contains("segredo"));
+            assert!(!redact(&format!("linha {secret}\n"), None).contains("segredo"));
+        }
     }
 
     #[test]

@@ -26,8 +26,10 @@ const HW_GPU_KEY: &str = "sync.hw_gpu";
 const SITE_PAUSED_KEY: &str = "sync.site_paused";
 const REVOKED_KEY: &str = "sync.revoked";
 
-/// O limite do Alvanista para cada texto do hardware e para o rótulo.
+/// O limite do Alvanista para cada texto do hardware.
 const TEXT_MAX_CHARS: usize = 120;
+/// O limite do Alvanista para o rótulo do aparelho (acima disso, 400).
+pub const LABEL_MAX_CHARS: usize = 80;
 
 /// O corpo `hardware` das rotas de aparelho. Campo ausente na resposta vira
 /// vazio: o servidor omite o que não tem.
@@ -112,10 +114,19 @@ pub fn hardware_fingerprint(hw: &HardwarePayload) -> String {
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
+/// O rótulo como o servidor aceita: `clean_text`, cortado em 80 caracteres.
+pub fn clean_label(s: &str) -> String {
+    let clipped: String = clean_text(s).chars().take(LABEL_MAX_CHARS).collect();
+    clipped.trim_end().to_owned()
+}
+
 /// O nome da máquina; sem ele, o rótulo padrão do Alvanista.
 pub fn default_label() -> String {
-    sysinfo::System::host_name()
-        .map(|h| clean_text(&h))
+    label_from_host(sysinfo::System::host_name())
+}
+
+fn label_from_host(host: Option<String>) -> String {
+    host.map(|h| clean_label(&h))
         .filter(|h| !h.is_empty())
         .unwrap_or_else(|| crate::alvanista::config::device_label().to_owned())
 }
@@ -392,6 +403,23 @@ mod tests {
     #[test]
     fn the_default_label_is_never_empty() {
         assert!(!default_label().trim().is_empty());
+    }
+
+    #[test]
+    fn the_label_is_clipped_to_the_server_limit_and_hardware_text_is_not() {
+        let long = format!("PC-{}", "x".repeat(150));
+        assert_eq!(label_from_host(Some(long.clone())).chars().count(), 80);
+        assert_eq!(clean_label(&"é".repeat(200)).chars().count(), 80);
+        // O corte não deixa espaço no fim.
+        assert_eq!(
+            clean_label(&format!("{} y", "a".repeat(79))),
+            "a".repeat(79)
+        );
+        assert_eq!(clean_text(&long).chars().count(), 120);
+        assert_eq!(
+            label_from_host(Some("\u{200B} ".into())),
+            crate::alvanista::config::device_label()
+        );
     }
 
     async fn store(secrets: MemSecrets) -> (DeviceStore, Arc<MemSecrets>, db::Db) {

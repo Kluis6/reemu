@@ -16,9 +16,12 @@ pub mod device;
 
 use crate::alvanista::client::ClientError;
 use crate::alvanista::loopback::Lang;
+use crate::alvanista::store::Tokens;
 use crate::alvanista::{Alvanista, AlvanistaStatus};
 use api::{ApiError, RemoteDevice, SavesApi};
-use device::{hardware_fingerprint, hardware_payload, Device, DeviceStore, HardwarePayload};
+use device::{
+    hardware_fingerprint, hardware_payload, Device, DeviceStore, HardwarePayload, LABEL_MAX_CHARS,
+};
 use serde::Serialize;
 use std::future::Future;
 use std::sync::Arc;
@@ -140,7 +143,7 @@ impl SyncService {
     async fn ensure_device_with(
         &self,
         alva: &Alvanista,
-        label: Option<String>,
+        mut label: Option<String>,
         hw: HardwarePayload,
     ) -> Result<Device, SyncError> {
         let _one_at_a_time = self.mint.lock().await;
@@ -157,6 +160,8 @@ impl SyncService {
                 Ok(Some(_)) => return Ok(device),
                 Ok(None) => {
                     log::warn!("sync: aparelho guardado sem token no chaveiro, criando outro");
+                    // O nome que a pessoa escolheu passa para o aparelho novo.
+                    label = label.or(Some(device.label));
                     self.devices
                         .forget()
                         .await
@@ -174,7 +179,7 @@ impl SyncService {
             return Err(SyncError::NeedsConsent);
         }
         let label = label
-            .map(|l| device::clean_text(&l))
+            .map(|l| device::clean_label(&l))
             .filter(|l| !l.is_empty())
             .unwrap_or_else(device::default_label);
 
@@ -198,10 +203,17 @@ impl SyncService {
                 .partner_mint_device(&tokens.access_token, &label, &hw)
                 .await;
         }
-        let minted = minted.map_err(|e| match e {
-            ApiError::Unauthorized => SyncError::NoAccount,
-            other => SyncError::from(other),
-        })?;
+        let minted = match minted {
+            Ok(minted) => minted,
+            Err(ApiError::Unauthorized) => return Err(SyncError::NoAccount),
+            Err(ApiError::TierInsufficient { .. }) => {
+                // O plano não libera (ou deixou de liberar) o sync: o espelho
+                // passa a dizer isso, e a página confere no `/me`.
+                alva.note_no_save_sync().await;
+                return Err(SyncError::NoTier);
+            }
+            Err(other) => return Err(SyncError::from(other)),
+        };
 
         let device = Device {
             id: minted.id,
@@ -238,7 +250,7 @@ impl SyncService {
         mut hw: HardwarePayload,
     ) -> Result<(), SyncError> {
         // Sem sessão nem chaveiro nem rede: só o SQLite foi lido até aqui.
-        if !alva.cached_status().await.connected {
+        if !alva.has_session().await {
             return Err(SyncError::NoAccount);
         }
         if self.devices.device().await.map_err(failed)?.is_none() {
@@ -309,17 +321,20 @@ impl SyncService {
     /// acabou no site (a renovação foi recusada), o aparelho daqui só se
     /// esquece: o par do parceiro já não existe.
     async fn partner_devices(&self, alva: &Alvanista) -> Result<Vec<RemoteDevice>, SyncError> {
-        let mut tokens = match alva.session_tokens().await {
-            Ok(Some(t)) => t,
-            Ok(None) => return Err(SyncError::NoAccount),
-            Err(e) => {
-                log::warn!("sync: não leu a sessão: {e}");
-                return Err(SyncError::Keyring);
-            }
-        };
+        let mut tokens = session_pair(alva).await?;
+        self.partner_devices_with(alva, &mut tokens).await
+    }
+
+    /// Como `partner_devices`, com o par que quem chama já leu; `tokens` fica
+    /// com o par renovado, se houve renovação.
+    async fn partner_devices_with(
+        &self,
+        alva: &Alvanista,
+        tokens: &mut Tokens,
+    ) -> Result<Vec<RemoteDevice>, SyncError> {
         let mut listed = self.api.partner_list_devices(&tokens.access_token).await;
         if matches!(listed, Err(ApiError::Unauthorized)) {
-            tokens = match alva.renew(&tokens).await {
+            *tokens = match alva.renew(tokens).await {
                 Ok(t) => t,
                 Err(ClientError::AuthEnded) => {
                     // `renew` já soltou o trinco de renovação, e `forget_device` não
@@ -425,33 +440,41 @@ impl SyncService {
         Ok(())
     }
 
+    /// O estado da página. Decide pelo SQLite (marcador de sessão, espelho,
+    /// aparelho) e lê o par do chaveiro uma vez só, quando vai à rede: a lista
+    /// de aparelhos (com aparelho guardado) e o `/me` (quando o espelho diz que
+    /// o plano não libera o sync, para quem acabou de assinar ver a mudança).
+    /// Um `/me` por chamada, nunca em laço.
     async fn status_with(
         &self,
         alva: &Alvanista,
         hw: HardwarePayload,
     ) -> Result<SyncStatus, SyncError> {
-        let cached = alva.cached_status().await;
         let device = self.devices.device().await.map_err(failed)?;
-        // Sem sessão ou sem aparelho não há o que perguntar ao site: só o
-        // SQLite foi lido.
-        if cached.connected && device.is_some() {
-            if let Ok(list) = self.partner_devices(alva).await {
-                self.absorb_site_state(&list).await;
+        if alva.has_session().await {
+            let check_tier = alva.mirrored_save_sync().await == Some(false);
+            if device.is_some() || check_tier {
+                if let Ok(mut tokens) = session_pair(alva).await {
+                    let mut ended = false;
+                    if device.is_some() {
+                        match self.partner_devices_with(alva, &mut tokens).await {
+                            Ok(list) => self.absorb_site_state(&list).await,
+                            Err(SyncError::NoAccount) => ended = true,
+                            Err(_) => {}
+                        }
+                    }
+                    if check_tier && !ended {
+                        alva.refresh_profile(tokens).await;
+                    }
+                }
             }
         }
-        // A lista pode ter acabado a sessão e esquecido o aparelho: o que vale é
-        // o que sobrou depois dela.
-        let (cached, device) = if cached.connected {
-            (
-                alva.cached_status().await,
-                self.devices.device().await.map_err(failed)?,
-            )
-        } else {
-            (cached, device)
-        };
-        let availability = if !cached.connected {
+        // A rede pode ter acabado a sessão, esquecido o aparelho ou mudado o
+        // plano: o que vale é o que sobrou depois dela.
+        let device = self.devices.device().await.map_err(failed)?;
+        let availability = if !alva.has_session().await {
             Availability::NoAccount
-        } else if cached.save_sync == Some(false) {
+        } else if alva.mirrored_save_sync().await == Some(false) {
             Availability::NoTier
         } else {
             Availability::Ready
@@ -496,17 +519,27 @@ impl SyncService {
     {
         if on {
             // O site revogou ou apagou o aparelho: o guardado não serve mais.
-            if alva.cached_status().await.connected
-                && self.devices.device().await.map_err(failed)?.is_some()
-            {
+            if alva.has_session().await && self.devices.device().await.map_err(failed)?.is_some() {
                 if let Ok(list) = self.partner_devices(alva).await {
                     self.absorb_site_state(&list).await;
                 }
             }
+            // Ligar de novo depois de revogada: o aparelho novo leva o nome que
+            // a pessoa tinha escolhido.
+            let mut label = None;
             if self.devices.site_state().await.map_err(failed)?.1 {
+                label = self
+                    .devices
+                    .device()
+                    .await
+                    .map_err(failed)?
+                    .map(|d| d.label);
                 self.forget_device(true).await?;
             }
-            match self.ensure_device_with(alva, None, hw.clone()).await {
+            match self
+                .ensure_device_with(alva, label.clone(), hw.clone())
+                .await
+            {
                 Ok(_) => {}
                 Err(SyncError::NeedsConsent) => {
                     reconnect().await.map_err(|code| match code.as_str() {
@@ -518,7 +551,7 @@ impl SyncService {
                             SyncError::Failed(code)
                         }
                     })?;
-                    self.ensure_device_with(alva, None, hw.clone()).await?;
+                    self.ensure_device_with(alva, label, hw.clone()).await?;
                 }
                 Err(e) => return Err(e),
             }
@@ -546,7 +579,7 @@ impl SyncService {
             return Err(SyncError::InvalidLabel);
         }
         // Sem sessão não se toca o chaveiro nem a rede.
-        if !alva.cached_status().await.connected {
+        if !alva.has_session().await {
             return Err(SyncError::NoAccount);
         }
         if self.devices.device().await.map_err(failed)?.is_none() {
@@ -614,7 +647,7 @@ impl SyncService {
         alva: &Alvanista,
         hw: HardwarePayload,
     ) -> Result<SyncStatus, SyncError> {
-        if !alva.cached_status().await.connected {
+        if !alva.has_session().await {
             return Err(SyncError::NoAccount);
         }
         if self.devices.device().await.map_err(failed)?.is_some()
@@ -640,8 +673,6 @@ impl SyncService {
     }
 }
 
-const LABEL_MAX_CHARS: usize = 80;
-
 /// Qual erro a tela mostra quando vários passos falham: revoked > paused >
 /// quota > offline > o resto.
 fn severity(e: &SyncError) -> u8 {
@@ -651,6 +682,18 @@ fn severity(e: &SyncError) -> u8 {
         SyncError::Quota => 3,
         SyncError::Offline => 2,
         _ => 1,
+    }
+}
+
+/// O par da sessão, lido do chaveiro (uma leitura).
+async fn session_pair(alva: &Alvanista) -> Result<Tokens, SyncError> {
+    match alva.session_tokens().await {
+        Ok(Some(t)) => Ok(t),
+        Ok(None) => Err(SyncError::NoAccount),
+        Err(e) => {
+            log::warn!("sync: não leu a sessão: {e}");
+            Err(SyncError::Keyring)
+        }
     }
 }
 
@@ -859,8 +902,10 @@ mod tests {
     use crate::alvanista::client::{Client, Entitlements, Me};
     use crate::alvanista::store::test_support::{tokens, MemSecrets, SERIAL};
     use crate::alvanista::store::Store;
+    use crate::alvanista::test_api::{browser, FamilyApi};
+    use std::sync::atomic::Ordering::SeqCst;
     use std::sync::{Arc, Mutex};
-    use wiremock::matchers::{header, method, path};
+    use wiremock::matchers::{body_partial_json, header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     fn hw() -> HardwarePayload {
@@ -1194,12 +1239,14 @@ mod tests {
     async fn a_stored_device_without_a_token_is_minted_again() {
         let _serial = SERIAL.lock().await;
         let r = rig().await;
-        mount_mint(
-            &r.server,
-            ResponseTemplate::new(201).set_body_json(minted_body("asv_new")),
-            1,
-        )
-        .await;
+        // O aparelho novo leva o nome do antigo.
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/save-devices"))
+            .and(body_partial_json(serde_json::json!({"label": "Velho"})))
+            .respond_with(ResponseTemplate::new(201).set_body_json(minted_body("asv_new")))
+            .expect(1)
+            .mount(&r.server)
+            .await;
         r.sync
             .devices()
             .save(
@@ -1689,6 +1736,8 @@ mod tests {
         let _serial = SERIAL.lock().await;
         let r = rig().await;
         store_device(&r).await;
+        // O nome que a pessoa escolheu antes de a máquina sair do site.
+        r.sync.devices().set_label("Quarto do Ed").await.unwrap();
         mount_list(&r.server, vec![remote("other", false, false)]).await;
         Mock::given(method("DELETE"))
             .and(path("/api/v1/saves/device"))
@@ -1696,12 +1745,16 @@ mod tests {
             .expect(1)
             .mount(&r.server)
             .await;
-        mount_mint(
-            &r.server,
-            ResponseTemplate::new(201).set_body_json(minted_body("asv_new")),
-            1,
-        )
-        .await;
+        // "Ligar de novo" mantém o nome, em vez de voltar ao da máquina.
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/save-devices"))
+            .and(body_partial_json(
+                serde_json::json!({"label": "Quarto do Ed"}),
+            ))
+            .respond_with(ResponseTemplate::new(201).set_body_json(minted_body("asv_new")))
+            .expect(1)
+            .mount(&r.server)
+            .await;
         let st = r
             .sync
             .set_enabled_with(&r.alva, true, hw(), never_reconnect)
@@ -1908,6 +1961,166 @@ mod tests {
         r.sync.runtime().last_error = Some("revoked".into());
         let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
         assert_eq!(st.last_error, None);
+    }
+
+    /// M1: o estado decide pelo SQLite e lê o par do chaveiro uma vez, só
+    /// quando vai à rede.
+    #[tokio::test]
+    async fn the_status_reads_the_keyring_at_most_once() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        let gets = || r.secrets.gets.load(SeqCst);
+        // Conectado e sem aparelho: nada a perguntar ao site, nem ao chaveiro.
+        let before = gets();
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::Ready);
+        assert_eq!(gets() - before, 0, "sem aparelho");
+        // Com aparelho: a lista do site, com uma leitura do par.
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        let before = gets();
+        r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(gets() - before, 1, "com aparelho");
+        // Sem plano: a lista e o `/me` dividem a mesma leitura.
+        r.store
+            .mirror_put(&Me {
+                id: "u1".into(),
+                username: "toy".into(),
+                avatar_url: None,
+                hero_url: None,
+                bio: None,
+                profile_url: "https://www.alvanista.com/u/toy".into(),
+                card: None,
+                entitlements: Some(Entitlements { save_sync: false }),
+            })
+            .await
+            .unwrap();
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/me"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "u1", "username": "toy",
+                "profile_url": "https://www.alvanista.com/u/toy",
+                "entitlements": {"save_sync": false}
+            })))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        let before = gets();
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::NoTier);
+        assert_eq!(gets() - before, 1, "sem plano");
+    }
+
+    /// Alvanista e sync contra o servidor que revoga por família, com uma
+    /// sessão (`old`, com `scopes`) que o servidor conhece e o perfil já lido
+    /// uma vez (o app abriu conectado).
+    struct FamilyRig {
+        api: FamilyApi,
+        alva: Alvanista,
+        sync: SyncService,
+        store: Store,
+    }
+
+    async fn family_rig(scopes: &[&str]) -> FamilyRig {
+        let api = FamilyApi::start(Arc::new(Mutex::new(Vec::new()))).await;
+        let secrets = Arc::new(MemSecrets::default());
+        let db = db::connect_in_memory().await.unwrap();
+        let store = Store::new(db.clone(), secrets.clone());
+        let device = store.device_id().await.unwrap();
+        api.seed(&tokens("old"), &device, scopes);
+        store.start_session(&tokens("old"), scopes).await.unwrap();
+        let alva = Alvanista::new(Client::with_api(
+            api.uri(),
+            Store::new(db.clone(), secrets.clone()),
+        ));
+        let sync = SyncService::new(SavesApi::new(api.uri()), DeviceStore::new(db, secrets));
+        assert!(alva.status().await.connected);
+        FamilyRig {
+            api,
+            alva,
+            sync,
+            store,
+        }
+    }
+
+    /// C1: ligar o sync numa sessão só de perfil pede o consentimento,
+    /// reconecta e cria o aparelho, e a sessão segue viva num servidor que
+    /// revoga a família inteira de um par.
+    #[tokio::test]
+    async fn turning_sync_on_through_the_consent_keeps_the_session_and_mints_the_device() {
+        let _serial = SERIAL.lock().await;
+        let r = family_rig(&["profile:read"]).await;
+        let st = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), || {
+                r.alva.reconnect_with_saves(Lang::PtBr, browser(true))
+            })
+            .await
+            .unwrap();
+        assert!(st.enabled, "{st:?}");
+        assert_eq!(st.availability, Availability::Ready);
+        assert_eq!(st.device_id.as_deref(), Some("dev1"));
+        assert_eq!(r.api.minted(), 1);
+        assert_eq!(
+            r.sync.devices().token().unwrap().as_deref(),
+            Some("asv_dev1")
+        );
+        // Nada foi revogado, e o par guardado é o novo, vivo no servidor.
+        let events = r.api.events();
+        assert!(
+            !events.iter().any(|e| e.starts_with("revoke:")),
+            "{events:?}"
+        );
+        let session = r.store.load_tokens().await.unwrap().unwrap();
+        assert_ne!(session, tokens("old"));
+        assert!(r.api.is_live(&session.access_token) && r.api.is_live(&session.refresh_token));
+        // A conexão segue de pé, agora com `saves`.
+        let alva = r.alva.status().await;
+        assert!(alva.connected && !alva.ended && !alva.offline, "{alva:?}");
+        assert!(alva.scopes.iter().any(|s| s == "saves"), "{alva:?}");
+        let again = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert!(again.enabled && again.availability == Availability::Ready);
+    }
+
+    /// I2: um 402 do mint vira `no_tier` na página, e assinar no site faz a
+    /// página voltar a oferecer o toggle sem reiniciar o app. Um `/me` por
+    /// leitura do estado, e nenhum quando o plano já libera.
+    #[tokio::test]
+    async fn a_402_at_mint_shows_no_tier_and_a_new_plan_turns_the_page_ready() {
+        let _serial = SERIAL.lock().await;
+        let r = family_rig(&["profile:read", "saves"]).await;
+        // O espelho ainda diz que o plano libera; no servidor ele venceu.
+        r.api.set_save_sync(false);
+        let err = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), never_reconnect)
+            .await;
+        assert_eq!(err, Err(SyncError::NoTier));
+        assert_eq!(
+            r.store.mirror_get().await.unwrap().unwrap().save_sync,
+            Some(false)
+        );
+        let me = r.api.me_calls();
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::NoTier);
+        assert_eq!(r.api.me_calls(), me + 1, "um /me por leitura");
+        // A pessoa assina no site e volta para a página.
+        r.api.set_save_sync(true);
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::Ready);
+        assert_eq!(r.api.me_calls(), me + 2);
+        r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(
+            r.api.me_calls(),
+            me + 2,
+            "com plano, o estado não vai ao /me"
+        );
+        let on = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), never_reconnect)
+            .await
+            .unwrap();
+        assert!(on.enabled && on.device_id.is_some(), "{on:?}");
     }
 
     #[test]

@@ -272,6 +272,32 @@ impl Store {
         Ok(())
     }
 
+    /// Troca o par de uma sessão que continua (a conta pediu mais um escopo).
+    /// No Alvanista o par novo é da mesma família do guardado (mesma concessão,
+    /// mesmo `device_id`), então o antigo não se revoga: revogar um encerra os
+    /// dois. Ele só sai do chaveiro e vence sozinho.
+    ///
+    /// O par novo vai primeiro: se o chaveiro recusar, a sessão anterior fica
+    /// inteira (marcador, escopos, data, espelho e par) e segue valendo.
+    pub async fn replace_session(&self, tokens: &Tokens, scopes: &[&str]) -> Result<(), String> {
+        let _one_at_a_time = REFRESH_LOCK.lock().await;
+        self.save_tokens(tokens).await?;
+        // Nenhuma rotação do par antigo volta a ser servida nem regravada.
+        forget_all_rotations();
+        // A aprovação pode ter vindo de outra conta: o perfil se relê.
+        if let Err(e) = self.mirror_clear().await {
+            log::warn!("alvanista: espelho anterior não apagado: {e}");
+        }
+        self.repo
+            .state_set(SESSION_KEY, "1")
+            .await
+            .map_err(|e| e.to_string())?;
+        if let Err(e) = self.repo.state_set(SCOPES_KEY, &scopes.join(" ")).await {
+            log::warn!("alvanista: escopos não gravados: {e}");
+        }
+        Ok(())
+    }
+
     /// Os escopos da sessão. Sessão de antes do registro (ou sem ele) conta
     /// como só `profile:read`.
     pub async fn scopes(&self) -> Result<Vec<String>, String> {
@@ -417,6 +443,20 @@ impl Store {
             .await
             .map_err(|e| e.to_string())?;
         Ok(mirror)
+    }
+
+    /// Muda só o `save_sync` do espelho guardado (o servidor disse o plano por
+    /// outra rota que não o `/me`). Sem espelho não há o que mudar.
+    pub async fn mirror_set_save_sync(&self, on: bool) -> Result<(), String> {
+        let Some(mut mirror) = self.mirror_get().await? else {
+            return Ok(());
+        };
+        mirror.save_sync = Some(on);
+        let json = serde_json::to_string(&mirror).map_err(|e| e.to_string())?;
+        self.repo
+            .state_set(MIRROR_KEY, &json)
+            .await
+            .map_err(|e| e.to_string())
     }
 
     pub async fn mirror_clear(&self) -> Result<(), String> {
