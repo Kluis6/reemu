@@ -52,6 +52,8 @@ pub enum SyncError {
     Quota,
     /// 413: o save passa do limite que a nuvem aceita para a plataforma.
     TooLarge,
+    /// 413 de um save state: passa do maior objeto que a nuvem aceita.
+    StateTooLarge,
     /// 400 ou 422: a nuvem recusou o save (nome, campos ou conteúdo).
     Rejected,
     Offline,
@@ -77,6 +79,7 @@ impl std::fmt::Display for SyncError {
             Self::Paused => "paused",
             Self::Quota => "quota",
             Self::TooLarge => "too_large",
+            Self::StateTooLarge => "state_too_large",
             Self::Rejected => "rejected",
             Self::Offline => "offline",
             Self::Keyring => "keyring",
@@ -128,8 +131,11 @@ struct Runtime {
     last_pass_at: Option<i64>,
     last_error: Option<String>,
     /// O arquivo que a nuvem recusou, quando `last_error` é de um arquivo só
-    /// (`too_large`, `rejected`): a página diz qual.
+    /// (`too_large`, `state_too_large`, `rejected`): a página diz qual.
     last_error_file: Option<String>,
+    /// Os save states que ficam só nesta máquina, pela chave, com o motivo
+    /// (`unversioned`, `wiped`, `rejected`). A passada dos states os conta.
+    states_local: std::collections::HashMap<String, &'static str>,
 }
 
 impl SyncService {
@@ -533,6 +539,7 @@ impl SyncService {
         let enabled = device.is_some() && self.devices.enabled().await.map_err(failed)?;
         let paused_local = self.devices.paused().await.map_err(failed)?;
         let saves_enabled = self.devices.saves_enabled().await.map_err(failed)?;
+        let states_enabled = self.devices.states_enabled().await.map_err(failed)?;
         // Pelo SQLite: vale logo ao abrir o app e com os game saves desligados
         // (resolver segue valendo, R19).
         let conflicts = match self.conflicts.conflicts_all().await {
@@ -549,6 +556,7 @@ impl SyncService {
             paused_local,
             paused_site,
             saves_enabled,
+            states_enabled,
             revoked,
             label: device
                 .as_ref()
@@ -560,11 +568,18 @@ impl SyncService {
             quota: runtime.quota,
             last_pass_at: runtime.last_pass_at,
             conflicts,
+            states_local_only: if states_enabled {
+                runtime.states_local.len() as u32
+            } else {
+                0
+            },
             last_error: runtime.last_error.clone(),
             // Só junto do erro de um arquivo: outro erro depois dele não leva
             // o nome de um arquivo que já não é o motivo.
             last_error_file: match runtime.last_error.as_deref() {
-                Some("too_large" | "rejected") => runtime.last_error_file.clone(),
+                Some("too_large" | "state_too_large" | "rejected") => {
+                    runtime.last_error_file.clone()
+                }
                 _ => None,
             },
         })
@@ -696,6 +711,24 @@ impl SyncService {
         self.devices.set_saves_enabled(on).await.map_err(failed)?;
         if on {
             self.kick_pass();
+        }
+        self.status_with(alva, hw).await
+    }
+
+    /// O interruptor dos save states (`sync.states_enabled`). Desligado, nenhum
+    /// state sobe e a base e os arquivos ficam como estão; ligar roda uma
+    /// passada já, como o dos game saves.
+    async fn set_states_enabled_with(
+        &self,
+        alva: &Alvanista,
+        on: bool,
+        hw: HardwarePayload,
+    ) -> Result<SyncStatus, SyncError> {
+        self.devices.set_states_enabled(on).await.map_err(failed)?;
+        if on {
+            self.kick_pass();
+        } else {
+            self.runtime().states_local.clear();
         }
         self.status_with(alva, hw).await
     }
@@ -839,7 +872,7 @@ fn severity(e: &SyncError) -> u8 {
         SyncError::Paused => 5,
         SyncError::Quota => 4,
         SyncError::Offline => 3,
-        SyncError::TooLarge | SyncError::Rejected => 2,
+        SyncError::TooLarge | SyncError::StateTooLarge | SyncError::Rejected => 2,
         _ => 1,
     }
 }
@@ -884,6 +917,8 @@ pub struct SyncStatus {
     pub paused_site: bool,
     /// O interruptor dos game saves (`sync.saves_enabled`).
     pub saves_enabled: bool,
+    /// O interruptor dos save states (`sync.states_enabled`).
+    pub states_enabled: bool,
     pub revoked: bool,
     pub device_id: Option<String>,
     pub label: String,
@@ -892,9 +927,14 @@ pub struct SyncStatus {
     /// Segundos Unix.
     pub last_pass_at: Option<i64>,
     pub conflicts: u32,
+    /// Os save states que ficam só nesta máquina: os de antes de a versão do
+    /// core ser registrada, os apagados no site (D127) e os que a nuvem
+    /// recusou. 0 com os states desligados.
+    pub states_local_only: u32,
     /// O código de i18n do último erro.
     pub last_error: Option<String>,
-    /// O nome do arquivo que a nuvem recusou, com `too_large` ou `rejected`.
+    /// O nome do arquivo que a nuvem recusou, com `too_large`,
+    /// `state_too_large` ou `rejected`.
     pub last_error_file: Option<String>,
 }
 
@@ -1037,6 +1077,33 @@ pub async fn sync_set_saves_enabled(app: AppHandle, enabled: bool) -> Result<Syn
         .map_err(|e| e.to_string());
     emit_status(&app);
     status
+}
+
+/// O interruptor dos save states: desligado, nenhum state sobe (a base e os
+/// arquivos ficam como estão).
+#[tauri::command]
+pub async fn sync_set_states_enabled(app: AppHandle, enabled: bool) -> Result<SyncStatus, String> {
+    let (sync, alva) = services(&app)?;
+    let status = sync
+        .set_states_enabled_with(&alva, enabled, current_hardware(&app))
+        .await
+        .map_err(|e| e.to_string());
+    emit_status(&app);
+    status
+}
+
+/// "Enviar os states antigos também" (D127): os states que um "apagar tudo"
+/// no site deixou só nesta máquina sobem de novo.
+#[tauri::command]
+pub async fn sync_upload_old_states(app: AppHandle) -> Result<SyncStatus, String> {
+    let engine = engine_of(&app)?;
+    let (sync, alva) = services(&app)?;
+    let sent = engine.upload_old_states(&alva).await;
+    emit_status(&app);
+    sent.map_err(|e| e.to_string())?;
+    sync.status_with(&alva, current_hardware(&app))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1768,6 +1835,56 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count(), 2);
+    }
+
+    /// O interruptor dos states (R28, mesma forma do dos game saves): vai no
+    /// estado da página, desligar não roda passada e zera a conta dos states
+    /// só desta máquina, ligar roda uma passada já. Um não mexe no outro.
+    #[tokio::test]
+    async fn the_states_switch_is_in_the_status_and_turning_it_on_runs_a_pass() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        let passes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = passes.clone();
+        r.sync.on_enabled(Box::new(move || {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }));
+        let count = || passes.load(std::sync::atomic::Ordering::SeqCst);
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert!(st.states_enabled && st.saves_enabled);
+        r.sync
+            .runtime()
+            .states_local
+            .insert("state:snes/c/a__slot1.state".into(), "unversioned");
+        assert_eq!(
+            r.sync
+                .status_with(&r.alva, hw())
+                .await
+                .unwrap()
+                .states_local_only,
+            1
+        );
+
+        let st = r
+            .sync
+            .set_states_enabled_with(&r.alva, false, hw())
+            .await
+            .unwrap();
+        assert!(!st.states_enabled);
+        assert!(st.saves_enabled);
+        assert_eq!(st.states_local_only, 0);
+        assert_eq!(count(), 0);
+        assert!(r.sync.runtime().states_local.is_empty());
+
+        let st = r
+            .sync
+            .set_states_enabled_with(&r.alva, true, hw())
+            .await
+            .unwrap();
+        assert!(st.states_enabled);
+        assert_eq!(count(), 1);
     }
 
     /// M2: a contagem de conflitos vem do SQLite: vale logo ao abrir o app

@@ -44,7 +44,9 @@ fn now_unix() -> i64 {
         .unwrap_or(0)
 }
 
-fn sanitize(s: &str) -> String {
+/// O nome em disco: o que não é letra ASCII, dígito, `-`, `_` ou `.` vira `_`.
+/// O cloud save usa o mesmo para o nome do state na nuvem.
+pub(crate) fn sanitize(s: &str) -> String {
     s.chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
@@ -56,8 +58,13 @@ fn sanitize(s: &str) -> String {
         .collect()
 }
 
+/// A vaga no nome do arquivo: `quick` (sem vaga) ou `slotN`.
+pub(crate) fn slot_name(slot: Option<u32>) -> String {
+    slot.map_or_else(|| "quick".to_string(), |s| format!("slot{s}"))
+}
+
 fn state_path(dir: &Path, rom_id: &str, core_id: &str, slot: Option<u32>) -> PathBuf {
-    let slot = slot.map_or_else(|| "quick".to_string(), |s| format!("slot{s}"));
+    let slot = slot_name(slot);
     dir.join(format!(
         "{}.state",
         sanitize(&format!("{rom_id}__{core_id}__{slot}"))

@@ -80,6 +80,9 @@ pub fn decide(
     remote: Option<&Remote>,
     this_device: &str,
 ) -> Action {
+    if kind == Kind::State {
+        return decide_state(local, base, remote, this_device);
+    }
     // `.srm` vazio é "sem save": nunca sobe e nunca disputa com a nuvem.
     let local = match (kind, local) {
         (Kind::File, Some(l)) if l.size == 0 => None,
@@ -148,6 +151,64 @@ pub fn decide(
             // Não há versão remota para disputar: o local mudou, sobe.
             Some(_) => Action::Upload,
         },
+    }
+}
+
+/// Um save state só sobe (D116): a linha é desta máquina, e só ela escreve
+/// nela. Uma linha que difere do local quer dizer que o local é mais novo;
+/// nunca desce nem vira conflito.
+///
+/// D127: a linha desta máquina apagada no site marca a base e deixa o
+/// arquivo. Com a base marcada, o state fica só aqui até mudar de bytes (ou
+/// até a pessoa pedir, e então a base sai e ele sobe como novo).
+fn decide_state(
+    local: Option<&Local>,
+    base: Option<&BaseRow>,
+    remote: Option<&Remote>,
+    this_device: &str,
+) -> Action {
+    let Some(l) = local else {
+        // O state saiu daqui: a linha da nuvem fica, só a base sai.
+        return match base {
+            Some(_) => Action::DropBase,
+            None => Action::Nothing,
+        };
+    };
+    let live = remote.filter(|r| !r.deleted);
+    let Some(base) = base else {
+        // Sem base, uma marca de apagado vale ausência.
+        return match live {
+            Some(r) if r.hash == l.hash => Action::Adopt,
+            _ => Action::Upload,
+        };
+    };
+    let unchanged = l.hash == base.local_hash;
+    if base.wiped_at.is_some() {
+        return if unchanged {
+            Action::Nothing
+        } else {
+            Action::Upload
+        };
+    }
+    if let Some(r) = live {
+        return if unchanged && r.hash == base.remote_hash {
+            Action::Nothing
+        } else if r.hash == l.hash {
+            // Já batem, e a base ficou velha: só ela anda.
+            Action::Adopt
+        } else {
+            Action::Upload
+        };
+    }
+    let own_tombstone =
+        remote.is_some_and(|r| r.deleted && r.device_token_id.as_deref() == Some(this_device));
+    match (own_tombstone, unchanged) {
+        (true, true) => Action::MarkBaseWipedKeepLocal,
+        // Gravado de novo depois do sync: bytes novos, sobe.
+        (true, false) => Action::Upload,
+        // O servidor perdeu a linha.
+        (false, true) => Action::ReUpload,
+        (false, false) => Action::Upload,
     }
 }
 
@@ -311,12 +372,130 @@ mod tests {
     #[test]
     fn decide_own_tombstone_of_a_non_file_marks_the_base_wiped() {
         let b = base("a", "r");
-        for kind in [Kind::State, Kind::Config] {
-            for l in ["a", "a2"] {
-                assert_eq!(
-                    decide(kind, Some(&local(l)), Some(&b), Some(&tomb(Some(ME))), ME),
-                    Action::MarkBaseWipedKeepLocal
-                );
+        for l in ["a", "a2"] {
+            assert_eq!(
+                decide(
+                    Kind::Config,
+                    Some(&local(l)),
+                    Some(&b),
+                    Some(&tomb(Some(ME))),
+                    ME
+                ),
+                Action::MarkBaseWipedKeepLocal
+            );
+        }
+        // O state que já existia fica; o gravado de novo depois do sync sobe.
+        assert_eq!(
+            decide(
+                Kind::State,
+                Some(&local("a")),
+                Some(&b),
+                Some(&tomb(Some(ME))),
+                ME
+            ),
+            Action::MarkBaseWipedKeepLocal
+        );
+        assert_eq!(
+            decide(
+                Kind::State,
+                Some(&local("a2")),
+                Some(&b),
+                Some(&tomb(Some(ME))),
+                ME
+            ),
+            Action::Upload
+        );
+    }
+
+    fn state(l: Option<&Local>, b: Option<&BaseRow>, r: Option<&Remote>) -> Action {
+        decide(Kind::State, l, b, r, ME)
+    }
+
+    /// D116: um state desta máquina só sobe. Nenhuma combinação dos três
+    /// lados desce ou vira conflito; a nuvem diferente é o local mais novo.
+    #[test]
+    fn decide_state_only_ever_uploads() {
+        let b = base("a", "r");
+        let wiped = BaseRow {
+            wiped_at: Some(5),
+            ..base("a", "r")
+        };
+        let owned = |hash: &str| Remote {
+            device_token_id: Some(ME.into()),
+            ..remote(hash)
+        };
+        // Primeiro envio, e linha igual sem base: adota.
+        assert_eq!(state(Some(&local("a")), None, None), Action::Upload);
+        assert_eq!(
+            state(Some(&local("a")), None, Some(&owned("a"))),
+            Action::Adopt
+        );
+        assert_eq!(
+            state(Some(&local("a")), None, Some(&owned("b"))),
+            Action::Upload
+        );
+        assert_eq!(
+            state(Some(&local("a")), None, Some(&tomb(Some(ME)))),
+            Action::Upload
+        );
+        // Com base: igual é nada; diferente em qualquer lado sobe.
+        assert_eq!(
+            state(Some(&local("a")), Some(&b), Some(&owned("r"))),
+            Action::Nothing
+        );
+        assert_eq!(
+            state(Some(&local("a2")), Some(&b), Some(&owned("r"))),
+            Action::Upload
+        );
+        assert_eq!(
+            state(Some(&local("a")), Some(&b), Some(&owned("r2"))),
+            Action::Upload,
+            "a nuvem mudou sem esta máquina: o local é o que vale"
+        );
+        assert_eq!(
+            state(Some(&local("a2")), Some(&b), Some(&owned("r2"))),
+            Action::Upload
+        );
+        assert_eq!(
+            state(Some(&local("z")), Some(&b), Some(&owned("z"))),
+            Action::Adopt
+        );
+        // Sem linha: o servidor a perdeu.
+        assert_eq!(state(Some(&local("a")), Some(&b), None), Action::ReUpload);
+        // Base marcada (D127): fica até mudar de bytes.
+        assert_eq!(
+            state(Some(&local("a")), Some(&wiped), Some(&tomb(Some(ME)))),
+            Action::Nothing
+        );
+        assert_eq!(
+            state(Some(&local("a")), Some(&wiped), None),
+            Action::Nothing
+        );
+        assert_eq!(
+            state(Some(&local("a2")), Some(&wiped), Some(&tomb(Some(ME)))),
+            Action::Upload
+        );
+        // O state saiu daqui: só a base sai, nada desce.
+        assert_eq!(state(None, Some(&b), Some(&owned("r"))), Action::DropBase);
+        assert_eq!(state(None, Some(&wiped), None), Action::DropBase);
+        assert_eq!(state(None, None, Some(&owned("r"))), Action::Nothing);
+        for l in [None, Some(local("a")), Some(local("a2"))] {
+            for bb in [None, Some(&b), Some(&wiped)] {
+                for r in [
+                    None,
+                    Some(owned("r")),
+                    Some(owned("x")),
+                    Some(tomb(Some(ME))),
+                ] {
+                    let got = state(l.as_ref(), bb, r.as_ref());
+                    assert!(
+                        !matches!(
+                            got,
+                            Action::Download | Action::Conflict | Action::LocalToBackupAndClearBase
+                        ),
+                        "{l:?} {bb:?} {r:?} -> {got:?}"
+                    );
+                }
             }
         }
     }
@@ -394,7 +573,18 @@ mod tests {
             run(Some(&local("a")), Some(&wiped), Some(&remote("r"))),
             Action::Conflict
         );
-        // Para o que não é arquivo a marca ainda é base (D127).
+        // Para o que não é arquivo a marca ainda é base (D127): a configuração
+        // marca de novo, e o state já marcado e sem mudança fica como está.
+        assert_eq!(
+            decide(
+                Kind::Config,
+                Some(&local("a")),
+                Some(&wiped),
+                Some(&tomb(Some(ME))),
+                ME
+            ),
+            Action::MarkBaseWipedKeepLocal
+        );
         assert_eq!(
             decide(
                 Kind::State,
@@ -403,7 +593,7 @@ mod tests {
                 Some(&tomb(Some(ME))),
                 ME
             ),
-            Action::MarkBaseWipedKeepLocal
+            Action::Nothing
         );
     }
 
@@ -481,10 +671,10 @@ mod tests {
             run(Some(&local("a")), None, Some(&empty_remote)),
             Action::Upload
         );
-        // Para estado, um remoto vazio continua sendo um remoto.
+        // Um state nunca desce, vazio ou não (D116).
         assert_eq!(
             decide(Kind::State, None, None, Some(&empty_remote), ME),
-            Action::Download
+            Action::Nothing
         );
     }
 }

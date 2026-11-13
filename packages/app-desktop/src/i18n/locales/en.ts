@@ -560,6 +560,7 @@ const en: Messages = {
       denied: 'You did not authorize the access. Nothing was turned on.',
       timeout: 'The time to authorize ran out. Try again.',
       too_large: 'This save is larger than the cloud accepts for its system. It stays on this machine only.',
+      state_too_large: 'This save state is larger than the cloud accepts. It stays on this machine only.',
       rejected: 'The cloud refused this save. It stays on this machine only.',
     },
     errFile: 'File: {{file}}',

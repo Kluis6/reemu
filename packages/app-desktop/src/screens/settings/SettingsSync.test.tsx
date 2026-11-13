@@ -73,7 +73,9 @@ const OFF: SyncStatus = {
   quota: null,
   lastPassAt: null,
   savesEnabled: true,
+  statesEnabled: true,
   conflicts: 0,
+  statesLocalOnly: 0,
   lastError: null,
   lastErrorFile: null,
 }

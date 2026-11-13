@@ -638,6 +638,13 @@ export const syncSetPaused = (paused: boolean) => invoke<SyncStatus>('sync_set_p
 /** O interruptor dos game saves (os states e as configurações têm o deles). */
 export const syncSetSavesEnabled = (enabled: boolean) =>
   invoke<SyncStatus>('sync_set_saves_enabled', { enabled })
+/** O interruptor dos save states: desligado, nenhum state sobe (a base e os
+ *  arquivos ficam como estão). */
+export const syncSetStatesEnabled = (enabled: boolean) =>
+  invoke<SyncStatus>('sync_set_states_enabled', { enabled })
+/** "Enviar os states antigos também": os states que um "apagar tudo" no site
+ *  deixou só nesta máquina sobem de novo. */
+export const syncUploadOldStates = () => invoke<SyncStatus>('sync_upload_old_states')
 export const syncMachines = () => invoke<SyncMachine[]>('sync_machines')
 export const syncNow = () => invoke<SyncStatus>('sync_now')
 /** Os conflitos abertos de save (sem rede). */

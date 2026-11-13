@@ -151,6 +151,7 @@ pub(super) fn thumbnail_png(w: u32, h: u32, rgba: &[u8], max_w: u32) -> Option<V
 
 #[tauri::command]
 pub async fn save_state(
+    app: AppHandle,
     state: State<'_, AppState>,
     rom_id: String,
     slot: Option<u32>,
@@ -180,6 +181,8 @@ pub async fn save_state(
     )
     .await
     .map_err(AppError::from)?;
+    // Cloud save: o state sobe 3 s depois do último save da rajada.
+    crate::sync::engine::after_state_saved(&app, rom_id);
     let installed = meta.core_version.clone();
     Ok(save_dto(meta, installed.as_deref()))
 }

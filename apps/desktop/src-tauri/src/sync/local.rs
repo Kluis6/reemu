@@ -4,7 +4,9 @@
 //! - arquivos de save de cada ROM da biblioteca em `<save_dir>`, com o stem que
 //!   a sessão usa (`emu_session::srm_path`);
 //! - memory cards do PS2 em `<system>/pcsx2/memcards/*.ps2`;
-//! - VMUs do Dreamcast em `<system>/dc/vmu_save_[a-d][1-8].bin`.
+//! - VMUs do Dreamcast em `<system>/dc/vmu_save_[a-d][1-8].bin`;
+//! - os save states desta máquina (`save_states` no SQLite), com a miniatura
+//!   ao lado.
 //!
 //! Erro de leitura nunca vira "lista vazia": o motor aborta a passada, porque
 //! uma lista curta demais faria a base parecer apagada. Só a pasta que não
@@ -12,6 +14,7 @@
 
 use super::platform::platform_for_system;
 use domain::library::{Rom, RomRepository};
+use domain::save_state::{SaveStateMetadata, SaveStateRepository};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Read};
@@ -552,6 +555,117 @@ pub async fn rom_saves(
     .await
 }
 
+/// Um save state desta máquina como ele sobe (D116): o nome na nuvem é o stem
+/// da ROM e a vaga, igual em toda máquina; o core vai em campo próprio. O
+/// arquivo local leva o id da ROM, que só existe nesta máquina.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateFile {
+    /// `state:<plataforma>/<core>/<stem>__<vaga>.state`.
+    pub key: String,
+    pub rom_id: String,
+    pub platform: &'static str,
+    pub core: String,
+    /// A versão do core que gravou; `None` quando o state é de antes do
+    /// registro (D122: não sobe).
+    pub core_version: Option<String>,
+    /// `<stem>__<quick|slotN>.state`.
+    pub filename: String,
+    pub path: PathBuf,
+    /// A miniatura que o save gravou ao lado (`.png`).
+    pub thumbnail: Option<PathBuf>,
+}
+
+impl StateFile {
+    /// A versão, quando conhecida: texto em branco vale por ausente.
+    pub fn version(&self) -> Option<&str> {
+        self.core_version
+            .as_deref()
+            .filter(|v| !v.trim().is_empty())
+    }
+
+    /// A chave da miniatura: a do state mais `.png`.
+    pub fn thumb_key(&self) -> String {
+        format!("{}.png", self.key)
+    }
+
+    /// O nome da miniatura na nuvem (D67): o do state mais `.png`.
+    pub fn thumb_filename(&self) -> String {
+        format!("{}.png", self.filename)
+    }
+}
+
+/// O nome de um state na nuvem: o stem do arquivo da ROM, limpo como o nome
+/// do state em disco, e a vaga (`quick` ou `slotN`).
+pub fn state_filename(rom_path: &str, slot: Option<u32>) -> String {
+    let stem = Path::new(rom_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("game");
+    format!(
+        "{}__{}.state",
+        crate::save_state::sanitize(stem),
+        crate::save_state::slot_name(slot)
+    )
+}
+
+/// Os states como sobem, na ordem das linhas (a mais nova primeiro): a linha
+/// cuja ROM não está em `roms` fica de fora, e uma chave repetida (duas linhas
+/// da mesma vaga, ou duas ROMs de mesmo stem) fica com a primeira.
+pub fn state_files(rows: &[SaveStateMetadata], roms: &HashMap<String, Rom>) -> Vec<StateFile> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for m in rows {
+        let Some(rom) = roms.get(&m.rom_id) else {
+            continue;
+        };
+        let platform = platform_for_system(&rom.system_id);
+        let filename = state_filename(&rom.file_path, m.slot);
+        let key = format!("state:{platform}/{}/{filename}", m.core_id);
+        if !seen.insert(key.clone()) {
+            continue;
+        }
+        out.push(StateFile {
+            key,
+            rom_id: m.rom_id.clone(),
+            platform,
+            core: m.core_id.clone(),
+            core_version: m.core_version.clone(),
+            filename,
+            path: PathBuf::from(&m.file_path),
+            thumbnail: m.thumbnail_path.as_ref().map(PathBuf::from),
+        });
+    }
+    out
+}
+
+/// Os save states desta máquina (de uma ROM, ou de todas), pelo SQLite. Não
+/// lê o disco: o arquivo que sumiu aparece aqui e a passada o vê ausente.
+pub async fn device_states(
+    states: &db::SaveStateRepo,
+    roms: &dyn RomRepository,
+    rom_id: Option<&str>,
+) -> Result<Vec<StateFile>, String> {
+    let rows = match rom_id {
+        Some(id) => states.list_states_for_rom(id).await,
+        None => states.all_states().await,
+    }
+    .map_err(|e| format!("save states: {e}"))?;
+    let mut by_id: HashMap<String, Rom> = HashMap::new();
+    for m in &rows {
+        if by_id.contains_key(&m.rom_id) {
+            continue;
+        }
+        if let Some(rom) = roms
+            .get(&m.rom_id)
+            .await
+            .map_err(|e| format!("ROM {}: {e}", m.rom_id))?
+        {
+            by_id.insert(rom.id.clone(), rom);
+        }
+    }
+    Ok(state_files(&rows, &by_id))
+}
+
 /// O que listar na nuvem para os saves de uma ROM: os nomes das vagas dela e
 /// o `core` dos cartões e VMUs da plataforma dela.
 pub fn rom_listing(rom: &Rom, save_dir: &Path) -> (Vec<String>, Vec<&'static str>) {
@@ -876,6 +990,123 @@ mod tests {
         let got = account_saves(&repo, &root.join("saves"), &system).await;
         assert!(got.is_err());
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    fn state_row(
+        id: &str,
+        rom_id: &str,
+        core: &str,
+        slot: Option<u32>,
+        version: Option<&str>,
+    ) -> SaveStateMetadata {
+        SaveStateMetadata {
+            id: id.into(),
+            rom_id: rom_id.into(),
+            core_id: core.into(),
+            slot,
+            file_path: format!("/saves/{rom_id}__{core}__{id}.state"),
+            thumbnail_path: (id != "nothumb").then(|| format!("/saves/{id}.png")),
+            created_at: 0,
+            play_time_at_save: None,
+            core_version: version.map(Into::into),
+        }
+    }
+
+    fn rom(id: &str, path: &str, system: &str) -> (String, Rom) {
+        (
+            id.into(),
+            Rom {
+                id: id.into(),
+                file_path: path.into(),
+                crc32: "CRC".into(),
+                md5: "MD5".into(),
+                system_id: system.into(),
+                added_at: 0,
+                last_played_at: None,
+                is_favorite: false,
+                user_title: None,
+            },
+        )
+    }
+
+    /// D116: o nome na nuvem é o stem da ROM (limpo como o nome em disco) e a
+    /// vaga; o id da ROM, que só existe nesta máquina, não entra.
+    #[test]
+    fn a_state_is_named_by_the_rom_stem_and_the_slot() {
+        let roms: HashMap<String, Rom> = [
+            rom("6f1c-uuid", "C:/roms/Chrono Trigger (USA).sfc", "snes"),
+            rom("r2", "/roms/Zelda.gba", "gba"),
+        ]
+        .into_iter()
+        .collect();
+        let rows = vec![
+            state_row("a", "6f1c-uuid", "snes9x_libretro", Some(3), Some("1.63")),
+            state_row("b", "6f1c-uuid", "snes9x_libretro", None, None),
+            // A mesma vaga numa linha mais velha: fica a primeira.
+            state_row("old", "6f1c-uuid", "snes9x_libretro", Some(3), Some("1.62")),
+            state_row("nothumb", "r2", "mgba_libretro", Some(0), Some("0.10")),
+            // ROM fora da biblioteca: fora.
+            state_row("x", "gone", "mgba_libretro", Some(1), Some("0.10")),
+        ];
+        let got = state_files(&rows, &roms);
+        let keys: Vec<&str> = got.iter().map(|s| s.key.as_str()).collect();
+        assert_eq!(
+            keys,
+            vec![
+                "state:snes/snes9x_libretro/Chrono_Trigger__USA___slot3.state",
+                "state:snes/snes9x_libretro/Chrono_Trigger__USA___quick.state",
+                "state:gba/mgba_libretro/Zelda__slot0.state",
+            ]
+        );
+        assert_eq!(got[0].filename, "Chrono_Trigger__USA___slot3.state");
+        assert!(!got[0].filename.contains("6f1c"));
+        assert_eq!(got[0].core, "snes9x_libretro");
+        assert_eq!(got[0].core_version.as_deref(), Some("1.63"));
+        assert_eq!(got[0].rom_id, "6f1c-uuid");
+        assert_eq!(got[0].thumbnail, Some(PathBuf::from("/saves/a.png")));
+        assert_eq!(
+            got[0].thumb_key(),
+            "state:snes/snes9x_libretro/Chrono_Trigger__USA___slot3.state.png"
+        );
+        assert_eq!(
+            got[0].thumb_filename(),
+            "Chrono_Trigger__USA___slot3.state.png"
+        );
+        assert_eq!(got[1].version(), None);
+        assert_eq!(got[2].thumbnail, None);
+        let blank = StateFile {
+            core_version: Some("  ".into()),
+            ..got[0].clone()
+        };
+        assert_eq!(blank.version(), None);
+    }
+
+    #[tokio::test]
+    async fn device_states_reads_one_rom_or_all_of_them() {
+        let pool = connect_in_memory().await.unwrap();
+        let roms = RomsRepo::new(pool.clone());
+        add_roms(
+            &roms,
+            &[
+                ("r1", "C:/roms/Zelda.gba", "gba"),
+                ("r2", "C:/roms/Chrono.sfc", "snes"),
+            ],
+        )
+        .await;
+        let states = db::SaveStateRepo::new(pool);
+        for (id, rom_id, created) in [("a", "r1", 1), ("b", "r2", 2)] {
+            let mut m = state_row(id, rom_id, "core", Some(1), Some("1"));
+            m.created_at = created;
+            states.record_state(&m).await.unwrap();
+        }
+        let all = device_states(&states, &roms, None).await.unwrap();
+        assert_eq!(
+            all.iter().map(|s| s.rom_id.as_str()).collect::<Vec<_>>(),
+            ["r2", "r1"]
+        );
+        let one = device_states(&states, &roms, Some("r1")).await.unwrap();
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0].key, "state:gba/core/Zelda__slot1.state");
     }
 
     #[test]

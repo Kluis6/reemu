@@ -33,6 +33,16 @@ impl SaveStateRepo {
         .map_err(be)?;
         rows.iter().map(row_to_state).collect()
     }
+
+    /// Todos os save states desta máquina, de todos os jogos, do mais novo
+    /// para o mais antigo (o cloud save sobe os desta máquina numa leitura).
+    pub async fn all_states(&self) -> Result<Vec<SaveStateMetadata>, RepoError> {
+        let rows = sqlx::query(&format!("{STATE_COLS} ORDER BY created_at DESC, id"))
+            .fetch_all(&self.db)
+            .await
+            .map_err(be)?;
+        rows.iter().map(row_to_state).collect()
+    }
 }
 
 const STATE_COLS: &str = "SELECT id, rom_id, core_id, slot, file_path, thumbnail_path, \

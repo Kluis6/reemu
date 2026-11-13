@@ -560,6 +560,7 @@ const es: Messages = {
       denied: 'No autorizaste el acceso. No se activó nada.',
       timeout: 'El tiempo para autorizar se acabó. Inténtalo de nuevo.',
       too_large: 'Este save supera el tamaño que la nube acepta para su sistema. Se queda solo en esta máquina.',
+      state_too_large: 'Este save state supera el tamaño que la nube acepta. Se queda solo en esta máquina.',
       rejected: 'La nube rechazó este save. Se queda solo en esta máquina.',
     },
     errFile: 'Archivo: {{file}}',

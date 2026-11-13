@@ -12,6 +12,7 @@ export const STATUS: SyncStatus = {
   pausedLocal: false,
   pausedSite: false,
   savesEnabled: true,
+  statesEnabled: true,
   revoked: false,
   deviceId: 'dev1',
   label: 'PC-ED',
@@ -31,6 +32,7 @@ export const STATUS: SyncStatus = {
   quota: null,
   lastPassAt: null,
   conflicts: 0,
+  statesLocalOnly: 0,
   lastError: null,
   lastErrorFile: null,
 }

@@ -368,6 +368,8 @@ pub fn run() {
             sync::sync_set_label,
             sync::sync_set_paused,
             sync::sync_set_saves_enabled,
+            sync::sync_set_states_enabled,
+            sync::sync_upload_old_states,
             sync::sync_machines,
             sync::sync_now,
             sync::sync_open_backups,
