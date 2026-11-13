@@ -13,7 +13,13 @@
 
 pub mod api;
 pub mod device;
+// `local` e `reconcile` ainda não têm chamador: o motor (próxima task) passa a
+// usar e estes dois `allow` saem.
+#[allow(dead_code)]
+pub mod local;
 pub mod platform;
+#[allow(dead_code)]
+pub mod reconcile;
 
 use crate::alvanista::client::ClientError;
 use crate::alvanista::loopback::Lang;

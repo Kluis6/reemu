@@ -4,8 +4,6 @@
 //! sistema sem valor exato vai para `other`: o servidor guarda e conta na
 //! cota igual, nunca recusa.
 
-// Ainda sem chamador: o motor de sync (próxima task) passa a usar.
-#[allow(dead_code)]
 pub fn platform_for_system(system_id: &str) -> &'static str {
     match system_id {
         "psx" => "ps1",
