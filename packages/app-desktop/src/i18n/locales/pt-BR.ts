@@ -544,7 +544,10 @@ const ptBR = {
       cancelled: 'A autorização foi cancelada.',
       denied: 'Você não autorizou o acesso. Nada foi ligado.',
       timeout: 'O tempo para autorizar acabou. Tente de novo.',
+      too_large: 'Este save passa do tamanho que a nuvem aceita para o sistema dele. Ele fica só nesta máquina.',
+      rejected: 'A nuvem recusou este save. Ele fica só nesta máquina.',
     },
+    errFile: 'Arquivo: {{file}}',
   },
   filePicker: {
     start: 'Unidades e pasta pessoal',

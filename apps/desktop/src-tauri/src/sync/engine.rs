@@ -95,12 +95,19 @@ pub struct PassReport {
 impl PassReport {
     /// O erro que a tela mostra (o mais grave).
     pub fn worst(&self) -> Option<SyncError> {
-        self.errors
-            .iter()
-            .map(|(_, e)| e)
-            .max_by_key(|e| severity(e))
-            .cloned()
+        self.worst_entry().map(|(_, e)| e.clone())
     }
+
+    /// O erro mais grave e a chave do arquivo dele.
+    fn worst_entry(&self) -> Option<&(String, SyncError)> {
+        self.errors.iter().max_by_key(|(_, e)| severity(e))
+    }
+}
+
+/// A nuvem recusou estes bytes de vez (413, 400, 422): a mesma chave com os
+/// mesmos bytes não sobe de novo; a passada só repete o erro.
+fn is_permanent(e: &SyncError) -> bool {
+    matches!(e, SyncError::TooLarge | SyncError::Rejected)
 }
 
 /// Um lado do conflito, como o diálogo mostra (D118).
@@ -259,6 +266,11 @@ pub struct Engine {
     last_listing: Mutex<Option<Snapshot>>,
     /// As linhas da última leitura, só para contar versões na página do jogo.
     known_files: Mutex<Vec<RemoteFile>>,
+    /// Chave -> (hash dos bytes recusados, o erro): a nuvem recusou estes
+    /// bytes de vez, e eles só sobem de novo quando mudarem. Vale enquanto o
+    /// app roda: abrir o app tenta uma vez mais (o limite do servidor pode ter
+    /// subido).
+    rejected: Mutex<HashMap<String, (String, SyncError)>>,
     prelaunch_budget: Duration,
 }
 
@@ -281,6 +293,7 @@ impl Engine {
             stamp: Mutex::new(String::new()),
             last_listing: Mutex::new(None),
             known_files: Mutex::new(Vec::new()),
+            rejected: Mutex::new(HashMap::new()),
             prelaunch_budget: PRELAUNCH_BUDGET,
         }
     }
@@ -451,7 +464,13 @@ impl Engine {
                 match result {
                     Ok(report) => {
                         rt.last_pass_at = Some(now_secs());
-                        rt.last_error = report.worst().map(|e| e.to_string());
+                        let worst = report.worst_entry();
+                        rt.last_error = worst.map(|(_, e)| e.to_string());
+                        // O nome do arquivo (nunca o caminho): a tela diz qual.
+                        rt.last_error_file = worst
+                            .filter(|(_, e)| is_permanent(e))
+                            .and_then(|(key, _)| parse_key(key))
+                            .map(|(_, _, name)| name.to_owned());
                     }
                     // O aviso de pausada no site já diz isso.
                     Err(SyncError::Paused) => rt.last_error = None,
@@ -567,12 +586,16 @@ impl Engine {
             ApiError::Unauthorized | ApiError::Paused | ApiError::Transient(_) => {
                 Fail::End(self.ending(alva, err).await)
             }
+            // A cota cheia não é falta de plano: o espelho do plano fica como
+            // está e a tela mostra os números da cota.
             ApiError::Quota if upload => Fail::StopUploads(SyncError::Quota),
             ApiError::TierInsufficient { .. } if upload => {
                 // A tela passa a oferecer o plano; as descidas seguem (D51).
                 alva.note_no_save_sync().await;
                 Fail::StopUploads(SyncError::NoTier)
             }
+            ApiError::TooLarge => Fail::File(SyncError::TooLarge),
+            ApiError::Invalid(_) if upload => Fail::File(SyncError::Rejected),
             other => Fail::File(SyncError::from(other)),
         }
     }
@@ -730,7 +753,7 @@ impl Engine {
         let done = match action {
             Action::Nothing => Ok(Done::Nothing),
             Action::Adopt => self.adopt(e, local.as_ref(), remote.as_ref()).await,
-            Action::Upload | Action::ReUpload => self.upload_step(cx, e).await,
+            Action::Upload | Action::ReUpload => self.upload_step(cx, e, local.as_ref()).await,
             Action::Download => self.download_step(cx, e, remote.as_ref()).await,
             Action::Conflict => {
                 self.conflict_step(cx, e, local.as_ref(), remote.as_ref(), known)
@@ -807,11 +830,29 @@ impl Engine {
         Ok(Done::Nothing)
     }
 
-    async fn upload_step(&self, cx: &Ctx<'_>, e: &Entry) -> Result<Done, Fail> {
+    async fn upload_step(
+        &self,
+        cx: &Ctx<'_>,
+        e: &Entry,
+        local: Option<&Local>,
+    ) -> Result<Done, Fail> {
         if cx.mode == Mode::BeforeLaunch || cx.uploads_stopped || !self.may_upload(&e.file) {
             return Ok(Done::Deferred);
         }
+        // Os mesmos bytes que a nuvem já recusou de vez não sobem de novo; a
+        // passada repete o erro para a tela seguir dizendo qual arquivo.
+        if let Some(err) = local.and_then(|l| self.still_rejected(&e.file.key, &l.hash)) {
+            return Err(Fail::File(err));
+        }
         self.send(cx.alva, &cx.token, &e.file, e.row.as_ref()).await
+    }
+
+    /// O erro guardado quando a nuvem já recusou estes bytes desta chave.
+    fn still_rejected(&self, key: &str, hash: &str) -> Option<SyncError> {
+        lock(&self.rejected)
+            .get(key)
+            .filter(|(seen, _)| seen == hash)
+            .map(|(_, err)| err.clone())
     }
 
     /// Lê o arquivo, manda, e só com o 201 grava a base.
@@ -858,8 +899,17 @@ impl Engine {
         self.forget_listing();
         let up = match self.sync.api.upload(token, &meta, bytes).await {
             Ok(up) => up,
-            Err(err) => return Err(self.file_error(alva, err, true).await),
+            Err(err) => {
+                let fail = self.file_error(alva, err, true).await;
+                if let Fail::File(e) = &fail {
+                    if is_permanent(e) {
+                        lock(&self.rejected).insert(file.key.clone(), (hash, e.clone()));
+                    }
+                }
+                return Err(fail);
+            }
         };
+        lock(&self.rejected).remove(&file.key);
         if up.deduplicated {
             log::debug!("sync: {} já estava na nuvem", file.key);
         }
@@ -886,7 +936,7 @@ impl Engine {
         let bytes = match self
             .sync
             .api
-            .download(&cx.token, &r.save_id, &r.version_id)
+            .download(&cx.token, &r.save_id, &r.version_id, r.size)
             .await
         {
             Ok(b) => b,
@@ -1202,22 +1252,24 @@ impl Engine {
             return self.repo.base_delete(&file.key).await.map_err(repo_err);
         };
         // A versão que o diálogo mostrou; se a linha mudou, a atual.
-        let (version_id, hash) =
+        let (version_id, hash, size) =
             if row.save_id == conflict.remote_save_id && !conflict.remote_version_id.is_empty() {
                 (
                     conflict.remote_version_id.clone(),
                     conflict.remote_hash.clone(),
+                    conflict.remote_size,
                 )
             } else {
                 (
                     current.version_id.clone(),
                     current.content_hash.to_ascii_lowercase(),
+                    current.size_bytes,
                 )
             };
         let bytes = match self
             .sync
             .api
-            .download(token, &row.save_id, &version_id)
+            .download(token, &row.save_id, &version_id, size)
             .await
         {
             Ok(b) => b,
@@ -1268,7 +1320,7 @@ impl Engine {
         let bytes = match self
             .sync
             .api
-            .download(&token, &row.save_id, version_id)
+            .download(&token, &row.save_id, version_id, version.size_bytes)
             .await
         {
             Ok(b) => b,
@@ -2064,6 +2116,14 @@ mod tests {
 
         async fn pass(&self) -> Result<PassReport, SyncError> {
             self.engine.pass(&self.alva, PassScope::All).await
+        }
+
+        /// O estado da página, como o comando o devolve.
+        async fn status(&self) -> crate::sync::SyncStatus {
+            self.sync
+                .status_with(&self.alva, HardwarePayload::default())
+                .await
+                .unwrap()
         }
     }
 
@@ -3482,10 +3542,47 @@ mod tests {
         assert_eq!(r.sync.runtime().last_error.as_deref(), Some("failed"));
     }
 
+    /// Os dois 402 que o Alvanista manda, com o corpo exato de
+    /// `billing.TierInsufficient` (internal/billing/errors.go).
+    fn gate_402() -> ResponseTemplate {
+        ResponseTemplate::new(402).set_body_json(json!({"error": {
+            "code": "tier_insufficient", "current_tier": "gamer",
+            "required_quota": "save_sync_enabled", "required_value": true,
+            "upgrade_to": "collector"}}))
+    }
+
+    /// A cota cheia: `saves.go` reescreve o 507 `quota_exceeded` do GameKave.
+    fn quota_402() -> ResponseTemplate {
+        ResponseTemplate::new(402).set_body_json(json!({"error": {
+            "code": "tier_insufficient", "current_tier": "collector",
+            "required_quota": "emu_saves_quota_mb", "required_value": 1024,
+            "upgrade_to": "collector"}}))
+    }
+
+    async fn mirror_with_save_sync(r: &Rig) {
+        r.store
+            .mirror_put(&Me {
+                id: "u1".into(),
+                username: "toy".into(),
+                avatar_url: None,
+                hero_url: None,
+                bio: None,
+                profile_url: "https://www.alvanista.com/u/toy".into(),
+                card: None,
+                entitlements: Some(Entitlements { save_sync: true }),
+            })
+            .await
+            .unwrap();
+    }
+
+    /// I-1: a cota cheia chega como o 402 de cota do Alvanista. Os envios
+    /// param, as descidas seguem, a tela recebe os números, e o espelho do
+    /// plano não muda: quem é Collector não vê "assine o Collector".
     #[tokio::test]
-    async fn quota_stops_uploads_and_keeps_downloads() {
+    async fn the_real_quota_402_stops_uploads_shows_the_numbers_and_keeps_the_plan() {
         let _serial = SERIAL.lock().await;
         let r = rig("quota").await;
+        mirror_with_save_sync(&r).await;
         r.rom("r1", "Zelda.gba", "gba").await;
         r.rom("r2", "Mario.gba", "gba").await;
         r.rom("r3", "Chrono.sfc", "snes").await;
@@ -3500,7 +3597,7 @@ mod tests {
         mount_content(&r.server, "s9", "v1", b"chrono").await;
         Mock::given(method("POST"))
             .and(path(SAVES))
-            .respond_with(ResponseTemplate::new(507))
+            .respond_with(quota_402())
             .mount(&r.server)
             .await;
         Mock::given(method("GET"))
@@ -3520,7 +3617,7 @@ mod tests {
         assert_eq!(
             r.reqs("POST", SAVES).await.len(),
             1,
-            "parou no primeiro 507"
+            "parou no primeiro 402 de cota"
         );
         assert_eq!(report.worst(), Some(SyncError::Quota));
         assert_eq!(r.read("saves/Chrono.srm").unwrap(), b"chrono");
@@ -3529,25 +3626,18 @@ mod tests {
             limit_bytes: 100
         }));
         assert_eq!(r.sync.runtime().last_error.as_deref(), Some("quota"));
+        assert_eq!(r.alva.mirrored_save_sync().await, Some(true));
+        let st = r.status().await;
+        assert_eq!(st.availability, crate::sync::Availability::Ready);
+        assert_eq!(st.last_error.as_deref(), Some("quota"));
+        assert_eq!(st.quota.map(|q| q.used_bytes), Some(100));
     }
 
     #[tokio::test]
-    async fn a_402_stops_uploads_keeps_downloads_and_shows_no_tier() {
+    async fn the_gate_402_stops_uploads_keeps_downloads_and_shows_no_tier() {
         let _serial = SERIAL.lock().await;
         let r = rig("tier").await;
-        r.store
-            .mirror_put(&Me {
-                id: "u1".into(),
-                username: "toy".into(),
-                avatar_url: None,
-                hero_url: None,
-                bio: None,
-                profile_url: "https://www.alvanista.com/u/toy".into(),
-                card: None,
-                entitlements: Some(Entitlements { save_sync: true }),
-            })
-            .await
-            .unwrap();
+        mirror_with_save_sync(&r).await;
         r.rom("r1", "Zelda.gba", "gba").await;
         r.rom("r3", "Chrono.sfc", "snes").await;
         r.write("saves/Zelda.srm", b"zelda");
@@ -3560,9 +3650,7 @@ mod tests {
         mount_content(&r.server, "s9", "v1", b"chrono").await;
         Mock::given(method("POST"))
             .and(path(SAVES))
-            .respond_with(ResponseTemplate::new(402).set_body_json(json!({
-                "error": {"code": "tier_insufficient", "upgrade_to": "collector"}
-            })))
+            .respond_with(gate_402())
             .mount(&r.server)
             .await;
 
@@ -3571,6 +3659,90 @@ mod tests {
         assert_eq!(report.worst(), Some(SyncError::NoTier));
         assert_eq!(r.alva.mirrored_save_sync().await, Some(false));
         assert_eq!(r.read("saves/Chrono.srm").unwrap(), b"chrono");
+        assert!(!r
+            .events()
+            .iter()
+            .any(|e| matches!(e, SyncEvent::Quota { .. })));
+    }
+
+    /// I-2 e M9: a nuvem recusa um save de N64 maior que o limite da
+    /// plataforma (413 `save_file_too_large`, corpo do GameKave). A página diz
+    /// `too_large` e qual arquivo; a passada seguinte não manda os mesmos
+    /// bytes de novo, mas segue dizendo; bytes novos sobem.
+    #[tokio::test]
+    async fn a_too_large_save_is_named_and_not_resent_until_its_bytes_change() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("too-large").await;
+        r.rom("r1", "Mario.n64", "n64").await;
+        r.write("saves/Mario.srm", &vec![1u8; 4096]);
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(seq(vec![
+                ResponseTemplate::new(413).set_body_json(json!({"error": {
+                    "code": "save_file_too_large",
+                    "message": "object exceeds the allowed size", "max_bytes": 65536}})),
+                uploaded("s1", "v1"),
+            ]))
+            .mount(&r.server)
+            .await;
+        let key = "file:n64/Mario.srm";
+
+        let report = r.pass().await.unwrap();
+        assert_eq!(report.errors, vec![(key.to_owned(), SyncError::TooLarge)]);
+        let st = r.status().await;
+        assert_eq!(st.last_error.as_deref(), Some("too_large"));
+        assert_eq!(st.last_error_file.as_deref(), Some("Mario.srm"));
+        assert!(r.base_of(key).await.is_none());
+
+        // Os mesmos bytes: nada sobe, a tela segue dizendo qual.
+        let again = r.pass().await.unwrap();
+        assert_eq!(again.errors, vec![(key.to_owned(), SyncError::TooLarge)]);
+        assert_eq!(
+            r.reqs("POST", SAVES).await.len(),
+            1,
+            "reenviou os mesmos bytes"
+        );
+        assert_eq!(
+            r.status().await.last_error_file.as_deref(),
+            Some("Mario.srm")
+        );
+
+        // O jogo gravou de novo: os bytes novos sobem.
+        r.write("saves/Mario.srm", &vec![2u8; 4096]);
+        let after = r.pass().await.unwrap();
+        assert_eq!((after.uploaded, after.errors.len()), (1, 0));
+        assert_eq!(r.reqs("POST", SAVES).await.len(), 2);
+        let st = r.status().await;
+        assert_eq!((st.last_error, st.last_error_file), (None, None));
+    }
+
+    /// M9: 422 `save_bios_rejected` e 400 `validation_failed` também são
+    /// recusa de vez: código `rejected`, sem reenvio dos mesmos bytes.
+    #[tokio::test]
+    async fn a_rejected_save_is_rejected_not_failed_and_is_not_resent() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("rejected").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        r.rom("r2", "Chrono.sfc", "snes").await;
+        r.write("saves/Zelda.srm", b"zelda");
+        r.write("saves/Chrono.srm", b"chrono");
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(ResponseTemplate::new(422).set_body_json(json!({"error": {
+                "code": "save_bios_rejected", "message": "BIOS images are never stored"}})))
+            .mount(&r.server)
+            .await;
+
+        let report = r.pass().await.unwrap();
+        assert_eq!(report.errors.len(), 2);
+        assert!(report.errors.iter().all(|(_, e)| *e == SyncError::Rejected));
+        assert_eq!(r.sync.runtime().last_error.as_deref(), Some("rejected"));
+        r.pass().await.unwrap();
+        assert_eq!(r.reqs("POST", SAVES).await.len(), 2, "um envio por arquivo");
     }
 
     #[tokio::test]

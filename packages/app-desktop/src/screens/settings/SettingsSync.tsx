@@ -270,7 +270,16 @@ export function SettingsSync() {
       )}
       {showError && (
         <MessageBar intent="warning">
-          <MessageBarBody>{t(`sync.err.${showError}`)}</MessageBarBody>
+          <MessageBarBody>
+            {t(`sync.err.${showError}`)}
+            {/* Um save que a nuvem recusou: a página diz qual. */}
+            {showError === st.lastError && st.lastErrorFile && (
+              <>
+                <br />
+                {t('sync.errFile', { file: st.lastErrorFile })}
+              </>
+            )}
+          </MessageBarBody>
         </MessageBar>
       )}
 

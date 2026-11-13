@@ -32,6 +32,7 @@ export const STATUS: SyncStatus = {
   lastPassAt: null,
   conflicts: 0,
   lastError: null,
+  lastErrorFile: null,
 }
 
 export async function settle() {

@@ -18,4 +18,8 @@ lastPassAt: number | null, conflicts: number,
 /**
  * O código de i18n do último erro.
  */
-lastError: string | null, };
+lastError: string | null, 
+/**
+ * O nome do arquivo que a nuvem recusou, com `too_large` ou `rejected`.
+ */
+lastErrorFile: string | null, };

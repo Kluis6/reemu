@@ -13,7 +13,17 @@ use super::device::HardwarePayload;
 use serde::Deserialize;
 use std::time::Duration;
 
+/// Um pedido comum (JSON), da conexão ao fim do corpo.
 const TIMEOUT: Duration = Duration::from_secs(30);
+/// Só a conexão (DNS, TCP e TLS).
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// A vazão mais baixa que um envio ou uma descida pode ter antes de desistir
+/// (32 KB/s, 256 kbit/s): o prazo deles cresce com o tamanho do arquivo.
+const MIN_TRANSFER_RATE: u64 = 32 * 1024;
+/// O `required_quota` do 402 da porta: o plano não libera o sync. Qualquer
+/// outro 402 das rotas de save é a cota cheia (o proxy do Alvanista troca o
+/// 507 `quota_exceeded` do GameKave por um 402 `emu_saves_quota_mb`).
+const GATE_QUOTA: &str = "save_sync_enabled";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApiError {
@@ -23,17 +33,23 @@ pub enum ApiError {
     InsufficientScope,
     /// 423: o aparelho está pausado no site.
     Paused,
-    /// 402: o plano não libera o sync.
+    /// 402 da porta (`required_quota: save_sync_enabled`): o plano não libera
+    /// o sync.
     TierInsufficient {
         upgrade_to: String,
     },
-    /// 507: acabou a cota de armazenamento.
+    /// Acabou a cota de armazenamento: o 402 de cota do Alvanista ou, de um
+    /// servidor sem o proxy, o 507.
     Quota,
-    /// 413: o arquivo passa do limite.
+    /// 413: o arquivo passa do limite da plataforma.
     TooLarge,
     NotFound,
     /// 429, 5xx ou rede: vale tentar depois.
     Transient(String),
+    /// 400 ou 422: o servidor recusou os campos ou o conteúdo
+    /// (`validation_failed`, `save_bios_rejected`...). Os mesmos bytes nunca
+    /// passam.
+    Invalid(String),
     /// Outro 4xx; leva o `code` do servidor (ou o status).
     Rejected(String),
 }
@@ -49,6 +65,7 @@ impl std::fmt::Display for ApiError {
             Self::TooLarge => f.write_str("arquivo grande demais"),
             Self::NotFound => f.write_str("não encontrado"),
             Self::Transient(e) => write!(f, "Alvanista indisponível: {e}"),
+            Self::Invalid(c) => write!(f, "o Alvanista recusou o arquivo: {c}"),
             Self::Rejected(c) => write!(f, "o Alvanista recusou o pedido: {c}"),
         }
     }
@@ -195,12 +212,21 @@ pub struct Uploaded {
 pub struct SavesApi {
     http: reqwest::Client,
     api: String,
+    /// O prazo de um pedido comum; envio e descida ganham mais pelo tamanho.
+    timeout: Duration,
+    /// A vazão mínima de envio e descida, em bytes por segundo.
+    min_rate: u64,
 }
 
 impl SavesApi {
     pub fn new(api: String) -> Self {
+        Self::with_timeouts(api, TIMEOUT, MIN_TRANSFER_RATE)
+    }
+
+    fn with_timeouts(api: String, timeout: Duration, min_rate: u64) -> Self {
         let builder = reqwest::Client::builder()
-            .timeout(TIMEOUT)
+            .connect_timeout(CONNECT_TIMEOUT.min(timeout))
+            .timeout(timeout)
             .user_agent(concat!("ReEmu/", env!("CARGO_PKG_VERSION")));
         // Os testes falam com um servidor local: sem proxy do ambiente.
         #[cfg(test)]
@@ -210,7 +236,16 @@ impl SavesApi {
                 .build()
                 .expect("cliente HTTP do sync (reqwest) não pôde ser criado"),
             api: api.trim_end_matches('/').to_owned(),
+            timeout,
+            min_rate: min_rate.max(1),
         }
+    }
+
+    /// O prazo de um envio ou de uma descida de `bytes`: o de um pedido comum
+    /// mais o tempo de passar os bytes na vazão mínima. Um cartão de 8 MB num
+    /// link lento não estoura o prazo de um pedido de 1 KB.
+    fn transfer_timeout(&self, bytes: u64) -> Duration {
+        self.timeout + Duration::from_millis(bytes.saturating_mul(1000) / self.min_rate)
     }
 
     pub async fn partner_mint_device(
@@ -317,6 +352,7 @@ impl SavesApi {
         meta: &UploadMeta<'_>,
         bytes: Vec<u8>,
     ) -> Result<Uploaded, ApiError> {
+        let timeout = self.transfer_timeout(bytes.len() as u64);
         let file = reqwest::multipart::Part::bytes(bytes)
             .file_name(meta.filename.to_owned())
             .mime_str("application/octet-stream")
@@ -338,16 +374,19 @@ impl SavesApi {
             .http
             .post(format!("{}/api/v1/saves", self.api))
             .bearer_auth(device_token)
+            .timeout(timeout)
             .multipart(form.part("file", file));
         read_json(req).await
     }
 
-    /// Os bytes de uma versão.
+    /// Os bytes de uma versão. `size`: o tamanho que a listagem informou, para
+    /// o prazo da descida.
     pub async fn download(
         &self,
         device_token: &str,
         save_id: &str,
         version_id: &str,
+        size: i64,
     ) -> Result<Vec<u8>, ApiError> {
         let req = self
             .http
@@ -357,7 +396,8 @@ impl SavesApi {
                 segment(save_id),
                 segment(version_id)
             ))
-            .bearer_auth(device_token);
+            .bearer_auth(device_token)
+            .timeout(self.transfer_timeout(size.max(0) as u64));
         let resp = send(req).await?;
         resp.bytes()
             .await
@@ -434,13 +474,20 @@ fn classify(status: u16, body: &[u8]) -> ApiError {
     let code = error_code(&json);
     match status {
         401 => ApiError::Unauthorized,
-        402 => ApiError::TierInsufficient {
-            upgrade_to: json
-                .pointer("/error/upgrade_to")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_owned(),
+        402 => match json
+            .pointer("/error/required_quota")
+            .and_then(|v| v.as_str())
+        {
+            Some(GATE_QUOTA) => ApiError::TierInsufficient {
+                upgrade_to: json
+                    .pointer("/error/upgrade_to")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_owned(),
+            },
+            _ => ApiError::Quota,
         },
+        400 | 422 => ApiError::Invalid(code.unwrap_or_else(|| format!("http_{status}"))),
         403 if code.as_deref() == Some("insufficient_scope") => ApiError::InsufficientScope,
         404 => ApiError::NotFound,
         413 => ApiError::TooLarge,
@@ -541,20 +588,27 @@ mod tests {
             status_of(403, json!({"error": {"code": "device_token_required"}})).await,
             ApiError::Rejected("device_token_required".into())
         );
+        assert_eq!(status_of(423, json!({})).await, ApiError::Paused);
+        // Um servidor sem o proxy do Alvanista ainda responde 507.
+        assert_eq!(status_of(507, json!({})).await, ApiError::Quota);
         assert_eq!(
             status_of(
-                402,
-                json!({"error": {"code": "tier_insufficient", "current_tier": "free",
-                    "upgrade_to": "collector", "required_quota": "saves", "required_value": 1}})
+                413,
+                json!({"error": {"code": "save_file_too_large",
+                    "message": "object exceeds the allowed size", "max_bytes": 65536}})
             )
             .await,
-            ApiError::TierInsufficient {
-                upgrade_to: "collector".into()
-            }
+            ApiError::TooLarge
         );
-        assert_eq!(status_of(423, json!({})).await, ApiError::Paused);
-        assert_eq!(status_of(507, json!({})).await, ApiError::Quota);
-        assert_eq!(status_of(413, json!({})).await, ApiError::TooLarge);
+        assert_eq!(
+            status_of(
+                422,
+                json!({"error": {"code": "save_bios_rejected",
+                    "message": "BIOS images are never stored"}})
+            )
+            .await,
+            ApiError::Invalid("save_bios_rejected".into())
+        );
         assert_eq!(status_of(404, json!({})).await, ApiError::NotFound);
         assert!(matches!(
             status_of(429, json!({})).await,
@@ -565,13 +619,107 @@ mod tests {
             ApiError::Transient(_)
         ));
         assert_eq!(
-            status_of(400, json!({"error": {"code": "bad_label"}})).await,
-            ApiError::Rejected("bad_label".into())
+            status_of(400, json!({"error": {"code": "validation_failed"}})).await,
+            ApiError::Invalid("validation_failed".into())
         );
         assert_eq!(
             status_of(400, json!("not an object")).await,
-            ApiError::Rejected("http_400".into())
+            ApiError::Invalid("http_400".into())
         );
+        assert_eq!(
+            status_of(409, json!({"error": {"code": "reference_stale"}})).await,
+            ApiError::Rejected("reference_stale".into())
+        );
+    }
+
+    /// Os dois 402 das rotas de save, com o corpo exato que o Alvanista monta
+    /// (`billing.TierInsufficient`, internal/billing/errors.go): a porta do
+    /// plano (`saves_gate.go`) e a cota cheia (o 507 do GameKave reescrito em
+    /// `saves.go`). Só o da porta é "o plano não libera".
+    #[tokio::test]
+    async fn the_quota_402_is_quota_and_only_the_gate_402_is_the_plan() {
+        use serde_json::json;
+        let gate = json!({"error": {"code": "tier_insufficient", "current_tier": "gamer",
+            "required_quota": "save_sync_enabled", "required_value": true,
+            "upgrade_to": "collector"}});
+        let quota = json!({"error": {"code": "tier_insufficient", "current_tier": "collector",
+            "required_quota": "emu_saves_quota_mb", "required_value": 1024,
+            "upgrade_to": "collector"}});
+        assert_eq!(
+            status_of(402, gate).await,
+            ApiError::TierInsufficient {
+                upgrade_to: "collector".into()
+            }
+        );
+        assert_eq!(status_of(402, quota).await, ApiError::Quota);
+    }
+
+    /// M8: envio e descida têm o prazo de um pedido comum mais o tempo dos
+    /// bytes na vazão mínima; um pedido comum lento ainda cai no prazo dele.
+    #[tokio::test]
+    async fn transfers_get_more_time_as_they_grow_and_plain_requests_do_not() {
+        let server = MockServer::start().await;
+        let slow = Duration::from_millis(600);
+        Mock::given(method("POST"))
+            .and(path("/api/v1/saves"))
+            .respond_with(
+                ResponseTemplate::new(201)
+                    .set_body_json(serde_json::json!({"save_id": "s1", "version_id": "v1"}))
+                    .set_delay(slow),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/saves/s1/versions/v1/content"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_bytes(vec![7u8; 128 * 1024])
+                    .set_delay(slow),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/saves/quota"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"used_bytes": 1, "limit_bytes": 2}))
+                    .set_delay(slow),
+            )
+            .mount(&server)
+            .await;
+        // 200 ms por pedido e 64 KB/s: 128 KB ganham mais 2 s.
+        let api = SavesApi::with_timeouts(server.uri(), Duration::from_millis(200), 64 * 1024);
+        assert_eq!(
+            api.transfer_timeout(128 * 1024),
+            Duration::from_millis(2200)
+        );
+        let meta = UploadMeta {
+            platform: "n64",
+            kind: "file",
+            filename: "Mario.srm",
+            core: None,
+            core_version: None,
+            client_mtime: None,
+        };
+        assert!(api
+            .upload("asv_t", &meta, vec![1u8; 128 * 1024])
+            .await
+            .is_ok());
+        assert_eq!(
+            api.download("asv_t", "s1", "v1", 128 * 1024)
+                .await
+                .unwrap()
+                .len(),
+            128 * 1024
+        );
+        assert!(matches!(
+            api.quota("asv_t").await,
+            Err(ApiError::Transient(_))
+        ));
+        // Os valores de verdade: um cartão de 8 MB tem mais de 4 minutos.
+        let real = SavesApi::new(server.uri());
+        assert!(real.transfer_timeout(8 * 1024 * 1024) > Duration::from_secs(240));
+        assert_eq!(real.transfer_timeout(0), TIMEOUT);
     }
 
     #[tokio::test]
@@ -768,13 +916,16 @@ mod tests {
             .mount(&server)
             .await;
         let api = api(&server);
-        assert_eq!(api.download("asv_t", "s1", "v1").await.unwrap(), b"bytes");
+        assert_eq!(
+            api.download("asv_t", "s1", "v1", 5).await.unwrap(),
+            b"bytes"
+        );
         let versions = api.versions("asv_t", "s1").await.unwrap();
         assert_eq!(versions.len(), 2);
         assert_eq!(versions[0].device_token_id.as_deref(), Some("dev1"));
         assert_eq!(versions[1].source_client.as_deref(), Some("retroarch"));
         assert_eq!(
-            api.download("asv_t", "s1", "gone").await,
+            api.download("asv_t", "s1", "gone", 0).await,
             Err(ApiError::NotFound)
         );
     }

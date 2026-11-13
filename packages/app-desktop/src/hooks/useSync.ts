@@ -45,6 +45,8 @@ export const SYNC_ERRORS = [
   'cancelled',
   'denied',
   'timeout',
+  'too_large',
+  'rejected',
 ] as const
 export type SyncErrorCode = (typeof SYNC_ERRORS)[number]
 

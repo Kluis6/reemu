@@ -543,7 +543,10 @@ const en: Messages = {
       cancelled: 'The authorization was cancelled.',
       denied: 'You did not authorize the access. Nothing was turned on.',
       timeout: 'The time to authorize ran out. Try again.',
+      too_large: 'This save is larger than the cloud accepts for its system. It stays on this machine only.',
+      rejected: 'The cloud refused this save. It stays on this machine only.',
     },
+    errFile: 'File: {{file}}',
   },
   filePicker: {
     start: 'Drives and home folder',

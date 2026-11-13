@@ -75,6 +75,7 @@ const OFF: SyncStatus = {
   savesEnabled: true,
   conflicts: 0,
   lastError: null,
+  lastErrorFile: null,
 }
 const ON: SyncStatus = {
   ...OFF,
@@ -407,6 +408,20 @@ describe('SettingsSync', () => {
     await act(async () => host.querySelector<HTMLInputElement>('[role="switch"]')!.click())
     await settle()
     expect(host.textContent).toContain('Sem conexão')
+  })
+
+  it('a save the cloud refused is named under its message', async () => {
+    api.syncStatus.mockResolvedValue({ ...ON, lastError: 'too_large', lastErrorFile: 'Mario Kart 64.srm' })
+    await mount()
+    expect(host.textContent).toContain('Este save passa do tamanho que a nuvem aceita para o sistema dele.')
+    expect(host.textContent).toContain('Arquivo: Mario Kart 64.srm')
+    await unmount()
+    host.remove()
+
+    api.syncStatus.mockResolvedValue({ ...ON, lastError: 'rejected', lastErrorFile: 'Zelda.srm' })
+    await mount()
+    expect(host.textContent).toContain('A nuvem recusou este save.')
+    expect(host.textContent).toContain('Arquivo: Zelda.srm')
   })
 
   it('does not repeat the removed message when the banner is shown', async () => {

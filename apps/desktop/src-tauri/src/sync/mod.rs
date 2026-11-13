@@ -49,6 +49,10 @@ pub enum SyncError {
     Revoked,
     Paused,
     Quota,
+    /// 413: o save passa do limite que a nuvem aceita para a plataforma.
+    TooLarge,
+    /// 400 ou 422: a nuvem recusou o save (nome, campos ou conteúdo).
+    Rejected,
     Offline,
     Keyring,
     /// O nome do aparelho está fora de 1..=80 caracteres ou o servidor o recusou.
@@ -71,6 +75,8 @@ impl std::fmt::Display for SyncError {
             Self::Revoked => "revoked",
             Self::Paused => "paused",
             Self::Quota => "quota",
+            Self::TooLarge => "too_large",
+            Self::Rejected => "rejected",
             Self::Offline => "offline",
             Self::Keyring => "keyring",
             Self::InvalidLabel => "invalid_label",
@@ -92,6 +98,7 @@ impl From<ApiError> for SyncError {
             ApiError::TierInsufficient { .. } => Self::NoTier,
             ApiError::Paused => Self::Paused,
             ApiError::Quota => Self::Quota,
+            ApiError::TooLarge => Self::TooLarge,
             ApiError::Transient(_) => Self::Offline,
             other => failed(other.to_string()),
         }
@@ -115,6 +122,9 @@ struct Runtime {
     last_pass_at: Option<i64>,
     conflicts: u32,
     last_error: Option<String>,
+    /// O arquivo que a nuvem recusou, quando `last_error` é de um arquivo só
+    /// (`too_large`, `rejected`): a página diz qual.
+    last_error_file: Option<String>,
 }
 
 impl SyncService {
@@ -502,6 +512,12 @@ impl SyncService {
             last_pass_at: runtime.last_pass_at,
             conflicts: runtime.conflicts,
             last_error: runtime.last_error.clone(),
+            // Só junto do erro de um arquivo: outro erro depois dele não leva
+            // o nome de um arquivo que já não é o motivo.
+            last_error_file: match runtime.last_error.as_deref() {
+                Some("too_large" | "rejected") => runtime.last_error_file.clone(),
+                _ => None,
+            },
         })
     }
 
@@ -600,7 +616,7 @@ impl SyncService {
                 .map_err(failed)?,
             Err(e) => {
                 let e = match e {
-                    ApiError::Rejected(_) => SyncError::InvalidLabel,
+                    ApiError::Rejected(_) | ApiError::Invalid(_) => SyncError::InvalidLabel,
                     other => SyncError::from(other),
                 };
                 if e == SyncError::Revoked {
@@ -764,13 +780,14 @@ async fn forget_now(
 }
 
 /// Qual erro a tela mostra quando vários passos falham: revoked > paused >
-/// quota > offline > o resto.
+/// quota > offline > um arquivo recusado (a tela diz qual) > o resto.
 fn severity(e: &SyncError) -> u8 {
     match e {
-        SyncError::Revoked => 5,
-        SyncError::Paused => 4,
-        SyncError::Quota => 3,
-        SyncError::Offline => 2,
+        SyncError::Revoked => 6,
+        SyncError::Paused => 5,
+        SyncError::Quota => 4,
+        SyncError::Offline => 3,
+        SyncError::TooLarge | SyncError::Rejected => 2,
         _ => 1,
     }
 }
@@ -825,6 +842,8 @@ pub struct SyncStatus {
     pub conflicts: u32,
     /// O código de i18n do último erro.
     pub last_error: Option<String>,
+    /// O nome do arquivo que a nuvem recusou, com `too_large` ou `rejected`.
+    pub last_error_file: Option<String>,
 }
 
 /// A cota como a tela a recebe (o servidor manda em snake_case: `api::Quota`).
@@ -1243,10 +1262,11 @@ mod tests {
         let r = rig().await;
         mount_mint(
             &r.server,
+            // O corpo da porta do plano, como `writeSaveDenial` o monta.
             ResponseTemplate::new(402).set_body_json(serde_json::json!({
-                "error": {"code": "tier_insufficient", "current_tier": "free",
-                          "upgrade_to": "collector", "required_quota": "saves",
-                          "required_value": 1}
+                "error": {"code": "tier_insufficient", "current_tier": "gamer",
+                          "required_quota": "save_sync_enabled", "required_value": true,
+                          "upgrade_to": "collector"}
             })),
             1,
         )
@@ -2320,6 +2340,8 @@ mod tests {
             (SyncError::Revoked, "revoked"),
             (SyncError::Paused, "paused"),
             (SyncError::Quota, "quota"),
+            (SyncError::TooLarge, "too_large"),
+            (SyncError::Rejected, "rejected"),
             (SyncError::Offline, "offline"),
             (SyncError::Keyring, "keyring"),
             (SyncError::InvalidLabel, "invalid_label"),
@@ -2331,6 +2353,7 @@ mod tests {
             assert_eq!(err.to_string(), code);
         }
         assert_eq!(SyncError::from(ApiError::Unauthorized), SyncError::Revoked);
+        assert_eq!(SyncError::from(ApiError::TooLarge), SyncError::TooLarge);
         assert_eq!(
             SyncError::from(ApiError::Transient("x".into())),
             SyncError::Offline
