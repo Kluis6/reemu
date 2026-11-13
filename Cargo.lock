@@ -406,7 +406,7 @@ dependencies = [
  "domain",
  "log",
  "ringbuf",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -999,7 +999,7 @@ dependencies = [
  "naga",
  "rustix 1.1.6",
  "sevenz-rust2",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
  "tokio",
  "windows-sys 0.61.2",
  "zip 9.3.0",
@@ -1217,7 +1217,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sqlx",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
  "tokio",
 ]
 
@@ -1467,7 +1467,7 @@ dependencies = [
  "async-trait",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -1557,7 +1557,7 @@ dependencies = [
  "input-desktop",
  "log",
  "rustix 1.1.6",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -2749,7 +2749,7 @@ dependencies = [
  "gilrs",
  "log",
  "sdl3-sys",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -3110,7 +3110,7 @@ dependencies = [
  "md-5",
  "sevenz-rust2",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
  "tokio",
  "uuid",
  "walkdir",
@@ -4790,7 +4790,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-log",
  "tauri-plugin-updater",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
  "tokio",
  "ts-rs",
  "url",
@@ -5553,7 +5553,7 @@ dependencies = [
  "log",
  "naga",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
