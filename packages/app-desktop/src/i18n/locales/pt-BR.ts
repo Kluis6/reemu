@@ -453,6 +453,7 @@ const ptBR = {
     unknownUser: 'Conta do Alvanista',
   },
   sync: {
+    explain: "Conecte sua conta do Alvanista para guardar os saves desta máquina na sua conta.",
     thisMachine: 'Esta máquina',
     toggle: 'Sincronizar esta máquina',
     toggleHint: 'Liga esta máquina à sua conta do Alvanista.',

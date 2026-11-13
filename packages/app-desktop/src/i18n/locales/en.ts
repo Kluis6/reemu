@@ -452,6 +452,7 @@ const en: Messages = {
     unknownUser: 'Alvanista account',
   },
   sync: {
+    explain: "Connect your Alvanista account to keep this machine's saves in your account.",
     thisMachine: 'This machine',
     toggle: 'Sync this machine',
     toggleHint: 'Links this machine to your Alvanista account.',

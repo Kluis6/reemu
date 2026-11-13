@@ -131,6 +131,8 @@ export function SettingsSync() {
   const label = st?.label ?? ''
   const draft = edited ?? label
   const commitLabel = () => {
+    // Outra ação em curso: o texto digitado fica até poder ser enviado.
+    if (busy !== null || edited === null) return
     const next = draft.trim()
     setEdited(null)
     if (next === label || next.length === 0 || next.length > LABEL_MAX) return
@@ -148,10 +150,11 @@ export function SettingsSync() {
     return <LoadingState />
   }
 
-  const offline = st.lastError === 'offline' || query.isError || machines.isError
+  const offline = st.lastError === 'offline' || error === 'offline' || query.isError || machines.isError
   const openSite = (page: 'sync' | 'plans') => void alvanistaOpenSite(page).catch(() => {})
   const failed = error ?? (st.lastError && (SYNC_ERRORS as readonly string[]).includes(st.lastError) ? syncErrorCode(st.lastError) : null)
-  const showError = failed && failed !== 'offline' ? failed : null
+  // O banner de revogada já diz o mesmo.
+  const showError = failed && failed !== 'offline' && !(failed === 'revoked' && st.revoked) ? failed : null
 
   if (st.availability === 'no_account') {
     return (
@@ -171,7 +174,7 @@ export function SettingsSync() {
           ) : (
             <>
               <AlvanistaButton onClick={connect} />
-              <Caption1>{t('alvanista.explain')}</Caption1>
+              <Caption1>{t('sync.explain')}</Caption1>
             </>
           )}
           {outcome && (
@@ -237,6 +240,7 @@ export function SettingsSync() {
           label={t('sync.toggle')}
           description={t('sync.toggleHint')}
           checked={st.enabled}
+          disabled={working}
           onChange={(on) => {
             if (!working) void setEnabled(on)
           }}
@@ -271,7 +275,9 @@ export function SettingsSync() {
                   }}
                 />
               </Field>
-              <Caption1 className={s.muted}>{hardwareLine(st.hardware, lang)}</Caption1>
+              {hardwareLine(st.hardware, lang) !== '' && (
+                <Caption1 className={s.muted}>{hardwareLine(st.hardware, lang)}</Caption1>
+              )}
               <Caption1 className={s.muted}>{t('sync.hardwareNote')}</Caption1>
             </FieldBlock>
             {quota && (
@@ -287,7 +293,7 @@ export function SettingsSync() {
                       {machines.data ? ` · ${t('sync.machineCount', { count: list.length })}` : ''}
                     </Caption1>
                   </div>
-                  <ProgressBar value={quota.limitBytes > 0 ? used / quota.limitBytes : 0} />
+                  <ProgressBar aria-label={t('sync.space')} value={quota.limitBytes > 0 ? used / quota.limitBytes : 0} />
                 </div>
               </FieldBlock>
             )}

@@ -1,10 +1,22 @@
 import type { HardwarePayload } from '../../lib/tauri'
 
-/** Cor estável do avatar de uma máquina: o matiz sai do hash do id. */
+/** Oito matizes bem separados, todos escuros o bastante para o texto branco. */
+export const MACHINE_COLORS = [
+  'hsl(262 45% 42%)',
+  'hsl(205 60% 34%)',
+  'hsl(165 55% 28%)',
+  'hsl(95 45% 30%)',
+  'hsl(38 70% 34%)',
+  'hsl(12 60% 40%)',
+  'hsl(335 50% 40%)',
+  'hsl(230 45% 45%)',
+] as const
+
+/** Cor estável do avatar de uma máquina: o hash do id escolhe da paleta. */
 export function machineColor(id: string): string {
   let h = 0
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0
-  return `hsl(${h % 360} 45% 38%)`
+  return MACHINE_COLORS[h % MACHINE_COLORS.length]
 }
 
 /** Ex.: "Windows 11 · Ryzen 7 5800X · 32 GB · RTX 3070 · Vulkan". Campo vazio some. */

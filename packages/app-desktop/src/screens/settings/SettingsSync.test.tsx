@@ -27,6 +27,8 @@ vi.mock('../../lib/tauri', async (orig) => ({
 import { SettingsSync } from './SettingsSync'
 import { hardwareLine, machineColor } from './syncFormat'
 
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled])'
+
 const HW: HardwarePayload = {
   os: 'Windows 11',
   arch: 'x86_64',
@@ -236,6 +238,87 @@ describe('SettingsSync', () => {
     expect(host.textContent).toContain('O espaço da sua conta acabou')
   })
 
+  it('first focusable element is the toggle', async () => {
+    await mount()
+    expect(host.querySelector<HTMLElement>(FOCUSABLE)!.getAttribute('role')).toBe('switch')
+  })
+
+  it('first focusable element is "Ligar de novo" when revoked', async () => {
+    api.syncStatus.mockResolvedValue({ ...OFF, revoked: true })
+    await mount()
+    expect(host.querySelector<HTMLElement>(FOCUSABLE)!.textContent).toContain('Ligar de novo')
+  })
+
+  it('a failed mutation with offline shows the badge', async () => {
+    api.syncSetEnabled.mockRejectedValue('offline')
+    await mount()
+    expect(host.textContent).not.toContain('Sem conexão')
+    await act(async () => host.querySelector<HTMLInputElement>('[role="switch"]')!.click())
+    await settle()
+    expect(host.textContent).toContain('Sem conexão')
+  })
+
+  it('does not repeat the removed message when the banner is shown', async () => {
+    api.syncStatus.mockResolvedValue({ ...OFF, revoked: true, lastError: 'revoked' })
+    await mount()
+    expect(host.textContent!.split('Esta máquina foi removida no site.').length - 1).toBe(1)
+  })
+
+  it('no account: connects through Alvanista and explains with sync.explain', async () => {
+    api.syncStatus.mockResolvedValue({ ...OFF, availability: 'no_account' })
+    api.alvanistaConnect.mockReturnValue(new Promise(() => {}))
+    await mount()
+    expect(host.textContent).toContain('guardar os saves desta máquina')
+    await act(async () => byText('Entrar com Alvanista')!.click())
+    expect(api.alvanistaConnect).toHaveBeenCalledTimes(1)
+  })
+
+  it('Pausar and Retomar call syncSetPaused with the opposite of pausedLocal', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSetPaused.mockResolvedValueOnce({ ...ON, pausedLocal: true }).mockResolvedValueOnce(ON)
+    await mount()
+    await act(async () => byText('Pausar')!.click())
+    await settle()
+    expect(api.syncSetPaused).toHaveBeenLastCalledWith(true)
+    await act(async () => byText('Retomar')!.click())
+    await settle()
+    expect(api.syncSetPaused).toHaveBeenLastCalledWith(false)
+  })
+
+  it('Sincronizar agora calls syncNow', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncNow.mockResolvedValue(ON)
+    await mount()
+    await act(async () => byText('Sincronizar agora')!.click())
+    await settle()
+    expect(api.syncNow).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a typed name while another action runs and sends it afterwards', async () => {
+    let finish!: (s: SyncStatus) => void
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncNow.mockReturnValue(new Promise<SyncStatus>((r) => (finish = r)))
+    api.syncSetLabel.mockResolvedValue({ ...ON, label: 'PC-ED' })
+    await mount()
+    await act(async () => byText('Sincronizar agora')!.click())
+    const input = host.querySelector<HTMLInputElement>('input:not([role="switch"])')!
+    await act(async () => typeInto(input, 'PC-ED'))
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+    expect(api.syncSetLabel).not.toHaveBeenCalled()
+    expect(host.querySelector<HTMLInputElement>('input:not([role="switch"])')!.value).toBe('PC-ED')
+    await act(async () => finish(ON))
+    await settle()
+    await act(async () => {
+      host.querySelector<HTMLInputElement>('input:not([role="switch"])')!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      )
+    })
+    await settle()
+    expect(api.syncSetLabel).toHaveBeenCalledWith('PC-ED')
+  })
+
   it('opens the site page for pause, revoke and erase', async () => {
     await mount()
     await act(async () => byText('alvanista.com/sync')!.click())
@@ -253,5 +336,6 @@ describe('helpers', () => {
   it('gives each id a stable colour', () => {
     expect(machineColor('dev1')).toBe(machineColor('dev1'))
     expect(machineColor('dev1')).not.toBe(machineColor('dev2'))
+    expect(new Set(['d1', 'd2', 'd3'].map(machineColor)).size).toBeGreaterThanOrEqual(2)
   })
 })

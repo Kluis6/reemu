@@ -106,7 +106,9 @@ const useStyles = makeStyles({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
-    gap: tokens.spacingHorizontalXL,
+    gap: tokens.spacingHorizontalL,
+    // o texto fica longe do ícone (64 px, absoluto à direita)
+    paddingRight: `calc(64px + ${tokens.spacingHorizontalXXL} + ${tokens.spacingHorizontalM})`,
   },
   // Ícone à DIREITA e maior (pedido do usuário: o dobro, era 40/32, e
   // depois um pouco menor — 64/52),
@@ -231,7 +233,7 @@ export function SettingsHome() {
               className={mergeClasses(s.card, s.profile)}
               style={delay}
             >
-              {profile && <ProfileAvatar profile={profile} size={96} tier={profile.tierColors} />}
+              {profile && <ProfileAvatar profile={profile} size={64} tier={profile.tierColors} />}
               {/* ícone da pessoa à direita, como nos outros cards (pedido do
                   usuário); sem perfil carregado é o único ícone do card */}
               <Icon className={s.icon} />
