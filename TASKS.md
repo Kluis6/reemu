@@ -117,10 +117,12 @@ o card atual fica.
       2026-11-12 já corrigiu `quinn-proto`, `ringbuf`, `rustls-webpki`, `webpki-roots`,
       `rustix` e `tokio`.
 - [ ] `todo` — **Majors do Dependabot adiados** (2026-11-13): `sqlx` 0.9 (PR #23 fechado; não
-      solta o `libsqlite3-sys` 0.39 e muda a API) e TypeScript 7 (PR #18 fechado; rodada
-      própria de teste com o `tsc -b` e o Fluent). Em aberto para avaliar: `i18next` 27 +
-      `react-i18next` 18 (#20, #21, juntos), `@vitejs/plugin-react` 6 (#19), `motion` 14 no
-      site (#16), `pollster` 1 (#25), `rand` 0.10 (#24), `thiserror` 2 (#26).
+      solta o `libsqlite3-sys` 0.39 e muda a API), TypeScript 7 (PR #18 fechado; rodada
+      própria de teste com o `tsc -b` e o Fluent) e `@vitejs/plugin-react` 6 (mesclado no
+      #19 e revertido para a 5: exige o Vite 8; trocar os dois juntos). Mesclados em
+      2026-11-13 e conferidos (tsc, vitest, build do app e do site, 432 testes Rust):
+      `i18next` 27, `react-i18next` 18, `motion` 14, `pollster` 1, `thiserror` 2, `@types/node`
+      26 e `rand` 0.10 (o `OsRng` virou `SysRng` em `alvanista/pkce.rs`).
 
 - [ ] `todo` — **Stella trava no Windows na fumaça do catálogo**
       (2026-10-14): desde 2026-09-28 o `catalog-smoke.yml` falha toda

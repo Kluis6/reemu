@@ -2,8 +2,8 @@
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use rand::rngs::OsRng;
-use rand::RngCore;
+use rand::rngs::SysRng;
+use rand::TryRng;
 use sha2::{Digest, Sha256};
 
 pub struct Pkce {
@@ -17,7 +17,12 @@ pub struct Pkce {
 /// `n` bytes do gerador do SO, em base64url sem padding.
 pub fn random_token(n: usize) -> String {
     let mut buf = vec![0u8; n];
-    OsRng.fill_bytes(&mut buf);
+    // rand 0.10: o `OsRng` virou `SysRng` (getrandom), que pode falhar. Sem
+    // gerador do SO não há token seguro; o `OsRng` da 0.8 também entrava em
+    // pânico nesse caso.
+    SysRng
+        .try_fill_bytes(&mut buf)
+        .expect("gerador de números aleatórios do sistema indisponível");
     URL_SAFE_NO_PAD.encode(buf)
 }
 
