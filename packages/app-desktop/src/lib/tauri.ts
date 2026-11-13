@@ -587,8 +587,9 @@ export const alvanistaCancel = () => invoke<void>('alvanista_cancel')
 export const alvanistaDisconnect = () => invoke<void>('alvanista_disconnect')
 /** Abre o perfil do Alvanista no navegador do sistema. */
 export const alvanistaOpenProfile = () => invoke<void>('alvanista_open_profile')
-/** Abre "editar perfil" ou "apps conectados" no site do Alvanista. */
-export const alvanistaOpenSite = (page: 'edit' | 'apps') => invoke<void>('alvanista_open_site', { page })
+/** Abre uma página do site do Alvanista: editar perfil, apps conectados, os
+ *  aparelhos do sync ou os planos. */
+export const alvanistaOpenSite = (page: 'edit' | 'apps' | 'sync' | 'plans') => invoke<void>('alvanista_open_site', { page })
 /** Resultado da renovação que o app faz sozinho ao abrir (evento do Rust). */
 export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Promise<() => void> {
   if (!inTauri) return () => {}

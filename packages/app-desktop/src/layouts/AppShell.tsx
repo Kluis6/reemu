@@ -41,6 +41,7 @@ import { useFocusMemory } from "../hooks/useFocusMemory";
 import { useNavHints } from "../hooks/useNavHints";
 import { useShaderFailures } from "../hooks/useShaderFailures";
 import { useAlvanistaStatusEvents, useEffectiveProfile } from "../hooks/useEffectiveProfile";
+import { useSyncEvents } from "../hooks/useSync";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useUpdateCheck } from "../hooks/useUpdateCheck";
 import { listPendingMatches } from "../lib/tauri";
@@ -139,6 +140,7 @@ export function AppShell() {
   // perfil local fica guardado e volta ao desconectar.
   const profile = useEffectiveProfile();
   useAlvanistaStatusEvents();
+  useSyncEvents();
   const search = useSearchStore();
   const searchRef = useRef<HTMLInputElement>(null);
   // Rolagem por wheel é NATIVA (o WebKitGTK já entrega inércia/suavidade

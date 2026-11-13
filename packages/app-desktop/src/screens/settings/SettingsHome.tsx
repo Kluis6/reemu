@@ -24,8 +24,7 @@ const cardIn = {
 };
 
 const useStyles = makeStyles({
-  // Bento: 11 categorias, Perfil ocupando 2 colunas = 12 células, que fecham
-  // 3×4, 4×3 ou 6×2 sem buraco. As linhas dividem a altura útil (`1fr`),
+  // 12 categorias, uma célula cada, que fecham 3×4, 4×3 ou 6×2 sem buraco. As linhas dividem a altura útil (`1fr`),
   // então tudo cabe sem rolar. As colunas seguem a PROPORÇÃO da janela, não a
   // largura: com o zoom da interface (`uiScale.ts`) a tela lógica continua
   // 16:9 e só encolhe (Maior = 1051×591), e aí 4 colunas × 3 linhas é o que
@@ -104,7 +103,6 @@ const useStyles = makeStyles({
     },
   },
   profile: {
-    gridColumn: "span 2",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",

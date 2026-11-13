@@ -643,12 +643,14 @@ fn site_page_url(page: &str) -> Option<String> {
     let path = match page {
         "edit" => "/settings/profile",
         "apps" => "/settings/apps",
+        "sync" => "/sync",
+        "plans" => "/plans",
         _ => return None,
     };
     Some(format!("{}{path}", config::base_urls().0))
 }
 
-/// Abre "editar perfil" ou "apps conectados" no navegador do sistema.
+/// Abre uma página do site (perfil, apps, sync, planos) no navegador do sistema.
 #[tauri::command]
 pub async fn alvanista_open_site(page: String) -> Result<(), String> {
     let url = site_page_url(&page).ok_or_else(|| "failed".to_owned())?;
@@ -1260,7 +1262,7 @@ mod tests {
 
     #[test]
     fn open_site_refuses_unknown_pages() {
-        for page in ["edit", "apps"] {
+        for page in ["edit", "apps", "sync", "plans"] {
             assert!(is_site_url(&site_page_url(page).unwrap()), "{page}");
         }
         for bad in ["", "EDIT", "../admin", "https://evil.example/"] {
