@@ -97,6 +97,21 @@ impl SyncRepo {
         Ok(())
     }
 
+    /// Esquece a base e os conflitos inteiros (outra conta nesta máquina),
+    /// numa transação: nunca sobra conflito sem a base de que ele fala.
+    pub async fn clear_all(&self) -> Result<(), RepoError> {
+        let mut tx = self.db.begin().await.map_err(be)?;
+        sqlx::query("DELETE FROM sync_conflicts")
+            .execute(&mut *tx)
+            .await
+            .map_err(be)?;
+        sqlx::query("DELETE FROM sync_base")
+            .execute(&mut *tx)
+            .await
+            .map_err(be)?;
+        tx.commit().await.map_err(be)
+    }
+
     pub async fn base_delete(&self, key: &str) -> Result<(), RepoError> {
         sqlx::query("DELETE FROM sync_base WHERE key = ?1")
             .bind(key)

@@ -68,6 +68,18 @@ describe('useSyncEvents toast', () => {
     ])
   })
 
+  it('a launch that could not check the cloud says so; other launches stay silent (M4)', async () => {
+    await act(async () => emit({ type: 'prelaunch', outcome: 'skipped', reason: 'timeout' }))
+    await act(async () => emit({ type: 'prelaunch', outcome: 'skipped', reason: 'offline' }))
+    await act(async () => emit({ type: 'prelaunch', outcome: 'skipped', reason: 'saves_off' }))
+    await act(async () => emit({ type: 'prelaunch', outcome: 'skipped', reason: 'no_account' }))
+    await act(async () => emit({ type: 'prelaunch', outcome: 'downloaded', reason: null }))
+    await act(async () => emit({ type: 'prelaunch', outcome: 'up_to_date', reason: null }))
+    const cloud = 'Não deu para conferir a nuvem a tempo. O jogo abriu com o save desta máquina.'
+    expect(messages()).toEqual([cloud, cloud])
+    expect(useToastStore.getState().queue.every((t) => t.variant === 'Warning')).toBe(true)
+  })
+
   it('a pass that only downloaded, or did nothing, stays silent', async () => {
     await act(async () => emit({ type: 'pass', uploaded: 0, downloaded: 2, backedUp: 0 }))
     await act(async () => emit({ type: 'pass', uploaded: 0, downloaded: 0, backedUp: 0 }))

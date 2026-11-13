@@ -95,6 +95,24 @@ async fn base_mark_wiped_sets_the_column() {
 }
 
 #[tokio::test]
+async fn clear_all_empties_base_and_conflicts() {
+    let repo = SyncRepo::new(mem_db().await);
+    repo.base_put(&base("file:nes/a.srm", "file"))
+        .await
+        .unwrap();
+    repo.base_put(&base("state:nes/core/a.state", "state"))
+        .await
+        .unwrap();
+    repo.conflict_put(&conflict("file:nes/a.srm", None))
+        .await
+        .unwrap();
+    repo.clear_all().await.unwrap();
+    assert!(repo.base_all("file").await.unwrap().is_empty());
+    assert!(repo.base_all("state").await.unwrap().is_empty());
+    assert!(repo.conflicts_all().await.unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn conflicts_round_trip_and_filter_by_rom() {
     let repo = SyncRepo::new(mem_db().await);
     repo.conflict_put(&conflict("file:nes/a.srm", Some("rom1")))

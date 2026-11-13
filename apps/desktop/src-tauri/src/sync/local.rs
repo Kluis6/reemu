@@ -96,6 +96,28 @@ fn io_err(path: &Path, e: &io::Error) -> String {
     format!("{}: {e}", path.display())
 }
 
+/// Um rótulo curto e estável para o log no lugar do nome de um save ou de
+/// uma chave (NFR-4: o log, que vai para o diagnóstico, nunca leva o nome de
+/// uma ROM): os 8 primeiros hex do SHA-256 do texto.
+pub fn log_tag(name: &str) -> String {
+    let hex: String = Sha256::digest(name.as_bytes())
+        .iter()
+        .take(4)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("#{hex}")
+}
+
+/// Erro de um arquivo de save: a pasta e o rótulo do nome, nunca o nome.
+fn file_err(path: &Path, e: &io::Error) -> String {
+    let dir = path.parent().unwrap_or(Path::new(""));
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy())
+        .unwrap_or_default();
+    format!("{} {}: {e}", dir.display(), log_tag(&name))
+}
+
 /// Arquivos regulares de `dir` cujo nome passa em `accept`, em ordem de nome.
 /// Pasta inexistente é lista vazia; qualquer outro erro é erro.
 fn system_files(
@@ -112,7 +134,7 @@ fn system_files(
     let mut found = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|e| io_err(dir, &e))?;
-        let is_file = entry.file_type().map_err(|e| io_err(&entry.path(), &e))?;
+        let is_file = entry.file_type().map_err(|e| file_err(&entry.path(), &e))?;
         if !is_file.is_file() {
             continue;
         }
@@ -341,13 +363,13 @@ fn file_names(dir: &Path) -> Result<HashSet<String>, String> {
     let mut names = HashSet::new();
     for entry in entries {
         let entry = entry.map_err(|e| io_err(dir, &e))?;
-        let kind = entry.file_type().map_err(|e| io_err(&entry.path(), &e))?;
+        let kind = entry.file_type().map_err(|e| file_err(&entry.path(), &e))?;
         let regular = if kind.is_symlink() {
             // Um link vale pelo que ele aponta, como no `metadata` de um caminho.
             match std::fs::metadata(entry.path()) {
                 Ok(m) => m.is_file(),
                 Err(e) if e.kind() == io::ErrorKind::NotFound => false,
-                Err(e) => return Err(io_err(&entry.path(), &e)),
+                Err(e) => return Err(file_err(&entry.path(), &e)),
             }
         } else {
             kind.is_file()
@@ -367,7 +389,7 @@ fn is_file_at(path: &Path) -> Result<bool, String> {
     match std::fs::metadata(path) {
         Ok(m) => Ok(m.is_file()),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(io_err(path, &e)),
+        Err(e) => Err(file_err(path, &e)),
     }
 }
 

@@ -20,7 +20,9 @@
 
 use super::api::{ApiError, FileFilter, RemoteDevice, RemoteFile, RemoteVersion, UploadMeta};
 use super::device::{default_label, rfc3339, Device};
-use super::local::{self, account_saves, parse_key, rom_saves, sha256_file, LocalSaves, SaveFile};
+use super::local::{
+    self, account_saves, log_tag, parse_key, rom_saves, sha256_file, LocalSaves, SaveFile,
+};
 use super::platform::platform_for_system;
 use super::reconcile::{decide, Action, Kind, Local, Remote};
 use super::{failed, severity, SyncError, SyncEvent, SyncService, SYNC_EVENT};
@@ -67,6 +69,23 @@ pub enum PrelaunchOutcome {
     Conflict,
     /// O jogo abre com o save local; o texto é o código do motivo.
     Skipped(String),
+}
+
+impl PrelaunchOutcome {
+    /// O aviso para a tela (D117: sem a nuvem a tempo, um toast diz que ela
+    /// não pôde ser conferida).
+    fn event(&self) -> SyncEvent {
+        let (outcome, reason) = match self {
+            Self::UpToDate => ("up_to_date", None),
+            Self::Downloaded => ("downloaded", None),
+            Self::Conflict => ("conflict", None),
+            Self::Skipped(reason) => ("skipped", Some(reason.clone())),
+        };
+        SyncEvent::Prelaunch {
+            outcome: outcome.into(),
+            reason,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -327,7 +346,7 @@ impl Engine {
             self.finish(&result, Mode::BeforeLaunch).await;
             result
         };
-        match tokio::time::timeout(self.prelaunch_budget, work).await {
+        let outcome = match tokio::time::timeout(self.prelaunch_budget, work).await {
             Err(_) => PrelaunchOutcome::Skipped("timeout".into()),
             Ok(Err(e)) => PrelaunchOutcome::Skipped(e.to_string()),
             Ok(Ok(r)) if r.conflicts > 0 => PrelaunchOutcome::Conflict,
@@ -336,7 +355,9 @@ impl Engine {
                 Some(e) => PrelaunchOutcome::Skipped(e.to_string()),
                 None => PrelaunchOutcome::UpToDate,
             },
-        }
+        };
+        self.emit(outcome.event());
+        outcome
     }
 
     /// A linha de save existe: aparelho guardado, sync ligado, não revogado e
@@ -375,7 +396,34 @@ impl Engine {
         if devices.paused().await.map_err(failed)? {
             return Err(SyncError::Paused);
         }
+        self.own_account(alva).await?;
         Ok(device)
+    }
+
+    /// A base e os conflitos são da conta que os gravou (M1). Outra conta
+    /// nesta máquina não herda o "já sincronizado" da anterior: a base e os
+    /// conflitos saem, e o primeiro sync dela segue a regra de duas máquinas
+    /// configuradas à parte (bytes diferentes viram conflito, nada desce por
+    /// cima). Só o SQLite.
+    async fn own_account(&self, alva: &Alvanista) -> Result<(), SyncError> {
+        let devices = &self.sync.devices;
+        let owner = devices.base_account().await.map_err(failed)?;
+        let Some(current) = alva.account_id().await else {
+            // Sem o perfil não se sabe de quem é a conta: uma base que é de
+            // alguém não serve até o `/me` responder.
+            return match owner {
+                Some(_) => Err(SyncError::Offline),
+                None => Ok(()),
+            };
+        };
+        if owner.as_deref() == Some(current.as_str()) {
+            return Ok(());
+        }
+        if owner.is_some() {
+            log::info!("sync: outra conta nesta máquina; a base e os conflitos da anterior saem");
+            self.repo.clear_all().await.map_err(repo_err)?;
+        }
+        devices.set_base_account(&current).await.map_err(failed)
     }
 
     async fn run(
@@ -459,12 +507,8 @@ impl Engine {
 
     /// O que a página lê depois de uma passada, e os avisos para ela.
     async fn finish(&self, result: &Result<PassReport, SyncError>, mode: Mode) {
-        let conflicts = self.repo.conflicts_all().await.map(|c| c.len() as u32);
         {
             let mut rt = self.sync.runtime();
-            if let Ok(n) = conflicts {
-                rt.conflicts = n;
-            }
             if mode == Mode::Pass {
                 match result {
                     Ok(report) => {
@@ -815,10 +859,9 @@ impl Engine {
             Err(err) if err.kind() == io::ErrorKind::NotFound => None,
             Err(err) => {
                 // Arquivo que não se lê não é arquivo ausente: nada desce por cima.
-                report.errors.push((
-                    key.clone(),
-                    failed(format!("{}: {err}", e.file.path.display())),
-                ));
+                report
+                    .errors
+                    .push((key.clone(), failed(format!("{}: {err}", log_tag(key)))));
                 return Ok(());
             }
         };
@@ -939,7 +982,7 @@ impl Engine {
         row: Option<&RemoteFile>,
     ) -> Result<Done, Fail> {
         let bytes = std::fs::read(&file.path)
-            .map_err(|err| Fail::File(failed(format!("{}: {err}", file.path.display()))))?;
+            .map_err(|err| Fail::File(failed(format!("{}: {err}", log_tag(&file.key)))))?;
         // Arquivo vazio é "sem save": nunca sobe.
         if bytes.is_empty() {
             return Ok(Done::Deferred);
@@ -984,7 +1027,7 @@ impl Engine {
         };
         lock(&self.rejected).remove(&file.key);
         if up.deduplicated {
-            log::debug!("sync: {} já estava na nuvem", file.key);
+            log::debug!("sync: {} já estava na nuvem", log_tag(&file.key));
         }
         self.put_base(file, &hash, &up.save_id, &up.version_id, &hash)
             .await
@@ -1037,13 +1080,13 @@ impl Engine {
         if bytes.is_empty() {
             return Err(Fail::File(failed(format!(
                 "{}: a nuvem mandou um arquivo vazio",
-                file.key
+                log_tag(&file.key)
             ))));
         }
         if !sha256_hex(bytes).eq_ignore_ascii_case(expected) {
             return Err(Fail::File(failed(format!(
                 "{}: os bytes não batem com o hash da nuvem",
-                file.key
+                log_tag(&file.key)
             ))));
         }
         // De novo, logo antes de escrever: o jogo pode ter aberto no meio.
@@ -1051,7 +1094,7 @@ impl Engine {
             return Ok(false);
         }
         let io_fail = |what: &str, err: io::Error| {
-            Fail::File(failed(format!("{what} {}: {err}", file.path.display())))
+            Fail::File(failed(format!("{what} {}: {err}", log_tag(&file.key))))
         };
         if present(&file.path).map_err(|err| io_fail("lendo", err))? {
             self.backup(&file.path)
@@ -1085,7 +1128,7 @@ impl Engine {
 
     /// Muda o arquivo (se existir) para a pasta de backup; devolve para onde.
     fn clear_away(&self, file: &SaveFile) -> Result<Option<PathBuf>, SyncError> {
-        let fail = |err: io::Error| failed(format!("backup de {}: {err}", file.path.display()));
+        let fail = |err: io::Error| failed(format!("backup de {}: {err}", log_tag(&file.key)));
         if present(&file.path).map_err(fail)? {
             return self.move_to_backup(&file.path).map(Some).map_err(fail);
         }
@@ -1291,7 +1334,7 @@ impl Engine {
             .map_err(repo_err)?
             .into_iter()
             .find(|c| c.key == key)
-            .ok_or_else(|| failed(format!("{key}: sem conflito aberto")))?;
+            .ok_or_else(|| failed(format!("{}: sem conflito aberto", log_tag(key))))?;
         let token = self.token()?;
         let file = self.file_for(key).await?;
         let files = self.list_file(alva, &token, &file).await?;
@@ -1303,11 +1346,11 @@ impl Engine {
         match keep {
             Keep::Local => {
                 if !self.may_upload(&file) {
-                    return Err(failed(format!("{key}: jogo aberto")));
+                    return Err(failed(format!("{}: jogo aberto", log_tag(key))));
                 }
                 match self.send(alva, &token, &file, row).await {
                     Ok(Done::Uploaded) => {}
-                    Ok(_) => return Err(failed(format!("{key}: nada para enviar"))),
+                    Ok(_) => return Err(failed(format!("{}: nada para enviar", log_tag(key)))),
                     Err(f) => return Err(fail_error(f)),
                 }
             }
@@ -1330,7 +1373,7 @@ impl Engine {
         conflict: &ConflictRow,
     ) -> Result<(), SyncError> {
         if !self.may_write(Mode::Pass) {
-            return Err(failed(format!("{}: jogo aberto", file.key)));
+            return Err(failed(format!("{}: jogo aberto", log_tag(&file.key))));
         }
         let live = row.filter(|r| r.deleted_at.is_none());
         let Some((row, current)) = live.and_then(|r| r.current.as_ref().map(|c| (r, c))) else {
@@ -1366,7 +1409,7 @@ impl Engine {
             .place(file, &bytes, &hash, Mode::Pass)
             .map_err(fail_error)?
         {
-            return Err(failed(format!("{}: jogo aberto", file.key)));
+            return Err(failed(format!("{}: jogo aberto", log_tag(&file.key))));
         }
         self.put_base(file, &hash, &row.save_id, &version_id, &hash)
             .await
@@ -1387,12 +1430,12 @@ impl Engine {
         let token = self.token()?;
         let file = self.file_for(key).await?;
         if !self.may_write(Mode::Pass) || !self.may_upload(&file) {
-            return Err(failed(format!("{key}: jogo aberto")));
+            return Err(failed(format!("{}: jogo aberto", log_tag(key))));
         }
         let files = self.list_file(alva, &token, &file).await?;
         let row = pick(&by_name(&files), &file)
             .cloned()
-            .ok_or_else(|| failed(format!("{key}: sem linha na nuvem")))?;
+            .ok_or_else(|| failed(format!("{}: sem linha na nuvem", log_tag(key))))?;
         let versions = match self.sync.api.versions(&token, &row.save_id).await {
             Ok(v) => v,
             Err(err) => return Err(fail_error(self.file_error(alva, err, false).await)),
@@ -1400,9 +1443,9 @@ impl Engine {
         let version = versions
             .iter()
             .find(|v| v.version_id == version_id)
-            .ok_or_else(|| failed(format!("{key}: versão {version_id} não existe")))?;
+            .ok_or_else(|| failed(format!("{}: versão {version_id} não existe", log_tag(key))))?;
         if version.size_bytes <= 0 {
-            return Err(failed(format!("{key}: versão vazia")));
+            return Err(failed(format!("{}: versão vazia", log_tag(key))));
         }
         let bytes = match self
             .sync
@@ -1417,13 +1460,13 @@ impl Engine {
             .place(&file, &bytes, &version.content_hash, Mode::Pass)
             .map_err(fail_error)?
         {
-            return Err(failed(format!("{key}: jogo aberto")));
+            return Err(failed(format!("{}: jogo aberto", log_tag(key))));
         }
         // Sobe como a versão atual. Se o envio falhar, o arquivo daqui já é a
         // versão antiga e a base não andou: a próxima passada sobe de novo.
         match self.send(alva, &token, &file, Some(&row)).await {
             Ok(Done::Uploaded) => {}
-            Ok(_) => return Err(failed(format!("{key}: nada para enviar"))),
+            Ok(_) => return Err(failed(format!("{}: nada para enviar", log_tag(key)))),
             Err(f) => return Err(fail_error(f)),
         }
         if let Err(e) = self.repo.conflict_delete(key).await {
@@ -1570,7 +1613,7 @@ impl Engine {
                 Ok((hash, size, _)) if size > 0 => Some(hash),
                 Ok(_) => None,
                 Err(e) if e.kind() == io::ErrorKind::NotFound => None,
-                Err(e) => return Err(failed(format!("{}: {e}", f.path.display()))),
+                Err(e) => return Err(failed(format!("{}: {e}", log_tag(&f.key)))),
             };
             // A base marcada pela remoção aceita vale por ausente; sem arquivo
             // aqui, ela é o que a página diz.
@@ -1631,14 +1674,12 @@ impl Engine {
             .map_err(|e| failed(format!("saves locais: {e}")))?;
         library
             .slot_for_key(key)
-            .ok_or_else(|| failed(format!("{key}: arquivo fora da biblioteca")))
+            .ok_or_else(|| failed(format!("{}: arquivo fora da biblioteca", log_tag(key))))
     }
 
-    /// Depois de resolver ou restaurar: a contagem de conflitos e um aviso.
+    /// Depois de resolver ou restaurar: a página relê (a contagem de
+    /// conflitos vem do SQLite).
     async fn after_change(&self) {
-        if let Ok(rows) = self.repo.conflicts_all().await {
-            self.sync.runtime().conflicts = rows.len() as u32;
-        }
         self.emit(SyncEvent::Status);
     }
 }
@@ -1700,8 +1741,8 @@ fn rank(r: &RemoteFile) -> (bool, bool, (i64, u32), &str) {
 }
 
 /// A linha da nuvem de um arquivo (D113, D125): o mesmo nome (e, nos cartões
-/// e VMUs, a mesma pasta) na plataforma do ReEmu, senão em `other`; entre
-/// várias, a primeira de `rank`.
+/// e VMUs, a mesma pasta) na plataforma do ReEmu, senão em `other`, as vivas
+/// antes das apagadas; entre várias, a primeira de `rank`.
 fn pick<'a>(
     by_name: &HashMap<String, Vec<&'a RemoteFile>>,
     file: &SaveFile,
@@ -1720,13 +1761,19 @@ fn pick<'a>(
             }
         })
         .collect();
-    let on = |platform: &str| {
+    let on = |platform: &str, live: bool| {
         same.iter()
             .copied()
-            .filter(|r| r.platform == platform)
+            .filter(|r| r.platform == platform && r.deleted_at.is_none() == live)
             .max_by(|a, b| rank(a).cmp(&rank(b)))
     };
-    on(file.platform).or_else(|| on("other"))
+    // Uma linha viva, em qualquer das duas plataformas, vem antes de uma
+    // apagada: a remoção da linha do ReEmu não esconde a `other` que um
+    // RetroArch plano segue escrevendo.
+    on(file.platform, true)
+        .or_else(|| on("other", true))
+        .or_else(|| on(file.platform, false))
+        .or_else(|| on("other", false))
 }
 
 /// A linha como a regra de três lados a vê. O dono (`device_token_id` do
@@ -1925,6 +1972,18 @@ pub fn install(app: &AppHandle, sync: Arc<SyncService>, db: db::Db, dirs: Dirs) 
             log::warn!("sync: não avisou a interface: {e}");
         }
     });
+    // Ligar o sync (ou os game saves) roda uma passada já, sem esperar a de
+    // 10 minutos nem um jogo (M3).
+    let kicker = app.clone();
+    sync.on_enabled(Box::new(move || {
+        let app = kicker.clone();
+        tauri::async_runtime::spawn(async move {
+            let Some((engine, alva)) = parts(&app) else {
+                return;
+            };
+            log_pass("passada ao ligar", engine.pass(&alva, PassScope::All).await);
+        });
+    }));
     app.manage(Arc::new(Engine::new(sync, db, dirs, playing, emit)));
 }
 
@@ -2675,7 +2734,7 @@ mod tests {
         assert_eq!(c.remote_version_id, "v2");
         // O nome é de quem escreveu a versão da nuvem.
         assert_eq!(c.remote_device_label.as_deref(), Some("Notebook"));
-        assert_eq!(r.sync.runtime().conflicts, 1);
+        assert_eq!(r.status().await.conflicts, 1);
         let conflict_events = |r: &Rig| {
             r.events()
                 .iter()
@@ -2762,7 +2821,7 @@ mod tests {
             (sha(b"theirs"), sha(b"theirs"), "v2".into())
         );
         assert!(r.repo.conflicts_all().await.unwrap().is_empty());
-        assert_eq!(r.sync.runtime().conflicts, 0);
+        assert_eq!(r.status().await.conflicts, 0);
         assert!(r.reqs("POST", SAVES).await.is_empty());
     }
 
@@ -3471,6 +3530,12 @@ mod tests {
         );
         assert!(r.read("saves/Zelda.srm").is_none());
         assert!(r.repo.base_all("file").await.unwrap().is_empty());
+        // M4: a tela fica sabendo, para o toast de "a nuvem não pôde ser
+        // conferida".
+        assert!(r.events().contains(&SyncEvent::Prelaunch {
+            outcome: "skipped".into(),
+            reason: Some("timeout".into())
+        }));
     }
 
     /// Os 12 nomes de save de um stem, como a listagem de uma ROM os pede.
@@ -3978,9 +4043,14 @@ mod tests {
     }
 
     async fn mirror_with_save_sync(r: &Rig) {
+        mirror_as(r, "u1").await;
+    }
+
+    /// O espelho do `/me` de uma conta (o AlvaID em `id`), plano com sync.
+    async fn mirror_as(r: &Rig, alva_id: &str) {
         r.store
             .mirror_put(&Me {
-                id: "u1".into(),
+                id: alva_id.into(),
                 username: "toy".into(),
                 avatar_url: None,
                 hero_url: None,
@@ -4081,6 +4151,128 @@ mod tests {
             .events()
             .iter()
             .any(|e| matches!(e, SyncEvent::Quota { .. })));
+    }
+
+    /// M10 (NFR-4): o log (que vai para o diagnóstico) nunca leva o nome de um
+    /// save, que é o nome da ROM: as falhas de um arquivo levam um rótulo.
+    #[tokio::test]
+    async fn failure_logs_never_name_the_save() {
+        let _serial = SERIAL.lock().await;
+        crate::sync::test_support::captured_logs();
+        let r = rig("log-names").await;
+        r.rom("r1", "Quuxomatic.gba", "gba").await;
+        r.rom("r2", "Quuxomatic Two.gba", "gba").await;
+        // Um "save" que não se lê (é uma pasta) e uma descida com bytes que
+        // não batem com o hash.
+        let unreadable = "file:gba/Quuxomatic.srm";
+        r.base(unreadable, "saves/Quuxomatic.srm", b"a", b"a", ("s1", "v1"))
+            .await;
+        std::fs::create_dir_all(r.path("saves/Quuxomatic.srm")).unwrap();
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(
+            &r.server,
+            vec![row(
+                "s2",
+                "Quuxomatic Two.srm",
+                "gba",
+                None,
+                b"good",
+                "v1",
+                None,
+            )],
+        )
+        .await;
+        mount_content(&r.server, "s2", "v1", b"garbled").await;
+
+        let report = r.pass().await.unwrap();
+        assert_eq!(report.errors.len(), 2, "{report:?}");
+        assert!(r
+            .engine
+            .resolve(&r.alva, "file:gba/Quuxomatic Two.srm", Keep::Local)
+            .await
+            .is_err());
+
+        let lines = crate::sync::test_support::captured_logs();
+        let failures: Vec<&String> = lines
+            .iter()
+            .filter(|l| l.contains(&local::log_tag(unreadable)))
+            .collect();
+        assert!(!failures.is_empty(), "as falhas não chegaram ao log");
+        for l in &lines {
+            assert!(!l.contains("Quuxomatic"), "nome de save no log: {l}");
+        }
+    }
+
+    /// M1: a base é da conta que a gravou. Outra conta nesta máquina, com um
+    /// save de mesmo nome e outros bytes, não desce por cima do local: sem a
+    /// base da anterior é conflito, como duas máquinas configuradas à parte.
+    /// E uma remoção na conta nova não manda o arquivo daqui para o resguardo.
+    #[tokio::test]
+    async fn another_account_does_not_inherit_the_base_of_the_previous_one() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("account").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        r.rom("r2", "Mario.gba", "gba").await;
+        // A máquina sincronizou com a conta A.
+        r.sync.devices.set_base_account("alva_A").await.unwrap();
+        r.base(
+            ZELDA,
+            "saves/Zelda.srm",
+            b"zelda-a",
+            b"zelda-a",
+            ("sA", "v1"),
+        )
+        .await;
+        r.write("saves/Zelda.srm", b"zelda-a");
+        let mario = "file:gba/Mario.srm";
+        r.base(
+            mario,
+            "saves/Mario.srm",
+            b"mario-a",
+            b"mario-a",
+            ("sM", "v1"),
+        )
+        .await;
+        r.write("saves/Mario.srm", b"mario-a");
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(
+            &r.server,
+            vec![
+                row("sB", "Zelda.srm", "gba", None, b"zelda-b", "v1", None),
+                tombstone(row("sN", "Mario.srm", "gba", None, b"mario-b", "v1", None)),
+            ],
+        )
+        .await;
+        mount_content(&r.server, "sB", "v1", b"zelda-b").await;
+        mount_upload(&r.server, "sX", "v1").await;
+
+        // Sem o perfil não se sabe de quem é a conta: nada anda.
+        assert_eq!(r.pass().await, Err(SyncError::Offline));
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+
+        // A pessoa conectou a conta B.
+        mirror_as(&r, "alva_B").await;
+        let report = r.pass().await.unwrap();
+        assert_eq!(
+            (report.conflicts, report.downloaded, report.backed_up),
+            (1, 0, 0)
+        );
+        assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"zelda-a");
+        assert_eq!(r.read("saves/Mario.srm").unwrap(), b"mario-a");
+        assert!(r.backups().is_empty());
+        assert_eq!(r.content_gets().await, 0);
+        assert_eq!(
+            r.sync.devices.base_account().await.unwrap().as_deref(),
+            Some("alva_B")
+        );
+        // Sem base, a remoção de B é ausência: o Mario daqui sobe para B.
+        assert_eq!(report.uploaded, 1);
+        assert_eq!(r.base_of(mario).await.unwrap().remote_save_id, "sX");
+        assert!(r.base_of(ZELDA).await.is_none());
+
+        // A mesma conta de novo: a base fica.
+        r.pass().await.unwrap();
+        assert!(r.base_of(mario).await.is_some());
     }
 
     /// I-2 e M9: a nuvem recusa um save de N64 maior que o limite da
@@ -4482,6 +4674,32 @@ mod tests {
             )),
         ];
         assert_eq!(pick(&by_name(&cards), &card).unwrap().save_id, "m1");
+
+        // M6: a linha do ReEmu apagada no site não esconde a `other` viva
+        // que um RetroArch plano segue escrevendo; sem viva, a apagada vale.
+        let dead_snes = file_row(tombstone(row(
+            "t1",
+            "Chrono.srm",
+            "snes",
+            None,
+            b"x",
+            "v1",
+            None,
+        )));
+        let live_other = file_row(row("o1", "Chrono.srm", "other", None, b"x", "v1", None));
+        let rows = [dead_snes.clone(), live_other];
+        assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "o1");
+        let dead_other = file_row(tombstone(row(
+            "t2",
+            "Chrono.srm",
+            "other",
+            None,
+            b"x",
+            "v1",
+            None,
+        )));
+        let rows = [dead_other, dead_snes];
+        assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "t1");
     }
 
     #[test]
@@ -4634,8 +4852,11 @@ mod tests {
             r.engine.prelaunch(&r.alva, "r1").await,
             PrelaunchOutcome::Skipped("timeout".into())
         );
+        // O esquecer apaga o SQLite e depois o chaveiro: espera os dois.
         for _ in 0..100 {
-            if r.sync.devices.device().await.unwrap().is_none() {
+            if r.sync.devices.device().await.unwrap().is_none()
+                && r.sync.devices.token().unwrap().is_none()
+            {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(20)).await;
@@ -4703,13 +4924,13 @@ mod tests {
             })
             .await
             .unwrap();
-        r.sync.runtime().conflicts = 1;
+        assert_eq!(r.status().await.conflicts, 1);
         mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
         mount_files(&r.server, vec![]).await;
 
         r.pass().await.unwrap();
         assert!(r.repo.conflicts_all().await.unwrap().is_empty());
-        assert_eq!(r.sync.runtime().conflicts, 0);
+        assert_eq!(r.status().await.conflicts, 0);
     }
 
     /// M7: um 200 sem `devices` é resposta ilegível: a passada acaba offline e

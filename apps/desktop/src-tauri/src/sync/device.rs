@@ -27,6 +27,9 @@ const HW_GPU_KEY: &str = "sync.hw_gpu";
 /// quando a lista não responde.
 const SITE_PAUSED_KEY: &str = "sync.site_paused";
 const REVOKED_KEY: &str = "sync.revoked";
+/// A conta (AlvaID) dona da base do cloud save (`sync_base`, `sync_conflicts`).
+/// Fica ao desconectar, como a base; só outra conta a troca (e limpa a base).
+const ACCOUNT_KEY: &str = "sync.account";
 
 /// O limite do Alvanista para cada texto do hardware.
 const TEXT_MAX_CHARS: usize = 120;
@@ -165,14 +168,30 @@ pub struct Device {
 pub struct DeviceStore {
     repo: AlvanistaRepo,
     secrets: SharedSecrets,
+    db: db::Db,
 }
 
 impl DeviceStore {
     pub fn new(db: db::Db, secrets: SharedSecrets) -> Self {
         Self {
-            repo: AlvanistaRepo::new(db),
+            repo: AlvanistaRepo::new(db.clone()),
             secrets,
+            db,
         }
+    }
+
+    /// O banco, para a base do cloud save (`SyncRepo`) no mesmo lugar.
+    pub(super) fn db(&self) -> db::Db {
+        self.db.clone()
+    }
+
+    /// A conta dona da base do cloud save; `None` antes do primeiro sync.
+    pub async fn base_account(&self) -> Result<Option<String>, String> {
+        self.get(ACCOUNT_KEY).await
+    }
+
+    pub async fn set_base_account(&self, alva_id: &str) -> Result<(), String> {
+        self.set(ACCOUNT_KEY, alva_id).await
     }
 
     async fn get(&self, key: &str) -> Result<Option<String>, String> {

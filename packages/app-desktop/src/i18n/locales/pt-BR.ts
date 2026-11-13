@@ -542,6 +542,7 @@ const ptBR = {
       uploaded_other: '{{count}} game saves enviados para a sua conta.',
       removed_one: '{{count}} game save apagado no site foi para a pasta de resguardo.',
       removed_other: '{{count}} game saves apagados no site foram para a pasta de resguardo.',
+      cloudUnchecked: 'Não deu para conferir a nuvem a tempo. O jogo abriu com o save desta máquina.',
     },
     err: {
       no_account: 'Entre com o Alvanista para sincronizar.',

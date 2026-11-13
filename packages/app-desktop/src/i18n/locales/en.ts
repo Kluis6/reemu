@@ -541,6 +541,7 @@ const en: Messages = {
       uploaded_other: '{{count}} game saves uploaded to your account.',
       removed_one: '{{count}} game save deleted on the site went to the backup folder.',
       removed_other: '{{count}} game saves deleted on the site went to the backup folder.',
+      cloudUnchecked: "The cloud could not be checked in time. The game opened with this machine's save.",
     },
     err: {
       no_account: 'Sign in with Alvanista to sync.',

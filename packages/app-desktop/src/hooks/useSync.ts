@@ -231,6 +231,15 @@ export function useSyncEvents() {
       if (e.type === 'pass' && e.backedUp > 0) {
         useToastStore.getState().push(sysToast(i18n.t('sync.toast.removed', { count: e.backedUp })))
       }
+      // D117: a nuvem não respondeu a tempo antes de abrir o jogo.
+      if (e.type === 'prelaunch' && e.outcome === 'skipped' && (e.reason === 'timeout' || e.reason === 'offline')) {
+        useToastStore.getState().push(sysToast(i18n.t('sync.toast.cloudUnchecked'), 'Warning'))
+      }
+      // O que a checagem trouxe ou achou aparece na página do jogo.
+      if (e.type === 'prelaunch' && (e.outcome === 'downloaded' || e.outcome === 'conflict')) {
+        void qc.invalidateQueries({ queryKey: SYNC_SAVE_LINE_KEY })
+        void qc.invalidateQueries({ queryKey: SYNC_CONFLICTS_KEY })
+      }
     }).then((d) => {
       if (disposed) d()
       else dispose = d

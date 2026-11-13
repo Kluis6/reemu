@@ -541,6 +541,7 @@ const es: Messages = {
       uploaded_other: '{{count}} game saves enviados a tu cuenta.',
       removed_one: '{{count}} game save borrado en el sitio fue a la carpeta de respaldo.',
       removed_other: '{{count}} game saves borrados en el sitio fueron a la carpeta de respaldo.',
+      cloudUnchecked: 'No se pudo revisar la nube a tiempo. El juego abrió con el save de esta máquina.',
     },
     err: {
       no_account: 'Entra con Alvanista para sincronizar.',

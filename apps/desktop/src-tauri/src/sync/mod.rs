@@ -25,6 +25,7 @@ use crate::alvanista::loopback::Lang;
 use crate::alvanista::store::Tokens;
 use crate::alvanista::{Alvanista, AlvanistaStatus};
 use api::{ApiError, RemoteDevice, SavesApi};
+use db::SyncRepo;
 use device::{
     hardware_fingerprint, hardware_payload, Device, DeviceStore, HardwarePayload, LABEL_MAX_CHARS,
 };
@@ -108,6 +109,11 @@ impl From<ApiError> for SyncError {
 pub struct SyncService {
     api: SavesApi,
     devices: DeviceStore,
+    /// Os conflitos abertos, que a página conta pelo SQLite.
+    conflicts: SyncRepo,
+    /// Quem roda uma passada quando o sync ou os game saves acabam de ligar
+    /// (o motor se registra aqui ao subir).
+    on_enabled: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>>,
     /// Quem cria o aparelho nunca corre em paralelo: duas chamadas juntas
     /// criariam dois aparelhos na conta.
     mint: tokio::sync::Mutex<()>,
@@ -120,7 +126,6 @@ pub struct SyncService {
 struct Runtime {
     quota: Option<SyncQuota>,
     last_pass_at: Option<i64>,
-    conflicts: u32,
     last_error: Option<String>,
     /// O arquivo que a nuvem recusou, quando `last_error` é de um arquivo só
     /// (`too_large`, `rejected`): a página diz qual.
@@ -131,7 +136,9 @@ impl SyncService {
     pub fn new(api: SavesApi, devices: DeviceStore) -> Self {
         Self {
             api,
+            conflicts: SyncRepo::new(devices.db()),
             devices,
+            on_enabled: std::sync::OnceLock::new(),
             mint: tokio::sync::Mutex::new(()),
             runtime: std::sync::Mutex::new(Runtime::default()),
         }
@@ -139,6 +146,19 @@ impl SyncService {
 
     fn runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
         self.runtime.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Registra quem roda a passada ao ligar. Só o primeiro vale.
+    pub fn on_enabled(&self, run_pass: Box<dyn Fn() + Send + Sync>) {
+        let _ = self.on_enabled.set(run_pass);
+    }
+
+    /// O sync ou os game saves acabaram de ligar: uma passada agora, em vez
+    /// de esperar a de 10 minutos (M3).
+    fn kick_pass(&self) {
+        if let Some(run_pass) = self.on_enabled.get() {
+            run_pass();
+        }
     }
 
     /// Para o teste do `alvanista/` segurar o trinco de quem cria o aparelho.
@@ -394,6 +414,26 @@ impl SyncService {
         }
     }
 
+    /// Um 401 com o token do aparelho, fora de uma passada: a lista do site
+    /// diz se a máquina foi mesmo removida. Viva na lista (ou lista sem
+    /// resposta) é `offline`.
+    async fn row_after_401(&self, alva: &Alvanista) -> SyncError {
+        match self.partner_devices(alva).await {
+            Ok(list) => {
+                self.absorb_site_state(&list).await;
+                match self.devices.site_state().await {
+                    Ok((_, true)) => SyncError::Revoked,
+                    _ => SyncError::Offline,
+                }
+            }
+            Err(SyncError::NoAccount) => SyncError::NoAccount,
+            Err(e) => {
+                log::info!("sync: 401 e a lista de aparelhos não respondeu ({e})");
+                SyncError::Offline
+            }
+        }
+    }
+
     async fn mark_revoked(&self) {
         let paused = self.devices.site_state().await.is_ok_and(|s| s.0);
         if let Err(e) = self.devices.set_site_state(paused, true).await {
@@ -493,6 +533,15 @@ impl SyncService {
         let enabled = device.is_some() && self.devices.enabled().await.map_err(failed)?;
         let paused_local = self.devices.paused().await.map_err(failed)?;
         let saves_enabled = self.devices.saves_enabled().await.map_err(failed)?;
+        // Pelo SQLite: vale logo ao abrir o app e com os game saves desligados
+        // (resolver segue valendo, R19).
+        let conflicts = match self.conflicts.conflicts_all().await {
+            Ok(rows) => rows.len() as u32,
+            Err(e) => {
+                log::warn!("sync: conflitos ilegíveis: {e}");
+                0
+            }
+        };
         let runtime = self.runtime();
         Ok(SyncStatus {
             availability,
@@ -510,7 +559,7 @@ impl SyncService {
             hardware: hw,
             quota: runtime.quota,
             last_pass_at: runtime.last_pass_at,
-            conflicts: runtime.conflicts,
+            conflicts,
             last_error: runtime.last_error.clone(),
             // Só junto do erro de um arquivo: outro erro depois dele não leva
             // o nome de um arquivo que já não é o motivo.
@@ -579,6 +628,7 @@ impl SyncService {
             if let Err(e) = self.refresh_quota().await {
                 log::info!("sync: cota não lida ao ligar: {e}");
             }
+            self.kick_pass();
         } else {
             let _one_at_a_time = self.mint.lock().await;
             self.forget_device(true).await?;
@@ -615,14 +665,13 @@ impl SyncService {
                 .await
                 .map_err(failed)?,
             Err(e) => {
-                let e = match e {
+                return Err(match e {
                     ApiError::Rejected(_) | ApiError::Invalid(_) => SyncError::InvalidLabel,
+                    // Um 401 sozinho não prova revogação (o `SaveAuth` também
+                    // o devolve quando falha): a lista de aparelhos decide.
+                    ApiError::Unauthorized => self.row_after_401(alva).await,
                     other => SyncError::from(other),
-                };
-                if e == SyncError::Revoked {
-                    self.mark_revoked().await;
-                }
-                return Err(e);
+                });
             }
         }
         self.status_with(alva, hw).await
@@ -645,6 +694,9 @@ impl SyncService {
         hw: HardwarePayload,
     ) -> Result<SyncStatus, SyncError> {
         self.devices.set_saves_enabled(on).await.map_err(failed)?;
+        if on {
+            self.kick_pass();
+        }
         self.status_with(alva, hw).await
     }
 
@@ -893,6 +945,13 @@ pub enum SyncEvent {
     /// A cota acabou: os envios pararam.
     #[serde(rename_all = "camelCase")]
     Quota { used_bytes: i64, limit_bytes: i64 },
+    /// A checagem de antes de abrir um jogo terminou: `up_to_date`,
+    /// `downloaded`, `conflict` ou `skipped` (o jogo abriu com o save daqui;
+    /// `reason` é o código, `timeout` e `offline` inclusive).
+    Prelaunch {
+        outcome: String,
+        reason: Option<String>,
+    },
 }
 
 fn emit_status(app: &AppHandle) {
@@ -1112,6 +1171,40 @@ pub(crate) mod test_support {
             .into_iter()
             .flat_map(|r| [r.get::<String, _>("key"), r.get::<String, _>("value")])
             .collect()
+    }
+
+    /// Logger de teste que guarda o texto de cada linha. Um por processo: todo
+    /// teste que lê o log passa por `captured_logs`.
+    struct Capture(std::sync::Mutex<Vec<String>>);
+    impl log::Log for Capture {
+        fn enabled(&self, _: &log::Metadata) -> bool {
+            true
+        }
+        fn log(&self, record: &log::Record) {
+            // O servidor de mentira despeja os pedidos que não esperava (com os
+            // cabeçalhos): é ferramenta de teste, não o log do app.
+            if record.target().starts_with("wiremock") {
+                return;
+            }
+            self.0
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(format!("{}", record.args()));
+        }
+        fn flush(&self) {}
+    }
+    static CAPTURE: Capture = Capture(std::sync::Mutex::new(Vec::new()));
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+
+    /// Instala o logger de captura (na primeira chamada) e devolve as linhas
+    /// até agora. Se outro logger já estava instalado, falha alto: um teste de
+    /// "nada vaza no log" que não vê o log não prova nada.
+    pub fn captured_logs() -> Vec<String> {
+        INSTALL.call_once(|| {
+            log::set_logger(&CAPTURE).expect("não deu pra instalar o logger de captura");
+            log::set_max_level(log::LevelFilter::Trace);
+        });
+        CAPTURE.0.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 }
 
@@ -1633,6 +1726,89 @@ mod tests {
         );
     }
 
+    /// M3: ligar o sync, ou ligar de novo os game saves, roda uma passada já
+    /// (desligar não roda nada).
+    #[tokio::test]
+    async fn turning_sync_or_game_saves_on_runs_a_pass_now() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        let passes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = passes.clone();
+        r.sync.on_enabled(Box::new(move || {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }));
+        let count = || passes.load(std::sync::atomic::Ordering::SeqCst);
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(201).set_body_json(minted_body("asv_secret")),
+            1,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/saves/quota"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"used_bytes": 1, "limit_bytes": 9})),
+            )
+            .mount(&r.server)
+            .await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        r.sync
+            .set_enabled_with(&r.alva, true, hw(), never_reconnect)
+            .await
+            .unwrap();
+        assert_eq!(count(), 1);
+        r.sync
+            .set_saves_enabled_with(&r.alva, false, hw())
+            .await
+            .unwrap();
+        assert_eq!(count(), 1);
+        r.sync
+            .set_saves_enabled_with(&r.alva, true, hw())
+            .await
+            .unwrap();
+        assert_eq!(count(), 2);
+    }
+
+    /// M2: a contagem de conflitos vem do SQLite: vale logo ao abrir o app
+    /// (antes de qualquer passada) e com os game saves desligados.
+    #[tokio::test]
+    async fn the_conflict_count_comes_from_sqlite_after_a_restart_and_with_saves_off() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        SyncRepo::new(r.db.clone())
+            .conflict_put(&domain::sync::ConflictRow {
+                key: "file:gba/Zelda.srm".into(),
+                local_hash: "l".into(),
+                local_mtime: 1,
+                local_size: 1,
+                remote_save_id: "s".into(),
+                remote_version_id: "v".into(),
+                remote_hash: "r".into(),
+                remote_device_label: None,
+                remote_client_mtime: None,
+                remote_size: 1,
+                remote_deleted: false,
+                rom_id: None,
+                seen_at: 1,
+            })
+            .await
+            .unwrap();
+        // Um serviço novo sobre o mesmo banco: o app acabou de abrir.
+        let fresh = SyncService::new(
+            SavesApi::new(r.server.uri()),
+            DeviceStore::new(r.db.clone(), r.secrets.clone()),
+        );
+        assert_eq!(fresh.status_with(&r.alva, hw()).await.unwrap().conflicts, 1);
+        fresh
+            .set_saves_enabled_with(&r.alva, false, hw())
+            .await
+            .unwrap();
+        assert_eq!(fresh.status_with(&r.alva, hw()).await.unwrap().conflicts, 1);
+    }
+
     #[tokio::test]
     async fn set_enabled_on_runs_the_consent_once_and_retries() {
         let _serial = SERIAL.lock().await;
@@ -2129,6 +2305,57 @@ mod tests {
         assert_eq!(r.server.received_requests().await.unwrap().len(), n);
     }
 
+    /// M12: renomear com um 401 do `SaveAuth` não basta para dizer "removida
+    /// no site": com a linha viva na lista é `offline` e nada vira revogado;
+    /// com a linha revogada, aí sim.
+    #[tokio::test]
+    async fn a_rename_401_with_the_row_alive_is_offline_not_revoked() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(
+                ResponseTemplate::new(401)
+                    .set_body_json(serde_json::json!({"error": {"code": "save_token_invalid"}})),
+            )
+            .mount(&r.server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/save-devices"))
+            .respond_with(seq_list(vec![
+                vec![remote("dev1", false, false)],
+                vec![remote("dev1", true, false)],
+            ]))
+            .mount(&r.server)
+            .await;
+        assert_eq!(
+            r.sync.set_label_with(&r.alva, "Quarto", hw()).await,
+            Err(SyncError::Offline)
+        );
+        assert_eq!(r.sync.devices().site_state().await.unwrap(), (false, false));
+        assert_eq!(
+            r.sync.devices().token().unwrap().as_deref(),
+            Some("asv_secret")
+        );
+        // A lista confirma a remoção: revogada.
+        assert_eq!(
+            r.sync.set_label_with(&r.alva, "Quarto", hw()).await,
+            Err(SyncError::Revoked)
+        );
+        assert_eq!(r.sync.devices().site_state().await.unwrap(), (false, true));
+    }
+
+    /// Respostas da lista de aparelhos em sequência; a última se repete.
+    fn seq_list(lists: Vec<Vec<serde_json::Value>>) -> impl wiremock::Respond {
+        let n = std::sync::atomic::AtomicUsize::new(0);
+        move |_: &wiremock::Request| {
+            let i = n.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"devices": lists[i.min(lists.len() - 1)]}))
+        }
+    }
+
     #[tokio::test]
     async fn an_unknown_reconnect_code_becomes_failed() {
         let _serial = SERIAL.lock().await;
@@ -2405,31 +2632,19 @@ mod tests {
             }),
             serde_json::json!({"type": "quota", "usedBytes": 5, "limitBytes": 9})
         );
+        assert_eq!(
+            json(SyncEvent::Prelaunch {
+                outcome: "skipped".into(),
+                reason: Some("timeout".into())
+            }),
+            serde_json::json!({"type": "prelaunch", "outcome": "skipped", "reason": "timeout"})
+        );
     }
-
-    /// Logger de teste que guarda o texto de cada linha.
-    struct Capture(Mutex<Vec<String>>);
-    impl log::Log for Capture {
-        fn enabled(&self, _: &log::Metadata) -> bool {
-            true
-        }
-        fn log(&self, record: &log::Record) {
-            self.0.lock().unwrap().push(format!("{}", record.args()));
-        }
-        fn flush(&self) {}
-    }
-    static CAPTURE: Capture = Capture(Mutex::new(Vec::new()));
 
     #[tokio::test]
     async fn no_log_line_and_no_state_row_ever_holds_the_device_token() {
         let _serial = SERIAL.lock().await;
-        // Se outro teste do processo instalou o logger antes, falha alto: um
-        // teste de "nada vaza no log" que não vê o log não prova nada.
-        assert!(
-            log::set_logger(&CAPTURE).is_ok(),
-            "não deu pra instalar o logger de captura"
-        );
-        log::set_max_level(log::LevelFilter::Trace);
+        test_support::captured_logs();
         let r = rig().await;
         // O caminho feliz, o do chaveiro recusando (que revoga o órfão) e o
         // do 401 do aparelho no refresh de hardware.
@@ -2474,7 +2689,7 @@ mod tests {
         for v in test_support::all_state_values(&r.db).await {
             assert!(!v.contains("asv_"), "token no SQLite: {v}");
         }
-        let lines = CAPTURE.0.lock().unwrap().clone();
+        let lines = test_support::captured_logs();
         assert!(
             lines.iter().any(|l| l.starts_with("sync:")),
             "o logger não viu as linhas do sync"

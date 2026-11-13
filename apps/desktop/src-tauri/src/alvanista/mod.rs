@@ -197,6 +197,18 @@ impl Alvanista {
         }
     }
 
+    /// A conta conectada (o AlvaID que o `/me` mandou), pelo espelho: sem
+    /// chaveiro nem rede. `None` sem espelho.
+    pub(crate) async fn account_id(&self) -> Option<String> {
+        match self.store().mirror_get().await {
+            Ok(mirror) => mirror.map(|m| m.id).filter(|id| !id.is_empty()),
+            Err(e) => {
+                log::warn!("alvanista: espelho ilegível: {e}");
+                None
+            }
+        }
+    }
+
     /// O servidor recusou o aparelho pelo plano (402): o espelho passa a dizer
     /// isso, e o estado da página confere no `/me` da próxima vez.
     pub(crate) async fn note_no_save_sync(&self) {

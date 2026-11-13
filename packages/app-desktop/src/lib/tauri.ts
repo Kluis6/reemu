@@ -614,6 +614,13 @@ export type SyncEvent =
   | { type: 'conflict'; key: string }
   | { type: 'error'; code: string }
   | { type: 'quota'; usedBytes: number; limitBytes: number }
+  /** A checagem de antes de abrir um jogo terminou. `skipped`: o jogo abriu com
+   *  o save desta máquina; `reason` é o código (`timeout`, `offline`...). */
+  | {
+      type: 'prelaunch'
+      outcome: 'up_to_date' | 'downloaded' | 'conflict' | 'skipped'
+      reason: string | null
+    }
 
 // Os comandos rejeitam com o código do erro: `no_account`, `no_tier`,
 // `needs_consent`, `revoked`, `paused`, `quota`, `offline`, `keyring`,
