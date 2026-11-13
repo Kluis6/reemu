@@ -240,7 +240,7 @@ export function SettingsSync() {
           label={t('sync.toggle')}
           description={t('sync.toggleHint')}
           checked={st.enabled}
-          disabled={working}
+          busy={working}
           onChange={(on) => {
             if (!working) void setEnabled(on)
           }}

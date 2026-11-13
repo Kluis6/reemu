@@ -294,6 +294,18 @@ describe('SettingsSync', () => {
     expect(api.syncNow).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the toggle focusable with aria-busy while an action runs and ignores changes', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncNow.mockReturnValue(new Promise(() => {}))
+    await mount()
+    await act(async () => byText('Sincronizar agora')!.click())
+    const sw = host.querySelector<HTMLInputElement>('[role="switch"]')!
+    expect(sw.disabled).toBe(false)
+    expect(sw.getAttribute('aria-busy')).toBe('true')
+    await act(async () => sw.click())
+    expect(api.syncSetEnabled).not.toHaveBeenCalled()
+  })
+
   it('keeps a typed name while another action runs and sends it afterwards', async () => {
     let finish!: (s: SyncStatus) => void
     api.syncStatus.mockResolvedValue(ON)

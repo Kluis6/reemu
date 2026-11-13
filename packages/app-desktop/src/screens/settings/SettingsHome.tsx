@@ -109,6 +109,10 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalL,
     // o texto fica longe do ícone (64 px, absoluto à direita)
     paddingRight: `calc(64px + ${tokens.spacingHorizontalXXL} + ${tokens.spacingHorizontalM})`,
+    // tela baixa: o ícone é de 52 px e fica a L da borda
+    "@media (max-height: 640px)": {
+      paddingRight: `calc(52px + ${tokens.spacingHorizontalL} + ${tokens.spacingHorizontalM})`,
+    },
   },
   // Ícone à DIREITA e maior (pedido do usuário: o dobro, era 40/32, e
   // depois um pouco menor — 64/52),
