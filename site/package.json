@@ -8,7 +8,7 @@
   },
   "devDependencies": {
     "@tailwindcss/cli": "4.3.3",
-    "motion": "13.4.6",
+    "motion": "14.11.1",
     "tailwindcss": "4.3.3"
   }
 }
