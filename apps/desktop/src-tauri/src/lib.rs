@@ -149,7 +149,7 @@ pub fn run() {
                 )));
                 // O cloud save: a máquina vira um aparelho da conta. O token do
                 // aparelho vai para o mesmo chaveiro, em outra conta.
-                app.manage(sync::Sync::new(
+                app.manage(sync::SyncService::new(
                     sync::api::SavesApi::new(alvanista::config::base_urls().1),
                     sync::device::DeviceStore::new(pool, keyring),
                 ));

@@ -11,10 +11,10 @@
 //! Erros seguem a convenção de `alvanista/`: `Result<_, String>` com o código
 //! no texto (`SyncError` mostra o código de i18n).
 
-// Os comandos do sync (próxima etapa) são quem chama `ensure_device` e
-// `refresh_hardware`; até lá o que eles usam fica sem chamador (nos testes
-// também: `ensure_device` recebe um `AppHandle`, que o teste não tem).
-#![expect(dead_code)]
+// Os comandos do sync (próxima etapa) são quem chama esta API; até lá o que
+// eles usam fica sem chamador fora dos testes. As funções que recebem um
+// `AppHandle` (que o teste não tem) levam o `expect` no próprio item.
+#![cfg_attr(not(test), expect(dead_code))]
 
 pub mod api;
 pub mod device;
@@ -74,12 +74,12 @@ impl From<ApiError> for SyncError {
             ApiError::Paused => Self::Paused,
             ApiError::Quota => Self::Quota,
             ApiError::Transient(_) => Self::Offline,
-            other => Self::Failed(other.to_string()),
+            other => failed(other.to_string()),
         }
     }
 }
 
-pub struct Sync {
+pub struct SyncService {
     api: SavesApi,
     devices: DeviceStore,
     /// Quem cria o aparelho nunca corre em paralelo: duas chamadas juntas
@@ -87,7 +87,7 @@ pub struct Sync {
     mint: tokio::sync::Mutex<()>,
 }
 
-impl Sync {
+impl SyncService {
     pub fn new(api: SavesApi, devices: DeviceStore) -> Self {
         Self {
             api,
@@ -105,6 +105,7 @@ impl Sync {
     ///
     /// `NeedsConsent`: a sessão não tem o escopo `saves`. Quem chama roda
     /// `reconnect_with_saves` e repete uma vez.
+    #[expect(dead_code)] // os comandos do sync chamam; o teste não tem `AppHandle`
     pub async fn ensure_device(
         &self,
         app: &AppHandle,
@@ -147,7 +148,7 @@ impl Sync {
             }
         }
         let label = label
-            .map(|l| l.trim().to_owned())
+            .map(|l| device::clean_text(&l))
             .filter(|l| !l.is_empty())
             .unwrap_or_else(device::default_label);
 
@@ -169,7 +170,7 @@ impl Sync {
                 Ok(t) => t,
                 Err(ClientError::AuthEnded) => return Err(SyncError::NoAccount),
                 Err(ClientError::Transient(_)) => return Err(SyncError::Offline),
-                Err(e) => return Err(SyncError::Failed(e.to_string())),
+                Err(e) => return Err(failed(e.to_string())),
             };
             minted = self
                 .api
@@ -196,6 +197,7 @@ impl Sync {
             return Err(SyncError::Keyring);
         }
         // Acabou de enviar o hardware: o próximo `refresh_hardware` espera.
+        self.remember_gpu(&hw).await;
         let _ = self
             .devices
             .set_hw_fingerprint(&hardware_fingerprint(&hw))
@@ -209,14 +211,26 @@ impl Sync {
     }
 
     /// Manda o hardware quando mudou ou quando o último envio tem mais de 24 h.
+    #[expect(dead_code)] // os comandos do sync chamam; o teste não tem `AppHandle`
     pub async fn refresh_hardware(&self, app: &AppHandle) -> Result<(), SyncError> {
-        self.refresh_hardware_with(current_hardware(app)).await
+        let alva = app.state::<Alvanista>();
+        self.refresh_hardware_with(&alva, current_hardware(app))
+            .await
     }
 
-    async fn refresh_hardware_with(&self, hw: HardwarePayload) -> Result<(), SyncError> {
+    async fn refresh_hardware_with(
+        &self,
+        alva: &Alvanista,
+        mut hw: HardwarePayload,
+    ) -> Result<(), SyncError> {
+        // Sem sessão nem chaveiro nem rede: só o SQLite foi lido até aqui.
+        if !alva.cached_status().await.connected {
+            return Err(SyncError::NoAccount);
+        }
         if self.devices.device().await.map_err(failed)?.is_none() {
             return Ok(());
         }
+        self.keep_last_gpu(&mut hw).await;
         let fingerprint = hardware_fingerprint(&hw);
         let now = crate::alvanista::store::now_secs();
         let unchanged = self
@@ -241,19 +255,49 @@ impl Sync {
             .map_err(|_| SyncError::Keyring)?
             .ok_or(SyncError::Revoked)?;
         self.api.patch_own_device(&token, None, Some(&hw)).await?;
+        self.remember_gpu(&hw).await;
         self.devices
             .set_hw_fingerprint(&fingerprint)
             .await
             .map_err(failed)?;
         self.devices.set_hw_sent_at(now).await.map_err(failed)
     }
+
+    /// GPU desconhecida agora (o wgpu não abriu): em vez de mandar campos
+    /// vazios por cima de valores bons do servidor, repete os últimos enviados.
+    async fn keep_last_gpu(&self, hw: &mut HardwarePayload) {
+        if !hw.gpu.is_empty() || !hw.gpu_backend.is_empty() || !hw.gpu_driver.is_empty() {
+            return;
+        }
+        if let Ok(Some([gpu, backend, driver])) = self.devices.hw_gpu().await {
+            (hw.gpu, hw.gpu_backend, hw.gpu_driver) = (gpu, backend, driver);
+        }
+    }
+
+    async fn remember_gpu(&self, hw: &HardwarePayload) {
+        if hw.gpu.is_empty() && hw.gpu_backend.is_empty() && hw.gpu_driver.is_empty() {
+            return;
+        }
+        let triple = [
+            hw.gpu.clone(),
+            hw.gpu_backend.clone(),
+            hw.gpu_driver.clone(),
+        ];
+        if let Err(e) = self.devices.set_hw_gpu(&triple).await {
+            log::warn!("sync: GPU enviada não guardada: {e}");
+        }
+    }
 }
 
+/// `Failed` leva a mensagem, mas `Display` só mostra o código: o texto
+/// (sem segredos) vai para o log onde o erro nasce.
 fn failed(e: String) -> SyncError {
+    log::warn!("sync: falhou: {e}");
     SyncError::Failed(e)
 }
 
 /// O hardware da máquina agora, no formato do servidor.
+#[expect(dead_code)] // `ensure_device` e `refresh_hardware`, que os comandos chamam
 fn current_hardware(app: &AppHandle) -> HardwarePayload {
     let info = crate::commands::hardware::get_hardware_info(app.state());
     hardware_payload(
@@ -303,7 +347,7 @@ mod tests {
     }
 
     struct Rig {
-        sync: Sync,
+        sync: SyncService,
         alva: Alvanista,
         store: Store,
         secrets: Arc<MemSecrets>,
@@ -326,7 +370,7 @@ mod tests {
             server.uri(),
             Store::new(db.clone(), secrets.clone()),
         ));
-        let sync = Sync::new(
+        let sync = SyncService::new(
             SavesApi::new(server.uri()),
             DeviceStore::new(db.clone(), secrets.clone()),
         );
@@ -454,9 +498,82 @@ mod tests {
         let _serial = SERIAL.lock().await;
         let r = rig().await;
         r.store.unmark_session().await.unwrap();
+        let keyring_calls = || r.secrets.calls.load(std::sync::atomic::Ordering::SeqCst);
+        let before = keyring_calls();
         mount_mint(&r.server, ResponseTemplate::new(500), 0).await;
         let err = r.sync.ensure_device_with(&r.alva, None, hw()).await;
         assert_eq!(err, Err(SyncError::NoAccount));
+        // O mesmo vale para o hardware, mesmo com um aparelho guardado.
+        r.sync
+            .devices()
+            .save(
+                &Device {
+                    id: "dev1".into(),
+                    label: "Sala".into(),
+                },
+                "asv_secret",
+            )
+            .await
+            .unwrap();
+        let before_refresh = keyring_calls();
+        assert_eq!(
+            r.sync.refresh_hardware_with(&r.alva, hw()).await,
+            Err(SyncError::NoAccount)
+        );
+        assert_eq!(
+            keyring_calls(),
+            before_refresh,
+            "o refresh tocou o chaveiro"
+        );
+        assert_eq!(
+            before,
+            before_refresh - 1,
+            "só o save do teste tocou o chaveiro"
+        );
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_unknown_gpu_keeps_the_last_one_sent() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        r.sync
+            .devices()
+            .save(
+                &Device {
+                    id: "dev1".into(),
+                    label: "Sala".into(),
+                },
+                "asv_secret",
+            )
+            .await
+            .unwrap();
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "dev1", "label": "Sala", "client_kind": "reemu",
+                "token_prefix": "asv_se", "created_at": "2026-11-13T10:00:00Z"
+            })))
+            .mount(&r.server)
+            .await;
+        let mut known = hw();
+        (known.gpu, known.gpu_backend, known.gpu_driver) =
+            ("RTX".into(), "Vulkan".into(), "555".into());
+        r.sync.refresh_hardware_with(&r.alva, known).await.unwrap();
+        // A GPU não abriu e a RAM mudou: vai de novo, com a GPU de antes.
+        let mut unknown = hw();
+        unknown.memory_mb = 32_768;
+        r.sync
+            .refresh_hardware_with(&r.alva, unknown)
+            .await
+            .unwrap();
+        let reqs = r.server.received_requests().await.unwrap();
+        assert_eq!(reqs.len(), 2);
+        let body: serde_json::Value = serde_json::from_slice(&reqs[1].body).unwrap();
+        assert_eq!(body["hardware"]["memory_mb"], 32_768);
+        assert_eq!(body["hardware"]["gpu"], "RTX");
+        assert_eq!(body["hardware"]["gpu_backend"], "Vulkan");
+        assert_eq!(body["hardware"]["gpu_driver"], "555");
     }
 
     #[tokio::test]
@@ -603,18 +720,18 @@ mod tests {
             .mount(&r.server)
             .await;
         // Nunca enviado: vai.
-        r.sync.refresh_hardware_with(hw()).await.unwrap();
+        r.sync.refresh_hardware_with(&r.alva, hw()).await.unwrap();
         assert_eq!(patches(&r.server).await, 1);
         // Mesma máquina, enviado agora: não vai.
         let mut later = hw();
         later.captured_at = "2026-11-13T11:00:00Z".into();
         later.app_version = "0.5.0".into();
-        r.sync.refresh_hardware_with(later).await.unwrap();
+        r.sync.refresh_hardware_with(&r.alva, later).await.unwrap();
         assert_eq!(patches(&r.server).await, 1);
         // GPU nova: vai.
         let mut gpu = hw();
         gpu.gpu = "Outra".into();
-        r.sync.refresh_hardware_with(gpu).await.unwrap();
+        r.sync.refresh_hardware_with(&r.alva, gpu).await.unwrap();
         assert_eq!(patches(&r.server).await, 2);
         // Mesma máquina, mas o último envio tem mais de 24 h: vai.
         r.sync
@@ -622,7 +739,7 @@ mod tests {
             .set_hw_sent_at(crate::alvanista::store::now_secs() - HW_RESEND_SECS - 1)
             .await
             .unwrap();
-        r.sync.refresh_hardware_with(hw()).await.unwrap();
+        r.sync.refresh_hardware_with(&r.alva, hw()).await.unwrap();
         assert_eq!(patches(&r.server).await, 3);
     }
 
@@ -665,9 +782,12 @@ mod tests {
     #[tokio::test]
     async fn no_log_line_and_no_state_row_ever_holds_the_device_token() {
         let _serial = SERIAL.lock().await;
-        // Outro teste do processo pode ter instalado o logger antes: aí só a
-        // parte do SQLite vale (e fica dito no relatório).
-        let capturing = log::set_logger(&CAPTURE).is_ok();
+        // Se outro teste do processo instalou o logger antes, falha alto: um
+        // teste de "nada vaza no log" que não vê o log não prova nada.
+        assert!(
+            log::set_logger(&CAPTURE).is_ok(),
+            "não deu pra instalar o logger de captura"
+        );
         log::set_max_level(log::LevelFilter::Trace);
         let r = rig().await;
         // O caminho feliz, o do chaveiro recusando (que revoga o órfão) e o
@@ -705,7 +825,7 @@ mod tests {
         let mut moved = hw();
         moved.gpu = "Outra".into();
         assert_eq!(
-            r.sync.refresh_hardware_with(moved).await,
+            r.sync.refresh_hardware_with(&r.alva, moved).await,
             Err(SyncError::Revoked)
         );
         r.sync.devices().set_enabled(true).await.unwrap();
@@ -713,15 +833,13 @@ mod tests {
         for v in test_support::all_state_values(&r.db).await {
             assert!(!v.contains("asv_"), "token no SQLite: {v}");
         }
-        if capturing {
-            let lines = CAPTURE.0.lock().unwrap();
-            assert!(
-                lines.iter().any(|l| l.starts_with("sync:")),
-                "o logger não viu as linhas do sync"
-            );
-            for l in lines.iter() {
-                assert!(!l.contains("asv_"), "token no log: {l}");
-            }
+        let lines = CAPTURE.0.lock().unwrap().clone();
+        assert!(
+            lines.iter().any(|l| l.starts_with("sync:")),
+            "o logger não viu as linhas do sync"
+        );
+        for l in lines.iter() {
+            assert!(!l.contains("asv_"), "token no log: {l}");
         }
         // O par da sessão também não aparece no SQLite.
         for v in test_support::all_state_values(&r.db).await {

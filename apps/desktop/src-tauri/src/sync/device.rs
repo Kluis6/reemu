@@ -18,6 +18,12 @@ const ENABLED_KEY: &str = "sync.enabled";
 const PAUSED_KEY: &str = "sync.paused";
 const HW_FINGERPRINT_KEY: &str = "sync.hw_fingerprint";
 const HW_SENT_AT_KEY: &str = "sync.hw_sent_at";
+/// Os últimos GPU, backend e driver enviados (JSON), para não apagá-los
+/// quando a GPU não abre.
+const HW_GPU_KEY: &str = "sync.hw_gpu";
+
+/// O limite do Alvanista para cada texto do hardware e para o rótulo.
+const TEXT_MAX_CHARS: usize = 120;
 
 /// O corpo `hardware` das rotas de aparelho. Campo ausente na resposta vira
 /// vazio: o servidor omite o que não tem.
@@ -38,20 +44,42 @@ pub struct HardwarePayload {
     pub captured_at: String,
 }
 
+/// Caracteres de formatação Unicode (categoria Cf), que o Alvanista recusa.
+fn is_format_char(c: char) -> bool {
+    matches!(c,
+        '\u{00AD}' | '\u{0600}'..='\u{0605}' | '\u{061C}' | '\u{06DD}' | '\u{070F}'
+        | '\u{08E2}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}'
+        | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{206F}' | '\u{FEFF}'
+        | '\u{FFF9}'..='\u{FFFB}' | '\u{110BD}' | '\u{1D173}'..='\u{1D17A}'
+        | '\u{E0001}' | '\u{E0020}'..='\u{E007F}')
+}
+
+/// Texto que o servidor aceita: sem caracteres de controle nem de formatação,
+/// sem espaços nas pontas, com no máximo 120 caracteres. Um valor fora disso
+/// leva 400 e travaria a criação do aparelho para sempre.
+pub fn clean_text(s: &str) -> String {
+    let kept: String = s
+        .chars()
+        .filter(|c| !c.is_control() && !is_format_char(*c))
+        .collect();
+    let clipped: String = kept.trim().chars().take(TEXT_MAX_CHARS).collect();
+    clipped.trim_end().to_owned()
+}
+
 /// Converte o que o app já sabe da máquina: o que não se descobriu vira
 /// texto vazio, a memória vai em MiB. `now` em segundos Unix.
 pub fn hardware_payload(hw: &HardwareInfo, app_version: &str, now: i64) -> HardwarePayload {
     HardwarePayload {
-        os: hw.os.clone().unwrap_or_default(),
-        arch: hw.arch.clone(),
-        cpu: hw.cpu.clone().unwrap_or_default(),
+        os: clean_text(&hw.os.clone().unwrap_or_default()),
+        arch: clean_text(&hw.arch),
+        cpu: clean_text(&hw.cpu.clone().unwrap_or_default()),
         cpu_cores: hw.cpu_cores.map_or(0, |n| n as u32),
         cpu_threads: hw.cpu_threads as u32,
         memory_mb: (hw.memory_bytes / 1_048_576) as i64,
-        gpu: hw.gpu.clone().unwrap_or_default(),
-        gpu_backend: hw.gpu_backend.clone().unwrap_or_default(),
-        gpu_driver: hw.gpu_driver.clone().unwrap_or_default(),
-        app_version: app_version.to_owned(),
+        gpu: clean_text(&hw.gpu.clone().unwrap_or_default()),
+        gpu_backend: clean_text(&hw.gpu_backend.clone().unwrap_or_default()),
+        gpu_driver: clean_text(&hw.gpu_driver.clone().unwrap_or_default()),
+        app_version: clean_text(app_version),
         captured_at: rfc3339(now),
     }
 }
@@ -81,10 +109,8 @@ pub fn hardware_fingerprint(hw: &HardwarePayload) -> String {
 
 /// O nome da máquina; sem ele, o rótulo padrão do Alvanista.
 pub fn default_label() -> String {
-    hostname::get()
-        .ok()
-        .and_then(|h| h.into_string().ok())
-        .map(|h| h.trim().to_owned())
+    sysinfo::System::host_name()
+        .map(|h| clean_text(&h))
         .filter(|h| !h.is_empty())
         .unwrap_or_else(|| crate::alvanista::config::device_label().to_owned())
 }
@@ -163,9 +189,11 @@ impl DeviceStore {
         self.set(LABEL_KEY, &d.label).await
     }
 
-    /// Esquece o aparelho: limpa o SQLite e depois o chaveiro. Se o chaveiro
-    /// recusar apagar, o erro volta, mas os marcadores já saíram.
+    /// Esquece o aparelho: tenta o SQLite e o chaveiro, mesmo que um falhe
+    /// (o token não pode ficar no chaveiro por causa de um erro do banco), e
+    /// devolve o primeiro erro.
     pub async fn forget(&self) -> Result<(), String> {
+        let mut first: Option<String> = None;
         for key in [
             DEVICE_ID_KEY,
             LABEL_KEY,
@@ -173,13 +201,16 @@ impl DeviceStore {
             PAUSED_KEY,
             HW_FINGERPRINT_KEY,
             HW_SENT_AT_KEY,
+            HW_GPU_KEY,
         ] {
-            self.repo
-                .state_delete(key)
-                .await
-                .map_err(|e| e.to_string())?;
+            if let Err(e) = self.repo.state_delete(key).await {
+                first.get_or_insert(e.to_string());
+            }
         }
-        self.secrets.delete(TOKEN_ACCOUNT)
+        if let Err(e) = self.secrets.delete(TOKEN_ACCOUNT) {
+            first.get_or_insert(e);
+        }
+        first.map_or(Ok(()), Err)
     }
 
     pub async fn set_label(&self, label: &str) -> Result<(), String> {
@@ -208,6 +239,19 @@ impl DeviceStore {
         } else {
             self.repo.state_delete(key).await.map_err(|e| e.to_string())
         }
+    }
+
+    /// Os últimos `[gpu, backend, driver]` enviados.
+    pub async fn hw_gpu(&self) -> Result<Option<[String; 3]>, String> {
+        Ok(self
+            .get(HW_GPU_KEY)
+            .await?
+            .and_then(|v| serde_json::from_str(&v).ok()))
+    }
+
+    pub async fn set_hw_gpu(&self, gpu: &[String; 3]) -> Result<(), String> {
+        let json = serde_json::to_string(gpu).map_err(|e| e.to_string())?;
+        self.set(HW_GPU_KEY, &json).await
     }
 
     pub async fn hw_fingerprint(&self) -> Result<Option<String>, String> {
@@ -309,6 +353,24 @@ mod tests {
     }
 
     #[test]
+    fn hardware_payload_clamps_and_cleans_every_text() {
+        let long = "x".repeat(300);
+        let mut i = info();
+        i.cpu = Some(format!("  Ry\u{200B}zen\u{0007} {long}"));
+        i.gpu = Some("\u{202E}RTX\n".into());
+        i.os = Some("\u{FEFF}".into());
+        let p = hardware_payload(&i, "0.4.0\u{0000}", 0);
+        assert_eq!(p.cpu.chars().count(), 120);
+        assert!(p.cpu.starts_with("Ryzen xxx"));
+        assert_eq!(p.gpu, "RTX");
+        assert_eq!(p.os, "");
+        assert_eq!(p.app_version, "0.4.0");
+        // O corte é por caractere, não por byte, e emoji comum fica.
+        assert_eq!(clean_text(&"é".repeat(200)).chars().count(), 120);
+        assert_eq!(clean_text("Sala \u{1F3AE}"), "Sala \u{1F3AE}");
+    }
+
+    #[test]
     fn the_default_label_is_never_empty() {
         assert!(!default_label().trim().is_empty());
     }
@@ -361,6 +423,42 @@ mod tests {
         };
         assert!(store.save(&d, "asv_secret").await.is_err());
         assert_eq!(store.device().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn forget_still_clears_the_keyring_when_the_database_fails() {
+        let (store, secrets, db) = store(MemSecrets::default()).await;
+        let d = Device {
+            id: "dev1".into(),
+            label: "Sala".into(),
+        };
+        store.save(&d, "asv_secret").await.unwrap();
+        db.close().await;
+        assert!(store.forget().await.is_err());
+        assert!(secrets.secrets.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_label_and_the_last_gpu_round_trip() {
+        let (store, _, _) = store(MemSecrets::default()).await;
+        store
+            .save(
+                &Device {
+                    id: "dev1".into(),
+                    label: "Sala".into(),
+                },
+                "asv_secret",
+            )
+            .await
+            .unwrap();
+        store.set_label("Quarto").await.unwrap();
+        assert_eq!(store.device().await.unwrap().unwrap().label, "Quarto");
+        assert_eq!(store.hw_gpu().await.unwrap(), None);
+        let gpu = ["RTX".to_owned(), "Vulkan".to_owned(), "555".to_owned()];
+        store.set_hw_gpu(&gpu).await.unwrap();
+        assert_eq!(store.hw_gpu().await.unwrap(), Some(gpu));
+        store.forget().await.unwrap();
+        assert_eq!(store.hw_gpu().await.unwrap(), None);
     }
 
     #[tokio::test]
