@@ -15,6 +15,18 @@ pub enum Kind {
     Config,
 }
 
+impl Kind {
+    /// O tipo de uma chave da base: `file:`, `state:` ou `config:`.
+    pub fn of_key(key: &str) -> Option<Self> {
+        match key.split_once(':')?.0 {
+            "file" => Some(Self::File),
+            "state" => Some(Self::State),
+            "config" => Some(Self::Config),
+            _ => None,
+        }
+    }
+}
+
 /// O arquivo como está em disco agora.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Local {
@@ -186,6 +198,15 @@ mod tests {
 
     fn run(l: Option<&Local>, b: Option<&BaseRow>, r: Option<&Remote>) -> Action {
         decide(Kind::File, l, b, r, ME)
+    }
+
+    #[test]
+    fn kind_of_key_reads_the_prefix() {
+        assert_eq!(Kind::of_key("file:gba/Zelda.srm"), Some(Kind::File));
+        assert_eq!(Kind::of_key("state:snes/x/a.state"), Some(Kind::State));
+        assert_eq!(Kind::of_key("config:video"), Some(Kind::Config));
+        assert_eq!(Kind::of_key("other:x"), None);
+        assert_eq!(Kind::of_key("file"), None);
     }
 
     #[test]

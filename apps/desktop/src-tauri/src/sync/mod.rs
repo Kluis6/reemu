@@ -2,7 +2,9 @@
 //!
 //! - `api`: o cliente REST das rotas de save;
 //! - `device`: o payload de hardware e o armazenamento do aparelho (o token
-//!   `asv_...` só no chaveiro, o resto no SQLite).
+//!   `asv_...` só no chaveiro, o resto no SQLite);
+//! - `local`, `reconcile` e `engine`: os game saves deste disco, a regra de
+//!   três lados e as passadas que sobem, descem e guardam o conflito.
 //!
 //! O aparelho nasce uma vez, pelo token de acesso do parceiro (o par do
 //! "Entrar com Alvanista"). Dali em diante só o token do aparelho fala com
@@ -13,12 +15,9 @@
 
 pub mod api;
 pub mod device;
-// `local` e `reconcile` ainda não têm chamador: o motor (próxima task) passa a
-// usar e estes dois `allow` saem.
-#[allow(dead_code)]
+pub mod engine;
 pub mod local;
 pub mod platform;
-#[allow(dead_code)]
 pub mod reconcile;
 
 use crate::alvanista::client::ClientError;
@@ -29,6 +28,7 @@ use api::{ApiError, RemoteDevice, SavesApi};
 use device::{
     hardware_fingerprint, hardware_payload, Device, DeviceStore, HardwarePayload, LABEL_MAX_CHARS,
 };
+use engine::{Engine, Keep, PassScope, SaveLineStatus, SyncConflict, SyncVersion};
 use serde::Serialize;
 use std::future::Future;
 use std::sync::Arc;
@@ -647,12 +647,13 @@ impl SyncService {
             .collect())
     }
 
-    /// Atualiza a cota, o hardware e a lista de aparelhos. As rodadas de
-    /// arquivos entram na etapa seguinte.
+    /// "Sincronizar agora": a passada dos game saves (que lê a linha desta
+    /// máquina no site antes de tudo), depois o hardware e a cota.
     async fn now_with(
         &self,
         alva: &Alvanista,
         hw: HardwarePayload,
+        engine: Option<&Engine>,
     ) -> Result<SyncStatus, SyncError> {
         if !alva.has_session().await {
             return Err(SyncError::NoAccount);
@@ -661,17 +662,49 @@ impl SyncService {
             && self.devices.enabled().await.map_err(failed)?
         {
             let mut last: Option<SyncError> = None;
-            for step in [
-                self.refresh_hardware_with(alva, hw.clone()).await,
-                self.refresh_quota().await,
-            ] {
-                if let Err(e) = step {
-                    if last.as_ref().map_or(true, |l| severity(&e) > severity(l)) {
-                        last = Some(e);
+            let mut keep = |e: SyncError| {
+                if last.as_ref().map_or(true, |l| severity(&e) > severity(l)) {
+                    last = Some(e);
+                }
+            };
+            // Pausada só aqui: nem passada (a página já mostra a pausa).
+            let paused_here = self.devices.paused().await.map_err(failed)?;
+            let mut stop = false;
+            if let (Some(engine), false) = (engine, paused_here) {
+                match engine.pass(alva, PassScope::All).await {
+                    Ok(report) => {
+                        if let Some(e) = report.worst() {
+                            keep(e);
+                        }
+                    }
+                    Err(e) => {
+                        stop = matches!(
+                            e,
+                            SyncError::Revoked
+                                | SyncError::NoAccount
+                                | SyncError::NotEnabled
+                                | SyncError::Paused
+                        );
+                        keep(e);
                     }
                 }
             }
-            if last == Some(SyncError::Revoked) {
+            if !stop {
+                for step in [
+                    self.refresh_hardware_with(alva, hw.clone()).await,
+                    self.refresh_quota().await,
+                ] {
+                    match step {
+                        // Um 401 sozinho não prova revogação (o `SaveAuth`
+                        // também o devolve quando falha): quem decide é a
+                        // linha da lista do site, que a passada lê.
+                        Err(SyncError::Revoked) if engine.is_some() => keep(SyncError::Offline),
+                        Err(e) => keep(e),
+                        Ok(()) => {}
+                    }
+                }
+            }
+            if last == Some(SyncError::Revoked) && engine.is_none() {
                 self.mark_revoked().await;
             }
             self.runtime().last_error = last.map(|e| e.to_string());
@@ -765,13 +798,36 @@ pub struct SyncMachine {
     pub paused: bool,
 }
 
-/// Evento `sync`: a tela relê o estado.
+/// O canal dos eventos do sync.
 pub const SYNC_EVENT: &str = "sync";
 
+/// Os eventos do canal `sync` (o tipo `SyncEvent` de `lib/tauri.ts`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SyncEvent {
+    /// A tela relê o estado.
+    Status,
+    /// Uma passada terminou.
+    Pass { uploaded: u32, downloaded: u32 },
+    /// Um conflito novo.
+    Conflict { key: String },
+    /// Um código de `SyncError` (`revoked`, `quota`...).
+    Error { code: String },
+    /// A cota acabou: os envios pararam.
+    #[serde(rename_all = "camelCase")]
+    Quota { used_bytes: i64, limit_bytes: i64 },
+}
+
 fn emit_status(app: &AppHandle) {
-    if let Err(e) = app.emit(SYNC_EVENT, serde_json::json!({ "type": "status" })) {
+    if let Err(e) = app.emit(SYNC_EVENT, SyncEvent::Status) {
         log::warn!("sync: não avisou a interface: {e}");
     }
+}
+
+fn engine_of(app: &AppHandle) -> Result<Arc<Engine>, String> {
+    app.try_state::<Arc<Engine>>()
+        .map(|e| e.inner().clone())
+        .ok_or_else(|| "failed".to_owned())
 }
 
 fn services(app: &AppHandle) -> Result<(Arc<SyncService>, tauri::State<'_, Alvanista>), String> {
@@ -843,12 +899,72 @@ pub async fn sync_machines(app: AppHandle) -> Result<Vec<SyncMachine>, String> {
 #[tauri::command]
 pub async fn sync_now(app: AppHandle) -> Result<SyncStatus, String> {
     let (sync, alva) = services(&app)?;
+    let engine = engine_of(&app).ok();
     let status = sync
-        .now_with(&alva, current_hardware(&app))
+        .now_with(&alva, current_hardware(&app), engine.as_deref())
         .await
         .map_err(|e| e.to_string());
     emit_status(&app);
     status
+}
+
+/// Os conflitos abertos (D118).
+#[tauri::command]
+pub async fn sync_conflicts(app: AppHandle) -> Result<Vec<SyncConflict>, String> {
+    engine_of(&app)?
+        .conflicts()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Fecha um conflito: `keep` é `local` ou `remote`.
+#[tauri::command]
+pub async fn sync_resolve(app: AppHandle, key: String, keep: String) -> Result<(), String> {
+    let keep = match keep.as_str() {
+        "local" => Keep::Local,
+        "remote" => Keep::Remote,
+        other => {
+            log::warn!("sync: lado desconhecido para resolver: {other}");
+            return Err(SyncError::Failed(other.to_owned()).to_string());
+        }
+    };
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    engine
+        .resolve(&alva, &key, keep)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// As versões do save de uma chave, da mais nova para a mais velha.
+#[tauri::command]
+pub async fn sync_versions(app: AppHandle, key: String) -> Result<Vec<SyncVersion>, String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    engine
+        .versions(&alva, &key)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Volta uma versão do histórico (D124).
+#[tauri::command]
+pub async fn sync_restore(app: AppHandle, key: String, version_id: String) -> Result<(), String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    engine
+        .restore(&alva, &key, &version_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// A linha de save da página do jogo (sem rede).
+#[tauri::command]
+pub async fn sync_save_status(app: AppHandle, rom_id: String) -> Result<SaveLineStatus, String> {
+    engine_of(&app)?
+        .save_status(&rom_id)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Abre a pasta dos backups do sync (a cria se ainda não existe).
@@ -1697,7 +1813,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(remote("dev1", false, false)))
             .mount(&r.server)
             .await;
-        let st = r.sync.now_with(&r.alva, hw()).await.unwrap();
+        let st = r.sync.now_with(&r.alva, hw(), None).await.unwrap();
         assert_eq!(st.quota.map(|q| q.used_bytes), Some(5));
         assert_eq!(st.last_error, None);
     }
@@ -1721,7 +1837,7 @@ mod tests {
                 .mount(&r.server)
                 .await;
         }
-        let st = r.sync.now_with(&r.alva, hw()).await.unwrap();
+        let st = r.sync.now_with(&r.alva, hw(), None).await.unwrap();
         assert!(st.revoked);
         assert_eq!(st.last_error.as_deref(), Some("revoked"));
     }
@@ -1962,7 +2078,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(503))
             .mount(&r.server)
             .await;
-        let st = r.sync.now_with(&r.alva, hw()).await.unwrap();
+        let st = r.sync.now_with(&r.alva, hw(), None).await.unwrap();
         assert_eq!(st.last_error.as_deref(), Some("paused"));
         // Um "revoked" velho some quando a lista mostra o aparelho vivo.
         r.sync.runtime().last_error = Some("revoked".into());
@@ -2153,6 +2269,40 @@ mod tests {
         assert_eq!(
             SyncError::from(ApiError::Transient("x".into())),
             SyncError::Offline
+        );
+    }
+
+    /// O formato que `lib/tauri.ts` espera em `SyncEvent`.
+    #[test]
+    fn sync_events_serialize_as_the_frontend_reads_them() {
+        let json = |e: SyncEvent| serde_json::to_value(e).unwrap();
+        assert_eq!(
+            json(SyncEvent::Status),
+            serde_json::json!({"type": "status"})
+        );
+        assert_eq!(
+            json(SyncEvent::Pass {
+                uploaded: 1,
+                downloaded: 2
+            }),
+            serde_json::json!({"type": "pass", "uploaded": 1, "downloaded": 2})
+        );
+        assert_eq!(
+            json(SyncEvent::Conflict { key: "k".into() }),
+            serde_json::json!({"type": "conflict", "key": "k"})
+        );
+        assert_eq!(
+            json(SyncEvent::Error {
+                code: "revoked".into()
+            }),
+            serde_json::json!({"type": "error", "code": "revoked"})
+        );
+        assert_eq!(
+            json(SyncEvent::Quota {
+                used_bytes: 5,
+                limit_bytes: 9
+            }),
+            serde_json::json!({"type": "quota", "usedBytes": 5, "limitBytes": 9})
         );
     }
 

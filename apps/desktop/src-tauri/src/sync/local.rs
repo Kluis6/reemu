@@ -11,9 +11,9 @@
 //! existe (`NotFound`) é uma pasta vazia.
 
 use super::platform::platform_for_system;
-use domain::library::RomRepository;
+use domain::library::{Rom, RomRepository};
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -35,6 +35,8 @@ pub struct SaveFile {
     pub key: String,
     /// A ROM dona do arquivo; `None` para cartões e VMUs.
     pub rom_id: Option<String>,
+    /// O CRC32 dessa ROM (D113: fica ao lado da base).
+    pub rom_crc32: Option<String>,
     pub platform: &'static str,
     /// O campo `core` da linha na nuvem: a pasta, como a porta WebDAV do
     /// Alvanista arquiva esses arquivos. `None` para os saves de ROM.
@@ -125,77 +127,239 @@ fn system_files(
 /// Plataforma, `core` e filtro de nome de um grupo de arquivos de sistema.
 type SystemGroup = (&'static str, &'static str, fn(&str) -> bool);
 
-/// Os arquivos de save da conta que existem agora neste disco, na ordem das
-/// ROMs da biblioteca e depois cartões e VMUs. Chave ou caminho repetido fica
-/// uma vez só (duas ROMs de mesmo stem dividem o mesmo arquivo).
-pub async fn account_saves(
-    repo: &dyn RomRepository,
-    save_dir: &Path,
-    system_dir: &Path,
-) -> Result<Vec<SaveFile>, String> {
-    let roms = repo
-        .list()
-        .await
-        .map_err(|e| format!("lista de ROMs: {e}"))?;
-    let mut out = Vec::new();
-    let mut seen_keys = HashSet::new();
-    let mut seen_paths = HashSet::new();
+const SYSTEM_GROUPS: [SystemGroup; 2] = [
+    ("ps2", PS2_CORE, is_ps2_card),
+    ("dreamcast", DC_CORE, is_vmu_name),
+];
 
-    for rom in roms {
-        let platform = platform_for_system(&rom.system_id);
-        let srm = emu_session::srm_path(save_dir, &rom.file_path);
-        let Some(srm_name) = srm.file_name().and_then(|n| n.to_str()) else {
-            continue;
+/// Nome de arquivo sem pasta: nada de `/`, `\`, `:` nem `..`. Um nome que vem
+/// da nuvem nunca escolhe a pasta onde o arquivo vai parar.
+fn plain_name(name: &str) -> bool {
+    !name.is_empty()
+        && name != "."
+        && name != ".."
+        && !name.contains(['/', '\\', ':', '\0'])
+        && Path::new(name).file_name().is_some_and(|n| n == name)
+}
+
+/// Plataforma, `core` (só cartões e VMUs) e nome de arquivo de uma chave
+/// `file:<plataforma>/<arquivo>` ou `file:<plataforma>/<core>/<arquivo>`.
+pub fn parse_key(key: &str) -> Option<(&str, Option<&str>, &str)> {
+    let rest = key.strip_prefix("file:")?;
+    let (platform, path) = rest.split_once('/')?;
+    Some(match path.rsplit_once('/') {
+        Some((core, filename)) => (platform, Some(core), filename),
+        None => (platform, None, path),
+    })
+}
+
+/// Uma ROM da biblioteca, pelo que o cloud save precisa dela.
+#[derive(Debug, Clone)]
+struct RomRef {
+    id: String,
+    crc32: String,
+    platform: &'static str,
+}
+
+/// O que `account_saves` achou: os arquivos de save em disco agora e, para
+/// cada ROM da biblioteca, onde o save dela fica (exista ou não), para um
+/// save que só a nuvem tem saber onde descer.
+#[derive(Debug, Default)]
+pub struct LocalSaves {
+    /// Os arquivos em disco, na ordem das ROMs da biblioteca e depois cartões
+    /// e VMUs. Chave ou caminho repetido fica uma vez só (duas ROMs de mesmo
+    /// stem dividem o mesmo arquivo).
+    pub files: Vec<SaveFile>,
+    save_dir: PathBuf,
+    system_dir: PathBuf,
+    /// Stem do save -> as ROMs com esse stem, na ordem da biblioteca.
+    stems: HashMap<String, Vec<RomRef>>,
+    /// Id da ROM -> plataforma da nuvem.
+    platforms: HashMap<String, &'static str>,
+}
+
+impl LocalSaves {
+    /// Onde fica, neste disco, o save de ROM chamado `filename`: um por
+    /// plataforma das ROMs com esse stem, exista o arquivo ou não. Nome com
+    /// pasta ou extensão que não é de save não tem lugar.
+    pub fn rom_slots(&self, filename: &str) -> Vec<SaveFile> {
+        let Some((stem, ext)) = filename.rsplit_once('.') else {
+            return Vec::new();
         };
-        // `srm_path` termina sempre em `.srm`; o stem pode ter pontos
-        // ("Game v1.2"), então a troca de extensão é por texto, não por `Path`.
-        let stem = srm_name.strip_suffix(".srm").unwrap_or(srm_name);
-        for ext in ROM_SAVE_EXTENSIONS {
+        if !plain_name(filename) || !ROM_SAVE_EXTENSIONS.contains(&ext) {
+            return Vec::new();
+        }
+        let mut platforms = HashSet::new();
+        self.stems
+            .get(stem)
+            .into_iter()
+            .flatten()
+            .filter(|r| platforms.insert(r.platform))
+            .map(|r| SaveFile {
+                key: format!("file:{}/{filename}", r.platform),
+                rom_id: Some(r.id.clone()),
+                rom_crc32: Some(r.crc32.clone()),
+                platform: r.platform,
+                core: None,
+                filename: filename.to_owned(),
+                path: self.save_dir.join(filename),
+            })
+            .collect()
+    }
+
+    /// Onde fica um cartão do PS2 ou um VMU (`core` é a pasta, como na nuvem).
+    /// `None` para nome que não é de cartão ou VMU, ou que traz pasta.
+    pub fn system_slot(&self, core: &str, filename: &str) -> Option<SaveFile> {
+        if !plain_name(filename) {
+            return None;
+        }
+        let (platform, core, accept) = SYSTEM_GROUPS.iter().find(|g| g.1 == core)?;
+        if !accept(filename) {
+            return None;
+        }
+        let rel = core.strip_prefix("system/").unwrap_or(core);
+        Some(SaveFile {
+            key: format!("file:{platform}/{core}/{filename}"),
+            rom_id: None,
+            rom_crc32: None,
+            platform,
+            core: Some(core),
+            filename: filename.to_owned(),
+            path: self.system_dir.join(rel).join(filename),
+        })
+    }
+
+    /// O arquivo de uma chave, exista ou não; `None` quando a chave não é de
+    /// nenhuma ROM da biblioteca nem de cartão ou VMU.
+    pub fn slot_for_key(&self, key: &str) -> Option<SaveFile> {
+        let (platform, core, filename) = parse_key(key)?;
+        match core {
+            Some(core) => self
+                .system_slot(core, filename)
+                .filter(|s| s.platform == platform),
+            None => self
+                .rom_slots(filename)
+                .into_iter()
+                .find(|s| s.platform == platform),
+        }
+    }
+
+    /// A plataforma da nuvem de uma ROM da biblioteca.
+    pub fn rom_platform(&self, rom_id: &str) -> Option<&'static str> {
+        self.platforms.get(rom_id).copied()
+    }
+}
+
+/// O stem dos saves de uma ROM: o mesmo que a sessão usa para o `.srm`.
+fn save_stem(save_dir: &Path, rom: &Rom) -> Option<String> {
+    let srm = emu_session::srm_path(save_dir, &rom.file_path);
+    let name = srm.file_name()?.to_str()?;
+    // `srm_path` termina sempre em `.srm`; o stem pode ter pontos
+    // ("Game v1.2"), então a troca de extensão é por texto, não por `Path`.
+    Some(name.strip_suffix(".srm").unwrap_or(name).to_owned())
+}
+
+/// Onde os saves de uma ROM ficam neste disco, existam ou não: um por
+/// extensão de save, na ordem de `ROM_SAVE_EXTENSIONS`.
+pub fn rom_slot_files(rom: &Rom, save_dir: &Path) -> Vec<SaveFile> {
+    let Some(stem) = save_stem(save_dir, rom) else {
+        return Vec::new();
+    };
+    let platform = platform_for_system(&rom.system_id);
+    ROM_SAVE_EXTENSIONS
+        .iter()
+        .map(|ext| {
             let filename = format!("{stem}.{ext}");
-            let path = save_dir.join(&filename);
-            match std::fs::metadata(&path) {
-                Ok(m) if m.is_file() => {}
-                Ok(_) => continue,
-                Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(io_err(&path, &e)),
-            }
-            let key = format!("file:{platform}/{filename}");
-            if !seen_paths.insert(path.clone()) || !seen_keys.insert(key.clone()) {
-                continue;
-            }
-            out.push(SaveFile {
-                key,
+            SaveFile {
+                key: format!("file:{platform}/{filename}"),
                 rom_id: Some(rom.id.clone()),
+                rom_crc32: Some(rom.crc32.clone()),
                 platform,
                 core: None,
+                path: save_dir.join(&filename),
+                filename,
+            }
+        })
+        .collect()
+}
+
+/// Os cartões e VMUs em disco da plataforma `platform` (nenhum para as
+/// plataformas sem arquivo de sistema). Erro de leitura é erro.
+pub fn system_saves(system_dir: &Path, platform: &str) -> Result<Vec<SaveFile>, String> {
+    let mut out = Vec::new();
+    for (p, core, accept) in SYSTEM_GROUPS {
+        if p != platform {
+            continue;
+        }
+        // `core` é "system/<pasta>": a pasta no disco é relativa à de sistema.
+        let rel = core.strip_prefix("system/").unwrap_or(core);
+        for (filename, path) in system_files(&system_dir.join(rel), accept)? {
+            out.push(SaveFile {
+                key: format!("file:{p}/{core}/{filename}"),
+                rom_id: None,
+                rom_crc32: None,
+                platform: p,
+                core: Some(core),
                 filename,
                 path,
             });
         }
     }
+    Ok(out)
+}
 
-    let groups: [SystemGroup; 2] = [
-        ("ps2", PS2_CORE, is_ps2_card),
-        ("dreamcast", DC_CORE, is_vmu_name),
-    ];
-    for (platform, core, accept) in groups {
-        // `core` é "system/<pasta>": a pasta no disco é relativa à de sistema.
-        let rel = core.strip_prefix("system/").unwrap_or(core);
-        for (filename, path) in system_files(&system_dir.join(rel), accept)? {
-            let key = format!("file:{platform}/{core}/{filename}");
-            if seen_paths.insert(path.clone()) && seen_keys.insert(key.clone()) {
-                out.push(SaveFile {
-                    key,
-                    rom_id: None,
-                    platform,
-                    core: Some(core),
-                    filename,
-                    path,
-                });
+/// Os arquivos de save da conta que existem agora neste disco (`files`) e o
+/// mapa de onde fica o save de cada ROM. Erro de leitura é erro: o motor
+/// aborta a passada.
+pub async fn account_saves(
+    repo: &dyn RomRepository,
+    save_dir: &Path,
+    system_dir: &Path,
+) -> Result<LocalSaves, String> {
+    let roms = repo
+        .list()
+        .await
+        .map_err(|e| format!("lista de ROMs: {e}"))?;
+    let mut saves = LocalSaves {
+        save_dir: save_dir.to_owned(),
+        system_dir: system_dir.to_owned(),
+        ..LocalSaves::default()
+    };
+    let mut seen_keys = HashSet::new();
+    let mut seen_paths = HashSet::new();
+
+    for rom in roms {
+        let platform = platform_for_system(&rom.system_id);
+        saves.platforms.insert(rom.id.clone(), platform);
+        if let Some(stem) = save_stem(save_dir, &rom) {
+            saves.stems.entry(stem).or_default().push(RomRef {
+                id: rom.id.clone(),
+                crc32: rom.crc32.clone(),
+                platform,
+            });
+        }
+        for file in rom_slot_files(&rom, save_dir) {
+            match std::fs::metadata(&file.path) {
+                Ok(m) if m.is_file() => {}
+                Ok(_) => continue,
+                Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(io_err(&file.path, &e)),
+            }
+            if !seen_paths.insert(file.path.clone()) || !seen_keys.insert(file.key.clone()) {
+                continue;
+            }
+            saves.files.push(file);
+        }
+    }
+
+    for (platform, _, _) in SYSTEM_GROUPS {
+        for file in system_saves(system_dir, platform)? {
+            if seen_paths.insert(file.path.clone()) && seen_keys.insert(file.key.clone()) {
+                saves.files.push(file);
             }
         }
     }
-    Ok(out)
+    Ok(saves)
 }
 
 #[cfg(test)]
@@ -270,7 +434,7 @@ mod tests {
         ])
         .await;
 
-        let got = account_saves(&repo, &saves, &system).await.unwrap();
+        let got = account_saves(&repo, &saves, &system).await.unwrap().files;
         let keys: Vec<&str> = got.iter().map(|s| s.key.as_str()).collect();
         assert_eq!(
             keys,
@@ -311,10 +475,97 @@ mod tests {
         .await;
         let got = account_saves(&repo, &saves, &root.join("system"))
             .await
-            .unwrap();
+            .unwrap()
+            .files;
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].key, "file:gba/Game.srm");
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn slots_say_where_a_cloud_save_lands_even_without_a_file() {
+        let root = temp("slots");
+        let saves = root.join("saves");
+        let system = root.join("system");
+        let repo = repo_with(&[
+            ("r1", "C:/roms/Zelda.gba", "gba"),
+            ("r2", "C:/roms/Zelda.nes", "nes"),
+            ("r3", "C:/roms/Chrono.sfc", "snes"),
+        ])
+        .await;
+        let local = account_saves(&repo, &saves, &system).await.unwrap();
+        assert!(local.files.is_empty());
+
+        // Duas ROMs de mesmo stem: uma vaga por plataforma, o mesmo caminho.
+        let slots = local.rom_slots("Zelda.srm");
+        let keys: Vec<&str> = slots.iter().map(|s| s.key.as_str()).collect();
+        assert_eq!(keys, vec!["file:gba/Zelda.srm", "file:nes/Zelda.srm"]);
+        assert!(slots.iter().all(|s| s.path == saves.join("Zelda.srm")));
+        assert_eq!(slots[0].rom_id.as_deref(), Some("r1"));
+        assert_eq!(slots[0].rom_crc32.as_deref(), Some("CRC"));
+        // Extensão que não é de save, nome com pasta ou sem ROM: sem lugar.
+        assert!(local.rom_slots("Zelda.txt").is_empty());
+        assert!(local.rom_slots("../Zelda.srm").is_empty());
+        assert!(local.rom_slots("sub/Zelda.srm").is_empty());
+        assert!(local.rom_slots("Absent.srm").is_empty());
+
+        let card = local
+            .system_slot("system/pcsx2/memcards", "Mcd001.ps2")
+            .unwrap();
+        assert_eq!(card.key, "file:ps2/system/pcsx2/memcards/Mcd001.ps2");
+        assert_eq!(
+            card.path,
+            system.join("pcsx2").join("memcards").join("Mcd001.ps2")
+        );
+        assert_eq!(card.core, Some("system/pcsx2/memcards"));
+        let vmu = local.system_slot("system/dc", "vmu_save_A1.bin").unwrap();
+        assert_eq!(vmu.platform, "dreamcast");
+        assert_eq!(vmu.path, system.join("dc").join("vmu_save_A1.bin"));
+        // Um nome da nuvem nunca escolhe a pasta.
+        for (core, name) in [
+            ("system/pcsx2/memcards", "../../evil.ps2"),
+            ("system/pcsx2/memcards", "..\\evil.ps2"),
+            ("system/pcsx2/memcards", "C:evil.ps2"),
+            ("system/pcsx2/memcards", "notes.txt"),
+            ("system/dc", "vmu_save_e1.bin"),
+            ("system/other", "Mcd001.ps2"),
+        ] {
+            assert!(local.system_slot(core, name).is_none(), "{core} {name}");
+        }
+
+        assert_eq!(
+            local.slot_for_key("file:snes/Chrono.srm").unwrap().rom_id,
+            Some("r3".into())
+        );
+        assert!(local.slot_for_key("file:gba/Chrono.srm").is_none());
+        assert_eq!(
+            local
+                .slot_for_key("file:ps2/system/pcsx2/memcards/Mcd001.ps2")
+                .unwrap()
+                .path,
+            card.path
+        );
+        assert!(local
+            .slot_for_key("file:dreamcast/system/pcsx2/memcards/Mcd001.ps2")
+            .is_none());
+        assert!(local.slot_for_key("state:snes/x/Chrono.state").is_none());
+        assert_eq!(local.rom_platform("r3"), Some("snes"));
+        assert_eq!(local.rom_platform("nope"), None);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn parse_key_splits_platform_core_and_name() {
+        assert_eq!(
+            parse_key("file:gba/Zelda.srm"),
+            Some(("gba", None, "Zelda.srm"))
+        );
+        assert_eq!(
+            parse_key("file:ps2/system/pcsx2/memcards/Mcd001.ps2"),
+            Some(("ps2", Some("system/pcsx2/memcards"), "Mcd001.ps2"))
+        );
+        assert_eq!(parse_key("state:snes/x/a.state"), None);
+        assert_eq!(parse_key("file:nothing"), None);
     }
 
     #[tokio::test]
@@ -323,7 +574,8 @@ mod tests {
         let repo = repo_with(&[("r1", "C:/roms/Zelda.gba", "gba")]).await;
         let got = account_saves(&repo, &root.join("saves"), &root.join("system"))
             .await
-            .unwrap();
+            .unwrap()
+            .files;
         assert!(got.is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -335,7 +587,7 @@ mod tests {
         let repo = RomsRepo::new(db.clone());
         db.close().await;
         let got = account_saves(&repo, &root.join("saves"), &root.join("system")).await;
-        assert!(got.is_err(), "{got:?}");
+        assert!(got.is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -348,7 +600,7 @@ mod tests {
         std::fs::write(system.join("pcsx2").join("memcards"), b"not a dir").unwrap();
         let repo = repo_with(&[]).await;
         let got = account_saves(&repo, &root.join("saves"), &system).await;
-        assert!(got.is_err(), "{got:?}");
+        assert!(got.is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 

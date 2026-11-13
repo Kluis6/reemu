@@ -132,7 +132,7 @@ fn label_from_host(host: Option<String>) -> String {
 }
 
 /// Segundos Unix em RFC 3339 UTC (`2026-11-13T10:00:00Z`).
-fn rfc3339(secs: i64) -> String {
+pub(super) fn rfc3339(secs: i64) -> String {
     let days = secs.div_euclid(86_400);
     let rem = secs.rem_euclid(86_400);
     // Dias desde 1970-01-01 em data civil (Howard Hinnant, `civil_from_days`).
@@ -229,6 +229,12 @@ impl DeviceStore {
             first.get_or_insert(e);
         }
         first.map_or(Ok(()), Err)
+    }
+
+    /// Tira só o token do chaveiro: o id e o nome ficam para "Ligar de novo"
+    /// criar o aparelho novo com o nome que a pessoa escolheu.
+    pub fn drop_token(&self) -> Result<(), String> {
+        self.secrets.delete(TOKEN_ACCOUNT)
     }
 
     pub async fn set_label(&self, label: &str) -> Result<(), String> {

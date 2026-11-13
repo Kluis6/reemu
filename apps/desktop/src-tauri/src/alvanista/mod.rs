@@ -624,16 +624,23 @@ pub fn refresh_on_start(app: &AppHandle) {
     }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let Some(alva) = app.try_state::<Alvanista>() else {
-            return;
-        };
-        let Some(status) = alva.refresh_if_connected().await else {
-            return;
-        };
-        if let Err(e) = tauri::Emitter::emit(&app, STATUS_EVENT, &status) {
-            log::warn!("alvanista: não avisou a interface da renovação: {e}");
-        }
+        refresh_profile_now(&app).await;
+        // O cloud save começa depois: a primeira passada usa o par que a
+        // renovação deixou.
+        crate::sync::engine::run_on_start(app).await;
     });
+}
+
+async fn refresh_profile_now(app: &AppHandle) {
+    let Some(alva) = app.try_state::<Alvanista>() else {
+        return;
+    };
+    let Some(status) = alva.refresh_if_connected().await else {
+        return;
+    };
+    if let Err(e) = tauri::Emitter::emit(app, STATUS_EVENT, &status) {
+        log::warn!("alvanista: não avisou a interface da renovação: {e}");
+    }
 }
 
 fn state_of(app: &AppHandle) -> Result<tauri::State<'_, Alvanista>, String> {
