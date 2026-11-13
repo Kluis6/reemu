@@ -3407,3 +3407,11 @@ Infra:
 - **Revogação:** desconectar do Alvanista revoga o aparelho antes do par do parceiro. Aparelho revogado, ou que sumiu da lista do site, aparece como removido, com "Ligar de novo"; pausado no site bloqueia renomear e sincronizar (o servidor responde 423).
 - **Tela:** Configurações › Sincronização mostra esta máquina, o espaço usado, o que sincroniza (cada linha com "em breve" até a parte que a traz) e as máquinas da conta. Sem plano, "Ver planos" abre o site, e a volta à janela relê o estado, que confere o plano no `/me`. O card do Perfil na grade de Configurações deixa de ocupar duas colunas.
 - **Erros:** os comandos de `sync/` seguem o padrão de `alvanista/` (`String` com código; `sync.err.*` na interface).
+
+## 2026-11-13 — `PlayScreen` dividido
+
+- **Antes:** 1.106 linhas num arquivo, com um componente de ~500 linhas (item 11 da análise).
+- **Agora:** `PlayScreen.tsx` (129 linhas) só monta as partes, que ficam em `screens/play/`: `useLaunchInfo` (core e arquivo a abrir), `useGameSession` (carregar/descarregar, com o unload adiado do StrictMode, e os avisos de QuickSave/QuickLoad pelo atalho), `useCanvasVideo` (loops de fetch e de pintura, moldura e viewport dos shaders), `usePauseBackground` (camada opaca e print do jogo no vídeo nativo), `PauseMenu` (drawer com as abas, save states e rodapé), `LaunchScreens` (abertura, erro e "sem alvo") e `styles.ts`.
+- **Uma correção no caminho:** o `ResizeObserver` que informa ao backend o tamanho do canvas (viewport dos shaders) dependia só de `[nativeVideo, deco]`; na 1ª execução o canvas ainda não existia (tela de abertura), e o efeito só voltava a rodar quando aparecia uma moldura. Sem moldura, o viewport nunca era enviado no modo canvas. Agora ele também depende do jogo estar carregado.
+- **Conferido:** `tsc -b`, `oxlint`, 301 testes do frontend; no navegador de teste, jogo carregado com o canvas, menu de pausa com as 3 abas, save states e troca de aba pelo LB/RB, tela de erro e tela "sem alvo".
+
