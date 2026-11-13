@@ -16,6 +16,8 @@ const DEVICE_ID_KEY: &str = "sync.device_id";
 const LABEL_KEY: &str = "sync.label";
 const ENABLED_KEY: &str = "sync.enabled";
 const PAUSED_KEY: &str = "sync.paused";
+/// O interruptor dos game saves: ausente vale ligado (só o `0` desliga).
+const SAVES_ENABLED_KEY: &str = "sync.saves_enabled";
 const HW_FINGERPRINT_KEY: &str = "sync.hw_fingerprint";
 const HW_SENT_AT_KEY: &str = "sync.hw_sent_at";
 /// Os últimos GPU, backend e driver enviados (JSON), para não apagá-los
@@ -216,6 +218,7 @@ impl DeviceStore {
             LABEL_KEY,
             ENABLED_KEY,
             PAUSED_KEY,
+            SAVES_ENABLED_KEY,
             HW_FINGERPRINT_KEY,
             HW_SENT_AT_KEY,
             HW_GPU_KEY,
@@ -256,6 +259,22 @@ impl DeviceStore {
 
     pub async fn set_paused(&self, on: bool) -> Result<(), String> {
         self.set_flag(PAUSED_KEY, on).await
+    }
+
+    /// Os game saves sincronizam? Ausente vale sim.
+    pub async fn saves_enabled(&self) -> Result<bool, String> {
+        Ok(self.get(SAVES_ENABLED_KEY).await?.as_deref() != Some("0"))
+    }
+
+    pub async fn set_saves_enabled(&self, on: bool) -> Result<(), String> {
+        if on {
+            self.repo
+                .state_delete(SAVES_ENABLED_KEY)
+                .await
+                .map_err(|e| e.to_string())
+        } else {
+            self.set(SAVES_ENABLED_KEY, "0").await
+        }
     }
 
     async fn set_flag(&self, key: &str, on: bool) -> Result<(), String> {
@@ -513,6 +532,19 @@ mod tests {
         assert_eq!(store.hw_gpu().await.unwrap(), Some(gpu));
         store.forget().await.unwrap();
         assert_eq!(store.hw_gpu().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn the_saves_switch_defaults_on_and_forget_puts_it_back() {
+        let (store, _, _) = store(MemSecrets::default()).await;
+        assert!(store.saves_enabled().await.unwrap());
+        store.set_saves_enabled(false).await.unwrap();
+        assert!(!store.saves_enabled().await.unwrap());
+        store.set_saves_enabled(true).await.unwrap();
+        assert!(store.saves_enabled().await.unwrap());
+        store.set_saves_enabled(false).await.unwrap();
+        store.forget().await.unwrap();
+        assert!(store.saves_enabled().await.unwrap());
     }
 
     #[tokio::test]

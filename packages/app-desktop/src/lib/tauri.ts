@@ -24,8 +24,12 @@ import type { Gamepad } from './bindings/Gamepad'
 import type { HardwareInfo } from './bindings/HardwareInfo'
 import type { HardwarePayload } from './bindings/HardwarePayload'
 import type { Quota } from './bindings/Quota'
+import type { SaveLineStatus } from './bindings/SaveLineStatus'
+import type { Side } from './bindings/Side'
+import type { SyncConflict } from './bindings/SyncConflict'
 import type { SyncMachine } from './bindings/SyncMachine'
 import type { SyncStatus } from './bindings/SyncStatus'
+import type { SyncVersion } from './bindings/SyncVersion'
 import type { HdrStatus } from './bindings/HdrStatus'
 import type { KeyboardBinding } from './bindings/KeyboardBinding'
 import type { MetadataConfig } from './bindings/MetadataConfig'
@@ -600,7 +604,7 @@ export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Prom
 
 // --- cloud save: esta máquina como aparelho da conta --------------------
 
-export type { HardwarePayload, Quota, SyncMachine, SyncStatus }
+export type { HardwarePayload, Quota, SaveLineStatus, Side, SyncConflict, SyncMachine, SyncStatus, SyncVersion }
 
 /** Eventos do canal `sync`. `status`: a tela relê o estado. */
 export type SyncEvent =
@@ -623,8 +627,24 @@ export const syncSetEnabled = (enabled: boolean, lang: string = i18n.language) =
 export const syncSetLabel = (label: string) => invoke<SyncStatus>('sync_set_label', { label })
 /** Pausa só nesta máquina. */
 export const syncSetPaused = (paused: boolean) => invoke<SyncStatus>('sync_set_paused', { paused })
+/** O interruptor dos game saves (os states e as configurações têm o deles). */
+export const syncSetSavesEnabled = (enabled: boolean) =>
+  invoke<SyncStatus>('sync_set_saves_enabled', { enabled })
 export const syncMachines = () => invoke<SyncMachine[]>('sync_machines')
 export const syncNow = () => invoke<SyncStatus>('sync_now')
+/** Os conflitos abertos de save (sem rede). */
+export const syncConflicts = () => invoke<SyncConflict[]>('sync_conflicts')
+/** Fecha um conflito: `local` mantém o save desta máquina, `remote` o da nuvem.
+ *  O outro vai para o histórico e para a pasta de resguardo. */
+export const syncResolve = (key: string, keep: 'local' | 'remote') =>
+  invoke<void>('sync_resolve', { key, keep })
+/** As versões de um save, da mais nova para a mais velha. */
+export const syncVersions = (key: string) => invoke<SyncVersion[]>('sync_versions', { key })
+/** Volta uma versão do histórico; o save de agora vai para o resguardo. */
+export const syncRestore = (key: string, versionId: string) =>
+  invoke<void>('sync_restore', { key, versionId })
+/** A linha de save da página do jogo (só disco e SQLite, sem rede). */
+export const syncSaveStatus = (romId: string) => invoke<SaveLineStatus>('sync_save_status', { romId })
 /** Abre a pasta dos backups do sync no gerenciador de arquivos. */
 export const syncOpenBackups = () => invoke<void>('sync_open_backups')
 export async function onSyncEvent(cb: (e: SyncEvent) => void): Promise<() => void> {

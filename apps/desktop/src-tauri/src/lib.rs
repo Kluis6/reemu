@@ -367,6 +367,7 @@ pub fn run() {
             sync::sync_set_enabled,
             sync::sync_set_label,
             sync::sync_set_paused,
+            sync::sync_set_saves_enabled,
             sync::sync_machines,
             sync::sync_now,
             sync::sync_open_backups,

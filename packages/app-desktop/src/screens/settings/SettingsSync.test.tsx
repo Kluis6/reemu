@@ -13,6 +13,9 @@ const api = vi.hoisted(() => ({
   syncSetEnabled: vi.fn(),
   syncSetLabel: vi.fn(),
   syncSetPaused: vi.fn(),
+  syncSetSavesEnabled: vi.fn(),
+  syncConflicts: vi.fn(),
+  syncResolve: vi.fn(),
   syncNow: vi.fn(),
   alvanistaConnect: vi.fn(),
   alvanistaCancel: vi.fn(),
@@ -22,6 +25,20 @@ const api = vi.hoisted(() => ({
 vi.mock('../../lib/tauri', async (orig) => ({
   ...(await orig<typeof import('../../lib/tauri')>()),
   ...api,
+}))
+
+// O Dialog do Fluent não monta no happy-dom desta árvore ("presenceFn is not a
+// function"): o diálogo de tela cheia vira uma camada simples.
+vi.mock('../../components/FullscreenDialog', () => ({
+  FullscreenDialog: (p: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; actions?: React.ReactNode }) =>
+    p.open ? (
+      <div className="fui-DialogSurface" role="dialog">
+        <h2>{p.title}</h2>
+        <button onClick={p.onClose}>fechar</button>
+        {p.children}
+        {p.actions}
+      </div>
+    ) : null,
 }))
 
 import { SettingsSync } from './SettingsSync'
@@ -55,6 +72,7 @@ const OFF: SyncStatus = {
   hardware: HW,
   quota: null,
   lastPassAt: null,
+  savesEnabled: true,
   conflicts: 0,
   lastError: null,
 }
@@ -192,12 +210,72 @@ describe('SettingsSync', () => {
     expect(api.syncStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('marks every "O que sincroniza" row as em breve', async () => {
+  it('only states and settings stay em breve; game saves have a real switch', async () => {
+    api.syncStatus.mockResolvedValue(ON)
     await mount()
-    for (const row of ['Game saves', 'Save states', 'Configurações']) {
+    for (const row of ['Save states', 'Configurações']) {
       const title = [...host.querySelectorAll('span')].find((e) => e.firstElementChild?.textContent === row)
       expect(title?.textContent).toContain('em breve')
     }
+    const saves = [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][1]
+    expect(saves.closest('label')?.textContent).toContain('Game saves')
+    expect(saves.closest('label')?.textContent).not.toContain('em breve')
+    expect(saves.checked).toBe(true)
+  })
+
+  it('turns the game saves switch off through syncSetSavesEnabled', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSetSavesEnabled.mockResolvedValue({ ...ON, savesEnabled: false })
+    await mount()
+    const saves = () => [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][1]
+    await act(async () => saves().click())
+    await settle()
+    expect(api.syncSetSavesEnabled).toHaveBeenCalledWith(false)
+    expect(saves().checked).toBe(false)
+  })
+
+  it('the game saves switch is disabled while sync is off', async () => {
+    await mount()
+    expect([...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][1].disabled).toBe(true)
+  })
+
+  it('hides Conflitos with zero and resolves the conflicts one after another', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    await mount()
+    expect(host.textContent).not.toContain('Conflitos')
+    await unmount()
+    host.remove()
+
+    const side = (machine: string) => ({ machine, savedAt: 1_700_000_000, size: 2048 })
+    const c = (key: string, title: string) => ({
+      key,
+      romId: null,
+      title,
+      local: side('PC-SALA'),
+      remote: side('Notebook'),
+    })
+    let open = [c('k1', 'Zelda'), c('k2', 'Chrono')]
+    api.syncStatus.mockResolvedValue({ ...ON, conflicts: 2 })
+    api.syncConflicts.mockImplementation(async () => open)
+    api.syncResolve.mockImplementation(async (key: string) => {
+      open = open.filter((x) => x.key !== key)
+    })
+    await mount()
+    expect(host.textContent).toContain('Conflitos')
+    expect(host.textContent).toContain('2 game saves mudaram nas duas máquinas.')
+    await act(async () => byText('Resolver')!.click())
+    await settle()
+    const dialog = () => document.querySelector('.fui-DialogSurface')
+    expect(dialog()?.textContent).toContain('Zelda mudou nas duas máquinas')
+    const keepThis = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Manter esta')!
+    await act(async () => keepThis().click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenCalledWith('k1', 'local')
+    expect(dialog()?.textContent).toContain('Chrono mudou nas duas máquinas')
+    await act(async () => keepThis().click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenCalledWith('k2', 'local')
+    expect(dialog()).toBeNull()
   })
 
   it('offers Copiar configurações only on other ReEmu machines (D119)', async () => {

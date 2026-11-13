@@ -297,6 +297,9 @@ impl Engine {
     pub async fn pass(&self, alva: &Alvanista, scope: PassScope) -> Result<PassReport, SyncError> {
         let _one = self.one_at_a_time.lock().await;
         let device = self.ready(alva).await?;
+        if !self.saves_on().await? {
+            return Ok(PassReport::default());
+        }
         let result = self.run(alva, &device, &scope, Mode::Pass).await;
         self.finish(&result, Mode::Pass).await;
         result
@@ -305,6 +308,9 @@ impl Engine {
     /// Antes de abrir um jogo: só o save daquele jogo, no máximo 5 s. Passado
     /// o prazo o jogo abre com o save local.
     pub async fn prelaunch(&self, alva: &Alvanista, rom_id: &str) -> PrelaunchOutcome {
+        if !matches!(self.saves_on().await, Ok(true)) {
+            return PrelaunchOutcome::Skipped("saves_off".into());
+        }
         let work = async {
             let _one = self.one_at_a_time.lock().await;
             let device = self.ready(alva).await?;
@@ -323,6 +329,11 @@ impl Engine {
                 None => PrelaunchOutcome::UpToDate,
             },
         }
+    }
+
+    /// O interruptor dos game saves: desligado, a passada não faz nada.
+    async fn saves_on(&self) -> Result<bool, SyncError> {
+        self.sync.devices.saves_enabled().await.map_err(failed)
     }
 
     /// Sessão, aparelho, ligado e sem pausa local. Só o SQLite: nem chaveiro
@@ -2747,6 +2758,52 @@ mod tests {
         assert_eq!(r.pass().await, Err(SyncError::Revoked));
         assert_eq!(r.sync.devices.token().unwrap(), None);
         assert!(!r.sync.devices.enabled().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn saves_off_makes_no_save_request_and_writes_nothing() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("saves-off").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        r.rom("r2", "Chrono.sfc", "snes").await;
+        r.write("saves/Zelda.srm", b"local");
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(
+            &r.server,
+            vec![row("s2", "Chrono.srm", "snes", None, b"cloud", "v1", None)],
+        )
+        .await;
+        mount_content(&r.server, "s2", "v1", b"cloud").await;
+        r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v0"))
+            .await;
+        r.sync.devices.set_saves_enabled(false).await.unwrap();
+        assert!(!r.sync.devices.saves_enabled().await.unwrap());
+
+        let report = r.pass().await.unwrap();
+        assert_eq!((report.uploaded, report.downloaded), (0, 0));
+        assert_eq!(
+            r.engine.prelaunch(&r.alva, "r2").await,
+            PrelaunchOutcome::Skipped("saves_off".into())
+        );
+        r.engine
+            .pass(&r.alva, PassScope::Rom("r1".into()))
+            .await
+            .unwrap();
+
+        assert!(
+            r.server.received_requests().await.unwrap().is_empty(),
+            "nenhum pedido, nem a lista de aparelhos"
+        );
+        assert_eq!(r.read("saves/Zelda.srm").as_deref(), Some(&b"local"[..]));
+        assert!(r.read("saves/Chrono.srm").is_none());
+        assert_eq!(r.base_of(ZELDA).await.unwrap().local_hash, sha(b"old"));
+        assert!(r.events().is_empty());
+
+        // Ligar de novo (ausente vale ligado) volta a sincronizar.
+        r.sync.devices.set_saves_enabled(true).await.unwrap();
+        assert!(r.sync.devices.saves_enabled().await.unwrap());
+        r.pass().await.unwrap();
+        assert!(!r.server.received_requests().await.unwrap().is_empty());
     }
 
     #[tokio::test]

@@ -482,12 +482,14 @@ impl SyncService {
         let (paused_site, revoked) = self.devices.site_state().await.map_err(failed)?;
         let enabled = device.is_some() && self.devices.enabled().await.map_err(failed)?;
         let paused_local = self.devices.paused().await.map_err(failed)?;
+        let saves_enabled = self.devices.saves_enabled().await.map_err(failed)?;
         let runtime = self.runtime();
         Ok(SyncStatus {
             availability,
             enabled,
             paused_local,
             paused_site,
+            saves_enabled,
             revoked,
             label: device
                 .as_ref()
@@ -617,6 +619,16 @@ impl SyncService {
         hw: HardwarePayload,
     ) -> Result<SyncStatus, SyncError> {
         self.devices.set_paused(paused).await.map_err(failed)?;
+        self.status_with(alva, hw).await
+    }
+
+    async fn set_saves_enabled_with(
+        &self,
+        alva: &Alvanista,
+        on: bool,
+        hw: HardwarePayload,
+    ) -> Result<SyncStatus, SyncError> {
+        self.devices.set_saves_enabled(on).await.map_err(failed)?;
         self.status_with(alva, hw).await
     }
 
@@ -801,6 +813,8 @@ pub struct SyncStatus {
     pub enabled: bool,
     pub paused_local: bool,
     pub paused_site: bool,
+    /// O interruptor dos game saves (`sync.saves_enabled`).
+    pub saves_enabled: bool,
     pub revoked: bool,
     pub device_id: Option<String>,
     pub label: String,
@@ -922,6 +936,19 @@ pub async fn sync_set_paused(app: AppHandle, paused: bool) -> Result<SyncStatus,
     let (sync, alva) = services(&app)?;
     let status = sync
         .set_paused_with(&alva, paused, current_hardware(&app))
+        .await
+        .map_err(|e| e.to_string());
+    emit_status(&app);
+    status
+}
+
+/// O interruptor dos game saves: desligado, nenhuma passada sobe nem baixa
+/// save (a base e os conflitos ficam como estão).
+#[tauri::command]
+pub async fn sync_set_saves_enabled(app: AppHandle, enabled: bool) -> Result<SyncStatus, String> {
+    let (sync, alva) = services(&app)?;
+    let status = sync
+        .set_saves_enabled_with(&alva, enabled, current_hardware(&app))
         .await
         .map_err(|e| e.to_string());
     emit_status(&app);

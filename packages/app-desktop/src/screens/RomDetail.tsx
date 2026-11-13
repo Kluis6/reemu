@@ -41,6 +41,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FullscreenDialog } from "../components/FullscreenDialog";
+import { ConflictDialog } from "../components/sync/ConflictDialog";
+import { SaveLine } from "../components/sync/SaveLine";
+import { SYNC_STATUS_KEY, savesActive } from "../hooks/useSync";
 import { GamePresets } from "../components/GamePresets";
 import { GameImageOptions } from "../components/GameImageOptions";
 import { SelectBlock } from "../components/SettingBlock";
@@ -79,6 +82,10 @@ import {
   setRomMetadata,
   setShader,
   getRomPlayTime,
+  syncConflicts,
+  syncSaveStatus,
+  type SyncConflict,
+  type SyncStatus,
 } from "../lib/tauri";
 import { formatPlayTime } from "../lib/playTime";
 import { useModalButtonStyles } from "../styles/buttons";
@@ -226,6 +233,8 @@ export function RomDetail() {
   const [editName, setEditName] = useState("");
   const [editSystem, setEditSystem] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
+  // Conflito de save achado ao apertar Jogar: pergunta antes de abrir.
+  const [conflictAsk, setConflictAsk] = useState<{ conflict: SyncConflict; loadState?: string } | null>(null);
   // Campos da gaveta formatados pelo que cada provedor documenta
   // (lib/metadataFormat.ts).
   const releaseText = formatReleaseDate(meta.data?.releaseDate);
@@ -327,7 +336,34 @@ export function RomDetail() {
   const title = meta.data?.title ?? rom.title;
   const hasQuick = states.data?.some((st) => st.slot === 0) ?? false;
 
+  // Antes de abrir: um conflito de game save é perguntado (com "Decidir depois"
+  // abrindo mesmo assim). A consulta é só disco e SQLite; qualquer falha (sem
+  // conta, offline, sync desligado) abre o jogo normalmente: ela nunca bloqueia.
   const play = (loadState?: string) => {
+    if (!chosenCore) return;
+    const known = qc.getQueryData<SyncStatus>(SYNC_STATUS_KEY);
+    if (known && !savesActive(known)) {
+      launch(loadState);
+      return;
+    }
+    void (async () => {
+      try {
+        const line = await syncSaveStatus(rom.id);
+        if (line.state === "conflict" && line.key !== null) {
+          const conflict = (await syncConflicts()).find((c) => c.key === line.key);
+          if (conflict) {
+            setConflictAsk({ conflict, loadState });
+            return;
+          }
+        }
+      } catch {
+        // segue para o jogo
+      }
+      launch(loadState);
+    })();
+  };
+
+  const launch = (loadState?: string) => {
     if (!chosenCore) return;
     const missingRequiredBios = (biosStatus.data ?? []).find(
       (b) => b.systemId === rom.systemId && b.required && !b.present,
@@ -497,6 +533,7 @@ export function RomDetail() {
               </span>
             </div>
           )}
+          <SaveLine romId={romId} className={s.heroStats} iconClassName={s.heroStatsIcon} />
           {/* Só depois de carregar a lista de cores: antes ela vem vazia e o
               aviso piscava ao abrir a página. */}
           {cores.isSuccess && coreList.length === 0 && (
@@ -892,7 +929,18 @@ export function RomDetail() {
         </div>
       </FullscreenDialog>
 
-
+      {conflictAsk && (
+        <ConflictDialog
+          conflict={conflictAsk.conflict}
+          onDone={(outcome) => {
+            const { loadState } = conflictAsk;
+            setConflictAsk(null);
+            // Escolher um lado ou "Decidir depois": o jogo abre. Fechar pelo X,
+            // Esc ou Voltar do controle só desiste de abrir.
+            if (outcome !== "dismiss") launch(loadState);
+          }}
+        />
+      )}
     </div>
   );
 }
