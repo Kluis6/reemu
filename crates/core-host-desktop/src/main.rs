@@ -856,3 +856,49 @@ fn forward_core_set_options(channel: &core_ipc::Channel) {
         let _ = channel.send(&ToParent::CoreOptionSet { key, value }, &[]);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mask_names_lists_pressed_buttons_in_libretro_order() {
+        assert_eq!(mask_names(0), "(nada)");
+        // B = bit 0, Start = bit 3, A = bit 8, R3 = bit 15
+        assert_eq!(mask_names(1 | 1 << 3 | 1 << 8), "B+Start+A");
+        assert_eq!(mask_names(1 << 15), "R3");
+        assert_eq!(mask_names(u16::MAX).split('+').count(), 16);
+    }
+
+    #[test]
+    fn sandbox_is_removed_on_drop() {
+        let dir = {
+            let sb = Sandbox::new("teste");
+            assert!(sb.0.is_dir());
+            std::fs::write(sb.0.join("x"), b"1").unwrap();
+            sb.0.clone()
+        };
+        assert!(!dir.exists());
+    }
+
+    #[test]
+    fn apply_input_reaches_what_the_core_reads() {
+        let mut ports = [PortInput {
+            joypad_mask: 0,
+            sticks: [(0, 0); 2],
+            triggers: (0, 0),
+        }; 4];
+        ports[1] = PortInput {
+            joypad_mask: 1 << 8,
+            sticks: [(100, -200), (-0x8000, 0x7fff)],
+            triggers: (10, 0x7fff),
+        };
+        apply_input(&ports);
+        let pad = core_loader_desktop::retropad();
+        let analog = core_loader_desktop::analog();
+        assert_eq!(pad.mask(0), 0);
+        assert_eq!(pad.mask(1), 1 << 8);
+        assert_eq!(analog.sticks(1), [(100, -200), (-0x8000, 0x7fff)]);
+        assert_eq!(analog.triggers(1), (10, 0x7fff));
+    }
+}
