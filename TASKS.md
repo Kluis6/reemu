@@ -706,10 +706,12 @@ no `emu-session`, ver `docs/historico.md`).
            escolha do usuário, desligada por padrão.
         3. **Ganhar conquistas jogando** (`gas/v1/signals`), depois de resolver a
            chave da pergunta 5.
-        4. **Saves na nuvem:** a API não tem nada hoje. Começar pelos `.srm`, porque
-           save state costuma quebrar ao trocar a versão do core, e definir como
-           tratar conflitos entre computadores. Alternativa independente: escolher
-           a pasta de saves e sincronizar por OneDrive ou similar.
+        4. **Saves na nuvem** (`in-progress`, 2026-11-13): sincronização com o
+           Alvanista em quatro PRs. Parte 1, a máquina: aparelho do Cloud Save da
+           conta e Configurações › Sincronização. Depois: os game saves (`.srm`,
+           cartões de PS2 e VMU), os save states quando o core e a versão batem e
+           as configurações copiadas de outra máquina. Conflito entre computadores
+           pergunta e guarda a outra versão.
       - **Metadados de jogos:** sem a busca da pergunta 3, não há como identificar a
         ROM, porque a API só aceita ID. Se vier, começar por hero e logo como fonte
         adicional, com ScreenScraper e TheGamesDB como principais, comparar a

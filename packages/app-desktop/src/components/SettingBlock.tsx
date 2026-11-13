@@ -112,12 +112,15 @@ export function ToggleBlock({
   description,
   checked,
   disabled,
+  busy,
   onChange,
 }: {
   label: string;
   description?: string;
   checked: boolean;
   disabled?: boolean;
+  /** Uma ação em curso: o controle segue focável (o foco do controle não some). */
+  busy?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   const s = useStyles();
@@ -131,6 +134,7 @@ export function ToggleBlock({
         className={s.switch}
         checked={checked}
         disabled={disabled}
+        aria-busy={busy || undefined}
         onChange={(_, d) => onChange(d.checked)}
       />
     </label>

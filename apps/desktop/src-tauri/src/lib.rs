@@ -32,6 +32,7 @@ mod shader_failure;
 mod shader_pack;
 #[cfg(test)]
 mod smoke_roms;
+mod sync;
 mod system;
 mod system_files;
 mod updates;
@@ -140,11 +141,22 @@ pub fn run() {
             // "Entrar com Alvanista": um cliente e um armazenamento para todos os
             // comandos (sem SQLite não há onde guardar a sessão: ficam sem estado).
             if let Some(pool) = db.clone() {
-                let store =
-                    alvanista::store::Store::new(pool, std::sync::Arc::new(credentials::OsKeyring));
+                let keyring: alvanista::store::SharedSecrets =
+                    std::sync::Arc::new(credentials::OsKeyring);
+                let store = alvanista::store::Store::new(pool.clone(), keyring.clone());
                 app.manage(alvanista::Alvanista::new(alvanista::client::Client::new(
                     store,
                 )));
+                // O cloud save: a máquina vira um aparelho da conta. O token do
+                // aparelho vai para o mesmo chaveiro, em outra conta.
+                let sync_service = std::sync::Arc::new(sync::SyncService::new(
+                    sync::api::SavesApi::new(alvanista::config::base_urls().1),
+                    sync::device::DeviceStore::new(pool, keyring),
+                ));
+                // Desconectar revoga o aparelho; a conta que acaba no site o esquece.
+                app.state::<alvanista::Alvanista>()
+                    .attach_sync(sync_service.clone());
+                app.manage(sync_service);
                 // Renova o espelho do perfil em segundo plano. Sem sessão não
                 // lê o chaveiro nem acessa a rede.
                 alvanista::refresh_on_start(app.handle());
@@ -333,6 +345,13 @@ pub fn run() {
             alvanista::alvanista_cancel,
             alvanista::alvanista_open_profile,
             alvanista::alvanista_open_site,
+            sync::sync_status,
+            sync::sync_set_enabled,
+            sync::sync_set_label,
+            sync::sync_set_paused,
+            sync::sync_machines,
+            sync::sync_now,
+            sync::sync_open_backups,
             commands::js_log,
             commands::current_focus,
             commands::toggle_focus,

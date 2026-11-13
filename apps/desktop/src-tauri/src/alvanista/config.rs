@@ -6,7 +6,8 @@ const WEB: &str = "https://www.alvanista.com";
 const API: &str = "https://api.alvanista.com";
 
 pub const CLIENT_ID: &str = "reemu";
-pub const SCOPE: &str = "profile:read";
+pub const SCOPE_PROFILE: &str = "profile:read";
+pub const SCOPE_SAVES: &str = "saves";
 
 /// `(site, api)`. Em release são sempre as duas URLs de produção. Só em
 /// build de debug `REEMU_ALVANISTA_BASE` troca: `"<site>,<api>"` ou uma URL
@@ -44,12 +45,13 @@ pub fn device_label() -> &'static str {
 }
 
 /// URL da página de consentimento, para abrir no navegador do sistema.
-pub fn authorize_url(web: &str, port: u16, pkce: &Pkce) -> String {
+/// `scope` é a lista separada por espaço (`"profile:read saves"`).
+pub fn authorize_url(web: &str, port: u16, pkce: &Pkce, scope: &str) -> String {
     let params = [
         ("client_id", CLIENT_ID),
         ("redirect_uri", &redirect_uri(port)),
         ("response_type", "code"),
-        ("scope", SCOPE),
+        ("scope", scope),
         ("state", &pkce.state),
         ("code_challenge", &pkce.challenge),
         ("code_challenge_method", "S256"),
@@ -103,7 +105,7 @@ mod tests {
             challenge: "chal".into(),
             state: "st".into(),
         };
-        let url = authorize_url("https://www.alvanista.com", 4242, &pkce);
+        let url = authorize_url("https://www.alvanista.com", 4242, &pkce, SCOPE_PROFILE);
         assert!(url.starts_with("https://www.alvanista.com/conectar?client_id=reemu&"));
         assert!(url.contains("redirect_uri=http%3A%2F%2F127.0.0.1%3A4242%2Fcallback"));
         assert!(url.contains("&response_type=code&scope=profile%3Aread&state=st&"));
@@ -113,5 +115,17 @@ mod tests {
                 || url.ends_with("&device_label=ReEmu%20(Linux)")
         );
         assert!(!url.contains("verifier"));
+    }
+
+    #[test]
+    fn authorize_url_carries_the_requested_scopes() {
+        let pkce = Pkce {
+            verifier: "v".into(),
+            challenge: "chal".into(),
+            state: "st".into(),
+        };
+        let scope = format!("{SCOPE_PROFILE} {SCOPE_SAVES}");
+        let url = authorize_url("https://www.alvanista.com", 4242, &pkce, &scope);
+        assert!(url.contains("&scope=profile%3Aread%20saves&state=st&"));
     }
 }

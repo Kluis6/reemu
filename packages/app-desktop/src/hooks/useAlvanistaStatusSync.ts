@@ -22,6 +22,8 @@ export const DISCONNECTED: AlvanistaStatus = {
   fetched_at: null,
   connected_at: null,
   device_label: null,
+  save_sync: null,
+  scopes: [],
 }
 
 function sameIdentity(a: AlvanistaStatus, b: AlvanistaStatus): boolean {

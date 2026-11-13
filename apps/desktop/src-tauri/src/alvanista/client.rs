@@ -52,12 +52,25 @@ pub struct Me {
     /// novo do servidor passa sem mudar o Rust.
     #[serde(default)]
     pub card: Option<serde_json::Value>,
+    /// O que o plano da conta libera. Ausente em servidores sem o campo.
+    #[serde(default)]
+    pub entitlements: Option<Entitlements>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub struct Entitlements {
+    #[serde(default)]
+    pub save_sync: bool,
 }
 
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
     refresh_token: String,
+    /// Escopos concedidos (convenção OAuth, separados por espaço), se o
+    /// servidor os informa.
+    #[serde(default)]
+    scope: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -100,6 +113,7 @@ impl Client {
         &self.store
     }
 
+    #[cfg(test)]
     /// Troca o `code` do callback pelos tokens. Não grava: quem chama grava
     /// com `store().save_tokens` quando for usar.
     pub async fn exchange(
@@ -109,7 +123,21 @@ impl Client {
         redirect_uri: &str,
         device_id: &str,
     ) -> Result<Tokens> {
-        self.token_request(&[
+        Ok(self
+            .exchange_scoped(code, verifier, redirect_uri, device_id)
+            .await?
+            .0)
+    }
+
+    /// Como `exchange`, mais os escopos que o servidor disse ter concedido.
+    pub async fn exchange_scoped(
+        &self,
+        code: &str,
+        verifier: &str,
+        redirect_uri: &str,
+        device_id: &str,
+    ) -> Result<(Tokens, Option<String>)> {
+        self.token_request_scoped(&[
             ("grant_type", "authorization_code"),
             ("client_id", CLIENT_ID),
             ("code", code),
@@ -253,6 +281,13 @@ impl Client {
     }
 
     async fn token_request(&self, form: &[(&str, &str)]) -> Result<Tokens> {
+        Ok(self.token_request_scoped(form).await?.0)
+    }
+
+    async fn token_request_scoped(
+        &self,
+        form: &[(&str, &str)],
+    ) -> Result<(Tokens, Option<String>)> {
         let resp = self
             .http
             .post(format!("{}/api/partner/oauth/token", self.api))
@@ -267,10 +302,13 @@ impl Client {
                 .json()
                 .await
                 .map_err(|_| ClientError::Transient("resposta do /token ilegível".into()))?;
-            return Ok(Tokens {
-                access_token: body.access_token,
-                refresh_token: body.refresh_token,
-            });
+            return Ok((
+                Tokens {
+                    access_token: body.access_token,
+                    refresh_token: body.refresh_token,
+                },
+                body.scope,
+            ));
         }
         Err(classify(status, error_code(resp).await))
     }
@@ -515,7 +553,7 @@ mod tests {
         })
         .await;
         if let Some(t) = seed {
-            store.start_session(t).await.unwrap();
+            store.start_session(t, &["profile:read"]).await.unwrap();
             // O save semeado não conta na ordem do teste.
             fake.log.lock().unwrap().clear();
         }
@@ -872,7 +910,11 @@ mod tests {
         client.store().clear_tokens().await.unwrap();
         // Uma conta nova entra.
         let (fresh, _) = names();
-        client.store().start_session(&tokens(&fresh)).await.unwrap();
+        client
+            .store()
+            .start_session(&tokens(&fresh), &["profile:read"])
+            .await
+            .unwrap();
 
         // Quem ainda segura old0 não recebe P1 nem P2, e nada é regravado.
         let got = client.refresh(&tokens(&old0)).await;
@@ -890,11 +932,27 @@ mod tests {
         let (store, _) = store_with(MemSecrets::default()).await;
         super::super::store::remember_rotation(&format!("alr_{old0}"), &tokens(&p1));
         let (fresh, _) = names();
-        store.start_session(&tokens(&fresh)).await.unwrap();
+        store
+            .start_session(&tokens(&fresh), &["profile:read"])
+            .await
+            .unwrap();
         assert_eq!(
             super::super::store::rotated_from(&format!("alr_{old0}")),
             None
         );
         assert_eq!(store.load_tokens().await.unwrap(), Some(tokens(&fresh)));
+    }
+
+    #[test]
+    fn me_parses_entitlements_and_tolerates_their_absence() {
+        let with: Me = serde_json::from_str(
+            r#"{"id":"a","username":"u","profile_url":"https://x/u","entitlements":{"save_sync":true}}"#,
+        )
+        .unwrap();
+        assert_eq!(with.entitlements, Some(Entitlements { save_sync: true }));
+        let without: Me =
+            serde_json::from_str(r#"{"id":"a","username":"u","profile_url":"https://x/u"}"#)
+                .unwrap();
+        assert_eq!(without.entitlements, None);
     }
 }

@@ -1,4 +1,5 @@
 import {
+  CloudSyncRegular,
   DesktopRegular,
   DeveloperBoardRegular,
   KeyboardRegular,
@@ -18,6 +19,7 @@ import type { FluentIcon } from "@fluentui/react-icons";
 // `id` = chave de tradução em `settings.tabs.*` e `settings.desc.*`.
 export const SETTINGS_SECTIONS = [
   { key: "perfil", id: "profile", Icon: PersonRegular },
+  { key: "sincronizacao", id: "sync", Icon: CloudSyncRegular },
   { key: "aparencia", id: "appearance", Icon: PaintBrushRegular },
   { key: "biblioteca", id: "library", Icon: LibraryRegular },
   { key: "audio", id: "audio", Icon: Speaker2Regular },

@@ -22,6 +22,10 @@ import type { DirListing } from './bindings/DirListing'
 import type { GameMetadata } from './bindings/GameMetadata'
 import type { Gamepad } from './bindings/Gamepad'
 import type { HardwareInfo } from './bindings/HardwareInfo'
+import type { HardwarePayload } from './bindings/HardwarePayload'
+import type { Quota } from './bindings/Quota'
+import type { SyncMachine } from './bindings/SyncMachine'
+import type { SyncStatus } from './bindings/SyncStatus'
 import type { HdrStatus } from './bindings/HdrStatus'
 import type { KeyboardBinding } from './bindings/KeyboardBinding'
 import type { MetadataConfig } from './bindings/MetadataConfig'
@@ -564,6 +568,10 @@ export interface AlvanistaStatus {
   connected_at: number | null
   /** O rótulo deste aparelho no Alvanista, quando conectado. */
   device_label: string | null
+  /** O plano da conta libera o sync de saves? null: o `/me` ainda não disse. */
+  save_sync: boolean | null
+  /** Escopos desta sessão; vazio sem conexão. */
+  scopes: string[]
 }
 
 /** Confirma com o Alvanista (rede, até ~15 s) e renova o espelho. */
@@ -571,21 +579,58 @@ export const alvanistaStatus = () => invoke<AlvanistaStatus>('alvanista_status')
 /** Só o que está no aparelho, sem rede: para a tela abrir na hora. */
 export const alvanistaCachedStatus = () => invoke<AlvanistaStatus>('alvanista_cached_status')
 /** Abre o navegador e espera a aprovação (até 5 minutos). `lang` é o idioma da
- *  página que o navegador mostra no fim. Rejeita com um código curto: `cancelled`,
+ *  página que o navegador mostra no fim. `saves`: pede também o escopo do cloud
+ *  save no mesmo consentimento. Rejeita com um código curto: `cancelled`,
  *  `denied`, `timeout`, `offline`, `keyring` ou `failed`. */
-export const alvanistaConnect = (lang: string = i18n.language) =>
-  invoke<AlvanistaStatus>('alvanista_connect', { lang })
+export const alvanistaConnect = (lang: string = i18n.language, saves = false) =>
+  invoke<AlvanistaStatus>('alvanista_connect', { lang, saves })
 export const alvanistaCancel = () => invoke<void>('alvanista_cancel')
 export const alvanistaDisconnect = () => invoke<void>('alvanista_disconnect')
 /** Abre o perfil do Alvanista no navegador do sistema. */
 export const alvanistaOpenProfile = () => invoke<void>('alvanista_open_profile')
-/** Abre "editar perfil" ou "apps conectados" no site do Alvanista. */
-export const alvanistaOpenSite = (page: 'edit' | 'apps') => invoke<void>('alvanista_open_site', { page })
+/** Abre uma página do site do Alvanista: editar perfil, apps conectados, os
+ *  aparelhos do sync ou os planos. */
+export const alvanistaOpenSite = (page: 'edit' | 'apps' | 'sync' | 'plans') => invoke<void>('alvanista_open_site', { page })
 /** Resultado da renovação que o app faz sozinho ao abrir (evento do Rust). */
 export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Promise<() => void> {
   if (!inTauri) return () => {}
   const { listen } = await import('@tauri-apps/api/event')
   return listen<AlvanistaStatus>('alvanista-status', (e) => cb(e.payload))
+}
+
+// --- cloud save: esta máquina como aparelho da conta --------------------
+
+export type { HardwarePayload, Quota, SyncMachine, SyncStatus }
+
+/** Eventos do canal `sync`. `status`: a tela relê o estado. */
+export type SyncEvent =
+  | { type: 'status' }
+  | { type: 'pass'; uploaded: number; downloaded: number }
+  | { type: 'conflict'; key: string }
+  | { type: 'error'; code: string }
+  | { type: 'quota'; usedBytes: number; limitBytes: number }
+
+// Os comandos rejeitam com o código do erro: `no_account`, `no_tier`,
+// `needs_consent`, `revoked`, `paused`, `quota`, `offline`, `keyring`,
+// `failed` e, ao ligar, `cancelled`, `denied` ou `timeout` da reconexão.
+/** O estado da página. Pergunta a lista de aparelhos ao Alvanista (rede). */
+export const syncStatus = () => invoke<SyncStatus>('sync_status')
+/** Ligar cria o aparelho (pedindo o consentimento no navegador se faltar o
+ *  escopo); desligar revoga o aparelho e o esquece. */
+export const syncSetEnabled = (enabled: boolean, lang: string = i18n.language) =>
+  invoke<SyncStatus>('sync_set_enabled', { enabled, lang })
+/** Nome do aparelho, de 1 a 80 caracteres. */
+export const syncSetLabel = (label: string) => invoke<SyncStatus>('sync_set_label', { label })
+/** Pausa só nesta máquina. */
+export const syncSetPaused = (paused: boolean) => invoke<SyncStatus>('sync_set_paused', { paused })
+export const syncMachines = () => invoke<SyncMachine[]>('sync_machines')
+export const syncNow = () => invoke<SyncStatus>('sync_now')
+/** Abre a pasta dos backups do sync no gerenciador de arquivos. */
+export const syncOpenBackups = () => invoke<void>('sync_open_backups')
+export async function onSyncEvent(cb: (e: SyncEvent) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<SyncEvent>('sync', (e) => cb(e.payload))
 }
 
 // --- perfil local (um por instalação) ----------------------------------

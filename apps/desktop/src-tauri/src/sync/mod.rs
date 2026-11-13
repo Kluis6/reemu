@@ -1,0 +1,2233 @@
+//! A máquina como aparelho do cloud save da conta do Alvanista.
+//!
+//! - `api`: o cliente REST das rotas de save;
+//! - `device`: o payload de hardware e o armazenamento do aparelho (o token
+//!   `asv_...` só no chaveiro, o resto no SQLite).
+//!
+//! O aparelho nasce uma vez, pelo token de acesso do parceiro (o par do
+//! "Entrar com Alvanista"). Dali em diante só o token do aparelho fala com
+//! `/api/v1/saves`: o do parceiro nunca chega lá.
+//!
+//! Erros seguem a convenção de `alvanista/`: `Result<_, String>` com o código
+//! no texto (`SyncError` mostra o código de i18n).
+
+pub mod api;
+pub mod device;
+
+use crate::alvanista::client::ClientError;
+use crate::alvanista::loopback::Lang;
+use crate::alvanista::store::Tokens;
+use crate::alvanista::{Alvanista, AlvanistaStatus};
+use api::{ApiError, RemoteDevice, SavesApi};
+use device::{
+    hardware_fingerprint, hardware_payload, Device, DeviceStore, HardwarePayload, LABEL_MAX_CHARS,
+};
+use serde::Serialize;
+use std::future::Future;
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager};
+
+/// Passado esse tempo sem enviar, o hardware vai de novo mesmo sem mudança.
+const HW_RESEND_SECS: i64 = 24 * 3600;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncError {
+    /// Sem sessão do Alvanista.
+    NoAccount,
+    /// O plano não libera o sync de saves.
+    NoTier,
+    /// A sessão não tem o escopo `saves`: a tela pede o consentimento.
+    NeedsConsent,
+    /// O token do aparelho foi revogado.
+    Revoked,
+    Paused,
+    Quota,
+    Offline,
+    Keyring,
+    /// O nome do aparelho está fora de 1..=80 caracteres ou o servidor o recusou.
+    InvalidLabel,
+    /// Não há aparelho nesta máquina (o sync está desligado).
+    NotEnabled,
+    /// A reconexão para pedir o escopo `saves` não terminou: um de
+    /// `cancelled`, `denied` ou `timeout` (o resto vira `Failed`).
+    Connect(String),
+    Failed(String),
+}
+
+impl std::fmt::Display for SyncError {
+    /// O código de i18n, o mesmo que a tela traduz.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NoAccount => "no_account",
+            Self::NoTier => "no_tier",
+            Self::NeedsConsent => "needs_consent",
+            Self::Revoked => "revoked",
+            Self::Paused => "paused",
+            Self::Quota => "quota",
+            Self::Offline => "offline",
+            Self::Keyring => "keyring",
+            Self::InvalidLabel => "invalid_label",
+            Self::NotEnabled => "not_enabled",
+            Self::Connect(code) => code.as_str(),
+            Self::Failed(_) => "failed",
+        })
+    }
+}
+
+impl std::error::Error for SyncError {}
+
+impl From<ApiError> for SyncError {
+    /// Para chamadas com o token do aparelho: 401 é aparelho revogado.
+    fn from(e: ApiError) -> Self {
+        match e {
+            ApiError::Unauthorized => Self::Revoked,
+            ApiError::InsufficientScope => Self::NeedsConsent,
+            ApiError::TierInsufficient { .. } => Self::NoTier,
+            ApiError::Paused => Self::Paused,
+            ApiError::Quota => Self::Quota,
+            ApiError::Transient(_) => Self::Offline,
+            other => failed(other.to_string()),
+        }
+    }
+}
+
+pub struct SyncService {
+    api: SavesApi,
+    devices: DeviceStore,
+    /// Quem cria o aparelho nunca corre em paralelo: duas chamadas juntas
+    /// criariam dois aparelhos na conta.
+    mint: tokio::sync::Mutex<()>,
+    /// O que só existe enquanto o app roda (a cota e o resultado da última
+    /// rodada); o resto fica no SQLite.
+    runtime: std::sync::Mutex<Runtime>,
+}
+
+#[derive(Default)]
+struct Runtime {
+    quota: Option<SyncQuota>,
+    last_pass_at: Option<i64>,
+    conflicts: u32,
+    last_error: Option<String>,
+}
+
+impl SyncService {
+    pub fn new(api: SavesApi, devices: DeviceStore) -> Self {
+        Self {
+            api,
+            devices,
+            mint: tokio::sync::Mutex::new(()),
+            runtime: std::sync::Mutex::new(Runtime::default()),
+        }
+    }
+
+    fn runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
+        self.runtime.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Para o teste do `alvanista/` segurar o trinco de quem cria o aparelho.
+    #[cfg(test)]
+    pub(crate) async fn hold_mint_for_test(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.mint.lock().await
+    }
+
+    #[cfg(test)]
+    pub fn devices(&self) -> &DeviceStore {
+        &self.devices
+    }
+
+    /// O aparelho desta máquina, criando-o na primeira vez. `label` é o nome
+    /// que a pessoa escolheu; sem ele vale o nome da máquina.
+    ///
+    /// `NeedsConsent`: a sessão não tem o escopo `saves`. Quem chama roda
+    /// `reconnect_with_saves` e repete uma vez.
+    async fn ensure_device_with(
+        &self,
+        alva: &Alvanista,
+        mut label: Option<String>,
+        hw: HardwarePayload,
+    ) -> Result<Device, SyncError> {
+        let _one_at_a_time = self.mint.lock().await;
+        let status = alva.cached_status().await;
+        if !status.connected {
+            return Err(SyncError::NoAccount);
+        }
+        if status.save_sync == Some(false) {
+            return Err(SyncError::NoTier);
+        }
+        if let Some(device) = self.devices.device().await.map_err(failed)? {
+            // Um aparelho sem token (chaveiro limpo por fora) não serve: nasce outro.
+            match self.devices.token() {
+                Ok(Some(_)) => return Ok(device),
+                Ok(None) => {
+                    log::warn!("sync: aparelho guardado sem token no chaveiro, criando outro");
+                    // O nome que a pessoa escolheu passa para o aparelho novo.
+                    label = label.or(Some(device.label));
+                    self.devices
+                        .forget()
+                        .await
+                        .map_err(|_| SyncError::Keyring)?;
+                }
+                Err(e) => {
+                    log::warn!("sync: chaveiro indisponível para ler o token: {e}");
+                    return Err(SyncError::Keyring);
+                }
+            }
+        }
+        // Sem o escopo `saves` o servidor recusaria; e o rótulo e o hardware só
+        // saem da máquina depois do consentimento que os nomeia.
+        if !status.scopes.iter().any(|s| s == config_scope_saves()) {
+            return Err(SyncError::NeedsConsent);
+        }
+        let label = label
+            .map(|l| device::clean_label(&l))
+            .filter(|l| !l.is_empty())
+            .unwrap_or_else(device::default_label);
+
+        let mut tokens = match alva.session_tokens().await {
+            Ok(Some(t)) => t,
+            Ok(None) => return Err(SyncError::NoAccount),
+            Err(e) => {
+                log::warn!("sync: não leu a sessão: {e}");
+                return Err(SyncError::Keyring);
+            }
+        };
+        let mut minted = self
+            .api
+            .partner_mint_device(&tokens.access_token, &label, &hw)
+            .await;
+        if matches!(minted, Err(ApiError::Unauthorized)) {
+            // O token de acesso do parceiro vence em minutos: renova uma vez.
+            tokens = alva.renew(&tokens).await.map_err(renew_error)?;
+            minted = self
+                .api
+                .partner_mint_device(&tokens.access_token, &label, &hw)
+                .await;
+        }
+        let minted = match minted {
+            Ok(minted) => minted,
+            Err(ApiError::Unauthorized) => return Err(SyncError::NoAccount),
+            Err(ApiError::TierInsufficient { .. }) => {
+                // O plano não libera (ou deixou de liberar) o sync: o espelho
+                // passa a dizer isso, e a página confere no `/me`.
+                alva.note_no_save_sync().await;
+                return Err(SyncError::NoTier);
+            }
+            Err(other) => return Err(SyncError::from(other)),
+        };
+
+        let device = Device {
+            id: minted.id,
+            label: minted.label,
+        };
+        if let Err(e) = self.devices.save(&device, &minted.token).await {
+            log::warn!("sync: não deu pra guardar o aparelho: {e}");
+            // O aparelho já existe no servidor: sem onde guardar o token ele
+            // ficaria órfão. Revoga com o token que acabou de nascer.
+            if let Err(e) = self.api.revoke_own_device(&minted.token).await {
+                log::warn!("sync: aparelho órfão não revogado: {e}");
+            }
+            let _ = self.devices.forget().await;
+            return Err(SyncError::Keyring);
+        }
+        // Acabou de enviar o hardware: o próximo `refresh_hardware` espera.
+        self.remember_gpu(&hw).await;
+        let _ = self
+            .devices
+            .set_hw_fingerprint(&hardware_fingerprint(&hw))
+            .await;
+        let _ = self
+            .devices
+            .set_hw_sent_at(crate::alvanista::store::now_secs())
+            .await;
+        log::info!("sync: aparelho criado");
+        Ok(device)
+    }
+
+    /// Manda o hardware quando mudou ou quando o último envio tem mais de 24 h.
+    async fn refresh_hardware_with(
+        &self,
+        alva: &Alvanista,
+        mut hw: HardwarePayload,
+    ) -> Result<(), SyncError> {
+        // Sem sessão nem chaveiro nem rede: só o SQLite foi lido até aqui.
+        if !alva.has_session().await {
+            return Err(SyncError::NoAccount);
+        }
+        if self.devices.device().await.map_err(failed)?.is_none() {
+            return Ok(());
+        }
+        self.keep_last_gpu(&mut hw).await;
+        let fingerprint = hardware_fingerprint(&hw);
+        let now = crate::alvanista::store::now_secs();
+        let unchanged = self
+            .devices
+            .hw_fingerprint()
+            .await
+            .map_err(failed)?
+            .as_deref()
+            == Some(&fingerprint);
+        let fresh = self
+            .devices
+            .hw_sent_at()
+            .await
+            .map_err(failed)?
+            .is_some_and(|at| now - at < HW_RESEND_SECS);
+        if unchanged && fresh {
+            return Ok(());
+        }
+        let token = self
+            .devices
+            .token()
+            .map_err(|_| SyncError::Keyring)?
+            .ok_or(SyncError::Revoked)?;
+        self.api.patch_own_device(&token, None, Some(&hw)).await?;
+        self.remember_gpu(&hw).await;
+        self.devices
+            .set_hw_fingerprint(&fingerprint)
+            .await
+            .map_err(failed)?;
+        self.devices.set_hw_sent_at(now).await.map_err(failed)
+    }
+
+    /// GPU desconhecida agora (o wgpu não abriu): em vez de mandar campos
+    /// vazios por cima de valores bons do servidor, repete os últimos enviados.
+    async fn keep_last_gpu(&self, hw: &mut HardwarePayload) {
+        if !hw.gpu.is_empty() || !hw.gpu_backend.is_empty() || !hw.gpu_driver.is_empty() {
+            return;
+        }
+        if let Ok(Some([gpu, backend, driver])) = self.devices.hw_gpu().await {
+            (hw.gpu, hw.gpu_backend, hw.gpu_driver) = (gpu, backend, driver);
+        }
+    }
+
+    async fn remember_gpu(&self, hw: &HardwarePayload) {
+        if hw.gpu.is_empty() && hw.gpu_backend.is_empty() && hw.gpu_driver.is_empty() {
+            return;
+        }
+        let triple = [
+            hw.gpu.clone(),
+            hw.gpu_backend.clone(),
+            hw.gpu_driver.clone(),
+        ];
+        if let Err(e) = self.devices.set_hw_gpu(&triple).await {
+            log::warn!("sync: GPU enviada não guardada: {e}");
+        }
+    }
+
+    // --- o que os comandos da tela usam ---------------------------------
+
+    /// A lista de aparelhos da conta, pelo par do parceiro (renovado uma vez
+    /// se vencido). Sem sessão não toca o chaveiro nem a rede. Se a conta
+    /// acabou no site (a renovação foi recusada), o aparelho daqui só se
+    /// esquece: o par do parceiro já não existe.
+    async fn partner_devices(&self, alva: &Alvanista) -> Result<Vec<RemoteDevice>, SyncError> {
+        let mut tokens = session_pair(alva).await?;
+        self.partner_devices_with(alva, &mut tokens).await
+    }
+
+    /// Como `partner_devices`, com o par que quem chama já leu; `tokens` fica
+    /// com o par renovado, se houve renovação.
+    async fn partner_devices_with(
+        &self,
+        alva: &Alvanista,
+        tokens: &mut Tokens,
+    ) -> Result<Vec<RemoteDevice>, SyncError> {
+        let mut listed = self.api.partner_list_devices(&tokens.access_token).await;
+        if matches!(listed, Err(ApiError::Unauthorized)) {
+            *tokens = match alva.renew(tokens).await {
+                Ok(t) => t,
+                Err(ClientError::AuthEnded) => {
+                    // `renew` já soltou o trinco de renovação, e `forget_device` não
+                    // toma `mint` (quem chama pode estar dentro dele). O DELETE usa
+                    // o token do aparelho, que não depende do par que acabou.
+                    if let Err(e) = self.forget_device(true).await {
+                        log::warn!("sync: aparelho não esquecido: {e}");
+                    }
+                    return Err(SyncError::NoAccount);
+                }
+                Err(e) => return Err(renew_error(e)),
+            };
+            listed = self.api.partner_list_devices(&tokens.access_token).await;
+        }
+        listed.map_err(|e| match e {
+            ApiError::Unauthorized => SyncError::NoAccount,
+            other => SyncError::from(other),
+        })
+    }
+
+    /// Guarda o que a lista do site diz deste aparelho (D128).
+    async fn absorb_site_state(&self, list: &[RemoteDevice]) {
+        let Ok(Some(this)) = self.devices.device().await else {
+            return;
+        };
+        // O servidor lista também os revogados e não corta a lista: quem não
+        // aparece foi apagado ou é de outra conta.
+        let (paused, revoked) = match list.iter().find(|d| d.id == this.id) {
+            Some(mine) => (mine.paused_at.is_some(), mine.revoked_at.is_some()),
+            None => (self.devices.site_state().await.is_ok_and(|s| s.0), true),
+        };
+        if let Err(e) = self.devices.set_site_state(paused, revoked).await {
+            log::warn!("sync: estado do site não guardado: {e}");
+        }
+        if !revoked {
+            let mut runtime = self.runtime();
+            if runtime.last_error.as_deref() == Some("revoked") {
+                runtime.last_error = None;
+            }
+        }
+    }
+
+    async fn mark_revoked(&self) {
+        let paused = self.devices.site_state().await.is_ok_and(|s| s.0);
+        if let Err(e) = self.devices.set_site_state(paused, true).await {
+            log::warn!("sync: revogação não guardada: {e}");
+        }
+    }
+
+    /// Esquece o aparelho daqui. Com `revoke`, avisa o servidor antes, com o
+    /// token do aparelho (401 e 404 valem como "já revogado"; uma falha de
+    /// rede vai para o log e o aparelho local sai assim mesmo: desligar tem
+    /// de funcionar sem rede, e o aparelho que sobrar a pessoa revoga no
+    /// site). Sem aparelho guardado não toca o chaveiro.
+    ///
+    /// Não toma `mint`: a partir de `ensure_device` o caminho `renew` segura
+    /// o trinco de renovação do `alvanista/`, e a sessão que acaba lá chama
+    /// esta função.
+    pub async fn forget_device(&self, revoke: bool) -> Result<(), SyncError> {
+        if self.devices.device().await.map_err(failed)?.is_none() {
+            return Ok(());
+        }
+        let mut revoke_failed = false;
+        if revoke {
+            match self.devices.token() {
+                Ok(Some(token)) => match self.api.revoke_own_device(&token).await {
+                    Ok(()) | Err(ApiError::Unauthorized) | Err(ApiError::NotFound) => {}
+                    Err(e) => {
+                        log::warn!("sync: aparelho não revogado no servidor: {e}");
+                        revoke_failed = true;
+                    }
+                },
+                Ok(None) => {}
+                Err(e) => {
+                    log::warn!("sync: chaveiro indisponível para revogar: {e}");
+                    revoke_failed = true;
+                }
+            }
+        }
+        // O aparelho que sobrou no servidor a pessoa revoga no site: a tela lê
+        // `offline` para dizer isso.
+        *self.runtime() = Runtime {
+            last_error: revoke_failed.then(|| SyncError::Offline.to_string()),
+            ..Runtime::default()
+        };
+        self.devices.forget().await.map_err(|e| {
+            log::warn!("sync: aparelho não esquecido: {e}");
+            SyncError::Keyring
+        })
+    }
+
+    async fn refresh_quota(&self) -> Result<(), SyncError> {
+        let token = self
+            .devices
+            .token()
+            .map_err(|_| SyncError::Keyring)?
+            .ok_or(SyncError::Revoked)?;
+        let quota = self.api.quota(&token).await?;
+        self.runtime().quota = Some(SyncQuota {
+            used_bytes: quota.used_bytes,
+            limit_bytes: quota.limit_bytes,
+        });
+        Ok(())
+    }
+
+    /// O estado da página. Decide pelo SQLite (marcador de sessão, espelho,
+    /// aparelho) e lê o par do chaveiro uma vez só, quando vai à rede: a lista
+    /// de aparelhos (com aparelho guardado) e o `/me` (quando o espelho diz que
+    /// o plano não libera o sync, para quem acabou de assinar ver a mudança).
+    /// Um `/me` por chamada, nunca em laço.
+    async fn status_with(
+        &self,
+        alva: &Alvanista,
+        hw: HardwarePayload,
+    ) -> Result<SyncStatus, SyncError> {
+        let device = self.devices.device().await.map_err(failed)?;
+        if alva.has_session().await {
+            let check_tier = alva.mirrored_save_sync().await == Some(false);
+            if device.is_some() || check_tier {
+                if let Ok(mut tokens) = session_pair(alva).await {
+                    let mut ended = false;
+                    if device.is_some() {
+                        match self.partner_devices_with(alva, &mut tokens).await {
+                            Ok(list) => self.absorb_site_state(&list).await,
+                            Err(SyncError::NoAccount) => ended = true,
+                            Err(_) => {}
+                        }
+                    }
+                    if check_tier && !ended {
+                        alva.refresh_profile(tokens).await;
+                    }
+                }
+            }
+        }
+        // A rede pode ter acabado a sessão, esquecido o aparelho ou mudado o
+        // plano: o que vale é o que sobrou depois dela.
+        let device = self.devices.device().await.map_err(failed)?;
+        let availability = if !alva.has_session().await {
+            Availability::NoAccount
+        } else if alva.mirrored_save_sync().await == Some(false) {
+            Availability::NoTier
+        } else {
+            Availability::Ready
+        };
+        let (paused_site, revoked) = self.devices.site_state().await.map_err(failed)?;
+        let enabled = device.is_some() && self.devices.enabled().await.map_err(failed)?;
+        let paused_local = self.devices.paused().await.map_err(failed)?;
+        let runtime = self.runtime();
+        Ok(SyncStatus {
+            availability,
+            enabled,
+            paused_local,
+            paused_site,
+            revoked,
+            label: device
+                .as_ref()
+                .map(|d| d.label.clone())
+                .filter(|l| !l.is_empty())
+                .unwrap_or_else(device::default_label),
+            device_id: device.map(|d| d.id),
+            hardware: hw,
+            quota: runtime.quota,
+            last_pass_at: runtime.last_pass_at,
+            conflicts: runtime.conflicts,
+            last_error: runtime.last_error.clone(),
+        })
+    }
+
+    /// Liga ou desliga. Ligar cria o aparelho (e, se a sessão não tem o
+    /// escopo `saves`, chama `reconnect` e repete uma vez); desligar revoga
+    /// o aparelho e o esquece. A base local nunca é tocada.
+    async fn set_enabled_with<F, Fut>(
+        &self,
+        alva: &Alvanista,
+        on: bool,
+        hw: HardwarePayload,
+        reconnect: F,
+    ) -> Result<SyncStatus, SyncError>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = Result<AlvanistaStatus, String>>,
+    {
+        if on {
+            // O site revogou ou apagou o aparelho: o guardado não serve mais.
+            if alva.has_session().await && self.devices.device().await.map_err(failed)?.is_some() {
+                if let Ok(list) = self.partner_devices(alva).await {
+                    self.absorb_site_state(&list).await;
+                }
+            }
+            // Ligar de novo depois de revogada: o aparelho novo leva o nome que
+            // a pessoa tinha escolhido.
+            let mut label = None;
+            if self.devices.site_state().await.map_err(failed)?.1 {
+                label = self
+                    .devices
+                    .device()
+                    .await
+                    .map_err(failed)?
+                    .map(|d| d.label);
+                self.forget_device(true).await?;
+            }
+            match self
+                .ensure_device_with(alva, label.clone(), hw.clone())
+                .await
+            {
+                Ok(_) => {}
+                Err(SyncError::NeedsConsent) => {
+                    reconnect().await.map_err(|code| match code.as_str() {
+                        "offline" => SyncError::Offline,
+                        "keyring" => SyncError::Keyring,
+                        "cancelled" | "denied" | "timeout" => SyncError::Connect(code),
+                        other => {
+                            log::warn!("sync: reconexão terminou com {other}");
+                            SyncError::Failed(code)
+                        }
+                    })?;
+                    self.ensure_device_with(alva, label, hw.clone()).await?;
+                }
+                Err(e) => return Err(e),
+            }
+            self.devices.set_enabled(true).await.map_err(failed)?;
+            self.runtime().last_error = None;
+            // A cota é cortesia da tela: sem ela o aparelho continua ligado.
+            if let Err(e) = self.refresh_quota().await {
+                log::info!("sync: cota não lida ao ligar: {e}");
+            }
+        } else {
+            let _one_at_a_time = self.mint.lock().await;
+            self.forget_device(true).await?;
+        }
+        self.status_with(alva, hw).await
+    }
+
+    async fn set_label_with(
+        &self,
+        alva: &Alvanista,
+        label: &str,
+        hw: HardwarePayload,
+    ) -> Result<SyncStatus, SyncError> {
+        let label = device::clean_text(label);
+        if label.is_empty() || label.chars().count() > LABEL_MAX_CHARS {
+            return Err(SyncError::InvalidLabel);
+        }
+        // Sem sessão não se toca o chaveiro nem a rede.
+        if !alva.has_session().await {
+            return Err(SyncError::NoAccount);
+        }
+        if self.devices.device().await.map_err(failed)?.is_none() {
+            return Err(SyncError::NotEnabled);
+        }
+        let token = self
+            .devices
+            .token()
+            .map_err(|_| SyncError::Keyring)?
+            .ok_or(SyncError::Revoked)?;
+        match self.api.patch_own_device(&token, Some(&label), None).await {
+            Ok(remote) => self
+                .devices
+                .set_label(&remote.label)
+                .await
+                .map_err(failed)?,
+            Err(e) => {
+                let e = match e {
+                    ApiError::Rejected(_) => SyncError::InvalidLabel,
+                    other => SyncError::from(other),
+                };
+                if e == SyncError::Revoked {
+                    self.mark_revoked().await;
+                }
+                return Err(e);
+            }
+        }
+        self.status_with(alva, hw).await
+    }
+
+    async fn set_paused_with(
+        &self,
+        alva: &Alvanista,
+        paused: bool,
+        hw: HardwarePayload,
+    ) -> Result<SyncStatus, SyncError> {
+        self.devices.set_paused(paused).await.map_err(failed)?;
+        self.status_with(alva, hw).await
+    }
+
+    async fn machines_with(&self, alva: &Alvanista) -> Result<Vec<SyncMachine>, SyncError> {
+        let list = self.partner_devices(alva).await?;
+        self.absorb_site_state(&list).await;
+        let this = self.devices.device().await.map_err(failed)?.map(|d| d.id);
+        Ok(list
+            .into_iter()
+            .filter(|d| d.revoked_at.is_none())
+            .map(|d| SyncMachine {
+                is_this: this.as_deref() == Some(d.id.as_str()),
+                id: d.id,
+                label: d.label,
+                client_kind: d.client_kind,
+                hardware: d.hardware,
+                last_used_at: d.last_used_at,
+                revoked: false,
+                paused: d.paused_at.is_some(),
+            })
+            .collect())
+    }
+
+    /// Atualiza a cota, o hardware e a lista de aparelhos. As rodadas de
+    /// arquivos entram na etapa seguinte.
+    async fn now_with(
+        &self,
+        alva: &Alvanista,
+        hw: HardwarePayload,
+    ) -> Result<SyncStatus, SyncError> {
+        if !alva.has_session().await {
+            return Err(SyncError::NoAccount);
+        }
+        if self.devices.device().await.map_err(failed)?.is_some()
+            && self.devices.enabled().await.map_err(failed)?
+        {
+            let mut last: Option<SyncError> = None;
+            for step in [
+                self.refresh_hardware_with(alva, hw.clone()).await,
+                self.refresh_quota().await,
+            ] {
+                if let Err(e) = step {
+                    if last.as_ref().map_or(true, |l| severity(&e) > severity(l)) {
+                        last = Some(e);
+                    }
+                }
+            }
+            if last == Some(SyncError::Revoked) {
+                self.mark_revoked().await;
+            }
+            self.runtime().last_error = last.map(|e| e.to_string());
+        }
+        self.status_with(alva, hw).await
+    }
+}
+
+/// Qual erro a tela mostra quando vários passos falham: revoked > paused >
+/// quota > offline > o resto.
+fn severity(e: &SyncError) -> u8 {
+    match e {
+        SyncError::Revoked => 5,
+        SyncError::Paused => 4,
+        SyncError::Quota => 3,
+        SyncError::Offline => 2,
+        _ => 1,
+    }
+}
+
+/// O par da sessão, lido do chaveiro (uma leitura).
+async fn session_pair(alva: &Alvanista) -> Result<Tokens, SyncError> {
+    match alva.session_tokens().await {
+        Ok(Some(t)) => Ok(t),
+        Ok(None) => Err(SyncError::NoAccount),
+        Err(e) => {
+            log::warn!("sync: não leu a sessão: {e}");
+            Err(SyncError::Keyring)
+        }
+    }
+}
+
+fn renew_error(e: ClientError) -> SyncError {
+    match e {
+        ClientError::AuthEnded => SyncError::NoAccount,
+        ClientError::Transient(_) => SyncError::Offline,
+        other => failed(other.to_string()),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub enum Availability {
+    NoAccount,
+    NoTier,
+    Ready,
+}
+
+/// O que a página de configurações mostra. Nunca leva token.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct SyncStatus {
+    pub availability: Availability,
+    pub enabled: bool,
+    pub paused_local: bool,
+    pub paused_site: bool,
+    pub revoked: bool,
+    pub device_id: Option<String>,
+    pub label: String,
+    pub hardware: HardwarePayload,
+    pub quota: Option<SyncQuota>,
+    /// Segundos Unix.
+    pub last_pass_at: Option<i64>,
+    pub conflicts: u32,
+    /// O código de i18n do último erro.
+    pub last_error: Option<String>,
+}
+
+/// A cota como a tela a recebe (o servidor manda em snake_case: `api::Quota`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "Quota"))]
+pub struct SyncQuota {
+    pub used_bytes: i64,
+    pub limit_bytes: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct SyncMachine {
+    pub id: String,
+    pub label: String,
+    pub client_kind: String,
+    pub is_this: bool,
+    pub hardware: Option<HardwarePayload>,
+    pub last_used_at: Option<String>,
+    pub revoked: bool,
+    pub paused: bool,
+}
+
+/// Evento `sync`: a tela relê o estado.
+pub const SYNC_EVENT: &str = "sync";
+
+fn emit_status(app: &AppHandle) {
+    if let Err(e) = app.emit(SYNC_EVENT, serde_json::json!({ "type": "status" })) {
+        log::warn!("sync: não avisou a interface: {e}");
+    }
+}
+
+fn services(app: &AppHandle) -> Result<(Arc<SyncService>, tauri::State<'_, Alvanista>), String> {
+    let sync = app
+        .try_state::<Arc<SyncService>>()
+        .ok_or_else(|| "failed".to_owned())?
+        .inner()
+        .clone();
+    let alva = app
+        .try_state::<Alvanista>()
+        .ok_or_else(|| "failed".to_owned())?;
+    Ok((sync, alva))
+}
+
+#[tauri::command]
+pub async fn sync_status(app: AppHandle) -> Result<SyncStatus, String> {
+    let (sync, alva) = services(&app)?;
+    sync.status_with(&alva, current_hardware(&app))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn sync_set_enabled(
+    app: AppHandle,
+    enabled: bool,
+    lang: Option<String>,
+) -> Result<SyncStatus, String> {
+    let (sync, alva) = services(&app)?;
+    let lang = Lang::from_tag(lang.as_deref().unwrap_or("pt-BR"));
+    let status = sync
+        .set_enabled_with(&alva, enabled, current_hardware(&app), || {
+            alva.reconnect_with_saves(lang, crate::alvanista::open_in_browser)
+        })
+        .await
+        .map_err(|e| e.to_string());
+    emit_status(&app);
+    status
+}
+
+#[tauri::command]
+pub async fn sync_set_label(app: AppHandle, label: String) -> Result<SyncStatus, String> {
+    let (sync, alva) = services(&app)?;
+    let status = sync
+        .set_label_with(&alva, &label, current_hardware(&app))
+        .await
+        .map_err(|e| e.to_string());
+    emit_status(&app);
+    status
+}
+
+#[tauri::command]
+pub async fn sync_set_paused(app: AppHandle, paused: bool) -> Result<SyncStatus, String> {
+    let (sync, alva) = services(&app)?;
+    let status = sync
+        .set_paused_with(&alva, paused, current_hardware(&app))
+        .await
+        .map_err(|e| e.to_string());
+    emit_status(&app);
+    status
+}
+
+#[tauri::command]
+pub async fn sync_machines(app: AppHandle) -> Result<Vec<SyncMachine>, String> {
+    let (sync, alva) = services(&app)?;
+    sync.machines_with(&alva).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn sync_now(app: AppHandle) -> Result<SyncStatus, String> {
+    let (sync, alva) = services(&app)?;
+    let status = sync
+        .now_with(&alva, current_hardware(&app))
+        .await
+        .map_err(|e| e.to_string());
+    emit_status(&app);
+    status
+}
+
+/// Abre a pasta dos backups do sync (a cria se ainda não existe).
+#[tauri::command]
+pub async fn sync_open_backups(app: AppHandle) -> Result<(), String> {
+    let dir = crate::data_dir(&app).join("sync-backups");
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        log::warn!("sync: não criou a pasta de backups: {e}");
+        "failed".to_owned()
+    })?;
+    open::that_detached(&dir).map_err(|e| {
+        log::warn!("sync: não abriu a pasta de backups: {e}");
+        "failed".to_owned()
+    })
+}
+
+fn config_scope_saves() -> &'static str {
+    crate::alvanista::config::SCOPE_SAVES
+}
+
+/// `Failed` leva a mensagem, mas `Display` só mostra o código: o texto
+/// (sem segredos) vai para o log onde o erro nasce.
+fn failed(e: String) -> SyncError {
+    log::warn!("sync: falhou: {e}");
+    SyncError::Failed(e)
+}
+
+/// O hardware da máquina agora, no formato do servidor.
+fn current_hardware(app: &AppHandle) -> HardwarePayload {
+    let info = crate::commands::hardware::get_hardware_info(app.state());
+    hardware_payload(
+        &info,
+        env!("CARGO_PKG_VERSION"),
+        crate::alvanista::store::now_secs(),
+    )
+}
+
+#[cfg(test)]
+pub(crate) mod test_support {
+    use sqlx::Row;
+
+    /// Toda chave e todo valor de `alvanista_state`, para provar o que NÃO
+    /// está lá.
+    pub async fn all_state_values(db: &db::Db) -> Vec<String> {
+        sqlx::query("SELECT key, value FROM alvanista_state")
+            .fetch_all(db)
+            .await
+            .unwrap()
+            .into_iter()
+            .flat_map(|r| [r.get::<String, _>("key"), r.get::<String, _>("value")])
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::alvanista::client::{Client, Entitlements, Me};
+    use crate::alvanista::store::test_support::{tokens, MemSecrets, SERIAL};
+    use crate::alvanista::store::Store;
+    use crate::alvanista::test_api::{browser, FamilyApi};
+    use std::sync::atomic::Ordering::SeqCst;
+    use std::sync::{Arc, Mutex};
+    use wiremock::matchers::{body_partial_json, header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn hw() -> HardwarePayload {
+        HardwarePayload {
+            os: "Windows 11".into(),
+            arch: "x86_64".into(),
+            cpu_cores: 8,
+            memory_mb: 16_384,
+            app_version: "0.4.0".into(),
+            captured_at: "2026-11-13T10:00:00Z".into(),
+            ..Default::default()
+        }
+    }
+
+    struct Rig {
+        sync: SyncService,
+        alva: Alvanista,
+        store: Store,
+        secrets: Arc<MemSecrets>,
+        db: db::Db,
+        server: MockServer,
+    }
+
+    /// Alvanista e sync contra o mesmo servidor de mentira, com sessão
+    /// (escopos `profile:read saves`) e chaveiro em memória.
+    async fn rig() -> Rig {
+        let server = MockServer::start().await;
+        let secrets = Arc::new(MemSecrets::default());
+        let db = db::connect_in_memory().await.unwrap();
+        let store = Store::new(db.clone(), secrets.clone());
+        store
+            .start_session(&tokens("1"), &["profile:read", "saves"])
+            .await
+            .unwrap();
+        let alva = Alvanista::new(Client::with_api(
+            server.uri(),
+            Store::new(db.clone(), secrets.clone()),
+        ));
+        let sync = SyncService::new(
+            SavesApi::new(server.uri()),
+            DeviceStore::new(db.clone(), secrets.clone()),
+        );
+        Rig {
+            sync,
+            alva,
+            store,
+            secrets,
+            db,
+            server,
+        }
+    }
+
+    async fn patches(server: &MockServer) -> usize {
+        server.received_requests().await.unwrap().len()
+    }
+
+    fn minted_body(token: &str) -> serde_json::Value {
+        serde_json::json!({
+            "id": "dev1", "label": "Sala", "client_kind": "reemu",
+            "token": token, "token_prefix": "asv_se",
+            "created_at": "2026-11-13T10:00:00Z"
+        })
+    }
+
+    async fn mount_mint(server: &MockServer, template: ResponseTemplate, times: u64) {
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/save-devices"))
+            .respond_with(template)
+            .expect(times)
+            .mount(server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn ensure_device_mints_once_then_reuses() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(201).set_body_json(minted_body("asv_secret")),
+            1,
+        )
+        .await;
+        let first = r
+            .sync
+            .ensure_device_with(&r.alva, Some("Sala".into()), hw())
+            .await
+            .unwrap();
+        assert_eq!(
+            first,
+            Device {
+                id: "dev1".into(),
+                label: "Sala".into()
+            }
+        );
+        let second = r
+            .sync
+            .ensure_device_with(&r.alva, None, hw())
+            .await
+            .unwrap();
+        assert_eq!(second, first);
+        assert_eq!(
+            r.sync.devices().token().unwrap().as_deref(),
+            Some("asv_secret")
+        );
+        // `expect(1)` do mock confere no drop do servidor.
+        let posts = r.server.received_requests().await.unwrap();
+        assert_eq!(posts.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn two_concurrent_calls_mint_a_single_device() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(201).set_body_json(minted_body("asv_secret")),
+            1,
+        )
+        .await;
+        let (a, b) = tokio::join!(
+            r.sync.ensure_device_with(&r.alva, None, hw()),
+            r.sync.ensure_device_with(&r.alva, None, hw())
+        );
+        assert_eq!(a.unwrap(), b.unwrap());
+    }
+
+    #[tokio::test]
+    async fn ensure_device_maps_insufficient_scope_to_needs_consent() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(403)
+                .set_body_json(serde_json::json!({"error": "insufficient_scope"})),
+            1,
+        )
+        .await;
+        let err = r.sync.ensure_device_with(&r.alva, None, hw()).await;
+        assert_eq!(err, Err(SyncError::NeedsConsent));
+        assert_eq!(r.sync.devices().device().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn ensure_device_maps_402_to_no_tier() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(402).set_body_json(serde_json::json!({
+                "error": {"code": "tier_insufficient", "current_tier": "free",
+                          "upgrade_to": "collector", "required_quota": "saves",
+                          "required_value": 1}
+            })),
+            1,
+        )
+        .await;
+        let err = r.sync.ensure_device_with(&r.alva, None, hw()).await;
+        assert_eq!(err, Err(SyncError::NoTier));
+    }
+
+    #[tokio::test]
+    async fn without_a_session_there_is_no_account_and_no_request() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        r.store.unmark_session().await.unwrap();
+        let keyring_calls = || r.secrets.calls.load(std::sync::atomic::Ordering::SeqCst);
+        let before = keyring_calls();
+        mount_mint(&r.server, ResponseTemplate::new(500), 0).await;
+        let err = r.sync.ensure_device_with(&r.alva, None, hw()).await;
+        assert_eq!(err, Err(SyncError::NoAccount));
+        // O mesmo vale para o hardware, mesmo com um aparelho guardado.
+        r.sync
+            .devices()
+            .save(
+                &Device {
+                    id: "dev1".into(),
+                    label: "Sala".into(),
+                },
+                "asv_secret",
+            )
+            .await
+            .unwrap();
+        let before_refresh = keyring_calls();
+        assert_eq!(
+            r.sync.refresh_hardware_with(&r.alva, hw()).await,
+            Err(SyncError::NoAccount)
+        );
+        assert_eq!(
+            keyring_calls(),
+            before_refresh,
+            "o refresh tocou o chaveiro"
+        );
+        assert_eq!(
+            before,
+            before_refresh - 1,
+            "só o save do teste tocou o chaveiro"
+        );
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_unknown_gpu_keeps_the_last_one_sent() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        r.sync
+            .devices()
+            .save(
+                &Device {
+                    id: "dev1".into(),
+                    label: "Sala".into(),
+                },
+                "asv_secret",
+            )
+            .await
+            .unwrap();
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "dev1", "label": "Sala", "client_kind": "reemu",
+                "token_prefix": "asv_se", "created_at": "2026-11-13T10:00:00Z"
+            })))
+            .mount(&r.server)
+            .await;
+        let mut known = hw();
+        (known.gpu, known.gpu_backend, known.gpu_driver) =
+            ("RTX".into(), "Vulkan".into(), "555".into());
+        r.sync.refresh_hardware_with(&r.alva, known).await.unwrap();
+        // A GPU não abriu e a RAM mudou: vai de novo, com a GPU de antes.
+        let mut unknown = hw();
+        unknown.memory_mb = 32_768;
+        r.sync
+            .refresh_hardware_with(&r.alva, unknown)
+            .await
+            .unwrap();
+        let reqs = r.server.received_requests().await.unwrap();
+        assert_eq!(reqs.len(), 2);
+        let body: serde_json::Value = serde_json::from_slice(&reqs[1].body).unwrap();
+        assert_eq!(body["hardware"]["memory_mb"], 32_768);
+        assert_eq!(body["hardware"]["gpu"], "RTX");
+        assert_eq!(body["hardware"]["gpu_backend"], "Vulkan");
+        assert_eq!(body["hardware"]["gpu_driver"], "555");
+    }
+
+    #[tokio::test]
+    async fn a_plan_without_save_sync_is_no_tier_and_no_request() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        r.store
+            .mirror_put(&Me {
+                id: "u1".into(),
+                username: "toy".into(),
+                avatar_url: None,
+                hero_url: None,
+                bio: None,
+                profile_url: "https://www.alvanista.com/u/toy".into(),
+                card: None,
+                entitlements: Some(Entitlements { save_sync: false }),
+            })
+            .await
+            .unwrap();
+        mount_mint(&r.server, ResponseTemplate::new(500), 0).await;
+        let err = r.sync.ensure_device_with(&r.alva, None, hw()).await;
+        assert_eq!(err, Err(SyncError::NoTier));
+    }
+
+    #[tokio::test]
+    async fn an_expired_partner_token_is_renewed_once_and_the_mint_repeated() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/save-devices"))
+            .and(header("authorization", "Bearer alp_1"))
+            .respond_with(
+                ResponseTemplate::new(401)
+                    .set_body_json(serde_json::json!({"error": "invalid_token"})),
+            )
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/oauth/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "alp_2", "refresh_token": "alr_2", "token_type": "Bearer",
+                "expires_in": 3600
+            })))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/save-devices"))
+            .and(header("authorization", "Bearer alp_2"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(minted_body("asv_secret")))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        let device = r
+            .sync
+            .ensure_device_with(&r.alva, None, hw())
+            .await
+            .unwrap();
+        assert_eq!(device.id, "dev1");
+    }
+
+    #[tokio::test]
+    async fn a_keyring_that_refuses_the_token_leaves_no_device_and_revokes_the_orphan() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(201).set_body_json(minted_body("asv_secret")),
+            1,
+        )
+        .await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .and(header("authorization", "Bearer asv_secret"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        r.secrets
+            .fail_next_set
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let err = r.sync.ensure_device_with(&r.alva, None, hw()).await;
+        assert_eq!(err, Err(SyncError::Keyring));
+        assert_eq!(r.sync.devices().device().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn a_stored_device_without_a_token_is_minted_again() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        // O aparelho novo leva o nome do antigo.
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/save-devices"))
+            .and(body_partial_json(serde_json::json!({"label": "Velho"})))
+            .respond_with(ResponseTemplate::new(201).set_body_json(minted_body("asv_new")))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        r.sync
+            .devices()
+            .save(
+                &Device {
+                    id: "old".into(),
+                    label: "Velho".into(),
+                },
+                "asv_old",
+            )
+            .await
+            .unwrap();
+        r.secrets.secrets.lock().unwrap().remove("alvanista-saves");
+        let device = r
+            .sync
+            .ensure_device_with(&r.alva, None, hw())
+            .await
+            .unwrap();
+        assert_eq!(device.id, "dev1");
+        assert_eq!(
+            r.sync.devices().token().unwrap().as_deref(),
+            Some("asv_new")
+        );
+    }
+
+    #[tokio::test]
+    async fn refresh_hardware_patches_only_on_change_or_after_a_day() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        r.sync
+            .devices()
+            .save(
+                &Device {
+                    id: "dev1".into(),
+                    label: "Sala".into(),
+                },
+                "asv_secret",
+            )
+            .await
+            .unwrap();
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .and(header("authorization", "Bearer asv_secret"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "dev1", "label": "Sala", "client_kind": "reemu",
+                "token_prefix": "asv_se", "created_at": "2026-11-13T10:00:00Z"
+            })))
+            .mount(&r.server)
+            .await;
+        // Nunca enviado: vai.
+        r.sync.refresh_hardware_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(patches(&r.server).await, 1);
+        // Mesma máquina, enviado agora: não vai.
+        let mut later = hw();
+        later.captured_at = "2026-11-13T11:00:00Z".into();
+        later.app_version = "0.5.0".into();
+        r.sync.refresh_hardware_with(&r.alva, later).await.unwrap();
+        assert_eq!(patches(&r.server).await, 1);
+        // GPU nova: vai.
+        let mut gpu = hw();
+        gpu.gpu = "Outra".into();
+        r.sync.refresh_hardware_with(&r.alva, gpu).await.unwrap();
+        assert_eq!(patches(&r.server).await, 2);
+        // Mesma máquina, mas o último envio tem mais de 24 h: vai.
+        r.sync
+            .devices()
+            .set_hw_sent_at(crate::alvanista::store::now_secs() - HW_RESEND_SECS - 1)
+            .await
+            .unwrap();
+        r.sync.refresh_hardware_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(patches(&r.server).await, 3);
+    }
+
+    async fn store_device(r: &Rig) {
+        r.sync
+            .devices()
+            .save(
+                &Device {
+                    id: "dev1".into(),
+                    label: "Sala".into(),
+                },
+                "asv_secret",
+            )
+            .await
+            .unwrap();
+        r.sync.devices().set_enabled(true).await.unwrap();
+    }
+
+    fn remote(id: &str, revoked: bool, paused: bool) -> serde_json::Value {
+        let mut d = serde_json::json!({
+            "id": id, "label": format!("Maquina {id}"), "client_kind": "reemu",
+            "created_at": "2026-11-13T10:00:00Z",
+            "last_used_at": "2026-11-13T11:00:00Z",
+        });
+        if revoked {
+            d["revoked_at"] = "2026-11-13T12:00:00Z".into();
+        }
+        if paused {
+            d["paused_at"] = "2026-11-13T12:00:00Z".into();
+        }
+        d
+    }
+
+    async fn mount_list(server: &MockServer, devices: Vec<serde_json::Value>) {
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/save-devices"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "devices": devices
+            })))
+            .mount(server)
+            .await;
+    }
+
+    async fn never_reconnect() -> Result<AlvanistaStatus, String> {
+        panic!("não devia pedir consentimento");
+    }
+
+    #[tokio::test]
+    async fn set_enabled_on_without_session_is_no_account() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        r.store.unmark_session().await.unwrap();
+        let err = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), never_reconnect)
+            .await;
+        assert_eq!(err, Err(SyncError::NoAccount));
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+        assert_eq!(r.sync.devices().device().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn set_enabled_on_creates_the_device_and_turns_the_flag_on() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(201).set_body_json(minted_body("asv_secret")),
+            1,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/saves/quota"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"used_bytes": 10, "limit_bytes": 100})),
+            )
+            .mount(&r.server)
+            .await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        let st = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), never_reconnect)
+            .await
+            .unwrap();
+        assert!(st.enabled);
+        assert_eq!(st.availability, Availability::Ready);
+        assert_eq!(st.device_id.as_deref(), Some("dev1"));
+        assert_eq!(
+            st.quota,
+            Some(SyncQuota {
+                used_bytes: 10,
+                limit_bytes: 100
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn set_enabled_on_runs_the_consent_once_and_retries() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/save-devices"))
+            .respond_with(
+                ResponseTemplate::new(403)
+                    .set_body_json(serde_json::json!({"error": "insufficient_scope"})),
+            )
+            .up_to_n_times(1)
+            .with_priority(1)
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/save-devices"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(minted_body("asv_secret")))
+            .with_priority(2)
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        let asked = std::sync::atomic::AtomicUsize::new(0);
+        let st = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), || async {
+                asked.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(AlvanistaStatus::default())
+            })
+            .await
+            .unwrap();
+        assert!(st.enabled);
+        assert_eq!(asked.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_refused_consent_surfaces_its_code_and_creates_nothing() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(403)
+                .set_body_json(serde_json::json!({"error": "insufficient_scope"})),
+            1,
+        )
+        .await;
+        let err = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), || async { Err("denied".to_owned()) })
+            .await;
+        assert_eq!(err, Err(SyncError::Connect("denied".into())));
+        assert_eq!(err.unwrap_err().to_string(), "denied");
+        assert_eq!(r.sync.devices().device().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn set_enabled_off_revokes_and_forgets() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .and(header("authorization", "Bearer asv_secret"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        mount_list(&r.server, vec![]).await;
+        let st = r
+            .sync
+            .set_enabled_with(&r.alva, false, hw(), never_reconnect)
+            .await
+            .unwrap();
+        assert!(!st.enabled);
+        assert_eq!(st.device_id, None);
+        assert_eq!(r.sync.devices().token().unwrap(), None, "token no chaveiro");
+        assert!(!r.sync.devices().enabled().await.unwrap());
+        for v in test_support::all_state_values(&r.db).await {
+            assert!(!v.starts_with("sync."), "sobrou estado do sync: {v}");
+        }
+    }
+
+    #[tokio::test]
+    async fn set_enabled_off_ignores_a_401_and_still_forgets() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(
+                ResponseTemplate::new(401)
+                    .set_body_json(serde_json::json!({"error": "invalid_token"})),
+            )
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        r.sync
+            .set_enabled_with(&r.alva, false, hw(), never_reconnect)
+            .await
+            .unwrap();
+        assert_eq!(r.sync.devices().device().await.unwrap(), None);
+        assert_eq!(r.sync.devices().token().unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn forgetting_without_a_device_touches_neither_keyring_nor_network() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        let before = r.secrets.calls.load(std::sync::atomic::Ordering::SeqCst);
+        r.sync.forget_device(true).await.unwrap();
+        assert_eq!(
+            r.secrets.calls.load(std::sync::atomic::Ordering::SeqCst),
+            before
+        );
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn forget_without_revoke_sends_no_delete() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        r.sync.forget_device(false).await.unwrap();
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+        assert_eq!(r.sync.devices().token().unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn status_reports_site_pause_from_the_device_list() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(
+            &r.server,
+            vec![remote("dev1", false, true), remote("dev2", false, false)],
+        )
+        .await;
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert!(st.paused_site);
+        assert!(!st.revoked);
+        assert!(st.enabled && !st.paused_local);
+        assert_eq!(st.label, "Sala");
+        // O último valor conhecido fica guardado para quando a lista não responder.
+        assert_eq!(r.sync.devices().site_state().await.unwrap(), (true, false));
+    }
+
+    #[tokio::test]
+    async fn status_falls_back_to_the_last_known_site_state_when_the_list_fails() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        r.sync.devices().set_site_state(true, true).await.unwrap();
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/save-devices"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&r.server)
+            .await;
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert!(st.paused_site);
+        assert!(st.revoked);
+    }
+
+    #[tokio::test]
+    async fn status_reports_a_revoked_device_from_the_list() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", true, false)]).await;
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert!(st.revoked);
+    }
+
+    #[tokio::test]
+    async fn status_without_a_session_is_no_account_and_asks_nothing() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        r.store.unmark_session().await.unwrap();
+        let calls = || r.secrets.calls.load(std::sync::atomic::Ordering::SeqCst);
+        let before = calls();
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::NoAccount);
+        assert_eq!(calls(), before, "tocou o chaveiro");
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn status_with_a_session_and_no_device_is_ready_and_off() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::Ready);
+        assert!(!st.enabled);
+        assert_eq!(st.device_id, None);
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn set_label_patches_and_stores_what_the_server_returns() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "dev1", "label": "Quarto", "client_kind": "reemu",
+                "created_at": "2026-11-13T10:00:00Z"
+            })))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        let st = r
+            .sync
+            .set_label_with(&r.alva, " Quarto ", hw())
+            .await
+            .unwrap();
+        assert_eq!(st.label, "Quarto");
+        assert!(r.sync.set_label_with(&r.alva, "  ", hw()).await.is_err());
+        let long = "x".repeat(81);
+        assert!(r.sync.set_label_with(&r.alva, &long, hw()).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn pausing_is_local_only() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        let st = r.sync.set_paused_with(&r.alva, true, hw()).await.unwrap();
+        assert!(st.paused_local);
+        let reqs = r.server.received_requests().await.unwrap();
+        assert!(reqs.iter().all(|q| q.method.as_str() == "GET"));
+    }
+
+    #[tokio::test]
+    async fn machines_lists_active_devices_and_marks_this_one() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(
+            &r.server,
+            vec![
+                remote("dev1", false, false),
+                remote("dev2", true, false),
+                remote("dev3", false, true),
+            ],
+        )
+        .await;
+        let list = r.sync.machines_with(&r.alva).await.unwrap();
+        let ids: Vec<_> = list
+            .iter()
+            .map(|m| (m.id.as_str(), m.is_this, m.paused))
+            .collect();
+        assert_eq!(ids, vec![("dev1", true, false), ("dev3", false, true)]);
+    }
+
+    #[tokio::test]
+    async fn sync_now_refreshes_quota_and_the_list() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/saves/quota"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"used_bytes": 5, "limit_bytes": 50})),
+            )
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(remote("dev1", false, false)))
+            .mount(&r.server)
+            .await;
+        let st = r.sync.now_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.quota.map(|q| q.used_bytes), Some(5));
+        assert_eq!(st.last_error, None);
+    }
+
+    #[tokio::test]
+    async fn sync_now_with_a_revoked_token_marks_the_device_revoked() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![]).await;
+        for (m, p) in [
+            ("GET", "/api/v1/saves/quota"),
+            ("PATCH", "/api/v1/saves/device"),
+        ] {
+            Mock::given(method(m))
+                .and(path(p))
+                .respond_with(
+                    ResponseTemplate::new(401)
+                        .set_body_json(serde_json::json!({"error": "invalid_token"})),
+                )
+                .mount(&r.server)
+                .await;
+        }
+        let st = r.sync.now_with(&r.alva, hw()).await.unwrap();
+        assert!(st.revoked);
+        assert_eq!(st.last_error.as_deref(), Some("revoked"));
+    }
+
+    #[tokio::test]
+    async fn status_reports_a_device_missing_from_the_list_as_revoked() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        r.sync.devices().set_site_state(true, false).await.unwrap();
+        mount_list(&r.server, vec![remote("other", false, false)]).await;
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert!(st.revoked);
+        assert!(st.paused_site, "o pause guardado se mantém");
+    }
+
+    #[tokio::test]
+    async fn set_enabled_on_mints_a_new_device_when_the_stored_one_is_missing_from_the_list() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        // O nome que a pessoa escolheu antes de a máquina sair do site.
+        r.sync.devices().set_label("Quarto do Ed").await.unwrap();
+        mount_list(&r.server, vec![remote("other", false, false)]).await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(404))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        // "Ligar de novo" mantém o nome, em vez de voltar ao da máquina.
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/save-devices"))
+            .and(body_partial_json(
+                serde_json::json!({"label": "Quarto do Ed"}),
+            ))
+            .respond_with(ResponseTemplate::new(201).set_body_json(minted_body("asv_new")))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        let st = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), never_reconnect)
+            .await
+            .unwrap();
+        assert_eq!(st.device_id.as_deref(), Some("dev1"));
+        assert_eq!(
+            r.sync.devices().token().unwrap().as_deref(),
+            Some("asv_new")
+        );
+    }
+
+    #[tokio::test]
+    async fn partner_devices_renews_once_and_retries_the_list() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        r.store
+            .start_session(&tokens("7"), &["profile:read", "saves"])
+            .await
+            .unwrap();
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/save-devices"))
+            .and(header("authorization", "Bearer alp_7"))
+            .respond_with(ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/oauth/token"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "access_token": "alp_8", "refresh_token": "alr_8", "token_type": "Bearer",
+                "expires_in": 3600
+            })))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/save-devices"))
+            .and(header("authorization", "Bearer alp_8"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "devices": [remote("dev9", false, false)]
+            })))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        let list = r.sync.machines_with(&r.alva).await.unwrap();
+        assert_eq!(list.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn partner_devices_forgets_and_revokes_the_device_when_the_session_ended() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        r.store
+            .start_session(&tokens("9"), &["profile:read", "saves"])
+            .await
+            .unwrap();
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/save-devices"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&r.server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/oauth/token"))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_json(serde_json::json!({"error": "invalid_grant"})),
+            )
+            .mount(&r.server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .and(header("authorization", "Bearer asv_secret"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        // O `mint` preso por outra chamada não pode travar o esquecer.
+        let _minting = r.sync.hold_mint_for_test().await;
+        let got = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            r.sync.status_with(&r.alva, hw()),
+        )
+        .await
+        .expect("travou")
+        .unwrap();
+        assert_eq!(got.availability, Availability::NoAccount);
+        assert_eq!(got.device_id, None);
+        assert_eq!(r.sync.devices().token().unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn a_failed_revoke_leaves_offline_for_the_page() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&r.server)
+            .await;
+        mount_list(&r.server, vec![]).await;
+        let st = r
+            .sync
+            .set_enabled_with(&r.alva, false, hw(), never_reconnect)
+            .await
+            .unwrap();
+        assert_eq!(st.device_id, None);
+        assert_eq!(st.last_error.as_deref(), Some("offline"));
+    }
+
+    #[tokio::test]
+    async fn label_and_rename_errors_have_their_own_codes() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        // Sem aparelho: not_enabled.
+        assert_eq!(
+            r.sync.set_label_with(&r.alva, "Sala", hw()).await,
+            Err(SyncError::NotEnabled)
+        );
+        assert_eq!(
+            r.sync.set_label_with(&r.alva, "", hw()).await,
+            Err(SyncError::InvalidLabel)
+        );
+        // O servidor recusa o nome: invalid_label.
+        store_device(&r).await;
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_json(serde_json::json!({"error": {"code": "invalid_label"}})),
+            )
+            .mount(&r.server)
+            .await;
+        assert_eq!(
+            r.sync.set_label_with(&r.alva, "Sala", hw()).await,
+            Err(SyncError::InvalidLabel)
+        );
+        // Sem sessão: antes de qualquer chaveiro ou rede.
+        r.store.unmark_session().await.unwrap();
+        let before = r.secrets.calls.load(std::sync::atomic::Ordering::SeqCst);
+        let n = r.server.received_requests().await.unwrap().len();
+        assert_eq!(
+            r.sync.set_label_with(&r.alva, "Sala", hw()).await,
+            Err(SyncError::NoAccount)
+        );
+        assert_eq!(
+            r.secrets.calls.load(std::sync::atomic::Ordering::SeqCst),
+            before
+        );
+        assert_eq!(r.server.received_requests().await.unwrap().len(), n);
+    }
+
+    #[tokio::test]
+    async fn an_unknown_reconnect_code_becomes_failed() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        r.store
+            .start_session(&tokens("5"), &["profile:read"])
+            .await
+            .unwrap();
+        let err = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), || async { Err("weird".to_owned()) })
+            .await;
+        assert_eq!(err.unwrap_err().to_string(), "failed");
+    }
+
+    #[tokio::test]
+    async fn without_the_saves_scope_nothing_is_sent_to_the_mint() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        r.store
+            .start_session(&tokens("5"), &["profile:read"])
+            .await
+            .unwrap();
+        mount_mint(&r.server, ResponseTemplate::new(500), 0).await;
+        let err = r.sync.ensure_device_with(&r.alva, None, hw()).await;
+        assert_eq!(err, Err(SyncError::NeedsConsent));
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn sync_now_keeps_the_most_severe_error_and_clears_a_stale_revoked() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        // O hardware volta 423 (paused) e a cota 503 (offline): vale o paused.
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(423))
+            .mount(&r.server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/saves/quota"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&r.server)
+            .await;
+        let st = r.sync.now_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.last_error.as_deref(), Some("paused"));
+        // Um "revoked" velho some quando a lista mostra o aparelho vivo.
+        r.sync.runtime().last_error = Some("revoked".into());
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.last_error, None);
+    }
+
+    /// M1: o estado decide pelo SQLite e lê o par do chaveiro uma vez, só
+    /// quando vai à rede.
+    #[tokio::test]
+    async fn the_status_reads_the_keyring_at_most_once() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        let gets = || r.secrets.gets.load(SeqCst);
+        // Conectado e sem aparelho: nada a perguntar ao site, nem ao chaveiro.
+        let before = gets();
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::Ready);
+        assert_eq!(gets() - before, 0, "sem aparelho");
+        // Com aparelho: a lista do site, com uma leitura do par.
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        let before = gets();
+        r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(gets() - before, 1, "com aparelho");
+        // Sem plano: a lista e o `/me` dividem a mesma leitura.
+        r.store
+            .mirror_put(&Me {
+                id: "u1".into(),
+                username: "toy".into(),
+                avatar_url: None,
+                hero_url: None,
+                bio: None,
+                profile_url: "https://www.alvanista.com/u/toy".into(),
+                card: None,
+                entitlements: Some(Entitlements { save_sync: false }),
+            })
+            .await
+            .unwrap();
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/me"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "id": "u1", "username": "toy",
+                "profile_url": "https://www.alvanista.com/u/toy",
+                "entitlements": {"save_sync": false}
+            })))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        let before = gets();
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::NoTier);
+        assert_eq!(gets() - before, 1, "sem plano");
+    }
+
+    /// Alvanista e sync contra o servidor que revoga por família, com uma
+    /// sessão (`old`, com `scopes`) que o servidor conhece e o perfil já lido
+    /// uma vez (o app abriu conectado).
+    struct FamilyRig {
+        api: FamilyApi,
+        alva: Alvanista,
+        sync: SyncService,
+        store: Store,
+    }
+
+    async fn family_rig(scopes: &[&str]) -> FamilyRig {
+        let api = FamilyApi::start(Arc::new(Mutex::new(Vec::new()))).await;
+        let secrets = Arc::new(MemSecrets::default());
+        let db = db::connect_in_memory().await.unwrap();
+        let store = Store::new(db.clone(), secrets.clone());
+        let device = store.device_id().await.unwrap();
+        api.seed(&tokens("old"), &device, scopes);
+        store.start_session(&tokens("old"), scopes).await.unwrap();
+        let alva = Alvanista::new(Client::with_api(
+            api.uri(),
+            Store::new(db.clone(), secrets.clone()),
+        ));
+        let sync = SyncService::new(SavesApi::new(api.uri()), DeviceStore::new(db, secrets));
+        assert!(alva.status().await.connected);
+        FamilyRig {
+            api,
+            alva,
+            sync,
+            store,
+        }
+    }
+
+    /// C1: ligar o sync numa sessão só de perfil pede o consentimento,
+    /// reconecta e cria o aparelho, e a sessão segue viva num servidor que
+    /// revoga a família inteira de um par.
+    #[tokio::test]
+    async fn turning_sync_on_through_the_consent_keeps_the_session_and_mints_the_device() {
+        let _serial = SERIAL.lock().await;
+        let r = family_rig(&["profile:read"]).await;
+        let st = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), || {
+                r.alva.reconnect_with_saves(Lang::PtBr, browser(true))
+            })
+            .await
+            .unwrap();
+        assert!(st.enabled, "{st:?}");
+        assert_eq!(st.availability, Availability::Ready);
+        assert_eq!(st.device_id.as_deref(), Some("dev1"));
+        assert_eq!(r.api.minted(), 1);
+        assert_eq!(
+            r.sync.devices().token().unwrap().as_deref(),
+            Some("asv_dev1")
+        );
+        // Nada foi revogado, e o par guardado é o novo, vivo no servidor.
+        let events = r.api.events();
+        assert!(
+            !events.iter().any(|e| e.starts_with("revoke:")),
+            "{events:?}"
+        );
+        let session = r.store.load_tokens().await.unwrap().unwrap();
+        assert_ne!(session, tokens("old"));
+        assert!(r.api.is_live(&session.access_token) && r.api.is_live(&session.refresh_token));
+        // A conexão segue de pé, agora com `saves`.
+        let alva = r.alva.status().await;
+        assert!(alva.connected && !alva.ended && !alva.offline, "{alva:?}");
+        assert!(alva.scopes.iter().any(|s| s == "saves"), "{alva:?}");
+        let again = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert!(again.enabled && again.availability == Availability::Ready);
+    }
+
+    /// I2: um 402 do mint vira `no_tier` na página, e assinar no site faz a
+    /// página voltar a oferecer o toggle sem reiniciar o app. Um `/me` por
+    /// leitura do estado, e nenhum quando o plano já libera.
+    #[tokio::test]
+    async fn a_402_at_mint_shows_no_tier_and_a_new_plan_turns_the_page_ready() {
+        let _serial = SERIAL.lock().await;
+        let r = family_rig(&["profile:read", "saves"]).await;
+        // O espelho ainda diz que o plano libera; no servidor ele venceu.
+        r.api.set_save_sync(false);
+        let err = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), never_reconnect)
+            .await;
+        assert_eq!(err, Err(SyncError::NoTier));
+        assert_eq!(
+            r.store.mirror_get().await.unwrap().unwrap().save_sync,
+            Some(false)
+        );
+        let me = r.api.me_calls();
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::NoTier);
+        assert_eq!(r.api.me_calls(), me + 1, "um /me por leitura");
+        // A pessoa assina no site e volta para a página.
+        r.api.set_save_sync(true);
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.availability, Availability::Ready);
+        assert_eq!(r.api.me_calls(), me + 2);
+        r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(
+            r.api.me_calls(),
+            me + 2,
+            "com plano, o estado não vai ao /me"
+        );
+        let on = r
+            .sync
+            .set_enabled_with(&r.alva, true, hw(), never_reconnect)
+            .await
+            .unwrap();
+        assert!(on.enabled && on.device_id.is_some(), "{on:?}");
+    }
+
+    #[test]
+    fn the_error_display_is_the_i18n_code() {
+        let codes = [
+            (SyncError::NoAccount, "no_account"),
+            (SyncError::NoTier, "no_tier"),
+            (SyncError::NeedsConsent, "needs_consent"),
+            (SyncError::Revoked, "revoked"),
+            (SyncError::Paused, "paused"),
+            (SyncError::Quota, "quota"),
+            (SyncError::Offline, "offline"),
+            (SyncError::Keyring, "keyring"),
+            (SyncError::InvalidLabel, "invalid_label"),
+            (SyncError::NotEnabled, "not_enabled"),
+            (SyncError::Connect("cancelled".into()), "cancelled"),
+            (SyncError::Failed("x".into()), "failed"),
+        ];
+        for (err, code) in codes {
+            assert_eq!(err.to_string(), code);
+        }
+        assert_eq!(SyncError::from(ApiError::Unauthorized), SyncError::Revoked);
+        assert_eq!(
+            SyncError::from(ApiError::Transient("x".into())),
+            SyncError::Offline
+        );
+    }
+
+    /// Logger de teste que guarda o texto de cada linha.
+    struct Capture(Mutex<Vec<String>>);
+    impl log::Log for Capture {
+        fn enabled(&self, _: &log::Metadata) -> bool {
+            true
+        }
+        fn log(&self, record: &log::Record) {
+            self.0.lock().unwrap().push(format!("{}", record.args()));
+        }
+        fn flush(&self) {}
+    }
+    static CAPTURE: Capture = Capture(Mutex::new(Vec::new()));
+
+    #[tokio::test]
+    async fn no_log_line_and_no_state_row_ever_holds_the_device_token() {
+        let _serial = SERIAL.lock().await;
+        // Se outro teste do processo instalou o logger antes, falha alto: um
+        // teste de "nada vaza no log" que não vê o log não prova nada.
+        assert!(
+            log::set_logger(&CAPTURE).is_ok(),
+            "não deu pra instalar o logger de captura"
+        );
+        log::set_max_level(log::LevelFilter::Trace);
+        let r = rig().await;
+        // O caminho feliz, o do chaveiro recusando (que revoga o órfão) e o
+        // do 401 do aparelho no refresh de hardware.
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(201).set_body_json(minted_body("asv_topsecret")),
+            2,
+        )
+        .await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(204))
+            .mount(&r.server)
+            .await;
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(
+                ResponseTemplate::new(401)
+                    .set_body_json(serde_json::json!({"error": "invalid_token"})),
+            )
+            .mount(&r.server)
+            .await;
+        r.secrets
+            .fail_next_set
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(
+            r.sync.ensure_device_with(&r.alva, None, hw()).await,
+            Err(SyncError::Keyring)
+        );
+        r.sync
+            .ensure_device_with(&r.alva, None, hw())
+            .await
+            .unwrap();
+        let mut moved = hw();
+        moved.gpu = "Outra".into();
+        assert_eq!(
+            r.sync.refresh_hardware_with(&r.alva, moved).await,
+            Err(SyncError::Revoked)
+        );
+        r.sync.devices().set_enabled(true).await.unwrap();
+
+        for v in test_support::all_state_values(&r.db).await {
+            assert!(!v.contains("asv_"), "token no SQLite: {v}");
+        }
+        let lines = CAPTURE.0.lock().unwrap().clone();
+        assert!(
+            lines.iter().any(|l| l.starts_with("sync:")),
+            "o logger não viu as linhas do sync"
+        );
+        for l in lines.iter() {
+            assert!(!l.contains("asv_"), "token no log: {l}");
+        }
+        // O par da sessão também não aparece no SQLite.
+        for v in test_support::all_state_values(&r.db).await {
+            assert!(!v.contains("alp_") && !v.contains("alr_"), "{v}");
+        }
+        let _ = &r.store;
+    }
+}

@@ -24,8 +24,7 @@ const cardIn = {
 };
 
 const useStyles = makeStyles({
-  // Bento: 11 categorias, Perfil ocupando 2 colunas = 12 células, que fecham
-  // 3×4, 4×3 ou 6×2 sem buraco. As linhas dividem a altura útil (`1fr`),
+  // 12 categorias, uma célula cada, que fecham 3×4, 4×3 ou 6×2 sem buraco. As linhas dividem a altura útil (`1fr`),
   // então tudo cabe sem rolar. As colunas seguem a PROPORÇÃO da janela, não a
   // largura: com o zoom da interface (`uiScale.ts`) a tela lógica continua
   // 16:9 e só encolhe (Maior = 1051×591), e aí 4 colunas × 3 linhas é o que
@@ -104,11 +103,16 @@ const useStyles = makeStyles({
     },
   },
   profile: {
-    gridColumn: "span 2",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
-    gap: tokens.spacingHorizontalXL,
+    gap: tokens.spacingHorizontalL,
+    // o texto fica longe do ícone (64 px, absoluto à direita)
+    paddingRight: `calc(64px + ${tokens.spacingHorizontalXXL} + ${tokens.spacingHorizontalM})`,
+    // tela baixa: o ícone é de 52 px e fica a L da borda
+    "@media (max-height: 640px)": {
+      paddingRight: `calc(52px + ${tokens.spacingHorizontalL} + ${tokens.spacingHorizontalM})`,
+    },
   },
   // Ícone à DIREITA e maior (pedido do usuário: o dobro, era 40/32, e
   // depois um pouco menor — 64/52),
@@ -233,7 +237,7 @@ export function SettingsHome() {
               className={mergeClasses(s.card, s.profile)}
               style={delay}
             >
-              {profile && <ProfileAvatar profile={profile} size={96} tier={profile.tierColors} />}
+              {profile && <ProfileAvatar profile={profile} size={64} tier={profile.tierColors} />}
               {/* ícone da pessoa à direita, como nos outros cards (pedido do
                   usuário); sem perfil carregado é o único ícone do card */}
               <Icon className={s.icon} />
