@@ -7,7 +7,7 @@ const API: &str = "https://api.alvanista.com";
 
 pub const CLIENT_ID: &str = "reemu";
 pub const SCOPE_PROFILE: &str = "profile:read";
-#[allow(dead_code)] // usado por `reconnect_with_saves`, ainda sem comando
+#[cfg_attr(not(test), expect(dead_code))] // até os comandos do sync chamarem `reconnect_with_saves`
 pub const SCOPE_SAVES: &str = "saves";
 
 /// `(site, api)`. Em release são sempre as duas URLs de produção. Só em

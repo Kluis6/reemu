@@ -390,13 +390,15 @@ impl Store {
     /// Grava o espelho e devolve o que ficou. Um `/me` sem cartão mantém o
     /// guardado, só se for da mesma conta.
     pub async fn mirror_put(&self, me: &Me) -> Result<Mirror, String> {
+        let previous = self.mirror_get().await?.filter(|old| old.id == me.id);
         let card = match &me.card {
             Some(card) => Some(card.clone()),
-            None => self
-                .mirror_get()
-                .await?
-                .filter(|old| old.id == me.id)
-                .and_then(|old| old.card),
+            None => previous.as_ref().and_then(|old| old.card.clone()),
+        };
+        // Um `/me` sem `entitlements` mantém o que se sabia da mesma conta.
+        let save_sync = match me.entitlements {
+            Some(e) => Some(e.save_sync),
+            None => previous.and_then(|old| old.save_sync),
         };
         let mirror = Mirror {
             id: me.id.clone(),
@@ -407,7 +409,7 @@ impl Store {
             profile_url: me.profile_url.clone(),
             fetched_at: now_secs(),
             card,
-            save_sync: me.entitlements.map(|e| e.save_sync),
+            save_sync,
         };
         let json = serde_json::to_string(&mirror).map_err(|e| e.to_string())?;
         self.repo
@@ -763,5 +765,42 @@ mod tests {
             store.mirror_get().await.unwrap().unwrap().save_sync,
             Some(true)
         );
+    }
+
+    #[tokio::test]
+    async fn a_me_without_entitlements_keeps_the_save_sync_of_the_same_account() {
+        let (store, _) = store_with(MemSecrets::default()).await;
+        let me = |id: &str, entitlements| Me {
+            id: id.into(),
+            username: "toy".into(),
+            avatar_url: None,
+            hero_url: None,
+            bio: None,
+            profile_url: "https://www.alvanista.com/users/toy".into(),
+            card: None,
+            entitlements,
+        };
+        let on = Some(super::super::client::Entitlements { save_sync: true });
+        store.mirror_put(&me("a", on)).await.unwrap();
+        assert_eq!(
+            store.mirror_put(&me("a", None)).await.unwrap().save_sync,
+            Some(true)
+        );
+        assert_eq!(
+            store.mirror_put(&me("b", None)).await.unwrap().save_sync,
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn ending_the_session_makes_scopes_read_as_profile_only_again() {
+        let (store, _) = store_with(MemSecrets::default()).await;
+        store
+            .start_session(&tokens("e1"), &["profile:read", "saves"])
+            .await
+            .unwrap();
+        assert_eq!(store.scopes().await.unwrap().len(), 2);
+        store.unmark_session().await.unwrap();
+        assert_eq!(store.scopes().await.unwrap(), vec!["profile:read"]);
     }
 }

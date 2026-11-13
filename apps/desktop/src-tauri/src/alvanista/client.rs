@@ -67,6 +67,10 @@ pub struct Entitlements {
 struct TokenResponse {
     access_token: String,
     refresh_token: String,
+    /// Escopos concedidos (convenção OAuth, separados por espaço), se o
+    /// servidor os informa.
+    #[serde(default)]
+    scope: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -109,6 +113,7 @@ impl Client {
         &self.store
     }
 
+    #[cfg(test)]
     /// Troca o `code` do callback pelos tokens. Não grava: quem chama grava
     /// com `store().save_tokens` quando for usar.
     pub async fn exchange(
@@ -118,7 +123,21 @@ impl Client {
         redirect_uri: &str,
         device_id: &str,
     ) -> Result<Tokens> {
-        self.token_request(&[
+        Ok(self
+            .exchange_scoped(code, verifier, redirect_uri, device_id)
+            .await?
+            .0)
+    }
+
+    /// Como `exchange`, mais os escopos que o servidor disse ter concedido.
+    pub async fn exchange_scoped(
+        &self,
+        code: &str,
+        verifier: &str,
+        redirect_uri: &str,
+        device_id: &str,
+    ) -> Result<(Tokens, Option<String>)> {
+        self.token_request_scoped(&[
             ("grant_type", "authorization_code"),
             ("client_id", CLIENT_ID),
             ("code", code),
@@ -262,6 +281,13 @@ impl Client {
     }
 
     async fn token_request(&self, form: &[(&str, &str)]) -> Result<Tokens> {
+        Ok(self.token_request_scoped(form).await?.0)
+    }
+
+    async fn token_request_scoped(
+        &self,
+        form: &[(&str, &str)],
+    ) -> Result<(Tokens, Option<String>)> {
         let resp = self
             .http
             .post(format!("{}/api/partner/oauth/token", self.api))
@@ -276,10 +302,13 @@ impl Client {
                 .json()
                 .await
                 .map_err(|_| ClientError::Transient("resposta do /token ilegível".into()))?;
-            return Ok(Tokens {
-                access_token: body.access_token,
-                refresh_token: body.refresh_token,
-            });
+            return Ok((
+                Tokens {
+                    access_token: body.access_token,
+                    refresh_token: body.refresh_token,
+                },
+                body.scope,
+            ));
         }
         Err(classify(status, error_code(resp).await))
     }
