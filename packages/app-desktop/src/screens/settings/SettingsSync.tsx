@@ -411,7 +411,13 @@ export function SettingsSync() {
             ) : (
               <Body1>{t('sync.conflicts.count', { count: conflictCount })}</Body1>
             )}
-            <Caption1 className={s.muted}>{t('sync.conflicts.hint')}</Caption1>
+            <Caption1 className={s.muted}>
+              {conflicts.data && deletedOnSite > 0
+                ? twoMachines === 0
+                  ? t('sync.conflict.deletedFooter')
+                  : t('sync.conflicts.hintMixed')
+                : t('sync.conflicts.hint')}
+            </Caption1>
             <div className={s.actions}>
               <Button
                 appearance="primary"

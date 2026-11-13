@@ -524,6 +524,7 @@ const ptBR = {
       count_one: '{{count}} game save mudou nas duas máquinas.',
       count_other: '{{count}} game saves mudaram nas duas máquinas.',
       hint: 'Nada é apagado: o save que você não escolher fica no histórico.',
+      hintMixed: 'Nada é apagado: o que você não escolher fica no histórico ou na pasta de resguardo.',
       resolve: 'Resolver',
       deletedCount_one: '{{count}} game save foi apagado no site e mudou aqui.',
       deletedCount_other: '{{count}} game saves foram apagados no site e mudaram aqui.',

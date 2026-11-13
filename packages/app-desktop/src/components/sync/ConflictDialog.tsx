@@ -18,6 +18,8 @@ const useStyles = makeStyles({
     display: 'grid',
     gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
     columnGap: tokens.spacingHorizontalXL,
+    // As duas cartas na mesma altura: o botão de cada uma desce para o fundo.
+    alignItems: 'stretch',
     '@media (max-width: 720px)': { gridTemplateColumns: 'minmax(0, 1fr)', rowGap: tokens.spacingVerticalL },
   },
   card: {
@@ -28,6 +30,9 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusLarge,
     backgroundColor: tokens.colorNeutralBackground2,
   },
+  // O botão fica no fundo da carta, na mesma linha do outro, mesmo quando uma
+  // carta tem menos texto (a navegação do controle é espacial).
+  action: { display: 'flex', flexDirection: 'column', marginTop: 'auto', paddingTop: tokens.spacingVerticalM },
   head: { display: 'flex', alignItems: 'center', columnGap: tokens.spacingHorizontalM, flexWrap: 'wrap' },
   avatar: {
     flexShrink: 0,
@@ -104,15 +109,17 @@ function Card({
           </dl>
         </>
       )}
-      <Button
-        ref={buttonRef}
-        autoFocus={mine}
-        appearance={mine ? 'primary' : 'secondary'}
-        disabledFocusable={busy}
-        onClick={onPick}
-      >
-        {action}
-      </Button>
+      <div className={s.action} data-slot="card-action">
+        <Button
+          ref={buttonRef}
+          autoFocus={mine}
+          appearance={mine ? 'primary' : 'secondary'}
+          disabledFocusable={busy}
+          onClick={onPick}
+        >
+          {action}
+        </Button>
+      </div>
     </div>
   )
 }

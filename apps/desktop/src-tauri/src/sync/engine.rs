@@ -407,15 +407,13 @@ impl Engine {
     /// cima). Só o SQLite.
     async fn own_account(&self, alva: &Alvanista) -> Result<(), SyncError> {
         let devices = &self.sync.devices;
-        let owner = devices.base_account().await.map_err(failed)?;
         let Some(current) = alva.account_id().await else {
-            // Sem o perfil não se sabe de quem é a conta: uma base que é de
-            // alguém não serve até o `/me` responder.
-            return match owner {
-                Some(_) => Err(SyncError::Offline),
-                None => Ok(()),
-            };
+            // Sem o perfil não se sabe de quem é a conta (N1): nada roda e nada
+            // se grava, nem com dono registrado nem sem. Uma base escrita agora
+            // seria adotada pela primeira conta que aparecesse.
+            return Err(SyncError::Offline);
         };
+        let owner = devices.base_account().await.map_err(failed)?;
         if owner.as_deref() == Some(current.as_str()) {
             return Ok(());
         }
@@ -2110,6 +2108,27 @@ mod tests {
     /// Sessão com `saves`, o aparelho `dev1` ("Sala") ligado, chaveiro em
     /// memória, o Alvanista de mentira e uma pasta de dados vazia.
     async fn rig(name: &str) -> Rig {
+        let r = rig_bare(name).await;
+        // A conta conectada é conhecida (N1): sem o AlvaID a passada não anda.
+        // O plano fica desconhecido (`entitlements: None`), como antes.
+        r.store
+            .mirror_put(&Me {
+                id: "alva_default".into(),
+                username: "toy".into(),
+                avatar_url: None,
+                hero_url: None,
+                bio: None,
+                profile_url: "https://www.alvanista.com/u/toy".into(),
+                card: None,
+                entitlements: None,
+            })
+            .await
+            .unwrap();
+        r
+    }
+
+    /// O mesmo, sem o espelho do `/me`: a conta ainda não é conhecida.
+    async fn rig_bare(name: &str) -> Rig {
         let server = MockServer::start().await;
         let secrets = Arc::new(MemSecrets::default());
         let db = db::connect_in_memory().await.unwrap();
@@ -4210,7 +4229,7 @@ mod tests {
     #[tokio::test]
     async fn another_account_does_not_inherit_the_base_of_the_previous_one() {
         let _serial = SERIAL.lock().await;
-        let r = rig("account").await;
+        let r = rig_bare("account").await;
         r.rom("r1", "Zelda.gba", "gba").await;
         r.rom("r2", "Mario.gba", "gba").await;
         // A máquina sincronizou com a conta A.
@@ -4273,6 +4292,85 @@ mod tests {
         // A mesma conta de novo: a base fica.
         r.pass().await.unwrap();
         assert!(r.base_of(mario).await.is_some());
+    }
+
+    /// N1: sem o AlvaID da conta conectada (nenhum dono gravado e nenhum
+    /// espelho ainda) a passada acaba offline e não grava nada: uma base
+    /// escrita agora seria adotada pela primeira conta que aparecesse.
+    #[tokio::test]
+    async fn an_unknown_account_ends_offline_and_writes_no_base() {
+        let _serial = SERIAL.lock().await;
+        let r = rig_bare("unknown-account").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        r.write("saves/Zelda.srm", b"zelda-local");
+        assert!(r.sync.devices.base_account().await.unwrap().is_none());
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(
+            &r.server,
+            vec![row(
+                "s1",
+                "Zelda.srm",
+                "gba",
+                None,
+                b"zelda-cloud",
+                "v1",
+                None,
+            )],
+        )
+        .await;
+        mount_content(&r.server, "s1", "v1", b"zelda-cloud").await;
+        mount_upload(&r.server, "sX", "v1").await;
+
+        assert_eq!(r.pass().await, Err(SyncError::Offline));
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+        assert!(r.repo.base_all("file").await.unwrap().is_empty());
+        assert!(r.base_of(ZELDA).await.is_none());
+        assert!(r.sync.devices.base_account().await.unwrap().is_none());
+        assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"zelda-local");
+    }
+
+    /// N3: a linha do ReEmu (`gba`) do save foi apagada, mas há uma linha viva
+    /// `other` com o mesmo nome. O save local não mudou desde a base, então a
+    /// passada desce a cópia `other` por cima, depois de guardar a de cá em
+    /// `sync-backups`, e a base passa a apontar para a linha `other`.
+    #[tokio::test]
+    async fn a_live_other_row_replaces_the_unchanged_local_after_a_backup_when_the_reemu_row_is_deleted(
+    ) {
+        let _serial = SERIAL.lock().await;
+        let r = rig("tomb-other").await;
+        mirror_as(&r, "alva_A").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
+            .await;
+        r.write("saves/Zelda.srm", b"old");
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(
+            &r.server,
+            vec![
+                tombstone(row("s1", "Zelda.srm", "gba", None, b"old", "v1", None)),
+                row("s2", "Zelda.srm", "other", None, b"retro", "v7", None),
+            ],
+        )
+        .await;
+        mount_content(&r.server, "s2", "v7", b"retro").await;
+
+        let report = r.pass().await.unwrap();
+        assert_eq!((report.downloaded, report.backed_up), (1, 0));
+        assert_eq!(
+            r.backups(),
+            vec![("saves/Zelda.srm".to_owned(), b"old".to_vec())]
+        );
+        assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"retro");
+        let base = r.base_of(ZELDA).await.unwrap();
+        assert_eq!(
+            (
+                base.remote_save_id.as_str(),
+                base.remote_version_id.as_str()
+            ),
+            ("s2", "v7")
+        );
+        assert_eq!(base.local_hash, sha(b"retro"));
+        assert!(base.wiped_at.is_none());
     }
 
     /// I-2 e M9: a nuvem recusa um save de N64 maior que o limite da

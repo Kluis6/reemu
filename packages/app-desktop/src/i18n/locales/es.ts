@@ -523,6 +523,7 @@ const es: Messages = {
       count_one: '{{count}} game save cambió en las dos máquinas.',
       count_other: '{{count}} game saves cambiaron en las dos máquinas.',
       hint: 'No se borra nada: el save que no elijas queda en el historial.',
+      hintMixed: 'No se borra nada: lo que no elijas queda en el historial o en la carpeta de resguardo.',
       resolve: 'Resolver',
       deletedCount_one: '{{count}} game save fue borrado en el sitio y cambió aquí.',
       deletedCount_other: '{{count}} game saves fueron borrados en el sitio y cambiaron aquí.',

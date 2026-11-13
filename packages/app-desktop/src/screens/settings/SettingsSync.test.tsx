@@ -293,6 +293,37 @@ describe('SettingsSync', () => {
     expect(host.textContent).not.toContain('3 game saves')
   })
 
+  it('the Conflitos hint tells the truth for deletions (N4)', async () => {
+    const side = (machine: string, deleted = false) => ({ machine, deviceId: null, savedAt: 1_700_000_000, size: 2048, deleted })
+    const two = { key: 'k1', romId: null, title: 'Zelda', local: side('PC-SALA'), remote: side('Notebook') }
+    const del = { key: 'k2', romId: null, title: 'Chrono', local: side('PC-SALA'), remote: side('', true) }
+    const hint = 'Nada é apagado: o save que você não escolher fica no histórico.'
+    const mixed = 'Nada é apagado: o que você não escolher fica no histórico ou na pasta de resguardo.'
+    const footer = 'Nada é apagado nesta máquina.'
+
+    api.syncStatus.mockResolvedValue({ ...ON, conflicts: 2 })
+    api.syncConflicts.mockResolvedValue([two, { ...two, key: 'k3' }])
+    await mount()
+    expect(host.textContent).toContain(hint)
+    expect(host.textContent).not.toContain(footer)
+    await unmount()
+    host.remove()
+
+    api.syncConflicts.mockResolvedValue([del, { ...del, key: 'k4' }])
+    await mount()
+    expect(host.textContent).toContain(footer)
+    expect(host.textContent).not.toContain(hint)
+    expect(host.textContent).not.toContain(mixed)
+    await unmount()
+    host.remove()
+
+    api.syncConflicts.mockResolvedValue([two, del])
+    await mount()
+    expect(host.textContent).toContain(mixed)
+    expect(host.textContent).not.toContain(hint)
+    expect(host.textContent).not.toContain(footer)
+  })
+
   it('offers Copiar configurações only on other ReEmu machines (D119)', async () => {
     const kinds = ['companion', 'launcher', 'operator', 'delta']
     api.syncStatus.mockResolvedValue(ON)

@@ -523,6 +523,7 @@ const en: Messages = {
       count_one: '{{count}} game save changed on both machines.',
       count_other: '{{count}} game saves changed on both machines.',
       hint: 'Nothing is deleted: the save you do not choose stays in the history.',
+      hintMixed: 'Nothing is deleted: what you do not choose stays in the history or in the backup folder.',
       resolve: 'Resolve',
       deletedCount_one: '{{count}} game save was deleted on the site and changed here.',
       deletedCount_other: '{{count}} game saves were deleted on the site and changed here.',

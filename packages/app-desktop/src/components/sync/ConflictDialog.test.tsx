@@ -147,6 +147,29 @@ describe('ConflictDialog', () => {
     expect(api.syncResolve).toHaveBeenLastCalledWith('file:gba/Zelda.srm', 'remote')
   })
 
+  it.each([
+    ['regular', CONFLICT, ['Manter esta', 'Manter a de Notebook-Ed']],
+    [
+      'deleted',
+      { ...CONFLICT, remote: { machine: '', deviceId: null, savedAt: 0, size: 0, deleted: true } } as SyncConflict,
+      ['Manter esta (sobe de novo)', 'Aceitar a remoção (vai para a pasta de resguardo)'],
+    ],
+  ])('pins each card button to the bottom slot of its card (%s)', async (_n, conflict, labels) => {
+    ui = await mountWithQuery(<ConflictDialog conflict={conflict} onDone={onDone} />)
+    const slots = [...document.querySelectorAll<HTMLElement>('[data-slot="card-action"]')]
+    expect(slots).toHaveLength(2)
+    for (const label of labels) {
+      const btn = button(label)!
+      const slot = btn.parentElement!
+      expect(slot.getAttribute('data-slot')).toBe('card-action')
+      // o slot é o último filho da carta, e carrega a classe que o empurra para o fundo
+      expect(slot.parentElement!.lastElementChild).toBe(slot)
+      expect(slot.className).toMatch(/\S/)
+    }
+    // as duas cartas esticam na mesma linha da grade
+    expect(slots[0].parentElement!.parentElement).toBe(slots[1].parentElement!.parentElement)
+  })
+
   it('a failed resolve keeps the dialog and shows the reason', async () => {
     api.syncResolve.mockRejectedValue('offline')
     await mount()
