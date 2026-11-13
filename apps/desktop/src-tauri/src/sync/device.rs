@@ -21,6 +21,10 @@ const HW_SENT_AT_KEY: &str = "sync.hw_sent_at";
 /// Os últimos GPU, backend e driver enviados (JSON), para não apagá-los
 /// quando a GPU não abre.
 const HW_GPU_KEY: &str = "sync.hw_gpu";
+/// O que a lista de aparelhos do site disse da última vez (D128): serve
+/// quando a lista não responde.
+const SITE_PAUSED_KEY: &str = "sync.site_paused";
+const REVOKED_KEY: &str = "sync.revoked";
 
 /// O limite do Alvanista para cada texto do hardware e para o rótulo.
 const TEXT_MAX_CHARS: usize = 120;
@@ -29,6 +33,7 @@ const TEXT_MAX_CHARS: usize = 120;
 /// vazio: o servidor omite o que não tem.
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct HardwarePayload {
     pub os: String,
     pub arch: String,
@@ -202,6 +207,8 @@ impl DeviceStore {
             HW_FINGERPRINT_KEY,
             HW_SENT_AT_KEY,
             HW_GPU_KEY,
+            SITE_PAUSED_KEY,
+            REVOKED_KEY,
         ] {
             if let Err(e) = self.repo.state_delete(key).await {
                 first.get_or_insert(e.to_string());
@@ -239,6 +246,18 @@ impl DeviceStore {
         } else {
             self.repo.state_delete(key).await.map_err(|e| e.to_string())
         }
+    }
+
+    /// O que o site disse por último: `(pausado no site, revogado)`.
+    pub async fn site_state(&self) -> Result<(bool, bool), String> {
+        let paused = self.get(SITE_PAUSED_KEY).await?.as_deref() == Some("1");
+        let revoked = self.get(REVOKED_KEY).await?.as_deref() == Some("1");
+        Ok((paused, revoked))
+    }
+
+    pub async fn set_site_state(&self, paused: bool, revoked: bool) -> Result<(), String> {
+        self.set_flag(SITE_PAUSED_KEY, paused).await?;
+        self.set_flag(REVOKED_KEY, revoked).await
     }
 
     /// Os últimos `[gpu, backend, driver]` enviados.

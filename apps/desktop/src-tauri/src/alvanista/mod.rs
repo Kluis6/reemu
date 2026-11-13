@@ -20,11 +20,12 @@ pub mod loopback;
 pub mod pkce;
 pub mod store;
 
+use crate::sync::SyncService;
 use client::{Client, ClientError};
 use loopback::{Lang, LoopbackError};
 use serde::Serialize;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use store::{ClearError, Loaded, Mirror, Store, Tokens};
 use tauri::{AppHandle, Manager};
@@ -101,6 +102,8 @@ impl AlvanistaStatus {
 pub struct Alvanista {
     client: Client,
     generation: Arc<AtomicU64>,
+    /// O aparelho do cloud save desta máquina: sai junto com a conta.
+    sync: OnceLock<Arc<SyncService>>,
 }
 
 impl Alvanista {
@@ -108,6 +111,26 @@ impl Alvanista {
         Self {
             client,
             generation: Arc::new(AtomicU64::new(0)),
+            sync: OnceLock::new(),
+        }
+    }
+
+    /// Liga o cloud save: desconectar revoga o aparelho, e uma conexão que
+    /// acabou no site o esquece. Só a primeira chamada vale.
+    pub fn attach_sync(&self, sync: Arc<SyncService>) {
+        let _ = self.sync.set(sync);
+    }
+
+    /// O aparelho do cloud save sai com a conta. `revoke`: avisa o servidor
+    /// com o token do aparelho antes (quando a conta some no site, o par do
+    /// parceiro já não existe, e o aparelho só se esquece). Nunca falha
+    /// quem chama: o que sobrar vai para o log.
+    async fn forget_save_device(&self, revoke: bool) {
+        let Some(sync) = self.sync.get() else {
+            return;
+        };
+        if let Err(e) = sync.forget_device(revoke).await {
+            log::warn!("alvanista: aparelho do cloud save não esquecido: {e}");
         }
     }
 
@@ -117,14 +140,12 @@ impl Alvanista {
 
     /// O par de tokens da sessão, para o sync pedir o aparelho em nome da
     /// conta. `None` sem sessão (e sem tocar o chaveiro nem a rede).
-    #[cfg_attr(not(test), expect(dead_code))] // até os comandos do sync chamarem `ensure_device`
     pub(crate) async fn session_tokens(&self) -> Result<Option<Tokens>, String> {
         Ok(self.stored_session().await?.map(|l| l.tokens))
     }
 
     /// Renova o par (gravando o novo), para o sync repetir o pedido que
     /// voltou 401.
-    #[cfg_attr(not(test), expect(dead_code))] // até os comandos do sync chamarem `ensure_device`
     pub(crate) async fn renew(&self, current: &Tokens) -> Result<Tokens, ClientError> {
         self.client.refresh(current).await
     }
@@ -152,7 +173,6 @@ impl Alvanista {
     /// Refaz a conexão pedindo também `saves`. O par anterior só é revogado
     /// depois que a sessão nova foi guardada, e o resultado da revogação
     /// não muda nada. Os erros são os de `connect`.
-    #[cfg_attr(not(test), expect(dead_code))] // até os comandos do sync chamarem
     pub async fn reconnect_with_saves<F>(
         &self,
         lang: Lang,
@@ -416,6 +436,9 @@ impl Alvanista {
             },
             Err(ClientError::AuthEnded) => {
                 let _ = self.store().mirror_clear().await;
+                // `client.me` já devolveu: nenhum trava de renovação está
+                // preso aqui. O par do parceiro acabou, então só se esquece.
+                self.forget_save_device(false).await;
                 AlvanistaStatus {
                     ended: true,
                     ..Default::default()
@@ -446,6 +469,9 @@ impl Alvanista {
     /// Sem sessão marcada não há o que revogar nem apagar: só sai o espelho.
     pub async fn disconnect(&self) -> Result<(), String> {
         self.cancel();
+        // O aparelho do cloud save vai primeiro, com o token dele: o par do
+        // parceiro, que revoga abaixo, não é o que o autoriza.
+        self.forget_save_device(true).await;
         if matches!(self.store().has_session().await, Ok(false)) {
             if let Err(e) = self.store().mirror_clear().await {
                 log::warn!("alvanista: espelho não apagado: {e}");
@@ -524,7 +550,7 @@ fn is_site_url(url: &str) -> bool {
 /// Abre `url` no navegador do sistema, e só se for do site do Alvanista: a
 /// página de consentimento e o perfil. Nada que venha do webview chega aqui
 /// sem passar por essa conferência.
-fn open_in_browser(url: &str) -> Result<(), String> {
+pub(crate) fn open_in_browser(url: &str) -> Result<(), String> {
     if !is_site_url(url) {
         return Err("URL fora do site do Alvanista".into());
     }
@@ -1553,5 +1579,151 @@ mod tests {
         assert!(r.is_ok(), "{r:?}");
         // Pediu `profile:read saves`, o servidor só concedeu `profile:read`.
         assert_eq!(alva.store().scopes().await.unwrap(), vec!["profile:read"]);
+    }
+
+    /// Alvanista com sessão e com o cloud save ligado, os dois contra o
+    /// mesmo servidor de mentira; o aparelho `dev1` já está guardado.
+    async fn alva_with_save_device(
+        server: &wiremock::MockServer,
+    ) -> (Alvanista, Arc<SyncService>, Arc<MemSecrets>) {
+        use crate::sync::device::{Device, DeviceStore};
+        let secrets = Arc::new(MemSecrets::default());
+        let db = db::connect_in_memory().await.unwrap();
+        let store = Store::new(db.clone(), secrets.clone());
+        store
+            .start_session(&tokens("1"), &["profile:read", "saves"])
+            .await
+            .unwrap();
+        let alva = Alvanista::new(Client::with_api(
+            server.uri(),
+            Store::new(db.clone(), secrets.clone()),
+        ));
+        let sync = Arc::new(SyncService::new(
+            crate::sync::api::SavesApi::new(server.uri()),
+            DeviceStore::new(db, secrets.clone()),
+        ));
+        sync.devices()
+            .save(
+                &Device {
+                    id: "dev1".into(),
+                    label: "Sala".into(),
+                },
+                "asv_secret",
+            )
+            .await
+            .unwrap();
+        sync.devices().set_enabled(true).await.unwrap();
+        alva.attach_sync(sync.clone());
+        (alva, sync, secrets)
+    }
+
+    #[tokio::test]
+    async fn disconnect_revokes_the_device_before_the_partner_pair() {
+        use wiremock::matchers::{header, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let _serial = SERIAL.lock().await;
+        let server = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .and(header("authorization", "Bearer asv_secret"))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/oauth/revoke"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let (alva, sync, secrets) = alva_with_save_device(&server).await;
+        assert_eq!(alva.disconnect().await, Ok(()));
+        let order: Vec<String> = server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| format!("{} {}", r.method, r.url.path()))
+            .collect();
+        assert_eq!(
+            order,
+            vec![
+                "DELETE /api/v1/saves/device".to_owned(),
+                "POST /api/partner/oauth/revoke".to_owned()
+            ]
+        );
+        assert_eq!(sync.devices().device().await.unwrap(), None);
+        assert!(!secrets
+            .secrets
+            .lock()
+            .unwrap()
+            .contains_key("alvanista-saves"));
+    }
+
+    #[tokio::test]
+    async fn disconnect_still_disconnects_when_the_device_revoke_is_unauthorized() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let _serial = SERIAL.lock().await;
+        let server = MockServer::start().await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/oauth/revoke"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let (alva, sync, _) = alva_with_save_device(&server).await;
+        assert_eq!(alva.disconnect().await, Ok(()));
+        assert_eq!(sync.devices().device().await.unwrap(), None);
+    }
+
+    /// O `/me` dá 401 e a renovação é recusada: a conexão acabou. O aparelho
+    /// se esquece sem aviso ao servidor, e isso não pode travar mesmo com o
+    /// trinco de quem cria o aparelho preso por outra chamada.
+    #[tokio::test]
+    async fn an_ended_session_forgets_the_device_without_deadlocking() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let _serial = SERIAL.lock().await;
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/me"))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/oauth/token"))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_json(serde_json::json!({"error": "invalid_grant"})),
+            )
+            .mount(&server)
+            .await;
+        let (alva, sync, secrets) = alva_with_save_device(&server).await;
+        let _minting = sync.hold_mint_for_test().await;
+        let status = tokio::time::timeout(Duration::from_secs(10), alva.refresh_if_connected())
+            .await
+            .expect("travou: o esquecer do aparelho tomou o trinco do mint")
+            .expect("havia sessão marcada");
+        assert!(status.ended);
+        assert_eq!(sync.devices().device().await.unwrap(), None);
+        assert!(!secrets
+            .secrets
+            .lock()
+            .unwrap()
+            .contains_key("alvanista-saves"));
+        let deletes = server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .filter(|r| r.method.as_str() == "DELETE")
+            .count();
+        assert_eq!(deletes, 0, "sem par do parceiro não há o que avisar");
     }
 }
