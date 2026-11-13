@@ -188,8 +188,8 @@ importers:
         specifier: ^2.8.3
         version: 2.8.3
       i18next:
-        specifier: ^26.4.2
-        version: 26.4.2(typescript@6.0.3)
+        specifier: ^27.1.1
+        version: 27.1.1(typescript@6.0.3)
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -198,7 +198,7 @@ importers:
         version: 19.2.8(react@19.2.8)
       react-i18next:
         specifier: ^18.0.1
-        version: 18.0.1(@types/react@19.2.18)(i18next@26.4.2(typescript@6.0.3))(react@19.2.8)(typescript@6.0.3)
+        version: 18.0.1(@types/react@19.2.18)(i18next@27.1.1(typescript@6.0.3))(react@19.2.8)(typescript@6.0.3)
       react-icons:
         specifier: ^5.7.0
         version: 5.7.0(react@19.2.8)
@@ -1726,8 +1726,9 @@ packages:
   html-parse-stringify@4.0.1:
     resolution: {integrity: sha512-0zHsZJrK7S3K2aucXWL6ycoYJ/iNtIcFHC/nYQgFklPtrv5LpJctIiSCroWZWeuoXvuyFdzp6KzjJQ+OT5MfFw==}
 
-  i18next@26.4.2:
-    resolution: {integrity: sha512-RX+R0VLg13IbvRuJSxnqykUFS9vQZTl8wYpWPCIUDWVrSGjsQywB5Y+pjzrkboxGAuYfJZVH1InFTdgBdxq6ug==}
+  i18next@27.1.1:
+    resolution: {integrity: sha512-Qq3aJizS3RXQ30crhx9BKQLrHoa6GKpgrOJjVZ9vgj3EBxAddrmVfDNUrAMxSUimw5Jc+ld4SSZUAzf1q4nGyQ==}
+    engines: {node: '>=22'}
     peerDependencies:
       typescript: ^5 || ^6 || ^7
     peerDependenciesMeta:
@@ -4140,7 +4141,7 @@ snapshots:
 
   html-parse-stringify@4.0.1: {}
 
-  i18next@26.4.2(typescript@6.0.3):
+  i18next@27.1.1(typescript@6.0.3):
     optionalDependencies:
       typescript: 6.0.3
 
@@ -4343,10 +4344,10 @@ snapshots:
       react: 19.2.8
       scheduler: 0.27.0
 
-  react-i18next@18.0.1(@types/react@19.2.18)(i18next@26.4.2(typescript@6.0.3))(react@19.2.8)(typescript@6.0.3):
+  react-i18next@18.0.1(@types/react@19.2.18)(i18next@27.1.1(typescript@6.0.3))(react@19.2.8)(typescript@6.0.3):
     dependencies:
       html-parse-stringify: 4.0.1
-      i18next: 26.4.2(typescript@6.0.3)
+      i18next: 27.1.1(typescript@6.0.3)
       react: 19.2.8
     optionalDependencies:
       '@types/react': 19.2.18
