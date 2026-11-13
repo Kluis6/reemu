@@ -20,7 +20,7 @@
 
 use super::api::{ApiError, FileFilter, RemoteDevice, RemoteFile, RemoteVersion, UploadMeta};
 use super::device::{default_label, rfc3339, Device};
-use super::local::{self, account_saves, parse_key, sha256_file, LocalSaves, SaveFile};
+use super::local::{self, account_saves, parse_key, rom_saves, sha256_file, LocalSaves, SaveFile};
 use super::platform::platform_for_system;
 use super::reconcile::{decide, Action, Kind, Local, Remote};
 use super::{failed, severity, SyncError, SyncEvent, SyncService, SYNC_EVENT};
@@ -35,13 +35,11 @@ use std::collections::{HashMap, HashSet};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, UNIX_EPOCH};
+use std::time::{Duration, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Quanto um jogo espera pela nuvem antes de abrir (D117).
 const PRELAUNCH_BUDGET: Duration = Duration::from_secs(5);
-/// Por quanto tempo a leitura da última passada serve antes de abrir um jogo.
-const LISTING_TTL: Duration = Duration::from_secs(60);
 /// A passada sem jogo aberto.
 const IDLE_EVERY: Duration = Duration::from_secs(600);
 
@@ -185,14 +183,6 @@ pub struct Dirs {
 type PlayingFn = Box<dyn Fn() -> Playing + Send + Sync>;
 type EmitFn = Box<dyn Fn(SyncEvent) + Send + Sync>;
 
-/// O que a última passada leu do site e da nuvem.
-#[derive(Clone)]
-struct Snapshot {
-    at: Instant,
-    devices: Vec<RemoteDevice>,
-    files: Vec<RemoteFile>,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
     Pass,
@@ -261,9 +251,6 @@ pub struct Engine {
     one_at_a_time: tokio::sync::Mutex<()>,
     /// A pasta de backup da passada em andamento.
     stamp: Mutex<String>,
-    /// A leitura da última passada, reaproveitada antes de abrir um jogo por
-    /// até 60 s. Some a cada envio: depois dele a nuvem já é outra.
-    last_listing: Mutex<Option<Snapshot>>,
     /// As linhas da última leitura, só para contar versões na página do jogo.
     known_files: Mutex<Vec<RemoteFile>>,
     /// Chave -> (hash dos bytes recusados, o erro): a nuvem recusou estes
@@ -291,7 +278,6 @@ impl Engine {
             emit,
             one_at_a_time: tokio::sync::Mutex::new(()),
             stamp: Mutex::new(String::new()),
-            last_listing: Mutex::new(None),
             known_files: Mutex::new(Vec::new()),
             rejected: Mutex::new(HashMap::new()),
             prelaunch_budget: PRELAUNCH_BUDGET,
@@ -395,33 +381,46 @@ impl Engine {
     ) -> Result<PassReport, SyncError> {
         self.new_stamp();
         self.sweep_temps();
-        let cached = match mode {
-            Mode::BeforeLaunch => self.recent_listing(),
-            Mode::Pass => None,
-        };
-        let devices = match &cached {
-            Some(s) => s.devices.clone(),
-            None => self.sync.partner_devices(alva).await?,
-        };
-        // A leitura guardada só confere esta linha: o estado do site que a
-        // página mostra vem só de uma leitura nova.
-        let receive = self
-            .check_row(&devices, &device.id, cached.is_none())
-            .await?;
+        // Toda passada lê a linha desta máquina de novo (sem leitura guardada):
+        // uma pausa ou revogação feita há segundos já vale antes de abrir.
+        let devices = self.sync.partner_devices(alva).await?;
+        let receive = self.check_row(&devices, &device.id, true).await?;
         let token = self.token()?;
-        let files = match cached {
-            Some(s) => s.files,
-            None => {
-                let files = self.list(alva, &token).await?;
-                self.remember_listing(&devices, &files);
-                files
-            }
-        };
         // Erro ao ler o disco ou a biblioteca acaba a passada: uma lista curta
         // demais faria save sincronizado parecer apagado.
-        let local = account_saves(&self.roms, &self.dirs.saves, &self.dirs.system)
-            .await
-            .map_err(|e| failed(format!("saves locais: {e}")))?;
+        let local_err = |e: String| failed(format!("saves locais: {e}"));
+        let (files, local) = match scope {
+            PassScope::All => {
+                let files = self.list(alva, &token).await?;
+                let local = account_saves(&self.roms, &self.dirs.saves, &self.dirs.system)
+                    .await
+                    .map_err(local_err)?;
+                (files, local)
+            }
+            // Uma ROM (antes de abrir, depois de fechar): só as vagas dela no
+            // disco e só os nomes dela na nuvem, lidos agora.
+            PassScope::Rom(id) => {
+                let Some(rom) = self
+                    .roms
+                    .get(id)
+                    .await
+                    .map_err(|e| failed(format!("ROM {id}: {e}")))?
+                else {
+                    return Ok(PassReport::default());
+                };
+                let (names, cores) = local::rom_listing(&rom, &self.dirs.saves);
+                let files = self.list_for(alva, &token, &names, &cores).await?;
+                // Saiu da biblioteca no meio: nada a fazer (um mapa vazio faria
+                // todo conflito parecer de jogo fora da biblioteca).
+                let Some(local) = rom_saves(&self.roms, &self.dirs.saves, &self.dirs.system, id)
+                    .await
+                    .map_err(local_err)?
+                else {
+                    return Ok(PassReport::default());
+                };
+                (files, local)
+            }
+        };
         let entries = self.entries(&local, &files, scope).await?;
         let mut known: HashSet<String> = HashSet::new();
         for c in self.repo.conflicts_all().await.map_err(repo_err)? {
@@ -528,7 +527,6 @@ impl Engine {
         }
         self.sync.mark_revoked().await;
         self.sync.runtime().last_error = Some(SyncError::Revoked.to_string());
-        self.forget_listing();
         self.emit(SyncEvent::Error {
             code: SyncError::Revoked.to_string(),
         });
@@ -633,22 +631,86 @@ impl Engine {
         }
     }
 
-    fn recent_listing(&self) -> Option<Snapshot> {
-        lock(&self.last_listing)
-            .clone()
-            .filter(|s| s.at.elapsed() < LISTING_TTL)
-    }
-
-    fn remember_listing(&self, devices: &[RemoteDevice], files: &[RemoteFile]) {
-        *lock(&self.last_listing) = Some(Snapshot {
-            at: Instant::now(),
-            devices: devices.to_vec(),
-            files: files.to_vec(),
+    /// Só as linhas de alguns nomes (`filename` exato, como o servidor
+    /// compara) e de alguns `core` (os cartões e VMUs de uma plataforma), os
+    /// apagados inclusive. Os pedidos vão juntos; um que falha acaba a passada
+    /// como a listagem completa.
+    async fn list_for(
+        &self,
+        alva: &Alvanista,
+        token: &str,
+        names: &[String],
+        cores: &[&'static str],
+    ) -> Result<Vec<RemoteFile>, SyncError> {
+        let mut set = tokio::task::JoinSet::new();
+        let queries = names
+            .iter()
+            .map(|n| (Some(n.clone()), None))
+            .chain(cores.iter().map(|c| (None, Some(*c))));
+        for (filename, core) in queries {
+            let (api, token) = (self.sync.api.clone(), token.to_owned());
+            set.spawn(async move {
+                let filter = FileFilter {
+                    kind: "file",
+                    filename: filename.as_deref(),
+                    core,
+                    include_deleted: true,
+                    ..FileFilter::default()
+                };
+                api.list_files(&token, &filter).await
+            });
+        }
+        let mut rows: Vec<RemoteFile> = Vec::new();
+        let mut worst: Option<ApiError> = None;
+        while let Some(joined) = set.join_next().await {
+            match joined {
+                Ok(Ok(found)) => rows.extend(found),
+                Ok(Err(e)) => {
+                    // O 401 decide pela lista de aparelhos; a pausa vem antes
+                    // de um erro qualquer.
+                    let weight = |e: &ApiError| match e {
+                        ApiError::Unauthorized => 3,
+                        ApiError::Paused => 2,
+                        ApiError::TierInsufficient { .. } => 1,
+                        _ => 0,
+                    };
+                    if worst.as_ref().map_or(true, |w| weight(&e) > weight(w)) {
+                        worst = Some(e);
+                    }
+                }
+                Err(e) => {
+                    worst.get_or_insert(ApiError::Transient(format!("listagem interrompida: {e}")));
+                }
+            }
+        }
+        if let Some(err) = worst {
+            return Err(self.ending(alva, err).await);
+        }
+        let mut ids = HashSet::new();
+        rows.retain(|f| f.kind == "file" && ids.insert(f.save_id.clone()));
+        let mut known = lock(&self.known_files);
+        known.retain(|f| {
+            !names.contains(&f.filename) && !f.core.as_deref().is_some_and(|c| cores.contains(&c))
         });
+        known.extend(rows.iter().cloned());
+        Ok(rows)
     }
 
-    fn forget_listing(&self) {
-        *lock(&self.last_listing) = None;
+    /// As linhas da nuvem de um arquivo: o nome dele, ou a pasta (`core`) de
+    /// um cartão ou VMU.
+    async fn list_file(
+        &self,
+        alva: &Alvanista,
+        token: &str,
+        file: &SaveFile,
+    ) -> Result<Vec<RemoteFile>, SyncError> {
+        match file.core {
+            Some(core) => self.list_for(alva, token, &[], &[core]).await,
+            None => {
+                self.list_for(alva, token, std::slice::from_ref(&file.filename), &[])
+                    .await
+            }
+        }
     }
 
     /// As chaves da passada: os arquivos em disco; os que a base conhece e
@@ -735,7 +797,12 @@ impl Engine {
         report: &mut PassReport,
     ) -> Result<(), SyncError> {
         let key = &e.file.key;
-        let local = match sha256_file(&e.file.path) {
+        // O hash fora das tarefas do Tokio: o prazo de antes de abrir vale aqui.
+        let path = e.file.path.clone();
+        let hashed = tokio::task::spawn_blocking(move || sha256_file(&path))
+            .await
+            .unwrap_or_else(|j| Err(io::Error::other(j.to_string())));
+        let local = match hashed {
             Ok((hash, size, mtime)) => Some(Local { hash, size, mtime }),
             Err(err) if err.kind() == io::ErrorKind::NotFound => None,
             Err(err) => {
@@ -895,8 +962,6 @@ impl Engine {
             core_version,
             client_mtime,
         };
-        // A nuvem vai mudar: a leitura guardada não serve mais.
-        self.forget_listing();
         let up = match self.sync.api.upload(token, &meta, bytes).await {
             Ok(up) => up,
             Err(err) => {
@@ -1207,7 +1272,7 @@ impl Engine {
             .ok_or_else(|| failed(format!("{key}: sem conflito aberto")))?;
         let token = self.token()?;
         let file = self.file_for(key).await?;
-        let files = self.list(alva, &token).await?;
+        let files = self.list_file(alva, &token, &file).await?;
         let names = by_name(&files);
         let row = files
             .iter()
@@ -1302,7 +1367,7 @@ impl Engine {
         if !self.may_write(Mode::Pass) || !self.may_upload(&file) {
             return Err(failed(format!("{key}: jogo aberto")));
         }
-        let files = self.list(alva, &token).await?;
+        let files = self.list_file(alva, &token, &file).await?;
         let row = pick(&by_name(&files), &file)
             .cloned()
             .ok_or_else(|| failed(format!("{key}: sem linha na nuvem")))?;
@@ -1355,7 +1420,7 @@ impl Engine {
         self.ready(alva).await?;
         let token = self.token()?;
         let file = self.file_for(key).await?;
-        let files = self.list(alva, &token).await?;
+        let files = self.list_file(alva, &token, &file).await?;
         let Some(row) = pick(&by_name(&files), &file).cloned() else {
             return Ok(Vec::new());
         };
@@ -1509,17 +1574,14 @@ impl Engine {
         })
     }
 
-    /// O arquivo de uma chave: o que está em disco ou o lugar dele.
+    /// O arquivo de uma chave, exista ou não: o mapa da biblioteca diz onde
+    /// ele fica, sem ler o disco (a chave já é a que a passada deu a ele).
     async fn file_for(&self, key: &str) -> Result<SaveFile, SyncError> {
-        let local = account_saves(&self.roms, &self.dirs.saves, &self.dirs.system)
+        let library = local::library(&self.roms, &self.dirs.saves, &self.dirs.system)
             .await
             .map_err(|e| failed(format!("saves locais: {e}")))?;
-        local
-            .files
-            .iter()
-            .find(|f| f.key == key)
-            .cloned()
-            .or_else(|| local.slot_for_key(key))
+        library
+            .slot_for_key(key)
             .ok_or_else(|| failed(format!("{key}: arquivo fora da biblioteca")))
     }
 
@@ -2206,11 +2268,70 @@ mod tests {
             .and(query_param("include_deleted", "true"))
     }
 
-    async fn mount_files(server: &MockServer, rows: Vec<Value>) {
+    /// A listagem filtrada como o GameKave filtra (`list_files`): `filename`
+    /// exato, `core` contra `COALESCE(core, '')` e `platform` exato. As linhas
+    /// podem mudar no meio do teste (outra máquina enviou).
+    #[derive(Clone)]
+    struct Listing(Arc<Mutex<Vec<Value>>>);
+
+    impl Listing {
+        fn set(&self, rows: Vec<Value>) {
+            *self.0.lock().unwrap() = rows;
+        }
+    }
+
+    impl Respond for Listing {
+        fn respond(&self, req: &Request) -> ResponseTemplate {
+            let q: HashMap<String, String> = req.url.query_pairs().into_owned().collect();
+            let rows = self
+                .0
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|r| {
+                    q.get("filename")
+                        .is_none_or(|f| r["filename"].as_str() == Some(f.as_str()))
+                        && q.get("core")
+                            .is_none_or(|c| r["core"].as_str().unwrap_or("") == c)
+                        && q.get("platform")
+                            .is_none_or(|p| r["platform"].as_str() == Some(p.as_str()))
+                })
+                .cloned()
+                .collect();
+            files_body(rows)
+        }
+    }
+
+    async fn mount_listing(server: &MockServer, rows: Vec<Value>) -> Listing {
+        let listing = Listing(Arc::new(Mutex::new(rows)));
         files_mock()
-            .respond_with(files_body(rows))
+            .respond_with(listing.clone())
             .mount(server)
             .await;
+        listing
+    }
+
+    async fn mount_files(server: &MockServer, rows: Vec<Value>) {
+        mount_listing(server, rows).await;
+    }
+
+    /// Os pedidos de listagem: os `filename` e `core` de cada um (`-` quando
+    /// o pedido não filtra por ele).
+    async fn listing_filters(r: &Rig) -> Vec<(String, String)> {
+        r.reqs("GET", SAVES)
+            .await
+            .iter()
+            .filter(|q| q.url.path() == SAVES)
+            .map(|q| {
+                let get = |k: &str| {
+                    q.url
+                        .query_pairs()
+                        .find(|(n, _)| n == k)
+                        .map_or("-".to_owned(), |(_, v)| v.into_owned())
+                };
+                (get("filename"), get("core"))
+            })
+            .collect()
     }
 
     fn uploaded(save_id: &str, version: &str) -> ResponseTemplate {
@@ -3211,8 +3332,20 @@ mod tests {
         assert!(r.repo.base_all("file").await.unwrap().is_empty());
     }
 
+    /// Os 12 nomes de save de um stem, como a listagem de uma ROM os pede.
+    fn slot_names(stem: &str) -> Vec<(String, String)> {
+        let mut names: Vec<(String, String)> = [
+            "srm", "sav", "rtc", "fs", "eep", "fla", "mcr", "mcd", "bsv", "mpk", "ldci", "sram",
+        ]
+        .iter()
+        .map(|ext| (format!("{stem}.{ext}"), "-".to_owned()))
+        .collect();
+        names.sort();
+        names
+    }
+
     #[tokio::test]
-    async fn prelaunch_downloads_while_the_game_loads_and_reuses_the_listing() {
+    async fn prelaunch_downloads_only_the_launched_game_with_a_fresh_read() {
         let _serial = SERIAL.lock().await;
         let r = rig("prelaunch").await;
         r.rom("r1", "Zelda.gba", "gba").await;
@@ -3236,29 +3369,172 @@ mod tests {
         );
         assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"zelda");
         assert!(r.read("saves/Mario.srm").is_none(), "só o jogo que abre");
-        assert_eq!(
-            (r.reqs("GET", DEVICES).await.len(), r.listings().await),
-            (1, 1)
-        );
+        let mut asked = listing_filters(&r).await;
+        asked.sort();
+        assert_eq!(asked, slot_names("Zelda"), "só os nomes do jogo que abre");
+        assert_eq!(r.reqs("GET", DEVICES).await.len(), 1);
 
-        // Dentro de 60 s a leitura serve para o próximo jogo.
+        // O próximo jogo lê a linha da máquina e a nuvem de novo.
         assert_eq!(
             r.engine.prelaunch(&r.alva, "r2").await,
             PrelaunchOutcome::Downloaded
         );
         assert_eq!(r.read("saves/Mario.srm").unwrap(), b"mario");
-        assert_eq!(
-            (r.reqs("GET", DEVICES).await.len(), r.listings().await),
-            (1, 1)
-        );
+        assert_eq!(r.reqs("GET", DEVICES).await.len(), 2);
         assert_eq!(
             r.engine.prelaunch(&r.alva, "r1").await,
             PrelaunchOutcome::UpToDate
         );
     }
 
-    /// Depois de um envio a leitura guardada é velha: usá-la traria a versão
-    /// anterior da nuvem por cima do save que acabou de subir.
+    /// I-3: numa biblioteca grande, a checagem de antes de abrir consulta no
+    /// disco só as 12 vagas do jogo e pede à nuvem só os nomes dele: o resto
+    /// da biblioteca não entra no prazo de 5 s.
+    #[tokio::test]
+    async fn prelaunch_in_a_big_library_touches_only_the_launched_rom() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("big-library").await;
+        for i in 0..300 {
+            r.rom(&format!("r{i:03}"), &format!("Game{i:03}.gba"), "gba")
+                .await;
+            r.write(&format!("saves/Game{i:03}.srm"), b"local only");
+        }
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(
+            &r.server,
+            vec![
+                row("s7", "Game007.srm", "gba", None, b"cloud", "v1", None),
+                row("s8", "Game008.srm", "gba", None, b"other", "v1", None),
+            ],
+        )
+        .await;
+        mount_content(&r.server, "s7", "v1", b"cloud").await;
+        r.set_playing(Playing::Loading);
+
+        let saves = r.path("saves");
+        let before = local::probe::count(&saves);
+        assert_eq!(
+            r.engine.prelaunch(&r.alva, "r007").await,
+            PrelaunchOutcome::Conflict
+        );
+        assert_eq!(
+            local::probe::count(&saves) - before,
+            12,
+            "o disco foi consultado fora das vagas do jogo"
+        );
+        let mut asked = listing_filters(&r).await;
+        asked.sort();
+        assert_eq!(asked, slot_names("Game007"));
+        // Só o jogo que abre virou conflito; nada do resto foi tocado.
+        let conflicts = r.repo.conflicts_all().await.unwrap();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].key, "file:gba/Game007.srm");
+        assert!(r.repo.base_all("file").await.unwrap().is_empty());
+        assert_eq!(r.content_gets().await, 0);
+
+        // A passada completa lê a pasta de saves uma vez, não 12 por ROM (com
+        // um jogo abrindo, nada sobe nem desce).
+        r.set_playing(Playing::Running(None));
+        let before = local::probe::count(&saves);
+        r.pass().await.unwrap();
+        assert_eq!(local::probe::count(&saves) - before, 1);
+    }
+
+    /// M5: outra máquina enviou depois da última passada daqui; a checagem de
+    /// antes de abrir lê a nuvem agora e traz o save novo (a leitura de até
+    /// 60 s atrás abria o jogo com o save velho).
+    #[tokio::test]
+    async fn prelaunch_sees_what_another_machine_uploaded_after_the_last_pass() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("fresh-listing").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
+            .await;
+        r.write("saves/Zelda.srm", b"old");
+        mount_devices(
+            &r.server,
+            vec![device("dev1", "Sala"), device("dev2", "Notebook")],
+        )
+        .await;
+        let listing = mount_listing(
+            &r.server,
+            vec![row(
+                "s1",
+                "Zelda.srm",
+                "gba",
+                None,
+                b"old",
+                "v1",
+                Some("dev1"),
+            )],
+        )
+        .await;
+        mount_content(&r.server, "s1", "v2", b"newer").await;
+        assert_eq!(r.pass().await.unwrap(), PassReport::default());
+
+        // 30 s depois o Notebook envia.
+        listing.set(vec![row(
+            "s1",
+            "Zelda.srm",
+            "gba",
+            None,
+            b"newer",
+            "v2",
+            Some("dev2"),
+        )]);
+        r.set_playing(Playing::Loading);
+        assert_eq!(
+            r.engine.prelaunch(&r.alva, "r1").await,
+            PrelaunchOutcome::Downloaded
+        );
+        assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"newer");
+        assert_eq!(
+            r.backups(),
+            vec![("saves/Zelda.srm".to_owned(), b"old".to_vec())]
+        );
+    }
+
+    /// M5: a pausa feita no site depois da última passada vale antes de abrir:
+    /// só a lista de aparelhos é lida, nada da nuvem.
+    #[tokio::test]
+    async fn prelaunch_honors_a_pause_made_after_the_last_pass() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("fresh-pause").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        let mut paused = device("dev1", "Sala");
+        paused["paused_at"] = json!("2026-11-13T12:00:00Z");
+        Mock::given(method("GET"))
+            .and(path(DEVICES))
+            .respond_with(seq(vec![
+                devices_body(vec![device("dev1", "Sala")]),
+                devices_body(vec![paused]),
+            ]))
+            .mount(&r.server)
+            .await;
+        mount_files(
+            &r.server,
+            vec![row("s1", "Zelda.srm", "gba", None, b"cloud", "v1", None)],
+        )
+        .await;
+        mount_content(&r.server, "s1", "v1", b"cloud").await;
+        // Uma passada com um jogo aberto: lê a linha e a nuvem, não escreve.
+        r.set_playing(Playing::Running(None));
+        assert_eq!(r.pass().await.unwrap().deferred, 1);
+        let listings = r.listings().await;
+
+        r.set_playing(Playing::Loading);
+        assert_eq!(
+            r.engine.prelaunch(&r.alva, "r1").await,
+            PrelaunchOutcome::Skipped("paused".into())
+        );
+        assert_eq!(r.reqs("GET", DEVICES).await.len(), 2);
+        assert_eq!(r.listings().await, listings, "pausada não lista a nuvem");
+        assert!(r.read("saves/Zelda.srm").is_none());
+        assert_eq!(r.sync.devices.site_state().await.unwrap(), (true, false));
+    }
+
+    /// Depois de um envio a nuvem já é outra: a checagem de antes de abrir lê
+    /// de novo e nunca traz a versão anterior por cima do save que subiu.
     #[tokio::test]
     async fn prelaunch_after_an_upload_lists_again_and_keeps_the_new_save() {
         let _serial = SERIAL.lock().await;
@@ -3300,7 +3576,8 @@ mod tests {
             r.engine.prelaunch(&r.alva, "r1").await,
             PrelaunchOutcome::UpToDate
         );
-        assert_eq!(r.listings().await, 2);
+        // A completa e as 12 do jogo.
+        assert_eq!(r.listings().await, 1 + 12);
         assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"newer");
         assert_eq!(r.content_gets().await, 0);
     }
@@ -4223,31 +4500,6 @@ mod tests {
         assert_eq!(r.sync.devices.device().await.unwrap(), None);
         assert_eq!(r.sync.devices.token().unwrap(), None, "asv_ no chaveiro");
         assert!(!r.store.has_session().await.unwrap());
-    }
-
-    /// M2: a leitura de até 60 s atrás só confere a linha desta máquina; o
-    /// estado do site que a página mostra não volta para trás com ela.
-    #[tokio::test]
-    async fn a_cached_device_list_never_overwrites_the_site_state() {
-        let _serial = SERIAL.lock().await;
-        let r = rig("cached-row").await;
-        r.rom("r1", "Zelda.gba", "gba").await;
-        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
-        mount_files(&r.server, vec![]).await;
-        r.pass().await.unwrap();
-        // Depois da passada, a página leu "pausada no site".
-        r.sync.devices.set_site_state(true, false).await.unwrap();
-        r.set_playing(Playing::Loading);
-        assert_eq!(
-            r.engine.prelaunch(&r.alva, "r1").await,
-            PrelaunchOutcome::UpToDate
-        );
-        assert_eq!(
-            r.reqs("GET", DEVICES).await.len(),
-            1,
-            "usou a leitura guardada"
-        );
-        assert_eq!(r.sync.devices.site_state().await.unwrap(), (true, false));
     }
 
     /// M4: com um load em andamento e um core aberto, o `current_rom` ainda é

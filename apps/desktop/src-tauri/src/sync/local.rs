@@ -102,6 +102,8 @@ fn system_files(
     dir: &Path,
     accept: impl Fn(&str) -> bool,
 ) -> Result<Vec<(String, PathBuf)>, String> {
+    #[cfg(test)]
+    probe::hit(dir);
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -316,58 +318,232 @@ pub fn system_saves(system_dir: &Path, platform: &str) -> Result<Vec<SaveFile>, 
     Ok(out)
 }
 
-/// Os arquivos de save da conta que existem agora neste disco (`files`) e o
-/// mapa de onde fica o save de cada ROM. Erro de leitura é erro: o motor
-/// aborta a passada.
-pub async fn account_saves(
-    repo: &dyn RomRepository,
-    save_dir: &Path,
-    system_dir: &Path,
-) -> Result<LocalSaves, String> {
-    let roms = repo
-        .list()
-        .await
-        .map_err(|e| format!("lista de ROMs: {e}"))?;
+/// O nome como o disco compara: sem maiúsculas no Windows e no macOS (os
+/// sistemas de arquivos de lá não as distinguem), exato no resto.
+fn fold(name: &str) -> String {
+    if cfg!(any(windows, target_os = "macos")) {
+        name.to_lowercase()
+    } else {
+        name.to_owned()
+    }
+}
+
+/// Os nomes (já em `fold`) dos arquivos regulares de `dir`, numa leitura só
+/// da pasta. Pasta inexistente é conjunto vazio; outro erro é erro.
+fn file_names(dir: &Path) -> Result<HashSet<String>, String> {
+    #[cfg(test)]
+    probe::hit(dir);
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(HashSet::new()),
+        Err(e) => return Err(io_err(dir, &e)),
+    };
+    let mut names = HashSet::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| io_err(dir, &e))?;
+        let kind = entry.file_type().map_err(|e| io_err(&entry.path(), &e))?;
+        let regular = if kind.is_symlink() {
+            // Um link vale pelo que ele aponta, como no `metadata` de um caminho.
+            match std::fs::metadata(entry.path()) {
+                Ok(m) => m.is_file(),
+                Err(e) if e.kind() == io::ErrorKind::NotFound => false,
+                Err(e) => return Err(io_err(&entry.path(), &e)),
+            }
+        } else {
+            kind.is_file()
+        };
+        if let (true, Ok(name)) = (regular, entry.file_name().into_string()) {
+            names.insert(fold(&name));
+        }
+    }
+    Ok(names)
+}
+
+/// O arquivo existe e é regular? Só "não existe" vale `false`; outro erro é
+/// erro.
+fn is_file_at(path: &Path) -> Result<bool, String> {
+    #[cfg(test)]
+    probe::hit(path.parent().unwrap_or(path));
+    match std::fs::metadata(path) {
+        Ok(m) => Ok(m.is_file()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(io_err(path, &e)),
+    }
+}
+
+/// Quantas vezes cada pasta foi consultada (só nos testes): prova que a
+/// passada de uma ROM não lê a biblioteca inteira e que a passada completa lê
+/// a pasta de saves uma vez.
+#[cfg(test)]
+pub(crate) mod probe {
+    use std::collections::HashMap;
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    static HITS: Mutex<Option<HashMap<PathBuf, usize>>> = Mutex::new(None);
+
+    pub fn hit(dir: &Path) {
+        let mut hits = HITS.lock().unwrap_or_else(|p| p.into_inner());
+        *hits
+            .get_or_insert_with(HashMap::new)
+            .entry(dir.to_owned())
+            .or_default() += 1;
+    }
+
+    pub fn count(dir: &Path) -> usize {
+        let hits = HITS.lock().unwrap_or_else(|p| p.into_inner());
+        hits.as_ref().and_then(|h| h.get(dir).copied()).unwrap_or(0)
+    }
+}
+
+/// Um arquivo por caminho e por chave: o primeiro que chega fica (duas ROMs
+/// de mesmo stem dividem o mesmo arquivo).
+#[derive(Default)]
+struct Seen {
+    keys: HashSet<String>,
+    paths: HashSet<PathBuf>,
+}
+
+impl Seen {
+    fn push(&mut self, files: &mut Vec<SaveFile>, file: SaveFile) {
+        if self.paths.insert(file.path.clone()) && self.keys.insert(file.key.clone()) {
+            files.push(file);
+        }
+    }
+}
+
+async fn list_roms(repo: &dyn RomRepository) -> Result<Vec<Rom>, String> {
+    repo.list().await.map_err(|e| format!("lista de ROMs: {e}"))
+}
+
+/// O mapa da biblioteca (stem e plataforma de cada ROM), sem tocar o disco.
+fn index(roms: &[Rom], save_dir: &Path, system_dir: &Path) -> LocalSaves {
     let mut saves = LocalSaves {
         save_dir: save_dir.to_owned(),
         system_dir: system_dir.to_owned(),
         ..LocalSaves::default()
     };
-    let mut seen_keys = HashSet::new();
-    let mut seen_paths = HashSet::new();
-
     for rom in roms {
         let platform = platform_for_system(&rom.system_id);
         saves.platforms.insert(rom.id.clone(), platform);
-        if let Some(stem) = save_stem(save_dir, &rom) {
+        if let Some(stem) = save_stem(save_dir, rom) {
             saves.stems.entry(stem).or_default().push(RomRef {
                 id: rom.id.clone(),
                 crc32: rom.crc32.clone(),
                 platform,
             });
         }
-        for file in rom_slot_files(&rom, save_dir) {
-            match std::fs::metadata(&file.path) {
-                Ok(m) if m.is_file() => {}
-                Ok(_) => continue,
-                Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(io_err(&file.path, &e)),
-            }
-            if !seen_paths.insert(file.path.clone()) || !seen_keys.insert(file.key.clone()) {
-                continue;
-            }
-            saves.files.push(file);
-        }
     }
+    saves
+}
 
-    for (platform, _, _) in SYSTEM_GROUPS {
-        for file in system_saves(system_dir, platform)? {
-            if seen_paths.insert(file.path.clone()) && seen_keys.insert(file.key.clone()) {
-                saves.files.push(file);
+/// Leitura de disco fora das tarefas do Tokio: o prazo de antes de abrir um
+/// jogo vale no meio dela, e o app não para enquanto ela roda.
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tokio::task::spawn_blocking(work)
+        .await
+        .map_err(|e| format!("leitura dos saves interrompida: {e}"))?
+}
+
+/// O mapa da biblioteca, sem arquivo nenhum: onde o save de cada chave fica.
+/// Só o SQLite, sem tocar o disco.
+pub async fn library(
+    repo: &dyn RomRepository,
+    save_dir: &Path,
+    system_dir: &Path,
+) -> Result<LocalSaves, String> {
+    let roms = list_roms(repo).await?;
+    Ok(index(&roms, save_dir, system_dir))
+}
+
+/// Os arquivos de save da conta que existem agora neste disco (`files`) e o
+/// mapa de onde fica o save de cada ROM. A pasta de saves é lida uma vez, não
+/// um arquivo por ROM. Erro de leitura é erro: o motor aborta a passada.
+pub async fn account_saves(
+    repo: &dyn RomRepository,
+    save_dir: &Path,
+    system_dir: &Path,
+) -> Result<LocalSaves, String> {
+    let roms = list_roms(repo).await?;
+    let (save_dir, system_dir) = (save_dir.to_owned(), system_dir.to_owned());
+    blocking(move || {
+        let mut saves = index(&roms, &save_dir, &system_dir);
+        let names = file_names(&save_dir)?;
+        let mut seen = Seen::default();
+        for rom in &roms {
+            for file in rom_slot_files(rom, &save_dir) {
+                if names.contains(&fold(&file.filename)) {
+                    seen.push(&mut saves.files, file);
+                }
             }
         }
-    }
-    Ok(saves)
+        for (platform, _, _) in SYSTEM_GROUPS {
+            for file in system_saves(&system_dir, platform)? {
+                seen.push(&mut saves.files, file);
+            }
+        }
+        Ok(saves)
+    })
+    .await
+}
+
+/// Só os saves de uma ROM: as vagas dela em `<save_dir>` e os cartões e VMUs
+/// da plataforma dela. O mapa da biblioteca vem inteiro (do SQLite), mas o
+/// disco só é consultado nesses lugares. A chave de cada arquivo é a mesma
+/// que a passada completa daria (a primeira ROM da biblioteca com aquele
+/// stem). `None` quando a ROM não está na biblioteca.
+pub async fn rom_saves(
+    repo: &dyn RomRepository,
+    save_dir: &Path,
+    system_dir: &Path,
+    rom_id: &str,
+) -> Result<Option<LocalSaves>, String> {
+    let roms = list_roms(repo).await?;
+    let (save_dir, system_dir, rom_id) = (
+        save_dir.to_owned(),
+        system_dir.to_owned(),
+        rom_id.to_owned(),
+    );
+    blocking(move || {
+        let mut saves = index(&roms, &save_dir, &system_dir);
+        let Some(rom) = roms.iter().find(|r| r.id == rom_id) else {
+            return Ok(None);
+        };
+        let mut seen = Seen::default();
+        for slot in rom_slot_files(rom, &save_dir) {
+            let file = saves
+                .rom_slots(&slot.filename)
+                .into_iter()
+                .next()
+                .unwrap_or(slot);
+            if is_file_at(&file.path)? {
+                seen.push(&mut saves.files, file);
+            }
+        }
+        for file in system_saves(&system_dir, platform_for_system(&rom.system_id))? {
+            seen.push(&mut saves.files, file);
+        }
+        Ok(Some(saves))
+    })
+    .await
+}
+
+/// O que listar na nuvem para os saves de uma ROM: os nomes das vagas dela e
+/// o `core` dos cartões e VMUs da plataforma dela.
+pub fn rom_listing(rom: &Rom, save_dir: &Path) -> (Vec<String>, Vec<&'static str>) {
+    let names = rom_slot_files(rom, save_dir)
+        .into_iter()
+        .map(|f| f.filename)
+        .collect();
+    let platform = platform_for_system(&rom.system_id);
+    let cores = SYSTEM_GROUPS
+        .iter()
+        .filter(|g| g.0 == platform)
+        .map(|g| g.1)
+        .collect();
+    (names, cores)
 }
 
 #[cfg(test)]
@@ -574,6 +750,74 @@ mod tests {
         );
         assert_eq!(parse_key("state:snes/x/a.state"), None);
         assert_eq!(parse_key("file:nothing"), None);
+    }
+
+    /// I-3: a passada completa lê a pasta de saves uma vez (não 12 consultas
+    /// por ROM), e a de uma ROM consulta só as 12 vagas dela, com a mesma
+    /// chave que a completa daria.
+    #[tokio::test]
+    async fn the_full_scan_reads_the_save_dir_once_and_a_rom_scan_only_its_slots() {
+        let root = temp("probe");
+        let saves = root.join("saves");
+        let system = root.join("system");
+        std::fs::create_dir_all(&saves).unwrap();
+        let mut roms = Vec::new();
+        for i in 0..40 {
+            roms.push((format!("r{i:02}"), format!("C:/roms/Game{i:02}.gba")));
+            std::fs::write(saves.join(format!("Game{i:02}.srm")), b"x").unwrap();
+        }
+        // Mesmo stem em outra plataforma: a chave é a da primeira ROM.
+        roms.push(("rn".into(), "C:/roms/Game07.nes".into()));
+        let repo = RomsRepo::new(connect_in_memory().await.unwrap());
+        for (id, path) in &roms {
+            let system = if path.ends_with(".nes") { "nes" } else { "gba" };
+            add_roms(&repo, &[(id.as_str(), path.as_str(), system)]).await;
+        }
+
+        let before = probe::count(&saves);
+        let all = account_saves(&repo, &saves, &system).await.unwrap();
+        assert_eq!(all.files.len(), 40);
+        assert_eq!(probe::count(&saves) - before, 1, "uma leitura da pasta");
+
+        let before = probe::count(&saves);
+        let one = rom_saves(&repo, &saves, &system, "rn")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(probe::count(&saves) - before, 12, "só as vagas da ROM");
+        let keys: Vec<&str> = one.files.iter().map(|f| f.key.as_str()).collect();
+        assert_eq!(keys, vec!["file:gba/Game07.srm"]);
+        assert_eq!(one.files[0].rom_id.as_deref(), Some("r07"));
+        assert!(all.files.contains(&one.files[0]));
+        // Fora da biblioteca: nada a ler.
+        assert!(rom_saves(&repo, &saves, &system, "nope")
+            .await
+            .unwrap()
+            .is_none());
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// No Windows o disco não distingue maiúsculas: `zelda.SRM` é o save da
+    /// ROM `Zelda`, nas duas leituras.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn on_windows_a_save_name_matches_without_case() {
+        let root = temp("case");
+        let saves = root.join("saves");
+        std::fs::create_dir_all(&saves).unwrap();
+        std::fs::write(saves.join("zelda.SRM"), b"z").unwrap();
+        let repo = repo_with(&[("r1", "C:/roms/Zelda.gba", "gba")]).await;
+        let all = account_saves(&repo, &saves, &root.join("system"))
+            .await
+            .unwrap();
+        assert_eq!(all.files.len(), 1);
+        assert_eq!(all.files[0].key, "file:gba/Zelda.srm");
+        let one = rom_saves(&repo, &saves, &root.join("system"), "r1")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(one.files, all.files);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[tokio::test]
