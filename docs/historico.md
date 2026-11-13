@@ -3415,3 +3415,10 @@ Infra:
 - **Uma correção no caminho:** o `ResizeObserver` que informa ao backend o tamanho do canvas (viewport dos shaders) dependia só de `[nativeVideo, deco]`; na 1ª execução o canvas ainda não existia (tela de abertura), e o efeito só voltava a rodar quando aparecia uma moldura. Sem moldura, o viewport nunca era enviado no modo canvas. Agora ele também depende do jogo estar carregado.
 - **Conferido:** `tsc -b`, `oxlint`, 301 testes do frontend; no navegador de teste, jogo carregado com o canvas, menu de pausa com as 3 abas, save states e troca de aba pelo LB/RB, tela de erro e tela "sem alvo".
 
+## 2026-11-13 — Save state: versão do core e teste na fumaça
+
+- **Pedido do usuário:** depois da pergunta "a função save state é compatível com todos os cores?", fazer as duas correções propostas.
+- **Versão do core no state:** migração `0020_save_state_core_version.sql` (`core_version TEXT`, NULL nos antigos). Ao salvar (menu, atalho e QuickSave), o ReEmu grava o `library_version` do core instalado (`core_loader_desktop::core_version`, a mesma espiada com cache de `discover_cores`). A lista de states traz `coreVersion` e `versionChanged`; com outra versão instalada agora, a página do jogo e o menu de pausa mostram o selo "Outra versão do core: pode não carregar" antes de carregar. Se o core recusar o state (`retro_unserialize` falso) e as versões forem diferentes, o erro diz as duas, com o código `saveStateIncompatible`. State antigo, sem versão, não acusa nada.
+- **Fumaça do catálogo:** o `reemu-core-host --run` termina com `state_round_trip`: salva (A), roda 30 quadros, restaura A e salva de novo (B); o resultado (`ok`, `diferente`, `recusou`, `sem`) vai na coluna "jogo" e no resumo ("N salvaram e restauraram o estado"). Não reprova o job: serve de lista de quais cores têm save state. Amostra local (Windows): Snes9x, mGBA, Genesis Plus GX, FCEUmm e Stella 2014 `ok`; Gambatte restaura, mas o estado não volta byte a byte; PCSX ReARMed sem ROM de teste.
+- **Conferido:** 520 testes Rust (inclui `version_changed` e a versão gravada/lida no banco), `clippy -D warnings`, `fmt`, `tsc -b`, 327 testes do frontend.
+

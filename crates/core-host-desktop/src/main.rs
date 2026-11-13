@@ -103,9 +103,10 @@ impl Drop for Sandbox {
 /// `reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros>`: carrega
 /// o jogo, roda `quadros` `retro_run` e sai — fase 2 do teste de fumaça do
 /// catálogo. Resultado no stdout: `REEMU_RUN_OK\t<quadros de vídeo>\t
-/// <quadros com cor>\t<amostras de áudio>` (saída 0) ou `REEMU_RUN_ERR\t
-/// <erro>` (saída 2). "Com cor" = algum pixel não preto (as ROMs de teste
-/// pintam o fundo).
+/// <quadros com cor>\t<amostras de áudio>\t<save state>` (saída 0) ou
+/// `REEMU_RUN_ERR\t<erro>` (saída 2). "Com cor" = algum pixel não preto (as
+/// ROMs de teste pintam o fundo). O save state é conferido no fim (ver
+/// [`state_round_trip`]).
 fn run_rom(args: &[String]) -> ! {
     let (Some(cores_dir), Some(core_id), Some(rom), Some(frames)) = (
         args.first(),
@@ -151,7 +152,8 @@ fn run_rom(args: &[String]) -> ! {
                 }
                 audio += core.drain_audio().len();
             }
-            println!("REEMU_RUN_OK\t{video}\t{colored}\t{audio}");
+            let state = state_round_trip(&mut core);
+            println!("REEMU_RUN_OK\t{video}\t{colored}\t{audio}\t{state}");
             // o processo sai já: sem `retro_deinit` (alguns cores caem nele,
             // como o VBA-M no probe)
             std::mem::forget(core);
@@ -160,6 +162,29 @@ fn run_rom(args: &[String]) -> ! {
     };
     drop(sandbox);
     exit_without_dll_teardown(code);
+}
+
+/// Confere o save state do core com o jogo rodando: salva (A), roda alguns
+/// quadros, restaura A e salva de novo (B). Resultado: `sem` (o core não
+/// serializa), `recusou` (`retro_unserialize` falso), `ok` (B == A) ou
+/// `diferente` (restaurou, mas o estado não volta byte a byte — comum em core
+/// que guarda contadores do frontend no state; não é falha por si).
+fn state_round_trip(core: &mut DesktopCore) -> &'static str {
+    let Some(a) = core.serialize_state() else {
+        return "sem";
+    };
+    for _ in 0..30 {
+        let _ = core.next_frame();
+        let _ = core.drain_audio();
+    }
+    if !core.restore_state(&a) {
+        return "recusou";
+    }
+    match core.serialize_state() {
+        Some(b) if b == a => "ok",
+        Some(_) => "diferente",
+        None => "sem",
+    }
 }
 
 /// Sai sem a limpeza das DLLs carregadas. No Windows o `std::process::exit`

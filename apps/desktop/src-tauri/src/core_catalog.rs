@@ -1116,13 +1116,24 @@ mod tests {
                             match (n(1), n(2), n(3)) {
                                 (Some(0), _, _) => "FALHA: nenhum quadro de vídeo".into(),
                                 (Some(v), Some(cor), Some(a)) => format!(
-                                    "{v} quadros{}{}",
+                                    "{v} quadros{}{}{}",
                                     if cor > 0 {
                                         ", com imagem"
                                     } else {
                                         ", tela preta"
                                     },
-                                    if a > 0 { ", áudio" } else { "" }
+                                    if a > 0 { ", áudio" } else { "" },
+                                    // save state: salvar, rodar, restaurar e
+                                    // salvar de novo (`reemu-core-host --run`)
+                                    match f.get(4).map(|s| s.trim()) {
+                                        Some("ok") => "; save state ok",
+                                        Some("diferente") => {
+                                            "; save state restaura (estado não idêntico)"
+                                        }
+                                        Some("recusou") => "; save state recusado",
+                                        Some("sem") => "; sem save state",
+                                        _ => "",
+                                    }
                                 ),
                                 _ => format!("FALHA: saída estranha: {l}"),
                             }
@@ -1153,12 +1164,17 @@ mod tests {
             .count();
         let ok = rows.iter().filter(|r| r.2 == "ok").count();
         let games = rows.iter().filter(|r| r.4.contains("quadros")).count();
+        let states = rows
+            .iter()
+            .filter(|r| r.4.contains("save state ok"))
+            .count();
         let mut md = format!(
-            "## Fumaça do catálogo ({})\n\n{} de {} cores abriram; {} rodaram a ROM de teste.\n\n| core | sistemas | resultado | detalhe | jogo |\n|---|---|---|---|---|\n",
+            "## Fumaça do catálogo ({})\n\n{} de {} cores abriram; {} rodaram a ROM de teste; {} salvaram e restauraram o estado.\n\n| core | sistemas | resultado | detalhe | jogo |\n|---|---|---|---|---|\n",
             buildbot_os(),
             ok,
             rows.len(),
-            games
+            games,
+            states
         );
         // falhas primeiro
         rows.sort_by_key(|r| (r.2 == "ok" && !game_failed(&r.4), r.2 == "conhecido", r.0));
