@@ -1,29 +1,29 @@
+import type { ComponentType } from 'react'
 import { createHashRouter, Navigate } from 'react-router-dom'
 import { AppShell } from './layouts/AppShell'
 import { RootLayout } from './layouts/RootLayout'
-import { SettingsLayout } from './layouts/SettingsLayout'
-import { Achievements } from './screens/Achievements'
 import { Home } from './screens/Home'
-import { ProfilePage } from './screens/ProfilePage'
 import { Library } from './screens/Library'
-import { Onboarding } from './screens/Onboarding'
 import { RouteError } from './components/RouteError'
 import { PlatformLibrary } from './screens/PlatformLibrary'
-import { PlayScreen } from './screens/PlayScreen'
-import { RomDetail } from './screens/RomDetail'
-import { SettingsAppearance } from './screens/settings/SettingsAppearance'
-import { SettingsAudio } from './screens/settings/SettingsAudio'
-import { SettingsBios } from './screens/settings/SettingsBios'
-import { SettingsSystem } from './screens/settings/SettingsSystem'
-import { SettingsControllers } from './screens/settings/SettingsControllers'
-import { SettingsCoreDetail } from './screens/settings/SettingsCoreDetail'
-import { SettingsCores } from './screens/settings/SettingsCores'
-import { SettingsHome } from './screens/settings/SettingsHome'
-import { SettingsHotkeys } from './screens/settings/SettingsHotkeys'
-import { SettingsLibrary } from './screens/settings/SettingsLibrary'
-import { SettingsMetadata } from './screens/settings/SettingsMetadata'
-import { SettingsProfile } from './screens/settings/SettingsProfile'
-import { SettingsVideo } from './screens/settings/SettingsVideo'
+
+/**
+ * Rota carregada sob demanda (`lazy` do React Router 7): o código da tela só
+ * baixa na primeira visita, e o pacote inicial fica com a casca, a Início e a
+ * Biblioteca. Enquanto o módulo chega, a tela anterior continua na tela.
+ * `pick` escolhe o componente exportado; `props` fixa as do caminho.
+ */
+function page<M, P extends object>(
+  load: () => Promise<M>,
+  pick: (m: M) => ComponentType<P>,
+  props?: P,
+) {
+  return async () => {
+    const C = pick(await load())
+    return { Component: props ? () => <C {...props} /> : (C as ComponentType) }
+  }
+}
+
 
 /**
  * Hash router (a webview do Tauri não tem servidor, então nada de history
@@ -47,41 +47,41 @@ export const router = createHashRouter([
               { index: true, element: <Home /> },
               { path: 'library', element: <Library /> },
               { path: 'library/:platform', element: <PlatformLibrary /> },
-              { path: 'rom/:romId', element: <RomDetail /> },
-              { path: 'conquistas', element: <Achievements /> },
-              { path: 'perfil', element: <ProfilePage /> },
+              { path: 'rom/:romId', lazy: page(() => import('./screens/RomDetail'), (m) => m.RomDetail) },
+              { path: 'conquistas', lazy: page(() => import('./screens/Achievements'), (m) => m.Achievements) },
+              { path: 'perfil', lazy: page(() => import('./screens/ProfilePage'), (m) => m.ProfilePage) },
               {
                 path: 'settings',
-                element: <SettingsLayout />,
+                lazy: page(() => import('./layouts/SettingsLayout'), (m) => m.SettingsLayout),
                 children: [
-                  { index: true, element: <SettingsHome /> },
-                  { path: 'perfil', element: <SettingsProfile /> },
-                  { path: 'aparencia', element: <SettingsAppearance /> },
-                  { path: 'aparencia/temas', element: <SettingsAppearance section="temas" /> },
-                  { path: 'aparencia/papel-de-parede', element: <SettingsAppearance section="papel-de-parede" /> },
-                  { path: 'biblioteca', element: <SettingsLibrary /> },
-                  { path: 'audio', element: <SettingsAudio /> },
-                  { path: 'video', element: <SettingsVideo /> },
-                  { path: 'video/shaders', element: <SettingsVideo section="shaders" /> },
-                  { path: 'video/molduras', element: <SettingsVideo section="molduras" /> },
-                  { path: 'metadata', element: <SettingsMetadata /> },
-                  { path: 'hotkeys', element: <SettingsHotkeys /> },
-                  { path: 'controllers', element: <SettingsControllers /> },
-                  { path: 'cores', element: <SettingsCores /> },
-                  { path: 'cores/:coreId', element: <SettingsCoreDetail /> },
-                  { path: 'bios', element: <SettingsBios /> },
-                  { path: 'sistema', element: <SettingsSystem /> },
-                  { path: 'sistema/opcoes', element: <SettingsSystem section="opcoes" /> },
-                  { path: 'sistema/hardware', element: <SettingsSystem section="hardware" /> },
-                  { path: 'sistema/sobre', element: <SettingsSystem section="sobre" /> },
+                  { index: true, lazy: page(() => import('./screens/settings/SettingsHome'), (m) => m.SettingsHome) },
+                  { path: 'perfil', lazy: page(() => import('./screens/settings/SettingsProfile'), (m) => m.SettingsProfile) },
+                  { path: 'aparencia', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance) },
+                  { path: 'aparencia/temas', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance, { section: 'temas' as const }) },
+                  { path: 'aparencia/papel-de-parede', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance, { section: 'papel-de-parede' as const }) },
+                  { path: 'biblioteca', lazy: page(() => import('./screens/settings/SettingsLibrary'), (m) => m.SettingsLibrary) },
+                  { path: 'audio', lazy: page(() => import('./screens/settings/SettingsAudio'), (m) => m.SettingsAudio) },
+                  { path: 'video', lazy: page(() => import('./screens/settings/SettingsVideo'), (m) => m.SettingsVideo) },
+                  { path: 'video/shaders', lazy: page(() => import('./screens/settings/SettingsVideo'), (m) => m.SettingsVideo, { section: 'shaders' as const }) },
+                  { path: 'video/molduras', lazy: page(() => import('./screens/settings/SettingsVideo'), (m) => m.SettingsVideo, { section: 'molduras' as const }) },
+                  { path: 'metadata', lazy: page(() => import('./screens/settings/SettingsMetadata'), (m) => m.SettingsMetadata) },
+                  { path: 'hotkeys', lazy: page(() => import('./screens/settings/SettingsHotkeys'), (m) => m.SettingsHotkeys) },
+                  { path: 'controllers', lazy: page(() => import('./screens/settings/SettingsControllers'), (m) => m.SettingsControllers) },
+                  { path: 'cores', lazy: page(() => import('./screens/settings/SettingsCores'), (m) => m.SettingsCores) },
+                  { path: 'cores/:coreId', lazy: page(() => import('./screens/settings/SettingsCoreDetail'), (m) => m.SettingsCoreDetail) },
+                  { path: 'bios', lazy: page(() => import('./screens/settings/SettingsBios'), (m) => m.SettingsBios) },
+                  { path: 'sistema', lazy: page(() => import('./screens/settings/SettingsSystem'), (m) => m.SettingsSystem) },
+                  { path: 'sistema/opcoes', lazy: page(() => import('./screens/settings/SettingsSystem'), (m) => m.SettingsSystem, { section: 'opcoes' as const }) },
+                  { path: 'sistema/hardware', lazy: page(() => import('./screens/settings/SettingsSystem'), (m) => m.SettingsSystem, { section: 'hardware' as const }) },
+                  { path: 'sistema/sobre', lazy: page(() => import('./screens/settings/SettingsSystem'), (m) => m.SettingsSystem, { section: 'sobre' as const }) },
                 ],
               },
             ],
           },
         ],
       },
-      { path: 'onboarding', element: <Onboarding /> },
-      { path: 'play/:romId', element: <PlayScreen /> },
+      { path: 'onboarding', lazy: page(() => import('./screens/Onboarding'), (m) => m.Onboarding) },
+      { path: 'play/:romId', lazy: page(() => import('./screens/PlayScreen'), (m) => m.PlayScreen) },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
