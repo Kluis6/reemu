@@ -43,7 +43,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { FullscreenDialog } from "../components/FullscreenDialog";
 import { ConflictDialog } from "../components/sync/ConflictDialog";
 import { SaveLine } from "../components/sync/SaveLine";
-import { SYNC_STATUS_KEY, savesActive } from "../hooks/useSync";
 import { GamePresets } from "../components/GamePresets";
 import { GameImageOptions } from "../components/GameImageOptions";
 import { SelectBlock } from "../components/SettingBlock";
@@ -85,7 +84,6 @@ import {
   syncConflicts,
   syncSaveStatus,
   type SyncConflict,
-  type SyncStatus,
 } from "../lib/tauri";
 import { formatPlayTime } from "../lib/playTime";
 import { useModalButtonStyles } from "../styles/buttons";
@@ -212,6 +210,8 @@ export function RomDetail() {
   // Ao abrir a página de um jogo, o foco vai pro "Jogar" (controle e teclado
   // já começam nele). Uma vez por jogo — refetch da lista não rouba o foco.
   const playRef = useRef<HTMLButtonElement>(null);
+  // A checagem do save em andamento: outro Jogar nesse intervalo é ignorado.
+  const checkingRef = useRef(false);
   const hasRom = !!rom;
   useEffect(() => {
     if (hasRom) playRef.current?.focus({ preventScroll: true });
@@ -339,25 +339,25 @@ export function RomDetail() {
   // Antes de abrir: um conflito de game save é perguntado (com "Decidir depois"
   // abrindo mesmo assim). A consulta é só disco e SQLite; qualquer falha (sem
   // conta, offline, sync desligado) abre o jogo normalmente: ela nunca bloqueia.
+  // Sem sync, revogado ou com os game saves desligados o comando devolve `none`.
   const play = (loadState?: string) => {
-    if (!chosenCore) return;
-    const known = qc.getQueryData<SyncStatus>(SYNC_STATUS_KEY);
-    if (known && !savesActive(known)) {
-      launch(loadState);
-      return;
-    }
+    if (!chosenCore || checkingRef.current) return;
+    checkingRef.current = true;
     void (async () => {
       try {
         const line = await syncSaveStatus(rom.id);
         if (line.state === "conflict" && line.key !== null) {
           const conflict = (await syncConflicts()).find((c) => c.key === line.key);
           if (conflict) {
+            checkingRef.current = false;
             setConflictAsk({ conflict, loadState });
             return;
           }
         }
       } catch {
         // segue para o jogo
+      } finally {
+        checkingRef.current = false;
       }
       launch(loadState);
     })();

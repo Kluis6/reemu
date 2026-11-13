@@ -2,6 +2,7 @@ import { Badge, Body1, Body1Strong, Button, Caption1, MessageBar, MessageBarBody
 import { useEffect, useRef, useState, type Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import { syncErrorCode, useResolve } from '../../hooks/useSync'
+import { formatDateTime } from '../../lib/metadataFormat'
 import type { Side, SyncConflict } from '../../lib/tauri'
 import { formatBytes, machineColor } from '../../screens/settings/syncFormat'
 import { FullscreenDialog } from '../FullscreenDialog'
@@ -65,7 +66,7 @@ function Card({
   return (
     <div className={s.card}>
       <div className={s.head}>
-        <span className={s.avatar} style={{ backgroundColor: machineColor(side.machine) }} aria-hidden>
+        <span className={s.avatar} style={{ backgroundColor: machineColor(side.deviceId ?? side.machine) }} aria-hidden>
           {(side.machine.trim()[0] ?? '?').toUpperCase()}
         </span>
         <Body1Strong>{side.machine}</Body1Strong>
@@ -77,11 +78,17 @@ function Card({
       </div>
       <dl className={s.facts}>
         <dt className={s.label}>{t('sync.conflict.saved')}</dt>
-        <dd className={s.value}>{new Date(side.savedAt * 1000).toLocaleString(lang)}</dd>
+        <dd className={s.value}>{formatDateTime(side.savedAt)}</dd>
         <dt className={s.label}>{t('sync.conflict.size')}</dt>
         <dd className={s.value}>{formatBytes(side.size, lang)}</dd>
       </dl>
-      <Button ref={buttonRef} appearance={mine ? 'primary' : 'secondary'} disabledFocusable={busy} onClick={onPick}>
+      <Button
+        ref={buttonRef}
+        autoFocus={mine}
+        appearance={mine ? 'primary' : 'secondary'}
+        disabledFocusable={busy}
+        onClick={onPick}
+      >
         {action}
       </Button>
     </div>
@@ -107,8 +114,8 @@ export function ConflictDialog({
   const [failed, setFailed] = useState<string | null>(null)
   const localRef = useRef<HTMLButtonElement>(null)
 
-  // O Fluent leva o foco ao primeiro item do diálogo (o fechar): este é o
-  // botão que a pessoa mais provavelmente quer.
+  // `autoFocus` no botão do save desta máquina é o caminho certo; o foco
+  // por tempo só cobre o caso do Fluent ter levado o foco ao fechar antes.
   useEffect(() => {
     const id = window.setTimeout(() => localRef.current?.focus(), 0)
     return () => window.clearTimeout(id)

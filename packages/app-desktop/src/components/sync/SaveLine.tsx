@@ -2,13 +2,12 @@ import { Button, makeStyles, mergeClasses, tokens } from '@fluentui/react-compon
 import {
   CloudArrowUpRegular,
   CloudCheckmarkRegular,
-  CloudOffRegular,
   WarningRegular,
 } from '@fluentui/react-icons'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { relativeAge } from '../../screens/profile/relativeAge'
-import { savesActive, useConflicts, useSaveStatus, useSyncStatus } from '../../hooks/useSync'
+import { useConflicts, useSaveStatus } from '../../hooks/useSync'
 import { HistoryDialog } from './HistoryDialog'
 
 const useStyles = makeStyles({
@@ -34,15 +33,14 @@ export function SaveLine({
 }) {
   const { t, i18n } = useTranslation()
   const s = useStyles()
-  const status = useSyncStatus()
-  const active = savesActive(status.data)
-  const line = useSaveStatus(romId, active)
+  // O comando devolve `none` sem sync, revogado ou com os game saves desligados.
+  const line = useSaveStatus(romId)
   const state = line.data?.state
-  const conflicts = useConflicts(active && state === 'conflict')
+  const conflicts = useConflicts(state === 'conflict')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [nowMs] = useState(() => Date.now())
 
-  if (!active || !line.data || state === undefined || state === 'none') return null
+  if (!line.data || state === undefined || state === 'none') return null
   const { key, versions, syncedAt } = line.data
 
   let text: string
@@ -52,15 +50,12 @@ export function SaveLine({
   } else if (state === 'pending') {
     text = t('sync.save.pending')
     Icon = CloudArrowUpRegular
-  } else if (state === 'conflict') {
+  } else {
     const c = conflicts.data?.find((x) => x.key === key)
     text = c
       ? t('sync.save.conflict', { local: c.local.machine, remote: c.remote.machine })
       : t('sync.save.conflictShort')
     Icon = WarningRegular
-  } else {
-    text = t('sync.save.localOnly')
-    Icon = CloudOffRegular
   }
 
   return (

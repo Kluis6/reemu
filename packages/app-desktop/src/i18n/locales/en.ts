@@ -494,7 +494,6 @@ const en: Messages = {
       pending: 'Game save not uploaded yet',
       conflict: 'Conflict: {{local}} and {{remote}} both changed',
       conflictShort: 'Game save conflict',
-      localOnly: 'Only on this machine',
       history_one: 'history ({{count}} version)',
       history_other: 'history ({{count}} versions)',
     },

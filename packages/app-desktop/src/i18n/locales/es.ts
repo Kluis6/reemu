@@ -494,7 +494,6 @@ const es: Messages = {
       pending: 'Game save aún sin enviar',
       conflict: 'Conflicto: {{local}} y {{remote}} cambiaron',
       conflictShort: 'Conflicto en el game save',
-      localOnly: 'Solo en esta máquina',
       history_one: 'historial ({{count}} versión)',
       history_other: 'historial ({{count}} versiones)',
     },

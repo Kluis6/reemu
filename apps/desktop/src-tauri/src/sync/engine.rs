@@ -109,6 +109,9 @@ impl PassReport {
 #[cfg_attr(test, derive(ts_rs::TS), ts(export))]
 pub struct Side {
     pub machine: String,
+    /// O id do aparelho: o desta máquina no lado local, o de quem escreveu a
+    /// versão da nuvem no remoto (`None` quando a última leitura não o trouxe).
+    pub device_id: Option<String>,
     /// Segundos Unix.
     pub saved_at: i64,
     pub size: u64,
@@ -131,6 +134,8 @@ pub struct SyncConflict {
 pub struct SyncVersion {
     pub version_id: String,
     pub machine: String,
+    /// O id do aparelho que escreveu a versão (o da listagem).
+    pub device_id: Option<String>,
     /// Segundos Unix.
     pub created_at: i64,
     pub size: u64,
@@ -147,8 +152,6 @@ pub enum SaveLineState {
     /// Mudou aqui (ou nunca subiu) e o sync está ligado.
     Pending,
     Conflict,
-    /// Há save, e o sync está desligado.
-    LocalOnly,
 }
 
 /// A linha de save da página do jogo. Só disco e SQLite: nada de rede.
@@ -329,6 +332,19 @@ impl Engine {
                 None => PrelaunchOutcome::UpToDate,
             },
         }
+    }
+
+    /// A linha de save existe: aparelho guardado, sync ligado, não revogado e
+    /// game saves ligados. Só o SQLite.
+    async fn saves_line_on(&self) -> Result<bool, SyncError> {
+        let devices = &self.sync.devices;
+        if devices.device().await.map_err(failed)?.is_none()
+            || !devices.enabled().await.map_err(failed)?
+        {
+            return Ok(false);
+        }
+        let (_, revoked) = devices.site_state().await.map_err(failed)?;
+        Ok(!revoked && self.saves_on().await?)
     }
 
     /// O interruptor dos game saves: desligado, a passada não faz nada.
@@ -1307,6 +1323,7 @@ impl Engine {
             .map(|v| SyncVersion {
                 version_id: v.version_id.clone(),
                 machine: machine_label(v, &devices).unwrap_or_default(),
+                device_id: v.device_token_id.clone(),
                 created_at: parse_time(&v.server_created_at).map_or(0, |t| t.0),
                 size: v.size_bytes.max(0) as u64,
                 is_current: current == Some(v.version_id.as_str()),
@@ -1317,15 +1334,14 @@ impl Engine {
     /// Os conflitos abertos, como o diálogo os mostra.
     pub async fn conflicts(&self) -> Result<Vec<SyncConflict>, SyncError> {
         let rows = self.repo.conflicts_all().await.map_err(repo_err)?;
-        let here = self
-            .sync
-            .devices
-            .device()
-            .await
-            .map_err(failed)?
-            .map(|d| d.label)
+        let this = self.sync.devices.device().await.map_err(failed)?;
+        let here = this
+            .as_ref()
+            .map(|d| d.label.clone())
             .filter(|l| !l.is_empty())
             .unwrap_or_else(default_label);
+        let here_id = this.map(|d| d.id);
+        let known = lock(&self.known_files).clone();
         let mut out = Vec::with_capacity(rows.len());
         for c in rows {
             let rom = match &c.rom_id {
@@ -1340,11 +1356,17 @@ impl Engine {
                 title,
                 local: Side {
                     machine: here.clone(),
+                    device_id: here_id.clone(),
                     saved_at: c.local_mtime,
                     size: c.local_size.max(0) as u64,
                 },
                 remote: Side {
                     machine: c.remote_device_label.unwrap_or_default(),
+                    device_id: known
+                        .iter()
+                        .find(|f| f.save_id == c.remote_save_id)
+                        .and_then(|f| f.current.as_ref())
+                        .and_then(|v| v.device_token_id.clone()),
                     saved_at: c.remote_client_mtime.unwrap_or(c.seen_at),
                     size: c.remote_size.max(0) as u64,
                 },
@@ -1357,6 +1379,16 @@ impl Engine {
 
     /// A linha de save da página do jogo, pelo disco e pelo SQLite.
     pub async fn save_status(&self, rom_id: &str) -> Result<SaveLineStatus, SyncError> {
+        // Sync desligado, aparelho revogado ou game saves desligados: a página
+        // do jogo não mostra nada nem pergunta nada. Só SQLite, sem rede.
+        if !self.saves_line_on().await? {
+            return Ok(SaveLineStatus {
+                state: SaveLineState::None,
+                synced_at: None,
+                versions: 0,
+                key: None,
+            });
+        }
         let rom = self
             .roms
             .get(rom_id)
@@ -1386,9 +1418,6 @@ impl Engine {
                 key: Some(c.key.clone()),
             });
         }
-        let devices = &self.sync.devices;
-        let on = devices.device().await.map_err(failed)?.is_some()
-            && devices.enabled().await.map_err(failed)?;
         let mut main: Option<String> = None;
         let mut pending = false;
         let mut synced_at: Option<i64> = None;
@@ -1411,11 +1440,10 @@ impl Engine {
                 _ => pending = true,
             }
         }
-        let state = match (&main, on, pending) {
-            (None, _, _) => SaveLineState::None,
-            (Some(_), false, _) => SaveLineState::LocalOnly,
-            (Some(_), true, true) => SaveLineState::Pending,
-            (Some(_), true, false) => SaveLineState::Synced,
+        let state = match (&main, pending) {
+            (None, _) => SaveLineState::None,
+            (Some(_), true) => SaveLineState::Pending,
+            (Some(_), false) => SaveLineState::Synced,
         };
         Ok(SaveLineStatus {
             state,
@@ -2434,6 +2462,8 @@ mod tests {
         assert_eq!(view[0].title, "Zelda");
         assert_eq!(view[0].local.machine, "Sala");
         assert_eq!(view[0].remote.machine, "Notebook");
+        assert_eq!(view[0].local.device_id.as_deref(), Some("dev1"));
+        assert_eq!(view[0].remote.device_id.as_deref(), Some("dev2"));
         assert_eq!((view[0].local.size, view[0].remote.size), (4, 6));
         assert_eq!(
             view[0].remote.saved_at,
@@ -3068,6 +3098,8 @@ mod tests {
             .map(|v| (v.version_id.as_str(), v.machine.as_str(), v.is_current))
             .collect();
         assert_eq!(seen, vec![("v2", "Sala", true), ("v1", "Notebook", false)]);
+        assert_eq!(versions[0].device_id.as_deref(), Some("dev1"));
+        assert_eq!(versions[1].device_id.as_deref(), Some("dev2"));
         assert_eq!(
             versions[1].created_at,
             parse_time("2026-11-12T10:00:00Z").unwrap().0
@@ -3583,8 +3615,87 @@ mod tests {
         r.repo.conflict_delete(ZELDA).await.unwrap();
         r.sync.devices.set_enabled(false).await.unwrap();
         let off = r.engine.save_status("r1").await.unwrap();
-        assert_eq!(off.state, SaveLineState::LocalOnly);
+        assert_eq!((off.state, off.key), (SaveLineState::None, None));
         assert!(r.server.received_requests().await.unwrap().is_empty());
+    }
+
+    /// Os três portões da linha do jogo: sem rede, e `none` mesmo com save e
+    /// com conflito guardado.
+    #[tokio::test]
+    async fn save_status_is_none_without_network_when_sync_is_off_revoked_or_saves_off() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("saveline-gates").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        r.write("saves/Zelda.srm", b"a");
+        r.repo
+            .conflict_put(&ConflictRow {
+                key: ZELDA.into(),
+                local_hash: sha(b"a"),
+                local_mtime: 1,
+                local_size: 1,
+                remote_save_id: "s1".into(),
+                remote_version_id: "v2".into(),
+                remote_hash: sha(b"b"),
+                remote_device_label: None,
+                remote_client_mtime: None,
+                remote_size: 1,
+                rom_id: Some("r1".into()),
+                seen_at: 1,
+            })
+            .await
+            .unwrap();
+        let state = |s: SaveLineStatus| (s.state, s.key, s.versions);
+        assert_eq!(
+            r.engine.save_status("r1").await.unwrap().state,
+            SaveLineState::Conflict
+        );
+
+        // 1. sync desligado
+        r.sync.devices.set_enabled(false).await.unwrap();
+        assert_eq!(
+            state(r.engine.save_status("r1").await.unwrap()),
+            (SaveLineState::None, None, 0)
+        );
+        r.sync.devices.set_enabled(true).await.unwrap();
+
+        // 2. aparelho revogado
+        r.sync.devices.set_site_state(false, true).await.unwrap();
+        assert_eq!(
+            state(r.engine.save_status("r1").await.unwrap()),
+            (SaveLineState::None, None, 0)
+        );
+        r.sync.devices.set_site_state(false, false).await.unwrap();
+
+        // 3. game saves desligados
+        r.sync.devices.set_saves_enabled(false).await.unwrap();
+        assert_eq!(
+            state(r.engine.save_status("r1").await.unwrap()),
+            (SaveLineState::None, None, 0)
+        );
+        r.sync.devices.set_saves_enabled(true).await.unwrap();
+
+        assert_eq!(
+            r.engine.save_status("r1").await.unwrap().state,
+            SaveLineState::Conflict
+        );
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+    }
+
+    /// Ação manual: com os game saves desligados, resolver um conflito que já
+    /// existe continua valendo.
+    #[tokio::test]
+    async fn resolve_still_works_with_saves_off() {
+        let _serial = SERIAL.lock().await;
+        let r = conflict_rig("resolve-saves-off").await;
+        r.pass().await.unwrap();
+        r.sync.devices.set_saves_enabled(false).await.unwrap();
+
+        r.engine
+            .resolve(&r.alva, ZELDA, Keep::Remote)
+            .await
+            .unwrap();
+        assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"theirs");
+        assert!(r.repo.conflicts_all().await.unwrap().is_empty());
     }
 
     #[tokio::test]

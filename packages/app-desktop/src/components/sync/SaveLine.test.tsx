@@ -27,7 +27,7 @@ vi.mock('../FullscreenDialog', () => ({
 
 import '../../i18n'
 import { SaveLine } from './SaveLine'
-import { STATUS, button, mountWithQuery, settle } from './syncTestSupport'
+import { button, mountWithQuery, settle } from './syncTestSupport'
 
 const line = (over: Partial<SaveLineStatus>): SaveLineStatus => ({
   state: 'synced',
@@ -44,7 +44,6 @@ const mount = async () => {
 
 beforeEach(() => {
   Object.values(api).forEach((f) => f.mockReset())
-  api.syncStatus.mockResolvedValue(STATUS)
   api.syncVersions.mockResolvedValue([])
 })
 afterEach(async () => {
@@ -76,30 +75,17 @@ describe('SaveLine', () => {
     expect(ui.host.textContent).toContain('Conflito: PC-ED e Notebook-Ed mudaram')
   })
 
-  it('local_only: only on this machine', async () => {
-    api.syncSaveStatus.mockResolvedValue(line({ state: 'local_only', syncedAt: null }))
-    await mount()
-    expect(ui.host.textContent).toContain('Só nesta máquina')
-  })
-
   it('none renders nothing', async () => {
     api.syncSaveStatus.mockResolvedValue(line({ state: 'none', syncedAt: null, key: null }))
     await mount()
     expect(ui.host.textContent).toBe('')
   })
 
-  it('renders nothing and asks nothing with the game saves switch off, or sync off', async () => {
-    api.syncStatus.mockResolvedValue({ ...STATUS, savesEnabled: false })
+  it('never calls syncStatus: the line depends on syncSaveStatus alone', async () => {
     api.syncSaveStatus.mockResolvedValue(line({ state: 'synced' }))
     await mount()
-    expect(ui.host.textContent).toBe('')
-    expect(api.syncSaveStatus).not.toHaveBeenCalled()
-    await ui.unmount()
-
-    api.syncStatus.mockResolvedValue({ ...STATUS, enabled: false })
-    await mount()
-    expect(ui.host.textContent).toBe('')
-    expect(api.syncSaveStatus).not.toHaveBeenCalled()
+    expect(ui.host.textContent).toContain('Game save sincronizado')
+    expect(api.syncStatus).not.toHaveBeenCalled()
   })
 
   it('shows the history link only with a key and versions, and opens the history', async () => {

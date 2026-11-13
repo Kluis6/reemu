@@ -5,6 +5,11 @@
  */
 export type Side = { machine: string, 
 /**
+ * O id do aparelho: o desta máquina no lado local, o de quem escreveu a
+ * versão da nuvem no remoto (`None` quando a última leitura não o trouxe).
+ */
+deviceId: string | null, 
+/**
  * Segundos Unix.
  */
 savedAt: number, size: number, };

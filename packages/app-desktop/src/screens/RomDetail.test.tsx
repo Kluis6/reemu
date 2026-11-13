@@ -65,8 +65,8 @@ const CONFLICT: SyncConflict = {
   key: KEY,
   romId: 'r1',
   title: 'Zelda',
-  local: { machine: 'PC-ED', savedAt: 1_700_000_000, size: 2048 },
-  remote: { machine: 'Notebook-Ed', savedAt: 1_700_003_600, size: 4096 },
+  local: { machine: 'PC-ED', deviceId: 'dev1', savedAt: 1_700_000_000, size: 2048 },
+  remote: { machine: 'Notebook-Ed', deviceId: 'dev2', savedAt: 1_700_003_600, size: 4096 },
 }
 
 function Where() {
@@ -176,11 +176,26 @@ describe('RomDetail play with a game save conflict', () => {
     expect(where()).toBe('/play/r1')
   })
 
-  it('skips the check when sync or the game saves switch is off', async () => {
-    api.syncStatus.mockResolvedValue({ ...STATUS, savesEnabled: false })
+  it('state none (sync off, revoked or saves off) launches straight, and the page never calls syncStatus', async () => {
+    api.syncSaveStatus.mockResolvedValue({ state: 'none', syncedAt: null, versions: 0, key: null })
     await mount()
     await play()
-    expect(api.syncSaveStatus).not.toHaveBeenCalled()
+    expect(api.syncSaveStatus).toHaveBeenCalledWith('r1')
+    expect(api.syncStatus).not.toHaveBeenCalled()
     expect(where()).toBe('/play/r1')
+  })
+
+  it('a second Jogar while the check runs is ignored', async () => {
+    let finish!: (v: unknown) => void
+    api.syncSaveStatus.mockReturnValue(new Promise((r) => (finish = r)))
+    await mount()
+    // a linha do jogo já fez a sua consulta ao montar
+    const before = api.syncSaveStatus.mock.calls.length
+    await act(async () => byText('Jogar')!.click())
+    await act(async () => byText('Jogar')!.click())
+    expect(api.syncSaveStatus.mock.calls.length - before).toBe(1)
+    await act(async () => finish({ state: 'conflict', syncedAt: null, versions: 2, key: KEY }))
+    await settle()
+    expect(dialog()).not.toBeNull()
   })
 })

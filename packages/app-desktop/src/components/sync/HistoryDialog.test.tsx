@@ -20,14 +20,15 @@ vi.mock('../FullscreenDialog', () => ({
 }))
 
 import '../../i18n'
+import { formatDateTime } from '../../lib/metadataFormat'
 import { HistoryDialog } from './HistoryDialog'
 import { button, buttons, mountWithQuery, settle } from './syncTestSupport'
 
 const KEY = 'file:gba/Zelda.srm'
 const VERSIONS = [
-  { versionId: 'v3', machine: 'PC-ED', createdAt: 1_700_007_200, size: 2048, isCurrent: true },
-  { versionId: 'v2', machine: 'Notebook-Ed', createdAt: 1_700_003_600, size: 1024, isCurrent: false },
-  { versionId: 'v1', machine: 'PC-ED', createdAt: 1_700_000_000, size: 512, isCurrent: false },
+  { versionId: 'v3', machine: 'PC-ED', createdAt: 1_700_007_200, size: 2048, isCurrent: true, deviceId: 'dev1' },
+  { versionId: 'v2', machine: 'Notebook-Ed', createdAt: 1_700_003_600, size: 1024, isCurrent: false, deviceId: 'dev2' },
+  { versionId: 'v1', machine: 'PC-ED', createdAt: 1_700_000_000, size: 512, isCurrent: false, deviceId: null },
 ]
 
 let ui: Awaited<ReturnType<typeof mountWithQuery>>
@@ -56,6 +57,8 @@ describe('HistoryDialog', () => {
     expect(text).toContain('2 KB')
     expect(text).toContain('1 KB')
     expect(text.match(/atual/g)).toHaveLength(1)
+    expect(text).toContain(formatDateTime(1_700_003_600))
+    expect(formatDateTime(1_700_003_600)).not.toMatch(/\d:\d\d:\d\d/)
     expect(buttons().filter((b) => b.textContent === 'Restaurar esta')).toHaveLength(2)
   })
 

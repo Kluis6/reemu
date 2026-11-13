@@ -142,21 +142,9 @@ export function useSync() {
   return { status, machines, busy, error, setEnabled, setLabel, setPaused, setSaves, now, cancel }
 }
 
-/** O `SyncStatus` em cache, para quem só precisa saber se os game saves estão
- *  valendo (a linha do jogo): é a mesma consulta da página Sincronização. */
-export function useSyncStatus() {
-  return useQuery({ queryKey: SYNC_STATUS_KEY, queryFn: syncStatus, retry: false })
-}
-
-/** Os game saves sincronizam nesta máquina? (sem conta, sem sync ligado,
- *  revogada ou com o interruptor desligado: não.) */
-export function savesActive(st: SyncStatus | undefined): boolean {
-  return st?.availability === 'ready' && st.enabled && st.savesEnabled && !st.revoked
-}
-
-/** A linha de save de um jogo. Só disco e SQLite: sem conta, sem sync ligado
- *  ou com o interruptor dos saves desligado, o comando falha ou a linha não
- *  aparece, e a página segue sem ela. */
+/** A linha de save de um jogo. Só disco e SQLite: sem sync ligado, revogado ou
+ *  com o interruptor dos saves desligado o comando devolve `none` (a linha não
+ *  aparece); sem conta ele falha e a página segue sem ela. */
 export function useSaveStatus(romId: string, enabled = true) {
   return useQuery({
     queryKey: [...SYNC_SAVE_LINE_KEY, romId],

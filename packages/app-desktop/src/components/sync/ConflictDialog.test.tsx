@@ -28,6 +28,8 @@ vi.mock('../FullscreenDialog', () => ({
 }))
 
 import '../../i18n'
+import { formatDateTime } from '../../lib/metadataFormat'
+import { machineColor } from '../../screens/settings/syncFormat'
 import { ConflictDialog } from './ConflictDialog'
 import { button, mountWithQuery, settle } from './syncTestSupport'
 
@@ -35,8 +37,8 @@ const CONFLICT: SyncConflict = {
   key: 'file:gba/Zelda.srm',
   romId: 'r1',
   title: 'Zelda',
-  local: { machine: 'PC-ED', savedAt: 1_700_000_000, size: 2048 },
-  remote: { machine: 'Notebook-Ed', savedAt: 1_700_003_600, size: 4096 },
+  local: { machine: 'PC-ED', deviceId: 'dev1', savedAt: 1_700_000_000, size: 2048 },
+  remote: { machine: 'Notebook-Ed', deviceId: null, savedAt: 1_700_003_600, size: 4096 },
 }
 
 let ui: Awaited<ReturnType<typeof mountWithQuery>>
@@ -79,6 +81,22 @@ describe('ConflictDialog', () => {
       await new Promise((r) => setTimeout(r, 10))
     })
     expect(document.activeElement).toBe(button('Manter esta'))
+  })
+
+  it('shows date and hours:minutes without seconds, and colors by device id (falling back to the name)', async () => {
+    await mount()
+    const text = document.body.textContent ?? ''
+    expect(text).toContain(formatDateTime(CONFLICT.local.savedAt))
+    expect(text).toContain(formatDateTime(CONFLICT.remote.savedAt))
+    expect(formatDateTime(CONFLICT.local.savedAt)).not.toMatch(/\d:\d\d:\d\d/)
+    const dots = [...document.querySelectorAll<HTMLElement>('span[aria-hidden]')].filter((e) => e.style.backgroundColor)
+    const css = (c: string) => {
+      const el = document.createElement('span')
+      el.style.backgroundColor = c
+      return el.style.backgroundColor
+    }
+    expect(dots[0].style.backgroundColor).toBe(css(machineColor('dev1')))
+    expect(dots[1].style.backgroundColor).toBe(css(machineColor('Notebook-Ed')))
   })
 
   it('Manter esta resolves with local, then onDone(local)', async () => {

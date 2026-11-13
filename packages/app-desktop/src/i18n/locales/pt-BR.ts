@@ -495,7 +495,6 @@ const ptBR = {
       pending: 'Game save ainda não enviado',
       conflict: 'Conflito: {{local}} e {{remote}} mudaram',
       conflictShort: 'Conflito no game save',
-      localOnly: 'Só nesta máquina',
       history_one: 'histórico ({{count}} versão)',
       history_other: 'histórico ({{count}} versões)',
     },

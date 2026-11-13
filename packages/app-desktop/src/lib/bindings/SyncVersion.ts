@@ -2,6 +2,10 @@
 
 export type SyncVersion = { versionId: string, machine: string, 
 /**
+ * O id do aparelho que escreveu a versão (o da listagem).
+ */
+deviceId: string | null, 
+/**
  * Segundos Unix.
  */
 createdAt: number, size: number, isCurrent: boolean, };

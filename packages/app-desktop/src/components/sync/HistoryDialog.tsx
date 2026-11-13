@@ -2,6 +2,7 @@ import { Badge, Body1, Button, Caption1, MessageBar, MessageBarBody, Spinner, ma
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { syncErrorCode, useRestore, useVersions } from '../../hooks/useSync'
+import { formatDateTime } from '../../lib/metadataFormat'
 import { formatBytes, machineColor } from '../../screens/settings/syncFormat'
 import { FullscreenDialog } from '../FullscreenDialog'
 
@@ -40,8 +41,9 @@ export function HistoryDialog({ romKey, onClose }: { romKey: string; onClose: ()
   const list = versions.data ?? []
   const firstOther = list.find((v) => !v.isCurrent)?.versionId
 
-  // O foco inicial: o primeiro "Restaurar esta" (e o "Restaurar" da confirmação
-  // quando ela abre), para o controle não começar no fechar.
+  // O foco inicial vem do `autoFocus` (o primeiro "Restaurar esta" e, na
+  // confirmação, o "Restaurar"); o foco por tempo só cobre o caso do Fluent
+  // ter levado o foco ao fechar antes.
   useEffect(() => {
     const id = window.setTimeout(() => (confirmRef.current ?? firstRef.current)?.focus(), 0)
     return () => window.clearTimeout(id)
@@ -76,10 +78,10 @@ export function HistoryDialog({ romKey, onClose }: { romKey: string; onClose: ()
         {versions.isSuccess && list.length === 0 && <Caption1 className={s.muted}>{t('sync.history.empty')}</Caption1>}
         {list.map((v) => (
           <div key={v.versionId} className={s.row}>
-            <span className={s.dot} style={{ backgroundColor: machineColor(v.machine) }} aria-hidden />
+            <span className={s.dot} style={{ backgroundColor: machineColor(v.deviceId ?? v.machine) }} aria-hidden />
             <span className={s.text}>
               <Body1>
-                {v.machine} · {new Date(v.createdAt * 1000).toLocaleString(i18n.language)} ·{' '}
+                {v.machine} · {formatDateTime(v.createdAt)} ·{' '}
                 {formatBytes(v.size, i18n.language)}
               </Body1>
               {v.isCurrent && (
@@ -94,6 +96,7 @@ export function HistoryDialog({ romKey, onClose }: { romKey: string; onClose: ()
                   <Caption1 className={s.muted}>{t('sync.history.confirm')}</Caption1>
                   <Button
                     ref={confirmRef}
+                    autoFocus
                     appearance="primary"
                     disabledFocusable={restore.isPending}
                     onClick={() => void go(v.versionId)}
@@ -107,6 +110,7 @@ export function HistoryDialog({ romKey, onClose }: { romKey: string; onClose: ()
               ) : (
                 <Button
                   ref={v.versionId === firstOther ? firstRef : undefined}
+                  autoFocus={v.versionId === firstOther}
                   appearance="secondary"
                   disabledFocusable={restore.isPending}
                   onClick={() => setAsking(v.versionId)}
