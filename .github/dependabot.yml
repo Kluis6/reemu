@@ -30,26 +30,17 @@ updates:
       - dependency-name: tauri-plugin-updater
         versions: ["2.14.1"]
 
+  # npm: um só item na raiz do workspace pnpm, onde fica o pnpm-lock.yaml —
+  # apontando para o pacote, o Dependabot só mexia no package.json e o CI caía
+  # em ERR_PNPM_OUTDATED_LOCKFILE (PRs #15 e #17, 2026-11-13).
   - package-ecosystem: npm
-    directory: /packages/app-desktop
+    directory: /
     schedule:
       interval: weekly
     commit-message:
       prefix: deps
     groups:
       npm-minor-patch:
-        update-types:
-          - minor
-          - patch
-
-  - package-ecosystem: npm
-    directory: /site
-    schedule:
-      interval: weekly
-    commit-message:
-      prefix: site
-    groups:
-      site-minor-patch:
         update-types:
           - minor
           - patch
