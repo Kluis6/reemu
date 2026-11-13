@@ -151,6 +151,31 @@ describe('SettingsSync', () => {
     expect(api.alvanistaOpenSite).toHaveBeenCalledWith('plans')
   })
 
+  it('coming back from the plans page re-reads the status and offers the toggle', async () => {
+    api.syncStatus.mockResolvedValueOnce({ ...OFF, availability: 'no_tier' }).mockResolvedValue(OFF)
+    await mount()
+    expect(host.querySelector('[role="switch"]')).toBeNull()
+    await act(async () => byText('Ver planos')!.click())
+    // O navegador abre e a pessoa assina; a janela do ReEmu volta a ter foco.
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    await settle()
+    expect(api.syncStatus).toHaveBeenCalledTimes(2)
+    expect(host.querySelector('[role="switch"]')).toBeTruthy()
+    expect(host.textContent).not.toContain('é para o plano Collector')
+    // Pronto: o foco não relê mais.
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    await settle()
+    expect(api.syncStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('a window focus before opening the plans page re-reads nothing', async () => {
+    api.syncStatus.mockResolvedValue({ ...OFF, availability: 'no_tier' })
+    await mount()
+    await act(async () => window.dispatchEvent(new Event('focus')))
+    await settle()
+    expect(api.syncStatus).toHaveBeenCalledTimes(1)
+  })
+
   it('turns sync on and shows the machine with its hardware', async () => {
     api.syncSetEnabled.mockResolvedValue(ON)
     await mount()
@@ -165,6 +190,28 @@ describe('SettingsSync', () => {
     expect(host.textContent).toContain('1 máquina nesta conta')
     // o resultado da mutação vira o estado: sem nova leitura do status
     expect(api.syncStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks every "O que sincroniza" row as em breve', async () => {
+    await mount()
+    for (const row of ['Game saves', 'Save states', 'Configurações']) {
+      const title = [...host.querySelectorAll('span')].find((e) => e.firstElementChild?.textContent === row)
+      expect(title?.textContent).toContain('em breve')
+    }
+  })
+
+  it('offers Copiar configurações only on other ReEmu machines (D119)', async () => {
+    const kinds = ['companion', 'launcher', 'operator', 'delta']
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncMachines.mockResolvedValue([
+      THIS,
+      ...kinds.map((k, i) => ({ ...OTHER, id: `k${i}`, label: k, clientKind: k })),
+      RETRO,
+    ])
+    await mount()
+    for (const k of kinds) expect(host.textContent).toContain(k)
+    const copies = [...host.querySelectorAll('button')].filter((b) => b.textContent?.includes('Copiar configurações'))
+    expect(copies).toHaveLength(0)
   })
 
   it('lists other machines and disables copy with em breve', async () => {
@@ -207,6 +254,32 @@ describe('SettingsSync', () => {
     await settle()
     expect(api.syncSetLabel).toHaveBeenCalledWith('PC-ED')
     expect(host.querySelector<HTMLInputElement>('input:not([role="switch"])')!.value).toBe('PC-ED')
+  })
+
+  it('keeps the name field focusable with aria-busy while its own rename runs', async () => {
+    let finish!: (s: SyncStatus) => void
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSetLabel.mockReturnValue(new Promise<SyncStatus>((r) => (finish = r)))
+    await mount()
+    const input = host.querySelector<HTMLInputElement>('input:not([role="switch"])')!
+    input.focus()
+    await act(async () => typeInto(input, 'PC-ED'))
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+    expect(api.syncSetLabel).toHaveBeenCalledWith('PC-ED')
+    const during = host.querySelector<HTMLInputElement>('input:not([role="switch"])')!
+    expect(during).toBe(input)
+    expect(during.disabled).toBe(false)
+    expect(during.getAttribute('aria-busy')).toBe('true')
+    expect(document.activeElement).toBe(during)
+    // O nome enviado fica na tela durante o envio.
+    expect(during.value).toBe('PC-ED')
+    await act(async () => finish({ ...ON, label: 'PC-ED' }))
+    await settle()
+    expect(input.getAttribute('aria-busy')).toBeNull()
+    expect(input.value).toBe('PC-ED')
+    expect(document.activeElement).toBe(input)
   })
 
   it('does not rename while paused on the site', async () => {
@@ -271,6 +344,8 @@ describe('SettingsSync', () => {
     expect(host.textContent).toContain('guardar os saves desta máquina')
     await act(async () => byText('Entrar com Alvanista')!.click())
     expect(api.alvanistaConnect).toHaveBeenCalledTimes(1)
+    // Um consentimento só, já com o escopo do cloud save.
+    expect(api.alvanistaConnect.mock.calls[0][1]).toBe(true)
   })
 
   it('Pausar and Retomar call syncSetPaused with the opposite of pausedLocal', async () => {

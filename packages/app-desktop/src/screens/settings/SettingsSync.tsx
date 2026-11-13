@@ -58,12 +58,15 @@ const useStyles = makeStyles({
   },
   machineText: { display: 'flex', flexDirection: 'column', rowGap: '2px', minWidth: 0, flexGrow: 1 },
   machineName: { display: 'flex', alignItems: 'center', columnGap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
+  rowTitle: { display: 'flex', alignItems: 'center', columnGap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
   machineSide: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', rowGap: '2px', flexShrink: 0 },
   site: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: tokens.spacingHorizontalXS },
 })
 
 /** RetroArch só guarda saves: sem hardware nem configurações do ReEmu. */
 const isSavesOnly = (m: SyncMachine) => m.clientKind === 'retroarch'
+/** Só outra máquina com o ReEmu tem configurações do ReEmu para copiar (D119). */
+const canCopyFrom = (m: SyncMachine) => m.clientKind === 'reemu' && !m.isThis
 
 function MachineRow({ m, lang, nowMs }: { m: SyncMachine; lang: string; nowMs: number }) {
   const { t } = useTranslation()
@@ -93,7 +96,7 @@ function MachineRow({ m, lang, nowMs }: { m: SyncMachine; lang: string; nowMs: n
             ? t('sync.neverSeen')
             : t('sync.seenAt', { when: relativeAge(seen / 1000, nowMs, lang) })}
         </Caption1>
-        {!m.isThis && !savesOnly && (
+        {canCopyFrom(m) && (
           // Chega com o PR das configurações.
           <Button size="small" appearance="secondary" disabled>
             {t('sync.copy')} ({t('sync.soon')})
@@ -113,7 +116,8 @@ export function SettingsSync() {
   const s = useStyles()
   const qc = useQueryClient()
   const { status: query, machines, busy, error, setEnabled, setLabel, setPaused, now, cancel } = useSync()
-  const { connect, cancel: cancelConnect, connecting, outcome } = useAlvanistaConnect()
+  // Quem conecta por aqui quer sincronizar: os dois escopos num consentimento só.
+  const { connect, cancel: cancelConnect, connecting, outcome } = useAlvanistaConnect({ saves: true })
   const st = query.data
   const lang = i18n.language
   // Fixo por visita à tela: o "visto há" não precisa andar com a renderização.
@@ -126,7 +130,25 @@ export function SettingsSync() {
     wasConnecting.current = connecting
   }, [connecting, qc])
 
-  // O nome em edição (null: o do estado). Enviado, volta a seguir o estado.
+  // Voltou da página de planos: o foco da janela relê o estado, que confere o
+  // plano no Alvanista. O foco automático do app é desligado (o WebKitGTK manda
+  // foco espúrio), então só esta tela escuta, só depois de "Ver planos" e com
+  // uma leitura por vez.
+  const [plansOpened, setPlansOpened] = useState(false)
+  const noTier = st?.availability === 'no_tier'
+  useEffect(() => {
+    if (!plansOpened || !noTier) return
+    const recheck = () => {
+      if (qc.isFetching({ queryKey: SYNC_STATUS_KEY }) === 0) {
+        void qc.invalidateQueries({ queryKey: SYNC_STATUS_KEY })
+      }
+    }
+    window.addEventListener('focus', recheck)
+    return () => window.removeEventListener('focus', recheck)
+  }, [plansOpened, noTier, qc])
+
+  // O nome em edição (null: o do estado). Enviado, fica na tela até a resposta
+  // e volta a seguir o estado.
   const [edited, setEdited] = useState<string | null>(null)
   const label = st?.label ?? ''
   const draft = edited ?? label
@@ -134,9 +156,11 @@ export function SettingsSync() {
     // Outra ação em curso: o texto digitado fica até poder ser enviado.
     if (busy !== null || edited === null) return
     const next = draft.trim()
-    setEdited(null)
-    if (next === label || next.length === 0 || next.length > LABEL_MAX) return
-    void setLabel(next)
+    if (next === label || next.length === 0 || next.length > LABEL_MAX) {
+      setEdited(null)
+      return
+    }
+    void setLabel(next).finally(() => setEdited((cur) => (cur === next ? null : cur)))
   }
 
   if (!st) {
@@ -192,7 +216,13 @@ export function SettingsSync() {
       <div className={s.root}>
         <div className={s.stack}>
           <Body1>{t('sync.upgrade')}</Body1>
-          <Button appearance="primary" onClick={() => openSite('plans')}>
+          <Button
+            appearance="primary"
+            onClick={() => {
+              setPlansOpened(true)
+              openSite('plans')
+            }}
+          >
             {t('sync.seePlans')}
           </Button>
         </div>
@@ -267,7 +297,10 @@ export function SettingsSync() {
                   maxLength={LABEL_MAX}
                   // Servidor responde 423 a tudo, menos a revogação, enquanto
                   // o aparelho está pausado no site.
-                  disabled={pausedSite || busy === 'label'}
+                  disabled={pausedSite}
+                  // Durante o próprio envio o campo segue focável, como o toggle:
+                  // o foco do controle não some.
+                  aria-busy={busy === 'label' || undefined}
                   onChange={(_, d) => setEdited(d.value)}
                   onBlur={commitLabel}
                   onKeyDown={(e) => {
@@ -321,9 +354,15 @@ export function SettingsSync() {
       </BlockGroup>
 
       <BlockGroup title={t('sync.what')}>
+        {/* Cada linha chega com o PR que a sincroniza; até lá, "em breve". */}
         {(['saves', 'states', 'settings'] as const).map((k) => (
           <FieldBlock key={k} wide>
-            <Body1>{t(`sync.${k}`)}</Body1>
+            <span className={s.rowTitle}>
+              <Body1>{t(`sync.${k}`)}</Body1>
+              <Badge appearance="tint" color="informative">
+                {t('sync.soon')}
+              </Badge>
+            </span>
             <Caption1 className={s.muted}>{t(`sync.${k}Hint`)}</Caption1>
           </FieldBlock>
         ))}

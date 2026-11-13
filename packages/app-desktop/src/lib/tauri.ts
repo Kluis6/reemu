@@ -579,10 +579,11 @@ export const alvanistaStatus = () => invoke<AlvanistaStatus>('alvanista_status')
 /** Só o que está no aparelho, sem rede: para a tela abrir na hora. */
 export const alvanistaCachedStatus = () => invoke<AlvanistaStatus>('alvanista_cached_status')
 /** Abre o navegador e espera a aprovação (até 5 minutos). `lang` é o idioma da
- *  página que o navegador mostra no fim. Rejeita com um código curto: `cancelled`,
+ *  página que o navegador mostra no fim. `saves`: pede também o escopo do cloud
+ *  save no mesmo consentimento. Rejeita com um código curto: `cancelled`,
  *  `denied`, `timeout`, `offline`, `keyring` ou `failed`. */
-export const alvanistaConnect = (lang: string = i18n.language) =>
-  invoke<AlvanistaStatus>('alvanista_connect', { lang })
+export const alvanistaConnect = (lang: string = i18n.language, saves = false) =>
+  invoke<AlvanistaStatus>('alvanista_connect', { lang, saves })
 export const alvanistaCancel = () => invoke<void>('alvanista_cancel')
 export const alvanistaDisconnect = () => invoke<void>('alvanista_disconnect')
 /** Abre o perfil do Alvanista no navegador do sistema. */

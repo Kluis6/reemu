@@ -20,9 +20,10 @@ function outcomeOf(err: unknown): ConnectOutcome | 'cancelled' {
 /**
  * O fluxo "Entrar com Alvanista", dividido pelas telas: tentativa em curso,
  * resultado, cancelar. Nada roda antes de `connect` ser chamado; sair da tela
- * com uma conexão em andamento a cancela.
+ * com uma conexão em andamento a cancela. `saves`: pede também o escopo do
+ * cloud save no mesmo consentimento (a página Sincronização).
  */
-export function useAlvanistaConnect() {
+export function useAlvanistaConnect({ saves = false }: { saves?: boolean } = {}) {
   const { i18n } = useTranslation()
   const qc = useQueryClient()
   const [connecting, setConnecting] = useState(false)
@@ -49,7 +50,7 @@ export function useAlvanistaConnect() {
     const mine = ++attempt.current
     setOutcome(null)
     setConnecting(true)
-    alvanistaConnect(i18n.language)
+    alvanistaConnect(i18n.language, saves)
       .then(async (next) => {
         if (mine !== attempt.current) return
         connectingRef.current = false
@@ -71,7 +72,7 @@ export function useAlvanistaConnect() {
         setConnecting(false)
         setOutcome(out === 'cancelled' ? null : out)
       })
-  }, [i18n.language, qc])
+  }, [i18n.language, qc, saves])
 
   const cancel = useCallback(() => {
     void alvanistaCancel().catch(() => {})
