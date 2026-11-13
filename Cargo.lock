@@ -4775,7 +4775,7 @@ dependencies = [
  "open",
  "png 0.17.16",
  "pollster",
- "rand 0.8.8",
+ "rand 0.10.2",
  "raw-window-handle",
  "reqwest 0.12.28",
  "rustix 1.1.6",
