@@ -122,8 +122,7 @@ impl Alvanista {
     }
 
     /// O aparelho do cloud save sai com a conta. `revoke`: avisa o servidor
-    /// com o token do aparelho antes (quando a conta some no site, o par do
-    /// parceiro já não existe, e o aparelho só se esquece). Nunca falha
+    /// com o token do aparelho (não com o par do parceiro). Nunca falha
     /// quem chama: o que sobrar vai para o log.
     async fn forget_save_device(&self, revoke: bool) {
         let Some(sync) = self.sync.get() else {
@@ -436,9 +435,10 @@ impl Alvanista {
             },
             Err(ClientError::AuthEnded) => {
                 let _ = self.store().mirror_clear().await;
-                // `client.me` já devolveu: nenhum trava de renovação está
-                // preso aqui. O par do parceiro acabou, então só se esquece.
-                self.forget_save_device(false).await;
+                // `client.me` já devolveu: o trinco de renovação não está preso
+                // aqui. O par do parceiro acabou, mas o DELETE do aparelho usa o
+                // token dele (401 e 404 valem como já revogado).
+                self.forget_save_device(true).await;
                 AlvanistaStatus {
                     ended: true,
                     ..Default::default()
@@ -1683,8 +1683,9 @@ mod tests {
     }
 
     /// O `/me` dá 401 e a renovação é recusada: a conexão acabou. O aparelho
-    /// se esquece sem aviso ao servidor, e isso não pode travar mesmo com o
-    /// trinco de quem cria o aparelho preso por outra chamada.
+    /// se esquece com um DELETE (o token dele não depende do par que acabou;
+    /// um 401 de volta vale), e isso não pode travar mesmo com o trinco de
+    /// quem cria o aparelho preso por outra chamada.
     #[tokio::test]
     async fn an_ended_session_forgets_the_device_without_deadlocking() {
         use wiremock::matchers::{method, path};
@@ -1702,6 +1703,12 @@ mod tests {
                 ResponseTemplate::new(400)
                     .set_body_json(serde_json::json!({"error": "invalid_grant"})),
             )
+            .mount(&server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(ResponseTemplate::new(401))
+            .expect(1)
             .mount(&server)
             .await;
         let (alva, sync, secrets) = alva_with_save_device(&server).await;
@@ -1724,6 +1731,6 @@ mod tests {
             .iter()
             .filter(|r| r.method.as_str() == "DELETE")
             .count();
-        assert_eq!(deletes, 0, "sem par do parceiro não há o que avisar");
+        assert_eq!(deletes, 1, "o aparelho é revogado com o token dele");
     }
 }
