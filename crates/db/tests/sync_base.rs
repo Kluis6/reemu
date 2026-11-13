@@ -78,6 +78,12 @@ async fn base_mark_wiped_sets_the_column() {
     repo.base_mark_wiped("file:nes/a.srm", 99).await.unwrap();
     let got = repo.base_get("file:nes/a.srm").await.unwrap().unwrap();
     assert_eq!(got.wiped_at, Some(99));
+    // Uma sincronização nova grava a base de novo e apaga a marca.
+    repo.base_put(&base("file:nes/a.srm", "file"))
+        .await
+        .unwrap();
+    let got = repo.base_get("file:nes/a.srm").await.unwrap().unwrap();
+    assert_eq!(got.wiped_at, None);
 }
 
 #[tokio::test]

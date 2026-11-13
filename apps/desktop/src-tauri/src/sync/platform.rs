@@ -21,7 +21,6 @@ pub fn platform_for_system(system_id: &str) -> &'static str {
         "gamegear" => "gamegear",
         "saturn" => "saturn",
         "dreamcast" => "dreamcast",
-        "neogeo" => "neogeo",
         "atari2600" => "atari2600",
         _ => "other",
     }
@@ -47,7 +46,6 @@ mod tests {
             ("gamegear", "gamegear"),
             ("saturn", "saturn"),
             ("dreamcast", "dreamcast"),
-            ("neogeo", "neogeo"),
             ("atari2600", "atari2600"),
         ] {
             assert_eq!(platform_for_system(system), platform, "{system}");
