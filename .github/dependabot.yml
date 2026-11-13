@@ -1,5 +1,11 @@
 # Mantém em dia as actions dos workflows, que ficam fixadas pelo hash do commit
-# (ver release.yml): o Dependabot abre um PR por semana com as versões novas.
+# (ver release.yml), as crates do workspace e os pacotes npm do app e do site:
+# o Dependabot abre PRs por semana com as versões novas. As atualizações de
+# patch e minor vêm agrupadas num PR por ecossistema (uma rodada de CI por
+# semana em vez de uma por pacote); major continua um PR por pacote. As
+# vulnerabilidades conhecidas seguem como alertas e PRs próprios, fora do
+# agrupamento. Fora: o `tauri-plugin-updater` até sair uma versão que não
+# prenda o `windows` 0.61 (TASKS.md, "zip 4.6.1 no auto-update do Windows").
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -8,3 +14,42 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: deps
+    groups:
+      cargo-minor-patch:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      - dependency-name: tauri-plugin-updater
+        versions: ["2.14.1"]
+
+  - package-ecosystem: npm
+    directory: /packages/app-desktop
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: deps
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: site
+    groups:
+      site-minor-patch:
+        update-types:
+          - minor
+          - patch

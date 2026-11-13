@@ -57,6 +57,25 @@ jobs:
           git add -N packages/app-desktop/src/lib/bindings
           git diff --exit-code -- packages/app-desktop/src/lib/bindings
 
+  audit:
+    name: Rust (cargo audit)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      # Consulta o banco RustSec contra o Cargo.lock (sem compilar nada). Os
+      # IDs ignorados têm motivo registrado no TASKS.md ("cargo audit"):
+      # - RUSTSEC-2026-0367/0368/0369/0429: `zip` 4.6.1 só do
+      #   `tauri-plugin-updater`, que confere a assinatura antes de abrir o
+      #   zip; a 2.14.1 prende o `windows` 0.61 e quebra o build no Windows;
+      # - RUSTSEC-2026-0459: `libsqlite3-sys` 0.30 (SQLite em C) — nem o sqlx
+      #   0.9 aceita a 0.39 corrigida; esperar o sqlx;
+      # - RUSTSEC-2023-0071: `rsa` só está no lock como dependência opcional
+      #   do driver MySQL do sqlx, que o ReEmu não compila (só o SQLite).
+      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ignore: RUSTSEC-2026-0367,RUSTSEC-2026-0368,RUSTSEC-2026-0369,RUSTSEC-2026-0429,RUSTSEC-2026-0459,RUSTSEC-2023-0071
+
   windows-check:
     name: Windows (cargo check cruzado)
     runs-on: ubuntu-24.04
