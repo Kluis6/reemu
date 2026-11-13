@@ -731,6 +731,7 @@ mod tests {
 
     #[tokio::test]
     async fn start_session_records_scopes_and_scopes_default_to_profile() {
+        let _serial = SERIAL.lock().await;
         let (store, _) = store_with(MemSecrets::default()).await;
         assert_eq!(store.scopes().await.unwrap(), vec!["profile:read"]);
         store
@@ -794,6 +795,7 @@ mod tests {
 
     #[tokio::test]
     async fn ending_the_session_makes_scopes_read_as_profile_only_again() {
+        let _serial = SERIAL.lock().await;
         let (store, _) = store_with(MemSecrets::default()).await;
         store
             .start_session(&tokens("e1"), &["profile:read", "saves"])
