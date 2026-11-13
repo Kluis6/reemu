@@ -20,7 +20,7 @@ import {
 import { ArrowDownloadRegular } from "@fluentui/react-icons";
 import { useEffect, useState } from "react";
 import { rememberWhatsNew } from "../hooks/useUpdateCheck";
-import { describeError } from "../lib/errors";
+import { describeError, errorText } from "../lib/errors";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { parseReleaseNotes } from "../lib/releaseNotes";
 import { installUpdate, onUpdateProgress } from "../lib/tauri";
@@ -139,7 +139,7 @@ function UpdateDialogOpen({ dialog }: { dialog: UpdateDialogState }) {
     try {
       await installUpdate(); // se der certo, o app reinicia e não volta aqui
     } catch (e) {
-      setError(String(e));
+      setError(errorText(e));
       setInstalling(false);
     }
   };

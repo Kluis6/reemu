@@ -23,6 +23,7 @@ pub enum ErrorCode {
     DiskFull,
     NoPermission,
     Corrupt,
+    SaveStateIncompatible,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -91,6 +92,71 @@ impl From<io::Error> for AppError {
         Self {
             code,
             message: e.to_string(),
+        }
+    }
+}
+
+/// Erro do banco: sem código (a interface mostra o texto). Disco cheio e
+/// permissão chegam como texto do SQLite, não como `io::Error`.
+impl From<db::DbError> for AppError {
+    fn from(e: db::DbError) -> Self {
+        e.to_string().into()
+    }
+}
+
+/// JSON de configuração ou de cache que não parseia.
+impl From<serde_json::Error> for AppError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::new(ErrorCode::Corrupt, e.to_string())
+    }
+}
+
+/// Rede sem contexto: o código vem do status/da causa (`from_http`).
+impl From<reqwest::Error> for AppError {
+    fn from(e: reqwest::Error) -> Self {
+        Self::from_http("rede", e)
+    }
+}
+
+impl From<tauri::Error> for AppError {
+    fn from(e: tauri::Error) -> Self {
+        e.to_string().into()
+    }
+}
+
+/// Repositório: `Corrupt` é dado que o domínio não interpreta (schema ou JSON).
+impl From<domain::error::RepoError> for AppError {
+    fn from(e: domain::error::RepoError) -> Self {
+        let code = match &e {
+            domain::error::RepoError::Corrupt(_) => Some(ErrorCode::Corrupt),
+            domain::error::RepoError::Backend(_) => None,
+        };
+        Self {
+            code,
+            message: e.to_string(),
+        }
+    }
+}
+
+impl From<library_scan::ScanError> for AppError {
+    fn from(e: library_scan::ScanError) -> Self {
+        match e {
+            library_scan::ScanError::Repo(r) => r.into(),
+        }
+    }
+}
+
+impl From<crate::save_state::SaveError> for AppError {
+    fn from(e: crate::save_state::SaveError) -> Self {
+        use crate::save_state::SaveError;
+        match e {
+            SaveError::Io(io) => io.into(),
+            SaveError::Repo(r) => r.into(),
+            SaveError::NotFound => Self::new(ErrorCode::NotFound, e.to_string()),
+            SaveError::CoreMismatch { .. } => {
+                Self::new(ErrorCode::SaveStateIncompatible, e.to_string())
+            }
+            SaveError::NoCore => Self::new(ErrorCode::NoCore, e.to_string()),
         }
     }
 }

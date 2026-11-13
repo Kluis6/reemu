@@ -5,6 +5,7 @@
 //! viewport.
 
 use super::*;
+use crate::app_error::AppError;
 use domain::frame_source::{Frame, FrameMetadata, FrameOrigin, SoftwarePixelFormat};
 
 /// Resolução da cena: 320×240, 4:3 como a maioria dos consoles 8/16 bits.
@@ -37,20 +38,23 @@ fn scene_frame(scene: &str) -> Frame {
     }
 }
 
-fn encode_png(w: u32, h: u32, rgba: &[u8]) -> Result<Vec<u8>, String> {
+fn encode_png(w: u32, h: u32, rgba: &[u8]) -> Result<Vec<u8>, AppError> {
     let mut out = Vec::new();
     let mut enc = png::Encoder::new(&mut out, w, h);
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
-    let mut wr = enc.write_header().map_err(|e| e.to_string())?;
-    wr.write_image_data(rgba).map_err(|e| e.to_string())?;
-    wr.finish().map_err(|e| e.to_string())?;
+    let mut wr = enc
+        .write_header()
+        .map_err(|e| AppError::from(e.to_string()))?;
+    wr.write_image_data(rgba)
+        .map_err(|e| AppError::from(e.to_string()))?;
+    wr.finish().map_err(|e| AppError::from(e.to_string()))?;
     Ok(out)
 }
 
 /// A cena original, sem shader (320×240, PNG) — o "antes" do comparador.
 #[tauri::command]
-pub fn shader_preview_source(scene: String) -> Result<tauri::ipc::Response, String> {
+pub fn shader_preview_source(scene: String) -> Result<tauri::ipc::Response, AppError> {
     let bgrx = scene_pixels(&scene);
     let mut rgba = Vec::with_capacity(bgrx.len());
     for p in bgrx.chunks_exact(4) {
@@ -68,7 +72,7 @@ pub async fn render_shader_preview(
     width: u32,
     height: u32,
     scene: String,
-) -> Result<tauri::ipc::Response, String> {
+) -> Result<tauri::ipc::Response, AppError> {
     let (source, params) = {
         let guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
         let fp = guard.as_ref().ok_or("sem GPU — shader indisponível")?;

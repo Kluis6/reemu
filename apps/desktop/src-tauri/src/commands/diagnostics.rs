@@ -1,6 +1,7 @@
 //! Diagnóstico gerado só sob pedido: junta o relatório do frontend ao fim do log,
 //! sem a pasta do usuário nem segredos, e grava num arquivo local. Nada é enviado.
 
+use crate::app_error::AppError;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
@@ -59,7 +60,7 @@ fn log_tail(path: &Path) -> Option<String> {
 
 /// Grava o relatório e devolve o caminho do arquivo.
 #[tauri::command]
-pub async fn export_diagnostics(app: AppHandle, report: String) -> Result<String, String> {
+pub async fn export_diagnostics(app: AppHandle, report: String) -> Result<String, AppError> {
     let log = app
         .path()
         .app_log_dir()
@@ -71,12 +72,12 @@ pub async fn export_diagnostics(app: AppHandle, report: String) -> Result<String
     let body = redact(&format!("{report}\n\n## Log\n{log}\n"), home.as_deref());
 
     let dir = crate::data_dir(&app).join("diagnostics");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(AppError::from)?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
     let path = dir.join(format!("reemu-diagnostico-{stamp}.txt"));
-    std::fs::write(&path, body).map_err(|e| e.to_string())?;
+    std::fs::write(&path, body).map_err(AppError::from)?;
     Ok(path.to_string_lossy().into_owned())
 }
 

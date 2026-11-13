@@ -1,6 +1,7 @@
 //! Metadata / scraping (etapa 09).
 
 use super::*;
+use crate::app_error::AppError;
 
 use domain::metadata::{GameMetadata, MetadataConfig, MetadataRepository};
 
@@ -18,7 +19,9 @@ pub struct MetadataConfigDto {
 }
 
 #[tauri::command]
-pub async fn get_metadata_config(state: State<'_, AppState>) -> Result<MetadataConfigDto, String> {
+pub async fn get_metadata_config(
+    state: State<'_, AppState>,
+) -> Result<MetadataConfigDto, AppError> {
     let repo = db::MetadataRepo::new(pool(&state)?);
     let c = crate::credentials::load_config(&repo, &crate::credentials::OsKeyring).await?;
     Ok(MetadataConfigDto {
@@ -33,7 +36,7 @@ pub async fn get_metadata_config(state: State<'_, AppState>) -> Result<MetadataC
 pub async fn set_metadata_config(
     state: State<'_, AppState>,
     config: MetadataConfigDto,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let norm = |s: Option<String>| s.filter(|v| !v.trim().is_empty());
     let repo = db::MetadataRepo::new(pool(&state)?);
     let cfg = MetadataConfig {
@@ -42,7 +45,9 @@ pub async fn set_metadata_config(
         screenscraper_password: norm(config.screenscraper_password),
         thegamesdb_api_key: norm(config.thegamesdb_api_key),
     };
-    crate::credentials::save_config(&repo, &crate::credentials::OsKeyring, cfg).await
+    crate::credentials::save_config(&repo, &crate::credentials::OsKeyring, cfg)
+        .await
+        .map_err(AppError::from)
 }
 
 #[derive(Serialize)]
@@ -97,11 +102,11 @@ impl From<GameMetadata> for GameMetadataDto {
 pub async fn get_rom_metadata(
     state: State<'_, AppState>,
     rom_id: String,
-) -> Result<Option<GameMetadataDto>, String> {
+) -> Result<Option<GameMetadataDto>, AppError> {
     Ok(db::MetadataRepo::new(pool(&state)?)
         .get_metadata(&rom_id)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::from)?
         .map(Into::into))
 }
 
@@ -121,11 +126,11 @@ pub struct PendingMatchDto {
 #[tauri::command]
 pub async fn list_pending_matches(
     state: State<'_, AppState>,
-) -> Result<Vec<PendingMatchDto>, String> {
+) -> Result<Vec<PendingMatchDto>, AppError> {
     let list = db::MetadataRepo::new(pool(&state)?)
         .list_pending()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     Ok(list
         .into_iter()
         .map(|p| PendingMatchDto {
@@ -145,11 +150,11 @@ pub async fn resolve_pending_match(
     state: State<'_, AppState>,
     rom_id: String,
     accept: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     db::MetadataRepo::new(pool(&state)?)
         .resolve_pending(&rom_id, accept)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     // Aceito = pode ter trazido uma `cover_url` nova — descarta o cache pra
     // próxima leitura buscar essa em vez de continuar servindo a antiga.
     if accept {
@@ -196,7 +201,7 @@ pub fn cancel_metadata_scan(state: State<'_, AppState>) {
 /// Dispara uma leva de scraping em background e volta na hora. O progresso é
 /// consultado por `metadata_scan_progress`.
 #[tauri::command]
-pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppError> {
     if state
         .scrape
         .running
@@ -229,7 +234,7 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), Strin
 pub async fn rescrape_rom(
     state: State<'_, AppState>,
     rom_id: String,
-) -> Result<&'static str, String> {
+) -> Result<&'static str, AppError> {
     let outcome =
         crate::scraping::scrape_one(pool(&state)?, state.covers_dir.clone(), &rom_id).await?;
     Ok(match outcome {

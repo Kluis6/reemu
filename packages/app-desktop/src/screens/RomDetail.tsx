@@ -60,6 +60,7 @@ import {
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { knownPlatforms, platformLabel } from "../lib/platform";
 import { errorToast, sysToast, shaderIssueToast } from "../lib/toast";
+import { errorText } from "../lib/errors";
 import {
   deleteSaveState,
   getRomMetadata,
@@ -144,7 +145,8 @@ export function RomDetail() {
     },
     onError: (e) =>
       push(
-        String(e).includes("ss_dev_login")
+        // o erro agora chega como `AppError` (objeto): o texto fica em `message`
+        errorText(e).includes("ss_dev_login")
           ? sysToast(t("metadata.errors.ssDevLoginTitle"), "Warning")
           : errorToast(e, "fetchMetadata"),
       ),

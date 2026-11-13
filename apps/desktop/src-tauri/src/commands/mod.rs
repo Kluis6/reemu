@@ -5,6 +5,7 @@
 //! `focus-changed`. A surface nativa de vídeo (que consome
 //! `session.take_latest_frame()`) e o `AudioSink` entram nas etapas 03/06.
 
+use crate::app_error::AppError;
 use crate::save_state as save_svc;
 use crate::video::VideoSurface;
 use domain::audio::{AudioConfig, AudioConfigRepository};
@@ -257,7 +258,7 @@ fn spawn_quick_state<R: tauri::Runtime>(app: AppHandle<R>, save: bool) {
         let result = quick_state(&app, save).await;
         let (ok, message) = match result {
             Ok(msg) => (true, msg),
-            Err(msg) => (false, msg),
+            Err(e) => (false, e.message),
         };
         let _ = app.emit(
             "hotkey-action",
@@ -270,7 +271,10 @@ fn spawn_quick_state<R: tauri::Runtime>(app: AppHandle<R>, save: bool) {
     });
 }
 
-async fn quick_state<R: tauri::Runtime>(app: &AppHandle<R>, save: bool) -> Result<String, String> {
+async fn quick_state<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    save: bool,
+) -> Result<String, AppError> {
     let state = app.state::<AppState>();
     let rom_id = state
         .current_rom
@@ -286,7 +290,7 @@ async fn quick_state<R: tauri::Runtime>(app: &AppHandle<R>, save: bool) -> Resul
         let bytes = state
             .session
             .save_state()
-            .map_err(|e| e.to_string())?
+            .map_err(AppError::from)?
             .ok_or_else(|| save_states::no_state_error(&state))?;
         let thumb = save_states::save_thumbnail(&state);
         save_svc::save(
@@ -300,21 +304,17 @@ async fn quick_state<R: tauri::Runtime>(app: &AppHandle<R>, save: bool) -> Resul
             crate::play_clock::total(&state, &rom_id).await,
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
         Ok("QuickSave gravado".into())
     } else {
         let meta = save_svc::list(&repo, &rom_id)
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(AppError::from)?
             .into_iter()
             .find(|m| m.slot == Some(QUICK_SLOT))
             .ok_or("nenhum QuickSave pra este jogo")?;
-        let bytes = std::fs::read(&meta.file_path).map_err(|e| e.to_string())?;
-        if state
-            .session
-            .restore_state(bytes)
-            .map_err(|e| e.to_string())?
-        {
+        let bytes = std::fs::read(&meta.file_path).map_err(AppError::from)?;
+        if state.session.restore_state(bytes).map_err(AppError::from)? {
             Ok("QuickLoad aplicado".into())
         } else {
             Err("o core recusou o save state".into())
@@ -374,15 +374,15 @@ pub fn current_focus(state: State<'_, AppState>) -> &'static str {
 }
 
 #[tauri::command]
-pub fn toggle_focus(app: AppHandle) -> Result<&'static str, String> {
+pub fn toggle_focus(app: AppHandle) -> Result<&'static str, AppError> {
     Ok(toggle_and_emit(&app))
 }
 
-fn pool(state: &AppState) -> Result<db::Db, String> {
+fn pool(state: &AppState) -> Result<db::Db, AppError> {
     state
         .db
         .clone()
-        .ok_or_else(|| "banco de dados indisponível".to_string())
+        .ok_or_else(|| "banco de dados indisponível".into())
 }
 
 mod bios;

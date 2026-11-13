@@ -1,6 +1,7 @@
 //! Save states (etapa 08).
 
 use super::*;
+use crate::app_error::AppError;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,7 +20,7 @@ pub struct SaveStateDto {
 /// Um save state em disco precisa carregar numa sessão futura: o de core com
 /// `SINGLE_SESSION` "can only be loaded during the same session"
 /// (libretro.h), então não é gravado.
-pub(super) fn check_disk_savable(state: &AppState) -> Result<(), String> {
+pub(super) fn check_disk_savable(state: &AppState) -> Result<(), AppError> {
     use domain::core_loader::serialization_quirk as q;
     if state.session.serialization_quirks() & q::SINGLE_SESSION != 0 {
         return Err(
@@ -126,7 +127,7 @@ pub async fn save_state(
     state: State<'_, AppState>,
     rom_id: String,
     slot: Option<u32>,
-) -> Result<SaveStateDto, String> {
+) -> Result<SaveStateDto, AppError> {
     let core_id = state
         .session
         .loaded_core()
@@ -135,7 +136,7 @@ pub async fn save_state(
     let bytes = state
         .session
         .save_state()
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::from)?
         .ok_or_else(|| no_state_error(&state))?;
     let thumb = save_thumbnail(&state);
     let repo = db::SaveStateRepo::new(pool(&state)?);
@@ -150,7 +151,7 @@ pub async fn save_state(
         crate::play_clock::total(&state, &rom_id).await,
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::from)?;
     Ok(save_dto(meta))
 }
 
@@ -159,13 +160,13 @@ pub async fn save_state(
 pub async fn read_save_thumbnail(
     state: State<'_, AppState>,
     state_id: String,
-) -> Result<tauri::ipc::Response, String> {
+) -> Result<tauri::ipc::Response, AppError> {
     use domain::save_state::SaveStateRepository;
     let repo = db::SaveStateRepo::new(pool(&state)?);
     let path = repo
         .get_state(&state_id)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::from)?
         .and_then(|m| m.thumbnail_path);
     let bytes = match path {
         Some(p) => std::fs::read(&p).unwrap_or_default(),
@@ -178,41 +179,40 @@ pub async fn read_save_thumbnail(
 pub async fn list_save_states(
     state: State<'_, AppState>,
     rom_id: String,
-) -> Result<Vec<SaveStateDto>, String> {
+) -> Result<Vec<SaveStateDto>, AppError> {
     let repo = db::SaveStateRepo::new(pool(&state)?);
     Ok(save_svc::list(&repo, &rom_id)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::from)?
         .into_iter()
         .map(save_dto)
         .collect())
 }
 
 #[tauri::command]
-pub async fn load_save_state(state: State<'_, AppState>, state_id: String) -> Result<(), String> {
+pub async fn load_save_state(state: State<'_, AppState>, state_id: String) -> Result<(), AppError> {
     let running = state.session.loaded_core();
     let repo = db::SaveStateRepo::new(pool(&state)?);
     let meta = save_svc::load_bytes(&repo, &state_id, running.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
-    let bytes = std::fs::read(&meta.file_path).map_err(|e| e.to_string())?;
-    if state
-        .session
-        .restore_state(bytes)
-        .map_err(|e| e.to_string())?
-    {
+        .map_err(AppError::from)?;
+    let bytes = std::fs::read(&meta.file_path).map_err(AppError::from)?;
+    if state.session.restore_state(bytes).map_err(AppError::from)? {
         Ok(())
     } else {
-        Err("retro_unserialize recusou o state".to_string())
+        Err("retro_unserialize recusou o state".into())
     }
 }
 
 #[tauri::command]
-pub async fn delete_save_state(state: State<'_, AppState>, state_id: String) -> Result<(), String> {
+pub async fn delete_save_state(
+    state: State<'_, AppState>,
+    state_id: String,
+) -> Result<(), AppError> {
     let repo = db::SaveStateRepo::new(pool(&state)?);
     save_svc::delete(&repo, &state_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 #[derive(Serialize)]
@@ -233,7 +233,7 @@ pub struct RecentSaveStateDto {
 pub async fn list_recent_save_states(
     state: State<'_, AppState>,
     limit: u32,
-) -> Result<Vec<RecentSaveStateDto>, String> {
+) -> Result<Vec<RecentSaveStateDto>, AppError> {
     let pool = pool(&state)?;
     recent_states_with_titles(
         &db::SaveStateRepo::new(pool.clone()),
@@ -249,12 +249,12 @@ async fn recent_states_with_titles(
     states: &db::SaveStateRepo,
     roms: &db::RomsRepo,
     limit: u32,
-) -> Result<Vec<RecentSaveStateDto>, String> {
+) -> Result<Vec<RecentSaveStateDto>, AppError> {
     use domain::library::RomRepository;
     let recent = states
         .recent_with_thumbnail(limit.clamp(1, 24))
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     let mut out = Vec::with_capacity(recent.len());
     for m in recent {
         let thumbnail_on_disk = m
@@ -266,7 +266,7 @@ async fn recent_states_with_titles(
         }
         // O SQL já tira o estado de ROM ausente; este `continue` cobre a ROM
         // removida entre a lista e esta leitura.
-        let Some(rom) = roms.get(&m.rom_id).await.map_err(|e| e.to_string())? else {
+        let Some(rom) = roms.get(&m.rom_id).await.map_err(AppError::from)? else {
             continue;
         };
         out.push(RecentSaveStateDto {

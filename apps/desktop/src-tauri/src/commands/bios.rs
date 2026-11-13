@@ -1,6 +1,7 @@
 //! BIOS (arquivos de sistema).
 
 use super::*;
+use crate::app_error::AppError;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,14 +42,14 @@ pub fn import_bios_file(
     system_id: String,
     filename: String,
     path: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     crate::bios::import_bios_file(
         &state.system_dir,
         &system_id,
         &filename,
         std::path::Path::new(&path),
     )
-    .map_err(|e| e.to_string())
+    .map_err(AppError::from)
 }
 
 #[tauri::command]
@@ -56,9 +57,8 @@ pub fn remove_bios_file(
     state: State<'_, AppState>,
     system_id: String,
     filename: String,
-) -> Result<(), String> {
-    crate::bios::remove_bios_file(&state.system_dir, &system_id, &filename)
-        .map_err(|e| e.to_string())
+) -> Result<(), AppError> {
+    crate::bios::remove_bios_file(&state.system_dir, &system_id, &filename).map_err(AppError::from)
 }
 
 #[derive(Serialize)]
@@ -87,7 +87,7 @@ pub async fn get_core_options(
     state: State<'_, AppState>,
     core_id: String,
     rom_id: Option<String>,
-) -> Result<Vec<CoreOptionDto>, String> {
+) -> Result<Vec<CoreOptionDto>, AppError> {
     use domain::core_options::{CoreOptionType, CoreOptionsStore};
 
     let live_matches = state.session.loaded_core().as_deref() == Some(core_id.as_str());
@@ -101,16 +101,16 @@ pub async fn get_core_options(
             Vec::new()
         };
         let defs = if live_defs.is_empty() {
-            repo.schema_for(&core_id).await.map_err(|e| e.to_string())?
+            repo.schema_for(&core_id).await.map_err(AppError::from)?
         } else {
             live_defs
         };
-        let core_values = repo.values_for(&core_id).await.map_err(|e| e.to_string())?;
+        let core_values = repo.values_for(&core_id).await.map_err(AppError::from)?;
         let rom_values = match &rom_id {
             Some(rid) => repo
                 .overrides_for_rom(rid, &core_id)
                 .await
-                .map_err(|e| e.to_string())?,
+                .map_err(AppError::from)?,
             None => Default::default(),
         };
         (defs, core_values, rom_values)
@@ -161,7 +161,7 @@ pub async fn set_core_option(
     key: String,
     value: String,
     rom_id: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     use domain::core_options::CoreOptionsStore;
 
     let clear = value.is_empty();
@@ -188,7 +188,7 @@ pub async fn set_core_option(
                 (!clear).then_some(value.as_str()),
             )
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
     }
     Ok(())
 }
@@ -201,13 +201,13 @@ pub async fn reset_core_options(
     state: State<'_, AppState>,
     core_id: String,
     rom_id: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     use domain::core_options::CoreOptionsStore;
     if let Some(pool) = state.db.clone() {
         db::CoreOptionsRepo::new(pool)
             .reset_scope(&core_id, rom_id.as_deref())
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
     }
     Ok(())
 }
@@ -221,6 +221,8 @@ pub fn ppsspp_assets_installed(state: State<'_, AppState>) -> bool {
 /// Baixa os assets do PPSSPP do buildbot da libretro (GPL — ao contrário de
 /// BIOS, pode ser baixado). Devolve quantos arquivos foram instalados.
 #[tauri::command]
-pub async fn download_ppsspp_assets(state: State<'_, AppState>) -> Result<usize, String> {
-    crate::system_files::download_ppsspp(&state.system_dir).await
+pub async fn download_ppsspp_assets(state: State<'_, AppState>) -> Result<usize, AppError> {
+    crate::system_files::download_ppsspp(&state.system_dir)
+        .await
+        .map_err(AppError::from)
 }

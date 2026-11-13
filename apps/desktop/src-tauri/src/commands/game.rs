@@ -175,7 +175,7 @@ pub(super) async fn shader_scope_args(
     scope: &str,
     system_id: Option<&str>,
     rom_id: Option<&str>,
-) -> Result<(AssignmentScope, Option<String>, Option<String>), String> {
+) -> Result<(AssignmentScope, Option<String>, Option<String>), AppError> {
     match scope {
         "default" => Ok((AssignmentScope::Default, None, None)),
         "system" => {
@@ -197,7 +197,7 @@ pub(super) async fn shader_scope_args(
             None,
             Some(rom_id.ok_or("scope 'rom' precisa de rom_id")?.to_string()),
         )),
-        other => Err(format!("scope desconhecido '{other}'")),
+        other => Err(AppError::from(format!("scope desconhecido '{other}'"))),
     }
 }
 
@@ -247,13 +247,16 @@ pub struct AspectInfo {
 }
 
 #[tauri::command]
-pub async fn get_aspect(state: State<'_, AppState>, rom_id: String) -> Result<AspectInfo, String> {
+pub async fn get_aspect(
+    state: State<'_, AppState>,
+    rom_id: String,
+) -> Result<AspectInfo, AppError> {
     let pool = pool(&state)?;
     let system_id = system_of(&pool, Some(&rom_id)).await;
     let a = db::AspectRepo::new(pool)
         .get(Some(&rom_id), &system_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     Ok(AspectInfo {
         at_rom: a.at_rom,
         at_system: a.at_system,
@@ -270,10 +273,10 @@ pub async fn set_aspect(
     scope: String,
     rom_id: String,
     aspect: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if let Some(a) = aspect.as_deref() {
         if !matches!(a, "core" | "4:3" | "16:9" | "fill") {
-            return Err(format!("proporção desconhecida: {a}"));
+            return Err(AppError::from(format!("proporção desconhecida: {a}")));
         }
     }
     let pool = pool(&state)?;
@@ -281,12 +284,12 @@ pub async fn set_aspect(
         "rom" => rom_id,
         "system" => system_of(&pool, Some(&rom_id)).await,
         "default" => String::new(),
-        other => return Err(format!("escopo desconhecido: {other}")),
+        other => return Err(AppError::from(format!("escopo desconhecido: {other}"))),
     };
     db::AspectRepo::new(pool)
         .set(&scope, &target, aspect.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     let current = state
         .current_rom
         .lock()
@@ -485,20 +488,22 @@ fn deco_viewport(
 pub async fn import_decoration_pack(
     state: State<'_, AppState>,
     path: String,
-) -> Result<usize, String> {
+) -> Result<usize, AppError> {
     let pool = pool(&state)?;
-    crate::decoration::import_pack(&pool, std::path::Path::new(&path)).await
+    crate::decoration::import_pack(&pool, std::path::Path::new(&path))
+        .await
+        .map_err(AppError::from)
 }
 
 /// Remove todas as decorações (packs + atribuições) e tira a moldura ativa.
 #[tauri::command]
-pub async fn clear_decorations(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn clear_decorations(state: State<'_, AppState>) -> Result<(), AppError> {
     use domain::decoration::DecorationStore;
     if let Some(pool) = state.db.clone() {
         db::DecorationRepo::new(pool)
             .clear_all()
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
     }
     let mut guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
     if let Some(fp) = guard.as_mut() {
@@ -519,7 +524,7 @@ pub fn bezel_catalog(state: State<'_, AppState>) -> Vec<crate::bezel_pack::Catal
 pub async fn bezel_updates(
     state: State<'_, AppState>,
     force: Option<bool>,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<String>, AppError> {
     let dir = state.decorations_dir.clone();
     Ok(crate::bezel_pack::updates(&dir, force.unwrap_or(false)).await)
 }
@@ -531,14 +536,16 @@ pub async fn download_bezel_pack(
     state: State<'_, AppState>,
     system_id: String,
     on_progress: tauri::ipc::Channel<crate::bezel_pack::DownloadProgress>,
-) -> Result<usize, String> {
+) -> Result<usize, AppError> {
     let pool = pool(&state)?;
     let dir = state.decorations_dir.clone();
-    crate::bezel_pack::download(&dir, &pool, &system_id, on_progress).await
+    crate::bezel_pack::download(&dir, &pool, &system_id, on_progress)
+        .await
+        .map_err(AppError::from)
 }
 
 #[tauri::command]
-pub async fn unload_game(app: AppHandle) -> Result<(), String> {
+pub async fn unload_game(app: AppHandle) -> Result<(), AppError> {
     let state = app.state::<AppState>();
     let session = Arc::clone(&state.session);
     *state.current_rom.lock().unwrap_or_else(|p| p.into_inner()) = None;
@@ -551,8 +558,8 @@ pub async fn unload_game(app: AppHandle) -> Result<(), String> {
     let _ = state.session.take_latest_frame();
     let r = tauri::async_runtime::spawn_blocking(move || session.unload())
         .await
-        .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string());
+        .map_err(AppError::from)?
+        .map_err(AppError::from);
     persist_core_set_options(&state).await;
     r
 }
@@ -753,7 +760,7 @@ pub fn quit_app(app: AppHandle) {
 /// aqui. Depende de o usuário ter permissão via polkit/systemd-logind
 /// (padrão em qualquer desktop Linux moderno, sem precisar de senha).
 #[tauri::command]
-pub fn shutdown_system() -> Result<(), String> {
+pub fn shutdown_system() -> Result<(), AppError> {
     std::process::Command::new("systemctl")
         .arg("poweroff")
         .spawn()
@@ -763,7 +770,7 @@ pub fn shutdown_system() -> Result<(), String> {
 
 /// Reinicia a máquina (`systemctl reboot`). Ver `shutdown_system`.
 #[tauri::command]
-pub fn restart_system() -> Result<(), String> {
+pub fn restart_system() -> Result<(), AppError> {
     std::process::Command::new("systemctl")
         .arg("reboot")
         .spawn()
@@ -777,8 +784,8 @@ pub fn is_fullscreen(window: tauri::WebviewWindow) -> bool {
 }
 
 #[tauri::command]
-pub fn set_fullscreen(window: tauri::WebviewWindow, value: bool) -> Result<(), String> {
-    window.set_fullscreen(value).map_err(|e| e.to_string())
+pub fn set_fullscreen(window: tauri::WebviewWindow, value: bool) -> Result<(), AppError> {
+    window.set_fullscreen(value).map_err(AppError::from)
 }
 
 #[tauri::command]

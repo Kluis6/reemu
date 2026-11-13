@@ -1,6 +1,7 @@
 //! Biblioteca (crates/library-scan).
 
 use super::*;
+use crate::app_error::AppError;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -40,10 +41,10 @@ pub(crate) fn rom_title(r: &domain::library::Rom) -> String {
 }
 
 #[tauri::command]
-pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, String> {
+pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, AppError> {
     let repo = db::RomsRepo::new(pool(&state)?);
-    let roms = repo.list().await.map_err(|e| e.to_string())?;
-    let play_times = repo.play_times().await.map_err(|e| e.to_string())?;
+    let roms = repo.list().await.map_err(AppError::from)?;
+    let play_times = repo.play_times().await.map_err(AppError::from)?;
     Ok(roms
         .into_iter()
         .map(|r| {
@@ -78,19 +79,19 @@ pub async fn set_rom_metadata(
     rom_id: String,
     title: Option<String>,
     system_id: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let repo = db::RomsRepo::new(pool(&state)?);
     repo.set_metadata(&rom_id, title.as_deref(), system_id.as_deref())
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// Remove a ROM da biblioteca (só o registro no banco — o arquivo em disco
 /// fica; um novo scan a readiciona). Save states / metadata caem em cascata.
 #[tauri::command]
-pub async fn remove_rom(state: State<'_, AppState>, rom_id: String) -> Result<(), String> {
+pub async fn remove_rom(state: State<'_, AppState>, rom_id: String) -> Result<(), AppError> {
     let repo = db::RomsRepo::new(pool(&state)?);
-    repo.remove(&rom_id).await.map_err(|e| e.to_string())
+    repo.remove(&rom_id).await.map_err(AppError::from)
 }
 
 /// Liga/desliga o favorito de uma ROM (aba "Favoritos" da biblioteca).
@@ -99,12 +100,12 @@ pub async fn set_rom_favorite(
     state: State<'_, AppState>,
     rom_id: String,
     favorite: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     use domain::library::RomRepository;
     let repo = db::RomsRepo::new(pool(&state)?);
     repo.set_favorite(&rom_id, favorite)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 #[derive(Serialize)]
@@ -120,9 +121,9 @@ pub struct RomSourceDto {
 /// arquivo, o que casa com `roms/<sistema>/<jogo>`), pra oferecer remoção em
 /// bloco. Ordenado por contagem desc.
 #[tauri::command]
-pub async fn list_rom_sources(state: State<'_, AppState>) -> Result<Vec<RomSourceDto>, String> {
+pub async fn list_rom_sources(state: State<'_, AppState>) -> Result<Vec<RomSourceDto>, AppError> {
     let repo = db::RomsRepo::new(pool(&state)?);
-    let roms = repo.list().await.map_err(|e| e.to_string())?;
+    let roms = repo.list().await.map_err(AppError::from)?;
     let mut by_dir: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     for r in &roms {
         let p = std::path::Path::new(&r.file_path);
@@ -148,12 +149,12 @@ pub async fn list_rom_sources(state: State<'_, AppState>) -> Result<Vec<RomSourc
 pub async fn remove_rom_system(
     state: State<'_, AppState>,
     system_id: String,
-) -> Result<u64, String> {
+) -> Result<u64, AppError> {
     let repo = db::RomsRepo::new(pool(&state)?);
     let n = repo
         .remove_by_system(&system_id)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     log::info!("biblioteca: {n} ROM(s) removida(s) do sistema {system_id}");
     Ok(n)
 }
@@ -161,7 +162,7 @@ pub async fn remove_rom_system(
 /// Tempo total de jogo da ROM, em segundos (banco + o que o relógio ainda
 /// não gravou).
 #[tauri::command]
-pub async fn rom_play_time(state: State<'_, AppState>, rom_id: String) -> Result<u64, String> {
+pub async fn rom_play_time(state: State<'_, AppState>, rom_id: String) -> Result<u64, AppError> {
     Ok(crate::play_clock::total(&state, &rom_id).await.unwrap_or(0))
 }
 
@@ -169,13 +170,13 @@ pub async fn rom_play_time(state: State<'_, AppState>, rom_id: String) -> Result
 #[tauri::command]
 pub async fn list_system_cores(
     state: State<'_, AppState>,
-) -> Result<std::collections::HashMap<String, String>, String> {
+) -> Result<std::collections::HashMap<String, String>, AppError> {
     use domain::core_loader::SystemCoreRepository;
     let repo = db::SystemCoreRepo::new(pool(&state)?);
     Ok(repo
         .all()
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::from)?
         .into_iter()
         .collect())
 }
@@ -186,44 +187,39 @@ pub async fn set_system_core(
     state: State<'_, AppState>,
     system_id: String,
     core_id: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     use domain::core_loader::SystemCoreRepository;
     let repo = db::SystemCoreRepo::new(pool(&state)?);
     if core_id.is_empty() {
-        repo.clear(&system_id).await.map_err(|e| e.to_string())
+        repo.clear(&system_id).await.map_err(AppError::from)
     } else {
-        repo.set(&system_id, &core_id)
-            .await
-            .map_err(|e| e.to_string())
+        repo.set(&system_id, &core_id).await.map_err(AppError::from)
     }
 }
 
 /// Remove todas as ROMs sob `path` (uma biblioteca inteira). Devolve a contagem.
 #[tauri::command]
-pub async fn remove_rom_source(state: State<'_, AppState>, path: String) -> Result<u64, String> {
+pub async fn remove_rom_source(state: State<'_, AppState>, path: String) -> Result<u64, AppError> {
     let repo = db::RomsRepo::new(pool(&state)?);
-    let n = repo
-        .remove_under_dir(&path)
-        .await
-        .map_err(|e| e.to_string())?;
+    let n = repo.remove_under_dir(&path).await.map_err(AppError::from)?;
     // Esquece a pasta, senão "Atualizar biblioteca" traria tudo de volta.
     db::LibraryFoldersRepo::new(pool(&state)?)
         .remove_under(&path)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     log::info!("biblioteca: {n} ROM(s) removida(s) de {path}");
     Ok(n)
 }
 
 /// Esvazia a biblioteca inteira (todos os sistemas). Devolve a contagem.
 #[tauri::command]
-pub async fn clear_library(state: State<'_, AppState>) -> Result<u64, String> {
+pub async fn clear_library(state: State<'_, AppState>) -> Result<u64, AppError> {
     let repo = db::RomsRepo::new(pool(&state)?);
-    let n = repo.remove_all().await.map_err(|e| e.to_string())?;
+    let n = repo.remove_all().await.map_err(AppError::from)?;
     db::LibraryFoldersRepo::new(pool(&state)?)
         .clear()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     log::info!("biblioteca: limpa ({n} ROM(s) removida(s))");
     Ok(n)
 }
@@ -280,7 +276,7 @@ async fn scan_dirs(
     repo: &db::RomsRepo,
     dirs: &[String],
     on_progress: &tauri::ipc::Channel<ScanProgressDto>,
-) -> Result<ScanReportDto, String> {
+) -> Result<ScanReportDto, AppError> {
     let now = now_unix();
     let totals: Vec<usize> = dirs
         .iter()
@@ -298,7 +294,7 @@ async fn scan_dirs(
             });
         })
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
         log::info!("biblioteca: varredura de {dir}: {r:?}");
         out.add(&r);
         done += n;
@@ -311,13 +307,13 @@ pub async fn scan_library(
     state: State<'_, AppState>,
     path: String,
     on_progress: tauri::ipc::Channel<ScanProgressDto>,
-) -> Result<ScanReportDto, String> {
+) -> Result<ScanReportDto, AppError> {
     let repo = db::RomsRepo::new(pool(&state)?);
     let r = scan_dirs(&repo, std::slice::from_ref(&path), &on_progress).await?;
     db::LibraryFoldersRepo::new(pool(&state)?)
         .add(&path, now_unix())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     Ok(r)
 }
 
@@ -353,19 +349,16 @@ fn folders_from_roms(roms: &[domain::library::Rom]) -> Vec<String> {
 pub async fn rescan_library(
     state: State<'_, AppState>,
     on_progress: tauri::ipc::Channel<ScanProgressDto>,
-) -> Result<ScanReportDto, String> {
+) -> Result<ScanReportDto, AppError> {
     let repo = db::RomsRepo::new(pool(&state)?);
     let folders = db::LibraryFoldersRepo::new(pool(&state)?);
-    let mut dirs = folders.list().await.map_err(|e| e.to_string())?;
+    let mut dirs = folders.list().await.map_err(AppError::from)?;
     if dirs.is_empty() {
-        let roms = repo.list().await.map_err(|e| e.to_string())?;
+        let roms = repo.list().await.map_err(AppError::from)?;
         for d in folders_from_roms(&roms) {
-            folders
-                .add(&d, now_unix())
-                .await
-                .map_err(|e| e.to_string())?;
+            folders.add(&d, now_unix()).await.map_err(AppError::from)?;
         }
-        dirs = folders.list().await.map_err(|e| e.to_string())?;
+        dirs = folders.list().await.map_err(AppError::from)?;
         log::info!("biblioteca: pastas deduzidas das ROMs: {dirs:?}");
     }
     let (present, missing): (Vec<String>, Vec<String>) = dirs

@@ -1,5 +1,6 @@
 //! Navegador de arquivos dentro do app: a janela do sistema não funciona com controle.
 
+use crate::app_error::AppError;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -115,10 +116,10 @@ pub async fn browse_dir(
     path: Option<String>,
     extensions: Vec<String>,
     dirs_only: bool,
-) -> Result<DirListing, String> {
+) -> Result<DirListing, AppError> {
     match path {
         None => Ok(roots()),
-        Some(p) => list_dir(Path::new(&p), &extensions, dirs_only).map_err(|e| e.to_string()),
+        Some(p) => list_dir(Path::new(&p), &extensions, dirs_only).map_err(AppError::from),
     }
 }
 

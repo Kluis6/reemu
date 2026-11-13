@@ -4,4 +4,4 @@
  * Cada código é uma regra de `errors.rules` em `lib/errors.ts`; o TypeScript
  * confere isso ao compilar.
  */
-export type ErrorCode = "noCore" | "coreIncompatible" | "gpuRejected" | "notFound" | "notFoundRemote" | "offline" | "rateLimited" | "diskFull" | "noPermission" | "corrupt";
+export type ErrorCode = "noCore" | "coreIncompatible" | "gpuRejected" | "notFound" | "notFoundRemote" | "offline" | "rateLimited" | "diskFull" | "noPermission" | "corrupt" | "saveStateIncompatible";

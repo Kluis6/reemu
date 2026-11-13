@@ -1,6 +1,7 @@
 //! Shaders: presets curados, pacote slang, preset por ROM e parâmetros.
 
 use super::*;
+use crate::app_error::AppError;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -85,7 +86,7 @@ pub fn shader_pack_status(state: State<'_, AppState>) -> crate::shader_pack::Pac
 pub async fn shader_pack_update(
     state: State<'_, AppState>,
     force: Option<bool>,
-) -> Result<bool, String> {
+) -> Result<bool, AppError> {
     let dir = state.shaders_dir.clone();
     Ok(crate::shader_pack::update_available(&dir, force.unwrap_or(false)).await)
 }
@@ -97,7 +98,7 @@ pub async fn shader_pack_update(
 pub async fn download_shader_pack(
     state: State<'_, AppState>,
     on_progress: tauri::ipc::Channel<crate::shader_pack::DownloadProgress>,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let dir = state.shaders_dir.clone();
     let path = crate::shader_pack::download(&dir, on_progress).await?;
     Ok(path.to_string_lossy().into_owned())
@@ -106,10 +107,13 @@ pub async fn download_shader_pack(
 /// Varre `root` recursivamente e lista todo `*.slangp`. Não compila nada — só
 /// enumera pra UI de biblioteca (a compilação acontece no `set_shader`).
 #[tauri::command]
-pub fn list_slangp_dir(root: String) -> Result<Vec<SlangpEntry>, String> {
+pub fn list_slangp_dir(root: String) -> Result<Vec<SlangpEntry>, AppError> {
     let root = std::path::PathBuf::from(&root);
     if !root.is_dir() {
-        return Err(format!("'{}' não é uma pasta", root.display()));
+        return Err(AppError::from(format!(
+            "'{}' não é uma pasta",
+            root.display()
+        )));
     }
     let mut out = Vec::new();
     walk_slangp(&root, &root, &mut out, 0);
@@ -217,7 +221,7 @@ pub async fn set_shader(
     scope: Option<String>,
     system_id: Option<String>,
     rom_id: Option<String>,
-) -> Result<Option<&'static str>, String> {
+) -> Result<Option<&'static str>, AppError> {
     let issue = crate::gpu::shader_issue(&name);
     if let Some(i) = issue {
         log::warn!("shader '{name}': problema conhecido ({})", i.key());
@@ -236,7 +240,7 @@ async fn set_shader_inner(
     scope: Option<String>,
     system_id: Option<String>,
     rom_id: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let clearing = name.is_empty();
     if !clearing {
         let mut guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
@@ -255,7 +259,7 @@ async fn set_shader_inner(
         return sc
             .clear_assignment(sc_scope, sys.as_deref(), rid.as_deref())
             .await
-            .map_err(|e| e.to_string());
+            .map_err(AppError::from);
     }
     let (id, pname, is_builtin) = preset_id_of(name);
     // heurística: presets com "bezel" no nome já desenham a moldura → o
@@ -270,10 +274,10 @@ async fn set_shader_inner(
         includes_bezel,
     })
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(AppError::from)?;
     sc.set_assignment(sc_scope, sys.as_deref(), rid.as_deref(), &id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// Preset de shader resolvido pra um jogo (rom → sistema → default) + o que
@@ -298,17 +302,17 @@ pub struct RomShader {
 pub async fn get_rom_shader(
     state: State<'_, AppState>,
     rom_id: String,
-) -> Result<RomShader, String> {
+) -> Result<RomShader, AppError> {
     use domain::shader_chain::ShaderChainResolver;
     let pool = pool(&state)?;
     let system = db::RomsRepo::new(pool.clone())
         .get(&rom_id)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::from)?
         .map(|r| r.system_id)
         .unwrap_or_default();
     let sc = db::ShaderChainRepo::new(pool);
-    let presets = sc.list_presets().await.map_err(|e| e.to_string())?;
+    let presets = sc.list_presets().await.map_err(AppError::from)?;
     let src_of = |id: &str| {
         presets
             .iter()
@@ -321,7 +325,7 @@ pub async fn get_rom_shader(
     let resolved = sc
         .resolve(&system, Some(&rom_id))
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     let at_rom = resolved
         .as_ref()
         .filter(|a| a.scope == AssignmentScope::Rom)
@@ -406,7 +410,7 @@ pub async fn set_shader_param(
     scope: Option<String>,
     system_id: Option<String>,
     rom_id: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     {
         let mut guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
         if let Some(fp) = guard.as_mut() {
@@ -426,7 +430,7 @@ pub async fn set_shader_param(
             &value.to_string(),
         )
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::from)
 }
 
 /// Volta os parâmetros do shader pros defaults do preset: limpa os overrides
@@ -437,7 +441,7 @@ pub async fn reset_shader_params(
     scope: Option<String>,
     system_id: Option<String>,
     rom_id: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if let Some(scope) = &scope {
         let pool = pool(&state)?;
         let (sc_scope, sys, rid) =
@@ -445,7 +449,7 @@ pub async fn reset_shader_params(
         db::ShaderChainRepo::new(pool)
             .clear_parameter_overrides(sc_scope, sys.as_deref(), rid.as_deref())
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(AppError::from)?;
     }
     apply_resolved_shader_ex(&state, rom_id.as_deref(), true).await;
     Ok(())

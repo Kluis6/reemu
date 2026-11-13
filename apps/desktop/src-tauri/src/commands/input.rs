@@ -1,6 +1,7 @@
 //! Input e captura de binding (etapa 05).
 
 use super::*;
+use crate::app_error::AppError;
 
 /// Recebe `KeyboardEvent.code` da webview (keydown/keyup).
 ///
@@ -16,7 +17,7 @@ pub fn input_key(
     state: State<'_, AppState>,
     code: String,
     pressed: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     use domain::focus::{FocusManager, InputFocus};
 
     // Modo de captura de binding: o evento vai pro frontend, não pro jogo.
@@ -98,28 +99,28 @@ pub async fn set_keyboard_binding(
     state: State<'_, AppState>,
     target: String,
     code: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     if input_desktop::keymap::target_by_name(&target).is_none() {
-        return Err(format!("alvo desconhecido: {target}"));
+        return Err(AppError::from(format!("alvo desconhecido: {target}")));
     }
     if code == "Escape" {
         return Err("Esc é reservado para o menu".into());
     }
     let repo = db::KeyboardBindingsRepo::new(pool(&state)?);
-    repo.set(&target, &code).await.map_err(|e| e.to_string())?;
+    repo.set(&target, &code).await.map_err(AppError::from)?;
     reload_keyboard(&repo).await
 }
 
 /// Volta o teclado inteiro ao padrão.
 #[tauri::command]
-pub async fn reset_keyboard_bindings(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn reset_keyboard_bindings(state: State<'_, AppState>) -> Result<(), AppError> {
     let repo = db::KeyboardBindingsRepo::new(pool(&state)?);
-    repo.clear().await.map_err(|e| e.to_string())?;
+    repo.clear().await.map_err(AppError::from)?;
     reload_keyboard(&repo).await
 }
 
-async fn reload_keyboard(repo: &db::KeyboardBindingsRepo) -> Result<(), String> {
-    let list = repo.list().await.map_err(|e| e.to_string())?;
+async fn reload_keyboard(repo: &db::KeyboardBindingsRepo) -> Result<(), AppError> {
+    let list = repo.list().await.map_err(AppError::from)?;
     input_desktop::keymap::set_overrides(&list);
     // tecla trocada no meio de um aperto não pode ficar presa
     emu_session::keyboard_pad().clear();
@@ -157,7 +158,7 @@ fn retropad_from_str(s: &str) -> Option<domain::input::RetroPadButton> {
 /// `input_key`, gamepad via a thread de `emu-session`) vão pro frontend por
 /// `raw-input-captured` em vez de irem pro jogo.
 #[tauri::command]
-pub fn start_binding_capture() -> Result<(), String> {
+pub fn start_binding_capture() -> Result<(), AppError> {
     emu_session::retropad().clear();
     emu_session::keyboard_pad().clear();
     emu_session::keyboard_analog().clear();
@@ -167,7 +168,7 @@ pub fn start_binding_capture() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn cancel_binding_capture() -> Result<(), String> {
+pub fn cancel_binding_capture() -> Result<(), AppError> {
     input_desktop::capture::end();
     Ok(())
 }
@@ -181,7 +182,7 @@ pub async fn save_binding(
     target: String,
     target_key: String,
     trigger: Vec<domain::input::RawInputEvent>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     input_desktop::capture::end();
     if trigger.is_empty() {
         return Err("nenhum input capturado".into());
@@ -199,7 +200,7 @@ pub async fn save_binding(
                     device_guid: None,
                 })
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(AppError::from)?;
             refresh_hotkey_resolver(&state, &pool).await
         }
         "controller_mapping" => {
@@ -221,7 +222,7 @@ pub async fn save_binding(
             let mut mapping =
                 repo.get(&guid)
                     .await
-                    .map_err(|e| e.to_string())?
+                    .map_err(AppError::from)?
                     .unwrap_or(ControllerMapping {
                         guid: guid.clone(),
                         display_name: display_name.clone(),
@@ -234,21 +235,21 @@ pub async fn save_binding(
             mapping
                 .layout
                 .push(ControllerLayoutEntry { trigger, button });
-            repo.upsert(&mapping).await.map_err(|e| e.to_string())?;
+            repo.upsert(&mapping).await.map_err(AppError::from)?;
             refresh_controller_mappings(&state).await
         }
-        other => Err(format!("target desconhecido: {other}")),
+        other => Err(AppError::from(format!("target desconhecido: {other}"))),
     }
 }
 
 /// Relê `controller_mappings` do DB e publica no override global lido pela
 /// thread de gamepad (`input_desktop::mappings`).
-async fn refresh_controller_mappings(state: &AppState) -> Result<(), String> {
+async fn refresh_controller_mappings(state: &AppState) -> Result<(), AppError> {
     use domain::input::ControllerMappingRepository;
     let list = db::ControllerMappingsRepo::new(pool(state)?)
         .list()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     input_desktop::mappings::set(list);
     Ok(())
 }
@@ -274,21 +275,21 @@ pub async fn load_controller_mappings(pool: &db::Db) {
 pub async fn clear_controller_mapping(
     state: State<'_, AppState>,
     guid: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     use domain::input::ControllerMappingRepository;
     db::ControllerMappingsRepo::new(pool(&state)?)
         .delete(&guid)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     refresh_controller_mappings(&state).await
 }
 
-async fn refresh_device_ports(state: &AppState) -> Result<(), String> {
+async fn refresh_device_ports(state: &AppState) -> Result<(), AppError> {
     use domain::input::DevicePortRepository;
     let ports = db::DevicePortsRepo::new(pool(state)?)
         .list()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     input_desktop::mappings::set_ports(ports.into_iter().map(|(g, p)| (g, p as usize)).collect());
     Ok(())
 }
@@ -298,22 +299,22 @@ pub async fn set_device_port(
     state: State<'_, AppState>,
     guid: String,
     port: u8,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     use domain::input::DevicePortRepository;
     db::DevicePortsRepo::new(pool(&state)?)
         .set(&guid, port)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     refresh_device_ports(&state).await
 }
 
 #[tauri::command]
-pub async fn clear_device_port(state: State<'_, AppState>, guid: String) -> Result<(), String> {
+pub async fn clear_device_port(state: State<'_, AppState>, guid: String) -> Result<(), AppError> {
     use domain::input::DevicePortRepository;
     db::DevicePortsRepo::new(pool(&state)?)
         .clear(&guid)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     refresh_device_ports(&state).await
 }
 
@@ -326,12 +327,12 @@ pub struct DevicePortDto {
 }
 
 #[tauri::command]
-pub async fn list_device_ports(state: State<'_, AppState>) -> Result<Vec<DevicePortDto>, String> {
+pub async fn list_device_ports(state: State<'_, AppState>) -> Result<Vec<DevicePortDto>, AppError> {
     use domain::input::DevicePortRepository;
     Ok(db::DevicePortsRepo::new(pool(&state)?)
         .list()
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::from)?
         .into_iter()
         .map(|(guid, port)| DevicePortDto { guid, port })
         .collect())
@@ -365,12 +366,12 @@ pub struct HotkeyBindingDto {
 #[tauri::command]
 pub async fn list_system_hotkeys(
     state: State<'_, AppState>,
-) -> Result<Vec<HotkeyBindingDto>, String> {
+) -> Result<Vec<HotkeyBindingDto>, AppError> {
     use domain::hotkeys::SystemHotkeyRepository;
     let bindings = db::SystemHotkeysRepo::new(pool(&state)?)
         .list()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     Ok(bindings
         .into_iter()
         .map(|b| HotkeyBindingDto {
@@ -381,7 +382,10 @@ pub async fn list_system_hotkeys(
 }
 
 #[tauri::command]
-pub async fn clear_system_hotkey(state: State<'_, AppState>, action: String) -> Result<(), String> {
+pub async fn clear_system_hotkey(
+    state: State<'_, AppState>,
+    action: String,
+) -> Result<(), AppError> {
     use domain::hotkeys::SystemHotkeyRepository;
     let action =
         SystemAction::from_wire(&action).ok_or_else(|| format!("ação desconhecida: {action}"))?;
@@ -389,13 +393,13 @@ pub async fn clear_system_hotkey(state: State<'_, AppState>, action: String) -> 
     db::SystemHotkeysRepo::new(pool.clone())
         .delete(action)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     refresh_hotkey_resolver(&state, &pool).await
 }
 
 /// Relê `system_hotkeys` do DB e recompõe o `ComboHotkeyResolver` do `AppState`.
-async fn refresh_hotkey_resolver(state: &AppState, pool: &db::Db) -> Result<(), String> {
-    let bindings = load_system_hotkeys(pool).await.map_err(|e| e.to_string())?;
+async fn refresh_hotkey_resolver(state: &AppState, pool: &db::Db) -> Result<(), AppError> {
+    let bindings = load_system_hotkeys(pool).await.map_err(AppError::from)?;
     *state.hotkeys.lock().unwrap_or_else(|p| p.into_inner()) = ComboHotkeyResolver::new(bindings);
     Ok(())
 }
@@ -443,12 +447,12 @@ pub struct ControllerMappingDto {
 #[tauri::command]
 pub async fn list_controller_mappings(
     state: State<'_, AppState>,
-) -> Result<Vec<ControllerMappingDto>, String> {
+) -> Result<Vec<ControllerMappingDto>, AppError> {
     use domain::input::ControllerMappingRepository;
     let mappings = db::ControllerMappingsRepo::new(pool(&state)?)
         .list()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     Ok(mappings
         .into_iter()
         .map(|m| ControllerMappingDto {

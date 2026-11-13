@@ -3,6 +3,7 @@
 //! cada mudança no jogo aberto (`EmuSession::set_cheats` → `retro_cheat_set`).
 
 use super::*;
+use crate::app_error::AppError;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -60,7 +61,7 @@ async fn reapply_if_current(state: &AppState, rom_id: &str) {
 
 /// Código sem espaços nas pontas; vazio é recusado. Descrição vazia vira o
 /// próprio código.
-fn clean(description: &str, code: &str) -> Result<(String, String), String> {
+fn clean(description: &str, code: &str) -> Result<(String, String), AppError> {
     let code = code.trim();
     if code.is_empty() {
         return Err("o código do cheat está vazio".into());
@@ -78,9 +79,9 @@ fn clean(description: &str, code: &str) -> Result<(String, String), String> {
 pub async fn list_cheats(
     state: State<'_, AppState>,
     rom_id: String,
-) -> Result<Vec<CheatDto>, String> {
+) -> Result<Vec<CheatDto>, AppError> {
     let repo = db::CheatsRepo::new(pool(&state)?);
-    let list = repo.list(&rom_id).await.map_err(|e| e.to_string())?;
+    let list = repo.list(&rom_id).await.map_err(AppError::from)?;
     Ok(list.into_iter().map(Into::into).collect())
 }
 
@@ -90,14 +91,14 @@ pub async fn add_cheat(
     rom_id: String,
     description: String,
     code: String,
-) -> Result<CheatDto, String> {
+) -> Result<CheatDto, AppError> {
     let (description, code) = clean(&description, &code)?;
     let repo = db::CheatsRepo::new(pool(&state)?);
     // entra ligado: quem acrescenta um código quer usar
     let cheat = repo
         .add(&rom_id, &description, &code, true)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::from)?;
     reapply_if_current(&state, &rom_id).await;
     Ok(cheat.into())
 }
@@ -109,22 +110,22 @@ pub async fn update_cheat(
     description: String,
     code: String,
     enabled: bool,
-) -> Result<CheatDto, String> {
+) -> Result<CheatDto, AppError> {
     let (description, code) = clean(&description, &code)?;
     let repo = db::CheatsRepo::new(pool(&state)?);
     let cheat = repo
         .update(id, &description, &code, enabled)
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(AppError::from)?
         .ok_or("cheat não encontrado")?;
     reapply_if_current(&state, &cheat.rom_id).await;
     Ok(cheat.into())
 }
 
 #[tauri::command]
-pub async fn delete_cheat(state: State<'_, AppState>, id: i64) -> Result<(), String> {
+pub async fn delete_cheat(state: State<'_, AppState>, id: i64) -> Result<(), AppError> {
     let repo = db::CheatsRepo::new(pool(&state)?);
-    if let Some(rom_id) = repo.delete(id).await.map_err(|e| e.to_string())? {
+    if let Some(rom_id) = repo.delete(id).await.map_err(AppError::from)? {
         reapply_if_current(&state, &rom_id).await;
     }
     Ok(())

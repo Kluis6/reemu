@@ -1,6 +1,7 @@
 //! Configs persistidas (crates/db): áudio e vídeo.
 
 use super::*;
+use crate::app_error::AppError;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,19 +39,19 @@ impl From<AudioConfigDto> for AudioConfig {
 }
 
 #[tauri::command]
-pub async fn get_audio_config(state: State<'_, AppState>) -> Result<AudioConfigDto, String> {
+pub async fn get_audio_config(state: State<'_, AppState>) -> Result<AudioConfigDto, AppError> {
     let repo = db::AudioConfigRepo::new(pool(&state)?);
-    repo.get().await.map(Into::into).map_err(|e| e.to_string())
+    repo.get().await.map(Into::into).map_err(AppError::from)
 }
 
 #[tauri::command]
 pub async fn update_audio_config(
     state: State<'_, AppState>,
     config: AudioConfigDto,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let cfg: AudioConfig = config.into();
     let repo = db::AudioConfigRepo::new(pool(&state)?);
-    repo.update(&cfg).await.map_err(|e| e.to_string())?;
+    repo.update(&cfg).await.map_err(AppError::from)?;
 
     // Aplica ao vivo: recria o sink na thread do core com a config nova.
     let cfg2 = cfg.clone();
@@ -67,8 +68,8 @@ pub async fn update_audio_config(
         }))
     })
     .await
-    .map_err(|e| e.to_string())?;
-    r.map_err(|e| e.to_string())
+    .map_err(AppError::from)?;
+    r.map_err(AppError::from)
 }
 
 #[derive(Serialize, Deserialize)]
@@ -131,19 +132,19 @@ pub fn video_hdr_status(state: State<'_, AppState>) -> crate::gpu::HdrStatus {
 }
 
 #[tauri::command]
-pub async fn get_video_config(state: State<'_, AppState>) -> Result<VideoConfigDto, String> {
+pub async fn get_video_config(state: State<'_, AppState>) -> Result<VideoConfigDto, AppError> {
     let repo = db::VideoConfigRepo::new(pool(&state)?);
-    repo.get().await.map(Into::into).map_err(|e| e.to_string())
+    repo.get().await.map(Into::into).map_err(AppError::from)
 }
 
 #[tauri::command]
 pub async fn update_video_config(
     state: State<'_, AppState>,
     config: VideoConfigDto,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let cfg: VideoConfig = config.into();
     let repo = db::VideoConfigRepo::new(pool(&state)?);
-    repo.update(&cfg).await.map_err(|e| e.to_string())?;
+    repo.update(&cfg).await.map_err(AppError::from)?;
 
     // Aplica ao vivo: o próximo `render_to_surface` já lê o valor novo.
     if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
@@ -176,14 +177,14 @@ pub struct InstalledCoreDto {
 #[tauri::command]
 pub async fn list_installed_cores(
     state: State<'_, AppState>,
-) -> Result<Vec<InstalledCoreDto>, String> {
+) -> Result<Vec<InstalledCoreDto>, AppError> {
     let discovered = emu_session::discover_cores(&state.cores_dir);
 
     let backends: std::collections::HashMap<String, Option<String>> = match state.db.as_ref() {
         Some(pool) => db::InstalledCoresRepo::new(pool.clone())
             .list()
             .await
-            .map_err(|e| e.to_string())?
+            .map_err(AppError::from)?
             .into_iter()
             .map(|c| {
                 (
