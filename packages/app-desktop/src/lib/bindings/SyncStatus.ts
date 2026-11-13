@@ -6,7 +6,11 @@ import type { Quota } from "./Quota";
 /**
  * O que a página de configurações mostra. Nunca leva token.
  */
-export type SyncStatus = { availability: Availability, enabled: boolean, pausedLocal: boolean, pausedSite: boolean, revoked: boolean, deviceId: string | null, label: string, hardware: HardwarePayload, quota: Quota | null, 
+export type SyncStatus = { availability: Availability, enabled: boolean, pausedLocal: boolean, pausedSite: boolean, 
+/**
+ * O interruptor dos game saves (`sync.saves_enabled`).
+ */
+savesEnabled: boolean, revoked: boolean, deviceId: string | null, label: string, hardware: HardwarePayload, quota: Quota | null, 
 /**
  * Segundos Unix.
  */
@@ -14,4 +18,8 @@ lastPassAt: number | null, conflicts: number,
 /**
  * O código de i18n do último erro.
  */
-lastError: string | null, };
+lastError: string | null, 
+/**
+ * O nome do arquivo que a nuvem recusou, com `too_large` ou `rejected`.
+ */
+lastErrorFile: string | null, };

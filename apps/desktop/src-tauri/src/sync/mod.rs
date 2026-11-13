@@ -2,7 +2,9 @@
 //!
 //! - `api`: o cliente REST das rotas de save;
 //! - `device`: o payload de hardware e o armazenamento do aparelho (o token
-//!   `asv_...` só no chaveiro, o resto no SQLite).
+//!   `asv_...` só no chaveiro, o resto no SQLite);
+//! - `local`, `reconcile` e `engine`: os game saves deste disco, a regra de
+//!   três lados e as passadas que sobem, descem e guardam o conflito.
 //!
 //! O aparelho nasce uma vez, pelo token de acesso do parceiro (o par do
 //! "Entrar com Alvanista"). Dali em diante só o token do aparelho fala com
@@ -13,15 +15,21 @@
 
 pub mod api;
 pub mod device;
+pub mod engine;
+pub mod local;
+pub mod platform;
+pub mod reconcile;
 
 use crate::alvanista::client::ClientError;
 use crate::alvanista::loopback::Lang;
 use crate::alvanista::store::Tokens;
 use crate::alvanista::{Alvanista, AlvanistaStatus};
 use api::{ApiError, RemoteDevice, SavesApi};
+use db::SyncRepo;
 use device::{
     hardware_fingerprint, hardware_payload, Device, DeviceStore, HardwarePayload, LABEL_MAX_CHARS,
 };
+use engine::{Engine, Keep, PassScope, SaveLineStatus, SyncConflict, SyncVersion};
 use serde::Serialize;
 use std::future::Future;
 use std::sync::Arc;
@@ -42,6 +50,10 @@ pub enum SyncError {
     Revoked,
     Paused,
     Quota,
+    /// 413: o save passa do limite que a nuvem aceita para a plataforma.
+    TooLarge,
+    /// 400 ou 422: a nuvem recusou o save (nome, campos ou conteúdo).
+    Rejected,
     Offline,
     Keyring,
     /// O nome do aparelho está fora de 1..=80 caracteres ou o servidor o recusou.
@@ -64,6 +76,8 @@ impl std::fmt::Display for SyncError {
             Self::Revoked => "revoked",
             Self::Paused => "paused",
             Self::Quota => "quota",
+            Self::TooLarge => "too_large",
+            Self::Rejected => "rejected",
             Self::Offline => "offline",
             Self::Keyring => "keyring",
             Self::InvalidLabel => "invalid_label",
@@ -85,6 +99,7 @@ impl From<ApiError> for SyncError {
             ApiError::TierInsufficient { .. } => Self::NoTier,
             ApiError::Paused => Self::Paused,
             ApiError::Quota => Self::Quota,
+            ApiError::TooLarge => Self::TooLarge,
             ApiError::Transient(_) => Self::Offline,
             other => failed(other.to_string()),
         }
@@ -94,6 +109,11 @@ impl From<ApiError> for SyncError {
 pub struct SyncService {
     api: SavesApi,
     devices: DeviceStore,
+    /// Os conflitos abertos, que a página conta pelo SQLite.
+    conflicts: SyncRepo,
+    /// Quem roda uma passada quando o sync ou os game saves acabam de ligar
+    /// (o motor se registra aqui ao subir).
+    on_enabled: std::sync::OnceLock<Box<dyn Fn() + Send + Sync>>,
     /// Quem cria o aparelho nunca corre em paralelo: duas chamadas juntas
     /// criariam dois aparelhos na conta.
     mint: tokio::sync::Mutex<()>,
@@ -106,15 +126,19 @@ pub struct SyncService {
 struct Runtime {
     quota: Option<SyncQuota>,
     last_pass_at: Option<i64>,
-    conflicts: u32,
     last_error: Option<String>,
+    /// O arquivo que a nuvem recusou, quando `last_error` é de um arquivo só
+    /// (`too_large`, `rejected`): a página diz qual.
+    last_error_file: Option<String>,
 }
 
 impl SyncService {
     pub fn new(api: SavesApi, devices: DeviceStore) -> Self {
         Self {
             api,
+            conflicts: SyncRepo::new(devices.db()),
             devices,
+            on_enabled: std::sync::OnceLock::new(),
             mint: tokio::sync::Mutex::new(()),
             runtime: std::sync::Mutex::new(Runtime::default()),
         }
@@ -122,6 +146,19 @@ impl SyncService {
 
     fn runtime(&self) -> std::sync::MutexGuard<'_, Runtime> {
         self.runtime.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    /// Registra quem roda a passada ao ligar. Só o primeiro vale.
+    pub fn on_enabled(&self, run_pass: Box<dyn Fn() + Send + Sync>) {
+        let _ = self.on_enabled.set(run_pass);
+    }
+
+    /// O sync ou os game saves acabaram de ligar: uma passada agora, em vez
+    /// de esperar a de 10 minutos (M3).
+    fn kick_pass(&self) {
+        if let Some(run_pass) = self.on_enabled.get() {
+            run_pass();
+        }
     }
 
     /// Para o teste do `alvanista/` segurar o trinco de quem cria o aparelho.
@@ -377,6 +414,26 @@ impl SyncService {
         }
     }
 
+    /// Um 401 com o token do aparelho, fora de uma passada: a lista do site
+    /// diz se a máquina foi mesmo removida. Viva na lista (ou lista sem
+    /// resposta) é `offline`.
+    async fn row_after_401(&self, alva: &Alvanista) -> SyncError {
+        match self.partner_devices(alva).await {
+            Ok(list) => {
+                self.absorb_site_state(&list).await;
+                match self.devices.site_state().await {
+                    Ok((_, true)) => SyncError::Revoked,
+                    _ => SyncError::Offline,
+                }
+            }
+            Err(SyncError::NoAccount) => SyncError::NoAccount,
+            Err(e) => {
+                log::info!("sync: 401 e a lista de aparelhos não respondeu ({e})");
+                SyncError::Offline
+            }
+        }
+    }
+
     async fn mark_revoked(&self) {
         let paused = self.devices.site_state().await.is_ok_and(|s| s.0);
         if let Err(e) = self.devices.set_site_state(paused, true).await {
@@ -393,37 +450,30 @@ impl SyncService {
     /// Não toma `mint`: a partir de `ensure_device` o caminho `renew` segura
     /// o trinco de renovação do `alvanista/`, e a sessão que acaba lá chama
     /// esta função.
+    ///
+    /// A revogação e o esquecer rodam numa tarefa própria: quem chamou pode
+    /// desistir de esperar (o prazo de antes de abrir um jogo), e o token não
+    /// pode ficar no chaveiro por isso.
     pub async fn forget_device(&self, revoke: bool) -> Result<(), SyncError> {
-        if self.devices.device().await.map_err(failed)?.is_none() {
-            return Ok(());
-        }
-        let mut revoke_failed = false;
-        if revoke {
-            match self.devices.token() {
-                Ok(Some(token)) => match self.api.revoke_own_device(&token).await {
-                    Ok(()) | Err(ApiError::Unauthorized) | Err(ApiError::NotFound) => {}
-                    Err(e) => {
-                        log::warn!("sync: aparelho não revogado no servidor: {e}");
-                        revoke_failed = true;
-                    }
-                },
-                Ok(None) => {}
-                Err(e) => {
-                    log::warn!("sync: chaveiro indisponível para revogar: {e}");
-                    revoke_failed = true;
-                }
+        let (api, devices) = (self.api.clone(), self.devices.clone());
+        let joined = tokio::spawn(async move { forget_now(&api, &devices, revoke).await }).await;
+        match joined {
+            Err(e) => Err(failed(format!("esquecer interrompido: {e}"))),
+            Ok(Err(e)) => Err(e),
+            Ok(Ok(Forgot::NoDevice)) => Ok(()),
+            Ok(Ok(Forgot::Done {
+                result,
+                revoke_failed,
+            })) => {
+                // O aparelho que sobrou no servidor a pessoa revoga no site: a
+                // tela lê `offline` para dizer isso.
+                *self.runtime() = Runtime {
+                    last_error: revoke_failed.then(|| SyncError::Offline.to_string()),
+                    ..Runtime::default()
+                };
+                result
             }
         }
-        // O aparelho que sobrou no servidor a pessoa revoga no site: a tela lê
-        // `offline` para dizer isso.
-        *self.runtime() = Runtime {
-            last_error: revoke_failed.then(|| SyncError::Offline.to_string()),
-            ..Runtime::default()
-        };
-        self.devices.forget().await.map_err(|e| {
-            log::warn!("sync: aparelho não esquecido: {e}");
-            SyncError::Keyring
-        })
     }
 
     async fn refresh_quota(&self) -> Result<(), SyncError> {
@@ -482,12 +532,23 @@ impl SyncService {
         let (paused_site, revoked) = self.devices.site_state().await.map_err(failed)?;
         let enabled = device.is_some() && self.devices.enabled().await.map_err(failed)?;
         let paused_local = self.devices.paused().await.map_err(failed)?;
+        let saves_enabled = self.devices.saves_enabled().await.map_err(failed)?;
+        // Pelo SQLite: vale logo ao abrir o app e com os game saves desligados
+        // (resolver segue valendo, R19).
+        let conflicts = match self.conflicts.conflicts_all().await {
+            Ok(rows) => rows.len() as u32,
+            Err(e) => {
+                log::warn!("sync: conflitos ilegíveis: {e}");
+                0
+            }
+        };
         let runtime = self.runtime();
         Ok(SyncStatus {
             availability,
             enabled,
             paused_local,
             paused_site,
+            saves_enabled,
             revoked,
             label: device
                 .as_ref()
@@ -498,8 +559,14 @@ impl SyncService {
             hardware: hw,
             quota: runtime.quota,
             last_pass_at: runtime.last_pass_at,
-            conflicts: runtime.conflicts,
+            conflicts,
             last_error: runtime.last_error.clone(),
+            // Só junto do erro de um arquivo: outro erro depois dele não leva
+            // o nome de um arquivo que já não é o motivo.
+            last_error_file: match runtime.last_error.as_deref() {
+                Some("too_large" | "rejected") => runtime.last_error_file.clone(),
+                _ => None,
+            },
         })
     }
 
@@ -561,6 +628,7 @@ impl SyncService {
             if let Err(e) = self.refresh_quota().await {
                 log::info!("sync: cota não lida ao ligar: {e}");
             }
+            self.kick_pass();
         } else {
             let _one_at_a_time = self.mint.lock().await;
             self.forget_device(true).await?;
@@ -597,14 +665,13 @@ impl SyncService {
                 .await
                 .map_err(failed)?,
             Err(e) => {
-                let e = match e {
-                    ApiError::Rejected(_) => SyncError::InvalidLabel,
+                return Err(match e {
+                    ApiError::Rejected(_) | ApiError::Invalid(_) => SyncError::InvalidLabel,
+                    // Um 401 sozinho não prova revogação (o `SaveAuth` também
+                    // o devolve quando falha): a lista de aparelhos decide.
+                    ApiError::Unauthorized => self.row_after_401(alva).await,
                     other => SyncError::from(other),
-                };
-                if e == SyncError::Revoked {
-                    self.mark_revoked().await;
-                }
-                return Err(e);
+                });
             }
         }
         self.status_with(alva, hw).await
@@ -617,6 +684,19 @@ impl SyncService {
         hw: HardwarePayload,
     ) -> Result<SyncStatus, SyncError> {
         self.devices.set_paused(paused).await.map_err(failed)?;
+        self.status_with(alva, hw).await
+    }
+
+    async fn set_saves_enabled_with(
+        &self,
+        alva: &Alvanista,
+        on: bool,
+        hw: HardwarePayload,
+    ) -> Result<SyncStatus, SyncError> {
+        self.devices.set_saves_enabled(on).await.map_err(failed)?;
+        if on {
+            self.kick_pass();
+        }
         self.status_with(alva, hw).await
     }
 
@@ -640,12 +720,13 @@ impl SyncService {
             .collect())
     }
 
-    /// Atualiza a cota, o hardware e a lista de aparelhos. As rodadas de
-    /// arquivos entram na etapa seguinte.
+    /// "Sincronizar agora": a passada dos game saves (que lê a linha desta
+    /// máquina no site antes de tudo), depois o hardware e a cota.
     async fn now_with(
         &self,
         alva: &Alvanista,
         hw: HardwarePayload,
+        engine: Option<&Engine>,
     ) -> Result<SyncStatus, SyncError> {
         if !alva.has_session().await {
             return Err(SyncError::NoAccount);
@@ -654,17 +735,49 @@ impl SyncService {
             && self.devices.enabled().await.map_err(failed)?
         {
             let mut last: Option<SyncError> = None;
-            for step in [
-                self.refresh_hardware_with(alva, hw.clone()).await,
-                self.refresh_quota().await,
-            ] {
-                if let Err(e) = step {
-                    if last.as_ref().map_or(true, |l| severity(&e) > severity(l)) {
-                        last = Some(e);
+            let mut keep = |e: SyncError| {
+                if last.as_ref().map_or(true, |l| severity(&e) > severity(l)) {
+                    last = Some(e);
+                }
+            };
+            // Pausada só aqui: nem passada (a página já mostra a pausa).
+            let paused_here = self.devices.paused().await.map_err(failed)?;
+            let mut stop = false;
+            if let (Some(engine), false) = (engine, paused_here) {
+                match engine.pass(alva, PassScope::All).await {
+                    Ok(report) => {
+                        if let Some(e) = report.worst() {
+                            keep(e);
+                        }
+                    }
+                    Err(e) => {
+                        stop = matches!(
+                            e,
+                            SyncError::Revoked
+                                | SyncError::NoAccount
+                                | SyncError::NotEnabled
+                                | SyncError::Paused
+                        );
+                        keep(e);
                     }
                 }
             }
-            if last == Some(SyncError::Revoked) {
+            if !stop {
+                for step in [
+                    self.refresh_hardware_with(alva, hw.clone()).await,
+                    self.refresh_quota().await,
+                ] {
+                    match step {
+                        // Um 401 sozinho não prova revogação (o `SaveAuth`
+                        // também o devolve quando falha): quem decide é a
+                        // linha da lista do site, que a passada lê.
+                        Err(SyncError::Revoked) if engine.is_some() => keep(SyncError::Offline),
+                        Err(e) => keep(e),
+                        Ok(()) => {}
+                    }
+                }
+            }
+            if last == Some(SyncError::Revoked) && engine.is_none() {
                 self.mark_revoked().await;
             }
             self.runtime().last_error = last.map(|e| e.to_string());
@@ -673,14 +786,60 @@ impl SyncService {
     }
 }
 
+enum Forgot {
+    NoDevice,
+    Done {
+        result: Result<(), SyncError>,
+        /// A revogação no servidor não chegou.
+        revoke_failed: bool,
+    },
+}
+
+/// O corpo de `forget_device`; `Err` só quando nem deu para ler o aparelho.
+async fn forget_now(
+    api: &SavesApi,
+    devices: &DeviceStore,
+    revoke: bool,
+) -> Result<Forgot, SyncError> {
+    if devices.device().await.map_err(failed)?.is_none() {
+        return Ok(Forgot::NoDevice);
+    }
+    let mut revoke_failed = false;
+    if revoke {
+        match devices.token() {
+            Ok(Some(token)) => match api.revoke_own_device(&token).await {
+                Ok(()) | Err(ApiError::Unauthorized) | Err(ApiError::NotFound) => {}
+                Err(e) => {
+                    log::warn!("sync: aparelho não revogado no servidor: {e}");
+                    revoke_failed = true;
+                }
+            },
+            Ok(None) => {}
+            Err(e) => {
+                log::warn!("sync: chaveiro indisponível para revogar: {e}");
+                revoke_failed = true;
+            }
+        }
+    }
+    let result = devices.forget().await.map_err(|e| {
+        log::warn!("sync: aparelho não esquecido: {e}");
+        SyncError::Keyring
+    });
+    Ok(Forgot::Done {
+        result,
+        revoke_failed,
+    })
+}
+
 /// Qual erro a tela mostra quando vários passos falham: revoked > paused >
-/// quota > offline > o resto.
+/// quota > offline > um arquivo recusado (a tela diz qual) > o resto.
 fn severity(e: &SyncError) -> u8 {
     match e {
-        SyncError::Revoked => 5,
-        SyncError::Paused => 4,
-        SyncError::Quota => 3,
-        SyncError::Offline => 2,
+        SyncError::Revoked => 6,
+        SyncError::Paused => 5,
+        SyncError::Quota => 4,
+        SyncError::Offline => 3,
+        SyncError::TooLarge | SyncError::Rejected => 2,
         _ => 1,
     }
 }
@@ -723,6 +882,8 @@ pub struct SyncStatus {
     pub enabled: bool,
     pub paused_local: bool,
     pub paused_site: bool,
+    /// O interruptor dos game saves (`sync.saves_enabled`).
+    pub saves_enabled: bool,
     pub revoked: bool,
     pub device_id: Option<String>,
     pub label: String,
@@ -733,6 +894,8 @@ pub struct SyncStatus {
     pub conflicts: u32,
     /// O código de i18n do último erro.
     pub last_error: Option<String>,
+    /// O nome do arquivo que a nuvem recusou, com `too_large` ou `rejected`.
+    pub last_error_file: Option<String>,
 }
 
 /// A cota como a tela a recebe (o servidor manda em snake_case: `api::Quota`).
@@ -758,13 +921,49 @@ pub struct SyncMachine {
     pub paused: bool,
 }
 
-/// Evento `sync`: a tela relê o estado.
+/// O canal dos eventos do sync.
 pub const SYNC_EVENT: &str = "sync";
 
+/// Os eventos do canal `sync` (o tipo `SyncEvent` de `lib/tauri.ts`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SyncEvent {
+    /// A tela relê o estado.
+    Status,
+    /// Uma passada terminou. `backed_up`: saves apagados no site que foram
+    /// para a pasta de resguardo.
+    #[serde(rename_all = "camelCase")]
+    Pass {
+        uploaded: u32,
+        downloaded: u32,
+        backed_up: u32,
+    },
+    /// Um conflito novo.
+    Conflict { key: String },
+    /// Um código de `SyncError` (`revoked`, `quota`...).
+    Error { code: String },
+    /// A cota acabou: os envios pararam.
+    #[serde(rename_all = "camelCase")]
+    Quota { used_bytes: i64, limit_bytes: i64 },
+    /// A checagem de antes de abrir um jogo terminou: `up_to_date`,
+    /// `downloaded`, `conflict` ou `skipped` (o jogo abriu com o save daqui;
+    /// `reason` é o código, `timeout` e `offline` inclusive).
+    Prelaunch {
+        outcome: String,
+        reason: Option<String>,
+    },
+}
+
 fn emit_status(app: &AppHandle) {
-    if let Err(e) = app.emit(SYNC_EVENT, serde_json::json!({ "type": "status" })) {
+    if let Err(e) = app.emit(SYNC_EVENT, SyncEvent::Status) {
         log::warn!("sync: não avisou a interface: {e}");
     }
+}
+
+fn engine_of(app: &AppHandle) -> Result<Arc<Engine>, String> {
+    app.try_state::<Arc<Engine>>()
+        .map(|e| e.inner().clone())
+        .ok_or_else(|| "failed".to_owned())
 }
 
 fn services(app: &AppHandle) -> Result<(Arc<SyncService>, tauri::State<'_, Alvanista>), String> {
@@ -827,6 +1026,19 @@ pub async fn sync_set_paused(app: AppHandle, paused: bool) -> Result<SyncStatus,
     status
 }
 
+/// O interruptor dos game saves: desligado, nenhuma passada sobe nem baixa
+/// save (a base e os conflitos ficam como estão).
+#[tauri::command]
+pub async fn sync_set_saves_enabled(app: AppHandle, enabled: bool) -> Result<SyncStatus, String> {
+    let (sync, alva) = services(&app)?;
+    let status = sync
+        .set_saves_enabled_with(&alva, enabled, current_hardware(&app))
+        .await
+        .map_err(|e| e.to_string());
+    emit_status(&app);
+    status
+}
+
 #[tauri::command]
 pub async fn sync_machines(app: AppHandle) -> Result<Vec<SyncMachine>, String> {
     let (sync, alva) = services(&app)?;
@@ -836,22 +1048,88 @@ pub async fn sync_machines(app: AppHandle) -> Result<Vec<SyncMachine>, String> {
 #[tauri::command]
 pub async fn sync_now(app: AppHandle) -> Result<SyncStatus, String> {
     let (sync, alva) = services(&app)?;
+    let engine = engine_of(&app).ok();
     let status = sync
-        .now_with(&alva, current_hardware(&app))
+        .now_with(&alva, current_hardware(&app), engine.as_deref())
         .await
         .map_err(|e| e.to_string());
     emit_status(&app);
     status
 }
 
-/// Abre a pasta dos backups do sync (a cria se ainda não existe).
+/// Os conflitos abertos (D118).
 #[tauri::command]
-pub async fn sync_open_backups(app: AppHandle) -> Result<(), String> {
-    let dir = crate::data_dir(&app).join("sync-backups");
-    std::fs::create_dir_all(&dir).map_err(|e| {
+pub async fn sync_conflicts(app: AppHandle) -> Result<Vec<SyncConflict>, String> {
+    engine_of(&app)?
+        .conflicts()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Fecha um conflito: `keep` é `local` ou `remote`.
+#[tauri::command]
+pub async fn sync_resolve(app: AppHandle, key: String, keep: String) -> Result<(), String> {
+    let keep = match keep.as_str() {
+        "local" => Keep::Local,
+        "remote" => Keep::Remote,
+        other => {
+            log::warn!("sync: lado desconhecido para resolver: {other}");
+            return Err(SyncError::Failed(other.to_owned()).to_string());
+        }
+    };
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    engine
+        .resolve(&alva, &key, keep)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// As versões do save de uma chave, da mais nova para a mais velha.
+#[tauri::command]
+pub async fn sync_versions(app: AppHandle, key: String) -> Result<Vec<SyncVersion>, String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    engine
+        .versions(&alva, &key)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Volta uma versão do histórico (D124).
+#[tauri::command]
+pub async fn sync_restore(app: AppHandle, key: String, version_id: String) -> Result<(), String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    engine
+        .restore(&alva, &key, &version_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// A linha de save da página do jogo (sem rede).
+#[tauri::command]
+pub async fn sync_save_status(app: AppHandle, rom_id: String) -> Result<SaveLineStatus, String> {
+    engine_of(&app)?
+        .save_status(&rom_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Abre a pasta dos backups do sync (a cria se ainda não existe). Com `key`
+/// de um save apagado no site, abre a pasta onde o arquivo dele foi parar.
+#[tauri::command]
+pub async fn sync_open_backups(app: AppHandle, key: Option<String>) -> Result<(), String> {
+    let root = crate::data_dir(&app).join("sync-backups");
+    std::fs::create_dir_all(&root).map_err(|e| {
         log::warn!("sync: não criou a pasta de backups: {e}");
         "failed".to_owned()
     })?;
+    let removed = match (key, engine_of(&app).ok()) {
+        (Some(key), Some(engine)) => engine.removed_folder(&key).await,
+        _ => None,
+    };
+    let dir = removed.unwrap_or(root);
     open::that_detached(&dir).map_err(|e| {
         log::warn!("sync: não abriu a pasta de backups: {e}");
         "failed".to_owned()
@@ -893,6 +1171,40 @@ pub(crate) mod test_support {
             .into_iter()
             .flat_map(|r| [r.get::<String, _>("key"), r.get::<String, _>("value")])
             .collect()
+    }
+
+    /// Logger de teste que guarda o texto de cada linha. Um por processo: todo
+    /// teste que lê o log passa por `captured_logs`.
+    struct Capture(std::sync::Mutex<Vec<String>>);
+    impl log::Log for Capture {
+        fn enabled(&self, _: &log::Metadata) -> bool {
+            true
+        }
+        fn log(&self, record: &log::Record) {
+            // O servidor de mentira despeja os pedidos que não esperava (com os
+            // cabeçalhos): é ferramenta de teste, não o log do app.
+            if record.target().starts_with("wiremock") {
+                return;
+            }
+            self.0
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push(format!("{}", record.args()));
+        }
+        fn flush(&self) {}
+    }
+    static CAPTURE: Capture = Capture(std::sync::Mutex::new(Vec::new()));
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+
+    /// Instala o logger de captura (na primeira chamada) e devolve as linhas
+    /// até agora. Se outro logger já estava instalado, falha alto: um teste de
+    /// "nada vaza no log" que não vê o log não prova nada.
+    pub fn captured_logs() -> Vec<String> {
+        INSTALL.call_once(|| {
+            log::set_logger(&CAPTURE).expect("não deu pra instalar o logger de captura");
+            log::set_max_level(log::LevelFilter::Trace);
+        });
+        CAPTURE.0.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 }
 
@@ -1055,10 +1367,11 @@ mod tests {
         let r = rig().await;
         mount_mint(
             &r.server,
+            // O corpo da porta do plano, como `writeSaveDenial` o monta.
             ResponseTemplate::new(402).set_body_json(serde_json::json!({
-                "error": {"code": "tier_insufficient", "current_tier": "free",
-                          "upgrade_to": "collector", "required_quota": "saves",
-                          "required_value": 1}
+                "error": {"code": "tier_insufficient", "current_tier": "gamer",
+                          "required_quota": "save_sync_enabled", "required_value": true,
+                          "upgrade_to": "collector"}
             })),
             1,
         )
@@ -1413,6 +1726,89 @@ mod tests {
         );
     }
 
+    /// M3: ligar o sync, ou ligar de novo os game saves, roda uma passada já
+    /// (desligar não roda nada).
+    #[tokio::test]
+    async fn turning_sync_or_game_saves_on_runs_a_pass_now() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        let passes = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = passes.clone();
+        r.sync.on_enabled(Box::new(move || {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }));
+        let count = || passes.load(std::sync::atomic::Ordering::SeqCst);
+        mount_mint(
+            &r.server,
+            ResponseTemplate::new(201).set_body_json(minted_body("asv_secret")),
+            1,
+        )
+        .await;
+        Mock::given(method("GET"))
+            .and(path("/api/v1/saves/quota"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"used_bytes": 1, "limit_bytes": 9})),
+            )
+            .mount(&r.server)
+            .await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        r.sync
+            .set_enabled_with(&r.alva, true, hw(), never_reconnect)
+            .await
+            .unwrap();
+        assert_eq!(count(), 1);
+        r.sync
+            .set_saves_enabled_with(&r.alva, false, hw())
+            .await
+            .unwrap();
+        assert_eq!(count(), 1);
+        r.sync
+            .set_saves_enabled_with(&r.alva, true, hw())
+            .await
+            .unwrap();
+        assert_eq!(count(), 2);
+    }
+
+    /// M2: a contagem de conflitos vem do SQLite: vale logo ao abrir o app
+    /// (antes de qualquer passada) e com os game saves desligados.
+    #[tokio::test]
+    async fn the_conflict_count_comes_from_sqlite_after_a_restart_and_with_saves_off() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        SyncRepo::new(r.db.clone())
+            .conflict_put(&domain::sync::ConflictRow {
+                key: "file:gba/Zelda.srm".into(),
+                local_hash: "l".into(),
+                local_mtime: 1,
+                local_size: 1,
+                remote_save_id: "s".into(),
+                remote_version_id: "v".into(),
+                remote_hash: "r".into(),
+                remote_device_label: None,
+                remote_client_mtime: None,
+                remote_size: 1,
+                remote_deleted: false,
+                rom_id: None,
+                seen_at: 1,
+            })
+            .await
+            .unwrap();
+        // Um serviço novo sobre o mesmo banco: o app acabou de abrir.
+        let fresh = SyncService::new(
+            SavesApi::new(r.server.uri()),
+            DeviceStore::new(r.db.clone(), r.secrets.clone()),
+        );
+        assert_eq!(fresh.status_with(&r.alva, hw()).await.unwrap().conflicts, 1);
+        fresh
+            .set_saves_enabled_with(&r.alva, false, hw())
+            .await
+            .unwrap();
+        assert_eq!(fresh.status_with(&r.alva, hw()).await.unwrap().conflicts, 1);
+    }
+
     #[tokio::test]
     async fn set_enabled_on_runs_the_consent_once_and_retries() {
         let _serial = SERIAL.lock().await;
@@ -1690,7 +2086,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(remote("dev1", false, false)))
             .mount(&r.server)
             .await;
-        let st = r.sync.now_with(&r.alva, hw()).await.unwrap();
+        let st = r.sync.now_with(&r.alva, hw(), None).await.unwrap();
         assert_eq!(st.quota.map(|q| q.used_bytes), Some(5));
         assert_eq!(st.last_error, None);
     }
@@ -1714,7 +2110,7 @@ mod tests {
                 .mount(&r.server)
                 .await;
         }
-        let st = r.sync.now_with(&r.alva, hw()).await.unwrap();
+        let st = r.sync.now_with(&r.alva, hw(), None).await.unwrap();
         assert!(st.revoked);
         assert_eq!(st.last_error.as_deref(), Some("revoked"));
     }
@@ -1909,6 +2305,57 @@ mod tests {
         assert_eq!(r.server.received_requests().await.unwrap().len(), n);
     }
 
+    /// M12: renomear com um 401 do `SaveAuth` não basta para dizer "removida
+    /// no site": com a linha viva na lista é `offline` e nada vira revogado;
+    /// com a linha revogada, aí sim.
+    #[tokio::test]
+    async fn a_rename_401_with_the_row_alive_is_offline_not_revoked() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        Mock::given(method("PATCH"))
+            .and(path("/api/v1/saves/device"))
+            .respond_with(
+                ResponseTemplate::new(401)
+                    .set_body_json(serde_json::json!({"error": {"code": "save_token_invalid"}})),
+            )
+            .mount(&r.server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/save-devices"))
+            .respond_with(seq_list(vec![
+                vec![remote("dev1", false, false)],
+                vec![remote("dev1", true, false)],
+            ]))
+            .mount(&r.server)
+            .await;
+        assert_eq!(
+            r.sync.set_label_with(&r.alva, "Quarto", hw()).await,
+            Err(SyncError::Offline)
+        );
+        assert_eq!(r.sync.devices().site_state().await.unwrap(), (false, false));
+        assert_eq!(
+            r.sync.devices().token().unwrap().as_deref(),
+            Some("asv_secret")
+        );
+        // A lista confirma a remoção: revogada.
+        assert_eq!(
+            r.sync.set_label_with(&r.alva, "Quarto", hw()).await,
+            Err(SyncError::Revoked)
+        );
+        assert_eq!(r.sync.devices().site_state().await.unwrap(), (false, true));
+    }
+
+    /// Respostas da lista de aparelhos em sequência; a última se repete.
+    fn seq_list(lists: Vec<Vec<serde_json::Value>>) -> impl wiremock::Respond {
+        let n = std::sync::atomic::AtomicUsize::new(0);
+        move |_: &wiremock::Request| {
+            let i = n.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            ResponseTemplate::new(200)
+                .set_body_json(serde_json::json!({"devices": lists[i.min(lists.len() - 1)]}))
+        }
+    }
+
     #[tokio::test]
     async fn an_unknown_reconnect_code_becomes_failed() {
         let _serial = SERIAL.lock().await;
@@ -1955,7 +2402,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(503))
             .mount(&r.server)
             .await;
-        let st = r.sync.now_with(&r.alva, hw()).await.unwrap();
+        let st = r.sync.now_with(&r.alva, hw(), None).await.unwrap();
         assert_eq!(st.last_error.as_deref(), Some("paused"));
         // Um "revoked" velho some quando a lista mostra o aparelho vivo.
         r.sync.runtime().last_error = Some("revoked".into());
@@ -2132,6 +2579,8 @@ mod tests {
             (SyncError::Revoked, "revoked"),
             (SyncError::Paused, "paused"),
             (SyncError::Quota, "quota"),
+            (SyncError::TooLarge, "too_large"),
+            (SyncError::Rejected, "rejected"),
             (SyncError::Offline, "offline"),
             (SyncError::Keyring, "keyring"),
             (SyncError::InvalidLabel, "invalid_label"),
@@ -2143,35 +2592,59 @@ mod tests {
             assert_eq!(err.to_string(), code);
         }
         assert_eq!(SyncError::from(ApiError::Unauthorized), SyncError::Revoked);
+        assert_eq!(SyncError::from(ApiError::TooLarge), SyncError::TooLarge);
         assert_eq!(
             SyncError::from(ApiError::Transient("x".into())),
             SyncError::Offline
         );
     }
 
-    /// Logger de teste que guarda o texto de cada linha.
-    struct Capture(Mutex<Vec<String>>);
-    impl log::Log for Capture {
-        fn enabled(&self, _: &log::Metadata) -> bool {
-            true
-        }
-        fn log(&self, record: &log::Record) {
-            self.0.lock().unwrap().push(format!("{}", record.args()));
-        }
-        fn flush(&self) {}
+    /// O formato que `lib/tauri.ts` espera em `SyncEvent`.
+    #[test]
+    fn sync_events_serialize_as_the_frontend_reads_them() {
+        let json = |e: SyncEvent| serde_json::to_value(e).unwrap();
+        assert_eq!(
+            json(SyncEvent::Status),
+            serde_json::json!({"type": "status"})
+        );
+        assert_eq!(
+            json(SyncEvent::Pass {
+                uploaded: 1,
+                downloaded: 2,
+                backed_up: 3
+            }),
+            serde_json::json!({"type": "pass", "uploaded": 1, "downloaded": 2, "backedUp": 3})
+        );
+        assert_eq!(
+            json(SyncEvent::Conflict { key: "k".into() }),
+            serde_json::json!({"type": "conflict", "key": "k"})
+        );
+        assert_eq!(
+            json(SyncEvent::Error {
+                code: "revoked".into()
+            }),
+            serde_json::json!({"type": "error", "code": "revoked"})
+        );
+        assert_eq!(
+            json(SyncEvent::Quota {
+                used_bytes: 5,
+                limit_bytes: 9
+            }),
+            serde_json::json!({"type": "quota", "usedBytes": 5, "limitBytes": 9})
+        );
+        assert_eq!(
+            json(SyncEvent::Prelaunch {
+                outcome: "skipped".into(),
+                reason: Some("timeout".into())
+            }),
+            serde_json::json!({"type": "prelaunch", "outcome": "skipped", "reason": "timeout"})
+        );
     }
-    static CAPTURE: Capture = Capture(Mutex::new(Vec::new()));
 
     #[tokio::test]
     async fn no_log_line_and_no_state_row_ever_holds_the_device_token() {
         let _serial = SERIAL.lock().await;
-        // Se outro teste do processo instalou o logger antes, falha alto: um
-        // teste de "nada vaza no log" que não vê o log não prova nada.
-        assert!(
-            log::set_logger(&CAPTURE).is_ok(),
-            "não deu pra instalar o logger de captura"
-        );
-        log::set_max_level(log::LevelFilter::Trace);
+        test_support::captured_logs();
         let r = rig().await;
         // O caminho feliz, o do chaveiro recusando (que revoga o órfão) e o
         // do 401 do aparelho no refresh de hardware.
@@ -2216,7 +2689,7 @@ mod tests {
         for v in test_support::all_state_values(&r.db).await {
             assert!(!v.contains("asv_"), "token no SQLite: {v}");
         }
-        let lines = CAPTURE.0.lock().unwrap().clone();
+        let lines = test_support::captured_logs();
         assert!(
             lines.iter().any(|l| l.starts_with("sync:")),
             "o logger não viu as linhas do sync"

@@ -41,6 +41,8 @@ thiserror.workspace = true
 reqwest = { version = "0.12", default-features = false, features = [
     "rustls-tls",
     "json",
+    # Envio de save do cloud save (src/sync/api.rs): POST multipart.
+    "multipart",
 ] }
 zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 md-5 = "0.10"
@@ -53,6 +55,8 @@ tokio = { version = "1", features = ["time", "rt", "sync"] }
 # do site do Alvanista.
 open = { version = "5", features = ["shellexecute-on-windows"] }
 sha2 = "0.10"
+# Carimbo das pastas de backup do cloud save no relógio da pessoa (src/sync/engine.rs).
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 base64 = "0.22"
 rand = "0.10"
 url = "2"

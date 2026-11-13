@@ -21,7 +21,8 @@ import { AlvanistaButton } from '../../components/AlvanistaButton'
 import { LoadingState } from '../../components/EmptyState'
 import { BlockGroup, FieldBlock, ToggleBlock } from '../../components/SettingBlock'
 import { useAlvanistaConnect } from '../../hooks/useAlvanistaConnect'
-import { SYNC_STATUS_KEY, SYNC_ERRORS, syncErrorCode, useSync } from '../../hooks/useSync'
+import { ConflictDialog } from '../../components/sync/ConflictDialog'
+import { SYNC_STATUS_KEY, SYNC_ERRORS, syncErrorCode, useConflicts, useSync } from '../../hooks/useSync'
 import { alvanistaOpenSite, type SyncMachine } from '../../lib/tauri'
 import { relativeAge } from '../profile/relativeAge'
 import { formatBytes, hardwareLine, machineColor } from './syncFormat'
@@ -115,7 +116,7 @@ export function SettingsSync() {
   const { t, i18n } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
-  const { status: query, machines, busy, error, setEnabled, setLabel, setPaused, now, cancel } = useSync()
+  const { status: query, machines, busy, error, setEnabled, setLabel, setPaused, setSaves, now, cancel } = useSync()
   // Quem conecta por aqui quer sincronizar: os dois escopos num consentimento só.
   const { connect, cancel: cancelConnect, connecting, outcome } = useAlvanistaConnect({ saves: true })
   const st = query.data
@@ -150,6 +151,16 @@ export function SettingsSync() {
   // O nome em edição (null: o do estado). Enviado, fica na tela até a resposta
   // e volta a seguir o estado.
   const [edited, setEdited] = useState<string | null>(null)
+
+  // "Resolver": os conflitos, um depois do outro. A fila guarda as chaves do
+  // momento do clique; cada resolvido sai dela e o diálogo mostra a próxima.
+  const conflictCount = query.data?.conflicts ?? 0
+  const conflicts = useConflicts(conflictCount > 0)
+  const [queue, setQueue] = useState<string[]>([])
+  // A primeira da fila que ainda existe: uma resolvida em outro lugar é pulada.
+  const asking = conflicts.data?.find((c) => queue.includes(c.key)) ?? null
+  const deletedOnSite = conflicts.data?.filter((c) => c.remote.deleted).length ?? 0
+  const twoMachines = (conflicts.data?.length ?? 0) - deletedOnSite
   const label = st?.label ?? ''
   const draft = edited ?? label
   const commitLabel = () => {
@@ -261,7 +272,16 @@ export function SettingsSync() {
       )}
       {showError && (
         <MessageBar intent="warning">
-          <MessageBarBody>{t(`sync.err.${showError}`)}</MessageBarBody>
+          <MessageBarBody>
+            {t(`sync.err.${showError}`)}
+            {/* Um save que a nuvem recusou: a página diz qual. */}
+            {showError === st.lastError && st.lastErrorFile && (
+              <>
+                <br />
+                {t('sync.errFile', { file: st.lastErrorFile })}
+              </>
+            )}
+          </MessageBarBody>
         </MessageBar>
       )}
 
@@ -354,8 +374,18 @@ export function SettingsSync() {
       </BlockGroup>
 
       <BlockGroup title={t('sync.what')}>
+        <ToggleBlock
+          label={t('sync.saves')}
+          description={t('sync.savesHint')}
+          checked={st.savesEnabled}
+          disabled={!st.enabled}
+          busy={working}
+          onChange={(on) => {
+            if (!working) void setSaves(on)
+          }}
+        />
         {/* Cada linha chega com o PR que a sincroniza; até lá, "em breve". */}
-        {(['saves', 'states', 'settings'] as const).map((k) => (
+        {(['states', 'settings'] as const).map((k) => (
           <FieldBlock key={k} wide>
             <span className={s.rowTitle}>
               <Body1>{t(`sync.${k}`)}</Body1>
@@ -367,6 +397,51 @@ export function SettingsSync() {
           </FieldBlock>
         ))}
       </BlockGroup>
+
+      {st.enabled && conflictCount > 0 && (
+        <BlockGroup title={t('sync.conflicts.title')}>
+          <FieldBlock wide>
+            {conflicts.data ? (
+              // Duas perguntas diferentes: as duas máquinas mudaram, ou o site
+              // apagou e esta máquina mudou.
+              <>
+                {twoMachines > 0 && <Body1>{t('sync.conflicts.count', { count: twoMachines })}</Body1>}
+                {deletedOnSite > 0 && <Body1>{t('sync.conflicts.deletedCount', { count: deletedOnSite })}</Body1>}
+              </>
+            ) : (
+              <Body1>{t('sync.conflicts.count', { count: conflictCount })}</Body1>
+            )}
+            <Caption1 className={s.muted}>
+              {conflicts.data && deletedOnSite > 0
+                ? twoMachines === 0
+                  ? t('sync.conflict.deletedFooter')
+                  : t('sync.conflicts.hintMixed')
+                : t('sync.conflicts.hint')}
+            </Caption1>
+            <div className={s.actions}>
+              <Button
+                appearance="primary"
+                disabledFocusable={!conflicts.data || conflicts.data.length === 0}
+                onClick={() => setQueue((conflicts.data ?? []).map((c) => c.key))}
+              >
+                {t('sync.conflicts.resolve')}
+              </Button>
+            </div>
+          </FieldBlock>
+        </BlockGroup>
+      )}
+
+      {asking && (
+        <ConflictDialog
+          conflict={asking}
+          onDone={(outcome) => {
+            // Resolvido: a próxima (por chave: a lista também se atualiza sozinha).
+            // Adiado ou fechado: para a fila.
+            if (outcome === 'local' || outcome === 'remote') setQueue((q) => q.filter((k) => k !== asking.key))
+            else setQueue([])
+          }}
+        />
+      )}
 
       {st.enabled && !st.revoked && (
         <section className={s.rows}>

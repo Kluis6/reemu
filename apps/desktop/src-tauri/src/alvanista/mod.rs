@@ -147,9 +147,31 @@ impl Alvanista {
     }
 
     /// Renova o par (gravando o novo), para o sync repetir o pedido que
-    /// voltou 401.
+    /// voltou 401. Se a conta acabou no site, o aparelho do cloud save sai
+    /// junto (revogado, se ainda der).
+    ///
+    /// Tudo numa tarefa própria: o sync pode desistir de esperar (o prazo de
+    /// antes de abrir um jogo), e nem a troca do par nem o esquecer do
+    /// aparelho podem ficar pela metade.
     pub(crate) async fn renew(&self, current: &Tokens) -> Result<Tokens, ClientError> {
-        self.client.refresh(current).await
+        let client = self.client.clone();
+        let sync = self.sync.get().cloned();
+        let current = current.clone();
+        tokio::spawn(async move {
+            let renewed = client.refresh(&current).await;
+            if let (Err(ClientError::AuthEnded), Some(sync)) = (&renewed, sync) {
+                if let Err(e) = sync.forget_device(true).await {
+                    log::warn!("alvanista: aparelho do cloud save não esquecido: {e}");
+                }
+            }
+            renewed
+        })
+        .await
+        .unwrap_or_else(|e| {
+            Err(ClientError::Transient(format!(
+                "renovação interrompida: {e}"
+            )))
+        })
     }
 
     /// Há sessão marcada? Só o SQLite: o sync decide por aqui e lê o par do
@@ -168,6 +190,18 @@ impl Alvanista {
     pub(crate) async fn mirrored_save_sync(&self) -> Option<bool> {
         match self.store().mirror_get().await {
             Ok(mirror) => mirror.and_then(|m| m.save_sync),
+            Err(e) => {
+                log::warn!("alvanista: espelho ilegível: {e}");
+                None
+            }
+        }
+    }
+
+    /// A conta conectada (o AlvaID que o `/me` mandou), pelo espelho: sem
+    /// chaveiro nem rede. `None` sem espelho.
+    pub(crate) async fn account_id(&self) -> Option<String> {
+        match self.store().mirror_get().await {
+            Ok(mirror) => mirror.map(|m| m.id).filter(|id| !id.is_empty()),
             Err(e) => {
                 log::warn!("alvanista: espelho ilegível: {e}");
                 None
@@ -624,16 +658,23 @@ pub fn refresh_on_start(app: &AppHandle) {
     }
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let Some(alva) = app.try_state::<Alvanista>() else {
-            return;
-        };
-        let Some(status) = alva.refresh_if_connected().await else {
-            return;
-        };
-        if let Err(e) = tauri::Emitter::emit(&app, STATUS_EVENT, &status) {
-            log::warn!("alvanista: não avisou a interface da renovação: {e}");
-        }
+        refresh_profile_now(&app).await;
+        // O cloud save começa depois: a primeira passada usa o par que a
+        // renovação deixou.
+        crate::sync::engine::run_on_start(app).await;
     });
+}
+
+async fn refresh_profile_now(app: &AppHandle) {
+    let Some(alva) = app.try_state::<Alvanista>() else {
+        return;
+    };
+    let Some(status) = alva.refresh_if_connected().await else {
+        return;
+    };
+    if let Err(e) = tauri::Emitter::emit(app, STATUS_EVENT, &status) {
+        log::warn!("alvanista: não avisou a interface da renovação: {e}");
+    }
 }
 
 fn state_of(app: &AppHandle) -> Result<tauri::State<'_, Alvanista>, String> {
