@@ -30,6 +30,9 @@ pub struct Remote {
     pub version_id: String,
     pub hash: String,
     pub size: i64,
+    /// O DONO da linha (`FileSummary.device_token_id`), nunca quem escreveu a
+    /// última versão (`current.device_token_id`). O GameKave não põe dono em
+    /// linha `kind=file`: ali o campo vem `None`.
     pub device_token_id: Option<String>,
     pub client_mtime: Option<i64>,
     pub deleted: bool,
@@ -37,16 +40,23 @@ pub struct Remote {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
+    /// Nada a fazer: local e nuvem batem com a base.
     Nothing,
+    /// Local e nuvem são iguais mas a base não existe ou ficou velha: o
+    /// chamador só grava a base (sem tráfego de bytes).
+    Adopt,
     Upload,
     Download,
     Conflict,
     /// A nuvem apagou a linha (de outro aparelho) e o local não mudou desde o
-    /// sync: o arquivo vai para o backup e a base é limpa.
+    /// sync: o arquivo vai para o backup e a base é removida.
     LocalToBackupAndClearBase,
-    /// A marca de apagado é da linha deste próprio aparelho (ou não há mais
-    /// nada dos dois lados): limpa a base e não toca no arquivo.
-    ClearBaseKeepLocal,
+    /// D127, linha própria de tipo que não é arquivo: o motor MARCA a base como
+    /// apagada (`base_mark_wiped`) e não toca no local.
+    MarkBaseWipedKeepLocal,
+    /// Base presente, sem arquivo local, e a nuvem apagou a linha ou a perdeu:
+    /// o motor REMOVE a base (`base_delete`). Não há arquivo a guardar.
+    DropBase,
     /// O servidor perdeu a linha (sem remoto, base presente, local = base).
     ReUpload,
 }
@@ -63,7 +73,10 @@ pub fn decide(
         (Kind::File, Some(l)) if l.size == 0 => None,
         (_, l) => l,
     };
-    let live = remote.filter(|r| !r.deleted);
+    // Remota viva e vazia, para arquivo, vale por ausente: nunca baixa um
+    // arquivo vazio por cima de um save.
+    let live = remote.filter(|r| !r.deleted && !(kind == Kind::File && r.size == 0));
+    let tombstone = remote.filter(|r| r.deleted);
 
     let Some(base) = base else {
         // Sem base, uma marca de apagado é igual a ausência: nada a restaurar.
@@ -71,7 +84,7 @@ pub fn decide(
             (None, None) => Action::Nothing,
             (Some(_), None) => Action::Upload,
             (None, Some(_)) => Action::Download,
-            (Some(l), Some(r)) if l.hash == r.hash => Action::Nothing,
+            (Some(l), Some(r)) if l.hash == r.hash => Action::Adopt,
             (Some(_), Some(_)) => Action::Conflict,
         };
     };
@@ -82,7 +95,13 @@ pub fn decide(
             return Action::Download;
         };
         if l.hash == r.hash {
-            return Action::Nothing; // adotar: o chamador grava a base
+            // Já batem com a base: nada. Senão a base está velha: adotar.
+            let fresh = l.hash == base.local_hash && r.hash == base.remote_hash;
+            return if fresh {
+                Action::Nothing
+            } else {
+                Action::Adopt
+            };
         }
         return match (l.hash == base.local_hash, r.hash == base.remote_hash) {
             (true, true) => Action::Nothing,
@@ -92,22 +111,23 @@ pub fn decide(
         };
     }
 
-    match remote {
+    match tombstone {
         // Linha apagada.
         Some(r) => {
-            if r.device_token_id.as_deref() == Some(this_device) {
-                return Action::ClearBaseKeepLocal;
+            // O dono só existe em linha que não é arquivo (ver `Remote`).
+            if kind != Kind::File && r.device_token_id.as_deref() == Some(this_device) {
+                return Action::MarkBaseWipedKeepLocal;
             }
             match local {
                 // Já não há arquivo para guardar: só a base sobra.
-                None => Action::ClearBaseKeepLocal,
+                None => Action::DropBase,
                 Some(l) if l.hash == base.local_hash => Action::LocalToBackupAndClearBase,
                 Some(_) => Action::Conflict,
             }
         }
-        // Sem linha nenhuma: o servidor a perdeu.
+        // Sem linha nenhuma (ou só uma remota vazia): o servidor a perdeu.
         None => match local {
-            None => Action::ClearBaseKeepLocal,
+            None => Action::DropBase,
             Some(l) if l.hash == base.local_hash => Action::ReUpload,
             // Não há versão remota para disputar: o local mudou, sobe.
             Some(_) => Action::Upload,
@@ -150,16 +170,16 @@ mod tests {
             version_id: "v2".into(),
             hash: hash.into(),
             size: 8,
-            device_token_id: Some("dev-other".into()),
+            device_token_id: None,
             client_mtime: Some(1),
             deleted: false,
         }
     }
 
-    fn tomb(device: &str) -> Remote {
+    fn tomb(device: Option<&str>) -> Remote {
         Remote {
             deleted: true,
-            device_token_id: Some(device.into()),
+            device_token_id: device.map(Into::into),
             ..remote("x")
         }
     }
@@ -187,7 +207,7 @@ mod tests {
     fn decide_no_base_same_hash_adopts() {
         assert_eq!(
             run(Some(&local("a")), None, Some(&remote("a"))),
-            Action::Nothing
+            Action::Adopt
         );
     }
 
@@ -240,7 +260,7 @@ mod tests {
         let b = base("a", "r");
         assert_eq!(
             run(Some(&local("z")), Some(&b), Some(&remote("z"))),
-            Action::Nothing
+            Action::Adopt
         );
     }
 
@@ -248,7 +268,7 @@ mod tests {
     fn decide_tombstone_from_other_device_with_unchanged_local_backs_up() {
         let b = base("a", "r");
         assert_eq!(
-            run(Some(&local("a")), Some(&b), Some(&tomb("dev-other"))),
+            run(Some(&local("a")), Some(&b), Some(&tomb(None))),
             Action::LocalToBackupAndClearBase
         );
     }
@@ -257,21 +277,45 @@ mod tests {
     fn decide_tombstone_from_other_device_with_changed_local_conflicts() {
         let b = base("a", "r");
         assert_eq!(
-            run(Some(&local("a2")), Some(&b), Some(&tomb("dev-other"))),
+            run(Some(&local("a2")), Some(&b), Some(&tomb(None))),
             Action::Conflict
         );
     }
 
     #[test]
-    fn decide_tombstone_of_this_device_keeps_local() {
+    fn decide_own_tombstone_of_a_non_file_marks_the_base_wiped() {
+        let b = base("a", "r");
+        for kind in [Kind::State, Kind::Config] {
+            for l in ["a", "a2"] {
+                assert_eq!(
+                    decide(kind, Some(&local(l)), Some(&b), Some(&tomb(Some(ME))), ME),
+                    Action::MarkBaseWipedKeepLocal
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn decide_file_tombstone_owned_by_this_device_is_not_special() {
+        // O servidor nunca põe dono em linha de arquivo; mesmo que viesse, o
+        // arquivo segue a regra comum e vai para o backup.
         let b = base("a", "r");
         assert_eq!(
-            run(Some(&local("a")), Some(&b), Some(&tomb(ME))),
-            Action::ClearBaseKeepLocal
+            run(Some(&local("a")), Some(&b), Some(&tomb(Some(ME)))),
+            Action::LocalToBackupAndClearBase
         );
         assert_eq!(
-            run(Some(&local("a2")), Some(&b), Some(&tomb(ME))),
-            Action::ClearBaseKeepLocal
+            run(Some(&local("a2")), Some(&b), Some(&tomb(Some(ME)))),
+            Action::Conflict
+        );
+    }
+
+    #[test]
+    fn decide_file_tombstone_without_owner_backs_up() {
+        let b = base("a", "r");
+        assert_eq!(
+            run(Some(&local("a")), Some(&b), Some(&tomb(None))),
+            Action::LocalToBackupAndClearBase
         );
     }
 
@@ -294,22 +338,19 @@ mod tests {
     }
 
     #[test]
-    fn decide_tombstone_and_no_local_only_clears_the_base() {
+    fn decide_tombstone_and_no_local_drops_the_base() {
         let b = base("a", "r");
-        assert_eq!(
-            run(None, Some(&b), Some(&tomb("dev-other"))),
-            Action::ClearBaseKeepLocal
-        );
-        assert_eq!(run(None, Some(&b), None), Action::ClearBaseKeepLocal);
+        assert_eq!(run(None, Some(&b), Some(&tomb(None))), Action::DropBase);
+        assert_eq!(run(None, Some(&b), None), Action::DropBase);
     }
 
     #[test]
     fn decide_tombstone_without_base_is_absence() {
         assert_eq!(
-            run(Some(&local("a")), None, Some(&tomb("dev-other"))),
+            run(Some(&local("a")), None, Some(&tomb(None))),
             Action::Upload
         );
-        assert_eq!(run(None, None, Some(&tomb("dev-other"))), Action::Nothing);
+        assert_eq!(run(None, None, Some(&tomb(None))), Action::Nothing);
     }
 
     #[test]
@@ -347,5 +388,40 @@ mod tests {
                 Action::Conflict
             );
         }
+    }
+
+    #[test]
+    fn decide_stale_base_with_equal_sides_adopts() {
+        let b = base("old", "oldr");
+        assert_eq!(
+            run(Some(&local("a")), Some(&b), Some(&remote("a"))),
+            Action::Adopt
+        );
+    }
+
+    #[test]
+    fn zero_byte_live_remote_is_absent_for_files() {
+        let empty_remote = Remote {
+            size: 0,
+            ..remote("e3b0")
+        };
+        // Nunca baixa um arquivo vazio.
+        assert_eq!(run(None, None, Some(&empty_remote)), Action::Nothing);
+        let b = base("a", "r");
+        assert_eq!(run(None, Some(&b), Some(&empty_remote)), Action::DropBase);
+        // Com local, a nuvem vazia é uma linha perdida: o local sobe.
+        assert_eq!(
+            run(Some(&local("a")), Some(&b), Some(&empty_remote)),
+            Action::ReUpload
+        );
+        assert_eq!(
+            run(Some(&local("a")), None, Some(&empty_remote)),
+            Action::Upload
+        );
+        // Para estado, um remoto vazio continua sendo um remoto.
+        assert_eq!(
+            decide(Kind::State, None, None, Some(&empty_remote), ME),
+            Action::Download
+        );
     }
 }
