@@ -60,6 +60,11 @@ jobs:
   audit:
     name: Rust (cargo audit)
     runs-on: ubuntu-24.04
+    # A action publica o resultado como "check run" do commit: precisa de
+    # `checks: write` (o padrão do workflow é só `contents: read`).
+    permissions:
+      contents: read
+      checks: write
     steps:
       - uses: actions/checkout@v7
       # Consulta o banco RustSec contra o Cargo.lock (sem compilar nada). Os
