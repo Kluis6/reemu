@@ -73,6 +73,7 @@ o card atual fica.
 
 - [x] `done` — Fase 0: linha de base de desempenho, CI no Windows e fumaça agendada (2026-10-30).
 - [x] `done` — Fase 1: tipos gerados entre Rust e TypeScript, erros com código (2026-10-30). Pendências em `19-plano-unificado.md`.
+      Em 2026-11-12 todos os comandos passaram a devolver `AppError` (71 devolviam `String`); os erros de disco, rede, banco e save state chegam com código.
 - [x] `done` — Fase 2: becos sem saída do controle, mapa de botões e camada de foco (2026-10-30).
 - [x] `done` — Fase 3: escala igual à do app Xbox e janelas pequenas, aprovada pelo usuário (2026-10-31). Desempenho comparado com `docs/perf/baseline.json`: só o `run_med` do Vulkan marcado (4,33 → 4,95 ms), a confirmar com nova captura na mesma cena.
 - [x] `done` — Fase 4: configurações no modelo do console, aprovada pelo usuário (2026-10-31). Blocos em Sistema, Áudio, Metadados e Plano de fundo; listas, Perfil, Temas, Shaders e Molduras mantêm o layout próprio; sem coluna de categorias, a pedido.
@@ -103,6 +104,18 @@ o card atual fica.
       com outro `CARGO_TARGET_DIR`; a sessão não achava o binário e caía em
       `/usr/lib/ReEmu/reemu-core-host`, com o IPC de outra versão. Agora o teste compila com
       `--target-dir` igual ao da pasta de onde roda; os 9 testes passam nos dois casos.
+      O `cargo audit` do CI (2026-11-12) ignora os quatro avisos dessa `zip`
+      (RUSTSEC-2026-0367/0368/0369/0429) até a troca; tirar da lista de `ignore` em
+      `ci.yml` quando o plugin subir.
+- [ ] `todo` — **`cargo audit`: avisos sem correção disponível** (2026-11-12). Ignorados
+      no `ci.yml`, com o motivo lá: `libsqlite3-sys` 0.30 (RUSTSEC-2026-0459, CVE no SQLite
+      em C; a correção pede a 0.39, que nem o sqlx 0.9.0 aceita — esperar o sqlx) e `rsa`
+      0.9 (RUSTSEC-2023-0071; só está no lock como dependência opcional do driver MySQL
+      do sqlx, que o ReEmu não compila). Avisos de crate sem manutenção que não falham o
+      job: `bincode` 2 (IPC do core-host), `glib` 0.18 e `zbus`/`zvariant` (gtk do Tauri
+      no Linux), `ttf-parser`, `smartstring`, `proc-macro-error`. O `cargo update` de
+      2026-11-12 já corrigiu `quinn-proto`, `ringbuf`, `rustls-webpki`, `webpki-roots`,
+      `rustix` e `tokio`.
 
 - [ ] `todo` — **Stella trava no Windows na fumaça do catálogo**
       (2026-10-14): desde 2026-09-28 o `catalog-smoke.yml` falha toda

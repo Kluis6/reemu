@@ -3381,3 +3381,15 @@ Infra:
 - **Fumaça do catálogo:** `stella_libretro` e `stella2023_libretro` viram "conhecido" só no Windows (`KNOWN_BROKEN_WINDOWS`), para o job semanal voltar a ficar verde e acusar só regressão nova. A causa segue no TASKS.
 - **`oxlint` zerado:** `useBlobUrl` (ShaderPreview) derivado com `useMemo` em vez de `setState` no efeito; o `FilePicker` guarda quem tinha o foco no `ask` do store em vez de ler um ref no render; o teclado na tela zera o cursor ao abrir com o padrão de ajuste no render.
 
+## 2026-11-12 — Dependências: Dependabot para cargo e npm, `cargo audit` no CI
+
+- **Dependabot** passa a cobrir `cargo` (raiz), `npm` do app e do site, além das actions; patch e minor agrupados num PR por ecossistema por semana. O `tauri-plugin-updater` 2.14.1 fica ignorado (prende o `windows` 0.61; TASKS).
+- **`cargo audit`** (RustSec, `rustsec/audit-check` v2 fixado pelo hash) achou 13 vulnerabilidades no `Cargo.lock`, contra 4 alertas do Dependabot. Sete saíram com `cargo update` dentro do semver: `quinn-proto` 0.11.19, `ringbuf` 0.5.3, `rustls-webpki` 0.103.17, `webpki-roots`/`webpki-root-certs` 1.0.12, `rustix` 1.1.6, `tokio` 1.54.1. As seis restantes ficam ignoradas no job com o motivo (zip 4.6.1 do updater; `libsqlite3-sys` sem versão que o sqlx aceite; `rsa` só no lock). `cargo check --workspace --all-targets` e a suíte passaram com o lock novo.
+
+## 2026-11-12 — Erros com código em todos os comandos
+
+- **Antes:** 71 dos 116 comandos Tauri devolviam `Result<_, String>`; só `load_game` e os de cores usavam o `AppError` da Fase 1. Sem código, a interface só tinha as regras de texto (`lib/errors.ts`) para dizer o que fazer.
+- **Agora:** todo comando em `commands/*.rs` devolve `AppError`. O `From<String>` já existente manteve os corpos, e os `map_err(|e| e.to_string())` viraram `map_err(AppError::from)`, com conversões novas para `DbError`, `RepoError` (Corrupt → `corrupt`), `ScanError`, `SaveError` (NotFound, NoCore e o código novo `saveStateIncompatible`, que já tinha regra na interface), `serde_json::Error` (`corrupt`), `reqwest::Error` (`offline`/`rateLimited`/`notFoundRemote` por `from_http`) e `tauri::Error`. Assim disco cheio, sem permissão, arquivo que sumiu e rede fora chegam com o código certo em vez de depender do texto.
+- **Interface:** dois pontos liam o erro com `String(e)` e virariam `[object Object]`: a checagem de `ss_dev_login` em `RomDetail` e o erro do `UpdateDialog`; os dois passaram a usar `errorText(e)`. `ErrorCode.ts` regenerado pelo ts-rs; `tsc -b` confere que todo código tem regra.
+- **Ficam como `String`** os comandos fora de `commands/` (`alvanista/mod.rs`, `appearance.rs`, `updates.rs`), que a interface já trata pelo texto.
+
