@@ -93,6 +93,11 @@ o card atual fica.
       confere a assinatura do arquivo baixado antes de abrir o zip. Tentar de novo quando
       sair uma versão do plugin, do `wgpu` ou do `gpu-allocator` compatível; conferir com
       `scripts/check-windows.sh`.
+      Reconferido em 2026-11-13: além do updater 2.14.1, os patches `wry` 0.57.2 e
+      `tauri-plugin-log` 2.10.2, cada um sozinho, também puxam o `windows` 0.61 e quebram o
+      `wgpu-hal` 30 no Windows. Saídas a avaliar (não verificadas): uma versão nova do
+      `wgpu`/`gpu-allocator` compatível com o `windows` 0.62, ou fixar o `windows`; precisa de
+      aviso (é GPU).
 - [x] `done` — **Testes de GPU com SIGSEGV nesta máquina Linux** (2026-11-03, resolvido em
       2026-11-05): `hw_render_core_detects_requirements_and_negotiates` e
       `gpu::tests::canvas_viewport_sizes_viewport_passes` caíam também na `main`, depois da

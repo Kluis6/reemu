@@ -3393,3 +3393,8 @@ Infra:
 - **Interface:** dois pontos liam o erro com `String(e)` e virariam `[object Object]`: a checagem de `ss_dev_login` em `RomDetail` e o erro do `UpdateDialog`; os dois passaram a usar `errorText(e)`. `ErrorCode.ts` regenerado pelo ts-rs; `tsc -b` confere que todo código tem regra.
 - **Ficam como `String`** os comandos fora de `commands/` (`alvanista/mod.rs`, `appearance.rs`, `updates.rs`), que a interface já trata pelo texto.
 
+## 2026-11-13 — Telas sob demanda e versões do Tauri
+
+- **Rotas sob demanda** (`router.tsx`, `lazy` do React Router 7): página do jogo, conquistas, perfil, configurações (casca e as 13 telas), onboarding e a tela de jogo baixam o próprio código na primeira visita; a casca, a Início e a Biblioteca (com a de plataforma) ficam no pacote inicial. Enquanto o módulo chega, a tela anterior continua visível. O pacote principal caiu de 1.517 kB para 1.281 kB (−16 %), em 41 arquivos; a maior parte do resto é o Fluent UI, compartilhado por todas as telas. `ui-smoke` em todas as rotas e as rotas com `section` abertas no navegador de teste sem erro.
+- **Tauri:** o 2.12.5 já é a última versão estável (a 3.0 está em alpha). Há patch novo em `wry` 0.57.2, `tauri-plugin-log` 2.10.2 e `tauri-plugin-updater` 2.14.1, mas qualquer `cargo update` neles faz o resolvedor reorganizar a crate `windows` (0.62 → 0.61 em `gio`/`gtk`), e o `wgpu-hal` 30 deixa de compilar no Windows (`dx12/suballocation.rs`, tipos do `gpu-allocator`). Conferido aqui, nos três separadamente: o lockfile ficou como estava. É o mesmo bloqueio do item "zip 4.6.1 no auto-update" do TASKS.
+
