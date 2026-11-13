@@ -60,15 +60,14 @@ jobs:
   audit:
     name: Rust (cargo audit)
     runs-on: ubuntu-24.04
-    # A action publica o resultado como "check run" do commit: precisa de
-    # `checks: write` (o padrão do workflow é só `contents: read`).
-    permissions:
-      contents: read
-      checks: write
     steps:
       - uses: actions/checkout@v7
-      # Consulta o banco RustSec contra o Cargo.lock (sem compilar nada). Os
-      # IDs ignorados têm motivo registrado no TASKS.md ("cargo audit"):
+      # Consulta o banco RustSec contra o Cargo.lock (sem compilar o projeto).
+      # Roda o `cargo audit` direto: a action `rustsec/audit-check` publicava
+      # o resultado num "check run" próprio, e quando um push novo cancelava o
+      # run anterior a atualização desse check dava 404 e o job ficava
+      # vermelho mesmo sem vulnerabilidade (main, 2026-11-13).
+      # IDs ignorados, com motivo registrado no TASKS.md ("cargo audit"):
       # - RUSTSEC-2026-0367/0368/0369/0429: `zip` 4.6.1 só do
       #   `tauri-plugin-updater`, que confere a assinatura antes de abrir o
       #   zip; a 2.14.1 prende o `windows` 0.61 e quebra o build no Windows;
@@ -76,10 +75,16 @@ jobs:
       #   0.9 aceita a 0.39 corrigida; esperar o sqlx;
       # - RUSTSEC-2023-0071: `rsa` só está no lock como dependência opcional
       #   do driver MySQL do sqlx, que o ReEmu não compila (só o SQLite).
-      - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ignore: RUSTSEC-2026-0367,RUSTSEC-2026-0368,RUSTSEC-2026-0369,RUSTSEC-2026-0429,RUSTSEC-2026-0459,RUSTSEC-2023-0071
+      - name: Preparar toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Instalar cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: cargo audit
+        run: >-
+          cargo audit
+          --ignore RUSTSEC-2026-0367 --ignore RUSTSEC-2026-0368
+          --ignore RUSTSEC-2026-0369 --ignore RUSTSEC-2026-0429
+          --ignore RUSTSEC-2026-0459 --ignore RUSTSEC-2023-0071
 
   windows-check:
     name: Windows (cargo check cruzado)
