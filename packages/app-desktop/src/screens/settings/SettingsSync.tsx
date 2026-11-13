@@ -159,6 +159,8 @@ export function SettingsSync() {
   const [queue, setQueue] = useState<string[]>([])
   // A primeira da fila que ainda existe: uma resolvida em outro lugar é pulada.
   const asking = conflicts.data?.find((c) => queue.includes(c.key)) ?? null
+  const deletedOnSite = conflicts.data?.filter((c) => c.remote.deleted).length ?? 0
+  const twoMachines = (conflicts.data?.length ?? 0) - deletedOnSite
   const label = st?.label ?? ''
   const draft = edited ?? label
   const commitLabel = () => {
@@ -399,7 +401,16 @@ export function SettingsSync() {
       {st.enabled && conflictCount > 0 && (
         <BlockGroup title={t('sync.conflicts.title')}>
           <FieldBlock wide>
-            <Body1>{t('sync.conflicts.count', { count: conflictCount })}</Body1>
+            {conflicts.data ? (
+              // Duas perguntas diferentes: as duas máquinas mudaram, ou o site
+              // apagou e esta máquina mudou.
+              <>
+                {twoMachines > 0 && <Body1>{t('sync.conflicts.count', { count: twoMachines })}</Body1>}
+                {deletedOnSite > 0 && <Body1>{t('sync.conflicts.deletedCount', { count: deletedOnSite })}</Body1>}
+              </>
+            ) : (
+              <Body1>{t('sync.conflicts.count', { count: conflictCount })}</Body1>
+            )}
             <Caption1 className={s.muted}>{t('sync.conflicts.hint')}</Caption1>
             <div className={s.actions}>
               <Button

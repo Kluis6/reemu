@@ -6,10 +6,10 @@ use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
 
 const BASE_COLS: &str = "key, kind, remote_save_id, remote_version_id, remote_hash, \
-     local_hash, local_path, rom_crc32, synced_at, wiped_at";
+     local_hash, local_path, rom_crc32, synced_at, wiped_at, backup_path";
 const CONFLICT_COLS: &str = "key, local_hash, local_mtime, local_size, remote_save_id, \
      remote_version_id, remote_hash, remote_device_label, remote_client_mtime, \
-     remote_size, rom_id, seen_at";
+     remote_size, remote_deleted, rom_id, seen_at";
 
 /// Base local do cloud save (`sync_base`) e conflitos abertos
 /// (`sync_conflicts`).
@@ -29,6 +29,7 @@ fn base_from(r: &SqliteRow) -> Result<BaseRow, RepoError> {
         rom_crc32: r.try_get("rom_crc32").map_err(be)?,
         synced_at: r.try_get("synced_at").map_err(be)?,
         wiped_at: r.try_get("wiped_at").map_err(be)?,
+        backup_path: r.try_get("backup_path").map_err(be)?,
     })
 }
 
@@ -44,6 +45,7 @@ fn conflict_from(r: &SqliteRow) -> Result<ConflictRow, RepoError> {
         remote_device_label: r.try_get("remote_device_label").map_err(be)?,
         remote_client_mtime: r.try_get("remote_client_mtime").map_err(be)?,
         remote_size: r.try_get("remote_size").map_err(be)?,
+        remote_deleted: r.try_get("remote_deleted").map_err(be)?,
         rom_id: r.try_get("rom_id").map_err(be)?,
         seen_at: r.try_get("seen_at").map_err(be)?,
     })
@@ -63,19 +65,20 @@ impl SyncRepo {
         row.as_ref().map(base_from).transpose()
     }
 
-    /// Insere ou substitui a linha da chave, `wiped_at` incluído: um sync
-    /// novo grava a linha sem ele e o limpa.
+    /// Insere ou substitui a linha da chave, `wiped_at` e `backup_path`
+    /// incluídos: um sync novo grava a linha sem eles e os limpa.
     pub async fn base_put(&self, b: &BaseRow) -> Result<(), RepoError> {
         sqlx::query(
             "INSERT INTO sync_base (key, kind, remote_save_id, remote_version_id, remote_hash, \
-             local_hash, local_path, rom_crc32, synced_at, wiped_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) \
+             local_hash, local_path, rom_crc32, synced_at, wiped_at, backup_path) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
              ON CONFLICT(key) DO UPDATE SET kind = excluded.kind, \
              remote_save_id = excluded.remote_save_id, \
              remote_version_id = excluded.remote_version_id, \
              remote_hash = excluded.remote_hash, local_hash = excluded.local_hash, \
              local_path = excluded.local_path, rom_crc32 = excluded.rom_crc32, \
-             synced_at = excluded.synced_at, wiped_at = excluded.wiped_at",
+             synced_at = excluded.synced_at, wiped_at = excluded.wiped_at, \
+             backup_path = excluded.backup_path",
         )
         .bind(&b.key)
         .bind(&b.kind)
@@ -87,6 +90,7 @@ impl SyncRepo {
         .bind(&b.rom_crc32)
         .bind(b.synced_at)
         .bind(b.wiped_at)
+        .bind(&b.backup_path)
         .execute(&self.db)
         .await
         .map_err(be)?;
@@ -113,10 +117,18 @@ impl SyncRepo {
         rows.iter().map(base_from).collect()
     }
 
-    pub async fn base_mark_wiped(&self, key: &str, at: i64) -> Result<(), RepoError> {
-        sqlx::query("UPDATE sync_base SET wiped_at = ?2 WHERE key = ?1")
+    /// Marca a base como apagada no site, com o lugar para onde o arquivo foi
+    /// (`None` quando nada se mudou: a linha própria de um state, D127).
+    pub async fn base_mark_wiped(
+        &self,
+        key: &str,
+        at: i64,
+        backup_path: Option<&str>,
+    ) -> Result<(), RepoError> {
+        sqlx::query("UPDATE sync_base SET wiped_at = ?2, backup_path = ?3 WHERE key = ?1")
             .bind(key)
             .bind(at)
+            .bind(backup_path)
             .execute(&self.db)
             .await
             .map_err(be)?;
@@ -127,8 +139,8 @@ impl SyncRepo {
         sqlx::query(
             "INSERT INTO sync_conflicts (key, local_hash, local_mtime, local_size, \
              remote_save_id, remote_version_id, remote_hash, remote_device_label, \
-             remote_client_mtime, remote_size, rom_id, seen_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) \
+             remote_client_mtime, remote_size, remote_deleted, rom_id, seen_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) \
              ON CONFLICT(key) DO UPDATE SET local_hash = excluded.local_hash, \
              local_mtime = excluded.local_mtime, local_size = excluded.local_size, \
              remote_save_id = excluded.remote_save_id, \
@@ -136,7 +148,8 @@ impl SyncRepo {
              remote_hash = excluded.remote_hash, \
              remote_device_label = excluded.remote_device_label, \
              remote_client_mtime = excluded.remote_client_mtime, \
-             remote_size = excluded.remote_size, rom_id = excluded.rom_id, \
+             remote_size = excluded.remote_size, \
+             remote_deleted = excluded.remote_deleted, rom_id = excluded.rom_id, \
              seen_at = excluded.seen_at",
         )
         .bind(&c.key)
@@ -149,6 +162,7 @@ impl SyncRepo {
         .bind(&c.remote_device_label)
         .bind(c.remote_client_mtime)
         .bind(c.remote_size)
+        .bind(c.remote_deleted)
         .bind(&c.rom_id)
         .bind(c.seen_at)
         .execute(&self.db)

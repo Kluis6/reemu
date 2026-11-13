@@ -227,6 +227,10 @@ export function useSyncEvents() {
       if (e.type === 'pass' && e.uploaded > 0) {
         useToastStore.getState().push(sysToast(i18n.t('sync.toast.uploaded', { count: e.uploaded }), 'Success'))
       }
+      // S13: um save apagado no site saiu desta máquina (para o resguardo).
+      if (e.type === 'pass' && e.backedUp > 0) {
+        useToastStore.getState().push(sysToast(i18n.t('sync.toast.removed', { count: e.backedUp })))
+      }
     }).then((d) => {
       if (disposed) d()
       else dispose = d

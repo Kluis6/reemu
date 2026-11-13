@@ -65,8 +65,8 @@ const CONFLICT: SyncConflict = {
   key: KEY,
   romId: 'r1',
   title: 'Zelda',
-  local: { machine: 'PC-ED', deviceId: 'dev1', savedAt: 1_700_000_000, size: 2048 },
-  remote: { machine: 'Notebook-Ed', deviceId: 'dev2', savedAt: 1_700_003_600, size: 4096 },
+  local: { machine: 'PC-ED', deviceId: 'dev1', savedAt: 1_700_000_000, size: 2048, deleted: false },
+  remote: { machine: 'Notebook-Ed', deviceId: 'dev2', savedAt: 1_700_003_600, size: 4096, deleted: false },
 }
 
 function Where() {

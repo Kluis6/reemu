@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   syncConflicts: vi.fn(),
   syncVersions: vi.fn(),
   syncRestore: vi.fn(),
+  syncOpenBackups: vi.fn(),
 }))
 vi.mock('../../lib/tauri', async (orig) => ({ ...(await orig<typeof import('../../lib/tauri')>()), ...api }))
 // O Dialog do Fluent não monta no happy-dom desta árvore ("presenceFn is not a
@@ -36,6 +37,8 @@ const line = (over: Partial<SaveLineStatus>): SaveLineStatus => ({
   key: 'file:gba/Zelda.srm',
   ...over,
 })
+
+const side = (machine: string, deleted = false) => ({ machine, deviceId: null, savedAt: 1, size: 1, deleted })
 
 let ui: Awaited<ReturnType<typeof mountWithQuery>>
 const mount = async () => {
@@ -66,13 +69,33 @@ describe('SaveLine', () => {
 
   it('conflict: names both machines from syncConflicts', async () => {
     api.syncSaveStatus.mockResolvedValue(line({ state: 'conflict', syncedAt: null }))
-    const side = (machine: string) => ({ machine, savedAt: 1, size: 1 })
     api.syncConflicts.mockResolvedValue([
       { key: 'outra', romId: null, title: 'X', local: side('A'), remote: side('B') },
       { key: 'file:gba/Zelda.srm', romId: 'r1', title: 'Zelda', local: side('PC-ED'), remote: side('Notebook-Ed') },
     ])
     await mount()
     expect(ui.host.textContent).toContain('Conflito: PC-ED e Notebook-Ed mudaram')
+  })
+
+  it('conflict against a site deletion says it was deleted on the site', async () => {
+    api.syncSaveStatus.mockResolvedValue(line({ state: 'conflict', syncedAt: null }))
+    api.syncConflicts.mockResolvedValue([
+      { key: 'file:gba/Zelda.srm', romId: 'r1', title: 'Zelda', local: side('PC-ED'), remote: side('PC-ED', true) },
+    ])
+    await mount()
+    expect(ui.host.textContent).toContain('Conflito: apagado no site e mudou aqui')
+    expect(ui.host.textContent).not.toContain('PC-ED e PC-ED')
+  })
+
+  it('removed (S13): says the save was deleted on the site and opens its folder', async () => {
+    api.syncSaveStatus.mockResolvedValue(line({ state: 'removed', syncedAt: null, versions: 4 }))
+    api.syncOpenBackups.mockResolvedValue(undefined)
+    await mount()
+    expect(ui.host.textContent).toContain('Game save apagado no site.')
+    expect(ui.host.textContent).toContain('pasta de resguardo')
+    expect(button('histórico')).toBeUndefined()
+    await act(async () => button('Abrir pasta')!.click())
+    expect(api.syncOpenBackups).toHaveBeenCalledWith('file:gba/Zelda.srm')
   })
 
   it('none renders nothing', async () => {

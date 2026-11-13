@@ -609,7 +609,8 @@ export type { HardwarePayload, Quota, SaveLineStatus, Side, SyncConflict, SyncMa
 /** Eventos do canal `sync`. `status`: a tela relê o estado. */
 export type SyncEvent =
   | { type: 'status' }
-  | { type: 'pass'; uploaded: number; downloaded: number }
+  /** `backedUp`: saves apagados no site que foram para a pasta de resguardo. */
+  | { type: 'pass'; uploaded: number; downloaded: number; backedUp: number }
   | { type: 'conflict'; key: string }
   | { type: 'error'; code: string }
   | { type: 'quota'; usedBytes: number; limitBytes: number }
@@ -645,8 +646,9 @@ export const syncRestore = (key: string, versionId: string) =>
   invoke<void>('sync_restore', { key, versionId })
 /** A linha de save da página do jogo (só disco e SQLite, sem rede). */
 export const syncSaveStatus = (romId: string) => invoke<SaveLineStatus>('sync_save_status', { romId })
-/** Abre a pasta dos backups do sync no gerenciador de arquivos. */
-export const syncOpenBackups = () => invoke<void>('sync_open_backups')
+/** Abre a pasta dos backups do sync no gerenciador de arquivos. Com a chave de
+ *  um save apagado no site, abre a pasta onde o arquivo dele foi parar. */
+export const syncOpenBackups = (key?: string) => invoke<void>('sync_open_backups', { key: key ?? null })
 export async function onSyncEvent(cb: (e: SyncEvent) => void): Promise<() => void> {
   if (!inTauri) return () => {}
   const { listen } = await import('@tauri-apps/api/event')

@@ -85,6 +85,10 @@ pub fn decide(
         (Kind::File, Some(l)) if l.size == 0 => None,
         (_, l) => l,
     };
+    // Arquivo cuja remoção no site já foi aceita: a base ficou só como marca
+    // (a página diz "apagado no site") e vale por ausente. O que aparecer
+    // depois, aqui ou na nuvem, é novo.
+    let base = base.filter(|b| !(kind == Kind::File && b.wiped_at.is_some()));
     // Remota viva e vazia, para arquivo, vale por ausente: nunca baixa um
     // arquivo vazio por cima de um save.
     let live = remote.filter(|r| !r.deleted && !(kind == Kind::File && r.size == 0));
@@ -173,6 +177,7 @@ mod tests {
             rom_crc32: None,
             synced_at: 1,
             wiped_at: None,
+            backup_path: None,
         }
     }
 
@@ -363,6 +368,43 @@ mod tests {
         let b = base("a", "r");
         assert_eq!(run(None, Some(&b), Some(&tomb(None))), Action::DropBase);
         assert_eq!(run(None, Some(&b), None), Action::DropBase);
+    }
+
+    /// I-4: a remoção no site aceita deixa a base marcada; para arquivo ela
+    /// vale por ausente: sem arquivo, nada (não some a marca); jogo novo
+    /// aqui sobe como linha nova; outra máquina que envie desce.
+    #[test]
+    fn decide_a_wiped_file_base_is_no_base() {
+        let wiped = BaseRow {
+            wiped_at: Some(5),
+            backup_path: Some("/b/a.srm".into()),
+            ..base("a", "r")
+        };
+        assert_eq!(run(None, Some(&wiped), Some(&tomb(None))), Action::Nothing);
+        assert_eq!(run(None, Some(&wiped), None), Action::Nothing);
+        assert_eq!(
+            run(Some(&local("a")), Some(&wiped), Some(&tomb(None))),
+            Action::Upload
+        );
+        assert_eq!(
+            run(None, Some(&wiped), Some(&remote("n"))),
+            Action::Download
+        );
+        assert_eq!(
+            run(Some(&local("a")), Some(&wiped), Some(&remote("r"))),
+            Action::Conflict
+        );
+        // Para o que não é arquivo a marca ainda é base (D127).
+        assert_eq!(
+            decide(
+                Kind::State,
+                Some(&local("a")),
+                Some(&wiped),
+                Some(&tomb(Some(ME))),
+                ME
+            ),
+            Action::MarkBaseWipedKeepLocal
+        );
     }
 
     #[test]

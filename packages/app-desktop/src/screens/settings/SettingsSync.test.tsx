@@ -247,7 +247,7 @@ describe('SettingsSync', () => {
     await unmount()
     host.remove()
 
-    const side = (machine: string) => ({ machine, savedAt: 1_700_000_000, size: 2048 })
+    const side = (machine: string, deleted = false) => ({ machine, deviceId: null, savedAt: 1_700_000_000, size: 2048, deleted })
     const c = (key: string, title: string) => ({
       key,
       romId: null,
@@ -277,6 +277,20 @@ describe('SettingsSync', () => {
     await settle()
     expect(api.syncResolve).toHaveBeenCalledWith('k2', 'local')
     expect(dialog()).toBeNull()
+  })
+
+  it('Conflitos counts a site deletion apart from the two-machine conflicts (I-4)', async () => {
+    const side = (machine: string, deleted = false) => ({ machine, deviceId: null, savedAt: 1_700_000_000, size: 2048, deleted })
+    api.syncStatus.mockResolvedValue({ ...ON, conflicts: 3 })
+    api.syncConflicts.mockResolvedValue([
+      { key: 'k1', romId: null, title: 'Zelda', local: side('PC-SALA'), remote: side('Notebook') },
+      { key: 'k2', romId: null, title: 'Chrono', local: side('PC-SALA'), remote: side('', true) },
+      { key: 'k3', romId: null, title: 'Mario', local: side('PC-SALA'), remote: side('Deck') },
+    ])
+    await mount()
+    expect(host.textContent).toContain('2 game saves mudaram nas duas máquinas.')
+    expect(host.textContent).toContain('1 game save foi apagado no site e mudou aqui.')
+    expect(host.textContent).not.toContain('3 game saves')
   })
 
   it('offers Copiar configurações only on other ReEmu machines (D119)', async () => {

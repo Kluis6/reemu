@@ -497,6 +497,9 @@ const ptBR = {
       conflictShort: 'Conflito no game save',
       history_one: 'histórico ({{count}} versão)',
       history_other: 'histórico ({{count}} versões)',
+      conflictDeleted: 'Conflito: apagado no site e mudou aqui',
+      removed: 'Game save apagado no site. O arquivo desta máquina está na pasta de resguardo.',
+      openFolder: 'Abrir pasta',
     },
     conflict: {
       title: '{{title}} mudou nas duas máquinas',
@@ -508,6 +511,13 @@ const ptBR = {
       keepOther: 'Manter a de {{machine}}',
       later: 'Decidir depois',
       footer: 'Nada é apagado. Dá para voltar pelo histórico.',
+      deletedTitle: '{{title}} foi apagado no site',
+      deletedBody: 'O save foi apagado no alvanista.com, mas esta máquina jogou depois disso. Escolha se ele sobe de novo ou se a remoção vale aqui também.',
+      deletedOnSite: 'Apagado no site',
+      deletedHint: 'Não há versão na nuvem para trazer.',
+      keepThisAgain: 'Manter esta (sobe de novo)',
+      acceptDeletion: 'Aceitar a remoção (vai para a pasta de resguardo)',
+      deletedFooter: 'Nada é apagado nesta máquina.',
     },
     conflicts: {
       title: 'Conflitos',
@@ -515,6 +525,8 @@ const ptBR = {
       count_other: '{{count}} game saves mudaram nas duas máquinas.',
       hint: 'Nada é apagado: o save que você não escolher fica no histórico.',
       resolve: 'Resolver',
+      deletedCount_one: '{{count}} game save foi apagado no site e mudou aqui.',
+      deletedCount_other: '{{count}} game saves foram apagados no site e mudaram aqui.',
     },
     history: {
       title: 'Histórico do game save',
@@ -528,6 +540,8 @@ const ptBR = {
     toast: {
       uploaded_one: '{{count}} game save enviado para a sua conta.',
       uploaded_other: '{{count}} game saves enviados para a sua conta.',
+      removed_one: '{{count}} game save apagado no site foi para a pasta de resguardo.',
+      removed_other: '{{count}} game saves apagados no site foram para a pasta de resguardo.',
     },
     err: {
       no_account: 'Entre com o Alvanista para sincronizar.',

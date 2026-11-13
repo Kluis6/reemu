@@ -12,4 +12,9 @@ deviceId: string | null,
 /**
  * Segundos Unix.
  */
-savedAt: number, size: number, };
+savedAt: number, size: number, 
+/**
+ * Só no lado da nuvem: o save foi apagado no site (não é outra versão,
+ * e não há máquina, data nem tamanho a mostrar).
+ */
+deleted: boolean, };

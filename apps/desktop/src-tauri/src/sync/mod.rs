@@ -878,8 +878,14 @@ pub const SYNC_EVENT: &str = "sync";
 pub enum SyncEvent {
     /// A tela relê o estado.
     Status,
-    /// Uma passada terminou.
-    Pass { uploaded: u32, downloaded: u32 },
+    /// Uma passada terminou. `backed_up`: saves apagados no site que foram
+    /// para a pasta de resguardo.
+    #[serde(rename_all = "camelCase")]
+    Pass {
+        uploaded: u32,
+        downloaded: u32,
+        backed_up: u32,
+    },
     /// Um conflito novo.
     Conflict { key: String },
     /// Um código de `SyncError` (`revoked`, `quota`...).
@@ -1051,14 +1057,20 @@ pub async fn sync_save_status(app: AppHandle, rom_id: String) -> Result<SaveLine
         .map_err(|e| e.to_string())
 }
 
-/// Abre a pasta dos backups do sync (a cria se ainda não existe).
+/// Abre a pasta dos backups do sync (a cria se ainda não existe). Com `key`
+/// de um save apagado no site, abre a pasta onde o arquivo dele foi parar.
 #[tauri::command]
-pub async fn sync_open_backups(app: AppHandle) -> Result<(), String> {
-    let dir = crate::data_dir(&app).join("sync-backups");
-    std::fs::create_dir_all(&dir).map_err(|e| {
+pub async fn sync_open_backups(app: AppHandle, key: Option<String>) -> Result<(), String> {
+    let root = crate::data_dir(&app).join("sync-backups");
+    std::fs::create_dir_all(&root).map_err(|e| {
         log::warn!("sync: não criou a pasta de backups: {e}");
         "failed".to_owned()
     })?;
+    let removed = match (key, engine_of(&app).ok()) {
+        (Some(key), Some(engine)) => engine.removed_folder(&key).await,
+        _ => None,
+    };
+    let dir = removed.unwrap_or(root);
     open::that_detached(&dir).map_err(|e| {
         log::warn!("sync: não abriu a pasta de backups: {e}");
         "failed".to_owned()
@@ -2371,9 +2383,10 @@ mod tests {
         assert_eq!(
             json(SyncEvent::Pass {
                 uploaded: 1,
-                downloaded: 2
+                downloaded: 2,
+                backed_up: 3
             }),
-            serde_json::json!({"type": "pass", "uploaded": 1, "downloaded": 2})
+            serde_json::json!({"type": "pass", "uploaded": 1, "downloaded": 2, "backedUp": 3})
         );
         assert_eq!(
             json(SyncEvent::Conflict { key: "k".into() }),

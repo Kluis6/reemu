@@ -496,6 +496,9 @@ const es: Messages = {
       conflictShort: 'Conflicto en el game save',
       history_one: 'historial ({{count}} versión)',
       history_other: 'historial ({{count}} versiones)',
+      conflictDeleted: 'Conflicto: borrado en el sitio y cambiado aquí',
+      removed: 'Game save borrado en el sitio. El archivo de esta máquina está en la carpeta de respaldo.',
+      openFolder: 'Abrir carpeta',
     },
     conflict: {
       title: '{{title}} cambió en las dos máquinas',
@@ -507,6 +510,13 @@ const es: Messages = {
       keepOther: 'Mantener el de {{machine}}',
       later: 'Decidir después',
       footer: 'No se borra nada. Se puede volver por el historial.',
+      deletedTitle: '{{title}} fue borrado en el sitio',
+      deletedBody: 'El save fue borrado en alvanista.com, pero esta máquina jugó después. Elige si vuelve a subir o si el borrado vale aquí también.',
+      deletedOnSite: 'Borrado en el sitio',
+      deletedHint: 'No hay versión en la nube para traer.',
+      keepThisAgain: 'Mantener este (sube de nuevo)',
+      acceptDeletion: 'Aceptar el borrado (va a la carpeta de respaldo)',
+      deletedFooter: 'No se borra nada en esta máquina.',
     },
     conflicts: {
       title: 'Conflictos',
@@ -514,6 +524,8 @@ const es: Messages = {
       count_other: '{{count}} game saves cambiaron en las dos máquinas.',
       hint: 'No se borra nada: el save que no elijas queda en el historial.',
       resolve: 'Resolver',
+      deletedCount_one: '{{count}} game save fue borrado en el sitio y cambió aquí.',
+      deletedCount_other: '{{count}} game saves fueron borrados en el sitio y cambiaron aquí.',
     },
     history: {
       title: 'Historial del game save',
@@ -527,6 +539,8 @@ const es: Messages = {
     toast: {
       uploaded_one: '{{count}} game save enviado a tu cuenta.',
       uploaded_other: '{{count}} game saves enviados a tu cuenta.',
+      removed_one: '{{count}} game save borrado en el sitio fue a la carpeta de respaldo.',
+      removed_other: '{{count}} game saves borrados en el sitio fueron a la carpeta de respaldo.',
     },
     err: {
       no_account: 'Entra con Alvanista para sincronizar.',

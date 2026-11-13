@@ -37,8 +37,8 @@ const CONFLICT: SyncConflict = {
   key: 'file:gba/Zelda.srm',
   romId: 'r1',
   title: 'Zelda',
-  local: { machine: 'PC-ED', deviceId: 'dev1', savedAt: 1_700_000_000, size: 2048 },
-  remote: { machine: 'Notebook-Ed', deviceId: null, savedAt: 1_700_003_600, size: 4096 },
+  local: { machine: 'PC-ED', deviceId: 'dev1', savedAt: 1_700_000_000, size: 2048, deleted: false },
+  remote: { machine: 'Notebook-Ed', deviceId: null, savedAt: 1_700_003_600, size: 4096, deleted: false },
 }
 
 let ui: Awaited<ReturnType<typeof mountWithQuery>>
@@ -122,6 +122,29 @@ describe('ConflictDialog', () => {
     await act(async () => button('fechar')!.click())
     expect(onDone).toHaveBeenLastCalledWith('dismiss')
     expect(api.syncResolve).not.toHaveBeenCalled()
+  })
+
+  it('a deletion on the site asks something else: upload again or accept the deletion', async () => {
+    // A última versão foi escrita por esta mesma máquina e apagada no site.
+    const gone: SyncConflict = {
+      ...CONFLICT,
+      remote: { machine: '', deviceId: null, savedAt: 0, size: 0, deleted: true },
+    }
+    ui = await mountWithQuery(<ConflictDialog conflict={gone} onDone={onDone} />)
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('Zelda foi apagado no site')
+    expect(text).toContain('O save foi apagado no alvanista.com, mas esta máquina jogou depois disso.')
+    expect(text).toContain('Apagado no site')
+    expect(text).toContain('Nada é apagado nesta máquina.')
+    expect(text).not.toContain('mudou nas duas máquinas')
+    expect(text).not.toContain('Manter a de')
+    expect(text).not.toContain('0 B')
+    await act(async () => button('Manter esta (sobe de novo)')!.click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenLastCalledWith('file:gba/Zelda.srm', 'local')
+    await act(async () => button('Aceitar a remoção (vai para a pasta de resguardo)')!.click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenLastCalledWith('file:gba/Zelda.srm', 'remote')
   })
 
   it('a failed resolve keeps the dialog and shows the reason', async () => {

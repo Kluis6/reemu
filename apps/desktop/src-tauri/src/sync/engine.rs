@@ -120,6 +120,9 @@ pub struct Side {
     /// Segundos Unix.
     pub saved_at: i64,
     pub size: u64,
+    /// Só no lado da nuvem: o save foi apagado no site (não é outra versão,
+    /// e não há máquina, data nem tamanho a mostrar).
+    pub deleted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -157,6 +160,9 @@ pub enum SaveLineState {
     /// Mudou aqui (ou nunca subiu) e o sync está ligado.
     Pending,
     Conflict,
+    /// O save foi apagado no site e o arquivo daqui foi para a pasta de
+    /// resguardo (S13).
+    Removed,
 }
 
 /// A linha de save da página do jogo. Só disco e SQLite: nada de rede.
@@ -479,10 +485,12 @@ impl Engine {
                 }
             }
         }
-        if let (Ok(report), Mode::Pass) = (result, mode) {
+        // Também antes de abrir: uma remoção no site aceita ali é avisada igual.
+        if let Ok(report) = result {
             self.emit(SyncEvent::Pass {
                 uploaded: report.uploaded,
                 downloaded: report.downloaded,
+                backed_up: report.backed_up,
             });
         }
         self.emit(SyncEvent::Status);
@@ -1054,26 +1062,34 @@ impl Engine {
     }
 
     /// A nuvem apagou um save da conta: o arquivo daqui se muda para o backup
-    /// e a base sai.
+    /// e a base fica marcada (S13: a página do jogo diz que foi apagado no
+    /// site e abre a pasta).
     async fn accept_deletion(&self, cx: &Ctx<'_>, e: &Entry) -> Result<Done, Fail> {
         if !receives(cx, e.file.platform) || !self.may_write(cx.mode) {
             return Ok(Done::Deferred);
         }
-        self.clear_away(&e.file).map_err(Fail::File)?;
-        self.repo
-            .base_delete(&e.file.key)
-            .await
-            .map_err(|err| Fail::File(repo_err(err)))?;
+        self.removed_on_site(&e.file).await.map_err(Fail::File)?;
         Ok(Done::BackedUp)
     }
 
-    /// Muda o arquivo (se existir) para a pasta de backup.
-    fn clear_away(&self, file: &SaveFile) -> Result<(), SyncError> {
+    /// Muda o arquivo daqui para o backup e deixa a base como marca de
+    /// "apagado no site", com o lugar para onde ele foi.
+    async fn removed_on_site(&self, file: &SaveFile) -> Result<(), SyncError> {
+        let moved = self.clear_away(file)?;
+        let moved = moved.map(|p| p.to_string_lossy().into_owned());
+        self.repo
+            .base_mark_wiped(&file.key, now_secs(), moved.as_deref())
+            .await
+            .map_err(repo_err)
+    }
+
+    /// Muda o arquivo (se existir) para a pasta de backup; devolve para onde.
+    fn clear_away(&self, file: &SaveFile) -> Result<Option<PathBuf>, SyncError> {
         let fail = |err: io::Error| failed(format!("backup de {}: {err}", file.path.display()));
         if present(&file.path).map_err(fail)? {
-            self.move_to_backup(&file.path).map_err(fail)?;
+            return self.move_to_backup(&file.path).map(Some).map_err(fail);
         }
-        Ok(())
+        Ok(None)
     }
 
     async fn conflict_step(
@@ -1104,6 +1120,9 @@ impl Engine {
             remote_device_label: writer,
             remote_client_mtime: r.client_mtime,
             remote_size: r.size,
+            // A linha da nuvem foi apagada no site: o diálogo pergunta outra
+            // coisa (subir de novo ou aceitar a remoção).
+            remote_deleted: r.deleted,
             rom_id: e.file.rom_id.clone(),
             seen_at: now_secs(),
         };
@@ -1122,7 +1141,9 @@ impl Engine {
     /// As ações que só mexem na base: nada em disco nem na rede (D127).
     async fn base_only(&self, key: &str, action: Action) -> Result<(), SyncError> {
         let done = match action {
-            Action::MarkBaseWipedKeepLocal => self.repo.base_mark_wiped(key, now_secs()).await,
+            Action::MarkBaseWipedKeepLocal => {
+                self.repo.base_mark_wiped(key, now_secs(), None).await
+            }
             Action::DropBase => self.repo.base_delete(key).await,
             _ => Ok(()),
         };
@@ -1149,6 +1170,7 @@ impl Engine {
                 rom_crc32: file.rom_crc32.clone(),
                 synced_at: now_secs(),
                 wiped_at: None,
+                backup_path: None,
             })
             .await
             .map_err(repo_err)
@@ -1312,9 +1334,9 @@ impl Engine {
         }
         let live = row.filter(|r| r.deleted_at.is_none());
         let Some((row, current)) = live.and_then(|r| r.current.as_ref().map(|c| (r, c))) else {
-            // A nuvem apagou o save: aceitar é mandar o daqui para o backup.
-            self.clear_away(file)?;
-            return self.repo.base_delete(&file.key).await.map_err(repo_err);
+            // A nuvem apagou o save: aceitar é mandar o daqui para o backup, e
+            // a página do jogo passa a dizer que ele foi apagado no site.
+            return self.removed_on_site(file).await;
         };
         // A versão que o diálogo mostrou; se a linha mudou, a atual.
         let (version_id, hash, size) =
@@ -1476,8 +1498,10 @@ impl Engine {
                     device_id: here_id.clone(),
                     saved_at: c.local_mtime,
                     size: c.local_size.max(0) as u64,
+                    deleted: false,
                 },
                 remote: Side {
+                    deleted: c.remote_deleted,
                     machine: c.remote_device_label.unwrap_or_default(),
                     device_id: known
                         .iter()
@@ -1538,6 +1562,8 @@ impl Engine {
         let mut main: Option<String> = None;
         let mut pending = false;
         let mut synced_at: Option<i64> = None;
+        // Um save apagado no site cujo arquivo daqui foi para o resguardo.
+        let mut removed: Option<String> = None;
         for f in &files {
             let base = self.repo.base_get(&f.key).await.map_err(repo_err)?;
             let local = match sha256_file(&f.path) {
@@ -1546,6 +1572,13 @@ impl Engine {
                 Err(e) if e.kind() == io::ErrorKind::NotFound => None,
                 Err(e) => return Err(failed(format!("{}: {e}", f.path.display()))),
             };
+            // A base marcada pela remoção aceita vale por ausente; sem arquivo
+            // aqui, ela é o que a página diz.
+            let wiped = base.as_ref().is_some_and(|b| b.wiped_at.is_some());
+            let base = base.filter(|b| b.wiped_at.is_none());
+            if wiped && local.is_none() {
+                removed.get_or_insert_with(|| f.key.clone());
+            }
             if local.is_none() && base.is_none() {
                 continue;
             }
@@ -1557,10 +1590,11 @@ impl Engine {
                 _ => pending = true,
             }
         }
-        let state = match (&main, pending) {
-            (None, _) => SaveLineState::None,
-            (Some(_), true) => SaveLineState::Pending,
-            (Some(_), false) => SaveLineState::Synced,
+        let state = match (&main, pending, &removed) {
+            (None, _, None) => SaveLineState::None,
+            (None, _, Some(_)) => SaveLineState::Removed,
+            (Some(_), true, _) => SaveLineState::Pending,
+            (Some(_), false, _) => SaveLineState::Synced,
         };
         Ok(SaveLineStatus {
             state,
@@ -1570,8 +1604,23 @@ impl Engine {
                 None
             },
             versions: main.as_deref().map_or(0, versions_of),
-            key: main,
+            key: main.or(removed),
         })
+    }
+
+    /// A pasta onde foi parar o arquivo de um save apagado no site (para o
+    /// "Abrir pasta" da página do jogo). Só dentro de `sync-backups`, e só se
+    /// ela ainda existe; senão `None` e quem chama abre a pasta de backups.
+    pub async fn removed_folder(&self, key: &str) -> Option<PathBuf> {
+        let base = self.repo.base_get(key).await.ok().flatten()?;
+        base.wiped_at?;
+        let moved = PathBuf::from(base.backup_path?);
+        let dir = moved.parent()?.to_path_buf();
+        let root = self.dirs.data.join("sync-backups");
+        let plain = dir
+            .components()
+            .all(|c| !matches!(c, std::path::Component::ParentDir));
+        (plain && dir.starts_with(&root) && dir.is_dir()).then_some(dir)
     }
 
     /// O arquivo de uma chave, exista ou não: o mapa da biblioteca diz onde
@@ -2106,6 +2155,7 @@ mod tests {
                     rom_crc32: Some("CRC".into()),
                     synced_at: 1,
                     wiped_at: None,
+                    backup_path: None,
                 })
                 .await
                 .unwrap();
@@ -2418,7 +2468,8 @@ mod tests {
 
         assert!(r.events().contains(&SyncEvent::Pass {
             uploaded: 1,
-            downloaded: 0
+            downloaded: 0,
+            backed_up: 0
         }));
         let rt = r.sync.runtime();
         assert!(rt.last_pass_at.is_some());
@@ -2761,6 +2812,10 @@ mod tests {
         .await;
         mount_content(&r.server, "s1", "v1", b"a").await;
         assert_eq!(r.pass().await.unwrap().conflicts, 1);
+        // I-4: o diálogo sabe que o outro lado é uma remoção no site.
+        let view = r.engine.conflicts().await.unwrap();
+        assert!(view[0].remote.deleted && !view[0].local.deleted);
+        assert!(r.repo.conflicts_all().await.unwrap()[0].remote_deleted);
 
         r.engine
             .resolve(&r.alva, ZELDA, Keep::Remote)
@@ -2771,9 +2826,56 @@ mod tests {
             r.backups(),
             vec![("saves/Zelda.srm".to_owned(), b"a2".to_vec())]
         );
-        assert!(r.base_of(ZELDA).await.is_none());
+        // A base fica como marca de "apagado no site", com o lugar do arquivo.
+        let base = r.base_of(ZELDA).await.unwrap();
+        assert!(base.wiped_at.is_some());
+        assert!(PathBuf::from(base.backup_path.unwrap()).ends_with("saves/Zelda.srm"));
+        assert_eq!(
+            r.engine.save_status("r1").await.unwrap().state,
+            SaveLineState::Removed
+        );
         assert!(r.repo.conflicts_all().await.unwrap().is_empty());
         assert_eq!(r.content_gets().await, 0, "nada desce de uma linha apagada");
+    }
+
+    /// I-4: "Manter esta (sobe de novo)" contra uma remoção no site: o save
+    /// daqui sobe com os campos da linha apagada (o servidor abre uma linha
+    /// viva nova e a apagada fica), nada vai para o resguardo.
+    #[tokio::test]
+    async fn keeping_this_save_against_a_site_deletion_uploads_it_again() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("keep-against-tomb").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        r.base(ZELDA, "saves/Zelda.srm", b"a", b"a", ("s1", "v1"))
+            .await;
+        r.write("saves/Zelda.srm", b"a2");
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        // A última versão foi escrita por esta mesma máquina e apagada.
+        let mut gone = tombstone(row(
+            "s1",
+            "Zelda.srm",
+            "gba",
+            None,
+            b"a",
+            "v1",
+            Some("dev1"),
+        ));
+        gone["current"] = Value::Null;
+        mount_files(&r.server, vec![gone]).await;
+        mount_upload(&r.server, "s2", "v1").await;
+        assert_eq!(r.pass().await.unwrap().conflicts, 1);
+        let view = r.engine.conflicts().await.unwrap();
+        assert!(view[0].remote.deleted);
+
+        r.engine.resolve(&r.alva, ZELDA, Keep::Local).await.unwrap();
+        let posts = r.reqs("POST", SAVES).await;
+        assert_eq!(posts.len(), 1);
+        assert_eq!(field(&posts[0].body, "file").as_deref(), Some("a2"));
+        assert_eq!(field(&posts[0].body, "platform").as_deref(), Some("gba"));
+        let base = r.base_of(ZELDA).await.unwrap();
+        assert_eq!((base.remote_save_id.as_str(), base.wiped_at), ("s2", None));
+        assert!(r.backups().is_empty());
+        assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"a2");
     }
 
     /// Review Focus 5: o 401 no meio da passada, confirmado pela lista do
@@ -3120,7 +3222,28 @@ mod tests {
             r.backups(),
             vec![("saves/Zelda.srm".to_owned(), b"old".to_vec())]
         );
-        assert!(r.base_of(ZELDA).await.is_none());
+        // S13: a base fica como marca, e a página do jogo diz que o save foi
+        // apagado no site e abre a pasta onde o arquivo foi parar.
+        let base = r.base_of(ZELDA).await.unwrap();
+        assert!(base.wiped_at.is_some());
+        let line = r.engine.save_status("r1").await.unwrap();
+        assert_eq!(
+            (line.state, line.key.as_deref(), line.versions),
+            (SaveLineState::Removed, Some(ZELDA), 0)
+        );
+        let folder = r.engine.removed_folder(ZELDA).await.unwrap();
+        assert!(folder.starts_with(r.path("sync-backups")));
+        assert_eq!(
+            std::fs::read(folder.join("Zelda.srm")).unwrap(),
+            b"old",
+            "a pasta é a do arquivo"
+        );
+        // O aviso da passada conta o que foi para o resguardo.
+        assert!(r.events().contains(&SyncEvent::Pass {
+            uploaded: 0,
+            downloaded: 0,
+            backed_up: 1
+        }));
 
         let again = r.pass().await.unwrap();
         assert_eq!((again.uploaded, again.downloaded), (0, 0));
@@ -3129,6 +3252,23 @@ mod tests {
             "a remoção não se desfaz"
         );
         assert!(r.read("saves/Zelda.srm").is_none());
+        assert_eq!(
+            r.engine.save_status("r1").await.unwrap().state,
+            SaveLineState::Removed,
+            "a marca fica"
+        );
+
+        // Jogou de novo: o save novo é novo, sobe como linha viva e a marca sai.
+        r.write("saves/Zelda.srm", b"new run");
+        assert_eq!(
+            r.engine.save_status("r1").await.unwrap().state,
+            SaveLineState::Pending
+        );
+        mount_upload(&r.server, "s9", "v1").await;
+        assert_eq!(r.pass().await.unwrap().uploaded, 1);
+        let base = r.base_of(ZELDA).await.unwrap();
+        assert_eq!((base.wiped_at, base.backup_path), (None, None));
+        assert_eq!(r.engine.removed_folder(ZELDA).await, None);
     }
 
     /// D127: a linha própria apagada (states e configurações; arquivo nunca
@@ -3155,6 +3295,7 @@ mod tests {
                 rom_crc32: None,
                 synced_at: 1,
                 wiped_at: None,
+                backup_path: None,
             })
             .await
             .unwrap();
@@ -4051,6 +4192,7 @@ mod tests {
                 remote_device_label: None,
                 remote_client_mtime: None,
                 remote_size: 1,
+                remote_deleted: false,
                 rom_id: Some("r1".into()),
                 seen_at: 1,
             })
@@ -4088,6 +4230,7 @@ mod tests {
                 remote_device_label: None,
                 remote_client_mtime: None,
                 remote_size: 1,
+                remote_deleted: false,
                 rom_id: Some("r1".into()),
                 seen_at: 1,
             })
@@ -4554,6 +4697,7 @@ mod tests {
                 remote_device_label: None,
                 remote_client_mtime: None,
                 remote_size: 1,
+                remote_deleted: false,
                 rom_id: Some("r1".into()),
                 seen_at: 1,
             })

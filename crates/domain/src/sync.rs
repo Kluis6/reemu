@@ -20,8 +20,12 @@ pub struct BaseRow {
     /// CRC32 da ROM quando a chave pertence a uma ROM da biblioteca.
     pub rom_crc32: Option<String>,
     pub synced_at: i64,
-    /// Marcado quando o servidor apagou a linha deste aparelho.
+    /// Marcado quando o servidor apagou a linha deste aparelho e, num
+    /// arquivo, quando a remoção feita no site foi aceita: a base fica como
+    /// marca de "apagado no site" e vale por ausente na regra de três lados.
     pub wiped_at: Option<i64>,
+    /// Onde o arquivo foi parar quando a remoção no site foi aceita.
+    pub backup_path: Option<String>,
 }
 
 /// Um arquivo cujo lado local e cujo lado remoto mudaram: nada é sobrescrito
@@ -38,6 +42,8 @@ pub struct ConflictRow {
     pub remote_device_label: Option<String>,
     pub remote_client_mtime: Option<i64>,
     pub remote_size: i64,
+    /// O lado da nuvem é uma remoção feita no site, não outra versão.
+    pub remote_deleted: bool,
     pub rom_id: Option<String>,
     pub seen_at: i64,
 }

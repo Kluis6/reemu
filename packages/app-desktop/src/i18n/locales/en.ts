@@ -496,6 +496,9 @@ const en: Messages = {
       conflictShort: 'Game save conflict',
       history_one: 'history ({{count}} version)',
       history_other: 'history ({{count}} versions)',
+      conflictDeleted: 'Conflict: deleted on the site and changed here',
+      removed: "Game save deleted on the site. This machine's file is in the backup folder.",
+      openFolder: 'Open folder',
     },
     conflict: {
       title: '{{title}} changed on both machines',
@@ -507,6 +510,13 @@ const en: Messages = {
       keepOther: "Keep {{machine}}'s",
       later: 'Decide later',
       footer: 'Nothing is deleted. You can go back through the history.',
+      deletedTitle: '{{title}} was deleted on the site',
+      deletedBody: 'The save was deleted on alvanista.com, but this machine played after that. Choose whether it goes up again or the deletion applies here too.',
+      deletedOnSite: 'Deleted on the site',
+      deletedHint: 'There is no version in the cloud to bring down.',
+      keepThisAgain: 'Keep this one (upload again)',
+      acceptDeletion: 'Accept the deletion (goes to the backup folder)',
+      deletedFooter: 'Nothing is deleted on this machine.',
     },
     conflicts: {
       title: 'Conflicts',
@@ -514,6 +524,8 @@ const en: Messages = {
       count_other: '{{count}} game saves changed on both machines.',
       hint: 'Nothing is deleted: the save you do not choose stays in the history.',
       resolve: 'Resolve',
+      deletedCount_one: '{{count}} game save was deleted on the site and changed here.',
+      deletedCount_other: '{{count}} game saves were deleted on the site and changed here.',
     },
     history: {
       title: 'Game save history',
@@ -527,6 +539,8 @@ const en: Messages = {
     toast: {
       uploaded_one: '{{count}} game save uploaded to your account.',
       uploaded_other: '{{count}} game saves uploaded to your account.',
+      removed_one: '{{count}} game save deleted on the site went to the backup folder.',
+      removed_other: '{{count}} game saves deleted on the site went to the backup folder.',
     },
     err: {
       no_account: 'Sign in with Alvanista to sync.',
