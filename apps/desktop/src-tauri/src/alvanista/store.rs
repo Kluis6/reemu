@@ -27,6 +27,7 @@ const MIRROR_KEY: &str = "mirror";
 const SESSION_KEY: &str = "session";
 /// Quando esta conexão começou (segundos Unix). Só informa: nunca decide sessão.
 const CONNECTED_AT_KEY: &str = "connected_at";
+const SCOPES_KEY: &str = "scopes";
 
 /// Uma renovação (ou desconexão) por vez em todo o processo, mesmo que
 /// existam vários `Client`/`Store`.
@@ -188,6 +189,9 @@ pub struct Mirror {
     /// O cartão do perfil. `default`: espelhos de antes do cartão não têm o campo.
     #[serde(default)]
     pub card: Option<serde_json::Value>,
+    /// O plano libera o sync de saves? `None` em espelhos de antes do campo.
+    #[serde(default)]
+    pub save_sync: Option<bool>,
 }
 
 pub type SharedSecrets = Arc<dyn SecretStore + Send + Sync>;
@@ -234,7 +238,9 @@ impl Store {
     ///
     /// O espelho anterior sai antes de tudo: a conta nova pode ser outra, e o
     /// perfil de uma conta não aparece na sessão de outra.
-    pub async fn start_session(&self, tokens: &Tokens) -> Result<(), String> {
+    ///
+    /// `scopes` são os escopos que o usuário aprovou; ficam em `scopes`.
+    pub async fn start_session(&self, tokens: &Tokens, scopes: &[&str]) -> Result<(), String> {
         let _one_at_a_time = REFRESH_LOCK.lock().await;
         forget_all_rotations();
         if let Err(e) = self.mirror_clear().await {
@@ -251,6 +257,10 @@ impl Store {
             }
             return Err(e);
         }
+        // Os escopos só informam a tela; sem eles vale `profile:read`.
+        if let Err(e) = self.repo.state_set(SCOPES_KEY, &scopes.join(" ")).await {
+            log::warn!("alvanista: escopos não gravados: {e}");
+        }
         // A data só informa: se não gravar, a conexão vale do mesmo jeito.
         if let Err(e) = self
             .repo
@@ -260,6 +270,26 @@ impl Store {
             log::warn!("alvanista: data da conexão não gravada: {e}");
         }
         Ok(())
+    }
+
+    /// Os escopos da sessão. Sessão de antes do registro (ou sem ele) conta
+    /// como só `profile:read`.
+    pub async fn scopes(&self) -> Result<Vec<String>, String> {
+        let raw = self
+            .repo
+            .state_get(SCOPES_KEY)
+            .await
+            .map_err(|e| e.to_string())?;
+        let list: Vec<String> = raw
+            .as_deref()
+            .unwrap_or("")
+            .split_whitespace()
+            .map(str::to_owned)
+            .collect();
+        if list.is_empty() {
+            return Ok(vec![super::config::SCOPE_PROFILE.to_owned()]);
+        }
+        Ok(list)
     }
 
     /// Quando esta conexão começou; `None` em sessões de antes da data.
@@ -286,6 +316,9 @@ impl Store {
     pub async fn unmark_session(&self) -> Result<(), String> {
         if let Err(e) = self.repo.state_delete(CONNECTED_AT_KEY).await {
             log::warn!("alvanista: data da conexão não apagada: {e}");
+        }
+        if let Err(e) = self.repo.state_delete(SCOPES_KEY).await {
+            log::warn!("alvanista: escopos não apagados: {e}");
         }
         self.repo
             .state_delete(SESSION_KEY)
@@ -374,6 +407,7 @@ impl Store {
             profile_url: me.profile_url.clone(),
             fetched_at: now_secs(),
             card,
+            save_sync: me.entitlements.map(|e| e.save_sync),
         };
         let json = serde_json::to_string(&mirror).map_err(|e| e.to_string())?;
         self.repo
@@ -509,7 +543,10 @@ mod tests {
             ..Default::default()
         })
         .await;
-        assert!(store.start_session(&tokens("a")).await.is_err());
+        assert!(store
+            .start_session(&tokens("a"), &["profile:read"])
+            .await
+            .is_err());
         assert!(!store.has_session().await.unwrap());
         // Só o marcador e o espelho iriam ao banco, e nem o marcador ficou.
         assert_eq!(
@@ -541,6 +578,7 @@ mod tests {
             bio: Some("oi".into()),
             profile_url: "https://www.alvanista.com/users/toy".into(),
             card: None,
+            entitlements: None,
         };
         store.mirror_put(&me).await.unwrap();
         let m = store.mirror_get().await.unwrap().unwrap();
@@ -580,6 +618,7 @@ mod tests {
             bio: None,
             profile_url: "https://www.alvanista.com/users/toy".into(),
             card,
+            entitlements: None,
         };
         let card = serde_json::json!({ "member_since": 2010 });
         store
@@ -606,10 +645,14 @@ mod tests {
                 bio: None,
                 profile_url: "https://www.alvanista.com/users/antiga".into(),
                 card: None,
+                entitlements: None,
             })
             .await
             .unwrap();
-        store.start_session(&tokens("n1")).await.unwrap();
+        store
+            .start_session(&tokens("n1"), &["profile:read"])
+            .await
+            .unwrap();
         assert_eq!(store.mirror_get().await.unwrap(), None);
         assert!(store.connected_at().await.unwrap().unwrap() > 1_700_000_000);
         store.clear_tokens().await.unwrap();
@@ -651,7 +694,10 @@ mod tests {
         let _serial = SERIAL.lock().await;
         let (store, _) = store_with(MemSecrets::default()).await;
         assert!(!store.has_session().await.unwrap());
-        store.start_session(&tokens("m1")).await.unwrap();
+        store
+            .start_session(&tokens("m1"), &["profile:read"])
+            .await
+            .unwrap();
         assert!(store.has_session().await.unwrap());
         store.clear_tokens().await.unwrap();
         assert!(!store.has_session().await.unwrap());
@@ -661,7 +707,10 @@ mod tests {
     async fn the_marker_stays_when_the_keyring_refuses_the_delete() {
         let _serial = SERIAL.lock().await;
         let (store, secrets) = store_with(MemSecrets::default()).await;
-        store.start_session(&tokens("m2")).await.unwrap();
+        store
+            .start_session(&tokens("m2"), &["profile:read"])
+            .await
+            .unwrap();
         secrets.readonly.store(true, Ordering::SeqCst);
         assert!(store.clear_tokens().await.is_err());
         // A cópia viva continua no chaveiro: a sessão não pode sumir da vista.
@@ -676,5 +725,43 @@ mod tests {
         assert_eq!(a, b);
         assert_eq!(b, c);
         assert_eq!(store.device_id().await.unwrap(), a);
+    }
+
+    #[tokio::test]
+    async fn start_session_records_scopes_and_scopes_default_to_profile() {
+        let (store, _) = store_with(MemSecrets::default()).await;
+        assert_eq!(store.scopes().await.unwrap(), vec!["profile:read"]);
+        store
+            .start_session(&tokens("sc1"), &["profile:read", "saves"])
+            .await
+            .unwrap();
+        assert_eq!(store.scopes().await.unwrap(), vec!["profile:read", "saves"]);
+        store
+            .start_session(&tokens("sc2"), &["profile:read"])
+            .await
+            .unwrap();
+        assert_eq!(store.scopes().await.unwrap(), vec!["profile:read"]);
+    }
+
+    #[tokio::test]
+    async fn mirror_put_keeps_the_save_sync_entitlement() {
+        let (store, _) = store_with(MemSecrets::default()).await;
+        let mut me = Me {
+            id: "alva_1".into(),
+            username: "toy".into(),
+            avatar_url: None,
+            hero_url: None,
+            bio: None,
+            profile_url: "https://www.alvanista.com/users/toy".into(),
+            card: None,
+            entitlements: None,
+        };
+        assert_eq!(store.mirror_put(&me).await.unwrap().save_sync, None);
+        me.entitlements = Some(super::super::client::Entitlements { save_sync: true });
+        assert_eq!(store.mirror_put(&me).await.unwrap().save_sync, Some(true));
+        assert_eq!(
+            store.mirror_get().await.unwrap().unwrap().save_sync,
+            Some(true)
+        );
     }
 }

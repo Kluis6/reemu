@@ -52,6 +52,15 @@ pub struct Me {
     /// novo do servidor passa sem mudar o Rust.
     #[serde(default)]
     pub card: Option<serde_json::Value>,
+    /// O que o plano da conta libera. Ausente em servidores sem o campo.
+    #[serde(default)]
+    pub entitlements: Option<Entitlements>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+pub struct Entitlements {
+    #[serde(default)]
+    pub save_sync: bool,
 }
 
 #[derive(Deserialize)]
@@ -515,7 +524,7 @@ mod tests {
         })
         .await;
         if let Some(t) = seed {
-            store.start_session(t).await.unwrap();
+            store.start_session(t, &["profile:read"]).await.unwrap();
             // O save semeado não conta na ordem do teste.
             fake.log.lock().unwrap().clear();
         }
@@ -872,7 +881,11 @@ mod tests {
         client.store().clear_tokens().await.unwrap();
         // Uma conta nova entra.
         let (fresh, _) = names();
-        client.store().start_session(&tokens(&fresh)).await.unwrap();
+        client
+            .store()
+            .start_session(&tokens(&fresh), &["profile:read"])
+            .await
+            .unwrap();
 
         // Quem ainda segura old0 não recebe P1 nem P2, e nada é regravado.
         let got = client.refresh(&tokens(&old0)).await;
@@ -890,11 +903,27 @@ mod tests {
         let (store, _) = store_with(MemSecrets::default()).await;
         super::super::store::remember_rotation(&format!("alr_{old0}"), &tokens(&p1));
         let (fresh, _) = names();
-        store.start_session(&tokens(&fresh)).await.unwrap();
+        store
+            .start_session(&tokens(&fresh), &["profile:read"])
+            .await
+            .unwrap();
         assert_eq!(
             super::super::store::rotated_from(&format!("alr_{old0}")),
             None
         );
         assert_eq!(store.load_tokens().await.unwrap(), Some(tokens(&fresh)));
+    }
+
+    #[test]
+    fn me_parses_entitlements_and_tolerates_their_absence() {
+        let with: Me = serde_json::from_str(
+            r#"{"id":"a","username":"u","profile_url":"https://x/u","entitlements":{"save_sync":true}}"#,
+        )
+        .unwrap();
+        assert_eq!(with.entitlements, Some(Entitlements { save_sync: true }));
+        let without: Me =
+            serde_json::from_str(r#"{"id":"a","username":"u","profile_url":"https://x/u"}"#)
+                .unwrap();
+        assert_eq!(without.entitlements, None);
     }
 }

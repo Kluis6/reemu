@@ -55,11 +55,18 @@ pub struct AlvanistaStatus {
     pub connected_at: Option<i64>,
     /// O rótulo deste aparelho no Alvanista, quando conectado.
     pub device_label: Option<String>,
+    /// O plano da conta libera o sync de saves? `None` quando o `/me` ainda
+    /// não disse (espelho de antes do campo, ou sem espelho).
+    pub save_sync: Option<bool>,
+    /// Escopos desta sessão; vazio sem sessão.
+    pub scopes: Vec<String>,
 }
 
 impl AlvanistaStatus {
     fn from_mirror(m: Mirror, offline: bool, connected_at: Option<i64>) -> Self {
         Self {
+            save_sync: m.save_sync,
+            scopes: Vec::new(),
             connected: true,
             username: Some(m.username),
             avatar_url: m.avatar_url,
@@ -124,6 +131,46 @@ impl Alvanista {
     where
         F: FnOnce(&str) -> Result<(), String>,
     {
+        self.connect_with(config::SCOPE_PROFILE, lang, open).await
+    }
+
+    /// Refaz a conexão pedindo também `saves`. O par anterior só é revogado
+    /// depois que a sessão nova foi guardada, e o resultado da revogação
+    /// não muda nada. Os erros são os de `connect`.
+    #[allow(dead_code)] // o comando que a chama entra no PR seguinte do sync
+    pub async fn reconnect_with_saves<F>(
+        &self,
+        lang: Lang,
+        open: F,
+    ) -> Result<AlvanistaStatus, String>
+    where
+        F: FnOnce(&str) -> Result<(), String>,
+    {
+        let old = match self.stored_session().await {
+            Ok(loaded) => loaded.map(|l| l.tokens),
+            Err(e) => {
+                log::warn!("alvanista: não leu a sessão anterior: {e}");
+                None
+            }
+        };
+        let scope = format!("{} {}", config::SCOPE_PROFILE, config::SCOPE_SAVES);
+        let status = self.connect_with(&scope, lang, open).await?;
+        if let Some(old) = old {
+            let _ = self.client.revoke(&old).await;
+        }
+        Ok(status)
+    }
+
+    /// `scope`: lista separada por espaço, como vai na URL de consentimento.
+    async fn connect_with<F>(
+        &self,
+        scope: &str,
+        lang: Lang,
+        open: F,
+    ) -> Result<AlvanistaStatus, String>
+    where
+        F: FnOnce(&str) -> Result<(), String>,
+    {
         // Uma tentativa por vez: esta cancela a anterior.
         let mine = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let pkce = pkce::new();
@@ -132,7 +179,7 @@ impl Alvanista {
             "failed".to_owned()
         })?;
         let port = lb.port;
-        let url = config::authorize_url(&config::base_urls().0, port, &pkce);
+        let url = config::authorize_url(&config::base_urls().0, port, &pkce, scope);
         let state = pkce.state.clone();
         let generation = self.generation.clone();
         // A espera já está de pé quando o navegador abre, para o callback
@@ -163,8 +210,15 @@ impl Alvanista {
             }
             Err(_) => return Err("failed".into()),
         };
-        self.complete(mine, &code, &pkce.verifier, &config::redirect_uri(port))
-            .await?;
+        let scopes: Vec<&str> = scope.split_whitespace().collect();
+        self.complete(
+            mine,
+            &code,
+            &pkce.verifier,
+            &config::redirect_uri(port),
+            &scopes,
+        )
+        .await?;
         Ok(self.status().await)
     }
 
@@ -185,6 +239,7 @@ impl Alvanista {
         code: &str,
         verifier: &str,
         redirect_uri: &str,
+        scopes: &[&str],
     ) -> Result<(), String> {
         if !self.is_current(mine) {
             return Err("cancelled".into());
@@ -207,7 +262,7 @@ impl Alvanista {
             return Err("cancelled".into());
         }
         // Sem chaveiro não há onde guardar: os tokens emitidos não ficam vivos.
-        if let Err(e) = self.store().start_session(&tokens).await {
+        if let Err(e) = self.store().start_session(&tokens, scopes).await {
             log::warn!("alvanista: não guardou a sessão: {e}");
             self.client.revoke(&tokens).await;
             return Err("keyring".into());
@@ -246,6 +301,22 @@ impl Alvanista {
     /// espelho? Serve para a tela aparecer na hora; `status` confirma depois.
     /// Lê o chaveiro uma vez só, e só com sessão marcada.
     pub async fn cached_status(&self) -> AlvanistaStatus {
+        let status = self.cached_status_inner().await;
+        self.with_scopes(status).await
+    }
+
+    /// Junta os escopos da sessão ao estado; sem conexão, ficam vazios.
+    async fn with_scopes(&self, mut status: AlvanistaStatus) -> AlvanistaStatus {
+        if status.connected {
+            match self.store().scopes().await {
+                Ok(scopes) => status.scopes = scopes,
+                Err(e) => log::warn!("alvanista: escopos ilegíveis: {e}"),
+            }
+        }
+        status
+    }
+
+    async fn cached_status_inner(&self) -> AlvanistaStatus {
         let mirror = self.store().mirror_get().await.ok().flatten();
         let connected_at = self.connected_at().await;
         match self.stored_session().await {
@@ -269,6 +340,11 @@ impl Alvanista {
     /// marcada, volta sem tocar no chaveiro nem na rede. Com ela, lê o
     /// chaveiro uma vez.
     pub async fn status(&self) -> AlvanistaStatus {
+        let status = self.status_inner().await;
+        self.with_scopes(status).await
+    }
+
+    async fn status_inner(&self) -> AlvanistaStatus {
         let mirror = match self.store().mirror_get().await {
             Ok(m) => m,
             Err(e) => {
@@ -310,6 +386,8 @@ impl Alvanista {
                 fetched_at: Some(store::now_secs()),
                 connected_at,
                 device_label: Some(config::device_label().to_owned()),
+                save_sync: me.entitlements.map(|e| e.save_sync),
+                scopes: Vec::new(),
             },
             Err(ClientError::AuthEnded) => {
                 let _ = self.store().mirror_clear().await;
@@ -597,7 +675,9 @@ mod tests {
         let alva = alva_against(api).await;
         let mine = alva.generation.fetch_add(1, Ordering::SeqCst) + 1;
         alva.cancel();
-        let r = alva.complete(mine, "code", "verifier", "http://x").await;
+        let r = alva
+            .complete(mine, "code", "verifier", "http://x", &["profile:read"])
+            .await;
         assert_eq!(r, Err("cancelled".to_owned()));
         assert_eq!(hits.load(Ordering::SeqCst), 0, "exchange was called");
         assert_eq!(alva.store().load_tokens().await.unwrap(), None);
@@ -725,7 +805,9 @@ mod tests {
         .await;
         let alva = Alvanista::new(Client::with_api(api, store));
         let mine = alva.generation.fetch_add(1, Ordering::SeqCst) + 1;
-        let r = alva.complete(mine, "code", "verifier", "http://x").await;
+        let r = alva
+            .complete(mine, "code", "verifier", "http://x", &["profile:read"])
+            .await;
         assert_eq!(r, Err("keyring".to_owned()));
         assert_eq!(revokes.load(Ordering::SeqCst), 1);
         assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
@@ -744,7 +826,10 @@ mod tests {
         let _serial = SERIAL.lock().await;
         // Porta fechada: erro de transporte (transitório).
         let alva = alva_against("http://127.0.0.1:9".into()).await;
-        alva.store().start_session(&tokens("s1")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("s1"), &["profile:read"])
+            .await
+            .unwrap();
         alva.store()
             .mirror_put(&client::Me {
                 id: "alva_1".into(),
@@ -754,6 +839,7 @@ mod tests {
                 bio: None,
                 profile_url: "https://www.alvanista.com/users/toy".into(),
                 card: None,
+                entitlements: None,
             })
             .await
             .unwrap();
@@ -770,7 +856,10 @@ mod tests {
     async fn disconnect_clears_session_and_mirror_even_when_offline() {
         let _serial = SERIAL.lock().await;
         let alva = alva_against("http://127.0.0.1:9".into()).await;
-        alva.store().start_session(&tokens("s2")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("s2"), &["profile:read"])
+            .await
+            .unwrap();
         assert_eq!(alva.disconnect().await, Ok(()));
         assert_eq!(alva.store().load_tokens().await.unwrap(), None);
         assert_eq!(alva.status().await, AlvanistaStatus::default());
@@ -782,7 +871,10 @@ mod tests {
         let (api, hits) = counting_api_with(200);
         let (store, secrets) = store_with(MemSecrets::default()).await;
         let alva = Alvanista::new(Client::with_api(api, store));
-        alva.store().start_session(&tokens("s3")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("s3"), &["profile:read"])
+            .await
+            .unwrap();
         secrets.readonly.store(true, Ordering::SeqCst);
         assert_eq!(alva.disconnect().await, Ok(()));
         assert_eq!(hits.load(Ordering::SeqCst), 1);
@@ -793,7 +885,10 @@ mod tests {
         let _serial = SERIAL.lock().await;
         let (store, secrets) = store_with(MemSecrets::default()).await;
         let alva = Alvanista::new(Client::with_api("http://127.0.0.1:9".into(), store));
-        alva.store().start_session(&tokens("s4")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("s4"), &["profile:read"])
+            .await
+            .unwrap();
         alva.store()
             .mirror_put(&client::Me {
                 id: "a".into(),
@@ -803,6 +898,7 @@ mod tests {
                 bio: None,
                 profile_url: "https://www.alvanista.com/users/toy".into(),
                 card: None,
+                entitlements: None,
             })
             .await
             .unwrap();
@@ -822,6 +918,7 @@ mod tests {
             bio: None,
             profile_url: format!("https://www.alvanista.com/users/{username}"),
             card: None,
+            entitlements: None,
         }
     }
 
@@ -852,7 +949,10 @@ mod tests {
         let (api, _) = counting_api();
         let (store, secrets) = store_with(MemSecrets::default()).await;
         let alva = Alvanista::new(Client::with_api(api, store));
-        alva.store().start_session(&tokens("s8")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("s8"), &["profile:read"])
+            .await
+            .unwrap();
         alva.store().mirror_put(&me_named("toy")).await.unwrap();
 
         secrets.gets.store(0, Ordering::SeqCst);
@@ -913,7 +1013,10 @@ mod tests {
         });
         let (store, secrets) = store_with(MemSecrets::default()).await;
         let alva = Alvanista::new(Client::with_api(api, store));
-        alva.store().start_session(&tokens("s9")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("s9"), &["profile:read"])
+            .await
+            .unwrap();
         secrets.readonly.store(true, Ordering::SeqCst);
 
         let st = alva.status().await;
@@ -927,7 +1030,10 @@ mod tests {
         let (api, hits) = counting_api();
         let alva = alva_against(api).await;
         assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
-        alva.store().start_session(&tokens("s5")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("s5"), &["profile:read"])
+            .await
+            .unwrap();
         alva.store()
             .mirror_put(&client::Me {
                 id: "a".into(),
@@ -937,6 +1043,7 @@ mod tests {
                 bio: None,
                 profile_url: "https://www.alvanista.com/users/toy".into(),
                 card: None,
+                entitlements: None,
             })
             .await
             .unwrap();
@@ -980,7 +1087,10 @@ mod tests {
         let (api, hits) = counting_api();
         let (store, secrets) = store_with(MemSecrets::default()).await;
         let alva = Alvanista::new(Client::with_api(api, store));
-        alva.store().start_session(&tokens("m4")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("m4"), &["profile:read"])
+            .await
+            .unwrap();
         // O chaveiro foi limpo por fora do ReEmu.
         secrets.secrets.lock().unwrap().clear();
 
@@ -1005,7 +1115,10 @@ mod tests {
         assert_eq!(alva.cached_status().await, AlvanistaStatus::default());
 
         // Conectado: o último perfil guardado, inteiro, como offline.
-        alva.store().start_session(&tokens("m5")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("m5"), &["profile:read"])
+            .await
+            .unwrap();
         alva.store().mirror_put(&me_full("toy")).await.unwrap();
         let cached = alva.cached_status().await;
         assert!(cached.connected && !cached.offline, "{cached:?}");
@@ -1046,7 +1159,10 @@ mod tests {
         let before = profiles.get().await.unwrap();
 
         let alva = Alvanista::new(Client::with_api(api, store));
-        alva.store().start_session(&tokens("m6")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("m6"), &["profile:read"])
+            .await
+            .unwrap();
         alva.store().mirror_put(&me_full("toy")).await.unwrap();
         assert_eq!(profiles.get().await.unwrap(), before, "conectado");
 
@@ -1064,7 +1180,10 @@ mod tests {
         let (api, _) = counting_api_with(200);
         let (store, secrets) = store_with(MemSecrets::default()).await;
         let alva = Alvanista::new(Client::with_api(api, store));
-        alva.store().start_session(&tokens("m7")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("m7"), &["profile:read"])
+            .await
+            .unwrap();
         secrets.readonly.store(true, Ordering::SeqCst);
         assert_eq!(alva.disconnect().await, Ok(()));
         assert!(!alva.store().has_session().await.unwrap());
@@ -1088,7 +1207,10 @@ mod tests {
     async fn the_cached_status_carries_the_card_and_the_connection_data() {
         let _serial = SERIAL.lock().await;
         let alva = alva_against("http://127.0.0.1:9".into()).await;
-        alva.store().start_session(&tokens("c1")).await.unwrap();
+        alva.store()
+            .start_session(&tokens("c1"), &["profile:read"])
+            .await
+            .unwrap();
         alva.store()
             .mirror_put(&client::Me {
                 card: Some(serde_json::json!({ "member_since": 2010 })),
@@ -1110,7 +1232,8 @@ mod tests {
         assert!(is_site_url(&config::authorize_url(
             "https://www.alvanista.com",
             4242,
-            &pkce
+            &pkce,
+            config::SCOPE_PROFILE
         )));
         assert!(is_site_url("https://www.alvanista.com/users/toy"));
         for bad in [
@@ -1139,6 +1262,7 @@ mod tests {
             bio: None,
             profile_url: url.into(),
             card: None,
+            entitlements: None,
         };
         alva.store()
             .mirror_put(&put("https://evil.example/users/u"))
@@ -1153,5 +1277,22 @@ mod tests {
             alva.profile_url().await.as_deref(),
             Some("https://www.alvanista.com/users/u")
         );
+    }
+
+    #[tokio::test]
+    async fn the_cached_status_carries_scopes_and_the_save_sync_flag() {
+        let _serial = SERIAL.lock().await;
+        let alva = alva_against("http://127.0.0.1:1".into()).await;
+        assert!(alva.cached_status().await.scopes.is_empty());
+        alva.store()
+            .start_session(&tokens("sc"), &["profile:read", "saves"])
+            .await
+            .unwrap();
+        let mut me = me_named("toy");
+        me.entitlements = Some(client::Entitlements { save_sync: true });
+        alva.store().mirror_put(&me).await.unwrap();
+        let st = alva.cached_status().await;
+        assert_eq!(st.scopes, vec!["profile:read", "saves"]);
+        assert_eq!(st.save_sync, Some(true));
     }
 }

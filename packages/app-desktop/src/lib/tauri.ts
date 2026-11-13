@@ -564,6 +564,10 @@ export interface AlvanistaStatus {
   connected_at: number | null
   /** O rótulo deste aparelho no Alvanista, quando conectado. */
   device_label: string | null
+  /** O plano da conta libera o sync de saves? null: o `/me` ainda não disse. */
+  save_sync: boolean | null
+  /** Escopos desta sessão; vazio sem conexão. */
+  scopes: string[]
 }
 
 /** Confirma com o Alvanista (rede, até ~15 s) e renova o espelho. */

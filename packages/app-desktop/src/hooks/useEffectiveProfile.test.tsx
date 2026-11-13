@@ -42,6 +42,8 @@ const OFF: AlvanistaStatus = {
   fetched_at: null,
   connected_at: null,
   device_label: null,
+  save_sync: null,
+  scopes: [],
 }
 const ON: AlvanistaStatus = {
   ...OFF,
