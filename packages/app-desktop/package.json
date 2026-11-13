@@ -11,26 +11,26 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@fluentui/react-components": "^9.74.7",
-    "@fluentui/react-icons": "^2.0.339",
-    "@tanstack/react-query": "^5.102.6",
+    "@fluentui/react-components": "^9.75.1",
+    "@fluentui/react-icons": "^2.0.345",
+    "@tanstack/react-query": "^5.107.1",
     "@tauri-apps/api": "^2.12.4",
-    "@tauri-apps/plugin-dialog": "^2.8.3",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
     "i18next": "^27.1.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "react-i18next": "^18.0.1",
     "react-icons": "^5.7.0",
-    "react-router-dom": "^7.18.2",
-    "zustand": "^5.0.15"
+    "react-router-dom": "^7.18.5",
+    "zustand": "^5.1.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
     "happy-dom": "^21.0.4",
-    "oxlint": "^1.79.0",
+    "oxlint": "^1.93.0",
     "typescript": "~6.0.2",
     "vite": "^7.3.7",
     "vitest": "^5.1.0"
