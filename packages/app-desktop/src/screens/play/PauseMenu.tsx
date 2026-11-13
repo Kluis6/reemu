@@ -1,4 +1,5 @@
 import {
+  Badge,
   Body1,
   Button,
   DrawerBody,
@@ -21,6 +22,7 @@ import {
   SaveRegular,
   TrophyRegular,
   WandRegular,
+  WarningRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -247,6 +249,15 @@ export function PauseMenu({
                             {st.playTimeAtSave != null &&
                               t("game.playedFor", { time: formatPlayTime(st.playTimeAtSave) })}
                           </span>
+                          {/* gravado com outra versão do core: avisa antes de carregar */}
+                          {st.versionChanged && (
+                            <>
+                              <br />
+                              <Badge appearance="tint" color="warning" icon={<WarningRegular />}>
+                                {t("game.otherVersion")}
+                              </Badge>
+                            </>
+                          )}
                         </span>
                         <div className={pause.stateActions}>
                           <Button

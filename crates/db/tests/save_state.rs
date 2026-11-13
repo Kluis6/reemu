@@ -16,6 +16,7 @@ fn state(id: &str, rom: &str, core: &str, slot: Option<u32>, created_at: i64) ->
         thumbnail_path: Some(format!("/saves/{id}.png")),
         created_at,
         play_time_at_save: Some(3600),
+        core_version: Some("1.0 abc".into()),
     }
 }
 

@@ -122,6 +122,18 @@ fn peek_cached(path: &Path) -> Option<DiscoveredCore> {
     found
 }
 
+/// `library_version` do core `core_id` instalado em `dir` (espiado uma vez
+/// por arquivo, como em [`discover_cores`]). `None` se não está instalado ou
+/// não declara versão.
+pub fn core_version(dir: &Path, core_id: &str) -> Option<String> {
+    core_files(dir)
+        .iter()
+        .find(|p| core_id_of(p).as_deref() == Some(core_id))
+        .and_then(|p| peek_cached(p))
+        .map(|c| c.library_version)
+        .filter(|v| !v.trim().is_empty())
+}
+
 /// Varre `dir` (não-recursivo). Diretório inexistente → lista vazia.
 /// Arquivos que não abrem como core libretro são ignorados em silêncio.
 /// Cada DLL é espiada uma vez por execução (ver o cabeçalho do módulo).

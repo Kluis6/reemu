@@ -302,6 +302,7 @@ async fn quick_state<R: tauri::Runtime>(
             &bytes,
             thumb.as_deref(),
             crate::play_clock::total(&state, &rom_id).await,
+            emu_session::core_version(&state.cores_dir, &core_id),
         )
         .await
         .map_err(AppError::from)?;
@@ -317,7 +318,7 @@ async fn quick_state<R: tauri::Runtime>(
         if state.session.restore_state(bytes).map_err(AppError::from)? {
             Ok("QuickLoad aplicado".into())
         } else {
-            Err("o core recusou o save state".into())
+            Err(save_states::refused_error(&state, &meta))
         }
     }
 }

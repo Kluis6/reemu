@@ -36,7 +36,7 @@ impl SaveStateRepo {
 }
 
 const STATE_COLS: &str = "SELECT id, rom_id, core_id, slot, file_path, thumbnail_path, \
-    created_at, play_time_at_save FROM save_states";
+    created_at, play_time_at_save, core_version FROM save_states";
 
 fn row_to_state(row: &SqliteRow) -> Result<SaveStateMetadata, RepoError> {
     let slot: Option<i64> = row.try_get("slot").map_err(be)?;
@@ -50,6 +50,7 @@ fn row_to_state(row: &SqliteRow) -> Result<SaveStateMetadata, RepoError> {
         thumbnail_path: row.try_get("thumbnail_path").map_err(be)?,
         created_at: row.try_get("created_at").map_err(be)?,
         play_time_at_save: play_time.map(|v| v as u64),
+        core_version: row.try_get("core_version").map_err(be)?,
     })
 }
 
@@ -68,8 +69,9 @@ impl SaveStateRepository for SaveStateRepo {
     async fn record_state(&self, meta: &SaveStateMetadata) -> Result<(), RepoError> {
         sqlx::query(
             "INSERT INTO save_states \
-             (id, rom_id, core_id, slot, file_path, thumbnail_path, created_at, play_time_at_save) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+             (id, rom_id, core_id, slot, file_path, thumbnail_path, created_at, play_time_at_save, \
+              core_version) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(&meta.id)
         .bind(&meta.rom_id)
@@ -79,6 +81,7 @@ impl SaveStateRepository for SaveStateRepo {
         .bind(&meta.thumbnail_path)
         .bind(meta.created_at)
         .bind(meta.play_time_at_save.map(|v| v as i64))
+        .bind(&meta.core_version)
         .execute(&self.db)
         .await
         .map_err(be)?;

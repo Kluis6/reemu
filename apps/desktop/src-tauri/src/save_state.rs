@@ -77,6 +77,7 @@ pub async fn save<R: SaveStateRepository + ?Sized>(
     state_bytes: &[u8],
     thumbnail_png: Option<&[u8]>,
     play_time: Option<u64>,
+    core_version: Option<String>,
 ) -> Result<SaveStateMetadata, SaveError> {
     std::fs::create_dir_all(save_dir)?;
 
@@ -111,6 +112,7 @@ pub async fn save<R: SaveStateRepository + ?Sized>(
         thumbnail_path,
         created_at: now_unix(),
         play_time_at_save: play_time,
+        core_version,
     };
     repo.record_state(&meta).await?;
     Ok(meta)
@@ -132,6 +134,12 @@ pub async fn load_bytes<R: SaveStateRepository + ?Sized>(
         });
     }
     Ok(meta)
+}
+
+/// O state foi gravado com outra versão do core? Só quando as duas são
+/// conhecidas: state antigo (sem versão) ou core sem versão não acusa.
+pub fn version_changed(saved: Option<&str>, installed: Option<&str>) -> bool {
+    matches!((saved, installed), (Some(a), Some(b)) if a.trim() != b.trim())
 }
 
 pub async fn list<R: SaveStateRepository + ?Sized>(

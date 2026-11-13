@@ -26,6 +26,10 @@ pub struct SaveStateMetadata {
     pub thumbnail_path: Option<String>,
     pub created_at: i64,
     pub play_time_at_save: Option<u64>,
+    /// `library_version` do core que gravou (ex.: "1.63 fae2fea"). `None` =
+    /// gravado antes de o ReEmu registrar, ou core sem versão.
+    #[serde(default)]
+    pub core_version: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

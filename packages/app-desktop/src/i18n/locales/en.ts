@@ -414,6 +414,7 @@ const en: Messages = {
     slot: 'Slot {{n}}',
     auto: 'Auto',
     playedFor: ' · {{time}} played',
+    otherVersion: 'Different core version: may not load',
     playFromHere: 'Play from here',
   },
   platform: {

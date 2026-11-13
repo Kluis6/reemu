@@ -15,6 +15,11 @@ pub struct SaveStateDto {
     /// Tempo de jogo da ROM (s) quando o estado foi salvo. `None` = save
     /// antigo, de antes do relógio existir.
     pub play_time_at_save: Option<u64>,
+    /// Versão do core que gravou; `None` = gravado antes do registro.
+    pub core_version: Option<String>,
+    /// Gravado com outra versão do core instalada agora: pode não carregar
+    /// (o formato do state é do core). A interface avisa antes.
+    pub version_changed: bool,
 }
 
 /// Um save state em disco precisa carregar numa sessão futura: o de core com
@@ -43,8 +48,30 @@ pub(super) fn no_state_error(state: &AppState) -> String {
     }
 }
 
-fn save_dto(m: domain::save_state::SaveStateMetadata) -> SaveStateDto {
+/// O core recusou o state (`retro_unserialize` falso). Se o state é de outra
+/// versão do core, é a causa provável e o erro diz as duas.
+pub(super) fn refused_error(
+    state: &AppState,
+    meta: &domain::save_state::SaveStateMetadata,
+) -> AppError {
+    let installed = emu_session::core_version(&state.cores_dir, &meta.core_id);
+    match (&meta.core_version, &installed) {
+        (Some(saved), Some(now)) if save_svc::version_changed(Some(saved), Some(now)) => {
+            AppError::new(
+                crate::app_error::ErrorCode::SaveStateIncompatible,
+                format!(
+                    "o core recusou o save state: ele foi gravado com a versão {saved} do core,                      e a instalada agora é {now}"
+                ),
+            )
+        }
+        _ => "retro_unserialize recusou o state".into(),
+    }
+}
+
+fn save_dto(m: domain::save_state::SaveStateMetadata, installed: Option<&str>) -> SaveStateDto {
     SaveStateDto {
+        version_changed: save_svc::version_changed(m.core_version.as_deref(), installed),
+        core_version: m.core_version.clone(),
         id: m.id,
         slot: m.slot,
         created_at: m.created_at,
@@ -149,10 +176,12 @@ pub async fn save_state(
         &bytes,
         thumb.as_deref(),
         crate::play_clock::total(&state, &rom_id).await,
+        emu_session::core_version(&state.cores_dir, &core_id),
     )
     .await
     .map_err(AppError::from)?;
-    Ok(save_dto(meta))
+    let installed = meta.core_version.clone();
+    Ok(save_dto(meta, installed.as_deref()))
 }
 
 /// PNG do thumbnail de um save state (corpo vazio se não tem).
@@ -181,11 +210,19 @@ pub async fn list_save_states(
     rom_id: String,
 ) -> Result<Vec<SaveStateDto>, AppError> {
     let repo = db::SaveStateRepo::new(pool(&state)?);
+    // versão instalada de cada core, uma vez por core da lista
+    let mut versions: std::collections::HashMap<String, Option<String>> = Default::default();
     Ok(save_svc::list(&repo, &rom_id)
         .await
         .map_err(AppError::from)?
         .into_iter()
-        .map(save_dto)
+        .map(|m| {
+            let installed = versions
+                .entry(m.core_id.clone())
+                .or_insert_with(|| emu_session::core_version(&state.cores_dir, &m.core_id))
+                .clone();
+            save_dto(m, installed.as_deref())
+        })
         .collect())
 }
 
@@ -200,7 +237,7 @@ pub async fn load_save_state(state: State<'_, AppState>, state_id: String) -> Re
     if state.session.restore_state(bytes).map_err(AppError::from)? {
         Ok(())
     } else {
-        Err("retro_unserialize recusou o state".into())
+        Err(refused_error(&state, &meta))
     }
 }
 
@@ -302,6 +339,7 @@ mod tests {
             thumbnail_path: Some(thumbnail.to_string_lossy().into_owned()),
             created_at,
             play_time_at_save: None,
+            core_version: None,
         }
     }
 

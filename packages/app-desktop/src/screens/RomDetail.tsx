@@ -35,6 +35,7 @@ import {
   InfoRegular,
   PlayRegular,
   TrophyRegular,
+  WarningRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -795,6 +796,12 @@ export function RomDetail() {
                       {st.playTimeAtSave != null &&
                         t("game.playedFor", { time: formatPlayTime(st.playTimeAtSave) })}
                     </Caption1>
+                    {/* gravado com outra versão do core: avisa antes de carregar */}
+                    {st.versionChanged && (
+                      <Badge appearance="tint" color="warning" icon={<WarningRegular />}>
+                        {t("game.otherVersion")}
+                      </Badge>
+                    )}
                   </div>
                   <Button
                     icon={<PlayRegular />}

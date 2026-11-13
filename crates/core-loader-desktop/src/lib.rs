@@ -42,7 +42,7 @@ pub use crate::coreopts::{
     core_option_values, core_options, set_core_option, set_pending_core_option_values,
     take_core_set_options,
 };
-pub use crate::discover::{discover_cores, installed_core_ids, DiscoveredCore};
+pub use crate::discover::{core_version, discover_cores, installed_core_ids, DiscoveredCore};
 pub use crate::execstack::{core_file, exec_stack_env};
 pub use crate::ffi_state::serialization_quirks;
 /// Lista de modificadores DRM que o Vulkan do app importa (negociação do

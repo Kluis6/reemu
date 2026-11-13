@@ -415,6 +415,7 @@ const ptBR = {
     slot: 'Slot {{n}}',
     auto: 'Auto',
     playedFor: ' · {{time}} de jogo',
+    otherVersion: 'Outra versão do core: pode não carregar',
     playFromHere: 'Jogar daqui',
   },
   platform: {

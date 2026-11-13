@@ -414,6 +414,7 @@ const es: Messages = {
     slot: 'Ranura {{n}}',
     auto: 'Auto',
     playedFor: ' · {{time}} de juego',
+    otherVersion: 'Otra versión del core: puede no cargar',
     playFromHere: 'Jugar desde aquí',
   },
   platform: {

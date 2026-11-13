@@ -5,4 +5,13 @@ export type SaveState = { id: string, slot: number | null, createdAt: number, fi
  * Tempo de jogo da ROM (s) quando o estado foi salvo. `None` = save
  * antigo, de antes do relógio existir.
  */
-playTimeAtSave: number | null, };
+playTimeAtSave: number | null, 
+/**
+ * Versão do core que gravou; `None` = gravado antes do registro.
+ */
+coreVersion: string | null, 
+/**
+ * Gravado com outra versão do core instalada agora: pode não carregar
+ * (o formato do state é do core). A interface avisa antes.
+ */
+versionChanged: boolean, };

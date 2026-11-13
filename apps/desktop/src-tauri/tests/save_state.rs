@@ -52,6 +52,7 @@ async fn save_writes_file_and_records_metadata() {
         b"STATE-BYTES-A",
         None,
         Some(3600),
+        Some("1.63 fae2fea".into()),
     )
     .await
     .unwrap();
@@ -65,6 +66,7 @@ async fn save_writes_file_and_records_metadata() {
         "tempo de jogo gravado"
     );
     assert_eq!(listed[0].id, meta.id);
+    assert_eq!(listed[0].core_version.as_deref(), Some("1.63 fae2fea"));
     assert_eq!(listed[0].slot, Some(0));
 
     let _ = std::fs::remove_dir_all(dir);
@@ -75,12 +77,32 @@ async fn saving_same_slot_replaces_previous() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
 
-    let first = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"OLD", None, None)
-        .await
-        .unwrap();
-    let second = save_state::save(&repo, &dir, "rom1", "mesen", Some(1), b"NEW", None, None)
-        .await
-        .unwrap();
+    let first = save_state::save(
+        &repo,
+        &dir,
+        "rom1",
+        "mesen",
+        Some(1),
+        b"OLD",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    let second = save_state::save(
+        &repo,
+        &dir,
+        "rom1",
+        "mesen",
+        Some(1),
+        b"NEW",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     // caminho determinístico por slot (convenção RetroArch); o registro antigo
     // foi trocado e o conteúdo é o novo.
@@ -97,7 +119,7 @@ async fn saving_same_slot_replaces_previous() {
 async fn load_validates_core_and_returns_meta() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
-    let meta = save_state::save(&repo, &dir, "rom1", "mesen", None, b"S", None, None)
+    let meta = save_state::save(&repo, &dir, "rom1", "mesen", None, b"S", None, None, None)
         .await
         .unwrap();
 
@@ -149,6 +171,7 @@ async fn load_allows_sw_hw_sibling_cores() {
         b"S",
         None,
         None,
+        None,
     )
     .await
     .unwrap();
@@ -166,6 +189,7 @@ async fn load_allows_sw_hw_sibling_cores() {
         "mednafen_psx_hw_libretro",
         None,
         b"S2",
+        None,
         None,
         None,
     )
@@ -190,9 +214,19 @@ async fn load_allows_sw_hw_sibling_cores() {
 async fn delete_removes_file_and_record() {
     let (db, dir) = setup().await;
     let repo = db::SaveStateRepo::new(db);
-    let meta = save_state::save(&repo, &dir, "rom1", "mesen", Some(2), b"S", None, None)
-        .await
-        .unwrap();
+    let meta = save_state::save(
+        &repo,
+        &dir,
+        "rom1",
+        "mesen",
+        Some(2),
+        b"S",
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
 
     save_state::delete(&repo, &meta.id).await.unwrap();
     assert!(std::fs::metadata(&meta.file_path).is_err());
@@ -200,4 +234,13 @@ async fn delete_removes_file_and_record() {
     assert!(repo.get_state(&meta.id).await.unwrap().is_none());
 
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn version_changed_only_when_both_versions_are_known() {
+    use save_state::version_changed as v;
+    assert!(!v(None, Some("1.0")));
+    assert!(!v(Some("1.0"), None));
+    assert!(!v(Some("1.0 abc"), Some("1.0 abc ")));
+    assert!(v(Some("1.0 abc"), Some("1.1 def")));
 }
