@@ -354,6 +354,7 @@ impl Engine {
         mode: Mode,
     ) -> Result<PassReport, SyncError> {
         self.new_stamp();
+        self.sweep_temps();
         let cached = match mode {
             Mode::BeforeLaunch => self.recent_listing(),
             Mode::Pass => None,
@@ -362,7 +363,11 @@ impl Engine {
             Some(s) => s.devices.clone(),
             None => self.sync.partner_devices(alva).await?,
         };
-        let receive = self.check_row(&devices, &device.id).await?;
+        // A leitura guardada só confere esta linha: o estado do site que a
+        // página mostra vem só de uma leitura nova.
+        let receive = self
+            .check_row(&devices, &device.id, cached.is_none())
+            .await?;
         let token = self.token()?;
         let files = match cached {
             Some(s) => s.files,
@@ -378,14 +383,19 @@ impl Engine {
             .await
             .map_err(|e| failed(format!("saves locais: {e}")))?;
         let entries = self.entries(&local, &files, scope).await?;
-        let known: HashSet<String> = self
-            .repo
-            .conflicts_all()
-            .await
-            .map_err(repo_err)?
-            .into_iter()
-            .map(|c| c.key)
-            .collect();
+        let mut known: HashSet<String> = HashSet::new();
+        for c in self.repo.conflicts_all().await.map_err(repo_err)? {
+            // O jogo saiu da biblioteca: o conflito não tem mais onde ser
+            // resolvido e não pode ficar contando na página.
+            if local.slot_for_key(&c.key).is_none() {
+                log::info!("sync: conflito de um save fora da biblioteca sai da lista");
+                if let Err(e) = self.repo.conflict_delete(&c.key).await {
+                    log::warn!("sync: conflito órfão não saiu da lista: {e}");
+                }
+                continue;
+            }
+            known.insert(c.key);
+        }
         let mut cx = Ctx {
             alva,
             mode,
@@ -434,13 +444,17 @@ impl Engine {
     }
 
     /// A linha desta máquina na lista do site (D128); devolve as plataformas
-    /// que ela recebe.
+    /// que ela recebe. `absorb`: a lista acabou de ser lida, e o que ela diz
+    /// fica guardado para a página.
     async fn check_row(
         &self,
         list: &[RemoteDevice],
         id: &str,
+        absorb: bool,
     ) -> Result<Option<Vec<String>>, SyncError> {
-        self.sync.absorb_site_state(list).await;
+        if absorb {
+            self.sync.absorb_site_state(list).await;
+        }
         match list.iter().find(|d| d.id == id) {
             Some(row) if row.revoked_at.is_none() => {
                 if row.paused_at.is_some() {
@@ -482,7 +496,7 @@ impl Engine {
             _ => return SyncError::NotEnabled,
         };
         match self.sync.partner_devices(alva).await {
-            Ok(list) => match self.check_row(&list, &id).await {
+            Ok(list) => match self.check_row(&list, &id, true).await {
                 Ok(_) => {
                     log::info!("sync: 401 com esta máquina viva na lista; tenta de novo depois");
                     SyncError::Offline
@@ -629,10 +643,24 @@ impl Engine {
                 }
             }
         }
+        // Duas ROMs de mesmo stem dividem o arquivo: a passada de uma também
+        // leva o arquivo que a outra listou primeiro.
+        let scope_paths: HashSet<String> = match scope {
+            PassScope::All => HashSet::new(),
+            PassScope::Rom(id) => match self.roms.get(id).await {
+                Ok(Some(rom)) => local::rom_slot_files(&rom, &self.dirs.saves)
+                    .iter()
+                    .map(|f| Keys::path_key(&f.path))
+                    .collect(),
+                Ok(None) => HashSet::new(),
+                Err(e) => return Err(failed(format!("ROM {id}: {e}"))),
+            },
+        };
         let in_scope = |f: &SaveFile| match scope {
             PassScope::All => true,
             PassScope::Rom(id) => {
                 f.rom_id.as_deref() == Some(id.as_str())
+                    || scope_paths.contains(&Keys::path_key(&f.path))
                     || (f.rom_id.is_none() && local.rom_platform(id) == Some(f.platform))
             }
         };
@@ -782,16 +810,21 @@ impl Engine {
         // Linha que já existe: o envio vai para ela, com a plataforma e o core
         // dela (D113, D125). Linha nova: a plataforma do ReEmu, e core só nos
         // cartões e VMUs (a pasta, como a porta WebDAV arquiva).
-        let (platform, core, filename) = match row {
-            Some(r) => (r.platform.as_str(), r.core.as_deref(), r.filename.as_str()),
-            None => (file.platform, file.core, file.filename.as_str()),
+        let (platform, core, core_version, filename) = match row {
+            Some(r) => (
+                r.platform.as_str(),
+                r.core.as_deref(),
+                r.core_version.as_deref(),
+                r.filename.as_str(),
+            ),
+            None => (file.platform, file.core, None, file.filename.as_str()),
         };
         let meta = UploadMeta {
             platform,
             kind: "file",
             filename,
             core,
-            core_version: None,
+            core_version,
             client_mtime,
         };
         // A nuvem vai mudar: a leitura guardada não serve mais.
@@ -815,10 +848,12 @@ impl Engine {
         e: &Entry,
         remote: Option<&Remote>,
     ) -> Result<Done, Fail> {
-        let (Some(r), Some(row)) = (remote, e.row.as_ref()) else {
+        let Some(r) = remote else {
             return Ok(Done::Nothing);
         };
-        if !receives(cx, &row.platform) || !self.may_write(cx.mode) {
+        // O filtro é pela plataforma do jogo daqui: uma linha `other` de um
+        // RetroArch plano desce para quem recebe `snes`.
+        if !receives(cx, e.file.platform) || !self.may_write(cx.mode) {
             return Ok(Done::Deferred);
         }
         let bytes = match self
@@ -879,11 +914,7 @@ impl Engine {
     /// A nuvem apagou um save da conta: o arquivo daqui se muda para o backup
     /// e a base sai.
     async fn accept_deletion(&self, cx: &Ctx<'_>, e: &Entry) -> Result<Done, Fail> {
-        let platform = e
-            .row
-            .as_ref()
-            .map_or(e.file.platform, |r| r.platform.as_str());
-        if !receives(cx, platform) || !self.may_write(cx.mode) {
+        if !receives(cx, e.file.platform) || !self.may_write(cx.mode) {
             return Ok(Done::Deferred);
         }
         self.clear_away(&e.file).map_err(Fail::File)?;
@@ -1004,7 +1035,30 @@ impl Engine {
     // --- backups -----------------------------------------------------------
 
     fn new_stamp(&self) {
-        *lock(&self.stamp) = stamp_of(now_secs());
+        *lock(&self.stamp) = local_stamp();
+    }
+
+    /// Apaga os `.sync-tmp` que uma escrita interrompida deixou (o app fechou
+    /// entre o temporário e o `rename`). Só esses: nenhum outro arquivo.
+    fn sweep_temps(&self) {
+        let mut dirs = vec![self.dirs.saves.clone()];
+        dirs.extend(local::system_dirs(&self.dirs.system));
+        for dir in dirs {
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+            for entry in entries.flatten() {
+                let is_ours = entry
+                    .file_name()
+                    .to_str()
+                    .is_some_and(|n| n.ends_with(TMP_SUFFIX));
+                if is_ours && entry.file_type().is_ok_and(|t| t.is_file()) {
+                    if let Err(e) = std::fs::remove_file(entry.path()) {
+                        log::warn!("sync: temporário velho não saiu: {e}");
+                    }
+                }
+            }
+        }
     }
 
     /// Onde o backup de `path` fica: `<dados>/sync-backups/<carimbo>/<caminho
@@ -1013,7 +1067,7 @@ impl Engine {
         let stamp = {
             let mut s = lock(&self.stamp);
             if s.is_empty() {
-                *s = stamp_of(now_secs());
+                *s = local_stamp();
             }
             s.clone()
         };
@@ -1038,10 +1092,11 @@ impl Engine {
         Ok(target)
     }
 
-    /// Copia o arquivo para a pasta de backup da passada (o original fica).
+    /// Copia o arquivo para a pasta de backup da passada (o original fica). A
+    /// cópia vai ao disco (`fsync`) antes de o original ser substituído.
     pub fn backup(&self, path: &Path) -> io::Result<PathBuf> {
         let target = self.backup_target(path)?;
-        std::fs::copy(path, &target)?;
+        copy_synced(path, &target)?;
         Ok(target)
     }
 
@@ -1049,8 +1104,8 @@ impl Engine {
     fn move_to_backup(&self, path: &Path) -> io::Result<PathBuf> {
         let target = self.backup_target(path)?;
         if std::fs::rename(path, &target).is_err() {
-            // Outro volume: copia e só então tira o original.
-            std::fs::copy(path, &target)?;
+            // Outro volume: copia, grava no disco e só então tira o original.
+            copy_synced(path, &target)?;
             std::fs::remove_file(path)?;
         }
         Ok(target)
@@ -1538,6 +1593,15 @@ fn present(path: &Path) -> io::Result<bool> {
     }
 }
 
+/// O sufixo dos temporários de `write_atomic` (e só deles).
+const TMP_SUFFIX: &str = ".sync-tmp";
+
+/// Copia e grava a cópia no disco (`fsync`).
+fn copy_synced(from: &Path, to: &Path) -> io::Result<()> {
+    std::fs::copy(from, to)?;
+    std::fs::OpenOptions::new().write(true).open(to)?.sync_all()
+}
+
 /// Grava num `.sync-tmp` ao lado, `fsync`, e troca pelo `rename`: um corte no
 /// meio deixa o arquivo de antes inteiro.
 fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
@@ -1545,7 +1609,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
         std::fs::create_dir_all(parent)?;
     }
     let mut name = path.file_name().unwrap_or_default().to_os_string();
-    name.push(".sync-tmp");
+    name.push(TMP_SUFFIX);
     let tmp = path.with_file_name(name);
     let written = (|| {
         let mut f = std::fs::File::create(&tmp)?;
@@ -1561,10 +1625,9 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     written
 }
 
-/// `yyyymmdd-hhmmss` (UTC).
-fn stamp_of(secs: i64) -> String {
-    let digits: String = rfc3339(secs).chars().filter(char::is_ascii_digit).collect();
-    format!("{}-{}", &digits[..8], &digits[8..14])
+/// `yyyymmdd-hhmmss` no relógio da pessoa: é o nome que ela vê na pasta.
+fn local_stamp() -> String {
+    chrono::Local::now().format("%Y%m%d-%H%M%S").to_string()
 }
 
 /// Dias desde 1970-01-01 de uma data civil (Howard Hinnant, `days_from_civil`).
@@ -1645,16 +1708,14 @@ pub fn install(app: &AppHandle, sync: Arc<SyncService>, db: db::Db, dirs: Dirs) 
         let Some(state) = probe.try_state::<crate::commands::AppState>() else {
             return Playing::Idle;
         };
-        if state.session.loaded_core().is_some() {
-            Playing::Running(lock(&state.current_rom).clone())
-        } else if state
-            .loading_game
-            .load(std::sync::atomic::Ordering::Relaxed)
-        {
-            Playing::Loading
-        } else {
-            Playing::Idle
-        }
+        let current_rom = lock(&state.current_rom).clone();
+        playing_from(
+            state.session.loaded_core().is_some(),
+            state
+                .loading_game
+                .load(std::sync::atomic::Ordering::Relaxed),
+            current_rom,
+        )
     });
     let sink = app.clone();
     let emit: EmitFn = Box::new(move |event| {
@@ -1663,6 +1724,19 @@ pub fn install(app: &AppHandle, sync: Arc<SyncService>, db: db::Db, dirs: Dirs) 
         }
     });
     app.manage(Arc::new(Engine::new(sync, db, dirs, playing, emit)));
+}
+
+/// O que está rodando, pelo estado da sessão. Com um load em andamento e um
+/// core já aberto, o `current_rom` ainda é o do jogo anterior: vale
+/// `Running(None)`. Sem core aberto, o load é `Loading` (a passada de antes de
+/// abrir ainda escreve).
+fn playing_from(core_open: bool, loading: bool, current_rom: Option<String>) -> Playing {
+    match (core_open, loading) {
+        (true, true) => Playing::Running(None),
+        (true, false) => Playing::Running(current_rom),
+        (false, true) => Playing::Loading,
+        (false, false) => Playing::Idle,
+    }
 }
 
 fn parts(app: &AppHandle) -> Option<(Arc<Engine>, tauri::State<'_, Alvanista>)> {
@@ -1802,6 +1876,8 @@ mod tests {
             .await
             .unwrap();
         sync.devices.set_enabled(true).await.unwrap();
+        // Como no app: a conta que acaba no site leva o aparelho junto.
+        alva.attach_sync(sync.clone());
         let root = temp(name);
         let playing = Arc::new(Mutex::new(Playing::Idle));
         let events = Arc::new(Mutex::new(Vec::new()));
@@ -2114,6 +2190,7 @@ mod tests {
         assert_eq!(field(body, "kind").as_deref(), Some("file"));
         assert_eq!(field(body, "filename").as_deref(), Some("Zelda.srm"));
         assert_eq!(field(body, "core"), None, "save de ROM novo vai sem core");
+        assert_eq!(field(body, "core_version"), None);
         assert!(field(body, "client_mtime")
             .and_then(|t| parse_time(&t))
             .is_some());
@@ -2702,6 +2779,7 @@ mod tests {
         let r = rig("receive").await;
         r.rom("r1", "Zelda.gba", "gba").await;
         r.rom("r2", "Chrono.sfc", "snes").await;
+        r.rom("r3", "Mario.gba", "gba").await;
         let mut me = device("dev1", "Sala");
         me["receive_platforms"] = json!(["gba"]);
         mount_devices(&r.server, vec![me]).await;
@@ -2710,24 +2788,35 @@ mod tests {
             vec![
                 row("s1", "Zelda.srm", "gba", None, b"zelda", "v1", None),
                 row("s2", "Chrono.srm", "snes", None, b"chrono", "v1", None),
+                // RetroArch plano arquiva em `other`; o jogo daqui é de GBA.
+                row("s3", "Mario.srm", "other", None, b"mario", "v1", None),
             ],
         )
         .await;
         mount_content(&r.server, "s1", "v1", b"zelda").await;
         mount_content(&r.server, "s2", "v1", b"chrono").await;
+        mount_content(&r.server, "s3", "v1", b"mario").await;
 
         let report = r.pass().await.unwrap();
-        assert_eq!((report.downloaded, report.deferred), (1, 1));
+        assert_eq!((report.downloaded, report.deferred), (2, 1));
         assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"zelda");
+        assert_eq!(r.read("saves/Mario.srm").unwrap(), b"mario");
         assert!(r.read("saves/Chrono.srm").is_none());
-        let gets: Vec<String> = r
+        let mut gets: Vec<String> = r
             .reqs("GET", SAVES)
             .await
             .iter()
             .filter(|q| q.url.path().ends_with("/content"))
             .map(|q| q.url.path().to_owned())
             .collect();
-        assert_eq!(gets, vec!["/api/v1/saves/s1/versions/v1/content"]);
+        gets.sort();
+        assert_eq!(
+            gets,
+            vec![
+                "/api/v1/saves/s1/versions/v1/content",
+                "/api/v1/saves/s3/versions/v1/content"
+            ]
+        );
     }
 
     /// Save da conta apagado no site, e a última versão foi escrita POR ESTA
@@ -3149,6 +3238,16 @@ mod tests {
         let _serial = SERIAL.lock().await;
         let r = rig("retroarch").await;
         r.rom("r1", "Chrono.sfc", "snes").await;
+        let mut retroarch = row(
+            "s9",
+            "Chrono.srm",
+            "snes",
+            Some("Snes9x"),
+            b"ra-1",
+            "v1",
+            Some("dev2"),
+        );
+        retroarch["core_version"] = json!("1.10");
         r.base(
             "file:snes/Chrono.srm",
             "saves/Chrono.srm",
@@ -3167,15 +3266,7 @@ mod tests {
             vec![
                 // A da plataforma do ReEmu ganha da de `other`.
                 row("s8", "Chrono.srm", "other", None, b"stray", "v1", None),
-                row(
-                    "s9",
-                    "Chrono.srm",
-                    "snes",
-                    Some("Snes9x"),
-                    b"ra-1",
-                    "v1",
-                    Some("dev2"),
-                ),
+                retroarch,
                 row(
                     "s5",
                     "Zelda.srm",
@@ -3198,6 +3289,8 @@ mod tests {
         assert_eq!(field(body, "filename").as_deref(), Some("Chrono.srm"));
         assert_eq!(field(body, "platform").as_deref(), Some("snes"));
         assert_eq!(field(body, "core").as_deref(), Some("Snes9x"));
+        // A versão do core também é chave da linha no servidor.
+        assert_eq!(field(body, "core_version").as_deref(), Some("1.10"));
         let chrono = r.base_of("file:snes/Chrono.srm").await.unwrap();
         assert_eq!(
             (
@@ -3656,7 +3749,14 @@ mod tests {
             assert_eq!(parse_time(bad), None, "{bad}");
         }
         assert!(parse_time("2026-11-13T10:00:00.5Z") > parse_time("2026-11-13T10:00:00Z"));
-        assert_eq!(stamp_of(1_794_564_000), "20261113-100000");
+    }
+
+    #[test]
+    fn backup_stamps_use_the_local_clock() {
+        let stamp = local_stamp();
+        let at = chrono::NaiveDateTime::parse_from_str(&stamp, "%Y%m%d-%H%M%S").unwrap();
+        let now = chrono::Local::now().naive_local();
+        assert!((now - at).num_seconds().abs() <= 5, "{stamp}");
     }
 
     #[tokio::test]
@@ -3688,5 +3788,236 @@ mod tests {
             third.parent().unwrap().parent().unwrap(),
             r.path("sync-backups")
         );
+    }
+
+    /// Fix R18 item 1: o prazo de antes de abrir corta a passada no meio de
+    /// uma renovação do par do parceiro. O servidor já trocou o par: o novo é
+    /// gravado assim mesmo e a sessão segue.
+    #[tokio::test]
+    async fn prelaunch_timeout_during_a_renewal_keeps_the_session() {
+        let _serial = SERIAL.lock().await;
+        let mut r = rig("renewal").await;
+        r.engine.prelaunch_budget = Duration::from_millis(100);
+        r.rom("r1", "Zelda.gba", "gba").await;
+        Mock::given(method("GET"))
+            .and(path(DEVICES))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&r.server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/oauth/token"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(json!({
+                        "access_token": "alp_2", "refresh_token": "alr_2",
+                        "token_type": "Bearer", "expires_in": 3600
+                    }))
+                    .set_delay(Duration::from_millis(400)),
+            )
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        r.set_playing(Playing::Loading);
+
+        assert_eq!(
+            r.engine.prelaunch(&r.alva, "r1").await,
+            PrelaunchOutcome::Skipped("timeout".into())
+        );
+        let mut stored = None;
+        for _ in 0..100 {
+            stored = r.store.load_tokens().await.unwrap();
+            if stored == Some(tokens("2")) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(stored, Some(tokens("2")), "o par novo se perdeu");
+        assert!(r.store.has_session().await.unwrap());
+        assert_eq!(
+            r.sync.devices.token().unwrap().as_deref(),
+            Some("asv_secret")
+        );
+    }
+
+    /// Fix R18 item 1: a renovação que o prazo cortou descobre que a conta
+    /// acabou no site. O aparelho é revogado e esquecido mesmo sem ninguém
+    /// esperando: o `asv_` não fica no chaveiro.
+    #[tokio::test]
+    async fn a_dropped_prelaunch_that_finds_the_account_ended_still_forgets_the_device() {
+        let _serial = SERIAL.lock().await;
+        let mut r = rig("ended").await;
+        r.engine.prelaunch_budget = Duration::from_millis(100);
+        r.rom("r1", "Zelda.gba", "gba").await;
+        Mock::given(method("GET"))
+            .and(path(DEVICES))
+            .respond_with(ResponseTemplate::new(401))
+            .mount(&r.server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/oauth/token"))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_json(json!({"error": "invalid_grant"}))
+                    .set_delay(Duration::from_millis(400)),
+            )
+            .mount(&r.server)
+            .await;
+        Mock::given(method("DELETE"))
+            .and(path(format!("{SAVES}/device")))
+            .respond_with(ResponseTemplate::new(204))
+            .expect(1)
+            .mount(&r.server)
+            .await;
+        r.set_playing(Playing::Loading);
+
+        assert_eq!(
+            r.engine.prelaunch(&r.alva, "r1").await,
+            PrelaunchOutcome::Skipped("timeout".into())
+        );
+        for _ in 0..100 {
+            if r.sync.devices.device().await.unwrap().is_none() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(r.sync.devices.device().await.unwrap(), None);
+        assert_eq!(r.sync.devices.token().unwrap(), None, "asv_ no chaveiro");
+        assert!(!r.store.has_session().await.unwrap());
+    }
+
+    /// M2: a leitura de até 60 s atrás só confere a linha desta máquina; o
+    /// estado do site que a página mostra não volta para trás com ela.
+    #[tokio::test]
+    async fn a_cached_device_list_never_overwrites_the_site_state() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("cached-row").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        r.pass().await.unwrap();
+        // Depois da passada, a página leu "pausada no site".
+        r.sync.devices.set_site_state(true, false).await.unwrap();
+        r.set_playing(Playing::Loading);
+        assert_eq!(
+            r.engine.prelaunch(&r.alva, "r1").await,
+            PrelaunchOutcome::UpToDate
+        );
+        assert_eq!(
+            r.reqs("GET", DEVICES).await.len(),
+            1,
+            "usou a leitura guardada"
+        );
+        assert_eq!(r.sync.devices.site_state().await.unwrap(), (true, false));
+    }
+
+    /// M4: com um load em andamento e um core aberto, o `current_rom` ainda é
+    /// o do jogo anterior; sem core, o load ainda deixa a passada de antes de
+    /// abrir escrever.
+    #[test]
+    fn the_probe_never_names_the_previous_game_while_loading() {
+        let prev = || Some("r-old".to_owned());
+        assert_eq!(playing_from(true, true, prev()), Playing::Running(None));
+        assert_eq!(playing_from(true, false, prev()), Playing::Running(prev()));
+        assert_eq!(playing_from(false, true, prev()), Playing::Loading);
+        assert_eq!(playing_from(false, false, None), Playing::Idle);
+    }
+
+    /// M5: duas ROMs de mesmo stem dividem o arquivo; fechar a segunda também
+    /// sobe o save.
+    #[tokio::test]
+    async fn a_rom_pass_takes_the_file_its_stem_shares_with_another_rom() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("shared-stem").await;
+        r.rom("r1", "Game.gba", "gba").await;
+        r.rom("r2", "Game.nes", "nes").await;
+        r.write("saves/Game.srm", b"played on nes");
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        mount_upload(&r.server, "s1", "v1").await;
+
+        let report = r
+            .engine
+            .pass(&r.alva, PassScope::Rom("r2".into()))
+            .await
+            .unwrap();
+        assert_eq!(report.uploaded, 1);
+        assert!(r.base_of("file:gba/Game.srm").await.is_some());
+    }
+
+    /// M6: o jogo saiu da biblioteca; o conflito dele sai da lista na
+    /// passada seguinte, em vez de contar na página para sempre.
+    #[tokio::test]
+    async fn a_conflict_whose_rom_left_the_library_is_dropped() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("orphan-conflict").await;
+        r.repo
+            .conflict_put(&ConflictRow {
+                key: ZELDA.into(),
+                local_hash: sha(b"a"),
+                local_mtime: 1,
+                local_size: 1,
+                remote_save_id: "s1".into(),
+                remote_version_id: "v2".into(),
+                remote_hash: sha(b"b"),
+                remote_device_label: None,
+                remote_client_mtime: None,
+                remote_size: 1,
+                rom_id: Some("r1".into()),
+                seen_at: 1,
+            })
+            .await
+            .unwrap();
+        r.sync.runtime().conflicts = 1;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+
+        r.pass().await.unwrap();
+        assert!(r.repo.conflicts_all().await.unwrap().is_empty());
+        assert_eq!(r.sync.runtime().conflicts, 0);
+    }
+
+    /// M7: um 200 sem `devices` é resposta ilegível: a passada acaba offline e
+    /// a máquina não vira revogada.
+    #[tokio::test]
+    async fn an_unexpected_device_list_is_offline_not_revoked() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("odd-list").await;
+        Mock::given(method("GET"))
+            .and(path(DEVICES))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({"items": []})))
+            .mount(&r.server)
+            .await;
+        assert_eq!(r.pass().await, Err(SyncError::Offline));
+        assert_eq!(
+            r.sync.devices.token().unwrap().as_deref(),
+            Some("asv_secret")
+        );
+        assert!(r.sync.devices.enabled().await.unwrap());
+        assert_eq!(r.sync.devices.site_state().await.unwrap(), (false, false));
+    }
+
+    /// M8: o app fechou entre o temporário e o `rename`. A próxima passada
+    /// tira os `.sync-tmp` e só eles.
+    #[tokio::test]
+    async fn stale_temporaries_are_swept_at_pass_start() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("sweep").await;
+        r.write("saves/Zelda.srm.sync-tmp", b"half");
+        r.write("system/pcsx2/memcards/Mcd001.ps2.sync-tmp", b"half");
+        r.write("system/dc/vmu_save_A1.bin.sync-tmp", b"half");
+        // O temporário da própria sessão e outros arquivos ficam.
+        r.write("saves/Zelda.srm.tmp", b"session");
+        r.write("saves/notes.txt", b"mine");
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+
+        r.pass().await.unwrap();
+        assert!(r.read("saves/Zelda.srm.sync-tmp").is_none());
+        assert!(r
+            .read("system/pcsx2/memcards/Mcd001.ps2.sync-tmp")
+            .is_none());
+        assert!(r.read("system/dc/vmu_save_A1.bin.sync-tmp").is_none());
+        assert_eq!(r.read("saves/Zelda.srm.tmp").unwrap(), b"session");
+        assert_eq!(r.read("saves/notes.txt").unwrap(), b"mine");
     }
 }

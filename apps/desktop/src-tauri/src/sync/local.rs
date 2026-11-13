@@ -132,6 +132,14 @@ const SYSTEM_GROUPS: [SystemGroup; 2] = [
     ("dreamcast", DC_CORE, is_vmu_name),
 ];
 
+/// As pastas dos cartões e VMUs dentro da pasta de sistema.
+pub fn system_dirs(system_dir: &Path) -> Vec<PathBuf> {
+    SYSTEM_GROUPS
+        .iter()
+        .map(|(_, core, _)| system_dir.join(core.strip_prefix("system/").unwrap_or(core)))
+        .collect()
+}
+
 /// Nome de arquivo sem pasta: nada de `/`, `\`, `:` nem `..`. Um nome que vem
 /// da nuvem nunca escolhe a pasta onde o arquivo vai parar.
 fn plain_name(name: &str) -> bool {

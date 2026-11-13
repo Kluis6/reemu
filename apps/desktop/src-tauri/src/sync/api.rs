@@ -96,9 +96,10 @@ pub struct Quota {
     pub limit_bytes: i64,
 }
 
+/// Sem `default`: um 200 sem `devices` é resposta ilegível (a passada termina
+/// `offline`), nunca "lista vazia", que faria esta máquina parecer revogada.
 #[derive(Deserialize)]
 struct DeviceList {
-    #[serde(default)]
     devices: Vec<RemoteDevice>,
 }
 
@@ -134,6 +135,10 @@ pub struct RemoteFile {
     pub platform: String,
     #[serde(default)]
     pub core: Option<String>,
+    /// Parte da chave da linha no servidor (com plataforma, tipo, nome, core e
+    /// aparelho): o envio para uma linha que existe repete o dela.
+    #[serde(default)]
+    pub core_version: Option<String>,
     /// `None` numa linha sem versão.
     #[serde(default)]
     pub current: Option<RemoteVersion>,
@@ -186,6 +191,7 @@ pub struct Uploaded {
     pub deduplicated: bool,
 }
 
+#[derive(Clone)]
 pub struct SavesApi {
     http: reqwest::Client,
     api: String,

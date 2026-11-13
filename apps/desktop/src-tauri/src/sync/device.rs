@@ -159,6 +159,7 @@ pub struct Device {
     pub label: String,
 }
 
+#[derive(Clone)]
 pub struct DeviceStore {
     repo: AlvanistaRepo,
     secrets: SharedSecrets,

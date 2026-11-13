@@ -147,9 +147,31 @@ impl Alvanista {
     }
 
     /// Renova o par (gravando o novo), para o sync repetir o pedido que
-    /// voltou 401.
+    /// voltou 401. Se a conta acabou no site, o aparelho do cloud save sai
+    /// junto (revogado, se ainda der).
+    ///
+    /// Tudo numa tarefa própria: o sync pode desistir de esperar (o prazo de
+    /// antes de abrir um jogo), e nem a troca do par nem o esquecer do
+    /// aparelho podem ficar pela metade.
     pub(crate) async fn renew(&self, current: &Tokens) -> Result<Tokens, ClientError> {
-        self.client.refresh(current).await
+        let client = self.client.clone();
+        let sync = self.sync.get().cloned();
+        let current = current.clone();
+        tokio::spawn(async move {
+            let renewed = client.refresh(&current).await;
+            if let (Err(ClientError::AuthEnded), Some(sync)) = (&renewed, sync) {
+                if let Err(e) = sync.forget_device(true).await {
+                    log::warn!("alvanista: aparelho do cloud save não esquecido: {e}");
+                }
+            }
+            renewed
+        })
+        .await
+        .unwrap_or_else(|e| {
+            Err(ClientError::Transient(format!(
+                "renovação interrompida: {e}"
+            )))
+        })
     }
 
     /// Há sessão marcada? Só o SQLite: o sync decide por aqui e lê o par do

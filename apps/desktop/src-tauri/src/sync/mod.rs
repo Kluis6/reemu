@@ -400,37 +400,30 @@ impl SyncService {
     /// Não toma `mint`: a partir de `ensure_device` o caminho `renew` segura
     /// o trinco de renovação do `alvanista/`, e a sessão que acaba lá chama
     /// esta função.
+    ///
+    /// A revogação e o esquecer rodam numa tarefa própria: quem chamou pode
+    /// desistir de esperar (o prazo de antes de abrir um jogo), e o token não
+    /// pode ficar no chaveiro por isso.
     pub async fn forget_device(&self, revoke: bool) -> Result<(), SyncError> {
-        if self.devices.device().await.map_err(failed)?.is_none() {
-            return Ok(());
-        }
-        let mut revoke_failed = false;
-        if revoke {
-            match self.devices.token() {
-                Ok(Some(token)) => match self.api.revoke_own_device(&token).await {
-                    Ok(()) | Err(ApiError::Unauthorized) | Err(ApiError::NotFound) => {}
-                    Err(e) => {
-                        log::warn!("sync: aparelho não revogado no servidor: {e}");
-                        revoke_failed = true;
-                    }
-                },
-                Ok(None) => {}
-                Err(e) => {
-                    log::warn!("sync: chaveiro indisponível para revogar: {e}");
-                    revoke_failed = true;
-                }
+        let (api, devices) = (self.api.clone(), self.devices.clone());
+        let joined = tokio::spawn(async move { forget_now(&api, &devices, revoke).await }).await;
+        match joined {
+            Err(e) => Err(failed(format!("esquecer interrompido: {e}"))),
+            Ok(Err(e)) => Err(e),
+            Ok(Ok(Forgot::NoDevice)) => Ok(()),
+            Ok(Ok(Forgot::Done {
+                result,
+                revoke_failed,
+            })) => {
+                // O aparelho que sobrou no servidor a pessoa revoga no site: a
+                // tela lê `offline` para dizer isso.
+                *self.runtime() = Runtime {
+                    last_error: revoke_failed.then(|| SyncError::Offline.to_string()),
+                    ..Runtime::default()
+                };
+                result
             }
         }
-        // O aparelho que sobrou no servidor a pessoa revoga no site: a tela lê
-        // `offline` para dizer isso.
-        *self.runtime() = Runtime {
-            last_error: revoke_failed.then(|| SyncError::Offline.to_string()),
-            ..Runtime::default()
-        };
-        self.devices.forget().await.map_err(|e| {
-            log::warn!("sync: aparelho não esquecido: {e}");
-            SyncError::Keyring
-        })
     }
 
     async fn refresh_quota(&self) -> Result<(), SyncError> {
@@ -711,6 +704,51 @@ impl SyncService {
         }
         self.status_with(alva, hw).await
     }
+}
+
+enum Forgot {
+    NoDevice,
+    Done {
+        result: Result<(), SyncError>,
+        /// A revogação no servidor não chegou.
+        revoke_failed: bool,
+    },
+}
+
+/// O corpo de `forget_device`; `Err` só quando nem deu para ler o aparelho.
+async fn forget_now(
+    api: &SavesApi,
+    devices: &DeviceStore,
+    revoke: bool,
+) -> Result<Forgot, SyncError> {
+    if devices.device().await.map_err(failed)?.is_none() {
+        return Ok(Forgot::NoDevice);
+    }
+    let mut revoke_failed = false;
+    if revoke {
+        match devices.token() {
+            Ok(Some(token)) => match api.revoke_own_device(&token).await {
+                Ok(()) | Err(ApiError::Unauthorized) | Err(ApiError::NotFound) => {}
+                Err(e) => {
+                    log::warn!("sync: aparelho não revogado no servidor: {e}");
+                    revoke_failed = true;
+                }
+            },
+            Ok(None) => {}
+            Err(e) => {
+                log::warn!("sync: chaveiro indisponível para revogar: {e}");
+                revoke_failed = true;
+            }
+        }
+    }
+    let result = devices.forget().await.map_err(|e| {
+        log::warn!("sync: aparelho não esquecido: {e}");
+        SyncError::Keyring
+    });
+    Ok(Forgot::Done {
+        result,
+        revoke_failed,
+    })
 }
 
 /// Qual erro a tela mostra quando vários passos falham: revoked > paused >
