@@ -13,6 +13,7 @@
 
 pub mod api;
 pub mod device;
+pub mod platform;
 
 use crate::alvanista::client::ClientError;
 use crate::alvanista::loopback::Lang;
