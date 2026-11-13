@@ -35,7 +35,7 @@ ash = { version = "0.38", default-features = false }
 png = "0.17"
 # `block_on`: abertura do device com as extensões do interop (gpu/win_interop.rs,
 # Linux) e o `pop` do escopo de erro do wgpu no `set_preset`
-pollster = "0.4"
+pollster = "1.0"
 uuid = { version = "1", features = ["v4"] }
 thiserror.workspace = true
 reqwest = { version = "0.12", default-features = false, features = [
