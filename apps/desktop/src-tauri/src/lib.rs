@@ -32,6 +32,7 @@ mod shader_failure;
 mod shader_pack;
 #[cfg(test)]
 mod smoke_roms;
+mod sync;
 mod system;
 mod system_files;
 mod updates;
@@ -140,11 +141,18 @@ pub fn run() {
             // "Entrar com Alvanista": um cliente e um armazenamento para todos os
             // comandos (sem SQLite não há onde guardar a sessão: ficam sem estado).
             if let Some(pool) = db.clone() {
-                let store =
-                    alvanista::store::Store::new(pool, std::sync::Arc::new(credentials::OsKeyring));
+                let keyring: alvanista::store::SharedSecrets =
+                    std::sync::Arc::new(credentials::OsKeyring);
+                let store = alvanista::store::Store::new(pool.clone(), keyring.clone());
                 app.manage(alvanista::Alvanista::new(alvanista::client::Client::new(
                     store,
                 )));
+                // O cloud save: a máquina vira um aparelho da conta. O token do
+                // aparelho vai para o mesmo chaveiro, em outra conta.
+                app.manage(sync::Sync::new(
+                    sync::api::SavesApi::new(alvanista::config::base_urls().1),
+                    sync::device::DeviceStore::new(pool, keyring),
+                ));
                 // Renova o espelho do perfil em segundo plano. Sem sessão não
                 // lê o chaveiro nem acessa a rede.
                 alvanista::refresh_on_start(app.handle());

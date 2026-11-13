@@ -154,7 +154,7 @@ fn now_millis() -> i64 {
 }
 
 /// Segundos desde a época Unix.
-pub(super) fn now_secs() -> i64 {
+pub(crate) fn now_secs() -> i64 {
     now_millis() / 1000
 }
 
@@ -428,7 +428,7 @@ impl Store {
 }
 
 #[cfg(test)]
-pub(super) mod test_support {
+pub(crate) mod test_support {
     use super::*;
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicBool, AtomicUsize};

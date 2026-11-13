@@ -391,7 +391,7 @@ mod cores;
 mod diagnostics;
 mod files;
 mod game;
-mod hardware;
+pub(crate) mod hardware;
 mod input;
 mod library;
 mod metadata;

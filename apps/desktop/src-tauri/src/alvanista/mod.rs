@@ -115,6 +115,20 @@ impl Alvanista {
         self.client.store()
     }
 
+    /// O par de tokens da sessão, para o sync pedir o aparelho em nome da
+    /// conta. `None` sem sessão (e sem tocar o chaveiro nem a rede).
+    #[cfg_attr(not(test), expect(dead_code))] // até os comandos do sync chamarem `ensure_device`
+    pub(crate) async fn session_tokens(&self) -> Result<Option<Tokens>, String> {
+        Ok(self.stored_session().await?.map(|l| l.tokens))
+    }
+
+    /// Renova o par (gravando o novo), para o sync repetir o pedido que
+    /// voltou 401.
+    #[cfg_attr(not(test), expect(dead_code))] // até os comandos do sync chamarem `ensure_device`
+    pub(crate) async fn renew(&self, current: &Tokens) -> Result<Tokens, ClientError> {
+        self.client.refresh(current).await
+    }
+
     /// Cancela a tentativa em andamento (se houver).
     pub fn cancel(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);

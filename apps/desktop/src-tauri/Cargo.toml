@@ -56,6 +56,8 @@ sha2 = "0.10"
 base64 = "0.22"
 rand = "0.10"
 url = "2"
+# Rótulo padrão do aparelho do cloud save (src/sync/device.rs).
+hostname = "0.4"
 
 # Crates internos (arquitetura hexagonal — o shell é um adapter). Nenhum tem
 # código específico de Linux (core-loader-desktop já trata windows/macos em
@@ -73,7 +75,12 @@ tauri-plugin-updater = "2"
 sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt"] }
+tokio = { version = "1", features = ["macros", "rt", "net"] }
+# Servidor HTTP local dos testes do sync (src/sync/): o Alvanista de mentira.
+wiremock = "0.6"
+# Lê as linhas de `alvanista_state` nos testes (o token não pode estar nelas).
+# Mesma versão e features do crate `db`.
+sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
 # logs do lado do app nos testes de hardware (ex.: diagnóstico de áudio)
 env_logger = "0.11"
 # Tipos do frontend (`lib/bindings`), gerados só em `cargo test`: o app não leva o crate.
