@@ -19,11 +19,21 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::catalog::{buildbot_os, dylib_ext};
 use crate::error::CatalogError;
 
-/// Core → repositório. Só entra o que foi conferido em 2026-10-30: ou o commit
-/// da DLL instalada era o HEAD, ou o HEAD estava dentro da DLL noturna. Quem
-/// não declara commit ou compila de outro branch fica de fora: sem aviso é
+/// Core → repositório. Só entra o que foi conferido: em 2026-10-30, o commit
+/// da DLL instalada era o HEAD ou o HEAD estava dentro da DLL noturna (85);
+/// em 2026-11-14, o commit da noturna era o HEAD do branch principal pelo
+/// `compare` da API do GitHub (7: cap32, dosbox_core, gambatte,
+/// mame2003_plus, noods, opera, tia). Quem não declara commit, compila de
+/// outro branch ou tem a noturna atrás do HEAD fica de fora: sem aviso é
 /// melhor que aviso falso.
 const UPSTREAM: &[(&str, &str)] = &[
+    ("cap32_libretro", "libretro/libretro-cap32"),
+    ("dosbox_core_libretro", "libretro/dosbox-core"),
+    ("gambatte_libretro", "libretro/gambatte-libretro"),
+    ("mame2003_plus_libretro", "libretro/mame2003-plus-libretro"),
+    ("noods_libretro", "jonian/libretro-noods"),
+    ("opera_libretro", "libretro/opera-libretro"),
+    ("tia_libretro", "warmenhoven/tia"),
     ("a5200_libretro", "libretro/a5200"),
     ("atari800_libretro", "libretro/libretro-atari800"),
     ("bluemsx_libretro", "libretro/blueMSX-libretro"),

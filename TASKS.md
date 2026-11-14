@@ -783,9 +783,6 @@ no `emu-session`, ver `docs/historico.md`).
 - [ ] `todo` — **Erros com código fora de `commands/`** (2026-11-14): `alvanista/`, `sync/`,
       `appearance.rs` e `updates.rs` ainda devolvem `String` que a interface lê pelo texto
       (`sync.err.*`, `lib/errors.ts`). Opcional: só para padronizar com o `AppError`.
-- [ ] `todo` — **Aviso de atualização para mais cores** (análise de 2026-11-12): a tabela
-      `UPSTREAM` (`crates/core-catalog/src/updates.rs`) cobre 80 dos 139 cores. Ampliar aos
-      poucos, conferindo cada repositório e o `library_version` na fumaça.
 
 - [ ] `todo` — **CI no Ubuntu 26**: os workflows ficaram presos em
       `ubuntu-24.04` (2026-10-02), porque o `ubuntu-latest` passa a ser o
