@@ -243,6 +243,9 @@ export function SettingsSync() {
 
   const enabling = busy === 'enable' && !st.enabled
   const working = busy !== null
+  // A passada dos states pode estar rodando por trás destas duas ações: o
+  // interruptor dos states segue valendo, e desligá-lo a para no meio.
+  const statesFree = busy === null || busy === 'now' || busy === 'oldStates'
   const pausedSite = st.pausedSite
   const quota = st.quota
   const used = quota ? Math.min(quota.usedBytes, quota.limitBytes) : 0
@@ -389,9 +392,9 @@ export function SettingsSync() {
           description={t('sync.statesHint')}
           checked={st.statesEnabled}
           disabled={!st.enabled}
-          busy={working}
+          busy={!statesFree}
           onChange={(on) => {
-            if (!working) void setStates(on)
+            if (statesFree) void setStates(on)
           }}
         />
         {st.enabled && st.statesEnabled && st.statesLocalOnly > 0 && (

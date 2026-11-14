@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   listSaveStates: vi.fn(),
   syncStatesFor: vi.fn(),
   syncDownloadState: vi.fn(),
+  syncStateNotes: vi.fn(),
 }))
 vi.mock('../lib/tauri', async (orig) => ({ ...(await orig<typeof import('../lib/tauri')>()), ...api }))
 // O Dialog do Fluent não monta no happy-dom desta árvore ("presenceFn is not a
@@ -135,6 +136,7 @@ beforeEach(() => {
   api.syncSaveStatus.mockResolvedValue({ state: 'conflict', syncedAt: null, versions: 2, key: KEY })
   api.listSaveStates.mockResolvedValue([])
   api.syncStatesFor.mockResolvedValue({ states: [], offline: false, installedVersion: null })
+  api.syncStateNotes.mockResolvedValue([])
 })
 afterEach(async () => {
   await unmount()
@@ -362,5 +364,92 @@ describe('RomDetail states from other machines', () => {
     expect(api.syncStatesFor).toHaveBeenCalled()
     expect(document.querySelectorAll('[data-remote-state]')).toHaveLength(0)
     expect(document.body.textContent).not.toContain('Em outras máquinas')
+  })
+
+  it('paused on the site, the other machines are not asked (D128)', async () => {
+    api.syncStatus.mockResolvedValue({ ...STATUS, pausedSite: true })
+    await mount()
+    await openStates()
+    expect(api.syncStatesFor).not.toHaveBeenCalled()
+    expect(document.querySelectorAll('[data-remote-state]')).toHaveLength(0)
+  })
+
+  it('a download that ends after the person started the game does not launch it again', async () => {
+    let finish!: (s: SaveState) => void
+    api.syncDownloadState.mockReturnValue(new Promise<SaveState>((r) => (finish = r)))
+    await mount()
+    await openStates()
+    await act(async () => byText('Baixar e carregar')!.click())
+    // "Jogar" segue na página: o jogo abre com o save de agora.
+    await play()
+    expect(where()).toBe('/play/r1')
+    const search = () => host.querySelector('[data-testid="where"]')!.getAttribute('data-search')
+    expect(search()).not.toContain('loadState')
+    await act(async () => finish(SAVED))
+    await settle()
+    expect(where()).toBe('/play/r1')
+    expect(search()).not.toContain('loadState')
+    expect(api.syncSaveStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('closing the panel during a download leaves the page where it is', async () => {
+    let finish!: (s: SaveState) => void
+    api.syncDownloadState.mockReturnValue(new Promise<SaveState>((r) => (finish = r)))
+    await mount()
+    await openStates()
+    await act(async () => byText('Baixar e carregar')!.click())
+    await act(async () => byText('fechar')!.click())
+    await settle()
+    await act(async () => finish(SAVED))
+    await settle()
+    expect(where()).toBe('/game/r1')
+  })
+})
+
+const local = (over: Partial<SaveState>): SaveState => ({ ...SAVED, ...over })
+
+describe('RomDetail local states that stay on this machine', () => {
+  beforeEach(() => {
+    api.syncSaveStatus.mockResolvedValue({ state: 'synced', syncedAt: 1, versions: 1, key: KEY })
+    api.listSaveStates.mockResolvedValue([
+      local({ id: 'old', slot: 1, coreVersion: null }),
+      local({ id: 'big', slot: 2 }),
+      local({ id: 'bad', slot: 3 }),
+      local({ id: 'ok', slot: 4 }),
+    ])
+    api.syncStateNotes.mockResolvedValue([
+      { stateId: 'big', reason: 'too_large' },
+      { stateId: 'bad', reason: 'rejected' },
+      { stateId: 'ok', reason: 'wiped' },
+    ])
+  })
+  const notes = () => [...document.querySelectorAll<HTMLElement>('[data-state-note]')].map((n) => n.textContent)
+
+  it('each slot says why it stays here: no core version, too large, refused', async () => {
+    await mount()
+    await openStates()
+    expect(api.syncStateNotes).toHaveBeenCalledWith('r1')
+    // Na ordem das vagas; o apagado no site (o slot 4) não ganha nota aqui.
+    expect(notes()).toEqual([
+      'Feito antes de o ReEmu registrar a versão do core: fica só nesta máquina.',
+      'Grande demais para a nuvem: fica só nesta máquina.',
+      'A nuvem recusou este state: fica só nesta máquina.',
+    ])
+  })
+
+  it('says nothing with the states switch off or sync off, and asks nothing', async () => {
+    api.syncStatus.mockResolvedValue({ ...STATUS, statesEnabled: false })
+    await mount()
+    await openStates()
+    expect(notes()).toEqual([])
+    expect(api.syncStateNotes).not.toHaveBeenCalled()
+    await unmount()
+    host.remove()
+
+    api.syncStatus.mockResolvedValue({ ...STATUS, enabled: false })
+    await mount()
+    await openStates()
+    expect(notes()).toEqual([])
+    expect(api.syncStateNotes).not.toHaveBeenCalled()
   })
 })

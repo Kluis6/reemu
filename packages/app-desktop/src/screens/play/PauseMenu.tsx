@@ -29,6 +29,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheatsPanel } from "../../components/CheatsPanel";
 import { SaveStateThumb } from "../../components/SaveStateThumb";
+import { LocalStateNote } from "../../components/sync/LocalStateNote";
 import { RemoteStateList } from "../../components/sync/RemoteStateList";
 import { useFullscreen } from "../../hooks/useFullscreen";
 import { REEMU_TAB } from "../../hooks/useMenuNav";
@@ -259,6 +260,8 @@ export function PauseMenu({
                               </Badge>
                             </>
                           )}
+                          {/* por que este state não vai para a nuvem (sync ligado) */}
+                          <LocalStateNote romId={romId} state={st} />
                         </span>
                         <div className={pause.stateActions}>
                           <Button

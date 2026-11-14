@@ -582,6 +582,31 @@ describe('SettingsSync', () => {
     expect(api.syncSetEnabled).not.toHaveBeenCalled()
   })
 
+  it('the save states switch still turns off while Sincronizar agora or Enviar os states antigos wait', async () => {
+    const states = () => [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][2]
+    for (const press of ['Sincronizar agora', 'Enviar os states antigos também']) {
+      api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 1, statesWiped: 1 })
+      api.syncNow.mockReturnValue(new Promise(() => {}))
+      api.syncUploadOldStates.mockReturnValue(new Promise(() => {}))
+      api.syncSetStatesEnabled.mockResolvedValue({ ...ON, statesEnabled: false })
+      api.syncSetStatesEnabled.mockClear()
+      await mount()
+      await act(async () => byText(press)!.click())
+      expect(states().getAttribute('aria-busy')).toBeNull()
+      await act(async () => states().click())
+      await settle()
+      expect(api.syncSetStatesEnabled).toHaveBeenCalledWith(false)
+      expect(states().checked).toBe(false)
+      // O resto da página segue esperando a ação em curso.
+      const saves = [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][1]
+      await act(async () => saves.click())
+      expect(api.syncSetSavesEnabled).not.toHaveBeenCalled()
+      await unmount()
+      host.remove()
+    }
+    await mount()
+  })
+
   it('keeps a typed name while another action runs and sends it afterwards', async () => {
     let finish!: (s: SyncStatus) => void
     api.syncStatus.mockResolvedValue(ON)

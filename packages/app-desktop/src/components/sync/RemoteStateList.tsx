@@ -81,6 +81,15 @@ export function RemoteStateList({
   // A linha cuja pergunta acabou de fechar: o foco volta ao botão dela, que
   // reaparece no lugar do par Substituir/Cancelar.
   const back = useRef<string | null>(null)
+  // Um download que termina depois de a lista sair da tela (a pessoa fechou o
+  // painel ou abriu o jogo) não abre nem carrega nada: a tela já é outra.
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+    }
+  }, [])
 
   // A pergunta abre com o foco no "Cancelar" (o controle não confirma sem querer).
   useEffect(() => {
@@ -106,6 +115,7 @@ export function RemoteStateList({
     setBusy(st.id)
     try {
       const saved = await syncDownloadState(romId, coreId, st.id, overwrite)
+      if (!mounted.current) return
       setAsking(null)
       await onDownloaded(saved)
     } catch (err) {

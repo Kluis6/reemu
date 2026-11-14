@@ -11,6 +11,7 @@ import {
   syncResolve,
   syncRestore,
   syncSaveStatus,
+  syncStateNotes,
   syncStatesFor,
   syncSetEnabled,
   syncSetLabel,
@@ -32,6 +33,8 @@ export const SYNC_SAVE_LINE_KEY = ['sync-save-line'] as const
 export const SYNC_VERSIONS_KEY = ['sync-versions'] as const
 /** Os states das outras máquinas, por jogo e core. */
 export const SYNC_REMOTE_STATES_KEY = ['sync-remote-states'] as const
+/** Por que cada state local fica só nesta máquina, por jogo. */
+export const SYNC_STATE_NOTES_KEY = ['sync-state-notes'] as const
 
 /** Os códigos de `sync_download_state` que a tela explica (cada um com uma
  *  chave `sync.state.err.<código>`); `other_core`, `other_version` e
@@ -96,6 +99,7 @@ export function useSync() {
   const [busy, setBusy] = useState<'enable' | 'label' | 'pause' | 'now' | 'saves' | 'states' | 'oldStates' | null>(null)
   const [error, setError] = useState<SyncErrorCode | null>(null)
   const busyRef = useRef(false)
+  const busyKind = useRef<typeof busy>(null)
   const enablingRef = useRef(false)
   // Só o resultado da tentativa mais recente conta (cancelar e ligar de novo).
   const attempt = useRef(0)
@@ -115,6 +119,7 @@ export function useSync() {
     async (kind: NonNullable<typeof busy>, call: () => Promise<SyncStatus>) => {
       if (busyRef.current) return
       busyRef.current = true
+      busyKind.current = kind
       const mine = ++attempt.current
       enablingRef.current = kind === 'enable'
       mutating++
@@ -142,7 +147,30 @@ export function useSync() {
         mutating--
         enablingRef.current = false
         busyRef.current = false
+        busyKind.current = null
         setBusy(null)
+      }
+    },
+    [qc],
+  )
+
+  /** Enquanto "Sincronizar agora" ou "Enviar os states antigos também" esperam,
+   *  o interruptor dos states segue valendo (desligar para a passada dos states
+   *  no meio). Ele passa à frente da ação em curso: o resultado dela, mais velho,
+   *  não sobrescreve o dele. */
+  const statesBeside = useCallback(
+    async (on: boolean) => {
+      const mine = ++attempt.current
+      mutating++
+      try {
+        const next = await syncSetStatesEnabled(on)
+        if (mine !== attempt.current) return
+        await qc.cancelQueries({ queryKey: SYNC_STATUS_KEY })
+        qc.setQueryData(SYNC_STATUS_KEY, next)
+      } catch (err) {
+        if (mine === attempt.current) setError(syncErrorCode(err))
+      } finally {
+        mutating--
       }
     },
     [qc],
@@ -153,7 +181,13 @@ export function useSync() {
   const setPaused = useCallback((p: boolean) => run('pause', () => syncSetPaused(p)), [run])
   const now = useCallback(() => run('now', () => syncNow()), [run])
   const setSaves = useCallback((on: boolean) => run('saves', () => syncSetSavesEnabled(on)), [run])
-  const setStates = useCallback((on: boolean) => run('states', () => syncSetStatesEnabled(on)), [run])
+  const setStates = useCallback(
+    (on: boolean) =>
+      busyKind.current === 'now' || busyKind.current === 'oldStates'
+        ? statesBeside(on)
+        : run('states', () => syncSetStatesEnabled(on)),
+    [run, statesBeside],
+  )
   /** "Enviar de novo": os states que um "apagar tudo" no site deixou só aqui. */
   const uploadOldStates = useCallback(() => run('oldStates', () => syncUploadOldStates()), [run])
   /** Cancela a espera do consentimento no navegador (o cancelar do Alvanista). */
@@ -238,6 +272,8 @@ export function useSyncEvents() {
         void qc.invalidateQueries({ queryKey: SYNC_STATUS_KEY })
         void qc.invalidateQueries({ queryKey: SYNC_MACHINES_KEY })
       }
+      // Uma passada de states terminou: a nota de cada vaga pode ter mudado.
+      if (e.type === 'status') void qc.invalidateQueries({ queryKey: SYNC_STATE_NOTES_KEY })
       // Uma passada mexeu nos saves: a linha da página do jogo e os conflitos
       // podem ter mudado.
       if (e.type === 'pass' || e.type === 'conflict') {
@@ -280,7 +316,9 @@ export function useSyncEvents() {
 export function useRemoteStates(romId: string, coreId: string | null, enabled = true) {
   const status = useQuery({ queryKey: SYNC_STATUS_KEY, queryFn: syncStatus, retry: false, staleTime: 60_000 })
   const st = status.data
-  const on = enabled && st?.enabled === true && !st.revoked && !st.pausedLocal && st.statesEnabled && romId !== ''
+  // Pausada aqui ou no site (D128): nada vai à rede.
+  const on =
+    enabled && st?.enabled === true && !st.revoked && !st.pausedLocal && !st.pausedSite && st.statesEnabled && romId !== ''
   const q = useQuery({
     queryKey: [...SYNC_REMOTE_STATES_KEY, romId, coreId],
     queryFn: () => syncStatesFor(romId, coreId),
@@ -290,4 +328,23 @@ export function useRemoteStates(romId: string, coreId: string | null, enabled = 
   })
   // Desligado depois de lido: o que ficou no cache não aparece.
   return { ...q, data: on ? q.data : undefined }
+}
+
+/**
+ * Por que cada state local de um jogo fica só nesta máquina, pelo id do state
+ * (a vaga diz: D116, D122). Só com o sync ligado e os states acesos; sem rede.
+ * `on` diz se a nota vale (com os states desligados nada fica "só aqui").
+ */
+export function useStateNotes(romId: string) {
+  const status = useQuery({ queryKey: SYNC_STATUS_KEY, queryFn: syncStatus, retry: false, staleTime: 60_000 })
+  const st = status.data
+  const on = st?.enabled === true && !st.revoked && st.statesEnabled && romId !== ''
+  const q = useQuery({
+    queryKey: [...SYNC_STATE_NOTES_KEY, romId],
+    queryFn: () => syncStateNotes(romId),
+    enabled: on,
+    retry: false,
+  })
+  const notes = on ? q.data : undefined
+  return { on, reasonOf: (stateId: string) => notes?.find((n) => n.stateId === stateId)?.reason ?? null }
 }

@@ -50,6 +50,7 @@ import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { CheatsPanel } from "../components/CheatsPanel";
 import { SaveStateThumb } from "../components/SaveStateThumb";
+import { LocalStateNote } from "../components/sync/LocalStateNote";
 import { RemoteStateList } from "../components/sync/RemoteStateList";
 import { ShaderPicker } from "../components/ShaderPicker";
 import { ShaderParams } from "../components/ShaderParams";
@@ -840,6 +841,8 @@ export function RomDetail() {
                         {t("game.otherVersion")}
                       </Badge>
                     )}
+                    {/* por que este state não vai para a nuvem (sync ligado) */}
+                    <LocalStateNote romId={rom.id} state={st} />
                   </div>
                   <Button
                     icon={<PlayRegular />}

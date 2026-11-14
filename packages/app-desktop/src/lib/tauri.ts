@@ -41,6 +41,7 @@ import type { RomSource } from './bindings/RomSource'
 import type { RemoteState } from './bindings/RemoteState'
 import type { RemoteStates } from './bindings/RemoteStates'
 import type { SaveState } from './bindings/SaveState'
+import type { StateNote } from './bindings/StateNote'
 import type { ScanProgress } from './bindings/ScanProgress'
 import type { ScanReport } from './bindings/ScanReport'
 import type { ScrapeProgress } from './bindings/ScrapeProgress'
@@ -606,7 +607,7 @@ export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Prom
 
 // --- cloud save: esta máquina como aparelho da conta --------------------
 
-export type { HardwarePayload, Quota, RemoteState, RemoteStates, SaveLineStatus, Side, SyncConflict, SyncMachine, SyncStatus, SyncVersion }
+export type { HardwarePayload, Quota, RemoteState, RemoteStates, SaveLineStatus, Side, StateNote, SyncConflict, SyncMachine, SyncStatus, SyncVersion }
 
 /** Eventos do canal `sync`. `status`: a tela relê o estado. */
 export type SyncEvent =
@@ -672,6 +673,10 @@ export const syncStatesFor = (romId: string, coreId: string | null) =>
  *  falso; o de agora vai para a pasta de resguardo antes de ser trocado. */
 export const syncDownloadState = (romId: string, coreId: string | null, saveId: string, overwrite: boolean) =>
   invoke<SaveState>('sync_download_state', { romId, coreId, saveId, overwrite })
+/** Por que cada state desta ROM fica só nesta máquina, pelo id do state, como a
+ *  última passada contou (`too_large`, `rejected`, `unversioned`...). Sem rede;
+ *  vazia com o sync ou os states desligados. */
+export const syncStateNotes = (romId: string) => invoke<StateNote[]>('sync_state_notes', { romId })
 /** A miniatura de um state de outra máquina como `blob:` URL (`null` se não tem). */
 export async function syncStateThumbnailUrl(saveId: string): Promise<string | null> {
   if (!inTauri) return null
