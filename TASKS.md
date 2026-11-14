@@ -713,7 +713,8 @@ no `emu-session`, ver `docs/historico.md`).
            antes de abrir, conflito entre computadores pergunta e guarda a outra
            versão, histórico para voltar. Parte 3, os save states: sobem com o
            core e a versão, e os das outras máquinas descem quando os dois batem.
-           Depois: as configurações copiadas de outra máquina.
+           Parte 4, as configurações: copiadas de outra máquina por grupo, com
+           backup e desfazer, sem apagar nada daqui.
       - **Metadados de jogos:** sem a busca da pergunta 3, não há como identificar a
         ROM, porque a API só aceita ID. Se vier, começar por hero e logo como fonte
         adicional, com ScreenScraper e TheGamesDB como principais, comparar a
