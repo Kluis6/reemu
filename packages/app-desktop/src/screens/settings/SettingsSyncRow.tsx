@@ -10,7 +10,7 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FieldBlock } from '../../components/SettingBlock'
 import { SYNC_STATUS_KEY, syncErrorCode } from '../../hooks/useSync'
@@ -80,10 +80,7 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
   // O erro do "Desfazer" é daquela cópia: uma cópia nova (outro `copiedAt`)
   // começa sem ele, e o "Esquecer" não aparece para a cópia errada.
   const copiedAt = undoInfo.data?.copiedAt ?? null
-  useEffect(() => {
-    setUndoError(null)
-    setAppearanceError(false)
-  }, [copiedAt])
+  const [undoErrorAt, setUndoErrorAt] = useState<number | null>(null)
 
   const send = async () => {
     if (sending) return
@@ -140,6 +137,7 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
       focusAfterBar()
     } catch (err) {
       setUndoError(syncErrorCode(err))
+      setUndoErrorAt(copiedAt)
     } finally {
       setUndoing(false)
     }
@@ -159,6 +157,7 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
       focusAfterBar()
     } catch (err) {
       setUndoError(syncErrorCode(err))
+      setUndoErrorAt(copiedAt)
     } finally {
       setForgetting(false)
     }
@@ -168,7 +167,8 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
   const sentAt = sent.data?.sentAt ?? null
   const changed = (sent.data?.changed.length ?? 0) > 0
   // o backup da cópia sumiu ou não confere: o "Desfazer" não volta sozinho
-  const backupGone = undoError === 'backup_failed'
+  const shownUndoError = undoError !== null && undoErrorAt === copiedAt ? undoError : null
+  const backupGone = shownUndoError === 'backup_failed'
   return (
     <FieldBlock wide>
       <div ref={titleRef} tabIndex={-1} className={s.anchor}>
@@ -182,10 +182,10 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
           <MessageBarBody>
             <span className={s.dot} style={{ backgroundColor: machineColor(info.machineId ?? info.machine) }} aria-hidden />
             {t('sync.settingsRow.undo', { machine: info.machine, when: formatDateTime(info.copiedAt) })}
-            {undoError && (
+            {shownUndoError && (
               <>
                 <br />
-                {t(`sync.err.${undoError as 'failed'}`)}
+                {t(`sync.err.${shownUndoError as 'failed'}`)}
               </>
             )}
             {backupGone && (
