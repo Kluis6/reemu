@@ -119,6 +119,8 @@ const ptBR = {
       card: 'Tema {{name}}',
       lightMode: '{{name}}: modo claro',
       hue: 'Matiz do tema personalizado',
+      customTitle: 'Tema personalizado',
+      customHint: 'Arraste a barra para escolher a cor de destaque. O tema muda na hora.',
       names: {
         reemu: 'Neon Circuit',
         xboxGreen: 'Green Modern',
@@ -144,6 +146,15 @@ const ptBR = {
       change: 'Trocar imagem…',
       remove: 'Remover',
       pickTitle: 'Escolha uma imagem de plano de fundo',
+      presetsTitle: 'Papéis de parede do ReEmu',
+      presetUse: 'Usar o papel de parede {{name}}',
+      presets: {
+        '1': 'Circuito',
+        '2': 'Controles',
+        '3': 'Floresta 8-bit',
+        '4': 'Fliperama',
+        '5': 'Espaço',
+      },
     },
   },
   actions: {

@@ -426,6 +426,7 @@ pub fn run() {
             profile::set_profile_avatar_file,
             appearance::read_wallpaper,
             appearance::set_wallpaper_file,
+            appearance::set_wallpaper_preset,
             appearance::clear_wallpaper,
             appearance::get_theme_selection,
             appearance::set_theme_selection,

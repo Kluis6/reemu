@@ -55,6 +55,7 @@ import type { ScanReport } from './bindings/ScanReport'
 import type { ScrapeProgress } from './bindings/ScrapeProgress'
 import type { ShaderInfo } from './bindings/ShaderInfo'
 import type { ShaderPackProgress } from './bindings/ShaderPackProgress'
+import { wallpaperIdOf, type WallpaperId } from './wallpapers'
 import type { ShaderPackStatus } from './bindings/ShaderPackStatus'
 import type { ShaderParam } from './bindings/ShaderParam'
 import type { SlangpEntry } from './bindings/SlangpEntry'
@@ -794,12 +795,30 @@ export const setWallpaperFile = (srcPath: string) =>
 /** Remove o papel de parede — a tela inicial volta a mostrar só a cor do tema. */
 export const clearWallpaper = () => invoke<void>('clear_wallpaper')
 
-/** O papel de parede escolhido como `blob:` URL, ou `null` se não há nenhum. */
+/** Grava um dos papéis de parede embutidos (`lib/wallpapers.ts`) como
+ *  `wallpaper.svg`. */
+export const setWallpaperPreset = (svg: string) => invoke<void>('set_wallpaper_preset', { svg })
+
+/** Começo do arquivo do papel de parede como texto (pra reconhecer o SVG). */
+function wallpaperHead(buf: ArrayBuffer): string {
+  return new TextDecoder().decode(new Uint8Array(buf, 0, Math.min(400, buf.byteLength)))
+}
+
+/** O papel de parede escolhido como `blob:` URL, ou `null` se não há nenhum.
+ *  O SVG dos embutidos precisa do tipo no `Blob`, senão a imagem não abre. */
 export async function wallpaperUrl(): Promise<string | null> {
   if (!inTauri) return null
   const buf = await invoke<ArrayBuffer>('read_wallpaper')
   if (buf.byteLength === 0) return null
-  return URL.createObjectURL(new Blob([buf]))
+  const svg = wallpaperHead(buf).trimStart().startsWith('<svg')
+  return URL.createObjectURL(new Blob([buf], svg ? { type: 'image/svg+xml' } : undefined))
+}
+
+/** Qual papel de parede embutido está em uso (`null` = nenhum ou imagem da pessoa). */
+export async function wallpaperPresetId(): Promise<WallpaperId | null> {
+  if (!inTauri) return null
+  const buf = await invoke<ArrayBuffer>('read_wallpaper')
+  return buf.byteLength === 0 ? null : wallpaperIdOf(wallpaperHead(buf))
 }
 
 // --- input / captura de binding (etapa 05) -------------------------------

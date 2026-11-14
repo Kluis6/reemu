@@ -118,6 +118,8 @@ const es: Messages = {
       card: 'Tema {{name}}',
       lightMode: '{{name}}: modo claro',
       hue: 'Tono del tema personalizado',
+      customTitle: 'Tema personalizado',
+      customHint: 'Arrastra la barra para elegir el color de acento. El tema cambia al instante.',
       names: {
         reemu: 'Neon Circuit',
         xboxGreen: 'Green Modern',
@@ -143,6 +145,15 @@ const es: Messages = {
       change: 'Cambiar imagen…',
       remove: 'Quitar',
       pickTitle: 'Elige un fondo de pantalla',
+      presetsTitle: 'Fondos de pantalla de ReEmu',
+      presetUse: 'Usar el fondo {{name}}',
+      presets: {
+        '1': 'Circuito',
+        '2': 'Mandos',
+        '3': 'Bosque 8 bits',
+        '4': 'Recreativa',
+        '5': 'Espacio',
+      },
     },
   },
   actions: {

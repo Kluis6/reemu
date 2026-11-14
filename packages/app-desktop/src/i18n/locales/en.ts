@@ -118,6 +118,8 @@ const en: Messages = {
       card: '{{name}} theme',
       lightMode: '{{name}}: light mode',
       hue: 'Custom theme hue',
+      customTitle: 'Custom theme',
+      customHint: 'Drag the bar to pick the accent color. The theme changes right away.',
       names: {
         reemu: 'Neon Circuit',
         xboxGreen: 'Green Modern',
@@ -143,6 +145,15 @@ const en: Messages = {
       change: 'Change image…',
       remove: 'Remove',
       pickTitle: 'Choose a wallpaper',
+      presetsTitle: 'ReEmu wallpapers',
+      presetUse: 'Use the {{name}} wallpaper',
+      presets: {
+        '1': 'Circuit',
+        '2': 'Controllers',
+        '3': '8-bit Forest',
+        '4': 'Arcade',
+        '5': 'Space',
+      },
     },
   },
   actions: {

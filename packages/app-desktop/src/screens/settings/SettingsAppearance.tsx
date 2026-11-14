@@ -4,9 +4,16 @@ import {
   Card,
   ColorPicker,
   ColorSlider,
+  Dialog,
+  DialogActions,
+  DialogBody,
+  DialogContent,
+  DialogSurface,
+  DialogTitle,
   Switch,
   Text,
   makeStyles,
+  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
 import { BlockGroup, SelectBlock } from "../../components/SettingBlock";
@@ -25,11 +32,15 @@ import {
   clearWallpaper,
   pickImage,
   setWallpaperFile,
+  setWallpaperPreset,
+  wallpaperPresetId,
   wallpaperUrl,
 } from "../../lib/tauri";
 import { useWallpaperStore, type WallpaperScope } from "../../stores/useWallpaperStore";
 import { REEMU_ACTION } from "../../hooks/useMenuNav";
 import { errorToast } from "../../lib/toast";
+import { WALLPAPER_IDS, wallpaperDataUri, wallpaperSvg, type WallpaperId } from "../../lib/wallpapers";
+import { DIALOG_FADE_ONLY } from "../../lib/motion";
 import { useToastStore } from "../../stores/useToastStore";
 import { useThemeStore } from "../../stores/useThemeStore";
 import {
@@ -62,8 +73,49 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalM,
-    maxWidth: "480px",
+    maxWidth: "720px",
   },
+  // Papéis de parede embutidos (pedido do usuário, 2026-11-14): miniaturas
+  // 16:9 em grade, o nome embaixo e o check no escolhido, como os temas.
+  presetGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(128px, 1fr))",
+    gap: tokens.spacingHorizontalM,
+  },
+  preset: {
+    display: "flex",
+    flexDirection: "column",
+    gap: tokens.spacingVerticalXS,
+    padding: 0,
+    border: "none",
+    background: "none",
+    color: tokens.colorNeutralForeground1,
+    cursor: "pointer",
+    textAlign: "left",
+    borderRadius: tokens.borderRadiusMedium,
+    fontFamily: "inherit",
+  },
+  presetImg: {
+    display: "block",
+    width: "100%",
+    aspectRatio: "16 / 9",
+    objectFit: "cover",
+    borderRadius: tokens.borderRadiusMedium,
+  },
+  presetName: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalXS,
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: tokens.lineHeightBase200,
+  },
+  presetCheck: { fontSize: "16px", color: tokens.colorBrandForeground1 },
+  // Temas na altura útil do card das Configurações (pedido do usuário,
+  // 2026-11-14): a raiz e a seção esticam, e as linhas da grade dividem a
+  // altura (mínimo de 150 px por card; abaixo disso a página rola).
+  rootFill: { height: "100%" },
+  sectionFill: { flexGrow: 1, minHeight: 0 },
+  gridFill: { flexGrow: 1, gridAutoRows: "minmax(150px, 1fr)" },
   grid: {
     display: "grid",
     // Até 4 colunas que esticam pra encher a largura do card (pedido do
@@ -84,7 +136,10 @@ const useStyles = makeStyles({
     position: "relative",
     gap: tokens.spacingVerticalS,
     padding: tokens.spacingHorizontalM,
-    border: "2px solid transparent",
+    // A mesma borda em todos os cards, do tema ATIVO (pedido do usuário,
+    // 2026-11-14): com a do próprio tema, os escuros tinham borda escura e os
+    // claros, clara. O fundo continua o do tema mostrado (a prévia).
+    border: `2px solid ${tokens.colorNeutralStroke2}`,
     // Sem a sombra do <Card> do Fluent (`shadow4`, e a do hover) — pedido do
     // usuário; a separação fica com a borda e o fundo do próprio tema.
     boxShadow: "none !important",
@@ -110,9 +165,8 @@ const useStyles = makeStyles({
       boxShadow: "none !important",
     },
     // Igual ao card de jogo (pedido do usuário): anel e brilho no foco E no
-    // hover, e o card muda de tom. O tom é uma camada cinza translúcida por
-    // cima do fundo (que vem inline, do próprio tema): clareia os escuros e
-    // escurece os claros.
+    // hover. O fundo NÃO muda (pedido do usuário, 2026-11-14): é a prévia do
+    // tema, e a camada cinza que clareava/escurecia o card mudava as cores.
     "&:hover, &:has(> .fui-Card__checkbox:focus)": {
       outlineWidth: "3px",
       outlineStyle: "solid",
@@ -121,8 +175,6 @@ const useStyles = makeStyles({
       // o brilho vem do `::before` (o do index.css, regra 4, no foco; o de
       // baixo no hover), por fora do anel; o card deixa ele aparecer
       overflow: "visible !important",
-      backgroundImage:
-        "linear-gradient(rgba(128, 128, 128, 0.14), rgba(128, 128, 128, 0.14))",
       // A borda de 2 px do card (cor do tema, inline) ficava logo dentro do
       // anel e somava com ele — parecia um anel mais grosso que o padrão. No
       // foco/hover ela some, como no card de jogo (que não tem borda).
@@ -151,12 +203,20 @@ const useStyles = makeStyles({
     columnGap: tokens.spacingHorizontalS,
     minHeight: "32px",
   },
+  // Cor primária em destaque numa linha inteira e as outras quatro numa
+  // linha abaixo (pedido do usuário, 2026-11-14); a altura total segue 56 px.
+  // Cresce com o card (a grade estica até a altura útil): as duas linhas
+  // ficam sempre com a mesma altura (pedido do usuário, 2026-11-14).
   swatch: {
-    height: "56px",
+    flexGrow: 1,
+    minHeight: "56px",
     borderRadius: tokens.borderRadiusMedium,
     display: "flex",
+    flexDirection: "column",
     overflow: "hidden",
   },
+  primary: { flexGrow: 1, flexBasis: 0 },
+  others: { flexGrow: 1, flexBasis: 0, display: "flex" },
   seg: { flexGrow: 1 },
   // check do tema ativo, depois do nome
   check: { fontSize: "20px", flexShrink: 0 },
@@ -181,6 +241,8 @@ const useStyles = makeStyles({
   },
   wallPreview: {
     width: "100%",
+    // a prévia fica no tamanho de antes; a grade dos embutidos usa os 720
+    maxWidth: "480px",
     aspectRatio: "16 / 9",
     borderRadius: tokens.borderRadiusLarge,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
@@ -198,28 +260,35 @@ const useStyles = makeStyles({
     flexWrap: "wrap",
     gap: tokens.spacingHorizontalS,
   },
-  customPanel: {
+  // Diálogo do tema personalizado (pedido do usuário, 2026-11-14): abre ao
+  // escolher o card "Personalizado", com a prévia e a barra de matiz.
+  customSurface: { maxWidth: "560px" },
+  // no diálogo a faixa é maior: duas linhas de 60 px (pedido do usuário)
+  customSwatch: { minHeight: "120px" },
+  // botão no tamanho grande do Fluent (40 px) e largo, como os dos diálogos
+  // do dashboard do Xbox Series X (controles de ~50 px na largura de 2000;
+  // doc 18, "Escala igual à do app Xbox")
+  customAction: { minWidth: "160px" },
+  customContent: {
     display: "flex",
     flexDirection: "column",
-    gap: tokens.spacingVerticalM,
-    padding: tokens.spacingHorizontalM,
-    borderRadius: tokens.borderRadiusLarge,
-    backgroundColor: tokens.colorNeutralBackground2,
+    gap: tokens.spacingVerticalL,
   },
   hueSlider: { width: "100%" },
 });
 
 /** Amostra do tema: as 4 cores do fundo (na ordem dos cantos, ver
  *  `BgPalette`) com a cor de marca no meio. */
-function Swatch({ t }: { t: ReEmuTheme }) {
+function Swatch({ t, className }: { t: ReEmuTheme; className?: string }) {
   const s = useStyles();
   return (
-    <div className={s.swatch}>
-      {[t.reemuBg1, t.reemuBg4, t.reemuBrandSolid, t.reemuBg2, t.reemuBg3].map(
-        (c, i) => (
+    <div className={mergeClasses(s.swatch, className)}>
+      <span className={s.primary} style={{ background: t.reemuBrandSolid }} />
+      <span className={s.others}>
+        {[t.reemuBg1, t.reemuBg4, t.reemuBg2, t.reemuBg3].map((c, i) => (
           <span key={i} className={s.seg} style={{ background: c }} />
-        ),
-      )}
+        ))}
+      </span>
     </div>
   );
 }
@@ -267,9 +336,6 @@ function ThemeCard({
       aria-label={tr("appearance.theme.card", { name: label })}
       style={{
         backgroundColor: t.colorNeutralBackground2,
-        // a mesma borda em todos: o ativo é marcado só pelo selo de check
-        // (pedido do usuário), não pela borda na cor do tema
-        borderColor: t.colorNeutralStroke2,
       }}
     >
       <Swatch t={t} />
@@ -368,6 +434,8 @@ export function SettingsAppearance({
     setCustomMode,
   } = useThemeStore();
   const isCustom = selection.kind === "custom";
+  // diálogo da cor do tema personalizado
+  const [customOpen, setCustomOpen] = useState(false);
   // Cada card guarda o próprio modo. No card selecionado o Switch aplica na
   // hora; nos outros só troca a prévia daquele card — clicar no card aplica
   // o tema no modo que está na tela. Um card nunca muda por causa de outro.
@@ -404,12 +472,28 @@ export function SettingsAppearance({
     onSuccess: (ok) => {
       if (!ok) return;
       qc.invalidateQueries({ queryKey: ["wallpaper"] });
+      qc.invalidateQueries({ queryKey: ["wallpaper-preset"] });
+    },
+    onError: (e) => push(errorToast(e, "loadImage")),
+  });
+  const wallPreset = useQuery({
+    queryKey: ["wallpaper-preset"],
+    queryFn: wallpaperPresetId,
+  });
+  const applyPreset = useMutation({
+    mutationFn: (id: WallpaperId) => setWallpaperPreset(wallpaperSvg(id)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["wallpaper"] });
+      qc.invalidateQueries({ queryKey: ["wallpaper-preset"] });
     },
     onError: (e) => push(errorToast(e, "loadImage")),
   });
   const remove = useMutation({
     mutationFn: clearWallpaper,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["wallpaper"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["wallpaper"] });
+      qc.invalidateQueries({ queryKey: ["wallpaper-preset"] });
+    },
     onError: (e) => push(errorToast(e, "removeWallpaper")),
   });
 
@@ -435,11 +519,14 @@ export function SettingsAppearance({
     );
 
   return (
-    <div className={s.root}>
+    <div className={mergeClasses(s.root, tab === "theme" && s.rootFill)}>
 
       {tab === "theme" && (
-        <div className={s.section}>
-          <div className={s.grid} aria-label={t("appearance.theme.title")}>
+        <div className={mergeClasses(s.section, s.sectionFill)}>
+          <div
+            className={mergeClasses(s.grid, s.gridFill)}
+            aria-label={t("appearance.theme.title")}
+          >
             {THEME_FAMILIES.map((f) => {
               const on = active?.family === f;
               const mode: ThemeMode = on
@@ -473,11 +560,11 @@ export function SettingsAppearance({
               t={customPreview}
               label={t("appearance.theme.names.custom")}
               selected={isCustom}
-              onSelect={() =>
-                customMode === customDraft.mode
-                  ? activateCustom()
-                  : setCustomMode(customMode)
-              }
+              onSelect={() => {
+                if (customMode === customDraft.mode) activateCustom();
+                else setCustomMode(customMode);
+                setCustomOpen(true);
+              }}
               mode={customMode}
               onModeChange={(m) => {
                 setPreviewMode("custom", m);
@@ -486,19 +573,41 @@ export function SettingsAppearance({
             />
           </div>
 
-          {isCustom && (
-            <div className={s.customPanel}>
-              <ColorPicker
-                color={{ h: customDraft.hue, s: 1, v: 1 }}
-                onColorChange={(_, data) => setCustomHue(data.color.h)}
-              >
-                <ColorSlider
-                  className={s.hueSlider}
-                  aria-label={t("appearance.theme.hue")}
-                />
-              </ColorPicker>
-            </div>
-          )}
+          <Dialog
+            open={customOpen}
+            onOpenChange={(_, d) => setCustomOpen(d.open)}
+            surfaceMotion={DIALOG_FADE_ONLY}
+          >
+            <DialogSurface className={s.customSurface}>
+              <DialogBody>
+                <DialogTitle>{t("appearance.theme.customTitle")}</DialogTitle>
+                <DialogContent className={s.customContent}>
+                  <Caption1>{t("appearance.theme.customHint")}</Caption1>
+                  {/* prévia com a cor escolhida, como a faixa dos cards */}
+                  <Swatch t={customPreview} className={s.customSwatch} />
+                  <ColorPicker
+                    color={{ h: customDraft.hue, s: 1, v: 1 }}
+                    onColorChange={(_, data) => setCustomHue(data.color.h)}
+                  >
+                    <ColorSlider
+                      className={s.hueSlider}
+                      aria-label={t("appearance.theme.hue")}
+                    />
+                  </ColorPicker>
+                </DialogContent>
+                <DialogActions>
+                  <Button
+                    appearance="primary"
+                    size="large"
+                    className={s.customAction}
+                    onClick={() => setCustomOpen(false)}
+                  >
+                    {t("common.close")}
+                  </Button>
+                </DialogActions>
+              </DialogBody>
+            </DialogSurface>
+          </Dialog>
         </div>
       )}
 
@@ -508,6 +617,32 @@ export function SettingsAppearance({
               {t("appearance.wallpaper.description")}
             </Caption1>
 
+          <Caption1 as="p" block style={{ margin: 0 }}>
+            {t("appearance.wallpaper.presetsTitle")}
+          </Caption1>
+          <div className={s.presetGrid}>
+            {WALLPAPER_IDS.map((id) => {
+              const name = t(`appearance.wallpaper.presets.${id}`);
+              const on = wallPreset.data === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={s.preset}
+                  aria-pressed={on}
+                  aria-label={t("appearance.wallpaper.presetUse", { name })}
+                  disabled={applyPreset.isPending}
+                  onClick={() => applyPreset.mutate(id)}
+                >
+                  <img className={s.presetImg} src={wallpaperDataUri(id)} alt="" draggable={false} />
+                  <span className={s.presetName}>
+                    {name}
+                    {on && <CheckmarkCircleFilled className={s.presetCheck} aria-hidden />}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           <div
             className={s.wallPreview}
             style={

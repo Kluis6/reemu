@@ -15,8 +15,14 @@ use tauri::State;
 use crate::app_error::{AppError, ErrorCode};
 use crate::commands::AppState;
 
-const WALLPAPER_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp"];
+/// O que a pessoa pode escolher do disco.
+const USER_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp"];
+/// Tudo o que pode estar em `wallpaper.<ext>`: as imagens da pessoa e o SVG
+/// dos papéis de parede embutidos (`set_wallpaper_preset`).
+const WALLPAPER_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "svg"];
 const MAX_BYTES: u64 = 20 * 1024 * 1024;
+/// Teto do SVG embutido (os 5 do app têm de 20 a 60 KB).
+const PRESET_MAX_BYTES: usize = 512 * 1024;
 
 fn wallpaper_file(dir: &Path) -> Option<PathBuf> {
     WALLPAPER_EXTS
@@ -27,7 +33,7 @@ fn wallpaper_file(dir: &Path) -> Option<PathBuf> {
 
 fn ext_of(path: &Path) -> Option<String> {
     let e = path.extension()?.to_str()?.to_ascii_lowercase();
-    WALLPAPER_EXTS.contains(&e.as_str()).then_some(e)
+    USER_EXTS.contains(&e.as_str()).then_some(e)
 }
 
 /// Bytes do papel de parede escolhido (vazio se não há nenhum). Frontend
@@ -65,6 +71,41 @@ pub async fn set_wallpaper_file(
         err
     })?;
     log::info!("papel de parede salvo em {}", dest.display());
+    Ok(())
+}
+
+/// O SVG serve como papel de parede embutido? Só os do app
+/// (`packages/app-desktop/src/lib/wallpapers.ts`, marcados com
+/// `data-reemu-wallpaper`), sem script nem atributo de evento: ele é exibido
+/// como imagem (`<img>`/CSS), que não roda script, mas o arquivo fica no disco.
+fn preset_svg_ok(svg: &str) -> bool {
+    let lower = svg.to_ascii_lowercase();
+    svg.len() <= PRESET_MAX_BYTES
+        && lower.trim_start().starts_with("<svg")
+        && lower.contains("data-reemu-wallpaper=")
+        && !lower.contains("<script")
+        && !lower.contains(" on")
+        && !lower.contains("javascript:")
+}
+
+/// Grava um dos papéis de parede embutidos (SVG gerado pelo app) como
+/// `<dados>/appearance/wallpaper.svg`, no lugar do que houver.
+#[tauri::command]
+pub async fn set_wallpaper_preset(state: State<'_, AppState>, svg: String) -> Result<(), AppError> {
+    if !preset_svg_ok(&svg) {
+        return Err(AppError::new(
+            ErrorCode::Corrupt,
+            "papel de parede inválido",
+        ));
+    }
+    std::fs::create_dir_all(&state.appearance_dir)?;
+    let tmp = state.appearance_dir.join("wallpaper.svg.tmp");
+    std::fs::write(&tmp, svg.as_bytes())?;
+    for e in WALLPAPER_EXTS {
+        let _ = std::fs::remove_file(state.appearance_dir.join(format!("wallpaper.{e}")));
+    }
+    std::fs::rename(&tmp, state.appearance_dir.join("wallpaper.svg"))?;
+    log::info!("papel de parede embutido salvo");
     Ok(())
 }
 
@@ -120,6 +161,25 @@ pub fn set_theme_selection(state: State<'_, AppState>, json: String) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preset_svg_so_os_do_app() {
+        let ok =
+            r#"<svg xmlns="http://www.w3.org/2000/svg" data-reemu-wallpaper="1"><rect/></svg>"#;
+        assert!(preset_svg_ok(ok));
+        assert!(!preset_svg_ok("<svg><rect/></svg>"), "sem a marca do app");
+        assert!(!preset_svg_ok(
+            &ok.replace("<rect/>", "<script>x()</script>")
+        ));
+        assert!(!preset_svg_ok(
+            &ok.replace("<rect/>", r#"<rect onload="x()"/>"#)
+        ));
+        assert!(!preset_svg_ok("<html data-reemu-wallpaper=\"1\"></html>"));
+        assert!(!preset_svg_ok(&format!(
+            "{ok}{}",
+            " ".repeat(PRESET_MAX_BYTES)
+        )));
+    }
 
     #[test]
     fn theme_roundtrip_and_validation() {
