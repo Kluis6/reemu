@@ -3464,3 +3464,9 @@ Infra:
 - **A1** (`core-loader-desktop/src/vk_frame.rs`): as 13 travas `lock().unwrap()` e o `wait_timeout(..).unwrap()` do `Condvar` viraram `unwrap_or_else(PoisonError::into_inner)` (std::sync::PoisonError). Um `Mutex` envenenado por um pânico em outra thread deixava de derrubar também a thread do core ou a do compositor. Não muda a ordem das chamadas Vulkan nem a sincronização. Conferido: 33 testes do crate, `clippy -D warnings` e os testes de GPU desta máquina (`from_adopted_vulkan_runs_the_chain`, `vk_interop_id_reads_this_device`, `win32_interop_*`, 8 ok).
 - **B1** (experiência, lock restaurado): `cargo update` do `wgpu` 30.0.1 → 30.0.2 sozinho já faz o resolvedor pôr a `windows` 0.61 e o `wgpu-hal` 30.0.2 falha em `dx12/suballocation.rs` (11 erros); com o `tauri-plugin-updater` 2.14.1 junto, o mesmo. O `gpu-allocator` 0.28.0 segue como último. Fica a B3: esperar uma versão compatível e reconferir por mês.
 
+
+## 2026-11-14 — Fase 6, passo C1: a crate `net`
+
+- **O que mudou:** `http.rs` (cliente com o User-Agent do ReEmu e os limites de conexão e de leitura) e `repo_version.rs` (commit dos pacotes do GitHub pelo `ls-refs` e pela API) saíram de `apps/desktop/src-tauri/src` para `crates/net`. O app usa `net::http::client()` e `net::repo_version::*`; o comportamento não muda. O User-Agent segue com a versão do workspace (`version.workspace`).
+- **Erros:** a crate não conhece o `AppError`. O teste de "servidor parado" ficou dividido: em `net`, o cliente desiste sozinho (`is_timeout`); em `app_error.rs`, esse erro vira `ErrorCode::Offline`. Para isso `net::http::build` ficou público.
+- **Conferido:** `cargo clippy --workspace --all-targets -D warnings`, `cargo test -p net` (3) e `cargo test -p reemu-desktop` (510 ok, 24 ignorados).

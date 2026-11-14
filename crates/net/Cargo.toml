@@ -1,0 +1,15 @@
+[package]
+name = "net"
+version.workspace = true
+edition.workspace = true
+
+# Rede dos downloads de terceiros (buildbot da libretro, GitHub, capas): o
+# cliente HTTP com User-Agent e limites de tempo, e a versão dos pacotes
+# baixados do GitHub. Sem Tauri: o app converte os erros no `AppError`.
+[dependencies]
+serde.workspace = true
+log = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "net", "time"] }

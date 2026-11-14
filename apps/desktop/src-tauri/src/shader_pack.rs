@@ -11,9 +11,7 @@
 use std::path::{Path, PathBuf};
 use tauri::ipc::Channel;
 
-use crate::repo_version::{
-    head_commit, installed_at, is_outdated, now_secs, refresh_latest, Commit,
-};
+use net::repo_version::{head_commit, installed_at, is_outdated, now_secs, refresh_latest, Commit};
 
 const ARCHIVE_URL: &str = "https://buildbot.libretro.com/assets/frontend/shaders_slang.zip";
 /// Usado se o buildbot estiver fora do ar. Vem com dir raiz `slang-shaders-master/`.
@@ -247,7 +245,7 @@ pub async fn update_available(shaders_dir: &Path, force: bool) -> bool {
 /// GET com status checado. `reqwest` já segue redirects (o buildbot manda um).
 async fn fetch(url: &str) -> Result<reqwest::Response, String> {
     log::info!("baixando pacote de shaders: {url}");
-    crate::http::client()
+    net::http::client()
         .get(url)
         .send()
         .await

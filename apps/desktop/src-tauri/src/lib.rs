@@ -11,8 +11,6 @@ mod covers;
 mod credentials;
 mod decoration;
 mod gpu;
-mod http;
-mod repo_version;
 
 /// Quadros do jogo novo apresentados antes de a janela de vídeo reaparecer.
 /// No Windows são 2: o present é assíncrono e o Vulkan não garante quando a

@@ -24,7 +24,7 @@ pub fn ppsspp_installed(system_dir: &Path) -> bool {
 pub async fn download_ppsspp(system_dir: &Path) -> Result<usize, String> {
     log::info!("system files: baixando {PPSSPP_URL}");
     let resp = reqwest::Client::builder()
-        .user_agent(crate::http::USER_AGENT)
+        .user_agent(net::http::USER_AGENT)
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .map_err(|e| e.to_string())?

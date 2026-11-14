@@ -19,7 +19,10 @@ pub const USER_AGENT: &str = concat!(
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
-fn build(connect: Duration, read: Duration) -> reqwest::Client {
+/// Cliente com o User-Agent do ReEmu e limites próprios. O app usa o
+/// [`client`] compartilhado; isto fica público para os testes que precisam
+/// de limites curtos.
+pub fn build(connect: Duration, read: Duration) -> reqwest::Client {
     reqwest::Client::builder()
         .user_agent(USER_AGENT)
         .connect_timeout(connect)
@@ -37,7 +40,6 @@ pub fn client() -> &'static reqwest::Client {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_error::{AppError, ErrorCode};
 
     /// Conecta e nunca responde: é o que uma rede caída no meio do caminho faz.
     #[tokio::test]
@@ -50,8 +52,8 @@ mod tests {
             .await
             .expect("o cliente deveria desistir sozinho");
 
-        let error = AppError::from_http("download", result.unwrap_err());
-        assert_eq!(error.code, Some(ErrorCode::Offline));
+        // o app converte este erro em `ErrorCode::Offline` (app_error.rs)
+        assert!(result.unwrap_err().is_timeout());
         drop(listener);
     }
 }

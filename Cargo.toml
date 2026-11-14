@@ -12,6 +12,7 @@ members = [
     "crates/shader-slang",
     "crates/core-ipc",
     "crates/core-host-desktop",
+    "crates/net",
     "apps/desktop/src-tauri",
     # adapters de plataforma são adicionados aqui conforme forem criados:
     # "crates/core-loader-mobile",

@@ -184,7 +184,7 @@ fn parse_index(text: &str, ext: &str) -> HashMap<String, i64> {
         .collect()
 }
 
-use crate::repo_version::remote_head;
+use net::repo_version::remote_head;
 
 fn is_outdated(commit: &str, head: &str, built_day: i64, dll_day: i64) -> bool {
     built_day > dll_day && !head.starts_with(commit)
@@ -228,7 +228,7 @@ pub async fn check(cores_dir: &Path) -> Result<Vec<String>, AppError> {
         "https://buildbot.libretro.com/nightly/{}/x86_64/latest/.index-extended",
         buildbot_os()
     );
-    let index = crate::http::client()
+    let index = net::http::client()
         .get(&url)
         .send()
         .await
@@ -299,7 +299,7 @@ pub async fn check(cores_dir: &Path) -> Result<Vec<String>, AppError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repo_version::parse_ls_refs;
+    use net::repo_version::parse_ls_refs;
 
     #[tokio::test]
     #[ignore = "usa a rede e os cores de REEMU_TEST_CORES_DIR"]

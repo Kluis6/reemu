@@ -92,6 +92,9 @@ o card atual fica.
         `gpu-allocator` 0.28.0 ainda é o último. Lock restaurado. Saída: B3, esperar.
       - [ ] B2/B3. Conforme o B1: atualizar Tauri e tirar a `zip` 4.6.1, ou escolher a saída.
       - [ ] C. Fase 6 (crates `net`, `core-catalog`, `scraping`).
+        - [x] C1. `crates/net`: `http.rs` e `repo_version.rs` (2026-11-14).
+        - [ ] C2. `crates/core-catalog`: `core_catalog.rs`, `core_updates.rs`, `smoke_roms.rs`.
+        - [ ] C3. `crates/scraping`.
 
 ### Validação (precisa de hardware/máquina que não é esta)
 

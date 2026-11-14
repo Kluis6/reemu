@@ -677,7 +677,7 @@ pub async fn download(cores_dir: &Path, core_id: &str) -> Result<PathBuf, AppErr
     }
     let url = download_url(core_id);
     log::info!("baixando core: {url}");
-    let resp = crate::http::client()
+    let resp = net::http::client()
         .get(&url)
         .send()
         .await

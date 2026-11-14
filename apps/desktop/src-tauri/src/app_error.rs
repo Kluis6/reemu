@@ -187,6 +187,22 @@ impl From<SessionError> for AppError {
 mod tests {
     use super::*;
 
+    /// Conecta e nunca responde (rede caída no meio do caminho): o cliente
+    /// desiste sozinho e a interface recebe "sem conexão".
+    #[tokio::test]
+    async fn servidor_parado_vira_erro_de_rede() {
+        use std::time::Duration;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/core.zip", listener.local_addr().unwrap());
+        let client = net::http::build(Duration::from_secs(1), Duration::from_millis(200));
+        let result = tokio::time::timeout(Duration::from_secs(5), client.get(&url).send())
+            .await
+            .expect("o cliente deveria desistir sozinho");
+        let error = AppError::from_http("download", result.unwrap_err());
+        assert_eq!(error.code, Some(ErrorCode::Offline));
+        drop(listener);
+    }
+
     #[test]
     fn vai_para_a_interface_com_codigo_e_texto() {
         let e = AppError::new(ErrorCode::NoCore, "core não encontrado: x");

@@ -3476,6 +3476,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "net"
+version = "0.1.12"
+dependencies = [
+ "log",
+ "reqwest 0.12.28",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "new_debug_unreachable"
 version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4873,6 +4883,7 @@ dependencies = [
  "library-scan",
  "log",
  "md-5",
+ "net",
  "open",
  "png 0.17.16",
  "pollster",

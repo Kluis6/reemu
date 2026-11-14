@@ -15,9 +15,7 @@ use std::path::{Path, PathBuf};
 
 use tauri::ipc::Channel;
 
-use crate::repo_version::{
-    head_commit, installed_at, is_outdated, now_secs, refresh_latest, Commit,
-};
+use net::repo_version::{head_commit, installed_at, is_outdated, now_secs, refresh_latest, Commit};
 
 /// `system_id` do ReEmu → repo `bezelproject-<X>` (família overlay/RetroArch).
 /// Só sistemas que a família publica; PSP/PS2/DS não têm bezel (widescreen).
@@ -112,7 +110,7 @@ fn archive_url(repo: &str) -> String {
 }
 
 async fn fetch(url: &str) -> Result<reqwest::Response, String> {
-    crate::http::client()
+    net::http::client()
         .get(url)
         .send()
         .await
