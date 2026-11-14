@@ -1690,7 +1690,7 @@ fn request_save_ram(
 }
 
 /// `<save_dir>/<stem da rom>.srm` — convenção do RetroArch pra battery save.
-fn srm_path(dir: &std::path::Path, rom_path: &str) -> PathBuf {
+pub fn srm_path(dir: &std::path::Path, rom_path: &str) -> PathBuf {
     let stem = std::path::Path::new(rom_path)
         .file_stem()
         .and_then(|s| s.to_str())

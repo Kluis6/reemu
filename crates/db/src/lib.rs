@@ -16,7 +16,7 @@ pub use repositories::{
     is_under, AlvanistaRepo, AspectAssignments, AspectRepo, AudioConfigRepo, CheatsRepo,
     ControllerMappingsRepo, CoreOptionsRepo, DecorationRepo, DevicePortsRepo, InstalledCoresRepo,
     KeyboardBindingsRepo, LibraryFoldersRepo, MetadataRepo, ProfileRepo, RomsRepo, SaveStateRepo,
-    ShaderChainRepo, SystemCoreRepo, SystemHotkeysRepo, VideoConfigRepo,
+    ShaderChainRepo, SyncRepo, SystemCoreRepo, SystemHotkeysRepo, VideoConfigRepo,
 };
 
 use thiserror::Error;

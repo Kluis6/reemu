@@ -13,6 +13,11 @@ const api = vi.hoisted(() => ({
   syncSetEnabled: vi.fn(),
   syncSetLabel: vi.fn(),
   syncSetPaused: vi.fn(),
+  syncSetSavesEnabled: vi.fn(),
+  syncSetStatesEnabled: vi.fn(),
+  syncUploadOldStates: vi.fn(),
+  syncConflicts: vi.fn(),
+  syncResolve: vi.fn(),
   syncNow: vi.fn(),
   alvanistaConnect: vi.fn(),
   alvanistaCancel: vi.fn(),
@@ -22,6 +27,20 @@ const api = vi.hoisted(() => ({
 vi.mock('../../lib/tauri', async (orig) => ({
   ...(await orig<typeof import('../../lib/tauri')>()),
   ...api,
+}))
+
+// O Dialog do Fluent não monta no happy-dom desta árvore ("presenceFn is not a
+// function"): o diálogo de tela cheia vira uma camada simples.
+vi.mock('../../components/FullscreenDialog', () => ({
+  FullscreenDialog: (p: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; actions?: React.ReactNode }) =>
+    p.open ? (
+      <div className="fui-DialogSurface" role="dialog">
+        <h2>{p.title}</h2>
+        <button onClick={p.onClose}>fechar</button>
+        {p.children}
+        {p.actions}
+      </div>
+    ) : null,
 }))
 
 import { SettingsSync } from './SettingsSync'
@@ -55,8 +74,13 @@ const OFF: SyncStatus = {
   hardware: HW,
   quota: null,
   lastPassAt: null,
+  savesEnabled: true,
+  statesEnabled: true,
   conflicts: 0,
+  statesLocalOnly: 0,
+  statesWiped: 0,
   lastError: null,
+  lastErrorFile: null,
 }
 const ON: SyncStatus = {
   ...OFF,
@@ -192,12 +216,175 @@ describe('SettingsSync', () => {
     expect(api.syncStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('marks every "O que sincroniza" row as em breve', async () => {
+  it('only settings stays em breve; game saves and states have real switches', async () => {
+    api.syncStatus.mockResolvedValue(ON)
     await mount()
-    for (const row of ['Game saves', 'Save states', 'Configurações']) {
-      const title = [...host.querySelectorAll('span')].find((e) => e.firstElementChild?.textContent === row)
-      expect(title?.textContent).toContain('em breve')
+    const title = [...host.querySelectorAll('span')].find((e) => e.firstElementChild?.textContent === 'Configurações')
+    expect(title?.textContent).toContain('em breve')
+    const switches = [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')]
+    for (const [i, label] of [
+      [1, 'Game saves'],
+      [2, 'Save states'],
+    ] as const) {
+      expect(switches[i].closest('label')?.textContent).toContain(label)
+      expect(switches[i].closest('label')?.textContent).not.toContain('em breve')
+      expect(switches[i].checked).toBe(true)
     }
+  })
+
+  it('turns the save states switch off through syncSetStatesEnabled', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSetStatesEnabled.mockResolvedValue({ ...ON, statesEnabled: false })
+    await mount()
+    const states = () => [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][2]
+    await act(async () => states().click())
+    await settle()
+    expect(api.syncSetStatesEnabled).toHaveBeenCalledWith(false)
+    expect(api.syncSetSavesEnabled).not.toHaveBeenCalled()
+    expect(states().checked).toBe(false)
+  })
+
+  it('the save states switch is disabled while sync is off', async () => {
+    await mount()
+    expect([...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][2].disabled).toBe(true)
+  })
+
+  it('says how many save states stay only on this machine and sends the wiped ones again', async () => {
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 3, statesWiped: 2 })
+    api.syncUploadOldStates.mockResolvedValue({ ...ON, statesLocalOnly: 1, statesWiped: 0 })
+    await mount()
+    expect(host.textContent).toContain('3 save states ficam só nesta máquina.')
+    await act(async () => byText('Enviar os states antigos também')!.click())
+    await settle()
+    expect(api.syncUploadOldStates).toHaveBeenCalledTimes(1)
+    expect(host.textContent).toContain('1 save state fica só nesta máquina.')
+    expect(byText('Enviar os states antigos também')).toBeUndefined()
+  })
+
+  it('the button stays away when none of the local-only states were wiped on the site', async () => {
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 4, statesWiped: 0 })
+    await mount()
+    expect(host.textContent).toContain('4 save states ficam só nesta máquina.')
+    expect(byText('Enviar os states antigos também')).toBeUndefined()
+  })
+
+  it('one save state reads in the singular, and zero or the switch off show no line', async () => {
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 1 })
+    await mount()
+    expect(host.textContent).toContain('1 save state fica só nesta máquina.')
+    await unmount()
+    host.remove()
+
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 0 })
+    await mount()
+    expect(host.textContent).not.toContain('só nesta máquina')
+    expect(byText('Enviar os states antigos também')).toBeUndefined()
+    await unmount()
+    host.remove()
+
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 2, statesEnabled: false })
+    await mount()
+    expect(host.textContent).not.toContain('só nesta máquina')
+  })
+
+  it('turns the game saves switch off through syncSetSavesEnabled', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSetSavesEnabled.mockResolvedValue({ ...ON, savesEnabled: false })
+    await mount()
+    const saves = () => [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][1]
+    await act(async () => saves().click())
+    await settle()
+    expect(api.syncSetSavesEnabled).toHaveBeenCalledWith(false)
+    expect(saves().checked).toBe(false)
+  })
+
+  it('the game saves switch is disabled while sync is off', async () => {
+    await mount()
+    expect([...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][1].disabled).toBe(true)
+  })
+
+  it('hides Conflitos with zero and resolves the conflicts one after another', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    await mount()
+    expect(host.textContent).not.toContain('Conflitos')
+    await unmount()
+    host.remove()
+
+    const side = (machine: string, deleted = false) => ({ machine, deviceId: null, savedAt: 1_700_000_000, size: 2048, deleted })
+    const c = (key: string, title: string) => ({
+      key,
+      romId: null,
+      title,
+      local: side('PC-SALA'),
+      remote: side('Notebook'),
+    })
+    let open = [c('k1', 'Zelda'), c('k2', 'Chrono')]
+    api.syncStatus.mockResolvedValue({ ...ON, conflicts: 2 })
+    api.syncConflicts.mockImplementation(async () => open)
+    api.syncResolve.mockImplementation(async (key: string) => {
+      open = open.filter((x) => x.key !== key)
+    })
+    await mount()
+    expect(host.textContent).toContain('Conflitos')
+    expect(host.textContent).toContain('2 game saves mudaram nas duas máquinas.')
+    await act(async () => byText('Resolver')!.click())
+    await settle()
+    const dialog = () => document.querySelector('.fui-DialogSurface')
+    expect(dialog()?.textContent).toContain('Zelda mudou nas duas máquinas')
+    const keepThis = () => [...document.querySelectorAll('button')].find((b) => b.textContent === 'Manter esta')!
+    await act(async () => keepThis().click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenCalledWith('k1', 'local')
+    expect(dialog()?.textContent).toContain('Chrono mudou nas duas máquinas')
+    await act(async () => keepThis().click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenCalledWith('k2', 'local')
+    expect(dialog()).toBeNull()
+  })
+
+  it('Conflitos counts a site deletion apart from the two-machine conflicts (I-4)', async () => {
+    const side = (machine: string, deleted = false) => ({ machine, deviceId: null, savedAt: 1_700_000_000, size: 2048, deleted })
+    api.syncStatus.mockResolvedValue({ ...ON, conflicts: 3 })
+    api.syncConflicts.mockResolvedValue([
+      { key: 'k1', romId: null, title: 'Zelda', local: side('PC-SALA'), remote: side('Notebook') },
+      { key: 'k2', romId: null, title: 'Chrono', local: side('PC-SALA'), remote: side('', true) },
+      { key: 'k3', romId: null, title: 'Mario', local: side('PC-SALA'), remote: side('Deck') },
+    ])
+    await mount()
+    expect(host.textContent).toContain('2 game saves mudaram nas duas máquinas.')
+    expect(host.textContent).toContain('1 game save foi apagado no site e mudou aqui.')
+    expect(host.textContent).not.toContain('3 game saves')
+  })
+
+  it('the Conflitos hint tells the truth for deletions (N4)', async () => {
+    const side = (machine: string, deleted = false) => ({ machine, deviceId: null, savedAt: 1_700_000_000, size: 2048, deleted })
+    const two = { key: 'k1', romId: null, title: 'Zelda', local: side('PC-SALA'), remote: side('Notebook') }
+    const del = { key: 'k2', romId: null, title: 'Chrono', local: side('PC-SALA'), remote: side('', true) }
+    const hint = 'Nada é apagado: o save que você não escolher fica no histórico.'
+    const mixed = 'Nada é apagado: o que você não escolher fica no histórico ou na pasta de resguardo.'
+    const footer = 'Nada é apagado nesta máquina.'
+
+    api.syncStatus.mockResolvedValue({ ...ON, conflicts: 2 })
+    api.syncConflicts.mockResolvedValue([two, { ...two, key: 'k3' }])
+    await mount()
+    expect(host.textContent).toContain(hint)
+    expect(host.textContent).not.toContain(footer)
+    await unmount()
+    host.remove()
+
+    api.syncConflicts.mockResolvedValue([del, { ...del, key: 'k4' }])
+    await mount()
+    expect(host.textContent).toContain(footer)
+    expect(host.textContent).not.toContain(hint)
+    expect(host.textContent).not.toContain(mixed)
+    await unmount()
+    host.remove()
+
+    api.syncConflicts.mockResolvedValue([two, del])
+    await mount()
+    expect(host.textContent).toContain(mixed)
+    expect(host.textContent).not.toContain(hint)
+    expect(host.textContent).not.toContain(footer)
   })
 
   it('offers Copiar configurações only on other ReEmu machines (D119)', async () => {
@@ -331,6 +518,20 @@ describe('SettingsSync', () => {
     expect(host.textContent).toContain('Sem conexão')
   })
 
+  it('a save the cloud refused is named under its message', async () => {
+    api.syncStatus.mockResolvedValue({ ...ON, lastError: 'too_large', lastErrorFile: 'Mario Kart 64.srm' })
+    await mount()
+    expect(host.textContent).toContain('Este save passa do tamanho que a nuvem aceita para o sistema dele.')
+    expect(host.textContent).toContain('Arquivo: Mario Kart 64.srm')
+    await unmount()
+    host.remove()
+
+    api.syncStatus.mockResolvedValue({ ...ON, lastError: 'rejected', lastErrorFile: 'Zelda.srm' })
+    await mount()
+    expect(host.textContent).toContain('A nuvem recusou este save.')
+    expect(host.textContent).toContain('Arquivo: Zelda.srm')
+  })
+
   it('does not repeat the removed message when the banner is shown', async () => {
     api.syncStatus.mockResolvedValue({ ...OFF, revoked: true, lastError: 'revoked' })
     await mount()
@@ -379,6 +580,48 @@ describe('SettingsSync', () => {
     expect(sw.getAttribute('aria-busy')).toBe('true')
     await act(async () => sw.click())
     expect(api.syncSetEnabled).not.toHaveBeenCalled()
+  })
+
+  it('the save states switch still turns off while Sincronizar agora or Enviar os states antigos wait', async () => {
+    const states = () => [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][2]
+    for (const press of ['Sincronizar agora', 'Enviar os states antigos também']) {
+      api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 1, statesWiped: 1 })
+      api.syncNow.mockReturnValue(new Promise(() => {}))
+      api.syncUploadOldStates.mockReturnValue(new Promise(() => {}))
+      api.syncSetStatesEnabled.mockResolvedValue({ ...ON, statesEnabled: false })
+      api.syncSetStatesEnabled.mockClear()
+      await mount()
+      await act(async () => byText(press)!.click())
+      expect(states().getAttribute('aria-busy')).toBeNull()
+      await act(async () => states().click())
+      await settle()
+      expect(api.syncSetStatesEnabled).toHaveBeenCalledWith(false)
+      expect(states().checked).toBe(false)
+      // O resto da página segue esperando a ação em curso.
+      const saves = [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][1]
+      await act(async () => saves.click())
+      expect(api.syncSetSavesEnabled).not.toHaveBeenCalled()
+      await unmount()
+      host.remove()
+    }
+    await mount()
+  })
+
+  it('re-reads the status when a superseded Sincronizar agora finishes', async () => {
+    let finish!: (s: SyncStatus) => void
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncNow.mockReturnValue(new Promise<SyncStatus>((r) => (finish = r)))
+    api.syncSetStatesEnabled.mockResolvedValue({ ...ON, statesEnabled: false })
+    await mount()
+    await act(async () => byText('Sincronizar agora')!.click())
+    const states = () => [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][2]
+    await act(async () => states().click())
+    await settle()
+    const before = api.syncStatus.mock.calls.length
+    // O resultado da passada (mais velho) é descartado, mas o estado é relido.
+    await act(async () => finish({ ...ON, lastPassAt: 123 }))
+    await settle()
+    expect(api.syncStatus.mock.calls.length).toBeGreaterThan(before)
   })
 
   it('keeps a typed name while another action runs and sends it afterwards', async () => {

@@ -24,8 +24,12 @@ import type { Gamepad } from './bindings/Gamepad'
 import type { HardwareInfo } from './bindings/HardwareInfo'
 import type { HardwarePayload } from './bindings/HardwarePayload'
 import type { Quota } from './bindings/Quota'
+import type { SaveLineStatus } from './bindings/SaveLineStatus'
+import type { Side } from './bindings/Side'
+import type { SyncConflict } from './bindings/SyncConflict'
 import type { SyncMachine } from './bindings/SyncMachine'
 import type { SyncStatus } from './bindings/SyncStatus'
+import type { SyncVersion } from './bindings/SyncVersion'
 import type { HdrStatus } from './bindings/HdrStatus'
 import type { KeyboardBinding } from './bindings/KeyboardBinding'
 import type { MetadataConfig } from './bindings/MetadataConfig'
@@ -34,7 +38,10 @@ import type { Profile } from './bindings/Profile'
 import type { RomEntry } from './bindings/RomEntry'
 import type { RomShader } from './bindings/RomShader'
 import type { RomSource } from './bindings/RomSource'
+import type { RemoteState } from './bindings/RemoteState'
+import type { RemoteStates } from './bindings/RemoteStates'
 import type { SaveState } from './bindings/SaveState'
+import type { StateNote } from './bindings/StateNote'
 import type { ScanProgress } from './bindings/ScanProgress'
 import type { ScanReport } from './bindings/ScanReport'
 import type { ScrapeProgress } from './bindings/ScrapeProgress'
@@ -600,15 +607,23 @@ export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Prom
 
 // --- cloud save: esta máquina como aparelho da conta --------------------
 
-export type { HardwarePayload, Quota, SyncMachine, SyncStatus }
+export type { HardwarePayload, Quota, RemoteState, RemoteStates, SaveLineStatus, Side, StateNote, SyncConflict, SyncMachine, SyncStatus, SyncVersion }
 
 /** Eventos do canal `sync`. `status`: a tela relê o estado. */
 export type SyncEvent =
   | { type: 'status' }
-  | { type: 'pass'; uploaded: number; downloaded: number }
+  /** `backedUp`: saves apagados no site que foram para a pasta de resguardo. */
+  | { type: 'pass'; uploaded: number; downloaded: number; backedUp: number }
   | { type: 'conflict'; key: string }
   | { type: 'error'; code: string }
   | { type: 'quota'; usedBytes: number; limitBytes: number }
+  /** A checagem de antes de abrir um jogo terminou. `skipped`: o jogo abriu com
+   *  o save desta máquina; `reason` é o código (`timeout`, `offline`...). */
+  | {
+      type: 'prelaunch'
+      outcome: 'up_to_date' | 'downloaded' | 'conflict' | 'skipped'
+      reason: string | null
+    }
 
 // Os comandos rejeitam com o código do erro: `no_account`, `no_tier`,
 // `needs_consent`, `revoked`, `paused`, `quota`, `offline`, `keyring`,
@@ -623,10 +638,55 @@ export const syncSetEnabled = (enabled: boolean, lang: string = i18n.language) =
 export const syncSetLabel = (label: string) => invoke<SyncStatus>('sync_set_label', { label })
 /** Pausa só nesta máquina. */
 export const syncSetPaused = (paused: boolean) => invoke<SyncStatus>('sync_set_paused', { paused })
+/** O interruptor dos game saves (os states e as configurações têm o deles). */
+export const syncSetSavesEnabled = (enabled: boolean) =>
+  invoke<SyncStatus>('sync_set_saves_enabled', { enabled })
+/** O interruptor dos save states: desligado, nenhum state sobe (a base e os
+ *  arquivos ficam como estão). */
+export const syncSetStatesEnabled = (enabled: boolean) =>
+  invoke<SyncStatus>('sync_set_states_enabled', { enabled })
+/** "Enviar os states antigos também": os states que um "apagar tudo" no site
+ *  deixou só nesta máquina sobem de novo. */
+export const syncUploadOldStates = () => invoke<SyncStatus>('sync_upload_old_states')
 export const syncMachines = () => invoke<SyncMachine[]>('sync_machines')
 export const syncNow = () => invoke<SyncStatus>('sync_now')
-/** Abre a pasta dos backups do sync no gerenciador de arquivos. */
-export const syncOpenBackups = () => invoke<void>('sync_open_backups')
+/** Os conflitos abertos de save (sem rede). */
+export const syncConflicts = () => invoke<SyncConflict[]>('sync_conflicts')
+/** Fecha um conflito: `local` mantém o save desta máquina, `remote` o da nuvem.
+ *  O outro vai para o histórico e para a pasta de resguardo. */
+export const syncResolve = (key: string, keep: 'local' | 'remote') =>
+  invoke<void>('sync_resolve', { key, keep })
+/** As versões de um save, da mais nova para a mais velha. */
+export const syncVersions = (key: string) => invoke<SyncVersion[]>('sync_versions', { key })
+/** Volta uma versão do histórico; o save de agora vai para o resguardo. */
+export const syncRestore = (key: string, versionId: string) =>
+  invoke<void>('sync_restore', { key, versionId })
+/** A linha de save da página do jogo (só disco e SQLite, sem rede). */
+export const syncSaveStatus = (romId: string) => invoke<SaveLineStatus>('sync_save_status', { romId })
+/** Os save states que as outras máquinas da conta subiram para esta ROM. Só lê:
+ *  sem sync, com os states desligados ou com a nuvem fora vem `offline` e a lista
+ *  vazia. `coreId`: o core escolhido; sem ele vale o que está aberto. */
+export const syncStatesFor = (romId: string, coreId: string | null) =>
+  invoke<RemoteStates>('sync_states_for', { romId, coreId })
+/** Baixa um state de outra máquina para a vaga dele, quando o core e a versão
+ *  batem. Rejeita com `slot_occupied` se a vaga tem um state e `overwrite` é
+ *  falso; o de agora vai para a pasta de resguardo antes de ser trocado. */
+export const syncDownloadState = (romId: string, coreId: string | null, saveId: string, overwrite: boolean) =>
+  invoke<SaveState>('sync_download_state', { romId, coreId, saveId, overwrite })
+/** Por que cada state desta ROM fica só nesta máquina, pelo id do state, como a
+ *  última passada contou (`too_large`, `rejected`, `unversioned`...). Sem rede;
+ *  vazia com o sync ou os states desligados. */
+export const syncStateNotes = (romId: string) => invoke<StateNote[]>('sync_state_notes', { romId })
+/** A miniatura de um state de outra máquina como `blob:` URL (`null` se não tem). */
+export async function syncStateThumbnailUrl(saveId: string): Promise<string | null> {
+  if (!inTauri) return null
+  const buf = await invoke<ArrayBuffer>('sync_state_thumbnail', { saveId })
+  if (buf.byteLength === 0) return null
+  return URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
+}
+/** Abre a pasta dos backups do sync no gerenciador de arquivos. Com a chave de
+ *  um save apagado no site, abre a pasta onde o arquivo dele foi parar. */
+export const syncOpenBackups = (key?: string) => invoke<void>('sync_open_backups', { key: key ?? null })
 export async function onSyncEvent(cb: (e: SyncEvent) => void): Promise<() => void> {
   if (!inTauri) return () => {}
   const { listen } = await import('@tauri-apps/api/event')

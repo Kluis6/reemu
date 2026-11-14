@@ -5,6 +5,7 @@ use sqlx::Row;
 
 /// Estado local da integração com o Alvanista: pares chave/valor
 /// (`alvanista_state`). Os tokens não passam por aqui.
+#[derive(Clone)]
 pub struct AlvanistaRepo {
     db: Db,
 }

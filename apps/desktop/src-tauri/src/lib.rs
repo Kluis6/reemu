@@ -157,11 +157,29 @@ pub fn run() {
                 app.state::<alvanista::Alvanista>()
                     .attach_sync(sync_service.clone());
                 app.manage(sync_service);
-                // Renova o espelho do perfil em segundo plano. Sem sessão não
-                // lê o chaveiro nem acessa a rede.
+            }
+            let sync_pool = db.clone();
+            app.manage(AppState::new(base.clone(), db, audio_config, hotkeys));
+            let sync_service = app
+                .try_state::<std::sync::Arc<sync::SyncService>>()
+                .map(|s| s.inner().clone());
+            if let (Some(pool), Some(sync_service)) = (sync_pool, sync_service) {
+                // As passadas dos game saves: sabem pelo `AppState` se um jogo
+                // está aberto e usam as mesmas pastas da sessão.
+                let dirs = {
+                    let state = app.state::<AppState>();
+                    sync::engine::Dirs {
+                        data: base,
+                        saves: state.save_dir.clone(),
+                        system: state.system_dir.clone(),
+                    }
+                };
+                sync::engine::install(app.handle(), sync_service, pool, dirs);
+                // Renova o espelho do perfil em segundo plano e depois roda a
+                // primeira passada do sync. Sem sessão não lê o chaveiro nem
+                // acessa a rede.
                 alvanista::refresh_on_start(app.handle());
             }
-            app.manage(AppState::new(base, db, audio_config, hotkeys));
 
             // Contexto GPU pro processamento de frame (etapa 04 — shader chain).
             // Headless: sem surface, não conflita com o GTK. Se não houver
@@ -349,9 +367,21 @@ pub fn run() {
             sync::sync_set_enabled,
             sync::sync_set_label,
             sync::sync_set_paused,
+            sync::sync_set_saves_enabled,
+            sync::sync_set_states_enabled,
+            sync::sync_upload_old_states,
             sync::sync_machines,
             sync::sync_now,
             sync::sync_open_backups,
+            sync::sync_conflicts,
+            sync::sync_resolve,
+            sync::sync_versions,
+            sync::sync_restore,
+            sync::sync_save_status,
+            sync::sync_states_for,
+            sync::sync_download_state,
+            sync::sync_state_thumbnail,
+            sync::sync_state_notes,
             commands::js_log,
             commands::current_focus,
             commands::toggle_focus,

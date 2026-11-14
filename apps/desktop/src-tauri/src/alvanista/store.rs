@@ -196,6 +196,7 @@ pub struct Mirror {
 
 pub type SharedSecrets = Arc<dyn SecretStore + Send + Sync>;
 
+#[derive(Clone)]
 pub struct Store {
     repo: AlvanistaRepo,
     secrets: SharedSecrets,

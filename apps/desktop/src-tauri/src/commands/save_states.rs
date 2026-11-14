@@ -68,7 +68,10 @@ pub(super) fn refused_error(
     }
 }
 
-fn save_dto(m: domain::save_state::SaveStateMetadata, installed: Option<&str>) -> SaveStateDto {
+pub(crate) fn save_dto(
+    m: domain::save_state::SaveStateMetadata,
+    installed: Option<&str>,
+) -> SaveStateDto {
     SaveStateDto {
         version_changed: save_svc::version_changed(m.core_version.as_deref(), installed),
         core_version: m.core_version.clone(),
@@ -151,6 +154,7 @@ pub(super) fn thumbnail_png(w: u32, h: u32, rgba: &[u8], max_w: u32) -> Option<V
 
 #[tauri::command]
 pub async fn save_state(
+    app: AppHandle,
     state: State<'_, AppState>,
     rom_id: String,
     slot: Option<u32>,
@@ -167,6 +171,7 @@ pub async fn save_state(
         .ok_or_else(|| no_state_error(&state))?;
     let thumb = save_thumbnail(&state);
     let repo = db::SaveStateRepo::new(pool(&state)?);
+    let _write = save_svc::write_lock(&rom_id).await;
     let meta = save_svc::save(
         &repo,
         &state.save_dir,
@@ -180,6 +185,8 @@ pub async fn save_state(
     )
     .await
     .map_err(AppError::from)?;
+    // Cloud save: o state sobe 3 s depois do último save da rajada.
+    crate::sync::engine::after_state_saved(&app, rom_id);
     let installed = meta.core_version.clone();
     Ok(save_dto(meta, installed.as_deref()))
 }
@@ -247,7 +254,7 @@ pub async fn delete_save_state(
     state_id: String,
 ) -> Result<(), AppError> {
     let repo = db::SaveStateRepo::new(pool(&state)?);
-    save_svc::delete(&repo, &state_id)
+    save_svc::delete_locked(&repo, &state_id)
         .await
         .map_err(AppError::from)
 }

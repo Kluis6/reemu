@@ -1,0 +1,181 @@
+// @vitest-environment happy-dom
+import { act } from 'react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SyncConflict } from '../../lib/tauri'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
+const api = vi.hoisted(() => ({ syncResolve: vi.fn(), syncStatus: vi.fn() }))
+vi.mock('../../lib/tauri', async (orig) => ({ ...(await orig<typeof import('../../lib/tauri')>()), ...api }))
+// O Dialog do Fluent não monta no happy-dom desta árvore ("presenceFn is not a
+// function"): o diálogo de tela cheia vira uma camada simples.
+vi.mock('../FullscreenDialog', () => ({
+  FullscreenDialog: (p: {
+    open: boolean
+    onClose: () => void
+    title: string
+    children: React.ReactNode
+    actions?: React.ReactNode
+  }) =>
+    p.open ? (
+      <div className="fui-DialogSurface" role="dialog">
+        <h2>{p.title}</h2>
+        <button onClick={p.onClose}>fechar</button>
+        {p.children}
+        {p.actions}
+      </div>
+    ) : null,
+}))
+
+import '../../i18n'
+import { formatDateTime } from '../../lib/metadataFormat'
+import { machineColor } from '../../screens/settings/syncFormat'
+import { ConflictDialog } from './ConflictDialog'
+import { button, mountWithQuery, settle } from './syncTestSupport'
+
+const CONFLICT: SyncConflict = {
+  key: 'file:gba/Zelda.srm',
+  romId: 'r1',
+  title: 'Zelda',
+  local: { machine: 'PC-ED', deviceId: 'dev1', savedAt: 1_700_000_000, size: 2048, deleted: false },
+  remote: { machine: 'Notebook-Ed', deviceId: null, savedAt: 1_700_003_600, size: 4096, deleted: false },
+}
+
+let ui: Awaited<ReturnType<typeof mountWithQuery>>
+const onDone = vi.fn()
+const mount = async () => {
+  ui = await mountWithQuery(<ConflictDialog conflict={CONFLICT} onDone={onDone} />)
+}
+
+beforeEach(() => {
+  api.syncResolve.mockReset().mockResolvedValue(undefined)
+  api.syncStatus.mockReset().mockRejectedValue('no_account')
+  onDone.mockReset()
+})
+afterEach(async () => {
+  await ui.unmount()
+})
+
+describe('ConflictDialog', () => {
+  it('shows the sentence, both cards and the reassurance footer', async () => {
+    await mount()
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('Zelda mudou nas duas máquinas')
+    expect(text).toContain(
+      'As duas jogaram desde a última sincronização. Escolha qual save continua. A outra fica no histórico e numa pasta de resguardo nesta máquina.',
+    )
+    expect(text).toContain('PC-ED')
+    expect(text).toContain('Notebook-Ed')
+    expect(text).toContain('Salvo')
+    expect(text).toContain('Tamanho')
+    expect(text).toContain('2 KB')
+    expect(text).toContain('4 KB')
+    expect(text).toContain('Nada é apagado. Dá para voltar pelo histórico.')
+    expect(button('Manter a de Notebook-Ed')).toBeTruthy()
+    expect(button('Decidir depois')).toBeTruthy()
+  })
+
+  it('starts on the local card button, with the controller alone', async () => {
+    await mount()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
+    expect(document.activeElement).toBe(button('Manter esta'))
+  })
+
+  it('shows date and hours:minutes without seconds, and colors by device id (falling back to the name)', async () => {
+    await mount()
+    const text = document.body.textContent ?? ''
+    expect(text).toContain(formatDateTime(CONFLICT.local.savedAt))
+    expect(text).toContain(formatDateTime(CONFLICT.remote.savedAt))
+    expect(formatDateTime(CONFLICT.local.savedAt)).not.toMatch(/\d:\d\d:\d\d/)
+    const dots = [...document.querySelectorAll<HTMLElement>('span[aria-hidden]')].filter((e) => e.style.backgroundColor)
+    const css = (c: string) => {
+      const el = document.createElement('span')
+      el.style.backgroundColor = c
+      return el.style.backgroundColor
+    }
+    expect(dots[0].style.backgroundColor).toBe(css(machineColor('dev1')))
+    expect(dots[1].style.backgroundColor).toBe(css(machineColor('Notebook-Ed')))
+  })
+
+  it('Manter esta resolves with local, then onDone(local)', async () => {
+    await mount()
+    await act(async () => button('Manter esta')!.click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenCalledWith('file:gba/Zelda.srm', 'local')
+    expect(onDone).toHaveBeenCalledWith('local')
+  })
+
+  it('Manter a de X resolves with remote', async () => {
+    await mount()
+    await act(async () => button('Manter a de Notebook-Ed')!.click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenCalledWith('file:gba/Zelda.srm', 'remote')
+    expect(onDone).toHaveBeenCalledWith('remote')
+  })
+
+  it('Decidir depois resolves nothing and reports later; the close button only dismisses', async () => {
+    await mount()
+    await act(async () => button('Decidir depois')!.click())
+    expect(onDone).toHaveBeenCalledWith('later')
+    await act(async () => button('fechar')!.click())
+    expect(onDone).toHaveBeenLastCalledWith('dismiss')
+    expect(api.syncResolve).not.toHaveBeenCalled()
+  })
+
+  it('a deletion on the site asks something else: upload again or accept the deletion', async () => {
+    // A última versão foi escrita por esta mesma máquina e apagada no site.
+    const gone: SyncConflict = {
+      ...CONFLICT,
+      remote: { machine: '', deviceId: null, savedAt: 0, size: 0, deleted: true },
+    }
+    ui = await mountWithQuery(<ConflictDialog conflict={gone} onDone={onDone} />)
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('Zelda foi apagado no site')
+    expect(text).toContain('O save foi apagado no alvanista.com, mas esta máquina jogou depois disso.')
+    expect(text).toContain('Apagado no site')
+    expect(text).toContain('Nada é apagado nesta máquina.')
+    expect(text).not.toContain('mudou nas duas máquinas')
+    expect(text).not.toContain('Manter a de')
+    expect(text).not.toContain('0 B')
+    await act(async () => button('Manter esta (sobe de novo)')!.click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenLastCalledWith('file:gba/Zelda.srm', 'local')
+    await act(async () => button('Aceitar a remoção (vai para a pasta de resguardo)')!.click())
+    await settle()
+    expect(api.syncResolve).toHaveBeenLastCalledWith('file:gba/Zelda.srm', 'remote')
+  })
+
+  it.each([
+    ['regular', CONFLICT, ['Manter esta', 'Manter a de Notebook-Ed']],
+    [
+      'deleted',
+      { ...CONFLICT, remote: { machine: '', deviceId: null, savedAt: 0, size: 0, deleted: true } } as SyncConflict,
+      ['Manter esta (sobe de novo)', 'Aceitar a remoção (vai para a pasta de resguardo)'],
+    ],
+  ])('pins each card button to the bottom slot of its card (%s)', async (_n, conflict, labels) => {
+    ui = await mountWithQuery(<ConflictDialog conflict={conflict} onDone={onDone} />)
+    const slots = [...document.querySelectorAll<HTMLElement>('[data-slot="card-action"]')]
+    expect(slots).toHaveLength(2)
+    for (const label of labels) {
+      const btn = button(label)!
+      const slot = btn.parentElement!
+      expect(slot.getAttribute('data-slot')).toBe('card-action')
+      // o slot é o último filho da carta, e carrega a classe que o empurra para o fundo
+      expect(slot.parentElement!.lastElementChild).toBe(slot)
+      expect(slot.className).toMatch(/\S/)
+    }
+    // as duas cartas esticam na mesma linha da grade
+    expect(slots[0].parentElement!.parentElement).toBe(slots[1].parentElement!.parentElement)
+  })
+
+  it('a failed resolve keeps the dialog and shows the reason', async () => {
+    api.syncResolve.mockRejectedValue('offline')
+    await mount()
+    await act(async () => button('Manter esta')!.click())
+    await settle()
+    expect(onDone).not.toHaveBeenCalled()
+    expect(document.body.textContent).toContain('Não foi possível falar com o Alvanista')
+  })
+})

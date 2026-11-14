@@ -290,10 +290,12 @@ impl Respond for Responder {
                     return json(403, serde_json::json!({"error": "insufficient_scope"}));
                 }
                 if !st.save_sync {
+                    // O corpo da porta do plano (`writeSaveDenial`).
                     return json(
                         402,
                         serde_json::json!({"error": {"code": "tier_insufficient",
-                            "upgrade_to": "collector"}}),
+                            "current_tier": "gamer", "required_quota": "save_sync_enabled",
+                            "required_value": true, "upgrade_to": "collector"}}),
                     );
                 }
                 log("mint".into());

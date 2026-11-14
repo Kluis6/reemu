@@ -16,6 +16,10 @@ const DEVICE_ID_KEY: &str = "sync.device_id";
 const LABEL_KEY: &str = "sync.label";
 const ENABLED_KEY: &str = "sync.enabled";
 const PAUSED_KEY: &str = "sync.paused";
+/// O interruptor dos game saves: ausente vale ligado (só o `0` desliga).
+const SAVES_ENABLED_KEY: &str = "sync.saves_enabled";
+/// O interruptor dos save states: ausente vale ligado (só o `0` desliga).
+const STATES_ENABLED_KEY: &str = "sync.states_enabled";
 const HW_FINGERPRINT_KEY: &str = "sync.hw_fingerprint";
 const HW_SENT_AT_KEY: &str = "sync.hw_sent_at";
 /// Os últimos GPU, backend e driver enviados (JSON), para não apagá-los
@@ -25,6 +29,9 @@ const HW_GPU_KEY: &str = "sync.hw_gpu";
 /// quando a lista não responde.
 const SITE_PAUSED_KEY: &str = "sync.site_paused";
 const REVOKED_KEY: &str = "sync.revoked";
+/// A conta (AlvaID) dona da base do cloud save (`sync_base`, `sync_conflicts`).
+/// Fica ao desconectar, como a base; só outra conta a troca (e limpa a base).
+const ACCOUNT_KEY: &str = "sync.account";
 
 /// O limite do Alvanista para cada texto do hardware.
 const TEXT_MAX_CHARS: usize = 120;
@@ -132,7 +139,7 @@ fn label_from_host(host: Option<String>) -> String {
 }
 
 /// Segundos Unix em RFC 3339 UTC (`2026-11-13T10:00:00Z`).
-fn rfc3339(secs: i64) -> String {
+pub(super) fn rfc3339(secs: i64) -> String {
     let days = secs.div_euclid(86_400);
     let rem = secs.rem_euclid(86_400);
     // Dias desde 1970-01-01 em data civil (Howard Hinnant, `civil_from_days`).
@@ -159,17 +166,34 @@ pub struct Device {
     pub label: String,
 }
 
+#[derive(Clone)]
 pub struct DeviceStore {
     repo: AlvanistaRepo,
     secrets: SharedSecrets,
+    db: db::Db,
 }
 
 impl DeviceStore {
     pub fn new(db: db::Db, secrets: SharedSecrets) -> Self {
         Self {
-            repo: AlvanistaRepo::new(db),
+            repo: AlvanistaRepo::new(db.clone()),
             secrets,
+            db,
         }
+    }
+
+    /// O banco, para a base do cloud save (`SyncRepo`) no mesmo lugar.
+    pub(super) fn db(&self) -> db::Db {
+        self.db.clone()
+    }
+
+    /// A conta dona da base do cloud save; `None` antes do primeiro sync.
+    pub async fn base_account(&self) -> Result<Option<String>, String> {
+        self.get(ACCOUNT_KEY).await
+    }
+
+    pub async fn set_base_account(&self, alva_id: &str) -> Result<(), String> {
+        self.set(ACCOUNT_KEY, alva_id).await
     }
 
     async fn get(&self, key: &str) -> Result<Option<String>, String> {
@@ -215,6 +239,8 @@ impl DeviceStore {
             LABEL_KEY,
             ENABLED_KEY,
             PAUSED_KEY,
+            SAVES_ENABLED_KEY,
+            STATES_ENABLED_KEY,
             HW_FINGERPRINT_KEY,
             HW_SENT_AT_KEY,
             HW_GPU_KEY,
@@ -229,6 +255,12 @@ impl DeviceStore {
             first.get_or_insert(e);
         }
         first.map_or(Ok(()), Err)
+    }
+
+    /// Tira só o token do chaveiro: o id e o nome ficam para "Ligar de novo"
+    /// criar o aparelho novo com o nome que a pessoa escolheu.
+    pub fn drop_token(&self) -> Result<(), String> {
+        self.secrets.delete(TOKEN_ACCOUNT)
     }
 
     pub async fn set_label(&self, label: &str) -> Result<(), String> {
@@ -249,6 +281,34 @@ impl DeviceStore {
 
     pub async fn set_paused(&self, on: bool) -> Result<(), String> {
         self.set_flag(PAUSED_KEY, on).await
+    }
+
+    /// Os game saves sincronizam? Ausente vale sim.
+    pub async fn saves_enabled(&self) -> Result<bool, String> {
+        Ok(self.get(SAVES_ENABLED_KEY).await?.as_deref() != Some("0"))
+    }
+
+    pub async fn set_saves_enabled(&self, on: bool) -> Result<(), String> {
+        self.set_default_on(SAVES_ENABLED_KEY, on).await
+    }
+
+    /// Os save states sobem? Ausente vale sim.
+    pub async fn states_enabled(&self) -> Result<bool, String> {
+        Ok(self.get(STATES_ENABLED_KEY).await?.as_deref() != Some("0"))
+    }
+
+    pub async fn set_states_enabled(&self, on: bool) -> Result<(), String> {
+        self.set_default_on(STATES_ENABLED_KEY, on).await
+    }
+
+    /// Um interruptor que vale ligado quando ausente: ligar apaga a chave,
+    /// desligar grava `0`.
+    async fn set_default_on(&self, key: &str, on: bool) -> Result<(), String> {
+        if on {
+            self.repo.state_delete(key).await.map_err(|e| e.to_string())
+        } else {
+            self.set(key, "0").await
+        }
     }
 
     async fn set_flag(&self, key: &str, on: bool) -> Result<(), String> {
@@ -506,6 +566,46 @@ mod tests {
         assert_eq!(store.hw_gpu().await.unwrap(), Some(gpu));
         store.forget().await.unwrap();
         assert_eq!(store.hw_gpu().await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn the_saves_switch_defaults_on_and_forget_puts_it_back() {
+        let (store, _, _) = store(MemSecrets::default()).await;
+        assert!(store.saves_enabled().await.unwrap());
+        store.set_saves_enabled(false).await.unwrap();
+        assert!(!store.saves_enabled().await.unwrap());
+        store.set_saves_enabled(true).await.unwrap();
+        assert!(store.saves_enabled().await.unwrap());
+        store.set_saves_enabled(false).await.unwrap();
+        store.forget().await.unwrap();
+        assert!(store.saves_enabled().await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn the_states_switch_defaults_on_is_its_own_key_and_forget_puts_it_back() {
+        let (store, _, db) = store(MemSecrets::default()).await;
+        assert!(store.states_enabled().await.unwrap());
+        store.set_states_enabled(false).await.unwrap();
+        assert!(!store.states_enabled().await.unwrap());
+        // Um interruptor não mexe no outro.
+        assert!(store.saves_enabled().await.unwrap());
+        assert_eq!(
+            AlvanistaRepo::new(db.clone())
+                .state_get("sync.states_enabled")
+                .await
+                .unwrap()
+                .as_deref(),
+            Some("0")
+        );
+        store.set_states_enabled(true).await.unwrap();
+        assert!(store.states_enabled().await.unwrap());
+        assert!(all_state_values(&db)
+            .await
+            .iter()
+            .all(|v| v != "sync.states_enabled"));
+        store.set_states_enabled(false).await.unwrap();
+        store.forget().await.unwrap();
+        assert!(store.states_enabled().await.unwrap());
     }
 
     #[tokio::test]
