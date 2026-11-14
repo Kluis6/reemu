@@ -23,6 +23,10 @@ import type { GameMetadata } from './bindings/GameMetadata'
 import type { Gamepad } from './bindings/Gamepad'
 import type { HardwareInfo } from './bindings/HardwareInfo'
 import type { HardwarePayload } from './bindings/HardwarePayload'
+import type { AppearanceDoc } from './appearanceGroup'
+import type { CopyReport } from './bindings/CopyReport'
+import type { SettingsPreview } from './bindings/SettingsPreview'
+import type { SettingsSent } from './bindings/SettingsSent'
 import type { Quota } from './bindings/Quota'
 import type { SaveLineStatus } from './bindings/SaveLineStatus'
 import type { Side } from './bindings/Side'
@@ -607,7 +611,22 @@ export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Prom
 
 // --- cloud save: esta máquina como aparelho da conta --------------------
 
-export type { HardwarePayload, Quota, RemoteState, RemoteStates, SaveLineStatus, Side, StateNote, SyncConflict, SyncMachine, SyncStatus, SyncVersion }
+export type {
+  CopyReport,
+  HardwarePayload,
+  Quota,
+  RemoteState,
+  RemoteStates,
+  SaveLineStatus,
+  SettingsPreview,
+  SettingsSent,
+  Side,
+  StateNote,
+  SyncConflict,
+  SyncMachine,
+  SyncStatus,
+  SyncVersion,
+}
 
 /** Eventos do canal `sync`. `status`: a tela relê o estado. */
 export type SyncEvent =
@@ -684,6 +703,30 @@ export async function syncStateThumbnailUrl(saveId: string): Promise<string | nu
   if (buf.byteLength === 0) return null
   return URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
 }
+// --- configurações entre máquinas (D114) --------------------------------
+// Rejeitam com os códigos de `sync.err`, mais `game_open` (copiar ou desfazer
+// com um jogo aberto), `settings_version` (veio de um ReEmu mais novo),
+// `settings_invalid`, `settings_missing` (a outra máquina não enviou o grupo) e
+// `backup_failed` (o backup desta máquina não gravou ou não leu: nada mudou).
+
+/** "Enviar as desta máquina": um documento por grupo, a aparência vinda da tela
+ *  (`exportAppearance()`). Devolve quando (segundos Unix). */
+export const syncSettingsUpload = (appearance: AppearanceDoc) =>
+  invoke<number>('sync_settings_upload', { appearance })
+/** O último envio e os grupos que mudaram desde ele (sem rede). */
+export const syncSettingsSent = (appearance: AppearanceDoc) =>
+  invoke<SettingsSent>('sync_settings_sent', { appearance })
+/** O que a cópia das configurações de outra máquina traria (não muda nada). */
+export const syncSettingsPreview = (deviceId: string) =>
+  invoke<SettingsPreview>('sync_settings_preview', { deviceId })
+/** Copia os grupos marcados (os do banco; a aparência vai em `appearanceWanted`
+ *  e volta em `appearanceDoc`, para a tela aplicar e guardar a de antes em
+ *  `reemu.sync.appearanceUndo`). Os de agora ficam num backup para desfazer. */
+export const syncSettingsCopy = (deviceId: string, groups: string[], appearanceWanted: boolean) =>
+  invoke<CopyReport>('sync_settings_copy', { deviceId, groups, appearanceWanted })
+/** Volta as configurações de antes da última cópia, uma vez por cópia; `false`
+ *  quando não há cópia a desfazer. A aparência a tela volta sozinha. */
+export const syncSettingsUndo = () => invoke<boolean>('sync_settings_undo')
 /** Abre a pasta dos backups do sync no gerenciador de arquivos. Com a chave de
  *  um save apagado no site, abre a pasta onde o arquivo dele foi parar. */
 export const syncOpenBackups = (key?: string) => invoke<void>('sync_open_backups', { key: key ?? null })

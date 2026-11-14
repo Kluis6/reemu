@@ -4,7 +4,8 @@
 //! - `device`: o payload de hardware e o armazenamento do aparelho (o token
 //!   `asv_...` só no chaveiro, o resto no SQLite);
 //! - `local`, `reconcile` e `engine`: os game saves deste disco, a regra de
-//!   três lados e as passadas que sobem, descem e guardam o conflito;
+//!   três lados e as passadas que sobem, descem e guardam o conflito; e, a
+//!   pedido, as configurações desta máquina enviadas e as de outra copiadas;
 //! - `settings_groups`: as configurações de cada grupo como documento
 //!   portátil, que outra máquina aplica.
 //!
@@ -21,9 +22,6 @@ pub mod engine;
 pub mod local;
 pub mod platform;
 pub mod reconcile;
-// Ainda sem chamador: os comandos de enviar e copiar configurações (próxima
-// task) passam a usar e este `allow` sai.
-#[allow(dead_code)]
 pub mod settings_groups;
 
 use crate::alvanista::client::ClientError;
@@ -35,7 +33,10 @@ use db::SyncRepo;
 use device::{
     hardware_fingerprint, hardware_payload, Device, DeviceStore, HardwarePayload, LABEL_MAX_CHARS,
 };
-use engine::{Engine, Keep, RemoteStates, SaveLineStatus, SyncConflict, SyncVersion};
+use engine::{
+    CopyReport, Engine, Keep, RemoteStates, SaveLineStatus, SettingsPreview, SettingsSent,
+    SyncConflict, SyncVersion,
+};
 use serde::Serialize;
 use std::future::Future;
 use std::sync::Arc;
@@ -71,6 +72,19 @@ pub enum SyncError {
     /// A reconexão para pedir o escopo `saves` não terminou: um de
     /// `cancelled`, `denied` ou `timeout` (o resto vira `Failed`).
     Connect(String),
+    /// Copiar ou desfazer configurações com um jogo aberto (ou abrindo): o
+    /// core lê opções, atalhos e áudio enquanto roda.
+    GameOpen,
+    /// O documento de configurações é de uma versão que esta não conhece (a
+    /// outra máquina tem um ReEmu mais novo).
+    SettingsVersion,
+    /// O documento de configurações não tem o formato do grupo.
+    SettingsInvalid,
+    /// A outra máquina não enviou o grupo pedido (ou não está mais na conta).
+    SettingsMissing,
+    /// O backup das configurações desta máquina não pôde ser gravado (a cópia
+    /// não aconteceu) ou lido (o "Desfazer" não aconteceu).
+    BackupFailed,
     Failed(String),
 }
 
@@ -92,6 +106,11 @@ impl std::fmt::Display for SyncError {
             Self::InvalidLabel => "invalid_label",
             Self::NotEnabled => "not_enabled",
             Self::Connect(code) => code.as_str(),
+            Self::GameOpen => "game_open",
+            Self::SettingsVersion => "settings_version",
+            Self::SettingsInvalid => "settings_invalid",
+            Self::SettingsMissing => "settings_missing",
+            Self::BackupFailed => "backup_failed",
             Self::Failed(_) => "failed",
         })
     }
@@ -825,16 +844,7 @@ impl SyncService {
         Ok(list
             .into_iter()
             .filter(|d| d.revoked_at.is_none())
-            .map(|d| SyncMachine {
-                is_this: this.as_deref() == Some(d.id.as_str()),
-                id: d.id,
-                label: d.label,
-                client_kind: d.client_kind,
-                hardware: d.hardware,
-                last_used_at: d.last_used_at,
-                revoked: false,
-                paused: d.paused_at.is_some(),
-            })
+            .map(|d| SyncMachine::from_remote(d, this.as_deref()))
             .collect())
     }
 
@@ -1068,6 +1078,22 @@ pub struct SyncMachine {
     pub last_used_at: Option<String>,
     pub revoked: bool,
     pub paused: bool,
+}
+
+impl SyncMachine {
+    /// A linha da lista de aparelhos do site; `this`: o id desta máquina.
+    fn from_remote(d: RemoteDevice, this: Option<&str>) -> Self {
+        Self {
+            is_this: this == Some(d.id.as_str()),
+            revoked: d.revoked_at.is_some(),
+            paused: d.paused_at.is_some(),
+            id: d.id,
+            label: d.label,
+            client_kind: d.client_kind,
+            hardware: d.hardware,
+            last_used_at: d.last_used_at,
+        }
+    }
 }
 
 /// O canal dos eventos do sync.
@@ -1364,6 +1390,78 @@ pub async fn sync_state_thumbnail(
     Ok(tauri::ipc::Response::new(
         engine.state_thumbnail(&alva, &save_id).await,
     ))
+}
+
+/// "Enviar as desta máquina" (D114): um documento por grupo sobe como linha
+/// `config` deste aparelho, a aparência (`appearance`) vinda da tela. Devolve
+/// quando (segundos Unix).
+#[tauri::command]
+pub async fn sync_settings_upload(
+    app: AppHandle,
+    appearance: serde_json::Value,
+) -> Result<i64, String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    let sent = engine.settings_upload(&alva, &appearance).await;
+    emit_status(&app);
+    sent.map_err(|e| e.to_string())
+}
+
+/// O último envio das configurações e os grupos que mudaram desde ele
+/// (`appearance`: a aparência de agora, vinda da tela). Sem rede.
+#[tauri::command]
+pub async fn sync_settings_sent(
+    app: AppHandle,
+    appearance: serde_json::Value,
+) -> Result<SettingsSent, String> {
+    engine_of(&app)?
+        .settings_sent(&appearance)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// O que a cópia das configurações de outra máquina traria: os grupos que ela
+/// enviou, o que de cada um não viria e se o vídeo começa desmarcado (GPU ou
+/// backend diferentes). Não muda nada.
+#[tauri::command]
+pub async fn sync_settings_preview(
+    app: AppHandle,
+    device_id: String,
+) -> Result<SettingsPreview, String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    engine
+        .settings_preview(&alva, &device_id, &current_hardware(&app))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Copia os grupos marcados de outra máquina, numa transação só, depois de
+/// guardar os desta para o "Desfazer". A aparência volta como documento para
+/// a tela aplicar. `game_open` com um jogo aberto.
+#[tauri::command]
+pub async fn sync_settings_copy(
+    app: AppHandle,
+    device_id: String,
+    groups: Vec<String>,
+    appearance_wanted: bool,
+) -> Result<CopyReport, String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    engine
+        .settings_copy(&alva, &device_id, &groups, appearance_wanted)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Volta as configurações de antes da última cópia (uma vez por cópia);
+/// `false` quando não há cópia a desfazer. Sem rede.
+#[tauri::command]
+pub async fn sync_settings_undo(app: AppHandle) -> Result<bool, String> {
+    engine_of(&app)?
+        .settings_undo()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// A linha de save da página do jogo (sem rede).
@@ -2936,6 +3034,11 @@ mod tests {
             (SyncError::InvalidLabel, "invalid_label"),
             (SyncError::NotEnabled, "not_enabled"),
             (SyncError::Connect("cancelled".into()), "cancelled"),
+            (SyncError::GameOpen, "game_open"),
+            (SyncError::SettingsVersion, "settings_version"),
+            (SyncError::SettingsInvalid, "settings_invalid"),
+            (SyncError::SettingsMissing, "settings_missing"),
+            (SyncError::BackupFailed, "backup_failed"),
             (SyncError::Failed("x".into()), "failed"),
         ];
         for (err, code) in codes {

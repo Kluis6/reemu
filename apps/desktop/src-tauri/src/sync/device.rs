@@ -32,6 +32,15 @@ const REVOKED_KEY: &str = "sync.revoked";
 /// A conta (AlvaID) dona da base do cloud save (`sync_base`, `sync_conflicts`).
 /// Fica ao desconectar, como a base; só outra conta a troca (e limpa a base).
 const ACCOUNT_KEY: &str = "sync.account";
+/// Quando "Enviar as desta máquina" mandou as configurações (segundos Unix).
+const SETTINGS_SENT_AT_KEY: &str = "sync.settings_sent_at";
+/// O hash do documento de cada grupo enviado (JSON `{grupo: sha256}`): o que
+/// diz se um grupo mudou desde o último envio.
+const SETTINGS_SENT_KEY: &str = "sync.settings_sent";
+/// O backup da última cópia de configurações (JSON com o arquivo de cada
+/// grupo), que o "Desfazer" volta. É desta máquina, não do aparelho: fica ao
+/// desligar o sync. Gravado e apagado na transação da cópia e do "Desfazer".
+pub(super) const LAST_COPY_BACKUP_KEY: &str = "sync.last_copy_backup";
 
 /// O limite do Alvanista para cada texto do hardware.
 const TEXT_MAX_CHARS: usize = 120;
@@ -246,6 +255,9 @@ impl DeviceStore {
             HW_GPU_KEY,
             SITE_PAUSED_KEY,
             REVOKED_KEY,
+            // as linhas de configuração eram do aparelho que sai
+            SETTINGS_SENT_AT_KEY,
+            SETTINGS_SENT_KEY,
         ] {
             if let Err(e) = self.repo.state_delete(key).await {
                 first.get_or_insert(e.to_string());
@@ -359,6 +371,38 @@ impl DeviceStore {
 
     pub async fn set_hw_sent_at(&self, secs: i64) -> Result<(), String> {
         self.set(HW_SENT_AT_KEY, &secs.to_string()).await
+    }
+
+    /// O último envio das configurações: quando, e o hash de cada grupo que
+    /// subiu.
+    pub async fn settings_sent(
+        &self,
+    ) -> Result<(Option<i64>, std::collections::BTreeMap<String, String>), String> {
+        let at = self
+            .get(SETTINGS_SENT_AT_KEY)
+            .await?
+            .and_then(|v| v.parse().ok());
+        let hashes = self
+            .get(SETTINGS_SENT_KEY)
+            .await?
+            .and_then(|v| serde_json::from_str(&v).ok())
+            .unwrap_or_default();
+        Ok((at, hashes))
+    }
+
+    pub async fn set_settings_sent(
+        &self,
+        at: i64,
+        hashes: &std::collections::BTreeMap<String, String>,
+    ) -> Result<(), String> {
+        let json = serde_json::to_string(hashes).map_err(|e| e.to_string())?;
+        self.set(SETTINGS_SENT_KEY, &json).await?;
+        self.set(SETTINGS_SENT_AT_KEY, &at.to_string()).await
+    }
+
+    /// O backup da última cópia de configurações, como a cópia o gravou.
+    pub async fn last_copy_backup(&self) -> Result<Option<String>, String> {
+        self.get(LAST_COPY_BACKUP_KEY).await
     }
 }
 

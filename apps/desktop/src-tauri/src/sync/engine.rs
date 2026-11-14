@@ -46,6 +46,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 mod remote_states;
 pub use remote_states::RemoteStates;
+mod settings;
+pub use settings::{CopyReport, SettingsPreview, SettingsSent};
 mod states;
 pub(in crate::sync) use states::WIPED as STATE_WIPED;
 
@@ -261,10 +263,21 @@ pub struct Dirs {
     pub data: PathBuf,
     pub saves: PathBuf,
     pub system: PathBuf,
+    /// `<dados>/shaders` e `<dados>/decorations`: os catálogos que o ReEmu
+    /// baixa, por onde as configurações acham presets e molduras (D126).
+    pub shaders: PathBuf,
+    pub decorations: PathBuf,
+    /// `<dados>/cores`: os cores instalados (o core preferido de uma
+    /// plataforma só vem se ele estiver aqui).
+    pub cores: PathBuf,
 }
 
 type PlayingFn = Box<dyn Fn() -> Playing + Send + Sync>;
 type EmitFn = Box<dyn Fn(SyncEvent) + Send + Sync>;
+/// Relê do banco o que o app guarda em memória das configurações (atalhos,
+/// teclado, vídeo, áudio), depois de uma cópia ou de desfazê-la.
+pub type ReloadFn =
+    Box<dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -328,11 +341,16 @@ fn repo_err(e: domain::error::RepoError) -> SyncError {
 
 pub struct Engine {
     sync: Arc<SyncService>,
+    /// O banco das configurações (enviar, copiar, desfazer).
+    db: db::Db,
     repo: SyncRepo,
     roms: RomsRepo,
     dirs: Dirs,
     playing: PlayingFn,
     emit: EmitFn,
+    reload: ReloadFn,
+    /// Um envio, cópia ou "Desfazer" de configurações por vez.
+    settings_lock: tokio::sync::Mutex<()>,
     /// Uma passada (ou resolução, ou restauração) por vez.
     one_at_a_time: tokio::sync::Mutex<()>,
     /// A pasta de backup da passada em andamento.
@@ -379,14 +397,18 @@ impl Engine {
         dirs: Dirs,
         playing: PlayingFn,
         emit: EmitFn,
+        reload: ReloadFn,
     ) -> Self {
         Self {
             sync,
             repo: SyncRepo::new(db.clone()),
             roms: RomsRepo::new(db.clone()),
+            db: db.clone(),
             dirs,
             playing,
             emit,
+            reload,
+            settings_lock: tokio::sync::Mutex::new(()),
             one_at_a_time: tokio::sync::Mutex::new(()),
             stamp: Mutex::new(String::new()),
             known_files: Mutex::new(Vec::new()),
@@ -2213,7 +2235,22 @@ pub fn install(app: &AppHandle, sync: Arc<SyncService>, db: db::Db, dirs: Dirs) 
             log_pass("passada ao ligar", engine.pass(&alva, PassScope::All).await);
         });
     }));
-    app.manage(Arc::new(Engine::new(sync, db, dirs, playing, emit)));
+    // Depois de copiar ou desfazer configurações: o que o app guarda em
+    // memória volta a ser o do banco.
+    let reloader = app.clone();
+    let reload: ReloadFn = Box::new(move || {
+        let app = reloader.clone();
+        Box::pin(async move {
+            let Some(state) = app.try_state::<crate::commands::AppState>() else {
+                return;
+            };
+            let Some(pool) = state.db.clone() else {
+                return;
+            };
+            crate::commands::reload_copied_settings(&state, &pool).await;
+        })
+    });
+    app.manage(Arc::new(Engine::new(sync, db, dirs, playing, emit, reload)));
 }
 
 /// O que está rodando, pelo estado da sessão. Com um load em andamento e um
@@ -2363,10 +2400,33 @@ mod tests {
         root: PathBuf,
         playing: Arc<Mutex<Playing>>,
         events: Arc<Mutex<Vec<SyncEvent>>>,
+        /// Quantas vezes o motor pediu para reler as configurações em memória.
+        reloads: Arc<AtomicUsize>,
         repo: SyncRepo,
         roms: RomsRepo,
         states: db::SaveStateRepo,
         db: db::Db,
+    }
+
+    /// As pastas do motor dentro da pasta de dados do teste.
+    fn dirs_in(root: &Path) -> Dirs {
+        Dirs {
+            data: root.to_path_buf(),
+            saves: root.join("saves"),
+            system: root.join("system"),
+            shaders: root.join("shaders"),
+            decorations: root.join("decorations"),
+            cores: root.join("cores"),
+        }
+    }
+
+    /// O relê das configurações em memória, contado.
+    fn counting_reload(reloads: &Arc<AtomicUsize>) -> ReloadFn {
+        let n = reloads.clone();
+        Box::new(move || {
+            n.fetch_add(1, SeqCst);
+            Box::pin(async {})
+        })
     }
 
     fn temp(name: &str) -> PathBuf {
@@ -2440,17 +2500,15 @@ mod tests {
         let root = temp(name);
         let playing = Arc::new(Mutex::new(Playing::Idle));
         let events = Arc::new(Mutex::new(Vec::new()));
+        let reloads = Arc::new(AtomicUsize::new(0));
         let (p, ev) = (playing.clone(), events.clone());
         let engine = Engine::new(
             sync.clone(),
             db.clone(),
-            Dirs {
-                data: root.clone(),
-                saves: root.join("saves"),
-                system: root.join("system"),
-            },
+            dirs_in(&root),
             Box::new(move || p.lock().unwrap().clone()),
             Box::new(move |e| ev.lock().unwrap().push(e)),
+            counting_reload(&reloads),
         );
         Rig {
             engine,
@@ -2462,6 +2520,7 @@ mod tests {
             root,
             playing,
             events,
+            reloads,
             repo: SyncRepo::new(db.clone()),
             roms: RomsRepo::new(db.clone()),
             states: db::SaveStateRepo::new(db.clone()),
@@ -5960,13 +6019,10 @@ mod tests {
             self.engine = Engine::new(
                 self.sync.clone(),
                 self.db.clone(),
-                Dirs {
-                    data: self.root.clone(),
-                    saves: self.root.join("saves"),
-                    system: self.root.join("system"),
-                },
+                dirs_in(&self.root),
                 Box::new(move || p.lock().unwrap().clone()),
                 Box::new(move |e| ev.lock().unwrap().push(e)),
+                counting_reload(&self.reloads),
             );
         }
     }
@@ -7659,5 +7715,918 @@ mod tests {
 
         r.sync.devices.set_states_enabled(false).await.unwrap();
         assert!(r.sync.state_notes("r1").await.unwrap().is_empty());
+    }
+
+    // --- configurações entre máquinas (D114, R36, R38) -----------------------
+
+    use crate::sync::settings_groups::{self as groups, Catalog, Group};
+
+    /// O aparelho da outra máquina da conta.
+    const OTHER: &str = "dev2";
+    /// Uma chave de opção que não pode aparecer em log nenhum.
+    const SECRET_KEY: &str = "snes9x_chave_de_teste_4_2";
+    /// Um valor de lá que também não pode aparecer em log.
+    const THEIR_VALUE: &str = "valor-de-la-4-2";
+    const MAC: &str = "ppsspp_change_mac_address01";
+
+    fn appearance() -> Value {
+        json!({
+            "v": 1,
+            "themeSelection": "{\"selection\":{\"id\":\"dark\"}}",
+            "uiScale": 1.0,
+            "overscan": 0,
+            "uiSounds": true,
+            "reduceMotion": false
+        })
+    }
+
+    /// Uma linha da lista de aparelhos com o hardware.
+    fn machine_row(id: &str, label: &str, gpu: &str, backend: &str) -> Value {
+        let mut d = device(id, label);
+        d["hardware"] = json!({"os": "Windows 11", "gpu": gpu, "gpu_backend": backend});
+        d
+    }
+
+    /// Uma linha `config` de outra máquina, com os bytes do documento.
+    fn config_row(
+        save_id: &str,
+        group: &str,
+        doc: &Value,
+        owner: Option<&str>,
+        at: &str,
+    ) -> (Value, Vec<u8>) {
+        let bytes = serde_json::to_vec(doc).unwrap();
+        let row = json!({
+            "save_id": save_id, "filename": format!("reemu/{group}.json"), "slug": null,
+            "kind": "config", "platform": "other", "game_uuid": null, "core": null,
+            "core_version": null, "visibility": "private",
+            "current": {
+                "version_id": format!("v-{save_id}"), "content_hash": sha(&bytes),
+                "size_bytes": bytes.len(), "server_created_at": at, "client_mtime": at,
+                "source_client": "reemu", "origin_media": "upload", "device_token_id": owner
+            },
+            "version_count": 1, "deleted_at": null, "device_token_id": owner
+        });
+        (row, bytes)
+    }
+
+    /// As linhas `config` que a listagem com `device_token_id=OTHER` devolve
+    /// (o GameKave junta as da conta) e o conteúdo de cada uma.
+    async fn mount_configs(server: &MockServer, rows: Vec<(Value, Vec<u8>)>) {
+        let mut listed = Vec::new();
+        for (row, bytes) in rows {
+            let id = row["save_id"].as_str().unwrap().to_owned();
+            mount_content(server, &id, &format!("v-{id}"), &bytes).await;
+            listed.push(row);
+        }
+        Mock::given(method("GET"))
+            .and(path(SAVES))
+            .and(query_param("kind", "config"))
+            .and(query_param("platform", "other"))
+            .and(query_param("device_token_id", OTHER))
+            .respond_with(files_body(listed))
+            .mount(server)
+            .await;
+    }
+
+    /// A outra máquina: um banco à parte, com o que cada teste põe nele.
+    struct There {
+        db: db::Db,
+        catalog: Catalog,
+    }
+
+    impl There {
+        async fn new(r: &Rig) -> Self {
+            There {
+                db: db::connect_in_memory().await.unwrap(),
+                catalog: Catalog::new(&r.path("ali/shaders"), &r.path("ali/decorations")),
+            }
+        }
+
+        async fn doc(&self, group: Group) -> Value {
+            groups::export(group, &self.db, &self.catalog)
+                .await
+                .unwrap()
+        }
+
+        /// As linhas dos grupos que ela enviou.
+        async fn rows(&self, list: &[Group]) -> Vec<(Value, Vec<u8>)> {
+            let mut out = Vec::new();
+            for (n, g) in list.iter().enumerate() {
+                let doc = self.doc(*g).await;
+                out.push(config_row(
+                    &format!("c{n}"),
+                    g.as_str(),
+                    &doc,
+                    Some(OTHER),
+                    "2026-11-13T10:00:00Z",
+                ));
+            }
+            out
+        }
+    }
+
+    async fn rom_crc(db: &db::Db, id: &str, crc32: &str) {
+        RomsRepo::new(db.clone())
+            .add(&Rom {
+                id: id.into(),
+                file_path: format!("C:/roms/{id}.sfc"),
+                crc32: crc32.into(),
+                md5: "MD5".into(),
+                system_id: "snes".into(),
+                added_at: 0,
+                last_played_at: None,
+                is_favorite: false,
+                user_title: None,
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn opt(db: &db::Db, core: &str, rom: Option<&str>, key: &str, value: &str) {
+        use domain::core_options::CoreOptionsStore;
+        db::CoreOptionsRepo::new(db.clone())
+            .set_scoped_value(core, rom, key, Some(value))
+            .await
+            .unwrap();
+    }
+
+    async fn aspect(db: &db::Db, scope: &str, target: &str, value: &str) {
+        db::AspectRepo::new(db.clone())
+            .set(scope, target, Some(value))
+            .await
+            .unwrap();
+    }
+
+    async fn audio(db: &db::Db, rate_control: bool, device: &str) {
+        use domain::audio::{AudioConfig, AudioConfigRepository};
+        db::AudioConfigRepo::new(db.clone())
+            .update(&AudioConfig {
+                output_device_id: Some(device.into()),
+                output_device_name: Some(format!("Saída {device}")),
+                rate_control_enabled: rate_control,
+                rate_control_delta: 0.25,
+                sample_rate_preference: Some(48000),
+            })
+            .await
+            .unwrap();
+    }
+
+    async fn video(db: &db::Db, integer: bool) {
+        use domain::video::{VideoConfig, VideoConfigRepository};
+        db::VideoConfigRepo::new(db.clone())
+            .update(&VideoConfig {
+                integer_scaling: integer,
+                hdr: false,
+                hdr_paper_white_nits: 120,
+                hdr_highlights: false,
+                hdr_peak_nits: 600,
+            })
+            .await
+            .unwrap();
+    }
+
+    /// O valor de uma opção global (o MAC não sai em documento nenhum).
+    async fn option_value(db: &db::Db, key: &str) -> Option<String> {
+        sqlx::query_scalar("SELECT value FROM core_options_values WHERE option_key = ?1")
+            .bind(key)
+            .fetch_optional(db)
+            .await
+            .unwrap()
+    }
+
+    /// Cada linha das tabelas que os grupos escrevem, como texto.
+    async fn settings_rows(db: &db::Db) -> Vec<String> {
+        let mut out = Vec::new();
+        for table in [
+            "core_options_values",
+            "core_option_overrides",
+            "system_core_prefs",
+            "shader_chain_assignments",
+            "shader_parameter_overrides",
+            "decoration_assignments",
+            "system_hotkeys",
+            "keyboard_bindings",
+            "audio_config",
+            "video_config",
+            "aspect_assignments",
+        ] {
+            let cols: Vec<String> = sqlx::query_scalar(&format!(
+                "SELECT name FROM pragma_table_info('{table}') ORDER BY cid"
+            ))
+            .fetch_all(db)
+            .await
+            .unwrap();
+            let expr = cols
+                .iter()
+                .map(|c| format!("quote({c})"))
+                .collect::<Vec<_>>()
+                .join(" || '|' || ");
+            let rows: Vec<String> =
+                sqlx::query_scalar(&format!("SELECT {expr} FROM {table} ORDER BY 1"))
+                    .fetch_all(db)
+                    .await
+                    .unwrap();
+            out.extend(rows.into_iter().map(|row| format!("{table}: {row}")));
+        }
+        out
+    }
+
+    async fn copy_marker(r: &Rig) -> Option<String> {
+        r.sync.devices.last_copy_backup().await.unwrap()
+    }
+
+    fn ticks(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| (*s).to_owned()).collect()
+    }
+
+    impl Rig {
+        fn reload_count(&self) -> usize {
+            self.reloads.load(SeqCst)
+        }
+
+        async fn copy(&self, list: &[&str], appearance: bool) -> Result<CopyReport, SyncError> {
+            self.engine
+                .settings_copy(&self.alva, OTHER, &ticks(list), appearance)
+                .await
+        }
+    }
+
+    /// D114: um documento por grupo, cada um numa linha `config` deste
+    /// aparelho, `platform=other`, sem core, `reemu/<grupo>.json`; a aparência
+    /// é a que a tela mandou. O envio fica guardado com o hash de cada grupo,
+    /// e um grupo mudado depois aparece como mudado.
+    #[tokio::test]
+    async fn settings_upload_writes_one_row_per_group() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("settings-upload").await;
+        opt(&r.db, "snes9x", None, "snes9x_region", "pal").await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_upload(&r.server, "c1", "v1").await;
+
+        let at = r
+            .engine
+            .settings_upload(&r.alva, &appearance())
+            .await
+            .unwrap();
+        assert!(at > 0);
+
+        let posts = r.reqs("POST", SAVES).await;
+        let mut names: Vec<String> = posts
+            .iter()
+            .map(|p| field(&p.body, "filename").unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "reemu/appearance.json",
+                "reemu/audio.json",
+                "reemu/core-options.json",
+                "reemu/hotkeys-keyboard.json",
+                "reemu/shaders-decorations.json",
+                "reemu/video.json",
+            ]
+        );
+        let catalog = Catalog::new(&r.path("shaders"), &r.path("decorations"));
+        for p in &posts {
+            let auth = p.headers.get("authorization").unwrap();
+            assert_eq!(auth.to_str().unwrap(), "Bearer asv_secret");
+            assert_eq!(field(&p.body, "kind").as_deref(), Some("config"));
+            assert_eq!(field(&p.body, "platform").as_deref(), Some("other"));
+            assert_eq!(
+                field(&p.body, "core"),
+                None,
+                "sem core: o GameKave guarda vazio como nenhum"
+            );
+            assert_eq!(field(&p.body, "core_version"), None);
+            let name = field(&p.body, "filename").unwrap();
+            let sent: Value = serde_json::from_str(&field(&p.body, "file").unwrap()).unwrap();
+            let group = name.trim_start_matches("reemu/").trim_end_matches(".json");
+            let want = match Group::ALL.into_iter().find(|g| g.as_str() == group) {
+                Some(g) => groups::export(g, &r.db, &catalog).await.unwrap(),
+                None => appearance(),
+            };
+            assert_eq!(sent, want, "{name}");
+        }
+
+        let (sent_at, hashes) = r.sync.devices.settings_sent().await.unwrap();
+        assert_eq!(sent_at, Some(at));
+        assert_eq!(hashes.len(), 6);
+        let state = r.engine.settings_sent(&appearance()).await.unwrap();
+        assert_eq!((state.sent_at, state.changed.len()), (Some(at), 0));
+        // mudou uma opção e a aparência depois do envio
+        opt(&r.db, "snes9x", None, "snes9x_region", "ntsc").await;
+        let mut look = appearance();
+        look["uiScale"] = json!(1.3);
+        let state = r.engine.settings_sent(&look).await.unwrap();
+        assert_eq!(state.changed, ["core-options", "appearance"]);
+    }
+
+    /// As regras de envio das passadas valem aqui: uma recusa de vez (413)
+    /// fica lembrada para aqueles bytes e os outros grupos sobem; o 402 da
+    /// cota não é o do plano.
+    #[tokio::test]
+    async fn settings_upload_follows_the_pass_rules() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("settings-upload-rules").await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        struct TooBigVideo;
+        impl Respond for TooBigVideo {
+            fn respond(&self, req: &Request) -> ResponseTemplate {
+                if field(&req.body, "filename").as_deref() == Some("reemu/video.json") {
+                    ResponseTemplate::new(413)
+                        .set_body_json(json!({"error": {"code": "save_file_too_large"}}))
+                } else {
+                    uploaded("c1", "v1")
+                }
+            }
+        }
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(TooBigVideo)
+            .mount(&r.server)
+            .await;
+        let video_posts = |posts: &[Request]| {
+            posts
+                .iter()
+                .filter(|p| field(&p.body, "filename").as_deref() == Some("reemu/video.json"))
+                .count()
+        };
+
+        let first = r.engine.settings_upload(&r.alva, &appearance()).await;
+        assert_eq!(first, Err(SyncError::TooLarge));
+        assert_eq!(r.reqs("POST", SAVES).await.len(), 6);
+        let (_, hashes) = r.sync.devices.settings_sent().await.unwrap();
+        assert!(hashes.contains_key("core-options") && !hashes.contains_key("video"));
+        // os mesmos bytes do vídeo não sobem de novo
+        let again = r.engine.settings_upload(&r.alva, &appearance()).await;
+        assert_eq!(again, Err(SyncError::TooLarge));
+        assert_eq!(video_posts(&r.reqs("POST", SAVES).await), 1);
+
+        // 402 de cota: para no primeiro; 402 da porta: é o plano
+        for (quota, code) in [
+            ("emu_saves_quota_mb", SyncError::Quota),
+            ("save_sync_enabled", SyncError::NoTier),
+        ] {
+            let r = rig(&format!("settings-402-{quota}")).await;
+            mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+            Mock::given(method("POST"))
+                .and(path(SAVES))
+                .respond_with(ResponseTemplate::new(402).set_body_json(json!({"error": {
+                    "code": "tier_insufficient", "required_quota": quota, "upgrade_to": "collector"
+                }})))
+                .mount(&r.server)
+                .await;
+            let got = r.engine.settings_upload(&r.alva, &appearance()).await;
+            assert_eq!(got, Err(code), "{quota}");
+            assert_eq!(r.reqs("POST", SAVES).await.len(), 1, "{quota}");
+            assert_eq!(r.sync.devices.settings_sent().await.unwrap().0, None);
+        }
+    }
+
+    /// Pausada no site ou com a conta desconhecida, nada vai à nuvem (D128,
+    /// N1): a pausa é lida na linha desta máquina, e sem o AlvaID nem a lista
+    /// de aparelhos é pedida.
+    #[tokio::test]
+    async fn settings_traffic_needs_the_site_row_and_the_account() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("settings-paused").await;
+        let mut row = device("dev1", "Sala");
+        row["paused_at"] = json!("2026-11-13T09:00:00Z");
+        mount_devices(&r.server, vec![row, device(OTHER, "Notebook")]).await;
+        assert_eq!(
+            r.engine.settings_upload(&r.alva, &appearance()).await,
+            Err(SyncError::Paused)
+        );
+        assert_eq!(r.copy(&["audio"], false).await, Err(SyncError::Paused));
+        assert!(r.reqs("POST", SAVES).await.is_empty());
+        assert!(r.reqs("GET", SAVES).await.is_empty());
+
+        let r = rig_bare("settings-no-account").await;
+        assert_eq!(
+            r.engine.settings_upload(&r.alva, &appearance()).await,
+            Err(SyncError::Offline)
+        );
+        assert_eq!(r.copy(&["audio"], false).await, Err(SyncError::Offline));
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+    }
+
+    /// A prévia lê só as linhas da outra máquina (as da conta ficam de fora),
+    /// diz o que veio e o que não viria, e desmarca o vídeo quando a GPU ou o
+    /// backend dela diferem dos daqui. Nada muda.
+    #[tokio::test]
+    async fn preview_flags_video_when_gpu_differs() {
+        let _serial = SERIAL.lock().await;
+        use domain::shader_chain::ShaderChainStore;
+        let r = rig("settings-preview").await;
+        mount_devices(
+            &r.server,
+            vec![
+                machine_row("dev1", "Sala", "NVIDIA GeForce RTX 4070", "Vulkan"),
+                machine_row(OTHER, "Notebook", "Intel Iris Xe", "Vulkan"),
+            ],
+        )
+        .await;
+        let there = There::new(&r).await;
+        opt(&there.db, "snes9x", None, "snes9x_region", "ntsc").await;
+        // um preset importado do disco lá, na plataforma do GBA
+        let mine = r.path("ali/Meus Shaders/crt-do-ed.slangp");
+        let mine = mine.to_string_lossy().into_owned();
+        db::ShaderChainRepo::new(there.db.clone())
+            .upsert_preset(&domain::shader_chain::ShaderPreset {
+                id: mine.clone(),
+                name: "crt-do-ed".into(),
+                source_path: mine.clone(),
+                format: domain::shader_chain::ShaderFormat::Slang,
+                is_builtin: false,
+                includes_bezel: false,
+            })
+            .await
+            .unwrap();
+        db::ShaderChainRepo::new(there.db.clone())
+            .set_assignment(
+                domain::shader_chain::AssignmentScope::System,
+                Some("gba"),
+                None,
+                &mine,
+            )
+            .await
+            .unwrap();
+        let mut rows = there
+            .rows(&[Group::CoreOptions, Group::ShadersDecorations, Group::Video])
+            .await;
+        let (newest, _) = &mut rows[2];
+        newest["current"]["server_created_at"] = json!("2026-11-13T12:00:00Z");
+        rows.push(config_row(
+            "c-app",
+            "appearance",
+            &appearance(),
+            Some(OTHER),
+            "2026-11-13T10:00:00Z",
+        ));
+        // da conta (sem dono): o filtro do GameKave a traz, a prévia não
+        rows.push(config_row(
+            "c-acct",
+            "audio",
+            &json!({"v": 1}),
+            None,
+            "2026-11-13T13:00:00Z",
+        ));
+        mount_configs(&r.server, rows).await;
+        let before = settings_rows(&r.db).await;
+
+        let rtx = |gpu: &str, backend: &str| HardwarePayload {
+            gpu: gpu.into(),
+            gpu_backend: backend.into(),
+            ..HardwarePayload::default()
+        };
+        let p = r
+            .engine
+            .settings_preview(&r.alva, OTHER, &rtx("NVIDIA GeForce RTX 4070", "Vulkan"))
+            .await
+            .unwrap();
+        assert!(p.video_default_off);
+        assert_eq!(
+            (p.machine.id.as_str(), p.machine.label.as_str()),
+            (OTHER, "Notebook")
+        );
+        assert!(!p.machine.is_this);
+        assert_eq!(p.sent_at, parse_time("2026-11-13T12:00:00Z").unwrap().0);
+        let present: Vec<(&str, bool)> = p
+            .groups
+            .iter()
+            .map(|g| (g.group.as_str(), g.present))
+            .collect();
+        assert_eq!(
+            present,
+            [
+                ("core-options", true),
+                ("shaders-decorations", true),
+                ("hotkeys-keyboard", false),
+                ("audio", false),
+                ("appearance", true),
+                ("video", true),
+            ]
+        );
+        let shaders = &p.groups[1];
+        assert_eq!(shaders.error, None);
+        assert_eq!(shaders.missing_files.len(), 1);
+        let missing = &shaders.missing_files[0];
+        assert_eq!(
+            (
+                missing.kind,
+                missing.name.as_str(),
+                missing.system_id.as_deref()
+            ),
+            (
+                groups::MissingKind::ImportedElsewhere,
+                "crt-do-ed",
+                Some("gba")
+            )
+        );
+        assert_eq!(settings_rows(&r.db).await, before, "a prévia não muda nada");
+
+        // mesma GPU no mesmo backend: o vídeo vem marcado
+        let same = r
+            .engine
+            .settings_preview(&r.alva, OTHER, &rtx("Intel Iris Xe", "vulkan"))
+            .await
+            .unwrap();
+        assert!(!same.video_default_off);
+        // mesma GPU em outro backend: desmarcado
+        let other_backend = r
+            .engine
+            .settings_preview(&r.alva, OTHER, &rtx("Intel Iris Xe", "Direct3D 12"))
+            .await
+            .unwrap();
+        assert!(other_backend.video_default_off);
+        // sem a GPU daqui agora, vale a da lista do site (a RTX): desmarcado
+        let unknown = r
+            .engine
+            .settings_preview(&r.alva, OTHER, &HardwarePayload::default())
+            .await
+            .unwrap();
+        assert!(unknown.video_default_off);
+    }
+
+    /// Uma cópia típica: opções e áudio daqui, vídeo de lá não marcado.
+    async fn copy_rig(name: &str) -> (Rig, There) {
+        let r = rig(name).await;
+        mount_devices(
+            &r.server,
+            vec![device("dev1", "Sala"), device(OTHER, "Notebook")],
+        )
+        .await;
+        opt(&r.db, "snes9x", None, "snes9x_region", "pal").await;
+        opt(&r.db, "snes9x", None, SECRET_KEY, "daqui").await;
+        audio(&r.db, false, "fone-daqui").await;
+        video(&r.db, false).await;
+        let there = There::new(&r).await;
+        opt(&there.db, "snes9x", None, "snes9x_region", "ntsc").await;
+        opt(&there.db, "snes9x", None, SECRET_KEY, THEIR_VALUE).await;
+        audio(&there.db, true, "caixa-de-la").await;
+        video(&there.db, true).await;
+        let mut rows = there
+            .rows(&[Group::CoreOptions, Group::Audio, Group::Video])
+            .await;
+        rows.push(config_row(
+            "c-app",
+            "appearance",
+            &appearance(),
+            Some(OTHER),
+            "2026-11-13T10:00:00Z",
+        ));
+        mount_configs(&r.server, rows).await;
+        (r, there)
+    }
+
+    /// D114: o backup do que a cópia troca vai para
+    /// `<dados>/sync-backups/<carimbo>/settings/<grupo>.json` com os valores de
+    /// antes, e só os grupos marcados entram. A aparência volta para a tela.
+    /// O que o app guarda em memória é relido uma vez.
+    #[tokio::test]
+    async fn copy_backs_up_then_applies_only_ticked_groups() {
+        let _serial = SERIAL.lock().await;
+        crate::sync::test_support::captured_logs();
+        let (r, there) = copy_rig("settings-copy").await;
+        let catalog = Catalog::new(&r.path("shaders"), &r.path("decorations"));
+        let video_before = groups::export(Group::Video, &r.db, &catalog).await.unwrap();
+
+        let report = r.copy(&["core-options", "audio"], true).await.unwrap();
+        let copied: Vec<&str> = report.per_group.iter().map(|g| g.group.as_str()).collect();
+        assert_eq!(copied, ["core-options", "audio"]);
+        assert_eq!(report.appearance_doc, Some(appearance()));
+        assert_eq!(r.reload_count(), 1);
+
+        // os marcados vieram; o vídeo não
+        let options = groups::export(Group::CoreOptions, &r.db, &catalog)
+            .await
+            .unwrap();
+        assert_eq!(options["values"]["snes9x"]["snes9x_region"], json!("ntsc"));
+        let sound = groups::export(Group::Audio, &r.db, &catalog).await.unwrap();
+        assert_eq!(sound, there.doc(Group::Audio).await);
+        let device: Option<String> =
+            sqlx::query_scalar("SELECT output_device_id FROM audio_config WHERE id = 1")
+                .fetch_one(&r.db)
+                .await
+                .unwrap();
+        assert_eq!(
+            device.as_deref(),
+            Some("fone-daqui"),
+            "o aparelho de áudio é daqui"
+        );
+        assert_eq!(
+            groups::export(Group::Video, &r.db, &catalog).await.unwrap(),
+            video_before
+        );
+
+        // o backup tem o de antes, um arquivo por grupo marcado
+        let backups = r.backups();
+        let names: Vec<&str> = backups.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["settings/audio.json", "settings/core-options.json"]);
+        let saved: Value = serde_json::from_slice(&backups[1].1).unwrap();
+        assert_eq!(saved["backup"], json!(true));
+        assert_eq!(saved["values"]["snes9x"]["snes9x_region"], json!("pal"));
+        let dir = PathBuf::from(report.backup_dir.unwrap());
+        assert!(dir.starts_with(r.path("sync-backups")));
+        assert!(dir.join("settings").join("core-options.json").is_file());
+        assert!(copy_marker(&r).await.is_some());
+
+        // nenhum nome de opção nem de arquivo no log
+        let leaked: Vec<String> = crate::sync::test_support::captured_logs()
+            .into_iter()
+            .filter(|l| l.contains(SECRET_KEY) || l.contains("reemu/") || l.contains(THEIR_VALUE))
+            .collect();
+        assert!(leaked.is_empty(), "{leaked:?}");
+    }
+
+    /// Sem backup, sem cópia: um backup que não grava não deixa nada mudar.
+    #[tokio::test]
+    async fn copy_applies_nothing_when_the_backup_fails() {
+        let _serial = SERIAL.lock().await;
+        let (r, _there) = copy_rig("settings-backup-fails").await;
+        // a pasta de backups é um arquivo: nada se grava dentro dela
+        r.write("sync-backups", b"nao e pasta");
+        let before = settings_rows(&r.db).await;
+        assert_eq!(
+            r.copy(&["core-options", "audio"], false).await,
+            Err(SyncError::BackupFailed)
+        );
+        assert_eq!(settings_rows(&r.db).await, before);
+        assert_eq!(copy_marker(&r).await, None);
+        assert_eq!(r.reload_count(), 0);
+    }
+
+    /// "Desfazer" volta o backup da última cópia (`Restore`) e apaga o
+    /// marcador junto: a segunda vez não há o que desfazer.
+    #[tokio::test]
+    async fn undo_restores_the_backup_set_once() {
+        let _serial = SERIAL.lock().await;
+        let (r, _there) = copy_rig("settings-undo").await;
+        assert!(
+            !r.engine.settings_undo().await.unwrap(),
+            "nada copiado ainda"
+        );
+        let before = settings_rows(&r.db).await;
+
+        r.copy(&["core-options", "audio", "video"], false)
+            .await
+            .unwrap();
+        assert_ne!(settings_rows(&r.db).await, before);
+        assert!(r.engine.settings_undo().await.unwrap());
+        assert_eq!(settings_rows(&r.db).await, before);
+        assert_eq!(copy_marker(&r).await, None);
+        assert_eq!(r.reload_count(), 2, "relido depois de copiar e de desfazer");
+
+        // uma vez por cópia
+        assert!(!r.engine.settings_undo().await.unwrap());
+        assert_eq!(r.reload_count(), 2);
+
+        // a cópia seguinte troca o backup: o "Desfazer" volta o de antes dela
+        r.copy(&["audio"], false).await.unwrap();
+        opt(&r.db, "snes9x", None, "snes9x_region", "mudou-depois").await;
+        let after_second = {
+            let mut rows = settings_rows(&r.db).await;
+            rows.retain(|l| !l.starts_with("audio_config"));
+            rows
+        };
+        assert!(r.engine.settings_undo().await.unwrap());
+        let mut rows = settings_rows(&r.db).await;
+        rows.retain(|l| !l.starts_with("audio_config"));
+        assert_eq!(rows, after_second, "só o grupo marcado volta");
+        assert_eq!(
+            settings_rows(&r.db)
+                .await
+                .iter()
+                .filter(|l| l.starts_with("audio_config"))
+                .collect::<Vec<_>>(),
+            before
+                .iter()
+                .filter(|l| l.starts_with("audio_config"))
+                .collect::<Vec<_>>()
+        );
+    }
+
+    /// Copiar e desfazer com um jogo aberto ou abrindo: recusado antes de
+    /// qualquer pedido à nuvem, nada muda e nada é relido.
+    #[tokio::test]
+    async fn copy_refuses_while_a_game_is_loaded() {
+        let _serial = SERIAL.lock().await;
+        let (r, _there) = copy_rig("settings-playing").await;
+        let before = settings_rows(&r.db).await;
+        for playing in [
+            Playing::Running(Some("r1".into())),
+            Playing::Running(None),
+            Playing::Loading,
+        ] {
+            r.set_playing(playing.clone());
+            assert_eq!(
+                r.copy(&["core-options"], true).await,
+                Err(SyncError::GameOpen),
+                "{playing:?}"
+            );
+        }
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+        assert_eq!(settings_rows(&r.db).await, before);
+        assert!(r.backups().is_empty());
+
+        // com uma cópia feita, o "Desfazer" também espera o jogo fechar
+        r.set_playing(Playing::Idle);
+        r.copy(&["core-options"], false).await.unwrap();
+        let copied = settings_rows(&r.db).await;
+        r.set_playing(Playing::Running(Some("r1".into())));
+        assert_eq!(r.engine.settings_undo().await, Err(SyncError::GameOpen));
+        assert_eq!(settings_rows(&r.db).await, copied);
+        assert!(
+            copy_marker(&r).await.is_some(),
+            "o desfazer segue disponível"
+        );
+        assert_eq!(r.reload_count(), 1);
+    }
+
+    /// D114: os grupos marcados entram juntos ou nenhum. Um documento de uma
+    /// versão mais nova para tudo antes do backup; uma falha do banco no
+    /// segundo grupo desfaz o primeiro.
+    #[tokio::test]
+    async fn copy_applies_nothing_when_one_ticked_document_is_bad() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("settings-bad-doc").await;
+        mount_devices(
+            &r.server,
+            vec![device("dev1", "Sala"), device(OTHER, "Notebook")],
+        )
+        .await;
+        opt(&r.db, "snes9x", None, "snes9x_region", "pal").await;
+        audio(&r.db, false, "fone-daqui").await;
+        let there = There::new(&r).await;
+        opt(&there.db, "snes9x", None, "snes9x_region", "ntsc").await;
+        audio(&there.db, true, "caixa-de-la").await;
+        let mut rows = there.rows(&[Group::CoreOptions, Group::Audio]).await;
+        let mut newer = there.doc(Group::Video).await;
+        newer["v"] = json!(2);
+        rows.push(config_row(
+            "c-new",
+            "video",
+            &newer,
+            Some(OTHER),
+            "2026-11-13T10:00:00Z",
+        ));
+        rows.push(config_row(
+            "c-bad",
+            "hotkeys-keyboard",
+            &json!({"v": 1, "hotkeys": "x"}),
+            Some(OTHER),
+            "2026-11-13T10:00:00Z",
+        ));
+        mount_configs(&r.server, rows).await;
+        let before = settings_rows(&r.db).await;
+
+        assert_eq!(
+            r.copy(&["core-options", "video"], false).await,
+            Err(SyncError::SettingsVersion)
+        );
+        assert_eq!(
+            r.copy(&["core-options", "hotkeys-keyboard"], false).await,
+            Err(SyncError::SettingsInvalid)
+        );
+        assert_eq!(settings_rows(&r.db).await, before);
+        assert!(r.backups().is_empty(), "conferido antes do backup");
+        assert_eq!(copy_marker(&r).await, None);
+
+        // o banco recusa o áudio, que entra depois das opções
+        sqlx::query(
+            "CREATE TRIGGER no_audio BEFORE UPDATE ON audio_config \
+             BEGIN SELECT RAISE(ABORT, 'audio recusado'); END",
+        )
+        .execute(&r.db)
+        .await
+        .unwrap();
+        assert!(matches!(
+            r.copy(&["core-options", "audio"], false).await,
+            Err(SyncError::Failed(_))
+        ));
+        assert_eq!(settings_rows(&r.db).await, before, "nem as opções ficaram");
+        assert_eq!(copy_marker(&r).await, None);
+        assert_eq!(r.reload_count(), 0);
+        assert!(!r.engine.settings_undo().await.unwrap());
+    }
+
+    /// R38: duas ROMs da biblioteca com o mesmo CRC32 e escolhas diferentes.
+    /// A cópia leva a escolha de lá para as duas; o "Desfazer" devolve cada
+    /// uma com a sua.
+    #[tokio::test]
+    async fn undo_is_exact_with_two_roms_sharing_a_crc() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("settings-dup-crc").await;
+        mount_devices(
+            &r.server,
+            vec![device("dev1", "Sala"), device(OTHER, "Notebook")],
+        )
+        .await;
+        rom_crc(&r.db, "d-1", "AAAA0001").await;
+        rom_crc(&r.db, "d-2", "AAAA0001").await;
+        opt(&r.db, "snes9x", Some("d-1"), "snes9x_overclock", "on").await;
+        opt(&r.db, "snes9x", Some("d-2"), "snes9x_overclock", "off").await;
+        aspect(&r.db, "rom", "d-1", "4:3").await;
+        aspect(&r.db, "rom", "d-2", "fill").await;
+        let there = There::new(&r).await;
+        rom_crc(&there.db, "t-1", "AAAA0001").await;
+        opt(&there.db, "snes9x", Some("t-1"), "snes9x_overclock", "max").await;
+        aspect(&there.db, "rom", "t-1", "16:9").await;
+        mount_configs(
+            &r.server,
+            there.rows(&[Group::CoreOptions, Group::Video]).await,
+        )
+        .await;
+        let before = settings_rows(&r.db).await;
+
+        r.copy(&["core-options", "video"], false).await.unwrap();
+        let copied = settings_rows(&r.db).await;
+        for rom in ["d-1", "d-2"] {
+            assert!(
+                copied
+                    .iter()
+                    .any(|l| l.contains(rom) && l.contains("'max'")),
+                "{rom}"
+            );
+            assert!(
+                copied
+                    .iter()
+                    .any(|l| l.contains(rom) && l.contains("'16:9'")),
+                "{rom}"
+            );
+        }
+        assert!(r.engine.settings_undo().await.unwrap());
+        assert_eq!(settings_rows(&r.db).await, before);
+    }
+
+    /// O MAC do PSP emulado é identidade desta máquina: não sobe no envio, uma
+    /// cópia (mesmo de um documento forjado com ele) não o troca, e o
+    /// "Desfazer" não o apaga.
+    #[tokio::test]
+    async fn copy_never_touches_the_ppsspp_mac() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("settings-mac").await;
+        mount_devices(
+            &r.server,
+            vec![device("dev1", "Sala"), device(OTHER, "Notebook")],
+        )
+        .await;
+        mount_upload(&r.server, "c1", "v1").await;
+        opt(&r.db, "ppsspp_libretro", None, MAC, "12").await;
+        opt(&r.db, "ppsspp_libretro", None, "ppsspp_cpu_core", "jit").await;
+
+        r.engine
+            .settings_upload(&r.alva, &appearance())
+            .await
+            .unwrap();
+        for p in r.reqs("POST", SAVES).await {
+            assert!(!field(&p.body, "file")
+                .unwrap()
+                .contains("ppsspp_change_mac_address"));
+        }
+
+        let there = There::new(&r).await;
+        opt(
+            &there.db,
+            "ppsspp_libretro",
+            None,
+            "ppsspp_cpu_core",
+            "interpreter",
+        )
+        .await;
+        let mut doc = there.doc(Group::CoreOptions).await;
+        doc["values"]["ppsspp_libretro"][MAC] = json!("99");
+        mount_configs(
+            &r.server,
+            vec![config_row(
+                "c-co",
+                "core-options",
+                &doc,
+                Some(OTHER),
+                "2026-11-13T10:00:00Z",
+            )],
+        )
+        .await;
+        r.copy(&["core-options"], false).await.unwrap();
+        assert_eq!(option_value(&r.db, MAC).await.as_deref(), Some("12"));
+        assert_eq!(
+            option_value(&r.db, "ppsspp_cpu_core").await.as_deref(),
+            Some("interpreter")
+        );
+        let (_, backup) = r
+            .backups()
+            .into_iter()
+            .find(|(n, _)| n == "settings/core-options.json")
+            .unwrap();
+        assert!(!String::from_utf8_lossy(&backup).contains("ppsspp_change_mac_address"));
+
+        assert!(r.engine.settings_undo().await.unwrap());
+        assert_eq!(option_value(&r.db, MAC).await.as_deref(), Some("12"));
+        assert_eq!(
+            option_value(&r.db, "ppsspp_cpu_core").await.as_deref(),
+            Some("jit")
+        );
     }
 }

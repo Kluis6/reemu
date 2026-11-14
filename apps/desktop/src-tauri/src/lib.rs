@@ -172,6 +172,9 @@ pub fn run() {
                         data: base,
                         saves: state.save_dir.clone(),
                         system: state.system_dir.clone(),
+                        shaders: state.shaders_dir.clone(),
+                        decorations: state.decorations_dir.clone(),
+                        cores: state.cores_dir.clone(),
                     }
                 };
                 sync::engine::install(app.handle(), sync_service, pool, dirs);
@@ -382,6 +385,11 @@ pub fn run() {
             sync::sync_download_state,
             sync::sync_state_thumbnail,
             sync::sync_state_notes,
+            sync::sync_settings_upload,
+            sync::sync_settings_sent,
+            sync::sync_settings_preview,
+            sync::sync_settings_copy,
+            sync::sync_settings_undo,
             commands::js_log,
             commands::current_focus,
             commands::toggle_focus,

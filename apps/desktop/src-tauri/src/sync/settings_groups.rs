@@ -24,6 +24,12 @@
 //! `kept_local`. Por isso `Restore` com o backup de antes de uma cópia devolve
 //! a máquina igual.
 //!
+//! O backup de antes de uma cópia ([`export_backup_in`]) é o documento com
+//! `"backup": true` e os jogos pela ROM (`rom_id`), não pelo CRC32: ele nunca
+//! sai desta máquina, e duas ROMs da biblioteca com o mesmo CRC32 podem ter
+//! escolhas diferentes, que o "Desfazer" devolve cada uma no seu lugar (R38).
+//! Só o `Restore` aceita um backup.
+//!
 //! Os grupos marcados são conferidos todos ([`check_all`]) antes de abrir a
 //! transação e entram juntos nela ([`apply_in`], [`apply_all`]): ou todos, ou
 //! nenhum (D114). Aplicar só grava o banco: quem chama recarrega o que o app
@@ -60,6 +66,19 @@ const SLANG_PACK: &str = "slang-shaders:";
 /// O catálogo de molduras do The Bezel Project (`bezel_pack`), pelo id que é o
 /// mesmo em toda máquina.
 const BEZEL_PROJECT: &str = "bezelproject";
+
+/// O campo que marca o backup desta máquina (`"backup": true`).
+const BACKUP_FIELD: &str = "backup";
+
+/// A forma de um documento.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Form {
+    /// O que vai à nuvem: um jogo pelo CRC32.
+    Portable,
+    /// O backup desta máquina antes de uma cópia: um jogo pela ROM. Nunca sai
+    /// daqui, e só o `Restore` o aceita (R38).
+    Backup,
+}
 
 /// Opções que um core grava sozinho como identidade desta máquina
 /// (`persist_core_set_options`): o PPSSPP sorteia o MAC do PSP emulado uma vez
@@ -162,7 +181,9 @@ pub struct ThisMachine<'a> {
 }
 
 /// Por que um preset ou uma moldura do documento não veio.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "SettingsMissingKind"))]
 pub enum MissingKind {
     /// Um arquivo que a outra máquina importou do disco dela.
     ImportedElsewhere,
@@ -171,17 +192,9 @@ pub enum MissingKind {
     NotDownloadedHere,
 }
 
-impl MissingKind {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            MissingKind::ImportedElsewhere => "imported_elsewhere",
-            MissingKind::NotDownloadedHere => "not_downloaded_here",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "SettingsMissingItem"))]
 pub enum MissingItem {
     Shader,
     Decoration,
@@ -189,7 +202,9 @@ pub enum MissingItem {
 
 /// Um preset ou uma moldura que não veio. O lugar desta máquina que ele
 /// ocuparia fica como estava.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "SettingsMissingFile"))]
 pub struct MissingFile {
     pub kind: MissingKind,
     pub item: MissingItem,
@@ -202,7 +217,9 @@ pub struct MissingFile {
 }
 
 /// O que uma aplicação fez.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "SettingsApplyReport"))]
 pub struct ApplyReport {
     /// Itens do documento gravados: um valor de opção, uma preferência de
     /// core, uma atribuição, uma hotkey, uma tecla, uma proporção; o áudio e a
@@ -233,9 +250,13 @@ struct CoreOptionsDoc {
     preferred_cores: BTreeMap<String, String>,
 }
 
+/// O jogo vai pelo `crc32` no documento portátil e pelo `rom_id` no backup.
 #[derive(Debug, Serialize, Deserialize)]
 struct OverrideEntry {
-    crc32: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    crc32: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rom_id: Option<String>,
     core_id: String,
     key: String,
     value: String,
@@ -252,12 +273,15 @@ struct ShadersDoc {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ShaderEntry {
-    /// `default`, `system` (com `system_id`) ou `rom` (com `crc32`).
+    /// `default`, `system` (com `system_id`) ou `rom` (com `crc32`; no backup,
+    /// com `rom_id`).
     scope: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     system_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     crc32: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rom_id: Option<String>,
     /// Um nome embutido, `curated:<id>` ou `slang-shaders:<caminho com />`.
     preset: String,
     /// O nome que a outra máquina mostra: o que aparece aqui quando o preset
@@ -275,6 +299,8 @@ struct DecorationEntry {
     system_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     crc32: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rom_id: Option<String>,
     /// O catálogo: `bezelproject`.
     pack: String,
     /// A imagem dentro da pasta do catálogo, separada por `/`; o primeiro
@@ -291,6 +317,8 @@ struct MissingEntry {
     system_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     crc32: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rom_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -329,7 +357,8 @@ struct VideoDoc {
     integer_scaling: bool,
     hdr: bool,
     hdr_highlights: bool,
-    /// `target`: o CRC32 do jogo, o id da plataforma ou `""` no padrão.
+    /// `target`: o CRC32 do jogo (no backup, o id da ROM), o id da plataforma
+    /// ou `""` no padrão.
     aspect: Vec<AspectEntry>,
 }
 
@@ -363,11 +392,11 @@ impl Doc {
     }
 
     /// O que não depende desta máquina: alvos, caminhos relativos, gatilhos.
-    fn validate(&self) -> Result<(), String> {
+    fn validate(&self, form: Form) -> Result<(), String> {
         match self {
             Doc::CoreOptions(d) => {
                 for e in &d.overrides {
-                    game_crc(&e.crc32)?;
+                    override_target(e, form)?;
                 }
                 if d.preferred_cores
                     .iter()
@@ -378,7 +407,13 @@ impl Doc {
             }
             Doc::Shaders(d) => {
                 for e in &d.assignments {
-                    Target::parse(&e.scope, e.system_id.as_deref(), e.crc32.as_deref())?;
+                    Target::parse(
+                        &e.scope,
+                        e.system_id.as_deref(),
+                        e.crc32.as_deref(),
+                        e.rom_id.as_deref(),
+                        form,
+                    )?;
                     if e.preset.is_empty() {
                         return Err(invalid());
                     }
@@ -387,14 +422,20 @@ impl Doc {
                     }
                 }
                 for e in &d.decorations {
-                    Target::parse(&e.scope, e.system_id.as_deref(), e.crc32.as_deref())?;
+                    Target::parse(
+                        &e.scope,
+                        e.system_id.as_deref(),
+                        e.crc32.as_deref(),
+                        e.rom_id.as_deref(),
+                        form,
+                    )?;
                     if e.pack.is_empty() {
                         return Err(invalid());
                     }
                     rel_parts(&e.asset)?;
                 }
                 for m in &d.missing {
-                    Target::parse(&m.scope, m.system_id.as_deref(), m.crc32.as_deref())?;
+                    missing_target(m, form)?;
                 }
             }
             Doc::Hotkeys(d) => {
@@ -409,7 +450,7 @@ impl Doc {
             Doc::Audio(_) => {}
             Doc::Video(d) => {
                 for e in &d.aspect {
-                    aspect_target(e)?;
+                    aspect_target(e, form)?;
                 }
             }
         }
@@ -422,6 +463,7 @@ impl Doc {
 pub struct Checked {
     group: Group,
     doc: Doc,
+    form: Form,
 }
 
 impl Checked {
@@ -435,15 +477,40 @@ impl Checked {
 /// O documento do grupo, com o que esta máquina tem agora.
 pub async fn export(group: Group, db: &Db, catalog: &Catalog) -> Result<Value, String> {
     let mut tx = SettingsRepo::new(db.clone()).read().await.map_err(repo)?;
-    let doc = match group {
-        Group::CoreOptions => serde_json::to_value(export_core_options(&mut tx).await?),
-        Group::ShadersDecorations => serde_json::to_value(export_shaders(&mut tx, catalog).await?),
-        Group::HotkeysKeyboard => serde_json::to_value(export_hotkeys(&mut tx).await?),
-        Group::Audio => serde_json::to_value(export_audio(&mut tx).await?),
-        Group::Video => serde_json::to_value(export_video(&mut tx).await?),
+    let doc = export_in(&mut tx, group, catalog, Form::Portable).await?;
+    tx.commit().await.map_err(repo)?;
+    Ok(doc)
+}
+
+/// O backup desta máquina para o "Desfazer" (R38), dentro de uma transação
+/// aberta por quem chama: a de escrita da cópia, para o backup ser o que a
+/// cópia troca. Os jogos vão pela ROM; o documento leva `"backup": true` e só
+/// o `Restore` o aceita.
+pub async fn export_backup_in(
+    tx: &mut SettingsTx,
+    group: Group,
+    catalog: &Catalog,
+) -> Result<Value, String> {
+    export_in(tx, group, catalog, Form::Backup).await
+}
+
+async fn export_in(
+    tx: &mut SettingsTx,
+    group: Group,
+    catalog: &Catalog,
+    form: Form,
+) -> Result<Value, String> {
+    let mut doc = match group {
+        Group::CoreOptions => serde_json::to_value(export_core_options(tx, form).await?),
+        Group::ShadersDecorations => serde_json::to_value(export_shaders(tx, catalog, form).await?),
+        Group::HotkeysKeyboard => serde_json::to_value(export_hotkeys(tx).await?),
+        Group::Audio => serde_json::to_value(export_audio(tx).await?),
+        Group::Video => serde_json::to_value(export_video(tx, form).await?),
     }
     .map_err(|e| e.to_string())?;
-    tx.commit().await.map_err(repo)?;
+    if let (Form::Backup, Some(fields)) = (form, doc.as_object_mut()) {
+        fields.insert(BACKUP_FIELD.to_string(), Value::Bool(true));
+    }
     Ok(doc)
 }
 
@@ -456,9 +523,18 @@ pub fn check(group: Group, doc: &Value) -> Result<Checked, String> {
     if doc.get("v").and_then(Value::as_u64) != Some(DOC_VERSION) {
         return Err(ERR_VERSION.to_string());
     }
-    let doc = Doc::parse(group, doc)?;
-    doc.validate()?;
-    Ok(Checked { group, doc })
+    let form = match doc.get(BACKUP_FIELD) {
+        None => Form::Portable,
+        Some(Value::Bool(true)) => Form::Backup,
+        Some(_) => return Err(invalid()),
+    };
+    let parsed = Doc::parse(group, doc)?;
+    parsed.validate(form)?;
+    Ok(Checked {
+        group,
+        doc: parsed,
+        form,
+    })
 }
 
 /// Confere todos os documentos de uma vez, antes da transação: um só que não
@@ -483,20 +559,30 @@ pub async fn apply_in(
     mode: ApplyMode,
     here: &ThisMachine<'_>,
 ) -> Result<ApplyReport, String> {
+    // o backup desta máquina só volta no "Desfazer"; copiar é de outra máquina
+    if mode == ApplyMode::Merge && checked.form == Form::Backup {
+        return Err(invalid());
+    }
+    let form = checked.form;
     let roms = LocalRoms::new(here.roms);
     let mut tally = Tally::default();
     match checked.doc {
-        Doc::CoreOptions(d) => apply_core_options(tx, d, mode, here, &roms, &mut tally).await?,
-        Doc::Shaders(d) => apply_shaders(tx, d, mode, here, &roms, &mut tally).await?,
+        Doc::CoreOptions(d) => {
+            apply_core_options(tx, d, mode, form, here, &roms, &mut tally).await?
+        }
+        Doc::Shaders(d) => apply_shaders(tx, d, mode, form, here, &roms, &mut tally).await?,
         Doc::Hotkeys(d) => apply_hotkeys(tx, d, mode, &mut tally).await?,
         Doc::Audio(d) => apply_audio(tx, d, &mut tally).await?,
-        Doc::Video(d) => apply_video(tx, d, mode, &roms, &mut tally).await?,
+        Doc::Video(d) => apply_video(tx, d, mode, form, &roms, &mut tally).await?,
     }
     Ok(tally.into_report())
 }
 
 /// Confere todos os documentos e aplica todos numa transação só (D114): ou
-/// entram todos, ou nenhum.
+/// entram todos, ou nenhum. A cópia e o "Desfazer" (`engine/settings.rs`)
+/// fazem o mesmo à mão, com o backup e o marcador na mesma transação; este é
+/// o caminho dos testes.
+#[cfg(test)]
 pub async fn apply_all(
     db: &Db,
     docs: &[(Group, &Value)],
@@ -511,8 +597,33 @@ pub async fn apply_all(
         reports.push((group, apply_in(&mut tx, c, mode, here).await?));
     }
     tx.commit().await.map_err(repo)?;
-    for (group, r) in &reports {
-        // só contagens: nome de jogo, de preset ou de pasta não vai para o log
+    log_applied(&reports, mode);
+    Ok(reports)
+}
+
+/// O que a prévia de uma cópia mostra: os documentos aplicados numa
+/// transação que não fica. O relatório de cada grupo é o que a cópia diria,
+/// e nada muda.
+pub async fn dry_run(
+    db: &Db,
+    checked: Vec<Checked>,
+    mode: ApplyMode,
+    here: &ThisMachine<'_>,
+) -> Result<Vec<(Group, ApplyReport)>, String> {
+    let mut tx = SettingsRepo::new(db.clone()).write().await.map_err(repo)?;
+    let mut reports = Vec::with_capacity(checked.len());
+    for c in checked {
+        let group = c.group();
+        reports.push((group, apply_in(&mut tx, c, mode, here).await?));
+    }
+    tx.rollback().await.map_err(repo)?;
+    Ok(reports)
+}
+
+/// Uma linha de log por grupo aplicado, só com contagens: nome de jogo, de
+/// preset ou de pasta não vai para o log.
+pub fn log_applied(reports: &[(Group, ApplyReport)], mode: ApplyMode) {
+    for (group, r) in reports {
         log::info!(
             "sync: configurações {} ({}): {} itens, {} jogos que esta máquina não tem, {} \
              lugares desta máquina mantidos, {} arquivos que não vieram, {} cores não \
@@ -526,10 +637,10 @@ pub async fn apply_all(
             r.cores_not_installed.len()
         );
     }
-    Ok(reports)
 }
 
 /// Um grupo só, numa transação dele ([`apply_all`] com um documento).
+#[cfg(test)]
 pub async fn apply(
     group: Group,
     db: &Db,
@@ -666,14 +777,22 @@ impl Tally {
     /// Os lugares do alvo nesta máquina; um jogo que ela não tem é contado.
     fn slots(&mut self, target: &Target, roms: &LocalRoms<'_>) -> Vec<Slot> {
         let slots = target.slots(roms);
-        if let (true, Target::Game(crc)) = (slots.is_empty(), target) {
-            self.unknown_games.insert(crc.clone());
+        if slots.is_empty() {
+            match target {
+                Target::Game(crc) => {
+                    self.unknown_games.insert(crc.clone());
+                }
+                Target::Rom(id) => {
+                    self.unknown_games.insert(format!("rom:{id}"));
+                }
+                Target::Default | Target::System(_) => {}
+            }
         }
         slots
     }
 
     fn missing(&mut self, kind: MissingKind, item: MissingItem, name: String, target: &Target) {
-        let (scope, system_id, crc32) = target.parts();
+        let (scope, system_id, crc32, _) = target.parts();
         self.missing.insert(MissingFile {
             kind,
             item,
@@ -701,7 +820,29 @@ impl Tally {
 enum Target {
     Default,
     System(String),
+    /// Um jogo pelo CRC32 (o documento portátil).
     Game(String),
+    /// Uma ROM desta biblioteca pelo id (só o backup, R38).
+    Rom(String),
+}
+
+/// `(scope, system_id, crc32, rom_id)` como o documento escreve um lugar.
+type Parts = (String, Option<String>, Option<String>, Option<String>);
+
+/// O jogo de uma opção por jogo.
+fn override_target(e: &OverrideEntry, form: Form) -> Result<Target, String> {
+    Target::parse("rom", None, e.crc32.as_deref(), e.rom_id.as_deref(), form)
+}
+
+/// O lugar de um preset ou moldura que não viajou.
+fn missing_target(m: &MissingEntry, form: Form) -> Result<Target, String> {
+    Target::parse(
+        &m.scope,
+        m.system_id.as_deref(),
+        m.crc32.as_deref(),
+        m.rom_id.as_deref(),
+        form,
+    )
 }
 
 /// O lugar de uma atribuição nesta máquina (escopo e alvo), o que os índices
@@ -734,20 +875,35 @@ impl Slot {
 }
 
 impl Target {
-    /// `(scope, system_id, crc32)` do documento.
-    fn parts(&self) -> (String, Option<String>, Option<String>) {
+    /// `(scope, system_id, crc32, rom_id)` do documento.
+    fn parts(&self) -> Parts {
         match self {
-            Target::Default => ("default".into(), None, None),
-            Target::System(s) => ("system".into(), Some(s.clone()), None),
-            Target::Game(c) => ("rom".into(), None, Some(c.clone())),
+            Target::Default => ("default".into(), None, None, None),
+            Target::System(s) => ("system".into(), Some(s.clone()), None, None),
+            Target::Game(c) => ("rom".into(), None, Some(c.clone()), None),
+            Target::Rom(id) => ("rom".into(), None, None, Some(id.clone())),
         }
     }
 
-    fn parse(scope: &str, system_id: Option<&str>, crc32: Option<&str>) -> Result<Self, String> {
-        match (scope, system_id, crc32) {
-            ("default", _, _) => Ok(Target::Default),
-            ("system", Some(s), _) if !s.is_empty() => Ok(Target::System(s.to_string())),
-            ("rom", _, Some(c)) => Ok(Target::Game(game_crc(c)?)),
+    /// Um jogo vai pelo `crc32` no documento portátil e pelo `rom_id` no
+    /// backup; o outro campo junto não serve.
+    fn parse(
+        scope: &str,
+        system_id: Option<&str>,
+        crc32: Option<&str>,
+        rom_id: Option<&str>,
+        form: Form,
+    ) -> Result<Self, String> {
+        match (scope, form, crc32, rom_id) {
+            ("default", ..) => Ok(Target::Default),
+            ("system", ..) => match system_id {
+                Some(s) if !s.is_empty() => Ok(Target::System(s.to_string())),
+                _ => Err(invalid()),
+            },
+            ("rom", Form::Portable, Some(c), None) => Ok(Target::Game(game_crc(c)?)),
+            ("rom", Form::Backup, None, Some(id)) if !id.trim().is_empty() => {
+                Ok(Target::Rom(id.to_string()))
+            }
             _ => Err(invalid()),
         }
     }
@@ -759,15 +915,21 @@ impl Target {
         system_id: Option<&str>,
         rom_id: Option<&str>,
         crc_of: &HashMap<String, String>,
+        form: Form,
     ) -> Option<Self> {
         match scope {
             AssignmentScope::Default => Some(Target::Default),
             AssignmentScope::System => system_id
                 .filter(|s| !s.is_empty())
                 .map(|s| Target::System(s.to_string())),
-            AssignmentScope::Rom => rom_id
-                .and_then(|id| crc_of.get(id))
-                .map(|c| Target::Game(c.clone())),
+            AssignmentScope::Rom => {
+                let id = rom_id?;
+                let crc = crc_of.get(id)?;
+                Some(match form {
+                    Form::Portable => Target::Game(crc.clone()),
+                    Form::Backup => Target::Rom(id.to_string()),
+                })
+            }
         }
     }
 
@@ -794,13 +956,19 @@ impl Target {
                     rom_id: Some(id.to_string()),
                 })
                 .collect(),
+            Target::Rom(id) if roms.has(id) => vec![Slot {
+                scope: AssignmentScope::Rom,
+                system_id: None,
+                rom_id: Some(id.clone()),
+            }],
+            Target::Rom(_) => Vec::new(),
         }
     }
 }
 
 // --- opções de core ----------------------------------------------------------
 
-async fn export_core_options(tx: &mut SettingsTx) -> Result<CoreOptionsDoc, String> {
+async fn export_core_options(tx: &mut SettingsTx, form: Form) -> Result<CoreOptionsDoc, String> {
     let crc_of = crc_by_rom(tx).await?;
     let mut values: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     for (core, key, value) in tx.option_values().await.map_err(repo)? {
@@ -808,15 +976,17 @@ async fn export_core_options(tx: &mut SettingsTx) -> Result<CoreOptionsDoc, Stri
             values.entry(core).or_default().insert(key, value);
         }
     }
-    // o mesmo jogo em duas ROMs: vale a primeira, na ordem do id
+    // o mesmo jogo em duas ROMs: no documento portátil vale a primeira, na
+    // ordem do id; no backup cada ROM leva a dela
     let mut overrides = BTreeMap::new();
     for o in tx.option_overrides().await.map_err(repo)? {
         if is_local_only(&o.key) {
             continue;
         }
-        if let Some(crc) = crc_of.get(&o.rom_id) {
+        let target = Target::of_row(AssignmentScope::Rom, None, Some(&o.rom_id), &crc_of, form);
+        if let Some(target) = target {
             overrides
-                .entry((crc.clone(), o.core_id, o.key))
+                .entry((target, o.core_id, o.key))
                 .or_insert(o.value);
         }
     }
@@ -826,11 +996,15 @@ async fn export_core_options(tx: &mut SettingsTx) -> Result<CoreOptionsDoc, Stri
         values,
         overrides: overrides
             .into_iter()
-            .map(|((crc32, core_id, key), value)| OverrideEntry {
-                crc32,
-                core_id,
-                key,
-                value,
+            .map(|((target, core_id, key), value)| {
+                let (_, _, crc32, rom_id) = target.parts();
+                OverrideEntry {
+                    crc32,
+                    rom_id,
+                    core_id,
+                    key,
+                    value,
+                }
             })
             .collect(),
         preferred_cores,
@@ -841,6 +1015,7 @@ async fn apply_core_options(
     tx: &mut SettingsTx,
     doc: CoreOptionsDoc,
     mode: ApplyMode,
+    form: Form,
     here: &ThisMachine<'_>,
     roms: &LocalRoms<'_>,
     tally: &mut Tally,
@@ -875,15 +1050,14 @@ async fn apply_core_options(
         if is_local_only(&e.key) {
             continue;
         }
-        let crc = game_crc(&e.crc32)?;
-        let ids = roms.of(&crc);
-        if ids.is_empty() {
-            tally.unknown_games.insert(crc);
+        let target = override_target(e, form)?;
+        let slots = tally.slots(&target, roms);
+        if slots.is_empty() {
             continue;
         }
-        for rom_id in ids {
+        for slot in slots {
             let row = OptionOverrideRow {
-                rom_id: rom_id.to_string(),
+                rom_id: slot.rom_id.unwrap_or_default(),
                 core_id: e.core_id.clone(),
                 key: e.key.clone(),
                 value: e.value.clone(),
@@ -1000,7 +1174,11 @@ fn bezel_pack_row(catalog: &Catalog) -> DecorationPack {
     }
 }
 
-async fn export_shaders(tx: &mut SettingsTx, catalog: &Catalog) -> Result<ShadersDoc, String> {
+async fn export_shaders(
+    tx: &mut SettingsTx,
+    catalog: &Catalog,
+    form: Form,
+) -> Result<ShadersDoc, String> {
     let builtins = crate::gpu::builtin_preset_names();
     let crc_of = crc_by_rom(tx).await?;
     let presets: HashMap<String, ShaderPreset> = tx
@@ -1012,13 +1190,14 @@ async fn export_shaders(tx: &mut SettingsTx, catalog: &Catalog) -> Result<Shader
         .collect();
     let mut missing = BTreeSet::new();
     let missing_entry = |item, name: &str, target: &Target| {
-        let (scope, system_id, crc32) = target.parts();
+        let (scope, system_id, crc32, rom_id) = target.parts();
         MissingEntry {
             item,
             name: bare_name(name),
             scope,
             system_id,
             crc32,
+            rom_id,
         }
     };
 
@@ -1029,6 +1208,7 @@ async fn export_shaders(tx: &mut SettingsTx, catalog: &Catalog) -> Result<Shader
             a.system_id.as_deref(),
             a.rom_id.as_deref(),
             &crc_of,
+            form,
         );
         let (Some(target), Some(preset)) = (target, presets.get(&a.preset_id)) else {
             continue;
@@ -1037,11 +1217,12 @@ async fn export_shaders(tx: &mut SettingsTx, catalog: &Catalog) -> Result<Shader
             missing.insert(missing_entry(MissingItem::Shader, &preset.name, &target));
             continue;
         };
-        let (scope, system_id, crc32) = target.parts();
+        let (scope, system_id, crc32, rom_id) = target.parts();
         assignments.entry(target).or_insert(ShaderEntry {
             scope,
             system_id,
             crc32,
+            rom_id,
             preset: id,
             name,
             params: a.params.into_iter().collect(),
@@ -1062,6 +1243,7 @@ async fn export_shaders(tx: &mut SettingsTx, catalog: &Catalog) -> Result<Shader
             d.system_id.as_deref(),
             d.rom_id.as_deref(),
             &crc_of,
+            form,
         );
         let (Some(target), Some(pack)) = (target, packs.get(&d.pack_id)) else {
             continue;
@@ -1070,11 +1252,12 @@ async fn export_shaders(tx: &mut SettingsTx, catalog: &Catalog) -> Result<Shader
             missing.insert(missing_entry(MissingItem::Decoration, &pack.name, &target));
             continue;
         };
-        let (scope, system_id, crc32) = target.parts();
+        let (scope, system_id, crc32, rom_id) = target.parts();
         decorations.entry(target).or_insert(DecorationEntry {
             scope,
             system_id,
             crc32,
+            rom_id,
             pack: BEZEL_PROJECT.to_string(),
             asset,
         });
@@ -1091,6 +1274,7 @@ async fn apply_shaders(
     tx: &mut SettingsTx,
     doc: ShadersDoc,
     mode: ApplyMode,
+    form: Form,
     here: &ThisMachine<'_>,
     roms: &LocalRoms<'_>,
     tally: &mut Tally,
@@ -1100,11 +1284,17 @@ async fn apply_shaders(
 
     // Onde a outra máquina tem um arquivo importado do disco: o lugar desta
     // fica como está (nem esvaziado no `Restore`). O backup desta máquina lista
-    // os importados daqui, que estão aqui: só a cópia os relata.
+    // os importados daqui, que estão aqui: só a cópia os relata. O de um jogo
+    // que esta máquina não tem conta como jogo que ela não tem (R38): não há
+    // lugar aqui para o arquivo faltar.
     let mut missing_slots: HashSet<(MissingItem, SlotKey)> = HashSet::new();
     for m in &doc.missing {
-        let target = Target::parse(&m.scope, m.system_id.as_deref(), m.crc32.as_deref())?;
-        for slot in target.slots(roms) {
+        let target = missing_target(m, form)?;
+        let slots = tally.slots(&target, roms);
+        if slots.is_empty() {
+            continue;
+        }
+        for slot in slots {
             missing_slots.insert((m.item, slot.key()));
         }
         if mode == ApplyMode::Merge {
@@ -1137,7 +1327,19 @@ async fn apply_shaders(
         local.insert(key, (a.id, portable));
     }
     for e in doc.assignments {
-        let target = Target::parse(&e.scope, e.system_id.as_deref(), e.crc32.as_deref())?;
+        let target = Target::parse(
+            &e.scope,
+            e.system_id.as_deref(),
+            e.crc32.as_deref(),
+            e.rom_id.as_deref(),
+            form,
+        )?;
+        // um jogo que esta máquina não tem conta como tal, antes de qualquer
+        // preset faltar (R38)
+        let slots = tally.slots(&target, roms);
+        if slots.is_empty() {
+            continue;
+        }
         let preset = match local_preset(&e, catalog, &builtins) {
             Ok(p) => p,
             Err(name) => {
@@ -1152,7 +1354,7 @@ async fn apply_shaders(
         };
         let params: Vec<(String, String)> = e.params.into_iter().collect();
         let mut wrote = false;
-        for slot in tally.slots(&target, roms) {
+        for slot in slots {
             let key = slot.key();
             match local.get(&key) {
                 Some((_, false)) => {
@@ -1206,7 +1408,17 @@ async fn apply_shaders(
         .unwrap_or_else(|| bezel_pack_row(catalog));
     let mut pack_ready = false;
     for e in doc.decorations {
-        let target = Target::parse(&e.scope, e.system_id.as_deref(), e.crc32.as_deref())?;
+        let target = Target::parse(
+            &e.scope,
+            e.system_id.as_deref(),
+            e.crc32.as_deref(),
+            e.rom_id.as_deref(),
+            form,
+        )?;
+        let slots = tally.slots(&target, roms);
+        if slots.is_empty() {
+            continue;
+        }
         let parts = rel_parts(&e.asset)?;
         let file = under(&catalog.bezels, &parts);
         // o sistema não foi baixado aqui (ou é de um catálogo que esta versão
@@ -1227,7 +1439,7 @@ async fn apply_shaders(
         }
         let asset_path = file.display().to_string();
         let mut wrote = false;
-        for slot in tally.slots(&target, roms) {
+        for slot in slots {
             let key = slot.key();
             match local.get(&key) {
                 Some((_, false)) => {
@@ -1379,33 +1591,43 @@ async fn apply_audio(tx: &mut SettingsTx, doc: AudioDoc, tally: &mut Tally) -> R
     Ok(())
 }
 
-/// O alvo de uma proporção do documento.
-fn aspect_target(e: &AspectEntry) -> Result<Target, String> {
-    match e.scope.as_str() {
-        "rom" => Target::parse("rom", None, Some(&e.target)),
-        scope => Target::parse(scope, Some(&e.target), None),
+/// O alvo de uma proporção do documento: o `target` de um jogo é o CRC32 no
+/// documento portátil e o id da ROM no backup.
+fn aspect_target(e: &AspectEntry, form: Form) -> Result<Target, String> {
+    match (e.scope.as_str(), form) {
+        ("rom", Form::Portable) => Target::parse("rom", None, Some(&e.target), None, form),
+        ("rom", Form::Backup) => Target::parse("rom", None, None, Some(&e.target), form),
+        (scope, _) => Target::parse(scope, Some(&e.target), None, None, form),
     }
 }
 
 /// `(scope, target)` de `aspect_assignments` na forma do documento; `None`
 /// para a de um jogo fora da biblioteca.
-fn aspect_key(row: &AspectRow, crc_of: &HashMap<String, String>) -> Option<(String, String)> {
+fn aspect_key(
+    row: &AspectRow,
+    crc_of: &HashMap<String, String>,
+    form: Form,
+) -> Option<(String, String)> {
     match row.scope.as_str() {
         "default" => Some(("default".into(), String::new())),
         "system" if !row.target.is_empty() => Some(("system".into(), row.target.clone())),
-        "rom" => crc_of
-            .get(&row.target)
-            .map(|crc| ("rom".into(), crc.clone())),
+        "rom" => crc_of.get(&row.target).map(|crc| {
+            let target = match form {
+                Form::Portable => crc.clone(),
+                Form::Backup => row.target.clone(),
+            };
+            ("rom".into(), target)
+        }),
         _ => None,
     }
 }
 
-async fn export_video(tx: &mut SettingsTx) -> Result<VideoDoc, String> {
+async fn export_video(tx: &mut SettingsTx, form: Form) -> Result<VideoDoc, String> {
     let crc_of = crc_by_rom(tx).await?;
     let v = tx.video().await.map_err(repo)?;
     let mut aspect = BTreeMap::new();
     for row in tx.aspects().await.map_err(repo)? {
-        if let Some(key) = aspect_key(&row, &crc_of) {
+        if let Some(key) = aspect_key(&row, &crc_of, form) {
             aspect.entry(key).or_insert(row.aspect);
         }
     }
@@ -1429,6 +1651,7 @@ async fn apply_video(
     tx: &mut SettingsTx,
     doc: VideoDoc,
     mode: ApplyMode,
+    form: Form,
     roms: &LocalRoms<'_>,
     tally: &mut Tally,
 ) -> Result<(), String> {
@@ -1457,7 +1680,7 @@ async fn apply_video(
         }
     }
     for e in &doc.aspect {
-        let target = aspect_target(e)?;
+        let target = aspect_target(e, form)?;
         // proporção de uma versão mais nova: esta não sabe desenhar
         if !ASPECTS.contains(&e.aspect.as_str()) {
             continue;
@@ -1544,6 +1767,16 @@ mod tests {
 
         async fn export(&self, group: Group) -> Value {
             export(group, &self.db, &self.catalog).await.unwrap()
+        }
+
+        /// O backup desta máquina (R38), como a cópia o grava.
+        async fn backup(&self, group: Group) -> Value {
+            let mut tx = SettingsRepo::new(self.db.clone()).read().await.unwrap();
+            let doc = export_backup_in(&mut tx, group, &self.catalog)
+                .await
+                .unwrap();
+            tx.commit().await.unwrap();
+            doc
         }
 
         async fn apply_all(
@@ -3124,5 +3357,156 @@ mod tests {
         let docs: Vec<(Group, &Value)> = backup.iter().map(|(g, d)| (*g, d)).collect();
         here.apply_all(&docs, Restore).await.unwrap();
         assert_eq!(snapshot(&here.db).await, before);
+    }
+
+    // --- o backup desta máquina (R38) -----------------------------------------
+
+    /// Duas ROMs da biblioteca com o mesmo CRC32 (o mesmo jogo em duas pastas)
+    /// com escolhas diferentes: o documento portátil leva uma por jogo, e o
+    /// `Restore` dele escreveria a mesma nas duas. O backup leva cada ROM, e
+    /// o "Desfazer" devolve cada uma no seu lugar.
+    #[tokio::test]
+    async fn the_backup_restores_each_rom_of_a_shared_crc() {
+        use AssignmentScope::*;
+        let here = Machine::new("dup-here").await;
+        rom(&here.db, "d-1", "AAAA0001").await;
+        rom(&here.db, "d-2", "AAAA0001").await;
+        option(&here.db, "snes9x", Some("d-1"), "snes9x_overclock", "on").await;
+        option(&here.db, "snes9x", Some("d-2"), "snes9x_overclock", "off").await;
+        preset(&here.db, "crt", "crt").await;
+        preset(&here.db, "lcd", "lcd").await;
+        shader(&here.db, Rom, Some("d-1"), "crt", &[("MASK", "1")]).await;
+        shader(&here.db, Rom, Some("d-2"), "lcd", &[]).await;
+        aspect(&here.db, "rom", "d-1", "4:3").await;
+        aspect(&here.db, "rom", "d-2", "fill").await;
+
+        let there = Machine::new("dup-there").await;
+        rom(&there.db, "t-1", "AAAA0001").await;
+        option(&there.db, "snes9x", Some("t-1"), "snes9x_overclock", "max").await;
+        preset(&there.db, "crt", "crt").await;
+        shader(&there.db, Rom, Some("t-1"), "crt", &[("MASK", "3")]).await;
+        aspect(&there.db, "rom", "t-1", "16:9").await;
+
+        let groups = [CO, SD, Group::Video];
+        let before = snapshot(&here.db).await;
+        let mut portable = Vec::new();
+        let mut backup = Vec::new();
+        for g in groups {
+            portable.push((g, here.export(g).await));
+            backup.push((g, here.backup(g).await));
+        }
+        // o backup vai pela ROM, com a marca; nenhum CRC32 de jogo nele
+        let co = &backup[0].1;
+        assert_eq!(co["backup"], json!(true));
+        assert_eq!(
+            co["overrides"],
+            json!([
+                {"rom_id": "d-1", "core_id": "snes9x", "key": "snes9x_overclock", "value": "on"},
+                {"rom_id": "d-2", "core_id": "snes9x", "key": "snes9x_overclock", "value": "off"},
+            ])
+        );
+        assert_eq!(
+            backup[2].1["aspect"],
+            json!([
+                {"scope": "rom", "target": "d-1", "aspect": "4:3"},
+                {"scope": "rom", "target": "d-2", "aspect": "fill"},
+            ])
+        );
+
+        let copy: Vec<(Group, Value)> = {
+            let mut out = Vec::new();
+            for g in groups {
+                out.push((g, there.export(g).await));
+            }
+            out
+        };
+        let copy_docs: Vec<(Group, &Value)> = copy.iter().map(|(g, d)| (*g, d)).collect();
+        here.apply_all(&copy_docs, Merge).await.unwrap();
+        assert_ne!(snapshot(&here.db).await, before);
+
+        // o documento portátil não devolve: a ROM 2 recebe as escolhas da 1
+        let docs: Vec<(Group, &Value)> = portable.iter().map(|(g, d)| (*g, d)).collect();
+        here.apply_all(&docs, Restore).await.unwrap();
+        assert_ne!(snapshot(&here.db).await, before);
+
+        // o backup devolve as duas, cada uma com a sua
+        here.apply_all(&copy_docs, Merge).await.unwrap();
+        let docs: Vec<(Group, &Value)> = backup.iter().map(|(g, d)| (*g, d)).collect();
+        here.apply_all(&docs, Restore).await.unwrap();
+        assert_eq!(snapshot(&here.db).await, before);
+    }
+
+    /// O backup é desta máquina: copiar (`Merge`) não o aceita, e um jogo vai
+    /// por um campo só, o da forma do documento.
+    #[tokio::test]
+    async fn a_backup_only_restores_and_each_form_keeps_its_game_key() {
+        let here = machine("form-here", "a").await;
+        let before = snapshot(&here.db).await;
+        let backup = here.backup(CO).await;
+        assert_eq!(here.apply(CO, &backup, Merge).await, Err(invalid()));
+        assert_eq!(snapshot(&here.db).await, before);
+
+        // um documento portátil com `rom_id` não serve, nem um backup com CRC32
+        let mut forged = here.export(CO).await;
+        forged["overrides"][0]["rom_id"] = json!("a-1");
+        assert_eq!(here.apply(CO, &forged, Merge).await, Err(invalid()));
+        let mut forged = backup.clone();
+        forged["overrides"][0]["crc32"] = json!("AAAA0001");
+        assert_eq!(here.apply(CO, &forged, Restore).await, Err(invalid()));
+        let mut forged = backup.clone();
+        forged["backup"] = json!("sim");
+        assert_eq!(here.apply(CO, &forged, Restore).await, Err(invalid()));
+        assert_eq!(snapshot(&here.db).await, before);
+
+        here.apply(CO, &backup, Restore).await.unwrap();
+        assert_eq!(snapshot(&here.db).await, before);
+    }
+
+    /// R38: o preset ou a moldura de um jogo que esta máquina não tem conta
+    /// como jogo que ela não tem, e não como arquivo que faltou (não há lugar
+    /// aqui para ele faltar). O de uma plataforma segue relatado.
+    #[tokio::test]
+    async fn merge_counts_files_of_games_this_machine_lacks_as_unknown_games() {
+        use AssignmentScope::*;
+        let src = Machine::new("lack-src").await;
+        rom(&src.db, "s-1", "AAAA0009").await;
+        rom(&src.db, "s-2", "AAAA0008").await;
+        rom(&src.db, "s-3", "AAAA0007").await;
+        // importado do disco lá: num jogo e numa plataforma
+        let mine = abs(&["Meus Shaders", "crt-do-ed.slangp"]);
+        preset(&src.db, &mine, "crt-do-ed").await;
+        shader(&src.db, Rom, Some("s-1"), &mine, &[]).await;
+        shader(&src.db, System, Some("gba"), &mine, &[]).await;
+        let user_base = abs(&["Molduras do Ed"]);
+        let user_pack = format!("pack:{user_base}");
+        pack(&src.db, &user_pack, "Molduras do Ed", false, &user_base).await;
+        let png = abs(&["Molduras do Ed", "jogo.png"]);
+        deco(&src.db, "rom", "s-1", &user_pack, &png).await;
+        // do catálogo baixado lá e não aqui, num jogo
+        let royale = src.slang("crt/crt-royale.slangp");
+        touch(&royale);
+        preset(&src.db, &royale, "crt-royale").await;
+        shader(&src.db, Rom, Some("s-2"), &royale, &[]).await;
+        let pid = src.bezel_pack().await;
+        let nes = src.bezel("nes/nes.png");
+        touch(&nes);
+        deco(&src.db, "rom", "s-3", &pid, &nes).await;
+        let doc = src.export(SD).await;
+
+        // aqui não há nenhum dos três jogos
+        let here = Machine::new("lack-here").await;
+        let report = here.apply(SD, &doc, Merge).await.unwrap();
+        assert_eq!(report.skipped_unknown_games, 3, "{report:?}");
+        assert_eq!(
+            report.missing_files,
+            vec![MissingFile {
+                kind: MissingKind::ImportedElsewhere,
+                item: MissingItem::Shader,
+                name: "crt-do-ed".into(),
+                scope: "system".into(),
+                system_id: Some("gba".into()),
+                crc32: None,
+            }]
+        );
     }
 }

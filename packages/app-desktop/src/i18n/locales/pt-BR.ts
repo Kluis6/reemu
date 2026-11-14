@@ -566,6 +566,11 @@ const ptBR = {
       too_large: 'Este save passa do tamanho que a nuvem aceita para o sistema dele. Ele fica só nesta máquina.',
       state_too_large: 'Este save state passa do tamanho que a nuvem aceita. Ele fica só nesta máquina.',
       rejected: 'A nuvem recusou este save. Ele fica só nesta máquina.',
+      game_open: 'Feche o jogo para copiar ou desfazer configurações.',
+      settings_version: 'Estas configurações vêm de um ReEmu mais novo. Atualize o ReEmu desta máquina para copiá-las.',
+      settings_invalid: 'As configurações da outra máquina vieram num formato que esta não lê. Nada mudou.',
+      settings_missing: 'A outra máquina não enviou estas configurações. Envie de lá e tente de novo.',
+      backup_failed: 'Não deu para guardar as configurações de agora na pasta de resguardo (ou para lê-las de lá), então nada mudou.',
     },
     state: {
       title: 'Em outras máquinas',

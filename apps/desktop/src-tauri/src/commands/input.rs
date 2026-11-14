@@ -119,7 +119,9 @@ pub async fn reset_keyboard_bindings(state: State<'_, AppState>) -> Result<(), A
     reload_keyboard(&repo).await
 }
 
-async fn reload_keyboard(repo: &db::KeyboardBindingsRepo) -> Result<(), AppError> {
+/// Relê o mapa do teclado do banco e o aplica (também depois de copiar as
+/// configurações de outra máquina, `reload_copied_settings`).
+pub(crate) async fn reload_keyboard(repo: &db::KeyboardBindingsRepo) -> Result<(), AppError> {
     let list = repo.list().await.map_err(AppError::from)?;
     input_desktop::keymap::set_overrides(&list);
     // tecla trocada no meio de um aperto não pode ficar presa
@@ -398,7 +400,10 @@ pub async fn clear_system_hotkey(
 }
 
 /// Relê `system_hotkeys` do DB e recompõe o `ComboHotkeyResolver` do `AppState`.
-async fn refresh_hotkey_resolver(state: &AppState, pool: &db::Db) -> Result<(), AppError> {
+pub(crate) async fn refresh_hotkey_resolver(
+    state: &AppState,
+    pool: &db::Db,
+) -> Result<(), AppError> {
     let bindings = load_system_hotkeys(pool).await.map_err(AppError::from)?;
     *state.hotkeys.lock().unwrap_or_else(|p| p.into_inner()) = ComboHotkeyResolver::new(bindings);
     Ok(())

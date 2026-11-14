@@ -565,6 +565,11 @@ const en: Messages = {
       too_large: 'This save is larger than the cloud accepts for its system. It stays on this machine only.',
       state_too_large: 'This save state is larger than the cloud accepts. It stays on this machine only.',
       rejected: 'The cloud refused this save. It stays on this machine only.',
+      game_open: 'Close the game to copy or undo settings.',
+      settings_version: 'These settings come from a newer ReEmu. Update ReEmu on this machine to copy them.',
+      settings_invalid: "The other machine's settings came in a format this one cannot read. Nothing changed.",
+      settings_missing: 'The other machine has not sent these settings. Send them from there and try again.',
+      backup_failed: 'The current settings could not be saved to the backup folder (or read back from it), so nothing changed.',
     },
     state: {
       title: 'On other machines',

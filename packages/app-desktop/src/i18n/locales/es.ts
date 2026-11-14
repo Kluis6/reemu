@@ -565,6 +565,11 @@ const es: Messages = {
       too_large: 'Este save supera el tamaño que la nube acepta para su sistema. Se queda solo en esta máquina.',
       state_too_large: 'Este save state supera el tamaño que la nube acepta. Se queda solo en esta máquina.',
       rejected: 'La nube rechazó este save. Se queda solo en esta máquina.',
+      game_open: 'Cierra el juego para copiar o deshacer configuraciones.',
+      settings_version: 'Estas configuraciones vienen de un ReEmu más nuevo. Actualiza el ReEmu de esta máquina para copiarlas.',
+      settings_invalid: 'Las configuraciones de la otra máquina llegaron en un formato que esta no lee. Nada cambió.',
+      settings_missing: 'La otra máquina no envió estas configuraciones. Envíalas desde allí e inténtalo de nuevo.',
+      backup_failed: 'No se pudieron guardar las configuraciones actuales en la carpeta de respaldo (ni leerlas de allí), así que nada cambió.',
     },
     state: {
       title: 'En otras máquinas',

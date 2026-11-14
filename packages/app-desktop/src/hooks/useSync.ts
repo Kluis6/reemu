@@ -67,6 +67,11 @@ export const SYNC_ERRORS = [
   'too_large',
   'state_too_large',
   'rejected',
+  'game_open',
+  'settings_version',
+  'settings_invalid',
+  'settings_missing',
+  'backup_failed',
 ] as const
 export type SyncErrorCode = (typeof SYNC_ERRORS)[number]
 

@@ -159,6 +159,37 @@ impl SettingsTx {
         self.tx.commit().await.map_err(be)
     }
 
+    /// Desfaz tudo o que a transação fez (a prévia de uma cópia).
+    pub async fn rollback(self) -> Result<(), RepoError> {
+        self.tx.rollback().await.map_err(be)
+    }
+
+    // --- marcadores do sync (`alvanista_state`) ------------------------------
+
+    /// Grava um marcador na mesma transação das configurações: o "Desfazer"
+    /// de uma cópia fica gravado junto com ela, ou nenhum dos dois.
+    pub async fn set_state(&mut self, key: &str, value: &str) -> Result<(), RepoError> {
+        sqlx::query(
+            "INSERT INTO alvanista_state (key, value) VALUES (?1, ?2) \
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&mut *self.tx)
+        .await
+        .map_err(be)?;
+        Ok(())
+    }
+
+    pub async fn delete_state(&mut self, key: &str) -> Result<(), RepoError> {
+        sqlx::query("DELETE FROM alvanista_state WHERE key = ?1")
+            .bind(key)
+            .execute(&mut *self.tx)
+            .await
+            .map_err(be)?;
+        Ok(())
+    }
+
     async fn all(&mut self, sql: &str) -> Result<Vec<SqliteRow>, RepoError> {
         sqlx::query(sql).fetch_all(&mut *self.tx).await.map_err(be)
     }
