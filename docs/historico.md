@@ -3670,3 +3670,9 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Ficam como estão `alvanista/` e `sync/`:** já devolvem códigos próprios (`sync.err.*`, `SYNC_ERRORS` em `useSync.ts`), com mensagem traduzida para cada um; trocar pelo `AppError` não muda nada para quem usa.
 - **Interface:** os pontos que chamam esses comandos já tratam o erro por `errorToast`/`errorText` ou ignoram (`.catch`), e aceitam o objeto `{ code, message }`.
 - **Conferido:** `clippy --workspace --all-targets -D warnings`, `cargo test -p reemu-desktop` (491), `tsc -b` e 432 testes do frontend.
+
+## 2026-11-14 — Itens do sino e shader selecionado
+
+- **Sino** (`NotificationBell.tsx`, print do usuário): no item, o título e o tempo ficam na mesma linha e o bloco de texto no meio da altura do ícone (antes preso no topo); padding de 8 px em cima e embaixo e 16 px nas laterais (pedido: vertical menor que o lateral), sem a altura mínima de 64 px. Medido: ícone e texto com o centro na mesma altura, item com 66 px.
+- **Lista de shaders** (`ShaderCard.tsx`, print do usuário): o card escolhido perde o contorno claro. Ele vinha do `Card` do Fluent, que desenha a borda do selecionado no `::after` com `colorNeutralStroke1Selected` (`useCardStyles.styles` do `@fluentui/react-card` 9.7.2); agora é transparente também no hover e no clique. O fundo na cor primária continua marcando o escolhido.
+- **Conferido:** `tsc -b`; `ui-render.py` nos temas `reemu` e `claro` com o sino aberto e com `/settings/video/shaders` (borda do `::after` do selecionado `rgba(0, 0, 0, 0)`, inclusive em hover).

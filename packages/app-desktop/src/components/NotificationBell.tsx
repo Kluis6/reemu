@@ -79,17 +79,18 @@ const useStyles = makeStyles({
     paddingTop: "20px",
     paddingBottom: "12px",
   },
-  // Linha: imagem quadrada, título e texto, e o tempo à direita. Sem borda e
-  // sem fundo: a cor só aparece no hover e no foco, como no app Xbox.
+  // Linha: imagem quadrada e, ao lado, o título com o tempo à direita e o
+  // texto embaixo; o bloco fica no meio da altura do ícone. Padding vertical
+  // menor que o lateral (pedido do usuário, 2026-11-14). Sem borda e sem
+  // fundo: a cor só aparece no hover e no foco, como no app Xbox.
   item: {
     display: "grid",
-    gridTemplateColumns: "48px minmax(0, 1fr) auto",
-    alignItems: "start",
+    gridTemplateColumns: "48px minmax(0, 1fr)",
+    alignItems: "center",
     columnGap: "16px",
     width: "100%",
     maxWidth: "none",
-    minHeight: "64px",
-    padding: "12px 16px",
+    padding: "8px 16px",
     textAlign: "left",
     fontWeight: tokens.fontWeightRegular,
     borderTopColor: "transparent",
@@ -120,9 +121,16 @@ const useStyles = makeStyles({
     fontSize: "26px",
   },
   itemText: { display: "flex", flexDirection: "column", rowGap: "2px", minWidth: 0 },
+  // título e tempo na mesma linha
+  itemHead: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    columnGap: tokens.spacingHorizontalM,
+  },
   itemTitle: { fontWeight: tokens.fontWeightSemibold, color: tokens.colorNeutralForeground1 },
   summary: { color: tokens.colorNeutralForeground2 },
-  time: { color: tokens.colorNeutralForeground3, whiteSpace: "nowrap", paddingTop: "2px" },
+  time: { color: tokens.colorNeutralForeground3, whiteSpace: "nowrap", flexShrink: 0 },
   empty: {
     color: tokens.colorNeutralForeground3,
     paddingTop: "20px",
@@ -242,10 +250,12 @@ export function NotificationBell({ className }: { className?: string }) {
                     )}
                   </span>
                   <span className={s.itemText}>
-                    <span className={s.itemTitle}>{n.title}</span>
+                    <span className={s.itemHead}>
+                      <span className={s.itemTitle}>{n.title}</span>
+                      <Caption1 className={s.time}>{ago(n.at)}</Caption1>
+                    </span>
                     <Caption1 className={s.summary}>{n.summary}</Caption1>
                   </span>
-                  <Caption1 className={s.time}>{ago(n.at)}</Caption1>
                 </Button>
               ))}
             </div>

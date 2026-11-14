@@ -32,13 +32,23 @@ const useStyles = makeStyles({
   // Escolhido: fundo na cor primária do tema (a do botão primary e do
   // quadrado dos ícones), com o texto legível sobre ela (pedido do usuário,
   // 2026-11-10). Antes era o `BrandBackground2`, um tom claro quase igual ao
-  // dos outros itens. Borda transparente de 1 px: o tamanho não muda.
+  // dos outros itens. Borda transparente de 1 px: o tamanho não muda. Sem o
+  // contorno que o `Card` do Fluent desenha no `::after` do selecionado
+  // (`colorNeutralStroke1Selected`; pedido do usuário, 2026-11-14): a cor do
+  // fundo já marca o escolhido.
   selected: {
     border: '1px solid transparent',
     backgroundColor: 'var(--reemuBrandSolid)',
     color: 'var(--reemuOnBrand)',
-    ':hover': { backgroundColor: 'var(--reemuBrandSolid)' },
-    ':active': { backgroundColor: 'var(--reemuBrandSolid)' },
+    '::after': { ...shorthands.borderColor('transparent') },
+    ':hover': {
+      backgroundColor: 'var(--reemuBrandSolid)',
+      '::after': { ...shorthands.borderColor('transparent') },
+    },
+    ':active': {
+      backgroundColor: 'var(--reemuBrandSolid)',
+      '::after': { ...shorthands.borderColor('transparent') },
+    },
     '& .fui-Text, & .fui-Caption1, & .fui-CardHeader__description': {
       color: 'var(--reemuOnBrand)',
     },
