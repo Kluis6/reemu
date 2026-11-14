@@ -597,6 +597,18 @@ const es: Messages = {
       localRejected: 'La nube rechazó este state: se queda solo en esta máquina.',
     },
     errFile: 'Archivo: {{file}}',
+    settingsGroup: {
+      'core-options': 'Opciones de los cores',
+      'shaders-decorations': 'Shaders y decoraciones',
+      'hotkeys-keyboard': 'Atajos y teclado',
+      audio: 'Audio',
+      appearance: 'Apariencia',
+      video: 'Video',
+    },
+    settingsUpload: {
+      too_large: 'El grupo {{group}} supera el tamaño que acepta la nube y no se envió.',
+      rejected: 'La nube rechazó el grupo {{group}}, así que no se envió.',
+    },
   },
   filePicker: {
     start: 'Unidades y carpeta personal',

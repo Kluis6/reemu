@@ -597,6 +597,18 @@ const en: Messages = {
       localRejected: 'The cloud refused this state: stays on this machine only.',
     },
     errFile: 'File: {{file}}',
+    settingsGroup: {
+      'core-options': 'Core options',
+      'shaders-decorations': 'Shaders and decorations',
+      'hotkeys-keyboard': 'Hotkeys and keyboard',
+      audio: 'Audio',
+      appearance: 'Appearance',
+      video: 'Video',
+    },
+    settingsUpload: {
+      too_large: 'The {{group}} group is larger than the cloud accepts and was not sent.',
+      rejected: 'The cloud refused the {{group}} group, so it was not sent.',
+    },
   },
   filePicker: {
     start: 'Drives and home folder',

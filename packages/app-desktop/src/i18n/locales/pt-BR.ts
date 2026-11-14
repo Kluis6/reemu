@@ -598,6 +598,18 @@ const ptBR = {
       localRejected: 'A nuvem recusou este state: fica só nesta máquina.',
     },
     errFile: 'Arquivo: {{file}}',
+    settingsGroup: {
+      'core-options': 'Opções dos cores',
+      'shaders-decorations': 'Shaders e decorações',
+      'hotkeys-keyboard': 'Atalhos e teclado',
+      audio: 'Áudio',
+      appearance: 'Aparência',
+      video: 'Vídeo',
+    },
+    settingsUpload: {
+      too_large: 'O grupo {{group}} passa do tamanho que a nuvem aceita e não foi enviado.',
+      rejected: 'A nuvem recusou o grupo {{group}}, que não foi enviado.',
+    },
   },
   filePicker: {
     start: 'Unidades e pasta pessoal',

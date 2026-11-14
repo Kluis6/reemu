@@ -28,7 +28,8 @@
 //! `"backup": true` e os jogos pela ROM (`rom_id`), não pelo CRC32: ele nunca
 //! sai desta máquina, e duas ROMs da biblioteca com o mesmo CRC32 podem ter
 //! escolhas diferentes, que o "Desfazer" devolve cada uma no seu lugar (R38).
-//! Só o `Restore` aceita um backup.
+//! A conferência ([`check`]) já separa as duas formas: o `Merge` recusa um
+//! documento com `"backup"`, e o `Restore` só aceita um backup (R39).
 //!
 //! Os grupos marcados são conferidos todos ([`check_all`]) antes de abrir a
 //! transação e entram juntos nela ([`apply_in`], [`apply_all`]): ou todos, ou
@@ -458,12 +459,12 @@ impl Doc {
     }
 }
 
-/// Um documento conferido (versão, formato, alvos), pronto para
+/// Um documento conferido (versão, formato, alvos) para um modo, pronto para
 /// [`apply_in`].
 pub struct Checked {
     group: Group,
     doc: Doc,
-    form: Form,
+    mode: ApplyMode,
 }
 
 impl Checked {
@@ -514,56 +515,59 @@ async fn export_in(
     Ok(doc)
 }
 
-/// Confere um documento sem tocar no banco: [`ERR_VERSION`] para outra versão
-/// (`v`), [`ERR_INVALID`] para outro formato.
-pub fn check(group: Group, doc: &Value) -> Result<Checked, String> {
+/// Confere um documento para um modo, sem tocar no banco: [`ERR_VERSION`]
+/// para outra versão (`v`), [`ERR_INVALID`] para outro formato. A forma vem do
+/// modo (R39): copiar (`Merge`) recusa um documento com `"backup"` (um backup
+/// é desta máquina e nunca vem da nuvem), e desfazer (`Restore`) só aceita o
+/// backup desta máquina.
+pub fn check(group: Group, doc: &Value, mode: ApplyMode) -> Result<Checked, String> {
     if !doc.is_object() {
         return Err(invalid());
     }
     if doc.get("v").and_then(Value::as_u64) != Some(DOC_VERSION) {
         return Err(ERR_VERSION.to_string());
     }
-    let form = match doc.get(BACKUP_FIELD) {
-        None => Form::Portable,
-        Some(Value::Bool(true)) => Form::Backup,
-        Some(_) => return Err(invalid()),
+    let form = match (doc.get(BACKUP_FIELD), mode) {
+        (None, ApplyMode::Merge) => Form::Portable,
+        (Some(Value::Bool(true)), ApplyMode::Restore) => Form::Backup,
+        _ => return Err(invalid()),
     };
     let parsed = Doc::parse(group, doc)?;
     parsed.validate(form)?;
     Ok(Checked {
         group,
         doc: parsed,
-        form,
+        mode,
     })
 }
 
 /// Confere todos os documentos de uma vez, antes da transação: um só que não
 /// serve e nenhum entra. O mesmo grupo duas vezes não serve.
-pub fn check_all(docs: &[(Group, &Value)]) -> Result<Vec<Checked>, String> {
+pub fn check_all(docs: &[(Group, &Value)], mode: ApplyMode) -> Result<Vec<Checked>, String> {
     let mut seen = HashSet::new();
     docs.iter()
         .map(|(group, doc)| {
             if !seen.insert(*group) {
                 return Err(invalid());
             }
-            check(*group, doc)
+            check(*group, doc, mode)
         })
         .collect()
 }
 
-/// Aplica um documento conferido dentro de uma transação aberta por quem
-/// chama (`SettingsRepo::write`). Sem `commit`, nada fica.
+/// Aplica um documento conferido, no modo em que foi conferido, dentro de uma
+/// transação aberta por quem chama (`SettingsRepo::write`). Sem `commit`,
+/// nada fica.
 pub async fn apply_in(
     tx: &mut SettingsTx,
     checked: Checked,
-    mode: ApplyMode,
     here: &ThisMachine<'_>,
 ) -> Result<ApplyReport, String> {
-    // o backup desta máquina só volta no "Desfazer"; copiar é de outra máquina
-    if mode == ApplyMode::Merge && checked.form == Form::Backup {
-        return Err(invalid());
-    }
-    let form = checked.form;
+    let mode = checked.mode;
+    let form = match mode {
+        ApplyMode::Merge => Form::Portable,
+        ApplyMode::Restore => Form::Backup,
+    };
     let roms = LocalRoms::new(here.roms);
     let mut tally = Tally::default();
     match checked.doc {
@@ -589,12 +593,12 @@ pub async fn apply_all(
     mode: ApplyMode,
     here: &ThisMachine<'_>,
 ) -> Result<Vec<(Group, ApplyReport)>, String> {
-    let checked = check_all(docs)?;
+    let checked = check_all(docs, mode)?;
     let mut tx = SettingsRepo::new(db.clone()).write().await.map_err(repo)?;
     let mut reports = Vec::with_capacity(checked.len());
     for c in checked {
         let group = c.group();
-        reports.push((group, apply_in(&mut tx, c, mode, here).await?));
+        reports.push((group, apply_in(&mut tx, c, here).await?));
     }
     tx.commit().await.map_err(repo)?;
     log_applied(&reports, mode);
@@ -607,14 +611,13 @@ pub async fn apply_all(
 pub async fn dry_run(
     db: &Db,
     checked: Vec<Checked>,
-    mode: ApplyMode,
     here: &ThisMachine<'_>,
 ) -> Result<Vec<(Group, ApplyReport)>, String> {
     let mut tx = SettingsRepo::new(db.clone()).write().await.map_err(repo)?;
     let mut reports = Vec::with_capacity(checked.len());
     for c in checked {
         let group = c.group();
-        reports.push((group, apply_in(&mut tx, c, mode, here).await?));
+        reports.push((group, apply_in(&mut tx, c, here).await?));
     }
     tx.rollback().await.map_err(repo)?;
     Ok(reports)
@@ -1769,6 +1772,65 @@ mod tests {
             export(group, &self.db, &self.catalog).await.unwrap()
         }
 
+        /// Um documento portátil (de outra máquina) na forma do backup desta:
+        /// `"backup": true` e os jogos pelas ROMs daqui (cada ROM com o CRC32
+        /// leva a entrada; um jogo que esta máquina não tem vira uma ROM que
+        /// ela não tem). O `Restore` só aceita essa forma (R39); os testes
+        /// que exercitam o `Restore` com o documento de outra máquina passam
+        /// por aqui.
+        async fn as_backup(&self, doc: &Value) -> Value {
+            let roms = self.roms().await;
+            let ids = |crc: &str| -> Vec<String> {
+                let found: Vec<String> = roms
+                    .iter()
+                    .filter(|(_, c)| c.eq_ignore_ascii_case(crc))
+                    .map(|(id, _)| id.clone())
+                    .collect();
+                if found.is_empty() {
+                    vec![format!("fora-{crc}")]
+                } else {
+                    found
+                }
+            };
+            let mut out = doc.clone();
+            for field in [
+                "overrides",
+                "assignments",
+                "decorations",
+                "missing",
+                "aspect",
+            ] {
+                let Some(items) = out.get(field).and_then(Value::as_array).cloned() else {
+                    continue;
+                };
+                let mut rewritten = Vec::new();
+                for item in items {
+                    let crc = match (field, item.get("scope").and_then(Value::as_str)) {
+                        ("aspect", Some("rom")) => item["target"].as_str().map(str::to_owned),
+                        ("aspect", _) => None,
+                        _ => item.get("crc32").and_then(Value::as_str).map(str::to_owned),
+                    };
+                    let Some(crc) = crc else {
+                        rewritten.push(item);
+                        continue;
+                    };
+                    for id in ids(&crc) {
+                        let mut e = item.clone();
+                        if field == "aspect" {
+                            e["target"] = json!(id);
+                        } else {
+                            e.as_object_mut().unwrap().remove("crc32");
+                            e["rom_id"] = json!(id);
+                        }
+                        rewritten.push(e);
+                    }
+                }
+                out[field] = Value::Array(rewritten);
+            }
+            out["backup"] = json!(true);
+            out
+        }
+
         /// O backup desta máquina (R38), como a cópia o grava.
         async fn backup(&self, group: Group) -> Value {
             let mut tx = SettingsRepo::new(self.db.clone()).read().await.unwrap();
@@ -2058,6 +2120,15 @@ mod tests {
         sqlx::query_as(sql).fetch_all(db).await.unwrap()
     }
 
+    /// Recusado pelo banco no meio da escrita, não pela conferência.
+    fn refused_by_db<T: std::fmt::Debug>(result: Result<T, String>) {
+        let e = result.unwrap_err();
+        assert!(
+            e != ERR_INVALID && e != ERR_VERSION,
+            "a conferência recusou antes do banco: {e}"
+        );
+    }
+
     fn s3(a: &str, b: &str, c: &str) -> (String, String, String) {
         (a.into(), b.into(), c.into())
     }
@@ -2162,7 +2233,10 @@ mod tests {
                 "preferred_cores": {"psx": "swanstation_libretro", "snes": "snes9x_libretro"},
             })
         );
-        let report = dst.apply(CO, &doc, Restore).await.unwrap();
+        let report = dst
+            .apply(CO, &dst.as_backup(&doc).await, Restore)
+            .await
+            .unwrap();
         assert_eq!(
             report,
             ApplyReport {
@@ -2250,13 +2324,19 @@ mod tests {
         option(&dst.db, "snes9x", Some("sumiu"), "k", "9").await;
 
         for mode in [Merge, Restore] {
+            let doc = match mode {
+                Merge => doc.clone(),
+                Restore => dst.as_backup(&doc).await,
+            };
             let report = dst.apply(CO, &doc, mode).await.unwrap();
             assert_eq!(
                 report.skipped_unknown_games, 2,
                 "{mode:?}: B e C, não três opções"
             );
+            // no backup a opção do jogo A vem uma vez por ROM
+            let entries = if mode == Merge { 2 } else { 3 };
             assert_eq!(
-                report.applied, 2,
+                report.applied, entries,
                 "{mode:?}: o valor do core e a opção do jogo A"
             );
             let overrides: Vec<(String, String, String, String)> = rows(
@@ -2304,7 +2384,11 @@ mod tests {
         forged["values"]["outro_core"] = json!({format!("{MAC}03"): "9"});
         for d in [&doc, &forged] {
             for mode in [Merge, Restore] {
-                here.apply(CO, d, mode).await.unwrap();
+                let d = match mode {
+                    Merge => d.clone(),
+                    Restore => here.as_backup(d).await,
+                };
+                here.apply(CO, &d, mode).await.unwrap();
                 let now: Vec<(String, String, String)> = rows(&here.db, mac_sql).await;
                 assert_eq!(now, before, "{mode:?}");
             }
@@ -2408,7 +2492,10 @@ mod tests {
                 "missing": [],
             })
         );
-        let report = dst.apply(SD, &doc, Restore).await.unwrap();
+        let report = dst
+            .apply(SD, &dst.as_backup(&doc).await, Restore)
+            .await
+            .unwrap();
         assert_eq!(
             report,
             ApplyReport {
@@ -2773,7 +2860,10 @@ mod tests {
                 ],
             })
         );
-        let report = dst.apply(HK, &doc, Restore).await.unwrap();
+        let report = dst
+            .apply(HK, &dst.as_backup(&doc).await, Restore)
+            .await
+            .unwrap();
         assert_eq!(report.applied, 4);
         assert_eq!(dst.export(HK).await, doc);
         // o botão do controle desta máquina continua onde estava
@@ -2854,7 +2944,7 @@ mod tests {
         assert_eq!(codes.len(), keys.len(), "uma tecla em dois alvos: {keys:?}");
 
         // o "Desfazer" devolve o layout daqui
-        let backup = json!({"v": 1, "hotkeys": [], "keyboard": [
+        let backup = json!({"v": 1, "backup": true, "hotkeys": [], "keyboard": [
             {"target": "A", "code": "KeyZ"}, {"target": "B", "code": "KeyR"},
         ]});
         here.apply(HK, &backup, Restore).await.unwrap();
@@ -2903,7 +2993,10 @@ mod tests {
                 "sample_rate_preference": 48000,
             })
         );
-        let report = dst.apply(Group::Audio, &doc, Restore).await.unwrap();
+        let report = dst
+            .apply(Group::Audio, &dst.as_backup(&doc).await, Restore)
+            .await
+            .unwrap();
         assert_eq!(report.applied, 1);
         assert_eq!(dst.export(Group::Audio).await, doc);
         // o aparelho de saída é desta máquina
@@ -2985,7 +3078,10 @@ mod tests {
                 ],
             })
         );
-        let report = dst.apply(Group::Video, &doc, Restore).await.unwrap();
+        let report = dst
+            .apply(Group::Video, &dst.as_backup(&doc).await, Restore)
+            .await
+            .unwrap();
         assert_eq!(report.applied, 4);
         assert_eq!(dst.export(Group::Video).await, doc);
         // os nits foram medidos na tela desta máquina
@@ -3208,19 +3304,22 @@ mod tests {
         let mut doc = src.export(CO).await;
         let again = doc["overrides"][0].clone();
         doc["overrides"].as_array_mut().unwrap().push(again);
-        assert!(dst.apply(CO, &doc, Restore).await.is_err());
+        let doc = dst.as_backup(&doc).await;
+        refused_by_db(dst.apply(CO, &doc, Restore).await);
 
         // teclado: as hotkeys já foram trocadas quando o mesmo alvo repete
         let mut doc = src.export(HK).await;
         let again = json!({"target": "R2", "code": "KeyQ"});
         doc["keyboard"].as_array_mut().unwrap().push(again);
-        assert!(dst.apply(HK, &doc, Restore).await.is_err());
+        let doc = dst.as_backup(&doc).await;
+        refused_by_db(dst.apply(HK, &doc, Restore).await);
 
         // vídeo: a linha de vídeo já foi gravada quando a proporção repete
         let mut doc = src.export(Group::Video).await;
         let again = doc["aspect"][0].clone();
         doc["aspect"].as_array_mut().unwrap().push(again);
-        assert!(dst.apply(Group::Video, &doc, Restore).await.is_err());
+        let doc = dst.as_backup(&doc).await;
+        refused_by_db(dst.apply(Group::Video, &doc, Restore).await);
 
         assert_eq!(snapshot(&dst.db).await, before);
     }
@@ -3237,10 +3336,12 @@ mod tests {
         let mut newer = src.export(HK).await;
         newer["v"] = json!(2);
         let docs = [(CO, &options), (Group::Video, &video), (HK, &newer)];
-        for mode in [Merge, Restore] {
-            let refused = dst.apply_all(&docs, mode).await;
-            assert_eq!(refused.unwrap_err(), ERR_VERSION, "{mode:?}");
-        }
+        let refused = dst.apply_all(&docs, Merge).await;
+        assert_eq!(refused.unwrap_err(), ERR_VERSION, "Merge");
+        let (options_b, video_b) = (dst.as_backup(&options).await, dst.as_backup(&video).await);
+        let docs = [(CO, &options_b), (Group::Video, &video_b), (HK, &newer)];
+        let refused = dst.apply_all(&docs, Restore).await;
+        assert_eq!(refused.unwrap_err(), ERR_VERSION, "Restore");
 
         // o formato do último não serve (moldura fora da pasta do catálogo)
         let mut shaders = src.export(SD).await;
@@ -3273,8 +3374,13 @@ mod tests {
         let again = keys["keyboard"][0].clone();
         keys["keyboard"].as_array_mut().unwrap().push(again);
 
-        let docs = [(CO, &options), (Group::Video, &video), (HK, &keys)];
-        assert!(dst.apply_all(&docs, Restore).await.is_err());
+        let (options_b, video_b, keys_b) = (
+            dst.as_backup(&options).await,
+            dst.as_backup(&video).await,
+            dst.as_backup(&keys).await,
+        );
+        let docs = [(CO, &options_b), (Group::Video, &video_b), (HK, &keys_b)];
+        refused_by_db(dst.apply_all(&docs, Restore).await);
         assert_eq!(snapshot(&dst.db).await, before);
 
         // sem o defeito, os três entram juntos
@@ -3334,7 +3440,7 @@ mod tests {
         let before = snapshot(&here.db).await;
         let mut backup = Vec::new();
         for g in Group::ALL {
-            backup.push((g, here.export(g).await));
+            backup.push((g, here.backup(g).await));
         }
         let mut copy = Vec::new();
         for g in Group::ALL {
@@ -3363,8 +3469,9 @@ mod tests {
 
     /// Duas ROMs da biblioteca com o mesmo CRC32 (o mesmo jogo em duas pastas)
     /// com escolhas diferentes: o documento portátil leva uma por jogo, e o
-    /// `Restore` dele escreveria a mesma nas duas. O backup leva cada ROM, e
-    /// o "Desfazer" devolve cada uma no seu lugar.
+    /// `Restore` dele escreveria a mesma nas duas (por isso o `Restore` não o
+    /// aceita). O backup leva cada ROM, e o "Desfazer" devolve cada uma no
+    /// seu lugar.
     #[tokio::test]
     async fn the_backup_restores_each_rom_of_a_shared_crc() {
         use AssignmentScope::*;
@@ -3424,19 +3531,19 @@ mod tests {
         here.apply_all(&copy_docs, Merge).await.unwrap();
         assert_ne!(snapshot(&here.db).await, before);
 
-        // o documento portátil não devolve: a ROM 2 recebe as escolhas da 1
+        // o documento portátil devolveria à ROM 2 as escolhas da 1: o
+        // `Restore` nem o aceita (R39)
         let docs: Vec<(Group, &Value)> = portable.iter().map(|(g, d)| (*g, d)).collect();
-        here.apply_all(&docs, Restore).await.unwrap();
-        assert_ne!(snapshot(&here.db).await, before);
+        assert_eq!(here.apply_all(&docs, Restore).await, Err(invalid()));
 
         // o backup devolve as duas, cada uma com a sua
-        here.apply_all(&copy_docs, Merge).await.unwrap();
         let docs: Vec<(Group, &Value)> = backup.iter().map(|(g, d)| (*g, d)).collect();
         here.apply_all(&docs, Restore).await.unwrap();
         assert_eq!(snapshot(&here.db).await, before);
     }
 
-    /// O backup é desta máquina: copiar (`Merge`) não o aceita, e um jogo vai
+    /// O backup é desta máquina: a conferência de copiar (`Merge`) não o
+    /// aceita, a de desfazer (`Restore`) só aceita ele (R39), e um jogo vai
     /// por um campo só, o da forma do documento.
     #[tokio::test]
     async fn a_backup_only_restores_and_each_form_keeps_its_game_key() {
@@ -3444,6 +3551,10 @@ mod tests {
         let before = snapshot(&here.db).await;
         let backup = here.backup(CO).await;
         assert_eq!(here.apply(CO, &backup, Merge).await, Err(invalid()));
+        let portable = here.export(CO).await;
+        assert_eq!(here.apply(CO, &portable, Restore).await, Err(invalid()));
+        assert!(check(CO, &backup, Merge).is_err());
+        assert!(check(CO, &portable, Restore).is_err());
         assert_eq!(snapshot(&here.db).await, before);
 
         // um documento portátil com `rom_id` não serve, nem um backup com CRC32

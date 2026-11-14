@@ -27,6 +27,8 @@ import type { AppearanceDoc } from './appearanceGroup'
 import type { CopyReport } from './bindings/CopyReport'
 import type { SettingsPreview } from './bindings/SettingsPreview'
 import type { SettingsSent } from './bindings/SettingsSent'
+import type { SettingsUndoInfo } from './bindings/SettingsUndoInfo'
+import type { SettingsUpload } from './bindings/SettingsUpload'
 import type { Quota } from './bindings/Quota'
 import type { SaveLineStatus } from './bindings/SaveLineStatus'
 import type { Side } from './bindings/Side'
@@ -620,6 +622,8 @@ export type {
   SaveLineStatus,
   SettingsPreview,
   SettingsSent,
+  SettingsUndoInfo,
+  SettingsUpload,
   Side,
   StateNote,
   SyncConflict,
@@ -710,9 +714,11 @@ export async function syncStateThumbnailUrl(saveId: string): Promise<string | nu
 // `backup_failed` (o backup desta máquina não gravou ou não leu: nada mudou).
 
 /** "Enviar as desta máquina": um documento por grupo, a aparência vinda da tela
- *  (`exportAppearance()`). Devolve quando (segundos Unix). */
+ *  (`exportAppearance()`). Devolve o resultado de cada grupo (o que vale) e a
+ *  data, quando algum subiu; rejeita só quando nada pôde ser tentado. O texto
+ *  do erro de um grupo vem de `settingsGroupErrorText`. */
 export const syncSettingsUpload = (appearance: AppearanceDoc) =>
-  invoke<number>('sync_settings_upload', { appearance })
+  invoke<SettingsUpload>('sync_settings_upload', { appearance })
 /** O último envio e os grupos que mudaram desde ele (sem rede). */
 export const syncSettingsSent = (appearance: AppearanceDoc) =>
   invoke<SettingsSent>('sync_settings_sent', { appearance })
@@ -724,8 +730,12 @@ export const syncSettingsPreview = (deviceId: string) =>
  *  `reemu.sync.appearanceUndo`). Os de agora ficam num backup para desfazer. */
 export const syncSettingsCopy = (deviceId: string, groups: string[], appearanceWanted: boolean) =>
   invoke<CopyReport>('sync_settings_copy', { deviceId, groups, appearanceWanted })
-/** Volta as configurações de antes da última cópia, uma vez por cópia; `false`
- *  quando não há cópia a desfazer. A aparência a tela volta sozinha. */
+/** A cópia que o "Desfazer" volta (de qual máquina, quando, quais grupos), ou
+ *  `null` sem cópia a desfazer. Sem rede: vale ao abrir o app de novo. */
+export const syncSettingsUndoInfo = () => invoke<SettingsUndoInfo | null>('sync_settings_undo_info')
+/** Volta as configurações de antes da última cópia, uma vez por cópia; as de
+ *  agora vão antes para a pasta de resguardo. `false` quando não há cópia a
+ *  desfazer. A aparência a tela volta sozinha. */
 export const syncSettingsUndo = () => invoke<boolean>('sync_settings_undo')
 /** Abre a pasta dos backups do sync no gerenciador de arquivos. Com a chave de
  *  um save apagado no site, abre a pasta onde o arquivo dele foi parar. */

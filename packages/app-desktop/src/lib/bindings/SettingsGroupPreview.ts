@@ -11,7 +11,10 @@ export type SettingsGroupPreview = { group: 'core-options' | 'shaders-decoration
 present: boolean, 
 /**
  * O documento não serve aqui e o grupo não pode ser copiado:
- * `settings_version` (veio de um ReEmu mais novo) ou `settings_invalid`.
+ * `settings_version` (veio de um ReEmu mais novo), `settings_invalid`
+ * (outro formato), `settings_missing` (sumiu da nuvem entre a listagem e
+ * a descida) ou `failed` (chegou diferente do hash da nuvem; vale tentar
+ * de novo).
  */
 error: string | null, 
 /**

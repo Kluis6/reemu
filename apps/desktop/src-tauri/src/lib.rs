@@ -389,6 +389,7 @@ pub fn run() {
             sync::sync_settings_sent,
             sync::sync_settings_preview,
             sync::sync_settings_copy,
+            sync::sync_settings_undo_info,
             sync::sync_settings_undo,
             commands::js_log,
             commands::current_focus,

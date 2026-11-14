@@ -41,6 +41,9 @@ const SETTINGS_SENT_KEY: &str = "sync.settings_sent";
 /// grupo), que o "Desfazer" volta. É desta máquina, não do aparelho: fica ao
 /// desligar o sync. Gravado e apagado na transação da cópia e do "Desfazer".
 pub(super) const LAST_COPY_BACKUP_KEY: &str = "sync.last_copy_backup";
+/// O backup do estado de antes do último "Desfazer" (R39): o registro dos
+/// arquivos, que nada oferece de volta.
+pub(super) const LAST_UNDO_BACKUP_KEY: &str = "sync.last_undo_backup";
 
 /// O limite do Alvanista para cada texto do hardware.
 const TEXT_MAX_CHARS: usize = 120;

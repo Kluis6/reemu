@@ -35,7 +35,7 @@ use device::{
 };
 use engine::{
     CopyReport, Engine, Keep, RemoteStates, SaveLineStatus, SettingsPreview, SettingsSent,
-    SyncConflict, SyncVersion,
+    SettingsUndoInfo, SettingsUpload, SyncConflict, SyncVersion,
 };
 use serde::Serialize;
 use std::future::Future;
@@ -1394,12 +1394,13 @@ pub async fn sync_state_thumbnail(
 
 /// "Enviar as desta máquina" (D114): um documento por grupo sobe como linha
 /// `config` deste aparelho, a aparência (`appearance`) vinda da tela. Devolve
-/// quando (segundos Unix).
+/// o resultado de cada grupo e quando (segundos Unix), se algum subiu; rejeita
+/// só quando nada pôde ser tentado.
 #[tauri::command]
 pub async fn sync_settings_upload(
     app: AppHandle,
     appearance: serde_json::Value,
-) -> Result<i64, String> {
+) -> Result<SettingsUpload, String> {
     let engine = engine_of(&app)?;
     let (_, alva) = services(&app)?;
     let sent = engine.settings_upload(&alva, &appearance).await;
@@ -1454,8 +1455,19 @@ pub async fn sync_settings_copy(
         .map_err(|e| e.to_string())
 }
 
-/// Volta as configurações de antes da última cópia (uma vez por cópia);
-/// `false` quando não há cópia a desfazer. Sem rede.
+/// A cópia que o "Desfazer" volta (de qual máquina, quando, quais grupos), ou
+/// `None` sem cópia a desfazer. Só o banco: nem chaveiro nem rede.
+#[tauri::command]
+pub async fn sync_settings_undo_info(app: AppHandle) -> Result<Option<SettingsUndoInfo>, String> {
+    engine_of(&app)?
+        .settings_undo_info()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Volta as configurações de antes da última cópia (uma vez por cópia); o de
+/// agora vai antes para a pasta de resguardo. `false` quando não há cópia a
+/// desfazer. Sem rede.
 #[tauri::command]
 pub async fn sync_settings_undo(app: AppHandle) -> Result<bool, String> {
     engine_of(&app)?
