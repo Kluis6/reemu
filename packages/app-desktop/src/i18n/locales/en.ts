@@ -1268,6 +1268,11 @@ const en: Messages = {
     hAgo: '{{count}} h ago',
     onlyUnread: 'Show unread only',
     noUnread: 'No unread notifications.',
+    bezelUpdatesTitle_one: 'Bezels for {{count}} system have an update',
+    bezelUpdatesTitle_other: 'Bezels for {{count}} systems have an update',
+    bezelUpdatesSummary: 'See Settings › Decorations › Bezels',
+    shaderPackUpdateTitle: 'The shader pack has an update',
+    shaderPackUpdateSummary: 'See Settings › Decorations › Shaders',
   },
   controllers: {
     mapRemoved: 'Controller map removed (back to default).',

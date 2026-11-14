@@ -1269,6 +1269,11 @@ const ptBR = {
     hAgo: 'há {{count}} h',
     onlyUnread: 'Mostrar apenas não lidas',
     noUnread: 'Nenhuma notificação não lida.',
+    bezelUpdatesTitle_one: 'As molduras de {{count}} sistema têm atualização',
+    bezelUpdatesTitle_other: 'As molduras de {{count}} sistemas têm atualização',
+    bezelUpdatesSummary: 'Veja em Configurações › Decorações › Molduras',
+    shaderPackUpdateTitle: 'O pacote de shaders tem atualização',
+    shaderPackUpdateSummary: 'Veja em Configurações › Decorações › Shaders',
   },
   controllers: {
     mapRemoved: 'Mapa de controle removido (volta ao padrão).',

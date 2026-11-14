@@ -10,8 +10,9 @@ import {
 } from '@fluentui/react-components'
 import { EyeOffRegular, EyeRegular } from '@fluentui/react-icons'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useBlobUrl } from '../hooks/useBlobUrl'
 import { renderShaderPreview, shaderPreviewSource, type PreviewScene } from '../lib/tauri'
 
 /** Tamanho em que o shader é renderizado (3× a cena de 320×240, 4:3). */
@@ -74,22 +75,6 @@ const useStyles = makeStyles({
   // sobre o fundo preto do quadro, em qualquer tema
   error: { color: '#ffffff', padding: tokens.spacingHorizontalL, textAlign: 'center' },
 })
-
-/** `ArrayBuffer` de PNG → URL de blob, revogada quando troca. Sem buffer
- *  (a prévia falhou) volta a `null`: a URL anterior já foi revogada e, se
- *  ficasse, a tela mostrava o ícone de imagem quebrada. */
-function useBlobUrl(buf: ArrayBuffer | undefined) {
-  // derivada do buffer, sem estado (um `setState` no efeito re-renderizava
-  // duas vezes a cada prévia); a URL anterior é revogada quando troca ou sai
-  const url = useMemo(
-    () => (buf ? URL.createObjectURL(new Blob([buf], { type: 'image/png' })) : null),
-    [buf],
-  )
-  useEffect(() => () => {
-    if (url) URL.revokeObjectURL(url)
-  }, [url])
-  return url
-}
 
 /**
  * Prévia do shader ativo numa cena de exemplo gerada pelo app (2D em pixel

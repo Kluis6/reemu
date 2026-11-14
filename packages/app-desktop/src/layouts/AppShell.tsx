@@ -37,6 +37,7 @@ import { RouteTransition } from "../components/RouteTransition";
 import { UpdateDialog } from "../components/UpdateDialog";
 import { ShaderFailureDialog } from "../components/ShaderFailureDialog";
 import { useCoreUpdates } from "../hooks/useCoreUpdates";
+import { usePackUpdates } from "../hooks/usePackUpdates";
 import { useFocusMemory } from "../hooks/useFocusMemory";
 import { useNavHints } from "../hooks/useNavHints";
 import { useShaderFailures } from "../hooks/useShaderFailures";
@@ -126,6 +127,7 @@ export function AppShell() {
   useUpdateCheck();
   useShaderFailures();
   useCoreUpdates();
+  usePackUpdates();
   // Correspondências de metadata esperando revisão (Configurações ›
   // Metadata). Mesma query da tela de revisão: resolver lá atualiza aqui.
   const pending = useQuery({

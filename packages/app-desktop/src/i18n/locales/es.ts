@@ -1268,6 +1268,11 @@ const es: Messages = {
     hAgo: 'hace {{count}} h',
     onlyUnread: 'Mostrar solo no leídas',
     noUnread: 'No hay notificaciones sin leer.',
+    bezelUpdatesTitle_one: 'Los marcos de {{count}} sistema tienen actualización',
+    bezelUpdatesTitle_other: 'Los marcos de {{count}} sistemas tienen actualización',
+    bezelUpdatesSummary: 'Mira en Configuración › Decoraciones › Marcos',
+    shaderPackUpdateTitle: 'El paquete de shaders tiene actualización',
+    shaderPackUpdateSummary: 'Mira en Configuración › Decoraciones › Shaders',
   },
   controllers: {
     mapRemoved: 'Mapa del mando eliminado (vuelve al predeterminado).',
