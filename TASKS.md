@@ -84,9 +84,12 @@ o card atual fica.
 - [ ] `in-progress` — Fase 8: estrutura de core e GPU (**cada item exige aviso**). Item 1 publicado; mapa das travas em `20-mapa-travas-session.md`; separar travas e item 3 parados até haver motivo.
 - [ ] `todo` — **Plano GPU e crates** (2026-11-13, só planejado; cada etapa com aviso):
       [`22-plano-gpu-e-crates.md`](docs/ai-context/22-plano-gpu-e-crates.md).
-      - [ ] A1. `vk_frame.rs`: `lock().unwrap()` → `unwrap_or_else(into_inner)` (risco baixo).
+      - [x] A1. `vk_frame.rs`: `lock().unwrap()` → `unwrap_or_else(into_inner)` (feito em 2026-11-14).
       - [ ] A2. `gpu/surface.rs`: 5 invariantes sem `unwrap` (risco médio; só com relato real).
-      - [ ] B1. Experiência sem commit: `wgpu` 30.0.2 + updater 2.14.1 compila no Windows?
+      - [x] B1. Experiência sem commit (2026-11-14): **não resolve**. Só o `cargo update` do
+        `wgpu` 30.0.1 → 30.0.2 já põe a `windows` 0.61 de volta e o `wgpu-hal` 30.0.2 falha no
+        mesmo `dx12/suballocation.rs` (11 erros); com o updater 2.14.1 junto, idem. O
+        `gpu-allocator` 0.28.0 ainda é o último. Lock restaurado. Saída: B3, esperar.
       - [ ] B2/B3. Conforme o B1: atualizar Tauri e tirar a `zip` 4.6.1, ou escolher a saída.
       - [ ] C. Fase 6 (crates `net`, `core-catalog`, `scraping`).
 

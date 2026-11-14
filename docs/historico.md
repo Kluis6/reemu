@@ -3422,3 +3422,8 @@ Infra:
 - **Fumaça do catálogo:** o `reemu-core-host --run` termina com `state_round_trip`: salva (A), roda 30 quadros, restaura A e salva de novo (B); o resultado (`ok`, `diferente`, `recusou`, `sem`) vai na coluna "jogo" e no resumo ("N salvaram e restauraram o estado"). Não reprova o job: serve de lista de quais cores têm save state. Amostra local (Windows): Snes9x, mGBA, Genesis Plus GX, FCEUmm e Stella 2014 `ok`; Gambatte restaura, mas o estado não volta byte a byte; PCSX ReARMed sem ROM de teste.
 - **Conferido:** 520 testes Rust (inclui `version_changed` e a versão gravada/lida no banco), `clippy -D warnings`, `fmt`, `tsc -b`, 327 testes do frontend.
 
+## 2026-11-14 — Plano GPU: A1 feito, B1 sem saída
+
+- **A1** (`core-loader-desktop/src/vk_frame.rs`): as 13 travas `lock().unwrap()` e o `wait_timeout(..).unwrap()` do `Condvar` viraram `unwrap_or_else(PoisonError::into_inner)` (std::sync::PoisonError). Um `Mutex` envenenado por um pânico em outra thread deixava de derrubar também a thread do core ou a do compositor. Não muda a ordem das chamadas Vulkan nem a sincronização. Conferido: 33 testes do crate, `clippy -D warnings` e os testes de GPU desta máquina (`from_adopted_vulkan_runs_the_chain`, `vk_interop_id_reads_this_device`, `win32_interop_*`, 8 ok).
+- **B1** (experiência, lock restaurado): `cargo update` do `wgpu` 30.0.1 → 30.0.2 sozinho já faz o resolvedor pôr a `windows` 0.61 e o `wgpu-hal` 30.0.2 falha em `dx12/suballocation.rs` (11 erros); com o `tauri-plugin-updater` 2.14.1 junto, o mesmo. O `gpu-allocator` 0.28.0 segue como último. Fica a B3: esperar uma versão compatível e reconferir por mês.
+
