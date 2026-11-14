@@ -3702,3 +3702,44 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Versão:** 0.1.13 → 0.1.14 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 15 crates do workspace.
 - **Testes antes da tag:** `cargo test --workspace` com 761 ok e 34 ignorados; `tsc -b`, 434 testes do frontend e o build de produção do frontend; diálogo de encerrar conferido no navegador de teste. Testes de GPU ignorados não rodaram (GPU fora desta rodada).
 - **O que entra:** o mesmo da v0.1.13 (ver a entrada acima) mais o diálogo de encerrar corrigido, a prévia de shader sem imagem quebrada e os avisos de molduras e do pacote de shaders no sino.
+
+## 2026-11-14 — Foco nos grupos do pacote de shaders
+
+- **Problema** (print do usuário): o cabeçalho de cada grupo (`AccordionHeader` do Fluent, também nas licenças e na tela de abertura do jogo) é um `<button>` de cantos retos. Pelo teclado o Fluent desenha o anel no `::after` (regra 1 do `index.css`, arredondado e com brilho); pelo controle caía na regra 2 e saía um anel reto (`border-radius: 0`), sem brilho e sem fundo.
+- **Correção** (`index.css`, regra 2b): cantos médios no botão do cabeçalho (o `outline` segue o raio), fundo de item em destaque (`colorNeutralBackground1Hover`) no hover e nos dois focos, e o brilho do anel no foco pelo controle. O seletor do brilho leva a classe repetida para vencer a regra 2, que zera o `box-shadow` com `!important`.
+- **Conferido:** `ui-render.py` em `/settings/video/shaders` com o pacote simulado e foco pelo controle, nos temas `reemu` e `claro`: raio 4 px, fundo e brilho no item focado.
+
+## 2026-11-14 — Cards de tema: borda única e cor primária em destaque
+
+- **Borda** (print do usuário: "por que cada card tem uma cor de borda diferente?"): vinha inline do próprio tema mostrado (`t.colorNeutralStroke2`), então os temas escuros tinham borda escura e os claros, clara. Agora é a mesma em todos, do tema ativo (`tokens.colorNeutralStroke2`); o fundo segue o do tema mostrado, que é a prévia.
+- **Faixa de cores:** a cor primária (`reemuBrandSolid`) ocupa a linha de cima inteira e os quatro tons de fundo (`reemuBg1`, `Bg4`, `Bg2`, `Bg3`) ficam na linha de baixo; a altura total segue 56 px.
+- **Conferido:** `tsc -b`, `oxlint`; `ui-render.py` em `/settings/aparencia/temas` nos temas `claro` e `reemu`: uma só cor de borda em todos os cards (medido).
+- **Ajuste no mesmo dia** (pedido do usuário): as duas linhas de cor com a mesma altura (`flexBasis: 0` e `flexGrow: 1` nas duas) e a grade de temas na altura útil do card das Configurações (`SettingsLayout` aplica o `fill` em Aparência › Temas; as linhas dividem a altura, com mínimo de 150 px por card). A faixa de cores cresce com o card (mínimo de 56 px). A área da barra de dicas do controle continua reservada embaixo, para ela não cobrir o Switch do último card. Conferido no `ui-render.py` (temas `claro` e `reemu`).
+
+## 2026-11-14 — 5 papéis de parede embutidos
+
+- **Pedido do usuário:** papéis de parede como os avatares, com temas parecidos, a partir de ideias de bancos de imagens. Referências consultadas (só como tema, nada copiado): Freepik e Vecteezy — placas de circuito, padrões de controles em traço, paisagens 8-bit de floresta, synthwave com sol listrado e grade, espaço com planetas.
+- **Arte** (`lib/wallpapers.ts`): SVG original 1920×1080 por avatar, com o degradê e o personagem dele (`presetArt` exportado de `avatars.ts`): Circuito (robô), Controles (padrão de ícones em traço), Floresta 8-bit (slime e slimes menores), Fliperama (synthwave) e Espaço (nave com rastro, planeta com anel). Gerador determinístico, o mesmo desenho a cada build; luz atrás do personagem e escurecido embaixo para o texto da Início.
+- **Aplicar:** `set_wallpaper_preset` (`appearance.rs`) grava o SVG como `wallpaper.svg`, no lugar da imagem anterior; aceita só SVG com a marca `data-reemu-wallpaper`, até 512 KB, sem `<script`, atributos `on*` ou `javascript:` (teste `preset_svg_so_os_do_app`; `wallpapers.test.ts` confere os 5 contra as mesmas regras). A escolha de arquivo da pessoa continua só PNG, JPG e WEBP. `wallpaperUrl` passa o tipo `image/svg+xml` ao `Blob` quando o arquivo é SVG; `wallpaperPresetId` diz qual embutido está em uso.
+- **Tela** (Aparência › Plano de fundo): grade com as 5 miniaturas (nome e check no escolhido) acima da prévia; a prévia segue com 480 px. Textos em pt-BR, en e es.
+- **Conferido:** `tsc -b`, `oxlint`, `clippy -D warnings`, testes de `appearance` e de `wallpapers`; `ui-render.py` com os 5 desenhos e a tela nos temas `reemu` e `claro`. Não conferido no app com o arquivo gravado de verdade (a página de teste não grava).
+
+## 2026-11-14 — Tema personalizado em diálogo; card de tema sem mudar de fundo
+
+- **Diálogo** (pedido do usuário): escolher o card "Personalizado" abre um `Dialog` do Fluent ("Tema personalizado") com uma frase de ajuda, a faixa de cores do tema com a cor atual e a barra de matiz (`ColorPicker`/`ColorSlider`, que já recebe o foco); o tema muda na hora e "Fechar" sai. Clicar de novo no card reabre. Antes a barra ficava num painel embaixo da grade. Textos `appearance.theme.customTitle`/`customHint` em pt-BR, en e es.
+- **Foco e hover no card de tema** (pedido do usuário): o fundo não muda mais. Saiu a camada cinza translúcida que clareava ou escurecia o card (ele é a prévia do tema); ficam o anel e o brilho. Medido: mesma cor de fundo com e sem foco.
+- **Conferido:** `tsc -b`, `oxlint`; `ui-render.py` com o diálogo aberto nos temas `reemu` e `claro` e o foco pelo controle num card.
+
+## 2026-11-14 — Relógio e ícones brancos na página do jogo
+
+- **Pedido do usuário** (print: tema claro sobre a arte do jogo): na página do jogo (`/rom/...`) o ícone do controle, o da rede e o relógio ficam sempre brancos, em qualquer tema e modo. Antes seguiam o `colorNeutralForeground1` do tema e saíam escuros nos temas claros.
+- **Como:** o `AppShell` agrupa os três num `span` com `display: contents` (não mexe no layout da barra); na página do jogo ele leva `topbarOnArt` (`styles/xbox.ts`): branco com `!important` nos filhos, que têm cor própria (`clock`, `gamepadStatus`), e uma sombra leve (`drop-shadow`) para ler sobre arte clara. Fora dela nada muda.
+- **Conferido:** `tsc -b`; `ui-render.py` em `/rom/r1` nos temas `claro` e `reemu` (relógio e rede brancos) e na Início do tema claro (como antes). O ícone do controle não aparece na página de teste (sem controle); ele está no mesmo bloco.
+- **Ajuste no mesmo dia** (pedido do usuário, com o dashboard do Xbox Series X como modelo): no diálogo, a faixa de cores passa a 120 px (duas linhas de 60), o diálogo a até 560 px de largura e o "Fechar" ao tamanho `large` do Fluent (40 px de altura), com 160 px de largura mínima — o maior dos tamanhos do Fluent; o registro do doc 18 dá controles de ~50 px na largura de 2000 no app do Xbox. Medido: diálogo de 560 px, botão de 160×40.
+
+## 2026-11-14 — Contraste de campos e botões nos temas claros; Remover e botões de diálogo maiores
+
+- **Contraste** (print do usuário, Gerenciar biblioteca num tema claro): as camadas dentro do card (`liftTokens` em `styles/themes.ts`) desciam, no claro, em direção à cor da página; quando ela é parecida com a do card, linha, campo e botão ficavam iguais. Medido (WCAG, luminância relativa) antes: linha/campo 1,03 a 1,06 e card/campo 1,03 a 1,08 nos claros, contra ~1,2 e ~1,5 nos escuros. Agora o claro também mistura a cor do texto, num passo fixo (linhas 7%, campos 16%), com o campo mais longe do card que a linha: 1,14–1,16 card/linha, 1,20–1,22 linha/campo e 1,37–1,41 card/campo em todos os claros (`claro`, `ps-blue-claro`, `ps1-claro`, `alva-claro`, `snes-claro`, `dream-claro`, `simple-vibes`); os escuros não mudaram. Vale para todo campo, seletor e botão que usa `Background2`/`Background3` dentro dos cards das Configurações e afins.
+- **Remover** (Gerenciar biblioteca): 48 px de altura, a mesma do seletor de core compacto e do ícone da linha (era 32). Medido: 48/48.
+- **Botões de diálogo:** regra no `index.css` para todo botão de texto em `DialogActions` com os valores do `size="large"` do Fluent (40 px, `fontSizeBase400`) e 160 px de largura mínima, como os do dashboard do Xbox Series X (pedido do usuário, seguindo o diálogo do tema personalizado). Medido no "Editar ROM": 160×40.
+- **Conferido:** `tsc -b`, testes do frontend; `ui-render.py` com a medição de contraste nos 17 temas, Gerenciar biblioteca em `alva-claro` e o diálogo de edição em `claro`.
