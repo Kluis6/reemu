@@ -220,6 +220,21 @@ html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus 
   border-color: transparent !important;
 }
 
+/* Diálogos com as mesmas camadas do card das Configurações (`SettingsLayout`):
+   botões e campos preenchidos (`styles/buttonHooks.ts`) ficam um passo fixo
+   acima do fundo do diálogo, com contraste medido (ver `liftTokens` em
+   styles/themes.ts), em vez dos `Background2/3` crus do tema. */
+.fui-DialogSurface {
+  --colorNeutralBackground2: var(--reemuSurface2);
+  --colorNeutralBackground2Hover: var(--reemuSurface2Hover);
+  --colorNeutralBackground2Pressed: var(--reemuSurface2Pressed);
+  --colorNeutralBackground2Selected: var(--reemuSurface2Selected);
+  --colorNeutralBackground3: var(--reemuSurface3);
+  --colorNeutralBackground3Hover: var(--reemuSurface3Hover);
+  --colorNeutralBackground3Pressed: var(--reemuSurface3Pressed);
+  --colorNeutralBackground3Selected: var(--reemuSurface3Selected);
+}
+
 /* Botões dos diálogos no tamanho grande, como os do dashboard do Xbox Series
    X (pedido do usuário, 2026-11-14; doc 18: controles de ~50 px na largura de
    2000 no app do Xbox): os valores do `size="large"` do Fluent (40 px de

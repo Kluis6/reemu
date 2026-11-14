@@ -6,6 +6,7 @@ import { queryClient } from './lib/queryClient'
 import { router } from './router'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { useThemeStore } from './stores/useThemeStore'
+import { BUTTON_STYLE_HOOKS } from './styles/buttonHooks'
 import { resolveTheme } from './styles/themes'
 
 /**
@@ -19,7 +20,11 @@ export function App() {
   const theme = useMemo(() => resolveTheme(selection), [selection])
   return (
     <AppErrorBoundary>
-      <FluentProvider theme={theme} style={{ minHeight: '100%' }}>
+      <FluentProvider
+        theme={theme}
+        style={{ minHeight: '100%' }}
+        customStyleHooks_unstable={BUTTON_STYLE_HOOKS}
+      >
         <QueryClientProvider client={queryClient}>
           <RouterProvider router={router} />
         </QueryClientProvider>

@@ -418,6 +418,10 @@ const sereneLift: ReEmuLiftTokens = {
   reemuSurface3Hover: "#42484F",
   reemuSurface3Pressed: "#363B42",
   reemuSurface3Selected: "#474D55",
+  // texto claro translúcido, como os outros temas escuros (`liftTokens`)
+  reemuControlFill: "color-mix(in srgb, var(--colorNeutralForeground1) 8%, transparent)",
+  reemuControlFillHover: "color-mix(in srgb, var(--colorNeutralForeground1) 12%, transparent)",
+  reemuControlFillPressed: "color-mix(in srgb, var(--colorNeutralForeground1) 5%, transparent)",
 };
 
 /** Dream Sky — o menu do Dreamcast: céu azul com nuvens ao fundo ("a blue
@@ -527,6 +531,11 @@ export interface ReEmuLiftTokens {
   reemuSurface3Hover: string;
   reemuSurface3Pressed: string;
   reemuSurface3Selected: string;
+  /** Preenchimento de botão/controle: a cor do texto TRANSLÚCIDA, sempre um
+   *  passo acima do que estiver atrás (card, linha, diálogo, bloco). */
+  reemuControlFill: string;
+  reemuControlFillHover: string;
+  reemuControlFillPressed: string;
 }
 
 /**
@@ -558,6 +567,8 @@ function liftTokens(light: boolean): ReEmuLiftTokens {
   const toward = "var(--colorNeutralForeground1)";
   const mix = (pct: number) =>
     `color-mix(in srgb, var(--colorNeutralBackground1), ${toward} ${pct}%)`;
+  const fill = (pct: number) =>
+    `color-mix(in srgb, var(--colorNeutralForeground1) ${pct}%, transparent)`;
   // [repouso, hover, pressionado, selecionado]
   const rows = light ? [7, 10, 12, 9] : [8, 12, 6, 14];
   const fields = light ? [16, 19, 22, 18] : [14, 18, 12, 20];
@@ -571,6 +582,14 @@ function liftTokens(light: boolean): ReEmuLiftTokens {
     reemuSurface3Hover: mix(fields[1]),
     reemuSurface3Pressed: mix(fields[2]),
     reemuSurface3Selected: mix(fields[3]),
+    // 2026-11-14 (print do usuário, Cores num tema claro): com cor sólida, o
+    // botão sumia quando o fundo atrás dele era a mesma camada (engrenagem e
+    // lixeira numa linha `Background2`). Translúcido, como os controles do
+    // WinUI (`ControlFillColorDefault`), ele clareia (escuro) ou escurece
+    // (claro) qualquer fundo; sobre o card dá a mesma cor da linha de antes.
+    reemuControlFill: fill(8),
+    reemuControlFillHover: fill(12),
+    reemuControlFillPressed: fill(5),
   };
 }
 

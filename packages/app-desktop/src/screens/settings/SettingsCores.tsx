@@ -123,7 +123,7 @@ const useStyles = makeStyles({
   // o estado é o anel e o brilho de sempre (index.css).
   keepBg: {
     ':hover, :hover:active, :focus, :focus-visible': {
-      backgroundColor: `${tokens.colorNeutralBackground1} !important`,
+      backgroundColor: 'var(--reemuControlFill) !important',
       color: `${tokens.colorNeutralForeground1} !important`,
     },
   },

@@ -13,56 +13,60 @@ export const STROKE = `var(--reemuFieldStroke, color-mix(in srgb, ${tokens.color
  * continua o do Fluent.
  */
 export const useModalButtonStyles = makeStyles({
-  // Mesmo fundo dos seletores de core (`SettingBlock`), sem cor na borda.
+  // Preenchimento de controle (`reemuControlFill*`, translúcido: sempre um
+  // passo acima do fundo atrás — 2026-11-14), sem cor na borda; o mesmo dos
+  // seletores (`SettingBlock`).
   block: {
-    backgroundColor: tokens.colorNeutralBackground2,
+    backgroundColor: "var(--reemuControlFill)",
     borderTopColor: "transparent",
     borderRightColor: "transparent",
     borderBottomColor: "transparent",
     borderLeftColor: "transparent",
     ":hover": {
-      backgroundColor: tokens.colorNeutralBackground2Hover,
+      backgroundColor: "var(--reemuControlFillHover)",
       borderTopColor: "transparent",
       borderRightColor: "transparent",
       borderBottomColor: "transparent",
       borderLeftColor: "transparent",
     },
     ":hover:active": {
-      backgroundColor: tokens.colorNeutralBackground2Pressed,
+      backgroundColor: "var(--reemuControlFillPressed)",
       borderTopColor: "transparent",
       borderRightColor: "transparent",
       borderBottomColor: "transparent",
       borderLeftColor: "transparent",
     },
   },
+  // Sem contorno desde 2026-11-14 (todos os botões preenchidos e sem borda,
+  // `buttonHooks.ts`), no preenchimento translúcido de controle.
   secondary: {
-    backgroundColor: tokens.colorNeutralBackground3,
+    backgroundColor: "var(--reemuControlFill)",
     // longhands: o atalho `borderColor` do Griffel some sem aviso
-    borderTopColor: STROKE,
-    borderRightColor: STROKE,
-    borderBottomColor: STROKE,
-    borderLeftColor: STROKE,
-    ':hover': { backgroundColor: tokens.colorNeutralBackground3Hover },
-    ':hover:active': { backgroundColor: tokens.colorNeutralBackground3Pressed },
+    borderTopColor: "transparent",
+    borderRightColor: "transparent",
+    borderBottomColor: "transparent",
+    borderLeftColor: "transparent",
+    ':hover': { backgroundColor: "var(--reemuControlFillHover)" },
+    ':hover:active': { backgroundColor: "var(--reemuControlFillPressed)" },
   },
   // O mesmo preenchimento, sem contorno (Gerenciar biblioteca, pedido do
   // usuário, 2026-11-06). Borda de 1 px transparente, não `none`: o tamanho
   // não muda e o foco continua no anel de fora (index.css).
   secondaryFlat: {
-    backgroundColor: tokens.colorNeutralBackground3,
+    backgroundColor: "var(--reemuControlFill)",
     borderTopColor: "transparent",
     borderRightColor: "transparent",
     borderBottomColor: "transparent",
     borderLeftColor: "transparent",
     ':hover': {
-      backgroundColor: tokens.colorNeutralBackground3Hover,
+      backgroundColor: "var(--reemuControlFillHover)",
       borderTopColor: "transparent",
       borderRightColor: "transparent",
       borderBottomColor: "transparent",
       borderLeftColor: "transparent",
     },
     ':hover:active': {
-      backgroundColor: tokens.colorNeutralBackground3Pressed,
+      backgroundColor: "var(--reemuControlFillPressed)",
       borderTopColor: "transparent",
       borderRightColor: "transparent",
       borderBottomColor: "transparent",

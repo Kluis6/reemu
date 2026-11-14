@@ -38,7 +38,7 @@ const useStyles = makeStyles({
     boxSizing: "border-box",
     padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
     borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground2,
+    backgroundColor: "var(--reemuControlFill)",
     color: tokens.colorNeutralForeground1,
     transitionProperty: "background-color",
     transitionDuration: tokens.durationFaster,
@@ -46,8 +46,8 @@ const useStyles = makeStyles({
   },
   pressable: {
     cursor: "pointer",
-    ":hover": { backgroundColor: tokens.colorNeutralBackground2Hover },
-    ":active": { backgroundColor: tokens.colorNeutralBackground2Pressed },
+    ":hover": { backgroundColor: "var(--reemuControlFillHover)" },
+    ":active": { backgroundColor: "var(--reemuControlFillPressed)" },
   },
   // `Button` do Fluent: herda o foco e o hover do app; só o desenho é do bloco.
   selectBlock: {
@@ -72,9 +72,9 @@ const useStyles = makeStyles({
   // Sobre uma superfície da mesma cor do bloco (faixa de lista, card, dialog):
   // um tom acima, o fundo dos botões do app.
   raised: {
-    backgroundColor: tokens.colorNeutralBackground3,
-    ":hover": { backgroundColor: tokens.colorNeutralBackground3Hover },
-    ":hover:active": { backgroundColor: tokens.colorNeutralBackground3Pressed },
+    backgroundColor: "var(--reemuControlFill)",
+    ":hover": { backgroundColor: "var(--reemuControlFillHover)" },
+    ":hover:active": { backgroundColor: "var(--reemuControlFillPressed)" },
   },
   text: {
     display: "flex",
