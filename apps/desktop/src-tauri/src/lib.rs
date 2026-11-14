@@ -5,8 +5,6 @@ mod bezel_pack;
 mod bios;
 mod bundled_shaders;
 mod commands;
-mod core_catalog;
-mod core_updates;
 mod covers;
 mod credentials;
 mod decoration;
@@ -28,8 +26,6 @@ mod profile;
 mod scraping;
 mod shader_failure;
 mod shader_pack;
-#[cfg(test)]
-mod smoke_roms;
 mod sync;
 mod system;
 mod system_files;

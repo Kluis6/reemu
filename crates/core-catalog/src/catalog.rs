@@ -16,7 +16,7 @@
 //!   (etapa 12); o `VkImage` do scanout vira textura do wgpu sem cópia. Cai
 //!   pro processo filho (GL/sw) se a negociação Vulkan não rolar.
 
-use crate::app_error::{AppError, ErrorCode};
+use crate::error::CatalogError;
 use std::path::{Path, PathBuf};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -671,7 +671,7 @@ fn download_url(core_id: &str) -> String {
 
 /// Baixa o `<core_id>` do buildbot e extrai o dylib pra `cores_dir`.
 /// Devolve o caminho instalado.
-pub async fn download(cores_dir: &Path, core_id: &str) -> Result<PathBuf, AppError> {
+pub async fn download(cores_dir: &Path, core_id: &str) -> Result<PathBuf, CatalogError> {
     if find(core_id).is_none() {
         return Err(format!("`{core_id}` não está no catálogo").into());
     }
@@ -681,23 +681,23 @@ pub async fn download(cores_dir: &Path, core_id: &str) -> Result<PathBuf, AppErr
         .get(&url)
         .send()
         .await
-        .map_err(|e| AppError::from_http("download", e))?
+        .map_err(|e| CatalogError::http("download", e))?
         .error_for_status()
-        .map_err(|e| AppError::from_http("download", e))?;
+        .map_err(|e| CatalogError::http("download", e))?;
     let bytes = resp
         .bytes()
         .await
-        .map_err(|e| AppError::from_http("download", e))?;
+        .map_err(|e| CatalogError::http("download", e))?;
 
     let cores_dir = cores_dir.to_path_buf();
     let so_name = format!("{core_id}.{}", dylib_ext());
-    tauri::async_runtime::spawn_blocking(move || -> Result<PathBuf, AppError> {
+    tokio::task::spawn_blocking(move || -> Result<PathBuf, CatalogError> {
         std::fs::create_dir_all(&cores_dir)?;
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
-            .map_err(|e| AppError::new(ErrorCode::Corrupt, format!("zip inválido: {e}")))?;
-        let mut entry = zip.by_name(&so_name).map_err(|_| {
-            AppError::new(ErrorCode::Corrupt, format!("`{so_name}` não está no zip"))
-        })?;
+            .map_err(|e| CatalogError::Corrupt(format!("zip inválido: {e}")))?;
+        let mut entry = zip
+            .by_name(&so_name)
+            .map_err(|_| CatalogError::Corrupt(format!("`{so_name}` não está no zip")))?;
         let tmp = cores_dir.join(format!("{so_name}.part"));
         let mut out = std::fs::File::create(&tmp)?;
         std::io::copy(&mut entry, &mut out)?;
@@ -705,7 +705,7 @@ pub async fn download(cores_dir: &Path, core_id: &str) -> Result<PathBuf, AppErr
         install_keeping_previous(&cores_dir, &so_name, &tmp)
     })
     .await
-    .map_err(|e| AppError::from(e.to_string()))?
+    .map_err(|e| CatalogError::Other(e.to_string()))?
 }
 
 /// Pasta da versão anterior de cada core. A descoberta não entra em subpastas.
@@ -720,7 +720,7 @@ fn install_keeping_previous(
     cores_dir: &Path,
     so_name: &str,
     tmp: &Path,
-) -> Result<PathBuf, AppError> {
+) -> Result<PathBuf, CatalogError> {
     let dest = cores_dir.join(so_name);
     if !dest.is_file() {
         std::fs::rename(tmp, &dest)?;
@@ -759,11 +759,11 @@ pub fn has_previous(cores_dir: &Path, core_id: &str) -> bool {
 }
 
 /// Volta para a versão anterior; a que estava instalada passa a ser a anterior.
-pub fn restore_previous(cores_dir: &Path, core_id: &str) -> Result<(), AppError> {
+pub fn restore_previous(cores_dir: &Path, core_id: &str) -> Result<(), CatalogError> {
     let so_name = format!("{core_id}.{}", dylib_ext());
     let kept = previous_dir(cores_dir).join(&so_name);
     if !kept.is_file() {
-        return Err(AppError::new(ErrorCode::NotFound, "não há versão anterior"));
+        return Err(CatalogError::NotFound("não há versão anterior".into()));
     }
     let tmp = cores_dir.join(format!("{so_name}.part"));
     std::fs::rename(&kept, &tmp)?;
@@ -771,10 +771,10 @@ pub fn restore_previous(cores_dir: &Path, core_id: &str) -> Result<(), AppError>
 }
 
 /// Remove o dylib de um core instalado e a versão anterior dele.
-pub fn remove(cores_dir: &Path, core_id: &str) -> Result<(), AppError> {
+pub fn remove(cores_dir: &Path, core_id: &str) -> Result<(), CatalogError> {
     let path = cores_dir.join(format!("{core_id}.{}", dylib_ext()));
     if !path.is_file() {
-        return Err(AppError::new(ErrorCode::NoCore, "core não está instalado"));
+        return Err(CatalogError::NoCore("core não está instalado".into()));
     }
     std::fs::remove_file(&path)?;
     let _ =
@@ -1069,7 +1069,7 @@ mod tests {
                 .and_then(|l| l.split('\t').nth(2))
                 .map(str::to_owned);
             if let Some(version) = &probe_version {
-                if let Some(state) = crate::core_updates::table_check(c.id, version).await {
+                if let Some(state) = crate::updates::table_check(c.id, version).await {
                     updates.push((c.id, state));
                 }
             }

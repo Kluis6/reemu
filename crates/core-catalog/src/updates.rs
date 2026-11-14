@@ -16,8 +16,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::app_error::AppError;
-use crate::core_catalog::{buildbot_os, dylib_ext};
+use crate::catalog::{buildbot_os, dylib_ext};
+use crate::error::CatalogError;
 
 /// Core → repositório. Só entra o que foi conferido em 2026-10-30: ou o commit
 /// da DLL instalada era o HEAD, ou o HEAD estava dentro da DLL noturna. Quem
@@ -223,7 +223,7 @@ struct Candidate {
 
 /// Os cores instalados com versão nova. Sem o índice, erro; sem o HEAD de um
 /// repositório, aquele core só não entra.
-pub async fn check(cores_dir: &Path) -> Result<Vec<String>, AppError> {
+pub async fn check(cores_dir: &Path) -> Result<Vec<String>, CatalogError> {
     let url = format!(
         "https://buildbot.libretro.com/nightly/{}/x86_64/latest/.index-extended",
         buildbot_os()
@@ -232,17 +232,17 @@ pub async fn check(cores_dir: &Path) -> Result<Vec<String>, AppError> {
         .get(&url)
         .send()
         .await
-        .map_err(|e| AppError::from_http("índice dos cores", e))?
+        .map_err(|e| CatalogError::http("índice dos cores", e))?
         .error_for_status()
-        .map_err(|e| AppError::from_http("índice dos cores", e))?
+        .map_err(|e| CatalogError::http("índice dos cores", e))?
         .text()
         .await
-        .map_err(|e| AppError::from_http("índice dos cores", e))?;
+        .map_err(|e| CatalogError::http("índice dos cores", e))?;
     let built = parse_index(&index, dylib_ext());
 
     // Ler `library_version` abre as DLLs (uma vez por execução; ver `discover`).
     let dir = cores_dir.to_path_buf();
-    let installed = tauri::async_runtime::spawn_blocking(move || emu_session::discover_cores(&dir))
+    let installed = tokio::task::spawn_blocking(move || core_loader_desktop::discover_cores(&dir))
         .await
         .map_err(|e| e.to_string())?;
 
@@ -272,9 +272,7 @@ pub async fn check(cores_dir: &Path) -> Result<Vec<String>, AppError> {
     for chunk in repos.chunks(HEAD_REQUESTS) {
         let tasks: Vec<_> = chunk
             .iter()
-            .map(|&repo| {
-                tauri::async_runtime::spawn(async move { (repo, remote_head(repo).await) })
-            })
+            .map(|&repo| tokio::spawn(async move { (repo, remote_head(repo).await) }))
             .collect();
         for task in tasks {
             if let Ok((repo, Some(head))) = task.await {
@@ -333,7 +331,7 @@ mod tests {
         let mut ids: Vec<&str> = UPSTREAM.iter().map(|(id, _)| *id).collect();
         let fora: Vec<&&str> = ids
             .iter()
-            .filter(|id| crate::core_catalog::find(id).is_none())
+            .filter(|id| crate::catalog::find(id).is_none())
             .collect();
         assert!(fora.is_empty(), "fora do catálogo: {fora:?}");
         let n = ids.len();

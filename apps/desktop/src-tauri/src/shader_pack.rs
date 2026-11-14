@@ -1,5 +1,5 @@
 //! Downloader do pacote de slang shaders — os mesmos que o RetroArch usa.
-//! Espelha `core_catalog.rs`: baixa o zip, extrai pra
+//! Espelha o `catalog.rs` da crate `core-catalog`: baixa o zip, extrai pra
 //! `<dados>/shaders/slang-shaders/` e a `ShaderLibrary` aponta pra lá.
 //!
 //! Fonte primária: `shaders_slang.zip` do buildbot da libretro (é o que o

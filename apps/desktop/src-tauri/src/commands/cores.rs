@@ -28,7 +28,7 @@ pub fn list_core_catalog(state: State<'_, AppState>) -> Vec<CatalogCoreDto> {
         emu_session::installed_core_ids(&state.cores_dir)
             .into_iter()
             .collect();
-    crate::core_catalog::CATALOG
+    core_catalog::CATALOG
         .iter()
         .map(|e| CatalogCoreDto {
             core_id: e.id.to_string(),
@@ -37,7 +37,7 @@ pub fn list_core_catalog(state: State<'_, AppState>) -> Vec<CatalogCoreDto> {
             license: e.license.to_string(),
             installed: installed.contains(e.id),
             hw: e.hw.as_str(),
-            has_previous: crate::core_catalog::has_previous(&state.cores_dir, e.id),
+            has_previous: core_catalog::has_previous(&state.cores_dir, e.id),
         })
         .collect()
 }
@@ -45,27 +45,27 @@ pub fn list_core_catalog(state: State<'_, AppState>) -> Vec<CatalogCoreDto> {
 #[tauri::command]
 pub async fn download_core(state: State<'_, AppState>, core_id: String) -> Result<(), AppError> {
     let dir = state.cores_dir.clone();
-    crate::core_catalog::download(&dir, &core_id).await?;
+    core_catalog::download(&dir, &core_id).await?;
     log::info!("core instalado: {core_id}");
     Ok(())
 }
 
 #[tauri::command]
 pub fn remove_core(state: State<'_, AppState>, core_id: String) -> Result<(), AppError> {
-    crate::core_catalog::remove(&state.cores_dir, &core_id)
+    Ok(core_catalog::remove(&state.cores_dir, &core_id)?)
 }
 
-/// Os cores instalados com versão nova no buildbot (`core_updates`).
+/// Os cores instalados com versão nova no buildbot (`core_catalog::updates`).
 #[tauri::command]
 pub async fn check_core_updates(state: State<'_, AppState>) -> Result<Vec<String>, AppError> {
     let dir = state.cores_dir.clone();
-    crate::core_updates::check(&dir).await
+    Ok(core_catalog::updates::check(&dir).await?)
 }
 
 /// Volta um core para a versão guardada na última atualização.
 #[tauri::command]
 pub fn restore_previous_core(state: State<'_, AppState>, core_id: String) -> Result<(), AppError> {
-    crate::core_catalog::restore_previous(&state.cores_dir, &core_id)?;
+    core_catalog::restore_previous(&state.cores_dir, &core_id)?;
     log::info!("core de volta à versão anterior: {core_id}");
     Ok(())
 }

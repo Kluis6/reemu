@@ -1,0 +1,20 @@
+[package]
+name = "core-catalog"
+version.workspace = true
+edition.workspace = true
+
+# Catálogo de cores libretro (lista curada do buildbot), download com a
+# versão anterior guardada e o aviso de atualização. Sem Tauri: devolve
+# `CatalogError` e o app converte no `AppError`. A fumaça semanal do catálogo
+# (`catalog_smoke`, ignorada) mora aqui e roda o `reemu-core-host`.
+[dependencies]
+net = { path = "../net" }
+core-loader-desktop = { path = "../core-loader-desktop" }
+thiserror.workspace = true
+log = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
+tokio = { version = "1", features = ["rt"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "time"] }

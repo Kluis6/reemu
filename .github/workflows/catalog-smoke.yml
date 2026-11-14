@@ -1,6 +1,6 @@
 name: Fumaça do catálogo
 
-# Baixa cada core do catálogo (apps/desktop/src-tauri/src/core_catalog.rs)
+# Baixa cada core do catálogo (crates/core-catalog/src/catalog.rs)
 # do buildbot, pelo mesmo `download` do app, e:
 # - fase 1: abre com `reemu-core-host --probe` (retro_init + system info,
 #   sem jogo) num processo à parte;
@@ -9,7 +9,7 @@ name: Fumaça do catálogo
 #   próprio teste (smoke_roms.rs) com `--run` e roda 180 quadros.
 # Pega core que sumiu do buildbot, que não abre na plataforma, que cai no
 # retro_init ou que não roda um jogo. Também confere a tabela do aviso de
-# atualização (core_updates.rs): repositório fora do ar ou core que deixou de
+# atualização (updates.rs): repositório fora do ar ou core que deixou de
 # declarar o commit fazem o job falhar. A tabela sai no resumo do job.
 # Semanal — os nightlies do buildbot mudam sozinhos.
 
@@ -55,15 +55,8 @@ jobs:
         with:
           key: catalog-smoke
 
-      # O crate do app embute o frontend (`frontendDist`) ao compilar.
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter app-desktop build
-
+      # A fumaça mora na crate `core-catalog` (Fase 6), que não compila o app:
+      # não precisa do frontend.
       - name: Compilar o core-host
         run: cargo build -p core-host-desktop
 
@@ -74,4 +67,4 @@ jobs:
         run: |
           # vazio = catálogo inteiro
           [ -z "$REEMU_SMOKE_ONLY" ] && unset REEMU_SMOKE_ONLY
-          cargo test -p reemu-desktop --lib catalog_smoke -- --ignored --nocapture
+          cargo test -p core-catalog --lib catalog_smoke -- --ignored --nocapture

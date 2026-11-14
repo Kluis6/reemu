@@ -161,6 +161,21 @@ impl From<crate::save_state::SaveError> for AppError {
     }
 }
 
+/// O código vem do tipo do erro; a mensagem é a mesma de antes da crate.
+impl From<core_catalog::CatalogError> for AppError {
+    fn from(e: core_catalog::CatalogError) -> Self {
+        use core_catalog::CatalogError as E;
+        match e {
+            E::Http { context, source } => Self::from_http(context, source),
+            E::Corrupt(m) => Self::new(ErrorCode::Corrupt, m),
+            E::NotFound(m) => Self::new(ErrorCode::NotFound, m),
+            E::NoCore(m) => Self::new(ErrorCode::NoCore, m),
+            E::Io(e) => Self::from(e),
+            E::Other(m) => Self::from(m),
+        }
+    }
+}
+
 impl From<SessionError> for AppError {
     fn from(e: SessionError) -> Self {
         // `LoadFailed` junta causas diferentes (core travou, ROM recusada, BIOS):

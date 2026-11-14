@@ -242,7 +242,7 @@ pub async fn list_installed_cores(
             version: c.library_version,
             extensions: c.valid_extensions,
             render_backend: backends.get(&c.core_id).cloned().flatten(),
-            systems: crate::core_catalog::system_ids(&c.core_id)
+            systems: core_catalog::system_ids(&c.core_id)
                 .into_iter()
                 .map(String::from)
                 .collect(),

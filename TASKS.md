@@ -93,7 +93,7 @@ o card atual fica.
       - [ ] B2/B3. Conforme o B1: atualizar Tauri e tirar a `zip` 4.6.1, ou escolher a saída.
       - [ ] C. Fase 6 (crates `net`, `core-catalog`, `scraping`).
         - [x] C1. `crates/net`: `http.rs` e `repo_version.rs` (2026-11-14).
-        - [ ] C2. `crates/core-catalog`: `core_catalog.rs`, `core_updates.rs`, `smoke_roms.rs`.
+        - [x] C2. `crates/core-catalog`: `core_catalog.rs`, `core_updates.rs`, `smoke_roms.rs` (2026-11-14).
         - [ ] C3. `crates/scraping`.
 
 ### Validação (precisa de hardware/máquina que não é esta)
@@ -154,7 +154,7 @@ o card atual fica.
       no Windows, ainda no `retro_init` (> 60 s); precisa ver se repete.
       Reproduzir numa máquina Windows com `reemu-core-host` e a ROM do teste.
       Desde 2026-11-12 a fumaça marca `stella_libretro` e `stella2023_libretro` como
-      "conhecido" só no Windows (`KNOWN_BROKEN_WINDOWS` em `core_catalog.rs`), para o job
+      "conhecido" só no Windows (`KNOWN_BROKEN_WINDOWS` em `crates/core-catalog/src/catalog.rs`), para o job
       semanal voltar a acusar só regressão nova; a causa continua em aberto.
 
 - [x] `done` — **Vídeo nativo no Windows** (janela filha acima do

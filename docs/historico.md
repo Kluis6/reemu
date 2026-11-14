@@ -3475,3 +3475,11 @@ Infra:
 
 - **O que mudou** (`screens/settings/SettingsHome.tsx`, pedido do usuário com print das Configurações do Xbox): grade de 2 colunas (1 em janela estreita), cards baixos (72 a 104 px) com o ícone de 32 px à esquerda na cor do texto e o nome (`Subtitle2`) e a descrição ao lado, centrados na altura. O card de Perfil mostra o avatar no lugar do ícone. Conteúdo, foco e hover não mudaram; os cards das subcategorias (`SettingsHubCards`) seguem o mesmo desenho.
 - **Conferido:** `tsc -b`; `ui-render.py` em `/settings` nos temas `reemu` e `claro`, com card focado, e em `/settings/aparencia`; `audit-focus` sem novidade.
+
+## 2026-11-14 — Fase 6, passo C2: a crate `core-catalog`
+
+- **O que mudou:** `core_catalog.rs`, `core_updates.rs` e `smoke_roms.rs` saíram de `apps/desktop/src-tauri/src` para `crates/core-catalog` (`catalog.rs`, reexportado na raiz; `updates.rs`; `smoke_roms.rs`, só nos testes). O app chama `core_catalog::download`, `core_catalog::updates::check` etc.; o comportamento não muda.
+- **Erros:** a crate devolve `CatalogError` (`Http` com o contexto, `Corrupt`, `NotFound`, `NoCore`, `Io`, `Other`) e o app converte em `AppError` com os mesmos códigos e textos de antes (`From` em `app_error.rs`).
+- **Sem Tauri:** `tauri::async_runtime::spawn_blocking`/`spawn` viraram `tokio::task::spawn_blocking`/`tokio::spawn` (os comandos já rodam no runtime tokio do Tauri); a lista de cores instalados vem direto do `core_loader_desktop::discover_cores`.
+- **Fumaça semanal:** `catalog-smoke.yml` roda `cargo test -p core-catalog --lib catalog_smoke` e deixou de instalar e compilar o frontend, que só o crate do app precisava.
+- **Conferido:** `clippy --workspace --all-targets -D warnings`; `cargo test -p core-catalog` (11 ok, 2 ignorados) e `-p reemu-desktop` (499 ok, 22 ignorados; antes 510 e 24, a diferença foi junto); `catalog_smoke` com `REEMU_SMOKE_ONLY=fceumm_libretro` nesta máquina (abriu, rodou 180 quadros, save state ok, em dia).
