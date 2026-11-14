@@ -780,8 +780,6 @@ no `emu-session`, ver `docs/historico.md`).
 
 ### Infra / qualidade
 
-- [ ] `todo` — **Dividir `sync/engine.rs`** (2026-11-14): 7.724 linhas, vindas dos PRs do
-      Alvanista (#36 a #38). Dividir como o `PlayScreen`, sem mudar o comportamento.
 - [ ] `todo` — **Erros com código fora de `commands/`** (2026-11-14): `alvanista/`, `sync/`,
       `appearance.rs` e `updates.rs` ainda devolvem `String` que a interface lê pelo texto
       (`sync.err.*`, `lib/errors.ts`). Opcional: só para padronizar com o `AppError`.

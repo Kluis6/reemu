@@ -3648,3 +3648,10 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Visual:** os botões da linha (Carregar, Apagar, Substituir) quebram linha quando não cabem no drawer `small` (`stateActions` com `flexWrap`).
 - **Textos:** `play.saveNewSlot`, `savedInSlot`, `overwrite`, `overwriteAsk` e `overwriteYes` em pt-BR, en e es.
 - **Conferido:** `tsc -b`, `oxlint`, 432 testes do frontend; `ui-render.py` em `/play/r1` com o menu aberto nos temas `reemu` e `claro`: a confirmação, o foco no "Sim" e o toast "Salvo no Slot 2" com o Slot 1 ocupado. Não conferido no app com um jogo real.
+
+## 2026-11-14 — `sync/engine.rs` dividido
+
+- **Antes:** 7.724 linhas num arquivo (2.373 de código e 5.351 de testes), vindas dos PRs do Alvanista (#36 a #38).
+- **Agora:** `engine.rs` (1.315 linhas: tipos, `Engine`, passadas, listagem e os auxiliares de disco e de data) e, ao lado de `states`, `remote_states` e `settings`, que já existiam: `steps.rs` (um arquivo por vez: subir, descer, aceitar o apagado, conflito e base), `backups.rs` (cópias em `sync-backups/` e limpeza de temporários), `requests.rs` (resolver conflito, voltar versão, listar versões e conflitos, estado do save), `app.rs` (instalação no Tauri e os momentos das passadas, reexportados em `engine::`) e `tests.rs`. Mesmo padrão dos submódulos de antes: `use super::*` e um `impl Engine` por arquivo; os métodos que mudaram de arquivo e eram privados viraram `pub(super)`.
+- **Sem mudança de comportamento:** comparadas as linhas de antes e de depois, a única diferença é o `rustfmt` juntando linhas nos testes (que perderam um nível de recuo), os cabeçalhos novos e os `pub(super)`.
+- **Conferido:** `clippy --workspace --all-targets -D warnings` e `cargo test -p reemu-desktop` (491 ok, 22 ignorados, como antes).
