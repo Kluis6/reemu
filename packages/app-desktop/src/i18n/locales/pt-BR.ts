@@ -473,7 +473,6 @@ const ptBR = {
     machinesLoading: 'Carregando as máquinas…',
     this: 'esta',
     copy: 'Copiar configurações…',
-    soon: 'em breve',
     what: 'O que sincroniza',
     saves: 'Game saves',
     savesHint: 'Da conta: toda máquina vê. Descem ao abrir o ReEmu e antes de um jogo; sobem quando o jogo fecha.',
@@ -615,12 +614,14 @@ const ptBR = {
       sentAt: 'Última enviada: {{when}}',
       changed: 'Alteradas desde o último envio',
       undo: 'Configurações copiadas de {{machine}} em {{when}}.',
+      appearanceUndoFailed: 'As configurações voltaram, mas a aparência de antes não pôde ser aplicada.',
       undoButton: 'Desfazer',
     },
     copyDlg: {
       title: 'Copiar de {{machine}} para esta máquina',
       sentAt: 'Enviadas {{when}}.',
       undoNote: 'As suas atuais ficam guardadas para desfazer.',
+      retry: 'Tentar de novo',
       loading: 'Lendo o que a outra máquina enviou…',
       hint: {
         'core-options': 'Por core e por jogo',

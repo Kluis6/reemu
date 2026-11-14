@@ -472,7 +472,6 @@ const en: Messages = {
     machinesLoading: 'Loading machines…',
     this: 'this one',
     copy: 'Copy settings…',
-    soon: 'coming soon',
     what: 'What syncs',
     saves: 'Game saves',
     savesHint: 'From the account: every machine sees them. They come down when ReEmu opens and before a game; they go up when the game closes.',
@@ -614,12 +613,14 @@ const en: Messages = {
       sentAt: 'Last sent: {{when}}',
       changed: 'Changed since the last send',
       undo: 'Settings copied from {{machine}} on {{when}}.',
+      appearanceUndoFailed: 'The settings were restored, but the previous appearance could not be applied.',
       undoButton: 'Undo',
     },
     copyDlg: {
       title: 'Copy from {{machine}} to this machine',
       sentAt: 'Sent {{when}}.',
       undoNote: 'Your current ones are kept so you can undo.',
+      retry: 'Try again',
       loading: 'Reading what the other machine sent…',
       hint: {
         'core-options': 'Per core and per game',

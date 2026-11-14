@@ -75,6 +75,7 @@ function MachineRow({ m, lang, nowMs }: { m: SyncMachine; lang: string; nowMs: n
   const s = useStyles()
   const savesOnly = isSavesOnly(m)
   const [copying, setCopying] = useState(false)
+  const copyRef = useRef<HTMLButtonElement>(null)
   const hw = hardwareLine(m.hardware, lang)
   const seen = m.lastUsedAt ? Date.parse(m.lastUsedAt) : NaN
   return (
@@ -100,12 +101,21 @@ function MachineRow({ m, lang, nowMs }: { m: SyncMachine; lang: string; nowMs: n
             : t('sync.seenAt', { when: relativeAge(seen / 1000, nowMs, lang) })}
         </Caption1>
         {canCopyFrom(m) && (
-          <Button size="small" appearance="secondary" onClick={() => setCopying(true)}>
+          <Button ref={copyRef} size="small" appearance="secondary" onClick={() => setCopying(true)}>
             {t('sync.copy')}
           </Button>
         )}
       </span>
-      {copying && <CopySettingsDialog machine={m} onClose={() => setCopying(false)} />}
+      {copying && (
+        <CopySettingsDialog
+          machine={m}
+          onClose={() => {
+            setCopying(false)
+            // O foco volta ao botão que abriu (Cancelar, Fechar, X, Esc ou B).
+            window.setTimeout(() => copyRef.current?.focus(), 0)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -215,4 +215,48 @@ describe('CopySettingsDialog', () => {
     })
     expect(document.activeElement).toBe(box('Opções dos cores'))
   })
+
+  it('a copy whose appearance export failed clears the saved appearance undo', async () => {
+    localStorage.setItem(APPEARANCE_UNDO_KEY, JSON.stringify({ v: 1, older: true }))
+    appearance.exportAppearance.mockRejectedValue(new Error('x'))
+    api.syncSettingsCopy.mockResolvedValue(REPORT({ appearanceDoc: { v: 1, theirs: true } }))
+    await mount()
+    await act(async () => button('Copiar 5 grupos')!.click())
+    expect(appearance.applyAppearance).toHaveBeenCalledWith({ v: 1, theirs: true })
+    expect(localStorage.getItem(APPEARANCE_UNDO_KEY)).toBeNull()
+  })
+
+  it('an appearance that fails to apply keeps the previous one saved and warns', async () => {
+    api.syncSettingsCopy.mockResolvedValue(REPORT({ appearanceDoc: { v: 1, theirs: true } }))
+    appearance.applyAppearance.mockRejectedValue(new Error('settings_invalid'))
+    await mount()
+    await act(async () => button('Copiar 5 grupos')!.click())
+    expect(JSON.parse(localStorage.getItem(APPEARANCE_UNDO_KEY)!)).toEqual({ v: 1, before: true })
+    expect(document.body.textContent).toContain('A aparência não pôde ser aplicada. O resto foi copiado.')
+    expect(document.body.textContent).toContain('Copiado.')
+  })
+
+  it('a preview that fails to load offers Tentar de novo, which reads it again', async () => {
+    api.syncSettingsPreview.mockRejectedValueOnce('offline').mockResolvedValue(PREVIEW)
+    await mount()
+    expect(document.body.textContent).toContain('Não foi possível falar com o Alvanista')
+    expect(api.syncSettingsPreview).toHaveBeenCalledTimes(1)
+    await act(async () => button('Tentar de novo')!.click())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5))
+    })
+    expect(api.syncSettingsPreview).toHaveBeenCalledTimes(2)
+    expect(button('Tentar de novo')).toBeUndefined()
+    expect(box('Opções dos cores').checked).toBe(true)
+  })
+
+  it('puts the focus on Fechar when the result shows', async () => {
+    await mount()
+    await act(async () => button('Copiar 5 grupos')!.click())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 5))
+    })
+    expect(document.activeElement).toBe(button('Fechar')!.closest('button'))
+    expect(document.activeElement?.textContent).toBe('Fechar')
+  })
 })

@@ -5,6 +5,7 @@ import {
   Caption1,
   Checkbox,
   MessageBar,
+  MessageBarActions,
   MessageBarBody,
   Spinner,
   makeStyles,
@@ -110,6 +111,8 @@ export function CopySettingsDialog({ machine, onClose }: { machine: SyncMachine;
   const [report, setReport] = useState<CopyReport | null>(null)
   const [appearanceFailed, setAppearanceFailed] = useState(false)
   const firstRef = useRef<HTMLInputElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     let alive = true
@@ -129,7 +132,7 @@ export function CopySettingsDialog({ machine, onClose }: { machine: SyncMachine;
     return () => {
       alive = false
     }
-  }, [machine.id])
+  }, [machine.id, attempt])
 
   // O foco do controle: no primeiro grupo que se pode marcar, e não no X.
   const firstUsable = preview?.groups.find((g) => g.present && g.error === null)?.group
@@ -138,6 +141,13 @@ export function CopySettingsDialog({ machine, onClose }: { machine: SyncMachine;
     const id = window.setTimeout(() => firstRef.current?.focus(), 0)
     return () => window.clearTimeout(id)
   }, [preview, report])
+
+  // Depois da cópia o foco vai para "Fechar": o grupo em que estava sumiu.
+  useEffect(() => {
+    if (!report) return
+    const id = window.setTimeout(() => closeRef.current?.focus(), 0)
+    return () => window.clearTimeout(id)
+  }, [report])
 
   const count = SETTINGS_GROUPS.filter((g) => ticked[g]).length
 
@@ -152,7 +162,9 @@ export function CopySettingsDialog({ machine, onClose }: { machine: SyncMachine;
       const before = appearanceWanted ? await exportAppearance().catch(() => null) : null
       const done = await syncSettingsCopy(machine.id, groups, appearanceWanted)
       if (appearanceWanted && done.appearanceDoc != null) {
+        // Sem a aparência de antes, uma guardada de outra cópia seria velha.
         if (before) saveAppearanceUndo(before)
+        else clearAppearanceUndo()
         try {
           await applyAppearance(done.appearanceDoc)
         } catch {
@@ -229,7 +241,7 @@ export function CopySettingsDialog({ machine, onClose }: { machine: SyncMachine;
       title={t('sync.copyDlg.title', { machine: machine.label })}
       actions={
         report ? (
-          <Button appearance="primary" onClick={onClose}>
+          <Button ref={closeRef} appearance="primary" onClick={onClose}>
             {t('sync.copyDlg.close')}
           </Button>
         ) : (
@@ -253,6 +265,12 @@ export function CopySettingsDialog({ machine, onClose }: { machine: SyncMachine;
         {loadError && (
           <MessageBar intent="warning">
             <MessageBarBody>{t(`sync.err.${loadError as 'failed'}`)}</MessageBarBody>
+            <MessageBarActions>
+              <Button onClick={() => {
+                  setLoadError(null)
+                  setAttempt((n) => n + 1)
+                }}>{t('sync.copyDlg.retry')}</Button>
+            </MessageBarActions>
           </MessageBar>
         )}
         {!preview && !loadError && <Spinner size="tiny" label={t('sync.copyDlg.loading')} labelPosition="after" />}

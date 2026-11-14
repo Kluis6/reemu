@@ -53,6 +53,7 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
   const [failedGroups, setFailedGroups] = useState<{ group: SettingsGroupName; code: string }[]>([])
   const [stop, setStop] = useState<string | null>(null)
   const [undoError, setUndoError] = useState<string | null>(null)
+  const [appearanceError, setAppearanceError] = useState(false)
 
   const sent = useQuery({
     queryKey: SETTINGS_SENT_KEY,
@@ -86,13 +87,19 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
     if (undoing) return
     setUndoing(true)
     setUndoError(null)
+    setAppearanceError(false)
     try {
-      await syncSettingsUndo()
+      const undone = await syncSettingsUndo()
       // A aparência de antes fica no localStorage; o Rust guarda só o banco.
-      const before = readAppearanceUndo()
+      // Só volta se o Rust desfez; se não aplicar, o documento fica guardado.
+      const before = undone ? readAppearanceUndo() : null
       if (before !== null) {
-        await applyAppearance(before).catch(() => {})
-        clearAppearanceUndo()
+        try {
+          await applyAppearance(before)
+          clearAppearanceUndo()
+        } catch {
+          setAppearanceError(true)
+        }
       }
       void qc.invalidateQueries({ queryKey: SETTINGS_UNDO_KEY })
       void qc.invalidateQueries({ queryKey: SETTINGS_SENT_KEY })
@@ -129,6 +136,11 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
               {t('sync.settingsRow.undoButton')}
             </Button>
           </MessageBarActions>
+        </MessageBar>
+      )}
+      {appearanceError && (
+        <MessageBar intent="warning">
+          <MessageBarBody>{t('sync.settingsRow.appearanceUndoFailed')}</MessageBarBody>
         </MessageBar>
       )}
       {enabled && (

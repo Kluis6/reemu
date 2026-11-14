@@ -472,7 +472,6 @@ const es: Messages = {
     machinesLoading: 'Cargando las máquinas…',
     this: 'esta',
     copy: 'Copiar ajustes…',
-    soon: 'próximamente',
     what: 'Qué se sincroniza',
     saves: 'Game saves',
     savesHint: 'De la cuenta: todas las máquinas los ven. Bajan al abrir ReEmu y antes de un juego; suben cuando el juego se cierra.',
@@ -614,12 +613,14 @@ const es: Messages = {
       sentAt: 'Último envío: {{when}}',
       changed: 'Cambiadas desde el último envío',
       undo: 'Ajustes copiados de {{machine}} el {{when}}.',
+      appearanceUndoFailed: 'Los ajustes se restauraron, pero no se pudo aplicar la apariencia anterior.',
       undoButton: 'Deshacer',
     },
     copyDlg: {
       title: 'Copiar de {{machine}} a esta máquina',
       sentAt: 'Enviados {{when}}.',
       undoNote: 'Los actuales se guardan para deshacer.',
+      retry: 'Reintentar',
       loading: 'Leyendo lo que envió la otra máquina…',
       hint: {
         'core-options': 'Por core y por juego',
