@@ -3773,3 +3773,10 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Backend** (`crates/input-desktop/src/gamepad.rs`): pulsos novos `ScrollUp`/`ScrollDown` (`menu-nav` "scrollUp"/"scrollDown") a partir do stick direito, com limiar de 25% do raio; vale o controle mais inclinado. Repete mais rápido quanto mais inclinado: 140 ms no limiar até 30 ms no fim do curso (`scroll_interval`, com teste). No jogo nada muda: o stick direito continua indo para o core como analógico.
 - **Frontend** (`hooks/useMenuNav.ts`): cada pulso rola 80 px a área rolável que contém o item focado (ou o conteúdo principal, `[data-nav-content]`), sem mover o foco e sem som, como o stick direito no dashboard do Xbox. Tratado antes do filtro de repetição de 90 ms dos outros pulsos.
 - **Conferido:** `clippy --workspace -D warnings`, 25 testes do `input-desktop`, `tsc -b`, `oxlint`; `ui-render.py` em Opções: três pulsos para baixo rolaram de 0 ao fim (200 px), um para cima voltou 80, o foco ficou no mesmo campo. Não conferido com um controle de verdade.
+
+## 2026-11-14 — Release v0.1.15
+
+- **Pedido do usuário:** gerar a versão com as mudanças de aparência da tarde.
+- **Versão:** 0.1.14 → 0.1.15 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 15 crates do workspace.
+- **Testes antes da tag:** `cargo test --workspace` com 763 ok e 34 ignorados; `tsc -b`, 434 testes do frontend e o build de produção do frontend (com os 6 vídeos em `dist/wallpapers`). Testes de GPU ignorados não rodaram (GPU fora desta rodada).
+- **O que entra, desde a v0.1.14:** papéis de parede em vídeo (6, com o do ReEmu) e a tela de Plano de fundo em duas colunas; diálogo do tema personalizado; cards de tema com borda única, cor primária em destaque e sem mudar de fundo no foco; botões preenchidos e sem borda em todo o app, com preenchimento translúcido que aparece sobre qualquer fundo; contraste dos temas claros; botões de diálogo maiores; foco nos grupos do pacote de shaders; relógio e ícones brancos na página do jogo; rolagem pelo stick direito.
