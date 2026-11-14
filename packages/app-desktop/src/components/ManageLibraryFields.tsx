@@ -66,6 +66,9 @@ const useStyles = makeStyles({
     minWidth: "120px",
     border: "1px solid transparent !important",
   },
+  // "Remover" da linha na altura do seletor de core compacto e do ícone
+  // (48 px; pedido do usuário, 2026-11-14 — era a altura padrão, 32)
+  rowAction: { height: "48px" },
   path: {
     flexGrow: 1,
     minWidth: 0,
@@ -131,7 +134,7 @@ export function ManageLibraryFields({
       appearance={confirm === target ? "primary" : "secondary"}
       // com fundo e sem borda, como o "Atualizar biblioteca"; na confirmação
       // fica o primary
-      className={mergeClasses(s.action, confirm !== target && btn.secondaryFlat)}
+      className={mergeClasses(s.action, s.rowAction, confirm !== target && btn.secondaryFlat)}
       disabled={purge.isPending}
       onClick={() =>
         confirm === target ? purge.mutate(target) : setConfirm(target)

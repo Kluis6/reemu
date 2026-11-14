@@ -336,6 +336,21 @@ export const useShellStyles = makeStyles({
     boxShadow: "none",
   },
   topbarSpacer: { flexGrow: 1 },
+  // Página do jogo (`/rom/...`, arte do jogo de fundo): controle, rede e
+  // relógio sempre brancos, em qualquer tema e modo (pedido do usuário,
+  // 2026-11-14), com uma sombra leve pra ler sobre arte clara. `contents`: o
+  // bloco não mexe no layout da barra; a cor passa por herança.
+  // fora da página do jogo: só agrupa, sem mudar nada
+  topbarStatus: { display: "contents" },
+  topbarOnArt: {
+    display: "contents",
+    color: "#ffffff",
+    // o relógio e os ícones têm cor própria (`clock`, `gamepadStatus`)
+    "& > *": {
+      color: "#ffffff !important",
+      filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55))",
+    },
+  },
   // Botões de ícone "soltos" da topbar/rail (Voltar, Tela cheia, Adicionar
   // ROM, Gerenciar biblioteca…) — cor/borda continuam no `navBtn` local de
   // cada tela; aqui só width/height/fontSize: o alvo mínimo de 32 epx, um

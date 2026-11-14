@@ -310,9 +310,11 @@ export function AppShell() {
               onClick={() => void toggleFullscreen()}
             />
           </Tooltip>
-          <GamepadStatus />
-          <NetworkStatus />
-          <Clock />
+          <span className={pathname.startsWith("/rom/") ? s.topbarOnArt : s.topbarStatus}>
+            <GamepadStatus />
+            <NetworkStatus />
+            <Clock />
+          </span>
         </div>
         <div className={s.scroll} ref={scrollRef} data-nav-content={pathname.startsWith("/rom/") ? "bleed" : ""}>
           <RouteTransition

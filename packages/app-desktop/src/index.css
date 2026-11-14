@@ -220,6 +220,39 @@ html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus 
   border-color: transparent !important;
 }
 
+/* Botões dos diálogos no tamanho grande, como os do dashboard do Xbox Series
+   X (pedido do usuário, 2026-11-14; doc 18: controles de ~50 px na largura de
+   2000 no app do Xbox): os valores do `size="large"` do Fluent (40 px de
+   altura, `fontSizeBase400`, padding 8/16) e 160 px de largura mínima, em todo
+   `DialogActions` — sem passar `size` botão por botão. Botão só de ícone fica
+   de fora. */
+.fui-DialogActions .fui-Button:not(.fui-Button--icon-only):not(:has(> .fui-Button__icon:only-child)) {
+  min-height: 40px;
+  min-width: 160px;
+  padding: 8px var(--spacingHorizontalL);
+  font-size: var(--fontSizeBase400);
+  line-height: var(--lineHeightBase400);
+}
+
+/* 2b. Cabeçalho do `Accordion` (grupos do pacote de shaders, licenças): é um
+   `<button>` comum, de cantos retos. Pelo teclado o Fluent desenha o anel no
+   `::after` (regra 1, arredondado e com brilho); pelo controle caía na regra 2
+   e saía um anel RETO, sem brilho e sem fundo (print do usuário, 2026-11-14).
+   Agora os dois focos são iguais: cantos médios (o `outline` segue o raio), o
+   brilho do anel e, no foco e no hover, o fundo de item em destaque. */
+.fui-AccordionHeader__button {
+  border-radius: var(--borderRadiusMedium);
+}
+.fui-AccordionHeader__button:hover,
+.fui-AccordionHeader__button[data-fui-focus-visible],
+html[data-nav-focus] .fui-AccordionHeader__button:focus {
+  background-color: var(--colorNeutralBackground1Hover);
+}
+/* mais específico que a regra 2, que zera o `box-shadow` com `!important` */
+html[data-nav-focus] .fui-AccordionHeader .fui-AccordionHeader__button.fui-AccordionHeader__button:focus {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
+}
+
 /* 3. Campos (texto, busca, área de texto, seletor): o anel em volta do
    campo inteiro quando o foco é visível — num campo de texto o foco é
    sempre visível (é onde se digita), e no controle entra pela regra 2 de

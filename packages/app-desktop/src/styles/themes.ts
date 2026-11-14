@@ -547,12 +547,20 @@ function liftTokens(light: boolean): ReEmuLiftTokens {
   // descem em direção à página (`--reemuPage`) — o mesmo sentido do hover do
   // Fluent no claro. Sem borda nem sombra no card (como no modo XBOX), a
   // separação é só a cor.
-  const toward = light ? "var(--reemuPage)" : "var(--colorNeutralForeground1)";
+  //
+  // 2026-11-14 (print do usuário, Gerenciar biblioteca num tema claro): no
+  // claro as camadas desciam em direção à PÁGINA, e quando a página tem cor
+  // perto da do card a linha, o campo e o botão ficavam iguais — contraste
+  // medido de 1,03 a 1,06 entre linha e campo (alva-claro, snes-claro,
+  // simple-vibes). Agora o claro também mistura a cor do texto, num passo
+  // fixo e neutro, com o campo mais longe do card que a linha (como no
+  // escuro): ~1,16 card/linha, ~1,2 linha/campo, ~1,4 card/campo.
+  const toward = "var(--colorNeutralForeground1)";
   const mix = (pct: number) =>
     `color-mix(in srgb, var(--colorNeutralBackground1), ${toward} ${pct}%)`;
   // [repouso, hover, pressionado, selecionado]
-  const rows = light ? [55, 70, 85, 65] : [8, 12, 6, 14];
-  const fields = light ? [30, 45, 60, 40] : [14, 18, 12, 20];
+  const rows = light ? [7, 10, 12, 9] : [8, 12, 6, 14];
+  const fields = light ? [16, 19, 22, 18] : [14, 18, 12, 20];
   return {
     reemuSurface1: "var(--colorNeutralBackground1)",
     reemuSurface2: mix(rows[0]),
