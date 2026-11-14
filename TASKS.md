@@ -79,9 +79,16 @@ o card atual fica.
 - [x] `done` — Fase 4: configurações no modelo do console, aprovada pelo usuário (2026-10-31). Blocos em Sistema, Áudio, Metadados e Plano de fundo; listas, Perfil, Temas, Shaders e Molduras mantêm o layout próprio; sem coluna de categorias, a pedido.
 - [x] `done` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados, aprovada pelo usuário (2026-10-31). Sugestões de palavras no teclado virtual ficaram de fora.
       Inclui redesenhar as mensagens de erro (tela ao abrir um jogo e avisos).
-- [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates.
+- [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates. Planejada em `22-plano-gpu-e-crates.md`, etapa C (`net`, `core-catalog`, `scraping`).
 - [x] `done` — Fase 7: sons, reduzir movimento, diagnóstico e registro de decisões, aprovada pelo usuário (2026-10-31). Pendentes: vibração, que precisa de suporte no código de entrada, e revisão dos temas numa TV.
 - [ ] `in-progress` — Fase 8: estrutura de core e GPU (**cada item exige aviso**). Item 1 publicado; mapa das travas em `20-mapa-travas-session.md`; separar travas e item 3 parados até haver motivo.
+- [ ] `todo` — **Plano GPU e crates** (2026-11-13, só planejado; cada etapa com aviso):
+      [`22-plano-gpu-e-crates.md`](docs/ai-context/22-plano-gpu-e-crates.md).
+      - [ ] A1. `vk_frame.rs`: `lock().unwrap()` → `unwrap_or_else(into_inner)` (risco baixo).
+      - [ ] A2. `gpu/surface.rs`: 5 invariantes sem `unwrap` (risco médio; só com relato real).
+      - [ ] B1. Experiência sem commit: `wgpu` 30.0.2 + updater 2.14.1 compila no Windows?
+      - [ ] B2/B3. Conforme o B1: atualizar Tauri e tirar a `zip` 4.6.1, ou escolher a saída.
+      - [ ] C. Fase 6 (crates `net`, `core-catalog`, `scraping`).
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
