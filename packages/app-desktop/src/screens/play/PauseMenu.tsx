@@ -19,6 +19,8 @@ import {
   FullScreenMinimizeRegular,
   HistoryRegular,
   PlayRegular,
+  SaveCopyRegular,
+  SaveEditRegular,
   SaveRegular,
   TrophyRegular,
   WandRegular,
@@ -86,12 +88,17 @@ export function PauseMenu({
   );
   type PauseTab = (typeof tabs)[number]["id"];
   const [tab, setTab] = useState<PauseTab>("states");
+  // vaga numerada esperando a confirmação de "Substituir"
+  const [confirmSlot, setConfirmSlot] = useState<number | null>(null);
   // ajuste no render quando o menu abre (react.dev, "Adjusting some state
   // when a prop changes"), sem efeito
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) setTab("states");
+    if (open) {
+      setTab("states");
+      setConfirmSlot(null);
+    }
   }
 
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -159,6 +166,27 @@ export function PauseMenu({
     },
     onError: (e) => push(errorToast(e, "loadGameState")),
   });
+  // Vagas numeradas (Slot 1, 2…): o QuickSave é a vaga 0. "Slot novo" usa a
+  // menor vaga livre a partir da 1; substituir uma vaga pede confirmação na
+  // própria linha (o backend apaga o state que estava nela).
+  const usedSlots = new Set((stateList.data ?? []).map((st) => st.slot));
+  let nextSlot = 1;
+  while (usedSlots.has(nextSlot)) nextSlot++;
+  const saveSlot = useMutation({
+    mutationFn: (slot: number) => saveState(romId, slot),
+    onSuccess: (_, slot) => {
+      setConfirmSlot(null);
+      qc.invalidateQueries({ queryKey: ["save-states", romId] });
+      push(sysToast(t("play.savedInSlot", { n: slot }), "Success"));
+    },
+    onError: (e) => push(errorToast(e, "saveGameState")),
+  });
+  // Ao pedir confirmação, o foco vai para o "Sim" da linha (controle).
+  useEffect(() => {
+    if (confirmSlot == null) return;
+    const yes = bodyRef.current?.querySelector<HTMLElement>("[data-overwrite-yes]");
+    if (yes) focusFromNav(yes);
+  }, [confirmSlot]);
   const delState = useMutation({
     mutationFn: (id: string) => deleteSaveState(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["save-states", romId] }),
@@ -233,6 +261,16 @@ export function PauseMenu({
               >
                 {t("play.quickLoad")}
               </Button>
+              <Button
+                size="large"
+                appearance="subtle"
+                className={pause.item}
+                icon={<SaveCopyRegular />}
+                disabled={saveSlot.isPending || !stateList.isSuccess}
+                onClick={() => saveSlot.mutate(nextSlot)}
+              >
+                {t("play.saveNewSlot")}
+              </Button>
               {(stateList.data?.length ?? 0) > 0 && (
                 <div className={pause.states}>
                   {stateList.data!.map((st) => (
@@ -263,24 +301,56 @@ export function PauseMenu({
                           {/* por que este state não vai para a nuvem (sync ligado) */}
                           <LocalStateNote romId={romId} state={st} />
                         </span>
-                        <div className={pause.stateActions}>
-                          <Button
-                            appearance="subtle"
-                            icon={<HistoryRegular />}
-                            disabled={loadAny.isPending}
-                            onClick={() => loadAny.mutate(st.id)}
+                        {st.slot != null && st.slot === confirmSlot ? (
+                          // confirmação de "Substituir", na própria linha
+                          <div
+                            className={pause.stateActions}
+                            role="group"
+                            aria-label={t("play.overwriteAsk", { n: st.slot })}
                           >
-                            {t("play.loadState")}
-                          </Button>
-                          <Button
-                            appearance="subtle"
-                            icon={<DeleteRegular />}
-                            disabled={delState.isPending}
-                            onClick={() => delState.mutate(st.id)}
-                          >
-                            {t("common.delete")}
-                          </Button>
-                        </div>
+                            <Button
+                              appearance="primary"
+                              icon={<SaveEditRegular />}
+                              data-overwrite-yes
+                              disabled={saveSlot.isPending}
+                              onClick={() => saveSlot.mutate(confirmSlot)}
+                            >
+                              {t("play.overwriteYes")}
+                            </Button>
+                            <Button appearance="subtle" onClick={() => setConfirmSlot(null)}>
+                              {t("common.cancel")}
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className={pause.stateActions}>
+                            <Button
+                              appearance="subtle"
+                              icon={<HistoryRegular />}
+                              disabled={loadAny.isPending}
+                              onClick={() => loadAny.mutate(st.id)}
+                            >
+                              {t("play.loadState")}
+                            </Button>
+                            <Button
+                              appearance="subtle"
+                              icon={<DeleteRegular />}
+                              disabled={delState.isPending}
+                              onClick={() => delState.mutate(st.id)}
+                            >
+                              {t("common.delete")}
+                            </Button>
+                            {st.slot != null && st.slot > 0 && (
+                              <Button
+                                appearance="subtle"
+                                icon={<SaveEditRegular />}
+                                disabled={saveSlot.isPending}
+                                onClick={() => setConfirmSlot(st.slot)}
+                              >
+                                {t("play.overwrite")}
+                              </Button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}

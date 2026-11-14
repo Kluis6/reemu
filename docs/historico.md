@@ -3641,3 +3641,10 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 
 - [x] `done` — **VFS do libretro v3** (2026-09-26): `core-loader-desktop/src/vfs.rs`;
       o Stella 8 voltou a abrir jogos (Pitfall II testado).
+
+## 2026-11-14 — Save states em vagas numeradas
+
+- **O que é:** o menu de pausa (aba Save states) ganhou "Salvar num slot novo", que grava na menor vaga livre a partir da 1 (o QuickSave é a vaga 0), e "Substituir" em cada vaga numerada. Substituir pede confirmação na própria linha ("Sim, substituir" / "Cancelar"), com o foco no "Sim" para o controle; reabrir o menu cancela a confirmação. O backend já gravava em qualquer vaga e apaga o state anterior da vaga ocupada; a página do jogo continua só listando, porque salvar precisa do jogo aberto.
+- **Visual:** os botões da linha (Carregar, Apagar, Substituir) quebram linha quando não cabem no drawer `small` (`stateActions` com `flexWrap`).
+- **Textos:** `play.saveNewSlot`, `savedInSlot`, `overwrite`, `overwriteAsk` e `overwriteYes` em pt-BR, en e es.
+- **Conferido:** `tsc -b`, `oxlint`, 432 testes do frontend; `ui-render.py` em `/play/r1` com o menu aberto nos temas `reemu` e `claro`: a confirmação, o foco no "Sim" e o toast "Salvo no Slot 2" com o Slot 1 ocupado. Não conferido no app com um jogo real.

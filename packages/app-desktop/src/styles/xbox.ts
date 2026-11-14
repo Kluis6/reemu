@@ -1819,7 +1819,9 @@ export const usePauseStyles = makeStyles({
     lineHeight: 1.3,
     minWidth: 0,
   },
-  stateActions: { display: "flex", columnGap: "8px" },
+  // quebra linha quando não cabe (Carregar, Apagar e Substituir; textos
+  // maiores em en/es)
+  stateActions: { display: "flex", flexWrap: "wrap", columnGap: "8px", rowGap: "4px" },
   stateDate: {
     fontSize: tokens.fontSizeBase100,
     color: tokens.colorNeutralForeground3,

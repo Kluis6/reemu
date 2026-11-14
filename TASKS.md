@@ -788,8 +788,6 @@ no `emu-session`, ver `docs/historico.md`).
 - [ ] `todo` — **Aviso de atualização para mais cores** (análise de 2026-11-12): a tabela
       `UPSTREAM` (`crates/core-catalog/src/updates.rs`) cobre 80 dos 139 cores. Ampliar aos
       poucos, conferindo cada repositório e o `library_version` na fumaça.
-- [ ] `todo` — **Interface das vagas numeradas de save state** (Slot 1, 2…): o backend já
-      grava em qualquer vaga; falta escolher a vaga no menu de pausa e na página do jogo.
 
 - [ ] `todo` — **CI no Ubuntu 26**: os workflows ficaram presos em
       `ubuntu-24.04` (2026-10-02), porque o `ubuntu-latest` passa a ser o
