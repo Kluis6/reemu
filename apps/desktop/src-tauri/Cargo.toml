@@ -75,6 +75,7 @@ input-desktop = { path = "../../../crates/input-desktop" }
 shader-slang = { path = "../../../crates/shader-slang" }
 net = { path = "../../../crates/net" }
 core-catalog = { path = "../../../crates/core-catalog" }
+scraping = { path = "../../../crates/scraping" }
 tauri-plugin-updater = "2"
 sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
 

@@ -54,7 +54,7 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       metadado vem do ScreenScraper. Pedir no fórum do screenscraper.fr
       (apresentar o ReEmu) e cadastrar como secrets `REEMU_SS_DEVID` e
       `REEMU_SS_DEVPASSWORD` no GitHub — o `release.yml` já repassa ao build
-      e o `scraping.rs` envia quando existem. Pra testar local: exportar as
+      e o `crates/scraping` envia quando existem. Pra testar local: exportar as
       duas variáveis antes do `cargo tauri dev`.
 - [x] `done` — **Referência de desempenho medida** (2026-10-30), com jogos reais de
       software, OpenGL e Vulkan: [`docs/perf/README.md`](docs/perf/README.md).
@@ -94,7 +94,8 @@ o card atual fica.
       - [ ] C. Fase 6 (crates `net`, `core-catalog`, `scraping`).
         - [x] C1. `crates/net`: `http.rs` e `repo_version.rs` (2026-11-14).
         - [x] C2. `crates/core-catalog`: `core_catalog.rs`, `core_updates.rs`, `smoke_roms.rs` (2026-11-14).
-        - [ ] C3. `crates/scraping`.
+        - [x] C3. `crates/scraping` (2026-11-14): o app passa a configuração já carregada e o cache
+          de capas pela trait `CoverCache`. Falta só ver a fumaça semanal verde no GitHub.
 
 ### Validação (precisa de hardware/máquina que não é esta)
 

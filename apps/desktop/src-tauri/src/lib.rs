@@ -23,7 +23,6 @@ const SHOW_AFTER_PRESENTS: u32 = if cfg!(target_os = "windows") { 2 } else { 1 }
 mod perf;
 mod play_clock;
 mod profile;
-mod scraping;
 mod shader_failure;
 mod shader_pack;
 mod sync;

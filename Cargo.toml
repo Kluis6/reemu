@@ -14,6 +14,7 @@ members = [
     "crates/core-host-desktop",
     "crates/net",
     "crates/core-catalog",
+    "crates/scraping",
     "apps/desktop/src-tauri",
     # adapters de plataforma são adicionados aqui conforme forem criados:
     # "crates/core-loader-mobile",

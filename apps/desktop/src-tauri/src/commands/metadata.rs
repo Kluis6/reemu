@@ -198,6 +198,13 @@ pub fn cancel_metadata_scan(state: State<'_, AppState>) {
         .store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
+/// Configuração de metadados com as credenciais do chaveiro do sistema, pra
+/// crate `scraping`.
+async fn metadata_config(pool: &db::Db) -> Result<domain::metadata::MetadataConfig, String> {
+    let repo = db::MetadataRepo::new(pool.clone());
+    crate::credentials::load_config(&repo, &crate::credentials::OsKeyring).await
+}
+
 /// Dispara uma leva de scraping em background e volta na hora. O progresso é
 /// consultado por `metadata_scan_progress`.
 #[tauri::command]
@@ -212,12 +219,14 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppEr
     let pool = pool(&state)?;
     let progress = state.scrape.clone();
     let stop = state.scrape_stop.clone();
-    let covers_dir = state.covers_dir.clone();
+    let covers = crate::covers::CoverDir(state.covers_dir.clone());
     stop.store(false, std::sync::atomic::Ordering::Relaxed);
     tauri::async_runtime::spawn(async move {
-        if let Err(e) =
-            crate::scraping::scrape_pending(pool, progress.clone(), stop, covers_dir).await
-        {
+        let run = async {
+            let cfg = metadata_config(&pool).await?;
+            scraping::scrape_pending(pool, progress.clone(), stop, cfg, &covers).await
+        };
+        if let Err(e) = run.await {
             log::warn!("metadata: leva falhou: {e}");
             progress
                 .running
@@ -235,11 +244,13 @@ pub async fn rescrape_rom(
     state: State<'_, AppState>,
     rom_id: String,
 ) -> Result<&'static str, AppError> {
-    let outcome =
-        crate::scraping::scrape_one(pool(&state)?, state.covers_dir.clone(), &rom_id).await?;
+    let pool = pool(&state)?;
+    let cfg = metadata_config(&pool).await?;
+    let covers = crate::covers::CoverDir(state.covers_dir.clone());
+    let outcome = scraping::scrape_one(pool, cfg, &covers, &rom_id).await?;
     Ok(match outcome {
-        crate::scraping::Outcome::Auto => "auto",
-        crate::scraping::Outcome::Pending => "pending",
-        crate::scraping::Outcome::NoMatch => "none",
+        scraping::Outcome::Auto => "auto",
+        scraping::Outcome::Pending => "pending",
+        scraping::Outcome::NoMatch => "none",
     })
 }

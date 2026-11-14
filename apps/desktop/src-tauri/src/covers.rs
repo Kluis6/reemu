@@ -50,6 +50,15 @@ pub fn invalidate(covers_dir: &std::path::Path, rom_id: &str) {
     let _ = std::fs::remove_file(cache_path(covers_dir, rom_id));
 }
 
+/// O cache de capas na pasta `covers_dir`, pra crate `scraping`.
+pub struct CoverDir(pub std::path::PathBuf);
+
+impl scraping::CoverCache for CoverDir {
+    fn invalidate(&self, rom_id: &str) {
+        invalidate(&self.0, rom_id);
+    }
+}
+
 fn not_found() -> http::Response<Vec<u8>> {
     http::Response::builder()
         .status(404)

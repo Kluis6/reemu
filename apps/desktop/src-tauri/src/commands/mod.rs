@@ -62,7 +62,7 @@ pub struct AppState {
     /// criado na 1ª vez: não mexe no preset nem no viewport do jogo.
     pub shader_preview: Mutex<Option<crate::gpu::FrameProcessor>>,
     /// Progresso da leva de scraping de metadata (etapa 09).
-    pub scrape: Arc<crate::scraping::ScrapeProgress>,
+    pub scrape: Arc<scraping::ScrapeProgress>,
     /// Flag de cancelamento da leva de scraping.
     pub scrape_stop: Arc<std::sync::atomic::AtomicBool>,
     /// Último frame enviado pro canvas — pra gerar o thumbnail no save state.
@@ -173,7 +173,7 @@ impl AppState {
             play_clock: Mutex::new(Default::default()),
             gpu: Mutex::new(None),
             shader_preview: Mutex::new(None),
-            scrape: Arc::new(crate::scraping::ScrapeProgress::default()),
+            scrape: Arc::new(scraping::ScrapeProgress::default()),
             scrape_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_frame: Mutex::new(None),
             video_menu: Mutex::new(VideoMenu::Playing),

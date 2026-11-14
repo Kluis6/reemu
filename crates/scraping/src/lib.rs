@@ -17,6 +17,10 @@
 //! Desktop Edition, GPL — `es-app/src/scrapers/ScreenScraper.cpp` e
 //! `GamesDBJSONScraper.cpp`), não de memória; os 15 ids do ScreenScraper que
 //! o ReEmu já tinha batem com os de lá.
+//!
+//! Crate própria desde a Fase 6 (item 12 da análise de 2026-11-12): o app
+//! carrega a configuração (com a senha do chaveiro, `credentials.rs`) e passa
+//! o cache de capas como [`CoverCache`].
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -27,6 +31,12 @@ use domain::metadata::{
     ScrapeQuery,
 };
 use serde_json::Value;
+
+/// Cache de capas do app: descarta a capa guardada de um jogo que ganhou
+/// uma `cover_url` nova, pra próxima leitura buscar a capa escrapeada.
+pub trait CoverCache: Send + Sync {
+    fn invalidate(&self, rom_id: &str);
+}
 
 /// Pausa entre requisições ao ScreenScraper — anônimo é bem limitado.
 const REQUEST_DELAY: std::time::Duration = std::time::Duration::from_millis(1200);
@@ -665,7 +675,7 @@ async fn record_result(
     rom_id: &str,
     stem: &str,
     candidate: Option<ScrapeCandidate>,
-    covers_dir: &std::path::Path,
+    covers: &dyn CoverCache,
 ) -> Result<Outcome, String> {
     let Some(c) = candidate else {
         let none = ScrapeCandidate {
@@ -709,7 +719,7 @@ async fn record_result(
         .await
         .is_ok();
     if ok {
-        crate::covers::invalidate(covers_dir, rom_id);
+        covers.invalidate(rom_id);
     }
     Ok(Outcome::Auto)
 }
@@ -718,9 +728,11 @@ async fn record_result(
 /// provedores na mesma cascata da leva — ScreenScraper pelo hash, depois o
 /// TheGamesDB pelo nome se houver chave — e grava como a leva grava. Erro de
 /// credencial do ScreenScraper volta como `ERR_SS_DEV_LOGIN` (a UI traduz).
+/// `cfg`: a configuração de metadados já com as credenciais.
 pub async fn scrape_one(
     pool: db::Db,
-    covers_dir: std::path::PathBuf,
+    cfg: MetadataConfig,
+    covers: &dyn CoverCache,
     rom_id: &str,
 ) -> Result<Outcome, String> {
     let repo = db::MetadataRepo::new(pool.clone());
@@ -729,7 +741,6 @@ pub async fn scrape_one(
         .await
         .map_err(|e| e.to_string())?
         .ok_or("jogo não encontrado na biblioteca")?;
-    let cfg = crate::credentials::load_config(&repo, &crate::credentials::OsKeyring).await?;
     let client = reqwest::Client::builder()
         .user_agent("reemu/0.1")
         .timeout(std::time::Duration::from_secs(20))
@@ -764,22 +775,22 @@ pub async fn scrape_one(
         // o TheGamesDB não achou e o ScreenScraper nem foi consultado
         return Err(ERR_SS_DEV_LOGIN.to_string());
     }
-    record_result(&repo, rom_id, &stem, candidate, &covers_dir).await
+    record_result(&repo, rom_id, &stem, candidate, covers).await
 }
 
 /// Roda uma leva de scraping sobre as ROMs sem match. Bloqueante (chamar de
-/// `spawn_blocking`/task). `stop` permite cancelar. `covers_dir`: descarta o
-/// cache de capa (`covers.rs`) de qualquer rom que ganhar uma `cover_url`
-/// nova aqui, pra próxima leitura buscar a capa escrapeada.
+/// `spawn_blocking`/task). `stop` permite cancelar. `cfg`: a configuração de
+/// metadados já com as credenciais. `covers`: descarta o cache de capa de
+/// qualquer rom que ganhar uma `cover_url` nova aqui.
 pub async fn scrape_pending(
     pool: db::Db,
     progress: Arc<ScrapeProgress>,
     stop: Arc<AtomicBool>,
-    covers_dir: std::path::PathBuf,
+    cfg: MetadataConfig,
+    covers: &dyn CoverCache,
 ) -> Result<(), String> {
     let repo = db::MetadataRepo::new(pool.clone());
     let roms_repo = db::RomsRepo::new(pool.clone());
-    let cfg = crate::credentials::load_config(&repo, &crate::credentials::OsKeyring).await?;
 
     let ids = repo
         .rom_ids_without_match()
@@ -849,7 +860,7 @@ pub async fn scrape_pending(
             tokio::time::sleep(TGDB_DELAY).await;
         }
         match result {
-            Ok(c) => match record_result(&repo, &rom_id, &stem, c, &covers_dir).await {
+            Ok(c) => match record_result(&repo, &rom_id, &stem, c, covers).await {
                 Ok(Outcome::Auto) => {
                     progress.auto.fetch_add(1, Ordering::Relaxed);
                 }
@@ -891,7 +902,7 @@ mod tests {
     /// `system_id`s que o scan produz — lidos do próprio `systems.rs` (tabela
     /// canônica), pra sistema novo lá sem id aqui quebrar o teste.
     fn scan_system_ids() -> Vec<String> {
-        let src = include_str!("../../../../crates/library-scan/src/systems.rs");
+        let src = include_str!("../../library-scan/src/systems.rs");
         let mut ids: Vec<String> = src
             .split("=> \"")
             .skip(1)

@@ -1,0 +1,15 @@
+[package]
+name = "scraping"
+version.workspace = true
+edition.workspace = true
+
+# Scraping de metadados (ScreenScraper e TheGamesDB). Sem Tauri: o app passa a
+# configuração já carregada (com a senha do chaveiro) e o cache de capas por
+# trait (`CoverCache`).
+[dependencies]
+domain = { path = "../domain" }
+db = { path = "../db" }
+serde_json.workspace = true
+log = "0.4"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+tokio = { version = "1", features = ["time"] }

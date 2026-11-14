@@ -3483,3 +3483,10 @@ Infra:
 - **Sem Tauri:** `tauri::async_runtime::spawn_blocking`/`spawn` viraram `tokio::task::spawn_blocking`/`tokio::spawn` (os comandos já rodam no runtime tokio do Tauri); a lista de cores instalados vem direto do `core_loader_desktop::discover_cores`.
 - **Fumaça semanal:** `catalog-smoke.yml` roda `cargo test -p core-catalog --lib catalog_smoke` e deixou de instalar e compilar o frontend, que só o crate do app precisava.
 - **Conferido:** `clippy --workspace --all-targets -D warnings`; `cargo test -p core-catalog` (11 ok, 2 ignorados) e `-p reemu-desktop` (499 ok, 22 ignorados; antes 510 e 24, a diferença foi junto); `catalog_smoke` com `REEMU_SMOKE_ONLY=fceumm_libretro` nesta máquina (abriu, rodou 180 quadros, save state ok, em dia).
+
+## 2026-11-14 — Fase 6, passo C3: a crate `scraping`
+
+- **O que mudou:** `scraping.rs` saiu de `apps/desktop/src-tauri/src` para `crates/scraping` (ScreenScraper e TheGamesDB, `ScrapeProgress`, `scrape_one` e `scrape_pending`). Com isso o `src-tauri` ficou sem os seis módulos da Fase 6 (`http`, `repo_version`, `core_catalog`, `core_updates`, `smoke_roms`, `scraping`).
+- **O que dependia do app:** a configuração com a senha do chaveiro (`credentials::load_config` com o `OsKeyring`) agora é carregada pelo comando (`metadata_config` em `commands/metadata.rs`) e entra como parâmetro; o cache de capas entra pela trait `scraping::CoverCache`, que o app implementa em `covers::CoverDir`. A única diferença de ordem: no "buscar de novo" a configuração é lida antes de procurar o jogo na biblioteca.
+- **Credenciais de desenvolvedor do ScreenScraper:** seguem pelo `option_env!` (agora na crate `scraping`); o `release.yml` já passa as variáveis ao build inteiro.
+- **Conferido:** `clippy --workspace --all-targets -D warnings`; `cargo test -p scraping` (8) e `-p reemu-desktop` (491 ok, 22 ignorados; eram 499, os 8 foram junto). Tempo dos testes do app: 32,4 s antes do C1, 32,0 s agora (o ganho da separação fica na compilação incremental, não na execução).

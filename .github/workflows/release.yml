@@ -111,7 +111,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Credenciais de desenvolvedor do ScreenScraper (pedidas no fórum
-          # deles); embutidas no binário via `option_env!` em scraping.rs.
+          # deles); embutidas no binário via `option_env!` em crates/scraping/src/lib.rs.
           # Sem elas a busca de metadados no ScreenScraper recebe 403.
           REEMU_SS_DEVID: ${{ secrets.REEMU_SS_DEVID }}
           REEMU_SS_DEVPASSWORD: ${{ secrets.REEMU_SS_DEVPASSWORD }}
