@@ -61,7 +61,7 @@ fn source_to_db(s: DecorationPackSource) -> &'static str {
     }
 }
 
-fn assign_id(a: &DecorationAssignment) -> String {
+pub(super) fn assign_id(a: &DecorationAssignment) -> String {
     match a.scope {
         AssignmentScope::Default => format!("{}:default", a.pack_id),
         AssignmentScope::System => {

@@ -18,11 +18,11 @@ impl CoreOptionsRepo {
 
 /// PK determinística (a tabela pede `id TEXT`, e não temos gerador de UUID
 /// no crate). `\u{1f}` (unit separator) não aparece em option keys reais.
-fn row_id(core_id: &str, option_key: &str) -> String {
+pub(super) fn row_id(core_id: &str, option_key: &str) -> String {
     format!("{core_id}\u{1f}{option_key}")
 }
 
-fn override_id(rom_id: &str, core_id: &str, option_key: &str) -> String {
+pub(super) fn override_id(rom_id: &str, core_id: &str, option_key: &str) -> String {
     format!("{rom_id}\u{1f}{core_id}\u{1f}{option_key}")
 }
 

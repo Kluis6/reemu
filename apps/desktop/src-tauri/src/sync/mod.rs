@@ -4,7 +4,9 @@
 //! - `device`: o payload de hardware e o armazenamento do aparelho (o token
 //!   `asv_...` só no chaveiro, o resto no SQLite);
 //! - `local`, `reconcile` e `engine`: os game saves deste disco, a regra de
-//!   três lados e as passadas que sobem, descem e guardam o conflito.
+//!   três lados e as passadas que sobem, descem e guardam o conflito;
+//! - `settings_groups`: as configurações de cada grupo como documento
+//!   portátil, que outra máquina aplica.
 //!
 //! O aparelho nasce uma vez, pelo token de acesso do parceiro (o par do
 //! "Entrar com Alvanista"). Dali em diante só o token do aparelho fala com
@@ -19,6 +21,10 @@ pub mod engine;
 pub mod local;
 pub mod platform;
 pub mod reconcile;
+// Ainda sem chamador: os comandos de enviar e copiar configurações (próxima
+// task) passam a usar e este `allow` sai.
+#[allow(dead_code)]
+pub mod settings_groups;
 
 use crate::alvanista::client::ClientError;
 use crate::alvanista::loopback::Lang;
