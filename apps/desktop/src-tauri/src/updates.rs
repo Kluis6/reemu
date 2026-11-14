@@ -18,6 +18,8 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
+use crate::app_error::AppError;
+
 #[derive(Default)]
 pub struct UpdateState(Mutex<Option<Update>>);
 
@@ -60,7 +62,7 @@ fn fake_update() -> bool {
 pub async fn update_check(
     app: AppHandle,
     state: State<'_, UpdateState>,
-) -> Result<Option<UpdateInfo>, String> {
+) -> Result<Option<UpdateInfo>, AppError> {
     if fake_update() {
         return Ok(Some(UpdateInfo {
             version: "9.9.9".into(),
@@ -78,10 +80,10 @@ pub async fn update_check(
     }
     let update = app
         .updater()
-        .map_err(|e| e.to_string())?
+        .map_err(updater_error)?
         .check()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(updater_error)?;
     let info = update.as_ref().map(|u| UpdateInfo {
         version: u.version.clone(),
         current_version: u.current_version.clone(),
@@ -96,12 +98,36 @@ pub async fn update_check(
     Ok(info)
 }
 
+/// Erro do plugin de atualização: rede e HTTP ganham o código (`offline`,
+/// `notFoundRemote`, `rateLimited`), com a mesma regra de
+/// `AppError::from_http`; o resto vai como texto. O plugin traz o `reqwest`
+/// 0.13 e o app o 0.12, por isso a regra repetida aqui.
+fn updater_error(e: tauri_plugin_updater::Error) -> AppError {
+    use crate::app_error::ErrorCode;
+    let tauri_plugin_updater::Error::Reqwest(e) = e else {
+        return AppError::from(e.to_string());
+    };
+    let code = match e.status().map(|s| s.as_u16()) {
+        Some(404) => Some(ErrorCode::NotFoundRemote),
+        Some(429) => Some(ErrorCode::RateLimited),
+        Some(_) => None,
+        None if e.is_connect() || e.is_timeout() || e.is_request() || e.is_body() => {
+            Some(ErrorCode::Offline)
+        }
+        None => None,
+    };
+    AppError {
+        code,
+        message: format!("atualização: {e}"),
+    }
+}
+
 /// Baixa, verifica a assinatura e instala a versão achada no último
 /// `update_check`; depois reinicia o app. No Windows o instalador (NSIS/MSI)
 /// fecha o processo sozinho; no Linux o AppImage é trocado no lugar (ou o
 /// `.deb` instalado via `pkexec`).
 #[tauri::command]
-pub async fn update_install(app: AppHandle, state: State<'_, UpdateState>) -> Result<(), String> {
+pub async fn update_install(app: AppHandle, state: State<'_, UpdateState>) -> Result<(), AppError> {
     if fake_update() {
         let total = 40_000_000u64;
         for i in 1..=20u64 {

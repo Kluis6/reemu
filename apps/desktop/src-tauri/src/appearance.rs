@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use tauri::State;
 
+use crate::app_error::{AppError, ErrorCode};
 use crate::commands::AppState;
 
 const WALLPAPER_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp"];
@@ -32,7 +33,7 @@ fn ext_of(path: &Path) -> Option<String> {
 /// Bytes do papel de parede escolhido (vazio se não há nenhum). Frontend
 /// embrulha num `Blob` → `blob:` URL, igual ao avatar.
 #[tauri::command]
-pub async fn read_wallpaper(state: State<'_, AppState>) -> Result<tauri::ipc::Response, String> {
+pub async fn read_wallpaper(state: State<'_, AppState>) -> Result<tauri::ipc::Response, AppError> {
     let bytes = wallpaper_file(&state.appearance_dir)
         .and_then(|p| std::fs::read(&p).ok())
         .unwrap_or_default();
@@ -46,26 +47,30 @@ pub async fn read_wallpaper(state: State<'_, AppState>) -> Result<tauri::ipc::Re
 pub async fn set_wallpaper_file(
     state: State<'_, AppState>,
     src_path: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let src = PathBuf::from(&src_path);
     let ext = ext_of(&src).ok_or("formato não suportado (use PNG, JPG ou WEBP)")?;
-    let meta = std::fs::metadata(&src).map_err(|e| e.to_string())?;
+    let meta = std::fs::metadata(&src)?;
     if meta.len() > MAX_BYTES {
         return Err("imagem grande demais (máx. 20 MB)".into());
     }
-    std::fs::create_dir_all(&state.appearance_dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&state.appearance_dir)?;
     for e in WALLPAPER_EXTS {
         let _ = std::fs::remove_file(state.appearance_dir.join(format!("wallpaper.{e}")));
     }
     let dest = state.appearance_dir.join(format!("wallpaper.{ext}"));
-    std::fs::copy(&src, &dest).map_err(|e| format!("copiar papel de parede: {e}"))?;
+    std::fs::copy(&src, &dest).map_err(|e| {
+        let mut err = AppError::from(e);
+        err.message = format!("copiar papel de parede: {}", err.message);
+        err
+    })?;
     log::info!("papel de parede salvo em {}", dest.display());
     Ok(())
 }
 
 /// Remove o papel de parede escolhido (volta a ser só a cor do tema).
 #[tauri::command]
-pub async fn clear_wallpaper(state: State<'_, AppState>) -> Result<(), String> {
+pub async fn clear_wallpaper(state: State<'_, AppState>) -> Result<(), AppError> {
     for e in WALLPAPER_EXTS {
         let _ = std::fs::remove_file(state.appearance_dir.join(format!("wallpaper.{e}")));
     }
@@ -89,15 +94,16 @@ fn read_theme(dir: &Path) -> String {
     std::fs::read_to_string(dir.join(THEME_FILE)).unwrap_or_default()
 }
 
-fn write_theme(dir: &Path, json: &str) -> Result<(), String> {
+fn write_theme(dir: &Path, json: &str) -> Result<(), AppError> {
     if json.len() > THEME_MAX_BYTES {
         return Err("tema grande demais".into());
     }
-    serde_json::from_str::<serde_json::Value>(json).map_err(|e| format!("tema inválido: {e}"))?;
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    serde_json::from_str::<serde_json::Value>(json)
+        .map_err(|e| AppError::new(ErrorCode::Corrupt, format!("tema inválido: {e}")))?;
+    std::fs::create_dir_all(dir)?;
     let tmp = dir.join(format!("{THEME_FILE}.tmp"));
-    std::fs::write(&tmp, json).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, dir.join(THEME_FILE)).map_err(|e| e.to_string())
+    std::fs::write(&tmp, json)?;
+    Ok(std::fs::rename(&tmp, dir.join(THEME_FILE))?)
 }
 
 /// JSON da escolha de tema salva (vazio se nunca escolheu).
@@ -107,7 +113,7 @@ pub fn get_theme_selection(state: State<'_, AppState>) -> String {
 }
 
 #[tauri::command]
-pub fn set_theme_selection(state: State<'_, AppState>, json: String) -> Result<(), String> {
+pub fn set_theme_selection(state: State<'_, AppState>, json: String) -> Result<(), AppError> {
     write_theme(&state.appearance_dir, &json)
 }
 

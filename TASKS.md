@@ -780,9 +780,6 @@ no `emu-session`, ver `docs/historico.md`).
 
 ### Infra / qualidade
 
-- [ ] `todo` — **Erros com código fora de `commands/`** (2026-11-14): `alvanista/`, `sync/`,
-      `appearance.rs` e `updates.rs` ainda devolvem `String` que a interface lê pelo texto
-      (`sync.err.*`, `lib/errors.ts`). Opcional: só para padronizar com o `AppError`.
 
 - [ ] `todo` — **CI no Ubuntu 26**: os workflows ficaram presos em
       `ubuntu-24.04` (2026-10-02), porque o `ubuntu-latest` passa a ser o
