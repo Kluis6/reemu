@@ -146,6 +146,10 @@ pub struct CopyReport {
     /// aplica e guarda o de antes (`reemu.sync.appearanceUndo`).
     #[cfg_attr(test, ts(type = "unknown"))]
     pub appearance_doc: Option<Value>,
+    /// Segundos Unix desta cópia, os mesmos do marcador do "Desfazer"
+    /// (`SettingsUndoInfo::copied_at`): a aparência de antes guardada pela
+    /// tela leva este valor e só volta no "Desfazer" desta cópia.
+    pub copied_at: i64,
 }
 
 /// O que `sync_settings_sent` devolve.
@@ -805,12 +809,13 @@ impl Engine {
                 .collect(),
             files: BTreeMap::new(),
         };
-        let (per_group, backup_dir) = self.copy_here(checked, marker).await?;
+        let (per_group, backup_dir, copied_at) = self.copy_here(checked, marker).await?;
         (self.reload)().await;
         Ok(CopyReport {
             per_group,
             backup_dir,
             appearance_doc,
+            copied_at,
         })
     }
 
@@ -818,11 +823,12 @@ impl Engine {
     /// muda vai ao disco primeiro, os grupos entram, o marcador do "Desfazer"
     /// entra junto, e só então a transação fica. Um jogo que começou a abrir
     /// no meio, um backup que não grava ou um grupo que falha, e nada fica.
+    /// Devolve os relatórios, a pasta do backup e o instante do marcador.
     async fn copy_here(
         &self,
         checked: Vec<Checked>,
         mut marker: CopyBackup,
-    ) -> Result<(Vec<SettingsGroupReport>, Option<String>), SyncError> {
+    ) -> Result<(Vec<SettingsGroupReport>, Option<String>, i64), SyncError> {
         self.settings_idle()?;
         let (mut tx, here) = self.open_write().await?;
         // o backup é o que esta transação vai trocar
@@ -849,6 +855,7 @@ impl Engine {
         });
         marker.files = files;
         marker.copied_at = now_secs();
+        let copied_at = marker.copied_at;
         let record = serde_json::to_string(&marker)
             .map_err(|e| failed(format!("marcador da cópia: {e}")))?;
         tx.set_state(LAST_COPY_BACKUP_KEY, &record)
@@ -864,7 +871,7 @@ impl Engine {
                 report,
             })
             .collect();
-        Ok((per_group, backup_dir))
+        Ok((per_group, backup_dir, copied_at))
     }
 
     /// A transação de escrita das configurações e o que esta máquina tem,
@@ -1016,6 +1023,21 @@ impl Engine {
         log_applied(&reports, ApplyMode::Restore);
         (self.reload)().await;
         Ok(true)
+    }
+
+    /// "Esquecer" a última cópia quando o "Desfazer" dela não volta (o backup
+    /// sumiu ou não confere): só o marcador sai. Os arquivos ficam na pasta de
+    /// resguardo, nenhuma configuração muda e nada é relido. Sem rede.
+    pub async fn settings_undo_forget(&self) -> Result<(), SyncError> {
+        let _one = self.settings_lock.lock().await;
+        let mut tx = SettingsRepo::new(self.db.clone())
+            .write()
+            .await
+            .map_err(db_err)?;
+        tx.delete_state(LAST_COPY_BACKUP_KEY)
+            .await
+            .map_err(db_err)?;
+        tx.commit().await.map_err(db_err)
     }
 }
 
@@ -2145,7 +2167,7 @@ mod tests {
         let (r, _there) = copy_rig("settings-undo-info").await;
         assert_eq!(r.engine.settings_undo_info().await.unwrap(), None);
         let started = now_secs();
-        r.copy(&["audio", "core-options"], true).await.unwrap();
+        let report = r.copy(&["audio", "core-options"], true).await.unwrap();
 
         let requests = r.server.received_requests().await.unwrap().len();
         let info = r.engine.settings_undo_info().await.unwrap().unwrap();
@@ -2153,6 +2175,10 @@ mod tests {
         assert_eq!(info.machine, "Notebook");
         assert_eq!(info.machine_id.as_deref(), Some(OTHER));
         assert!(info.copied_at >= started);
+        assert_eq!(
+            report.copied_at, info.copied_at,
+            "a tela casa a aparência de antes com esta cópia"
+        );
         assert_eq!(info.groups, ["core-options", "audio", "appearance"]);
         let marker = copy_marker(&r).await.unwrap();
         for group in ["core-options", "audio"] {
@@ -2222,6 +2248,34 @@ mod tests {
             .unwrap();
         std::fs::write(&path, &good).unwrap();
         assert!(r.engine.settings_undo().await.unwrap());
+    }
+
+    /// "Esquecer" a cópia cujo backup sumiu: só o marcador sai. Os arquivos
+    /// que restam ficam na pasta de resguardo, nenhuma configuração muda,
+    /// nada é relido e nada vai à rede.
+    #[tokio::test]
+    async fn forgetting_an_undo_removes_only_the_marker() {
+        let _serial = SERIAL.lock().await;
+        let (r, _there) = copy_rig("settings-undo-forget").await;
+        r.copy(&["core-options", "audio"], false).await.unwrap();
+        let copied = settings_rows(&r.db).await;
+        let marker = copy_marker(&r).await.unwrap();
+        let (_, path) = file_of(&r, &marker, "core-options");
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(r.engine.settings_undo().await, Err(SyncError::BackupFailed));
+        let files = r.backups();
+        let requests = r.server.received_requests().await.unwrap().len();
+
+        r.engine.settings_undo_forget().await.unwrap();
+        assert_eq!(copy_marker(&r).await, None);
+        assert_eq!(r.engine.settings_undo_info().await.unwrap(), None);
+        assert!(!r.engine.settings_undo().await.unwrap());
+        assert_eq!(settings_rows(&r.db).await, copied);
+        assert_eq!(r.backups(), files, "nenhum arquivo apagado");
+        assert_eq!(r.reload_count(), 1, "só a da cópia");
+        assert_eq!(r.server.received_requests().await.unwrap().len(), requests);
+        // sem cópia a esquecer, nada acontece
+        r.engine.settings_undo_forget().await.unwrap();
     }
 
     /// O jogo que começa a abrir enquanto a cópia anda: ela confere de novo ao
@@ -2369,5 +2423,302 @@ mod tests {
         ));
         assert_eq!(settings_rows(&r.db).await, before);
         assert!(r.backups().is_empty());
+    }
+
+    // --- os cinco grupos no motor (Review Focus 4) ---------------------------
+
+    /// GUID de um controle desta máquina (formato SDL).
+    const GUID: &str = "030000005e0400008e02000000007200";
+
+    /// Um preset atribuído num lugar, com os parâmetros, como a tela de
+    /// shaders grava: o id é o `source_path`.
+    async fn shader_on(
+        db: &db::Db,
+        scope: domain::shader_chain::AssignmentScope,
+        target: Option<&str>,
+        source: &str,
+        params: &[(&str, &str)],
+    ) {
+        use domain::shader_chain::{AssignmentScope, ShaderChainStore, ShaderFormat, ShaderPreset};
+        let repo = db::ShaderChainRepo::new(db.clone());
+        let name = Path::new(source)
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or(source);
+        repo.upsert_preset(&ShaderPreset {
+            id: source.into(),
+            name: name.into(),
+            source_path: source.into(),
+            format: ShaderFormat::Slang,
+            is_builtin: !source.ends_with(".slangp"),
+            includes_bezel: false,
+        })
+        .await
+        .unwrap();
+        let (sys, rom) = match scope {
+            AssignmentScope::Default => (None, None),
+            AssignmentScope::System => (target, None),
+            AssignmentScope::Rom => (None, target),
+        };
+        repo.set_assignment(scope, sys, rom, source).await.unwrap();
+        for (k, v) in params {
+            repo.set_parameter_override(scope, sys, rom, k, v)
+                .await
+                .unwrap();
+        }
+    }
+
+    /// Uma moldura do The Bezel Project, no pacote que `bezel_pack` importa
+    /// (o mesmo em toda máquina), com o `id` que o `DecorationRepo` grava.
+    async fn bezel_on(db: &db::Db, catalog: &Catalog, scope: &str, target: &str, rel: &str) {
+        let base = catalog.bezels.display().to_string();
+        let pack = format!("pack:{base}");
+        sqlx::query(
+            "INSERT OR IGNORE INTO decoration_packs (id, name, source, base_path) \
+             VALUES (?1, 'bezelproject', 'user_imported', ?2)",
+        )
+        .bind(&pack)
+        .bind(&base)
+        .execute(db)
+        .await
+        .unwrap();
+        let mut asset = catalog.bezels.clone();
+        asset.extend(rel.split('/'));
+        let (sys, rom) = match scope {
+            "system" => (target, ""),
+            _ => ("", target),
+        };
+        sqlx::query(
+            "INSERT INTO decoration_assignments (id, scope, system_id, rom_id, pack_id, asset_path) \
+             VALUES (?1, ?2, NULLIF(?3, ''), NULLIF(?4, ''), ?5, ?6)",
+        )
+        .bind(format!("{pack}:{scope}:{target}"))
+        .bind(scope)
+        .bind(sys)
+        .bind(rom)
+        .bind(&pack)
+        .bind(asset.to_string_lossy().into_owned())
+        .execute(db)
+        .await
+        .unwrap();
+    }
+
+    async fn hotkey_on(
+        db: &db::Db,
+        action: domain::hotkeys::SystemAction,
+        trigger: domain::input::RawInputEvent,
+    ) {
+        use domain::hotkeys::{HotkeyBinding, SystemHotkeyRepository};
+        db::SystemHotkeysRepo::new(db.clone())
+            .set(&HotkeyBinding {
+                action,
+                trigger: vec![trigger],
+                device_guid: None,
+            })
+            .await
+            .unwrap();
+    }
+
+    fn key(code: &str) -> domain::input::RawInputEvent {
+        domain::input::RawInputEvent::Keyboard {
+            scancode: input_desktop::keymap::key_scancode(code),
+        }
+    }
+
+    async fn core_pref(db: &db::Db, system: &str, core: &str) {
+        sqlx::query("INSERT INTO system_core_prefs (system_id, core_id) VALUES (?1, ?2)")
+            .bind(system)
+            .bind(core)
+            .execute(db)
+            .await
+            .unwrap();
+    }
+
+    /// Review Focus 4 no motor: a outra máquina tem outra GPU, e a pessoa marca
+    /// à mão os cinco grupos do banco, com um preset do pacote `slang-shaders`
+    /// e uma moldura do The Bezel Project baixados aqui, atalhos e teclado. A
+    /// hotkey de controle e o MAC do PSP desta máquina não mudam. Copiar e
+    /// desfazer devolve as tabelas byte a byte; fica só o catálogo
+    /// (`shader_presets` e o pacote do The Bezel Project que a cópia criou),
+    /// que nenhuma escolha usa depois do "Desfazer".
+    #[tokio::test]
+    async fn copy_then_undo_of_every_group_restores_byte_for_byte() {
+        use domain::hotkeys::SystemAction;
+        use domain::shader_chain::AssignmentScope as At;
+        let _serial = SERIAL.lock().await;
+        let r = rig("settings-all-groups").await;
+        mount_devices(
+            &r.server,
+            vec![
+                machine_row("dev1", "Sala", "RTX 3070", "Vulkan"),
+                machine_row(OTHER, "Notebook", "Intel Iris Xe", "OpenGL"),
+            ],
+        )
+        .await;
+        // os catálogos baixados aqui e o core que a outra prefere
+        let here = Catalog::new(&r.path("shaders"), &r.path("decorations"));
+        let slang = |c: &Catalog, rel: &str| {
+            let mut p = c.shader_pack.clone();
+            p.extend(rel.split('/'));
+            p
+        };
+        for rel in ["crt/crt-royale.slangp", "handheld/lcd-grid-v2.slangp"] {
+            let file = slang(&here, rel);
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(&file, b"x").unwrap();
+        }
+        let mut snes_png = here.bezels.clone();
+        snes_png.extend(["snes", "snes.png"]);
+        std::fs::create_dir_all(snes_png.parent().unwrap()).unwrap();
+        std::fs::write(&snes_png, b"x").unwrap();
+        r.write(
+            &format!("cores/mgba_libretro{}", std::env::consts::DLL_SUFFIX),
+            b"x",
+        );
+
+        // esta máquina
+        rom_crc(&r.db, "h-1", "AAAA0001").await;
+        opt(&r.db, "snes9x", None, "snes9x_region", "pal").await;
+        opt(&r.db, "snes9x", Some("h-1"), "snes9x_overclock", "off").await;
+        opt(&r.db, "ppsspp_libretro", None, MAC, "12").await;
+        core_pref(&r.db, "snes", "snes9x_libretro").await;
+        let royale = slang(&here, "crt/crt-royale.slangp");
+        let royale = royale.to_string_lossy();
+        shader_on(&r.db, At::System, Some("snes"), &royale, &[("MASK", "2")]).await;
+        shader_on(&r.db, At::Default, None, "crt", &[("GAMMA", "2.2")]).await;
+        hotkey_on(&r.db, SystemAction::QuickSave, key("F5")).await;
+        let pad = domain::input::RawInputEvent::GamepadButton {
+            device_guid: GUID.into(),
+            index: 2,
+        };
+        hotkey_on(&r.db, SystemAction::QuickLoad, pad).await;
+        db::KeyboardBindingsRepo::new(r.db.clone())
+            .set("R2", "KeyR")
+            .await
+            .unwrap();
+        audio(&r.db, false, "fone-daqui").await;
+        video(&r.db, false).await;
+        aspect(&r.db, "default", "", "4:3").await;
+        aspect(&r.db, "rom", "h-1", "fill").await;
+
+        // a outra
+        let there = There::new(&r).await;
+        rom_crc(&there.db, "t-1", "AAAA0001").await;
+        opt(&there.db, "snes9x", None, "snes9x_region", "ntsc").await;
+        opt(&there.db, "snes9x", Some("t-1"), "snes9x_overclock", "max").await;
+        core_pref(&there.db, "snes", "mgba_libretro").await;
+        shader_on(&there.db, At::System, Some("snes"), "lcd", &[]).await;
+        let grid = slang(&there.catalog, "handheld/lcd-grid-v2.slangp");
+        let grid = grid.to_string_lossy();
+        shader_on(&there.db, At::Rom, Some("t-1"), &grid, &[("GRID", "0.5")]).await;
+        shader_on(&there.db, At::Default, None, "crt", &[("GAMMA", "2.4")]).await;
+        bezel_on(&there.db, &there.catalog, "system", "snes", "snes/snes.png").await;
+        hotkey_on(&there.db, SystemAction::QuickSave, key("F6")).await;
+        hotkey_on(&there.db, SystemAction::QuickLoad, key("F9")).await;
+        let keys = db::KeyboardBindingsRepo::new(there.db.clone());
+        keys.set("R2", "KeyT").await.unwrap();
+        keys.set("L2", "KeyY").await.unwrap();
+        audio(&there.db, true, "caixa-de-la").await;
+        video(&there.db, true).await;
+        aspect(&there.db, "default", "", "16:9").await;
+        aspect(&there.db, "rom", "t-1", "core").await;
+        mount_configs(&r.server, there.rows(&Group::ALL).await).await;
+
+        // a prévia desmarca o vídeo; a pessoa marca tudo à mão
+        let preview = r
+            .engine
+            .settings_preview(&r.alva, OTHER, &HardwarePayload::default())
+            .await
+            .unwrap();
+        assert!(preview.video_default_off);
+        let before = settings_rows(&r.db).await;
+        let report = r
+            .copy(
+                &[
+                    "core-options",
+                    "shaders-decorations",
+                    "hotkeys-keyboard",
+                    "audio",
+                    "video",
+                ],
+                false,
+            )
+            .await
+            .unwrap();
+        assert_eq!(report.per_group.len(), 5);
+        for g in &report.per_group {
+            assert!(
+                g.report.missing_files.is_empty(),
+                "{}: {:?}",
+                g.group,
+                g.report
+            );
+            assert!(g.report.cores_not_installed.is_empty(), "{}", g.group);
+        }
+        let kept: u32 = report.per_group.iter().map(|g| g.report.kept_local).sum();
+        assert_eq!(kept, 1, "a hotkey de controle daqui");
+
+        // cada tabela que um grupo escreve mudou de fato
+        let copied = settings_rows(&r.db).await;
+        let table = |rows: &[String], t: &str| -> Vec<String> {
+            let prefix = format!("{t}: ");
+            rows.iter()
+                .filter(|l| l.starts_with(&prefix))
+                .cloned()
+                .collect()
+        };
+        for t in [
+            "core_options_values",
+            "core_option_overrides",
+            "system_core_prefs",
+            "shader_chain_assignments",
+            "shader_parameter_overrides",
+            "decoration_assignments",
+            "system_hotkeys",
+            "keyboard_bindings",
+            "audio_config",
+            "video_config",
+            "aspect_assignments",
+        ] {
+            assert_ne!(table(&copied, t), table(&before, t), "{t} não mudou");
+        }
+        let grid_here = slang(&here, "handheld/lcd-grid-v2.slangp");
+        let grid_here = grid_here.to_string_lossy();
+        assert!(
+            table(&copied, "shader_chain_assignments")
+                .iter()
+                .any(|l| l.contains(grid_here.as_ref()) && l.contains("'h-1'")),
+            "o preset do pacote aponta para o arquivo daqui"
+        );
+        let snes_png = snes_png.to_string_lossy();
+        assert!(table(&copied, "decoration_assignments")
+            .iter()
+            .any(|l| l.contains(snes_png.as_ref())));
+        // o que é só desta máquina ficou
+        assert_eq!(option_value(&r.db, MAC).await.as_deref(), Some("12"));
+        assert!(table(&copied, "system_hotkeys")
+            .iter()
+            .any(|l| l.contains(GUID)));
+        let names: Vec<String> = r.backups().into_iter().map(|(n, _)| n).collect();
+        assert_eq!(
+            names,
+            [
+                "settings/audio.json",
+                "settings/core-options.json",
+                "settings/hotkeys-keyboard.json",
+                "settings/shaders-decorations.json",
+                "settings/video.json",
+            ]
+        );
+
+        assert!(r.engine.settings_undo().await.unwrap());
+        assert_eq!(settings_rows(&r.db).await, before);
+        assert_eq!(r.reload_count(), 2);
+        // o catálogo que fica: o pacote que a cópia criou, sem atribuição
+        let packs: Vec<String> = sqlx::query_scalar("SELECT name FROM decoration_packs")
+            .fetch_all(&r.db)
+            .await
+            .unwrap();
+        assert_eq!(packs, ["bezelproject"]);
     }
 }

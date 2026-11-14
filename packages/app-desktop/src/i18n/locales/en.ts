@@ -615,6 +615,9 @@ const en: Messages = {
       undo: 'Settings copied from {{machine}} on {{when}}.',
       appearanceUndoFailed: 'The settings were restored, but the previous appearance could not be applied.',
       undoButton: 'Undo',
+      forgetHint: 'What is left of the backup is in the backup folder. Forget only removes this Undo and deletes no file.',
+      openFolder: 'Open folder',
+      forget: 'Forget',
     },
     copyDlg: {
       title: 'Copy from {{machine}} to this machine',
@@ -625,7 +628,7 @@ const en: Messages = {
       hint: {
         'core-options': 'Per core and per game',
         'shaders-decorations': 'Presets, chains and assigned bezels',
-        appearance: 'Theme, interface size, TV margin',
+        appearance: 'Theme, interface size, TV margin, sounds and motion',
       },
       notSent: 'The other machine has not sent this group yet.',
       videoPill: 'different hardware',

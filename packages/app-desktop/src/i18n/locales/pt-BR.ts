@@ -616,6 +616,9 @@ const ptBR = {
       undo: 'Configurações copiadas de {{machine}} em {{when}}.',
       appearanceUndoFailed: 'As configurações voltaram, mas a aparência de antes não pôde ser aplicada.',
       undoButton: 'Desfazer',
+      forgetHint: 'O que restou do backup está na pasta de resguardo. Esquecer tira só este Desfazer, sem apagar arquivo nenhum.',
+      openFolder: 'Abrir pasta',
+      forget: 'Esquecer',
     },
     copyDlg: {
       title: 'Copiar de {{machine}} para esta máquina',
@@ -626,7 +629,7 @@ const ptBR = {
       hint: {
         'core-options': 'Por core e por jogo',
         'shaders-decorations': 'Presets, cadeias e bezels atribuídos',
-        appearance: 'Tema, tamanho da interface, margem da TV',
+        appearance: 'Tema, tamanho da interface, margem da TV, sons e movimento',
       },
       notSent: 'A outra máquina ainda não enviou este grupo.',
       videoPill: 'hardware diferente',

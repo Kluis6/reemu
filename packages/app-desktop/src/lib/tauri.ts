@@ -744,6 +744,10 @@ export const syncSettingsUndoInfo = () => invoke<SettingsUndoInfo | null>('sync_
  *  agora vão antes para a pasta de resguardo. `false` quando não há cópia a
  *  desfazer. A aparência a tela volta sozinha. */
 export const syncSettingsUndo = () => invoke<boolean>('sync_settings_undo')
+/** "Esquecer" a última cópia cujo "Desfazer" não volta (o backup sumiu ou não
+ *  confere): só o registro dela sai. Os arquivos ficam na pasta de resguardo e
+ *  nenhuma configuração muda. */
+export const syncSettingsUndoForget = () => invoke<void>('sync_settings_undo_forget')
 /** Abre a pasta dos backups do sync no gerenciador de arquivos. Com a chave de
  *  um save apagado no site, abre a pasta onde o arquivo dele foi parar. */
 export const syncOpenBackups = (key?: string) => invoke<void>('sync_open_backups', { key: key ?? null })

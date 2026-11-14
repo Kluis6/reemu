@@ -69,10 +69,13 @@ const PREVIEW: SettingsPreview = {
   hereGpu: 'RTX 3060',
   hereBackend: 'Vulkan',
 }
+/** O instante da cópia no marcador do Rust. */
+const COPIED_AT = 1_700_000_500
 const REPORT = (over: Partial<CopyReport> = {}): CopyReport => ({
   perGroup: [],
   backupDir: 'sync-backups/x',
   appearanceDoc: null,
+  copiedAt: COPIED_AT,
   ...over,
 })
 const APPLY = { applied: 1, skippedUnknownGames: 0, keptLocal: 0, missingFiles: [], coresNotInstalled: [] }
@@ -184,7 +187,8 @@ describe('CopySettingsDialog', () => {
     await mount()
     await act(async () => button('Copiar 5 grupos')!.click())
     expect(appearance.applyAppearance).toHaveBeenCalledWith({ v: 1, theirs: true })
-    expect(JSON.parse(localStorage.getItem(APPEARANCE_UNDO_KEY)!)).toEqual({ v: 1, before: true })
+    // guardada com o instante desta cópia: só o Desfazer dela a traz
+    expect(JSON.parse(localStorage.getItem(APPEARANCE_UNDO_KEY)!)).toEqual({ copiedAt: COPIED_AT, doc: { v: 1, before: true } })
   })
 
   it('a copy without appearance clears the appearance undo', async () => {
@@ -231,7 +235,7 @@ describe('CopySettingsDialog', () => {
     appearance.applyAppearance.mockRejectedValue(new Error('settings_invalid'))
     await mount()
     await act(async () => button('Copiar 5 grupos')!.click())
-    expect(JSON.parse(localStorage.getItem(APPEARANCE_UNDO_KEY)!)).toEqual({ v: 1, before: true })
+    expect(JSON.parse(localStorage.getItem(APPEARANCE_UNDO_KEY)!)).toEqual({ copiedAt: COPIED_AT, doc: { v: 1, before: true } })
     expect(document.body.textContent).toContain('A aparência não pôde ser aplicada. O resto foi copiado.')
     expect(document.body.textContent).toContain('Copiado.')
   })
@@ -248,6 +252,26 @@ describe('CopySettingsDialog', () => {
     expect(api.syncSettingsPreview).toHaveBeenCalledTimes(2)
     expect(button('Tentar de novo')).toBeUndefined()
     expect(box('Opções dos cores').checked).toBe(true)
+  })
+
+  it('a copy invalidates every query, so no settings screen writes its old config over it', async () => {
+    await mount()
+    // Áudio e Sistema leram a configuração antes da cópia
+    ui.qc.setQueryData(['audio-config'], { rateControlEnabled: false })
+    ui.qc.setQueryData(['video-config'], { integerScaling: false, hdr: false })
+    ui.qc.setQueryData(['core-options', 'snes9x'], [])
+    await act(async () => button('Copiar 5 grupos')!.click())
+    for (const key of [['audio-config'], ['video-config'], ['core-options', 'snes9x']]) {
+      expect(ui.qc.getQueryState(key)?.isInvalidated, key.join('/')).toBe(true)
+    }
+  })
+
+  it('a refused copy leaves the cached settings alone', async () => {
+    api.syncSettingsCopy.mockRejectedValue('game_open')
+    await mount()
+    ui.qc.setQueryData(['audio-config'], { rateControlEnabled: false })
+    await act(async () => button('Copiar 5 grupos')!.click())
+    expect(ui.qc.getQueryState(['audio-config'])?.isInvalidated).toBe(false)
   })
 
   it('puts the focus on Fechar when the result shows', async () => {

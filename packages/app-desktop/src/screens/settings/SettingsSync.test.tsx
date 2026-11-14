@@ -26,8 +26,10 @@ const api = vi.hoisted(() => ({
   syncSettingsUpload: vi.fn(),
   syncSettingsUndoInfo: vi.fn(),
   syncSettingsUndo: vi.fn(),
+  syncSettingsUndoForget: vi.fn(),
   syncSettingsPreview: vi.fn(),
   syncSettingsCopy: vi.fn(),
+  syncOpenBackups: vi.fn(),
 }))
 const appearance = vi.hoisted(() => ({ exportAppearance: vi.fn(), applyAppearance: vi.fn() }))
 vi.mock('../../lib/appearanceGroup', () => appearance)
@@ -121,6 +123,8 @@ const RETRO: SyncMachine = { ...OTHER, id: 'dev3', label: 'Deck', clientKind: 'r
 
 let host: HTMLDivElement
 let unmount: () => Promise<void>
+/** O QueryClient da tela montada (as telas de configuração leem dele). */
+let qc: QueryClient
 
 async function settle() {
   for (let i = 0; i < 5; i++) {
@@ -134,7 +138,7 @@ async function mount() {
   host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   await act(async () =>
     root.render(
       <QueryClientProvider client={qc}>
@@ -694,6 +698,10 @@ describe('SettingsSync settings row', () => {
     hereBackend: 'Vulkan',
   }
   const INFO = { machine: 'Notebook', machineId: 'dev2', copiedAt: 1_700_000_000, groups: ['audio'] }
+  /** Uma cópia que trouxe a aparência. */
+  const WITH_APPEARANCE = { ...INFO, groups: ['audio', 'appearance'] }
+  /** A aparência de antes da cópia de `INFO`, como a cópia a guardou. */
+  const SAVED = JSON.stringify({ copiedAt: 1_700_000_000, doc: { v: 1, before: true } })
   const box = (name: string) =>
     [...document.querySelectorAll('.fui-Checkbox')].find((c) => c.textContent?.includes(name))!.querySelector<HTMLInputElement>('input')!
   const dialogButton = (text: string) => [...document.querySelectorAll('button')].find((b) => b.textContent?.includes(text))!
@@ -756,7 +764,7 @@ describe('SettingsSync settings row', () => {
     api.syncStatus.mockResolvedValue(ON)
     api.syncMachines.mockResolvedValue([THIS, OTHER])
     api.syncSettingsPreview.mockResolvedValue(PREVIEW)
-    api.syncSettingsCopy.mockResolvedValue({ perGroup: [], backupDir: 'x', appearanceDoc: null })
+    api.syncSettingsCopy.mockResolvedValue({ perGroup: [], backupDir: 'x', appearanceDoc: null, copiedAt: 1_700_000_000 })
     api.syncSettingsUndo.mockResolvedValue(true)
     await mount()
     expect(byText('Desfazer')).toBeUndefined()
@@ -778,7 +786,12 @@ describe('SettingsSync settings row', () => {
     api.syncStatus.mockResolvedValue(ON)
     api.syncMachines.mockResolvedValue([THIS, OTHER])
     api.syncSettingsPreview.mockResolvedValue(PREVIEW)
-    api.syncSettingsCopy.mockResolvedValue({ perGroup: [], backupDir: 'x', appearanceDoc: { v: 1, theirs: true } })
+    api.syncSettingsCopy.mockResolvedValue({
+      perGroup: [],
+      backupDir: 'x',
+      appearanceDoc: { v: 1, theirs: true },
+      copiedAt: 1_700_000_000,
+    })
     api.syncSettingsUndo.mockResolvedValue(true)
     await mount()
     await act(async () => byText('Copiar configurações')!.click())
@@ -793,7 +806,7 @@ describe('SettingsSync settings row', () => {
       true,
     )
     expect(appearance.applyAppearance).toHaveBeenCalledWith({ v: 1, theirs: true })
-    expect(JSON.parse(localStorage.getItem(APPEARANCE_UNDO_KEY)!)).toEqual({ v: 1, before: true })
+    expect(JSON.parse(localStorage.getItem(APPEARANCE_UNDO_KEY)!)).toEqual({ copiedAt: 1_700_000_000, doc: { v: 1, before: true } })
     appearance.applyAppearance.mockClear()
     await act(async () => byText('Desfazer')!.click())
     await settle()
@@ -815,9 +828,9 @@ describe('SettingsSync settings row', () => {
 
   it('undo applies the saved appearance only when the Rust undo returned true', async () => {
     api.syncStatus.mockResolvedValue(ON)
-    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    api.syncSettingsUndoInfo.mockResolvedValue(WITH_APPEARANCE)
     api.syncSettingsUndo.mockResolvedValue(false)
-    localStorage.setItem(APPEARANCE_UNDO_KEY, JSON.stringify({ v: 1, before: true }))
+    localStorage.setItem(APPEARANCE_UNDO_KEY, SAVED)
     await mount()
     await act(async () => byText('Desfazer')!.click())
     await settle()
@@ -827,16 +840,134 @@ describe('SettingsSync settings row', () => {
 
   it('an appearance that fails to come back stays saved and warns', async () => {
     api.syncStatus.mockResolvedValue(ON)
-    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    api.syncSettingsUndoInfo.mockResolvedValue(WITH_APPEARANCE)
     api.syncSettingsUndo.mockResolvedValue(true)
     appearance.applyAppearance.mockRejectedValue(new Error('x'))
-    localStorage.setItem(APPEARANCE_UNDO_KEY, JSON.stringify({ v: 1, before: true }))
+    localStorage.setItem(APPEARANCE_UNDO_KEY, SAVED)
     await mount()
     await act(async () => byText('Desfazer')!.click())
     await settle()
     expect(appearance.applyAppearance).toHaveBeenCalledWith({ v: 1, before: true })
     expect(host.textContent).toContain('a aparência de antes não pôde ser aplicada')
-    expect(JSON.parse(localStorage.getItem(APPEARANCE_UNDO_KEY)!)).toEqual({ v: 1, before: true })
+    expect(localStorage.getItem(APPEARANCE_UNDO_KEY)).toBe(SAVED)
+  })
+
+  it('undo brings back only the appearance saved for this copy (M2)', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUndo.mockResolvedValue(true)
+    // o app fechou entre a cópia no Rust e a gravação da aparência: ficou a de
+    // uma cópia mais velha
+    localStorage.setItem(APPEARANCE_UNDO_KEY, JSON.stringify({ copiedAt: 1_600_000_000, doc: { v: 1, older: true } }))
+    api.syncSettingsUndoInfo.mockResolvedValue(WITH_APPEARANCE)
+    await mount()
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(api.syncSettingsUndo).toHaveBeenCalledTimes(1)
+    expect(appearance.applyAppearance).not.toHaveBeenCalled()
+    expect(localStorage.getItem(APPEARANCE_UNDO_KEY)).toBeNull()
+    await unmount()
+    host.remove()
+
+    // a cópia certa, mas sem aparência: a guardada não é dela
+    localStorage.setItem(APPEARANCE_UNDO_KEY, SAVED)
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    await mount()
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(appearance.applyAppearance).not.toHaveBeenCalled()
+  })
+
+  it('a successful undo invalidates every query, so no settings screen writes its old config back (I1)', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    api.syncSettingsUndo.mockResolvedValue(true)
+    await mount()
+    // Áudio e Sistema leram a configuração copiada
+    qc.setQueryData(['audio-config'], { rateControlEnabled: true })
+    qc.setQueryData(['video-config'], { integerScaling: true, hdr: true })
+    qc.setQueryData(['system-hotkeys'], [])
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    for (const key of [['audio-config'], ['video-config'], ['system-hotkeys']]) {
+      expect(qc.getQueryState(key)?.isInvalidated, key.join('/')).toBe(true)
+    }
+  })
+
+  it('a refused undo leaves the cached settings alone', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    api.syncSettingsUndo.mockRejectedValue('game_open')
+    await mount()
+    qc.setQueryData(['audio-config'], { rateControlEnabled: true })
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(qc.getQueryState(['audio-config'])?.isInvalidated).toBe(false)
+  })
+
+  it('after a successful undo the focus goes to Enviar as desta máquina (M3)', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    api.syncSettingsUndo.mockResolvedValue(true)
+    await mount()
+    const undoButton = byText('Desfazer')!
+    undoButton.focus()
+    api.syncSettingsUndoInfo.mockResolvedValue(null)
+    await act(async () => undoButton.click())
+    await settle()
+    expect(byText('Desfazer')).toBeUndefined()
+    expect(document.activeElement).toBe(byText('Enviar as desta máquina'))
+  })
+
+  it('with sync off, the focus stays on the row after the undo', async () => {
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    api.syncSettingsUndo.mockResolvedValue(true)
+    await mount()
+    expect(byText('Enviar as desta máquina')).toBeUndefined()
+    api.syncSettingsUndoInfo.mockResolvedValue(null)
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(document.activeElement?.textContent).toBe('Configurações')
+  })
+
+  it('a missing backup offers Abrir pasta and Esquecer, which drops only the record (M4)', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUndoInfo.mockResolvedValue(WITH_APPEARANCE)
+    api.syncSettingsUndo.mockRejectedValue('backup_failed')
+    api.syncOpenBackups.mockResolvedValue(undefined)
+    api.syncSettingsUndoForget.mockResolvedValue(undefined)
+    localStorage.setItem(APPEARANCE_UNDO_KEY, SAVED)
+    await mount()
+    expect(byText('Abrir pasta')).toBeUndefined()
+    expect(byText('Esquecer')).toBeUndefined()
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(host.textContent).toContain('Não deu para guardar as configurações de agora na pasta de resguardo')
+    expect(host.textContent).toContain('Esquecer tira só este Desfazer, sem apagar arquivo nenhum.')
+    expect(byText('Desfazer')).toBeTruthy()
+
+    await act(async () => byText('Abrir pasta')!.click())
+    expect(api.syncOpenBackups).toHaveBeenCalledTimes(1)
+    expect(api.syncOpenBackups.mock.calls[0]).toEqual([])
+
+    api.syncSettingsUndoInfo.mockResolvedValue(null)
+    await act(async () => byText('Esquecer')!.click())
+    await settle()
+    expect(api.syncSettingsUndoForget).toHaveBeenCalledTimes(1)
+    expect(byText('Desfazer')).toBeUndefined()
+    expect(byText('Esquecer')).toBeUndefined()
+    expect(localStorage.getItem(APPEARANCE_UNDO_KEY)).toBeNull()
+    expect(document.activeElement).toBe(byText('Enviar as desta máquina'))
+  })
+
+  it('an undo refused for another reason offers neither the folder nor Esquecer', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    api.syncSettingsUndo.mockRejectedValue('game_open')
+    await mount()
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(byText('Abrir pasta')).toBeUndefined()
+    expect(byText('Esquecer')).toBeUndefined()
   })
 
   it('closing the dialog returns the focus to the button that opened it', async () => {

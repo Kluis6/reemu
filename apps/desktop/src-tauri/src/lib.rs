@@ -391,6 +391,7 @@ pub fn run() {
             sync::sync_settings_copy,
             sync::sync_settings_undo_info,
             sync::sync_settings_undo,
+            sync::sync_settings_undo_forget,
             commands::js_log,
             commands::current_focus,
             commands::toggle_focus,

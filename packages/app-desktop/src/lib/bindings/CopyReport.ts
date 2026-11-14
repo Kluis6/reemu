@@ -17,4 +17,10 @@ backupDir: string | null,
  * O documento de aparência da outra máquina, quando pedido: a tela o
  * aplica e guarda o de antes (`reemu.sync.appearanceUndo`).
  */
-appearanceDoc: unknown, };
+appearanceDoc: unknown, 
+/**
+ * Segundos Unix desta cópia, os mesmos do marcador do "Desfazer"
+ * (`SettingsUndoInfo::copied_at`): a aparência de antes guardada pela
+ * tela leva este valor e só volta no "Desfazer" desta cópia.
+ */
+copiedAt: number, };

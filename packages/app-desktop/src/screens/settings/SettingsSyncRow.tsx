@@ -10,7 +10,7 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FieldBlock } from '../../components/SettingBlock'
 import { SYNC_STATUS_KEY, syncErrorCode } from '../../hooks/useSync'
@@ -24,7 +24,15 @@ import {
   settingsGroupErrorText,
   type SettingsGroupName,
 } from '../../lib/settingsSync'
-import { alvanistaOpenSite, syncSettingsSent, syncSettingsUndo, syncSettingsUndoInfo, syncSettingsUpload } from '../../lib/tauri'
+import {
+  alvanistaOpenSite,
+  syncOpenBackups,
+  syncSettingsSent,
+  syncSettingsUndo,
+  syncSettingsUndoForget,
+  syncSettingsUndoInfo,
+  syncSettingsUpload,
+} from '../../lib/tauri'
 import { machineColor } from './syncFormat'
 
 const useStyles = makeStyles({
@@ -33,6 +41,9 @@ const useStyles = makeStyles({
   actions: { display: 'flex', flexWrap: 'wrap', columnGap: tokens.spacingHorizontalS, rowGap: tokens.spacingVerticalS },
   dot: { display: 'inline-block', width: '10px', height: '10px', borderRadius: tokens.borderRadiusCircular, marginRight: tokens.spacingHorizontalXS },
   list: { display: 'flex', flexDirection: 'column', rowGap: tokens.spacingVerticalXS },
+  // onde o foco pousa depois do "Desfazer" com o sync desligado (sem botão na
+  // linha): só para não cair no nada, sem anel
+  anchor: { outlineStyle: 'none' },
 })
 
 /** Recusas de um grupo: quem conta é o grupo. O que parou o envio todo
@@ -42,7 +53,8 @@ const PER_GROUP = ['too_large', 'rejected']
 /**
  * A linha "Configurações" de Sincronização: o envio manual das desta máquina
  * (com o que mudou desde o último) e o "Desfazer" da última cópia, que o
- * Rust lembra depois de reiniciar o app.
+ * Rust lembra depois de reiniciar o app. Um "Desfazer" cujo backup sumiu
+ * oferece a pasta de resguardo e "Esquecer" (sai só o registro da cópia).
  */
 export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocked: boolean }) {
   const { t } = useTranslation()
@@ -54,6 +66,9 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
   const [stop, setStop] = useState<string | null>(null)
   const [undoError, setUndoError] = useState<string | null>(null)
   const [appearanceError, setAppearanceError] = useState(false)
+  const [forgetting, setForgetting] = useState(false)
+  const sendRef = useRef<HTMLButtonElement>(null)
+  const titleRef = useRef<HTMLDivElement>(null)
 
   const sent = useQuery({
     queryKey: SETTINGS_SENT_KEY,
@@ -83,16 +98,23 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
     }
   }
 
+  // A barra do "Desfazer" sai da tela: o foco do controle vai para "Enviar as
+  // desta máquina" (sem o sync ligado, para a própria linha), não para o nada.
+  const focusAfterBar = () => (sendRef.current ?? titleRef.current)?.focus()
+
   const undo = async () => {
     if (undoing) return
     setUndoing(true)
     setUndoError(null)
     setAppearanceError(false)
     try {
+      // A cópia que este "Desfazer" volta, lida do Rust agora: a aparência de
+      // antes mora no localStorage e só volta se for desta cópia (o mesmo
+      // `copiedAt`) e se ela trouxe aparência.
+      const copy = await syncSettingsUndoInfo()
       const undone = await syncSettingsUndo()
-      // A aparência de antes fica no localStorage; o Rust guarda só o banco.
       // Só volta se o Rust desfez; se não aplicar, o documento fica guardado.
-      const before = undone ? readAppearanceUndo() : null
+      const before = undone && copy?.groups.includes('appearance') ? readAppearanceUndo(copy.copiedAt) : null
       if (before !== null) {
         try {
           await applyAppearance(before)
@@ -100,9 +122,14 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
         } catch {
           setAppearanceError(true)
         }
+      } else if (undone) {
+        // o que ficou guardado era de outra cópia
+        clearAppearanceUndo()
       }
-      void qc.invalidateQueries({ queryKey: SETTINGS_UNDO_KEY })
-      void qc.invalidateQueries({ queryKey: SETTINGS_SENT_KEY })
+      // Tudo de novo: as telas que gravam a configuração inteira a partir do
+      // que leram (Áudio, Sistema, HDR) gravariam por cima do que voltou.
+      void qc.invalidateQueries()
+      focusAfterBar()
     } catch (err) {
       setUndoError(syncErrorCode(err))
     } finally {
@@ -110,12 +137,35 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
     }
   }
 
+  // "Esquecer": o backup desta cópia não volta mais. Sai só o registro dela no
+  // Rust; os arquivos ficam na pasta de resguardo.
+  const forget = async () => {
+    if (forgetting) return
+    setForgetting(true)
+    try {
+      await syncSettingsUndoForget()
+      // a aparência guardada era do "Desfazer" desta cópia
+      clearAppearanceUndo()
+      setUndoError(null)
+      void qc.invalidateQueries({ queryKey: SETTINGS_UNDO_KEY })
+      focusAfterBar()
+    } catch (err) {
+      setUndoError(syncErrorCode(err))
+    } finally {
+      setForgetting(false)
+    }
+  }
+
   const info = undoInfo.data ?? null
   const sentAt = sent.data?.sentAt ?? null
   const changed = (sent.data?.changed.length ?? 0) > 0
+  // o backup da cópia sumiu ou não confere: o "Desfazer" não volta sozinho
+  const backupGone = undoError === 'backup_failed'
   return (
     <FieldBlock wide>
-      <Body1>{t('sync.settings')}</Body1>
+      <div ref={titleRef} tabIndex={-1} className={s.anchor}>
+        <Body1>{t('sync.settings')}</Body1>
+      </div>
       <Caption1 className={s.muted}>{t('sync.settingsHint')}</Caption1>
       {enabled && sentAt !== null && <Caption1 className={s.muted}>{t('sync.settingsRow.sentAt', { when: formatDateTime(sentAt) })}</Caption1>}
       {enabled && sentAt !== null && changed && <Caption1 className={s.muted}>{t('sync.settingsRow.changed')}</Caption1>}
@@ -130,11 +180,29 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
                 {t(`sync.err.${undoError as 'failed'}`)}
               </>
             )}
+            {backupGone && (
+              <>
+                <br />
+                {t('sync.settingsRow.forgetHint')}
+              </>
+            )}
           </MessageBarBody>
           <MessageBarActions>
             <Button disabledFocusable={undoing} icon={undoing ? <Spinner size="tiny" /> : undefined} onClick={() => void undo()}>
               {t('sync.settingsRow.undoButton')}
             </Button>
+            {backupGone && (
+              <Button onClick={() => void syncOpenBackups().catch(() => {})}>{t('sync.settingsRow.openFolder')}</Button>
+            )}
+            {backupGone && (
+              <Button
+                disabledFocusable={forgetting}
+                icon={forgetting ? <Spinner size="tiny" /> : undefined}
+                onClick={() => void forget()}
+              >
+                {t('sync.settingsRow.forget')}
+              </Button>
+            )}
           </MessageBarActions>
         </MessageBar>
       )}
@@ -146,6 +214,7 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
       {enabled && (
         <div className={s.actions}>
           <Button
+            ref={sendRef}
             appearance="secondary"
             disabledFocusable={sending || blocked}
             icon={sending ? <Spinner size="tiny" /> : undefined}

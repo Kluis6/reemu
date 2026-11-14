@@ -615,6 +615,9 @@ const es: Messages = {
       undo: 'Ajustes copiados de {{machine}} el {{when}}.',
       appearanceUndoFailed: 'Los ajustes se restauraron, pero no se pudo aplicar la apariencia anterior.',
       undoButton: 'Deshacer',
+      forgetHint: 'Lo que queda del respaldo está en la carpeta de respaldo. Olvidar solo quita este Deshacer y no borra ningún archivo.',
+      openFolder: 'Abrir carpeta',
+      forget: 'Olvidar',
     },
     copyDlg: {
       title: 'Copiar de {{machine}} a esta máquina',
@@ -625,7 +628,7 @@ const es: Messages = {
       hint: {
         'core-options': 'Por core y por juego',
         'shaders-decorations': 'Presets, cadenas y bezels asignados',
-        appearance: 'Tema, tamaño de la interfaz, margen de la TV',
+        appearance: 'Tema, tamaño de la interfaz, margen de la TV, sonidos y movimiento',
       },
       notSent: 'La otra máquina todavía no envió este grupo.',
       videoPill: 'hardware distinto',

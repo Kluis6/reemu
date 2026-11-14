@@ -25,18 +25,33 @@ export const SETTINGS_UNDO_KEY = ['sync-settings-undo-info'] as const
  *  banco). Cada acesso ao localStorage pode falhar: nunca derruba a tela. */
 export const APPEARANCE_UNDO_KEY = 'reemu.sync.appearanceUndo'
 
-export function saveAppearanceUndo(doc: AppearanceDoc): void {
+/** O que fica guardado: a aparência e a cópia a que ela pertence (o
+ *  `copiedAt` do marcador do Rust). */
+interface SavedAppearance {
+  copiedAt: number
+  doc: AppearanceDoc
+}
+
+/** Guarda a aparência de antes da cópia de `copiedAt` (`CopyReport.copiedAt`). */
+export function saveAppearanceUndo(doc: AppearanceDoc, copiedAt: number): void {
   try {
-    localStorage.setItem(APPEARANCE_UNDO_KEY, JSON.stringify(doc))
+    const saved: SavedAppearance = { copiedAt, doc }
+    localStorage.setItem(APPEARANCE_UNDO_KEY, JSON.stringify(saved))
   } catch {
     // sem localStorage: a aparência não volta, o resto volta
   }
 }
 
-export function readAppearanceUndo(): unknown {
+/** A aparência de antes da cópia de `copiedAt` (`SettingsUndoInfo.copiedAt`),
+ *  ou `null`. A de outra cópia não volta: o app pode ter fechado entre a cópia
+ *  no Rust e a gravação daqui, e o que ficou é de uma cópia mais velha. */
+export function readAppearanceUndo(copiedAt: number): unknown {
   try {
     const raw = localStorage.getItem(APPEARANCE_UNDO_KEY)
-    return raw === null ? null : (JSON.parse(raw) as unknown)
+    if (raw === null) return null
+    const saved = JSON.parse(raw) as unknown
+    if (typeof saved !== 'object' || saved === null || !('copiedAt' in saved) || !('doc' in saved)) return null
+    return saved.copiedAt === copiedAt ? saved.doc : null
   } catch {
     return null
   }

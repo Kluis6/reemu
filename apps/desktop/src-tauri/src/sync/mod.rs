@@ -1476,6 +1476,16 @@ pub async fn sync_settings_undo(app: AppHandle) -> Result<bool, String> {
         .map_err(|e| e.to_string())
 }
 
+/// "Esquecer" a última cópia cujo "Desfazer" não volta: só o marcador sai, os
+/// arquivos ficam na pasta de resguardo e nenhuma configuração muda. Sem rede.
+#[tauri::command]
+pub async fn sync_settings_undo_forget(app: AppHandle) -> Result<(), String> {
+    engine_of(&app)?
+        .settings_undo_forget()
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// A linha de save da página do jogo (sem rede).
 #[tauri::command]
 pub async fn sync_save_status(app: AppHandle, rom_id: String) -> Result<SaveLineStatus, String> {

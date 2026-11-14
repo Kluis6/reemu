@@ -14,13 +14,11 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { SYNC_STATUS_KEY, syncErrorCode } from '../../hooks/useSync'
+import { syncErrorCode } from '../../hooks/useSync'
 import { applyAppearance, exportAppearance } from '../../lib/appearanceGroup'
 import { formatDateTime } from '../../lib/metadataFormat'
 import {
   SETTINGS_GROUPS,
-  SETTINGS_SENT_KEY,
-  SETTINGS_UNDO_KEY,
   clearAppearanceUndo,
   saveAppearanceUndo,
   type SettingsDbGroup,
@@ -163,7 +161,8 @@ export function CopySettingsDialog({ machine, onClose }: { machine: SyncMachine;
       const done = await syncSettingsCopy(machine.id, groups, appearanceWanted)
       if (appearanceWanted && done.appearanceDoc != null) {
         // Sem a aparência de antes, uma guardada de outra cópia seria velha.
-        if (before) saveAppearanceUndo(before)
+        // Guardada com o instante desta cópia: só o "Desfazer" dela a traz.
+        if (before) saveAppearanceUndo(before, done.copiedAt)
         else clearAppearanceUndo()
         try {
           await applyAppearance(done.appearanceDoc)
@@ -175,9 +174,10 @@ export function CopySettingsDialog({ machine, onClose }: { machine: SyncMachine;
         clearAppearanceUndo()
       }
       setReport(done)
-      void qc.invalidateQueries({ queryKey: SETTINGS_UNDO_KEY })
-      void qc.invalidateQueries({ queryKey: SETTINGS_SENT_KEY })
-      void qc.invalidateQueries({ queryKey: SYNC_STATUS_KEY })
+      // Tudo de novo, não só o Desfazer e o status: as telas de Áudio, Sistema,
+      // HDR e companhia gravam a configuração inteira a partir do que leram, e
+      // um valor de antes da cópia gravaria por cima dela.
+      void qc.invalidateQueries()
     } catch (err) {
       setError(syncErrorCode(err))
     } finally {

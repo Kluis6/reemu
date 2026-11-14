@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../i18n'
-import { settingsGroupErrorText } from './settingsSync'
+import type { AppearanceDoc } from './appearanceGroup'
+import {
+  APPEARANCE_UNDO_KEY,
+  clearAppearanceUndo,
+  readAppearanceUndo,
+  saveAppearanceUndo,
+  settingsGroupErrorText,
+} from './settingsSync'
 
 describe('settingsGroupErrorText', () => {
   const t = i18n.getFixedT('pt-BR')
@@ -29,5 +37,46 @@ describe('settingsGroupErrorText', () => {
         expect(text).not.toContain('{{group}}')
       }
     }
+  })
+})
+
+describe('appearance undo in localStorage', () => {
+  const DOC: AppearanceDoc = {
+    v: 1,
+    themeSelection: '{"selection":{"id":"dark"}}',
+    uiScale: 1,
+    overscan: 0,
+    uiSounds: true,
+    reduceMotion: true,
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    localStorage.clear()
+  })
+
+  it('comes back only for the copy it was saved with', () => {
+    saveAppearanceUndo(DOC, 1_700_000_000)
+    expect(readAppearanceUndo(1_700_000_000)).toEqual(DOC)
+    expect(readAppearanceUndo(1_700_000_001)).toBeNull()
+    clearAppearanceUndo()
+    expect(readAppearanceUndo(1_700_000_000)).toBeNull()
+  })
+
+  it('a document without its copy (an older version) never comes back', () => {
+    localStorage.setItem(APPEARANCE_UNDO_KEY, JSON.stringify(DOC))
+    expect(readAppearanceUndo(1_700_000_000)).toBeNull()
+    localStorage.setItem(APPEARANCE_UNDO_KEY, '{ nao e json')
+    expect(readAppearanceUndo(1_700_000_000)).toBeNull()
+  })
+
+  it('a localStorage that throws never breaks the screen', () => {
+    const boom = () => {
+      throw new Error('negado')
+    }
+    vi.stubGlobal('localStorage', { getItem: boom, setItem: boom, removeItem: boom })
+    expect(() => saveAppearanceUndo(DOC, 1)).not.toThrow()
+    expect(readAppearanceUndo(1)).toBeNull()
+    expect(() => clearAppearanceUndo()).not.toThrow()
   })
 })
