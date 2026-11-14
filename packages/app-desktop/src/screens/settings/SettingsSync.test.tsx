@@ -607,6 +607,23 @@ describe('SettingsSync', () => {
     await mount()
   })
 
+  it('re-reads the status when a superseded Sincronizar agora finishes', async () => {
+    let finish!: (s: SyncStatus) => void
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncNow.mockReturnValue(new Promise<SyncStatus>((r) => (finish = r)))
+    api.syncSetStatesEnabled.mockResolvedValue({ ...ON, statesEnabled: false })
+    await mount()
+    await act(async () => byText('Sincronizar agora')!.click())
+    const states = () => [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][2]
+    await act(async () => states().click())
+    await settle()
+    const before = api.syncStatus.mock.calls.length
+    // O resultado da passada (mais velho) é descartado, mas o estado é relido.
+    await act(async () => finish({ ...ON, lastPassAt: 123 }))
+    await settle()
+    expect(api.syncStatus.mock.calls.length).toBeGreaterThan(before)
+  })
+
   it('keeps a typed name while another action runs and sends it afterwards', async () => {
     let finish!: (s: SyncStatus) => void
     api.syncStatus.mockResolvedValue(ON)

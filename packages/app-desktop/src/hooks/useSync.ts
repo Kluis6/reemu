@@ -127,7 +127,12 @@ export function useSync() {
       setBusy(kind)
       try {
         const next = await call()
-        if (mine !== attempt.current) return
+        if (mine !== attempt.current) {
+          // Outra ação passou à frente (os states desligados no meio): este
+          // resultado, mais velho, não vale, mas o estado tem de ser relido.
+          void qc.invalidateQueries({ queryKey: SYNC_STATUS_KEY })
+          return
+        }
         await qc.cancelQueries({ queryKey: SYNC_STATUS_KEY })
         qc.setQueryData(SYNC_STATUS_KEY, next)
         // A lista de aparelhos muda ao ligar, desligar e renomear.

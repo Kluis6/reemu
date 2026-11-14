@@ -1,8 +1,9 @@
 import { Body1, Button, Caption1, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { ArrowDownloadRegular, WarningRegular } from '@fluentui/react-icons'
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { stateDownloadError, useRemoteStates } from '../../hooks/useSync'
+import { SYNC_STATE_NOTES_KEY, stateDownloadError, useRemoteStates } from '../../hooks/useSync'
 import { sysToast } from '../../lib/toast'
 import { syncDownloadState, type RemoteState, type SaveState } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
@@ -71,6 +72,7 @@ export function RemoteStateList({
   const { t, i18n } = useTranslation()
   const s = useStyles()
   const push = useToastStore((st) => st.push)
+  const qc = useQueryClient()
   const remote = useRemoteStates(romId, coreId)
   // A vaga ocupada pergunta antes de trocar; só uma pergunta por vez.
   const [asking, setAsking] = useState<string | null>(null)
@@ -82,7 +84,8 @@ export function RemoteStateList({
   // reaparece no lugar do par Substituir/Cancelar.
   const back = useRef<string | null>(null)
   // Um download que termina depois de a lista sair da tela (a pessoa fechou o
-  // painel ou abriu o jogo) não abre nem carrega nada: a tela já é outra.
+  // painel ou abriu o jogo) não abre nem carrega nada: a tela já é outra. A
+  // vaga trocada, porém, vale na lista de states e nas notas, montada ou não.
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
@@ -115,6 +118,8 @@ export function RemoteStateList({
     setBusy(st.id)
     try {
       const saved = await syncDownloadState(romId, coreId, st.id, overwrite)
+      void qc.invalidateQueries({ queryKey: ['save-states', romId] })
+      void qc.invalidateQueries({ queryKey: SYNC_STATE_NOTES_KEY })
       if (!mounted.current) return
       setAsking(null)
       await onDownloaded(saved)
