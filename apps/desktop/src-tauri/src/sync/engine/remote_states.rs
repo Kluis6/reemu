@@ -19,7 +19,7 @@
 //!   (máquina, nome, core) foi apagada, o grupo todo some, e uma linha de
 //!   versão mais velha nunca volta no lugar dela.
 //! - Descer: o state de agora da vaga (se há) vai para
-//!   `<dados>/sync-backups/<carimbo>/states/` ANTES de ser trocado, e a troca
+//!   `<dados>/sync-backups/<carimbo>/saves/` ANTES de ser trocado, e a troca
 //!   passa por `save_state::save` com a versão do core instalada daqui: o
 //!   state vira desta máquina e sobe de novo como dela (D116).
 
@@ -98,20 +98,18 @@ fn slot_of(filename: &str, stem: &str) -> Option<Option<u32>> {
     n.parse().ok().map(Some)
 }
 
-/// Quando a linha foi escrita, para escolher a mais nova.
-fn written(f: &RemoteFile) -> (i64, u32) {
+/// A posição de uma linha entre as do mesmo (máquina, nome, core): quando a
+/// VERSÃO dela foi escrita, viva ou apagada (o apagamento no site guarda a
+/// versão atual, e é ela que diz se a linha é a mais nova da vaga). Apagar
+/// uma linha velha depois da nova não a põe na frente. Uma apagada sem versão
+/// fica atrás de qualquer outra, e num empate a viva vence.
+fn rank(f: &RemoteFile) -> ((i64, u32), bool) {
     let wrote = f
         .current
         .as_ref()
         .and_then(|v| parse_time(&v.server_created_at))
         .unwrap_or((0, 0));
-    // Uma linha apagada vale desde o apagamento.
-    let deleted = f
-        .deleted_at
-        .as_deref()
-        .and_then(parse_time)
-        .unwrap_or((0, 0));
-    wrote.max(deleted)
+    (wrote, f.deleted_at.is_none())
 }
 
 fn newest<'a>(
@@ -121,7 +119,7 @@ fn newest<'a>(
     for (row, device, filename, core) in rows {
         let key = (device, filename, core);
         match best.get(&key) {
-            Some(old) if written(old) >= written(row) => {}
+            Some(old) if rank(old) >= rank(row) => {}
             _ => {
                 best.insert(key, row);
             }
@@ -385,6 +383,10 @@ impl Engine {
         // segundos, e um jogo pode ter começado a abrir ou um QuickSave pode
         // ter caído na vaga. A vaga de agora é a que vale, e o que está nela
         // vai para o resguardo.
+        // A trava de escrita da ROM: um QuickSave que chega agora espera a
+        // troca acabar (e nunca é apagado sem backup); um que já estava
+        // gravando termina antes da conferência abaixo.
+        let _write = crate::save_state::write_lock(rom_id).await;
         if self.playing() == Playing::Loading {
             return Err("loading".into());
         }

@@ -7173,4 +7173,80 @@ mod tests {
         assert!(!r.path("sync-backups/20200101-000000").exists());
         assert_eq!(r.backups().len(), 1);
     }
+
+    #[tokio::test]
+    async fn deleting_an_old_row_after_the_newer_one_keeps_the_newer_visible() {
+        // X (core velho) foi apagado no site DEPOIS de Y (core novo) ser escrito.
+        let mut x = other_state(
+            "x",
+            SLOT1,
+            "dev2",
+            CORE,
+            Some(V_OTHER),
+            "2026-11-10T10:00:00Z",
+            b"x",
+        );
+        x["deleted_at"] = json!("2026-11-13T10:00:00Z");
+        let y = other_state(
+            "y",
+            SLOT1,
+            "dev2",
+            CORE,
+            Some(V163),
+            "2026-11-12T10:00:00Z",
+            b"y",
+        );
+        // Uma apagada sem versão nunca passa na frente de uma viva.
+        let mut bare = other_state("bare", SLOT1, "dev3", CORE, Some(V163), T0, b"b");
+        bare["deleted_at"] = json!("2026-11-20T10:00:00Z");
+        bare["current"] = json!(null);
+        let live3 = other_state(
+            "l3",
+            SLOT1,
+            "dev3",
+            CORE,
+            Some(V_OTHER),
+            "2026-11-01T10:00:00Z",
+            b"l",
+        );
+        let r = remote_rig("remote-old-deleted", vec![x, y, bare, live3]).await;
+        let got = remote(&r, Some(V163)).await;
+        let ids: Vec<&str> = got.states.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["y", "l3"]);
+    }
+
+    #[tokio::test]
+    async fn a_quicksave_racing_the_download_write_is_serialized_and_never_lost() {
+        let r = download_rig("remote-lock", V163).await;
+        // Um QuickSave já gravando: segura a trava da ROM.
+        let writing = crate::save_state::write_lock("r1").await;
+        let mut fut = Box::pin(download(&r, false));
+        let early = tokio::time::timeout(Duration::from_millis(400), &mut fut).await;
+        assert!(early.is_err(), "o download espera a trava da ROM");
+        assert!(r.read(LOCAL1).is_none(), "nada foi escrito enquanto isso");
+        // O QuickSave grava na vaga e solta a trava.
+        r.save_state("r1", Some(1), Some(V163), b"quick-just-saved", None)
+            .await;
+        drop(writing);
+        // O download vê a vaga ocupada de agora e pergunta, sem apagar nada.
+        assert_eq!(fut.await.unwrap_err(), "slot_occupied");
+        assert_eq!(r.read(LOCAL1).unwrap(), b"quick-just-saved");
+        assert!(r.backups().is_empty());
+
+        // Com `overwrite`, o que acabou de ser gravado vai para o resguardo.
+        let r = download_rig("remote-lock-overwrite", V163).await;
+        let writing = crate::save_state::write_lock("r1").await;
+        let mut fut = Box::pin(download(&r, true));
+        assert!(tokio::time::timeout(Duration::from_millis(400), &mut fut)
+            .await
+            .is_err());
+        r.save_state("r1", Some(1), Some(V163), b"quick-just-saved", None)
+            .await;
+        drop(writing);
+        fut.await.unwrap();
+        assert_eq!(r.read(LOCAL1).unwrap(), b"remote-bytes");
+        let backups = r.backups();
+        assert_eq!(backups.len(), 1, "o QuickSave não tinha miniatura");
+        assert_eq!(backups[0].1, b"quick-just-saved");
+    }
 }

@@ -171,6 +171,7 @@ pub async fn save_state(
         .ok_or_else(|| no_state_error(&state))?;
     let thumb = save_thumbnail(&state);
     let repo = db::SaveStateRepo::new(pool(&state)?);
+    let _write = save_svc::write_lock(&rom_id).await;
     let meta = save_svc::save(
         &repo,
         &state.save_dir,

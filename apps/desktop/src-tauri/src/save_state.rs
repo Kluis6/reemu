@@ -7,7 +7,9 @@
 //! gravado ao lado, com a mesma stem + `.png`.
 
 use domain::save_state::{SaveStateMetadata, SaveStateRepository};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SaveError {
@@ -35,6 +37,22 @@ fn save_family(core_id: &str) -> std::borrow::Cow<'_, str> {
         Some(base) => std::borrow::Cow::Owned(format!("{base}_libretro")),
         None => std::borrow::Cow::Borrowed(core_id),
     }
+}
+
+/// A trava de escrita de states de uma ROM. Quem grava na vaga de uma ROM
+/// (`save_state`, o QuickSave da hotkey, o download de um state de outra
+/// máquina) a segura de ponta a ponta: `save` apaga o state de antes da vaga,
+/// e dois escritores juntos apagariam o que o outro acabou de gravar.
+pub async fn write_lock(rom_id: &str) -> tokio::sync::OwnedMutexGuard<()> {
+    static LOCKS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+    let lock = {
+        let mut map = LOCKS
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        map.entry(rom_id.to_owned()).or_default().clone()
+    };
+    lock.lock_owned().await
 }
 
 fn now_unix() -> i64 {

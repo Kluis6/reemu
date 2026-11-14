@@ -293,6 +293,7 @@ async fn quick_state<R: tauri::Runtime>(
             .map_err(AppError::from)?
             .ok_or_else(|| save_states::no_state_error(&state))?;
         let thumb = save_states::save_thumbnail(&state);
+        let _write = save_svc::write_lock(&rom_id).await;
         save_svc::save(
             &repo,
             &state.save_dir,

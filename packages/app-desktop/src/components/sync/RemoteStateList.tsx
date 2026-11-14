@@ -24,6 +24,8 @@ const useStyles = makeStyles({
   dimmed: { opacity: 0.6 },
   info: { display: 'flex', flexDirection: 'column', rowGap: '4px', flexGrow: 1, minWidth: 0 },
   actions: { display: 'flex', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px' },
+  // No menu estreito o botão tem o tamanho do conteúdo, como o Carregar dos locais.
+  fit: { alignSelf: 'flex-start' },
   // O aviso dos que não carregam aqui. Não é um `Badge` (altura fixa): num menu
   // estreito o texto quebra, e a borda tem de acompanhar as linhas.
   pill: {
@@ -138,7 +140,7 @@ export function RemoteStateList({
 
   const action = (st: RemoteState) =>
     asking === st.id ? (
-      <div className={s.actions}>
+      <div className={mergeClasses(s.actions, variant === 'pause' && s.fit)}>
         <Button appearance="primary" disabledFocusable={busy !== null} onClick={() => void download(st, true)}>
           {t('sync.state.replace')}
         </Button>
@@ -151,6 +153,7 @@ export function RemoteStateList({
       </div>
     ) : (
       <Button
+        className={variant === 'pause' ? s.fit : undefined}
         data-download={st.id}
         icon={<ArrowDownloadRegular />}
         disabledFocusable={busy !== null}
