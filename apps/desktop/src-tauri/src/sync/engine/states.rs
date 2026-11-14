@@ -32,15 +32,22 @@ pub(super) const WIPED: &str = "wiped";
 pub(super) const REJECTED: &str = "rejected";
 /// Outra ROM tem um state mais novo com o mesmo nome na nuvem.
 pub(super) const DUPLICATE: &str = "duplicate";
+/// O arquivo tem mtime depois da linha que o gravou (mais de 2 s): os bytes
+/// não são comprovadamente dela, e não sobem até o state ser gravado de novo.
+pub(super) const DEFERRED: &str = "deferred";
 
 /// Quanto o mtime do arquivo pode passar do `created_at` da linha: `save`
 /// grava os bytes e só depois a linha, e há disco que arredonda o mtime.
 const ROW_SLACK_SECS: i64 = 2;
 
 /// O que uma leitura de um state deixou: o hash daqueles bytes, com o
-/// tamanho e o mtime de quando foram lidos. Vale enquanto os dois não mudam.
+/// tamanho, o mtime e a linha de `save_states` de quando foram lidos. Vale
+/// enquanto os três não mudam: uma vaga gravada de novo é outra linha, mesmo
+/// com o mesmo tamanho e o mesmo mtime (o FAT32 conta o mtime de 2 em 2 s).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Seen {
+    /// A linha (`save_states.id`) a que estes bytes pertenciam.
+    row: Option<String>,
     size: u64,
     /// `None`: o arquivo mudou durante a leitura, e o hash não fica guardado.
     modified: Option<SystemTime>,
@@ -58,11 +65,13 @@ impl Seen {
         }
     }
 
-    /// O que a base guardou do arquivo, quando ela tem tamanho e mtime.
+    /// O que a base guardou do arquivo, quando ela tem a linha, o tamanho e
+    /// o mtime.
     fn from_base(b: &BaseRow) -> Option<Self> {
         let size = u64::try_from(b.local_size?).ok()?;
         let ns = u64::try_from(b.local_mtime_ns?).ok()?;
         Some(Self {
+            row: Some(b.local_row.clone()?),
             size,
             modified: Some(UNIX_EPOCH + Duration::from_nanos(ns)),
             hash: b.local_hash.clone(),
@@ -101,9 +110,24 @@ pub(super) struct StateWork {
     platform: Option<&'static str>,
     /// `None`: todos os states; senão os de uma ROM.
     rom: Option<String>,
+    /// A época dos states quando a passada começou (`Runtime::states_epoch`).
+    epoch: u64,
 }
 
 impl StateWork {
+    /// A ROM dona de cada chave (do state e da miniatura).
+    fn owners(&self) -> HashMap<String, String> {
+        self.files
+            .iter()
+            .flat_map(|f| {
+                [
+                    (f.key.clone(), f.rom_id.clone()),
+                    (f.thumb_key(), f.rom_id.clone()),
+                ]
+            })
+            .collect()
+    }
+
     /// Há o que perguntar à nuvem: um state com versão, ou uma base a decidir.
     fn needs_network(&self) -> bool {
         self.files.iter().any(|f| f.version().is_some()) || !self.bases.is_empty()
@@ -139,19 +163,24 @@ impl Engine {
         scope: &PassScope,
     ) -> Result<PassReport, SyncError> {
         let _one = self.states_lock.lock().await;
-        let device = self.ready(alva).await?;
+        // Nunca apaga a base: a troca de conta é dos game saves (R30).
+        let device = self.ready_for_states(alva).await?;
         if !self.states_on().await? {
             return Ok(PassReport::default());
         }
+        // Desligar os states ou esquecer o aparelho muda a época: o que esta
+        // passada diria depois disso não é gravado (N3).
+        let epoch = self.sync.runtime().states_epoch;
         let rom = match scope {
             PassScope::State(id) => Some(id.clone()),
             _ => None,
         };
-        let Some(work) = self.state_work(rom).await? else {
+        let Some(work) = self.state_work(rom.clone(), epoch).await? else {
             return Ok(PassReport::default());
         };
+        let owners = work.owners();
         let result = self.run_state_pass(alva, &device, work).await;
-        self.finish_states(&result);
+        self.finish_states(&result, rom.as_deref(), &owners, epoch);
         result
     }
 
@@ -169,7 +198,11 @@ impl Engine {
 
     /// O trabalho de states do escopo. `None` quando não há state nem base de
     /// state: nada a fazer, nem a rede. A conta da página já fica certa aqui.
-    async fn state_work(&self, rom: Option<String>) -> Result<Option<StateWork>, SyncError> {
+    async fn state_work(
+        &self,
+        rom: Option<String>,
+        epoch: u64,
+    ) -> Result<Option<StateWork>, SyncError> {
         let found = device_states(&self.states, &self.roms)
             .await
             .map_err(|e| failed(format!("states locais: {e}")))?;
@@ -190,12 +223,10 @@ impl Engine {
             }
         }
         if files.is_empty() && duplicates.is_empty() && orphans.is_empty() {
-            // Nenhum state no escopo: nenhum fica só aqui (M1), e sem state
-            // nenhum não há state recusado a dizer.
-            self.record_local_only(rom.as_deref(), HashMap::new());
-            if rom.is_none() {
-                self.sync.runtime().state_error = None;
-            }
+            // Nenhum state no escopo: nenhum fica só aqui (M1), e não há
+            // state recusado a dizer.
+            self.record_local_only(rom.as_deref(), HashMap::new(), epoch);
+            self.record_state_errors(rom.as_deref(), HashMap::new(), epoch);
             return Ok(None);
         }
         Ok(Some(StateWork {
@@ -207,6 +238,7 @@ impl Engine {
             bases,
             orphans,
             rom,
+            epoch,
         }))
     }
 
@@ -279,18 +311,23 @@ impl Engine {
                 report.errors.push((key.clone(), repo_err(e)));
             }
         }
-        self.record_local_only(work.rom.as_deref(), local_only);
+        self.record_local_only(work.rom.as_deref(), local_only, work.epoch);
         Ok(())
     }
 
     /// A conta da página: a passada de todos troca a lista inteira, a de uma
-    /// ROM só as entradas dela.
+    /// ROM só as entradas dela. Nada, se os states desligaram ou o aparelho
+    /// foi esquecido desde o começo da passada.
     fn record_local_only(
         &self,
         rom: Option<&str>,
         entries: HashMap<(String, String), &'static str>,
+        epoch: u64,
     ) {
         let mut rt = self.sync.runtime();
+        if rt.states_epoch != epoch {
+            return;
+        }
         match rom {
             None => rt.states_local = entries,
             Some(id) => {
@@ -305,30 +342,67 @@ impl Engine {
     /// enviados): só no aviso dos states, e só com o que a pessoa pode fazer
     /// algo (um state recusado, a cota, o plano). Uma falha de rede fica no
     /// log; a próxima passada tenta de novo.
-    fn finish_states(&self, result: &Result<PassReport, SyncError>) {
+    ///
+    /// Os avisos são por ROM: a passada de uma ROM só troca o dela (um
+    /// QuickSave num jogo não apaga o aviso de um state de outro jogo).
+    fn finish_states(
+        &self,
+        result: &Result<PassReport, SyncError>,
+        rom: Option<&str>,
+        owners: &HashMap<String, String>,
+        epoch: u64,
+    ) {
         match result {
             Ok(report) => {
-                let shown = report
-                    .errors
-                    .iter()
-                    .filter(|(_, e)| {
-                        matches!(
-                            e,
-                            SyncError::StateTooLarge
-                                | SyncError::Rejected
-                                | SyncError::Quota
-                                | SyncError::NoTier
-                        )
-                    })
-                    .max_by_key(|(_, e)| severity(e));
-                self.sync.runtime().state_error = shown.map(|(key, e)| {
-                    let file = key_file_name(key).filter(|_| is_permanent(e));
-                    (e.clone(), file.map(str::to_owned))
+                let mut errors: HashMap<String, (SyncError, Option<String>)> = HashMap::new();
+                let shown = report.errors.iter().filter(|(_, e)| {
+                    matches!(
+                        e,
+                        SyncError::StateTooLarge
+                            | SyncError::Rejected
+                            | SyncError::Quota
+                            | SyncError::NoTier
+                    )
                 });
+                for (key, e) in shown {
+                    let Some(owner) = owners.get(key) else {
+                        continue;
+                    };
+                    if errors
+                        .get(owner)
+                        .is_some_and(|(old, _)| severity(old) >= severity(e))
+                    {
+                        continue;
+                    }
+                    let file = key_file_name(key).filter(|_| is_permanent(e));
+                    errors.insert(owner.clone(), (e.clone(), file.map(str::to_owned)));
+                }
+                self.record_state_errors(rom, errors, epoch);
             }
             Err(e) => log::info!("sync: passada dos states terminou em {e}"),
         }
         self.emit(SyncEvent::Status);
+    }
+
+    /// Os avisos de states por ROM: a passada de todos troca todos, a de uma
+    /// ROM só o dela. Nada, se a época mudou desde o começo da passada.
+    fn record_state_errors(
+        &self,
+        rom: Option<&str>,
+        errors: HashMap<String, (SyncError, Option<String>)>,
+        epoch: u64,
+    ) {
+        let mut rt = self.sync.runtime();
+        if rt.states_epoch != epoch {
+            return;
+        }
+        match rom {
+            None => rt.state_errors = errors,
+            Some(id) => {
+                rt.state_errors.remove(id);
+                rt.state_errors.extend(errors);
+            }
+        }
     }
 
     /// As linhas de state desta máquina, as apagadas no site inclusive (sem
@@ -454,7 +528,7 @@ impl Engine {
             ));
             Kept::Later
         };
-        let look = match self.look_state(obj.path, base, false).await {
+        let look = match self.look_state(obj.path, base, &obj.file.id, false).await {
             Ok(look) => look,
             Err(err) => return Ok(unreadable(report, err)),
         };
@@ -537,7 +611,7 @@ impl Engine {
         let look = if look.bytes.is_some() {
             look
         } else {
-            match self.look_state(obj.path, None, true).await {
+            match self.look_state(obj.path, None, &obj.file.id, true).await {
                 Ok(look) => look,
                 Err(err) => {
                     report.errors.push((
@@ -554,10 +628,17 @@ impl Engine {
         let (Some(seen), Some(bytes)) = (&look.seen, &look.bytes) else {
             return Ok(Kept::Later);
         };
-        if !look.steady || seen.mtime > after.created_at + ROW_SLACK_SECS || *before != after {
-            // Um save está gravando estes bytes agora (ou já gravou depois da
-            // linha): a passada dele os sobe com a linha certa.
+        if !look.steady || *before != after {
+            // Um save está gravando estes bytes agora: a passada dele os sobe
+            // com a linha certa.
             return Ok(deferred(report, "o arquivo mudou durante a leitura"));
+        }
+        if seen.mtime > after.created_at + ROW_SLACK_SECS {
+            // O arquivo é mais novo que a linha (relógio de um disco de rede,
+            // um programa que mexeu nele): os bytes não são comprovadamente
+            // dela. Fica só aqui, e a página conta; um save novo resolve.
+            deferred(report, "o arquivo é mais novo que a linha");
+            return Ok(Kept::LocalOnly(DEFERRED));
         }
         // Com os bytes lidos a decisão pode mudar (eles podem ser os da base).
         match decide_on(&look) {
@@ -667,6 +748,7 @@ impl Engine {
                 backup_path: None,
                 local_size: i64::try_from(seen.size).ok(),
                 local_mtime_ns: seen.mtime_ns(),
+                local_row: seen.row.clone(),
             })
             .await
             .map_err(repo_err)
@@ -679,14 +761,17 @@ impl Engine {
         &self,
         path: &Path,
         base: Option<&BaseRow>,
+        row: &str,
         read: bool,
     ) -> io::Result<Look> {
+        let of_row = |s: &Seen| s.row.as_deref() == Some(row);
         let known = lock(&self.state_hashes)
             .get(path)
+            .filter(|s| of_row(s))
             .cloned()
-            .or_else(|| base.and_then(Seen::from_base));
-        let at = path.to_path_buf();
-        let look = tokio::task::spawn_blocking(move || look_at(&at, known, read))
+            .or_else(|| base.and_then(Seen::from_base).filter(of_row));
+        let (at, row) = (path.to_path_buf(), row.to_owned());
+        let look = tokio::task::spawn_blocking(move || look_at(&at, known, row, read))
             .await
             .unwrap_or_else(|j| Err(io::Error::other(j.to_string())))?;
         let mut cache = lock(&self.state_hashes);
@@ -708,7 +793,7 @@ impl Engine {
     pub async fn upload_old_states(&self, alva: &Alvanista) -> Result<PassReport, SyncError> {
         {
             let _one = self.states_lock.lock().await;
-            self.ready(alva).await?;
+            self.ready_for_states(alva).await?;
             if !self.states_on().await? {
                 return Ok(PassReport::default());
             }
@@ -767,7 +852,7 @@ fn state_row<'a>(
 
 /// O state em disco. Sem `read` e com o tamanho e o mtime de antes, vale o
 /// hash guardado; senão os bytes são lidos uma vez e o hash é deles.
-fn look_at(path: &Path, known: Option<Seen>, read: bool) -> io::Result<Look> {
+fn look_at(path: &Path, known: Option<Seen>, row: String, read: bool) -> io::Result<Look> {
     let absent = Look {
         seen: None,
         bytes: None,
@@ -811,6 +896,7 @@ fn look_at(path: &Path, known: Option<Seen>, read: bool) -> io::Result<Look> {
         .map_or(0, |d| d.as_secs() as i64);
     Ok(Look {
         seen: Some(Seen {
+            row: Some(row),
             size: bytes.len() as u64,
             modified: modified.filter(|_| steady),
             hash: sha256_hex(&bytes),

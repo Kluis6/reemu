@@ -33,6 +33,10 @@ pub struct BaseRow {
     pub local_size: Option<i64>,
     #[serde(default)]
     pub local_mtime_ns: Option<i64>,
+    /// A linha de `save_states` dos bytes da base (só nos states): uma vaga
+    /// gravada de novo é outra linha, mesmo com o mesmo tamanho e mtime.
+    #[serde(default)]
+    pub local_row: Option<String>,
 }
 
 /// Um arquivo cujo lado local e cujo lado remoto mudaram: nada é sobrescrito

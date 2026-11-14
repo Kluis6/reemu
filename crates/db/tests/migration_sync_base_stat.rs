@@ -1,5 +1,6 @@
 //! Um banco com a base do cloud save (até a migration 21) passa pela 22 sem
-//! perder linha: as de antes ficam sem tamanho e mtime, e as novas os guardam.
+//! perder linha: as de antes ficam sem tamanho, mtime e linha do state, e as
+//! novas os guardam.
 
 mod common;
 
@@ -22,6 +23,7 @@ fn base(key: &str) -> BaseRow {
         backup_path: None,
         local_size: None,
         local_mtime_ns: None,
+        local_row: None,
     }
 }
 
@@ -29,7 +31,7 @@ fn base(key: &str) -> BaseRow {
 async fn a_base_from_before_migrates_and_keeps_its_rows() {
     let db = mem_db().await;
     // Volta o banco para antes da 22, com uma linha da base gravada então.
-    for col in ["local_size", "local_mtime_ns"] {
+    for col in ["local_size", "local_mtime_ns", "local_row"] {
         sqlx::query(&format!("ALTER TABLE sync_base DROP COLUMN {col}"))
             .execute(&db)
             .await
@@ -56,12 +58,16 @@ async fn a_base_from_before_migrates_and_keeps_its_rows() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!((old.local_size, old.local_mtime_ns), (None, None));
+    assert_eq!(
+        (old.local_size, old.local_mtime_ns, old.local_row),
+        (None, None, None)
+    );
     assert_eq!(old.local_hash, "aa");
 
     let stat = BaseRow {
         local_size: Some(4096),
         local_mtime_ns: Some(1_794_564_000_123_456_700),
+        local_row: Some("row-1".into()),
         ..base("state:snes/c/b__slot2.state")
     };
     repo.base_put(&stat).await.unwrap();
@@ -74,7 +80,11 @@ async fn a_base_from_before_migrates_and_keeps_its_rows() {
     let wiped = repo.base_get(&stat.key).await.unwrap().unwrap();
     assert_eq!(wiped.wiped_at, Some(99));
     assert_eq!(
-        (wiped.local_size, wiped.local_mtime_ns),
-        (Some(4096), Some(1_794_564_000_123_456_700))
+        (
+            wiped.local_size,
+            wiped.local_mtime_ns,
+            wiped.local_row.as_deref()
+        ),
+        (Some(4096), Some(1_794_564_000_123_456_700), Some("row-1"))
     );
 }

@@ -137,11 +137,35 @@ struct Runtime {
     /// motivo (`unversioned`, `wiped`, `rejected`, `duplicate`). A passada
     /// dos states os conta.
     states_local: std::collections::HashMap<(String, String), &'static str>,
-    /// O que a última passada de states tem a dizer à página (um state que a
-    /// nuvem recusou, a cota, o plano), com o nome do arquivo quando é um só.
-    /// Fica à parte do `last_error` dos game saves: uma passada de states
-    /// nunca apaga nem troca o que a dos game saves disse.
-    state_error: Option<(SyncError, Option<String>)>,
+    /// O que as passadas de states têm a dizer à página (um state que a
+    /// nuvem recusou, a cota, o plano), por ROM, com o nome do arquivo quando
+    /// é um só. Fica à parte do `last_error` dos game saves: uma passada de
+    /// states nunca apaga nem troca o que a dos game saves disse, e a de uma
+    /// ROM só troca o da ROM dela.
+    state_errors: std::collections::HashMap<String, (SyncError, Option<String>)>,
+    /// Muda quando os states desligam ou o aparelho é esquecido: uma passada
+    /// de states que começou antes não grava mais nada aqui.
+    states_epoch: u64,
+}
+
+impl Runtime {
+    /// O aviso de states que a página mostra: o mais grave, e entre iguais o
+    /// da primeira ROM pelo id (sempre o mesmo).
+    fn state_error(&self) -> Option<&(SyncError, Option<String>)> {
+        let mut roms: Vec<&String> = self.state_errors.keys().collect();
+        roms.sort();
+        roms.into_iter()
+            .map(|rom| &self.state_errors[rom])
+            .rev()
+            .max_by_key(|(e, _)| severity(e))
+    }
+
+    /// Esquece o que os states disseram e deixa para trás a passada em curso.
+    fn forget_states(&mut self) {
+        self.states_local.clear();
+        self.state_errors.clear();
+        self.states_epoch += 1;
+    }
 }
 
 impl SyncService {
@@ -479,10 +503,16 @@ impl SyncService {
             })) => {
                 // O aparelho que sobrou no servidor a pessoa revoga no site: a
                 // tela lê `offline` para dizer isso.
-                *self.runtime() = Runtime {
+                let mut runtime = self.runtime();
+                let epoch = runtime.states_epoch;
+                *runtime = Runtime {
                     last_error: revoke_failed.then(|| SyncError::Offline.to_string()),
                     ..Runtime::default()
                 };
+                // A passada de states em curso não grava por cima.
+                runtime.states_epoch = epoch;
+                runtime.forget_states();
+                drop(runtime);
                 result
             }
         }
@@ -556,6 +586,7 @@ impl SyncService {
             }
         };
         let runtime = self.runtime();
+        let state_error = runtime.state_error().filter(|_| states_enabled);
         Ok(SyncStatus {
             availability,
             enabled,
@@ -579,14 +610,15 @@ impl SyncService {
             } else {
                 0
             },
-            // O dos game saves primeiro; sem ele, o dos states.
+            // O dos game saves primeiro; sem ele, o dos states (que somem com
+            // os states desligados).
             last_error: runtime
                 .last_error
                 .clone()
-                .or_else(|| runtime.state_error.as_ref().map(|(e, _)| e.to_string())),
+                .or_else(|| state_error.map(|(e, _)| e.to_string())),
             // Só junto do erro de um arquivo: outro erro depois dele não leva
             // o nome de um arquivo que já não é o motivo.
-            last_error_file: match (runtime.last_error.as_deref(), &runtime.state_error) {
+            last_error_file: match (runtime.last_error.as_deref(), state_error) {
                 (Some("too_large" | "rejected"), _) => runtime.last_error_file.clone(),
                 (Some(_), _) => None,
                 (None, Some((_, file))) => file.clone(),
@@ -738,9 +770,8 @@ impl SyncService {
         if on {
             self.kick_pass();
         } else {
-            let mut runtime = self.runtime();
-            runtime.states_local.clear();
-            runtime.state_error = None;
+            // A passada de states em curso não grava mais nada (N3).
+            self.runtime().forget_states();
         }
         self.status_with(alva, hw).await
     }
@@ -1897,6 +1928,35 @@ mod tests {
             .unwrap();
         assert!(st.states_enabled);
         assert_eq!(count(), 1);
+    }
+
+    /// N3: com os states desligados a página não mostra aviso de state (nem
+    /// um guardado); esquecer o aparelho tira os avisos e muda a época, para a
+    /// passada de states em curso não gravar mais nada.
+    #[tokio::test]
+    async fn state_banners_hide_while_states_are_off_and_go_with_the_device() {
+        let _serial = SERIAL.lock().await;
+        let r = rig().await;
+        store_device(&r).await;
+        mount_list(&r.server, vec![remote("dev1", false, false)]).await;
+        r.sync.runtime().state_errors.insert(
+            "r1".into(),
+            (SyncError::StateTooLarge, Some("a__slot1.state".into())),
+        );
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(st.last_error.as_deref(), Some("state_too_large"));
+        assert_eq!(st.last_error_file.as_deref(), Some("a__slot1.state"));
+
+        r.sync.devices().set_states_enabled(false).await.unwrap();
+        let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!((st.last_error, st.last_error_file), (None, None));
+        r.sync.devices().set_states_enabled(true).await.unwrap();
+
+        let epoch = r.sync.runtime().states_epoch;
+        r.sync.forget_device(false).await.unwrap();
+        let rt = r.sync.runtime();
+        assert!(rt.state_errors.is_empty());
+        assert!(rt.states_epoch > epoch);
     }
 
     /// M2: a contagem de conflitos vem do SQLite: vale logo ao abrir o app

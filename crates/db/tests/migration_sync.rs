@@ -20,7 +20,7 @@ async fn an_existing_database_migrates_and_keeps_its_data() {
         .execute(&db)
         .await
         .unwrap();
-    sqlx::query("DELETE FROM _sqlx_migrations WHERE version >= 21")
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version IN (21, 22)")
         .execute(&db)
         .await
         .unwrap();

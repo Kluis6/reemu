@@ -491,9 +491,34 @@ impl Engine {
         self.sync.devices.states_enabled().await.map_err(failed)
     }
 
-    /// Sessão, aparelho, ligado e sem pausa local. Só o SQLite: nem chaveiro
-    /// nem rede.
+    /// Sessão, aparelho, ligado e sem pausa local, e a base é desta conta (a
+    /// de outra conta sai aqui). Só o SQLite: nem chaveiro nem rede. Só o lado
+    /// dos game saves chama, com o trinco deles: é lá que a base é apagada.
     async fn ready(&self, alva: &Alvanista) -> Result<Device, SyncError> {
+        let device = self.ready_device(alva).await?;
+        self.own_account(alva).await?;
+        Ok(device)
+    }
+
+    /// Como `ready`, para a passada de states: ela nunca apaga a base. Se a
+    /// base ainda não é da conta de agora (ou de conta nenhuma), a passada
+    /// termina `offline` sem tocar em nada; a dos game saves, com o trinco
+    /// dela, faz a troca, e a de states seguinte anda.
+    async fn ready_for_states(&self, alva: &Alvanista) -> Result<Device, SyncError> {
+        let device = self.ready_device(alva).await?;
+        let current = alva.account_id().await;
+        let owner = self.sync.devices.base_account().await.map_err(failed)?;
+        match (current, owner) {
+            (Some(current), Some(owner)) if current == owner => Ok(device),
+            _ => {
+                log::info!("sync: a base ainda não é desta conta; os states esperam os game saves");
+                Err(SyncError::Offline)
+            }
+        }
+    }
+
+    /// Sessão, aparelho, ligado e sem pausa local. Só o SQLite.
+    async fn ready_device(&self, alva: &Alvanista) -> Result<Device, SyncError> {
         if !alva.has_session().await {
             return Err(SyncError::NoAccount);
         }
@@ -509,7 +534,6 @@ impl Engine {
         if devices.paused().await.map_err(failed)? {
             return Err(SyncError::Paused);
         }
-        self.own_account(alva).await?;
         Ok(device)
     }
 
@@ -1376,6 +1400,7 @@ impl Engine {
                 backup_path: None,
                 local_size: None,
                 local_mtime_ns: None,
+                local_row: None,
             })
             .await
             .map_err(repo_err)
@@ -2313,6 +2338,13 @@ mod tests {
             })
             .await
             .unwrap();
+        // A base já é desta conta (uma passada dos game saves gravou o dono):
+        // a passada de states só anda assim (R30).
+        r.sync
+            .devices
+            .set_base_account("alva_default")
+            .await
+            .unwrap();
         r
     }
 
@@ -2427,6 +2459,7 @@ mod tests {
                     backup_path: None,
                     local_size: None,
                     local_mtime_ns: None,
+                    local_row: None,
                 })
                 .await
                 .unwrap();
@@ -3569,6 +3602,7 @@ mod tests {
                 backup_path: None,
                 local_size: None,
                 local_mtime_ns: None,
+                local_row: None,
             })
             .await
             .unwrap();
@@ -4534,6 +4568,8 @@ mod tests {
         let _serial = SERIAL.lock().await;
         let r = rig("tomb-other").await;
         mirror_as(&r, "alva_A").await;
+        // Esta máquina já sincronizava com a conta A.
+        r.sync.devices.set_base_account("alva_A").await.unwrap();
         r.rom("r1", "Zelda.gba", "gba").await;
         r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
             .await;
@@ -5753,6 +5789,7 @@ mod tests {
             backup_path: None,
             local_size: None,
             local_mtime_ns: None,
+            local_row: None,
         };
         r.repo.base_put(&wiped).await.unwrap();
         r.sync.devices.set_states_enabled(false).await.unwrap();
@@ -5899,6 +5936,9 @@ mod tests {
         assert_eq!((report.states_uploaded, report.deferred), (0, 1));
         assert!(r.state_posts().await.is_empty());
         assert!(r.base_of(SLOT3_KEY).await.is_none());
+        // N4: fica só aqui, e a página conta.
+        assert_eq!(r.local_only(SLOT3_KEY), Some("deferred"));
+        assert_eq!(r.status().await.states_local_only, 1);
     }
 
     /// I2 + I3: um save de state que chega enquanto a passada dos game saves
@@ -6147,6 +6187,7 @@ mod tests {
             backup_path: None,
             local_size: None,
             local_mtime_ns: None,
+            local_row: None,
         };
         r.repo.base_put(&base).await.unwrap();
         mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
@@ -6293,5 +6334,185 @@ mod tests {
         r.state_pass("eu").await.unwrap();
         assert_eq!(r.state_posts().await.len(), 1);
         assert_eq!(r.local_only(key), Some("duplicate"));
+    }
+
+    // --- save states, fix round 2 (R30) --------------------------------------
+
+    /// O envio de um state responde 413 com o teto quando passa dele.
+    struct OverCeiling(usize);
+
+    impl Respond for OverCeiling {
+        fn respond(&self, req: &Request) -> ResponseTemplate {
+            if field(&req.body, "file").unwrap_or_default().len() > self.0 {
+                ResponseTemplate::new(413).set_body_json(json!({"error": {
+                    "code": "save_file_too_large", "max_bytes": self.0}}))
+            } else {
+                uploaded("s-ok", "v1")
+            }
+        }
+    }
+
+    /// N1: a passada de states nunca apaga a base. Com a base ainda de outra
+    /// conta, ela termina `offline` sem pedido nenhum e sem tocar em nada; a
+    /// passada dos game saves faz a troca, e os states andam depois dela.
+    #[tokio::test]
+    async fn a_state_pass_never_wipes_the_base_of_another_account() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-account").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.save_state("r1", Some(3), Some(V163), b"state", None)
+            .await;
+        r.sync.devices.set_base_account("alva_old").await.unwrap();
+        r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
+            .await;
+        let other = BaseRow {
+            key: SLOT3_KEY.into(),
+            kind: "state".into(),
+            ..r.base_of(ZELDA).await.unwrap()
+        };
+        r.repo.base_put(&other).await.unwrap();
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        mount_state_cloud(&r.server).await;
+
+        assert_eq!(r.state_pass("r1").await, Err(SyncError::Offline));
+        assert_eq!(
+            r.engine.upload_old_states(&r.alva).await,
+            Err(SyncError::Offline)
+        );
+        assert!(r.server.received_requests().await.unwrap().is_empty());
+        assert!(r.base_of(ZELDA).await.is_some());
+        assert_eq!(r.base_of(SLOT3_KEY).await.unwrap(), other);
+        assert_eq!(
+            r.sync.devices.base_account().await.unwrap().as_deref(),
+            Some("alva_old")
+        );
+
+        // A passada dos game saves troca a conta e apaga a base; os states,
+        // depois dela, sobem para a conta nova.
+        let report = r.pass().await.unwrap();
+        assert_eq!(
+            r.sync.devices.base_account().await.unwrap().as_deref(),
+            Some("alva_default")
+        );
+        assert!(r.base_of(ZELDA).await.is_none());
+        assert_eq!(report.states_uploaded, 1);
+        assert_ne!(r.base_of(SLOT3_KEY).await.unwrap(), other);
+    }
+
+    /// N2: o aviso de um state recusado é da ROM dele. Um QuickSave em outro
+    /// jogo (a passada de states daquela ROM) não o apaga.
+    #[tokio::test]
+    async fn a_quick_save_in_one_game_keeps_another_games_state_banner() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-banner").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.rom("r2", "Zelda.gba", "gba").await;
+        r.save_state("r1", Some(3), Some(V163), &[1u8; 4096], None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_states(&r.server).await;
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(OverCeiling(1024))
+            .mount(&r.server)
+            .await;
+
+        r.state_pass("r1").await.unwrap();
+        let st = r.status().await;
+        assert_eq!(st.last_error.as_deref(), Some("state_too_large"));
+        assert_eq!(st.last_error_file.as_deref(), Some(SLOT3));
+
+        r.save_state("r2", Some(0), Some("0.10"), b"zelda", None)
+            .await;
+        assert_eq!(r.state_pass("r2").await.unwrap().states_uploaded, 1);
+        let st = r.status().await;
+        assert_eq!(st.last_error.as_deref(), Some("state_too_large"));
+        assert_eq!(st.last_error_file.as_deref(), Some(SLOT3));
+    }
+
+    /// N3: desligar os states no meio de um envio longo. A passada em curso
+    /// termina, mas o que ela diria (o 413, a conta) não é gravado: nenhum
+    /// aviso de state com os states desligados, nem depois de religar.
+    #[tokio::test]
+    async fn turning_states_off_during_a_long_state_upload_leaves_no_banner() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-off-midway").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.save_state("r1", Some(3), Some(V163), &[1u8; 4096], None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_states(&r.server).await;
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(
+                ResponseTemplate::new(413)
+                    .set_body_json(json!({"error": {
+                        "code": "save_file_too_large", "max_bytes": 1024}}))
+                    .set_delay(Duration::from_millis(800)),
+            )
+            .mount(&r.server)
+            .await;
+
+        let (pass, off) = tokio::join!(r.state_pass("r1"), async {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            r.sync
+                .set_states_enabled_with(&r.alva, false, HardwarePayload::default())
+                .await
+        });
+        assert_eq!(pass.unwrap().errors.len(), 1, "o 413 chegou à passada");
+        assert!(!off.unwrap().states_enabled);
+        let st = r.status().await;
+        assert_eq!((st.last_error, st.last_error_file), (None, None));
+        assert_eq!(st.states_local_only, 0);
+        {
+            let rt = r.sync.runtime();
+            assert!(rt.state_errors.is_empty(), "a passada gravou depois");
+            assert!(rt.states_local.is_empty());
+        }
+
+        // Ligar de novo (sem passada ainda): nada velho volta.
+        r.sync.devices.set_states_enabled(true).await.unwrap();
+        let st = r.status().await;
+        assert_eq!((st.last_error, st.states_local_only), (None, 0));
+    }
+
+    /// N5: a vaga gravada de novo dentro do mesmo tique de 2 s do FAT32 tem o
+    /// mesmo tamanho e o mesmo mtime, mas é outra linha: o hash guardado não
+    /// vale para ela, o arquivo é lido e os bytes novos sobem.
+    #[tokio::test]
+    async fn a_slot_saved_again_within_one_fat32_tick_is_read_again() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-fat-tick").await;
+        r.rom("r1", CHRONO, "snes").await;
+        let first = r
+            .save_state("r1", Some(3), Some(V163), b"first!!!", None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_state_cloud(&r.server).await;
+        r.state_pass("r1").await.unwrap();
+        let base = r.base_of(SLOT3_KEY).await.unwrap();
+        assert_eq!(base.local_row.as_deref(), Some(first.id.as_str()));
+        let path = PathBuf::from(&first.file_path);
+        let when = std::fs::metadata(&path).unwrap().modified().unwrap();
+
+        let second = r
+            .save_state("r1", Some(3), Some(V163), b"second!!", None)
+            .await;
+        assert_eq!(second.file_path, first.file_path);
+        assert_ne!(second.id, first.id);
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(when)
+            .unwrap();
+
+        r.state_pass("r1").await.unwrap();
+        let posts = r.state_posts().await;
+        assert_eq!(posts.len(), 2, "o hash da linha antiga valeu");
+        assert_eq!(field(&posts[1].body, "file").as_deref(), Some("second!!"));
+        let base = r.base_of(SLOT3_KEY).await.unwrap();
+        assert_eq!(base.local_row.as_deref(), Some(second.id.as_str()));
     }
 }

@@ -241,6 +241,7 @@ mod tests {
             backup_path: None,
             local_size: None,
             local_mtime_ns: None,
+            local_row: None,
         }
     }
 
