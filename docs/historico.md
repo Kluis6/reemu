@@ -3676,3 +3676,8 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Sino** (`NotificationBell.tsx`, print do usuário): no item, o título e o tempo ficam na mesma linha e o bloco de texto no meio da altura do ícone (antes preso no topo); padding de 8 px em cima e embaixo e 16 px nas laterais (pedido: vertical menor que o lateral), sem a altura mínima de 64 px. Medido: ícone e texto com o centro na mesma altura, item com 66 px.
 - **Lista de shaders** (`ShaderCard.tsx`, print do usuário): o card escolhido perde o contorno claro. Ele vinha do `Card` do Fluent, que desenha a borda do selecionado no `::after` com `colorNeutralStroke1Selected` (`useCardStyles.styles` do `@fluentui/react-card` 9.7.2); agora é transparente também no hover e no clique. O fundo na cor primária continua marcando o escolhido.
 - **Conferido:** `tsc -b`; `ui-render.py` nos temas `reemu` e `claro` com o sino aberto e com `/settings/video/shaders` (borda do `::after` do selecionado `rgba(0, 0, 0, 0)`, inclusive em hover).
+
+## 2026-11-14 — Fase 6 concluída: fumaça do catálogo verde
+
+- **Run 43597813777** (`workflow_dispatch`, pedido do dono do projeto), a primeira com a fumaça na crate `core-catalog` e sem compilar o frontend: verde no Linux e no Windows. 126 de 127 cores abriram (o `ep128emu_core` é o conhecido), 51 rodaram a ROM de teste, 35 salvaram e restauraram o estado; no aviso de atualização, nenhuma falha (só o `fbneo` com o HEAD à frente da noturna, o que não é falha).
+- Com isso a Fase 6 (etapa C de `22-plano-gpu-e-crates.md`) sai do TASKS.

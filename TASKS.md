@@ -58,7 +58,6 @@ Mudança estrutural em core, Vulkan ou OpenGL exige aviso ao dono do projeto ant
 de começar. Layout do Xbox para Windows; menus no modelo das configurações do console;
 o card atual fica.
 
-- [ ] `in-progress` — Fase 6: extrair catálogo, atualização de cores e scraping para crates. As três crates entraram em 2026-11-14 (etapa C de `22-plano-gpu-e-crates.md`); falta ver a fumaça semanal verde no GitHub.
 - [ ] `in-progress` — Fase 8: estrutura de core e GPU (**cada item exige aviso**). Item 1 publicado; mapa das travas em `20-mapa-travas-session.md`; separar travas e item 3 parados até haver motivo.
 - [ ] `todo` — **Plano GPU e crates** (2026-11-13, só planejado; cada etapa com aviso):
       [`22-plano-gpu-e-crates.md`](docs/ai-context/22-plano-gpu-e-crates.md).
@@ -69,11 +68,11 @@ o card atual fica.
         mesmo `dx12/suballocation.rs` (11 erros); com o updater 2.14.1 junto, idem. O
         `gpu-allocator` 0.28.0 ainda é o último. Lock restaurado. Saída: B3, esperar.
       - [ ] B2/B3. Conforme o B1: atualizar Tauri e tirar a `zip` 4.6.1, ou escolher a saída.
-      - [ ] C. Fase 6 (crates `net`, `core-catalog`, `scraping`).
+      - [x] C. Fase 6 (crates `net`, `core-catalog`, `scraping`): concluída em 2026-11-14.
         - [x] C1. `crates/net`: `http.rs` e `repo_version.rs` (2026-11-14).
         - [x] C2. `crates/core-catalog`: `core_catalog.rs`, `core_updates.rs`, `smoke_roms.rs` (2026-11-14).
         - [x] C3. `crates/scraping` (2026-11-14): o app passa a configuração já carregada e o cache
-          de capas pela trait `CoverCache`. Falta só ver a fumaça semanal verde no GitHub.
+          de capas pela trait `CoverCache`. Fumaça do catálogo verde (run 43597813777).
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
