@@ -35,17 +35,6 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
 
 ### Depende do dono do projeto
 
-- [x] `done` — **Chave de assinatura do auto-update no ambiente `release`** (2026-11-03).
-      Chave nova `B6070D7C1CFAAE82` (a senha da antiga, `C1829D421AB43D0C`, se perdeu
-      depois que os segredos do repositório foram apagados). Chave e senha só no ambiente
-      `release`; o repositório não tem mais segredos. Conferido no build manual da `main`
-      (run 41647706613): `.msi`, `.exe`, `.deb` e `.AppImage` saíram com `.sig`. Com isso
-      os colaboradores já podem entrar.
-- [x] `done` — **Aviso da troca de chave na v0.1.11** (2026-11-03): as notas da Release
-      abrem com o pedido de instalação manual para quem tem a `v0.1.10` ou anterior. O
-      `latest.json` publicado traz a 0.1.11 nas 6 plataformas, assinadas pela chave
-      `B6070D7C1CFAAE82`, a mesma do app. Guardar a chave antiga (`~/.tauri/reemu.key`): se a
-      senha aparecer, ela ainda assina uma versão de transição para quem ficou na `v0.1.10`.
 - [x] `decidido` — **Sem versão de teste** (dono do projeto, 2026-11-05): só a versão
       oficial é distribuída. Ficam fora o instalador de teste por pull request (PR #12,
       fechado) e o canal beta (`vX.Y.Z-beta.N`). Os pull requests seguem conferidos pelo CI.
@@ -56,8 +45,6 @@ Desktop (01–10) fechado. Detalhe de cada etapa: `docs/historico.md` ›
       `REEMU_SS_DEVPASSWORD` no GitHub — o `release.yml` já repassa ao build
       e o `crates/scraping` envia quando existem. Pra testar local: exportar as
       duas variáveis antes do `cargo tauri dev`.
-- [x] `done` — **Referência de desempenho medida** (2026-10-30), com jogos reais de
-      software, OpenGL e Vulkan: [`docs/perf/README.md`](docs/perf/README.md).
 - [ ] `todo` — **Testar e aprovar cada etapa do plano unificado**: as etapas ficam só
       locais até a aprovação; depois vão com commit e push.
 
@@ -71,16 +58,7 @@ Mudança estrutural em core, Vulkan ou OpenGL exige aviso ao dono do projeto ant
 de começar. Layout do Xbox para Windows; menus no modelo das configurações do console;
 o card atual fica.
 
-- [x] `done` — Fase 0: linha de base de desempenho, CI no Windows e fumaça agendada (2026-10-30).
-- [x] `done` — Fase 1: tipos gerados entre Rust e TypeScript, erros com código (2026-10-30). Pendências em `19-plano-unificado.md`.
-      Em 2026-11-12 todos os comandos passaram a devolver `AppError` (71 devolviam `String`); os erros de disco, rede, banco e save state chegam com código.
-- [x] `done` — Fase 2: becos sem saída do controle, mapa de botões e camada de foco (2026-10-30).
-- [x] `done` — Fase 3: escala igual à do app Xbox e janelas pequenas, aprovada pelo usuário (2026-10-31). Desempenho comparado com `docs/perf/baseline.json`: só o `run_med` do Vulkan marcado (4,33 → 4,95 ms), a confirmar com nova captura na mesma cena.
-- [x] `done` — Fase 4: configurações no modelo do console, aprovada pelo usuário (2026-10-31). Blocos em Sistema, Áudio, Metadados e Plano de fundo; listas, Perfil, Temas, Shaders e Molduras mantêm o layout próprio; sem coluna de categorias, a pedido.
-- [x] `done` — Fase 5: demais menus, biblioteca, página do jogo e entrada de dados, aprovada pelo usuário (2026-10-31). Sugestões de palavras no teclado virtual ficaram de fora.
-      Inclui redesenhar as mensagens de erro (tela ao abrir um jogo e avisos).
-- [ ] `todo` — Fase 6: extrair catálogo, atualização de cores e scraping para crates. Planejada em `22-plano-gpu-e-crates.md`, etapa C (`net`, `core-catalog`, `scraping`).
-- [x] `done` — Fase 7: sons, reduzir movimento, diagnóstico e registro de decisões, aprovada pelo usuário (2026-10-31). Pendentes: vibração, que precisa de suporte no código de entrada, e revisão dos temas numa TV.
+- [ ] `in-progress` — Fase 6: extrair catálogo, atualização de cores e scraping para crates. As três crates entraram em 2026-11-14 (etapa C de `22-plano-gpu-e-crates.md`); falta ver a fumaça semanal verde no GitHub.
 - [ ] `in-progress` — Fase 8: estrutura de core e GPU (**cada item exige aviso**). Item 1 publicado; mapa das travas em `20-mapa-travas-session.md`; separar travas e item 3 parados até haver motivo.
 - [ ] `todo` — **Plano GPU e crates** (2026-11-13, só planejado; cada etapa com aviso):
       [`22-plano-gpu-e-crates.md`](docs/ai-context/22-plano-gpu-e-crates.md).
@@ -112,20 +90,6 @@ o card atual fica.
       `wgpu-hal` 30 no Windows. Saídas a avaliar (não verificadas): uma versão nova do
       `wgpu`/`gpu-allocator` compatível com o `windows` 0.62, ou fixar o `windows`; precisa de
       aviso (é GPU).
-- [x] `done` — **Testes de GPU com SIGSEGV nesta máquina Linux** (2026-11-03, resolvido em
-      2026-11-05): `hw_render_core_detects_requirements_and_negotiates` e
-      `gpu::tests::canvas_viewport_sizes_viewport_passes` caíam também na `main`, depois da
-      atualização do kernel para 7.0.0-42 e antes de reiniciar. Depois do reinício
-      (2026-11-05) a suíte inteira passa, com os testes de GPU: 430 testes, 0 falhas.
-      Não era o código.
-- [x] `done` — **Testes do `emu-session` usavam o `reemu-core-host` instalado** (2026-11-05):
-      o `cargo build` de dentro do teste compilava no `target/` padrão quando o teste rodava
-      com outro `CARGO_TARGET_DIR`; a sessão não achava o binário e caía em
-      `/usr/lib/ReEmu/reemu-core-host`, com o IPC de outra versão. Agora o teste compila com
-      `--target-dir` igual ao da pasta de onde roda; os 9 testes passam nos dois casos.
-      O `cargo audit` do CI (2026-11-12) ignora os quatro avisos dessa `zip`
-      (RUSTSEC-2026-0367/0368/0369/0429) até a troca; tirar da lista de `ignore` em
-      `ci.yml` quando o plugin subir.
 - [ ] `todo` — **`cargo audit`: avisos sem correção disponível** (2026-11-12). Ignorados
       no `ci.yml`, com o motivo lá: `libsqlite3-sys` 0.30 (RUSTSEC-2026-0459, CVE no SQLite
       em C; a correção pede a 0.39, que nem o sqlx 0.9.0 aceita — esperar o sqlx) e `rsa`
@@ -158,43 +122,11 @@ o card atual fica.
       "conhecido" só no Windows (`KNOWN_BROKEN_WINDOWS` em `crates/core-catalog/src/catalog.rs`), para o job
       semanal voltar a acusar só regressão nova; a causa continua em aberto.
 
-- [x] `done` — **Vídeo nativo no Windows** (janela filha acima do
-      WebView2): validado pelo usuário em 2026-10-02 (RTX 3060, wgpu em
-      Vulkan; vbam, gpsp, parallel_n64, fbalpha2012 vertical). O jogo
-      aparece, Esc abre o menu e volta, clicar no jogo não tira o teclado,
-      redimensionar e tela cheia acompanham. O jogo anterior piscava na
-      troca, e isso foi corrigido limpando a surface de preto antes de
-      esconder (`lib.rs`, pump). `REEMU_NATIVE_VIDEO=0` ainda volta pro
-      `<canvas>`.
-- [x] `done` — **Protótipo de overlay no Windows** (`REEMU_WIN_OVERLAY`):
-      testado em 2026-10-02, tela preta nas duas variantes (`=1` e
-      `=child`). O WebView2 em modo janela não deixa ver o que está por
-      baixo; precisaria de visual hosting (DirectComposition), que o
-      Tauri/wry não usa. O padrão (janela filha acima do WebView2) ficou.
-- [x] `done` — **Windows ponta a ponta**: validado pelo usuário em 2026-10-08. Antes, só os testes do `core-ipc` rodavam
-      numa máquina Windows real. Falta `cargo tauri dev` completo, `video.rs`
-      no caminho `#[cfg(not(linux))]`, paths do buildbot de cores, instalador.
-      Conferir que as capas aparecem (URL `http://cover.localhost/<id>` no
-      Windows, `covers::cover_url`, corrigida sem teste em máquina real).
-- [x] `done` — **Publicar uma versão com auto-update**: superado pela
-      `v0.1.4`, publicada em 2026-10-02 (instaladores assinados e
-      `latest.json` com a 0.1.4 nas seis variantes).
-- [x] `done` — **Chaveiro no Windows** (validado pelo usuário em 2026-10-08): `cargo test -p reemu-desktop --lib
-      os_keyring -- --ignored` (Credential Manager).
-- [x] `done` — `SET_ROTATION` com um jogo vertical real: validado pelo
-      usuário em 2026-09-25 (shooter vertical de arcade em pé, sem espelhar).
-
 ### Atualização automática
 
 - [ ] `todo` — Validar ponta a ponta com duas Releases publicadas: instalar
       a antiga pelo AppImage e pelo NSIS, atualizar pelo modal e conferir o
       aviso "atualizado" depois do reinício. O `.deb` usa `pkexec`.
-- [x] `done` — Capturas do site em `site/screens/` (2026-10-02): `jogo`,
-      `biblioteca`, `pagina-jogo`, `jogo-moldura`, `pausa` e
-      `configuracoes` .png, mandadas pelo usuário. As vagas de tela
-      inicial e de catálogo de cores saíram da galeria (sem captura).
-- [x] `done` — Logo e favicon do site (`site/logo.webp`, `favicon-*.png`,
-      `icon-512.png`), 2026-10-01.
 
 ### Vídeo / GPU
 
@@ -572,14 +504,6 @@ conferir".
 
 ### Biblioteca
 
-- [x] `done` — Validado no Windows (validado pelo usuário em 2026-10-08): "Atualizar biblioteca"
-      tira as 25 cópias do Redump e os `.chd` de `naomi/`, e adiciona os 127
-      `.zip` de NAOMI e os 25 de Atomiswave (contagem da varredura nova na
-      pasta real, num banco à parte); e os jogos de NAOMI abrem no flycast.
-- [x] `done` — Validado no Windows (validado pelo usuário em 2026-10-08): trocar de jogo não mostra mais o último
-      quadro do anterior (`SHOW_AFTER_PRESENTS` em `lib.rs`, também na rota
-      Vulkan).
-
 ### Desempenho do caminho do core
 
 Medir antes de otimizar: `REEMU_PERF=1 scripts/dev.sh` com um jogo pesado
@@ -654,8 +578,6 @@ no `emu-session`, ver `docs/historico.md`).
         tempo de jogo pelo GAS. Depois, hero e logo de jogos já identificados
         para o carrossel e a página do jogo. ScreenScraper e TheGamesDB
         continuam como fontes principais, e o app funciona sem a GameKave.
-- [x] `done` — **`ui-smoke` não acusa app que não abre:** com um erro no início do `main.tsx`, ele terminou sem falhas (2026-10-31). Fazer a varredura falhar quando a tela não montar.
-      Feito em 2026-11-12: a varredura espera o 1º render e acusa raiz vazia ou tela de erro (`data-app-error`, `data-route-error`); o `AppErrorBoundary` em `App.tsx` cobre o que fica fora das rotas.
 - [ ] `todo` — **Shader e proporção gerais nas Configurações:** a página do jogo só
       edita o próprio jogo (pedido do dono do projeto, 2026-10-31), então os valores
       por plataforma e para todos os jogos continuam valendo, mas precisam de um
@@ -797,11 +719,6 @@ no `emu-session`, ver `docs/historico.md`).
       publica termos de uso (só política de privacidade, sobre contas), então
       não há autorização pra usar o banco num app distribuído. Só com
       permissão escrita do LaunchBox.
-- [x] `done` — Validar o TheGamesDB com uma chave real (2026-10-08, chave do
-      usuário, 1 requisição): `/v1/Games/ByGameName` com `fields=overview,
-      players,rating,coop` e `include=boxart` devolve o formato do spec.yaml
-      oficial (api.thegamesdb.net/spec.yaml) — o parser bate. Cota: 1000
-      requisições/mês por chave; com a capa no `include`, ~1 por jogo.
 - [ ] `todo` — **Onboarding: passo de contas** (backlog, pedido em
       2026-10-04): um modal a mais no onboarding, do mesmo tamanho dos outros
       três, para entrar em redes sociais ou lojas de jogos (Steam e outras).
@@ -861,20 +778,18 @@ no `emu-session`, ver `docs/historico.md`).
         fraca (opcional: sugerir o preset inicial pela GPU que o wgpu
         detecta). Validar cada core jogando um título pesado em cada nível.
 
-- [x] `done` — **Teclado configurável** (2026-09-26): seção Teclado em
-      Configurações › Controles (botões e direções dos dois analógicos); as
-      setas também movem o analógico esquerdo por padrão.
-- [x] `done` — **Gatilhos analógicos** (2026-09-26): pressão real de L2/R2
-      chega ao core (`RETRO_DEVICE_INDEX_ANALOG_BUTTON`).
-
-- [x] `done` — **Idiomas (pt-BR, en, es) no frontend** (2026-09-25): todas
-      as telas, componentes, toasts, erros (`lib/errors.ts`) e diálogos
-      nativos passam por `t()`; datas e números usam `Intl` no idioma ativo.
-- [x] `done` — **Idiomas: textos que vêm do Rust** (2026-09-26): shaders
-      prontos, notas de BIOS, aviso do QuickSave por atalho, instalador NSIS
-      e o site (seletor PT/EN/ES).
-
 ### Infra / qualidade
+
+- [ ] `todo` — **Dividir `sync/engine.rs`** (2026-11-14): 7.724 linhas, vindas dos PRs do
+      Alvanista (#36 a #38). Dividir como o `PlayScreen`, sem mudar o comportamento.
+- [ ] `todo` — **Erros com código fora de `commands/`** (2026-11-14): `alvanista/`, `sync/`,
+      `appearance.rs` e `updates.rs` ainda devolvem `String` que a interface lê pelo texto
+      (`sync.err.*`, `lib/errors.ts`). Opcional: só para padronizar com o `AppError`.
+- [ ] `todo` — **Aviso de atualização para mais cores** (análise de 2026-11-12): a tabela
+      `UPSTREAM` (`crates/core-catalog/src/updates.rs`) cobre 80 dos 139 cores. Ampliar aos
+      poucos, conferindo cada repositório e o `library_version` na fumaça.
+- [ ] `todo` — **Interface das vagas numeradas de save state** (Slot 1, 2…): o backend já
+      grava em qualquer vaga; falta escolher a vaga no menu de pausa e na página do jogo.
 
 - [ ] `todo` — **CI no Ubuntu 26**: os workflows ficaram presos em
       `ubuntu-24.04` (2026-10-02), porque o `ubuntu-latest` passa a ser o
@@ -890,17 +805,6 @@ no `emu-session`, ver `docs/historico.md`).
       no 22.04 exigem GLIBC_2.34 (run 38130076079, passo "glibc mínima").
       Só os checks de CI migram; o Release só sobe de base quando o 22.04
       sair dos runners.
-
-- [x] `done` — **Teste de fumaça do catálogo, fase 1** (2026-09-25):
-      workflow semanal `catalog-smoke.yml` (Linux e Windows) baixa cada core
-      e abre com `reemu-core-host --probe` (`retro_init` + system info, sem
-      jogo). Ver docs/historico.md.
-- [x] `done` — **Fumaça do catálogo, fase 2** (2026-09-26): ROMs mínimas
-      geradas pelo teste (NES, SNES, GB, GBA, Mega Drive, Master System, PC
-      Engine, Atari 2600) rodam 180 quadros em cada core compatível; o
-      travamento do pcsx_rearmed no CI (FIFO no /tmp) foi resolvido.
-- [x] `done` — **VFS do libretro v3** (2026-09-26): `core-loader-desktop/src/vfs.rs`;
-      o Stella 8 voltou a abrir jogos (Pitfall II testado).
 
 - [ ] `todo` — Etapa 11 (Android): `apps/mobile`, `packages/app-mobile`,
       `packages/ui`, `packages/shared`. Os pacotes compartilhados só nascem
