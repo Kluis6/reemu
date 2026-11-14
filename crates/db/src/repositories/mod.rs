@@ -42,8 +42,8 @@ pub use profile_repo::ProfileRepo;
 pub use roms_repo::RomsRepo;
 pub use save_state_repo::SaveStateRepo;
 pub use settings_repo::{
-    AspectRow, AudioSettings, DecorationAssignmentRow, HotkeyRow, OptionOverrideRow, SettingsRepo,
-    SettingsTx, ShaderAssignmentRow, VideoSettings,
+    AspectRow, AudioSettings, DecorationAssignmentRow, HotkeyRow, OptionOverrideRow, Put,
+    SettingsRepo, SettingsTx, ShaderAssignmentRow, VideoSettings,
 };
 pub use shader_chain_repo::ShaderChainRepo;
 pub use sync_repo::SyncRepo;

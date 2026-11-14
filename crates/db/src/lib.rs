@@ -16,7 +16,7 @@ pub use repositories::{
     is_under, AlvanistaRepo, AspectAssignments, AspectRepo, AspectRow, AudioConfigRepo,
     AudioSettings, CheatsRepo, ControllerMappingsRepo, CoreOptionsRepo, DecorationAssignmentRow,
     DecorationRepo, DevicePortsRepo, HotkeyRow, InstalledCoresRepo, KeyboardBindingsRepo,
-    LibraryFoldersRepo, MetadataRepo, OptionOverrideRow, ProfileRepo, RomsRepo, SaveStateRepo,
+    LibraryFoldersRepo, MetadataRepo, OptionOverrideRow, ProfileRepo, Put, RomsRepo, SaveStateRepo,
     SettingsRepo, SettingsTx, ShaderAssignmentRow, ShaderChainRepo, SyncRepo, SystemCoreRepo,
     SystemHotkeysRepo, VideoConfigRepo, VideoSettings,
 };

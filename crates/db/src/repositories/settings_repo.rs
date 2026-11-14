@@ -86,6 +86,25 @@ pub struct AspectRow {
     pub aspect: String,
 }
 
+/// Como uma linha nova entra. `Insert` recusa a chave que já existe (a mesma
+/// chave duas vezes num documento é erro e desfaz a transação); `Upsert` troca
+/// o valor da linha que já existe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Put {
+    Insert,
+    Upsert,
+}
+
+impl Put {
+    /// O `INSERT` com o `ON CONFLICT` que troca `set` quando é `Upsert`.
+    fn sql(self, insert: &str, conflict: &str, set: &str) -> String {
+        match self {
+            Put::Insert => insert.to_string(),
+            Put::Upsert => format!("{insert} ON CONFLICT({conflict}) DO UPDATE SET {set}"),
+        }
+    }
+}
+
 pub struct SettingsRepo {
     db: Db,
 }
@@ -167,32 +186,37 @@ impl SettingsTx {
             .collect()
     }
 
-    pub async fn clear_option_values(&mut self) -> Result<(), RepoError> {
-        sqlx::query("DELETE FROM core_options_values")
+    pub async fn delete_option_value(&mut self, core_id: &str, key: &str) -> Result<(), RepoError> {
+        sqlx::query("DELETE FROM core_options_values WHERE core_id = ?1 AND option_key = ?2")
+            .bind(core_id)
+            .bind(key)
             .execute(&mut *self.tx)
             .await
             .map_err(be)?;
         Ok(())
     }
 
-    /// Insere sem substituir: a mesma opção duas vezes é erro.
-    pub async fn insert_option_value(
+    pub async fn put_option_value(
         &mut self,
+        put: Put,
         core_id: &str,
         key: &str,
         value: &str,
     ) -> Result<(), RepoError> {
-        sqlx::query(
+        let sql = put.sql(
             "INSERT INTO core_options_values (id, core_id, option_key, value) \
              VALUES (?1, ?2, ?3, ?4)",
-        )
-        .bind(row_id(core_id, key))
-        .bind(core_id)
-        .bind(key)
-        .bind(value)
-        .execute(&mut *self.tx)
-        .await
-        .map_err(be)?;
+            "core_id, option_key",
+            "value = excluded.value",
+        );
+        sqlx::query(&sql)
+            .bind(row_id(core_id, key))
+            .bind(core_id)
+            .bind(key)
+            .bind(value)
+            .execute(&mut *self.tx)
+            .await
+            .map_err(be)?;
         Ok(())
     }
 
@@ -215,30 +239,79 @@ impl SettingsTx {
             .collect()
     }
 
-    /// Apaga as opções por jogo de uma ROM (de todos os cores).
-    pub async fn delete_option_overrides(&mut self, rom_id: &str) -> Result<(), RepoError> {
-        sqlx::query("DELETE FROM core_option_overrides WHERE rom_id = ?1")
-            .bind(rom_id)
+    pub async fn delete_option_override(&mut self, o: &OptionOverrideRow) -> Result<(), RepoError> {
+        sqlx::query(
+            "DELETE FROM core_option_overrides \
+             WHERE rom_id = ?1 AND core_id = ?2 AND option_key = ?3",
+        )
+        .bind(&o.rom_id)
+        .bind(&o.core_id)
+        .bind(&o.key)
+        .execute(&mut *self.tx)
+        .await
+        .map_err(be)?;
+        Ok(())
+    }
+
+    pub async fn put_option_override(
+        &mut self,
+        put: Put,
+        o: &OptionOverrideRow,
+    ) -> Result<(), RepoError> {
+        let sql = put.sql(
+            "INSERT INTO core_option_overrides (id, rom_id, core_id, option_key, value) \
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "rom_id, core_id, option_key",
+            "value = excluded.value",
+        );
+        sqlx::query(&sql)
+            .bind(override_id(&o.rom_id, &o.core_id, &o.key))
+            .bind(&o.rom_id)
+            .bind(&o.core_id)
+            .bind(&o.key)
+            .bind(&o.value)
             .execute(&mut *self.tx)
             .await
             .map_err(be)?;
         Ok(())
     }
 
-    /// Insere sem substituir: a mesma opção do mesmo jogo duas vezes é erro.
-    pub async fn insert_option_override(&mut self, o: &OptionOverrideRow) -> Result<(), RepoError> {
-        sqlx::query(
-            "INSERT INTO core_option_overrides (id, rom_id, core_id, option_key, value) \
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-        )
-        .bind(override_id(&o.rom_id, &o.core_id, &o.key))
-        .bind(&o.rom_id)
-        .bind(&o.core_id)
-        .bind(&o.key)
-        .bind(&o.value)
-        .execute(&mut *self.tx)
-        .await
-        .map_err(be)?;
+    /// `(system_id, core_id)` de `system_core_prefs` (o core preferido de cada
+    /// plataforma).
+    pub async fn core_prefs(&mut self) -> Result<Vec<(String, String)>, RepoError> {
+        let rows = self
+            .all("SELECT system_id, core_id FROM system_core_prefs ORDER BY system_id")
+            .await?;
+        rows.iter()
+            .map(|r| Ok((col(r, "system_id")?, col(r, "core_id")?)))
+            .collect()
+    }
+
+    pub async fn clear_core_prefs(&mut self) -> Result<(), RepoError> {
+        sqlx::query("DELETE FROM system_core_prefs")
+            .execute(&mut *self.tx)
+            .await
+            .map_err(be)?;
+        Ok(())
+    }
+
+    pub async fn put_core_pref(
+        &mut self,
+        put: Put,
+        system_id: &str,
+        core_id: &str,
+    ) -> Result<(), RepoError> {
+        let sql = put.sql(
+            "INSERT INTO system_core_prefs (system_id, core_id) VALUES (?1, ?2)",
+            "system_id",
+            "core_id = excluded.core_id",
+        );
+        sqlx::query(&sql)
+            .bind(system_id)
+            .bind(core_id)
+            .execute(&mut *self.tx)
+            .await
+            .map_err(be)?;
         Ok(())
     }
 
@@ -334,7 +407,7 @@ impl SettingsTx {
     }
 
     /// Insere a atribuição e os parâmetros dela, sem substituir nada: o
-    /// escopo já ocupado é erro.
+    /// escopo já ocupado é erro. Devolve o `id` gravado.
     pub async fn insert_shader_assignment(
         &mut self,
         scope: AssignmentScope,
@@ -342,7 +415,7 @@ impl SettingsTx {
         rom_id: Option<&str>,
         preset_id: &str,
         params: &[(String, String)],
-    ) -> Result<(), RepoError> {
+    ) -> Result<String, RepoError> {
         let aid = assignment_id(scope, system_id, rom_id);
         sqlx::query(
             "INSERT INTO shader_chain_assignments (id, scope, system_id, rom_id, preset_id) \
@@ -369,7 +442,7 @@ impl SettingsTx {
             .await
             .map_err(be)?;
         }
-        Ok(())
+        Ok(aid)
     }
 
     // --- decoração ------------------------------------------------------------
@@ -413,6 +486,27 @@ impl SettingsTx {
             .collect()
     }
 
+    /// Cria o pacote quando não há um com o mesmo `id`; o que já existe fica
+    /// como está.
+    pub async fn ensure_decoration_pack(&mut self, p: &DecorationPack) -> Result<(), RepoError> {
+        let source = match p.source {
+            DecorationPackSource::Bundled => "bundled",
+            DecorationPackSource::UserImported => "user_imported",
+        };
+        sqlx::query(
+            "INSERT INTO decoration_packs (id, name, source, base_path) VALUES (?1, ?2, ?3, ?4) \
+             ON CONFLICT(id) DO NOTHING",
+        )
+        .bind(&p.id)
+        .bind(&p.name)
+        .bind(source)
+        .bind(&p.base_path)
+        .execute(&mut *self.tx)
+        .await
+        .map_err(be)?;
+        Ok(())
+    }
+
     pub async fn delete_decoration_assignment(&mut self, id: &str) -> Result<(), RepoError> {
         sqlx::query("DELETE FROM decoration_assignments WHERE id = ?1")
             .bind(id)
@@ -422,17 +516,18 @@ impl SettingsTx {
         Ok(())
     }
 
-    /// Insere sem substituir: o escopo já ocupado é erro.
+    /// Insere sem substituir: o escopo já ocupado é erro. Devolve o `id` gravado.
     pub async fn insert_decoration_assignment(
         &mut self,
         a: &DecorationAssignment,
-    ) -> Result<(), RepoError> {
+    ) -> Result<String, RepoError> {
+        let id = assign_id(a);
         sqlx::query(
             "INSERT INTO decoration_assignments \
              (id, scope, system_id, rom_id, pack_id, asset_path) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )
-        .bind(assign_id(a))
+        .bind(&id)
         .bind(scope_to_db(a.scope))
         .bind(&a.system_id)
         .bind(&a.rom_id)
@@ -441,7 +536,7 @@ impl SettingsTx {
         .execute(&mut *self.tx)
         .await
         .map_err(be)?;
-        Ok(())
+        Ok(id)
     }
 
     // --- hotkeys e teclado ----------------------------------------------------
@@ -508,13 +603,18 @@ impl SettingsTx {
         Ok(())
     }
 
-    /// Insere sem substituir: o mesmo alvo duas vezes é erro.
-    pub async fn insert_keyboard_binding(
+    pub async fn put_keyboard_binding(
         &mut self,
+        put: Put,
         target: &str,
         code: &str,
     ) -> Result<(), RepoError> {
-        sqlx::query("INSERT INTO keyboard_bindings (target, code) VALUES (?1, ?2)")
+        let sql = put.sql(
+            "INSERT INTO keyboard_bindings (target, code) VALUES (?1, ?2)",
+            "target",
+            "code = excluded.code",
+        );
+        sqlx::query(&sql)
             .bind(target)
             .bind(code)
             .execute(&mut *self.tx)
@@ -617,9 +717,13 @@ impl SettingsTx {
         Ok(())
     }
 
-    /// Insere sem substituir: o mesmo escopo e alvo duas vezes é erro.
-    pub async fn insert_aspect(&mut self, a: &AspectRow) -> Result<(), RepoError> {
-        sqlx::query("INSERT INTO aspect_assignments (scope, target, aspect) VALUES (?1, ?2, ?3)")
+    pub async fn put_aspect(&mut self, put: Put, a: &AspectRow) -> Result<(), RepoError> {
+        let sql = put.sql(
+            "INSERT INTO aspect_assignments (scope, target, aspect) VALUES (?1, ?2, ?3)",
+            "scope, target",
+            "aspect = excluded.aspect",
+        );
+        sqlx::query(&sql)
             .bind(&a.scope)
             .bind(&a.target)
             .bind(&a.aspect)
