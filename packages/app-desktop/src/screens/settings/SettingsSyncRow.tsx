@@ -10,7 +10,7 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FieldBlock } from '../../components/SettingBlock'
 import { SYNC_STATUS_KEY, syncErrorCode } from '../../hooks/useSync'
@@ -76,6 +76,14 @@ export function SettingsSyncRow({ enabled, blocked }: { enabled: boolean; blocke
     enabled,
   })
   const undoInfo = useQuery({ queryKey: SETTINGS_UNDO_KEY, queryFn: syncSettingsUndoInfo })
+
+  // O erro do "Desfazer" é daquela cópia: uma cópia nova (outro `copiedAt`)
+  // começa sem ele, e o "Esquecer" não aparece para a cópia errada.
+  const copiedAt = undoInfo.data?.copiedAt ?? null
+  useEffect(() => {
+    setUndoError(null)
+    setAppearanceError(false)
+  }, [copiedAt])
 
   const send = async () => {
     if (sending) return

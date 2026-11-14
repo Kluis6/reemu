@@ -959,6 +959,22 @@ describe('SettingsSync settings row', () => {
     expect(document.activeElement).toBe(byText('Enviar as desta máquina'))
   })
 
+  it('a new copy starts without the error of the undo that failed before', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    api.syncSettingsUndo.mockRejectedValue('backup_failed')
+    await mount()
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(byText('Esquecer')).toBeTruthy()
+    api.syncSettingsUndoInfo.mockResolvedValue({ ...INFO, copiedAt: INFO.copiedAt + 60 })
+    await act(async () => qc.invalidateQueries())
+    await settle()
+    expect(byText('Desfazer')).toBeTruthy()
+    expect(byText('Esquecer')).toBeUndefined()
+    expect(byText('Abrir pasta')).toBeUndefined()
+  })
+
   it('an undo refused for another reason offers neither the folder nor Esquecer', async () => {
     api.syncStatus.mockResolvedValue(ON)
     api.syncSettingsUndoInfo.mockResolvedValue(INFO)
