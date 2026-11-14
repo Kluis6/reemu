@@ -3695,3 +3695,10 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Prévia de shader com imagem quebrada** (relato do usuário): `useBlobUrl` (agora em `hooks/useBlobUrl.ts`) revogava a URL do blob na limpeza do efeito; no `StrictMode` do dev o React desmonta e remonta o efeito com o mesmo `useMemo`, e a prévia que abria com o PNG já no cache (trocar de aba) ficava com uma URL revogada. A revogação agora é adiada e cancelada se a mesma URL voltar a montar. Erro introduzido na limpeza do `oxlint` de 2026-11-12. Teste em `useBlobUrl.test.tsx` (falha no código antigo).
 - **Molduras e pacote de shaders no sino** (pedido do usuário): `usePackUpdates`, montado no `AppShell` 25 s depois de abrir, usa as mesmas consultas das telas (`bezel_updates`, `shader_pack_update`, guardadas 6 h no backend) e deixa um aviso para cada um, que abre Molduras ou Shaders e some depois de atualizar. Textos em pt-BR, en e es.
 - **Conferido:** `tsc -b`, 434 testes do frontend, build de produção do frontend; `ui-render.py`: o diálogo de encerrar abre sem erro depois do dedupe (antes reproduzia o erro) e o sino mostra os dois avisos com respostas simuladas.
+
+## 2026-11-14 — Release v0.1.14 (no lugar da v0.1.13)
+
+- **v0.1.13 descartada:** o rascunho foi montado antes do `pnpm dedupe` e tinha o erro `presenceFn is not a function` no diálogo de encerrar. Com o sim do dono do projeto, o rascunho e a tag `v0.1.13` foram excluídos sem publicar (nenhum usuário recebeu a 0.1.13).
+- **Versão:** 0.1.13 → 0.1.14 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 15 crates do workspace.
+- **Testes antes da tag:** `cargo test --workspace` com 761 ok e 34 ignorados; `tsc -b`, 434 testes do frontend e o build de produção do frontend; diálogo de encerrar conferido no navegador de teste. Testes de GPU ignorados não rodaram (GPU fora desta rodada).
+- **O que entra:** o mesmo da v0.1.13 (ver a entrada acima) mais o diálogo de encerrar corrigido, a prévia de shader sem imagem quebrada e os avisos de molduras e do pacote de shaders no sino.
