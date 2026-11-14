@@ -3681,3 +3681,10 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 
 - **Run 43597813777** (`workflow_dispatch`, pedido do dono do projeto), a primeira com a fumaça na crate `core-catalog` e sem compilar o frontend: verde no Linux e no Windows. 126 de 127 cores abriram (o `ep128emu_core` é o conhecido), 51 rodaram a ROM de teste, 35 salvaram e restauraram o estado; no aviso de atualização, nenhuma falha (só o `fbneo` com o HEAD à frente da noturna, o que não é falha).
 - Com isso a Fase 6 (etapa C de `22-plano-gpu-e-crates.md`) sai do TASKS.
+
+## 2026-11-14 — Release v0.1.13
+
+- **Pedido do usuário:** fazer a build desta versão.
+- **Versão:** 0.1.12 → 0.1.13 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 15 crates do workspace (nenhuma dependência atualizada).
+- **Testes antes da tag (Windows, esta máquina):** `cargo test --workspace` com 761 ok e 34 ignorados; `tsc -b`; 432 testes do frontend. Os testes de GPU ignorados não rodaram nesta release (o dono do projeto deixou GPU fora desta rodada; o pacote de shaders já derrubou o device aqui em 2026-11-06). Fumaça do catálogo verde no Linux e no Windows no mesmo dia (run 43597813777).
+- **O que entra, desde a v0.1.12:** sincronização com o Alvanista (game saves, save states e configurações entre máquinas da conta, com backups e histórico); save states em vagas numeradas no menu de pausa e versão do core gravada no state, com aviso antes de carregar; cards das Configurações em 2 colunas como no Xbox; seletores no padrão dos blocos, hover igual ao foco e abas no Gerenciar biblioteca; aviso de versão nova nas molduras e no pacote de shaders; aviso de atualização para mais 7 cores; shader escolhido com o fundo na cor primária e sem contorno; itens do sino centrados; erros com código em todos os comandos; SQLite em WAL com cópia antes de migrar; telas carregadas sob demanda; travas do vídeo Vulkan que não derrubam a outra thread; dependências de segurança do RustSec e Dependabot.
