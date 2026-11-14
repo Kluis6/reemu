@@ -3,9 +3,54 @@
 
 import type { TFunction } from 'i18next'
 import { syncErrorCode } from '../hooks/useSync'
-import type { SettingsGroupSent } from './bindings/SettingsGroupSent'
+import type { AppearanceDoc } from './appearanceGroup'
+import type { SettingsGroupName } from './tauri'
 
-export type SettingsGroupName = SettingsGroupSent['group']
+export type { SettingsDbGroup, SettingsGroupName } from './tauri'
+
+/** Os seis grupos, na ordem do diálogo. */
+export const SETTINGS_GROUPS: readonly SettingsGroupName[] = [
+  'core-options',
+  'shaders-decorations',
+  'hotkeys-keyboard',
+  'audio',
+  'appearance',
+  'video',
+]
+
+export const SETTINGS_SENT_KEY = ['sync-settings-sent'] as const
+export const SETTINGS_UNDO_KEY = ['sync-settings-undo-info'] as const
+
+/** A aparência de antes da última cópia, para o "Desfazer" (o Rust guarda só o
+ *  banco). Cada acesso ao localStorage pode falhar: nunca derruba a tela. */
+export const APPEARANCE_UNDO_KEY = 'reemu.sync.appearanceUndo'
+
+export function saveAppearanceUndo(doc: AppearanceDoc): void {
+  try {
+    localStorage.setItem(APPEARANCE_UNDO_KEY, JSON.stringify(doc))
+  } catch {
+    // sem localStorage: a aparência não volta, o resto volta
+  }
+}
+
+export function readAppearanceUndo(): unknown {
+  try {
+    const raw = localStorage.getItem(APPEARANCE_UNDO_KEY)
+    return raw === null ? null : (JSON.parse(raw) as unknown)
+  } catch {
+    return null
+  }
+}
+
+/** Uma cópia sem aparência apaga a de antes: o "Desfazer" dela não pode trazer
+ *  de volta uma aparência mais velha. */
+export function clearAppearanceUndo(): void {
+  try {
+    localStorage.removeItem(APPEARANCE_UNDO_KEY)
+  } catch {
+    // nada a apagar
+  }
+}
 
 /** O texto do erro de um grupo no envio. Uma recusa da nuvem (`too_large`,
  *  `rejected`) é daquele grupo e diz qual, nunca "save"; o que parou o envio

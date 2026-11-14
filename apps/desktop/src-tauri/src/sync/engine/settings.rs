@@ -111,6 +111,11 @@ pub struct SettingsPreview {
     /// A GPU ou o backend dela diferem dos desta máquina (ou um dos dois não
     /// é conhecido): o vídeo começa desmarcado.
     pub video_default_off: bool,
+    /// A GPU desta máquina que a comparação usou (a de agora; sem ela, a da
+    /// lista do site). Vazia quando não se sabe.
+    pub here_gpu: String,
+    /// O backend desta máquina que a comparação usou. Vazio quando não se sabe.
+    pub here_backend: String,
 }
 
 /// Um grupo copiado e o que a cópia fez nele.
@@ -153,6 +158,12 @@ pub struct SettingsSent {
     pub sent_at: Option<i64>,
     /// Os grupos cujo documento de agora não é o que subiu por último, na
     /// ordem do diálogo.
+    #[cfg_attr(
+        test,
+        ts(
+            type = "Array<'core-options' | 'shaders-decorations' | 'hotkeys-keyboard' | 'audio' | 'appearance' | 'video'>"
+        )
+    )]
     pub changed: Vec<String>,
 }
 
@@ -712,6 +723,10 @@ impl Engine {
             Some(here_hw.clone())
         };
         let video_default_off = !same_gpu(other.hardware.as_ref(), mine.as_ref());
+        let here_gpu = mine.as_ref().map_or_else(String::new, |h| h.gpu.clone());
+        let here_backend = mine
+            .as_ref()
+            .map_or_else(String::new, |h| h.gpu_backend.clone());
         let sent_at = rows
             .values()
             .map(|r| written(r).0)
@@ -736,6 +751,8 @@ impl Engine {
             sent_at,
             groups,
             video_default_off,
+            here_gpu,
+            here_backend,
         })
     }
 
@@ -1612,6 +1629,11 @@ mod tests {
             .await
             .unwrap();
         assert!(p.video_default_off);
+        // a comparação mostra a GPU e o backend que decidiram
+        assert_eq!(
+            (p.here_gpu.as_str(), p.here_backend.as_str()),
+            ("NVIDIA GeForce RTX 4070", "Vulkan")
+        );
         assert_eq!(
             (p.machine.id.as_str(), p.machine.label.as_str()),
             (OTHER, "Notebook")
@@ -1676,6 +1698,10 @@ mod tests {
         assert!(
             !unknown.video_default_off,
             "a linha do site vale sem a GPU daqui"
+        );
+        assert_eq!(
+            (unknown.here_gpu.as_str(), unknown.here_backend.as_str()),
+            ("Intel Iris Xe", "Vulkan")
         );
     }
 

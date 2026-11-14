@@ -22,9 +22,11 @@ import { LoadingState } from '../../components/EmptyState'
 import { BlockGroup, FieldBlock, ToggleBlock } from '../../components/SettingBlock'
 import { useAlvanistaConnect } from '../../hooks/useAlvanistaConnect'
 import { ConflictDialog } from '../../components/sync/ConflictDialog'
+import { CopySettingsDialog } from '../../components/sync/CopySettingsDialog'
 import { SYNC_STATUS_KEY, SYNC_ERRORS, syncErrorCode, useConflicts, useSync } from '../../hooks/useSync'
 import { alvanistaOpenSite, type SyncMachine } from '../../lib/tauri'
 import { relativeAge } from '../profile/relativeAge'
+import { SettingsSyncRow } from './SettingsSyncRow'
 import { formatBytes, hardwareLine, machineColor } from './syncFormat'
 
 const SITE_HOST = 'alvanista.com/sync'
@@ -59,7 +61,6 @@ const useStyles = makeStyles({
   },
   machineText: { display: 'flex', flexDirection: 'column', rowGap: '2px', minWidth: 0, flexGrow: 1 },
   machineName: { display: 'flex', alignItems: 'center', columnGap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
-  rowTitle: { display: 'flex', alignItems: 'center', columnGap: tokens.spacingHorizontalS, flexWrap: 'wrap' },
   machineSide: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', rowGap: '2px', flexShrink: 0 },
   site: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: tokens.spacingHorizontalXS },
 })
@@ -73,6 +74,7 @@ function MachineRow({ m, lang, nowMs }: { m: SyncMachine; lang: string; nowMs: n
   const { t } = useTranslation()
   const s = useStyles()
   const savesOnly = isSavesOnly(m)
+  const [copying, setCopying] = useState(false)
   const hw = hardwareLine(m.hardware, lang)
   const seen = m.lastUsedAt ? Date.parse(m.lastUsedAt) : NaN
   return (
@@ -98,12 +100,12 @@ function MachineRow({ m, lang, nowMs }: { m: SyncMachine; lang: string; nowMs: n
             : t('sync.seenAt', { when: relativeAge(seen / 1000, nowMs, lang) })}
         </Caption1>
         {canCopyFrom(m) && (
-          // Chega com o PR das configurações.
-          <Button size="small" appearance="secondary" disabled>
-            {t('sync.copy')} ({t('sync.soon')})
+          <Button size="small" appearance="secondary" onClick={() => setCopying(true)}>
+            {t('sync.copy')}
           </Button>
         )}
       </span>
+      {copying && <CopySettingsDialog machine={m} onClose={() => setCopying(false)} />}
     </div>
   )
 }
@@ -416,16 +418,7 @@ export function SettingsSync() {
             )}
           </FieldBlock>
         )}
-        {/* As configurações chegam com o PR que as sincroniza; até lá, "em breve". */}
-        <FieldBlock wide>
-          <span className={s.rowTitle}>
-            <Body1>{t('sync.settings')}</Body1>
-            <Badge appearance="tint" color="informative">
-              {t('sync.soon')}
-            </Badge>
-          </span>
-          <Caption1 className={s.muted}>{t('sync.settingsHint')}</Caption1>
-        </FieldBlock>
+        <SettingsSyncRow enabled={st.enabled} blocked={st.pausedLocal || pausedSite || st.revoked} />
       </BlockGroup>
 
       {st.enabled && conflictCount > 0 && (

@@ -13,4 +13,4 @@ sentAt: number | null,
  * Os grupos cujo documento de agora não é o que subiu por último, na
  * ordem do diálogo.
  */
-changed: Array<string>, };
+changed: Array<'core-options' | 'shaders-decorations' | 'hotkeys-keyboard' | 'audio' | 'appearance' | 'video'>, };

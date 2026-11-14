@@ -18,4 +18,13 @@ groups: Array<SettingsGroupPreview>,
  * A GPU ou o backend dela diferem dos desta máquina (ou um dos dois não
  * é conhecido): o vídeo começa desmarcado.
  */
-videoDefaultOff: boolean, };
+videoDefaultOff: boolean, 
+/**
+ * A GPU desta máquina que a comparação usou (a de agora; sem ela, a da
+ * lista do site). Vazia quando não se sabe.
+ */
+hereGpu: string, 
+/**
+ * O backend desta máquina que a comparação usou. Vazio quando não se sabe.
+ */
+hereBackend: string, };

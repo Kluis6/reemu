@@ -25,6 +25,8 @@ import type { HardwareInfo } from './bindings/HardwareInfo'
 import type { HardwarePayload } from './bindings/HardwarePayload'
 import type { AppearanceDoc } from './appearanceGroup'
 import type { CopyReport } from './bindings/CopyReport'
+import type { SettingsGroupReport } from './bindings/SettingsGroupReport'
+import type { SettingsGroupSent } from './bindings/SettingsGroupSent'
 import type { SettingsPreview } from './bindings/SettingsPreview'
 import type { SettingsSent } from './bindings/SettingsSent'
 import type { SettingsUndoInfo } from './bindings/SettingsUndoInfo'
@@ -613,6 +615,11 @@ export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Prom
 
 // --- cloud save: esta máquina como aparelho da conta --------------------
 
+/** Os nomes dos seis grupos de configurações (a aparência inclusive). */
+export type SettingsGroupName = SettingsGroupSent['group']
+/** Os cinco grupos do banco: o que `syncSettingsCopy` aceita em `groups`. */
+export type SettingsDbGroup = SettingsGroupReport['group']
+
 export type {
   CopyReport,
   HardwarePayload,
@@ -728,7 +735,7 @@ export const syncSettingsPreview = (deviceId: string) =>
 /** Copia os grupos marcados (os do banco; a aparência vai em `appearanceWanted`
  *  e volta em `appearanceDoc`, para a tela aplicar e guardar a de antes em
  *  `reemu.sync.appearanceUndo`). Os de agora ficam num backup para desfazer. */
-export const syncSettingsCopy = (deviceId: string, groups: string[], appearanceWanted: boolean) =>
+export const syncSettingsCopy = (deviceId: string, groups: SettingsDbGroup[], appearanceWanted: boolean) =>
   invoke<CopyReport>('sync_settings_copy', { deviceId, groups, appearanceWanted })
 /** A cópia que o "Desfazer" volta (de qual máquina, quando, quais grupos), ou
  *  `null` sem cópia a desfazer. Sem rede: vale ao abrir o app de novo. */

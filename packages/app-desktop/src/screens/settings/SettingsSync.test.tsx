@@ -22,7 +22,15 @@ const api = vi.hoisted(() => ({
   alvanistaConnect: vi.fn(),
   alvanistaCancel: vi.fn(),
   alvanistaOpenSite: vi.fn(),
+  syncSettingsSent: vi.fn(),
+  syncSettingsUpload: vi.fn(),
+  syncSettingsUndoInfo: vi.fn(),
+  syncSettingsUndo: vi.fn(),
+  syncSettingsPreview: vi.fn(),
+  syncSettingsCopy: vi.fn(),
 }))
+const appearance = vi.hoisted(() => ({ exportAppearance: vi.fn(), applyAppearance: vi.fn() }))
+vi.mock('../../lib/appearanceGroup', () => appearance)
 
 vi.mock('../../lib/tauri', async (orig) => ({
   ...(await orig<typeof import('../../lib/tauri')>()),
@@ -43,6 +51,7 @@ vi.mock('../../components/FullscreenDialog', () => ({
     ) : null,
 }))
 
+import { APPEARANCE_UNDO_KEY } from '../../lib/settingsSync'
 import { SettingsSync } from './SettingsSync'
 import { hardwareLine, machineColor } from './syncFormat'
 
@@ -152,6 +161,11 @@ beforeEach(() => {
   api.syncMachines.mockResolvedValue([THIS])
   api.alvanistaCancel.mockResolvedValue(undefined)
   api.alvanistaOpenSite.mockResolvedValue(undefined)
+  api.syncSettingsSent.mockResolvedValue({ sentAt: null, changed: [] })
+  api.syncSettingsUndoInfo.mockResolvedValue(null)
+  appearance.exportAppearance.mockReset().mockResolvedValue({ v: 1, before: true })
+  appearance.applyAppearance.mockReset().mockResolvedValue(undefined)
+  localStorage.clear()
 })
 afterEach(async () => {
   await unmount()
@@ -216,18 +230,17 @@ describe('SettingsSync', () => {
     expect(api.syncStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('only settings stays em breve; game saves and states have real switches', async () => {
+  it('settings is a real row now; game saves and states have real switches', async () => {
     api.syncStatus.mockResolvedValue(ON)
     await mount()
-    const title = [...host.querySelectorAll('span')].find((e) => e.firstElementChild?.textContent === 'Configurações')
-    expect(title?.textContent).toContain('em breve')
+    expect(host.textContent).not.toContain('em breve')
+    expect(byText('Enviar as desta máquina')).toBeTruthy()
     const switches = [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')]
     for (const [i, label] of [
       [1, 'Game saves'],
       [2, 'Save states'],
     ] as const) {
       expect(switches[i].closest('label')?.textContent).toContain(label)
-      expect(switches[i].closest('label')?.textContent).not.toContain('em breve')
       expect(switches[i].checked).toBe(true)
     }
   })
@@ -401,7 +414,7 @@ describe('SettingsSync', () => {
     expect(copies).toHaveLength(0)
   })
 
-  it('lists other machines and disables copy with em breve', async () => {
+  it('lists other machines and offers copy', async () => {
     api.syncStatus.mockResolvedValue(ON)
     api.syncMachines.mockResolvedValue([THIS, OTHER, RETRO])
     await mount()
@@ -412,8 +425,8 @@ describe('SettingsSync', () => {
     const copies = [...host.querySelectorAll('button')].filter((b) => b.textContent?.includes('Copiar configurações'))
     // só a máquina ReEmu que não é esta
     expect(copies).toHaveLength(1)
-    expect(copies[0].disabled).toBe(true)
-    expect(copies[0].textContent).toContain('em breve')
+    expect(copies[0].disabled).toBe(false)
+    expect(copies[0].textContent).not.toContain('em breve')
   })
 
   it('shows the removed banner and relinks', async () => {
@@ -667,5 +680,136 @@ describe('helpers', () => {
     expect(machineColor('dev1')).toBe(machineColor('dev1'))
     expect(machineColor('dev1')).not.toBe(machineColor('dev2'))
     expect(new Set(['d1', 'd2', 'd3'].map(machineColor)).size).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('SettingsSync settings row', () => {
+  const GROUPS = ['core-options', 'shaders-decorations', 'hotkeys-keyboard', 'audio', 'appearance', 'video'] as const
+  const PREVIEW = {
+    machine: OTHER,
+    sentAt: 1_700_000_000,
+    groups: GROUPS.map((group) => ({ group, present: true, error: null, missingFiles: [] })),
+    videoDefaultOff: true,
+    hereGpu: 'RTX 3070',
+    hereBackend: 'Vulkan',
+  }
+  const INFO = { machine: 'Notebook', machineId: 'dev2', copiedAt: 1_700_000_000, groups: ['audio'] }
+  const box = (name: string) =>
+    [...document.querySelectorAll('.fui-Checkbox')].find((c) => c.textContent?.includes(name))!.querySelector<HTMLInputElement>('input')!
+  const dialogButton = (text: string) => [...document.querySelectorAll('button')].find((b) => b.textContent?.includes(text))!
+
+  it('shows when the settings were last sent and what changed since', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsSent.mockResolvedValue({ sentAt: 1_700_000_000, changed: [] })
+    await mount()
+    expect(host.textContent).toContain('Última enviada:')
+    expect(host.textContent).not.toContain('Alteradas desde o último envio')
+    await unmount()
+    host.remove()
+
+    api.syncSettingsSent.mockResolvedValue({ sentAt: 1_700_000_000, changed: ['audio'] })
+    await mount()
+    expect(host.textContent).toContain('Última enviada:')
+    expect(host.textContent).toContain('Alteradas desde o último envio')
+  })
+
+  it('the send shows per-group failures by name', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUpload.mockResolvedValue({
+      sentAt: 1_700_000_000,
+      groups: [
+        { group: 'core-options', sent: true, error: null },
+        { group: 'video', sent: false, error: 'too_large' },
+        { group: 'audio', sent: false, error: 'rejected' },
+      ],
+      error: 'too_large',
+    })
+    await mount()
+    await act(async () => byText('Enviar as desta máquina')!.click())
+    await settle()
+    expect(api.syncSettingsUpload).toHaveBeenCalledWith({ v: 1, before: true })
+    expect(host.textContent).toContain('O grupo Vídeo passa do tamanho que a nuvem aceita e não foi enviado.')
+    expect(host.textContent).toContain('A nuvem recusou o grupo Áudio, que não foi enviado.')
+    expect(host.textContent).not.toContain('O grupo Opções dos cores')
+  })
+
+  it('a 402 plan gate on the send shows the plan prompt', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUpload.mockRejectedValue('no_tier')
+    await mount()
+    await act(async () => byText('Enviar as desta máquina')!.click())
+    await settle()
+    expect(host.textContent).toContain('Sincronização de saves é para o plano Collector ou acima.')
+    await act(async () => byText('Ver planos')!.click())
+    expect(api.alvanistaOpenSite).toHaveBeenCalledWith('plans')
+  })
+
+  it('the undo bar shows after a restart from syncSettingsUndoInfo, naming machine and time', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    await mount()
+    expect(host.textContent).toContain('Configurações copiadas de Notebook em')
+    expect(byText('Desfazer')).toBeTruthy()
+  })
+
+  it('undo appears after a copy and calls syncSettingsUndo', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncMachines.mockResolvedValue([THIS, OTHER])
+    api.syncSettingsPreview.mockResolvedValue(PREVIEW)
+    api.syncSettingsCopy.mockResolvedValue({ perGroup: [], backupDir: 'x', appearanceDoc: null })
+    api.syncSettingsUndo.mockResolvedValue(true)
+    await mount()
+    expect(byText('Desfazer')).toBeUndefined()
+    await act(async () => byText('Copiar configurações')!.click())
+    await settle()
+    // depois da cópia o Rust lembra dela
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    await act(async () => dialogButton('Copiar 5 grupos').click())
+    await settle()
+    expect(byText('Desfazer')).toBeTruthy()
+    api.syncSettingsUndoInfo.mockResolvedValue(null)
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(api.syncSettingsUndo).toHaveBeenCalledTimes(1)
+    expect(byText('Desfazer')).toBeUndefined()
+  })
+
+  it('tick everything including video, copy, undo: the appearance comes back from reemu.sync.appearanceUndo', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncMachines.mockResolvedValue([THIS, OTHER])
+    api.syncSettingsPreview.mockResolvedValue(PREVIEW)
+    api.syncSettingsCopy.mockResolvedValue({ perGroup: [], backupDir: 'x', appearanceDoc: { v: 1, theirs: true } })
+    api.syncSettingsUndo.mockResolvedValue(true)
+    await mount()
+    await act(async () => byText('Copiar configurações')!.click())
+    await settle()
+    await act(async () => box('Vídeo').click())
+    api.syncSettingsUndoInfo.mockResolvedValue({ ...INFO, groups: [...GROUPS] })
+    await act(async () => dialogButton('Copiar 6 grupos').click())
+    await settle()
+    expect(api.syncSettingsCopy).toHaveBeenCalledWith(
+      'dev2',
+      ['core-options', 'shaders-decorations', 'hotkeys-keyboard', 'audio', 'video'],
+      true,
+    )
+    expect(appearance.applyAppearance).toHaveBeenCalledWith({ v: 1, theirs: true })
+    expect(JSON.parse(localStorage.getItem(APPEARANCE_UNDO_KEY)!)).toEqual({ v: 1, before: true })
+    appearance.applyAppearance.mockClear()
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(api.syncSettingsUndo).toHaveBeenCalledTimes(1)
+    expect(appearance.applyAppearance).toHaveBeenCalledWith({ v: 1, before: true })
+    expect(localStorage.getItem(APPEARANCE_UNDO_KEY)).toBeNull()
+  })
+
+  it('an undo refused while a game is loaded says so and keeps the bar', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSettingsUndoInfo.mockResolvedValue(INFO)
+    api.syncSettingsUndo.mockRejectedValue('game_open')
+    await mount()
+    await act(async () => byText('Desfazer')!.click())
+    await settle()
+    expect(host.textContent).toContain('Feche o jogo para copiar ou desfazer configurações.')
+    expect(byText('Desfazer')).toBeTruthy()
   })
 })
