@@ -381,6 +381,7 @@ pub fn run() {
             sync::sync_states_for,
             sync::sync_download_state,
             sync::sync_state_thumbnail,
+            sync::sync_state_notes,
             commands::js_log,
             commands::current_focus,
             commands::toggle_focus,

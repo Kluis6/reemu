@@ -176,9 +176,16 @@ fn decide_state(
     };
     let live = remote.filter(|r| !r.deleted);
     let Some(base) = base else {
-        // Sem base, uma marca de apagado vale ausência.
-        return match live {
-            Some(r) if r.hash == l.hash => Action::Adopt,
+        let own_tombstone =
+            remote.filter(|r| r.deleted && r.device_token_id.as_deref() == Some(this_device));
+        return match (live, own_tombstone) {
+            (Some(r), _) if r.hash == l.hash => Action::Adopt,
+            // A linha desta máquina foi apagada no site com estes mesmos
+            // bytes, e a base se perdeu (troca de conta): o apagamento vale, e
+            // a base volta marcada (D127). Bytes outros sobem como novos.
+            (None, Some(r)) if !r.hash.is_empty() && r.hash == l.hash => {
+                Action::MarkBaseWipedKeepLocal
+            }
             _ => Action::Upload,
         };
     };
@@ -439,6 +446,17 @@ mod tests {
         );
         assert_eq!(
             state(Some(&local("a")), None, Some(&tomb(Some(ME)))),
+            Action::Upload
+        );
+        // M3: sem base (perdida numa troca de conta), a linha desta máquina
+        // apagada no site com os mesmos bytes marca a base; a de outra
+        // máquina não.
+        assert_eq!(
+            state(Some(&local("x")), None, Some(&tomb(Some(ME)))),
+            Action::MarkBaseWipedKeepLocal
+        );
+        assert_eq!(
+            state(Some(&local("x")), None, Some(&tomb(Some("dev-other")))),
             Action::Upload
         );
         // Com base: igual é nada; diferente em qualquer lado sobe.

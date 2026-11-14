@@ -18,6 +18,9 @@
 //!   e só quando são os da linha que dá a versão: lidos sem mudar no meio,
 //!   com a linha ainda lá antes e depois, e sem mtime mais novo que ela. Senão
 //!   o save em andamento sobe na passada dele.
+//! - Desligar os states ou o sync no meio para a lista: o envio em curso
+//!   termina, o próximo state não começa. Uma falha de rede num envio fica
+//!   para a próxima e a passada segue; três seguidas a acabam.
 
 use super::*;
 use crate::sync::local::{device_states, StateFile};
@@ -26,9 +29,12 @@ use std::io::Read;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 
-/// Por que um state fica só nesta máquina (a página conta).
+/// Por que um state fica só nesta máquina (a página conta, e a vaga diz).
 pub(super) const UNVERSIONED: &str = "unversioned";
 pub(in crate::sync) const WIPED: &str = "wiped";
+/// Passa do maior objeto que a nuvem aceita (413, ou o teto que um 413 disse).
+pub(super) const TOO_LARGE: &str = "too_large";
+/// A nuvem recusou os bytes (400, 422).
 pub(super) const REJECTED: &str = "rejected";
 /// Outra ROM tem um state mais novo com o mesmo nome na nuvem.
 pub(super) const DUPLICATE: &str = "duplicate";
@@ -39,6 +45,20 @@ pub(super) const DEFERRED: &str = "deferred";
 /// Quanto o mtime do arquivo pode passar do `created_at` da linha: `save`
 /// grava os bytes e só depois a linha, e há disco que arredonda o mtime.
 const ROW_SLACK_SECS: i64 = 2;
+
+/// Envios de state seguidos que falham na rede antes de a passada acabar
+/// (M1): um que falha fica para a próxima e os outros seguem; três seguidos
+/// dizem que a rede caiu.
+const NETWORK_FAILURES_TO_END: u32 = 3;
+
+/// Por que a nuvem recusou um state de vez: grande demais ou recusado.
+fn refused(e: &SyncError) -> &'static str {
+    if *e == SyncError::StateTooLarge {
+        TOO_LARGE
+    } else {
+        REJECTED
+    }
+}
 
 /// O que uma leitura de um state deixou: o hash daqueles bytes, com o
 /// tamanho, o mtime e a linha de `save_states` de quando foram lidos. Vale
@@ -179,9 +199,32 @@ impl Engine {
             return Ok(PassReport::default());
         };
         let owners = work.owners();
-        let result = self.run_state_pass(alva, &device, work).await;
-        self.finish_states(&result, rom.as_deref(), &owners, epoch);
+        let (result, whole) = match self.run_state_pass(alva, &device, work).await {
+            Ok((report, whole)) => (Ok(report), whole),
+            Err(e) => (Err(e), true),
+        };
+        if whole {
+            self.finish_states(&result, rom.as_deref(), &owners, epoch);
+        } else {
+            // Parou no meio (I1): a conta e os avisos de uma lista pela metade
+            // não valem; a próxima passada inteira os refaz.
+            self.emit(SyncEvent::Status);
+        }
         result
+    }
+
+    /// A passada de states ainda vale (I1): os states e o sync ligados, sem
+    /// pausa aqui, na mesma época de quando ela começou (desligar os states
+    /// ou esquecer o aparelho muda a época). Só a memória e o SQLite.
+    async fn states_still_on(&self, epoch: u64) -> bool {
+        let now = self.sync.runtime().states_epoch;
+        if now != epoch {
+            return false;
+        }
+        let devices = &self.sync.devices;
+        matches!(devices.enabled().await, Ok(true))
+            && matches!(devices.paused().await, Ok(false))
+            && matches!(devices.states_enabled().await, Ok(true))
     }
 
     /// Depois de fechar um jogo (D117): a passada dos game saves daquela ROM
@@ -244,12 +287,13 @@ impl Engine {
 
     /// A linha desta máquina (D128) só quando há o que perguntar à nuvem;
     /// depois cada state. Sem varrer temporários nem abrir pasta de backup.
+    /// O `bool` diz se a lista foi inteira (`false`: parou no meio, I1).
     async fn run_state_pass(
         &self,
         alva: &Alvanista,
         device: &Device,
         work: StateWork,
-    ) -> Result<PassReport, SyncError> {
+    ) -> Result<(PassReport, bool), SyncError> {
         let mut report = PassReport::default();
         let mut cx = if work.needs_network() {
             let devices = self.sync.partner_devices(alva).await?;
@@ -262,47 +306,61 @@ impl Engine {
                 devices,
                 receive,
                 uploads_stopped: false,
+                network_failures: 0,
             })
         } else {
             None
         };
-        self.run_states(cx.as_mut(), &device.id, work, &mut report)
+        let whole = self
+            .run_states(cx.as_mut(), &device.id, work, &mut report)
             .await?;
-        Ok(report)
+        Ok((report, whole))
     }
 
     /// Cada state do trabalho, com a miniatura; as bases órfãs saem; a conta
-    /// dos que ficam só aqui é refeita para o escopo.
+    /// dos que ficam só aqui é refeita para o escopo. Antes de cada state a
+    /// passada confere que os states e o sync seguem ligados (I1): desligados
+    /// no meio, o envio em curso termina e o resto da lista fica, sem conta
+    /// nem base órfã mexida (`Ok(false)`).
     async fn run_states(
         &self,
         mut cx: Option<&mut Ctx<'_>>,
         me: &str,
         work: StateWork,
         report: &mut PassReport,
-    ) -> Result<(), SyncError> {
+    ) -> Result<bool, SyncError> {
         let rows = match cx.as_deref() {
             Some(cx) if work.files.iter().any(|f| f.version().is_some()) => {
                 self.list_states(cx, me, work.platform).await?
             }
             _ => Vec::new(),
         };
-        let mut local_only: HashMap<(String, String), &'static str> = HashMap::new();
+        let mut local_only: HashMap<(String, String), (&'static str, String)> = HashMap::new();
         for file in &work.duplicates {
-            local_only.insert((file.rom_id.clone(), file.key.clone()), DUPLICATE);
+            local_only.insert(
+                (file.rom_id.clone(), file.key.clone()),
+                (DUPLICATE, file.id.clone()),
+            );
         }
         for file in &work.files {
+            // Só antes de um state que vai à nuvem: o sem versão nem sai daqui.
+            let goes_up = file.version().is_some() && cx.is_some();
+            if goes_up && !self.states_still_on(work.epoch).await {
+                log::info!("sync: os states desligaram no meio da passada; o resto fica");
+                return Ok(false);
+            }
             let reason = match (file.version(), cx.as_deref_mut()) {
                 // D122: sem a versão do core, outra máquina não saberia se ele
                 // carrega.
                 (None, _) => Some(UNVERSIONED),
-                (Some(_), Some(cx)) => {
-                    self.state_step(cx, me, file, &work.bases, &rows, report)
-                        .await?
-                }
+                (Some(_), Some(cx)) => self.state_step(cx, me, file, &work, &rows, report).await?,
                 (Some(_), None) => None,
             };
             if let Some(reason) = reason {
-                local_only.insert((file.rom_id.clone(), file.key.clone()), reason);
+                local_only.insert(
+                    (file.rom_id.clone(), file.key.clone()),
+                    (reason, file.id.clone()),
+                );
             }
         }
         for key in &work.orphans {
@@ -312,7 +370,7 @@ impl Engine {
             }
         }
         self.record_local_only(work.rom.as_deref(), local_only, work.epoch);
-        Ok(())
+        Ok(true)
     }
 
     /// A conta da página: a passada de todos troca a lista inteira, a de uma
@@ -321,7 +379,7 @@ impl Engine {
     fn record_local_only(
         &self,
         rom: Option<&str>,
-        entries: HashMap<(String, String), &'static str>,
+        entries: HashMap<(String, String), (&'static str, String)>,
         epoch: u64,
     ) {
         let mut rt = self.sync.runtime();
@@ -436,10 +494,11 @@ impl Engine {
         cx: &mut Ctx<'_>,
         me: &str,
         file: &StateFile,
-        bases: &HashMap<String, BaseRow>,
+        work: &StateWork,
         rows: &[RemoteFile],
         report: &mut PassReport,
     ) -> Result<Option<&'static str>, SyncError> {
+        let bases = &work.bases;
         let state = Object {
             key: file.key.clone(),
             filename: file.filename.clone(),
@@ -470,6 +529,9 @@ impl Engine {
             Kept::InCloud => {}
         }
         match &file.thumbnail {
+            // Os states desligaram enquanto o state subia (I1): a miniatura
+            // fica, e a lista para no próximo.
+            Some(_) if !self.states_still_on(work.epoch).await => {}
             // A miniatura só acompanha um state que está na nuvem.
             Some(path) => {
                 let thumb = Object {
@@ -546,7 +608,7 @@ impl Engine {
             Action::Adopt => match (&look.seen, &remote) {
                 (Some(seen), Some(r)) => {
                     match self
-                        .put_state_base(obj, seen, &r.save_id, &r.version_id, &r.hash)
+                        .put_state_base(obj, seen, &r.save_id, &r.version_id, &r.hash, None)
                         .await
                     {
                         Ok(()) => Kept::InCloud,
@@ -559,10 +621,30 @@ impl Engine {
                 self.upload_state(cx, obj, &before, look, &decide_on, report)
                     .await?
             }
-            Action::MarkBaseWipedKeepLocal => match self.base_only(&obj.key, action).await {
-                Ok(()) => Kept::LocalOnly(WIPED),
-                Err(e) => base_err(report, e),
-            },
+            Action::MarkBaseWipedKeepLocal => {
+                let marked = match (base, &look.seen, &remote) {
+                    (Some(_), _, _) => self.base_only(&obj.key, action).await,
+                    // Sem base (ela sai numa troca de conta, M3), a linha
+                    // apagada no site tem estes mesmos bytes: a base volta já
+                    // marcada, e o apagamento segue valendo.
+                    (None, Some(seen), Some(r)) => {
+                        self.put_state_base(
+                            obj,
+                            seen,
+                            &r.save_id,
+                            &r.version_id,
+                            &r.hash,
+                            Some(now_secs()),
+                        )
+                        .await
+                    }
+                    (None, _, _) => return Ok(Kept::Later),
+                };
+                match marked {
+                    Ok(()) => Kept::LocalOnly(WIPED),
+                    Err(e) => base_err(report, e),
+                }
+            }
             Action::DropBase => match self.base_only(&obj.key, action).await {
                 Ok(()) => Kept::Later,
                 Err(e) => base_err(report, e),
@@ -600,7 +682,20 @@ impl Engine {
                 report
                     .errors
                     .push((obj.key.clone(), SyncError::StateTooLarge));
-                return Ok(Kept::LocalOnly(REJECTED));
+                return Ok(Kept::LocalOnly(TOO_LARGE));
+            }
+        }
+        // Os mesmos bytes que a nuvem já recusou de vez, pelo hash guardado
+        // (o da mesma linha, tamanho e mtime): nem são lidos de novo (M5).
+        if look.bytes.is_none() {
+            if let Some(err) = look
+                .seen
+                .as_ref()
+                .and_then(|seen| self.still_rejected(&obj.key, &seen.hash))
+            {
+                let reason = refused(&err);
+                report.errors.push((obj.key.clone(), err));
+                return Ok(Kept::LocalOnly(reason));
             }
         }
         let deferred = |report: &mut PassReport, why: &str| {
@@ -625,7 +720,7 @@ impl Engine {
         let Ok(Some(after)) = self.states.get_state(&obj.file.id).await else {
             return Ok(deferred(report, "a vaga foi gravada de novo"));
         };
-        let (Some(seen), Some(bytes)) = (&look.seen, &look.bytes) else {
+        let (Some(seen), Some(_)) = (&look.seen, &look.bytes) else {
             return Ok(Kept::Later);
         };
         if !look.steady || *before != after {
@@ -652,6 +747,16 @@ impl Engine {
                 return Ok(Kept::Later);
             }
         }
+        // Daqui em diante os bytes saem do `look` e vão para o envio, sem
+        // cópia (um state passa de dezenas de MB, M9).
+        let Look {
+            seen: Some(seen),
+            bytes: Some(bytes),
+            ..
+        } = look
+        else {
+            return Ok(Kept::Later);
+        };
         // A versão é a da linha lida junto com os bytes.
         let Some(version) = after
             .core_version
@@ -666,8 +771,9 @@ impl Engine {
         }
         // Os mesmos bytes que a nuvem já recusou de vez não sobem de novo.
         if let Some(err) = self.still_rejected(&obj.key, &seen.hash) {
+            let reason = refused(&err);
             report.errors.push((obj.key.clone(), err));
-            return Ok(Kept::LocalOnly(REJECTED));
+            return Ok(Kept::LocalOnly(reason));
         }
         let meta = UploadMeta {
             platform: obj.file.platform,
@@ -677,22 +783,28 @@ impl Engine {
             core_version: Some(version),
             client_mtime: Some(rfc3339(seen.mtime)),
         };
-        let seen = seen.clone();
         let up: Uploaded = match self
-            .upload_bytes(
-                cx.alva,
-                &cx.token,
-                &obj.key,
-                &meta,
-                bytes.clone(),
-                &seen.hash,
-            )
+            .upload_bytes(cx.alva, &cx.token, &obj.key, &meta, bytes, &seen.hash)
             .await
         {
-            Ok(up) => up,
+            Ok(up) => {
+                cx.network_failures = 0;
+                up
+            }
+            // A rede falhou neste envio (M1): ele fica para a próxima e a
+            // passada segue com os outros states. Três seguidos: a rede caiu,
+            // e a passada acaba.
+            Err(Fail::File(SyncError::Offline)) => {
+                cx.network_failures += 1;
+                if cx.network_failures >= NETWORK_FAILURES_TO_END {
+                    return Err(SyncError::Offline);
+                }
+                report.errors.push((obj.key.clone(), SyncError::Offline));
+                return Ok(Kept::Later);
+            }
             Err(Fail::File(e)) => {
                 let kept = if is_permanent(&e) {
-                    Kept::LocalOnly(REJECTED)
+                    Kept::LocalOnly(refused(&e))
                 } else {
                     Kept::Later
                 };
@@ -710,7 +822,7 @@ impl Engine {
             Err(Fail::End(e)) => return Err(e),
         };
         if let Err(e) = self
-            .put_state_base(obj, &seen, &up.save_id, &up.version_id, &seen.hash)
+            .put_state_base(obj, &seen, &up.save_id, &up.version_id, &seen.hash, None)
             .await
         {
             report.errors.push((obj.key.clone(), e));
@@ -724,7 +836,8 @@ impl Engine {
 
     /// A base de um objeto, com o tamanho e o mtime dos bytes: com os dois
     /// iguais no disco, a próxima passada (mesmo depois de abrir o app de
-    /// novo) não relê o arquivo.
+    /// novo) não relê o arquivo. `wiped_at`: a base já nasce marcada (a linha
+    /// foi apagada no site, D127).
     async fn put_state_base(
         &self,
         obj: &Object<'_>,
@@ -732,6 +845,7 @@ impl Engine {
         save_id: &str,
         version_id: &str,
         remote_hash: &str,
+        wiped_at: Option<i64>,
     ) -> Result<(), SyncError> {
         self.repo
             .base_put(&BaseRow {
@@ -744,7 +858,7 @@ impl Engine {
                 local_path: obj.path.to_string_lossy().into_owned(),
                 rom_crc32: None,
                 synced_at: now_secs(),
-                wiped_at: None,
+                wiped_at,
                 backup_path: None,
                 local_size: i64::try_from(seen.size).ok(),
                 local_mtime_ns: seen.mtime_ns(),
@@ -788,8 +902,12 @@ impl Engine {
     }
 
     /// "Enviar os states antigos também" (D127): as bases que um "apagar
-    /// tudo" no site marcou saem, e esses states sobem como novos. Com os
-    /// states desligados nada muda.
+    /// tudo" no site marcou esquecem a linha apagada, e esses states sobem
+    /// como novos (a passada não acha linha nenhuma e envia de novo). Só tirar
+    /// a marca a poria de volta (a linha apagada ainda é a da base), e apagar
+    /// a base também (sem base, a linha apagada com os mesmos bytes a marca,
+    /// M3). A base fica no SQLite: com o app fechado antes da passada, o
+    /// pedido segue valendo. Com os states desligados nada muda.
     pub async fn upload_old_states(&self, alva: &Alvanista) -> Result<PassReport, SyncError> {
         {
             let _one = self.states_lock.lock().await;
@@ -799,7 +917,14 @@ impl Engine {
             }
             for b in self.repo.base_all("state").await.map_err(repo_err)? {
                 if b.wiped_at.is_some() {
-                    self.repo.base_delete(&b.key).await.map_err(repo_err)?;
+                    let forgot = BaseRow {
+                        remote_save_id: String::new(),
+                        remote_version_id: String::new(),
+                        remote_hash: String::new(),
+                        wiped_at: None,
+                        ..b
+                    };
+                    self.repo.base_put(&forgot).await.map_err(repo_err)?;
                 }
             }
         }
@@ -823,7 +948,10 @@ impl Engine {
 
 /// A linha da nuvem de um objeto: a que a base conhece, se ainda listada
 /// (viva ou apagada no site); senão a viva com o mesmo core e a mesma versão,
-/// que é a identidade dela no GameKave.
+/// que é a identidade dela no GameKave. Um state sem base nenhuma (ela sai
+/// numa troca de conta, M3) e sem linha viva fica com a apagada mais nova
+/// dessa identidade: um "apagar tudo" no site segue valendo para os mesmos
+/// bytes (D127). A miniatura não: ela segue o state dela.
 fn state_row<'a>(
     rows: &'a [RemoteFile],
     obj: &Object<'_>,
@@ -844,9 +972,11 @@ fn state_row<'a>(
             return Some(r);
         }
     }
+    // `rank` põe a viva antes da apagada, e entre iguais a escrita por último.
     rows.iter()
         .filter(same)
-        .filter(|r| r.deleted_at.is_none() && r.core_version.as_deref() == Some(version))
+        .filter(|r| r.core_version.as_deref() == Some(version))
+        .filter(|r| (base.is_none() && !obj.thumb) || r.deleted_at.is_none())
         .max_by(|a, b| rank(a).cmp(&rank(b)))
 }
 

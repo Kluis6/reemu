@@ -180,10 +180,14 @@ impl Engine {
     }
 
     /// O que toda leitura de states de outras máquinas exige: aparelho ligado
-    /// e sem pausa, os states ligados e a conta conhecida (sem o AlvaID nada
-    /// sai da máquina). Só o SQLite.
+    /// e sem pausa (nem aqui nem no site, D128: pausada, nada vai à rede), os
+    /// states ligados e a conta conhecida (sem o AlvaID nada sai da máquina).
+    /// Só o SQLite.
     async fn remote_ready(&self, alva: &Alvanista) -> Result<Device, SyncError> {
         let device = self.ready_device(alva).await?;
+        if self.sync.devices.site_state().await.map_err(failed)?.0 {
+            return Err(SyncError::Paused);
+        }
         if !self.states_on().await? {
             return Err(SyncError::NotEnabled);
         }

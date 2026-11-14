@@ -161,6 +161,20 @@ fn is_permanent(e: &SyncError) -> bool {
     )
 }
 
+/// A passada de states pode vir depois desta dos game saves? Não quando ela
+/// disse que a máquina não sincroniza agora (revogada, sem conta, desligada,
+/// pausada, sem chaveiro).
+pub fn states_may_follow(files: &Result<PassReport, SyncError>) -> bool {
+    !matches!(
+        files,
+        Err(SyncError::Revoked
+            | SyncError::NoAccount
+            | SyncError::NotEnabled
+            | SyncError::Paused
+            | SyncError::Keyring)
+    )
+}
+
 /// O nome do arquivo de uma chave, para a página dizer qual a nuvem recusou:
 /// o do save, ou o do state na nuvem (nunca o caminho).
 fn key_file_name(key: &str) -> Option<&str> {
@@ -271,6 +285,9 @@ struct Ctx<'a> {
     receive: Option<Vec<String>>,
     /// A cota ou o plano parou os envios desta passada.
     uploads_stopped: bool,
+    /// Envios de state seguidos que falharam na rede (M1): um só fica para a
+    /// próxima e a passada segue; três seguidos acabam a passada.
+    network_failures: u32,
 }
 
 /// Uma chave: o arquivo neste disco (exista ou não), a base e a linha da
@@ -408,14 +425,7 @@ impl Engine {
             None
         };
         // A máquina não sincroniza agora: a passada de states nem tenta.
-        let halted = matches!(
-            files,
-            Some(Err(SyncError::Revoked
-                | SyncError::NoAccount
-                | SyncError::NotEnabled
-                | SyncError::Paused
-                | SyncError::Keyring))
-        );
+        let halted = files.as_ref().is_some_and(|f| !states_may_follow(f));
         let states = if scope.states() && !halted {
             Some(self.state_pass(alva, &scope).await)
         } else {
@@ -431,6 +441,12 @@ impl Engine {
             (None, Some(states)) => states,
             (None, None) => Ok(PassReport::default()),
         }
+    }
+
+    /// Só a metade dos game saves de uma passada completa ("Sincronizar
+    /// agora", M4): a dos states roda depois, sem a página esperar por ela.
+    pub async fn saves_pass(&self, alva: &Alvanista) -> Result<PassReport, SyncError> {
+        self.file_pass(alva, &PassScope::All).await
     }
 
     /// A passada dos game saves: lê a linha desta máquina, a nuvem e o disco,
@@ -593,6 +609,7 @@ impl Engine {
             devices,
             receive,
             uploads_stopped: false,
+            network_failures: 0,
         };
         let mut report = PassReport::default();
         self.run_files(&mut cx, &device.id, scope, &mut report)
@@ -1214,11 +1231,20 @@ impl Engine {
                 {
                     *lock(&self.state_ceiling) = Some(*max);
                 }
-                let fail = match self.file_error(alva, err, true).await {
-                    Fail::File(SyncError::TooLarge) if meta.kind == "state" => {
-                        Fail::File(SyncError::StateTooLarge)
+                let fail = match err {
+                    // Um state que falha na rede fica para a próxima, e a
+                    // passada segue com os outros (M1); quem conta as falhas
+                    // seguidas é a passada de states.
+                    ApiError::Transient(e) if meta.kind == "state" => {
+                        log::info!("sync: {} não subiu agora: {e}", log_tag(key));
+                        Fail::File(SyncError::Offline)
                     }
-                    other => other,
+                    err => match self.file_error(alva, err, true).await {
+                        Fail::File(SyncError::TooLarge) if meta.kind == "state" => {
+                            Fail::File(SyncError::StateTooLarge)
+                        }
+                        other => other,
+                    },
                 };
                 if let Fail::File(e) = &fail {
                     if is_permanent(e) {
@@ -2258,6 +2284,21 @@ pub fn after_state_saved<R: tauri::Runtime>(app: &AppHandle<R>, rom_id: String) 
         log_pass(
             "passada dos states",
             engine.pass(&alva, PassScope::State(rom_id)).await,
+        );
+    });
+}
+
+/// A metade dos states de "Sincronizar agora", por conta própria: a página
+/// não espera por ela (M4), e desligar os states no meio a para (I1).
+pub fn spawn_state_pass(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some((engine, alva)) = parts(&app) else {
+            return;
+        };
+        log_pass(
+            "passada dos states",
+            engine.pass(&alva, PassScope::States).await,
         );
     });
 }
@@ -4853,7 +4894,7 @@ mod tests {
 
         let st = r
             .sync
-            .now_with(&r.alva, HardwarePayload::default(), Some(&r.engine))
+            .now_with(&r.alva, HardwarePayload::default(), Some(&r.engine), || {})
             .await
             .unwrap();
         assert!(r.base_of(ZELDA).await.is_some());
@@ -4887,7 +4928,7 @@ mod tests {
         }
         let st = r
             .sync
-            .now_with(&r.alva, HardwarePayload::default(), Some(&r.engine))
+            .now_with(&r.alva, HardwarePayload::default(), Some(&r.engine), || {})
             .await
             .unwrap();
         assert!(!st.revoked && st.enabled, "{st:?}");
@@ -5391,7 +5432,7 @@ mod tests {
                 .states_local
                 .iter()
                 .find(|((_, k), _)| k == key)
-                .map(|(_, reason)| *reason)
+                .map(|(_, (reason, _))| *reason)
         }
     }
 
@@ -5630,7 +5671,7 @@ mod tests {
             vec![(SLOT3_KEY.to_owned(), SyncError::StateTooLarge)]
         );
         assert_eq!(r.state_posts().await.len(), 1, "reenviou os mesmos bytes");
-        assert_eq!(r.local_only(SLOT3_KEY), Some("rejected"));
+        assert_eq!(r.local_only(SLOT3_KEY), Some("too_large"));
 
         r.save_state("r1", Some(3), Some(V163), &[2u8; 512], Some(b"png"))
             .await;
@@ -6175,8 +6216,8 @@ mod tests {
                 (slot(2), SyncError::StateTooLarge)
             ]
         );
-        assert_eq!(r.local_only(&slot(1)), Some("rejected"));
-        assert_eq!(r.local_only(&slot(2)), Some("rejected"));
+        assert_eq!(r.local_only(&slot(1)), Some("too_large"));
+        assert_eq!(r.local_only(&slot(2)), Some("too_large"));
         assert_eq!(r.status().await.states_local_only, 2);
     }
 
@@ -6620,6 +6661,7 @@ mod tests {
 
     #[tokio::test]
     async fn states_for_marks_available_only_on_exact_match() {
+        let _serial = SERIAL.lock().await;
         let mut rows = vec![
             other_state("same", SLOT1, "dev2", CORE, Some(V163), T0, b"a"),
             other_state(
@@ -6702,6 +6744,7 @@ mod tests {
 
     #[tokio::test]
     async fn states_for_keeps_the_newest_row_per_device_filename_core() {
+        let _serial = SERIAL.lock().await;
         let rows = vec![
             // A mesma vaga da mesma máquina e do mesmo core, antes e depois
             // de o core atualizar: só a nova.
@@ -6746,6 +6789,7 @@ mod tests {
 
     #[tokio::test]
     async fn states_for_skips_this_devices_rows_and_other_games() {
+        let _serial = SERIAL.lock().await;
         let rows = vec![
             other_state("mine", SLOT1, "dev1", CORE, Some(V163), T0, b"m"),
             other_state(
@@ -6786,6 +6830,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_listing_error_gives_an_empty_list_and_writes_nothing() {
+        let _serial = SERIAL.lock().await;
         let r = rig("remote-error").await;
         r.rom("r1", CHRONO, "snes").await;
         mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
@@ -6850,6 +6895,7 @@ mod tests {
 
     #[tokio::test]
     async fn download_state_refuses_unavailable() {
+        let _serial = SERIAL.lock().await;
         for (version, core, expected) in [
             (Some(V_OTHER), CORE, "other_version"),
             (Some(V163), "bsnes_libretro", "other_core"),
@@ -6874,6 +6920,7 @@ mod tests {
 
     #[tokio::test]
     async fn download_state_asks_before_overwriting() {
+        let _serial = SERIAL.lock().await;
         let r = download_rig("remote-asks", V163).await;
         r.save_state(
             "r1",
@@ -6899,6 +6946,7 @@ mod tests {
 
     #[tokio::test]
     async fn download_state_backs_up_the_slot_before_replacing_it() {
+        let _serial = SERIAL.lock().await;
         let r = download_rig("remote-backup", V163).await;
         r.save_state(
             "r1",
@@ -6936,6 +6984,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_failed_backup_leaves_the_slot_alone() {
+        let _serial = SERIAL.lock().await;
         let r = download_rig("remote-backup-fails", V163).await;
         r.save_state("r1", Some(1), Some(V163), b"local-bytes", None)
             .await;
@@ -6953,6 +7002,7 @@ mod tests {
 
     #[tokio::test]
     async fn download_state_maps_slot0_to_the_quicksave_slot() {
+        let _serial = SERIAL.lock().await;
         let zero = other_state(
             "z",
             "Chrono Trigger (USA)__slot0.state",
@@ -7003,6 +7053,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_download_never_writes_while_a_game_is_loading() {
+        let _serial = SERIAL.lock().await;
         let r = download_rig("remote-loading", V163).await;
         r.set_playing(Playing::Loading);
         assert_eq!(download(&r, true).await.unwrap_err(), "loading");
@@ -7014,6 +7065,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_downloaded_state_with_the_wrong_hash_is_not_written() {
+        let _serial = SERIAL.lock().await;
         let st = other_state("s1", SLOT1, "dev2", CORE, Some(V163), T0, b"remote-bytes");
         let r = remote_rig("remote-hash", vec![st]).await;
         mount_content(&r.server, "s1", "v-s1", b"cut off").await;
@@ -7026,6 +7078,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_thumbnail_of_a_remote_state_is_fetched_once() {
+        let _serial = SERIAL.lock().await;
         let r = download_rig("remote-thumb", V163).await;
         let got = remote(&r, Some(V163)).await;
         assert!(got.states[0].has_thumbnail);
@@ -7058,6 +7111,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_quicksave_that_lands_during_the_download_is_asked_about_or_backed_up() {
+        let _serial = SERIAL.lock().await;
         // Sem `overwrite`: a vaga ficou ocupada no meio, então pergunta.
         let r = slow_download_rig("remote-race-asks", 500).await;
         let (got, _) = tokio::join!(download(&r, false), async {
@@ -7085,6 +7139,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_launch_that_starts_during_the_download_stops_the_write() {
+        let _serial = SERIAL.lock().await;
         let r = slow_download_rig("remote-race-loading", 500).await;
         r.set_playing(Playing::Idle);
         let (got, _) = tokio::join!(download(&r, true), async {
@@ -7098,6 +7153,7 @@ mod tests {
 
     #[tokio::test]
     async fn without_a_core_every_row_is_other_core() {
+        let _serial = SERIAL.lock().await;
         let st = other_state("s1", SLOT1, "dev2", CORE, Some(V163), T0, b"x");
         let r = remote_rig("remote-no-core", vec![st]).await;
         let got = r.engine.states_for(&r.alva, "r1", None, Some(V163)).await;
@@ -7113,6 +7169,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_deleted_newest_row_takes_its_older_versions_with_it() {
+        let _serial = SERIAL.lock().await;
         let old = other_state("old", SLOT1, "dev2", CORE, Some(V_OTHER), T0, b"o");
         let mut gone = other_state(
             "gone",
@@ -7160,6 +7217,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_backup_leaves_the_pass_stamp_alone_and_the_hash_ignores_case() {
+        let _serial = SERIAL.lock().await;
         let mut st = other_state("s1", SLOT1, "dev2", CORE, Some(V163), T0, b"remote-bytes");
         st["current"]["content_hash"] = json!(sha(b"remote-bytes").to_uppercase());
         let r = remote_rig("remote-stamp", vec![st]).await;
@@ -7176,6 +7234,7 @@ mod tests {
 
     #[tokio::test]
     async fn deleting_an_old_row_after_the_newer_one_keeps_the_newer_visible() {
+        let _serial = SERIAL.lock().await;
         // X (core velho) foi apagado no site DEPOIS de Y (core novo) ser escrito.
         let mut x = other_state(
             "x",
@@ -7217,6 +7276,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_quicksave_racing_the_download_write_is_serialized_and_never_lost() {
+        let _serial = SERIAL.lock().await;
         let r = download_rig("remote-lock", V163).await;
         // Um QuickSave já gravando: segura a trava da ROM.
         let writing = crate::save_state::write_lock("r1").await;
@@ -7248,5 +7308,356 @@ mod tests {
         let backups = r.backups();
         assert_eq!(backups.len(), 1, "o QuickSave não tinha miniatura");
         assert_eq!(backups[0].1, b"quick-just-saved");
+    }
+
+    // --- PR 3, correção final (R34) ------------------------------------------
+
+    /// Responde com `template` e avisa a cada pedido que chega (antes da
+    /// demora do `template`): o teste age no meio de um envio sem chutar
+    /// quanto tempo ele leva para começar.
+    struct Arrived(tokio::sync::mpsc::UnboundedSender<()>, ResponseTemplate);
+
+    impl Respond for Arrived {
+        fn respond(&self, _: &Request) -> ResponseTemplate {
+            let _ = self.0.send(());
+            self.1.clone()
+        }
+    }
+
+    /// I1: desligar os states (ou o sync inteiro) enquanto um state sobe para
+    /// a lista: o envio em curso termina, a miniatura dele e o próximo state
+    /// não saem, e a conta da página não é refeita com metade da lista.
+    #[tokio::test]
+    async fn turning_states_or_sync_off_stops_the_rest_of_the_state_list() {
+        let _serial = SERIAL.lock().await;
+        for sync_off in [false, true] {
+            let r = rig(if sync_off {
+                "i1-sync-off"
+            } else {
+                "i1-states-off"
+            })
+            .await;
+            r.rom("r1", CHRONO, "snes").await;
+            r.save_state("r1", Some(1), Some(V163), b"one", Some(b"png 1"))
+                .await;
+            r.save_state("r1", Some(2), Some(V163), b"two", Some(b"png 2"))
+                .await;
+            mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+            mount_states(&r.server).await;
+            let (arrived, mut first) = tokio::sync::mpsc::unbounded_channel();
+            Mock::given(method("POST"))
+                .and(path(SAVES))
+                .respond_with(Arrived(
+                    arrived,
+                    uploaded("s1", "v1").set_delay(Duration::from_millis(1500)),
+                ))
+                .mount(&r.server)
+                .await;
+
+            let (pass, _) = tokio::join!(r.state_pass("r1"), async {
+                first.recv().await;
+                if sync_off {
+                    r.sync
+                        .set_enabled_with(
+                            &r.alva,
+                            false,
+                            HardwarePayload::default(),
+                            never_reconnect,
+                        )
+                        .await
+                        .unwrap();
+                } else {
+                    r.sync
+                        .set_states_enabled_with(&r.alva, false, HardwarePayload::default())
+                        .await
+                        .unwrap();
+                }
+            });
+            pass.unwrap();
+            assert_eq!(
+                r.state_posts().await.len(),
+                1,
+                "sync_off={sync_off}: só o envio que já corria"
+            );
+            assert!(r.sync.runtime().states_local.is_empty());
+        }
+    }
+
+    /// M1: uma falha de rede num state fica para a próxima, e a passada segue
+    /// com os outros; ela não vira aviso na página.
+    #[tokio::test]
+    async fn a_network_failure_on_one_state_leaves_it_for_later_and_the_rest_go_up() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("m1-one").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.save_state("r1", Some(1), Some(V163), b"one", None).await;
+        r.save_state("r1", Some(2), Some(V163), b"two", None).await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_states(&r.server).await;
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(seq(vec![ResponseTemplate::new(503), uploaded("s2", "v2")]))
+            .mount(&r.server)
+            .await;
+
+        let report = r.state_pass("r1").await.unwrap();
+        assert_eq!(r.state_posts().await.len(), 2);
+        assert_eq!(report.states_uploaded, 1);
+        let offline: Vec<_> = report
+            .errors
+            .iter()
+            .filter(|(_, e)| *e == SyncError::Offline)
+            .collect();
+        assert_eq!(offline.len(), 1);
+        // O que falhou não fica "só aqui": tenta de novo na próxima.
+        assert!(r.local_only(&offline[0].0).is_none());
+        assert_eq!(r.status().await.last_error, None);
+    }
+
+    /// M1: três falhas de rede seguidas acabam a passada (a rede caiu); um
+    /// envio que passa no meio zera a conta.
+    #[tokio::test]
+    async fn three_network_failures_in_a_row_end_the_state_pass() {
+        let _serial = SERIAL.lock().await;
+        for (name, responses, posts, ends) in [
+            ("m1-three", vec![503, 503, 503, 503], 3, true),
+            ("m1-reset", vec![503, 503, 201, 503, 503], 5, false),
+        ] {
+            let r = rig(name).await;
+            r.rom("r1", CHRONO, "snes").await;
+            for n in 0..responses.len() as u32 {
+                r.save_state("r1", Some(n + 1), Some(V163), &[n as u8; 8], None)
+                    .await;
+            }
+            mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+            mount_states(&r.server).await;
+            let templates = responses
+                .iter()
+                .map(|&code| match code {
+                    201 => uploaded("s-ok", "v1"),
+                    other => ResponseTemplate::new(other),
+                })
+                .collect();
+            Mock::given(method("POST"))
+                .and(path(SAVES))
+                .respond_with(seq(templates))
+                .mount(&r.server)
+                .await;
+
+            let result = r.state_pass("r1").await;
+            assert_eq!(result.is_err(), ends, "{name}: {result:?}");
+            if ends {
+                assert_eq!(result, Err(SyncError::Offline));
+            }
+            assert_eq!(r.state_posts().await.len(), posts, "{name}");
+        }
+    }
+
+    /// M3: a base sai numa troca de conta (A, B, A de volta). Um state que o
+    /// site apagou continua só aqui: a base volta já marcada, nada sobe. Com
+    /// bytes novos ele sobe como sempre.
+    #[tokio::test]
+    async fn a_state_the_site_wiped_stays_here_after_its_base_is_lost() {
+        let _serial = SERIAL.lock().await;
+        let (r, meta) = wiped_rig("m3-lost-base").await;
+        // O que `own_account` faz na troca de conta.
+        r.repo.clear_all().await.unwrap();
+        assert!(r.base_of(SLOT3_KEY).await.is_none());
+
+        let report = r.state_pass("r1").await.unwrap();
+        assert_eq!(report.states_uploaded, 0);
+        assert_eq!(r.state_posts().await.len(), 2, "nada subiu de novo");
+        let base = r.base_of(SLOT3_KEY).await.unwrap();
+        assert!(base.wiped_at.is_some());
+        assert_eq!(base.local_hash, sha(b"state"));
+        assert_eq!(base.remote_save_id, format!("s-{SLOT3}"));
+        assert_eq!(r.local_only(SLOT3_KEY), Some("wiped"));
+        assert_eq!(std::fs::read(&meta.file_path).unwrap(), b"state");
+        assert!(r.backups().is_empty());
+
+        r.state_pass("r1").await.unwrap();
+        assert_eq!(r.state_posts().await.len(), 2, "segue só aqui");
+
+        // "Enviar os states antigos também" segue valendo para ele.
+        let sent = r.engine.upload_old_states(&r.alva).await.unwrap();
+        assert_eq!(sent.states_uploaded, 1);
+        assert_eq!(r.state_posts().await.len(), 4, "o state e a miniatura");
+        assert_eq!(r.base_of(SLOT3_KEY).await.unwrap().wiped_at, None);
+        assert_eq!(r.local_only(SLOT3_KEY), None);
+    }
+
+    /// M5: um state recusado de vez, com o hash guardado valendo (mesma linha,
+    /// tamanho e mtime), não é lido de novo a cada passada: mesmo trocados por
+    /// fora sem mudar nada disso, os bytes não são relidos nem enviados.
+    #[tokio::test]
+    async fn a_refused_state_is_not_read_again_while_its_stat_holds() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("m5-refused").await;
+        r.rom("r1", CHRONO, "snes").await;
+        let meta = r
+            .save_state("r1", Some(3), Some(V163), b"refused!", None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_states(&r.server).await;
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(
+                ResponseTemplate::new(400)
+                    .set_body_json(json!({"error": {"code": "validation_failed"}})),
+            )
+            .mount(&r.server)
+            .await;
+
+        let first = r.state_pass("r1").await.unwrap();
+        assert_eq!(
+            first.errors,
+            vec![(SLOT3_KEY.to_owned(), SyncError::Rejected)]
+        );
+        assert_eq!(r.local_only(SLOT3_KEY), Some("rejected"));
+        let path = PathBuf::from(&meta.file_path);
+        let when = std::fs::metadata(&path).unwrap().modified().unwrap();
+        std::fs::write(&path, b"changed!").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(when)
+            .unwrap();
+
+        let again = r.state_pass("r1").await.unwrap();
+        assert_eq!(
+            again.errors,
+            vec![(SLOT3_KEY.to_owned(), SyncError::Rejected)]
+        );
+        assert_eq!(r.state_posts().await.len(), 1, "o arquivo foi relido");
+        assert_eq!(r.local_only(SLOT3_KEY), Some("rejected"));
+    }
+
+    /// M2 (D128): pausada no site, a máquina não lista nem baixa os states das
+    /// outras, nem a miniatura deles. Retomada, tudo volta.
+    #[tokio::test]
+    async fn a_site_pause_keeps_other_machines_states_off_the_network() {
+        let _serial = SERIAL.lock().await;
+        let r = download_rig("m2-site-pause", V163).await;
+        assert_eq!(remote(&r, Some(V163)).await.states.len(), 1);
+        let listed = r.listings().await;
+        r.sync.devices.set_site_state(true, false).await.unwrap();
+
+        let got = remote(&r, Some(V163)).await;
+        assert!(got.offline && got.states.is_empty());
+        assert_eq!(download(&r, true).await.unwrap_err(), "paused");
+        assert!(r.engine.state_thumbnail(&r.alva, "s1").await.is_empty());
+        assert_eq!(r.listings().await, listed, "nenhuma listagem pausada");
+        assert_eq!(r.content_gets().await, 0);
+        assert!(r.states.list_states_for_rom("r1").await.unwrap().is_empty());
+
+        r.sync.devices.set_site_state(false, false).await.unwrap();
+        assert_eq!(remote(&r, Some(V163)).await.states.len(), 1);
+    }
+
+    /// M4: "Sincronizar agora" volta depois dos game saves; a passada dos
+    /// states é disparada à parte (e não com a máquina pausada no site).
+    #[tokio::test]
+    async fn sync_now_returns_after_the_game_saves_and_leaves_the_states_to_their_own_pass() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("m4-now").await;
+        r.rom("r1", "Zelda.gba", "gba").await;
+        r.write("saves/Zelda.srm", b"zelda");
+        r.rom("r2", CHRONO, "snes").await;
+        r.save_state("r2", Some(1), Some(V163), b"state", None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        mount_file_uploads(&r.server, uploaded("f1", "v1")).await;
+        mount_state_cloud(&r.server).await;
+        let fired = AtomicUsize::new(0);
+
+        r.sync
+            .now_with(&r.alva, HardwarePayload::default(), Some(&r.engine), || {
+                fired.fetch_add(1, SeqCst);
+            })
+            .await
+            .unwrap();
+        assert!(r.base_of(ZELDA).await.is_some(), "os game saves subiram");
+        assert!(
+            r.state_posts().await.is_empty(),
+            "o botão esperou os states"
+        );
+        assert!(r.kind_listings("state").await.is_empty());
+        assert_eq!(fired.load(SeqCst), 1);
+        // A metade dos states, por conta própria.
+        let states = r.engine.pass(&r.alva, PassScope::States).await.unwrap();
+        assert_eq!(states.states_uploaded, 1);
+
+        // Pausada no site: nem a passada dos states é disparada.
+        let r = rig("m4-paused").await;
+        let mut paused = device("dev1", "Sala");
+        paused["paused_at"] = json!("2026-11-13T00:00:00Z");
+        mount_devices(&r.server, vec![paused]).await;
+        let fired = AtomicUsize::new(0);
+        r.sync
+            .now_with(&r.alva, HardwarePayload::default(), Some(&r.engine), || {
+                fired.fetch_add(1, SeqCst);
+            })
+            .await
+            .unwrap();
+        assert_eq!(fired.load(SeqCst), 0);
+    }
+
+    /// I2: cada state que fica só aqui tem o motivo pelo id dele (a vaga diz):
+    /// grande demais, recusado, ou de antes de a versão do core ser
+    /// registrada. Os da nuvem não têm nota; outra ROM ou os states desligados,
+    /// nenhuma.
+    #[tokio::test]
+    async fn the_notes_say_why_each_state_stays_here_by_its_id() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("i2-notes").await;
+        r.rom("r1", CHRONO, "snes").await;
+        let big = r
+            .save_state("r1", Some(1), Some(V163), &[1u8; 4096], None)
+            .await;
+        let bad = r
+            .save_state("r1", Some(2), Some(V163), b"refused", None)
+            .await;
+        let old = r.save_state("r1", Some(3), None, b"old", None).await;
+        r.save_state("r1", Some(4), Some(V163), b"fine", None).await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_states(&r.server).await;
+        struct Refuses;
+        impl Respond for Refuses {
+            fn respond(&self, req: &Request) -> ResponseTemplate {
+                let file = field(&req.body, "file").unwrap_or_default();
+                if file.len() > 1024 {
+                    ResponseTemplate::new(413).set_body_json(json!({"error": {
+                        "code": "save_file_too_large", "max_bytes": 1024}}))
+                } else if file == "refused" {
+                    ResponseTemplate::new(400)
+                        .set_body_json(json!({"error": {"code": "validation_failed"}}))
+                } else {
+                    uploaded("s-ok", "v1")
+                }
+            }
+        }
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(Refuses)
+            .mount(&r.server)
+            .await;
+
+        r.state_pass("r1").await.unwrap();
+        let notes = r.sync.state_notes("r1").await.unwrap();
+        let got: Vec<(String, String)> =
+            notes.into_iter().map(|n| (n.state_id, n.reason)).collect();
+        let mut want = vec![
+            (big.id.clone(), "too_large".to_owned()),
+            (bad.id.clone(), "rejected".to_owned()),
+            (old.id.clone(), "unversioned".to_owned()),
+        ];
+        want.sort();
+        assert_eq!(got, want);
+        assert!(r.sync.state_notes("r2").await.unwrap().is_empty());
+
+        r.sync.devices.set_states_enabled(false).await.unwrap();
+        assert!(r.sync.state_notes("r1").await.unwrap().is_empty());
     }
 }

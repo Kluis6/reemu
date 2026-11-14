@@ -29,7 +29,7 @@ use db::SyncRepo;
 use device::{
     hardware_fingerprint, hardware_payload, Device, DeviceStore, HardwarePayload, LABEL_MAX_CHARS,
 };
-use engine::{Engine, Keep, PassScope, RemoteStates, SaveLineStatus, SyncConflict, SyncVersion};
+use engine::{Engine, Keep, RemoteStates, SaveLineStatus, SyncConflict, SyncVersion};
 use serde::Serialize;
 use std::future::Future;
 use std::sync::Arc;
@@ -134,9 +134,10 @@ struct Runtime {
     /// (`too_large`, `state_too_large`, `rejected`): a página diz qual.
     last_error_file: Option<String>,
     /// Os save states que ficam só nesta máquina, por (ROM, chave), com o
-    /// motivo (`unversioned`, `wiped`, `rejected`, `duplicate`). A passada
-    /// dos states os conta.
-    states_local: std::collections::HashMap<(String, String), &'static str>,
+    /// motivo (`unversioned`, `wiped`, `too_large`, `rejected`, `duplicate`,
+    /// `deferred`) e o id do state (a vaga diz o dela). A passada dos states
+    /// os conta.
+    states_local: std::collections::HashMap<(String, String), (&'static str, String)>,
     /// O que as passadas de states têm a dizer à página (um state que a
     /// nuvem recusou, a cota, o plano), por ROM, com o nome do arquivo quando
     /// é um só. Fica à parte do `last_error` dos game saves: uma passada de
@@ -614,7 +615,7 @@ impl SyncService {
                 runtime
                     .states_local
                     .values()
-                    .filter(|r| **r == engine::STATE_WIPED)
+                    .filter(|(r, _)| *r == engine::STATE_WIPED)
                     .count() as u32
             } else {
                 0
@@ -785,6 +786,32 @@ impl SyncService {
         self.status_with(alva, hw).await
     }
 
+    /// Por que cada state desta ROM fica só nesta máquina, pelo id do state,
+    /// como a última passada de states contou (a vaga diz o motivo, D116 e
+    /// D122). Só a memória do app: nem rede nem disco. Vazia com o sync ou os
+    /// states desligados.
+    async fn state_notes(&self, rom_id: &str) -> Result<Vec<StateNote>, SyncError> {
+        let devices = &self.devices;
+        if devices.device().await.map_err(failed)?.is_none()
+            || !devices.enabled().await.map_err(failed)?
+            || !devices.states_enabled().await.map_err(failed)?
+        {
+            return Ok(Vec::new());
+        }
+        let mut notes: Vec<StateNote> = self
+            .runtime()
+            .states_local
+            .iter()
+            .filter(|((rom, _), _)| rom == rom_id)
+            .map(|(_, (reason, id))| StateNote {
+                state_id: id.clone(),
+                reason: (*reason).to_owned(),
+            })
+            .collect();
+        notes.sort_by(|a, b| a.state_id.cmp(&b.state_id));
+        Ok(notes)
+    }
+
     async fn machines_with(&self, alva: &Alvanista) -> Result<Vec<SyncMachine>, SyncError> {
         let list = self.partner_devices(alva).await?;
         self.absorb_site_state(&list).await;
@@ -806,12 +833,16 @@ impl SyncService {
     }
 
     /// "Sincronizar agora": a passada dos game saves (que lê a linha desta
-    /// máquina no site antes de tudo), depois o hardware e a cota.
+    /// máquina no site antes de tudo), depois o hardware e a cota. A dos
+    /// states não é esperada (M4): `then_states` a dispara, quando a dos game
+    /// saves deixa, e ela roda por conta própria. Um state grande subindo não
+    /// segura o botão nem a página.
     async fn now_with(
         &self,
         alva: &Alvanista,
         hw: HardwarePayload,
         engine: Option<&Engine>,
+        then_states: impl FnOnce(),
     ) -> Result<SyncStatus, SyncError> {
         if !alva.has_session().await {
             return Err(SyncError::NoAccount);
@@ -829,7 +860,11 @@ impl SyncService {
             let paused_here = self.devices.paused().await.map_err(failed)?;
             let mut stop = false;
             if let (Some(engine), false) = (engine, paused_here) {
-                match engine.pass(alva, PassScope::All).await {
+                let files = engine.saves_pass(alva).await;
+                if engine::states_may_follow(&files) {
+                    then_states();
+                }
+                match files {
                     Ok(report) => {
                         if let Some(e) = report.worst() {
                             keep(e);
@@ -992,6 +1027,18 @@ pub struct SyncStatus {
     /// O nome do arquivo que a nuvem recusou, com `too_large`,
     /// `state_too_large` ou `rejected`.
     pub last_error_file: Option<String>,
+}
+
+/// Por que um save state desta máquina fica só nela: a vaga dele diz.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct StateNote {
+    /// O id do state (`save_states.id`).
+    pub state_id: String,
+    /// `unversioned`, `too_large`, `rejected`, `wiped`, `duplicate` ou
+    /// `deferred`.
+    pub reason: String,
 }
 
 /// A cota como a tela a recebe (o servidor manda em snake_case: `api::Quota`).
@@ -1173,11 +1220,20 @@ pub async fn sync_now(app: AppHandle) -> Result<SyncStatus, String> {
     let (sync, alva) = services(&app)?;
     let engine = engine_of(&app).ok();
     let status = sync
-        .now_with(&alva, current_hardware(&app), engine.as_deref())
+        .now_with(&alva, current_hardware(&app), engine.as_deref(), || {
+            engine::spawn_state_pass(&app)
+        })
         .await
         .map_err(|e| e.to_string());
     emit_status(&app);
     status
+}
+
+/// Por que cada state de uma ROM fica só nesta máquina (sem rede).
+#[tauri::command]
+pub async fn sync_state_notes(app: AppHandle, rom_id: String) -> Result<Vec<StateNote>, String> {
+    let (sync, _) = services(&app)?;
+    sync.state_notes(&rom_id).await.map_err(|e| e.to_string())
 }
 
 /// Os conflitos abertos (D118).
@@ -1986,12 +2042,12 @@ mod tests {
         assert!(st.states_enabled && st.saves_enabled);
         r.sync.runtime().states_local.insert(
             ("r1".into(), "state:snes/c/a__slot1.state".into()),
-            "unversioned",
+            ("unversioned", "st-a".into()),
         );
-        r.sync
-            .runtime()
-            .states_local
-            .insert(("r1".into(), "state:snes/c/b__slot1.state".into()), "wiped");
+        r.sync.runtime().states_local.insert(
+            ("r1".into(), "state:snes/c/b__slot1.state".into()),
+            ("wiped", "st-b".into()),
+        );
         let counted_now = r.sync.status_with(&r.alva, hw()).await.unwrap();
         assert_eq!(counted_now.states_local_only, 2);
         assert_eq!(counted_now.states_wiped, 1, "só o apagado no site");
@@ -2374,7 +2430,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(200).set_body_json(remote("dev1", false, false)))
             .mount(&r.server)
             .await;
-        let st = r.sync.now_with(&r.alva, hw(), None).await.unwrap();
+        let st = r.sync.now_with(&r.alva, hw(), None, || {}).await.unwrap();
         assert_eq!(st.quota.map(|q| q.used_bytes), Some(5));
         assert_eq!(st.last_error, None);
     }
@@ -2398,7 +2454,7 @@ mod tests {
                 .mount(&r.server)
                 .await;
         }
-        let st = r.sync.now_with(&r.alva, hw(), None).await.unwrap();
+        let st = r.sync.now_with(&r.alva, hw(), None, || {}).await.unwrap();
         assert!(st.revoked);
         assert_eq!(st.last_error.as_deref(), Some("revoked"));
     }
@@ -2690,7 +2746,7 @@ mod tests {
             .respond_with(ResponseTemplate::new(503))
             .mount(&r.server)
             .await;
-        let st = r.sync.now_with(&r.alva, hw(), None).await.unwrap();
+        let st = r.sync.now_with(&r.alva, hw(), None, || {}).await.unwrap();
         assert_eq!(st.last_error.as_deref(), Some("paused"));
         // Um "revoked" velho some quando a lista mostra o aparelho vivo.
         r.sync.runtime().last_error = Some("revoked".into());
