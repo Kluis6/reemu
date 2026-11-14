@@ -46,6 +46,27 @@ const switchTab = (step: -1 | 1) =>
 /** Tipos de `<input>` em que se digita texto (o A abre o teclado na tela). */
 const TEXT_INPUT = new Set(['text', 'search', 'email', 'url', 'tel', 'password', 'number', ''])
 
+/** Passo de cada pulso de rolagem do stick direito, em px. */
+const SCROLL_STEP = 80
+
+/**
+ * Rola a área que contém o item focado (o primeiro ancestral que rola na
+ * vertical) — ou o conteúdo principal (`[data-nav-content]`) se não houver
+ * —, sem mover o foco, como o stick direito no dashboard do Xbox
+ * (pedido do usuário, 2026-11-14). `dir`: -1 = cima, 1 = baixo.
+ */
+function scrollFocusedArea(dir: -1 | 1) {
+  const scrolls = (el: Element) => {
+    const oy = getComputedStyle(el).overflowY
+    return (oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight
+  }
+  let el: Element | null = document.activeElement
+  while (el && el !== document.body && !scrolls(el)) el = el.parentElement
+  const target =
+    el && el !== document.body ? el : document.querySelector('[data-nav-content]')
+  target?.scrollBy({ top: dir * SCROLL_STEP, behavior: 'auto' })
+}
+
 /** O foco é um campo de texto editável? */
 function textField(el: Element | null): HTMLInputElement | HTMLTextAreaElement | null {
   if (el instanceof HTMLTextAreaElement) return el.readOnly || el.disabled ? null : el
@@ -133,6 +154,12 @@ export function useMenuNav() {
     let lastKind = ''
     const handle = (nav: string) => {
       if (onPlayIdle()) return
+      // Stick direito: rola, sem mexer no foco e sem som. Antes do filtro de
+      // repetição abaixo — os pulsos vêm a cada 30–140 ms (backend).
+      if (nav === 'scrollUp' || nav === 'scrollDown') {
+        scrollFocusedArea(nav === 'scrollUp' ? -1 : 1)
+        return
+      }
       const now = performance.now()
       if (nav === lastKind && now - last < 90) return
       last = now

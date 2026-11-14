@@ -21,6 +21,19 @@ const STICK_THRESHOLD: f32 = 0.5;
 const NAV_REPEAT_DELAY: Duration = Duration::from_millis(380);
 const NAV_REPEAT_EVERY: Duration = Duration::from_millis(150);
 
+/// Rolagem pelo stick direito (pedido do usuário, 2026-11-14): fora desta
+/// fração do raio o stick rola a tela, um pulso por intervalo, mais rápido
+/// quanto mais inclinado (de `SCROLL_SLOW` no limiar a `SCROLL_FAST` no fim).
+const SCROLL_THRESHOLD: f32 = 0.25;
+const SCROLL_SLOW: Duration = Duration::from_millis(140);
+const SCROLL_FAST: Duration = Duration::from_millis(30);
+
+/// Intervalo entre pulsos de rolagem para a inclinação `y` (módulo, 0..1).
+fn scroll_interval(y: f32) -> Duration {
+    let t = ((y - SCROLL_THRESHOLD) / (1.0 - SCROLL_THRESHOLD)).clamp(0.0, 1.0);
+    SCROLL_SLOW.mul_f32(1.0 - t) + SCROLL_FAST.mul_f32(t)
+}
+
 /// Pulso de navegação de menu derivado do gamepad (d-pad / stick esquerdo / A /
 /// B), já com edge-detection e auto-repeat. O shell emite pro frontend como
 /// evento `menu-nav` — a Gamepad API do WebKitGTK não enxerga o controle nesse
@@ -47,6 +60,10 @@ pub enum NavPulse {
     PageDown,
     /// View: leva o foco à barra lateral.
     View,
+    /// Stick direito para cima / para baixo: rola a área do item focado, sem
+    /// mover o foco (repetição mais rápida quanto mais inclinado).
+    ScrollUp,
+    ScrollDown,
 }
 
 /// Índices de d-pad (numeração de [`button_index`]) que o stick esquerdo
@@ -410,6 +427,31 @@ impl GamepadPoller {
             out.push(NavPulse::View);
         }
         self.nav_view_down = view;
+
+        // Stick direito: rolagem. Vale o mais inclinado entre os controles.
+        let ry = self.rstick.values().map(|&(_, y)| y).fold(0.0f32, |a, y| {
+            if y.abs() > a.abs() {
+                y
+            } else {
+                a
+            }
+        });
+        for (dir, active) in [
+            (NavPulse::ScrollUp, ry >= SCROLL_THRESHOLD),
+            (NavPulse::ScrollDown, ry <= -SCROLL_THRESHOLD),
+        ] {
+            if !active {
+                self.nav_repeat.remove(&dir);
+                continue;
+            }
+            match self.nav_repeat.get(&dir) {
+                Some(&next) if now < next => {}
+                _ => {
+                    out.push(dir);
+                    self.nav_repeat.insert(dir, now + scroll_interval(ry.abs()));
+                }
+            }
+        }
         out
     }
 
@@ -640,6 +682,16 @@ impl GamepadPoller {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rolagem_mais_rapida_quanto_mais_inclinado() {
+        assert_eq!(scroll_interval(SCROLL_THRESHOLD), SCROLL_SLOW);
+        assert_eq!(scroll_interval(1.0), SCROLL_FAST);
+        let meio = scroll_interval(0.6);
+        assert!(meio < SCROLL_SLOW && meio > SCROLL_FAST, "{meio:?}");
+        // fora da faixa não passa dos limites
+        assert_eq!(scroll_interval(2.0), SCROLL_FAST);
+    }
 
     #[test]
     fn stick_at_rest_is_zero_and_full_tilt_stays_full() {

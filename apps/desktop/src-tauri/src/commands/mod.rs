@@ -246,6 +246,8 @@ pub(crate) fn nav_pulse_name(p: input_desktop::NavPulse) -> &'static str {
         PageUp => "pageUp",
         PageDown => "pageDown",
         View => "view",
+        ScrollUp => "scrollUp",
+        ScrollDown => "scrollDown",
     }
 }
 
