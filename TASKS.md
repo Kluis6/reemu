@@ -99,7 +99,9 @@ o card atual fica.
       no Linux), `ttf-parser`, `smartstring`, `proc-macro-error`. O `cargo update` de
       2026-11-12 já corrigiu `quinn-proto`, `ringbuf`, `rustls-webpki`, `webpki-roots`,
       `rustix` e `tokio`.
-- [ ] `todo` — **Majors do Dependabot adiados** (2026-11-13): `sqlx` 0.9 (PR #23 fechado; não
+- [ ] `blocked` — **Majors do Dependabot adiados** (2026-11-13; decisão do dono do projeto em
+      2026-11-14: ficam para futuras atualizações, só com autorização dele, e nenhuma melhora
+      desempenho ou segurança do app hoje): `sqlx` 0.9 (PR #23 fechado; não
       solta o `libsqlite3-sys` 0.39 e muda a API), TypeScript 7 (PR #18 fechado; rodada
       própria de teste com o `tsc -b` e o Fluent) e `@vitejs/plugin-react` 6 (mesclado no
       #19 e revertido para a 5: exige o Vite 8; trocar os dois juntos). Mesclados em
