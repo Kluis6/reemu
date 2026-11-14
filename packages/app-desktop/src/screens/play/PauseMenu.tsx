@@ -29,6 +29,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheatsPanel } from "../../components/CheatsPanel";
 import { SaveStateThumb } from "../../components/SaveStateThumb";
+import { LocalStateNote } from "../../components/sync/LocalStateNote";
+import { RemoteStateList } from "../../components/sync/RemoteStateList";
 import { useFullscreen } from "../../hooks/useFullscreen";
 import { REEMU_TAB } from "../../hooks/useMenuNav";
 import { focusFromNav, moveFocus } from "../../lib/focusNav";
@@ -208,7 +210,7 @@ export function PauseMenu({
       </DrawerHeader>
 
       <DrawerBody className={pause.drawerBody}>
-        <div ref={bodyRef} className={pause.body} role="tabpanel">
+        <div ref={bodyRef} className={pause.body} role="tabpanel" data-nav-group>
           {tab === "states" && (
             <>
               <Button
@@ -258,6 +260,8 @@ export function PauseMenu({
                               </Badge>
                             </>
                           )}
+                          {/* por que este state não vai para a nuvem (sync ligado) */}
+                          <LocalStateNote romId={romId} state={st} />
                         </span>
                         <div className={pause.stateActions}>
                           <Button
@@ -282,6 +286,16 @@ export function PauseMenu({
                   ))}
                 </div>
               )}
+              {/* states de outras máquinas: baixa e carrega no core aberto */}
+              <RemoteStateList
+                romId={romId}
+                coreId={null}
+                variant="pause"
+                onDownloaded={async (saved) => {
+                  qc.invalidateQueries({ queryKey: ["save-states", romId] });
+                  await loadAny.mutateAsync(saved.id).catch(() => {});
+                }}
+              />
             </>
           )}
 

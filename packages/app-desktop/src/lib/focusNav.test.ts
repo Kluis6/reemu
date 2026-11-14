@@ -54,6 +54,45 @@ describe('camada aberta', () => {
   })
 })
 
+describe('grupo de navegação', () => {
+  it('anda por dentro do grupo antes de sair dele, mesmo com o rodapé mais perto', () => {
+    document.body.innerHTML = `
+      <div data-nav-group>
+        <button id="a" data-box="0,0">a</button>
+        <button id="b" data-box="80,900">b</button>
+      </div>
+      <button id="rodape" data-box="0,400">rodape</button>`
+    document.getElementById('a')!.focus()
+    moveFocus('down')
+    expect(document.activeElement?.id).toBe('b')
+    // sem mais nada no grupo, a navegação sai para a tela
+    moveFocus('up')
+    expect(document.activeElement?.id).toBe('a')
+    document.getElementById('b')!.focus()
+    moveFocus('up')
+    expect(document.activeElement?.id).toBe('a')
+  })
+
+  it('sem grupo nada muda: o mais perto ganha', () => {
+    document.body.innerHTML = `
+      <button id="a" data-box="0,0">a</button>
+      <button id="b" data-box="80,900">b</button>
+      <button id="rodape" data-box="0,400">rodape</button>`
+    document.getElementById('a')!.focus()
+    moveFocus('down')
+    expect(document.activeElement?.id).toBe('rodape')
+  })
+
+  it('o fim do grupo cai no botão de fora', () => {
+    document.body.innerHTML = `
+      <div data-nav-group><button id="a" data-box="0,0">a</button></div>
+      <button id="rodape" data-box="0,400">rodape</button>`
+    document.getElementById('a')!.focus()
+    moveFocus('down')
+    expect(document.activeElement?.id).toBe('rodape')
+  })
+})
+
 describe('ajuste com o controle', () => {
   it('seletor muda de opção e avisa, sem passar do fim', () => {
     document.body.innerHTML = '<select id="s"><option>a</option><option>b</option></select>'

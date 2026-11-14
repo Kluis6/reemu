@@ -90,12 +90,21 @@ impl ShaderChainResolver for ShaderChainRepo {
 }
 
 /// `id` determinístico da atribuição, por escopo/alvo.
-fn assignment_id(scope: AssignmentScope, system_id: Option<&str>, rom_id: Option<&str>) -> String {
+pub(super) fn assignment_id(
+    scope: AssignmentScope,
+    system_id: Option<&str>,
+    rom_id: Option<&str>,
+) -> String {
     match scope {
         AssignmentScope::Default => "default".to_string(),
         AssignmentScope::System => format!("system:{}", system_id.unwrap_or("")),
         AssignmentScope::Rom => format!("rom:{}", rom_id.unwrap_or("")),
     }
+}
+
+/// `id` determinístico de um parâmetro ajustado numa atribuição.
+pub(super) fn param_id(assignment_id: &str, key: &str) -> String {
+    format!("{assignment_id}::{key}")
 }
 
 #[async_trait]
@@ -205,7 +214,7 @@ impl ShaderChainStore for ShaderChainRepo {
              VALUES (?1, ?2, ?3, ?4) \
              ON CONFLICT(assignment_id, parameter_key) DO UPDATE SET value = excluded.value",
         )
-        .bind(format!("{aid}::{key}"))
+        .bind(param_id(&aid, key))
         .bind(&aid)
         .bind(key)
         .bind(value)

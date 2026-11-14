@@ -714,11 +714,14 @@ no `emu-session`, ver `docs/historico.md`).
         3. **Ganhar conquistas jogando** (`gas/v1/signals`), depois de resolver a
            chave da pergunta 5.
         4. **Saves na nuvem** (`in-progress`, 2026-11-13): sincronização com o
-           Alvanista em quatro PRs. Parte 1, a máquina: aparelho do Cloud Save da
-           conta e Configurações › Sincronização. Depois: os game saves (`.srm`,
-           cartões de PS2 e VMU), os save states quando o core e a versão batem e
-           as configurações copiadas de outra máquina. Conflito entre computadores
-           pergunta e guarda a outra versão.
+           Alvanista em quatro PRs. Parte 1, a máquina (#35): aparelho do Cloud
+           Save da conta e Configurações › Sincronização. Parte 2, os game saves
+           (`.srm` e afins, cartões de PS2 e VMU): sobem ao fechar o jogo, descem
+           antes de abrir, conflito entre computadores pergunta e guarda a outra
+           versão, histórico para voltar. Parte 3, os save states: sobem com o
+           core e a versão, e os das outras máquinas descem quando os dois batem.
+           Parte 4, as configurações: copiadas de outra máquina por grupo, com
+           backup e desfazer, sem apagar nada daqui.
       - **Metadados de jogos:** sem a busca da pergunta 3, não há como identificar a
         ROM, porque a API só aceita ID. Se vier, começar por hero e logo como fonte
         adicional, com ScreenScraper e TheGamesDB como principais, comparar a

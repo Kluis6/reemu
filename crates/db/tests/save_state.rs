@@ -53,6 +53,30 @@ async fn record_list_get_delete_states() {
 }
 
 #[tokio::test]
+async fn all_states_lists_every_rom_newest_first() {
+    let db = mem_db().await;
+    seed_rom(&db, "rom1", "nes").await;
+    seed_rom(&db, "rom2", "snes").await;
+    let repo = SaveStateRepo::new(db);
+    assert!(repo.all_states().await.unwrap().is_empty());
+    repo.record_state(&state("a", "rom1", "mesen", Some(1), 100))
+        .await
+        .unwrap();
+    repo.record_state(&state("b", "rom2", "snes9x", None, 300))
+        .await
+        .unwrap();
+    repo.record_state(&state("c", "rom1", "mesen", Some(2), 200))
+        .await
+        .unwrap();
+    let all = repo.all_states().await.unwrap();
+    assert_eq!(
+        all.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+        ["b", "c", "a"]
+    );
+    assert_eq!(all[0].core_version.as_deref(), Some("1.0 abc"));
+}
+
+#[tokio::test]
 async fn find_state_in_slot_returns_latest_in_that_slot() {
     let db = mem_db().await;
     seed_rom(&db, "rom1", "nes").await;
