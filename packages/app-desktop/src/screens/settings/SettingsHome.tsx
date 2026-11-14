@@ -1,7 +1,6 @@
 import {
   Body1,
-  Subtitle1,
-  Title3,
+  Subtitle2,
   makeStyles,
   mergeClasses,
   tokens,
@@ -24,43 +23,37 @@ const cardIn = {
 };
 
 const useStyles = makeStyles({
-  // 12 categorias, uma célula cada, que fecham 3×4, 4×3 ou 6×2 sem buraco. As linhas dividem a altura útil (`1fr`),
-  // então tudo cabe sem rolar. As colunas seguem a PROPORÇÃO da janela, não a
-  // largura: com o zoom da interface (`uiScale.ts`) a tela lógica continua
-  // 16:9 e só encolhe (Maior = 1051×591), e aí 4 colunas × 3 linhas é o que
-  // cabe; 3 colunas só em janela mais quadrada (4:3, 5:4), que tem altura
-  // pra 4 linhas. Abaixo de 72 px por card a grade rola em vez de espremer.
+  // Cards em 2 colunas, como as Configurações do Xbox (print do usuário,
+  // 2026-11-14): 12 categorias = 6 linhas. Altura entre 72 e 104 px; se a
+  // tela for baixa demais, a grade rola em vez de espremer. Janela estreita:
+  // uma coluna.
   grid: {
     flexGrow: 1,
     minHeight: 0,
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gridAutoRows: "minmax(72px, 1fr)",
-    gap: tokens.spacingHorizontalM,
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gridAutoRows: "minmax(72px, 104px)",
+    alignContent: "start",
+    gap: tokens.spacingHorizontalS,
     overflowY: "auto",
     scrollbarWidth: "none",
     padding: `${RING}px`,
     margin: `-${RING}px`,
-    "@media (max-aspect-ratio: 3/2)": {
-      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    },
     "@media (max-width: 640px)": {
-      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+      gridTemplateColumns: "minmax(0, 1fr)",
     },
   },
   // `<a>`: ganha o anel de foco global do app (controle/teclado). Card
-  // clicável do Fluent 2: a superfície inteira navega, hover/pressionado
-  // mudam o fundo e a elevação sobe no hover.
-  // Ícone no alto, nome e descrição no pé do card (pedido do usuário). Com
-  // controle conectado, a barra de dicas (canto inferior direito, fixa)
-  // fica por cima do pé do card de Sistema.
+  // clicável do Fluent 2 em layout horizontal: ícone à esquerda, nome e
+  // descrição ao lado, a superfície inteira navega; hover e pressionado
+  // mudam o fundo.
   card: {
     display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    gap: tokens.spacingVerticalL,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalL,
     minWidth: 0,
-    padding: tokens.spacingHorizontalXXL,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalXL}`,
     boxSizing: "border-box",
     borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground2,
@@ -68,10 +61,9 @@ const useStyles = makeStyles({
     // destaca da página só pela cor; hover/pressionado mudam o fundo.
     color: tokens.colorNeutralForeground1,
     textDecorationLine: "none",
-    // base do ícone (`absolute`, no canto de cima à direita)
-    position: "relative",
     // visível: o brilho do foco (`::before`, index.css) fica fora do card;
     // o texto corta com reticências nele mesmo
+    position: "relative",
     overflow: "visible",
     transitionProperty: "background-color",
     transitionDuration: tokens.durationFaster,
@@ -92,61 +84,23 @@ const useStyles = makeStyles({
     // `backwards`: ver o comentário em RouteTransition (ClearType no WebView2)
     animationFillMode: "backwards",
     "@media (prefers-reduced-motion: reduce)": { animationName: "none" },
-    // Tela baixa (interface Grande/Maior): o card fica em linha, ícone ao
-    // lado do texto, pra caber na altura de uma linha da grade.
-    "@media (max-height: 640px)": {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "flex-start",
-      gap: tokens.spacingHorizontalL,
-      padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
-    },
   },
-  profile: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: tokens.spacingHorizontalL,
-    // o texto fica longe do ícone (64 px, absoluto à direita)
-    paddingRight: `calc(64px + ${tokens.spacingHorizontalXXL} + ${tokens.spacingHorizontalM})`,
-    // tela baixa: o ícone é de 52 px e fica a L da borda
-    "@media (max-height: 640px)": {
-      paddingRight: `calc(52px + ${tokens.spacingHorizontalL} + ${tokens.spacingHorizontalM})`,
-    },
-  },
-  // Ícone à DIREITA e maior (pedido do usuário: o dobro, era 40/32, e
-  // depois um pouco menor — 64/52),
-  // com o texto onde já estava. Fora do fluxo (`absolute`), pra não somar
-  // altura ao card: a grade do hub continua cabendo na tela sem rolar. No
-  // canto de cima; no card em linha (tela baixa), no meio da altura.
+  // Ícone de traço, na cor do texto, como no Xbox; mesma largura em todos
+  // os cards para os nomes ficarem alinhados na coluna.
   icon: {
-    position: "absolute",
-    top: tokens.spacingHorizontalXXL,
-    right: tokens.spacingHorizontalXXL,
-    fontSize: "64px",
-    lineHeight: 0,
-    "@media (max-height: 640px)": {
-      top: "50%",
-      right: tokens.spacingHorizontalL,
-      transform: "translateY(-50%)",
-      fontSize: "52px",
-    },
     flexShrink: 0,
-    // ícone: destaque do tema (`reemuBrandAccent`, 3:1 garantido)
-    color: "var(--reemuBrandAccent)",
+    width: "32px",
+    display: "flex",
+    justifyContent: "center",
+    fontSize: "32px",
+    lineHeight: 0,
+    color: tokens.colorNeutralForeground1,
   },
   text: {
     display: "flex",
     flexDirection: "column",
     gap: "2px",
     minWidth: 0,
-  },
-  // Nome e descrição no pé do card, onde já ficavam (o ícone saiu do
-  // fluxo). No card em linha, na borda da esquerda como no card normal, com
-  // espaço à direita pro ícone (52 + folga).
-  textEnd: {
-    marginTop: "auto",
-    "@media (max-height: 640px)": { marginTop: 0, marginRight: "60px" },
   },
   // Descrição numa linha só: com controle conectado a barra de dicas
   // (canto inferior direito) cobria a 2ª linha do card de Sistema.
@@ -156,26 +110,15 @@ const useStyles = makeStyles({
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
-  // Tela baixa (card em linha): título menor e podendo quebrar linha, senão
-  // nomes longos ("Gerenciar biblioteca") saíam cortados.
-  name: {
-    "@media (max-height: 640px)": {
-      fontSize: tokens.fontSizeBase400,
-      lineHeight: tokens.lineHeightBase400,
-      whiteSpace: "normal",
-    },
-  },
   ellipsis: {
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
   // Subcategoria (Aparência, Decorações): os mesmos cards do hub, numa
-  // fileira de altura fixa (não estica até o fim da página).
+  // fileira só (não estica até o fim da página).
   subGrid: {
     flexGrow: 0,
-    gridAutoRows: "180px",
-    "@media (max-height: 640px)": { gridAutoRows: "minmax(72px, 120px)" },
   },
 });
 
@@ -195,17 +138,12 @@ export interface SettingsHubItem {
 export function SettingsHubCards({ items, label }: { items: SettingsHubItem[]; label: string }) {
   const s = useStyles();
   return (
-    // os cards dividem a largura útil da página em partes iguais
-    <nav
-      className={mergeClasses(s.grid, s.subGrid)}
-      style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}
-      aria-label={label}
-    >
+    <nav className={mergeClasses(s.grid, s.subGrid)} aria-label={label}>
       {items.map((it, i) => (
         <Link key={it.to} to={it.to} className={s.card} style={{ animationDelay: `${i * 30}ms` }}>
           <span className={s.icon}>{it.icon}</span>
-          <span className={mergeClasses(s.text, s.textEnd)}>
-            <Subtitle1 className={mergeClasses(s.ellipsis, s.name)}>{it.title}</Subtitle1>
+          <span className={s.text}>
+            <Subtitle2 className={s.ellipsis}>{it.title}</Subtitle2>
             <Body1 className={s.desc}>{it.description}</Body1>
           </span>
         </Link>
@@ -215,9 +153,9 @@ export function SettingsHubCards({ items, label }: { items: SettingsHubItem[]; l
 }
 
 /**
- * Entrada das Configurações: um card por categoria em grade bento, que ocupa a
- * área útil da página sem rolar. O card de Perfil é o maior e mostra o avatar
- * e o nome; os outros, ícone, nome e o que tem dentro.
+ * Entrada das Configurações: um card por categoria em 2 colunas, como as
+ * Configurações do Xbox. O card de Perfil mostra o avatar e o nome no lugar
+ * do ícone e do nome da categoria; os outros, ícone, nome e o que tem dentro.
  */
 export function SettingsHome() {
   const { t } = useTranslation();
@@ -231,20 +169,16 @@ export function SettingsHome() {
         if (id === "profile") {
           const name = profile?.name ?? "";
           return (
-            <Link
-              key={key}
-              to={key}
-              className={mergeClasses(s.card, s.profile)}
-              style={delay}
-            >
-              {profile && <ProfileAvatar profile={profile} size={64} tier={profile.tierColors} />}
-              {/* ícone da pessoa à direita, como nos outros cards (pedido do
-                  usuário); sem perfil carregado é o único ícone do card */}
-              <Icon className={s.icon} />
+            <Link key={key} to={key} className={s.card} style={delay}>
+              <span className={s.icon}>
+                {profile ? (
+                  <ProfileAvatar profile={profile} size={32} tier={profile.tierColors} />
+                ) : (
+                  <Icon />
+                )}
+              </span>
               <span className={s.text}>
-                <Title3 className={s.ellipsis}>
-                  {name || t("settings.tabs.profile")}
-                </Title3>
+                <Subtitle2 className={s.ellipsis}>{name || t("settings.tabs.profile")}</Subtitle2>
                 <Body1 className={s.desc}>
                   {name
                     ? `${t("settings.tabs.profile")} · ${t("settings.desc.profile")}`
@@ -256,11 +190,11 @@ export function SettingsHome() {
         }
         return (
           <Link key={key} to={key} className={s.card} style={delay}>
-            <Icon className={s.icon} />
-            <span className={mergeClasses(s.text, s.textEnd)}>
-              <Subtitle1 className={mergeClasses(s.ellipsis, s.name)}>
-                {t(`settings.tabs.${id}`)}
-              </Subtitle1>
+            <span className={s.icon}>
+              <Icon />
+            </span>
+            <span className={s.text}>
+              <Subtitle2 className={s.ellipsis}>{t(`settings.tabs.${id}`)}</Subtitle2>
               <Body1 className={s.desc}>{t(`settings.desc.${id}`)}</Body1>
             </span>
           </Link>

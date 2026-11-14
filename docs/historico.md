@@ -3470,3 +3470,8 @@ Infra:
 - **O que mudou:** `http.rs` (cliente com o User-Agent do ReEmu e os limites de conexão e de leitura) e `repo_version.rs` (commit dos pacotes do GitHub pelo `ls-refs` e pela API) saíram de `apps/desktop/src-tauri/src` para `crates/net`. O app usa `net::http::client()` e `net::repo_version::*`; o comportamento não muda. O User-Agent segue com a versão do workspace (`version.workspace`).
 - **Erros:** a crate não conhece o `AppError`. O teste de "servidor parado" ficou dividido: em `net`, o cliente desiste sozinho (`is_timeout`); em `app_error.rs`, esse erro vira `ErrorCode::Offline`. Para isso `net::http::build` ficou público.
 - **Conferido:** `cargo clippy --workspace --all-targets -D warnings`, `cargo test -p net` (3) e `cargo test -p reemu-desktop` (510 ok, 24 ignorados).
+
+## 2026-11-14 — Cards das Configurações como os do Xbox
+
+- **O que mudou** (`screens/settings/SettingsHome.tsx`, pedido do usuário com print das Configurações do Xbox): grade de 2 colunas (1 em janela estreita), cards baixos (72 a 104 px) com o ícone de 32 px à esquerda na cor do texto e o nome (`Subtitle2`) e a descrição ao lado, centrados na altura. O card de Perfil mostra o avatar no lugar do ícone. Conteúdo, foco e hover não mudaram; os cards das subcategorias (`SettingsHubCards`) seguem o mesmo desenho.
+- **Conferido:** `tsc -b`; `ui-render.py` em `/settings` nos temas `reemu` e `claro`, com card focado, e em `/settings/aparencia`; `audit-focus` sem novidade.
