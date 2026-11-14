@@ -1,14 +1,9 @@
 // Aparência como documento portátil: o grupo `appearance` das configurações
 // copiadas entre máquinas (D114). Tema, escala da interface, margem da TV,
-// sons, menos movimento e idioma, pelos getters e setters de cada um. O papel
-// de parede não vai: é um arquivo desta máquina.
+// sons e menos movimento, pelos getters e setters de cada um. O papel de
+// parede não vai (é um arquivo desta máquina), nem o idioma: duas máquinas
+// podem estar em idiomas diferentes de propósito.
 
-import {
-  getLanguagePreference,
-  LANGUAGES,
-  setLanguagePreference,
-  type LanguagePreference,
-} from '../i18n'
 import { syncFromRust, useThemeStore } from '../stores/useThemeStore'
 import { getThemeSelection, setThemeSelection } from './tauri'
 import { getReduceMotion, getUiSounds, setReduceMotion, setUiSounds } from './uiPrefs'
@@ -28,7 +23,6 @@ export interface AppearanceDoc {
   overscan: number
   uiSounds: boolean
   reduceMotion: boolean
-  language: LanguagePreference
 }
 
 /** O tema salvo no Rust; sem nada lá (nunca escolheu) ou sem Rust, o que a
@@ -52,7 +46,6 @@ export async function exportAppearance(): Promise<AppearanceDoc> {
     overscan: getOverscan(),
     uiSounds: getUiSounds(),
     reduceMotion: getReduceMotion(),
-    language: getLanguagePreference(),
   }
 }
 
@@ -72,21 +65,21 @@ function isThemeJson(raw: string): boolean {
 /**
  * Aplica o documento com os setters de cada preferência. Versão desconhecida
  * ou formato errado: lança e nada muda. Um valor que esta versão não oferece
- * (uma escala, uma margem ou um idioma novos) deixa o desta máquina; um tema
- * que ela não conhece cai no padrão, como na store.
+ * (uma escala ou uma margem novas) deixa o desta máquina; um tema que ela não
+ * conhece cai no padrão, como na store. Um `language` que venha de uma versão
+ * anterior é ignorado: o idioma é desta máquina.
  */
 export async function applyAppearance(doc: unknown): Promise<void> {
   if (!isObject(doc)) throw new Error(APPEARANCE_ERR_INVALID)
   if (doc.v !== APPEARANCE_DOC_VERSION) throw new Error(APPEARANCE_ERR_VERSION)
-  const { themeSelection, uiScale, overscan, uiSounds, reduceMotion, language } = doc
+  const { themeSelection, uiScale, overscan, uiSounds, reduceMotion } = doc
   if (
     typeof themeSelection !== 'string' ||
     !isThemeJson(themeSelection) ||
     typeof uiScale !== 'number' ||
     typeof overscan !== 'number' ||
     typeof uiSounds !== 'boolean' ||
-    typeof reduceMotion !== 'boolean' ||
-    typeof language !== 'string'
+    typeof reduceMotion !== 'boolean'
   ) {
     throw new Error(APPEARANCE_ERR_INVALID)
   }
@@ -98,9 +91,6 @@ export async function applyAppearance(doc: unknown): Promise<void> {
   if (OVERSCANS.some((o) => o.value === overscan)) setOverscan(overscan)
   setUiSounds(uiSounds)
   setReduceMotion(reduceMotion)
-  if (language === 'auto' || (LANGUAGES as readonly string[]).includes(language)) {
-    await setLanguagePreference(language as LanguagePreference)
-  }
   // Por último: guarda a escolha antes de refazer o zoom, que pode falhar.
   if (UI_SCALES.some((s) => s.value === uiScale)) await setUiScale(uiScale)
 }

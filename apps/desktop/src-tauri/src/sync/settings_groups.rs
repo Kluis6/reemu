@@ -13,7 +13,8 @@
 //!
 //! Dois modos:
 //! - `Merge` ("Copiar") grava o que o documento traz e não apaga nada que ele
-//!   não traz: o desta máquina que ele não menciona fica;
+//!   não traz: o desta máquina que ele não menciona fica. A exceção é o mapa
+//!   do teclado, que é um layout só e vem inteiro;
 //! - `Restore` ("Desfazer") recebe o backup desta máquina e o grupo volta a ser
 //!   o dele.
 //!
@@ -1334,9 +1335,10 @@ async fn apply_hotkeys(
         tally.applied += 1;
     }
 
-    if mode == ApplyMode::Restore {
-        tx.clear_keyboard_bindings().await.map_err(repo)?;
-    }
+    // O teclado é um mapa só, nos dois modos: quem marca "Atalhos e teclado"
+    // quer aquele layout (uma tecla no padrão lá fica no padrão aqui, e a cópia
+    // não deixa uma tecla em dois alvos); o "Desfazer" devolve o daqui.
+    tx.clear_keyboard_bindings().await.map_err(repo)?;
     for k in &doc.keyboard {
         // na cópia: um alvo de uma versão mais nova, ou o Esc que o menu
         // reserva (`set_keyboard_binding`), não entra
@@ -2591,13 +2593,45 @@ mod tests {
             "SELECT target, code FROM keyboard_bindings ORDER BY target",
         )
         .await;
-        assert_eq!(
-            keys,
-            vec![
-                ("A".to_string(), "KeyZ".to_string()),
-                ("R2".to_string(), "KeyR".to_string())
-            ]
-        );
+        assert_eq!(keys, vec![("R2".to_string(), "KeyR".to_string())]);
+    }
+
+    /// R37: o mapa do teclado é um layout só e vem inteiro na cópia.
+    #[tokio::test]
+    async fn merge_replaces_the_keyboard_map_as_a_whole() {
+        let src = Machine::new("kbm-src").await;
+        // lá: R2 no R; A e B no padrão (sem linha)
+        key_binding(&src.db, "R2", "KeyR").await;
+        let doc = src.export(HK).await;
+
+        let here = Machine::new("kbm-here").await;
+        key_binding(&here.db, "A", "KeyZ").await;
+        // aqui o R está no B: depois da cópia não pode ficar no B e no R2
+        key_binding(&here.db, "B", "KeyR").await;
+
+        here.apply(HK, &doc, Merge).await.unwrap();
+        let keys: Vec<(String, String)> = rows(
+            &here.db,
+            "SELECT target, code FROM keyboard_bindings ORDER BY target",
+        )
+        .await;
+        // A e B voltam ao padrão, como lá
+        assert_eq!(keys, vec![("R2".to_string(), "KeyR".to_string())]);
+        let codes: HashSet<&str> = keys.iter().map(|(_, c)| c.as_str()).collect();
+        assert_eq!(codes.len(), keys.len(), "uma tecla em dois alvos: {keys:?}");
+
+        // o "Desfazer" devolve o layout daqui
+        let backup = json!({"v": 1, "hotkeys": [], "keyboard": [
+            {"target": "A", "code": "KeyZ"}, {"target": "B", "code": "KeyR"},
+        ]});
+        here.apply(HK, &backup, Restore).await.unwrap();
+        let keys: Vec<(String, String)> = rows(
+            &here.db,
+            "SELECT target, code FROM keyboard_bindings ORDER BY target",
+        )
+        .await;
+        let pair = |a: &str, b: &str| (a.to_string(), b.to_string());
+        assert_eq!(keys, vec![pair("A", "KeyZ"), pair("B", "KeyR")]);
     }
 
     // --- áudio e vídeo -----------------------------------------------------

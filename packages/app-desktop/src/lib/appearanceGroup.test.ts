@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import i18n, { setLanguagePreference } from '../i18n'
+import i18n, { getLanguagePreference, setLanguagePreference } from '../i18n'
 import { useThemeStore } from '../stores/useThemeStore'
 import { DEFAULT_CUSTOM_HUE, DEFAULT_THEME_ID } from '../styles/themes'
 import { applyAppearance, exportAppearance } from './appearanceGroup'
@@ -38,7 +38,7 @@ async function factory() {
   await i18n.changeLanguage('pt-BR')
 }
 
-/** Esta máquina, com tudo trocado. */
+/** Esta máquina, com tudo trocado (o idioma também, que não viaja). */
 async function configured() {
   rust.theme = THEME
   await setUiScale(1.3)
@@ -65,7 +65,6 @@ describe('appearanceGroup', () => {
       overscan: 5,
       uiSounds: false,
       reduceMotion: true,
-      language: 'es',
     })
 
     await factory()
@@ -75,7 +74,21 @@ describe('appearanceGroup', () => {
     expect(await exportAppearance()).toEqual(doc)
     expect(useThemeStore.getState().selection).toEqual({ kind: 'custom', hue: 200, mode: 'light' })
     expect(document.documentElement.hasAttribute('data-reduce-motion')).toBe(true)
-    expect(i18n.language).toBe('es')
+    // o idioma é desta máquina: a de fábrica continua no dela
+    expect(i18n.language).toBe('pt-BR')
+  })
+
+  it('o idioma não vai: duas máquinas podem estar em idiomas diferentes', async () => {
+    await configured()
+    const doc = await exportAppearance()
+    expect(Object.keys(doc)).not.toContain('language')
+
+    // nem quando um documento de antes ainda o traz
+    await factory()
+    await setLanguagePreference('en')
+    await applyAppearance({ ...doc, language: 'es' })
+    expect(getLanguagePreference()).toBe('en')
+    expect(i18n.language).toBe('en')
   })
 
   it('o papel de parede não vai: é um arquivo desta máquina', async () => {
@@ -89,7 +102,7 @@ describe('appearanceGroup', () => {
     await configured()
     const before = await exportAppearance()
     rust.calls.length = 0
-    const newer: Record<string, unknown> = { ...before, v: 2, uiScale: 0.8, language: 'en' }
+    const newer: Record<string, unknown> = { ...before, v: 2, uiScale: 0.8 }
     await expect(applyAppearance(newer)).rejects.toThrow('settings_version')
     delete newer.v
     await expect(applyAppearance(newer)).rejects.toThrow('settings_version')
@@ -111,7 +124,7 @@ describe('appearanceGroup', () => {
   it('valor que esta versão não oferece deixa o desta máquina', async () => {
     await configured()
     const before = await exportAppearance()
-    await applyAppearance({ ...before, uiScale: 1.5, overscan: 7, language: 'fr', uiSounds: true })
+    await applyAppearance({ ...before, uiScale: 1.5, overscan: 7, uiSounds: true })
     expect(await exportAppearance()).toEqual({ ...before, uiSounds: true })
   })
 })
