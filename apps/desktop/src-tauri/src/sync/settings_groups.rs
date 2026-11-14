@@ -1115,10 +1115,17 @@ fn preset_row(source: &str, name: &str, is_builtin: bool) -> ShaderPreset {
 /// O preset do documento nesta máquina; `Err(nome)` quando ele não está aqui:
 /// o pacote não foi baixado, o arquivo não existe nesta versão do pacote, ou
 /// esta versão do ReEmu não conhece o preset.
+///
+/// `need_file`: só a cópia (`Merge`) exige o arquivo. O `Restore` devolve o
+/// lugar desta máquina como o backup o guardou, mesmo que o arquivo tenha
+/// saído depois (o pacote apagado ou no meio de uma atualização): o jogo avisa
+/// e cai no padrão, como antes da cópia. Sem a identidade (um curado que esta
+/// versão não conhece, um caminho que sairia do pacote), nada se escreve.
 fn local_preset(
     e: &ShaderEntry,
     catalog: &Catalog,
     builtins: &[String],
+    need_file: bool,
 ) -> Result<ShaderPreset, String> {
     let shown = |fallback: &str| e.name.clone().unwrap_or_else(|| bare_name(fallback));
     if builtins.contains(&e.preset) {
@@ -1129,7 +1136,7 @@ fn local_preset(
             return Err(shown(&e.preset));
         };
         // o embutido vem com o app; o do pacote só vale com o pacote aqui
-        if !c.bundled && !catalog.shader_pack.join(c.relpath).is_file() {
+        if need_file && !c.bundled && !catalog.shader_pack.join(c.relpath).is_file() {
             return Err(c.label.to_string());
         }
         return Ok(preset_row(&e.preset, c.label, true));
@@ -1144,7 +1151,7 @@ fn local_preset(
             .and_then(|s| s.to_str())
             .unwrap_or("preset")
             .to_string();
-        if !file.is_file() {
+        if need_file && !file.is_file() {
             return Err(e.name.clone().unwrap_or(stem));
         }
         return Ok(preset_row(&file.to_string_lossy(), &stem, false));
@@ -1343,7 +1350,7 @@ async fn apply_shaders(
         if slots.is_empty() {
             continue;
         }
-        let preset = match local_preset(&e, catalog, &builtins) {
+        let preset = match local_preset(&e, catalog, &builtins, mode == ApplyMode::Merge) {
             Ok(p) => p,
             Err(name) => {
                 tally.missing(
@@ -1425,8 +1432,10 @@ async fn apply_shaders(
         let parts = rel_parts(&e.asset)?;
         let file = under(&catalog.bezels, &parts);
         // o sistema não foi baixado aqui (ou é de um catálogo que esta versão
-        // não conhece): a moldura não aponta para nada
-        if e.pack != BEZEL_PROJECT || !file.is_file() {
+        // não conhece): a moldura não aponta para nada. O `Restore` devolve o
+        // lugar desta máquina como estava, mesmo sem o arquivo agora.
+        let need_file = mode == ApplyMode::Merge;
+        if e.pack != BEZEL_PROJECT || (need_file && !file.is_file()) {
             let name = if e.pack == BEZEL_PROJECT {
                 parts[0].to_string()
             } else {
@@ -3571,6 +3580,72 @@ mod tests {
 
         here.apply(CO, &backup, Restore).await.unwrap();
         assert_eq!(snapshot(&here.db).await, before);
+    }
+
+    /// O "Desfazer" devolve o lugar desta máquina como o backup o guardou,
+    /// mesmo que o arquivo do catálogo tenha saído depois da cópia (o pacote
+    /// apagado ou no meio de uma atualização): o preset do pacote, o curado
+    /// do pacote e as molduras do The Bezel Project voltam a apontar para onde
+    /// apontavam, e o lugar não fica vazio.
+    #[tokio::test]
+    async fn restore_writes_the_own_slot_back_when_its_catalog_file_is_gone() {
+        use AssignmentScope::*;
+        let here = Machine::new("gone-here").await;
+        rom(&here.db, "g-1", "AAAA0001").await;
+        let royale = here.slang("crt/crt-royale.slangp");
+        touch(&royale);
+        preset(&here.db, &royale, "crt-royale").await;
+        shader(&here.db, System, Some("snes"), &royale, &[("MASK", "2")]).await;
+        touch(&here.slang("edge-smoothing/xbr/other presets/xbr-lv2-standalone.slangp"));
+        preset(&here.db, "curated:xbr", "Suavizar pixel art (xBR)").await;
+        shader(&here.db, System, Some("gba"), "curated:xbr", &[]).await;
+        let pid = here.bezel_pack().await;
+        let snes = here.bezel("snes/snes.png");
+        touch(&snes);
+        deco(&here.db, "system", "snes", &pid, &snes).await;
+        let chrono = here.bezel("snes/games/Chrono Trigger.png");
+        touch(&chrono);
+        deco(&here.db, "rom", "g-1", &pid, &chrono).await;
+        touch(&here.bezel("snes/outra.png"));
+        let before = snapshot(&here.db).await;
+        let backup = here.backup(SD).await;
+
+        // a cópia troca os quatro lugares pelos de lá
+        let there = Machine::new("gone-there").await;
+        rom(&there.db, "t-1", "AAAA0001").await;
+        preset(&there.db, "crt", "crt").await;
+        shader(&there.db, System, Some("snes"), "crt", &[]).await;
+        shader(&there.db, System, Some("gba"), "crt", &[]).await;
+        let there_pack = there.bezel_pack().await;
+        let outra = there.bezel("snes/outra.png");
+        deco(&there.db, "system", "snes", &there_pack, &outra).await;
+        deco(&there.db, "rom", "t-1", &there_pack, &outra).await;
+        let report = here
+            .apply(SD, &there.export(SD).await, Merge)
+            .await
+            .unwrap();
+        assert_eq!(report.applied, 4, "{report:?}");
+        assert_ne!(snapshot(&here.db).await, before);
+
+        // os dois pacotes saíram desta máquina antes do "Desfazer"
+        std::fs::remove_dir_all(&here.catalog.shader_pack).unwrap();
+        std::fs::remove_dir_all(&here.catalog.bezels).unwrap();
+        here.apply(SD, &backup, Restore).await.unwrap();
+        assert_eq!(snapshot(&here.db).await, before);
+
+        // a cópia segue exigindo o arquivo: sem ele, o lugar daqui fica
+        let report = here
+            .apply(SD, &there.export(SD).await, Merge)
+            .await
+            .unwrap();
+        assert_eq!(report.applied, 2, "só os embutidos: {report:?}");
+        let gone: Vec<(String, String)> = rows(
+            &here.db,
+            "SELECT asset_path, COALESCE(system_id, rom_id) FROM decoration_assignments \
+             ORDER BY 2",
+        )
+        .await;
+        assert_eq!(gone, vec![(chrono, "g-1".into()), (snes, "snes".into())]);
     }
 
     /// R38: o preset ou a moldura de um jogo que esta máquina não tem conta
