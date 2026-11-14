@@ -154,6 +154,7 @@ const ptBR = {
         '3': 'Floresta 8-bit',
         '4': 'Fliperama',
         '5': 'Espaço',
+        '6': 'ReEmu',
       },
     },
   },

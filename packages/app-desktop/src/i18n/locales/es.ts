@@ -153,6 +153,7 @@ const es: Messages = {
         '3': 'Bosque 8 bits',
         '4': 'Recreativa',
         '5': 'Espacio',
+        '6': 'ReEmu',
       },
     },
   },

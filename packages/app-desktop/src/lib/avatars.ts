@@ -102,12 +102,6 @@ const ART: Record<PresetId, string> = {
     '<path d="M29.5 47h5l-2.5 6z" fill="#f97316"/>',
 }
 
-/** Só o desenho do preset (viewBox 64×64, sem o fundo): os papéis de parede
- *  (`wallpapers.ts`) põem o mesmo personagem no cenário dele. */
-export function presetArt(id: PresetId): string {
-  return ART[id]
-}
-
 /** SVG completo do preset (fundo em gradiente + desenho). */
 export function presetSvg(id: PresetId): string {
   const [a, b] = AVATAR_GRADIENTS[id]

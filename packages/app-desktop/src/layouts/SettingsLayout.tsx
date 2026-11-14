@@ -261,8 +261,10 @@ export function SettingsLayout() {
                           (sub === "opcoes" || sub === "sobre") &&
                           styles.wide,
                         section.key === "video" && sub === "shaders" && styles.fill,
-                        // Temas: a grade ocupa a altura útil do card
-                        section.key === "aparencia" && sub === "temas" && styles.fill,
+                        // Temas e Plano de fundo: na altura útil do card, sem rolar
+                        section.key === "aparencia" &&
+                          (sub === "temas" || sub === "papel-de-parede") &&
+                          styles.fill,
                       )}
                     >
                       <Outlet />

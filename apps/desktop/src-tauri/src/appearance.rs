@@ -7,6 +7,9 @@
 //! (diferente do perfil, que tem nome/bio). `AnimatedBackground` desenha
 //! esta imagem como a camada mais no fundo, ATRÁS das manchas de cor do tema
 //! (que continuam por cima, translúcidas).
+//!
+//! Ou um dos papéis de parede embutidos em vídeo: aí só o id fica em
+//! `wallpaper.preset` (os vídeos vêm com o app, em `public/wallpapers/`).
 
 use std::path::{Path, PathBuf};
 
@@ -15,14 +18,14 @@ use tauri::State;
 use crate::app_error::{AppError, ErrorCode};
 use crate::commands::AppState;
 
-/// O que a pessoa pode escolher do disco.
-const USER_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp"];
-/// Tudo o que pode estar em `wallpaper.<ext>`: as imagens da pessoa e o SVG
-/// dos papéis de parede embutidos (`set_wallpaper_preset`).
-const WALLPAPER_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "svg"];
+/// Imagens que a pessoa pode escolher do disco (`wallpaper.<ext>`).
+const WALLPAPER_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp"];
 const MAX_BYTES: u64 = 20 * 1024 * 1024;
-/// Teto do SVG embutido (os 5 do app têm de 20 a 60 KB).
-const PRESET_MAX_BYTES: usize = 512 * 1024;
+/// Papel de parede embutido escolhido: só o id ("1".."6"). Os vídeos vêm com
+/// o app (`packages/app-desktop/public/wallpapers/<id>.webm`, gerados por
+/// `scripts/wallpaper-video/render.py`); aqui fica só qual deles.
+const PRESET_FILE: &str = "wallpaper.preset";
+const PRESET_IDS: &[&str] = &["1", "2", "3", "4", "5", "6"];
 
 fn wallpaper_file(dir: &Path) -> Option<PathBuf> {
     WALLPAPER_EXTS
@@ -33,10 +36,38 @@ fn wallpaper_file(dir: &Path) -> Option<PathBuf> {
 
 fn ext_of(path: &Path) -> Option<String> {
     let e = path.extension()?.to_str()?.to_ascii_lowercase();
-    USER_EXTS.contains(&e.as_str()).then_some(e)
+    WALLPAPER_EXTS.contains(&e.as_str()).then_some(e)
 }
 
-/// Bytes do papel de parede escolhido (vazio se não há nenhum). Frontend
+/// Tira qualquer papel de parede: a imagem, o embutido e o `wallpaper.svg`
+/// de um build anterior (os embutidos foram SVG antes de virar vídeo).
+fn remove_all(dir: &Path) {
+    for e in WALLPAPER_EXTS.iter().chain(&["svg"]) {
+        let _ = std::fs::remove_file(dir.join(format!("wallpaper.{e}")));
+    }
+    let _ = std::fs::remove_file(dir.join(PRESET_FILE));
+}
+
+fn write_preset(dir: &Path, id: &str) -> Result<(), AppError> {
+    if !PRESET_IDS.contains(&id) {
+        return Err(AppError::new(
+            ErrorCode::NotFound,
+            "papel de parede desconhecido",
+        ));
+    }
+    std::fs::create_dir_all(dir)?;
+    remove_all(dir);
+    std::fs::write(dir.join(PRESET_FILE), id)?;
+    Ok(())
+}
+
+fn read_preset(dir: &Path) -> Option<String> {
+    let id = std::fs::read_to_string(dir.join(PRESET_FILE)).ok()?;
+    let id = id.trim();
+    PRESET_IDS.contains(&id).then(|| id.to_string())
+}
+
+/// Bytes da imagem escolhida (vazio se não há nenhuma). Frontend
 /// embrulha num `Blob` → `blob:` URL, igual ao avatar.
 #[tauri::command]
 pub async fn read_wallpaper(state: State<'_, AppState>) -> Result<tauri::ipc::Response, AppError> {
@@ -47,8 +78,8 @@ pub async fn read_wallpaper(state: State<'_, AppState>) -> Result<tauri::ipc::Re
 }
 
 /// Copia `src_path` (imagem escolhida pelo usuário) pra
-/// `<dados>/appearance/wallpaper.<ext>`, removendo qualquer papel de parede
-/// anterior.
+/// `<dados>/appearance/wallpaper.<ext>`, no lugar do que houver (inclusive
+/// um embutido).
 #[tauri::command]
 pub async fn set_wallpaper_file(
     state: State<'_, AppState>,
@@ -61,9 +92,7 @@ pub async fn set_wallpaper_file(
         return Err("imagem grande demais (máx. 20 MB)".into());
     }
     std::fs::create_dir_all(&state.appearance_dir)?;
-    for e in WALLPAPER_EXTS {
-        let _ = std::fs::remove_file(state.appearance_dir.join(format!("wallpaper.{e}")));
-    }
+    remove_all(&state.appearance_dir);
     let dest = state.appearance_dir.join(format!("wallpaper.{ext}"));
     std::fs::copy(&src, &dest).map_err(|e| {
         let mut err = AppError::from(e);
@@ -74,47 +103,25 @@ pub async fn set_wallpaper_file(
     Ok(())
 }
 
-/// O SVG serve como papel de parede embutido? Só os do app
-/// (`packages/app-desktop/src/lib/wallpapers.ts`, marcados com
-/// `data-reemu-wallpaper`), sem script nem atributo de evento: ele é exibido
-/// como imagem (`<img>`/CSS), que não roda script, mas o arquivo fica no disco.
-fn preset_svg_ok(svg: &str) -> bool {
-    let lower = svg.to_ascii_lowercase();
-    svg.len() <= PRESET_MAX_BYTES
-        && lower.trim_start().starts_with("<svg")
-        && lower.contains("data-reemu-wallpaper=")
-        && !lower.contains("<script")
-        && !lower.contains(" on")
-        && !lower.contains("javascript:")
+/// Escolhe um dos papéis de parede embutidos (em vídeo), no lugar do que
+/// houver.
+#[tauri::command]
+pub async fn set_wallpaper_preset(state: State<'_, AppState>, id: String) -> Result<(), AppError> {
+    write_preset(&state.appearance_dir, &id)?;
+    log::info!("papel de parede embutido: {id}");
+    Ok(())
 }
 
-/// Grava um dos papéis de parede embutidos (SVG gerado pelo app) como
-/// `<dados>/appearance/wallpaper.svg`, no lugar do que houver.
+/// Qual papel de parede embutido está escolhido (`None` = nenhum ou imagem).
 #[tauri::command]
-pub async fn set_wallpaper_preset(state: State<'_, AppState>, svg: String) -> Result<(), AppError> {
-    if !preset_svg_ok(&svg) {
-        return Err(AppError::new(
-            ErrorCode::Corrupt,
-            "papel de parede inválido",
-        ));
-    }
-    std::fs::create_dir_all(&state.appearance_dir)?;
-    let tmp = state.appearance_dir.join("wallpaper.svg.tmp");
-    std::fs::write(&tmp, svg.as_bytes())?;
-    for e in WALLPAPER_EXTS {
-        let _ = std::fs::remove_file(state.appearance_dir.join(format!("wallpaper.{e}")));
-    }
-    std::fs::rename(&tmp, state.appearance_dir.join("wallpaper.svg"))?;
-    log::info!("papel de parede embutido salvo");
-    Ok(())
+pub fn get_wallpaper_preset(state: State<'_, AppState>) -> Option<String> {
+    read_preset(&state.appearance_dir)
 }
 
 /// Remove o papel de parede escolhido (volta a ser só a cor do tema).
 #[tauri::command]
 pub async fn clear_wallpaper(state: State<'_, AppState>) -> Result<(), AppError> {
-    for e in WALLPAPER_EXTS {
-        let _ = std::fs::remove_file(state.appearance_dir.join(format!("wallpaper.{e}")));
-    }
+    remove_all(&state.appearance_dir);
     Ok(())
 }
 
@@ -163,22 +170,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn preset_svg_so_os_do_app() {
-        let ok =
-            r#"<svg xmlns="http://www.w3.org/2000/svg" data-reemu-wallpaper="1"><rect/></svg>"#;
-        assert!(preset_svg_ok(ok));
-        assert!(!preset_svg_ok("<svg><rect/></svg>"), "sem a marca do app");
-        assert!(!preset_svg_ok(
-            &ok.replace("<rect/>", "<script>x()</script>")
-        ));
-        assert!(!preset_svg_ok(
-            &ok.replace("<rect/>", r#"<rect onload="x()"/>"#)
-        ));
-        assert!(!preset_svg_ok("<html data-reemu-wallpaper=\"1\"></html>"));
-        assert!(!preset_svg_ok(&format!(
-            "{ok}{}",
-            " ".repeat(PRESET_MAX_BYTES)
-        )));
+    fn embutido_so_ids_conhecidos_e_substitui_a_imagem() {
+        let dir = std::env::temp_dir().join(format!("reemu-wall-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("wallpaper.png"), b"png").unwrap();
+        std::fs::write(dir.join("wallpaper.svg"), b"<svg/>").unwrap();
+
+        write_preset(&dir, "6").unwrap();
+        assert_eq!(read_preset(&dir).as_deref(), Some("6"));
+        assert!(wallpaper_file(&dir).is_none(), "a imagem sai");
+        assert!(!dir.join("wallpaper.svg").exists(), "o SVG antigo sai");
+
+        assert!(write_preset(&dir, "7").is_err());
+        assert!(write_preset(&dir, "../x").is_err());
+        std::fs::write(dir.join(PRESET_FILE), "../../etc").unwrap();
+        assert_eq!(read_preset(&dir), None, "conteúdo estranho não vale");
+
+        remove_all(&dir);
+        assert_eq!(read_preset(&dir), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

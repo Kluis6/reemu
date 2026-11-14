@@ -39,8 +39,10 @@ import {
 import { useWallpaperStore, type WallpaperScope } from "../../stores/useWallpaperStore";
 import { REEMU_ACTION } from "../../hooks/useMenuNav";
 import { errorToast } from "../../lib/toast";
-import { WALLPAPER_IDS, wallpaperDataUri, wallpaperSvg, type WallpaperId } from "../../lib/wallpapers";
+import { WALLPAPER_IDS, wallpaperPosterUrl, type WallpaperId } from "../../lib/wallpapers";
 import { DIALOG_FADE_ONLY } from "../../lib/motion";
+import { useModalButtonStyles } from "../../styles/buttons";
+import * as M from "../../styles/metrics";
 import { useToastStore } from "../../stores/useToastStore";
 import { useThemeStore } from "../../stores/useThemeStore";
 import {
@@ -69,18 +71,45 @@ const useStyles = makeStyles({
   },
   // Conteúdo do plano de fundo direto no card geral das Configurações (sem
   // um card interno — pedido do usuário).
+  // Duas colunas (pedido do usuário, 2026-11-14): à esquerda os papéis de
+  // parede embutidos, à direita a prévia, os botões e "Onde mostrar". Janela
+  // estreita: uma coluna só.
+  // Na altura útil do card, sem rolar (pedido do usuário, 2026-11-14): as
+  // miniaturas e a prévia encolhem para caber; janela estreita volta a uma
+  // coluna e a rolar.
   wallCard: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+    gridTemplateRows: "minmax(0, 1fr)",
+    flexGrow: 1,
+    minHeight: 0,
+    columnGap: tokens.spacingHorizontalXXL,
+    rowGap: tokens.spacingVerticalL,
+    "@media (max-width: 900px)": {
+      gridTemplateColumns: "minmax(0, 1fr)",
+      gridTemplateRows: "auto",
+      flexGrow: 0,
+    },
+  },
+  wallCol: {
     display: "flex",
     flexDirection: "column",
     gap: tokens.spacingVerticalM,
-    maxWidth: "720px",
+    minWidth: 0,
+    minHeight: 0,
   },
   // Papéis de parede embutidos (pedido do usuário, 2026-11-14): miniaturas
   // 16:9 em grade, o nome embaixo e o check no escolhido, como os temas.
+  // 6 papéis de parede: 2 por linha, 3 linhas (pedido do usuário)
   presetGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(128px, 1fr))",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    // as 3 linhas dividem a altura que sobra
+    gridTemplateRows: "repeat(3, minmax(0, 1fr))",
+    flexGrow: 1,
+    minHeight: 0,
     gap: tokens.spacingHorizontalM,
+    "@media (max-width: 900px)": { gridTemplateRows: "auto" },
   },
   preset: {
     display: "flex",
@@ -94,13 +123,17 @@ const useStyles = makeStyles({
     textAlign: "left",
     borderRadius: tokens.borderRadiusMedium,
     fontFamily: "inherit",
+    minHeight: 0,
   },
+  // a miniatura ocupa o que a linha der (o vídeo é cortado ao centro)
   presetImg: {
     display: "block",
     width: "100%",
-    aspectRatio: "16 / 9",
+    flexGrow: 1,
+    minHeight: 0,
     objectFit: "cover",
     borderRadius: tokens.borderRadiusMedium,
+    "@media (max-width: 900px)": { aspectRatio: "16 / 9", flexGrow: 0 },
   },
   presetName: {
     display: "inline-flex",
@@ -114,6 +147,13 @@ const useStyles = makeStyles({
   // 2026-11-14): a raiz e a seção esticam, e as linhas da grade dividem a
   // altura (mínimo de 150 px por card; abaixo disso a página rola).
   rootFill: { height: "100%" },
+  // Plano de fundo: desce até a margem de baixo do card, sobre a faixa da
+  // barra de dicas do controle (como Vídeo › Shaders) — proporções aprovadas
+  // pelo usuário (2026-11-14), com a prévia em cima dos botões
+  rootBleed: {
+    height: `calc(100% + ${M.PAGE_PAD_B - M.SAFE_Y}px)`,
+    marginBottom: `-${M.PAGE_PAD_B - M.SAFE_Y}px`,
+  },
   sectionFill: { flexGrow: 1, minHeight: 0 },
   gridFill: { flexGrow: 1, gridAutoRows: "minmax(150px, 1fr)" },
   grid: {
@@ -239,11 +279,12 @@ const useStyles = makeStyles({
     alignItems: "center",
     gap: tokens.spacingHorizontalXS,
   },
+  // a prévia fica com a altura que sobra na coluna
   wallPreview: {
     width: "100%",
-    // a prévia fica no tamanho de antes; a grade dos embutidos usa os 720
-    maxWidth: "480px",
-    aspectRatio: "16 / 9",
+    flexGrow: 1,
+    minHeight: "120px",
+    "@media (max-width: 900px)": { aspectRatio: "16 / 9", flexGrow: 0 },
     borderRadius: tokens.borderRadiusLarge,
     border: `1px solid ${tokens.colorNeutralStroke2}`,
     backgroundColor: tokens.colorNeutralBackground3,
@@ -255,11 +296,15 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground3,
     fontSize: "28px",
   },
+  // Botões no estilo do seletor "Onde mostrar" (pedido do usuário): fundo de
+  // bloco sem borda (`useModalButtonStyles().block`), a mesma altura (72 px
+  // do `SelectBlock`) e dividindo a largura.
   wallActions: {
-    display: "flex",
-    flexWrap: "wrap",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(0, 1fr))",
     gap: tokens.spacingHorizontalS,
   },
+  wallAction: { minHeight: "72px" },
   // Diálogo do tema personalizado (pedido do usuário, 2026-11-14): abre ao
   // escolher o card "Personalizado", com a prévia e a barra de matiz.
   customSurface: { maxWidth: "560px" },
@@ -456,6 +501,7 @@ export function SettingsAppearance({
     mode: customMode,
   });
   const qc = useQueryClient();
+  const mb = useModalButtonStyles();
   const push = useToastStore((t) => t.push);
   const wallpaper = useQuery({
     queryKey: ["wallpaper"],
@@ -480,8 +526,13 @@ export function SettingsAppearance({
     queryKey: ["wallpaper-preset"],
     queryFn: wallpaperPresetId,
   });
+  // a prévia mostra a imagem da pessoa ou o pôster do embutido (o vídeo
+  // toca no fundo da Início)
+  const shownWallpaper = wallPreset.data
+    ? wallpaperPosterUrl(wallPreset.data)
+    : wallpaper.data;
   const applyPreset = useMutation({
-    mutationFn: (id: WallpaperId) => setWallpaperPreset(wallpaperSvg(id)),
+    mutationFn: (id: WallpaperId) => setWallpaperPreset(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wallpaper"] });
       qc.invalidateQueries({ queryKey: ["wallpaper-preset"] });
@@ -519,7 +570,7 @@ export function SettingsAppearance({
     );
 
   return (
-    <div className={mergeClasses(s.root, tab === "theme" && s.rootFill)}>
+    <div className={mergeClasses(s.root, s.rootFill, tab === "wallpaper" && s.rootBleed)}>
 
       {tab === "theme" && (
         <div className={mergeClasses(s.section, s.sectionFill)}>
@@ -613,78 +664,83 @@ export function SettingsAppearance({
 
       {tab === "wallpaper" && (
         <div className={s.wallCard}>
-          <Caption1 as="p" block style={{ margin: 0 }}>
+          <div className={s.wallCol}>
+            <Caption1 as="p" block style={{ margin: 0 }}>
+              {t("appearance.wallpaper.presetsTitle")}
+            </Caption1>
+            <div className={s.presetGrid}>
+              {WALLPAPER_IDS.map((id) => {
+                const name = t(`appearance.wallpaper.presets.${id}`);
+                const on = wallPreset.data === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    className={s.preset}
+                    aria-pressed={on}
+                    aria-label={t("appearance.wallpaper.presetUse", { name })}
+                    disabled={applyPreset.isPending}
+                    onClick={() => applyPreset.mutate(id)}
+                  >
+                    <img className={s.presetImg} src={wallpaperPosterUrl(id)} alt="" draggable={false} />
+                    <span className={s.presetName}>
+                      {name}
+                      {on && <CheckmarkCircleFilled className={s.presetCheck} aria-hidden />}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className={s.wallCol}>
+            <Caption1 as="p" block style={{ margin: 0 }}>
               {t("appearance.wallpaper.description")}
             </Caption1>
-
-          <Caption1 as="p" block style={{ margin: 0 }}>
-            {t("appearance.wallpaper.presetsTitle")}
-          </Caption1>
-          <div className={s.presetGrid}>
-            {WALLPAPER_IDS.map((id) => {
-              const name = t(`appearance.wallpaper.presets.${id}`);
-              const on = wallPreset.data === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  className={s.preset}
-                  aria-pressed={on}
-                  aria-label={t("appearance.wallpaper.presetUse", { name })}
-                  disabled={applyPreset.isPending}
-                  onClick={() => applyPreset.mutate(id)}
-                >
-                  <img className={s.presetImg} src={wallpaperDataUri(id)} alt="" draggable={false} />
-                  <span className={s.presetName}>
-                    {name}
-                    {on && <CheckmarkCircleFilled className={s.presetCheck} aria-hidden />}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          <div
-            className={s.wallPreview}
-            style={
-              wallpaper.data
-                ? { backgroundImage: `url(${wallpaper.data})` }
-                : undefined
-            }
-          >
-            {!wallpaper.data && <ImageAddRegular />}
-          </div>
-          <div className={s.wallActions}>
-            <Button
-              appearance="secondary"
-              disabled={upload.isPending}
-              onClick={() => upload.mutate()}
+            <div
+              className={s.wallPreview}
+              style={
+                shownWallpaper
+                  ? { backgroundImage: `url(${shownWallpaper})` }
+                  : undefined
+              }
             >
-              {wallpaper.data
-                ? t("appearance.wallpaper.change")
-                : t("appearance.wallpaper.choose")}
-            </Button>
-            {wallpaper.data && (
+              {!shownWallpaper && <ImageAddRegular />}
+            </div>
+            <div className={s.wallActions}>
               <Button
-                appearance="subtle"
-                disabled={remove.isPending}
-                onClick={() => remove.mutate()}
+                appearance="secondary"
+                className={mergeClasses(mb.block, s.wallAction)}
+                disabled={upload.isPending}
+                onClick={() => upload.mutate()}
               >
-                {t("appearance.wallpaper.remove")}
+                {wallpaper.data
+                  ? t("appearance.wallpaper.change")
+                  : t("appearance.wallpaper.choose")}
               </Button>
-            )}
+              {shownWallpaper && (
+                <Button
+                  appearance="secondary"
+                  className={mergeClasses(mb.block, s.wallAction)}
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate()}
+                >
+                  {t("appearance.wallpaper.remove")}
+                </Button>
+              )}
+            </div>
+            {/* onde aparece; a página do jogo fica sempre sem (arte do jogo) */}
+            <BlockGroup>
+              <SelectBlock
+                label={t("appearance.wallpaper.scope")}
+                value={wallScope}
+                options={[
+                  { value: "home", label: t("appearance.wallpaper.scopeHome") },
+                  { value: "all", label: t("appearance.wallpaper.scopeAll") },
+                ]}
+                onChange={(v) => setWallScope(v as WallpaperScope)}
+              />
+            </BlockGroup>
           </div>
-          {/* onde aparece; a página do jogo fica sempre sem (arte do jogo) */}
-          <BlockGroup>
-            <SelectBlock
-              label={t("appearance.wallpaper.scope")}
-              value={wallScope}
-              options={[
-                { value: "home", label: t("appearance.wallpaper.scopeHome") },
-                { value: "all", label: t("appearance.wallpaper.scopeAll") },
-              ]}
-              onChange={(v) => setWallScope(v as WallpaperScope)}
-            />
-          </BlockGroup>
         </div>
       )}
     </div>

@@ -1,0 +1,64 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>ReEmu — gerador dos papéis de parede em vídeo</title>
+<canvas id="c" width="1920" height="1080"></canvas>
+<script type="module">
+  import { SCENES, W, H } from './scenes.js'
+  import { muxWebm } from './webm.js'
+
+  const canvas = document.getElementById('c')
+  const ctx = canvas.getContext('2d')
+
+  /** Desenha só um quadro (prévia/miniatura). */
+  window.frame = (id, t) => {
+    const draw = SCENES[id]()
+    draw(ctx, t)
+    return canvas.toDataURL('image/jpeg', 0.86)
+  }
+
+  /** Gera o WebM VP9 da cena `id` e devolve em base64. */
+  window.render = async (id, { seconds = 12, fps = 30, bitrate = 2_500_000, keyEvery = 60, codec = 'vp9' } = {}) => {
+    const draw = SCENES[id]()
+    const total = seconds * fps
+    const frames = []
+    let error = null
+    let description = null
+    const enc = new VideoEncoder({
+      output: (chunk, meta) => {
+        if (meta?.decoderConfig?.description) description = new Uint8Array(meta.decoderConfig.description)
+        const data = new Uint8Array(chunk.byteLength)
+        chunk.copyTo(data)
+        frames.push({ data, timeMs: Math.round(chunk.timestamp / 1000), key: chunk.type === 'key' })
+      },
+      error: (e) => { error = e },
+    })
+    // VP9 perfil 0, nível 4.1 (1080p30), 8 bits; ou AV1 Main, nível 4.0, 8 bits
+    const codecString = codec === 'av1' ? 'av01.0.08M.08' : 'vp09.00.41.08'
+    enc.configure({ codec: codecString, width: W, height: H, bitrate, bitrateMode: 'variable', framerate: fps, latencyMode: 'quality' })
+    for (let i = 0; i < total; i++) {
+      draw(ctx, i / total)
+      const vf = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) })
+      enc.encode(vf, { keyFrame: i % keyEvery === 0 })
+      vf.close()
+      while (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 1))
+    }
+    await enc.flush()
+    if (error) throw error
+    frames.sort((a, b) => a.timeMs - b.timeMs)
+    const bytes = muxWebm({
+      width: W, height: H, frames, durationMs: seconds * 1000,
+      codecId: codec === 'av1' ? 'V_AV1' : 'V_VP9', codecPrivate: codec === 'av1' ? description : null,
+    })
+    window.__out = bytes
+    return bytes.length
+  }
+
+  /** Pedaço `i` (de 1 MB) da saída em base64 — o CDP não leva tudo de uma vez. */
+  window.chunk = (i) => {
+    const part = window.__out.subarray(i * 1048576, (i + 1) * 1048576)
+    let s = ''
+    for (let k = 0; k < part.length; k += 32768) s += String.fromCharCode(...part.subarray(k, k + 32768))
+    return btoa(s)
+  }
+  window.ready = true
+</script>

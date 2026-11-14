@@ -1,7 +1,8 @@
 import { makeStyles, mergeClasses } from '@fluentui/react-components'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
-import { wallpaperUrl } from '../lib/tauri'
+import { useEffect, useRef, useState } from 'react'
+import { wallpaperPresetId, wallpaperUrl } from '../lib/tauri'
+import { wallpaperPosterUrl, wallpaperVideoUrl, type WallpaperId } from '../lib/wallpapers'
 
 /**
  * Fundo das telas, em um de dois modos (nunca os dois juntos):
@@ -138,6 +139,63 @@ function useWindowIdle(): boolean {
   return idle
 }
 
+/** "Reduzir movimento" do app (`data-reduce-motion` no `<html>`,
+ *  `lib/uiPrefs.ts`) ou do sistema; acompanha a troca sem recarregar. */
+function useReducedMotion(): boolean {
+  const read = () =>
+    document.documentElement.hasAttribute('data-reduce-motion') ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const [reduced, setReduced] = useState(read)
+  useEffect(() => {
+    const update = () => setReduced(read())
+    const mo = new MutationObserver(update)
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-reduce-motion'] })
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    mq.addEventListener('change', update)
+    return () => {
+      mo.disconnect()
+      mq.removeEventListener('change', update)
+    }
+  }, [])
+  return reduced
+}
+
+/**
+ * Papel de parede embutido em vídeo (`lib/wallpapers.ts`): loop sem som.
+ * Toca só no Windows (`CAN_DRIFT`, mesmo motivo da deriva dos brilhos: no
+ * Linux o WebKitGTK sem compositing repintaria a tela a cada quadro) e sem
+ * "reduzir movimento"; senão fica o 1º quadro (pôster). Pausa com a janela
+ * escondida ou sem foco e retoma de onde parou (`pause()`/`play()`, MDN
+ * HTMLMediaElement). No jogo o fundo nem existe (`/play` fica fora do
+ * `AppShell`).
+ */
+function WallpaperVideo({ id, idle, className }: { id: WallpaperId; idle: boolean; className: string }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  const reduced = useReducedMotion()
+  const plays = CAN_DRIFT && !reduced
+  useEffect(() => {
+    const v = ref.current
+    if (!v) return
+    if (idle) v.pause()
+    else void v.play().catch(() => {})
+  }, [idle, plays, id])
+  if (!plays) return <img src={wallpaperPosterUrl(id)} alt="" className={className} />
+  return (
+    <video
+      ref={ref}
+      className={className}
+      src={wallpaperVideoUrl(id)}
+      poster={wallpaperPosterUrl(id)}
+      muted
+      loop
+      autoPlay
+      playsInline
+      disablePictureInPicture
+      preload="auto"
+    />
+  )
+}
+
 export function AnimatedBackground({ showWallpaper = false }: { showWallpaper?: boolean }) {
   const s = useStyles()
   const idle = useWindowIdle()
@@ -151,6 +209,20 @@ export function AnimatedBackground({ showWallpaper = false }: { showWallpaper?: 
     staleTime: Infinity,
     enabled: showWallpaper,
   })
+  const preset = useQuery({
+    queryKey: ['wallpaper-preset'],
+    queryFn: wallpaperPresetId,
+    staleTime: Infinity,
+    enabled: showWallpaper,
+  })
+  if (showWallpaper && preset.data) {
+    return (
+      <div className={s.root} aria-hidden>
+        <WallpaperVideo id={preset.data} idle={idle} className={s.wallpaper} />
+        <div className={s.wallpaperVeil} />
+      </div>
+    )
+  }
   if (showWallpaper && wallpaper.data) {
     return (
       <div className={s.root} aria-hidden>
