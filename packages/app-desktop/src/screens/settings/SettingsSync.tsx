@@ -116,7 +116,7 @@ export function SettingsSync() {
   const { t, i18n } = useTranslation()
   const s = useStyles()
   const qc = useQueryClient()
-  const { status: query, machines, busy, error, setEnabled, setLabel, setPaused, setSaves, now, cancel } = useSync()
+  const { status: query, machines, busy, error, setEnabled, setLabel, setPaused, setSaves, setStates, uploadOldStates, now, cancel } = useSync()
   // Quem conecta por aqui quer sincronizar: os dois escopos num consentimento só.
   const { connect, cancel: cancelConnect, connecting, outcome } = useAlvanistaConnect({ saves: true })
   const st = query.data
@@ -384,18 +384,44 @@ export function SettingsSync() {
             if (!working) void setSaves(on)
           }}
         />
-        {/* Cada linha chega com o PR que a sincroniza; até lá, "em breve". */}
-        {(['states', 'settings'] as const).map((k) => (
-          <FieldBlock key={k} wide>
-            <span className={s.rowTitle}>
-              <Body1>{t(`sync.${k}`)}</Body1>
-              <Badge appearance="tint" color="informative">
-                {t('sync.soon')}
-              </Badge>
-            </span>
-            <Caption1 className={s.muted}>{t(`sync.${k}Hint`)}</Caption1>
+        <ToggleBlock
+          label={t('sync.states')}
+          description={t('sync.statesHint')}
+          checked={st.statesEnabled}
+          disabled={!st.enabled}
+          busy={working}
+          onChange={(on) => {
+            if (!working) void setStates(on)
+          }}
+        />
+        {st.enabled && st.statesEnabled && st.statesLocalOnly > 0 && (
+          <FieldBlock wide>
+            <Body1>{t('sync.statesLocalOnly', { count: st.statesLocalOnly })}</Body1>
+            {/* O backend só informa quantos; o botão aparece com qualquer
+                número acima de zero (os de "apagar tudo" sobem, os demais
+                seguem só aqui). */}
+            <div className={s.actions}>
+              <Button
+                appearance="secondary"
+                disabledFocusable={working}
+                icon={busy === 'oldStates' ? <Spinner size="tiny" /> : undefined}
+                onClick={() => void uploadOldStates()}
+              >
+                {t('sync.statesResend')}
+              </Button>
+            </div>
           </FieldBlock>
-        ))}
+        )}
+        {/* As configurações chegam com o PR que as sincroniza; até lá, "em breve". */}
+        <FieldBlock wide>
+          <span className={s.rowTitle}>
+            <Body1>{t('sync.settings')}</Body1>
+            <Badge appearance="tint" color="informative">
+              {t('sync.soon')}
+            </Badge>
+          </span>
+          <Caption1 className={s.muted}>{t('sync.settingsHint')}</Caption1>
+        </FieldBlock>
       </BlockGroup>
 
       {st.enabled && conflictCount > 0 && (

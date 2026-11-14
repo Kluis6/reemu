@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { InstalledCore, RomEntry, SyncConflict } from '../lib/tauri'
+import type { InstalledCore, RemoteState, RomEntry, SaveState, SyncConflict } from '../lib/tauri'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -15,6 +15,9 @@ const api = vi.hoisted(() => ({
   syncSaveStatus: vi.fn(),
   syncConflicts: vi.fn(),
   syncResolve: vi.fn(),
+  listSaveStates: vi.fn(),
+  syncStatesFor: vi.fn(),
+  syncDownloadState: vi.fn(),
 }))
 vi.mock('../lib/tauri', async (orig) => ({ ...(await orig<typeof import('../lib/tauri')>()), ...api }))
 // O Dialog do Fluent não monta no happy-dom desta árvore ("presenceFn is not a
@@ -70,7 +73,12 @@ const CONFLICT: SyncConflict = {
 }
 
 function Where() {
-  return <div data-testid="where">{useLocation().pathname}</div>
+  const loc = useLocation()
+  return (
+    <div data-testid="where" data-search={loc.search}>
+      {loc.pathname}
+    </div>
+  )
 }
 
 let host: HTMLDivElement
@@ -124,6 +132,8 @@ beforeEach(() => {
   api.syncResolve.mockResolvedValue(undefined)
   api.syncConflicts.mockResolvedValue([CONFLICT])
   api.syncSaveStatus.mockResolvedValue({ state: 'conflict', syncedAt: null, versions: 2, key: KEY })
+  api.listSaveStates.mockResolvedValue([])
+  api.syncStatesFor.mockResolvedValue({ states: [], offline: false, installedVersion: null })
 })
 afterEach(async () => {
   await unmount()
@@ -197,5 +207,136 @@ describe('RomDetail play with a game save conflict', () => {
     await act(async () => finish({ state: 'conflict', syncedAt: null, versions: 2, key: KEY }))
     await settle()
     expect(dialog()).not.toBeNull()
+  })
+})
+
+const remote = (over: Partial<RemoteState>): RemoteState => ({
+  id: 's1',
+  machine: 'Notebook',
+  slot: 1,
+  createdAt: 1_700_000_000,
+  core: 'mgba_libretro',
+  coreVersion: '0.10.1',
+  available: true,
+  reason: null,
+  hasThumbnail: false,
+  size: 10,
+  ...over,
+})
+const SAVED: SaveState = {
+  id: 'local-1',
+  slot: 1,
+  createdAt: 1,
+  filePath: 'x',
+  hasThumbnail: false,
+  playTimeAtSave: null,
+  coreVersion: '0.10.1',
+  versionChanged: false,
+}
+const OTHER_BUILD = remote({
+  id: 's2',
+  machine: 'Deck',
+  slot: 2,
+  coreVersion: '0.10.0',
+  available: false,
+  reason: 'other_version',
+})
+
+async function openStates() {
+  await act(async () => byText('Save states')!.click())
+  await settle()
+}
+const rows = (kind: 'available' | 'unavailable') =>
+  [...document.querySelectorAll<HTMLElement>(`[data-remote-state="${kind}"]`)]
+
+describe('RomDetail states from other machines', () => {
+  beforeEach(() => {
+    api.syncStatesFor.mockResolvedValue({
+      states: [remote({}), OTHER_BUILD],
+      offline: false,
+      installedVersion: '0.10.1',
+    })
+    api.syncDownloadState.mockResolvedValue(SAVED)
+    api.syncSaveStatus.mockResolvedValue({ state: 'synced', syncedAt: 1, versions: 1, key: KEY })
+  })
+
+  it('shows both kinds of row, and the dimmed one has no button', async () => {
+    await mount()
+    await openStates()
+    expect(api.syncStatesFor).toHaveBeenCalledWith('r1', 'mgba_libretro')
+    const [ok] = rows('available')
+    expect(ok.textContent).toContain('Notebook')
+    expect(ok.textContent).toContain('mesmo core e versão')
+    expect([...ok.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Baixar e carregar'])
+    const [dim] = rows('unavailable')
+    expect(dim.textContent).toContain('mgba_libretro 0.10.0 em Deck, 0.10.1 aqui')
+    expect(dim.querySelectorAll('button, a, input')).toHaveLength(0)
+    expect(document.querySelectorAll('[data-remote-state]')).toHaveLength(2)
+  })
+
+  it('download and load: downloads into the slot and launches with that state', async () => {
+    await mount()
+    await openStates()
+    await act(async () => byText('Baixar e carregar')!.click())
+    await settle()
+    expect(api.syncDownloadState).toHaveBeenCalledWith('r1', 'mgba_libretro', 's1', false)
+    expect(where()).toBe('/play/r1')
+    expect(host.querySelector('[data-testid="where"]')!.getAttribute('data-search')).toContain('loadState=local-1')
+  })
+
+  it('an occupied slot asks first: Cancelar keeps everything, Substituir retries with overwrite', async () => {
+    api.syncDownloadState.mockRejectedValueOnce('slot_occupied')
+    await mount()
+    await openStates()
+    await act(async () => byText('Baixar e carregar')!.click())
+    await settle()
+    expect(document.body.textContent).toContain('O state de agora deste slot vai para a pasta de resguardo.')
+    expect(api.syncDownloadState).toHaveBeenCalledTimes(1)
+    // o foco cai no Cancelar, o lado seguro
+    expect(document.activeElement?.textContent).toBe('Cancelar')
+
+    await act(async () => byText('Cancelar')!.click())
+    await settle()
+    expect(document.body.textContent).not.toContain('vai para a pasta de resguardo')
+    expect(where()).toBe('/game/r1')
+    expect(api.syncDownloadState).toHaveBeenCalledTimes(1)
+    // o foco volta ao botão da linha
+    expect(document.activeElement?.textContent).toBe('Baixar e carregar')
+
+    api.syncDownloadState.mockRejectedValueOnce('slot_occupied')
+    await act(async () => byText('Baixar e carregar')!.click())
+    await settle()
+    await act(async () => byText('Substituir')!.click())
+    await settle()
+    expect(api.syncDownloadState).toHaveBeenLastCalledWith('r1', 'mgba_libretro', 's1', true)
+    expect(where()).toBe('/play/r1')
+  })
+
+  it('a download that fails stays on the page and says why', async () => {
+    api.syncDownloadState.mockRejectedValueOnce('hash_mismatch')
+    await mount()
+    await openStates()
+    await act(async () => byText('Baixar e carregar')!.click())
+    await settle()
+    expect(where()).toBe('/game/r1')
+    expect(byText('Baixar e carregar')).toBeDefined()
+  })
+
+  it('asks nothing with the states switch off, offline or with no rows', async () => {
+    api.syncStatus.mockResolvedValue({ ...STATUS, statesEnabled: false })
+    await mount()
+    await openStates()
+    expect(api.syncStatesFor).not.toHaveBeenCalled()
+    expect(document.querySelectorAll('[data-remote-state]')).toHaveLength(0)
+    await unmount()
+    host.remove()
+
+    api.syncStatus.mockResolvedValue(STATUS)
+    api.syncStatesFor.mockResolvedValue({ states: [], offline: true, installedVersion: null })
+    await mount()
+    await openStates()
+    expect(api.syncStatesFor).toHaveBeenCalled()
+    expect(document.querySelectorAll('[data-remote-state]')).toHaveLength(0)
+    expect(document.body.textContent).not.toContain('Em outras máquinas')
   })
 })

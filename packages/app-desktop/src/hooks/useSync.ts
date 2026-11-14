@@ -11,11 +11,14 @@ import {
   syncResolve,
   syncRestore,
   syncSaveStatus,
+  syncStatesFor,
   syncSetEnabled,
   syncSetLabel,
   syncSetPaused,
   syncSetSavesEnabled,
+  syncSetStatesEnabled,
   syncStatus,
+  syncUploadOldStates,
   syncVersions,
   type SyncStatus,
 } from '../lib/tauri'
@@ -27,6 +30,19 @@ export const SYNC_CONFLICTS_KEY = ['sync-conflicts'] as const
 /** Prefixo das linhas de save de todas as páginas de jogo. */
 export const SYNC_SAVE_LINE_KEY = ['sync-save-line'] as const
 export const SYNC_VERSIONS_KEY = ['sync-versions'] as const
+/** Os states das outras máquinas, por jogo e core. */
+export const SYNC_REMOTE_STATES_KEY = ['sync-remote-states'] as const
+
+/** Os códigos de `sync_download_state` que a tela explica (cada um com uma
+ *  chave `sync.state.err.<código>`); `other_core`, `other_version` e
+ *  `unversioned` valem `unavailable`. O resto vira `failed`. */
+export type StateDownloadError = 'unavailable' | 'offline' | 'loading' | 'backup_failed' | 'hash_mismatch' | 'not_found' | 'failed'
+export function stateDownloadError(err: unknown): StateDownloadError {
+  const code = typeof err === 'string' ? err : err instanceof Error ? err.message : ''
+  if (['other_core', 'other_version', 'unversioned'].includes(code)) return 'unavailable'
+  const known: StateDownloadError[] = ['offline', 'loading', 'backup_failed', 'hash_mismatch', 'not_found']
+  return known.find((k) => k === code) ?? 'failed'
+}
 
 /** Os códigos que os comandos `sync_*` devolvem ao falhar (`SyncError`), cada um
  *  com uma chave `sync.err.<código>`. */
@@ -77,7 +93,7 @@ export function useSync() {
     retry: false,
   })
 
-  const [busy, setBusy] = useState<'enable' | 'label' | 'pause' | 'now' | 'saves' | null>(null)
+  const [busy, setBusy] = useState<'enable' | 'label' | 'pause' | 'now' | 'saves' | 'states' | 'oldStates' | null>(null)
   const [error, setError] = useState<SyncErrorCode | null>(null)
   const busyRef = useRef(false)
   const enablingRef = useRef(false)
@@ -110,7 +126,7 @@ export function useSync() {
         await qc.cancelQueries({ queryKey: SYNC_STATUS_KEY })
         qc.setQueryData(SYNC_STATUS_KEY, next)
         // A lista de aparelhos muda ao ligar, desligar e renomear.
-        if (kind !== 'pause' && kind !== 'now' && kind !== 'saves') {
+        if (kind !== 'pause' && kind !== 'now' && kind !== 'saves' && kind !== 'states' && kind !== 'oldStates') {
           void qc.invalidateQueries({ queryKey: SYNC_MACHINES_KEY })
         }
       } catch (err) {
@@ -137,12 +153,15 @@ export function useSync() {
   const setPaused = useCallback((p: boolean) => run('pause', () => syncSetPaused(p)), [run])
   const now = useCallback(() => run('now', () => syncNow()), [run])
   const setSaves = useCallback((on: boolean) => run('saves', () => syncSetSavesEnabled(on)), [run])
+  const setStates = useCallback((on: boolean) => run('states', () => syncSetStatesEnabled(on)), [run])
+  /** "Enviar de novo": os states que um "apagar tudo" no site deixou só aqui. */
+  const uploadOldStates = useCallback(() => run('oldStates', () => syncUploadOldStates()), [run])
   /** Cancela a espera do consentimento no navegador (o cancelar do Alvanista). */
   const cancel = useCallback(() => {
     void alvanistaCancel().catch(() => {})
   }, [])
 
-  return { status, machines, busy, error, setEnabled, setLabel, setPaused, setSaves, now, cancel }
+  return { status, machines, busy, error, setEnabled, setLabel, setPaused, setSaves, setStates, uploadOldStates, now, cancel }
 }
 
 /** A linha de save de um jogo. Só disco e SQLite: sem sync ligado, revogado ou
@@ -250,4 +269,25 @@ export function useSyncEvents() {
       dispose?.()
     }
   }, [qc])
+}
+
+/**
+ * Os save states das outras máquinas para um jogo (D116). Só consulta com o
+ * sync ligado e o interruptor dos states aceso, e nunca segura a página: sem
+ * dados, a lista simplesmente não aparece. `coreId` nulo: o core aberto (menu
+ * de pausa).
+ */
+export function useRemoteStates(romId: string, coreId: string | null, enabled = true) {
+  const status = useQuery({ queryKey: SYNC_STATUS_KEY, queryFn: syncStatus, retry: false, staleTime: 60_000 })
+  const st = status.data
+  const on = enabled && st?.enabled === true && !st.revoked && !st.pausedLocal && st.statesEnabled && romId !== ''
+  const q = useQuery({
+    queryKey: [...SYNC_REMOTE_STATES_KEY, romId, coreId],
+    queryFn: () => syncStatesFor(romId, coreId),
+    enabled: on,
+    retry: false,
+    staleTime: 60_000,
+  })
+  // Desligado depois de lido: o que ficou no cache não aparece.
+  return { ...q, data: on ? q.data : undefined }
 }

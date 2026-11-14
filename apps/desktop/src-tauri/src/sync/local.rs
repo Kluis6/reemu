@@ -597,7 +597,7 @@ impl StateFile {
 
 /// O stem do arquivo de uma ROM, cru, como o `.srm` dela sobe
 /// (`emu_session::srm_path`).
-fn rom_stem(rom_path: &str) -> Option<String> {
+pub fn rom_stem(rom_path: &str) -> Option<String> {
     let srm = emu_session::srm_path(Path::new(""), rom_path);
     let name = srm.file_name()?.to_str()?;
     // `srm_path` termina sempre em `.srm`; o stem pode ter pontos

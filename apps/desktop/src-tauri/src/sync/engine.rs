@@ -44,6 +44,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
+mod remote_states;
+pub use remote_states::RemoteStates;
 mod states;
 
 /// Quanto um jogo espera pela nuvem antes de abrir (D117).
@@ -344,6 +346,12 @@ pub struct Engine {
     /// um state: um state maior não sobe (nem é enviado para ouvir o 413).
     /// Vale até outro 413 dizer outro número ou o app abrir de novo.
     state_ceiling: Mutex<Option<i64>>,
+    /// Os states de outras máquinas da última listagem, por `save_id`: o
+    /// download e a miniatura acham ali a versão e o nome.
+    remote_found: Mutex<HashMap<String, remote_states::Found>>,
+    /// As miniaturas já baixadas, por (`save_id`, versão): cada uma vem uma
+    /// vez só.
+    remote_thumbs: Mutex<HashMap<(String, String), Vec<u8>>>,
 }
 
 impl Engine {
@@ -373,6 +381,8 @@ impl Engine {
             state_debounce: STATE_DEBOUNCE,
             states_lock: tokio::sync::Mutex::new(()),
             state_ceiling: Mutex::new(None),
+            remote_found: Mutex::new(HashMap::new()),
+            remote_thumbs: Mutex::new(HashMap::new()),
         }
     }
 
@@ -1458,16 +1468,21 @@ impl Engine {
     /// Onde o backup de `path` fica: `<dados>/sync-backups/<carimbo>/<caminho
     /// relativo aos dados>`, sem nunca sobrescrever um backup.
     fn backup_target(&self, path: &Path) -> io::Result<PathBuf> {
+        let rel = match path.strip_prefix(&self.dirs.data) {
+            Ok(rel) if !rel.as_os_str().is_empty() => rel.to_path_buf(),
+            _ => PathBuf::from(path.file_name().unwrap_or(path.as_os_str())),
+        };
+        self.backup_target_at(rel)
+    }
+
+    /// O mesmo para um caminho já relativo à pasta do carimbo.
+    fn backup_target_at(&self, rel: PathBuf) -> io::Result<PathBuf> {
         let stamp = {
             let mut s = lock(&self.stamp);
             if s.is_empty() {
                 *s = local_stamp();
             }
             s.clone()
-        };
-        let rel = match path.strip_prefix(&self.dirs.data) {
-            Ok(rel) if !rel.as_os_str().is_empty() => rel.to_path_buf(),
-            _ => PathBuf::from(path.file_name().unwrap_or(path.as_os_str())),
         };
         let first = self.dirs.data.join("sync-backups").join(stamp).join(rel);
         if let Some(parent) = first.parent() {
@@ -2286,6 +2301,7 @@ mod tests {
     use crate::sync::api::SavesApi;
     use crate::sync::device::{DeviceStore, HardwarePayload};
     use domain::library::Rom;
+    use domain::save_state::SaveStateRepository;
     use serde_json::{json, Value};
     use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
     use wiremock::matchers::{body_partial_json, method, path, query_param};
@@ -6514,5 +6530,500 @@ mod tests {
         assert_eq!(field(&posts[1].body, "file").as_deref(), Some("second!!"));
         let base = r.base_of(SLOT3_KEY).await.unwrap();
         assert_eq!(base.local_row.as_deref(), Some(second.id.as_str()));
+    }
+
+    // --- states de outras máquinas (D116, D122) ----------------------------
+
+    const V_OTHER: &str = "1.63 2b1c0d7";
+
+    /// Uma linha `kind=state` de outra máquina: `device`, a vaga no nome,
+    /// o core e a versão (`None`: sem versão), escrita em `at`.
+    fn other_state(
+        save_id: &str,
+        filename: &str,
+        device: &str,
+        core: &str,
+        core_version: Option<&str>,
+        at: &str,
+        bytes: &[u8],
+    ) -> Value {
+        let mut r = state_row(save_id, filename, bytes, &format!("v-{save_id}"));
+        r["device_token_id"] = json!(device);
+        r["core"] = json!(core);
+        r["core_version"] = json!(core_version);
+        r["current"]["device_token_id"] = json!(device);
+        r["current"]["server_created_at"] = json!(at);
+        r
+    }
+
+    /// A miniatura de um state: o mesmo nome mais `.png`, `kind=state`.
+    fn other_thumb(save_id: &str, of: &Value, bytes: &[u8]) -> Value {
+        other_state(
+            save_id,
+            &format!("{}.png", of["filename"].as_str().unwrap()),
+            of["device_token_id"].as_str().unwrap(),
+            of["core"].as_str().unwrap(),
+            of["core_version"].as_str(),
+            "2026-11-13T10:00:01Z",
+            bytes,
+        )
+    }
+
+    /// A listagem de states de todas as máquinas: `kind=state` e a plataforma,
+    /// sem `device_token_id`.
+    async fn mount_all_states(server: &MockServer, rows: Vec<Value>) -> Listing {
+        let listing = Listing(Arc::new(Mutex::new(rows)));
+        Mock::given(method("GET"))
+            .and(path(SAVES))
+            .and(query_param("kind", "state"))
+            .and(query_param("platform", "snes"))
+            .respond_with(listing.clone())
+            .mount(server)
+            .await;
+        listing
+    }
+
+    /// Duas outras máquinas na conta, além desta (`dev1`).
+    async fn remote_rig(name: &str, rows: Vec<Value>) -> Rig {
+        let r = rig(name).await;
+        r.rom("r1", CHRONO, "snes").await;
+        mount_devices(
+            &r.server,
+            vec![
+                device("dev1", "Sala"),
+                device("dev2", "Quarto"),
+                device("dev3", "Trabalho"),
+            ],
+        )
+        .await;
+        mount_all_states(&r.server, rows).await;
+        r
+    }
+
+    async fn remote(r: &Rig, installed: Option<&str>) -> RemoteStates {
+        r.engine
+            .states_for(&r.alva, "r1", Some(CORE), installed)
+            .await
+    }
+
+    const SLOT1: &str = "Chrono Trigger (USA)__slot1.state";
+    const LOCAL1: &str = "saves/r1__snes9x_libretro__slot1.state";
+    const T0: &str = "2026-11-13T10:00:00Z";
+
+    #[tokio::test]
+    async fn states_for_marks_available_only_on_exact_match() {
+        let mut rows = vec![
+            other_state("same", SLOT1, "dev2", CORE, Some(V163), T0, b"a"),
+            other_state(
+                "build",
+                "Chrono Trigger (USA)__slot2.state",
+                "dev2",
+                CORE,
+                Some(V_OTHER),
+                "2026-11-13T09:00:00Z",
+                b"b",
+            ),
+            other_state(
+                "core",
+                "Chrono Trigger (USA)__slot3.state",
+                "dev3",
+                "bsnes_libretro",
+                Some(V163),
+                "2026-11-13T08:00:00Z",
+                b"c",
+            ),
+            other_state(
+                "none",
+                "Chrono Trigger (USA)__quick.state",
+                "dev3",
+                CORE,
+                None,
+                "2026-11-13T07:00:00Z",
+                b"d",
+            ),
+        ];
+        rows.push(other_thumb("same-png", &rows[0], b"png"));
+        let r = remote_rig("remote-exact", rows).await;
+
+        let got = remote(&r, Some(V163)).await;
+        assert!(!got.offline);
+        assert_eq!(got.installed_version.as_deref(), Some(V163));
+        let by_id = |id: &str| got.states.iter().find(|s| s.id == id).unwrap().clone();
+        assert_eq!(got.states.len(), 4, "a miniatura não é um state");
+
+        let same = by_id("same");
+        assert!(same.available);
+        assert_eq!(same.reason, None);
+        assert_eq!(same.slot, Some(1));
+        assert_eq!(same.machine, "Quarto");
+        assert!(same.has_thumbnail);
+        assert_eq!(same.size, 1);
+        // Só o hash do build muda: `1.63 fae2fea` contra `1.63 2b1c0d7`.
+        let build = by_id("build");
+        assert!(!build.available);
+        assert_eq!(build.reason.as_deref(), Some("other_version"));
+        assert_eq!(build.core_version.as_deref(), Some(V_OTHER));
+        assert!(!build.has_thumbnail);
+        let core = by_id("core");
+        assert_eq!(core.reason.as_deref(), Some("other_core"));
+        assert_eq!(core.machine, "Trabalho");
+        let none = by_id("none");
+        assert_eq!(none.reason.as_deref(), Some("unversioned"));
+        assert_eq!(none.slot, None, "quick é a vaga sem número");
+        assert!(!none.available);
+        // O mais novo primeiro.
+        let order: Vec<&str> = got.states.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(order, ["same", "build", "core", "none"]);
+
+        // Sem versão instalada nada é comprovado: nada fica disponível.
+        let unknown = remote(&r, None).await;
+        assert!(unknown.states.iter().all(|s| !s.available));
+        let same = unknown.states.iter().find(|s| s.id == "same").unwrap();
+        assert_eq!(same.reason.as_deref(), Some("unversioned"));
+
+        // Um pedido só: `kind=state` e a plataforma, sem `filename` nem dono.
+        let q = r.kind_listings("state").await;
+        let has = |k: &str| q[0].url.query_pairs().any(|(n, _)| n == k);
+        assert!(has("platform"));
+        assert!(!has("filename") && !has("device_token_id") && !has("core"));
+    }
+
+    #[tokio::test]
+    async fn states_for_keeps_the_newest_row_per_device_filename_core() {
+        let rows = vec![
+            // A mesma vaga da mesma máquina e do mesmo core, antes e depois
+            // de o core atualizar: só a nova.
+            other_state("old", SLOT1, "dev2", CORE, Some(V_OTHER), T0, b"o"),
+            other_state(
+                "new",
+                SLOT1,
+                "dev2",
+                CORE,
+                Some(V163),
+                "2026-11-14T10:00:00Z",
+                b"n",
+            ),
+            // Outra máquina, o mesmo nome: é outra linha.
+            other_state(
+                "pc",
+                SLOT1,
+                "dev3",
+                CORE,
+                Some(V163),
+                "2026-11-12T10:00:00Z",
+                b"p",
+            ),
+            // Outro core da mesma máquina: é outra linha.
+            other_state(
+                "bs",
+                SLOT1,
+                "dev2",
+                "bsnes_libretro",
+                Some("v115"),
+                "2026-11-11T10:00:00Z",
+                b"q",
+            ),
+        ];
+        let r = remote_rig("remote-newest", rows).await;
+        let got = remote(&r, Some(V163)).await;
+        let ids: Vec<&str> = got.states.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["new", "pc", "bs"], "a velha de dev2 não aparece");
+        assert!(got.states[0].available);
+        assert_eq!(got.states[0].core_version.as_deref(), Some(V163));
+    }
+
+    #[tokio::test]
+    async fn states_for_skips_this_devices_rows_and_other_games() {
+        let rows = vec![
+            other_state("mine", SLOT1, "dev1", CORE, Some(V163), T0, b"m"),
+            other_state(
+                "other-game",
+                "Super Mario World (USA)__slot1.state",
+                "dev2",
+                CORE,
+                Some(V163),
+                T0,
+                b"x",
+            ),
+            // O stem de outra ROM que só começa igual.
+            other_state(
+                "longer",
+                "Chrono Trigger (USA) Hack__slot1.state",
+                "dev2",
+                CORE,
+                Some(V163),
+                T0,
+                b"y",
+            ),
+            other_state(
+                "bad-slot",
+                "Chrono Trigger (USA)__slotX.state",
+                "dev2",
+                CORE,
+                Some(V163),
+                T0,
+                b"z",
+            ),
+            other_state("theirs", SLOT1, "dev2", CORE, Some(V163), T0, b"t"),
+        ];
+        let r = remote_rig("remote-skips", rows).await;
+        let got = remote(&r, Some(V163)).await;
+        let ids: Vec<&str> = got.states.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["theirs"]);
+    }
+
+    #[tokio::test]
+    async fn a_listing_error_gives_an_empty_list_and_writes_nothing() {
+        let r = rig("remote-error").await;
+        r.rom("r1", CHRONO, "snes").await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        Mock::given(method("GET"))
+            .and(path(SAVES))
+            .respond_with(ResponseTemplate::new(500))
+            .mount(&r.server)
+            .await;
+        r.save_state("r1", Some(1), Some(V163), b"mine", None).await;
+        let before = r.read(LOCAL1);
+
+        let got = remote(&r, Some(V163)).await;
+        assert!(got.offline);
+        assert!(got.states.is_empty());
+        let dl = r
+            .engine
+            .download_state(&r.alva, "r1", Some(CORE), Some(V163), "x", true)
+            .await;
+        assert!(dl.is_err());
+        // Nada mudou: nem arquivo, nem linha, nem backup, nem base.
+        assert_eq!(r.read(LOCAL1), before);
+        assert_eq!(r.states.list_states_for_rom("r1").await.unwrap().len(), 1);
+        assert!(r.backups().is_empty());
+        assert!(r.repo.base_get(SLOT3_KEY).await.unwrap().is_none());
+        assert!(r.reqs("POST", SAVES).await.is_empty());
+
+        // Com os states desligados nem a listagem sai.
+        r.sync.devices.set_states_enabled(false).await.unwrap();
+        let n = r.listings().await;
+        let off = remote(&r, Some(V163)).await;
+        assert!(off.offline && off.states.is_empty());
+        assert_eq!(r.listings().await, n);
+    }
+
+    /// Uma ROM e um state de `dev2` no slot 1 pronto para baixar, com a
+    /// miniatura.
+    async fn download_rig(name: &str, version: &str) -> Rig {
+        let st = other_state(
+            "s1",
+            SLOT1,
+            "dev2",
+            CORE,
+            Some(version),
+            T0,
+            b"remote-bytes",
+        );
+        let th = other_thumb("t1", &st, b"remote-png");
+        let r = remote_rig(name, vec![st, th]).await;
+        mount_content(&r.server, "s1", "v-s1", b"remote-bytes").await;
+        mount_content(&r.server, "t1", "v-t1", b"remote-png").await;
+        r
+    }
+
+    async fn download(
+        r: &Rig,
+        overwrite: bool,
+    ) -> Result<domain::save_state::SaveStateMetadata, String> {
+        r.engine
+            .download_state(&r.alva, "r1", Some(CORE), Some(V163), "s1", overwrite)
+            .await
+    }
+
+    #[tokio::test]
+    async fn download_state_refuses_unavailable() {
+        for (version, core, expected) in [
+            (Some(V_OTHER), CORE, "other_version"),
+            (Some(V163), "bsnes_libretro", "other_core"),
+            (None, CORE, "unversioned"),
+        ] {
+            let st = other_state("s1", SLOT1, "dev2", core, version, T0, b"remote-bytes");
+            let r = remote_rig("remote-refuse", vec![st]).await;
+            mount_content(&r.server, "s1", "v-s1", b"remote-bytes").await;
+            assert_eq!(download(&r, true).await.unwrap_err(), expected);
+            assert_eq!(r.content_gets().await, 0, "{expected}: nada baixado");
+            assert!(r.states.list_states_for_rom("r1").await.unwrap().is_empty());
+            assert!(r.read(LOCAL1).is_none());
+        }
+        // Um id que a listagem não tem.
+        let r = download_rig("remote-refuse-id", V163).await;
+        let got = r
+            .engine
+            .download_state(&r.alva, "r1", Some(CORE), Some(V163), "nope", true)
+            .await;
+        assert_eq!(got.unwrap_err(), "not_found");
+    }
+
+    #[tokio::test]
+    async fn download_state_asks_before_overwriting() {
+        let r = download_rig("remote-asks", V163).await;
+        r.save_state(
+            "r1",
+            Some(1),
+            Some(V163),
+            b"local-bytes",
+            Some(b"local-png"),
+        )
+        .await;
+
+        assert_eq!(download(&r, false).await.unwrap_err(), "slot_occupied");
+        assert_eq!(r.content_gets().await, 0, "perguntou antes de baixar");
+        assert_eq!(r.read(LOCAL1).unwrap(), b"local-bytes");
+        assert!(r.backups().is_empty());
+
+        let meta = download(&r, true).await.unwrap();
+        assert_eq!(meta.slot, Some(1));
+        assert_eq!(r.read(LOCAL1).unwrap(), b"remote-bytes");
+        // Uma vaga livre não pergunta.
+        let r = download_rig("remote-free", V163).await;
+        assert!(download(&r, false).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn download_state_backs_up_the_slot_before_replacing_it() {
+        let r = download_rig("remote-backup", V163).await;
+        r.save_state(
+            "r1",
+            Some(1),
+            Some(V163),
+            b"local-bytes",
+            Some(b"local-png"),
+        )
+        .await;
+
+        let meta = download(&r, true).await.unwrap();
+        let backups = r.backups();
+        let names: Vec<&str> = backups.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "states/r1__snes9x_libretro__slot1.png",
+                "states/r1__snes9x_libretro__slot1.state"
+            ]
+        );
+        assert_eq!(backups[0].1, b"local-png");
+        assert_eq!(backups[1].1, b"local-bytes");
+        // O de agora é o baixado, com a miniatura e a versão DESTA máquina.
+        assert_eq!(r.read(LOCAL1).unwrap(), b"remote-bytes");
+        assert_eq!(
+            r.read("saves/r1__snes9x_libretro__slot1.png").unwrap(),
+            b"remote-png"
+        );
+        assert_eq!(meta.core_version.as_deref(), Some(V163));
+        assert_eq!(meta.core_id, CORE);
+        let rows = r.states.list_states_for_rom("r1").await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].id, meta.id);
+    }
+
+    #[tokio::test]
+    async fn a_failed_backup_leaves_the_slot_alone() {
+        let r = download_rig("remote-backup-fails", V163).await;
+        r.save_state("r1", Some(1), Some(V163), b"local-bytes", None)
+            .await;
+        // `sync-backups` é um arquivo: a pasta de resguardo não pode nascer.
+        r.write("sync-backups", b"not a folder");
+
+        assert_eq!(download(&r, true).await.unwrap_err(), "backup_failed");
+        assert_eq!(
+            r.read(LOCAL1).unwrap(),
+            b"local-bytes",
+            "sem backup nada é trocado"
+        );
+        assert_eq!(r.states.list_states_for_rom("r1").await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn download_state_maps_slot0_to_the_quicksave_slot() {
+        let zero = other_state(
+            "z",
+            "Chrono Trigger (USA)__slot0.state",
+            "dev2",
+            CORE,
+            Some(V163),
+            T0,
+            b"zero",
+        );
+        let quick = other_state(
+            "q",
+            "Chrono Trigger (USA)__quick.state",
+            "dev2",
+            CORE,
+            Some(V163),
+            "2026-11-13T09:00:00Z",
+            b"quick",
+        );
+        let r = remote_rig("remote-slot0", vec![zero, quick]).await;
+        mount_content(&r.server, "z", "v-z", b"zero").await;
+        mount_content(&r.server, "q", "v-q", b"quick").await;
+        let list = remote(&r, Some(V163)).await;
+        assert_eq!(list.states[0].slot, Some(0));
+        assert_eq!(list.states[1].slot, None);
+
+        let get = |id: &'static str, overwrite: bool| {
+            r.engine
+                .download_state(&r.alva, "r1", Some(CORE), Some(V163), id, overwrite)
+        };
+        let meta = get("z", false).await.unwrap();
+        assert_eq!(meta.slot, Some(0));
+        let local = r
+            .states
+            .find_state_in_slot("r1", CORE, 0)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(std::fs::read(&local.file_path).unwrap(), b"zero");
+
+        let meta = get("q", false).await.unwrap();
+        assert_eq!(meta.slot, None);
+        // Pedir de novo a vaga sem número pergunta, e trocar deixa uma linha.
+        assert_eq!(get("q", false).await.unwrap_err(), "slot_occupied");
+        get("q", true).await.unwrap();
+        let rows = r.states.list_states_for_rom("r1").await.unwrap();
+        assert_eq!(rows.iter().filter(|s| s.slot.is_none()).count(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_download_never_writes_while_a_game_is_loading() {
+        let r = download_rig("remote-loading", V163).await;
+        r.set_playing(Playing::Loading);
+        assert_eq!(download(&r, true).await.unwrap_err(), "loading");
+        assert!(r.states.list_states_for_rom("r1").await.unwrap().is_empty());
+        // Com o jogo rodando (o menu de pausa) é normal.
+        r.set_playing(Playing::Running(Some("r1".into())));
+        assert!(download(&r, true).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn a_downloaded_state_with_the_wrong_hash_is_not_written() {
+        let st = other_state("s1", SLOT1, "dev2", CORE, Some(V163), T0, b"remote-bytes");
+        let r = remote_rig("remote-hash", vec![st]).await;
+        mount_content(&r.server, "s1", "v-s1", b"cut off").await;
+        r.save_state("r1", Some(1), Some(V163), b"local-bytes", None)
+            .await;
+        assert_eq!(download(&r, true).await.unwrap_err(), "hash_mismatch");
+        assert_eq!(r.read(LOCAL1).unwrap(), b"local-bytes");
+        assert!(r.backups().is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_thumbnail_of_a_remote_state_is_fetched_once() {
+        let r = download_rig("remote-thumb", V163).await;
+        let got = remote(&r, Some(V163)).await;
+        assert!(got.states[0].has_thumbnail);
+        assert_eq!(r.engine.state_thumbnail(&r.alva, "s1").await, b"remote-png");
+        assert_eq!(r.engine.state_thumbnail(&r.alva, "s1").await, b"remote-png");
+        assert_eq!(r.content_gets().await, 1);
+        assert!(r
+            .engine
+            .state_thumbnail(&r.alva, "unknown")
+            .await
+            .is_empty());
     }
 }

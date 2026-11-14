@@ -50,6 +50,7 @@ import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { CheatsPanel } from "../components/CheatsPanel";
 import { SaveStateThumb } from "../components/SaveStateThumb";
+import { RemoteStateList } from "../components/sync/RemoteStateList";
 import { ShaderPicker } from "../components/ShaderPicker";
 import { ShaderParams } from "../components/ShaderParams";
 import {
@@ -856,6 +857,15 @@ export function RomDetail() {
                   </Button>
                 </div>
               ))}
+              {/* states de outras máquinas: depois dos locais, sem segurar a página */}
+              <RemoteStateList
+                romId={rom.id}
+                coreId={chosenCore || null}
+                onDownloaded={(saved) => {
+                  void qc.invalidateQueries({ queryKey: ["save-states", rom.id] });
+                  play(saved.id);
+                }}
+              />
             </>
           )}
           {panel === "shader" && shaderInfo.data?.gpu && (

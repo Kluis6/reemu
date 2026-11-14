@@ -38,6 +38,8 @@ import type { Profile } from './bindings/Profile'
 import type { RomEntry } from './bindings/RomEntry'
 import type { RomShader } from './bindings/RomShader'
 import type { RomSource } from './bindings/RomSource'
+import type { RemoteState } from './bindings/RemoteState'
+import type { RemoteStates } from './bindings/RemoteStates'
 import type { SaveState } from './bindings/SaveState'
 import type { ScanProgress } from './bindings/ScanProgress'
 import type { ScanReport } from './bindings/ScanReport'
@@ -604,7 +606,7 @@ export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Prom
 
 // --- cloud save: esta máquina como aparelho da conta --------------------
 
-export type { HardwarePayload, Quota, SaveLineStatus, Side, SyncConflict, SyncMachine, SyncStatus, SyncVersion }
+export type { HardwarePayload, Quota, RemoteState, RemoteStates, SaveLineStatus, Side, SyncConflict, SyncMachine, SyncStatus, SyncVersion }
 
 /** Eventos do canal `sync`. `status`: a tela relê o estado. */
 export type SyncEvent =
@@ -660,6 +662,23 @@ export const syncRestore = (key: string, versionId: string) =>
   invoke<void>('sync_restore', { key, versionId })
 /** A linha de save da página do jogo (só disco e SQLite, sem rede). */
 export const syncSaveStatus = (romId: string) => invoke<SaveLineStatus>('sync_save_status', { romId })
+/** Os save states que as outras máquinas da conta subiram para esta ROM. Só lê:
+ *  sem sync, com os states desligados ou com a nuvem fora vem `offline` e a lista
+ *  vazia. `coreId`: o core escolhido; sem ele vale o que está aberto. */
+export const syncStatesFor = (romId: string, coreId: string | null) =>
+  invoke<RemoteStates>('sync_states_for', { romId, coreId })
+/** Baixa um state de outra máquina para a vaga dele, quando o core e a versão
+ *  batem. Rejeita com `slot_occupied` se a vaga tem um state e `overwrite` é
+ *  falso; o de agora vai para a pasta de resguardo antes de ser trocado. */
+export const syncDownloadState = (romId: string, coreId: string | null, saveId: string, overwrite: boolean) =>
+  invoke<SaveState>('sync_download_state', { romId, coreId, saveId, overwrite })
+/** A miniatura de um state de outra máquina como `blob:` URL (`null` se não tem). */
+export async function syncStateThumbnailUrl(saveId: string): Promise<string | null> {
+  if (!inTauri) return null
+  const buf = await invoke<ArrayBuffer>('sync_state_thumbnail', { saveId })
+  if (buf.byteLength === 0) return null
+  return URL.createObjectURL(new Blob([buf], { type: 'image/png' }))
+}
 /** Abre a pasta dos backups do sync no gerenciador de arquivos. Com a chave de
  *  um save apagado no site, abre a pasta onde o arquivo dele foi parar. */
 export const syncOpenBackups = (key?: string) => invoke<void>('sync_open_backups', { key: key ?? null })

@@ -173,6 +173,9 @@ pub struct RemoteFile {
     /// o nome da máquina vem da versão.
     #[serde(default)]
     pub device_token_id: Option<String>,
+    /// O nome do aparelho dono, quando o Alvanista o põe ao lado da linha.
+    #[serde(default)]
+    pub device_label: Option<String>,
 }
 
 /// Os filtros de `GET /api/v1/saves`.

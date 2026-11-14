@@ -29,7 +29,7 @@ use db::SyncRepo;
 use device::{
     hardware_fingerprint, hardware_payload, Device, DeviceStore, HardwarePayload, LABEL_MAX_CHARS,
 };
-use engine::{Engine, Keep, PassScope, SaveLineStatus, SyncConflict, SyncVersion};
+use engine::{Engine, Keep, PassScope, RemoteStates, SaveLineStatus, SyncConflict, SyncVersion};
 use serde::Serialize;
 use std::future::Future;
 use std::sync::Arc;
@@ -1215,6 +1215,80 @@ pub async fn sync_restore(app: AppHandle, key: String, version_id: String) -> Re
         .restore(&alva, &key, &version_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// O core que vale para os states de outras máquinas: o que a tela diz
+/// (o escolhido na página do jogo) ou, sem isso, o que está aberto (o menu de
+/// pausa). E a versão dele instalada aqui, lida do binário (D122).
+fn state_core(app: &AppHandle, core_id: Option<String>) -> (Option<String>, Option<String>) {
+    let Some(state) = app.try_state::<crate::commands::AppState>() else {
+        return (core_id.filter(|c| !c.is_empty()), None);
+    };
+    let core = core_id
+        .filter(|c| !c.is_empty())
+        .or_else(|| state.session.loaded_core());
+    let installed = core
+        .as_deref()
+        .and_then(|c| emu_session::core_version(&state.cores_dir, c));
+    (core, installed)
+}
+
+/// Os save states que as outras máquinas da conta subiram para esta ROM
+/// (D116). Só lê: sem sync, com os states desligados ou com a listagem
+/// falhando devolve a lista vazia com `offline`.
+#[tauri::command]
+pub async fn sync_states_for(
+    app: AppHandle,
+    rom_id: String,
+    core_id: Option<String>,
+) -> Result<RemoteStates, String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    let (core, installed) = state_core(&app, core_id);
+    Ok(engine
+        .states_for(&alva, &rom_id, core.as_deref(), installed.as_deref())
+        .await)
+}
+
+/// Baixa um state de outra máquina para a vaga dele, quando o core e a versão
+/// batem. `slot_occupied`: a vaga tem um state, e `overwrite` é falso.
+#[tauri::command]
+pub async fn sync_download_state(
+    app: AppHandle,
+    rom_id: String,
+    core_id: Option<String>,
+    save_id: String,
+    overwrite: bool,
+) -> Result<crate::commands::SaveStateDto, String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    let (core, installed) = state_core(&app, core_id);
+    let meta = engine
+        .download_state(
+            &alva,
+            &rom_id,
+            core.as_deref(),
+            installed.as_deref(),
+            &save_id,
+            overwrite,
+        )
+        .await?;
+    // O state virou desta máquina: sobe de novo como dela (D116).
+    engine::after_state_saved(&app, rom_id);
+    Ok(crate::commands::save_dto(meta, installed.as_deref()))
+}
+
+/// O PNG da miniatura de um state de outra máquina (vazio se não tem).
+#[tauri::command]
+pub async fn sync_state_thumbnail(
+    app: AppHandle,
+    save_id: String,
+) -> Result<tauri::ipc::Response, String> {
+    let engine = engine_of(&app)?;
+    let (_, alva) = services(&app)?;
+    Ok(tauri::ipc::Response::new(
+        engine.state_thumbnail(&alva, &save_id).await,
+    ))
 }
 
 /// A linha de save da página do jogo (sem rede).

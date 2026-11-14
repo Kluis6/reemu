@@ -14,6 +14,8 @@ const api = vi.hoisted(() => ({
   syncSetLabel: vi.fn(),
   syncSetPaused: vi.fn(),
   syncSetSavesEnabled: vi.fn(),
+  syncSetStatesEnabled: vi.fn(),
+  syncUploadOldStates: vi.fn(),
   syncConflicts: vi.fn(),
   syncResolve: vi.fn(),
   syncNow: vi.fn(),
@@ -213,17 +215,68 @@ describe('SettingsSync', () => {
     expect(api.syncStatus).toHaveBeenCalledTimes(1)
   })
 
-  it('only states and settings stay em breve; game saves have a real switch', async () => {
+  it('only settings stays em breve; game saves and states have real switches', async () => {
     api.syncStatus.mockResolvedValue(ON)
     await mount()
-    for (const row of ['Save states', 'Configurações']) {
-      const title = [...host.querySelectorAll('span')].find((e) => e.firstElementChild?.textContent === row)
-      expect(title?.textContent).toContain('em breve')
+    const title = [...host.querySelectorAll('span')].find((e) => e.firstElementChild?.textContent === 'Configurações')
+    expect(title?.textContent).toContain('em breve')
+    const switches = [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')]
+    for (const [i, label] of [
+      [1, 'Game saves'],
+      [2, 'Save states'],
+    ] as const) {
+      expect(switches[i].closest('label')?.textContent).toContain(label)
+      expect(switches[i].closest('label')?.textContent).not.toContain('em breve')
+      expect(switches[i].checked).toBe(true)
     }
-    const saves = [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][1]
-    expect(saves.closest('label')?.textContent).toContain('Game saves')
-    expect(saves.closest('label')?.textContent).not.toContain('em breve')
-    expect(saves.checked).toBe(true)
+  })
+
+  it('turns the save states switch off through syncSetStatesEnabled', async () => {
+    api.syncStatus.mockResolvedValue(ON)
+    api.syncSetStatesEnabled.mockResolvedValue({ ...ON, statesEnabled: false })
+    await mount()
+    const states = () => [...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][2]
+    await act(async () => states().click())
+    await settle()
+    expect(api.syncSetStatesEnabled).toHaveBeenCalledWith(false)
+    expect(api.syncSetSavesEnabled).not.toHaveBeenCalled()
+    expect(states().checked).toBe(false)
+  })
+
+  it('the save states switch is disabled while sync is off', async () => {
+    await mount()
+    expect([...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][2].disabled).toBe(true)
+  })
+
+  it('says how many save states stay only on this machine and sends them again', async () => {
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 3 })
+    api.syncUploadOldStates.mockResolvedValue({ ...ON, statesLocalOnly: 0 })
+    await mount()
+    expect(host.textContent).toContain('3 save states ficam só nesta máquina.')
+    await act(async () => byText('Enviar de novo')!.click())
+    await settle()
+    expect(api.syncUploadOldStates).toHaveBeenCalledTimes(1)
+    expect(host.textContent).not.toContain('ficam só nesta máquina')
+    expect(byText('Enviar de novo')).toBeUndefined()
+  })
+
+  it('one save state reads in the singular, and zero or the switch off show no line', async () => {
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 1 })
+    await mount()
+    expect(host.textContent).toContain('1 save state fica só nesta máquina.')
+    await unmount()
+    host.remove()
+
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 0 })
+    await mount()
+    expect(host.textContent).not.toContain('só nesta máquina')
+    expect(byText('Enviar de novo')).toBeUndefined()
+    await unmount()
+    host.remove()
+
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 2, statesEnabled: false })
+    await mount()
+    expect(host.textContent).not.toContain('só nesta máquina')
   })
 
   it('turns the game saves switch off through syncSetSavesEnabled', async () => {

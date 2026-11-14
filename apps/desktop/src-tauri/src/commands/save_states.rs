@@ -68,7 +68,10 @@ pub(super) fn refused_error(
     }
 }
 
-fn save_dto(m: domain::save_state::SaveStateMetadata, installed: Option<&str>) -> SaveStateDto {
+pub(crate) fn save_dto(
+    m: domain::save_state::SaveStateMetadata,
+    installed: Option<&str>,
+) -> SaveStateDto {
     SaveStateDto {
         version_changed: save_svc::version_changed(m.core_version.as_deref(), installed),
         core_version: m.core_version.clone(),

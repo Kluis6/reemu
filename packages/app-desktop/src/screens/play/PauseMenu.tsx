@@ -29,6 +29,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheatsPanel } from "../../components/CheatsPanel";
 import { SaveStateThumb } from "../../components/SaveStateThumb";
+import { RemoteStateList } from "../../components/sync/RemoteStateList";
 import { useFullscreen } from "../../hooks/useFullscreen";
 import { REEMU_TAB } from "../../hooks/useMenuNav";
 import { focusFromNav, moveFocus } from "../../lib/focusNav";
@@ -282,6 +283,15 @@ export function PauseMenu({
                   ))}
                 </div>
               )}
+              {/* states de outras máquinas: baixa e carrega no core aberto */}
+              <RemoteStateList
+                romId={romId}
+                coreId={null}
+                onDownloaded={async (saved) => {
+                  qc.invalidateQueries({ queryKey: ["save-states", romId] });
+                  await loadAny.mutateAsync(saved.id).catch(() => {});
+                }}
+              />
             </>
           )}
 
