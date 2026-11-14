@@ -186,9 +186,75 @@ pub async fn delete<R: SaveStateRepository + ?Sized>(
     Ok(())
 }
 
+/// `delete` sob a trava de escrita da ROM do state: apagar enquanto um
+/// QuickSave ou um download grava a mesma vaga apagaria o arquivo que o `save`
+/// acabou de reescrever. A linha é relida já com a trava na mão.
+pub async fn delete_locked<R: SaveStateRepository + ?Sized>(
+    repo: &R,
+    state_id: &str,
+) -> Result<(), SaveError> {
+    let rom_id = repo.get_state(state_id).await?.map(|m| m.rom_id);
+    let _write = match &rom_id {
+        Some(rom) => Some(write_lock(rom).await),
+        None => None,
+    };
+    delete(repo, state_id).await
+}
+
 #[cfg(test)]
 mod tests {
-    use super::save_family;
+    use super::{delete_locked, save, save_family, write_lock};
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn a_delete_waits_for_the_roms_write_lock() {
+        let db = db::connect_in_memory().await.unwrap();
+        domain::library::RomRepository::add(
+            &db::RomsRepo::new(db.clone()),
+            &domain::library::Rom {
+                id: "rom-del-lock".into(),
+                file_path: "C:/roms/A.sfc".into(),
+                crc32: "C".into(),
+                md5: "M".into(),
+                system_id: "snes".into(),
+                added_at: 0,
+                last_played_at: None,
+                is_favorite: false,
+                user_title: None,
+            },
+        )
+        .await
+        .unwrap();
+        let repo = db::SaveStateRepo::new(db);
+        let dir = std::env::temp_dir().join(format!("reemu-del-lock-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let meta = save(
+            &repo,
+            &dir,
+            "rom-del-lock",
+            "core",
+            Some(1),
+            b"s",
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let held = write_lock("rom-del-lock").await;
+        let mut delete = Box::pin(delete_locked(&repo, &meta.id));
+        let early = tokio::time::timeout(Duration::from_millis(300), &mut delete).await;
+        assert!(early.is_err(), "o delete espera a trava");
+        assert!(std::path::Path::new(&meta.file_path).exists());
+
+        drop(held);
+        delete.await.unwrap();
+        assert!(!std::path::Path::new(&meta.file_path).exists());
+        // Outra ROM não espera por esta.
+        let _other = write_lock("rom-other").await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn hw_and_sw_beetle_psx_share_a_family() {

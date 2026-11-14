@@ -383,6 +383,7 @@ impl Engine {
         // segundos, e um jogo pode ter começado a abrir ou um QuickSave pode
         // ter caído na vaga. A vaga de agora é a que vale, e o que está nela
         // vai para o resguardo.
+        //
         // A trava de escrita da ROM: um QuickSave que chega agora espera a
         // troca acabar (e nunca é apagado sem backup); um que já estava
         // gravando termina antes da conferência abaixo.

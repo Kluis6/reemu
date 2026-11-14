@@ -254,7 +254,7 @@ pub async fn delete_save_state(
     state_id: String,
 ) -> Result<(), AppError> {
     let repo = db::SaveStateRepo::new(pool(&state)?);
-    save_svc::delete(&repo, &state_id)
+    save_svc::delete_locked(&repo, &state_id)
         .await
         .map_err(AppError::from)
 }
