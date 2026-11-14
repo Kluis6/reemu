@@ -610,6 +610,15 @@ impl SyncService {
             } else {
                 0
             },
+            states_wiped: if states_enabled {
+                runtime
+                    .states_local
+                    .values()
+                    .filter(|r| **r == engine::STATE_WIPED)
+                    .count() as u32
+            } else {
+                0
+            },
             // O dos game saves primeiro; sem ele, o dos states (que somem com
             // os states desligados).
             last_error: runtime
@@ -974,6 +983,10 @@ pub struct SyncStatus {
     /// core ser registrada, os apagados no site (D127) e os que a nuvem
     /// recusou. 0 com os states desligados.
     pub states_local_only: u32,
+    /// Os que ficam só aqui porque o site os apagou (D127): são os únicos que
+    /// "Enviar os states antigos também" manda de novo. Parte de
+    /// `states_local_only`.
+    pub states_wiped: u32,
     /// O código de i18n do último erro.
     pub last_error: Option<String>,
     /// O nome do arquivo que a nuvem recusou, com `too_large`,
@@ -1975,6 +1988,17 @@ mod tests {
             ("r1".into(), "state:snes/c/a__slot1.state".into()),
             "unversioned",
         );
+        r.sync
+            .runtime()
+            .states_local
+            .insert(("r1".into(), "state:snes/c/b__slot1.state".into()), "wiped");
+        let counted_now = r.sync.status_with(&r.alva, hw()).await.unwrap();
+        assert_eq!(counted_now.states_local_only, 2);
+        assert_eq!(counted_now.states_wiped, 1, "só o apagado no site");
+        r.sync
+            .runtime()
+            .states_local
+            .remove(&("r1".to_owned(), "state:snes/c/b__slot1.state".to_owned()));
         assert_eq!(
             r.sync
                 .status_with(&r.alva, hw())
@@ -1992,6 +2016,7 @@ mod tests {
         assert!(!st.states_enabled);
         assert!(st.saves_enabled);
         assert_eq!(st.states_local_only, 0);
+        assert_eq!(st.states_wiped, 0);
         assert_eq!(count(), 0);
         assert!(r.sync.runtime().states_local.is_empty());
 

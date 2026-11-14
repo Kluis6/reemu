@@ -209,7 +209,7 @@ export function PauseMenu({
       </DrawerHeader>
 
       <DrawerBody className={pause.drawerBody}>
-        <div ref={bodyRef} className={pause.body} role="tabpanel">
+        <div ref={bodyRef} className={pause.body} role="tabpanel" data-nav-group>
           {tab === "states" && (
             <>
               <Button
@@ -287,6 +287,7 @@ export function PauseMenu({
               <RemoteStateList
                 romId={romId}
                 coreId={null}
+                variant="pause"
                 onDownloaded={async (saved) => {
                   qc.invalidateQueries({ queryKey: ["save-states", romId] });
                   await loadAny.mutateAsync(saved.id).catch(() => {});

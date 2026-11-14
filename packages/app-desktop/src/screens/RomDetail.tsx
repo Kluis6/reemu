@@ -858,14 +858,18 @@ export function RomDetail() {
                 </div>
               ))}
               {/* states de outras máquinas: depois dos locais, sem segurar a página */}
-              <RemoteStateList
-                romId={rom.id}
-                coreId={chosenCore || null}
-                onDownloaded={(saved) => {
-                  void qc.invalidateQueries({ queryKey: ["save-states", rom.id] });
-                  play(saved.id);
-                }}
-              />
+              {/* sem core escolhido não há o que comparar: o null do menu de
+                  pausa ("o core aberto") não vale aqui */}
+              {chosenCore && (
+                <RemoteStateList
+                  romId={rom.id}
+                  coreId={chosenCore}
+                  onDownloaded={(saved) => {
+                    void qc.invalidateQueries({ queryKey: ["save-states", rom.id] });
+                    play(saved.id);
+                  }}
+                />
+              )}
             </>
           )}
           {panel === "shader" && shaderInfo.data?.gpu && (

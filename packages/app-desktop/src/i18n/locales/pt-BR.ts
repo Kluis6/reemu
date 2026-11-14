@@ -481,7 +481,7 @@ const ptBR = {
     statesHint: 'Ficam disponíveis em outra máquina quando o core e a versão batem. Fora disso, só aqui.',
     statesLocalOnly_one: '{{count}} save state fica só nesta máquina.',
     statesLocalOnly_other: '{{count}} save states ficam só nesta máquina.',
-    statesResend: 'Enviar de novo',
+    statesResend: 'Enviar os states antigos também',
     settings: 'Configurações',
     settingsHint: 'Manual. Nada muda sem você pedir.',
     seenAt: 'visto {{when}}',
@@ -579,8 +579,6 @@ const ptBR = {
       confirm: 'O state de agora deste slot vai para a pasta de resguardo.',
       replace: 'Substituir',
       cancel: 'Cancelar',
-      loaded: 'State baixado e carregado.',
-      downloaded: 'State baixado para este jogo.',
       err: {
         failed: 'Não foi possível baixar o state. Tente de novo.',
         offline: 'Não foi possível falar com o Alvanista. Verifique a internet e tente de novo.',

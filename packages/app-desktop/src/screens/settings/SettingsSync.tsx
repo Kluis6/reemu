@@ -397,19 +397,20 @@ export function SettingsSync() {
         {st.enabled && st.statesEnabled && st.statesLocalOnly > 0 && (
           <FieldBlock wide>
             <Body1>{t('sync.statesLocalOnly', { count: st.statesLocalOnly })}</Body1>
-            {/* O backend só informa quantos; o botão aparece com qualquer
-                número acima de zero (os de "apagar tudo" sobem, os demais
-                seguem só aqui). */}
-            <div className={s.actions}>
-              <Button
-                appearance="secondary"
-                disabledFocusable={working}
-                icon={busy === 'oldStates' ? <Spinner size="tiny" /> : undefined}
-                onClick={() => void uploadOldStates()}
-              >
-                {t('sync.statesResend')}
-              </Button>
-            </div>
+            {/* "Enviar os states antigos também" (D127) só age nos apagados no
+                site; os outros ficam só aqui e não ganham o botão. */}
+            {st.statesWiped > 0 && (
+              <div className={s.actions}>
+                <Button
+                  appearance="secondary"
+                  disabledFocusable={working}
+                  icon={busy === 'oldStates' ? <Spinner size="tiny" /> : undefined}
+                  onClick={() => void uploadOldStates()}
+                >
+                  {t('sync.statesResend')}
+                </Button>
+              </div>
+            )}
           </FieldBlock>
         )}
         {/* As configurações chegam com o PR que as sincroniza; até lá, "em breve". */}

@@ -480,7 +480,7 @@ const en: Messages = {
     statesHint: 'Available on another machine when the core and the version match. Otherwise, only here.',
     statesLocalOnly_one: '{{count}} save state stays only on this machine.',
     statesLocalOnly_other: '{{count}} save states stay only on this machine.',
-    statesResend: 'Send again',
+    statesResend: 'Also send the old states',
     settings: 'Settings',
     settingsHint: 'Manual. Nothing changes unless you ask.',
     seenAt: 'seen {{when}}',
@@ -578,8 +578,6 @@ const en: Messages = {
       confirm: 'The current state in this slot goes to the backup folder.',
       replace: 'Replace',
       cancel: 'Cancel',
-      loaded: 'State downloaded and loaded.',
-      downloaded: 'State downloaded for this game.',
       err: {
         failed: 'The state could not be downloaded. Try again.',
         offline: 'Could not reach Alvanista. Check your internet and try again.',

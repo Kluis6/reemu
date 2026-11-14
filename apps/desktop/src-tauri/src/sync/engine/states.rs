@@ -28,7 +28,7 @@ use std::time::SystemTime;
 
 /// Por que um state fica só nesta máquina (a página conta).
 pub(super) const UNVERSIONED: &str = "unversioned";
-pub(super) const WIPED: &str = "wiped";
+pub(in crate::sync) const WIPED: &str = "wiped";
 pub(super) const REJECTED: &str = "rejected";
 /// Outra ROM tem um state mais novo com o mesmo nome na nuvem.
 pub(super) const DUPLICATE: &str = "duplicate";

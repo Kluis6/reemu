@@ -33,6 +33,7 @@ export const STATUS: SyncStatus = {
   lastPassAt: null,
   conflicts: 0,
   statesLocalOnly: 0,
+  statesWiped: 0,
   lastError: null,
   lastErrorFile: null,
 }

@@ -26,6 +26,12 @@ lastPassAt: number | null, conflicts: number,
  */
 statesLocalOnly: number, 
 /**
+ * Os que ficam só aqui porque o site os apagou (D127): são os únicos que
+ * "Enviar os states antigos também" manda de novo. Parte de
+ * `states_local_only`.
+ */
+statesWiped: number, 
+/**
  * O código de i18n do último erro.
  */
 lastError: string | null, 

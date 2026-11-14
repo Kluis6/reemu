@@ -47,6 +47,7 @@ use tauri::{AppHandle, Emitter, Manager};
 mod remote_states;
 pub use remote_states::RemoteStates;
 mod states;
+pub(in crate::sync) use states::WIPED as STATE_WIPED;
 
 /// Quanto um jogo espera pela nuvem antes de abrir (D117).
 const PRELAUNCH_BUDGET: Duration = Duration::from_secs(5);
@@ -1468,21 +1469,21 @@ impl Engine {
     /// Onde o backup de `path` fica: `<dados>/sync-backups/<carimbo>/<caminho
     /// relativo aos dados>`, sem nunca sobrescrever um backup.
     fn backup_target(&self, path: &Path) -> io::Result<PathBuf> {
-        let rel = match path.strip_prefix(&self.dirs.data) {
-            Ok(rel) if !rel.as_os_str().is_empty() => rel.to_path_buf(),
-            _ => PathBuf::from(path.file_name().unwrap_or(path.as_os_str())),
-        };
-        self.backup_target_at(rel)
-    }
-
-    /// O mesmo para um caminho já relativo à pasta do carimbo.
-    fn backup_target_at(&self, rel: PathBuf) -> io::Result<PathBuf> {
         let stamp = {
             let mut s = lock(&self.stamp);
             if s.is_empty() {
                 *s = local_stamp();
             }
             s.clone()
+        };
+        self.backup_target_in(&stamp, path)
+    }
+
+    /// O mesmo com um carimbo dado, sem tocar no da passada em andamento.
+    fn backup_target_in(&self, stamp: &str, path: &Path) -> io::Result<PathBuf> {
+        let rel = match path.strip_prefix(&self.dirs.data) {
+            Ok(rel) if !rel.as_os_str().is_empty() => rel.to_path_buf(),
+            _ => PathBuf::from(path.file_name().unwrap_or(path.as_os_str())),
         };
         let first = self.dirs.data.join("sync-backups").join(stamp).join(rel);
         if let Some(parent) = first.parent() {
@@ -6553,6 +6554,13 @@ mod tests {
         r["core_version"] = json!(core_version);
         r["current"]["device_token_id"] = json!(device);
         r["current"]["server_created_at"] = json!(at);
+        // O Alvanista rotula toda linha de aparelho com o nome do dono.
+        r["device_label"] = json!(match device {
+            "dev1" => "Sala",
+            "dev2" => "Quarto",
+            "dev3" => "Trabalho",
+            _ => "",
+        });
         r
     }
 
@@ -6667,6 +6675,10 @@ mod tests {
         let core = by_id("core");
         assert_eq!(core.reason.as_deref(), Some("other_core"));
         assert_eq!(core.machine, "Trabalho");
+        assert!(
+            r.reqs("GET", DEVICES).await.is_empty(),
+            "ler não toca na lista de aparelhos"
+        );
         let none = by_id("none");
         assert_eq!(none.reason.as_deref(), Some("unversioned"));
         assert_eq!(none.slot, None, "quick é a vaga sem número");
@@ -6903,8 +6915,8 @@ mod tests {
         assert_eq!(
             names,
             [
-                "states/r1__snes9x_libretro__slot1.png",
-                "states/r1__snes9x_libretro__slot1.state"
+                "saves/r1__snes9x_libretro__slot1.png",
+                "saves/r1__snes9x_libretro__slot1.state"
             ]
         );
         assert_eq!(backups[0].1, b"local-png");
@@ -7025,5 +7037,140 @@ mod tests {
             .state_thumbnail(&r.alva, "unknown")
             .await
             .is_empty());
+    }
+
+    /// O conteúdo de `s1` só chega depois de `ms`: o tempo em que a pessoa
+    /// ainda mexe na máquina.
+    async fn slow_download_rig(name: &str, ms: u64) -> Rig {
+        let st = other_state("s1", SLOT1, "dev2", CORE, Some(V163), T0, b"remote-bytes");
+        let r = remote_rig(name, vec![st]).await;
+        Mock::given(method("GET"))
+            .and(path(format!("{SAVES}/s1/versions/v-s1/content")))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_bytes(b"remote-bytes".to_vec())
+                    .set_delay(Duration::from_millis(ms)),
+            )
+            .mount(&r.server)
+            .await;
+        r
+    }
+
+    #[tokio::test]
+    async fn a_quicksave_that_lands_during_the_download_is_asked_about_or_backed_up() {
+        // Sem `overwrite`: a vaga ficou ocupada no meio, então pergunta.
+        let r = slow_download_rig("remote-race-asks", 500).await;
+        let (got, _) = tokio::join!(download(&r, false), async {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            r.save_state("r1", Some(1), Some(V163), b"quick-during", None)
+                .await;
+        });
+        assert_eq!(got.unwrap_err(), "slot_occupied");
+        assert_eq!(r.read(LOCAL1).unwrap(), b"quick-during");
+        assert!(r.backups().is_empty());
+
+        // Com `overwrite`: o que caiu na vaga vai para o resguardo antes.
+        let r = slow_download_rig("remote-race-backs-up", 500).await;
+        let (got, _) = tokio::join!(download(&r, true), async {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            r.save_state("r1", Some(1), Some(V163), b"quick-during", None)
+                .await;
+        });
+        got.unwrap();
+        assert_eq!(r.read(LOCAL1).unwrap(), b"remote-bytes");
+        let backups = r.backups();
+        assert_eq!(backups.len(), 1);
+        assert_eq!(backups[0].1, b"quick-during");
+    }
+
+    #[tokio::test]
+    async fn a_launch_that_starts_during_the_download_stops_the_write() {
+        let r = slow_download_rig("remote-race-loading", 500).await;
+        r.set_playing(Playing::Idle);
+        let (got, _) = tokio::join!(download(&r, true), async {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            r.set_playing(Playing::Loading);
+        });
+        assert_eq!(got.unwrap_err(), "loading");
+        assert!(r.states.list_states_for_rom("r1").await.unwrap().is_empty());
+        assert!(r.read(LOCAL1).is_none());
+    }
+
+    #[tokio::test]
+    async fn without_a_core_every_row_is_other_core() {
+        let st = other_state("s1", SLOT1, "dev2", CORE, Some(V163), T0, b"x");
+        let r = remote_rig("remote-no-core", vec![st]).await;
+        let got = r.engine.states_for(&r.alva, "r1", None, Some(V163)).await;
+        assert_eq!(got.states.len(), 1);
+        assert!(!got.states[0].available);
+        assert_eq!(got.states[0].reason.as_deref(), Some("other_core"));
+        let dl = r
+            .engine
+            .download_state(&r.alva, "r1", None, Some(V163), "s1", true)
+            .await;
+        assert_eq!(dl.unwrap_err(), "other_core");
+    }
+
+    #[tokio::test]
+    async fn a_deleted_newest_row_takes_its_older_versions_with_it() {
+        let old = other_state("old", SLOT1, "dev2", CORE, Some(V_OTHER), T0, b"o");
+        let mut gone = other_state(
+            "gone",
+            SLOT1,
+            "dev2",
+            CORE,
+            Some(V163),
+            "2026-11-14T10:00:00Z",
+            b"g",
+        );
+        gone["deleted_at"] = json!("2026-11-14T12:00:00Z");
+        // Outro grupo, vivo; e uma linha viva mais nova que um apagamento velho.
+        let live = other_state(
+            "live",
+            SLOT1,
+            "dev3",
+            CORE,
+            Some(V163),
+            "2026-11-14T10:00:00Z",
+            b"l",
+        );
+        let older_gone = {
+            let mut t = other_state(
+                "t",
+                SLOT1,
+                "dev3",
+                CORE,
+                Some(V_OTHER),
+                "2026-11-10T10:00:00Z",
+                b"t",
+            );
+            t["deleted_at"] = json!("2026-11-11T10:00:00Z");
+            t
+        };
+        let r = remote_rig("remote-tombstone", vec![old, gone, live, older_gone]).await;
+        let got = remote(&r, Some(V163)).await;
+        let ids: Vec<&str> = got.states.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["live"], "o grupo de dev2 saiu inteiro");
+        let q = r.kind_listings("state").await;
+        assert!(q[0]
+            .url
+            .query_pairs()
+            .any(|(k, v)| k == "include_deleted" && v == "true"));
+    }
+
+    #[tokio::test]
+    async fn the_backup_leaves_the_pass_stamp_alone_and_the_hash_ignores_case() {
+        let mut st = other_state("s1", SLOT1, "dev2", CORE, Some(V163), T0, b"remote-bytes");
+        st["current"]["content_hash"] = json!(sha(b"remote-bytes").to_uppercase());
+        let r = remote_rig("remote-stamp", vec![st]).await;
+        mount_content(&r.server, "s1", "v-s1", b"remote-bytes").await;
+        r.save_state("r1", Some(1), Some(V163), b"local-bytes", None)
+            .await;
+        *lock(&r.engine.stamp) = "20200101-000000".to_owned();
+
+        download(&r, true).await.unwrap();
+        assert_eq!(*lock(&r.engine.stamp), "20200101-000000");
+        assert!(!r.path("sync-backups/20200101-000000").exists());
+        assert_eq!(r.backups().len(), 1);
     }
 }

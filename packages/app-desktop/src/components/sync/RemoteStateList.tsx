@@ -1,4 +1,4 @@
-import { Badge, Body1, Button, Caption1, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
+import { Body1, Button, Caption1, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { ArrowDownloadRegular, WarningRegular } from '@fluentui/react-icons'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -24,6 +24,24 @@ const useStyles = makeStyles({
   dimmed: { opacity: 0.6 },
   info: { display: 'flex', flexDirection: 'column', rowGap: '4px', flexGrow: 1, minWidth: 0 },
   actions: { display: 'flex', flexWrap: 'wrap', columnGap: '8px', rowGap: '4px' },
+  // O aviso dos que não carregam aqui. Não é um `Badge` (altura fixa): num menu
+  // estreito o texto quebra, e a borda tem de acompanhar as linhas.
+  pill: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    columnGap: '4px',
+    minWidth: 0,
+    maxWidth: '100%',
+    padding: '2px 8px',
+    borderRadius: tokens.borderRadiusMedium,
+    border: `1px solid ${tokens.colorPaletteYellowBorder1}`,
+    backgroundColor: tokens.colorPaletteYellowBackground1,
+    color: tokens.colorPaletteYellowForeground1,
+    fontSize: tokens.fontSizeBase200,
+    lineHeight: tokens.lineHeightBase200,
+    overflowWrap: 'anywhere',
+  },
+  pillIcon: { flexShrink: 0, marginTop: '2px' },
   muted: { color: tokens.colorNeutralForeground3, overflowWrap: 'anywhere' },
 })
 
@@ -37,11 +55,15 @@ const useStyles = makeStyles({
 export function RemoteStateList({
   romId,
   coreId,
+  variant = 'page',
   onDownloaded,
 }: {
   romId: string
-  /** O core escolhido; `null`: o que está aberto (menu de pausa). */
+  /** O core escolhido. `null` (só o menu de pausa): o que está aberto. */
   coreId: string | null
+  /** `pause`: o menu estreito, com o botão debaixo do texto, na coluna dos
+   *  botões dos states locais (o controle desce do último local para ele). */
+  variant?: 'page' | 'pause'
   onDownloaded: (state: SaveState) => void | Promise<void>
 }) {
   const { t, i18n } = useTranslation()
@@ -100,18 +122,43 @@ export function RemoteStateList({
 
   const machine = (st: RemoteState) => st.machine || t('sync.state.unknownMachine')
   const slotName = (st: RemoteState) =>
-    st.slot === 0 ? 'QuickSave' : st.slot != null ? t('game.slot', { n: st.slot }) : t('game.auto')
+    st.slot === 0 ? t('play.quickSave') : st.slot != null ? t('game.slot', { n: st.slot }) : t('game.auto')
   const when = (st: RemoteState) => new Date(st.createdAt * 1000).toLocaleString(i18n.language)
   const why = (st: RemoteState) => {
     const core = st.core
-    if (st.reason === 'other_version') {
-      return installed
-        ? t('sync.state.otherVersion', { core, version: st.coreVersion ?? '', machine: machine(st), installed })
-        : t('sync.state.otherVersionUnknown', { core, version: st.coreVersion ?? '', machine: machine(st) })
-    }
     if (st.reason === 'other_core') return t('sync.state.otherCore', { core, machine: machine(st) })
+    // A versão de lá é conhecida: mostra as duas, e diz quando a daqui não é.
+    if (st.coreVersion) {
+      return installed
+        ? t('sync.state.otherVersion', { core, version: st.coreVersion, machine: machine(st), installed })
+        : t('sync.state.otherVersionUnknown', { core, version: st.coreVersion, machine: machine(st) })
+    }
     return t('sync.state.unversioned', { core, machine: machine(st) })
   }
+
+  const action = (st: RemoteState) =>
+    asking === st.id ? (
+      <div className={s.actions}>
+        <Button appearance="primary" disabledFocusable={busy !== null} onClick={() => void download(st, true)}>
+          {t('sync.state.replace')}
+        </Button>
+        <Button ref={cancelRef} disabledFocusable={busy !== null} onClick={() => {
+            back.current = st.id
+            setAsking(null)
+          }}>
+          {t('sync.state.cancel')}
+        </Button>
+      </div>
+    ) : (
+      <Button
+        data-download={st.id}
+        icon={<ArrowDownloadRegular />}
+        disabledFocusable={busy !== null}
+        onClick={() => void download(st, false)}
+      >
+        {t('sync.state.download')}
+      </Button>
+    )
 
   return (
     <div ref={rootRef} className={s.root} data-testid="remote-states">
@@ -126,29 +173,9 @@ export function RemoteStateList({
                 {t('sync.state.sameCore', { machine: machine(st), when: when(st) })}
               </Caption1>
               {asking === st.id && <Caption1>{t('sync.state.confirm')}</Caption1>}
+              {variant === 'pause' && action(st)}
             </div>
-            {asking === st.id ? (
-              <div className={s.actions}>
-                <Button appearance="primary" disabledFocusable={busy !== null} onClick={() => void download(st, true)}>
-                  {t('sync.state.replace')}
-                </Button>
-                <Button ref={cancelRef} disabledFocusable={busy !== null} onClick={() => {
-                    back.current = st.id
-                    setAsking(null)
-                  }}>
-                  {t('sync.state.cancel')}
-                </Button>
-              </div>
-            ) : (
-              <Button
-                data-download={st.id}
-                icon={<ArrowDownloadRegular />}
-                disabledFocusable={busy !== null}
-                onClick={() => void download(st, false)}
-              >
-                {t('sync.state.download')}
-              </Button>
-            )}
+            {variant === 'page' && action(st)}
           </div>
         ) : (
           <div key={st.id} className={mergeClasses(s.row, s.dimmed)} data-remote-state="unavailable">
@@ -156,9 +183,10 @@ export function RemoteStateList({
             <div className={s.info}>
               <Body1>{slotName(st)}</Body1>
               <Caption1 className={s.muted}>{when(st)}</Caption1>
-              <Badge appearance="tint" color="warning" icon={<WarningRegular />}>
-                {why(st)}
-              </Badge>
+              <span className={s.pill}>
+                <WarningRegular className={s.pillIcon} aria-hidden />
+                <span>{why(st)}</span>
+              </span>
             </div>
           </div>
         ),

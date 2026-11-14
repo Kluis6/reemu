@@ -107,25 +107,33 @@ export function moveFocus(dir: NavDir) {
   const cy = c.top + c.height / 2
   const vertical = dir === 'up' || dir === 'down'
   const inRail = !!cur.closest('[data-nav-rail]')
-  let best: HTMLElement | null = null
-  let bestScore = Infinity
-  for (const el of els) {
-    if (el === cur) continue
-    // Só se entra e sai da barra lateral na horizontal: no fim do conteúdo, descer
-    // pararia no sino, lá embaixo na barra.
-    if (vertical && !!el.closest('[data-nav-rail]') !== inRail) continue
-    const r = el.getBoundingClientRect()
-    const dx = r.left + r.width / 2 - cx
-    const dy = r.top + r.height / 2 - cy
-    const forward = dir === 'up' ? -dy : dir === 'down' ? dy : dir === 'left' ? -dx : dx
-    if (forward <= 2) continue
-    const cross = dir === 'up' || dir === 'down' ? Math.abs(dx) : Math.abs(dy)
-    const score = forward + cross * 2.5
-    if (score < bestScore) {
-      bestScore = score
-      best = el
+  const pick = (list: HTMLElement[]) => {
+    let best: HTMLElement | null = null
+    let bestScore = Infinity
+    for (const el of list) {
+      if (el === cur) continue
+      // Só se entra e sai da barra lateral na horizontal: no fim do conteúdo, descer
+      // pararia no sino, lá embaixo na barra.
+      if (vertical && !!el.closest('[data-nav-rail]') !== inRail) continue
+      const r = el.getBoundingClientRect()
+      const dx = r.left + r.width / 2 - cx
+      const dy = r.top + r.height / 2 - cy
+      const forward = dir === 'up' ? -dy : dir === 'down' ? dy : dir === 'left' ? -dx : dx
+      if (forward <= 2) continue
+      const cross = dir === 'up' || dir === 'down' ? Math.abs(dx) : Math.abs(dy)
+      const score = forward + cross * 2.5
+      if (score < bestScore) {
+        bestScore = score
+        best = el
+      }
     }
+    return best
   }
+  // Um grupo (`data-nav-group`, ex.: o corpo rolável do menu de pausa) anda
+  // primeiro por dentro: um item rolado para fora da vista fica longe demais
+  // e perderia para um botão fixo do rodapé. Sem alvo no grupo, vale a tela.
+  const group = cur.closest<HTMLElement>('[data-nav-group]')
+  const best = (group ? pick(els.filter((el) => group.contains(el))) : null) ?? pick(els)
   if (best) focusAndReveal(best)
 }
 

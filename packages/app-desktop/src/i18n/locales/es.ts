@@ -480,7 +480,7 @@ const es: Messages = {
     statesHint: 'Quedan disponibles en otra máquina cuando el core y la versión coinciden. Si no, solo aquí.',
     statesLocalOnly_one: '{{count}} save state queda solo en esta máquina.',
     statesLocalOnly_other: '{{count}} save states quedan solo en esta máquina.',
-    statesResend: 'Enviar de nuevo',
+    statesResend: 'Enviar también los states antiguos',
     settings: 'Ajustes',
     settingsHint: 'Manual. Nada cambia sin que lo pidas.',
     seenAt: 'visto {{when}}',
@@ -578,8 +578,6 @@ const es: Messages = {
       confirm: 'El state actual de este slot va a la carpeta de respaldo.',
       replace: 'Reemplazar',
       cancel: 'Cancelar',
-      loaded: 'State descargado y cargado.',
-      downloaded: 'State descargado para este juego.',
       err: {
         failed: 'No se pudo descargar el state. Inténtalo de nuevo.',
         offline: 'No se pudo hablar con Alvanista. Revisa internet e inténtalo de nuevo.',

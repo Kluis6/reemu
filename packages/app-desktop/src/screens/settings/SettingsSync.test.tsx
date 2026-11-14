@@ -78,6 +78,7 @@ const OFF: SyncStatus = {
   statesEnabled: true,
   conflicts: 0,
   statesLocalOnly: 0,
+  statesWiped: 0,
   lastError: null,
   lastErrorFile: null,
 }
@@ -248,16 +249,23 @@ describe('SettingsSync', () => {
     expect([...host.querySelectorAll<HTMLInputElement>('[role="switch"]')][2].disabled).toBe(true)
   })
 
-  it('says how many save states stay only on this machine and sends them again', async () => {
-    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 3 })
-    api.syncUploadOldStates.mockResolvedValue({ ...ON, statesLocalOnly: 0 })
+  it('says how many save states stay only on this machine and sends the wiped ones again', async () => {
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 3, statesWiped: 2 })
+    api.syncUploadOldStates.mockResolvedValue({ ...ON, statesLocalOnly: 1, statesWiped: 0 })
     await mount()
     expect(host.textContent).toContain('3 save states ficam só nesta máquina.')
-    await act(async () => byText('Enviar de novo')!.click())
+    await act(async () => byText('Enviar os states antigos também')!.click())
     await settle()
     expect(api.syncUploadOldStates).toHaveBeenCalledTimes(1)
-    expect(host.textContent).not.toContain('ficam só nesta máquina')
-    expect(byText('Enviar de novo')).toBeUndefined()
+    expect(host.textContent).toContain('1 save state fica só nesta máquina.')
+    expect(byText('Enviar os states antigos também')).toBeUndefined()
+  })
+
+  it('the button stays away when none of the local-only states were wiped on the site', async () => {
+    api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 4, statesWiped: 0 })
+    await mount()
+    expect(host.textContent).toContain('4 save states ficam só nesta máquina.')
+    expect(byText('Enviar os states antigos também')).toBeUndefined()
   })
 
   it('one save state reads in the singular, and zero or the switch off show no line', async () => {
@@ -270,7 +278,7 @@ describe('SettingsSync', () => {
     api.syncStatus.mockResolvedValue({ ...ON, statesLocalOnly: 0 })
     await mount()
     expect(host.textContent).not.toContain('só nesta máquina')
-    expect(byText('Enviar de novo')).toBeUndefined()
+    expect(byText('Enviar os states antigos também')).toBeUndefined()
     await unmount()
     host.remove()
 

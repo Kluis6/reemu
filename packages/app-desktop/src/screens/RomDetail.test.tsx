@@ -41,6 +41,7 @@ vi.mock('../components/FullscreenDialog', () => ({
 }))
 
 import '../i18n'
+import { useToastStore } from '../stores/useToastStore'
 import { STATUS } from '../components/sync/syncTestSupport'
 import { RomDetail } from './RomDetail'
 
@@ -320,6 +321,29 @@ describe('RomDetail states from other machines', () => {
     await settle()
     expect(where()).toBe('/game/r1')
     expect(byText('Baixar e carregar')).toBeDefined()
+    const texts = useToastStore.getState().queue.map((q) => q.message)
+    expect(texts).toContain('O state chegou incompleto. Nada foi trocado. Tente de novo.')
+  })
+
+  it('a known remote version with an unknown local one says so, and a core that is not chosen asks nothing', async () => {
+    api.syncStatesFor.mockResolvedValue({
+      states: [{ ...OTHER_BUILD, reason: 'unversioned' }],
+      offline: false,
+      installedVersion: null,
+    })
+    await mount()
+    await openStates()
+    const [dim] = rows('unavailable')
+    expect(dim.textContent).toContain('mgba_libretro 0.10.0 em Deck, versão daqui desconhecida')
+    expect(dim.textContent).not.toContain('sem a versão do core registrada')
+    await unmount()
+    host.remove()
+
+    api.syncStatesFor.mockClear()
+    api.listInstalledCores.mockResolvedValue([])
+    await mount()
+    await openStates()
+    expect(api.syncStatesFor).not.toHaveBeenCalled()
   })
 
   it('asks nothing with the states switch off, offline or with no rows', async () => {

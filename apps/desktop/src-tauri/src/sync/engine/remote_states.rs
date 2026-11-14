@@ -12,7 +12,12 @@
 //!   deixa a linha da versão velha viva na nuvem, e a página nunca oferece
 //!   uma cópia mais velha da vaga.
 //! - Ler nunca muda nada: um erro de listagem dá lista vazia e `offline`,
-//!   sem tocar no aparelho, na base ou no disco.
+//!   sem tocar no aparelho, na base ou no disco. O nome da máquina vem da
+//!   própria listagem (o Alvanista rotula toda linha); a lista de aparelhos
+//!   não é lida aqui.
+//! - A listagem traz também as linhas apagadas no site: se a mais nova de um
+//!   (máquina, nome, core) foi apagada, o grupo todo some, e uma linha de
+//!   versão mais velha nunca volta no lugar dela.
 //! - Descer: o state de agora da vaga (se há) vai para
 //!   `<dados>/sync-backups/<carimbo>/states/` ANTES de ser trocado, e a troca
 //!   passa por `save_state::save` com a versão do core instalada daqui: o
@@ -95,10 +100,18 @@ fn slot_of(filename: &str, stem: &str) -> Option<Option<u32>> {
 
 /// Quando a linha foi escrita, para escolher a mais nova.
 fn written(f: &RemoteFile) -> (i64, u32) {
-    f.current
+    let wrote = f
+        .current
         .as_ref()
         .and_then(|v| parse_time(&v.server_created_at))
-        .unwrap_or((0, 0))
+        .unwrap_or((0, 0));
+    // Uma linha apagada vale desde o apagamento.
+    let deleted = f
+        .deleted_at
+        .as_deref()
+        .and_then(parse_time)
+        .unwrap_or((0, 0));
+    wrote.max(deleted)
 }
 
 fn newest<'a>(
@@ -168,6 +181,20 @@ impl Engine {
         }
     }
 
+    /// O que toda leitura de states de outras máquinas exige: aparelho ligado
+    /// e sem pausa, os states ligados e a conta conhecida (sem o AlvaID nada
+    /// sai da máquina). Só o SQLite.
+    async fn remote_ready(&self, alva: &Alvanista) -> Result<Device, SyncError> {
+        let device = self.ready_device(alva).await?;
+        if !self.states_on().await? {
+            return Err(SyncError::NotEnabled);
+        }
+        if alva.account_id().await.is_none() {
+            return Err(SyncError::Offline);
+        }
+        Ok(device)
+    }
+
     /// A listagem, sem nenhum efeito: nem 401 vira revogação aqui (quem trata
     /// é a próxima passada).
     async fn list_remote(
@@ -177,13 +204,7 @@ impl Engine {
         core: Option<&str>,
         installed: Option<&str>,
     ) -> Result<Vec<Found>, SyncError> {
-        let device = self.ready_device(alva).await?;
-        if !self.states_on().await? {
-            return Err(SyncError::NotEnabled);
-        }
-        if alva.account_id().await.is_none() {
-            return Err(SyncError::Offline);
-        }
+        let device = self.remote_ready(alva).await?;
         let Some(rom) = self
             .roms
             .get(rom_id)
@@ -200,6 +221,8 @@ impl Engine {
         let filter = FileFilter {
             kind: "state",
             platform: Some(platform),
+            // As apagadas no site entram para uma versão velha não voltar.
+            include_deleted: true,
             ..FileFilter::default()
         };
         let rows = self
@@ -212,10 +235,8 @@ impl Engine {
             .iter()
             .filter(|r| {
                 r.kind == "state"
-                    && r.deleted_at.is_none()
                     && r.platform == platform
                     && r.core.is_some()
-                    && r.current.is_some()
                     && r.device_token_id.as_deref().is_some_and(|d| d != device.id)
             })
             .collect();
@@ -226,24 +247,20 @@ impl Engine {
                 r.core.clone().unwrap_or_default(),
             )
         };
-        let states = newest(live.iter().filter_map(|r| {
+        // A mais nova de cada grupo; um grupo cuja mais nova foi apagada sai.
+        let mut states = newest(live.iter().filter_map(|r| {
             slot_of(&r.filename, &stem)?;
             let (d, f, c) = key(r);
             Some((*r, d, f, c))
         }));
-        let thumbs = newest(live.iter().filter_map(|r| {
+        states.retain(|_, r| r.deleted_at.is_none() && r.current.is_some());
+        let mut thumbs = newest(live.iter().filter_map(|r| {
             let state_name = r.filename.strip_suffix(".png")?;
             slot_of(state_name, &stem)?;
             let (d, f, c) = key(r);
             Some((*r, d, f, c))
         }));
-        // O nome da máquina: o que a listagem traz; senão a lista de
-        // aparelhos da conta (lida só quando alguma linha ficou sem nome).
-        let devices = if states.values().any(|r| r.device_label.is_none()) {
-            self.sync.partner_devices(alva).await.unwrap_or_default()
-        } else {
-            Vec::new()
-        };
+        thumbs.retain(|_, r| r.deleted_at.is_none() && r.current.is_some());
         let mut found: Vec<Found> = states
             .values()
             .filter_map(|r| {
@@ -252,11 +269,9 @@ impl Engine {
                 let owner = r.device_token_id.as_deref().unwrap_or_default();
                 let core_id = r.core.clone().unwrap_or_default();
                 let reason = verdict(&core_id, r.core_version.as_deref(), core, installed);
-                let machine = devices
-                    .iter()
-                    .find(|d| d.id == owner)
-                    .map(|d| d.label.clone())
-                    .or_else(|| r.device_label.clone())
+                let machine = r
+                    .device_label
+                    .clone()
                     .or_else(|| version.device_label.clone())
                     .filter(|m| !m.is_empty())
                     .unwrap_or_default();
@@ -342,11 +357,13 @@ impl Engine {
         // A vaga é do core de agora, que é o do state (D122).
         let core_id = item.state.core.clone();
         let slot = item.state.slot;
-        let old = self
+        // Pergunta cedo, antes de gastar rede; a decisão que vale é a de logo
+        // antes de escrever, abaixo.
+        let early = self
             .local_slot(rom_id, &core_id, slot)
             .await
             .map_err(|e| e.to_string())?;
-        if old.is_some() && !overwrite {
+        if early.is_some() && !overwrite {
             return Err("slot_occupied".into());
         }
         let token = self.token().map_err(|e| e.to_string())?;
@@ -356,7 +373,7 @@ impl Engine {
             .download(&token, save_id, &item.version_id, item.state.size)
             .await
             .map_err(|e| SyncError::from(e).to_string())?;
-        if sha256_hex(&bytes) != item.hash {
+        if !sha256_hex(&bytes).eq_ignore_ascii_case(&item.hash) {
             log::warn!("sync: o state baixado não confere com o hash da nuvem");
             return Err("hash_mismatch".into());
         }
@@ -364,6 +381,20 @@ impl Engine {
             Some(t) => self.thumbnail_bytes(&token, t).await,
             None => None,
         };
+        // De novo, logo antes de escrever (como `place`): a rede levou
+        // segundos, e um jogo pode ter começado a abrir ou um QuickSave pode
+        // ter caído na vaga. A vaga de agora é a que vale, e o que está nela
+        // vai para o resguardo.
+        if self.playing() == Playing::Loading {
+            return Err("loading".into());
+        }
+        let old = self
+            .local_slot(rom_id, &core_id, slot)
+            .await
+            .map_err(|e| e.to_string())?;
+        if old.is_some() && !overwrite {
+            return Err("slot_occupied".into());
+        }
         // O de agora vai para a pasta de resguardo antes de qualquer troca:
         // `save_state::save` apaga o arquivo, a miniatura e a linha dele.
         if let Some(old) = &old {
@@ -415,11 +446,13 @@ impl Engine {
         }
     }
 
-    /// Copia o state e a miniatura para `<dados>/sync-backups/<carimbo>/states/`
-    /// (o carimbo é o de agora, no formato da pasta dos saves). A cópia vai ao
-    /// disco antes de a troca começar; um arquivo que já não existe não é erro.
+    /// Copia o state e a miniatura para a pasta de resguardo, com o mesmo
+    /// nome relativo que o backup de um `.srm` da mesma pasta teria
+    /// (`<dados>/sync-backups/<carimbo>/saves/<arquivo>`). O carimbo é só
+    /// deste backup: o da passada em andamento não muda. A cópia vai ao disco
+    /// antes de a troca começar; um arquivo que já não existe não é erro.
     fn backup_state(&self, old: &SaveStateMetadata) -> io::Result<()> {
-        self.new_stamp();
+        let stamp = local_stamp();
         let mut files = vec![PathBuf::from(&old.file_path)];
         if let Some(t) = &old.thumbnail_path {
             files.push(PathBuf::from(t));
@@ -428,8 +461,7 @@ impl Engine {
             if !present(&from)? {
                 continue;
             }
-            let name = from.file_name().unwrap_or_default();
-            let target = self.backup_target_at(PathBuf::from("states").join(name))?;
+            let target = self.backup_target_in(&stamp, &from)?;
             copy_synced(&from, &target)?;
         }
         Ok(())
@@ -467,7 +499,7 @@ impl Engine {
         if let Some(bytes) = lock(&self.remote_thumbs).get(&key) {
             return bytes.clone();
         }
-        if self.ready_device(alva).await.is_err() || !self.states_on().await.unwrap_or(false) {
+        if self.remote_ready(alva).await.is_err() {
             return Vec::new();
         }
         let Ok(token) = self.token() else {
