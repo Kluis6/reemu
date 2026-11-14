@@ -336,6 +336,14 @@ pub struct Engine {
     state_tickets: std::sync::atomic::AtomicU64,
     /// Quanto uma rajada de saves de state espera, quieta, antes de subir.
     state_debounce: Duration,
+    /// Uma passada de states por vez. Não é o trinco dos game saves: um state
+    /// grande subindo devagar nunca segura a checagem de antes de abrir um
+    /// jogo, e a passada de states não escreve em disco nem faz backup.
+    states_lock: tokio::sync::Mutex<()>,
+    /// O maior objeto que a nuvem aceita, pelo `max_bytes` do último 413 de
+    /// um state: um state maior não sobe (nem é enviado para ouvir o 413).
+    /// Vale até outro 413 dizer outro número ou o app abrir de novo.
+    state_ceiling: Mutex<Option<i64>>,
 }
 
 impl Engine {
@@ -363,6 +371,8 @@ impl Engine {
             state_bursts: Mutex::new(HashMap::new()),
             state_tickets: std::sync::atomic::AtomicU64::new(0),
             state_debounce: STATE_DEBOUNCE,
+            states_lock: tokio::sync::Mutex::new(()),
+            state_ceiling: Mutex::new(None),
         }
     }
 
@@ -376,24 +386,55 @@ impl Engine {
 
     // --- as passadas -------------------------------------------------------
 
-    /// Uma passada completa (ou de uma ROM): lê a linha desta máquina, a
-    /// nuvem e o disco, decide cada chave e age.
+    /// Uma passada: a dos game saves (completa ou de uma ROM) e, depois, a
+    /// dos save states, cada uma com o seu trinco e o seu relatório. Uma falha
+    /// dos states nunca apaga nem troca o relatório dos game saves: com os
+    /// dois, o que volta é o dos game saves com a conta de states enviados.
     pub async fn pass(&self, alva: &Alvanista, scope: PassScope) -> Result<PassReport, SyncError> {
-        let _one = self.one_at_a_time.lock().await;
-        let device = self.ready(alva).await?;
-        let files = scope.files() && self.saves_on().await?;
-        // O trabalho dos states vem do SQLite: sem state nem base, nem a rede.
-        let states = if scope.states() && self.states_on().await? {
-            self.state_work(&scope).await?
+        let files = if scope.files() {
+            Some(self.file_pass(alva, &scope).await)
         } else {
             None
         };
-        if !files && states.is_none() {
+        // A máquina não sincroniza agora: a passada de states nem tenta.
+        let halted = matches!(
+            files,
+            Some(Err(SyncError::Revoked
+                | SyncError::NoAccount
+                | SyncError::NotEnabled
+                | SyncError::Paused
+                | SyncError::Keyring))
+        );
+        let states = if scope.states() && !halted {
+            Some(self.state_pass(alva, &scope).await)
+        } else {
+            None
+        };
+        match (files, states) {
+            (Some(files), states) => files.map(|mut report| {
+                if let Some(Ok(states)) = states {
+                    report.states_uploaded = states.states_uploaded;
+                }
+                report
+            }),
+            (None, Some(states)) => states,
+            (None, None) => Ok(PassReport::default()),
+        }
+    }
+
+    /// A passada dos game saves: lê a linha desta máquina, a nuvem e o disco,
+    /// decide cada chave e age.
+    async fn file_pass(
+        &self,
+        alva: &Alvanista,
+        scope: &PassScope,
+    ) -> Result<PassReport, SyncError> {
+        let _one = self.one_at_a_time.lock().await;
+        let device = self.ready(alva).await?;
+        if !self.saves_on().await? {
             return Ok(PassReport::default());
         }
-        let result = self
-            .run(alva, &device, &scope, Mode::Pass, files, states)
-            .await;
+        let result = self.run(alva, &device, scope, Mode::Pass).await;
         self.finish(&result, Mode::Pass).await;
         result
     }
@@ -408,9 +449,7 @@ impl Engine {
             let _one = self.one_at_a_time.lock().await;
             let device = self.ready(alva).await?;
             let scope = PassScope::Rom(rom_id.to_owned());
-            let result = self
-                .run(alva, &device, &scope, Mode::BeforeLaunch, true, None)
-                .await;
+            let result = self.run(alva, &device, &scope, Mode::BeforeLaunch).await;
             self.finish(&result, Mode::BeforeLaunch).await;
             result
         };
@@ -498,16 +537,12 @@ impl Engine {
         devices.set_base_account(&current).await.map_err(failed)
     }
 
-    /// `files`: os game saves entram (o interruptor deles está ligado);
-    /// `states`: o trabalho dos save states, quando há.
     async fn run(
         &self,
         alva: &Alvanista,
         device: &Device,
         scope: &PassScope,
         mode: Mode,
-        files: bool,
-        states: Option<states::StateWork>,
     ) -> Result<PassReport, SyncError> {
         self.new_stamp();
         self.sweep_temps();
@@ -525,14 +560,8 @@ impl Engine {
             uploads_stopped: false,
         };
         let mut report = PassReport::default();
-        if files {
-            self.run_files(&mut cx, &device.id, scope, &mut report)
-                .await?;
-        }
-        if let Some(work) = states {
-            self.run_states(&mut cx, &device.id, work, &mut report)
-                .await?;
-        }
+        self.run_files(&mut cx, &device.id, scope, &mut report)
+            .await?;
         Ok(report)
     }
 
@@ -742,7 +771,7 @@ impl Engine {
                 alva.note_no_save_sync().await;
                 Fail::StopUploads(SyncError::NoTier)
             }
-            ApiError::TooLarge => Fail::File(SyncError::TooLarge),
+            ApiError::TooLarge { .. } => Fail::File(SyncError::TooLarge),
             ApiError::Invalid(_) if upload => Fail::File(SyncError::Rejected),
             other => Fail::File(SyncError::from(other)),
         }
@@ -1141,6 +1170,15 @@ impl Engine {
                 Ok(up)
             }
             Err(err) => {
+                if let (
+                    ApiError::TooLarge {
+                        max_bytes: Some(max),
+                    },
+                    "state",
+                ) = (&err, meta.kind)
+                {
+                    *lock(&self.state_ceiling) = Some(*max);
+                }
                 let fail = match self.file_error(alva, err, true).await {
                     Fail::File(SyncError::TooLarge) if meta.kind == "state" => {
                         Fail::File(SyncError::StateTooLarge)
@@ -1336,6 +1374,8 @@ impl Engine {
                 synced_at: now_secs(),
                 wiped_at: None,
                 backup_path: None,
+                local_size: None,
+                local_mtime_ns: None,
             })
             .await
             .map_err(repo_err)
@@ -2188,10 +2228,9 @@ pub fn after_unload(app: &AppHandle, rom_id: String) {
         let Some((engine, alva)) = parts(&app) else {
             return;
         };
-        log_pass(
-            "passada depois do jogo",
-            engine.pass(&alva, PassScope::Rom(rom_id)).await,
-        );
+        let (saves, states) = engine.after_close(&alva, &rom_id).await;
+        log_pass("passada depois do jogo", saves);
+        log_pass("passada dos states depois do jogo", states);
     });
 }
 
@@ -2244,6 +2283,7 @@ mod tests {
         repo: SyncRepo,
         roms: RomsRepo,
         states: db::SaveStateRepo,
+        db: db::Db,
     }
 
     fn temp(name: &str) -> PathBuf {
@@ -2334,7 +2374,8 @@ mod tests {
             events,
             repo: SyncRepo::new(db.clone()),
             roms: RomsRepo::new(db.clone()),
-            states: db::SaveStateRepo::new(db),
+            states: db::SaveStateRepo::new(db.clone()),
+            db,
         }
     }
 
@@ -2384,6 +2425,8 @@ mod tests {
                     synced_at: 1,
                     wiped_at: None,
                     backup_path: None,
+                    local_size: None,
+                    local_mtime_ns: None,
                 })
                 .await
                 .unwrap();
@@ -3524,6 +3567,8 @@ mod tests {
                 synced_at: 1,
                 wiped_at: None,
                 backup_path: None,
+                local_size: None,
+                local_mtime_ns: None,
             })
             .await
             .unwrap();
@@ -5231,8 +5276,8 @@ mod tests {
     const CORE: &str = "snes9x_libretro";
     const V163: &str = "1.63 fae2fea";
     const CHRONO: &str = "Chrono Trigger (USA).sfc";
-    const SLOT3: &str = "Chrono_Trigger__USA___slot3.state";
-    const SLOT3_KEY: &str = "state:snes/snes9x_libretro/Chrono_Trigger__USA___slot3.state";
+    const SLOT3: &str = "Chrono Trigger (USA)__slot3.state";
+    const SLOT3_KEY: &str = "state:snes/snes9x_libretro/Chrono Trigger (USA)__slot3.state";
 
     impl Rig {
         /// Grava um save state como o app grava (`save_state::save`).
@@ -5286,8 +5331,14 @@ mod tests {
                 .collect()
         }
 
+        /// Por que o state desta chave fica só aqui (`None`: não fica).
         fn local_only(&self, key: &str) -> Option<&'static str> {
-            self.sync.runtime().states_local.get(key).copied()
+            self.sync
+                .runtime()
+                .states_local
+                .iter()
+                .find(|((_, k), _)| k == key)
+                .map(|(_, reason)| *reason)
         }
     }
 
@@ -5438,12 +5489,12 @@ mod tests {
         let thumb = r.base_of(&format!("{SLOT3_KEY}.png")).await.unwrap();
         assert_eq!(thumb.local_hash, sha(b"png-1"));
         assert_eq!(thumb.remote_save_id, format!("s-{png_name}"));
-        // O aviso de game saves enviados não conta states.
-        assert!(r.events().contains(&SyncEvent::Pass {
-            uploaded: 0,
-            downloaded: 0,
-            backed_up: 0
-        }));
+        // A passada de states não dá o aviso de game saves enviados.
+        assert!(!r
+            .events()
+            .iter()
+            .any(|e| matches!(e, SyncEvent::Pass { .. })));
+        assert!(r.events().contains(&SyncEvent::Status));
 
         let again = r.state_pass("6f1c-uuid").await.unwrap();
         assert_eq!(again.states_uploaded, 0);
@@ -5472,7 +5523,7 @@ mod tests {
         assert!(report.errors.is_empty());
         assert!(r.state_posts().await.is_empty());
         assert!(r.kind_listings("state").await.is_empty());
-        let slot1 = "state:snes/snes9x_libretro/Chrono_Trigger__USA___slot1.state";
+        let slot1 = "state:snes/snes9x_libretro/Chrono Trigger (USA)__slot1.state";
         assert!(r.base_of(slot1).await.is_none());
         assert_eq!(r.local_only(slot1), Some("unversioned"));
         let st = r.status().await;
@@ -5669,7 +5720,7 @@ mod tests {
             names[0],
             vec![
                 (
-                    "Chrono_Trigger__USA___quick.state".to_owned(),
+                    "Chrono Trigger (USA)__quick.state".to_owned(),
                     CORE.to_owned()
                 ),
                 (SLOT3.to_owned(), CORE.to_owned()),
@@ -5700,6 +5751,8 @@ mod tests {
             synced_at: 1,
             wiped_at: Some(5),
             backup_path: None,
+            local_size: None,
+            local_mtime_ns: None,
         };
         r.repo.base_put(&wiped).await.unwrap();
         r.sync.devices.set_states_enabled(false).await.unwrap();
@@ -5772,7 +5825,7 @@ mod tests {
         assert_eq!(field(&posts[0].body, "file").as_deref(), Some("three"));
         assert_eq!(
             field(&posts[0].body, "filename").as_deref(),
-            Some("Chrono_Trigger__USA___slot0.state")
+            Some("Chrono Trigger (USA)__slot0.state")
         );
 
         let fourth = quick_save(b"four").await;
@@ -5780,5 +5833,465 @@ mod tests {
         let posts = r.state_posts().await;
         assert_eq!(posts.len(), 3, "a miniatura não mudou");
         assert_eq!(field(&posts[2].body, "file").as_deref(), Some("four"));
+    }
+
+    // --- save states, fix round 1 (R29) --------------------------------------
+
+    /// O envio de um `kind` só.
+    struct KindIs(&'static str);
+
+    impl wiremock::Match for KindIs {
+        fn matches(&self, req: &Request) -> bool {
+            field(&req.body, "kind").as_deref() == Some(self.0)
+        }
+    }
+
+    /// Os game saves sobem para `s-<nome>`, à frente da nuvem de states.
+    async fn mount_file_uploads(server: &MockServer, template: ResponseTemplate) {
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .and(KindIs("file"))
+            .respond_with(template)
+            .with_priority(1)
+            .mount(server)
+            .await;
+    }
+
+    impl Rig {
+        /// O app abriu de novo: um motor novo sobre o mesmo banco e as mesmas
+        /// pastas, sem nada guardado em memória.
+        fn restart(&mut self) {
+            let (p, ev) = (self.playing.clone(), self.events.clone());
+            self.engine = Engine::new(
+                self.sync.clone(),
+                self.db.clone(),
+                Dirs {
+                    data: self.root.clone(),
+                    saves: self.root.join("saves"),
+                    system: self.root.join("system"),
+                },
+                Box::new(move || p.lock().unwrap().clone()),
+                Box::new(move |e| ev.lock().unwrap().push(e)),
+            );
+        }
+    }
+
+    /// I2: os bytes de um state só sobem com a linha que os gravou. Um arquivo
+    /// com mtime depois da linha (a vaga sendo gravada de novo) fica para a
+    /// passada do save que o gravou: nada sobe, nada vai para a base.
+    #[tokio::test]
+    async fn a_state_written_after_its_row_is_not_sent_under_that_row() {
+        use domain::save_state::SaveStateRepository;
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-after-row").await;
+        r.rom("r1", CHRONO, "snes").await;
+        let mut meta = r
+            .save_state("r1", Some(3), Some(V163), b"bytes", None)
+            .await;
+        // A linha diz que foi gravada um minuto antes destes bytes.
+        r.states.delete_state(&meta.id).await.unwrap();
+        meta.created_at -= 60;
+        r.states.record_state(&meta).await.unwrap();
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_state_cloud(&r.server).await;
+
+        let report = r.state_pass("r1").await.unwrap();
+        assert_eq!((report.states_uploaded, report.deferred), (0, 1));
+        assert!(r.state_posts().await.is_empty());
+        assert!(r.base_of(SLOT3_KEY).await.is_none());
+    }
+
+    /// I2 + I3: um save de state que chega enquanto a passada dos game saves
+    /// roda sobe com a versão da linha dele, lida junto com os bytes (o core
+    /// foi atualizado: 1.64), nunca com a versão de uma linha lida antes.
+    #[tokio::test]
+    async fn a_state_saved_during_the_game_save_pass_goes_up_with_its_own_version() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-during-files").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.rom("r2", "Zelda.gba", "gba").await;
+        r.write("saves/Zelda.srm", b"zelda");
+        r.save_state("r1", Some(3), Some(V163), b"old", None).await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        mount_state_cloud(&r.server).await;
+        r.state_pass("r1").await.unwrap();
+        assert_eq!(r.state_posts().await.len(), 1);
+        mount_file_uploads(
+            &r.server,
+            uploaded("f1", "v1").set_delay(Duration::from_millis(800)),
+        )
+        .await;
+
+        let (report, _) = tokio::join!(r.pass(), async {
+            tokio::time::sleep(Duration::from_millis(200)).await;
+            r.save_state("r1", Some(3), Some("1.64 2b1c0d7"), b"new", None)
+                .await
+        });
+        let report = report.unwrap();
+        assert_eq!((report.uploaded, report.states_uploaded), (1, 1));
+        let posts = r.state_posts().await;
+        assert_eq!(posts.len(), 2);
+        assert_eq!(field(&posts[1].body, "file").as_deref(), Some("new"));
+        assert_eq!(
+            field(&posts[1].body, "core_version").as_deref(),
+            Some("1.64 2b1c0d7")
+        );
+    }
+
+    /// I3: um state grande subindo devagar não segura a checagem de antes de
+    /// abrir um jogo: ela termina dentro do prazo dela, com a nuvem conferida.
+    #[tokio::test]
+    async fn a_long_state_upload_does_not_hold_up_the_prelaunch() {
+        let _serial = SERIAL.lock().await;
+        let mut r = rig("state-vs-prelaunch").await;
+        r.engine.prelaunch_budget = Duration::from_secs(1);
+        r.rom("r1", CHRONO, "snes").await;
+        r.rom("r2", "Zelda.gba", "gba").await;
+        r.save_state("r1", Some(3), Some(V163), b"big", None).await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        mount_states(&r.server).await;
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .and(KindIs("state"))
+            .respond_with(uploaded("s1", "v1").set_delay(Duration::from_millis(2500)))
+            .mount(&r.server)
+            .await;
+        let r = &r;
+
+        let (state, (outcome, waited)) = tokio::join!(r.state_pass("r1"), async {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let started = std::time::Instant::now();
+            let outcome = r.engine.prelaunch(&r.alva, "r2").await;
+            (outcome, started.elapsed())
+        });
+        assert_eq!(outcome, PrelaunchOutcome::UpToDate);
+        assert!(waited < Duration::from_secs(1), "{waited:?}");
+        assert_eq!(state.unwrap().states_uploaded, 1);
+    }
+
+    /// I4: o state falha na rede depois de os game saves subirem: o relatório
+    /// dos game saves fica inteiro (o aviso de enviados, a hora da passada) e
+    /// a página não diz `offline` por isso.
+    #[tokio::test]
+    async fn a_state_network_failure_keeps_the_game_save_report() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-fail-keeps").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.rom("r2", "Zelda.gba", "gba").await;
+        r.write("saves/Zelda.srm", b"zelda");
+        r.save_state("r1", Some(3), Some(V163), b"state", None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        mount_states(&r.server).await;
+        mount_file_uploads(&r.server, uploaded("f1", "v1")).await;
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .and(KindIs("state"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&r.server)
+            .await;
+
+        let report = r.pass().await.unwrap();
+        assert_eq!((report.uploaded, report.states_uploaded), (1, 0));
+        assert!(r.events().contains(&SyncEvent::Pass {
+            uploaded: 1,
+            downloaded: 0,
+            backed_up: 0
+        }));
+        assert!(r.base_of(ZELDA).await.is_some());
+        assert!(r.base_of(SLOT3_KEY).await.is_none());
+        let st = r.status().await;
+        assert!(st.last_pass_at.is_some());
+        assert_eq!(st.last_error, None);
+    }
+
+    /// M2: uma passada de states não apaga o erro de um game save nem mexe na
+    /// hora da última passada (que é a dos game saves).
+    #[tokio::test]
+    async fn a_state_pass_leaves_the_game_save_status_alone() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-status").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.save_state("r1", Some(3), Some(V163), b"state", None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_state_cloud(&r.server).await;
+        {
+            let mut rt = r.sync.runtime();
+            rt.last_error = Some("too_large".into());
+            rt.last_error_file = Some("Mario.srm".into());
+            rt.last_pass_at = Some(123);
+        }
+
+        assert_eq!(r.state_pass("r1").await.unwrap().states_uploaded, 1);
+        let st = r.status().await;
+        assert_eq!(st.last_error.as_deref(), Some("too_large"));
+        assert_eq!(st.last_error_file.as_deref(), Some("Mario.srm"));
+        assert_eq!(st.last_pass_at, Some(123));
+    }
+
+    /// M3 (D117 "e de novo ao fechar"): fechar o jogo roda a passada dos game
+    /// saves da ROM e, depois, a dos states dela.
+    #[tokio::test]
+    async fn closing_a_game_runs_its_state_pass_after_the_save_pass() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-close").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.write("saves/Chrono Trigger (USA).srm", b"sram");
+        r.save_state("r1", Some(3), Some(V163), b"state", None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        mount_file_uploads(&r.server, uploaded("f1", "v1")).await;
+        mount_state_cloud(&r.server).await;
+
+        let (saves, states) = r.engine.after_close(&r.alva, "r1").await;
+        assert_eq!(saves.unwrap().uploaded, 1);
+        assert_eq!(states.unwrap().states_uploaded, 1);
+        let kinds: Vec<String> = r
+            .reqs("POST", SAVES)
+            .await
+            .iter()
+            .filter_map(|q| field(&q.body, "kind"))
+            .collect();
+        assert_eq!(kinds, vec!["file", "state"]);
+    }
+
+    /// M4: o 413 de um state diz o teto (`max_bytes`). Daí em diante um state
+    /// maior que ele nem é enviado (fica só aqui, dito pelo nome); um menor
+    /// sobe.
+    #[tokio::test]
+    async fn the_ceiling_from_a_413_holds_back_bigger_states_without_sending_them() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-ceiling").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.save_state("r1", Some(3), Some(V163), &[3u8; 512], None)
+            .await;
+        r.save_state("r1", Some(2), Some(V163), &[2u8; 2048], None)
+            .await;
+        r.save_state("r1", Some(1), Some(V163), &[1u8; 4096], None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_states(&r.server).await;
+        struct Ceiling;
+        impl Respond for Ceiling {
+            fn respond(&self, req: &Request) -> ResponseTemplate {
+                if field(&req.body, "file").unwrap_or_default().len() > 1024 {
+                    ResponseTemplate::new(413).set_body_json(json!({"error": {
+                        "code": "save_file_too_large", "max_bytes": 1024}}))
+                } else {
+                    uploaded("s3", "v1")
+                }
+            }
+        }
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(Ceiling)
+            .mount(&r.server)
+            .await;
+
+        let report = r.state_pass("r1").await.unwrap();
+        let slot =
+            |n: u32| format!("state:snes/snes9x_libretro/Chrono Trigger (USA)__slot{n}.state");
+        // A ordem entre as três depende do segundo em que foram gravadas: a
+        // primeira grande que vai ouve o 413, e a outra grande nem é enviada.
+        let mut names: Vec<String> = r
+            .state_posts()
+            .await
+            .iter()
+            .filter_map(|q| field(&q.body, "filename"))
+            .collect();
+        names.sort();
+        assert_eq!(names.len(), 2, "uma das grandes não foi enviada: {names:?}");
+        assert_eq!(names[1], SLOT3);
+        assert!(names[0].ends_with("__slot1.state") || names[0].ends_with("__slot2.state"));
+        assert_eq!(report.states_uploaded, 1);
+        let mut errors = report.errors.clone();
+        errors.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            errors,
+            vec![
+                (slot(1), SyncError::StateTooLarge),
+                (slot(2), SyncError::StateTooLarge)
+            ]
+        );
+        assert_eq!(r.local_only(&slot(1)), Some("rejected"));
+        assert_eq!(r.local_only(&slot(2)), Some("rejected"));
+        assert_eq!(r.status().await.states_local_only, 2);
+    }
+
+    /// M6: a listagem dos states falha: a passada acaba sem enviar nada e sem
+    /// mexer na base (uma linha apagada no site nunca vira "sumiu" e sobe).
+    #[tokio::test]
+    async fn a_failed_state_listing_sends_nothing_and_keeps_the_base() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-list-fails").await;
+        r.rom("r1", CHRONO, "snes").await;
+        let meta = r
+            .save_state("r1", Some(3), Some(V163), b"state", None)
+            .await;
+        let base = BaseRow {
+            key: SLOT3_KEY.into(),
+            kind: "state".into(),
+            remote_save_id: "s1".into(),
+            remote_version_id: "v1".into(),
+            remote_hash: sha(b"state"),
+            local_hash: sha(b"state"),
+            local_path: meta.file_path.clone(),
+            rom_crc32: None,
+            synced_at: 1,
+            wiped_at: None,
+            backup_path: None,
+            local_size: None,
+            local_mtime_ns: None,
+        };
+        r.repo.base_put(&base).await.unwrap();
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        Mock::given(method("GET"))
+            .and(path(SAVES))
+            .and(query_param("kind", "state"))
+            .respond_with(ResponseTemplate::new(503))
+            .mount(&r.server)
+            .await;
+        mount_state_uploads_counted(&r.server).await;
+
+        assert_eq!(r.state_pass("r1").await, Err(SyncError::Offline));
+        assert!(r.reqs("POST", SAVES).await.is_empty());
+        assert_eq!(r.base_of(SLOT3_KEY).await.unwrap(), base);
+    }
+
+    /// Um envio que nunca devia acontecer (o teste confere que nada chegou).
+    async fn mount_state_uploads_counted(server: &MockServer) {
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(uploaded("x", "x"))
+            .mount(server)
+            .await;
+    }
+
+    /// M6: sem base, a nuvem já tem estes bytes na linha desta máquina (mesmo
+    /// core e versão): a base é adotada, com o tamanho e o mtime, sem envio.
+    #[tokio::test]
+    async fn a_state_already_in_the_cloud_is_adopted() {
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-adopt").await;
+        r.rom("r1", CHRONO, "snes").await;
+        r.save_state("r1", Some(3), Some(V163), b"same", None).await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        let cloud = mount_state_cloud(&r.server).await;
+        cloud.set(vec![state_row("s9", SLOT3, b"same", "v4")]);
+
+        let report = r.state_pass("r1").await.unwrap();
+        assert_eq!(report.states_uploaded, 0);
+        assert!(r.state_posts().await.is_empty());
+        let base = r.base_of(SLOT3_KEY).await.unwrap();
+        assert_eq!(
+            (
+                base.remote_save_id.as_str(),
+                base.remote_version_id.as_str()
+            ),
+            ("s9", "v4")
+        );
+        assert_eq!(base.local_hash, sha(b"same"));
+        assert_eq!(base.local_size, Some(4));
+        assert!(base.local_mtime_ns.is_some());
+    }
+
+    /// M7: o tamanho e o mtime vão com a base. Com o app aberto de novo, um
+    /// state com os dois iguais não é relido (o hash da base vale, mesmo com
+    /// bytes trocados por fora sem mexer em nada disso); com o mtime mudado,
+    /// é lido e sobe.
+    #[tokio::test]
+    async fn after_a_restart_an_unchanged_state_is_not_read_again() {
+        let _serial = SERIAL.lock().await;
+        let mut r = rig("state-restart").await;
+        r.rom("r1", CHRONO, "snes").await;
+        let meta = r
+            .save_state("r1", Some(3), Some(V163), b"original", None)
+            .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_state_cloud(&r.server).await;
+        r.state_pass("r1").await.unwrap();
+        let base = r.base_of(SLOT3_KEY).await.unwrap();
+        assert_eq!(base.local_size, Some(8));
+        let path = PathBuf::from(&meta.file_path);
+        let when = std::fs::metadata(&path).unwrap().modified().unwrap();
+
+        r.restart();
+        // Mesmo tamanho, mesmo mtime, bytes outros: só uma leitura veria.
+        std::fs::write(&path, b"replaced").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(when)
+            .unwrap();
+        r.state_pass("r1").await.unwrap();
+        assert_eq!(r.state_posts().await.len(), 1, "o arquivo foi relido");
+
+        // O mtime mudou: lido de novo, e os bytes novos sobem.
+        std::fs::File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_modified(when + Duration::from_secs(1))
+            .unwrap();
+        // A linha é de antes deste mtime por menos de 2 s: ainda é dela.
+        r.state_pass("r1").await.unwrap();
+        let posts = r.state_posts().await;
+        assert_eq!(posts.len(), 2);
+        assert_eq!(field(&posts[1].body, "file").as_deref(), Some("replaced"));
+    }
+
+    /// M1 e M8: a conta da página acompanha o disco. O state que sai daqui
+    /// sai da conta (na passada de todos e na de uma ROM), e o state de uma
+    /// ROM que perdeu o nome na nuvem para outra entra nela como duplicado.
+    #[tokio::test]
+    async fn the_local_only_count_follows_deleted_and_duplicate_states() {
+        use domain::save_state::SaveStateRepository;
+        let _serial = SERIAL.lock().await;
+        let r = rig("state-count").await;
+        r.rom("r1", CHRONO, "snes").await;
+        let old = r.save_state("r1", Some(1), None, b"old", None).await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![]).await;
+        mount_state_cloud(&r.server).await;
+
+        r.pass().await.unwrap();
+        assert_eq!(r.status().await.states_local_only, 1);
+        crate::save_state::delete(&r.states, &old.id).await.unwrap();
+        r.pass().await.unwrap();
+        assert_eq!(r.status().await.states_local_only, 0);
+
+        let old = r.save_state("r1", Some(1), None, b"old", None).await;
+        r.state_pass("r1").await.unwrap();
+        assert_eq!(r.status().await.states_local_only, 1);
+        crate::save_state::delete(&r.states, &old.id).await.unwrap();
+        r.state_pass("r1").await.unwrap();
+        assert_eq!(r.status().await.states_local_only, 0);
+
+        // Duas pastas, o mesmo jogo: um nome na nuvem, o mais novo sobe.
+        r.rom("eu", "europa/Game.sfc", "snes").await;
+        r.rom("us", "usa/Game.sfc", "snes").await;
+        // O de "eu" é de um minuto antes (o `created_at` é em segundos).
+        let mut eu = r.save_state("eu", Some(1), Some(V163), b"eu", None).await;
+        r.states.delete_state(&eu.id).await.unwrap();
+        eu.created_at -= 60;
+        r.states.record_state(&eu).await.unwrap();
+        r.save_state("us", Some(1), Some(V163), b"us", None).await;
+        r.pass().await.unwrap();
+        let posts = r.state_posts().await;
+        assert_eq!(posts.len(), 1);
+        assert_eq!(field(&posts[0].body, "file").as_deref(), Some("us"));
+        let key = "state:snes/snes9x_libretro/Game__slot1.state";
+        assert_eq!(r.local_only(key), Some("duplicate"));
+        assert_eq!(r.status().await.states_local_only, 1);
+        // A passada de uma ROM não sobe o duplicado por cima.
+        r.state_pass("eu").await.unwrap();
+        assert_eq!(r.state_posts().await.len(), 1);
+        assert_eq!(r.local_only(key), Some("duplicate"));
     }
 }

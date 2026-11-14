@@ -239,6 +239,8 @@ mod tests {
             synced_at: 1,
             wiped_at: None,
             backup_path: None,
+            local_size: None,
+            local_mtime_ns: None,
         }
     }
 

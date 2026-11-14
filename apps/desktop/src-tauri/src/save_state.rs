@@ -44,9 +44,7 @@ fn now_unix() -> i64 {
         .unwrap_or(0)
 }
 
-/// O nome em disco: o que não é letra ASCII, dígito, `-`, `_` ou `.` vira `_`.
-/// O cloud save usa o mesmo para o nome do state na nuvem.
-pub(crate) fn sanitize(s: &str) -> String {
+fn sanitize(s: &str) -> String {
     s.chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {

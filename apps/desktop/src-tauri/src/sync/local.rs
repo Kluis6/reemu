@@ -14,7 +14,7 @@
 
 use super::platform::platform_for_system;
 use domain::library::{Rom, RomRepository};
-use domain::save_state::{SaveStateMetadata, SaveStateRepository};
+use domain::save_state::SaveStateMetadata;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::io::{self, Read};
@@ -285,19 +285,16 @@ impl LocalSaves {
     }
 }
 
-/// O stem dos saves de uma ROM: o mesmo que a sessão usa para o `.srm`.
-fn save_stem(save_dir: &Path, rom: &Rom) -> Option<String> {
-    let srm = emu_session::srm_path(save_dir, &rom.file_path);
-    let name = srm.file_name()?.to_str()?;
-    // `srm_path` termina sempre em `.srm`; o stem pode ter pontos
-    // ("Game v1.2"), então a troca de extensão é por texto, não por `Path`.
-    Some(name.strip_suffix(".srm").unwrap_or(name).to_owned())
+/// O stem dos saves de uma ROM: o mesmo que a sessão usa para o `.srm`, e o
+/// mesmo dos states dela na nuvem.
+fn save_stem(rom: &Rom) -> Option<String> {
+    rom_stem(&rom.file_path)
 }
 
 /// Onde os saves de uma ROM ficam neste disco, existam ou não: um por
 /// extensão de save, na ordem de `ROM_SAVE_EXTENSIONS`.
 pub fn rom_slot_files(rom: &Rom, save_dir: &Path) -> Vec<SaveFile> {
-    let Some(stem) = save_stem(save_dir, rom) else {
+    let Some(stem) = save_stem(rom) else {
         return Vec::new();
     };
     let platform = platform_for_system(&rom.system_id);
@@ -451,7 +448,7 @@ fn index(roms: &[Rom], save_dir: &Path, system_dir: &Path) -> LocalSaves {
     for rom in roms {
         let platform = platform_for_system(&rom.system_id);
         saves.platforms.insert(rom.id.clone(), platform);
-        if let Some(stem) = save_stem(save_dir, rom) {
+        if let Some(stem) = save_stem(rom) {
             saves.stems.entry(stem).or_default().push(RomRef {
                 id: rom.id.clone(),
                 crc32: rom.crc32.clone(),
@@ -560,6 +557,8 @@ pub async fn rom_saves(
 /// arquivo local leva o id da ROM, que só existe nesta máquina.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StateFile {
+    /// A linha de `save_states`: some quando a vaga é gravada de novo.
+    pub id: String,
     /// `state:<plataforma>/<core>/<stem>__<vaga>.state`.
     pub key: String,
     pub rom_id: String,
@@ -573,6 +572,8 @@ pub struct StateFile {
     pub path: PathBuf,
     /// A miniatura que o save gravou ao lado (`.png`).
     pub thumbnail: Option<PathBuf>,
+    /// Quando a linha foi gravada (segundos Unix), depois dos bytes.
+    pub created_at: i64,
 }
 
 impl StateFile {
@@ -594,26 +595,41 @@ impl StateFile {
     }
 }
 
-/// O nome de um state na nuvem: o stem do arquivo da ROM, limpo como o nome
-/// do state em disco, e a vaga (`quick` ou `slotN`).
-pub fn state_filename(rom_path: &str, slot: Option<u32>) -> String {
-    let stem = Path::new(rom_path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("game");
-    format!(
-        "{}__{}.state",
-        crate::save_state::sanitize(stem),
-        crate::save_state::slot_name(slot)
-    )
+/// O stem do arquivo de uma ROM, cru, como o `.srm` dela sobe
+/// (`emu_session::srm_path`).
+fn rom_stem(rom_path: &str) -> Option<String> {
+    let srm = emu_session::srm_path(Path::new(""), rom_path);
+    let name = srm.file_name()?.to_str()?;
+    // `srm_path` termina sempre em `.srm`; o stem pode ter pontos
+    // ("Game v1.2"), então a troca de extensão é por texto, não por `Path`.
+    Some(name.strip_suffix(".srm").unwrap_or(name).to_owned())
 }
 
-/// Os states como sobem, na ordem das linhas (a mais nova primeiro): a linha
-/// cuja ROM não está em `roms` fica de fora, e uma chave repetida (duas linhas
-/// da mesma vaga, ou duas ROMs de mesmo stem) fica com a primeira.
-pub fn state_files(rows: &[SaveStateMetadata], roms: &HashMap<String, Rom>) -> Vec<StateFile> {
-    let mut seen = HashSet::new();
-    let mut out = Vec::new();
+/// O nome de um state na nuvem (D116): o stem cru do arquivo da ROM, o mesmo
+/// do `.srm` dela, e a vaga (`quick` ou `slotN`). Nada é trocado no stem: dois
+/// títulos diferentes nunca dão o mesmo nome.
+pub fn state_filename(rom_path: &str, slot: Option<u32>) -> String {
+    let stem = rom_stem(rom_path).unwrap_or_else(|| "game".to_owned());
+    format!("{stem}__{}.state", crate::save_state::slot_name(slot))
+}
+
+/// Os states desta máquina como sobem.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct DeviceStates {
+    /// Um por chave: o mais novo.
+    pub files: Vec<StateFile>,
+    /// Os de outra ROM com a mesma chave (o mesmo stem, plataforma, core e
+    /// vaga) que um mais novo: ficam só aqui.
+    pub duplicates: Vec<StateFile>,
+}
+
+/// Os states como sobem, na ordem das linhas (a mais nova primeiro). A linha
+/// cuja ROM não está em `roms` fica de fora. Uma chave repetida fica com a
+/// primeira: a linha mais velha da mesma ROM é só uma gravação anterior da
+/// vaga; a de outra ROM vai para `duplicates`.
+pub fn state_files(rows: &[SaveStateMetadata], roms: &HashMap<String, Rom>) -> DeviceStates {
+    let mut owner: HashMap<String, String> = HashMap::new();
+    let mut out = DeviceStates::default();
     for m in rows {
         let Some(rom) = roms.get(&m.rom_id) else {
             continue;
@@ -621,11 +637,9 @@ pub fn state_files(rows: &[SaveStateMetadata], roms: &HashMap<String, Rom>) -> V
         let platform = platform_for_system(&rom.system_id);
         let filename = state_filename(&rom.file_path, m.slot);
         let key = format!("state:{platform}/{}/{filename}", m.core_id);
-        if !seen.insert(key.clone()) {
-            continue;
-        }
-        out.push(StateFile {
-            key,
+        let file = StateFile {
+            id: m.id.clone(),
+            key: key.clone(),
             rom_id: m.rom_id.clone(),
             platform,
             core: m.core_id.clone(),
@@ -633,23 +647,39 @@ pub fn state_files(rows: &[SaveStateMetadata], roms: &HashMap<String, Rom>) -> V
             filename,
             path: PathBuf::from(&m.file_path),
             thumbnail: m.thumbnail_path.as_ref().map(PathBuf::from),
-        });
+            created_at: m.created_at,
+        };
+        match owner.get(&key) {
+            None => {
+                owner.insert(key, m.rom_id.clone());
+                out.files.push(file);
+            }
+            Some(rom_id) if *rom_id == m.rom_id => {}
+            Some(_) => {
+                if !out
+                    .duplicates
+                    .iter()
+                    .any(|d| d.key == file.key && d.rom_id == file.rom_id)
+                {
+                    out.duplicates.push(file);
+                }
+            }
+        }
     }
     out
 }
 
-/// Os save states desta máquina (de uma ROM, ou de todas), pelo SQLite. Não
-/// lê o disco: o arquivo que sumiu aparece aqui e a passada o vê ausente.
+/// Os save states desta máquina, pelo SQLite, de todas as ROMs: a chave
+/// repetida entre duas ROMs só se vê olhando todas. Não lê o disco: o arquivo
+/// que sumiu aparece aqui e a passada o vê ausente.
 pub async fn device_states(
     states: &db::SaveStateRepo,
     roms: &dyn RomRepository,
-    rom_id: Option<&str>,
-) -> Result<Vec<StateFile>, String> {
-    let rows = match rom_id {
-        Some(id) => states.list_states_for_rom(id).await,
-        None => states.all_states().await,
-    }
-    .map_err(|e| format!("save states: {e}"))?;
+) -> Result<DeviceStates, String> {
+    let rows = states
+        .all_states()
+        .await
+        .map_err(|e| format!("save states: {e}"))?;
     let mut by_id: HashMap<String, Rom> = HashMap::new();
     for m in &rows {
         if by_id.contains_key(&m.rom_id) {
@@ -687,6 +717,7 @@ mod tests {
     use super::*;
     use db::{connect_in_memory, RomsRepo};
     use domain::library::Rom;
+    use domain::save_state::SaveStateRepository;
 
     fn temp(name: &str) -> PathBuf {
         let dir =
@@ -1029,8 +1060,8 @@ mod tests {
         )
     }
 
-    /// D116: o nome na nuvem é o stem da ROM (limpo como o nome em disco) e a
-    /// vaga; o id da ROM, que só existe nesta máquina, não entra.
+    /// D116: o nome na nuvem é o stem cru da ROM (o mesmo do `.srm`) e a vaga;
+    /// o id da ROM, que só existe nesta máquina, não entra.
     #[test]
     fn a_state_is_named_by_the_rom_stem_and_the_slot() {
         let roms: HashMap<String, Rom> = [
@@ -1042,35 +1073,39 @@ mod tests {
         let rows = vec![
             state_row("a", "6f1c-uuid", "snes9x_libretro", Some(3), Some("1.63")),
             state_row("b", "6f1c-uuid", "snes9x_libretro", None, None),
-            // A mesma vaga numa linha mais velha: fica a primeira.
+            // A mesma vaga numa linha mais velha da mesma ROM: só uma gravação
+            // anterior, não um duplicado.
             state_row("old", "6f1c-uuid", "snes9x_libretro", Some(3), Some("1.62")),
             state_row("nothumb", "r2", "mgba_libretro", Some(0), Some("0.10")),
             // ROM fora da biblioteca: fora.
             state_row("x", "gone", "mgba_libretro", Some(1), Some("0.10")),
         ];
-        let got = state_files(&rows, &roms);
+        let found = state_files(&rows, &roms);
+        assert!(found.duplicates.is_empty());
+        let got = found.files;
         let keys: Vec<&str> = got.iter().map(|s| s.key.as_str()).collect();
         assert_eq!(
             keys,
             vec![
-                "state:snes/snes9x_libretro/Chrono_Trigger__USA___slot3.state",
-                "state:snes/snes9x_libretro/Chrono_Trigger__USA___quick.state",
+                "state:snes/snes9x_libretro/Chrono Trigger (USA)__slot3.state",
+                "state:snes/snes9x_libretro/Chrono Trigger (USA)__quick.state",
                 "state:gba/mgba_libretro/Zelda__slot0.state",
             ]
         );
-        assert_eq!(got[0].filename, "Chrono_Trigger__USA___slot3.state");
+        assert_eq!(got[0].filename, "Chrono Trigger (USA)__slot3.state");
         assert!(!got[0].filename.contains("6f1c"));
+        assert_eq!(got[0].id, "a");
         assert_eq!(got[0].core, "snes9x_libretro");
         assert_eq!(got[0].core_version.as_deref(), Some("1.63"));
         assert_eq!(got[0].rom_id, "6f1c-uuid");
         assert_eq!(got[0].thumbnail, Some(PathBuf::from("/saves/a.png")));
         assert_eq!(
             got[0].thumb_key(),
-            "state:snes/snes9x_libretro/Chrono_Trigger__USA___slot3.state.png"
+            "state:snes/snes9x_libretro/Chrono Trigger (USA)__slot3.state.png"
         );
         assert_eq!(
             got[0].thumb_filename(),
-            "Chrono_Trigger__USA___slot3.state.png"
+            "Chrono Trigger (USA)__slot3.state.png"
         );
         assert_eq!(got[1].version(), None);
         assert_eq!(got[2].thumbnail, None);
@@ -1081,8 +1116,65 @@ mod tests {
         assert_eq!(blank.version(), None);
     }
 
+    /// I1: o stem vai cru. Dois títulos diferentes de mesmo tamanho, que só
+    /// diferem fora do ASCII, nunca dão o mesmo nome na nuvem; e o nome do
+    /// state tem o mesmo stem que o `.srm` da mesma ROM.
+    #[test]
+    fn two_titles_that_differ_outside_ascii_never_share_a_cloud_name() {
+        for (a, b) in [
+            ("ファイナルファンタジー.sfc", "ドラゴンクエストモンス.sfc"),
+            ("Pokémon Azul.gba", "Pokèmon Azul.gba"),
+        ] {
+            assert_eq!(a.chars().count(), b.chars().count(), "{a} {b}");
+            let (na, nb) = (state_filename(a, Some(1)), state_filename(b, Some(1)));
+            assert_ne!(na, nb);
+            let srm = emu_session::srm_path(Path::new("/saves"), a);
+            let srm_stem = srm.file_stem().unwrap().to_str().unwrap();
+            assert_eq!(na, format!("{srm_stem}__slot1.state"));
+        }
+        assert_eq!(
+            state_filename("/roms/Game v1.2.n64", None),
+            "Game v1.2__quick.state"
+        );
+    }
+
+    /// M8: duas ROMs com o mesmo stem na mesma plataforma, core e vaga dão o
+    /// mesmo nome na nuvem: o state mais novo sobe e o outro fica só aqui,
+    /// contado como duplicado.
+    #[test]
+    fn the_older_of_two_roms_sharing_a_cloud_name_is_a_duplicate() {
+        let roms: HashMap<String, Rom> = [
+            rom("eu", "C:/roms/europa/Game.sfc", "snes"),
+            rom("us", "D:/outra/Game.sfc", "snes"),
+        ]
+        .into_iter()
+        .collect();
+        let rows = vec![
+            state_row("new", "us", "snes9x_libretro", Some(1), Some("1")),
+            state_row("old", "eu", "snes9x_libretro", Some(1), Some("1")),
+            state_row("older", "eu", "snes9x_libretro", Some(1), Some("1")),
+            state_row("other-slot", "eu", "snes9x_libretro", Some(2), Some("1")),
+        ];
+        let found = state_files(&rows, &roms);
+        let files: Vec<(&str, &str)> = found
+            .files
+            .iter()
+            .map(|f| (f.rom_id.as_str(), f.filename.as_str()))
+            .collect();
+        assert_eq!(
+            files,
+            vec![("us", "Game__slot1.state"), ("eu", "Game__slot2.state")]
+        );
+        let dups: Vec<(&str, &str)> = found
+            .duplicates
+            .iter()
+            .map(|f| (f.rom_id.as_str(), f.id.as_str()))
+            .collect();
+        assert_eq!(dups, vec![("eu", "old")]);
+    }
+
     #[tokio::test]
-    async fn device_states_reads_one_rom_or_all_of_them() {
+    async fn device_states_reads_every_rom_newest_first() {
         let pool = connect_in_memory().await.unwrap();
         let roms = RomsRepo::new(pool.clone());
         add_roms(
@@ -1099,14 +1191,15 @@ mod tests {
             m.created_at = created;
             states.record_state(&m).await.unwrap();
         }
-        let all = device_states(&states, &roms, None).await.unwrap();
+        let all = device_states(&states, &roms).await.unwrap();
         assert_eq!(
-            all.iter().map(|s| s.rom_id.as_str()).collect::<Vec<_>>(),
-            ["r2", "r1"]
+            all.files
+                .iter()
+                .map(|s| (s.rom_id.as_str(), s.created_at))
+                .collect::<Vec<_>>(),
+            [("r2", 2), ("r1", 1)]
         );
-        let one = device_states(&states, &roms, Some("r1")).await.unwrap();
-        assert_eq!(one.len(), 1);
-        assert_eq!(one[0].key, "state:gba/core/Zelda__slot1.state");
+        assert_eq!(all.files[1].key, "state:gba/core/Zelda__slot1.state");
     }
 
     #[test]

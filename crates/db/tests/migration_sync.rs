@@ -11,7 +11,7 @@ use domain::library::RomRepository;
 async fn an_existing_database_migrates_and_keeps_its_data() {
     let db = mem_db().await;
     seed_rom(&db, "rom1", "nes").await;
-    // Volta o banco para antes da 21.
+    // Volta o banco para antes da 21 (e da 22, que mexe na mesma tabela).
     sqlx::query("DROP TABLE sync_base")
         .execute(&db)
         .await
@@ -20,7 +20,7 @@ async fn an_existing_database_migrates_and_keeps_its_data() {
         .execute(&db)
         .await
         .unwrap();
-    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 21")
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version >= 21")
         .execute(&db)
         .await
         .unwrap();

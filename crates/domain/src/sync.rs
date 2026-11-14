@@ -26,6 +26,13 @@ pub struct BaseRow {
     pub wiped_at: Option<i64>,
     /// Onde o arquivo foi parar quando a remoção no site foi aceita.
     pub backup_path: Option<String>,
+    /// O tamanho e o mtime (nanossegundos Unix) do arquivo quando a base foi
+    /// gravada: iguais no disco, `local_hash` vale sem reler. `None` nos game
+    /// saves e nas linhas de antes da coluna.
+    #[serde(default)]
+    pub local_size: Option<i64>,
+    #[serde(default)]
+    pub local_mtime_ns: Option<i64>,
 }
 
 /// Um arquivo cujo lado local e cujo lado remoto mudaram: nada é sobrescrito

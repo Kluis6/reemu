@@ -41,8 +41,11 @@ pub enum ApiError {
     /// Acabou a cota de armazenamento: o 402 de cota do Alvanista ou, de um
     /// servidor sem o proxy, o 507.
     Quota,
-    /// 413: o arquivo passa do limite da plataforma.
-    TooLarge,
+    /// 413: o arquivo passa do limite da plataforma (num state, do maior
+    /// objeto que a nuvem aceita). `max_bytes`: o limite, quando o corpo diz.
+    TooLarge {
+        max_bytes: Option<i64>,
+    },
     NotFound,
     /// 429, 5xx ou rede: vale tentar depois.
     Transient(String),
@@ -62,7 +65,7 @@ impl std::fmt::Display for ApiError {
             Self::Paused => f.write_str("aparelho pausado"),
             Self::TierInsufficient { .. } => f.write_str("plano sem sync de saves"),
             Self::Quota => f.write_str("cota esgotada"),
-            Self::TooLarge => f.write_str("arquivo grande demais"),
+            Self::TooLarge { .. } => f.write_str("arquivo grande demais"),
             Self::NotFound => f.write_str("não encontrado"),
             Self::Transient(e) => write!(f, "Alvanista indisponível: {e}"),
             Self::Invalid(c) => write!(f, "o Alvanista recusou o arquivo: {c}"),
@@ -490,7 +493,9 @@ fn classify(status: u16, body: &[u8]) -> ApiError {
         400 | 422 => ApiError::Invalid(code.unwrap_or_else(|| format!("http_{status}"))),
         403 if code.as_deref() == Some("insufficient_scope") => ApiError::InsufficientScope,
         404 => ApiError::NotFound,
-        413 => ApiError::TooLarge,
+        413 => ApiError::TooLarge {
+            max_bytes: json.pointer("/error/max_bytes").and_then(|v| v.as_i64()),
+        },
         423 => ApiError::Paused,
         507 => ApiError::Quota,
         429 | 500..=599 => ApiError::Transient(format!("HTTP {status}")),
@@ -598,7 +603,14 @@ mod tests {
                     "message": "object exceeds the allowed size", "max_bytes": 65536}})
             )
             .await,
-            ApiError::TooLarge
+            ApiError::TooLarge {
+                max_bytes: Some(65536)
+            }
+        );
+        // Um 413 sem corpo (o proxy cortou o envio) não diz o limite.
+        assert_eq!(
+            status_of(413, json!({})).await,
+            ApiError::TooLarge { max_bytes: None }
         );
         assert_eq!(
             status_of(

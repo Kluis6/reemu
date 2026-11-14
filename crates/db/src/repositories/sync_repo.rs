@@ -6,7 +6,8 @@ use sqlx::sqlite::SqliteRow;
 use sqlx::Row;
 
 const BASE_COLS: &str = "key, kind, remote_save_id, remote_version_id, remote_hash, \
-     local_hash, local_path, rom_crc32, synced_at, wiped_at, backup_path";
+     local_hash, local_path, rom_crc32, synced_at, wiped_at, backup_path, local_size, \
+     local_mtime_ns";
 const CONFLICT_COLS: &str = "key, local_hash, local_mtime, local_size, remote_save_id, \
      remote_version_id, remote_hash, remote_device_label, remote_client_mtime, \
      remote_size, remote_deleted, rom_id, seen_at";
@@ -30,6 +31,8 @@ fn base_from(r: &SqliteRow) -> Result<BaseRow, RepoError> {
         synced_at: r.try_get("synced_at").map_err(be)?,
         wiped_at: r.try_get("wiped_at").map_err(be)?,
         backup_path: r.try_get("backup_path").map_err(be)?,
+        local_size: r.try_get("local_size").map_err(be)?,
+        local_mtime_ns: r.try_get("local_mtime_ns").map_err(be)?,
     })
 }
 
@@ -65,20 +68,23 @@ impl SyncRepo {
         row.as_ref().map(base_from).transpose()
     }
 
-    /// Insere ou substitui a linha da chave, `wiped_at` e `backup_path`
-    /// incluídos: um sync novo grava a linha sem eles e os limpa.
+    /// Insere ou substitui a linha da chave, `wiped_at`, `backup_path`, o
+    /// tamanho e o mtime incluídos: um sync novo grava a linha sem a marca e
+    /// a limpa.
     pub async fn base_put(&self, b: &BaseRow) -> Result<(), RepoError> {
         sqlx::query(
             "INSERT INTO sync_base (key, kind, remote_save_id, remote_version_id, remote_hash, \
-             local_hash, local_path, rom_crc32, synced_at, wiped_at, backup_path) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) \
+             local_hash, local_path, rom_crc32, synced_at, wiped_at, backup_path, \
+             local_size, local_mtime_ns) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13) \
              ON CONFLICT(key) DO UPDATE SET kind = excluded.kind, \
              remote_save_id = excluded.remote_save_id, \
              remote_version_id = excluded.remote_version_id, \
              remote_hash = excluded.remote_hash, local_hash = excluded.local_hash, \
              local_path = excluded.local_path, rom_crc32 = excluded.rom_crc32, \
              synced_at = excluded.synced_at, wiped_at = excluded.wiped_at, \
-             backup_path = excluded.backup_path",
+             backup_path = excluded.backup_path, local_size = excluded.local_size, \
+             local_mtime_ns = excluded.local_mtime_ns",
         )
         .bind(&b.key)
         .bind(&b.kind)
@@ -91,6 +97,8 @@ impl SyncRepo {
         .bind(b.synced_at)
         .bind(b.wiped_at)
         .bind(&b.backup_path)
+        .bind(b.local_size)
+        .bind(b.local_mtime_ns)
         .execute(&self.db)
         .await
         .map_err(be)?;

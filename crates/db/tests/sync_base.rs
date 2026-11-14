@@ -17,6 +17,8 @@ fn base(key: &str, kind: &str) -> BaseRow {
         synced_at: 10,
         wiped_at: None,
         backup_path: None,
+        local_size: None,
+        local_mtime_ns: None,
     }
 }
 

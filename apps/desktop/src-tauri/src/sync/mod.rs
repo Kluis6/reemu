@@ -102,7 +102,7 @@ impl From<ApiError> for SyncError {
             ApiError::TierInsufficient { .. } => Self::NoTier,
             ApiError::Paused => Self::Paused,
             ApiError::Quota => Self::Quota,
-            ApiError::TooLarge => Self::TooLarge,
+            ApiError::TooLarge { .. } => Self::TooLarge,
             ApiError::Transient(_) => Self::Offline,
             other => failed(other.to_string()),
         }
@@ -133,9 +133,15 @@ struct Runtime {
     /// O arquivo que a nuvem recusou, quando `last_error` é de um arquivo só
     /// (`too_large`, `state_too_large`, `rejected`): a página diz qual.
     last_error_file: Option<String>,
-    /// Os save states que ficam só nesta máquina, pela chave, com o motivo
-    /// (`unversioned`, `wiped`, `rejected`). A passada dos states os conta.
-    states_local: std::collections::HashMap<String, &'static str>,
+    /// Os save states que ficam só nesta máquina, por (ROM, chave), com o
+    /// motivo (`unversioned`, `wiped`, `rejected`, `duplicate`). A passada
+    /// dos states os conta.
+    states_local: std::collections::HashMap<(String, String), &'static str>,
+    /// O que a última passada de states tem a dizer à página (um state que a
+    /// nuvem recusou, a cota, o plano), com o nome do arquivo quando é um só.
+    /// Fica à parte do `last_error` dos game saves: uma passada de states
+    /// nunca apaga nem troca o que a dos game saves disse.
+    state_error: Option<(SyncError, Option<String>)>,
 }
 
 impl SyncService {
@@ -573,14 +579,18 @@ impl SyncService {
             } else {
                 0
             },
-            last_error: runtime.last_error.clone(),
+            // O dos game saves primeiro; sem ele, o dos states.
+            last_error: runtime
+                .last_error
+                .clone()
+                .or_else(|| runtime.state_error.as_ref().map(|(e, _)| e.to_string())),
             // Só junto do erro de um arquivo: outro erro depois dele não leva
             // o nome de um arquivo que já não é o motivo.
-            last_error_file: match runtime.last_error.as_deref() {
-                Some("too_large" | "state_too_large" | "rejected") => {
-                    runtime.last_error_file.clone()
-                }
-                _ => None,
+            last_error_file: match (runtime.last_error.as_deref(), &runtime.state_error) {
+                (Some("too_large" | "rejected"), _) => runtime.last_error_file.clone(),
+                (Some(_), _) => None,
+                (None, Some((_, file))) => file.clone(),
+                (None, None) => None,
             },
         })
     }
@@ -728,7 +738,9 @@ impl SyncService {
         if on {
             self.kick_pass();
         } else {
-            self.runtime().states_local.clear();
+            let mut runtime = self.runtime();
+            runtime.states_local.clear();
+            runtime.state_error = None;
         }
         self.status_with(alva, hw).await
     }
@@ -1854,10 +1866,10 @@ mod tests {
         let count = || passes.load(std::sync::atomic::Ordering::SeqCst);
         let st = r.sync.status_with(&r.alva, hw()).await.unwrap();
         assert!(st.states_enabled && st.saves_enabled);
-        r.sync
-            .runtime()
-            .states_local
-            .insert("state:snes/c/a__slot1.state".into(), "unversioned");
+        r.sync.runtime().states_local.insert(
+            ("r1".into(), "state:snes/c/a__slot1.state".into()),
+            "unversioned",
+        );
         assert_eq!(
             r.sync
                 .status_with(&r.alva, hw())
@@ -2709,7 +2721,10 @@ mod tests {
             assert_eq!(err.to_string(), code);
         }
         assert_eq!(SyncError::from(ApiError::Unauthorized), SyncError::Revoked);
-        assert_eq!(SyncError::from(ApiError::TooLarge), SyncError::TooLarge);
+        assert_eq!(
+            SyncError::from(ApiError::TooLarge { max_bytes: None }),
+            SyncError::TooLarge
+        );
         assert_eq!(
             SyncError::from(ApiError::Transient("x".into())),
             SyncError::Offline
