@@ -16,9 +16,16 @@
 //! Ver `docs/ai-context/12-vulkan-hw-render-fase2.md`.
 #![allow(dead_code)]
 
+// Travas: um `Mutex` envenenado (outra thread caiu segurando a trava) não
+// derruba esta thread também — segue com o dado de dentro
+// (`PoisonError::into_inner`, std::sync::PoisonError). Antes, um pânico na
+// thread do core levava a do compositor junto (e vice-versa) no próximo
+// `lock().unwrap()`. Se o pânico foi no meio de uma seção travada, o anel pode
+// ficar inconsistente e o vídeo parar — o mesmo efeito de antes, mas sem a
+// cascata, e o pânico original já foi pro log pelo hook de `lib.rs`.
 use std::os::raw::c_void;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, PoisonError};
 
 use ash::vk::{self, Handle};
 
@@ -65,7 +72,7 @@ impl VkFrameSync {
         // `fetch_max`: liberações fora de ordem (descarte) não regridem.
         let prev = self.released[s].fetch_max(gen, Ordering::AcqRel);
         if gen > prev {
-            let _g = self.lock.lock().unwrap();
+            let _g = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
             self.cv.notify_all();
         }
     }
@@ -77,7 +84,7 @@ impl VkFrameSync {
             return; // primeiros RING frames: slot nunca foi usado
         };
         let s = slot as usize % RING;
-        let mut g = self.lock.lock().unwrap();
+        let mut g = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         loop {
             if self.shutdown.load(Ordering::Acquire) {
                 return;
@@ -89,7 +96,7 @@ impl VkFrameSync {
             let (ng, to) = self
                 .cv
                 .wait_timeout(g, std::time::Duration::from_millis(100))
-                .unwrap();
+                .unwrap_or_else(PoisonError::into_inner);
             g = ng;
             if to.timed_out() && self.released[s].load(Ordering::Acquire) < need {
                 log::warn!("vk wait_sync_index slot {s}: compositor atrasado (gen {need})");
@@ -113,7 +120,7 @@ impl VkFrameSync {
 
     fn stop(&self) {
         self.shutdown.store(true, Ordering::Release);
-        let _g = self.lock.lock().unwrap();
+        let _g = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         self.cv.notify_all();
     }
 }
@@ -235,7 +242,7 @@ impl VkFrameBridge {
     /// Antes de `retro_run`: nova geração + avança o slot. Mão-única com o
     /// `get_sync_index`/`wait_sync_index` que o core chama em seguida.
     pub fn begin_frame(&self) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
         // Marcador de "tudo do slot anterior terminou na GPU": submissão
         // VAZIA com a fence do slot. Pela spec Vulkan, o sinal de fence de um
         // `vkQueueSubmit` inclui no 1º escopo "all commands that occur earlier
@@ -278,7 +285,7 @@ impl VkFrameBridge {
     /// Depois de `retro_run`: pega (sem submeter) o trabalho que o core gravou.
     /// `None` = frame dup / software.
     pub fn take_pending(&self) -> Option<PendingFrame> {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
         let image = inner.pending_image.take()?;
         let idx = inner.current_index as usize;
         let cmds = std::mem::take(&mut inner.pending_cmds);
@@ -303,14 +310,17 @@ impl VkFrameBridge {
 
     /// Frames entregues pelo core (diagnóstico/teste).
     pub fn frames_delivered(&self) -> u64 {
-        self.inner.lock().unwrap().delivered
+        self.inner
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .delivered
     }
 }
 
 impl Drop for VkFrameBridge {
     fn drop(&mut self) {
         self.sync.stop();
-        let inner = self.inner.lock().unwrap();
+        let inner = self.inner.lock().unwrap_or_else(PoisonError::into_inner);
         // SAFETY: o core já foi desativado; espera a GPU e destrói os fences
         // antes do `VkContext` derrubar o device.
         unsafe {
@@ -358,7 +368,7 @@ unsafe extern "C" fn cb_set_image(
             )
         });
     }
-    let mut inner = b.inner.lock().unwrap();
+    let mut inner = b.inner.lock().unwrap_or_else(PoisonError::into_inner);
     inner.pending_image = Some(*image);
     inner.pending_semaphores.clear();
     if num_semaphores > 0 && !semaphores.is_null() {
@@ -380,7 +390,10 @@ unsafe extern "C" fn cb_set_command_buffers(
         return;
     }
     let slice = std::slice::from_raw_parts(cmd, num_cmd as usize);
-    let mut inner = bridge(handle).inner.lock().unwrap();
+    let mut inner = bridge(handle)
+        .inner
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
     inner.pending_cmds.clear();
     inner.pending_cmds.extend_from_slice(slice);
 }
@@ -389,7 +402,11 @@ unsafe extern "C" fn cb_get_sync_index(handle: *mut c_void) -> u32 {
     if handle.is_null() {
         return 0;
     }
-    bridge(handle).inner.lock().unwrap().current_index
+    bridge(handle)
+        .inner
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .current_index
 }
 
 unsafe extern "C" fn cb_get_sync_index_mask(handle: *mut c_void) -> u32 {
@@ -403,7 +420,7 @@ unsafe extern "C" fn cb_wait_sync_index(handle: *mut c_void) {
     }
     let b = bridge(handle);
     let (idx, gen) = {
-        let inner = b.inner.lock().unwrap();
+        let inner = b.inner.lock().unwrap_or_else(PoisonError::into_inner);
         (inner.current_index, inner.generation)
     };
     // Bloqueia até o compositor liberar o uso anterior deste slot.
@@ -412,7 +429,11 @@ unsafe extern "C" fn cb_wait_sync_index(handle: *mut c_void) {
     // atividade de GPU daquele quadro; quase sempre já sinalizada) antes de o
     // core reusar os recursos dele, e a reseta pro próximo marcador.
     if b.sync.take_submitted(idx) {
-        let fence = b.inner.lock().unwrap().fences[idx as usize % RING];
+        let fence = b
+            .inner
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .fences[idx as usize % RING];
         if fence != vk::Fence::null() {
             let _ = b.ctx.device.wait_for_fences(&[fence], true, u64::MAX);
             let _ = b.ctx.device.reset_fences(&[fence]);
@@ -436,7 +457,11 @@ unsafe extern "C" fn cb_set_signal_semaphore(handle: *mut c_void, semaphore: vk:
     if handle.is_null() {
         return;
     }
-    bridge(handle).inner.lock().unwrap().signal_semaphore = semaphore;
+    bridge(handle)
+        .inner
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .signal_semaphore = semaphore;
 }
 
 // ---------------------------------------------------------------------------
