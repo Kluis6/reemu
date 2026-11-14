@@ -57,6 +57,13 @@ pub async fn load_game(
         None => Default::default(),
     };
 
+    // Cloud save: antes de o core abrir, o save deste jogo vem da nuvem se lá
+    // estiver mais novo (no máximo 5 s; passado isso, abre com o local). O
+    // conflito a página do jogo já perguntou antes de chamar o load.
+    if let Some(rid) = rom_id.as_deref() {
+        crate::sync::engine::before_launch(&app, rid).await;
+    }
+
     // O load é bloqueante (spawna o processo filho + espera o `Loaded`);
     // tira da thread async.
     let av = {
@@ -548,7 +555,12 @@ pub async fn download_bezel_pack(
 pub async fn unload_game(app: AppHandle) -> Result<(), AppError> {
     let state = app.state::<AppState>();
     let session = Arc::clone(&state.session);
-    *state.current_rom.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    // A ROM que fecha: a passada do cloud save depois do unload é dela.
+    let rom_id = state
+        .current_rom
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .take();
     *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
     // A subsurface é escondida pelo `reemu-video-pump` assim que a sessão fica
@@ -561,6 +573,10 @@ pub async fn unload_game(app: AppHandle) -> Result<(), AppError> {
         .map_err(AppError::from)?
         .map_err(AppError::from);
     persist_core_set_options(&state).await;
+    // O save está em disco: sobe em segundo plano, sem segurar a volta ao menu.
+    if let (Ok(()), Some(rid)) = (&r, rom_id) {
+        crate::sync::engine::after_unload(&app, rid);
+    }
     r
 }
 

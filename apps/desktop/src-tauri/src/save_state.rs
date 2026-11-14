@@ -7,7 +7,9 @@
 //! gravado ao lado, com a mesma stem + `.png`.
 
 use domain::save_state::{SaveStateMetadata, SaveStateRepository};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SaveError {
@@ -37,6 +39,22 @@ fn save_family(core_id: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
+/// A trava de escrita de states de uma ROM. Quem grava na vaga de uma ROM
+/// (`save_state`, o QuickSave da hotkey, o download de um state de outra
+/// máquina) a segura de ponta a ponta: `save` apaga o state de antes da vaga,
+/// e dois escritores juntos apagariam o que o outro acabou de gravar.
+pub async fn write_lock(rom_id: &str) -> tokio::sync::OwnedMutexGuard<()> {
+    static LOCKS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+    let lock = {
+        let mut map = LOCKS
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        map.entry(rom_id.to_owned()).or_default().clone()
+    };
+    lock.lock_owned().await
+}
+
 fn now_unix() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -56,8 +74,13 @@ fn sanitize(s: &str) -> String {
         .collect()
 }
 
+/// A vaga no nome do arquivo: `quick` (sem vaga) ou `slotN`.
+pub(crate) fn slot_name(slot: Option<u32>) -> String {
+    slot.map_or_else(|| "quick".to_string(), |s| format!("slot{s}"))
+}
+
 fn state_path(dir: &Path, rom_id: &str, core_id: &str, slot: Option<u32>) -> PathBuf {
-    let slot = slot.map_or_else(|| "quick".to_string(), |s| format!("slot{s}"));
+    let slot = slot_name(slot);
     dir.join(format!(
         "{}.state",
         sanitize(&format!("{rom_id}__{core_id}__{slot}"))
@@ -163,9 +186,75 @@ pub async fn delete<R: SaveStateRepository + ?Sized>(
     Ok(())
 }
 
+/// `delete` sob a trava de escrita da ROM do state: apagar enquanto um
+/// QuickSave ou um download grava a mesma vaga apagaria o arquivo que o `save`
+/// acabou de reescrever. A linha é relida já com a trava na mão.
+pub async fn delete_locked<R: SaveStateRepository + ?Sized>(
+    repo: &R,
+    state_id: &str,
+) -> Result<(), SaveError> {
+    let rom_id = repo.get_state(state_id).await?.map(|m| m.rom_id);
+    let _write = match &rom_id {
+        Some(rom) => Some(write_lock(rom).await),
+        None => None,
+    };
+    delete(repo, state_id).await
+}
+
 #[cfg(test)]
 mod tests {
-    use super::save_family;
+    use super::{delete_locked, save, save_family, write_lock};
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn a_delete_waits_for_the_roms_write_lock() {
+        let db = db::connect_in_memory().await.unwrap();
+        domain::library::RomRepository::add(
+            &db::RomsRepo::new(db.clone()),
+            &domain::library::Rom {
+                id: "rom-del-lock".into(),
+                file_path: "C:/roms/A.sfc".into(),
+                crc32: "C".into(),
+                md5: "M".into(),
+                system_id: "snes".into(),
+                added_at: 0,
+                last_played_at: None,
+                is_favorite: false,
+                user_title: None,
+            },
+        )
+        .await
+        .unwrap();
+        let repo = db::SaveStateRepo::new(db);
+        let dir = std::env::temp_dir().join(format!("reemu-del-lock-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let meta = save(
+            &repo,
+            &dir,
+            "rom-del-lock",
+            "core",
+            Some(1),
+            b"s",
+            None,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+
+        let held = write_lock("rom-del-lock").await;
+        let mut delete = Box::pin(delete_locked(&repo, &meta.id));
+        let early = tokio::time::timeout(Duration::from_millis(300), &mut delete).await;
+        assert!(early.is_err(), "o delete espera a trava");
+        assert!(std::path::Path::new(&meta.file_path).exists());
+
+        drop(held);
+        delete.await.unwrap();
+        assert!(!std::path::Path::new(&meta.file_path).exists());
+        // Outra ROM não espera por esta.
+        let _other = write_lock("rom-other").await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn hw_and_sw_beetle_psx_share_a_family() {

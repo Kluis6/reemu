@@ -6,12 +6,37 @@ import type { Quota } from "./Quota";
 /**
  * O que a página de configurações mostra. Nunca leva token.
  */
-export type SyncStatus = { availability: Availability, enabled: boolean, pausedLocal: boolean, pausedSite: boolean, revoked: boolean, deviceId: string | null, label: string, hardware: HardwarePayload, quota: Quota | null, 
+export type SyncStatus = { availability: Availability, enabled: boolean, pausedLocal: boolean, pausedSite: boolean, 
+/**
+ * O interruptor dos game saves (`sync.saves_enabled`).
+ */
+savesEnabled: boolean, 
+/**
+ * O interruptor dos save states (`sync.states_enabled`).
+ */
+statesEnabled: boolean, revoked: boolean, deviceId: string | null, label: string, hardware: HardwarePayload, quota: Quota | null, 
 /**
  * Segundos Unix.
  */
 lastPassAt: number | null, conflicts: number, 
 /**
+ * Os save states que ficam só nesta máquina: os de antes de a versão do
+ * core ser registrada, os apagados no site (D127) e os que a nuvem
+ * recusou. 0 com os states desligados.
+ */
+statesLocalOnly: number, 
+/**
+ * Os que ficam só aqui porque o site os apagou (D127): são os únicos que
+ * "Enviar os states antigos também" manda de novo. Parte de
+ * `states_local_only`.
+ */
+statesWiped: number, 
+/**
  * O código de i18n do último erro.
  */
-lastError: string | null, };
+lastError: string | null, 
+/**
+ * O nome do arquivo que a nuvem recusou, com `too_large`,
+ * `state_too_large` ou `rejected`.
+ */
+lastErrorFile: string | null, };

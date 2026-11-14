@@ -79,6 +79,7 @@ struct ErrorBody {
     error: String,
 }
 
+#[derive(Clone)]
 pub struct Client {
     http: reqwest::Client,
     api: String,
@@ -152,7 +153,25 @@ impl Client {
     /// no processo (`REFRESH_LOCK`). Se `current` já foi trocado (por outra
     /// chamada deste processo, ou o par guardado já é outro), devolve o par
     /// mais novo em vez de gastar o refresh token de novo.
+    ///
+    /// Roda numa tarefa própria: quem espera pode desistir no meio (o prazo
+    /// de antes de abrir um jogo) depois de o servidor já ter trocado o par.
+    /// Abandonada ali, a troca deixaria o refresh token antigo, já gasto, como
+    /// o guardado, e o próximo uso dele encerraria a sessão. A tarefa termina
+    /// e grava o par novo de qualquer jeito.
     pub async fn refresh(&self, current: &Tokens) -> Result<Tokens> {
+        let worker = self.clone();
+        let current = current.clone();
+        tokio::spawn(async move { worker.refresh_now(&current).await })
+            .await
+            .unwrap_or_else(|e| {
+                Err(ClientError::Transient(format!(
+                    "renovação interrompida: {e}"
+                )))
+            })
+    }
+
+    async fn refresh_now(&self, current: &Tokens) -> Result<Tokens> {
         let _one_at_a_time = REFRESH_LOCK.lock().await;
         if let Some((done, received_at)) = rotated_from(&current.refresh_token) {
             match self.store.load().await {
@@ -816,6 +835,52 @@ mod tests {
             .filter(|l| l.starts_with("POST token"))
             .count();
         assert_eq!(spent, 1);
+    }
+
+    /// Quem pediu a renovação desiste antes de o servidor responder (o prazo
+    /// de antes de abrir um jogo). O servidor já trocou o par: o novo é gravado
+    /// assim mesmo, e o refresh velho nunca é usado de novo.
+    #[tokio::test]
+    async fn a_refresh_whose_caller_gives_up_still_stores_the_new_pair() {
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+        let _serial = SERIAL.lock().await;
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/api/partner/oauth/token"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({
+                        "access_token": "alp_late", "refresh_token": "alr_late",
+                        "token_type": "Bearer", "expires_in": 3600
+                    }))
+                    .set_delay(Duration::from_millis(400)),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let (store, _secrets) = store_with(MemSecrets::default()).await;
+        store
+            .start_session(&tokens("early"), &["profile:read"])
+            .await
+            .unwrap();
+        let client = Client::with_api(server.uri(), store.clone());
+
+        let gave_up =
+            tokio::time::timeout(Duration::from_millis(50), client.refresh(&tokens("early"))).await;
+        assert!(gave_up.is_err(), "devia ter desistido antes da resposta");
+        let mut stored = None;
+        for _ in 0..100 {
+            stored = store.load_tokens().await.unwrap();
+            if stored == Some(tokens("late")) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        assert_eq!(stored, Some(tokens("late")));
+        assert!(store.has_session().await.unwrap());
+        // Quem ainda segura o par velho recebe o novo, sem gastar o refresh de novo.
+        assert_eq!(client.refresh(&tokens("early")).await, Ok(tokens("late")));
     }
 
     #[tokio::test]

@@ -19,7 +19,9 @@ mod metadata_repo;
 mod profile_repo;
 mod roms_repo;
 mod save_state_repo;
+mod settings_repo;
 mod shader_chain_repo;
+mod sync_repo;
 mod system_core_repo;
 mod system_hotkeys_repo;
 mod video_config_repo;
@@ -39,7 +41,12 @@ pub use metadata_repo::MetadataRepo;
 pub use profile_repo::ProfileRepo;
 pub use roms_repo::RomsRepo;
 pub use save_state_repo::SaveStateRepo;
+pub use settings_repo::{
+    AspectRow, AudioSettings, DecorationAssignmentRow, HotkeyRow, OptionOverrideRow, Put,
+    SettingsRepo, SettingsTx, ShaderAssignmentRow, VideoSettings,
+};
 pub use shader_chain_repo::ShaderChainRepo;
+pub use sync_repo::SyncRepo;
 pub use system_core_repo::SystemCoreRepo;
 pub use system_hotkeys_repo::SystemHotkeysRepo;
 pub use video_config_repo::VideoConfigRepo;

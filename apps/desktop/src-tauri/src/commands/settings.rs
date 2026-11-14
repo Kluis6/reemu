@@ -52,13 +52,16 @@ pub async fn update_audio_config(
     let cfg: AudioConfig = config.into();
     let repo = db::AudioConfigRepo::new(pool(&state)?);
     repo.update(&cfg).await.map_err(AppError::from)?;
+    reload_audio_live(&state, cfg).await
+}
 
-    // Aplica ao vivo: recria o sink na thread do core com a config nova.
-    let cfg2 = cfg.clone();
+/// Aplica ao vivo: recria o sink na thread do core com a config (inteira,
+/// com o aparelho de saída dela).
+pub(crate) async fn reload_audio_live(state: &AppState, cfg: AudioConfig) -> Result<(), AppError> {
     let session = state.session.clone();
     let r = tauri::async_runtime::spawn_blocking(move || {
         session.reload_audio(Box::new(move || {
-            match audio_desktop::CpalAudioSink::new(&cfg2) {
+            match audio_desktop::CpalAudioSink::new(&cfg) {
                 Ok(s) => Some(Box::new(s) as _),
                 Err(e) => {
                     log::error!("áudio indisponível ({e}) — rodando sem som");
@@ -145,13 +148,44 @@ pub async fn update_video_config(
     let cfg: VideoConfig = config.into();
     let repo = db::VideoConfigRepo::new(pool(&state)?);
     repo.update(&cfg).await.map_err(AppError::from)?;
+    apply_video_live(&state, &cfg);
+    Ok(())
+}
 
-    // Aplica ao vivo: o próximo `render_to_surface` já lê o valor novo.
+/// Aplica ao vivo: o próximo `render_to_surface` já lê o valor novo.
+pub(crate) fn apply_video_live(state: &AppState, cfg: &VideoConfig) {
     if let Some(fp) = state.gpu.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
         fp.set_integer_scaling(cfg.integer_scaling);
-        fp.set_hdr(hdr_settings(&cfg));
+        fp.set_hdr(hdr_settings(cfg));
     }
-    Ok(())
+}
+
+/// Depois de copiar as configurações de outra máquina (ou de desfazer a
+/// cópia): o banco mudou por baixo, e o que o app guarda em memória volta a
+/// ser o dele. Atalhos, teclado, vídeo (a config inteira, os nits daqui
+/// inclusive) e áudio (a config inteira, com o aparelho de saída daqui). Uma
+/// parte que falha vai para o log e as outras seguem.
+pub(crate) async fn reload_copied_settings(state: &AppState, pool: &db::Db) {
+    if let Err(e) = super::input::refresh_hotkey_resolver(state, pool).await {
+        log::warn!("configurações: atalhos não recarregados: {e}");
+    }
+    if let Err(e) =
+        super::input::reload_keyboard(&db::KeyboardBindingsRepo::new(pool.clone())).await
+    {
+        log::warn!("configurações: teclado não recarregado: {e}");
+    }
+    match db::VideoConfigRepo::new(pool.clone()).get().await {
+        Ok(cfg) => apply_video_live(state, &cfg),
+        Err(e) => log::warn!("configurações: vídeo não relido: {e}"),
+    }
+    match db::AudioConfigRepo::new(pool.clone()).get().await {
+        Ok(cfg) => {
+            if let Err(e) = reload_audio_live(state, cfg).await {
+                log::warn!("configurações: áudio não recarregado: {e}");
+            }
+        }
+        Err(e) => log::warn!("configurações: áudio não relido: {e}"),
+    }
 }
 
 #[derive(Serialize)]

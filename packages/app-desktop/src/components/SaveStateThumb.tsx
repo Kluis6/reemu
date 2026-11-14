@@ -1,6 +1,6 @@
 import { makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { useEffect, useState } from 'react'
-import { saveThumbnailUrl } from '../lib/tauri'
+import { saveThumbnailUrl, syncStateThumbnailUrl } from '../lib/tauri'
 
 const useStyles = makeStyles({
   box: {
@@ -19,11 +19,14 @@ export function SaveStateThumb({
   stateId,
   hasThumbnail,
   className,
+  remote,
 }: {
   stateId: string
   hasThumbnail: boolean
   /** Troca o tamanho padrão (96×72), como o perfil faz nos "momentos". */
   className?: string
+  /** O state é de outra máquina (`stateId` é o `save_id` da nuvem). */
+  remote?: boolean
 }) {
   const s = useStyles()
   const [url, setUrl] = useState<string | null>(null)
@@ -32,7 +35,7 @@ export function SaveStateThumb({
     if (!hasThumbnail) return
     let dead = false
     let made: string | null = null
-    void saveThumbnailUrl(stateId).then((u) => {
+    void (remote ? syncStateThumbnailUrl : saveThumbnailUrl)(stateId).then((u) => {
       if (dead) {
         if (u) URL.revokeObjectURL(u)
       } else {
@@ -44,7 +47,7 @@ export function SaveStateThumb({
       dead = true
       if (made) URL.revokeObjectURL(made)
     }
-  }, [stateId, hasThumbnail])
+  }, [stateId, hasThumbnail, remote])
 
   return <img className={mergeClasses(s.box, className)} src={url ?? undefined} alt="" />
 }
