@@ -1492,6 +1492,62 @@ async fn a_save_removed_on_the_site_wins_over_the_games_other_synced_save() {
     );
 }
 
+/// Um cartão apagado no site é da plataforma inteira: com o outro cartão
+/// sincronizado, a linha de cada jogo de PS2 segue dizendo "sincronizado",
+/// não "apagado no site". O cartão que foi para o resguardo nem é listado
+/// (só os cartões em disco entram); o caminho que chega à linha é um arquivo
+/// vazio deixado no lugar dele, que vale por ausente.
+#[tokio::test]
+async fn a_card_removed_on_the_site_does_not_take_over_every_game_of_the_platform() {
+    let _serial = SERIAL.lock().await;
+    let r = rig("tomb-card").await;
+    let core = Some("system/pcsx2/memcards");
+    let (one, two) = (
+        "file:ps2/system/pcsx2/memcards/Mcd001.ps2",
+        "file:ps2/system/pcsx2/memcards/Mcd002.ps2",
+    );
+    r.rom("r1", "Gran Turismo 4.iso", "ps2").await;
+    r.base(
+        one,
+        "system/pcsx2/memcards/Mcd001.ps2",
+        b"one",
+        b"one",
+        ("m1", "v1"),
+    )
+    .await;
+    r.base(
+        two,
+        "system/pcsx2/memcards/Mcd002.ps2",
+        b"two",
+        b"two",
+        ("m2", "v1"),
+    )
+    .await;
+    r.write("system/pcsx2/memcards/Mcd001.ps2", b"one");
+    r.write("system/pcsx2/memcards/Mcd002.ps2", b"two");
+    mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+    mount_files(
+        &r.server,
+        vec![
+            row("m1", "Mcd001.ps2", "ps2", core, b"one", "v1", None),
+            tombstone(row("m2", "Mcd002.ps2", "ps2", core, b"two", "v1", None)),
+        ],
+    )
+    .await;
+
+    assert_eq!(r.pass().await.unwrap().backed_up, 1);
+    let synced = (SaveLineState::Synced, Some(one));
+    let line = r.engine.save_status("r1").await.unwrap();
+    assert_eq!((line.state, line.key.as_deref()), synced);
+
+    // Um arquivo vazio no lugar do cartão apagado: a marca da remoção chega
+    // à linha, e mesmo assim o jogo segue com a do cartão sincronizado.
+    r.write("system/pcsx2/memcards/Mcd002.ps2", b"");
+    let line = r.engine.save_status("r1").await.unwrap();
+    assert_eq!((line.state, line.key.as_deref()), synced);
+    assert!(r.base_of(two).await.unwrap().wiped_at.is_some());
+}
+
 /// D127: a linha própria apagada (states e configurações; arquivo nunca
 /// tem dono, então isto passa pelo executor direto) marca a base e deixa
 /// o arquivo. Sem arquivo local, uma linha apagada só tira a base.
