@@ -307,6 +307,8 @@ impl Engine {
                 receive,
                 uploads_stopped: false,
                 network_failures: 0,
+                // Os states seguem a época deles (`work.epoch`).
+                saves_epoch: self.sync.runtime().saves_epoch,
             })
         } else {
             None

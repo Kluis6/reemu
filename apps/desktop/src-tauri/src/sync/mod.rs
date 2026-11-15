@@ -172,6 +172,10 @@ struct Runtime {
     /// Muda quando os states desligam ou o aparelho é esquecido: uma passada
     /// de states que começou antes não grava mais nada aqui.
     states_epoch: u64,
+    /// O mesmo para os game saves: muda quando eles desligam ou o aparelho é
+    /// esquecido, e a passada que começou antes não segue para o próximo
+    /// arquivo (desligar e ligar de novo no meio também a para).
+    saves_epoch: u64,
 }
 
 impl Runtime {
@@ -530,9 +534,11 @@ impl SyncService {
                 // O aparelho que sobrou no servidor a pessoa revoga no site: a
                 // tela lê `offline` para dizer isso.
                 let mut runtime = self.runtime();
-                let epoch = runtime.states_epoch;
+                let (epoch, saves_epoch) = (runtime.states_epoch, runtime.saves_epoch);
                 *runtime = Runtime {
                     last_error: revoke_failed.then(|| SyncError::Offline.to_string()),
+                    // A passada dos game saves em curso não segue.
+                    saves_epoch: saves_epoch + 1,
                     ..Runtime::default()
                 };
                 // A passada de states em curso não grava por cima.
@@ -788,6 +794,10 @@ impl SyncService {
         self.devices.set_saves_enabled(on).await.map_err(failed)?;
         if on {
             self.kick_pass();
+        } else {
+            // A passada em curso não começa outro arquivo (o envio que já
+            // corre termina) e não grava nada no disco depois daqui.
+            self.runtime().saves_epoch += 1;
         }
         self.status_with(alva, hw).await
     }

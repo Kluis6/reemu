@@ -1167,6 +1167,128 @@ async fn saves_off_makes_no_save_request_and_writes_nothing() {
     assert!(!r.server.received_requests().await.unwrap().is_empty());
 }
 
+/// Desligar os game saves (ou desligar e ligar de novo) enquanto o primeiro
+/// arquivo sobe: o envio em curso termina e a base dele anda, mas o próximo
+/// arquivo nem desce nem sobe, e nada muda no disco.
+#[tokio::test]
+async fn turning_game_saves_off_during_an_upload_stops_the_rest_of_the_list() {
+    let _serial = SERIAL.lock().await;
+    let (kirby, mario) = ("file:gba/Kirby.srm", "file:gba/Mario.srm");
+    for back_on in [false, true] {
+        let r = rig(if back_on { "f2-off-on" } else { "f2-off" }).await;
+        // Na ordem da biblioteca: Kirby (só aqui, sobe devagar), Mario (a
+        // nuvem tem um mais novo) e Zelda (mudou aqui).
+        r.rom("r1", "Kirby.gba", "gba").await;
+        r.rom("r2", "Mario.gba", "gba").await;
+        r.rom("r3", "Zelda.gba", "gba").await;
+        r.write("saves/Kirby.srm", b"kirby");
+        r.base(mario, "saves/Mario.srm", b"old", b"old", ("s2", "v1"))
+            .await;
+        r.write("saves/Mario.srm", b"old");
+        r.base(ZELDA, "saves/Zelda.srm", b"z-old", b"z-old", ("s3", "v1"))
+            .await;
+        r.write("saves/Zelda.srm", b"z-new");
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(
+            &r.server,
+            vec![
+                row("s2", "Mario.srm", "gba", None, b"new", "v2", Some("dev2")),
+                row("s3", "Zelda.srm", "gba", None, b"z-old", "v1", Some("dev1")),
+            ],
+        )
+        .await;
+        mount_content(&r.server, "s2", "v2", b"new").await;
+        let (arrived, mut first) = tokio::sync::mpsc::unbounded_channel();
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(Arrived(
+                arrived,
+                uploaded("s1", "v1").set_delay(Duration::from_millis(1500)),
+            ))
+            .mount(&r.server)
+            .await;
+
+        let (pass, _) = tokio::join!(r.pass(), async {
+            first.recv().await;
+            let hw = HardwarePayload::default;
+            r.sync
+                .set_saves_enabled_with(&r.alva, false, hw())
+                .await
+                .unwrap();
+            if back_on {
+                r.sync
+                    .set_saves_enabled_with(&r.alva, true, hw())
+                    .await
+                    .unwrap();
+            }
+        });
+        let report = pass.unwrap();
+        assert_eq!(
+            (report.uploaded, report.downloaded),
+            (1, 0),
+            "back_on={back_on}: só o envio que já corria"
+        );
+        assert_eq!(r.reqs("POST", SAVES).await.len(), 1);
+        assert_eq!(r.base_of(kirby).await.unwrap().remote_version_id, "v1");
+        assert_eq!(r.content_gets().await, 0, "back_on={back_on}");
+        assert_eq!(r.read("saves/Mario.srm").unwrap(), b"old");
+        assert_eq!(r.base_of(mario).await.unwrap().remote_version_id, "v1");
+        assert_eq!(r.base_of(ZELDA).await.unwrap().local_hash, sha(b"z-old"));
+        assert!(r.backups().is_empty());
+    }
+}
+
+/// Os game saves desligam enquanto um save desce: os bytes chegam, mas nada
+/// é gravado (nem o backup) e a base fica como estava.
+#[tokio::test]
+async fn turning_game_saves_off_while_a_save_comes_down_writes_nothing() {
+    let _serial = SERIAL.lock().await;
+    let r = rig("f2-download").await;
+    r.rom("r1", "Zelda.gba", "gba").await;
+    r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
+        .await;
+    r.write("saves/Zelda.srm", b"old");
+    mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+    mount_files(
+        &r.server,
+        vec![row(
+            "s1",
+            "Zelda.srm",
+            "gba",
+            None,
+            b"new",
+            "v2",
+            Some("dev2"),
+        )],
+    )
+    .await;
+    let (arrived, mut asked) = tokio::sync::mpsc::unbounded_channel();
+    Mock::given(method("GET"))
+        .and(path(format!("{SAVES}/s1/versions/v2/content")))
+        .respond_with(Arrived(
+            arrived,
+            ResponseTemplate::new(200)
+                .set_body_bytes(b"new".to_vec())
+                .set_delay(Duration::from_millis(1500)),
+        ))
+        .mount(&r.server)
+        .await;
+
+    let (pass, _) = tokio::join!(r.pass(), async {
+        asked.recv().await;
+        r.sync
+            .set_saves_enabled_with(&r.alva, false, HardwarePayload::default())
+            .await
+            .unwrap();
+    });
+    let report = pass.unwrap();
+    assert_eq!((report.downloaded, report.deferred), (0, 1));
+    assert_eq!(r.content_gets().await, 1);
+    assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"old");
+    assert!(r.backups().is_empty());
+    assert_eq!(r.base_of(ZELDA).await.unwrap().remote_version_id, "v1");
+}
+
 #[tokio::test]
 async fn paused_row_makes_no_traffic() {
     let _serial = SERIAL.lock().await;

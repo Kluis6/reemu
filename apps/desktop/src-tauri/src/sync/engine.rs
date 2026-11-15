@@ -308,6 +308,9 @@ struct Ctx<'a> {
     /// Envios de state seguidos que falharam na rede (M1): um só fica para a
     /// próxima e a passada segue; três seguidos acabam a passada.
     network_failures: u32,
+    /// A época dos game saves quando a passada começou
+    /// (`Runtime::saves_epoch`): desligá-los no meio a muda.
+    saves_epoch: u64,
 }
 
 /// Uma chave: o arquivo neste disco (exista ou não), a base e a linha da
@@ -545,6 +548,20 @@ impl Engine {
         self.sync.devices.saves_enabled().await.map_err(failed)
     }
 
+    /// A passada dos game saves ainda vale: os game saves e o sync ligados,
+    /// sem pausa aqui, na mesma época de quando ela começou (desligar os game
+    /// saves ou esquecer o aparelho muda a época). Só a memória e o SQLite.
+    async fn saves_still_on(&self, epoch: u64) -> bool {
+        let now = self.sync.runtime().saves_epoch;
+        if now != epoch {
+            return false;
+        }
+        let devices = &self.sync.devices;
+        matches!(devices.enabled().await, Ok(true))
+            && matches!(devices.paused().await, Ok(false))
+            && matches!(devices.saves_enabled().await, Ok(true))
+    }
+
     /// O interruptor dos save states: desligado, nenhum state sobe e a base
     /// deles fica como está.
     async fn states_on(&self) -> Result<bool, SyncError> {
@@ -628,6 +645,8 @@ impl Engine {
         scope: &PassScope,
         mode: Mode,
     ) -> Result<PassReport, SyncError> {
+        // Desligar os game saves daqui em diante muda a época.
+        let saves_epoch = self.sync.runtime().saves_epoch;
         self.new_stamp();
         self.sweep_temps();
         // Toda passada lê a linha desta máquina de novo (sem leitura guardada):
@@ -643,6 +662,7 @@ impl Engine {
             receive,
             uploads_stopped: false,
             network_failures: 0,
+            saves_epoch,
         };
         let mut report = PassReport::default();
         self.run_files(&mut cx, &device.id, scope, &mut report)
@@ -712,6 +732,12 @@ impl Engine {
             known.insert(c.key);
         }
         for entry in &entries {
+            // Os game saves (ou o sync) desligaram no meio: o envio que já
+            // corria terminou, e nenhum arquivo mais sobe, desce ou muda aqui.
+            if !self.saves_still_on(cx.saves_epoch).await {
+                log::info!("sync: os game saves desligaram no meio da passada; o resto fica");
+                break;
+            }
             self.step(cx, me, entry, &known, report).await?;
         }
         Ok(())

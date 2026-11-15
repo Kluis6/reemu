@@ -265,6 +265,10 @@ impl Engine {
             Ok(b) => b,
             Err(err) => return Err(self.file_error(cx.alva, err, false).await),
         };
+        // Os game saves desligaram enquanto os bytes desciam: nada é gravado.
+        if !self.saves_still_on(cx.saves_epoch).await {
+            return Ok(Done::Deferred);
+        }
         if !self.place(&e.file, &bytes, &r.hash, cx.mode)? {
             return Ok(Done::Deferred);
         }
