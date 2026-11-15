@@ -320,11 +320,15 @@ impl Engine {
                 _ => pending = true,
             }
         }
-        let state = match (&main, pending, &removed) {
-            (None, _, None) => SaveLineState::None,
-            (None, _, Some(_)) => SaveLineState::Removed,
-            (Some(_), true, _) => SaveLineState::Pending,
-            (Some(_), false, _) => SaveLineState::Synced,
+        // A remoção vem antes dos outros arquivos do jogo: a linha diz que o
+        // save foi apagado no site e abre a pasta para onde ele foi, mesmo com
+        // outro save do jogo sincronizado. Fica até um save novo naquele lugar
+        // tirar a marca (a pessoa jogou de novo).
+        let state = match (&removed, &main, pending) {
+            (Some(_), _, _) => SaveLineState::Removed,
+            (None, None, _) => SaveLineState::None,
+            (None, Some(_), true) => SaveLineState::Pending,
+            (None, Some(_), false) => SaveLineState::Synced,
         };
         Ok(SaveLineStatus {
             state,
@@ -333,8 +337,12 @@ impl Engine {
             } else {
                 None
             },
-            versions: main.as_deref().map_or(0, versions_of),
-            key: main.or(removed),
+            // A linha da remoção não mostra o histórico.
+            versions: match &removed {
+                Some(_) => 0,
+                None => main.as_deref().map_or(0, versions_of),
+            },
+            key: removed.or(main),
         })
     }
 

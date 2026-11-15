@@ -1319,6 +1319,57 @@ async fn tombstone_of_account_save_backs_up_local() {
     assert_eq!(r.engine.removed_folder(ZELDA).await, None);
 }
 
+/// S13 num jogo com dois saves (o `.srm` e o `.rtc`): o site apaga um, e a
+/// linha da página diz a remoção e abre a pasta dele, não o "sincronizado"
+/// do outro. A marca fica até a pessoa jogar de novo.
+#[tokio::test]
+async fn a_save_removed_on_the_site_wins_over_the_games_other_synced_save() {
+    let _serial = SERIAL.lock().await;
+    let r = rig("tomb-two").await;
+    let rtc = "file:gba/Zelda.rtc";
+    r.rom("r1", "Zelda.gba", "gba").await;
+    r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
+        .await;
+    r.base(rtc, "saves/Zelda.rtc", b"clock", b"clock", ("s2", "v1"))
+        .await;
+    r.write("saves/Zelda.srm", b"old");
+    r.write("saves/Zelda.rtc", b"clock");
+    mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+    mount_files(
+        &r.server,
+        vec![
+            tombstone(row("s1", "Zelda.srm", "gba", None, b"old", "v1", None)),
+            row("s2", "Zelda.rtc", "gba", None, b"clock", "v1", None),
+        ],
+    )
+    .await;
+
+    let report = r.pass().await.unwrap();
+    assert_eq!((report.backed_up, report.uploaded), (1, 0));
+    assert_eq!(r.read("saves/Zelda.rtc").unwrap(), b"clock");
+    let line = r.engine.save_status("r1").await.unwrap();
+    assert_eq!(
+        (
+            line.state,
+            line.key.as_deref(),
+            line.synced_at,
+            line.versions
+        ),
+        (SaveLineState::Removed, Some(ZELDA), None, 0)
+    );
+    // "Abrir pasta" leva à pasta do arquivo apagado.
+    let folder = r.engine.removed_folder(ZELDA).await.unwrap();
+    assert_eq!(std::fs::read(folder.join("Zelda.srm")).unwrap(), b"old");
+
+    // Jogou de novo: a marca sai e a linha volta a ser a dos saves.
+    r.write("saves/Zelda.srm", b"new run");
+    let line = r.engine.save_status("r1").await.unwrap();
+    assert_eq!(
+        (line.state, line.key.as_deref()),
+        (SaveLineState::Pending, Some(ZELDA))
+    );
+}
+
 /// D127: a linha própria apagada (states e configurações; arquivo nunca
 /// tem dono, então isto passa pelo executor direto) marca a base e deixa
 /// o arquivo. Sem arquivo local, uma linha apagada só tira a base.
