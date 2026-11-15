@@ -117,6 +117,7 @@ async function mount() {
 }
 
 const where = () => host.querySelector('[data-testid="where"]')!.textContent
+const search = () => host.querySelector('[data-testid="where"]')!.getAttribute('data-search')
 const byText = (text: string) =>
   [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === text)
 const dialog = () => document.querySelector('.fui-DialogSurface')
@@ -154,6 +155,8 @@ describe('RomDetail play with a game save conflict', () => {
     await settle()
     expect(api.syncResolve).not.toHaveBeenCalled()
     expect(where()).toBe('/play/r1')
+    // A tela de jogo não pergunta de novo pelo mesmo conflito guardado.
+    expect(search()).toContain('sync=later')
   })
 
   it('choosing a side resolves it and then launches', async () => {
@@ -163,6 +166,7 @@ describe('RomDetail play with a game save conflict', () => {
     await settle()
     expect(api.syncResolve).toHaveBeenCalledWith(KEY, 'local')
     expect(where()).toBe('/play/r1')
+    expect(search()).not.toContain('sync=later')
   })
 
   it('closing the dialog gives up on launching', async () => {

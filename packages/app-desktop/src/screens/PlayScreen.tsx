@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, type CSSProperties } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { ConflictDialog } from "../components/sync/ConflictDialog";
 import { useFocusBridge } from "../hooks/useFocusBridge";
 import { useKeyboardInput } from "../hooks/useKeyboardInput";
 import { nativeVideoActive, nativeVideoOverlay, toggleFocus, unloadGame } from "../lib/tauri";
@@ -55,7 +56,7 @@ export function PlayScreen() {
   const setFocus = useFocusStore((s) => s.setFocus);
 
   const { launch, loading: launchLoading } = useLaunchInfo(romId);
-  const { status, aspect, setAspect, declaredAspect } = useGameSession(launch, romId);
+  const { status, aspect, setAspect, declaredAspect, answerConflict } = useGameSession(launch, romId);
   useQuickStateToasts(romId);
   const { canvasRef, decoCanvasRef, deco } = useCanvasVideo({
     running: status === "ready",
@@ -89,6 +90,20 @@ export function PlayScreen() {
 
   if (!launch && !launchLoading) return <NoTarget onBack={goBack} />;
   if (status === "loading") return <LaunchSplash launch={launch} />;
+  // A checagem da nuvem achou o save deste jogo mudado nas duas máquinas
+  // (D118): o mesmo diálogo da página do jogo, por cima da abertura. Um lado
+  // ou "Decidir depois" abre o jogo; fechar desiste e volta. Sem jogo
+  // rodando, o controle navega no diálogo (`data-launch-ask`, useMenuNav).
+  if (typeof status === "object" && "conflict" in status)
+    return (
+      <div data-launch-ask>
+        <LaunchSplash launch={launch} />
+        <ConflictDialog
+          conflict={status.conflict}
+          onDone={(outcome) => (outcome === "dismiss" ? goBack() : answerConflict(outcome))}
+        />
+      </div>
+    );
   if (typeof status === "object") return <LaunchError error={status.error} launch={launch} onBack={goBack} />;
 
   return (

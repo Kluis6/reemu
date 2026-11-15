@@ -295,6 +295,10 @@ const es: Messages = {
         title: 'El archivo está dañado o incompleto',
         hint: 'Descarga o copia el archivo de nuevo.',
       },
+      syncConflict: {
+        title: 'El save de este juego cambió en las dos máquinas',
+        hint: 'Elige qué save continúa antes de abrir el juego.',
+      },
     },
   },
   onboarding: {

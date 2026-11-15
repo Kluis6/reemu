@@ -1863,6 +1863,102 @@ async fn prelaunch_sees_what_another_machine_uploaded_after_the_last_pass() {
     );
 }
 
+/// D118 antes de abrir: outra máquina mudou o save depois da última passada
+/// daqui, e este também mudou. A página do jogo só lê o SQLite, não vê
+/// conflito guardado e abre a tela de jogo; a checagem de antes de abrir acha
+/// o conflito e o load para antes do core, com o código que a tela de jogo
+/// transforma no diálogo. Nada é escrito enquanto a pessoa decide.
+#[tokio::test]
+async fn a_conflict_found_before_launch_stops_the_load_until_the_person_decides() {
+    let _serial = SERIAL.lock().await;
+    let r = rig("prelaunch-conflict").await;
+    r.rom("r1", "Zelda.gba", "gba").await;
+    r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
+        .await;
+    r.write("saves/Zelda.srm", b"old");
+    mount_devices(
+        &r.server,
+        vec![device("dev1", "Sala"), device("dev2", "Notebook")],
+    )
+    .await;
+    let listing = mount_listing(
+        &r.server,
+        vec![row(
+            "s1",
+            "Zelda.srm",
+            "gba",
+            None,
+            b"old",
+            "v1",
+            Some("dev1"),
+        )],
+    )
+    .await;
+    mount_content(&r.server, "s1", "v2", b"theirs").await;
+    assert_eq!(r.pass().await.unwrap(), PassReport::default());
+
+    // Esta máquina jogou (o envio ainda não saiu) e o Notebook enviou.
+    r.write("saves/Zelda.srm", b"mine");
+    listing.set(vec![row(
+        "s1",
+        "Zelda.srm",
+        "gba",
+        None,
+        b"theirs",
+        "v2",
+        Some("dev2"),
+    )]);
+    assert_eq!(
+        r.engine.save_status("r1").await.unwrap().state,
+        SaveLineState::Pending,
+        "a página do jogo não tem o que perguntar"
+    );
+
+    r.set_playing(Playing::Loading);
+    let stopped = r.engine.launch_check(&r.alva, "r1", false).await;
+    assert_eq!(
+        stopped.map_err(|e| e.code),
+        Err(Some(crate::app_error::ErrorCode::SyncConflict))
+    );
+    // O load parou: nada desceu, subiu ou foi para o backup, e a base é a
+    // de antes. O conflito ficou guardado para o diálogo da tela de jogo.
+    r.set_playing(Playing::Idle);
+    assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"mine");
+    assert!(r.backups().is_empty());
+    assert_eq!(r.content_gets().await, 0);
+    assert!(r.reqs("POST", SAVES).await.is_empty());
+    assert_eq!(r.base_of(ZELDA).await.unwrap().remote_version_id, "v1");
+    assert_eq!(
+        r.engine.save_status("r1").await.unwrap().state,
+        SaveLineState::Conflict
+    );
+    assert_eq!(
+        r.engine.conflicts().await.unwrap()[0].remote.machine,
+        "Notebook"
+    );
+
+    // "Decidir depois": o load chama de novo e abre com o save daqui.
+    r.set_playing(Playing::Loading);
+    assert_eq!(r.engine.launch_check(&r.alva, "r1", true).await, Ok(()));
+    assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"mine");
+    assert_eq!(r.content_gets().await, 0);
+
+    // "Manter a de Notebook": resolvido sem jogo abrindo, o load de novo
+    // não acha conflito e abre com o save que desceu.
+    r.set_playing(Playing::Idle);
+    r.engine
+        .resolve(&r.alva, ZELDA, Keep::Remote)
+        .await
+        .unwrap();
+    r.set_playing(Playing::Loading);
+    assert_eq!(r.engine.launch_check(&r.alva, "r1", false).await, Ok(()));
+    assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"theirs");
+    assert_eq!(
+        r.backups(),
+        vec![("saves/Zelda.srm".to_owned(), b"mine".to_vec())]
+    );
+}
+
 /// M5: a pausa feita no site depois da última passada vale antes de abrir:
 /// só a lista de aparelhos é lida, nada da nuvem.
 #[tokio::test]
