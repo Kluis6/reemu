@@ -3785,3 +3785,10 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 
 - **Problema** (print do usuário, v0.1.15): favoritar, editar, informações e excluir, sobre a arte do jogo, ficaram quase invisíveis — o preenchimento translúcido dos botões (`buttonHooks.ts`) não aparece sobre uma imagem.
 - **Correção** (`heroActionBtn` em `styles/xbox.ts`): fundo sólido na cor do tema, `var(--reemuSurface1)` (o `Background1` do tema resolvido no `FluentProvider`; dentro do botão o gancho redefine o `colorNeutralBackground1` para o translúcido). Hover e foco sólidos também: o fundo misturado com 10% da cor do texto (4% ao pressionar). Medido: `rgb(28, 34, 32)` no `reemu` e branco no `claro`.
+
+## 2026-11-15 — Release v0.1.16
+
+- **Pedido do usuário:** nova build com os botões do topo da página do jogo sólidos.
+- **Versão:** 0.1.15 → 0.1.16 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 15 crates do workspace.
+- **Testes antes da tag:** `cargo test --workspace` com 763 ok e 34 ignorados; 434 testes do frontend. Testes de GPU ignorados não rodaram.
+- **O que entra, desde a v0.1.15:** botões favoritar, editar, informações e excluir da página do jogo com fundo sólido do tema.
