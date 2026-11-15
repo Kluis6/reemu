@@ -30,6 +30,10 @@ export const shell = {
 };
 
 // Gradiente de superfície elevada (cartões, hero) a partir dos neutros do tema.
+/** Hover/pressionado sólidos dos botões do topo da página do jogo: o fundo do
+ *  tema clareado (escuro) ou escurecido (claro) pela cor do texto. */
+const HERO_BTN_HOVER = `color-mix(in srgb, var(--reemuSurface1), ${tokens.colorNeutralForeground1} 10%)`;
+const HERO_BTN_PRESSED = `color-mix(in srgb, var(--reemuSurface1), ${tokens.colorNeutralForeground1} 4%)`;
 const elevGradient = `linear-gradient(135deg, ${tokens.colorNeutralBackground4}, ${tokens.colorNeutralBackground3})`;
 /** Fundo dos cards de jogo/2×2 (tokens `reemuCard*`, ver `cardSurface` em
  *  themes.ts) e o traço deles por dentro (não muda o tamanho do card). */
@@ -1358,9 +1362,16 @@ export const useDetailStyles = makeStyles({
       width: "1em",
       height: "1em",
     },
+    // Sobre a arte do jogo o fundo é SÓLIDO, na cor do tema (pedido do
+    // usuário, 2026-11-15): o preenchimento translúcido dos botões
+    // (`buttonHooks.ts`) sumia sobre a imagem. `--reemuSurface1` é o
+    // `Background1` do tema resolvido no `FluentProvider` — dentro do botão o
+    // gancho redefine o `colorNeutralBackground1` para o translúcido.
+    backgroundColor: "var(--reemuSurface1) !important",
     // Foco igual ao do card de jogo (pedido do usuário): além do anel e do
-    // brilho, o botão clareia — o fundo do hover do `secondary`.
-    ":focus": { backgroundColor: tokens.colorNeutralBackground1Hover },
+    // brilho, o botão clareia; hover igual ao foco, sólido também.
+    ":hover, :focus": { backgroundColor: `${HERO_BTN_HOVER} !important` },
+    ":hover:active": { backgroundColor: `${HERO_BTN_PRESSED} !important` },
   },
   // Linha de tempo de jogo abaixo das ações (página de jogo do app Xbox:
   // texto de 16 com ícone, logo abaixo dos botões). Branco translúcido:

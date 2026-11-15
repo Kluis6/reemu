@@ -3780,3 +3780,8 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Versão:** 0.1.14 → 0.1.15 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 15 crates do workspace.
 - **Testes antes da tag:** `cargo test --workspace` com 763 ok e 34 ignorados; `tsc -b`, 434 testes do frontend e o build de produção do frontend (com os 6 vídeos em `dist/wallpapers`). Testes de GPU ignorados não rodaram (GPU fora desta rodada).
 - **O que entra, desde a v0.1.14:** papéis de parede em vídeo (6, com o do ReEmu) e a tela de Plano de fundo em duas colunas; diálogo do tema personalizado; cards de tema com borda única, cor primária em destaque e sem mudar de fundo no foco; botões preenchidos e sem borda em todo o app, com preenchimento translúcido que aparece sobre qualquer fundo; contraste dos temas claros; botões de diálogo maiores; foco nos grupos do pacote de shaders; relógio e ícones brancos na página do jogo; rolagem pelo stick direito.
+
+## 2026-11-15 — Botões do topo da página do jogo sólidos
+
+- **Problema** (print do usuário, v0.1.15): favoritar, editar, informações e excluir, sobre a arte do jogo, ficaram quase invisíveis — o preenchimento translúcido dos botões (`buttonHooks.ts`) não aparece sobre uma imagem.
+- **Correção** (`heroActionBtn` em `styles/xbox.ts`): fundo sólido na cor do tema, `var(--reemuSurface1)` (o `Background1` do tema resolvido no `FluentProvider`; dentro do botão o gancho redefine o `colorNeutralBackground1` para o translúcido). Hover e foco sólidos também: o fundo misturado com 10% da cor do texto (4% ao pressionar). Medido: `rgb(28, 34, 32)` no `reemu` e branco no `claro`.
