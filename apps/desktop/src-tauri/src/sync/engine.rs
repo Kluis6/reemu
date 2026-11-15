@@ -25,7 +25,7 @@ use super::api::{
 };
 use super::device::{default_label, rfc3339, Device};
 use super::local::{
-    self, account_saves, log_tag, parse_key, rom_saves, sha256_file, LocalSaves, SaveFile,
+    self, account_saves, log_tag, parse_key, rom_saves, sha256_file, LocalSaves, NameCase, SaveFile,
 };
 use super::platform::platform_for_system;
 use super::reconcile::{decide, Action, Kind, Local, Remote};
@@ -395,6 +395,9 @@ pub struct Engine {
     /// As miniaturas já baixadas, por (`save_id`, versão): cada uma vem uma
     /// vez só.
     remote_thumbs: Mutex<HashMap<(String, String), Vec<u8>>>,
+    /// Como o disco compara os nomes dos saves (a do sistema; os testes
+    /// trocam).
+    name_case: NameCase,
 }
 
 impl Engine {
@@ -430,6 +433,7 @@ impl Engine {
             state_ceiling: Mutex::new(None),
             remote_found: Mutex::new(HashMap::new()),
             remote_thumbs: Mutex::new(HashMap::new()),
+            name_case: NameCase::HERE,
         }
     }
 
@@ -982,7 +986,7 @@ impl Engine {
         files: &[RemoteFile],
         scope: &PassScope,
     ) -> Result<Vec<Entry>, SyncError> {
-        let by_name = by_name(files);
+        let by_name = by_name(files, self.name_case);
         let bases: HashMap<String, BaseRow> = self
             .repo
             .base_all("file")
@@ -991,7 +995,7 @@ impl Engine {
             .into_iter()
             .map(|b| (b.key.clone(), b))
             .collect();
-        let mut keys = Keys::default();
+        let mut keys = Keys::new(self.name_case);
         for file in &local.files {
             keys.add_present(file.clone());
         }
@@ -1022,7 +1026,7 @@ impl Engine {
             PassScope::Rom(id) => match self.roms.get(id).await {
                 Ok(Some(rom)) => local::rom_slot_files(&rom, &self.dirs.saves)
                     .iter()
-                    .map(|f| Keys::path_key(&f.path))
+                    .map(|f| path_key(self.name_case, &f.path))
                     .collect(),
                 Ok(None) => HashSet::new(),
                 Err(e) => return Err(failed(format!("ROM {id}: {e}"))),
@@ -1032,7 +1036,7 @@ impl Engine {
             PassScope::All | PassScope::State(_) | PassScope::States => true,
             PassScope::Rom(id) => {
                 f.rom_id.as_deref() == Some(id.as_str())
-                    || scope_paths.contains(&Keys::path_key(&f.path))
+                    || scope_paths.contains(&path_key(self.name_case, &f.path))
                     || (f.rom_id.is_none() && local.rom_platform(id) == Some(f.platform))
             }
         };
@@ -1049,31 +1053,41 @@ impl Engine {
     }
 }
 
+/// O caminho como o disco compara: no Windows `VMU_SAVE_A1.BIN` e
+/// `vmu_save_a1.bin` são o mesmo arquivo, no Linux são dois.
+fn path_key(case: NameCase, p: &Path) -> String {
+    case.of(&p.to_string_lossy())
+}
+
 /// Uma chave por arquivo e um arquivo por chave: o primeiro que chega fica.
-/// O caminho compara sem maiúsculas (no Windows `VMU_SAVE_A1.BIN` e
-/// `vmu_save_a1.bin` são o mesmo arquivo).
-#[derive(Default)]
+/// O caminho compara como o disco (`path_key`).
 struct Keys {
+    case: NameCase,
     files: Vec<SaveFile>,
     keys: HashSet<String>,
     paths: HashSet<String>,
 }
 
 impl Keys {
-    fn path_key(p: &Path) -> String {
-        p.to_string_lossy().to_lowercase()
+    fn new(case: NameCase) -> Self {
+        Self {
+            case,
+            files: Vec::new(),
+            keys: HashSet::new(),
+            paths: HashSet::new(),
+        }
     }
 
     /// Os arquivos em disco já chegam sem repetição de `account_saves`.
     fn add_present(&mut self, f: SaveFile) {
-        self.paths.insert(Self::path_key(&f.path));
+        self.paths.insert(path_key(self.case, &f.path));
         if self.keys.insert(f.key.clone()) {
             self.files.push(f);
         }
     }
 
     fn add(&mut self, f: SaveFile) {
-        let path = Self::path_key(&f.path);
+        let path = path_key(self.case, &f.path);
         if self.keys.contains(&f.key) || self.paths.contains(&path) {
             return;
         }
@@ -1083,12 +1097,18 @@ impl Keys {
     }
 }
 
-fn by_name(files: &[RemoteFile]) -> HashMap<String, Vec<&RemoteFile>> {
-    let mut map: HashMap<String, Vec<&RemoteFile>> = HashMap::new();
+/// As linhas da nuvem pelo nome, como o disco compara.
+struct ByName<'a> {
+    case: NameCase,
+    rows: HashMap<String, Vec<&'a RemoteFile>>,
+}
+
+fn by_name(files: &[RemoteFile], case: NameCase) -> ByName<'_> {
+    let mut rows: HashMap<String, Vec<&RemoteFile>> = HashMap::new();
     for f in files {
-        map.entry(f.filename.to_lowercase()).or_default().push(f);
+        rows.entry(case.of(&f.filename)).or_default().push(f);
     }
-    map
+    ByName { case, rows }
 }
 
 /// A ordem entre linhas do mesmo arquivo: viva antes de apagada, da conta
@@ -1107,18 +1127,18 @@ fn rank(r: &RemoteFile) -> (bool, bool, (i64, u32), &str) {
 
 /// A linha da nuvem de um arquivo (D113, D125): o mesmo nome (e, nos cartões
 /// e VMUs, a mesma pasta) na plataforma do ReEmu, senão em `other`, as vivas
-/// antes das apagadas; entre várias, a primeira de `rank`.
-fn pick<'a>(
-    by_name: &HashMap<String, Vec<&'a RemoteFile>>,
-    file: &SaveFile,
-) -> Option<&'a RemoteFile> {
-    let rows = by_name.get(&file.filename.to_lowercase())?;
+/// antes das apagadas; entre várias, a primeira de `rank`. O nome de um
+/// cartão ou VMU compara como o disco: no Linux `VMU_SAVE_A1.BIN` não é a
+/// linha de `vmu_save_a1.bin`, que é outro arquivo lá.
+fn pick<'a>(by_name: &ByName<'a>, file: &SaveFile) -> Option<&'a RemoteFile> {
+    let case = by_name.case;
+    let rows = by_name.rows.get(&case.of(&file.filename))?;
     let same: Vec<&'a RemoteFile> = rows
         .iter()
         .copied()
         .filter(|r| match file.core {
             Some(core) => {
-                r.core.as_deref() == Some(core) && r.filename.eq_ignore_ascii_case(&file.filename)
+                r.core.as_deref() == Some(core) && case.of(&r.filename) == case.of(&file.filename)
             }
             None => {
                 r.filename == file.filename

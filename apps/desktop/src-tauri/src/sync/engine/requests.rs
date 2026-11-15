@@ -23,7 +23,7 @@ impl Engine {
         let token = self.token()?;
         let file = self.file_for(key).await?;
         let files = self.list_file(alva, &token, &file).await?;
-        let names = by_name(&files);
+        let names = by_name(&files, self.name_case);
         let row = files
             .iter()
             .find(|f| f.save_id == conflict.remote_save_id)
@@ -118,7 +118,7 @@ impl Engine {
             return Err(failed(format!("{}: jogo aberto", log_tag(key))));
         }
         let files = self.list_file(alva, &token, &file).await?;
-        let row = pick(&by_name(&files), &file)
+        let row = pick(&by_name(&files, self.name_case), &file)
             .cloned()
             .ok_or_else(|| failed(format!("{}: sem linha na nuvem", log_tag(key))))?;
         let versions = match self.sync.api.versions(&token, &row.save_id).await {
@@ -171,7 +171,7 @@ impl Engine {
         let token = self.token()?;
         let file = self.file_for(key).await?;
         let files = self.list_file(alva, &token, &file).await?;
-        let Some(row) = pick(&by_name(&files), &file).cloned() else {
+        let Some(row) = pick(&by_name(&files, self.name_case), &file).cloned() else {
             return Ok(Vec::new());
         };
         let versions = match self.sync.api.versions(&token, &row.save_id).await {
@@ -272,7 +272,9 @@ impl Engine {
             files
                 .iter()
                 .find(|f| f.key == key)
-                .and_then(|f| pick(&by_name(&known), f).map(|r| r.version_count.max(0) as u32))
+                .and_then(|f| {
+                    pick(&by_name(&known, self.name_case), f).map(|r| r.version_count.max(0) as u32)
+                })
                 .unwrap_or(0)
         };
         let conflicts = self.repo.conflicts_all().await.map_err(repo_err)?;

@@ -2681,7 +2681,12 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
             None,
         )),
     ];
-    assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "s1");
+    assert_eq!(
+        pick(&by_name(&rows, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "s1"
+    );
     let only_other = [file_row(row(
         "o1",
         "Chrono.srm",
@@ -2691,9 +2696,14 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
         "v1",
         None,
     ))];
-    assert_eq!(pick(&by_name(&only_other), &snes).unwrap().save_id, "o1");
+    assert_eq!(
+        pick(&by_name(&only_other, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "o1"
+    );
     let zelda = save_file("gba", None, "Zelda.srm");
-    assert!(pick(&by_name(&only_other), &zelda).is_none());
+    assert!(pick(&by_name(&only_other, NameCase::HERE), &zelda).is_none());
 
     // Entre várias da mesma plataforma: a viva, a da conta, a mais nova.
     let snes_row = |id: &str, when: &str| {
@@ -2708,7 +2718,12 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
         .into_iter()
         .map(file_row)
         .collect();
-    assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "b");
+    assert_eq!(
+        pick(&by_name(&rows, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "b"
+    );
 
     // Linha de cartão ou VMU nunca serve a save de ROM.
     let card_row = [file_row(row(
@@ -2720,8 +2735,9 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
         "v1",
         None,
     ))];
-    assert!(pick(&by_name(&card_row), &snes).is_none());
-    // Cartão: mesma pasta, nome sem diferença de maiúsculas.
+    assert!(pick(&by_name(&card_row, NameCase::HERE), &snes).is_none());
+    // Cartão: mesma pasta, e o nome como o disco compara (no Windows e no
+    // macOS sem maiúsculas; no Linux `MCD001.PS2` é outro arquivo).
     let card = save_file("ps2", Some("system/pcsx2/memcards"), "Mcd001.ps2");
     let cards = [
         file_row(row(
@@ -2743,7 +2759,13 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
             None,
         )),
     ];
-    assert_eq!(pick(&by_name(&cards), &card).unwrap().save_id, "m1");
+    assert_eq!(
+        pick(&by_name(&cards, NameCase::Fold), &card)
+            .unwrap()
+            .save_id,
+        "m1"
+    );
+    assert!(pick(&by_name(&cards, NameCase::Exact), &card).is_none());
 
     // M6: a linha do ReEmu apagada no site não esconde a `other` viva
     // que um RetroArch plano segue escrevendo; sem viva, a apagada vale.
@@ -2758,7 +2780,12 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
     )));
     let live_other = file_row(row("o1", "Chrono.srm", "other", None, b"x", "v1", None));
     let rows = [dead_snes.clone(), live_other];
-    assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "o1");
+    assert_eq!(
+        pick(&by_name(&rows, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "o1"
+    );
     let dead_other = file_row(tombstone(row(
         "t2",
         "Chrono.srm",
@@ -2769,7 +2796,58 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
         None,
     )));
     let rows = [dead_other, dead_snes];
-    assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "t1");
+    assert_eq!(
+        pick(&by_name(&rows, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "t1"
+    );
+}
+
+/// No Linux `Game.srm` e `game.srm` são dois arquivos (duas ROMs cujo nome
+/// só muda nas maiúsculas): a passada completa dá uma chave a cada um, com a
+/// linha dela, e nenhum some da conciliação. No Windows e no macOS o disco
+/// vê um arquivo só, e fica o primeiro. A regra vem de fora: o caso do Linux
+/// roda em qualquer sistema.
+#[tokio::test]
+async fn saves_that_differ_only_in_case_are_two_files_where_the_disk_says_so() {
+    let _serial = SERIAL.lock().await;
+    for (case, want) in [
+        (
+            NameCase::Exact,
+            vec![("file:snes/Game.srm", "s1"), ("file:snes/game.srm", "s2")],
+        ),
+        (NameCase::Fold, vec![("file:snes/Game.srm", "s1")]),
+    ] {
+        let mut r = rig(&format!("case-{case:?}")).await;
+        r.engine.name_case = case;
+        r.rom("r1", "Game.sfc", "snes").await;
+        r.rom("r2", "game.sfc", "snes").await;
+        let files: Vec<RemoteFile> = [
+            row("s1", "Game.srm", "snes", None, b"upper", "v1", None),
+            row("s2", "game.srm", "snes", None, b"lower", "v1", None),
+        ]
+        .into_iter()
+        .map(file_row)
+        .collect();
+        // Nada em disco: só a nuvem diz que os arquivos existem.
+        let local = account_saves(&r.roms, &r.path("saves"), &r.path("system"))
+            .await
+            .unwrap();
+        let entries = r
+            .engine
+            .entries(&local, &files, &PassScope::All)
+            .await
+            .unwrap();
+        let got: Vec<(&str, &str)> = entries
+            .iter()
+            .map(|e| {
+                let row = e.row.as_ref().unwrap();
+                (e.file.key.as_str(), row.save_id.as_str())
+            })
+            .collect();
+        assert_eq!(got, want, "{case:?}");
+    }
 }
 
 #[test]
