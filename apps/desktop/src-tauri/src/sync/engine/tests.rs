@@ -3119,6 +3119,69 @@ async fn saves_that_differ_only_in_case_are_two_files_where_the_disk_says_so() {
     }
 }
 
+/// A atualização no Linux: até a 0.1.16 o cartão `Mcd001.ps2` daqui seguia a
+/// linha `MCD001.PS2` (o nome do cartão comparava sem maiúsculas). Com a
+/// comparação exata o par continua pela base: a primeira passada não sobe
+/// uma segunda linha nem desce um segundo cartão. No Windows e no macOS
+/// nada muda.
+#[tokio::test]
+async fn a_card_paired_across_case_keeps_its_row_after_the_upgrade() {
+    let _serial = SERIAL.lock().await;
+    let key = "file:ps2/system/pcsx2/memcards/Mcd001.ps2";
+    let cloud = || {
+        row(
+            "m1",
+            "MCD001.PS2",
+            "ps2",
+            Some("system/pcsx2/memcards"),
+            b"card",
+            "v1",
+            None,
+        )
+    };
+    for case in [NameCase::Exact, NameCase::Fold] {
+        let mut r = rig(&format!("case-card-{case:?}")).await;
+        r.engine.name_case = case;
+        r.write("system/pcsx2/memcards/Mcd001.ps2", b"card");
+        r.base(
+            key,
+            "system/pcsx2/memcards/Mcd001.ps2",
+            b"card",
+            b"card",
+            ("m1", "v1"),
+        )
+        .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![cloud()]).await;
+
+        // Uma chave, a do cartão daqui, com a linha que a base segue.
+        let local = account_saves(&r.roms, &r.path("saves"), &r.path("system"))
+            .await
+            .unwrap();
+        let files = [file_row(cloud())];
+        let entries = r
+            .engine
+            .entries(&local, &files, &PassScope::All)
+            .await
+            .unwrap();
+        let got: Vec<(&str, Option<&str>)> = entries
+            .iter()
+            .map(|e| {
+                let row = e.row.as_ref().map(|x| x.save_id.as_str());
+                (e.file.key.as_str(), row)
+            })
+            .collect();
+        assert_eq!(got, vec![(key, Some("m1"))], "{case:?}");
+
+        let report = r.pass().await.unwrap();
+        assert_eq!((report.uploaded, report.downloaded), (0, 0), "{case:?}");
+        assert!(r.reqs("POST", SAVES).await.is_empty(), "{case:?}");
+        assert_eq!(r.content_gets().await, 0, "{case:?}");
+        assert!(r.backups().is_empty(), "{case:?}");
+        assert_eq!(r.base_of(key).await.unwrap().remote_save_id, "m1");
+    }
+}
+
 #[test]
 fn parse_time_reads_rfc3339_with_fractions_and_offsets() {
     assert_eq!(parse_time("2026-11-13T10:00:00Z"), Some((1_794_564_000, 0)));

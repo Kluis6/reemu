@@ -1027,8 +1027,14 @@ impl Engine {
         }
         let mut base_keys: Vec<&String> = bases.keys().collect();
         base_keys.sort();
+        // A linha que cada base desta biblioteca segue, e de que chaves.
+        let mut claimed: HashMap<&str, HashSet<&str>> = HashMap::new();
         for key in base_keys {
             if let Some(slot) = local.slot_for_key(key) {
+                claimed
+                    .entry(bases[key].remote_save_id.as_str())
+                    .or_default()
+                    .insert(key.as_str());
                 keys.add(slot);
             }
         }
@@ -1040,7 +1046,13 @@ impl Engine {
                 _ => local.rom_slots(&row.filename),
             };
             for slot in slots {
-                if pick(&by_name, &slot).is_some() {
+                // Uma linha que a base de outra chave segue não ganha vaga só
+                // da nuvem: no Linux, o `MCD001.PS2` que o `Mcd001.ps2` daqui
+                // seguia desceria como um segundo cartão.
+                let followed = claimed
+                    .get(row.save_id.as_str())
+                    .is_some_and(|by| !by.contains(slot.key.as_str()));
+                if !followed && pick(&by_name, &slot).is_some() {
                     keys.add(slot);
                 }
             }
@@ -1070,13 +1082,36 @@ impl Engine {
             .files
             .into_iter()
             .filter(in_scope)
-            .map(|file| Entry {
-                base: bases.get(&file.key).cloned(),
-                row: pick(&by_name, &file).cloned(),
-                file,
+            .map(|file| {
+                let base = bases.get(&file.key);
+                let row = pick(&by_name, &file).or_else(|| base_row(files, base, &file));
+                Entry {
+                    row: row.cloned(),
+                    base: base.cloned(),
+                    file,
+                }
             })
             .collect())
     }
+}
+
+/// A linha que a base de um cartão ou VMU segue, quando o nome não acha
+/// nenhuma e ela é o mesmo arquivo com outras maiúsculas. Até a 0.1.16 o
+/// Linux pareava `Mcd001.ps2` com a linha `MCD001.PS2`; o par continua, e a
+/// primeira passada depois da atualização não sobe uma segunda linha. Só
+/// quando o nome não acha nada: entre linhas que o nome acha vale `rank`.
+fn base_row<'a>(
+    files: &'a [RemoteFile],
+    base: Option<&BaseRow>,
+    file: &SaveFile,
+) -> Option<&'a RemoteFile> {
+    let base = base?;
+    file.core?;
+    files.iter().find(|r| {
+        r.save_id == base.remote_save_id
+            && r.core.as_deref() == file.core
+            && r.filename.to_lowercase() == file.filename.to_lowercase()
+    })
 }
 
 /// O caminho como o disco compara: no Windows `VMU_SAVE_A1.BIN` e
