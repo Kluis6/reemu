@@ -1,6 +1,7 @@
 //! O que a pessoa pede pela tela: resolver um conflito, voltar uma versão
 //! pelo histórico, listar versões e conflitos e o estado do save de um jogo.
-//! Saiu de `engine.rs` sem mudança de comportamento.
+//! A remoção no site de um save do jogo vem antes dos outros arquivos dele
+//! na linha da página. Saiu de `engine.rs` na divisão do motor.
 
 use super::*;
 

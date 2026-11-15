@@ -1,7 +1,8 @@
 //! O motor ligado ao app: instalação no estado do Tauri e os momentos em que
 //! uma passada roda (ao abrir, de tempos em tempos, antes de abrir e depois de
-//! fechar um jogo, depois de gravar um state). Saiu de `engine.rs` sem
-//! mudança de comportamento.
+//! fechar um jogo, depois de gravar um state), e a checagem de antes de abrir
+//! que segura o jogo num conflito (`launch_check`). Saiu de `engine.rs` na
+//! divisão do motor.
 
 use super::*;
 use crate::app_error::{AppError, ErrorCode};

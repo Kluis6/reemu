@@ -1,6 +1,7 @@
 //! Um arquivo por vez dentro da passada: subir, descer, aceitar o que a
-//! nuvem apagou, guardar o conflito e andar a base. Saiu de `engine.rs` sem
-//! mudança de comportamento.
+//! nuvem apagou, guardar o conflito e andar a base. Antes de agir, cada
+//! arquivo confere que os game saves seguem ligados. Saiu de `engine.rs` na
+//! divisão do motor.
 
 use super::*;
 
@@ -33,6 +34,12 @@ impl Engine {
         let remote = e.row.as_ref().and_then(remote_of);
         let kind = Kind::of_key(key).unwrap_or(Kind::File);
         let action = decide(kind, local.as_ref(), e.base.as_ref(), remote.as_ref(), me);
+        // De novo depois do hash, logo antes de subir, mover para o backup ou
+        // mexer na base: os game saves podem ter desligado enquanto ele lia o
+        // arquivo. A passada para no próximo arquivo.
+        if action != Action::Nothing && !self.saves_still_on(cx.saves_epoch).await {
+            return Ok(());
+        }
         let done = match action {
             Action::Nothing => Ok(Done::Nothing),
             Action::Adopt => self.adopt(e, local.as_ref(), remote.as_ref()).await,
