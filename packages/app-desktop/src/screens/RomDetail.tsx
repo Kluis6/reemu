@@ -83,10 +83,9 @@ import {
   setRomMetadata,
   setShader,
   getRomPlayTime,
-  syncConflicts,
-  syncSaveStatus,
   type SyncConflict,
 } from "../lib/tauri";
+import { conflictFor } from "../hooks/useSync";
 import { formatPlayTime } from "../lib/playTime";
 import { useModalButtonStyles } from "../styles/buttons";
 import { useDetailStyles } from "../styles/xbox";
@@ -347,14 +346,11 @@ export function RomDetail() {
     checkingRef.current = true;
     void (async () => {
       try {
-        const line = await syncSaveStatus(rom.id);
-        if (line.state === "conflict" && line.key !== null) {
-          const conflict = (await syncConflicts()).find((c) => c.key === line.key);
-          if (conflict) {
-            checkingRef.current = false;
-            setConflictAsk({ conflict, loadState });
-            return;
-          }
+        const conflict = await conflictFor(rom.id);
+        if (conflict) {
+          checkingRef.current = false;
+          setConflictAsk({ conflict, loadState });
+          return;
         }
       } catch {
         // segue para o jogo
@@ -365,7 +361,9 @@ export function RomDetail() {
     })();
   };
 
-  const launch = (loadState?: string) => {
+  // `decideLater`: a pessoa respondeu "Decidir depois" ao conflito; a tela de
+  // jogo não pergunta de novo pelo mesmo conflito guardado.
+  const launch = (loadState?: string, decideLater = false) => {
     if (!chosenCore) return;
     const missingRequiredBios = (biosStatus.data ?? []).find(
       (b) => b.systemId === rom.systemId && b.required && !b.present,
@@ -380,6 +378,7 @@ export function RomDetail() {
     }
     const q = new URLSearchParams({ core: chosenCore });
     if (loadState) q.set("loadState", loadState);
+    if (decideLater) q.set("sync", "later");
     navigate(`/play/${rom.id}?${q}`, {
       state: {
         coreId: chosenCore,
@@ -954,7 +953,7 @@ export function RomDetail() {
             setConflictAsk(null);
             // Escolher um lado ou "Decidir depois": o jogo abre. Fechar pelo X,
             // Esc ou Voltar do controle só desiste de abrir.
-            if (outcome !== "dismiss") launch(loadState);
+            if (outcome !== "dismiss") launch(loadState, outcome === "later");
           }}
         />
       )}

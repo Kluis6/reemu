@@ -21,6 +21,7 @@ import {
   syncStatus,
   syncUploadOldStates,
   syncVersions,
+  type SyncConflict,
   type SyncStatus,
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
@@ -220,6 +221,15 @@ export function useSaveStatus(romId: string, enabled = true) {
     staleTime: 0,
     refetchOnMount: 'always',
   })
+}
+
+/** O conflito de game save de um jogo, para perguntar antes de abrir (na
+ *  página do jogo e na tela de jogo). Só disco e SQLite; `null` sem conflito.
+ *  Rejeita se a consulta falhar (sem conta, por exemplo). */
+export async function conflictFor(romId: string): Promise<SyncConflict | null> {
+  const line = await syncSaveStatus(romId)
+  if (line.state !== 'conflict' || line.key === null) return null
+  return (await syncConflicts()).find((c) => c.key === line.key) ?? null
 }
 
 /** Os conflitos abertos, para o diálogo e a contagem das configurações. */

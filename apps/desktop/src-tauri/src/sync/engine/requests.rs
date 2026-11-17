@@ -1,6 +1,7 @@
 //! O que a pessoa pede pela tela: resolver um conflito, voltar uma versão
 //! pelo histórico, listar versões e conflitos e o estado do save de um jogo.
-//! Saiu de `engine.rs` sem mudança de comportamento.
+//! A remoção no site de um save do jogo vem antes dos outros arquivos dele
+//! na linha da página. Saiu de `engine.rs` na divisão do motor.
 
 use super::*;
 
@@ -23,7 +24,7 @@ impl Engine {
         let token = self.token()?;
         let file = self.file_for(key).await?;
         let files = self.list_file(alva, &token, &file).await?;
-        let names = by_name(&files);
+        let names = by_name(&files, self.name_case);
         let row = files
             .iter()
             .find(|f| f.save_id == conflict.remote_save_id)
@@ -118,7 +119,7 @@ impl Engine {
             return Err(failed(format!("{}: jogo aberto", log_tag(key))));
         }
         let files = self.list_file(alva, &token, &file).await?;
-        let row = pick(&by_name(&files), &file)
+        let row = pick(&by_name(&files, self.name_case), &file)
             .cloned()
             .ok_or_else(|| failed(format!("{}: sem linha na nuvem", log_tag(key))))?;
         let versions = match self.sync.api.versions(&token, &row.save_id).await {
@@ -171,7 +172,7 @@ impl Engine {
         let token = self.token()?;
         let file = self.file_for(key).await?;
         let files = self.list_file(alva, &token, &file).await?;
-        let Some(row) = pick(&by_name(&files), &file).cloned() else {
+        let Some(row) = pick(&by_name(&files, self.name_case), &file).cloned() else {
             return Ok(Vec::new());
         };
         let versions = match self.sync.api.versions(&token, &row.save_id).await {
@@ -272,7 +273,9 @@ impl Engine {
             files
                 .iter()
                 .find(|f| f.key == key)
-                .and_then(|f| pick(&by_name(&known), f).map(|r| r.version_count.max(0) as u32))
+                .and_then(|f| {
+                    pick(&by_name(&known, self.name_case), f).map(|r| r.version_count.max(0) as u32)
+                })
                 .unwrap_or(0)
         };
         let conflicts = self.repo.conflicts_all().await.map_err(repo_err)?;
@@ -290,8 +293,10 @@ impl Engine {
         let mut main: Option<String> = None;
         let mut pending = false;
         let mut synced_at: Option<i64> = None;
-        // Um save apagado no site cujo arquivo daqui foi para o resguardo.
+        // Um save do jogo apagado no site cujo arquivo daqui foi para o
+        // resguardo; à parte, o mesmo de um cartão ou VMU da plataforma.
         let mut removed: Option<String> = None;
+        let mut removed_card: Option<String> = None;
         for f in &files {
             let base = self.repo.base_get(&f.key).await.map_err(repo_err)?;
             let local = match sha256_file(&f.path) {
@@ -305,7 +310,12 @@ impl Engine {
             let wiped = base.as_ref().is_some_and(|b| b.wiped_at.is_some());
             let base = base.filter(|b| b.wiped_at.is_none());
             if wiped && local.is_none() {
-                removed.get_or_insert_with(|| f.key.clone());
+                let mark = if f.rom_id.is_some() {
+                    &mut removed
+                } else {
+                    &mut removed_card
+                };
+                mark.get_or_insert_with(|| f.key.clone());
             }
             if local.is_none() && base.is_none() {
                 continue;
@@ -318,11 +328,20 @@ impl Engine {
                 _ => pending = true,
             }
         }
-        let state = match (&main, pending, &removed) {
-            (None, _, None) => SaveLineState::None,
-            (None, _, Some(_)) => SaveLineState::Removed,
-            (Some(_), true, _) => SaveLineState::Pending,
-            (Some(_), false, _) => SaveLineState::Synced,
+        // A remoção de um save do jogo vem antes dos outros arquivos dele: a
+        // linha diz que o save foi apagado no site e abre a pasta para onde
+        // ele foi, mesmo com outro save do jogo sincronizado. Fica até um save
+        // novo naquele lugar tirar a marca (a pessoa jogou de novo). Um cartão
+        // ou VMU é de todos os jogos da plataforma: a remoção dele só é o que
+        // a linha diz quando o jogo não tem outro save.
+        if main.is_none() {
+            removed = removed.or(removed_card);
+        }
+        let state = match (&removed, &main, pending) {
+            (Some(_), _, _) => SaveLineState::Removed,
+            (None, None, _) => SaveLineState::None,
+            (None, Some(_), true) => SaveLineState::Pending,
+            (None, Some(_), false) => SaveLineState::Synced,
         };
         Ok(SaveLineStatus {
             state,
@@ -331,8 +350,12 @@ impl Engine {
             } else {
                 None
             },
-            versions: main.as_deref().map_or(0, versions_of),
-            key: main.or(removed),
+            // A linha da remoção não mostra o histórico.
+            versions: match &removed {
+                Some(_) => 0,
+                None => main.as_deref().map_or(0, versions_of),
+            },
+            key: removed.or(main),
         })
     }
 

@@ -296,6 +296,10 @@ const ptBR = {
         title: 'O arquivo está corrompido ou incompleto',
         hint: 'Baixe ou copie o arquivo de novo.',
       },
+      syncConflict: {
+        title: 'O save deste jogo mudou nas duas máquinas',
+        hint: 'Escolha qual save continua antes de abrir o jogo.',
+      },
     },
   },
   onboarding: {

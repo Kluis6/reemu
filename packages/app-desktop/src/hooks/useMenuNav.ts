@@ -89,8 +89,11 @@ export function useMenuNav() {
   })
 
   useEffect(() => {
+    // A tela de jogo pergunta algo antes de o jogo abrir (o conflito do save):
+    // sem core rodando, o controle e as setas navegam no diálogo e o B o fecha.
+    const launchAsk = () => document.querySelector('[data-launch-ask]') !== null
     const onPlayIdle = () =>
-      locRef.current.startsWith('/play/') && focusRef.current !== 'MenuFocused'
+      locRef.current.startsWith('/play/') && focusRef.current !== 'MenuFocused' && !launchAsk()
     const openSearch = () => {
       navigate('/library')
       setSearchOpen(true)
@@ -206,7 +209,7 @@ export function useMenuNav() {
           const modal =
             document.querySelector<HTMLElement>('[role="menu"], .fui-PopoverSurface') ??
             document.querySelector<HTMLElement>('.fui-OverlayDrawer, .fui-DialogSurface')
-          if (locRef.current.startsWith('/play/')) void toggleFocus().catch(() => {})
+          if (locRef.current.startsWith('/play/') && !launchAsk()) void toggleFocus().catch(() => {})
           // o onboarding é um modal também, mas o B nele volta um passo
           else if (locRef.current === '/onboarding')
             window.dispatchEvent(new CustomEvent(REEMU_ONBOARDING_BACK))

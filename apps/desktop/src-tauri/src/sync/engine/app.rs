@@ -1,9 +1,11 @@
 //! O motor ligado ao app: instalação no estado do Tauri e os momentos em que
 //! uma passada roda (ao abrir, de tempos em tempos, antes de abrir e depois de
-//! fechar um jogo, depois de gravar um state). Saiu de `engine.rs` sem
-//! mudança de comportamento.
+//! fechar um jogo, depois de gravar um state), e a checagem de antes de abrir
+//! que segura o jogo num conflito (`launch_check`). Saiu de `engine.rs` na
+//! divisão do motor.
 
 use super::*;
+use crate::app_error::{AppError, ErrorCode};
 
 /// O motor no estado do Tauri: o que está rodando vem do `AppState`, e os
 /// eventos vão para a tela no canal `sync`.
@@ -98,13 +100,44 @@ pub(super) async fn scheduled_pass(app: &AppHandle) {
     log_pass("passada", engine.pass(&alva, PassScope::All).await);
 }
 
-/// Antes de abrir um jogo: espera a nuvem só daquele jogo (no máximo 5 s).
-pub async fn before_launch(app: &AppHandle, rom_id: &str) {
+/// Antes de abrir um jogo: espera a nuvem só daquele jogo (no máximo 5 s). Um
+/// conflito achado ali segura o jogo (`Engine::launch_check`).
+pub async fn before_launch(
+    app: &AppHandle,
+    rom_id: &str,
+    decide_later: bool,
+) -> Result<(), AppError> {
     let Some((engine, alva)) = parts(app) else {
-        return;
+        return Ok(());
     };
-    let outcome = engine.prelaunch(&alva, rom_id).await;
-    log::info!("sync: antes de abrir: {outcome:?}");
+    engine.launch_check(&alva, rom_id, decide_later).await
+}
+
+impl Engine {
+    /// A checagem de antes de abrir, e o que ela diz ao `load_game`. Um
+    /// conflito deste jogo achado agora (outra máquina mudou o save depois
+    /// da última passada daqui) para o jogo antes de o core abrir: o erro
+    /// `syncConflict` faz a tela de jogo perguntar (D118) e tentar de novo.
+    /// Enquanto a pessoa decide, nada é escrito: a checagem já terminou e o
+    /// conflito só ficou guardado. `decide_later`: ela já disse "Decidir
+    /// depois", e o jogo abre com o save daqui. O prazo de 5 s e o toast de
+    /// "não conferida" ficam como estão.
+    pub async fn launch_check(
+        &self,
+        alva: &Alvanista,
+        rom_id: &str,
+        decide_later: bool,
+    ) -> Result<(), AppError> {
+        let outcome = self.prelaunch(alva, rom_id).await;
+        log::info!("sync: antes de abrir: {outcome:?}");
+        match outcome {
+            PrelaunchOutcome::Conflict if !decide_later => Err(AppError::new(
+                ErrorCode::SyncConflict,
+                "o save deste jogo mudou aqui e em outra máquina",
+            )),
+            _ => Ok(()),
+        }
+    }
 }
 
 /// Depois de gravar um save state: a passada dos states daquela ROM, 3 s

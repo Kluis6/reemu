@@ -1167,6 +1167,128 @@ async fn saves_off_makes_no_save_request_and_writes_nothing() {
     assert!(!r.server.received_requests().await.unwrap().is_empty());
 }
 
+/// Desligar os game saves (ou desligar e ligar de novo) enquanto o primeiro
+/// arquivo sobe: o envio em curso termina e a base dele anda, mas o próximo
+/// arquivo nem desce nem sobe, e nada muda no disco.
+#[tokio::test]
+async fn turning_game_saves_off_during_an_upload_stops_the_rest_of_the_list() {
+    let _serial = SERIAL.lock().await;
+    let (kirby, mario) = ("file:gba/Kirby.srm", "file:gba/Mario.srm");
+    for back_on in [false, true] {
+        let r = rig(if back_on { "f2-off-on" } else { "f2-off" }).await;
+        // Na ordem da biblioteca: Kirby (só aqui, sobe devagar), Mario (a
+        // nuvem tem um mais novo) e Zelda (mudou aqui).
+        r.rom("r1", "Kirby.gba", "gba").await;
+        r.rom("r2", "Mario.gba", "gba").await;
+        r.rom("r3", "Zelda.gba", "gba").await;
+        r.write("saves/Kirby.srm", b"kirby");
+        r.base(mario, "saves/Mario.srm", b"old", b"old", ("s2", "v1"))
+            .await;
+        r.write("saves/Mario.srm", b"old");
+        r.base(ZELDA, "saves/Zelda.srm", b"z-old", b"z-old", ("s3", "v1"))
+            .await;
+        r.write("saves/Zelda.srm", b"z-new");
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(
+            &r.server,
+            vec![
+                row("s2", "Mario.srm", "gba", None, b"new", "v2", Some("dev2")),
+                row("s3", "Zelda.srm", "gba", None, b"z-old", "v1", Some("dev1")),
+            ],
+        )
+        .await;
+        mount_content(&r.server, "s2", "v2", b"new").await;
+        let (arrived, mut first) = tokio::sync::mpsc::unbounded_channel();
+        Mock::given(method("POST"))
+            .and(path(SAVES))
+            .respond_with(Arrived(
+                arrived,
+                uploaded("s1", "v1").set_delay(Duration::from_millis(1500)),
+            ))
+            .mount(&r.server)
+            .await;
+
+        let (pass, _) = tokio::join!(r.pass(), async {
+            first.recv().await;
+            let hw = HardwarePayload::default;
+            r.sync
+                .set_saves_enabled_with(&r.alva, false, hw())
+                .await
+                .unwrap();
+            if back_on {
+                r.sync
+                    .set_saves_enabled_with(&r.alva, true, hw())
+                    .await
+                    .unwrap();
+            }
+        });
+        let report = pass.unwrap();
+        assert_eq!(
+            (report.uploaded, report.downloaded),
+            (1, 0),
+            "back_on={back_on}: só o envio que já corria"
+        );
+        assert_eq!(r.reqs("POST", SAVES).await.len(), 1);
+        assert_eq!(r.base_of(kirby).await.unwrap().remote_version_id, "v1");
+        assert_eq!(r.content_gets().await, 0, "back_on={back_on}");
+        assert_eq!(r.read("saves/Mario.srm").unwrap(), b"old");
+        assert_eq!(r.base_of(mario).await.unwrap().remote_version_id, "v1");
+        assert_eq!(r.base_of(ZELDA).await.unwrap().local_hash, sha(b"z-old"));
+        assert!(r.backups().is_empty());
+    }
+}
+
+/// Os game saves desligam enquanto um save desce: os bytes chegam, mas nada
+/// é gravado (nem o backup) e a base fica como estava.
+#[tokio::test]
+async fn turning_game_saves_off_while_a_save_comes_down_writes_nothing() {
+    let _serial = SERIAL.lock().await;
+    let r = rig("f2-download").await;
+    r.rom("r1", "Zelda.gba", "gba").await;
+    r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
+        .await;
+    r.write("saves/Zelda.srm", b"old");
+    mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+    mount_files(
+        &r.server,
+        vec![row(
+            "s1",
+            "Zelda.srm",
+            "gba",
+            None,
+            b"new",
+            "v2",
+            Some("dev2"),
+        )],
+    )
+    .await;
+    let (arrived, mut asked) = tokio::sync::mpsc::unbounded_channel();
+    Mock::given(method("GET"))
+        .and(path(format!("{SAVES}/s1/versions/v2/content")))
+        .respond_with(Arrived(
+            arrived,
+            ResponseTemplate::new(200)
+                .set_body_bytes(b"new".to_vec())
+                .set_delay(Duration::from_millis(1500)),
+        ))
+        .mount(&r.server)
+        .await;
+
+    let (pass, _) = tokio::join!(r.pass(), async {
+        asked.recv().await;
+        r.sync
+            .set_saves_enabled_with(&r.alva, false, HardwarePayload::default())
+            .await
+            .unwrap();
+    });
+    let report = pass.unwrap();
+    assert_eq!((report.downloaded, report.deferred), (0, 1));
+    assert_eq!(r.content_gets().await, 1);
+    assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"old");
+    assert!(r.backups().is_empty());
+    assert_eq!(r.base_of(ZELDA).await.unwrap().remote_version_id, "v1");
+}
+
 #[tokio::test]
 async fn paused_row_makes_no_traffic() {
     let _serial = SERIAL.lock().await;
@@ -1317,6 +1439,113 @@ async fn tombstone_of_account_save_backs_up_local() {
     let base = r.base_of(ZELDA).await.unwrap();
     assert_eq!((base.wiped_at, base.backup_path), (None, None));
     assert_eq!(r.engine.removed_folder(ZELDA).await, None);
+}
+
+/// S13 num jogo com dois saves (o `.srm` e o `.rtc`): o site apaga um, e a
+/// linha da página diz a remoção e abre a pasta dele, não o "sincronizado"
+/// do outro. A marca fica até a pessoa jogar de novo.
+#[tokio::test]
+async fn a_save_removed_on_the_site_wins_over_the_games_other_synced_save() {
+    let _serial = SERIAL.lock().await;
+    let r = rig("tomb-two").await;
+    let rtc = "file:gba/Zelda.rtc";
+    r.rom("r1", "Zelda.gba", "gba").await;
+    r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
+        .await;
+    r.base(rtc, "saves/Zelda.rtc", b"clock", b"clock", ("s2", "v1"))
+        .await;
+    r.write("saves/Zelda.srm", b"old");
+    r.write("saves/Zelda.rtc", b"clock");
+    mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+    mount_files(
+        &r.server,
+        vec![
+            tombstone(row("s1", "Zelda.srm", "gba", None, b"old", "v1", None)),
+            row("s2", "Zelda.rtc", "gba", None, b"clock", "v1", None),
+        ],
+    )
+    .await;
+
+    let report = r.pass().await.unwrap();
+    assert_eq!((report.backed_up, report.uploaded), (1, 0));
+    assert_eq!(r.read("saves/Zelda.rtc").unwrap(), b"clock");
+    let line = r.engine.save_status("r1").await.unwrap();
+    assert_eq!(
+        (
+            line.state,
+            line.key.as_deref(),
+            line.synced_at,
+            line.versions
+        ),
+        (SaveLineState::Removed, Some(ZELDA), None, 0)
+    );
+    // "Abrir pasta" leva à pasta do arquivo apagado.
+    let folder = r.engine.removed_folder(ZELDA).await.unwrap();
+    assert_eq!(std::fs::read(folder.join("Zelda.srm")).unwrap(), b"old");
+
+    // Jogou de novo: a marca sai e a linha volta a ser a dos saves.
+    r.write("saves/Zelda.srm", b"new run");
+    let line = r.engine.save_status("r1").await.unwrap();
+    assert_eq!(
+        (line.state, line.key.as_deref()),
+        (SaveLineState::Pending, Some(ZELDA))
+    );
+}
+
+/// Um cartão apagado no site é da plataforma inteira: com o outro cartão
+/// sincronizado, a linha de cada jogo de PS2 segue dizendo "sincronizado",
+/// não "apagado no site". O cartão que foi para o resguardo nem é listado
+/// (só os cartões em disco entram); o caminho que chega à linha é um arquivo
+/// vazio deixado no lugar dele, que vale por ausente.
+#[tokio::test]
+async fn a_card_removed_on_the_site_does_not_take_over_every_game_of_the_platform() {
+    let _serial = SERIAL.lock().await;
+    let r = rig("tomb-card").await;
+    let core = Some("system/pcsx2/memcards");
+    let (one, two) = (
+        "file:ps2/system/pcsx2/memcards/Mcd001.ps2",
+        "file:ps2/system/pcsx2/memcards/Mcd002.ps2",
+    );
+    r.rom("r1", "Gran Turismo 4.iso", "ps2").await;
+    r.base(
+        one,
+        "system/pcsx2/memcards/Mcd001.ps2",
+        b"one",
+        b"one",
+        ("m1", "v1"),
+    )
+    .await;
+    r.base(
+        two,
+        "system/pcsx2/memcards/Mcd002.ps2",
+        b"two",
+        b"two",
+        ("m2", "v1"),
+    )
+    .await;
+    r.write("system/pcsx2/memcards/Mcd001.ps2", b"one");
+    r.write("system/pcsx2/memcards/Mcd002.ps2", b"two");
+    mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+    mount_files(
+        &r.server,
+        vec![
+            row("m1", "Mcd001.ps2", "ps2", core, b"one", "v1", None),
+            tombstone(row("m2", "Mcd002.ps2", "ps2", core, b"two", "v1", None)),
+        ],
+    )
+    .await;
+
+    assert_eq!(r.pass().await.unwrap().backed_up, 1);
+    let synced = (SaveLineState::Synced, Some(one));
+    let line = r.engine.save_status("r1").await.unwrap();
+    assert_eq!((line.state, line.key.as_deref()), synced);
+
+    // Um arquivo vazio no lugar do cartão apagado: a marca da remoção chega
+    // à linha, e mesmo assim o jogo segue com a do cartão sincronizado.
+    r.write("system/pcsx2/memcards/Mcd002.ps2", b"");
+    let line = r.engine.save_status("r1").await.unwrap();
+    assert_eq!((line.state, line.key.as_deref()), synced);
+    assert!(r.base_of(two).await.unwrap().wiped_at.is_some());
 }
 
 /// D127: a linha própria apagada (states e configurações; arquivo nunca
@@ -1687,6 +1916,102 @@ async fn prelaunch_sees_what_another_machine_uploaded_after_the_last_pass() {
     assert_eq!(
         r.backups(),
         vec![("saves/Zelda.srm".to_owned(), b"old".to_vec())]
+    );
+}
+
+/// D118 antes de abrir: outra máquina mudou o save depois da última passada
+/// daqui, e este também mudou. A página do jogo só lê o SQLite, não vê
+/// conflito guardado e abre a tela de jogo; a checagem de antes de abrir acha
+/// o conflito e o load para antes do core, com o código que a tela de jogo
+/// transforma no diálogo. Nada é escrito enquanto a pessoa decide.
+#[tokio::test]
+async fn a_conflict_found_before_launch_stops_the_load_until_the_person_decides() {
+    let _serial = SERIAL.lock().await;
+    let r = rig("prelaunch-conflict").await;
+    r.rom("r1", "Zelda.gba", "gba").await;
+    r.base(ZELDA, "saves/Zelda.srm", b"old", b"old", ("s1", "v1"))
+        .await;
+    r.write("saves/Zelda.srm", b"old");
+    mount_devices(
+        &r.server,
+        vec![device("dev1", "Sala"), device("dev2", "Notebook")],
+    )
+    .await;
+    let listing = mount_listing(
+        &r.server,
+        vec![row(
+            "s1",
+            "Zelda.srm",
+            "gba",
+            None,
+            b"old",
+            "v1",
+            Some("dev1"),
+        )],
+    )
+    .await;
+    mount_content(&r.server, "s1", "v2", b"theirs").await;
+    assert_eq!(r.pass().await.unwrap(), PassReport::default());
+
+    // Esta máquina jogou (o envio ainda não saiu) e o Notebook enviou.
+    r.write("saves/Zelda.srm", b"mine");
+    listing.set(vec![row(
+        "s1",
+        "Zelda.srm",
+        "gba",
+        None,
+        b"theirs",
+        "v2",
+        Some("dev2"),
+    )]);
+    assert_eq!(
+        r.engine.save_status("r1").await.unwrap().state,
+        SaveLineState::Pending,
+        "a página do jogo não tem o que perguntar"
+    );
+
+    r.set_playing(Playing::Loading);
+    let stopped = r.engine.launch_check(&r.alva, "r1", false).await;
+    assert_eq!(
+        stopped.map_err(|e| e.code),
+        Err(Some(crate::app_error::ErrorCode::SyncConflict))
+    );
+    // O load parou: nada desceu, subiu ou foi para o backup, e a base é a
+    // de antes. O conflito ficou guardado para o diálogo da tela de jogo.
+    r.set_playing(Playing::Idle);
+    assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"mine");
+    assert!(r.backups().is_empty());
+    assert_eq!(r.content_gets().await, 0);
+    assert!(r.reqs("POST", SAVES).await.is_empty());
+    assert_eq!(r.base_of(ZELDA).await.unwrap().remote_version_id, "v1");
+    assert_eq!(
+        r.engine.save_status("r1").await.unwrap().state,
+        SaveLineState::Conflict
+    );
+    assert_eq!(
+        r.engine.conflicts().await.unwrap()[0].remote.machine,
+        "Notebook"
+    );
+
+    // "Decidir depois": o load chama de novo e abre com o save daqui.
+    r.set_playing(Playing::Loading);
+    assert_eq!(r.engine.launch_check(&r.alva, "r1", true).await, Ok(()));
+    assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"mine");
+    assert_eq!(r.content_gets().await, 0);
+
+    // "Manter a de Notebook": resolvido sem jogo abrindo, o load de novo
+    // não acha conflito e abre com o save que desceu.
+    r.set_playing(Playing::Idle);
+    r.engine
+        .resolve(&r.alva, ZELDA, Keep::Remote)
+        .await
+        .unwrap();
+    r.set_playing(Playing::Loading);
+    assert_eq!(r.engine.launch_check(&r.alva, "r1", false).await, Ok(()));
+    assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"theirs");
+    assert_eq!(
+        r.backups(),
+        vec![("saves/Zelda.srm".to_owned(), b"mine".to_vec())]
     );
 }
 
@@ -2681,7 +3006,12 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
             None,
         )),
     ];
-    assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "s1");
+    assert_eq!(
+        pick(&by_name(&rows, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "s1"
+    );
     let only_other = [file_row(row(
         "o1",
         "Chrono.srm",
@@ -2691,9 +3021,14 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
         "v1",
         None,
     ))];
-    assert_eq!(pick(&by_name(&only_other), &snes).unwrap().save_id, "o1");
+    assert_eq!(
+        pick(&by_name(&only_other, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "o1"
+    );
     let zelda = save_file("gba", None, "Zelda.srm");
-    assert!(pick(&by_name(&only_other), &zelda).is_none());
+    assert!(pick(&by_name(&only_other, NameCase::HERE), &zelda).is_none());
 
     // Entre várias da mesma plataforma: a viva, a da conta, a mais nova.
     let snes_row = |id: &str, when: &str| {
@@ -2708,7 +3043,12 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
         .into_iter()
         .map(file_row)
         .collect();
-    assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "b");
+    assert_eq!(
+        pick(&by_name(&rows, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "b"
+    );
 
     // Linha de cartão ou VMU nunca serve a save de ROM.
     let card_row = [file_row(row(
@@ -2720,8 +3060,9 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
         "v1",
         None,
     ))];
-    assert!(pick(&by_name(&card_row), &snes).is_none());
-    // Cartão: mesma pasta, nome sem diferença de maiúsculas.
+    assert!(pick(&by_name(&card_row, NameCase::HERE), &snes).is_none());
+    // Cartão: mesma pasta, e o nome como o disco compara (no Windows e no
+    // macOS sem maiúsculas; no Linux `MCD001.PS2` é outro arquivo).
     let card = save_file("ps2", Some("system/pcsx2/memcards"), "Mcd001.ps2");
     let cards = [
         file_row(row(
@@ -2743,7 +3084,13 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
             None,
         )),
     ];
-    assert_eq!(pick(&by_name(&cards), &card).unwrap().save_id, "m1");
+    assert_eq!(
+        pick(&by_name(&cards, NameCase::Fold), &card)
+            .unwrap()
+            .save_id,
+        "m1"
+    );
+    assert!(pick(&by_name(&cards, NameCase::Exact), &card).is_none());
 
     // M6: a linha do ReEmu apagada no site não esconde a `other` viva
     // que um RetroArch plano segue escrevendo; sem viva, a apagada vale.
@@ -2758,7 +3105,12 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
     )));
     let live_other = file_row(row("o1", "Chrono.srm", "other", None, b"x", "v1", None));
     let rows = [dead_snes.clone(), live_other];
-    assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "o1");
+    assert_eq!(
+        pick(&by_name(&rows, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "o1"
+    );
     let dead_other = file_row(tombstone(row(
         "t2",
         "Chrono.srm",
@@ -2769,7 +3121,121 @@ fn pick_follows_platform_then_other_and_prefers_live_account_newest() {
         None,
     )));
     let rows = [dead_other, dead_snes];
-    assert_eq!(pick(&by_name(&rows), &snes).unwrap().save_id, "t1");
+    assert_eq!(
+        pick(&by_name(&rows, NameCase::HERE), &snes)
+            .unwrap()
+            .save_id,
+        "t1"
+    );
+}
+
+/// No Linux `Game.srm` e `game.srm` são dois arquivos (duas ROMs cujo nome
+/// só muda nas maiúsculas): a passada completa dá uma chave a cada um, com a
+/// linha dela, e nenhum some da conciliação. No Windows e no macOS o disco
+/// vê um arquivo só, e fica o primeiro. A regra vem de fora: o caso do Linux
+/// roda em qualquer sistema.
+#[tokio::test]
+async fn saves_that_differ_only_in_case_are_two_files_where_the_disk_says_so() {
+    let _serial = SERIAL.lock().await;
+    for (case, want) in [
+        (
+            NameCase::Exact,
+            vec![("file:snes/Game.srm", "s1"), ("file:snes/game.srm", "s2")],
+        ),
+        (NameCase::Fold, vec![("file:snes/Game.srm", "s1")]),
+    ] {
+        let mut r = rig(&format!("case-{case:?}")).await;
+        r.engine.name_case = case;
+        r.rom("r1", "Game.sfc", "snes").await;
+        r.rom("r2", "game.sfc", "snes").await;
+        let files: Vec<RemoteFile> = [
+            row("s1", "Game.srm", "snes", None, b"upper", "v1", None),
+            row("s2", "game.srm", "snes", None, b"lower", "v1", None),
+        ]
+        .into_iter()
+        .map(file_row)
+        .collect();
+        // Nada em disco: só a nuvem diz que os arquivos existem.
+        let local = account_saves(&r.roms, &r.path("saves"), &r.path("system"))
+            .await
+            .unwrap();
+        let entries = r
+            .engine
+            .entries(&local, &files, &PassScope::All)
+            .await
+            .unwrap();
+        let got: Vec<(&str, &str)> = entries
+            .iter()
+            .map(|e| {
+                let row = e.row.as_ref().unwrap();
+                (e.file.key.as_str(), row.save_id.as_str())
+            })
+            .collect();
+        assert_eq!(got, want, "{case:?}");
+    }
+}
+
+/// A atualização no Linux: até a 0.1.16 o cartão `Mcd001.ps2` daqui seguia a
+/// linha `MCD001.PS2` (o nome do cartão comparava sem maiúsculas). Com a
+/// comparação exata o par continua pela base: a primeira passada não sobe
+/// uma segunda linha nem desce um segundo cartão. No Windows e no macOS
+/// nada muda.
+#[tokio::test]
+async fn a_card_paired_across_case_keeps_its_row_after_the_upgrade() {
+    let _serial = SERIAL.lock().await;
+    let key = "file:ps2/system/pcsx2/memcards/Mcd001.ps2";
+    let cloud = || {
+        row(
+            "m1",
+            "MCD001.PS2",
+            "ps2",
+            Some("system/pcsx2/memcards"),
+            b"card",
+            "v1",
+            None,
+        )
+    };
+    for case in [NameCase::Exact, NameCase::Fold] {
+        let mut r = rig(&format!("case-card-{case:?}")).await;
+        r.engine.name_case = case;
+        r.write("system/pcsx2/memcards/Mcd001.ps2", b"card");
+        r.base(
+            key,
+            "system/pcsx2/memcards/Mcd001.ps2",
+            b"card",
+            b"card",
+            ("m1", "v1"),
+        )
+        .await;
+        mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+        mount_files(&r.server, vec![cloud()]).await;
+
+        // Uma chave, a do cartão daqui, com a linha que a base segue.
+        let local = account_saves(&r.roms, &r.path("saves"), &r.path("system"))
+            .await
+            .unwrap();
+        let files = [file_row(cloud())];
+        let entries = r
+            .engine
+            .entries(&local, &files, &PassScope::All)
+            .await
+            .unwrap();
+        let got: Vec<(&str, Option<&str>)> = entries
+            .iter()
+            .map(|e| {
+                let row = e.row.as_ref().map(|x| x.save_id.as_str());
+                (e.file.key.as_str(), row)
+            })
+            .collect();
+        assert_eq!(got, vec![(key, Some("m1"))], "{case:?}");
+
+        let report = r.pass().await.unwrap();
+        assert_eq!((report.uploaded, report.downloaded), (0, 0), "{case:?}");
+        assert!(r.reqs("POST", SAVES).await.is_empty(), "{case:?}");
+        assert_eq!(r.content_gets().await, 0, "{case:?}");
+        assert!(r.backups().is_empty(), "{case:?}");
+        assert_eq!(r.base_of(key).await.unwrap().remote_save_id, "m1");
+    }
 }
 
 #[test]

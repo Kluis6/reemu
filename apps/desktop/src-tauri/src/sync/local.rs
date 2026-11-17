@@ -340,14 +340,37 @@ pub fn system_saves(system_dir: &Path, platform: &str) -> Result<Vec<SaveFile>, 
     Ok(out)
 }
 
-/// O nome como o disco compara: sem maiúsculas no Windows e no macOS (os
-/// sistemas de arquivos de lá não as distinguem), exato no resto.
-fn fold(name: &str) -> String {
-    if cfg!(any(windows, target_os = "macos")) {
-        name.to_lowercase()
+/// Como o disco compara os nomes dos arquivos. Os testes escolhem a regra,
+/// e assim a do Linux também roda no Windows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NameCase {
+    /// Sem maiúsculas: `Game.srm` e `game.srm` são o mesmo arquivo.
+    Fold,
+    /// Exato: são dois arquivos.
+    Exact,
+}
+
+impl NameCase {
+    /// A deste sistema: sem maiúsculas no Windows e no macOS (os sistemas de
+    /// arquivos de lá não as distinguem), exata no resto.
+    pub const HERE: Self = if cfg!(any(windows, target_os = "macos")) {
+        Self::Fold
     } else {
-        name.to_owned()
+        Self::Exact
+    };
+
+    /// O nome como o disco compara.
+    pub fn of(self, name: &str) -> String {
+        match self {
+            Self::Fold => name.to_lowercase(),
+            Self::Exact => name.to_owned(),
+        }
     }
+}
+
+/// O nome como o disco daqui compara.
+fn fold(name: &str) -> String {
+    NameCase::HERE.of(name)
 }
 
 /// Os nomes (já em `fold`) dos arquivos regulares de `dir`, numa leitura só

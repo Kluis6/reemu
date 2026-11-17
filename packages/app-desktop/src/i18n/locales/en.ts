@@ -295,6 +295,10 @@ const en: Messages = {
         title: 'The file is corrupted or incomplete',
         hint: 'Download or copy the file again.',
       },
+      syncConflict: {
+        title: "This game's save changed on both machines",
+        hint: 'Choose which save continues before the game opens.',
+      },
     },
   },
   onboarding: {

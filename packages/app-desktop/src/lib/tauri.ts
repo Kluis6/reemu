@@ -86,8 +86,11 @@ export const currentFocus = () => invoke<InputFocus>('current_focus')
 export const sessionState = () => invoke<'Idle' | 'Running' | 'Paused'>('session_state')
 
 export type { LoadedGame }
-export const loadGame = (coreId: string, romPath: string, romId?: string) =>
-  invoke<LoadedGame>('load_game', { coreId, romPath, romId: romId ?? null })
+/** Um conflito do game save achado pela checagem da nuvem antes de abrir para o
+ *  load com o código `syncConflict` (nenhum core abre). `decideLater`: a pessoa
+ *  já respondeu "Decidir depois", e o jogo abre com o save desta máquina. */
+export const loadGame = (coreId: string, romPath: string, romId?: string, decideLater = false) =>
+  invoke<LoadedGame>('load_game', { coreId, romPath, romId: romId ?? null, decideLater })
 export const unloadGame = () => invoke<void>('unload_game')
 
 /** Quadro do jogo: cabeçalho de `FRAME_HEADER` bytes (`[w][h][decoGen]

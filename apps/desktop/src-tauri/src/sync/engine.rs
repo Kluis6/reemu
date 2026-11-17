@@ -25,7 +25,7 @@ use super::api::{
 };
 use super::device::{default_label, rfc3339, Device};
 use super::local::{
-    self, account_saves, log_tag, parse_key, rom_saves, sha256_file, LocalSaves, SaveFile,
+    self, account_saves, log_tag, parse_key, rom_saves, sha256_file, LocalSaves, NameCase, SaveFile,
 };
 use super::platform::platform_for_system;
 use super::reconcile::{decide, Action, Kind, Local, Remote};
@@ -308,6 +308,9 @@ struct Ctx<'a> {
     /// Envios de state seguidos que falharam na rede (M1): um só fica para a
     /// próxima e a passada segue; três seguidos acabam a passada.
     network_failures: u32,
+    /// A época dos game saves quando a passada começou
+    /// (`Runtime::saves_epoch`): desligá-los no meio a muda.
+    saves_epoch: u64,
 }
 
 /// Uma chave: o arquivo neste disco (exista ou não), a base e a linha da
@@ -395,6 +398,9 @@ pub struct Engine {
     /// As miniaturas já baixadas, por (`save_id`, versão): cada uma vem uma
     /// vez só.
     remote_thumbs: Mutex<HashMap<(String, String), Vec<u8>>>,
+    /// Como o disco compara os nomes dos saves (a do sistema; os testes
+    /// trocam).
+    name_case: NameCase,
 }
 
 impl Engine {
@@ -430,6 +436,7 @@ impl Engine {
             state_ceiling: Mutex::new(None),
             remote_found: Mutex::new(HashMap::new()),
             remote_thumbs: Mutex::new(HashMap::new()),
+            name_case: NameCase::HERE,
         }
     }
 
@@ -541,6 +548,20 @@ impl Engine {
         self.sync.devices.saves_enabled().await.map_err(failed)
     }
 
+    /// A passada dos game saves ainda vale: os game saves e o sync ligados,
+    /// sem pausa aqui, na mesma época de quando ela começou (desligar os game
+    /// saves ou esquecer o aparelho muda a época). Só a memória e o SQLite.
+    async fn saves_still_on(&self, epoch: u64) -> bool {
+        let now = self.sync.runtime().saves_epoch;
+        if now != epoch {
+            return false;
+        }
+        let devices = &self.sync.devices;
+        matches!(devices.enabled().await, Ok(true))
+            && matches!(devices.paused().await, Ok(false))
+            && matches!(devices.saves_enabled().await, Ok(true))
+    }
+
     /// O interruptor dos save states: desligado, nenhum state sobe e a base
     /// deles fica como está.
     async fn states_on(&self) -> Result<bool, SyncError> {
@@ -624,6 +645,8 @@ impl Engine {
         scope: &PassScope,
         mode: Mode,
     ) -> Result<PassReport, SyncError> {
+        // Desligar os game saves daqui em diante muda a época.
+        let saves_epoch = self.sync.runtime().saves_epoch;
         self.new_stamp();
         self.sweep_temps();
         // Toda passada lê a linha desta máquina de novo (sem leitura guardada):
@@ -639,6 +662,7 @@ impl Engine {
             receive,
             uploads_stopped: false,
             network_failures: 0,
+            saves_epoch,
         };
         let mut report = PassReport::default();
         self.run_files(&mut cx, &device.id, scope, &mut report)
@@ -708,6 +732,12 @@ impl Engine {
             known.insert(c.key);
         }
         for entry in &entries {
+            // Os game saves (ou o sync) desligaram no meio: o envio que já
+            // corria terminou, e nenhum arquivo mais sobe, desce ou muda aqui.
+            if !self.saves_still_on(cx.saves_epoch).await {
+                log::info!("sync: os game saves desligaram no meio da passada; o resto fica");
+                break;
+            }
             self.step(cx, me, entry, &known, report).await?;
         }
         Ok(())
@@ -982,7 +1012,7 @@ impl Engine {
         files: &[RemoteFile],
         scope: &PassScope,
     ) -> Result<Vec<Entry>, SyncError> {
-        let by_name = by_name(files);
+        let by_name = by_name(files, self.name_case);
         let bases: HashMap<String, BaseRow> = self
             .repo
             .base_all("file")
@@ -991,14 +1021,20 @@ impl Engine {
             .into_iter()
             .map(|b| (b.key.clone(), b))
             .collect();
-        let mut keys = Keys::default();
+        let mut keys = Keys::new(self.name_case);
         for file in &local.files {
             keys.add_present(file.clone());
         }
         let mut base_keys: Vec<&String> = bases.keys().collect();
         base_keys.sort();
+        // A linha que cada base desta biblioteca segue, e de que chaves.
+        let mut claimed: HashMap<&str, HashSet<&str>> = HashMap::new();
         for key in base_keys {
             if let Some(slot) = local.slot_for_key(key) {
+                claimed
+                    .entry(bases[key].remote_save_id.as_str())
+                    .or_default()
+                    .insert(key.as_str());
                 keys.add(slot);
             }
         }
@@ -1010,7 +1046,13 @@ impl Engine {
                 _ => local.rom_slots(&row.filename),
             };
             for slot in slots {
-                if pick(&by_name, &slot).is_some() {
+                // Uma linha que a base de outra chave segue não ganha vaga só
+                // da nuvem: no Linux, o `MCD001.PS2` que o `Mcd001.ps2` daqui
+                // seguia desceria como um segundo cartão.
+                let followed = claimed
+                    .get(row.save_id.as_str())
+                    .is_some_and(|by| !by.contains(slot.key.as_str()));
+                if !followed && pick(&by_name, &slot).is_some() {
                     keys.add(slot);
                 }
             }
@@ -1022,7 +1064,7 @@ impl Engine {
             PassScope::Rom(id) => match self.roms.get(id).await {
                 Ok(Some(rom)) => local::rom_slot_files(&rom, &self.dirs.saves)
                     .iter()
-                    .map(|f| Keys::path_key(&f.path))
+                    .map(|f| path_key(self.name_case, &f.path))
                     .collect(),
                 Ok(None) => HashSet::new(),
                 Err(e) => return Err(failed(format!("ROM {id}: {e}"))),
@@ -1032,7 +1074,7 @@ impl Engine {
             PassScope::All | PassScope::State(_) | PassScope::States => true,
             PassScope::Rom(id) => {
                 f.rom_id.as_deref() == Some(id.as_str())
-                    || scope_paths.contains(&Keys::path_key(&f.path))
+                    || scope_paths.contains(&path_key(self.name_case, &f.path))
                     || (f.rom_id.is_none() && local.rom_platform(id) == Some(f.platform))
             }
         };
@@ -1040,40 +1082,73 @@ impl Engine {
             .files
             .into_iter()
             .filter(in_scope)
-            .map(|file| Entry {
-                base: bases.get(&file.key).cloned(),
-                row: pick(&by_name, &file).cloned(),
-                file,
+            .map(|file| {
+                let base = bases.get(&file.key);
+                let row = pick(&by_name, &file).or_else(|| base_row(files, base, &file));
+                Entry {
+                    row: row.cloned(),
+                    base: base.cloned(),
+                    file,
+                }
             })
             .collect())
     }
 }
 
+/// A linha que a base de um cartão ou VMU segue, quando o nome não acha
+/// nenhuma e ela é o mesmo arquivo com outras maiúsculas. Até a 0.1.16 o
+/// Linux pareava `Mcd001.ps2` com a linha `MCD001.PS2`; o par continua, e a
+/// primeira passada depois da atualização não sobe uma segunda linha. Só
+/// quando o nome não acha nada: entre linhas que o nome acha vale `rank`.
+fn base_row<'a>(
+    files: &'a [RemoteFile],
+    base: Option<&BaseRow>,
+    file: &SaveFile,
+) -> Option<&'a RemoteFile> {
+    let base = base?;
+    file.core?;
+    files.iter().find(|r| {
+        r.save_id == base.remote_save_id
+            && r.core.as_deref() == file.core
+            && r.filename.to_lowercase() == file.filename.to_lowercase()
+    })
+}
+
+/// O caminho como o disco compara: no Windows `VMU_SAVE_A1.BIN` e
+/// `vmu_save_a1.bin` são o mesmo arquivo, no Linux são dois.
+fn path_key(case: NameCase, p: &Path) -> String {
+    case.of(&p.to_string_lossy())
+}
+
 /// Uma chave por arquivo e um arquivo por chave: o primeiro que chega fica.
-/// O caminho compara sem maiúsculas (no Windows `VMU_SAVE_A1.BIN` e
-/// `vmu_save_a1.bin` são o mesmo arquivo).
-#[derive(Default)]
+/// O caminho compara como o disco (`path_key`).
 struct Keys {
+    case: NameCase,
     files: Vec<SaveFile>,
     keys: HashSet<String>,
     paths: HashSet<String>,
 }
 
 impl Keys {
-    fn path_key(p: &Path) -> String {
-        p.to_string_lossy().to_lowercase()
+    fn new(case: NameCase) -> Self {
+        Self {
+            case,
+            files: Vec::new(),
+            keys: HashSet::new(),
+            paths: HashSet::new(),
+        }
     }
 
     /// Os arquivos em disco já chegam sem repetição de `account_saves`.
     fn add_present(&mut self, f: SaveFile) {
-        self.paths.insert(Self::path_key(&f.path));
+        self.paths.insert(path_key(self.case, &f.path));
         if self.keys.insert(f.key.clone()) {
             self.files.push(f);
         }
     }
 
     fn add(&mut self, f: SaveFile) {
-        let path = Self::path_key(&f.path);
+        let path = path_key(self.case, &f.path);
         if self.keys.contains(&f.key) || self.paths.contains(&path) {
             return;
         }
@@ -1083,12 +1158,18 @@ impl Keys {
     }
 }
 
-fn by_name(files: &[RemoteFile]) -> HashMap<String, Vec<&RemoteFile>> {
-    let mut map: HashMap<String, Vec<&RemoteFile>> = HashMap::new();
+/// As linhas da nuvem pelo nome, como o disco compara.
+struct ByName<'a> {
+    case: NameCase,
+    rows: HashMap<String, Vec<&'a RemoteFile>>,
+}
+
+fn by_name(files: &[RemoteFile], case: NameCase) -> ByName<'_> {
+    let mut rows: HashMap<String, Vec<&RemoteFile>> = HashMap::new();
     for f in files {
-        map.entry(f.filename.to_lowercase()).or_default().push(f);
+        rows.entry(case.of(&f.filename)).or_default().push(f);
     }
-    map
+    ByName { case, rows }
 }
 
 /// A ordem entre linhas do mesmo arquivo: viva antes de apagada, da conta
@@ -1107,18 +1188,18 @@ fn rank(r: &RemoteFile) -> (bool, bool, (i64, u32), &str) {
 
 /// A linha da nuvem de um arquivo (D113, D125): o mesmo nome (e, nos cartões
 /// e VMUs, a mesma pasta) na plataforma do ReEmu, senão em `other`, as vivas
-/// antes das apagadas; entre várias, a primeira de `rank`.
-fn pick<'a>(
-    by_name: &HashMap<String, Vec<&'a RemoteFile>>,
-    file: &SaveFile,
-) -> Option<&'a RemoteFile> {
-    let rows = by_name.get(&file.filename.to_lowercase())?;
+/// antes das apagadas; entre várias, a primeira de `rank`. O nome de um
+/// cartão ou VMU compara como o disco: no Linux `VMU_SAVE_A1.BIN` não é a
+/// linha de `vmu_save_a1.bin`, que é outro arquivo lá.
+fn pick<'a>(by_name: &ByName<'a>, file: &SaveFile) -> Option<&'a RemoteFile> {
+    let case = by_name.case;
+    let rows = by_name.rows.get(&case.of(&file.filename))?;
     let same: Vec<&'a RemoteFile> = rows
         .iter()
         .copied()
         .filter(|r| match file.core {
             Some(core) => {
-                r.core.as_deref() == Some(core) && r.filename.eq_ignore_ascii_case(&file.filename)
+                r.core.as_deref() == Some(core) && case.of(&r.filename) == case.of(&file.filename)
             }
             None => {
                 r.filename == file.filename

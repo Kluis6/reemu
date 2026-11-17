@@ -15,12 +15,16 @@ pub struct LoadedGame {
     aspect_ratio: f32,
 }
 
+/// `decide_later`: a pessoa já respondeu "Decidir depois" a um conflito do
+/// save deste jogo, e ele abre com o save daqui mesmo que a checagem da nuvem
+/// ache o conflito de novo.
 #[tauri::command]
 pub async fn load_game(
     app: AppHandle,
     core_id: String,
     rom_path: String,
     rom_id: Option<String>,
+    decide_later: Option<bool>,
 ) -> Result<LoadedGame, crate::app_error::AppError> {
     use domain::core_options::CoreOptionsStore;
     let state = app.state::<AppState>();
@@ -58,10 +62,19 @@ pub async fn load_game(
     };
 
     // Cloud save: antes de o core abrir, o save deste jogo vem da nuvem se lá
-    // estiver mais novo (no máximo 5 s; passado isso, abre com o local). O
-    // conflito a página do jogo já perguntou antes de chamar o load.
+    // estiver mais novo (no máximo 5 s; passado isso, abre com o local). Um
+    // conflito achado agora (a página do jogo só vê os já guardados) para o
+    // load aqui, sem core aberto: a tela de jogo pergunta e chama de novo.
     if let Some(rid) = rom_id.as_deref() {
-        crate::sync::engine::before_launch(&app, rid).await;
+        let gate =
+            crate::sync::engine::before_launch(&app, rid, decide_later.unwrap_or(false)).await;
+        if let Err(e) = gate {
+            // Sem jogo abrindo: resolver o conflito pode escrever o save.
+            state
+                .loading_game
+                .store(false, std::sync::atomic::Ordering::Relaxed);
+            return Err(e);
+        }
     }
 
     // O load é bloqueante (spawna o processo filho + espera o `Loaded`);

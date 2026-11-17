@@ -24,6 +24,10 @@ pub enum ErrorCode {
     NoPermission,
     Corrupt,
     SaveStateIncompatible,
+    /// A checagem da nuvem antes de abrir achou o game save deste jogo
+    /// mudado aqui e em outra máquina: o jogo não abre e a tela de jogo
+    /// pergunta qual save continua (D118).
+    SyncConflict,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
