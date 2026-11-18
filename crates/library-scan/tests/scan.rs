@@ -274,6 +274,7 @@ async fn arcade_bios_skipped_aliases_and_unrecognized_archives() {
         last_played_at: None,
         is_favorite: false,
         user_title: None,
+        ..Default::default()
     })
     .await
     .unwrap();
@@ -355,6 +356,7 @@ async fn naomi_and_atomiswave_mame_sets() {
             last_played_at: None,
             is_favorite: false,
             user_title: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -508,4 +510,53 @@ async fn scan_real_folder() {
         *by.entry(rom.system_id).or_default() += 1;
     }
     eprintln!("{r:?}\n{by:?}");
+}
+
+#[tokio::test]
+async fn zip_inner_entry_name_and_size() {
+    let dir = scratch_dir();
+    let rom_bytes = b"n64-rom-payload-inside-zip-identity";
+    let zip_path = dir.join("Embrulho.zip");
+    {
+        let f = std::fs::File::create(&zip_path).unwrap();
+        let mut zw = zip::ZipWriter::new(f);
+        zw.start_file(
+            "Super Mario 64 (USA).z64",
+            zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated),
+        )
+        .unwrap();
+        zw.write_all(rom_bytes).unwrap();
+        zw.finish().unwrap();
+    }
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+
+    let rom = &repo.list_by_system("n64").await.unwrap()[0];
+    // Nome e tamanho são os da entrada de dentro, não os do .zip.
+    assert_eq!(rom.ident_name.as_deref(), Some("Super Mario 64 (USA).z64"));
+    assert_eq!(rom.ident_size, Some(rom_bytes.len() as i64));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn scanned_rom_row_carries_sha1_name_size_and_time() {
+    let dir = scratch_dir();
+    let bytes = b"abc";
+    std::fs::write(dir.join("Teste (World).gba"), bytes).unwrap();
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    scan_into(&repo, &dir, 1234, |_| {}).await.unwrap();
+
+    let rom = &repo.list_by_system("gba").await.unwrap()[0];
+    assert_eq!(
+        rom.sha1.as_deref(),
+        Some("a9993e364706816aba3e25717850c26c9cd0d89d")
+    );
+    assert_eq!(rom.ident_name.as_deref(), Some("Teste (World).gba"));
+    assert_eq!(rom.ident_size, Some(3));
+    assert_eq!(rom.identified_at, Some(1234));
+    assert_eq!(rom.serial, None, "o serial é da Task A2");
+    let _ = std::fs::remove_dir_all(dir);
 }

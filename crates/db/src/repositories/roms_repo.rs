@@ -73,7 +73,8 @@ impl RomsRepo {
 }
 
 const SELECT_COLS: &str = "SELECT id, file_path, crc32, md5, system_id, added_at, \
-     last_played_at, is_favorite, user_title FROM roms";
+     last_played_at, is_favorite, user_title, sha1, serial, ident_name, \
+     ident_size, identified_at FROM roms";
 
 fn row_to_rom(row: &SqliteRow) -> Result<Rom, RepoError> {
     Ok(Rom {
@@ -89,6 +90,11 @@ fn row_to_rom(row: &SqliteRow) -> Result<Rom, RepoError> {
             .try_get::<Option<String>, _>("user_title")
             .map_err(be)?
             .filter(|s| !s.is_empty()),
+        sha1: row.try_get("sha1").map_err(be)?,
+        serial: row.try_get("serial").map_err(be)?,
+        ident_name: row.try_get("ident_name").map_err(be)?,
+        ident_size: row.try_get("ident_size").map_err(be)?,
+        identified_at: row.try_get("identified_at").map_err(be)?,
     })
 }
 
@@ -96,8 +102,9 @@ fn row_to_rom(row: &SqliteRow) -> Result<Rom, RepoError> {
 impl RomRepository for RomsRepo {
     async fn add(&self, rom: &Rom) -> Result<(), RepoError> {
         sqlx::query(
-            "INSERT INTO roms (id, file_path, crc32, md5, system_id, added_at) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO roms (id, file_path, crc32, md5, system_id, added_at, \
+             sha1, serial, ident_name, ident_size, identified_at) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )
         .bind(&rom.id)
         .bind(&rom.file_path)
@@ -105,6 +112,11 @@ impl RomRepository for RomsRepo {
         .bind(&rom.md5)
         .bind(&rom.system_id)
         .bind(rom.added_at)
+        .bind(&rom.sha1)
+        .bind(&rom.serial)
+        .bind(&rom.ident_name)
+        .bind(rom.ident_size)
+        .bind(rom.identified_at)
         .execute(&self.db)
         .await
         .map_err(be)?;

@@ -190,3 +190,9 @@ Origem: <https://www.alvanista.com/assets/images/logo/alvanista-symbol.svg>, cop
 
 O símbolo é marca da Tellurian Corp / Alvanista e **não** é coberto pela licença MIT do ReEmu. A
 autorização de uso foi informada ao dono do projeto em 2026-10-31; a confirmação por escrito está pendente.
+
+## sha1 (crate Rust)
+
+Origem: <https://crates.io/crates/sha1> (RustCrypto). Licença MIT OU Apache-2.0,
+a mesma do `md-5` que o ReEmu já usa. Usada em `crates/library-scan/src/hash.rs`
+pra calcular o SHA1 da ROM na mesma leitura do CRC32 e do MD5.

@@ -6,7 +6,7 @@ use crate::error::RepoError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rom {
     pub id: String,
     pub file_path: String,
@@ -22,6 +22,19 @@ pub struct Rom {
     /// Nome definido manualmente pelo usuário (`set_metadata`). `None` = usa o
     /// nome do arquivo. A plataforma editada vai direto em `system_id`.
     pub user_title: Option<String>,
+    /// SHA1 (hex minúsculo) do que foi lido pro CRC32/MD5, na mesma passada.
+    /// `None` nas linhas de antes da identidade (o passo em segundo plano
+    /// preenche; o scan não relê).
+    pub sha1: Option<String>,
+    /// Serial do disco (ex.: `SLUS-00594`), lido da imagem. `None` = não lido.
+    pub serial: Option<String>,
+    /// Nome do arquivo que foi lido pra identidade: a entrada de dentro do
+    /// `.zip`/`.7z`, ou o próprio arquivo.
+    pub ident_name: Option<String>,
+    /// Tamanho em bytes do que foi lido (sem o header iNES).
+    pub ident_size: Option<i64>,
+    /// Unix segundos de quando a identidade foi calculada.
+    pub identified_at: Option<i64>,
 }
 
 #[async_trait]

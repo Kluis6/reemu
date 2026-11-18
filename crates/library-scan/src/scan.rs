@@ -1,7 +1,7 @@
 //! Varredura de um diretório de ROMs → `domain::library::Rom` (por hash).
 
 use crate::archive::{is_supported_archive, peek_archive, read_archive_entry};
-use crate::hash::FileRomHasher;
+use crate::hash::{file_name_of, FileRomHasher, RomHashes};
 use crate::systems::{
     folder_only_exts, folder_only_flat, system_for_extension, system_from_folder_name,
     AMBIGUOUS_DISC_EXTS,
@@ -10,6 +10,25 @@ use domain::library::{Rom, RomRepository};
 use std::io::Cursor;
 use std::path::Path;
 use walkdir::WalkDir;
+
+/// Lê o que dá a identidade da ROM, numa leitura só (CRC32, MD5 e SHA1 juntos).
+/// Dentro de `.zip`/`.7z` é a entrada interna (nome e tamanho dela); nos demais
+/// casos, o próprio arquivo.
+///
+/// Ponto de troca da Task A3: `.cue`/`.gdi` hoje passam por aqui como arquivo
+/// comum (o hash é o do texto do cue); lá ganham um ramo que escolhe a 1ª
+/// trilha de dados e devolve o nome e o tamanho dela.
+fn identity_hash(
+    path: &Path,
+    path_str: &str,
+    archived_entry: Option<&str>,
+) -> std::io::Result<RomHashes> {
+    match archived_entry {
+        None => FileRomHasher::hash_file(path_str),
+        Some(entry) => read_archive_entry(path, entry)
+            .and_then(|bytes| FileRomHasher::hash_reader(Cursor::new(bytes), &file_name_of(entry))),
+    }
+}
 
 /// Pastas ancestrais de `path` (relativas a `root`), da mais próxima da raiz
 /// pra mais próxima do arquivo — ex: `<root>/psx/Game (USA).iso` → `["psx"]`.
@@ -375,11 +394,7 @@ where
             continue;
         }
 
-        let hash = match &archived_entry {
-            None => FileRomHasher::hash_file(&path_str),
-            Some(entry) => read_archive_entry(path, entry)
-                .and_then(|bytes| FileRomHasher::hash_reader(Cursor::new(bytes))),
-        };
+        let hash = identity_hash(path, &path_str, archived_entry.as_deref());
         let hash = match hash {
             Ok(h) => h,
             Err(e) => {
@@ -399,6 +414,11 @@ where
             last_played_at: None,
             is_favorite: false,
             user_title: None,
+            sha1: Some(hash.sha1),
+            serial: None,
+            ident_name: Some(hash.name),
+            ident_size: i64::try_from(hash.size).ok(),
+            identified_at: Some(now_unix),
         })
         .await?;
         report.added += 1;
