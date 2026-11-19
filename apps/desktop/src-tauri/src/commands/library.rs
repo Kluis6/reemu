@@ -79,11 +79,62 @@ pub async fn set_rom_metadata(
     rom_id: String,
     title: Option<String>,
     system_id: Option<String>,
+    details: Option<domain::metadata::GameMetadataEdits>,
 ) -> Result<(), AppError> {
+    if let Some(details) = &details {
+        let valid_url = |value: &str| {
+            let value = value.trim();
+            value.is_empty()
+                || reqwest::Url::parse(value).ok().is_some_and(|url| {
+                    url.scheme() == "https"
+                        && url.host_str().is_some()
+                        && url.username().is_empty()
+                        && url.password().is_none()
+                })
+        };
+        if [
+            &details.cover_url,
+            &details.fanart_url,
+            &details.screenshot_url,
+            &details.logo_url,
+        ]
+        .into_iter()
+        .flatten()
+        .any(|value| !valid_url(value))
+        {
+            return Err(AppError::new(
+                crate::app_error::ErrorCode::Corrupt,
+                "image URL must use HTTPS",
+            ));
+        }
+        if details.rating.as_deref().is_some_and(|rating| {
+            !rating.trim().is_empty()
+                && !rating.trim().parse::<u8>().is_ok_and(|value| value <= 100)
+        }) {
+            return Err(AppError::new(
+                crate::app_error::ErrorCode::Corrupt,
+                "rating must be between 0 and 100",
+            ));
+        }
+    }
+    let cover_changed = details
+        .as_ref()
+        .is_some_and(|value| value.cover_url.is_some())
+        || title.is_some()
+        || system_id.is_some();
     let repo = db::RomsRepo::new(pool(&state)?);
-    repo.set_metadata(&rom_id, title.as_deref(), system_id.as_deref())
-        .await
-        .map_err(AppError::from)
+    repo.set_metadata_and_details(
+        &rom_id,
+        title.as_deref(),
+        system_id.as_deref(),
+        details.as_ref(),
+    )
+    .await
+    .map_err(AppError::from)?;
+    if cover_changed {
+        crate::covers::invalidate(&state.covers_dir, &rom_id);
+    }
+    Ok(())
 }
 
 /// Remove a ROM da biblioteca (só o registro no banco — o arquivo em disco

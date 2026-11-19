@@ -41,6 +41,11 @@ trabalhar de memória (ver `00-visao-geral.md`).
 | `17-cheats-rewind.md` | Cheats (código pelo `retro_cheat_set`, banco `.cht` do libretro, cheats de memória) e rewind (estados com delta no processo do core): pesquisa e plano em 6 fases (**planejado**) | 01, 06/07, save states, 16 (memória e hardcore) |
 | `18-experiencia-console-tv.md` | Menus confortáveis para TV e controle, com o layout do Xbox para Windows: comparação, medidas e plano em 9 etapas (**planejado**) | 05, 07 |
 | `19-plano-unificado.md` | Avaliação do projeto, robustez e frontend juntos: 9 fases, etapas locais até aprovar, riscos, portão de desempenho e mudanças que exigem aviso (**planejado**) | 18 |
+| `23-direct3d11-ppsspp.md` | Direct3D 11 no Windows para o PPSSPP (**backlog**) | 02, 12, 19 |
+| `24-direct3d-por-core.md` | Roteiro Direct3D 11 e 12 por core no Windows (**backlog**) | 19, 23 |
+| `25-dolphin-libretro.md` | Integração do Dolphin libretro para GameCube e Wii (**backlog**) | 02, 05, 10, 12, 24 |
+| `26-compatibilidade-libretro.md` | Compatibilidade total com libretro: etapas, tarefas e [inventário por core](inventario-libretro.md) (**backlog**) | 02, 10, 19, 24, 25 |
+| `27-papeis-de-parede-animados.md` | Qualidade, fluidez e custo dos fundos animados (**backlog**) | 03, 07, 19 |
 
 Docs 04 a 10 podem ser feitos em paralelo/qualquer ordem entre si, desde
 que 01-03 já estejam prontos.

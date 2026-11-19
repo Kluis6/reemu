@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { customBgPalette, familyOf, THEME_FAMILIES, THEMES, type ThemeId } from './themes'
+import { customBgPalette, familyOf, resolveTheme, THEME_FAMILIES, THEMES, type ThemeId } from './themes'
 
 describe('THEME_FAMILIES', () => {
   it('cada tema está em exatamente uma família, no modo certo', () => {
@@ -46,6 +46,17 @@ describe('tema de alto contraste', () => {
 })
 
 describe('paletas do fundo', () => {
+  it('temas claros exibem o papel de parede sem sobreposição', () => {
+    for (const id of Object.keys(THEMES) as ThemeId[]) {
+      if (familyOf(id).mode === 'light') {
+        expect(THEMES[id].theme.reemuVeil, id).toBe('none')
+      }
+    }
+
+    const custom = resolveTheme({ kind: 'custom', hue: 205, mode: 'light' })
+    expect(custom.reemuVeil).toBe('none')
+  })
+
   it('todo tema tem as 4 cores do fundo', () => {
     for (const [id, { theme }] of Object.entries(THEMES)) {
       for (const c of [theme.reemuBg1, theme.reemuBg2, theme.reemuBg3, theme.reemuBg4]) {
