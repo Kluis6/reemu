@@ -4,10 +4,10 @@ Comece por [`TASKS.md`](TASKS.md) (o que está em aberto) e
 [`docs/historico.md`](docs/historico.md) (o que foi feito e por quê). O
 contexto de cada etapa está em `docs/ai-context/`.
 
-## Regra: OpenGL, Vulkan e GPU só com a documentação oficial
+## Regra de documentação oficial para APIs gráficas
 
-Sempre que o trabalho tocar OpenGL, Vulkan, WGL, EGL, GLX, wgpu, shaders ou
-qualquer API de GPU, **consulte a documentação oficial antes de decidir ou
+Sempre que o trabalho tocar OpenGL, Vulkan, Direct3D 11/12, DXGI, WGL, EGL,
+GLX, wgpu, shaders ou qualquer API de GPU, **consulte a documentação oficial antes de decidir ou
 escrever código** — não implemente de memória. Vale para **cada decisão**
 sobre GPU, inclusive as pequenas (um formato de textura, um flag, a ordem de
 duas chamadas), não só para as grandes; as fontes de partida indicadas pelo
@@ -39,7 +39,13 @@ Fontes oficiais, nesta ordem de preferência:
   registro Khronos, WGSL na W3C).
 - **wgpu**: <https://docs.rs/wgpu> (a versão usada está no `Cargo.lock`) e
   <https://www.w3.org/TR/webgpu/> para a semântica.
-- **Windows (WGL, DXGI, Direct3D)**: <https://learn.microsoft.com/windows/win32/>.
+- **Windows (WGL, DXGI, Direct3D)** — Microsoft Learn para o contrato da API.
+  Em decisões sobre Direct3D por core, confira também os cabeçalhos oficiais
+  do libretro e a documentação ou o código upstream da versão do core.
+  Registre a fonte consultada e a versão da interface usada.
+  [Direct3D 11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11) ·
+  [Direct3D 12](https://learn.microsoft.com/en-us/windows/win32/direct3d12/direct3d-12-programming-guide) ·
+  [Referências do ReEmu](docs/ai-context/REFERENCES.md#direct3d-11-e-12-no-windows).
 - **libretro (HW render, `retro_hw_render_callback`, interface Vulkan)**:
   `libretro.h` e `libretro_vulkan.h` do repositório oficial
   <https://github.com/libretro/libretro-common>.

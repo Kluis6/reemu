@@ -147,6 +147,16 @@ passa em `wgpu_hal::vulkan::Queue::add_wait_semaphore`. O wgpu-hal 30 **não**
 habilita `VK_KHR_external_semaphore_fd` sozinho — precisa criar o device pelo
 caminho manual de `wgpu-hal` (como o `from_adopted_vulkan` já faz).
 
+## Direct3D 11 e 12 no Windows
+
+- [Plano e referências do Direct3D 11 para o PPSSPP](23-direct3d11-ppsspp.md)
+- [Microsoft Learn: criação do dispositivo D3D11](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-d3d11createdevice)
+- [Libretro: interface de renderização D3D11 e negociação](https://github.com/libretro/RetroArch/blob/master/libretro-common/include/libretro_d3d11.h)
+
+- [Roteiro de implementação por core](24-direct3d-por-core.md)
+- [Libretro: interface de renderização D3D12 e negociação](https://github.com/libretro/RetroArch/blob/master/libretro-common/include/libretro_d3d12.h)
+- [Microsoft Learn: filas e command lists em D3D12](https://learn.microsoft.com/en-us/windows/win32/direct3d12/command-queues-and-command-lists)
+
 ## Design (frontend)
 
 | O quê | Onde |
