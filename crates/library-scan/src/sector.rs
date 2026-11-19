@@ -9,7 +9,7 @@
 //! quebrada: offset e tamanho vindos do arquivo são conferidos antes de usar.
 
 use crate::chd_reader::ChdTrack;
-use crate::disc_sniff::{parse_cue, sibling, CUE_MAX_BYTES};
+use crate::disc_sniff::{decode_sheet, parse_cue, sibling, CUE_MAX_BYTES};
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
@@ -126,7 +126,9 @@ pub struct DataTrack {
     pub start: u64,
 }
 
-/// Lê o texto de um `.cue`/`.gdi` (pequeno; passado de [`CUE_MAX_BYTES`] não é).
+/// Lê o texto de um `.cue`/`.gdi`: no máximo [`CUE_MAX_BYTES`] (um de verdade
+/// tem poucos KiB; o que passa disso fica de fora), sem o BOM e em
+/// Windows-1252 quando não é UTF-8 ([`decode_sheet`]).
 pub(crate) fn read_sheet(path: &Path, open: Opener) -> Option<String> {
     let mut bytes = Vec::new();
     open(path)
@@ -134,7 +136,7 @@ pub(crate) fn read_sheet(path: &Path, open: Opener) -> Option<String> {
         .take(CUE_MAX_BYTES)
         .read_to_end(&mut bytes)
         .ok()?;
-    Some(String::from_utf8_lossy(&bytes).into_owned())
+    Some(decode_sheet(&bytes))
 }
 
 /// A trilha de dados de um `.cue` ou `.gdi` (pela extensão de `path`).

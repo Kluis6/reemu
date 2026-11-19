@@ -788,6 +788,33 @@ mod tests {
         }
     }
 
+    /// Cue gravado com BOM (Bloco de Notas antigo) e cue/gdi em Windows-1252
+    /// citando `Pokémon.bin`: a trilha é achada e hasheada.
+    #[test]
+    fn sheet_with_bom_or_cp1252_finds_its_track() {
+        let dir = tempfile::tempdir().unwrap();
+        let track: Vec<u8> = (0..2352 * 4).map(|i| (i % 19) as u8).collect();
+        put(dir.path(), "Pokémon.bin", &track);
+        let cue = "FILE \"Pokémon.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n";
+
+        let mut bom = b"\xEF\xBB\xBF".to_vec();
+        bom.extend_from_slice(cue.as_bytes());
+        let cp1252 =
+            b"FILE \"Pok\xE9mon.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n";
+        let gdi = b"1\n1 0 4 2352 \"Pok\xE9mon.bin\" 0\n";
+        for (sheet, bytes, system) in [
+            ("Bom.cue", &bom[..], "psx"),
+            ("Antigo.cue", &cp1252[..], "psx"),
+            ("Antigo.gdi", &gdi[..], "dreamcast"),
+        ] {
+            let path = put(dir.path(), sheet, bytes);
+            let id = identify(&path, system, None).unwrap();
+            assert_eq!(id.name, "Pokémon.bin", "{sheet}");
+            assert_eq!(id.hashes, Some(digests_of(&track)), "{sheet}");
+            assert!(!id.provisional, "{sheet}");
+        }
+    }
+
     /// Cue cujo texto não se lê, ou cuja trilha ainda não chegou: provisório.
     /// Quando a trilha aparece, a mesma conta dá a identidade dela.
     #[test]

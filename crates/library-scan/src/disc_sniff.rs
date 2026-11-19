@@ -25,13 +25,13 @@ fn has(hay: &[u8], needle: &[u8]) -> bool {
 
 /// `.cue` aponta pro `.bin`/`.img` da trilha 1 — abre esse e fareja nele.
 fn sniff_cue(path: &Path) -> Option<&'static str> {
-    let mut text = String::new();
+    let mut bytes = Vec::new();
     File::open(path)
         .ok()?
         .take(CUE_MAX_BYTES)
-        .read_to_string(&mut text)
+        .read_to_end(&mut bytes)
         .ok()?;
-    let first = parse_cue(&text).into_iter().next()?;
+    let first = parse_cue(&decode_sheet(&bytes)).into_iter().next()?;
     let track = sibling(path, &first.file)?;
     // Só arquivo comum: `FILE "CON"` viraria dispositivo no Windows.
     if !track.is_file() {
@@ -73,6 +73,36 @@ pub(crate) const SHEET_ESCAPES: &[&str] = &[
 
 /// Um `.cue` de verdade tem poucos KiB; acima disto não é cue.
 pub(crate) const CUE_MAX_BYTES: u64 = 256 * 1024;
+
+/// Texto de um `.cue`/`.gdi` como veio do disco. Sem o BOM do UTF-8 (o Bloco
+/// de Notas antigo grava um, e com ele a 1ª linha não é `FILE`), e em
+/// Windows-1252 quando não é UTF-8 válido: ferramentas antigas gravam o nome
+/// da trilha na página de código do Windows (`Pokémon.bin` com o `é` em
+/// 0xE9), e decodificar com perda trocaria a letra e a trilha não se acharia.
+pub(crate) fn decode_sheet(bytes: &[u8]) -> String {
+    let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
+    match std::str::from_utf8(bytes) {
+        Ok(text) => text.to_owned(),
+        Err(_) => bytes.iter().map(|&b| cp1252(b)).collect(),
+    }
+}
+
+/// Um byte em Windows-1252: o mesmo do Latin-1, menos 0x80 a 0x9F. As cinco
+/// posições que não têm caractere ficam com o código de controle de mesmo
+/// número, como no WHATWG Encoding Standard.
+fn cp1252(b: u8) -> char {
+    const HIGH: [char; 32] = [
+        '\u{20AC}', '\u{0081}', '\u{201A}', '\u{0192}', '\u{201E}', '\u{2026}', '\u{2020}',
+        '\u{2021}', '\u{02C6}', '\u{2030}', '\u{0160}', '\u{2039}', '\u{0152}', '\u{008D}',
+        '\u{017D}', '\u{008F}', '\u{0090}', '\u{2018}', '\u{2019}', '\u{201C}', '\u{201D}',
+        '\u{2022}', '\u{2013}', '\u{2014}', '\u{02DC}', '\u{2122}', '\u{0161}', '\u{203A}',
+        '\u{0153}', '\u{009D}', '\u{017E}', '\u{0178}',
+    ];
+    match b {
+        0x80..=0x9F => HIGH[usize::from(b - 0x80)],
+        _ => char::from(b),
+    }
+}
 
 /// Uma trilha de um `.cue`, na ordem em que aparece.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -325,6 +355,38 @@ mod tests {
         assert_eq!(identify(&cue("Bom.cue", "Jogo.bin")), Some("saturn"));
         assert_eq!(identify(&cue("Pasta.cue", "Pasta.bin")), None);
         assert_eq!(identify(&cue("Sumiu.cue", "Nada.bin")), None);
+    }
+
+    #[test]
+    fn sheet_text_without_bom_and_in_cp1252_when_not_utf8() {
+        assert_eq!(decode_sheet(b"\xEF\xBB\xBFFILE x"), "FILE x");
+        assert_eq!(decode_sheet("Pokémon".as_bytes()), "Pokémon", "UTF-8 fica");
+        assert_eq!(
+            decode_sheet(b"Pok\xE9mon \x80\x97\x81"),
+            "Pok\u{E9}mon \u{20AC}\u{2014}\u{81}"
+        );
+    }
+
+    /// Cue com BOM e cue em Windows-1252: o sistema sai do disco do mesmo jeito.
+    #[test]
+    fn cue_with_bom_or_cp1252_is_sniffed() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut saturn = vec![0u8; 4096];
+        saturn[..16].copy_from_slice(b"SEGA SEGASATURN ");
+        std::fs::write(dir.path().join("Pokémon.bin"), &saturn).unwrap();
+        let body =
+            b"FILE \"Pok\xE9mon.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n";
+        let cp1252 = dir.path().join("Antigo.cue");
+        std::fs::write(&cp1252, body).unwrap();
+        assert_eq!(identify(&cp1252), Some("saturn"));
+        let mut bom = b"\xEF\xBB\xBF".to_vec();
+        bom.extend_from_slice(
+            "FILE \"Pokémon.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+                .as_bytes(),
+        );
+        let with_bom = dir.path().join("Bom.cue");
+        std::fs::write(&with_bom, bom).unwrap();
+        assert_eq!(identify(&with_bom), Some("saturn"));
     }
 
     #[test]
