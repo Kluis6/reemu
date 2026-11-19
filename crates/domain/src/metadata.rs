@@ -51,6 +51,54 @@ pub struct GameDetails {
     pub fanart_url: Option<String>,
     pub logo_url: Option<String>,
     pub video_url: Option<String>,
+    pub gamekave: Option<GameKaveData>,
+}
+
+/// Dados adicionais preservados com a ficha para uso offline.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct GameKaveData {
+    pub descriptions: std::collections::BTreeMap<String, String>,
+    pub release_dates: std::collections::BTreeMap<String, String>,
+    pub time_to_beat_minutes: [Option<u32>; 3],
+    pub covers: Vec<String>,
+    pub heroes: Vec<String>,
+    pub screenshots: Vec<String>,
+    pub trailers: Vec<String>,
+    pub achievement_count: Option<u32>,
+    pub soundtrack_count: Option<u32>,
+}
+
+/// Campos sobrepostos ? ficha importada. Uma string vazia limpa o campo.
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct GameMetadataEdits {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub release_date: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub genre: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub developer: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub publisher: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub players: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rating: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub age_rating: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub modes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cover_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fanart_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub screenshot_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logo_url: Option<String>,
 }
 
 /// Um resultado de provedor pra uma ROM: metadata + os dois critérios que

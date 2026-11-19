@@ -32,7 +32,7 @@ wgpu = "30"
 # Handles Vulkan crus pro HW render por-core (etapa 12): o core renderiza no
 # MESMO VkDevice do wgpu. Mesma versao que o wgpu 30 ja resolve.
 ash = { version = "0.38", default-features = false }
-png = "0.17"
+png = "0.18"
 # `block_on`: abertura do device com as extensões do interop (gpu/win_interop.rs,
 # Linux) e o `pop` do escopo de erro do wgpu no `set_preset`
 pollster = "1.0"
@@ -76,7 +76,9 @@ shader-slang = { path = "../../../crates/shader-slang" }
 net = { path = "../../../crates/net" }
 core-catalog = { path = "../../../crates/core-catalog" }
 scraping = { path = "../../../crates/scraping" }
-tauri-plugin-updater = "2"
+# O manifesto publica instaladores Tauri v2 assinados (.exe, .msi, .AppImage).
+# O suporte a pacotes de atualizacao compactados do Tauri v1 fica desabilitado.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
 
 [dev-dependencies]

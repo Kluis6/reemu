@@ -1,6 +1,8 @@
 # 17 — Cheats e rewind
 
-**Estado:** planejado (pesquisa de 2026-10-28). Nenhum código ainda.
+**Estado:** base de serialização e cheats por código implementados. Rewind
+em backlog desde 2026-11-18, com implementação pendente.
+
 **Depende de:** 01 (core libretro), 06/07 (sessão e processo do core), save
 states, atalhos (`input_desktop::hotkeys`) e, para cheats de memória, o mapa de
 memória da fase 1 das conquistas (`16-retroachievements.md`).
@@ -182,17 +184,30 @@ só manda "começar/parar rewind".
       `cheatN_enable`; campos de memória mais novos, se houver), com testes.
 - [ ] Importar um `.cht` do disco.
 
-### Fase 3 — Rewind
-- [ ] Buffer circular com delta comprimido no processo do core, com limite
-      de memória e intervalo por sistema.
-- [ ] Atalho de segurar: no teclado e no controle (combinação, pelo
-      `ComboHotkeyResolver`). Áudio mudo e indicador na tela durante o
-      rewind.
-- [ ] Configurações › Sistema (ou Jogo): ligar/desligar, memória máxima e
-      intervalo. Desligado por padrão nos sistemas pesados, conforme a
-      medição da fase 0.
-- [ ] Testes: rewind em core real volta a um estado igual ao gravado (hash da
-      RAM), e o buffer respeita o limite.
+### Fase 3 — Rewind (backlog)
+
+**Entrega inicial:** suporte opcional a NES, SNES, Mega Drive e GBA. O
+jogador segura um atalho de teclado ou controle para voltar e solta para
+retomar o jogo naquele ponto.
+
+- [ ] Buffer circular com deltas comprimidos junto à instância do core.
+      O limite de RAM inclui o histórico e os buffers temporários.
+      O intervalo de captura varia por core. O histórico dura só a sessão,
+      sem ocupar slots de save state ou entrar na sincronização do Alvanista.
+- [ ] Atalho de segurar pelo `ComboHotkeyResolver` e indicador durante o
+      retrocesso. Silenciar e limpar o áudio ao alternar entre os modos.
+      Descartar o histórico ao carregar um save state externo, reiniciar ou
+      trocar de jogo.
+- [ ] Opção para ativar o recurso, desligado por padrão na primeira entrega.
+      Aplicar os quirks de serialização e bloquear no modo hardcore quando
+      a integração com RetroAchievements estiver disponível.
+- [ ] Testar com cores reais. Verificar que a restauração recupera o
+      estado esperado, a RAM fica dentro do limite e o histórico é descartado
+      nas transições previstas. Medir tempo de quadro p95/p99 com o recurso
+      ligado e desligado, além do custo de captura, compressão e restauração.
+- [ ] Após a validação inicial, avaliar PS1 e N64 por core. Dreamcast e PSP
+      ficam para uma rodada própria, dentro do ReEmu, cobrindo OpenGL e Vulkan
+      conforme o suporte de cada core. Medir o PPSSPP nessa rodada.
 
 ### Fase 4 — Cheats de memória
 - [ ] Com o mapa de memória (fase 1 das conquistas), aplicar cheats de
