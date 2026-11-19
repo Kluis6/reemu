@@ -642,3 +642,56 @@ async fn video_config_hdr_roundtrip_and_defaults() {
     repo.update(&cfg).await.unwrap();
     assert_eq!(repo.get().await.unwrap(), cfg);
 }
+
+#[tokio::test]
+async fn metadata_rescrape_preserves_independent_local_edits() {
+    use domain::metadata::GameMetadataEdits;
+
+    let pool = db::connect_in_memory().await.unwrap();
+    let roms = RomsRepo::new(pool.clone());
+    roms.add(&rom("r1", "AA", "snes")).await.unwrap();
+    let metadata = MetadataRepo::new(pool);
+    let mut imported = candidate("Mario", false);
+    imported.provider = "gamekave".into();
+    imported.details.gamekave = Some(domain::metadata::GameKaveData {
+        covers: vec!["https://cdn.gamekave.net/box.png".into()],
+        ..Default::default()
+    });
+    metadata
+        .record_match("r1", &imported, MatchStatus::PendingReview)
+        .await
+        .unwrap();
+    metadata.resolve_pending("r1", true).await.unwrap();
+
+    let edits = GameMetadataEdits {
+        description: Some("Minha descrição".into()),
+        ..Default::default()
+    };
+    roms.set_metadata_and_details("r1", Some("Meu Mario"), None, Some(&edits))
+        .await
+        .unwrap();
+    let art = GameMetadataEdits {
+        cover_url: Some("https://example.com/box.png".into()),
+        ..Default::default()
+    };
+    roms.set_metadata_and_details("r1", None, None, Some(&art))
+        .await
+        .unwrap();
+
+    imported.description = Some("Updated from the provider".into());
+    metadata
+        .record_match("r1", &imported, MatchStatus::PendingReview)
+        .await
+        .unwrap();
+    metadata.resolve_pending("r1", true).await.unwrap();
+    let saved = metadata.get_metadata("r1").await.unwrap().unwrap();
+    assert_eq!(saved.description, imported.description);
+    assert_eq!(saved.details.gamekave, imported.details.gamekave);
+    let edits = metadata.get_edits("r1").await.unwrap().unwrap();
+    assert_eq!(edits.description.as_deref(), Some("Minha descrição"));
+    assert_eq!(edits.cover_url, art.cover_url);
+    assert_eq!(
+        roms.get("r1").await.unwrap().unwrap().user_title.as_deref(),
+        Some("Meu Mario")
+    );
+}
