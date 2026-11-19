@@ -1,6 +1,10 @@
 import {
   Button,
   Caption1,
+  MessageBar,
+  MessageBarActions,
+  MessageBarBody,
+  MessageBarTitle,
   makeStyles,
   tokens,
 } from "@fluentui/react-components";
@@ -50,6 +54,7 @@ import {
   setOverscan,
   setUiScale,
 } from "../../lib/uiScale";
+import { useNotificationStore } from "../../stores/useNotificationStore";
 import { useToastStore } from "../../stores/useToastStore";
 import {
   DesktopTowerRegular,
@@ -57,6 +62,28 @@ import {
   OptionsRegular,
 } from "@fluentui/react-icons";
 import { SettingsHubCards } from "./SettingsHome";
+
+function SystemUpdateNotice() {
+  const { t } = useTranslation();
+  const update = useNotificationStore(
+    (state) => state.items.find((item) => item.id === "update" && item.kind === "update"),
+  );
+  const openDialog = useNotificationStore((state) => state.openDialog);
+  if (update?.kind !== "update") return null;
+  return (
+    <MessageBar intent="info">
+      <MessageBarBody>
+        <MessageBarTitle>{t("updates.availableTitle", { version: update.update.version })}</MessageBarTitle>
+        {t("updates.availableSummary", { version: update.update.currentVersion })}
+      </MessageBarBody>
+      <MessageBarActions>
+        <Button onClick={() => openDialog({ mode: "update", info: update.update })}>
+          {t("updates.view")}
+        </Button>
+      </MessageBarActions>
+    </MessageBar>
+  );
+}
 
 const useStyles = makeStyles({
   root: {
@@ -386,7 +413,12 @@ export function SettingsSystem({
         </section>
       )}
 
-      {section === "sobre" && <AboutLicenses />}
+      {section === "sobre" && (
+        <>
+          <SystemUpdateNotice />
+          <AboutLicenses />
+        </>
+      )}
     </div>
   );
 }

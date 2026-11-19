@@ -223,13 +223,27 @@ impl RomRepository for RomsRepo {
         title: Option<&str>,
         system_id: Option<&str>,
     ) -> Result<(), RepoError> {
+        self.set_metadata_and_details(id, title, system_id, None)
+            .await
+    }
+}
+
+impl RomsRepo {
+    pub async fn set_metadata_and_details(
+        &self,
+        id: &str,
+        title: Option<&str>,
+        system_id: Option<&str>,
+        edits: Option<&domain::metadata::GameMetadataEdits>,
+    ) -> Result<(), RepoError> {
+        let mut tx = self.db.begin().await.map_err(be)?;
         if let Some(t) = title {
             // string vazia = NULL (volta pro nome do arquivo)
             let val: Option<&str> = (!t.trim().is_empty()).then(|| t.trim());
             sqlx::query("UPDATE roms SET user_title = ?2 WHERE id = ?1")
                 .bind(id)
                 .bind(val)
-                .execute(&self.db)
+                .execute(&mut *tx)
                 .await
                 .map_err(be)?;
         }
@@ -237,10 +251,25 @@ impl RomRepository for RomsRepo {
             sqlx::query("UPDATE roms SET system_id = ?2 WHERE id = ?1")
                 .bind(id)
                 .bind(s)
-                .execute(&self.db)
+                .execute(&mut *tx)
                 .await
                 .map_err(be)?;
         }
+        if let Some(edits) = edits {
+            let json =
+                serde_json::to_string(edits).map_err(|e| RepoError::Corrupt(e.to_string()))?;
+            sqlx::query(
+                "INSERT INTO game_metadata_edits (rom_id, fields_json) VALUES (?1, ?2) \
+                 ON CONFLICT(rom_id) DO UPDATE SET \
+                 fields_json = json_patch(game_metadata_edits.fields_json, excluded.fields_json)",
+            )
+            .bind(id)
+            .bind(json)
+            .execute(&mut *tx)
+            .await
+            .map_err(be)?;
+        }
+        tx.commit().await.map_err(be)?;
         Ok(())
     }
 }
