@@ -190,3 +190,52 @@ Origem: <https://www.alvanista.com/assets/images/logo/alvanista-symbol.svg>, cop
 
 O símbolo é marca da Tellurian Corp / Alvanista e **não** é coberto pela licença MIT do ReEmu. A
 autorização de uso foi informada ao dono do projeto em 2026-10-31; a confirmação por escrito está pendente.
+
+## sha1 (crate Rust)
+
+Origem: <https://crates.io/crates/sha1> (RustCrypto). Licença MIT OU Apache-2.0,
+a mesma do `md-5` que o ReEmu já usa. Usada em `crates/library-scan/src/hash.rs`
+pra calcular o SHA1 da ROM na mesma leitura do CRC32 e do MD5.
+
+## chd (crate Rust, chd-rs)
+
+Origem: <https://crates.io/crates/chd> (<https://github.com/SnowflakePowered/chd-rs>).
+Usada em `crates/library-scan/src/chd_reader.rs` pra ler setores de dentro de
+um `.chd` e tirar dele o serial do jogo: o índice do arquivo (cabeçalho,
+metadados e mapa de hunks) é lido inteiro, e da imagem só os poucos hunks com
+o cabeçalho do disco. Puro Rust. Traz junto, todas MIT, Apache-2.0 ou as duas:
+`bitreader`, `claxon`, `lzma-rust2`, `text_io`, `fearless_simd` e `zrip`
+(`zrip-core`, `zrip-decode`, `zrip-encode`; o `zrip-encode` vai no app junto
+com o resto do `zrip`). Só a feature `encode` do próprio `chd`, que monta
+`.chd` pros testes, fica fora do app.
+
+```
+Copyright (c) 2022 Ronny Chan
+
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```

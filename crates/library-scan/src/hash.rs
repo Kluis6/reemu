@@ -1,4 +1,4 @@
-//! Hash de ROM (CRC32 + MD5). Matching por hash é a única forma de match
+//! Hash de ROM (CRC32 + MD5 + SHA1, numa leitura só). Matching por hash é a única forma de match
 //! automático (ver `docs/ai-context/09`) — nome de arquivo não conta.
 //!
 //! Header skip: alguns dumps carregam um header do emulador que não faz
@@ -7,22 +7,39 @@
 
 use domain::metadata::{RomHash, RomHashService};
 use md5::{Digest, Md5};
+use sha1::Sha1;
 use std::fs::File;
 use std::io::{BufReader, Read};
 
 const INES_MAGIC: &[u8; 4] = b"NES\x1a";
 const INES_HEADER_LEN: u64 = 16;
 
+/// O que uma leitura produz: os três hashes (CRC32 em maiúsculas, MD5 e SHA1
+/// em minúsculas), o tamanho do que entrou neles (sem o header iNES, como os
+/// hashes sem header do ScreenScraper) e o nome do que foi lido.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RomHashes {
+    pub crc32: String,
+    pub md5: String,
+    pub sha1: String,
+    pub size: u64,
+    /// Nome (só o arquivo, sem pasta) do que foi lido: a entrada de dentro do
+    /// `.zip`/`.7z`, ou o próprio arquivo.
+    pub name: String,
+}
+
 pub struct FileRomHasher;
 
 impl FileRomHasher {
-    pub fn hash_file(path: &str) -> std::io::Result<RomHash> {
-        Self::hash_reader(BufReader::new(File::open(path)?))
+    pub fn hash_file(path: &str) -> std::io::Result<RomHashes> {
+        let name = file_name_of(path);
+        Self::hash_reader(BufReader::new(File::open(path)?), &name)
     }
 
     /// Como [`hash_file`], mas sobre um leitor qualquer — pra ROM de dentro de
     /// um arquivo comprimido (o CRC precisa ser o da ROM crua, não do `.zip`).
-    pub fn hash_reader<R: Read>(mut reader: R) -> std::io::Result<RomHash> {
+    /// `name` é o nome do que o leitor entrega (a entrada interna).
+    pub fn hash_reader<R: Read>(mut reader: R, name: &str) -> std::io::Result<RomHashes> {
         // Detecta e pula o header iNES.
         let mut head = [0u8; 4];
         let n = read_up_to(&mut reader, &mut head)?;
@@ -30,10 +47,14 @@ impl FileRomHasher {
 
         let mut crc = crc32fast::Hasher::new();
         let mut md5 = Md5::new();
+        let mut sha1 = Sha1::new();
+        let mut size = 0u64;
 
         if !skip {
             crc.update(&head[..n]);
             md5.update(&head[..n]);
+            sha1.update(&head[..n]);
+            size += n as u64;
         } else {
             // consome o resto do header (já lemos 4 dos 16 bytes)
             let mut rest = [0u8; (INES_HEADER_LEN - 4) as usize];
@@ -48,19 +69,66 @@ impl FileRomHasher {
             }
             crc.update(&buf[..read]);
             md5.update(&buf[..read]);
+            sha1.update(&buf[..read]);
+            size += read as u64;
         }
 
-        Ok(RomHash {
+        Ok(RomHashes {
             crc32: format!("{:08X}", crc.finalize()),
             md5: format!("{:x}", md5.finalize()),
+            sha1: format!("{:x}", sha1.finalize()),
+            size,
+            name: name.to_owned(),
         })
+    }
+}
+
+impl FileRomHasher {
+    /// Como [`hash_reader`](Self::hash_reader), mas lê no máximo `cap + 1`
+    /// bytes de `reader`. Se passar de `cap` (um zip bomb, ou um arquivo que
+    /// cresce enquanto é lido), `Ok(None)`: sem hash, e nada além disso lido.
+    pub(crate) fn hash_reader_capped<R: Read>(
+        reader: R,
+        name: &str,
+        cap: u64,
+    ) -> std::io::Result<Option<RomHashes>> {
+        let mut limited = Counted {
+            inner: reader.take(cap.saturating_add(1)),
+            read: 0,
+        };
+        let hashes = Self::hash_reader(&mut limited, name)?;
+        Ok((limited.read <= cap).then_some(hashes))
+    }
+}
+
+/// Leitor que conta os bytes que entrega.
+struct Counted<R> {
+    inner: R,
+    read: u64,
+}
+
+impl<R: Read> Read for Counted<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.read += n as u64;
+        Ok(n)
     }
 }
 
 impl RomHashService for FileRomHasher {
     fn compute(&self, file_path: &str) -> Result<RomHash, String> {
-        Self::hash_file(file_path).map_err(|e| format!("{file_path}: {e}"))
+        Self::hash_file(file_path)
+            .map(|h| RomHash {
+                crc32: h.crc32,
+                md5: h.md5,
+            })
+            .map_err(|e| format!("{file_path}: {e}"))
     }
+}
+
+/// Último componente de um caminho (separador `/` ou `\`, venha de onde vier).
+pub(crate) fn file_name_of(path: &str) -> String {
+    path.rsplit(['/', '\\']).next().unwrap_or(path).to_owned()
 }
 
 fn read_up_to(r: &mut impl Read, buf: &mut [u8]) -> std::io::Result<usize> {
@@ -97,7 +165,39 @@ mod tests {
         let h = FileRomHasher::hash_file(&f).unwrap();
         assert_eq!(h.crc32, "0D4A1185");
         assert_eq!(h.md5, "5eb63bbbe01eeed093cb22bb8f5acdc3");
+        assert_eq!(h.size, 11);
         let _ = std::fs::remove_file(f);
+    }
+
+    #[test]
+    fn sha1_matches_known_vector() {
+        let h = FileRomHasher::hash_reader(std::io::Cursor::new(b"abc"), "abc.bin").unwrap();
+        assert_eq!(h.sha1, "a9993e364706816aba3e25717850c26c9cd0d89d");
+        assert_eq!(h.size, 3);
+        assert_eq!(h.name, "abc.bin");
+    }
+
+    #[test]
+    fn nes_header_is_skipped_for_all_three() {
+        let body = b"ROMBODY-1234567890";
+        let mut with_header = Vec::new();
+        with_header.extend_from_slice(b"NES\x1a");
+        with_header.extend_from_slice(&[0u8; 12]);
+        with_header.extend_from_slice(body);
+
+        let a = FileRomHasher::hash_file(&tmp("nes3-hdr", &with_header)).unwrap();
+        let b = FileRomHasher::hash_file(&tmp("nes3-body", body)).unwrap();
+        assert_eq!(a.crc32, b.crc32);
+        assert_eq!(a.md5, b.md5);
+        assert_eq!(a.sha1, b.sha1);
+        assert_eq!(a.size, body.len() as u64, "size exclui o header iNES");
+    }
+
+    #[test]
+    fn file_name_is_the_last_path_component() {
+        assert_eq!(file_name_of(r"C:\roms\nes\Game.nes"), "Game.nes");
+        assert_eq!(file_name_of("/roms/nes/Game.nes"), "Game.nes");
+        assert_eq!(file_name_of("Game.nes"), "Game.nes");
     }
 
     #[test]
@@ -112,6 +212,24 @@ mod tests {
         let b = FileRomHasher::hash_file(&tmp("nes-body", body)).unwrap();
         assert_eq!(a.crc32, b.crc32, "hash deve ignorar o header iNES");
         assert_eq!(a.md5, b.md5);
+    }
+
+    /// Uma fonte bem maior que o limite (como um zip bomb): a leitura para
+    /// um byte depois do limite e não dá hash; no limite, dá.
+    #[test]
+    fn capped_read_stops_one_byte_past_the_cap() {
+        const CAP: u64 = 1024 * 1024;
+        let mut bomb = Counted {
+            inner: std::io::repeat(0x5A).take(64 * CAP),
+            read: 0,
+        };
+        let h = FileRomHasher::hash_reader_capped(&mut bomb, "bomba", CAP).unwrap();
+        assert_eq!(h, None);
+        assert_eq!(bomb.read, CAP + 1);
+
+        let exact = std::io::repeat(0x5A).take(CAP);
+        let h = FileRomHasher::hash_reader_capped(exact, "certo", CAP).unwrap();
+        assert_eq!(h.map(|h| h.size), Some(CAP));
     }
 
     #[test]

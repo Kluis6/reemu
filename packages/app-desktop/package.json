@@ -11,8 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@fluentui/react-components": "^9.75.1",
-    "@fluentui/react-icons": "^2.0.345",
+    "@fluentui/react-components": "^9.75.2",
+    "@fluentui/react-icons": "^2.0.346",
     "@tanstack/react-query": "^5.107.1",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/plugin-dialog": "^2.8.4",
@@ -32,7 +32,7 @@
     "happy-dom": "^21.0.4",
     "oxlint": "^1.93.0",
     "typescript": "~7.0.2",
-    "vite": "^7.3.7",
+    "vite": "^8.3.8",
     "vitest": "^5.1.0"
   }
 }
