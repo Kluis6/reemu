@@ -31,6 +31,8 @@ const CHD_MAX_HUNKS: u32 = 1 << 22;
 /// qualquer mapa de verdade e põe teto no que o `chd` aloca pra ler o mapa.
 const CHD_MAP_BYTES_PER_HUNK: u64 = 16;
 const CHD_MAP_SLACK: u64 = 64 * 1024;
+/// Marcador que fecha o mapa dos `.chd` V1 a V4 (os 8 primeiros bytes no V1/V2).
+const END_OF_MAP: &[u8; 16] = b"EndOfListCookie\0";
 /// Entradas de metadados: uma trilha tem ~100 bytes, um disco rígido ~40.
 /// Maior que isto não é de disco de jogo, e o `chd` alocaria o tamanho todo.
 const CHD_MAX_METADATA: usize = 64 * 1024;
@@ -196,11 +198,27 @@ impl ChdTrack {
                 v5.map_offset.checked_add(16)?.checked_add(len)?
             }
             Header::V5Header(v5) => v5.map_offset.checked_add(hunks * 4)?,
-            Header::V3Header(_) | Header::V4Header(_) => {
-                u64::from(header.len()).checked_add((hunks + 1) * 16)?
-            }
-            Header::V1Header(_) | Header::V2Header(_) => {
-                u64::from(header.len()).checked_add((hunks + 1) * 8)?
+            Header::V1Header(_)
+            | Header::V2Header(_)
+            | Header::V3Header(_)
+            | Header::V4Header(_) => {
+                // O mapa antigo (entradas de 16 bytes no V3/V4, 8 no V1/V2)
+                // termina no marcador `EndOfListCookie`. O `chd` só confere
+                // depois de ler e montar o mapa todo; um número de hunks torto
+                // faria ele ler dezenas de MiB antes de recusar.
+                let entry: u64 = match &header {
+                    Header::V3Header(_) | Header::V4Header(_) => 16,
+                    _ => 8,
+                };
+                let cookie_at = u64::from(header.len()).checked_add(hunks * entry)?;
+                let mut cookie = [0u8; 16];
+                let cookie = cookie.get_mut(..entry as usize)?;
+                src.seek(SeekFrom::Start(cookie_at)).ok()?;
+                src.read_exact(cookie).ok()?;
+                if *cookie != END_OF_MAP[..entry as usize] {
+                    return None;
+                }
+                cookie_at.checked_add(entry)?
             }
         };
         if map_end > file_len {
@@ -458,12 +476,13 @@ mod tests {
         h
     }
 
-    /// Cabeçalho V4 (108 bytes), sem compressão.
+    /// Cabeçalho V4 (108 bytes), zlib (o `chd` recusa o V4 sem codec).
     fn v4(hunks: u32, meta_offset: u64) -> Vec<u8> {
         let mut h = vec![0u8; 108];
         h[..8].copy_from_slice(b"MComprHD");
         h[8..12].copy_from_slice(&108u32.to_be_bytes());
         h[12..16].copy_from_slice(&4u32.to_be_bytes());
+        h[20..24].copy_from_slice(&1u32.to_be_bytes());
         h[24..28].copy_from_slice(&hunks.to_be_bytes());
         h[28..36].copy_from_slice(&(u64::from(hunks) * 4096).to_be_bytes());
         h[36..44].copy_from_slice(&meta_offset.to_be_bytes());
@@ -535,29 +554,89 @@ mod tests {
             assert!(read < 64 * 1024, "leu {read} bytes");
         }
 
-        // Metadado de 16 MiB (o `chd` alocaria tudo pra ler).
+        // Texto de trilha de 16 MiB (nossa leitura dos metadados alocaria).
         let mut f = v5(256 * 4096, 0, 4096, 4096, true);
         meta(&mut f, 4096, b"CHT2", 0x00FF_FFFF, 0);
-        let (opened, read) = open_crafted(f.clone(), 8 * GIB);
+        let (opened, read) = open_crafted(f, 8 * GIB);
         assert!(!opened);
         assert!(read < 64 * 1024, "leu {read} bytes");
-        meta(&mut f, 4096, b"GDDD", 0x00FF_FFFF, 0);
-        assert!(!open_crafted(f, 8 * GIB).0);
+    }
 
-        // V4: o `chd` percorre os metadados no parse do cabeçalho. Lista de
-        // 1000 entradas e lista em ciclo param antes, na nossa conferência.
+    /// No V3/V4 o `chd` percorre os metadados dentro do parse do cabeçalho
+    /// (`guess_unit_bytes`) e lê o `GDDD` inteiro: a nossa conferência
+    /// limitada tem de vir antes, e barrar entrada grande.
+    #[test]
+    fn v4_metadata_is_checked_before_the_crate_walks_it() {
+        // 8192 entradas (128 KiB de cabeçalhos): o `chd` andando primeiro
+        // leria tudo; a nossa volta para em 128.
         let mut f = v4(16, 4096);
-        for i in 0..1000u64 {
+        for i in 0..8192u64 {
             let at = 4096 + i as usize * 16;
             meta(&mut f, at, b"IDNT", 0, 4096 + (i + 1) * 16);
         }
         let (opened, read) = open_crafted(f, 8 * GIB);
         assert!(!opened);
         assert!(read < 64 * 1024, "leu {read} bytes");
+
+        // Lista em ciclo.
         let mut f = v4(16, 4096);
         meta(&mut f, 4096, b"IDNT", 0, 4112);
         meta(&mut f, 4112, b"IDNT", 0, 4096);
-        assert!(!open_crafted(f, 8 * GIB).0);
+        let (opened, read) = open_crafted(f, 8 * GIB);
+        assert!(!opened);
+        assert!(read < 64 * 1024, "leu {read} bytes");
+
+        // `GDDD` de 16 MiB: o `chd` leria tudo pra achar os bytes por setor.
+        let mut f = v4(16, 4096);
+        meta(&mut f, 4096, b"GDDD", 0x00FF_FFFF, 0);
+        let (opened, read) = open_crafted(f, 8 * GIB);
+        assert!(!opened);
+        assert!(read < 64 * 1024, "leu {read} bytes");
+    }
+
+    /// V4 de 2 hunks "mini" (o hunk é um padrão de 8 bytes repetido), com o
+    /// marcador no fim do mapa ou sem ele.
+    fn v4_with_map(hunks: u32, cookie: bool) -> Vec<u8> {
+        let mut f = v4(hunks, 0);
+        for _ in 0..hunks {
+            let mut entry = [0u8; 16];
+            entry[..8].copy_from_slice(b"ABCDEFGH");
+            entry[15] = 3; // mini
+            f.extend(entry);
+        }
+        if cookie {
+            f.extend(END_OF_MAP);
+        }
+        f
+    }
+
+    /// O mapa do V1 a V4 termina no `EndOfListCookie`: sem ele, um número
+    /// de hunks torto para antes de o `chd` ler o mapa todo.
+    #[test]
+    fn legacy_map_needs_its_end_marker() {
+        // Controle: V4 de verdade abre e lê o setor.
+        let read = Arc::new(AtomicU64::new(0));
+        let f = v4_with_map(2, true);
+        let len = f.len() as u64;
+        let src = Sparse {
+            data: f,
+            len,
+            pos: 0,
+            read,
+        };
+        let mut track = ChdTrack::open(Box::new(src), Area::FirstData).expect("V4 válido abre");
+        assert_eq!(&track.read_sector(0).unwrap()[..16], b"ABCDEFGHABCDEFGH");
+
+        // Sem o marcador: nada.
+        let f = v4_with_map(2, false);
+        let len = f.len() as u64 + 16;
+        assert!(!open_crafted(f, len).0);
+
+        // 4 Mi hunks (64 MiB de mapa) num arquivo de 8 GiB sem marcador:
+        // cabe no arquivo, mas o marcador não está onde o mapa terminaria.
+        let (opened, read) = open_crafted(v4(1 << 22, 0), 8 * GIB);
+        assert!(!opened);
+        assert!(read < 64 * 1024, "leu {read} bytes");
     }
 
     #[test]
