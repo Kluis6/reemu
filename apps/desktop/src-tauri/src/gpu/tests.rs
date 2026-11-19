@@ -1548,7 +1548,10 @@ fn diag_bezel_composition() {
         std::fs::File::open(&bezel).unwrap(),
     ));
     let mut reader = decoder.read_info().unwrap();
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let size = reader
+        .output_buffer_size()
+        .expect("tamanho do PNG de teste inválido");
+    let mut buf = vec![0; size];
     let info = reader.next_frame(&mut buf).unwrap();
     buf.truncate(info.buffer_size());
     let (bw, bh) = (info.width, info.height);
