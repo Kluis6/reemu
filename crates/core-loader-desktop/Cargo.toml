@@ -33,7 +33,7 @@ ash = { version = "0.38", default-features = false, features = ["loaded"] }
 # ROMs em .zip são extraídas pra um arquivo temporário na hora do load.
 zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
 # .7z — mesma extração, na hora do load (ver library-scan/Cargo.toml).
-sevenz-rust2 = { version = "0.22", default-features = false }
+sevenz-rust2 = { version = "0.25", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 # Só pra `silence_core_stdout` (dup2 do stdout pra /dev/null — cores libretro
@@ -64,4 +64,4 @@ cc = "1"
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "sync"] }
 # Só os testes escrevem `.7z` (fixture) — resolver 2 isola essa feature de
 # encoder pro build de teste, o binário de produção não linka LZMA encoder.
-sevenz-rust2 = { version = "0.22", default-features = false, features = ["compress"] }
+sevenz-rust2 = { version = "0.25", default-features = false, features = ["compress"] }
