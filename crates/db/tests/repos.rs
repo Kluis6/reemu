@@ -32,6 +32,7 @@ fn rom(id: &str, crc: &str, system: &str) -> Rom {
         last_played_at: None,
         is_favorite: false,
         user_title: None,
+        ..Default::default()
     }
 }
 
@@ -616,6 +617,7 @@ async fn remove_under_dir_handles_both_separators() {
             last_played_at: None,
             is_favorite: false,
             user_title: None,
+            ..Default::default()
         })
         .await
         .unwrap();

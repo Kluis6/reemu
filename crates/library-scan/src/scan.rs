@@ -1,13 +1,13 @@
 //! Varredura de um diretório de ROMs → `domain::library::Rom` (por hash).
 
-use crate::archive::{is_supported_archive, peek_archive, read_archive_entry};
-use crate::hash::FileRomHasher;
+use crate::archive::{is_supported_archive, peek_archive};
+use crate::identity::identify;
+use crate::sector::ext_of;
 use crate::systems::{
     folder_only_exts, folder_only_flat, system_for_extension, system_from_folder_name,
     AMBIGUOUS_DISC_EXTS,
 };
 use domain::library::{Rom, RomRepository};
-use std::io::Cursor;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -287,11 +287,7 @@ where
             continue;
         }
         let path = entry.path();
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
+        let ext = ext_of(path);
 
         // Parte de um set do MAME (`.chd` ao lado do `.zip`): não é jogo; se
         // uma varredura antiga catalogou, sai da biblioteca.
@@ -375,30 +371,37 @@ where
             continue;
         }
 
-        let hash = match &archived_entry {
-            None => FileRomHasher::hash_file(&path_str),
-            Some(entry) => read_archive_entry(path, entry)
-                .and_then(|bytes| FileRomHasher::hash_reader(Cursor::new(bytes))),
-        };
-        let hash = match hash {
-            Ok(h) => h,
+        let id = match identify(path, system_id, archived_entry.as_deref()) {
+            Ok(id) => id,
             Err(e) => {
-                log::warn!("hash {path_str}: {e}");
+                // Nunca o caminho nem o nome (são do disco da pessoa).
+                log::warn!("biblioteca: um arquivo não foi lido ({:?})", e.kind());
                 report.errors += 1;
                 continue;
             }
+        };
+        // Sem hash, `crc32` e `md5` ficam vazios (as colunas são NOT NULL) e
+        // `sha1` fica nulo; o nome, o tamanho e o serial identificam.
+        let (crc32, md5, sha1) = match id.hashes {
+            Some(d) => (d.crc32, d.md5, Some(d.sha1)),
+            None => (String::new(), String::new(), None),
         };
 
         repo.add(&Rom {
             id: uuid::Uuid::new_v4().to_string(),
             file_path: path_str.into_owned(),
-            crc32: hash.crc32,
-            md5: hash.md5,
+            crc32,
+            md5,
             system_id: system_id.to_string(),
             added_at: now_unix,
             last_played_at: None,
             is_favorite: false,
             user_title: None,
+            sha1,
+            serial: id.serial,
+            ident_name: Some(id.name),
+            ident_size: i64::try_from(id.size).ok(),
+            identified_at: (!id.provisional).then_some(now_unix),
         })
         .await?;
         report.added += 1;
