@@ -251,7 +251,8 @@ fn gdi_fields(line: &str) -> Vec<String> {
     out
 }
 
-fn ext_of(path: &Path) -> String {
+/// Extensão de `path` em minúsculas (vazia se não tiver).
+pub(crate) fn ext_of(path: &Path) -> String {
     path.extension()
         .and_then(|e| e.to_str())
         .map(str::to_ascii_lowercase)

@@ -7,6 +7,7 @@ mod chd_reader;
 mod decoration;
 mod disc_sniff;
 mod hash;
+mod identity;
 mod iso9660;
 mod scan;
 mod sector;
@@ -18,9 +19,8 @@ pub use decoration::{
     scan_decoration_pack, viewport_for_image, DecoScope, ScannedDecoration, Viewport,
 };
 pub use hash::{FileRomHasher, RomHashes};
-pub use scan::{
-    count_roms, identify, scan_into, Digests, Identity, ScanError, ScanProgress, ScanReport,
-};
+pub use identity::{identify, Digests, Identity};
+pub use scan::{count_roms, scan_into, ScanError, ScanProgress, ScanReport};
 pub use serial::{read_serial, SERIAL_SYSTEMS};
 pub use systems::{
     libretro_boxart_url, system_for_extension, system_from_folder_name, AMBIGUOUS_DISC_EXTS,
