@@ -178,7 +178,10 @@ pub fn decode_png(path: &Path) -> Result<(Vec<u8>, u32, u32), String> {
     let mut decoder = png::Decoder::new(std::io::BufReader::new(file));
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
-    let mut buf = vec![0u8; reader.output_buffer_size()];
+    let size = reader
+        .output_buffer_size()
+        .ok_or("Tamanho do PNG inválido")?;
+    let mut buf = vec![0u8; size];
     let info = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
     if info.bit_depth != png::BitDepth::Eight {
         return Err(format!(
