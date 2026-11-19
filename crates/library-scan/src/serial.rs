@@ -288,20 +288,57 @@ mod tests {
         img
     }
 
+    /// Escreve campos de texto num cabeçalho, como o disco de verdade tem:
+    /// texto legível também nos offsets que outro sistema leria.
+    fn fields(img: &mut [u8], list: &[(usize, &[u8])]) {
+        for (at, text) in list {
+            img[*at..*at + text.len()].copy_from_slice(text);
+        }
+    }
+
     fn saturn_image() -> Vec<u8> {
         let mut img = sega_header(b"SEGA SEGASATURN ", 0x20, b"MK-81022  ");
-        img[0x10..0x20].copy_from_slice(b"SEGA TP T-81    ");
+        fields(
+            &mut img,
+            &[
+                (0x10, b"SEGA TP T-81    "),
+                (0x2A, b"V1.000"),
+                (0x30, b"19950512CD-1/1  "),
+                (0x40, b"JTUE            "),
+                (0x60, b"VIRTUA FIGHTER REMIX"),
+            ],
+        );
         img
     }
 
     fn segacd_image() -> Vec<u8> {
         let mut img = sega_header(b"SEGADISCSYSTEM  ", 0x180, b"GM MK-4407 -00");
-        img[0x100..0x110].copy_from_slice(b"SEGA MEGA DRIVE ");
+        fields(
+            &mut img,
+            &[
+                (0x10, b"SEGASYSTEM  "),
+                (0x100, b"SEGA MEGA DRIVE (C)SEGA 1993.JUL"),
+                (0x120, b"SONIC THE HEDGEHOG CD"),
+            ],
+        );
         img
     }
 
     fn dreamcast_ip_bin() -> Vec<u8> {
-        sega_header(b"SEGA SEGAKATANA ", 0x40, b"MK-51000  ")
+        let mut img = sega_header(b"SEGA SEGAKATANA ", 0x40, b"MK-51000  ");
+        fields(
+            &mut img,
+            &[
+                (0x10, b"SEGA ENTERPRISES"),
+                (0x20, b"0000 GD-ROM1/1  "),
+                (0x30, b"U       0799A10 "),
+                (0x4A, b"V1.000"),
+                (0x50, b"19990909"),
+                (0x60, b"SEGA ENTERPRISES"),
+                (0x80, b"SHENMUE"),
+            ],
+        );
+        img
     }
 
     fn param_sfo(entries: &[(&str, &str)]) -> Vec<u8> {
@@ -662,6 +699,127 @@ mod tests {
             &iso(&[("PSP_GAME/PARAM.SFO", &sfo)]),
         );
         assert_eq!(read_serial(&p, "psp"), None);
+    }
+
+    /// O número de produto só vale com a assinatura do sistema: o mesmo
+    /// campo, com a assinatura errada ou de outro sistema, não é serial.
+    #[test]
+    fn sega_fields_need_their_signature() {
+        /// Sistema, assinatura, offset do campo, campo, serial esperado.
+        type Case = (
+            &'static str,
+            &'static [u8],
+            usize,
+            &'static [u8],
+            &'static str,
+        );
+        let dir = scratch();
+        let cases: [Case; 3] = [
+            (
+                "saturn",
+                b"SEGA SEGASATURN ",
+                0x20,
+                b"MK-81022  ",
+                "MK-81022",
+            ),
+            (
+                "segacd",
+                b"SEGADISCSYSTEM  ",
+                0x180,
+                b"GM MK-4407 -00",
+                "MK-4407 -00",
+            ),
+            (
+                "dreamcast",
+                b"SEGA SEGAKATANA ",
+                0x40,
+                b"MK-51000  ",
+                "MK-51000",
+            ),
+        ];
+        for (sys, magic, at, field, want) in cases {
+            let good = put(
+                dir.path(),
+                &format!("{sys}.iso"),
+                &sega_header(magic, at, field),
+            );
+            assert_eq!(read_serial(&good, sys).as_deref(), Some(want), "{sys}");
+            // Uma letra trocada na assinatura.
+            let mut typo = magic.to_vec();
+            typo[5] ^= 0x20;
+            let typo = put(
+                dir.path(),
+                &format!("{sys}-typo.iso"),
+                &sega_header(&typo, at, field),
+            );
+            assert_eq!(
+                read_serial(&typo, sys),
+                None,
+                "{sys} com a assinatura trocada"
+            );
+            // Sem assinatura nenhuma.
+            let blank = put(
+                dir.path(),
+                &format!("{sys}-zero.iso"),
+                &sega_header(&[0; 16], at, field),
+            );
+            assert_eq!(read_serial(&blank, sys), None, "{sys} sem assinatura");
+        }
+
+        // Disco de um sistema lido como outro: os cabeçalhos têm texto nos
+        // offsets do outro, e nada disso pode virar serial.
+        let images = [
+            ("saturn", saturn_image()),
+            ("segacd", segacd_image()),
+            ("dreamcast", dreamcast_ip_bin()),
+        ];
+        for (own, img) in &images {
+            let p = put(dir.path(), &format!("{own}-real.iso"), img);
+            for sys in ["saturn", "segacd", "dreamcast"] {
+                if sys != *own {
+                    assert_eq!(read_serial(&p, sys), None, "{own} lido como {sys}");
+                }
+            }
+        }
+    }
+
+    /// `FILE` de `.cue`/`.gdi` que é pasta ou não existe: nada é aberto.
+    #[test]
+    fn cue_and_gdi_naming_a_folder_or_nothing_is_none() {
+        let dir = scratch();
+        let img = saturn_image();
+        put(dir.path(), "Jogo.bin", &to_raw(&img, 1));
+        std::fs::create_dir(dir.path().join("Pasta.bin")).unwrap();
+        let cue = |name: &str, file: &str| {
+            let text =
+                format!("FILE \"{file}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n");
+            put(dir.path(), name, text.as_bytes())
+        };
+        assert_eq!(
+            read_serial(&cue("Bom.cue", "Jogo.bin"), "saturn").as_deref(),
+            Some("MK-81022")
+        );
+        assert_eq!(read_serial(&cue("Pasta.cue", "Pasta.bin"), "saturn"), None);
+        assert_eq!(read_serial(&cue("Sumiu.cue", "Nada.bin"), "saturn"), None);
+
+        let gdi = |name: &str, file: &str| {
+            put(
+                dir.path(),
+                name,
+                format!("1\n1 45000 4 2352 \"{file}\" 0\n").as_bytes(),
+            )
+        };
+        assert_eq!(
+            read_serial(&gdi("Pasta.gdi", "Pasta.bin"), "dreamcast"),
+            None
+        );
+        assert_eq!(
+            read_serial(&gdi("Sumiu.gdi", "Nada.bin"), "dreamcast"),
+            None
+        );
+        // A própria imagem sendo uma pasta.
+        std::fs::create_dir(dir.path().join("Disco.iso")).unwrap();
+        assert_eq!(read_serial(&dir.path().join("Disco.iso"), "psx"), None);
     }
 
     #[test]

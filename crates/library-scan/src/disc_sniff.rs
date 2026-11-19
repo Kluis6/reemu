@@ -33,6 +33,10 @@ fn sniff_cue(path: &Path) -> Option<&'static str> {
         .ok()?;
     let first = parse_cue(&text).into_iter().next()?;
     let track = path.parent()?.join(first.file);
+    // Só arquivo comum: `FILE "CON"` viraria dispositivo no Windows.
+    if !track.is_file() {
+        return None;
+    }
     sniff_disc_system(&track)
 }
 
@@ -271,5 +275,24 @@ mod tests {
 
         // Lixo não vira trilha nem entra em pânico.
         assert!(parse_cue("TRACK 01 MODE1/2352\nINDEX 01 99:99:99\nFILE \"\nFILE\n").is_empty());
+    }
+
+    #[test]
+    fn cue_naming_a_folder_or_nothing_is_not_sniffed() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut saturn = vec![0u8; 4096];
+        saturn[..16].copy_from_slice(b"SEGA SEGASATURN ");
+        std::fs::write(dir.path().join("Jogo.bin"), &saturn).unwrap();
+        std::fs::create_dir(dir.path().join("Pasta.bin")).unwrap();
+        let cue = |name: &str, file: &str| {
+            let p = dir.path().join(name);
+            let text =
+                format!("FILE \"{file}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n");
+            std::fs::write(&p, text).unwrap();
+            p
+        };
+        assert_eq!(identify(&cue("Bom.cue", "Jogo.bin")), Some("saturn"));
+        assert_eq!(identify(&cue("Pasta.cue", "Pasta.bin")), None);
+        assert_eq!(identify(&cue("Sumiu.cue", "Nada.bin")), None);
     }
 }

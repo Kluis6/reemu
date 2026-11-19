@@ -28,7 +28,14 @@ pub type Opener<'a> = &'a dyn Fn(&Path) -> io::Result<Box<dyn ReadSeek>>;
 
 /// O jeito normal de abrir: o arquivo do disco. Sem `BufReader`: a leitura
 /// é de setor inteiro depois de um `seek`, e o buffer só leria a mais.
+///
+/// Só arquivo comum: um `FILE "CON"` ou `"COM1"` num `.cue`/`.gdi` viraria
+/// dispositivo no Windows (sem `seek`, e a leitura pode travar), e uma pasta
+/// não é imagem.
 pub fn open_file(path: &Path) -> io::Result<Box<dyn ReadSeek>> {
+    if !path.is_file() {
+        return Err(io::ErrorKind::NotFound.into());
+    }
     Ok(Box::new(std::fs::File::open(path)?))
 }
 
