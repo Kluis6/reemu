@@ -12,14 +12,12 @@ import {
 } from "@fluentui/react-icons";
 import {
   Button,
-  CounterBadge,
   SearchBox,
   Tooltip,
   makeStyles,
   mergeClasses,
   tokens,
 } from "@fluentui/react-components";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
@@ -45,7 +43,9 @@ import { useAlvanistaStatusEvents, useEffectiveProfile } from "../hooks/useEffec
 import { useSyncEvents } from "../hooks/useSync";
 import { useFullscreen } from "../hooks/useFullscreen";
 import { useUpdateCheck } from "../hooks/useUpdateCheck";
-import { listPendingMatches } from "../lib/tauri";
+import { RailIconBadge } from "../components/RailIconBadge";
+import { useSettingsBadges } from "../hooks/useSettingsBadges";
+import { SETTINGS_SECTIONS } from "./settingsSections";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useShellStyles } from "../styles/xbox";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
@@ -54,13 +54,6 @@ const useLocalStyles = makeStyles({
   // ícones da sidebar com o border-radius padrão do botão do Fluent
   // Cantos de 6 epx, como o item ativo da rail do app Xbox.
   railRadius: { borderRadius: tokens.borderRadiusLarge, position: "relative" },
-  // contador de pendências de metadata no ícone de Configurações
-  railBadge: {
-    position: "absolute",
-    top: "2px",
-    right: "2px",
-    pointerEvents: "none",
-  },
   // Voltar/Fullscreen: mesmo tom de fundo da sidebar (`rail`,
   // `colorNeutralBackground2`) no fundo E na borda — a borda fica sempre da
   // mesma cor do fundo (em repouso e no hover), então nunca aparece como uma
@@ -128,15 +121,8 @@ export function AppShell() {
   useShaderFailures();
   useCoreUpdates();
   usePackUpdates();
-  // Correspondências de metadata esperando revisão (Configurações ›
-  // Metadata). Mesma query da tela de revisão: resolver lá atualiza aqui.
-  const pending = useQuery({
-    queryKey: ["pending-matches"],
-    queryFn: listPendingMatches,
-    retry: false,
-    staleTime: 30_000,
-  });
-  const pendingCount = pending.data?.length ?? 0;
+  const countForSettings = useSettingsBadges();
+  const settingsCount = SETTINGS_SECTIONS.filter(({ key }) => countForSettings("/settings/" + key) > 0).length;
 
   // Conectado ao Alvanista, o perfil de lá na barra lateral e no drawer; o
   // perfil local fica guardado e volta ao desconectar.
@@ -192,38 +178,26 @@ export function AppShell() {
           />
         </Button>
 
-        {RAIL.map((it) => (
-          <Tooltip key={it.to} positioning={TOOLTIP_POSITION} content={t(it.label)} relationship="label">
-          <NavLink
-            to={it.to}
-            end={it.end}
-            className={mergeClasses(s.railItem, l.railRadius)}
-            aria-label={
-              it.to === "/settings" && pendingCount > 0
-                ? t("shell.pendingMetadata", {
-                    label: t(it.label),
-                    count: pendingCount,
-                  })
-                : t(it.label)
-            }
-          >
-            {({ isActive }) => (
-              <>
-                {isActive ? it.activeIcon : it.icon}
-                {it.to === "/settings" && pendingCount > 0 && (
-                  <CounterBadge
-                    className={l.railBadge}
-                    count={pendingCount}
-                    overflowCount={99}
-                    size="small"
-                    color="brand"
-                  />
+        {RAIL.map((it) => {
+          const count = it.to === "/settings" ? settingsCount : 0;
+          const label = count > 0
+            ? t("shell.settingsUpdates", { label: t(it.label), count })
+            : t(it.label);
+          return (
+            <Tooltip key={it.to} positioning={TOOLTIP_POSITION} content={label} relationship="label">
+              <NavLink
+                to={it.to}
+                end={it.end}
+                className={mergeClasses(s.railItem, l.railRadius)}
+                aria-label={label}
+              >
+                {({ isActive }) => (
+                  <RailIconBadge count={count}>{isActive ? it.activeIcon : it.icon}</RailIconBadge>
                 )}
-              </>
-            )}
-          </NavLink>
-          </Tooltip>
-        ))}
+              </NavLink>
+            </Tooltip>
+          );
+        })}
         <div className={s.railSpacer} />
 
         <NotificationBell

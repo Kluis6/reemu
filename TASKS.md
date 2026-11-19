@@ -76,19 +76,12 @@ o card atual fica.
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
-- [ ] `todo` — **`zip` 4.6.1 no auto-update do Windows** (2026-11-03): a migração para a
-      `zip` 9 (PR #10) cobre o app, mas o `tauri-plugin-updater` 2.14.0 ainda traz a 4.6.1
-      (alertas críticos e altos do Dependabot). A 2.14.1 já usa `zip` 9, só que leva o Cargo
-      a versões antigas da crate `windows` (0.62 → 0.61, `windows-sys` 0.61 → 0.60) e o
-      `gpu-allocator` do `wgpu-hal` deixa de compilar no Windows. Risco baixo: o plugin
-      confere a assinatura do arquivo baixado antes de abrir o zip. Tentar de novo quando
-      sair uma versão do plugin, do `wgpu` ou do `gpu-allocator` compatível; conferir com
-      `scripts/check-windows.sh`.
-      Reconferido em 2026-11-13: além do updater 2.14.1, os patches `wry` 0.57.2 e
-      `tauri-plugin-log` 2.10.2, cada um sozinho, também puxam o `windows` 0.61 e quebram o
-      `wgpu-hal` 30 no Windows. Saídas a avaliar (não verificadas): uma versão nova do
-      `wgpu`/`gpu-allocator` compatível com o `windows` 0.62, ou fixar o `windows`; precisa de
-      aviso (é GPU).
+- [x] `done` — **Remover `zip` 4.6.1 do auto-update** (2026-11-19).
+      O manifesto publica instaladores Tauri v2 assinados: NSIS, MSI e
+      AppImage. O updater continua na 2.14.0, com TLS e proxy do sistema,
+      e o recurso opcional para pacotes compactados foi desabilitado.
+      Isso remove a dependência antiga e as quatro exceções de ZIP na CI.
+      [Formatos oficiais do updater](https://v2.tauri.app/plugin/updater/#building).
 - [ ] `todo` — **`cargo audit`: avisos sem correção disponível** (2026-11-12). Ignorados
       no `ci.yml`, com o motivo lá: `libsqlite3-sys` 0.30 (RUSTSEC-2026-0459, CVE no SQLite
       em C; a correção pede a 0.39, que nem o sqlx 0.9.0 aceita — esperar o sqlx) e `rsa`
@@ -130,6 +123,14 @@ o card atual fica.
       aviso "atualizado" depois do reinício. O `.deb` usa `pkexec`.
 
 ### Vídeo / GPU
+
+- [ ] `backlog` — **Direct3D 11 e 12 por core no Windows** (2026-11-18).
+      D3D11 começa no PPSSPP e segue para SwanStation, Flycast e LRPS2.
+      D3D12 começa no SwanStation e segue para LRPS2. Dolphin fica para
+      depois da avaliação da plataforma. Validar a DLL, a rota e o custo
+      por core antes de oferecer a opção. Avisar antes de iniciar as mudanças
+      de core/GPU. [Roteiro por core](docs/ai-context/24-direct3d-por-core.md) ·
+      [Plano do PPSSPP](docs/ai-context/23-direct3d11-ppsspp.md).
 
 - [ ] `backlog` — **Menus e avisos por cima do jogo em movimento (Windows)**,
       pedido do dono do projeto (2026-10-28): fica para depois. Por ora seguem
@@ -518,6 +519,26 @@ no `emu-session`, ver `docs/historico.md`).
 
 ### Funcionalidades
 
+- [ ] `backlog` — **Melhorar os papéis de parede animados** (2026-11-18).
+      Corrigir a emenda e os detalhes das seis cenas. Comparar VP9 a
+      900p/30 com os arquivos 1080p/24 e medir o custo no WebView2 com
+      pôster e vídeo antes de trocar o perfil.
+      [Avaliação e plano de implementação](docs/ai-context/27-papeis-de-parede-animados.md).
+
+- [ ] `backlog` — **Compatibilidade total com cores libretro** (2026-11-18).
+      Auditar o catálogo existente e integrar cada core faltante por
+      versão e plataforma, ampliando os testes de boot, recursos e
+      persistência. Começar por Windows e Linux x64 e acompanhar também
+      os alvos e builds em falta.
+      [Plano em etapas](docs/ai-context/26-compatibilidade-libretro.md) ·
+      [Inventário com uma tarefa por core](docs/ai-context/inventario-libretro.md).
+
+- [ ] `backlog` — **Suporte ao Dolphin libretro (GameCube e Wii)** (2026-11-18).
+      Integrar catálogo, formatos e arquivos `Sys`. Validar GameCube com
+      OpenGL e controle convencional, depois Wii com controles emulados.
+      Vulkan e D3D11 têm validações próprias.
+      [Plano do Dolphin](docs/ai-context/25-dolphin-libretro.md).
+
 - [ ] `todo` — **Conquistas (RetroAchievements)**, pedido do dono do projeto
       (2026-10-28). Plano completo em
       [`docs/ai-context/16-retroachievements.md`](docs/ai-context/16-retroachievements.md):
@@ -528,14 +549,12 @@ no `emu-session`, ver `docs/historico.md`).
         projeto.
       - **Primeiro passo de código:** tratar o
         `RETRO_ENVIRONMENT_SET_MEMORY_MAPS`, que hoje cai em "não tratado".
-- [ ] `todo` — **Cheats e rewind**, pedido do dono do projeto (2026-10-28).
+- [ ] `todo` — **Cheats**, pedido do dono do projeto (2026-10-28).
       Plano em
       [`docs/ai-context/17-cheats-rewind.md`](docs/ai-context/17-cheats-rewind.md).
       - **Cheats:** código pelo `retro_cheat_set`; banco `.cht` do
         libretro-database (CC-BY-SA 4.0, baixado sob demanda com crédito);
         depois cheats de memória.
-      - **Rewind:** buffer circular de estados com delta comprimido, no
-        processo do core.
       - **Fase 0 feita (2026-10-28):**
         - quirks e `GET_SAVESTATE_CONTEXT` tratados;
         - estado de core `SINGLE_SESSION` não vai mais para disco;
@@ -544,7 +563,14 @@ no `emu-session`, ver `docs/historico.md`).
       - **Fase 1 feita (2026-10-28):** cheats por código no menu de pausa,
         salvos por jogo e aplicados ao carregar. Falta editar na tela.
       - **Próximo:** fase 2 (banco `.cht` do libretro).
-      - No hardcore do RetroAchievements, os dois ficam proibidos.
+      - Cheats ficam desativados no modo hardcore do RetroAchievements.
+- [ ] `backlog` — **Rewind em tempo real** (2026-11-18).
+      Segurar um atalho no teclado ou controle para voltar no jogo. Começar
+      com NES, SNES, Mega Drive e GBA, com ativação opcional e histórico em RAM.
+      PS1 e N64 entram depois de medir por core. Dreamcast e PSP ficam para
+      validação separada no app, com os renderizadores reais.
+      Escopo e critérios em
+      [Cheats e rewind, fase 3](docs/ai-context/17-cheats-rewind.md#fase-3--rewind-backlog).
 
 - [ ] `in-progress` — **Entrar com Alvanista, trazido do PR #1 em etapas:** núcleo, botão em Perfil, perfil no drawer e página Meu perfil (`/perfil`) publicados; falta testar o cartão com a conta real. A PR segue aberta para os extras, e não será feito merge da versão atual.
 - [ ] `todo` — Avaliar integração **GameKave / Alvanista** (pedido do dono

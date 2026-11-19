@@ -5,12 +5,6 @@ import {
   Button,
   Spinner,
   Caption1,
-  Dialog,
-  DialogActions,
-  DialogBody,
-  DialogContent,
-  DialogSurface,
-  DialogTitle,
   DrawerBody,
   DrawerHeader,
   DrawerHeaderTitle,
@@ -21,6 +15,8 @@ import {
   MessageBarActions,
   MessageBarBody,
   OverlayDrawer,
+  Tab,
+  TabList,
   Tooltip,
   tokens,
 } from "@fluentui/react-components";
@@ -51,6 +47,14 @@ import { EmptyState, LoadingState } from "../components/EmptyState";
 import { CheatsPanel } from "../components/CheatsPanel";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { LocalStateNote } from "../components/sync/LocalStateNote";
+import {
+  GameArtworkFields,
+  GameCatalogFacts,
+  GameMetadataFields,
+  gameMetadataDraft,
+  validMetadataDraft,
+} from "../components/GameMetadataFields";
+import type { GameMetadataEdits } from "../lib/tauri";
 import { RemoteStateList } from "../components/sync/RemoteStateList";
 import { ShaderPicker } from "../components/ShaderPicker";
 import { ShaderParams } from "../components/ShaderParams";
@@ -62,7 +66,6 @@ import {
   splitGenres,
   splitPath,
 } from "../lib/metadataFormat";
-import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { knownPlatforms, platformLabel } from "../lib/platform";
 import { errorToast, sysToast, shaderIssueToast } from "../lib/toast";
 import { errorText } from "../lib/errors";
@@ -133,9 +136,10 @@ export function RomDetail() {
     queryFn: () => listSaveStates(romId),
     retry: false,
   });
+  const metadataLanguage = i18n.resolvedLanguage ?? i18n.language;
   const meta = useQuery({
-    queryKey: ["rom-metadata", romId],
-    queryFn: () => getRomMetadata(romId),
+    queryKey: ["rom-metadata", romId, metadataLanguage],
+    queryFn: () => getRomMetadata(romId, metadataLanguage),
     retry: false,
   });
   // "Buscar de novo" na gaveta de informações: consulta os provedores só
@@ -229,11 +233,17 @@ export function RomDetail() {
   // mostrá-la. Fora disso, abre no hover/foco como as outras.
   const [removeTipHover, setRemoveTipHover] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [editTab, setEditTab] = useState<"details" | "artwork">("details");
+  const [editDetails, setEditDetails] = useState<GameMetadataEdits>({});
+  const [originalDetails, setOriginalDetails] = useState<GameMetadataEdits>({});
+  const [originalEditName, setOriginalEditName] = useState("");
+  const [brokenHero, setBrokenHero] = useState<string | null>(null);
   // capa que não carregou (URL quebrada): cai no card sem imagem
   const [brokenCover, setBrokenCover] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editSystem, setEditSystem] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
+  const [infoTab, setInfoTab] = useState<"about" | "library">("about");
   // Conflito de save achado ao apertar Jogar: pergunta antes de abrir.
   const [conflictAsk, setConflictAsk] = useState<{ conflict: SyncConflict; loadState?: string } | null>(null);
   // Campos da gaveta formatados pelo que cada provedor documenta
@@ -241,6 +251,15 @@ export function RomDetail() {
   const releaseText = formatReleaseDate(meta.data?.releaseDate);
   const genres = splitGenres(meta.data?.genre);
   const modes = splitGenres(meta.data?.modes);
+  const hasGameFacts =
+    !!releaseText ||
+    genres.length > 0 ||
+    modes.length > 0 ||
+    !!meta.data?.developer ||
+    !!meta.data?.publisher ||
+    !!meta.data?.players ||
+    meta.data?.rating != null ||
+    !!meta.data?.ageRating;
   const descParas = descriptionParagraphs(meta.data?.description);
   const sourceText = providerLabel(meta.data?.providerSource);
   const releaseYear = meta.data?.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
@@ -253,7 +272,16 @@ export function RomDetail() {
     { key: "titleScreen", url: meta.data?.titleScreenUrl },
     { key: "fanart", url: meta.data?.fanartUrl },
   ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
-  const hasMedia = shots.length > 0 || !!meta.data?.videoUrl || !!meta.data?.logoUrl;
+  const catalog = meta.data?.gamekave;
+  const galleryShots = [
+    ...shots,
+    ...(catalog?.screenshots ?? [])
+      .filter((url) => !shots.some((shot) => shot.url === url))
+      .map((url) => ({ key: "screenshot" as const, url })),
+  ];
+  const trailerUrls = [...new Set([meta.data?.videoUrl, ...(catalog?.trailers ?? [])])]
+    .filter((url): url is string => !!url);
+  const hasMedia = galleryShots.length > 0 || trailerUrls.length > 0 || !!meta.data?.logoUrl;
   const panels = [
     { key: "states", show: true },
     { key: "shader", show: hasShaderCfg },
@@ -279,13 +307,20 @@ export function RomDetail() {
     },
     onError: (e) => push(errorToast(e, "removeGame")),
   });
+  const metadataEdits = Object.fromEntries(
+    Object.entries(editDetails).filter(
+      ([key, value]) => originalDetails[key as keyof GameMetadataEdits] !== value,
+    ),
+  ) as GameMetadataEdits;
   const editMeta = useMutation({
-    mutationFn: () =>
-      setRomMetadata(
+    mutationFn: () => {
+      return setRomMetadata(
         romId,
-        editName === (rom?.title ?? "") ? undefined : editName,
+        editName === originalEditName ? undefined : editName,
         editSystem === rom?.systemId ? undefined : editSystem,
-      ),
+        Object.keys(metadataEdits).length ? metadataEdits : undefined,
+      );
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roms"] });
       qc.invalidateQueries({ queryKey: ["rom-metadata", romId] });
@@ -295,9 +330,18 @@ export function RomDetail() {
     onError: (e) => push(errorToast(e, "saveChanges")),
   });
   const openEdit = () => {
-    setEditName(rom?.title ?? "");
+    const name = meta.data?.title ?? rom?.title ?? "";
+    const fields = gameMetadataDraft(meta.data);
+    setOriginalEditName(name);
+    setOriginalDetails(fields);
+    setEditDetails(fields);
+    setEditTab("details");
+    setEditName(name);
     setEditSystem(rom?.systemId ?? "");
     setEditOpen(true);
+  };
+  const updateGameField = (key: keyof GameMetadataEdits, value: string) => {
+    setEditDetails((previous) => ({ ...previous, [key]: value }));
   };
   const fav = useMutation({
     mutationFn: (on: boolean) => setRomFavorite(romId, on),
@@ -333,6 +377,8 @@ export function RomDetail() {
     );
 
   const cover = meta.data?.coverUrl ?? rom.boxart;
+  const hero = meta.data?.fanartUrl;
+  const backdrop = hero && hero !== brokenHero ? hero : cover;
   const fileParts = splitPath(rom.filePath);
   const title = meta.data?.title ?? rom.title;
   const hasQuick = states.data?.some((st) => st.slot === 0) ?? false;
@@ -394,13 +440,15 @@ export function RomDetail() {
     <div className={s.root} data-loading={meta.isPending ? "true" : "false"}>
       <div className={s.hero}>
         <div className={s.heroBackdrop} aria-hidden>
-          {cover && (
+          {backdrop && (
             <img
+              key={backdrop}
               className={s.heroArt}
-              src={cover}
+              src={backdrop}
               alt=""
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
+              onError={(event) => {
+                if (backdrop === hero && hero !== cover) setBrokenHero(backdrop);
+                else event.currentTarget.style.display = "none";
               }}
             />
           )}
@@ -552,17 +600,43 @@ export function RomDetail() {
         </div>
       </div>
 
-      <Dialog
+      <FullscreenDialog
         open={editOpen}
-        onOpenChange={(_, d) => setEditOpen(d.open)}
-        surfaceMotion={DIALOG_FADE_ONLY}
-      >
-        <DialogSurface>
-          <DialogBody>
-            <DialogTitle>{t("game.editTitle")}</DialogTitle>
-            <DialogContent
-              style={{ display: "flex", flexDirection: "column", gap: 16 }}
+        title={t("game.editTitle")}
+        onClose={() => setEditOpen(false)}
+        actions={
+          <>
+            <Button
+              appearance="secondary"
+              onClick={() => setEditOpen(false)}
             >
+              {t("common.cancel")}
+            </Button>
+            <Button
+              appearance="primary"
+              disabled={editMeta.isPending || !validMetadataDraft(metadataEdits)}
+              onClick={() => editMeta.mutate()}
+            >
+              {t("common.save")}
+            </Button>
+          </>
+        }
+      >
+        <div className={mergeClasses(s.editMetadataFields, s.editMetadataDialog)}>
+          <TabList
+            aria-label={t("game.editTitle")}
+            selectedValue={editTab}
+            onTabSelect={(_, { value }) => setEditTab(value === "artwork" ? "artwork" : "details")}
+          >
+            <Tab value="details" id="edit-game-details-tab" aria-controls="edit-game-details">
+              {t("game.about")}
+            </Tab>
+            <Tab value="artwork" id="edit-game-artwork-tab" aria-controls="edit-game-artwork">
+              {t("game.catalog.artwork")}
+            </Tab>
+          </TabList>
+          <div id="edit-game-details" role="tabpanel" aria-labelledby="edit-game-details-tab" hidden={editTab !== "details"}>
+            <div className={s.editMetadataFields}>
               <Field label={t("common.name")}>
                 <Input
                   value={editName}
@@ -588,25 +662,14 @@ export function RomDetail() {
                   {t("game.platformHint")}
                 </Caption1>
               </div>
-            </DialogContent>
-            <DialogActions>
-              <Button
-                appearance="secondary"
-                onClick={() => setEditOpen(false)}
-              >
-                {t("common.cancel")}
-              </Button>
-              <Button
-                appearance="primary"
-                disabled={editMeta.isPending}
-                onClick={() => editMeta.mutate()}
-              >
-                {t("common.save")}
-              </Button>
-            </DialogActions>
-          </DialogBody>
-        </DialogSurface>
-      </Dialog>
+              <GameMetadataFields draft={editDetails} catalog={catalog} onChange={updateGameField} />
+            </div>
+          </div>
+          <div id="edit-game-artwork" role="tabpanel" aria-labelledby="edit-game-artwork-tab" hidden={editTab !== "artwork"}>
+            <GameArtworkFields draft={editDetails} catalog={catalog} onChange={updateGameField} />
+          </div>
+        </div>
+      </FullscreenDialog>
 
       <OverlayDrawer
         position="end"
@@ -621,122 +684,194 @@ export function RomDetail() {
           >
             {t("game.infoTitle")}
           </DrawerHeaderTitle>
+          <div className={s.infoToolbar}>
+            <TabList
+              aria-label={t("game.infoTitle")}
+              selectedValue={infoTab}
+              onTabSelect={(_, { value }) => setInfoTab(value === "library" ? "library" : "about")}
+            >
+              <Tab className={s.infoTab} id="game-info-about-tab" value="about" aria-controls="game-info-about">
+                {t("game.about")}
+              </Tab>
+              <Tab className={s.infoTab} id="game-info-library-tab" value="library" aria-controls="game-info-library">
+                {t("game.inLibrary")}
+              </Tab>
+            </TabList>
+            <Tooltip content={t("game.rescrape")} relationship="label">
+              <Button
+                appearance="subtle"
+                icon={rescrape.isPending ? <Spinner size="tiny" /> : <ArrowSyncRegular />}
+                aria-label={rescrape.isPending ? t("game.rescraping") : t("game.rescrape")}
+                aria-busy={rescrape.isPending}
+                disabledFocusable={rescrape.isPending}
+                onClick={() => rescrape.mutate()}
+              />
+            </Tooltip>
+          </div>
         </DrawerHeader>
         <DrawerBody>
-          <div className={s.infoBody}>
-            {cover && <img className={s.infoCover} src={cover} alt="" />}
+          <div
+            id="game-info-about"
+            role="tabpanel"
+            aria-labelledby="game-info-about-tab"
+            hidden={infoTab !== "about"}
+          >
+            <div className={s.infoBody}>
+              <div className={s.infoSummary}>
+                {cover && brokenCover !== cover && (
+                  <img
+                    className={s.infoCover}
+                    src={cover}
+                    alt=""
+                    onError={() => setBrokenCover(cover)}
+                  />
+                )}
+                <div className={s.infoIdentity}>
+                  <h3 className={s.infoGameTitle}>{title}</h3>
+                  <span className={s.infoLabel}>{platformLabel(rom.systemId)}</span>
+                  {sourceText && (
+                    <Badge appearance="tint" color="brand" aria-label={`${t("game.source")} ${sourceText}`}>
+                      {sourceText}
+                    </Badge>
+                  )}
+                </div>
+              </div>
 
-            <section className={s.infoSection} aria-labelledby="info-sobre">
-              <h3 id="info-sobre" className={s.infoHeading}>
-                {t("game.about")}
-              </h3>
-              <dl className={s.infoList}>
-                <dt className={s.infoLabel}>{t("game.title")}</dt>
-                <dd className={s.infoValue}>{title}</dd>
-                <dt className={s.infoLabel}>{t("common.platform")}</dt>
-                <dd className={s.infoValue}>{platformLabel(rom.systemId)}</dd>
-                {releaseText && (
-                  <>
-                    <dt className={s.infoLabel}>{t("game.release")}</dt>
-                    <dd className={s.infoValue}>{releaseText}</dd>
-                  </>
-                )}
-                {genres.length > 0 && (
-                  <>
-                    <dt className={s.infoLabel}>{genres.length > 1 ? t("game.genres") : t("game.genre")}</dt>
-                    <dd className={mergeClasses(s.infoValue, s.infoTags)}>
-                      {genres.map((g) => (
-                        <Badge key={g} appearance="tint" color="brand" shape="rounded" size="large">
-                          {g}
-                        </Badge>
-                      ))}
-                    </dd>
-                  </>
-                )}
-                {/* Ficha técnica: cada linha só aparece se o provedor trouxe */}
-                {meta.data?.developer && (
-                  <>
-                    <dt className={s.infoLabel}>{t("game.developer")}</dt>
-                    <dd className={s.infoValue}>{meta.data.developer}</dd>
-                  </>
-                )}
-                {meta.data?.publisher && (
-                  <>
-                    <dt className={s.infoLabel}>{t("game.publisher")}</dt>
-                    <dd className={s.infoValue}>{meta.data.publisher}</dd>
-                  </>
-                )}
-                {meta.data?.players && (
-                  <>
-                    <dt className={s.infoLabel}>{t("game.players")}</dt>
-                    <dd className={s.infoValue}>{meta.data.players}</dd>
-                  </>
-                )}
-                {modes.length > 0 && (
-                  <>
-                    <dt className={s.infoLabel}>{t("game.modes")}</dt>
-                    <dd className={mergeClasses(s.infoValue, s.infoTags)}>
-                      {modes.map((m) => (
-                        <Badge key={m} appearance="tint" color="informative" shape="rounded" size="large">
-                          {m}
-                        </Badge>
-                      ))}
-                    </dd>
-                  </>
-                )}
-                {meta.data?.rating != null && (
-                  <>
-                    <dt className={s.infoLabel}>{t("game.rating")}</dt>
-                    <dd className={s.infoValue}>
-                      {t("game.ratingValue", {
-                        value: (meta.data.rating / 10).toLocaleString(i18n.language, {
-                          maximumFractionDigits: 1,
-                        }),
-                      })}
-                    </dd>
-                  </>
-                )}
-                {meta.data?.ageRating && (
-                  <>
-                    <dt className={s.infoLabel}>{t("game.ageRating")}</dt>
-                    <dd className={s.infoValue}>{meta.data.ageRating}</dd>
-                  </>
-                )}
-                {sourceText && (
-                  <>
-                    <dt className={s.infoLabel}>{t("game.source")}</dt>
-                    <dd className={s.infoValue}>{sourceText}</dd>
-                  </>
-                )}
-              </dl>
-              <Button
-                className={s.infoRescrape}
-                appearance="secondary"
-                icon={rescrape.isPending ? <Spinner size="tiny" /> : <ArrowSyncRegular />}
-                disabled={rescrape.isPending}
-                onClick={() => rescrape.mutate()}
-              >
-                {rescrape.isPending ? t("game.rescraping") : t("game.rescrape")}
-              </Button>
-            </section>
+              {hasGameFacts && (
+                <div className={s.infoSection}>
+                  <dl className={s.infoList}>
+                    {releaseText && (
+                      <>
+                        <dt className={s.infoLabel}>{t("game.release")}</dt>
+                        <dd className={s.infoValue}>{releaseText}</dd>
+                      </>
+                    )}
+                    {genres.length > 0 && (
+                      <>
+                        <dt className={s.infoLabel}>{genres.length > 1 ? t("game.genres") : t("game.genre")}</dt>
+                        <dd className={mergeClasses(s.infoValue, s.infoTags)}>
+                          {genres.map((g) => (
+                            <Badge key={g} appearance="tint" color="brand" shape="rounded" size="large">
+                              {g}
+                            </Badge>
+                          ))}
+                        </dd>
+                      </>
+                    )}
+                    {/* Ficha técnica: cada linha só aparece se o provedor trouxe */}
+                    {meta.data?.developer && (
+                      <>
+                        <dt className={s.infoLabel}>{t("game.developer")}</dt>
+                        <dd className={s.infoValue}>{meta.data.developer}</dd>
+                      </>
+                    )}
+                    {meta.data?.publisher && (
+                      <>
+                        <dt className={s.infoLabel}>{t("game.publisher")}</dt>
+                        <dd className={s.infoValue}>{meta.data.publisher}</dd>
+                      </>
+                    )}
+                    {meta.data?.players && (
+                      <>
+                        <dt className={s.infoLabel}>{t("game.players")}</dt>
+                        <dd className={s.infoValue}>{meta.data.players}</dd>
+                      </>
+                    )}
+                    {modes.length > 0 && (
+                      <>
+                        <dt className={s.infoLabel}>{t("game.modes")}</dt>
+                        <dd className={mergeClasses(s.infoValue, s.infoTags)}>
+                          {modes.map((m) => (
+                            <Badge key={m} appearance="tint" color="informative" shape="rounded" size="large">
+                              {m}
+                            </Badge>
+                          ))}
+                        </dd>
+                      </>
+                    )}
+                    {meta.data?.rating != null && (
+                      <>
+                        <dt className={s.infoLabel}>{t("game.rating")}</dt>
+                        <dd className={s.infoValue}>
+                          {t("game.ratingValue", {
+                            value: (meta.data.rating / 10).toLocaleString(i18n.language, {
+                              maximumFractionDigits: 1,
+                            }),
+                          })}
+                        </dd>
+                      </>
+                    )}
+                    {meta.data?.ageRating && (
+                      <>
+                        <dt className={s.infoLabel}>{t("game.ageRating")}</dt>
+                        <dd className={s.infoValue}>{meta.data.ageRating}</dd>
+                      </>
+                    )}
+                  </dl>
+                </div>
+              )}
 
-            {descParas.length > 0 && (
-              <section className={s.infoSection} aria-labelledby="info-desc">
-                <h3 id="info-desc" className={s.infoHeading}>
-                  {t("game.description")}
-                </h3>
-                {descParas.map((p, i) => (
-                  <p key={i} className={s.infoPara}>
-                    {p}
-                  </p>
-                ))}
-              </section>
-            )}
+              {descParas.length > 0 && (
+                <section className={s.infoSection} aria-labelledby="info-desc">
+                  <h3 id="info-desc" className={s.infoHeading}>
+                    {t("game.description")}
+                  </h3>
+                  {descParas.map((p, i) => (
+                    <p key={i} className={s.infoPara}>
+                      {p}
+                    </p>
+                  ))}
+                </section>
+              )}
 
-            <section className={s.infoSection} aria-labelledby="info-lib">
-              <h3 id="info-lib" className={s.infoHeading}>
-                {t("game.inLibrary")}
-              </h3>
+              {catalog && (
+                <GameCatalogFacts catalog={catalog} />
+              )}
+
+              {(shots.length > 0 || meta.data?.logoUrl || trailerUrls.length > 0) && (
+                <section className={s.infoSection} aria-labelledby="info-media">
+                  <h3 id="info-media" className={s.infoHeading}>
+                    {t("game.tabs.media")}
+                  </h3>
+                  {trailerUrls[0] && (
+                    <video
+                      className={s.galleryVideo}
+                      src={trailerUrls[0]}
+                      controls
+                      preload="none"
+                      aria-label={t("game.media.video")}
+                    />
+                  )}
+                  <div className={s.infoMediaGrid}>
+                    {meta.data?.logoUrl && (
+                      <figure className={s.galleryItem}>
+                        <img className={s.infoLogo} src={meta.data.logoUrl} alt="" loading="lazy" />
+                        <figcaption className={s.galleryCaption}>{t("game.media.logo")}</figcaption>
+                      </figure>
+                    )}
+                    {shots.map((image) => (
+                      <figure key={image.key} className={s.galleryItem}>
+                        <img className={s.infoShot} src={image.url} alt="" loading="lazy" />
+                        <figcaption className={s.galleryCaption}>
+                          {image.key === "fanart" && meta.data?.providerSource === "gamekave"
+                            ? t("game.media.hero")
+                            : t(`game.media.${image.key}`)}
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          </div>
+
+          <div
+            id="game-info-library"
+            role="tabpanel"
+            aria-labelledby="game-info-library-tab"
+            hidden={infoTab !== "library"}
+          >
+            <div className={s.infoBody}>
               <dl className={s.infoList}>
                 <dt className={s.infoLabel}>{t("game.file")}</dt>
                 <dd className={s.infoValue}>
@@ -756,7 +891,7 @@ export function RomDetail() {
                 <dt className={s.infoLabel}>{t("game.favorite")}</dt>
                 <dd className={s.infoValue}>{rom.isFavorite ? t("common.yes") : t("common.no")}</dd>
               </dl>
-            </section>
+            </div>
           </div>
         </DrawerBody>
       </OverlayDrawer>
@@ -922,19 +1057,20 @@ export function RomDetail() {
               {meta.data?.logoUrl && (
                 <img className={s.galleryLogo} src={meta.data.logoUrl} alt={t("game.media.logo")} />
               )}
-              {meta.data?.videoUrl && (
+              {trailerUrls.map((url) => (
                 <video
+                  key={url}
                   className={s.galleryVideo}
-                  src={meta.data.videoUrl}
+                  src={url}
                   controls
                   muted
-                  preload="metadata"
+                  preload="none"
                   aria-label={t("game.media.video")}
                 />
-              )}
+              ))}
               <div className={s.galleryGrid}>
-                {shots.map((m) => (
-                  <figure key={m.key} className={s.galleryItem}>
+                {galleryShots.map((m) => (
+                  <figure key={m.key + m.url} className={s.galleryItem}>
                     <img className={s.galleryShot} src={m.url} alt={t(`game.media.${m.key}`)} loading="lazy" />
                     <figcaption className={s.galleryCaption}>{t(`game.media.${m.key}`)}</figcaption>
                   </figure>

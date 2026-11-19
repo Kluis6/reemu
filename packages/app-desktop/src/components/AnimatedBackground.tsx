@@ -7,10 +7,8 @@ import { wallpaperPosterUrl, wallpaperVideoUrl, type WallpaperId } from '../lib/
 /**
  * Fundo das telas, em um de dois modos (nunca os dois juntos):
  *
- * - **Papel de parede** (só onde quem usa pede — hoje a tela inicial): a
- *   imagem escolhida em Configurações › Aparência + o `--reemuVeil` (véu
- *   neutro, escuro no tema escuro / claro no claro) pra manter o texto
- *   legível. SEM as cores do tema por cima.
+ * - **Papel de parede**: imagem ou vídeo escolhido em Configurações ›
+ *   Aparência. O `--reemuVeil` controla a sobreposição de acordo com o tema.
  * - **Cores do tema** (todo o resto, e a tela inicial sem papel de parede):
  *   4 brilhos difusos, um por canto — `--reemuBg1..4`, ver `BgPalette` em
  *   `styles/themes.ts` — + o `--reemuGlowVeil`, leve e uniforme.

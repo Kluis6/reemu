@@ -3,7 +3,10 @@
 use super::*;
 use crate::app_error::AppError;
 
-use domain::metadata::{GameMetadata, MetadataConfig, MetadataRepository};
+use domain::library::RomRepository;
+use domain::metadata::{
+    GameKaveData, GameMetadata, GameMetadataEdits, MetadataConfig, MetadataRepository,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,6 +75,13 @@ pub struct GameMetadataDto {
     pub fanart_url: Option<String>,
     pub logo_url: Option<String>,
     pub video_url: Option<String>,
+    #[cfg_attr(
+        test,
+        ts(
+            type = "{ descriptions: Record<string, string>; releaseDates: Record<string, string>; timeToBeatMinutes: [number | null, number | null, number | null]; covers: string[]; heroes: string[]; screenshots: string[]; trailers: string[]; achievementCount: number | null; soundtrackCount: number | null } | null"
+        )
+    )]
+    pub gamekave: Option<GameKaveData>,
 }
 
 impl From<GameMetadata> for GameMetadataDto {
@@ -94,20 +104,86 @@ impl From<GameMetadata> for GameMetadataDto {
             fanart_url: m.details.fanart_url,
             logo_url: m.details.logo_url,
             video_url: m.details.video_url,
+            gamekave: m.details.gamekave,
         }
     }
+}
+
+fn apply_edits(mut dto: GameMetadataDto, edits: GameMetadataEdits) -> GameMetadataDto {
+    for (target, value) in [
+        (&mut dto.description, edits.description),
+        (&mut dto.release_date, edits.release_date),
+        (&mut dto.genre, edits.genre),
+        (&mut dto.developer, edits.developer),
+        (&mut dto.publisher, edits.publisher),
+        (&mut dto.players, edits.players),
+        (&mut dto.age_rating, edits.age_rating),
+        (&mut dto.modes, edits.modes),
+        (&mut dto.cover_url, edits.cover_url),
+        (&mut dto.fanart_url, edits.fanart_url),
+        (&mut dto.screenshot_url, edits.screenshot_url),
+        (&mut dto.logo_url, edits.logo_url),
+    ] {
+        if let Some(value) = value {
+            *target = (!value.trim().is_empty()).then(|| value.trim().to_owned());
+        }
+    }
+    if let Some(rating) = edits.rating {
+        dto.rating = rating
+            .trim()
+            .parse::<u8>()
+            .ok()
+            .filter(|&value| value <= 100);
+    }
+    dto
 }
 
 #[tauri::command]
 pub async fn get_rom_metadata(
     state: State<'_, AppState>,
     rom_id: String,
+    language: Option<String>,
 ) -> Result<Option<GameMetadataDto>, AppError> {
-    Ok(db::MetadataRepo::new(pool(&state)?)
-        .get_metadata(&rom_id)
+    let pool = pool(&state)?;
+    let repo = db::MetadataRepo::new(pool.clone());
+    let imported = repo.get_metadata(&rom_id).await.map_err(AppError::from)?;
+    let edits = repo.get_edits(&rom_id).await.map_err(AppError::from)?;
+    if imported.is_none() && edits.is_none() {
+        return Ok(None);
+    }
+    let Some(rom) = db::RomsRepo::new(pool)
+        .get(&rom_id)
         .await
         .map_err(AppError::from)?
-        .map(Into::into))
+    else {
+        return Ok(None);
+    };
+    let mut dto = GameMetadataDto::from(imported.unwrap_or_else(|| GameMetadata {
+        rom_id,
+        title: super::library::rom_title(&rom),
+        description: None,
+        cover_url: None,
+        release_date: None,
+        genre: None,
+        provider_source: None,
+        details: Default::default(),
+    }));
+    if let Some(title) = rom.user_title {
+        dto.title = title;
+    }
+    if let (Some(catalog), Some(language)) = (&dto.gamekave, language) {
+        let tag = language.to_ascii_lowercase();
+        if let Some(description) = catalog.descriptions.get(&tag).or_else(|| {
+            let (base, _) = tag.split_once('-')?;
+            catalog.descriptions.get(base)
+        }) {
+            dto.description = Some(description.clone());
+        }
+    }
+    if let Some(edits) = edits {
+        dto = apply_edits(dto, edits);
+    }
+    Ok(Some(dto))
 }
 
 #[derive(Serialize)]
@@ -168,34 +244,49 @@ pub async fn resolve_pending_match(
 #[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ScrapeProgress"))]
 pub struct ScrapeProgressDto {
     pub running: bool,
+    #[cfg_attr(
+        test,
+        ts(
+            type = "'idle' | 'preparing' | 'running' | 'cancelling' | 'completed' | 'cancelled' | 'failed'"
+        )
+    )]
+    pub status: &'static str,
     pub done: usize,
     pub total: usize,
     pub auto: usize,
     pub pending: usize,
     pub failed: usize,
-    /// Por que a leva parou (código: `ss_dev_login`), `None` se não parou.
+    // Aviso do provedor (ss_dev_login), independente do estado da leva.
     pub error: Option<String>,
 }
 
 #[tauri::command]
 pub fn metadata_scan_progress(state: State<'_, AppState>) -> ScrapeProgressDto {
-    let (running, done, total, auto, pending, failed) = state.scrape.snapshot();
+    use scraping::ScrapeState;
+    let (status, done, total, auto, pending, failed, error) = state.scrape.snapshot();
     ScrapeProgressDto {
-        running,
+        running: status.is_active(),
+        status: match status {
+            ScrapeState::Idle => "idle",
+            ScrapeState::Preparing => "preparing",
+            ScrapeState::Running => "running",
+            ScrapeState::Cancelling => "cancelling",
+            ScrapeState::Completed => "completed",
+            ScrapeState::Cancelled => "cancelled",
+            ScrapeState::Failed => "failed",
+        },
         done,
         total,
         auto,
         pending,
         failed,
-        error: state.scrape.error(),
+        error,
     }
 }
 
 #[tauri::command]
 pub fn cancel_metadata_scan(state: State<'_, AppState>) {
-    state
-        .scrape_stop
-        .store(true, std::sync::atomic::Ordering::Relaxed);
+    state.scrape.cancel();
 }
 
 /// Configuração de metadados com as credenciais do chaveiro do sistema, pra
@@ -209,28 +300,21 @@ async fn metadata_config(pool: &db::Db) -> Result<domain::metadata::MetadataConf
 /// consultado por `metadata_scan_progress`.
 #[tauri::command]
 pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppError> {
-    if state
-        .scrape
-        .running
-        .load(std::sync::atomic::Ordering::Relaxed)
-    {
-        return Err("já tem um scraping em andamento".into());
-    }
     let pool = pool(&state)?;
     let progress = state.scrape.clone();
-    let stop = state.scrape_stop.clone();
+    if !progress.begin() {
+        return Err("já tem um scraping em andamento".into());
+    }
     let covers = crate::covers::CoverDir(state.covers_dir.clone());
-    stop.store(false, std::sync::atomic::Ordering::Relaxed);
     tauri::async_runtime::spawn(async move {
         let run = async {
             let cfg = metadata_config(&pool).await?;
-            scraping::scrape_pending(pool, progress.clone(), stop, cfg, &covers).await
+            scraping::scrape_pending(pool, progress.clone(), cfg, &covers).await
         };
-        if let Err(e) = run.await {
+        let result = run.await;
+        progress.finish(result.is_err());
+        if let Err(e) = result {
             log::warn!("metadata: leva falhou: {e}");
-            progress
-                .running
-                .store(false, std::sync::atomic::Ordering::Relaxed);
         }
     });
     Ok(())

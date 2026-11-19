@@ -373,15 +373,23 @@ export const setRomFavorite = (romId: string, favorite: boolean) =>
 
 /** Edição manual: `title` vazio volta pro nome do arquivo; `systemId` vazio não
  *  mexe na plataforma. */
+export type GameMetadataEdits = Partial<Record<
+  'description' | 'releaseDate' | 'genre' | 'developer' | 'publisher' | 'players' |
+  'rating' | 'ageRating' | 'modes' | 'coverUrl' | 'fanartUrl' | 'screenshotUrl' | 'logoUrl',
+  string
+>>
+
 export const setRomMetadata = (
   romId: string,
   title?: string,
   systemId?: string,
+  details?: GameMetadataEdits,
 ) =>
   invoke<void>('set_rom_metadata', {
     romId,
     title: title ?? null,
     systemId: systemId ?? null,
+    details: details ?? null,
   })
 
 // --- metadata / scraping (etapa 09) ---
@@ -391,8 +399,8 @@ export const setMetadataConfig = (config: MetadataConfig) =>
   invoke<void>('set_metadata_config', { config })
 
 export type { GameMetadata }
-export const getRomMetadata = (romId: string) =>
-  invoke<GameMetadata | null>('get_rom_metadata', { romId })
+export const getRomMetadata = (romId: string, language?: string) =>
+  invoke<GameMetadata | null>('get_rom_metadata', { romId, language: language ?? null })
 
 export type { PendingMatch }
 export const listPendingMatches = () => invoke<PendingMatch[]>('list_pending_matches')
