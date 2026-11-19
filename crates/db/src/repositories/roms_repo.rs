@@ -210,7 +210,7 @@ impl RomRepository for RomsRepo {
     }
 
     async fn set_system(&self, id: &str, system_id: &str) -> Result<(), RepoError> {
-        sqlx::query("UPDATE roms SET system_id = ?2 WHERE id = ?1")
+        sqlx::query("UPDATE roms SET system_id = ?2, identified_at = NULL WHERE id = ?1")
             .bind(id)
             .bind(system_id)
             .execute(&self.db)

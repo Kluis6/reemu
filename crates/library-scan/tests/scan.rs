@@ -671,3 +671,46 @@ async fn cue_without_its_track_yet_is_left_for_late_identification() {
     assert_eq!((rom.crc32.as_str(), rom.sha1.as_deref()), ("", None));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Linha que a varredura reclassifica (entrou como `disc`, a pasta diz
+/// `dreamcast`): a identidade fica pra calcular de novo, porque a trilha e o
+/// serial dependem do sistema. O resto da linha fica como estava.
+#[tokio::test]
+async fn reclassified_row_is_left_for_late_identification() {
+    let dir = scratch_dir();
+    write(
+        &dir,
+        "dreamcast/Jogo (USA).cue",
+        b"FILE \"Jogo (USA).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n",
+    );
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let path = dir
+        .join("dreamcast")
+        .join("Jogo (USA).cue")
+        .to_string_lossy()
+        .into_owned();
+    repo.add(&domain::library::Rom {
+        id: "velha".into(),
+        file_path: path.clone(),
+        crc32: "AAAAAAAA".into(),
+        md5: "m".into(),
+        system_id: "disc".into(),
+        identified_at: Some(1),
+        ident_name: Some("Jogo (USA).bin".into()),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let r = scan_into(&repo, &dir, 2, |_| {}).await.unwrap();
+    assert_eq!((r.reclassified, r.added), (1, 0), "{r:?}");
+    let rom = repo.find_by_path(&path).await.unwrap().unwrap();
+    assert_eq!(rom.system_id, "dreamcast");
+    assert_eq!(rom.identified_at, None);
+    assert_eq!(
+        rom.crc32, "AAAAAAAA",
+        "o hash antigo fica até ser recalculado"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
