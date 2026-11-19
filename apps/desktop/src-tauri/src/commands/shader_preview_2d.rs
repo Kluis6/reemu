@@ -14,10 +14,13 @@ const SCENE_PNG: &[u8] = include_bytes!("../../assets/shader-preview-2d.png");
 
 /// Cena 2D em XRGB8888 (B, G, R, X), 320×240.
 pub fn sample_scene() -> Vec<u8> {
-    let mut reader = png::Decoder::new(SCENE_PNG)
+    let mut reader = png::Decoder::new(std::io::Cursor::new(SCENE_PNG))
         .read_info()
         .expect("cena 2D: PNG embutido inválido");
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let size = reader
+        .output_buffer_size()
+        .expect("cena 2D: tamanho do PNG inválido");
+    let mut buf = vec![0; size];
     let info = reader
         .next_frame(&mut buf)
         .expect("cena 2D: PNG embutido inválido");
