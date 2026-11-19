@@ -258,7 +258,7 @@ pub async fn remove_rom_source(state: State<'_, AppState>, path: String) -> Resu
         .remove_under(&path)
         .await
         .map_err(AppError::from)?;
-    log::info!("biblioteca: {n} ROM(s) removida(s) de {path}");
+    log::info!("biblioteca: {n} ROM(s) removida(s) de uma pasta");
     Ok(n)
 }
 
@@ -346,7 +346,7 @@ async fn scan_dirs(
         })
         .await
         .map_err(AppError::from)?;
-        log::info!("biblioteca: varredura de {dir}: {r:?}");
+        log::info!("biblioteca: varredura de uma pasta: {r:?}");
         out.add(&r);
         done += n;
     }
@@ -410,13 +410,16 @@ pub async fn rescan_library(
             folders.add(&d, now_unix()).await.map_err(AppError::from)?;
         }
         dirs = folders.list().await.map_err(AppError::from)?;
-        log::info!("biblioteca: pastas deduzidas das ROMs: {dirs:?}");
+        log::info!("biblioteca: {} pasta(s) deduzida(s) das ROMs", dirs.len());
     }
     let (present, missing): (Vec<String>, Vec<String>) = dirs
         .into_iter()
         .partition(|d| std::path::Path::new(d).is_dir());
     if !missing.is_empty() {
-        log::warn!("biblioteca: pastas não encontradas, puladas: {missing:?}");
+        log::warn!(
+            "biblioteca: {} pasta(s) não encontrada(s), pulada(s)",
+            missing.len()
+        );
     }
     scan_dirs(&repo, &present, &on_progress).await
 }

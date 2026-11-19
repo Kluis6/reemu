@@ -546,7 +546,8 @@ where
         let id = match identify(path, system_id, archived_entry.as_deref()) {
             Ok(id) => id,
             Err(e) => {
-                log::warn!("hash {path_str}: {e}");
+                // Nunca o caminho nem o nome (são do disco da pessoa).
+                log::warn!("biblioteca: um arquivo não foi lido ({:?})", e.kind());
                 report.errors += 1;
                 continue;
             }
