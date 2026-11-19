@@ -3,7 +3,7 @@ use serde_json::Value;
 
 use super::search_title;
 
-const SEARCH_URL: &str = "https://api.gamekave.net/games/search";
+pub(super) const SEARCH_URL: &str = "https://api.gamekave.net/games/search";
 
 /// Slugs do catálogo GameKave (/games/filters/platforms).
 fn platforms(system: &str) -> &[&str] {
@@ -60,9 +60,11 @@ fn platforms(system: &str) -> &[&str] {
     }
 }
 
+/// `search_url`: o [`SEARCH_URL`] no app; um servidor local nos testes.
 pub(super) async fn query(
     client: &reqwest::Client,
     query: &ScrapeQuery<'_>,
+    search_url: &str,
 ) -> Result<Option<ScrapeCandidate>, String> {
     let platforms = platforms(query.system_id);
     let title = search_title(query.file_stem);
@@ -70,7 +72,7 @@ pub(super) async fn query(
         return Ok(None);
     }
     let response = client
-        .get(SEARCH_URL)
+        .get(search_url)
         .query(&[("q", &title)])
         .send()
         .await
@@ -87,7 +89,7 @@ pub(super) async fn query(
         return Ok(None);
     };
     // A ficha da busca continua utilizável se a consulta extra falhar.
-    if let Some(assets) = fetch_assets(client, &candidate.external_id).await {
+    if let Some(assets) = fetch_assets(client, search_url, &candidate.external_id).await {
         let details = candidate
             .details
             .gamekave
@@ -142,8 +144,8 @@ fn media(value: &Value) -> Option<String> {
     (url.scheme() == "https" && url.host_str() == Some("cdn.gamekave.net")).then(|| url.to_string())
 }
 
-async fn fetch_assets(client: &reqwest::Client, game_id: &str) -> Option<Value> {
-    let mut url = reqwest::Url::parse(SEARCH_URL).ok()?;
+async fn fetch_assets(client: &reqwest::Client, search_url: &str, game_id: &str) -> Option<Value> {
+    let mut url = reqwest::Url::parse(search_url).ok()?;
     url.path_segments_mut()
         .ok()?
         .pop()
