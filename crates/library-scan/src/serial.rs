@@ -4,7 +4,7 @@
 //! [`crate::sector`]); qualquer falha (sistema de arquivos desconhecido,
 //! imagem quebrada, homebrew sem `SYSTEM.CNF`, `.cso`) dá `None`.
 
-use crate::iso9660;
+use crate::iso9660::{self, le_u16, le_u32};
 use crate::sector::{open_file, Area, Opener, SectorReader};
 use std::path::Path;
 
@@ -120,15 +120,9 @@ fn header_field(sector: &[u8], at: usize, len: usize) -> Option<String> {
     (!text.is_empty()).then(|| text.to_ascii_uppercase())
 }
 
-fn le_u16(b: &[u8], at: usize) -> Option<u16> {
-    Some(u16::from_le_bytes(
-        b.get(at..at.checked_add(2)?)?.try_into().ok()?,
-    ))
-}
-
-fn le_u32(b: &[u8], at: usize) -> Option<usize> {
-    let v = u32::from_le_bytes(b.get(at..at.checked_add(4)?)?.try_into().ok()?);
-    usize::try_from(v).ok()
+/// `u32` little-endian em `at`, como índice.
+fn le_usize(b: &[u8], at: usize) -> Option<usize> {
+    usize::try_from(le_u32(b, at)?).ok()
 }
 
 /// Valor de texto da chave `key` num `PARAM.SFO`: cabeçalho `\0PSF`, tabela
@@ -139,15 +133,15 @@ fn sfo_string(sfo: &[u8], key: &str) -> Option<String> {
     if sfo.get(0..4)? != b"\0PSF" {
         return None;
     }
-    let keys = le_u32(sfo, 8)?;
-    let data = le_u32(sfo, 12)?;
-    let count = le_u32(sfo, 16)?.min(MAX_ENTRIES);
+    let keys = le_usize(sfo, 8)?;
+    let data = le_usize(sfo, 12)?;
+    let count = le_usize(sfo, 16)?.min(MAX_ENTRIES);
     for i in 0..count {
         let e = 0x14 + i * 16;
         let key_at = keys.checked_add(usize::from(le_u16(sfo, e)?))?;
         let format = le_u16(sfo, e + 2)?;
-        let len = le_u32(sfo, e + 4)?;
-        let data_at = data.checked_add(le_u32(sfo, e + 12)?)?;
+        let len = le_usize(sfo, e + 4)?;
+        let data_at = data.checked_add(le_usize(sfo, e + 12)?)?;
         let name = sfo.get(key_at..)?;
         let name = &name[..name.iter().position(|&b| b == 0)?];
         if name != key.as_bytes() {
@@ -168,8 +162,9 @@ fn sfo_string(sfo: &[u8], key: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::sector::{Layout, ReadSeek, READ_BUDGET, USER_DATA};
+    use crate::test_io::Counting;
     use std::collections::HashMap;
-    use std::io::{self, Cursor, Read, Seek, SeekFrom};
+    use std::io::{self, Cursor};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
@@ -386,33 +381,13 @@ mod tests {
         p
     }
 
-    /// Conta os bytes que passam por ele (o "leitor que conta" do NFR-5).
-    struct Counting<R> {
-        inner: R,
-        count: Arc<AtomicU64>,
-    }
-
-    impl<R: Read> Read for Counting<R> {
-        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-            let n = self.inner.read(buf)?;
-            self.count.fetch_add(n as u64, Ordering::Relaxed);
-            Ok(n)
-        }
-    }
-
-    impl<R: Seek> Seek for Counting<R> {
-        fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
-            self.inner.seek(pos)
-        }
-    }
-
     /// Abre do disco, contando cada byte lido.
     fn counting_file(count: Arc<AtomicU64>) -> impl Fn(&Path) -> io::Result<Box<dyn ReadSeek>> {
         move |p| {
             let f = std::fs::File::open(p)?;
             Ok(Box::new(Counting {
                 inner: f,
-                count: count.clone(),
+                read: count.clone(),
             }))
         }
     }

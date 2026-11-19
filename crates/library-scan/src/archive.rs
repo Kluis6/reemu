@@ -6,7 +6,9 @@
 use crate::hash::{FileRomHasher, RomHashes};
 use crate::systems::system_for_extension;
 use sevenz_rust2::{ArchiveReader, Password};
-use std::io::{BufReader, Read};
+use std::io::BufReader;
+#[cfg(test)]
+use std::io::Read;
 use std::path::Path;
 
 /// Uma ROM localizada dentro de um arquivo comprimido.
@@ -37,8 +39,11 @@ pub fn peek_archive(path: &Path) -> Option<ArchivedRom> {
     }
 }
 
-/// Bytes descomprimidos de uma entrada do arquivo (`.zip`/`.7z`).
-pub fn read_archive_entry(path: &Path, entry: &str) -> std::io::Result<Vec<u8>> {
+/// Bytes descomprimidos de uma entrada do arquivo (`.zip`/`.7z`), inteiros
+/// na memória. Só os testes usam (a varredura hasheia aos poucos, com
+/// [`hash_archive_entry`]).
+#[cfg(test)]
+pub(crate) fn read_archive_entry(path: &Path, entry: &str) -> std::io::Result<Vec<u8>> {
     if is_7z(path) {
         read_7z_entry(path, entry)
     } else {
@@ -139,6 +144,7 @@ fn peek_zip(path: &Path) -> Option<ArchivedRom> {
     None
 }
 
+#[cfg(test)]
 fn read_zip_entry(path: &Path, entry: &str) -> std::io::Result<Vec<u8>> {
     let file = std::fs::File::open(path)?;
     let mut zip = zip::ZipArchive::new(BufReader::new(file))
@@ -173,6 +179,7 @@ fn peek_7z(path: &Path) -> Option<ArchivedRom> {
     found
 }
 
+#[cfg(test)]
 fn read_7z_entry(path: &Path, entry: &str) -> std::io::Result<Vec<u8>> {
     let mut r = ArchiveReader::open(path, Password::empty())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;

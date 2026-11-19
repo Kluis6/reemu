@@ -14,6 +14,10 @@ use chd::Chd;
 use std::io::{Read, Seek, SeekFrom};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
+/// O aviso quando o `chd` entra em pânico numa imagem: sem o arquivo nem o
+/// serial.
+const CHD_FAILED: &str = "serial: o leitor de chd falhou numa imagem; ela fica sem serial";
+
 // O `catch_unwind` daqui só segura pânico com `panic = "unwind"`. Com
 // "abort", todo `.chd` quebrado derrubaria o app em vez de ficar sem serial.
 #[cfg(panic = "abort")]
@@ -142,7 +146,7 @@ impl ChdTrack {
     /// conferir (um pânico com imagem quebrada); aqui o pânico vira `None`.
     pub(crate) fn open(src: Box<dyn ReadSeek>, area: Area) -> Option<ChdTrack> {
         catch_unwind(AssertUnwindSafe(move || Self::open_checked(src, area))).unwrap_or_else(|_| {
-            log::warn!("serial: o leitor de chd falhou numa imagem; ela fica sem serial");
+            log::warn!("{CHD_FAILED}");
             None
         })
     }
@@ -359,7 +363,7 @@ impl ChdTrack {
             Ok(None) => None,
             Err(_) => {
                 self.poisoned = true;
-                log::warn!("serial: o leitor de chd falhou numa imagem; ela fica sem serial");
+                log::warn!("{CHD_FAILED}");
                 None
             }
         }

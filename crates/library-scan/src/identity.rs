@@ -213,30 +213,11 @@ mod tests {
     use super::*;
     use crate::archive::read_archive_entry;
     use crate::sector::{ReadSeek, READ_BUDGET};
+    use crate::test_io::Counting;
     use std::io::{Cursor, Read, Seek, SeekFrom, Write};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
-
-    /// Arquivo aberto que soma num contador tudo o que se lê dele.
-    struct Counting {
-        inner: Box<dyn ReadSeek>,
-        read: Arc<AtomicU64>,
-    }
-
-    impl Read for Counting {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            let n = self.inner.read(buf)?;
-            self.read.fetch_add(n as u64, Ordering::Relaxed);
-            Ok(n)
-        }
-    }
-
-    impl Seek for Counting {
-        fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
-            self.inner.seek(pos)
-        }
-    }
 
     /// A identidade de um arquivo solto e quantos bytes foram lidos, de
     /// todos os arquivos (a imagem, o cue, a trilha), pra chegar nela.

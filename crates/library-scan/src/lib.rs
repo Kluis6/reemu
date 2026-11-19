@@ -13,8 +13,10 @@ mod scan;
 mod sector;
 mod serial;
 mod systems;
+#[cfg(test)]
+mod test_io;
 
-pub use archive::{is_supported_archive, peek_archive, read_archive_entry, ArchivedRom};
+pub use archive::{is_supported_archive, peek_archive, ArchivedRom};
 pub use decoration::{
     scan_decoration_pack, viewport_for_image, DecoScope, ScannedDecoration, Viewport,
 };
