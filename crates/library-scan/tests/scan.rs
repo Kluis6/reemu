@@ -557,6 +557,46 @@ async fn scanned_rom_row_carries_sha1_name_size_and_time() {
     assert_eq!(rom.ident_name.as_deref(), Some("Teste (World).gba"));
     assert_eq!(rom.ident_size, Some(3));
     assert_eq!(rom.identified_at, Some(1234));
-    assert_eq!(rom.serial, None, "o serial é da Task A2");
+    assert_eq!(rom.serial, None, "cartucho não tem serial");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Imagem de Saturn de 32 KiB: só o cabeçalho do setor 0.
+fn saturn_iso(product: &[u8; 10]) -> Vec<u8> {
+    let mut img = vec![0u8; 16 * 2048];
+    img[..16].copy_from_slice(b"SEGA SEGASATURN ");
+    img[0x10..0x20].copy_from_slice(b"SEGA TP T-81    ");
+    img[0x20..0x2A].copy_from_slice(product);
+    img
+}
+
+#[tokio::test]
+async fn disc_serial_is_stored_for_disc_systems() {
+    let dir = scratch_dir();
+    write(&dir, "saturn/Jogo (USA).iso", &saturn_iso(b"MK-81022  "));
+    // Sem pasta de sistema: a assinatura diz Saturn, e o serial vem junto.
+    write(&dir, "Solto (Japan).iso", &saturn_iso(b"T-4507G   "));
+    // Disco de PS1 ilegível: entra na biblioteca, sem serial.
+    write(&dir, "psx/Quebrado (USA).iso", &[0xAB; 4096]);
+    write(&dir, "Cartucho (World).gba", b"gba");
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!(r.added, 4);
+    assert_eq!(r.errors, 0);
+
+    let roms = repo.list().await.unwrap();
+    let serial = |name: &str| {
+        roms.iter()
+            .find(|r| r.ident_name.as_deref() == Some(name))
+            .unwrap()
+            .serial
+            .clone()
+    };
+    assert_eq!(serial("Jogo (USA).iso").as_deref(), Some("MK-81022"));
+    assert_eq!(serial("Solto (Japan).iso").as_deref(), Some("T-4507G"));
+    assert_eq!(serial("Quebrado (USA).iso"), None);
+    assert_eq!(serial("Cartucho (World).gba"), None);
     let _ = std::fs::remove_dir_all(dir);
 }

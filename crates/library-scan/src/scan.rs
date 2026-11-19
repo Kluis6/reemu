@@ -403,6 +403,12 @@ where
                 continue;
             }
         };
+        // Serial do disco (D138), só pros sistemas de disco e só da imagem
+        // solta (de dentro de um `.zip`/`.7z` seria descomprimir o disco).
+        let serial = archived_entry
+            .is_none()
+            .then(|| crate::serial::read_serial(path, system_id))
+            .flatten();
 
         repo.add(&Rom {
             id: uuid::Uuid::new_v4().to_string(),
@@ -415,7 +421,7 @@ where
             is_favorite: false,
             user_title: None,
             sha1: Some(hash.sha1),
-            serial: None,
+            serial,
             ident_name: Some(hash.name),
             ident_size: i64::try_from(hash.size).ok(),
             identified_at: Some(now_unix),
