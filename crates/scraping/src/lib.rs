@@ -707,12 +707,26 @@ fn hash_and_stem(rom: &Rom) -> (RomHash, String) {
     (hash, stem)
 }
 
+/// Contêineres comprimidos: o tamanho do arquivo não é o de nada que o
+/// ScreenScraper indexe (ele conhece a trilha ou a imagem descomprimida).
+const COMPRESSED_CONTAINERS: &[&str] = &["chd", "cso"];
+
+/// `name` é um `.chd`/`.cso` (pela extensão, sem diferença de caixa).
+fn is_compressed_container(name: &str) -> bool {
+    name.rsplit_once('.').is_some_and(|(_, ext)| {
+        COMPRESSED_CONTAINERS
+            .iter()
+            .any(|c| ext.eq_ignore_ascii_case(c))
+    })
+}
+
 /// URL do `jeuInfos.php` pra `q`; `None` pra sistema que o ScreenScraper não
 /// cobre (ex: 'disc'). Com hash, pergunta pelo CRC32 e pelo MD5. Sem hash
 /// (CSO, CHD, ou ISO e imagem de disco acima de 1,5 GiB), pelo serial
-/// (`serialnum`), pelo
-/// nome com a extensão (`romnom`) e pelo tamanho (`romtaille`), que a API
-/// também aceita (doc da API v2, `jeuInfos.php`).
+/// (`serialnum`) e pelo nome com a extensão (`romnom`), que a API também
+/// aceita (doc da API v2, `jeuInfos.php`), e pelo tamanho (`romtaille`) só
+/// quando ele é o de algo que o ScreenScraper conhece: nunca o de um `.chd`
+/// ou `.cso`, que é o do arquivo comprimido.
 fn screenscraper_url(
     cfg: &MetadataConfig,
     q: &ScrapeQuery<'_>,
@@ -733,7 +747,7 @@ fn screenscraper_url(
                 .ident_name
                 .map_or_else(|| format!("{}.zip", q.file_stem), str::to_string);
             qp.append_pair("romnom", &name);
-            if let Some(size) = q.ident_size {
+            if let Some(size) = q.ident_size.filter(|_| !is_compressed_container(&name)) {
                 qp.append_pair("romtaille", &size.to_string());
             }
         } else {
@@ -1223,11 +1237,10 @@ mod tests {
         assert_eq!(search_title("(Beta)"), "");
     }
 
-    /// Disco que a varredura guardou sem hash (CSO, CHD, ISO acima de 1,5
-    /// GiB): o pedido ao
-    /// ScreenScraper vai pelo serial, pelo nome com a extensão e pelo
-    /// tamanho, sem `crc`/`md5` vazios, e um hash vazio na resposta não conta
-    /// como correspondência exata.
+    /// Disco que a varredura guardou sem hash (aqui um ISO de DVD, acima de
+    /// 1,5 GiB): o pedido ao ScreenScraper vai pelo serial, pelo nome com a
+    /// extensão e pelo tamanho, sem `crc`/`md5` vazios, e um hash vazio na
+    /// resposta não conta como correspondência exata.
     #[test]
     fn disc_without_hashes_is_asked_by_serial_name_and_size() {
         let params = |rom: &Rom| -> std::collections::HashMap<String, String> {
@@ -1242,20 +1255,17 @@ mod tests {
         let get = |p: &std::collections::HashMap<String, String>, k: &str| p.get(k).cloned();
         let disc = Rom {
             id: "r".into(),
-            file_path: "/biblioteca/psx/Crash Bandicoot (USA).chd".into(),
-            system_id: "psx".into(),
-            serial: Some("SCUS-94900".into()),
-            ident_name: Some("Crash Bandicoot (USA).chd".into()),
-            ident_size: Some(541_249_456),
+            file_path: "/biblioteca/ps2/Jogo (USA).iso".into(),
+            system_id: "ps2".into(),
+            serial: Some("SLUS-20062".into()),
+            ident_name: Some("Jogo (USA).iso".into()),
+            ident_size: Some(4_380_000_000),
             ..Default::default()
         };
         let p = params(&disc);
-        assert_eq!(get(&p, "serialnum").as_deref(), Some("SCUS-94900"));
-        assert_eq!(
-            get(&p, "romnom").as_deref(),
-            Some("Crash Bandicoot (USA).chd")
-        );
-        assert_eq!(get(&p, "romtaille").as_deref(), Some("541249456"));
+        assert_eq!(get(&p, "serialnum").as_deref(), Some("SLUS-20062"));
+        assert_eq!(get(&p, "romnom").as_deref(), Some("Jogo (USA).iso"));
+        assert_eq!(get(&p, "romtaille").as_deref(), Some("4380000000"));
         assert!(!p.contains_key("crc") && !p.contains_key("md5"), "{p:?}");
 
         // Serial que não se leu: o nome e o tamanho.
@@ -1264,7 +1274,7 @@ mod tests {
             ..disc.clone()
         });
         assert!(!p.contains_key("serialnum"), "{p:?}");
-        assert_eq!(get(&p, "romtaille").as_deref(), Some("541249456"));
+        assert_eq!(get(&p, "romtaille").as_deref(), Some("4380000000"));
 
         // Controle: cartucho vai pelos hashes, como antes.
         let cart = Rom {
@@ -1289,6 +1299,48 @@ mod tests {
         let q = rom_query(&disc, &hash, &stem);
         let empty = json!({"rom": {"romcrc": "", "rommd5": ""}});
         assert!(!rom_hash_matches(&empty, &q), "hash vazio não é exato");
+    }
+
+    /// `.chd` e `.cso` sem hash vão pelo serial e pelo nome, sem `romtaille`
+    /// (o tamanho é o do arquivo comprimido, que não casa com nada). Trilha
+    /// `.bin` e `.iso` grandes continuam mandando o tamanho.
+    #[test]
+    fn compressed_container_sends_no_size() {
+        let ask = |name: &str, serial: Option<&str>| {
+            let rom = Rom {
+                id: "r".into(),
+                file_path: format!("/biblioteca/psx/{name}"),
+                system_id: "psx".into(),
+                serial: serial.map(str::to_string),
+                ident_name: Some(name.to_string()),
+                ident_size: Some(2_000_000_000),
+                ..Default::default()
+            };
+            let (hash, stem) = hash_and_stem(&rom);
+            let q = rom_query(&rom, &hash, &stem);
+            let url = screenscraper_url(&MetadataConfig::default(), &q, "https://ss.invalid/api2")
+                .expect("sistema coberto");
+            url.query_pairs()
+                .into_owned()
+                .collect::<std::collections::HashMap<String, String>>()
+        };
+        for name in ["Jogo (USA).chd", "Jogo (USA).cso", "JOGO (USA).CHD"] {
+            let p = ask(name, Some("SCUS-94900"));
+            assert!(!p.contains_key("romtaille"), "{name}: {p:?}");
+            assert_eq!(p.get("romnom").map(String::as_str), Some(name));
+            assert_eq!(p.get("serialnum").map(String::as_str), Some("SCUS-94900"));
+            // Sem serial lido: só o nome.
+            let p = ask(name, None);
+            assert!(!p.contains_key("romtaille") && !p.contains_key("serialnum"));
+        }
+        for name in ["Jogo (USA) (Track 1).bin", "Jogo (USA).iso"] {
+            let p = ask(name, Some("SCUS-94900"));
+            assert_eq!(
+                p.get("romtaille").map(String::as_str),
+                Some("2000000000"),
+                "{name}"
+            );
+        }
     }
 
     #[test]
