@@ -15,10 +15,13 @@ const SCENE_PNG: &[u8] = include_bytes!("../../assets/shader-preview-3d.png");
 
 /// Cena 3D em XRGB8888 (B, G, R, X), 320×240.
 pub fn sample_scene_3d() -> Vec<u8> {
-    let mut reader = png::Decoder::new(SCENE_PNG)
+    let mut reader = png::Decoder::new(std::io::Cursor::new(SCENE_PNG))
         .read_info()
         .expect("cena 3D: PNG embutido inválido");
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let size = reader
+        .output_buffer_size()
+        .expect("cena 3D: tamanho do PNG inválido");
+    let mut buf = vec![0; size];
     let info = reader
         .next_frame(&mut buf)
         .expect("cena 3D: PNG embutido inválido");
