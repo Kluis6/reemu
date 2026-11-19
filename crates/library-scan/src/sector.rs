@@ -104,6 +104,19 @@ pub enum Area {
     HighDensity,
 }
 
+impl Area {
+    /// De onde vem a identidade de um disco de `system`: no Dreamcast, a área
+    /// de alta densidade (a trilha 3 do GD-ROM); nos outros, a 1ª trilha de
+    /// dados. O serial e o hash da trilha usam a mesma.
+    pub fn for_system(system: &str) -> Area {
+        if system == "dreamcast" {
+            Area::HighDensity
+        } else {
+            Area::FirstData
+        }
+    }
+}
+
 /// A trilha de dados escolhida de um `.cue` ou `.gdi`: o arquivo, como os
 /// setores estão gravados e em que byte do arquivo a trilha começa.
 #[derive(Debug, Clone, PartialEq, Eq)]

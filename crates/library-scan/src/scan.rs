@@ -2,32 +2,127 @@
 
 use crate::archive::{is_supported_archive, peek_archive, read_archive_entry};
 use crate::hash::{file_name_of, FileRomHasher, RomHashes};
+use crate::sector::{data_track, open_file, Area, Opener};
 use crate::systems::{
     folder_only_exts, folder_only_flat, system_for_extension, system_from_folder_name,
     AMBIGUOUS_DISC_EXTS,
 };
 use domain::library::{Rom, RomRepository};
-use std::io::Cursor;
+use std::io::{BufReader, Cursor};
 use std::path::Path;
 use walkdir::WalkDir;
 
-/// Lê o que dá a identidade da ROM, numa leitura só (CRC32, MD5 e SHA1 juntos).
-/// Dentro de `.zip`/`.7z` é a entrada interna (nome e tamanho dela); nos demais
-/// casos, o próprio arquivo.
-///
-/// Ponto de troca da Task A3: `.cue`/`.gdi` hoje passam por aqui como arquivo
-/// comum (o hash é o do texto do cue); lá ganham um ramo que escolhe a 1ª
-/// trilha de dados e devolve o nome e o tamanho dela.
-fn identity_hash(
-    path: &Path,
-    path_str: &str,
-    archived_entry: Option<&str>,
-) -> std::io::Result<RomHashes> {
-    match archived_entry {
-        None => FileRomHasher::hash_file(path_str),
-        Some(entry) => read_archive_entry(path, entry)
-            .and_then(|bytes| FileRomHasher::hash_reader(Cursor::new(bytes), &file_name_of(entry))),
+/// O que identifica um arquivo da biblioteca (D138): os hashes, quando o
+/// arquivo é lido inteiro, e sempre o nome e o tamanho do que identifica (a
+/// entrada de dentro do `.zip`/`.7z`, a 1ª trilha de dados de um
+/// `.cue`/`.gdi`, ou o próprio arquivo), mais o serial do disco.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Identity {
+    /// `None` quando o que identifica não foi lido inteiro.
+    pub hashes: Option<Digests>,
+    /// Nome (só o arquivo, sem pasta) do que identifica.
+    pub name: String,
+    /// Tamanho em bytes do que identifica (sem o header iNES).
+    pub size: u64,
+    /// Serial do disco, lido da imagem solta (`None` em cartucho, dentro de
+    /// `.zip`/`.7z`, ou quando não se lê).
+    pub serial: Option<String>,
+}
+
+/// CRC32 (maiúsculas), MD5 e SHA1 (minúsculas) de uma leitura só.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Digests {
+    pub crc32: String,
+    pub md5: String,
+    pub sha1: String,
+}
+
+impl From<RomHashes> for Identity {
+    fn from(h: RomHashes) -> Self {
+        Identity {
+            hashes: Some(Digests {
+                crc32: h.crc32,
+                md5: h.md5,
+                sha1: h.sha1,
+            }),
+            name: h.name,
+            size: h.size,
+            serial: None,
+        }
     }
+}
+
+/// A identidade de `path` como a varredura calcula (o passo em segundo plano
+/// recalcula as linhas antigas com ela). `archived_entry`: a ROM de dentro de
+/// um `.zip`/`.7z`, se for o caso.
+pub fn identify(
+    path: &Path,
+    system_id: &str,
+    archived_entry: Option<&str>,
+) -> std::io::Result<Identity> {
+    identify_with(path, system_id, archived_entry, &open_file)
+}
+
+/// [`identify`] com outro jeito de abrir os arquivos (os testes contam o que
+/// é lido).
+fn identify_with(
+    path: &Path,
+    system_id: &str,
+    archived_entry: Option<&str>,
+    open: Opener,
+) -> std::io::Result<Identity> {
+    let mut id = match archived_entry {
+        Some(entry) => read_archive_entry(path, entry)
+            .and_then(|bytes| FileRomHasher::hash_reader(Cursor::new(bytes), &file_name_of(entry)))?
+            .into(),
+        None => file_identity(path, system_id, open)?,
+    };
+    // Serial do disco (D138), só pros sistemas de disco e só da imagem solta
+    // (de dentro de um `.zip`/`.7z` seria descomprimir o disco).
+    id.serial = archived_entry
+        .is_none()
+        .then(|| crate::serial::read_serial_with(path, system_id, open))
+        .flatten();
+    Ok(id)
+}
+
+/// Identidade de um arquivo solto. `.cue` e `.gdi` são identificados pela
+/// 1ª trilha de dados (a trilha 3 do GD-ROM no Dreamcast, quando há), não
+/// pelo texto deles: é o hash da trilha que o Redump, o ScreenScraper e o
+/// catálogo conhecem (D138). A trilha só é alcançada dentro da pasta do
+/// cue ([`crate::disc_sniff::sibling`]) e se for arquivo comum; sem ela, o
+/// nome e o tamanho do próprio cue, sem hash.
+fn file_identity(path: &Path, system_id: &str, open: Opener) -> std::io::Result<Identity> {
+    if !matches!(ext_of(path).as_str(), "cue" | "gdi") {
+        return hash_whole(path, open);
+    }
+    match data_track(path, Area::for_system(system_id), open) {
+        Some(track) if track.file.is_file() => hash_whole(&track.file, open),
+        _ => unhashed(path),
+    }
+}
+
+/// Nome e tamanho de `path`, sem ler o conteúdo.
+fn unhashed(path: &Path) -> std::io::Result<Identity> {
+    Ok(Identity {
+        hashes: None,
+        name: file_name_of(&path.to_string_lossy()),
+        size: std::fs::metadata(path)?.len(),
+        serial: None,
+    })
+}
+
+fn ext_of(path: &Path) -> String {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+}
+
+/// CRC32, MD5 e SHA1 do arquivo inteiro, numa leitura só.
+fn hash_whole(path: &Path, open: Opener) -> std::io::Result<Identity> {
+    let name = file_name_of(&path.to_string_lossy());
+    Ok(FileRomHasher::hash_reader(BufReader::new(open(path)?), &name)?.into())
 }
 
 /// Pastas ancestrais de `path` (relativas a `root`), da mais próxima da raiz
@@ -306,11 +401,7 @@ where
             continue;
         }
         let path = entry.path();
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase();
+        let ext = ext_of(path);
 
         // Parte de um set do MAME (`.chd` ao lado do `.zip`): não é jogo; se
         // uma varredura antiga catalogou, sai da biblioteca.
@@ -394,36 +485,35 @@ where
             continue;
         }
 
-        let hash = identity_hash(path, &path_str, archived_entry.as_deref());
-        let hash = match hash {
-            Ok(h) => h,
+        let id = match identify(path, system_id, archived_entry.as_deref()) {
+            Ok(id) => id,
             Err(e) => {
                 log::warn!("hash {path_str}: {e}");
                 report.errors += 1;
                 continue;
             }
         };
-        // Serial do disco (D138), só pros sistemas de disco e só da imagem
-        // solta (de dentro de um `.zip`/`.7z` seria descomprimir o disco).
-        let serial = archived_entry
-            .is_none()
-            .then(|| crate::serial::read_serial(path, system_id))
-            .flatten();
+        // Sem hash, `crc32` e `md5` ficam vazios (as colunas são NOT NULL) e
+        // `sha1` fica nulo; o nome, o tamanho e o serial identificam.
+        let (crc32, md5, sha1) = match id.hashes {
+            Some(d) => (d.crc32, d.md5, Some(d.sha1)),
+            None => (String::new(), String::new(), None),
+        };
 
         repo.add(&Rom {
             id: uuid::Uuid::new_v4().to_string(),
             file_path: path_str.into_owned(),
-            crc32: hash.crc32,
-            md5: hash.md5,
+            crc32,
+            md5,
             system_id: system_id.to_string(),
             added_at: now_unix,
             last_played_at: None,
             is_favorite: false,
             user_title: None,
-            sha1: Some(hash.sha1),
-            serial,
-            ident_name: Some(hash.name),
-            ident_size: i64::try_from(hash.size).ok(),
+            sha1,
+            serial: id.serial,
+            ident_name: Some(id.name),
+            ident_size: i64::try_from(id.size).ok(),
             identified_at: Some(now_unix),
         })
         .await?;
@@ -431,4 +521,130 @@ where
     }
 
     Ok(report)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn digests_of(bytes: &[u8]) -> Digests {
+        Identity::from(FileRomHasher::hash_reader(Cursor::new(bytes), "x").unwrap())
+            .hashes
+            .unwrap()
+    }
+
+    fn put(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {
+        let p = dir.join(name);
+        std::fs::write(&p, bytes).unwrap();
+        p
+    }
+
+    /// Dois arquivos de trilha de bytes diferentes (o cue diz o modo de cada um).
+    fn tracks(dir: &Path) -> (Vec<u8>, Vec<u8>) {
+        let t1 = vec![0xA5u8; 2352 * 4];
+        let t2: Vec<u8> = (0..2352 * 8).map(|i| (i % 251) as u8).collect();
+        put(dir, "Jogo (Track 1).bin", &t1);
+        put(dir, "Jogo (Track 2).bin", &t2);
+        (t1, t2)
+    }
+
+    #[test]
+    fn cue_hashes_first_data_track() {
+        let dir = tempfile::tempdir().unwrap();
+        let (t1, t2) = tracks(dir.path());
+
+        // Áudio primeiro: pulado; vale a 1ª trilha MODE1/ ou MODE2/.
+        let text = "FILE \"Jogo (Track 1).bin\" BINARY\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\nFILE \"Jogo (Track 2).bin\" BINARY\n  TRACK 02 MODE2/2352\n    INDEX 00 00:00:00\n    INDEX 01 00:02:00\n";
+        let cue = put(dir.path(), "Jogo.cue", text.as_bytes());
+        let id = identify(&cue, "psx", None).unwrap();
+        assert_eq!(id.name, "Jogo (Track 2).bin");
+        assert_eq!(id.size, t2.len() as u64);
+        assert_eq!(id.hashes, Some(digests_of(&t2)));
+        assert_ne!(
+            id.hashes,
+            Some(digests_of(text.as_bytes())),
+            "o texto do cue não é hasheado"
+        );
+
+        // Dados primeiro: a trilha 1 vale, mesmo com áudio depois.
+        let text = "FILE \"Jogo (Track 1).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"Jogo (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
+        let cue = put(dir.path(), "Dados.cue", text.as_bytes());
+        let id = identify(&cue, "saturn", None).unwrap();
+        assert_eq!(id.name, "Jogo (Track 1).bin");
+        assert_eq!(id.size, t1.len() as u64);
+        assert_eq!(id.hashes, Some(digests_of(&t1)));
+    }
+
+    #[test]
+    fn gdi_hashes_track_3_for_dreamcast_when_present_else_first_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let t1: Vec<u8> = vec![0x01; 2352 * 3];
+        let t3: Vec<u8> = (0..2352 * 5).map(|i| (i % 13) as u8).collect();
+        put(dir.path(), "track01.bin", &t1);
+        put(dir.path(), "track02.raw", &[0x02; 2352 * 2]);
+        put(dir.path(), "track 03.bin", &t3);
+
+        let gdi = put(
+            dir.path(),
+            "Jogo.gdi",
+            b"3\n1 0 4 2352 track01.bin 0\n2 450 0 2352 track02.raw 0\n3 45000 4 2352 \"track 03.bin\" 0\n",
+        );
+        let id = identify(&gdi, "dreamcast", None).unwrap();
+        assert_eq!(id.name, "track 03.bin");
+        assert_eq!(id.size, t3.len() as u64);
+        assert_eq!(id.hashes, Some(digests_of(&t3)));
+
+        // Sem a trilha 3 (sem área de alta densidade): a 1ª trilha de dados.
+        let gdi = put(
+            dir.path(),
+            "Curto.gdi",
+            b"2\n1 0 4 2352 track01.bin 0\n2 450 0 2352 track02.raw 0\n",
+        );
+        let id = identify(&gdi, "dreamcast", None).unwrap();
+        assert_eq!(id.name, "track01.bin");
+        assert_eq!(id.hashes, Some(digests_of(&t1)));
+    }
+
+    #[test]
+    fn missing_track_file_falls_back_to_name_and_size_of_cue() {
+        let root = tempfile::tempdir().unwrap();
+        let lib = root.path().join("lib");
+        std::fs::create_dir_all(lib.join("Pasta.bin")).unwrap();
+        // Existe, mas fora da pasta do cue: não é alcançado.
+        put(root.path(), "Fora.bin", &[0x11; 4096]);
+        let cue = |name: &str, file: &str, mode: &str| {
+            put(
+                &lib,
+                name,
+                format!("FILE \"{file}\" BINARY\n  TRACK 01 {mode}\n    INDEX 01 00:00:00\n")
+                    .as_bytes(),
+            )
+        };
+        for (sheet, why) in [
+            (
+                cue("Sumiu.cue", "Sumiu.bin", "MODE2/2352"),
+                "trilha que não existe",
+            ),
+            (
+                cue("Pasta.cue", "Pasta.bin", "MODE2/2352"),
+                "trilha que é pasta",
+            ),
+            (
+                cue("Sobe.cue", "../Fora.bin", "MODE2/2352"),
+                "trilha fora da pasta",
+            ),
+            (cue("Musica.cue", "Pasta.bin", "AUDIO"), "só áudio"),
+            (
+                put(&lib, "Gd.gdi", b"1\n1 0 4 2352 nada.bin 0\n"),
+                "gdi sem a trilha",
+            ),
+        ] {
+            let id = identify(&sheet, "psx", None).unwrap();
+            let own = sheet.file_name().unwrap().to_string_lossy().into_owned();
+            assert_eq!(id.name, own, "{why}");
+            assert_eq!(id.size, std::fs::metadata(&sheet).unwrap().len(), "{why}");
+            assert_eq!(id.hashes, None, "{why}");
+        }
+    }
 }

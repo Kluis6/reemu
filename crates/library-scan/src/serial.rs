@@ -29,12 +29,7 @@ pub(crate) fn read_serial_with(path: &Path, system: &str, open: Opener) -> Optio
     if !SERIAL_SYSTEMS.contains(&system) {
         return None;
     }
-    let area = if system == "dreamcast" {
-        Area::HighDensity
-    } else {
-        Area::FirstData
-    };
-    let mut reader = SectorReader::open(path, area, open)?;
+    let mut reader = SectorReader::open(path, Area::for_system(system), open)?;
     let serial = serial_from(&mut reader, system);
     // Só o sistema e a contagem: nunca o arquivo nem o serial.
     log::debug!(

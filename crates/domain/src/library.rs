@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 pub struct Rom {
     pub id: String,
     pub file_path: String,
+    /// CRC32 e MD5 do que identifica o arquivo. Vazios (as colunas são NOT
+    /// NULL) quando ele não é lido inteiro: aí o nome, o tamanho e o serial
+    /// identificam.
     pub crc32: String,
     pub md5: String,
     pub system_id: String,
@@ -24,12 +27,14 @@ pub struct Rom {
     pub user_title: Option<String>,
     /// SHA1 (hex minúsculo) do que foi lido pro CRC32/MD5, na mesma passada.
     /// `None` nas linhas de antes da identidade (o passo em segundo plano
-    /// preenche; o scan não relê).
+    /// preenche; o scan não relê) e quando não há hash (ver `crc32`); quem
+    /// separa os dois casos é `identified_at`.
     pub sha1: Option<String>,
     /// Serial do disco (ex.: `SLUS-00594`), lido da imagem. `None` = não lido.
     pub serial: Option<String>,
     /// Nome do arquivo que foi lido pra identidade: a entrada de dentro do
-    /// `.zip`/`.7z`, ou o próprio arquivo.
+    /// `.zip`/`.7z`, a 1ª trilha de dados de um `.cue`/`.gdi`, ou o próprio
+    /// arquivo.
     pub ident_name: Option<String>,
     /// Tamanho em bytes do que foi lido (sem o header iNES).
     pub ident_size: Option<i64>,
