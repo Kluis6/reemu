@@ -27,10 +27,10 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use domain::library::RomRepository;
+use domain::library::{Rom, RomRepository};
 use domain::metadata::{
-    GameDetails, GameMetadata, MatchStatus, MetadataConfig, MetadataRepository, ScrapeCandidate,
-    ScrapeQuery,
+    GameDetails, GameMetadata, MatchStatus, MetadataConfig, MetadataRepository, RomHash,
+    ScrapeCandidate, ScrapeQuery,
 };
 use serde_json::Value;
 
@@ -642,24 +642,62 @@ fn media_url(jeu: &Value, types: &[&str]) -> Option<String> {
     None
 }
 
-/// Uma consulta ao ScreenScraper. `Ok(None)` = não catalogado (404).
-async fn query_screenscraper(
-    client: &reqwest::Client,
-    cfg: &MetadataConfig,
-    q: &ScrapeQuery<'_>,
-) -> Result<Option<ScrapeCandidate>, String> {
-    let Some(sys) = screenscraper_system_id(q.system_id) else {
-        return Ok(None); // sistema que o ScreenScraper não cobre (ex: 'disc')
+/// A consulta de uma ROM da biblioteca: os hashes, o sistema, o nome do
+/// arquivo e, pro disco sem hash, o serial, o nome e o tamanho do que o
+/// identifica. `hash` e `stem` vêm de [`hash_and_stem`].
+fn rom_query<'a>(rom: &'a Rom, hash: &'a RomHash, stem: &'a str) -> ScrapeQuery<'a> {
+    ScrapeQuery {
+        hash,
+        system_id: &rom.system_id,
+        file_stem: stem,
+        serial: rom.serial.as_deref(),
+        ident_name: rom.ident_name.as_deref(),
+        ident_size: rom.ident_size,
+    }
+}
+
+/// Os hashes da ROM e o nome do arquivo dela, sem a extensão.
+fn hash_and_stem(rom: &Rom) -> (RomHash, String) {
+    let stem = std::path::Path::new(&rom.file_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let hash = RomHash {
+        crc32: rom.crc32.clone(),
+        md5: rom.md5.clone(),
     };
-    let mut url = reqwest::Url::parse("https://api.screenscraper.fr/api2/jeuInfos.php")
-        .map_err(|e| e.to_string())?;
+    (hash, stem)
+}
+
+/// URL do `jeuInfos.php` pra `q`; `None` pra sistema que o ScreenScraper não
+/// cobre (ex: 'disc'). Com hash, pergunta pelo CRC32 e pelo MD5. Sem hash
+/// (ISO, CSO, CHD, imagem de disco grande), pelo serial (`serialnum`), pelo
+/// nome com a extensão (`romnom`) e pelo tamanho (`romtaille`), que a API
+/// também aceita (doc da API v2, `jeuInfos.php`).
+fn screenscraper_url(cfg: &MetadataConfig, q: &ScrapeQuery<'_>) -> Option<reqwest::Url> {
+    let sys = screenscraper_system_id(q.system_id)?;
+    let mut url = reqwest::Url::parse("https://api.screenscraper.fr/api2/jeuInfos.php").ok()?;
     {
         let mut qp = url.query_pairs_mut();
         qp.append_pair("output", "json")
             .append_pair("softname", "reemu")
-            .append_pair("systemeid", &sys.to_string())
-            .append_pair("crc", &q.hash.crc32.to_uppercase())
-            .append_pair("romnom", &format!("{}.zip", q.file_stem));
+            .append_pair("systemeid", &sys.to_string());
+        if q.hash.crc32.is_empty() {
+            if let Some(serial) = q.serial {
+                qp.append_pair("serialnum", serial);
+            }
+            let name = q
+                .ident_name
+                .map_or_else(|| format!("{}.zip", q.file_stem), str::to_string);
+            qp.append_pair("romnom", &name);
+            if let Some(size) = q.ident_size {
+                qp.append_pair("romtaille", &size.to_string());
+            }
+        } else {
+            qp.append_pair("crc", &q.hash.crc32.to_uppercase())
+                .append_pair("romnom", &format!("{}.zip", q.file_stem));
+        }
         // MD5 junto: o ScreenScraper identifica por qualquer um dos hashes
         // (o ES-DE consulta por MD5) — ajuda quando o CRC não está catalogado.
         if !q.hash.md5.is_empty() {
@@ -677,6 +715,18 @@ async fn query_screenscraper(
             }
         }
     }
+    Some(url)
+}
+
+/// Uma consulta ao ScreenScraper. `Ok(None)` = não catalogado (404).
+async fn query_screenscraper(
+    client: &reqwest::Client,
+    cfg: &MetadataConfig,
+    q: &ScrapeQuery<'_>,
+) -> Result<Option<ScrapeCandidate>, String> {
+    let Some(url) = screenscraper_url(cfg, q) else {
+        return Ok(None); // sistema que o ScreenScraper não cobre (ex: 'disc')
+    };
 
     let resp = client
         .get(url)
@@ -718,10 +768,12 @@ async fn query_screenscraper(
 
 /// O hash bateu? O ScreenScraper devolve em `rom` o CRC (`romcrc`) e o MD5
 /// (`rommd5`) da ROM que ele achou — qualquer um igual ao nosso é exato.
+/// Hash vazio (disco sem hash) nunca bate.
 fn rom_hash_matches(jeu: &Value, q: &ScrapeQuery<'_>) -> bool {
     let rom = jeu.get("rom");
     let field = |k: &str| rom.and_then(|r| r.get(k)).and_then(Value::as_str);
-    let crc = field("romcrc").is_some_and(|c| c.eq_ignore_ascii_case(&q.hash.crc32));
+    let crc = !q.hash.crc32.is_empty()
+        && field("romcrc").is_some_and(|c| c.eq_ignore_ascii_case(&q.hash.crc32));
     let md5 = !q.hash.md5.is_empty()
         && field("rommd5").is_some_and(|m| m.eq_ignore_ascii_case(&q.hash.md5));
     crc || md5
@@ -817,20 +869,8 @@ pub async fn scrape_one(
         .timeout(std::time::Duration::from_secs(20))
         .build()
         .map_err(|e| e.to_string())?;
-    let stem = std::path::Path::new(&rom.file_path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_string();
-    let hash = domain::metadata::RomHash {
-        crc32: rom.crc32.clone(),
-        md5: rom.md5.clone(),
-    };
-    let q = ScrapeQuery {
-        hash: &hash,
-        system_id: &rom.system_id,
-        file_stem: &stem,
-    };
+    let (hash, stem) = hash_and_stem(&rom);
+    let q = rom_query(&rom, &hash, &stem);
     let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
     let mut result = query_screenscraper(&client, &cfg, &q).await;
     let ss_refused = matches!(&result, Err(e) if e == ERR_SS_DEV_LOGIN);
@@ -894,20 +934,8 @@ pub async fn scrape_pending(
                 continue;
             }
         };
-        let stem = std::path::Path::new(&rom.file_path)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
-        let hash = domain::metadata::RomHash {
-            crc32: rom.crc32.clone(),
-            md5: rom.md5.clone(),
-        };
-        let q = ScrapeQuery {
-            hash: &hash,
-            system_id: &rom.system_id,
-            file_stem: &stem,
-        };
+        let (hash, stem) = hash_and_stem(&rom);
+        let q = rom_query(&rom, &hash, &stem);
 
         // Cascata: ScreenScraper (hash) primeiro; se ele não achar e houver
         // chave do TheGamesDB, tenta por nome lá. A GameKave fica por último.
@@ -978,7 +1006,6 @@ pub async fn scrape_pending(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use domain::metadata::RomHash;
     use serde_json::json;
 
     /// `system_id`s que o scan produz — lidos do próprio `systems.rs` (tabela
@@ -1125,6 +1152,73 @@ mod tests {
         assert_eq!(search_title("(Beta)"), "");
     }
 
+    /// Disco que a varredura guardou sem hash (ISO, CSO, CHD): o pedido ao
+    /// ScreenScraper vai pelo serial, pelo nome com a extensão e pelo
+    /// tamanho, sem `crc`/`md5` vazios, e um hash vazio na resposta não conta
+    /// como correspondência exata.
+    #[test]
+    fn disc_without_hashes_is_asked_by_serial_name_and_size() {
+        let params = |rom: &Rom| -> std::collections::HashMap<String, String> {
+            let (hash, stem) = hash_and_stem(rom);
+            let q = rom_query(rom, &hash, &stem);
+            screenscraper_url(&MetadataConfig::default(), &q)
+                .expect("sistema coberto")
+                .query_pairs()
+                .into_owned()
+                .collect()
+        };
+        let get = |p: &std::collections::HashMap<String, String>, k: &str| p.get(k).cloned();
+        let disc = Rom {
+            id: "r".into(),
+            file_path: "/biblioteca/psx/Crash Bandicoot (USA).chd".into(),
+            system_id: "psx".into(),
+            serial: Some("SCUS-94900".into()),
+            ident_name: Some("Crash Bandicoot (USA).chd".into()),
+            ident_size: Some(541_249_456),
+            ..Default::default()
+        };
+        let p = params(&disc);
+        assert_eq!(get(&p, "serialnum").as_deref(), Some("SCUS-94900"));
+        assert_eq!(
+            get(&p, "romnom").as_deref(),
+            Some("Crash Bandicoot (USA).chd")
+        );
+        assert_eq!(get(&p, "romtaille").as_deref(), Some("541249456"));
+        assert!(!p.contains_key("crc") && !p.contains_key("md5"), "{p:?}");
+
+        // Serial que não se leu: o nome e o tamanho.
+        let p = params(&Rom {
+            serial: None,
+            ..disc.clone()
+        });
+        assert!(!p.contains_key("serialnum"), "{p:?}");
+        assert_eq!(get(&p, "romtaille").as_deref(), Some("541249456"));
+
+        // Controle: cartucho vai pelos hashes, como antes.
+        let cart = Rom {
+            file_path: "/biblioteca/snes/Jogo (USA).sfc".into(),
+            system_id: "snes".into(),
+            crc32: "b19ed489".into(),
+            md5: "CDD3C8C37322978CA8669B34BC89C804".into(),
+            ident_name: Some("Jogo (USA).sfc".into()),
+            ident_size: Some(1024),
+            ..Default::default()
+        };
+        let p = params(&cart);
+        assert_eq!(get(&p, "crc").as_deref(), Some("B19ED489"));
+        assert_eq!(
+            get(&p, "md5").as_deref(),
+            Some("cdd3c8c37322978ca8669b34bc89c804")
+        );
+        assert_eq!(get(&p, "romnom").as_deref(), Some("Jogo (USA).zip"));
+        assert!(!p.contains_key("serialnum") && !p.contains_key("romtaille"));
+
+        let (hash, stem) = hash_and_stem(&disc);
+        let q = rom_query(&disc, &hash, &stem);
+        let empty = json!({"rom": {"romcrc": "", "rommd5": ""}});
+        assert!(!rom_hash_matches(&empty, &q), "hash vazio não é exato");
+    }
+
     #[test]
     fn exact_hash_by_crc_or_md5() {
         let hash = RomHash {
@@ -1135,6 +1229,9 @@ mod tests {
             hash: &hash,
             system_id: "snes",
             file_stem: "x",
+            serial: None,
+            ident_name: None,
+            ident_size: None,
         };
         let crc = json!({"rom": {"romcrc": "B19ED489"}});
         let md5 =

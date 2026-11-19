@@ -45,6 +45,29 @@ pub fn read_archive_entry(path: &Path, entry: &str) -> std::io::Result<Vec<u8>> 
     }
 }
 
+/// Tamanho descomprimido de uma entrada, lido do índice do arquivo (nada é
+/// descomprimido).
+pub(crate) fn archive_entry_size(path: &Path, entry: &str) -> std::io::Result<u64> {
+    if is_7z(path) {
+        let r = ArchiveReader::open(path, Password::empty())
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
+        r.archive()
+            .files
+            .iter()
+            .find(|f| f.name() == entry)
+            .map(|f| f.size())
+            .ok_or_else(|| std::io::ErrorKind::NotFound.into())
+    } else {
+        let file = std::fs::File::open(path)?;
+        let mut zip = zip::ZipArchive::new(BufReader::new(file))
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let f = zip
+            .by_name(entry)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?;
+        Ok(f.size())
+    }
+}
+
 fn peek_zip(path: &Path) -> Option<ArchivedRom> {
     let file = std::fs::File::open(path).ok()?;
     let mut zip = zip::ZipArchive::new(BufReader::new(file)).ok()?;

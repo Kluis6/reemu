@@ -600,3 +600,49 @@ async fn disc_serial_is_stored_for_disc_systems() {
     assert_eq!(serial("Cartucho (World).gba"), None);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// ISO, CSO e CHD entram sem hash (CRC32 e MD5 vazios, SHA1 nulo) e com o
+/// nome, o tamanho e o serial; um `.cue` entra com o hash da trilha de dados.
+#[tokio::test]
+async fn disc_rows_keep_name_size_and_serial_without_hashes() {
+    let dir = scratch_dir();
+    let iso = saturn_iso(b"MK-81022  ");
+    write(&dir, "saturn/Jogo (USA).iso", &iso);
+    write(&dir, "psp/Jogo (USA).cso", b"CISO-fake");
+    write(&dir, "psx/Jogo (USA).chd", b"MComprHD-fake");
+    write(&dir, "saturn/Outro (USA) (Track 1).bin", &iso);
+    write(
+        &dir,
+        "saturn/Outro (USA).cue",
+        b"FILE \"Outro (USA) (Track 1).bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n",
+    );
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 77, |_| {}).await.unwrap();
+    assert_eq!((r.added, r.errors), (4, 0), "{r:?}");
+
+    let roms = repo.list().await.unwrap();
+    let row = |name: &str| {
+        roms.iter()
+            .find(|r| r.ident_name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("{name}"))
+    };
+    for (name, size, serial) in [
+        ("Jogo (USA).iso", iso.len(), Some("MK-81022")),
+        ("Jogo (USA).cso", 9, None),
+        ("Jogo (USA).chd", 13, None),
+    ] {
+        let rom = row(name);
+        assert_eq!((rom.crc32.as_str(), rom.md5.as_str()), ("", ""), "{name}");
+        assert_eq!(rom.sha1, None, "{name}");
+        assert_eq!(rom.ident_size, Some(size as i64), "{name}");
+        assert_eq!(rom.serial.as_deref(), serial, "{name}");
+        assert_eq!(rom.identified_at, Some(77), "{name}");
+    }
+    let cue = row("Outro (USA) (Track 1).bin");
+    assert_eq!(cue.crc32, crc_of(&iso));
+    assert_eq!(cue.serial.as_deref(), Some("MK-81022"));
+    assert!(cue.file_path.ends_with("Outro (USA).cue"));
+    let _ = std::fs::remove_dir_all(dir);
+}

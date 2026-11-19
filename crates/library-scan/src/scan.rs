@@ -1,6 +1,6 @@
 //! Varredura de um diretório de ROMs → `domain::library::Rom` (por hash).
 
-use crate::archive::{is_supported_archive, peek_archive, read_archive_entry};
+use crate::archive::{archive_entry_size, is_supported_archive, peek_archive, read_archive_entry};
 use crate::hash::{file_name_of, FileRomHasher, RomHashes};
 use crate::sector::{data_track, open_file, Area, Opener};
 use crate::systems::{
@@ -52,6 +52,25 @@ impl From<RomHashes> for Identity {
     }
 }
 
+/// Contêineres de disco identificados só pelo serial, pelo nome e pelo
+/// tamanho (D138): o hash de um `.iso`, `.cso` ou `.chd` de vários GB custa
+/// minutos e não casa com nada que o ScreenScraper indexa (`.cso` e `.chd`
+/// são comprimidos). Nunca são lidos inteiros (NFR-5).
+const SERIAL_ONLY_EXTS: &[&str] = &["iso", "cso", "chd"];
+
+/// Maior imagem de disco lida inteira pro hash (a trilha de um `.cue`/`.gdi`,
+/// ou um `.img`, `.pbp`, `.cdi`, `.mdf`, `.nrg` solto): 1,5 GiB. Cabe a
+/// maior trilha de CD (~870 MiB num CD de 99 minutos) e a trilha 3 de um
+/// GD-ROM de Dreamcast (até 504.150 setores de 2352 bytes, 1.185.760.800
+/// bytes), que o catálogo e o ScreenScraper conhecem pelo hash. Uma trilha
+/// de DVD (PS2, até 8,5 GB) passa disso e fica com o serial, o nome e o
+/// tamanho, como o `.iso`.
+const DISC_HASH_MAX: u64 = 1536 * 1024 * 1024;
+const _: () = assert!(
+    DISC_HASH_MAX >= (549_150 - 45_000) * 2352 && DISC_HASH_MAX < 2 * 1024 * 1024 * 1024,
+    "cabe a trilha 3 do GD-ROM e nunca uma imagem de vários GB"
+);
+
 /// A identidade de `path` como a varredura calcula (o passo em segundo plano
 /// recalcula as linhas antigas com ela). `archived_entry`: a ROM de dentro de
 /// um `.zip`/`.7z`, se for o caso.
@@ -60,22 +79,21 @@ pub fn identify(
     system_id: &str,
     archived_entry: Option<&str>,
 ) -> std::io::Result<Identity> {
-    identify_with(path, system_id, archived_entry, &open_file)
+    identify_with(path, system_id, archived_entry, &open_file, DISC_HASH_MAX)
 }
 
-/// [`identify`] com outro jeito de abrir os arquivos (os testes contam o que
-/// é lido).
+/// [`identify`] com outro jeito de abrir os arquivos e outro limite de
+/// imagem lida inteira (os testes contam o que é lido sem gravar GBs).
 fn identify_with(
     path: &Path,
     system_id: &str,
     archived_entry: Option<&str>,
     open: Opener,
+    hash_max: u64,
 ) -> std::io::Result<Identity> {
     let mut id = match archived_entry {
-        Some(entry) => read_archive_entry(path, entry)
-            .and_then(|bytes| FileRomHasher::hash_reader(Cursor::new(bytes), &file_name_of(entry)))?
-            .into(),
-        None => file_identity(path, system_id, open)?,
+        Some(entry) => archived_identity(path, entry, hash_max)?,
+        None => file_identity(path, system_id, open, hash_max)?,
     };
     // Serial do disco (D138), só pros sistemas de disco e só da imagem solta
     // (de dentro de um `.zip`/`.7z` seria descomprimir o disco).
@@ -91,15 +109,55 @@ fn identify_with(
 /// pelo texto deles: é o hash da trilha que o Redump, o ScreenScraper e o
 /// catálogo conhecem (D138). A trilha só é alcançada dentro da pasta do
 /// cue ([`crate::disc_sniff::sibling`]) e se for arquivo comum; sem ela, o
-/// nome e o tamanho do próprio cue, sem hash.
-fn file_identity(path: &Path, system_id: &str, open: Opener) -> std::io::Result<Identity> {
-    if !matches!(ext_of(path).as_str(), "cue" | "gdi") {
-        return hash_whole(path, open);
+/// nome e o tamanho do próprio cue, sem hash. `.iso`, `.cso` e `.chd` nunca
+/// são lidos ([`SERIAL_ONLY_EXTS`]); imagem ou trilha acima de `hash_max`
+/// também não.
+fn file_identity(
+    path: &Path,
+    system_id: &str,
+    open: Opener,
+    hash_max: u64,
+) -> std::io::Result<Identity> {
+    let ext = ext_of(path);
+    match ext.as_str() {
+        "cue" | "gdi" => match data_track(path, Area::for_system(system_id), open) {
+            Some(track) if track.file.is_file() => disc_identity(&track.file, open, hash_max),
+            _ => unhashed(path),
+        },
+        e if SERIAL_ONLY_EXTS.contains(&e) => unhashed(path),
+        e if AMBIGUOUS_DISC_EXTS.contains(&e) => disc_identity(path, open, hash_max),
+        _ => hash_whole(path, open),
     }
-    match data_track(path, Area::for_system(system_id), open) {
-        Some(track) if track.file.is_file() => hash_whole(&track.file, open),
-        _ => unhashed(path),
+}
+
+/// Imagem de disco (ou trilha dela): lida inteira só até `hash_max`.
+fn disc_identity(path: &Path, open: Opener, hash_max: u64) -> std::io::Result<Identity> {
+    let id = unhashed(path)?;
+    if id.size > hash_max {
+        return Ok(id);
     }
+    hash_whole(path, open)
+}
+
+/// A ROM de dentro de um `.zip`/`.7z`. Um `.iso`/`.cso`/`.chd` lá dentro, ou
+/// outra imagem de disco acima de `hash_max`, fica com o nome e o tamanho do
+/// índice do arquivo, sem descomprimir.
+fn archived_identity(path: &Path, entry: &str, hash_max: u64) -> std::io::Result<Identity> {
+    let name = file_name_of(entry);
+    let ext = ext_of(Path::new(entry));
+    if AMBIGUOUS_DISC_EXTS.contains(&ext.as_str()) {
+        let size = archive_entry_size(path, entry)?;
+        if SERIAL_ONLY_EXTS.contains(&ext.as_str()) || size > hash_max {
+            return Ok(Identity {
+                hashes: None,
+                name,
+                size,
+                serial: None,
+            });
+        }
+    }
+    let bytes = read_archive_entry(path, entry)?;
+    Ok(FileRomHasher::hash_reader(Cursor::new(bytes), &name)?.into())
 }
 
 /// Nome e tamanho de `path`, sem ler o conteúdo.
@@ -526,7 +584,45 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sector::{ReadSeek, READ_BUDGET};
+    use std::io::{Read, Seek, SeekFrom, Write};
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Arc;
+
+    /// Arquivo aberto que soma num contador tudo o que se lê dele.
+    struct Counting {
+        inner: Box<dyn ReadSeek>,
+        read: Arc<AtomicU64>,
+    }
+
+    impl Read for Counting {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let n = self.inner.read(buf)?;
+            self.read.fetch_add(n as u64, Ordering::Relaxed);
+            Ok(n)
+        }
+    }
+
+    impl Seek for Counting {
+        fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+            self.inner.seek(pos)
+        }
+    }
+
+    /// A identidade de um arquivo solto e quantos bytes foram lidos, de
+    /// todos os arquivos (a imagem, o cue, a trilha), pra chegar nela.
+    fn identify_counting(path: &Path, system: &str, hash_max: u64) -> (Identity, u64) {
+        let read = Arc::new(AtomicU64::new(0));
+        let open = |p: &Path| -> std::io::Result<Box<dyn ReadSeek>> {
+            Ok(Box::new(Counting {
+                inner: open_file(p)?,
+                read: read.clone(),
+            }))
+        };
+        let id = identify_with(path, system, None, &open, hash_max).unwrap();
+        (id, read.load(Ordering::Relaxed))
+    }
 
     fn digests_of(bytes: &[u8]) -> Digests {
         Identity::from(FileRomHasher::hash_reader(Cursor::new(bytes), "x").unwrap())
@@ -646,5 +742,106 @@ mod tests {
             assert_eq!(id.size, std::fs::metadata(&sheet).unwrap().len(), "{why}");
             assert_eq!(id.hashes, None, "{why}");
         }
+    }
+
+    #[test]
+    fn iso_cso_chd_are_never_hashed_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        // Maior que o orçamento do serial (2 MiB): ler inteiro passaria dele.
+        const SIZE: usize = 3 * 1024 * 1024;
+        let mut saturn = vec![0x5Au8; SIZE];
+        saturn[..16].copy_from_slice(b"SEGA SEGASATURN ");
+        saturn[0x20..0x2A].copy_from_slice(b"MK-81022  ");
+        let iso = put(dir.path(), "Jogo (USA).iso", &saturn);
+        let cso = put(dir.path(), "Jogo (USA).cso", &vec![0x5A; SIZE]);
+        let chd = put(dir.path(), "Jogo (USA).chd", &vec![0x5A; SIZE]);
+
+        for path in [&iso, &cso, &chd] {
+            // Sistema sem serial: a identidade não lê um byte.
+            let (id, read) = identify_counting(path, "disc", DISC_HASH_MAX);
+            assert_eq!(read, 0, "{path:?}");
+            assert_eq!(id.hashes, None, "{path:?}");
+            assert_eq!(id.size, SIZE as u64);
+            assert_eq!(
+                id.name,
+                path.file_name().unwrap().to_string_lossy().into_owned()
+            );
+        }
+        // Com o sistema, só o que o serial lê, dentro do orçamento.
+        for (path, system) in [(&iso, "saturn"), (&cso, "psp"), (&chd, "psx")] {
+            let (id, read) = identify_counting(path, system, DISC_HASH_MAX);
+            assert!(read <= READ_BUDGET, "{system}: leu {read} bytes");
+            assert_eq!(id.hashes, None, "{system}");
+        }
+        let (id, _) = identify_counting(&iso, "saturn", DISC_HASH_MAX);
+        assert_eq!(id.serial.as_deref(), Some("MK-81022"));
+
+        // Dentro de um `.zip`: o tamanho vem do índice e nada é
+        // descomprimido. Os dados estão estragados, então ler a entrada
+        // falharia (o CRC não bate).
+        let zip_path = dir.path().join("Jogo.zip");
+        {
+            let mut zw = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+            zw.start_file(
+                "Jogo (USA).iso",
+                zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Stored),
+            )
+            .unwrap();
+            zw.write_all(&vec![0x5A; 64 * 1024]).unwrap();
+            zw.finish().unwrap();
+        }
+        let mut bytes = std::fs::read(&zip_path).unwrap();
+        let data = bytes.windows(64).position(|w| w == [0x5A; 64]).unwrap();
+        bytes[data + 1000] ^= 0xFF;
+        std::fs::write(&zip_path, &bytes).unwrap();
+        assert!(read_archive_entry(&zip_path, "Jogo (USA).iso").is_err());
+        let id = identify(&zip_path, "disc", Some("Jogo (USA).iso")).unwrap();
+        assert_eq!(id.hashes, None);
+        assert_eq!((id.name.as_str(), id.size), ("Jogo (USA).iso", 64 * 1024));
+
+        // E de um `.7z`, também pelo índice.
+        let sz = dir.path().join("Jogo.7z");
+        let mut w = sevenz_rust2::ArchiveWriter::create(&sz).unwrap();
+        w.push_archive_entry(
+            sevenz_rust2::ArchiveEntry::new_file("Jogo (USA).chd"),
+            Some(Cursor::new(vec![0x5A; 5000])),
+        )
+        .unwrap();
+        w.finish().unwrap();
+        let id = identify(&sz, "psx", Some("Jogo (USA).chd")).unwrap();
+        assert_eq!(id.hashes, None);
+        assert_eq!((id.name.as_str(), id.size), ("Jogo (USA).chd", 5000));
+    }
+
+    /// Trilha ou imagem acima do limite: o nome e o tamanho dela, sem ler.
+    /// O limite de verdade (1,5 GiB) está preso por um `assert!` de compilação
+    /// junto do [`DISC_HASH_MAX`]; aqui ele vem pequeno pra não gravar GBs.
+    #[test]
+    fn disc_image_above_the_limit_is_identified_by_name_and_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let track: Vec<u8> = (0..64 * 1024).map(|i| (i % 7) as u8).collect();
+        put(dir.path(), "Jogo (Track 1).bin", &track);
+        let text = "FILE \"Jogo (Track 1).bin\" BINARY
+  TRACK 01 MODE2/2352
+    INDEX 01 00:00:00
+";
+        let cue = put(dir.path(), "Jogo.cue", text.as_bytes());
+
+        let (id, read) = identify_counting(&cue, "disc", 32 * 1024);
+        assert_eq!(id.name, "Jogo (Track 1).bin", "a trilha, não o cue");
+        assert_eq!(id.size, track.len() as u64);
+        assert_eq!(id.hashes, None);
+        assert_eq!(read, text.len() as u64, "só o texto do cue foi lido");
+        // No limite: a trilha é lida e hasheada.
+        let (id, _) = identify_counting(&cue, "disc", track.len() as u64);
+        assert_eq!(id.hashes, Some(digests_of(&track)));
+
+        // Imagem solta (`.img`, `.pbp`...) segue a mesma regra.
+        let img = put(dir.path(), "Jogo.img", &track);
+        let (id, read) = identify_counting(&img, "disc", 32 * 1024);
+        assert_eq!((id.hashes, id.size, read), (None, track.len() as u64, 0));
+        let (id, _) = identify_counting(&img, "disc", track.len() as u64);
+        assert_eq!(id.hashes, Some(digests_of(&track)));
     }
 }
