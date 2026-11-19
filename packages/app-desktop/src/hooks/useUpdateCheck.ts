@@ -86,7 +86,10 @@ export function useUpdateCheck() {
         console.warn("verificação de atualização falhou:", e);
         return;
       }
-      if (!info) return;
+      if (!info) {
+        useNotificationStore.getState().remove("update");
+        return;
+      }
       // mesma versão já avisada: mantém lida/não lida como estava
       const prev = useNotificationStore
         .getState()

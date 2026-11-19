@@ -4,4 +4,4 @@ export type GameMetadata = { title: string, description: string | null, coverUrl
 /**
  * 0 a 100
  */
-rating: number | null, ageRating: string | null, modes: string | null, screenshotUrl: string | null, titleScreenUrl: string | null, fanartUrl: string | null, logoUrl: string | null, videoUrl: string | null, };
+rating: number | null, ageRating: string | null, modes: string | null, screenshotUrl: string | null, titleScreenUrl: string | null, fanartUrl: string | null, logoUrl: string | null, videoUrl: string | null, gamekave: { descriptions: Record<string, string>; releaseDates: Record<string, string>; timeToBeatMinutes: [number | null, number | null, number | null]; covers: string[]; heroes: string[]; screenshots: string[]; trailers: string[]; achievementCount: number | null; soundtrackCount: number | null } | null, };

@@ -1,5 +1,6 @@
 import {
   Body1,
+  CounterBadge,
   Subtitle2,
   makeStyles,
   mergeClasses,
@@ -7,9 +8,10 @@ import {
 } from "@fluentui/react-components";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link, useResolvedPath } from "react-router-dom";
 import { ProfileAvatar } from "../../components/ProfileAvatar";
 import { useEffectiveProfile } from "../../hooks/useEffectiveProfile";
+import { useSettingsBadges } from "../../hooks/useSettingsBadges";
 import { SETTINGS_SECTIONS } from "../../layouts/settingsSections";
 
 // Folga pro anel de foco (3 de vão + 3 de traço) e o brilho de fora (~12)
@@ -110,6 +112,8 @@ const useStyles = makeStyles({
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  title: { display: "flex", alignItems: "center", gap: tokens.spacingHorizontalS, minWidth: 0 },
+  badge: { flexShrink: 0 },
   ellipsis: {
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -121,6 +125,26 @@ const useStyles = makeStyles({
     flexGrow: 0,
   },
 });
+
+function SettingsCardTitle({ title, count }: { title: string; count: number }) {
+  const { t } = useTranslation();
+  const s = useStyles();
+  return (
+    <span className={s.title}>
+      <Subtitle2 className={s.ellipsis}>{title}</Subtitle2>
+      {count > 0 && (
+        <CounterBadge
+          className={s.badge}
+          count={count}
+          overflowCount={Number.MAX_SAFE_INTEGER}
+          size="small"
+          color="brand"
+          aria-label={t("shell.settingsItems", { count })}
+        />
+      )}
+    </span>
+  );
+}
 
 export interface SettingsHubItem {
   to: string;
@@ -137,13 +161,15 @@ export interface SettingsHubItem {
  */
 export function SettingsHubCards({ items, label }: { items: SettingsHubItem[]; label: string }) {
   const s = useStyles();
+  const countFor = useSettingsBadges();
+  const parent = useResolvedPath(".").pathname.replace(/\/$/, "");
   return (
     <nav className={mergeClasses(s.grid, s.subGrid)} aria-label={label}>
       {items.map((it, i) => (
         <Link key={it.to} to={it.to} className={s.card} style={{ animationDelay: `${i * 30}ms` }}>
           <span className={s.icon}>{it.icon}</span>
           <span className={s.text}>
-            <Subtitle2 className={s.ellipsis}>{it.title}</Subtitle2>
+            <SettingsCardTitle title={it.title} count={countFor(parent + "/" + it.to)} />
             <Body1 className={s.desc}>{it.description}</Body1>
           </span>
         </Link>
@@ -161,6 +187,7 @@ export function SettingsHome() {
   const { t } = useTranslation();
   const s = useStyles();
   const profile = useEffectiveProfile();
+  const countFor = useSettingsBadges();
 
   return (
     <nav className={s.grid} aria-label={t("settings.title")}>
@@ -194,7 +221,7 @@ export function SettingsHome() {
               <Icon />
             </span>
             <span className={s.text}>
-              <Subtitle2 className={s.ellipsis}>{t(`settings.tabs.${id}`)}</Subtitle2>
+              <SettingsCardTitle title={t(`settings.tabs.${id}`)} count={countFor("/settings/" + key)} />
               <Body1 className={s.desc}>{t(`settings.desc.${id}`)}</Body1>
             </span>
           </Link>

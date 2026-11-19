@@ -1529,11 +1529,55 @@ export const useDetailStyles = makeStyles({
     paddingTop: "16px",
     paddingBottom: "24px",
   },
-  infoCover: {
-    width: "100%",
+  infoSummary: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: tokens.spacingHorizontalL,
+    padding: tokens.spacingHorizontalM,
     borderRadius: shell.radius,
+    backgroundColor: tokens.colorNeutralBackground2,
+  },
+  infoIdentity: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: tokens.spacingVerticalXS,
+    flex: "1 1 140px",
+    minWidth: 0,
+  },
+  infoGameTitle: {
+    margin: 0,
+    fontSize: tokens.fontSizeBase500,
+    lineHeight: tokens.lineHeightBase500,
+    fontWeight: tokens.fontWeightSemibold,
+    overflowWrap: "anywhere",
+  },
+  infoCover: {
+    width: "clamp(64px, 23%, 104px)",
+    maxHeight: "140px",
+    borderRadius: tokens.borderRadiusMedium,
+    objectFit: "contain",
+  },
+  infoMediaGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 144px), 1fr))",
+    gap: tokens.spacingHorizontalM,
+  },
+  infoShot: {
+    width: "100%",
     aspectRatio: "16 / 9",
-    objectFit: "cover",
+    objectFit: "contain",
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: tokens.colorNeutralBackground3,
+  },
+  infoLogo: {
+    width: "100%",
+    aspectRatio: "16 / 9",
+    objectFit: "contain",
+    boxSizing: "border-box",
+    padding: tokens.spacingHorizontalM,
+    borderRadius: tokens.borderRadiusMedium,
     backgroundColor: tokens.colorNeutralBackground3,
   },
   // Seções da gaveta (Sobre o jogo / Descrição / Na sua biblioteca).
@@ -1561,9 +1605,28 @@ export const useDetailStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
   },
   galleryCaption: { color: tokens.colorNeutralForeground3, fontSize: tokens.fontSizeBase200 },
-  // "Buscar dados de novo" no fim de "Sobre o jogo": botão do tamanho do
-  // texto, alinhado à esquerda como as linhas da lista.
-  infoRescrape: { alignSelf: "flex-start", marginTop: tokens.spacingVerticalS },
+  editMetadataDialog: { maxWidth: "1040px", marginInline: "auto", width: "100%" },
+  editMetadataFields: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalL },
+  infoToolbar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: tokens.spacingHorizontalS,
+    marginTop: tokens.spacingVerticalS,
+  },
+  infoTab: {
+    borderRadius: tokens.borderRadiusMedium,
+    "&::before, &::after, &:hover::before, &:active::before": {
+      display: "none",
+    },
+    '&[aria-selected="true"]': {
+      backgroundColor: tokens.colorNeutralBackground3,
+      "@media (forced-colors: active)": {
+        outline: "1px solid Highlight",
+        outlineOffset: "-2px",
+      },
+    },
+  },
   infoSection: {
     display: "flex",
     flexDirection: "column",

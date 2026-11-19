@@ -109,15 +109,20 @@ export function ProfileHero({
     const id = setInterval(() => setNow(Date.now()), 30_000)
     return () => clearInterval(id)
   }, [])
-  const identity = status?.card?.identity
+  const card = connected ? status?.card : null
+  const identity = card?.identity
+  const palette = card?.palette
+  const isColor = (value: unknown): value is string =>
+    typeof value === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)
   const bannerStyle = profile.bannerUrl
     ? {
         backgroundImage: `url(${JSON.stringify(profile.bannerUrl)})`,
         backgroundPosition: `${identity?.hero_position_x ?? 50}% ${identity?.hero_position_y ?? 50}%`,
       }
-    : undefined
+    : isColor(palette?.base) && isColor(palette?.mid)
+      ? { backgroundImage: `linear-gradient(160deg, ${palette.base}, ${palette.mid})` }
+      : undefined
   const fetchedAt = connected ? status?.fetched_at : null
-  const card = connected ? status?.card : null
   const tierName = pickText(identity?.tier?.name, i18n.language)
   const reino = pickText(card?.reino_title_text, i18n.language)
   // As cores do plano vêm do Alvanista: o anel do avatar e o chip.
@@ -193,6 +198,11 @@ export function ProfileHero({
               <Button appearance="outline" onClick={() => void alvanistaOpenSite('edit').catch(() => {})}>
                 {t('alvanista.editOnAlvanista')}
               </Button>
+              {status?.save_sync === true && (
+                <Button appearance="subtle" onClick={() => navigate('/settings/sincronizacao')}>
+                  {t('profilePage.alvaCloudSave')}
+                </Button>
+              )}
               <div className={s.sync}>
                 {fetchedAt != null && (
                   <Caption1>

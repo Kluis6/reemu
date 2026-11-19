@@ -46,9 +46,11 @@ export function splitGenres(raw: string | null | undefined): string[] {
 
 /** Decodifica entidades HTML (os textos vêm de sites) sem interpretar tags. */
 function decodeEntities(s: string): string {
+  const decodeCodePoint = (entity: string, code: number) =>
+    Number.isInteger(code) && code <= 0x10ffff ? String.fromCodePoint(code) : entity
   return s
-    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&#(\d+);/g, (entity, n) => decodeCodePoint(entity, Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (entity, n) => decodeCodePoint(entity, parseInt(n, 16)))
     .replace(/&quot;/g, '"')
     .replace(/&apos;|&#39;/g, "'")
     .replace(/&lt;/g, '<')
@@ -74,6 +76,7 @@ export function descriptionParagraphs(raw: string | null | undefined): string[] 
 const PROVIDERS: Record<string, string> = {
   screenscraper: 'ScreenScraper',
   thegamesdb: 'TheGamesDB',
+  gamekave: 'GameKave',
 }
 
 export function providerLabel(raw: string | null | undefined): string | null {

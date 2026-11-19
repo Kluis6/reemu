@@ -32,9 +32,21 @@ import {
 import { useToastStore } from '../../stores/useToastStore'
 import { Trans, useTranslation } from 'react-i18next'
 
+const progressKey = ['metadata-progress'] as const
+
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL },
   save: { alignSelf: 'flex-start' },
+  scan: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
+  scanActions: { display: 'flex', flexWrap: 'wrap', gap: tokens.spacingHorizontalS },
+  scanStatus: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    padding: tokens.spacingHorizontalM,
+    backgroundColor: tokens.colorNeutralBackground3,
+    borderRadius: tokens.borderRadiusMedium,
+  },
   pending: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
   row: {
     display: 'flex',
@@ -68,7 +80,7 @@ export function SettingsMetadata() {
   }, [cfg.data, form])
 
   const progress = useQuery({
-    queryKey: ['metadata-progress'],
+    queryKey: progressKey,
     queryFn: metadataScanProgress,
     refetchInterval: (q) => (q.state.data?.running ? 700 : false),
     retry: false,
@@ -98,11 +110,23 @@ export function SettingsMetadata() {
     onError: (e) => push(errorToast(e, 'saveMetadataConfig')),
   })
   const scan = useMutation({
-    mutationFn: () => startMetadataScan(),
-    onSuccess: () => {
-      push(sysToast(t('metadata.started'), 'Info'))
-      progress.refetch()
+    mutationFn: startMetadataScan,
+    onSuccess: async () => {
+      await qc.cancelQueries({ queryKey: progressKey })
+      const { data } = await progress.refetch()
+      if (!data?.running) {
+        void qc.invalidateQueries({ queryKey: ['pending-matches'] })
+        void qc.invalidateQueries({ queryKey: ['roms'] })
+      }
     },
+    onError: async (e) => {
+      push(errorToast(e, 'fetchMetadata'))
+      await progress.refetch()
+    },
+  })
+  const cancel = useMutation({
+    mutationFn: cancelMetadataScan,
+    onSuccess: () => progress.refetch(),
     onError: (e) => push(errorToast(e, 'fetchMetadata')),
   })
   const resolve = useMutation({
@@ -119,6 +143,16 @@ export function SettingsMetadata() {
   if (cfg.isError || !form) return <Body1>{t('metadata.unavailable')}</Body1>
 
   const p = progress.data
+  const status = scan.isPending ? 'preparing'
+    : cancel.isPending ? 'cancelling'
+    : scan.isError && !running ? 'failed'
+    : progress.isError ? 'unavailable'
+    : p?.status === 'completed' && p.total === 0 ? 'empty'
+    : p?.status ?? 'idle'
+  const active = scan.isPending || running
+  const showCounts = !scan.isPending && (!scan.isError || running) && !!p?.total
+  const ratio = showCounts && p ? p.done / p.total : undefined
+  const statusText = t(`metadata.status.${status}`)
 
   return (
     <div className={s.root}>
@@ -166,36 +200,46 @@ export function SettingsMetadata() {
         {t('common.save')}
       </Button>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+      <div className={s.scan}>
+        <div className={s.scanActions}>
           <Button
             icon={<SearchRegular />}
-            disabled={running || scan.isPending}
+            disabledFocusable={active}
+            aria-busy={active}
             onClick={() => scan.mutate()}
           >
-            {running ? t('metadata.scanning') : t('metadata.scan')}
+            {active ? t('metadata.scanning') : t('metadata.scan')}
           </Button>
           {running && (
-            <Button appearance="subtle" onClick={() => void cancelMetadataScan()}>
+            <Button
+              appearance="subtle"
+              disabledFocusable={status === 'cancelling'}
+              onClick={() => cancel.mutate()}
+            >
               {t('common.cancel')}
             </Button>
           )}
         </div>
-        {p && (p.running || p.done > 0) && (
-          <>
-            {/* sem total ainda (montando a fila) = barra indeterminada */}
-            <ProgressBar
-              thickness="large"
-              value={p.total ? p.done / p.total : undefined}
-              color={p.error ? 'warning' : 'brand'}
-            />
-            <Caption1 className={s.dim}>
-              {p.total ? `${Math.floor((p.done / p.total) * 100)}% · ` : ''}
-              {t('metadata.progress', { done: p.done, total: p.total, auto: p.auto, pending: p.pending, failed: p.failed })}
-            </Caption1>
-          </>
+        {status !== 'idle' && (
+          <div className={s.scanStatus}>
+            <Text role="status" weight="semibold">{statusText}</Text>
+            {(active || ratio !== undefined) && (
+              <ProgressBar
+                aria-label={t('metadata.scan')}
+                thickness="large"
+                value={ratio}
+                color={p?.error || status === 'failed' || status === 'cancelled' ? 'warning' : 'brand'}
+              />
+            )}
+            {showCounts && p && (
+              <Caption1 className={s.dim}>
+                {ratio !== undefined ? Math.floor(ratio * 100) + '% · ' : ''}
+                {t('metadata.progress', { done: p.done, total: p.total, auto: p.auto, pending: p.pending, failed: p.failed })}
+              </Caption1>
+            )}
+          </div>
         )}
-        {p?.error === 'ss_dev_login' && (
+        {!scan.isPending && p?.error === 'ss_dev_login' && (
           <MessageBar intent="warning">
             <MessageBarBody>
               <MessageBarTitle>{t('metadata.errors.ssDevLoginTitle')}</MessageBarTitle>

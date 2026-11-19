@@ -43,7 +43,9 @@ const useStyles = makeStyles({
     color: tokens.colorNeutralForeground2,
   },
   badges: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginTop: '16px' },
-  badge: { width: '40px', height: '40px', objectFit: 'contain', borderRadius: tokens.borderRadiusSmall },
+  badgeEntry: { display: 'inline-flex', alignItems: 'center', gap: '6px', minWidth: 0 },
+  badgeName: { color: tokens.colorNeutralForeground2, fontSize: tokens.fontSizeBase200, overflowWrap: 'anywhere' },
+  badge: { flexShrink: 0, width: '40px', height: '40px', objectFit: 'contain', borderRadius: tokens.borderRadiusSmall },
   more: { color: tokens.colorNeutralForeground2, fontSize: '13px' },
   now: { display: 'flex', alignItems: 'center', columnGap: '12px', marginTop: '16px' },
   nowCover: {
@@ -148,7 +150,10 @@ export function AlvanistaCardBlock({ card, fetchedAt }: { card: AlvanistaCard; f
       {(recent.length > 0 || total > 0) && (
         <div className={s.badges} data-testid="profile-alvanista-badges">
           {recent.map((b, i) => (
-            <BadgeIcon key={`${b.name}-${i}`} badge={b} className={s.badge} />
+            <span key={`${b.name}-${i}`} className={s.badgeEntry}>
+              <BadgeIcon badge={b} className={s.badge} />
+              <span className={s.badgeName}>{pickText(b.names, i18n.language) ?? b.name}</span>
+            </span>
           ))}
           {total > 0 && <span className={s.more}>{t('profilePage.alvaBadges', { count: total })}</span>}
         </div>
