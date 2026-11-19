@@ -54,7 +54,10 @@ const en: Messages = {
     searchPlaceholder: 'Search the library…',
     fullscreen: 'Full screen',
     exitFullscreen: 'Exit full screen',
-    pendingMetadata: '{{label}} — metadata to review: {{count}}',
+    settingsUpdates_one: '{{label}} — {{count}} category with pending items',
+    settingsUpdates_other: '{{label}} — {{count}} categories with pending items',
+    settingsItems_one: '{{count}} pending item',
+    settingsItems_other: '{{count}} pending items',
   },
   settings: {
     title: 'Settings',

@@ -54,7 +54,10 @@ const es: Messages = {
     searchPlaceholder: 'Buscar en la biblioteca…',
     fullscreen: 'Pantalla completa',
     exitFullscreen: 'Salir de pantalla completa',
-    pendingMetadata: '{{label}} — metadatos para revisar: {{count}}',
+    settingsUpdates_one: '{{label}} — {{count}} categoría con pendientes',
+    settingsUpdates_other: '{{label}} — {{count}} categorías con pendientes',
+    settingsItems_one: '{{count}} elemento pendiente',
+    settingsItems_other: '{{count}} elementos pendientes',
   },
   settings: {
     title: 'Configuración',

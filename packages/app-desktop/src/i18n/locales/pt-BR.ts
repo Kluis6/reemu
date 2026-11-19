@@ -55,7 +55,10 @@ const ptBR = {
     searchPlaceholder: 'Buscar na biblioteca…',
     fullscreen: 'Tela cheia',
     exitFullscreen: 'Sair da tela cheia',
-    pendingMetadata: '{{label}} — metadados para revisar: {{count}}',
+    settingsUpdates_one: '{{label}} — {{count}} categoria com pendências',
+    settingsUpdates_other: '{{label}} — {{count}} categorias com pendências',
+    settingsItems_one: '{{count}} item pendente',
+    settingsItems_other: '{{count}} itens pendentes',
   },
   settings: {
     title: 'Configurações',
