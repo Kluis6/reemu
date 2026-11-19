@@ -3,7 +3,8 @@ use crate::pool::Db;
 use async_trait::async_trait;
 use domain::error::RepoError;
 use domain::metadata::{
-    GameMetadata, MatchStatus, MetadataConfig, MetadataRepository, PendingMatch, ScrapeCandidate,
+    GameMetadata, GameMetadataEdits, MatchStatus, MetadataConfig, MetadataRepository, PendingMatch,
+    ScrapeCandidate,
 };
 use sqlx::Row;
 
@@ -14,6 +15,17 @@ pub struct MetadataRepo {
 impl MetadataRepo {
     pub fn new(db: Db) -> Self {
         Self { db }
+    }
+
+    pub async fn get_edits(&self, rom_id: &str) -> Result<Option<GameMetadataEdits>, RepoError> {
+        let raw: Option<String> =
+            sqlx::query_scalar("SELECT fields_json FROM game_metadata_edits WHERE rom_id = ?1")
+                .bind(rom_id)
+                .fetch_optional(&self.db)
+                .await
+                .map_err(be)?;
+        raw.map(|json| serde_json::from_str(&json).map_err(|e| RepoError::Corrupt(e.to_string())))
+            .transpose()
     }
 }
 
@@ -63,6 +75,12 @@ fn row_to_meta(row: &sqlx::sqlite::SqliteRow) -> Result<GameMetadata, RepoError>
             fanart_url: row.try_get("fanart_url").map_err(be)?,
             logo_url: row.try_get("logo_url").map_err(be)?,
             video_url: row.try_get("video_url").map_err(be)?,
+            gamekave: row
+                .try_get::<Option<String>, _>("gamekave_json")
+                .map_err(be)?
+                .map(|value| serde_json::from_str(&value))
+                .transpose()
+                .map_err(|e| RepoError::Corrupt(e.to_string()))?,
         },
     })
 }
@@ -105,7 +123,7 @@ impl MetadataRepository for MetadataRepo {
         let row = sqlx::query(
             "SELECT rom_id, title, description, cover_url, release_date, genre, provider_source, \
              developer, publisher, players, rating, age_rating, modes, \
-             screenshot_url, title_screen_url, fanart_url, logo_url, video_url \
+             screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json \
              FROM game_metadata WHERE rom_id = ?1",
         )
         .bind(rom_id)
@@ -120,9 +138,9 @@ impl MetadataRepository for MetadataRepo {
             "INSERT INTO game_metadata \
              (id, rom_id, title, description, cover_url, release_date, genre, provider_source, \
               developer, publisher, players, rating, age_rating, modes, \
-              screenshot_url, title_screen_url, fanart_url, logo_url, video_url) \
+              screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json) \
              VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, \
-                     ?14, ?15, ?16, ?17, ?18) \
+                     ?14, ?15, ?16, ?17, ?18, ?19) \
              ON CONFLICT(rom_id) DO UPDATE SET \
                title = excluded.title, description = excluded.description, \
                cover_url = excluded.cover_url, release_date = excluded.release_date, \
@@ -133,7 +151,7 @@ impl MetadataRepository for MetadataRepo {
                screenshot_url = excluded.screenshot_url, \
                title_screen_url = excluded.title_screen_url, \
                fanart_url = excluded.fanart_url, logo_url = excluded.logo_url, \
-               video_url = excluded.video_url",
+               video_url = excluded.video_url, gamekave_json = excluded.gamekave_json",
         )
         .bind(&m.rom_id)
         .bind(&m.title)
@@ -153,6 +171,14 @@ impl MetadataRepository for MetadataRepo {
         .bind(&m.details.fanart_url)
         .bind(&m.details.logo_url)
         .bind(&m.details.video_url)
+        .bind(
+            m.details
+                .gamekave
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()
+                .map_err(|e| RepoError::Corrupt(e.to_string()))?,
+        )
         .execute(&self.db)
         .await
         .map_err(be)?;

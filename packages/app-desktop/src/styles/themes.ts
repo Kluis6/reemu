@@ -10,9 +10,8 @@
  *    "modo XBOX" no PC, nos dois modos.
  *  - tokens **custom** `reemu*`: o `FluentProvider` emite toda chave do objeto
  *    de tema como CSS var (`--reemuAppBg`, …), então o Griffel referencia com
- *    `var(--reemuAppBg)`. Todo token `reemu*` tem que ter um valor pros DOIS
- *    modos em `make()` — é isso que faz o tema claro não "vazar" preto por
- *    baixo (ver `reemuVeil`).
+ *    `var(--reemuAppBg)`. Todo token `reemu*` tem um valor para os dois
+ *    modos em `make()`.
  *
  * Regenerar rampas: Fluent Theme Designer
  * (https://react.fluentui.dev/?path=/docs/theme-theme-designer--docs) ou o
@@ -617,14 +616,9 @@ export interface ReEmuTokens extends ReEmuLiftTokens {
   reemuBg2: string;
   reemuBg3: string;
   reemuBg4: string;
-  /** Véu leve e uniforme sobre os brilhos (o `reemuVeil`, que escurece as
-   *  bordas, é pro papel de parede — nos brilhos ele apagaria justamente os
-   *  cantos, onde fica a cor). */
+  /** Véu leve e uniforme sobre os brilhos do tema. */
   reemuGlowVeil: string;
-  /** Véu sobre as manchas do fundo (`components/AnimatedBackground`) — escuro
-   *  no tema escuro (abafa a cor, mantém tudo "moody"), CLARO no tema claro
-   *  (abafa a cor pro lado do branco). Sem isto o fundo de um tema claro
-   *  ficaria escuro de qualquer jeito (o véu cobre tudo por cima). */
+  /** Camada sobre o papel de parede em `AnimatedBackground`. */
   reemuVeil: string;
   /** Fundo do item ativo no rail (`[aria-current="page"]`) — mais forte que
    *  o hover (`colorNeutralBackground3`), pra destacar onde o usuário está.
@@ -950,13 +944,9 @@ function make(
     // brilham). Claro: puxa bastante pro cinza da casca — cor cheia num
     // fundo claro fica berrante.
     reemuGlowVeil: light ? "rgba(236, 238, 241, 0.62)" : "rgba(9, 9, 12, 0.1)",
-    // Radial (não mais vertical): centro bem mais transparente — deixa o
-    // papel de parede aparecer no meio da tela — e as bordas/cantos (onde
-    // ficam as manchas de cor do tema) mantêm a força de antes. Camada
-    // ÚNICA de gradiente (WebKitGTK quebra com radial-gradient multicamada
-    // num elemento `position: fixed` — ver comentário no `.app`).
+    // O papel de parede fica sem sobreposição no tema claro.
     reemuVeil: light
-      ? "radial-gradient(ellipse at center, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.9) 100%)"
+      ? "none"
       : "radial-gradient(ellipse at center, rgba(9, 9, 12, 0) 0%, rgba(9, 9, 12, 0.82) 100%)",
     // Verde de marca (tom 70 — mais fechado que o 80 padrão, fica igual ao
     // verde da pílula de seleção nos screenshots) só no claro; no escuro

@@ -13,7 +13,9 @@
 //! auto-aplicado. IGDB ficou de fora: a lista de ids de plataforma dele só sai
 //! da API autenticada, sem fonte pública confiável pra conferir.
 //!
-//! Ids de plataforma dos dois provedores: tabelas do ES-DE (EmulationStation
+//! A GameKave é a última opção, por título e plataforma, com revisão manual.
+//!
+//! Ids de plataforma do ScreenScraper e do TheGamesDB: tabelas do ES-DE (EmulationStation
 //! Desktop Edition, GPL — `es-app/src/scrapers/ScreenScraper.cpp` e
 //! `GamesDBJSONScraper.cpp`), não de memória; os 15 ids do ScreenScraper que
 //! o ReEmu já tinha batem com os de lá.
@@ -22,7 +24,7 @@
 //! carrega a configuração (com a senha do chaveiro, `credentials.rs`) e passa
 //! o cache de capas como [`CoverCache`].
 
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use domain::library::RomRepository;
@@ -31,6 +33,8 @@ use domain::metadata::{
     ScrapeQuery,
 };
 use serde_json::Value;
+
+mod gamekave;
 
 /// Cache de capas do app: descarta a capa guardada de um jogo que ganhou
 /// uma `cover_url` nova, pra próxima leitura buscar a capa escrapeada.
@@ -328,44 +332,110 @@ async fn query_thegamesdb(
     Ok(Some(c))
 }
 
+/// Estado visível mesmo quando a leva termina sem processar nenhuma ROM.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ScrapeState {
+    #[default]
+    Idle,
+    Preparing,
+    Running,
+    Cancelling,
+    Completed,
+    Cancelled,
+    Failed,
+}
+
+impl ScrapeState {
+    pub fn is_active(self) -> bool {
+        matches!(self, Self::Preparing | Self::Running | Self::Cancelling)
+    }
+}
+
 /// Progresso de uma leva de scraping (consultável via comando).
 #[derive(Default)]
 pub struct ScrapeProgress {
-    pub running: AtomicBool,
-    pub done: AtomicUsize,
-    pub total: AtomicUsize,
-    pub auto: AtomicUsize,
-    pub pending: AtomicUsize,
-    pub failed: AtomicUsize,
-    /// Por que a leva parou antes do fim (código, ver `ERR_*`).
-    pub error: std::sync::Mutex<Option<String>>,
+    state: std::sync::Mutex<ScrapeState>,
+    done: AtomicUsize,
+    total: AtomicUsize,
+    auto: AtomicUsize,
+    pending: AtomicUsize,
+    failed: AtomicUsize,
+    error: std::sync::Mutex<Option<String>>,
 }
 
 impl ScrapeProgress {
-    pub fn error(&self) -> Option<String> {
-        self.error.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    fn state(&self) -> std::sync::MutexGuard<'_, ScrapeState> {
+        self.state.lock().unwrap_or_else(|p| p.into_inner())
     }
+
     fn set_error(&self, code: &str) {
         *self.error.lock().unwrap_or_else(|p| p.into_inner()) = Some(code.to_string());
     }
-    pub fn snapshot(&self) -> (bool, usize, usize, usize, usize, usize) {
+
+    pub fn snapshot(
+        &self,
+    ) -> (
+        ScrapeState,
+        usize,
+        usize,
+        usize,
+        usize,
+        usize,
+        Option<String>,
+    ) {
+        let state = self.state();
         (
-            self.running.load(Ordering::Relaxed),
+            *state,
             self.done.load(Ordering::Relaxed),
             self.total.load(Ordering::Relaxed),
             self.auto.load(Ordering::Relaxed),
             self.pending.load(Ordering::Relaxed),
             self.failed.load(Ordering::Relaxed),
+            self.error.lock().unwrap_or_else(|p| p.into_inner()).clone(),
         )
     }
-    fn reset(&self, total: usize) {
+
+    pub fn begin(&self) -> bool {
+        let mut state = self.state();
+        if state.is_active() {
+            return false;
+        }
         self.done.store(0, Ordering::Relaxed);
-        self.total.store(total, Ordering::Relaxed);
+        self.total.store(0, Ordering::Relaxed);
         self.auto.store(0, Ordering::Relaxed);
         self.pending.store(0, Ordering::Relaxed);
         self.failed.store(0, Ordering::Relaxed);
         *self.error.lock().unwrap_or_else(|p| p.into_inner()) = None;
-        self.running.store(true, Ordering::Relaxed);
+        *state = ScrapeState::Preparing;
+        true
+    }
+
+    pub fn cancel(&self) {
+        let mut state = self.state();
+        if state.is_active() {
+            *state = ScrapeState::Cancelling;
+        }
+    }
+
+    fn is_cancelled(&self) -> bool {
+        *self.state() == ScrapeState::Cancelling
+    }
+
+    fn start_processing(&self, total: usize) {
+        let mut state = self.state();
+        self.total.store(total, Ordering::Relaxed);
+        if *state == ScrapeState::Preparing {
+            *state = ScrapeState::Running;
+        }
+    }
+
+    pub fn finish(&self, failed: bool) {
+        let mut state = self.state();
+        *state = match *state {
+            ScrapeState::Cancelling => ScrapeState::Cancelled,
+            _ if failed => ScrapeState::Failed,
+            _ => ScrapeState::Completed,
+        };
     }
 }
 
@@ -543,6 +613,7 @@ fn parse_details(jeu: &Value) -> GameDetails {
         fanart_url: media(&["fanart"]),
         logo_url: media(&["wheel-hd", "wheel"]),
         video_url: media(&["video-normalized", "video"]),
+        ..Default::default()
     }
 }
 
@@ -726,7 +797,7 @@ async fn record_result(
 
 /// "Buscar de novo" de UM jogo (gaveta de informações): consulta os
 /// provedores na mesma cascata da leva — ScreenScraper pelo hash, depois o
-/// TheGamesDB pelo nome se houver chave — e grava como a leva grava. Erro de
+/// TheGamesDB pelo nome se houver chave e GameKave por título e plataforma. Erro de
 /// credencial do ScreenScraper volta como `ERR_SS_DEV_LOGIN` (a UI traduz).
 /// `cfg`: a configuração de metadados já com as credenciais.
 pub async fn scrape_one(
@@ -762,30 +833,31 @@ pub async fn scrape_one(
     };
     let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
     let mut result = query_screenscraper(&client, &cfg, &q).await;
-    // sem credencial no ScreenScraper, ainda dá pra tentar o TheGamesDB
     let ss_refused = matches!(&result, Err(e) if e == ERR_SS_DEV_LOGIN);
-    if ss_refused && tgdb_key.is_some() {
-        result = Ok(None);
-    }
-    if let (Ok(None), Some(key)) = (&result, tgdb_key) {
+    if let Some(key) = tgdb_key.filter(|_| ss_refused || matches!(&result, Ok(None))) {
         result = query_thegamesdb(&client, key, &q).await;
     }
-    let candidate = result?;
-    if candidate.is_none() && ss_refused {
-        // o TheGamesDB não achou e o ScreenScraper nem foi consultado
-        return Err(ERR_SS_DEV_LOGIN.to_string());
-    }
+    let candidate = match result {
+        Ok(Some(candidate)) => Some(candidate),
+        fallback => match gamekave::query(&client, &q).await {
+            Ok(Some(candidate)) => Some(candidate),
+            Ok(None) if ss_refused && matches!(fallback, Ok(None)) => {
+                return Err(ERR_SS_DEV_LOGIN.to_string());
+            }
+            Ok(None) => fallback?,
+            Err(error) => return Err(fallback.err().unwrap_or(error)),
+        },
+    };
     record_result(&repo, rom_id, &stem, candidate, covers).await
 }
 
 /// Roda uma leva de scraping sobre as ROMs sem match. Bloqueante (chamar de
-/// `spawn_blocking`/task). `stop` permite cancelar. `cfg`: a configuração de
+/// `spawn_blocking`/task). `cfg`: a configuração de
 /// metadados já com as credenciais. `covers`: descarta o cache de capa de
 /// qualquer rom que ganhar uma `cover_url` nova aqui.
 pub async fn scrape_pending(
     pool: db::Db,
     progress: Arc<ScrapeProgress>,
-    stop: Arc<AtomicBool>,
     cfg: MetadataConfig,
     covers: &dyn CoverCache,
 ) -> Result<(), String> {
@@ -796,7 +868,7 @@ pub async fn scrape_pending(
         .rom_ids_without_match()
         .await
         .map_err(|e| e.to_string())?;
-    progress.reset(ids.len());
+    progress.start_processing(ids.len());
     log::info!("metadata: {} ROM(s) na fila de scraping", ids.len());
 
     let client = reqwest::Client::builder()
@@ -807,11 +879,11 @@ pub async fn scrape_pending(
 
     // ScreenScraper recusou as credenciais de desenvolvedor: não adianta
     // perguntar de novo pras outras milhares de ROMs (cada falha custava
-    // ~16 s). Segue só com o TheGamesDB, se tiver chave; senão a leva para.
+    // ~16 s). Segue com os provedores de reserva.
     let mut ss_ok = true;
 
     for rom_id in ids {
-        if stop.load(Ordering::Relaxed) {
+        if progress.is_cancelled() {
             log::info!("metadata: scraping cancelado");
             break;
         }
@@ -838,7 +910,7 @@ pub async fn scrape_pending(
         };
 
         // Cascata: ScreenScraper (hash) primeiro; se ele não achar e houver
-        // chave do TheGamesDB, tenta por nome lá — sempre pra revisão.
+        // chave do TheGamesDB, tenta por nome lá. A GameKave fica por último.
         let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
         let mut result = if ss_ok {
             query_screenscraper(&client, &cfg, &q).await
@@ -849,9 +921,6 @@ pub async fn scrape_pending(
             log::warn!("metadata: ScreenScraper recusou as credenciais de desenvolvedor do ReEmu");
             ss_ok = false;
             progress.set_error(ERR_SS_DEV_LOGIN);
-            if tgdb_key.is_none() {
-                break;
-            }
             result = Ok(None);
         }
         if let (Ok(None), Some(key)) = (&result, tgdb_key) {
@@ -859,7 +928,21 @@ pub async fn scrape_pending(
             result = query_thegamesdb(&client, key, &q).await;
             tokio::time::sleep(TGDB_DELAY).await;
         }
+        if !matches!(&result, Ok(Some(_))) && !progress.is_cancelled() {
+            match gamekave::query(&client, &q).await {
+                Ok(Some(candidate)) => result = Ok(Some(candidate)),
+                Ok(None) => {}
+                Err(error) if result.is_ok() => result = Err(error),
+                Err(_) => {}
+            }
+        }
+        if progress.is_cancelled() {
+            break;
+        }
         match result {
+            // A GameKave pode não cobrir a ROM. Deixa o jogo na fila se o
+            // ScreenScraper esteve indisponível e não havia chave do TheGamesDB.
+            Ok(None) if !ss_ok && tgdb_key.is_none() => {}
             Ok(c) => match record_result(&repo, &rom_id, &stem, c, covers).await {
                 Ok(Outcome::Auto) => {
                     progress.auto.fetch_add(1, Ordering::Relaxed);
@@ -885,8 +968,7 @@ pub async fn scrape_pending(
         tokio::time::sleep(REQUEST_DELAY).await;
     }
 
-    progress.running.store(false, Ordering::Relaxed);
-    let (_, done, total, auto, pending, failed) = progress.snapshot();
+    let (_, done, total, auto, pending, failed, _) = progress.snapshot();
     log::info!(
         "metadata: leva concluída — {done}/{total} ({auto} auto, {pending} p/ revisão, {failed} falha)"
     );
@@ -917,6 +999,29 @@ mod tests {
         ids.sort();
         ids.dedup();
         ids
+    }
+
+    #[test]
+    fn scan_transitions_include_empty_completion_and_cancellation() {
+        let progress = ScrapeProgress::default();
+        assert_eq!(progress.snapshot().0, ScrapeState::Idle);
+        assert!(progress.begin());
+        assert_eq!(progress.snapshot().0, ScrapeState::Preparing);
+        assert!(!progress.begin());
+        progress.start_processing(0);
+        progress.finish(false);
+        assert_eq!(progress.snapshot().0, ScrapeState::Completed);
+
+        assert!(progress.begin());
+        progress.cancel();
+        progress.start_processing(2);
+        assert_eq!(progress.snapshot().0, ScrapeState::Cancelling);
+        progress.finish(false);
+        assert_eq!(progress.snapshot().0, ScrapeState::Cancelled);
+
+        assert!(progress.begin());
+        progress.finish(true);
+        assert_eq!(progress.snapshot().0, ScrapeState::Failed);
     }
 
     #[test]

@@ -68,9 +68,6 @@ jobs:
       # run anterior a atualização desse check dava 404 e o job ficava
       # vermelho mesmo sem vulnerabilidade (main, 2026-11-13).
       # IDs ignorados, com motivo registrado no TASKS.md ("cargo audit"):
-      # - RUSTSEC-2026-0367/0368/0369/0429: `zip` 4.6.1 só do
-      #   `tauri-plugin-updater`, que confere a assinatura antes de abrir o
-      #   zip; a 2.14.1 prende o `windows` 0.61 e quebra o build no Windows;
       # - RUSTSEC-2026-0459: `libsqlite3-sys` 0.30 (SQLite em C) — nem o sqlx
       #   0.9 aceita a 0.39 corrigida; esperar o sqlx;
       # - RUSTSEC-2023-0071: `rsa` só está no lock como dependência opcional
@@ -82,8 +79,6 @@ jobs:
       - name: cargo audit
         run: >-
           cargo audit
-          --ignore RUSTSEC-2026-0367 --ignore RUSTSEC-2026-0368
-          --ignore RUSTSEC-2026-0369 --ignore RUSTSEC-2026-0429
           --ignore RUSTSEC-2026-0459 --ignore RUSTSEC-2023-0071
 
   windows-check:

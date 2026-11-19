@@ -121,13 +121,23 @@ async fn resolve<R: Runtime>(app: &tauri::AppHandle<R>, rom_id: &str) -> http::R
 
     // Prioridade: capa escrapeada (se o jogo já passou pelo scraping e
     // trouxe uma) — senão a URL padrão calculada pela convenção da libretro.
-    let scraped_cover = db::MetadataRepo::new(pool)
-        .get_metadata(rom_id)
+    let metadata = db::MetadataRepo::new(pool);
+    let edited_cover = metadata
+        .get_edits(rom_id)
         .await
         .ok()
         .flatten()
-        .and_then(|m| m.cover_url)
-        .filter(|u| !u.is_empty());
+        .and_then(|edit| edit.cover_url);
+    let scraped_cover = match edited_cover {
+        Some(edited) => (!edited.trim().is_empty()).then(|| edited.trim().to_owned()),
+        None => metadata
+            .get_metadata(rom_id)
+            .await
+            .ok()
+            .flatten()
+            .and_then(|m| m.cover_url)
+            .filter(|url| !url.is_empty()),
+    };
     let url = match scraped_cover {
         Some(u) => u,
         None => {
