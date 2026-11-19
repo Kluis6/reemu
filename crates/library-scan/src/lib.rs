@@ -3,6 +3,7 @@
 //! é sempre por hash exato (ver `docs/ai-context/09`).
 
 mod archive;
+mod chd_reader;
 mod decoration;
 mod disc_sniff;
 mod hash;
