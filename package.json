@@ -10,6 +10,6 @@
     "tauri:before-dev": "node scripts/dev-before.mjs"
   },
   "devDependencies": {
-    "typescript": "^5.5.0"
+    "typescript": "^7.0.2"
   }
 }
