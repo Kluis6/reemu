@@ -34,11 +34,17 @@ jobs em background pra catalogar milhares de ROMs sem travar a UI.
 ## Estado atual (2026-09-19 — `done` no MVP)
 
 `crates/library-scan`:
-- `hash.rs` — `FileRomHasher` (CRC32 + MD5, pula o header iNES).
+- `hash.rs`: `FileRomHasher` (CRC32 + MD5 + SHA1 numa leitura só, pula o
+  header iNES).
 - `systems.rs` — `system_id` por extensão e por nome de pasta (inclusive os
   nomes no estilo No-Intro/RetroArch); `disc_sniff.rs` identifica o sistema
   de imagens de disco pelo conteúdo; `archive.rs` lê `.zip`/`.7z`.
 - `scan.rs` — `scan_into` varre recursivo, com dedup por `file_path`.
+  `identify` dá a identidade de cada arquivo: hashes, nome, tamanho e o
+  serial do disco (`serial.rs`, lido da imagem). `.cue`/`.gdi` valem pela 1ª
+  trilha de dados (a 3 do GD-ROM no Dreamcast), não pelo texto. `.chd` e
+  `.cso`, e qualquer arquivo acima de 1,5 GiB, ficam sem hash: só serial,
+  nome e tamanho (`roms.crc32`/`md5` vazios, `sha1` nulo).
 
 `apps/desktop/src-tauri/src/scraping.rs`:
 - Um provider: **ScreenScraper** (`api.screenscraper.fr`), busca por CRC.
@@ -48,6 +54,9 @@ jobs em background pra catalogar milhares de ROMs sem travar a UI.
   a UI não trava.
 - A política continua: só hash exato vira `auto_matched`; o resto vai pra
   revisão manual (`set_rom_metadata`).
+- ROM sem hash (disco sem hash, ver acima) é perguntada por `serialnum`,
+  `romnom` e `romtaille`. A doc da API pede um hash; o 400 que vem disso
+  conta como não achado (o TheGamesDB tenta pelo nome e a ROM sai da fila).
 - Capas: vêm do `thumbnails.libretro.com`, com cache local servido pelo
   protocolo `cover://` (`covers.rs`) — funcionam sem internet depois da 1ª
   vez.

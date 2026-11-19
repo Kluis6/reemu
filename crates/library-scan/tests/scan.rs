@@ -274,6 +274,7 @@ async fn arcade_bios_skipped_aliases_and_unrecognized_archives() {
         last_played_at: None,
         is_favorite: false,
         user_title: None,
+        ..Default::default()
     })
     .await
     .unwrap();
@@ -355,6 +356,7 @@ async fn naomi_and_atomiswave_mame_sets() {
             last_played_at: None,
             is_favorite: false,
             user_title: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -508,4 +510,207 @@ async fn scan_real_folder() {
         *by.entry(rom.system_id).or_default() += 1;
     }
     eprintln!("{r:?}\n{by:?}");
+}
+
+#[tokio::test]
+async fn zip_inner_entry_name_and_size() {
+    let dir = scratch_dir();
+    let rom_bytes = b"n64-rom-payload-inside-zip-identity";
+    let zip_path = dir.join("Embrulho.zip");
+    {
+        let f = std::fs::File::create(&zip_path).unwrap();
+        let mut zw = zip::ZipWriter::new(f);
+        zw.start_file(
+            "Super Mario 64 (USA).z64",
+            zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated),
+        )
+        .unwrap();
+        zw.write_all(rom_bytes).unwrap();
+        zw.finish().unwrap();
+    }
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+
+    let rom = &repo.list_by_system("n64").await.unwrap()[0];
+    // Nome e tamanho são os da entrada de dentro, não os do .zip.
+    assert_eq!(rom.ident_name.as_deref(), Some("Super Mario 64 (USA).z64"));
+    assert_eq!(rom.ident_size, Some(rom_bytes.len() as i64));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn scanned_rom_row_carries_sha1_name_size_and_time() {
+    let dir = scratch_dir();
+    let bytes = b"abc";
+    std::fs::write(dir.join("Teste (World).gba"), bytes).unwrap();
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    scan_into(&repo, &dir, 1234, |_| {}).await.unwrap();
+
+    let rom = &repo.list_by_system("gba").await.unwrap()[0];
+    assert_eq!(
+        rom.sha1.as_deref(),
+        Some("a9993e364706816aba3e25717850c26c9cd0d89d")
+    );
+    assert_eq!(rom.ident_name.as_deref(), Some("Teste (World).gba"));
+    assert_eq!(rom.ident_size, Some(3));
+    assert_eq!(rom.identified_at, Some(1234));
+    assert_eq!(rom.serial, None, "cartucho não tem serial");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Imagem de Saturn de 32 KiB: só o cabeçalho do setor 0.
+fn saturn_iso(product: &[u8; 10]) -> Vec<u8> {
+    let mut img = vec![0u8; 16 * 2048];
+    img[..16].copy_from_slice(b"SEGA SEGASATURN ");
+    img[0x10..0x20].copy_from_slice(b"SEGA TP T-81    ");
+    img[0x20..0x2A].copy_from_slice(product);
+    img
+}
+
+#[tokio::test]
+async fn disc_serial_is_stored_for_disc_systems() {
+    let dir = scratch_dir();
+    write(&dir, "saturn/Jogo (USA).iso", &saturn_iso(b"MK-81022  "));
+    // Sem pasta de sistema: a assinatura diz Saturn, e o serial vem junto.
+    write(&dir, "Solto (Japan).iso", &saturn_iso(b"T-4507G   "));
+    // Disco de PS1 ilegível: entra na biblioteca, sem serial.
+    write(&dir, "psx/Quebrado (USA).iso", &[0xAB; 4096]);
+    write(&dir, "Cartucho (World).gba", b"gba");
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!(r.added, 4);
+    assert_eq!(r.errors, 0);
+
+    let roms = repo.list().await.unwrap();
+    let serial = |name: &str| {
+        roms.iter()
+            .find(|r| r.ident_name.as_deref() == Some(name))
+            .unwrap()
+            .serial
+            .clone()
+    };
+    assert_eq!(serial("Jogo (USA).iso").as_deref(), Some("MK-81022"));
+    assert_eq!(serial("Solto (Japan).iso").as_deref(), Some("T-4507G"));
+    assert_eq!(serial("Quebrado (USA).iso"), None);
+    assert_eq!(serial("Cartucho (World).gba"), None);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// CSO e CHD entram sem hash (CRC32 e MD5 vazios, SHA1 nulo) e com o nome,
+/// o tamanho e o serial; um `.iso` de tamanho de CD entra com o hash e o
+/// serial; um `.cue`, com o hash da trilha de dados.
+#[tokio::test]
+async fn disc_rows_keep_name_size_and_serial() {
+    let dir = scratch_dir();
+    let iso = saturn_iso(b"MK-81022  ");
+    write(&dir, "saturn/Jogo (USA).iso", &iso);
+    write(&dir, "psp/Jogo (USA).cso", b"CISO-fake");
+    write(&dir, "psx/Jogo (USA).chd", b"MComprHD-fake");
+    write(&dir, "saturn/Outro (USA) (Track 1).bin", &iso);
+    write(
+        &dir,
+        "saturn/Outro (USA).cue",
+        b"FILE \"Outro (USA) (Track 1).bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n",
+    );
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 77, |_| {}).await.unwrap();
+    assert_eq!((r.added, r.errors), (4, 0), "{r:?}");
+
+    let roms = repo.list().await.unwrap();
+    let row = |name: &str| {
+        roms.iter()
+            .find(|r| r.ident_name.as_deref() == Some(name))
+            .unwrap_or_else(|| panic!("{name}"))
+    };
+    for (name, size) in [("Jogo (USA).cso", 9), ("Jogo (USA).chd", 13)] {
+        let rom = row(name);
+        assert_eq!((rom.crc32.as_str(), rom.md5.as_str()), ("", ""), "{name}");
+        assert_eq!(rom.sha1, None, "{name}");
+        assert_eq!(rom.ident_size, Some(size as i64), "{name}");
+        assert_eq!(rom.serial, None, "{name}");
+        assert_eq!(rom.identified_at, Some(77), "{name}");
+    }
+    let disc = row("Jogo (USA).iso");
+    assert_eq!(disc.crc32, crc_of(&iso));
+    assert_eq!(disc.md5.len(), 32);
+    assert_eq!(disc.sha1.as_ref().map(String::len), Some(40));
+    assert_eq!(disc.ident_size, Some(iso.len() as i64));
+    assert_eq!(disc.serial.as_deref(), Some("MK-81022"));
+    assert_eq!(disc.identified_at, Some(77));
+    let cue = row("Outro (USA) (Track 1).bin");
+    assert_eq!(cue.crc32, crc_of(&iso));
+    assert_eq!(cue.serial.as_deref(), Some("MK-81022"));
+    assert!(cue.file_path.ends_with("Outro (USA).cue"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// `.cue` copiado antes do `.bin`: entra com o nome e o tamanho do cue e
+/// `identified_at` nulo, pro passo em segundo plano identificar depois.
+#[tokio::test]
+async fn cue_without_its_track_yet_is_left_for_late_identification() {
+    let dir = scratch_dir();
+    write(
+        &dir,
+        "psx/Jogo (USA).cue",
+        b"FILE \"Jogo (USA).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
+    );
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 55, |_| {}).await.unwrap();
+    assert_eq!((r.added, r.errors), (1, 0), "{r:?}");
+    let rom = &repo.list_by_system("psx").await.unwrap()[0];
+    assert_eq!(rom.ident_name.as_deref(), Some("Jogo (USA).cue"));
+    assert_eq!(rom.identified_at, None);
+    assert_eq!((rom.crc32.as_str(), rom.sha1.as_deref()), ("", None));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Linha que a varredura reclassifica (entrou como `disc`, a pasta diz
+/// `dreamcast`): a identidade fica pra calcular de novo, porque a trilha e o
+/// serial dependem do sistema. O resto da linha fica como estava.
+#[tokio::test]
+async fn reclassified_row_is_left_for_late_identification() {
+    let dir = scratch_dir();
+    write(
+        &dir,
+        "dreamcast/Jogo (USA).cue",
+        b"FILE \"Jogo (USA).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n",
+    );
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let path = dir
+        .join("dreamcast")
+        .join("Jogo (USA).cue")
+        .to_string_lossy()
+        .into_owned();
+    repo.add(&domain::library::Rom {
+        id: "velha".into(),
+        file_path: path.clone(),
+        crc32: "AAAAAAAA".into(),
+        md5: "m".into(),
+        system_id: "disc".into(),
+        identified_at: Some(1),
+        ident_name: Some("Jogo (USA).bin".into()),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+
+    let r = scan_into(&repo, &dir, 2, |_| {}).await.unwrap();
+    assert_eq!((r.reclassified, r.added), (1, 0), "{r:?}");
+    let rom = repo.find_by_path(&path).await.unwrap().unwrap();
+    assert_eq!(rom.system_id, "dreamcast");
+    assert_eq!(rom.identified_at, None);
+    assert_eq!(
+        rom.crc32, "AAAAAAAA",
+        "o hash antigo fica até ser recalculado"
+    );
+    let _ = std::fs::remove_dir_all(dir);
 }
