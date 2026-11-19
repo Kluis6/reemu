@@ -822,6 +822,60 @@ mod tests {
         assert_eq!(read_serial(&dir.path().join("Disco.iso"), "psx"), None);
     }
 
+    /// `FILE` de `.cue`/`.gdi` absoluto, com unidade, de rede ou com `..`:
+    /// nada fora da pasta é pedido. Fora da pasta o "mundo" tem um disco de
+    /// Saturn válido, então um caminho que escapasse daria serial.
+    #[test]
+    fn cue_and_gdi_never_open_outside_their_folder() {
+        use crate::disc_sniff::SHEET_ESCAPES;
+        use std::cell::RefCell;
+        let lib = Path::new("lib");
+        let world = to_raw(&saturn_image(), 1);
+        for name in SHEET_ESCAPES {
+            for (sheet, system, text) in [
+                (
+                    lib.join("Jogo.cue"),
+                    "saturn",
+                    format!("FILE \"{name}\" BINARY\n TRACK 01 MODE1/2352\n  INDEX 01 00:00:00\n"),
+                ),
+                (
+                    lib.join("Jogo.gdi"),
+                    "dreamcast",
+                    format!("1\n1 45000 4 2352 \"{name}\" 0\n"),
+                ),
+            ] {
+                let opened = RefCell::new(Vec::<PathBuf>::new());
+                let open = |p: &Path| -> io::Result<Box<dyn ReadSeek>> {
+                    opened.borrow_mut().push(p.to_path_buf());
+                    if p == sheet {
+                        Ok(Box::new(Cursor::new(text.clone().into_bytes())))
+                    } else if !p.starts_with(lib) {
+                        Ok(Box::new(Cursor::new(world.clone())))
+                    } else {
+                        Err(io::ErrorKind::NotFound.into())
+                    }
+                };
+                assert_eq!(read_serial_with(&sheet, system, &open), None, "{name}");
+                for p in opened.borrow().iter() {
+                    assert!(p.starts_with(lib), "{name} abriu {p:?}");
+                    assert!(
+                        !p.components()
+                            .any(|c| matches!(c, std::path::Component::ParentDir)),
+                        "{name} abriu {p:?}"
+                    );
+                }
+            }
+        }
+        // Controle: o "mundo" responde de verdade se o caminho chegar nele.
+        let open = |_: &Path| -> io::Result<Box<dyn ReadSeek>> {
+            Ok(Box::new(Cursor::new(world.clone())))
+        };
+        assert_eq!(
+            read_serial_with(Path::new("fora/Jogo.bin"), "saturn", &open).as_deref(),
+            Some("MK-81022")
+        );
+    }
+
     #[test]
     fn serial_normalisation() {
         assert_eq!(normalize_sony("SLUS_005.94").as_deref(), Some("SLUS-00594"));

@@ -5,7 +5,7 @@
 
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 const HEADER: usize = 256 * 1024;
 
@@ -32,13 +32,44 @@ fn sniff_cue(path: &Path) -> Option<&'static str> {
         .read_to_string(&mut text)
         .ok()?;
     let first = parse_cue(&text).into_iter().next()?;
-    let track = path.parent()?.join(first.file);
+    let track = sibling(path, &first.file)?;
     // Só arquivo comum: `FILE "CON"` viraria dispositivo no Windows.
     if !track.is_file() {
         return None;
     }
     sniff_disc_system(&track)
 }
+
+/// Arquivo citado num `.cue`/`.gdi`, na pasta dele. Só vale nome relativo
+/// que não sai da pasta: caminho absoluto, com unidade (`C:\x`, `D:x`), de
+/// rede (`\\servidor\x`, que no Windows abre conexão SMB) ou com `..` dá
+/// `None`, e nada fora da pasta é tocado.
+pub(crate) fn sibling(sheet: &Path, name: &str) -> Option<PathBuf> {
+    let rel = Path::new(name);
+    if rel
+        .components()
+        .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
+    {
+        return None;
+    }
+    Some(sheet.parent()?.join(rel))
+}
+
+/// Nomes de `FILE` que sairiam da pasta do cue: absoluto, com unidade, de
+/// rede, `..`. No Windows o [`sibling`] recusa todos; fora dele, `\` e `C:`
+/// não são separador nem unidade, e o nome vira um arquivo de nome esquisito
+/// dentro da pasta. Em nenhum caso o caminho sai dela.
+#[cfg(test)]
+pub(crate) const SHEET_ESCAPES: &[&str] = &[
+    "/fora/Jogo.bin",
+    r"C:\Fora\Jogo.bin",
+    "D:Jogo.bin",
+    r"\\servidor\share\Jogo.bin",
+    r"\\?\C:\Jogo.bin",
+    "../Jogo.bin",
+    r"..\Jogo.bin",
+    "sub/../../Jogo.bin",
+];
 
 /// Um `.cue` de verdade tem poucos KiB; acima disto não é cue.
 pub(crate) const CUE_MAX_BYTES: u64 = 256 * 1024;
@@ -294,5 +325,66 @@ mod tests {
         assert_eq!(identify(&cue("Bom.cue", "Jogo.bin")), Some("saturn"));
         assert_eq!(identify(&cue("Pasta.cue", "Pasta.bin")), None);
         assert_eq!(identify(&cue("Sumiu.cue", "Nada.bin")), None);
+    }
+
+    #[test]
+    fn sibling_never_leaves_the_folder() {
+        let sheet = Path::new("lib").join("Jogo.cue");
+        assert_eq!(
+            sibling(&sheet, "Jogo.bin"),
+            Some(Path::new("lib").join("Jogo.bin"))
+        );
+        assert_eq!(
+            sibling(&sheet, "sub/Jogo.bin"),
+            Some(Path::new("lib").join("sub/Jogo.bin"))
+        );
+        let absolute = std::env::temp_dir().join("Jogo.bin");
+        assert_eq!(sibling(&sheet, absolute.to_str().unwrap()), None);
+        for name in SHEET_ESCAPES {
+            match sibling(&sheet, name) {
+                None => {}
+                Some(p) => {
+                    if cfg!(windows) {
+                        panic!("{name} não é recusado no Windows: {p:?}");
+                    }
+                    assert!(p.starts_with("lib"), "{name} -> {p:?}");
+                    assert!(
+                        !p.components().any(|c| matches!(c, Component::ParentDir)),
+                        "{name} -> {p:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Cue que aponta pra um disco de Saturn de verdade fora da pasta (por
+    /// caminho absoluto ou com `..`): não é farejado, e o disco não é lido.
+    #[test]
+    fn cue_pointing_outside_its_folder_is_not_sniffed() {
+        let root = tempfile::tempdir().unwrap();
+        let lib = root.path().join("lib");
+        let fora = root.path().join("fora");
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::create_dir_all(&fora).unwrap();
+        let mut saturn = vec![0u8; 4096];
+        saturn[..16].copy_from_slice(b"SEGA SEGASATURN ");
+        std::fs::write(fora.join("Jogo.bin"), &saturn).unwrap();
+        std::fs::write(lib.join("Jogo.bin"), &saturn).unwrap();
+        let cue = |name: &str, file: &str| {
+            let p = lib.join(name);
+            let text =
+                format!("FILE \"{file}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n");
+            std::fs::write(&p, text).unwrap();
+            p
+        };
+        // Controle: o mesmo disco dentro da pasta é farejado.
+        assert_eq!(identify(&cue("Dentro.cue", "Jogo.bin")), Some("saturn"));
+        let absolute = fora.join("Jogo.bin");
+        assert_eq!(
+            identify(&cue("Absoluto.cue", absolute.to_str().unwrap())),
+            None
+        );
+        assert_eq!(identify(&cue("Sobe.cue", "../fora/Jogo.bin")), None);
+        assert_eq!(identify(&cue("SobeWin.cue", r"..\fora\Jogo.bin")), None);
     }
 }

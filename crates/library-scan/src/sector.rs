@@ -9,9 +9,9 @@
 //! quebrada: offset e tamanho vindos do arquivo são conferidos antes de usar.
 
 use crate::chd_reader::ChdTrack;
-use crate::disc_sniff::{parse_cue, CUE_MAX_BYTES};
+use crate::disc_sniff::{parse_cue, sibling, CUE_MAX_BYTES};
 use std::io::{self, Read, Seek, SeekFrom};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 
 /// Bytes de dados de usuário num setor.
 pub const USER_DATA: usize = 2048;
@@ -122,19 +122,6 @@ fn read_sheet(path: &Path, open: Opener) -> Option<String> {
         .read_to_end(&mut bytes)
         .ok()?;
     Some(String::from_utf8_lossy(&bytes).into_owned())
-}
-
-/// Arquivo de trilha citado num `.cue`/`.gdi`, ao lado dele. Caminho
-/// absoluto ou que sobe de pasta não vale.
-fn sibling(sheet: &Path, name: &str) -> Option<PathBuf> {
-    let rel = Path::new(name);
-    if rel
-        .components()
-        .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
-    {
-        return None;
-    }
-    Some(sheet.parent()?.join(rel))
 }
 
 /// A trilha de dados de um `.cue` ou `.gdi` (pela extensão de `path`).
