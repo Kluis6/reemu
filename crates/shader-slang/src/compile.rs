@@ -1873,7 +1873,9 @@ fn glsl_to_spirv(
         None,
     )
     .map_err(|e| err(e.to_string()))?;
-    let shader = glslang::Shader::new(compiler, input).map_err(|e| err(e.to_string()))?;
+    let shader = compiler
+        .create_shader(input)
+        .map_err(|e| err(e.to_string()))?;
     shader.compile().map_err(|e| err(e.to_string()))
 }
 
