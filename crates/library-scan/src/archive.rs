@@ -48,12 +48,14 @@ pub fn read_archive_entry(path: &Path, entry: &str) -> std::io::Result<Vec<u8>> 
 
 /// CRC32, MD5 e SHA1 de uma entrada, descomprimida aos poucos direto no
 /// hash: nunca inteira na memória (uma imagem de disco pode ter 1,5 GiB).
-/// `name` é o nome que vai no resultado.
+/// `name` é o nome que vai no resultado. Para depois de `cap` bytes
+/// descomprimidos, valha o índice o que valer: `Ok(None)`, sem hash.
 pub(crate) fn hash_archive_entry(
     path: &Path,
     entry: &str,
     name: &str,
-) -> std::io::Result<RomHashes> {
+    cap: u64,
+) -> std::io::Result<Option<RomHashes>> {
     if !is_7z(path) {
         let file = std::fs::File::open(path)?;
         let mut zip = zip::ZipArchive::new(BufReader::new(file))
@@ -61,7 +63,7 @@ pub(crate) fn hash_archive_entry(
         let f = zip
             .by_name(entry)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?;
-        return FileRomHasher::hash_reader(f, name);
+        return FileRomHasher::hash_reader_capped(f, name, cap);
     }
     let mut r = ArchiveReader::open(path, Password::empty())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
@@ -74,7 +76,7 @@ pub(crate) fn hash_archive_entry(
             return Ok(false);
         }
         if e.name() == entry {
-            out = Some(FileRomHasher::hash_reader(reader, name));
+            out = Some(FileRomHasher::hash_reader_capped(reader, name, cap));
             return Ok(false);
         }
         // As entradas de um bloco vêm em sequência: a de antes é lida (e

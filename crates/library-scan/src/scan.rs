@@ -66,9 +66,13 @@ impl From<RomHashes> for Identity {
 /// hash.
 const SERIAL_ONLY_EXTS: &[&str] = &["cso", "chd"];
 
-/// Maior imagem de disco lida inteira pro hash (um `.iso`, a trilha de um
-/// `.cue`/`.gdi`, ou um `.img`, `.pbp`, `.cdi`, `.mdf`, `.nrg` solto): 1,5
-/// GiB, na mesma leitura única do CRC32, do MD5 e do SHA1. Cabe a
+/// Maior arquivo lido inteiro pro hash (um `.iso`, a trilha de um
+/// `.cue`/`.gdi`, um `.img`, `.pbp`, `.cdi`, `.mdf`, `.nrg` solto, e também
+/// qualquer outro arquivo ou entrada de `.zip`/`.7z`): 1,5 GiB, na mesma
+/// leitura única do CRC32, do MD5 e do SHA1. É um limite da própria leitura,
+/// não só do tamanho visto antes: entrada que descomprime mais do que o
+/// índice diz, ou arquivo que cresce enquanto é lido, para aqui sem hash.
+/// Cabe a
 /// maior trilha de CD (~999 MiB crus num CD de 99 minutos: 445.500 setores
 /// de 2352 bytes) e a trilha 3 de um
 /// GD-ROM de Dreamcast (até 504.150 setores de 2352 bytes, 1.185.760.800
@@ -136,7 +140,9 @@ fn file_identity(
                 return provisional(path);
             };
             match sheet_data_track(path, &text, Area::for_system(system_id)) {
-                Some(track) if track.file.is_file() => disc_identity(&track.file, open, hash_max),
+                Some(track) if track.file.is_file() => {
+                    bounded_identity(&track.file, open, hash_max)
+                }
                 // A trilha citada não está lá (ainda: o `.bin` pode chegar
                 // depois do `.cue`).
                 Some(_) => provisional(path),
@@ -145,40 +151,47 @@ fn file_identity(
             }
         }
         e if SERIAL_ONLY_EXTS.contains(&e) => unhashed(path),
-        e if AMBIGUOUS_DISC_EXTS.contains(&e) => disc_identity(path, open, hash_max),
-        _ => hash_whole(path, open),
+        _ => bounded_identity(path, open, hash_max),
     }
 }
 
-/// Imagem de disco (ou trilha dela): lida inteira só até `hash_max`.
-fn disc_identity(path: &Path, open: Opener, hash_max: u64) -> std::io::Result<Identity> {
+/// Arquivo solto (ROM, imagem ou trilha): CRC32, MD5 e SHA1 numa leitura só,
+/// se couber em `hash_max`, pelo tamanho de agora e na própria leitura. Não
+/// coube: o nome e o tamanho, sem hash.
+fn bounded_identity(path: &Path, open: Opener, hash_max: u64) -> std::io::Result<Identity> {
     let id = unhashed(path)?;
     if id.size > hash_max {
         return Ok(id);
     }
-    hash_whole(path, open)
+    match FileRomHasher::hash_reader_capped(BufReader::new(open(path)?), &id.name, hash_max)? {
+        Some(h) => Ok(h.into()),
+        // Cresceu enquanto era lido (cópia em andamento): o tamanho de agora.
+        None => unhashed(path),
+    }
 }
 
-/// A ROM de dentro de um `.zip`/`.7z`. Um `.cso`/`.chd` lá dentro, ou outra
-/// imagem de disco (o `.iso` também) acima de `hash_max`, fica com o nome e
-/// o tamanho do índice do arquivo, sem descomprimir. O resto é descomprimido aos poucos
-/// direto no hash, nunca inteiro na memória.
+/// A ROM de dentro de um `.zip`/`.7z`. Um `.cso`/`.chd` lá dentro, ou
+/// qualquer entrada acima de `hash_max`, fica com o nome e o tamanho do
+/// índice do arquivo, sem descomprimir. O resto é descomprimido aos poucos
+/// direto no hash, nunca inteiro na memória, e para em `hash_max` mesmo que
+/// o índice minta.
 fn archived_identity(path: &Path, entry: &str, hash_max: u64) -> std::io::Result<Identity> {
-    let name = file_name_of(entry);
-    let ext = ext_of(Path::new(entry));
-    if AMBIGUOUS_DISC_EXTS.contains(&ext.as_str()) {
-        let size = archive_entry_size(path, entry)?;
-        if SERIAL_ONLY_EXTS.contains(&ext.as_str()) || size > hash_max {
-            return Ok(Identity {
-                hashes: None,
-                name,
-                size,
-                serial: None,
-                provisional: false,
-            });
-        }
+    let index_only = Identity {
+        hashes: None,
+        name: file_name_of(entry),
+        size: archive_entry_size(path, entry)?,
+        serial: None,
+        provisional: false,
+    };
+    if SERIAL_ONLY_EXTS.contains(&ext_of(Path::new(entry)).as_str()) || index_only.size > hash_max {
+        return Ok(index_only);
     }
-    Ok(hash_archive_entry(path, entry, &name)?.into())
+    Ok(
+        match hash_archive_entry(path, entry, &index_only.name, hash_max)? {
+            Some(h) => h.into(),
+            None => index_only,
+        },
+    )
 }
 
 /// Nome e tamanho de `path`, sem ler o conteúdo.
@@ -205,12 +218,6 @@ fn ext_of(path: &Path) -> String {
         .and_then(|e| e.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase()
-}
-
-/// CRC32, MD5 e SHA1 do arquivo inteiro, numa leitura só.
-fn hash_whole(path: &Path, open: Opener) -> std::io::Result<Identity> {
-    let name = file_name_of(&path.to_string_lossy());
-    Ok(FileRomHasher::hash_reader(BufReader::new(open(path)?), &name)?.into())
 }
 
 /// Pastas ancestrais de `path` (relativas a `root`), da mais próxima da raiz
@@ -813,6 +820,126 @@ mod tests {
             assert_eq!(id.hashes, Some(digests_of(&track)), "{sheet}");
             assert!(!id.provisional, "{sheet}");
         }
+    }
+
+    /// Fonte que entrega `left` bytes e finge que dá pra voltar: um arquivo
+    /// que cresce enquanto é lido (no disco ele mede menos).
+    struct Growing {
+        left: u64,
+    }
+
+    impl Read for Growing {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            let n = buf
+                .len()
+                .min(usize::try_from(self.left).unwrap_or(usize::MAX));
+            buf[..n].fill(0x22);
+            self.left -= n as u64;
+            Ok(n)
+        }
+    }
+
+    impl Seek for Growing {
+        fn seek(&mut self, _: SeekFrom) -> std::io::Result<u64> {
+            Ok(0)
+        }
+    }
+
+    /// Entrada guardada sem compressão (`.zip` ou `.7z` em COPY) de 128 KiB,
+    /// com um byte estragado perto do fim: lida até o fim, o CRC não bate.
+    fn bomb(dir: &Path, archive: &str) -> PathBuf {
+        let path = dir.join(archive);
+        let data = vec![0x5Au8; 128 * 1024];
+        if archive.ends_with(".zip") {
+            let mut zw = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+            zw.start_file(
+                "Bomba.bin",
+                zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Stored),
+            )
+            .unwrap();
+            zw.write_all(&data).unwrap();
+            zw.finish().unwrap();
+        } else {
+            let mut w = sevenz_rust2::ArchiveWriter::create(&path).unwrap();
+            w.set_content_methods(vec![sevenz_rust2::EncoderConfiguration::new(
+                sevenz_rust2::EncoderMethod::COPY,
+            )]);
+            w.push_archive_entry(
+                sevenz_rust2::ArchiveEntry::new_file("Bomba.bin"),
+                Some(Cursor::new(data)),
+            )
+            .unwrap();
+            w.finish().unwrap();
+        }
+        let mut bytes = std::fs::read(&path).unwrap();
+        let at = bytes.windows(4096).position(|w| w == [0x5A; 4096]).unwrap();
+        bytes[at + 120 * 1024] ^= 0xFF;
+        std::fs::write(&path, &bytes).unwrap();
+        path
+    }
+
+    /// Toda leitura de identidade para no limite, não só a de imagem de
+    /// disco: a entrada de cartucho grande fica com o índice; a leitura de
+    /// uma entrada que passa do limite para nele, valha o índice o que valer
+    /// (zip bomb); e o arquivo solto que cresce enquanto é lido também.
+    #[test]
+    fn every_identity_read_stops_at_the_cap() {
+        let dir = tempfile::tempdir().unwrap();
+        const MIB: u64 = 1024 * 1024;
+
+        // Cartucho (`.nes`) de 1 MiB num zip, limite de 64 KiB: pelo índice.
+        let zip_path = dir.path().join("Cartucho.zip");
+        {
+            let mut zw = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+            zw.start_file(
+                "Jogo (USA).nes",
+                zip::write::SimpleFileOptions::default()
+                    .compression_method(zip::CompressionMethod::Deflated),
+            )
+            .unwrap();
+            std::io::copy(&mut std::io::repeat(0x5A).take(MIB), &mut zw).unwrap();
+            zw.finish().unwrap();
+        }
+        let id = identify_with(
+            &zip_path,
+            "nes",
+            Some("Jogo (USA).nes"),
+            &open_file,
+            64 * 1024,
+        )
+        .unwrap();
+        assert_eq!(
+            (id.hashes, id.name.as_str(), id.size),
+            (None, "Jogo (USA).nes", MIB)
+        );
+
+        // A leitura em si para no limite: com 32 KiB ela nunca chega ao byte
+        // estragado nem ao CRC do fim. Controle: lida inteira, falha.
+        for archive in ["Bomba.zip", "Bomba.7z"] {
+            let path = bomb(dir.path(), archive);
+            assert!(
+                hash_archive_entry(&path, "Bomba.bin", "Bomba.bin", MIB).is_err(),
+                "{archive}: controle"
+            );
+            let h = hash_archive_entry(&path, "Bomba.bin", "Bomba.bin", 32 * 1024).unwrap();
+            assert_eq!(h, None, "{archive}");
+        }
+
+        // No disco 64 KiB (dentro do limite de 1 MiB), mas a leitura entrega
+        // 16 MiB: para em 1 MiB + 1 byte, sem hash, com o tamanho do disco.
+        let rom = put(dir.path(), "Jogo.gba", &[0x11; 64 * 1024]);
+        let read = Arc::new(AtomicU64::new(0));
+        let growing = |_: &Path| -> std::io::Result<Box<dyn ReadSeek>> {
+            Ok(Box::new(Counting {
+                inner: Box::new(Growing { left: 16 * MIB }),
+                read: read.clone(),
+            }))
+        };
+        let id = identify_with(&rom, "gba", None, &growing, MIB).unwrap();
+        assert_eq!(id.hashes, None);
+        assert_eq!((id.name.as_str(), id.size), ("Jogo.gba", 64 * 1024));
+        assert_eq!(read.load(Ordering::Relaxed), MIB + 1);
     }
 
     /// Cue cujo texto não se lê, ou cuja trilha ainda não chegou: provisório.

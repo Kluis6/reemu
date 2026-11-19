@@ -83,6 +83,38 @@ impl FileRomHasher {
     }
 }
 
+impl FileRomHasher {
+    /// Como [`hash_reader`](Self::hash_reader), mas lê no máximo `cap + 1`
+    /// bytes de `reader`. Se passar de `cap` (um zip bomb, ou um arquivo que
+    /// cresce enquanto é lido), `Ok(None)`: sem hash, e nada além disso lido.
+    pub(crate) fn hash_reader_capped<R: Read>(
+        reader: R,
+        name: &str,
+        cap: u64,
+    ) -> std::io::Result<Option<RomHashes>> {
+        let mut limited = Counted {
+            inner: reader.take(cap.saturating_add(1)),
+            read: 0,
+        };
+        let hashes = Self::hash_reader(&mut limited, name)?;
+        Ok((limited.read <= cap).then_some(hashes))
+    }
+}
+
+/// Leitor que conta os bytes que entrega.
+struct Counted<R> {
+    inner: R,
+    read: u64,
+}
+
+impl<R: Read> Read for Counted<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(buf)?;
+        self.read += n as u64;
+        Ok(n)
+    }
+}
+
 impl RomHashService for FileRomHasher {
     fn compute(&self, file_path: &str) -> Result<RomHash, String> {
         Self::hash_file(file_path)
@@ -180,6 +212,24 @@ mod tests {
         let b = FileRomHasher::hash_file(&tmp("nes-body", body)).unwrap();
         assert_eq!(a.crc32, b.crc32, "hash deve ignorar o header iNES");
         assert_eq!(a.md5, b.md5);
+    }
+
+    /// Uma fonte bem maior que o limite (como um zip bomb): a leitura para
+    /// um byte depois do limite e não dá hash; no limite, dá.
+    #[test]
+    fn capped_read_stops_one_byte_past_the_cap() {
+        const CAP: u64 = 1024 * 1024;
+        let mut bomb = Counted {
+            inner: std::io::repeat(0x5A).take(64 * CAP),
+            read: 0,
+        };
+        let h = FileRomHasher::hash_reader_capped(&mut bomb, "bomba", CAP).unwrap();
+        assert_eq!(h, None);
+        assert_eq!(bomb.read, CAP + 1);
+
+        let exact = std::io::repeat(0x5A).take(CAP);
+        let h = FileRomHasher::hash_reader_capped(exact, "certo", CAP).unwrap();
+        assert_eq!(h.map(|h| h.size), Some(CAP));
     }
 
     #[test]
