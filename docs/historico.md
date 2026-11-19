@@ -3792,3 +3792,13 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Versão:** 0.1.15 → 0.1.16 em `Cargo.toml` (workspace), `tauri.conf.json` e `package.json`; o `Cargo.lock` mudou só nas versões dos 15 crates do workspace.
 - **Testes antes da tag:** `cargo test --workspace` com 763 ok e 34 ignorados; 434 testes do frontend. Testes de GPU ignorados não rodaram.
 - **O que entra, desde a v0.1.15:** botões favoritar, editar, informações e excluir da página do jogo com fundo sólido do tema.
+
+## 2026-11-19 - Biblioteca pelo catálogo, parte 1: a identidade na varredura
+
+- **O que é:** cada ROM ganha uma identidade de verdade na varredura, para o catálogo do Alvanista (parte 2) achar o jogo. Migração `0024_rom_identity.sql`: `roms.sha1`, `serial`, `ident_name`, `ident_size`, `identified_at`. Biblioteca já escaneada não é relida; a parte 2 identifica as linhas antigas em segundo plano.
+- **Hashes** (`identity.rs`, `hash.rs`): CRC32, MD5 e SHA1 numa leitura só, sem o cabeçalho iNES nos três nem no tamanho. Zip/7z: a entrada de dentro, lida aos poucos direto no hash. cue/gdi: a primeira trilha de dados (`MODE1`/`MODE2`; no gdi do Dreamcast a trilha 3), achada só dentro da pasta do `.cue` (`sibling()`); folha com BOM ou em Windows-1252 também vale.
+- **Teto de 1,5 GiB:** nenhuma leitura de identidade passa disso (arquivo solto, trilha, entrada de zip/7z; a trilha 3 de um GD-ROM chega a 1,10 GiB). Acima dele, nome, tamanho e serial sem hash. ISO até o teto tem hash; CHD e CSO só pelo serial.
+- **Serial do disco** (`serial.rs`, `iso9660.rs`, `sector.rs`, `chd_reader.rs`), em até 2 MiB de dados: PS1/PS2 (`SYSTEM.CNF`), PSP (`PARAM.SFO`), Saturn e Sega CD (cabeçalho), Dreamcast (IP.BIN). ISO, BIN pelo CUE, IMG e CHD (crate `chd`). O índice do CHD é lido inteiro, com limite pelo número de hunks.
+- **Arquivo quebrado:** todo tamanho vindo do arquivo tem limite; o pânico do `chd` fica num `catch_unwind` (e um `compile_error!` impede `panic = "abort"`); hunk circular, alocação enorme, CHD com pai e mapa sem marcador de fim são recusados antes.
+- **Metadados:** disco sem hash vai ao ScreenScraper por serial e nome (sem `romtaille` no CHD/CSO); 400 num pedido sem hash conta como não achado e o TheGamesDB tenta.
+- **Segurança:** erro do reqwest perde a URL antes do log e da tela (levava a senha de desenvolvedor, o login e a senha do ScreenScraper e a chave do TheGamesDB); `FILE` de cue/gdi absoluto, de rede ou com `..` é recusado (no Windows um caminho de rede abria conexão SMB); varredura e scraping sem nome nem caminho de arquivo no log.
