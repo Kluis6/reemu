@@ -76,19 +76,12 @@ o card atual fica.
 
 ### Validação (precisa de hardware/máquina que não é esta)
 
-- [ ] `todo` — **`zip` 4.6.1 no auto-update do Windows** (2026-11-03): a migração para a
-      `zip` 9 (PR #10) cobre o app, mas o `tauri-plugin-updater` 2.14.0 ainda traz a 4.6.1
-      (alertas críticos e altos do Dependabot). A 2.14.1 já usa `zip` 9, só que leva o Cargo
-      a versões antigas da crate `windows` (0.62 → 0.61, `windows-sys` 0.61 → 0.60) e o
-      `gpu-allocator` do `wgpu-hal` deixa de compilar no Windows. Risco baixo: o plugin
-      confere a assinatura do arquivo baixado antes de abrir o zip. Tentar de novo quando
-      sair uma versão do plugin, do `wgpu` ou do `gpu-allocator` compatível; conferir com
-      `scripts/check-windows.sh`.
-      Reconferido em 2026-11-13: além do updater 2.14.1, os patches `wry` 0.57.2 e
-      `tauri-plugin-log` 2.10.2, cada um sozinho, também puxam o `windows` 0.61 e quebram o
-      `wgpu-hal` 30 no Windows. Saídas a avaliar (não verificadas): uma versão nova do
-      `wgpu`/`gpu-allocator` compatível com o `windows` 0.62, ou fixar o `windows`; precisa de
-      aviso (é GPU).
+- [x] `done` — **Remover `zip` 4.6.1 do auto-update** (2026-11-19).
+      O manifesto publica instaladores Tauri v2 assinados: NSIS, MSI e
+      AppImage. O updater continua na 2.14.0, com TLS e proxy do sistema,
+      e o recurso opcional para pacotes compactados foi desabilitado.
+      Isso remove a dependência antiga e as quatro exceções de ZIP na CI.
+      [Formatos oficiais do updater](https://v2.tauri.app/plugin/updater/#building).
 - [ ] `todo` — **`cargo audit`: avisos sem correção disponível** (2026-11-12). Ignorados
       no `ci.yml`, com o motivo lá: `libsqlite3-sys` 0.30 (RUSTSEC-2026-0459, CVE no SQLite
       em C; a correção pede a 0.39, que nem o sqlx 0.9.0 aceita — esperar o sqlx) e `rsa`
