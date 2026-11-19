@@ -1149,6 +1149,7 @@ const ptBR = {
     alvaInvite: 'Conecte sua conta Alvanista para mostrar aqui a sua capa, a bio, o nível e as badges. O seu perfil local continua guardado.',
     alvaCardAge: 'atualizado {{age}}',
     alvaHoursValue: '{{hours}} h',
+    alvaCloudSave: 'Saves na nuvem',
     chipAlvanista: 'Alvanista',
     defaultName: 'Jogador',
     libraryError: 'Não foi possível ler a biblioteca.',

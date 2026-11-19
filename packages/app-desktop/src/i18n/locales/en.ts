@@ -1148,6 +1148,7 @@ const en: Messages = {
     alvaInvite: 'Connect your Alvanista account to show your cover, bio, level and badges here. Your local profile stays saved.',
     alvaCardAge: 'updated {{age}}',
     alvaHoursValue: '{{hours}} h',
+    alvaCloudSave: 'Cloud saves',
     chipAlvanista: 'Alvanista',
     defaultName: 'Player',
     libraryError: 'Could not read the library.',
