@@ -200,11 +200,14 @@ pra calcular o SHA1 da ROM na mesma leitura do CRC32 e do MD5.
 ## chd (crate Rust, chd-rs)
 
 Origem: <https://crates.io/crates/chd> (<https://github.com/SnowflakePowered/chd-rs>).
-Usada em `crates/library-scan/src/sector.rs` pra ler setores de dentro de um
-`.chd` (só os poucos hunks com o cabeçalho do disco) e tirar dele o serial do
-jogo. Puro Rust. Traz junto, todas MIT, Apache-2.0 ou as duas: `bitreader`,
-`claxon`, `lzma-rust2`, `text_io`, `fearless_simd` e `zrip` (`zrip-core`,
-`zrip-decode`, `zrip-encode`). O encoder (`encode`) só entra nos testes.
+Usada em `crates/library-scan/src/chd_reader.rs` pra ler setores de dentro de
+um `.chd` e tirar dele o serial do jogo: o índice do arquivo (cabeçalho,
+metadados e mapa de hunks) é lido inteiro, e da imagem só os poucos hunks com
+o cabeçalho do disco. Puro Rust. Traz junto, todas MIT, Apache-2.0 ou as duas:
+`bitreader`, `claxon`, `lzma-rust2`, `text_io`, `fearless_simd` e `zrip`
+(`zrip-core`, `zrip-decode`, `zrip-encode`; o `zrip-encode` vai no app junto
+com o resto do `zrip`). Só a feature `encode` do próprio `chd`, que monta
+`.chd` pros testes, fica fora do app.
 
 ```
 Copyright (c) 2022 Ronny Chan

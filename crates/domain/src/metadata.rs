@@ -14,8 +14,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 /// CRC32 e MD5 de uma ROM. Vazios quando a varredura não leu o arquivo
-/// inteiro (ISO, CSO, CHD, imagem de disco grande): aí a busca vai pelo
-/// serial, pelo nome e pelo tamanho de [`ScrapeQuery`].
+/// inteiro (CSO, CHD, ou arquivo acima de 1,5 GiB, como um ISO de DVD): aí a
+/// busca vai pelo serial, pelo nome e pelo tamanho de [`ScrapeQuery`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RomHash {
     pub crc32: String,

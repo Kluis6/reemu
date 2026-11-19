@@ -709,7 +709,8 @@ fn hash_and_stem(rom: &Rom) -> (RomHash, String) {
 
 /// URL do `jeuInfos.php` pra `q`; `None` pra sistema que o ScreenScraper não
 /// cobre (ex: 'disc'). Com hash, pergunta pelo CRC32 e pelo MD5. Sem hash
-/// (ISO, CSO, CHD, imagem de disco grande), pelo serial (`serialnum`), pelo
+/// (CSO, CHD, ou ISO e imagem de disco acima de 1,5 GiB), pelo serial
+/// (`serialnum`), pelo
 /// nome com a extensão (`romnom`) e pelo tamanho (`romtaille`), que a API
 /// também aceita (doc da API v2, `jeuInfos.php`).
 fn screenscraper_url(
@@ -782,7 +783,7 @@ async fn query_screenscraper(
     if status.as_u16() == 404 || body.contains("Erreur : Rom/Iso/Dossier non trouv") {
         return Ok(None);
     }
-    // Sem hash (ISO, CSO, CHD, disco grande) o pedido vai só com serial, nome
+    // Sem hash (CSO, CHD, disco acima de 1,5 GiB) o pedido vai só com serial, nome
     // e tamanho, e a doc da API pede um hash: o 400 que vem disso ("Il manque
     // des champs obligatoires dans l'url") conta como não achado. Assim o
     // TheGamesDB tenta pelo nome e a ROM não volta pra fila a cada leva.
@@ -1050,12 +1051,12 @@ async fn scrape_pending_with(
                 }
                 Ok(Outcome::NoMatch) => {}
                 Err(e) => {
-                    log::warn!("metadata: gravar match de {stem}: {e}");
+                    log::warn!("metadata: gravar o resultado de uma ROM: {e}");
                     progress.failed.fetch_add(1, Ordering::Relaxed);
                 }
             },
             Err(e) => {
-                log::warn!("metadata: {stem}: {e}");
+                log::warn!("metadata: consulta de uma ROM: {e}");
                 progress.failed.fetch_add(1, Ordering::Relaxed);
                 // erro de quota/rede: espera mais antes de continuar
                 tokio::time::sleep(providers.error_pause).await;
@@ -1222,7 +1223,8 @@ mod tests {
         assert_eq!(search_title("(Beta)"), "");
     }
 
-    /// Disco que a varredura guardou sem hash (ISO, CSO, CHD): o pedido ao
+    /// Disco que a varredura guardou sem hash (CSO, CHD, ISO acima de 1,5
+    /// GiB): o pedido ao
     /// ScreenScraper vai pelo serial, pelo nome com a extensão e pelo
     /// tamanho, sem `crc`/`md5` vazios, e um hash vazio na resposta não conta
     /// como correspondência exata.
@@ -1526,6 +1528,69 @@ mod tests {
         for text in [&ui, &ss, &tgdb] {
             assert!(text.starts_with("rede: "), "{text}");
             for secret in &secrets {
+                assert!(!text.contains(secret), "{secret} em {text:?}");
+            }
+        }
+    }
+
+    /// Servidor que promete 100 bytes de corpo, manda 10 e fecha: a falha
+    /// vem na leitura do corpo, não no envio.
+    fn truncated_mock() -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut s) = stream else { continue };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 1024];
+                while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+                    match s.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => head.extend_from_slice(&buf[..n]),
+                    }
+                }
+                let _ = s.write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\n0123456789",
+                );
+            }
+        });
+        base
+    }
+
+    /// Corpo que não chega inteiro: o erro de leitura do corpo, nos dois
+    /// provedores, também sai sem a URL e sem as senhas. No reqwest 0.12 esse
+    /// erro já vem sem a URL (o do envio é que traz); o teste prende o
+    /// comportamento pra uma troca de versão.
+    #[tokio::test]
+    async fn body_error_has_no_url_nor_password() {
+        let providers = local(&truncated_mock());
+        let disc = hashless_disc();
+        let cfg = MetadataConfig {
+            screenscraper_user: Some("pessoa-login".into()),
+            screenscraper_password: Some("senha-da-pessoa".into()),
+            ..Default::default()
+        };
+        let client = reqwest::Client::new();
+        let (hash, stem) = hash_and_stem(&disc);
+        let q = rom_query(&disc, &hash, &stem);
+        let ss = query_screenscraper(&client, &cfg, &q, &providers.screenscraper)
+            .await
+            .unwrap_err();
+        let tgdb = query_thegamesdb(&client, "chave-tgdb", &q, &providers.thegamesdb)
+            .await
+            .unwrap_err();
+        for text in [&ss, &tgdb] {
+            for secret in [
+                "senha-da-pessoa",
+                "pessoa-login",
+                "chave-tgdb",
+                "sspassword",
+                "apikey",
+                "SCUS-94900",
+                "Crash",
+                "127.0.0.1",
+            ] {
                 assert!(!text.contains(secret), "{secret} em {text:?}");
             }
         }
