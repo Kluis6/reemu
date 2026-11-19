@@ -2,7 +2,7 @@
 
 use crate::archive::{archive_entry_size, is_supported_archive, peek_archive, read_archive_entry};
 use crate::hash::{file_name_of, FileRomHasher, RomHashes};
-use crate::sector::{data_track, open_file, Area, Opener};
+use crate::sector::{open_file, read_sheet, sheet_data_track, Area, Opener};
 use crate::systems::{
     folder_only_exts, folder_only_flat, system_for_extension, system_from_folder_name,
     AMBIGUOUS_DISC_EXTS,
@@ -27,6 +27,11 @@ pub struct Identity {
     /// Serial do disco, lido da imagem solta (`None` em cartucho, dentro de
     /// `.zip`/`.7z`, ou quando não se lê).
     pub serial: Option<String>,
+    /// A trilha que o `.cue`/`.gdi` cita não estava lá, ou o texto dele não
+    /// se leu: o nome e o tamanho são os do próprio cue, por enquanto. A
+    /// varredura grava a linha com `identified_at` nulo, e o passo em segundo
+    /// plano calcula de novo quando a trilha aparecer.
+    pub provisional: bool,
 }
 
 /// CRC32 (maiúsculas), MD5 e SHA1 (minúsculas) de uma leitura só.
@@ -48,6 +53,7 @@ impl From<RomHashes> for Identity {
             name: h.name,
             size: h.size,
             serial: None,
+            provisional: false,
         }
     }
 }
@@ -60,7 +66,8 @@ const SERIAL_ONLY_EXTS: &[&str] = &["iso", "cso", "chd"];
 
 /// Maior imagem de disco lida inteira pro hash (a trilha de um `.cue`/`.gdi`,
 /// ou um `.img`, `.pbp`, `.cdi`, `.mdf`, `.nrg` solto): 1,5 GiB. Cabe a
-/// maior trilha de CD (~870 MiB num CD de 99 minutos) e a trilha 3 de um
+/// maior trilha de CD (~999 MiB crus num CD de 99 minutos: 445.500 setores
+/// de 2352 bytes) e a trilha 3 de um
 /// GD-ROM de Dreamcast (até 504.150 setores de 2352 bytes, 1.185.760.800
 /// bytes), que o catálogo e o ScreenScraper conhecem pelo hash. Uma trilha
 /// de DVD (PS2, até 8,5 GB) passa disso e fica com o serial, o nome e o
@@ -109,7 +116,8 @@ fn identify_with(
 /// pelo texto deles: é o hash da trilha que o Redump, o ScreenScraper e o
 /// catálogo conhecem (D138). A trilha só é alcançada dentro da pasta do
 /// cue ([`crate::disc_sniff::sibling`]) e se for arquivo comum; sem ela, o
-/// nome e o tamanho do próprio cue, sem hash. `.iso`, `.cso` e `.chd` nunca
+/// nome e o tamanho do próprio cue, sem hash (provisório se a trilha só não
+/// está lá ainda, ou se o texto não se leu). `.iso`, `.cso` e `.chd` nunca
 /// são lidos ([`SERIAL_ONLY_EXTS`]); imagem ou trilha acima de `hash_max`
 /// também não.
 fn file_identity(
@@ -120,10 +128,19 @@ fn file_identity(
 ) -> std::io::Result<Identity> {
     let ext = ext_of(path);
     match ext.as_str() {
-        "cue" | "gdi" => match data_track(path, Area::for_system(system_id), open) {
-            Some(track) if track.file.is_file() => disc_identity(&track.file, open, hash_max),
-            _ => unhashed(path),
-        },
+        "cue" | "gdi" => {
+            let Some(text) = read_sheet(path, open) else {
+                return provisional(path);
+            };
+            match sheet_data_track(path, &text, Area::for_system(system_id)) {
+                Some(track) if track.file.is_file() => disc_identity(&track.file, open, hash_max),
+                // A trilha citada não está lá (ainda: o `.bin` pode chegar
+                // depois do `.cue`).
+                Some(_) => provisional(path),
+                // Sem trilha de dados, ou citando fora da pasta: não muda.
+                None => unhashed(path),
+            }
+        }
         e if SERIAL_ONLY_EXTS.contains(&e) => unhashed(path),
         e if AMBIGUOUS_DISC_EXTS.contains(&e) => disc_identity(path, open, hash_max),
         _ => hash_whole(path, open),
@@ -153,6 +170,7 @@ fn archived_identity(path: &Path, entry: &str, hash_max: u64) -> std::io::Result
                 name,
                 size,
                 serial: None,
+                provisional: false,
             });
         }
     }
@@ -167,6 +185,15 @@ fn unhashed(path: &Path) -> std::io::Result<Identity> {
         name: file_name_of(&path.to_string_lossy()),
         size: std::fs::metadata(path)?.len(),
         serial: None,
+        provisional: false,
+    })
+}
+
+/// Como [`unhashed`], marcado pra ser calculado de novo.
+fn provisional(path: &Path) -> std::io::Result<Identity> {
+    Ok(Identity {
+        provisional: true,
+        ..unhashed(path)?
     })
 }
 
@@ -573,7 +600,7 @@ where
             serial: id.serial,
             ident_name: Some(id.name),
             ident_size: i64::try_from(id.size).ok(),
-            identified_at: Some(now_unix),
+            identified_at: (!id.provisional).then_some(now_unix),
         })
         .await?;
         report.added += 1;
@@ -691,6 +718,11 @@ mod tests {
         assert_eq!(id.name, "track 03.bin");
         assert_eq!(id.size, t3.len() as u64);
         assert_eq!(id.hashes, Some(digests_of(&t3)));
+        // O mesmo gdi como outro sistema (pasta que diz outra coisa): a área
+        // de alta densidade é só do Dreamcast, vale a 1ª trilha de dados.
+        let id = identify(&gdi, "psx", None).unwrap();
+        assert_eq!(id.name, "track01.bin");
+        assert_eq!(id.hashes, Some(digests_of(&t1)));
 
         // Sem a trilha 3 (sem área de alta densidade): a 1ª trilha de dados.
         let gdi = put(
@@ -718,22 +750,28 @@ mod tests {
                     .as_bytes(),
             )
         };
-        for (sheet, why) in [
+        // `provisional`: a trilha pode aparecer depois (calcula de novo); o
+        // resto não muda com o tempo.
+        for (sheet, provisional, why) in [
             (
                 cue("Sumiu.cue", "Sumiu.bin", "MODE2/2352"),
+                true,
                 "trilha que não existe",
             ),
             (
                 cue("Pasta.cue", "Pasta.bin", "MODE2/2352"),
+                true,
                 "trilha que é pasta",
             ),
             (
                 cue("Sobe.cue", "../Fora.bin", "MODE2/2352"),
+                false,
                 "trilha fora da pasta",
             ),
-            (cue("Musica.cue", "Pasta.bin", "AUDIO"), "só áudio"),
+            (cue("Musica.cue", "Pasta.bin", "AUDIO"), false, "só áudio"),
             (
                 put(&lib, "Gd.gdi", b"1\n1 0 4 2352 nada.bin 0\n"),
+                true,
                 "gdi sem a trilha",
             ),
         ] {
@@ -742,7 +780,40 @@ mod tests {
             assert_eq!(id.name, own, "{why}");
             assert_eq!(id.size, std::fs::metadata(&sheet).unwrap().len(), "{why}");
             assert_eq!(id.hashes, None, "{why}");
+            assert_eq!(id.provisional, provisional, "{why}");
         }
+    }
+
+    /// Cue cujo texto não se lê, ou cuja trilha ainda não chegou: provisório.
+    /// Quando a trilha aparece, a mesma conta dá a identidade dela.
+    #[test]
+    fn unreadable_sheet_or_missing_track_is_identified_again_later() {
+        let dir = tempfile::tempdir().unwrap();
+        let text =
+            "FILE \"Jogo (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n";
+        let cue = put(dir.path(), "Jogo.cue", text.as_bytes());
+
+        let id = identify(&cue, "psx", None).unwrap();
+        assert!(id.provisional, "trilha que ainda não chegou");
+        assert_eq!((id.name.as_str(), id.hashes.as_ref()), ("Jogo.cue", None));
+
+        let track: Vec<u8> = (0..2352 * 4).map(|i| (i % 17) as u8).collect();
+        put(dir.path(), "Jogo (Track 1).bin", &track);
+        let id = identify(&cue, "psx", None).unwrap();
+        assert!(!id.provisional);
+        assert_eq!(id.name, "Jogo (Track 1).bin");
+        assert_eq!(id.hashes, Some(digests_of(&track)));
+
+        // O texto do cue não se lê (o arquivo existe, a leitura falha).
+        let refuse = |p: &Path| -> std::io::Result<Box<dyn ReadSeek>> {
+            if p.extension().is_some_and(|e| e == "cue") {
+                return Err(std::io::ErrorKind::PermissionDenied.into());
+            }
+            open_file(p)
+        };
+        let id = identify_with(&cue, "psx", None, &refuse, DISC_HASH_MAX).unwrap();
+        assert!(id.provisional, "texto que não se lê");
+        assert_eq!((id.name.as_str(), id.hashes), ("Jogo.cue", None));
     }
 
     #[test]

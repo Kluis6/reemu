@@ -646,3 +646,24 @@ async fn disc_rows_keep_name_size_and_serial_without_hashes() {
     assert!(cue.file_path.ends_with("Outro (USA).cue"));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// `.cue` copiado antes do `.bin`: entra com o nome e o tamanho do cue e
+/// `identified_at` nulo, pro passo em segundo plano identificar depois.
+#[tokio::test]
+async fn cue_without_its_track_yet_is_left_for_late_identification() {
+    let dir = scratch_dir();
+    write(
+        &dir,
+        "psx/Jogo (USA).cue",
+        b"FILE \"Jogo (USA).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n",
+    );
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let r = scan_into(&repo, &dir, 55, |_| {}).await.unwrap();
+    assert_eq!((r.added, r.errors), (1, 0), "{r:?}");
+    let rom = &repo.list_by_system("psx").await.unwrap()[0];
+    assert_eq!(rom.ident_name.as_deref(), Some("Jogo (USA).cue"));
+    assert_eq!(rom.identified_at, None);
+    assert_eq!((rom.crc32.as_str(), rom.sha1.as_deref()), ("", None));
+    let _ = std::fs::remove_dir_all(dir);
+}

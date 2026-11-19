@@ -127,7 +127,7 @@ pub struct DataTrack {
 }
 
 /// Lê o texto de um `.cue`/`.gdi` (pequeno; passado de [`CUE_MAX_BYTES`] não é).
-fn read_sheet(path: &Path, open: Opener) -> Option<String> {
+pub(crate) fn read_sheet(path: &Path, open: Opener) -> Option<String> {
     let mut bytes = Vec::new();
     open(path)
         .ok()?
@@ -139,10 +139,14 @@ fn read_sheet(path: &Path, open: Opener) -> Option<String> {
 
 /// A trilha de dados de um `.cue` ou `.gdi` (pela extensão de `path`).
 pub fn data_track(path: &Path, area: Area, open: Opener) -> Option<DataTrack> {
-    let text = read_sheet(path, open)?;
+    sheet_data_track(path, &read_sheet(path, open)?, area)
+}
+
+/// A trilha de dados de um `.cue` ou `.gdi` cujo texto já foi lido.
+pub(crate) fn sheet_data_track(path: &Path, text: &str, area: Area) -> Option<DataTrack> {
     match ext_of(path).as_str() {
-        "cue" => cue_data_track(path, &text, area),
-        "gdi" => gdi_data_track(path, &text, area),
+        "cue" => cue_data_track(path, text, area),
+        "gdi" => gdi_data_track(path, text, area),
         _ => None,
     }
 }
