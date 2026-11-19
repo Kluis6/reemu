@@ -1,6 +1,6 @@
 //! Varredura de um diretório de ROMs → `domain::library::Rom` (por hash).
 
-use crate::archive::{archive_entry_size, is_supported_archive, peek_archive, read_archive_entry};
+use crate::archive::{archive_entry_size, hash_archive_entry, is_supported_archive, peek_archive};
 use crate::hash::{file_name_of, FileRomHasher, RomHashes};
 use crate::sector::{open_file, read_sheet, sheet_data_track, Area, Opener};
 use crate::systems::{
@@ -8,7 +8,7 @@ use crate::systems::{
     AMBIGUOUS_DISC_EXTS,
 };
 use domain::library::{Rom, RomRepository};
-use std::io::{BufReader, Cursor};
+use std::io::BufReader;
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -158,7 +158,8 @@ fn disc_identity(path: &Path, open: Opener, hash_max: u64) -> std::io::Result<Id
 
 /// A ROM de dentro de um `.zip`/`.7z`. Um `.iso`/`.cso`/`.chd` lá dentro, ou
 /// outra imagem de disco acima de `hash_max`, fica com o nome e o tamanho do
-/// índice do arquivo, sem descomprimir.
+/// índice do arquivo, sem descomprimir. O resto é descomprimido aos poucos
+/// direto no hash, nunca inteiro na memória.
 fn archived_identity(path: &Path, entry: &str, hash_max: u64) -> std::io::Result<Identity> {
     let name = file_name_of(entry);
     let ext = ext_of(Path::new(entry));
@@ -174,8 +175,7 @@ fn archived_identity(path: &Path, entry: &str, hash_max: u64) -> std::io::Result
             });
         }
     }
-    let bytes = read_archive_entry(path, entry)?;
-    Ok(FileRomHasher::hash_reader(Cursor::new(bytes), &name)?.into())
+    Ok(hash_archive_entry(path, entry, &name)?.into())
 }
 
 /// Nome e tamanho de `path`, sem ler o conteúdo.
@@ -612,8 +612,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::archive::read_archive_entry;
     use crate::sector::{ReadSeek, READ_BUDGET};
-    use std::io::{Read, Seek, SeekFrom, Write};
+    use std::io::{Cursor, Read, Seek, SeekFrom, Write};
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::Arc;
