@@ -601,10 +601,11 @@ async fn disc_serial_is_stored_for_disc_systems() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// ISO, CSO e CHD entram sem hash (CRC32 e MD5 vazios, SHA1 nulo) e com o
-/// nome, o tamanho e o serial; um `.cue` entra com o hash da trilha de dados.
+/// CSO e CHD entram sem hash (CRC32 e MD5 vazios, SHA1 nulo) e com o nome,
+/// o tamanho e o serial; um `.iso` de tamanho de CD entra com o hash e o
+/// serial; um `.cue`, com o hash da trilha de dados.
 #[tokio::test]
-async fn disc_rows_keep_name_size_and_serial_without_hashes() {
+async fn disc_rows_keep_name_size_and_serial() {
     let dir = scratch_dir();
     let iso = saturn_iso(b"MK-81022  ");
     write(&dir, "saturn/Jogo (USA).iso", &iso);
@@ -628,18 +629,21 @@ async fn disc_rows_keep_name_size_and_serial_without_hashes() {
             .find(|r| r.ident_name.as_deref() == Some(name))
             .unwrap_or_else(|| panic!("{name}"))
     };
-    for (name, size, serial) in [
-        ("Jogo (USA).iso", iso.len(), Some("MK-81022")),
-        ("Jogo (USA).cso", 9, None),
-        ("Jogo (USA).chd", 13, None),
-    ] {
+    for (name, size) in [("Jogo (USA).cso", 9), ("Jogo (USA).chd", 13)] {
         let rom = row(name);
         assert_eq!((rom.crc32.as_str(), rom.md5.as_str()), ("", ""), "{name}");
         assert_eq!(rom.sha1, None, "{name}");
         assert_eq!(rom.ident_size, Some(size as i64), "{name}");
-        assert_eq!(rom.serial.as_deref(), serial, "{name}");
+        assert_eq!(rom.serial, None, "{name}");
         assert_eq!(rom.identified_at, Some(77), "{name}");
     }
+    let disc = row("Jogo (USA).iso");
+    assert_eq!(disc.crc32, crc_of(&iso));
+    assert_eq!(disc.md5.len(), 32);
+    assert_eq!(disc.sha1.as_ref().map(String::len), Some(40));
+    assert_eq!(disc.ident_size, Some(iso.len() as i64));
+    assert_eq!(disc.serial.as_deref(), Some("MK-81022"));
+    assert_eq!(disc.identified_at, Some(77));
     let cue = row("Outro (USA) (Track 1).bin");
     assert_eq!(cue.crc32, crc_of(&iso));
     assert_eq!(cue.serial.as_deref(), Some("MK-81022"));
