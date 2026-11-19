@@ -187,7 +187,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -198,7 +198,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -206,15 +206,6 @@ name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
-
-[[package]]
-name = "arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d036a3c4ab069c7b410a2ce876bd74808d2d0888a82667669f8e783a898bf1"
-dependencies = [
- "derive_arbitrary",
-]
 
 [[package]]
 name = "arrayref"
@@ -969,7 +960,7 @@ dependencies = [
  "reqwest 0.12.28",
  "thiserror 2.0.21",
  "tokio",
- "zip 9.5.0",
+ "zip",
 ]
 
 [[package]]
@@ -1088,7 +1079,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "windows-sys 0.61.2",
- "zip 9.5.0",
+ "zip",
 ]
 
 [[package]]
@@ -1406,17 +1397,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_arbitrary"
-version = "1.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e567bd82dcff979e4b03460c307b3cdc9e96fde3d73bed1496d2bc75d9dd62a"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "derive_more"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1476,7 +1456,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1748,7 +1728,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2349,22 +2329,21 @@ dependencies = [
 
 [[package]]
 name = "glslang"
-version = "0.8.1"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0db73ac0e8bd6f9c253b70205f2bb1c63845b6e263665ac8063316ce16f408c8"
+checksum = "e8fccba569493100739248dd04ec4b320967a5703237496b66bacfd4dff610ee"
 dependencies = [
  "bitflags 2.13.1",
  "glslang-sys",
  "rustc-hash 2.1.3",
- "smartstring",
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "glslang-sys"
-version = "0.8.1+275822a"
+version = "0.9.2+e1b562a"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec80baca8831e8414db40c562fd76ca6a32a792c1db990451d4e7d3cb246e1ed"
+checksum = "f8ac997482faa54527938d8cc23eeef882d9a68cbce4a9d10bb3d6dbf0d2fbf0"
 dependencies = [
  "cc",
  "glob",
@@ -2752,7 +2731,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d75e94d66081e4d8dcd098bd8dc5254800fea14a26389b298410158d834de167"
 dependencies = [
  "byteorder",
- "png 0.18.1",
+ "png",
 ]
 
 [[package]]
@@ -3303,7 +3282,7 @@ dependencies = [
  "tokio",
  "uuid",
  "walkdir",
- "zip 9.5.0",
+ "zip",
 ]
 
 [[package]]
@@ -3515,10 +3494,10 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "once_cell",
- "png 0.18.1",
+ "png",
  "serde",
  "thiserror 2.0.21",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4622,19 +4601,6 @@ dependencies = [
 
 [[package]]
 name = "png"
-version = "0.17.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82151a2fc869e011c153adc57cf2789ccb8d9906ce52c0b39a6b5697749d7526"
-dependencies = [
- "bitflags 1.3.2",
- "crc32fast",
- "fdeflate",
- "flate2",
- "miniz_oxide 0.8.9",
-]
-
-[[package]]
-name = "png"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "60769b8b31b2a9f263dae2776c37b1b28ae246943cf719eb6946a1db05128a61"
@@ -4847,7 +4813,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5010,7 +4976,7 @@ dependencies = [
  "md-5",
  "net",
  "open",
- "png 0.17.16",
+ "png",
  "pollster",
  "rand 0.10.3",
  "raw-window-handle",
@@ -5039,7 +5005,7 @@ dependencies = [
  "wgpu",
  "windows-sys 0.61.2",
  "wiremock",
- "zip 9.5.0",
+ "zip",
 ]
 
 [[package]]
@@ -5297,7 +5263,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5354,7 +5320,7 @@ dependencies = [
  "security-framework 3.7.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5909,17 +5875,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "smartstring"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fb72c633efbaa2dd666986505016c32c3044395ceaf881518399d2f4127ee29"
-dependencies = [
- "autocfg",
- "static_assertions",
- "version_check",
-]
-
-[[package]]
 name = "smithay-client-toolkit"
 version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5960,7 +5915,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6559,7 +6514,7 @@ dependencies = [
  "ico",
  "json-patch",
  "plist",
- "png 0.18.1",
+ "png",
  "proc-macro2",
  "quote",
  "semver",
@@ -6713,7 +6668,6 @@ dependencies = [
  "tokio",
  "url",
  "windows-sys 0.61.2",
- "zip 4.6.1",
 ]
 
 [[package]]
@@ -6825,7 +6779,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.6",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7224,10 +7178,10 @@ dependencies = [
  "objc2-core-graphics",
  "objc2-foundation 0.3.2",
  "once_cell",
- "png 0.18.1",
+ "png",
  "serde",
  "thiserror 2.0.21",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7290,7 +7244,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8015,7 +7969,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8036,7 +7990,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
  "raw-window-handle",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
  "windows-version",
 ]
 
@@ -8978,18 +8932,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.4",
-]
-
-[[package]]
-name = "zip"
-version = "4.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "caa8cd6af31c3b31c6631b8f483848b91589021b28fffe50adada48d4f4d2ed1"
-dependencies = [
- "arbitrary",
- "crc32fast",
- "indexmap 2.14.1",
- "memchr",
 ]
 
 [[package]]
