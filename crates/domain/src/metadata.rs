@@ -13,6 +13,9 @@ use crate::error::RepoError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+/// CRC32 e MD5 de uma ROM. Vazios quando a varredura não leu o arquivo
+/// inteiro (CSO, CHD, ou arquivo acima de 1,5 GiB, como um ISO de DVD): aí a
+/// busca vai pelo serial, pelo nome e pelo tamanho de [`ScrapeQuery`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RomHash {
     pub crc32: String,
@@ -142,6 +145,12 @@ pub struct ScrapeQuery<'a> {
     /// quanto, se bater exato com o nome que o provedor reconhece pro
     /// candidato encontrado, pra auto-match (`exact_filename_match`).
     pub file_stem: &'a str,
+    /// Serial do disco lido da imagem (`roms.serial`).
+    pub serial: Option<&'a str>,
+    /// Nome e tamanho do que identifica o arquivo (`roms.ident_name` e
+    /// `ident_size`): a 1ª trilha de dados de um cue, o próprio `.iso`...
+    pub ident_name: Option<&'a str>,
+    pub ident_size: Option<i64>,
 }
 
 #[async_trait]

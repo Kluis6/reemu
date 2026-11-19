@@ -1,19 +1,20 @@
 {
   "rust": {
-    "total": 545,
+    "total": 572,
     "byLicense": {
-      "Apache-2.0 OR MIT": 339,
-      "MIT": 123,
+      "Apache-2.0 OR MIT": 355,
+      "MIT": 129,
       "Unicode-3.0": 18,
+      "Apache-2.0": 12,
       "MIT OR Unlicense": 11,
-      "Apache-2.0": 9,
       "Apache-2.0 OR MIT OR Zlib": 9,
       "ISC": 6,
       "MPL-2.0": 5,
+      "BSD-3-Clause": 4,
       "Zlib": 4,
       "Apache-2.0 OR ISC OR MIT": 3,
-      "BSD-3-Clause": 3,
       "Apache-2.0 OR BSD-2-Clause OR MIT": 2,
+      "Apache-2.0 OR CC0-1.0 OR MIT-0": 2,
       "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT": 2,
       "(MIT OR Apache-2.0) AND Unicode-3.0": 1,
       "0BSD OR Apache-2.0 OR MIT": 1,
@@ -21,7 +22,6 @@
       "Apache-2.0 AND MIT": 1,
       "Apache-2.0 OR BSL-1.0": 1,
       "Apache-2.0 OR BSL-1.0 OR MIT": 1,
-      "Apache-2.0 OR CC0-1.0 OR MIT-0": 1,
       "BSD-3-Clause AND MIT": 1,
       "BSD-3-Clause OR MIT": 1,
       "CDLA-Permissive-2.0": 1,
@@ -29,9 +29,9 @@
     }
   },
   "js": {
-    "total": 106,
+    "total": 104,
     "byLicense": {
-      "MIT": 102,
+      "MIT": 100,
       "Apache-2.0 OR MIT": 2,
       "0BSD": 1,
       "Apache-2.0": 1

@@ -32,6 +32,7 @@ async fn setup() -> (db::Db, PathBuf) {
         last_played_at: None,
         is_favorite: false,
         user_title: None,
+        ..Default::default()
     })
     .await
     .unwrap();

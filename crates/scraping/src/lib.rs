@@ -27,10 +27,10 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use domain::library::RomRepository;
+use domain::library::{Rom, RomRepository};
 use domain::metadata::{
-    GameDetails, GameMetadata, MatchStatus, MetadataConfig, MetadataRepository, ScrapeCandidate,
-    ScrapeQuery,
+    GameDetails, GameMetadata, MatchStatus, MetadataConfig, MetadataRepository, RomHash,
+    ScrapeCandidate, ScrapeQuery,
 };
 use serde_json::Value;
 
@@ -47,6 +47,43 @@ const REQUEST_DELAY: std::time::Duration = std::time::Duration::from_millis(1200
 /// Pausa depois de consultar o TheGamesDB — a chave tem cota MENSAL
 /// (`remaining_monthly_allowance`), então sem pressa.
 const TGDB_DELAY: std::time::Duration = std::time::Duration::from_millis(1000);
+/// Pausa depois de um erro de quota ou de rede, antes da próxima ROM.
+const ERROR_PAUSE: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Onde ficam os provedores e quanto esperar entre perguntas. O app usa
+/// [`Providers::live`]; os testes apontam pra um servidor local, sem pausa.
+struct Providers {
+    /// Base do `jeuInfos.php` (sem a barra do fim).
+    screenscraper: String,
+    /// Base da API v1 do TheGamesDB (sem a barra do fim).
+    thegamesdb: String,
+    /// Busca de jogos da GameKave (a URL inteira do `/games/search`).
+    gamekave: String,
+    request_delay: std::time::Duration,
+    tgdb_delay: std::time::Duration,
+    error_pause: std::time::Duration,
+}
+
+impl Providers {
+    fn live() -> Self {
+        Providers {
+            screenscraper: "https://api.screenscraper.fr/api2".into(),
+            thegamesdb: "https://api.thegamesdb.net/v1".into(),
+            gamekave: gamekave::SEARCH_URL.into(),
+            request_delay: REQUEST_DELAY,
+            tgdb_delay: TGDB_DELAY,
+            error_pause: ERROR_PAUSE,
+        }
+    }
+}
+
+/// Texto de um erro do `reqwest` sem a URL: a do ScreenScraper leva a senha
+/// de desenvolvedor do ReEmu e o login e a senha da pessoa, a do TheGamesDB
+/// leva a chave, e as duas o nome e os hashes do jogo. O texto vai pro log e
+/// pra interface.
+fn net_error(e: reqwest::Error) -> String {
+    e.without_url().to_string()
+}
 
 /// Credenciais de DESENVOLVEDOR do ScreenScraper (as do software, não as do
 /// usuário). A API responde 403 "Erreur de login : Vérifier vos identifiants
@@ -267,6 +304,7 @@ async fn query_thegamesdb(
     client: &reqwest::Client,
     api_key: &str,
     q: &ScrapeQuery<'_>,
+    base: &str,
 ) -> Result<Option<ScrapeCandidate>, String> {
     let Some(platforms) = thegamesdb_platforms(q.system_id) else {
         return Ok(None);
@@ -276,8 +314,7 @@ async fn query_thegamesdb(
         return Ok(None);
     }
     let get = |path: &str, params: &[(&str, &str)]| {
-        let mut url = reqwest::Url::parse(&format!("https://api.thegamesdb.net/v1/{path}"))
-            .expect("URL fixa válida");
+        let mut url = reqwest::Url::parse(&format!("{base}/{path}")).expect("URL fixa válida");
         url.query_pairs_mut()
             .append_pair("apikey", api_key)
             .extend_pairs(params);
@@ -285,7 +322,7 @@ async fn query_thegamesdb(
     };
     let read = |resp: reqwest::Response| async move {
         let status = resp.status();
-        let body = resp.text().await.map_err(|e| e.to_string())?;
+        let body = resp.text().await.map_err(net_error)?;
         if !status.is_success() {
             // 403 = chave inválida ou cota do mês esgotada
             return Err(format!(
@@ -311,7 +348,7 @@ async fn query_thegamesdb(
             ],
         )
         .await
-        .map_err(|e| format!("rede: {e}"))?,
+        .map_err(|e| format!("rede: {}", net_error(e)))?,
     )
     .await?;
     let Some(mut c) = parse_tgdb_game(&found) else {
@@ -327,7 +364,7 @@ async fn query_thegamesdb(
             Ok(v) => c.cover_url = parse_tgdb_boxart(&v, &c.external_id),
             Err(e) => log::warn!("metadata: capa do TheGamesDB: {e}"),
         },
-        Err(e) => log::warn!("metadata: capa do TheGamesDB: rede: {e}"),
+        Err(e) => log::warn!("metadata: capa do TheGamesDB: rede: {}", net_error(e)),
     }
     Ok(Some(c))
 }
@@ -642,24 +679,81 @@ fn media_url(jeu: &Value, types: &[&str]) -> Option<String> {
     None
 }
 
-/// Uma consulta ao ScreenScraper. `Ok(None)` = não catalogado (404).
-async fn query_screenscraper(
-    client: &reqwest::Client,
+/// A consulta de uma ROM da biblioteca: os hashes, o sistema, o nome do
+/// arquivo e, pro disco sem hash, o serial, o nome e o tamanho do que o
+/// identifica. `hash` e `stem` vêm de [`hash_and_stem`].
+fn rom_query<'a>(rom: &'a Rom, hash: &'a RomHash, stem: &'a str) -> ScrapeQuery<'a> {
+    ScrapeQuery {
+        hash,
+        system_id: &rom.system_id,
+        file_stem: stem,
+        serial: rom.serial.as_deref(),
+        ident_name: rom.ident_name.as_deref(),
+        ident_size: rom.ident_size,
+    }
+}
+
+/// Os hashes da ROM e o nome do arquivo dela, sem a extensão.
+fn hash_and_stem(rom: &Rom) -> (RomHash, String) {
+    let stem = std::path::Path::new(&rom.file_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
+    let hash = RomHash {
+        crc32: rom.crc32.clone(),
+        md5: rom.md5.clone(),
+    };
+    (hash, stem)
+}
+
+/// Contêineres comprimidos: o tamanho do arquivo não é o de nada que o
+/// ScreenScraper indexe (ele conhece a trilha ou a imagem descomprimida).
+const COMPRESSED_CONTAINERS: &[&str] = &["chd", "cso"];
+
+/// `name` é um `.chd`/`.cso` (pela extensão, sem diferença de caixa).
+fn is_compressed_container(name: &str) -> bool {
+    name.rsplit_once('.').is_some_and(|(_, ext)| {
+        COMPRESSED_CONTAINERS
+            .iter()
+            .any(|c| ext.eq_ignore_ascii_case(c))
+    })
+}
+
+/// URL do `jeuInfos.php` pra `q`; `None` pra sistema que o ScreenScraper não
+/// cobre (ex: 'disc'). Com hash, pergunta pelo CRC32 e pelo MD5. Sem hash
+/// (CSO, CHD, ou ISO e imagem de disco acima de 1,5 GiB), pelo serial
+/// (`serialnum`) e pelo nome com a extensão (`romnom`), que a API também
+/// aceita (doc da API v2, `jeuInfos.php`), e pelo tamanho (`romtaille`) só
+/// quando ele é o de algo que o ScreenScraper conhece: nunca o de um `.chd`
+/// ou `.cso`, que é o do arquivo comprimido.
+fn screenscraper_url(
     cfg: &MetadataConfig,
     q: &ScrapeQuery<'_>,
-) -> Result<Option<ScrapeCandidate>, String> {
-    let Some(sys) = screenscraper_system_id(q.system_id) else {
-        return Ok(None); // sistema que o ScreenScraper não cobre (ex: 'disc')
-    };
-    let mut url = reqwest::Url::parse("https://api.screenscraper.fr/api2/jeuInfos.php")
-        .map_err(|e| e.to_string())?;
+    base: &str,
+) -> Option<reqwest::Url> {
+    let sys = screenscraper_system_id(q.system_id)?;
+    let mut url = reqwest::Url::parse(&format!("{base}/jeuInfos.php")).ok()?;
     {
         let mut qp = url.query_pairs_mut();
         qp.append_pair("output", "json")
             .append_pair("softname", "reemu")
-            .append_pair("systemeid", &sys.to_string())
-            .append_pair("crc", &q.hash.crc32.to_uppercase())
-            .append_pair("romnom", &format!("{}.zip", q.file_stem));
+            .append_pair("systemeid", &sys.to_string());
+        if q.hash.crc32.is_empty() {
+            if let Some(serial) = q.serial {
+                qp.append_pair("serialnum", serial);
+            }
+            let name = q
+                .ident_name
+                .map_or_else(|| format!("{}.zip", q.file_stem), str::to_string);
+            qp.append_pair("romnom", &name);
+            if let Some(size) = q.ident_size.filter(|_| !is_compressed_container(&name)) {
+                qp.append_pair("romtaille", &size.to_string());
+            }
+        } else {
+            qp.append_pair("crc", &q.hash.crc32.to_uppercase())
+                .append_pair("romnom", &format!("{}.zip", q.file_stem));
+        }
         // MD5 junto: o ScreenScraper identifica por qualquer um dos hashes
         // (o ES-DE consulta por MD5) — ajuda quando o CRC não está catalogado.
         if !q.hash.md5.is_empty() {
@@ -677,16 +771,37 @@ async fn query_screenscraper(
             }
         }
     }
+    Some(url)
+}
+
+/// Uma consulta ao ScreenScraper. `Ok(None)` = não catalogado (404), ou
+/// pedido sem hash recusado (400).
+async fn query_screenscraper(
+    client: &reqwest::Client,
+    cfg: &MetadataConfig,
+    q: &ScrapeQuery<'_>,
+    base: &str,
+) -> Result<Option<ScrapeCandidate>, String> {
+    let Some(url) = screenscraper_url(cfg, q, base) else {
+        return Ok(None); // sistema que o ScreenScraper não cobre (ex: 'disc')
+    };
 
     let resp = client
         .get(url)
         .send()
         .await
-        .map_err(|e| format!("rede: {e}"))?;
+        .map_err(|e| format!("rede: {}", net_error(e)))?;
     let status = resp.status();
-    let body = resp.text().await.map_err(|e| e.to_string())?;
+    let body = resp.text().await.map_err(net_error)?;
 
     if status.as_u16() == 404 || body.contains("Erreur : Rom/Iso/Dossier non trouv") {
+        return Ok(None);
+    }
+    // Sem hash (CSO, CHD, disco acima de 1,5 GiB) o pedido vai só com serial, nome
+    // e tamanho, e a doc da API pede um hash: o 400 que vem disso ("Il manque
+    // des champs obligatoires dans l'url") conta como não achado. Assim o
+    // TheGamesDB tenta pelo nome e a ROM não volta pra fila a cada leva.
+    if status.as_u16() == 400 && q.hash.crc32.is_empty() {
         return Ok(None);
     }
     if status.as_u16() == 403 {
@@ -718,10 +833,12 @@ async fn query_screenscraper(
 
 /// O hash bateu? O ScreenScraper devolve em `rom` o CRC (`romcrc`) e o MD5
 /// (`rommd5`) da ROM que ele achou — qualquer um igual ao nosso é exato.
+/// Hash vazio (disco sem hash) nunca bate.
 fn rom_hash_matches(jeu: &Value, q: &ScrapeQuery<'_>) -> bool {
     let rom = jeu.get("rom");
     let field = |k: &str| rom.and_then(|r| r.get(k)).and_then(Value::as_str);
-    let crc = field("romcrc").is_some_and(|c| c.eq_ignore_ascii_case(&q.hash.crc32));
+    let crc = !q.hash.crc32.is_empty()
+        && field("romcrc").is_some_and(|c| c.eq_ignore_ascii_case(&q.hash.crc32));
     let md5 = !q.hash.md5.is_empty()
         && field("rommd5").is_some_and(|m| m.eq_ignore_ascii_case(&q.hash.md5));
     crc || md5
@@ -806,6 +923,16 @@ pub async fn scrape_one(
     covers: &dyn CoverCache,
     rom_id: &str,
 ) -> Result<Outcome, String> {
+    scrape_one_with(pool, cfg, covers, rom_id, &Providers::live()).await
+}
+
+async fn scrape_one_with(
+    pool: db::Db,
+    cfg: MetadataConfig,
+    covers: &dyn CoverCache,
+    rom_id: &str,
+    providers: &Providers,
+) -> Result<Outcome, String> {
     let repo = db::MetadataRepo::new(pool.clone());
     let rom = db::RomsRepo::new(pool)
         .get(rom_id)
@@ -816,30 +943,18 @@ pub async fn scrape_one(
         .user_agent("reemu/0.1")
         .timeout(std::time::Duration::from_secs(20))
         .build()
-        .map_err(|e| e.to_string())?;
-    let stem = std::path::Path::new(&rom.file_path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("")
-        .to_string();
-    let hash = domain::metadata::RomHash {
-        crc32: rom.crc32.clone(),
-        md5: rom.md5.clone(),
-    };
-    let q = ScrapeQuery {
-        hash: &hash,
-        system_id: &rom.system_id,
-        file_stem: &stem,
-    };
+        .map_err(net_error)?;
+    let (hash, stem) = hash_and_stem(&rom);
+    let q = rom_query(&rom, &hash, &stem);
     let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
-    let mut result = query_screenscraper(&client, &cfg, &q).await;
+    let mut result = query_screenscraper(&client, &cfg, &q, &providers.screenscraper).await;
     let ss_refused = matches!(&result, Err(e) if e == ERR_SS_DEV_LOGIN);
     if let Some(key) = tgdb_key.filter(|_| ss_refused || matches!(&result, Ok(None))) {
-        result = query_thegamesdb(&client, key, &q).await;
+        result = query_thegamesdb(&client, key, &q, &providers.thegamesdb).await;
     }
     let candidate = match result {
         Ok(Some(candidate)) => Some(candidate),
-        fallback => match gamekave::query(&client, &q).await {
+        fallback => match gamekave::query(&client, &q, &providers.gamekave).await {
             Ok(Some(candidate)) => Some(candidate),
             Ok(None) if ss_refused && matches!(fallback, Ok(None)) => {
                 return Err(ERR_SS_DEV_LOGIN.to_string());
@@ -861,6 +976,16 @@ pub async fn scrape_pending(
     cfg: MetadataConfig,
     covers: &dyn CoverCache,
 ) -> Result<(), String> {
+    scrape_pending_with(pool, progress, cfg, covers, &Providers::live()).await
+}
+
+async fn scrape_pending_with(
+    pool: db::Db,
+    progress: Arc<ScrapeProgress>,
+    cfg: MetadataConfig,
+    covers: &dyn CoverCache,
+    providers: &Providers,
+) -> Result<(), String> {
     let repo = db::MetadataRepo::new(pool.clone());
     let roms_repo = db::RomsRepo::new(pool.clone());
 
@@ -875,7 +1000,7 @@ pub async fn scrape_pending(
         .user_agent("reemu/0.1")
         .timeout(std::time::Duration::from_secs(20))
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(net_error)?;
 
     // ScreenScraper recusou as credenciais de desenvolvedor: não adianta
     // perguntar de novo pras outras milhares de ROMs (cada falha custava
@@ -894,26 +1019,14 @@ pub async fn scrape_pending(
                 continue;
             }
         };
-        let stem = std::path::Path::new(&rom.file_path)
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("")
-            .to_string();
-        let hash = domain::metadata::RomHash {
-            crc32: rom.crc32.clone(),
-            md5: rom.md5.clone(),
-        };
-        let q = ScrapeQuery {
-            hash: &hash,
-            system_id: &rom.system_id,
-            file_stem: &stem,
-        };
+        let (hash, stem) = hash_and_stem(&rom);
+        let q = rom_query(&rom, &hash, &stem);
 
         // Cascata: ScreenScraper (hash) primeiro; se ele não achar e houver
         // chave do TheGamesDB, tenta por nome lá. A GameKave fica por último.
         let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
         let mut result = if ss_ok {
-            query_screenscraper(&client, &cfg, &q).await
+            query_screenscraper(&client, &cfg, &q, &providers.screenscraper).await
         } else {
             Ok(None)
         };
@@ -924,12 +1037,12 @@ pub async fn scrape_pending(
             result = Ok(None);
         }
         if let (Ok(None), Some(key)) = (&result, tgdb_key) {
-            tokio::time::sleep(REQUEST_DELAY).await;
-            result = query_thegamesdb(&client, key, &q).await;
-            tokio::time::sleep(TGDB_DELAY).await;
+            tokio::time::sleep(providers.request_delay).await;
+            result = query_thegamesdb(&client, key, &q, &providers.thegamesdb).await;
+            tokio::time::sleep(providers.tgdb_delay).await;
         }
         if !matches!(&result, Ok(Some(_))) && !progress.is_cancelled() {
-            match gamekave::query(&client, &q).await {
+            match gamekave::query(&client, &q, &providers.gamekave).await {
                 Ok(Some(candidate)) => result = Ok(Some(candidate)),
                 Ok(None) => {}
                 Err(error) if result.is_ok() => result = Err(error),
@@ -952,20 +1065,20 @@ pub async fn scrape_pending(
                 }
                 Ok(Outcome::NoMatch) => {}
                 Err(e) => {
-                    log::warn!("metadata: gravar match de {stem}: {e}");
+                    log::warn!("metadata: gravar o resultado de uma ROM: {e}");
                     progress.failed.fetch_add(1, Ordering::Relaxed);
                 }
             },
             Err(e) => {
-                log::warn!("metadata: {stem}: {e}");
+                log::warn!("metadata: consulta de uma ROM: {e}");
                 progress.failed.fetch_add(1, Ordering::Relaxed);
                 // erro de quota/rede: espera mais antes de continuar
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                tokio::time::sleep(providers.error_pause).await;
             }
         }
 
         progress.done.fetch_add(1, Ordering::Relaxed);
-        tokio::time::sleep(REQUEST_DELAY).await;
+        tokio::time::sleep(providers.request_delay).await;
     }
 
     let (_, done, total, auto, pending, failed, _) = progress.snapshot();
@@ -978,7 +1091,6 @@ pub async fn scrape_pending(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use domain::metadata::RomHash;
     use serde_json::json;
 
     /// `system_id`s que o scan produz — lidos do próprio `systems.rs` (tabela
@@ -1125,6 +1237,112 @@ mod tests {
         assert_eq!(search_title("(Beta)"), "");
     }
 
+    /// Disco que a varredura guardou sem hash (aqui um ISO de DVD, acima de
+    /// 1,5 GiB): o pedido ao ScreenScraper vai pelo serial, pelo nome com a
+    /// extensão e pelo tamanho, sem `crc`/`md5` vazios, e um hash vazio na
+    /// resposta não conta como correspondência exata.
+    #[test]
+    fn disc_without_hashes_is_asked_by_serial_name_and_size() {
+        let params = |rom: &Rom| -> std::collections::HashMap<String, String> {
+            let (hash, stem) = hash_and_stem(rom);
+            let q = rom_query(rom, &hash, &stem);
+            screenscraper_url(&MetadataConfig::default(), &q, "https://ss.invalid/api2")
+                .expect("sistema coberto")
+                .query_pairs()
+                .into_owned()
+                .collect()
+        };
+        let get = |p: &std::collections::HashMap<String, String>, k: &str| p.get(k).cloned();
+        let disc = Rom {
+            id: "r".into(),
+            file_path: "/biblioteca/ps2/Jogo (USA).iso".into(),
+            system_id: "ps2".into(),
+            serial: Some("SLUS-20062".into()),
+            ident_name: Some("Jogo (USA).iso".into()),
+            ident_size: Some(4_380_000_000),
+            ..Default::default()
+        };
+        let p = params(&disc);
+        assert_eq!(get(&p, "serialnum").as_deref(), Some("SLUS-20062"));
+        assert_eq!(get(&p, "romnom").as_deref(), Some("Jogo (USA).iso"));
+        assert_eq!(get(&p, "romtaille").as_deref(), Some("4380000000"));
+        assert!(!p.contains_key("crc") && !p.contains_key("md5"), "{p:?}");
+
+        // Serial que não se leu: o nome e o tamanho.
+        let p = params(&Rom {
+            serial: None,
+            ..disc.clone()
+        });
+        assert!(!p.contains_key("serialnum"), "{p:?}");
+        assert_eq!(get(&p, "romtaille").as_deref(), Some("4380000000"));
+
+        // Controle: cartucho vai pelos hashes, como antes.
+        let cart = Rom {
+            file_path: "/biblioteca/snes/Jogo (USA).sfc".into(),
+            system_id: "snes".into(),
+            crc32: "b19ed489".into(),
+            md5: "CDD3C8C37322978CA8669B34BC89C804".into(),
+            ident_name: Some("Jogo (USA).sfc".into()),
+            ident_size: Some(1024),
+            ..Default::default()
+        };
+        let p = params(&cart);
+        assert_eq!(get(&p, "crc").as_deref(), Some("B19ED489"));
+        assert_eq!(
+            get(&p, "md5").as_deref(),
+            Some("cdd3c8c37322978ca8669b34bc89c804")
+        );
+        assert_eq!(get(&p, "romnom").as_deref(), Some("Jogo (USA).zip"));
+        assert!(!p.contains_key("serialnum") && !p.contains_key("romtaille"));
+
+        let (hash, stem) = hash_and_stem(&disc);
+        let q = rom_query(&disc, &hash, &stem);
+        let empty = json!({"rom": {"romcrc": "", "rommd5": ""}});
+        assert!(!rom_hash_matches(&empty, &q), "hash vazio não é exato");
+    }
+
+    /// `.chd` e `.cso` sem hash vão pelo serial e pelo nome, sem `romtaille`
+    /// (o tamanho é o do arquivo comprimido, que não casa com nada). Trilha
+    /// `.bin` e `.iso` grandes continuam mandando o tamanho.
+    #[test]
+    fn compressed_container_sends_no_size() {
+        let ask = |name: &str, serial: Option<&str>| {
+            let rom = Rom {
+                id: "r".into(),
+                file_path: format!("/biblioteca/psx/{name}"),
+                system_id: "psx".into(),
+                serial: serial.map(str::to_string),
+                ident_name: Some(name.to_string()),
+                ident_size: Some(2_000_000_000),
+                ..Default::default()
+            };
+            let (hash, stem) = hash_and_stem(&rom);
+            let q = rom_query(&rom, &hash, &stem);
+            let url = screenscraper_url(&MetadataConfig::default(), &q, "https://ss.invalid/api2")
+                .expect("sistema coberto");
+            url.query_pairs()
+                .into_owned()
+                .collect::<std::collections::HashMap<String, String>>()
+        };
+        for name in ["Jogo (USA).chd", "Jogo (USA).cso", "JOGO (USA).CHD"] {
+            let p = ask(name, Some("SCUS-94900"));
+            assert!(!p.contains_key("romtaille"), "{name}: {p:?}");
+            assert_eq!(p.get("romnom").map(String::as_str), Some(name));
+            assert_eq!(p.get("serialnum").map(String::as_str), Some("SCUS-94900"));
+            // Sem serial lido: só o nome.
+            let p = ask(name, None);
+            assert!(!p.contains_key("romtaille") && !p.contains_key("serialnum"));
+        }
+        for name in ["Jogo (USA) (Track 1).bin", "Jogo (USA).iso"] {
+            let p = ask(name, Some("SCUS-94900"));
+            assert_eq!(
+                p.get("romtaille").map(String::as_str),
+                Some("2000000000"),
+                "{name}"
+            );
+        }
+    }
+
     #[test]
     fn exact_hash_by_crc_or_md5() {
         let hash = RomHash {
@@ -1135,6 +1353,9 @@ mod tests {
             hash: &hash,
             system_id: "snes",
             file_stem: "x",
+            serial: None,
+            ident_name: None,
+            ident_size: None,
         };
         let crc = json!({"rom": {"romcrc": "B19ED489"}});
         let md5 =
@@ -1144,6 +1365,287 @@ mod tests {
         assert!(rom_hash_matches(&md5, &q), "MD5 igual também é exato");
         assert!(!rom_hash_matches(&none, &q));
         assert!(!rom_hash_matches(&json!({}), &q));
+    }
+
+    /// Servidor HTTP local mínimo: responde cada pedido com `answer(alvo)`
+    /// (caminho com a query) e guarda os alvos na ordem.
+    fn mock(answer: fn(&str) -> (u16, String)) -> (String, Arc<std::sync::Mutex<Vec<String>>>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = seen.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut s) = stream else { continue };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 1024];
+                while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+                    match s.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => head.extend_from_slice(&buf[..n]),
+                    }
+                }
+                let head = String::from_utf8_lossy(&head);
+                let target = head
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap_or_default()
+                    .to_string();
+                let (status, body) = answer(&target);
+                log.lock().unwrap().push(target);
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            }
+        });
+        (base, seen)
+    }
+
+    fn local(base: &str) -> Providers {
+        Providers {
+            screenscraper: format!("{base}/api2"),
+            thegamesdb: format!("{base}/v1"),
+            gamekave: format!("{base}/games/search"),
+            request_delay: std::time::Duration::ZERO,
+            tgdb_delay: std::time::Duration::ZERO,
+            error_pause: std::time::Duration::ZERO,
+        }
+    }
+
+    struct NoCovers;
+    impl CoverCache for NoCovers {
+        fn invalidate(&self, _: &str) {}
+    }
+
+    /// Disco sem hash, como a varredura grava um `.chd`.
+    fn hashless_disc() -> Rom {
+        Rom {
+            id: "disco".into(),
+            file_path: "/biblioteca/psx/Crash Bandicoot (USA).chd".into(),
+            system_id: "psx".into(),
+            serial: Some("SCUS-94900".into()),
+            ident_name: Some("Crash Bandicoot (USA).chd".into()),
+            ident_size: Some(541_249_456),
+            ..Default::default()
+        }
+    }
+
+    /// O ScreenScraper recusa com 400 o pedido sem hash: conta como não
+    /// achado, o TheGamesDB tenta pelo nome, a correspondência é gravada e a
+    /// leva seguinte não pergunta de novo. Um cartucho (com hash) recusado
+    /// com 400 continua sendo erro e volta na leva seguinte.
+    #[tokio::test]
+    async fn hashless_disc_refused_by_screenscraper_falls_to_thegamesdb_once() {
+        let (base, seen) = mock(|target| {
+            if target.starts_with("/api2/jeuInfos.php") {
+                (
+                    400,
+                    "Erreur : Il manque des champs obligatoires dans l'url".into(),
+                )
+            } else if target.starts_with("/v1/Games/ByGameName") {
+                let body = json!({
+                    "data": {"games": [{"id": 77, "game_title": "Crash Bandicoot"}]},
+                    "include": {"boxart": {
+                        "base_url": {"large": "https://cdn.invalid/"},
+                        "data": {"77": [{"side": "front", "filename": "c.jpg"}]}
+                    }}
+                });
+                (200, body.to_string())
+            } else if target.starts_with("/games/search") {
+                // A GameKave (último da cascata) não acha nada.
+                (200, r#"{"games": []}"#.into())
+            } else {
+                (404, String::new())
+            }
+        });
+        let pool = db::connect_in_memory().await.unwrap();
+        let roms = db::RomsRepo::new(pool.clone());
+        roms.add(&hashless_disc()).await.unwrap();
+        roms.add(&Rom {
+            id: "cartucho".into(),
+            file_path: "/biblioteca/snes/Jogo (USA).sfc".into(),
+            system_id: "snes".into(),
+            crc32: "B19ED489".into(),
+            md5: "cdd3c8c37322978ca8669b34bc89c804".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+        let cfg = MetadataConfig {
+            thegamesdb_api_key: Some("chave".into()),
+            ..Default::default()
+        };
+        let providers = local(&base);
+
+        let mut failed = Vec::new();
+        for _ in 0..2 {
+            let progress = Arc::new(ScrapeProgress::default());
+            scrape_pending_with(
+                pool.clone(),
+                progress.clone(),
+                cfg.clone(),
+                &NoCovers,
+                &providers,
+            )
+            .await
+            .unwrap();
+            failed.push(progress.failed.load(Ordering::Relaxed));
+        }
+
+        let seen = seen.lock().unwrap().clone();
+        let asked = |path: &str, needle: &str| {
+            seen.iter()
+                .filter(|t| t.starts_with(path) && t.contains(needle))
+                .count()
+        };
+        assert_eq!(
+            asked("/api2/jeuInfos.php", "serialnum=SCUS-94900"),
+            1,
+            "{seen:?}"
+        );
+        assert_eq!(
+            asked("/v1/Games/ByGameName", "Crash+Bandicoot"),
+            1,
+            "{seen:?}"
+        );
+        assert_eq!(asked("/api2/jeuInfos.php", "crc=B19ED489"), 2, "{seen:?}");
+        assert_eq!(failed, [1, 1], "só o cartucho falha, nas duas levas");
+        let pending = db::MetadataRepo::new(pool.clone())
+            .list_pending()
+            .await
+            .unwrap();
+        let pending: Vec<_> = pending
+            .iter()
+            .map(|p| (p.rom_id.as_str(), p.provider.as_str()))
+            .collect();
+        assert_eq!(pending, [("disco", "thegamesdb")]);
+
+        // "Buscar de novo" do disco: a mesma cascata, sem erro pra interface.
+        let one = scrape_one_with(pool, cfg, &NoCovers, "disco", &providers).await;
+        assert_eq!(one, Ok(Outcome::Pending));
+    }
+
+    /// Pedido que falha na rede: o texto do erro (que a leva grava no log e
+    /// o "buscar de novo" mostra na interface) não leva a URL, nem a senha da
+    /// pessoa, nem a de desenvolvedor, nem a chave do TheGamesDB.
+    #[tokio::test]
+    async fn failed_request_error_has_no_url_nor_password() {
+        // Porta fechada: a conexão é recusada.
+        let port = {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            l.local_addr().unwrap().port()
+        };
+        let providers = local(&format!("http://127.0.0.1:{port}"));
+        let pool = db::connect_in_memory().await.unwrap();
+        let disc = hashless_disc();
+        db::RomsRepo::new(pool.clone()).add(&disc).await.unwrap();
+        let cfg = MetadataConfig {
+            screenscraper_user: Some("pessoa-login".into()),
+            screenscraper_password: Some("senha-da-pessoa".into()),
+            thegamesdb_api_key: Some("chave-tgdb".into()),
+            ..Default::default()
+        };
+
+        let ui = scrape_one_with(pool, cfg.clone(), &NoCovers, "disco", &providers)
+            .await
+            .unwrap_err();
+        let client = reqwest::Client::new();
+        let (hash, stem) = hash_and_stem(&disc);
+        let q = rom_query(&disc, &hash, &stem);
+        let ss = query_screenscraper(&client, &cfg, &q, &providers.screenscraper)
+            .await
+            .unwrap_err();
+        let tgdb = query_thegamesdb(&client, "chave-tgdb", &q, &providers.thegamesdb)
+            .await
+            .unwrap_err();
+
+        let mut secrets = vec![
+            "senha-da-pessoa",
+            "pessoa-login",
+            "chave-tgdb",
+            "sspassword",
+            "apikey",
+            "SCUS-94900",
+            "Crash",
+            "127.0.0.1",
+            "jeuInfos",
+            "Games/",
+        ];
+        if let Some(pw) = SS_DEVPASSWORD.filter(|p| !p.is_empty()) {
+            secrets.push(pw);
+        }
+        for text in [&ui, &ss, &tgdb] {
+            assert!(text.starts_with("rede: "), "{text}");
+            for secret in &secrets {
+                assert!(!text.contains(secret), "{secret} em {text:?}");
+            }
+        }
+    }
+
+    /// Servidor que promete 100 bytes de corpo, manda 10 e fecha: a falha
+    /// vem na leitura do corpo, não no envio.
+    fn truncated_mock() -> String {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut s) = stream else { continue };
+                let mut head = Vec::new();
+                let mut buf = [0u8; 1024];
+                while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+                    match s.read(&mut buf) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => head.extend_from_slice(&buf[..n]),
+                    }
+                }
+                let _ = s.write_all(
+                    b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\n0123456789",
+                );
+            }
+        });
+        base
+    }
+
+    /// Corpo que não chega inteiro: o erro de leitura do corpo, nos dois
+    /// provedores, também sai sem a URL e sem as senhas. No reqwest 0.12 esse
+    /// erro já vem sem a URL (o do envio é que traz); o teste prende o
+    /// comportamento pra uma troca de versão.
+    #[tokio::test]
+    async fn body_error_has_no_url_nor_password() {
+        let providers = local(&truncated_mock());
+        let disc = hashless_disc();
+        let cfg = MetadataConfig {
+            screenscraper_user: Some("pessoa-login".into()),
+            screenscraper_password: Some("senha-da-pessoa".into()),
+            ..Default::default()
+        };
+        let client = reqwest::Client::new();
+        let (hash, stem) = hash_and_stem(&disc);
+        let q = rom_query(&disc, &hash, &stem);
+        let ss = query_screenscraper(&client, &cfg, &q, &providers.screenscraper)
+            .await
+            .unwrap_err();
+        let tgdb = query_thegamesdb(&client, "chave-tgdb", &q, &providers.thegamesdb)
+            .await
+            .unwrap_err();
+        for text in [&ss, &tgdb] {
+            for secret in [
+                "senha-da-pessoa",
+                "pessoa-login",
+                "chave-tgdb",
+                "sspassword",
+                "apikey",
+                "SCUS-94900",
+                "Crash",
+                "127.0.0.1",
+            ] {
+                assert!(!text.contains(secret), "{secret} em {text:?}");
+            }
+        }
     }
 
     // JSON no formato que o ES-DE lê do TheGamesDB (`GamesDBJSONScraper.cpp`:
