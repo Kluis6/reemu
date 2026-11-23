@@ -9,6 +9,6 @@ import type { SettingsMissingKind } from "./SettingsMissingKind";
 export type SettingsMissingFile = { kind: SettingsMissingKind, item: SettingsMissingItem, name: string, 
 /**
  * O lugar, como no documento: `default`, `system` (com `system_id`) ou
- * `rom` (com `crc32`).
+ * `rom` (com `crc32`, que pode ser a chave `ID:` de um jogo sem CRC32).
  */
 scope: string, systemId: string | null, crc32: string | null, };

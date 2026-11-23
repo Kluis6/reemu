@@ -14,10 +14,11 @@
 //! nome é só o último pedaço do caminho. Todo `rom` do documento continua com
 //! um `crc32` que não é vazio e o `games` é um campo novo e opcional, então a
 //! v0.1.16, que ignora o campo, lê o documento inteiro e conta uma chave `ID:`
-//! como um jogo que ela não tem. Um preset vai pela identidade: embutido, `curated:<id>` ou
-//! `slang-shaders:<caminho>` dentro do pacote que o ReEmu baixa; uma moldura
-//! do The Bezel Project vai pelo caminho dentro da pasta dele (D126). Um preset
-//! ou pacote importado do disco vai só pelo nome e pelo lugar, em `missing`.
+//! como um jogo que ela não tem. Um preset vai pela identidade: embutido,
+//! `curated:<id>` ou `slang-shaders:<caminho>` dentro do pacote que o ReEmu
+//! baixa; uma moldura do The Bezel Project vai pelo caminho dentro da pasta
+//! dele (D126). Um preset ou pacote importado do disco vai só pelo nome e pelo
+//! lugar, em `missing`.
 //!
 //! Dois modos:
 //! - `Merge` ("Copiar") grava o que o documento traz e não apaga nada que ele
@@ -33,9 +34,10 @@
 //! a máquina igual.
 //!
 //! O backup de antes de uma cópia ([`export_backup_in`]) é o documento com
-//! `"backup": true` e os jogos pela ROM (`rom_id`), não pelo CRC32: ele nunca
-//! sai desta máquina, e duas ROMs da biblioteca com o mesmo CRC32 podem ter
-//! escolhas diferentes, que o "Desfazer" devolve cada uma no seu lugar (R38).
+//! `"backup": true` e os jogos pela ROM (`rom_id`), não pelo CRC32: ele cobre
+//! toda ROM da biblioteca, com CRC32 ou sem, nunca sai desta máquina, e duas
+//! ROMs da biblioteca com o mesmo CRC32 podem ter escolhas diferentes, que o
+//! "Desfazer" devolve cada uma no seu lugar (R38).
 //! A conferência ([`check`]) já separa as duas formas: o `Merge` recusa um
 //! documento com `"backup"`, e o `Restore` só aceita um backup (R39).
 //!
@@ -58,6 +60,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Component, Path, PathBuf};
+use std::sync::Mutex;
 
 /// A versão dos documentos que esta máquina escreve e aceita.
 pub const DOC_VERSION: u64 = 1;
@@ -220,7 +223,7 @@ pub struct MissingFile {
     pub item: MissingItem,
     pub name: String,
     /// O lugar, como no documento: `default`, `system` (com `system_id`) ou
-    /// `rom` (com `crc32`).
+    /// `rom` (com `crc32`, que pode ser a chave `ID:` de um jogo sem CRC32).
     pub scope: String,
     pub system_id: Option<String>,
     pub crc32: Option<String>,
@@ -235,7 +238,8 @@ pub struct ApplyReport {
     /// core, uma atribuição, uma hotkey, uma tecla, uma proporção; o áudio e a
     /// linha de vídeo contam um.
     pub applied: u32,
-    /// Jogos (CRC32 distintos) do documento que esta máquina não tem.
+    /// Jogos (chaves distintas, CRC32 ou `ID:`) do documento que esta máquina
+    /// não tem.
     pub skipped_unknown_games: u32,
     /// Lugares em que a escolha só desta máquina ficou no lugar da do
     /// documento.
@@ -805,8 +809,9 @@ fn size_of(r: &RomIdentity) -> Option<u64> {
 
 /// A chave de um jogo desta máquina no documento: o CRC32, ou, sem ele,
 /// `ID:` e os 16 primeiros hex de um SHA-256 do sistema, do serial (aparado,
-/// em maiúsculas), do nome (em minúsculas) e do tamanho, separados por um
-/// byte zero. Não depende de caminho nenhum, e nunca é um CRC32 (8 hex) nem
+/// em maiúsculas), do nome (em minúsculas) e do tamanho, com um byte zero
+/// entre as partes (três separadores, nenhum no fim; parte que falta é vazia).
+/// Não depende de caminho nenhum, e nunca é um CRC32 (8 hex) nem
 /// vazia.
 fn game_key(r: &RomIdentity, name: Option<&str>, size: Option<u64>) -> String {
     use sha2::{Digest, Sha256};
@@ -822,9 +827,14 @@ fn game_key(r: &RomIdentity, name: Option<&str>, size: Option<u64>) -> String {
     let name = name.map(str::to_lowercase).unwrap_or_default();
     let size = size.map(|s| s.to_string()).unwrap_or_default();
     let mut sha = Sha256::new();
-    for part in [r.system_id.as_str(), &serial, &name, &size] {
+    for (i, part) in [r.system_id.as_str(), &serial, &name, &size]
+        .into_iter()
+        .enumerate()
+    {
+        if i > 0 {
+            sha.update([0u8]);
+        }
         sha.update(part.as_bytes());
-        sha.update([0u8]);
     }
     let hex: String = sha
         .finalize()
@@ -884,6 +894,16 @@ impl Known {
         let r = self.rows.get(rom_id)?;
         let (name, size) = (name_of(r), size_of(r));
         let key = game_key(r, name.as_deref(), size);
+        // uma dica sem sistema não acha nada e o documento a recusaria: sem
+        // CRC32 o jogo não tem como ser achado e fica fora; com CRC32 a chave
+        // vai sem dicas
+        if r.system_id.trim().is_empty() {
+            if r.crc32.trim().is_empty() {
+                return None;
+            }
+            self.keys.insert(rom_id.to_string(), key.clone());
+            return Some(key);
+        }
         let hints = hints_of(r, name, size);
         match self.hints.get(&key) {
             Some((id, _)) if id.as_str() <= rom_id => {}
@@ -921,6 +941,12 @@ struct LocalRoms<'a> {
     rows: &'a [RomIdentity],
     by_crc: HashMap<String, Vec<&'a str>>,
     ids: HashSet<&'a str>,
+    /// O tamanho no disco de cada ROM, lido uma vez só por aplicação (a
+    /// importação roda dentro da transação de escrita).
+    sizes: Mutex<HashMap<usize, Option<u64>>>,
+    /// Quantas vezes o disco foi aberto, para o teste.
+    #[cfg(test)]
+    stats: std::sync::atomic::AtomicU32,
 }
 
 impl<'a> LocalRoms<'a> {
@@ -940,7 +966,21 @@ impl<'a> LocalRoms<'a> {
             rows: roms,
             by_crc,
             ids,
+            sizes: Mutex::new(HashMap::new()),
+            #[cfg(test)]
+            stats: std::sync::atomic::AtomicU32::new(0),
         }
+    }
+
+    /// O tamanho do jogo da ROM `i` (`size_of`), lido uma vez só.
+    fn size(&self, i: usize) -> Option<u64> {
+        let mut sizes = self.sizes.lock().unwrap_or_else(|e| e.into_inner());
+        *sizes.entry(i).or_insert_with(|| {
+            #[cfg(test)]
+            self.stats
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            size_of(&self.rows[i])
+        })
     }
 
     fn has(&self, rom_id: &str) -> bool {
@@ -961,26 +1001,47 @@ impl<'a> LocalRoms<'a> {
         let Some(h) = hints else {
             return Vec::new();
         };
-        let in_system = || self.rows.iter().filter(|r| r.system_id == h.system_id);
-        if let Some(serial) = h.serial.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        let in_system = || {
+            self.rows
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| r.system_id == h.system_id)
+        };
+        let serial = h.serial.as_deref().map(str::trim).filter(|s| !s.is_empty());
+        if let Some(serial) = serial {
             let found: Vec<&'a str> = in_system()
-                .filter(|r| {
+                .filter(|(_, r)| {
                     r.serial
                         .as_deref()
                         .is_some_and(|s| s.trim().eq_ignore_ascii_case(serial))
                 })
-                .map(|r| r.id.as_str())
+                .map(|(_, r)| r.id.as_str())
                 .collect();
             if !found.is_empty() {
                 return found;
             }
         }
         if let (Some(name), Some(size)) = (h.name.as_deref(), h.size) {
-            // o arquivo só é aberto para quem já bateu em sistema e nome
+            // uma chave de CRC32 só chega por nome e tamanho a uma ROM sem
+            // CRC32: com outro CRC32 é outro conteúdo
+            let crc_key = !key.starts_with("ID:");
+            // dois seriais diferentes são dois jogos; a ROM sem serial (a de
+            // antes da identidade) continua valendo
+            let contradicts = |r: &RomIdentity| match (r.serial.as_deref(), serial) {
+                (Some(local), Some(hint)) => {
+                    let local = local.trim();
+                    !local.is_empty() && !local.eq_ignore_ascii_case(hint)
+                }
+                _ => false,
+            };
+            // o arquivo só é aberto para quem já bateu em sistema e nome, e
+            // uma vez só
             return in_system()
-                .filter(|r| name_of(r).is_some_and(|n| n.eq_ignore_ascii_case(name)))
-                .filter(|r| size_of(r) == Some(size))
-                .map(|r| r.id.as_str())
+                .filter(|(_, r)| !(crc_key && !normalize_crc(&r.crc32).is_empty()))
+                .filter(|(_, r)| !contradicts(r))
+                .filter(|(_, r)| name_of(r).is_some_and(|n| n.eq_ignore_ascii_case(name)))
+                .filter(|(i, _)| self.size(*i) == Some(size))
+                .map(|(_, r)| r.id.as_str())
                 .collect();
         }
         Vec::new()
@@ -4228,6 +4289,23 @@ mod tests {
     /// escolha que não é de jogo (que o leitor antigo ainda aplica).
     async fn hashless_source(tag: &str) -> (Machine, Vec<(Group, Value)>) {
         let (a, _) = chd_pair(tag).await;
+        // um segundo jogo sem CRC32, com um preset importado do disco (vira
+        // `missing`), e uma moldura do catálogo no primeiro
+        let imported = abs(&["Meus Shaders", "crt-do-ed.slangp"]);
+        rom_row(
+            &a.db,
+            "a2",
+            "",
+            "psx",
+            Some("SLUS-00001"),
+            Some(("Two.chd", 500)),
+            &abs(&["Jogos-chd", "a2.chd"]),
+        )
+        .await;
+        preset(&a.db, &imported, "crt-do-ed").await;
+        shader(&a.db, AssignmentScope::Rom, Some("a2"), &imported, &[]).await;
+        let pid = a.bezel_pack().await;
+        deco(&a.db, "rom", "a1", &pid, &a.bezel("psx/games/Game.png")).await;
         option(&a.db, "snes9x", None, "snes9x_region", "pal").await;
         option(&a.db, PS1_CORE, Some("a1"), "k", "v").await;
         preset(&a.db, "crt", "crt").await;
@@ -4247,9 +4325,24 @@ mod tests {
     async fn new_document_is_valid_for_an_old_reader() {
         let (_a, docs) = hashless_source("old-reader").await;
         let (_, b) = chd_pair("old-reader-b").await;
+        rom_row(
+            &b.db,
+            "b2",
+            "",
+            "psx",
+            Some("slus-00001"),
+            Some(("Dois.chd", 9)),
+            &abs(&["Jogos-chd", "b2.chd"]),
+        )
+        .await;
+        // o shaders tem dois jogos sem CRC32 (a1 e a2), os outros um só
+        assert!(!docs[1].1["decorations"].as_array().unwrap().is_empty());
+        assert!(!docs[1].1["missing"].as_array().unwrap().is_empty());
+        assert_eq!(docs[1].1["games"].as_object().unwrap().len(), 2);
         // os itens que não são de jogo, que o leitor antigo aplica
         let non_game = [1, 1, 2];
-        for ((group, doc), non_game) in docs.iter().zip(non_game) {
+        let unknown = [1, 2, 1];
+        for (((group, doc), non_game), unknown) in docs.iter().zip(non_game).zip(unknown) {
             // toda entrada de jogo leva uma chave que não é vazia
             for field in [
                 "overrides",
@@ -4281,7 +4374,10 @@ mod tests {
             old.as_object_mut().unwrap().remove("games");
             check(*group, &old, Merge).unwrap_or_else(|e| panic!("{group:?}: {e}"));
             let report = b.apply(*group, &old, Merge).await.unwrap();
-            assert_eq!(report.skipped_unknown_games, 1, "{group:?} {report:?}");
+            assert_eq!(
+                report.skipped_unknown_games, unknown,
+                "{group:?} {report:?}"
+            );
             assert_eq!(report.applied, non_game, "{group:?} {report:?}");
             // com `games`, o jogo chega
             let report = b.apply(*group, doc, Merge).await.unwrap();
@@ -4348,6 +4444,24 @@ mod tests {
         option(&b.db, PS1_CORE, Some("b1"), "k", "local").await;
         let doc = a.export(CO).await;
 
+        // a escolha de shader e a proporção da ROM sem CRC32 também voltam
+        preset(&a.db, "crt", "crt").await;
+        shader(&a.db, AssignmentScope::Rom, Some("a1"), "crt", &[]).await;
+        aspect(&a.db, "rom", "a1", "16:9").await;
+        preset(&b.db, "crt", "crt").await;
+        preset(&b.db, "lcd", "lcd").await;
+        shader(&b.db, AssignmentScope::Rom, Some("b1"), "lcd", &[]).await;
+        aspect(&b.db, "rom", "b1", "4:3").await;
+        let before = snapshot(&b.db).await;
+        let (sd, video) = (a.export(SD).await, a.export(Group::Video).await);
+        let (sd_backup, video_backup) = (b.backup(SD).await, b.backup(Group::Video).await);
+        b.apply(SD, &sd, Merge).await.unwrap();
+        b.apply(Group::Video, &video, Merge).await.unwrap();
+        assert_ne!(snapshot(&b.db).await, before);
+        b.apply(SD, &sd_backup, Restore).await.unwrap();
+        b.apply(Group::Video, &video_backup, Restore).await.unwrap();
+        assert_eq!(snapshot(&b.db).await, before);
+
         let backup = b.backup(CO).await;
         assert_eq!(
             backup["overrides"],
@@ -4387,8 +4501,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("Game.cso");
         std::fs::write(&file, vec![0u8; 1234]).unwrap();
+        // a linha de antes da identidade: sem serial
         let mut r = ident("p1", "", "psp");
-        r.serial = Some("OUTRO-00001".into());
         r.file_path = file.to_string_lossy().into_owned();
         let rows = [r];
         let h = GameHints {
@@ -4435,6 +4549,154 @@ mod tests {
         r.ident_size = Some(99);
         assert_eq!(name_of(&r).as_deref(), Some("Entrada.bin"));
         assert_eq!(size_of(&r), Some(99));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A receita da chave: SHA-256 de `sistema NUL serial NUL nome NUL tamanho`
+    /// (três separadores, nenhum no fim), 16 primeiros hex.
+    #[test]
+    fn game_key_matches_the_documented_recipe() {
+        use sha2::{Digest, Sha256};
+        let mut r = ident("a1", "", "psx");
+        r.serial = Some(" slus-00594 ".into());
+        let key = game_key(&r, Some("Game.CHD"), Some(1000));
+        assert_eq!(key, "ID:e85931e703216261");
+        let sum = Sha256::digest(b"psx\x00SLUS-00594\x00game.chd\x001000");
+        let hex: String = sum.iter().take(8).map(|b| format!("{b:02x}")).collect();
+        assert_eq!(key, format!("ID:{hex}"));
+        // sem serial, nome ou tamanho a parte fica vazia e o separador fica
+        let bare = ident("a2", "", "psx");
+        let sum = Sha256::digest(b"psx\x00\x00\x00");
+        let hex: String = sum.iter().take(8).map(|b| format!("{b:02x}")).collect();
+        assert_eq!(game_key(&bare, None, None), format!("ID:{hex}"));
+    }
+
+    #[tokio::test]
+    async fn same_game_in_two_folders_has_the_same_key() {
+        let a = Machine::new("key-folders").await;
+        for (id, dir) in [("f1", "a"), ("f2", "b")] {
+            let path = abs(&["Jogos", dir, "Game.chd"]);
+            rom_row(
+                &a.db,
+                id,
+                "",
+                "psx",
+                Some("SLUS-00594"),
+                Some(("Game.chd", 1000)),
+                &path,
+            )
+            .await;
+        }
+        let roms = a.roms().await;
+        let keys: Vec<String> = roms
+            .iter()
+            .map(|r| game_key(r, name_of(r).as_deref(), size_of(r)))
+            .collect();
+        assert_eq!(keys[0], keys[1]);
+        assert_eq!(keys[0], "ID:e85931e703216261");
+    }
+
+    /// O que esta versão escreve passa na própria conferência: um jogo sem
+    /// sistema nunca vira uma dica (nem, sem CRC32, uma chave).
+    #[tokio::test]
+    async fn export_never_writes_a_game_without_system() {
+        let a = Machine::new("blank-system").await;
+        rom_row(
+            &a.db,
+            "x1",
+            "",
+            "",
+            Some("S-1"),
+            Some(("X.chd", 5)),
+            &abs(&["x1.chd"]),
+        )
+        .await;
+        rom_row(&a.db, "x2", "BEEF0002", "", None, None, &abs(&["x2.bin"])).await;
+        option(&a.db, PS1_CORE, Some("x1"), "k", "v").await;
+        option(&a.db, PS1_CORE, Some("x2"), "k", "v").await;
+        let doc = a.export(CO).await;
+        assert_eq!(doc["overrides"].as_array().unwrap().len(), 1, "{doc}");
+        assert_eq!(doc["overrides"][0]["crc32"], json!("BEEF0002"));
+        assert!(doc.get("games").is_none(), "{doc}");
+        check(CO, &doc, Merge).unwrap();
+    }
+
+    /// Um arquivo de `bytes` bytes numa pasta temporária só do teste.
+    fn sized_file(tag: &str, name: &str, bytes: usize) -> (std::path::PathBuf, String) {
+        let dir = std::env::temp_dir().join(format!("reemu-ident-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join(name);
+        std::fs::write(&file, vec![0u8; bytes]).unwrap();
+        (dir, file.to_string_lossy().into_owned())
+    }
+
+    fn by_name_and_size(system: &str, name: &str, size: u64) -> GameHints {
+        GameHints {
+            name: Some(name.into()),
+            size: Some(size),
+            ..hints(system)
+        }
+    }
+
+    #[test]
+    fn local_roms_name_and_size_skips_a_contradicting_serial() {
+        let (dir, path) = sized_file("contradiction", "disc.iso", 64);
+        let mut r = ident("p1", "", "ps2");
+        r.serial = Some("SLES-11111".into());
+        r.file_path = path;
+        let rows = [r];
+        let h = GameHints {
+            serial: Some("SLUS-22222".into()),
+            ..by_name_and_size("ps2", "disc.iso", 64)
+        };
+        assert!(LocalRoms::new(&rows)
+            .of("ID:0123456789abcdef", Some(&h))
+            .is_empty());
+        // o mesmo serial, ou nenhum, casa
+        let mut same = rows[0].clone();
+        same.serial = Some(" sles-11111".into());
+        let rows = [same];
+        let h = GameHints {
+            serial: Some("SLES-11111".into()),
+            ..by_name_and_size("ps2", "disc.iso", 64)
+        };
+        assert_eq!(
+            LocalRoms::new(&rows).of("ID:0123456789abcdef", Some(&h)),
+            ["p1"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn crc_key_does_not_fall_back_to_another_crc_by_name_and_size() {
+        let (dir, path) = sized_file("crc-key", "Game.cso", 1234);
+        let mut other = ident("p1", "CAFE0001", "psp");
+        other.file_path = path.clone();
+        let mut bare = ident("p2", "", "psp");
+        bare.file_path = path;
+        let h = by_name_and_size("psp", "Game.cso", 1234);
+        // outro CRC32 com o mesmo nome e tamanho: outro conteúdo
+        let rows = [other.clone()];
+        assert!(LocalRoms::new(&rows).of("DEADBEEF", Some(&h)).is_empty());
+        // a ROM sem CRC32 (de depois do scan novo) é alcançada
+        let rows = [other, bare];
+        assert_eq!(LocalRoms::new(&rows).of("deadbeef", Some(&h)), ["p2"]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn local_roms_read_each_file_size_once() {
+        let (dir, path) = sized_file("stats", "Game.cso", 10);
+        let mut r = ident("p1", "", "psp");
+        r.file_path = path;
+        let rows = [r];
+        let local = LocalRoms::new(&rows);
+        let h = by_name_and_size("psp", "Game.cso", 10);
+        for _ in 0..5 {
+            assert_eq!(local.of("ID:0123456789abcdef", Some(&h)), ["p1"]);
+        }
+        assert_eq!(local.stats.load(std::sync::atomic::Ordering::Relaxed), 1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
