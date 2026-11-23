@@ -5,8 +5,16 @@
 //! mapeamento de controle e portas, GUID de controle (a hotkey presa a um
 //! botão de controle fica aqui), o aparelho de áudio, os nits de HDR medidos
 //! nesta tela, as opções que um core grava como identidade da máquina (o MAC
-//! do PSP) e qualquer caminho absoluto. Um jogo vai pelo CRC32 da ROM. Um
-//! preset vai pela identidade: embutido, `curated:<id>` ou
+//! do PSP) e qualquer caminho absoluto. Um jogo vai pelo CRC32 da ROM; a ROM sem
+//! CRC32 (CHD, CSO, ISO grande) vai por uma chave opaca `ID:<16 hex>` (os 16
+//! primeiros hex de um SHA-256 do sistema, do serial, do nome e do tamanho) e o
+//! mapa `games` do documento diz, de cada chave, o sistema, o serial, o nome e o
+//! tamanho, para a outra máquina achar o jogo dela: pelo CRC32, senão pelo
+//! serial no mesmo sistema, senão pelo nome e o tamanho no mesmo sistema. O
+//! nome é só o último pedaço do caminho. Todo `rom` do documento continua com
+//! um `crc32` que não é vazio e o `games` é um campo novo e opcional, então a
+//! v0.1.16, que ignora o campo, lê o documento inteiro e conta uma chave `ID:`
+//! como um jogo que ela não tem. Um preset vai pela identidade: embutido, `curated:<id>` ou
 //! `slang-shaders:<caminho>` dentro do pacote que o ReEmu baixa; uma moldura
 //! do The Bezel Project vai pelo caminho dentro da pasta dele (D126). Um preset
 //! ou pacote importado do disco vai só pelo nome e pelo lugar, em `missing`.
@@ -245,11 +253,14 @@ struct CoreOptionsDoc {
     v: u64,
     /// `{core_id: {chave: valor}}`, sem as opções de identidade.
     values: BTreeMap<String, BTreeMap<String, String>>,
-    /// Opções por jogo, o jogo pelo CRC32.
+    /// Opções por jogo, o jogo pelo CRC32 (ou pela chave `ID:`).
     overrides: Vec<OverrideEntry>,
     /// `{system_id: core_id}`: o core preferido de cada plataforma.
     #[serde(default)]
     preferred_cores: BTreeMap<String, String>,
+    /// As dicas de cada jogo do documento, pela chave.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    games: BTreeMap<String, GameHints>,
 }
 
 /// O jogo vai pelo `crc32` no documento portátil e pelo `rom_id` no backup.
@@ -271,6 +282,9 @@ struct ShadersDoc {
     decorations: Vec<DecorationEntry>,
     /// Presets e pacotes importados do disco nesta máquina, com o lugar.
     missing: Vec<MissingEntry>,
+    /// As dicas de cada jogo do documento, pela chave.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    games: BTreeMap<String, GameHints>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -359,9 +373,12 @@ struct VideoDoc {
     integer_scaling: bool,
     hdr: bool,
     hdr_highlights: bool,
-    /// `target`: o CRC32 do jogo (no backup, o id da ROM), o id da plataforma
-    /// ou `""` no padrão.
+    /// `target`: o CRC32 ou a chave `ID:` do jogo (no backup, o id da ROM), o
+    /// id da plataforma ou `""` no padrão.
     aspect: Vec<AspectEntry>,
+    /// As dicas de cada jogo do documento, pela chave.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    games: BTreeMap<String, GameHints>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -397,6 +414,7 @@ impl Doc {
     fn validate(&self, form: Form) -> Result<(), String> {
         match self {
             Doc::CoreOptions(d) => {
+                valid_games(&d.games)?;
                 for e in &d.overrides {
                     override_target(e, form)?;
                 }
@@ -408,6 +426,7 @@ impl Doc {
                 }
             }
             Doc::Shaders(d) => {
+                valid_games(&d.games)?;
                 for e in &d.assignments {
                     Target::parse(
                         &e.scope,
@@ -451,6 +470,7 @@ impl Doc {
             }
             Doc::Audio(_) => {}
             Doc::Video(d) => {
+                valid_games(&d.games)?;
                 for e in &d.aspect {
                     aspect_target(e, form)?;
                 }
@@ -719,53 +739,184 @@ fn under(root: &Path, parts: &[&str]) -> PathBuf {
     path
 }
 
-/// `rom_id` → CRC32 das ROMs desta biblioteca (lido na transação).
-async fn crc_by_rom(tx: &mut SettingsTx) -> Result<HashMap<String, String>, String> {
-    Ok(tx
-        .rom_crc32s()
-        .await
-        .map_err(repo)?
-        .into_iter()
-        .map(|(id, crc)| (id, normalize_crc(&crc)))
-        .filter(|(_, crc)| !crc.is_empty())
-        .collect())
-}
-
 /// O que um documento diz de um jogo além da chave, para achá-lo quando esta
 /// máquina não tem o mesmo CRC32: o sistema, o serial e o nome e o tamanho do
 /// arquivo.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct GameHints {
-    pub system_id: String,
+struct GameHints {
+    system_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub serial: Option<String>,
+    serial: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub size: Option<u64>,
+    size: Option<u64>,
 }
 
-/// O nome do jogo nesta máquina: o lido no scan, senão o último pedaço do
-/// caminho. `None` quando não sobra nome.
+/// As dicas dos jogos de um documento, pela chave.
+type Games = BTreeMap<String, GameHints>;
+
+/// Uma dica sem sistema não acha nada, e uma chave vazia não é jogo: o
+/// documento é inválido.
+fn valid_games(games: &Games) -> Result<(), String> {
+    if games
+        .iter()
+        .any(|(key, h)| key.trim().is_empty() || h.system_id.trim().is_empty())
+    {
+        return Err(invalid());
+    }
+    Ok(())
+}
+
+/// As dicas com a chave como `normalize_crc` a escreve, que é como o alvo
+/// de um jogo a procura.
+fn games_by_key(games: &Games) -> Games {
+    games
+        .iter()
+        .map(|(key, h)| (normalize_crc(key), h.clone()))
+        .collect()
+}
+
+/// O par nome e tamanho lido no scan, quando os dois estão.
+fn ident_pair(r: &RomIdentity) -> Option<(&str, i64)> {
+    let name = r.ident_name.as_deref().filter(|n| !n.is_empty())?;
+    Some((name, r.ident_size?))
+}
+
+/// O nome do jogo nesta máquina: o lido no scan (junto com o tamanho), senão
+/// o último pedaço do caminho. `None` quando não sobra nome.
 fn name_of(r: &RomIdentity) -> Option<String> {
-    let name = match r.ident_name.as_deref().filter(|n| !n.is_empty()) {
-        Some(n) => bare_name(n),
+    let name = match ident_pair(r) {
+        Some((name, _)) => bare_name(name),
         None => bare_name(&r.file_path),
     };
     (!name.is_empty()).then_some(name)
 }
 
-/// O tamanho do jogo nesta máquina: o lido no scan, senão o do arquivo no
-/// disco. `None` quando o arquivo não pode ser lido (some, sem acesso).
+/// O tamanho do jogo nesta máquina, da mesma fonte do nome: o lido no scan,
+/// senão o do arquivo no disco. `None` quando o arquivo não pode ser lido
+/// (some, sem acesso).
 fn size_of(r: &RomIdentity) -> Option<u64> {
-    match r.ident_size {
-        Some(size) => u64::try_from(size).ok(),
+    match ident_pair(r) {
+        Some((_, size)) => u64::try_from(size).ok(),
         None => std::fs::metadata(&r.file_path).map(|m| m.len()).ok(),
     }
 }
 
+/// A chave de um jogo desta máquina no documento: o CRC32, ou, sem ele,
+/// `ID:` e os 16 primeiros hex de um SHA-256 do sistema, do serial (aparado,
+/// em maiúsculas), do nome (em minúsculas) e do tamanho, separados por um
+/// byte zero. Não depende de caminho nenhum, e nunca é um CRC32 (8 hex) nem
+/// vazia.
+fn game_key(r: &RomIdentity, name: Option<&str>, size: Option<u64>) -> String {
+    use sha2::{Digest, Sha256};
+    let crc = normalize_crc(&r.crc32);
+    if !crc.is_empty() {
+        return crc;
+    }
+    let serial = r
+        .serial
+        .as_deref()
+        .map(|s| s.trim().to_uppercase())
+        .unwrap_or_default();
+    let name = name.map(str::to_lowercase).unwrap_or_default();
+    let size = size.map(|s| s.to_string()).unwrap_or_default();
+    let mut sha = Sha256::new();
+    for part in [r.system_id.as_str(), &serial, &name, &size] {
+        sha.update(part.as_bytes());
+        sha.update([0u8]);
+    }
+    let hex: String = sha
+        .finalize()
+        .iter()
+        .take(8)
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    format!("ID:{hex}")
+}
+
+/// As dicas de um jogo desta máquina para o documento.
+fn hints_of(r: &RomIdentity, name: Option<String>, size: Option<u64>) -> GameHints {
+    GameHints {
+        system_id: r.system_id.clone(),
+        serial: r
+            .serial
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
+        name,
+        size,
+    }
+}
+
+/// A biblioteca desta máquina na hora de exportar: `rom_id` → a chave e as
+/// dicas do jogo, lidas na transação. O arquivo só é aberto (para o tamanho)
+/// quando uma escolha aponta a ROM e a linha não trouxe o tamanho do scan.
+struct Known {
+    rows: HashMap<String, RomIdentity>,
+    keys: HashMap<String, String>,
+    /// As dicas de cada chave já pedida: com a mesma chave em duas ROMs, as da
+    /// de menor id, para o documento não depender da ordem das leituras.
+    hints: BTreeMap<String, (String, GameHints)>,
+}
+
+impl Known {
+    async fn read(tx: &mut SettingsTx) -> Result<Self, String> {
+        let rows = tx.rom_identities().await.map_err(repo)?;
+        Ok(Self {
+            rows: rows.into_iter().map(|r| (r.id.clone(), r)).collect(),
+            keys: HashMap::new(),
+            hints: BTreeMap::new(),
+        })
+    }
+
+    /// A ROM está na biblioteca, com CRC32 ou sem.
+    fn has(&self, rom_id: &str) -> bool {
+        self.rows.contains_key(rom_id)
+    }
+
+    /// A chave do jogo da ROM; `None` para uma ROM que não é da biblioteca.
+    fn key_of(&mut self, rom_id: &str) -> Option<String> {
+        if let Some(key) = self.keys.get(rom_id) {
+            return Some(key.clone());
+        }
+        let r = self.rows.get(rom_id)?;
+        let (name, size) = (name_of(r), size_of(r));
+        let key = game_key(r, name.as_deref(), size);
+        let hints = hints_of(r, name, size);
+        match self.hints.get(&key) {
+            Some((id, _)) if id.as_str() <= rom_id => {}
+            _ => {
+                self.hints.insert(key.clone(), (rom_id.to_string(), hints));
+            }
+        }
+        self.keys.insert(rom_id.to_string(), key.clone());
+        Some(key)
+    }
+
+    /// As dicas das chaves que o documento usa.
+    fn games<'k>(&self, used: impl Iterator<Item = &'k str>) -> Games {
+        used.filter_map(|key| {
+            self.hints
+                .get(key)
+                .map(|(_, h)| (key.to_string(), h.clone()))
+        })
+        .collect()
+    }
+}
+
+/// As dicas dos jogos que os alvos usam; só o documento portátil as leva.
+fn games_of<'t>(known: &Known, targets: impl Iterator<Item = &'t Target>) -> Games {
+    known.games(targets.filter_map(|t| match t {
+        Target::Game(key) => Some(key.as_str()),
+        _ => None,
+    }))
+}
+
 /// As ROMs desta máquina, por CRC32 (o mesmo jogo pode estar em duas pastas),
-/// por id e, para o que não tem CRC32, pelas dicas do documento.
+/// por id (todas, com CRC32 ou sem) e, para o que não tem CRC32, pelas dicas
+/// do documento.
 struct LocalRoms<'a> {
     rows: &'a [RomIdentity],
     by_crc: HashMap<String, Vec<&'a str>>,
@@ -777,12 +928,13 @@ impl<'a> LocalRoms<'a> {
         let mut by_crc: HashMap<String, Vec<&'a str>> = HashMap::new();
         let mut ids = HashSet::new();
         for r in roms {
-            let crc = normalize_crc(&r.crc32);
-            if crc.is_empty() {
-                continue;
-            }
-            by_crc.entry(crc).or_default().push(r.id.as_str());
+            // toda ROM da biblioteca é conhecida pelo id; só a com CRC32 entra
+            // no índice dele
             ids.insert(r.id.as_str());
+            let crc = normalize_crc(&r.crc32);
+            if !crc.is_empty() {
+                by_crc.entry(crc).or_default().push(r.id.as_str());
+            }
         }
         Self {
             rows: roms,
@@ -801,8 +953,10 @@ impl<'a> LocalRoms<'a> {
     /// pulado, e os dois últimos nunca saem do sistema da dica.
     fn of(&self, key: &str, hints: Option<&GameHints>) -> Vec<&'a str> {
         let key = normalize_crc(key);
-        if let Some(found) = self.by_crc.get(&key).filter(|_| !key.is_empty()) {
-            return found.clone();
+        if !key.is_empty() {
+            if let Some(found) = self.by_crc.get(&key) {
+                return found.clone();
+            }
         }
         let Some(h) = hints else {
             return Vec::new();
@@ -850,9 +1004,14 @@ struct Tally {
 
 impl Tally {
     /// Os lugares do alvo nesta máquina; um jogo que ela não tem é contado.
-    fn slots(&mut self, target: &Target, roms: &LocalRoms<'_>) -> Vec<Slot> {
-        // as dicas do documento entram com o formato novo (sem elas, só o CRC32)
-        let slots = target.slots(roms, None);
+    fn slots(&mut self, target: &Target, roms: &LocalRoms<'_>, games: &Games) -> Vec<Slot> {
+        // a chave que nenhuma ROM daqui tem pelo CRC32 usa as dicas do
+        // documento (sem elas, só o CRC32)
+        let hints = match target {
+            Target::Game(key) => games.get(key),
+            _ => None,
+        };
+        let slots = target.slots(roms, hints);
         if slots.is_empty() {
             match target {
                 Target::Game(crc) => {
@@ -896,7 +1055,7 @@ impl Tally {
 enum Target {
     Default,
     System(String),
-    /// Um jogo pelo CRC32 (o documento portátil).
+    /// Um jogo pelo CRC32 ou pela chave `ID:` (o documento portátil).
     Game(String),
     /// Uma ROM desta biblioteca pelo id (só o backup, R38).
     Rom(String),
@@ -990,7 +1149,7 @@ impl Target {
         scope: AssignmentScope,
         system_id: Option<&str>,
         rom_id: Option<&str>,
-        crc_of: &HashMap<String, String>,
+        known: &mut Known,
         form: Form,
     ) -> Option<Self> {
         match scope {
@@ -1000,10 +1159,9 @@ impl Target {
                 .map(|s| Target::System(s.to_string())),
             AssignmentScope::Rom => {
                 let id = rom_id?;
-                let crc = crc_of.get(id)?;
                 Some(match form {
-                    Form::Portable => Target::Game(crc.clone()),
-                    Form::Backup => Target::Rom(id.to_string()),
+                    Form::Portable => Target::Game(known.key_of(id)?),
+                    Form::Backup => Target::Rom(known.has(id).then(|| id.to_string())?),
                 })
             }
         }
@@ -1045,7 +1203,7 @@ impl Target {
 // --- opções de core ----------------------------------------------------------
 
 async fn export_core_options(tx: &mut SettingsTx, form: Form) -> Result<CoreOptionsDoc, String> {
-    let crc_of = crc_by_rom(tx).await?;
+    let mut known = Known::read(tx).await?;
     let mut values: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     for (core, key, value) in tx.option_values().await.map_err(repo)? {
         if !is_local_only(&key) {
@@ -1059,7 +1217,13 @@ async fn export_core_options(tx: &mut SettingsTx, form: Form) -> Result<CoreOpti
         if is_local_only(&o.key) {
             continue;
         }
-        let target = Target::of_row(AssignmentScope::Rom, None, Some(&o.rom_id), &crc_of, form);
+        let target = Target::of_row(
+            AssignmentScope::Rom,
+            None,
+            Some(&o.rom_id),
+            &mut known,
+            form,
+        );
         if let Some(target) = target {
             overrides
                 .entry((target, o.core_id, o.key))
@@ -1067,6 +1231,7 @@ async fn export_core_options(tx: &mut SettingsTx, form: Form) -> Result<CoreOpti
         }
     }
     let preferred_cores = tx.core_prefs().await.map_err(repo)?.into_iter().collect();
+    let games = games_of(&known, overrides.keys().map(|(target, _, _)| target));
     Ok(CoreOptionsDoc {
         v: DOC_VERSION,
         values,
@@ -1084,6 +1249,7 @@ async fn export_core_options(tx: &mut SettingsTx, form: Form) -> Result<CoreOpti
             })
             .collect(),
         preferred_cores,
+        games,
     })
 }
 
@@ -1097,6 +1263,7 @@ async fn apply_core_options(
     tally: &mut Tally,
 ) -> Result<(), String> {
     let put = mode.put();
+    let games = games_by_key(&doc.games);
     if mode == ApplyMode::Restore {
         // o backup desta máquina volta inteiro; a identidade nunca sai
         for (core, key, _) in tx.option_values().await.map_err(repo)? {
@@ -1127,7 +1294,7 @@ async fn apply_core_options(
             continue;
         }
         let target = override_target(e, form)?;
-        let slots = tally.slots(&target, roms);
+        let slots = tally.slots(&target, roms, &games);
         if slots.is_empty() {
             continue;
         }
@@ -1263,7 +1430,7 @@ async fn export_shaders(
     form: Form,
 ) -> Result<ShadersDoc, String> {
     let builtins = crate::gpu::builtin_preset_names();
-    let crc_of = crc_by_rom(tx).await?;
+    let mut known = Known::read(tx).await?;
     let presets: HashMap<String, ShaderPreset> = tx
         .shader_presets()
         .await
@@ -1290,7 +1457,7 @@ async fn export_shaders(
             a.scope,
             a.system_id.as_deref(),
             a.rom_id.as_deref(),
-            &crc_of,
+            &mut known,
             form,
         );
         let (Some(target), Some(preset)) = (target, presets.get(&a.preset_id)) else {
@@ -1325,7 +1492,7 @@ async fn export_shaders(
             d.scope,
             d.system_id.as_deref(),
             d.rom_id.as_deref(),
-            &crc_of,
+            &mut known,
             form,
         );
         let (Some(target), Some(pack)) = (target, packs.get(&d.pack_id)) else {
@@ -1345,11 +1512,16 @@ async fn export_shaders(
             asset,
         });
     }
+    let mut games = games_of(&known, assignments.keys().chain(decorations.keys()));
+    // o lugar de um preset que não viajou também é um jogo do documento
+    let missing_keys = missing.iter().filter_map(|m| m.crc32.as_deref());
+    games.extend(known.games(missing_keys));
     Ok(ShadersDoc {
         v: DOC_VERSION,
         assignments: assignments.into_values().collect(),
         decorations: decorations.into_values().collect(),
         missing: missing.into_iter().collect(),
+        games,
     })
 }
 
@@ -1364,6 +1536,7 @@ async fn apply_shaders(
 ) -> Result<(), String> {
     let catalog = here.catalog;
     let builtins = crate::gpu::builtin_preset_names();
+    let games = games_by_key(&doc.games);
 
     // Onde a outra máquina tem um arquivo importado do disco: o lugar desta
     // fica como está (nem esvaziado no `Restore`). O backup desta máquina lista
@@ -1373,7 +1546,7 @@ async fn apply_shaders(
     let mut missing_slots: HashSet<(MissingItem, SlotKey)> = HashSet::new();
     for m in &doc.missing {
         let target = missing_target(m, form)?;
-        let slots = tally.slots(&target, roms);
+        let slots = tally.slots(&target, roms, &games);
         if slots.is_empty() {
             continue;
         }
@@ -1419,7 +1592,7 @@ async fn apply_shaders(
         )?;
         // um jogo que esta máquina não tem conta como tal, antes de qualquer
         // preset faltar (R38)
-        let slots = tally.slots(&target, roms);
+        let slots = tally.slots(&target, roms, &games);
         if slots.is_empty() {
             continue;
         }
@@ -1498,7 +1671,7 @@ async fn apply_shaders(
             e.rom_id.as_deref(),
             form,
         )?;
-        let slots = tally.slots(&target, roms);
+        let slots = tally.slots(&target, roms, &games);
         if slots.is_empty() {
             continue;
         }
@@ -1688,34 +1861,36 @@ fn aspect_target(e: &AspectEntry, form: Form) -> Result<Target, String> {
 
 /// `(scope, target)` de `aspect_assignments` na forma do documento; `None`
 /// para a de um jogo fora da biblioteca.
-fn aspect_key(
-    row: &AspectRow,
-    crc_of: &HashMap<String, String>,
-    form: Form,
-) -> Option<(String, String)> {
+fn aspect_key(row: &AspectRow, known: &mut Known, form: Form) -> Option<(String, String)> {
     match row.scope.as_str() {
         "default" => Some(("default".into(), String::new())),
         "system" if !row.target.is_empty() => Some(("system".into(), row.target.clone())),
-        "rom" => crc_of.get(&row.target).map(|crc| {
+        "rom" => {
             let target = match form {
-                Form::Portable => crc.clone(),
-                Form::Backup => row.target.clone(),
+                Form::Portable => known.key_of(&row.target)?,
+                Form::Backup => known.has(&row.target).then(|| row.target.clone())?,
             };
-            ("rom".into(), target)
-        }),
+            Some(("rom".into(), target))
+        }
         _ => None,
     }
 }
 
 async fn export_video(tx: &mut SettingsTx, form: Form) -> Result<VideoDoc, String> {
-    let crc_of = crc_by_rom(tx).await?;
+    let mut known = Known::read(tx).await?;
     let v = tx.video().await.map_err(repo)?;
     let mut aspect = BTreeMap::new();
     for row in tx.aspects().await.map_err(repo)? {
-        if let Some(key) = aspect_key(&row, &crc_of, form) {
+        if let Some(key) = aspect_key(&row, &mut known, form) {
             aspect.entry(key).or_insert(row.aspect);
         }
     }
+    let games = known.games(
+        aspect
+            .keys()
+            .filter(|(scope, _)| scope == "rom" && form == Form::Portable)
+            .map(|(_, target)| target.as_str()),
+    );
     Ok(VideoDoc {
         v: DOC_VERSION,
         integer_scaling: v.integer_scaling,
@@ -1729,6 +1904,7 @@ async fn export_video(tx: &mut SettingsTx, form: Form) -> Result<VideoDoc, Strin
                 aspect,
             })
             .collect(),
+        games,
     })
 }
 
@@ -1748,6 +1924,7 @@ async fn apply_video(
     .await
     .map_err(repo)?;
     tally.applied += 1;
+    let games = games_by_key(&doc.games);
 
     if mode == ApplyMode::Restore {
         // a proporção de um jogo fora da biblioteca não é de cópia nenhuma e fica
@@ -1771,7 +1948,7 @@ async fn apply_video(
             continue;
         }
         let mut wrote = false;
-        for slot in tally.slots(&target, roms) {
+        for slot in tally.slots(&target, roms, &games) {
             let (scope, target) = match slot.scope {
                 AssignmentScope::Default => ("default", String::new()),
                 AssignmentScope::System => ("system", slot.system_id.unwrap_or_default()),
@@ -2211,6 +2388,14 @@ mod tests {
         );
     }
 
+    /// O documento sem as dicas dos jogos, que são do arquivo da máquina que o
+    /// escreveu.
+    fn without_games(doc: &Value) -> Value {
+        let mut doc = doc.clone();
+        doc.as_object_mut().unwrap().remove("games");
+        doc
+    }
+
     fn s3(a: &str, b: &str, c: &str) -> (String, String, String) {
         (a.into(), b.into(), c.into())
     }
@@ -2313,6 +2498,10 @@ mod tests {
                     {"crc32": "AAAA0002", "core_id": "mgba", "key": "mgba_solar", "value": "10"},
                 ],
                 "preferred_cores": {"psx": "swanstation_libretro", "snes": "snes9x_libretro"},
+                "games": {
+                    "AAAA0001": {"system_id": "snes", "name": "src-1.sfc"},
+                    "AAAA0002": {"system_id": "snes", "name": "src-2.sfc"},
+                },
             })
         );
         let report = dst
@@ -2326,7 +2515,8 @@ mod tests {
                 ..ApplyReport::default()
             }
         );
-        assert_eq!(dst.export(CO).await, doc);
+        // as dicas são da máquina que escreveu (aqui o nome do arquivo)
+        assert_eq!(without_games(&dst.export(CO).await), without_games(&doc));
     }
 
     #[tokio::test]
@@ -2572,6 +2762,7 @@ mod tests {
                      "asset": "snes/games/AAAA0001.png"},
                 ],
                 "missing": [],
+                "games": {"AAAA0001": {"system_id": "snes", "name": "src-1.sfc"}},
             })
         );
         let report = dst
@@ -2585,7 +2776,7 @@ mod tests {
                 ..ApplyReport::default()
             }
         );
-        assert_eq!(dst.export(SD).await, doc);
+        assert_eq!(without_games(&dst.export(SD).await), without_games(&doc));
         // o preset e a moldura apontam para os arquivos DESTA máquina
         let psx: String = sqlx::query_scalar(
             "SELECT preset_id FROM shader_chain_assignments WHERE system_id = 'psx'",
@@ -3158,6 +3349,7 @@ mod tests {
                     {"scope": "rom", "target": "AAAA0001", "aspect": "fill"},
                     {"scope": "system", "target": "snes", "aspect": "16:9"},
                 ],
+                "games": {"AAAA0001": {"system_id": "snes", "name": "src-1.sfc"}},
             })
         );
         let report = dst
@@ -3165,7 +3357,10 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(report.applied, 4);
-        assert_eq!(dst.export(Group::Video).await, doc);
+        assert_eq!(
+            without_games(&dst.export(Group::Video).await),
+            without_games(&doc)
+        );
         // os nits foram medidos na tela desta máquina
         let now = db::VideoConfigRepo::new(dst.db.clone())
             .get()
@@ -3882,6 +4077,364 @@ mod tests {
             LocalRoms::new(&rows).of("ID:0123456789abcdef", Some(&h)),
             ["t1"]
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // --- jogos sem CRC32: a chave e as dicas no documento ------------------------
+
+    /// Uma ROM com tudo que a identidade lê; `crc` vazio é a linha sem hash.
+    async fn rom_row(
+        db: &Db,
+        id: &str,
+        crc: &str,
+        system: &str,
+        serial: Option<&str>,
+        ident: Option<(&str, i64)>,
+        path: &str,
+    ) {
+        sqlx::query(
+            "INSERT INTO roms (id, file_path, crc32, md5, system_id, added_at, serial, \
+             ident_name, ident_size) VALUES (?1, ?2, ?3, '', ?4, 0, ?5, ?6, ?7)",
+        )
+        .bind(id)
+        .bind(path)
+        .bind(crc)
+        .bind(system)
+        .bind(serial)
+        .bind(ident.map(|(n, _)| n))
+        .bind(ident.map(|(_, s)| s))
+        .execute(db)
+        .await
+        .unwrap();
+    }
+
+    const PS1_CORE: &str = "swanstation";
+
+    /// Duas máquinas com o mesmo CD de PS1 em CHD (sem CRC32), com nomes e
+    /// tamanhos diferentes: só o serial, em caixa diferente, une os dois.
+    async fn chd_pair(tag: &str) -> (Machine, Machine) {
+        let a = Machine::new(&format!("{tag}-a")).await;
+        let b = Machine::new(&format!("{tag}-b")).await;
+        let path = |id: &str| abs(&["Jogos-chd", &format!("{id}.chd")]);
+        let (pa, pb) = (path("a1"), path("b1"));
+        let ia = Some(("Game.chd", 1000));
+        let ib = Some(("Other.chd", 2000));
+        rom_row(&a.db, "a1", "", "psx", Some("SLUS-00594"), ia, &pa).await;
+        rom_row(&b.db, "b1", "", "psx", Some("slus-00594"), ib, &pb).await;
+        (a, b)
+    }
+
+    async fn override_values(db: &Db) -> Vec<(String, String, String)> {
+        rows(
+            db,
+            "SELECT rom_id, option_key, value FROM core_option_overrides ORDER BY rom_id",
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn hashless_core_option_travels_by_serial() {
+        let (a, b) = chd_pair("hl-co").await;
+        option(&a.db, PS1_CORE, Some("a1"), "k", "v").await;
+        let doc = a.export(CO).await;
+        let report = b.apply(CO, &doc, Merge).await.unwrap();
+        assert_eq!(report.applied, 1, "{report:?}");
+        assert_eq!(report.skipped_unknown_games, 0, "{report:?}");
+        assert_eq!(override_values(&b.db).await, vec![s3("b1", "k", "v")]);
+    }
+
+    #[tokio::test]
+    async fn hashless_shader_and_aspect_travel_by_serial() {
+        let (a, b) = chd_pair("hl-sd").await;
+        preset(&a.db, "crt", "crt").await;
+        shader(&a.db, AssignmentScope::Rom, Some("a1"), "crt", &[]).await;
+        aspect(&a.db, "rom", "a1", "4:3").await;
+        let sd = a.export(SD).await;
+        let video = a.export(Group::Video).await;
+
+        let r = b.apply(SD, &sd, Merge).await.unwrap();
+        assert_eq!((r.applied, r.skipped_unknown_games), (1, 0), "{r:?}");
+        let r = b.apply(Group::Video, &video, Merge).await.unwrap();
+        // a linha de vídeo conta um e a proporção do jogo, outro
+        assert_eq!((r.applied, r.skipped_unknown_games), (2, 0), "{r:?}");
+        let shaders: Vec<(String, String)> = rows(
+            &b.db,
+            "SELECT rom_id, preset_id FROM shader_chain_assignments WHERE scope = 'rom'",
+        )
+        .await;
+        assert_eq!(shaders, vec![("b1".to_string(), "crt".to_string())]);
+        let aspects: Vec<(String, String, String)> = rows(
+            &b.db,
+            "SELECT scope, target, aspect FROM aspect_assignments WHERE scope = 'rom'",
+        )
+        .await;
+        assert_eq!(aspects, vec![s3("rom", "b1", "4:3")]);
+    }
+
+    /// Uma linha de antes do #55: o CRC32 do contêiner, sem identidade lida, e
+    /// o arquivo no disco com 1234 bytes.
+    async fn old_container_row(m: &Machine) {
+        let file = m.root.join("A").join("Game.cso");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, vec![0u8; 1234]).unwrap();
+        let path = file.to_string_lossy().into_owned();
+        rom_row(&m.db, "a1", "DEADBEEF", "psp", None, None, &path).await;
+    }
+
+    async fn new_container_row(m: &Machine) {
+        let path = abs(&["Jogos-cso", "b1.cso"]);
+        rom_row(
+            &m.db,
+            "b1",
+            "",
+            "psp",
+            None,
+            Some(("Game.cso", 1234)),
+            &path,
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn old_container_crc_meets_new_row_by_file() {
+        // a linha velha leva a opção à nova
+        let (a, b) = (Machine::new("old-a").await, Machine::new("old-b").await);
+        old_container_row(&a).await;
+        new_container_row(&b).await;
+        option(&a.db, "ppsspp", Some("a1"), "k", "from-a").await;
+        let report = b.apply(CO, &a.export(CO).await, Merge).await.unwrap();
+        assert_eq!(
+            (report.applied, report.skipped_unknown_games),
+            (1, 0),
+            "{report:?}"
+        );
+        assert_eq!(override_values(&b.db).await, vec![s3("b1", "k", "from-a")]);
+
+        // e no outro sentido: a nova leva a opção à velha
+        let (a, b) = (Machine::new("old-a2").await, Machine::new("old-b2").await);
+        old_container_row(&a).await;
+        new_container_row(&b).await;
+        option(&b.db, "ppsspp", Some("b1"), "k", "from-b").await;
+        let report = a.apply(CO, &b.export(CO).await, Merge).await.unwrap();
+        assert_eq!(
+            (report.applied, report.skipped_unknown_games),
+            (1, 0),
+            "{report:?}"
+        );
+        assert_eq!(override_values(&a.db).await, vec![s3("a1", "k", "from-b")]);
+    }
+
+    /// A máquina A com um jogo sem CRC32 e uma escolha em cada grupo, mais uma
+    /// escolha que não é de jogo (que o leitor antigo ainda aplica).
+    async fn hashless_source(tag: &str) -> (Machine, Vec<(Group, Value)>) {
+        let (a, _) = chd_pair(tag).await;
+        option(&a.db, "snes9x", None, "snes9x_region", "pal").await;
+        option(&a.db, PS1_CORE, Some("a1"), "k", "v").await;
+        preset(&a.db, "crt", "crt").await;
+        shader(&a.db, AssignmentScope::Default, None, "crt", &[]).await;
+        shader(&a.db, AssignmentScope::Rom, Some("a1"), "crt", &[]).await;
+        aspect(&a.db, "default", "", "4:3").await;
+        aspect(&a.db, "rom", "a1", "16:9").await;
+        let docs = vec![
+            (CO, a.export(CO).await),
+            (SD, a.export(SD).await),
+            (Group::Video, a.export(Group::Video).await),
+        ];
+        (a, docs)
+    }
+
+    #[tokio::test]
+    async fn new_document_is_valid_for_an_old_reader() {
+        let (_a, docs) = hashless_source("old-reader").await;
+        let (_, b) = chd_pair("old-reader-b").await;
+        // os itens que não são de jogo, que o leitor antigo aplica
+        let non_game = [1, 1, 2];
+        for ((group, doc), non_game) in docs.iter().zip(non_game) {
+            // toda entrada de jogo leva uma chave que não é vazia
+            for field in [
+                "overrides",
+                "assignments",
+                "decorations",
+                "missing",
+                "aspect",
+            ] {
+                for e in doc
+                    .get(field)
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
+                    match (field, e.get("scope").and_then(Value::as_str)) {
+                        ("aspect", Some("rom")) => {
+                            assert!(!e["target"].as_str().unwrap().is_empty())
+                        }
+                        ("aspect", _) | (_, Some("default" | "system")) => {}
+                        _ => assert!(!e["crc32"].as_str().unwrap().is_empty(), "{e}"),
+                    }
+                }
+            }
+            assert!(doc.get("games").is_some(), "{group:?}");
+
+            // o mesmo documento sem `games`, como o leitor antigo o vê: confere
+            // e aplica tudo, menos o jogo, que é um jogo que ele não tem
+            let mut old = doc.clone();
+            old.as_object_mut().unwrap().remove("games");
+            check(*group, &old, Merge).unwrap_or_else(|e| panic!("{group:?}: {e}"));
+            let report = b.apply(*group, &old, Merge).await.unwrap();
+            assert_eq!(report.skipped_unknown_games, 1, "{group:?} {report:?}");
+            assert_eq!(report.applied, non_game, "{group:?} {report:?}");
+            // com `games`, o jogo chega
+            let report = b.apply(*group, doc, Merge).await.unwrap();
+            assert_eq!(report.skipped_unknown_games, 0, "{group:?} {report:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn game_key_is_deterministic_and_path_free() {
+        let a = Machine::new("det").await;
+        let secret = abs(&["Pasta Secreta"]);
+        rom_row(
+            &a.db,
+            "a1",
+            "",
+            "psx",
+            Some("SLUS-00594"),
+            None,
+            &format!("{secret}{}Game.chd", std::path::MAIN_SEPARATOR),
+        )
+        .await;
+        rom_row(
+            &a.db,
+            "a2",
+            "",
+            "psx",
+            None,
+            Some(("sub/dir\\Track 01.bin", 50)),
+            &abs(&["Pasta Secreta", "a2.bin"]),
+        )
+        .await;
+        option(&a.db, PS1_CORE, Some("a1"), "k", "v").await;
+        option(&a.db, PS1_CORE, Some("a2"), "k", "v").await;
+        let first = a.export(CO).await;
+        assert_eq!(first, a.export(CO).await);
+        let text = first.to_string();
+        assert!(!text.contains("Pasta Secreta"), "{text}");
+        let games = first["games"].as_object().unwrap();
+        assert_eq!(games.len(), 2, "{text}");
+        for (key, hints) in games {
+            assert!(key.starts_with("ID:") && key.len() == 3 + 16, "{key}");
+            let name = hints["name"].as_str().unwrap();
+            assert!(!name.contains(['/', '\\']), "{name}");
+        }
+    }
+
+    #[tokio::test]
+    async fn games_entry_without_system_is_invalid() {
+        let doc = json!({
+            "v": 1,
+            "values": {},
+            "overrides": [],
+            "games": {"ID:0123456789abcdef": {"system_id": ""}},
+        });
+        assert_eq!(check(CO, &doc, Merge).err(), Some(invalid()));
+    }
+
+    /// R38/R39: o backup de antes da cópia cobre também a linha sem CRC32, e o
+    /// "Desfazer" devolve o valor que a cópia trocou.
+    #[tokio::test]
+    async fn merge_onto_hashless_row_is_undone_by_restore() {
+        let (a, b) = chd_pair("hl-undo").await;
+        option(&a.db, PS1_CORE, Some("a1"), "k", "copied").await;
+        option(&b.db, PS1_CORE, Some("b1"), "k", "local").await;
+        let doc = a.export(CO).await;
+
+        let backup = b.backup(CO).await;
+        assert_eq!(
+            backup["overrides"],
+            json!([{"rom_id": "b1", "core_id": PS1_CORE, "key": "k", "value": "local"}])
+        );
+        b.apply(CO, &doc, Merge).await.unwrap();
+        assert_eq!(override_values(&b.db).await, vec![s3("b1", "k", "copied")]);
+        b.apply(CO, &backup, Restore).await.unwrap();
+        assert_eq!(override_values(&b.db).await, vec![s3("b1", "k", "local")]);
+    }
+
+    #[test]
+    fn local_roms_name_and_size_stays_in_its_system() {
+        let dir = std::env::temp_dir().join(format!("reemu-ident-sys-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("Game.cso");
+        std::fs::write(&file, vec![0u8; 1234]).unwrap();
+        let mut other = ident("p1", "", "ps2");
+        other.file_path = file.to_string_lossy().into_owned();
+        let rows = [other];
+        let h = GameHints {
+            name: Some("Game.cso".into()),
+            size: Some(1234),
+            ..hints("psp")
+        };
+        assert!(LocalRoms::new(&rows)
+            .of("ID:0123456789abcdef", Some(&h))
+            .is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn local_roms_serial_miss_falls_through_to_name_and_size() {
+        let dir = std::env::temp_dir().join(format!("reemu-ident-miss-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("Game.cso");
+        std::fs::write(&file, vec![0u8; 1234]).unwrap();
+        let mut r = ident("p1", "", "psp");
+        r.serial = Some("OUTRO-00001".into());
+        r.file_path = file.to_string_lossy().into_owned();
+        let rows = [r];
+        let h = GameHints {
+            serial: Some("SLUS-00594".into()),
+            name: Some("game.cso".into()),
+            size: Some(1234),
+            ..hints("psp")
+        };
+        assert_eq!(
+            LocalRoms::new(&rows).of("ID:0123456789abcdef", Some(&h)),
+            ["p1"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn local_roms_blank_serial_is_absent() {
+        let mut r = ident("p1", "", "psx");
+        r.serial = Some("  ".into());
+        let rows = [r];
+        let h = GameHints {
+            serial: Some("  ".into()),
+            ..hints("psx")
+        };
+        assert!(LocalRoms::new(&rows)
+            .of("ID:0123456789abcdef", Some(&h))
+            .is_empty());
+    }
+
+    #[test]
+    fn name_and_size_come_from_the_same_source() {
+        let dir = std::env::temp_dir().join(format!("reemu-ident-pair-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("Real.chd");
+        std::fs::write(&file, vec![0u8; 10]).unwrap();
+        let mut r = ident("p1", "", "psx");
+        r.file_path = file.to_string_lossy().into_owned();
+        // só o nome lido no scan: nome e tamanho vêm os dois do arquivo
+        r.ident_name = Some("Entrada.bin".into());
+        assert_eq!(name_of(&r).as_deref(), Some("Real.chd"));
+        assert_eq!(size_of(&r), Some(10));
+        // o par lido no scan vale inteiro
+        r.ident_size = Some(99);
+        assert_eq!(name_of(&r).as_deref(), Some("Entrada.bin"));
+        assert_eq!(size_of(&r), Some(99));
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

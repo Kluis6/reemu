@@ -208,19 +208,12 @@ impl SettingsTx {
         sqlx::query(sql).fetch_all(&mut *self.tx).await.map_err(be)
     }
 
-    /// `(id, crc32)` de cada ROM da biblioteca.
-    pub async fn rom_crc32s(&mut self) -> Result<Vec<(String, String)>, RepoError> {
-        let rows = self.all("SELECT id, crc32 FROM roms ORDER BY id").await?;
-        rows.iter()
-            .map(|r| Ok((col(r, "id")?, col(r, "crc32")?)))
-            .collect()
-    }
-
     /// A identidade de cada ROM da biblioteca.
     pub async fn rom_identities(&mut self) -> Result<Vec<RomIdentity>, RepoError> {
         let rows = self
             .all(
-                "SELECT id, crc32, system_id, serial, ident_name, ident_size, file_path                  FROM roms ORDER BY id",
+                "SELECT id, crc32, system_id, serial, ident_name, ident_size, file_path \
+                 FROM roms ORDER BY id",
             )
             .await?;
         rows.iter()
