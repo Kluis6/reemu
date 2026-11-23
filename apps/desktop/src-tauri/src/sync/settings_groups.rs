@@ -37,7 +37,8 @@
 //! guarda em memória (hotkeys, teclado, áudio, vídeo).
 
 use db::{
-    AspectRow, AudioSettings, Db, OptionOverrideRow, Put, SettingsRepo, SettingsTx, VideoSettings,
+    AspectRow, AudioSettings, Db, OptionOverrideRow, Put, RomIdentity, SettingsRepo, SettingsTx,
+    VideoSettings,
 };
 use domain::decoration::{DecorationAssignment, DecorationPack, DecorationPackSource};
 use domain::error::RepoError;
@@ -174,8 +175,8 @@ impl Catalog {
 
 /// O que esta máquina tem e o banco não diz.
 pub struct ThisMachine<'a> {
-    /// `(rom_id, crc32)` da biblioteca.
-    pub roms: &'a [(String, String)],
+    /// A identidade de cada ROM da biblioteca (`SettingsTx::rom_identities`).
+    pub roms: &'a [RomIdentity],
     /// Os cores instalados (`emu_session::installed_core_ids`).
     pub cores: &'a [String],
     pub catalog: &'a Catalog,
@@ -730,34 +731,105 @@ async fn crc_by_rom(tx: &mut SettingsTx) -> Result<HashMap<String, String>, Stri
         .collect())
 }
 
-/// As ROMs desta máquina, por CRC32 (o mesmo jogo pode estar em duas pastas)
-/// e por id.
+/// O que um documento diz de um jogo além da chave, para achá-lo quando esta
+/// máquina não tem o mesmo CRC32: o sistema, o serial e o nome e o tamanho do
+/// arquivo.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GameHints {
+    pub system_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub serial: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<u64>,
+}
+
+/// O nome do jogo nesta máquina: o lido no scan, senão o último pedaço do
+/// caminho. `None` quando não sobra nome.
+fn name_of(r: &RomIdentity) -> Option<String> {
+    let name = match r.ident_name.as_deref().filter(|n| !n.is_empty()) {
+        Some(n) => bare_name(n),
+        None => bare_name(&r.file_path),
+    };
+    (!name.is_empty()).then_some(name)
+}
+
+/// O tamanho do jogo nesta máquina: o lido no scan, senão o do arquivo no
+/// disco. `None` quando o arquivo não pode ser lido (some, sem acesso).
+fn size_of(r: &RomIdentity) -> Option<u64> {
+    match r.ident_size {
+        Some(size) => u64::try_from(size).ok(),
+        None => std::fs::metadata(&r.file_path).map(|m| m.len()).ok(),
+    }
+}
+
+/// As ROMs desta máquina, por CRC32 (o mesmo jogo pode estar em duas pastas),
+/// por id e, para o que não tem CRC32, pelas dicas do documento.
 struct LocalRoms<'a> {
+    rows: &'a [RomIdentity],
     by_crc: HashMap<String, Vec<&'a str>>,
     ids: HashSet<&'a str>,
 }
 
 impl<'a> LocalRoms<'a> {
-    fn new(roms: &'a [(String, String)]) -> Self {
+    fn new(roms: &'a [RomIdentity]) -> Self {
         let mut by_crc: HashMap<String, Vec<&'a str>> = HashMap::new();
         let mut ids = HashSet::new();
-        for (id, crc) in roms {
-            let crc = normalize_crc(crc);
+        for r in roms {
+            let crc = normalize_crc(&r.crc32);
             if crc.is_empty() {
                 continue;
             }
-            by_crc.entry(crc).or_default().push(id.as_str());
-            ids.insert(id.as_str());
+            by_crc.entry(crc).or_default().push(r.id.as_str());
+            ids.insert(r.id.as_str());
         }
-        Self { by_crc, ids }
+        Self {
+            rows: roms,
+            by_crc,
+            ids,
+        }
     }
 
     fn has(&self, rom_id: &str) -> bool {
         self.ids.contains(rom_id)
     }
 
-    fn of(&self, crc: &str) -> &[&'a str] {
-        self.by_crc.get(crc).map(Vec::as_slice).unwrap_or(&[])
+    /// As ROMs de um jogo do documento, pelo primeiro passo que achar alguma:
+    /// o CRC32 da chave; o serial no mesmo sistema; o nome e o tamanho no mesmo
+    /// sistema. Um passo que precisa de uma dica que o documento não trouxe é
+    /// pulado, e os dois últimos nunca saem do sistema da dica.
+    fn of(&self, key: &str, hints: Option<&GameHints>) -> Vec<&'a str> {
+        let key = normalize_crc(key);
+        if let Some(found) = self.by_crc.get(&key).filter(|_| !key.is_empty()) {
+            return found.clone();
+        }
+        let Some(h) = hints else {
+            return Vec::new();
+        };
+        let in_system = || self.rows.iter().filter(|r| r.system_id == h.system_id);
+        if let Some(serial) = h.serial.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            let found: Vec<&'a str> = in_system()
+                .filter(|r| {
+                    r.serial
+                        .as_deref()
+                        .is_some_and(|s| s.trim().eq_ignore_ascii_case(serial))
+                })
+                .map(|r| r.id.as_str())
+                .collect();
+            if !found.is_empty() {
+                return found;
+            }
+        }
+        if let (Some(name), Some(size)) = (h.name.as_deref(), h.size) {
+            // o arquivo só é aberto para quem já bateu em sistema e nome
+            return in_system()
+                .filter(|r| name_of(r).is_some_and(|n| n.eq_ignore_ascii_case(name)))
+                .filter(|r| size_of(r) == Some(size))
+                .map(|r| r.id.as_str())
+                .collect();
+        }
+        Vec::new()
     }
 
     /// A escolha é de todos, de uma plataforma ou de um jogo desta
@@ -779,7 +851,8 @@ struct Tally {
 impl Tally {
     /// Os lugares do alvo nesta máquina; um jogo que ela não tem é contado.
     fn slots(&mut self, target: &Target, roms: &LocalRoms<'_>) -> Vec<Slot> {
-        let slots = target.slots(roms);
+        // as dicas do documento entram com o formato novo (sem elas, só o CRC32)
+        let slots = target.slots(roms, None);
         if slots.is_empty() {
             match target {
                 Target::Game(crc) => {
@@ -938,7 +1011,7 @@ impl Target {
 
     /// Os lugares desta máquina para o alvo: um jogo pode estar em mais de
     /// uma ROM, ou em nenhuma.
-    fn slots(&self, roms: &LocalRoms<'_>) -> Vec<Slot> {
+    fn slots(&self, roms: &LocalRoms<'_>, hints: Option<&GameHints>) -> Vec<Slot> {
         match self {
             Target::Default => vec![Slot {
                 scope: AssignmentScope::Default,
@@ -950,8 +1023,8 @@ impl Target {
                 system_id: Some(s.clone()),
                 rom_id: None,
             }],
-            Target::Game(crc) => roms
-                .of(crc)
+            Target::Game(key) => roms
+                .of(key, hints)
                 .iter()
                 .map(|id| Slot {
                     scope: AssignmentScope::Rom,
@@ -1770,11 +1843,11 @@ mod tests {
             }
         }
 
-        async fn roms(&self) -> Vec<(String, String)> {
-            sqlx::query_as("SELECT id, crc32 FROM roms ORDER BY id")
-                .fetch_all(&self.db)
-                .await
-                .unwrap()
+        async fn roms(&self) -> Vec<RomIdentity> {
+            let mut tx = SettingsRepo::new(self.db.clone()).read().await.unwrap();
+            let roms = tx.rom_identities().await.unwrap();
+            tx.commit().await.unwrap();
+            roms
         }
 
         async fn export(&self, group: Group) -> Value {
@@ -1792,8 +1865,8 @@ mod tests {
             let ids = |crc: &str| -> Vec<String> {
                 let found: Vec<String> = roms
                     .iter()
-                    .filter(|(_, c)| c.eq_ignore_ascii_case(crc))
-                    .map(|(id, _)| id.clone())
+                    .filter(|r| r.crc32.eq_ignore_ascii_case(crc))
+                    .map(|r| r.id.clone())
                     .collect();
                 if found.is_empty() {
                     vec![format!("fora-{crc}")]
@@ -3694,5 +3767,121 @@ mod tests {
                 crc32: None,
             }]
         );
+    }
+
+    // --- identidade local de uma ROM -------------------------------------------
+
+    fn ident(id: &str, crc: &str, system: &str) -> RomIdentity {
+        RomIdentity {
+            id: id.into(),
+            crc32: crc.into(),
+            system_id: system.into(),
+            serial: None,
+            ident_name: None,
+            ident_size: None,
+            file_path: abs(&["Jogos-que-nao-existem", &format!("{id}.bin")]),
+        }
+    }
+
+    fn hints(system: &str) -> GameHints {
+        GameHints {
+            system_id: system.into(),
+            serial: None,
+            name: None,
+            size: None,
+        }
+    }
+
+    #[test]
+    fn local_roms_crc_wins_over_serial() {
+        let b1 = ident("b1", "AAAA0001", "psx");
+        let mut b2 = ident("b2", "", "psx");
+        b2.serial = Some("SLUS-00594".into());
+        let rows = [b1, b2];
+        let h = GameHints {
+            serial: Some("SLUS-00594".into()),
+            ..hints("psx")
+        };
+        assert_eq!(LocalRoms::new(&rows).of("AAAA0001", Some(&h)), ["b1"]);
+    }
+
+    #[test]
+    fn local_roms_serial_when_crc_absent() {
+        let mut b2 = ident("b2", "", "psx");
+        b2.serial = Some("SLUS-00594".into());
+        let rows = [b2];
+        let h = GameHints {
+            serial: Some("slus-00594 ".into()),
+            ..hints("psx")
+        };
+        assert_eq!(
+            LocalRoms::new(&rows).of("ID:0123456789abcdef", Some(&h)),
+            ["b2"]
+        );
+    }
+
+    #[test]
+    fn local_roms_serial_stays_in_its_system() {
+        let mut other = ident("b3", "", "ps2");
+        other.serial = Some("SLUS-00594".into());
+        let rows = [other];
+        let h = GameHints {
+            serial: Some("SLUS-00594".into()),
+            ..hints("psx")
+        };
+        assert!(LocalRoms::new(&rows)
+            .of("ID:0123456789abcdef", Some(&h))
+            .is_empty());
+    }
+
+    #[test]
+    fn local_roms_name_and_size_from_file() {
+        let dir = std::env::temp_dir().join(format!("reemu-ident-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("x")).unwrap();
+        let file = dir.join("x").join("Game.cso");
+        std::fs::write(&file, vec![0u8; 1234]).unwrap();
+
+        let mut here = ident("p1", "DEADBEEF", "psp");
+        here.file_path = file.to_string_lossy().into_owned();
+        let gone = ident("p2", "DEADBEEF", "psp");
+        let rows = [here, gone];
+        let local = LocalRoms::new(&rows);
+        let key = "ID:0123456789abcdef";
+        let with = |name: &str, size: u64| GameHints {
+            name: Some(name.into()),
+            size: Some(size),
+            ..hints("psp")
+        };
+        assert_eq!(local.of(key, Some(&with("game.cso", 1234))), ["p1"]);
+        assert!(local.of(key, Some(&with("game.cso", 1235))).is_empty());
+        // o arquivo que sumiu não casa por tamanho e não derruba nada
+        assert!(local.of(key, Some(&with("p2.bin", 0))).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn local_roms_ident_beats_file() {
+        let dir = std::env::temp_dir().join(format!("reemu-ident-beats-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("other.bin");
+        std::fs::write(&file, vec![0u8; 7]).unwrap();
+
+        let mut r = ident("t1", "", "psx");
+        r.ident_name = Some("Track 01.bin".into());
+        r.ident_size = Some(50);
+        r.file_path = file.to_string_lossy().into_owned();
+        let rows = [r];
+        let h = GameHints {
+            name: Some("track 01.bin".into()),
+            size: Some(50),
+            ..hints("psx")
+        };
+        assert_eq!(
+            LocalRoms::new(&rows).of("ID:0123456789abcdef", Some(&h)),
+            ["t1"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

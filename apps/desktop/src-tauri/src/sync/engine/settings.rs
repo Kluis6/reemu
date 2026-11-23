@@ -41,7 +41,7 @@ use crate::sync::settings_groups::{
     ERR_VERSION,
 };
 use crate::sync::SyncMachine;
-use db::{SettingsRepo, SettingsTx};
+use db::{RomIdentity, SettingsRepo, SettingsTx};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -249,7 +249,7 @@ struct UndoBackup {
 
 /// O que esta máquina tem e o banco não diz, para aplicar.
 struct Here {
-    roms: Vec<(String, String)>,
+    roms: Vec<RomIdentity>,
     cores: Vec<String>,
     catalog: Catalog,
 }
@@ -404,7 +404,7 @@ impl Engine {
             .read()
             .await
             .map_err(db_err)?;
-        let roms = tx.rom_crc32s().await.map_err(db_err)?;
+        let roms = tx.rom_identities().await.map_err(db_err)?;
         tx.commit().await.map_err(db_err)?;
         Ok(Here {
             roms,
@@ -884,7 +884,7 @@ impl Engine {
             .await
             .map_err(db_err)?;
         let here = Here {
-            roms: tx.rom_crc32s().await.map_err(db_err)?,
+            roms: tx.rom_identities().await.map_err(db_err)?,
             cores,
             catalog,
         };

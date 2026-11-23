@@ -6,7 +6,7 @@ mod common;
 use common::mem_db;
 use db::{
     AudioConfigRepo, CoreOptionsRepo, InstalledCoresRepo, MetadataRepo, ProfileRepo, RomsRepo,
-    ShaderChainRepo, SystemCoreRepo,
+    SettingsRepo, ShaderChainRepo, SystemCoreRepo,
 };
 use domain::audio::{AudioConfig, AudioConfigRepository};
 use domain::core_loader::SystemCoreRepository;
@@ -696,4 +696,31 @@ async fn metadata_rescrape_preserves_independent_local_edits() {
         roms.get("r1").await.unwrap().unwrap().user_title.as_deref(),
         Some("Meu Mario")
     );
+}
+
+#[tokio::test]
+async fn settings_rom_identities_carry_serial_name_and_size() {
+    let db = mem_db().await;
+    let roms = RomsRepo::new(db.clone());
+    roms.add(&rom("a", "AABBCCDD", "snes")).await.unwrap();
+    let mut chd = rom("b", "", "psx");
+    chd.serial = Some("SLUS-00594".into());
+    chd.ident_name = Some("Game.chd".into());
+    chd.ident_size = Some(700_000_000);
+    roms.add(&chd).await.unwrap();
+
+    let mut tx = SettingsRepo::new(db).read().await.unwrap();
+    let ids = tx.rom_identities().await.unwrap();
+    assert_eq!(ids.len(), 2);
+    assert_eq!(ids[0].id, "a");
+    assert_eq!(ids[0].crc32, "AABBCCDD");
+    assert_eq!(ids[0].serial, None);
+    assert_eq!(ids[0].ident_size, None);
+    assert_eq!(ids[0].file_path, "/roms/a.zip");
+    assert_eq!(ids[1].id, "b");
+    assert_eq!(ids[1].crc32, "");
+    assert_eq!(ids[1].system_id, "psx");
+    assert_eq!(ids[1].serial.as_deref(), Some("SLUS-00594"));
+    assert_eq!(ids[1].ident_name.as_deref(), Some("Game.chd"));
+    assert_eq!(ids[1].ident_size, Some(700_000_000));
 }

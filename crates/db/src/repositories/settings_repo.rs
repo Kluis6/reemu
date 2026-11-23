@@ -86,6 +86,20 @@ pub struct AspectRow {
     pub aspect: String,
 }
 
+/// O que uma ROM da biblioteca diz de si para achar o mesmo jogo em outra
+/// máquina: o CRC32 (vazio em CHD, CSO e ISO grande), o serial e o nome e
+/// o tamanho lidos no scan (`NULL` nas linhas de antes).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RomIdentity {
+    pub id: String,
+    pub crc32: String,
+    pub system_id: String,
+    pub serial: Option<String>,
+    pub ident_name: Option<String>,
+    pub ident_size: Option<i64>,
+    pub file_path: String,
+}
+
 /// Como uma linha nova entra. `Insert` recusa a chave que já existe (a mesma
 /// chave duas vezes num documento é erro e desfaz a transação); `Upsert` troca
 /// o valor da linha que já existe.
@@ -199,6 +213,28 @@ impl SettingsTx {
         let rows = self.all("SELECT id, crc32 FROM roms ORDER BY id").await?;
         rows.iter()
             .map(|r| Ok((col(r, "id")?, col(r, "crc32")?)))
+            .collect()
+    }
+
+    /// A identidade de cada ROM da biblioteca.
+    pub async fn rom_identities(&mut self) -> Result<Vec<RomIdentity>, RepoError> {
+        let rows = self
+            .all(
+                "SELECT id, crc32, system_id, serial, ident_name, ident_size, file_path                  FROM roms ORDER BY id",
+            )
+            .await?;
+        rows.iter()
+            .map(|r| {
+                Ok(RomIdentity {
+                    id: col(r, "id")?,
+                    crc32: col(r, "crc32")?,
+                    system_id: col(r, "system_id")?,
+                    serial: col(r, "serial")?,
+                    ident_name: col(r, "ident_name")?,
+                    ident_size: col(r, "ident_size")?,
+                    file_path: col(r, "file_path")?,
+                })
+            })
             .collect()
     }
 
