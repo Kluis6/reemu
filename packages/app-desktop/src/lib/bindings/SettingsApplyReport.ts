@@ -12,7 +12,8 @@ export type SettingsApplyReport = {
  */
 applied: number, 
 /**
- * Jogos (CRC32 distintos) do documento que esta máquina não tem.
+ * Jogos (chaves distintas, CRC32 ou `ID:`) do documento que esta máquina
+ * não tem.
  */
 skippedUnknownGames: number, 
 /**
