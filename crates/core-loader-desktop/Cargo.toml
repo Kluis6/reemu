@@ -19,7 +19,7 @@ log = "0.4"
 # resolve — não duplicar. `khronos-egl/dynamic` carrega libEGL em runtime: se
 # faltar, só os cores GL falham (com erro claro), os software seguem.
 khronos-egl = { version = "6", features = ["dynamic"] }
-glow = "0.17"
+glow = "0.18"
 # Shader do passe de cópia do Vulkan no processo filho (C3, `vk_present.rs`):
 # WGSL → SPIR-V em tempo de execução, uma vez. Mesma versão que o wgpu 30
 # já resolve (Cargo.lock), sem compilar outra.
