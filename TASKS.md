@@ -119,8 +119,34 @@ o card atual fica.
 ### Atualização automática
 
 - [ ] `todo` — Validar ponta a ponta com duas Releases publicadas: instalar
-      a antiga pelo AppImage e pelo NSIS, atualizar pelo modal e conferir o
-      aviso "atualizado" depois do reinício. O `.deb` usa `pkexec`.
+      a antiga pelo NSIS, atualizar pelo modal e conferir o aviso
+      "atualizado" depois do reinício. A validação de AppImage e `.deb`
+      fica em [Testes em Linux x64](#testes-em-linux-x64).
+
+### Testes em Linux x64
+
+- [ ] `backlog` — **Executar as validações pendentes do ReEmu em Linux x64**
+      (2026-11-23). Usar um runner Linux para a fumaça automatizada e uma
+      sessão desktop Linux para os testes de interface, controle e vídeo.
+      - **Cores Libretro.** Rodar a fumaça do catálogo com `bsnes-jg`,
+        `Mesen-S` e `Mesen2`. Repetir os testes de cartucho, vídeo, áudio,
+        RetroPad, save states e persistência da SRAM. Cobrir Famicom Disk
+        System e PC Engine CD no Mesen2 com firmware e mídia sintéticos e
+        originais, Super Game Boy nos dois Mesen e os modos pendentes de
+        Satellaview e Sufami Turbo nos cores que os oferecem. Incluir as
+        demais variantes Linux conforme entrarem no catálogo.
+      - **Gerenciamento de BIOS.** Testar na interface a escolha de pasta,
+        a busca em subpastas, o reconhecimento por MD5, a importação no
+        destino por core, a revisão manual e a repetição sem duplicatas.
+      - **Desktop e distribuição.** Validar em Wayland a sincronização do
+        ritmo do core com o monitor e medir os quadros perdidos. Testar
+        a atualização do AppImage pelo modal entre duas releases e conferir
+        o fluxo do `.deb` com `pkexec`. Validar os checks no runner Ubuntu 26
+        quando a migração de CI estiver disponível.
+      - Registrar versão do core, distribuição, arquitetura, renderizador
+        quando aplicável e resultado de cada cenário no inventário.
+        [Fumaça do catálogo](.github/workflows/catalog-smoke.yml) ·
+        [Inventário Libretro](docs/ai-context/inventario-libretro.md).
 
 ### Vídeo / GPU
 
@@ -520,9 +546,10 @@ no `emu-session`, ver `docs/historico.md`).
 ### Funcionalidades
 
 - [ ] `backlog` — **Melhorar os papéis de parede animados** (2026-11-18).
-      Corrigir a emenda e os detalhes das seis cenas. Comparar VP9 a
-      900p/30 com os arquivos 1080p/24 e medir o custo no WebView2 com
-      pôster e vídeo antes de trocar o perfil.
+      Seis fundos entregues em 2026-11-20, com loops de 20 s a 900p,
+      Fliperama a 60 fps e demais a 30 fps. Consumo da proteção de tela
+      comparado no WebView2 com RTX 3060. Validar GPU integrada, telas
+      de maior resolução e impacto na navegação e na abertura de jogos.
       [Avaliação e plano de implementação](docs/ai-context/27-papeis-de-parede-animados.md).
 
 - [ ] `backlog` — **Compatibilidade total com cores libretro** (2026-11-18).

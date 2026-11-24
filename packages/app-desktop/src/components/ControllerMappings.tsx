@@ -114,7 +114,7 @@ export function ControllerMappings() {
   if (loading) return <Spinner label={t('controllers.searching')} />
   if (devices.length === 0)
     return (
-      <EmptyState title={t('controllers.noneTitle')}>
+      <EmptyState title={t('controllers.noneTitle')} onCard>
         {t('controllers.noneHint')}
       </EmptyState>
     )

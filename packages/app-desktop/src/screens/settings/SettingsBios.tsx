@@ -3,7 +3,10 @@ import {
   Body1,
   Button,
   Caption1,
+  MessageBar,
+  MessageBarBody,
   SearchBox,
+  Spinner,
   Switch,
   Text,
   makeStyles,
@@ -11,7 +14,11 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import {
+  ArrowSyncRegular,
+  ArrowUploadRegular,
   CheckmarkCircleFilled,
+  CloudArrowDownRegular,
+  DeleteRegular,
   PuzzlePieceRegular,
   WarningFilled,
 } from '@fluentui/react-icons'
@@ -23,8 +30,10 @@ import {
   listBiosStatus,
   listRoms,
   pickBiosFile,
+  pickFolder,
   ppssppAssetsInstalled,
   removeBiosFile,
+  scanBiosFolder,
   type BiosStatus,
 } from '../../lib/tauri'
 import { platformLabel } from '../../lib/platform'
@@ -32,13 +41,12 @@ import { LoadingState } from '../../components/EmptyState'
 import { errorToast, sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
 import { biosNote } from '../../lib/backendText'
-import { DownloadButton } from '../../components/DownloadButton'
+import { LIST_ICON_ACTION_WIDTH, ListIconAction } from '../../components/ListIconAction'
 import { Trans, useTranslation } from 'react-i18next'
 
 // Colunas fixas (iguais em todas as linhas): situação e botão, como na
 // lista de Cores.
 const STATUS_W = '210px'
-const ACTION_W = '120px'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -51,6 +59,8 @@ const useStyles = makeStyles({
   },
   search: { width: '320px', maxWidth: '100%' },
   count: { color: tokens.colorNeutralForeground3 },
+  scanAction: { marginInlineStart: 'auto' },
+  scanReport: { display: 'flex', flexDirection: 'column', overflowWrap: 'anywhere' },
   // Um bloco por sistema numa coluna só; 2 COLUNAS CORRIDAS só em tela
   // grande (≥ 1600 px úteis: interface Compacta ou monitor ultrawide — num
   // 16:9 o zoom da interface mantém ~1366). Colunas corridas e não grade:
@@ -78,7 +88,7 @@ const useStyles = makeStyles({
   // mesmo padding nos 4 lados.
   row: {
     display: 'grid',
-    gridTemplateColumns: `minmax(0, 1fr) ${STATUS_W} ${ACTION_W}`,
+    gridTemplateColumns: `minmax(0, 1fr) ${STATUS_W} ${LIST_ICON_ACTION_WIDTH}`,
     alignItems: 'center',
     columnGap: tokens.spacingHorizontalL,
     padding: tokens.spacingHorizontalM,
@@ -86,7 +96,7 @@ const useStyles = makeStyles({
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
     // coluna estreita: a situação encolhe pro tamanho do selo
-    '@media (max-width: 760px)': { gridTemplateColumns: `minmax(0, 1fr) auto ${ACTION_W}` },
+    '@media (max-width: 760px)': { gridTemplateColumns: `minmax(0, 1fr) auto ${LIST_ICON_ACTION_WIDTH}` },
   },
   lead: { display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalM, minWidth: 0 },
   // ícone de BIOS (peça de quebra-cabeça, o do card no hub) num quadrado
@@ -116,7 +126,6 @@ const useStyles = makeStyles({
   note: { color: tokens.colorNeutralForeground3 },
   // selo da situação: não quebra nem vaza da pílula
   status: { minWidth: 0, whiteSpace: 'nowrap' },
-  action: { width: ACTION_W, minWidth: '0 !important', maxWidth: 'none !important' },
 })
 
 type Key = { systemId: string; filename: string }
@@ -132,6 +141,16 @@ export function SettingsBios() {
   const bios = useQuery({ queryKey: ['bios-status'], queryFn: listBiosStatus, retry: false })
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['bios-status'] })
+  const scan = useMutation({
+    mutationFn: async () => {
+      const path = await pickFolder(t('bios.scanPickFolder'))
+      return path ? scanBiosFolder(path) : null
+    },
+    onSuccess: (result) => {
+      if (result?.imported) refresh()
+    },
+    onError: (e) => push(errorToast(e, 'importBios')),
+  })
   const ppsspp = useQuery({ queryKey: ['ppsspp-assets'], queryFn: ppssppAssetsInstalled, retry: false })
   const getPpsspp = useMutation({
     mutationFn: downloadPpssppAssets,
@@ -222,7 +241,34 @@ export function SettingsBios() {
         <Caption1 className={styles.count}>
           {t('bios.showing', { shown: shownCount, total: allSystems.length })}
         </Caption1>
+        <Button
+          className={styles.scanAction}
+          appearance="secondary"
+          disabled={scan.isPending || doImport.isPending || doRemove.isPending}
+          onClick={() => scan.mutate()}
+        >
+          {t('bios.scanFolder')}
+        </Button>
       </div>
+      {scan.isPending && <Spinner size="tiny" label={t('bios.scanning')} />}
+      {scan.data && (
+        <MessageBar intent={scan.data.review.length || scan.data.unreadable ? 'warning' : 'info'}>
+          <MessageBarBody>
+            <div className={styles.scanReport}>
+              <Text>
+                {scan.data.imported > 0
+                  ? t('bios.scanImported', { count: scan.data.imported })
+                  : t('bios.scanNoImports')}
+              </Text>
+              {scan.data.skipped > 0 && <Caption1>{t('bios.scanSkipped', { count: scan.data.skipped })}</Caption1>}
+              {scan.data.unreadable > 0 && <Caption1>{t('bios.scanUnreadable', { count: scan.data.unreadable })}</Caption1>}
+              {scan.data.review.length > 0 && (
+                <Caption1>{t('bios.scanReview', { files: scan.data.review.join(', ') })}</Caption1>
+              )}
+            </div>
+          </MessageBarBody>
+        </MessageBar>
+      )}
       {shownCount === 0 && <Caption1>{t('bios.noneFound')}</Caption1>}
       <div className={styles.groups}>
         {visible.map(([systemId, files]) => (
@@ -273,26 +319,21 @@ export function SettingsBios() {
                         </Badge>
                       )}
                     </span>
-                    {/* Importar em primary e Remover em secondary, só com o
-                        texto (como na lista de Cores) */}
                     {f.present ? (
-                      <Button
-                        className={styles.action}
-                        appearance="secondary"
-                        disabled={busy}
+                      <ListIconAction
+                        label={t('common.remove')}
+                        icon={busy ? <Spinner size="tiny" /> : <DeleteRegular />}
+                        disabled={busy || scan.isPending}
                         onClick={() => doRemove.mutate(key)}
-                      >
-                        {t('common.remove')}
-                      </Button>
+                      />
                     ) : (
-                      <Button
-                        className={styles.action}
-                        appearance="primary"
-                        disabled={busy}
+                      <ListIconAction
+                        primary
+                        label={busy ? t('bios.importing') : t('bios.import')}
+                        icon={busy ? <Spinner size="tiny" /> : <ArrowUploadRegular />}
+                        disabled={busy || scan.isPending}
                         onClick={() => doImport.mutate({ ...key, label: shownName(f) })}
-                      >
-                        {busy ? t('bios.importing') : t('bios.import')}
-                      </Button>
+                      />
                     )}
                   </div>
                 )
@@ -325,11 +366,11 @@ export function SettingsBios() {
               )}
             </span>
             {/* baixar em primary; já instalado, atualizar em secondary */}
-            <DownloadButton
-              className={styles.action}
-              appearance={ppsspp.data ? 'secondary' : 'primary'}
+            <ListIconAction
+              primary={!ppsspp.data}
               label={getPpsspp.isPending ? t('bios.downloading') : ppsspp.data ? t('bios.update') : t('bios.download')}
-              busy={getPpsspp.isPending}
+              icon={getPpsspp.isPending ? <Spinner size="tiny" /> : ppsspp.data ? <ArrowSyncRegular /> : <CloudArrowDownRegular />}
+              disabled={getPpsspp.isPending}
               onClick={() => getPpsspp.mutate()}
             />
           </div>

@@ -4,12 +4,13 @@
 Para cada cena de `scenes.js`, abre `render.html` num Chrome/Edge headless,
 codifica o loop em VP9 pelo WebCodecs (`VideoEncoder`), grava o WebM com o
 gravador de `webm.js` e salva, em `packages/app-desktop/public/wallpapers/`:
-- `<id>.webm` — o vídeo em loop (1920×1080, 30 fps);
+- `<id>.webm` — o vídeo em loop (VP9, resolução e taxa configuráveis);
 - `<id>.jpg`  — o primeiro quadro (pôster, miniatura e o fundo parado no
   Linux, onde o vídeo não toca; ver `AnimatedBackground`).
 
-Uso:  python scripts/wallpaper-video/render.py [--only 1,6] [--seconds 12]
-      [--bitrate 2500000]
+Uso:  python scripts/wallpaper-video/render.py [--only 1,6] [--seconds 20]
+      [--bitrate 2500000 | --quantizer 88] [--width 1600 --fps 30]
+      Por padrão são 1600×900 e 30 fps, com 20 s (30 s para Fliperama).
 
 Não precisa de ffmpeg: o encoder é o do próprio navegador. A página é servida
 por um servidor HTTP local de curta duração (módulos ES não carregam de
@@ -36,6 +37,7 @@ import websocket  # mesmo pacote do scripts/ui-smoke.py
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 OUT = os.path.join(ROOT, "packages", "app-desktop", "public", "wallpapers")
+VP9_QUANTIZERS = {"1": 92, "2": 166, "3": 158, "4": 174, "5": 112, "6": 88}
 
 _spec = importlib.util.spec_from_file_location("ui_smoke", os.path.join(ROOT, "scripts", "ui-smoke.py"))
 assert _spec and _spec.loader
@@ -58,13 +60,19 @@ def serve(directory):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--only", help="ids separados por vírgula (padrão: 1 a 6)")
-    ap.add_argument("--seconds", type=int, default=12)
-    ap.add_argument("--bitrate", type=int, default=1_600_000)
+    ap.add_argument("--seconds", type=int)
+    rate = ap.add_mutually_exclusive_group()
+    rate.add_argument("--bitrate", type=int)
+    rate.add_argument("--quantizer", type=int, choices=range(256), metavar="0..255")
     ap.add_argument("--codec", choices=["vp9", "av1"], default="vp9")
-    ap.add_argument("--fps", type=int, default=24)
+    ap.add_argument("--fps", type=int)
+    ap.add_argument("--width", type=int, choices=[1280, 1600, 1920])
+    ap.add_argument("--software", action="store_true", help="usa SwiftShader na ferramenta local")
     ap.add_argument("--port", type=int, default=9388)
     ap.add_argument("--out", default=OUT)
     args = ap.parse_args()
+    if args.quantizer is not None and args.codec != "vp9":
+        ap.error("--quantizer requer VP9")
     ids = args.only.split(",") if args.only else ["1", "2", "3", "4", "5", "6"]
     os.makedirs(args.out, exist_ok=True)
 
@@ -72,8 +80,9 @@ def main():
     profile = tempfile.mkdtemp(prefix="reemu-wallvid-")
     browser = subprocess.Popen(
         [smoke.find_browser(), "--headless=new", f"--remote-debugging-port={args.port}",
-         "--remote-allow-origins=*", f"--user-data-dir={profile}", "about:blank"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+         *(["--enable-unsafe-swiftshader"] if args.software else []), "--remote-allow-origins=*", f"--user-data-dir={profile}", "about:blank"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     try:
         for _ in range(100):
             try:
@@ -96,11 +105,23 @@ def main():
 
         for wid in ids:
             started = time.time()
-            poster = page.eval(f"window.frame({json.dumps(wid)}, 0)")
+            width = args.width or 1600
+            height = width * 9 // 16
+            seconds = args.seconds or (30 if wid == "4" else 20)
+            fps = args.fps or 30
+            bitrate = args.bitrate or 1_600_000
+            quantizer = args.quantizer
+            if args.codec == "vp9" and args.bitrate is None and quantizer is None:
+                quantizer = VP9_QUANTIZERS.get(wid)
+            poster = page.eval(f"window.frame({json.dumps(wid)}, 0, {width}, {height})")
+            if not poster:
+                sys.exit(f"cena {wid}: o renderizador não devolveu o pôster")
             with open(os.path.join(args.out, f"{wid}.jpg"), "wb") as f:
                 f.write(base64.b64decode(poster.split(",", 1)[1]))
             size = page.eval(
-                f"window.render({json.dumps(wid)}, {{ seconds: {args.seconds}, bitrate: {args.bitrate}, fps: {args.fps}, keyEvery: {args.fps * 4}, codec: '{args.codec}' }})"
+                f"window.render({json.dumps(wid)}, "
+                f"{{ seconds: {seconds}, bitrate: {bitrate}, fps: {fps}, keyEvery: {fps * 4}, "
+                f"codec: '{args.codec}', quantizer: {json.dumps(quantizer)}, width: {width}, height: {height} }})"
             )
             if not size:
                 sys.exit(f"cena {wid}: o encoder não devolveu nada")

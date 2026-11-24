@@ -249,6 +249,17 @@ impl RomsRepo {
         edits: Option<&domain::metadata::GameMetadataEdits>,
     ) -> Result<(), RepoError> {
         let mut tx = self.db.begin().await.map_err(be)?;
+        Self::update_metadata(&mut tx, id, title, system_id, edits).await?;
+        tx.commit().await.map_err(be)?;
+        Ok(())
+    }
+    pub(crate) async fn update_metadata(
+        tx: &mut sqlx::SqliteConnection,
+        id: &str,
+        title: Option<&str>,
+        system_id: Option<&str>,
+        edits: Option<&domain::metadata::GameMetadataEdits>,
+    ) -> Result<(), RepoError> {
         if let Some(t) = title {
             // string vazia = NULL (volta pro nome do arquivo)
             let val: Option<&str> = (!t.trim().is_empty()).then(|| t.trim());
@@ -281,7 +292,6 @@ impl RomsRepo {
             .await
             .map_err(be)?;
         }
-        tx.commit().await.map_err(be)?;
         Ok(())
     }
 }

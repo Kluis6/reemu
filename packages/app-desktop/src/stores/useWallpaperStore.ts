@@ -9,30 +9,43 @@ import { create } from "zustand";
  * padrão).
  */
 export type WallpaperScope = "home" | "all";
+export type ThemeBackgroundMotion = "animated" | "static";
 
-const KEY = "reemu.wallpaperScope";
+const SCOPE_KEY = "reemu.wallpaperScope";
+const MOTION_KEY = "reemu.themeBackgroundMotion";
 
-function load(): WallpaperScope {
+function readPreference(key: string): string | null {
   try {
-    return localStorage.getItem(KEY) === "all" ? "all" : "home";
+    return localStorage.getItem(key);
   } catch {
-    return "home";
+    return null;
+  }
+}
+
+function writePreference(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Sem armazenamento, a preferência vale nesta sessão.
   }
 }
 
 interface WallpaperState {
   scope: WallpaperScope;
+  themeBackgroundMotion: ThemeBackgroundMotion;
   setScope: (scope: WallpaperScope) => void;
+  setThemeBackgroundMotion: (themeBackgroundMotion: ThemeBackgroundMotion) => void;
 }
 
 export const useWallpaperStore = create<WallpaperState>((set) => ({
-  scope: load(),
+  scope: readPreference(SCOPE_KEY) === "all" ? "all" : "home",
+  themeBackgroundMotion: readPreference(MOTION_KEY) === "static" ? "static" : "animated",
   setScope: (scope) => {
-    try {
-      localStorage.setItem(KEY, scope);
-    } catch {
-      /* modo privado / storage bloqueado: vale só nesta sessão */
-    }
+    writePreference(SCOPE_KEY, scope);
     set({ scope });
+  },
+  setThemeBackgroundMotion: (themeBackgroundMotion) => {
+    writePreference(MOTION_KEY, themeBackgroundMotion);
+    set({ themeBackgroundMotion });
   },
 }));

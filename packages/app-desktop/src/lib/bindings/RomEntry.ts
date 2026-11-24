@@ -24,4 +24,4 @@ isFavorite: boolean,
 /**
  * Tempo de jogo acumulado (s): o perfil soma e ordena sem uma chamada por ROM.
  */
-playTimeSecs: number, };
+playTimeSecs: number, contentExtension?: string, };

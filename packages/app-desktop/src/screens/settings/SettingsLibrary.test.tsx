@@ -124,11 +124,13 @@ describe('SettingsLibrary (Gerenciar biblioteca)', () => {
 
   it('removing a platform also asks for confirmation', async () => {
     await mount()
-    const remove = buttons().filter((b) => b.textContent?.trim() === 'Remover')
+    const remove = buttons().filter((b) => b.getAttribute('aria-label') === 'Remover')
     expect(remove).toHaveLength(2)
     await click(remove[1])
     expect(api.removeRomSystem).not.toHaveBeenCalled()
-    await click(button('Confirmar')!)
+    const confirm = buttons().find((b) => b.getAttribute('aria-label') === 'Confirmar')
+    expect(confirm).toBeDefined()
+    await click(confirm!)
     expect(api.removeRomSystem).toHaveBeenCalledWith('snes')
   })
 })

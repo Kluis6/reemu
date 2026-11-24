@@ -3803,6 +3803,35 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Metadados:** disco sem hash vai ao ScreenScraper por serial e nome (sem `romtaille` no CHD/CSO); 400 num pedido sem hash conta como não achado e o TheGamesDB tenta.
 - **Segurança:** erro do reqwest perde a URL antes do log e da tela (levava a senha de desenvolvedor, o login e a senha do ScreenScraper e a chave do TheGamesDB); `FILE` de cue/gdi absoluto, de rede ou com `..` é recusado (no Windows um caminho de rede abria conexão SMB); varredura e scraping sem nome nem caminho de arquivo no log.
 
+## 2026-11-20 — Fliperama procedural e proteção de tela
+
+- O Three.js foi adicionado às ferramentas de geração. A nova cena do
+  Fliperama usa um plano com material procedural, iluminação de horizonte e
+  grade periódica. O gerador usa o mesmo quadro inicial para pôster e vídeo.
+  O vídeo final usa VP9 a 60 fps por 20 s, com
+  [quantização fixa](https://www.w3.org/TR/webcodecs-vp9-codec-registration/)
+  para reduzir a diferença de cor ao reiniciar o loop.
+  A referência do material e do encoder vem da
+  [API ShaderMaterial](https://threejs.org/docs/pages/ShaderMaterial.html),
+  do [WebGLRenderer](https://threejs.org/docs/pages/WebGLRenderer.html) e do
+  [WebCodecs](https://www.w3.org/TR/webcodecs/).
+- A proteção de tela é configurada em Aparência. Ativa só na janela em foco
+  e no launcher. Teclado, mouse, toque e controle voltam à mesma tela.
+  A camada modal ocupa a janela e isola a interação atrás dela com o
+  [diálogo modal do HTML](https://html.spec.whatwg.org/multipage/interactive-elements.html#dom-dialog-showmodal).
+  O vídeo decorativo mantém a pausa em segundo plano e a imagem estática
+  para redução de movimento ou Linux.
+
+## 2026-11-20 — Renovação dos papéis de parede animados
+
+- Circuito, Controles, Floresta 8-bit, Espaço e ReEmu ganharam arte e
+  movimento novos, com vídeo VP9 a 900p/30 e loop de 20 s. Os arquivos
+  continuam atendendo o papel de parede e a proteção de tela.
+- O catálogo com os seis fundos e pôsteres ficou em 12,13 MB. As cinco
+  cenas novas registraram 29,96 fps e até 0,45% de quadros descartados
+  no teste da proteção de tela com RTX 3060.
+  [Medições](ai-context/27-papeis-de-parede-animados.md#comparação-na-proteção-de-tela)
+
 ## 2026-11-23 - Configurações por jogo acham o jogo sem CRC
 
 - **Problema:** as configurações por jogo (opções de core, shader, moldura e proporção) iam pelo CRC32 da ROM, então CHD, CSO e ISO grande (sem hash desde o `Kluis6/reemu#55`) ficavam de fora do documento, e uma biblioteca escaneada antes e outra depois do #55 não se achavam.
@@ -3816,3 +3845,15 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - **Limites:** entre uma biblioteca escaneada antes do #55 e outra depois, CHD, CSO e imagens acima de 1,5 GiB cruzam por nome e tamanho; o resto ainda não cruza: `.cue` e `.gdi` (a linha velha é chaveada pelo texto da folha, a nova pela trilha de dados), imagens de disco dentro de `.zip` ou `.7z`, e qualquer linha velha cujo arquivo tenha outro nome. Isso espera o passo em segundo plano que identifica as linhas antigas. A linha velha não tem serial, então só o nome e o tamanho a alcançam; um serial diferente nunca casa por nome e tamanho, e uma chave de CRC32 só chega por nome e tamanho a uma ROM sem CRC32.
 - **Versões:** a v0.1.16 que recebe um documento novo conta os jogos sem CRC32 como jogos que não tem. Os documentos que a v0.1.16 envia não levam dicas, então o encontro entre os dois escaneamentos só começa quando quem envia atualiza e envia de novo. Cada grupo com uma escolha por jogo mostra "mudou desde o envio" uma vez depois da atualização, porque `games` é um campo novo.
 - **Conferido:** `cargo test --workspace` (todos verdes), `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `npx tsc -b`, `npx oxlint src` (só avisos que já existiam), `npx vitest run` (443 testes) e `npx vite build`; nos testes de `settings_groups`: chave por serial, por nome e tamanho (linha velha e linha nova, nos dois sentidos), documento lido sem `games`, chave estável, sem caminho e fixa, e o "Desfazer" de uma cópia numa ROM sem CRC32.
+
+## 2026-11-24 — Release v0.1.17
+
+- Papéis de parede renovados com opção estática e proteção de tela configurável.
+- Metadados do GameKave com progresso de varredura, comparação de sugestões e imagens personalizadas. Mais dados do Alvanista no perfil.
+- Busca de BIOS em pastas locais e reconhecimento de mais sistemas da biblioteca, incluindo Satellaview e Sufami Turbo.
+- Ajustes de navegação por controle, contraste e ações nas listas de Configurações.
+
+## 2026-11-24 — Release v0.1.18
+
+- A v0.1.18 leva as mudanças da v0.1.17 para a publicação. O empacotamento da tag anterior foi cancelado após a auditoria de dependências.
+- O lockfile usa `cookie` 0.18.3 e `url` 2.5.9 para atender aos avisos [RUSTSEC-2026-0594](https://rustsec.org/advisories/RUSTSEC-2026-0594.html) e [RUSTSEC-2026-0592](https://rustsec.org/advisories/RUSTSEC-2026-0592.html).

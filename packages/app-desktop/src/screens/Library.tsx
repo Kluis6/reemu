@@ -87,10 +87,16 @@ const useLibStyles = makeStyles({
     marginTop: "-5px",
   },
   barRight: { display: "flex", alignItems: "center", columnGap: "10px" },
+  manageBtn: { color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1})` },
   // A aba (caixa e traço de selecionada) começa na coluna dos filtros e das
   // prateleiras, sem o recuo de −15 px do `useTabStyles` — que alinhava só o
   // texto (pedido do usuário).
-  tabsAligned: { marginLeft: "0 !important" },
+  tabsAligned: {
+    marginLeft: "0 !important",
+    "& .fui-Tab:is(:hover, :focus, :active)": {
+      "--reemuWallpaperText": tokens.colorNeutralForeground1,
+    },
+  },
   // A 1ª prateleira já fica a 27 dos filtros (`toolbar.marginBottom`, como
   // no Xbox) — sem somar o espaço entre prateleiras (`section`, 64).
   firstShelf: { marginTop: 0 },
@@ -336,7 +342,7 @@ export function Library() {
     <div ref={rootRef}>
       <div className={l.bar}>
         <TabList
-          className={mergeClasses(tb.tabs, l.tabsAligned)}
+          className={mergeClasses(tb.tabs, l.tabsAligned, "reemu-on-wallpaper")}
           selectedValue={tab}
           onTabSelect={(_, d) => setTab(d.value as LibTab)}
         >
@@ -344,7 +350,7 @@ export function Library() {
           <Tab value="fav">{t("library.tabFav")}</Tab>
         </TabList>
 
-        <div className={l.barRight}>
+        <div className={mergeClasses(l.barRight, "reemu-on-wallpaper")}>
           <Text className={s.shelfCount}>
             {t("library.games", { count: all.length })}
           </Text>
@@ -360,7 +366,7 @@ export function Library() {
           <Tooltip positioning={TOOLTIP_POSITION} content={t("library.manage")} relationship="label">
             <Button
               appearance="subtle"
-              className={mergeClasses(shell.navIconBtn, shell.navIconLg)}
+              className={mergeClasses(shell.navIconBtn, shell.navIconLg, l.manageBtn)}
               icon={<MoreHorizontalRegular />}
               aria-label={t("library.manage")}
               onClick={() => setManageOpen(true)}

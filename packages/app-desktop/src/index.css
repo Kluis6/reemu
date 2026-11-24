@@ -602,6 +602,13 @@ html [data-nav-topbar] {
   padding-top: calc(32px + var(--reemuInsetY));
   padding-right: calc(47px + var(--reemuInsetX));
 }
+.reemu-topbar-status {
+  display: contents;
+}
+/* Texto e indicadores expostos diretamente ao papel de parede. */
+.reemu-app:has(> [data-wallpaper-visible]) :is(.reemu-on-wallpaper, .reemu-topbar-status) {
+  --reemuWallpaperText: #fff;
+}
 /* A lista vai até a borda da tela e a folga fica por dentro dela: com margem, os
    cards eram cortados numa linha antes da borda. */
 html [data-nav-content=""] {

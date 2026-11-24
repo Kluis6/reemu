@@ -14,8 +14,8 @@ continuam na fila.
 
 O [inventário por core](inventario-libretro.md) cruza o catálogo do ReEmu,
 os metadados oficiais e os índices do buildbot. São **261 IDs
-publicados para Windows ou Linux x64**, com **127 no catálogo** e
-**134 faltando**. Há mais **97 IDs
+publicados para Windows ou Linux x64**, com **130 no catálogo** e
+**131 faltando**. Há mais **96 IDs
 oficiais** sem pacote nesses dois índices. Cada ID faltante tem uma
 tarefa inicial e a situação do pacote. A disponibilidade de um binário
 e a compatibilidade comprovada no ReEmu são verificações distintas.
@@ -35,12 +35,12 @@ por engano.
 | Etapa | Tarefas pendentes | Resultado esperado |
 | --- | --- | --- |
 | **1. Inventário contínuo** | Corrigir a referência ao caminho antigo do catálogo em `scripts/gen_core_catalog.py`. Separar descoberta de binários da publicação no catálogo. Registrar fonte, alvo, versão, categoria, sistema e recursos. | Relatório de diferenças que inclui variantes, cores de um único alvo e lançamentos novos. |
-| **2. Alternativas para plataformas conhecidas** | Começar com Mesen 2, Mesen-S e bsnes-jg em lotes pequenos. Confirmar extensão, seleção, controles e saves por core. | Novas opções entram pelo fluxo normal, com regressões testadas nos cores padrão. |
+| **2. Alternativas para plataformas conhecidas** | bsnes-jg, Mesen-S e Mesen 2 entraram no catálogo e passaram testes de cartucho no Windows. Conferir os recursos pendentes no inventário. A rodada em Linux está em [backlog](../../TASKS.md#testes-em-linux-x64). | Novas opções entram pelo fluxo normal, com regressões testadas nos cores padrão. |
 | **3. Plataformas clássicas e mídia** | Integrar Atari ST, Sharp X68000 e os demais sistemas do inventário. Adicionar BIOS, disquetes, listas, teclado ou mouse quando aplicável. Criar o fluxo LaserDisc com arquivos acompanhantes. | Importação confiável, saves persistentes e diagnóstico de arquivos de sistema ausentes. |
 | **4. Engines, aplicativos e utilitários** | Usar a capacidade de iniciar sem conteúdo quando anunciada. Criar o fluxo de seleção de pasta ou arquivo para engines e mídias. Descobrir as dependências de dados e os diretórios graváveis por core. | Cada categoria tem forma de abrir, operar e encerrar pelo ReEmu. |
 | **5. GameCube, Wii e 3DS** | Seguir o piloto Dolphin e usar Azahar para estabelecer formatos, layout e toque do 3DS. Validar Citra, Citra 2018, Citra Canary e Panda3DS individualmente. | GameCube e Wii ganham plataformas distintas, e o 3DS compartilha uma base com validação por core. [Plano Dolphin](25-dolphin-libretro.md) |
 | **6. Wii U, PS3, Vita e Xbox** | Fazer pilotos independentes, cobrindo formatos, armazenamento emulado, GPU e controles. Liberar D3D12 do Xenia Edge após validar a base gráfica. | Importação, jogo e persistência aferidos por core e alvo. [Roteiro Direct3D](24-direct3d-por-core.md) |
-| **7. Revalidação e alvos restantes** | Auditar os 127 IDs já catalogados. Ampliar o smoke test para mais tipos de conteúdo e tratar as entradas sem pacote x64. Verificar outros alvos conforme o suporte do app e documentar impedimentos. | Matriz completa para o recorte, com próxima tarefa e evidência por combinação. |
+| **7. Revalidação e alvos restantes** | Auditar os IDs já catalogados. Ampliar o smoke test para mais tipos de conteúdo e tratar as entradas sem pacote x64. Verificar outros alvos conforme o suporte do app e documentar impedimentos. | Matriz completa para o recorte, com próxima tarefa e evidência por combinação. |
 
 O smoke test atual executa o probe dos cores e roda conteúdo em um
 subconjunto de sistemas. Ampliar esse caminho reaproveitando o core-host,

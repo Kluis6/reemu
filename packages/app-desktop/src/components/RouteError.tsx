@@ -15,7 +15,7 @@ const useStyles = makeStyles({
   actions: { display: 'flex', gap: tokens.spacingHorizontalM, justifyContent: 'center' },
   detail: {
     marginTop: tokens.spacingVerticalS,
-    color: tokens.colorNeutralForeground3,
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground3})`,
     fontSize: tokens.fontSizeBase200,
     overflowWrap: 'anywhere',
   },

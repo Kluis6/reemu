@@ -13,7 +13,7 @@
  */
 import { makeStyles, shorthands, tokens } from "@fluentui/react-components";
 import { cardSizeCss, SHELF_GAP, SHELF_PAD } from "../lib/shelf";
-import { STROKE } from "./buttons";
+import { PANEL_BUTTON_MIN_WIDTH, STROKE } from "./buttons";
 import * as M from "./metrics";
 
 // Só os valores NÃO-cor do "console look". Cor de marca, elevações e o fundo
@@ -342,13 +342,8 @@ export const useShellStyles = makeStyles({
   topbarSpacer: { flexGrow: 1 },
   // Página do jogo (`/rom/...`, arte do jogo de fundo): controle, rede e
   // relógio sempre brancos, em qualquer tema e modo (pedido do usuário,
-  // 2026-11-14), com uma sombra leve pra ler sobre arte clara. `contents`: o
-  // bloco não mexe no layout da barra; a cor passa por herança.
-  // fora da página do jogo: só agrupa, sem mudar nada
-  topbarStatus: { display: "contents" },
+  // 2026-11-14), com uma sombra leve pra ler sobre arte clara.
   topbarOnArt: {
-    display: "contents",
-    color: "#ffffff",
     // o relógio e os ícones têm cor própria (`clock`, `gamepadStatus`)
     "& > *": {
       color: "#ffffff !important",
@@ -442,7 +437,7 @@ export const useShellStyles = makeStyles({
     // Centralizado pela caixa, a DIN fica acima do centro dos botões ao lado.
     position: "relative",
     top: "1px",
-    color: tokens.colorNeutralForeground1,
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1})`,
     fontVariantNumeric: "tabular-nums",
     fontFamily: "var(--reemuFontDisplay)",
     fontSize: "20px",
@@ -454,7 +449,7 @@ export const useShellStyles = makeStyles({
     display: "flex",
     alignItems: "center",
     // Mesma cor do relógio ao lado (`clock`).
-    color: tokens.colorNeutralForeground1,
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1})`,
     // 28 px: o desenho do controle ocupa ~58% da altura da caixa (y 4,5 a
     // 16 no quadro de 20), então fica com ~16 de altura — entre os
     // algarismos do relógio (14) e o ícone vertical do Xbox (20).
@@ -646,7 +641,7 @@ export const useBrowseStyles = makeStyles({
   // ao lado de "Adicionar ROM"): mesmo tamanho e peso do subtítulo da
   // prateleira (`SectionHeader`, medido no app Xbox).
   shelfCount: {
-    color: tokens.colorNeutralForeground3,
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground2})`,
     fontWeight: tokens.fontWeightRegular,
     fontSize: `${M.SECTION_SUB}px`,
     lineHeight: `${M.SECTION_SUB_LINE}px`,
@@ -946,10 +941,9 @@ export const useHintStyles = makeStyles({
     paddingLeft: "8px",
     paddingRight: "9px",
     borderRadius: tokens.borderRadiusMedium,
-    // #080809 do Xbox com transparência (pedidos do usuário: 0,85 e, em
-    // 2026-10-11, um pouco mais transparente). O texto branco segue bem
-    // acima de AA mesmo sobre fundo claro (a barra escurece o que passa).
-    backgroundColor: "rgba(8, 8, 9, 0.72)",
+    // A transparência fica na cor de fundo para manter os rótulos e
+    // glifos opacos. O texto branco mantém contraste sobre fundos claros.
+    backgroundColor: "rgba(8, 8, 9, 0.57)",
     border: "none",
     fontSize: "19px",
     fontWeight: tokens.fontWeightRegular,
@@ -1243,10 +1237,9 @@ export const useDetailStyles = makeStyles({
   // predefinições.
   panelButtons: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gridTemplateColumns: `repeat(auto-fit, minmax(${PANEL_BUTTON_MIN_WIDTH}, 1fr))`,
     gap: tokens.spacingHorizontalM,
   },
-  panelButton: { maxWidth: "none", minHeight: "48px", fontWeight: tokens.fontWeightRegular },
   heroTitleCol: {
     display: "flex",
     flexDirection: "column",
@@ -1509,10 +1502,10 @@ export const useDetailStyles = makeStyles({
     fontSize: tokens.fontSizeBase100,
     color: tokens.colorNeutralForeground3,
   },
-  // 1/3 da largura da tela — nenhum dos presets do Drawer (`size`) bate com
-  // isso, então sobrescreve a CSS var interna que o Fluent usa pra largura.
+  // Um terço da janela, com espaço para as abas e o botão de atualizar
+  // mesmo na menor janela do app.
   infoDrawer: {
-    ["--fui-Drawer--size" as string]: `min(33.34vw, calc(100vw - ${2 * DRAWER_GAP}px))`,
+    ["--fui-Drawer--size" as string]: `min(max(320px, 33.34vw), calc(100vw - ${2 * DRAWER_GAP}px))`,
     ...floatingDrawer("right"),
     // Degradê do menu-guia do Xbox (print do usuário, 2026-10-12): cinza
     // escuro em cima até ~1/3 e descendo pra cor de destaque embaixo. Aqui
@@ -1614,19 +1607,6 @@ export const useDetailStyles = makeStyles({
     gap: tokens.spacingHorizontalS,
     marginTop: tokens.spacingVerticalS,
   },
-  infoTab: {
-    borderRadius: tokens.borderRadiusMedium,
-    "&::before, &::after, &:hover::before, &:active::before": {
-      display: "none",
-    },
-    '&[aria-selected="true"]': {
-      backgroundColor: tokens.colorNeutralBackground3,
-      "@media (forced-colors: active)": {
-        outline: "1px solid Highlight",
-        outlineOffset: "-2px",
-      },
-    },
-  },
   infoSection: {
     display: "flex",
     flexDirection: "column",
@@ -1699,10 +1679,10 @@ const TAB_STATES = {
   "& .fui-Tab": {
     // Raio padrão do ReEmu (`metrics.RADIUS`).
     borderRadius: `${M.RADIUS}px`,
-    color: `${tokens.colorNeutralForeground1} !important`,
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1}) !important`,
   },
   "& .fui-Tab__content": {
-    color: `${tokens.colorNeutralForeground1} !important`,
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1}) !important`,
   },
   // Fora do foco o `::before` some; no foco ele vira o brilho por fora do
   // anel (index.css, regra 4) — sem isto as abas eram o único foco sem o

@@ -1,32 +1,24 @@
-import { makeStyles, tokens } from '@fluentui/react-components'
-import { useImageExists } from '../hooks/useImageExists'
-import { AnimatedBackground } from './AnimatedBackground'
+import { makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-/** Símbolo do ReEmu, o mesmo do site (`site/logo.webp`), em
- *  `packages/app-desktop/public/`. */
 const LOGO_SRC = '/reemu-logo.webp'
+export const SPLASH_EXIT_MS = 240
 
-// Entrada: fade-in só de opacidade (composited, barato). Antes era uma
-// expansão vertical de "TV ligando"; trocada a pedido do usuário por um
-// fade com ritmo fluido (2026-10-02).
-const fadeIn = {
-  from: { opacity: 0 },
-  to: { opacity: 1 },
+const reveal = {
+  from: { opacity: 0, transform: 'translate3d(0, 12px, 0)' },
+  to: { opacity: 1, transform: 'translate3d(0, 0, 0)' },
 }
-// glow que respira via OPACITY de um brilho separado (composited, barato).
-// Faixa mais baixa que um "0.4-0.75" ingênuo: as cores do gradiente agora são
-// sólidas (tokens do tema, não dá pra variar alpha por stop num var()), então
-// quem faz o efeito "glow suave" (em vez de mancha sólida) é só a opacity do
-// elemento inteiro.
-const breathe = {
-  '0%, 100%': { opacity: 0.16 },
-  '50%': { opacity: 0.3 },
+const light = {
+  '0%': { opacity: 0.04 },
+  '48%': { opacity: 0.35 },
+  '100%': { opacity: 0.23 },
 }
-const pulse = {
-  '0%, 100%': { opacity: 0.35 },
-  '50%': { opacity: 0.7 },
+const sweep = {
+  from: { transform: 'translate3d(-100%, 0, 0)' },
+  to: { transform: 'translate3d(250%, 0, 0)' },
 }
+const reducedMotion = '@media (prefers-reduced-motion: reduce)'
 
 const useStyles = makeStyles({
   root: {
@@ -37,126 +29,148 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: tokens.spacingVerticalXXL,
+    gap: tokens.spacingVerticalL,
+    overflow: 'hidden',
     backgroundColor: '#050506',
+    transitionProperty: 'opacity',
+    transitionDuration: `${SPLASH_EXIT_MS}ms`,
+    transitionTimingFunction: tokens.curveEasyEase,
+    [reducedMotion]: { transitionDuration: '0ms' },
+  },
+  leaving: {
+    opacity: 0,
+    pointerEvents: 'none',
+  },
+  ambient: {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: 'radial-gradient(ellipse at 50% 44%, var(--reemuBg3, #1b3f5c), transparent 73%)',
+    opacity: 0.3,
+    pointerEvents: 'none',
   },
   stage: {
     position: 'relative',
-    zIndex: 1,
-    width: 'min(78vw, 880px)',
-    maxWidth: '100%',
-    aspectRatio: '16 / 9',
-    // `durationUltraSlow` (500 ms, o maior da escala do Fluent: a logo é o
-    // maior elemento da tela) com desaceleração: acelera no começo e
-    // assenta devagar, sem tranco no fim. O atraso de 80 ms evita que o 1º quadro pinte a
-    // animação já no meio. Cabe no mínimo de 1,1 s da splash
-    // (`SPLASH_MIN_MS` no RootLayout): a logo fica inteira antes do
-    // fade-out.
-    animationName: fadeIn,
-    animationDuration: tokens.durationUltraSlow,
-    animationDelay: '80ms',
-    animationTimingFunction: tokens.curveDecelerateMid,
-    animationFillMode: 'both',
-    '@media (prefers-reduced-motion: reduce)': {
-      animationDuration: '300ms',
-      animationDelay: '0ms',
-    },
+    width: 'clamp(96px, 46vmin, 350px)',
+    aspectRatio: '1',
   },
-  // brilho estático atrás da logo; só a opacity anima. Cor do TEMA, não fixa
-  // verde/azul — o boot é "momento de marca fixo" só quanto ao papel de
-  // parede do usuário (ver memória frontend-xbox-design-reference); a cor
-  // em si sempre foi pra vir do tema, e o wordmark (`.wmGreen` abaixo) já
-  // faz isso. `--reemuBrandSolid`/`--reemuBg1` (tons da rampa do tema ativo,
-  // ver `styles/themes.ts`) com fallback pro azul/verde antigo.
-  glow: {
+  halo: {
     position: 'absolute',
-    inset: '-8%',
-    borderRadius: '50%',
+    inset: '-38%',
     backgroundImage:
-      'radial-gradient(closest-side, var(--reemuBrandSolid, #40dc78), var(--reemuBg1, #3c96ff) 55%, transparent 78%)',
-    animationName: breathe,
-    animationDuration: '4s',
-    animationTimingFunction: 'ease-in-out',
-    animationIterationCount: 'infinite',
-    '@media (prefers-reduced-motion: reduce)': { animationName: 'none', opacity: 0.22 },
+      'radial-gradient(ellipse closest-side, var(--reemuBrandSolid, #40dc78), var(--reemuBg1, #3c96ff) 40%, transparent 95%)',
+    opacity: 0.23,
+    animationName: light,
+    animationDuration: '640ms',
+    animationTimingFunction: tokens.curveEasyEase,
+    animationFillMode: 'both',
+    [reducedMotion]: { animationName: 'none' },
   },
-  // O símbolo é quadrado: ocupa ~70% da altura do palco (16:9),
-  // centralizado sobre o brilho.
-  logo: {
-    position: 'absolute',
-    inset: '15% 0',
-    width: '100%',
-    height: '70%',
-    objectFit: 'contain',
-  },
-  wordmark: {
+  mark: {
     position: 'absolute',
     inset: 0,
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+  },
+  hiddenMark: { visibility: 'hidden' },
+  appear: {
+    animationName: reveal,
+    animationDuration: tokens.durationUltraSlow,
+    animationTimingFunction: tokens.curveDecelerateMid,
+    animationFillMode: 'both',
+    [reducedMotion]: { animationName: 'none' },
+  },
+  wordmark: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     fontFamily: 'var(--reemuFontDisplay)',
-    fontSize: '72px',
+    fontSize: 'clamp(36px, 8vmin, 72px)',
     fontWeight: tokens.fontWeightBold,
     letterSpacing: '0.03em',
-    color: tokens.colorNeutralForeground1,
+    color: '#f4f6fb',
   },
-  wmGreen: { color: tokens.colorBrandForeground1 },
-  tag: {
+  wordmarkAccent: { color: 'var(--reemuBrandSolid, #40dc78)' },
+  status: {
     position: 'relative',
-    zIndex: 1,
+    display: 'grid',
+    justifyItems: 'center',
+    gap: tokens.spacingVerticalM,
     fontSize: tokens.fontSizeBase300,
-    letterSpacing: '0.14em',
+    letterSpacing: '0.12em',
     textTransform: 'uppercase',
-    color: tokens.colorNeutralForeground3,
-    animationName: pulse,
-    animationDuration: '2s',
+    color: '#c9cdd8',
+  },
+  track: {
+    width: '112px',
+    height: '2px',
+    overflow: 'hidden',
+    backgroundColor: '#ffffff24',
+    borderRadius: tokens.borderRadiusCircular,
+  },
+  indicator: {
+    display: 'block',
+    width: '40%',
+    height: '100%',
+    transform: 'translate3d(75%, 0, 0)',
+    backgroundColor: 'var(--reemuBrandSolid, #40dc78)',
+    borderRadius: tokens.borderRadiusCircular,
+    [reducedMotion]: { animationName: 'none' },
+  },
+  moving: {
+    animationName: sweep,
+    animationDuration: '1150ms',
+    animationTimingFunction: tokens.curveEasyEase,
     animationIterationCount: 'infinite',
-    animationTimingFunction: 'ease-in-out',
-    '@media (prefers-reduced-motion: reduce)': { animationName: 'none', opacity: 0.6 },
+    animationFillMode: 'both',
   },
-  leaving: {
-    opacity: 0,
-    transitionProperty: 'opacity',
-    transitionDuration: tokens.durationGentle,
-    transitionTimingFunction: tokens.curveEasyEase,
-    pointerEvents: 'none',
-  },
-  // Scanlines de CRT — ESTÁTICO: só um `repeating-linear-gradient` (sem
-  // filter, sem animação), pinta uma vez e fica. Por cima de tudo (a tela
-  // toda "por trás do vidro"), não só do fundo.
+  paused: { animationPlayState: 'paused' },
   scanlines: {
     position: 'absolute',
     inset: 0,
-    zIndex: 2,
     pointerEvents: 'none',
-    backgroundImage:
-      'repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.18) 0px, rgba(0, 0, 0, 0.18) 1px, transparent 1px, transparent 3px)',
+    backgroundImage: 'repeating-linear-gradient(to bottom, #00000015 0 1px, transparent 1px 4px)',
   },
 })
 
-/** Tela de abertura — liga a logo com uma expansão curta + brilho que respira.
- *  `leaving` dispara o fade-out. */
-export function Splash({ leaving = false }: { leaving?: boolean }) {
+export function Splash({ leaving, onExited }: { leaving: boolean; onExited: () => void }) {
   const { t } = useTranslation()
   const s = useStyles()
-  // Pré-carrega fora do DOM — nunca monta um <img> quebrado (o ícone de
-  // imagem ausente do navegador piscava na tela até o onError reagir).
-  const imgOk = useImageExists(LOGO_SRC)
+  const [logoState, setLogoState] = useState<'loading' | 'ready' | 'missing'>('loading')
+
   return (
-    <div className={leaving ? `${s.root} ${s.leaving}` : s.root}>
-      <AnimatedBackground />
+    <div
+      data-boot-splash=""
+      className={mergeClasses(s.root, leaving && s.leaving)}
+      onTransitionEnd={(event) => {
+        if (leaving && event.target === event.currentTarget && event.propertyName === 'opacity') onExited()
+      }}
+    >
+      <div className={s.ambient} aria-hidden />
       <div className={s.stage}>
-        <div className={s.glow} aria-hidden />
-        {imgOk ? (
-          <img className={s.logo} src={LOGO_SRC} alt="ReEmu" />
-        ) : (
-          <div className={`${s.logo} ${s.wordmark}`}>
-            Re<span className={s.wmGreen}>Emu</span>
+        <div className={s.halo} aria-hidden />
+        {logoState === 'missing' ? (
+          <div className={mergeClasses(s.mark, s.wordmark, s.appear)}>
+            Re<span className={s.wordmarkAccent}>Emu</span>
           </div>
+        ) : (
+          <img
+            className={mergeClasses(s.mark, logoState === 'ready' ? s.appear : s.hiddenMark)}
+            src={LOGO_SRC}
+            width={512}
+            height={512}
+            alt="ReEmu"
+            onLoad={() => setLogoState('ready')}
+            onError={() => setLogoState('missing')}
+          />
         )}
       </div>
-      <div className={s.tag}>{t('shell.splashLoading')}</div>
+      <div className={s.status} role="status">
+        {t('shell.splashLoading')}
+        <div className={s.track} aria-hidden>
+          <span className={mergeClasses(s.indicator, s.moving, leaving && s.paused)} />
+        </div>
+      </div>
       <div className={s.scanlines} aria-hidden />
     </div>
   )

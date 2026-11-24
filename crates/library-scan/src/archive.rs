@@ -4,7 +4,7 @@
 //! (`core-loader-desktop`) extrai pra um arquivo temporário na hora de carregar.
 
 use crate::hash::{FileRomHasher, RomHashes};
-use crate::systems::system_for_extension;
+use crate::systems::system_for_rom_entry;
 use sevenz_rust2::{ArchiveReader, Password};
 use std::io::BufReader;
 #[cfg(test)]
@@ -120,7 +120,7 @@ fn peek_zip(path: &Path) -> Option<ArchivedRom> {
     let file = std::fs::File::open(path).ok()?;
     let mut zip = zip::ZipArchive::new(BufReader::new(file)).ok()?;
     for i in 0..zip.len() {
-        let e = zip.by_index(i).ok()?;
+        let mut e = zip.by_index(i).ok()?;
         if !e.is_file() {
             continue;
         }
@@ -133,7 +133,7 @@ fn peek_zip(path: &Path) -> Option<ArchivedRom> {
         if let Some(sys) = Path::new(&name)
             .extension()
             .and_then(|x| x.to_str())
-            .and_then(system_for_extension)
+            .and_then(|ext| system_for_rom_entry(ext, e.size(), &mut e))
         {
             return Some(ArchivedRom {
                 entry: name,
@@ -160,12 +160,12 @@ fn read_zip_entry(path: &Path, entry: &str) -> std::io::Result<Vec<u8>> {
 fn peek_7z(path: &Path) -> Option<ArchivedRom> {
     let mut r = ArchiveReader::open(path, Password::empty()).ok()?;
     let mut found = None;
-    r.for_each_entries(|e, _reader| {
+    r.for_each_entries(|e, reader| {
         if found.is_none() && !e.is_directory() {
             if let Some(sys) = Path::new(e.name())
                 .extension()
                 .and_then(|x| x.to_str())
-                .and_then(system_for_extension)
+                .and_then(|ext| system_for_rom_entry(ext, e.size(), reader))
             {
                 found = Some(ArchivedRom {
                     entry: e.name().to_string(),

@@ -9,16 +9,36 @@
   const canvas = document.getElementById('c')
   const ctx = canvas.getContext('2d')
 
-  /** Desenha só um quadro (prévia/miniatura). */
-  window.frame = (id, t) => {
-    const draw = SCENES[id]()
-    draw(ctx, t)
-    return canvas.toDataURL('image/jpeg', 0.86)
+  async function scene(id, width, height) {
+    canvas.width = width
+    canvas.height = height
+    if (id === '4') {
+      const { createFliperama } = await import('./fliperama.js')
+      return createFliperama(width, height)
+    }
+    const draw = await SCENES[id]()
+    return {
+      draw(ctx, t) {
+        ctx.setTransform(width / W, 0, 0, height / H, 0, 0)
+        draw(ctx, t)
+      },
+    }
   }
 
-  /** Gera o WebM VP9 da cena `id` e devolve em base64. */
-  window.render = async (id, { seconds = 12, fps = 30, bitrate = 2_500_000, keyEvery = 60, codec = 'vp9' } = {}) => {
-    const draw = SCENES[id]()
+  /** Desenha só um quadro (prévia/miniatura). */
+  window.frame = async (id, t, width = W, height = H) => {
+    const art = await scene(id, width, height)
+    try {
+      art.draw(ctx, t)
+      return canvas.toDataURL('image/jpeg', 0.9)
+    } finally {
+      art.dispose?.()
+    }
+  }
+
+  /** Codifica a cena `id` e disponibiliza o WebM para leitura em partes. */
+  window.render = async (id, { seconds = 12, fps = 30, bitrate = 2_500_000, keyEvery = 60, codec = 'vp9', quantizer = null, width = W, height = H } = {}) => {
+    const art = await scene(id, width, height)
     const total = seconds * fps
     const frames = []
     let error = null
@@ -32,25 +52,32 @@
       },
       error: (e) => { error = e },
     })
-    // VP9 perfil 0, nível 4.1 (1080p30), 8 bits; ou AV1 Main, nível 4.0, 8 bits
+    // VP9 perfil 0, nível 4.1 (até 1080p60), 8 bits; ou AV1 Main, nível 4.0, 8 bits
     const codecString = codec === 'av1' ? 'av01.0.08M.08' : 'vp09.00.41.08'
-    enc.configure({ codec: codecString, width: W, height: H, bitrate, bitrateMode: 'variable', framerate: fps, latencyMode: 'quality' })
-    for (let i = 0; i < total; i++) {
-      draw(ctx, i / total)
-      const vf = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) })
-      enc.encode(vf, { keyFrame: i % keyEvery === 0 })
-      vf.close()
-      while (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 1))
+    try {
+      const rate = quantizer === null ? { bitrate, bitrateMode: 'variable' } : { bitrateMode: 'quantizer' }
+      enc.configure({ codec: codecString, width, height, ...rate, framerate: fps, latencyMode: 'quality' })
+      for (let i = 0; i < total; i++) {
+        art.draw(ctx, i / total)
+        const vf = new VideoFrame(canvas, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps) })
+        const keyFrame = i % keyEvery === 0
+        enc.encode(vf, quantizer === null ? { keyFrame } : { keyFrame, vp9: { quantizer } })
+        vf.close()
+        while (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 1))
+      }
+      await enc.flush()
+      if (error) throw error
+      frames.sort((a, b) => a.timeMs - b.timeMs)
+      const bytes = muxWebm({
+        width, height, frames, durationMs: seconds * 1000,
+        codecId: codec === 'av1' ? 'V_AV1' : 'V_VP9', codecPrivate: codec === 'av1' ? description : null,
+      })
+      window.__out = bytes
+      return bytes.length
+    } finally {
+      if (enc.state !== 'closed') enc.close()
+      art.dispose?.()
     }
-    await enc.flush()
-    if (error) throw error
-    frames.sort((a, b) => a.timeMs - b.timeMs)
-    const bytes = muxWebm({
-      width: W, height: H, frames, durationMs: seconds * 1000,
-      codecId: codec === 'av1' ? 'V_AV1' : 'V_VP9', codecPrivate: codec === 'av1' ? description : null,
-    })
-    window.__out = bytes
-    return bytes.length
   }
 
   /** Pedaço `i` (de 1 MB) da saída em base64 — o CDP não leva tudo de uma vez. */

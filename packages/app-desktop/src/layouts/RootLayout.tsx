@@ -4,17 +4,17 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { BindingCapture } from '../components/BindingCapture'
 import { OnScreenKeyboard } from '../components/OnScreenKeyboard'
-import { Splash } from '../components/Splash'
+import { Splash, SPLASH_EXIT_MS } from '../components/Splash'
 import { FilePicker } from '../components/FilePicker'
 import { ToastLayer } from '../components/ToastLayer'
 import { useFullscreenSync } from '../hooks/useFullscreen'
 import { useGamepadStatus } from '../hooks/useGamepadStatus'
 import { useMenuNav } from '../hooks/useMenuNav'
 import { getProfile, setTrayLabels } from '../lib/tauri'
+import { getReduceMotion } from '../lib/uiPrefs'
 
 /** Tempo mínimo da splash (estilo Xbox — não pisca em máquina rápida). */
 const SPLASH_MIN_MS = 1100
-const SPLASH_FADE_MS = 240
 
 /**
  * Envolve todas as rotas. Global: splash de abertura, gate de onboarding, fila
@@ -46,7 +46,9 @@ export function RootLayout() {
   const ready = minElapsed && !profile.isLoading
   useEffect(() => {
     if (!ready) return
-    const t = setTimeout(() => setSplashGone(true), SPLASH_FADE_MS)
+    const reduced = getReduceMotion() || window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    // O transitionend desmonta a splash. O timer cobre transições suprimidas.
+    const t = setTimeout(() => setSplashGone(true), reduced ? 0 : SPLASH_EXIT_MS + 64)
     return () => clearTimeout(t)
   }, [ready])
 
@@ -61,7 +63,7 @@ export function RootLayout() {
 
       <Outlet />
 
-      {!splashGone && <Splash leaving={ready} />}
+      {!splashGone && <Splash leaving={ready} onExited={() => setSplashGone(true)} />}
 
       <BindingCapture />
       <ToastLayer />

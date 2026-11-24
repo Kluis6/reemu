@@ -38,12 +38,14 @@ export function FullscreenDialog({
   title,
   children,
   actions,
+  contentClassName,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
   actions?: ReactNode;
+  contentClassName?: string;
 }) {
   const s = useStyles();
   return (
@@ -61,7 +63,7 @@ export function FullscreenDialog({
           >
             {title}
           </DialogTitle>
-          <DialogContent className={s.content}>{children}</DialogContent>
+          <DialogContent className={mergeClasses(s.content, contentClassName)}>{children}</DialogContent>
           {actions != null && <DialogActions>{actions}</DialogActions>}
         </DialogBody>
       </DialogSurface>

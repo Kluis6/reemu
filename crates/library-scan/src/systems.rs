@@ -2,6 +2,9 @@
 //! extensão é ambígua, da pasta) — palpite pro agrupamento inicial da
 //! biblioteca; o match real de metadata é por hash.
 
+use domain::library::{is_sufami_turbo_cart, SUFAMI_TURBO_HEADER_LEN};
+use std::io::Read;
+
 /// Extensões de imagem de disco — compartilhadas por vários sistemas (PS1,
 /// PS2, Saturn, Dreamcast, PSP, Sega CD, PC Engine CD, PC-FX, 3DO...). A
 /// extensão sozinha não dá pra saber qual; `system_for_extension` devolve o
@@ -19,7 +22,7 @@ pub const AMBIGUOUS_DISC_EXTS: &[&str] = &[
 pub fn system_for_extension(ext: &str) -> Option<&'static str> {
     Some(match ext.to_ascii_lowercase().as_str() {
         "nes" | "fds" | "unif" | "unf" => "nes",
-        "sfc" | "smc" | "swc" | "fig" => "snes",
+        "sfc" | "smc" | "swc" | "fig" | "bs" => "snes",
         "gb" => "gb",
         "gbc" => "gbc",
         "gba" | "srl" => "gba",
@@ -68,6 +71,19 @@ pub fn system_for_extension(ext: &str) -> Option<&'static str> {
         "iso" | "cue" | "chd" | "mdf" | "m3u" | "img" | "ccd" | "nrg" => "disc",
         _ => return None,
     })
+}
+
+pub(crate) fn system_for_rom_entry(
+    ext: &str,
+    size: u64,
+    mut reader: impl Read,
+) -> Option<&'static str> {
+    if !ext.eq_ignore_ascii_case("st") {
+        return system_for_extension(ext);
+    }
+    let mut header = [0; SUFAMI_TURBO_HEADER_LEN];
+    reader.read_exact(&mut header).ok()?;
+    is_sufami_turbo_cart(size, &header).then_some("snes")
 }
 
 /// Nomes de pasta comuns em bibliotecas RetroBat/ES-DE e packs de bezel →

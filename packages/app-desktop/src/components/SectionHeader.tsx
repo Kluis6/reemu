@@ -1,4 +1,4 @@
-import { Button, Text, Tooltip, makeStyles, tokens } from '@fluentui/react-components'
+import { Button, Text, Tooltip, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
 import { ChevronRightRegular } from '@fluentui/react-icons'
 import type { ReactNode } from 'react'
 import {
@@ -15,7 +15,18 @@ import { TOOLTIP_POSITION } from '../lib/tooltip'
 
 const useStyles = makeStyles({
   // Espaço até os cards, como no app Xbox (metrics.ts).
-  root: { marginBottom: `${SECTION_TITLE_GAP}px` },
+  root: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: tokens.spacingHorizontalS,
+    marginBottom: `${SECTION_TITLE_GAP}px`,
+    color: tokens.colorNeutralForeground1,
+  },
+  heading: {
+    minWidth: 0,
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1})`,
+  },
   row: {
     display: 'flex',
     alignItems: 'center',
@@ -50,6 +61,7 @@ const useStyles = makeStyles({
     width: '24px',
     height: '24px',
     padding: '0 !important',
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1})`,
     // `appearance="subtle"`: sem fundo em repouso (como no Xbox). Hover e
     // foco (teclado/controle) com o MESMO fundo dos outros botões do tema
     // (voltar, tela cheia, filtros: `colorNeutralBackground2` no hover/foco,
@@ -68,12 +80,15 @@ const useStyles = makeStyles({
     '& .fui-Button__icon': { fontSize: `${ICON}px`, width: `${ICON}px`, height: `${ICON}px` },
   },
   seeAllIcon: { fontSize: `${ICON}px` },
-  right: { marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: tokens.spacingHorizontalS },
+  right: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+  },
   sub: {
     marginTop: `${SECTION_SUB_GAP}px`,
     fontSize: `${SECTION_SUB}px`,
     lineHeight: `${SECTION_SUB_LINE}px`,
-    color: tokens.colorNeutralForeground3,
   },
 })
 
@@ -90,6 +105,7 @@ export function SectionHeader({
   seeAllLabel,
   right,
   as = 'h2',
+  onCard = false,
 }: {
   title: string
   subtitle?: string
@@ -97,29 +113,33 @@ export function SectionHeader({
   seeAllLabel?: string
   right?: ReactNode
   as?: 'h2' | 'h3'
+  onCard?: boolean
 }) {
   const { t } = useTranslation()
   const s = useStyles()
+  const wallpaper = !onCard && 'reemu-on-wallpaper'
   return (
     <div className={s.root}>
-      <div className={s.row}>
-        <Text as={as} className={s.title}>
-          {title}
-        </Text>
-        {onSeeAll && (
-          <Tooltip positioning={TOOLTIP_POSITION} content={t('shell2.showAll')} relationship="description">
-            <Button
-              appearance="subtle"
-              className={s.seeAll}
-              onClick={onSeeAll}
-              aria-label={seeAllLabel ?? t('shell2.seeAll', { title })}
-              icon={<ChevronRightRegular className={s.seeAllIcon} />}
-            />
-          </Tooltip>
-        )}
-        {right && <div className={s.right}>{right}</div>}
+      <div className={mergeClasses(s.heading, wallpaper)}>
+        <div className={s.row}>
+          <Text as={as} className={s.title}>
+            {title}
+          </Text>
+          {onSeeAll && (
+            <Tooltip positioning={TOOLTIP_POSITION} content={t('shell2.showAll')} relationship="description">
+              <Button
+                appearance="subtle"
+                className={s.seeAll}
+                onClick={onSeeAll}
+                aria-label={seeAllLabel ?? t('shell2.seeAll', { title })}
+                icon={<ChevronRightRegular className={s.seeAllIcon} />}
+              />
+            </Tooltip>
+          )}
+        </div>
+        {subtitle && <div className={s.sub}>{subtitle}</div>}
       </div>
-      {subtitle && <div className={s.sub}>{subtitle}</div>}
+      {right && <div className={mergeClasses(s.right, wallpaper)}>{right}</div>}
     </div>
   )
 }

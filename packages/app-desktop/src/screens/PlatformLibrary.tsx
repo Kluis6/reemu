@@ -1,6 +1,6 @@
 import { DeleteRegular, OpenRegular } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button, makeStyles, tokens } from "@fluentui/react-components";
+import { Button, makeStyles, mergeClasses, tokens } from "@fluentui/react-components";
 import { useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { CardGridSkeleton } from "../components/CardGridSkeleton";
@@ -31,7 +31,13 @@ const useStyles = makeStyles({
     gap: tokens.spacingHorizontalXS,
     marginBottom: tokens.spacingVerticalL,
   },
-  letter: { minWidth: "36px", maxWidth: "36px", paddingLeft: 0, paddingRight: 0 },
+  letter: {
+    minWidth: "36px",
+    maxWidth: "36px",
+    paddingLeft: 0,
+    paddingRight: 0,
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1})`,
+  },
 });
 
 /**
@@ -101,7 +107,7 @@ export function PlatformLibrary() {
         }
       />
 
-      <div className={l.tools}>
+      <div className={mergeClasses(l.tools, "reemu-on-wallpaper")}>
         <SearchChip />
         {letters.length > 1 &&
           letters.map(({ letter, index }) => (

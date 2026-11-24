@@ -4,6 +4,7 @@ import { makeStyles, tokens } from '@fluentui/react-components'
  *  temas — a mesma cor da borda dos campos no `index.css` (`reemuFieldStroke`
  *  no alto contraste). */
 export const STROKE = `var(--reemuFieldStroke, color-mix(in srgb, ${tokens.colorNeutralForeground1} 50%, transparent))`
+export const PANEL_BUTTON_MIN_WIDTH = '120px'
 
 /**
  * Botões dos modais no padrão do ReEmu. Sobre a superfície de um Dialog o
@@ -13,6 +14,12 @@ export const STROKE = `var(--reemuFieldStroke, color-mix(in srgb, ${tokens.color
  * continua o do Fluent.
  */
 export const useModalButtonStyles = makeStyles({
+  panel: {
+    minWidth: PANEL_BUTTON_MIN_WIDTH,
+    minHeight: '48px',
+    maxWidth: 'none',
+    fontWeight: tokens.fontWeightRegular,
+  },
   // Preenchimento de controle (`reemuControlFill*`, translúcido: sempre um
   // passo acima do fundo atrás — 2026-11-14), sem cor na borda; o mesmo dos
   // seletores (`SettingBlock`).

@@ -62,6 +62,9 @@ negociação na DLL exata. [Catálogo do ReEmu](../../crates/core-catalog/src/ca
 
 ### C — D3D12 no SwanStation e no LRPS2
 
+Consulte o [guia oficial de programação do Direct3D 12](https://learn.microsoft.com/en-us/windows/win32/direct3d12/directx-12-programming-guide)
+antes de planejar, implementar ou revisar qualquer tarefa desta fase.
+
 - [ ] Criar a integração D3D12 no processo filho, com device, fila, command
       lists, estados de recursos, fences e ciclo de vida das texturas.
       Negociar a versão que a DLL aceita. Na v1, submeter a cópia na

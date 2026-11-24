@@ -35,7 +35,12 @@ pub(crate) struct CoreOption {
 ///   (Jet Set Radio, 2026-10-02). A descrição no core
 ///   (`shell/libretro/libretro_core_options.h`) pede desligado em jogos de
 ///   taxa instável (Ecco, Unreal Tournament); aí o usuário desliga por jogo.
-const FRONTEND_DEFAULTS: &[(&str, &str)] = &[("reicast_detect_vsync_swap_interval", "enabled")];
+/// - `mesen_gba_skip_boot_screen` (MesenCE): sem `gba_bios.bin`, o boot
+///   original fica em tela preta. Iniciar no cartucho usa a opção do core.
+const FRONTEND_DEFAULTS: &[(&str, &str)] = &[
+    ("reicast_detect_vsync_swap_interval", "enabled"),
+    ("mesen_gba_skip_boot_screen", "enabled"),
+];
 
 /// Aplica `FRONTEND_DEFAULTS` ao schema declarado pelo core.
 pub(crate) fn apply_frontend_defaults(opts: &mut [CoreOption]) {

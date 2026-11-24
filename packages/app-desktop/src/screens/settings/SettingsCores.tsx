@@ -6,25 +6,24 @@ import {
   Input,
   Spinner,
   Text,
-  Tooltip,
   makeStyles,
   tokens,
-  mergeClasses,
 } from '@fluentui/react-components'
 import {
   ArrowCircleUpRegular,
   CheckmarkCircleFilled,
+  CloudArrowDownRegular,
   DeleteRegular,
   DeveloperBoardRegular,
   HistoryRegular,
   SettingsRegular,
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type ReactElement } from 'react'
+import { useState } from 'react'
+import { LIST_ICON_ACTION_WIDTH, ListIconAction } from '../../components/ListIconAction'
 import { LoadingState } from '../../components/EmptyState'
 import { CORE_UPDATES_KEY, CORE_UPDATES_STALE_MS } from '../../hooks/useCoreUpdates'
 import { errorToast, sysToast } from '../../lib/toast'
-import { TOOLTIP_ABOVE } from '../../lib/tooltip'
 import {
   checkCoreUpdates,
   downloadCore,
@@ -34,16 +33,14 @@ import {
   type CatalogCore,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
-import { DownloadButton } from '../../components/DownloadButton'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 // Botões da direita quadrados, só com ícone. Três vagas, para não mudarem de lugar nas
 // linhas com Atualizar ou Versão anterior.
-const ACTION_W = '40px'
 // Cabe "atualização disponível" numa linha, nos três idiomas.
 const STATUS_W = '190px'
-const ACTIONS_W = `calc(3 * ${ACTION_W} + 2 * ${tokens.spacingHorizontalS})`
+const ACTIONS_W = `calc(3 * ${LIST_ICON_ACTION_WIDTH} + 2 * ${tokens.spacingHorizontalS})`
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
@@ -108,25 +105,6 @@ const useStyles = makeStyles({
     '@media (max-width: 900px)': { display: 'none' },
   },
   narrowOnly: { display: 'none', '@media (max-width: 900px)': { display: 'inline' } },
-  action: {
-    width: ACTION_W,
-    height: ACTION_W,
-    padding: '0 !important',
-    minWidth: '0 !important',
-    maxWidth: 'none !important',
-    // com o fundo do botão, sem a borda (pedido do usuário, 2026-11-06); 1 px
-    // transparente, não `none`, para o tamanho não mudar no foco
-    border: '1px solid transparent !important',
-  },
-  // Botões claros (não o principal): o fundo não muda no hover nem no foco
-  // (pedido do usuário, 2026-11-06), o cinza do `secondary` sai. O que marca
-  // o estado é o anel e o brilho de sempre (index.css).
-  keepBg: {
-    ':hover, :hover:active, :focus, :focus-visible': {
-      backgroundColor: 'var(--reemuControlFill) !important',
-      color: `${tokens.colorNeutralForeground1} !important`,
-    },
-  },
   badge: { whiteSpace: 'nowrap' },
   // Selo da API de vídeo do core, preenchido (pedido do usuário, 2026-11-06):
   // Vulkan em vermelho (`danger` do Fluent), OpenGL em azul. O azul é fixo da
@@ -144,37 +122,6 @@ const useStyles = makeStyles({
     columnGap: tokens.spacingHorizontalS,
   },
 })
-
-/** Só com ícone, com fundo e sem borda: o nome vai na dica, acima do botão, e no
- *  rótulo acessível (Fluent 2, Button). */
-function IconAction({
-  label,
-  icon,
-  className,
-  primary = false,
-  disabled,
-  onClick,
-}: {
-  label: string
-  icon: ReactElement
-  className: string
-  primary?: boolean
-  disabled?: boolean
-  onClick: () => void
-}) {
-  const s = useStyles()
-  return (
-    <Tooltip positioning={TOOLTIP_ABOVE} content={label} relationship="label">
-      <Button
-        className={mergeClasses(className, !primary && s.keepBg)}
-        appearance={primary ? 'primary' : 'secondary'}
-        icon={icon}
-        disabled={disabled}
-        onClick={onClick}
-      />
-    </Tooltip>
-  )
-}
 
 /**
  * Configurações › Cores: só o catálogo (pedido do usuário — a aba
@@ -351,8 +298,7 @@ function Catalog() {
             </span>
             <span className={styles.actions}>
               {c.installed && outdated.includes(c.coreId) ? (
-                <IconAction
-                  className={styles.action}
+                <ListIconAction
                   primary
                   label={busy(c.coreId) ? t('cores.updating') : t('cores.update')}
                   icon={busy(c.coreId) ? <Spinner size="tiny" /> : <ArrowCircleUpRegular />}
@@ -362,8 +308,7 @@ function Catalog() {
               ) : (
                 c.installed &&
                 c.hasPrevious && (
-                  <IconAction
-                    className={styles.action}
+                  <ListIconAction
                     label={t('cores.restorePrevious')}
                     icon={<HistoryRegular />}
                     disabled={busy(c.coreId)}
@@ -372,27 +317,25 @@ function Catalog() {
                 )
               )}
               {c.installed && (
-                <IconAction
-                  className={styles.action}
+                <ListIconAction
                   label={t('settings.title')}
                   icon={<SettingsRegular />}
                   onClick={() => navigate(`/settings/cores/${c.coreId}`)}
                 />
               )}
               {c.installed ? (
-                <IconAction
-                  className={styles.action}
+                <ListIconAction
                   label={t('common.remove')}
                   icon={<DeleteRegular />}
                   disabled={busy(c.coreId)}
                   onClick={() => uninstall.mutate(c.coreId)}
                 />
               ) : (
-                <DownloadButton
-                  className={styles.action}
-                  appearance="primary"
+                <ListIconAction
+                  primary
                   label={busy(c.coreId) ? t('cores.downloading') : t('cores.install')}
-                  busy={busy(c.coreId)}
+                  icon={busy(c.coreId) ? <Spinner size="tiny" /> : <CloudArrowDownRegular />}
+                  disabled={busy(c.coreId)}
                   onClick={() => install.mutate(c.coreId)}
                 />
               )}

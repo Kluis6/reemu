@@ -48,7 +48,7 @@ fn raise_priority() {
 }
 
 /// `reemu-core-host --probe <pasta de cores> <core_id>`: abre o core sem
-/// jogo (`DesktopCoreLoader::probe_core`) e sai. Usado pelo teste de fumaça
+/// jogo e sai. No Windows, encerra com a DLL carregada. Usado pelo teste de fumaça
 /// do catálogo — num processo à parte, um core que cai no `retro_init` só
 /// derruba este processo. Resultado numa linha com prefixo fixo no stdout
 /// (o core pode escrever o que quiser antes): `REEMU_PROBE_OK\t<nome>\t
@@ -61,7 +61,12 @@ fn probe(args: &[String]) -> ! {
     };
     let sandbox = Sandbox::new("probe");
     let loader = DesktopCoreLoader::new(cores_dir, &sandbox.0, &sandbox.0);
-    let code = match loader.probe_core(&CoreId(core_id.clone())) {
+    let core_id = CoreId(core_id.clone());
+    #[cfg(windows)]
+    let result = loader.probe_core_until_exit(&core_id);
+    #[cfg(not(windows))]
+    let result = loader.probe_core(&core_id);
+    let code = match result {
         Ok(p) => {
             println!(
                 "REEMU_PROBE_OK\t{}\t{}\t{}",
@@ -75,7 +80,7 @@ fn probe(args: &[String]) -> ! {
         }
     };
     drop(sandbox);
-    std::process::exit(code);
+    exit_without_dll_teardown(code);
 }
 
 /// Pasta de sistema/saves só deste processo, vazia, apagada no fim. Não
@@ -100,7 +105,7 @@ impl Drop for Sandbox {
     }
 }
 
-/// `reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros>`: carrega
+/// `reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros> [pasta de firmware]`: carrega
 /// o jogo, roda `quadros` `retro_run` e sai — fase 2 do teste de fumaça do
 /// catálogo. Resultado no stdout: `REEMU_RUN_OK\t<quadros de vídeo>\t
 /// <quadros com cor>\t<amostras de áudio>\t<save state>` (saída 0) ou
@@ -114,11 +119,14 @@ fn run_rom(args: &[String]) -> ! {
         args.get(2),
         args.get(3).and_then(|n| n.parse::<u32>().ok()),
     ) else {
-        eprintln!("uso: reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros>");
+        eprintln!(
+            "uso: reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros> [pasta de firmware]"
+        );
         std::process::exit(64);
     };
     let sandbox = Sandbox::new("run");
-    let loader = DesktopCoreLoader::new(cores_dir, &sandbox.0, &sandbox.0);
+    let system_dir = args.get(4).map(std::path::Path::new).unwrap_or(&sandbox.0);
+    let loader = DesktopCoreLoader::new(cores_dir, system_dir, &sandbox.0);
     let code = match loader.open_core(&CoreId(core_id.clone()), rom) {
         Err(e) => {
             println!("REEMU_RUN_ERR\t{e}");
@@ -126,9 +134,12 @@ fn run_rom(args: &[String]) -> ! {
         }
         Ok(mut core) => {
             let (mut video, mut colored, mut audio) = (0u32, 0u32, 0usize);
+            let mut size = (0, 0);
+            let mut center = [0; 3];
             for _ in 0..frames {
                 if let Some(frame) = core.next_frame() {
                     video += 1;
+                    size = (frame.metadata.native_width, frame.metadata.native_height);
                     if let FrameOrigin::SoftwareRawBuffer {
                         data,
                         pitch,
@@ -142,6 +153,12 @@ fn run_rom(args: &[String]) -> ! {
                             *pitch,
                             *format,
                         );
+                        let x = frame.metadata.native_width as usize / 2;
+                        let y = frame.metadata.native_height as usize / 2;
+                        let offset = (y * frame.metadata.native_width as usize + x) * 4;
+                        if let Some(rgb) = rgba.get(offset..offset + 3) {
+                            center.copy_from_slice(rgb);
+                        }
                         if rgba
                             .chunks_exact(4)
                             .any(|p| p[0] > 16 || p[1] > 16 || p[2] > 16)
@@ -154,6 +171,13 @@ fn run_rom(args: &[String]) -> ! {
             }
             let state = state_round_trip(&mut core);
             println!("REEMU_RUN_OK\t{video}\t{colored}\t{audio}\t{state}");
+            if args.get(4).is_some() {
+                println!("REEMU_RUN_SIZE\t{}\t{}", size.0, size.1);
+                println!(
+                    "REEMU_RUN_CENTER\t{}\t{}\t{}",
+                    center[0], center[1], center[2]
+                );
+            }
             // o processo sai já: sem `retro_deinit` (alguns cores caem nele,
             // como o VBA-M no probe)
             std::mem::forget(core);

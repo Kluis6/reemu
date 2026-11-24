@@ -60,6 +60,7 @@ export const router = createHashRouter([
                   { path: 'aparencia', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance) },
                   { path: 'aparencia/temas', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance, { section: 'temas' as const }) },
                   { path: 'aparencia/papel-de-parede', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance, { section: 'papel-de-parede' as const }) },
+                  { path: 'aparencia/protecao-de-tela', lazy: page(() => import('./screens/settings/SettingsScreensaver'), (m) => m.SettingsScreensaver) },
                   { path: 'biblioteca', lazy: page(() => import('./screens/settings/SettingsLibrary'), (m) => m.SettingsLibrary) },
                   { path: 'audio', lazy: page(() => import('./screens/settings/SettingsAudio'), (m) => m.SettingsAudio) },
                   { path: 'video', lazy: page(() => import('./screens/settings/SettingsVideo'), (m) => m.SettingsVideo) },

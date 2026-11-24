@@ -19,6 +19,19 @@ const cores = [
 ]
 
 describe('rankCores', () => {
+  it('prioriza os cores validados no carregamento comum de Satellaview e Sufami Turbo', () => {
+    const snes = [
+      core('bsnes-jg_libretro', 'bsnes-jg', ['bs', 'st', 'sfc'], ['snes']),
+      core('mesen-s_libretro', 'Mesen-S', ['bs', 'sfc'], ['snes']),
+      core('mesen2_libretro', 'Mesen2', ['sfc'], ['snes']),
+      core('snes9x_libretro', 'Snes9x', ['bs', 'sfc'], ['snes']),
+    ]
+    expect(rankCores(snes, 'snes', 'bs')[0].coreId).toBe('snes9x_libretro')
+    expect(rankCores(snes.slice(0, 3), 'snes', 'bs')[0].coreId).toBe('mesen-s_libretro')
+    expect(rankCores(snes, 'snes', 'st')[0].coreId).toBe('snes9x_libretro')
+    expect(rankCores(snes.slice(0, 3), 'snes', 'st')[0].coreId).toBe('mesen2_libretro')
+  })
+
   it('prefere o core do sistema do jogo, não o 1º em ordem alfabética', () => {
     expect(rankCores(cores, 'megadrive', 'bin')[0].coreId).toBe('genesis_plus_gx_libretro')
     expect(rankCores(cores, 'atari2600', 'bin')[0].coreId).toBe('stella_libretro')

@@ -232,6 +232,17 @@ impl DesktopCoreLoader {
     /// de `GET_LOG_INTERFACE`). Um core que cai derruba o processo: rode
     /// isto num processo separado (`reemu-core-host --probe`).
     pub fn probe_core(&self, core_id: &CoreId) -> Result<CoreProbe, CoreLoadError> {
+        self.probe(core_id, false)
+    }
+
+    /// Mantém a DLL carregada até o fim do processo de sondagem descartável.
+    /// Deve ser seguida de encerramento imediato, sem descarregar as DLLs.
+    #[cfg(windows)]
+    pub fn probe_core_until_exit(&self, core_id: &CoreId) -> Result<CoreProbe, CoreLoadError> {
+        self.probe(core_id, true)
+    }
+
+    fn probe(&self, core_id: &CoreId, keep_loaded: bool) -> Result<CoreProbe, CoreLoadError> {
         let path = self.resolve_path(core_id)?;
         let _guard = ffi_state::acquire(&self.system_dir, &self.save_dir)?;
         let raw = RawCore::open(&path)?;
@@ -247,17 +258,18 @@ impl DesktopCoreLoader {
             init_in_retroarch_order(&raw);
             let mut info: sys::retro_system_info = std::mem::zeroed();
             (raw.get_system_info)(&mut info);
-            let probe = CoreProbe {
+            CoreProbe {
                 library_name: c_str(info.library_name),
                 library_version: c_str(info.library_version),
                 valid_extensions: c_str(info.valid_extensions),
                 need_fullpath: info.need_fullpath,
-            };
-            // SEM `retro_deinit`: o VBA-M (e outros) limpa o estado do jogo
-            // no deinit e cai se nenhum jogo foi carregado — o probe roda
-            // num processo descartável, que só sai.
-            probe
+            }
         };
+        // O VBA-M cai em retro_deinit sem jogo. O MesenCE sobe threads em
+        // retro_init e fica bloqueado ao descarregar a DLL sem retro_deinit.
+        if keep_loaded {
+            std::mem::forget(raw);
+        }
         Ok(probe)
     }
 
@@ -388,6 +400,21 @@ impl DesktopCoreLoader {
             .extension()
             .map(|e| e.to_string_lossy().to_ascii_lowercase())
             .unwrap_or_default();
+        // O Mesen2 aceita o disco sem BIOS e roda com uma ROM vazia.
+        // Checa a extensão após extrair arquivos compactados.
+        if core_id.0 == "mesen2_libretro" && content_ext == "fds" {
+            let has_firmware = ["disksys.rom", "FdsBios.bin"].iter().any(|name| {
+                std::fs::File::open(self.system_dir.join(name))
+                    .and_then(|file| file.metadata())
+                    .is_ok_and(|metadata| metadata.is_file() && metadata.len() == 8192)
+            });
+            if !has_firmware {
+                unsafe { (raw.deinit)() };
+                return Err(CoreLoadError::LoadFailed(
+                    "O Mesen2 precisa de disksys.rom de 8 KiB para abrir discos Famicom Disk System. Importe a BIOS em Configurações → BIOS.".into(),
+                ));
+            }
+        }
         let content_override = ffi_state::lock().as_ref().and_then(|st| {
             st.content_overrides
                 .iter()
@@ -396,6 +423,15 @@ impl DesktopCoreLoader {
         });
         let (need_fullpath, persistent_data) = match content_override {
             Some((full, persistent)) => (full, persistent && !full),
+            // O Mesen2 monta um caminho virtual a partir de GET_GAME_INFO_EXT
+            // para conteúdo compactado. Precisa dos bytes quando não declarou
+            // override para estas extensões de SNES.
+            None if core_id.0 == "mesen2_libretro"
+                && extracted.is_some()
+                && matches!(content_ext.as_str(), "bs" | "st") =>
+            {
+                (false, false)
+            }
             None => (need_fullpath, false),
         };
         let mut persistent_rom: Option<Vec<u8>> = None;

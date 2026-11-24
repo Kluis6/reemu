@@ -1,5 +1,12 @@
 import type { InstalledCore } from './tauri'
 
+// Cores validados com um arquivo de jogo e a BIOS na pasta do sistema.
+// Alguns anunciam .bs/.st só para subsistemas ou omitem a extensão no probe.
+const snesExpansionCores = new Map([
+  ['bs', ['snes9x_libretro', 'mesen-s_libretro', 'mesen2_libretro']],
+  ['st', ['snes9x_libretro', 'mesen2_libretro']],
+])
+
 /**
  * Ordem dos cores pra um jogo: primeiro os que atendem o SISTEMA do jogo,
  * depois os que aceitam a extensão do arquivo, e por nome. Só a extensão
@@ -11,7 +18,13 @@ export function rankCores(
   systemId: string | undefined,
   ext: string,
 ): InstalledCore[] {
-  const score = (c: InstalledCore) =>
-    (systemId && c.systems.includes(systemId) ? 0 : 2) + (c.extensions.includes(ext) ? 0 : 1)
+  const preferred = systemId === 'snes' ? snesExpansionCores.get(ext) : undefined
+  const score = (c: InstalledCore) => {
+    if (preferred) {
+      const order = preferred.indexOf(c.coreId)
+      if (order >= 0) return order - preferred.length
+    }
+    return (systemId && c.systems.includes(systemId) ? 0 : 2) + (c.extensions.includes(ext) ? 0 : 1)
+  }
   return [...cores].sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name))
 }

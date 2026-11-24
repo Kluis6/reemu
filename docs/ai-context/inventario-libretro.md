@@ -1,30 +1,29 @@
 # Inventário de compatibilidade libretro por core
 
-**Recorte** — 2026-11-18. Todos os itens abaixo estão em backlog.
+**Recorte dos índices** — 2026-11-18, reconferido em 2026-11-23.
 A disponibilidade indica presença no índice de pacotes. A compatibilidade
 será comprovada pelo [roteiro de implementação](26-compatibilidade-libretro.md).
 
-- **358 IDs** na união dos metadados oficiais e dos dois índices.
-- **261 IDs com pacote desktop**, dos quais 127 já estão no catálogo e 134 faltam. Entre os faltantes, 131 aparecem nos dois índices e 3 em apenas um.
-- **97 IDs adicionais** dos metadados oficiais ficam na fila de investigação de builds e alvos.
+- **357 IDs** na união dos metadados de cores e dos dois índices.
+- **261 IDs com pacote desktop**, dos quais 130 já estão no catálogo e 131 faltam. Entre os faltantes, 128 aparecem nos dois índices e 3 apenas no de Linux x64.
+- **96 IDs adicionais** dos metadados oficiais ficam na fila de investigação de builds e alvos.
 
 ## Fontes do recorte
 
 - Catálogo local na data do recorte. [Código do ReEmu](../../crates/core-catalog/src/catalog.rs)
-- 351 arquivos de metadados na revisão `eac3a2784d42`. [Revisão do Core Info](https://github.com/libretro/libretro-core-info/tree/eac3a2784d428444aa2bd472039b5c5540141af1)
+- 350 arquivos de metadados de cores na revisão `eac3a2784d42`, excluído o modelo `00_example_libretro.info`. [Revisão do Core Info](https://github.com/libretro/libretro-core-info/tree/eac3a2784d428444aa2bd472039b5c5540141af1)
 - Windows x64, 258 IDs. SHA-256 do índice `cee55ba24a8984fa8fae5f18da9f7f5882c2abdc369f1d538b14e0941dd49bf5`. [Índice do buildbot](https://buildbot.libretro.com/nightly/windows/x86_64/latest/.index-extended)
 - Linux x64, 261 IDs. SHA-256 do índice `03369f12fd1bc819f3ff9ce03fc9a806bac0a77221827ef87a98d9be33da1952`. [Índice do buildbot](https://buildbot.libretro.com/nightly/linux/x86_64/latest/.index-extended)
 
-## IDs publicados para desktop fora do catálogo (134)
+## IDs publicados para desktop fora do catálogo (131)
 
 Os exemplos de extensão vêm dos arquivos oficiais de informações.
 Confirme o contrato do binário escolhido. Cada entrada passa pelos critérios
 do roteiro antes de ser publicada como compatível.
 
-### Pilotos e casos específicos (24)
+### Pilotos e casos específicos (21)
 
 - [ ] `azahar_libretro` — 3DS. Criar a integração 3DS e validar duas telas, toque e armazenamento. **Pacote:** Windows e Linux x64.
-- [ ] `bsnes-jg_libretro` — Super Nintendo Entertainment System. Validar SNES, as extensões do binário e a persistência de save com as fixtures existentes. **Pacote:** Windows e Linux x64.
 - [ ] `cemu_libretro` — Wii U. Validar WUA/RPX, GamePad e persistência de `mlc01` no fluxo Wii U. **Pacote:** Windows e Linux x64.
 - [ ] `citra2018_libretro` — 3DS. Validar boot, layout, toque e saves da revisão 2018 como variante própria. **Pacote:** Windows e Linux x64.
 - [ ] `citra_libretro` — 3DS. Validar as opções e o toque da DLL Citra após integrar a plataforma 3DS. **Pacote:** Windows e Linux x64.
@@ -35,8 +34,6 @@ do roteiro antes de ser publicada como compatível.
 - [ ] `hatari_libretro` — Atari ST/STE/TT/Falcon. Validar TOS, disquete e teclado/joystick em Atari ST. **Pacote:** Windows e Linux x64.
 - [ ] `hatarib_libretro` — Atari ST/STE/TT/Falcon. Validar TOS, seleção de máquina, disquete e troca de mídia no hatariB. **Pacote:** Windows e Linux x64.
 - [ ] `hypseushw_libretro` — Laserdisc Arcade. Validar lançamento por framefile e acesso aos arquivos acompanhantes de áudio e vídeo. **Pacote:** Windows e Linux x64.
-- [ ] `mesen-s_libretro` — Super Nintendo Entertainment System / Game Boy / Game Boy Color. Validar SNES e os modos Game Boy/Color que o binário anunciar, com seleção pelo sistema correto. **Pacote:** Windows e Linux x64.
-- [ ] `mesen2_libretro` — Nintendo Entertainment System / Super Nintendo Entertainment System / Game Boy /…. Associar cada sistema anunciado ao Mesen 2 e testar seleção e boot por plataforma. **Pacote:** Windows e Linux x64.
 - [ ] `openmsx_libretro` — Metadados a confirmar. Confirmar os recursos pelo binário. Integrar cartucho, disco e arquivos de sistema do MSX. [openMSX](https://docs.libretro.com/library/openmsx/) **Pacote:** Windows e Linux x64.
 - [ ] `panda3ds_libretro` — 3DS. Confirmar contexto gráfico do binário e testar layout e toque com a plataforma 3DS. **Pacote:** Windows e Linux x64.
 - [ ] `parallel_dc_libretro` — Sega Dreamcast. Validar a variante Dreamcast separadamente do Flycast e registrar os backends selecionáveis. **Pacote:** Windows e Linux x64.
@@ -173,13 +170,12 @@ do roteiro antes de ser publicada como compatível.
 - [ ] `odin_libretro` — Metadados a confirmar. Identificar a origem do pacote e coletar o tipo de core, formatos e opções com o probe. **Pacote:** Windows e Linux x64.
 - [ ] `pokketstation_libretro` — Metadados a confirmar. Identificar a origem do pacote e coletar o tipo de core, formatos e opções com o probe. **Pacote:** Windows e Linux x64.
 
-## IDs oficiais sem pacote nos índices Windows e Linux x64 (97)
+## IDs oficiais sem pacote nos índices Windows e Linux x64 (96)
 
 Confirmar alvo e disponibilidade por core. Se houver build para outra
 arquitetura ou plataforma, registrar esse alvo. Se faltar binário utilizável,
 registrar o impedimento e manter a entrada em backlog.
 
-- [ ] `00_example_libretro` — Metadados a confirmar. Confirmar alvo, origem e disponibilidade do binário.
 - [ ] `advanced_tests_libretro` — Advanced Test Core. Confirmar alvo, origem e disponibilidade do binário.
 - [ ] `anybor_libretro` — OpenBOR. Confirmar alvo, origem e disponibilidade do binário.
 - [ ] `anygm_libretro` — GameMaker. Confirmar alvo, origem e disponibilidade do binário.
@@ -278,6 +274,95 @@ registrar o impedimento e manter a entrada em backlog.
 - [ ] `zesarpcw_libretro` — PCW. Confirmar alvo, origem e disponibilidade do binário.
 
 ## Cores já no catálogo
+
+Os testes pendentes em Linux x64 estão reunidos na
+[tarefa de validação em Linux](../../TASKS.md#testes-em-linux-x64).
+
+| Core | Evidência no Windows x64 | Linux x64 e modos adicionais |
+| --- | --- | --- |
+| `bsnes-jg_libretro` | Buildbot de 2026-11-23, versão 2.1.0. Descoberta e probe pelo loader. A fumaça do catálogo rodou 180 quadros com imagem, áudio e restauração de save state. Teste adicional confirmou o botão B do RetroPad e a restauração de 2 KiB de SRAM após reabertura. | Pacote publicado. Validação em Linux e dos subsistemas Super Game Boy, BS-X e Sufami Turbo pendente. |
+| `mesen-s_libretro` | Buildbot de 2026-11-23, versão 0.4.0. O core-host rodou 180 quadros com imagem, áudio e restauração de save state para `.sfc`, `.gb` e `.gbc` com modo Color obrigatório. Testes adicionais confirmaram o botão B do RetroPad, a restauração da SRAM após reabertura, o modo Super Game Boy com as duas revisões de firmware e a inicialização de Satellaview com `.bs` avulso e em ZIP. | Pacote publicado. Execução em Linux e validação de jogos comerciais de Satellaview pendentes. [Documentação oficial](https://docs.libretro.com/library/mesen-s/) |
+| `mesen2_libretro` | Buildbot de 2026-11-23, versão 2.0.0 anunciada pela DLL. O core-host rodou 180 quadros com imagem, áudio e restauração de save state em cada cartucho de teste de NES, SNES, GB, GBC, GBA, PC Engine, SuperGrafx, Master System, Game Gear, WonderSwan e WonderSwan Color. O GBA abriu sem BIOS com a opção de iniciar direto no cartucho aplicada pelo ReEmu. FDS e PC Engine CD passaram com mídia sintética e também com programas homebrew usando firmware original. Super Game Boy 2 passou com firmware sintético e original. | Pacote Linux verificado como ELF64 x86-64 com os símbolos Libretro. Execução em Linux e boot de discos comerciais pendentes. [Documentação oficial](https://docs.libretro.com/library/mesen2/) |
+
+### Satellaview e Sufami Turbo no Windows
+
+A biblioteca agrupa `.bs` e cartuchos `.st` válidos em Super Nintendo,
+inclusive em ZIP e 7z. Arquivos `.st` passam pela assinatura e pelo
+tamanho de cartucho Sufami Turbo para distinguir disquetes Atari ST.
+Quando o jogo e a plataforma seguem a escolha automática, a seleção de
+core prioriza o Snes9x e considera a extensão interna dos arquivos compactados.
+No Mesen2, o loader repassa em memória os arquivos extraídos de `.bs`
+e `.st` porque essas extensões não estão no override de conteúdo do core.
+[Porta Libretro do MesenCE](https://github.com/libretro/MesenCE/blob/master/Libretro/libretro.cpp) ·
+[Identificação no Snes9x](https://github.com/snes9xgit/snes9x/blob/master/libretro/libretro.cpp)
+
+O homebrew `bs-demo-mpack.bs` abriu no Mesen2, Mesen-S e Snes9x, avulso
+e em ZIP, com a edição traduzida DRM-Free de `BS-X.bin`. Foram produzidos
+600 quadros, saída PCM e save states restauráveis. A captura do Mesen2
+confirmou a tela de criação de personagem do BS-X.
+[Homebrew de Krokodyl](https://github.com/Krokodyl/bsdemo-mpack) ·
+[BIOS no System.dat](https://github.com/libretro/libretro-database/blob/master/dat/System.dat)
+
+O cartucho sintético Sufami Turbo desenhou a tela vermelha do programa
+no Mesen2 e no Snes9x, avulso e em ZIP, com restauração de save state.
+O Mesen2 carrega o firmware como `SufamiTurbo.sfc` e o Snes9x usa
+`STBIOS.bin`. Ambos os nomes estão na busca de BIOS. A associação de
+dois cartuchos e os subsistemas do bsnes-jg seguem pendentes.
+[Firmware no MesenCE](https://github.com/libretro/MesenCE/blob/master/Core/Shared/FirmwareHelper.h) ·
+[Documentação oficial do Snes9x](https://docs.libretro.com/library/snes9x/)
+
+### Mesen2 e Mesen-S
+
+A fumaça do Mesen 2 roda FDS e PC Engine CD no core-host com dados
+gerados em diretório temporário. O teste de FDS confere a cor desenhada
+pelo firmware sintético e o aviso quando `disksys.rom` está ausente.
+O teste de PC Engine CD confere a recusa sem firmware, a abertura de
+`.cue` com trilha separada e a integridade de `syscard3.pce` após o
+encerramento. Ambos validam vídeo, áudio e restauração de estado.
+A matriz existente do CI inclui Windows e Linux. [Fumaça do catálogo](../../.github/workflows/catalog-smoke.yml)
+
+No Windows x64, o exemplo FDS de Brad Smith rodou avulso e em `.zip`
+com `disksys.rom` original. O exemplo Super CD-ROM² do HuC mostrou
+`HELLO, WORLD` depois de receber Start com `syscard3.pce` original.
+O core-host confirmou vídeo, saída PCM e restauração de save state.
+Sem a BIOS de FDS, o core aceitava o disco e exibia uma tela verde
+porque preenchia a ROM de BIOS com bytes zerados. O ReEmu agora pede
+o arquivo de 8 KiB ao abrir `.fds`, inclusive dentro de arquivo
+compactado. [Exemplo FDS](https://github.com/bbbradsmith/NES-ca65-example/tree/fds) ·
+[Exemplo HuC](https://github.com/pce-devel/huc/tree/master/examples/asm/elmer/scd-bios-hello) ·
+[Carregador FDS do MesenCE](https://github.com/libretro/MesenCE/blob/master/Core/NES/Mappers/FDS/Fds.cpp)
+
+O Mesen2 usa a revisão Super Game Boy 2. Com `SGB2.sfc` na pasta de BIOS,
+o carregamento normal do ReEmu abriu o cartucho compatível e produziu
+quadros de 256 × 239. Com apenas `SGB1.sfc`, o carregamento comum abriu
+como Game Boy, em 160 × 144. A tentativa isolada com `SGB1.sfc` pelo
+subsistema de dois arquivos terminou com uma violação de acesso dentro
+da DLL. O Mesen-S aceita `SGB1.sfc` ao desligar **Use SGB2** nas opções
+do core. [Configuração padrão no MesenCE](https://github.com/libretro/MesenCE/blob/master/Core/Shared/SettingTypes.h) · [Carregamento de firmware no MesenCE](https://github.com/libretro/MesenCE/blob/master/Core/SNES/BaseCartridge.cpp) · [Opções do Mesen-S](https://docs.libretro.com/library/mesen-s/)
+
+No Windows x64, Donkey Kong e Kirby's Dream Land 2 rodaram em `.zip` por
+600 quadros a 256 × 239 com áudio. Os testes usaram `SGB2.sfc` no Mesen2
+e as duas revisões no Mesen-S, com hashes conferidos no catálogo oficial.
+Os dois jogos reproduziram os mesmos quadros após restaurar o save state.
+Em Donkey Kong, acionar Start a partir do mesmo estado alterou a sequência
+de quadros nas três combinações. A contagem de amostras de áudio após a
+restauração variou em relação à execução contínua. [Hashes dos firmwares](https://github.com/libretro/libretro-database/blob/master/dat/System.dat)
+
+A fumaça dos dois cores abre um cartucho GB com a marcação SGB e
+`SGB2.sfc` sintético. Ela verifica a resolução de 256 × 239, a cor
+produzida pelo firmware, áudio, restauração de save state e integridade
+do firmware após a execução. [Fumaça do catálogo](../../.github/workflows/catalog-smoke.yml)
+
+A sondagem isolada do Mesen 2 no Windows travava ao descarregar a DLL
+após `retro_init` sem conteúdo. O modo `--probe` agora reutiliza a saída
+de processo já usada pelo modo `--run` no Windows, com a DLL carregada
+até o encerramento. [Inicialização e encerramento do core](https://github.com/libretro/MesenCE/blob/master/Libretro/libretro.cpp)
+
+A ROM de fumaça de SNES agora inicializa os registradores de vídeo que
+afetavam a cor de fundo, além de desligar HDMA e interrupções. Antes do
+ajuste, a imagem do bsnes-jg aparecia preta de forma intermitente. Com a
+ROM atualizada, as 12 aberturas independentes no Windows produziram
+180 quadros com imagem, áudio e restauração de save state. [ROM de teste](../../crates/core-catalog/src/smoke_roms.rs#L119)
 
 A auditoria inclui os cores já catalogados. Usar a lista atual como fonte de IDs
 e registrar resultado por plataforma e versão, com teste de conteúdo e

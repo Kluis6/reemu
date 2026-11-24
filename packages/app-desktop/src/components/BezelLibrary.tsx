@@ -1,7 +1,6 @@
 import {
   Badge,
   Body1,
-  Button,
   Text,
   Caption1,
   Spinner,
@@ -10,7 +9,9 @@ import {
 } from '@fluentui/react-components'
 import {
   ArrowCircleUpRegular,
+  ArrowSyncRegular,
   CheckmarkCircleFilled,
+  CloudArrowDownRegular,
   FrameRegular,
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -25,7 +26,7 @@ import {
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
 import { errorPatch } from '../lib/toast'
-import { DownloadButton } from './DownloadButton'
+import { ListIconAction } from './ListIconAction'
 import { useTranslation } from 'react-i18next'
 
 const useStyles = makeStyles({
@@ -42,7 +43,7 @@ const useStyles = makeStyles({
   row: {
     display: 'flex',
     alignItems: 'center',
-    gap: tokens.spacingHorizontalM,
+    gap: tokens.spacingHorizontalL,
     padding: tokens.spacingHorizontalM,
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
@@ -69,16 +70,6 @@ const useStyles = makeStyles({
     minWidth: 0,
     flexGrow: 1,
     overflowWrap: 'anywhere',
-  },
-  // Baixar e Reinstalar com a mesma largura, como nas listas de Cores e BIOS
-  action: {
-    flexShrink: 0,
-    width: '120px',
-    minWidth: '0 !important',
-    maxWidth: 'none !important',
-    // com o fundo do botão, sem a borda (pedido do usuário, 2026-11-06); 1 px
-    // transparente, não `none`, para o tamanho não mudar no foco
-    border: '1px solid transparent !important',
   },
 })
 
@@ -174,60 +165,41 @@ export function BezelLibrary() {
   return (
     <div className={s.root}>
       <div className={s.list}>
-        {rows.map((c) => (
-          <div key={c.systemId} className={s.row}>
-            <span className={s.tile} aria-hidden>
-              <FrameRegular />
-            </span>
-            <span className={s.meta}>
-              <Body1>
-                <Text as="strong" weight="semibold">
-                  {platformLabel(c.systemId)}
-                </Text>
-              </Body1>
-              {c.installed && outdated.has(c.systemId) ? (
-                <Badge appearance="tint" color="brand" icon={<ArrowCircleUpRegular />}>
-                  {t('bezels.updateAvailable')}
-                </Badge>
-              ) : c.installed ? (
-                <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
-                  {t('bezels.downloaded')}
-                </Badge>
-              ) : null}
-            </span>
-            {c.installed && outdated.has(c.systemId) ? (
-              // versão nova no repositório: a ação principal da faixa
-              <Button
-                className={s.action}
-                appearance="primary"
-                disabled={dl.isPending}
-                onClick={() => dl.mutate(c.systemId)}
-              >
-                {t('bezels.update')}
-              </Button>
-            ) : c.installed ? (
-              // Reinstalar: secondary, só o texto, sem ícone (como o Remover das
-              // outras listas); o progresso aparece no toast
-              <Button
-                className={s.action}
-                appearance="secondary"
-                disabled={dl.isPending}
-                onClick={() => dl.mutate(c.systemId)}
-              >
-                {t('bezels.reinstall')}
-              </Button>
-            ) : (
-              <DownloadButton
-                className={s.action}
-                appearance="primary"
-                label={t('bezels.download')}
-                busy={dl.isPending && dl.variables === c.systemId}
+        {rows.map((c) => {
+          const needsUpdate = c.installed && outdated.has(c.systemId)
+          const downloading = dl.isPending && dl.variables === c.systemId
+          const name = platformLabel(c.systemId)
+          const ActionIcon = needsUpdate ? ArrowCircleUpRegular : c.installed ? ArrowSyncRegular : CloudArrowDownRegular
+          const actionLabel = needsUpdate ? 'bezels.update' : c.installed ? 'bezels.reinstall' : 'bezels.download'
+          return (
+            <div key={c.systemId} className={s.row}>
+              <span className={s.tile} aria-hidden>
+                <FrameRegular />
+              </span>
+              <span className={s.meta}>
+                <Body1>
+                  <Text as="strong" weight="semibold">{name}</Text>
+                </Body1>
+                {needsUpdate ? (
+                  <Badge appearance="tint" color="brand" icon={<ArrowCircleUpRegular />}>
+                    {t('bezels.updateAvailable')}
+                  </Badge>
+                ) : c.installed ? (
+                  <Badge appearance="tint" color="success" icon={<CheckmarkCircleFilled />}>
+                    {t('bezels.downloaded')}
+                  </Badge>
+                ) : null}
+              </span>
+              <ListIconAction
+                primary={needsUpdate || !c.installed}
+                label={downloading ? t('bezels.downloading', { label: name }) : t(actionLabel)}
+                icon={downloading ? <Spinner size="tiny" /> : <ActionIcon />}
                 disabled={dl.isPending}
                 onClick={() => dl.mutate(c.systemId)}
               />
-            )}
-          </div>
-        ))}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

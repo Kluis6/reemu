@@ -1,11 +1,15 @@
-import { Tab, TabList, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
+import { Button, Spinner, Tab, TabList, Tooltip, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
+import { ArrowSyncRegular } from '@fluentui/react-icons'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { curatedText, presetDesc, presetTitle } from '../lib/backendText'
 import type { ShaderInfo } from '../lib/tauri'
+import { TOOLTIP_POSITION } from '../lib/tooltip'
 import { useTabStyles } from '../styles/xbox'
 import { ShaderCard } from './ShaderCard'
-import { ShaderLibrary } from './ShaderLibrary'
+import { ShaderLibrary, useShaderPack } from './ShaderLibrary'
+
+const compactHeader = '@container shader-picker (max-width: 490px)'
 
 const useStyles = makeStyles({
   // Lista de shaders com rolagem própria; a folga (8) não deixa o anel de
@@ -31,9 +35,37 @@ const useStyles = makeStyles({
   // Abas no estilo do app (42 de altura). Nas Configurações a lista começa
   // na altura da imagem da prévia, cuja barra tem 32 + 24: aqui são 10 a
   // mais de aba e 10 a menos de espaço (8 do `gap` do pai + 6).
-  // A aba começa na borda da lista de baixo (respeita o padding do card),
-  // sem o recuo de −15 px das outras abas (`useTabStyles`).
-  tabs: { alignSelf: 'flex-start', marginBottom: '6px', marginLeft: '0 !important' },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: tokens.spacingHorizontalS,
+    flexShrink: 0,
+    marginBottom: '6px',
+    containerName: 'shader-picker',
+    containerType: 'inline-size',
+  },
+  // A primeira aba começa na borda da lista de baixo.
+  tabs: {
+    marginLeft: '0 !important',
+    [compactHeader]: {
+      '& .fui-Tab': {
+        paddingLeft: tokens.spacingHorizontalXS,
+        paddingRight: tokens.spacingHorizontalXS,
+      },
+    },
+  },
+  update: {
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
+    [compactHeader]: {
+      minWidth: '32px',
+      paddingLeft: 0,
+      paddingRight: 0,
+      '& .fui-Button__icon': { margin: 0 },
+    },
+  },
+  updateLabel: { [compactHeader]: { display: 'none' } },
 })
 
 type Common = {
@@ -125,20 +157,39 @@ export function ShaderPicker(props: Common) {
     !info.available.includes(selected) &&
     !info.curated.some((c) => c.id === selected)
   const [source, setSource] = useState<Source>(isPath ? 'pack' : 'reemu')
+  const pack = useShaderPack(source === 'pack')
+  const updateLabel = t(pack.downloading ? 'shaders.downloading' : 'shaders.updatePack')
+
   return (
     <>
-      <TabList
-        className={mergeClasses(tb.tabs, s.tabs)}
-        selectedValue={source}
-        onTabSelect={(_, d) => setSource(d.value as Source)}
-      >
-        <Tab value="reemu">{t('video.sourceReemu')}</Tab>
-        <Tab value="pack">{t('video.sourcePack')}</Tab>
-      </TabList>
+      <div className={s.header}>
+        <TabList
+          className={mergeClasses(tb.tabs, s.tabs)}
+          selectedValue={source}
+          onTabSelect={(_, d) => setSource(d.value as Source)}
+        >
+          <Tab value="reemu">{t('video.sourceReemu')}</Tab>
+          <Tab value="pack">{t('video.sourcePack')}</Tab>
+        </TabList>
+        {source === 'pack' && pack.updateAvailable && (
+          <Tooltip positioning={TOOLTIP_POSITION} content={updateLabel} relationship="label">
+            <Button
+              className={s.update}
+              appearance="primary"
+              icon={pack.downloading ? <Spinner size="tiny" /> : <ArrowSyncRegular />}
+              disabledFocusable={pack.downloading}
+              onClick={pack.download}
+            >
+              <span className={s.updateLabel}>{updateLabel}</span>
+            </Button>
+          </Tooltip>
+        )}
+      </div>
       {source === 'reemu' ? (
         <ShaderPresetList {...props} />
       ) : (
         <ShaderLibrary
+          pack={pack}
           onPick={props.onPick}
           activePath={selected}
           busy={!!props.busy}
