@@ -3362,7 +3362,7 @@ dependencies = [
  "log",
  "md-5 0.10.6",
  "sevenz-rust2",
- "sha1 0.10.7",
+ "sha1 0.11.0",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
