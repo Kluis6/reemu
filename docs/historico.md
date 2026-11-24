@@ -3838,3 +3838,8 @@ Limpeza proposta na análise de 2026-11-12: os itens `done` que ainda estavam na
 - Metadados do GameKave com progresso de varredura, comparação de sugestões e imagens personalizadas. Mais dados do Alvanista no perfil.
 - Busca de BIOS em pastas locais e reconhecimento de mais sistemas da biblioteca, incluindo Satellaview e Sufami Turbo.
 - Ajustes de navegação por controle, contraste e ações nas listas de Configurações.
+
+## 2026-11-24 — Release v0.1.18
+
+- A v0.1.18 leva as mudanças da v0.1.17 para a publicação. O empacotamento da tag anterior foi cancelado após a auditoria de dependências.
+- O lockfile usa `cookie` 0.18.3 e `url` 2.5.9 para atender aos avisos [RUSTSEC-2026-0594](https://rustsec.org/advisories/RUSTSEC-2026-0594.html) e [RUSTSEC-2026-0592](https://rustsec.org/advisories/RUSTSEC-2026-0592.html).
