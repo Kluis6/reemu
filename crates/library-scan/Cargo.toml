@@ -8,7 +8,7 @@ description = "Hash de ROMs (CRC32/MD5/SHA1) + varredura de biblioteca"
 domain = { path = "../domain" }
 crc32fast = "1"
 md-5 = "0.10"
-sha1 = "0.10"
+sha1 = "0.11"
 uuid = { version = "1", features = ["v4"] }
 walkdir = "2"
 thiserror.workspace = true
