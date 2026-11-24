@@ -89,7 +89,7 @@ tokio = { version = "1", features = ["macros", "rt", "net"] }
 wiremock = "0.6"
 # Lê as linhas de `alvanista_state` nos testes (o token não pode estar nelas).
 # Mesma versão do crate `db`, só com as features que o teste usa.
-sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
+sqlx = { version = "0.9", default-features = false, features = ["sqlite", "runtime-tokio"] }
 # logs do lado do app nos testes de hardware (ex.: diagnóstico de áudio)
 env_logger = "0.11"
 # Tipos do frontend (`lib/bindings`), gerados só em `cargo test`: o app não leva o crate.
