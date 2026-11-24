@@ -68,9 +68,9 @@ const useStyles = makeStyles({
     paddingTop: "0 !important",
     paddingBottom: "0 !important",
     whiteSpace: "nowrap",
-    color: tokens.colorNeutralForeground1,
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1})`,
   },
-  crumbCurrent: { color: `${tokens.colorNeutralForeground1} !important` },
+  crumbCurrent: { color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1}) !important` },
   crumbPage: { fontWeight: tokens.fontWeightRegular },
   bodyPage: {
     flexGrow: 1,
@@ -116,6 +116,13 @@ const useStyles = makeStyles({
     paddingRight: `calc(${tokens.spacingHorizontalXXL} - ${M.SCROLLBAR_W}px)`,
     // O fim da lista sobe além da barra de dicas, que flutua sobre o card.
     paddingBottom: `${M.PAGE_PAD_B - M.SAFE_Y + 24}px`,
+  },
+  paneFixed: {
+    minHeight: 0,
+    overflow: "hidden",
+    scrollbarGutter: "auto",
+    paddingRight: tokens.spacingHorizontalXXL,
+    paddingBottom: 0,
   },
   content: { minWidth: 0, maxWidth: "640px" },
   // Abas de lista em grade (Aparência, Cores, BIOS…) usam a largura toda —
@@ -175,6 +182,8 @@ export function SettingsLayout() {
       crumbs.push({
         label: sub === "shaders" ? t("video.tabShaders") : t("video.tabBezels"),
       });
+    } else if (section.key === "aparencia" && sub === "protecao-de-tela") {
+      crumbs.push({ label, to: "/settings/aparencia" }, { label: t("appearance.screensaver.title") });
     } else if (section.key === "aparencia" && (sub === "temas" || sub === "papel-de-parede")) {
       crumbs.push({ label, to: "/settings/aparencia" });
       crumbs.push({
@@ -207,7 +216,7 @@ export function SettingsLayout() {
     <div className={styles.root}>
       <div className={styles.page}>
         <Breadcrumb
-          className={styles.crumbs}
+          className={mergeClasses(styles.crumbs, "reemu-on-wallpaper")}
           // com o controle, B volta; o foco entra direto nas opções
           data-nav-skip
           size="large"
@@ -249,7 +258,7 @@ export function SettingsLayout() {
                 <Outlet />
               ) : (
                 <div className={styles.card}>
-                  <div className={styles.pane}>
+                  <div className={mergeClasses(styles.pane, section.key === "metadata" && styles.paneFixed)}>
                     <div
                       className={mergeClasses(
                         styles.content,
@@ -260,7 +269,7 @@ export function SettingsLayout() {
                         section.key === "sistema" &&
                           (sub === "opcoes" || sub === "sobre") &&
                           styles.wide,
-                        section.key === "video" && sub === "shaders" && styles.fill,
+                        (section.key === "metadata" || (section.key === "video" && sub === "shaders")) && styles.fill,
                         // Temas e Plano de fundo: na altura útil do card, sem rolar
                         section.key === "aparencia" &&
                           (sub === "temas" || sub === "papel-de-parede") &&

@@ -149,14 +149,6 @@ pub(crate) const GENERATED: &[(&str, BiosFile)] = &[
         any_of: &[],
     }),
     ("snes", BiosFile {
-        filename: "BS-X.bin",
-        subfolder: None,
-        md5: &["fed4d8242cfbed61343d53d48432aced"],
-        required: false,
-        note: "BS-X.bin (BS-X - Sore wa Namae o Nusumareta Machi no Monogatari (Japan) (Rev 1))",
-        any_of: &[],
-    }),
-    ("snes", BiosFile {
         filename: "STBIOS.bin",
         subfolder: None,
         md5: &["d3a44ba7d42a74d3ac58cb9c14c6a5ca"],
@@ -1147,7 +1139,6 @@ pub(crate) const GENERATED: &[(&str, BiosFile)] = &[
 /// Sistemas que só aparecem na parte gerada (fora da tabela à mão).
 pub(crate) const GENERATED_SYSTEMS: &[&str] = &[
     "nes",
-    "snes",
     "gb",
     "gbc",
     "gba",

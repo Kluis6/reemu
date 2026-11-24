@@ -16,6 +16,7 @@ import { onMenuNav, toggleFocus } from '../lib/tauri'
 import { playUiSound } from '../lib/uiPrefs'
 import { useFocusStore } from '../stores/useFocusStore'
 import { useSearchStore } from '../stores/useSearchStore'
+import { SCREENSAVER_CONTROLLER_ACTIVITY, useScreensaverStore } from '../stores/useScreensaverStore'
 
 /**
  * Navegação da UI no estilo console (modo Xbox) — um único listener estável
@@ -155,15 +156,31 @@ export function useMenuNav() {
     // --- gamepad ---
     let last = 0
     let lastKind = ''
+    let wakeNav = ''
+    let wakeTime = 0
     const handle = (nav: string) => {
       if (onPlayIdle()) return
+      window.dispatchEvent(new Event(SCREENSAVER_CONTROLLER_ACTIVITY))
+      const now = performance.now()
+      const screensaver = useScreensaverStore.getState()
+      if (screensaver.active) {
+        screensaver.dismiss()
+        wakeNav = nav
+        wakeTime = now
+        return
+      }
+      // Segurar o mesmo botão ou eixo que acordou a tela não dispara comandos.
+      if (nav === wakeNav && now - wakeTime < 250) {
+        wakeTime = now
+        return
+      }
+      wakeNav = ''
       // Stick direito: rola, sem mexer no foco e sem som. Antes do filtro de
       // repetição abaixo — os pulsos vêm a cada 30–140 ms (backend).
       if (nav === 'scrollUp' || nav === 'scrollDown') {
         scrollFocusedArea(nav === 'scrollUp' ? -1 : 1)
         return
       }
-      const now = performance.now()
       if (nav === lastKind && now - last < 90) return
       last = now
       lastKind = nav

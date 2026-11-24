@@ -1,13 +1,12 @@
 import {
   Badge,
-  Button,
   Caption1,
   Subtitle2,
   Text,
   makeStyles,
   tokens,
 } from '@fluentui/react-components'
-import { ArrowResetRegular } from '@fluentui/react-icons'
+import { ArrowResetRegular, DeleteRegular, DismissRegular, EditRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -20,48 +19,50 @@ import {
   type KeyboardBinding,
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
+import { ListIconAction } from './ListIconAction'
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
   head: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: tokens.spacingHorizontalM },
+  heading: { margin: 0 },
   groups: {
     display: 'grid',
-    // 340: o que uma linha precisa (nome + tecla + Trocar + Limpar). Com 260
-    // as colunas encolhiam e os botões passavam por cima da tecla.
-    gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
     gap: tokens.spacingHorizontalXL,
   },
-  group: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalXS },
+  column: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL, minWidth: 0 },
+  group: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
   row: {
     display: 'flex',
     alignItems: 'center',
-    gap: tokens.spacingHorizontalS,
-    padding: `${tokens.spacingVerticalXXS} ${tokens.spacingHorizontalS}`,
+    justifyContent: 'space-between',
+    gap: tokens.spacingHorizontalL,
+    padding: tokens.spacingHorizontalM,
     borderRadius: tokens.borderRadiusMedium,
-    background: tokens.colorNeutralBackground2,
+    backgroundColor: tokens.colorNeutralBackground2,
   },
-  name: { minWidth: '72px', flexShrink: 0 },
+  binding: { display: 'grid', gap: tokens.spacingVerticalXXS, minWidth: 0 },
   key: {
-    flex: 1,
-    minWidth: 0,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: tokens.spacingHorizontalS,
+    overflowWrap: 'anywhere',
+    color: tokens.colorNeutralForeground2,
   },
-  // botões pequenos no tamanho do texto (o padrão tem 96 px de mínimo)
-  btn: { minWidth: 'auto', flexShrink: 0 },
-  none: { color: tokens.colorNeutralForeground3 },
+  actions: { display: 'flex', gap: tokens.spacingHorizontalS, flexShrink: 0 },
 })
 
-// Alvos na ordem do backend (`input_desktop::keymap::TARGETS`), por grupo.
-const GROUPS = [
-  { id: 'dpad', targets: ['Up', 'Down', 'Left', 'Right'] },
-  {
+const GROUP_COLUMNS = [
+  [
+    { id: 'dpad', targets: ['Up', 'Down', 'Left', 'Right'] },
+    { id: 'lstick', targets: ['LStickUp', 'LStickDown', 'LStickLeft', 'LStickRight'] },
+    { id: 'rstick', targets: ['RStickUp', 'RStickDown', 'RStickLeft', 'RStickRight'] },
+  ],
+  [{
     id: 'buttons',
     targets: ['B', 'A', 'Y', 'X', 'L1', 'R1', 'L2', 'R2', 'L3', 'R3', 'Start', 'Select'],
-  },
-  { id: 'lstick', targets: ['LStickUp', 'LStickDown', 'LStickLeft', 'LStickRight'] },
-  { id: 'rstick', targets: ['RStickUp', 'RStickDown', 'RStickLeft', 'RStickRight'] },
+  }],
 ] as const
 
 const UI_KEYS = new Set(['Tab', 'F5', 'F12'])
@@ -144,61 +145,63 @@ export function KeyboardBindings() {
   return (
     <div className={s.root}>
       <div className={s.head}>
-        <Subtitle2>{t('keyboard.title')}</Subtitle2>
-        <Button
-          appearance="subtle"
+        <Subtitle2 className={s.heading} as="h2">{t('keyboard.title')}</Subtitle2>
+        <ListIconAction
+          label={t('keyboard.reset')}
           icon={<ArrowResetRegular />}
           disabled={reset.isPending}
           onClick={() => reset.mutate()}
-        >
-          {t('keyboard.reset')}
-        </Button>
+        />
       </div>
       <Caption1>{t('keyboard.intro')}</Caption1>
       <div className={s.groups}>
-        {GROUPS.map((g) => (
-          <div key={g.id} className={s.group}>
-            <Text weight="semibold">{t(`keyboard.groups.${g.id}`)}</Text>
-            {g.targets.map((target) => {
-              const b = byTarget.get(target)
-              const code = b?.code ?? ''
-              return (
-                <div key={target} className={s.row}>
-                  <Text className={s.name}>{targetLabel(target, t)}</Text>
-                  <span className={s.key}>
-                    {capturing === target ? (
-                      <Caption1>{t('keyboard.press')}</Caption1>
-                    ) : code ? (
-                      <Text weight="semibold">{keyLabel(code, t)}</Text>
-                    ) : (
-                      <Caption1 className={s.none}>{t('keyboard.none')}</Caption1>
-                    )}
-                    {b && !b.isDefault && capturing !== target && (
-                      <Badge appearance="tint" size="small" style={{ marginLeft: 8 }}>
-                        {t('keyboard.custom')}
-                      </Badge>
-                    )}
-                  </span>
-                  <Button
-                    className={s.btn}
-                    size="small"
-                    disabled={set.isPending}
-                    onClick={() => setCapturing(capturing === target ? null : target)}
-                  >
-                    {t('keyboard.change')}
-                  </Button>
-                  <Button
-                    className={s.btn}
-                    size="small"
-                    appearance="subtle"
-                    disabled={set.isPending || !code}
-                    onClick={() => set.mutate({ target, code: '' })}
-                  >
-                    {t('keyboard.clear')}
-                  </Button>
-                </div>
-              )
-            })}
+        {GROUP_COLUMNS.map((column) => (
+          <div key={column[0].id} className={s.column}>
+            {column.map((group) => (
+              <section key={group.id} className={s.group} aria-labelledby={`keyboard-group-${group.id}`}>
+                <Subtitle2 className={s.heading} id={`keyboard-group-${group.id}`} as="h3">
+                  {t(`keyboard.groups.${group.id}`)}
+                </Subtitle2>
+                {group.targets.map((target) => {
+                  const binding = byTarget.get(target)
+                  const code = binding?.code ?? ''
+                  const isCapturing = capturing === target
+                  const label = targetLabel(target, t)
+                  return (
+                    <div key={target} className={s.row} role="group" aria-label={label}>
+                      <div className={s.binding}>
+                        <Text weight="semibold">{label}</Text>
+                        <span className={s.key}>
+                          {isCapturing ? (
+                            <Caption1 role="status">{t('keyboard.press')}</Caption1>
+                          ) : (
+                            <Caption1>{code ? keyLabel(code, t) : t('keyboard.none')}</Caption1>
+                          )}
+                          {binding && !binding.isDefault && !isCapturing && (
+                            <Badge appearance="tint" size="small">{t('keyboard.custom')}</Badge>
+                          )}
+                        </span>
+                      </div>
+                      <div className={s.actions}>
+                        <ListIconAction
+                          primary={isCapturing}
+                          label={t(isCapturing ? 'common.cancel' : 'keyboard.change')}
+                          icon={isCapturing ? <DismissRegular /> : <EditRegular />}
+                          disabled={set.isPending}
+                          onClick={() => setCapturing(isCapturing ? null : target)}
+                        />
+                        <ListIconAction
+                          label={t('keyboard.clear')}
+                          icon={<DeleteRegular />}
+                          disabled={set.isPending || !code}
+                          onClick={() => set.mutate({ target, code: '' })}
+                        />
+                      </div>
+                    </div>
+                  )
+                })}
+              </section>
+            ))}
           </div>
         ))}
       </div>

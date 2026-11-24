@@ -455,6 +455,28 @@ const NDS: &[BiosFile] = &[
     },
 ];
 
+const SNES: &[BiosFile] = &[
+    BiosFile {
+        filename: "BS-X.bin",
+        subfolder: None,
+        md5: &[
+            "fed4d8242cfbed61343d53d48432aced", // Japão, rev. 1
+            "4ed9648505ab33a4daec93707b16caba", // tradução DRM-Free do System.dat
+        ],
+        required: false,
+        note: "Firmware BS-X para Satellaview",
+        any_of: &[],
+    },
+    BiosFile {
+        filename: "SufamiTurbo.sfc",
+        subfolder: None,
+        md5: &["d3a44ba7d42a74d3ac58cb9c14c6a5ca"],
+        required: false,
+        note: "Firmware Sufami Turbo para o Mesen2",
+        any_of: &[],
+    },
+];
+
 /// Arquivos de sistema conhecidos pra um `system_id`: a tabela à mão (com
 /// as notas conferidas core a core) e, depois, o que só a gerada tem
 /// (`bios_generated.rs`, de `scripts/gen_bios_table.py` — System.dat +
@@ -480,6 +502,7 @@ pub fn known_systems() -> Vec<&'static str> {
 
 fn handwritten(system_id: &str) -> &'static [BiosFile] {
     match system_id {
+        "snes" => SNES,
         "psx" => PSX,
         "saturn" => SATURN,
         "dreamcast" => DREAMCAST,
@@ -514,6 +537,7 @@ const HANDWRITTEN_SYSTEMS: &[&str] = &[
     "atari8bit",
     "msx",
     "nds",
+    "snes",
 ];
 
 #[cfg(test)]

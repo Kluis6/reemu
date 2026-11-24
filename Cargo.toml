@@ -22,7 +22,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.16"
+version = "0.1.17"
 edition = "2021"
 
 [workspace.dependencies]
@@ -40,6 +40,11 @@ opt-level = 2
 
 [profile.dev.package."*"]
 opt-level = 3
+
+# Objetos incrementais do app_lib otimizado podem deixar símbolos internos ausentes no linker MSVC.
+# O ajuste fica restrito ao pacote desktop em dev.
+[profile.dev.package.reemu-desktop]
+incremental = false
 
 [profile.release]
 lto = "thin"

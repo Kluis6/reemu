@@ -4,8 +4,8 @@ use crate::archive::{is_supported_archive, peek_archive};
 use crate::identity::identify;
 use crate::sector::ext_of;
 use crate::systems::{
-    folder_only_exts, folder_only_flat, system_for_extension, system_from_folder_name,
-    AMBIGUOUS_DISC_EXTS,
+    folder_only_exts, folder_only_flat, system_for_extension, system_for_rom_entry,
+    system_from_folder_name, AMBIGUOUS_DISC_EXTS,
 };
 use domain::library::{Rom, RomRepository};
 use std::path::Path;
@@ -219,9 +219,17 @@ fn recognized(path: &Path, root: &Path) -> bool {
     if is_mame_companion(path, &ext) || is_unplayable_disc_dump(path, root, &ext, false) {
         return false;
     }
-    system_for_extension(&ext).is_some()
+    system_for_rom_file(path, &ext).is_some()
         || is_supported_archive(&ext)
         || system_from_folder_ext(path, root, &ext).is_some()
+}
+
+fn system_for_rom_file(path: &Path, ext: &str) -> Option<&'static str> {
+    if ext != "st" {
+        return system_for_extension(ext);
+    }
+    let file = std::fs::File::open(path).ok()?;
+    system_for_rom_entry(ext, file.metadata().ok()?.len(), file)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -321,7 +329,7 @@ where
                     .or_else(|| crate::disc_sniff::identify(path))
                     .unwrap_or("disc");
                 (sys, None)
-            } else if let Some(sys) = system_for_extension(&ext) {
+            } else if let Some(sys) = system_for_rom_file(path, &ext) {
                 (sys, None)
             } else if let Some(sys) = system_from_folder_ext(path, dir, &ext) {
                 (sys, None)

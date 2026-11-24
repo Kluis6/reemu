@@ -80,29 +80,9 @@ const useStyles = makeStyles({
   },
 })
 
-/**
- * Navegador da pasta de shaders do usuário (RetroArch / RetroBat —
- * `shaders_slang`). Lista os `.slangp` agrupados por subpasta; clicar aplica
- * via `onPick`. A raiz escolhida fica no `localStorage` (conveniência de UI —
- * o shader ativo em si é persistido no banco pelo `set_shader`).
- */
-export function ShaderLibrary({
-  onPick,
-  activePath,
-  busy,
-  settingsFor,
-  fill = false,
-}: {
-  onPick: (path: string) => void
-  activePath: string
-  busy: boolean
-  /** Botão de ajustes no card do shader, igual à lista do ReEmu. */
-  settingsFor?: (path: string) => (() => void) | undefined
-  /** Lista na altura que sobrar no pai (flex em coluna), em vez da fixa. */
-  fill?: boolean
-}) {
+/** A pasta e o download são compartilhados pela barra de abas e pela lista. */
+export function useShaderPack(enabled: boolean) {
   const { t } = useTranslation()
-  const s = useStyles()
   const [root, setRoot] = useState<string>(() => {
     try {
       return localStorage.getItem(ROOT_KEY) ?? ''
@@ -110,10 +90,6 @@ export function ShaderLibrary({
       return ''
     }
   })
-  const [filter, setFilter] = useState('')
-  // grupos abertos (só relevante quando há > 3 grupos e sem filtro — senão
-  // tudo fica aberto).
-  const [openGroups, setOpenGroups] = useState<string[]>([])
   const push = useToastStore((st) => st.push)
   const updateToast = useToastStore((st) => st.update)
   const dlId = useRef<string | null>(null)
@@ -121,6 +97,7 @@ export function ShaderLibrary({
   const pack = useQuery({
     queryKey: ['shader-pack'],
     queryFn: shaderPackStatus,
+    enabled,
     retry: false,
   })
   // Versão nova do pacote no `libretro/slang-shaders` (o backend guarda a
@@ -129,7 +106,7 @@ export function ShaderLibrary({
   const packUpdate = useQuery({
     queryKey: ['shader-pack-update'],
     queryFn: () => shaderPackUpdate(),
-    enabled: !!pack.data?.installed,
+    enabled: enabled && !!pack.data?.installed,
     retry: false,
     staleTime: 60 * 60 * 1000,
   })
@@ -169,6 +146,7 @@ export function ShaderLibrary({
       setRoot(path)
       pack.refetch()
       qc.invalidateQueries({ queryKey: ['shader-pack-update'] })
+      qc.invalidateQueries({ queryKey: ['slangp-dir', path] })
       if (dlId.current)
         updateToast(dlId.current, {
           message: t('shaders.installed'),
@@ -196,6 +174,45 @@ export function ShaderLibrary({
     }
     setRoot(p)
   }
+
+  return {
+    root,
+    chooseRoot,
+    downloading: dl.isPending,
+    download: () => dl.mutate(),
+    // A atualização é do pacote gerenciado pelo ReEmu, identificado pela pasta instalada.
+    updateAvailable: !!packUpdate.data && pack.data?.path === root,
+  }
+}
+
+/**
+ * Navegador da pasta de shaders do usuário (RetroArch / RetroBat —
+ * `shaders_slang`). Lista os `.slangp` agrupados por subpasta.
+ */
+export function ShaderLibrary({
+  pack,
+  onPick,
+  activePath,
+  busy,
+  settingsFor,
+  fill = false,
+}: {
+  pack: ReturnType<typeof useShaderPack>
+  onPick: (path: string) => void
+  activePath: string
+  busy: boolean
+  /** Botão de ajustes no card do shader, igual à lista do ReEmu. */
+  settingsFor?: (path: string) => (() => void) | undefined
+  /** Lista na altura que sobrar no pai (flex em coluna), em vez da fixa. */
+  fill?: boolean
+}) {
+  const { t } = useTranslation()
+  const s = useStyles()
+  const { root, chooseRoot, downloading, download } = pack
+  const [filter, setFilter] = useState('')
+  // grupos abertos (só relevante quando há > 3 grupos e sem filtro — senão
+  // tudo fica aberto).
+  const [openGroups, setOpenGroups] = useState<string[]>([])
 
   const q = useQuery({
     queryKey: ['slangp-dir', root],
@@ -228,9 +245,9 @@ export function ShaderLibrary({
         <div className={s.bar}>
           <DownloadButton
             appearance="primary"
-            label={dl.isPending ? t('shaders.downloading') : t('shaders.download')}
-            busy={dl.isPending}
-            onClick={() => dl.mutate()}
+            label={downloading ? t('shaders.downloading') : t('shaders.download')}
+            busy={downloading}
+            onClick={download}
           />
           <Button icon={<FolderRegular />} onClick={chooseRoot}>
             {t('shaders.chooseFolder')}
@@ -256,17 +273,6 @@ export function ShaderLibrary({
               style={{ flex: 1 }}
             />
             <Caption1>{t('shaders.presets', { count: q.data.length })}</Caption1>
-            {/* só pra pasta do pacote baixado (uma pasta escolhida à mão não
-                tem de onde atualizar) */}
-            {packUpdate.data && pack.data?.path === root && (
-              <Button
-                appearance="primary"
-                disabled={dl.isPending}
-                onClick={() => dl.mutate()}
-              >
-                {dl.isPending ? t('shaders.downloading') : t('shaders.updatePack')}
-              </Button>
-            )}
           </div>
           <div className={mergeClasses(s.list, fill && s.listFill)}>
             {groups.length === 0 && <Caption1>{t('shaders.nothing')}</Caption1>}

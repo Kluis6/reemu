@@ -697,3 +697,81 @@ async fn metadata_rescrape_preserves_independent_local_edits() {
         Some("Meu Mario")
     );
 }
+
+#[tokio::test]
+async fn metadata_review_refresh_keeps_current_until_applying_edits() {
+    use domain::metadata::GameMetadataEdits;
+
+    let pool = mem_db().await;
+    let roms = RomsRepo::new(pool.clone());
+    roms.add(&rom("r1", "AA", "snes")).await.unwrap();
+    let metadata = MetadataRepo::new(pool);
+    metadata
+        .record_match(
+            "r1",
+            &candidate("Current", false),
+            MatchStatus::PendingReview,
+        )
+        .await
+        .unwrap();
+    metadata.resolve_pending("r1", true).await.unwrap();
+    metadata
+        .record_match(
+            "r1",
+            &candidate("Initial", false),
+            MatchStatus::PendingReview,
+        )
+        .await
+        .unwrap();
+
+    let next = candidate("Refreshed", true);
+    assert!(metadata
+        .replace_pending_candidate("r1", &next)
+        .await
+        .unwrap());
+    assert_eq!(
+        metadata
+            .pending_candidate("r1")
+            .await
+            .unwrap()
+            .unwrap()
+            .title,
+        next.title
+    );
+    assert_eq!(
+        metadata.get_metadata("r1").await.unwrap().unwrap().title,
+        "Current"
+    );
+
+    let edits = GameMetadataEdits {
+        description: Some("Edited description".into()),
+        cover_url: Some("data:image/png;base64,iVBORw0KGgo=".into()),
+        ..Default::default()
+    };
+    metadata
+        .resolve_pending_with_edits("r1", true, Some("Edited title"), Some(&edits))
+        .await
+        .unwrap();
+    assert_eq!(
+        metadata.get_metadata("r1").await.unwrap().unwrap().title,
+        next.title
+    );
+    assert_eq!(
+        metadata.get_edits("r1").await.unwrap().unwrap().description,
+        edits.description
+    );
+    assert_eq!(
+        metadata.cover_override("r1").await.unwrap(),
+        edits.cover_url
+    );
+    assert!(metadata.cover_override_ids().await.unwrap().contains("r1"));
+    assert_eq!(
+        roms.get("r1").await.unwrap().unwrap().user_title.as_deref(),
+        Some("Edited title")
+    );
+    assert!(metadata.list_pending().await.unwrap().is_empty());
+    assert!(!metadata
+        .replace_pending_candidate("r1", &next)
+        .await
+        .unwrap());
+}

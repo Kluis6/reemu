@@ -13,6 +13,7 @@ import type { AudioConfig } from './bindings/AudioConfig'
 import type { BezelCatalogItem } from './bindings/BezelCatalogItem'
 import type { BezelProgress } from './bindings/BezelProgress'
 import type { BiosStatus } from './bindings/BiosStatus'
+import type { BiosScanResult } from './bindings/BiosScanResult'
 import type { Cheat } from './bindings/Cheat'
 import type { ControllerDriverSettings } from './bindings/ControllerDriverSettings'
 import type { CoreOption } from './bindings/CoreOption'
@@ -319,6 +320,7 @@ export const restorePreviousCore = (coreId: string) =>
  *  nada (copyright da fabricante); só confere o que já está no disco. */
 export type { BiosStatus }
 export const listBiosStatus = () => invoke<BiosStatus[]>('list_bios_status')
+export const scanBiosFolder = (path: string) => invoke<BiosScanResult>('scan_bios_folder', { path })
 export const importBiosFile = (systemId: string, filename: string, path: string) =>
   invoke<void>('import_bios_file', { systemId, filename, path })
 export const removeBiosFile = (systemId: string, filename: string) =>
@@ -404,8 +406,11 @@ export const getRomMetadata = (romId: string, language?: string) =>
 
 export type { PendingMatch }
 export const listPendingMatches = () => invoke<PendingMatch[]>('list_pending_matches')
-export const resolvePendingMatch = (romId: string, accept: boolean) =>
-  invoke<void>('resolve_pending_match', { romId, accept })
+export const reviewPendingMatch = (romId: string, refresh = false) =>
+  invoke<GameMetadata | null>('review_pending_match', { romId, refresh })
+export const readGameArtworkFile = (path: string) => invoke<string>('read_game_artwork', { path })
+export const resolvePendingMatch = (romId: string, accept: boolean, title?: string, details?: GameMetadataEdits) =>
+  invoke<void>('resolve_pending_match', { romId, accept, title: title ?? null, details: details ?? null })
 
 export type { ScrapeProgress }
 export const metadataScanProgress = () => invoke<ScrapeProgress>('metadata_scan_progress')

@@ -6,6 +6,7 @@
 //! exigem `need_fullpath`, e mesmo os que não exigem preferem um `path` real
 //! pro nome.
 
+use domain::library::{is_sufami_turbo_cart, SUFAMI_TURBO_HEADER_LEN};
 use sevenz_rust2::{ArchiveReader, Password};
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -15,12 +16,12 @@ use std::path::{Path, PathBuf};
 /// aqui, uma ROM zipada é catalogada pelo scan mas não é extraída no load.
 /// (Este crate não depende do `library-scan`; manter as duas em sincronia.)
 const ROM_EXTS: &[&str] = &[
-    "nes", "fds", "unif", "unf", "sfc", "smc", "swc", "fig", "gb", "gbc", "gba", "srl", "n64",
-    "z64", "v64", "ndd", "md", "smd", "gen", "sgd", "sms", "gg", "pce", "sgx", "a26", "a78", "lnx",
-    "ws", "wsc", "ngp", "ngc", "32x", "vb", "col", "int", "nds", "dsi", "ids", "sg", "a52", "atr",
-    "xfd", "atx", "xex", "j64", "jag", "min", "sv", "mx1", "mx2", "vec", "d64", "d71", "d81",
-    "g64", "t64", "x64", "crt", "adf", "adz", "dms", "hdf", "tzx", "z80", "rzx", "szx", "scl",
-    "trd", "cdt", "cpr", "cue", "chd", "iso", "pbp",
+    "nes", "fds", "unif", "unf", "sfc", "smc", "swc", "fig", "bs", "gb", "gbc", "gba", "srl",
+    "n64", "z64", "v64", "ndd", "md", "smd", "gen", "sgd", "sms", "gg", "pce", "sgx", "a26", "a78",
+    "lnx", "ws", "wsc", "ngp", "ngc", "32x", "vb", "col", "int", "nds", "dsi", "ids", "sg", "a52",
+    "atr", "xfd", "atx", "xex", "j64", "jag", "min", "sv", "mx1", "mx2", "vec", "d64", "d71",
+    "d81", "g64", "t64", "x64", "crt", "adf", "adz", "dms", "hdf", "tzx", "z80", "rzx", "szx",
+    "scl", "trd", "cdt", "cpr", "cue", "chd", "iso", "pbp",
 ];
 
 /// ROM extraída pra um arquivo temporário — apagado no `Drop`.
@@ -75,6 +76,18 @@ fn is_rom_entry(name: &str) -> bool {
         .is_some_and(|e| ROM_EXTS.iter().any(|r| e.eq_ignore_ascii_case(r)))
 }
 
+fn is_st_entry(name: &str) -> bool {
+    Path::new(name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("st"))
+}
+
+fn read_sufami_header(size: u64, mut reader: impl Read) -> Option<[u8; SUFAMI_TURBO_HEADER_LEN]> {
+    let mut header = [0; SUFAMI_TURBO_HEADER_LEN];
+    reader.read_exact(&mut header).ok()?;
+    is_sufami_turbo_cart(size, &header).then_some(header)
+}
+
 /// `true` se `path` tem extensão `.zip`/`.7z`.
 pub fn is_archive(path: &Path) -> bool {
     path.extension()
@@ -104,9 +117,15 @@ fn extract_rom_zip(zip_path: &Path, temp_dir: &Path) -> std::io::Result<Extracte
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     let idx = (0..zip.len()).find(|&i| {
-        zip.by_index(i)
-            .map(|e| e.is_file() && e.name().is_ok_and(|n| is_rom_entry(&n)))
-            .unwrap_or(false)
+        let Ok(mut entry) = zip.by_index(i) else {
+            return false;
+        };
+        if !entry.is_file() {
+            return false;
+        }
+        let Ok(name) = entry.name() else { return false };
+        is_rom_entry(&name)
+            || (is_st_entry(&name) && read_sufami_header(entry.size(), &mut entry).is_some())
     });
     let Some(idx) = idx else {
         return Err(std::io::Error::new(
@@ -153,9 +172,19 @@ fn extract_rom_7z(archive_path: &Path, temp_dir: &Path) -> std::io::Result<Extra
 
     let mut result: Option<std::io::Result<(PathBuf, String)>> = None;
     r.for_each_entries(|entry, reader| {
-        if result.is_some() || entry.is_directory() || !is_rom_entry(entry.name()) {
+        if result.is_some() || entry.is_directory() {
             return Ok(true);
         }
+        let header = if is_st_entry(entry.name()) {
+            let Some(header) = read_sufami_header(entry.size(), &mut *reader) else {
+                return Ok(true);
+            };
+            Some(header)
+        } else if is_rom_entry(entry.name()) {
+            None
+        } else {
+            return Ok(true);
+        };
         let ext = Path::new(entry.name())
             .extension()
             .and_then(|e| e.to_str())
@@ -164,6 +193,9 @@ fn extract_rom_7z(archive_path: &Path, temp_dir: &Path) -> std::io::Result<Extra
         let name = entry.name().to_string();
         result = Some((|| -> std::io::Result<(PathBuf, String)> {
             let (out_path, mut out) = create_unique(temp_dir, &ext)?;
+            if let Some(header) = header {
+                out.write_all(&header)?;
+            }
             std::io::copy(reader, &mut out)?;
             out.flush()?;
             Ok((out_path, name))
@@ -218,6 +250,31 @@ mod tests {
         );
 
         let _ = std::fs::remove_file(&zip_path);
+    }
+
+    #[test]
+    fn extracts_sufami_cart_from_7z_without_dropping_the_header() {
+        let mut cart = vec![0; 0x80000];
+        cart[..14].copy_from_slice(b"BANDAI SFC-ADX");
+        let archive = scratch_path("7z");
+        let mut writer = sevenz_rust2::ArchiveWriter::create(&archive).unwrap();
+        writer
+            .push_archive_entry(
+                sevenz_rust2::ArchiveEntry::new_file("Atari.st"),
+                Some(std::io::Cursor::new(vec![0; 0x80000])),
+            )
+            .unwrap();
+        writer
+            .push_archive_entry(
+                sevenz_rust2::ArchiveEntry::new_file("Sufami.ST"),
+                Some(std::io::Cursor::new(&cart)),
+            )
+            .unwrap();
+        drop(writer.finish().unwrap());
+        let extracted = extract_rom(&archive, &std::env::temp_dir()).unwrap();
+        assert_eq!(extracted.entry(), "Sufami.ST");
+        assert_eq!(std::fs::read(extracted.path()).unwrap(), cart);
+        let _ = std::fs::remove_file(&archive);
     }
 
     #[test]

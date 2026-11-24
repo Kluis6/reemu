@@ -6,6 +6,7 @@ import {
   MessageBarBody,
   MessageBarTitle,
   makeStyles,
+  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
 import { getVersion } from "@tauri-apps/api/app";
@@ -56,6 +57,7 @@ import {
 } from "../../lib/uiScale";
 import { useNotificationStore } from "../../stores/useNotificationStore";
 import { useToastStore } from "../../stores/useToastStore";
+import { useModalButtonStyles } from "../../styles/buttons";
 import {
   DesktopTowerRegular,
   InfoRegular,
@@ -147,6 +149,7 @@ export function SettingsSystem({
 }) {
   const { t, i18n } = useTranslation();
   const s = useStyles();
+  const btn = useModalButtonStyles();
   const qc = useQueryClient();
   const push = useToastStore((st) => st.push);
   const [langPref, setLangPref] = useState<LanguagePreference>(
@@ -406,7 +409,11 @@ export function SettingsSystem({
             <Caption1 as="p" block style={{ margin: 0 }}>
               {t("system.diagnosticsHint")}
             </Caption1>
-            <Button disabled={diagnostics.isPending} onClick={() => diagnostics.mutate()}>
+            <Button
+              className={mergeClasses(btn.panel, btn.block)}
+              disabled={diagnostics.isPending}
+              onClick={() => diagnostics.mutate()}
+            >
               {t("system.diagnostics")}
             </Button>
           </div>

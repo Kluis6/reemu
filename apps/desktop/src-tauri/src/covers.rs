@@ -19,8 +19,10 @@
 //! frontend cai no placeholder de iniciais, e tenta de novo normalmente na
 //! próxima vez que o card renderizar (ex.: reabrir o app já com rede).
 
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use domain::library::RomRepository;
 use domain::metadata::MetadataRepository;
+use std::{io::Read, path::Path};
 use tauri::http;
 use tauri::{Manager, Runtime, UriSchemeContext, UriSchemeResponder};
 
@@ -67,12 +69,66 @@ fn not_found() -> http::Response<Vec<u8>> {
 }
 
 fn ok_png(bytes: Vec<u8>) -> http::Response<Vec<u8>> {
+    artwork_response("image/png", bytes)
+}
+
+fn artwork_response(content_type: &str, bytes: Vec<u8>) -> http::Response<Vec<u8>> {
     http::Response::builder()
         .status(200)
-        .header("Content-Type", "image/png")
+        .header("Content-Type", content_type)
+        .header("X-Content-Type-Options", "nosniff")
         .header("Cache-Control", "no-cache")
         .body(bytes)
         .unwrap()
+}
+
+/// Imagens locais persistidas com a revisão. Aceita só formatos raster e
+/// limita o tamanho antes de decodificar.
+const MAX_ARTWORK_BYTES: usize = 4 * 1024 * 1024;
+
+pub(crate) fn uploaded_artwork(url: &str) -> Option<(&str, Vec<u8>)> {
+    let (mime, data) = url.strip_prefix("data:")?.split_once(";base64,")?;
+    if data.len() > MAX_ARTWORK_BYTES.div_ceil(3) * 4 {
+        return None;
+    }
+    let bytes = STANDARD.decode(data).ok()?;
+    (bytes.len() <= MAX_ARTWORK_BYTES && artwork_mime(&bytes) == Some(mime))
+        .then_some((mime, bytes))
+}
+
+fn artwork_mime(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("image/png")
+    } else if bytes.starts_with(b"\xff\xd8\xff") {
+        Some("image/jpeg")
+    } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+        Some("image/webp")
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") {
+        Some("image/gif")
+    } else {
+        None
+    }
+}
+
+pub(crate) fn read_artwork_file(path: &Path) -> Result<String, crate::app_error::AppError> {
+    let invalid = || {
+        crate::app_error::AppError::new(
+            crate::app_error::ErrorCode::Corrupt,
+            "unsupported artwork file",
+        )
+    };
+    let meta = std::fs::metadata(path)?;
+    if !meta.is_file() || meta.len() > MAX_ARTWORK_BYTES as u64 {
+        return Err(invalid());
+    }
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?
+        .take(MAX_ARTWORK_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)?;
+    let mime = artwork_mime(&bytes)
+        .filter(|_| bytes.len() <= MAX_ARTWORK_BYTES)
+        .ok_or_else(invalid)?;
+    Ok(format!("data:{mime};base64,{}", STANDARD.encode(bytes)))
 }
 
 /// URL da capa de uma ROM pro `<img>`. No Windows o WebView2 não aceita
@@ -114,20 +170,23 @@ async fn resolve<R: Runtime>(app: &tauri::AppHandle<R>, rom_id: &str) -> http::R
         return not_found();
     };
 
+    // Prioridade: capa escrapeada (se o jogo já passou pelo scraping e
+    // trouxe uma) — senão a URL padrão calculada pela convenção da libretro.
+    let metadata = db::MetadataRepo::new(pool);
+    let edited_cover = metadata.cover_override(rom_id).await.ok().flatten();
+    if let Some(url) = edited_cover
+        .as_deref()
+        .filter(|url| url.starts_with("data:"))
+    {
+        return uploaded_artwork(url)
+            .map(|(mime, bytes)| artwork_response(mime, bytes))
+            .unwrap_or_else(not_found);
+    }
+
     let path = cache_path(&state.covers_dir, rom_id);
     if let Ok(bytes) = std::fs::read(&path) {
         return ok_png(bytes);
     }
-
-    // Prioridade: capa escrapeada (se o jogo já passou pelo scraping e
-    // trouxe uma) — senão a URL padrão calculada pela convenção da libretro.
-    let metadata = db::MetadataRepo::new(pool);
-    let edited_cover = metadata
-        .get_edits(rom_id)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|edit| edit.cover_url);
     let scraped_cover = match edited_cover {
         Some(edited) => (!edited.trim().is_empty()).then(|| edited.trim().to_owned()),
         None => metadata
@@ -172,6 +231,21 @@ async fn resolve<R: Runtime>(app: &tauri::AppHandle<R>, rom_id: &str) -> http::R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uploaded_artwork_checks_type_and_length() {
+        let png = b"\x89PNG\r\n\x1a\n";
+        let payload = STANDARD.encode(png);
+        let url = format!("data:image/png;base64,{payload}");
+        assert_eq!(uploaded_artwork(&url), Some(("image/png", png.to_vec())));
+        assert!(uploaded_artwork(&format!("data:image/gif;base64,{payload}")).is_none());
+        assert!(uploaded_artwork(&format!("data:image/svg+xml;base64,{payload}")).is_none());
+        assert!(uploaded_artwork("data:image/png;base64,invalid!").is_none());
+        let mut large = png.to_vec();
+        large.resize(4 * 1024 * 1024 + 1, 0);
+        let url = format!("data:image/png;base64,{}", STANDARD.encode(large));
+        assert!(uploaded_artwork(&url).is_none());
+    }
 
     #[test]
     fn cache_path_is_stable_per_rom() {

@@ -192,6 +192,7 @@ pub async fn get_rom_metadata(
 pub struct PendingMatchDto {
     pub rom_id: String,
     pub file_stem: String,
+    pub provider: String,
     pub title: String,
     pub description: Option<String>,
     pub cover_url: Option<String>,
@@ -212,6 +213,7 @@ pub async fn list_pending_matches(
         .map(|p| PendingMatchDto {
             rom_id: p.rom_id,
             file_stem: p.file_stem,
+            provider: p.provider,
             title: p.candidate.title,
             description: p.candidate.description,
             cover_url: p.candidate.cover_url,
@@ -222,13 +224,69 @@ pub async fn list_pending_matches(
 }
 
 #[tauri::command]
+pub async fn review_pending_match(
+    state: State<'_, AppState>,
+    rom_id: String,
+    refresh: bool,
+) -> Result<Option<GameMetadataDto>, AppError> {
+    let pool = pool(&state)?;
+    let repo = db::MetadataRepo::new(pool.clone());
+    let stored = repo
+        .pending_candidate(&rom_id)
+        .await
+        .map_err(AppError::from)?
+        .ok_or("correspondência pendente indisponível")?;
+    let candidate = if refresh {
+        let cfg = metadata_config(&pool).await?;
+        let Some(candidate) = scraping::preview_rom(&pool, cfg, &rom_id).await? else {
+            return Ok(None);
+        };
+        if !repo
+            .replace_pending_candidate(&rom_id, &candidate)
+            .await
+            .map_err(AppError::from)?
+        {
+            return Err("correspondência pendente indisponível".into());
+        }
+        candidate
+    } else {
+        stored
+    };
+    Ok(Some(
+        GameMetadata {
+            rom_id,
+            title: candidate.title,
+            description: candidate.description,
+            cover_url: candidate.cover_url,
+            release_date: candidate.release_date,
+            genre: candidate.genre,
+            provider_source: Some(candidate.provider),
+            details: candidate.details,
+        }
+        .into(),
+    ))
+}
+
+#[tauri::command]
+pub async fn read_game_artwork(path: String) -> Result<String, AppError> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::covers::read_artwork_file(std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn resolve_pending_match(
     state: State<'_, AppState>,
     rom_id: String,
     accept: bool,
+    title: Option<String>,
+    details: Option<GameMetadataEdits>,
 ) -> Result<(), AppError> {
+    super::library::validate_metadata_edits(details.as_ref())?;
     db::MetadataRepo::new(pool(&state)?)
-        .resolve_pending(&rom_id, accept)
+        .resolve_pending_with_edits(&rom_id, accept, title.as_deref(), details.as_ref())
         .await
         .map_err(AppError::from)?;
     // Aceito = pode ter trazido uma `cover_url` nova — descarta o cache pra

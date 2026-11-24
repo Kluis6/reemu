@@ -34,6 +34,20 @@ pub fn list_bios_status(state: State<'_, AppState>) -> Vec<BiosStatusDto> {
         .collect()
 }
 
+#[tauri::command]
+pub async fn scan_bios_folder(
+    state: State<'_, AppState>,
+    path: String,
+) -> Result<crate::bios::BiosScanResult, AppError> {
+    let system_dir = state.system_dir.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::bios::scan_bios_folder(&system_dir, std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(AppError::from)
+}
+
 /// Copia `path` (escolhido no file picker do frontend) pro lugar/nome
 /// esperado dentro de `<dados>/system`.
 #[tauri::command]

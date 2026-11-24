@@ -40,11 +40,13 @@ Fontes oficiais, nesta ordem de preferência:
 - **wgpu**: <https://docs.rs/wgpu> (a versão usada está no `Cargo.lock`) e
   <https://www.w3.org/TR/webgpu/> para a semântica.
 - **Windows (WGL, DXGI, Direct3D)** — Microsoft Learn para o contrato da API.
+  Em todo trabalho que envolva DirectX 12, consulte o
+  [guia oficial de programação do Direct3D 12](https://learn.microsoft.com/en-us/windows/win32/direct3d12/directx-12-programming-guide)
+  antes de planejar, implementar ou revisar mudanças.
   Em decisões sobre Direct3D por core, confira também os cabeçalhos oficiais
   do libretro e a documentação ou o código upstream da versão do core.
   Registre a fonte consultada e a versão da interface usada.
   [Direct3D 11](https://learn.microsoft.com/en-us/windows/win32/direct3d11/atoc-dx-graphics-direct3d-11) ·
-  [Direct3D 12](https://learn.microsoft.com/en-us/windows/win32/direct3d12/direct3d-12-programming-guide) ·
   [Referências do ReEmu](docs/ai-context/REFERENCES.md#direct3d-11-e-12-no-windows).
 - **libretro (HW render, `retro_hw_render_callback`, interface Vulkan)**:
   `libretro.h` e `libretro_vulkan.h` do repositório oficial

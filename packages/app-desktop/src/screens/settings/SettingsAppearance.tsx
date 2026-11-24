@@ -22,6 +22,7 @@ import {
   ColorRegular,
   ImageAddRegular,
   ImageRegular,
+  MoviesAndTvRegular,
   WeatherMoonFilled,
   WeatherSunnyFilled,
 } from "@fluentui/react-icons";
@@ -39,7 +40,7 @@ import {
 import { useWallpaperStore, type WallpaperScope } from "../../stores/useWallpaperStore";
 import { REEMU_ACTION } from "../../hooks/useMenuNav";
 import { errorToast } from "../../lib/toast";
-import { WALLPAPER_IDS, wallpaperPosterUrl, type WallpaperId } from "../../lib/wallpapers";
+import { CAN_ANIMATE_WALLPAPER, WALLPAPER_IDS, wallpaperPosterUrl, type WallpaperId } from "../../lib/wallpapers";
 import { DIALOG_FADE_ONLY } from "../../lib/motion";
 import { useModalButtonStyles } from "../../styles/buttons";
 import * as M from "../../styles/metrics";
@@ -155,6 +156,7 @@ const useStyles = makeStyles({
     marginBottom: `-${M.PAGE_PAD_B - M.SAFE_Y}px`,
   },
   sectionFill: { flexGrow: 1, minHeight: 0 },
+  motionSetting: { width: "min(100%, 420px)", height: "auto", flexShrink: 0 },
   gridFill: { flexGrow: 1, gridAutoRows: "minmax(150px, 1fr)" },
   grid: {
     display: "grid",
@@ -470,6 +472,8 @@ export function SettingsAppearance({
   const tab = section === "papel-de-parede" ? "wallpaper" : "theme";
   const wallScope = useWallpaperStore((st) => st.scope);
   const setWallScope = useWallpaperStore((st) => st.setScope);
+  const backgroundMotion = useWallpaperStore((st) => st.themeBackgroundMotion);
+  const setBackgroundMotion = useWallpaperStore((st) => st.setThemeBackgroundMotion);
   const {
     selection,
     customDraft,
@@ -565,6 +569,12 @@ export function SettingsAppearance({
             title: t("appearance.wallpaper.title"),
             description: t("appearance.wallpaper.description"),
           },
+          {
+            to: "protecao-de-tela",
+            icon: <MoviesAndTvRegular />,
+            title: t("appearance.screensaver.title"),
+            description: t("appearance.screensaver.description"),
+          },
         ]}
       />
     );
@@ -574,6 +584,19 @@ export function SettingsAppearance({
 
       {tab === "theme" && (
         <div className={mergeClasses(s.section, s.sectionFill)}>
+          <SelectBlock
+            className={s.motionSetting}
+            label={t("appearance.theme.backgroundMotion")}
+            description={t(CAN_ANIMATE_WALLPAPER ? "appearance.theme.backgroundMotionHint" : "appearance.theme.backgroundStaticPlatform")}
+            value={CAN_ANIMATE_WALLPAPER ? backgroundMotion : "static"}
+            options={[
+              { value: "animated", label: t("appearance.theme.backgroundAnimated") },
+              { value: "static", label: t("appearance.theme.backgroundStatic") },
+            ]}
+            disabled={!CAN_ANIMATE_WALLPAPER}
+            onChange={(value) => setBackgroundMotion(value === "static" ? "static" : "animated")}
+            compact
+          />
           <div
             className={mergeClasses(s.grid, s.gridFill)}
             aria-label={t("appearance.theme.title")}

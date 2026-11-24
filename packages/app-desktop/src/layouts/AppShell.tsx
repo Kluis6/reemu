@@ -22,6 +22,8 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatedBackground } from "../components/AnimatedBackground";
+import { Screensaver } from "../components/Screensaver";
+import { useScreensaver } from "../hooks/useScreensaver";
 import { ButtonHints } from "../components/ButtonHints";
 import { useWallpaperStore } from "../stores/useWallpaperStore";
 import { Clock } from "../components/Clock";
@@ -114,6 +116,7 @@ export function AppShell() {
   const { pathname } = useLocation();
   const { on: fullscreen, toggle: toggleFullscreen } = useFullscreen();
   const atRoot = pathname === "/";
+  const screensaver = useScreensaver(pathname);
   const wallpaperScope = useWallpaperStore((st) => st.scope);
   const [powerOpen, setPowerOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -154,9 +157,11 @@ export function AppShell() {
       {/* Papel de parede: só na tela inicial ou em todas as telas (escolha em
           Aparência › Papel de parede); nunca na página do jogo, que tem a
           arte do jogo no hero. */}
-      <AnimatedBackground
-        showWallpaper={wallpaperScope === "all" ? !pathname.startsWith("/rom/") : atRoot}
-      />
+      {screensaver ? <Screensaver /> : (
+        <AnimatedBackground
+          showWallpaper={wallpaperScope === "all" ? !pathname.startsWith("/rom/") : atRoot}
+        />
+      )}
       <nav className={s.rail} data-nav-rail>
         {/* Avatar: abre o perfil num drawer à esquerda (era um menu suspenso;
             pedido do usuário, 2026-10-29). `Button` do Fluent sem fundo
@@ -284,7 +289,7 @@ export function AppShell() {
               onClick={() => void toggleFullscreen()}
             />
           </Tooltip>
-          <span className={pathname.startsWith("/rom/") ? s.topbarOnArt : s.topbarStatus}>
+          <span className={mergeClasses("reemu-topbar-status", pathname.startsWith("/rom/") && s.topbarOnArt)}>
             <GamepadStatus />
             <NetworkStatus />
             <Clock />

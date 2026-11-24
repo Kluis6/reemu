@@ -75,6 +75,48 @@ async fn scans_recursively_infers_system_and_dedups() {
 }
 
 #[tokio::test]
+async fn snes_expansions_scan_without_mistaking_atari_disks_for_roms() {
+    let dir = scratch_dir();
+    let mut cart = vec![0; 0x80000];
+    cart[..14].copy_from_slice(b"BANDAI SFC-ADX");
+    write(&dir, "Broadcast.bs", b"fixture");
+    write(&dir, "Cartridge.st", &cart);
+    write(&dir, "Atari.st", &vec![0; 0x80000]);
+    let packed = dir.join("Cartridge.zip");
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&packed).unwrap());
+    let options = zip::write::SimpleFileOptions::default();
+    zip.start_file("Atari.st", options).unwrap();
+    zip.write_all(&vec![0; 0x80000]).unwrap();
+    zip.start_file("folder/Cartridge.ST", options).unwrap();
+    zip.write_all(&cart).unwrap();
+    zip.finish().unwrap();
+
+    let mut sevenz = sevenz_rust2::ArchiveWriter::create(dir.join("Cartridge.7z")).unwrap();
+    sevenz
+        .push_archive_entry(
+            sevenz_rust2::ArchiveEntry::new_file("folder/Cartridge.st"),
+            Some(std::io::Cursor::new(&cart)),
+        )
+        .unwrap();
+    drop(sevenz.finish().unwrap());
+
+    let repo = db::RomsRepo::new(db::connect_in_memory().await.unwrap());
+    let report = scan_into(&repo, &dir, 1, |_| {}).await.unwrap();
+    assert_eq!(report.added, 4);
+    let games = repo.list_by_system("snes").await.unwrap();
+    assert_eq!(games.len(), 4);
+    for (archive, entry) in [
+        ("Cartridge.zip", "Cartridge.ST"),
+        ("Cartridge.7z", "Cartridge.st"),
+    ] {
+        assert!(games.iter().any(|rom| {
+            rom.file_path.ends_with(archive) && rom.ident_name.as_deref() == Some(entry)
+        }));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn rom_inside_zip_is_catalogued_by_inner_extension_and_hash() {
     let dir = scratch_dir();
     let rom_bytes = b"n64-rom-payload-inside-zip";

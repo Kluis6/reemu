@@ -14,11 +14,18 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    rowGap: tokens.spacingVerticalM,
     textAlign: 'center',
     paddingBlock: '72px',
     paddingInline: tokens.spacingHorizontalXXL,
-    color: tokens.colorNeutralForeground3,
+  },
+  content: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    rowGap: tokens.spacingVerticalM,
+    boxSizing: 'border-box',
+    maxWidth: 'min(100%, 42rem)',
+    color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1})`,
   },
   icon: { fontSize: '44px', lineHeight: 1, opacity: 0.5 },
   // `--reemuBrandText`, não `colorBrandForeground1`: o tom padrão de marca
@@ -26,7 +33,6 @@ const useStyles = makeStyles({
   // `styles/themes.ts::ReEmuTokens.reemuBrandText`).
   art: { color: "var(--reemuBrandText)", opacity: 0.85 },
   artAccent: { opacity: 1 },
-  title: { color: tokens.colorNeutralForeground1 },
   action: { marginTop: tokens.spacingVerticalS },
   // `size="large"` (página inicial sem jogos, pedido do usuário): no meio da
   // altura útil da página, ilustração e textos maiores. A altura útil é a da
@@ -35,11 +41,9 @@ const useStyles = makeStyles({
   rootLg: {
     minHeight: 'calc(100vh - var(--reemuPageTop, 116px) - 100px - var(--reemuEmptyOffset, 0px))',
     justifyContent: 'center',
-    // título e frase juntos (pedido do usuário); o ícone e o botão têm a
-    // margem própria
-    rowGap: tokens.spacingVerticalXS,
     paddingBlock: 0,
   },
+  contentLg: { rowGap: tokens.spacingVerticalXS },
   artLg: {
     fontSize: '160px',
     // janela baixa (ex.: 1024×600): ícone menor pro bloco caber sem rolar
@@ -57,6 +61,7 @@ const useStyles = makeStyles({
     lineHeight: tokens.lineHeightHero800,
     fontWeight: tokens.fontWeightSemibold,
   },
+  description: { textWrap: 'balance' },
   textLg: { fontSize: tokens.fontSizeBase500, lineHeight: tokens.lineHeightBase500 },
   actionLg: { marginTop: tokens.spacingVerticalXL },
   loading: {
@@ -79,6 +84,7 @@ export function EmptyState({
   children,
   action,
   size = 'medium',
+  onCard = false,
 }: {
   /** Emoji/ícone pequeno (fallback). Ignorado se `art` for dado. */
   icon?: ReactNode
@@ -93,19 +99,24 @@ export function EmptyState({
   action?: ReactNode
   /** `large`: ocupa a página, no meio, com tudo maior (página inicial vazia). */
   size?: 'medium' | 'large'
+  onCard?: boolean
 }) {
   const s = useStyles()
   const lg = size === 'large'
   return (
     <div className={mergeClasses(s.root, lg && s.rootLg)}>
-      <div className={mergeClasses(art ? s.art : s.icon, artAccent && s.artAccent, lg && s.artLg)} aria-hidden>
-        {art ?? icon}
+      <div className={mergeClasses(s.content, lg && s.contentLg, !onCard && 'reemu-on-wallpaper')}>
+        {(art || icon) && (
+          <div className={mergeClasses(art ? s.art : s.icon, artAccent && s.artAccent, lg && s.artLg)} aria-hidden>
+            {art ?? icon}
+          </div>
+        )}
+        <Subtitle1 as="h2" align="center" className={lg ? s.titleLg : undefined}>
+          {title}
+        </Subtitle1>
+        {children && <Text align="center" className={mergeClasses(s.description, lg && s.textLg)}>{children}</Text>}
+        {action && <div className={mergeClasses(s.action, lg && s.actionLg)}>{action}</div>}
       </div>
-      <Subtitle1 as="h2" className={mergeClasses(s.title, lg && s.titleLg)}>
-        {title}
-      </Subtitle1>
-      {children && <Text className={lg ? s.textLg : undefined}>{children}</Text>}
-      {action && <div className={mergeClasses(s.action, lg && s.actionLg)}>{action}</div>}
     </div>
   )
 }

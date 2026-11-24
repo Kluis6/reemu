@@ -38,8 +38,9 @@ cargo test --workspace
 
 As regras estão em [`CLAUDE.md`](CLAUDE.md). As principais:
 
-- Decisões sobre OpenGL, Vulkan, wgpu ou shaders seguem a documentação oficial, e
-  o pull request cita qual foi usada.
+- Decisões sobre OpenGL, Vulkan, Direct3D, wgpu ou shaders seguem a documentação
+  oficial, e o pull request cita qual foi usada. Em todo trabalho com DirectX 12,
+  comece pelo [guia oficial de programação do Direct3D 12](https://learn.microsoft.com/en-us/windows/win32/direct3d12/directx-12-programming-guide).
 - Texto da interface passa por `t('chave')`, em pt-BR, en e es.
 - Não envie chaves, senhas nem tokens, e não copie código com licença incompatível.
 

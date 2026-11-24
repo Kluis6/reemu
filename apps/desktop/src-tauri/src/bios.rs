@@ -5,7 +5,8 @@
 
 use domain::bios::{bios_files_for_system, known_systems, BiosFile};
 use md5::{Digest, Md5};
-use std::io;
+use std::collections::{BTreeSet, HashMap};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 pub struct BiosStatus {
@@ -39,6 +40,160 @@ fn md5_hex(path: &Path) -> Option<String> {
     let mut hasher = Md5::new();
     hasher.update(&bytes);
     Some(format!("{:x}", hasher.finalize()))
+}
+
+#[derive(Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export))]
+pub struct BiosScanResult {
+    pub imported: usize,
+    pub skipped: usize,
+    pub unreadable: usize,
+    pub review: Vec<String>,
+}
+
+// Cobre os firmwares conhecidos de hash fixo (incluindo PS2 e 64DD).
+// Evita ler imagens grandes quando a pasta contém também jogos.
+const BIOS_SCAN_MAX_BYTES: u64 = 16 * 1024 * 1024;
+
+fn read_scan_candidate(path: &Path, data: &mut Vec<u8>) -> io::Result<bool> {
+    let file = std::fs::File::open(path)?;
+    if file.metadata()?.len() > BIOS_SCAN_MAX_BYTES {
+        return Ok(false);
+    }
+    data.clear();
+    file.take(BIOS_SCAN_MAX_BYTES + 1).read_to_end(data)?;
+    Ok(!data.is_empty() && data.len() as u64 <= BIOS_SCAN_MAX_BYTES)
+}
+
+/// Procura BIOS na pasta selecionada e copia somente as correspondências
+/// por MD5 para os caminhos publicados no catálogo.
+pub fn scan_bios_folder(system_dir: &Path, folder: &Path) -> io::Result<BiosScanResult> {
+    scan_bios(
+        system_dir,
+        folder,
+        known_systems().into_iter().flat_map(bios_files_for_system),
+    )
+}
+
+fn scan_bios(
+    system_dir: &Path,
+    folder: &Path,
+    bios_files: impl IntoIterator<Item = BiosFile>,
+) -> io::Result<BiosScanResult> {
+    if !std::fs::metadata(folder)?.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Selecione uma pasta de BIOS",
+        ));
+    }
+
+    let mut by_hash: HashMap<&str, Vec<PathBuf>> = HashMap::new();
+    let mut known_names = BTreeSet::new();
+    for entry in bios_files {
+        let dir = dir_for(system_dir, &entry);
+        for (name, hash) in entry.any_of.iter().copied() {
+            known_names.insert(name.to_ascii_lowercase());
+            by_hash.entry(hash).or_default().push(dir.join(name));
+        }
+        if entry.any_of.is_empty() {
+            known_names.insert(entry.filename.to_ascii_lowercase());
+            for hash in entry.md5 {
+                by_hash
+                    .entry(hash)
+                    .or_default()
+                    .push(dir.join(entry.filename));
+            }
+        }
+    }
+
+    let mut result = BiosScanResult::default();
+    let mut review = BTreeSet::new();
+    let mut candidates = HashMap::new();
+    let mut data = Vec::new();
+    for entry in walkdir::WalkDir::new(folder).sort_by_file_name() {
+        let entry = match entry {
+            Ok(entry) if entry.file_type().is_file() => entry,
+            Ok(_) => continue,
+            Err(_) => {
+                result.unreadable += 1;
+                continue;
+            }
+        };
+        let name = entry.file_name().to_string_lossy();
+        let loaded = match read_scan_candidate(entry.path(), &mut data) {
+            Ok(loaded) => loaded,
+            Err(_) => {
+                result.unreadable += 1;
+                continue;
+            }
+        };
+        let hash = loaded.then(|| format!("{:x}", Md5::digest(&data)));
+        let Some((&hash, targets)) = hash.as_deref().and_then(|h| by_hash.get_key_value(h)) else {
+            if known_names.contains(&name.to_ascii_lowercase()) {
+                review.insert(name.into_owned());
+            }
+            continue;
+        };
+        let same_name = |p: &Path| {
+            p.file_name()
+                .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(&name))
+        };
+        for target in targets {
+            // Nomes alternativos com o mesmo hash podem atender cores diferentes.
+            // Só prioriza o nome de origem se houver conflito entre arquivo e pasta.
+            if !same_name(target)
+                && targets
+                    .iter()
+                    .any(|p| same_name(p) && (p.starts_with(target) || target.starts_with(p)))
+            {
+                continue;
+            }
+            candidates
+                .entry(target)
+                .or_insert_with(|| (entry.path().to_path_buf(), hash));
+        }
+    }
+
+    // SGB1.sfc e SGB2.sfc podem ser arquivos ou pastas em cores diferentes.
+    // Quando ambos aparecem como candidatos, dá precedência ao arquivo.
+    let mut candidates: Vec<_> = candidates.into_iter().collect();
+    candidates.sort_by(|a, b| a.0.cmp(b.0));
+    for (dst, (src, hash)) in candidates {
+        let copied = (|| -> io::Result<bool> {
+            if dst.symlink_metadata().is_ok() {
+                return Ok(false);
+            }
+            if !read_scan_candidate(&src, &mut data)? || format!("{:x}", Md5::digest(&data)) != hash
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Arquivo mudou durante a busca de BIOS",
+                ));
+            }
+            let parent = dst.parent().expect("destino de BIOS tem pasta pai");
+            std::fs::create_dir_all(parent)?;
+            let mut staged = tempfile::NamedTempFile::new_in(parent)?;
+            staged.write_all(&data)?;
+            staged.persist_noclobber(dst).map_err(|e| e.error)?;
+            Ok(true)
+        })();
+        match copied {
+            Ok(true) => result.imported += 1,
+            Ok(false) => result.skipped += 1,
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::AlreadyExists | io::ErrorKind::NotADirectory
+                ) =>
+            {
+                result.skipped += 1;
+            }
+            Err(_) => result.unreadable += 1,
+        }
+    }
+    result.review = review.into_iter().collect();
+    Ok(result)
 }
 
 /// Arquivos soltos na pasta de uma entrada "qualquer um destes".
@@ -245,5 +400,99 @@ mod tests {
         remove_bios_file(&dir, "ps2", "*").unwrap();
         assert!(super::files_in(&dir.join("pcsx2/bios")).is_empty());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn scan_fills_nonconflicting_firmware_names_for_different_cores() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        let system = temp.path().join("system");
+        std::fs::create_dir_all(&source).unwrap();
+        std::fs::write(source.join("bios.bin"), b"abc").unwrap();
+        let bios = BiosFile {
+            filename: "bios.bin",
+            subfolder: None,
+            md5: &["900150983cd24fb0d6963f7d28e17f72"],
+            required: false,
+            note: "",
+            any_of: &[],
+        };
+        let result = scan_bios(
+            &system,
+            &source,
+            [
+                bios,
+                BiosFile {
+                    filename: "other.sfc",
+                    ..bios
+                },
+                BiosFile {
+                    filename: "program.rom",
+                    subfolder: Some("bios.bin"),
+                    ..bios
+                },
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            (result.imported, result.skipped, result.unreadable),
+            (2, 0, 0)
+        );
+        for name in ["bios.bin", "other.sfc"] {
+            assert_eq!(std::fs::read(system.join(name)).unwrap(), b"abc");
+        }
+    }
+
+    #[test]
+    fn scan_matches_renamed_files_marks_known_names_for_review_and_preserves_targets() {
+        let temp = tempfile::tempdir().unwrap();
+        let source = temp.path().join("source");
+        let system = temp.path().join("system");
+        std::fs::create_dir_all(source.join("nested")).unwrap();
+        std::fs::create_dir_all(&system).unwrap();
+        std::fs::write(source.join("nested/renamed.img"), b"abc").unwrap();
+        std::fs::write(source.join("bios.zip"), b"not verified").unwrap();
+        std::fs::write(source.join("wrong.bin"), b"incorrect hash").unwrap();
+        std::fs::write(source.join("rename-again.bin"), b"hello").unwrap();
+        std::fs::write(system.join("wrong.bin"), b"preserve this file").unwrap();
+
+        let bios = BiosFile {
+            filename: "expected.bin",
+            subfolder: Some("core"),
+            md5: &["900150983cd24fb0d6963f7d28e17f72"], // abc
+            required: false,
+            note: "",
+            any_of: &[],
+        };
+        let catalog = [
+            bios,
+            BiosFile {
+                filename: "bios.zip",
+                md5: &[],
+                ..bios
+            },
+            BiosFile {
+                filename: "wrong.bin",
+                subfolder: None,
+                md5: &["5d41402abc4b2a76b9719d911017c592"], // hello
+                ..bios
+            },
+        ];
+        let result = scan_bios(&system, &source, catalog).unwrap();
+        assert_eq!(result.imported, 1);
+        assert_eq!(result.skipped, 1);
+        assert_eq!(result.unreadable, 0);
+        assert_eq!(result.review, ["bios.zip", "wrong.bin"]);
+        assert_eq!(
+            std::fs::read(system.join("core/expected.bin")).unwrap(),
+            b"abc"
+        );
+        assert_eq!(
+            std::fs::read(system.join("wrong.bin")).unwrap(),
+            b"preserve this file"
+        );
+
+        let repeated = scan_bios(&system, &source, catalog).unwrap();
+        assert_eq!((repeated.imported, repeated.skipped), (0, 2));
     }
 }

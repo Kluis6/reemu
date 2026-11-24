@@ -933,19 +933,49 @@ async fn scrape_one_with(
     rom_id: &str,
     providers: &Providers,
 ) -> Result<Outcome, String> {
-    let repo = db::MetadataRepo::new(pool.clone());
-    let rom = db::RomsRepo::new(pool)
+    let rom = load_scrape_rom(&pool, rom_id).await?;
+    let (stem, candidate) = lookup_rom(&rom, cfg, providers).await?;
+    record_result(
+        &db::MetadataRepo::new(pool),
+        rom_id,
+        &stem,
+        candidate,
+        covers,
+    )
+    .await
+}
+
+pub async fn preview_rom(
+    pool: &db::Db,
+    cfg: MetadataConfig,
+    rom_id: &str,
+) -> Result<Option<ScrapeCandidate>, String> {
+    let rom = load_scrape_rom(pool, rom_id).await?;
+    lookup_rom(&rom, cfg, &Providers::live())
+        .await
+        .map(|(_, candidate)| candidate)
+}
+
+async fn load_scrape_rom(pool: &db::Db, rom_id: &str) -> Result<domain::library::Rom, String> {
+    db::RomsRepo::new(pool.clone())
         .get(rom_id)
         .await
         .map_err(|e| e.to_string())?
-        .ok_or("jogo não encontrado na biblioteca")?;
+        .ok_or_else(|| "jogo não encontrado na biblioteca".into())
+}
+
+async fn lookup_rom(
+    rom: &domain::library::Rom,
+    cfg: MetadataConfig,
+    providers: &Providers,
+) -> Result<(String, Option<ScrapeCandidate>), String> {
     let client = reqwest::Client::builder()
         .user_agent("reemu/0.1")
         .timeout(std::time::Duration::from_secs(20))
         .build()
         .map_err(net_error)?;
-    let (hash, stem) = hash_and_stem(&rom);
-    let q = rom_query(&rom, &hash, &stem);
+    let (hash, stem) = hash_and_stem(rom);
+    let q = rom_query(rom, &hash, &stem);
     let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
     let mut result = query_screenscraper(&client, &cfg, &q, &providers.screenscraper).await;
     let ss_refused = matches!(&result, Err(e) if e == ERR_SS_DEV_LOGIN);
@@ -963,7 +993,7 @@ async fn scrape_one_with(
             Err(error) => return Err(fallback.err().unwrap_or(error)),
         },
     };
-    record_result(&repo, rom_id, &stem, candidate, covers).await
+    Ok((stem, candidate))
 }
 
 /// Roda uma leva de scraping sobre as ROMs sem match. Bloqueante (chamar de

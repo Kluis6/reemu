@@ -86,3 +86,34 @@ it('shows counts while running and keeps the cancelled result visible', async ()
   await waitForStatus(() => expect(host.textContent).toContain('Busca cancelada.'))
   expect(host.textContent).toContain('2/4')
 })
+
+
+it('keeps provider results and scan progress in a separate Fluent tab from credentials', async () => {
+  await act(async () => {
+    qc.setQueryData(['pending-matches'], [{
+      romId: 'one', fileStem: 'Sample ROM', title: 'Sample Game', provider: 'gamekave',
+      description: null, coverUrl: null, releaseDate: '1992-06-01', genre: null,
+    }])
+  })
+  await waitForStatus(() => expect(host.querySelector('#metadata-results')?.textContent).toContain('GameKave · 1992-06-01'))
+  const results = host.querySelector<HTMLButtonElement>('#metadata-results-tab')!
+  const credentials = host.querySelector<HTMLButtonElement>('#metadata-credentials-tab')!
+  expect(results.getAttribute('aria-selected')).toBe('true')
+  expect(host.querySelector('input[type="password"]')).toBeNull()
+
+  await act(async () => credentials.click())
+  expect(credentials.getAttribute('aria-selected')).toBe('true')
+  expect(credentials.getAttribute('aria-controls')).toBe('metadata-credentials')
+  expect(host.querySelector('#metadata-credentials')?.getAttribute('aria-labelledby')).toBe(credentials.id)
+  expect(host.querySelectorAll('input[type="password"]')).toHaveLength(2)
+  expect(host.querySelector('#metadata-results')?.hasAttribute('hidden')).toBe(true)
+  expect(host.textContent).not.toContain('Sample Game')
+
+  await act(async () => {
+    qc.setQueryData(['metadata-progress'], { ...empty, status: 'running', running: true, done: 1, total: 2 })
+  })
+  await act(async () => results.click())
+  await waitForStatus(() => expect(host.textContent).toContain('50%'))
+  expect(host.textContent).toContain('Sample Game')
+  expect(host.querySelector('input[type="password"]')).toBeNull()
+})

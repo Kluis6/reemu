@@ -885,6 +885,8 @@ interface ThemeOverrides {
   appBg?: string;
   /** Pílula do item ativo no rail (`reemuActiveBg`). */
   activeBg?: string;
+  /** Opacidade do véu em temas escuros com brilhos mais claros. */
+  glowVeilOpacity?: number;
   /** Fundo de uma cor só: sem os brilhos coloridos nos cantos (os 4 viram
    *  esta cor, como no alto contraste) e casca lisa. */
   solidBg?: string;
@@ -940,10 +942,11 @@ function make(
     reemuBg2: bg.bg2,
     reemuBg3: bg.bg3,
     reemuBg4: bg.bg4,
-    // Escuro: só abafa um pouco (o fundo continua quase preto e os cantos
-    // brilham). Claro: puxa bastante pro cinza da casca — cor cheia num
-    // fundo claro fica berrante.
-    reemuGlowVeil: light ? "rgba(236, 238, 241, 0.62)" : "rgba(9, 9, 12, 0.1)",
+    // No escuro, os temas com manchas mais claras precisam de um véu mais
+    // forte para manter o contraste do texto durante o ciclo da animação.
+    reemuGlowVeil: light
+      ? "rgba(236, 238, 241, 0.62)"
+      : `rgba(9, 9, 12, ${o.glowVeilOpacity ?? 0.1})`,
     // O papel de parede fica sem sobreposição no tema claro.
     reemuVeil: light
       ? "none"
@@ -1080,9 +1083,18 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   },
   "xbox-green": { label: "Green Modern", theme: make(xboxGreen, "dark", xboxGreenBg) },
   // Sem par "-claro" de propósito — o dashboard Blades nunca teve modo claro.
-  "xbox-classico": { label: "Lime Classic", theme: make(xboxClassico, "dark", xboxClassicoBg) },
-  "ps-blue": { label: "Blue Modern", theme: make(psBlue, "dark", psBlueBg) },
-  ps1: { label: "Crimson Retro", theme: make(ps1Red, "dark", ps1Bg) },
+  "xbox-classico": {
+    label: "Lime Classic",
+    theme: make(xboxClassico, "dark", xboxClassicoBg, { glowVeilOpacity: 0.22 }),
+  },
+  "ps-blue": {
+    label: "Blue Modern",
+    theme: make(psBlue, "dark", psBlueBg, { glowVeilOpacity: 0.18 }),
+  },
+  ps1: {
+    label: "Crimson Retro",
+    theme: make(ps1Red, "dark", ps1Bg, { glowVeilOpacity: 0.18 }),
+  },
   // Modo claro do dashboard Xbox (Series S/X e "modo XBOX" no PC): fundo
   // branco/cinza bem claro — só a luminosidade da casca inverte, a marca
   // não muda. Uma variante claro por rampa, mesmo par light/dark que o
@@ -1098,6 +1110,7 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   alva: {
     label: "Alva",
     theme: make(alvaBlue, "dark", alvaBg, {
+      glowVeilOpacity: 0.28,
       neutrals: alvaDark,
       appBg: "linear-gradient(180deg, #121212 0%, #0E0E0E 45%)",
       activeBg: "#2E3035",
@@ -1114,6 +1127,7 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   snes: {
     label: "Purple Mistique",
     theme: make(snesPurple, "dark", snesBg, {
+      glowVeilOpacity: 0.22,
       neutrals: snesDark,
       appBg: "linear-gradient(180deg, #1D1C23 0%, #15141A 45%)",
       activeBg: "#3A3845",
@@ -1131,6 +1145,7 @@ export const THEMES: Record<ThemeId, { label: string; theme: ReEmuTheme }> = {
   dream: {
     label: "Dream Sky",
     theme: make(dreamOrange, "dark", dreamBg, {
+      glowVeilOpacity: 0.28,
       neutrals: dreamDark,
       appBg: "linear-gradient(180deg, #12223A 0%, #0D1828 45%)",
       activeBg: "#24395A",

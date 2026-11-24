@@ -6,6 +6,16 @@ use crate::error::RepoError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+pub const SUFAMI_TURBO_HEADER_LEN: usize = 30;
+
+/// Identifica um cartucho Sufami Turbo sem confundir `.st` com disco Atari ST.
+/// A assinatura na posição 0 também ocorre na BIOS, que tem outro tamanho.
+pub fn is_sufami_turbo_cart(size: u64, header: &[u8; SUFAMI_TURBO_HEADER_LEN]) -> bool {
+    (0x80000..=0x100000).contains(&size)
+        && header.starts_with(b"BANDAI SFC-ADX")
+        && &header[16..30] != b"SFC-ADX BACKUP"
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rom {
     pub id: String,

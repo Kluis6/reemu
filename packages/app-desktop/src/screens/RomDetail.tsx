@@ -91,7 +91,7 @@ import {
 import { conflictFor } from "../hooks/useSync";
 import { formatPlayTime } from "../lib/playTime";
 import { useModalButtonStyles } from "../styles/buttons";
-import { useDetailStyles } from "../styles/xbox";
+import { useDetailStyles, useTabStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
 import { rankCores } from "../lib/coreChoice";
@@ -101,6 +101,7 @@ import { CloseButton } from "../components/CloseButton";
 export function RomDetail() {
   const { t, i18n } = useTranslation();
   const s = useDetailStyles();
+  const tb = useTabStyles();
   const btn = useModalButtonStyles();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -221,7 +222,7 @@ export function RomDetail() {
   useEffect(() => {
     if (hasRom) playRef.current?.focus({ preventScroll: true });
   }, [romId, hasRom]);
-  const ext = rom?.filePath.split(".").pop()?.toLowerCase() ?? "";
+  const ext = rom?.contentExtension ?? rom?.filePath.split(".").pop()?.toLowerCase() ?? "";
   const coreList = rankCores(cores.data ?? [], rom?.systemId, ext);
   const [coreId, setCoreId] = useState("");
   const systemDefaultCore = rom ? (sysCores.data?.[rom.systemId] ?? "") : "";
@@ -686,14 +687,15 @@ export function RomDetail() {
           </DrawerHeaderTitle>
           <div className={s.infoToolbar}>
             <TabList
+              className={tb.tabs}
               aria-label={t("game.infoTitle")}
               selectedValue={infoTab}
               onTabSelect={(_, { value }) => setInfoTab(value === "library" ? "library" : "about")}
             >
-              <Tab className={s.infoTab} id="game-info-about-tab" value="about" aria-controls="game-info-about">
+              <Tab id="game-info-about-tab" value="about" aria-controls="game-info-about">
                 {t("game.about")}
               </Tab>
-              <Tab className={s.infoTab} id="game-info-library-tab" value="library" aria-controls="game-info-library">
+              <Tab id="game-info-library-tab" value="library" aria-controls="game-info-library">
                 {t("game.inLibrary")}
               </Tab>
             </TabList>
@@ -714,6 +716,7 @@ export function RomDetail() {
             id="game-info-about"
             role="tabpanel"
             aria-labelledby="game-info-about-tab"
+            tabIndex={0}
             hidden={infoTab !== "about"}
           >
             <div className={s.infoBody}>
@@ -869,6 +872,7 @@ export function RomDetail() {
             id="game-info-library"
             role="tabpanel"
             aria-labelledby="game-info-library-tab"
+            tabIndex={0}
             hidden={infoTab !== "library"}
           >
             <div className={s.infoBody}>
@@ -929,7 +933,7 @@ export function RomDetail() {
             .map((p) => (
               <Button
                 key={p.key}
-                className={mergeClasses(s.panelButton, btn.block)}
+                className={mergeClasses(btn.panel, btn.block)}
                 onClick={() => setPanel(p.key)}
               >
                 {t(`game.tabs.${p.key}`)}

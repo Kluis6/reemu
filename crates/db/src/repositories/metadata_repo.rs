@@ -17,6 +17,28 @@ impl MetadataRepo {
         Self { db }
     }
 
+    pub async fn cover_override_ids(&self) -> Result<std::collections::HashSet<String>, RepoError> {
+        let ids: Vec<String> = sqlx::query_scalar(
+            "SELECT rom_id FROM game_metadata_edits
+             WHERE json_extract(fields_json, '$.coverUrl') <> ''",
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(ids.into_iter().collect())
+    }
+
+    pub async fn cover_override(&self, rom_id: &str) -> Result<Option<String>, RepoError> {
+        let cover: Option<Option<String>> = sqlx::query_scalar(
+            "SELECT json_extract(fields_json, '$.coverUrl') FROM game_metadata_edits WHERE rom_id = ?1",
+        )
+        .bind(rom_id)
+        .fetch_optional(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(cover.flatten())
+    }
+
     pub async fn get_edits(&self, rom_id: &str) -> Result<Option<GameMetadataEdits>, RepoError> {
         let raw: Option<String> =
             sqlx::query_scalar("SELECT fields_json FROM game_metadata_edits WHERE rom_id = ?1")
@@ -27,6 +49,132 @@ impl MetadataRepo {
         raw.map(|json| serde_json::from_str(&json).map_err(|e| RepoError::Corrupt(e.to_string())))
             .transpose()
     }
+
+    pub async fn pending_candidate(
+        &self,
+        rom_id: &str,
+    ) -> Result<Option<ScrapeCandidate>, RepoError> {
+        let raw: Option<String> = sqlx::query_scalar(
+            "SELECT candidate_json FROM scrape_matches WHERE rom_id = ?1 AND status = 'pending_review'",
+        )
+        .bind(rom_id)
+        .fetch_optional(&self.db)
+        .await
+        .map_err(be)?
+        .flatten();
+        raw.map(|json| serde_json::from_str(&json).map_err(|e| RepoError::Corrupt(e.to_string())))
+            .transpose()
+    }
+
+    pub async fn replace_pending_candidate(
+        &self,
+        rom_id: &str,
+        candidate: &ScrapeCandidate,
+    ) -> Result<bool, RepoError> {
+        let json =
+            serde_json::to_string(candidate).map_err(|e| RepoError::Corrupt(e.to_string()))?;
+        let update = sqlx::query(
+            "UPDATE scrape_matches SET provider = ?2, external_id = ?3, candidate_json = ?4
+             WHERE rom_id = ?1 AND status = 'pending_review'",
+        )
+        .bind(rom_id)
+        .bind(&candidate.provider)
+        .bind(&candidate.external_id)
+        .bind(json)
+        .execute(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(update.rows_affected() != 0)
+    }
+
+    pub async fn resolve_pending_with_edits(
+        &self,
+        rom_id: &str,
+        accept: bool,
+        title: Option<&str>,
+        edits: Option<&GameMetadataEdits>,
+    ) -> Result<(), RepoError> {
+        if !accept {
+            sqlx::query("UPDATE scrape_matches SET status = 'no_match' WHERE rom_id = ?1 AND status = 'pending_review'")
+                .bind(rom_id)
+                .execute(&self.db)
+                .await
+                .map_err(be)?;
+            return Ok(());
+        }
+        let mut tx = self.db.begin().await.map_err(be)?;
+        let json: Option<String> = sqlx::query_scalar::<_, Option<String>>(
+            "UPDATE scrape_matches SET status = 'user_confirmed'
+             WHERE rom_id = ?1 AND status = 'pending_review' RETURNING candidate_json",
+        )
+        .bind(rom_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(be)?
+        .flatten();
+        let json = json.ok_or_else(|| RepoError::Backend("pendência sem candidato".into()))?;
+        let candidate: ScrapeCandidate = serde_json::from_str(&json)
+            .map_err(|e| RepoError::Corrupt(format!("candidate JSON inválido: {e}")))?;
+        write_metadata(&mut *tx, &meta_from_candidate(rom_id, &candidate)).await?;
+        super::roms_repo::RomsRepo::update_metadata(&mut tx, rom_id, title, None, edits).await?;
+        tx.commit().await.map_err(be)?;
+        Ok(())
+    }
+}
+
+async fn write_metadata<'e>(
+    executor: impl sqlx::Executor<'e, Database = sqlx::Sqlite>,
+    m: &GameMetadata,
+) -> Result<(), RepoError> {
+    sqlx::query(
+        "INSERT INTO game_metadata \
+         (id, rom_id, title, description, cover_url, release_date, genre, provider_source, \
+          developer, publisher, players, rating, age_rating, modes, \
+          screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json) \
+         VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, \
+                 ?14, ?15, ?16, ?17, ?18, ?19) \
+         ON CONFLICT(rom_id) DO UPDATE SET \
+           title = excluded.title, description = excluded.description, \
+           cover_url = excluded.cover_url, release_date = excluded.release_date, \
+           genre = excluded.genre, provider_source = excluded.provider_source, \
+           developer = excluded.developer, publisher = excluded.publisher, \
+           players = excluded.players, rating = excluded.rating, \
+           age_rating = excluded.age_rating, modes = excluded.modes, \
+           screenshot_url = excluded.screenshot_url, \
+           title_screen_url = excluded.title_screen_url, \
+           fanart_url = excluded.fanart_url, logo_url = excluded.logo_url, \
+           video_url = excluded.video_url, gamekave_json = excluded.gamekave_json",
+    )
+    .bind(&m.rom_id)
+    .bind(&m.title)
+    .bind(&m.description)
+    .bind(&m.cover_url)
+    .bind(&m.release_date)
+    .bind(&m.genre)
+    .bind(&m.provider_source)
+    .bind(&m.details.developer)
+    .bind(&m.details.publisher)
+    .bind(&m.details.players)
+    .bind(m.details.rating.map(i64::from))
+    .bind(&m.details.age_rating)
+    .bind(&m.details.modes)
+    .bind(&m.details.screenshot_url)
+    .bind(&m.details.title_screen_url)
+    .bind(&m.details.fanart_url)
+    .bind(&m.details.logo_url)
+    .bind(&m.details.video_url)
+    .bind(
+        m.details
+            .gamekave
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()
+            .map_err(|e| RepoError::Corrupt(e.to_string()))?,
+    )
+    .execute(executor)
+    .await
+    .map_err(be)?;
+    Ok(())
 }
 
 fn status_to_db(s: MatchStatus) -> &'static str {
@@ -134,55 +282,7 @@ impl MetadataRepository for MetadataRepo {
     }
 
     async fn upsert_metadata(&self, m: &GameMetadata) -> Result<(), RepoError> {
-        sqlx::query(
-            "INSERT INTO game_metadata \
-             (id, rom_id, title, description, cover_url, release_date, genre, provider_source, \
-              developer, publisher, players, rating, age_rating, modes, \
-              screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json) \
-             VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, \
-                     ?14, ?15, ?16, ?17, ?18, ?19) \
-             ON CONFLICT(rom_id) DO UPDATE SET \
-               title = excluded.title, description = excluded.description, \
-               cover_url = excluded.cover_url, release_date = excluded.release_date, \
-               genre = excluded.genre, provider_source = excluded.provider_source, \
-               developer = excluded.developer, publisher = excluded.publisher, \
-               players = excluded.players, rating = excluded.rating, \
-               age_rating = excluded.age_rating, modes = excluded.modes, \
-               screenshot_url = excluded.screenshot_url, \
-               title_screen_url = excluded.title_screen_url, \
-               fanart_url = excluded.fanart_url, logo_url = excluded.logo_url, \
-               video_url = excluded.video_url, gamekave_json = excluded.gamekave_json",
-        )
-        .bind(&m.rom_id)
-        .bind(&m.title)
-        .bind(&m.description)
-        .bind(&m.cover_url)
-        .bind(&m.release_date)
-        .bind(&m.genre)
-        .bind(&m.provider_source)
-        .bind(&m.details.developer)
-        .bind(&m.details.publisher)
-        .bind(&m.details.players)
-        .bind(m.details.rating.map(i64::from))
-        .bind(&m.details.age_rating)
-        .bind(&m.details.modes)
-        .bind(&m.details.screenshot_url)
-        .bind(&m.details.title_screen_url)
-        .bind(&m.details.fanart_url)
-        .bind(&m.details.logo_url)
-        .bind(&m.details.video_url)
-        .bind(
-            m.details
-                .gamekave
-                .as_ref()
-                .map(serde_json::to_string)
-                .transpose()
-                .map_err(|e| RepoError::Corrupt(e.to_string()))?,
-        )
-        .execute(&self.db)
-        .await
-        .map_err(be)?;
-        Ok(())
+        write_metadata(&self.db, m).await
     }
 
     async fn record_match(
@@ -258,32 +358,7 @@ impl MetadataRepository for MetadataRepo {
     }
 
     async fn resolve_pending(&self, rom_id: &str, accept: bool) -> Result<(), RepoError> {
-        if !accept {
-            sqlx::query("UPDATE scrape_matches SET status = 'no_match' WHERE rom_id = ?1")
-                .bind(rom_id)
-                .execute(&self.db)
-                .await
-                .map_err(be)?;
-            return Ok(());
-        }
-        let json: Option<String> = sqlx::query_scalar::<_, Option<String>>(
-            "SELECT candidate_json FROM scrape_matches WHERE rom_id = ?1",
-        )
-        .bind(rom_id)
-        .fetch_optional(&self.db)
-        .await
-        .map_err(be)?
-        .flatten();
-        let json = json.ok_or_else(|| RepoError::Backend("pendência sem candidato".into()))?;
-        let candidate: ScrapeCandidate = serde_json::from_str(&json)
-            .map_err(|e| RepoError::Corrupt(format!("candidate JSON inválido: {e}")))?;
-        self.upsert_metadata(&meta_from_candidate(rom_id, &candidate))
-            .await?;
-        sqlx::query("UPDATE scrape_matches SET status = 'user_confirmed' WHERE rom_id = ?1")
-            .bind(rom_id)
-            .execute(&self.db)
+        self.resolve_pending_with_edits(rom_id, accept, None, None)
             .await
-            .map_err(be)?;
-        Ok(())
     }
 }

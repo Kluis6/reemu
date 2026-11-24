@@ -154,6 +154,7 @@ caminho manual de `wgpu-hal` (como o `from_adopted_vulkan` já faz).
 - [Libretro: interface de renderização D3D11 e negociação](https://github.com/libretro/RetroArch/blob/master/libretro-common/include/libretro_d3d11.h)
 
 - [Roteiro de implementação por core](24-direct3d-por-core.md)
+- [Guia oficial de programação do Direct3D 12 no Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/direct3d12/directx-12-programming-guide) — consulta obrigatória em trabalhos com DirectX 12.
 - [Libretro: interface de renderização D3D12 e negociação](https://github.com/libretro/RetroArch/blob/master/libretro-common/include/libretro_d3d12.h)
 - [Microsoft Learn: filas e command lists em D3D12](https://learn.microsoft.com/en-us/windows/win32/direct3d12/command-queues-and-command-lists)
 

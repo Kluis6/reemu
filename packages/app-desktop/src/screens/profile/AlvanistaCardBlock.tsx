@@ -124,7 +124,7 @@ export function AlvanistaCardBlock({ card, fetchedAt }: { card: AlvanistaCard; f
     <div className={s.card} data-testid="profile-alvanista">
       <div className={s.title}>
         <img className={s.symbol} src={symbol} alt="" aria-hidden draggable={false} />
-        <SectionHeader as="h3" title={t('profilePage.alvaTitle')} />
+        <SectionHeader as="h3" title={t('profilePage.alvaTitle')} onCard />
       </div>
       {tiles.length > 0 && (
         <div className={s.grid}>

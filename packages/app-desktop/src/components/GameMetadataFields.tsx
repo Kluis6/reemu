@@ -1,14 +1,20 @@
 import {
+  Button,
+  Caption1,
   Field,
   Input,
   Select,
   Textarea,
   makeStyles,
+  mergeClasses,
   tokens,
 } from "@fluentui/react-components";
+import { ArrowUploadRegular } from "@fluentui/react-icons";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { GameMetadata, GameMetadataEdits } from "../lib/tauri";
+import { readGameArtworkFile, type GameMetadata, type GameMetadataEdits } from "../lib/tauri";
 import { formatReleaseDate } from "../lib/metadataFormat";
+import { inNavMode } from "../lib/focusNav";
 
 const textFields = [
   ["releaseDate", "game.release"],
@@ -26,6 +32,69 @@ const artFields = [
   ["fanartUrl", "game.media.hero", "heroes"],
   ["screenshotUrl", "game.media.screenshot", "screenshots"],
   ["logoUrl", "game.media.logo", null],
+] as const;
+
+export type GameArtworkKey = typeof artFields[number][0];
+const artworkTypes = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+const maxArtworkBytes = 4 * 1024 * 1024;
+
+export function isLocalArtwork(value: string) {
+  return artworkTypes.some((type) => value.startsWith(`data:${type};base64,`));
+}
+
+async function readArtworkInput(file: File): Promise<string> {
+  if (file.size === 0 || file.size > maxArtworkBytes || !artworkTypes.includes(file.type)) {
+    throw new Error("invalid artwork file");
+  }
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function readGameArtwork(file: File | string): Promise<string> {
+  const url = await (typeof file === "string" ? readGameArtworkFile(file) : readArtworkInput(file));
+  const image = new Image();
+  image.src = url;
+  await image.decode();
+  return url;
+}
+
+function ArtworkUpload({ label, disabled, onFile }: {
+  label: string;
+  disabled: boolean;
+  onFile: (file?: File) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <Button appearance="secondary" icon={<ArrowUploadRegular />} disabled={disabled} onClick={() => {
+        if (inNavMode()) onFile();
+        else input.current?.click();
+      }}>
+        {label}
+      </Button>
+      <input
+        ref={input}
+        type="file"
+        hidden
+        accept={artworkTypes.join(",")}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (file) onFile(file);
+        }}
+      />
+    </>
+  );
+}
+
+export const gameMetadataLabels = [
+  ["description", "game.description"],
+  ...textFields,
+  ...artFields,
 ] as const;
 
 export function gameMetadataDraft(meta: GameMetadata | null | undefined): GameMetadataEdits {
@@ -48,7 +117,10 @@ function imageUrl(value: string) {
 export function validMetadataDraft(draft: GameMetadataEdits) {
   const rating = draft.rating?.trim() ?? "";
   return (!rating || (/^\d{1,3}$/.test(rating) && Number(rating) <= 100))
-    && artFields.every(([key]) => !draft[key]?.trim() || imageUrl(draft[key]!));
+    && artFields.every(([key]) => {
+      const value = draft[key]?.trim() ?? "";
+      return !value || isLocalArtwork(value) || !!imageUrl(value);
+    });
 }
 
 const useStyles = makeStyles({
@@ -56,6 +128,10 @@ const useStyles = makeStyles({
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 190px), 1fr))",
     gap: tokens.spacingHorizontalL,
+  },
+  uploadGrid: {
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    "@media (max-width: 1050px)": { gridTemplateColumns: "minmax(0, 1fr)" },
   },
   art: { display: "flex", flexDirection: "column", gap: tokens.spacingVerticalS, minWidth: 0 },
   preview: {
@@ -148,26 +224,29 @@ export function GameMetadataFields({
 }
 
 export function GameArtworkFields({
-  draft, catalog, onChange,
+  draft, catalog, onChange, onUpload, disabled = false,
 }: {
   draft: GameMetadataEdits;
   catalog: GameMetadata["gamekave"] | undefined;
   onChange: (key: keyof GameMetadataEdits, value: string) => void;
+  onUpload?: (key: GameArtworkKey, file?: File) => void;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
   const s = useStyles();
   return (
-    <div className={s.fields}>
+    <div className={mergeClasses(s.fields, !!onUpload && s.uploadGrid)}>
       {artFields.map(([key, label, source]) => {
         const value = draft[key] ?? "";
         const options = source ? catalog?.[source] ?? [] : [];
-        const preview = imageUrl(value);
+        const local = isLocalArtwork(value);
+        const preview = local ? value : imageUrl(value);
         return (
           <div key={key} className={s.art}>
             {preview && <img key={preview} className={s.preview} src={preview} alt={t(label)} />}
             {options.length > 0 && (
               <Field label={t("game.catalog.chooseArt", { art: t(label) })}>
-                <Select value={options.includes(value) ? value : ""} onChange={(_, data) => {
+                <Select disabled={disabled} value={options.includes(value) ? value : ""} onChange={(_, data) => {
                   if (data.value) onChange(key, data.value);
                 }}>
                   <option value="" disabled>{t("game.catalog.chooseImage")}</option>
@@ -184,8 +263,23 @@ export function GameArtworkFields({
               validationState={value.trim() && !preview ? "error" : "none"}
               validationMessage={value.trim() && !preview ? t("game.catalog.invalidUrl") : undefined}
             >
-              <Input type="url" value={value} onChange={(_, data) => onChange(key, data.value)} />
+              <Input disabled={disabled} type="url" value={local ? "" : value} onChange={(_, data) => onChange(key, data.value)} />
             </Field>
+            {onUpload && (
+              <ArtworkUpload
+                label={t("game.catalog.uploadArt", { art: t(label) })}
+                disabled={disabled}
+                onFile={(file) => onUpload(key, file)}
+              />
+            )}
+            {local && (
+              <>
+                <Caption1>{t("game.catalog.localArt")}</Caption1>
+                <Button appearance="subtle" disabled={disabled} onClick={() => onChange(key, "")}>
+                  {t("game.catalog.removeLocalArt", { art: t(label) })}
+                </Button>
+              </>
+            )}
           </div>
         );
       })}

@@ -25,6 +25,10 @@ pub struct RomDto {
     pub is_favorite: bool,
     /// Tempo de jogo acumulado (s): o perfil soma e ordena sem uma chamada por ROM.
     pub play_time_secs: u64,
+    // Extensão interna de Satellaview/Sufami Turbo para a escolha do core.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub content_extension: Option<String>,
 }
 
 /// Título de exibição de uma ROM: o que o usuário renomeou, senão o nome do
@@ -42,20 +46,30 @@ pub(crate) fn rom_title(r: &domain::library::Rom) -> String {
 
 #[tauri::command]
 pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, AppError> {
-    let repo = db::RomsRepo::new(pool(&state)?);
+    let pool = pool(&state)?;
+    let repo = db::RomsRepo::new(pool.clone());
     let roms = repo.list().await.map_err(AppError::from)?;
     let play_times = repo.play_times().await.map_err(AppError::from)?;
+    let cover_overrides = db::MetadataRepo::new(pool)
+        .cover_override_ids()
+        .await
+        .map_err(AppError::from)?;
     Ok(roms
         .into_iter()
         .map(|r| {
             let title = rom_title(&r);
-            // Sem cobertura conhecida (`libretro_boxart_url` → `None`, ex.:
-            // arcade) nem tenta o protocolo — cai direto nas iniciais, igual
-            // hoje. Com cobertura, aponta pro protocolo `cover://` (ver
-            // `covers.rs`): serve do cache em disco se já baixou antes, ou
-            // baixa na hora e grava — funciona offline depois da 1ª vez.
-            let boxart = library_scan::libretro_boxart_url(&r.system_id, &title)
-                .map(|_| crate::covers::cover_url(&r.id));
+            // Uma capa editada também aparece em sistemas sem cobertura da libretro.
+            let boxart = (cover_overrides.contains(&r.id)
+                || library_scan::libretro_boxart_url(&r.system_id, &title).is_some())
+            .then(|| crate::covers::cover_url(&r.id));
+            let content_extension = std::path::Path::new(&r.file_path)
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .filter(|ext| r.system_id == "snes" && library_scan::is_supported_archive(ext))
+                .and(r.ident_name.as_deref())
+                .and_then(|name| std::path::Path::new(name).extension()?.to_str())
+                .map(str::to_ascii_lowercase)
+                .filter(|ext| matches!(ext.as_str(), "bs" | "st"));
             RomDto {
                 play_time_secs: play_times.get(&r.id).copied().unwrap_or(0),
                 boxart,
@@ -63,6 +77,7 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, AppErr
                 id: r.id,
                 system_id: r.system_id,
                 file_path: r.file_path,
+                content_extension,
                 last_played_at: r.last_played_at,
                 added_at: r.added_at,
                 is_favorite: r.is_favorite,
@@ -71,20 +86,14 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, AppErr
         .collect())
 }
 
-/// Edição manual dos dados de uma ROM. `title` vazio limpa (volta pro nome do
-/// arquivo); `system_id` vazio/`None` não mexe na plataforma.
-#[tauri::command]
-pub async fn set_rom_metadata(
-    state: State<'_, AppState>,
-    rom_id: String,
-    title: Option<String>,
-    system_id: Option<String>,
-    details: Option<domain::metadata::GameMetadataEdits>,
+pub(super) fn validate_metadata_edits(
+    details: Option<&domain::metadata::GameMetadataEdits>,
 ) -> Result<(), AppError> {
-    if let Some(details) = &details {
+    if let Some(details) = details {
         let valid_url = |value: &str| {
             let value = value.trim();
             value.is_empty()
+                || (value.starts_with("data:") && crate::covers::uploaded_artwork(value).is_some())
                 || reqwest::Url::parse(value).ok().is_some_and(|url| {
                     url.scheme() == "https"
                         && url.host_str().is_some()
@@ -104,7 +113,7 @@ pub async fn set_rom_metadata(
         {
             return Err(AppError::new(
                 crate::app_error::ErrorCode::Corrupt,
-                "image URL must use HTTPS",
+                "image must be an HTTPS URL or supported local artwork",
             ));
         }
         if details.rating.as_deref().is_some_and(|rating| {
@@ -117,6 +126,20 @@ pub async fn set_rom_metadata(
             ));
         }
     }
+    Ok(())
+}
+
+/// Edição manual dos dados de uma ROM. `title` vazio limpa (volta pro nome do
+/// arquivo); `system_id` vazio/`None` não mexe na plataforma.
+#[tauri::command]
+pub async fn set_rom_metadata(
+    state: State<'_, AppState>,
+    rom_id: String,
+    title: Option<String>,
+    system_id: Option<String>,
+    details: Option<domain::metadata::GameMetadataEdits>,
+) -> Result<(), AppError> {
+    validate_metadata_edits(details.as_ref())?;
     let cover_changed = details
         .as_ref()
         .is_some_and(|value| value.cover_url.is_some())

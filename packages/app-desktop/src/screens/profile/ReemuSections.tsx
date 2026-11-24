@@ -25,7 +25,7 @@ const useStyles = makeStyles({
   },
   statValue: { fontSize: '26px', fontFamily: 'var(--reemuFontDisplay)', lineHeight: 1.2 },
   statLabel: { color: tokens.colorNeutralForeground3, fontSize: '12.5px', marginTop: '2px' },
-  invite: { color: tokens.colorNeutralForeground2 },
+  invite: { color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground2})` },
   card: {
     backgroundColor: tokens.colorNeutralBackground2,
     borderRadius: tokens.borderRadiusMedium,
@@ -103,11 +103,11 @@ export function ReemuNumbers({ roms, failed = false }: { roms: RomEntry[]; faile
     <section className={s.section} data-testid="profile-numbers">
       <SectionHeader title={t('profilePage.reemuTitle')} subtitle={t('profilePage.reemuSub')} />
       {failed ? (
-        <div className={s.invite} data-testid="profile-library-error">
+        <div className={mergeClasses(s.invite, 'reemu-on-wallpaper')} data-testid="profile-library-error">
           {t('profilePage.libraryError')}
         </div>
       ) : roms.length === 0 ? (
-        <div className={s.invite}>{t('profilePage.invite')}</div>
+        <div className={mergeClasses(s.invite, 'reemu-on-wallpaper')}>{t('profilePage.invite')}</div>
       ) : (
         <div className={s.stats}>
           {items.map((i) => (
@@ -133,7 +133,7 @@ export function RecentRow({ roms }: { roms: RomEntry[] }) {
   if (roms.length === 0) return null
   return (
     <section className={mergeClasses(browse.section, browse.featured)} data-testid="profile-recent">
-      <SectionHeader title={t('profilePage.recent')} />
+      <SectionHeader title={t('profilePage.recent')} onCard />
       <Shelf>
         {roms.map((r) => (
           <GameCard
@@ -160,7 +160,7 @@ export function MostPlayedCard({ roms }: { roms: RomEntry[] }) {
   const top = roms[0].playTimeSecs
   return (
     <div className={s.card} data-testid="profile-most-played">
-      <SectionHeader as="h3" title={t('profilePage.mostPlayed')} />
+      <SectionHeader as="h3" title={t('profilePage.mostPlayed')} onCard />
       <div className={s.bars}>
         {roms.map((r) => (
           <Button

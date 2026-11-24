@@ -83,10 +83,8 @@ fn put(rom: &mut [u8], at: usize, bytes: &[u8]) {
 
 /// NES, iNES mapeador 0: 16 KiB de PRG em $C000 + 8 KiB de CHR zerado.
 /// Pinta o fundo ($3F00) de azul-claro e liga o fundo no PPUMASK.
-fn nes() -> Vec<u8> {
-    let mut prg = vec![0u8; 16 * 1024];
-    #[rustfmt::skip]
-    let code: &[u8] = &[
+#[rustfmt::skip]
+const NES_TEST_PROGRAM: &[u8] = &[
         0x78,             // $C000 SEI
         0xD8,             //       CLD
         0xA9, 0x00,       //       LDA #$00
@@ -102,8 +100,11 @@ fn nes() -> Vec<u8> {
         0x8D, 0x01, 0x20, //       STA $2001   ; mostra o fundo
         0x4C, 0x1E, 0xC0, // $C01E JMP $C01E
         0x40,             // $C021 RTI (NMI/IRQ)
-    ];
-    put(&mut prg, 0, code);
+];
+
+fn nes() -> Vec<u8> {
+    let mut prg = vec![0u8; 16 * 1024];
+    put(&mut prg, 0, NES_TEST_PROGRAM);
     // vetores: NMI, RESET, IRQ
     put(&mut prg, 0x3FFA, &[0x21, 0xC0, 0x00, 0xC0, 0x21, 0xC0]);
     let mut rom = vec![b'N', b'E', b'S', 0x1A, 1, 1, 0, 0];
@@ -111,6 +112,20 @@ fn nes() -> Vec<u8> {
     rom.extend(prg);
     rom.extend(vec![0u8; 8 * 1024]);
     rom
+}
+
+/// Disco FDS vazio e firmware de teste que pinta o mesmo fundo azul do NES.
+pub fn fds_media() -> (Vec<u8>, Vec<u8>) {
+    let mut disk = vec![0; 16 + 65_500];
+    put(&mut disk, 0, b"FDS\x1A\x01");
+    put(&mut disk, 16, b"\x01*NINTENDO-HVC*");
+    disk[16 + 56] = 0x02; // marcador do bloco de contagem de arquivos
+
+    let mut firmware = vec![0; 8192];
+    put(&mut firmware, 0, NES_TEST_PROGRAM);
+    firmware[NES_TEST_PROGRAM.len() - 2] = 0xE0; // JMP no banco $E000
+    put(&mut firmware, 0x1FFA, &[0x21, 0xE0, 0x00, 0xE0, 0x21, 0xE0]);
+    (disk, firmware)
 }
 
 /// SNES LoROM, 128 KiB (código no banco $00:8000). Cor 0 do CGRAM =
@@ -126,14 +141,21 @@ fn snes() -> Vec<u8> {
         0xE2, 0x20,       //       SEP #$20     ; A de 8 bits
         0xA9, 0x8F,       //       LDA #$8F
         0x8D, 0x00, 0x21, //       STA $2100    ; forced blank
+        0x9C, 0x00, 0x42, //       STZ $4200    ; desliga NMI/IRQ
+        0x9C, 0x0C, 0x42, //       STZ $420C    ; desliga HDMA
+        0x9C, 0x2C, 0x21, //       STZ $212C    ; desliga camadas na tela principal
+        0x9C, 0x2D, 0x21, //       STZ $212D    ; desliga camadas na subtela
+        0x9C, 0x30, 0x21, //       STZ $2130    ; sem recorte por janela
+        0x9C, 0x31, 0x21, //       STZ $2131    ; sem mistura de cores
+        0x9C, 0x33, 0x21, //       STZ $2133    ; vídeo sem entrelaçamento
         0x9C, 0x21, 0x21, //       STZ $2121    ; CGADD = 0
         0xA9, 0x1F,       //       LDA #$1F     ; BGR555 vermelho
         0x8D, 0x22, 0x21, //       STA $2122
         0x9C, 0x22, 0x21, //       STZ $2122
         0xA9, 0x0F,       //       LDA #$0F
         0x8D, 0x00, 0x21, //       STA $2100    ; tela ligada, brilho 15
-        0x80, 0xFE,       // $801A BRA $801A
-        0x40,             // $801C RTI
+        0x80, 0xFE,       //       BRA *
+        0x40,             //       RTI
     ];
     put(&mut rom, 0, code);
     let h = 0x7FC0;
@@ -142,12 +164,14 @@ fn snes() -> Vec<u8> {
     rom[h + 0x16] = 0x00; // só ROM
     rom[h + 0x17] = 0x07; // 128 KiB (1 << 7 KiB)
     rom[h + 0x19] = 0x01; // América do Norte
-                          // vetores nativos ($FFE4..) e de emulação ($FFF4..) → RTI; reset → $8000
+
+    // Vetores nativos ($FFE4..) e de emulação ($FFF4..) → RTI; reset → $8000.
+    let rti = (0x8000 + code.len() as u16 - 1).to_le_bytes();
     for v in (0x7FE4..0x7FFC).step_by(2) {
-        put(&mut rom, v, &[0x1C, 0x80]);
+        put(&mut rom, v, &rti);
     }
     put(&mut rom, 0x7FFC, &[0x00, 0x80]);
-    put(&mut rom, 0x7FFE, &[0x1C, 0x80]);
+    put(&mut rom, 0x7FFE, &rti);
     // checksum: soma dos bytes com complemento/checksum = FFFF/0000
     put(&mut rom, h + 0x1C, &[0xFF, 0xFF, 0x00, 0x00]);
     let sum = rom.iter().fold(0u16, |a, &b| a.wrapping_add(u16::from(b)));
@@ -172,6 +196,30 @@ fn gb() -> Vec<u8> {
     rom[0x14D] = chk;
     put(&mut rom, 0x150, &[0xF3, 0x18, 0xFE]); // DI; JR -2
     rom
+}
+
+/// Cartucho GB com a marcação SGB e um firmware SGB2 sintético que pinta
+/// o fundo de vermelho. Assim a fumaça distingue SGB de um fallback para GB.
+pub fn sgb2_media() -> (Vec<u8>, Vec<u8>) {
+    let mut cart = gb();
+    cart[0x146] = 0x03; // compatível com Super Game Boy
+    cart[0x14B] = 0x33; // usa o novo código de licença
+    cart[0x14D] = cart[0x134..=0x14C]
+        .iter()
+        .fold(0u8, |x, &b| x.wrapping_sub(b).wrapping_sub(1));
+
+    let mut firmware = snes();
+    firmware.resize(512 * 1024, 0);
+    let header = 0x7FC0;
+    firmware[header + 0x16] = 0xE3; // coprocessador Super Game Boy
+    firmware[header + 0x17] = 0x09; // 512 KiB
+    put(&mut firmware, header + 0x1C, &[0xFF, 0xFF, 0, 0]);
+    let sum = firmware
+        .iter()
+        .fold(0u16, |sum, &b| sum.wrapping_add(u16::from(b)));
+    put(&mut firmware, header + 0x1C, &(!sum).to_le_bytes());
+    put(&mut firmware, header + 0x1E, &sum.to_le_bytes());
+    (cart, firmware)
 }
 
 /// GBA: salto pro código em $C0, que pinta a cor 0 da paleta (fundo) de

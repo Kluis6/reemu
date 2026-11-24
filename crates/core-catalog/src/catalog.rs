@@ -98,6 +98,12 @@ pub const CATALOG: &[CatalogEntry] = &[
     sw("fceumm_libretro", "FCEUmm", "NES / Famicom", "GPLv2"),
     sw("nestopia_libretro", "Nestopia UE", "NES / Famicom", "GPLv2"),
     sw("mesen_libretro", "Mesen", "NES / Famicom", "GPLv3"),
+    sw(
+        "mesen2_libretro",
+        "Mesen 2 (MesenCE)",
+        "NES / SNES / Game Boy / Color / GBA / PC Engine / SuperGrafx / CD / Master System / Game Gear / WonderSwan",
+        "GPLv3",
+    ),
     sw("quicknes_libretro", "QuickNES", "NES / Famicom", "LGPLv2.1"),
     sw(
         "snes9x_libretro",
@@ -454,6 +460,18 @@ pub const CATALOG: &[CatalogEntry] = &[
     ),
     sw("bsnes_libretro", "bsnes", "Nintendo SNES / SFC", "GPLv3"),
     sw(
+        "bsnes-jg_libretro",
+        "bsnes-jg",
+        "Nintendo SNES / SFC",
+        "GPLv3",
+    ),
+    sw(
+        "mesen-s_libretro",
+        "Mesen-S",
+        "SNES / Game Boy / Color",
+        "GPLv3",
+    ),
+    sw(
         "bsnes2014_accuracy_libretro",
         "bsnes 2014 Accuracy",
         "Nintendo SNES / SFC",
@@ -605,6 +623,7 @@ fn systems_from_text(text: &str) -> Vec<&'static str> {
     let pce = has("pc engine") || has("turbografx") || has("supergrafx");
     add(pce, "pcengine");
     add(pce && word("cd"), "pcenginecd");
+    add(has("supergrafx"), "supergrafx");
     add(has("pc-fx"), "pcfx");
     add(has("playstation 2"), "ps2");
     add(has("playstation") && !has("playstation 2"), "psx");
@@ -895,6 +914,23 @@ mod tests {
         assert_eq!(ids("Game Boy Advance / GB / GBC"), vec!["gba", "gb", "gbc"]);
         assert_eq!(ids("Nintendo Game Boy Advance"), vec!["gba"]);
         assert_eq!(ids("Game Boy / Color"), vec!["gb", "gbc"]);
+        assert_eq!(system_ids("mesen-s_libretro"), vec!["snes", "gb", "gbc"]);
+        assert_eq!(
+            system_ids("mesen2_libretro"),
+            vec![
+                "snes",
+                "nes",
+                "gba",
+                "gb",
+                "gbc",
+                "mastersystem",
+                "gamegear",
+                "pcengine",
+                "pcenginecd",
+                "supergrafx",
+                "wonderswan"
+            ]
+        );
         assert_eq!(
             ids("Mega Drive / Master System / Game Gear / SG-1000 / Sega CD"),
             vec!["megadrive", "mastersystem", "gamegear", "sg1000", "segacd"]
@@ -910,7 +946,7 @@ mod tests {
         );
         assert_eq!(
             ids("PC Engine / SuperGrafx / CD"),
-            vec!["pcengine", "pcenginecd"]
+            vec!["pcengine", "pcenginecd", "supergrafx"]
         );
         assert_eq!(ids("Neo Geo / CPS / arcade"), vec!["arcade"]);
         // todo core do catálogo cai em pelo menos um sistema da varredura,
@@ -1013,6 +1049,118 @@ mod tests {
             .unwrap_or_default();
         let _ = std::fs::remove_file(out_path);
         (status, out, hang_info)
+    }
+
+    fn smoke_has_av_and_state(output: &str) -> bool {
+        output.lines().any(|line| {
+            let parts: Vec<_> = line.split('\t').collect();
+            matches!(parts.as_slice(), ["REEMU_RUN_OK", "180", "180", audio, "ok"]
+                if audio.parse::<usize>().is_ok_and(|n| n > 0))
+        })
+    }
+
+    fn mesen_sgb_smoke(host: &Path, core: &Path, cores_dir: &Path, id: &str) -> String {
+        use std::ffi::OsStr;
+
+        let media = cores_dir.join(format!("{id}-sgb"));
+        std::fs::create_dir_all(&media).expect("pasta de teste do Super Game Boy");
+        let (cart, firmware) = crate::smoke_roms::sgb2_media();
+        let rom_path = media.join("smoke.gb");
+        let firmware_path = media.join("SGB2.sfc");
+        std::fs::write(&rom_path, cart).unwrap();
+        std::fs::write(&firmware_path, &firmware).unwrap();
+        let args = [
+            OsStr::new("--run"),
+            cores_dir.as_os_str(),
+            OsStr::new(id),
+            rom_path.as_os_str(),
+            OsStr::new("180"),
+            media.as_os_str(),
+        ];
+        let (status, output, detail) = run_host(host, core, &args, &media.join("run.txt"));
+        if !status.is_some_and(|s| s.success())
+            || !smoke_has_av_and_state(&output)
+            || !output
+                .lines()
+                .any(|line| line == "REEMU_RUN_SIZE\t256\t239")
+            || !output
+                .lines()
+                .any(|line| line == "REEMU_RUN_CENTER\t255\t0\t0")
+        {
+            return format!("FALHA: Super Game Boy 2: {output}{detail}");
+        }
+        if std::fs::read(firmware_path).as_deref().ok() != Some(firmware.as_slice()) {
+            return "FALHA: Super Game Boy 2 deixou o firmware de teste alterado".into();
+        }
+        "Super Game Boy 2 com imagem, áudio e save state".into()
+    }
+
+    fn mesen2_disk_smoke(host: &Path, core: &Path, cores_dir: &Path) -> String {
+        use std::ffi::OsStr;
+
+        let media = cores_dir.join("mesen2-media");
+        let system = media.join("system");
+        let empty = media.join("empty");
+        std::fs::create_dir_all(&system).expect("pasta de firmware de teste");
+        std::fs::create_dir_all(&empty).expect("pasta de sistema vazia");
+        let fds = media.join("smoke.fds");
+        let cue = media.join("smoke.cue");
+        let (disk, firmware) = crate::smoke_roms::fds_media();
+        std::fs::write(&fds, disk).unwrap();
+        std::fs::write(system.join("disksys.rom"), firmware).unwrap();
+        std::fs::write(
+            &cue,
+            b"FILE \"track.bin\" BINARY\n  TRACK 01 MODE1/2048\n    INDEX 01 00:00:00\n",
+        )
+        .unwrap();
+        std::fs::write(media.join("track.bin"), vec![0; 128 * 2048]).unwrap();
+        let syscard = crate::smoke_roms::RomKind::PcEngine.build().repeat(32);
+        std::fs::write(system.join("syscard3.pce"), &syscard).unwrap();
+
+        let run = |rom: &Path, system: &Path| {
+            let args = [
+                OsStr::new("--run"),
+                cores_dir.as_os_str(),
+                OsStr::new("mesen2_libretro"),
+                rom.as_os_str(),
+                OsStr::new("180"),
+                system.as_os_str(),
+            ];
+            run_host(host, core, &args, &media.join("run.txt"))
+        };
+        let (status, output, detail) = run(&cue, &empty);
+        if status.and_then(|s| s.code()) != Some(2) || !output.contains("REEMU_RUN_ERR\t") {
+            return format!("FALHA: PC Engine CD sem firmware: {output}{detail}");
+        }
+        let (status, output, detail) = run(&fds, &empty);
+        if status.and_then(|s| s.code()) != Some(2)
+            || !output
+                .lines()
+                .any(|line| line.starts_with("REEMU_RUN_ERR\t") && line.contains("disksys.rom"))
+        {
+            return format!("FALHA: FDS sem firmware: {output}{detail}");
+        }
+        for (name, rom) in [("FDS", &fds), ("PC Engine CD", &cue)] {
+            let (status, output, detail) = run(rom, &system);
+            if !status.is_some_and(|s| s.success()) || !smoke_has_av_and_state(&output) {
+                return format!("FALHA: {name}: {output}{detail}");
+            }
+            if name == "FDS"
+                && !output
+                    .lines()
+                    .any(|line| line == "REEMU_RUN_CENTER\t100\t176\t255")
+            {
+                return format!("FALHA: FDS não desenhou a cor do firmware de teste: {output}");
+            }
+        }
+        if std::fs::read(system.join("syscard3.pce")).as_deref().ok() != Some(syscard.as_slice())
+            || system
+                .join("[BIOS] Super CD-ROM System (Japan) (v3.0).pce")
+                .exists()
+        {
+            return "FALHA: PC Engine CD deixou o firmware de teste alterado".into();
+        }
+        "FDS e PC Engine CD com imagem, áudio e save state".into()
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -1146,6 +1294,29 @@ mod tests {
                 }
                 ("ok", None) => "sem ROM de teste".into(),
                 _ => "—".into(),
+            };
+            let game = if c.id == "mesen2_libretro" && row.0 == "ok" && !game.starts_with("FALHA") {
+                let disks = mesen2_disk_smoke(&host, &path, &cores_dir);
+                if disks.starts_with("FALHA") {
+                    disks
+                } else {
+                    format!("{game}; {disks}")
+                }
+            } else {
+                game
+            };
+            let game = if matches!(c.id, "mesen2_libretro" | "mesen-s_libretro")
+                && row.0 == "ok"
+                && !game.starts_with("FALHA")
+            {
+                let sgb = mesen_sgb_smoke(&host, &path, &cores_dir, c.id);
+                if sgb.starts_with("FALHA") {
+                    sgb
+                } else {
+                    format!("{game}; {sgb}")
+                }
+            } else {
+                game
             };
             let game = match known_broken(c.id) {
                 Some(why) if game.starts_with("FALHA") => format!("conhecido: {why}"),
