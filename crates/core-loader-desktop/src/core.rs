@@ -14,6 +14,7 @@ pub struct DesktopCore {
     raw: RawCore,
     av_info: SystemAvInfo,
     render_reqs: CoreRenderRequirements,
+    last_realtime_frame: Option<std::time::Instant>,
     /// `Some` = core de HW render (GL). O frame sai do FBO deste contexto.
     gl: Option<GlContext>,
     /// `Some` = core de HW render Vulkan (etapa 12). Dono do `VkContext` +
@@ -53,6 +54,7 @@ impl DesktopCore {
             raw,
             av_info,
             render_reqs,
+            last_realtime_frame: None,
             gl,
             vk,
             vk_readback: None,
@@ -256,6 +258,23 @@ impl DesktopCore {
 
 impl FrameSource for DesktopCore {
     fn next_frame(&mut self) -> Option<Frame> {
+        self.reset_frame_time();
+        self.run_frame(false)
+    }
+}
+
+impl DesktopCore {
+    /// Roda um quadro agendado pelo loop de emulação em tempo real.
+    pub fn next_realtime_frame(&mut self) -> Option<Frame> {
+        self.run_frame(true)
+    }
+
+    /// A pausa não faz parte do tempo que transcorreu dentro do core.
+    pub fn reset_frame_time(&mut self) {
+        self.last_realtime_frame = None;
+    }
+
+    fn run_frame(&mut self, realtime: bool) -> Option<Frame> {
         if let Some(gl) = self.gl.as_mut() {
             // Interop: aponta o FBO pro slot de escrita do ring antes do run.
             gl.bind_write_slot();
@@ -265,6 +284,27 @@ impl FrameSource for DesktopCore {
             vk.begin_frame();
         }
 
+        let frame_time = ffi_state::lock().as_ref().and_then(|st| st.frame_time);
+        if let Some(sys::retro_frame_time_callback {
+            callback: Some(callback),
+            reference,
+        }) = frame_time
+        {
+            let usec = if realtime {
+                let now = std::time::Instant::now();
+                self.last_realtime_frame
+                    .replace(now)
+                    .map_or(reference, |last| {
+                        i64::try_from(now.duration_since(last).as_micros()).unwrap_or(i64::MAX)
+                    })
+            } else {
+                reference
+            };
+            // O core pode voltar a chamar o frontend daqui. O lock já foi liberado.
+            unsafe { callback(usec) };
+        } else {
+            self.reset_frame_time();
+        }
         unsafe { (self.raw.run)() };
         self.apply_geometry_update();
 

@@ -7,6 +7,13 @@ const snesExpansionCores = new Map([
   ['st', ['snes9x_libretro', 'mesen2_libretro']],
 ])
 
+export function requiresCompatibleCore(systemId: string | undefined, ext: string): boolean {
+  return systemId === 'laserdisc' || systemId === 'zx81' || systemId === 'arduboy'
+    || systemId === 'uzebox' || systemId === 'vaporspec' || systemId === 'gametank'
+    || systemId === 'megaduck' || systemId === 'handheld_electronic'
+    || (systemId === 'zxspectrum' && ext === 'tzx')
+}
+
 /**
  * Ordem dos cores pra um jogo: primeiro os que atendem o SISTEMA do jogo,
  * depois os que aceitam a extensão do arquivo, e por nome. Só a extensão
@@ -18,6 +25,9 @@ export function rankCores(
   systemId: string | undefined,
   ext: string,
 ): InstalledCore[] {
+  const available = systemId && requiresCompatibleCore(systemId, ext)
+    ? cores.filter((core) => core.systems.includes(systemId) && core.extensions.includes(ext))
+    : cores
   const preferred = systemId === 'snes' ? snesExpansionCores.get(ext) : undefined
   const score = (c: InstalledCore) => {
     if (preferred) {
@@ -26,5 +36,5 @@ export function rankCores(
     }
     return (systemId && c.systems.includes(systemId) ? 0 : 2) + (c.extensions.includes(ext) ? 0 : 1)
   }
-  return [...cores].sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name))
+  return [...available].sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name))
 }

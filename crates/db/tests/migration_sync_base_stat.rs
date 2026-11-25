@@ -32,10 +32,12 @@ async fn a_base_from_before_migrates_and_keeps_its_rows() {
     let db = mem_db().await;
     // Volta o banco para antes da 22, com uma linha da base gravada então.
     for col in ["local_size", "local_mtime_ns", "local_row"] {
-        sqlx::query(&format!("ALTER TABLE sync_base DROP COLUMN {col}"))
-            .execute(&db)
-            .await
-            .unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "ALTER TABLE sync_base DROP COLUMN {col}"
+        )))
+        .execute(&db)
+        .await
+        .unwrap();
     }
     sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 22")
         .execute(&db)

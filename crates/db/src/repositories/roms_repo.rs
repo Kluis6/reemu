@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use domain::error::RepoError;
 use domain::library::{Rom, RomRepository};
 use sqlx::sqlite::SqliteRow;
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 
 pub struct RomsRepo {
     db: Db,
@@ -124,7 +124,7 @@ impl RomRepository for RomsRepo {
     }
 
     async fn get(&self, id: &str) -> Result<Option<Rom>, RepoError> {
-        let row = sqlx::query(&format!("{SELECT_COLS} WHERE id = ?1"))
+        let row = sqlx::query(AssertSqlSafe(format!("{SELECT_COLS} WHERE id = ?1")))
             .bind(id)
             .fetch_optional(&self.db)
             .await
@@ -133,7 +133,7 @@ impl RomRepository for RomsRepo {
     }
 
     async fn find_by_path(&self, file_path: &str) -> Result<Option<Rom>, RepoError> {
-        let row = sqlx::query(&format!("{SELECT_COLS} WHERE file_path = ?1"))
+        let row = sqlx::query(AssertSqlSafe(format!("{SELECT_COLS} WHERE file_path = ?1")))
             .bind(file_path)
             .fetch_optional(&self.db)
             .await
@@ -142,9 +142,9 @@ impl RomRepository for RomsRepo {
     }
 
     async fn find_by_crc32(&self, crc32: &str) -> Result<Vec<Rom>, RepoError> {
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(AssertSqlSafe(format!(
             "{SELECT_COLS} WHERE crc32 = ?1 ORDER BY file_path"
-        ))
+        )))
         .bind(crc32)
         .fetch_all(&self.db)
         .await
@@ -153,9 +153,9 @@ impl RomRepository for RomsRepo {
     }
 
     async fn list_by_system(&self, system_id: &str) -> Result<Vec<Rom>, RepoError> {
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(AssertSqlSafe(format!(
             "{SELECT_COLS} WHERE system_id = ?1 ORDER BY file_path"
-        ))
+        )))
         .bind(system_id)
         .fetch_all(&self.db)
         .await
@@ -164,10 +164,12 @@ impl RomRepository for RomsRepo {
     }
 
     async fn list(&self) -> Result<Vec<Rom>, RepoError> {
-        let rows = sqlx::query(&format!("{SELECT_COLS} ORDER BY system_id, file_path"))
-            .fetch_all(&self.db)
-            .await
-            .map_err(be)?;
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "{SELECT_COLS} ORDER BY system_id, file_path"
+        )))
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
         rows.iter().map(row_to_rom).collect()
     }
 

@@ -274,6 +274,14 @@ const ptBR = {
         title: 'Falta um arquivo de BIOS que este sistema precisa',
         hint: 'Veja em Configurações › BIOS quais arquivos faltam e importe-os.',
       },
+      openMsxDisk: {
+        title: 'O openMSX não conseguiu abrir o disquete',
+        hint: 'Selecione uma máquina com drive nas opções do core e coloque as ROMs de sistema do modelo em system/openmsx/share/systemroms. Se estiver usando M3U, confira os caminhos dos discos.',
+      },
+      openMsxArchive: {
+        title: 'O openMSX não conseguiu abrir o arquivo compactado',
+        hint: 'Extraia a mídia antes de abrir ou compacte um único arquivo em ZIP com o método Deflate.',
+      },
       gpuRejected: {
         title: 'A placa de vídeo não aceitou o modo de desenho deste core',
         hint: 'Atualize o driver de vídeo ou escolha outro core para este sistema.',

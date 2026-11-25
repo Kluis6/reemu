@@ -49,11 +49,7 @@ const useStyles = makeStyles({
     display: "flex",
     flexDirection: "column",
     rowGap: tokens.spacingVerticalS,
-    // rolável pelo teclado/controle (tabIndex) — contorno só no foco visível
     outlineStyle: "none",
-    ":focus-visible": {
-      outline: `${tokens.strokeWidthThick} solid ${tokens.colorStrokeFocus2}`,
-    },
   },
   heading: {
     margin: 0,
@@ -171,7 +167,7 @@ function UpdateDialogOpen({ dialog }: { dialog: UpdateDialogState }) {
               {date ? t("updates.publishedOn", { date }) : ""}
             </Caption1>
 
-            <div className={s.notes} tabIndex={0} aria-label={t("updates.notesLabel")}>
+            <div className={s.notes} role="region" aria-label={t("updates.notesLabel")} tabIndex={-1}>
               {blocks.length === 0 && (
                 <p className={s.empty}>{t("updates.noNotes")}</p>
               )}

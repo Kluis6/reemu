@@ -7,7 +7,8 @@ use crate::systems::{
     folder_only_exts, folder_only_flat, system_for_extension, system_for_rom_entry,
     system_from_folder_name, AMBIGUOUS_DISC_EXTS,
 };
-use domain::library::{Rom, RomRepository};
+use domain::library::{dirksimple_game_id, Rom, RomRepository, DIRKSIMPLE_OFFICIAL_GAMES};
+use std::io::{BufRead, BufReader, Read};
 use std::path::Path;
 use walkdir::WalkDir;
 
@@ -201,7 +202,7 @@ fn is_unplayable_disc_dump(path: &Path, root: &Path, ext: &str, peek: bool) -> b
         return true;
     }
     peek && is_supported_archive(ext)
-        && peek_archive(path).is_some_and(|a| {
+        && peek_archive(path, None).is_some_and(|a| {
             Path::new(&a.entry)
                 .extension()
                 .and_then(|e| e.to_str())
@@ -216,7 +217,10 @@ fn recognized(path: &Path, root: &Path) -> bool {
         return false;
     };
     let ext = ext.to_ascii_lowercase();
-    if is_mame_companion(path, &ext) || is_unplayable_disc_dump(path, root, &ext, false) {
+    if is_mame_companion(path, &ext)
+        || is_daphne_rom_companion(path, &ext)
+        || is_unplayable_disc_dump(path, root, &ext, false)
+    {
         return false;
     }
     system_for_rom_file(path, &ext).is_some()
@@ -225,11 +229,91 @@ fn recognized(path: &Path, root: &Path) -> bool {
 }
 
 fn system_for_rom_file(path: &Path, ext: &str) -> Option<&'static str> {
-    if ext != "st" {
+    if ext == "txt" {
+        return is_daphne_framefile(path).then_some("laserdisc");
+    }
+    if ext == "ogv" {
+        return dirksimple_game_id(path)
+            .is_some_and(|id| DIRKSIMPLE_OFFICIAL_GAMES.contains(&id.as_str()))
+            .then_some("laserdisc");
+    }
+    if !matches!(ext, "st" | "xdf" | "dim" | "p") {
         return system_for_extension(ext);
     }
     let file = std::fs::File::open(path).ok()?;
     system_for_rom_entry(ext, file.metadata().ok()?.len(), file)
+}
+
+fn named_dir(path: &Path, name: &str) -> bool {
+    path.file_name()
+        .is_some_and(|part| part.eq_ignore_ascii_case(name))
+}
+
+/// Reconhece o layout Daphne com uma pasta de vídeo na primeira linha e
+/// pelo menos um registro de quadro apontando para vídeo MPEG.
+fn is_daphne_framefile(path: &Path) -> bool {
+    let Some(dir) = path.parent() else {
+        return false;
+    };
+    if !named_dir(dir, "framefile")
+        && !dir.parent().is_some_and(|parent| named_dir(parent, "vldp"))
+        && !dir
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("daphne"))
+    {
+        return false;
+    }
+    let Ok(file) = std::fs::File::open(path) else {
+        return false;
+    };
+    let mut lines = BufReader::new(file.take(8192)).lines();
+    if !lines
+        .next()
+        .is_some_and(|line| line.is_ok_and(|dir| !dir.trim().is_empty()))
+    {
+        return false;
+    }
+    for line in lines {
+        let Ok(line) = line else { return false };
+        let mut words = line.split_whitespace();
+        let Some(frame) = words.next() else { continue };
+        return frame.parse::<i32>().is_ok()
+            && words.next().is_some_and(|media| {
+                matches!(ext_of(Path::new(media)).as_str(), "m2v" | "mpg" | "mpeg")
+            });
+    }
+    false
+}
+
+fn is_daphne_rom_companion(path: &Path, ext: &str) -> bool {
+    if ext != "zip" {
+        return false;
+    }
+    let Some(roms) = path.parent().filter(|dir| named_dir(dir, "roms")) else {
+        return false;
+    };
+    let Some(root) = roms.parent() else {
+        return false;
+    };
+    let Some(game) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return false;
+    };
+    let rooted_daphne = root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .and_then(system_from_folder_name)
+        == Some("laserdisc");
+    if rooted_daphne && (root.join("framefile").is_dir() || root.join("vldp").is_dir()) {
+        return true;
+    }
+    let name = format!("{game}.txt");
+    [
+        root.join("framefile").join(&name),
+        root.join("vldp").join(game).join(&name),
+        root.join(format!("{game}.daphne")).join(&name),
+    ]
+    .iter()
+    .any(|file| is_daphne_framefile(file))
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -296,6 +380,9 @@ where
         }
         let path = entry.path();
         let ext = ext_of(path);
+        if is_daphne_rom_companion(path, &ext) {
+            continue;
+        }
 
         // Parte de um set do MAME (`.chd` ao lado do `.zip`): não é jogo; se
         // uma varredura antiga catalogou, sai da biblioteca.
@@ -319,42 +406,49 @@ where
         // (o CRC precisa ser o da ROM, não o do arquivo); pro arquivo de
         // arcade (MAME/FBNeo — sem entrada de cartucho reconhecível dentro)
         // e pra disco, o arquivo INTEIRO é a "ROM".
-        let (system_id, archived_entry): (&str, Option<String>) =
-            if AMBIGUOUS_DISC_EXTS.contains(&ext.as_str()) {
-                // Extensão de disco: (1) pasta ancestral (RetroBat/ES-DE); (2)
-                // sistema específico da extensão (`.gdi`→dreamcast, `.pbp`→psp);
-                // (3) assinatura no conteúdo do arquivo; (4) balde genérico.
-                let sys = system_from_dirs(&ancestor_dirs(path, dir))
-                    .or_else(|| system_for_extension(&ext).filter(|s| *s != "disc"))
-                    .or_else(|| crate::disc_sniff::identify(path))
-                    .unwrap_or("disc");
+        let (system_id, archived_entry): (&str, Option<String>) = if AMBIGUOUS_DISC_EXTS
+            .contains(&ext.as_str())
+        {
+            // Extensão de disco: (1) pasta ancestral (RetroBat/ES-DE); (2)
+            // sistema específico da extensão (`.gdi`→dreamcast, `.pbp`→psp);
+            // (3) assinatura no conteúdo do arquivo; (4) balde genérico.
+            let sys = system_from_dirs(&ancestor_dirs(path, dir))
+                .or_else(|| system_for_extension(&ext).filter(|s| *s != "disc"))
+                .or_else(|| crate::disc_sniff::identify(path))
+                .unwrap_or("disc");
+            (sys, None)
+        } else if ext == "hdf" && system_from_dirs(&ancestor_dirs(path, dir)) == Some("x68000") {
+            ("x68000", None)
+        } else if ext == "tzx" && system_from_dirs(&ancestor_dirs(path, dir)) == Some("zx81") {
+            ("zx81", None)
+        } else if let Some(sys) = system_for_rom_file(path, &ext) {
+            (sys, None)
+        } else if let Some(sys) = system_from_folder_ext(path, dir, &ext) {
+            (sys, None)
+        } else if is_supported_archive(&ext) {
+            let folder_system = system_from_dirs(&ancestor_dirs(path, dir));
+            if let Some(sys) = folder_system.filter(|s| WHOLE_ARCHIVE_SYSTEMS.contains(s)) {
+                // Set de arcade/NAOMI/Atomiswave: sem "a ROM" dentro do
+                // arquivo (chip dumps avulsos) — ele inteiro é a unidade,
+                // hash do arquivo.
                 (sys, None)
-            } else if let Some(sys) = system_for_rom_file(path, &ext) {
-                (sys, None)
-            } else if let Some(sys) = system_from_folder_ext(path, dir, &ext) {
-                (sys, None)
-            } else if is_supported_archive(&ext) {
-                let whole = system_from_dirs(&ancestor_dirs(path, dir))
-                    .filter(|s| WHOLE_ARCHIVE_SYSTEMS.contains(s));
-                if let Some(sys) = whole {
-                    // Set de arcade/NAOMI/Atomiswave: sem "a ROM" dentro do
-                    // arquivo (chip dumps avulsos) — ele inteiro é a unidade,
-                    // hash do arquivo.
-                    (sys, None)
-                } else {
-                    match peek_archive(path) {
-                        Some(a) => (a.system_id, Some(a.entry)),
-                        None => {
-                            report.skipped_unrecognized += 1;
-                            report.unrecognized_archives += 1;
-                            continue;
-                        }
+            } else {
+                match peek_archive(path, folder_system) {
+                    // O PX68k ordena e monta a mídia interna do ZIP. O
+                    // arquivo inteiro é a unidade de jogo e identificação.
+                    Some(a) if a.system_id == "x68000" && ext == "zip" => ("x68000", None),
+                    Some(a) => (a.system_id, Some(a.entry)),
+                    None => {
+                        report.skipped_unrecognized += 1;
+                        report.unrecognized_archives += 1;
+                        continue;
                     }
                 }
-            } else {
-                report.skipped_unrecognized += 1;
-                continue;
-            };
+            }
+        } else {
+            report.skipped_unrecognized += 1;
+            continue;
+        };
         report.found += 1;
         on_progress(ScanProgress {
             current: report.found,

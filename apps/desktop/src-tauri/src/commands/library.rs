@@ -25,7 +25,7 @@ pub struct RomDto {
     pub is_favorite: bool,
     /// Tempo de jogo acumulado (s): o perfil soma e ordena sem uma chamada por ROM.
     pub play_time_secs: u64,
-    // Extensão interna de Satellaview/Sufami Turbo para a escolha do core.
+    // Extensão interna usada na escolha do core para jogos compactados.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub content_extension: Option<String>,
@@ -65,11 +65,22 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, AppErr
             let content_extension = std::path::Path::new(&r.file_path)
                 .extension()
                 .and_then(|ext| ext.to_str())
-                .filter(|ext| r.system_id == "snes" && library_scan::is_supported_archive(ext))
+                .filter(|ext| library_scan::is_supported_archive(ext))
                 .and(r.ident_name.as_deref())
                 .and_then(|name| std::path::Path::new(name).extension()?.to_str())
                 .map(str::to_ascii_lowercase)
-                .filter(|ext| matches!(ext.as_str(), "bs" | "st"));
+                .filter(|ext| match r.system_id.as_str() {
+                    "snes" => matches!(ext.as_str(), "bs" | "st"),
+                    "atarist" => matches!(ext.as_str(), "st" | "msa" | "stx"),
+                    "zx81" => matches!(ext.as_str(), "p" | "t81" | "tzx"),
+                    "zxspectrum" => ext == "tzx",
+                    "uzebox" => ext == "uze",
+                    "vaporspec" => ext == "vaporbin",
+                    "gametank" => ext == "gtr",
+                    "megaduck" => matches!(ext.as_str(), "duck" | "bin"),
+                    "handheld_electronic" => ext == "mgw",
+                    _ => false,
+                });
             RomDto {
                 play_time_secs: play_times.get(&r.id).copied().unwrap_or(0),
                 boxart,

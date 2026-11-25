@@ -2,7 +2,7 @@
 //! extensão é ambígua, da pasta) — palpite pro agrupamento inicial da
 //! biblioteca; o match real de metadata é por hash.
 
-use domain::library::{is_sufami_turbo_cart, SUFAMI_TURBO_HEADER_LEN};
+use domain::library::{is_zx81_program, system_for_st, ST_HEADER_LEN, ZX81_P_HEADER_LEN};
 use std::io::Read;
 
 /// Extensões de imagem de disco — compartilhadas por vários sistemas (PS1,
@@ -15,6 +15,12 @@ use std::io::Read;
 pub const AMBIGUOUS_DISC_EXTS: &[&str] = &[
     "iso", "cue", "chd", "pbp", "gdi", "cdi", "mdf", "m3u", "img", "ccd", "nrg", "cso",
 ];
+
+pub(crate) const X68000_DISK_EXTS: &[&str] = &[
+    "dim", "img", "d88", "88d", "hdm", "dup", "2hd", "xdf", "hdf",
+];
+
+const MSX_FOLDER_EXTS: &[&str] = &["rom", "ri", "dsk", "di1", "di2", "dmk", "xsa", "cas", "wav"];
 
 /// `system_id` canônico pra uma extensão (sem o ponto, minúsculo). `None` se
 /// não reconhecida. Pras extensões de disco (`AMBIGUOUS_DISC_EXTS`) isso é
@@ -49,19 +55,29 @@ pub fn system_for_extension(ext: &str) -> Option<&'static str> {
         "sg" => "sg1000",
         "a52" => "atari5200",
         "atr" | "xfd" | "atx" | "xex" => "atari8bit",
+        "msa" | "stx" => "atarist",
         "j64" | "jag" => "jaguar",
         "min" => "pokemini",
         "sv" => "supervision",
         "mx1" | "mx2" => "msx",
+        "ch8" | "sc8" | "xo8" | "hc8" => "chip8",
+        "arduboy" => "arduboy",
+        "uze" => "uzebox",
+        "vaporbin" => "vaporspec",
+        "gtr" => "gametank",
+        "duck" => "megaduck",
+        "mgw" => "handheld_electronic",
         "vec" => "vectrex",
         "d64" | "d71" | "d81" | "g64" | "t64" | "x64" | "crt" => "c64",
         "adf" | "adz" | "dms" | "hdf" => "amiga",
         "tzx" | "z80" | "rzx" | "szx" | "scl" | "trd" => "zxspectrum",
+        "t81" => "zx81",
         "cdt" | "cpr" => "amstradcpc",
         // `.scummvm`: arquivo de texto com o id do jogo, dentro da pasta do
         // jogo (convenção do core ScummVM do libretro). `.dosz`: zip de jogo
         // de DOS do DOSBox Pure. Os dois só existem pra esses sistemas.
         "scummvm" => "scummvm",
+        "dirksimple" => "laserdisc",
         "dosz" => "dos",
         // `.gdi`/`.cdi` são GD-ROM → Dreamcast por padrão (NAOMI/Atomiswave a
         // pasta desambigua); `.pbp`/`.cso` são de PSP. As outras seguem ambíguas
@@ -78,12 +94,34 @@ pub(crate) fn system_for_rom_entry(
     size: u64,
     mut reader: impl Read,
 ) -> Option<&'static str> {
-    if !ext.eq_ignore_ascii_case("st") {
-        return system_for_extension(ext);
+    match ext.to_ascii_lowercase().as_str() {
+        "st" => {
+            let mut header = [0; ST_HEADER_LEN];
+            reader.read_exact(&mut header).ok()?;
+            system_for_st(size, &header)
+        }
+        "p" => {
+            let mut header = [0; ZX81_P_HEADER_LEN];
+            reader.read_exact(&mut header).ok()?;
+            is_zx81_program(size, &header).then_some("zx81")
+        }
+        "xdf" => (size == 77 * 2 * 8 * 1024).then_some("x68000"),
+        "dim" => {
+            let mut header = [0; 256];
+            reader.read_exact(&mut header).ok()?;
+            // DIM do X68000 guarda o tipo de mídia e um mapa de 170 trilhas.
+            // O mesmo sufixo, em Atari ST, tem outro layout.
+            let track_size = match header[0] {
+                0 => 8192,
+                1 | 3 | 9 => 9216,
+                2 => 7680,
+                _ => return None,
+            };
+            let tracks = header[1..=170].iter().filter(|&&flag| flag != 0).count() as u64;
+            (tracks > 0 && size == 256 + tracks * track_size).then_some("x68000")
+        }
+        _ => system_for_extension(ext),
     }
-    let mut header = [0; SUFAMI_TURBO_HEADER_LEN];
-    reader.read_exact(&mut header).ok()?;
-    is_sufami_turbo_cart(size, &header).then_some("snes")
 }
 
 /// Nomes de pasta comuns em bibliotecas RetroBat/ES-DE e packs de bezel →
@@ -157,18 +195,50 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         | "atari 800"
         | "atarixl"
         | "atari - 8-bit family" => "atari8bit",
+        "atarist" | "atari_st" | "atari-st" | "atari st" | "atari - st" | "atariste"
+        | "atari ste" | "atari tt" | "atari falcon" => "atarist",
         "jaguar" | "atarijaguar" | "atari jaguar" | "atari - jaguar" => "jaguar",
         "pokemini" | "pokemon mini" | "nintendo - pokemon mini" => "pokemini",
         "supervision" | "watara supervision" | "watara - supervision" => "supervision",
-        "msx" | "msx1" | "msx2" | "microsoft - msx" | "microsoft - msx2" => "msx",
+        "msx" | "msx1" | "msx2" | "msx2+" | "msx2plus" | "msx turbo r" | "msxturbor"
+        | "microsoft - msx" | "microsoft - msx2" | "microsoft - msx2+" => "msx",
+        "chip8" | "chip-8" | "schip" | "super chip" | "xochip" | "xo-chip" => "chip8",
+        "arduboy" | "arduboy fx" | "arduboy inc - arduboy" => "arduboy",
+        "uzebox" => "uzebox",
+        "vaporspec" | "vapor spec" => "vaporspec",
+        "gametank" | "game tank" | "clydeware - gametank" => "gametank",
+        "handheld_electronic"
+        | "handheld electronic"
+        | "handheld electronic game"
+        | "gameandwatch"
+        | "game & watch" => "handheld_electronic",
+        "megaduck"
+        | "mega_duck"
+        | "mega duck"
+        | "cougarboy"
+        | "cougar boy"
+        | "mega duck - cougar boy"
+        | "welback - mega duck"
+        | "welback holdings - mega duck" => "megaduck",
+        "zx81"
+        | "zx 81"
+        | "sinclair zx81"
+        | "sinclair zx 81"
+        | "sinclair - zx81"
+        | "sinclair - zx 81"
+        | "ts1000"
+        | "timex sinclair 1000" => "zx81",
         "vectrex" | "gce - vectrex" => "vectrex",
         "odyssey2" | "odyssey 2" | "videopac" | "magnavox - odyssey2" => "odyssey2",
         "c64" | "commodore 64" | "commodore64" | "commodore - 64" => "c64",
         "amiga" | "commodore amiga" | "commodore - amiga" => "amiga",
+        "x68000" | "x68k" | "sharp x68000" | "sharp - x68000" => "x68000",
         "zxspectrum" | "zx spectrum" | "spectrum" | "sinclair - zx spectrum" => "zxspectrum",
         "amstradcpc" | "cpc" | "amstrad cpc" | "amstrad - cpc" => "amstradcpc",
         "dos" | "msdos" | "ms-dos" | "pc" => "dos",
         "scummvm" => "scummvm",
+        "laserdisc" | "laser disc" | "laser-disc" | "dirksimple" | "daphne" | "hypseus"
+        | "hypseushw" => "laserdisc",
         // --- disco (AMBIGUOUS_DISC_EXTS) ---
         "psx" | "playstation" | "ps1" | "sony - playstation" => "psx",
         "ps2" | "playstation2" | "playstation 2" | "sony - playstation 2" => "ps2",
@@ -219,8 +289,9 @@ pub fn folder_only_flat(system_id: &str) -> bool {
 /// do `supported_extensions` do `.info` oficial dos cores do catálogo.
 pub fn folder_only_exts(system_id: &str) -> &'static [&'static str] {
     match system_id {
-        "msx" => &["rom", "ri", "dsk", "cas"],
-        "odyssey2" => &["bin"],
+        "msx" => MSX_FOLDER_EXTS,
+        "arduboy" => &["hex"],
+        "odyssey2" | "megaduck" => &["bin"],
         "vectrex" => &["bin"],
         "supervision" => &["bin"],
         "sg1000" => &["bin", "rom"],
@@ -229,6 +300,9 @@ pub fn folder_only_exts(system_id: &str) -> &'static [&'static str] {
         "atari7800" => &["bin", "cdf"],
         "atari5200" => &["bin", "rom", "car"],
         "atari8bit" => &["bin", "rom", "car", "cas", "com"],
+        "atarist" => &["dim", "ipf", "vhd", "gem", "ide", "m3u8"],
+        "x68000" => &["dim", "d88", "88d", "hdm", "dup", "2hd", "xdf", "cmd"],
+        "laserdisc" => &["ogv"],
         "jaguar" => &["bin", "rom", "abs", "cof"],
         "c64" => &["prg", "p00", "tap"],
         "zxspectrum" => &["tap", "dsk", "sna", "dck"],
@@ -283,6 +357,7 @@ fn libretro_thumbnail_system(system_id: &str) -> Option<&'static str> {
         "supergrafx" => "NEC - PC Engine SuperGrafx",
         "atari5200" => "Atari - 5200",
         "atari8bit" => "Atari - 8-bit Family",
+        "atarist" => "Atari - ST",
         "jaguar" => "Atari - Jaguar",
         "pokemini" => "Nintendo - Pokemon Mini",
         "supervision" => "Watara - Supervision",
@@ -291,6 +366,7 @@ fn libretro_thumbnail_system(system_id: &str) -> Option<&'static str> {
         "odyssey2" => "Magnavox - Odyssey2",
         "c64" => "Commodore - 64",
         "amiga" => "Commodore - Amiga",
+        "x68000" => "Sharp - X68000",
         "zxspectrum" => "Sinclair - ZX Spectrum",
         "amstradcpc" => "Amstrad - CPC",
         "dos" => "DOS",
@@ -412,14 +488,14 @@ mod tests {
         assert_eq!(system_from_folder_name("not-a-system"), None);
     }
 
-    /// Todo sistema novo precisa das 3 pontas: extensão ou pasta que o
-    /// reconhece, e pasta de capa no libretro-thumbnails.
+    /// Sistemas do catálogo com uma pasta confirmada no libretro-thumbnails.
     const CATALOG_SYSTEMS: &[&str] = &[
         "nds",
         "sg1000",
         "supergrafx",
         "atari5200",
         "atari8bit",
+        "atarist",
         "jaguar",
         "pokemini",
         "supervision",
@@ -428,6 +504,7 @@ mod tests {
         "odyssey2",
         "c64",
         "amiga",
+        "x68000",
         "zxspectrum",
         "amstradcpc",
         "dos",
@@ -450,6 +527,8 @@ mod tests {
         assert_eq!(system_for_extension("pce"), Some("pcengine"));
         assert_eq!(system_for_extension("a52"), Some("atari5200"));
         assert_eq!(system_for_extension("xex"), Some("atari8bit"));
+        assert_eq!(system_for_extension("msa"), Some("atarist"));
+        assert_eq!(system_for_extension("stx"), Some("atarist"));
         assert_eq!(system_for_extension("j64"), Some("jaguar"));
         assert_eq!(system_for_extension("min"), Some("pokemini"));
         assert_eq!(system_for_extension("sv"), Some("supervision"));
@@ -460,6 +539,7 @@ mod tests {
         assert_eq!(system_for_extension("tzx"), Some("zxspectrum"));
         assert_eq!(system_for_extension("cdt"), Some("amstradcpc"));
         assert_eq!(system_for_extension("scummvm"), Some("scummvm"));
+        assert_eq!(system_for_extension("dirksimple"), Some("laserdisc"));
         assert_eq!(system_for_extension("dosz"), Some("dos"));
     }
 
@@ -470,6 +550,7 @@ mod tests {
                 assert_eq!(system_for_extension(ext), None, "{sys}: .{ext}");
             }
         }
+        assert_eq!(system_for_extension("ogv"), None);
     }
 
     #[test]

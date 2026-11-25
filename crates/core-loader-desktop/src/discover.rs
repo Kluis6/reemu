@@ -154,17 +154,22 @@ fn peek(path: &Path) -> Option<DiscoveredCore> {
     unsafe { (raw.get_system_info)(&mut info) };
 
     let core_id = core_id_of(path)?;
+    let mut valid_extensions: Vec<_> = cstr(info.valid_extensions)
+        .split('|')
+        .filter(|s| !s.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect();
+    // O build do SameDuck anuncia BIN, mas carrega o mesmo cartucho como DUCK.
+    if core_id == "sameduck_libretro" && !valid_extensions.iter().any(|ext| ext == "duck") {
+        valid_extensions.push("duck".into());
+    }
 
     Some(DiscoveredCore {
         core_id,
         path: path.to_path_buf(),
         library_name: cstr(info.library_name),
         library_version: cstr(info.library_version),
-        valid_extensions: cstr(info.valid_extensions)
-            .split('|')
-            .filter(|s| !s.is_empty())
-            .map(str::to_owned)
-            .collect(),
+        valid_extensions,
         api_version,
     })
 }

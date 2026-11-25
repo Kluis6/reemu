@@ -129,15 +129,70 @@ o card atual fica.
       (2026-11-23). Usar um runner Linux para a fumaça automatizada e uma
       sessão desktop Linux para os testes de interface, controle e vídeo.
       - **Cores Libretro.** Rodar a fumaça do catálogo com `bsnes-jg`,
-        `Mesen-S` e `Mesen2`. Repetir os testes de cartucho, vídeo, áudio,
-        RetroPad, save states e persistência da SRAM. Cobrir Famicom Disk
+        `Mesen-S`, `Mesen2` e `DoubleCherryGB`. Repetir os testes de cartucho,
+        vídeo, áudio, RetroPad, save states e persistência da SRAM. Cobrir Famicom Disk
         System e PC Engine CD no Mesen2 com firmware e mídia sintéticos e
         originais, Super Game Boy nos dois Mesen e os modos pendentes de
         Satellaview e Sufami Turbo nos cores que os oferecem. Incluir as
-        demais variantes Linux conforme entrarem no catálogo.
+        demais variantes Linux conforme entrarem no catálogo. Em Hatari e Hatari 2014,
+        validar a importação de `tos.img`, o boot de `.st` e ZIP com
+        `REEMU_HATARI_TOS` e a abertura pela biblioteca em Atari ST. No
+        hatariB, repetir a abertura com EmuTOS embutido, incluindo ZIP e
+        `.m3u8`, e verificar as opções de modelo e save states. No PX68k,
+        validar importação de `iplrom.dat` e `cgrom.dat`, boot em XDF, DIM,
+        ZIP multidisco e M3U com `REEMU_PX68K_BIOS_DIR`, o menu por RetroPad
+        L2 e a restauração de save states pela biblioteca.
+        No DirkSimple, validar o download de `system/DirkSimple`, a abertura
+        de `.ogv` e `.dirksimple`, a fumaça com `REEMU_DIRKSIMPLE_OGV`,
+        áudio, RetroPad, pausa e restauração após reabrir o jogo.
+        No HypseusHW, repetir a fumaça com `REEMU_HYPSEUS_MEDIA_DIR`,
+        abrir o framefile pela biblioteca, verificar a ROM e mídias associadas,
+        diagnóstico de arquivos ausentes e criação do cache. Validar OpenGL
+        e CPU Fallback e registrar a rota Vulkan separadamente.
+        No openMSX, repetir a fumaça de cartucho avulso e em ZIP Deflate,
+        validar a instalação e a restauração de save states pela biblioteca
+        e testar boot de disquetes e listas M3U com uma máquina com drive e
+        as ROMs de sistema do modelo. Conferir RetroPad e teclado físico.
+        No JAXE, repetir a fumaça `REEMU_SMOKE_ONLY=jaxe_libretro` e validar
+        instalação, varredura CHIP-8, abertura de ROM compactada, RetroPad,
+        save state e persistência dos flags pela save RAM.
+        No Ardens, repetir a fumaça `REEMU_SMOKE_ONLY=ardens_libretro`, validar
+        a importação de `.hex` e `.arduboy`, o RetroPad, a restauração do save
+        state e a persistência de EEPROM e de dados de flash FX.
+        No Arduous, executar `REEMU_SMOKE_ONLY=arduous_libretro` e verificar
+        RetroPad, EEPROM, save state e seleção de core para `.hex` e `.arduboy`
+        com os dois cores instalados.
+        No Uzem, executar `REEMU_SMOKE_ONLY=uzem_libretro` com `REEMU_UZEM_ROM`
+        apontando para um cartucho `.uze` com áudio. Validar instalação,
+        abertura de `.uze` avulso, ZIP e 7z, RetroPad, EEPROM, restauração
+        do save state pela biblioteca e montagem do cartão SD em `system/uzem`.
+        No VaporSpec, executar `REEMU_SMOKE_ONLY=vaporspec_libretro` e validar
+        instalação, abertura de `.vaporbin` avulso, ZIP e 7z, RetroPad e
+        restauração do save state pela biblioteca.
+        No GameTank, executar `REEMU_SMOKE_ONLY=gametank_libretro` com
+        `REEMU_GAMETANK_ROM` apontando para `05_audio.gtr` do projeto oficial.
+        Validar abertura de `.gtr` avulso, ZIP e 7z, RetroPad, save states,
+        flash `.xor` e SRAM `.srm`. [ROMs de teste](https://github.com/clydeshaffer/GameTankEmulator/tree/7fcfbcda5af56490663dba0bc228897e199bb36d/asm/Tutorial)
+        No SameDuck, executar `REEMU_SMOKE_ONLY=sameduck_libretro` e validar
+        instalação, abertura de `.duck` e `.bin` avulsos ou compactados em
+        ZIP e 7z, RetroPad e restauração do save state pela biblioteca.
+        No GW, executar `REEMU_SMOKE_ONLY=gw_libretro` com `REEMU_GW_ROM`
+        apontando para um simulador `.mgw` do Buildbot. Validar instalação,
+        abertura de `.mgw` avulso, ZIP e 7z, mapa de controles via Start e
+        gravação e restauração da SRAM. [Amostras oficiais](https://buildbot.libretro.com/assets/cores/Handheld%20Electronic%20Game/)
+        No EightyOne, executar `REEMU_SMOKE_ONLY=81_libretro`, abrir `.p`
+        avulso e compactado, testar fitas `.tzx` e `.t81` pela biblioteca e
+        verificar teclado virtual, teclado físico e restauração do save state.
       - **Gerenciamento de BIOS.** Testar na interface a escolha de pasta,
         a busca em subpastas, o reconhecimento por MD5, a importação no
         destino por core, a revisão manual e a repetição sem duplicatas.
+      - **Multiplayer e recursos extras.** Repetir a matriz validada no Windows
+        para redes de PSP e DS, Link, netplay, Netpacket, conquistas, troca de
+        disco, latência e periféricos. Conferir também sessões Windows–Linux
+        nas combinações elegíveis. [Plano](docs/ai-context/28-recursos-extras-libretro.md#ordem-de-entrega-e-validação).
+      - **Shaders nativos.** Repetir a linha de base e a matriz de qualidade e
+        desempenho em Vulkan, incluindo Wayland, escala fracionária, troca de
+        preset e GPU integrada. [Plano](docs/ai-context/29-shaders-nativos.md).
       - **Desktop e distribuição.** Validar em Wayland a sincronização do
         ritmo do core com o monitor e medir os quadros perdidos. Testar
         a atualização do AppImage pelo modal entre duas releases e conferir
@@ -149,6 +204,12 @@ o card atual fica.
         [Inventário Libretro](docs/ai-context/inventario-libretro.md).
 
 ### Vídeo / GPU
+
+- [ ] `backlog` — **Melhorar a qualidade e o desempenho dos shaders nativos**
+      (2026-11-24). Medir `plain`, CRT, LCD e CAS por passe, priorizar a
+      estabilidade de scanlines e máscaras do CRT, corrigir a grade do LCD,
+      revisar escala e cor e medir as otimizações da prévia e apresentação.
+      [Análise, etapas e critérios de aceite](docs/ai-context/29-shaders-nativos.md).
 
 - [ ] `backlog` — **Direct3D 11 e 12 por core no Windows** (2026-11-18).
       D3D11 começa no PPSSPP e segue para SwanStation, Flycast e LRPS2.
@@ -566,8 +627,29 @@ no `emu-session`, ver `docs/historico.md`).
       Vulkan e D3D11 têm validações próprias.
       [Plano do Dolphin](docs/ai-context/25-dolphin-libretro.md).
 
-- [ ] `todo` — **Conquistas (RetroAchievements)**, pedido do dono do projeto
-      (2026-10-28). Plano completo em
+- [ ] `backlog` — **Detectar recursos extras por core e versão.** Registrar
+      callbacks e disponibilidade no loader e na interface. [Plano](docs/ai-context/28-recursos-extras-libretro.md#0-detectar-recursos-por-core-e-versão).
+- [ ] `backlog` — **Redes próprias do PPSSPP e melonDS DS.** Validar ad hoc
+      no PSP, Nintendo Wi-Fi Connection no DS e multiplayer local de DS em LAN
+      cabeada. [Plano](docs/ai-context/28-recursos-extras-libretro.md#1-redes-próprias-do-psp-e-do-ds).
+- [ ] `backlog` — **Cabo Link e subsistemas.** Testar Link local em TGB Dual,
+      DoubleCherryGB e SameBoy. Implementar seleção de dois cartuchos no
+      SameBoy e Slot-2 no melonDS DS. [Plano](docs/ai-context/28-recursos-extras-libretro.md#2-cabo-link-local-e-múltiplas-mídias).
+- [ ] `backlog` — **Netplay por controles sincronizados.** Começar com
+      Snes9x em LAN, expandir para FCEUmm, Genesis Plus GX e FinalBurn Neo e
+      depois validar partidas pela internet. [Plano](docs/ai-context/28-recursos-extras-libretro.md#3-netplay-por-controles-sincronizados).
+- [ ] `backlog` — **Multiplayer via Netpacket.** Implementar a interface
+      Libretro e validar trocas no DoubleCherryGB, Wireless Adapter no gpSP,
+      rede no DOSBox Pure e LAN no melonDS DS. [Plano](docs/ai-context/28-recursos-extras-libretro.md#4-redes-emuladas-via-netpacket).
+- [ ] `backlog` — **Troca de disco no menu de pausa.** Expor Disk Control e
+      validar jogos `.m3u` no PCSX ReARMed e Beetle PSX HW. [Plano](docs/ai-context/28-recursos-extras-libretro.md#6-troca-de-disco-no-menu-de-pausa).
+- [ ] `backlog` — **Run-ahead e quadros preemptivos.** Começar pelo FinalBurn
+      Neo e medir latência de entrada, desempenho e estabilidade. [Plano](docs/ai-context/28-recursos-extras-libretro.md#7-rewind-run-ahead-e-quadros-preemptivos).
+- [ ] `backlog` — **Periféricos Libretro.** Expor pistola de luz no Flycast e
+      exportação de PNG do Game Boy Printer no DoubleCherryGB. [Plano](docs/ai-context/28-recursos-extras-libretro.md#8-periféricos).
+
+- [ ] `backlog` — **Conquistas e placares (RetroAchievements)**, pedido do
+      dono do projeto (2026-10-28). Plano completo em
       [`docs/ai-context/16-retroachievements.md`](docs/ai-context/16-retroachievements.md):
       rcheevos (MIT) compilado num crate nosso; `rc_client` no processo do
       core; HTTPS pelo app com o User-Agent do ReEmu.

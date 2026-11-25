@@ -87,6 +87,15 @@ const RULES: Rule[] = [
     id: 'notFoundRemote',
   },
   {
+    test: /openMSX não abriu o disquete/i,
+    id: 'openMsxDisk',
+    fix: 'cores',
+  },
+  {
+    test: /openMSX não abriu o ZIP|Extraia a mídia do arquivo 7z antes de abrir no openMSX/i,
+    id: 'openMsxArchive',
+  },
+  {
     test: /bios|firmware/i,
     id: 'missingBios',
     fix: 'bios',

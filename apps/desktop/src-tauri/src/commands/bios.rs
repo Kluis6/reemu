@@ -19,13 +19,16 @@ pub struct BiosStatusDto {
 /// Confere `<dados>/system` contra a tabela de BIOS conhecida
 /// (`domain::bios`) — presença + MD5 quando documentado. Nunca baixa nada.
 #[tauri::command]
-pub fn list_bios_status(state: State<'_, AppState>) -> Vec<BiosStatusDto> {
+pub fn list_bios_status(state: State<'_, AppState>, core_id: Option<String>) -> Vec<BiosStatusDto> {
     crate::bios::check_all(&state.system_dir)
         .into_iter()
         .map(|s| BiosStatusDto {
+            required: s.required
+                || core_id.as_deref().is_some_and(|core_id| {
+                    domain::bios::bios_required_for_core(&s.system_id, &s.filename, core_id)
+                }),
             system_id: s.system_id,
             filename: s.filename,
-            required: s.required,
             note: s.note,
             present: s.present,
             hash_ok: s.hash_ok,

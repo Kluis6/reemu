@@ -46,6 +46,8 @@ trabalhar de memória (ver `00-visao-geral.md`).
 | `25-dolphin-libretro.md` | Integração do Dolphin libretro para GameCube e Wii (**backlog**) | 02, 05, 10, 12, 24 |
 | `26-compatibilidade-libretro.md` | Compatibilidade total com libretro: etapas, tarefas e [inventário por core](inventario-libretro.md) (**backlog**) | 02, 10, 19, 24, 25 |
 | `27-papeis-de-parede-animados.md` | Qualidade, fluidez e custo dos fundos animados (**backlog**) | 03, 07, 19 |
+| [`28-recursos-extras-libretro.md`](28-recursos-extras-libretro.md) | Multiplayer, cabo Link, serviços de rede, conquistas, troca de disco, latência e periféricos (**backlog**) | 02, 05, 08, 16, 17, 26 |
+| [`29-shaders-nativos.md`](29-shaders-nativos.md) | Qualidade, escala, cor e custo dos shaders nativos (**backlog**) | 04, 19 |
 
 Docs 04 a 10 podem ser feitos em paralelo/qualquer ordem entre si, desde
 que 01-03 já estejam prontos.

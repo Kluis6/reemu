@@ -568,6 +568,13 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-11-25 — preparação da versão 0.1.19**. As integrações Libretro
+  ampliaram o catálogo para 147 dos 261 cores com pacote desktop. Entraram
+  plataformas como LaserDisc, Sinclair ZX81, Arduboy, Uzebox, VaporSpec,
+  GameTank, Mega Duck e Handheld Electronic. A versão também inclui ajustes
+  na identificação de ROMs e BIOS e a adaptação dos repositórios a SQLx 0.9.1.
+  [Inventário e validações](ai-context/inventario-libretro.md#cores-já-no-catálogo)
+
 - **2026-09-25 — `GET_INPUT_BITMASKS` anunciado**: pelo `libretro.h`, o
   frontend que responde `true` a `GET_INPUT_BITMASKS` (51 | EXPERIMENTAL)
   aceita `RETRO_DEVICE_ID_JOYPAD_MASK` (256) no `input_state` e devolve

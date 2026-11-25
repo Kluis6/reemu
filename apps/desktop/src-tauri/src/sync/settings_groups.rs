@@ -2222,7 +2222,7 @@ mod tests {
         std::fs::write(p, b"x").unwrap();
     }
 
-    async fn run(db: &Db, sql: &str, args: &[&str]) {
+    async fn run(db: &Db, sql: &'static str, args: &[&str]) {
         let mut q = sqlx::query(sql);
         for a in args {
             q = q.bind(*a);
@@ -2251,22 +2251,25 @@ mod tests {
     }
 
     /// Cada linha da tabela, como texto, em ordem.
-    async fn dump(db: &Db, table: &str) -> Vec<String> {
-        let cols: Vec<String> = sqlx::query_scalar(&format!(
-            "SELECT name FROM pragma_table_info('{table}') ORDER BY cid"
-        ))
-        .fetch_all(db)
-        .await
-        .unwrap();
+    async fn dump(db: &Db, table: &'static str) -> Vec<String> {
+        let cols: Vec<String> =
+            sqlx::query_scalar("SELECT name FROM pragma_table_info(?1) ORDER BY cid")
+                .bind(table)
+                .fetch_all(db)
+                .await
+                .unwrap();
         let expr = cols
             .iter()
             .map(|c| format!("quote({c})"))
             .collect::<Vec<_>>()
             .join(" || '|' || ");
-        sqlx::query_scalar(&format!("SELECT {expr} FROM {table} ORDER BY 1"))
-            .fetch_all(db)
-            .await
-            .unwrap()
+        // Os nomes vêm das tabelas e migrations do banco de teste em memória.
+        sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT {expr} FROM {table} ORDER BY 1"
+        )))
+        .fetch_all(db)
+        .await
+        .unwrap()
     }
 
     /// As tabelas que os grupos escrevem e as que nunca viajam. Sem
@@ -2433,7 +2436,7 @@ mod tests {
             .unwrap();
     }
 
-    async fn rows<T>(db: &Db, sql: &str) -> Vec<T>
+    async fn rows<T>(db: &Db, sql: &'static str) -> Vec<T>
     where
         T: for<'r> sqlx::FromRow<'r, sqlx::sqlite::SqliteRow> + Send + Unpin,
     {

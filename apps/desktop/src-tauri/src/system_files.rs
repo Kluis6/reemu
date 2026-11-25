@@ -1,16 +1,14 @@
-//! Arquivos de sistema que não são BIOS: hoje só a pasta `PPSSPP/` que o core
-//! de PSP usa (fontes, atlas da interface do sistema, `compat.ini`…). Sem ela
-//! alguns jogos mostram texto quebrado nos diálogos do sistema.
-//!
-//! Ao contrário de BIOS (copyright da fabricante — o ReEmu nunca baixa), isto
-//! é GPL e sai do buildbot da libretro: o mesmo `assets/system/PPSSPP.zip`
-//! que o "Core System Files Downloader" do RetroArch baixa. Raiz do zip =
-//! `PPSSPP/`, extraída direto em `<system_dir>/`.
+//! Pacotes de dados do Buildbot para PPSSPP e DirkSimple, instalados sob
+//! `<system_dir>/`. O vídeo de LaserDisc é fornecido pela biblioteca local.
 
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 const PPSSPP_URL: &str = "https://buildbot.libretro.com/assets/system/PPSSPP.zip";
+const DIRKSIMPLE_URL: &str = "https://buildbot.libretro.com/assets/system/DirkSimple.zip";
+const DIRKSIMPLE_MAX_BYTES: usize = 2 * 1024 * 1024;
+const DIRKSIMPLE_MAX_ENTRIES: usize = 128;
+static DIRKSIMPLE_INSTALL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// Arquivo que só existe com a pasta completa — marca de "instalado".
 const PPSSPP_MARKER: &str = "PPSSPP/ppge_atlas.zim";
 
@@ -22,24 +20,129 @@ pub fn ppsspp_installed(system_dir: &Path) -> bool {
 /// então troca pela atual — download interrompido não deixa pasta pela
 /// metade. Devolve quantos arquivos foram extraídos.
 pub async fn download_ppsspp(system_dir: &Path) -> Result<usize, String> {
-    log::info!("system files: baixando {PPSSPP_URL}");
+    let resp = download_pack(PPSSPP_URL).await?;
+    let bytes = resp.bytes().await.map_err(|e| format!("download: {e}"))?;
+    let dir = system_dir.to_path_buf();
+    tokio::task::spawn_blocking(move || install_zip(&dir, &bytes))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+async fn download_pack(url: &str) -> Result<reqwest::Response, String> {
+    log::info!("system files: baixando {url}");
     let resp = reqwest::Client::builder()
         .user_agent(net::http::USER_AGENT)
         .timeout(std::time::Duration::from_secs(120))
         .build()
         .map_err(|e| e.to_string())?
-        .get(PPSSPP_URL)
+        .get(url)
         .send()
         .await
         .map_err(|e| format!("rede: {e}"))?;
     if !resp.status().is_success() {
         return Err(format!("buildbot HTTP {}", resp.status()));
     }
-    let bytes = resp.bytes().await.map_err(|e| format!("download: {e}"))?;
-    let dir = system_dir.to_path_buf();
-    tokio::task::spawn_blocking(move || install_zip(&dir, &bytes))
+    Ok(resp)
+}
+
+fn dirksimple_script(root: &Path, game: &str) -> bool {
+    let folder = root.join("data/games").join(game);
+    ["game.lua", "game.luac"]
+        .iter()
+        .any(|name| folder.join(name).is_file())
+}
+
+pub fn needs_dirksimple_data(system_dir: &Path, path: &Path) -> bool {
+    domain::library::dirksimple_game_id(path).is_some_and(|id| {
+        domain::library::DIRKSIMPLE_OFFICIAL_GAMES.contains(&id.as_str())
+            && !dirksimple_script(&system_dir.join("DirkSimple"), &id)
+    })
+}
+
+pub async fn ensure_dirksimple(system_dir: &Path) -> Result<(), String> {
+    let _install = DIRKSIMPLE_INSTALL.lock().await;
+    let root = system_dir.join("DirkSimple");
+    if domain::library::DIRKSIMPLE_OFFICIAL_GAMES
+        .iter()
+        .all(|game| dirksimple_script(&root, game))
+    {
+        return Ok(());
+    }
+    let mut resp = download_pack(DIRKSIMPLE_URL).await?;
+    let mut bytes = Vec::new();
+    while let Some(chunk) = resp.chunk().await.map_err(|e| format!("download: {e}"))? {
+        if bytes.len() + chunk.len() > DIRKSIMPLE_MAX_BYTES {
+            return Err("pacote do DirkSimple excedeu o tamanho esperado".into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    tokio::task::spawn_blocking(move || install_dirksimple_zip(&root, &bytes))
         .await
         .map_err(|e| e.to_string())?
+}
+
+fn install_dirksimple_zip(root: &Path, bytes: &[u8]) -> Result<(), String> {
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
+    if zip.len() > DIRKSIMPLE_MAX_ENTRIES {
+        return Err("pacote do DirkSimple excedeu o número esperado de arquivos".into());
+    }
+    let mut entries = Vec::new();
+    let mut remaining = DIRKSIMPLE_MAX_BYTES;
+    for index in 0..zip.len() {
+        let entry = zip.by_index(index).map_err(|e| e.to_string())?;
+        if entry.is_dir() || entry.is_symlink() {
+            continue;
+        }
+        let Some(path) = entry
+            .enclosed_name()
+            .and_then(|p| strip_root(&p, "DirkSimple"))
+        else {
+            continue;
+        };
+        let mut data = Vec::new();
+        entry
+            .take(remaining as u64 + 1)
+            .read_to_end(&mut data)
+            .map_err(|e| e.to_string())?;
+        remaining = remaining
+            .checked_sub(data.len())
+            .ok_or("pacote do DirkSimple excedeu o tamanho descompactado esperado")?;
+        entries.push((path, data));
+    }
+    for game in domain::library::DIRKSIMPLE_OFFICIAL_GAMES {
+        let script = Path::new("data/games").join(game).join("game.lua");
+        if !entries
+            .iter()
+            .any(|(path, data)| *path == script && !data.is_empty())
+        {
+            return Err(format!(
+                "pacote do DirkSimple incompleto (sem {})",
+                script.display()
+            ));
+        }
+    }
+
+    // Grava os scripts por último: uma interrupção durante cópia dos assets
+    // mantém o pacote pendente e o próximo download preenche o que faltou.
+    entries.sort_by_key(|(path, _)| path.ends_with("game.lua"));
+    for (path, data) in entries {
+        let dest = root.join(path);
+        if dest.is_file() {
+            continue;
+        }
+        let parent = dest
+            .parent()
+            .expect("asset do DirkSimple tem diretório pai");
+        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        let mut file = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+        file.write_all(&data).map_err(|e| e.to_string())?;
+        match file.persist_noclobber(&dest) {
+            Ok(_) => {}
+            Err(e) if e.error.kind() == std::io::ErrorKind::AlreadyExists && dest.is_file() => {}
+            Err(e) => return Err(e.error.to_string()),
+        }
+    }
+    Ok(())
 }
 
 fn install_zip(system_dir: &Path, bytes: &[u8]) -> Result<usize, String> {
@@ -56,7 +159,7 @@ fn install_zip(system_dir: &Path, bytes: &[u8]) -> Result<usize, String> {
         }
         // Só `PPSSPP/...`, sem `..` nem caminho absoluto (zip malicioso não
         // escreve fora da pasta).
-        let Some(rel) = entry.enclosed_name().and_then(|p| strip_root(&p)) else {
+        let Some(rel) = entry.enclosed_name().and_then(|p| strip_root(&p, "PPSSPP")) else {
             continue;
         };
         let dest = staging.join(&rel);
@@ -83,15 +186,11 @@ fn install_zip(system_dir: &Path, bytes: &[u8]) -> Result<usize, String> {
     Ok(files)
 }
 
-/// `PPSSPP/a/b` → `a/b`. Qualquer coisa fora de `PPSSPP/` → `None`.
-fn strip_root(p: &Path) -> Option<PathBuf> {
-    let mut comps = p.components();
-    match comps.next()? {
-        Component::Normal(first) if first == "PPSSPP" => {}
-        _ => return None,
-    }
-    let rest: PathBuf = comps.collect();
-    (!rest.as_os_str().is_empty()).then_some(rest)
+/// `raiz/a/b` → `a/b`, só com componentes de caminho simples.
+fn strip_root(p: &Path, root: &str) -> Option<PathBuf> {
+    let rest = p.strip_prefix(root).ok()?;
+    (!rest.as_os_str().is_empty() && rest.components().all(|c| matches!(c, Component::Normal(_))))
+        .then(|| rest.to_path_buf())
 }
 
 #[cfg(test)]
@@ -155,13 +254,39 @@ mod tests {
     }
 
     #[test]
+    fn dirksimple_pack_retries_without_overwriting_local_game_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("DirkSimple");
+        let lair = root.join("data/games/lair/game.lua");
+        std::fs::create_dir_all(lair.parent().unwrap()).unwrap();
+        std::fs::write(&lair, b"local script").unwrap();
+        let archive = zip_with(&[
+            ("DirkSimple/data/games/lair/game.lua", b"upstream lair"),
+            ("DirkSimple/data/games/cliff/game.lua", b"upstream cliff"),
+            ("DirkSimple/data/games/cliff/icon.png", b"icon"),
+            ("DirkSimple/../foreign", b"foreign"),
+        ]);
+        assert!(needs_dirksimple_data(dir.path(), Path::new("cliff.ogv")));
+        install_dirksimple_zip(&root, &archive).unwrap();
+        install_dirksimple_zip(&root, &archive).unwrap();
+        assert_eq!(std::fs::read(lair).unwrap(), b"local script");
+        assert!(root.join("data/games/cliff/icon.png").is_file());
+        assert!(!dir.path().join("foreign").exists());
+        assert!(!needs_dirksimple_data(dir.path(), Path::new("CLIFF.OGV")));
+    }
+
+    #[test]
     fn strip_root_rejects_anything_outside_ppsspp() {
         assert_eq!(
-            strip_root(Path::new("PPSSPP/a/b")),
+            strip_root(Path::new("PPSSPP/a/b"), "PPSSPP"),
             Some(PathBuf::from("a/b"))
         );
-        assert_eq!(strip_root(Path::new("PPSSPP")), None);
-        assert_eq!(strip_root(Path::new("x/PPSSPP/a")), None);
+        assert_eq!(strip_root(Path::new("PPSSPP"), "PPSSPP"), None);
+        assert_eq!(strip_root(Path::new("x/PPSSPP/a"), "PPSSPP"), None);
+        assert_eq!(
+            strip_root(Path::new("DirkSimple/../escape"), "DirkSimple"),
+            None
+        );
     }
 
     /// Baixa o pacote REAL do buildbot (rede, ~11 MB). Fora do CI:

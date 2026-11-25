@@ -36,8 +36,9 @@ pub const RETRO_ENVIRONMENT_SET_VARIABLES: c_uint = 16;
 pub const RETRO_ENVIRONMENT_SET_VARIABLE: c_uint = 70;
 pub const RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: c_uint = 17;
 pub const RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME: c_uint = 18;
+pub const RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK: c_uint = 21;
 pub const RETRO_ENVIRONMENT_GET_LOG_INTERFACE: c_uint = 27;
-pub const RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY: c_uint = 30;
+pub const RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY: c_uint = 30;
 pub const RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: c_uint = 31;
 pub const RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: c_uint = 32;
 pub const RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO: c_uint = 34;
@@ -58,6 +59,19 @@ pub const RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL: c_uint = 54;
 pub const RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY: c_uint = 55;
 pub const RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2: c_uint = 67;
 pub const RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL: c_uint = 68;
+
+#[repr(C)]
+pub struct retro_message {
+    pub msg: *const c_char,
+    pub frames: c_uint,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct retro_frame_time_callback {
+    pub callback: Option<unsafe extern "C" fn(i64)>,
+    pub reference: i64,
+}
 
 /// `RETRO_HW_FRAME_BUFFER_VALID` = `((void*)-1)` — o `data` que o core passa pro
 /// `retro_video_refresh` quando o frame está no FBO de HW render (não é ponteiro

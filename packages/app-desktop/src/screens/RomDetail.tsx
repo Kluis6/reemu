@@ -94,7 +94,7 @@ import { useModalButtonStyles } from "../styles/buttons";
 import { useDetailStyles, useTabStyles } from "../styles/xbox";
 import { useToastStore } from "../stores/useToastStore";
 import { useTranslation } from "react-i18next";
-import { rankCores } from "../lib/coreChoice";
+import { rankCores, requiresCompatibleCore } from "../lib/coreChoice";
 import { TOOLTIP_POSITION } from "../lib/tooltip";
 import { CloseButton } from "../components/CloseButton";
 
@@ -168,13 +168,6 @@ export function RomDetail() {
     queryFn: getShaderInfo,
     retry: false,
   });
-  // Cacheado (Config › BIOS já deixa isso quente); só pra avisar antes de
-  // jogar um sistema que precisa de BIOS obrigatório e ele estiver faltando.
-  const biosStatus = useQuery({
-    queryKey: ["bios-status"],
-    queryFn: listBiosStatus,
-    retry: false,
-  });
   const romShader = useQuery({
     queryKey: ["rom-shader", romId],
     queryFn: () => getRomShader(romId),
@@ -227,7 +220,17 @@ export function RomDetail() {
   const [coreId, setCoreId] = useState("");
   const systemDefaultCore = rom ? (sysCores.data?.[rom.systemId] ?? "") : "";
   const chosenCore =
-    coreId || systemDefaultCore || coreList[0]?.coreId || "";
+    requiresCompatibleCore(rom?.systemId, ext)
+      ? [coreId, systemDefaultCore, coreList[0]?.coreId].find((id) =>
+          coreList.some((core) => core.coreId === id),
+        ) ?? ""
+      : coreId || systemDefaultCore || coreList[0]?.coreId || "";
+  const biosStatus = useQuery({
+    queryKey: ["bios-status", chosenCore],
+    queryFn: () => listBiosStatus(chosenCore),
+    enabled: !!chosenCore,
+    retry: false,
+  });
   const [confirmRemove, setConfirmRemove] = useState(false);
   // Dica do "Remover": abre sozinha no 1º clique (a confirmação) e fica
   // aberta enquanto ela vale — com controle ou toque não há hover pra

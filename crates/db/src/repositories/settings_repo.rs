@@ -16,7 +16,7 @@ use domain::decoration::{DecorationAssignment, DecorationPack, DecorationPackSou
 use domain::error::RepoError;
 use domain::shader_chain::{AssignmentScope, ShaderFormat, ShaderPreset};
 use sqlx::sqlite::SqliteRow;
-use sqlx::{Row, Sqlite, Transaction};
+use sqlx::{AssertSqlSafe, Row, SqlSafeStr, SqlStr, Sqlite, Transaction};
 use std::collections::HashMap;
 
 /// Um valor de `core_option_overrides` (opção de core de um jogo).
@@ -111,10 +111,13 @@ pub enum Put {
 
 impl Put {
     /// O `INSERT` com o `ON CONFLICT` que troca `set` quando é `Upsert`.
-    fn sql(self, insert: &str, conflict: &str, set: &str) -> String {
+    fn sql(self, insert: &'static str, conflict: &'static str, set: &'static str) -> SqlStr {
         match self {
-            Put::Insert => insert.to_string(),
-            Put::Upsert => format!("{insert} ON CONFLICT({conflict}) DO UPDATE SET {set}"),
+            Put::Insert => SqlStr::from_static(insert),
+            Put::Upsert => AssertSqlSafe(format!(
+                "{insert} ON CONFLICT({conflict}) DO UPDATE SET {set}"
+            ))
+            .into_sql_str(),
         }
     }
 }
@@ -204,7 +207,7 @@ impl SettingsTx {
         Ok(())
     }
 
-    async fn all(&mut self, sql: &str) -> Result<Vec<SqliteRow>, RepoError> {
+    async fn all(&mut self, sql: &'static str) -> Result<Vec<SqliteRow>, RepoError> {
         sqlx::query(sql).fetch_all(&mut *self.tx).await.map_err(be)
     }
 
@@ -269,7 +272,7 @@ impl SettingsTx {
             "core_id, option_key",
             "value = excluded.value",
         );
-        sqlx::query(&sql)
+        sqlx::query(sql)
             .bind(row_id(core_id, key))
             .bind(core_id)
             .bind(key)
@@ -324,7 +327,7 @@ impl SettingsTx {
             "rom_id, core_id, option_key",
             "value = excluded.value",
         );
-        sqlx::query(&sql)
+        sqlx::query(sql)
             .bind(override_id(&o.rom_id, &o.core_id, &o.key))
             .bind(&o.rom_id)
             .bind(&o.core_id)
@@ -366,7 +369,7 @@ impl SettingsTx {
             "system_id",
             "core_id = excluded.core_id",
         );
-        sqlx::query(&sql)
+        sqlx::query(sql)
             .bind(system_id)
             .bind(core_id)
             .execute(&mut *self.tx)
@@ -674,7 +677,7 @@ impl SettingsTx {
             "target",
             "code = excluded.code",
         );
-        sqlx::query(&sql)
+        sqlx::query(sql)
             .bind(target)
             .bind(code)
             .execute(&mut *self.tx)
@@ -783,7 +786,7 @@ impl SettingsTx {
             "scope, target",
             "aspect = excluded.aspect",
         );
-        sqlx::query(&sql)
+        sqlx::query(sql)
             .bind(&a.scope)
             .bind(&a.target)
             .bind(&a.aspect)

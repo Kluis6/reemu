@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use domain::error::RepoError;
 use domain::save_state::{SaveRamMetadata, SaveStateMetadata, SaveStateRepository};
 use sqlx::sqlite::SqliteRow;
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 
 pub struct SaveStateRepo {
     db: Db,
@@ -22,11 +22,11 @@ impl SaveStateRepo {
         &self,
         limit: u32,
     ) -> Result<Vec<SaveStateMetadata>, RepoError> {
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(AssertSqlSafe(format!(
             "{STATE_COLS} WHERE thumbnail_path IS NOT NULL \
              AND EXISTS (SELECT 1 FROM roms r WHERE r.id = save_states.rom_id) \
              ORDER BY created_at DESC, id LIMIT ?1"
-        ))
+        )))
         .bind(limit as i64)
         .fetch_all(&self.db)
         .await
@@ -37,10 +37,12 @@ impl SaveStateRepo {
     /// Todos os save states desta máquina, de todos os jogos, do mais novo
     /// para o mais antigo (o cloud save sobe os desta máquina numa leitura).
     pub async fn all_states(&self) -> Result<Vec<SaveStateMetadata>, RepoError> {
-        let rows = sqlx::query(&format!("{STATE_COLS} ORDER BY created_at DESC, id"))
-            .fetch_all(&self.db)
-            .await
-            .map_err(be)?;
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "{STATE_COLS} ORDER BY created_at DESC, id"
+        )))
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
         rows.iter().map(row_to_state).collect()
     }
 }
@@ -99,7 +101,7 @@ impl SaveStateRepository for SaveStateRepo {
     }
 
     async fn get_state(&self, id: &str) -> Result<Option<SaveStateMetadata>, RepoError> {
-        let row = sqlx::query(&format!("{STATE_COLS} WHERE id = ?1"))
+        let row = sqlx::query(AssertSqlSafe(format!("{STATE_COLS} WHERE id = ?1")))
             .bind(id)
             .fetch_optional(&self.db)
             .await
@@ -108,9 +110,9 @@ impl SaveStateRepository for SaveStateRepo {
     }
 
     async fn list_states_for_rom(&self, rom_id: &str) -> Result<Vec<SaveStateMetadata>, RepoError> {
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(AssertSqlSafe(format!(
             "{STATE_COLS} WHERE rom_id = ?1 ORDER BY created_at DESC, id"
-        ))
+        )))
         .bind(rom_id)
         .fetch_all(&self.db)
         .await
@@ -124,10 +126,10 @@ impl SaveStateRepository for SaveStateRepo {
         core_id: &str,
         slot: u32,
     ) -> Result<Option<SaveStateMetadata>, RepoError> {
-        let row = sqlx::query(&format!(
+        let row = sqlx::query(AssertSqlSafe(format!(
             "{STATE_COLS} WHERE rom_id = ?1 AND core_id = ?2 AND slot = ?3 \
              ORDER BY created_at DESC LIMIT 1"
-        ))
+        )))
         .bind(rom_id)
         .bind(core_id)
         .bind(slot as i64)

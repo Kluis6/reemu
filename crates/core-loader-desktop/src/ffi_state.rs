@@ -50,6 +50,7 @@ pub(crate) struct FrontendState {
     pub pixel_format: SoftwarePixelFormat,
     pub system_dir: CString,
     pub save_dir: CString,
+    core_assets_dir: CString,
     pub hw_render: Option<HwRenderRequest>,
     /// Id do FBO GL que o core deve renderizar (`get_current_framebuffer`).
     /// `Some` só depois que o `loader` cria o contexto GL.
@@ -87,6 +88,9 @@ pub(crate) struct FrontendState {
     /// a proporção nova até a tela (libretro.h: `SET_GEOMETRY` é o caminho
     /// indicado pra mudar a proporção sem reiniciar o vídeo).
     pub geometry_update: Option<(u32, u32, f32)>,
+    pub frame_time: Option<sys::retro_frame_time_callback>,
+    /// Captura opt-in de mensagens emitidas em `retro_load_game`.
+    pub load_message: Option<String>,
     /// Portas declaradas pelo core em `SET_CONTROLLER_INFO` (0 = não
     /// declarou). O loader liga um `RETRO_DEVICE_JOYPAD` em cada uma depois
     /// do `retro_load_game`, como o RetroArch.
@@ -122,7 +126,7 @@ pub(crate) struct FrontendState {
 }
 
 impl FrontendState {
-    fn new(system_dir: &Path, save_dir: &Path) -> Self {
+    fn new(system_dir: &Path, save_dir: &Path, core_assets_dir: &Path) -> Self {
         let to_c = |p: &Path| {
             CString::new(p.to_string_lossy().into_owned().into_bytes())
                 .unwrap_or_else(|_| CString::new("").unwrap())
@@ -131,6 +135,7 @@ impl FrontendState {
             pixel_format: SoftwarePixelFormat::Rgb1555, // default libretro
             system_dir: to_c(system_dir),
             save_dir: to_c(save_dir),
+            core_assets_dir: to_c(core_assets_dir),
             hw_render: None,
             hw_fbo: None,
             vk_negotiation: None,
@@ -147,6 +152,8 @@ impl FrontendState {
             savestate_context: sys::RETRO_SAVESTATE_CONTEXT_NORMAL,
             av_update: None,
             geometry_update: None,
+            frame_time: None,
+            load_message: None,
             controller_ports: 0,
             last_frame: None,
             spare_frame: Vec::new(),
@@ -251,14 +258,18 @@ impl Drop for CoreGuard {
     }
 }
 
-pub(crate) fn acquire(system_dir: &Path, save_dir: &Path) -> Result<CoreGuard, CoreLoadError> {
+pub(crate) fn acquire(
+    system_dir: &Path,
+    save_dir: &Path,
+    core_assets_dir: &Path,
+) -> Result<CoreGuard, CoreLoadError> {
     let mut g = lock();
     if g.is_some() {
         return Err(CoreLoadError::LoadFailed(
             "já há um core carregado neste processo (libretro é um-por-processo)".into(),
         ));
     }
-    *g = Some(FrontendState::new(system_dir, save_dir));
+    *g = Some(FrontendState::new(system_dir, save_dir, core_assets_dir));
     crate::input::retropad().clear();
     crate::input::analog().clear();
     Ok(CoreGuard { _private: () })
@@ -323,12 +334,26 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             *(data as *mut *const c_char) = st.system_dir.as_ptr();
             true
         }
-        sys::RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY
-        | sys::RETRO_ENVIRONMENT_GET_CONTENT_DIRECTORY => {
+        sys::RETRO_ENVIRONMENT_SET_FRAME_TIME_CALLBACK => {
+            if data.is_null() {
+                return false;
+            }
+            let registration = *(data as *const sys::retro_frame_time_callback);
+            st.frame_time = registration.callback.map(|_| registration);
+            true
+        }
+        sys::RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY => {
             if data.is_null() {
                 return false;
             }
             *(data as *mut *const c_char) = st.save_dir.as_ptr();
+            true
+        }
+        sys::RETRO_ENVIRONMENT_GET_CORE_ASSETS_DIRECTORY => {
+            if data.is_null() {
+                return false;
+            }
+            *(data as *mut *const c_char) = st.core_assets_dir.as_ptr();
             true
         }
         sys::RETRO_ENVIRONMENT_SET_HW_RENDER => {
@@ -601,7 +626,11 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             if quirks & q::CORE_VARIABLE_SIZE != 0 {
                 answer |= q::FRONT_VARIABLE_SIZE;
             }
-            *(data as *mut u64) = answer;
+            // O hatariB passa uma constante para anunciar ENDIAN_DEPENDENT.
+            // Quando a resposta é idêntica, devolver true basta.
+            if answer != quirks {
+                *(data as *mut u64) = answer;
+            }
             log::info!("core: quirks de serialização 0x{quirks:x}");
             true
         }
@@ -613,9 +642,20 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
             }
             true
         }
+        sys::RETRO_ENVIRONMENT_SET_MESSAGE => {
+            if let Some(out) = st.load_message.as_mut().filter(|msg| msg.is_empty()) {
+                if let Some(message) = (data as *const sys::retro_message).as_ref() {
+                    if !message.msg.is_null() {
+                        *out = std::ffi::CStr::from_ptr(message.msg)
+                            .to_string_lossy()
+                            .into_owned();
+                    }
+                }
+            }
+            true
+        }
         // Reconhecidos, sem efeito ainda.
         sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
-        | sys::RETRO_ENVIRONMENT_SET_MESSAGE
         | sys::RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS
         | sys::RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO
@@ -900,7 +940,7 @@ mod serialization_tests {
     #[test]
     fn quirks_are_kept_and_answered_as_libretro_asks() {
         let dir = std::env::temp_dir();
-        let _guard = acquire(&dir, &dir).expect("estado do core");
+        let _guard = acquire(&dir, &dir, &dir).expect("estado do core");
         // o core manda os quirks dele; o frontend devolve os que suporta
         let mut quirks: u64 = q::SINGLE_SESSION | q::CORE_VARIABLE_SIZE | q::INCOMPLETE;
         let ok = unsafe {
@@ -929,6 +969,14 @@ mod serialization_tests {
             )
         });
         assert_eq!(serialization_quirks(), q::SINGLE_SESSION);
+        static ENDIAN_QUIRK: u64 = q::ENDIAN_DEPENDENT;
+        assert!(unsafe {
+            environment_cb(
+                sys::RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS,
+                std::ptr::from_ref(&ENDIAN_QUIRK).cast_mut().cast(),
+            )
+        });
+        assert_eq!(serialization_quirks(), ENDIAN_QUIRK);
         // contexto: NULL só pergunta se existe; com ponteiro, NORMAL
         assert!(unsafe {
             environment_cb(

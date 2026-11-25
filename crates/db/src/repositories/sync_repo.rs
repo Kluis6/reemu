@@ -3,7 +3,7 @@ use crate::pool::Db;
 use domain::error::RepoError;
 use domain::sync::{BaseRow, ConflictRow};
 use sqlx::sqlite::SqliteRow;
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 
 const BASE_COLS: &str = "key, kind, remote_save_id, remote_version_id, remote_hash, \
      local_hash, local_path, rom_crc32, synced_at, wiped_at, backup_path, local_size, \
@@ -61,11 +61,13 @@ impl SyncRepo {
     }
 
     pub async fn base_get(&self, key: &str) -> Result<Option<BaseRow>, RepoError> {
-        let row = sqlx::query(&format!("SELECT {BASE_COLS} FROM sync_base WHERE key = ?1"))
-            .bind(key)
-            .fetch_optional(&self.db)
-            .await
-            .map_err(be)?;
+        let row = sqlx::query(AssertSqlSafe(format!(
+            "SELECT {BASE_COLS} FROM sync_base WHERE key = ?1"
+        )))
+        .bind(key)
+        .fetch_optional(&self.db)
+        .await
+        .map_err(be)?;
         row.as_ref().map(base_from).transpose()
     }
 
@@ -132,9 +134,9 @@ impl SyncRepo {
     }
 
     pub async fn base_all(&self, kind: &str) -> Result<Vec<BaseRow>, RepoError> {
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(AssertSqlSafe(format!(
             "SELECT {BASE_COLS} FROM sync_base WHERE kind = ?1 ORDER BY key"
-        ))
+        )))
         .bind(kind)
         .fetch_all(&self.db)
         .await
@@ -206,9 +208,9 @@ impl SyncRepo {
     }
 
     pub async fn conflicts_all(&self) -> Result<Vec<ConflictRow>, RepoError> {
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(AssertSqlSafe(format!(
             "SELECT {CONFLICT_COLS} FROM sync_conflicts ORDER BY seen_at, key"
-        ))
+        )))
         .fetch_all(&self.db)
         .await
         .map_err(be)?;
@@ -216,9 +218,9 @@ impl SyncRepo {
     }
 
     pub async fn conflicts_for_rom(&self, rom_id: &str) -> Result<Vec<ConflictRow>, RepoError> {
-        let rows = sqlx::query(&format!(
+        let rows = sqlx::query(AssertSqlSafe(format!(
             "SELECT {CONFLICT_COLS} FROM sync_conflicts WHERE rom_id = ?1 ORDER BY seen_at, key"
-        ))
+        )))
         .bind(rom_id)
         .fetch_all(&self.db)
         .await

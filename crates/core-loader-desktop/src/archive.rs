@@ -6,7 +6,7 @@
 //! exigem `need_fullpath`, e mesmo os que não exigem preferem um `path` real
 //! pro nome.
 
-use domain::library::{is_sufami_turbo_cart, SUFAMI_TURBO_HEADER_LEN};
+use domain::library::{is_zx81_program, system_for_st, ST_HEADER_LEN, ZX81_P_HEADER_LEN};
 use sevenz_rust2::{ArchiveReader, Password};
 use std::io::{BufReader, Read, Write};
 use std::path::{Path, PathBuf};
@@ -21,7 +21,8 @@ const ROM_EXTS: &[&str] = &[
     "lnx", "ws", "wsc", "ngp", "ngc", "32x", "vb", "col", "int", "nds", "dsi", "ids", "sg", "a52",
     "atr", "xfd", "atx", "xex", "j64", "jag", "min", "sv", "mx1", "mx2", "vec", "d64", "d71",
     "d81", "g64", "t64", "x64", "crt", "adf", "adz", "dms", "hdf", "tzx", "z80", "rzx", "szx",
-    "scl", "trd", "cdt", "cpr", "cue", "chd", "iso", "pbp",
+    "scl", "trd", "cdt", "cpr", "cue", "chd", "iso", "pbp", "msa", "stx", "ch8", "sc8", "xo8",
+    "hc8", "t81", "uze", "vaporbin", "gtr", "duck", "mgw",
 ];
 
 /// ROM extraída pra um arquivo temporário — apagado no `Drop`.
@@ -69,23 +70,33 @@ fn create_unique(temp_dir: &Path, ext: &str) -> std::io::Result<(PathBuf, std::f
     unreachable!("u32 esgotado ao nomear a ROM temporária")
 }
 
-fn is_rom_entry(name: &str) -> bool {
-    Path::new(name)
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| ROM_EXTS.iter().any(|r| e.eq_ignore_ascii_case(r)))
-}
-
-fn is_st_entry(name: &str) -> bool {
-    Path::new(name)
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("st"))
-}
-
-fn read_sufami_header(size: u64, mut reader: impl Read) -> Option<[u8; SUFAMI_TURBO_HEADER_LEN]> {
-    let mut header = [0; SUFAMI_TURBO_HEADER_LEN];
-    reader.read_exact(&mut header).ok()?;
-    is_sufami_turbo_cart(size, &header).then_some(header)
+/// Valida o conteúdo das extensões ambíguas e devolve os bytes já lidos.
+/// O leitor de 7z continua da mesma posição ao extrair a entrada.
+fn rom_entry_prefix(
+    name: &str,
+    size: u64,
+    mut reader: impl Read,
+    required_extension: Option<&str>,
+) -> Option<Vec<u8>> {
+    let ext = Path::new(name).extension()?.to_str()?;
+    if let Some(required) = required_extension {
+        return ext.eq_ignore_ascii_case(required).then(Vec::new);
+    }
+    if ext.eq_ignore_ascii_case("st") {
+        let mut header = [0; ST_HEADER_LEN];
+        reader.read_exact(&mut header).ok()?;
+        system_for_st(size, &header)?;
+        return Some(header.to_vec());
+    }
+    if ext.eq_ignore_ascii_case("p") {
+        let mut header = [0; ZX81_P_HEADER_LEN];
+        reader.read_exact(&mut header).ok()?;
+        return is_zx81_program(size, &header).then(|| header.to_vec());
+    }
+    ROM_EXTS
+        .iter()
+        .any(|r| ext.eq_ignore_ascii_case(r))
+        .then(Vec::new)
 }
 
 /// `true` se `path` tem extensão `.zip`/`.7z`.
@@ -103,15 +114,23 @@ fn is_7z(path: &Path) -> bool {
 
 /// Extrai a 1ª ROM de dentro de `archive_path` pra
 /// `<temp>/reemu-rom-<pid>-<n>.<ext>`.
-pub fn extract_rom(archive_path: &Path, temp_dir: &Path) -> std::io::Result<ExtractedRom> {
+pub fn extract_rom(
+    archive_path: &Path,
+    temp_dir: &Path,
+    required_extension: Option<&str>,
+) -> std::io::Result<ExtractedRom> {
     if is_7z(archive_path) {
-        extract_rom_7z(archive_path, temp_dir)
+        extract_rom_7z(archive_path, temp_dir, required_extension)
     } else {
-        extract_rom_zip(archive_path, temp_dir)
+        extract_rom_zip(archive_path, temp_dir, required_extension)
     }
 }
 
-fn extract_rom_zip(zip_path: &Path, temp_dir: &Path) -> std::io::Result<ExtractedRom> {
+fn extract_rom_zip(
+    zip_path: &Path,
+    temp_dir: &Path,
+    required_extension: Option<&str>,
+) -> std::io::Result<ExtractedRom> {
     let file = std::fs::File::open(zip_path)?;
     let mut zip = zip::ZipArchive::new(BufReader::new(file))
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
@@ -124,8 +143,8 @@ fn extract_rom_zip(zip_path: &Path, temp_dir: &Path) -> std::io::Result<Extracte
             return false;
         }
         let Ok(name) = entry.name() else { return false };
-        is_rom_entry(&name)
-            || (is_st_entry(&name) && read_sufami_header(entry.size(), &mut entry).is_some())
+        let name = name.into_owned();
+        rom_entry_prefix(&name, entry.size(), &mut entry, required_extension).is_some()
     });
     let Some(idx) = idx else {
         return Err(std::io::Error::new(
@@ -166,7 +185,11 @@ fn extract_rom_zip(zip_path: &Path, temp_dir: &Path) -> std::io::Result<Extracte
     })
 }
 
-fn extract_rom_7z(archive_path: &Path, temp_dir: &Path) -> std::io::Result<ExtractedRom> {
+fn extract_rom_7z(
+    archive_path: &Path,
+    temp_dir: &Path,
+    required_extension: Option<&str>,
+) -> std::io::Result<ExtractedRom> {
     let mut r = ArchiveReader::open(archive_path, Password::empty())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()))?;
 
@@ -175,14 +198,9 @@ fn extract_rom_7z(archive_path: &Path, temp_dir: &Path) -> std::io::Result<Extra
         if result.is_some() || entry.is_directory() {
             return Ok(true);
         }
-        let header = if is_st_entry(entry.name()) {
-            let Some(header) = read_sufami_header(entry.size(), &mut *reader) else {
-                return Ok(true);
-            };
-            Some(header)
-        } else if is_rom_entry(entry.name()) {
-            None
-        } else {
+        let Some(prefix) =
+            rom_entry_prefix(entry.name(), entry.size(), &mut *reader, required_extension)
+        else {
             return Ok(true);
         };
         let ext = Path::new(entry.name())
@@ -193,9 +211,7 @@ fn extract_rom_7z(archive_path: &Path, temp_dir: &Path) -> std::io::Result<Extra
         let name = entry.name().to_string();
         result = Some((|| -> std::io::Result<(PathBuf, String)> {
             let (out_path, mut out) = create_unique(temp_dir, &ext)?;
-            if let Some(header) = header {
-                out.write_all(&header)?;
-            }
+            out.write_all(&prefix)?;
             std::io::copy(reader, &mut out)?;
             out.flush()?;
             Ok((out_path, name))
@@ -242,7 +258,7 @@ mod tests {
             zw.finish().unwrap();
         }
 
-        let extracted = extract_rom(&zip_path, &std::env::temp_dir()).unwrap();
+        let extracted = extract_rom(&zip_path, &std::env::temp_dir(), None).unwrap();
         assert_eq!(extracted.path().extension().unwrap(), "sfc");
         assert_eq!(
             std::fs::read(extracted.path()).unwrap(),
@@ -271,7 +287,7 @@ mod tests {
             )
             .unwrap();
         drop(writer.finish().unwrap());
-        let extracted = extract_rom(&archive, &std::env::temp_dir()).unwrap();
+        let extracted = extract_rom(&archive, &std::env::temp_dir(), None).unwrap();
         assert_eq!(extracted.entry(), "Sufami.ST");
         assert_eq!(std::fs::read(extracted.path()).unwrap(), cart);
         let _ = std::fs::remove_file(&archive);
@@ -290,7 +306,7 @@ mod tests {
             w.finish().unwrap();
         }
 
-        let extracted = extract_rom(&archive_path, &std::env::temp_dir()).unwrap();
+        let extracted = extract_rom(&archive_path, &std::env::temp_dir(), None).unwrap();
         assert_eq!(extracted.path().extension().unwrap(), "sfc");
         assert_eq!(
             std::fs::read(extracted.path()).unwrap(),
@@ -315,7 +331,7 @@ mod tests {
             w.finish().unwrap();
         }
 
-        let err = extract_rom(&archive_path, &std::env::temp_dir()).unwrap_err();
+        let err = extract_rom(&archive_path, &std::env::temp_dir(), None).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
 
         let _ = std::fs::remove_file(&archive_path);
@@ -338,7 +354,7 @@ mod tests {
         let handles: Vec<_> = (0..8)
             .map(|_| {
                 let p = zip_path.clone();
-                std::thread::spawn(move || extract_rom(&p, &std::env::temp_dir()).unwrap())
+                std::thread::spawn(move || extract_rom(&p, &std::env::temp_dir(), None).unwrap())
             })
             .collect();
         let extracted: Vec<ExtractedRom> = handles.into_iter().map(|h| h.join().unwrap()).collect();

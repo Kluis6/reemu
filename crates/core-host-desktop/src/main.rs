@@ -105,7 +105,7 @@ impl Drop for Sandbox {
     }
 }
 
-/// `reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros> [pasta de firmware]`: carrega
+/// `reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros> [pasta de firmware] [--paced]`: carrega
 /// o jogo, roda `quadros` `retro_run` e sai — fase 2 do teste de fumaça do
 /// catálogo. Resultado no stdout: `REEMU_RUN_OK\t<quadros de vídeo>\t
 /// <quadros com cor>\t<amostras de áudio>\t<save state>` (saída 0) ou
@@ -120,7 +120,7 @@ fn run_rom(args: &[String]) -> ! {
         args.get(3).and_then(|n| n.parse::<u32>().ok()),
     ) else {
         eprintln!(
-            "uso: reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros> [pasta de firmware]"
+            "uso: reemu-core-host --run <pasta de cores> <core_id> <rom> <quadros> [pasta de firmware] [--paced]"
         );
         std::process::exit(64);
     };
@@ -134,10 +134,21 @@ fn run_rom(args: &[String]) -> ! {
         }
         Ok(mut core) => {
             let (mut video, mut colored, mut audio) = (0u32, 0u32, 0usize);
+            let (detailed, mut audible) = (args.get(4).is_some(), false);
+            let mut pacer = (args.get(5).map(String::as_str) == Some("--paced")).then(|| {
+                Pacer::new(Duration::from_secs_f64(
+                    1.0 / core.system_av_info().timing.fps.max(1.0),
+                ))
+            });
             let mut size = (0, 0);
             let mut center = [0; 3];
             for _ in 0..frames {
-                if let Some(frame) = core.next_frame() {
+                let frame = if pacer.is_some() {
+                    core.next_realtime_frame()
+                } else {
+                    core.next_frame()
+                };
+                if let Some(frame) = frame {
                     video += 1;
                     size = (frame.metadata.native_width, frame.metadata.native_height);
                     if let FrameOrigin::SoftwareRawBuffer {
@@ -167,12 +178,18 @@ fn run_rom(args: &[String]) -> ! {
                         }
                     }
                 }
-                audio += core.drain_audio().len();
+                let samples = core.drain_audio();
+                audio += samples.len();
+                audible |= detailed && !audible && samples.iter().any(|sample| *sample != 0);
+                if let Some(pacer) = &mut pacer {
+                    pacer.pace();
+                }
             }
             let state = state_round_trip(&mut core);
             println!("REEMU_RUN_OK\t{video}\t{colored}\t{audio}\t{state}");
-            if args.get(4).is_some() {
+            if detailed {
                 println!("REEMU_RUN_SIZE\t{}\t{}", size.0, size.1);
+                println!("REEMU_RUN_AUDIBLE\t{audible}");
                 println!(
                     "REEMU_RUN_CENTER\t{}\t{}\t{}",
                     center[0], center[1], center[2]
@@ -495,6 +512,29 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 }
                 match loader.open_core(&CoreId(core_id.clone()), &rom_path) {
                     Ok(mut c) => {
+                        let restored = initial_save_ram.map(|bytes| {
+                            let ok = c.restore_save_ram(&bytes);
+                            if ok {
+                                log::info!("save RAM restaurada ({} bytes)", bytes.len());
+                            } else {
+                                log::warn!("save RAM ignorada (tamanho não bate)");
+                            }
+                            ok
+                        });
+
+                        // O GW monta a tela do simulador no primeiro retro_run.
+                        // Restaura a SRAM antes da inicialização e usa a geometria
+                        // resultante para dimensionar o anel de vídeo.
+                        if core_id == "gw_libretro" && c.next_frame().is_none() {
+                            let _ = channel.send(
+                                &ToParent::Loaded(Err(
+                                    "O GW não conseguiu iniciar o simulador.".into()
+                                )),
+                                &[],
+                            );
+                            continue;
+                        }
+
                         let av = c.system_av_info();
                         let fps = av.timing.fps.max(1.0);
                         pacer.set_budget(Duration::from_secs_f64(1.0 / fps));
@@ -505,16 +545,6 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                             fps,
                             av.timing.sample_rate
                         );
-
-                        let restored = initial_save_ram.map(|bytes| {
-                            let ok = c.restore_save_ram(&bytes);
-                            if ok {
-                                log::info!("save RAM restaurada ({} bytes)", bytes.len());
-                            } else {
-                                log::warn!("save RAM ignorada (tamanho não bate)");
-                            }
-                            ok
-                        });
 
                         let max_w = av.geometry.max_width.max(av.geometry.base_width).max(1);
                         let max_h = av.geometry.max_height.max(av.geometry.base_height).max(1);
@@ -563,6 +593,11 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 }
             }
             ToChild::SetPaused(p) => {
+                if paused != p {
+                    if let Some(c) = core.as_mut() {
+                        c.reset_frame_time();
+                    }
+                }
                 paused = p;
                 if !p {
                     pacer.reset();
@@ -747,7 +782,7 @@ fn run_one_frame(
         d.frame_start(now);
         now
     });
-    let produced = c.next_frame();
+    let produced = c.next_realtime_frame();
     if let (Some(d), Some(t0)) = (diag.as_mut(), t0) {
         d.record_frame(t0.elapsed(), pacer.budget(), produced.is_none());
     }
