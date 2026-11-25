@@ -556,6 +556,33 @@ fn atari2600() -> Vec<u8> {
     rom
 }
 
+pub(crate) const DIRKSIMPLE_LUA: &str = r#"
+local started = false
+local action = false
+
+function DirkSimple.tick(_, _, inputs)
+    if not started then
+        started = true
+        DirkSimple.start_clip(0)
+    end
+    if inputs.pressed.action then
+        action = true
+    end
+    if action then
+        DirkSimple.clear_screen(32, 240, 52)
+    end
+end
+
+function DirkSimple.serialize()
+    return { action }
+end
+
+function DirkSimple.unserialize(saved)
+    action = saved[1]
+    return true
+end
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -624,29 +651,3 @@ mod tests {
         assert_eq!(a26.len(), 4096);
     }
 }
-pub(crate) const DIRKSIMPLE_LUA: &str = r#"
-local started = false
-local action = false
-
-function DirkSimple.tick(_, _, inputs)
-    if not started then
-        started = true
-        DirkSimple.start_clip(0)
-    end
-    if inputs.pressed.action then
-        action = true
-    end
-    if action then
-        DirkSimple.clear_screen(32, 240, 52)
-    end
-end
-
-function DirkSimple.serialize()
-    return { action }
-end
-
-function DirkSimple.unserialize(saved)
-    action = saved[1]
-    return true
-end
-"#;
