@@ -639,6 +639,34 @@ export type CatalogEvent =
   | { type: 'pass'; found: number; pending: number; unknown: number }
   | { type: 'status' }
 
+export type CatalogMediaKind = 'hero' | 'logo' | 'title' | 'screenshot'
+
+/** URL do protocolo `media://` (ou `http://media.localhost/` no Windows) para
+ *  uma mídia guardada em disco por `gameUuid`. Preserva `data:` locais e faz
+ *  fallback para `rawUrl` fora do Tauri ou quando `gameUuid` não existe. */
+export function catalogMediaUrl(
+  gameUuid: string | null | undefined,
+  rawUrl: string | null | undefined,
+  kind: CatalogMediaKind,
+  index = 0,
+): string | undefined {
+  if (!rawUrl) return undefined
+  if (rawUrl.startsWith('data:')) return rawUrl
+  if (!gameUuid || !inTauri) return rawUrl
+  const internals = (
+    window as unknown as {
+      __TAURI_INTERNALS__?: { convertFileSrc?: (path: string, protocol?: string) => string }
+    }
+  ).__TAURI_INTERNALS__
+  const base =
+    internals?.convertFileSrc?.('', 'media') ??
+    (typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+      ? 'http://media.localhost/'
+      : 'media://localhost/')
+  const prefix = base.endsWith('/') ? base : `${base}/`
+  return `${prefix}${gameUuid}/${kind}/${index}`
+}
+
 export const catalogStatus = () => invoke<CatalogStatus>('catalog_status')
 export const catalogSetEnabled = (enabled: boolean) =>
   invoke<CatalogStatus>('catalog_set_enabled', { enabled })

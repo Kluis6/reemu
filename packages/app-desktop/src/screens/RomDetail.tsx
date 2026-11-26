@@ -70,6 +70,7 @@ import { knownPlatforms, platformLabel } from "../lib/platform";
 import { errorToast, sysToast, shaderIssueToast } from "../lib/toast";
 import { errorText } from "../lib/errors";
 import {
+  catalogMediaUrl,
   deleteSaveState,
   getRomMetadata,
   rescrapeRom,
@@ -270,22 +271,37 @@ export function RomDetail() {
   // Dialog de tela cheia aberto; o conteúdo de Emulador fica na própria página.
   const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "media" | null>(null);
   const hasShaderCfg = !!shaderInfo.data?.gpu;
-  // Galeria: só as mídias que o provedor trouxe.
-  const shots = [
-    { key: "screenshot", url: meta.data?.screenshotUrl },
-    { key: "titleScreen", url: meta.data?.titleScreenUrl },
-    { key: "fanart", url: meta.data?.fanartUrl },
-  ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
+  const gameUuid = meta.data?.gameUuid;
   const catalog = meta.data?.gamekave;
+  const heroUrl = catalogMediaUrl(gameUuid, meta.data?.fanartUrl, "hero", 0);
+  const logoUrl = catalogMediaUrl(gameUuid, meta.data?.logoUrl, "logo", 0);
+  const titleScreenUrl = catalogMediaUrl(gameUuid, meta.data?.titleScreenUrl, "title", 0);
+  const catalogScreenshots = (catalog?.screenshots ?? []).slice(0, 8);
+  const primaryShotUrl = catalogMediaUrl(
+    gameUuid,
+    meta.data?.screenshotUrl,
+    "screenshot",
+    Math.max(0, catalogScreenshots.indexOf(meta.data?.screenshotUrl ?? "")),
+  );
+  // Galeria: só as mídias que o provedor trouxe, servidas do cache por jogo quando há gameUuid.
+  const shots = [
+    { key: "screenshot", url: primaryShotUrl },
+    { key: "titleScreen", url: titleScreenUrl },
+    { key: "fanart", url: heroUrl },
+  ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
   const galleryShots = [
     ...shots,
-    ...(catalog?.screenshots ?? [])
-      .filter((url) => !shots.some((shot) => shot.url === url))
-      .map((url) => ({ key: "screenshot" as const, url })),
+    ...catalogScreenshots
+      .map((raw, idx) => ({
+        raw,
+        url: catalogMediaUrl(gameUuid, raw, "screenshot", idx)!,
+      }))
+      .filter(({ raw, url }) => raw !== meta.data?.screenshotUrl && !shots.some((shot) => shot.url === url))
+      .map(({ url }) => ({ key: "screenshot" as const, url })),
   ];
   const trailerUrls = [...new Set([meta.data?.videoUrl, ...(catalog?.trailers ?? [])])]
     .filter((url): url is string => !!url);
-  const hasMedia = galleryShots.length > 0 || trailerUrls.length > 0 || !!meta.data?.logoUrl;
+  const hasMedia = galleryShots.length > 0 || trailerUrls.length > 0 || !!logoUrl;
   const panels = [
     { key: "states", show: true },
     { key: "shader", show: hasShaderCfg },
@@ -380,8 +396,10 @@ export function RomDetail() {
       </EmptyState>
     );
 
-  const cover = meta.data?.coverUrl ?? rom.boxart;
-  const hero = meta.data?.fanartUrl;
+  const cover = meta.data?.coverUrl?.startsWith("data:")
+    ? meta.data.coverUrl
+    : (rom.boxart ?? meta.data?.coverUrl);
+  const hero = heroUrl;
   const backdrop = hero && hero !== brokenHero ? hero : cover;
   const fileParts = splitPath(rom.filePath);
   const title = rom.userTitle ?? meta.data?.title ?? rom.title;
@@ -834,7 +852,7 @@ export function RomDetail() {
                 <GameCatalogFacts catalog={catalog} />
               )}
 
-              {(shots.length > 0 || meta.data?.logoUrl || trailerUrls.length > 0) && (
+              {(shots.length > 0 || logoUrl || trailerUrls.length > 0) && (
                 <section className={s.infoSection} aria-labelledby="info-media">
                   <h3 id="info-media" className={s.infoHeading}>
                     {t("game.tabs.media")}
@@ -849,9 +867,9 @@ export function RomDetail() {
                     />
                   )}
                   <div className={s.infoMediaGrid}>
-                    {meta.data?.logoUrl && (
+                    {logoUrl && (
                       <figure className={s.galleryItem}>
-                        <img className={s.infoLogo} src={meta.data.logoUrl} alt="" loading="lazy" />
+                        <img className={s.infoLogo} src={logoUrl} alt="" loading="lazy" />
                         <figcaption className={s.galleryCaption}>{t("game.media.logo")}</figcaption>
                       </figure>
                     )}
@@ -1063,8 +1081,8 @@ export function RomDetail() {
           )}
           {panel === "media" && (
             <div className={s.gallery}>
-              {meta.data?.logoUrl && (
-                <img className={s.galleryLogo} src={meta.data.logoUrl} alt={t("game.media.logo")} />
+              {logoUrl && (
+                <img className={s.galleryLogo} src={logoUrl} alt={t("game.media.logo")} />
               )}
               {trailerUrls.map((url) => (
                 <video
