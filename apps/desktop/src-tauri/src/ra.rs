@@ -11,9 +11,10 @@ use crate::app_error::{AppError, ErrorCode};
 use crate::commands::AppState;
 use crate::credentials::{self, OsKeyring, RaConfig};
 use achievements::{
-    console_id_for_system, hash_file, AchievementClient, AchievementEntry, AchievementEvent,
-    AchievementKind, AsyncOutcome, GameSummary, OutboundHttpRequest, RaError, RaLoadedSnapshot,
-    RaSessionConfig,
+    console::{RC_CONSOLE_ARCADE, RC_CONSOLE_ARDUBOY, RC_CONSOLE_MS_DOS},
+    console_id_for_system, hash_buffer, hash_file, AchievementClient, AchievementEntry,
+    AchievementEvent, AchievementKind, AsyncOutcome, GameSummary, OutboundHttpRequest, RaError,
+    RaLoadedSnapshot, RaSessionConfig,
 };
 use domain::library::RomRepository as _;
 use emu_session::RaHostMessage;
@@ -26,6 +27,57 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(15);
+/// Limite oficial `MAX_BUFFER_SIZE` do `rcheevos` (`rc_hash_internal.h`: 64 MiB).
+const RA_MAX_ROM_BUFFER: usize = 64 * 1024 * 1024;
+
+/// Calcula o hash oficial do `rcheevos` para `path`, extraindo em memória a ROM
+/// interna quando o arquivo está em `.zip` ou `.7z` (exceto Arcade, MS-DOS e
+/// pacotes `.arduboy`, nos quais o `rcheevos` hasheia o próprio contêiner).
+fn compute_rom_hash(console_id: u32, system_id: &str, path: &Path) -> Option<String> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or_default();
+    let hash_inner_archive = library_scan::is_supported_archive(ext)
+        && !matches!(
+            console_id,
+            RC_CONSOLE_ARCADE | RC_CONSOLE_MS_DOS | RC_CONSOLE_ARDUBOY
+        );
+    if hash_inner_archive {
+        if let Some(archived) = library_scan::peek_archive(path, Some(system_id)) {
+            if let Ok(bytes) =
+                library_scan::read_archive_entry_capped(path, &archived.entry, RA_MAX_ROM_BUFFER)
+            {
+                if let Some(h) = hash_buffer(console_id, &bytes) {
+                    return Some(h);
+                }
+            }
+        }
+    }
+    hash_file(console_id, path)
+}
+
+async fn resolve_rom_hash(
+    ra_state: &RaState,
+    console_id: u32,
+    rom_id: &str,
+    system_id: &str,
+    file_path: &str,
+) -> Option<String> {
+    if let Some(cached) = ra_state.cached_hash(rom_id, file_path) {
+        return Some(cached);
+    }
+    let sys = system_id.to_owned();
+    let path_owned = file_path.to_owned();
+    let computed = tauri::async_runtime::spawn_blocking(move || {
+        compute_rom_hash(console_id, &sys, Path::new(&path_owned))
+    })
+    .await
+    .ok()
+    .flatten()?;
+    ra_state.store_hash(rom_id, file_path, computed.clone());
+    Some(computed)
+}
 
 #[derive(Default)]
 pub struct RaState {
@@ -337,8 +389,8 @@ pub async fn on_game_launched(app: &AppHandle, rom_id: Option<&str>, rom_path: &
         return false;
     };
 
-    let rom_hash = ra_state.cached_hash(&rom.id, rom_path);
-    ra_state.set_hardcore_active(cfg.hardcore);
+    let rom_hash = resolve_rom_hash(&ra_state, console_id, &rom.id, &rom.system_id, rom_path).await;
+    ra_state.set_hardcore_active(cfg.hardcore && rom_hash.is_some());
     state.session.init_achievements(RaSessionConfig {
         console_id,
         rom_path: rom_path.to_owned(),
@@ -726,22 +778,16 @@ pub async fn ra_game_achievements(
         return Ok(RaGameViewDto::empty("unsupported_system", cfg.hardcore));
     };
 
-    let hash = match ra_state.cached_hash(&rom.id, &rom.file_path) {
-        Some(h) => h,
-        None => {
-            let file_path = rom.file_path.clone();
-            let computed = tauri::async_runtime::spawn_blocking(move || {
-                hash_file(console_id, Path::new(&file_path))
-            })
-            .await
-            .ok()
-            .flatten();
-            let Some(h) = computed else {
-                return Ok(RaGameViewDto::empty("unidentified", cfg.hardcore));
-            };
-            ra_state.store_hash(&rom.id, &rom.file_path, h.clone());
-            h
-        }
+    let Some(hash) = resolve_rom_hash(
+        &ra_state,
+        console_id,
+        &rom.id,
+        &rom.system_id,
+        &rom.file_path,
+    )
+    .await
+    else {
+        return Ok(RaGameViewDto::empty("unidentified", cfg.hardcore));
     };
 
     let http = ra_state.http_client();
@@ -824,4 +870,49 @@ pub async fn ra_game_achievements(
         unlocked_points,
         achievements: entries.into_iter().map(Into::into).collect(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write as _;
+
+    #[test]
+    fn compute_rom_hash_extracts_inner_rom_from_zip_and_preserves_arcade_zip() {
+        let dir = tempfile::tempdir().unwrap();
+        let payload = vec![0xA5u8; 4096];
+        let raw_path = dir.path().join("River Raid (USA).a26");
+        std::fs::write(&raw_path, &payload).unwrap();
+
+        let zip_path = dir.path().join("River Raid (USA).zip");
+        {
+            let file = std::fs::File::create(&zip_path).unwrap();
+            let mut zw = zip::ZipWriter::new(file);
+            let opts = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated);
+            zw.start_file("readme.html", opts).unwrap();
+            zw.write_all(b"<html>bundle note</html>").unwrap();
+            zw.start_file("River Raid (USA).A26", opts).unwrap();
+            zw.write_all(&payload).unwrap();
+            zw.finish().unwrap();
+        }
+
+        let a26_console = console_id_for_system("atari2600").unwrap();
+        let raw_hash = compute_rom_hash(a26_console, "atari2600", &raw_path).unwrap();
+        let zip_hash = compute_rom_hash(a26_console, "atari2600", &zip_path).unwrap();
+        assert_eq!(zip_hash, raw_hash);
+
+        let arcade_zip = dir.path().join("mslug.zip");
+        {
+            let file = std::fs::File::create(&arcade_zip).unwrap();
+            let mut zw = zip::ZipWriter::new(file);
+            let opts = zip::write::SimpleFileOptions::default();
+            zw.start_file("201-p1.p1", opts).unwrap();
+            zw.write_all(b"chip").unwrap();
+            zw.finish().unwrap();
+        }
+        let arcade_hash = compute_rom_hash(RC_CONSOLE_ARCADE, "arcade", &arcade_zip).unwrap();
+        let expected_arcade = hash_file(RC_CONSOLE_ARCADE, &arcade_zip).unwrap();
+        assert_eq!(arcade_hash, expected_arcade);
+    }
 }
