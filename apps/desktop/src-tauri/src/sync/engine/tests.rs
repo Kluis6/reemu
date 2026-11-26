@@ -5799,3 +5799,83 @@ async fn the_notes_say_why_each_state_stays_here_by_its_id() {
     r.sync.devices.set_states_enabled(false).await.unwrap();
     assert!(r.sync.state_notes("r1").await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn sync_pass_unlocks_retroachievements_locally_and_pushes_updates() {
+    let _serial = SERIAL.lock().await;
+    let mut r = rig("creds-sync").await;
+    let store = Arc::new(MemCredStore::default());
+    r.engine.set_secret_store(store.clone());
+    let ra_notified = Arc::new(AtomicUsize::new(0));
+    let notified_cb = ra_notified.clone();
+    r.engine.set_on_ra_changed(Box::new(move || {
+        notified_cb.fetch_add(1, SeqCst);
+    }));
+
+    mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+    mount_files(&r.server, vec![]).await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/saves/credentials"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "has_vault": true,
+            "updated_at": "2026-11-26T18:00:00Z",
+            "linked_ra_username": "edward",
+            "credentials": {
+                "retroachievements": {
+                    "username": "edward",
+                    "connect_token": "ra_token_from_cloud",
+                    "hardcore": true,
+                    "enabled": true,
+                    "updated_at": "2026-11-26T18:00:00Z"
+                }
+            }
+        })))
+        .mount(&r.server)
+        .await;
+
+    r.pass().await.unwrap();
+
+    let (ra_cfg, ra_tok) = crate::credentials::load_ra_session(&r.db, store.as_ref())
+        .await
+        .unwrap();
+    assert!(ra_cfg.connected);
+    assert!(ra_cfg.hardcore);
+    assert!(ra_cfg.enabled);
+    assert_eq!(ra_cfg.username.as_deref(), Some("edward"));
+    assert_eq!(ra_cfg.linked_alvanista_username.as_deref(), Some("edward"));
+    assert_eq!(ra_tok.as_deref(), Some("ra_token_from_cloud"));
+    assert_eq!(ra_notified.load(SeqCst), 1);
+
+    // Uma chave local nova sobe no PUT para o cofre criptografado.
+    let meta_cfg = domain::metadata::MetadataConfig {
+        provider: "thegamesdb".into(),
+        screenscraper_user: None,
+        screenscraper_password: None,
+        thegamesdb_api_key: Some("tgdb_local_key".into()),
+    };
+    crate::credentials::save_config_tracked(&r.db, store.as_ref(), meta_cfg)
+        .await
+        .unwrap();
+
+    Mock::given(method("PUT"))
+        .and(path("/api/v1/saves/credentials"))
+        .and(body_partial_json(json!({
+            "providers": {
+                "thegamesdb": {
+                    "api_key": "tgdb_local_key"
+                }
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "has_vault": true,
+            "updated_at": "2026-11-26T19:00:00Z",
+            "linked_ra_username": "edward"
+        })))
+        .expect(1)
+        .mount(&r.server)
+        .await;
+
+    r.engine.push_credentials_now(&r.alva).await.unwrap();
+    let sync_meta = crate::credentials::load_sync_meta(&r.db).await.unwrap();
+    assert!(!sync_meta.thegamesdb.dirty);
+}
