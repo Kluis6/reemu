@@ -131,6 +131,7 @@ fn screenscraper_system_id(system_id: &str) -> Option<u32> {
         "atari5200" => 40,
         "atari7800" => 41,
         "atari8bit" => 43,
+        "atarist" => 42,
         "jaguar" => 27,
         "lynx" => 28,
         "wonderswan" => 45,
@@ -147,8 +148,14 @@ fn screenscraper_system_id(system_id: &str) -> Option<u32> {
         "c64" => 66,
         "amiga" => 64,
         "zxspectrum" => 76,
+        "zx81" => 77,
+        "x68000" => 79,
         "amstradcpc" => 65,
         "arcade" => 75,
+        "laserdisc" => 49, // Daphne no catálogo ScreenScraper
+        "arduboy" => 263,
+        "megaduck" => 90,
+        "uzebox" => 216,
         "dos" => 135,
         "scummvm" => 123,
         _ => return None,
@@ -188,6 +195,7 @@ fn thegamesdb_platforms(system_id: &str) -> Option<&'static str> {
         "atari5200" => "26",
         "atari7800" => "27",
         "atari8bit" => "4943,30",
+        "atarist" => "4937",
         "jaguar" => "28",
         "lynx" => "4924",
         "wonderswan" => "4925,4926",
@@ -204,7 +212,10 @@ fn thegamesdb_platforms(system_id: &str) -> Option<&'static str> {
         "c64" => "40",
         "amiga" => "4911",
         "zxspectrum" => "4913",
+        "zx81" => "5010",
+        "x68000" => "4931",
         "amstradcpc" => "4914",
+        "megaduck" => "4948",
         "dos" | "scummvm" => "1",
         _ => return None,
     })
@@ -1124,7 +1135,7 @@ mod tests {
     use serde_json::json;
 
     /// `system_id`s que o scan produz — lidos do próprio `systems.rs` (tabela
-    /// canônica), pra sistema novo lá sem id aqui quebrar o teste.
+    /// canônica), pra sistema novo lá exigir conferência nos provedores.
     fn scan_system_ids() -> Vec<String> {
         let src = include_str!("../../library-scan/src/systems.rs");
         let mut ids: Vec<String> = src
@@ -1167,7 +1178,7 @@ mod tests {
     }
 
     #[test]
-    fn every_scanned_system_has_ids_in_both_providers() {
+    fn scanned_systems_have_ids_or_documented_provider_gaps() {
         let ids = scan_system_ids();
         assert!(
             ids.len() > 40,
@@ -1177,13 +1188,29 @@ mod tests {
         let no_ss: Vec<_> = ids
             .iter()
             .filter(|i| screenscraper_system_id(i).is_none())
+            .map(String::as_str)
             .collect();
         let no_tgdb: Vec<_> = ids
             .iter()
             .filter(|i| thegamesdb_platforms(i).is_none())
+            .map(String::as_str)
             .collect();
-        assert!(no_ss.is_empty(), "sem id no ScreenScraper: {no_ss:?}");
-        assert!(no_tgdb.is_empty(), "sem id no TheGamesDB: {no_tgdb:?}");
+        // Catálogos oficiais:
+        // https://www.screenscraper.fr/systemesinfos.php
+        // https://thegamesdb.net/list_platforms.php
+        assert_eq!(no_ss, ["chip8", "gametank", "vaporspec"]);
+        // O catálogo do TGDB tem Pioneer LaserActive, que é outra plataforma.
+        assert_eq!(
+            no_tgdb,
+            [
+                "arduboy",
+                "chip8",
+                "gametank",
+                "laserdisc",
+                "uzebox",
+                "vaporspec"
+            ]
+        );
     }
 
     #[test]
