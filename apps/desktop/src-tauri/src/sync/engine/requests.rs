@@ -268,6 +268,11 @@ impl Engine {
         let mut files = local::rom_slot_files(&rom, &self.dirs.saves);
         let platform = platform_for_system(&rom.system_id);
         files.extend(local::system_saves(&self.dirs.system, platform).map_err(failed)?);
+        files.extend(
+            local::rom_folder_saves(&self.roms, &rom, &self.dirs.saves)
+                .await
+                .map_err(failed)?,
+        );
         let versions_of = |key: &str| -> u32 {
             let known = lock(&self.known_files);
             files
@@ -299,7 +304,7 @@ impl Engine {
         let mut removed_card: Option<String> = None;
         for f in &files {
             let base = self.repo.base_get(&f.key).await.map_err(repo_err)?;
-            let local = match sha256_file(&f.path) {
+            let local = match local::hash_save(f) {
                 Ok((hash, size, _)) if size > 0 => Some(hash),
                 Ok(_) => None,
                 Err(e) if e.kind() == io::ErrorKind::NotFound => None,

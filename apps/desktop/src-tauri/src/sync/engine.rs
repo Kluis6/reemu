@@ -25,7 +25,7 @@ use super::api::{
 };
 use super::device::{default_label, rfc3339, Device};
 use super::local::{
-    self, account_saves, log_tag, parse_key, rom_saves, sha256_file, LocalSaves, NameCase, SaveFile,
+    self, account_saves, log_tag, parse_key, rom_saves, LocalSaves, NameCase, SaveFile,
 };
 use super::platform::platform_for_system;
 use super::reconcile::{decide, Action, Kind, Local, Remote};
@@ -1043,6 +1043,9 @@ impl Engine {
                 Some(core) if core.starts_with("system/") => {
                     local.system_slot(core, &row.filename).into_iter().collect()
                 }
+                Some(core) if core.starts_with("saves/") => {
+                    local.folder_slot(core, &row.filename).into_iter().collect()
+                }
                 _ => local.rom_slots(&row.filename),
             };
             for slot in slots {
@@ -1075,7 +1078,7 @@ impl Engine {
             PassScope::Rom(id) => {
                 f.rom_id.as_deref() == Some(id.as_str())
                     || scope_paths.contains(&path_key(self.name_case, &f.path))
-                    || (f.rom_id.is_none() && local.rom_platform(id) == Some(f.platform))
+                    || (f.rom_id.is_none() && local.rom_matches_unowned_save(id, f))
             }
         };
         Ok(keys
@@ -1202,8 +1205,8 @@ fn pick<'a>(by_name: &ByName<'a>, file: &SaveFile) -> Option<&'a RemoteFile> {
                 r.core.as_deref() == Some(core) && case.of(&r.filename) == case.of(&file.filename)
             }
             None => {
-                r.filename == file.filename
-                    && !r.core.as_deref().unwrap_or_default().starts_with("system/")
+                let c = r.core.as_deref().unwrap_or_default();
+                r.filename == file.filename && !c.starts_with("system/") && !c.starts_with("saves/")
             }
         })
         .collect();

@@ -16,8 +16,8 @@ impl Engine {
     ) -> Result<(), SyncError> {
         let key = &e.file.key;
         // O hash fora das tarefas do Tokio: o prazo de antes de abrir vale aqui.
-        let path = e.file.path.clone();
-        let hashed = tokio::task::spawn_blocking(move || sha256_file(&path))
+        let target = e.file.clone();
+        let hashed = tokio::task::spawn_blocking(move || local::hash_save(&target))
             .await
             .unwrap_or_else(|j| Err(io::Error::other(j.to_string())));
         let local = match hashed {
@@ -145,7 +145,7 @@ impl Engine {
             .map(|(_, err)| err.clone())
     }
 
-    /// Lê o arquivo, manda, e só com o 201 grava a base.
+    /// Lê o arquivo (ou empacota a pasta), manda, e só com o 201 grava a base.
     pub(super) async fn send(
         &self,
         alva: &Alvanista,
@@ -153,18 +153,34 @@ impl Engine {
         file: &SaveFile,
         row: Option<&RemoteFile>,
     ) -> Result<Done, Fail> {
-        let bytes = std::fs::read(&file.path)
-            .map_err(|err| Fail::File(failed(format!("{}: {err}", log_tag(&file.key)))))?;
-        // Arquivo vazio é "sem save": nunca sobe.
-        if bytes.is_empty() {
-            return Ok(Done::Deferred);
-        }
-        let hash = sha256_hex(&bytes);
-        let client_mtime = std::fs::metadata(&file.path)
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-            .map(|d| rfc3339(d.as_secs() as i64));
+        let (bytes, hash, client_mtime) = if file.is_folder {
+            let path = file.path.clone();
+            let packed =
+                tokio::task::spawn_blocking(move || super::super::folder::pack_folder(&path))
+                    .await
+                    .unwrap_or_else(|j| Err(io::Error::other(j.to_string())));
+            match packed {
+                Ok((b, h, mtime)) => (b, h, (mtime > 0).then(|| rfc3339(mtime))),
+                Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Done::Deferred),
+                Err(err) => {
+                    return Err(Fail::File(failed(format!("{}: {err}", log_tag(&file.key)))));
+                }
+            }
+        } else {
+            let bytes = std::fs::read(&file.path)
+                .map_err(|err| Fail::File(failed(format!("{}: {err}", log_tag(&file.key)))))?;
+            // Arquivo vazio é "sem save": nunca sobe.
+            if bytes.is_empty() {
+                return Ok(Done::Deferred);
+            }
+            let hash = sha256_hex(&bytes);
+            let client_mtime = std::fs::metadata(&file.path)
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                .map(|d| rfc3339(d.as_secs() as i64));
+            (bytes, hash, client_mtime)
+        };
         // Linha que já existe: o envio vai para ela, com a plataforma e o core
         // dela (D113, D125). Linha nova: a plataforma do ReEmu, e core só nos
         // cartões e VMUs (a pasta, como a porta WebDAV arquiva).
@@ -318,7 +334,12 @@ impl Engine {
             self.backup(&file.path)
                 .map_err(|err| io_fail("backup de", err))?;
         }
-        write_atomic(&file.path, bytes).map_err(|err| io_fail("gravando", err))?;
+        if file.is_folder {
+            super::super::folder::unpack_folder_atomic(&file.path, bytes)
+                .map_err(|err| io_fail("extraindo", err))?;
+        } else {
+            write_atomic(&file.path, bytes).map_err(|err| io_fail("gravando", err))?;
+        }
         Ok(true)
     }
 

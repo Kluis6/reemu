@@ -2980,6 +2980,7 @@ fn save_file(platform: &'static str, core: Option<&'static str>, filename: &str)
         core,
         filename: filename.into(),
         path: PathBuf::from(filename),
+        is_folder: core.is_some_and(|c| c.starts_with("saves/")),
     }
 }
 
@@ -5798,4 +5799,161 @@ async fn the_notes_say_why_each_state_stays_here_by_its_id() {
 
     r.sync.devices.set_states_enabled(false).await.unwrap();
     assert!(r.sync.state_notes("r1").await.unwrap().is_empty());
+}
+
+/// D171-D173: pastas de save (`PSP/SAVEDATA/<SLOT>`) sobem empacotadas em
+/// `.zip` determinístico, descem em outra máquina sem reenvio na passada
+/// seguinte, entram em conflito quando os dois lados mudam e copiam a pasta
+/// inteira para `sync-backups` antes de substituir.
+#[tokio::test]
+async fn folder_saves_roundtrip_upload_download_conflict_and_backup() {
+    let _serial = SERIAL.lock().await;
+    let key = "file:other/saves/PSP/SAVEDATA/ULUS10041DATA00.zip";
+
+    // Máquina A cria o slot SAVEDATA e sobe na primeira passada.
+    let a = rig("folder-a").await;
+    a.roms
+        .add(&Rom {
+            id: "psp1".into(),
+            file_path: "C:/roms/Lumines.iso".into(),
+            crc32: "CRCPSP".into(),
+            md5: "MD5".into(),
+            system_id: "psp".into(),
+            serial: Some("ULUS-10041".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    a.write(
+        "saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN",
+        b"progress-v1",
+    );
+    a.write("saves/PSP/SAVEDATA/ULUS10041DATA00/PARAM.SFO", b"sfo-v1");
+    let (zip_v1, hash_v1, _) =
+        crate::sync::folder::pack_folder(&a.path("saves/PSP/SAVEDATA/ULUS10041DATA00")).unwrap();
+
+    mount_devices(&a.server, vec![device("dev1", "Sala")]).await;
+    let listing_a = mount_listing(&a.server, vec![]).await;
+    mount_upload(&a.server, "save-psp-1", "ver-1").await;
+
+    let rep_a = a.pass().await.unwrap();
+    assert_eq!(
+        (rep_a.uploaded, rep_a.downloaded, rep_a.conflicts),
+        (1, 0, 0)
+    );
+    let posts = a.reqs("POST", SAVES).await;
+    assert_eq!(posts.len(), 1);
+    assert_eq!(field(&posts[0].body, "platform").as_deref(), Some("other"));
+    assert_eq!(
+        field(&posts[0].body, "core").as_deref(),
+        Some("saves/PSP/SAVEDATA")
+    );
+    assert_eq!(
+        field(&posts[0].body, "filename").as_deref(),
+        Some("ULUS10041DATA00.zip")
+    );
+    let base_a = a.base_of(key).await.expect("base gravada");
+    assert_eq!(base_a.local_hash, hash_v1);
+    listing_a.set(vec![row(
+        "save-psp-1",
+        "ULUS10041DATA00.zip",
+        "other",
+        Some("saves/PSP/SAVEDATA"),
+        &zip_v1,
+        "ver-1",
+        Some("dev1"),
+    )]);
+    let line = a.engine.save_status("psp1").await.unwrap();
+    assert_eq!(line.state, SaveLineState::Synced);
+
+    // Máquina B baixa a pasta, extrai os arquivos e não reenvia na 2a passada.
+    let b = rig("folder-b").await;
+    mount_devices(&b.server, vec![device("dev1", "Sala")]).await;
+    let listing_b = mount_listing(
+        &b.server,
+        vec![row(
+            "save-psp-1",
+            "ULUS10041DATA00.zip",
+            "other",
+            Some("saves/PSP/SAVEDATA"),
+            &zip_v1,
+            "ver-1",
+            Some("dev2"),
+        )],
+    )
+    .await;
+    mount_content(&b.server, "save-psp-1", "ver-1", &zip_v1).await;
+
+    let rep_b1 = b.pass().await.unwrap();
+    assert_eq!(
+        (rep_b1.uploaded, rep_b1.downloaded, rep_b1.conflicts),
+        (0, 1, 0)
+    );
+    assert_eq!(
+        b.read("saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN")
+            .as_deref(),
+        Some(&b"progress-v1"[..])
+    );
+    assert_eq!(
+        b.read("saves/PSP/SAVEDATA/ULUS10041DATA00/PARAM.SFO")
+            .as_deref(),
+        Some(&b"sfo-v1"[..])
+    );
+
+    let rep_b2 = b.pass().await.unwrap();
+    assert_eq!(
+        (rep_b2.uploaded, rep_b2.downloaded, rep_b2.conflicts),
+        (0, 0, 0)
+    );
+
+    // Conflito dos dois lados: B edita localmente e outra máquina sobe `ver-2`.
+    let remote_tmp = temp("folder-v2-src");
+    std::fs::create_dir_all(&remote_tmp).unwrap();
+    std::fs::write(remote_tmp.join("DATA.BIN"), b"progress-remote-v2").unwrap();
+    std::fs::write(remote_tmp.join("PARAM.SFO"), b"sfo-v2").unwrap();
+    let (zip_v2, _, _) = crate::sync::folder::pack_folder(&remote_tmp).unwrap();
+    let _ = std::fs::remove_dir_all(&remote_tmp);
+
+    b.write(
+        "saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN",
+        b"progress-local-diverged",
+    );
+    listing_b.set(vec![row(
+        "save-psp-1",
+        "ULUS10041DATA00.zip",
+        "other",
+        Some("saves/PSP/SAVEDATA"),
+        &zip_v2,
+        "ver-2",
+        Some("dev2"),
+    )]);
+    mount_content(&b.server, "save-psp-1", "ver-2", &zip_v2).await;
+
+    let rep_conflict = b.pass().await.unwrap();
+    assert_eq!(rep_conflict.conflicts, 1);
+
+    // Resolver com `Keep::Remote` copia a pasta local inteira para `sync-backups`
+    // antes de aplicar `ver-2`.
+    b.engine.resolve(&b.alva, key, Keep::Remote).await.unwrap();
+    assert_eq!(
+        b.read("saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN")
+            .as_deref(),
+        Some(&b"progress-remote-v2"[..])
+    );
+    let backups = b.backups();
+    assert!(
+        backups.iter().any(|(p, data)| {
+            p == "saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN" && data == b"progress-local-diverged"
+        }),
+        "esperava DATA.BIN no resguardo: {backups:?}"
+    );
+    assert!(
+        backups.iter().any(|(p, data)| {
+            p == "saves/PSP/SAVEDATA/ULUS10041DATA00/PARAM.SFO" && data == b"sfo-v1"
+        }),
+        "esperava PARAM.SFO no resguardo: {backups:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&a.root);
+    let _ = std::fs::remove_dir_all(&b.root);
 }
