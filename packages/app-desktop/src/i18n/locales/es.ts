@@ -1477,6 +1477,16 @@ const es: Messages = {
     privacy: 'Los nombres y los hashes de los archivos se envían a Alvanista para identificar los juegos. Nada sobre ti queda junto a la solicitud.',
     counts: '{{found}} identificados, {{pending}} en cola, {{unknown}} sin respuesta',
     disabledByServer: 'Catálogo desactivado por el momento. Los proveedores locales siguen funcionando.',
+    pick: {
+      button: 'Elegir juego',
+      title: 'Elegir juego en el catálogo',
+      placeholder: 'Escribe el nombre del juego…',
+      hint: 'Tu elección se aplica al instante en este equipo y ayuda al catálogo a reconocer este archivo.',
+      searching: 'Buscando en el catálogo…',
+      empty: 'No se encontraron juegos para "{{query}}".',
+      error: 'No se pudo consultar el catálogo ahora. Inténtalo de nuevo.',
+      applied: 'Juego actualizado desde el catálogo.',
+    },
   },
 }
 

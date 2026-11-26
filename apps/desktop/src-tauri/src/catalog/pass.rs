@@ -119,6 +119,56 @@ struct ResolveItemResp {
     game: Option<GameAnswer>,
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "CatalogSearchGame"))]
+pub struct SearchGameDto {
+    pub game_id: String,
+    pub title: String,
+    pub platforms: Vec<String>,
+    pub release_date: Option<String>,
+    pub cover: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SearchGameWire {
+    game_id: String,
+    title: String,
+    #[serde(default)]
+    platforms: Vec<String>,
+    #[serde(default)]
+    release_date: Option<String>,
+    #[serde(default)]
+    cover: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct SearchGamesResp {
+    #[serde(default)]
+    games: Vec<SearchGameWire>,
+}
+
+#[derive(Serialize)]
+struct ClaimBatchReq<'a> {
+    game_id: &'a str,
+    langs: Vec<String>,
+    items: Vec<ResolveItemReq<'a>>,
+}
+
+#[derive(Deserialize)]
+struct ClaimBatchResp {
+    #[serde(default)]
+    game: Option<GameAnswer>,
+}
+
+fn map_client_error(err: ClientError) -> CatalogError {
+    match err {
+        ClientError::AuthEnded => CatalogError::AuthEnded,
+        ClientError::Transient(msg) => CatalogError::Transient(msg),
+        ClientError::Rejected(msg) => CatalogError::Rejected(msg),
+    }
+}
+
 /// Ordem de preferência de idioma enviada ao catálogo (`1..=8` caracteres por item).
 pub fn langs_for(ui_lang: Option<&str>) -> Vec<String> {
     let primary = ui_lang
@@ -292,6 +342,182 @@ impl CatalogEngine {
             .unwrap_or(false)
     }
 
+    async fn call_partner<T: serde::de::DeserializeOwned>(
+        &self,
+        alva: &Alvanista,
+        method: reqwest::Method,
+        path: &str,
+        payload: Option<&serde_json::Value>,
+        fallback_err: &'static str,
+        cleared_server_flag: &mut bool,
+    ) -> Result<T, CatalogError> {
+        let (status, body) = alva
+            .partner_json(method, path, payload)
+            .await
+            .map_err(map_client_error)?;
+
+        let err_code = partner_error_code(&body);
+        if status == 503 && err_code == Some("rom_resolve_disabled") {
+            let _ = self.state_repo().set_catalog_disabled_by_server(true).await;
+            return Err(CatalogError::Disabled);
+        }
+        if !(200..300).contains(&status) {
+            return Err(CatalogError::Rejected(
+                err_code.unwrap_or(fallback_err).to_owned(),
+            ));
+        }
+        if !*cleared_server_flag {
+            let _ = self
+                .state_repo()
+                .set_catalog_disabled_by_server(false)
+                .await;
+            *cleared_server_flag = true;
+        }
+        serde_json::from_value(body)
+            .map_err(|e| CatalogError::Transient(format!("resposta ilegível: {e}")))
+    }
+
+    /// Busca jogos no catálogo (`GET /api/partner/v1/games/search?q=&system=`)
+    /// para a escolha manual ("Escolher o jogo", D141).
+    pub async fn search(
+        &self,
+        alva: &Alvanista,
+        q: &str,
+        system: &str,
+    ) -> Result<Vec<SearchGameDto>, CatalogError> {
+        let trimmed: String = q.trim().chars().take(100).collect();
+        if trimmed.is_empty() {
+            return Ok(Vec::new());
+        }
+        if !alva.has_session().await {
+            return Err(CatalogError::AuthEnded);
+        }
+        if !self.is_enabled().await {
+            return Err(CatalogError::Disabled);
+        }
+
+        let path = {
+            let mut ser = url::form_urlencoded::Serializer::new(String::new());
+            ser.append_pair("q", &trimmed);
+            let sys = system.trim();
+            if !sys.is_empty() && sys != "disc" {
+                ser.append_pair("system", sys);
+            }
+            ser.append_pair("limit", "20");
+            format!("/api/partner/v1/games/search?{}", ser.finish())
+        };
+
+        let mut cleared = false;
+        let parsed: SearchGamesResp = self
+            .call_partner(
+                alva,
+                reqwest::Method::GET,
+                &path,
+                None,
+                "search_failed",
+                &mut cleared,
+            )
+            .await?;
+
+        Ok(parsed
+            .games
+            .into_iter()
+            .map(|g| SearchGameDto {
+                game_id: g.game_id,
+                title: g.title,
+                platforms: g.platforms,
+                release_date: g.release_date,
+                cover: g.cover.as_deref().and_then(net::http::https_url),
+            })
+            .collect())
+    }
+
+    /// Registra a escolha manual da pessoa (`POST /api/partner/v1/games/claims`,
+    /// D141) e aplica os metadados na hora com `state = 'manual'`.
+    pub async fn pick(
+        &self,
+        alva: &Alvanista,
+        rom_id: &str,
+        game_id: &str,
+        lang: Option<&str>,
+    ) -> Result<GameMetadata, CatalogError> {
+        if !alva.has_session().await {
+            return Err(CatalogError::AuthEnded);
+        }
+        if !self.is_enabled().await {
+            return Err(CatalogError::Disabled);
+        }
+        let game_id = game_id.trim();
+        if game_id.is_empty() {
+            return Err(CatalogError::Rejected("invalid_game_id".into()));
+        }
+
+        let roms_repo = db::RomsRepo::new(self.db.clone());
+        let mut rom = roms_repo
+            .get(rom_id)
+            .await
+            .map_err(|e| CatalogError::Repo(e.to_string()))?
+            .ok_or_else(|| CatalogError::Rejected("rom_not_found".into()))?;
+
+        let now = self.now();
+        if rom.identified_at.is_none() && !self.is_playing() {
+            let mut only = HashSet::with_capacity(1);
+            only.insert(rom_id.to_owned());
+            let _ =
+                identify_unidentified(&self.db, Some(&only), now, self.is_playing.as_ref()).await;
+            if let Ok(Some(refreshed)) = roms_repo.get(rom_id).await {
+                rom = refreshed;
+            }
+        }
+
+        let item =
+            item_from_rom(&rom).ok_or_else(|| CatalogError::Rejected("missing_system".into()))?;
+        let payload = serde_json::to_value(ClaimBatchReq {
+            game_id,
+            langs: langs_for(lang),
+            items: vec![item],
+        })
+        .map_err(|e| CatalogError::Rejected(e.to_string()))?;
+
+        let mut cleared = false;
+        let parsed: ClaimBatchResp = self
+            .call_partner(
+                alva,
+                reqwest::Method::POST,
+                "/api/partner/v1/games/claims",
+                Some(&payload),
+                "claim_failed",
+                &mut cleared,
+            )
+            .await?;
+        let answer = parsed
+            .game
+            .ok_or_else(|| CatalogError::Transient("resposta sem dados do jogo".into()))?;
+
+        let meta = self
+            .apply_answer(
+                rom_id,
+                &answer,
+                ResolutionState::Manual,
+                None,
+                None,
+                self.now(),
+            )
+            .await?;
+
+        let (found, pending, unknown) = db::RomResolutionRepo::new(self.db.clone())
+            .counts()
+            .await
+            .unwrap_or((1, 0, 0));
+        self.emit(CatalogEvent::Pass {
+            found,
+            pending,
+            unknown,
+        });
+        self.emit(CatalogEvent::Status);
+        Ok(meta)
+    }
+
     /// Grava a resolução (`found` automático ou `manual` escolhida pela pessoa)
     /// e aplica `game_metadata` + `scrape_matches` + invalidação da capa.
     /// No modo `Found`, respeita uma confirmação manual prévia (`user_confirmed`).
@@ -406,7 +632,6 @@ impl CatalogEngine {
 
         let res_repo = db::RomResolutionRepo::new(self.db.clone());
         let roms_repo = db::RomsRepo::new(self.db.clone());
-        let state_repo = self.state_repo();
 
         let target_ids: Vec<String> = match scope {
             PassScope::All => {
@@ -481,38 +706,16 @@ impl CatalogEngine {
             })
             .map_err(|e| CatalogError::Rejected(e.to_string()))?;
 
-            let (status, body) = match alva
-                .partner_json(
+            let parsed: ResolveBatchResp = self
+                .call_partner(
+                    alva,
                     reqwest::Method::POST,
                     "/api/partner/v1/games/resolve",
                     Some(&payload),
+                    "unexpected_status",
+                    &mut server_answered_ok,
                 )
-                .await
-            {
-                Ok(resp) => resp,
-                Err(ClientError::AuthEnded) => return Err(CatalogError::AuthEnded),
-                Err(ClientError::Transient(msg)) => return Err(CatalogError::Transient(msg)),
-                Err(ClientError::Rejected(msg)) => return Err(CatalogError::Rejected(msg)),
-            };
-
-            let err_code = partner_error_code(&body);
-            if status == 503 && err_code == Some("rom_resolve_disabled") {
-                let _ = state_repo.set_catalog_disabled_by_server(true).await;
-                return Err(CatalogError::Disabled);
-            }
-            if !(200..300).contains(&status) {
-                return Err(CatalogError::Rejected(
-                    err_code.unwrap_or("unexpected_status").to_owned(),
-                ));
-            }
-
-            if !server_answered_ok {
-                let _ = state_repo.set_catalog_disabled_by_server(false).await;
-                server_answered_ok = true;
-            }
-
-            let parsed: ResolveBatchResp = serde_json::from_value(body)
-                .map_err(|e| CatalogError::Transient(format!("resposta ilegível: {e}")))?;
+                .await?;
 
             report.sent += chunk.len();
             let batch_now = self.now();
@@ -1333,5 +1536,246 @@ mod tests {
             sent_item["crc32"],
             expected_hashes.crc32.to_ascii_lowercase()
         );
+    }
+
+    #[tokio::test]
+    async fn pick_writes_manual_resolution_and_metadata() {
+        let server = MockServer::start().await;
+        let game_id = "01950f10-aaaa-7bbb-8ccc-ff66ff66ff66";
+
+        Mock::given(method("GET"))
+            .and(path("/api/partner/v1/games/search"))
+            .respond_with(|req: &Request| {
+                let query: std::collections::HashMap<String, String> = req
+                    .url
+                    .query_pairs()
+                    .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                    .collect();
+                assert_eq!(query.get("q").map(String::as_str), Some("Final Fantasy"));
+                assert_eq!(query.get("system").map(String::as_str), Some("snes"));
+                ResponseTemplate::new(200).set_body_json(json!({
+                    "games": [
+                        {
+                            "game_id": "01950f10-aaaa-7bbb-8ccc-ff66ff66ff66",
+                            "title": "Final Fantasy VI",
+                            "platforms": ["Super Nintendo"],
+                            "release_date": "1994-04-02",
+                            "cover": "https://cdn.alvanista.com/ff6/cover.webp"
+                        },
+                        {
+                            "game_id": "01950f10-aaaa-7bbb-8ccc-ff44ff44ff44",
+                            "title": "Final Fantasy IV",
+                            "platforms": ["Super Nintendo"],
+                            "release_date": "1991-07-19",
+                            "cover": "http://insecure.example/cover.png"
+                        }
+                    ]
+                }))
+            })
+            .mount(&server)
+            .await;
+
+        let seen_claims: Arc<Mutex<Vec<serde_json::Value>>> = Arc::new(Mutex::new(Vec::new()));
+        let seen_claims2 = seen_claims.clone();
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/games/claims"))
+            .respond_with(move |req: &Request| {
+                seen_claims2
+                    .lock()
+                    .unwrap()
+                    .push(serde_json::from_slice(&req.body).unwrap());
+                ResponseTemplate::new(200).set_body_json(json!({
+                    "accepted": 1,
+                    "promoted": false,
+                    "game": {
+                        "game_id": game_id,
+                        "title": "Final Fantasy VI",
+                        "synopsis": "A Guerra dos Magi.",
+                        "release_date": "1994-04-02",
+                        "developers": ["Square"],
+                        "publishers": ["Square"],
+                        "genres": ["RPG"],
+                        "media": {
+                            "cover": "https://cdn.alvanista.com/ff6/cover.webp",
+                            "hero": "https://cdn.alvanista.com/ff6/hero.webp"
+                        },
+                        "media_pending": true
+                    }
+                }))
+            })
+            .mount(&server)
+            .await;
+
+        let h = harness(&server).await;
+        add_rom(
+            &h.db,
+            Rom {
+                id: "rom_ff6".into(),
+                file_path: "/roms/snes/FF6 T-BR.sfc".into(),
+                crc32: "11223344".into(),
+                md5: "00112233445566778899aabbccddeeff".into(),
+                sha1: Some("0123456789abcdef0123456789abcdef01234567".into()),
+                system_id: "snes".into(),
+                ident_name: Some("FF6 T-BR.sfc".into()),
+                ident_size: Some(3_145_728),
+                identified_at: Some(100),
+                ..Default::default()
+            },
+        )
+        .await;
+
+        let hits = h
+            .engine
+            .search(&h.alva, "  Final Fantasy  ", "snes")
+            .await
+            .unwrap();
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].title, "Final Fantasy VI");
+        assert_eq!(
+            hits[0].cover.as_deref(),
+            Some("https://cdn.alvanista.com/ff6/cover.webp")
+        );
+        // URL http:// é descartada na fronteira.
+        assert_eq!(hits[1].cover, None);
+
+        let meta = h
+            .engine
+            .pick(&h.alva, "rom_ff6", game_id, Some("pt-BR"))
+            .await
+            .unwrap();
+        assert_eq!(meta.title, "Final Fantasy VI");
+        assert_eq!(meta.game_uuid.as_deref(), Some(game_id));
+        assert_eq!(meta.provider_source.as_deref(), Some("alvanista"));
+
+        {
+            let claims = seen_claims.lock().unwrap();
+            assert_eq!(claims.len(), 1);
+            assert_eq!(claims[0]["game_id"], game_id);
+            assert_eq!(claims[0]["langs"], json!(["pt", "en"]));
+            assert_eq!(claims[0]["items"][0]["crc32"], "11223344");
+            assert_eq!(claims[0]["items"][0]["filename"], "FF6 T-BR.sfc");
+        }
+
+        let res = db::RomResolutionRepo::new(h.db.clone())
+            .get("rom_ff6")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(res.state, ResolutionState::Manual);
+        assert_eq!(res.game_uuid.as_deref(), Some(game_id));
+        assert!(!res.media_pending);
+
+        let meta_repo = db::MetadataRepo::new(h.db.clone());
+        let saved = meta_repo.get_metadata("rom_ff6").await.unwrap().unwrap();
+        assert_eq!(saved.title, "Final Fantasy VI");
+        assert_eq!(saved.game_uuid.as_deref(), Some(game_id));
+        assert!(meta_repo.is_user_confirmed("rom_ff6").await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn manual_resolution_survives_a_later_pass() {
+        let server = MockServer::start().await;
+        let chosen_id = "01950f10-aaaa-7bbb-8ccc-ff66ff66ff66";
+        let other_id = "01950f10-aaaa-7bbb-8ccc-000000000000";
+
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/games/claims"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "accepted": 1,
+                "promoted": false,
+                "game": {
+                    "game_id": chosen_id,
+                    "title": "Final Fantasy VI",
+                    "media": { "cover": "https://cdn.alvanista.com/ff6/cover.webp" },
+                    "media_pending": false
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/partner/v1/games/resolve"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "results": [
+                    {
+                        "id": "rom_manual",
+                        "status": "found",
+                        "matched_by": "sha1",
+                        "game": {
+                            "game_id": other_id,
+                            "title": "Outro Jogo Automático",
+                            "media": {},
+                            "media_pending": false
+                        }
+                    },
+                    {
+                        "id": "rom_other",
+                        "status": "unknown",
+                        "reason": "not_indexed"
+                    }
+                ]
+            })))
+            .mount(&server)
+            .await;
+
+        let h = harness(&server).await;
+        for id in ["rom_manual", "rom_other"] {
+            add_rom(
+                &h.db,
+                Rom {
+                    id: id.into(),
+                    file_path: format!("/roms/snes/{id}.sfc"),
+                    crc32: "11223344".into(),
+                    md5: "00112233445566778899aabbccddeeff".into(),
+                    system_id: "snes".into(),
+                    identified_at: Some(100),
+                    ..Default::default()
+                },
+            )
+            .await;
+        }
+
+        h.engine
+            .pick(&h.alva, "rom_manual", chosen_id, Some("pt"))
+            .await
+            .unwrap();
+
+        // Nem uma passada geral nem uma passada explícita da própria ROM podem
+        // sobrescrever a escolha manual.
+        let r_all = h
+            .engine
+            .run_pass(&h.alva, PassScope::All, Some("pt"))
+            .await
+            .unwrap();
+        assert_eq!(r_all.sent, 1);
+        assert_eq!(r_all.found, 0);
+
+        let r_explicit = h
+            .engine
+            .run_pass(
+                &h.alva,
+                PassScope::Roms(vec!["rom_manual".into(), "rom_other".into()]),
+                Some("pt"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(r_explicit.sent, 1);
+        assert_eq!(r_explicit.found, 0);
+
+        let res = db::RomResolutionRepo::new(h.db.clone())
+            .get("rom_manual")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(res.state, ResolutionState::Manual);
+        assert_eq!(res.game_uuid.as_deref(), Some(chosen_id));
+
+        let saved = db::MetadataRepo::new(h.db.clone())
+            .get_metadata("rom_manual")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.title, "Final Fantasy VI");
+        assert_eq!(saved.game_uuid.as_deref(), Some(chosen_id));
     }
 }

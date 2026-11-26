@@ -140,28 +140,26 @@ fn apply_edits(mut dto: GameMetadataDto, edits: GameMetadataEdits) -> GameMetada
     dto
 }
 
-#[tauri::command]
-pub async fn get_rom_metadata(
-    state: State<'_, AppState>,
-    rom_id: String,
-    language: Option<String>,
+pub(crate) async fn load_rom_metadata(
+    pool: &db::Db,
+    rom_id: &str,
+    language: Option<&str>,
 ) -> Result<Option<GameMetadataDto>, AppError> {
-    let pool = pool(&state)?;
     let repo = db::MetadataRepo::new(pool.clone());
-    let imported = repo.get_metadata(&rom_id).await.map_err(AppError::from)?;
-    let edits = repo.get_edits(&rom_id).await.map_err(AppError::from)?;
+    let imported = repo.get_metadata(rom_id).await.map_err(AppError::from)?;
+    let edits = repo.get_edits(rom_id).await.map_err(AppError::from)?;
     if imported.is_none() && edits.is_none() {
         return Ok(None);
     }
-    let Some(rom) = db::RomsRepo::new(pool)
-        .get(&rom_id)
+    let Some(rom) = db::RomsRepo::new(pool.clone())
+        .get(rom_id)
         .await
         .map_err(AppError::from)?
     else {
         return Ok(None);
     };
     let mut dto = GameMetadataDto::from(imported.unwrap_or_else(|| GameMetadata {
-        rom_id,
+        rom_id: rom_id.to_owned(),
         title: super::library::rom_title(&rom),
         description: None,
         cover_url: None,
@@ -187,6 +185,16 @@ pub async fn get_rom_metadata(
         dto = apply_edits(dto, edits);
     }
     Ok(Some(dto))
+}
+
+#[tauri::command]
+pub async fn get_rom_metadata(
+    state: State<'_, AppState>,
+    rom_id: String,
+    language: Option<String>,
+) -> Result<Option<GameMetadataDto>, AppError> {
+    let pool = pool(&state)?;
+    load_rom_metadata(&pool, &rom_id, language.as_deref()).await
 }
 
 #[derive(Serialize)]

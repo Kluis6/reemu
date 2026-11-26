@@ -44,7 +44,7 @@ pub struct AppState {
     /// `<dados>/covers` — cache local das capas baixadas da libretro (uma
     /// vez por ROM, servido pelo protocolo `cover://` em `covers.rs`).
     pub covers_dir: std::path::PathBuf,
-    /// `<dados>/media` — cache por jogo (`<game_uuid>/`) de hero, logo, tela de
+    /// `<dados>/media`: cache por jogo (`<game_uuid>/`) de hero, logo, tela de
     /// título e capturas do catálogo (`media://` em `covers.rs`).
     pub media_dir: std::path::PathBuf,
     /// Hotkeys de sistema carregadas do DB (`system_hotkeys`). `save_binding` /
@@ -402,7 +402,7 @@ mod game;
 pub(crate) mod hardware;
 mod input;
 mod library;
-mod metadata;
+pub(crate) mod metadata;
 mod save_states;
 mod settings;
 mod shader_preview;

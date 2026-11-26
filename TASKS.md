@@ -787,11 +787,14 @@ no `emu-session`, ver `docs/historico.md`).
            core e a versão, e os das outras máquinas descem quando os dois batem.
            Parte 4, as configurações: copiadas de outra máquina por grupo, com
            backup e desfazer, sem apagar nada daqui.
-      - **Metadados de jogos:** sem a busca da pergunta 3, não há como identificar a
-        ROM, porque a API só aceita ID. Se vier, começar por hero e logo como fonte
-        adicional, com ScreenScraper e TheGamesDB como principais, comparar a
-        cobertura com jogos retrô, guardar em cache local e nunca exigir login. Depois,
-        ligar a biblioteca à coleção do Alvanista pelo ID em comum.
+      - **Metadados de jogos (`done`, 2026-11-26):** conectado ao Alvanista e com
+        a chave ligada em Configurações > Metadados, o ReEmu resolve a biblioteca
+        em lotes por hash, serial, nome e tamanho (`/api/partner/v1/games/resolve`),
+        guarda hero, logo, tela de título e capturas no cache local por `game_uuid`,
+        permite escolher o jogo manualmente (`/games/search` + `/games/claims`) e
+        mantém ScreenScraper, TheGamesDB e busca pública como cascata de reserva
+        e modo sem login (D129-D151). Depois, ligar a biblioteca à coleção do
+        Alvanista pelo ID em comum.
 - [ ] `todo` — **Predefinições reais dos cores** (pesquisa iniciada em 2026-11-01). Hoje
       Desempenho, Normal e Qualidade não mudam nada.
       - **Encontrado:** não achei um conjunto de presets pronto e confiável. A comunidade

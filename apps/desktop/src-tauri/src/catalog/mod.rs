@@ -6,10 +6,13 @@ pub mod answer;
 pub mod identify;
 pub mod pass;
 
-pub use pass::{CatalogEngine, CatalogError, CatalogEvent, CatalogStatus, PassReport, PassScope};
+pub use pass::{
+    CatalogEngine, CatalogError, CatalogEvent, CatalogStatus, PassReport, PassScope, SearchGameDto,
+};
 
 use crate::alvanista::Alvanista;
 use crate::app_error::AppError;
+use crate::commands::GameMetadataDto;
 use domain::metadata::ResolutionState;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -189,4 +192,36 @@ pub async fn catalog_run_now(
         }
         Err(e) => Err(AppError::from(e.to_string())),
     }
+}
+
+#[tauri::command]
+pub async fn catalog_search(
+    app: AppHandle,
+    q: String,
+    system: String,
+) -> Result<Vec<SearchGameDto>, AppError> {
+    let (engine, alva) = required_parts(&app)?;
+    engine
+        .search(&alva, &q, &system)
+        .await
+        .map_err(|e| AppError::from(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn catalog_pick(
+    app: AppHandle,
+    rom_id: String,
+    game_id: String,
+    lang: Option<String>,
+) -> Result<GameMetadataDto, AppError> {
+    let (engine, alva) = required_parts(&app)?;
+    let meta = engine
+        .pick(&alva, &rom_id, &game_id, lang.as_deref())
+        .await
+        .map_err(|e| AppError::from(e.to_string()))?;
+    Ok(
+        crate::commands::metadata::load_rom_metadata(engine.db(), &rom_id, lang.as_deref())
+            .await?
+            .unwrap_or_else(|| GameMetadataDto::from(meta)),
+    )
 }

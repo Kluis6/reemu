@@ -37,6 +37,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FullscreenDialog } from "../components/FullscreenDialog";
+import { PickGameDialog } from "../components/catalog/PickGameDialog";
 import { ConflictDialog } from "../components/sync/ConflictDialog";
 import { SaveLine } from "../components/sync/SaveLine";
 import { GamePresets } from "../components/GamePresets";
@@ -90,6 +91,7 @@ import {
   type SyncConflict,
 } from "../lib/tauri";
 import { conflictFor } from "../hooks/useSync";
+import { useCatalogStatus } from "../hooks/useCatalog";
 import { formatPlayTime } from "../lib/playTime";
 import { useModalButtonStyles } from "../styles/buttons";
 import { useDetailStyles, useTabStyles } from "../styles/xbox";
@@ -249,6 +251,12 @@ export function RomDetail() {
   const [editSystem, setEditSystem] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoTab, setInfoTab] = useState<"about" | "library">("about");
+  const [pickOpen, setPickOpen] = useState(false);
+  const catalogStatus = useCatalogStatus();
+  const canPickFromCatalog =
+    !!catalogStatus.data?.connected &&
+    catalogStatus.data.enabled &&
+    !catalogStatus.data.disabledByServer;
   // Conflito de save achado ao apertar Jogar: pergunta antes de abrir.
   const [conflictAsk, setConflictAsk] = useState<{ conflict: SyncConflict; loadState?: string } | null>(null);
   // Campos da gaveta formatados pelo que cada provedor documenta
@@ -758,6 +766,15 @@ export function RomDetail() {
                       {sourceText}
                     </Badge>
                   )}
+                  {canPickFromCatalog && (
+                    <Button
+                      size="small"
+                      appearance="secondary"
+                      onClick={() => setPickOpen(true)}
+                    >
+                      {t("catalog.pick.button")}
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -1107,6 +1124,15 @@ export function RomDetail() {
           )}
         </div>
       </FullscreenDialog>
+
+      {pickOpen && (
+        <PickGameDialog
+          romId={rom.id}
+          systemId={rom.systemId}
+          initialQuery={rom.title}
+          onClose={() => setPickOpen(false)}
+        />
+      )}
 
       {conflictAsk && (
         <ConflictDialog
