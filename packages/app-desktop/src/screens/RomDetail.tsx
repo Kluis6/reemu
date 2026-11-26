@@ -30,12 +30,11 @@ import {
   HeartRegular,
   InfoRegular,
   PlayRegular,
-  TrophyRegular,
   WarningRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FullscreenDialog } from "../components/FullscreenDialog";
 import { ConflictDialog } from "../components/sync/ConflictDialog";
 import { SaveLine } from "../components/sync/SaveLine";
@@ -45,6 +44,7 @@ import { SelectBlock } from "../components/SettingBlock";
 import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { CheatsPanel } from "../components/CheatsPanel";
+import { GameAchievementsPanel } from "../components/GameAchievementsPanel";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { LocalStateNote } from "../components/sync/LocalStateNote";
 import {
@@ -103,6 +103,7 @@ export function RomDetail() {
   const s = useDetailStyles();
   const tb = useTabStyles();
   const btn = useModalButtonStyles();
+  const location = useLocation();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const push = useToastStore((st) => st.push);
@@ -268,7 +269,11 @@ export function RomDetail() {
   const sourceText = providerLabel(meta.data?.providerSource);
   const releaseYear = meta.data?.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
   // Dialog de tela cheia aberto; o conteúdo de Emulador fica na própria página.
-  const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "media" | null>(null);
+  const initialPanel =
+    (location.state as { openPanel?: string } | null)?.openPanel === "achievements"
+      ? "achievements"
+      : null;
+  const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "media" | null>(initialPanel);
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   // Galeria: só as mídias que o provedor trouxe.
   const shots = [
@@ -1049,15 +1054,11 @@ export function RomDetail() {
             </>
           )}
           {panel === "cheats" && <CheatsPanel romId={romId} />}
-          {/* Conquistas deste jogo: ainda sem dados, como no menu de pausa. */}
           {panel === "achievements" && (
-            <EmptyState
-              art={<TrophyRegular style={{ color: "var(--reemuBrandAccent)", fontSize: "44px" }} />}
-              artAccent
-              title={t("game.tabs.achievements")}
-            >
-              {t("play.achievementsSoon")}
-            </EmptyState>
+            <GameAchievementsPanel
+              romId={romId}
+              onNavigateSettings={() => navigate("/settings/conquistas")}
+            />
           )}
           {panel === "media" && (
             <div className={s.gallery}>

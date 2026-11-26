@@ -46,6 +46,23 @@ pub(crate) struct HwRenderRequest {
     pub context_destroy: sys::retro_hw_context_reset_t,
 }
 
+/// Descritor copiado de `RETRO_ENVIRONMENT_SET_MEMORY_MAPS` (`libretro.h`:
+/// "The frontend must maintain its own copy of this object and its contents,
+/// including strings and nested objects").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MemoryDescriptor {
+    pub flags: u64,
+    /// Endereço do buffer no processo do host (`0` = nulo), válido enquanto o
+    /// core estiver carregado.
+    pub ptr: usize,
+    pub offset: usize,
+    pub start: usize,
+    pub select: usize,
+    pub disconnect: usize,
+    pub len: usize,
+    pub addrspace: Option<String>,
+}
+
 pub(crate) struct FrontendState {
     pub pixel_format: SoftwarePixelFormat,
     pub system_dir: CString,
@@ -120,6 +137,8 @@ pub(crate) struct FrontendState {
     /// `SET_CONTENT_INFO_OVERRIDE`: extensão (minúscula) → (`need_fullpath`,
     /// `persistent_data`). Só a 1ª ocorrência de cada extensão vale.
     pub content_overrides: Vec<(String, bool, bool)>,
+    /// Regiões declaradas pelo core em `RETRO_ENVIRONMENT_SET_MEMORY_MAPS`.
+    pub memory_descriptors: Vec<MemoryDescriptor>,
     /// `CString` viva por chave, pro ponteiro que devolvemos em `GET_VARIABLE`
     /// continuar válido até o valor mudar.
     option_value_cache: HashMap<String, CString>,
@@ -166,6 +185,7 @@ impl FrontendState {
             core_set_options: Vec::new(),
             game_info_ext: None,
             content_overrides: Vec::new(),
+            memory_descriptors: Vec::new(),
             option_value_cache: HashMap::new(),
         }
     }
@@ -240,6 +260,14 @@ pub(crate) fn lock() -> std::sync::MutexGuard<'static, Option<FrontendState>> {
 /// processo do core manda ao app (`ToParent::SerializationQuirks`).
 pub fn serialization_quirks() -> u64 {
     lock().as_ref().map_or(0, |st| st.serialization_quirks)
+}
+
+/// Cópia dos descritores de memória declarados pelo core carregado em
+/// `RETRO_ENVIRONMENT_SET_MEMORY_MAPS` (vazio se o core não declarou).
+pub fn memory_descriptors() -> Vec<MemoryDescriptor> {
+    lock()
+        .as_ref()
+        .map_or_else(Vec::new, |st| st.memory_descriptors.clone())
 }
 
 /// Guarda que representa "há um core carregado". Enquanto viver, um novo
@@ -599,6 +627,42 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
                     n += 1;
                 }
                 st.controller_ports = n;
+            }
+            true
+        }
+        // `libretro.h`: `const struct retro_memory_map *` (comando 36 | EXPERIMENTAL).
+        // Mantemos cópia própria dos descritores e strings `addrspace` para o
+        // mapeamento de memória do `rcheevos` (`rc_libretro_memory_init`).
+        sys::RETRO_ENVIRONMENT_SET_MEMORY_MAPS => {
+            if data.is_null() {
+                return false;
+            }
+            let mmap = &*(data as *const sys::retro_memory_map);
+            let count = (mmap.num_descriptors as usize).min(256);
+            st.memory_descriptors.clear();
+            if count > 0 && !mmap.descriptors.is_null() {
+                let slice = std::slice::from_raw_parts(mmap.descriptors, count);
+                st.memory_descriptors.reserve(count);
+                for d in slice {
+                    let addrspace = if d.addrspace.is_null() {
+                        None
+                    } else {
+                        let s = std::ffi::CStr::from_ptr(d.addrspace)
+                            .to_string_lossy()
+                            .into_owned();
+                        (!s.is_empty()).then_some(s)
+                    };
+                    st.memory_descriptors.push(MemoryDescriptor {
+                        flags: d.flags,
+                        ptr: d.ptr as usize,
+                        offset: d.offset,
+                        start: d.start,
+                        select: d.select,
+                        disconnect: d.disconnect,
+                        len: d.len,
+                        addrspace,
+                    });
+                }
             }
             true
         }

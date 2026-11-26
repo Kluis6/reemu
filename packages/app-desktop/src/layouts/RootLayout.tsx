@@ -10,6 +10,7 @@ import { ToastLayer } from '../components/ToastLayer'
 import { useFullscreenSync } from '../hooks/useFullscreen'
 import { useGamepadStatus } from '../hooks/useGamepadStatus'
 import { useMenuNav } from '../hooks/useMenuNav'
+import { useRaEvents } from '../hooks/useRetroAchievements'
 import { getProfile, setTrayLabels } from '../lib/tauri'
 import { getReduceMotion } from '../lib/uiPrefs'
 
@@ -25,6 +26,7 @@ export function RootLayout() {
   useMenuNav()
   useFullscreenSync()
   useGamepadStatus()
+  useRaEvents()
 
   const { pathname } = useLocation()
 

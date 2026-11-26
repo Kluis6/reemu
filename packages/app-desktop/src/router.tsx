@@ -57,6 +57,7 @@ export const router = createHashRouter([
                   { index: true, lazy: page(() => import('./screens/settings/SettingsHome'), (m) => m.SettingsHome) },
                   { path: 'perfil', lazy: page(() => import('./screens/settings/SettingsProfile'), (m) => m.SettingsProfile) },
                   { path: 'sincronizacao', lazy: page(() => import('./screens/settings/SettingsSync'), (m) => m.SettingsSync) },
+                  { path: 'conquistas', lazy: page(() => import('./screens/settings/SettingsAchievements'), (m) => m.SettingsAchievements) },
                   { path: 'aparencia', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance) },
                   { path: 'aparencia/temas', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance, { section: 'temas' as const }) },
                   { path: 'aparencia/papel-de-parede', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance, { section: 'papel-de-parede' as const }) },

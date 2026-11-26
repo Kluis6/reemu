@@ -8,6 +8,7 @@ name = "reemu-core-host"
 path = "src/main.rs"
 
 [dependencies]
+achievements = { path = "../achievements" }
 core-loader-desktop = { path = "../core-loader-desktop" }
 core-ipc = { path = "../core-ipc" }
 domain = { path = "../domain" }

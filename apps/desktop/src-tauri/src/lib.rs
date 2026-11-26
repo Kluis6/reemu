@@ -23,6 +23,7 @@ const SHOW_AFTER_PRESENTS: u32 = if cfg!(target_os = "windows") { 2 } else { 1 }
 mod perf;
 mod play_clock;
 mod profile;
+mod ra;
 mod shader_failure;
 mod shader_pack;
 mod sync;
@@ -73,6 +74,7 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::UpdateState::default())
+        .manage(ra::RaState::default())
         .setup(|app| {
             shader_failure::init(app.handle().clone());
             gpu::set_shader_failure_hook(|source, error| {
@@ -153,6 +155,7 @@ pub fn run() {
             }
             let sync_pool = db.clone();
             app.manage(AppState::new(base.clone(), db, audio_config, hotkeys));
+            ra::install_session_bridge(app.handle());
             let sync_service = app
                 .try_state::<std::sync::Arc<sync::SyncService>>()
                 .map(|s| s.inner().clone());
@@ -385,6 +388,11 @@ pub fn run() {
             sync::sync_settings_undo_info,
             sync::sync_settings_undo,
             sync::sync_settings_undo_forget,
+            ra::ra_status,
+            ra::ra_login,
+            ra::ra_logout,
+            ra::ra_set_preferences,
+            ra::ra_game_achievements,
             commands::js_log,
             commands::current_focus,
             commands::toggle_focus,

@@ -78,6 +78,7 @@ shader-slang = { path = "../../../crates/shader-slang" }
 net = { path = "../../../crates/net" }
 core-catalog = { path = "../../../crates/core-catalog" }
 scraping = { path = "../../../crates/scraping" }
+achievements = { path = "../../../crates/achievements" }
 # O manifesto publica instaladores Tauri v2 assinados (.exe, .msi, .AppImage).
 # O suporte a pacotes de atualizacao compactados do Tauri v1 fica desabilitado.
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }

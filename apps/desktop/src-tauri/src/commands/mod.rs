@@ -310,6 +310,12 @@ async fn quick_state<R: tauri::Runtime>(
         crate::sync::engine::after_state_saved(app, rom_id);
         Ok("QuickSave gravado".into())
     } else {
+        if app.state::<crate::ra::RaState>().is_hardcore_active() {
+            return Err(
+                "Modo Hardcore ativo: carregar save state fica desativado nas conquistas Hardcore."
+                    .into(),
+            );
+        }
         let meta = save_svc::list(&repo, &rom_id)
             .await
             .map_err(AppError::from)?

@@ -1,0 +1,12 @@
+[package]
+name = "achievements"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+log = "0.4"
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[build-dependencies]
+cc = "1"
