@@ -288,13 +288,7 @@ impl Client {
                 Ok(me)
             }
             // Só chega aqui um 401 logo depois de uma renovação que deu certo.
-            Err(MeError::Unauthorized) => {
-                if let Err(e) = self.store.clear_tokens().await {
-                    log::warn!("alvanista: não deu pra apagar a sessão: {e}");
-                }
-                self.session_ended().await;
-                Err(ClientError::AuthEnded)
-            }
+            Err(MeError::Unauthorized) => Err(self.end_unauthorized().await),
             Err(MeError::Failed(e)) => Err(e),
         }
     }
@@ -337,15 +331,17 @@ impl Client {
         }
         match result {
             Ok(out) => Ok(out),
-            Err(MeError::Unauthorized) => {
-                if let Err(e) = self.store.clear_tokens().await {
-                    log::warn!("alvanista: não deu pra apagar a sessão: {e}");
-                }
-                self.session_ended().await;
-                Err(ClientError::AuthEnded)
-            }
+            Err(MeError::Unauthorized) => Err(self.end_unauthorized().await),
             Err(MeError::Failed(e)) => Err(e),
         }
+    }
+
+    async fn end_unauthorized(&self) -> ClientError {
+        if let Err(e) = self.store.clear_tokens().await {
+            log::warn!("alvanista: não deu pra apagar a sessão: {e}");
+        }
+        self.session_ended().await;
+        ClientError::AuthEnded
     }
 
     async fn send_authed_json(
@@ -469,7 +465,7 @@ fn transport(e: reqwest::Error) -> ClientError {
     ClientError::Transient(e.without_url().to_string())
 }
 
-fn partner_error_code(v: &serde_json::Value) -> Option<&str> {
+pub(crate) fn partner_error_code(v: &serde_json::Value) -> Option<&str> {
     let err = v.get("error")?;
     err.as_str()
         .or_else(|| err.get("code").and_then(|c| c.as_str()))

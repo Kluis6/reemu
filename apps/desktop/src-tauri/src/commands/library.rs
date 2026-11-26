@@ -105,12 +105,7 @@ pub(super) fn validate_metadata_edits(
             let value = value.trim();
             value.is_empty()
                 || (value.starts_with("data:") && crate::covers::uploaded_artwork(value).is_some())
-                || reqwest::Url::parse(value).ok().is_some_and(|url| {
-                    url.scheme() == "https"
-                        && url.host_str().is_some()
-                        && url.username().is_empty()
-                        && url.password().is_none()
-                })
+                || net::http::https_url(value).is_some()
         };
         if [
             &details.cover_url,
@@ -389,6 +384,7 @@ async fn scan_dirs(
 
 #[tauri::command]
 pub async fn scan_library(
+    app: AppHandle,
     state: State<'_, AppState>,
     path: String,
     on_progress: tauri::ipc::Channel<ScanProgressDto>,
@@ -399,6 +395,9 @@ pub async fn scan_library(
         .add(&path, now_unix())
         .await
         .map_err(AppError::from)?;
+    if r.added + r.reclassified > 0 {
+        crate::catalog::trigger_in_background(&app, crate::catalog::PassScope::All);
+    }
     Ok(r)
 }
 
@@ -432,6 +431,7 @@ fn folders_from_roms(roms: &[domain::library::Rom]) -> Vec<String> {
 /// (disco externo desligado) é pulada, sem mexer no que veio dela.
 #[tauri::command]
 pub async fn rescan_library(
+    app: AppHandle,
     state: State<'_, AppState>,
     on_progress: tauri::ipc::Channel<ScanProgressDto>,
 ) -> Result<ScanReportDto, AppError> {
@@ -455,7 +455,11 @@ pub async fn rescan_library(
             missing.len()
         );
     }
-    scan_dirs(&repo, &present, &on_progress).await
+    let r = scan_dirs(&repo, &present, &on_progress).await?;
+    if r.added + r.reclassified > 0 {
+        crate::catalog::trigger_in_background(&app, crate::catalog::PassScope::All);
+    }
+    Ok(r)
 }
 
 #[cfg(test)]

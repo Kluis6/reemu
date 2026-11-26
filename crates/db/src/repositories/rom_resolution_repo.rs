@@ -187,15 +187,31 @@ impl RomResolutionRepo {
         Ok((found, pending, unknown))
     }
 
+    /// Ao desconectar a conta, linhas `pending` (ainda sem dados) saem da fila
+    /// para os provedores locais poderem assumir; `found` e `manual` ficam.
+    pub async fn clear_pending(&self) -> Result<(), RepoError> {
+        sqlx::query("DELETE FROM rom_resolution WHERE state = 'pending'")
+            .execute(&self.db)
+            .await
+            .map_err(be)?;
+        Ok(())
+    }
+
     /// ROMs que os provedores próprios do ReEmu não devem consultar (D145):
-    /// `found`, `manual` e `pending`.
+    /// `found` e `manual` sempre; `pending` enquanto o catálogo está ativo.
     pub async fn skip_own_scraper_ids(&self) -> Result<HashSet<String>, RepoError> {
-        let ids: Vec<String> = sqlx::query_scalar(
-            "SELECT rom_id FROM rom_resolution WHERE state IN ('found', 'manual', 'pending')",
-        )
-        .fetch_all(&self.db)
-        .await
-        .map_err(be)?;
+        let include_pending = super::AlvanistaRepo::new(self.db.clone())
+            .catalog_active()
+            .await?;
+        let sql = if include_pending {
+            "SELECT rom_id FROM rom_resolution WHERE state IN ('found', 'manual', 'pending')"
+        } else {
+            "SELECT rom_id FROM rom_resolution WHERE state IN ('found', 'manual')"
+        };
+        let ids: Vec<String> = sqlx::query_scalar(sql)
+            .fetch_all(&self.db)
+            .await
+            .map_err(be)?;
         Ok(ids.into_iter().collect())
     }
 }

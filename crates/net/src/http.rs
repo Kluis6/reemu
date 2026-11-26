@@ -37,6 +37,17 @@ pub fn client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| build(CONNECT_TIMEOUT, READ_TIMEOUT))
 }
 
+/// Devolve a URL aparada apenas se for `https://`, com host e sem credenciais.
+pub fn https_url(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    let parsed = reqwest::Url::parse(trimmed).ok()?;
+    (parsed.scheme() == "https"
+        && parsed.host_str().is_some()
+        && parsed.username().is_empty()
+        && parsed.password().is_none())
+    .then(|| trimmed.to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

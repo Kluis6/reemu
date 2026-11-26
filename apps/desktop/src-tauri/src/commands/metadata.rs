@@ -360,7 +360,10 @@ async fn metadata_config(pool: &db::Db) -> Result<domain::metadata::MetadataConf
 /// Dispara uma leva de scraping em background e volta na hora. O progresso é
 /// consultado por `metadata_scan_progress`.
 #[tauri::command]
-pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppError> {
+pub async fn start_metadata_scan(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
     let pool = pool(&state)?;
     let progress = state.scrape.clone();
     if !progress.begin() {
@@ -369,6 +372,7 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppEr
     let covers = crate::covers::CoverDir(state.covers_dir.clone());
     tauri::async_runtime::spawn(async move {
         let run = async {
+            crate::catalog::run_before_own_scraper(&app, crate::catalog::PassScope::All).await;
             let cfg = metadata_config(&pool).await?;
             scraping::scrape_pending(pool, progress.clone(), cfg, &covers).await
         };
@@ -386,9 +390,13 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppEr
 /// (foi pra revisão) ou `"none"` (nenhum provedor achou).
 #[tauri::command]
 pub async fn rescrape_rom(
+    app: AppHandle,
     state: State<'_, AppState>,
     rom_id: String,
 ) -> Result<&'static str, AppError> {
+    if let Some(outcome) = crate::catalog::resolve_one_for_rescrape(&app, &rom_id).await {
+        return Ok(outcome);
+    }
     let pool = pool(&state)?;
     let cfg = metadata_config(&pool).await?;
     let covers = crate::covers::CoverDir(state.covers_dir.clone());

@@ -22,7 +22,7 @@ pub use decoration::{
 };
 pub use hash::{FileRomHasher, RomHashes};
 pub use identity::{identify, Digests, Identity};
-pub use scan::{count_roms, scan_into, ScanError, ScanProgress, ScanReport};
+pub use scan::{count_roms, identify_known_rom, scan_into, ScanError, ScanProgress, ScanReport};
 pub use serial::{read_serial, SERIAL_SYSTEMS};
 pub use systems::{
     libretro_boxart_url, system_for_extension, system_from_folder_name, AMBIGUOUS_DISC_EXTS,

@@ -2,6 +2,7 @@
 //! `ScrapeCandidate`.
 
 use domain::metadata::{GameDetails, GameKaveData, GameMetadata, ScrapeCandidate};
+use net::http::https_url;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -45,17 +46,6 @@ pub struct GameAnswer {
     pub media: Media,
     #[serde(default)]
     pub media_pending: bool,
-}
-
-/// Só URLs `https://` sem usuário/senha entram nos metadados ou no cache.
-pub fn https_url(raw: &str) -> Option<String> {
-    let trimmed = raw.trim();
-    let parsed = reqwest::Url::parse(trimmed).ok()?;
-    (parsed.scheme() == "https"
-        && parsed.host_str().is_some()
-        && parsed.username().is_empty()
-        && parsed.password().is_none())
-    .then(|| trimmed.to_owned())
 }
 
 fn clean_opt(s: Option<&str>) -> Option<String> {
@@ -246,4 +236,3 @@ mod tests {
         );
     }
 }
-
