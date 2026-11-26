@@ -224,9 +224,7 @@ export function ProfileDrawer({
         <div className={s.list}>
           {item("/perfil", t("shell.myProfile"))}
           {item("/conquistas", t("nav.achievements"))}
-          <Button size="large" appearance="subtle" className={s.item} disabled>
-            {t("nav.network")}
-          </Button>
+          {item("/rede", t("nav.network"))}
           <Button size="large" appearance="subtle" className={s.item} disabled>
             {t("shell.status")}
             <ChevronRightRegular className={s.chevron} aria-hidden />

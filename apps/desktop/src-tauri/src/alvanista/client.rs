@@ -288,15 +288,104 @@ impl Client {
                 Ok(me)
             }
             // Só chega aqui um 401 logo depois de uma renovação que deu certo.
-            Err(MeError::Unauthorized) => {
-                if let Err(e) = self.store.clear_tokens().await {
-                    log::warn!("alvanista: não deu pra apagar a sessão: {e}");
-                }
-                self.session_ended().await;
-                Err(ClientError::AuthEnded)
-            }
+            Err(MeError::Unauthorized) => Err(self.end_unauthorized().await),
             Err(MeError::Failed(e)) => Err(e),
         }
+    }
+
+    /// Pedido JSON autenticado contra `/api/partner/v1/*`, com a mesma
+    /// renovação em 401 usada por `me`.
+    pub(crate) async fn authed_json(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<(u16, serde_json::Value)> {
+        match self.store.has_session().await {
+            Ok(true) => {}
+            Ok(false) => return Err(ClientError::AuthEnded),
+            Err(e) => return Err(ClientError::Transient(e.to_string())),
+        }
+        let mut tokens = match self.store.load().await {
+            Ok(Some(loaded)) => loaded.tokens,
+            Ok(None) => {
+                self.session_ended().await;
+                return Err(ClientError::AuthEnded);
+            }
+            Err(e) => return Err(ClientError::Transient(e.to_string())),
+        };
+        let mut result = self
+            .send_authed_json(&tokens.access_token, method.clone(), path, body)
+            .await;
+        if matches!(result, Err(MeError::Unauthorized)) {
+            tokens = self.refresh(&tokens).await?;
+            result = self
+                .send_authed_json(&tokens.access_token, method, path, body)
+                .await;
+        }
+        match result {
+            Ok(out) => Ok(out),
+            Err(MeError::Unauthorized) => Err(self.end_unauthorized().await),
+            Err(MeError::Failed(e)) => Err(e),
+        }
+    }
+
+    async fn end_unauthorized(&self) -> ClientError {
+        if let Err(e) = self.store.clear_tokens().await {
+            log::warn!("alvanista: não deu pra apagar a sessão: {e}");
+        }
+        self.session_ended().await;
+        ClientError::AuthEnded
+    }
+
+    async fn send_authed_json(
+        &self,
+        access_token: &str,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> std::result::Result<(u16, serde_json::Value), MeError> {
+        let mut req = self
+            .http
+            .request(method, format!("{}{path}", self.api))
+            .bearer_auth(access_token);
+        if let Some(b) = body {
+            req = req.json(b);
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| MeError::Failed(transport(e)))?;
+        let status = resp.status();
+        let route = path.split('?').next().unwrap_or(path);
+        log::debug!("alvanista: {route} respondeu {}", status.as_u16());
+        if status == StatusCode::UNAUTHORIZED {
+            return Err(MeError::Unauthorized);
+        }
+        if status.is_success() {
+            let val: serde_json::Value = resp
+                .json()
+                .await
+                .map_err(|_| MeError::Failed(ClientError::Transient("resposta ilegível".into())))?;
+            return Ok((status.as_u16(), val));
+        }
+        let parsed = resp.json::<serde_json::Value>().await.ok();
+        let code = parsed.as_ref().and_then(partner_error_code);
+        if (status == StatusCode::SERVICE_UNAVAILABLE && code == Some("rom_resolve_disabled"))
+            || (status == StatusCode::NOT_FOUND && code == Some("game_not_found"))
+        {
+            return Ok((status.as_u16(), parsed.unwrap_or(serde_json::Value::Null)));
+        }
+        if status == StatusCode::NOT_FOUND
+            || status == StatusCode::TOO_MANY_REQUESTS
+            || status.is_server_error()
+        {
+            return Err(MeError::Failed(ClientError::Transient(format!(
+                "{}",
+                status.as_u16()
+            ))));
+        }
+        Ok((status.as_u16(), parsed.unwrap_or(serde_json::Value::Null)))
     }
 
     async fn token_request(&self, form: &[(&str, &str)]) -> Result<Tokens> {
@@ -368,6 +457,12 @@ enum MeError {
 
 fn transport(e: reqwest::Error) -> ClientError {
     ClientError::Transient(e.without_url().to_string())
+}
+
+pub(crate) fn partner_error_code(v: &serde_json::Value) -> Option<&str> {
+    let err = v.get("error")?;
+    err.as_str()
+        .or_else(|| err.get("code").and_then(|c| c.as_str()))
 }
 
 async fn error_code(resp: reqwest::Response) -> String {

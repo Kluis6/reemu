@@ -136,6 +136,12 @@ impl Alvanista {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn store(&self) -> &Store {
+        self.client.store()
+    }
+
+    #[cfg(not(test))]
     fn store(&self) -> &Store {
         self.client.store()
     }
@@ -223,6 +229,27 @@ impl Alvanista {
         let _ = self.status_from(tokens, None).await;
     }
 
+    /// Pedido JSON autenticado nas rotas de parceiro (`/api/partner/v1/*`).
+    /// Sem sessão marcada, devolve `AuthEnded` sem tocar no chaveiro nem na
+    /// rede; se a sessão viva acabou no servidor, limpa o espelho e o aparelho
+    /// do cloud save como em `status`.
+    pub(crate) async fn partner_json(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<(u16, serde_json::Value), ClientError> {
+        if !self.has_session().await {
+            return Err(ClientError::AuthEnded);
+        }
+        let res = self.client.authed_json(method, path, body).await;
+        if matches!(res, Err(ClientError::AuthEnded)) {
+            let _ = self.store().mirror_clear().await;
+            self.forget_save_device(true).await;
+        }
+        res
+    }
+
     /// Cancela a tentativa em andamento (se houver).
     pub fn cancel(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
@@ -257,7 +284,37 @@ impl Alvanista {
     where
         F: FnOnce(&str) -> Result<(), String>,
     {
-        let scope = format!("{} {}", config::SCOPE_PROFILE, config::SCOPE_SAVES);
+        self.connect_adding_scopes(&[config::SCOPE_SAVES], lang, open)
+            .await
+    }
+
+    /// Pede escopos adicionais preservando os escopos que a sessão viva já tem.
+    pub async fn connect_adding_scopes<F>(
+        &self,
+        extra: &[&str],
+        lang: Lang,
+        open: F,
+    ) -> Result<AlvanistaStatus, String>
+    where
+        F: FnOnce(&str) -> Result<(), String>,
+    {
+        let mut list: Vec<String> = vec![config::SCOPE_PROFILE.to_owned()];
+        if matches!(self.store().has_session().await, Ok(true)) {
+            if let Ok(existing) = self.store().scopes().await {
+                for s in existing {
+                    if !s.is_empty() && !list.iter().any(|x| x == &s) {
+                        list.push(s);
+                    }
+                }
+            }
+        }
+        for &s in extra {
+            let s = s.trim();
+            if !s.is_empty() && !list.iter().any(|x| x == s) {
+                list.push(s.to_owned());
+            }
+        }
+        let scope = list.join(" ");
         self.connect_with(&scope, lang, open).await
     }
 
@@ -682,6 +739,17 @@ fn state_of(app: &AppHandle) -> Result<tauri::State<'_, Alvanista>, String> {
         .ok_or_else(|| "failed".to_owned())
 }
 
+fn allowed_extra_scope(s: &str) -> Option<&'static str> {
+    match s.trim() {
+        config::SCOPE_PROFILE => Some(config::SCOPE_PROFILE),
+        config::SCOPE_SAVES => Some(config::SCOPE_SAVES),
+        "collection" => Some("collection"),
+        config::SCOPE_FRIENDS_READ => Some(config::SCOPE_FRIENDS_READ),
+        config::SCOPE_ACHIEVEMENTS_READ => Some(config::SCOPE_ACHIEVEMENTS_READ),
+        _ => None,
+    }
+}
+
 /// `saves`: pede também o escopo do cloud save no mesmo consentimento (a
 /// página Sincronização, onde a pessoa já disse que quer sincronizar).
 #[tauri::command]
@@ -689,11 +757,27 @@ pub async fn alvanista_connect(
     app: AppHandle,
     lang: Option<String>,
     saves: Option<bool>,
+    scopes: Option<Vec<String>>,
 ) -> Result<AlvanistaStatus, String> {
     let alva = state_of(&app)?;
     let lang = Lang::from_tag(lang.as_deref().unwrap_or("pt-BR"));
+    let mut extra: Vec<&'static str> = Vec::new();
     if saves == Some(true) {
-        alva.reconnect_with_saves(lang, open_in_browser).await
+        extra.push(config::SCOPE_SAVES);
+    }
+    if let Some(raw_scopes) = scopes {
+        for raw in raw_scopes {
+            let Some(clean) = allowed_extra_scope(&raw) else {
+                return Err("failed".to_owned());
+            };
+            if clean != config::SCOPE_PROFILE && !extra.contains(&clean) {
+                extra.push(clean);
+            }
+        }
+    }
+    if !extra.is_empty() {
+        alva.connect_adding_scopes(&extra, lang, open_in_browser)
+            .await
     } else {
         alva.connect(lang, open_in_browser).await
     }
@@ -754,6 +838,32 @@ pub async fn alvanista_open_site(page: String) -> Result<(), String> {
     let url = site_page_url(&page).ok_or_else(|| "failed".to_owned())?;
     open_in_browser(&url).map_err(|e| {
         log::warn!("alvanista: não abriu a página do site: {e}");
+        "failed".to_owned()
+    })
+}
+
+fn valid_user_slug(raw: &str) -> Option<&str> {
+    let s = raw.trim();
+    if s.is_empty() || s.len() > 64 {
+        return None;
+    }
+    if s.bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
+    {
+        Some(s)
+    } else {
+        None
+    }
+}
+
+/// Abre o perfil público de um Gamer conectado no navegador do sistema,
+/// montando a URL exclusivamente sobre a origem do Alvanista.
+#[tauri::command]
+pub async fn alvanista_open_user(username: String) -> Result<(), String> {
+    let slug = valid_user_slug(&username).ok_or_else(|| "failed".to_owned())?;
+    let url = format!("{}/users/{slug}", config::base_urls().0);
+    open_in_browser(&url).map_err(|e| {
+        log::warn!("alvanista: não abriu o perfil do gamer: {e}");
         "failed".to_owned()
     })
 }

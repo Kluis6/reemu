@@ -26,6 +26,7 @@ mod profile;
 mod ra;
 mod shader_failure;
 mod shader_pack;
+mod social;
 mod sync;
 mod system;
 mod system_files;
@@ -362,6 +363,9 @@ pub fn run() {
             alvanista::alvanista_cancel,
             alvanista::alvanista_open_profile,
             alvanista::alvanista_open_site,
+            alvanista::alvanista_open_user,
+            social::alvanista_friends,
+            social::alvanista_achievements,
             sync::sync_status,
             sync::sync_set_enabled,
             sync::sync_set_label,
