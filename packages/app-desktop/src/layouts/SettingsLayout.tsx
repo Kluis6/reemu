@@ -117,13 +117,6 @@ const useStyles = makeStyles({
     // O fim da lista sobe além da barra de dicas, que flutua sobre o card.
     paddingBottom: `${M.PAGE_PAD_B - M.SAFE_Y + 24}px`,
   },
-  paneFixed: {
-    minHeight: 0,
-    overflow: "hidden",
-    scrollbarGutter: "auto",
-    paddingRight: tokens.spacingHorizontalXXL,
-    paddingBottom: 0,
-  },
   content: { minWidth: 0, maxWidth: "640px" },
   // Abas de lista em grade (Aparência, Cores, BIOS…) usam a largura toda —
   // 640 é bom pra formulário, mas deixava as colunas espremidas.
@@ -223,27 +216,27 @@ export function SettingsLayout() {
           aria-label={t("settings.title")}
         >
           {crumbs.map((c, i) => (
-              <BreadcrumbItem key={i}>
-                {c.to ? (
-                  <BreadcrumbButton
-                    className={styles.crumbButton}
-                    onClick={() => navigate(c.to!)}
-                  >
-                    {c.label}
-                  </BreadcrumbButton>
-                ) : (
-                  <BreadcrumbButton
-                    className={mergeClasses(
-                      styles.crumbButton,
-                      styles.crumbCurrent,
-                      i > 0 && styles.crumbPage,
-                    )}
-                    current
-                  >
-                    {c.label}
-                  </BreadcrumbButton>
-                )}
-              </BreadcrumbItem>
+            <BreadcrumbItem key={i}>
+              {c.to ? (
+                <BreadcrumbButton
+                  className={styles.crumbButton}
+                  onClick={() => navigate(c.to!)}
+                >
+                  {c.label}
+                </BreadcrumbButton>
+              ) : (
+                <BreadcrumbButton
+                  className={mergeClasses(
+                    styles.crumbButton,
+                    styles.crumbCurrent,
+                    i > 0 && styles.crumbPage,
+                  )}
+                  current
+                >
+                  {c.label}
+                </BreadcrumbButton>
+              )}
+            </BreadcrumbItem>
           ))}
         </Breadcrumb>
         {section ? (
@@ -258,7 +251,7 @@ export function SettingsLayout() {
                 <Outlet />
               ) : (
                 <div className={styles.card}>
-                  <div className={mergeClasses(styles.pane, section.key === "metadata" && styles.paneFixed)}>
+                  <div className={styles.pane}>
                     <div
                       className={mergeClasses(
                         styles.content,
@@ -267,13 +260,13 @@ export function SettingsLayout() {
                         // em cards (largura toda, até os 1120 do próprio
                         // SettingsSystem; as licenças viram duas colunas)
                         section.key === "sistema" &&
-                          (sub === "opcoes" || sub === "sobre") &&
-                          styles.wide,
-                        (section.key === "metadata" || (section.key === "video" && sub === "shaders")) && styles.fill,
+                        (sub === "opcoes" || sub === "sobre") &&
+                        styles.wide,
+                        section.key === "video" && sub === "shaders" && styles.fill,
                         // Temas e Plano de fundo: na altura útil do card, sem rolar
                         section.key === "aparencia" &&
-                          (sub === "temas" || sub === "papel-de-parede") &&
-                          styles.fill,
+                        (sub === "temas" || sub === "papel-de-parede") &&
+                        styles.fill,
                       )}
                     >
                       <Outlet />

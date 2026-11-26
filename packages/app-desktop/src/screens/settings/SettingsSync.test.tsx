@@ -359,6 +359,29 @@ describe('SettingsSync', () => {
     expect(dialog()).toBeNull()
   })
 
+  it('offers bulk conflict resolution when multiple conflicts exist', async () => {
+    const side = (machine: string, deleted = false) => ({ machine, deviceId: null, savedAt: 1_700_000_000, size: 2048, deleted })
+    let open = [
+      { key: 'k1', romId: null, title: 'Zelda', local: side('PC-SALA'), remote: side('Notebook') },
+      { key: 'k2', romId: null, title: 'Chrono', local: side('PC-SALA'), remote: side('Notebook') },
+    ]
+    api.syncStatus.mockResolvedValue({ ...ON, conflicts: 2 })
+    api.syncConflicts.mockImplementation(async () => open)
+    api.syncResolve.mockImplementation(async (key: string) => {
+      open = open.filter((x) => x.key !== key)
+    })
+    await mount()
+
+    const keepAllLocal = byText('Manter todos desta máquina (2)')
+    expect(keepAllLocal).toBeTruthy()
+    expect(byText('Manter todos da nuvem (2)')).toBeTruthy()
+    await act(async () => keepAllLocal!.click())
+    await settle()
+
+    expect(api.syncResolve).toHaveBeenNthCalledWith(1, 'k1', 'local')
+    expect(api.syncResolve).toHaveBeenNthCalledWith(2, 'k2', 'local')
+  })
+
   it('Conflitos counts a site deletion apart from the two-machine conflicts (I-4)', async () => {
     const side = (machine: string, deleted = false) => ({ machine, deviceId: null, savedAt: 1_700_000_000, size: 2048, deleted })
     api.syncStatus.mockResolvedValue({ ...ON, conflicts: 3 })

@@ -310,6 +310,24 @@ pub async fn resolve_pending_match(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn resolve_pending_matches_bulk(
+    state: State<'_, AppState>,
+    rom_ids: Vec<String>,
+    accept: bool,
+) -> Result<usize, AppError> {
+    let resolved = db::MetadataRepo::new(pool(&state)?)
+        .resolve_pending_bulk(&rom_ids, accept)
+        .await
+        .map_err(AppError::from)?;
+    if accept {
+        for rom_id in &resolved {
+            crate::covers::invalidate(&state.covers_dir, rom_id);
+        }
+    }
+    Ok(resolved.len())
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "ScrapeProgress"))]

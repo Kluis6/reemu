@@ -490,6 +490,7 @@ pub fn run() {
             commands::review_pending_match,
             commands::read_game_artwork,
             commands::resolve_pending_match,
+            commands::resolve_pending_matches_bulk,
             commands::metadata_scan_progress,
             commands::cancel_metadata_scan,
             commands::start_metadata_scan,
