@@ -6,8 +6,9 @@
 //! outros formatos entram conforme necessário.
 
 use domain::metadata::{RomHash, RomHashService};
-use md5::{Digest, Md5};
-use sha1::Sha1;
+use md5::{Digest as _, Md5};
+use sha1::{Digest as _, Sha1};
+use std::fmt::Write as _;
 use std::fs::File;
 use std::io::{BufReader, Read};
 
@@ -73,10 +74,16 @@ impl FileRomHasher {
             size += read as u64;
         }
 
+        let sha1_bytes = sha1.finalize();
+        let mut sha1_hex = String::with_capacity(sha1_bytes.len() * 2);
+        for byte in sha1_bytes.iter() {
+            write!(sha1_hex, "{byte:02x}").expect("gravar em String não falha");
+        }
+
         Ok(RomHashes {
             crc32: format!("{:08X}", crc.finalize()),
             md5: format!("{:x}", md5.finalize()),
-            sha1: format!("{:x}", sha1.finalize()),
+            sha1: sha1_hex,
             size,
             name: name.to_owned(),
         })

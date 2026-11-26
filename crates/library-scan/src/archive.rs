@@ -4,7 +4,7 @@
 //! (`core-loader-desktop`) extrai pra um arquivo temporário na hora de carregar.
 
 use crate::hash::{FileRomHasher, RomHashes};
-use crate::systems::system_for_rom_entry;
+use crate::systems::{folder_only_exts, system_for_rom_entry, X68000_DISK_EXTS};
 use sevenz_rust2::{ArchiveReader, Password};
 use std::io::BufReader;
 #[cfg(test)]
@@ -31,12 +31,56 @@ fn is_7z(path: &Path) -> bool {
 }
 
 /// Primeira entrada do arquivo (`.zip`/`.7z`) com extensão de ROM reconhecida.
-pub fn peek_archive(path: &Path) -> Option<ArchivedRom> {
-    if is_7z(path) {
-        peek_7z(path)
-    } else {
-        peek_zip(path)
+pub fn peek_archive(path: &Path, folder_system: Option<&str>) -> Option<ArchivedRom> {
+    let seven_zip = is_7z(path);
+    let peek = |required_extension| {
+        if seven_zip {
+            peek_7z(
+                path,
+                folder_system.filter(|system| *system != "msx"),
+                required_extension,
+            )
+        } else {
+            peek_zip(path, folder_system, required_extension)
+        }
+    };
+    if folder_system == Some("megaduck") {
+        // DUCK tem prioridade sobre arquivos BIN na mesma coleção.
+        if let Some(rom) = peek(Some("duck")) {
+            return Some(rom);
+        }
     }
+    peek(None)
+}
+
+fn archive_entry_system(
+    ext: &str,
+    size: u64,
+    reader: impl std::io::Read,
+    folder_system: Option<&str>,
+) -> Option<&'static str> {
+    if folder_system == Some("x68000")
+        && X68000_DISK_EXTS.iter().any(|x| ext.eq_ignore_ascii_case(x))
+    {
+        return Some("x68000");
+    }
+    if folder_system == Some("msx")
+        && folder_only_exts("msx")
+            .iter()
+            .any(|x| ext.eq_ignore_ascii_case(x))
+    {
+        return Some("msx");
+    }
+    if folder_system == Some("zx81") && ext.eq_ignore_ascii_case("tzx") {
+        return Some("zx81");
+    }
+    if folder_system == Some("megaduck") && ext.eq_ignore_ascii_case("bin") {
+        return Some("megaduck");
+    }
+    // As mídias do DirkSimple podem ter vários GB. O core abre o vídeo solto.
+    // O Ardens abre o pacote .arduboy diretamente, sem uma camada ZIP ou 7z externa.
+    system_for_rom_entry(ext, size, reader)
+        .filter(|system| !matches!(*system, "laserdisc" | "arduboy"))
 }
 
 /// Bytes descomprimidos de uma entrada do arquivo (`.zip`/`.7z`), inteiros
@@ -116,7 +160,11 @@ pub(crate) fn archive_entry_size(path: &Path, entry: &str) -> std::io::Result<u6
     }
 }
 
-fn peek_zip(path: &Path) -> Option<ArchivedRom> {
+fn peek_zip(
+    path: &Path,
+    folder_system: Option<&str>,
+    required_extension: Option<&str>,
+) -> Option<ArchivedRom> {
     let file = std::fs::File::open(path).ok()?;
     let mut zip = zip::ZipArchive::new(BufReader::new(file)).ok()?;
     for i in 0..zip.len() {
@@ -133,7 +181,10 @@ fn peek_zip(path: &Path) -> Option<ArchivedRom> {
         if let Some(sys) = Path::new(&name)
             .extension()
             .and_then(|x| x.to_str())
-            .and_then(|ext| system_for_rom_entry(ext, e.size(), &mut e))
+            .filter(|ext| {
+                required_extension.is_none_or(|required| ext.eq_ignore_ascii_case(required))
+            })
+            .and_then(|ext| archive_entry_system(ext, e.size(), &mut e, folder_system))
         {
             return Some(ArchivedRom {
                 entry: name,
@@ -157,7 +208,11 @@ fn read_zip_entry(path: &Path, entry: &str) -> std::io::Result<Vec<u8>> {
     Ok(buf)
 }
 
-fn peek_7z(path: &Path) -> Option<ArchivedRom> {
+fn peek_7z(
+    path: &Path,
+    folder_system: Option<&str>,
+    required_extension: Option<&str>,
+) -> Option<ArchivedRom> {
     let mut r = ArchiveReader::open(path, Password::empty()).ok()?;
     let mut found = None;
     r.for_each_entries(|e, reader| {
@@ -165,7 +220,10 @@ fn peek_7z(path: &Path) -> Option<ArchivedRom> {
             if let Some(sys) = Path::new(e.name())
                 .extension()
                 .and_then(|x| x.to_str())
-                .and_then(|ext| system_for_rom_entry(ext, e.size(), reader))
+                .filter(|ext| {
+                    required_extension.is_none_or(|required| ext.eq_ignore_ascii_case(required))
+                })
+                .and_then(|ext| archive_entry_system(ext, e.size(), reader, folder_system))
             {
                 found = Some(ArchivedRom {
                     entry: e.name().to_string(),

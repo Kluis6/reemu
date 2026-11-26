@@ -273,6 +273,14 @@ const en: Messages = {
         title: 'A BIOS file this system needs is missing',
         hint: 'See which files are missing in Settings › BIOS and import them.',
       },
+      openMsxDisk: {
+        title: 'openMSX could not open the floppy disk',
+        hint: 'Select a machine with a disk drive in the core options and place its system ROMs in system/openmsx/share/systemroms. If you are using an M3U playlist, check the disk paths.',
+      },
+      openMsxArchive: {
+        title: 'openMSX could not open the archive',
+        hint: 'Extract the media first or pack a single file into a ZIP archive using Deflate compression.',
+      },
       gpuRejected: {
         title: 'The graphics card didn\'t accept this core\'s rendering mode',
         hint: 'Update the graphics driver or pick another core for this system.',

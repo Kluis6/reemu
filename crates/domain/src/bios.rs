@@ -17,8 +17,9 @@
 //!
 //! `required` só é `true` quando TODOS os cores do sistema no catálogo
 //! exigem o arquivo — o `RomDetail` avisa quando falta um obrigatório, e um
-//! aviso falso pra quem usa o outro core confunde mais do que ajuda. Quando
-//! um core exige e outro não, a `note` diz qual.
+//! aviso falso pra quem usa o outro core confunde mais do que ajuda. O
+//! requisito de um core específico é consultado por
+//! `bios_required_for_core`.
 //!
 //! PSP não entra aqui: o PPSSPP não usa BIOS, e sim a pasta `assets` do
 //! projeto PPSSPP (GPL) em `<system_dir>/PPSSPP/` — outro tipo de coisa.
@@ -343,6 +344,67 @@ const ATARI_5200: &[BiosFile] = &[BiosFile {
     note: "atari800 exige; o a5200 roda sem",
     any_of: &[],
 }];
+const ATARI_ST: &[BiosFile] = &[BiosFile {
+    filename: "tos.img",
+    subfolder: None,
+    md5: &[
+        "c1c57ce48e8ee4135885cee9e63a68a2", // Atari TOS 1.02 US
+        "693255fbec212bde1d0054a94d6ffb28", // EmuTOS 1.4, ST/US, 192 KiB
+    ],
+    required: false,
+    note: "Hatari e Hatari 2014 exigem TOS. O hatariB inclui EmuTOS",
+    any_of: &[],
+}];
+pub const X68000_IPL_NAMES: &[&str] =
+    &["iplrom.dat", "iplrom30.dat", "iplromco.dat", "iplromxv.dat"];
+pub const X68000_FONT_NAMES: &[&str] = &["cgrom.dat", "cgrom.tmp"];
+pub const X68000_IPL_SIZE: u64 = 131_072;
+pub const X68000_FONT_SIZE: u64 = 786_432;
+const X68000: &[BiosFile] = &[
+    BiosFile {
+        filename: "iplrom.dat",
+        subfolder: Some("keropi"),
+        md5: &["7fd4caabac1d9169e289f0f7bbf71d8e"],
+        required: true,
+        note: "IPL do PX68k. Também pode usar uma das revisões alternativas",
+        any_of: &[],
+    },
+    BiosFile {
+        filename: "cgrom.dat",
+        subfolder: Some("keropi"),
+        md5: &[
+            "cb0a5cfcf7247a7eab74bb2716260269", // CGROM original
+            "ed8956b00f1847f93b566ce9d41aef4d", // Shinonome, gerado pelo WebX68k
+        ],
+        required: true,
+        note: "ROM de fontes do PX68k. Aceita a fonte Shinonome gerada pelo WebX68k",
+        any_of: &[],
+    },
+    BiosFile {
+        filename: "iplrom30.dat",
+        subfolder: Some("keropi"),
+        md5: &["f373003710ab4322642f527f567e020a"],
+        required: false,
+        note: "IPL alternativo do X68030",
+        any_of: &[],
+    },
+    BiosFile {
+        filename: "iplromco.dat",
+        subfolder: Some("keropi"),
+        md5: &["cc78d4f4900f622bd6de1aed7f52592f"],
+        required: false,
+        note: "IPL alternativo do X68000 Compact",
+        any_of: &[],
+    },
+    BiosFile {
+        filename: "iplromxv.dat",
+        subfolder: Some("keropi"),
+        md5: &["0617321daa182c3f3d6f41fd02fb3275"],
+        required: false,
+        note: "IPL alternativo do X68000 XVI",
+        any_of: &[],
+    },
+];
 const ATARI_8BIT: &[BiosFile] = &[
     BiosFile {
         filename: "ATARIXL.ROM",
@@ -492,6 +554,18 @@ pub fn bios_files_for_system(system_id: &str) -> Vec<BiosFile> {
     out
 }
 
+/// Requisito específico para um arquivo opcional na visão por plataforma.
+pub fn bios_required_for_core(system_id: &str, filename: &str, core_id: &str) -> bool {
+    matches!(
+        (system_id, filename, core_id),
+        (
+            "atarist",
+            "tos.img",
+            "hatari_libretro" | "hatari2014_libretro"
+        )
+    )
+}
+
 /// Todos os `system_id` com algum BIOS conhecido (os da tabela à mão
 /// primeiro, na ordem dela) — pro painel de Configurações varrer tudo.
 pub fn known_systems() -> Vec<&'static str> {
@@ -514,6 +588,8 @@ fn handwritten(system_id: &str) -> &'static [BiosFile] {
         "pcfx" => PC_FX,
         "amiga" => AMIGA,
         "atari5200" => ATARI_5200,
+        "atarist" => ATARI_ST,
+        "x68000" => X68000,
         "atari8bit" => ATARI_8BIT,
         "msx" => MSX,
         "nds" => NDS,
@@ -534,6 +610,8 @@ const HANDWRITTEN_SYSTEMS: &[&str] = &[
     "pcfx",
     "amiga",
     "atari5200",
+    "atarist",
+    "x68000",
     "atari8bit",
     "msx",
     "nds",
@@ -582,12 +660,31 @@ mod tests {
     #[test]
     fn systems_with_multiple_cores_only_warn_when_all_require_it() {
         // cada um desses tem um core no catálogo que roda sem o arquivo
-        for sys in ["amiga", "atari5200", "atari8bit", "msx", "nds"] {
+        for sys in ["amiga", "atari5200", "atari8bit", "atarist", "msx", "nds"] {
             assert!(
                 bios_files_for_system(sys).iter().all(|f| !f.required),
                 "{sys}: nenhum arquivo deveria ser obrigatório"
             );
         }
+    }
+
+    #[test]
+    fn atari_st_external_tos_requirement_depends_on_the_core() {
+        assert!(bios_required_for_core(
+            "atarist",
+            "tos.img",
+            "hatari_libretro"
+        ));
+        assert!(bios_required_for_core(
+            "atarist",
+            "tos.img",
+            "hatari2014_libretro"
+        ));
+        assert!(!bios_required_for_core(
+            "atarist",
+            "tos.img",
+            "hatarib_libretro"
+        ));
     }
 
     #[test]

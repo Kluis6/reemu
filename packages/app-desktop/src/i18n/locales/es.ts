@@ -273,6 +273,14 @@ const es: Messages = {
         title: 'Falta un archivo de BIOS que este sistema necesita',
         hint: 'Mira en Configuración › BIOS qué archivos faltan e impórtalos.',
       },
+      openMsxDisk: {
+        title: 'openMSX no pudo abrir el disquete',
+        hint: 'Selecciona una máquina con disquetera en las opciones del núcleo y coloca sus ROM de sistema en system/openmsx/share/systemroms. Si usas una lista M3U, comprueba las rutas de los discos.',
+      },
+      openMsxArchive: {
+        title: 'openMSX no pudo abrir el archivo comprimido',
+        hint: 'Extrae el contenido antes de abrirlo o comprime un solo archivo en ZIP con el método Deflate.',
+      },
       gpuRejected: {
         title: 'La tarjeta gráfica no aceptó el modo de dibujo de este núcleo',
         hint: 'Actualiza el controlador de video o elige otro núcleo para este sistema.',

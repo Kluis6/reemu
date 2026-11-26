@@ -30,6 +30,17 @@ pub async fn load_game(
     let state = app.state::<AppState>();
     let session = Arc::clone(&state.session);
 
+    if core_id == "dirksimple_libretro"
+        && crate::system_files::needs_dirksimple_data(
+            &state.system_dir,
+            std::path::Path::new(&rom_path),
+        )
+    {
+        crate::system_files::ensure_dirksimple(&state.system_dir)
+            .await
+            .map_err(|e| format!("Dados do DirkSimple: {e}"))?;
+    }
+
     // Vídeo nativo: volta pro estado "jogando" e descarta o print do menu. A
     // subsurface fica escondida pelo `reemu-video-pump` (dono único da conexão
     // Wayland) durante todo o load — senão o último frame do jogo anterior fica

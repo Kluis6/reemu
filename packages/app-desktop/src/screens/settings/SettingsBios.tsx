@@ -138,7 +138,7 @@ export function SettingsBios() {
   const styles = useStyles()
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
-  const bios = useQuery({ queryKey: ['bios-status'], queryFn: listBiosStatus, retry: false })
+  const bios = useQuery({ queryKey: ['bios-status'], queryFn: () => listBiosStatus(), retry: false })
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['bios-status'] })
   const scan = useMutation({

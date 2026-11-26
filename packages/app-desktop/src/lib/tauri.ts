@@ -319,7 +319,7 @@ export const restorePreviousCore = (coreId: string) =>
 /** Arquivo de sistema (BIOS) — status contra `<dados>/system`. Nunca baixa
  *  nada (copyright da fabricante); só confere o que já está no disco. */
 export type { BiosStatus }
-export const listBiosStatus = () => invoke<BiosStatus[]>('list_bios_status')
+export const listBiosStatus = (coreId?: string) => invoke<BiosStatus[]>('list_bios_status', { coreId })
 export const scanBiosFolder = (path: string) => invoke<BiosScanResult>('scan_bios_folder', { path })
 export const importBiosFile = (systemId: string, filename: string, path: string) =>
   invoke<void>('import_bios_file', { systemId, filename, path })

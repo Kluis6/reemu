@@ -81,6 +81,200 @@ fn put(rom: &mut [u8], at: usize, bytes: &[u8]) {
     rom[at..at + bytes.len()].copy_from_slice(bytes);
 }
 
+/// Imagem `.p` de memória BASIC do ZX81 com um retângulo preto no centro.
+pub fn zx81_program() -> Vec<u8> {
+    const START: usize = 0x4009;
+    const DISPLAY: usize = 0x407d;
+    const VARIABLES: usize = DISPLAY + 1 + 24 * 33;
+    const END: usize = VARIABLES + 1;
+    let mut ram = vec![0; END - START];
+
+    for (addr, ptr) in [
+        (0x400c, DISPLAY),     // D_FILE
+        (0x400e, DISPLAY + 1), // DF_CC
+        (0x4010, VARIABLES),   // VARS
+        (0x4014, END),         // E_LINE
+        (0x401a, END),         // STKBOT
+        (0x401c, END),         // STKEND
+        (0x401f, 0x405d),      // MEM
+        (0x4029, DISPLAY),     // NXTLIN
+        (0x4034, 0xffff),      // FRAMES
+        (0x4039, 0x1821),      // S_POSN
+    ] {
+        put(&mut ram, addr - START, &(ptr as u16).to_le_bytes());
+    }
+    ram[0x4022 - START] = 2; // DF_SZ
+    ram[0x4028 - START] = 55; // MARGIN, PAL
+    ram[0x403b - START] = 0x40; // CDFLAG, modo lento
+
+    ram[DISPLAY - START] = 0x76;
+    for (y, line) in ram[DISPLAY + 1 - START..VARIABLES - START]
+        .chunks_exact_mut(33)
+        .enumerate()
+    {
+        if (7..=17).contains(&y) {
+            line[6..=25].fill(0x80); // Espaço invertido.
+        }
+        line[32] = 0x76; // HALT encerra a linha na memória de vídeo.
+    }
+    ram[VARIABLES - START] = 0x80;
+    ram
+}
+
+/// Cartucho Mega Duck com tom contínuo e fundo cinza que escurece ao apertar B.
+pub fn megaduck_program() -> Vec<u8> {
+    let program = [
+        0xf3, 0x31, 0xff, 0xdf, // Desliga interrupções e inicializa a pilha.
+        0xaf, 0xe0, 0x10, // Desliga o LCD.
+        0x21, 0x00, 0x80, 0x01, 0x00, 0x20, 0x16, 0x00, // VRAM e tamanho.
+        0x7a, 0x22, 0x0b, 0x78, 0xb1, 0x20, 0xf9, // Zera a VRAM.
+        0x3e, 0x55, 0xe0, 0x1b, 0x3e, 0xd0, 0xe0, 0x10, // Fundo cinza.
+        0x3e, 0x80, 0xe0, 0x45, 0x3e, 0x77, 0xe0, 0x44, 0x3e, 0x11, 0xe0, 0x46, 0x3e, 0x80, 0xe0,
+        0x22, 0x3e, 0xf0, 0xe0, 0x21, 0xaf, 0xe0, 0x23, 0x3e, 0x87, 0xe0,
+        0x24, // Aciona o primeiro canal de áudio.
+        0x3e, 0x10, 0xe0, 0x00, // Seleciona os botões.
+        0xf0, 0x00, 0xf0, 0x00, 0xe6, 0x02, 0x20, 0xf8, // Espera B.
+        0x3e, 0xff, 0xe0, 0x1b, 0x18, 0xf2, // Mantém a paleta escura.
+    ];
+    let mut rom = vec![0; 32 * 1024];
+    put(&mut rom, 0, &program);
+    rom
+}
+
+/// Programa VaporSpec. Liga o vídeo em vermelho e muda para branco ao apertar B.
+pub fn vaporspec_program() -> Vec<u8> {
+    let words: [u16; 17] = [
+        0xb07f, // LRC r0, segmento de vídeo e entrada
+        0xb111, // LRC r1, endereço dos controles de vídeo
+        0xb201, // LRC r2, habilita o vídeo
+        0xa201, // STR r2, r0, r1
+        0xb110, // LRC r1, endereço da cor de fundo
+        0xb2e0, // LRC r2, vermelho
+        0xa201, // STR r2, r0, r1
+        0xb300, // LRC r3, endereço do primeiro controle e segmento do salto
+        0xb420, // LRC r4, máscara para o botão B no core libretro
+        0xb50a, // LRC r5, instrução 10 (laço)
+        0x9603, // LDR r6, r0, r3
+        0xc664, // AND r6, r6, r4
+        0x5663, // CMP r6, r6, r3
+        0x8635, // JEQ r6, r3, r5
+        0xb2ff, // LRC r2, branco
+        0xa201, // STR r2, r0, r1
+        0x0535, // JMP r3, r5
+    ];
+    std::iter::once(words.len() as u16)
+        .chain(words)
+        .flat_map(u16::to_le_bytes)
+        .collect()
+}
+
+/// Programa AVR próprio em Intel HEX. Acende o OLED por SPI e alterna PC6
+/// para produzir um tom. Ao apertar B (PB4), apaga o OLED e silencia o som.
+pub const ARDUBOY_HEX: &str = concat!(
+    ":1000000007E004B901E105B904ED0AB904E80BB948\n",
+    ":1000100000E50CBD0DE813D004E111D007EA0FD0C4\n",
+    ":100020000FEA0DD000E407B9469A0FD046980DD0DC\n",
+    ":100030001C99FACF00E007B906EA01D0FFCF0EBD48\n",
+    ":100040001DB517FFFDCF1EB5089528E030E03A95A5\n",
+    ":08005000F1F72A95D9F7089594\n",
+    ":00000001FF\n",
+);
+
+/// Programa CHIP-8 que desenha um bloco no centro e aciona o temporizador de som.
+pub const CHIP8_ROM: &[u8] = &[
+    0x00, 0xe0, // Limpa a tela.
+    0x60, 0x1c, 0x61, 0x0e, // Posição x=28, y=14 no modo 64×32.
+    0xa2, 0x14, 0xd0, 0x15, // Desenha as cinco linhas do sprite em $214.
+    0x62, 0x10, 0xf2, 0x18, // Toca por 16 ticks.
+    0x12, 0x0e, // Permanece em $20E.
+    0x00, 0x00, 0x00, 0x00, // Preenchimento até $214.
+    0xff, 0xff, 0xff, 0xff, 0xff,
+];
+
+/// Cartucho Z80 de 8 KiB. A BIOS chama $4010, que escreve a cor de fundo no
+/// VDP, produz um tom no PSG e estaciona o processador num loop.
+pub fn msx_cartridge() -> Vec<u8> {
+    let mut rom = vec![0; 8192];
+    put(&mut rom, 0, b"AB\x10\x40");
+    put(
+        &mut rom,
+        0x10,
+        &[
+            0xf3, 0x3e, 0x0d, 0xd3, 0x99, 0x3e, 0x87, 0xd3, 0x99, // VDP
+            0xaf, 0xd3, 0xa0, 0x3e, 0x64, 0xd3, 0xa1, 0x3e, 0x07, 0xd3, 0xa0, // PSG
+            0x3e, 0x3e, 0xd3, 0xa1, 0x3e, 0x08, 0xd3, 0xa0, 0x3e, 0x08, 0xd3, 0xa1, 0x18,
+            0xfe, // JR $
+        ],
+    );
+    rom
+}
+
+/// Disquete 2HD com setor de boot próprio. Exibe magenta após o IPL carregar
+/// o programa e habilitar a primeira camada gráfica.
+pub fn x68000_media() -> (Vec<u8>, Vec<u8>) {
+    let mut xdf = vec![0; 77 * 2 * 8 * 1024];
+    put(&mut xdf, 0, &[0x60, 0x1e]); // BRA.S para o código no offset 32
+    put(&mut xdf, 2, b"REEMUX68");
+    let mut pos = 32;
+    for (address, value) in [
+        (0xe82400u32, 0u16), // modo gráfico de 16 cores
+        (0xe82500, 0x02e4),  // ordem das páginas
+        (0xe82600, 1),       // habilita a página gráfica 0
+        (0xe82002, 0x07fe),  // magenta na entrada 1 da paleta
+    ] {
+        put(&mut xdf, pos, &[0x33, 0xfc]); // MOVE.W #valor, endereço.l
+        put(&mut xdf, pos + 2, &value.to_be_bytes());
+        put(&mut xdf, pos + 4, &address.to_be_bytes());
+        pos += 8;
+    }
+    #[rustfmt::skip]
+    let fill_page = [
+        0x20, 0x7c, 0x00, 0xc0, 0x00, 0x00, // MOVEA.L #$C00000,A0
+        0x30, 0xfc, 0x00, 0x01,             // MOVE.W  #1,(A0)+
+        0xb1, 0xfc, 0x00, 0xc8, 0x00, 0x00, // CMPA.L  #$C80000,A0
+        0x66, 0xf4,                         // BNE.S   para o MOVE.W
+        0x60, 0xfe,                         // BRA.S   para si mesmo
+    ];
+    put(&mut xdf, pos, &fill_page);
+
+    let mut dim = vec![0; 256];
+    dim[1..=154].fill(1); // 77 cilindros, duas trilhas por cilindro
+    dim.extend_from_slice(&xdf);
+    (xdf, dim)
+}
+
+/// Disquete Atari ST de 720 KiB. O código do setor de boot pinta a paleta 0
+/// de magenta, para distinguir o boot do disquete da tela inicial do firmware.
+pub fn atari_st_media() -> Vec<u8> {
+    const SECTOR_SIZE: usize = 512;
+    let mut disk = vec![0; 720 * 1024];
+    put(&mut disk, 0, &[0x60, 0x1c]); // BRA.S para o código no offset 30
+    put(&mut disk, 2, b"REEMU ");
+    put(
+        &mut disk,
+        11,
+        &[0, 2, 2, 1, 0, 2, 112, 0, 0xa0, 5, 0xf9, 3, 0, 9, 0, 2, 0],
+    ); // BPB FAT12, 80 cilindros, 2 lados e 9 setores por trilha
+    put(
+        &mut disk,
+        30,
+        &[0x31, 0xfc, 0x07, 0x07, 0x82, 0x40, 0x60, 0xfe],
+    );
+    for sector in [1, 4] {
+        put(&mut disk, sector * SECTOR_SIZE, &[0xf9, 0xff, 0xff]);
+    }
+    let checksum = disk[..SECTOR_SIZE - 2]
+        .chunks_exact(2)
+        .map(|word| u16::from_be_bytes([word[0], word[1]]))
+        .fold(0u16, u16::wrapping_add);
+    put(
+        &mut disk,
+        SECTOR_SIZE - 2,
+        &0x1234u16.wrapping_sub(checksum).to_be_bytes(),
+    );
+    disk
+}
+
 /// NES, iNES mapeador 0: 16 KiB de PRG em $C000 + 8 KiB de CHR zerado.
 /// Pinta o fundo ($3F00) de azul-claro e liga o fundo no PPUMASK.
 #[rustfmt::skip]
@@ -361,6 +555,33 @@ fn atari2600() -> Vec<u8> {
     put(&mut rom, 0xFFC, &[0x00, 0xF0, 0x00, 0xF0]); // RESET, IRQ
     rom
 }
+
+pub(crate) const DIRKSIMPLE_LUA: &str = r#"
+local started = false
+local action = false
+
+function DirkSimple.tick(_, _, inputs)
+    if not started then
+        started = true
+        DirkSimple.start_clip(0)
+    end
+    if inputs.pressed.action then
+        action = true
+    end
+    if action then
+        DirkSimple.clear_screen(32, 240, 52)
+    end
+end
+
+function DirkSimple.serialize()
+    return { action }
+end
+
+function DirkSimple.unserialize(saved)
+    action = saved[1]
+    return true
+end
+"#;
 
 #[cfg(test)]
 mod tests {

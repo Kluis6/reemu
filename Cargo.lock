@@ -401,7 +401,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "audio-desktop"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "cpal",
  "domain",
@@ -961,7 +961,7 @@ dependencies = [
 
 [[package]]
 name = "core-catalog"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "core-loader-desktop",
  "log",
@@ -1048,7 +1048,7 @@ dependencies = [
 
 [[package]]
 name = "core-host-desktop"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "core-ipc",
  "core-loader-desktop",
@@ -1061,7 +1061,7 @@ dependencies = [
 
 [[package]]
 name = "core-ipc"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "bincode",
  "domain",
@@ -1072,7 +1072,7 @@ dependencies = [
 
 [[package]]
 name = "core-loader-desktop"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "ash",
  "async-trait",
@@ -1312,7 +1312,7 @@ checksum = "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f"
 
 [[package]]
 name = "db"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "async-trait",
  "domain",
@@ -1573,7 +1573,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "async-trait",
  "serde",
@@ -1660,7 +1660,7 @@ checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
 
 [[package]]
 name = "emu-session"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "core-ipc",
  "core-loader-desktop",
@@ -2962,7 +2962,7 @@ dependencies = [
 
 [[package]]
 name = "input-desktop"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "core-loader-desktop",
  "domain",
@@ -3353,7 +3353,7 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "library-scan"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "chd",
  "crc32fast",
@@ -3667,7 +3667,7 @@ dependencies = [
 
 [[package]]
 name = "net"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "log",
  "reqwest 0.12.28",
@@ -5028,7 +5028,7 @@ dependencies = [
 
 [[package]]
 name = "reemu-desktop"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "ash",
  "audio-desktop",
@@ -5488,7 +5488,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scraping"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "db",
  "domain",
@@ -5850,7 +5850,7 @@ dependencies = [
 
 [[package]]
 name = "shader-slang"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "glslang",
  "log",
@@ -7418,7 +7418,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "video-surface"
-version = "0.1.18"
+version = "0.1.19"
 dependencies = [
  "bytemuck",
  "core-loader-desktop",

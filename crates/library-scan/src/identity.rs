@@ -53,13 +53,13 @@ impl From<RomHashes> for Identity {
     }
 }
 
-/// Contêineres comprimidos identificados só pelo serial, pelo nome e pelo
-/// tamanho (D138): o hash de um `.cso` ou `.chd` não casa com nada que o
-/// ScreenScraper indexa e custaria ler o disco inteiro. Nunca são lidos
+/// Contêineres comprimidos identificados só pelo serial (quando existe),
+/// nome e tamanho. O hash de um `.cso`, `.chd` ou vídeo recodificado não
+/// casa com o índice e custaria ler o arquivo inteiro. Nunca são lidos
 /// inteiros (NFR-5). O `.iso` não está aqui: segue o [`DISC_HASH_MAX`] como
 /// as outras imagens, porque o de tamanho de CD o ScreenScraper conhece pelo
 /// hash.
-const SERIAL_ONLY_EXTS: &[&str] = &["cso", "chd"];
+const SERIAL_ONLY_EXTS: &[&str] = &["cso", "chd", "ogv", "dirksimple"];
 
 /// Maior arquivo lido inteiro pro hash (um `.iso`, a trilha de um
 /// `.cue`/`.gdi`, um `.img`, `.pbp`, `.cdi`, `.mdf`, `.nrg` solto, e também

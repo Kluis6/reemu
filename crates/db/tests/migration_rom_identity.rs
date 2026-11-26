@@ -20,10 +20,12 @@ async fn an_existing_database_migrates_and_keeps_its_roms_with_null_identity() {
     let db = mem_db().await;
     // Volta a tabela para antes da 24: tira as colunas e o registro.
     for c in NEW_COLS {
-        sqlx::query(&format!("ALTER TABLE roms DROP COLUMN {c}"))
-            .execute(&db)
-            .await
-            .unwrap();
+        sqlx::query(sqlx::AssertSqlSafe(format!(
+            "ALTER TABLE roms DROP COLUMN {c}"
+        )))
+        .execute(&db)
+        .await
+        .unwrap();
     }
     sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 24")
         .execute(&db)

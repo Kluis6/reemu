@@ -252,10 +252,29 @@ pub fn check_all(system_dir: &Path) -> Vec<BiosStatus> {
     for system_id in known_systems() {
         for file in bios_files_for_system(system_id) {
             let (present, hash_ok) = status_of(system_dir, &file);
+            let alternatives: Option<(&[&str], u64)> = match (system_id, file.filename) {
+                ("x68000", "iplrom.dat") => Some((
+                    &domain::bios::X68000_IPL_NAMES[1..],
+                    domain::bios::X68000_IPL_SIZE,
+                )),
+                ("x68000", "cgrom.dat") => Some((
+                    &domain::bios::X68000_FONT_NAMES[1..],
+                    domain::bios::X68000_FONT_SIZE,
+                )),
+                _ => None,
+            };
+            let required = file.required
+                && !alternatives.is_some_and(|(names, size)| {
+                    let dir = dir_for(system_dir, &file);
+                    names.iter().any(|name| {
+                        std::fs::metadata(dir.join(name))
+                            .is_ok_and(|metadata| metadata.is_file() && metadata.len() == size)
+                    })
+                });
             out.push(BiosStatus {
                 system_id: system_id.to_string(),
                 filename: file.filename.to_string(),
-                required: file.required,
+                required,
                 note: file.note.to_string(),
                 present,
                 hash_ok,

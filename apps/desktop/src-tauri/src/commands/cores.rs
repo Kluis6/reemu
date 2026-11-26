@@ -44,6 +44,11 @@ pub fn list_core_catalog(state: State<'_, AppState>) -> Vec<CatalogCoreDto> {
 
 #[tauri::command]
 pub async fn download_core(state: State<'_, AppState>, core_id: String) -> Result<(), AppError> {
+    if core_id == "dirksimple_libretro" {
+        crate::system_files::ensure_dirksimple(&state.system_dir)
+            .await
+            .map_err(|e| format!("Dados do DirkSimple: {e}"))?;
+    }
     let dir = state.cores_dir.clone();
     core_catalog::download(&dir, &core_id).await?;
     log::info!("core instalado: {core_id}");

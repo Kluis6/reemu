@@ -88,8 +88,8 @@ pub async fn backup(pool: &Db, path: &Path) -> Result<PathBuf, DbError> {
     if bak.exists() {
         std::fs::remove_file(&bak).map_err(|e| DbError::Config(e.to_string()))?;
     }
-    let target = bak.to_string_lossy().replace('\'', "''");
-    sqlx::query(&format!("VACUUM INTO '{target}'"))
+    sqlx::query("VACUUM INTO ?1")
+        .bind(bak.to_string_lossy().into_owned())
         .execute(pool)
         .await?;
     Ok(bak)
@@ -153,7 +153,7 @@ async fn heal_line_ending_checksums(pool: &Db) -> Result<(), DbError> {
         if stored == m.checksum.as_ref() {
             continue;
         }
-        let lf = m.sql.replace("\r\n", "\n");
+        let lf = m.sql.as_str().replace("\r\n", "\n");
         let crlf = lf.replace('\n', "\r\n");
         let same_text = [lf, crlf]
             .iter()
@@ -191,13 +191,13 @@ mod tests {
     async fn file_db_opens_twice_and_backs_up() {
         let dir = std::env::temp_dir().join(format!("reemu-db-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let path = dir.join("t.db");
+        let path = dir.join("player's.db");
         let url = format!("sqlite://{}", path.display());
         let pool = connect(&url).await.unwrap();
         // banco novo: tudo aplicado, nada pendente
         assert!(!has_pending_migrations(&pool).await.unwrap());
         let bak = backup(&pool, &path).await.unwrap();
-        assert!(bak.ends_with("t.db.bak") && bak.is_file());
+        assert!(bak.ends_with("player's.db.bak") && bak.is_file());
         // a cópia é um banco válido com as mesmas migrations
         let copy = connect(&format!("sqlite://{}", bak.display()))
             .await

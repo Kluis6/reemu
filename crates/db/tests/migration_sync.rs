@@ -41,15 +41,14 @@ async fn an_existing_database_migrates_and_keeps_its_data() {
     let cols = |table: &'static str| {
         let db = db.clone();
         async move {
-            sqlx::query_as::<_, (String,)>(&format!(
-                "SELECT name FROM pragma_table_info('{table}')"
-            ))
-            .fetch_all(&db)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(|(n,)| n)
-            .collect::<Vec<_>>()
+            sqlx::query_as::<_, (String,)>("SELECT name FROM pragma_table_info(?1)")
+                .bind(table)
+                .fetch_all(&db)
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|(n,)| n)
+                .collect::<Vec<_>>()
         }
     };
     assert!(cols("sync_base").await.contains(&"backup_path".to_owned()));

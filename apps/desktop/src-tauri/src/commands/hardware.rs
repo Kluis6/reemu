@@ -24,12 +24,14 @@ pub struct HardwareInfo {
 #[tauri::command]
 pub fn get_hardware_info(state: State<'_, AppState>) -> HardwareInfo {
     use sysinfo::System;
-    let mut sys = System::new();
-    sys.refresh_cpu_all();
-    sys.refresh_memory();
+    let sys = System::new().ok().map(|mut sys| {
+        sys.refresh_cpu_all();
+        sys.refresh_memory();
+        sys
+    });
     let cpu = sys
-        .cpus()
-        .first()
+        .as_ref()
+        .and_then(|sys| sys.cpus().first())
         .map(|c| c.brand().trim().to_string())
         .filter(|b| !b.is_empty());
     let gpu = state
@@ -47,12 +49,12 @@ pub fn get_hardware_info(state: State<'_, AppState>) -> HardwareInfo {
         (!d.is_empty()).then_some(d)
     });
     HardwareInfo {
-        os: System::long_os_version(),
+        os: System::long_os_version().ok(),
         arch: System::cpu_arch(),
         cpu,
-        cpu_cores: System::physical_core_count(),
-        cpu_threads: sys.cpus().len(),
-        memory_bytes: sys.total_memory(),
+        cpu_cores: System::physical_core_count().ok(),
+        cpu_threads: sys.as_ref().map_or(0, |sys| sys.cpus().len()),
+        memory_bytes: sys.as_ref().map_or(0, System::total_memory),
         gpu: gpu.as_ref().map(|i| i.name.clone()),
         gpu_backend: gpu.as_ref().map(|i| format!("{:?}", i.backend)),
         gpu_driver: driver,

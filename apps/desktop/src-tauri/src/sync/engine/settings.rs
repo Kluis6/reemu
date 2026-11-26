@@ -1250,22 +1250,24 @@ mod tests {
             "video_config",
             "aspect_assignments",
         ] {
-            let cols: Vec<String> = sqlx::query_scalar(&format!(
-                "SELECT name FROM pragma_table_info('{table}') ORDER BY cid"
-            ))
-            .fetch_all(db)
-            .await
-            .unwrap();
+            let cols: Vec<String> =
+                sqlx::query_scalar("SELECT name FROM pragma_table_info(?1) ORDER BY cid")
+                    .bind(table)
+                    .fetch_all(db)
+                    .await
+                    .unwrap();
             let expr = cols
                 .iter()
                 .map(|c| format!("quote({c})"))
                 .collect::<Vec<_>>()
                 .join(" || '|' || ");
-            let rows: Vec<String> =
-                sqlx::query_scalar(&format!("SELECT {expr} FROM {table} ORDER BY 1"))
-                    .fetch_all(db)
-                    .await
-                    .unwrap();
+            // Os nomes vêm das tabelas e migrations do banco de teste em memória.
+            let rows: Vec<String> = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+                "SELECT {expr} FROM {table} ORDER BY 1"
+            )))
+            .fetch_all(db)
+            .await
+            .unwrap();
             out.extend(rows.into_iter().map(|row| format!("{table}: {row}")));
         }
         out

@@ -225,6 +225,22 @@ fn c_str(p: *const std::os::raw::c_char) -> String {
 }
 
 impl DesktopCoreLoader {
+    fn acquire_core(&self, core_id: &CoreId) -> Result<ffi_state::CoreGuard, CoreLoadError> {
+        // O Uzem monta a pasta de recursos como cartão SD dentro do jogo.
+        let assets = if core_id.0 == "uzem_libretro" {
+            let path = self.system_dir.join("uzem");
+            std::fs::create_dir_all(&path).map_err(|err| {
+                CoreLoadError::LoadFailed(format!(
+                    "Não foi possível preparar o cartão SD do Uzem: {err}"
+                ))
+            })?;
+            path
+        } else {
+            self.save_dir.clone()
+        };
+        ffi_state::acquire(&self.system_dir, &self.save_dir, &assets)
+    }
+
     /// Abre o core SEM jogo: confere a versão da API, entrega os callbacks,
     /// roda `retro_init` e lê `retro_get_system_info`. Não chama
     /// `retro_deinit` (ver abaixo) — use num processo que vai sair. É o teste de fumaça do catálogo — pega core que não
@@ -244,7 +260,7 @@ impl DesktopCoreLoader {
 
     fn probe(&self, core_id: &CoreId, keep_loaded: bool) -> Result<CoreProbe, CoreLoadError> {
         let path = self.resolve_path(core_id)?;
-        let _guard = ffi_state::acquire(&self.system_dir, &self.save_dir)?;
+        let _guard = self.acquire_core(core_id)?;
         let raw = RawCore::open(&path)?;
 
         let api = unsafe { (raw.api_version)() };
@@ -309,9 +325,65 @@ impl DesktopCoreLoader {
         if !Path::new(rom_path).exists() {
             return Err(CoreLoadError::RomNotFound(rom_path.to_string()));
         }
+        if core_id.0 == "dirksimple_libretro" {
+            validate_dirksimple_content(Path::new(rom_path), &self.system_dir)?;
+        }
+        if core_id.0 == "openmsx_libretro"
+            && Path::new(rom_path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("7z"))
+        {
+            return Err(CoreLoadError::LoadFailed(
+                "Extraia a mídia do arquivo 7z antes de abrir no openMSX.".into(),
+            ));
+        }
+        if core_id.0 == "px68k_libretro" {
+            if Path::new(rom_path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("7z"))
+            {
+                return Err(CoreLoadError::LoadFailed(
+                    "O PX68k lê disquetes avulsos, ZIP e listas M3U. Extraia o 7z ou empacote os discos em ZIP.".into(),
+                ));
+            }
+            let keropi = self.system_dir.join("keropi");
+            for (names, size, description) in [
+                (
+                    domain::bios::X68000_IPL_NAMES,
+                    domain::bios::X68000_IPL_SIZE,
+                    "IPL (iplrom.dat ou revisão alternativa)",
+                ),
+                (
+                    domain::bios::X68000_FONT_NAMES,
+                    domain::bios::X68000_FONT_SIZE,
+                    "ROM de fontes (cgrom.dat)",
+                ),
+            ] {
+                let firmware = names
+                    .iter()
+                    .find_map(|name| std::fs::File::open(keropi.join(name)).ok());
+                if !firmware
+                    .and_then(|file| file.metadata().ok())
+                    .is_some_and(|metadata| metadata.is_file() && metadata.len() == size)
+                {
+                    return Err(CoreLoadError::LoadFailed(format!(
+                        "O PX68k precisa de {description} com {size} bytes. Importe o arquivo em Configurações → BIOS, na seção Sharp X68000."
+                    )));
+                }
+            }
+        }
+        if core_id.0 == "hatarib_libretro"
+            && Path::new(rom_path)
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("7z"))
+        {
+            return Err(CoreLoadError::LoadFailed(
+                "O hatariB abre disquetes em ZIP, .st ou .msa. Para jogar este arquivo 7z, selecione Hatari ou Hatari 2014.".into(),
+            ));
+        }
 
         // O guard inicializa o estado global e garante um-core-por-processo.
-        let guard = ffi_state::acquire(&self.system_dir, &self.save_dir)?;
+        let guard = self.acquire_core(core_id)?;
         if self.vulkan_only || self.vulkan_in_child {
             // Rota in-process (etapa 12) ou Vulkan no filho (C3): só Vulkan serve aqui, então é o que
             // `GET_PREFERRED_HW_RENDER` responde — o flycast escolhe o
@@ -356,7 +428,10 @@ impl DesktopCoreLoader {
                     .split('|')
                     .any(|e| e.eq_ignore_ascii_case(&ext))
             };
-            (info.need_fullpath, info.block_extract || accepts_archive)
+            // O Hatari 2014 anuncia ZIP, mas o build 1.8 abriu o TOS sem
+            // executar o setor de boot do disquete. O caminho extraído funcionou.
+            let keep_archive = accepts_archive && core_id.0 != "hatari2014_libretro";
+            (info.need_fullpath, info.block_extract || keep_archive)
         };
 
         // ROM em .zip/.7z: extrai a entrada interna pra um arquivo temporário
@@ -369,9 +444,28 @@ impl DesktopCoreLoader {
         // Outros erros de IO (arquivo corrompido, permissão) continuam
         // propagando — só "não achei ROM reconhecida aí dentro" tem fallback.
         let extracted = if crate::archive::is_archive(Path::new(rom_path)) && !keep_archive {
-            match crate::archive::extract_rom(Path::new(rom_path), &std::env::temp_dir()) {
+            let archive = Path::new(rom_path);
+            let temp = std::env::temp_dir();
+            let extracted = if core_id.0 == "sameduck_libretro" {
+                // DUCK identifica a plataforma. BIN pode ser um arquivo auxiliar.
+                match crate::archive::extract_rom(archive, &temp, Some("duck")) {
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                        crate::archive::extract_rom(archive, &temp, Some("bin"))
+                    }
+                    result => result,
+                }
+            } else {
+                crate::archive::extract_rom(archive, &temp, None)
+            };
+            match extracted {
                 Ok(e) => Some(e),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::NotFound
+                        && !matches!(
+                            core_id.0.as_str(),
+                            "gametank_libretro" | "sameduck_libretro"
+                        ) =>
+                {
                     log::info!(
                         "{rom_path}: nenhuma ROM de cartucho reconhecida dentro do arquivo — \
                          tratando como set de arcade (caminho original pro core)"
@@ -436,8 +530,15 @@ impl DesktopCoreLoader {
         };
         let mut persistent_rom: Option<Vec<u8>> = None;
 
-        let load_ok = {
-            let c_path = CString::new(rom_path)
+        let (load_ok, load_error) = {
+            // O GameTank recebe o cartucho em memória e nomeia o .xor pelo
+            // caminho informado. Usa o arquivo da biblioteca entre sessões.
+            let core_path = if core_id.0 == "gametank_libretro" && !need_fullpath {
+                original_path
+            } else {
+                rom_path
+            };
+            let c_path = CString::new(core_path)
                 .map_err(|_| CoreLoadError::LoadFailed("rom_path contém NUL".into()))?;
             let rom_bytes =
                 if need_fullpath {
@@ -447,6 +548,17 @@ impl DesktopCoreLoader {
                         CoreLoadError::LoadFailed(format!("ler ROM {rom_path}: {e}"))
                     })?)
                 };
+            // O VaporSpec lê o contador de instruções antes de conferir o tamanho.
+            if core_id.0 == "vaporspec_libretro"
+                && rom_bytes
+                    .as_deref()
+                    .is_some_and(|bytes| bytes.len() < 4 || bytes.starts_with(&[0, 0]))
+            {
+                unsafe { (raw.deinit)() };
+                return Err(CoreLoadError::LoadFailed(
+                    "O arquivo VaporSpec não contém instruções válidas.".into(),
+                ));
+            }
             let game = sys::retro_game_info {
                 path: c_path.as_ptr(),
                 data: rom_bytes
@@ -457,6 +569,9 @@ impl DesktopCoreLoader {
             };
             // `GET_GAME_INFO_EXT` só responde durante o `retro_load_game`.
             if let Some(st) = ffi_state::lock().as_mut() {
+                // O HypseusHW devolve true para mostrar a própria tela de
+                // erro. Entregamos a mensagem ao app e encerramos o load.
+                st.load_message = (core_id.0 == "hypseushw_libretro").then(String::new);
                 st.game_info_ext = Some(ffi_state::GameInfoExt::new(
                     Path::new(original_path),
                     Path::new(rom_path),
@@ -466,24 +581,40 @@ impl DesktopCoreLoader {
                 ));
             }
             let ok = unsafe { (raw.load_game)(&game) };
-            if let Some(st) = ffi_state::lock().as_mut() {
+            let message = ffi_state::lock().as_mut().and_then(|st| {
                 st.game_info_ext = None;
-            }
+                st.load_message.take().filter(|msg| !msg.is_empty())
+            });
             // rom_bytes/c_path vivem até aqui (o core copia o que precisa),
             // a não ser com `persistent_data`: aí o buffer fica no core.
             if persistent_data {
                 persistent_rom = rom_bytes;
             }
-            ok
+            (ok, message)
         };
 
-        if !load_ok {
-            unsafe { (raw.deinit)() };
+        if !load_ok || load_error.is_some() {
+            unsafe {
+                if load_ok {
+                    (raw.unload_game)();
+                }
+                (raw.deinit)();
+            }
             drop(raw);
             drop(guard);
-            return Err(CoreLoadError::LoadFailed(format!(
-                "retro_load_game falhou para {rom_path}"
-            )));
+            let load_error = load_error.or_else(|| {
+                (core_id.0 == "openmsx_libretro").then(|| match content_ext.as_str() {
+                    "dsk" | "di1" | "di2" | "dmk" | "xsa" | "m3u" => format!(
+                        "O openMSX não abriu o disquete. Selecione uma máquina com drive nas opções do core e coloque as ROMs de sistema do modelo em {}. Confira também os caminhos dos discos na lista M3U.",
+                        self.system_dir.join("openmsx/share/systemroms").display()
+                    ),
+                    "zip" => "O openMSX não abriu o ZIP. Extraia a mídia ou compacte um único arquivo usando o método Deflate.".into(),
+                    _ => format!("O openMSX não conseguiu abrir {rom_path}.")
+                })
+            });
+            return Err(CoreLoadError::LoadFailed(load_error.unwrap_or_else(|| {
+                format!("retro_load_game falhou para {rom_path}")
+            })));
         }
 
         // Liga um controle em cada porta, como o RetroArch
@@ -491,10 +622,17 @@ impl DesktopCoreLoader {
         // porta declarada em `SET_CONTROLLER_INFO` → `RETRO_DEVICE_JOYPAD`.
         // Cores como o flycast só leem a entrada das portas configuradas
         // assim — sem isto nem teclado nem controle chegavam ao jogo.
+        // No EightyOne, a segunda porta é reservada ao teclado Sinclair.
+        // Com dois joypads, segurar Select alterna o teclado virtual a cada quadro.
+        let joypad_ports = if core_id.0 == "81_libretro" {
+            1
+        } else {
+            MAX_PORTS
+        };
         let ports = ffi_state::lock()
             .as_ref()
             .map_or(0, |s| s.controller_ports)
-            .min(MAX_PORTS);
+            .min(joypad_ports);
         for port in 0..ports {
             unsafe { (raw.set_controller_port_device)(port, sys::RETRO_DEVICE_JOYPAD) };
         }
@@ -758,6 +896,42 @@ fn setup_vk_context(
         unsafe { reset() };
     }
     Ok(bridge)
+}
+
+fn validate_dirksimple_content(path: &Path, system_dir: &Path) -> Result<(), CoreLoadError> {
+    use std::io::Read;
+
+    if !path.extension().is_some_and(|ext| {
+        ext.eq_ignore_ascii_case("ogv") || ext.eq_ignore_ascii_case("dirksimple")
+    }) {
+        return Err(CoreLoadError::LoadFailed(
+            "O DirkSimple precisa de um vídeo Ogg Theora avulso (.ogv ou .dirksimple). Extraia o vídeo antes de jogar.".into(),
+        ));
+    }
+    let mut header = [0; 4];
+    if !std::fs::File::open(path)
+        .and_then(|mut file| file.read_exact(&mut header))
+        .is_ok_and(|_| &header == b"OggS")
+    {
+        return Err(CoreLoadError::LoadFailed(
+            "O DirkSimple precisa de um vídeo Ogg Theora com áudio Vorbis. Verifique o arquivo selecionado.".into(),
+        ));
+    }
+    let game_id = domain::library::dirksimple_game_id(path).ok_or_else(|| {
+        CoreLoadError::LoadFailed(
+            "O nome do vídeo precisa identificar o jogo do DirkSimple.".into(),
+        )
+    })?;
+    let data = system_dir.join("DirkSimple/data/games").join(&game_id);
+    if !["game.lua", "game.luac"]
+        .iter()
+        .any(|name| data.join(name).is_file())
+    {
+        return Err(CoreLoadError::LoadFailed(format!(
+            "O DirkSimple não encontrou os dados de '{game_id}' em system/DirkSimple/data/games. Para Dragon's Lair ou Cliff Hanger, use lair.ogv ou cliff.ogv. Para outros jogos, coloque os dados do jogo na pasta com o mesmo nome do vídeo."
+        )));
+    }
+    Ok(())
 }
 
 #[async_trait]

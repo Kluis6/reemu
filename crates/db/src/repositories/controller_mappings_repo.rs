@@ -6,7 +6,7 @@ use domain::input::{
     ControllerLayoutEntry, ControllerMapping, ControllerMappingRepository, MappingSource,
 };
 use sqlx::sqlite::SqliteRow;
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 
 pub struct ControllerMappingsRepo {
     db: Db,
@@ -40,7 +40,7 @@ fn row_to_mapping(row: &SqliteRow) -> Result<ControllerMapping, RepoError> {
 #[async_trait]
 impl ControllerMappingRepository for ControllerMappingsRepo {
     async fn list(&self) -> Result<Vec<ControllerMapping>, RepoError> {
-        let rows = sqlx::query(&format!("{COLS} ORDER BY display_name"))
+        let rows = sqlx::query(AssertSqlSafe(format!("{COLS} ORDER BY display_name")))
             .fetch_all(&self.db)
             .await
             .map_err(be)?;
@@ -48,7 +48,7 @@ impl ControllerMappingRepository for ControllerMappingsRepo {
     }
 
     async fn get(&self, guid: &str) -> Result<Option<ControllerMapping>, RepoError> {
-        let row = sqlx::query(&format!("{COLS} WHERE guid = ?1"))
+        let row = sqlx::query(AssertSqlSafe(format!("{COLS} WHERE guid = ?1")))
             .bind(guid)
             .fetch_optional(&self.db)
             .await

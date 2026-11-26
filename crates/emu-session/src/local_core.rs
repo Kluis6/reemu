@@ -18,7 +18,7 @@ use core_ipc::PortInput;
 use core_loader_desktop::{DesktopCore, DesktopCoreLoader, Pacer};
 use domain::core_loader::{CoreId, CoreLoadError, LoadedCore, RenderBackend, SystemAvInfo};
 use domain::core_options::CoreOptionDefinition;
-use domain::frame_source::{Frame, FrameSource};
+use domain::frame_source::Frame;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -125,7 +125,7 @@ impl LocalCore {
             );
         }
 
-        let frame = self.core.next_frame();
+        let frame = self.core.next_realtime_frame();
         let audio = self.core.drain_audio();
         self.pacer.pace();
         FrameTick {
@@ -136,6 +136,7 @@ impl LocalCore {
     }
 
     pub(crate) fn set_paused(&mut self, paused: bool) {
+        self.core.reset_frame_time();
         if !paused {
             self.pacer.reset();
         }

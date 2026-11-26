@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use domain::core_loader::{CoreRenderRequirements, InstalledCore, InstalledCoreRepository};
 use domain::error::RepoError;
 use sqlx::sqlite::SqliteRow;
-use sqlx::Row;
+use sqlx::{AssertSqlSafe, Row};
 
 pub struct InstalledCoresRepo {
     db: Db,
@@ -64,7 +64,7 @@ impl InstalledCoreRepository for InstalledCoresRepo {
     }
 
     async fn get(&self, core_id: &str) -> Result<Option<InstalledCore>, RepoError> {
-        let row = sqlx::query(&format!("{SELECT_COLS} WHERE core_id = ?1"))
+        let row = sqlx::query(AssertSqlSafe(format!("{SELECT_COLS} WHERE core_id = ?1")))
             .bind(core_id)
             .fetch_optional(&self.db)
             .await
@@ -76,7 +76,7 @@ impl InstalledCoreRepository for InstalledCoresRepo {
     }
 
     async fn list(&self) -> Result<Vec<InstalledCore>, RepoError> {
-        let rows = sqlx::query(&format!("{SELECT_COLS} ORDER BY core_id"))
+        let rows = sqlx::query(AssertSqlSafe(format!("{SELECT_COLS} ORDER BY core_id")))
             .fetch_all(&self.db)
             .await
             .map_err(be)?;

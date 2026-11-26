@@ -6,14 +6,55 @@ use crate::error::RepoError;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-pub const SUFAMI_TURBO_HEADER_LEN: usize = 30;
+pub const ST_HEADER_LEN: usize = 30;
+pub const ZX81_P_HEADER_LEN: usize = 13;
 
-/// Identifica um cartucho Sufami Turbo sem confundir `.st` com disco Atari ST.
-/// A assinatura na posição 0 também ocorre na BIOS, que tem outro tamanho.
-pub fn is_sufami_turbo_cart(size: u64, header: &[u8; SUFAMI_TURBO_HEADER_LEN]) -> bool {
-    (0x80000..=0x100000).contains(&size)
-        && header.starts_with(b"BANDAI SFC-ADX")
-        && &header[16..30] != b"SFC-ADX BACKUP"
+/// `.p` do ZX81 guarda a RAM de $4009 até E_LINE − 1.
+/// Os ponteiros D_FILE, VARS e E_LINE distinguem o programa de outros arquivos `.p`.
+pub fn is_zx81_program(size: u64, header: &[u8; ZX81_P_HEADER_LEN]) -> bool {
+    let display = u16::from_le_bytes([header[3], header[4]]);
+    let variables = u16::from_le_bytes([header[7], header[8]]);
+    let end = u16::from_le_bytes([header[11], header[12]]);
+    header[0] == 0
+        && display >= 0x407d
+        && variables > display
+        && end > variables
+        && size == u64::from(end - 0x4009)
+}
+
+/// Os disquetes `.st` são imagens cruas de setores de 512 bytes. O cartucho
+/// Sufami Turbo tem assinatura própria e a BIOS usa uma variante dela.
+pub fn system_for_st(size: u64, header: &[u8; ST_HEADER_LEN]) -> Option<&'static str> {
+    if header.starts_with(b"BANDAI SFC-ADX") {
+        return ((0x80000..=0x100000).contains(&size) && &header[16..30] != b"SFC-ADX BACKUP")
+            .then_some("snes");
+    }
+
+    if !size.is_multiple_of(512) || !(160 * 1024..=2880 * 1024).contains(&size) {
+        return None;
+    }
+    let bytes_per_sector = u16::from_le_bytes([header[11], header[12]]);
+    let total_sectors = u64::from(u16::from_le_bytes([header[19], header[20]]));
+    let sectors = size / 512;
+    let standard_geometry = [8, 9, 10, 11, 12, 18, 36].iter().any(|per_track| {
+        [*per_track, *per_track * 2]
+            .into_iter()
+            .any(|per_cylinder| {
+                sectors.is_multiple_of(per_cylinder)
+                    && matches!(sectors / per_cylinder, 40 | 80..=86)
+            })
+    });
+    (standard_geometry || (bytes_per_sector == 512 && total_sectors == sectors))
+        .then_some("atarist")
+}
+
+pub const DIRKSIMPLE_OFFICIAL_GAMES: &[&str] = &["lair", "cliff"];
+
+/// O DirkSimple usa o nome até o primeiro ponto, com letras ASCII minúsculas,
+/// para localizar `data/games/<id>/game.lua` ou `game.luac`.
+pub fn dirksimple_game_id(path: &std::path::Path) -> Option<String> {
+    let (id, _) = path.file_name()?.to_str()?.split_once('.')?;
+    (!id.is_empty()).then(|| id.to_ascii_lowercase())
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

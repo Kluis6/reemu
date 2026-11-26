@@ -28,6 +28,67 @@ fn write(dir: &std::path::Path, name: &str, bytes: &[u8]) {
 }
 
 #[tokio::test]
+async fn daphne_scan_pairs_rom_and_media_with_the_framefile() {
+    let dir = scratch_dir();
+    write(
+        &dir,
+        "Arcade/framefile/lair.txt",
+        b"../vldp/lair\r\n0 color.m2v\r\n",
+    );
+    write(
+        &dir,
+        "Arcade/framefile/readme.txt",
+        b"Instructions\nLabel value\n",
+    );
+    write(&dir, "Arcade/roms/lair.zip", b"test rom zip");
+    write(&dir, "Arcade/roms/unrelated.zip", b"existing arcade set");
+    write(&dir, "Arcade/vldp/lair/color.m2v", b"test video");
+    write(&dir, "Arcade/vldp/lair/color.ogg", b"test audio");
+    write(&dir, "Daphne/vldp/ace/ace.txt", b".\n0 ace.M2V\n");
+    write(&dir, "Daphne/launch.bat", b"example");
+    write(&dir, "example.txt", b".\n0 demo.m2v\n");
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let report = scan_into(&repo, &dir, 1, |_| {}).await.unwrap();
+    assert_eq!(report.added, 3);
+    let laserdisc = repo.list_by_system("laserdisc").await.unwrap();
+    assert_eq!(laserdisc.len(), 2);
+    assert!(laserdisc.iter().all(|rom| rom.file_path.ends_with(".txt")));
+    let arcade = repo.list_by_system("arcade").await.unwrap();
+    assert_eq!(arcade.len(), 1);
+    assert!(arcade[0].file_path.ends_with("unrelated.zip"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
+async fn laserdisc_scan_accepts_game_videos_and_ignores_unrelated_ogv() {
+    let dir = scratch_dir();
+    write(&dir, "outros/LAIR.capture.OGV", b"OggS");
+    write(&dir, "Cliff.dirksimple", b"OggS");
+    write(&dir, "Laser Disc/Teste/abertura.ogv", b"OggS");
+    write(&dir, "Videos/demo.ogv", b"OggS");
+    let mut archive =
+        zip::ZipWriter::new(std::fs::File::create(dir.join("laserdisc.zip")).unwrap());
+    archive
+        .start_file("cliff.dirksimple", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    archive.write_all(b"OggS").unwrap();
+    archive.finish().unwrap();
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let report = scan_into(&repo, &dir, 1, |_| {}).await.unwrap();
+    assert_eq!(report.added, 3);
+    let media = repo.list_by_system("laserdisc").await.unwrap();
+    assert_eq!(media.len(), 3);
+    assert!(media
+        .iter()
+        .all(|rom| rom.ident_size == Some(4) && rom.crc32.is_empty() && rom.md5.is_empty()));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
 async fn scans_recursively_infers_system_and_dedups() {
     let dir = scratch_dir();
     write(&dir, "Mario.nes", b"nes-rom-data");
@@ -75,17 +136,22 @@ async fn scans_recursively_infers_system_and_dedups() {
 }
 
 #[tokio::test]
-async fn snes_expansions_scan_without_mistaking_atari_disks_for_roms() {
+async fn snes_expansions_and_atari_st_disks_scan_as_distinct_systems() {
     let dir = scratch_dir();
     let mut cart = vec![0; 0x80000];
     cart[..14].copy_from_slice(b"BANDAI SFC-ADX");
     write(&dir, "Broadcast.bs", b"fixture");
     write(&dir, "Cartridge.st", &cart);
-    write(&dir, "Atari.st", &vec![0; 0x80000]);
+    let disk = vec![0; 720 * 1024];
+    write(&dir, "Atari.st", &disk);
+    write(&dir, "Invalid.st", &vec![0; 0x80000]);
+    write(&dir, "Downloads/Unrelated.gem", b"ruby package");
+    write(&dir, "Atari ST/Two Disks.m3u", b"../Atari.st\n");
+    write(&dir, "Atari ST/Two Disks UTF-8.m3u8", b"../Atari.st\n");
     let packed = dir.join("Cartridge.zip");
     let mut zip = zip::ZipWriter::new(std::fs::File::create(&packed).unwrap());
     let options = zip::write::SimpleFileOptions::default();
-    zip.start_file("Atari.st", options).unwrap();
+    zip.start_file("Invalid.st", options).unwrap();
     zip.write_all(&vec![0; 0x80000]).unwrap();
     zip.start_file("folder/Cartridge.ST", options).unwrap();
     zip.write_all(&cart).unwrap();
@@ -100,11 +166,26 @@ async fn snes_expansions_scan_without_mistaking_atari_disks_for_roms() {
         .unwrap();
     drop(sevenz.finish().unwrap());
 
+    let disk_zip = dir.join("Atari.zip");
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&disk_zip).unwrap());
+    zip.start_file("folder/Atari.ST", options).unwrap();
+    zip.write_all(&disk).unwrap();
+    zip.finish().unwrap();
+
     let repo = db::RomsRepo::new(db::connect_in_memory().await.unwrap());
     let report = scan_into(&repo, &dir, 1, |_| {}).await.unwrap();
-    assert_eq!(report.added, 4);
+    assert_eq!(report.added, 8);
     let games = repo.list_by_system("snes").await.unwrap();
     assert_eq!(games.len(), 4);
+    let disks = repo.list_by_system("atarist").await.unwrap();
+    assert_eq!(disks.len(), 4);
+    assert!(disks.iter().any(|rom| rom.file_path.ends_with("Atari.st")));
+    assert!(disks
+        .iter()
+        .any(|rom| rom.file_path.ends_with("Two Disks.m3u")));
+    assert!(disks.iter().any(|rom| {
+        rom.file_path.ends_with("Atari.zip") && rom.ident_name.as_deref() == Some("Atari.ST")
+    }));
     for (archive, entry) in [
         ("Cartridge.zip", "Cartridge.ST"),
         ("Cartridge.7z", "Cartridge.st"),
@@ -113,6 +194,269 @@ async fn snes_expansions_scan_without_mistaking_atari_disks_for_roms() {
             rom.file_path.ends_with(archive) && rom.ident_name.as_deref() == Some(entry)
         }));
     }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn sharp_x68000_media_preserves_atari_and_amiga_classification() {
+    let dir = scratch_dir();
+    let xdf = vec![0; 77 * 2 * 8 * 1024];
+    let mut dim = vec![0; 256 + xdf.len()];
+    dim[1..=154].fill(1);
+    write(&dir, "Disk.xdf", &xdf);
+    write(&dir, "Sharp Disk.dim", &dim);
+    write(&dir, "Atari ST/Atari Disk.dim", &[0x42; 64]);
+    write(&dir, "Sharp X68000/Hard disk.hdf", b"x68000 hdf");
+    write(&dir, "Amiga/Hard disk.hdf", b"amiga hdf");
+    write(&dir, "Sharp X68000/Two Drives.m3u", b"../Disk.xdf\n");
+    write(&dir, "Migrate.cmd", b"not emulator media");
+
+    for (file, entry, data) in [
+        ("Disks.zip", "nested/Sharp Disk.DIM", dim.as_slice()),
+        (
+            "Sharp X68000/Shared extensions.zip",
+            "Disk 2.IMG",
+            xdf.as_slice(),
+        ),
+    ] {
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(dir.join(file)).unwrap());
+        zip.start_file(entry, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(data).unwrap();
+        zip.finish().unwrap();
+    }
+
+    let repo = db::RomsRepo::new(db::connect_in_memory().await.unwrap());
+    let report = scan_into(&repo, &dir, 1, |_| {}).await.unwrap();
+    assert_eq!(report.added, 8);
+    assert_eq!(repo.list_by_system("atarist").await.unwrap().len(), 1);
+    assert_eq!(repo.list_by_system("amiga").await.unwrap().len(), 1);
+    let sharp = repo.list_by_system("x68000").await.unwrap();
+    assert_eq!(sharp.len(), 6);
+    for name in ["Disks.zip", "Shared extensions.zip"] {
+        let archive = sharp
+            .iter()
+            .find(|rom| rom.file_path.ends_with(name))
+            .unwrap();
+        assert_eq!(archive.ident_name.as_deref(), Some(name));
+        assert_eq!(
+            archive.ident_size,
+            Some(std::fs::metadata(&archive.file_path).unwrap().len() as i64)
+        );
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn zx81_tapes_keep_zx_spectrum_and_other_p_files_separate() {
+    let dir = scratch_dir();
+    let mut program = vec![0; 0x407f - 0x4009];
+    program[3..5].copy_from_slice(&0x407du16.to_le_bytes());
+    program[7..9].copy_from_slice(&0x407eu16.to_le_bytes());
+    program[11..13].copy_from_slice(&0x407fu16.to_le_bytes());
+    write(&dir, "jogo.P", &program);
+    write(&dir, "exemplo.p", b"program example; begin end.");
+    write(&dir, "colecao.t81", b"EO81");
+    write(&dir, "Sinclair - ZX 81/jogo.tzx", b"ZXTape!");
+    write(&dir, "zxspectrum/jogo.tzx", b"ZXTape!");
+
+    for (folder, name, contents) in [
+        ("Sinclair - ZX 81", "fita.TZX", &b"ZXTape!"[..]),
+        ("zxspectrum", "fita.TZX", &b"ZXTape!"[..]),
+        ("", "jogo.p", program.as_slice()),
+    ] {
+        let mut zip =
+            zip::ZipWriter::new(std::fs::File::create(dir.join(folder).join("midia.zip")).unwrap());
+        let opts = zip::write::SimpleFileOptions::default();
+        zip.start_file("exemplo.p", opts).unwrap();
+        zip.write_all(b"program example; begin end.").unwrap();
+        zip.start_file(name, opts).unwrap();
+        zip.write_all(contents).unwrap();
+        zip.finish().unwrap();
+    }
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let report = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!((report.added, report.errors), (7, 0), "{report:?}");
+    let zx81 = repo.list_by_system("zx81").await.unwrap();
+    let spectrum = repo.list_by_system("zxspectrum").await.unwrap();
+    assert_eq!((zx81.len(), spectrum.len()), (5, 2));
+    assert!(zx81
+        .iter()
+        .any(|rom| rom.ident_name.as_deref() == Some("jogo.p")));
+    for roms in [&zx81, &spectrum] {
+        assert!(roms
+            .iter()
+            .any(|rom| rom.ident_name.as_deref() == Some("fita.TZX")));
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn arduboy_packages_and_hex_need_different_import_contexts() {
+    let dir = scratch_dir();
+    let hex = b":02000000FFCF30\n:00000001FF\n";
+    write(&dir, "firmware.hex", hex);
+    write(&dir, "Arduboy FX/sub/jogo.HEX", hex);
+    write(&dir, "pacote.arduboy", b"pacote inteiro");
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(dir.join("externo.zip")).unwrap());
+    zip.start_file("jogo.arduboy", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(b"pacote inteiro").unwrap();
+    zip.finish().unwrap();
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let report = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!((report.added, report.errors), (2, 0), "{report:?}");
+    let roms = repo.list_by_system("arduboy").await.unwrap();
+    assert_eq!(roms.len(), 2);
+    assert!(roms.iter().any(|rom| rom.file_path.ends_with("jogo.HEX")));
+    assert!(roms
+        .iter()
+        .any(|rom| rom.file_path.ends_with("pacote.arduboy")));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn uzebox_scan_uses_the_rom_entry_inside_zip() {
+    let dir = scratch_dir();
+    let rom = b"Uzebox test data";
+    write(&dir, "jogo.UZE", rom);
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(dir.join("compactado.zip")).unwrap());
+    zip.start_file("jogo.uze", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(rom).unwrap();
+    zip.finish().unwrap();
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let report = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!((report.added, report.errors), (2, 0), "{report:?}");
+    let games = repo.list_by_system("uzebox").await.unwrap();
+    assert_eq!(games.len(), 2);
+    assert!(games.iter().all(|game| game.crc32 == crc_of(rom)));
+    assert!(games
+        .iter()
+        .any(|game| game.ident_name.as_deref() == Some("jogo.uze")));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn vaporspec_scan_uses_the_rom_entry_inside_zip() {
+    let dir = scratch_dir();
+    let rom = b"\x01\x00\x00\x06";
+    write(&dir, "jogo.VAPORBIN", rom);
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(dir.join("compactado.zip")).unwrap());
+    zip.start_file("jogo.vaporbin", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(rom).unwrap();
+    zip.finish().unwrap();
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let report = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!((report.added, report.errors), (2, 0), "{report:?}");
+    let games = repo.list_by_system("vaporspec").await.unwrap();
+    assert_eq!(games.len(), 2);
+    assert!(games.iter().all(|game| game.crc32 == crc_of(rom)));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn megaduck_bin_needs_a_platform_folder_and_duck_takes_priority() {
+    let dir = scratch_dir();
+    write(&dir, "outro.bin", b"ambiguous");
+    write(&dir, "jogo.DUCK", b"plain duck");
+    write(&dir, "Cougar Boy/pasta/avulso.BIN", b"raw bin");
+    std::fs::create_dir(dir.join("Mega Duck")).unwrap();
+    for (path, explicit_duck) in [
+        ("Mega Duck/bin.zip", false),
+        ("Mega Duck/misto.zip", true),
+        ("ignorar.zip", false),
+    ] {
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(dir.join(path)).unwrap());
+        let options = zip::write::SimpleFileOptions::default();
+        zip.start_file("outro.bin", options).unwrap();
+        zip.write_all(b"generic bin").unwrap();
+        if explicit_duck {
+            zip.start_file("jogo.DUCK", options).unwrap();
+            zip.write_all(b"explicit duck").unwrap();
+        }
+        zip.finish().unwrap();
+    }
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let report = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!((report.added, report.errors), (4, 0), "{report:?}");
+    let games = repo.list_by_system("megaduck").await.unwrap();
+    assert_eq!(games.len(), 4);
+    let mixed = games
+        .iter()
+        .find(|game| game.file_path.ends_with("misto.zip"))
+        .unwrap();
+    assert_eq!(mixed.ident_name.as_deref(), Some("jogo.DUCK"));
+    assert_eq!(mixed.crc32, crc_of(b"explicit duck"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn chip8_scan_recognizes_variants_as_one_platform() {
+    let dir = scratch_dir();
+    let rom_bytes = b"\x00\xe0\x12\x00";
+    for ext in ["ch8", "sc8", "xo8", "hc8"] {
+        write(&dir, &format!("teste.{ext}"), rom_bytes);
+    }
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(dir.join("teste.zip")).unwrap());
+    zip.start_file("jogo.XO8", zip::write::SimpleFileOptions::default())
+        .unwrap();
+    zip.write_all(rom_bytes).unwrap();
+    zip.finish().unwrap();
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let report = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!((report.added, report.errors), (5, 0), "{report:?}");
+    let roms = repo.list_by_system("chip8").await.unwrap();
+    assert_eq!(roms.len(), 5);
+    assert!(roms.iter().all(|rom| rom.crc32 == crc_of(rom_bytes)));
+    let packed = roms
+        .iter()
+        .find(|rom| rom.file_path.ends_with(".zip"))
+        .unwrap();
+    assert_eq!(packed.ident_name.as_deref(), Some("jogo.XO8"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn msx_media_with_ambiguous_extensions_needs_an_msx_folder() {
+    let dir = scratch_dir();
+    let rom_bytes = b"MSX cartridge in ZIP";
+    for folder in ["MSX2+", "outros"] {
+        write(&dir, &format!("{folder}/boot.dmk"), b"disk image");
+        let archive = dir.join(folder).join("cart.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(archive).unwrap());
+        zip.start_file("cart.ROM", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(rom_bytes).unwrap();
+        zip.finish().unwrap();
+    }
+    write(&dir, "MSX2+/boot.m3u", b"boot.dmk\n");
+
+    let db = db::connect_in_memory().await.unwrap();
+    let repo = db::RomsRepo::new(db);
+    let report = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!((report.added, report.errors), (3, 0), "{report:?}");
+    let msx = repo.list_by_system("msx").await.unwrap();
+    assert_eq!(msx.len(), 3);
+    let cart = msx
+        .iter()
+        .find(|rom| rom.file_path.ends_with("cart.zip"))
+        .unwrap();
+    assert_eq!(cart.ident_name.as_deref(), Some("cart.ROM"));
+    assert_eq!(cart.crc32, crc_of(rom_bytes));
     let _ = std::fs::remove_dir_all(dir);
 }
 

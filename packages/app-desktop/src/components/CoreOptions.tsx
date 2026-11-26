@@ -22,6 +22,19 @@ const useStyles = makeStyles({
   hint: { fontSize: tokens.fontSizeBase100, color: tokens.colorNeutralForeground3 },
 })
 
+// Values and labels from the hatariB core options for Atari machine and TOS.
+const hatariBOptionLabels = new Map([
+  ['hatarib_machine', new Map([
+    ['0', 'ST'], ['1', 'Mega ST'], ['2', 'STE'], ['3', 'Mega STE'], ['4', 'TT'], ['5', 'Falcon'],
+  ])],
+  ['hatarib_tos', new Map([
+    ['<tos.img>', 'system/tos.img'],
+    ['<etos1024k>', 'EmuTOS 1024k'],
+    ['<etos192uk>', 'EmuTOS 192uk'],
+    ['<etos192us>', 'EmuTOS 192us'],
+  ])],
+])
+
 /**
  * Opções de core **geradas do schema** que o próprio core declarou
  * (`retro_core_options*`). O schema só existe depois do core rodar uma vez.
@@ -89,6 +102,8 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
       </div>
       <BlockGroup>
         {opts.data.map((o) => {
+          const choiceLabel = (value: string) =>
+            hatariBOptionLabels.get(o.key)?.get(value) ?? value
           // Só nas opções do core: no jogo também existe o "Herdar", um 3º estado.
           const toggle = romId ? null : toggleValues(o.choices)
           // "rom": mostra o override ("" = herda). "core": o valor por core,
@@ -115,11 +130,13 @@ export function CoreOptions({ coreId, romId }: { coreId: string; romId?: string 
               disabled={change.isPending}
               options={[
                 ...(scope === 'rom'
-                  ? [{ value: '', label: t('coreOptions.inherit', { value: o.value }) }]
+                  ? [{ value: '', label: t('coreOptions.inherit', { value: choiceLabel(o.value) }) }]
                   : []),
                 ...o.choices.map((c) => ({
                   value: c,
-                  label: c === o.defaultValue ? t('coreOptions.default', { value: c }) : c,
+                  label: c === o.defaultValue
+                    ? t('coreOptions.default', { value: choiceLabel(c) })
+                    : choiceLabel(c),
                 })),
               ]}
               onChange={(value) => change.mutate({ key: o.key, value })}

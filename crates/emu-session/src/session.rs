@@ -1907,8 +1907,26 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     .lock()
                     .unwrap_or_else(|p| p.into_inner()) = None;
 
-                let target_srm = srm_path(&save_dir, &rom);
-                let initial_save_ram = std::fs::read(&target_srm).ok();
+                let legacy_srm = srm_path(&save_dir, &rom);
+                let is_arduous = id.0 == "arduous_libretro";
+                // Arduous grava só a EEPROM de 1 KiB. O Ardens pode ter um
+                // .srm anterior com EEPROM e flash FX para o mesmo jogo.
+                let target_srm = if is_arduous {
+                    srm_path(&save_dir.join("arduous_libretro"), &rom)
+                } else {
+                    legacy_srm.clone()
+                };
+                let initial_save_ram = match std::fs::read(&target_srm) {
+                    Ok(bytes) => Some(bytes),
+                    Err(err) if is_arduous && err.kind() == std::io::ErrorKind::NotFound => {
+                        std::fs::metadata(&legacy_srm)
+                            .ok()
+                            .filter(|meta| meta.is_file() && meta.len() == 1024)
+                            .and_then(|_| std::fs::read(&legacy_srm).ok())
+                            .filter(|bytes| bytes.len() == 1024)
+                    }
+                    Err(_) => None,
+                };
                 // Jogo novo: volta a dobrar o stick como d-pad até o core
                 // mostrar que lê analógico (`AnalogUsed` / rota local).
                 PARENT_ANALOG.clear();
@@ -2051,9 +2069,16 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                             )));
                             continue;
                         }
+                        // O HypseusHW pode indexar o vídeo na primeira carga.
+                        // Seu limite é 300 s, antes de devolver o erro de boot.
+                        let load_timeout = if id.0 == "hypseushw_libretro" {
+                            315
+                        } else {
+                            30
+                        };
                         let loaded = wait_for_reply(
                             &erx,
-                            Duration::from_secs(30),
+                            Duration::from_secs(load_timeout),
                             &shared,
                             &mut sink,
                             &mut ring,

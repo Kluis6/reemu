@@ -141,7 +141,7 @@ pub fn clean_label(s: &str) -> String {
 
 /// O nome da máquina; sem ele, o rótulo padrão do Alvanista.
 pub fn default_label() -> String {
-    label_from_host(sysinfo::System::host_name())
+    label_from_host(sysinfo::System::host_name().ok())
 }
 
 fn label_from_host(host: Option<String>) -> String {
