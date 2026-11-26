@@ -6,9 +6,10 @@ pub mod answer;
 pub mod identify;
 pub mod pass;
 
-pub use pass::{CatalogEngine, CatalogError, CatalogEvent, PassReport, PassScope};
+pub use pass::{CatalogEngine, CatalogError, CatalogEvent, CatalogStatus, PassReport, PassScope};
 
 use crate::alvanista::Alvanista;
+use crate::app_error::AppError;
 use domain::metadata::ResolutionState;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -145,5 +146,47 @@ pub async fn resolve_one_for_rescrape(app: &AppHandle, rom_id: &str) -> Option<&
         ResolutionState::Found | ResolutionState::Manual => Some("auto"),
         ResolutionState::Pending => Some("none"),
         ResolutionState::Unknown => None,
+    }
+}
+
+fn required_parts(
+    app: &AppHandle,
+) -> Result<(Arc<CatalogEngine>, tauri::State<'_, Alvanista>), AppError> {
+    parts(app).ok_or_else(|| AppError::from("catálogo indisponível"))
+}
+
+#[tauri::command]
+pub async fn catalog_status(app: AppHandle) -> Result<CatalogStatus, AppError> {
+    let (engine, alva) = required_parts(&app)?;
+    Ok(engine.status(&alva).await)
+}
+
+#[tauri::command]
+pub async fn catalog_set_enabled(app: AppHandle, enabled: bool) -> Result<CatalogStatus, AppError> {
+    let (engine, alva) = required_parts(&app)?;
+    engine
+        .set_enabled(enabled)
+        .await
+        .map_err(|e| AppError::from(e.to_string()))?;
+    if enabled {
+        trigger_in_background(&app, PassScope::All);
+    }
+    Ok(engine.status(&alva).await)
+}
+
+#[tauri::command]
+pub async fn catalog_run_now(
+    app: AppHandle,
+    lang: Option<String>,
+) -> Result<CatalogStatus, AppError> {
+    let (engine, alva) = required_parts(&app)?;
+    match engine
+        .run_pass(&alva, PassScope::All, lang.as_deref())
+        .await
+    {
+        Ok(_) | Err(CatalogError::Disabled | CatalogError::AuthEnded) => {
+            Ok(engine.status(&alva).await)
+        }
+        Err(e) => Err(AppError::from(e.to_string())),
     }
 }

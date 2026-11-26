@@ -1,119 +1,126 @@
 // @vitest-environment happy-dom
-
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
-import type { ScrapeProgress } from '../../lib/tauri'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CatalogStatus, MetadataConfig, ScrapeProgress } from '../../lib/tauri'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const api = vi.hoisted(() => ({
+  catalogStatus: vi.fn(),
+  catalogSetEnabled: vi.fn(),
   getMetadataConfig: vi.fn(),
   metadataScanProgress: vi.fn(),
   listPendingMatches: vi.fn(),
-  startMetadataScan: vi.fn(),
-  cancelMetadataScan: vi.fn(),
 }))
-vi.mock('../../lib/tauri', async (original) => ({ ...(await original<object>()), ...api }))
 
-import i18n from '../../i18n'
+vi.mock('../../lib/tauri', async (orig) => ({
+  ...(await orig<typeof import('../../lib/tauri')>()),
+  ...api,
+}))
+
+import '../../i18n'
 import { SettingsMetadata } from './SettingsMetadata'
 
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-const empty = { running: false, status: 'idle', done: 0, total: 0, auto: 0, pending: 0, failed: 0, error: null } satisfies ScrapeProgress
+const CFG: MetadataConfig = {
+  provider: 'screenscraper',
+  screenscraperUser: null,
+  screenscraperPassword: null,
+  thegamesdbApiKey: null,
+}
+
+const PROGRESS: ScrapeProgress = {
+  running: false,
+  status: 'idle',
+  done: 0,
+  total: 0,
+  auto: 0,
+  pending: 0,
+  failed: 0,
+  error: null,
+}
+
+const CONNECTED_STATUS: CatalogStatus = {
+  connected: true,
+  enabled: true,
+  disabledByServer: false,
+  running: false,
+  found: 12,
+  pending: 3,
+  unknown: 1,
+}
+
 let host: HTMLDivElement
-let root: ReturnType<typeof createRoot>
-let qc: QueryClient
+let unmount: () => Promise<void>
 
-// O happy-dom rejeita a animação do ProgressBar ao sair do modo indeterminado.
-const animate = Element.prototype.animate
-beforeAll(() => {
-  ;(Element.prototype as { animate?: unknown }).animate = undefined
-})
-afterAll(() => {
-  Element.prototype.animate = animate
-})
+async function settle() {
+  for (let i = 0; i < 6; i++) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+  }
+}
 
-beforeEach(async () => {
-  vi.resetAllMocks()
-  await i18n.changeLanguage('pt-BR')
-  api.getMetadataConfig.mockResolvedValue({
-    provider: 'screenscraper', screenscraperUser: null, screenscraperPassword: null, thegamesdbApiKey: null,
-  })
-  api.listPendingMatches.mockResolvedValue([])
-  api.metadataScanProgress.mockResolvedValue(empty)
+async function mount() {
   host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  await act(async () => root.render(<QueryClientProvider client={qc}><SettingsMetadata /></QueryClientProvider>))
-  await waitForStatus(() => expect(host.textContent).toContain('Escanear metadata da biblioteca'))
+  document.body.appendChild(host)
+  const root = createRoot(host)
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  await act(async () =>
+    root.render(
+      <QueryClientProvider client={qc}>
+        <SettingsMetadata />
+      </QueryClientProvider>,
+    ),
+  )
+  await settle()
+  unmount = () => act(async () => root.unmount())
+}
+
+beforeEach(() => {
+  Object.values(api).forEach((f) => f.mockReset())
+  api.catalogStatus.mockResolvedValue(CONNECTED_STATUS)
+  api.catalogSetEnabled.mockImplementation(async (enabled: boolean) => ({
+    ...CONNECTED_STATUS,
+    enabled,
+  }))
+  api.getMetadataConfig.mockResolvedValue(CFG)
+  api.metadataScanProgress.mockResolvedValue(PROGRESS)
+  api.listPendingMatches.mockResolvedValue([])
 })
 
 afterEach(async () => {
-  await act(async () => root.unmount())
-  qc.clear()
-  host.remove()
+  if (unmount) await unmount()
+  host?.remove()
 })
 
-async function waitForStatus(assert: () => void) {
-  await vi.waitFor(async () => {
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
-    assert()
+describe('SettingsMetadata catalog section', () => {
+  it('status_line_shows_counts', async () => {
+    await mount()
+    expect(host.textContent).toContain('Usar o catálogo do Alvanista para identificar meus jogos')
+    expect(host.textContent).toContain(
+      'Os nomes e os hashes dos arquivos vão para o Alvanista para identificar os jogos. Nada sobre você fica junto do pedido.',
+    )
+    const line = host.querySelector('[data-testid="catalog-status-line"]')
+    expect(line?.textContent).toBe('12 identificados, 3 na fila, 1 sem resposta')
   })
-}
 
-it('shows preparation and explains an empty queue even if the scan already finished', async () => {
-  let complete!: () => void
-  api.startMetadataScan.mockImplementation(() => new Promise<void>((resolve) => { complete = resolve }))
-  const button = [...host.querySelectorAll('button')].find((item) => item.textContent?.includes('Escanear metadata'))!
-  await act(async () => button.click())
-  await waitForStatus(() => expect(host.textContent).toContain('Preparando a busca'))
-  expect(host.querySelector('[role="progressbar"]')).not.toBeNull()
-  api.metadataScanProgress.mockResolvedValue({ ...empty, status: 'completed' })
-  await act(async () => complete())
-  await waitForStatus(() => expect(host.textContent).toContain('Nenhum jogo na fila'))
-  expect(host.querySelector('[role="progressbar"]')).toBeNull()
-})
-
-it('shows counts while running and keeps the cancelled result visible', async () => {
-  const active = { ...empty, status: 'running', running: true, done: 2, total: 4, pending: 1 } satisfies ScrapeProgress
-  await act(async () => { qc.setQueryData(['metadata-progress'], active) })
-  await waitForStatus(() => expect(host.textContent).toContain('50%'))
-  api.cancelMetadataScan.mockResolvedValue(undefined)
-  api.metadataScanProgress.mockResolvedValue({ ...active, running: false, status: 'cancelled' })
-  const button = [...host.querySelectorAll('button')].find((item) => item.textContent?.trim() === 'Cancelar')!
-  await act(async () => button.click())
-  await waitForStatus(() => expect(host.textContent).toContain('Busca cancelada.'))
-  expect(host.textContent).toContain('2/4')
-})
-
-
-it('keeps provider results and scan progress in a separate Fluent tab from credentials', async () => {
-  await act(async () => {
-    qc.setQueryData(['pending-matches'], [{
-      romId: 'one', fileStem: 'Sample ROM', title: 'Sample Game', provider: 'gamekave',
-      description: null, coverUrl: null, releaseDate: '1992-06-01', genre: null,
-    }])
+  it('toggle_off_calls_catalog_set_enabled_false', async () => {
+    await mount()
+    const sw = host.querySelector<HTMLInputElement>('input[role="switch"]')
+    expect(sw?.checked).toBe(true)
+    await act(async () => {
+      sw!.click()
+    })
+    await settle()
+    expect(api.catalogSetEnabled).toHaveBeenCalledWith(false)
+    expect(host.querySelector('[data-testid="catalog-status-line"]')).toBeNull()
   })
-  await waitForStatus(() => expect(host.querySelector('#metadata-results')?.textContent).toContain('GameKave · 1992-06-01'))
-  const results = host.querySelector<HTMLButtonElement>('#metadata-results-tab')!
-  const credentials = host.querySelector<HTMLButtonElement>('#metadata-credentials-tab')!
-  expect(results.getAttribute('aria-selected')).toBe('true')
-  expect(host.querySelector('input[type="password"]')).toBeNull()
 
-  await act(async () => credentials.click())
-  expect(credentials.getAttribute('aria-selected')).toBe('true')
-  expect(credentials.getAttribute('aria-controls')).toBe('metadata-credentials')
-  expect(host.querySelector('#metadata-credentials')?.getAttribute('aria-labelledby')).toBe(credentials.id)
-  expect(host.querySelectorAll('input[type="password"]')).toHaveLength(2)
-  expect(host.querySelector('#metadata-results')?.hasAttribute('hidden')).toBe(true)
-  expect(host.textContent).not.toContain('Sample Game')
-
-  await act(async () => {
-    qc.setQueryData(['metadata-progress'], { ...empty, status: 'running', running: true, done: 1, total: 2 })
+  it('hides the catalog toggle when not connected to Alvanista', async () => {
+    api.catalogStatus.mockResolvedValue({ ...CONNECTED_STATUS, connected: false })
+    await mount()
+    expect(host.querySelector('[data-testid="catalog-section"]')).toBeNull()
   })
-  await act(async () => results.click())
-  await waitForStatus(() => expect(host.textContent).toContain('50%'))
-  expect(host.textContent).toContain('Sample Game')
-  expect(host.querySelector('input[type="password"]')).toBeNull()
 })

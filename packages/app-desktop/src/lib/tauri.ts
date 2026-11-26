@@ -8,6 +8,7 @@ import { inNavMode } from './focusNav'
 import type { InputFocus } from '../stores/useFocusStore'
 // Gerados do Rust (`cargo test`, ts-rs). Não editar à mão.
 import type { CatalogCore } from './bindings/CatalogCore'
+import type { CatalogStatus } from './bindings/CatalogStatus'
 import type { AspectInfo } from './bindings/AspectInfo'
 import type { AudioConfig } from './bindings/AudioConfig'
 import type { BezelCatalogItem } from './bindings/BezelCatalogItem'
@@ -628,6 +629,25 @@ export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Prom
   if (!inTauri) return () => {}
   const { listen } = await import('@tauri-apps/api/event')
   return listen<AlvanistaStatus>('alvanista-status', (e) => cb(e.payload))
+}
+
+// --- catálogo de jogos do Alvanista (D140, D147) ------------------------
+
+export type { CatalogStatus }
+
+export type CatalogEvent =
+  | { type: 'pass'; found: number; pending: number; unknown: number }
+  | { type: 'status' }
+
+export const catalogStatus = () => invoke<CatalogStatus>('catalog_status')
+export const catalogSetEnabled = (enabled: boolean) =>
+  invoke<CatalogStatus>('catalog_set_enabled', { enabled })
+export const catalogRunNow = (lang: string = i18n.language) =>
+  invoke<CatalogStatus>('catalog_run_now', { lang })
+export async function onCatalogEvent(cb: (e: CatalogEvent) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<CatalogEvent>('catalog', (e) => cb(e.payload))
 }
 
 // --- cloud save: esta máquina como aparelho da conta --------------------

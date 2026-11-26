@@ -63,6 +63,7 @@ pub struct GameMetadataDto {
     pub release_date: Option<String>,
     pub genre: Option<String>,
     pub provider_source: Option<String>,
+    pub game_uuid: Option<String>,
     pub developer: Option<String>,
     pub publisher: Option<String>,
     pub players: Option<String>,
@@ -93,6 +94,7 @@ impl From<GameMetadata> for GameMetadataDto {
             release_date: m.release_date,
             genre: m.genre,
             provider_source: m.provider_source,
+            game_uuid: m.game_uuid,
             developer: m.details.developer,
             publisher: m.details.publisher,
             players: m.details.players,
@@ -263,7 +265,7 @@ pub async fn review_pending_match(
             genre: candidate.genre,
             provider_source: Some(candidate.provider.clone()),
             game_uuid: (candidate.provider == "gamekave" && !candidate.external_id.is_empty())
-                .then(|| candidate.external_id),
+                .then_some(candidate.external_id),
             details: candidate.details,
         }
         .into(),

@@ -257,7 +257,6 @@ impl CatalogEngine {
             .unwrap_or(false)
     }
 
-    #[allow(dead_code)]
     pub async fn set_enabled(&self, enabled: bool) -> Result<(), CatalogError> {
         self.state_repo()
             .set_catalog_enabled(enabled)
@@ -267,7 +266,6 @@ impl CatalogEngine {
         Ok(())
     }
 
-    #[allow(dead_code)]
     pub async fn status(&self, alva: &Alvanista) -> CatalogStatus {
         let connected = alva.has_session().await;
         let enabled = self.is_enabled().await;

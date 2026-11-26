@@ -77,6 +77,7 @@ const PROVIDERS: Record<string, string> = {
   screenscraper: 'ScreenScraper',
   thegamesdb: 'TheGamesDB',
   gamekave: 'GameKave',
+  alvanista: 'Alvanista',
 }
 
 export function providerLabel(raw: string | null | undefined): string | null {

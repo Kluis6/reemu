@@ -1472,6 +1472,12 @@ const en: Messages = {
       altRight: 'Right Alt',
     },
   },
+  catalog: {
+    toggle: 'Use the Alvanista catalog to identify my games',
+    privacy: 'File names and hashes are sent to Alvanista to identify your games. Nothing about you is stored with the request.',
+    counts: '{{found}} identified, {{pending}} queued, {{unknown}} unmatched',
+    disabledByServer: 'Catalog currently turned off. Local providers continue as usual.',
+  },
 }
 
 export default en
