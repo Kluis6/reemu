@@ -242,6 +242,7 @@ async fn metadata_config_scrape_and_pending_review() {
         release_date: Some("1990".into()),
         genre: Some("Platform".into()),
         provider_source: Some("screenscraper".into()),
+        game_uuid: None,
         details: domain::metadata::GameDetails {
             developer: Some("Nintendo EAD".into()),
             publisher: Some("Nintendo".into()),

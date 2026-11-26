@@ -913,6 +913,8 @@ async fn record_result(
             release_date: c.release_date.clone(),
             genre: c.genre.clone(),
             provider_source: Some(c.provider.clone()),
+            game_uuid: (c.provider == "gamekave" && !c.external_id.is_empty())
+                .then(|| c.external_id.clone()),
             details: c.details.clone(),
         })
         .await

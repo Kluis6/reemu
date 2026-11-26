@@ -166,6 +166,7 @@ pub async fn get_rom_metadata(
         release_date: None,
         genre: None,
         provider_source: None,
+        game_uuid: None,
         details: Default::default(),
     }));
     if let Some(title) = rom.user_title {
@@ -260,7 +261,9 @@ pub async fn review_pending_match(
             cover_url: candidate.cover_url,
             release_date: candidate.release_date,
             genre: candidate.genre,
-            provider_source: Some(candidate.provider),
+            provider_source: Some(candidate.provider.clone()),
+            game_uuid: (candidate.provider == "gamekave" && !candidate.external_id.is_empty())
+                .then(|| candidate.external_id),
             details: candidate.details,
         }
         .into(),

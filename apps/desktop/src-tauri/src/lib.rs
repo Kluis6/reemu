@@ -4,6 +4,7 @@ mod appearance;
 mod bezel_pack;
 mod bios;
 mod bundled_shaders;
+mod catalog;
 mod commands;
 mod covers;
 mod credentials;

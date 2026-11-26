@@ -28,6 +28,52 @@ impl MetadataRepo {
         Ok(ids.into_iter().collect())
     }
 
+    /// `rom_id -> (title, tem_cover_url)` de `game_metadata` numa leitura só,
+    /// para `list_roms` montar os cards da biblioteca sem N queries.
+    pub async fn titles_and_covers(
+        &self,
+    ) -> Result<std::collections::HashMap<String, (String, bool)>, RepoError> {
+        let rows: Vec<(String, String, i64)> = sqlx::query_as(
+            "SELECT rom_id, title, (cover_url IS NOT NULL AND TRIM(cover_url) <> '') \
+             FROM game_metadata",
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(rows
+            .into_iter()
+            .map(|(rom_id, title, has_cover)| (rom_id, (title, has_cover != 0)))
+            .collect())
+    }
+
+    pub async fn is_user_confirmed(&self, rom_id: &str) -> Result<bool, RepoError> {
+        let exists: i64 = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM scrape_matches WHERE rom_id = ?1 AND status = 'user_confirmed')",
+        )
+        .bind(rom_id)
+        .fetch_one(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(exists != 0)
+    }
+
+    pub async fn get_by_game_uuid(
+        &self,
+        game_uuid: &str,
+    ) -> Result<Option<GameMetadata>, RepoError> {
+        let row = sqlx::query(
+            "SELECT rom_id, title, description, cover_url, release_date, genre, provider_source, \
+             game_uuid, developer, publisher, players, rating, age_rating, modes, \
+             screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json \
+             FROM game_metadata WHERE game_uuid = ?1 LIMIT 1",
+        )
+        .bind(game_uuid)
+        .fetch_optional(&self.db)
+        .await
+        .map_err(be)?;
+        row.as_ref().map(row_to_meta).transpose()
+    }
+
     pub async fn cover_override(&self, rom_id: &str) -> Result<Option<String>, RepoError> {
         let cover: Option<Option<String>> = sqlx::query_scalar(
             "SELECT json_extract(fields_json, '$.coverUrl') FROM game_metadata_edits WHERE rom_id = ?1",
@@ -130,9 +176,10 @@ async fn write_metadata<'e>(
         "INSERT INTO game_metadata \
          (id, rom_id, title, description, cover_url, release_date, genre, provider_source, \
           developer, publisher, players, rating, age_rating, modes, \
-          screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json) \
+          screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json, \
+          game_uuid) \
          VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, \
-                 ?14, ?15, ?16, ?17, ?18, ?19) \
+                 ?14, ?15, ?16, ?17, ?18, ?19, ?20) \
          ON CONFLICT(rom_id) DO UPDATE SET \
            title = excluded.title, description = excluded.description, \
            cover_url = excluded.cover_url, release_date = excluded.release_date, \
@@ -143,7 +190,8 @@ async fn write_metadata<'e>(
            screenshot_url = excluded.screenshot_url, \
            title_screen_url = excluded.title_screen_url, \
            fanart_url = excluded.fanart_url, logo_url = excluded.logo_url, \
-           video_url = excluded.video_url, gamekave_json = excluded.gamekave_json",
+           video_url = excluded.video_url, gamekave_json = excluded.gamekave_json, \
+           game_uuid = excluded.game_uuid",
     )
     .bind(&m.rom_id)
     .bind(&m.title)
@@ -171,6 +219,7 @@ async fn write_metadata<'e>(
             .transpose()
             .map_err(|e| RepoError::Corrupt(e.to_string()))?,
     )
+    .bind(&m.game_uuid)
     .execute(executor)
     .await
     .map_err(be)?;
@@ -195,6 +244,8 @@ fn meta_from_candidate(rom_id: &str, c: &ScrapeCandidate) -> GameMetadata {
         release_date: c.release_date.clone(),
         genre: c.genre.clone(),
         provider_source: Some(c.provider.clone()),
+        game_uuid: (c.provider == "gamekave" && !c.external_id.is_empty())
+            .then(|| c.external_id.clone()),
         details: c.details.clone(),
     }
 }
@@ -208,6 +259,7 @@ fn row_to_meta(row: &sqlx::sqlite::SqliteRow) -> Result<GameMetadata, RepoError>
         release_date: row.try_get("release_date").map_err(be)?,
         genre: row.try_get("genre").map_err(be)?,
         provider_source: row.try_get("provider_source").map_err(be)?,
+        game_uuid: row.try_get("game_uuid").map_err(be)?,
         details: domain::metadata::GameDetails {
             developer: row.try_get("developer").map_err(be)?,
             publisher: row.try_get("publisher").map_err(be)?,
@@ -270,7 +322,7 @@ impl MetadataRepository for MetadataRepo {
     async fn get_metadata(&self, rom_id: &str) -> Result<Option<GameMetadata>, RepoError> {
         let row = sqlx::query(
             "SELECT rom_id, title, description, cover_url, release_date, genre, provider_source, \
-             developer, publisher, players, rating, age_rating, modes, \
+             game_uuid, developer, publisher, players, rating, age_rating, modes, \
              screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json \
              FROM game_metadata WHERE rom_id = ?1",
         )
