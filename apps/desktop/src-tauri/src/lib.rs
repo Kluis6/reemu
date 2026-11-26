@@ -507,6 +507,8 @@ pub fn run() {
             commands::remove_bios_file,
             commands::ppsspp_assets_installed,
             commands::download_ppsspp_assets,
+            commands::dolphin_assets_installed,
+            commands::download_dolphin_assets,
             commands::browse_dir,
             commands::export_diagnostics,
             commands::list_roms,

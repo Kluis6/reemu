@@ -13,7 +13,8 @@ use std::io::Read;
 /// `system_from_folder_name`). Deliberadamente **sem** `.bin` — usado por
 /// lixo demais fora de contexto de disco pra arriscar reconhecer sozinho.
 pub const AMBIGUOUS_DISC_EXTS: &[&str] = &[
-    "iso", "cue", "chd", "pbp", "gdi", "cdi", "mdf", "m3u", "img", "ccd", "nrg", "cso",
+    "iso", "cue", "chd", "pbp", "gdi", "cdi", "mdf", "m3u", "img", "ccd", "nrg", "cso", "rvz",
+    "wia",
 ];
 
 pub(crate) const X68000_DISK_EXTS: &[&str] = &[
@@ -85,7 +86,8 @@ pub fn system_for_extension(ext: &str) -> Option<&'static str> {
         // (`scan.rs` tenta a pasta, depois fareja o conteúdo).
         "gdi" | "cdi" => "dreamcast",
         "pbp" | "cso" => "psp",
-        "iso" | "cue" | "chd" | "mdf" | "m3u" | "img" | "ccd" | "nrg" => "disc",
+        "gcm" | "gcz" | "tgc" => "gamecube",
+        "iso" | "cue" | "chd" | "mdf" | "m3u" | "img" | "ccd" | "nrg" | "rvz" | "wia" => "disc",
         _ => return None,
     })
 }
@@ -148,6 +150,7 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         "gbc" | "game boy color" | "gameboycolor" | "nintendo - game boy color" => "gbc",
         "gba" | "game boy advance" | "gameboyadvance" | "nintendo - game boy advance" => "gba",
         "n64" | "nintendo 64" | "nintendo64" | "nintendo - nintendo 64" => "n64",
+        "gamecube" | "gc" | "ngc" | "nintendo gamecube" | "nintendo - gamecube" => "gamecube",
         "genesis"
         | "megadrive"
         | "mega drive"
@@ -330,6 +333,7 @@ fn libretro_thumbnail_system(system_id: &str) -> Option<&'static str> {
         "gbc" => "Nintendo - Game Boy Color",
         "gba" => "Nintendo - Game Boy Advance",
         "n64" => "Nintendo - Nintendo 64",
+        "gamecube" => "Nintendo - GameCube",
         "vb" => "Nintendo - Virtual Boy",
         "megadrive" => "Sega - Mega Drive - Genesis",
         "mastersystem" => "Sega - Master System - Mark III",

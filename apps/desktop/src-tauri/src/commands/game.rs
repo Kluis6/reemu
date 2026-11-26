@@ -40,6 +40,15 @@ pub async fn load_game(
             .await
             .map_err(|e| format!("Dados do DirkSimple: {e}"))?;
     }
+    if core_id == "dolphin_libretro" && !crate::system_files::dolphin_installed(&state.system_dir) {
+        crate::system_files::ensure_dolphin(&state.system_dir)
+            .await
+            .map_err(|e| {
+                format!(
+                    "Dados Sys do Dolphin ausentes ({e}). Baixe o pacote em Configurações > BIOS."
+                )
+            })?;
+    }
 
     // Vídeo nativo: volta pro estado "jogando" e descarta o print do menu. A
     // subsurface fica escondida pelo `reemu-video-pump` (dono único da conexão

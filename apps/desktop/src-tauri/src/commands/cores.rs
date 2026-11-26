@@ -49,6 +49,13 @@ pub async fn download_core(state: State<'_, AppState>, core_id: String) -> Resul
             .await
             .map_err(|e| format!("Dados do DirkSimple: {e}"))?;
     }
+    if core_id == "dolphin_libretro" {
+        crate::system_files::ensure_dolphin(&state.system_dir)
+            .await
+            .map_err(|e| {
+                format!("Dados Sys do Dolphin: {e}. Tente novamente em Configurações > BIOS.")
+            })?;
+    }
     let dir = state.cores_dir.clone();
     core_catalog::download(&dir, &core_id).await?;
     log::info!("core instalado: {core_id}");

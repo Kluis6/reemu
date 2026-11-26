@@ -1,6 +1,7 @@
 //! Serial do disco lido da imagem (D138): PS1 e PS2 pelo `SYSTEM.CNF`, PSP
 //! pelo `PARAM.SFO`, Saturn, Sega CD e Dreamcast pelo cabeçalho do primeiro
-//! setor da trilha de dados. Lê no máximo 2 MiB por imagem (NFR-5, ver
+//! setor da trilha de dados, e GameCube pelo cabeçalho de 216 bytes (`.iso`,
+//! `.gcm`, `.rvz`, `.wia`). Lê no máximo 2 MiB por imagem (NFR-5, ver
 //! [`crate::sector`]); qualquer falha (sistema de arquivos desconhecido,
 //! imagem quebrada, homebrew sem `SYSTEM.CNF`, `.cso`) dá `None`.
 
@@ -9,7 +10,15 @@ use crate::sector::{open_file, Area, Opener, SectorReader};
 use std::path::Path;
 
 /// Sistemas do ReEmu (`systems.rs`) em que o serial vem da imagem.
-pub const SERIAL_SYSTEMS: &[&str] = &["psx", "ps2", "psp", "saturn", "segacd", "dreamcast"];
+pub const SERIAL_SYSTEMS: &[&str] = &[
+    "psx",
+    "ps2",
+    "psp",
+    "saturn",
+    "segacd",
+    "dreamcast",
+    "gamecube",
+];
 
 /// `SYSTEM.CNF` tem algumas dezenas de bytes.
 const SYSTEM_CNF_MAX: usize = 16 * 1024;
@@ -29,6 +38,9 @@ pub(crate) fn read_serial_with(path: &Path, system: &str, open: Opener) -> Optio
     if !SERIAL_SYSTEMS.contains(&system) {
         return None;
     }
+    if system == "gamecube" {
+        return read_gamecube_serial(path, open);
+    }
     let mut reader = SectorReader::open(path, Area::for_system(system), open)?;
     let serial = serial_from(&mut reader, system);
     // Só o sistema e a contagem: nunca o arquivo nem o serial.
@@ -42,6 +54,29 @@ pub(crate) fn read_serial_with(path: &Path, system: &str, open: Opener) -> Optio
         reader.used()
     );
     serial
+}
+
+fn read_gamecube_serial(path: &Path, open: Opener) -> Option<String> {
+    let ext = crate::sector::ext_of(path);
+    if !matches!(ext.as_str(), "iso" | "gcm" | "rvz" | "wia") {
+        return None;
+    }
+    let mut src = open(path).ok()?;
+    let mut buf = [0u8; crate::disc_sniff::RVZ_HEADER_MIN];
+    let mut n = 0usize;
+    while n < buf.len() {
+        match std::io::Read::read(&mut src, &mut buf[n..]) {
+            Ok(0) => break,
+            Ok(k) => n += k,
+            Err(_) => return None,
+        }
+    }
+    let dhead = crate::disc_sniff::gc_disc_header(&buf[..n])?;
+    let id_bytes = dhead.get(0..6)?;
+    if !id_bytes.iter().all(u8::is_ascii_alphanumeric) {
+        return None;
+    }
+    Some(String::from_utf8_lossy(id_bytes).to_ascii_uppercase())
 }
 
 /// O serial de `system` lido pelos setores de `reader`.
@@ -592,9 +627,56 @@ mod tests {
         }
         assert_eq!(read_serial(&psp_bad, "psp"), None);
         assert_eq!(read_serial(&psp_magic, "psp"), None);
-        for other in ["nes", "disc", "gamecube", "3do", ""] {
+        for other in ["nes", "disc", "n64", "3do", ""] {
             assert_eq!(read_serial(&good, other), None, "{other}");
         }
+        assert_eq!(read_serial(&good, "gamecube"), None);
+    }
+
+    #[test]
+    fn gamecube_iso_gcm_and_rvz_serials() {
+        let dir = scratch();
+
+        let mut gc_iso = vec![0u8; 4096];
+        gc_iso[0..6].copy_from_slice(b"GALE01");
+        gc_iso[0x1C..0x20].copy_from_slice(&0xC233_9F3Du32.to_be_bytes());
+        let iso_path = put(dir.path(), "Smash.iso", &gc_iso);
+        let gcm_path = put(dir.path(), "Smash.gcm", &gc_iso);
+
+        let count = Arc::new(AtomicU64::new(0));
+        let opener = counting_file(count.clone());
+        assert_eq!(
+            read_serial_with(&iso_path, "gamecube", &opener).as_deref(),
+            Some("GALE01")
+        );
+        assert!(
+            count.load(Ordering::Relaxed) <= crate::disc_sniff::RVZ_HEADER_MIN as u64,
+            "leu mais que o cabecalho minimo"
+        );
+        assert_eq!(
+            read_serial(&gcm_path, "gamecube").as_deref(),
+            Some("GALE01")
+        );
+
+        let mut rvz = vec![0u8; 512];
+        rvz[0..4].copy_from_slice(b"RVZ\x01");
+        rvz[0x48..0x4C].copy_from_slice(&1u32.to_be_bytes());
+        rvz[0x58..0x5E].copy_from_slice(b"gm8e01");
+        rvz[0x58 + 0x1C..0x58 + 0x20].copy_from_slice(&0xC233_9F3Du32.to_be_bytes());
+        let rvz_path = put(dir.path(), "Metroid.rvz", &rvz);
+        assert_eq!(
+            read_serial(&rvz_path, "gamecube").as_deref(),
+            Some("GM8E01")
+        );
+
+        // Container RVZ de Wii (disc_type = 2) nao vira serial de GameCube.
+        let mut wii_rvz = vec![0u8; 512];
+        wii_rvz[0..4].copy_from_slice(b"RVZ\x01");
+        wii_rvz[0x48..0x4C].copy_from_slice(&2u32.to_be_bytes());
+        wii_rvz[0x58..0x5E].copy_from_slice(b"RMGE01");
+        wii_rvz[0x58 + 0x18..0x58 + 0x1C].copy_from_slice(&0x5D1C_9EA3u32.to_be_bytes());
+        let wii_path = put(dir.path(), "Galaxy.rvz", &wii_rvz);
+        assert_eq!(read_serial(&wii_path, "gamecube"), None);
     }
 
     /// Imagem de 4 MiB cujo diretório raiz diz ter 64 MiB e não tem

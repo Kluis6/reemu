@@ -207,10 +207,54 @@ fn msf_frames(at: &str) -> Option<u32> {
         .checked_add(f)
 }
 
+/// Assinatura de DVD do GameCube (`0xC2339F3D` em `0x1C..0x20`) e do Wii
+/// (`0x5D1C9EA3` em `0x18..0x1C`). No formato `.rvz`/`.wia` (`WiaAndRvz.md`),
+/// `wia_disc_t` começa em `0x48` com `u32 disc_type` big-endian (`1` = GameCube,
+/// `2` = Wii) e traz os primeiros `0x80` bytes descomprimidos do disco em
+/// `0x58..0xD8`.
+const GC_MAGIC: [u8; 4] = [0xC2, 0x33, 0x9F, 0x3D];
+const WII_MAGIC: [u8; 4] = [0x5D, 0x1C, 0x9E, 0xA3];
+pub(crate) const RVZ_HEADER_MIN: usize = 0xD8;
+
+pub(crate) fn is_rvz_or_wia(b: &[u8]) -> bool {
+    b.starts_with(b"RVZ\x01") || b.starts_with(b"WIA\x01")
+}
+
+/// Devolve o cabeçalho do disco de GameCube (até `0x80` bytes a partir do Game
+/// ID em `0x00..0x06`), tanto em `.iso`/`.gcm` quanto em `.rvz`/`.wia`.
+pub(crate) fn gc_disc_header(b: &[u8]) -> Option<&[u8]> {
+    if is_rvz_or_wia(b) {
+        if b.len() < RVZ_HEADER_MIN {
+            return None;
+        }
+        let disc_type = u32::from_be_bytes([b[0x48], b[0x49], b[0x4A], b[0x4B]]);
+        let dhead = &b[0x58..RVZ_HEADER_MIN];
+        if disc_type == 1 && dhead[0x18..0x1C] != WII_MAGIC && dhead[0x1C..0x20] == GC_MAGIC {
+            return Some(dhead);
+        }
+        return None;
+    }
+    if b.len() >= 0x20 && b[0x18..0x1C] != WII_MAGIC && b[0x1C..0x20] == GC_MAGIC {
+        return Some(&b[..b.len().min(0x80)]);
+    }
+    None
+}
+
 fn sniff_bytes(b: &[u8]) -> Option<&'static str> {
     // 3DO: 0x01 'ZZZZZ' no byte 0.
     if b.len() >= 7 && b[0] == 0x01 && &b[1..6] == b"ZZZZZ" {
         return Some("3do");
+    }
+    // RVZ / WIA: o cabeçalho já traz `disc_type` (1 = GameCube, 2 = Wii).
+    // Um disco de Wii fica no balde genérico até a etapa do Wii entrar.
+    if is_rvz_or_wia(b) {
+        return gc_disc_header(b).map(|_| "gamecube");
+    }
+    if b.len() >= 0x1C && b[0x18..0x1C] == WII_MAGIC {
+        return None;
+    }
+    if gc_disc_header(b).is_some() {
+        return Some("gamecube");
     }
     // Sega — string no começo da trilha de dados (offset 0 pra 2048/ISO, +16
     // pra .bin 2352). Procuro nos primeiros 4 KiB pra cobrir os dois.
@@ -374,6 +418,30 @@ mod tests {
         b[0] = 0x01;
         b[1..6].copy_from_slice(b"ZZZZZ");
         assert_eq!(sniff_bytes(&b), Some("3do"));
+    }
+
+    #[test]
+    fn detects_gamecube_iso_and_rvz_without_claiming_wii() {
+        let mut gc_iso = vec![0u8; 0x80];
+        gc_iso[0..6].copy_from_slice(b"GALE01");
+        gc_iso[0x1C..0x20].copy_from_slice(&[0xC2, 0x33, 0x9F, 0x3D]);
+        assert_eq!(sniff_bytes(&gc_iso), Some("gamecube"));
+
+        let mut wii_iso = vec![0u8; 0x80];
+        wii_iso[0..6].copy_from_slice(b"RSBE01");
+        wii_iso[0x18..0x1C].copy_from_slice(&[0x5D, 0x1C, 0x9E, 0xA3]);
+        assert_eq!(sniff_bytes(&wii_iso), None);
+
+        let mut gc_rvz = vec![0u8; 0x100];
+        gc_rvz[0..4].copy_from_slice(b"RVZ\x01");
+        gc_rvz[0x48..0x4C].copy_from_slice(&1u32.to_be_bytes());
+        gc_rvz[0x58..0x5E].copy_from_slice(b"GM8E01");
+        gc_rvz[0x58 + 0x1C..0x58 + 0x20].copy_from_slice(&[0xC2, 0x33, 0x9F, 0x3D]);
+        assert_eq!(sniff_bytes(&gc_rvz), Some("gamecube"));
+
+        let mut wii_rvz = gc_rvz.clone();
+        wii_rvz[0x48..0x4C].copy_from_slice(&2u32.to_be_bytes());
+        assert_eq!(sniff_bytes(&wii_rvz), None);
     }
 
     #[test]

@@ -171,6 +171,13 @@ pub const CATALOG: &[CatalogEntry] = &[
         "Nintendo 64",
         "GPLv3",
     ),
+    // --- Nintendo GameCube (GL) ---
+    gl(
+        "dolphin_libretro",
+        "Dolphin",
+        "Nintendo GameCube",
+        "GPLv2+",
+    ),
     // --- Sega ---
     sw(
         "genesis_plus_gx_libretro",
@@ -653,6 +660,7 @@ fn systems_from_text(text: &str) -> Vec<&'static str> {
     add(has("nintendo ds") || word("nds"), "nds");
     add(has("virtual boy"), "vb");
     add(has("nintendo 64"), "n64");
+    add(has("gamecube") || word("ngc"), "gamecube");
     add(
         has("mega drive") || has("genesis") || word("md"),
         "megadrive",
@@ -924,6 +932,13 @@ mod tests {
         let u = download_url("fceumm_libretro");
         assert!(u.starts_with("https://buildbot.libretro.com/nightly/"));
         assert!(u.ends_with("/fceumm_libretro.so.zip") || u.ends_with("/fceumm_libretro.dll.zip"));
+    }
+
+    #[test]
+    fn dolphin_maps_to_gamecube_opengl() {
+        let entry = find("dolphin_libretro").expect("dolphin no catalogo");
+        assert!(matches!(entry.hw, CoreHw::OpenGl));
+        assert_eq!(system_ids("dolphin_libretro"), vec!["gamecube"]);
     }
 
     /// **Teste de fumaça do catálogo** (fora do `cargo test` normal —

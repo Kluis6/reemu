@@ -5,15 +5,22 @@ use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 const PPSSPP_URL: &str = "https://buildbot.libretro.com/assets/system/PPSSPP.zip";
+const DOLPHIN_URL: &str = "https://buildbot.libretro.com/assets/system/Dolphin.zip";
 const DIRKSIMPLE_URL: &str = "https://buildbot.libretro.com/assets/system/DirkSimple.zip";
 const DIRKSIMPLE_MAX_BYTES: usize = 2 * 1024 * 1024;
 const DIRKSIMPLE_MAX_ENTRIES: usize = 128;
 static DIRKSIMPLE_INSTALL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+static DOLPHIN_INSTALL: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 /// Arquivo que só existe com a pasta completa — marca de "instalado".
 const PPSSPP_MARKER: &str = "PPSSPP/ppge_atlas.zim";
+const DOLPHIN_MARKER: &str = "dolphin-emu/Sys/codehandler.bin";
 
 pub fn ppsspp_installed(system_dir: &Path) -> bool {
     system_dir.join(PPSSPP_MARKER).is_file()
+}
+
+pub fn dolphin_installed(system_dir: &Path) -> bool {
+    system_dir.join(DOLPHIN_MARKER).is_file()
 }
 
 /// Baixa e instala `<system_dir>/PPSSPP/`. Extrai numa pasta temporária e só
@@ -26,6 +33,25 @@ pub async fn download_ppsspp(system_dir: &Path) -> Result<usize, String> {
     tokio::task::spawn_blocking(move || install_zip(&dir, &bytes))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// Baixa e instala `<system_dir>/dolphin-emu/Sys/` do buildbot oficial da
+/// libretro, preservando qualquer `IPL.bin` opcional importado pelo usuário.
+pub async fn download_dolphin(system_dir: &Path) -> Result<usize, String> {
+    let _install = DOLPHIN_INSTALL.lock().await;
+    let resp = download_pack(DOLPHIN_URL).await?;
+    let bytes = resp.bytes().await.map_err(|e| format!("download: {e}"))?;
+    let dir = system_dir.to_path_buf();
+    tokio::task::spawn_blocking(move || install_dolphin_zip(&dir, &bytes))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+pub async fn ensure_dolphin(system_dir: &Path) -> Result<(), String> {
+    if dolphin_installed(system_dir) {
+        return Ok(());
+    }
+    download_dolphin(system_dir).await.map(|_| ())
 }
 
 async fn download_pack(url: &str) -> Result<reqwest::Response, String> {
@@ -186,6 +212,59 @@ fn install_zip(system_dir: &Path, bytes: &[u8]) -> Result<usize, String> {
     Ok(files)
 }
 
+fn install_dolphin_zip(system_dir: &Path, bytes: &[u8]) -> Result<usize, String> {
+    let mut zip =
+        zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| format!("zip: {e}"))?;
+    std::fs::create_dir_all(system_dir).map_err(|e| e.to_string())?;
+    let staging = system_dir.join(".dolphin-emu.part");
+    let _ = std::fs::remove_dir_all(&staging);
+    let mut files = 0;
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
+        if entry.is_symlink() {
+            continue;
+        }
+        let Some(rel) = entry
+            .enclosed_name()
+            .and_then(|p| strip_root(&p, "dolphin-emu"))
+        else {
+            continue;
+        };
+        let dest = staging.join(&rel);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+            continue;
+        }
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        let mut buf = Vec::with_capacity(entry.size() as usize);
+        entry.read_to_end(&mut buf).map_err(|e| e.to_string())?;
+        std::fs::write(&dest, buf).map_err(|e| e.to_string())?;
+        files += 1;
+    }
+    if !staging.join("Sys/codehandler.bin").is_file() {
+        let _ = std::fs::remove_dir_all(&staging);
+        return Err("pacote do Dolphin incompleto (sem Sys/codehandler.bin)".into());
+    }
+    let final_dir = system_dir.join("dolphin-emu");
+    // Preserva BIOS IPL opcionais que o usuário já tenha importado.
+    for region in ["USA", "EUR", "JAP"] {
+        let existing_ipl = final_dir.join("Sys/GC").join(region).join("IPL.bin");
+        if existing_ipl.is_file() {
+            let staged_ipl = staging.join("Sys/GC").join(region).join("IPL.bin");
+            if let Some(parent) = staged_ipl.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::copy(&existing_ipl, &staged_ipl);
+        }
+    }
+    let _ = std::fs::remove_dir_all(&final_dir);
+    std::fs::rename(&staging, &final_dir).map_err(|e| e.to_string())?;
+    log::info!("system files: Dolphin Sys instalado ({files} arquivos)");
+    Ok(files)
+}
+
 /// `raiz/a/b` → `a/b`, só com componentes de caminho simples.
 fn strip_root(p: &Path, root: &str) -> Option<PathBuf> {
     let rest = p.strip_prefix(root).ok()?;
@@ -287,6 +366,31 @@ mod tests {
             strip_root(Path::new("DirkSimple/../escape"), "DirkSimple"),
             None
         );
+    }
+
+    #[test]
+    fn dolphin_pack_installs_and_preserves_optional_ipl() {
+        let dir = tempfile::tempdir().unwrap();
+        let sys = dir.path();
+        let ipl = sys.join("dolphin-emu/Sys/GC/USA/IPL.bin");
+        std::fs::create_dir_all(ipl.parent().unwrap()).unwrap();
+        std::fs::write(&ipl, b"user-ipl").unwrap();
+
+        let z = zip_with(&[
+            ("dolphin-emu/Sys/codehandler.bin", b"code"),
+            ("dolphin-emu/Sys/GameSettings/GALE01.ini", b"[Core]"),
+            ("fora/x.txt", b"ignorado"),
+        ]);
+        assert!(!dolphin_installed(sys));
+        assert_eq!(install_dolphin_zip(sys, &z).unwrap(), 2);
+        assert!(dolphin_installed(sys));
+        assert_eq!(std::fs::read(&ipl).unwrap(), b"user-ipl");
+        assert!(!sys.join("fora").exists());
+        assert!(!sys.join(".dolphin-emu.part").exists());
+
+        let bad = zip_with(&[("dolphin-emu/Sys/GameSettings/GALE01.ini", b"sem-marker")]);
+        assert!(install_dolphin_zip(sys, &bad).is_err());
+        assert!(dolphin_installed(sys));
     }
 
     /// Baixa o pacote REAL do buildbot (rede, ~11 MB). Fora do CI:
