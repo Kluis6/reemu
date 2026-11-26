@@ -24,7 +24,10 @@ function outcomeOf(err: unknown): ConnectOutcome | 'cancelled' {
  * com uma conexão em andamento a cancela. `saves`: pede também o escopo do
  * cloud save no mesmo consentimento (a página Sincronização).
  */
-export function useAlvanistaConnect({ saves = false }: { saves?: boolean } = {}) {
+export function useAlvanistaConnect({
+  saves = false,
+  scopes,
+}: { saves?: boolean; scopes?: string[] } = {}) {
   const { i18n } = useTranslation()
   const qc = useQueryClient()
   const [connecting, setConnecting] = useState(false)
@@ -34,6 +37,7 @@ export function useAlvanistaConnect({ saves = false }: { saves?: boolean } = {})
   const attempt = useRef(0)
   // Síncrono: um segundo clique antes do re-render não abre outra tentativa.
   const connectingRef = useRef(false)
+  const scopesKey = scopes?.join(' ') ?? ''
 
   useEffect(
     () => () => {
@@ -51,7 +55,8 @@ export function useAlvanistaConnect({ saves = false }: { saves?: boolean } = {})
     const mine = ++attempt.current
     setOutcome(null)
     setConnecting(true)
-    alvanistaConnect(i18n.language, saves)
+    const extraScopes = scopesKey ? scopesKey.split(' ') : undefined
+    alvanistaConnect(i18n.language, saves, extraScopes)
       .then(async (next) => {
         if (mine !== attempt.current) return
         connectingRef.current = false
@@ -65,6 +70,7 @@ export function useAlvanistaConnect({ saves = false }: { saves?: boolean } = {})
         qc.setQueryData(ALVANISTA_CACHED_KEY, next)
         void qc.invalidateQueries({ queryKey: ALVANISTA_CACHED_KEY })
         void qc.invalidateQueries({ queryKey: CATALOG_STATUS_KEY })
+        void qc.invalidateQueries({ queryKey: ['alvanista-collection'] })
         setConnecting(false)
       })
       .catch((err: unknown) => {
@@ -74,7 +80,7 @@ export function useAlvanistaConnect({ saves = false }: { saves?: boolean } = {})
         setConnecting(false)
         setOutcome(out === 'cancelled' ? null : out)
       })
-  }, [i18n.language, qc, saves])
+  }, [i18n.language, qc, saves, scopesKey])
 
   const cancel = useCallback(() => {
     void alvanistaCancel().catch(() => {})

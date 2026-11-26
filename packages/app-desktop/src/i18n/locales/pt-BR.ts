@@ -1489,6 +1489,32 @@ const ptBR = {
       applied: 'Jogo atualizado pelo catálogo.',
     },
   },
+  collection: {
+    connectPrompt: 'Vincule sua coleção do Alvanista para marcar posse, jornada e lista de desejos.',
+    connectButton: 'Conectar à minha Coleção',
+    connecting: 'Aguardando no navegador…',
+    cancelConnect: 'Cancelar',
+    inCollection: 'Na coleção',
+    addCollection: 'Adicionar à coleção',
+    wishlist: 'Lista de desejos',
+    addWishlist: 'Quero comprar',
+    journeyLabel: 'Jornada no Alvanista',
+    syncTime: 'Sincronizar tempo ({{minutes}} min)',
+    syncingTime: 'Sincronizando…',
+    timeSynced: 'Tempo sincronizado com o Alvanista.',
+    updateFailed: 'Não foi possível atualizar sua coleção no Alvanista agora.',
+    offline: 'Coleção do Alvanista indisponível sem conexão.',
+    status: {
+      no_status: 'Sem status',
+      want_to_play: 'Quero jogar',
+      backlog: 'Na fila',
+      playing: 'Jogando',
+      played: 'Jogado',
+      completed: 'Zerado',
+      completed_100: '100% concluído',
+      dropped: 'Abandonado',
+    },
+  },
 }
 
 export default ptBR

@@ -37,6 +37,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FullscreenDialog } from "../components/FullscreenDialog";
+import { AlvanistaCollectionBar } from "../components/catalog/AlvanistaCollectionBar";
 import { PickGameDialog } from "../components/catalog/PickGameDialog";
 import { ConflictDialog } from "../components/sync/ConflictDialog";
 import { SaveLine } from "../components/sync/SaveLine";
@@ -613,6 +614,12 @@ export function RomDetail() {
             </div>
           )}
           <SaveLine romId={romId} className={s.heroStats} iconClassName={s.heroStatsIcon} />
+          <AlvanistaCollectionBar
+            gameUuid={gameUuid}
+            systemId={rom.systemId}
+            playTimeSeconds={playTime.data ?? 0}
+            className={s.heroStats}
+          />
           {/* Só depois de carregar a lista de cores: antes ela vem vazia e o
               aviso piscava ao abrir a página. */}
           {cores.isSuccess && coreList.length === 0 && (

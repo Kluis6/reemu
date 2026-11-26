@@ -614,10 +614,14 @@ export const alvanistaStatus = () => invoke<AlvanistaStatus>('alvanista_status')
 export const alvanistaCachedStatus = () => invoke<AlvanistaStatus>('alvanista_cached_status')
 /** Abre o navegador e espera a aprovação (até 5 minutos). `lang` é o idioma da
  *  página que o navegador mostra no fim. `saves`: pede também o escopo do cloud
- *  save no mesmo consentimento. Rejeita com um código curto: `cancelled`,
- *  `denied`, `timeout`, `offline`, `keyring` ou `failed`. */
-export const alvanistaConnect = (lang: string = i18n.language, saves = false) =>
-  invoke<AlvanistaStatus>('alvanista_connect', { lang, saves })
+ *  save no mesmo consentimento. `scopes`: escopos incrementais adicionais unidos
+ *  aos da sessão atual. Rejeita com um código curto: `cancelled`, `denied`,
+ *  `timeout`, `offline`, `keyring` ou `failed`. */
+export const alvanistaConnect = (
+  lang: string = i18n.language,
+  saves = false,
+  scopes?: string[],
+) => invoke<AlvanistaStatus>('alvanista_connect', { lang, saves, scopes: scopes ?? null })
 export const alvanistaCancel = () => invoke<void>('alvanista_cancel')
 export const alvanistaDisconnect = () => invoke<void>('alvanista_disconnect')
 /** Abre o perfil do Alvanista no navegador do sistema. */
@@ -682,6 +686,44 @@ export async function onCatalogEvent(cb: (e: CatalogEvent) => void): Promise<() 
   const { listen } = await import('@tauri-apps/api/event')
   return listen<CatalogEvent>('catalog', (e) => cb(e.payload))
 }
+
+// --- coleção, jornada e lista de desejos no Alvanista (D160) ------------
+
+export type CollectionJourneyStatus =
+  | 'no_status'
+  | 'want_to_play'
+  | 'backlog'
+  | 'playing'
+  | 'played'
+  | 'completed'
+  | 'completed_100'
+  | 'dropped'
+
+export interface CollectionItem {
+  gameId: string
+  inCollection: boolean
+  possessed: boolean
+  ownership: string
+  inWishlist: boolean
+  interest: string
+  status: CollectionJourneyStatus | string
+  playtimeMinutes: number
+  lastPlayedAt: string | null
+}
+
+export interface CollectionPatch {
+  system?: string
+  inCollection?: boolean
+  inWishlist?: boolean
+  status?: CollectionJourneyStatus
+  playtimeMinutes?: number
+}
+
+export const alvanistaCollectionStatus = (gameIds: string[]) =>
+  invoke<CollectionItem[]>('alvanista_collection_status', { gameIds })
+
+export const alvanistaCollectionUpdate = (gameId: string, patch: CollectionPatch) =>
+  invoke<CollectionItem>('alvanista_collection_update', { gameId, patch })
 
 // --- cloud save: esta máquina como aparelho da conta --------------------
 
