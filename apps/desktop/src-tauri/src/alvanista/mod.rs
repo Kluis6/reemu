@@ -223,6 +223,28 @@ impl Alvanista {
         let _ = self.status_from(tokens, None).await;
     }
 
+    /// Pedido JSON autenticado nas rotas de parceiro (`/api/partner/v1/*`).
+    /// Sem sessão marcada, devolve `AuthEnded` sem tocar no chaveiro nem na
+    /// rede; se a sessão viva acabou no servidor, limpa o espelho e o aparelho
+    /// do cloud save como em `status`.
+    #[allow(dead_code)]
+    pub(crate) async fn partner_json(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<(u16, serde_json::Value), ClientError> {
+        if !self.has_session().await {
+            return Err(ClientError::AuthEnded);
+        }
+        let res = self.client.authed_json(method, path, body).await;
+        if matches!(res, Err(ClientError::AuthEnded)) {
+            let _ = self.store().mirror_clear().await;
+            self.forget_save_device(true).await;
+        }
+        res
+    }
+
     /// Cancela a tentativa em andamento (se houver).
     pub fn cancel(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
