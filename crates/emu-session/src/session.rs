@@ -198,6 +198,8 @@ struct Shared {
     /// Quirks de serialização do core carregado
     /// (`domain::core_loader::serialization_quirk`); 0 sem core.
     serialization_quirks: AtomicU64,
+    /// Caminho temporário extraído pelo core para arquivos `.zip`/`.7z`.
+    extracted_content_path: Mutex<Option<PathBuf>>,
     /// Ouvinte de pedidos HTTP e eventos do RetroAchievements vindos do core.
     ra_sink: Mutex<Option<RaHostSink>>,
     /// Época monotônica da partida atual para descartar respostas HTTP atrasadas
@@ -358,6 +360,7 @@ impl EmuSession {
             core_set_options: Mutex::new(Vec::new()),
             loading_core: Mutex::new(None),
             serialization_quirks: AtomicU64::new(0),
+            extracted_content_path: Mutex::new(None),
             ra_sink: Mutex::new(None),
             ra_gen: AtomicU64::new(0),
             ra_last_idle: Mutex::new(None),
@@ -481,6 +484,15 @@ impl EmuSession {
     /// O app recusa gravar em disco o estado de core `SINGLE_SESSION`.
     pub fn serialization_quirks(&self) -> u64 {
         self.shared.serialization_quirks.load(Ordering::Acquire)
+    }
+
+    /// Caminho temporário extraído pelo core quando a partida atual abriu um `.zip`/`.7z`.
+    pub fn extracted_content_path(&self) -> Option<PathBuf> {
+        self.shared
+            .extracted_content_path
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
     }
 
     /// Opções que o core trocou sozinho (`RETRO_ENVIRONMENT_SET_VARIABLE`)
@@ -1500,6 +1512,12 @@ fn handle_event(
             }
             shared.serialization_quirks.store(quirks, Ordering::Release);
         }
+        ToParent::ExtractedContentPath(path) => {
+            *shared
+                .extracted_content_path
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()) = path;
+        }
         ToParent::RaHttpRequest(req) => {
             emit_ra_message(
                 shared,
@@ -2088,6 +2106,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                     .unwrap_or_else(|p| p.into_inner()) = Some(id.0.clone());
                 // os quirks do core anterior não valem pro novo
                 shared.serialization_quirks.store(0, Ordering::Release);
+                *shared
+                    .extracted_content_path
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = None;
                 // Salva a save RAM do jogo anterior e mata o processo
                 // incondicionalmente — o novo `Load` SEMPRE sobe um processo
                 // novo, mesmo que o anterior fosse o mesmo core (é essa
@@ -2113,6 +2135,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 ring = None;
                 current_srm = None;
                 *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner()) = None;
+                *shared
+                    .extracted_content_path
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = None;
                 *shared
                     .child_channel
                     .lock()
@@ -2203,6 +2229,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 );
                                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(id.0.clone());
+                                *shared
+                                    .extracted_content_path
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner()) = lc.extracted_rom_path();
                                 *shared.vk_local.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(lc);
                                 collect_local_core_set_options(&shared);
@@ -2409,6 +2439,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 current_srm = None;
                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) = None;
                 *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner()) = None;
+                *shared
+                    .extracted_content_path
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = None;
                 *shared
                     .child_channel
                     .lock()

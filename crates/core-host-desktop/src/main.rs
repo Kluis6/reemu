@@ -450,6 +450,7 @@ impl LoopDiag {
 fn run(channel: Channel, rx: Receiver<ToChild>) {
     let mut core: Option<DesktopCore> = None;
     let mut ra: Option<achievements::LiveRuntime> = None;
+    let mut ra_mem_gen = 0u64;
     let mut ring: Option<core_ipc::FrameRing> = None;
     let mut frame_slot = 0u32;
     let mut paused = false;
@@ -494,6 +495,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
             run_one_frame(
                 &mut core,
                 &mut ra,
+                &mut ra_mem_gen,
                 &channel,
                 &mut ring,
                 &mut frame_slot,
@@ -589,6 +591,12 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         // Opções que o core fixou no load (o MAC do PPSSPP)
                         // chegam ao pai antes da resposta do load.
                         forward_core_set_options(&channel);
+                        let _ = channel.send(
+                            &ToParent::ExtractedContentPath(
+                                c.extracted_rom_path().map(std::path::Path::to_path_buf),
+                            ),
+                            &[],
+                        );
                         let _ = channel.send(
                             &ToParent::SerializationQuirks(
                                 core_loader_desktop::serialization_quirks(),
@@ -734,6 +742,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
             ToChild::InteropSlotFree { slot } => core_loader_desktop::interop_slot_freed(slot),
             ToChild::InitAchievements(cfg) => {
                 if let Some(c) = core.as_mut() {
+                    ra_mem_gen = c.memory_map_generation();
                     let descs = memory_descriptors_for_ra(c);
                     let mem = unsafe {
                         achievements::LibretroMemory::init(cfg.console_id, &descs, |id| {
@@ -817,6 +826,7 @@ fn apply_input(ports: &[PortInput; 4]) {
 fn run_one_frame(
     core: &mut Option<DesktopCore>,
     ra: &mut Option<achievements::LiveRuntime>,
+    ra_mem_gen: &mut u64,
     channel: &Channel,
     ring: &mut Option<core_ipc::FrameRing>,
     frame_slot: &mut u32,
@@ -850,6 +860,19 @@ fn run_one_frame(
         d.record_frame(t0.elapsed(), pacer.budget(), produced.is_none());
     }
     if let Some(rt) = ra.as_mut() {
+        let cur_gen = c.memory_map_generation();
+        let needs_rebind = cur_gen != *ra_mem_gen
+            || (!rt.has_valid_memory() && !c.core_memory_region(2).0.is_null());
+        if needs_rebind {
+            *ra_mem_gen = cur_gen;
+            let descs = memory_descriptors_for_ra(c);
+            let mem = unsafe {
+                achievements::LibretroMemory::init(rt.console_id(), &descs, |id| {
+                    c.core_memory_region(id)
+                })
+            };
+            rt.update_memory(mem);
+        }
         let drain = rt.do_frame();
         flush_ra_drain(channel, c, drain);
     }

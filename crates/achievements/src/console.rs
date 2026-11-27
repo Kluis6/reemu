@@ -2,7 +2,7 @@
 //! e cálculo de hash oficial do RetroAchievements (`include/rc_hash.h`).
 
 use crate::ffi;
-use std::ffi::{CStr, CString};
+use std::ffi::CStr;
 use std::os::raw::c_char;
 use std::path::Path;
 
@@ -162,17 +162,62 @@ pub fn hash_buffer(console_id: u32, buffer: &[u8]) -> Option<String> {
     (!s.is_empty()).then_some(s)
 }
 
-/// Calcula o hash RetroAchievements de um arquivo em disco para `console_id`.
-pub fn hash_file(console_id: u32, path: &Path) -> Option<String> {
-    let c_path = CString::new(path.to_string_lossy().into_owned().into_bytes()).ok()?;
-    let mut out = [0 as c_char; 33];
-    let ok =
-        unsafe { ffi::rc_hash_generate_from_file(out.as_mut_ptr(), console_id, c_path.as_ptr()) };
-    if ok == 0 {
-        return None;
+/// Informa se `console_id` representa uma plataforma baseada em disco óptico
+/// no `rcheevos` (`rc_hash_disc.c`).
+pub fn is_disc_console(console_id: u32) -> bool {
+    matches!(
+        console_id,
+        RC_CONSOLE_SEGA_CD
+            | RC_CONSOLE_PLAYSTATION
+            | RC_CONSOLE_GAMECUBE
+            | RC_CONSOLE_WII
+            | RC_CONSOLE_PLAYSTATION_2
+            | RC_CONSOLE_SATURN
+            | RC_CONSOLE_DREAMCAST
+            | RC_CONSOLE_PSP
+            | RC_CONSOLE_CDI
+            | RC_CONSOLE_3DO
+            | RC_CONSOLE_PCFX
+            | RC_CONSOLE_NEO_GEO_CD
+            | RC_CONSOLE_PC_ENGINE_CD
+    )
+}
+
+/// Converte o `core_id` libretro em um `RC_CONSOLE_*` de referência quando o
+/// `system_id` salvo na biblioteca é genérico (`"disc"`).
+pub fn console_id_for_core(core_id: &str) -> Option<u32> {
+    let base = core_id.rsplit(['/', '\\']).next().unwrap_or(core_id);
+    let stem = base
+        .strip_suffix(".dll")
+        .or_else(|| base.strip_suffix(".so"))
+        .or_else(|| base.strip_suffix(".dylib"))
+        .unwrap_or(base);
+    match stem {
+        "pcsx2_libretro" | "lrps2_libretro" | "play_libretro" => Some(RC_CONSOLE_PLAYSTATION_2),
+        "dolphin_libretro" => Some(RC_CONSOLE_GAMECUBE),
+        "pcsx_rearmed_libretro"
+        | "swanstation_libretro"
+        | "duckstation_libretro"
+        | "mednafen_psx_libretro"
+        | "mednafen_psx_hw_libretro" => Some(RC_CONSOLE_PLAYSTATION),
+        "ppsspp_libretro" => Some(RC_CONSOLE_PSP),
+        "flycast_libretro" => Some(RC_CONSOLE_DREAMCAST),
+        "mednafen_saturn_libretro" | "yabasanshiro_libretro" | "kronos_libretro" => {
+            Some(RC_CONSOLE_SATURN)
+        }
+        "genesis_plus_gx_libretro" | "genesis_plus_gx_wide_libretro" | "picodrive_libretro" => {
+            Some(RC_CONSOLE_SEGA_CD)
+        }
+        "opera_libretro" => Some(RC_CONSOLE_3DO),
+        "mednafen_pce_libretro" | "mednafen_pce_fast_libretro" => Some(RC_CONSOLE_PC_ENGINE_CD),
+        "mednafen_pcfx_libretro" => Some(RC_CONSOLE_PCFX),
+        "neocd_libretro" => Some(RC_CONSOLE_NEO_GEO_CD),
+        _ => None,
     }
-    let s = unsafe { CStr::from_ptr(out.as_ptr()) }
-        .to_string_lossy()
-        .into_owned();
-    (!s.is_empty()).then_some(s)
+}
+
+/// Calcula o hash RetroAchievements de um arquivo em disco para `console_id`,
+/// incluindo suporte a `.chd`, `.cso`, `.gcz` e arquivos `.zip`/`.7z`.
+pub fn hash_file(console_id: u32, path: &Path) -> Option<String> {
+    crate::disc_io::hash_path_for_console(console_id, path)
 }

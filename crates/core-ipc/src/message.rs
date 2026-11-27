@@ -126,6 +126,9 @@ pub enum ToParent {
     /// Quirks de serialização do core (`domain::core_loader::serialization_quirk`),
     /// mandados logo antes do `Loaded`.
     SerializationQuirks(u64),
+    /// Caminho da ROM/imagem extraída em diretório temporário pelo filho (quando
+    /// o arquivo original era `.zip`/`.7z`), para o pai reutilizar no hash RA.
+    ExtractedContentPath(Option<PathBuf>),
     FrameReady {
         slot: u32,
         meta: FrameMetadata,

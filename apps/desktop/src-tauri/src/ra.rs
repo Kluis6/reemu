@@ -12,15 +12,16 @@ use crate::commands::AppState;
 use crate::credentials::{self, OsKeyring, RaConfig};
 use achievements::{
     console::{RC_CONSOLE_ARCADE, RC_CONSOLE_ARDUBOY, RC_CONSOLE_MS_DOS},
-    console_id_for_system, hash_buffer, hash_file, AchievementClient, AchievementEntry,
-    AchievementEvent, AchievementKind, AsyncOutcome, GameSummary, OutboundHttpRequest, RaError,
-    RaLoadedSnapshot, RaSessionConfig,
+    console_id_for_core, console_id_for_system, hash_buffer, is_disc_console, is_disc_like_path,
+    resolve_console_and_hash, AchievementClient, AchievementEntry, AchievementEvent,
+    AchievementKind, AsyncOutcome, GameSummary, OutboundHttpRequest, RaError, RaLoadedSnapshot,
+    RaSessionConfig,
 };
 use domain::library::RomRepository as _;
 use emu_session::RaHostMessage;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -29,64 +30,142 @@ use tauri::{AppHandle, Emitter, Manager, State};
 const HTTP_TIMEOUT: Duration = Duration::from_secs(15);
 /// Limite oficial `MAX_BUFFER_SIZE` do `rcheevos` (`rc_hash_internal.h`: 64 MiB).
 const RA_MAX_ROM_BUFFER: usize = 64 * 1024 * 1024;
+const RA_DISK_CACHE_FILE: &str = "ra_hashes.json";
+const RA_DISK_CACHE_MAX_ENTRIES: usize = 8192;
 
-/// Calcula o hash oficial do `rcheevos` para `path`, extraindo em memória a ROM
-/// interna quando o arquivo está em `.zip` ou `.7z` (exceto Arcade, MS-DOS e
-/// pacotes `.arduboy`, nos quais o `rcheevos` hasheia o próprio contêiner).
-fn compute_rom_hash(console_id: u32, system_id: &str, path: &Path) -> Option<String> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DiskHashEntry {
+    size: u64,
+    modified_secs: u64,
+    console_id: u32,
+    hash: String,
+}
+
+fn file_signature(path: &Path) -> Option<(u64, u64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    if !meta.is_file() {
+        return None;
+    }
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    Some((meta.len(), modified))
+}
+
+fn app_hash_cache_file(app: &AppHandle) -> Option<PathBuf> {
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join(RA_DISK_CACHE_FILE))
+}
+
+fn can_attempt_ra(system_id: &str, preferred_console: Option<u32>, path: &Path) -> bool {
+    preferred_console.is_some()
+        || system_id == "disc"
+        || system_id.is_empty()
+        || (system_id != "laserdisc" && is_disc_like_path(path))
+}
+
+/// Calcula `(console_id, hash)` oficial do `rcheevos` para `path`:
+/// - reaproveita `extracted_hint` quando o loader ja extraiu um `.zip`/`.7z` para disco;
+/// - extrai em memoria ROMs de cartucho ate 64 MiB quando estao em `.zip`/`.7z`;
+/// - delega imagens de disco (`.iso`, `.cue`/`.bin`, `.chd`, `.cso`, `.gcm`, `.gcz`,
+///   `.gdi`, `.pbp`, `.m3u` e discos em `.zip`/`.7z`) e `system_id == "disc"` ao
+///   resolvedor `resolve_console_and_hash`.
+fn compute_rom_console_and_hash(
+    preferred_console: Option<u32>,
+    system_id: &str,
+    path: &Path,
+    extracted_hint: Option<&Path>,
+) -> Option<(u32, String)> {
+    let container_hashed_directly = matches!(
+        preferred_console,
+        Some(RC_CONSOLE_ARCADE | RC_CONSOLE_MS_DOS | RC_CONSOLE_ARDUBOY)
+    );
+
+    if !container_hashed_directly {
+        if let Some(extracted) = extracted_hint.filter(|p| p.is_file()) {
+            if let Some(res) = resolve_console_and_hash(preferred_console, extracted) {
+                return Some(res);
+            }
+        }
+    }
+
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or_default();
-    let hash_inner_archive = library_scan::is_supported_archive(ext)
-        && !matches!(
-            console_id,
-            RC_CONSOLE_ARCADE | RC_CONSOLE_MS_DOS | RC_CONSOLE_ARDUBOY
-        );
-    if hash_inner_archive {
-        if let Some(archived) = library_scan::peek_archive(path, Some(system_id)) {
-            if let Ok(bytes) =
-                library_scan::read_archive_entry_capped(path, &archived.entry, RA_MAX_ROM_BUFFER)
-            {
-                if let Some(h) = hash_buffer(console_id, &bytes) {
-                    return Some(h);
+    if library_scan::is_supported_archive(ext) && !container_hashed_directly {
+        if let Some(cid) = preferred_console.filter(|c| !is_disc_console(*c)) {
+            let folder_hint = (!system_id.is_empty() && system_id != "disc").then_some(system_id);
+            if let Some(archived) = library_scan::peek_archive(path, folder_hint) {
+                if !is_disc_like_path(Path::new(&archived.entry)) {
+                    if let Ok(bytes) = library_scan::read_archive_entry_capped(
+                        path,
+                        &archived.entry,
+                        RA_MAX_ROM_BUFFER,
+                    ) {
+                        if let Some(h) = hash_buffer(cid, &bytes) {
+                            return Some((cid, h));
+                        }
+                    }
                 }
             }
         }
     }
-    hash_file(console_id, path)
+
+    resolve_console_and_hash(preferred_console, path)
 }
 
-async fn resolve_rom_hash(
+async fn resolve_rom_console_and_hash(
     ra_state: &RaState,
-    console_id: u32,
+    cache_file: Option<&Path>,
+    preferred_console: Option<u32>,
     rom_id: &str,
     system_id: &str,
     file_path: &str,
-) -> Option<String> {
-    if let Some(cached) = ra_state.cached_hash(rom_id, file_path) {
+    extracted_hint: Option<&Path>,
+) -> Option<(u32, String)> {
+    if let Some(cached) = ra_state.cached_console_and_hash(cache_file, rom_id, file_path) {
         return Some(cached);
     }
     let sys = system_id.to_owned();
     let path_owned = file_path.to_owned();
+    let hint_owned = extracted_hint.map(Path::to_path_buf);
     let computed = tauri::async_runtime::spawn_blocking(move || {
-        compute_rom_hash(console_id, &sys, Path::new(&path_owned))
+        compute_rom_console_and_hash(
+            preferred_console,
+            &sys,
+            Path::new(&path_owned),
+            hint_owned.as_deref(),
+        )
     })
     .await
     .ok()
     .flatten()?;
-    ra_state.store_hash(rom_id, file_path, computed.clone());
+    ra_state.store_console_and_hash(
+        cache_file,
+        rom_id,
+        file_path,
+        computed.0,
+        computed.1.clone(),
+    );
     Some(computed)
 }
 
 #[derive(Default)]
 pub struct RaState {
     http: Mutex<Option<reqwest::Client>>,
-    /// Hash RA por `(rom_id, file_path)` para não reler a ROM inteira ao reabrir a aba.
-    rom_hashes: Mutex<HashMap<(String, String), String>>,
-    /// `rom_id` da partida atualmente em execução (para anexar ao `LiveGameAchievements`).
+    /// `(console_id, hash)` RA por `(rom_id, file_path)` para nao reler a midia ao reabrir a aba.
+    rom_hashes: Mutex<HashMap<(String, String), (u32, String)>>,
+    disk_hashes_loaded: AtomicBool,
+    disk_hashes: Mutex<HashMap<String, DiskHashEntry>>,
+    /// `rom_id` da partida atualmente em execucao (para anexar ao `LiveGameAchievements`).
     active_rom_id: Mutex<Option<String>>,
-    /// `true` enquanto o jogo aberto iniciou uma sessão de conquistas em modo Hardcore.
+    /// `true` enquanto o jogo aberto iniciou uma sessao de conquistas em modo Hardcore.
     hardcore_active: AtomicBool,
     /// Estado vivo da partida aberta agora.
     live: Mutex<Option<LiveGameAchievements>>,
@@ -184,19 +263,98 @@ impl RaState {
             .cloned()
     }
 
-    fn cached_hash(&self, rom_id: &str, file_path: &str) -> Option<String> {
-        self.rom_hashes
+    fn ensure_disk_cache_loaded(&self, cache_file: &Path) {
+        if self.disk_hashes_loaded.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let Ok(bytes) = std::fs::read(cache_file) else {
+            return;
+        };
+        let Ok(parsed) = serde_json::from_slice::<HashMap<String, DiskHashEntry>>(&bytes) else {
+            return;
+        };
+        *self.disk_hashes.lock().unwrap_or_else(|p| p.into_inner()) = parsed;
+    }
+
+    fn cached_console_and_hash(
+        &self,
+        cache_file: Option<&Path>,
+        rom_id: &str,
+        file_path: &str,
+    ) -> Option<(u32, String)> {
+        if let Some(hit) = self
+            .rom_hashes
             .lock()
             .unwrap_or_else(|p| p.into_inner())
             .get(&(rom_id.to_owned(), file_path.to_owned()))
             .cloned()
-    }
+        {
+            return Some(hit);
+        }
 
-    fn store_hash(&self, rom_id: &str, file_path: &str, hash: String) {
+        let cache_path = cache_file?;
+        self.ensure_disk_cache_loaded(cache_path);
+        let (size, modified_secs) = file_signature(Path::new(file_path))?;
+        let entry = self
+            .disk_hashes
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(file_path)
+            .filter(|e| e.size == size && e.modified_secs == modified_secs)
+            .cloned()?;
+        let out = (entry.console_id, entry.hash);
         self.rom_hashes
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .insert((rom_id.to_owned(), file_path.to_owned()), hash);
+            .insert((rom_id.to_owned(), file_path.to_owned()), out.clone());
+        Some(out)
+    }
+
+    fn store_console_and_hash(
+        &self,
+        cache_file: Option<&Path>,
+        rom_id: &str,
+        file_path: &str,
+        console_id: u32,
+        hash: String,
+    ) {
+        self.rom_hashes
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(
+                (rom_id.to_owned(), file_path.to_owned()),
+                (console_id, hash.clone()),
+            );
+
+        let Some(cache_path) = cache_file else {
+            return;
+        };
+        let Some((size, modified_secs)) = file_signature(Path::new(file_path)) else {
+            return;
+        };
+        self.ensure_disk_cache_loaded(cache_path);
+        let serialized = {
+            let mut guard = self.disk_hashes.lock().unwrap_or_else(|p| p.into_inner());
+            if guard.len() >= RA_DISK_CACHE_MAX_ENTRIES && !guard.contains_key(file_path) {
+                guard.clear();
+            }
+            guard.insert(
+                file_path.to_owned(),
+                DiskHashEntry {
+                    size,
+                    modified_secs,
+                    console_id,
+                    hash,
+                },
+            );
+            serde_json::to_vec(&*guard).ok()
+        };
+        if let Some(bytes) = serialized {
+            if let Some(parent) = cache_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::write(cache_path, bytes);
+        }
     }
 }
 
@@ -359,8 +517,13 @@ fn handle_runtime_event(app: &AppHandle, event: AchievementEvent) {
 }
 
 /// Chamado em `load_game` logo depois de abrir o core. Devolve `true` quando o
-/// modo Hardcore está ativo para esta partida (desabilitando cheats e load state).
-pub async fn on_game_launched(app: &AppHandle, rom_id: Option<&str>, rom_path: &str) -> bool {
+/// modo Hardcore esta ativo para esta partida (desabilitando cheats e load state).
+pub async fn on_game_launched(
+    app: &AppHandle,
+    core_id: Option<&str>,
+    rom_id: Option<&str>,
+    rom_path: &str,
+) -> bool {
     let ra_state = app.state::<RaState>();
     ra_state.set_live(None);
     ra_state.set_hardcore_active(false);
@@ -379,18 +542,44 @@ pub async fn on_game_launched(app: &AppHandle, rom_id: Option<&str>, rom_path: &
     let Some(username) = cfg.username else {
         return false;
     };
-    let Some(rid) = rom_id else {
-        return false;
-    };
-    let Ok(Some(rom)) = db::RomsRepo::new(pool).get(rid).await else {
-        return false;
-    };
-    let Some(console_id) = console_id_for_system(&rom.system_id) else {
-        return false;
+
+    let (cache_key, system_id) = match rom_id {
+        Some(rid) => {
+            let Ok(Some(rom)) = db::RomsRepo::new(pool).get(rid).await else {
+                return false;
+            };
+            (rom.id, rom.system_id)
+        }
+        None => (rom_path.to_owned(), String::new()),
     };
 
-    let rom_hash = resolve_rom_hash(&ra_state, console_id, &rom.id, &rom.system_id, rom_path).await;
-    ra_state.set_hardcore_active(cfg.hardcore && rom_hash.is_some());
+    let preferred_console =
+        console_id_for_system(&system_id).or_else(|| core_id.and_then(console_id_for_core));
+    if !can_attempt_ra(&system_id, preferred_console, Path::new(rom_path)) {
+        return false;
+    }
+
+    let extracted_hint = state.session.extracted_content_path();
+    let cache_file = app_hash_cache_file(app);
+    let resolved = resolve_rom_console_and_hash(
+        &ra_state,
+        cache_file.as_deref(),
+        preferred_console,
+        &cache_key,
+        &system_id,
+        rom_path,
+        extracted_hint.as_deref(),
+    )
+    .await;
+
+    let (console_id, rom_hash) = match (resolved, preferred_console) {
+        (Some((cid, hash)), _) => (cid, Some(hash)),
+        (None, Some(cid)) => (cid, None),
+        (None, None) => return false,
+    };
+
+    let hardcore_active = cfg.hardcore && rom_hash.is_some();
+    ra_state.set_hardcore_active(hardcore_active);
     state.session.init_achievements(RaSessionConfig {
         console_id,
         rom_path: rom_path.to_owned(),
@@ -401,7 +590,7 @@ pub async fn on_game_launched(app: &AppHandle, rom_id: Option<&str>, rom_path: &
         unofficial: cfg.unofficial,
         encore: cfg.encore,
     });
-    cfg.hardcore
+    hardcore_active
 }
 
 pub fn on_game_unloaded(app: &AppHandle) {
@@ -738,6 +927,7 @@ async fn fetch_unlocks_set(
 
 #[tauri::command]
 pub async fn ra_game_achievements(
+    app: AppHandle,
     state: State<'_, AppState>,
     ra_state: State<'_, RaState>,
     rom_id: String,
@@ -777,16 +967,20 @@ pub async fn ra_game_achievements(
     else {
         return Ok(RaGameViewDto::empty("unidentified", cfg.hardcore));
     };
-    let Some(console_id) = console_id_for_system(&rom.system_id) else {
+    let preferred_console = console_id_for_system(&rom.system_id);
+    if !can_attempt_ra(&rom.system_id, preferred_console, Path::new(&rom.file_path)) {
         return Ok(RaGameViewDto::empty("unsupported_system", cfg.hardcore));
-    };
+    }
 
-    let Some(hash) = resolve_rom_hash(
+    let cache_file = app_hash_cache_file(&app);
+    let Some((_resolved_console_id, hash)) = resolve_rom_console_and_hash(
         &ra_state,
-        console_id,
+        cache_file.as_deref(),
+        preferred_console,
         &rom.id,
         &rom.system_id,
         &rom.file_path,
+        None,
     )
     .await
     else {
@@ -878,6 +1072,10 @@ pub async fn ra_game_achievements(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use achievements::{
+        console::{RC_CONSOLE_PLAYSTATION, RC_CONSOLE_PLAYSTATION_2, RC_CONSOLE_SATURN},
+        hash_file,
+    };
     use std::io::Write as _;
 
     #[test]
@@ -901,9 +1099,12 @@ mod tests {
         }
 
         let a26_console = console_id_for_system("atari2600").unwrap();
-        let raw_hash = compute_rom_hash(a26_console, "atari2600", &raw_path).unwrap();
-        let zip_hash = compute_rom_hash(a26_console, "atari2600", &zip_path).unwrap();
-        assert_eq!(zip_hash, raw_hash);
+        let raw_res =
+            compute_rom_console_and_hash(Some(a26_console), "atari2600", &raw_path, None).unwrap();
+        let zip_res =
+            compute_rom_console_and_hash(Some(a26_console), "atari2600", &zip_path, None).unwrap();
+        assert_eq!(zip_res, raw_res);
+        assert_eq!(zip_res.0, a26_console);
 
         let arcade_zip = dir.path().join("mslug.zip");
         {
@@ -914,8 +1115,59 @@ mod tests {
             zw.write_all(b"chip").unwrap();
             zw.finish().unwrap();
         }
-        let arcade_hash = compute_rom_hash(RC_CONSOLE_ARCADE, "arcade", &arcade_zip).unwrap();
+        let arcade_res =
+            compute_rom_console_and_hash(Some(RC_CONSOLE_ARCADE), "arcade", &arcade_zip, None)
+                .unwrap();
         let expected_arcade = hash_file(RC_CONSOLE_ARCADE, &arcade_zip).unwrap();
-        assert_eq!(arcade_hash, expected_arcade);
+        assert_eq!(arcade_res, (RC_CONSOLE_ARCADE, expected_arcade));
+    }
+
+    #[test]
+    fn resolves_generic_disc_system_persists_disk_cache_and_reuses_extracted_hint() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut saturn_iso = vec![0u8; 16 * 2048];
+        saturn_iso[..16].copy_from_slice(b"SEGA SEGASATURN ");
+        let iso_path = dir.path().join("Panzer Dragoon.iso");
+        std::fs::write(&iso_path, &saturn_iso).unwrap();
+
+        // `system_id = "disc"` (sem `preferred_console`) resolve Saturn e grava cache em disco.
+        assert!(can_attempt_ra("disc", None, &iso_path));
+        assert!(!can_attempt_ra("chip8", None, Path::new("pong.ch8")));
+
+        let resolved = compute_rom_console_and_hash(None, "disc", &iso_path, None).unwrap();
+        assert_eq!(resolved.0, RC_CONSOLE_SATURN);
+        assert_eq!(resolved.1.len(), 32);
+
+        let cache_file = dir.path().join("ra_hashes.json");
+        let state_a = RaState::default();
+        let iso_str = iso_path.to_string_lossy().into_owned();
+        state_a.store_console_and_hash(
+            Some(&cache_file),
+            "rom-1",
+            &iso_str,
+            resolved.0,
+            resolved.1.clone(),
+        );
+        assert!(cache_file.is_file());
+
+        // Nova instancia (simulando reinicio do app) recupera `(console_id, hash)` de `ra_hashes.json`.
+        let state_b = RaState::default();
+        assert_eq!(
+            state_b.cached_console_and_hash(Some(&cache_file), "rom-1", &iso_str),
+            Some(resolved.clone())
+        );
+
+        // `extracted_hint` evita descompactar de novo um `.7z` ja extraido pelo core-loader.
+        let fake_7z = dir.path().join("Panzer Dragoon.7z");
+        std::fs::write(&fake_7z, b"not-a-valid-7z-archive").unwrap();
+        let from_hint = compute_rom_console_and_hash(
+            Some(RC_CONSOLE_PLAYSTATION_2),
+            "ps2",
+            &fake_7z,
+            Some(&iso_path),
+        )
+        .unwrap();
+        assert_eq!(from_hint, resolved);
+        assert_ne!(from_hint.0, RC_CONSOLE_PLAYSTATION);
     }
 }

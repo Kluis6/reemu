@@ -209,6 +209,16 @@ impl DesktopCore {
         ffi_state::memory_descriptors()
     }
 
+    /// Geração atual do mapa `SET_MEMORY_MAPS` deste core.
+    pub fn memory_map_generation(&self) -> u64 {
+        ffi_state::memory_map_generation()
+    }
+
+    /// Caminho da ROM/imagem extraída de um `.zip`/`.7z`, quando houve extração.
+    pub fn extracted_rom_path(&self) -> Option<&std::path::Path> {
+        self._extracted.as_ref().map(|e| e.path())
+    }
+
     /// Reinicia o sistema emulado (`retro_reset`), exigido ao ativar Hardcore
     /// com um jogo aberto (`RC_CLIENT_EVENT_RESET`).
     pub fn reset_core(&mut self) {

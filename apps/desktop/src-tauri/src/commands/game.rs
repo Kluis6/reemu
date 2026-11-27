@@ -164,7 +164,8 @@ pub async fn load_game(
 
     // RetroAchievements: liga o cliente na memória do core. Em modo Hardcore,
     // cheats e carregamento de save states ficam desativados nesta sessão.
-    let hardcore_ra = crate::ra::on_game_launched(&app, rom_id.as_deref(), &rom_path).await;
+    let hardcore_ra =
+        crate::ra::on_game_launched(&app, Some(&core_id), rom_id.as_deref(), &rom_path).await;
 
     // Cheats ligados deste jogo (doc 17): pulados em sessões Hardcore.
     if !hardcore_ra {
