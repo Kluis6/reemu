@@ -523,7 +523,17 @@ fn candidate_filename_stem(jeu: &Value) -> Option<&str> {
 /// nome do arquivo local (sem extensão) — comparado, exato e
 /// case-insensitive, contra `candidate_filename_stem` pro segundo critério
 /// de auto-match (ver comentário do módulo).
+#[cfg(test)]
 fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCandidate> {
+    parse_jeu_for_region(jeu, exact_hash, file_stem, None)
+}
+
+fn parse_jeu_for_region(
+    jeu: &Value,
+    exact_hash: bool,
+    file_stem: &str,
+    rom_region: Option<&str>,
+) -> Option<ScrapeCandidate> {
     let title = first_text(jeu.get("noms")?, &["wor", "ss", "us", "eu", "jp"])?.to_string();
     let external_id = jeu
         .get("id")
@@ -544,7 +554,7 @@ fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCan
         .and_then(|d| first_text(d, &["wor", "us", "eu", "jp"]))
         .map(str::to_string);
     // Todos os gêneros, o principal (`principale: "1"` na doc) primeiro,
-    // separados por ", " — a gaveta de informações mostra cada um como etiqueta.
+    // separados por ", " - a gaveta de informações mostra cada um como etiqueta.
     let genre = jeu.get("genres").and_then(|g| {
         let arr = g.as_array()?;
         let is_main = |x: &Value| {
@@ -563,7 +573,34 @@ fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCan
         }
         (!names.is_empty()).then(|| names.join(", "))
     });
-    let cover_url = jeu.get("medias").and_then(|m| {
+
+    let mut regional_covers = std::collections::BTreeMap::new();
+    if let Some(arr) = jeu.get("medias").and_then(Value::as_array) {
+        for x in arr {
+            let is_box = matches!(
+                x.get("type").and_then(Value::as_str),
+                Some("box-2D") | Some("box-2d")
+            );
+            if !is_box {
+                continue;
+            }
+            if let (Some(reg), Some(url)) = (
+                x.get("region")
+                    .and_then(Value::as_str)
+                    .and_then(rom_name::normalize_region_code),
+                x.get("url")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|u| !u.is_empty()),
+            ) {
+                regional_covers
+                    .entry(reg.to_string())
+                    .or_insert_with(|| url.to_string());
+            }
+        }
+    }
+
+    let default_cover = jeu.get("medias").and_then(|m| {
         let arr = m.as_array()?;
         arr.iter()
             .find(|x| {
@@ -576,9 +613,19 @@ fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCan
             .and_then(|x| x.get("url").and_then(Value::as_str))
             .map(str::to_string)
     });
+    let cover_url =
+        rom_name::pick_regional_cover(&regional_covers, rom_region, default_cover.as_deref())
+            .map(str::to_string);
 
     let exact_filename_match = candidate_filename_stem(jeu)
         .is_some_and(|candidate_stem| candidate_stem.eq_ignore_ascii_case(file_stem));
+
+    let mut details = parse_details(jeu);
+    if !regional_covers.is_empty() || rom_region.is_some() {
+        let gk = details.gamekave.get_or_insert_with(Default::default);
+        gk.regional_covers = regional_covers;
+        gk.rom_region = rom_region.map(str::to_string);
+    }
 
     Some(ScrapeCandidate {
         provider: "screenscraper".into(),
@@ -590,7 +637,7 @@ fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCan
         genre,
         exact_hash_match: exact_hash,
         exact_filename_match,
-        details: parse_details(jeu),
+        details,
     })
 }
 
@@ -846,7 +893,14 @@ async fn query_screenscraper(
         .and_then(|r| r.get("jeu"))
         .ok_or("resposta sem 'jeu'")?;
 
-    Ok(parse_jeu(jeu, rom_hash_matches(jeu, q), q.file_stem))
+    let rom_region =
+        rom_name::detect_rom_region(q.ident_name.unwrap_or(q.file_stem), None, q.serial);
+    Ok(parse_jeu_for_region(
+        jeu,
+        rom_hash_matches(jeu, q),
+        q.file_stem,
+        rom_region,
+    ))
 }
 
 /// O hash bateu? O ScreenScraper devolve em `rom` o CRC (`romcrc`) e o MD5

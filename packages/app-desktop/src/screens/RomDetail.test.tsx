@@ -493,4 +493,29 @@ describe('RomDetail title precedence', () => {
     await mount()
     expect(host.querySelector('h1')?.textContent).toBe('Meu Zelda Favorito')
   })
+
+  it('shows_region_badge_and_version_selector_for_grouped_regional_roms', async () => {
+    api.listRoms.mockResolvedValue([
+      {
+        ...ROM,
+        id: 'r1',
+        title: 'The Minish Cap',
+        filePath: 'C:/roms/Zelda (USA).gba',
+        groupKey: 'game:uuid-minish',
+        region: 'NA',
+      },
+      {
+        ...ROM,
+        id: 'r2',
+        title: 'The Minish Cap',
+        filePath: 'C:/roms/Zelda (Europe).gba',
+        groupKey: 'game:uuid-minish',
+        region: 'EU',
+      },
+    ])
+    api.getRomMetadata.mockResolvedValue(null)
+    await mount()
+    expect(host.querySelector('[data-testid="rom-region-badge"]')?.textContent).toContain('NTSC')
+    expect(host.textContent).toContain('Versão e região')
+  })
 })

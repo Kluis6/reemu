@@ -655,6 +655,312 @@ pub fn title_match_tier(rom_title: &str, candidate_title: &str) -> Option<u8> {
     None
 }
 
+static PAREN_GROUP_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\(([^()]+)\)|\[([^\[\]]+)\]").expect("PAREN_GROUP_RE válido"));
+
+static NINTENDO_DISC_REGION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:^|[\s._(\[-])[GDRPUW][A-Z0-9]{2}([EFJPKXDUWSI])[0-9A-Z]{2}(?:[\s._)\]:-]|$)")
+        .expect("NINTENDO_DISC_REGION_RE válido")
+});
+
+static QUALIFIER_DISC_CHIP_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^(?:(?:disc|disk|cd|dvd|gd|umd|side|chip)\s*(?:\d+|[a-d])(?:\s*of\s*\d+)?)$")
+        .expect("QUALIFIER_DISC_CHIP_RE válido")
+});
+
+static QUALIFIER_REV_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^(?:rev\.?\s*(?:\d+|[a-c])|v\d+(?:\.\d+)+[a-z]?|ver\.?\s*\d+(?:\.\d+)*)$")
+        .expect("QUALIFIER_REV_RE válido")
+});
+
+static QUALIFIER_EDITION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)^(?:beta(?:\s*\d+)?|proto(?:\s*\d+)?|prototype|demo|sample|promo|kiosk|arcade|virtual console|unl|pirate|t[+-][a-z]{2,5}.*)$",
+    )
+    .expect("QUALIFIER_EDITION_RE válido")
+});
+
+/// Normaliza um código ou nome de região (No-Intro, Redump, ScreenScraper,
+/// LaunchBox/IGDB ou GoodTools) para o vocabulário canônico:
+/// `"NA"`, `"EU"`, `"JP"`, `"BR"`, `"KR"`, `"AU"`, `"CN"` ou `"WORLD"`.
+pub fn normalize_region_code(raw: &str) -> Option<&'static str> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    // Listas No-Intro separadas por vírgula: ex. "USA, Europe", "USA, Canada", "Europe, Australia".
+    if trimmed.contains(',') {
+        let mut codes: Vec<&'static str> = Vec::new();
+        for part in trimmed.split(',') {
+            if let Some(code) = normalize_single_region(part.trim(), false) {
+                if !codes.contains(&code) {
+                    codes.push(code);
+                }
+            }
+        }
+        return match codes.as_slice() {
+            [] => None,
+            [single] => Some(*single),
+            _ if codes.iter().all(|c| matches!(*c, "EU" | "AU")) => Some("EU"),
+            _ if codes.iter().all(|c| *c == "NA") => Some("NA"),
+            _ if (codes.contains(&"NA") && codes.contains(&"EU"))
+                || (codes.contains(&"NA") && codes.contains(&"JP"))
+                || (codes.contains(&"EU") && codes.contains(&"JP")) =>
+            {
+                Some("WORLD")
+            }
+            [first, ..] => Some(*first),
+        };
+    }
+    normalize_single_region(trimmed, true)
+}
+
+fn normalize_single_region(token: &str, allow_single_letter: bool) -> Option<&'static str> {
+    let lower = token.trim().to_ascii_lowercase();
+    match lower.as_str() {
+        "na" | "usa" | "us" | "u.s.a." | "north america" | "canada" | "ca" | "cus" | "ntsc-u"
+        | "ntsc" | "americas" => Some("NA"),
+        "eu" | "eur" | "europe" | "pal" | "pal-e" | "pal-m" | "uk" | "united kingdom"
+        | "england" | "great britain" | "germany" | "ger" | "de" | "deu" | "france" | "fra"
+        | "fr" | "spain" | "esp" | "es" | "italy" | "ita" | "it" | "netherlands" | "nl"
+        | "holland" | "sweden" | "swe" | "se" | "scandinavia" | "portugal" | "pt" | "belgium"
+        | "austria" | "switzerland" => Some("EU"),
+        "jp" | "jpn" | "jap" | "japan" | "ja" | "ntsc-j" => Some("JP"),
+        "br" | "bra" | "brazil" | "brasil" => Some("BR"),
+        "kr" | "kor" | "korea" | "south korea" | "ko" => Some("KR"),
+        "au" | "aus" | "australia" => Some("AU"),
+        "cn" | "chn" | "china" | "asia" | "taiwan" | "tw" | "hong kong" | "hk" => Some("CN"),
+        "world" | "wor" | "jue" | "ue" | "ju" | "uj" | "eu-us" => Some("WORLD"),
+        "u" if allow_single_letter => Some("NA"),
+        "e" | "f" | "g" | "s" | "i" if allow_single_letter => Some("EU"),
+        "j" if allow_single_letter => Some("JP"),
+        "b" if allow_single_letter => Some("BR"),
+        "k" if allow_single_letter => Some("KR"),
+        "a" if allow_single_letter => Some("AU"),
+        "w" if allow_single_letter => Some("WORLD"),
+        _ => None,
+    }
+}
+
+fn region_from_serial(serial_text: &str) -> Option<&'static str> {
+    if let Some(sony) = extract_disc_serial(serial_text) {
+        let prefix = sony.split('-').next().unwrap_or("");
+        return match prefix {
+            "SLUS" | "SCUS" | "ULUS" | "UCUS" | "NPUI" | "NPUA" | "NPUF" | "NPUG" | "NPUH"
+            | "NPUJ" | "NPUX" | "NPUZ" => Some("NA"),
+            "SLES" | "SCES" | "ULES" | "UCES" | "NPEF" | "NPEG" | "NPEA" | "NPEH" | "NPEX"
+            | "NPEZ" => Some("EU"),
+            "SLPS" | "SLPM" | "SCPS" | "SCPM" | "ULJM" | "ULJS" | "UCJS" | "NPJJ" | "NPJA"
+            | "NPJG" | "NPJH" | "PAPX" | "PBPX" => Some("JP"),
+            "SLKA" | "SCKA" | "ULKS" | "UCKS" => Some("KR"),
+            "SLAJ" | "SCAJ" | "ULAS" | "UCAS" => Some("CN"),
+            _ => None,
+        };
+    }
+    if let Some(caps) = NINTENDO_DISC_REGION_RE.captures(serial_text) {
+        return match &caps[1] {
+            "E" | "N" => Some("NA"),
+            "J" => Some("JP"),
+            "K" => Some("KR"),
+            "P" | "D" | "F" | "S" | "I" | "U" | "X" | "Y" => Some("EU"),
+            _ => None,
+        };
+    }
+    None
+}
+
+fn region_from_name(name: &str) -> Option<&'static str> {
+    for caps in PAREN_GROUP_RE.captures_iter(name) {
+        let inner = caps
+            .get(1)
+            .or_else(|| caps.get(2))
+            .map(|m| m.as_str().trim())
+            .unwrap_or("");
+        if inner.is_empty() {
+            continue;
+        }
+        // Em colchetes `[...]`, letras soltas do GoodTools como `[b]`, `[f]`, `[p]`
+        // são flags de dump (bad/fixed/pirate), não regiões; só aceita 2+ letras
+        // ou `[U]`/`[E]`/`[J]` maiúsculos.
+        if caps.get(2).is_some() && inner.len() == 1 {
+            match inner {
+                "U" => return Some("NA"),
+                "E" => return Some("EU"),
+                "J" => return Some("JP"),
+                _ => continue,
+            }
+        }
+        if let Some(code) = normalize_region_code(inner) {
+            return Some(code);
+        }
+    }
+    if let Some(from_serial) = region_from_serial(name) {
+        return Some(from_serial);
+    }
+    // Releases de cena separados por pontos ou com sufixo NTSC/PAL explícito.
+    let upper = name.to_ascii_uppercase();
+    if upper.contains("NTSC-U") || upper.contains(".USA.") || upper.ends_with(".USA") {
+        return Some("NA");
+    }
+    if upper.contains("NTSC-J")
+        || upper.contains(".JPN.")
+        || upper.contains(".JAP.")
+        || upper.ends_with(".JPN")
+        || upper.ends_with(".JAP")
+    {
+        return Some("JP");
+    }
+    if upper.contains(".EUR.")
+        || upper.contains(".PAL.")
+        || upper.ends_with(".EUR")
+        || upper.ends_with(".PAL")
+    {
+        return Some("EU");
+    }
+    None
+}
+
+/// Detecta a região canônica (`NA`, `EU`, `JP`, `BR`, `KR`, `AU`, `CN`, `WORLD`)
+/// de uma ROM combinando `ident_name`, nome do arquivo, pasta pai e `serial`.
+pub fn detect_rom_region(
+    file_path: &str,
+    ident_name: Option<&str>,
+    serial: Option<&str>,
+) -> Option<&'static str> {
+    if let Some(ident) = ident_name {
+        if let Some(code) = region_from_name(ident) {
+            return Some(code);
+        }
+    }
+    let file_name = Path::new(file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(file_path);
+    if let Some(code) = region_from_name(file_name) {
+        return Some(code);
+    }
+    if let Some(s) = serial {
+        if let Some(code) = region_from_serial(s) {
+            return Some(code);
+        }
+    }
+    if let Some(folder) = parent_folder_candidate(file_path) {
+        if let Some(code) = region_from_name(&folder) {
+            return Some(code);
+        }
+    }
+    None
+}
+
+/// Extrai qualificadores de edição/revisão/mídia (ex.: `Disc 1`, `Chip 2`,
+/// `Rev 1`, `v1.02`, `Beta`, `T-PtBr`) para diferenciar múltiplas ROMs do mesmo
+/// jogo no seletor de versões.
+pub fn extract_rom_qualifier(
+    file_path: &str,
+    ident_name: Option<&str>,
+    revision_override: Option<&str>,
+) -> Option<String> {
+    let source = ident_name
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| {
+            Path::new(file_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(file_path)
+        });
+
+    fn push_unique(parts: &mut Vec<String>, label: &str) {
+        let trimmed = label.trim();
+        if !trimmed.is_empty()
+            && !parts
+                .iter()
+                .any(|existing| existing.eq_ignore_ascii_case(trimmed))
+        {
+            parts.push(trimmed.to_string());
+        }
+    }
+
+    let mut parts: Vec<String> = Vec::new();
+
+    for caps in PAREN_GROUP_RE.captures_iter(source) {
+        let inner = caps
+            .get(1)
+            .or_else(|| caps.get(2))
+            .map(|m| m.as_str().trim())
+            .unwrap_or("");
+        if inner.is_empty() || inner == "!" {
+            continue;
+        }
+        if QUALIFIER_DISC_CHIP_RE.is_match(inner)
+            || QUALIFIER_REV_RE.is_match(inner)
+            || QUALIFIER_EDITION_RE.is_match(inner)
+        {
+            push_unique(&mut parts, inner);
+        }
+    }
+
+    // Caso o marcador de disco/versão esteja solto fora de parênteses (`Jogo - Disc 1`).
+    let stem = Path::new(source)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(source);
+    let without_brackets = collapse_spaces(&strip_bracketed_tags(stem).replace('_', " "));
+    if let Some(m) = BARE_MEDIA_VER_RE.find(&without_brackets) {
+        let raw_tail = m
+            .as_str()
+            .trim_matches(|c: char| matches!(c, '-' | ':' | ' '));
+        push_unique(&mut parts, raw_tail);
+    }
+
+    if let Some(rev) = revision_override
+        .map(str::trim)
+        .filter(|r| !r.is_empty() && !parts.iter().any(|p| QUALIFIER_REV_RE.is_match(p)))
+    {
+        push_unique(&mut parts, rev);
+    }
+
+    (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
+/// Escolhe a capa regional mais adequada para a região da ROM (`JP`, `EU`, `NA`,
+/// `BR`, `KR`, `AU`, `WORLD`), caindo para `fallback` quando não houver variante
+/// específica para aquela região.
+pub fn pick_regional_cover<'a>(
+    regional_covers: &'a std::collections::BTreeMap<String, String>,
+    region: Option<&str>,
+    fallback: Option<&'a str>,
+) -> Option<&'a str> {
+    if !regional_covers.is_empty() {
+        if let Some(raw_reg) = region {
+            let norm = normalize_region_code(raw_reg);
+            let candidates: &[&str] = match norm {
+                Some("JP") => &["JP"],
+                Some("EU") => &["EU"],
+                Some("AU") => &["AU", "EU"],
+                Some("BR") => &["BR", "NA", "WORLD"],
+                Some("KR") => &["KR"],
+                Some("CN") => &["CN"],
+                Some("NA") => &["NA", "WORLD"],
+                Some("WORLD") => &["WORLD", "NA", "EU"],
+                _ => &[],
+            };
+            for key in candidates {
+                if let Some(url) = regional_covers.get(*key).filter(|u| !u.trim().is_empty()) {
+                    return Some(url.as_str());
+                }
+            }
+            let direct = raw_reg.trim().to_ascii_uppercase();
+            if let Some(url) = regional_covers
+                .get(&direct)
+                .filter(|u| !u.trim().is_empty())
+            {
+                return Some(url.as_str());
+            }
+        }
+    }
+    fallback.filter(|u| !u.trim().is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,5 +1187,83 @@ mod tests {
             Some(2)
         );
         assert_eq!(title_match_tier("Super Mario", "Super Mario World"), None);
+    }
+
+    #[test]
+    fn detects_rom_regions_qualifiers_and_picks_regional_covers() {
+        assert_eq!(
+            detect_rom_region("/roms/snes/Chrono Trigger (USA).sfc", None, None),
+            Some("NA")
+        );
+        assert_eq!(
+            detect_rom_region("/roms/snes/Chrono Trigger (Japan).sfc", None, None),
+            Some("JP")
+        );
+        assert_eq!(
+            detect_rom_region("/roms/snes/Terranigma (Europe).sfc", None, None),
+            Some("EU")
+        );
+        assert_eq!(
+            detect_rom_region("/roms/sms/Turma da Monica (Brazil).sms", None, None),
+            Some("BR")
+        );
+        assert_eq!(
+            detect_rom_region(
+                "/roms/gba/Pokemon - Emerald Version (USA, Europe).gba",
+                None,
+                None
+            ),
+            Some("WORLD")
+        );
+        // Tags de revisão/lado não devem ser confundidas com códigos de 1 letra como "(A)" = Austrália.
+        assert_eq!(
+            detect_rom_region("/roms/nes/Metroid (Rev A).nes", None, None),
+            None
+        );
+        assert_eq!(
+            detect_rom_region("/roms/ps2/game.iso", None, Some("SLPS-25088")),
+            Some("JP")
+        );
+        assert_eq!(
+            detect_rom_region("/roms/gc/GALE01 - Melee.iso", None, None),
+            Some("NA")
+        );
+        assert_eq!(
+            extract_rom_qualifier(
+                "/roms/atari2600/128-in-1 Junior Console (Chip 2) (PAL) [!].a26",
+                None,
+                None,
+            )
+            .as_deref(),
+            Some("Chip 2")
+        );
+
+        let mut covers = std::collections::BTreeMap::new();
+        covers.insert("JP".into(), "https://cdn.gamekave.net/jp.webp".into());
+        covers.insert("EU".into(), "https://cdn.gamekave.net/eu.webp".into());
+        assert_eq!(
+            pick_regional_cover(
+                &covers,
+                Some("JP"),
+                Some("https://cdn.gamekave.net/na.webp")
+            ),
+            Some("https://cdn.gamekave.net/jp.webp")
+        );
+        assert_eq!(
+            pick_regional_cover(
+                &covers,
+                Some("AU"),
+                Some("https://cdn.gamekave.net/na.webp")
+            ),
+            Some("https://cdn.gamekave.net/eu.webp")
+        );
+        assert_eq!(
+            pick_regional_cover(
+                &covers,
+                Some("NA"),
+                Some("https://cdn.gamekave.net/na.webp")
+            ),
+            Some("https://cdn.gamekave.net/na.webp")
+        );
     }
 }

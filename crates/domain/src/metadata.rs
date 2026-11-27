@@ -63,6 +63,9 @@ pub struct GameDetails {
 pub struct GameKaveData {
     pub descriptions: std::collections::BTreeMap<String, String>,
     pub release_dates: std::collections::BTreeMap<String, String>,
+    pub regional_covers: std::collections::BTreeMap<String, String>,
+    pub rom_region: Option<String>,
+    pub rom_revision: Option<String>,
     pub time_to_beat_minutes: [Option<u32>; 3],
     pub covers: Vec<String>,
     pub heroes: Vec<String>,

@@ -34,7 +34,7 @@ import {
   WarningRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FullscreenDialog } from "../components/FullscreenDialog";
 import { PickGameDialog } from "../components/catalog/PickGameDialog";
@@ -68,6 +68,13 @@ import {
   splitPath,
 } from "../lib/metadataFormat";
 import { knownPlatforms, platformLabel } from "../lib/platform";
+import {
+  detectRomRegionFallback,
+  normalizeRegionCode,
+  regionDisplayLabel,
+  romVariantLabel,
+  siblingsForRom,
+} from "../lib/romGrouping";
 import { errorToast, sysToast, shaderIssueToast } from "../lib/toast";
 import { errorText } from "../lib/errors";
 import {
@@ -209,6 +216,10 @@ export function RomDetail() {
   });
 
   const rom = roms.data?.find((r) => r.id === romId);
+  const siblings = useMemo(
+    () => siblingsForRom(roms.data ?? [], rom, metadataLanguage),
+    [roms.data, rom, metadataLanguage],
+  );
   // Ao abrir a página de um jogo, o foco vai pro "Jogar" (controle e teclado
   // já começam nele). Uma vez por jogo — refetch da lista não rouba o foco.
   const playRef = useRef<HTMLButtonElement>(null);
@@ -372,12 +383,23 @@ export function RomDetail() {
     setEditDetails((previous) => ({ ...previous, [key]: value }));
   };
   const fav = useMutation({
-    mutationFn: (on: boolean) => setRomFavorite(romId, on),
+    mutationFn: async (on: boolean) => {
+      await setRomFavorite(romId, on);
+      if (!on && siblings.length > 1) {
+        const extra = siblings.filter((s) => s.id !== romId && s.isFavorite);
+        await Promise.all(extra.map((s) => setRomFavorite(s.id, false)));
+      }
+    },
     onMutate: async (on) => {
       await qc.cancelQueries({ queryKey: ["roms"] });
       const prev = qc.getQueryData(["roms"]);
+      const siblingIds = new Set(siblings.map((s) => s.id));
       qc.setQueryData<{ id: string; isFavorite: boolean }[]>(["roms"], (old) =>
-        (old ?? []).map((r) => (r.id === romId ? { ...r, isFavorite: on } : r)),
+        (old ?? []).map((r) => {
+          if (r.id === romId) return { ...r, isFavorite: on };
+          if (!on && siblingIds.has(r.id)) return { ...r, isFavorite: false };
+          return r;
+        }),
       );
       return { prev };
     },
@@ -411,6 +433,11 @@ export function RomDetail() {
   const backdrop = hero && hero !== brokenHero ? hero : cover;
   const fileParts = splitPath(rom.filePath);
   const title = rom.userTitle ?? meta.data?.title ?? rom.title;
+  const activeRegion =
+    normalizeRegionCode(meta.data?.gamekave?.romRegion) ??
+    detectRomRegionFallback(rom);
+  const isGroupFavorite =
+    rom.isFavorite || siblings.some((sibling) => sibling.isFavorite);
   const hasQuick = states.data?.some((st) => st.slot === 0) ?? false;
 
   // Antes de abrir: um conflito de game save é perguntado (com "Decidir depois"
@@ -507,8 +534,13 @@ export function RomDetail() {
               <Text as="h1" className={s.title}>
                 {title}
               </Text>
-              {(meta.data?.releaseDate || meta.data?.genre) && (
+              {(meta.data?.releaseDate || meta.data?.genre || activeRegion) && (
                 <div className={s.badges}>
+                  {activeRegion && (
+                    <span className={s.badge} data-testid="rom-region-badge">
+                      {regionDisplayLabel(activeRegion, t)}
+                    </span>
+                  )}
                   {releaseYear && <span className={s.badge}>{releaseYear}</span>}
                   {genres[0] && <span className={s.badge}>{genres[0]}</span>}
                 </div>
@@ -533,7 +565,7 @@ export function RomDetail() {
             {/* Ações secundárias só com ícone (pedido do usuário); o nome vem
                 pelo tooltip e pelo aria-label. */}
             <Tooltip positioning={TOOLTIP_POSITION}
-              content={rom.isFavorite ? t("game.favoriteRemove") : t("game.favoriteAdd")}
+              content={isGroupFavorite ? t("game.favoriteRemove") : t("game.favoriteAdd")}
               relationship="label"
             >
               <Button
@@ -541,14 +573,14 @@ export function RomDetail() {
                 appearance="secondary"
                 className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
                 icon={
-                  rom.isFavorite ? (
+                  isGroupFavorite ? (
                     <HeartFilled className={s.favIconOn} />
                   ) : (
                     <HeartRegular />
                   )
                 }
-                aria-pressed={rom.isFavorite}
-                onClick={() => fav.mutate(!rom.isFavorite)}
+                aria-pressed={isGroupFavorite}
+                onClick={() => fav.mutate(!isGroupFavorite)}
               />
             </Tooltip>
             <Tooltip positioning={TOOLTIP_POSITION} content={t("game.edit")} relationship="label">
@@ -933,7 +965,25 @@ export function RomDetail() {
                   {playTime.data ? formatPlayTime(playTime.data) : t("game.neverPlayed")}
                 </dd>
                 <dt className={s.infoLabel}>{t("game.favorite")}</dt>
-                <dd className={s.infoValue}>{rom.isFavorite ? t("common.yes") : t("common.no")}</dd>
+                <dd className={s.infoValue}>{isGroupFavorite ? t("common.yes") : t("common.no")}</dd>
+                {siblings.length > 1 && (
+                  <>
+                    <dt className={s.infoLabel}>{t("game.allVersionsInLibrary")}</dt>
+                    <dd className={s.infoValue}>
+                      {siblings.map((sibling) => {
+                        const sp = splitPath(sibling.filePath);
+                        return (
+                          <div key={sibling.id} style={{ marginBottom: 6 }}>
+                            <span className={s.infoFileName}>
+                              {romVariantLabel(sibling, siblings, t)}
+                            </span>
+                            <span className={s.infoFileDir}>{sp.name}</span>
+                          </div>
+                        );
+                      })}
+                    </dd>
+                  </>
+                )}
               </dl>
             </div>
           </div>
@@ -942,6 +992,21 @@ export function RomDetail() {
 
       <section className={mergeClasses(s.section, s.tabsOverlap, s.tabsCard)}>
         <div className={s.panel}>
+          {siblings.length > 1 && (
+            <SelectBlock
+              label={t("game.regionVersion")}
+              value={rom.id}
+              options={siblings.map((sibling) => ({
+                value: sibling.id,
+                label: romVariantLabel(sibling, siblings, t),
+              }))}
+              onChange={(nextId) => {
+                if (nextId && nextId !== rom.id) {
+                  navigate(`/rom/${nextId}`, { replace: true });
+                }
+              }}
+            />
+          )}
           {chosenCore && (
             <>
               <GameImageOptions

@@ -12,6 +12,15 @@ pub struct MetadataRepo {
     db: Db,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct RomMetadataSummary {
+    pub title: String,
+    pub has_cover: bool,
+    pub game_uuid: Option<String>,
+    pub rom_region: Option<String>,
+    pub rom_revision: Option<String>,
+}
+
 impl MetadataRepo {
     pub fn new(db: Db) -> Self {
         Self { db }
@@ -33,8 +42,36 @@ impl MetadataRepo {
     pub async fn titles_and_covers(
         &self,
     ) -> Result<std::collections::HashMap<String, (String, bool)>, RepoError> {
-        let rows: Vec<(String, String, i64)> = sqlx::query_as(
-            "SELECT rom_id, title, (cover_url IS NOT NULL AND TRIM(cover_url) <> '') \
+        Ok(self
+            .library_summaries()
+            .await?
+            .into_iter()
+            .map(|(rom_id, s)| (rom_id, (s.title, s.has_cover)))
+            .collect())
+    }
+
+    /// Resumo leve de `game_metadata` para `list_roms` agrupar versões regionais
+    /// e resolver capas sem desserializar todas as fichas completas.
+    pub async fn library_summaries(
+        &self,
+    ) -> Result<std::collections::HashMap<String, RomMetadataSummary>, RepoError> {
+        #[derive(sqlx::FromRow)]
+        struct SummaryRow {
+            rom_id: String,
+            title: String,
+            has_cover: i64,
+            game_uuid: Option<String>,
+            rom_region: Option<String>,
+            rom_revision: Option<String>,
+        }
+
+        let rows: Vec<SummaryRow> = sqlx::query_as(
+            "SELECT rom_id, title, \
+                    ( (cover_url IS NOT NULL AND TRIM(cover_url) <> '') \
+                      OR COALESCE(json_array_length(gamekave_json, '$.covers'), 0) > 0 ) AS has_cover, \
+                    game_uuid, \
+                    json_extract(gamekave_json, '$.romRegion') AS rom_region, \
+                    json_extract(gamekave_json, '$.romRevision') AS rom_revision \
              FROM game_metadata",
         )
         .fetch_all(&self.db)
@@ -42,7 +79,18 @@ impl MetadataRepo {
         .map_err(be)?;
         Ok(rows
             .into_iter()
-            .map(|(rom_id, title, has_cover)| (rom_id, (title, has_cover != 0)))
+            .map(|row| {
+                (
+                    row.rom_id,
+                    RomMetadataSummary {
+                        title: row.title,
+                        has_cover: row.has_cover != 0,
+                        game_uuid: row.game_uuid.filter(|s| !s.trim().is_empty()),
+                        rom_region: row.rom_region.filter(|s| !s.trim().is_empty()),
+                        rom_revision: row.rom_revision.filter(|s| !s.trim().is_empty()),
+                    },
+                )
+            })
             .collect())
     }
 

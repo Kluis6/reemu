@@ -37,12 +37,17 @@ import { PlatformTile } from "../components/PlatformTile";
 import { Shelf } from "../components/Shelf";
 import { ManageLibraryDialog } from "../components/ManageLibraryDialog";
 import { platformLabel } from "../lib/platform";
+import {
+  formatCardGroupBadge,
+  groupRoms,
+  romVariantLabel,
+  type GroupedRomEntry,
+} from "../lib/romGrouping";
 import { errorToast, sysToast } from "../lib/toast";
 import { useLibraryScan } from "../lib/useLibraryScan";
 import {
   listRoms,
   removeRom,
-  type RomEntry,
 } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
 import { useToastStore } from "../stores/useToastStore";
@@ -144,7 +149,7 @@ const SORT_LABEL = {
  * tela inicial (`/`) com hero e faixas curadas fica em `screens/Home`.
  */
 export function Library() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const s = useBrowseStyles();
   const tb = useTabStyles();
   const m = useMotionStyles();
@@ -191,7 +196,9 @@ export function Library() {
   };
 
   const del = useMutation({
-    mutationFn: (id: string) => removeRom(id),
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => removeRom(id)));
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roms"] });
       push(sysToast(t("library.removed"), "Success"));
@@ -199,9 +206,13 @@ export function Library() {
     onError: (e) => push(errorToast(e, "removeGame")),
   });
 
-  const all = useMemo(() => roms.data ?? [], [roms.data]);
+  const uiLang = i18n.resolvedLanguage ?? i18n.language;
+  const all = useMemo(
+    () => groupRoms(roms.data ?? [], uiLang),
+    [roms.data, uiLang],
+  );
 
-  // plataformas presentes → `[systemId, quantidade]`, ordenado pelo rótulo
+  // plataformas presentes -> `[systemId, quantidade]`, ordenado pelo rótulo
   const platformCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const r of all) m.set(r.systemId, (m.get(r.systemId) ?? 0) + 1);
@@ -218,14 +229,19 @@ export function Library() {
   const filtered = useMemo(() => {
     let list = all;
     if (platform !== "all") list = list.filter((r) => r.systemId === platform);
-    if (query)
-      list = list.filter((r) => r.title.toLowerCase().includes(query));
+    if (query) {
+      list = list.filter(
+        (r) =>
+          r.title.toLowerCase().includes(query) ||
+          r.variants.some((v) => v.title.toLowerCase().includes(query)),
+      );
+    }
     return list;
   }, [all, platform, query]);
 
   const view = useMemo(() => {
     const base = tab === "fav" ? filtered.filter((r) => r.isFavorite) : filtered;
-    const cmp: Record<LibSort, (a: RomEntry, b: RomEntry) => number> = {
+    const cmp: Record<LibSort, (a: GroupedRomEntry, b: GroupedRomEntry) => number> = {
       name: (a, b) => a.title.localeCompare(b.title),
       added: (a, b) => b.addedAt - a.addedAt,
       played: (a, b) =>
@@ -236,7 +252,7 @@ export function Library() {
   }, [filtered, tab, sort]);
 
   const byPlatform = useMemo(() => {
-    const groups = new Map<string, RomEntry[]>();
+    const groups = new Map<string, GroupedRomEntry[]>();
     for (const r of view) {
       const list = groups.get(r.systemId) ?? [];
       list.push(r);
@@ -247,17 +263,35 @@ export function Library() {
     );
   }, [view]);
 
-  const cardMenu = (r: RomEntry) =>
-    [
-      { label: t("library.open"), icon: <OpenRegular />, onClick: () => navigate(`/rom/${r.id}`) },
-      { label: t("library.remove"), icon: <DeleteRegular />, onClick: () => del.mutate(r.id) },
-    ];
+  const cardMenu = (r: GroupedRomEntry) => [
+    ...(r.variants.length > 1
+      ? r.variants.map((v) => ({
+          label: t("library.openVersion", {
+            version: romVariantLabel(v, r.variants, t),
+          }),
+          icon: <OpenRegular />,
+          onClick: () => navigate(`/rom/${v.id}`),
+        }))
+      : [
+          {
+            label: t("library.open"),
+            icon: <OpenRegular />,
+            onClick: () => navigate(`/rom/${r.id}`),
+          },
+        ]),
+    {
+      label: t("library.remove"),
+      icon: <DeleteRegular />,
+      onClick: () => del.mutate(r.variants.map((v) => v.id)),
+    },
+  ];
 
-  const card = (r: RomEntry) => (
+  const card = (r: GroupedRomEntry) => (
     <GameCard
       key={r.id}
       title={r.title}
       badge={platformLabel(r.systemId)}
+      regionBadge={formatCardGroupBadge(r, t)}
       boxart={r.boxart}
       favorite={r.isFavorite}
       onClick={() => navigate(`/rom/${r.id}`)}
@@ -265,7 +299,7 @@ export function Library() {
     />
   );
 
-  const grid = (list: readonly RomEntry[]) => (
+  const grid = (list: readonly GroupedRomEntry[]) => (
     <VirtualGrid className={mergeClasses(s.grid, m.fadeIn)} items={list} render={card} />
   );
 

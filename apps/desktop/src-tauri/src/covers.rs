@@ -298,13 +298,9 @@ async fn resolve_cover<R: Runtime>(
 
     let scraped_cover = match edited_cover {
         Some(edited) => net::http::https_url(&edited),
-        None => metadata
-            .get_metadata(rom_id)
-            .await
-            .ok()
-            .flatten()
-            .and_then(|m| m.cover_url)
-            .and_then(|u| net::http::https_url(&u)),
+        None => {
+            resolve_rom_cover_source_url(metadata.get_metadata(rom_id).await.ok().flatten(), &rom)
+        }
     };
     let url = scraped_cover.or_else(|| {
         let title = rom_title(&rom);
@@ -312,6 +308,31 @@ async fn resolve_cover<R: Runtime>(
     });
 
     serve_cached_or_fetch(&path, url, http_fetch_bytes).await
+}
+
+pub(crate) fn resolve_rom_cover_source_url(
+    meta: Option<domain::metadata::GameMetadata>,
+    rom: &domain::library::Rom,
+) -> Option<String> {
+    let m = meta?;
+    let detected = scraping::rom_name::detect_rom_region(
+        &rom.file_path,
+        rom.ident_name.as_deref(),
+        rom.serial.as_deref(),
+    );
+    if let Some(gk) = m.details.gamekave.as_ref() {
+        let reg = gk.rom_region.as_deref().or(detected);
+        if let Some(regional) = scraping::rom_name::pick_regional_cover(
+            &gk.regional_covers,
+            reg,
+            m.cover_url.as_deref(),
+        ) {
+            if let Some(valid) = net::http::https_url(regional) {
+                return Some(valid);
+            }
+        }
+    }
+    m.cover_url.as_deref().and_then(net::http::https_url)
 }
 
 async fn resolve_media_request<R: Runtime>(
@@ -637,5 +658,55 @@ mod tests {
             assert_eq!(resp.status(), 404, "deveria recusar {req_path}");
         }
         assert_eq!(called.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn two_regional_roms_of_same_game_serve_distinct_regional_covers() {
+        let mut regional_covers = std::collections::BTreeMap::new();
+        regional_covers.insert("JP".into(), "https://cdn.gamekave.net/smw/jp.webp".into());
+        regional_covers.insert("EU".into(), "https://cdn.gamekave.net/smw/eu.webp".into());
+        let answer = GameAnswer {
+            game_id: "01950f10-aaaa-7bbb-8ccc-999900001111".into(),
+            title: "Super Mario World".into(),
+            media: Media {
+                cover: Some("https://cdn.gamekave.net/smw/na.webp".into()),
+                regional_covers,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let base_meta = metadata_from_answer("shared", &answer);
+
+        let rom_jp = Rom {
+            id: "smw_jp".into(),
+            file_path: "/roms/snes/Super Mario World (Japan).sfc".into(),
+            system_id: "snes".into(),
+            ..Default::default()
+        };
+        let rom_eu = Rom {
+            id: "smw_eu".into(),
+            file_path: "/roms/snes/Super Mario World (Europe).sfc".into(),
+            system_id: "snes".into(),
+            ..Default::default()
+        };
+        let rom_us = Rom {
+            id: "smw_us".into(),
+            file_path: "/roms/snes/Super Mario World (USA).sfc".into(),
+            system_id: "snes".into(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            resolve_rom_cover_source_url(Some(base_meta.clone()), &rom_jp).as_deref(),
+            Some("https://cdn.gamekave.net/smw/jp.webp")
+        );
+        assert_eq!(
+            resolve_rom_cover_source_url(Some(base_meta.clone()), &rom_eu).as_deref(),
+            Some("https://cdn.gamekave.net/smw/eu.webp")
+        );
+        assert_eq!(
+            resolve_rom_cover_source_url(Some(base_meta), &rom_us).as_deref(),
+            Some("https://cdn.gamekave.net/smw/na.webp")
+        );
     }
 }

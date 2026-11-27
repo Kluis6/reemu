@@ -34,6 +34,24 @@ pub struct RomDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub user_title: Option<String>,
+    /// Chave canônica para agrupar múltiplas ROMs regionais do mesmo jogo na
+    /// mesma plataforma.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub group_key: Option<String>,
+    /// Título limpo extraído do arquivo quando a ROM ainda não tem título do
+    /// catálogo nem `user_title` (usado ao exibir um grupo com múltiplas dumps).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub clean_title: Option<String>,
+    /// Código canônico de região da ROM (`NA`, `EU`, `JP`, `BR`, `KR`, `AU`, `CN`, `WORLD`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub region: Option<String>,
+    /// Qualificador de disco/revisão/edição (`Disc 1`, `Chip 2`, `Rev 1`, `v1.02`...).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub version_qualifier: Option<String>,
 }
 
 /// Título de exibição de uma ROM: o que o usuário renomeou, senão o nome do
@@ -64,24 +82,101 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
         .cover_override_ids()
         .await
         .map_err(AppError::from)?;
-    let meta_titles = meta_repo
-        .titles_and_covers()
+    let meta_summaries = meta_repo
+        .library_summaries()
         .await
         .map_err(AppError::from)?;
+
+    // Se uma ROM do grupo já tem `game_uuid` do catálogo e outra cópia regional
+    // ainda não terminou de resolver, associa `(system_id, canonical_title)` ao
+    // mesmo `game_uuid` para não duplicar o card na prateleira.
+    let mut title_to_uuid: std::collections::HashMap<(String, String), String> =
+        std::collections::HashMap::new();
+    for r in &roms {
+        if r.user_title.is_some() {
+            continue;
+        }
+        if let Some(m) = meta_summaries.get(&r.id) {
+            if let Some(uuid) = &m.game_uuid {
+                let canon = scraping::rom_name::canonical_key(&m.title);
+                if !canon.is_empty() {
+                    title_to_uuid
+                        .entry((r.system_id.clone(), canon))
+                        .or_insert_with(|| uuid.clone());
+                }
+            }
+        }
+    }
+
     Ok(roms
         .into_iter()
         .map(|r| {
             let fallback_title = rom_title(&r);
-            let meta = meta_titles.get(&r.id);
+            let meta = meta_summaries.get(&r.id);
+            let cat_title = meta
+                .map(|m| m.title.trim().to_owned())
+                .filter(|t| !t.is_empty());
+            let cleaned_stem = scraping::rom_name::clean_rom_title(&fallback_title);
+            let clean_title = (r.user_title.is_none()
+                && cat_title.is_none()
+                && !cleaned_stem.is_empty()
+                && cleaned_stem != fallback_title)
+                .then(|| cleaned_stem.clone());
+
             let title = r
                 .user_title
                 .clone()
-                .or_else(|| {
-                    meta.map(|(t, _)| t.trim().to_owned())
-                        .filter(|t| !t.is_empty())
-                })
+                .or_else(|| cat_title.clone())
                 .unwrap_or_else(|| fallback_title.clone());
-            let has_meta_cover = meta.is_some_and(|(_, has_cover)| *has_cover);
+
+            let group_key = if let Some(ut) = &r.user_title {
+                let k = scraping::rom_name::canonical_key(ut);
+                Some(if k.is_empty() {
+                    format!("rom:{}", r.id)
+                } else {
+                    format!("user:{k}")
+                })
+            } else if let Some(uuid) = meta.and_then(|m| m.game_uuid.as_ref()) {
+                Some(format!("game:{uuid}"))
+            } else {
+                let base_for_canon = cat_title.as_deref().unwrap_or(if cleaned_stem.is_empty() {
+                    &fallback_title
+                } else {
+                    &cleaned_stem
+                });
+                let canon = scraping::rom_name::canonical_key(base_for_canon);
+                if canon.is_empty() {
+                    Some(format!("rom:{}", r.id))
+                } else if let Some(uuid) = title_to_uuid.get(&(r.system_id.clone(), canon.clone()))
+                {
+                    Some(format!("game:{uuid}"))
+                } else {
+                    Some(format!("title:{canon}"))
+                }
+            };
+
+            let region = meta
+                .and_then(|m| m.rom_region.as_deref())
+                .and_then(|reg| {
+                    scraping::rom_name::normalize_region_code(reg)
+                        .map(str::to_owned)
+                        .or_else(|| Some(reg.trim().to_ascii_uppercase()))
+                })
+                .or_else(|| {
+                    scraping::rom_name::detect_rom_region(
+                        &r.file_path,
+                        r.ident_name.as_deref(),
+                        r.serial.as_deref(),
+                    )
+                    .map(str::to_owned)
+                });
+            let version_qualifier = scraping::rom_name::extract_rom_qualifier(
+                &r.file_path,
+                r.ident_name.as_deref(),
+                meta.and_then(|m| m.rom_revision.as_deref()),
+            );
+
+            let has_meta_cover = meta.is_some_and(|m| m.has_cover);
             let boxart = (cover_overrides.contains(&r.id)
                 || has_meta_cover
                 || library_scan::libretro_boxart_url(&r.system_id, &fallback_title).is_some())
@@ -110,6 +205,10 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
                 boxart,
                 title,
                 user_title: r.user_title,
+                group_key,
+                clean_title,
+                region,
+                version_qualifier,
                 id: r.id,
                 system_id: r.system_id,
                 file_path: r.file_path,
@@ -629,6 +728,43 @@ mod tests {
         assert_eq!(
             by_id("r_with_cover").boxart,
             Some(crate::covers::cover_url("r_with_cover"))
+        );
+    }
+
+    #[tokio::test]
+    async fn list_roms_assigns_shared_group_key_and_regions_across_regional_dumps() {
+        use domain::library::RomRepository;
+
+        let pool = db::connect_in_memory().await.unwrap();
+        let roms_repo = db::RomsRepo::new(pool.clone());
+
+        for (id, path) in [
+            ("ct_us", "/roms/snes/Chrono Trigger (USA).sfc"),
+            ("ct_jp", "/roms/snes/Chrono Trigger (Japan).sfc"),
+            ("ct_eu", "/roms/snes/Chrono Trigger (Europe) (Rev 1).sfc"),
+        ] {
+            roms_repo
+                .add(&domain::library::Rom {
+                    id: id.into(),
+                    file_path: path.into(),
+                    system_id: "snes".into(),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+        }
+
+        let got = list_roms_from_pool(&pool).await.unwrap();
+        let by_id = |id: &str| got.iter().find(|r| r.id == id).unwrap();
+        assert_eq!(by_id("ct_us").region.as_deref(), Some("NA"));
+        assert_eq!(by_id("ct_jp").region.as_deref(), Some("JP"));
+        assert_eq!(by_id("ct_eu").region.as_deref(), Some("EU"));
+        assert_eq!(by_id("ct_eu").version_qualifier.as_deref(), Some("Rev 1"));
+        assert_eq!(by_id("ct_us").group_key, by_id("ct_jp").group_key);
+        assert_eq!(by_id("ct_us").group_key, by_id("ct_eu").group_key);
+        assert_eq!(
+            by_id("ct_us").clean_title.as_deref(),
+            Some("Chrono Trigger")
         );
     }
 }

@@ -57,6 +57,24 @@ const useLocalStyles = makeStyles({
     fontSize: "16px",
     pointerEvents: "none",
   },
+  regionBadge: {
+    position: "absolute",
+    top: "8px",
+    left: "8px",
+    maxWidth: "calc(100% - 48px)",
+    padding: "2px 8px",
+    borderRadius: tokens.borderRadiusSmall,
+    backgroundColor: "var(--reemuPage)",
+    color: tokens.colorNeutralForeground1,
+    boxShadow: "inset 0 0 0 1px var(--reemuCardStroke)",
+    fontSize: "11px",
+    fontWeight: tokens.fontWeightSemibold,
+    lineHeight: "16px",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    pointerEvents: "none",
+  },
   // Sem capa: o NOME do jogo no próprio card (antes eram só as iniciais —
   // "CA", "CA", "CA" não dizia qual era qual; reconhecer > lembrar).
   noArt: {
@@ -105,6 +123,7 @@ const useLocalStyles = makeStyles({
 export function GameCard({
   title,
   badge,
+  regionBadge,
   boxart,
   favorite,
   onClick,
@@ -113,6 +132,8 @@ export function GameCard({
   title: string;
   /** Linha secundária embaixo do título (normalmente a plataforma). */
   badge?: string;
+  /** Selo compacto de regiões/versões agrupadas sob o card (ex.: "USA · PAL · JP"). */
+  regionBadge?: string;
   boxart?: string | null;
   favorite?: boolean;
   onClick?: () => void;
@@ -184,6 +205,11 @@ export function GameCard({
           <span className={l.noArt}>
             <span className={l.noArtTitle}>{title}</span>
             {badge && <span className={l.noArtSub}>{badge}</span>}
+          </span>
+        )}
+        {regionBadge && (
+          <span className={l.regionBadge} data-testid="card-region-badge">
+            {regionBadge}
           </span>
         )}
         {favorite && (

@@ -1,7 +1,7 @@
 //! Passada de resolução em lotes contra `POST /api/partner/v1/games/resolve`
 //! (D135, D140, D145, D151).
 
-use super::answer::{candidate_from_answer, metadata_from_answer, GameAnswer};
+use super::answer::{candidate_from_answer, metadata_from_answer_for_rom, GameAnswer};
 use super::identify::identify_unidentified;
 use crate::alvanista::client::{partner_error_code, ClientError};
 use crate::alvanista::store::now_secs;
@@ -111,6 +111,10 @@ struct ResolveItemResp {
     status: String,
     #[serde(default)]
     matched_by: Option<String>,
+    #[serde(default)]
+    region: Option<String>,
+    #[serde(default)]
+    revision: Option<String>,
     #[serde(default)]
     reason: Option<String>,
     #[serde(default)]
@@ -495,10 +499,12 @@ impl CatalogEngine {
             .ok_or_else(|| CatalogError::Transient("resposta sem dados do jogo".into()))?;
 
         let meta = self
-            .apply_answer(
+            .apply_answer_with_region(
                 rom_id,
                 &answer,
                 ResolutionState::Manual,
+                None,
+                None,
                 None,
                 None,
                 self.now(),
@@ -521,6 +527,7 @@ impl CatalogEngine {
     /// Grava a resolução (`found` automático ou `manual` escolhida pela pessoa)
     /// e aplica `game_metadata` + `scrape_matches` + invalidação da capa.
     /// No modo `Found`, respeita uma confirmação manual prévia (`user_confirmed`).
+    #[allow(dead_code)]
     pub async fn apply_answer(
         &self,
         rom_id: &str,
@@ -530,8 +537,39 @@ impl CatalogEngine {
         existing: Option<&RomResolution>,
         now: i64,
     ) -> Result<GameMetadata, CatalogError> {
+        self.apply_answer_with_region(rom_id, answer, state, matched_by, None, None, existing, now)
+            .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn apply_answer_with_region(
+        &self,
+        rom_id: &str,
+        answer: &GameAnswer,
+        state: ResolutionState,
+        matched_by: Option<String>,
+        server_region: Option<&str>,
+        server_revision: Option<&str>,
+        existing: Option<&RomResolution>,
+        now: i64,
+    ) -> Result<GameMetadata, CatalogError> {
         let res_repo = db::RomResolutionRepo::new(self.db.clone());
         let meta_repo = db::MetadataRepo::new(self.db.clone());
+        let rom_opt = db::RomsRepo::new(self.db.clone())
+            .get(rom_id)
+            .await
+            .ok()
+            .flatten();
+        let detected_region = rom_opt.as_ref().and_then(|r| {
+            scraping::rom_name::detect_rom_region(
+                &r.file_path,
+                r.ident_name.as_deref(),
+                r.serial.as_deref(),
+            )
+        });
+        let effective_region = server_region
+            .filter(|s| !s.trim().is_empty())
+            .or(detected_region);
 
         let answer_json = serde_json::to_string(answer).ok();
         let is_manual = state == ResolutionState::Manual;
@@ -559,7 +597,7 @@ impl CatalogEngine {
             .await
             .map_err(|e| CatalogError::Repo(e.to_string()))?;
 
-        let meta = metadata_from_answer(rom_id, answer);
+        let meta = metadata_from_answer_for_rom(rom_id, answer, effective_region, server_revision);
         let skip_metadata = !is_manual
             && meta_repo
                 .is_user_confirmed(rom_id)
@@ -737,11 +775,13 @@ impl CatalogEngine {
                         let Some(answer) = item.game else {
                             continue;
                         };
-                        self.apply_answer(
+                        self.apply_answer_with_region(
                             &item.id,
                             &answer,
                             ResolutionState::Found,
                             item.matched_by,
+                            item.region.as_deref(),
+                            item.revision.as_deref(),
                             existing.as_ref(),
                             batch_now,
                         )

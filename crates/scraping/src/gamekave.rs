@@ -122,12 +122,30 @@ pub(super) async fn query(
     let Some(mut candidate) = matched else {
         return Ok(None);
     };
+    let rom_region = rom_name::detect_rom_region(
+        query.ident_name.unwrap_or(query.file_stem),
+        None,
+        query.serial,
+    );
+    if let Some(gk) = candidate.details.gamekave.as_mut() {
+        gk.rom_region = rom_region.map(str::to_owned);
+    }
     // A ficha da busca continua utilizável se a consulta extra falhar.
     if let Some(assets) = fetch_assets(client, search_url, &candidate.external_id).await {
         let details = candidate
             .details
             .gamekave
             .get_or_insert_with(Default::default);
+        for (region, val) in assets["regional_covers"].as_object().into_iter().flatten() {
+            if let Some(url) = cover_media(val) {
+                let key = rom_name::normalize_region_code(region)
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| region.trim().to_ascii_uppercase());
+                if !key.is_empty() {
+                    details.regional_covers.insert(key, url);
+                }
+            }
+        }
         for (list, kind) in [
             (&mut details.covers, "covers"),
             (&mut details.heroes, "heroes"),
@@ -146,9 +164,16 @@ pub(super) async fn query(
         }
         details.achievement_count = count(&assets["achievements"]["count"]);
         details.soundtrack_count = count(&assets["soundtrack_files"]["count"]);
-        candidate.cover_url = candidate
+        let fallback_cover = candidate
             .cover_url
+            .clone()
             .or_else(|| details.covers.first().cloned());
+        candidate.cover_url = rom_name::pick_regional_cover(
+            &details.regional_covers,
+            rom_region,
+            fallback_cover.as_deref(),
+        )
+        .map(str::to_owned);
         candidate.details.fanart_url = candidate
             .details
             .fanart_url
@@ -165,6 +190,14 @@ pub(super) async fn query(
             .details
             .video_url
             .or_else(|| details.trailers.first().cloned());
+    } else if let Some(details) = candidate.details.gamekave.as_ref() {
+        let fallback_cover = candidate.cover_url.clone();
+        candidate.cover_url = rom_name::pick_regional_cover(
+            &details.regional_covers,
+            rom_region,
+            fallback_cover.as_deref(),
+        )
+        .map(str::to_owned);
     }
     Ok(Some(candidate))
 }
@@ -176,6 +209,12 @@ fn text(value: &Value) -> Option<&str> {
 fn media(value: &Value) -> Option<String> {
     let url = reqwest::Url::parse(text(value)?).ok()?;
     (url.scheme() == "https" && url.host_str() == Some("cdn.gamekave.net")).then(|| url.to_string())
+}
+
+fn cover_media(value: &Value) -> Option<String> {
+    let url = reqwest::Url::parse(text(value)?).ok()?;
+    let host_ok = matches!(url.host_str(), Some("cdn.gamekave.net" | "images.igdb.com"));
+    (url.scheme() == "https" && host_ok).then(|| url.to_string())
 }
 
 async fn fetch_assets(client: &reqwest::Client, search_url: &str, game_id: &str) -> Option<Value> {
@@ -270,6 +309,18 @@ fn catalog_details(game: &Value) -> GameKaveData {
         entries(&metadata["screenshots"]).filter_map(media),
     );
     append_urls(&mut details.covers, catalog_media(metadata, "box-2D"));
+    for item in entries(&metadata["medias"]) {
+        let is_box = text(&item["type"]).is_some_and(|t| t.eq_ignore_ascii_case("box-2D"));
+        if !is_box {
+            continue;
+        }
+        if let (Some(reg), Some(url)) = (
+            text(&item["region"]).and_then(rom_name::normalize_region_code),
+            cover_media(&item["url"]),
+        ) {
+            details.regional_covers.entry(reg.to_owned()).or_insert(url);
+        }
+    }
     append_urls(&mut details.heroes, catalog_media(metadata, "fanart"));
     append_urls(&mut details.screenshots, catalog_media(metadata, "ss"));
     append_urls(
