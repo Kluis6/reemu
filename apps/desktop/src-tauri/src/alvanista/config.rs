@@ -9,6 +9,7 @@ pub const CLIENT_ID: &str = "reemu";
 pub const SCOPE_PROFILE: &str = "profile:read";
 pub const SCOPE_SAVES: &str = "saves";
 pub const SCOPE_COLLECTION: &str = "collection";
+pub const SCOPE_GAMELOG: &str = "gamelog";
 
 /// `(site, api)`. Em release são sempre as duas URLs de produção. Só em
 /// build de debug `REEMU_ALVANISTA_BASE` troca: `"<site>,<api>"` ou uma URL

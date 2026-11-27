@@ -250,6 +250,38 @@ impl Alvanista {
         res
     }
 
+    /// Envio `multipart/form-data` autenticado nas rotas de parceiro (`/api/partner/v1/*`).
+    pub(crate) async fn partner_multipart<F>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        make_form: F,
+    ) -> Result<(u16, serde_json::Value), ClientError>
+    where
+        F: Fn() -> Result<reqwest::multipart::Form, String>,
+    {
+        if !self.has_session().await {
+            return Err(ClientError::AuthEnded);
+        }
+        let res = self.client.authed_multipart(method, path, make_form).await;
+        if matches!(res, Err(ClientError::AuthEnded)) {
+            let _ = self.store().mirror_clear().await;
+            self.forget_save_device(true).await;
+        }
+        res
+    }
+
+    pub(crate) async fn put_presigned_bytes(
+        &self,
+        upload_url: &str,
+        headers: &std::collections::HashMap<String, String>,
+        bytes: Vec<u8>,
+    ) -> Result<(), String> {
+        self.client
+            .put_presigned_bytes(upload_url, headers, bytes)
+            .await
+    }
+
     /// Cancela a tentativa em andamento (se houver).
     pub fn cancel(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
@@ -750,6 +782,7 @@ fn allowed_extra_scope(s: &str) -> Option<&'static str> {
         config::SCOPE_PROFILE => Some(config::SCOPE_PROFILE),
         config::SCOPE_SAVES => Some(config::SCOPE_SAVES),
         config::SCOPE_COLLECTION => Some(config::SCOPE_COLLECTION),
+        config::SCOPE_GAMELOG => Some(config::SCOPE_GAMELOG),
         "friends:read" => Some("friends:read"),
         "achievements:read" => Some("achievements:read"),
         _ => None,

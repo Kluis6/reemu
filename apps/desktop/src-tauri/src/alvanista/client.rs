@@ -336,6 +336,78 @@ impl Client {
         }
     }
 
+    /// Envio `multipart/form-data` autenticado contra `/api/partner/v1/*` (usado
+    /// para screenshots e notas de audio do Meu Log), com renovacao automatica
+    /// de token num 401.
+    pub(crate) async fn authed_multipart<F>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        make_form: F,
+    ) -> Result<(u16, serde_json::Value)>
+    where
+        F: Fn() -> std::result::Result<reqwest::multipart::Form, String>,
+    {
+        match self.store.has_session().await {
+            Ok(true) => {}
+            Ok(false) => return Err(ClientError::AuthEnded),
+            Err(e) => return Err(ClientError::Transient(e.to_string())),
+        }
+        let mut tokens = match self.store.load().await {
+            Ok(Some(loaded)) => loaded.tokens,
+            Ok(None) => {
+                self.session_ended().await;
+                return Err(ClientError::AuthEnded);
+            }
+            Err(e) => return Err(ClientError::Transient(e.to_string())),
+        };
+        let form1 = make_form().map_err(ClientError::Transient)?;
+        let mut result = self
+            .send_authed_multipart(&tokens.access_token, method.clone(), path, form1)
+            .await;
+        if matches!(result, Err(MeError::Unauthorized)) {
+            tokens = self.refresh(&tokens).await?;
+            let form2 = make_form().map_err(ClientError::Transient)?;
+            result = self
+                .send_authed_multipart(&tokens.access_token, method, path, form2)
+                .await;
+        }
+        match result {
+            Ok(out) => Ok(out),
+            Err(MeError::Unauthorized) => Err(self.end_unauthorized().await),
+            Err(MeError::Failed(e)) => Err(e),
+        }
+    }
+
+    /// `PUT` direto numa URL pre-assinada de R2 devolvida por `/gamelog/.../uploads`
+    /// (sem cabecalho `Authorization`, apenas os cabecalhos indicados pelo servidor).
+    pub(crate) async fn put_presigned_bytes(
+        &self,
+        upload_url: &str,
+        headers: &std::collections::HashMap<String, String>,
+        bytes: Vec<u8>,
+    ) -> std::result::Result<(), String> {
+        let mut req = self
+            .http
+            .put(upload_url)
+            .timeout(Duration::from_secs(300))
+            .body(bytes);
+        for (k, v) in headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| format!("envio de video falhou: {}", e.without_url()))?;
+        if !resp.status().is_success() {
+            return Err(format!(
+                "armazenamento recusou o video (HTTP {})",
+                resp.status().as_u16()
+            ));
+        }
+        Ok(())
+    }
+
     async fn end_unauthorized(&self) -> ClientError {
         if let Err(e) = self.store.clear_tokens().await {
             log::warn!("alvanista: não deu pra apagar a sessão: {e}");
@@ -362,23 +434,62 @@ impl Client {
             .send()
             .await
             .map_err(|e| MeError::Failed(transport(e)))?;
+        Self::parse_partner_response(path, resp).await
+    }
+
+    async fn send_authed_multipart(
+        &self,
+        access_token: &str,
+        method: reqwest::Method,
+        path: &str,
+        form: reqwest::multipart::Form,
+    ) -> std::result::Result<(u16, serde_json::Value), MeError> {
+        let resp = self
+            .http
+            .request(method, format!("{}{path}", self.api))
+            .timeout(Duration::from_secs(120))
+            .bearer_auth(access_token)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| MeError::Failed(transport(e)))?;
+        Self::parse_partner_response(path, resp).await
+    }
+
+    async fn parse_partner_response(
+        path: &str,
+        resp: reqwest::Response,
+    ) -> std::result::Result<(u16, serde_json::Value), MeError> {
         let status = resp.status();
         let route = path.split('?').next().unwrap_or(path);
         log::debug!("alvanista: {route} respondeu {}", status.as_u16());
         if status == StatusCode::UNAUTHORIZED {
             return Err(MeError::Unauthorized);
         }
+        if status == StatusCode::NO_CONTENT {
+            return Ok((status.as_u16(), serde_json::Value::Null));
+        }
         if status.is_success() {
-            let val: serde_json::Value = resp
-                .json()
+            let bytes = resp
+                .bytes()
                 .await
+                .map_err(|_| MeError::Failed(ClientError::Transient("resposta ilegível".into())))?;
+            if bytes.is_empty() {
+                return Ok((status.as_u16(), serde_json::Value::Null));
+            }
+            let val: serde_json::Value = serde_json::from_slice(&bytes)
                 .map_err(|_| MeError::Failed(ClientError::Transient("resposta ilegível".into())))?;
             return Ok((status.as_u16(), val));
         }
         let parsed = resp.json::<serde_json::Value>().await.ok();
         let code = parsed.as_ref().and_then(partner_error_code);
         if (status == StatusCode::SERVICE_UNAVAILABLE && code == Some("rom_resolve_disabled"))
-            || (status == StatusCode::NOT_FOUND && code == Some("game_not_found"))
+            || (status == StatusCode::NOT_FOUND
+                && matches!(
+                    code,
+                    Some("game_not_found" | "not_found" | "session_not_found")
+                ))
+            || (status.as_u16() == 507 && code == Some("quota_exceeded"))
         {
             return Ok((status.as_u16(), parsed.unwrap_or(serde_json::Value::Null)));
         }
