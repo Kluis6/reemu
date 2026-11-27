@@ -163,6 +163,16 @@ pub(crate) async fn load_rom_metadata(
         rom.ident_name.as_deref(),
         rom.serial.as_deref(),
     );
+    let has_cover_edit = edits
+        .as_ref()
+        .and_then(|e| e.cover_url.as_deref())
+        .is_some_and(|u| !u.trim().is_empty());
+    let imported = match imported {
+        Some(meta) if !has_cover_edit => Some(
+            crate::covers::heal_rom_front_cover_if_needed(pool, None, rom_id, &rom, meta).await,
+        ),
+        other => other,
+    };
     let mut dto = GameMetadataDto::from(imported.unwrap_or_else(|| GameMetadata {
         rom_id: rom_id.to_owned(),
         title: super::library::rom_title(&rom),

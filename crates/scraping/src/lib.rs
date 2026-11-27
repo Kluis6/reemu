@@ -602,12 +602,14 @@ fn parse_jeu_for_region(
 
     let default_cover = jeu.get("medias").and_then(|m| {
         let arr = m.as_array()?;
-        arr.iter()
-            .find(|x| {
-                matches!(
-                    x.get("type").and_then(Value::as_str),
-                    Some("box-2D") | Some("box-2d")
-                )
+        ["box-2D", "box-2d", "cover", "box-3D", "box-3d"]
+            .into_iter()
+            .find_map(|wanted| {
+                arr.iter().find(|x| {
+                    x.get("type")
+                        .and_then(Value::as_str)
+                        .is_some_and(|t| t == wanted)
+                })
             })
             .or_else(|| arr.first())
             .and_then(|x| x.get("url").and_then(Value::as_str))

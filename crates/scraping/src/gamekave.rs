@@ -137,7 +137,7 @@ pub(super) async fn query(
             .gamekave
             .get_or_insert_with(Default::default);
         for (region, val) in assets["regional_covers"].as_object().into_iter().flatten() {
-            if let Some(url) = cover_media(val) {
+            if let Some(url) = cover_media(val).filter(|u| !rom_name::is_non_front_cover_url(u)) {
                 let key = rom_name::normalize_region_code(region)
                     .map(str::to_owned)
                     .unwrap_or_else(|| region.trim().to_ascii_uppercase());
@@ -146,8 +146,41 @@ pub(super) async fn query(
                 }
             }
         }
+        let default_asset_cover = cover_media(&assets["covers"]["default"]["url"]);
+        let mut ranked_covers: Vec<((u8, u8, u8), usize, String)> =
+            entries(&assets["covers"]["list"])
+                .enumerate()
+                .filter_map(|(idx, item)| {
+                    if item["hidden"].as_bool() == Some(true) {
+                        return None;
+                    }
+                    let url = cover_media(&item["url"])?;
+                    let is_def = item["is_default"].as_bool() == Some(true)
+                        || default_asset_cover.as_deref() == Some(url.as_str());
+                    let dims = match (count(&item["width"]), count(&item["height"])) {
+                        (Some(w), Some(h)) if w > 0 && h > 0 => Some((w, h)),
+                        _ => None,
+                    };
+                    let rank = rom_name::cover_url_rank(&url, Some(query.system_id), is_def, dims);
+                    Some((rank, idx, url))
+                })
+                .collect();
+        ranked_covers.sort_by_key(|(rank, idx, _)| (*rank, *idx));
+        let mut merged_covers = Vec::new();
+        append_urls(
+            &mut merged_covers,
+            ranked_covers
+                .into_iter()
+                .map(|(_, _, url)| url)
+                .chain(details.covers.drain(..)),
+        );
+        merged_covers.sort_by_key(|url| {
+            let is_def = default_asset_cover.as_deref() == Some(url.as_str());
+            rom_name::cover_url_rank(url, Some(query.system_id), is_def, None)
+        });
+        details.covers = merged_covers;
+
         for (list, kind) in [
-            (&mut details.covers, "covers"),
             (&mut details.heroes, "heroes"),
             (&mut details.screenshots, "screenshots"),
             (&mut details.trailers, "trailers"),
@@ -164,10 +197,21 @@ pub(super) async fn query(
         }
         details.achievement_count = count(&assets["achievements"]["count"]);
         details.soundtrack_count = count(&assets["soundtrack_files"]["count"]);
-        let fallback_cover = candidate
+        let best_cover_pool: Vec<&str> = candidate
             .cover_url
-            .clone()
-            .or_else(|| details.covers.first().cloned());
+            .as_deref()
+            .into_iter()
+            .chain(default_asset_cover.as_deref())
+            .chain(details.covers.iter().map(String::as_str))
+            .collect();
+        let fallback_cover = rom_name::pick_best_cover_url(
+            best_cover_pool,
+            Some(query.system_id),
+            default_asset_cover
+                .as_deref()
+                .or(candidate.cover_url.as_deref()),
+        )
+        .map(str::to_owned);
         candidate.cover_url = rom_name::pick_regional_cover(
             &details.regional_covers,
             rom_region,

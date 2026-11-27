@@ -922,14 +922,192 @@ pub fn extract_rom_qualifier(
     (!parts.is_empty()).then(|| parts.join(" · "))
 }
 
+/// Extrai o radical normalizado do arquivo de capa em uma URL ou caminho,
+/// removendo extensão e sufixo `_{8 hex}` do espelho (`box-texture_0af13c71.png` -> `box-texture`).
+pub fn cover_stem(url_or_path: &str) -> String {
+    let clean = url_or_path.split(['?', '#']).next().unwrap_or(url_or_path);
+    let file_name = clean.rsplit(['/', '\\']).next().unwrap_or(clean);
+    let no_ext = match file_name.rsplit_once('.') {
+        Some((base, ext)) if !base.is_empty() && !ext.is_empty() => base,
+        _ => file_name,
+    };
+    let stem = match no_ext.rsplit_once('_') {
+        Some((base, hash))
+            if !base.is_empty()
+                && hash.len() == 8
+                && hash.chars().all(|c| c.is_ascii_hexdigit()) =>
+        {
+            base
+        }
+        _ => no_ext,
+    };
+    stem.to_ascii_lowercase()
+}
+
+/// Indica se a URL aponta para uma arte não-frontal de caixa: textura aberta
+/// com contracapa + lombada + frente (`box-texture`), textura de mídia
+/// (`support-texture`), verso/lateral ou render 3D inclinado (`box-3D`).
+pub fn is_non_front_cover_url(url: &str) -> bool {
+    let stem = cover_stem(url);
+    stem.contains("texture")
+        || stem.contains("3d")
+        || stem == "back"
+        || stem.ends_with("-back")
+        || stem.ends_with("_back")
+        || stem == "side"
+        || stem.ends_with("-side")
+        || stem.ends_with("_side")
+        || stem.contains("spine")
+}
+
+/// Sistemas cujas caixas físicas originais são quadradas (~1:1, ex.: 700x700
+/// nas capas `cover` / `box-2D` do catálogo).
+pub fn is_square_box_system(system_id: &str) -> bool {
+    matches!(
+        system_id.trim().to_ascii_lowercase().as_str(),
+        "gb" | "gbc"
+            | "gba"
+            | "vb"
+            | "nds"
+            | "pokemini"
+            | "psx"
+            | "dreamcast"
+            | "pcengine"
+            | "pcenginecd"
+            | "supergrafx"
+            | "pcfx"
+            | "ngp"
+            | "neogeocd"
+            | "3do"
+            | "cdi"
+            | "lynx"
+            | "gamegear"
+            | "wonderswan"
+            | "supervision"
+            | "megaduck"
+            | "game-boy"
+            | "game-boy-color"
+            | "game-boy-advance"
+            | "virtual-boy"
+            | "pokemon-mini"
+            | "nintendo-ds"
+            | "nintendo-dsi"
+            | "playstation"
+            | "turbografx-16-pc-engine"
+            | "turbografx-16-pc-engine-cd"
+            | "pc-engine-cd-rom"
+            | "pc-engine-supergrafx"
+            | "neo-geo-pocket"
+            | "neo-geo-pocket-color"
+            | "neo-geo-cd"
+            | "3do-interactive-multiplayer"
+            | "philips-cd-i"
+            | "atari-lynx"
+            | "sega-game-gear"
+            | "wonderswan-color"
+            | "watara-supervision"
+            | "watara-quickshot-supervision"
+    )
+}
+
+/// Pontuação de prioridade para escolha automática de capa (menor = melhor):
+/// `(kind_tier, square_pref, default_pref)`.
+/// - `kind_tier = 0`: capa frontal 2D completa (`cover`, `box-2D`, `1080p`, `coXXXX`...)
+/// - `kind_tier = 10`: resolução intermediária (`cover_big`)
+/// - `kind_tier = 20`: miniatura pequena (`thumb`, `cover_small`)
+/// - `kind_tier = 30`: caixa 3D inclinada (`box-3D`)
+/// - `kind_tier = 40`: caixa aberta com lombada/verso (`box-texture`, `back`, `side`)
+pub fn cover_url_rank(
+    url: &str,
+    system_id: Option<&str>,
+    is_default: bool,
+    dims: Option<(u32, u32)>,
+) -> (u8, u8, u8) {
+    let lower = url.to_ascii_lowercase();
+    let stem = cover_stem(url);
+
+    let is_wrap_or_back = stem.contains("texture")
+        || stem == "back"
+        || stem.ends_with("-back")
+        || stem.ends_with("_back")
+        || stem == "side"
+        || stem.ends_with("-side")
+        || stem.ends_with("_side")
+        || stem.contains("spine");
+    let is_3d = stem.contains("3d");
+    let is_tiny = matches!(stem.as_str(), "thumb" | "cover_small")
+        || lower.contains("/t_thumb/")
+        || lower.contains("/t_cover_small/");
+    let is_medium = stem == "cover_big";
+
+    let kind_tier = if is_wrap_or_back {
+        40
+    } else if is_3d {
+        30
+    } else if is_tiny {
+        20
+    } else if is_medium {
+        10
+    } else {
+        0
+    };
+
+    let known_square = match dims {
+        Some((w, h)) if w > 0 && h > 0 => {
+            let ratio = f64::from(w) / f64::from(h);
+            (0.85..=1.18).contains(&ratio)
+        }
+        _ => {
+            system_id.is_some_and(is_square_box_system)
+                && matches!(stem.as_str(), "cover" | "box-2d")
+        }
+    };
+    let square_pref = if kind_tier == 0 && known_square { 0 } else { 1 };
+
+    let default_pref = if kind_tier == 0 && is_default {
+        0
+    } else if matches!(
+        stem.as_str(),
+        "1080p" | "cover" | "box-2d" | "cover_big_2x" | "720p"
+    ) {
+        1
+    } else {
+        2
+    };
+
+    (kind_tier, square_pref, default_pref)
+}
+
+/// Escolhe a melhor capa frontal/quadrada dentre uma sequência de URLs candidatas.
+pub fn pick_best_cover_url<'a>(
+    candidates: impl IntoIterator<Item = &'a str>,
+    system_id: Option<&str>,
+    default_url: Option<&str>,
+) -> Option<&'a str> {
+    candidates
+        .into_iter()
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .enumerate()
+        .min_by_key(|(idx, u)| {
+            let is_def = default_url.is_some_and(|d| d.trim() == *u);
+            (cover_url_rank(u, system_id, is_def, None), *idx)
+        })
+        .map(|(_, u)| u)
+}
+
 /// Escolhe a capa regional mais adequada para a região da ROM (`JP`, `EU`, `NA`,
 /// `BR`, `KR`, `AU`, `WORLD`), caindo para `fallback` quando não houver variante
-/// específica para aquela região.
+/// específica para aquela região (e evitando cair em `box-texture`/`box-3D` se
+/// houver capa frontal disponível).
 pub fn pick_regional_cover<'a>(
     regional_covers: &'a std::collections::BTreeMap<String, String>,
     region: Option<&str>,
     fallback: Option<&'a str>,
 ) -> Option<&'a str> {
+    let fallback_clean = fallback.map(str::trim).filter(|u| !u.is_empty());
+    let fallback_is_front = fallback_clean.is_some_and(|u| !is_non_front_cover_url(u));
+
     if !regional_covers.is_empty() {
         if let Some(raw_reg) = region {
             let norm = normalize_region_code(raw_reg);
@@ -945,20 +1123,48 @@ pub fn pick_regional_cover<'a>(
                 _ => &[],
             };
             for key in candidates {
-                if let Some(url) = regional_covers.get(*key).filter(|u| !u.trim().is_empty()) {
-                    return Some(url.as_str());
+                if let Some(url) = regional_covers
+                    .get(*key)
+                    .map(String::as_str)
+                    .map(str::trim)
+                    .filter(|u| !u.is_empty() && (!fallback_is_front || !is_non_front_cover_url(u)))
+                {
+                    return Some(url);
                 }
             }
             let direct = raw_reg.trim().to_ascii_uppercase();
             if let Some(url) = regional_covers
                 .get(&direct)
-                .filter(|u| !u.trim().is_empty())
+                .map(String::as_str)
+                .map(str::trim)
+                .filter(|u| !u.is_empty() && (!fallback_is_front || !is_non_front_cover_url(u)))
             {
-                return Some(url.as_str());
+                return Some(url);
+            }
+        }
+
+        if !fallback_is_front {
+            for key in ["WORLD", "NA", "EU", "BR", "JP", "AU", "KR", "CN"] {
+                if let Some(url) = regional_covers
+                    .get(key)
+                    .map(String::as_str)
+                    .map(str::trim)
+                    .filter(|u| !u.is_empty() && !is_non_front_cover_url(u))
+                {
+                    return Some(url);
+                }
+            }
+            if let Some(url) = regional_covers
+                .values()
+                .map(String::as_str)
+                .map(str::trim)
+                .find(|u| !u.is_empty() && !is_non_front_cover_url(u))
+            {
+                return Some(url);
             }
         }
     }
-    fallback.filter(|u| !u.trim().is_empty())
+    fallback_clean
 }
 
 #[cfg(test)]
@@ -1264,6 +1470,43 @@ mod tests {
                 Some("https://cdn.gamekave.net/na.webp")
             ),
             Some("https://cdn.gamekave.net/na.webp")
+        );
+
+        // Nunca mantém `box-texture` como fallback quando há capa frontal disponível.
+        assert_eq!(
+            pick_regional_cover(
+                &covers,
+                None,
+                Some(
+                    "https://cdn.gamekave.net/games/g/cover/screenscraper/box-texture_0af13c71.png"
+                )
+            ),
+            Some("https://cdn.gamekave.net/eu.webp")
+        );
+    }
+
+    #[test]
+    fn ranks_front_and_square_covers_ahead_of_box_texture_and_box_3d() {
+        let wrap = "https://cdn.gamekave.net/games/g/cover/screenscraper/box-texture_0af13c71.png";
+        let box3d = "https://cdn.gamekave.net/games/g/cover/screenscraper/box-3D_b4c06009.png";
+        let box2d = "https://cdn.gamekave.net/games/g/cover/screenscraper/box-2D_d75bd986.png";
+        let cover = "https://cdn.gamekave.net/games/g/cover/screenscraper/cover_d5a30ce5.png";
+        let igdb = "https://cdn.gamekave.net/games/g/covers/igdb/co8lo8.jpg";
+
+        assert!(is_non_front_cover_url(wrap));
+        assert!(is_non_front_cover_url(box3d));
+        assert!(!is_non_front_cover_url(box2d));
+        assert!(!is_non_front_cover_url(cover));
+        assert!(!is_non_front_cover_url(igdb));
+
+        assert_eq!(
+            pick_best_cover_url([wrap, box3d, box2d, cover], Some("atari2600"), Some(cover)),
+            Some(cover)
+        );
+        // Em plataformas de caixa quadrada (GB/GBA/PSX/Dreamcast/NDS), prefere `cover`/`box-2D` (1:1).
+        assert_eq!(
+            pick_best_cover_url([wrap, igdb, cover], Some("gba"), Some(igdb)),
+            Some(cover)
         );
     }
 }

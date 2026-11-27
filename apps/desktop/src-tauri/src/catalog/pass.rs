@@ -891,31 +891,124 @@ fn push_unique_asset(list: &mut Vec<String>, candidate: Option<String>, max_len:
     }
 }
 
+pub(crate) fn pick_best_public_catalog_cover(
+    platform: Option<&str>,
+    current_cover: Option<&str>,
+    assets: Option<&serde_json::Value>,
+    game: Option<&serde_json::Value>,
+) -> Option<String> {
+    let mut candidates: Vec<((u8, u8, u8), usize, String)> = Vec::new();
+    let mut push = |url: String, is_default: bool, dims: Option<(u32, u32)>| {
+        if candidates.iter().any(|(_, _, existing)| existing == &url) {
+            return;
+        }
+        let idx = candidates.len();
+        let rank = scraping::rom_name::cover_url_rank(&url, platform, is_default, dims);
+        candidates.push((rank, idx, url));
+    };
+
+    let default_asset_url = assets
+        .and_then(|a| a.pointer("/covers/default/url"))
+        .and_then(serde_json::Value::as_str)
+        .and_then(safe_catalog_asset_url);
+
+    if let Some(cur) = current_cover.and_then(safe_catalog_asset_url) {
+        let is_def = default_asset_url.as_deref() == Some(cur.as_str())
+            && !scraping::rom_name::is_non_front_cover_url(&cur);
+        push(cur, is_def, None);
+    }
+
+    if let Some(def) = default_asset_url.clone() {
+        push(def, true, None);
+    }
+
+    if let Some(list) = assets
+        .and_then(|a| a.pointer("/covers/list"))
+        .and_then(serde_json::Value::as_array)
+    {
+        for it in list {
+            if it["hidden"].as_bool() == Some(true) {
+                continue;
+            }
+            let Some(url) = it["url"].as_str().and_then(safe_catalog_asset_url) else {
+                continue;
+            };
+            let is_def = it["is_default"].as_bool() == Some(true)
+                || default_asset_url.as_deref() == Some(url.as_str());
+            let dims = match (
+                it["width"].as_u64().and_then(|v| u32::try_from(v).ok()),
+                it["height"].as_u64().and_then(|v| u32::try_from(v).ok()),
+            ) {
+                (Some(w), Some(h)) if w > 0 && h > 0 => Some((w, h)),
+                _ => None,
+            };
+            push(url, is_def, dims);
+        }
+    }
+
+    if let Some(game) = game {
+        let meta = &game["metadata"];
+        for raw in [
+            game["cover_url"].as_str(),
+            meta["cover_url"].as_str(),
+            meta.pointer("/cover/url")
+                .and_then(serde_json::Value::as_str),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if let Some(url) = safe_catalog_asset_url(raw) {
+                push(url, true, None);
+            }
+        }
+    }
+
+    candidates
+        .into_iter()
+        .min_by_key(|(rank, idx, _)| (*rank, *idx))
+        .map(|(_, _, url)| url)
+}
+
 pub(crate) fn apply_public_catalog_to_answer(
     answer: &mut GameAnswer,
     assets: Option<&serde_json::Value>,
     game: Option<&serde_json::Value>,
 ) {
-    if let Some(assets) = assets {
-        if answer.media.cover.is_none() {
-            answer.media.cover = assets
-                .pointer("/covers/default/url")
-                .and_then(serde_json::Value::as_str)
-                .and_then(safe_catalog_asset_url)
-                .or_else(|| {
-                    assets
-                        .pointer("/covers/list")
-                        .and_then(serde_json::Value::as_array)?
-                        .iter()
-                        .filter(|it| it["hidden"].as_bool() != Some(true))
-                        .find_map(|it| it["url"].as_str().and_then(safe_catalog_asset_url))
-                });
+    if let Some(best_cover) = pick_best_public_catalog_cover(
+        answer.platform.as_deref(),
+        answer.media.cover.as_deref(),
+        assets,
+        game,
+    ) {
+        let should_replace = match answer.media.cover.as_deref() {
+            None => true,
+            Some(cur) if scraping::rom_name::is_non_front_cover_url(cur) => true,
+            Some(cur) => {
+                let cur_rank =
+                    scraping::rom_name::cover_url_rank(cur, answer.platform.as_deref(), true, None);
+                let new_rank = scraping::rom_name::cover_url_rank(
+                    &best_cover,
+                    answer.platform.as_deref(),
+                    true,
+                    None,
+                );
+                (new_rank.0, new_rank.1) < (cur_rank.0, cur_rank.1)
+            }
+        };
+        if should_replace {
+            answer.media.cover = Some(best_cover);
         }
+    }
+
+    if let Some(assets) = assets {
         if let Some(reg_obj) = assets["regional_covers"].as_object() {
             for (region, val) in reg_obj {
                 let Some(url) = val.as_str().and_then(safe_catalog_asset_url) else {
                     continue;
                 };
+                if scraping::rom_name::is_non_front_cover_url(&url) {
+                    continue;
+                }
                 let key = scraping::rom_name::normalize_region_code(region)
                     .map(str::to_owned)
                     .unwrap_or_else(|| region.trim().to_ascii_uppercase());
@@ -2091,6 +2184,57 @@ mod tests {
                 "https://cdn.gamekave.net/games/2015da97-ad78-4020-97ff-4caa387cf66d/screenshot/igdb/screenshot_1.jpg",
                 "https://images.igdb.com/igdb/image/upload/t_1080p/scuazf.jpg"
             ]
+        );
+    }
+
+    #[test]
+    fn apply_public_catalog_replaces_box_texture_with_front_and_square_cover() {
+        let mut answer = GameAnswer {
+            game_id: "27079dab-d849-4d1b-9b77-3b3a81f63cfd".into(),
+            title: "Gremlins 2 : The New Batch".into(),
+            platform: Some("game-boy".into()),
+            media: super::super::answer::Media {
+                cover: Some(
+                    "https://cdn.gamekave.net/games/27079dab-d849-4d1b-9b77-3b3a81f63cfd/cover/screenscraper/box-texture_0af13c71.png"
+                        .into(),
+                ),
+                ..Default::default()
+            },
+            media_pending: false,
+            ..Default::default()
+        };
+        let assets = json!({
+            "covers": {
+                "list": [
+                    {
+                        "hidden": false,
+                        "is_default": false,
+                        "url": "https://cdn.gamekave.net/games/27079dab-d849-4d1b-9b77-3b3a81f63cfd/cover/screenscraper/box-texture_0af13c71.png"
+                    },
+                    {
+                        "hidden": false,
+                        "is_default": false,
+                        "url": "https://cdn.gamekave.net/games/27079dab-d849-4d1b-9b77-3b3a81f63cfd/cover/screenscraper/box-3D_b4c06009.png"
+                    },
+                    {
+                        "hidden": false,
+                        "is_default": false,
+                        "url": "https://cdn.gamekave.net/games/27079dab-d849-4d1b-9b77-3b3a81f63cfd/cover/screenscraper/box-2D_d75bd986.png"
+                    },
+                    {
+                        "hidden": false,
+                        "is_default": true,
+                        "url": "https://cdn.gamekave.net/games/27079dab-d849-4d1b-9b77-3b3a81f63cfd/cover/screenscraper/cover_d5a30ce5.png"
+                    }
+                ]
+            }
+        });
+
+        apply_public_catalog_to_answer(&mut answer, Some(&assets), None);
+
+        assert_eq!(
+            answer.media.cover.as_deref(),
+            Some("https://cdn.gamekave.net/games/27079dab-d849-4d1b-9b77-3b3a81f63cfd/cover/screenscraper/cover_d5a30ce5.png")
         );
     }
 }

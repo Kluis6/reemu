@@ -82,6 +82,9 @@ pub fn metadata_from_answer_for_rom(
         let Some(url) = https_url(raw_url) else {
             continue;
         };
+        if scraping::rom_name::is_non_front_cover_url(&url) {
+            continue;
+        }
         let key = scraping::rom_name::normalize_region_code(region)
             .map(str::to_owned)
             .unwrap_or_else(|| region.trim().to_ascii_uppercase());
@@ -128,6 +131,10 @@ pub fn metadata_from_answer_for_rom(
             covers.push(c.clone());
         }
     }
+    covers.sort_by_key(|c| {
+        let is_selected = cover_url.as_deref() == Some(c.as_str());
+        scraping::rom_name::cover_url_rank(c, a.platform.as_deref(), is_selected, None)
+    });
 
     let gamekave = GameKaveData {
         descriptions,

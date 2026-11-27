@@ -182,10 +182,16 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
                 let seed = if let Some(ov) = override_cover {
                     Some(format!("ov:{ov}"))
                 } else if has_meta_cover {
+                    let stored_cover = meta.and_then(|m| m.cover_url.as_deref()).unwrap_or("");
+                    let heal_tag = if scraping::rom_name::is_non_front_cover_url(stored_cover) {
+                        ":front-v2"
+                    } else {
+                        ""
+                    };
                     Some(format!(
-                        "meta:{}:{}:{}",
+                        "meta:{}:{}:{}{heal_tag}",
                         meta.and_then(|m| m.game_uuid.as_deref()).unwrap_or(""),
-                        meta.and_then(|m| m.cover_url.as_deref()).unwrap_or(""),
+                        stored_cover,
                         region.as_deref().unwrap_or(""),
                     ))
                 } else {
