@@ -1,7 +1,7 @@
 use domain::metadata::{GameDetails, GameKaveData, ScrapeCandidate, ScrapeQuery};
 use serde_json::Value;
 
-use super::search_title;
+use super::rom_name;
 
 pub(super) const SEARCH_URL: &str = "https://api.gamekave.net/games/search";
 
@@ -11,11 +11,13 @@ fn platforms(system: &str) -> &[&str] {
         "nes" => &["nintendo-entertainment-system", "family-computer"],
         "snes" => &["super-nintendo-entertainment-system", "super-famicom"],
         "n64" => &["nintendo-64"],
+        "gamecube" => &["nintendo-gamecube"],
         "gb" => &["game-boy"],
         "gbc" => &["game-boy-color"],
         "gba" => &["game-boy-advance"],
         "vb" => &["virtual-boy"],
         "nds" => &["nintendo-ds", "nintendo-dsi"],
+        "pokemini" => &["pokemon-mini"],
         "megadrive" => &["sega-mega-drive-genesis"],
         "mastersystem" => &["sega-master-system-mark-iii"],
         "gamegear" => &["sega-game-gear"],
@@ -34,6 +36,7 @@ fn platforms(system: &str) -> &[&str] {
         "atari5200" => &["atari-5200"],
         "atari7800" => &["atari-7800"],
         "atari8bit" => &["atari-8-bit"],
+        "atarist" => &["atari-st-ste"],
         "jaguar" => &["atari-jaguar"],
         "lynx" => &["atari-lynx"],
         "wonderswan" => &["wonderswan", "wonderswan-color"],
@@ -47,15 +50,19 @@ fn platforms(system: &str) -> &[&str] {
         "vectrex" => &["vectrex"],
         "odyssey2" => &["odyssey-2-videopac-g7000"],
         "supervision" => &["watara-supervision", "watara-quickshot-supervision"],
+        "megaduck" => &["mega-duck-cougar-boy"],
         "3do" => &["3do-interactive-multiplayer"],
         "cdi" => &["philips-cd-i"],
         "msx" => &["msx", "msx2", "msx-turbo-r"],
         "c64" => &["commodore-c64-128-max"],
         "amiga" => &["amiga", "amiga-aga"],
         "zxspectrum" => &["zx-spectrum"],
+        "zx81" => &["sinclair-zx81"],
+        "x68000" => &["sharp-x68000"],
         "amstradcpc" => &["amstrad-cpc"],
         "arcade" => &["arcade"],
         "dos" => &["dos"],
+        "scummvm" => &["dos", "pc-microsoft-windows"],
         _ => &[],
     }
 }
@@ -67,25 +74,52 @@ pub(super) async fn query(
     search_url: &str,
 ) -> Result<Option<ScrapeCandidate>, String> {
     let platforms = platforms(query.system_id);
-    let title = search_title(query.file_stem);
-    if platforms.is_empty() || title.is_empty() {
+    let queries = rom_name::search_queries(query.file_stem);
+    if platforms.is_empty() || queries.is_empty() {
         return Ok(None);
     }
-    let response = client
-        .get(search_url)
-        .query(&[("q", &title)])
-        .send()
-        .await
-        .and_then(reqwest::Response::error_for_status)
-        .map_err(|e| format!("GameKave: {}", e.without_url()))?;
-    let games: Value = response
-        .json()
-        .await
-        .map_err(|e| format!("GameKave: {}", e.without_url()))?;
-    let games = games["games"]
-        .as_array()
-        .ok_or("GameKave: resposta sem lista de jogos")?;
-    let Some(mut candidate) = select_candidate(games, &title, platforms) else {
+    let clean_title = rom_name::clean_rom_title(query.file_stem);
+    let serial = query
+        .serial
+        .and_then(rom_name::normalize_serial)
+        .or_else(|| rom_name::extract_disc_serial(query.file_stem));
+
+    let mut matched = None;
+    for q_str in &queries {
+        let mut req = client
+            .get(search_url)
+            .query(&[("q", q_str.as_str()), ("limit", "40")]);
+        if platforms.len() == 1 {
+            req = req.query(&[("platform", platforms[0])]);
+        }
+        let response = req
+            .send()
+            .await
+            .and_then(reqwest::Response::error_for_status)
+            .map_err(|e| format!("GameKave: {}", e.without_url()))?;
+        let games: Value = response
+            .json()
+            .await
+            .map_err(|e| format!("GameKave: {}", e.without_url()))?;
+        let games = games["games"]
+            .as_array()
+            .ok_or("GameKave: resposta sem lista de jogos")?;
+        if let Some(candidate) = select_candidate_for_query(
+            games,
+            if clean_title.is_empty() {
+                q_str
+            } else {
+                &clean_title
+            },
+            serial.as_deref(),
+            platforms,
+        ) {
+            matched = Some(candidate);
+            break;
+        }
+    }
+
+    let Some(mut candidate) = matched else {
         return Ok(None);
     };
     // A ficha da busca continua utilizável se a consulta extra falhar.
@@ -253,22 +287,106 @@ fn number(value: &Value) -> Option<f64> {
     value.as_f64().or_else(|| text(value)?.parse().ok())
 }
 
-/// A busca usa título (não hash). Só propõe um candidato quando há um único
-/// título exato na plataforma, e a confirmação continua no fluxo de revisão.
+fn has_matching_platform(game: &Value, platforms: &[&str]) -> bool {
+    game["platforms"].as_array().is_some_and(|entries| {
+        entries.iter().any(|entry| {
+            text(&entry["slug"])
+                .or_else(|| text(entry))
+                .is_some_and(|slug| platforms.contains(&slug))
+        })
+    })
+}
+
+fn is_official_game(game: &Value) -> bool {
+    let is_addon = game["game_type"]["is_addon"].as_bool() == Some(true)
+        || game["type_is_addon"].as_bool() == Some(true);
+    let counts_as_game = game["game_type"]["counts_as_game"]
+        .as_bool()
+        .or_else(|| game["type_counts_as_game"].as_bool())
+        .unwrap_or(true);
+    !is_addon && counts_as_game
+}
+
+fn alternate_titles(game: &Value) -> Vec<&str> {
+    let metadata = &game["metadata"];
+    let mut out = Vec::new();
+    if let Some(igdb_name) = text(&metadata["igdb_name"]) {
+        out.push(igdb_name);
+    }
+    for item in entries(&metadata["legacy_titles"]) {
+        if let Some(t) = text(item) {
+            out.push(t);
+        }
+    }
+    for item in entries(&metadata["alternative_names"]) {
+        if let Some(t) = text(&item["name"]).or_else(|| text(item)) {
+            out.push(t);
+        }
+    }
+    for item in entries(&metadata["noms"]) {
+        if let Some(t) = text(&item["text"]) {
+            out.push(t);
+        }
+    }
+    out
+}
+
+fn match_tier(game: &Value, rom_title: &str, serial: Option<&str>) -> Option<u8> {
+    if let Some(target_serial) = serial {
+        let serial_hit = entries(&game["psn_serials"])
+            .filter_map(text)
+            .filter_map(rom_name::normalize_serial)
+            .any(|s| s == target_serial);
+        if serial_hit {
+            return Some(4);
+        }
+    }
+    if let Some(name) = text(&game["title"]) {
+        if let Some(tier) = rom_name::title_match_tier(rom_title, name) {
+            return Some(tier);
+        }
+    }
+    if alternate_titles(game)
+        .into_iter()
+        .any(|alt| rom_name::title_match_tier(rom_title, alt).is_some())
+    {
+        return Some(1);
+    }
+    None
+}
+
+#[cfg(test)]
 fn select_candidate(games: &[Value], title: &str, platforms: &[&str]) -> Option<ScrapeCandidate> {
-    let title = title.to_lowercase();
-    let mut matches = games.iter().filter(|game| {
-        text(&game["title"]).is_some_and(|name| name.to_lowercase() == title)
-            && game["platforms"].as_array().is_some_and(|entries| {
-                entries
-                    .iter()
-                    .any(|entry| text(&entry["slug"]).is_some_and(|slug| platforms.contains(&slug)))
-            })
-    });
-    let game = matches.next()?;
-    if matches.next().is_some() {
+    select_candidate_for_query(games, title, None, platforms)
+}
+
+/// A busca usa título canônico (ou serial quando disponível). Prioriza jogos
+/// oficiais (`is_addon = false`) sobre hacks/mods e só propõe candidato quando
+/// não há empate entre jogos de mesmo nível na plataforma; a confirmação
+/// continua no fluxo de revisão.
+fn select_candidate_for_query(
+    games: &[Value],
+    rom_title: &str,
+    serial: Option<&str>,
+    platforms: &[&str],
+) -> Option<ScrapeCandidate> {
+    let scored: Vec<(&Value, (u8, bool))> = games
+        .iter()
+        .filter(|game| has_matching_platform(game, platforms))
+        .filter_map(|game| {
+            let tier = match_tier(game, rom_title, serial)?;
+            Some((game, (tier, is_official_game(game))))
+        })
+        .collect();
+
+    let best_rank = scored.iter().map(|(_, rank)| *rank).max()?;
+    let mut best_games = scored.into_iter().filter(|(_, rank)| *rank == best_rank);
+    let (game, _) = best_games.next()?;
+    let first_id = text(&game["id"]);
+    if best_games.any(|(other, _)| text(&other["id"]) != first_id) {
         return None;
     }
+
     let metadata = &game["metadata"];
     let catalog = catalog_details(game);
     let rating = number(&game["rating"])
@@ -384,5 +502,93 @@ mod tests {
             }),
         ];
         assert!(select_candidate(&same_platform, "super mario world", platforms("snes")).is_none());
+    }
+
+    #[test]
+    fn matches_colon_subtitles_inverted_articles_diacritics_and_prefers_official_over_mods() {
+        let psx = [json!({
+            "id": "sotn",
+            "title": "Castlevania: Symphony of the Night",
+            "platforms": [{"slug": "playstation"}]
+        })];
+        let hit = select_candidate(
+            &psx,
+            "Castlevania - Symphony of the Night (USA)",
+            platforms("psx"),
+        )
+        .expect("subtítulo com hífen casa com dois-pontos");
+        assert_eq!(hit.external_id, "sotn");
+
+        let snes = [json!({
+            "id": "alttp",
+            "title": "The Legend of Zelda: A Link to the Past",
+            "platforms": [{"slug": "super-nintendo-entertainment-system"}]
+        })];
+        let hit = select_candidate(
+            &snes,
+            "Legend of Zelda, The - A Link to the Past (USA)",
+            platforms("snes"),
+        )
+        .expect("artigo invertido No-Intro casa com título oficial");
+        assert_eq!(hit.external_id, "alttp");
+
+        let gba = [
+            json!({
+                "id": "emerald-hack",
+                "title": "Pokémon Emerald Version",
+                "platforms": [{"slug": "game-boy-advance"}],
+                "game_type": {"slug": "mod", "is_addon": true, "counts_as_game": false}
+            }),
+            json!({
+                "id": "emerald-official",
+                "title": "Pokémon Emerald Version",
+                "platforms": [{"slug": "game-boy-advance"}],
+                "game_type": {"slug": "main_game", "is_addon": false, "counts_as_game": true}
+            }),
+        ];
+        let hit = select_candidate(
+            &gba,
+            "0425 - Pokemon - Emerald Version (USA, Europe)",
+            platforms("gba"),
+        )
+        .expect("jogo oficial vence mod homônimo e ignora acento");
+        assert_eq!(hit.external_id, "emerald-official");
+    }
+
+    #[test]
+    fn matches_by_psn_serial_and_alternate_localized_titles() {
+        let ps2 = [
+            json!({
+                "id": "gta3",
+                "title": "Grand Theft Auto III",
+                "platforms": [{"slug": "playstation-2"}],
+                "psn_serials": ["SLUS-20062"]
+            }),
+            json!({
+                "id": "gta3-alt",
+                "title": "Grand Theft Auto III",
+                "platforms": [{"slug": "playstation-2"}]
+            }),
+        ];
+        let hit = select_candidate_for_query(
+            &ps2,
+            "Grand Theft Auto III",
+            Some("SLUS-20062"),
+            platforms("ps2"),
+        )
+        .expect("serial desempata a edição exata");
+        assert_eq!(hit.external_id, "gta3");
+
+        let snes_jp = [json!({
+            "id": "rockman-x",
+            "title": "Mega Man X",
+            "platforms": [{"slug": "super-famicom"}],
+            "metadata": {
+                "noms": [{"region": "jp", "text": "Rockman X"}]
+            }
+        })];
+        let hit = select_candidate(&snes_jp, "Rockman X (Japan)", platforms("snes"))
+            .expect("nome regional no metadata casa");
+        assert_eq!(hit.external_id, "rockman-x");
     }
 }

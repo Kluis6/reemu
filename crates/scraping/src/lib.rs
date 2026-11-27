@@ -35,6 +35,7 @@ use domain::metadata::{
 use serde_json::Value;
 
 mod gamekave;
+pub mod rom_name;
 
 /// Cache de capas do app: descarta a capa guardada de um jogo que ganhou
 /// uma `cover_url` nova, pra próxima leitura buscar a capa escrapeada.
@@ -221,26 +222,32 @@ fn thegamesdb_platforms(system_id: &str) -> Option<&'static str> {
     })
 }
 
-/// Nome do arquivo → título pra busca por nome: tira as tags No-Intro/TOSEC
-/// (`(USA)`, `(Rev 1)`, `[!]`…) e troca `_` por espaço.
-fn search_title(file_stem: &str) -> String {
-    let mut out = String::with_capacity(file_stem.len());
-    let mut depth = 0i32;
-    for c in file_stem.chars() {
-        match c {
-            '(' | '[' => depth += 1,
-            ')' | ']' => depth = (depth - 1).max(0),
-            _ if depth == 0 => out.push(if c == '_' { ' ' } else { c }),
-            _ => {}
-        }
-    }
-    out.split_whitespace().collect::<Vec<_>>().join(" ")
+use rom_name::search_title;
+
+/// Escolhe em `data.games` do `/v1/Games/ByGameName` o jogo cujo título casa
+/// canonicamente com `rom_title` (caindo para o 1º item quando a API devolve
+/// uma grafia regional diferente, mantendo o comportamento de revisão manual).
+#[cfg(test)]
+fn parse_tgdb_game(v: &Value) -> Option<ScrapeCandidate> {
+    parse_tgdb_game_for(v, None)
 }
 
-/// 1º jogo de `data.games` do `/v1/Games/ByGameName` → candidato (sem capa;
-/// a capa vem de outra chamada, `parse_tgdb_boxart`).
-fn parse_tgdb_game(v: &Value) -> Option<ScrapeCandidate> {
-    let game = v.get("data")?.get("games")?.as_array()?.first()?;
+fn parse_tgdb_game_for(v: &Value, rom_title: Option<&str>) -> Option<ScrapeCandidate> {
+    let games = v.get("data")?.get("games")?.as_array()?;
+    let game = rom_title
+        .filter(|t| !t.trim().is_empty())
+        .and_then(|target| {
+            games
+                .iter()
+                .filter_map(|g| {
+                    let name = g.get("game_title").and_then(Value::as_str)?.trim();
+                    let tier = rom_name::title_match_tier(target, name)?;
+                    Some((tier, g))
+                })
+                .max_by_key(|(tier, _)| *tier)
+                .map(|(_, g)| g)
+        })
+        .or_else(|| games.first())?;
     let id = game.get("id")?;
     let external_id = id
         .as_str()
@@ -362,7 +369,7 @@ async fn query_thegamesdb(
         .map_err(|e| format!("rede: {}", net_error(e)))?,
     )
     .await?;
-    let Some(mut c) = parse_tgdb_game(&found) else {
+    let Some(mut c) = parse_tgdb_game_for(&found, Some(q.file_stem)) else {
         return Ok(None);
     };
     c.cover_url = parse_tgdb_included_boxart(&found, &c.external_id);
@@ -995,16 +1002,18 @@ async fn lookup_rom(
         .build()
         .map_err(net_error)?;
     let (hash, stem) = hash_and_stem(rom);
-    let q = rom_query(rom, &hash, &stem);
+    let q_ss = rom_query(rom, &hash, &stem);
+    let effective_stem = rom_name::effective_rom_stem(rom, &stem);
+    let q_name = rom_query(rom, &hash, &effective_stem);
     let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
-    let mut result = query_screenscraper(&client, &cfg, &q, &providers.screenscraper).await;
+    let mut result = query_screenscraper(&client, &cfg, &q_ss, &providers.screenscraper).await;
     let ss_refused = matches!(&result, Err(e) if e == ERR_SS_DEV_LOGIN);
     if let Some(key) = tgdb_key.filter(|_| ss_refused || matches!(&result, Ok(None))) {
-        result = query_thegamesdb(&client, key, &q, &providers.thegamesdb).await;
+        result = query_thegamesdb(&client, key, &q_name, &providers.thegamesdb).await;
     }
     let candidate = match result {
         Ok(Some(candidate)) => Some(candidate),
-        fallback => match gamekave::query(&client, &q, &providers.gamekave).await {
+        fallback => match gamekave::query(&client, &q_name, &providers.gamekave).await {
             Ok(Some(candidate)) => Some(candidate),
             Ok(None) if ss_refused && matches!(fallback, Ok(None)) => {
                 return Err(ERR_SS_DEV_LOGIN.to_string());
@@ -1077,13 +1086,15 @@ async fn scrape_pending_with(
             }
         };
         let (hash, stem) = hash_and_stem(&rom);
-        let q = rom_query(&rom, &hash, &stem);
+        let q_ss = rom_query(&rom, &hash, &stem);
+        let effective_stem = rom_name::effective_rom_stem(&rom, &stem);
+        let q_name = rom_query(&rom, &hash, &effective_stem);
 
         // Cascata: ScreenScraper (hash) primeiro; se ele não achar e houver
         // chave do TheGamesDB, tenta por nome lá. A GameKave fica por último.
         let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
         let mut result = if ss_ok {
-            query_screenscraper(&client, &cfg, &q, &providers.screenscraper).await
+            query_screenscraper(&client, &cfg, &q_ss, &providers.screenscraper).await
         } else {
             Ok(None)
         };
@@ -1095,11 +1106,11 @@ async fn scrape_pending_with(
         }
         if let (Ok(None), Some(key)) = (&result, tgdb_key) {
             tokio::time::sleep(providers.request_delay).await;
-            result = query_thegamesdb(&client, key, &q, &providers.thegamesdb).await;
+            result = query_thegamesdb(&client, key, &q_name, &providers.thegamesdb).await;
             tokio::time::sleep(providers.tgdb_delay).await;
         }
         if !matches!(&result, Ok(Some(_))) && !progress.is_cancelled() {
-            match gamekave::query(&client, &q, &providers.gamekave).await {
+            match gamekave::query(&client, &q_name, &providers.gamekave).await {
                 Ok(Some(candidate)) => result = Ok(Some(candidate)),
                 Ok(None) => {}
                 Err(error) if result.is_ok() => result = Err(error),
@@ -1859,5 +1870,17 @@ mod tests {
                 "{skipped} não deveria consultar os provedores locais: {targets:?}"
             );
         }
+    }
+
+    #[test]
+    fn tgdb_prefers_canonical_title_over_first_array_entry() {
+        let v = json!({"data": {"games": [
+            {"id": 1, "game_title": "Castlevania: Symphony of the Night - Demo"},
+            {"id": 2, "game_title": "Castlevania: Symphony of the Night"}
+        ]}});
+        let c = parse_tgdb_game_for(&v, Some("Castlevania - Symphony of the Night (USA)"))
+            .expect("candidato canônico");
+        assert_eq!(c.external_id, "2");
+        assert_eq!(c.title, "Castlevania: Symphony of the Night");
     }
 }
