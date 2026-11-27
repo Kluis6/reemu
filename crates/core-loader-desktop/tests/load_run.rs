@@ -368,6 +368,35 @@ async fn zip_without_a_recognized_rom_entry_falls_back_to_the_zip_path() {
     let _ = std::fs::remove_file(zip_path);
 }
 
+/// `RETRO_ENVIRONMENT_SET_MEMORY_MAPS` (36 | EXPERIMENTAL, `libretro.h`): o
+/// core declara suas regiões e o frontend guarda cópia própria dos descritores
+/// e das strings `addrspace`, além de expor o ponteiro de `SYSTEM_RAM`.
+#[tokio::test]
+async fn set_memory_maps_copies_descriptors_and_addrspace() {
+    let _lock = guard().await;
+    let rom = write_rom(b"MMAP rom");
+    let core = loader()
+        .load_core(&core_id(), rom.to_str().unwrap())
+        .await
+        .expect("load do core-fake com MMAP");
+
+    let descs = core.memory_descriptors();
+    assert_eq!(descs.len(), 1);
+    assert_eq!(descs[0].flags, 4);
+    assert_eq!(descs[0].start, 0x7E0000);
+    assert_eq!(descs[0].len, 256);
+    assert_eq!(descs[0].addrspace.as_deref(), Some("WRAM"));
+    assert_ne!(descs[0].ptr, 0);
+
+    let (sys_ptr, sys_len) = core.core_memory_region(2);
+    assert_eq!(sys_ptr as usize, descs[0].ptr);
+    assert_eq!(sys_len, 256);
+    assert_eq!(&core.system_ram().unwrap()[..4], &[0x11, 0x22, 0x33, 0x44]);
+
+    drop(core);
+    let _ = std::fs::remove_file(rom);
+}
+
 /// Mesmo caso do teste acima, mas em `.7z`.
 #[tokio::test]
 async fn sevenz_without_a_recognized_rom_entry_falls_back_to_the_archive_path() {

@@ -43,6 +43,10 @@ pub const RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY: c_uint = 31;
 pub const RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: c_uint = 32;
 pub const RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO: c_uint = 34;
 pub const RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: c_uint = 35;
+/// `RETRO_ENVIRONMENT_SET_MEMORY_MAPS` (`libretro.h`, `(36 | RETRO_ENVIRONMENT_EXPERIMENTAL)`).
+pub const RETRO_ENVIRONMENT_SET_MEMORY_MAPS: c_uint = 36 | RETRO_ENVIRONMENT_EXPERIMENTAL;
+/// `RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS` (`libretro.h`, `(42 | RETRO_ENVIRONMENT_EXPERIMENTAL)`).
+pub const RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS: c_uint = 42 | RETRO_ENVIRONMENT_EXPERIMENTAL;
 pub const RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS: c_uint = 44;
 /// "Legacy compatibility shim to RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS".
 pub const RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS_2: c_uint = 87;
@@ -152,6 +156,26 @@ pub struct retro_system_timing {
 pub struct retro_controller_info {
     pub types: *const c_void,
     pub num_types: c_uint,
+}
+
+/// `struct retro_memory_descriptor` (`libretro.h`).
+#[repr(C)]
+pub struct retro_memory_descriptor {
+    pub flags: u64,
+    pub ptr: *mut c_void,
+    pub offset: usize,
+    pub start: usize,
+    pub select: usize,
+    pub disconnect: usize,
+    pub len: usize,
+    pub addrspace: *const c_char,
+}
+
+/// `struct retro_memory_map` (`libretro.h`).
+#[repr(C)]
+pub struct retro_memory_map {
+    pub descriptors: *const retro_memory_descriptor,
+    pub num_descriptors: c_uint,
 }
 
 #[repr(C)]

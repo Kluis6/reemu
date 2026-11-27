@@ -69,6 +69,7 @@ struct retro_hw_render_callback {
 #define RETRO_ENVIRONMENT_GET_VARIABLE 15
 #define RETRO_ENVIRONMENT_SET_VARIABLES 16
 #define RETRO_ENVIRONMENT_SET_GEOMETRY 37 /* libretro.h */
+#define RETRO_ENVIRONMENT_SET_MEMORY_MAPS (36 | 0x10000) /* libretro.h */
 #define RETRO_ENVIRONMENT_GET_INPUT_BITMASKS (51 | 0x10000) /* libretro.h */
 #define RETRO_DEVICE_JOYPAD 1
 #define RETRO_DEVICE_ID_JOYPAD_MASK 256
@@ -91,6 +92,22 @@ typedef void (TESTCORE_GLAPI *tc_bind_fb_t)(unsigned, unsigned);
 struct retro_variable {
    const char *key;
    const char *value;
+};
+
+struct retro_memory_descriptor {
+   uint64_t flags;
+   void *ptr;
+   size_t offset;
+   size_t start;
+   size_t select;
+   size_t disconnect;
+   size_t len;
+   const char *addrspace;
+};
+
+struct retro_memory_map {
+   const struct retro_memory_descriptor *descriptors;
+   unsigned num_descriptors;
 };
 
 #define FB_W 64
@@ -116,6 +133,7 @@ static struct retro_hw_render_callback hw_cb;
    `emu-session` exercitar o fluxo de battery save de verdade. SRAM[2] recebe
    o valor atual da core option `testcore_mark` a cada `retro_run`. */
 static unsigned char testcore_sram[64] = {0xA5, 0x5A};
+static unsigned char testcore_wram[256] = {0x11, 0x22, 0x33, 0x44};
 
 RETRO_API void retro_set_environment(retro_environment_t cb) {
    env_cb = cb;
@@ -202,6 +220,24 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game) {
    has_bitmasks = env_cb && env_cb(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, NULL);
    geometry_test = game && game->data && game->size >= 4 &&
                    memcmp(game->data, "GEOM", 4) == 0;
+
+   if (game && game->data && game->size >= 4 &&
+       memcmp(game->data, "MMAP", 4) == 0 && env_cb) {
+      char local_space[8] = "WRAM";
+      struct retro_memory_descriptor descs[1];
+      struct retro_memory_map mmap;
+      memset(descs, 0, sizeof(descs));
+      descs[0].flags = 4; /* RETRO_MEMDESC_SYSTEM_RAM */
+      descs[0].ptr = testcore_wram;
+      descs[0].start = 0x7E0000;
+      descs[0].len = sizeof(testcore_wram);
+      descs[0].addrspace = local_space;
+      mmap.descriptors = descs;
+      mmap.num_descriptors = 1;
+      env_cb(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &mmap);
+      /* Limpa a string na pilha pra provar que o frontend copiou `addrspace`. */
+      memset(local_space, 0, sizeof(local_space));
+   }
 
    if (game && game->data && game->size >= 2 &&
        memcmp(game->data, "HW", 2) == 0) {
@@ -309,10 +345,14 @@ RETRO_API void retro_cheat_set(unsigned index, bool enabled, const char *code) {
 RETRO_API void *retro_get_memory_data(unsigned id) {
    if (id == 0 /* RETRO_MEMORY_SAVE_RAM */)
       return testcore_sram;
+   if (id == 2 /* RETRO_MEMORY_SYSTEM_RAM */)
+      return testcore_wram;
    return NULL;
 }
 RETRO_API size_t retro_get_memory_size(unsigned id) {
    if (id == 0 /* RETRO_MEMORY_SAVE_RAM */)
       return sizeof(testcore_sram);
+   if (id == 2 /* RETRO_MEMORY_SYSTEM_RAM */)
+      return sizeof(testcore_wram);
    return 0;
 }
