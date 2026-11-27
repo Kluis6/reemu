@@ -11,8 +11,13 @@ import { SearchChip } from "../components/SearchChip";
 import { SectionHeader } from "../components/SectionHeader";
 import { VirtualGrid, type VirtualGridHandle } from "../components/VirtualGrid";
 import { platformLabel } from "../lib/platform";
+import {
+  formatCardGroupBadge,
+  groupRoms,
+  romVariantLabel,
+  type GroupedRomEntry,
+} from "../lib/romGrouping";
 import { letterIndex } from "../lib/virtualGrid";
-import type { RomEntry } from "../lib/tauri";
 import { errorToast, sysToast } from "../lib/toast";
 import { listRoms, removeRom } from "../lib/tauri";
 import { useSearchStore } from "../stores/useSearchStore";
@@ -45,7 +50,7 @@ const useStyles = makeStyles({
  * "Meus jogos" mostra só uma prévia de cada plataforma e manda pra cá.
  */
 export function PlatformLibrary() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const s = useBrowseStyles();
   const l = useStyles();
   const grid = useRef<VirtualGridHandle>(null);
@@ -56,15 +61,27 @@ export function PlatformLibrary() {
   const query = useSearchStore((q) => q.query).trim().toLowerCase();
 
   const roms = useQuery({ queryKey: ["roms"], queryFn: listRoms, retry: false });
+  const uiLang = i18n.resolvedLanguage ?? i18n.language;
 
   const list = useMemo(() => {
-    let l = (roms.data ?? []).filter((r) => r.systemId === platform);
-    if (query) l = l.filter((r) => r.title.toLowerCase().includes(query));
-    return l.sort((a, b) => a.title.localeCompare(b.title));
-  }, [roms.data, platform, query]);
+    let items = groupRoms(
+      (roms.data ?? []).filter((r) => r.systemId === platform),
+      uiLang,
+    );
+    if (query) {
+      items = items.filter(
+        (r) =>
+          r.title.toLowerCase().includes(query) ||
+          r.variants.some((v) => v.title.toLowerCase().includes(query)),
+      );
+    }
+    return items.sort((a, b) => a.title.localeCompare(b.title));
+  }, [roms.data, platform, query, uiLang]);
 
   const del = useMutation({
-    mutationFn: (id: string) => removeRom(id),
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(ids.map((id) => removeRom(id)));
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["roms"] });
       push(sysToast(t("library.removed"), "Success"));
@@ -77,20 +94,35 @@ export function PlatformLibrary() {
     [list],
   );
 
-  const card = (r: RomEntry) => (
+  const card = (r: GroupedRomEntry) => (
     <GameCard
       key={r.id}
       title={r.title}
       badge={platformLabel(r.systemId)}
+      regionBadge={formatCardGroupBadge(r, t)}
       boxart={r.boxart}
       favorite={r.isFavorite}
       onClick={() => navigate(`/rom/${r.id}`)}
       menu={[
-        { label: t("library.open"), icon: <OpenRegular />, onClick: () => navigate(`/rom/${r.id}`) },
+        ...(r.variants.length > 1
+          ? r.variants.map((v) => ({
+              label: t("library.openVersion", {
+                version: romVariantLabel(v, r.variants, t),
+              }),
+              icon: <OpenRegular />,
+              onClick: () => navigate(`/rom/${v.id}`),
+            }))
+          : [
+              {
+                label: t("library.open"),
+                icon: <OpenRegular />,
+                onClick: () => navigate(`/rom/${r.id}`),
+              },
+            ]),
         {
           label: t("library.remove"),
           icon: <DeleteRegular />,
-          onClick: () => del.mutate(r.id),
+          onClick: () => del.mutate(r.variants.map((v) => v.id)),
         },
       ]}
     />

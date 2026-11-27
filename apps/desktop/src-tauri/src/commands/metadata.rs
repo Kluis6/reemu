@@ -79,7 +79,7 @@ pub struct GameMetadataDto {
     #[cfg_attr(
         test,
         ts(
-            type = "{ descriptions: Record<string, string>; releaseDates: Record<string, string>; timeToBeatMinutes: [number | null, number | null, number | null]; covers: string[]; heroes: string[]; screenshots: string[]; trailers: string[]; achievementCount: number | null; soundtrackCount: number | null } | null"
+            type = "{ descriptions: Record<string, string>; releaseDates: Record<string, string>; regionalCovers: Record<string, string>; romRegion: string | null; romRevision: string | null; timeToBeatMinutes: [number | null, number | null, number | null]; covers: string[]; heroes: string[]; screenshots: string[]; trailers: string[]; achievementCount: number | null; soundtrackCount: number | null } | null"
         )
     )]
     pub gamekave: Option<GameKaveData>,
@@ -158,6 +158,21 @@ pub(crate) async fn load_rom_metadata(
     else {
         return Ok(None);
     };
+    let detected_region = scraping::rom_name::detect_rom_region(
+        &rom.file_path,
+        rom.ident_name.as_deref(),
+        rom.serial.as_deref(),
+    );
+    let has_cover_edit = edits
+        .as_ref()
+        .and_then(|e| e.cover_url.as_deref())
+        .is_some_and(|u| !u.trim().is_empty());
+    let imported = match imported {
+        Some(meta) if !has_cover_edit => Some(
+            crate::covers::heal_rom_front_cover_if_needed(pool, None, rom_id, &rom, meta).await,
+        ),
+        other => other,
+    };
     let mut dto = GameMetadataDto::from(imported.unwrap_or_else(|| GameMetadata {
         rom_id: rom_id.to_owned(),
         title: super::library::rom_title(&rom),
@@ -172,13 +187,23 @@ pub(crate) async fn load_rom_metadata(
     if let Some(title) = rom.user_title {
         dto.title = title;
     }
-    if let (Some(catalog), Some(language)) = (&dto.gamekave, language) {
-        let tag = language.to_ascii_lowercase();
-        if let Some(description) = catalog.descriptions.get(&tag).or_else(|| {
-            let (base, _) = tag.split_once('-')?;
-            catalog.descriptions.get(base)
-        }) {
-            dto.description = Some(description.clone());
+    if let Some(catalog) = &dto.gamekave {
+        let reg = catalog.rom_region.as_deref().or(detected_region);
+        if let Some(regional) = scraping::rom_name::pick_regional_cover(
+            &catalog.regional_covers,
+            reg,
+            dto.cover_url.as_deref(),
+        ) {
+            dto.cover_url = Some(regional.to_owned());
+        }
+        if let Some(language) = language {
+            let tag = language.to_ascii_lowercase();
+            if let Some(description) = catalog.descriptions.get(&tag).or_else(|| {
+                let (base, _) = tag.split_once('-')?;
+                catalog.descriptions.get(base)
+            }) {
+                dto.description = Some(description.clone());
+            }
         }
     }
     if let Some(edits) = edits {

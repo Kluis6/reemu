@@ -10,11 +10,15 @@ import { GameCard } from "../components/GameCard";
 import { HeroCarousel } from "../components/HeroCarousel";
 import { SectionHeader } from "../components/SectionHeader";
 import { platformLabel } from "../lib/platform";
+import {
+  formatCardGroupBadge,
+  groupRoms,
+  type GroupedRomEntry,
+} from "../lib/romGrouping";
 import { Shelf } from "../components/Shelf";
 import {
   listRoms,
   scanLibrary,
-  type RomEntry,
   type ScanProgress,
 } from "../lib/tauri";
 import { archivesHint } from "../lib/useLibraryScan";
@@ -36,9 +40,9 @@ function Row({
 }: {
   title: string;
   subtitle?: string;
-  items: readonly RomEntry[];
+  items: readonly GroupedRomEntry[];
   onMore?: () => void;
-  render: (r: RomEntry) => ReactNode;
+  render: (r: GroupedRomEntry) => ReactNode;
   index?: number;
   /** Dentro de um card (prateleira em destaque, como no app Xbox). */
   featured?: boolean;
@@ -63,7 +67,7 @@ function Row({
  * fica em `/library`. Novas seções entram aqui.
  */
 export function Home() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const s = useBrowseStyles();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -74,7 +78,11 @@ export function Home() {
     queryFn: listRoms,
     retry: false,
   });
-  const all = useMemo(() => roms.data ?? [], [roms.data]);
+  const uiLang = i18n.resolvedLanguage ?? i18n.language;
+  const all = useMemo(
+    () => groupRoms(roms.data ?? [], uiLang),
+    [roms.data, uiLang],
+  );
 
   const [addOpen, setAddOpen] = useState(false);
   const scanId = useRef<string | null>(null);
@@ -149,7 +157,7 @@ export function Home() {
   // capa, sem repetir; teto de 6.
   const featured = useMemo(() => {
     const seen = new Set<string>();
-    const out: RomEntry[] = [];
+    const out: GroupedRomEntry[] = [];
     for (const r of [
       ...recent,
       ...all.filter((r) => r.boxart),
@@ -163,11 +171,12 @@ export function Home() {
     return out;
   }, [recent, all]);
 
-  const card = (r: RomEntry) => (
+  const card = (r: GroupedRomEntry) => (
     <GameCard
       key={r.id}
       title={r.title}
       badge={platformLabel(r.systemId)}
+      regionBadge={formatCardGroupBadge(r, t)}
       boxart={r.boxart}
       onClick={() => navigate(`/rom/${r.id}`)}
       menu={[

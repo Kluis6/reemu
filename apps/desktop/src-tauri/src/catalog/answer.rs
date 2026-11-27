@@ -10,6 +10,8 @@ use std::collections::BTreeMap;
 pub struct Media {
     #[serde(default)]
     pub cover: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub regional_covers: BTreeMap<String, String>,
     #[serde(default)]
     pub hero: Option<String>,
     #[serde(default)]
@@ -53,7 +55,17 @@ fn clean_opt(s: Option<&str>) -> Option<String> {
     (!trimmed.is_empty()).then(|| trimmed.to_owned())
 }
 
+#[cfg(test)]
 pub fn metadata_from_answer(rom_id: &str, a: &GameAnswer) -> GameMetadata {
+    metadata_from_answer_for_rom(rom_id, a, None, None)
+}
+
+pub fn metadata_from_answer_for_rom(
+    rom_id: &str,
+    a: &GameAnswer,
+    rom_region: Option<&str>,
+    rom_revision: Option<&str>,
+) -> GameMetadata {
     let description = clean_opt(a.description.as_deref());
     let release_date = clean_opt(a.release_date.as_deref());
     let genres: Vec<&str> = a
@@ -64,7 +76,33 @@ pub fn metadata_from_answer(rom_id: &str, a: &GameAnswer) -> GameMetadata {
         .collect();
     let genre = (!genres.is_empty()).then(|| genres.join(", "));
 
-    let cover_url = a.media.cover.as_deref().and_then(https_url);
+    let default_cover = a.media.cover.as_deref().and_then(https_url);
+    let mut regional_covers = BTreeMap::new();
+    for (region, raw_url) in &a.media.regional_covers {
+        let Some(url) = https_url(raw_url) else {
+            continue;
+        };
+        if scraping::rom_name::is_non_front_cover_url(&url) {
+            continue;
+        }
+        let key = scraping::rom_name::normalize_region_code(region)
+            .map(str::to_owned)
+            .unwrap_or_else(|| region.trim().to_ascii_uppercase());
+        if !key.is_empty() {
+            regional_covers.insert(key, url);
+        }
+    }
+    let normalized_region = rom_region.and_then(|r| {
+        scraping::rom_name::normalize_region_code(r)
+            .map(str::to_owned)
+            .or_else(|| clean_opt(Some(r)).map(|s| s.to_ascii_uppercase()))
+    });
+    let cover_url = scraping::rom_name::pick_regional_cover(
+        &regional_covers,
+        normalized_region.as_deref(),
+        default_cover.as_deref(),
+    )
+    .map(str::to_owned);
     let fanart_url = a.media.hero.as_deref().and_then(https_url);
     let logo_url = a.media.logo.as_deref().and_then(https_url);
     let title_screen_url = a.media.title_screen.as_deref().and_then(https_url);
@@ -82,9 +120,28 @@ pub fn metadata_from_answer(rom_id: &str, a: &GameAnswer) -> GameMetadata {
         descriptions.insert(lang.to_ascii_lowercase(), desc.clone());
     }
 
+    let mut covers: Vec<String> = Vec::new();
+    for c in cover_url.iter().chain(default_cover.iter()) {
+        if !covers.contains(c) {
+            covers.push(c.clone());
+        }
+    }
+    for c in regional_covers.values() {
+        if !covers.contains(c) {
+            covers.push(c.clone());
+        }
+    }
+    covers.sort_by_key(|c| {
+        let is_selected = cover_url.as_deref() == Some(c.as_str());
+        scraping::rom_name::cover_url_rank(c, a.platform.as_deref(), is_selected, None)
+    });
+
     let gamekave = GameKaveData {
         descriptions,
-        covers: cover_url.iter().cloned().collect(),
+        regional_covers,
+        rom_region: normalized_region,
+        rom_revision: clean_opt(rom_revision),
+        covers,
         heroes: fanart_url.iter().cloned().collect(),
         screenshots,
         trailers: video_url.iter().cloned().collect(),
@@ -151,6 +208,7 @@ mod tests {
             description_lang: Some("pt-BR".into()),
             media: Media {
                 cover: Some("https://cdn.alvanista.com/ct/cover.webp".into()),
+                regional_covers: BTreeMap::new(),
                 hero: Some("https://cdn.alvanista.com/ct/hero.webp".into()),
                 logo: Some("https://cdn.alvanista.com/ct/logo.png".into()),
                 title_screen: Some("https://cdn.alvanista.com/ct/title.png".into()),
@@ -233,6 +291,46 @@ mod tests {
         assert_eq!(
             meta.game_uuid.as_deref(),
             Some("01950f10-1111-7222-8333-444455556666")
+        );
+    }
+
+    #[test]
+    fn metadata_from_answer_for_rom_picks_regional_cover_matching_rom_region() {
+        let mut regional_covers = BTreeMap::new();
+        regional_covers.insert("JP".into(), "https://cdn.gamekave.net/ct/jp.webp".into());
+        regional_covers.insert("EU".into(), "https://cdn.gamekave.net/ct/eu.webp".into());
+        regional_covers.insert("KR".into(), "http://insecure.example/kr.webp".into());
+        let answer = GameAnswer {
+            game_id: "01950f10-aaaa-7bbb-8ccc-ddddeeeeffff".into(),
+            title: "Chrono Trigger".into(),
+            media: Media {
+                cover: Some("https://cdn.gamekave.net/ct/na.webp".into()),
+                regional_covers,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let jp = metadata_from_answer_for_rom("rom-jp", &answer, Some("JP"), Some("Rev 1"));
+        assert_eq!(
+            jp.cover_url.as_deref(),
+            Some("https://cdn.gamekave.net/ct/jp.webp")
+        );
+        let gk_jp = jp.details.gamekave.unwrap();
+        assert_eq!(gk_jp.rom_region.as_deref(), Some("JP"));
+        assert_eq!(gk_jp.rom_revision.as_deref(), Some("Rev 1"));
+        assert!(!gk_jp.regional_covers.contains_key("KR"));
+
+        let au = metadata_from_answer_for_rom("rom-au", &answer, Some("Australia"), None);
+        assert_eq!(
+            au.cover_url.as_deref(),
+            Some("https://cdn.gamekave.net/ct/eu.webp")
+        );
+
+        let na = metadata_from_answer_for_rom("rom-na", &answer, Some("USA"), None);
+        assert_eq!(
+            na.cover_url.as_deref(),
+            Some("https://cdn.gamekave.net/ct/na.webp")
         );
     }
 }

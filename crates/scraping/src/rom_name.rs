@@ -655,6 +655,518 @@ pub fn title_match_tier(rom_title: &str, candidate_title: &str) -> Option<u8> {
     None
 }
 
+static PAREN_GROUP_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\(([^()]+)\)|\[([^\[\]]+)\]").expect("PAREN_GROUP_RE válido"));
+
+static NINTENDO_DISC_REGION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:^|[\s._(\[-])[GDRPUW][A-Z0-9]{2}([EFJPKXDUWSI])[0-9A-Z]{2}(?:[\s._)\]:-]|$)")
+        .expect("NINTENDO_DISC_REGION_RE válido")
+});
+
+static QUALIFIER_DISC_CHIP_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^(?:(?:disc|disk|cd|dvd|gd|umd|side|chip)\s*(?:\d+|[a-d])(?:\s*of\s*\d+)?)$")
+        .expect("QUALIFIER_DISC_CHIP_RE válido")
+});
+
+static QUALIFIER_REV_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)^(?:rev\.?\s*(?:\d+|[a-c])|v\d+(?:\.\d+)+[a-z]?|ver\.?\s*\d+(?:\.\d+)*)$")
+        .expect("QUALIFIER_REV_RE válido")
+});
+
+static QUALIFIER_EDITION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)^(?:beta(?:\s*\d+)?|proto(?:\s*\d+)?|prototype|demo|sample|promo|kiosk|arcade|virtual console|unl|pirate|t[+-][a-z]{2,5}.*)$",
+    )
+    .expect("QUALIFIER_EDITION_RE válido")
+});
+
+/// Normaliza um código ou nome de região (No-Intro, Redump, ScreenScraper,
+/// LaunchBox/IGDB ou GoodTools) para o vocabulário canônico:
+/// `"NA"`, `"EU"`, `"JP"`, `"BR"`, `"KR"`, `"AU"`, `"CN"` ou `"WORLD"`.
+pub fn normalize_region_code(raw: &str) -> Option<&'static str> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    // Listas No-Intro separadas por vírgula: ex. "USA, Europe", "USA, Canada", "Europe, Australia".
+    if trimmed.contains(',') {
+        let mut codes: Vec<&'static str> = Vec::new();
+        for part in trimmed.split(',') {
+            if let Some(code) = normalize_single_region(part.trim(), false) {
+                if !codes.contains(&code) {
+                    codes.push(code);
+                }
+            }
+        }
+        return match codes.as_slice() {
+            [] => None,
+            [single] => Some(*single),
+            _ if codes.iter().all(|c| matches!(*c, "EU" | "AU")) => Some("EU"),
+            _ if codes.iter().all(|c| *c == "NA") => Some("NA"),
+            _ if (codes.contains(&"NA") && codes.contains(&"EU"))
+                || (codes.contains(&"NA") && codes.contains(&"JP"))
+                || (codes.contains(&"EU") && codes.contains(&"JP")) =>
+            {
+                Some("WORLD")
+            }
+            [first, ..] => Some(*first),
+        };
+    }
+    normalize_single_region(trimmed, true)
+}
+
+fn normalize_single_region(token: &str, allow_single_letter: bool) -> Option<&'static str> {
+    let lower = token.trim().to_ascii_lowercase();
+    match lower.as_str() {
+        "na" | "usa" | "us" | "u.s.a." | "north america" | "canada" | "ca" | "cus" | "ntsc-u"
+        | "ntsc" | "americas" => Some("NA"),
+        "eu" | "eur" | "europe" | "pal" | "pal-e" | "pal-m" | "uk" | "united kingdom"
+        | "england" | "great britain" | "germany" | "ger" | "de" | "deu" | "france" | "fra"
+        | "fr" | "spain" | "esp" | "es" | "italy" | "ita" | "it" | "netherlands" | "nl"
+        | "holland" | "sweden" | "swe" | "se" | "scandinavia" | "portugal" | "pt" | "belgium"
+        | "austria" | "switzerland" => Some("EU"),
+        "jp" | "jpn" | "jap" | "japan" | "ja" | "ntsc-j" => Some("JP"),
+        "br" | "bra" | "brazil" | "brasil" => Some("BR"),
+        "kr" | "kor" | "korea" | "south korea" | "ko" => Some("KR"),
+        "au" | "aus" | "australia" => Some("AU"),
+        "cn" | "chn" | "china" | "asia" | "taiwan" | "tw" | "hong kong" | "hk" => Some("CN"),
+        "world" | "wor" | "jue" | "ue" | "ju" | "uj" | "eu-us" => Some("WORLD"),
+        "u" if allow_single_letter => Some("NA"),
+        "e" | "f" | "g" | "s" | "i" if allow_single_letter => Some("EU"),
+        "j" if allow_single_letter => Some("JP"),
+        "b" if allow_single_letter => Some("BR"),
+        "k" if allow_single_letter => Some("KR"),
+        "a" if allow_single_letter => Some("AU"),
+        "w" if allow_single_letter => Some("WORLD"),
+        _ => None,
+    }
+}
+
+fn region_from_serial(serial_text: &str) -> Option<&'static str> {
+    if let Some(sony) = extract_disc_serial(serial_text) {
+        let prefix = sony.split('-').next().unwrap_or("");
+        return match prefix {
+            "SLUS" | "SCUS" | "ULUS" | "UCUS" | "NPUI" | "NPUA" | "NPUF" | "NPUG" | "NPUH"
+            | "NPUJ" | "NPUX" | "NPUZ" => Some("NA"),
+            "SLES" | "SCES" | "ULES" | "UCES" | "NPEF" | "NPEG" | "NPEA" | "NPEH" | "NPEX"
+            | "NPEZ" => Some("EU"),
+            "SLPS" | "SLPM" | "SCPS" | "SCPM" | "ULJM" | "ULJS" | "UCJS" | "NPJJ" | "NPJA"
+            | "NPJG" | "NPJH" | "PAPX" | "PBPX" => Some("JP"),
+            "SLKA" | "SCKA" | "ULKS" | "UCKS" => Some("KR"),
+            "SLAJ" | "SCAJ" | "ULAS" | "UCAS" => Some("CN"),
+            _ => None,
+        };
+    }
+    if let Some(caps) = NINTENDO_DISC_REGION_RE.captures(serial_text) {
+        return match &caps[1] {
+            "E" | "N" => Some("NA"),
+            "J" => Some("JP"),
+            "K" => Some("KR"),
+            "P" | "D" | "F" | "S" | "I" | "U" | "X" | "Y" => Some("EU"),
+            _ => None,
+        };
+    }
+    None
+}
+
+fn region_from_name(name: &str) -> Option<&'static str> {
+    for caps in PAREN_GROUP_RE.captures_iter(name) {
+        let inner = caps
+            .get(1)
+            .or_else(|| caps.get(2))
+            .map(|m| m.as_str().trim())
+            .unwrap_or("");
+        if inner.is_empty() {
+            continue;
+        }
+        // Em colchetes `[...]`, letras soltas do GoodTools como `[b]`, `[f]`, `[p]`
+        // são flags de dump (bad/fixed/pirate), não regiões; só aceita 2+ letras
+        // ou `[U]`/`[E]`/`[J]` maiúsculos.
+        if caps.get(2).is_some() && inner.len() == 1 {
+            match inner {
+                "U" => return Some("NA"),
+                "E" => return Some("EU"),
+                "J" => return Some("JP"),
+                _ => continue,
+            }
+        }
+        if let Some(code) = normalize_region_code(inner) {
+            return Some(code);
+        }
+    }
+    if let Some(from_serial) = region_from_serial(name) {
+        return Some(from_serial);
+    }
+    // Releases de cena separados por pontos ou com sufixo NTSC/PAL explícito.
+    let upper = name.to_ascii_uppercase();
+    if upper.contains("NTSC-U") || upper.contains(".USA.") || upper.ends_with(".USA") {
+        return Some("NA");
+    }
+    if upper.contains("NTSC-J")
+        || upper.contains(".JPN.")
+        || upper.contains(".JAP.")
+        || upper.ends_with(".JPN")
+        || upper.ends_with(".JAP")
+    {
+        return Some("JP");
+    }
+    if upper.contains(".EUR.")
+        || upper.contains(".PAL.")
+        || upper.ends_with(".EUR")
+        || upper.ends_with(".PAL")
+    {
+        return Some("EU");
+    }
+    None
+}
+
+/// Detecta a região canônica (`NA`, `EU`, `JP`, `BR`, `KR`, `AU`, `CN`, `WORLD`)
+/// de uma ROM combinando `ident_name`, nome do arquivo, pasta pai e `serial`.
+pub fn detect_rom_region(
+    file_path: &str,
+    ident_name: Option<&str>,
+    serial: Option<&str>,
+) -> Option<&'static str> {
+    if let Some(ident) = ident_name {
+        if let Some(code) = region_from_name(ident) {
+            return Some(code);
+        }
+    }
+    let file_name = Path::new(file_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(file_path);
+    if let Some(code) = region_from_name(file_name) {
+        return Some(code);
+    }
+    if let Some(s) = serial {
+        if let Some(code) = region_from_serial(s) {
+            return Some(code);
+        }
+    }
+    if let Some(folder) = parent_folder_candidate(file_path) {
+        if let Some(code) = region_from_name(&folder) {
+            return Some(code);
+        }
+    }
+    None
+}
+
+/// Extrai qualificadores de edição/revisão/mídia (ex.: `Disc 1`, `Chip 2`,
+/// `Rev 1`, `v1.02`, `Beta`, `T-PtBr`) para diferenciar múltiplas ROMs do mesmo
+/// jogo no seletor de versões.
+pub fn extract_rom_qualifier(
+    file_path: &str,
+    ident_name: Option<&str>,
+    revision_override: Option<&str>,
+) -> Option<String> {
+    let source = ident_name
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| {
+            Path::new(file_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(file_path)
+        });
+
+    fn push_unique(parts: &mut Vec<String>, label: &str) {
+        let trimmed = label.trim();
+        if !trimmed.is_empty()
+            && !parts
+                .iter()
+                .any(|existing| existing.eq_ignore_ascii_case(trimmed))
+        {
+            parts.push(trimmed.to_string());
+        }
+    }
+
+    let mut parts: Vec<String> = Vec::new();
+
+    for caps in PAREN_GROUP_RE.captures_iter(source) {
+        let inner = caps
+            .get(1)
+            .or_else(|| caps.get(2))
+            .map(|m| m.as_str().trim())
+            .unwrap_or("");
+        if inner.is_empty() || inner == "!" {
+            continue;
+        }
+        if QUALIFIER_DISC_CHIP_RE.is_match(inner)
+            || QUALIFIER_REV_RE.is_match(inner)
+            || QUALIFIER_EDITION_RE.is_match(inner)
+        {
+            push_unique(&mut parts, inner);
+        }
+    }
+
+    // Caso o marcador de disco/versão esteja solto fora de parênteses (`Jogo - Disc 1`).
+    let stem = Path::new(source)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(source);
+    let without_brackets = collapse_spaces(&strip_bracketed_tags(stem).replace('_', " "));
+    if let Some(m) = BARE_MEDIA_VER_RE.find(&without_brackets) {
+        let raw_tail = m
+            .as_str()
+            .trim_matches(|c: char| matches!(c, '-' | ':' | ' '));
+        push_unique(&mut parts, raw_tail);
+    }
+
+    if let Some(rev) = revision_override
+        .map(str::trim)
+        .filter(|r| !r.is_empty() && !parts.iter().any(|p| QUALIFIER_REV_RE.is_match(p)))
+    {
+        push_unique(&mut parts, rev);
+    }
+
+    (!parts.is_empty()).then(|| parts.join(" · "))
+}
+
+/// Extrai o radical normalizado do arquivo de capa em uma URL ou caminho,
+/// removendo extensão e sufixo `_{8 hex}` do espelho (`box-texture_0af13c71.png` -> `box-texture`).
+pub fn cover_stem(url_or_path: &str) -> String {
+    let clean = url_or_path.split(['?', '#']).next().unwrap_or(url_or_path);
+    let file_name = clean.rsplit(['/', '\\']).next().unwrap_or(clean);
+    let no_ext = match file_name.rsplit_once('.') {
+        Some((base, ext)) if !base.is_empty() && !ext.is_empty() => base,
+        _ => file_name,
+    };
+    let stem = match no_ext.rsplit_once('_') {
+        Some((base, hash))
+            if !base.is_empty()
+                && hash.len() == 8
+                && hash.chars().all(|c| c.is_ascii_hexdigit()) =>
+        {
+            base
+        }
+        _ => no_ext,
+    };
+    stem.to_ascii_lowercase()
+}
+
+/// Indica se a URL aponta para uma arte não-frontal de caixa: textura aberta
+/// com contracapa + lombada + frente (`box-texture`), textura de mídia
+/// (`support-texture`), verso/lateral ou render 3D inclinado (`box-3D`).
+pub fn is_non_front_cover_url(url: &str) -> bool {
+    let stem = cover_stem(url);
+    stem.contains("texture")
+        || stem.contains("3d")
+        || stem == "back"
+        || stem.ends_with("-back")
+        || stem.ends_with("_back")
+        || stem == "side"
+        || stem.ends_with("-side")
+        || stem.ends_with("_side")
+        || stem.contains("spine")
+}
+
+/// Sistemas cujas caixas físicas originais são quadradas (~1:1, ex.: 700x700
+/// nas capas `cover` / `box-2D` do catálogo).
+pub fn is_square_box_system(system_id: &str) -> bool {
+    matches!(
+        system_id.trim().to_ascii_lowercase().as_str(),
+        "gb" | "gbc"
+            | "gba"
+            | "vb"
+            | "nds"
+            | "pokemini"
+            | "psx"
+            | "dreamcast"
+            | "pcengine"
+            | "pcenginecd"
+            | "supergrafx"
+            | "pcfx"
+            | "ngp"
+            | "neogeocd"
+            | "3do"
+            | "cdi"
+            | "lynx"
+            | "gamegear"
+            | "wonderswan"
+            | "supervision"
+            | "megaduck"
+            | "game-boy"
+            | "game-boy-color"
+            | "game-boy-advance"
+            | "virtual-boy"
+            | "pokemon-mini"
+            | "nintendo-ds"
+            | "nintendo-dsi"
+            | "playstation"
+            | "turbografx-16-pc-engine"
+            | "turbografx-16-pc-engine-cd"
+            | "pc-engine-cd-rom"
+            | "pc-engine-supergrafx"
+            | "neo-geo-pocket"
+            | "neo-geo-pocket-color"
+            | "neo-geo-cd"
+            | "3do-interactive-multiplayer"
+            | "philips-cd-i"
+            | "atari-lynx"
+            | "sega-game-gear"
+            | "wonderswan-color"
+            | "watara-supervision"
+            | "watara-quickshot-supervision"
+    )
+}
+
+/// Pontuação de prioridade para escolha automática de capa (menor = melhor):
+/// `(kind_tier, square_pref, default_pref)`.
+/// - `kind_tier = 0`: capa frontal 2D completa (`cover`, `box-2D`, `1080p`, `coXXXX`...)
+/// - `kind_tier = 10`: resolução intermediária (`cover_big`)
+/// - `kind_tier = 20`: miniatura pequena (`thumb`, `cover_small`)
+/// - `kind_tier = 30`: caixa 3D inclinada (`box-3D`)
+/// - `kind_tier = 40`: caixa aberta com lombada/verso (`box-texture`, `back`, `side`)
+pub fn cover_url_rank(
+    url: &str,
+    system_id: Option<&str>,
+    is_default: bool,
+    dims: Option<(u32, u32)>,
+) -> (u8, u8, u8) {
+    let lower = url.to_ascii_lowercase();
+    let stem = cover_stem(url);
+
+    let is_wrap_or_back = stem.contains("texture")
+        || stem == "back"
+        || stem.ends_with("-back")
+        || stem.ends_with("_back")
+        || stem == "side"
+        || stem.ends_with("-side")
+        || stem.ends_with("_side")
+        || stem.contains("spine");
+    let is_3d = stem.contains("3d");
+    let is_tiny = matches!(stem.as_str(), "thumb" | "cover_small")
+        || lower.contains("/t_thumb/")
+        || lower.contains("/t_cover_small/");
+    let is_medium = stem == "cover_big";
+
+    let kind_tier = if is_wrap_or_back {
+        40
+    } else if is_3d {
+        30
+    } else if is_tiny {
+        20
+    } else if is_medium {
+        10
+    } else {
+        0
+    };
+
+    let known_square = match dims {
+        Some((w, h)) if w > 0 && h > 0 => {
+            let ratio = f64::from(w) / f64::from(h);
+            (0.85..=1.18).contains(&ratio)
+        }
+        _ => {
+            system_id.is_some_and(is_square_box_system)
+                && matches!(stem.as_str(), "cover" | "box-2d")
+        }
+    };
+    let square_pref = if kind_tier == 0 && known_square { 0 } else { 1 };
+
+    let default_pref = if kind_tier == 0 && is_default {
+        0
+    } else if matches!(
+        stem.as_str(),
+        "1080p" | "cover" | "box-2d" | "cover_big_2x" | "720p"
+    ) {
+        1
+    } else {
+        2
+    };
+
+    (kind_tier, square_pref, default_pref)
+}
+
+/// Escolhe a melhor capa frontal/quadrada dentre uma sequência de URLs candidatas.
+pub fn pick_best_cover_url<'a>(
+    candidates: impl IntoIterator<Item = &'a str>,
+    system_id: Option<&str>,
+    default_url: Option<&str>,
+) -> Option<&'a str> {
+    candidates
+        .into_iter()
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+        .enumerate()
+        .min_by_key(|(idx, u)| {
+            let is_def = default_url.is_some_and(|d| d.trim() == *u);
+            (cover_url_rank(u, system_id, is_def, None), *idx)
+        })
+        .map(|(_, u)| u)
+}
+
+/// Escolhe a capa regional mais adequada para a região da ROM (`JP`, `EU`, `NA`,
+/// `BR`, `KR`, `AU`, `WORLD`), caindo para `fallback` quando não houver variante
+/// específica para aquela região (e evitando cair em `box-texture`/`box-3D` se
+/// houver capa frontal disponível).
+pub fn pick_regional_cover<'a>(
+    regional_covers: &'a std::collections::BTreeMap<String, String>,
+    region: Option<&str>,
+    fallback: Option<&'a str>,
+) -> Option<&'a str> {
+    let fallback_clean = fallback.map(str::trim).filter(|u| !u.is_empty());
+    let fallback_is_front = fallback_clean.is_some_and(|u| !is_non_front_cover_url(u));
+
+    if !regional_covers.is_empty() {
+        if let Some(raw_reg) = region {
+            let norm = normalize_region_code(raw_reg);
+            let candidates: &[&str] = match norm {
+                Some("JP") => &["JP"],
+                Some("EU") => &["EU"],
+                Some("AU") => &["AU", "EU"],
+                Some("BR") => &["BR", "NA", "WORLD"],
+                Some("KR") => &["KR"],
+                Some("CN") => &["CN"],
+                Some("NA") => &["NA", "WORLD"],
+                Some("WORLD") => &["WORLD", "NA", "EU"],
+                _ => &[],
+            };
+            for key in candidates {
+                if let Some(url) = regional_covers
+                    .get(*key)
+                    .map(String::as_str)
+                    .map(str::trim)
+                    .filter(|u| !u.is_empty() && (!fallback_is_front || !is_non_front_cover_url(u)))
+                {
+                    return Some(url);
+                }
+            }
+            let direct = raw_reg.trim().to_ascii_uppercase();
+            if let Some(url) = regional_covers
+                .get(&direct)
+                .map(String::as_str)
+                .map(str::trim)
+                .filter(|u| !u.is_empty() && (!fallback_is_front || !is_non_front_cover_url(u)))
+            {
+                return Some(url);
+            }
+        }
+
+        if !fallback_is_front {
+            for key in ["WORLD", "NA", "EU", "BR", "JP", "AU", "KR", "CN"] {
+                if let Some(url) = regional_covers
+                    .get(key)
+                    .map(String::as_str)
+                    .map(str::trim)
+                    .filter(|u| !u.is_empty() && !is_non_front_cover_url(u))
+                {
+                    return Some(url);
+                }
+            }
+            if let Some(url) = regional_covers
+                .values()
+                .map(String::as_str)
+                .map(str::trim)
+                .find(|u| !u.is_empty() && !is_non_front_cover_url(u))
+            {
+                return Some(url);
+            }
+        }
+    }
+    fallback_clean
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -881,5 +1393,120 @@ mod tests {
             Some(2)
         );
         assert_eq!(title_match_tier("Super Mario", "Super Mario World"), None);
+    }
+
+    #[test]
+    fn detects_rom_regions_qualifiers_and_picks_regional_covers() {
+        assert_eq!(
+            detect_rom_region("/roms/snes/Chrono Trigger (USA).sfc", None, None),
+            Some("NA")
+        );
+        assert_eq!(
+            detect_rom_region("/roms/snes/Chrono Trigger (Japan).sfc", None, None),
+            Some("JP")
+        );
+        assert_eq!(
+            detect_rom_region("/roms/snes/Terranigma (Europe).sfc", None, None),
+            Some("EU")
+        );
+        assert_eq!(
+            detect_rom_region("/roms/sms/Turma da Monica (Brazil).sms", None, None),
+            Some("BR")
+        );
+        assert_eq!(
+            detect_rom_region(
+                "/roms/gba/Pokemon - Emerald Version (USA, Europe).gba",
+                None,
+                None
+            ),
+            Some("WORLD")
+        );
+        // Tags de revisão/lado não devem ser confundidas com códigos de 1 letra como "(A)" = Austrália.
+        assert_eq!(
+            detect_rom_region("/roms/nes/Metroid (Rev A).nes", None, None),
+            None
+        );
+        assert_eq!(
+            detect_rom_region("/roms/ps2/game.iso", None, Some("SLPS-25088")),
+            Some("JP")
+        );
+        assert_eq!(
+            detect_rom_region("/roms/gc/GALE01 - Melee.iso", None, None),
+            Some("NA")
+        );
+        assert_eq!(
+            extract_rom_qualifier(
+                "/roms/atari2600/128-in-1 Junior Console (Chip 2) (PAL) [!].a26",
+                None,
+                None,
+            )
+            .as_deref(),
+            Some("Chip 2")
+        );
+
+        let mut covers = std::collections::BTreeMap::new();
+        covers.insert("JP".into(), "https://cdn.gamekave.net/jp.webp".into());
+        covers.insert("EU".into(), "https://cdn.gamekave.net/eu.webp".into());
+        assert_eq!(
+            pick_regional_cover(
+                &covers,
+                Some("JP"),
+                Some("https://cdn.gamekave.net/na.webp")
+            ),
+            Some("https://cdn.gamekave.net/jp.webp")
+        );
+        assert_eq!(
+            pick_regional_cover(
+                &covers,
+                Some("AU"),
+                Some("https://cdn.gamekave.net/na.webp")
+            ),
+            Some("https://cdn.gamekave.net/eu.webp")
+        );
+        assert_eq!(
+            pick_regional_cover(
+                &covers,
+                Some("NA"),
+                Some("https://cdn.gamekave.net/na.webp")
+            ),
+            Some("https://cdn.gamekave.net/na.webp")
+        );
+
+        // Nunca mantém `box-texture` como fallback quando há capa frontal disponível.
+        assert_eq!(
+            pick_regional_cover(
+                &covers,
+                None,
+                Some(
+                    "https://cdn.gamekave.net/games/g/cover/screenscraper/box-texture_0af13c71.png"
+                )
+            ),
+            Some("https://cdn.gamekave.net/eu.webp")
+        );
+    }
+
+    #[test]
+    fn ranks_front_and_square_covers_ahead_of_box_texture_and_box_3d() {
+        let wrap = "https://cdn.gamekave.net/games/g/cover/screenscraper/box-texture_0af13c71.png";
+        let box3d = "https://cdn.gamekave.net/games/g/cover/screenscraper/box-3D_b4c06009.png";
+        let box2d = "https://cdn.gamekave.net/games/g/cover/screenscraper/box-2D_d75bd986.png";
+        let cover = "https://cdn.gamekave.net/games/g/cover/screenscraper/cover_d5a30ce5.png";
+        let igdb = "https://cdn.gamekave.net/games/g/covers/igdb/co8lo8.jpg";
+
+        assert!(is_non_front_cover_url(wrap));
+        assert!(is_non_front_cover_url(box3d));
+        assert!(!is_non_front_cover_url(box2d));
+        assert!(!is_non_front_cover_url(cover));
+        assert!(!is_non_front_cover_url(igdb));
+
+        assert_eq!(
+            pick_best_cover_url([wrap, box3d, box2d, cover], Some("atari2600"), Some(cover)),
+            Some(cover)
+        );
+        // Em plataformas de caixa quadrada (GB/GBA/PSX/Dreamcast/NDS), prefere `cover`/`box-2D` (1:1).
+        assert_eq!(
+            pick_best_cover_url([wrap, igdb, cover], Some("gba"), Some(igdb)),
+            Some(cover)
+        );
     }
 }
