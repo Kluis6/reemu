@@ -54,6 +54,28 @@ fn system_from_folder_ext(path: &Path, root: &Path, ext: &str) -> Option<&'stati
 /// core recebe o `.zip`/`.7z` como está (flycast/MAME aceitam `zip|7z`).
 const WHOLE_ARCHIVE_SYSTEMS: &[&str] = &["arcade", "naomi", "atomiswave"];
 
+fn is_whole_archive(system_id: &str, ext: &str) -> bool {
+    WHOLE_ARCHIVE_SYSTEMS.contains(&system_id) || (system_id == "x68000" && ext == "zip")
+}
+
+/// Calcula a identidade de um arquivo cujo `system_id` já está gravado na
+/// biblioteca (reaproveitado pelo passo em segundo plano para linhas antigas).
+pub fn identify_known_rom(path: &Path, system_id: &str) -> std::io::Result<crate::Identity> {
+    let ext = ext_of(path);
+    let archived_entry = if is_supported_archive(&ext) && !is_whole_archive(system_id, &ext) {
+        let found = peek_archive(path, Some(system_id)).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "arquivo compactado sem entrada reconhecida",
+            )
+        })?;
+        Some(found.entry)
+    } else {
+        None
+    };
+    identify(path, system_id, archived_entry.as_deref())
+}
+
 /// `.chd` que acompanha um set do MAME: fica numa subpasta com o id do jogo
 /// ao lado do `.zip` (`naomi/azumanga/gdl-0018.chd` + `naomi/azumanga.zip`,
 /// "the chd file in a subdirectory of the roms folder named after the mame
@@ -436,7 +458,7 @@ where
                 match peek_archive(path, folder_system) {
                     // O PX68k ordena e monta a mídia interna do ZIP. O
                     // arquivo inteiro é a unidade de jogo e identificação.
-                    Some(a) if a.system_id == "x68000" && ext == "zip" => ("x68000", None),
+                    Some(a) if is_whole_archive(a.system_id, &ext) => (a.system_id, None),
                     Some(a) => (a.system_id, Some(a.entry)),
                     None => {
                         report.skipped_unrecognized += 1;

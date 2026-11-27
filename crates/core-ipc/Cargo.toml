@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+achievements = { path = "../achievements" }
 serde = { workspace = true }
 domain = { path = "../domain" }
 bincode = { version = "2", features = ["serde"] }

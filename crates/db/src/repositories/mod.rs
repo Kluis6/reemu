@@ -17,6 +17,7 @@ mod keyboard_bindings_repo;
 mod library_folders_repo;
 mod metadata_repo;
 mod profile_repo;
+mod rom_resolution_repo;
 mod roms_repo;
 mod save_state_repo;
 mod settings_repo;
@@ -39,6 +40,7 @@ pub use keyboard_bindings_repo::KeyboardBindingsRepo;
 pub use library_folders_repo::{is_under, LibraryFoldersRepo};
 pub use metadata_repo::MetadataRepo;
 pub use profile_repo::ProfileRepo;
+pub use rom_resolution_repo::RomResolutionRepo;
 pub use roms_repo::RomsRepo;
 pub use save_state_repo::SaveStateRepo;
 pub use settings_repo::{

@@ -242,6 +242,7 @@ async fn metadata_config_scrape_and_pending_review() {
         release_date: Some("1990".into()),
         genre: Some("Platform".into()),
         provider_source: Some("screenscraper".into()),
+        game_uuid: None,
         details: domain::metadata::GameDetails {
             developer: Some("Nintendo EAD".into()),
             publisher: Some("Nintendo".into()),
@@ -801,4 +802,52 @@ async fn settings_rom_identities_carry_serial_name_and_size() {
     assert_eq!(ids[1].serial.as_deref(), Some("SLUS-00594"));
     assert_eq!(ids[1].ident_name.as_deref(), Some("Game.chd"));
     assert_eq!(ids[1].ident_size, Some(700_000_000));
+}
+
+#[tokio::test]
+async fn metadata_resolve_pending_bulk_accepts_and_rejects_across_chunks() {
+    let pool = mem_db().await;
+    let roms = RomsRepo::new(pool.clone());
+    let metadata = MetadataRepo::new(pool);
+
+    for idx in 0..220 {
+        let id = format!("rom-{idx:03}");
+        roms.add(&rom(&id, &format!("{idx:08X}"), "snes"))
+            .await
+            .unwrap();
+        let mut cand = candidate(&format!("Game {idx}"), false);
+        cand.provider = "gamekave".into();
+        cand.external_id = format!("uuid-{idx}");
+        metadata
+            .record_match(&id, &cand, MatchStatus::PendingReview)
+            .await
+            .unwrap();
+    }
+
+    let mut to_accept: Vec<String> = (0..205).map(|idx| format!("rom-{idx:03}")).collect();
+    // Duplicados e IDs inexistentes devem ser ignorados sem falhar a transação.
+    to_accept.push("rom-000".into());
+    to_accept.push("inexistente".into());
+
+    let accepted = metadata
+        .resolve_pending_bulk(&to_accept, true)
+        .await
+        .unwrap();
+    assert_eq!(accepted.len(), 205);
+    assert_eq!(metadata.list_pending().await.unwrap().len(), 15);
+    let first = metadata.get_metadata("rom-000").await.unwrap().unwrap();
+    assert_eq!(first.title, "Game 0");
+    assert_eq!(first.game_uuid.as_deref(), Some("uuid-0"));
+    let boundary = metadata.get_metadata("rom-204").await.unwrap().unwrap();
+    assert_eq!(boundary.title, "Game 204");
+
+    let to_reject: Vec<String> = (200..220).map(|idx| format!("rom-{idx:03}")).collect();
+    let rejected = metadata
+        .resolve_pending_bulk(&to_reject, false)
+        .await
+        .unwrap();
+    // 200..204 já estavam confirmados, então apenas 205..219 (15 itens) mudam.
+    assert_eq!(rejected.len(), 15);
+    assert!(metadata.list_pending().await.unwrap().is_empty());
+    assert!(metadata.get_metadata("rom-219").await.unwrap().is_none());
 }

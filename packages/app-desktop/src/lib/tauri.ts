@@ -8,6 +8,8 @@ import { inNavMode } from './focusNav'
 import type { InputFocus } from '../stores/useFocusStore'
 // Gerados do Rust (`cargo test`, ts-rs). Não editar à mão.
 import type { CatalogCore } from './bindings/CatalogCore'
+import type { CatalogSearchGame } from './bindings/CatalogSearchGame'
+import type { CatalogStatus } from './bindings/CatalogStatus'
 import type { AspectInfo } from './bindings/AspectInfo'
 import type { AudioConfig } from './bindings/AudioConfig'
 import type { BezelCatalogItem } from './bindings/BezelCatalogItem'
@@ -65,6 +67,11 @@ import type { UpdateInfo } from './bindings/UpdateInfo'
 import type { VideoConfig } from './bindings/VideoConfig'
 import type { InstalledCore } from './bindings/InstalledCore'
 import type { LoadedGame } from './bindings/LoadedGame'
+import type { RaAchievement } from './bindings/RaAchievement'
+import type { RaGameLoadedEvent } from './bindings/RaGameLoadedEvent'
+import type { RaGameView } from './bindings/RaGameView'
+import type { RaStatus } from './bindings/RaStatus'
+import type { RaUnlockEvent } from './bindings/RaUnlockEvent'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -411,6 +418,8 @@ export const reviewPendingMatch = (romId: string, refresh = false) =>
 export const readGameArtworkFile = (path: string) => invoke<string>('read_game_artwork', { path })
 export const resolvePendingMatch = (romId: string, accept: boolean, title?: string, details?: GameMetadataEdits) =>
   invoke<void>('resolve_pending_match', { romId, accept, title: title ?? null, details: details ?? null })
+export const resolvePendingMatchesBulk = (romIds: string[], accept: boolean) =>
+  invoke<number>('resolve_pending_matches_bulk', { romIds, accept })
 
 export type { ScrapeProgress }
 export const metadataScanProgress = () => invoke<ScrapeProgress>('metadata_scan_progress')
@@ -612,10 +621,14 @@ export const alvanistaStatus = () => invoke<AlvanistaStatus>('alvanista_status')
 export const alvanistaCachedStatus = () => invoke<AlvanistaStatus>('alvanista_cached_status')
 /** Abre o navegador e espera a aprovação (até 5 minutos). `lang` é o idioma da
  *  página que o navegador mostra no fim. `saves`: pede também o escopo do cloud
- *  save no mesmo consentimento. Rejeita com um código curto: `cancelled`,
- *  `denied`, `timeout`, `offline`, `keyring` ou `failed`. */
-export const alvanistaConnect = (lang: string = i18n.language, saves = false) =>
-  invoke<AlvanistaStatus>('alvanista_connect', { lang, saves })
+ *  save no mesmo consentimento. `scopes`: escopos incrementais adicionais unidos
+ *  aos da sessão atual. Rejeita com um código curto: `cancelled`, `denied`,
+ *  `timeout`, `offline`, `keyring` ou `failed`. */
+export const alvanistaConnect = (
+  lang: string = i18n.language,
+  saves = false,
+  scopes?: string[],
+) => invoke<AlvanistaStatus>('alvanista_connect', { lang, saves, scopes: scopes ?? null })
 export const alvanistaCancel = () => invoke<void>('alvanista_cancel')
 export const alvanistaDisconnect = () => invoke<void>('alvanista_disconnect')
 /** Abre o perfil do Alvanista no navegador do sistema. */
@@ -623,12 +636,167 @@ export const alvanistaOpenProfile = () => invoke<void>('alvanista_open_profile')
 /** Abre uma página do site do Alvanista: editar perfil, apps conectados, os
  *  aparelhos do sync ou os planos. */
 export const alvanistaOpenSite = (page: 'edit' | 'apps' | 'sync' | 'plans') => invoke<void>('alvanista_open_site', { page })
+/** Abre o perfil público de um Gamer conectado no navegador do sistema. */
+export const alvanistaOpenUser = (username: string) =>
+  invoke<void>('alvanista_open_user', { username })
+
+export interface PartnerFriendPlaying {
+  gameId: string | null
+  title: string | null
+  platform: string | null
+  customMessage: string | null
+}
+
+export interface PartnerFriend {
+  id: string
+  username: string
+  avatarUrl: string | null
+  profileUrl: string
+  online: boolean
+  playingNow: PartnerFriendPlaying | null
+}
+
+export interface PartnerPlatformStat {
+  platform: string
+  total: number
+  unlocked: number
+  completionPercentage: number
+}
+
+export interface PartnerAchievementStats {
+  total: number
+  unlocked: number
+  totalPoints: number
+  completionPercentage: number
+  byPlatform: PartnerPlatformStat[]
+}
+
+export interface PartnerPlatformSummary {
+  platform: string
+  status: string
+  lastSynced: string | null
+  totalGames: number
+  totalAchievements: number
+}
+
+export interface PartnerAchievementItem {
+  source: string
+  name: string
+  description: string | null
+  iconUrl: string | null
+  gameOrApp: string | null
+  gameId: string | null
+  unlockedAt: string | null
+  points: number
+  names: Record<string, string>
+  descriptions: Record<string, string>
+}
+
+export interface PartnerAchievements {
+  stats: PartnerAchievementStats
+  platforms: PartnerPlatformSummary[]
+  recent: PartnerAchievementItem[]
+}
+
+export const alvanistaFriends = () => invoke<PartnerFriend[]>('alvanista_friends')
+export const alvanistaAchievements = () =>
+  invoke<PartnerAchievements>('alvanista_achievements')
 /** Resultado da renovação que o app faz sozinho ao abrir (evento do Rust). */
 export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Promise<() => void> {
   if (!inTauri) return () => {}
   const { listen } = await import('@tauri-apps/api/event')
   return listen<AlvanistaStatus>('alvanista-status', (e) => cb(e.payload))
 }
+
+// --- catálogo de jogos do Alvanista (D140, D147) ------------------------
+
+export type { CatalogSearchGame, CatalogStatus }
+
+export type CatalogEvent =
+  | { type: 'pass'; found: number; pending: number; unknown: number }
+  | { type: 'status' }
+
+export type CatalogMediaKind = 'hero' | 'logo' | 'title' | 'screenshot'
+
+/** URL do protocolo `media://` (ou `http://media.localhost/` no Windows) para
+ *  uma mídia guardada em disco por `gameUuid`. Preserva `data:` locais e faz
+ *  fallback para `rawUrl` fora do Tauri ou quando `gameUuid` não existe. */
+export function catalogMediaUrl(
+  gameUuid: string | null | undefined,
+  rawUrl: string | null | undefined,
+  kind: CatalogMediaKind,
+  index = 0,
+): string | undefined {
+  if (!rawUrl) return undefined
+  if (rawUrl.startsWith('data:')) return rawUrl
+  if (!gameUuid || !inTauri) return rawUrl
+  const internals = (
+    window as unknown as {
+      __TAURI_INTERNALS__?: { convertFileSrc?: (path: string, protocol?: string) => string }
+    }
+  ).__TAURI_INTERNALS__
+  const base =
+    internals?.convertFileSrc?.('', 'media') ??
+    (typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+      ? 'http://media.localhost/'
+      : 'media://localhost/')
+  const prefix = base.endsWith('/') ? base : `${base}/`
+  return `${prefix}${gameUuid}/${kind}/${index}`
+}
+
+export const catalogStatus = () => invoke<CatalogStatus>('catalog_status')
+export const catalogSetEnabled = (enabled: boolean) =>
+  invoke<CatalogStatus>('catalog_set_enabled', { enabled })
+export const catalogRunNow = (lang: string = i18n.language) =>
+  invoke<CatalogStatus>('catalog_run_now', { lang })
+export const catalogSearch = (q: string, system: string) =>
+  invoke<CatalogSearchGame[]>('catalog_search', { q, system })
+export const catalogPick = (romId: string, gameId: string, lang: string = i18n.language) =>
+  invoke<GameMetadata>('catalog_pick', { romId, gameId, lang })
+export async function onCatalogEvent(cb: (e: CatalogEvent) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<CatalogEvent>('catalog', (e) => cb(e.payload))
+}
+
+// --- coleção, jornada e lista de desejos no Alvanista (D160) ------------
+
+export type CollectionJourneyStatus =
+  | 'no_status'
+  | 'unplayed'
+  | 'want_to_play'
+  | 'backlog'
+  | 'playing'
+  | 'played'
+  | 'finished'
+  | 'completed'
+  | 'abandoned'
+
+export interface CollectionItem {
+  gameId: string
+  inCollection: boolean
+  possessed: boolean
+  ownership: string
+  inWishlist: boolean
+  interest: string
+  status: CollectionJourneyStatus | string
+  playtimeMinutes: number
+  lastPlayedAt: string | null
+}
+
+export interface CollectionPatch {
+  system?: string
+  inCollection?: boolean
+  inWishlist?: boolean
+  status?: CollectionJourneyStatus
+  playtimeMinutes?: number
+}
+
+export const alvanistaCollectionStatus = (gameIds: string[]) =>
+  invoke<CollectionItem[]>('alvanista_collection_status', { gameIds })
+
+export const alvanistaCollectionUpdate = (gameId: string, patch: CollectionPatch) =>
+  invoke<CollectionItem>('alvanista_collection_update', { gameId, patch })
 
 // --- cloud save: esta máquina como aparelho da conta --------------------
 
@@ -841,7 +1009,13 @@ export type RawInputEvent =
 export type BindingTarget = 'system_hotkey' | 'controller_mapping'
 
 /** `SystemAction::as_wire()` do backend. */
-export type SystemActionKey = 'toggle_menu_overlay' | 'quick_save' | 'quick_load'
+export type SystemActionKey =
+  | 'toggle_menu_overlay'
+  | 'quick_save'
+  | 'quick_load'
+  | 'capture_screenshot'
+  | 'toggle_audio_note'
+  | 'toggle_video_recording'
 
 export async function onRawInputCaptured(
   cb: (ev: RawInputEvent) => void,
@@ -975,9 +1149,62 @@ const gamepadButtonNames = (): Record<number, string> => ({
   15: 'D-pad ↑', 16: 'D-pad ↓', 17: 'D-pad ←', 18: 'D-pad →',
 })
 
+function fnv1aKeyScancode(code: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < code.length; i++) {
+    h ^= code.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h >>> 0
+}
+
+const KNOWN_SCANCODE_LABELS: Map<number, string> = (() => {
+  const map = new Map<number, string>()
+  const add = (code: string, label = code) => map.set(fnv1aKeyScancode(code), label)
+  for (let n = 1; n <= 24; n++) add(`F${n}`)
+  for (let c = 65; c <= 90; c++) {
+    const ch = String.fromCharCode(c)
+    add(`Key${ch}`, ch)
+  }
+  for (let d = 0; d <= 9; d++) {
+    add(`Digit${d}`, String(d))
+    add(`Numpad${d}`, `Num ${d}`)
+  }
+  add('ShiftLeft', 'Shift')
+  add('ShiftRight', 'RShift')
+  add('ControlLeft', 'Ctrl')
+  add('ControlRight', 'RCtrl')
+  add('AltLeft', 'Alt')
+  add('AltRight', 'RAlt')
+  add('Space', 'Space')
+  add('Enter', 'Enter')
+  add('Backspace', 'Backspace')
+  add('PrintScreen', 'PrintScreen')
+  add('Insert', 'Insert')
+  add('Delete', 'Delete')
+  add('Home', 'Home')
+  add('End', 'End')
+  add('PageUp', 'PageUp')
+  add('PageDown', 'PageDown')
+  add('Backquote', '`')
+  add('Minus', '-')
+  add('Equal', '=')
+  add('BracketLeft', '[')
+  add('BracketRight', ']')
+  add('Backslash', '\\')
+  add('Semicolon', ';')
+  add('Quote', "'")
+  add('Comma', ',')
+  add('Period', '.')
+  add('Slash', '/')
+  return map
+})()
+
 /** Rótulo curto e legível de um evento bruto (pra chips da UI de captura). */
 export function describeRawInput(ev: RawInputEvent): string {
-  if ('Keyboard' in ev) return i18n.t('input.key')
+  if ('Keyboard' in ev) {
+    return KNOWN_SCANCODE_LABELS.get(ev.Keyboard.scancode >>> 0) ?? i18n.t('input.key')
+  }
   if ('GamepadButton' in ev)
     return (
       gamepadButtonNames()[ev.GamepadButton.index] ??
@@ -1035,4 +1262,300 @@ export async function appVersion(): Promise<string> {
   if (!inTauri) throw new Error('fora do Tauri: appVersion')
   const { getVersion } = await import('@tauri-apps/api/app')
   return getVersion()
+}
+
+// --- RetroAchievements (`src-tauri/src/ra.rs`) ----------------------------
+
+export type { RaAchievement, RaGameLoadedEvent, RaGameView, RaStatus, RaUnlockEvent }
+
+export const raStatus = () => invoke<RaStatus>('ra_status')
+
+export const raLogin = (username: string, password: string) =>
+  invoke<RaStatus>('ra_login', { username, password })
+
+export const raLogout = () => invoke<RaStatus>('ra_logout')
+
+export const raSetPreferences = (prefs: {
+  enabled?: boolean
+  hardcore?: boolean
+  unofficial?: boolean
+  encore?: boolean
+}) =>
+  invoke<RaStatus>('ra_set_preferences', {
+    enabled: prefs.enabled ?? null,
+    hardcore: prefs.hardcore ?? null,
+    unofficial: prefs.unofficial ?? null,
+    encore: prefs.encore ?? null,
+  })
+
+export const raGameAchievements = (romId: string) =>
+  invoke<RaGameView>('ra_game_achievements', { romId })
+
+export async function onRaStatusChanged(cb: (st: RaStatus) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<RaStatus>('ra-status-changed', (e) => cb(e.payload))
+}
+
+export async function onRaGameLoaded(cb: (ev: RaGameLoadedEvent) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<RaGameLoadedEvent>('ra-game-loaded', (e) => cb(e.payload))
+}
+
+export async function onRaAchievementUnlocked(cb: (ev: RaUnlockEvent) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<RaUnlockEvent>('ra-achievement-unlocked', (e) => cb(e.payload))
+}
+
+// --- Meu Log + thread automatica de check-in da sessao (`gamelog.rs`) -----
+
+export type GamelogVisibility = 'public' | 'friends' | 'private'
+export type GamelogKind = 'note' | 'screenshot' | 'video' | 'audio'
+
+export interface GamelogPrefs {
+  autoSessionCheckin: boolean
+  autoAttachCaptures: boolean
+  visibility: GamelogVisibility | string
+}
+
+export interface GamelogRuntimeState {
+  audioRecording: boolean
+  audioElapsedMs: number
+  videoRecording: boolean
+  videoElapsedMs: number
+  ffmpegAvailable: boolean
+  activeRomId: string | null
+  activeGameId: string | null
+  activeSessionPostId: string | null
+  activeRaGameId: number
+  prefs: GamelogPrefs
+}
+
+export interface GamelogUsage {
+  usedBytes: number
+  quotaBytes: number
+  itemCount: number
+}
+
+export interface GamelogMedia {
+  key: string
+  url: string
+  mimeType: string
+  sizeBytes: number
+  width: number | null
+  height: number | null
+  durationMs: number | null
+  posterUrl: string | null
+}
+
+export interface GamelogItem {
+  id: string
+  gameId: string
+  kind: GamelogKind | string
+  title: string | null
+  body: string
+  platformId: string | null
+  visibility: GamelogVisibility | string
+  state: string
+  takenAt: string | null
+  createdAt: string
+  updatedAt: string
+  media: GamelogMedia[]
+}
+
+export interface GamelogList {
+  items: GamelogItem[]
+  nextCursor: string | null
+}
+
+export interface GamelogCaptureResult {
+  localPath: string
+  uploadedItem: GamelogItem | null
+  attachedPostId: string | null
+  warning: string | null
+}
+
+export const gamelogState = () => invoke<GamelogRuntimeState>('gamelog_state')
+
+export const gamelogSetPrefs = (prefs: {
+  autoSessionCheckin?: boolean
+  autoAttachCaptures?: boolean
+  visibility?: GamelogVisibility
+}) =>
+  invoke<GamelogPrefs>('gamelog_set_prefs', {
+    autoSessionCheckin: prefs.autoSessionCheckin ?? null,
+    autoAttachCaptures: prefs.autoAttachCaptures ?? null,
+    visibility: prefs.visibility ?? null,
+  })
+
+export const gamelogUsage = () => invoke<GamelogUsage>('gamelog_usage')
+
+export const gamelogListItems = (gameId: string, cursor?: string | null, limit = 20) =>
+  invoke<GamelogList>('gamelog_list_items', {
+    gameId,
+    cursor: cursor ?? null,
+    limit,
+  })
+
+export const gamelogCreateNote = (args: {
+  gameId: string
+  romId?: string | null
+  title?: string | null
+  body: string
+  visibility?: GamelogVisibility
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogItem>('gamelog_create_note', {
+    gameId: args.gameId,
+    romId: args.romId ?? null,
+    title: args.title ?? null,
+    body: args.body,
+    visibility: args.visibility ?? null,
+    attachToSession: args.attachToSession ?? null,
+  })
+
+export const gamelogUploadFile = (args: {
+  gameId: string
+  romId?: string | null
+  filePath: string
+  kind?: GamelogKind | null
+  title?: string | null
+  caption?: string | null
+  visibility?: GamelogVisibility
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogItem>('gamelog_upload_file', {
+    gameId: args.gameId,
+    romId: args.romId ?? null,
+    filePath: args.filePath,
+    kind: args.kind ?? null,
+    title: args.title ?? null,
+    caption: args.caption ?? null,
+    visibility: args.visibility ?? null,
+    attachToSession: args.attachToSession ?? null,
+  })
+
+export const gamelogPatchItem = (args: {
+  itemId: string
+  title?: string | null
+  body?: string | null
+  visibility?: GamelogVisibility
+}) =>
+  invoke<GamelogItem>('gamelog_patch_item', {
+    itemId: args.itemId,
+    title: args.title ?? null,
+    body: args.body ?? null,
+    visibility: args.visibility ?? null,
+  })
+
+export const gamelogDeleteItem = (itemId: string) =>
+  invoke<void>('gamelog_delete_item', { itemId })
+
+export const gamelogAttachToSession = (args: {
+  itemId: string
+  gameId?: string | null
+  caption?: string | null
+  visibility?: GamelogVisibility
+}) =>
+  invoke<string | null>('gamelog_attach_to_session', {
+    itemId: args.itemId,
+    gameId: args.gameId ?? null,
+    caption: args.caption ?? null,
+    visibility: args.visibility ?? null,
+  })
+
+export const gamelogCaptureScreenshot = (args?: {
+  caption?: string | null
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogCaptureResult>('gamelog_capture_screenshot', {
+    caption: args?.caption ?? null,
+    attachToSession: args?.attachToSession ?? null,
+  })
+
+export const gamelogStartAudioNote = (args?: {
+  romId?: string | null
+  gameId?: string | null
+  title?: string | null
+  caption?: string | null
+}) =>
+  invoke<GamelogRuntimeState>('gamelog_start_audio_note', {
+    romId: args?.romId ?? null,
+    gameId: args?.gameId ?? null,
+    title: args?.title ?? null,
+    caption: args?.caption ?? null,
+  })
+
+export const gamelogStopAudioNote = (args?: {
+  title?: string | null
+  caption?: string | null
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogCaptureResult>('gamelog_stop_audio_note', {
+    title: args?.title ?? null,
+    caption: args?.caption ?? null,
+    attachToSession: args?.attachToSession ?? null,
+  })
+
+export const gamelogCancelAudioNote = () =>
+  invoke<GamelogRuntimeState>('gamelog_cancel_audio_note')
+
+export const gamelogStartVideoRecording = (caption?: string | null) =>
+  invoke<GamelogRuntimeState>('gamelog_start_video_recording', {
+    caption: caption ?? null,
+  })
+
+export const gamelogStopVideoRecording = (args?: {
+  caption?: string | null
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogCaptureResult>('gamelog_stop_video_recording', {
+    caption: args?.caption ?? null,
+    attachToSession: args?.attachToSession ?? null,
+  })
+
+export const gamelogOpenCapturesDir = (romId?: string | null) =>
+  invoke<void>('gamelog_open_captures_dir', { romId: romId ?? null })
+
+export const gamelogOpenSessionPost = (postId: string) =>
+  invoke<void>('gamelog_open_session_post', { postId })
+
+export function pickGamelogMediaFile(title = i18n.t('gamelog.pickMediaTitle')): Promise<string | null> {
+  return pickPath({
+    title,
+    extensions: [
+      'png',
+      'jpg',
+      'jpeg',
+      'webp',
+      'gif',
+      'mp4',
+      'webm',
+      'mov',
+      'wav',
+      'mp3',
+      'm4a',
+      'ogg',
+      'flac',
+    ],
+    filterName: i18n.t('gamelog.mediaFilter'),
+  })
+}
+
+export async function onGamelogStateChanged(
+  cb: (st: GamelogRuntimeState) => void,
+): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<GamelogRuntimeState>('gamelog-state-changed', (e) => cb(e.payload))
+}
+
+export async function onGamelogUpdated(
+  cb: (ev: { gameId: string | null }) => void,
+): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<{ gameId: string | null }>('gamelog-updated', (e) => cb(e.payload))
 }

@@ -449,6 +449,8 @@ impl LoopDiag {
 
 fn run(channel: Channel, rx: Receiver<ToChild>) {
     let mut core: Option<DesktopCore> = None;
+    let mut ra: Option<achievements::LiveRuntime> = None;
+    let mut ra_mem_gen = 0u64;
     let mut ring: Option<core_ipc::FrameRing> = None;
     let mut frame_slot = 0u32;
     let mut paused = false;
@@ -461,8 +463,24 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
     let mut rate = RateMatch::new(pacer.budget());
 
     loop {
-        let msg = if core.is_none() || paused {
+        let msg = if core.is_none() {
             rx.recv().ok()
+        } else if paused {
+            if ra.is_some() {
+                match rx.recv_timeout(Duration::from_millis(100)) {
+                    Ok(m) => Some(m),
+                    Err(mpsc::RecvTimeoutError::Timeout) => {
+                        if let (Some(rt), Some(c)) = (ra.as_mut(), core.as_mut()) {
+                            let drain = rt.idle();
+                            flush_ra_drain(&channel, c, drain);
+                        }
+                        continue;
+                    }
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+            } else {
+                rx.recv().ok()
+            }
         } else {
             rx.try_recv().ok()
         };
@@ -476,6 +494,8 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
             }
             run_one_frame(
                 &mut core,
+                &mut ra,
+                &mut ra_mem_gen,
                 &channel,
                 &mut ring,
                 &mut frame_slot,
@@ -500,6 +520,7 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 vk_interop,
                 vulkan_in_child,
             } => {
+                ra = None;
                 core = None; // não deveria haver um core já — o pai mata e sobe de novo a cada troca.
                 core_loader_desktop::set_dmabuf_import_modifiers(dmabuf_modifiers);
                 core_loader_desktop::set_vk_interop(vk_interop.map(|b| *b));
@@ -571,6 +592,12 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                         // chegam ao pai antes da resposta do load.
                         forward_core_set_options(&channel);
                         let _ = channel.send(
+                            &ToParent::ExtractedContentPath(
+                                c.extracted_rom_path().map(std::path::Path::to_path_buf),
+                            ),
+                            &[],
+                        );
+                        let _ = channel.send(
                             &ToParent::SerializationQuirks(
                                 core_loader_desktop::serialization_quirks(),
                             ),
@@ -610,14 +637,26 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 }
             }
             ToChild::SaveState => {
-                let bytes = core.as_mut().and_then(|c| c.serialize_state());
+                let bytes =
+                    core.as_mut()
+                        .and_then(|c| c.serialize_state())
+                        .map(|b| match ra.as_ref() {
+                            Some(rt) => rt.pack_save_state(b),
+                            None => b,
+                        });
                 let _ = channel.send(&ToParent::SaveStateResult(bytes), &[]);
             }
             ToChild::RestoreState(data) => {
+                let (core_bytes, progress) = achievements::unpack_state_with_progress(&data);
                 let ok = core
                     .as_mut()
-                    .map(|c| c.restore_state(&data))
+                    .map(|c| c.restore_state(core_bytes))
                     .unwrap_or(false);
+                if ok {
+                    if let Some(rt) = ra.as_mut() {
+                        rt.restore_progress(progress);
+                    }
+                }
                 let _ = channel.send(&ToParent::RestoreStateResult(ok), &[]);
             }
             ToChild::GetSaveRam => {
@@ -701,9 +740,41 @@ fn run(channel: Channel, rx: Receiver<ToChild>) {
                 ));
             }
             ToChild::InteropSlotFree { slot } => core_loader_desktop::interop_slot_freed(slot),
+            ToChild::InitAchievements(cfg) => {
+                if let Some(c) = core.as_mut() {
+                    ra_mem_gen = c.memory_map_generation();
+                    let descs = memory_descriptors_for_ra(c);
+                    let mem = unsafe {
+                        achievements::LibretroMemory::init(cfg.console_id, &descs, |id| {
+                            c.core_memory_region(id)
+                        })
+                    };
+                    match achievements::LiveRuntime::start(*cfg, mem) {
+                        Ok((rt, drain)) => {
+                            flush_ra_drain(&channel, c, drain);
+                            ra = Some(rt);
+                        }
+                        Err(e) => {
+                            let _ = channel
+                                .send(&ToParent::Warn(format!("RetroAchievements: {e}")), &[]);
+                        }
+                    }
+                }
+            }
+            ToChild::RaHttpResponse {
+                request_id,
+                status_code,
+                body,
+            } => {
+                if let (Some(rt), Some(c)) = (ra.as_mut(), core.as_mut()) {
+                    let drain = rt.on_http_response(request_id, status_code, &body);
+                    flush_ra_drain(&channel, c, drain);
+                }
+            }
             ToChild::Shutdown => break,
         }
     }
+    drop(ra);
     core_loader_desktop::offer_interop_images(None);
     // `core` dropa aqui (se ainda `Some`) → `DesktopCore::Drop` faz o
     // teardown libretro/GL. O processo sai logo em seguida de qualquer jeito
@@ -754,6 +825,8 @@ fn apply_input(ports: &[PortInput; 4]) {
 #[allow(clippy::too_many_arguments)]
 fn run_one_frame(
     core: &mut Option<DesktopCore>,
+    ra: &mut Option<achievements::LiveRuntime>,
+    ra_mem_gen: &mut u64,
     channel: &Channel,
     ring: &mut Option<core_ipc::FrameRing>,
     frame_slot: &mut u32,
@@ -785,6 +858,23 @@ fn run_one_frame(
     let produced = c.next_realtime_frame();
     if let (Some(d), Some(t0)) = (diag.as_mut(), t0) {
         d.record_frame(t0.elapsed(), pacer.budget(), produced.is_none());
+    }
+    if let Some(rt) = ra.as_mut() {
+        let cur_gen = c.memory_map_generation();
+        let needs_rebind = cur_gen != *ra_mem_gen
+            || (!rt.has_valid_memory() && !c.core_memory_region(2).0.is_null());
+        if needs_rebind {
+            *ra_mem_gen = cur_gen;
+            let descs = memory_descriptors_for_ra(c);
+            let mem = unsafe {
+                achievements::LibretroMemory::init(rt.console_id(), &descs, |id| {
+                    c.core_memory_region(id)
+                })
+            };
+            rt.update_memory(mem);
+        }
+        let drain = rt.do_frame();
+        flush_ra_drain(channel, c, drain);
     }
     // 1ª leitura de analógico pelo core → avisa o pai (uma vez por processo;
     // cada jogo roda num filho novo).
@@ -938,6 +1028,40 @@ fn send_frame(
 fn forward_core_set_options(channel: &core_ipc::Channel) {
     for (key, value) in core_loader_desktop::take_core_set_options() {
         let _ = channel.send(&ToParent::CoreOptionSet { key, value }, &[]);
+    }
+}
+
+fn memory_descriptors_for_ra(core: &DesktopCore) -> Vec<achievements::MemoryDescriptorInput> {
+    core.memory_descriptors()
+        .into_iter()
+        .map(|d| achievements::MemoryDescriptorInput {
+            flags: d.flags,
+            ptr: d.ptr,
+            offset: d.offset,
+            start: d.start,
+            select: d.select,
+            disconnect: d.disconnect,
+            len: d.len,
+            addrspace: d.addrspace,
+        })
+        .collect()
+}
+
+fn flush_ra_drain(channel: &Channel, core: &mut DesktopCore, drain: achievements::RuntimeDrain) {
+    if drain.reset_core {
+        core.reset_core();
+    }
+    for warn in drain.warnings {
+        let _ = channel.send(&ToParent::Warn(warn), &[]);
+    }
+    if let Some(loaded) = drain.loaded {
+        let _ = channel.send(&ToParent::RaGameLoaded(Box::new(loaded)), &[]);
+    }
+    for ev in drain.events {
+        let _ = channel.send(&ToParent::RaEvent(Box::new(ev)), &[]);
+    }
+    for req in drain.http_requests {
+        let _ = channel.send(&ToParent::RaHttpRequest(req), &[]);
     }
 }
 

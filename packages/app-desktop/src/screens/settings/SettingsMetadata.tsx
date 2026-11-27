@@ -3,12 +3,13 @@ import {
   Button,
   Caption1,
   Field,
-  Image,
   Input,
   MessageBar,
+  MessageBarActions,
   MessageBarBody,
   MessageBarTitle,
   ProgressBar,
+  Spinner,
   Tab,
   TabList,
   Text,
@@ -16,49 +17,79 @@ import {
   mergeClasses,
   tokens,
 } from '@fluentui/react-components'
-import { CheckmarkRegular, DismissRegular, EditRegular } from '@fluentui/react-icons'
+import { DismissRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { LoadingState } from '../../components/EmptyState'
-import { ReviewMetadataDialog } from './ReviewMetadataDialog'
-import { BlockGroup, FieldBlock } from '../../components/SettingBlock'
-import { providerLabel } from '../../lib/metadataFormat'
-import { ListIconAction } from '../../components/ListIconAction'
-import { PAGE_PAD_B, SAFE_Y } from '../../styles/metrics'
-import { useTabStyles } from '../../styles/xbox'
-import { errorToast, sysToast } from '../../lib/toast'
+import { BlockGroup, FieldBlock, ToggleBlock } from '../../components/SettingBlock'
+import { useCatalogStatus, useRunCatalogNow, useSetCatalogEnabled } from '../../hooks/useCatalog'
 import {
   cancelMetadataScan,
   getMetadataConfig,
   listPendingMatches,
   metadataScanProgress,
-  resolvePendingMatch,
   setMetadataConfig,
   startMetadataScan,
   type MetadataConfig,
   type PendingMatch,
 } from '../../lib/tauri'
+import { errorToast, sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
-import { Trans, useTranslation } from 'react-i18next'
+import { useTabStyles } from '../../styles/xbox'
+import { PendingMatchesSection } from './PendingMatchesSection'
+import { ReviewMetadataDialog } from './ReviewMetadataDialog'
 
 const progressKey = ['metadata-progress'] as const
+const DISMISS_SS_DEV_WARNING_KEY = 'reemu.dismissSsDevWarning'
+
+function readSsWarningDismissed(): boolean {
+  try {
+    return sessionStorage.getItem(DISMISS_SS_DEV_WARNING_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeSsWarningDismissed(dismissed: boolean) {
+  try {
+    if (dismissed) sessionStorage.setItem(DISMISS_SS_DEV_WARNING_KEY, '1')
+    else sessionStorage.removeItem(DISMISS_SS_DEV_WARNING_KEY)
+  } catch {
+    // sessionStorage indisponível
+  }
+}
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, gap: tokens.spacingVerticalS },
-  tabs: { flexShrink: 0, paddingInlineStart: tokens.spacingHorizontalS },
-  tabPanel: {
-    flexGrow: 1,
-    minHeight: 0,
-    overflowY: 'auto',
-    overscrollBehavior: 'contain',
-    scrollbarGutter: 'stable',
-    padding: `8px ${tokens.spacingHorizontalS} ${PAGE_PAD_B - SAFE_Y + 24}px`,
-    scrollPaddingBlock: '8px',
+  root: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalL,
   },
-  panel: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalL },
+  tabs: { marginLeft: '-3px' },
+  panel: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalL,
+  },
   save: { alignSelf: 'flex-start' },
-  scan: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
-  scanActions: { display: 'flex', flexWrap: 'wrap', gap: tokens.spacingHorizontalS },
+  scan: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+  },
+  catalogStatusRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: tokens.spacingHorizontalM,
+  },
+  scanActions: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: tokens.spacingHorizontalS,
+  },
   scanStatus: {
     display: 'flex',
     flexDirection: 'column',
@@ -67,31 +98,6 @@ const useStyles = makeStyles({
     backgroundColor: tokens.colorNeutralBackground3,
     borderRadius: tokens.borderRadiusMedium,
   },
-  pending: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
-  row: {
-    display: 'flex',
-    gap: tokens.spacingHorizontalM,
-    alignItems: 'center',
-    padding: tokens.spacingHorizontalM,
-    boxSizing: 'border-box',
-    borderRadius: tokens.borderRadiusMedium,
-    backgroundColor: tokens.colorNeutralBackground2,
-  },
-  cover: {
-    width: '36px',
-    height: '48px',
-    objectFit: 'cover',
-    flexShrink: 0,
-    borderRadius: tokens.borderRadiusMedium,
-  },
-  matchDetails: {
-    display: 'flex',
-    flexDirection: 'column',
-    flexGrow: 1,
-    minWidth: 0,
-    overflowWrap: 'anywhere',
-  },
-  matchActions: { display: 'flex', flexShrink: 0, gap: tokens.spacingHorizontalS },
   dim: { color: tokens.colorNeutralForeground3 },
 })
 
@@ -101,8 +107,13 @@ export function SettingsMetadata() {
   const tb = useTabStyles()
   const [review, setReview] = useState<PendingMatch | null>(null)
   const [tab, setTab] = useState<'results' | 'credentials'>('results')
+  const [ssWarningDismissed, setSsWarningDismissed] = useState<boolean>(readSsWarningDismissed)
   const qc = useQueryClient()
   const push = useToastStore((st) => st.push)
+
+  const catalog = useCatalogStatus()
+  const setCatalog = useSetCatalogEnabled()
+  const runCatalog = useRunCatalogNow()
 
   const cfg = useQuery({ queryKey: ['metadata-config'], queryFn: getMetadataConfig, retry: false })
   const [form, setForm] = useState<MetadataConfig | null>(null)
@@ -123,11 +134,12 @@ export function SettingsMetadata() {
     queryFn: listPendingMatches,
     retry: false,
   })
-  // recarrega a fila de pendências quando o scan termina
+
+  // Recarrega a fila de pendências quando o scan termina.
   useEffect(() => {
     if (!running) {
-      pending.refetch()
-      qc.invalidateQueries({ queryKey: ['roms'] })
+      void pending.refetch()
+      void qc.invalidateQueries({ queryKey: ['roms'] })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running])
@@ -135,7 +147,9 @@ export function SettingsMetadata() {
   const save = useMutation({
     mutationFn: (c: MetadataConfig) => setMetadataConfig(c),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['metadata-config'] })
+      writeSsWarningDismissed(false)
+      setSsWarningDismissed(false)
+      void qc.invalidateQueries({ queryKey: ['metadata-config'] })
       push(sysToast(t('metadata.saved'), 'Success'))
     },
     onError: (e) => push(errorToast(e, 'saveMetadataConfig')),
@@ -160,28 +174,40 @@ export function SettingsMetadata() {
     onSuccess: () => progress.refetch(),
     onError: (e) => push(errorToast(e, 'fetchMetadata')),
   })
-  const resolve = useMutation({
-    mutationFn: ({ romId, accept }: { romId: string; accept: boolean }) =>
-      resolvePendingMatch(romId, accept),
-    onSuccess: () => {
-      pending.refetch()
-      qc.invalidateQueries({ queryKey: ['roms'] })
-    },
-    onError: (e) => push(errorToast(e, 'resolveMatch')),
-  })
 
   const matches = pending.data ?? []
   const p = progress.data
-  const status = scan.isPending ? 'preparing'
-    : cancel.isPending ? 'cancelling'
-    : scan.isError && !running ? 'failed'
-    : progress.isError ? 'unavailable'
-    : p?.status === 'completed' && p.total === 0 ? 'empty'
-    : p?.status ?? 'idle'
+  const status = scan.isPending
+    ? 'preparing'
+    : cancel.isPending
+      ? 'cancelling'
+      : scan.isError && !running
+        ? 'failed'
+        : progress.isError
+          ? 'unavailable'
+          : p?.status === 'completed' && p.total === 0
+            ? 'empty'
+            : (p?.status ?? 'idle')
   const active = scan.isPending || running
   const showCounts = !scan.isPending && (!scan.isError || running) && !!p?.total
   const ratio = showCounts && p ? p.done / p.total : undefined
   const statusText = t(`metadata.status.${status}`)
+  const catalogBusy = runCatalog.isPending || Boolean(catalog.data?.running)
+  const hasSsCredentials = Boolean(
+    cfg.data?.screenscraperUser?.trim() && cfg.data?.screenscraperPassword?.trim(),
+  )
+  const showSsDevWarning =
+    !scan.isPending && hasSsCredentials && p?.error === 'ss_dev_login' && !ssWarningDismissed
+  const hasProgressWarning =
+    Boolean(p?.error && p.error !== 'ss_dev_login') ||
+    showSsDevWarning ||
+    status === 'failed' ||
+    status === 'cancelled'
+
+  const dismissSsWarning = () => {
+    writeSsWarningDismissed(true)
+    setSsWarningDismissed(true)
+  }
 
   return (
     <div className={s.root}>
@@ -199,110 +225,147 @@ export function SettingsMetadata() {
         </Tab>
       </TabList>
 
-      <div id="metadata-results" className={s.tabPanel} role="tabpanel" aria-labelledby="metadata-results-tab" tabIndex={0} hidden={tab !== 'results'}>
-        {tab === 'results' && (
-          <div className={s.panel}>
-            <Caption1>
-              <Trans i18nKey="metadata.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
-            </Caption1>
-
-            <div className={s.scan}>
-              <div className={s.scanActions}>
-                <Button
-                  disabledFocusable={active}
-                  aria-busy={active}
-                  onClick={() => scan.mutate()}
-                >
-                  {active ? t('metadata.scanning') : t('metadata.scan')}
-                </Button>
-                {running && (
-                  <Button
-                    appearance="subtle"
-                    disabledFocusable={status === 'cancelling'}
-                    onClick={() => cancel.mutate()}
-                  >
-                    {t('common.cancel')}
-                  </Button>
-                )}
-              </div>
-              {status !== 'idle' && (
-                <div className={s.scanStatus}>
-                  <Text role="status" weight="semibold">{statusText}</Text>
-                  {(active || ratio !== undefined) && (
-                    <ProgressBar
-                      aria-label={t('metadata.scan')}
-                      thickness="large"
-                      value={ratio}
-                      color={p?.error || status === 'failed' || status === 'cancelled' ? 'warning' : 'brand'}
-                    />
-                  )}
-                  {showCounts && p && (
-                    <Caption1 className={s.dim}>
-                      {ratio !== undefined ? Math.floor(ratio * 100) + '% · ' : ''}
-                      {t('metadata.progress', { done: p.done, total: p.total, auto: p.auto, pending: p.pending, failed: p.failed })}
-                    </Caption1>
+      {tab === 'results' ? (
+        <div id="metadata-results" role="tabpanel" aria-labelledby="metadata-results-tab" className={s.panel}>
+          {catalog.data?.connected && (
+            <div className={s.scan} data-testid="catalog-section">
+              <BlockGroup>
+                <ToggleBlock
+                  label={t('catalog.toggle')}
+                  description={t('catalog.privacy')}
+                  checked={catalog.data.enabled}
+                  busy={setCatalog.isPending}
+                  onChange={(on) =>
+                    setCatalog.mutate(on, {
+                      onError: (e) => push(errorToast(e, 'saveMetadataConfig')),
+                    })
+                  }
+                />
+              </BlockGroup>
+              {catalog.data.enabled && (
+                <div className={s.catalogStatusRow}>
+                  <Caption1 className={s.dim} role="status" data-testid="catalog-status-line">
+                    {catalog.data.disabledByServer
+                      ? t('catalog.disabledByServer')
+                      : t('catalog.counts', {
+                        found: catalog.data.found,
+                        pending: catalog.data.pending,
+                        unknown: catalog.data.unknown,
+                      })}
+                  </Caption1>
+                  {!catalog.data.disabledByServer && (
+                    <Button
+                      size="small"
+                      appearance="secondary"
+                      disabledFocusable={catalogBusy}
+                      aria-busy={catalogBusy || undefined}
+                      icon={catalogBusy ? <Spinner size="tiny" /> : undefined}
+                      onClick={() =>
+                        runCatalog.mutate(undefined, {
+                          onSuccess: (st) =>
+                            push(
+                              sysToast(
+                                t('catalog.syncedToast', { found: st.found, pending: st.pending }),
+                                'Success',
+                              ),
+                            ),
+                          onError: (e) => push(errorToast(e, 'fetchMetadata')),
+                        })
+                      }
+                    >
+                      {catalogBusy ? t('catalog.syncing') : t('catalog.syncNow')}
+                    </Button>
                   )}
                 </div>
               )}
-              {!scan.isPending && p?.error === 'ss_dev_login' && (
-                <MessageBar intent="warning">
-                  <MessageBarBody>
-                    <MessageBarTitle>{t('metadata.errors.ssDevLoginTitle')}</MessageBarTitle>
-                    {t('metadata.errors.ssDevLogin')}
-                  </MessageBarBody>
-                </MessageBar>
+            </div>
+          )}
+
+          <Caption1>
+            <Trans i18nKey="metadata.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
+          </Caption1>
+
+          <div className={s.scan}>
+            <div className={s.scanActions}>
+              <Button
+                disabledFocusable={active}
+                aria-busy={active}
+                onClick={() => scan.mutate()}
+              >
+                {active ? t('metadata.scanning') : t('metadata.scan')}
+              </Button>
+              {running && (
+                <Button
+                  appearance="subtle"
+                  disabledFocusable={status === 'cancelling'}
+                  onClick={() => cancel.mutate()}
+                >
+                  {t('common.cancel')}
+                </Button>
               )}
             </div>
-
-            {pending.isLoading && <LoadingState />}
-            {pending.isError && <Body1>{t('metadata.pendingUnavailable')}</Body1>}
-            {pending.isSuccess && matches.length === 0 && <Caption1>{t('metadata.noPending')}</Caption1>}
-            {matches.length > 0 && (
-              <div className={s.pending}>
-                <Caption1>{t('metadata.review', { count: matches.length })}</Caption1>
-                {matches.map((m) => {
-                  const details = [providerLabel(m.provider), m.releaseDate, m.genre].filter(Boolean).join(' · ')
-                  return (
-                    <div key={m.romId} className={s.row}>
-                      {m.coverUrl && <Image className={s.cover} src={m.coverUrl} alt="" loading="lazy" />}
-                      <div className={s.matchDetails}>
-                        <Text weight="semibold">{m.title}</Text>
-                        <Caption1 className={s.dim}>{t('metadata.file', { name: m.fileStem })}</Caption1>
-                        {details && <Caption1 className={s.dim}>{details}</Caption1>}
-                      </div>
-                      <div className={s.matchActions}>
-                        <ListIconAction
-                          label={t('metadata.editMatch')}
-                          icon={<EditRegular />}
-                          disabled={resolve.isPending}
-                          onClick={() => setReview(m)}
-                        />
-                        <ListIconAction
-                          label={t('metadata.accept')}
-                          icon={<CheckmarkRegular />}
-                          disabled={resolve.isPending}
-                          onClick={() => resolve.mutate({ romId: m.romId, accept: true })}
-                        />
-                        <ListIconAction
-                          label={t('metadata.reject')}
-                          icon={<DismissRegular />}
-                          disabled={resolve.isPending}
-                          onClick={() => resolve.mutate({ romId: m.romId, accept: false })}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
+            {status !== 'idle' && (
+              <div className={s.scanStatus}>
+                <Text role="status" weight="semibold">
+                  {statusText}
+                </Text>
+                {(active || ratio !== undefined) && (
+                  <ProgressBar
+                    aria-label={t('metadata.scan')}
+                    thickness="large"
+                    value={ratio}
+                    color={hasProgressWarning ? 'warning' : 'brand'}
+                  />
+                )}
+                {showCounts && p && (
+                  <Caption1 className={s.dim}>
+                    {ratio !== undefined ? Math.floor(ratio * 100) + '% · ' : ''}
+                    {t('metadata.progress', {
+                      done: p.done,
+                      total: p.total,
+                      auto: p.auto,
+                      pending: p.pending,
+                      failed: p.failed,
+                    })}
+                  </Caption1>
+                )}
               </div>
             )}
+            {showSsDevWarning && (
+              <MessageBar intent="warning" data-testid="ss-dev-warning">
+                <MessageBarBody>
+                  <MessageBarTitle>{t('metadata.errors.ssDevLoginTitle')}.</MessageBarTitle>{' '}
+                  {t('metadata.errors.ssDevLogin')}
+                </MessageBarBody>
+                <MessageBarActions
+                  containerAction={
+                    <Button
+                      appearance="transparent"
+                      icon={<DismissRegular />}
+                      aria-label={t('shell.close')}
+                      onClick={dismissSsWarning}
+                    />
+                  }
+                />
+              </MessageBar>
+            )}
           </div>
-        )}
-      </div>
 
-      <div id="metadata-credentials" className={s.tabPanel} role="tabpanel" aria-labelledby="metadata-credentials-tab" tabIndex={0} hidden={tab !== 'credentials'}>
-        {tab === 'credentials' && (
-          cfg.isLoading ? <LoadingState /> : cfg.isError || !form ? <Body1>{t('metadata.unavailable')}</Body1> : (
-            <div className={s.panel}>
+          {pending.isLoading && <LoadingState />}
+          {pending.isError && <Body1>{t('metadata.pendingUnavailable')}</Body1>}
+          {pending.isSuccess && matches.length === 0 && <Caption1>{t('metadata.noPending')}</Caption1>}
+          {matches.length > 0 && (
+            <PendingMatchesSection matches={matches} onReview={setReview} />
+          )}
+        </div>
+      ) : (
+        <div id="metadata-credentials" role="tabpanel" aria-labelledby="metadata-credentials-tab" className={s.panel}>
+          {cfg.isLoading ? (
+            <LoadingState />
+          ) : cfg.isError || !form ? (
+            <Body1>{t('metadata.unavailable')}</Body1>
+          ) : (
+            <>
               <Caption1>{t('metadata.credentialsIntro')}</Caption1>
 
               <BlockGroup>
@@ -344,10 +407,10 @@ export function SettingsMetadata() {
               >
                 {t('common.save')}
               </Button>
-            </div>
-          )
-        )}
-      </div>
+            </>
+          )}
+        </div>
+      )}
       {review && <ReviewMetadataDialog key={review.romId} match={review} onClose={() => setReview(null)} />}
     </div>
   )

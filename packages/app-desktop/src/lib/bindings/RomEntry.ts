@@ -24,4 +24,31 @@ isFavorite: boolean,
 /**
  * Tempo de jogo acumulado (s): o perfil soma e ordena sem uma chamada por ROM.
  */
-playTimeSecs: number, contentExtension?: string, };
+playTimeSecs: number, 
+/**
+ * Extensão interna usada na escolha do core para jogos compactados.
+ */
+contentExtension?: string, 
+/**
+ * Nome escolhido pela pessoa (`roms.user_title`), quando definido; tem
+ * precedência sobre o título do catálogo na grade e na página do jogo.
+ */
+userTitle?: string, 
+/**
+ * Chave canônica para agrupar múltiplas ROMs regionais do mesmo jogo na
+ * mesma plataforma.
+ */
+groupKey?: string, 
+/**
+ * Título limpo extraído do arquivo quando a ROM ainda não tem título do
+ * catálogo nem `user_title` (usado ao exibir um grupo com múltiplas dumps).
+ */
+cleanTitle?: string, 
+/**
+ * Código canônico de região da ROM (`NA`, `EU`, `JP`, `BR`, `KR`, `AU`, `CN`, `WORLD`).
+ */
+region?: string, 
+/**
+ * Qualificador de disco/revisão/edição (`Disc 1`, `Chip 2`, `Rev 1`, `v1.02`...).
+ */
+versionQualifier?: string, };

@@ -9,6 +9,7 @@ import {
   PuzzlePieceRegular,
   Speaker2Regular,
   TagMultipleRegular,
+  TrophyRegular,
   TvRegular,
   XboxControllerRegular,
 } from "@fluentui/react-icons";
@@ -20,6 +21,7 @@ import type { FluentIcon } from "@fluentui/react-icons";
 export const SETTINGS_SECTIONS = [
   { key: "perfil", id: "profile", Icon: PersonRegular },
   { key: "sincronizacao", id: "sync", Icon: CloudSyncRegular },
+  { key: "conquistas", id: "achievements", Icon: TrophyRegular },
   { key: "aparencia", id: "appearance", Icon: PaintBrushRegular },
   { key: "biblioteca", id: "library", Icon: LibraryRegular },
   { key: "audio", id: "audio", Icon: Speaker2Regular },

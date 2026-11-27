@@ -23,7 +23,7 @@ import { BlockGroup, FieldBlock, ToggleBlock } from '../../components/SettingBlo
 import { useAlvanistaConnect } from '../../hooks/useAlvanistaConnect'
 import { ConflictDialog } from '../../components/sync/ConflictDialog'
 import { CopySettingsDialog } from '../../components/sync/CopySettingsDialog'
-import { SYNC_STATUS_KEY, SYNC_ERRORS, syncErrorCode, useConflicts, useSync } from '../../hooks/useSync'
+import { SYNC_STATUS_KEY, SYNC_ERRORS, syncErrorCode, useConflicts, useResolveBulk, useSync } from '../../hooks/useSync'
 import { alvanistaOpenSite, type SyncMachine } from '../../lib/tauri'
 import { relativeAge } from '../profile/relativeAge'
 import { SettingsSyncRow } from './SettingsSyncRow'
@@ -168,6 +168,7 @@ export function SettingsSync() {
   // momento do clique; cada resolvido sai dela e o diálogo mostra a próxima.
   const conflictCount = query.data?.conflicts ?? 0
   const conflicts = useConflicts(conflictCount > 0)
+  const resolveBulk = useResolveBulk()
   const [queue, setQueue] = useState<string[]>([])
   // A primeira da fila que ainda existe: uma resolvida em outro lugar é pulada.
   const asking = conflicts.data?.find((c) => queue.includes(c.key)) ?? null
@@ -451,14 +452,59 @@ export function SettingsSync() {
                   : t('sync.conflicts.hintMixed')
                 : t('sync.conflicts.hint')}
             </Caption1>
+            {resolveBulk.isError && (
+              <MessageBar intent="warning">
+                <MessageBarBody>{t(`sync.err.${syncErrorCode(resolveBulk.error)}`)}</MessageBarBody>
+              </MessageBar>
+            )}
             <div className={s.actions}>
               <Button
                 appearance="primary"
-                disabledFocusable={!conflicts.data || conflicts.data.length === 0}
+                disabledFocusable={!conflicts.data || conflicts.data.length === 0 || resolveBulk.isPending}
                 onClick={() => setQueue((conflicts.data ?? []).map((c) => c.key))}
               >
                 {t('sync.conflicts.resolve')}
               </Button>
+              {(conflicts.data?.length ?? 0) > 1 && (
+                <>
+                  <Button
+                    appearance="secondary"
+                    disabledFocusable={resolveBulk.isPending}
+                    icon={
+                      resolveBulk.isPending && resolveBulk.variables?.keep === 'local' ? (
+                        <Spinner size="tiny" />
+                      ) : undefined
+                    }
+                    onClick={() =>
+                      resolveBulk.mutate({
+                        keys: (conflicts.data ?? []).map((c) => c.key),
+                        keep: 'local',
+                      })
+                    }
+                  >
+                    {t('sync.conflicts.keepAllLocal', { count: conflicts.data?.length ?? 0 })}
+                  </Button>
+                  <Button
+                    appearance="secondary"
+                    disabledFocusable={resolveBulk.isPending}
+                    icon={
+                      resolveBulk.isPending && resolveBulk.variables?.keep === 'remote' ? (
+                        <Spinner size="tiny" />
+                      ) : undefined
+                    }
+                    onClick={() =>
+                      resolveBulk.mutate({
+                        keys: (conflicts.data ?? []).map((c) => c.key),
+                        keep: 'remote',
+                      })
+                    }
+                  >
+                    {twoMachines === 0 && deletedOnSite > 0
+                      ? t('sync.conflicts.acceptAllDeletions', { count: conflicts.data?.length ?? 0 })
+                      : t('sync.conflicts.keepAllRemote', { count: conflicts.data?.length ?? 0 })}
+                  </Button>
+                </>
+              )}
             </div>
           </FieldBlock>
         </BlockGroup>

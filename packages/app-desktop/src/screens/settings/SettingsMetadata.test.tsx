@@ -1,119 +1,290 @@
 // @vitest-environment happy-dom
-
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
-import type { ScrapeProgress } from '../../lib/tauri'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CatalogStatus, MetadataConfig, PendingMatch, ScrapeProgress } from '../../lib/tauri'
+
+;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const api = vi.hoisted(() => ({
+  catalogStatus: vi.fn(),
+  catalogSetEnabled: vi.fn(),
+  catalogRunNow: vi.fn(),
   getMetadataConfig: vi.fn(),
   metadataScanProgress: vi.fn(),
   listPendingMatches: vi.fn(),
-  startMetadataScan: vi.fn(),
-  cancelMetadataScan: vi.fn(),
+  resolvePendingMatch: vi.fn(),
+  resolvePendingMatchesBulk: vi.fn(),
 }))
-vi.mock('../../lib/tauri', async (original) => ({ ...(await original<object>()), ...api }))
 
-import i18n from '../../i18n'
+vi.mock('../../lib/tauri', async (orig) => ({
+  ...(await orig<typeof import('../../lib/tauri')>()),
+  ...api,
+}))
+
+import '../../i18n'
 import { SettingsMetadata } from './SettingsMetadata'
 
-;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-const empty = { running: false, status: 'idle', done: 0, total: 0, auto: 0, pending: 0, failed: 0, error: null } satisfies ScrapeProgress
+const CFG: MetadataConfig = {
+  provider: 'screenscraper',
+  screenscraperUser: null,
+  screenscraperPassword: null,
+  thegamesdbApiKey: null,
+}
+
+const PROGRESS: ScrapeProgress = {
+  running: false,
+  status: 'idle',
+  done: 0,
+  total: 0,
+  auto: 0,
+  pending: 0,
+  failed: 0,
+  error: null,
+}
+
+const CONNECTED_STATUS: CatalogStatus = {
+  connected: true,
+  enabled: true,
+  disabledByServer: false,
+  running: false,
+  found: 12,
+  pending: 3,
+  unknown: 1,
+}
+
+function makeMatch(idx: number, provider = 'gamekave'): PendingMatch {
+  return {
+    romId: `rom-${idx}`,
+    fileStem: `File_${idx}`,
+    provider,
+    title: `Game Title ${idx}`,
+    description: null,
+    coverUrl: `https://example.com/cover-${idx}.png`,
+    releaseDate: '1995-08-15',
+    genre: 'adventure',
+  }
+}
+
 let host: HTMLDivElement
-let root: ReturnType<typeof createRoot>
-let qc: QueryClient
+let unmount: () => Promise<void>
 
-// O happy-dom rejeita a animação do ProgressBar ao sair do modo indeterminado.
-const animate = Element.prototype.animate
-beforeAll(() => {
-  ;(Element.prototype as { animate?: unknown }).animate = undefined
-})
-afterAll(() => {
-  Element.prototype.animate = animate
-})
+async function settle() {
+  for (let i = 0; i < 6; i++) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0))
+    })
+  }
+}
 
-beforeEach(async () => {
-  vi.resetAllMocks()
-  await i18n.changeLanguage('pt-BR')
-  api.getMetadataConfig.mockResolvedValue({
-    provider: 'screenscraper', screenscraperUser: null, screenscraperPassword: null, thegamesdbApiKey: null,
-  })
-  api.listPendingMatches.mockResolvedValue([])
-  api.metadataScanProgress.mockResolvedValue(empty)
+async function mount() {
   host = document.createElement('div')
-  document.body.append(host)
-  root = createRoot(host)
-  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  await act(async () => root.render(<QueryClientProvider client={qc}><SettingsMetadata /></QueryClientProvider>))
-  await waitForStatus(() => expect(host.textContent).toContain('Escanear metadata da biblioteca'))
+  document.body.appendChild(host)
+  const root = createRoot(host)
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  await act(async () =>
+    root.render(
+      <QueryClientProvider client={qc}>
+        <SettingsMetadata />
+      </QueryClientProvider>,
+    ),
+  )
+  await settle()
+  unmount = () => act(async () => root.unmount())
+}
+
+const buttonByText = (text: string) =>
+  [...host.querySelectorAll('button')].find((b) => b.textContent?.includes(text))
+
+function typeInto(input: HTMLInputElement, value: string) {
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  set.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+beforeEach(() => {
+  Object.values(api).forEach((f) => f.mockReset())
+  api.catalogStatus.mockResolvedValue(CONNECTED_STATUS)
+  api.catalogSetEnabled.mockImplementation(async (enabled: boolean) => ({
+    ...CONNECTED_STATUS,
+    enabled,
+  }))
+  api.catalogRunNow.mockResolvedValue({ ...CONNECTED_STATUS, found: 15, pending: 0 })
+  api.getMetadataConfig.mockResolvedValue(CFG)
+  api.metadataScanProgress.mockResolvedValue(PROGRESS)
+  api.listPendingMatches.mockResolvedValue([])
+  api.resolvePendingMatch.mockResolvedValue(undefined)
+  api.resolvePendingMatchesBulk.mockImplementation(async (ids: string[]) => ids.length)
 })
 
 afterEach(async () => {
-  await act(async () => root.unmount())
-  qc.clear()
-  host.remove()
+  if (unmount) await unmount()
+  host?.remove()
+  sessionStorage.clear()
 })
 
-async function waitForStatus(assert: () => void) {
-  await vi.waitFor(async () => {
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
-    assert()
-  })
-}
+describe('SettingsMetadata catalog section', () => {
+  it('status_line_shows_counts_and_syncs_catalog_on_demand', async () => {
+    await mount()
+    expect(host.textContent).toContain('Usar o catálogo do Alvanista para identificar meus jogos')
+    expect(host.textContent).toContain(
+      'Os nomes e os hashes dos arquivos vão para o Alvanista para identificar os jogos. Nada sobre você fica junto do pedido.',
+    )
+    const line = host.querySelector('[data-testid="catalog-status-line"]')
+    expect(line?.textContent).toBe('12 identificados, 3 na fila, 1 sem resposta')
 
-it('shows preparation and explains an empty queue even if the scan already finished', async () => {
-  let complete!: () => void
-  api.startMetadataScan.mockImplementation(() => new Promise<void>((resolve) => { complete = resolve }))
-  const button = [...host.querySelectorAll('button')].find((item) => item.textContent?.includes('Escanear metadata'))!
-  await act(async () => button.click())
-  await waitForStatus(() => expect(host.textContent).toContain('Preparando a busca'))
-  expect(host.querySelector('[role="progressbar"]')).not.toBeNull()
-  api.metadataScanProgress.mockResolvedValue({ ...empty, status: 'completed' })
-  await act(async () => complete())
-  await waitForStatus(() => expect(host.textContent).toContain('Nenhum jogo na fila'))
-  expect(host.querySelector('[role="progressbar"]')).toBeNull()
+    const syncBtn = buttonByText('Sincronizar catálogo')
+    expect(syncBtn).toBeTruthy()
+    await act(async () => {
+      syncBtn!.click()
+    })
+    await settle()
+    expect(api.catalogRunNow).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('[data-testid="catalog-status-line"]')?.textContent).toBe(
+      '15 identificados, 0 na fila, 1 sem resposta',
+    )
+  })
+
+  it('toggle_off_calls_catalog_set_enabled_false', async () => {
+    await mount()
+    const sw = host.querySelector<HTMLInputElement>('input[role="switch"]')
+    expect(sw?.checked).toBe(true)
+    await act(async () => {
+      sw!.click()
+    })
+    await settle()
+    expect(api.catalogSetEnabled).toHaveBeenCalledWith(false)
+    expect(host.querySelector('[data-testid="catalog-status-line"]')).toBeNull()
+  })
+
+  it('hides the catalog toggle when not connected to Alvanista', async () => {
+    api.catalogStatus.mockResolvedValue({ ...CONNECTED_STATUS, connected: false })
+    await mount()
+    expect(host.querySelector('[data-testid="catalog-section"]')).toBeNull()
+  })
+
+  it('keeps role=tabpanel without tabindex=0 so focus rules never break scrolling', async () => {
+    await mount()
+    const panel = host.querySelector('[role="tabpanel"]')
+    expect(panel).toBeTruthy()
+    expect(panel?.getAttribute('tabindex')).toBeNull()
+  })
 })
 
-it('shows counts while running and keeps the cancelled result visible', async () => {
-  const active = { ...empty, status: 'running', running: true, done: 2, total: 4, pending: 1 } satisfies ScrapeProgress
-  await act(async () => { qc.setQueryData(['metadata-progress'], active) })
-  await waitForStatus(() => expect(host.textContent).toContain('50%'))
-  api.cancelMetadataScan.mockResolvedValue(undefined)
-  api.metadataScanProgress.mockResolvedValue({ ...active, running: false, status: 'cancelled' })
-  const button = [...host.querySelectorAll('button')].find((item) => item.textContent?.trim() === 'Cancelar')!
-  await act(async () => button.click())
-  await waitForStatus(() => expect(host.textContent).toContain('Busca cancelada.'))
-  expect(host.textContent).toContain('2/4')
+describe('SettingsMetadata bulk actions and large queue pagination', () => {
+  it('paginates DOM rows while approving all pending matches in one bulk call', async () => {
+    const items = Array.from({ length: 75 }, (_, i) => makeMatch(i + 1))
+    api.listPendingMatches.mockResolvedValue(items)
+    await mount()
+
+    expect(host.querySelectorAll('[data-testid="pending-match-row"]')).toHaveLength(50)
+    expect(buttonByText('Mostrar mais (25 restantes)')).toBeTruthy()
+
+    const approveAll = buttonByText('Aprovar todas (75)')
+    expect(approveAll).toBeTruthy()
+    api.listPendingMatches.mockResolvedValue([])
+    await act(async () => {
+      approveAll!.click()
+    })
+    await settle()
+
+    expect(api.resolvePendingMatchesBulk).toHaveBeenCalledWith(
+      items.map((m) => m.romId),
+      true,
+    )
+    expect(host.querySelectorAll('[data-testid="pending-match-row"]')).toHaveLength(0)
+  })
+
+  it('supports row selection, search/provider filter, and two-step bulk rejection', async () => {
+    const items = [
+      { ...makeMatch(1, 'gamekave'), title: 'Chrono Trigger', fileStem: 'Chrono_Trigger_U' },
+      { ...makeMatch(2, 'gamekave'), title: 'Super Metroid', fileStem: 'Super_Metroid_JU' },
+      { ...makeMatch(3, 'thegamesdb'), title: 'Chrono Cross', fileStem: 'Chrono_Cross_Disc1' },
+    ]
+    api.listPendingMatches.mockResolvedValue(items)
+    await mount()
+
+    // Seleciona apenas o primeiro item e aprova selecionadas (1).
+    const firstBox = host.querySelector<HTMLInputElement>(
+      '[data-testid="pending-match-row"] input[type="checkbox"]',
+    )!
+    await act(async () => {
+      firstBox.click()
+    })
+    expect(buttonByText('Aprovar selecionadas (1)')).toBeTruthy()
+
+    await act(async () => {
+      buttonByText('Limpar seleção')!.click()
+    })
+    expect(buttonByText('Aprovar todas (3)')).toBeTruthy()
+
+    // Filtra por texto "Chrono" -> 2 itens filtrados; rejeita com confirmação em duas etapas.
+    const searchInput = host.querySelector<HTMLInputElement>('.reemu-list-search input')!
+    await act(async () => {
+      typeInto(searchInput, 'Chrono')
+    })
+    await settle()
+
+    expect(host.querySelectorAll('[data-testid="pending-match-row"]')).toHaveLength(2)
+    const rejectFiltered = buttonByText('Rejeitar filtradas (2)')
+    expect(rejectFiltered).toBeTruthy()
+    await act(async () => {
+      rejectFiltered!.click()
+    })
+    expect(api.resolvePendingMatchesBulk).not.toHaveBeenCalled()
+
+    const confirmBtn = buttonByText('Confirmar rejeição (2)')
+    expect(confirmBtn).toBeTruthy()
+    await act(async () => {
+      confirmBtn!.click()
+    })
+    await settle()
+
+    expect(api.resolvePendingMatchesBulk).toHaveBeenCalledWith(['rom-1', 'rom-3'], false)
+  })
 })
 
-
-it('keeps provider results and scan progress in a separate Fluent tab from credentials', async () => {
-  await act(async () => {
-    qc.setQueryData(['pending-matches'], [{
-      romId: 'one', fileStem: 'Sample ROM', title: 'Sample Game', provider: 'gamekave',
-      description: null, coverUrl: null, releaseDate: '1992-06-01', genre: null,
-    }])
+describe('SettingsMetadata ScreenScraper warning behavior', () => {
+  it('does not render ss_dev_login warning when ScreenScraper credentials are not configured', async () => {
+    api.metadataScanProgress.mockResolvedValue({
+      ...PROGRESS,
+      running: true,
+      status: 'running',
+      done: 12,
+      total: 100,
+      error: 'ss_dev_login',
+    })
+    await mount()
+    expect(host.querySelector('[data-testid="ss-dev-warning"]')).toBeNull()
   })
-  await waitForStatus(() => expect(host.querySelector('#metadata-results')?.textContent).toContain('GameKave · 1992-06-01'))
-  const results = host.querySelector<HTMLButtonElement>('#metadata-results-tab')!
-  const credentials = host.querySelector<HTMLButtonElement>('#metadata-credentials-tab')!
-  expect(results.getAttribute('aria-selected')).toBe('true')
-  expect(host.querySelector('input[type="password"]')).toBeNull()
 
-  await act(async () => credentials.click())
-  expect(credentials.getAttribute('aria-selected')).toBe('true')
-  expect(credentials.getAttribute('aria-controls')).toBe('metadata-credentials')
-  expect(host.querySelector('#metadata-credentials')?.getAttribute('aria-labelledby')).toBe(credentials.id)
-  expect(host.querySelectorAll('input[type="password"]')).toHaveLength(2)
-  expect(host.querySelector('#metadata-results')?.hasAttribute('hidden')).toBe(true)
-  expect(host.textContent).not.toContain('Sample Game')
+  it('allows dismissing ss_dev_login warning when ScreenScraper credentials are configured', async () => {
+    api.getMetadataConfig.mockResolvedValue({
+      ...CFG,
+      screenscraperUser: 'edward',
+      screenscraperPassword: 'secret',
+    })
+    api.metadataScanProgress.mockResolvedValue({
+      ...PROGRESS,
+      running: true,
+      status: 'running',
+      done: 12,
+      total: 100,
+      error: 'ss_dev_login',
+    })
+    await mount()
 
-  await act(async () => {
-    qc.setQueryData(['metadata-progress'], { ...empty, status: 'running', running: true, done: 1, total: 2 })
+    const banner = host.querySelector('[data-testid="ss-dev-warning"]')
+    expect(banner).toBeTruthy()
+    const closeBtn = banner!.querySelector<HTMLButtonElement>('button[aria-label="Fechar"]')
+    expect(closeBtn).toBeTruthy()
+
+    await act(async () => {
+      closeBtn!.click()
+    })
+    await settle()
+    expect(host.querySelector('[data-testid="ss-dev-warning"]')).toBeNull()
+    expect(sessionStorage.getItem('reemu.dismissSsDevWarning')).toBe('1')
   })
-  await act(async () => results.click())
-  await waitForStatus(() => expect(host.textContent).toContain('50%'))
-  expect(host.textContent).toContain('Sample Game')
-  expect(host.querySelector('input[type="password"]')).toBeNull()
 })

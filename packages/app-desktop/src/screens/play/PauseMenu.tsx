@@ -1,6 +1,5 @@
 import {
   Badge,
-  Body1,
   Button,
   DrawerBody,
   DrawerFooter,
@@ -14,6 +13,7 @@ import {
 } from "@fluentui/react-components";
 import {
   ArrowExitRegular,
+  CameraRegular,
   DeleteRegular,
   FullScreenMaximizeRegular,
   FullScreenMinimizeRegular,
@@ -30,6 +30,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheatsPanel } from "../../components/CheatsPanel";
+import { GameAchievementsPanel } from "../../components/GameAchievementsPanel";
+import { GameLogPanel } from "../../components/GameLogPanel";
 import { SaveStateThumb } from "../../components/SaveStateThumb";
 import { LocalStateNote } from "../../components/sync/LocalStateNote";
 import { RemoteStateList } from "../../components/sync/RemoteStateList";
@@ -81,8 +83,8 @@ export function PauseMenu({
       ...(romId
         ? [{ id: "cheats" as const, label: "play.cheats" as const, icon: <WandRegular /> }]
         : []),
-      // RetroAchievements (doc 16): por enquanto só o aviso de que vem aí
       { id: "achievements" as const, label: "play.achievements" as const, icon: <TrophyRegular /> },
+      { id: "gamelog" as const, label: "play.gamelog" as const, icon: <CameraRegular /> },
     ],
     [romId],
   );
@@ -371,12 +373,9 @@ export function PauseMenu({
 
           {tab === "cheats" && romId && <CheatsPanel romId={romId} />}
 
-          {tab === "achievements" && (
-            <div className={pause.soon}>
-              <TrophyRegular className={pause.soonIcon} aria-hidden />
-              <Body1>{t("play.achievementsSoon")}</Body1>
-            </div>
-          )}
+          {tab === "achievements" && <GameAchievementsPanel romId={romId} compact />}
+
+          {tab === "gamelog" && <GameLogPanel romId={romId} inGame />}
         </div>
       </DrawerBody>
 

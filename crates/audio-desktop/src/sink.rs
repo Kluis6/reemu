@@ -170,6 +170,7 @@ impl AudioSink for CpalAudioSink {
         if samples.is_empty() {
             return;
         }
+        crate::tap::push_game_samples(samples, core_sample_rate);
         let mut in_frames = std::mem::take(&mut self.in_frames);
         in_frames.clear();
         in_frames.extend(

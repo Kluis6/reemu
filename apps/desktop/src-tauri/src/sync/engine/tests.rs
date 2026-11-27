@@ -1758,10 +1758,10 @@ async fn prelaunch_times_out_to_skipped() {
     }));
 }
 
-/// Os 12 nomes de save de um stem, como a listagem de uma ROM os pede.
+/// Os 13 nomes de save de um stem, como a listagem de uma ROM os pede.
 fn slot_names(stem: &str) -> Vec<(String, String)> {
     let mut names: Vec<(String, String)> = [
-        "srm", "sav", "rtc", "fs", "eep", "fla", "mcr", "mcd", "bsv", "mpk", "ldci", "sram",
+        "srm", "sav", "rtc", "fs", "eep", "fla", "mcr", "mcd", "bsv", "mpk", "ldci", "sram", "dsv",
     ]
     .iter()
     .map(|ext| (format!("{stem}.{ext}"), "-".to_owned()))
@@ -1814,7 +1814,7 @@ async fn prelaunch_downloads_only_the_launched_game_with_a_fresh_read() {
 }
 
 /// I-3: numa biblioteca grande, a checagem de antes de abrir consulta no
-/// disco só as 12 vagas do jogo e pede à nuvem só os nomes dele: o resto
+/// disco só as 13 vagas do jogo e pede à nuvem só os nomes dele: o resto
 /// da biblioteca não entra no prazo de 5 s.
 #[tokio::test]
 async fn prelaunch_in_a_big_library_touches_only_the_launched_rom() {
@@ -1845,7 +1845,7 @@ async fn prelaunch_in_a_big_library_touches_only_the_launched_rom() {
     );
     assert_eq!(
         local::probe::count(&saves) - before,
-        12,
+        13,
         "o disco foi consultado fora das vagas do jogo"
     );
     let mut asked = listing_filters(&r).await;
@@ -1858,7 +1858,7 @@ async fn prelaunch_in_a_big_library_touches_only_the_launched_rom() {
     assert!(r.repo.base_all("file").await.unwrap().is_empty());
     assert_eq!(r.content_gets().await, 0);
 
-    // A passada completa lê a pasta de saves uma vez, não 12 por ROM (com
+    // A passada completa lê a pasta de saves uma vez, não 13 por ROM (com
     // um jogo abrindo, nada sobe nem desce).
     r.set_playing(Playing::Running(None));
     let before = local::probe::count(&saves);
@@ -2098,8 +2098,8 @@ async fn prelaunch_after_an_upload_lists_again_and_keeps_the_new_save() {
         r.engine.prelaunch(&r.alva, "r1").await,
         PrelaunchOutcome::UpToDate
     );
-    // A completa e as 12 do jogo.
-    assert_eq!(r.listings().await, 1 + 12);
+    // A completa e as 13 do jogo.
+    assert_eq!(r.listings().await, 1 + 13);
     assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"newer");
     assert_eq!(r.content_gets().await, 0);
 }
@@ -2980,6 +2980,7 @@ fn save_file(platform: &'static str, core: Option<&'static str>, filename: &str)
         core,
         filename: filename.into(),
         path: PathBuf::from(filename),
+        is_folder: core.is_some_and(|c| c.starts_with("saves/")),
     }
 }
 
@@ -5798,4 +5799,241 @@ async fn the_notes_say_why_each_state_stays_here_by_its_id() {
 
     r.sync.devices.set_states_enabled(false).await.unwrap();
     assert!(r.sync.state_notes("r1").await.unwrap().is_empty());
+}
+
+/// D171-D173: pastas de save (`PSP/SAVEDATA/<SLOT>`) sobem empacotadas em
+/// `.zip` determinístico, descem em outra máquina sem reenvio na passada
+/// seguinte, entram em conflito quando os dois lados mudam e copiam a pasta
+/// inteira para `sync-backups` antes de substituir.
+#[tokio::test]
+async fn folder_saves_roundtrip_upload_download_conflict_and_backup() {
+    let _serial = SERIAL.lock().await;
+    let key = "file:other/saves/PSP/SAVEDATA/ULUS10041DATA00.zip";
+
+    // Máquina A cria o slot SAVEDATA e sobe na primeira passada.
+    let a = rig("folder-a").await;
+    a.roms
+        .add(&Rom {
+            id: "psp1".into(),
+            file_path: "C:/roms/Lumines.iso".into(),
+            crc32: "CRCPSP".into(),
+            md5: "MD5".into(),
+            system_id: "psp".into(),
+            serial: Some("ULUS-10041".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    a.write(
+        "saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN",
+        b"progress-v1",
+    );
+    a.write("saves/PSP/SAVEDATA/ULUS10041DATA00/PARAM.SFO", b"sfo-v1");
+    let (zip_v1, hash_v1, _) =
+        crate::sync::folder::pack_folder(&a.path("saves/PSP/SAVEDATA/ULUS10041DATA00")).unwrap();
+
+    mount_devices(&a.server, vec![device("dev1", "Sala")]).await;
+    let listing_a = mount_listing(&a.server, vec![]).await;
+    mount_upload(&a.server, "save-psp-1", "ver-1").await;
+
+    let rep_a = a.pass().await.unwrap();
+    assert_eq!(
+        (rep_a.uploaded, rep_a.downloaded, rep_a.conflicts),
+        (1, 0, 0)
+    );
+    let posts = a.reqs("POST", SAVES).await;
+    assert_eq!(posts.len(), 1);
+    assert_eq!(field(&posts[0].body, "platform").as_deref(), Some("other"));
+    assert_eq!(
+        field(&posts[0].body, "core").as_deref(),
+        Some("saves/PSP/SAVEDATA")
+    );
+    assert_eq!(
+        field(&posts[0].body, "filename").as_deref(),
+        Some("ULUS10041DATA00.zip")
+    );
+    let base_a = a.base_of(key).await.expect("base gravada");
+    assert_eq!(base_a.local_hash, hash_v1);
+    listing_a.set(vec![row(
+        "save-psp-1",
+        "ULUS10041DATA00.zip",
+        "other",
+        Some("saves/PSP/SAVEDATA"),
+        &zip_v1,
+        "ver-1",
+        Some("dev1"),
+    )]);
+    let line = a.engine.save_status("psp1").await.unwrap();
+    assert_eq!(line.state, SaveLineState::Synced);
+
+    // Máquina B baixa a pasta, extrai os arquivos e não reenvia na 2a passada.
+    let b = rig("folder-b").await;
+    mount_devices(&b.server, vec![device("dev1", "Sala")]).await;
+    let listing_b = mount_listing(
+        &b.server,
+        vec![row(
+            "save-psp-1",
+            "ULUS10041DATA00.zip",
+            "other",
+            Some("saves/PSP/SAVEDATA"),
+            &zip_v1,
+            "ver-1",
+            Some("dev2"),
+        )],
+    )
+    .await;
+    mount_content(&b.server, "save-psp-1", "ver-1", &zip_v1).await;
+
+    let rep_b1 = b.pass().await.unwrap();
+    assert_eq!(
+        (rep_b1.uploaded, rep_b1.downloaded, rep_b1.conflicts),
+        (0, 1, 0)
+    );
+    assert_eq!(
+        b.read("saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN")
+            .as_deref(),
+        Some(&b"progress-v1"[..])
+    );
+    assert_eq!(
+        b.read("saves/PSP/SAVEDATA/ULUS10041DATA00/PARAM.SFO")
+            .as_deref(),
+        Some(&b"sfo-v1"[..])
+    );
+
+    let rep_b2 = b.pass().await.unwrap();
+    assert_eq!(
+        (rep_b2.uploaded, rep_b2.downloaded, rep_b2.conflicts),
+        (0, 0, 0)
+    );
+
+    // Conflito dos dois lados: B edita localmente e outra máquina sobe `ver-2`.
+    let remote_tmp = temp("folder-v2-src");
+    std::fs::create_dir_all(&remote_tmp).unwrap();
+    std::fs::write(remote_tmp.join("DATA.BIN"), b"progress-remote-v2").unwrap();
+    std::fs::write(remote_tmp.join("PARAM.SFO"), b"sfo-v2").unwrap();
+    let (zip_v2, _, _) = crate::sync::folder::pack_folder(&remote_tmp).unwrap();
+    let _ = std::fs::remove_dir_all(&remote_tmp);
+
+    b.write(
+        "saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN",
+        b"progress-local-diverged",
+    );
+    listing_b.set(vec![row(
+        "save-psp-1",
+        "ULUS10041DATA00.zip",
+        "other",
+        Some("saves/PSP/SAVEDATA"),
+        &zip_v2,
+        "ver-2",
+        Some("dev2"),
+    )]);
+    mount_content(&b.server, "save-psp-1", "ver-2", &zip_v2).await;
+
+    let rep_conflict = b.pass().await.unwrap();
+    assert_eq!(rep_conflict.conflicts, 1);
+
+    // Resolver com `Keep::Remote` copia a pasta local inteira para `sync-backups`
+    // antes de aplicar `ver-2`.
+    b.engine.resolve(&b.alva, key, Keep::Remote).await.unwrap();
+    assert_eq!(
+        b.read("saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN")
+            .as_deref(),
+        Some(&b"progress-remote-v2"[..])
+    );
+    let backups = b.backups();
+    assert!(
+        backups.iter().any(|(p, data)| {
+            p == "saves/PSP/SAVEDATA/ULUS10041DATA00/DATA.BIN" && data == b"progress-local-diverged"
+        }),
+        "esperava DATA.BIN no resguardo: {backups:?}"
+    );
+    assert!(
+        backups.iter().any(|(p, data)| {
+            p == "saves/PSP/SAVEDATA/ULUS10041DATA00/PARAM.SFO" && data == b"sfo-v1"
+        }),
+        "esperava PARAM.SFO no resguardo: {backups:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&a.root);
+    let _ = std::fs::remove_dir_all(&b.root);
+}
+
+#[tokio::test]
+async fn sync_pass_unlocks_retroachievements_locally_and_pushes_updates() {
+    let _serial = SERIAL.lock().await;
+    let mut r = rig("creds-sync").await;
+    let store = Arc::new(MemCredStore::default());
+    r.engine.set_secret_store(store.clone());
+    let ra_notified = Arc::new(AtomicUsize::new(0));
+    let notified_cb = ra_notified.clone();
+    r.engine.set_on_ra_changed(Box::new(move || {
+        notified_cb.fetch_add(1, SeqCst);
+    }));
+
+    mount_devices(&r.server, vec![device("dev1", "Sala")]).await;
+    mount_files(&r.server, vec![]).await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/saves/credentials"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "has_vault": true,
+            "updated_at": "2026-11-26T18:00:00Z",
+            "linked_ra_username": "edward",
+            "credentials": {
+                "retroachievements": {
+                    "username": "edward",
+                    "connect_token": "ra_token_from_cloud",
+                    "hardcore": true,
+                    "enabled": true,
+                    "updated_at": "2026-11-26T18:00:00Z"
+                }
+            }
+        })))
+        .mount(&r.server)
+        .await;
+
+    r.pass().await.unwrap();
+
+    let (ra_cfg, ra_tok) = crate::credentials::load_ra_session(&r.db, store.as_ref())
+        .await
+        .unwrap();
+    assert!(ra_cfg.connected);
+    assert!(ra_cfg.hardcore);
+    assert!(ra_cfg.enabled);
+    assert_eq!(ra_cfg.username.as_deref(), Some("edward"));
+    assert_eq!(ra_cfg.linked_alvanista_username.as_deref(), Some("edward"));
+    assert_eq!(ra_tok.as_deref(), Some("ra_token_from_cloud"));
+    assert_eq!(ra_notified.load(SeqCst), 1);
+
+    // Uma chave local nova sobe no PUT para o cofre criptografado.
+    let meta_cfg = domain::metadata::MetadataConfig {
+        provider: "thegamesdb".into(),
+        screenscraper_user: None,
+        screenscraper_password: None,
+        thegamesdb_api_key: Some("tgdb_local_key".into()),
+    };
+    crate::credentials::save_config_tracked(&r.db, store.as_ref(), meta_cfg)
+        .await
+        .unwrap();
+
+    Mock::given(method("PUT"))
+        .and(path("/api/v1/saves/credentials"))
+        .and(body_partial_json(json!({
+            "providers": {
+                "thegamesdb": {
+                    "api_key": "tgdb_local_key"
+                }
+            }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "has_vault": true,
+            "updated_at": "2026-11-26T19:00:00Z",
+            "linked_ra_username": "edward"
+        })))
+        .expect(1)
+        .mount(&r.server)
+        .await;
+
+    r.engine.push_credentials_now(&r.alva).await.unwrap();
+    let sync_meta = crate::credentials::load_sync_meta(&r.db).await.unwrap();
+    assert!(!sync_meta.thegamesdb.dirty);
 }

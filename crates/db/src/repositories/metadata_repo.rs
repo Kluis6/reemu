@@ -6,10 +6,20 @@ use domain::metadata::{
     GameMetadata, GameMetadataEdits, MatchStatus, MetadataConfig, MetadataRepository, PendingMatch,
     ScrapeCandidate,
 };
-use sqlx::Row;
+use sqlx::{QueryBuilder, Row, Sqlite};
 
 pub struct MetadataRepo {
     db: Db,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct RomMetadataSummary {
+    pub title: String,
+    pub cover_url: Option<String>,
+    pub has_cover: bool,
+    pub game_uuid: Option<String>,
+    pub rom_region: Option<String>,
+    pub rom_revision: Option<String>,
 }
 
 impl MetadataRepo {
@@ -17,15 +27,125 @@ impl MetadataRepo {
         Self { db }
     }
 
-    pub async fn cover_override_ids(&self) -> Result<std::collections::HashSet<String>, RepoError> {
-        let ids: Vec<String> = sqlx::query_scalar(
-            "SELECT rom_id FROM game_metadata_edits
-             WHERE json_extract(fields_json, '$.coverUrl') <> ''",
+    pub async fn cover_overrides(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, RepoError> {
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT rom_id, json_extract(fields_json, '$.coverUrl') \
+             FROM game_metadata_edits \
+             WHERE COALESCE(json_extract(fields_json, '$.coverUrl'), '') <> ''",
         )
         .fetch_all(&self.db)
         .await
         .map_err(be)?;
-        Ok(ids.into_iter().collect())
+        Ok(rows.into_iter().collect())
+    }
+
+    pub async fn cover_override_ids(&self) -> Result<std::collections::HashSet<String>, RepoError> {
+        Ok(self.cover_overrides().await?.into_keys().collect())
+    }
+
+    pub async fn clear_artwork_edits(&self, rom_id: &str) -> Result<(), RepoError> {
+        sqlx::query(
+            "UPDATE game_metadata_edits \
+             SET fields_json = json_patch( \
+                 fields_json, \
+                 '{\"coverUrl\":null,\"fanartUrl\":null,\"screenshotUrl\":null,\"logoUrl\":null}' \
+             ) \
+             WHERE rom_id = ?1",
+        )
+        .bind(rom_id)
+        .execute(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(())
+    }
+
+    /// `rom_id -> (title, tem_cover_url)` de `game_metadata` numa leitura só,
+    /// para `list_roms` montar os cards da biblioteca sem N queries.
+    pub async fn titles_and_covers(
+        &self,
+    ) -> Result<std::collections::HashMap<String, (String, bool)>, RepoError> {
+        Ok(self
+            .library_summaries()
+            .await?
+            .into_iter()
+            .map(|(rom_id, s)| (rom_id, (s.title, s.has_cover)))
+            .collect())
+    }
+
+    /// Resumo leve de `game_metadata` para `list_roms` agrupar versões regionais
+    /// e resolver capas sem desserializar todas as fichas completas.
+    pub async fn library_summaries(
+        &self,
+    ) -> Result<std::collections::HashMap<String, RomMetadataSummary>, RepoError> {
+        #[derive(sqlx::FromRow)]
+        struct SummaryRow {
+            rom_id: String,
+            title: String,
+            cover_url: Option<String>,
+            has_cover: i64,
+            game_uuid: Option<String>,
+            rom_region: Option<String>,
+            rom_revision: Option<String>,
+        }
+
+        let rows: Vec<SummaryRow> = sqlx::query_as(
+            "SELECT rom_id, title, cover_url, \
+                    ( (cover_url IS NOT NULL AND TRIM(cover_url) <> '') \
+                      OR COALESCE(json_array_length(gamekave_json, '$.covers'), 0) > 0 ) AS has_cover, \
+                    game_uuid, \
+                    json_extract(gamekave_json, '$.romRegion') AS rom_region, \
+                    json_extract(gamekave_json, '$.romRevision') AS rom_revision \
+             FROM game_metadata",
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                (
+                    row.rom_id,
+                    RomMetadataSummary {
+                        title: row.title,
+                        cover_url: row.cover_url.filter(|s| !s.trim().is_empty()),
+                        has_cover: row.has_cover != 0,
+                        game_uuid: row.game_uuid.filter(|s| !s.trim().is_empty()),
+                        rom_region: row.rom_region.filter(|s| !s.trim().is_empty()),
+                        rom_revision: row.rom_revision.filter(|s| !s.trim().is_empty()),
+                    },
+                )
+            })
+            .collect())
+    }
+
+    pub async fn is_user_confirmed(&self, rom_id: &str) -> Result<bool, RepoError> {
+        let exists: i64 = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM scrape_matches WHERE rom_id = ?1 AND status = 'user_confirmed')",
+        )
+        .bind(rom_id)
+        .fetch_one(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(exists != 0)
+    }
+
+    pub async fn get_by_game_uuid(
+        &self,
+        game_uuid: &str,
+    ) -> Result<Option<GameMetadata>, RepoError> {
+        let row = sqlx::query(
+            "SELECT rom_id, title, description, cover_url, release_date, genre, provider_source, \
+             game_uuid, developer, publisher, players, rating, age_rating, modes, \
+             screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json \
+             FROM game_metadata WHERE game_uuid = ?1 LIMIT 1",
+        )
+        .bind(game_uuid)
+        .fetch_optional(&self.db)
+        .await
+        .map_err(be)?;
+        row.as_ref().map(row_to_meta).transpose()
     }
 
     pub async fn cover_override(&self, rom_id: &str) -> Result<Option<String>, RepoError> {
@@ -120,6 +240,77 @@ impl MetadataRepo {
         tx.commit().await.map_err(be)?;
         Ok(())
     }
+
+    /// Resolve várias correspondências pendentes em uma única transação SQLite.
+    /// Devolve os `rom_id`s que estavam em `pending_review` e foram resolvidos.
+    pub async fn resolve_pending_bulk(
+        &self,
+        rom_ids: &[String],
+        accept: bool,
+    ) -> Result<Vec<String>, RepoError> {
+        const CHUNK: usize = 200;
+
+        let mut seen = std::collections::HashSet::with_capacity(rom_ids.len());
+        let unique: Vec<&str> = rom_ids
+            .iter()
+            .map(String::as_str)
+            .filter(|id| !id.is_empty() && seen.insert(*id))
+            .collect();
+        if unique.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut tx = self.db.begin().await.map_err(be)?;
+        let mut resolved: Vec<String> = Vec::with_capacity(unique.len());
+
+        if !accept {
+            for chunk in unique.chunks(CHUNK) {
+                let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new(
+                    "UPDATE scrape_matches SET status = 'no_match' \
+                     WHERE status = 'pending_review' AND rom_id IN (",
+                );
+                let mut sep = qb.separated(", ");
+                for id in chunk {
+                    sep.push_bind((*id).to_owned());
+                }
+                sep.push_unseparated(") RETURNING rom_id");
+                let ids: Vec<String> = qb
+                    .build_query_scalar::<String>()
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(be)?;
+                resolved.extend(ids);
+            }
+        } else {
+            for chunk in unique.chunks(CHUNK) {
+                let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new(
+                    "UPDATE scrape_matches SET status = 'user_confirmed' \
+                     WHERE status = 'pending_review' AND rom_id IN (",
+                );
+                let mut sep = qb.separated(", ");
+                for id in chunk {
+                    sep.push_bind((*id).to_owned());
+                }
+                sep.push_unseparated(") RETURNING rom_id, candidate_json");
+                let rows: Vec<(String, Option<String>)> = qb
+                    .build_query_as::<(String, Option<String>)>()
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(be)?;
+                for (rom_id, raw) in rows {
+                    let json =
+                        raw.ok_or_else(|| RepoError::Backend("pendência sem candidato".into()))?;
+                    let candidate: ScrapeCandidate = serde_json::from_str(&json)
+                        .map_err(|e| RepoError::Corrupt(format!("candidate JSON inválido: {e}")))?;
+                    write_metadata(&mut *tx, &meta_from_candidate(&rom_id, &candidate)).await?;
+                    resolved.push(rom_id);
+                }
+            }
+        }
+
+        tx.commit().await.map_err(be)?;
+        Ok(resolved)
+    }
 }
 
 async fn write_metadata<'e>(
@@ -130,9 +321,10 @@ async fn write_metadata<'e>(
         "INSERT INTO game_metadata \
          (id, rom_id, title, description, cover_url, release_date, genre, provider_source, \
           developer, publisher, players, rating, age_rating, modes, \
-          screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json) \
+          screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json, \
+          game_uuid) \
          VALUES (?1, ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, \
-                 ?14, ?15, ?16, ?17, ?18, ?19) \
+                 ?14, ?15, ?16, ?17, ?18, ?19, ?20) \
          ON CONFLICT(rom_id) DO UPDATE SET \
            title = excluded.title, description = excluded.description, \
            cover_url = excluded.cover_url, release_date = excluded.release_date, \
@@ -143,7 +335,8 @@ async fn write_metadata<'e>(
            screenshot_url = excluded.screenshot_url, \
            title_screen_url = excluded.title_screen_url, \
            fanart_url = excluded.fanart_url, logo_url = excluded.logo_url, \
-           video_url = excluded.video_url, gamekave_json = excluded.gamekave_json",
+           video_url = excluded.video_url, gamekave_json = excluded.gamekave_json, \
+           game_uuid = excluded.game_uuid",
     )
     .bind(&m.rom_id)
     .bind(&m.title)
@@ -171,6 +364,7 @@ async fn write_metadata<'e>(
             .transpose()
             .map_err(|e| RepoError::Corrupt(e.to_string()))?,
     )
+    .bind(&m.game_uuid)
     .execute(executor)
     .await
     .map_err(be)?;
@@ -195,6 +389,8 @@ fn meta_from_candidate(rom_id: &str, c: &ScrapeCandidate) -> GameMetadata {
         release_date: c.release_date.clone(),
         genre: c.genre.clone(),
         provider_source: Some(c.provider.clone()),
+        game_uuid: (c.provider == "gamekave" && !c.external_id.is_empty())
+            .then(|| c.external_id.clone()),
         details: c.details.clone(),
     }
 }
@@ -208,6 +404,7 @@ fn row_to_meta(row: &sqlx::sqlite::SqliteRow) -> Result<GameMetadata, RepoError>
         release_date: row.try_get("release_date").map_err(be)?,
         genre: row.try_get("genre").map_err(be)?,
         provider_source: row.try_get("provider_source").map_err(be)?,
+        game_uuid: row.try_get("game_uuid").map_err(be)?,
         details: domain::metadata::GameDetails {
             developer: row.try_get("developer").map_err(be)?,
             publisher: row.try_get("publisher").map_err(be)?,
@@ -270,7 +467,7 @@ impl MetadataRepository for MetadataRepo {
     async fn get_metadata(&self, rom_id: &str) -> Result<Option<GameMetadata>, RepoError> {
         let row = sqlx::query(
             "SELECT rom_id, title, description, cover_url, release_date, genre, provider_source, \
-             developer, publisher, players, rating, age_rating, modes, \
+             game_uuid, developer, publisher, players, rating, age_rating, modes, \
              screenshot_url, title_screen_url, fanart_url, logo_url, video_url, gamekave_json \
              FROM game_metadata WHERE rom_id = ?1",
         )

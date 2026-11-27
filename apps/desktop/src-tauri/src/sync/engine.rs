@@ -25,7 +25,7 @@ use super::api::{
 };
 use super::device::{default_label, rfc3339, Device};
 use super::local::{
-    self, account_saves, log_tag, parse_key, rom_saves, sha256_file, LocalSaves, NameCase, SaveFile,
+    self, account_saves, log_tag, parse_key, rom_saves, LocalSaves, NameCase, SaveFile,
 };
 use super::platform::platform_for_system;
 use super::reconcile::{decide, Action, Kind, Local, Remote};
@@ -51,7 +51,8 @@ pub use settings::{CopyReport, SettingsPreview, SettingsSent, SettingsUndoInfo, 
 mod app;
 mod states;
 pub use app::{
-    after_state_saved, after_unload, before_launch, install, run_on_start, spawn_state_pass,
+    after_credentials_changed, after_state_saved, after_unload, before_launch, install,
+    run_on_start, spawn_state_pass,
 };
 mod backups;
 mod requests;
@@ -401,6 +402,43 @@ pub struct Engine {
     /// Como o disco compara os nomes dos saves (a do sistema; os testes
     /// trocam).
     name_case: NameCase,
+    /// Chaveiro das credenciais de emuladores sincronizadas (`OsKeyring` em
+    /// produção; isolado em memória nos testes).
+    secrets: Arc<dyn crate::credentials::SecretStore + Send + Sync>,
+    /// Aviso disparado quando o sync atualiza a sessão local do RetroAchievements.
+    on_ra_changed: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+}
+
+#[cfg(test)]
+#[derive(Default)]
+struct MemCredStore(Mutex<HashMap<String, String>>);
+
+#[cfg(test)]
+impl crate::credentials::SecretStore for MemCredStore {
+    fn get(&self, account: &str) -> Result<Option<String>, String> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .get(account)
+            .cloned())
+    }
+
+    fn set(&self, account: &str, secret: &str) -> Result<(), String> {
+        self.0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .insert(account.to_owned(), secret.to_owned());
+        Ok(())
+    }
+
+    fn delete(&self, account: &str) -> Result<(), String> {
+        self.0
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .remove(account);
+        Ok(())
+    }
 }
 
 impl Engine {
@@ -412,6 +450,12 @@ impl Engine {
         emit: EmitFn,
         reload: ReloadFn,
     ) -> Self {
+        #[cfg(not(test))]
+        let secrets: Arc<dyn crate::credentials::SecretStore + Send + Sync> =
+            Arc::new(crate::credentials::OsKeyring);
+        #[cfg(test)]
+        let secrets: Arc<dyn crate::credentials::SecretStore + Send + Sync> =
+            Arc::new(MemCredStore::default());
         Self {
             sync,
             repo: SyncRepo::new(db.clone()),
@@ -437,7 +481,21 @@ impl Engine {
             remote_found: Mutex::new(HashMap::new()),
             remote_thumbs: Mutex::new(HashMap::new()),
             name_case: NameCase::HERE,
+            secrets,
+            on_ra_changed: Mutex::new(None),
         }
+    }
+
+    pub fn set_on_ra_changed(&self, f: Box<dyn Fn() + Send + Sync>) {
+        *self.on_ra_changed.lock().unwrap_or_else(|p| p.into_inner()) = Some(f);
+    }
+
+    #[cfg(test)]
+    pub fn set_secret_store(
+        &mut self,
+        store: Arc<dyn crate::credentials::SecretStore + Send + Sync>,
+    ) {
+        self.secrets = store;
     }
 
     pub fn playing(&self) -> Playing {
@@ -667,7 +725,96 @@ impl Engine {
         let mut report = PassReport::default();
         self.run_files(&mut cx, &device.id, scope, &mut report)
             .await?;
+        if mode == Mode::Pass
+            && matches!(scope, PassScope::All)
+            && self.saves_still_on(cx.saves_epoch).await
+        {
+            self.reconcile_credentials(&mut cx).await;
+        }
         Ok(report)
+    }
+
+    /// Sincroniza credenciais de emuladores (RetroAchievements, ScreenScraper e
+    /// TheGamesDB) com o cofre criptografado do Cloud Save (D155, D157).
+    async fn reconcile_credentials(&self, cx: &mut Ctx<'_>) {
+        let remote = match self.sync.api.get_credentials(&cx.token).await {
+            Ok(resp) => resp,
+            Err(ApiError::NotFound) => return,
+            Err(e) => {
+                log::warn!("sync: credenciais não puderam ser lidas: {e}");
+                return;
+            }
+        };
+        let (to_upload, ra_changed) = match crate::credentials::reconcile_with_remote(
+            &self.db,
+            self.secrets.as_ref(),
+            remote.credentials.as_ref(),
+            remote.linked_ra_username,
+        )
+        .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                log::warn!("sync: reconciliação de credenciais falhou: {e}");
+                return;
+            }
+        };
+        if ra_changed {
+            if let Some(cb) = self
+                .on_ra_changed
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .as_ref()
+            {
+                cb();
+            }
+        }
+        if !to_upload.is_empty() && !cx.uploads_stopped {
+            match self.sync.api.put_credentials(&cx.token, &to_upload).await {
+                Ok(saved) => {
+                    if let Err(e) =
+                        crate::credentials::mark_sync_uploaded(&self.db, &to_upload).await
+                    {
+                        log::warn!("sync: marcação local de credenciais enviadas falhou: {e}");
+                    }
+                    if saved.linked_ra_username.is_some() {
+                        let _ = crate::credentials::set_linked_alvanista_ra_username(
+                            &self.db,
+                            saved.linked_ra_username,
+                        )
+                        .await;
+                    }
+                }
+                Err(ApiError::TierInsufficient { .. } | ApiError::Quota) => {
+                    cx.uploads_stopped = true;
+                }
+                Err(e) => {
+                    log::warn!("sync: envio de credenciais adiado: {e}");
+                }
+            }
+        }
+    }
+
+    /// Dispara a reconciliação imediata das credenciais quando o usuário faz
+    /// login, logout ou altera preferências locais com o sync ligado.
+    pub async fn push_credentials_now(&self, alva: &Alvanista) -> Result<(), SyncError> {
+        let _one = self.one_at_a_time.lock().await;
+        let device = self.ready(alva).await?;
+        let devices = self.sync.partner_devices(alva).await?;
+        let receive = self.check_row(&devices, &device.id, true).await?;
+        let token = self.token()?;
+        let mut cx = Ctx {
+            alva,
+            mode: Mode::Pass,
+            token,
+            devices,
+            receive,
+            uploads_stopped: false,
+            network_failures: 0,
+            saves_epoch: self.sync.runtime().saves_epoch,
+        };
+        self.reconcile_credentials(&mut cx).await;
+        Ok(())
     }
 
     /// Os game saves da passada: a nuvem e o disco, e cada chave decidida.
@@ -1043,6 +1190,9 @@ impl Engine {
                 Some(core) if core.starts_with("system/") => {
                     local.system_slot(core, &row.filename).into_iter().collect()
                 }
+                Some(core) if core.starts_with("saves/") => {
+                    local.folder_slot(core, &row.filename).into_iter().collect()
+                }
                 _ => local.rom_slots(&row.filename),
             };
             for slot in slots {
@@ -1075,7 +1225,7 @@ impl Engine {
             PassScope::Rom(id) => {
                 f.rom_id.as_deref() == Some(id.as_str())
                     || scope_paths.contains(&path_key(self.name_case, &f.path))
-                    || (f.rom_id.is_none() && local.rom_platform(id) == Some(f.platform))
+                    || (f.rom_id.is_none() && local.rom_matches_unowned_save(id, f))
             }
         };
         Ok(keys
@@ -1202,8 +1352,8 @@ fn pick<'a>(by_name: &ByName<'a>, file: &SaveFile) -> Option<&'a RemoteFile> {
                 r.core.as_deref() == Some(core) && case.of(&r.filename) == case.of(&file.filename)
             }
             None => {
-                r.filename == file.filename
-                    && !r.core.as_deref().unwrap_or_default().starts_with("system/")
+                let c = r.core.as_deref().unwrap_or_default();
+                r.filename == file.filename && !c.starts_with("system/") && !c.starts_with("saves/")
             }
         })
         .collect();

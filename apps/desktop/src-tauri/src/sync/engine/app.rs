@@ -57,7 +57,20 @@ pub fn install(app: &AppHandle, sync: Arc<SyncService>, db: db::Db, dirs: Dirs) 
             crate::commands::reload_copied_settings(&state, &pool).await;
         })
     });
-    app.manage(Arc::new(Engine::new(sync, db, dirs, playing, emit, reload)));
+    let engine = Arc::new(Engine::new(sync, db.clone(), dirs, playing, emit, reload));
+    let ra_app = app.clone();
+    let ra_db = db;
+    engine.set_on_ra_changed(Box::new(move || {
+        let app = ra_app.clone();
+        let pool = ra_db.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Ok(cfg) = crate::credentials::load_ra_config(&pool).await {
+                let dto: crate::ra::RaStatusDto = cfg.into();
+                crate::ra::emit_ra_status_changed(&app, &dto);
+            }
+        });
+    }));
+    app.manage(engine);
 }
 
 /// O que está rodando, pelo estado da sessão. Com um load em andamento e um
@@ -188,6 +201,25 @@ pub fn after_unload(app: &AppHandle, rom_id: String) {
         let (saves, states) = engine.after_close(&alva, &rom_id).await;
         log_pass("passada depois do jogo", saves);
         log_pass("passada dos states depois do jogo", states);
+    });
+}
+
+/// Depois de mudar credenciais locais (login/logout/modo do RetroAchievements
+/// ou chaves de metadados): envia ao cofre criptografado em segundo plano.
+pub fn after_credentials_changed(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some((engine, alva)) = parts(&app) else {
+            return;
+        };
+        if let Err(e) = engine.push_credentials_now(&alva).await {
+            if !matches!(
+                e,
+                SyncError::NoAccount | SyncError::NotEnabled | SyncError::Paused
+            ) {
+                log::info!("sync: envio imediato de credenciais terminou em {e}");
+            }
+        }
     });
 }
 

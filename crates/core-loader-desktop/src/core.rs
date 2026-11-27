@@ -190,6 +190,42 @@ impl DesktopCore {
         Some(unsafe { std::slice::from_raw_parts(ptr.cast::<u8>(), size) }.to_vec())
     }
 
+    /// Ponteiro e tamanho crus de uma região `RETRO_MEMORY_*` no processo do
+    /// core (`(null, 0)` quando ausente). Usado pelo `rc_libretro_memory_init`.
+    pub fn core_memory_region(&self, id: u32) -> (*mut u8, usize) {
+        let size = unsafe { (self.raw.get_memory_size)(id) };
+        if size == 0 {
+            return (std::ptr::null_mut(), 0);
+        }
+        let ptr = unsafe { (self.raw.get_memory_data)(id) };
+        if ptr.is_null() {
+            return (std::ptr::null_mut(), 0);
+        }
+        (ptr.cast::<u8>(), size)
+    }
+
+    /// Descritores registrados pelo core em `RETRO_ENVIRONMENT_SET_MEMORY_MAPS`.
+    pub fn memory_descriptors(&self) -> Vec<ffi_state::MemoryDescriptor> {
+        ffi_state::memory_descriptors()
+    }
+
+    /// Geração atual do mapa `SET_MEMORY_MAPS` deste core.
+    pub fn memory_map_generation(&self) -> u64 {
+        ffi_state::memory_map_generation()
+    }
+
+    /// Caminho da ROM/imagem extraída de um `.zip`/`.7z`, quando houve extração.
+    pub fn extracted_rom_path(&self) -> Option<&std::path::Path> {
+        self._extracted.as_ref().map(|e| e.path())
+    }
+
+    /// Reinicia o sistema emulado (`retro_reset`), exigido ao ativar Hardcore
+    /// com um jogo aberto (`RC_CLIENT_EVENT_RESET`).
+    pub fn reset_core(&mut self) {
+        self.reset_frame_time();
+        unsafe { (self.raw.reset)() };
+    }
+
     /// Cópia da save RAM (SRAM de cartucho / battery save) do core. `None` se
     /// o jogo não tem — muitos jogos salvam só via save state.
     pub fn save_ram(&self) -> Option<Vec<u8>> {

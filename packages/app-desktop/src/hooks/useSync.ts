@@ -259,6 +259,19 @@ export function useResolve() {
   })
 }
 
+/** Fecha vários conflitos em sequência e relê o estado ao terminar. */
+export function useResolveBulk() {
+  const invalidate = useInvalidateSave()
+  return useMutation({
+    mutationFn: async ({ keys, keep }: { keys: string[]; keep: 'local' | 'remote' }) => {
+      for (const key of keys) {
+        await syncResolve(key, keep)
+      }
+    },
+    onSettled: () => void invalidate(),
+  })
+}
+
 /** As versões de um save (o histórico). */
 export function useVersions(key: string | null) {
   return useQuery({

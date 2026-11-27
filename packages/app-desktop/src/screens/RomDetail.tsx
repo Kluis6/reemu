@@ -30,13 +30,14 @@ import {
   HeartRegular,
   InfoRegular,
   PlayRegular,
-  TrophyRegular,
   WarningRegular,
 } from "@fluentui/react-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FullscreenDialog } from "../components/FullscreenDialog";
+import { AlvanistaCollectionBar } from "../components/catalog/AlvanistaCollectionBar";
+import { PickGameDialog } from "../components/catalog/PickGameDialog";
 import { ConflictDialog } from "../components/sync/ConflictDialog";
 import { SaveLine } from "../components/sync/SaveLine";
 import { GamePresets } from "../components/GamePresets";
@@ -45,6 +46,8 @@ import { SelectBlock } from "../components/SettingBlock";
 import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { CheatsPanel } from "../components/CheatsPanel";
+import { GameAchievementsPanel } from "../components/GameAchievementsPanel";
+import { GameLogPanel } from "../components/GameLogPanel";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { LocalStateNote } from "../components/sync/LocalStateNote";
 import {
@@ -67,9 +70,17 @@ import {
   splitPath,
 } from "../lib/metadataFormat";
 import { knownPlatforms, platformLabel } from "../lib/platform";
+import {
+  detectRomRegionFallback,
+  normalizeRegionCode,
+  regionDisplayLabel,
+  romVariantLabel,
+  siblingsForRom,
+} from "../lib/romGrouping";
 import { errorToast, sysToast, shaderIssueToast } from "../lib/toast";
 import { errorText } from "../lib/errors";
 import {
+  catalogMediaUrl,
   deleteSaveState,
   getRomMetadata,
   rescrapeRom,
@@ -89,6 +100,7 @@ import {
   type SyncConflict,
 } from "../lib/tauri";
 import { conflictFor } from "../hooks/useSync";
+import { useCatalogStatus } from "../hooks/useCatalog";
 import { formatPlayTime } from "../lib/playTime";
 import { useModalButtonStyles } from "../styles/buttons";
 import { useDetailStyles, useTabStyles } from "../styles/xbox";
@@ -103,6 +115,7 @@ export function RomDetail() {
   const s = useDetailStyles();
   const tb = useTabStyles();
   const btn = useModalButtonStyles();
+  const location = useLocation();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const push = useToastStore((st) => st.push);
@@ -206,6 +219,10 @@ export function RomDetail() {
   });
 
   const rom = roms.data?.find((r) => r.id === romId);
+  const siblings = useMemo(
+    () => siblingsForRom(roms.data ?? [], rom, metadataLanguage),
+    [roms.data, rom, metadataLanguage],
+  );
   // Ao abrir a página de um jogo, o foco vai pro "Jogar" (controle e teclado
   // já começam nele). Uma vez por jogo — refetch da lista não rouba o foco.
   const playRef = useRef<HTMLButtonElement>(null);
@@ -242,12 +259,24 @@ export function RomDetail() {
   const [originalDetails, setOriginalDetails] = useState<GameMetadataEdits>({});
   const [originalEditName, setOriginalEditName] = useState("");
   const [brokenHero, setBrokenHero] = useState<string | null>(null);
+  const [brokenBackdrop, setBrokenBackdrop] = useState<string | null>(null);
   // capa que não carregou (URL quebrada): cai no card sem imagem
   const [brokenCover, setBrokenCover] = useState<string | null>(null);
+  useEffect(() => {
+    setBrokenCover(null);
+    setBrokenHero(null);
+    setBrokenBackdrop(null);
+  }, [romId, meta.data?.gameUuid, meta.data?.coverUrl, meta.data?.fanartUrl, meta.data?.screenshotUrl, rom?.boxart]);
   const [editName, setEditName] = useState("");
   const [editSystem, setEditSystem] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoTab, setInfoTab] = useState<"about" | "library">("about");
+  const [pickOpen, setPickOpen] = useState(false);
+  const catalogStatus = useCatalogStatus();
+  const canPickFromCatalog =
+    !!catalogStatus.data?.connected &&
+    catalogStatus.data.enabled &&
+    !catalogStatus.data.disabledByServer;
   // Conflito de save achado ao apertar Jogar: pergunta antes de abrir.
   const [conflictAsk, setConflictAsk] = useState<{ conflict: SyncConflict; loadState?: string } | null>(null);
   // Campos da gaveta formatados pelo que cada provedor documenta
@@ -268,30 +297,50 @@ export function RomDetail() {
   const sourceText = providerLabel(meta.data?.providerSource);
   const releaseYear = meta.data?.releaseDate?.match(/^\d{4}/)?.[0] ?? null;
   // Dialog de tela cheia aberto; o conteúdo de Emulador fica na própria página.
-  const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "media" | null>(null);
+  const initialPanel =
+    (location.state as { openPanel?: string } | null)?.openPanel === "achievements"
+      ? "achievements"
+      : null;
+  const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "gamelog" | "media" | null>(initialPanel);
   const hasShaderCfg = !!shaderInfo.data?.gpu;
-  // Galeria: só as mídias que o provedor trouxe.
-  const shots = [
-    { key: "screenshot", url: meta.data?.screenshotUrl },
-    { key: "titleScreen", url: meta.data?.titleScreenUrl },
-    { key: "fanart", url: meta.data?.fanartUrl },
-  ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
+  const gameUuid = meta.data?.gameUuid;
   const catalog = meta.data?.gamekave;
+  const heroUrl = catalogMediaUrl(gameUuid, meta.data?.fanartUrl, "hero", 0);
+  const logoUrl = catalogMediaUrl(gameUuid, meta.data?.logoUrl, "logo", 0);
+  const titleScreenUrl = catalogMediaUrl(gameUuid, meta.data?.titleScreenUrl, "title", 0);
+  const catalogScreenshots = (catalog?.screenshots ?? []).slice(0, 8);
+  const primaryShotUrl = catalogMediaUrl(
+    gameUuid,
+    meta.data?.screenshotUrl,
+    "screenshot",
+    Math.max(0, catalogScreenshots.indexOf(meta.data?.screenshotUrl ?? "")),
+  );
+  // Galeria: só as mídias que o provedor trouxe, servidas do cache por jogo quando há gameUuid.
+  const shots = [
+    { key: "screenshot", url: primaryShotUrl },
+    { key: "titleScreen", url: titleScreenUrl },
+    { key: "fanart", url: heroUrl },
+  ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
   const galleryShots = [
     ...shots,
-    ...(catalog?.screenshots ?? [])
-      .filter((url) => !shots.some((shot) => shot.url === url))
-      .map((url) => ({ key: "screenshot" as const, url })),
+    ...catalogScreenshots
+      .map((raw, idx) => ({
+        raw,
+        url: catalogMediaUrl(gameUuid, raw, "screenshot", idx)!,
+      }))
+      .filter(({ raw, url }) => raw !== meta.data?.screenshotUrl && !shots.some((shot) => shot.url === url))
+      .map(({ url }) => ({ key: "screenshot" as const, url })),
   ];
   const trailerUrls = [...new Set([meta.data?.videoUrl, ...(catalog?.trailers ?? [])])]
     .filter((url): url is string => !!url);
-  const hasMedia = galleryShots.length > 0 || trailerUrls.length > 0 || !!meta.data?.logoUrl;
+  const hasMedia = galleryShots.length > 0 || trailerUrls.length > 0 || !!logoUrl;
   const panels = [
     { key: "states", show: true },
     { key: "shader", show: hasShaderCfg },
     // cheats por código (doc 17): a lista é do jogo, vale ao abrir
     { key: "cheats", show: true },
     { key: "achievements", show: true },
+    { key: "gamelog", show: true },
     { key: "media", show: hasMedia },
   ] as const;
 
@@ -334,7 +383,7 @@ export function RomDetail() {
     onError: (e) => push(errorToast(e, "saveChanges")),
   });
   const openEdit = () => {
-    const name = meta.data?.title ?? rom?.title ?? "";
+    const name = rom?.userTitle ?? meta.data?.title ?? rom?.title ?? "";
     const fields = gameMetadataDraft(meta.data);
     setOriginalEditName(name);
     setOriginalDetails(fields);
@@ -348,12 +397,23 @@ export function RomDetail() {
     setEditDetails((previous) => ({ ...previous, [key]: value }));
   };
   const fav = useMutation({
-    mutationFn: (on: boolean) => setRomFavorite(romId, on),
+    mutationFn: async (on: boolean) => {
+      await setRomFavorite(romId, on);
+      if (!on && siblings.length > 1) {
+        const extra = siblings.filter((s) => s.id !== romId && s.isFavorite);
+        await Promise.all(extra.map((s) => setRomFavorite(s.id, false)));
+      }
+    },
     onMutate: async (on) => {
       await qc.cancelQueries({ queryKey: ["roms"] });
       const prev = qc.getQueryData(["roms"]);
+      const siblingIds = new Set(siblings.map((s) => s.id));
       qc.setQueryData<{ id: string; isFavorite: boolean }[]>(["roms"], (old) =>
-        (old ?? []).map((r) => (r.id === romId ? { ...r, isFavorite: on } : r)),
+        (old ?? []).map((r) => {
+          if (r.id === romId) return { ...r, isFavorite: on };
+          if (!on && siblingIds.has(r.id)) return { ...r, isFavorite: false };
+          return r;
+        }),
       );
       return { prev };
     },
@@ -380,11 +440,22 @@ export function RomDetail() {
       </EmptyState>
     );
 
-  const cover = meta.data?.coverUrl ?? rom.boxart;
-  const hero = meta.data?.fanartUrl;
-  const backdrop = hero && hero !== brokenHero ? hero : cover;
+  const cover = meta.data?.coverUrl?.startsWith("data:")
+    ? meta.data.coverUrl
+    : (rom.boxart ?? meta.data?.coverUrl);
+  const hero = heroUrl ?? primaryShotUrl;
+  const candidateBackdrop = hero && hero !== brokenHero ? hero : cover;
+  const backdrop =
+    candidateBackdrop && candidateBackdrop !== brokenBackdrop
+      ? candidateBackdrop
+      : undefined;
   const fileParts = splitPath(rom.filePath);
-  const title = meta.data?.title ?? rom.title;
+  const title = rom.userTitle ?? meta.data?.title ?? rom.title;
+  const activeRegion =
+    normalizeRegionCode(meta.data?.gamekave?.romRegion) ??
+    detectRomRegionFallback(rom);
+  const isGroupFavorite =
+    rom.isFavorite || siblings.some((sibling) => sibling.isFavorite);
   const hasQuick = states.data?.some((st) => st.slot === 0) ?? false;
 
   // Antes de abrir: um conflito de game save é perguntado (com "Decidir depois"
@@ -450,9 +521,9 @@ export function RomDetail() {
               className={s.heroArt}
               src={backdrop}
               alt=""
-              onError={(event) => {
+              onError={() => {
                 if (backdrop === hero && hero !== cover) setBrokenHero(backdrop);
-                else event.currentTarget.style.display = "none";
+                else setBrokenBackdrop(backdrop);
               }}
             />
           )}
@@ -481,8 +552,13 @@ export function RomDetail() {
               <Text as="h1" className={s.title}>
                 {title}
               </Text>
-              {(meta.data?.releaseDate || meta.data?.genre) && (
+              {(meta.data?.releaseDate || meta.data?.genre || activeRegion) && (
                 <div className={s.badges}>
+                  {activeRegion && (
+                    <span className={s.badge} data-testid="rom-region-badge">
+                      {regionDisplayLabel(activeRegion, t)}
+                    </span>
+                  )}
                   {releaseYear && <span className={s.badge}>{releaseYear}</span>}
                   {genres[0] && <span className={s.badge}>{genres[0]}</span>}
                 </div>
@@ -507,7 +583,7 @@ export function RomDetail() {
             {/* Ações secundárias só com ícone (pedido do usuário); o nome vem
                 pelo tooltip e pelo aria-label. */}
             <Tooltip positioning={TOOLTIP_POSITION}
-              content={rom.isFavorite ? t("game.favoriteRemove") : t("game.favoriteAdd")}
+              content={isGroupFavorite ? t("game.favoriteRemove") : t("game.favoriteAdd")}
               relationship="label"
             >
               <Button
@@ -515,14 +591,14 @@ export function RomDetail() {
                 appearance="secondary"
                 className={mergeClasses(s.noBorderButton, s.heroActionBtn)}
                 icon={
-                  rom.isFavorite ? (
+                  isGroupFavorite ? (
                     <HeartFilled className={s.favIconOn} />
                   ) : (
                     <HeartRegular />
                   )
                 }
-                aria-pressed={rom.isFavorite}
-                onClick={() => fav.mutate(!rom.isFavorite)}
+                aria-pressed={isGroupFavorite}
+                onClick={() => fav.mutate(!isGroupFavorite)}
               />
             </Tooltip>
             <Tooltip positioning={TOOLTIP_POSITION} content={t("game.edit")} relationship="label">
@@ -587,6 +663,12 @@ export function RomDetail() {
             </div>
           )}
           <SaveLine romId={romId} className={s.heroStats} iconClassName={s.heroStatsIcon} />
+          <AlvanistaCollectionBar
+            gameUuid={gameUuid}
+            systemId={rom.systemId}
+            playTimeSeconds={playTime.data ?? 0}
+            className={s.heroStats}
+          />
           {/* Só depois de carregar a lista de cores: antes ela vem vazia e o
               aviso piscava ao abrir a página. */}
           {cores.isSuccess && coreList.length === 0 && (
@@ -740,6 +822,15 @@ export function RomDetail() {
                       {sourceText}
                     </Badge>
                   )}
+                  {canPickFromCatalog && (
+                    <Button
+                      size="small"
+                      appearance="secondary"
+                      onClick={() => setPickOpen(true)}
+                    >
+                      {t("catalog.pick.button")}
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -834,7 +925,7 @@ export function RomDetail() {
                 <GameCatalogFacts catalog={catalog} />
               )}
 
-              {(shots.length > 0 || meta.data?.logoUrl || trailerUrls.length > 0) && (
+              {(galleryShots.length > 0 || logoUrl || trailerUrls.length > 0) && (
                 <section className={s.infoSection} aria-labelledby="info-media">
                   <h3 id="info-media" className={s.infoHeading}>
                     {t("game.tabs.media")}
@@ -849,17 +940,19 @@ export function RomDetail() {
                     />
                   )}
                   <div className={s.infoMediaGrid}>
-                    {meta.data?.logoUrl && (
+                    {logoUrl && (
                       <figure className={s.galleryItem}>
-                        <img className={s.infoLogo} src={meta.data.logoUrl} alt="" loading="lazy" />
+                        <img className={s.infoLogo} src={logoUrl} alt="" loading="lazy" />
                         <figcaption className={s.galleryCaption}>{t("game.media.logo")}</figcaption>
                       </figure>
                     )}
-                    {shots.map((image) => (
-                      <figure key={image.key} className={s.galleryItem}>
+                    {galleryShots.map((image) => (
+                      <figure key={`${image.key}:${image.url}`} className={s.galleryItem}>
                         <img className={s.infoShot} src={image.url} alt="" loading="lazy" />
                         <figcaption className={s.galleryCaption}>
-                          {image.key === "fanart" && meta.data?.providerSource === "gamekave"
+                          {image.key === "fanart" &&
+                          (meta.data?.providerSource === "gamekave" ||
+                            meta.data?.providerSource === "alvanista")
                             ? t("game.media.hero")
                             : t(`game.media.${image.key}`)}
                         </figcaption>
@@ -896,7 +989,25 @@ export function RomDetail() {
                   {playTime.data ? formatPlayTime(playTime.data) : t("game.neverPlayed")}
                 </dd>
                 <dt className={s.infoLabel}>{t("game.favorite")}</dt>
-                <dd className={s.infoValue}>{rom.isFavorite ? t("common.yes") : t("common.no")}</dd>
+                <dd className={s.infoValue}>{isGroupFavorite ? t("common.yes") : t("common.no")}</dd>
+                {siblings.length > 1 && (
+                  <>
+                    <dt className={s.infoLabel}>{t("game.allVersionsInLibrary")}</dt>
+                    <dd className={s.infoValue}>
+                      {siblings.map((sibling) => {
+                        const sp = splitPath(sibling.filePath);
+                        return (
+                          <div key={sibling.id} style={{ marginBottom: 6 }}>
+                            <span className={s.infoFileName}>
+                              {romVariantLabel(sibling, siblings, t)}
+                            </span>
+                            <span className={s.infoFileDir}>{sp.name}</span>
+                          </div>
+                        );
+                      })}
+                    </dd>
+                  </>
+                )}
               </dl>
             </div>
           </div>
@@ -905,6 +1016,21 @@ export function RomDetail() {
 
       <section className={mergeClasses(s.section, s.tabsOverlap, s.tabsCard)}>
         <div className={s.panel}>
+          {siblings.length > 1 && (
+            <SelectBlock
+              label={t("game.regionVersion")}
+              value={rom.id}
+              options={siblings.map((sibling) => ({
+                value: sibling.id,
+                label: romVariantLabel(sibling, siblings, t),
+              }))}
+              onChange={(nextId) => {
+                if (nextId && nextId !== rom.id) {
+                  navigate(`/rom/${nextId}`, { replace: true });
+                }
+              }}
+            />
+          )}
           {chosenCore && (
             <>
               <GameImageOptions
@@ -1049,20 +1175,31 @@ export function RomDetail() {
             </>
           )}
           {panel === "cheats" && <CheatsPanel romId={romId} />}
-          {/* Conquistas deste jogo: ainda sem dados, como no menu de pausa. */}
           {panel === "achievements" && (
-            <EmptyState
-              art={<TrophyRegular style={{ color: "var(--reemuBrandAccent)", fontSize: "44px" }} />}
-              artAccent
-              title={t("game.tabs.achievements")}
-            >
-              {t("play.achievementsSoon")}
-            </EmptyState>
+            <GameAchievementsPanel
+              romId={romId}
+              onNavigateSettings={() => navigate("/settings/conquistas")}
+            />
+          )}
+          {panel === "gamelog" && (
+            <GameLogPanel
+              romId={romId}
+              gameUuid={gameUuid}
+              inGame={false}
+              onPickCatalogGame={
+                canPickFromCatalog
+                  ? () => {
+                      setPanel(null);
+                      setPickOpen(true);
+                    }
+                  : undefined
+              }
+            />
           )}
           {panel === "media" && (
             <div className={s.gallery}>
-              {meta.data?.logoUrl && (
-                <img className={s.galleryLogo} src={meta.data.logoUrl} alt={t("game.media.logo")} />
+              {logoUrl && (
+                <img className={s.galleryLogo} src={logoUrl} alt={t("game.media.logo")} />
               )}
               {trailerUrls.map((url) => (
                 <video
@@ -1087,6 +1224,15 @@ export function RomDetail() {
           )}
         </div>
       </FullscreenDialog>
+
+      {pickOpen && (
+        <PickGameDialog
+          romId={rom.id}
+          systemId={rom.systemId}
+          initialQuery={rom.title}
+          onClose={() => setPickOpen(false)}
+        />
+      )}
 
       {conflictAsk && (
         <ConflictDialog

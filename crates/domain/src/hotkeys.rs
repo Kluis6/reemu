@@ -13,6 +13,9 @@ pub enum SystemAction {
     ToggleMenuOverlay,
     QuickSave,
     QuickLoad,
+    CaptureScreenshot,
+    ToggleAudioNote,
+    ToggleVideoRecording,
 }
 
 impl SystemAction {
@@ -23,6 +26,9 @@ impl SystemAction {
             SystemAction::ToggleMenuOverlay => "toggle_menu_overlay",
             SystemAction::QuickSave => "quick_save",
             SystemAction::QuickLoad => "quick_load",
+            SystemAction::CaptureScreenshot => "capture_screenshot",
+            SystemAction::ToggleAudioNote => "toggle_audio_note",
+            SystemAction::ToggleVideoRecording => "toggle_video_recording",
         }
     }
 
@@ -31,14 +37,20 @@ impl SystemAction {
             "toggle_menu_overlay" => SystemAction::ToggleMenuOverlay,
             "quick_save" => SystemAction::QuickSave,
             "quick_load" => SystemAction::QuickLoad,
+            "capture_screenshot" => SystemAction::CaptureScreenshot,
+            "toggle_audio_note" => SystemAction::ToggleAudioNote,
+            "toggle_video_recording" => SystemAction::ToggleVideoRecording,
             _ => return None,
         })
     }
 
-    pub const ALL: [SystemAction; 3] = [
+    pub const ALL: [SystemAction; 6] = [
         SystemAction::ToggleMenuOverlay,
         SystemAction::QuickSave,
         SystemAction::QuickLoad,
+        SystemAction::CaptureScreenshot,
+        SystemAction::ToggleAudioNote,
+        SystemAction::ToggleVideoRecording,
     ];
 }
 

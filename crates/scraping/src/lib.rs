@@ -523,7 +523,17 @@ fn candidate_filename_stem(jeu: &Value) -> Option<&str> {
 /// nome do arquivo local (sem extensão) — comparado, exato e
 /// case-insensitive, contra `candidate_filename_stem` pro segundo critério
 /// de auto-match (ver comentário do módulo).
+#[cfg(test)]
 fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCandidate> {
+    parse_jeu_for_region(jeu, exact_hash, file_stem, None)
+}
+
+fn parse_jeu_for_region(
+    jeu: &Value,
+    exact_hash: bool,
+    file_stem: &str,
+    rom_region: Option<&str>,
+) -> Option<ScrapeCandidate> {
     let title = first_text(jeu.get("noms")?, &["wor", "ss", "us", "eu", "jp"])?.to_string();
     let external_id = jeu
         .get("id")
@@ -544,7 +554,7 @@ fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCan
         .and_then(|d| first_text(d, &["wor", "us", "eu", "jp"]))
         .map(str::to_string);
     // Todos os gêneros, o principal (`principale: "1"` na doc) primeiro,
-    // separados por ", " — a gaveta de informações mostra cada um como etiqueta.
+    // separados por ", " - a gaveta de informações mostra cada um como etiqueta.
     let genre = jeu.get("genres").and_then(|g| {
         let arr = g.as_array()?;
         let is_main = |x: &Value| {
@@ -563,22 +573,61 @@ fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCan
         }
         (!names.is_empty()).then(|| names.join(", "))
     });
-    let cover_url = jeu.get("medias").and_then(|m| {
+
+    let mut regional_covers = std::collections::BTreeMap::new();
+    if let Some(arr) = jeu.get("medias").and_then(Value::as_array) {
+        for x in arr {
+            let is_box = matches!(
+                x.get("type").and_then(Value::as_str),
+                Some("box-2D") | Some("box-2d")
+            );
+            if !is_box {
+                continue;
+            }
+            if let (Some(reg), Some(url)) = (
+                x.get("region")
+                    .and_then(Value::as_str)
+                    .and_then(rom_name::normalize_region_code),
+                x.get("url")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|u| !u.is_empty()),
+            ) {
+                regional_covers
+                    .entry(reg.to_string())
+                    .or_insert_with(|| url.to_string());
+            }
+        }
+    }
+
+    let default_cover = jeu.get("medias").and_then(|m| {
         let arr = m.as_array()?;
-        arr.iter()
-            .find(|x| {
-                matches!(
-                    x.get("type").and_then(Value::as_str),
-                    Some("box-2D") | Some("box-2d")
-                )
+        ["box-2D", "box-2d", "cover", "box-3D", "box-3d"]
+            .into_iter()
+            .find_map(|wanted| {
+                arr.iter().find(|x| {
+                    x.get("type")
+                        .and_then(Value::as_str)
+                        .is_some_and(|t| t == wanted)
+                })
             })
             .or_else(|| arr.first())
             .and_then(|x| x.get("url").and_then(Value::as_str))
             .map(str::to_string)
     });
+    let cover_url =
+        rom_name::pick_regional_cover(&regional_covers, rom_region, default_cover.as_deref())
+            .map(str::to_string);
 
     let exact_filename_match = candidate_filename_stem(jeu)
         .is_some_and(|candidate_stem| candidate_stem.eq_ignore_ascii_case(file_stem));
+
+    let mut details = parse_details(jeu);
+    if !regional_covers.is_empty() || rom_region.is_some() {
+        let gk = details.gamekave.get_or_insert_with(Default::default);
+        gk.regional_covers = regional_covers;
+        gk.rom_region = rom_region.map(str::to_string);
+    }
 
     Some(ScrapeCandidate {
         provider: "screenscraper".into(),
@@ -590,7 +639,7 @@ fn parse_jeu(jeu: &Value, exact_hash: bool, file_stem: &str) -> Option<ScrapeCan
         genre,
         exact_hash_match: exact_hash,
         exact_filename_match,
-        details: parse_details(jeu),
+        details,
     })
 }
 
@@ -846,7 +895,14 @@ async fn query_screenscraper(
         .and_then(|r| r.get("jeu"))
         .ok_or("resposta sem 'jeu'")?;
 
-    Ok(parse_jeu(jeu, rom_hash_matches(jeu, q), q.file_stem))
+    let rom_region =
+        rom_name::detect_rom_region(q.ident_name.unwrap_or(q.file_stem), None, q.serial);
+    Ok(parse_jeu_for_region(
+        jeu,
+        rom_hash_matches(jeu, q),
+        q.file_stem,
+        rom_region,
+    ))
 }
 
 /// O hash bateu? O ScreenScraper devolve em `rom` o CRC (`romcrc`) e o MD5
@@ -920,6 +976,8 @@ async fn record_result(
             release_date: c.release_date.clone(),
             genre: c.genre.clone(),
             provider_source: Some(c.provider.clone()),
+            game_uuid: (c.provider == "gamekave" && !c.external_id.is_empty())
+                .then(|| c.external_id.clone()),
             details: c.details.clone(),
         })
         .await
@@ -951,6 +1009,13 @@ async fn scrape_one_with(
     rom_id: &str,
     providers: &Providers,
 ) -> Result<Outcome, String> {
+    let skip = db::RomResolutionRepo::new(pool.clone())
+        .skip_own_scraper_ids()
+        .await
+        .map_err(|e| e.to_string())?;
+    if skip.contains(rom_id) {
+        return Ok(Outcome::NoMatch);
+    }
     let rom = load_scrape_rom(&pool, rom_id).await?;
     let (stem, candidate) = lookup_rom(&rom, cfg, providers).await?;
     record_result(
@@ -982,6 +1047,16 @@ async fn load_scrape_rom(pool: &db::Db, rom_id: &str) -> Result<domain::library:
         .ok_or_else(|| "jogo não encontrado na biblioteca".into())
 }
 
+fn has_screenscraper_credentials(cfg: &MetadataConfig) -> bool {
+    cfg.screenscraper_user
+        .as_deref()
+        .is_some_and(|u| !u.trim().is_empty())
+        && cfg
+            .screenscraper_password
+            .as_deref()
+            .is_some_and(|p| !p.trim().is_empty())
+}
+
 async fn lookup_rom(
     rom: &domain::library::Rom,
     cfg: MetadataConfig,
@@ -997,7 +1072,11 @@ async fn lookup_rom(
     let effective_stem = rom_name::effective_rom_stem(rom, &stem);
     let q_name = rom_query(rom, &hash, &effective_stem);
     let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
-    let mut result = query_screenscraper(&client, &cfg, &q_ss, &providers.screenscraper).await;
+    let mut result = if has_screenscraper_credentials(&cfg) {
+        query_screenscraper(&client, &cfg, &q_ss, &providers.screenscraper).await
+    } else {
+        Ok(None)
+    };
     let ss_refused = matches!(&result, Err(e) if e == ERR_SS_DEV_LOGIN);
     if let Some(key) = tgdb_key.filter(|_| ss_refused || matches!(&result, Ok(None))) {
         result = query_thegamesdb(&client, key, &q_name, &providers.thegamesdb).await;
@@ -1039,10 +1118,17 @@ async fn scrape_pending_with(
     let repo = db::MetadataRepo::new(pool.clone());
     let roms_repo = db::RomsRepo::new(pool.clone());
 
-    let ids = repo
-        .rom_ids_without_match()
+    let skip = db::RomResolutionRepo::new(pool.clone())
+        .skip_own_scraper_ids()
         .await
         .map_err(|e| e.to_string())?;
+    let ids: Vec<String> = repo
+        .rom_ids_without_match()
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter(|id| !skip.contains(id))
+        .collect();
     progress.start_processing(ids.len());
     log::info!("metadata: {} ROM(s) na fila de scraping", ids.len());
 
@@ -1052,9 +1138,10 @@ async fn scrape_pending_with(
         .build()
         .map_err(net_error)?;
 
-    // ScreenScraper recusou as credenciais de desenvolvedor: não adianta
-    // perguntar de novo pras outras milhares de ROMs (cada falha custava
-    // ~16 s). Segue com os provedores de reserva.
+    // ScreenScraper só entra na cascata quando o usuário configurou conta
+    // própria; se recusar as credenciais de desenvolvedor, para de perguntar
+    // nas próximas ROMs e segue pelos provedores alternativos.
+    let ss_configured = has_screenscraper_credentials(&cfg);
     let mut ss_ok = true;
 
     for rom_id in ids {
@@ -1074,10 +1161,10 @@ async fn scrape_pending_with(
         let effective_stem = rom_name::effective_rom_stem(&rom, &stem);
         let q_name = rom_query(&rom, &hash, &effective_stem);
 
-        // Cascata: ScreenScraper (hash) primeiro; se ele não achar e houver
-        // chave do TheGamesDB, tenta por nome lá. A GameKave fica por último.
+        // Cascata: ScreenScraper (hash) quando há credenciais; se não achar e
+        // houver chave do TheGamesDB, tenta por nome lá. A GameKave fica por último.
         let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
-        let mut result = if ss_ok {
+        let mut result = if ss_configured && ss_ok {
             query_screenscraper(&client, &cfg, &q_ss, &providers.screenscraper).await
         } else {
             Ok(None)
@@ -1543,6 +1630,8 @@ mod tests {
         .await
         .unwrap();
         let cfg = MetadataConfig {
+            screenscraper_user: Some("usuario".into()),
+            screenscraper_password: Some("senha".into()),
             thegamesdb_api_key: Some("chave".into()),
             ..Default::default()
         };
@@ -1623,7 +1712,7 @@ mod tests {
         let client = reqwest::Client::new();
         let (hash, stem) = hash_and_stem(&disc);
         let q = rom_query(&disc, &hash, &stem);
-        let ss = query_screenscraper(&client, &cfg, &q, &providers.screenscraper)
+        let ss = query_screenscraper(&client, &cfg, &q_ss, &providers.screenscraper)
             .await
             .unwrap_err();
         let tgdb = query_thegamesdb(&client, "chave-tgdb", &q, &providers.thegamesdb)
@@ -1694,7 +1783,7 @@ mod tests {
         let client = reqwest::Client::new();
         let (hash, stem) = hash_and_stem(&disc);
         let q = rom_query(&disc, &hash, &stem);
-        let ss = query_screenscraper(&client, &cfg, &q, &providers.screenscraper)
+        let ss = query_screenscraper(&client, &cfg, &q_ss, &providers.screenscraper)
             .await
             .unwrap_err();
         let tgdb = query_thegamesdb(&client, "chave-tgdb", &q, &providers.thegamesdb)
@@ -1780,6 +1869,143 @@ mod tests {
             Some("https://cdn.thegamesdb.net/images/large/boxart/front/1018-1.jpg")
         );
         assert_eq!(parse_tgdb_boxart(&v, "999"), None);
+    }
+
+    #[test]
+    fn tgdb_prefers_canonical_title_over_first_array_entry() {
+        let v = json!({"data": {"games": [
+            {"id": 1, "game_title": "Castlevania: Symphony of the Night - Demo"},
+            {"id": 2, "game_title": "Castlevania: Symphony of the Night"}
+        ]}});
+        let c = parse_tgdb_game_for(&v, Some("Castlevania - Symphony of the Night (USA)"))
+            .expect("candidato canônico");
+        assert_eq!(c.external_id, "2");
+        assert_eq!(c.title, "Castlevania: Symphony of the Night");
+    }
+
+    #[tokio::test]
+    async fn own_scraper_skips_pending_and_found() {
+        use domain::metadata::{ResolutionState, RomResolution};
+
+        let (base, seen) = mock(|target| {
+            if target.starts_with("/api2/jeuInfos.php") {
+                (404, String::new())
+            } else if target.starts_with("/games/search") {
+                (200, r#"{"games": []}"#.into())
+            } else {
+                (404, String::new())
+            }
+        });
+        let pool = db::connect_in_memory().await.unwrap();
+        let roms = db::RomsRepo::new(pool.clone());
+        let res_repo = db::RomResolutionRepo::new(pool.clone());
+
+        for (id, name, state) in [
+            ("r_found", "FoundGame", ResolutionState::Found),
+            ("r_pending", "PendingGame", ResolutionState::Pending),
+            ("r_manual", "ManualGame", ResolutionState::Manual),
+            ("r_unknown", "UnknownGame", ResolutionState::Unknown),
+        ] {
+            roms.add(&Rom {
+                id: id.into(),
+                file_path: format!("/biblioteca/nes/{name}.nes"),
+                system_id: "nes".into(),
+                crc32: "11223344".into(),
+                md5: "0123456789abcdef0123456789abcdef".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+            res_repo
+                .put(&RomResolution {
+                    rom_id: id.into(),
+                    state,
+                    game_uuid: None,
+                    matched_by: None,
+                    reason: None,
+                    retry_after: Some(9_999_999),
+                    media_pending: false,
+                    answer_json: None,
+                    resolved_at: 100,
+                })
+                .await
+                .unwrap();
+        }
+
+        let providers = local(&base);
+        let progress = Arc::new(ScrapeProgress::default());
+        scrape_pending_with(
+            pool.clone(),
+            progress,
+            MetadataConfig::default(),
+            &NoCovers,
+            &providers,
+        )
+        .await
+        .unwrap();
+
+        let targets = seen.lock().unwrap().clone();
+        assert!(
+            targets.iter().any(|t| t.contains("UnknownGame")),
+            "unknown deveria consultar os provedores locais: {targets:?}"
+        );
+        for skipped in ["FoundGame", "PendingGame", "ManualGame"] {
+            assert!(
+                !targets.iter().any(|t| t.contains(skipped)),
+                "{skipped} não deveria consultar os provedores locais: {targets:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn without_screenscraper_credentials_skips_screenscraper_and_sets_no_warning() {
+        let (base, seen) = mock(|target| {
+            if target.starts_with("/api2/jeuInfos.php") {
+                (
+                    403,
+                    "Erreur de login : Vérifier vos identifiants développeur !".into(),
+                )
+            } else if target.starts_with("/games/search") {
+                (200, r#"{"games": []}"#.into())
+            } else {
+                (404, String::new())
+            }
+        });
+        let pool = db::connect_in_memory().await.unwrap();
+        db::RomsRepo::new(pool.clone())
+            .add(&Rom {
+                id: "r1".into(),
+                file_path: "/biblioteca/snes/Super Mario World.sfc".into(),
+                system_id: "snes".into(),
+                crc32: "B19ED489".into(),
+                md5: "cdd3c8c37322978ca8669b34bc89c804".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let providers = local(&base);
+        let progress = Arc::new(ScrapeProgress::default());
+        scrape_pending_with(
+            pool.clone(),
+            progress.clone(),
+            MetadataConfig::default(),
+            &NoCovers,
+            &providers,
+        )
+        .await
+        .unwrap();
+
+        let targets = seen.lock().unwrap().clone();
+        assert!(
+            !targets.iter().any(|t| t.starts_with("/api2/jeuInfos.php")),
+            "sem credenciais do ScreenScraper não deve consultar a API: {targets:?}"
+        );
+        assert_eq!(progress.snapshot().6, None);
+
+        let one =
+            scrape_one_with(pool, MetadataConfig::default(), &NoCovers, "r1", &providers).await;
+        assert_eq!(one, Ok(Outcome::NoMatch));
     }
 
     #[test]

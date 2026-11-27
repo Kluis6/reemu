@@ -11,6 +11,7 @@ import type { InstalledCore, RemoteState, RomEntry, SaveState, SyncConflict } fr
 const api = vi.hoisted(() => ({
   listRoms: vi.fn(),
   listInstalledCores: vi.fn(),
+  getRomMetadata: vi.fn(),
   syncStatus: vi.fn(),
   syncSaveStatus: vi.fn(),
   syncConflicts: vi.fn(),
@@ -131,6 +132,7 @@ beforeEach(() => {
   Object.values(api).forEach((f) => f.mockReset())
   api.listRoms.mockResolvedValue([ROM])
   api.listInstalledCores.mockResolvedValue([CORE])
+  api.getRomMetadata.mockResolvedValue(null)
   api.syncStatus.mockResolvedValue(STATUS)
   api.syncResolve.mockResolvedValue(undefined)
   api.syncConflicts.mockResolvedValue([CONFLICT])
@@ -455,5 +457,65 @@ describe('RomDetail local states that stay on this machine', () => {
     await openStates()
     expect(notes()).toEqual([])
     expect(api.syncStateNotes).not.toHaveBeenCalled()
+  })
+})
+
+describe('RomDetail title precedence', () => {
+  it('rom_detail_keeps_user_title', async () => {
+    api.listRoms.mockResolvedValue([
+      {
+        ...ROM,
+        title: 'Meu Zelda Favorito',
+        userTitle: 'Meu Zelda Favorito',
+      },
+    ])
+    api.getRomMetadata.mockResolvedValue({
+      title: 'The Legend of Zelda: The Minish Cap',
+      description: null,
+      coverUrl: null,
+      releaseDate: null,
+      genre: null,
+      providerSource: 'alvanista',
+      gameUuid: '01950f10-1111-7222-8333-444455556666',
+      developer: null,
+      publisher: null,
+      players: null,
+      rating: null,
+      ageRating: null,
+      modes: null,
+      screenshotUrl: null,
+      titleScreenUrl: null,
+      fanartUrl: null,
+      logoUrl: null,
+      videoUrl: null,
+      gamekave: null,
+    })
+    await mount()
+    expect(host.querySelector('h1')?.textContent).toBe('Meu Zelda Favorito')
+  })
+
+  it('shows_region_badge_and_version_selector_for_grouped_regional_roms', async () => {
+    api.listRoms.mockResolvedValue([
+      {
+        ...ROM,
+        id: 'r1',
+        title: 'The Minish Cap',
+        filePath: 'C:/roms/Zelda (USA).gba',
+        groupKey: 'game:uuid-minish',
+        region: 'NA',
+      },
+      {
+        ...ROM,
+        id: 'r2',
+        title: 'The Minish Cap',
+        filePath: 'C:/roms/Zelda (Europe).gba',
+        groupKey: 'game:uuid-minish',
+        region: 'EU',
+      },
+    ])
+    api.getRomMetadata.mockResolvedValue(null)
+    await mount()
+    expect(host.querySelector('[data-testid="rom-region-badge"]')?.textContent).toContain('NTSC')
+    expect(host.textContent).toContain('Versão e região')
   })
 })

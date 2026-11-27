@@ -50,6 +50,8 @@ pub async fn load_game(
         .store(true, std::sync::atomic::Ordering::Relaxed);
     *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    crate::gamelog::on_game_unloaded(&app).await;
+    crate::ra::on_game_unloaded(&app);
 
     // Valores de opção salvos — o filho os aplica já durante o load (ele
     // pede via `GET_VARIABLE`), mandados junto no `EmuSession::load`. Cascata:
@@ -92,6 +94,7 @@ pub async fn load_game(
     // tira da thread async.
     let av = {
         let core_id = core_id.clone();
+        let rom_path = rom_path.clone();
         let joined = tauri::async_runtime::spawn_blocking(move || {
             session.load(&core_id, &rom_path, initial_option_values)
         })
@@ -160,9 +163,16 @@ pub async fn load_game(
         let _ = db::RomsRepo::new(pool).mark_played(rid, now).await;
     }
 
-    // Cheats ligados deste jogo (doc 17) — o core aplica a partir daqui.
-    if let Some(rid) = rom_id.as_deref() {
-        super::cheats::apply_cheats(&state, rid).await;
+    // RetroAchievements: liga o cliente na memória do core. Em modo Hardcore,
+    // cheats e carregamento de save states ficam desativados nesta sessão.
+    let hardcore_ra =
+        crate::ra::on_game_launched(&app, Some(&core_id), rom_id.as_deref(), &rom_path).await;
+
+    // Cheats ligados deste jogo (doc 17): pulados em sessões Hardcore.
+    if !hardcore_ra {
+        if let Some(rid) = rom_id.as_deref() {
+            super::cheats::apply_cheats(&state, rid).await;
+        }
     }
 
     // Proporção da imagem (rom → sistema → todos, ou a do core).
@@ -182,7 +192,9 @@ pub async fn load_game(
 
     // Guarda o `rom_id` (do DB) pro QuickSave/QuickLoad; `None` se o jogo veio
     // de fora da biblioteca.
+    let launched_rom = rom_id.clone();
     *state.current_rom.lock().unwrap_or_else(|p| p.into_inner()) = rom_id;
+    crate::gamelog::on_game_launched(&app, launched_rom.as_deref()).await;
     persist_core_set_options(&state).await;
     // Load concluído: o pump pode voltar a apresentar a subsurface (agora com
     // frames do jogo NOVO — `latest_frame` foi zerado no `Command::Load`).
@@ -587,6 +599,8 @@ pub async fn unload_game(app: AppHandle) -> Result<(), AppError> {
         .take();
     *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    crate::gamelog::on_game_unloaded(&app).await;
+    crate::ra::on_game_unloaded(&app);
     // A subsurface é escondida pelo `reemu-video-pump` assim que a sessão fica
     // `Idle` (que `Command::Unload` marca antes do teardown bloqueante). Tocar
     // na conexão Wayland fora da thread do pump corrompe o `wl_display`
@@ -762,6 +776,9 @@ pub fn decoration_image(state: State<'_, AppState>) -> tauri::ipc::Response {
 /// Guarda uma cópia do frame pra thumbnail do save state — no máximo 1×/500ms
 /// (o clone de um frame grande custa; a frescura do thumb não precisa de 60fps).
 fn cache_thumb_frame(state: &AppState, w: u32, h: u32, rgba: &[u8]) {
+    if crate::gamelog::should_sample_video_frame() {
+        crate::gamelog::push_video_frame(w, h, rgba.to_vec());
+    }
     let mut slot = state.last_frame.lock().unwrap_or_else(|p| p.into_inner());
     let stale = slot
         .as_ref()

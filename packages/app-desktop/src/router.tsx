@@ -49,6 +49,7 @@ export const router = createHashRouter([
               { path: 'library/:platform', element: <PlatformLibrary /> },
               { path: 'rom/:romId', lazy: page(() => import('./screens/RomDetail'), (m) => m.RomDetail) },
               { path: 'conquistas', lazy: page(() => import('./screens/Achievements'), (m) => m.Achievements) },
+              { path: 'rede', lazy: page(() => import('./screens/Network'), (m) => m.Network) },
               { path: 'perfil', lazy: page(() => import('./screens/ProfilePage'), (m) => m.ProfilePage) },
               {
                 path: 'settings',
@@ -57,6 +58,7 @@ export const router = createHashRouter([
                   { index: true, lazy: page(() => import('./screens/settings/SettingsHome'), (m) => m.SettingsHome) },
                   { path: 'perfil', lazy: page(() => import('./screens/settings/SettingsProfile'), (m) => m.SettingsProfile) },
                   { path: 'sincronizacao', lazy: page(() => import('./screens/settings/SettingsSync'), (m) => m.SettingsSync) },
+                  { path: 'conquistas', lazy: page(() => import('./screens/settings/SettingsAchievements'), (m) => m.SettingsAchievements) },
                   { path: 'aparencia', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance) },
                   { path: 'aparencia/temas', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance, { section: 'temas' as const }) },
                   { path: 'aparencia/papel-de-parede', lazy: page(() => import('./screens/settings/SettingsAppearance'), (m) => m.SettingsAppearance, { section: 'papel-de-parede' as const }) },

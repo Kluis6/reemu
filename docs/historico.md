@@ -568,6 +568,24 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-11-26 - mídia em disco por jogo e escolha manual no catálogo (parte 3 de 3)**.
+  O protocolo `media://` guarda `hero`, `logo`, tela de título e até 8 capturas
+  em `<dados>/media/<game_uuid>/`, compartilhando os arquivos entre dumps do
+  mesmo jogo e servindo offline após o primeiro acesso (apenas URLs `https://`
+  sem credenciais; vídeos seguem em streaming). Na gaveta de informações da
+  página do jogo, "Escolher o jogo" pesquisa `GET /api/partner/v1/games/search`
+  e envia o vínculo em `POST /api/partner/v1/games/claims`, aplicando os dados
+  na hora com `state = 'manual'`.
+
+- **2026-11-26 - catálogo do Alvanista na biblioteca (parte 2 de 3)**. Com a
+  conta do Alvanista conectada e a chave ligada em Configurações > Metadados,
+  a biblioteca resolve as ROMs em lotes de até 200 por
+  `POST /api/partner/v1/games/resolve`, guarda o estado em `rom_resolution`
+  (migração `0025`) e preenche `game_metadata` com `game_uuid`. Linhas antigas
+  (`identified_at` nulo) ganham identidade em segundo plano uma por vez fora de
+  jogo. Os provedores locais pulam arquivos `found`, `manual` e `pending` e
+  continuam na cascata atual para `unknown` ou quando desconectado.
+
 - **2026-11-25 — preparação da versão 0.1.19**. As integrações Libretro
   ampliaram o catálogo para 147 dos 261 cores com pacote desktop. Entraram
   plataformas como LaserDisc, Sinclair ZX81, Arduboy, Uzebox, VaporSpec,

@@ -37,20 +37,23 @@ pub async fn get_metadata_config(
 
 #[tauri::command]
 pub async fn set_metadata_config(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     config: MetadataConfigDto,
 ) -> Result<(), AppError> {
     let norm = |s: Option<String>| s.filter(|v| !v.trim().is_empty());
-    let repo = db::MetadataRepo::new(pool(&state)?);
+    let db_pool = pool(&state)?;
     let cfg = MetadataConfig {
         provider: config.provider,
         screenscraper_user: norm(config.screenscraper_user),
         screenscraper_password: norm(config.screenscraper_password),
         thegamesdb_api_key: norm(config.thegamesdb_api_key),
     };
-    crate::credentials::save_config(&repo, &crate::credentials::OsKeyring, cfg)
+    crate::credentials::save_config_tracked(&db_pool, &crate::credentials::OsKeyring, cfg)
         .await
-        .map_err(AppError::from)
+        .map_err(AppError::from)?;
+    crate::sync::engine::after_credentials_changed(&app);
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -63,6 +66,7 @@ pub struct GameMetadataDto {
     pub release_date: Option<String>,
     pub genre: Option<String>,
     pub provider_source: Option<String>,
+    pub game_uuid: Option<String>,
     pub developer: Option<String>,
     pub publisher: Option<String>,
     pub players: Option<String>,
@@ -78,7 +82,7 @@ pub struct GameMetadataDto {
     #[cfg_attr(
         test,
         ts(
-            type = "{ descriptions: Record<string, string>; releaseDates: Record<string, string>; timeToBeatMinutes: [number | null, number | null, number | null]; covers: string[]; heroes: string[]; screenshots: string[]; trailers: string[]; achievementCount: number | null; soundtrackCount: number | null } | null"
+            type = "{ descriptions: Record<string, string>; releaseDates: Record<string, string>; regionalCovers: Record<string, string>; romRegion: string | null; romRevision: string | null; timeToBeatMinutes: [number | null, number | null, number | null]; covers: string[]; heroes: string[]; screenshots: string[]; trailers: string[]; achievementCount: number | null; soundtrackCount: number | null } | null"
         )
     )]
     pub gamekave: Option<GameKaveData>,
@@ -93,6 +97,7 @@ impl From<GameMetadata> for GameMetadataDto {
             release_date: m.release_date,
             genre: m.genre,
             provider_source: m.provider_source,
+            game_uuid: m.game_uuid,
             developer: m.details.developer,
             publisher: m.details.publisher,
             players: m.details.players,
@@ -138,6 +143,78 @@ fn apply_edits(mut dto: GameMetadataDto, edits: GameMetadataEdits) -> GameMetada
     dto
 }
 
+pub(crate) async fn load_rom_metadata(
+    pool: &db::Db,
+    rom_id: &str,
+    language: Option<&str>,
+) -> Result<Option<GameMetadataDto>, AppError> {
+    let repo = db::MetadataRepo::new(pool.clone());
+    let imported = repo.get_metadata(rom_id).await.map_err(AppError::from)?;
+    let edits = repo.get_edits(rom_id).await.map_err(AppError::from)?;
+    if imported.is_none() && edits.is_none() {
+        return Ok(None);
+    }
+    let Some(rom) = db::RomsRepo::new(pool.clone())
+        .get(rom_id)
+        .await
+        .map_err(AppError::from)?
+    else {
+        return Ok(None);
+    };
+    let detected_region = scraping::rom_name::detect_rom_region(
+        &rom.file_path,
+        rom.ident_name.as_deref(),
+        rom.serial.as_deref(),
+    );
+    let has_cover_edit = edits
+        .as_ref()
+        .and_then(|e| e.cover_url.as_deref())
+        .is_some_and(|u| !u.trim().is_empty());
+    let imported = match imported {
+        Some(meta) if !has_cover_edit => Some(
+            crate::covers::heal_rom_front_cover_if_needed(pool, None, rom_id, &rom, meta).await,
+        ),
+        other => other,
+    };
+    let mut dto = GameMetadataDto::from(imported.unwrap_or_else(|| GameMetadata {
+        rom_id: rom_id.to_owned(),
+        title: super::library::rom_title(&rom),
+        description: None,
+        cover_url: None,
+        release_date: None,
+        genre: None,
+        provider_source: None,
+        game_uuid: None,
+        details: Default::default(),
+    }));
+    if let Some(title) = rom.user_title {
+        dto.title = title;
+    }
+    if let Some(catalog) = &dto.gamekave {
+        let reg = catalog.rom_region.as_deref().or(detected_region);
+        if let Some(regional) = scraping::rom_name::pick_regional_cover(
+            &catalog.regional_covers,
+            reg,
+            dto.cover_url.as_deref(),
+        ) {
+            dto.cover_url = Some(regional.to_owned());
+        }
+        if let Some(language) = language {
+            let tag = language.to_ascii_lowercase();
+            if let Some(description) = catalog.descriptions.get(&tag).or_else(|| {
+                let (base, _) = tag.split_once('-')?;
+                catalog.descriptions.get(base)
+            }) {
+                dto.description = Some(description.clone());
+            }
+        }
+    }
+    if let Some(edits) = edits {
+        dto = apply_edits(dto, edits);
+    }
+    Ok(Some(dto))
+}
+
 #[tauri::command]
 pub async fn get_rom_metadata(
     state: State<'_, AppState>,
@@ -145,45 +222,7 @@ pub async fn get_rom_metadata(
     language: Option<String>,
 ) -> Result<Option<GameMetadataDto>, AppError> {
     let pool = pool(&state)?;
-    let repo = db::MetadataRepo::new(pool.clone());
-    let imported = repo.get_metadata(&rom_id).await.map_err(AppError::from)?;
-    let edits = repo.get_edits(&rom_id).await.map_err(AppError::from)?;
-    if imported.is_none() && edits.is_none() {
-        return Ok(None);
-    }
-    let Some(rom) = db::RomsRepo::new(pool)
-        .get(&rom_id)
-        .await
-        .map_err(AppError::from)?
-    else {
-        return Ok(None);
-    };
-    let mut dto = GameMetadataDto::from(imported.unwrap_or_else(|| GameMetadata {
-        rom_id,
-        title: super::library::rom_title(&rom),
-        description: None,
-        cover_url: None,
-        release_date: None,
-        genre: None,
-        provider_source: None,
-        details: Default::default(),
-    }));
-    if let Some(title) = rom.user_title {
-        dto.title = title;
-    }
-    if let (Some(catalog), Some(language)) = (&dto.gamekave, language) {
-        let tag = language.to_ascii_lowercase();
-        if let Some(description) = catalog.descriptions.get(&tag).or_else(|| {
-            let (base, _) = tag.split_once('-')?;
-            catalog.descriptions.get(base)
-        }) {
-            dto.description = Some(description.clone());
-        }
-    }
-    if let Some(edits) = edits {
-        dto = apply_edits(dto, edits);
-    }
-    Ok(Some(dto))
+    load_rom_metadata(&pool, &rom_id, language.as_deref()).await
 }
 
 #[derive(Serialize)]
@@ -260,7 +299,9 @@ pub async fn review_pending_match(
             cover_url: candidate.cover_url,
             release_date: candidate.release_date,
             genre: candidate.genre,
-            provider_source: Some(candidate.provider),
+            provider_source: Some(candidate.provider.clone()),
+            game_uuid: (candidate.provider == "gamekave" && !candidate.external_id.is_empty())
+                .then_some(candidate.external_id),
             details: candidate.details,
         }
         .into(),
@@ -295,6 +336,24 @@ pub async fn resolve_pending_match(
         crate::covers::invalidate(&state.covers_dir, &rom_id);
     }
     Ok(())
+}
+
+#[tauri::command]
+pub async fn resolve_pending_matches_bulk(
+    state: State<'_, AppState>,
+    rom_ids: Vec<String>,
+    accept: bool,
+) -> Result<usize, AppError> {
+    let resolved = db::MetadataRepo::new(pool(&state)?)
+        .resolve_pending_bulk(&rom_ids, accept)
+        .await
+        .map_err(AppError::from)?;
+    if accept {
+        for rom_id in &resolved {
+            crate::covers::invalidate(&state.covers_dir, rom_id);
+        }
+    }
+    Ok(resolved.len())
 }
 
 #[derive(Serialize)]
@@ -357,7 +416,10 @@ async fn metadata_config(pool: &db::Db) -> Result<domain::metadata::MetadataConf
 /// Dispara uma leva de scraping em background e volta na hora. O progresso é
 /// consultado por `metadata_scan_progress`.
 #[tauri::command]
-pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppError> {
+pub async fn start_metadata_scan(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
     let pool = pool(&state)?;
     let progress = state.scrape.clone();
     if !progress.begin() {
@@ -366,6 +428,7 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppEr
     let covers = crate::covers::CoverDir(state.covers_dir.clone());
     tauri::async_runtime::spawn(async move {
         let run = async {
+            crate::catalog::run_before_own_scraper(&app, crate::catalog::PassScope::All).await;
             let cfg = metadata_config(&pool).await?;
             scraping::scrape_pending(pool, progress.clone(), cfg, &covers).await
         };
@@ -383,9 +446,13 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppEr
 /// (foi pra revisão) ou `"none"` (nenhum provedor achou).
 #[tauri::command]
 pub async fn rescrape_rom(
+    app: AppHandle,
     state: State<'_, AppState>,
     rom_id: String,
 ) -> Result<&'static str, AppError> {
+    if let Some(outcome) = crate::catalog::resolve_one_for_rescrape(&app, &rom_id).await {
+        return Ok(outcome);
+    }
     let pool = pool(&state)?;
     let cfg = metadata_config(&pool).await?;
     let covers = crate::covers::CoverDir(state.covers_dir.clone());

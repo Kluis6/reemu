@@ -29,10 +29,13 @@ pub(crate) struct FrameTick {
     pub frame: Option<Frame>,
     pub audio: Vec<i16>,
     pub sample_rate: u32,
+    pub ra_drain: Option<achievements::RuntimeDrain>,
 }
 
 pub(crate) struct LocalCore {
     core: DesktopCore,
+    ra: Option<achievements::LiveRuntime>,
+    ra_mem_gen: u64,
     pacer: Pacer,
     sample_rate: u32,
 }
@@ -93,11 +96,19 @@ impl LocalCore {
         Ok((
             Self {
                 core,
+                ra: None,
+                ra_mem_gen: 0,
                 pacer: Pacer::new(Duration::from_secs_f64(1.0 / fps)),
                 sample_rate,
             },
             av,
         ))
+    }
+
+    pub(crate) fn extracted_rom_path(&self) -> Option<PathBuf> {
+        self.core
+            .extracted_rom_path()
+            .map(std::path::Path::to_path_buf)
     }
 
     /// Copia o snapshot de input do pai pros globais que o `input_state_cb` do
@@ -126,13 +137,117 @@ impl LocalCore {
         }
 
         let frame = self.core.next_realtime_frame();
+        let ra_drain = if let Some(rt) = self.ra.as_mut() {
+            let cur_gen = self.core.memory_map_generation();
+            let needs_rebind = cur_gen != self.ra_mem_gen
+                || (!rt.has_valid_memory() && !self.core.core_memory_region(2).0.is_null());
+            if needs_rebind {
+                self.ra_mem_gen = cur_gen;
+                let descs: Vec<achievements::MemoryDescriptorInput> = self
+                    .core
+                    .memory_descriptors()
+                    .into_iter()
+                    .map(|d| achievements::MemoryDescriptorInput {
+                        flags: d.flags,
+                        ptr: d.ptr,
+                        offset: d.offset,
+                        start: d.start,
+                        select: d.select,
+                        disconnect: d.disconnect,
+                        len: d.len,
+                        addrspace: d.addrspace,
+                    })
+                    .collect();
+                let mem = unsafe {
+                    achievements::LibretroMemory::init(rt.console_id(), &descs, |id| {
+                        self.core.core_memory_region(id)
+                    })
+                };
+                rt.update_memory(mem);
+            }
+            let mut d = rt.do_frame();
+            if d.reset_core {
+                self.core.reset_core();
+                d.reset_core = false;
+            }
+            Some(d)
+        } else {
+            None
+        };
         let audio = self.core.drain_audio();
         self.pacer.pace();
         FrameTick {
             frame,
             audio,
             sample_rate: self.sample_rate,
+            ra_drain,
         }
+    }
+
+    pub(crate) fn init_achievements(
+        &mut self,
+        cfg: achievements::RaSessionConfig,
+    ) -> achievements::RuntimeDrain {
+        self.ra_mem_gen = self.core.memory_map_generation();
+        let descs: Vec<achievements::MemoryDescriptorInput> = self
+            .core
+            .memory_descriptors()
+            .into_iter()
+            .map(|d| achievements::MemoryDescriptorInput {
+                flags: d.flags,
+                ptr: d.ptr,
+                offset: d.offset,
+                start: d.start,
+                select: d.select,
+                disconnect: d.disconnect,
+                len: d.len,
+                addrspace: d.addrspace,
+            })
+            .collect();
+        let mem = unsafe {
+            achievements::LibretroMemory::init(cfg.console_id, &descs, |id| {
+                self.core.core_memory_region(id)
+            })
+        };
+        match achievements::LiveRuntime::start(cfg, mem) {
+            Ok((rt, mut drain)) => {
+                if drain.reset_core {
+                    self.core.reset_core();
+                    drain.reset_core = false;
+                }
+                self.ra = Some(rt);
+                drain
+            }
+            Err(e) => achievements::RuntimeDrain {
+                warnings: vec![format!("RetroAchievements: {e}")],
+                ..Default::default()
+            },
+        }
+    }
+
+    pub(crate) fn on_ra_http_response(
+        &mut self,
+        request_id: u64,
+        status_code: i32,
+        body: &[u8],
+    ) -> Option<achievements::RuntimeDrain> {
+        let rt = self.ra.as_mut()?;
+        let mut drain = rt.on_http_response(request_id, status_code, body);
+        if drain.reset_core {
+            self.core.reset_core();
+            drain.reset_core = false;
+        }
+        Some(drain)
+    }
+
+    pub(crate) fn idle_ra(&mut self) -> Option<achievements::RuntimeDrain> {
+        let rt = self.ra.as_mut()?;
+        let mut drain = rt.idle();
+        if drain.reset_core {
+            self.core.reset_core();
+            drain.reset_core = false;
+        }
+        Some(drain)
     }
 
     pub(crate) fn set_paused(&mut self, paused: bool) {
@@ -143,11 +258,23 @@ impl LocalCore {
     }
 
     pub(crate) fn serialize_state(&mut self) -> Option<Vec<u8>> {
-        self.core.serialize_state()
+        self.core
+            .serialize_state()
+            .map(|bytes| match self.ra.as_ref() {
+                Some(rt) => rt.pack_save_state(bytes),
+                None => bytes,
+            })
     }
 
     pub(crate) fn restore_state(&mut self, data: &[u8]) -> bool {
-        self.core.restore_state(data)
+        let (core_bytes, progress) = achievements::unpack_state_with_progress(data);
+        let ok = self.core.restore_state(core_bytes);
+        if ok {
+            if let Some(rt) = self.ra.as_mut() {
+                rt.restore_progress(progress);
+            }
+        }
+        ok
     }
 
     pub(crate) fn set_cheats(&mut self, cheats: &[domain::cheats::CheatCode]) {

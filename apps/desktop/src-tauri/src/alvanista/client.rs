@@ -288,15 +288,221 @@ impl Client {
                 Ok(me)
             }
             // Só chega aqui um 401 logo depois de uma renovação que deu certo.
-            Err(MeError::Unauthorized) => {
-                if let Err(e) = self.store.clear_tokens().await {
-                    log::warn!("alvanista: não deu pra apagar a sessão: {e}");
-                }
-                self.session_ended().await;
-                Err(ClientError::AuthEnded)
-            }
+            Err(MeError::Unauthorized) => Err(self.end_unauthorized().await),
             Err(MeError::Failed(e)) => Err(e),
         }
+    }
+
+    /// Pedido JSON autenticado contra `/api/partner/v1/*`, com a mesma
+    /// renovação em 401 usada por `me`.
+    ///
+    /// Sem sessão marcada, devolve `AuthEnded` sem tocar no chaveiro nem na
+    /// rede. Em 404 genérico, 429 ou 5xx devolve `Transient` (exceto 503
+    /// `rom_resolve_disabled` e 404 `game_not_found`, devolvidos com status e
+    /// corpo para quem chamou tratar como regra de negócio, assim como os
+    /// demais 4xx).
+    pub(crate) async fn authed_json(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<(u16, serde_json::Value)> {
+        match self.store.has_session().await {
+            Ok(true) => {}
+            Ok(false) => return Err(ClientError::AuthEnded),
+            Err(e) => return Err(ClientError::Transient(e.to_string())),
+        }
+        let mut tokens = match self.store.load().await {
+            Ok(Some(loaded)) => loaded.tokens,
+            Ok(None) => {
+                self.session_ended().await;
+                return Err(ClientError::AuthEnded);
+            }
+            Err(e) => return Err(ClientError::Transient(e.to_string())),
+        };
+        let mut result = self
+            .send_authed_json(&tokens.access_token, method.clone(), path, body)
+            .await;
+        if matches!(result, Err(MeError::Unauthorized)) {
+            tokens = self.refresh(&tokens).await?;
+            result = self
+                .send_authed_json(&tokens.access_token, method, path, body)
+                .await;
+        }
+        match result {
+            Ok(out) => Ok(out),
+            Err(MeError::Unauthorized) => Err(self.end_unauthorized().await),
+            Err(MeError::Failed(e)) => Err(e),
+        }
+    }
+
+    /// Envio `multipart/form-data` autenticado contra `/api/partner/v1/*` (usado
+    /// para screenshots e notas de audio do Meu Log), com renovacao automatica
+    /// de token num 401.
+    pub(crate) async fn authed_multipart<F>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        make_form: F,
+    ) -> Result<(u16, serde_json::Value)>
+    where
+        F: Fn() -> std::result::Result<reqwest::multipart::Form, String>,
+    {
+        match self.store.has_session().await {
+            Ok(true) => {}
+            Ok(false) => return Err(ClientError::AuthEnded),
+            Err(e) => return Err(ClientError::Transient(e.to_string())),
+        }
+        let mut tokens = match self.store.load().await {
+            Ok(Some(loaded)) => loaded.tokens,
+            Ok(None) => {
+                self.session_ended().await;
+                return Err(ClientError::AuthEnded);
+            }
+            Err(e) => return Err(ClientError::Transient(e.to_string())),
+        };
+        let form1 = make_form().map_err(ClientError::Transient)?;
+        let mut result = self
+            .send_authed_multipart(&tokens.access_token, method.clone(), path, form1)
+            .await;
+        if matches!(result, Err(MeError::Unauthorized)) {
+            tokens = self.refresh(&tokens).await?;
+            let form2 = make_form().map_err(ClientError::Transient)?;
+            result = self
+                .send_authed_multipart(&tokens.access_token, method, path, form2)
+                .await;
+        }
+        match result {
+            Ok(out) => Ok(out),
+            Err(MeError::Unauthorized) => Err(self.end_unauthorized().await),
+            Err(MeError::Failed(e)) => Err(e),
+        }
+    }
+
+    /// `PUT` direto numa URL pre-assinada de R2 devolvida por `/gamelog/.../uploads`
+    /// (sem cabecalho `Authorization`, apenas os cabecalhos indicados pelo servidor).
+    pub(crate) async fn put_presigned_bytes(
+        &self,
+        upload_url: &str,
+        headers: &std::collections::HashMap<String, String>,
+        bytes: Vec<u8>,
+    ) -> std::result::Result<(), String> {
+        let mut req = self
+            .http
+            .put(upload_url)
+            .timeout(Duration::from_secs(300))
+            .body(bytes);
+        for (k, v) in headers {
+            req = req.header(k.as_str(), v.as_str());
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| format!("envio de video falhou: {}", e.without_url()))?;
+        if !resp.status().is_success() {
+            return Err(format!(
+                "armazenamento recusou o video (HTTP {})",
+                resp.status().as_u16()
+            ));
+        }
+        Ok(())
+    }
+
+    async fn end_unauthorized(&self) -> ClientError {
+        if let Err(e) = self.store.clear_tokens().await {
+            log::warn!("alvanista: não deu pra apagar a sessão: {e}");
+        }
+        self.session_ended().await;
+        ClientError::AuthEnded
+    }
+
+    async fn send_authed_json(
+        &self,
+        access_token: &str,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> std::result::Result<(u16, serde_json::Value), MeError> {
+        let mut req = self
+            .http
+            .request(method, format!("{}{path}", self.api))
+            .bearer_auth(access_token);
+        if let Some(b) = body {
+            req = req.json(b);
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| MeError::Failed(transport(e)))?;
+        Self::parse_partner_response(path, resp).await
+    }
+
+    async fn send_authed_multipart(
+        &self,
+        access_token: &str,
+        method: reqwest::Method,
+        path: &str,
+        form: reqwest::multipart::Form,
+    ) -> std::result::Result<(u16, serde_json::Value), MeError> {
+        let resp = self
+            .http
+            .request(method, format!("{}{path}", self.api))
+            .timeout(Duration::from_secs(120))
+            .bearer_auth(access_token)
+            .multipart(form)
+            .send()
+            .await
+            .map_err(|e| MeError::Failed(transport(e)))?;
+        Self::parse_partner_response(path, resp).await
+    }
+
+    async fn parse_partner_response(
+        path: &str,
+        resp: reqwest::Response,
+    ) -> std::result::Result<(u16, serde_json::Value), MeError> {
+        let status = resp.status();
+        let route = path.split('?').next().unwrap_or(path);
+        log::debug!("alvanista: {route} respondeu {}", status.as_u16());
+        if status == StatusCode::UNAUTHORIZED {
+            return Err(MeError::Unauthorized);
+        }
+        if status == StatusCode::NO_CONTENT {
+            return Ok((status.as_u16(), serde_json::Value::Null));
+        }
+        if status.is_success() {
+            let bytes = resp
+                .bytes()
+                .await
+                .map_err(|_| MeError::Failed(ClientError::Transient("resposta ilegível".into())))?;
+            if bytes.is_empty() {
+                return Ok((status.as_u16(), serde_json::Value::Null));
+            }
+            let val: serde_json::Value = serde_json::from_slice(&bytes)
+                .map_err(|_| MeError::Failed(ClientError::Transient("resposta ilegível".into())))?;
+            return Ok((status.as_u16(), val));
+        }
+        let parsed = resp.json::<serde_json::Value>().await.ok();
+        let code = parsed.as_ref().and_then(partner_error_code);
+        if (status == StatusCode::SERVICE_UNAVAILABLE && code == Some("rom_resolve_disabled"))
+            || (status == StatusCode::NOT_FOUND
+                && matches!(
+                    code,
+                    Some("game_not_found" | "not_found" | "session_not_found")
+                ))
+            || (status.as_u16() == 507 && code == Some("quota_exceeded"))
+        {
+            return Ok((status.as_u16(), parsed.unwrap_or(serde_json::Value::Null)));
+        }
+        if status == StatusCode::NOT_FOUND
+            || status == StatusCode::TOO_MANY_REQUESTS
+            || status.is_server_error()
+        {
+            return Err(MeError::Failed(ClientError::Transient(format!(
+                "{}",
+                status.as_u16()
+            ))));
+        }
+        Ok((status.as_u16(), parsed.unwrap_or(serde_json::Value::Null)))
     }
 
     async fn token_request(&self, form: &[(&str, &str)]) -> Result<Tokens> {
@@ -368,6 +574,12 @@ enum MeError {
 
 fn transport(e: reqwest::Error) -> ClientError {
     ClientError::Transient(e.without_url().to_string())
+}
+
+pub(crate) fn partner_error_code(v: &serde_json::Value) -> Option<&str> {
+    let err = v.get("error")?;
+    err.as_str()
+        .or_else(|| err.get("code").and_then(|c| c.as_str()))
 }
 
 async fn error_code(resp: reqwest::Response) -> String {
@@ -1019,5 +1231,142 @@ mod tests {
             serde_json::from_str(r#"{"id":"a","username":"u","profile_url":"https://x/u"}"#)
                 .unwrap();
         assert_eq!(without.entitlements, None);
+    }
+
+    #[tokio::test]
+    async fn authed_json_refreshes_once_on_401() {
+        let _serial = SERIAL.lock().await;
+        let (old, new) = names();
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let old_refresh = format!("alr_{old}");
+        let new_access = format!("alp_{new}");
+        let new2 = new.clone();
+        let used = Mutex::new(false);
+        let fake = start_fake(log.clone(), move |req| {
+            if req.path.contains("token") {
+                let mut used = used.lock().unwrap();
+                if req.form("refresh_token").as_deref() == Some(old_refresh.as_str()) && !*used {
+                    *used = true;
+                    (200, pair_json(&new2))
+                } else {
+                    (400, r#"{"error":"invalid_grant"}"#.into())
+                }
+            } else if req.bearer() == new_access {
+                (
+                    200,
+                    r#"{"results":[{"id":"r1","status":"unknown"}]}"#.into(),
+                )
+            } else {
+                (401, r#"{"error":"invalid_token"}"#.into())
+            }
+        });
+        let client = client_for(&fake, log.clone(), Some(&tokens(&old))).await;
+
+        let payload = serde_json::json!({"items": [{"id": "r1", "system": "nes"}]});
+        let (status, body) = client
+            .authed_json(
+                reqwest::Method::POST,
+                "/api/partner/v1/games/resolve",
+                Some(&payload),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(status, 200);
+        assert_eq!(body["results"][0]["id"], "r1");
+        assert_eq!(
+            client.store().load_tokens().await.unwrap(),
+            Some(tokens(&new))
+        );
+        let refreshes = log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|l| l.starts_with("POST token"))
+            .count();
+        assert_eq!(refreshes, 1);
+    }
+
+    #[tokio::test]
+    async fn authed_json_returns_4xx_body() {
+        let _serial = SERIAL.lock().await;
+        let (old, _) = names();
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let fake = start_fake(log.clone(), |req| {
+            if req.path.ends_with("/disabled") {
+                (503, r#"{"error":{"code":"rom_resolve_disabled"}}"#.into())
+            } else if req.path.ends_with("/missing-game") {
+                (404, r#"{"error":{"code":"game_not_found"}}"#.into())
+            } else {
+                (
+                    400,
+                    r#"{"error":{"code":"validation_failed","message":"bad batch"}}"#.into(),
+                )
+            }
+        });
+        let client = client_for(&fake, log, Some(&tokens(&old))).await;
+
+        let (status, body) = client
+            .authed_json(reqwest::Method::POST, "/api/partner/v1/games/resolve", None)
+            .await
+            .unwrap();
+        assert_eq!(status, 400);
+        assert_eq!(body["error"]["code"], "validation_failed");
+
+        let (status_503, body_503) = client
+            .authed_json(
+                reqwest::Method::POST,
+                "/api/partner/v1/games/disabled",
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(status_503, 503);
+        assert_eq!(body_503["error"]["code"], "rom_resolve_disabled");
+
+        let (status_404, body_404) = client
+            .authed_json(
+                reqwest::Method::POST,
+                "/api/partner/v1/games/missing-game",
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(status_404, 404);
+        assert_eq!(body_404["error"]["code"], "game_not_found");
+    }
+
+    #[tokio::test]
+    async fn authed_json_second_401_ends_session() {
+        let _serial = SERIAL.lock().await;
+        let (old, new) = names();
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let new2 = new.clone();
+        let fake = start_fake(log.clone(), move |req| {
+            if req.path.contains("token") {
+                (200, pair_json(&new2))
+            } else {
+                (401, r#"{"error":"invalid_token"}"#.into())
+            }
+        });
+        let client = client_for(&fake, log.clone(), Some(&tokens(&old))).await;
+
+        let got = client
+            .authed_json(
+                reqwest::Method::GET,
+                "/api/partner/v1/games/search?q=x",
+                None,
+            )
+            .await;
+        assert_eq!(got, Err(ClientError::AuthEnded));
+        let refreshes = log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|l| l.starts_with("POST token"))
+            .count();
+        assert_eq!(refreshes, 1);
+        assert_eq!(client.store().load_tokens().await.unwrap(), None);
+        assert!(!client.store().has_session().await.unwrap());
     }
 }
