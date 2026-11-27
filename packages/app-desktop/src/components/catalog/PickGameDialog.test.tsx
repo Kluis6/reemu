@@ -36,6 +36,7 @@ vi.mock('../FullscreenDialog', () => ({
 
 import '../../i18n'
 import { PickGameDialog } from './PickGameDialog'
+import { cleanSeedQuery } from './cleanSeedQuery'
 
 const RESULTS: CatalogSearchGame[] = [
   {
@@ -148,6 +149,24 @@ describe('PickGameDialog', () => {
       expect.any(String),
     )
     expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('cleans_rom_and_iso_dump_tags_serials_and_inverted_articles_in_seed_query', () => {
+    expect(cleanSeedQuery('0425 - Pokemon - Emerald Version (USA, Europe)')).toBe(
+      'Pokemon - Emerald Version',
+    )
+    expect(cleanSeedQuery('Legend of Zelda, The - A Link to the Past (USA)')).toBe(
+      'The Legend of Zelda - A Link to the Past',
+    )
+    expect(cleanSeedQuery('SLUS-20062 - Grand Theft Auto III (USA)')).toBe('Grand Theft Auto III')
+    expect(cleanSeedQuery('ULUS10041_Lumines')).toBe('Lumines')
+    expect(cleanSeedQuery('God.of.War.II.USA.PS2DVD-LIGHTFORCE')).toBe('God of War II')
+    expect(cleanSeedQuery("Luigi's Mansion (USA).nkit")).toBe("Luigi's Mansion")
+    expect(cleanSeedQuery('128-in-1 Junior Console (Chip 1) (PAL) [!]')).toBe(
+      '128-in-1 Junior Console',
+    )
+    expect(cleanSeedQuery('Final Fantasy VII - Disc 1')).toBe('Final Fantasy VII')
+    expect(cleanSeedQuery('007 - GoldenEye (USA)')).toBe('007 - GoldenEye')
   })
 })
 

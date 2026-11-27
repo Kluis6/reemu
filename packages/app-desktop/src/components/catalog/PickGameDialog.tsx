@@ -20,6 +20,7 @@ import { catalogPick, catalogSearch, type CatalogSearchGame } from '../../lib/ta
 import { sysToast } from '../../lib/toast'
 import { useToastStore } from '../../stores/useToastStore'
 import { FullscreenDialog } from '../FullscreenDialog'
+import { cleanSeedQuery } from './cleanSeedQuery'
 
 const DEBOUNCE_MS = import.meta.env.MODE === 'test' ? 0 : 220
 
@@ -76,14 +77,6 @@ const useStyles = makeStyles({
     flexGrow: 1,
   },
 })
-
-function cleanSeedQuery(raw: string): string {
-  return raw
-    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
-    .replace(/_/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
 
 export function PickGameDialog({
   romId,
