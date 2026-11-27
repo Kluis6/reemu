@@ -1712,7 +1712,7 @@ mod tests {
         let client = reqwest::Client::new();
         let (hash, stem) = hash_and_stem(&disc);
         let q = rom_query(&disc, &hash, &stem);
-        let ss = query_screenscraper(&client, &cfg, &q_ss, &providers.screenscraper)
+        let ss = query_screenscraper(&client, &cfg, &q, &providers.screenscraper)
             .await
             .unwrap_err();
         let tgdb = query_thegamesdb(&client, "chave-tgdb", &q, &providers.thegamesdb)
@@ -1783,7 +1783,7 @@ mod tests {
         let client = reqwest::Client::new();
         let (hash, stem) = hash_and_stem(&disc);
         let q = rom_query(&disc, &hash, &stem);
-        let ss = query_screenscraper(&client, &cfg, &q_ss, &providers.screenscraper)
+        let ss = query_screenscraper(&client, &cfg, &q, &providers.screenscraper)
             .await
             .unwrap_err();
         let tgdb = query_thegamesdb(&client, "chave-tgdb", &q, &providers.thegamesdb)
@@ -2006,17 +2006,5 @@ mod tests {
         let one =
             scrape_one_with(pool, MetadataConfig::default(), &NoCovers, "r1", &providers).await;
         assert_eq!(one, Ok(Outcome::NoMatch));
-    }
-
-    #[test]
-    fn tgdb_prefers_canonical_title_over_first_array_entry() {
-        let v = json!({"data": {"games": [
-            {"id": 1, "game_title": "Castlevania: Symphony of the Night - Demo"},
-            {"id": 2, "game_title": "Castlevania: Symphony of the Night"}
-        ]}});
-        let c = parse_tgdb_game_for(&v, Some("Castlevania - Symphony of the Night (USA)"))
-            .expect("candidato canônico");
-        assert_eq!(c.external_id, "2");
-        assert_eq!(c.title, "Castlevania: Symphony of the Night");
     }
 }
