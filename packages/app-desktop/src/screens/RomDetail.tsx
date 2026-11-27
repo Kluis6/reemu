@@ -1104,6 +1104,11 @@ export function RomDetail() {
             <GameAchievementsPanel
               romId={romId}
               onNavigateSettings={() => navigate("/settings/conquistas")}
+              onSelectRom={(nextId) => {
+                if (nextId && nextId !== romId) {
+                  navigate(`/rom/${nextId}`, { replace: true });
+                }
+              }}
             />
           )}
           {panel === "gamelog" && (

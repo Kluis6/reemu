@@ -973,6 +973,9 @@ pub async fn on_game_launched(app: &AppHandle, rom_id: Option<&str>) {
 
 /// Chamado em `ra.rs` quando o RetroAchievements identifica o jogo.
 pub fn on_ra_game_loaded(app: &AppHandle, rom_id: Option<String>, snapshot: &RaLoadedSnapshot) {
+    if snapshot.incompatible_version || achievements::is_incompatible_game_id(snapshot.game_id) {
+        return;
+    }
     let Some(gl) = app.try_state::<Arc<GamelogState>>() else {
         return;
     };
@@ -1010,6 +1013,9 @@ pub fn on_ra_achievement_unlocked(
     hardcore: bool,
     badge_url: Option<&str>,
 ) {
+    if achievements::is_warning_achievement_id(id) {
+        return;
+    }
     let badge_name = badge_url
         .and_then(|u| u.rsplit('/').next())
         .map(|seg| {
