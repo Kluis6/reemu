@@ -279,6 +279,12 @@ export function SettingsAchievements() {
             />
           </BlockGroup>
 
+          {st.enabled && st.hardcore && (
+            <MessageBar intent="info">
+              <MessageBarBody>{t('achievements.hardcorePendingApproval')}</MessageBarBody>
+            </MessageBar>
+          )}
+
           <Caption1 className={s.dim}>{t('achievements.nextSessionNote')}</Caption1>
         </>
       )}

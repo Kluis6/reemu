@@ -13,9 +13,9 @@ use crate::credentials::{self, OsKeyring, RaConfig};
 use achievements::{
     console::{RC_CONSOLE_ARCADE, RC_CONSOLE_ARDUBOY, RC_CONSOLE_MS_DOS},
     console_id_for_core, console_id_for_system, hash_buffer, is_disc_console, is_disc_like_path,
-    resolve_console_and_hash, AchievementClient, AchievementEntry, AchievementEvent,
-    AchievementKind, AsyncOutcome, GameSummary, OutboundHttpRequest, RaError, RaLoadedSnapshot,
-    RaSessionConfig,
+    is_incompatible_game_id, is_warning_achievement_id, resolve_console_and_hash,
+    AchievementClient, AchievementEntry, AchievementEvent, AchievementKind, AsyncOutcome,
+    GameSummary, OutboundHttpRequest, RaError, RaLoadedSnapshot, RaSessionConfig,
 };
 use domain::library::RomRepository as _;
 use emu_session::RaHostMessage;
@@ -178,8 +178,20 @@ pub struct LiveGameAchievements {
     pub title: String,
     pub badge_url: Option<String>,
     pub hardcore: bool,
+    pub hardcore_downgraded: bool,
+    pub incompatible_version: bool,
     pub summary: GameSummary,
     pub achievements: Vec<AchievementEntry>,
+}
+
+fn host_system_clause() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "Windows"
+    } else if cfg!(target_os = "macos") {
+        "macOS"
+    } else {
+        "Linux"
+    }
 }
 
 impl RaState {
@@ -190,8 +202,10 @@ impl RaState {
         }
         let mut tmp = AchievementClient::new();
         let ua = format!(
-            "ReEmu/{} {}",
+            "ReEmu/{} ({} {}) {}",
             env!("CARGO_PKG_VERSION"),
+            host_system_clause(),
+            std::env::consts::ARCH,
             tmp.user_agent_clause()
         );
         let client = reqwest::Client::builder()
@@ -437,6 +451,9 @@ pub fn install_session_bridge(app: &AppHandle) {
 fn handle_game_loaded(app: &AppHandle, snapshot: RaLoadedSnapshot) {
     let ra_state = app.state::<RaState>();
     let rom_id = ra_state.active_rom();
+    if snapshot.hardcore_downgraded || snapshot.incompatible_version {
+        ra_state.set_hardcore_active(false);
+    }
     let event_dto = RaGameLoadedEventDto {
         rom_id: rom_id.clone(),
         game_id: snapshot.game_id,
@@ -444,17 +461,25 @@ fn handle_game_loaded(app: &AppHandle, snapshot: RaLoadedSnapshot) {
         badge_url: snapshot.badge_url.clone(),
         hardcore: snapshot.hardcore,
         unlocked_achievements: snapshot.summary.num_unlocked_achievements,
-        total_achievements: snapshot.summary.num_core_achievements,
+        total_achievements: if snapshot.incompatible_version {
+            0
+        } else {
+            snapshot.summary.num_core_achievements
+        },
         unlocked_points: snapshot.summary.points_unlocked,
         total_points: snapshot.summary.points_core,
     };
-    crate::gamelog::on_ra_game_loaded(app, rom_id.clone(), &snapshot);
+    if !snapshot.incompatible_version {
+        crate::gamelog::on_ra_game_loaded(app, rom_id.clone(), &snapshot);
+    }
     ra_state.set_live(Some(LiveGameAchievements {
         rom_id,
         game_id: snapshot.game_id,
         title: snapshot.title,
         badge_url: snapshot.badge_url,
         hardcore: snapshot.hardcore,
+        hardcore_downgraded: snapshot.hardcore_downgraded,
+        incompatible_version: snapshot.incompatible_version,
         summary: snapshot.summary,
         achievements: snapshot.achievements,
     }));
@@ -472,6 +497,9 @@ fn handle_runtime_event(app: &AppHandle, event: AchievementEvent) {
             hardcore,
             badge_url,
         } => {
+            if is_warning_achievement_id(id) {
+                return;
+            }
             ra_state.mark_live_unlocked(id, hardcore);
             crate::gamelog::on_ra_achievement_unlocked(
                 app,
@@ -495,6 +523,39 @@ fn handle_runtime_event(app: &AppHandle, event: AchievementEvent) {
                     game_completed: false,
                 },
             );
+        }
+        AchievementEvent::RuntimeWarning { title, .. } => {
+            let lower = title.to_ascii_lowercase();
+            let mut notify_dto = None;
+            {
+                let mut guard = ra_state.live.lock().unwrap_or_else(|p| p.into_inner());
+                if let Some(live) = guard.as_mut() {
+                    if lower.contains("unknown emulator") {
+                        live.hardcore = false;
+                        live.hardcore_downgraded = true;
+                        ra_state.set_hardcore_active(false);
+                    }
+                    if lower.contains("unsupported game version") {
+                        live.hardcore = false;
+                        live.incompatible_version = true;
+                        ra_state.set_hardcore_active(false);
+                    }
+                    notify_dto = Some(RaGameLoadedEventDto {
+                        rom_id: live.rom_id.clone(),
+                        game_id: live.game_id,
+                        title: live.title.clone(),
+                        badge_url: live.badge_url.clone(),
+                        hardcore: live.hardcore,
+                        unlocked_achievements: live.summary.num_unlocked_achievements,
+                        total_achievements: 0,
+                        unlocked_points: live.summary.points_unlocked,
+                        total_points: live.summary.points_core,
+                    });
+                }
+            }
+            if let Some(dto) = notify_dto {
+                let _ = app.emit("ra-game-loaded", dto);
+            }
         }
         AchievementEvent::GameCompleted { hardcore } => {
             let live_title = ra_state
@@ -710,13 +771,17 @@ impl From<AchievementEntry> for RaAchievementDto {
 pub struct RaGameViewDto {
     #[cfg_attr(
         test,
-        ts(type = "'not_connected' | 'unsupported_system' | 'unidentified' | 'loaded'")
+        ts(
+            type = "'not_connected' | 'unsupported_system' | 'unidentified' | 'incompatible_version' | 'loaded'"
+        )
     )]
     pub status: String,
     pub game_id: Option<u32>,
     pub title: Option<String>,
     pub badge_url: Option<String>,
     pub hardcore: bool,
+    pub hardcore_downgraded: bool,
+    pub compatible_rom_id: Option<String>,
     pub total_achievements: u32,
     pub unlocked_achievements: u32,
     pub total_points: u32,
@@ -732,6 +797,8 @@ impl RaGameViewDto {
             title: None,
             badge_url: None,
             hardcore,
+            hardcore_downgraded: false,
+            compatible_rom_id: None,
             total_achievements: 0,
             unlocked_achievements: 0,
             total_points: 0,
@@ -935,6 +1002,86 @@ async fn fetch_unlocks_set(
         .unwrap_or_default()
 }
 
+#[derive(Deserialize)]
+struct GameIdReply {
+    #[serde(rename = "Success", default)]
+    success: bool,
+    #[serde(rename = "GameID", default)]
+    game_id: u32,
+}
+
+async fn lookup_ra_game_id_by_hash(http: &reqwest::Client, hash: &str) -> Option<u32> {
+    let url = format!("https://retroachievements.org/dorequest.php?r=gameid&m={hash}");
+    let req = OutboundHttpRequest {
+        id: 0,
+        url,
+        post_data: None,
+        content_type: None,
+    };
+    let (status, bytes) = execute_rcheevos_http(http, &req).await;
+    if status != 200 {
+        return None;
+    }
+    let parsed: GameIdReply = serde_json::from_slice(&bytes).ok()?;
+    (parsed.success && parsed.game_id > 0).then_some(parsed.game_id)
+}
+
+async fn find_compatible_sibling_rom_id(
+    pool: &db::Db,
+    ra_state: &RaState,
+    http: &reqwest::Client,
+    cache_file: Option<&Path>,
+    current: &domain::library::Rom,
+    preferred_console: Option<u32>,
+) -> Option<String> {
+    let base_stem = Path::new(&current.file_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(&current.file_path);
+    let target_canon =
+        scraping::rom_name::canonical_key(&scraping::rom_name::clean_rom_title(base_stem));
+    if target_canon.is_empty() {
+        return None;
+    }
+    let all_roms = db::RomsRepo::new(pool.clone()).list().await.ok()?;
+    let siblings: Vec<domain::library::Rom> = all_roms
+        .into_iter()
+        .filter(|r| r.id != current.id && r.system_id == current.system_id)
+        .filter(|r| {
+            let stem = Path::new(&r.file_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(&r.file_path);
+            let canon =
+                scraping::rom_name::canonical_key(&scraping::rom_name::clean_rom_title(stem));
+            canon == target_canon
+        })
+        .take(8)
+        .collect();
+
+    for sib in siblings {
+        let Some((_, sib_hash)) = resolve_rom_console_and_hash(
+            ra_state,
+            cache_file,
+            preferred_console,
+            &sib.id,
+            &sib.system_id,
+            &sib.file_path,
+            None,
+        )
+        .await
+        else {
+            continue;
+        };
+        if let Some(gid) = lookup_ra_game_id_by_hash(http, &sib_hash).await {
+            if !is_incompatible_game_id(gid) {
+                return Some(sib.id);
+            }
+        }
+    }
+    None
+}
+
 #[tauri::command]
 pub async fn ra_game_achievements(
     app: AppHandle,
@@ -953,15 +1100,41 @@ pub async fn ra_game_achievements(
         return Ok(RaGameViewDto::empty("not_connected", cfg.hardcore));
     };
 
+    let cache_file = app_hash_cache_file(&app);
+    let http = ra_state.http_client();
+
     // Se este mesmo jogo está rodando agora, o snapshot vivo já traz os
     // desbloqueios da sessão atual sem nova ida à rede.
     if let Some(live) = ra_state.live_for(&rom_id) {
+        if live.incompatible_version || is_incompatible_game_id(live.game_id) {
+            let compatible_rom_id =
+                if let Ok(Some(cur_rom)) = db::RomsRepo::new(pool.clone()).get(&rom_id).await {
+                    let pref = console_id_for_system(&cur_rom.system_id);
+                    find_compatible_sibling_rom_id(
+                        &pool,
+                        &ra_state,
+                        &http,
+                        cache_file.as_deref(),
+                        &cur_rom,
+                        pref,
+                    )
+                    .await
+                } else {
+                    None
+                };
+            let mut dto = RaGameViewDto::empty("incompatible_version", false);
+            dto.hardcore_downgraded = live.hardcore_downgraded;
+            dto.compatible_rom_id = compatible_rom_id;
+            return Ok(dto);
+        }
         return Ok(RaGameViewDto {
             status: "loaded".into(),
             game_id: Some(live.game_id),
             title: Some(live.title),
             badge_url: live.badge_url,
             hardcore: live.hardcore,
+            hardcore_downgraded: live.hardcore_downgraded,
+            compatible_rom_id: None,
             total_achievements: live.summary.num_core_achievements,
             unlocked_achievements: live.summary.num_unlocked_achievements,
             total_points: live.summary.points_core,
@@ -970,7 +1143,7 @@ pub async fn ra_game_achievements(
         });
     }
 
-    let Some(rom) = db::RomsRepo::new(pool)
+    let Some(rom) = db::RomsRepo::new(pool.clone())
         .get(&rom_id)
         .await
         .map_err(AppError::from)?
@@ -982,7 +1155,6 @@ pub async fn ra_game_achievements(
         return Ok(RaGameViewDto::empty("unsupported_system", cfg.hardcore));
     }
 
-    let cache_file = app_hash_cache_file(&app);
     let Some((_resolved_console_id, hash)) = resolve_rom_console_and_hash(
         &ra_state,
         cache_file.as_deref(),
@@ -997,8 +1169,7 @@ pub async fn ra_game_achievements(
         return Ok(RaGameViewDto::empty("unidentified", cfg.hardcore));
     };
 
-    let http = ra_state.http_client();
-    let (loaded_game, mut entries) = {
+    let (loaded_game, mut entries, warnings) = {
         let mut client = AchievementClient::new();
         // `spectator = true` carrega definições (`r=achievementsets`) sem enviar
         // `r=startsession`, evitando marcar "Jogando" só por abrir a página do jogo.
@@ -1026,11 +1197,39 @@ pub async fn ra_game_achievements(
         drive_client_requests(&http, &mut client).await;
 
         let Some(game) = client.game_info() else {
-            return Ok(RaGameViewDto::empty("unidentified", cfg.hardcore));
+            let compatible_rom_id = find_compatible_sibling_rom_id(
+                &pool,
+                &ra_state,
+                &http,
+                cache_file.as_deref(),
+                &rom,
+                preferred_console,
+            )
+            .await;
+            let mut dto = RaGameViewDto::empty("unidentified", cfg.hardcore);
+            dto.compatible_rom_id = compatible_rom_id;
+            return Ok(dto);
         };
+        let warnings = client.runtime_warnings();
         let list = client.achievements(cfg.unofficial);
-        (game, list)
+        (game, list, warnings)
     };
+
+    if is_incompatible_game_id(loaded_game.id) || warnings.unsupported_version {
+        let compatible_rom_id = find_compatible_sibling_rom_id(
+            &pool,
+            &ra_state,
+            &http,
+            cache_file.as_deref(),
+            &rom,
+            preferred_console,
+        )
+        .await;
+        let mut dto = RaGameViewDto::empty("incompatible_version", false);
+        dto.hardcore_downgraded = cfg.hardcore && warnings.unknown_emulator;
+        dto.compatible_rom_id = compatible_rom_id;
+        return Ok(dto);
+    }
 
     let soft_task = {
         let (http, u, t, gid) = (
@@ -1065,12 +1264,17 @@ pub async fn ra_game_achievements(
         }
     }
 
+    let hardcore_downgraded = cfg.hardcore && warnings.unknown_emulator;
+    let effective_hardcore = cfg.hardcore && !hardcore_downgraded;
+
     Ok(RaGameViewDto {
         status: "loaded".into(),
         game_id: Some(loaded_game.id),
         title: Some(loaded_game.title),
         badge_url: loaded_game.badge_url,
-        hardcore: cfg.hardcore,
+        hardcore: effective_hardcore,
+        hardcore_downgraded,
+        compatible_rom_id: None,
         total_achievements: total_count,
         unlocked_achievements: unlocked_count,
         total_points,
