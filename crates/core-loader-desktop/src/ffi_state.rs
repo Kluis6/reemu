@@ -251,9 +251,15 @@ impl FrontendState {
 }
 
 static STATE: Mutex<Option<FrontendState>> = Mutex::new(None);
+static MEMORY_MAP_GEN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 pub(crate) fn lock() -> std::sync::MutexGuard<'static, Option<FrontendState>> {
     STATE.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// Geração monotônica de `RETRO_ENVIRONMENT_SET_MEMORY_MAPS` na partida atual.
+pub fn memory_map_generation() -> u64 {
+    MEMORY_MAP_GEN.load(std::sync::atomic::Ordering::Acquire)
 }
 
 /// Quirks de serialização do core carregado (0 sem core ou sem quirks) — o
@@ -279,6 +285,7 @@ pub(crate) struct CoreGuard {
 impl Drop for CoreGuard {
     fn drop(&mut self) {
         *lock() = None;
+        MEMORY_MAP_GEN.store(0, std::sync::atomic::Ordering::Release);
         // Zera o input global — senão um botão/eixo segurado no fim de um jogo
         // vaza pro próximo core carregado.
         crate::input::retropad().clear();
@@ -298,6 +305,7 @@ pub(crate) fn acquire(
         ));
     }
     *g = Some(FrontendState::new(system_dir, save_dir, core_assets_dir));
+    MEMORY_MAP_GEN.store(0, std::sync::atomic::Ordering::Release);
     crate::input::retropad().clear();
     crate::input::analog().clear();
     Ok(CoreGuard { _private: () })
@@ -664,6 +672,7 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
                     });
                 }
             }
+            MEMORY_MAP_GEN.fetch_add(1, std::sync::atomic::Ordering::Release);
             true
         }
         // libretro.h: "The frontend will set the flags of the quirks it
@@ -720,6 +729,7 @@ pub(crate) unsafe extern "C" fn environment_cb(cmd: c_uint, data: *mut c_void) -
         }
         // Reconhecidos, sem efeito ainda.
         sys::RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME
+        | sys::RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS
         | sys::RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL
         | sys::RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS
         | sys::RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO

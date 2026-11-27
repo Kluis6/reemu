@@ -101,6 +101,8 @@ enum Phase {
 pub struct LiveRuntime {
     client: AchievementClient,
     phase: Phase,
+    console_id: u32,
+    has_valid_memory: bool,
     hardcore: bool,
     unofficial: bool,
 }
@@ -110,6 +112,8 @@ impl LiveRuntime {
         cfg: RaSessionConfig,
         memory: LibretroMemory,
     ) -> Result<(Self, RuntimeDrain), RaError> {
+        let has_valid_memory = memory.has_valid_region();
+        let console_id = cfg.console_id;
         let mut client = AchievementClient::new();
         client.set_hardcore(cfg.hardcore);
         client.set_unofficial(cfg.unofficial);
@@ -124,6 +128,8 @@ impl LiveRuntime {
                 rom_path: cfg.rom_path,
                 rom_hash: cfg.rom_hash,
             },
+            console_id,
+            has_valid_memory,
             hardcore: cfg.hardcore,
             unofficial: cfg.unofficial,
         };
@@ -131,11 +137,28 @@ impl LiveRuntime {
         Ok((rt, drain))
     }
 
+    pub fn console_id(&self) -> u32 {
+        self.console_id
+    }
+
+    pub fn has_valid_memory(&self) -> bool {
+        self.has_valid_memory
+    }
+
+    /// Atualiza o mapa de memória em tempo de execução (por exemplo, quando
+    /// cores como `dolphin_libretro` publicam `SET_MEMORY_MAPS` no primeiro
+    /// `retro_run` após `retro_load_game`).
+    pub fn update_memory(&mut self, memory: LibretroMemory) {
+        self.has_valid_memory = memory.has_valid_region();
+        self.client.attach_libretro_memory(memory);
+    }
+
     #[cfg(test)]
     fn start_with_test_memory(
         cfg: RaSessionConfig,
         memory: Vec<u8>,
     ) -> Result<(Self, RuntimeDrain), RaError> {
+        let console_id = cfg.console_id;
         let mut client = AchievementClient::new();
         client.set_hardcore(cfg.hardcore);
         client.set_unofficial(cfg.unofficial);
@@ -150,6 +173,8 @@ impl LiveRuntime {
                 rom_path: cfg.rom_path,
                 rom_hash: cfg.rom_hash,
             },
+            console_id,
+            has_valid_memory: true,
             hardcore: cfg.hardcore,
             unofficial: cfg.unofficial,
         };

@@ -7,6 +7,7 @@
 
 mod client;
 pub mod console;
+pub mod disc_io;
 pub mod ffi;
 mod memory;
 mod runtime;
@@ -15,7 +16,11 @@ pub use client::{
     AchievementClient, AchievementEntry, AchievementEvent, AchievementKind, AsyncOutcome,
     GameSummary, LoadedGame, LoggedInUser, OutboundHttpRequest, RaError,
 };
-pub use console::{console_id_for_system, console_name, hash_buffer, hash_file};
+pub use console::{
+    console_id_for_core, console_id_for_system, console_name, hash_buffer, hash_file,
+    is_disc_console,
+};
+pub use disc_io::{hash_path_for_console, is_disc_like_path, resolve_console_and_hash};
 pub use memory::{LibretroMemory, MemoryDescriptorInput};
 pub use runtime::{
     pack_state_with_progress, unpack_state_with_progress, LiveRuntime, RaLoadedSnapshot,

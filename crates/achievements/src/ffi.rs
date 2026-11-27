@@ -261,6 +261,112 @@ pub struct rc_libretro_core_memory_info_t {
 pub type rc_libretro_get_core_memory_info_func =
     Option<unsafe extern "C" fn(id: u32, info: *mut rc_libretro_core_memory_info_t)>;
 
+pub const RC_HASH_CDTRACK_FIRST_DATA: u32 = u32::MAX;
+pub const RC_HASH_CDTRACK_LAST: u32 = u32::MAX - 1;
+pub const RC_HASH_CDTRACK_LARGEST: u32 = u32::MAX - 2;
+pub const RC_HASH_CDTRACK_FIRST_OF_SECOND_SESSION: u32 = u32::MAX - 3;
+
+pub type rc_hash_message_callback_func =
+    Option<unsafe extern "C" fn(message: *const c_char, iterator: *const rc_hash_iterator_t)>;
+
+pub type rc_hash_filereader_open_file_handler =
+    Option<unsafe extern "C" fn(path_utf8: *const c_char) -> *mut c_void>;
+pub type rc_hash_filereader_seek_handler =
+    Option<unsafe extern "C" fn(file_handle: *mut c_void, offset: i64, origin: c_int)>;
+pub type rc_hash_filereader_tell_handler =
+    Option<unsafe extern "C" fn(file_handle: *mut c_void) -> i64>;
+pub type rc_hash_filereader_read_handler = Option<
+    unsafe extern "C" fn(
+        file_handle: *mut c_void,
+        buffer: *mut c_void,
+        requested_bytes: usize,
+    ) -> usize,
+>;
+pub type rc_hash_filereader_close_file_handler =
+    Option<unsafe extern "C" fn(file_handle: *mut c_void)>;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct rc_hash_filereader_t {
+    pub open: rc_hash_filereader_open_file_handler,
+    pub seek: rc_hash_filereader_seek_handler,
+    pub tell: rc_hash_filereader_tell_handler,
+    pub read: rc_hash_filereader_read_handler,
+    pub close: rc_hash_filereader_close_file_handler,
+}
+
+pub type rc_hash_cdreader_open_track_handler =
+    Option<unsafe extern "C" fn(path: *const c_char, track: u32) -> *mut c_void>;
+pub type rc_hash_cdreader_open_track_iterator_handler = Option<
+    unsafe extern "C" fn(
+        path: *const c_char,
+        track: u32,
+        iterator: *const rc_hash_iterator_t,
+    ) -> *mut c_void,
+>;
+pub type rc_hash_cdreader_read_sector_handler = Option<
+    unsafe extern "C" fn(
+        track_handle: *mut c_void,
+        sector: u32,
+        buffer: *mut c_void,
+        requested_bytes: usize,
+    ) -> usize,
+>;
+pub type rc_hash_cdreader_close_track_handler =
+    Option<unsafe extern "C" fn(track_handle: *mut c_void)>;
+pub type rc_hash_cdreader_first_track_sector_handler =
+    Option<unsafe extern "C" fn(track_handle: *mut c_void) -> u32>;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct rc_hash_cdreader_t {
+    pub open_track: rc_hash_cdreader_open_track_handler,
+    pub read_sector: rc_hash_cdreader_read_sector_handler,
+    pub close_track: rc_hash_cdreader_close_track_handler,
+    pub first_track_sector: rc_hash_cdreader_first_track_sector_handler,
+    pub open_track_iterator: rc_hash_cdreader_open_track_iterator_handler,
+}
+
+pub type rc_hash_3ds_get_cia_normal_key_func =
+    Option<unsafe extern "C" fn(common_key_index: u8, out_normal_key: *mut u8) -> c_int>;
+pub type rc_hash_3ds_get_ncch_normal_keys_func = Option<
+    unsafe extern "C" fn(
+        primary_key_y: *mut u8,
+        secondary_key_x_slot: u8,
+        optional_program_id: *mut u8,
+        out_primary_key: *mut u8,
+        out_secondary_key: *mut u8,
+    ) -> c_int,
+>;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct rc_hash_encryption_callbacks_t {
+    pub get_3ds_cia_normal_key: rc_hash_3ds_get_cia_normal_key_func,
+    pub get_3ds_ncch_normal_keys: rc_hash_3ds_get_ncch_normal_keys_func,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct rc_hash_callbacks_t {
+    pub verbose_message: rc_hash_message_callback_func,
+    pub error_message: rc_hash_message_callback_func,
+    pub filereader: rc_hash_filereader_t,
+    pub cdreader: rc_hash_cdreader_t,
+    pub encryption: rc_hash_encryption_callbacks_t,
+}
+
+#[repr(C)]
+pub struct rc_hash_iterator_t {
+    pub buffer: *const u8,
+    pub buffer_size: usize,
+    pub consoles: [u8; 12],
+    pub index: c_int,
+    pub path: *const c_char,
+    pub userdata: *mut c_void,
+    pub callbacks: rc_hash_callbacks_t,
+}
+
 extern "C" {
     pub fn rc_error_str(ret: c_int) -> *const c_char;
     pub fn rc_console_name(console_id: u32) -> *const c_char;
@@ -379,6 +485,19 @@ extern "C" {
         num_bytes: u32,
     ) -> u32;
 
+    pub fn rc_hash_get_default_cdreader(cdreader: *mut rc_hash_cdreader_t);
+    pub fn rc_hash_initialize_iterator(
+        iterator: *mut rc_hash_iterator_t,
+        path: *const c_char,
+        buffer: *const u8,
+        buffer_size: usize,
+    );
+    pub fn rc_hash_destroy_iterator(iterator: *mut rc_hash_iterator_t);
+    pub fn rc_hash_generate(
+        hash: *mut c_char,
+        console_id: u32,
+        iterator: *const rc_hash_iterator_t,
+    ) -> c_int;
     pub fn rc_hash_generate_from_buffer(
         hash: *mut c_char,
         console_id: u32,

@@ -23,9 +23,14 @@ name = "achievements"
 version = "0.1.19"
 dependencies = [
  "cc",
+ "chd",
+ "flate2",
  "log",
  "serde",
+ "sevenz-rust2",
+ "tempfile",
  "thiserror 2.0.21",
+ "zip",
 ]
 
 [[package]]

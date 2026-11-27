@@ -25,6 +25,7 @@ pub struct MemoryDescriptorInput {
 /// Regiões de memória resolvidas para leitura a cada quadro pelo `rc_client`.
 pub struct LibretroMemory {
     raw: ffi::rc_libretro_memory_regions_t,
+    has_valid_region: bool,
 }
 
 type CoreMemLookup<'a> = &'a mut dyn FnMut(u32) -> (*mut u8, usize);
@@ -123,15 +124,22 @@ impl LibretroMemory {
         });
         let _guard = ResetGuard;
 
-        let _ = ffi::rc_libretro_memory_init(
+        let has_valid_region = ffi::rc_libretro_memory_init(
             &mut raw,
             mmap_ptr,
             Some(get_core_memory_trampoline),
             console_id,
-        );
+        ) != 0;
         drop(addrspaces);
 
-        Self { raw }
+        Self {
+            raw,
+            has_valid_region,
+        }
+    }
+
+    pub fn has_valid_region(&self) -> bool {
+        self.has_valid_region
     }
 
     pub fn total_size(&self) -> usize {
