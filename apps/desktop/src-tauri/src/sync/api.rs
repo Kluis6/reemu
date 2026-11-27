@@ -214,6 +214,18 @@ pub struct Uploaded {
     pub deduplicated: bool,
 }
 
+/// Resposta de `GET/PUT /api/v1/saves/credentials` para um aparelho (`asv_`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct RemoteCredentialsResponse {
+    pub has_vault: bool,
+    #[serde(default)]
+    pub updated_at: Option<String>,
+    #[serde(default)]
+    pub linked_ra_username: Option<String>,
+    #[serde(default)]
+    pub credentials: Option<crate::credentials::SyncedCredentialsPayload>,
+}
+
 #[derive(Clone)]
 pub struct SavesApi {
     http: reqwest::Client,
@@ -320,6 +332,30 @@ impl SavesApi {
             .http
             .get(format!("{}/api/v1/saves/quota", self.api))
             .bearer_auth(device_token);
+        read_json(req).await
+    }
+
+    pub async fn get_credentials(
+        &self,
+        device_token: &str,
+    ) -> Result<RemoteCredentialsResponse, ApiError> {
+        let req = self
+            .http
+            .get(format!("{}/api/v1/saves/credentials", self.api))
+            .bearer_auth(device_token);
+        read_json(req).await
+    }
+
+    pub async fn put_credentials(
+        &self,
+        device_token: &str,
+        providers: &crate::credentials::SyncedCredentialsPayload,
+    ) -> Result<RemoteCredentialsResponse, ApiError> {
+        let req = self
+            .http
+            .put(format!("{}/api/v1/saves/credentials", self.api))
+            .bearer_auth(device_token)
+            .json(&serde_json::json!({ "providers": providers }));
         read_json(req).await
     }
 

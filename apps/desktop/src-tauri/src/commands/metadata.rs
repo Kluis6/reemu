@@ -37,20 +37,23 @@ pub async fn get_metadata_config(
 
 #[tauri::command]
 pub async fn set_metadata_config(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     config: MetadataConfigDto,
 ) -> Result<(), AppError> {
     let norm = |s: Option<String>| s.filter(|v| !v.trim().is_empty());
-    let repo = db::MetadataRepo::new(pool(&state)?);
+    let db_pool = pool(&state)?;
     let cfg = MetadataConfig {
         provider: config.provider,
         screenscraper_user: norm(config.screenscraper_user),
         screenscraper_password: norm(config.screenscraper_password),
         thegamesdb_api_key: norm(config.thegamesdb_api_key),
     };
-    crate::credentials::save_config(&repo, &crate::credentials::OsKeyring, cfg)
+    crate::credentials::save_config_tracked(&db_pool, &crate::credentials::OsKeyring, cfg)
         .await
-        .map_err(AppError::from)
+        .map_err(AppError::from)?;
+    crate::sync::engine::after_credentials_changed(&app);
+    Ok(())
 }
 
 #[derive(Serialize)]

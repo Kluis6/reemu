@@ -845,6 +845,7 @@ pub async fn ra_login(
 
     let dto: RaStatusDto = cfg.into();
     emit_ra_status_changed(&app, &dto);
+    crate::sync::engine::after_credentials_changed(&app);
     Ok(dto)
 }
 
@@ -862,6 +863,7 @@ pub async fn ra_logout(
     ra_state.set_live(None);
     let dto: RaStatusDto = cfg.into();
     emit_ra_status_changed(&app, &dto);
+    crate::sync::engine::after_credentials_changed(&app);
     Ok(dto)
 }
 
@@ -880,6 +882,7 @@ pub async fn ra_set_preferences(
         .map_err(AppError::from)?;
     let dto: RaStatusDto = cfg.into();
     emit_ra_status_changed(&app, &dto);
+    crate::sync::engine::after_credentials_changed(&app);
     Ok(dto)
 }
 
