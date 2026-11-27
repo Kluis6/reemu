@@ -947,10 +947,10 @@ function make(
     reemuGlowVeil: light
       ? "rgba(236, 238, 241, 0.62)"
       : `rgba(9, 9, 12, ${o.glowVeilOpacity ?? 0.1})`,
-    // O papel de parede fica sem sobreposição no tema claro.
+    // Vinheta discreta nas bordas do papel de parede no tema escuro.
     reemuVeil: light
       ? "none"
-      : "radial-gradient(ellipse at center, rgba(9, 9, 12, 0) 0%, rgba(9, 9, 12, 0.82) 100%)",
+      : "radial-gradient(ellipse at center, rgba(9, 9, 12, 0) 62%, rgba(9, 9, 12, 0.08) 100%)",
     // Verde de marca (tom 70 — mais fechado que o 80 padrão, fica igual ao
     // verde da pílula de seleção nos screenshots) só no claro; no escuro
     // continua o cinza neutro que já existia.

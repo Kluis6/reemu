@@ -76,8 +76,7 @@ const useStyles = makeStyles({
   wallpaperVeil: {
     position: 'absolute',
     inset: 0,
-    backgroundImage:
-      'var(--reemuVeil, radial-gradient(ellipse at center, rgba(9, 9, 12, 0) 0%, rgba(9, 9, 12, 0.82) 100%))',
+    backgroundImage: 'var(--reemuVeil, none)',
   },
 })
 
