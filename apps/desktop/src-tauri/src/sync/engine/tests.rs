@@ -1758,10 +1758,10 @@ async fn prelaunch_times_out_to_skipped() {
     }));
 }
 
-/// Os 12 nomes de save de um stem, como a listagem de uma ROM os pede.
+/// Os 13 nomes de save de um stem, como a listagem de uma ROM os pede.
 fn slot_names(stem: &str) -> Vec<(String, String)> {
     let mut names: Vec<(String, String)> = [
-        "srm", "sav", "rtc", "fs", "eep", "fla", "mcr", "mcd", "bsv", "mpk", "ldci", "sram",
+        "srm", "sav", "rtc", "fs", "eep", "fla", "mcr", "mcd", "bsv", "mpk", "ldci", "sram", "dsv",
     ]
     .iter()
     .map(|ext| (format!("{stem}.{ext}"), "-".to_owned()))
@@ -1814,7 +1814,7 @@ async fn prelaunch_downloads_only_the_launched_game_with_a_fresh_read() {
 }
 
 /// I-3: numa biblioteca grande, a checagem de antes de abrir consulta no
-/// disco só as 12 vagas do jogo e pede à nuvem só os nomes dele: o resto
+/// disco só as 13 vagas do jogo e pede à nuvem só os nomes dele: o resto
 /// da biblioteca não entra no prazo de 5 s.
 #[tokio::test]
 async fn prelaunch_in_a_big_library_touches_only_the_launched_rom() {
@@ -1845,7 +1845,7 @@ async fn prelaunch_in_a_big_library_touches_only_the_launched_rom() {
     );
     assert_eq!(
         local::probe::count(&saves) - before,
-        12,
+        13,
         "o disco foi consultado fora das vagas do jogo"
     );
     let mut asked = listing_filters(&r).await;
@@ -1858,7 +1858,7 @@ async fn prelaunch_in_a_big_library_touches_only_the_launched_rom() {
     assert!(r.repo.base_all("file").await.unwrap().is_empty());
     assert_eq!(r.content_gets().await, 0);
 
-    // A passada completa lê a pasta de saves uma vez, não 12 por ROM (com
+    // A passada completa lê a pasta de saves uma vez, não 13 por ROM (com
     // um jogo abrindo, nada sobe nem desce).
     r.set_playing(Playing::Running(None));
     let before = local::probe::count(&saves);
@@ -2098,8 +2098,8 @@ async fn prelaunch_after_an_upload_lists_again_and_keeps_the_new_save() {
         r.engine.prelaunch(&r.alva, "r1").await,
         PrelaunchOutcome::UpToDate
     );
-    // A completa e as 12 do jogo.
-    assert_eq!(r.listings().await, 1 + 12);
+    // A completa e as 13 do jogo.
+    assert_eq!(r.listings().await, 1 + 13);
     assert_eq!(r.read("saves/Zelda.srm").unwrap(), b"newer");
     assert_eq!(r.content_gets().await, 0);
 }

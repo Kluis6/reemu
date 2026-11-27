@@ -1392,11 +1392,9 @@ async fn upload_and_maybe_attach<R: tauri::Runtime>(
     };
 
     let prefs = gl.prefs_snapshot();
-    let should_attach = attach_override.unwrap_or(prefs.auto_attach_captures);
-    // Se a captura vai ser anexada a thread de check-in e a visibilidade padrao era
-    // privada, mantemos a visibilidade do item no Meu Log conforme configurado (a API
-    // de attach-media gera uma copia publica independente para o post da sessao).
     let vis = normalize_visibility(visibility, &prefs.visibility);
+    // A API de anexos gera uma cópia da mídia para o post da sessão.
+    let should_attach = vis != "private" && attach_override.unwrap_or(prefs.auto_attach_captures);
     let taken_at = now_rfc3339();
     let meta = UploadMeta {
         game_id: gid,
@@ -2168,7 +2166,9 @@ pub async fn gamelog_create_note(
         .game_id
         .as_deref()
         == Some(clean_gid.as_str());
-    if attach_to_session.unwrap_or(same_active_game && prefs.auto_attach_captures) {
+    if vis != "private"
+        && attach_to_session.unwrap_or(same_active_game && prefs.auto_attach_captures)
+    {
         let _ =
             attach_item_to_active_session(&app, &item.id, Some(&clean_gid), None, Some(&vis)).await;
     }

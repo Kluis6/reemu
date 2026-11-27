@@ -86,8 +86,8 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
 
     // Se uma ROM do grupo já tem `game_uuid` do catálogo e outra cópia regional
     // ainda não terminou de resolver, associa `(system_id, canonical_title)` ao
-    // mesmo `game_uuid` para não duplicar o card na prateleira.
-    let mut title_to_uuid: std::collections::HashMap<(String, String), String> =
+    // mesmo `game_uuid` somente se o título identificar um único jogo na plataforma.
+    let mut title_to_uuid: std::collections::HashMap<(String, String), Option<String>> =
         std::collections::HashMap::new();
     for r in &roms {
         if r.user_title.is_some() {
@@ -99,7 +99,12 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
                 if !canon.is_empty() {
                     title_to_uuid
                         .entry((r.system_id.clone(), canon))
-                        .or_insert_with(|| uuid.clone());
+                        .and_modify(|known| {
+                            if known.as_ref() != Some(uuid) {
+                                *known = None;
+                            }
+                        })
+                        .or_insert_with(|| Some(uuid.clone()));
                 }
             }
         }
@@ -144,11 +149,14 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
                 let canon = scraping::rom_name::canonical_key(base_for_canon);
                 if canon.is_empty() {
                     Some(format!("rom:{}", r.id))
-                } else if let Some(uuid) = title_to_uuid.get(&(r.system_id.clone(), canon.clone()))
-                {
-                    Some(format!("game:{uuid}"))
                 } else {
-                    Some(format!("title:{canon}"))
+                    Some(
+                        match title_to_uuid.get(&(r.system_id.clone(), canon.clone())) {
+                            Some(Some(uuid)) => format!("game:{uuid}"),
+                            Some(None) => format!("rom:{}", r.id),
+                            None => format!("title:{canon}"),
+                        },
+                    )
                 }
             };
 
@@ -805,5 +813,30 @@ mod tests {
             by_id("ct_us").clean_title.as_deref(),
             Some("Chrono Trigger")
         );
+
+        use domain::metadata::{GameMetadata, MetadataRepository};
+
+        let metadata = db::MetadataRepo::new(pool.clone());
+        for (rom_id, game_uuid) in [("ct_us", "game-a"), ("ct_jp", "game-b")] {
+            metadata
+                .upsert_metadata(&GameMetadata {
+                    rom_id: rom_id.into(),
+                    title: "Chrono Trigger".into(),
+                    game_uuid: Some(game_uuid.into()),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+        }
+
+        let got = list_roms_from_pool(&pool).await.unwrap();
+        let key = |id: &str| {
+            got.iter()
+                .find(|rom| rom.id == id)
+                .and_then(|rom| rom.group_key.as_deref())
+        };
+        assert_eq!(key("ct_us"), Some("game:game-a"));
+        assert_eq!(key("ct_jp"), Some("game:game-b"));
+        assert_eq!(key("ct_eu"), Some("rom:ct_eu"));
     }
 }

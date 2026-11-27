@@ -422,6 +422,7 @@ export function GameLogPanel({
         itemId: item.id,
         gameId: item.gameId,
         caption: item.body || null,
+        visibility: item.visibility,
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['gamelog-state'] })
@@ -824,7 +825,7 @@ export function GameLogPanel({
                       ))}
                     </Select>
 
-                    {inGame && (
+                    {inGame && item.visibility !== 'private' && (
                       <Button
                         size="small"
                         appearance="subtle"
