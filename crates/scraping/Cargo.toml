@@ -11,6 +11,7 @@ domain = { path = "../domain" }
 db = { path = "../db" }
 serde_json.workspace = true
 log = "0.4"
+regex = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 tokio = { version = "1", features = ["time"] }
 
