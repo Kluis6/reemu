@@ -49,6 +49,7 @@ export const router = createHashRouter([
               { path: 'library/:platform', element: <PlatformLibrary /> },
               { path: 'rom/:romId', lazy: page(() => import('./screens/RomDetail'), (m) => m.RomDetail) },
               { path: 'conquistas', lazy: page(() => import('./screens/Achievements'), (m) => m.Achievements) },
+              { path: 'rede', lazy: page(() => import('./screens/Network'), (m) => m.Network) },
               { path: 'perfil', lazy: page(() => import('./screens/ProfilePage'), (m) => m.ProfilePage) },
               {
                 path: 'settings',

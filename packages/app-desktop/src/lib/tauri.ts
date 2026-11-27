@@ -636,6 +636,71 @@ export const alvanistaOpenProfile = () => invoke<void>('alvanista_open_profile')
 /** Abre uma página do site do Alvanista: editar perfil, apps conectados, os
  *  aparelhos do sync ou os planos. */
 export const alvanistaOpenSite = (page: 'edit' | 'apps' | 'sync' | 'plans') => invoke<void>('alvanista_open_site', { page })
+/** Abre o perfil público de um Gamer conectado no navegador do sistema. */
+export const alvanistaOpenUser = (username: string) =>
+  invoke<void>('alvanista_open_user', { username })
+
+export interface PartnerFriendPlaying {
+  gameId: string | null
+  title: string | null
+  platform: string | null
+  customMessage: string | null
+}
+
+export interface PartnerFriend {
+  id: string
+  username: string
+  avatarUrl: string | null
+  profileUrl: string
+  online: boolean
+  playingNow: PartnerFriendPlaying | null
+}
+
+export interface PartnerPlatformStat {
+  platform: string
+  total: number
+  unlocked: number
+  completionPercentage: number
+}
+
+export interface PartnerAchievementStats {
+  total: number
+  unlocked: number
+  totalPoints: number
+  completionPercentage: number
+  byPlatform: PartnerPlatformStat[]
+}
+
+export interface PartnerPlatformSummary {
+  platform: string
+  status: string
+  lastSynced: string | null
+  totalGames: number
+  totalAchievements: number
+}
+
+export interface PartnerAchievementItem {
+  source: string
+  name: string
+  description: string | null
+  iconUrl: string | null
+  gameOrApp: string | null
+  gameId: string | null
+  unlockedAt: string | null
+  points: number
+  names: Record<string, string>
+  descriptions: Record<string, string>
+}
+
+export interface PartnerAchievements {
+  stats: PartnerAchievementStats
+  platforms: PartnerPlatformSummary[]
+  recent: PartnerAchievementItem[]
+}
+
+export const alvanistaFriends = () => invoke<PartnerFriend[]>('alvanista_friends')
+export const alvanistaAchievements = () =>
+  invoke<PartnerAchievements>('alvanista_achievements')
 /** Resultado da renovação que o app faz sozinho ao abrir (evento do Rust). */
 export async function onAlvanistaStatus(cb: (st: AlvanistaStatus) => void): Promise<() => void> {
   if (!inTauri) return () => {}

@@ -71,6 +71,8 @@ export function useAlvanistaConnect({
         void qc.invalidateQueries({ queryKey: ALVANISTA_CACHED_KEY })
         void qc.invalidateQueries({ queryKey: CATALOG_STATUS_KEY })
         void qc.invalidateQueries({ queryKey: ['alvanista-collection'] })
+        void qc.invalidateQueries({ queryKey: ['alvanista-friends'] })
+        void qc.invalidateQueries({ queryKey: ['alvanista-achievements'] })
         setConnecting(false)
       })
       .catch((err: unknown) => {

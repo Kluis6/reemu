@@ -750,8 +750,8 @@ fn allowed_extra_scope(s: &str) -> Option<&'static str> {
         config::SCOPE_PROFILE => Some(config::SCOPE_PROFILE),
         config::SCOPE_SAVES => Some(config::SCOPE_SAVES),
         config::SCOPE_COLLECTION => Some(config::SCOPE_COLLECTION),
-        "friends:read" => Some("friends:read"),
-        "achievements:read" => Some("achievements:read"),
+        config::SCOPE_FRIENDS_READ => Some(config::SCOPE_FRIENDS_READ),
+        config::SCOPE_ACHIEVEMENTS_READ => Some(config::SCOPE_ACHIEVEMENTS_READ),
         _ => None,
     }
 }
@@ -850,6 +850,32 @@ pub async fn alvanista_open_site(page: String) -> Result<(), String> {
     let url = site_page_url(&page).ok_or_else(|| "failed".to_owned())?;
     open_in_browser(&url).map_err(|e| {
         log::warn!("alvanista: não abriu a página do site: {e}");
+        "failed".to_owned()
+    })
+}
+
+fn valid_user_slug(raw: &str) -> Option<&str> {
+    let s = raw.trim();
+    if s.is_empty() || s.len() > 64 {
+        return None;
+    }
+    if s.bytes()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.'))
+    {
+        Some(s)
+    } else {
+        None
+    }
+}
+
+/// Abre o perfil público de um Gamer conectado no navegador do sistema,
+/// montando a URL exclusivamente sobre a origem do Alvanista.
+#[tauri::command]
+pub async fn alvanista_open_user(username: String) -> Result<(), String> {
+    let slug = valid_user_slug(&username).ok_or_else(|| "failed".to_owned())?;
+    let url = format!("{}/users/{slug}", config::base_urls().0);
+    open_in_browser(&url).map_err(|e| {
+        log::warn!("alvanista: não abriu o perfil do gamer: {e}");
         "failed".to_owned()
     })
 }
