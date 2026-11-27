@@ -3,6 +3,8 @@ import {
   Body1,
   Button,
   Caption1,
+  MessageBar,
+  MessageBarBody,
   ProgressBar,
   Text,
   makeStyles,
@@ -146,10 +148,12 @@ export function GameAchievementsPanel({
   romId,
   compact = false,
   onNavigateSettings,
+  onSelectRom,
 }: {
   romId: string
   compact?: boolean
   onNavigateSettings?: () => void
+  onSelectRom?: (nextRomId: string) => void
 }) {
   const { t } = useTranslation()
   const s = useStyles()
@@ -222,14 +226,28 @@ export function GameAchievementsPanel({
     )
   }
 
-  if (view.status === 'unidentified') {
+  if (view.status === 'unidentified' || view.status === 'incompatible_version') {
+    const canSwitch = Boolean(view.compatibleRomId && onSelectRom && !compact)
     return (
       <EmptyState
         art={<TrophyRegular style={{ color: 'var(--reemuBrandAccent)', fontSize: '40px' }} />}
         artAccent
-        title={t('game.tabs.achievements')}
+        title={
+          view.status === 'incompatible_version'
+            ? t('achievements.incompatibleVersionTitle')
+            : t('game.tabs.achievements')
+        }
+        action={
+          canSwitch && view.compatibleRomId ? (
+            <Button appearance="primary" onClick={() => onSelectRom?.(view.compatibleRomId!)}>
+              {t('achievements.switchCompatibleVersion')}
+            </Button>
+          ) : undefined
+        }
       >
-        {t('achievements.unidentifiedGame')}
+        {view.status === 'incompatible_version'
+          ? t('achievements.incompatibleVersionHint')
+          : t('achievements.unidentifiedGame')}
       </EmptyState>
     )
   }
@@ -238,6 +256,11 @@ export function GameAchievementsPanel({
 
   return (
     <div className={s.root}>
+      {view.hardcoreDowngraded && (
+        <MessageBar intent="info">
+          <MessageBarBody>{t('achievements.hardcorePendingApproval')}</MessageBarBody>
+        </MessageBar>
+      )}
       <div className={mergeClasses(s.summaryCard, compact && s.summaryCompact)}>
         <div className={s.summaryTop}>
           {view.badgeUrl && <img className={s.gameBadge} src={view.badgeUrl} alt="" loading="lazy" />}

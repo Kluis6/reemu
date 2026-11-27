@@ -13,8 +13,10 @@ mod memory;
 mod runtime;
 
 pub use client::{
-    AchievementClient, AchievementEntry, AchievementEvent, AchievementKind, AsyncOutcome,
-    GameSummary, LoadedGame, LoggedInUser, OutboundHttpRequest, RaError,
+    is_incompatible_game_id, is_warning_achievement_id, AchievementClient, AchievementEntry,
+    AchievementEvent, AchievementKind, AsyncOutcome, GameSummary, LoadedGame, LoggedInUser,
+    OutboundHttpRequest, RaError, RaRuntimeWarnings, RA_INCOMPATIBLE_GAME_ID_BASE,
+    RC_CLIENT_ACHIEVEMENT_WARNING_ID,
 };
 pub use console::{
     console_id_for_core, console_id_for_system, console_name, hash_buffer, hash_file,
@@ -156,6 +158,89 @@ mod tests {
         // Serialização de progresso para save states.
         let progress = client.serialize_progress().expect("progress bytes");
         assert!(client.deserialize_progress(&progress));
+    }
+
+    #[test]
+    fn filters_synthetic_warning_achievements_and_surfaces_runtime_warnings() {
+        let mut client = AchievementClient::new();
+        client.set_hardcore(true);
+        client
+            .begin_login_with_token("edward", "tok_test_123")
+            .unwrap();
+        let reqs = client.take_http_requests();
+        client.complete_http_request(
+            reqs[0].id,
+            200,
+            br#"{"Success":true,"User":"edward","Token":"tok_test_123","Score":100,"SoftcoreScore":50,"Messages":0}"#,
+        );
+        let _ = client.take_outcomes();
+
+        client.attach_test_memory(vec![0u8; 4096]);
+        client
+            .begin_load_game_by_hash("faebcb2ef1f3831b2fc1dbd39d36517c")
+            .unwrap();
+
+        loop {
+            let pending = client.take_http_requests();
+            if pending.is_empty() {
+                break;
+            }
+            for req in pending {
+                let body = req.post_data.as_deref().unwrap_or(&req.url);
+                if body.contains("r=gameid") {
+                    client.complete_http_request(
+                        req.id,
+                        200,
+                        br#"{"Success":true,"GameID":1100011718}"#,
+                    );
+                } else if body.contains("r=patch")
+                    || body.contains("r=gamesets")
+                    || body.contains("r=achievementsets")
+                {
+                    client.complete_http_request(
+                        req.id,
+                        200,
+                        br#"{"Success":true,"GameId":1100011718,"Title":"Unsupported Game Version","ConsoleId":25,"ImageIconUrl":"https://media.retroachievements.org/Images/000001.png","RichPresenceGameId":1100011718,"RichPresencePatch":"","Sets":[{"AchievementSetId":9999,"GameId":1100011718,"Title":null,"Type":"core","ImageIconUrl":"https://media.retroachievements.org/Images/000001.png","Achievements":[{"ID":101000001,"MemAddr":"0xH0010=42","Title":"Warning: Unknown Emulator","Description":"Hardcore unlocks cannot be earned using this emulator.","Points":0,"Author":"RA","Modified":1700000000,"Created":1700000000,"BadgeName":"00000","Flags":3,"Type":"progression"},{"ID":101000002,"MemAddr":"0=1","Title":"Unsupported Game Version","Description":"This version of the game has not been tested.","Points":0,"Author":"RA","Modified":1700000000,"Created":1700000000,"BadgeName":"00000","Flags":3,"Type":"progression"}],"Leaderboards":[]}]}"#,
+                    );
+                } else if body.contains("r=startsession") {
+                    client.complete_http_request(
+                        req.id,
+                        200,
+                        br#"{"Success":true,"HardcoreUnlocks":[],"Unlocks":[],"ServerNow":1700000100}"#,
+                    );
+                } else {
+                    client.complete_http_request(req.id, 200, br#"{"Success":true}"#);
+                }
+            }
+        }
+
+        let _ = client.take_outcomes();
+        let warnings = client.runtime_warnings();
+        assert!(warnings.unknown_emulator);
+        assert!(warnings.unsupported_version);
+        assert!(
+            client.achievements(false).is_empty(),
+            "avisos sintéticos não devem entrar na lista de conquistas"
+        );
+
+        // Quando `101000001` dispara no C, vira `RuntimeWarning`, nunca `AchievementTriggered`.
+        client.do_frame();
+        client.write_test_memory(0x0010, &[42]);
+        client.do_frame();
+        let events = client.take_events();
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, AchievementEvent::AchievementTriggered { .. })),
+            "aviso sintético não pode disparar AchievementTriggered: {events:?}"
+        );
+        assert!(events.iter().any(|e| matches!(
+            e,
+            AchievementEvent::RuntimeWarning {
+                id: 101_000_001,
+                ..
+            }
+        )));
     }
 
     #[test]

@@ -6,8 +6,8 @@
 //!   sem quebrar cores que validam `size == retro_serialize_size()`.
 
 use crate::client::{
-    AchievementClient, AchievementEntry, AchievementEvent, AsyncOutcome, GameSummary,
-    OutboundHttpRequest, RaError,
+    is_incompatible_game_id, AchievementClient, AchievementEntry, AchievementEvent, AsyncOutcome,
+    GameSummary, OutboundHttpRequest, RaError,
 };
 use crate::ffi;
 use crate::memory::LibretroMemory;
@@ -74,6 +74,10 @@ pub struct RaLoadedSnapshot {
     pub title: String,
     pub badge_url: Option<String>,
     pub hardcore: bool,
+    #[serde(default)]
+    pub hardcore_downgraded: bool,
+    #[serde(default)]
+    pub incompatible_version: bool,
     pub summary: GameSummary,
     pub achievements: Vec<AchievementEntry>,
 }
@@ -262,11 +266,20 @@ impl LiveRuntime {
                 }
                 AsyncOutcome::GameLoad(Ok(game)) => {
                     self.phase = Phase::Active;
+                    let warnings = self.client.runtime_warnings();
+                    let incompatible_version =
+                        is_incompatible_game_id(game.id) || warnings.unsupported_version;
+                    let hardcore_downgraded = self.hardcore && warnings.unknown_emulator;
+                    let effective_hardcore =
+                        self.hardcore && !hardcore_downgraded && !incompatible_version;
+                    self.hardcore = effective_hardcore;
                     drain.loaded = Some(RaLoadedSnapshot {
                         game_id: game.id,
                         title: game.title,
                         badge_url: game.badge_url,
-                        hardcore: self.hardcore,
+                        hardcore: effective_hardcore,
+                        hardcore_downgraded,
+                        incompatible_version,
                         summary: game.summary,
                         achievements: self.client.achievements(self.unofficial),
                     });

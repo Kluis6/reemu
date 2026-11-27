@@ -21,6 +21,29 @@ use std::os::raw::{c_char, c_int, c_void};
 use std::path::Path;
 use thiserror::Error;
 
+/// Limiar oficial do `rcheevos` (`src/rc_client.c`: `RC_CLIENT_ACHIEVEMENT_WARNING_ID`)
+/// para avisos sintéticos injetados como pseudo-conquistas (`Warning: Unknown Emulator`,
+/// `Unsupported Game Version`, etc.). Nunca devem disparar toast de troféu nem ir ao Meu Log.
+pub const RC_CLIENT_ACHIEVEMENT_WARNING_ID: u32 = 101_000_001;
+
+/// Prefixo virtual devolvido por `dorequest.php?r=gameid` quando o hash da ROM está
+/// marcado como versão incompatível de um jogo catalogado (`1_100_000_000 + game_id`).
+pub const RA_INCOMPATIBLE_GAME_ID_BASE: u32 = 1_100_000_000;
+
+pub fn is_warning_achievement_id(id: u32) -> bool {
+    id >= RC_CLIENT_ACHIEVEMENT_WARNING_ID
+}
+
+pub fn is_incompatible_game_id(game_id: u32) -> bool {
+    game_id >= RA_INCOMPATIBLE_GAME_ID_BASE
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RaRuntimeWarnings {
+    pub unknown_emulator: bool,
+    pub unsupported_version: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Error, Serialize, Deserialize)]
 pub enum RaError {
     #[error("credenciais inválidas no RetroAchievements")]
@@ -157,6 +180,11 @@ pub enum AchievementEvent {
     },
     Disconnected,
     Reconnected,
+    RuntimeWarning {
+        id: u32,
+        title: String,
+        description: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -414,6 +442,55 @@ impl AchievementClient {
         unsafe { read_game_summary(self.raw) }
     }
 
+    pub fn runtime_warnings(&mut self) -> RaRuntimeWarnings {
+        let mut warnings = RaRuntimeWarnings {
+            unknown_emulator: false,
+            unsupported_version: self
+                .game_info()
+                .is_some_and(|g| is_incompatible_game_id(g.id)),
+        };
+        let list_ptr = unsafe {
+            ffi::rc_client_create_achievement_list(
+                self.raw,
+                ffi::RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE_AND_UNOFFICIAL,
+                ffi::RC_CLIENT_ACHIEVEMENT_LIST_GROUPING_LOCK_STATE,
+            )
+        };
+        if list_ptr.is_null() {
+            return warnings;
+        }
+        unsafe {
+            let list = &*list_ptr;
+            if !list.buckets.is_null() {
+                let buckets = std::slice::from_raw_parts(list.buckets, list.num_buckets as usize);
+                for b in buckets {
+                    if b.achievements.is_null() {
+                        continue;
+                    }
+                    let items =
+                        std::slice::from_raw_parts(b.achievements, b.num_achievements as usize);
+                    for &ach_ptr in items {
+                        let Some(ach) = ach_ptr.as_ref() else {
+                            continue;
+                        };
+                        if !is_warning_achievement_id(ach.id) {
+                            continue;
+                        }
+                        let title_lower = cstr_or_empty(ach.title).to_ascii_lowercase();
+                        if title_lower.contains("unknown emulator") {
+                            warnings.unknown_emulator = true;
+                        }
+                        if title_lower.contains("unsupported game version") {
+                            warnings.unsupported_version = true;
+                        }
+                    }
+                }
+            }
+            ffi::rc_client_destroy_achievement_list(list_ptr);
+        }
+        warnings
+    }
+
     pub fn achievements(&mut self, include_unofficial: bool) -> Vec<AchievementEntry> {
         let category = if include_unofficial {
             ffi::RC_CLIENT_ACHIEVEMENT_CATEGORY_CORE_AND_UNOFFICIAL
@@ -442,8 +519,10 @@ impl AchievementClient {
                     let items =
                         std::slice::from_raw_parts(b.achievements, b.num_achievements as usize);
                     for &ach_ptr in items {
-                        if !ach_ptr.is_null() {
-                            out.push(read_achievement(&*ach_ptr));
+                        if let Some(ach) = ach_ptr.as_ref() {
+                            if !is_warning_achievement_id(ach.id) {
+                                out.push(read_achievement(ach));
+                            }
                         }
                     }
                 }
@@ -689,26 +768,38 @@ unsafe extern "C" fn event_handler_trampoline(
     match ev.r#type {
         ffi::RC_CLIENT_EVENT_ACHIEVEMENT_TRIGGERED => {
             if let Some(ach) = ev.achievement.as_ref() {
-                q.events.push(AchievementEvent::AchievementTriggered {
-                    id: ach.id,
-                    title: cstr_or_empty(ach.title),
-                    description: cstr_or_empty(ach.description),
-                    points: ach.points,
-                    hardcore,
-                    badge_url: cstr_opt(ach.badge_url),
-                });
+                let title = cstr_or_empty(ach.title);
+                let description = cstr_or_empty(ach.description);
+                if is_warning_achievement_id(ach.id) {
+                    q.events.push(AchievementEvent::RuntimeWarning {
+                        id: ach.id,
+                        title,
+                        description,
+                    });
+                } else {
+                    q.events.push(AchievementEvent::AchievementTriggered {
+                        id: ach.id,
+                        title,
+                        description,
+                        points: ach.points,
+                        hardcore,
+                        badge_url: cstr_opt(ach.badge_url),
+                    });
+                }
             }
         }
         ffi::RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_SHOW
         | ffi::RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_UPDATE => {
             if let Some(ach) = ev.achievement.as_ref() {
-                q.events.push(AchievementEvent::ProgressUpdated {
-                    id: ach.id,
-                    title: cstr_or_empty(ach.title),
-                    progress_text: cstr_or_empty(ach.measured_progress.as_ptr()),
-                    percent: ach.measured_percent,
-                    badge_url: cstr_opt(ach.badge_url),
-                });
+                if !is_warning_achievement_id(ach.id) {
+                    q.events.push(AchievementEvent::ProgressUpdated {
+                        id: ach.id,
+                        title: cstr_or_empty(ach.title),
+                        progress_text: cstr_or_empty(ach.measured_progress.as_ptr()),
+                        percent: ach.measured_percent,
+                        badge_url: cstr_opt(ach.badge_url),
+                    });
+                }
             }
         }
         ffi::RC_CLIENT_EVENT_ACHIEVEMENT_PROGRESS_INDICATOR_HIDE => {
@@ -716,11 +807,13 @@ unsafe extern "C" fn event_handler_trampoline(
         }
         ffi::RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_SHOW => {
             if let Some(ach) = ev.achievement.as_ref() {
-                q.events.push(AchievementEvent::ChallengeShown {
-                    id: ach.id,
-                    title: cstr_or_empty(ach.title),
-                    badge_url: cstr_opt(ach.badge_url),
-                });
+                if !is_warning_achievement_id(ach.id) {
+                    q.events.push(AchievementEvent::ChallengeShown {
+                        id: ach.id,
+                        title: cstr_or_empty(ach.title),
+                        badge_url: cstr_opt(ach.badge_url),
+                    });
+                }
             }
         }
         ffi::RC_CLIENT_EVENT_ACHIEVEMENT_CHALLENGE_INDICATOR_HIDE => {
