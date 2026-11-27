@@ -16,8 +16,8 @@ it("counts a category once while retaining every item's count, even after readin
   const { upsert, markAllRead } = useNotificationStore.getState();
   for (const [id, route, count] of [
     ["core-updates", "/settings/cores", 7],
-    ["bezel-updates", "/settings/video/molduras", 4],
-    ["shader-pack-update", "/settings/video/shaders", 1],
+    ["bezel-updates", "/settings/aparencia/decoracoes/molduras", 4],
+    ["shader-pack-update", "/settings/aparencia/decoracoes/shaders", 1],
     ["other", "/settings/sincronizacao", 100],
   ] as const) {
     upsert({ id, route, count, kind: "notice", title: "", summary: "", at: 1, read: false });
@@ -31,13 +31,15 @@ it("counts a category once while retaining every item's count, even after readin
       SETTINGS_SECTIONS.filter(({ key }) => countFor("/settings/" + key) > 0).length,
       countFor("/settings/metadata"),
       countFor("/settings/cores"),
-      countFor("/settings/video"),
-      countFor("/settings/video/shaders"),
+      countFor("/settings/aparencia"),
+      countFor("/settings/aparencia/decoracoes"),
+      countFor("/settings/aparencia/decoracoes/molduras"),
+      countFor("/settings/aparencia/decoracoes/shaders"),
     ].join(",")}</>;
   }
   try {
     await act(async () => root.render(<QueryClientProvider client={qc}><Counts /></QueryClientProvider>));
-    expect(host.textContent).toBe("3,12,7,5,1");
+    expect(host.textContent).toBe("3,12,7,5,5,4,1");
   } finally {
     await act(async () => root.unmount());
     qc.clear();

@@ -69,7 +69,7 @@ export function usePackUpdates() {
       bezelCount,
       i18n.t("notifications.bezelUpdatesTitle", { count: bezelCount }),
       i18n.t("notifications.bezelUpdatesSummary"),
-      "/settings/video/molduras",
+      "/settings/aparencia/decoracoes/molduras",
     );
   }, [bezelCount]);
 
@@ -81,7 +81,7 @@ export function usePackUpdates() {
       shaderPack ? 1 : 0,
       i18n.t("notifications.shaderPackUpdateTitle"),
       i18n.t("notifications.shaderPackUpdateSummary"),
-      "/settings/video/shaders",
+      "/settings/aparencia/decoracoes/shaders",
     );
   }, [shaderPack]);
 }

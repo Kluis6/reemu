@@ -23,6 +23,7 @@ import {
   ImageAddRegular,
   ImageRegular,
   MoviesAndTvRegular,
+  TvRegular,
   WeatherMoonFilled,
   WeatherSunnyFilled,
 } from "@fluentui/react-icons";
@@ -574,6 +575,12 @@ export function SettingsAppearance({
             icon: <MoviesAndTvRegular />,
             title: t("appearance.screensaver.title"),
             description: t("appearance.screensaver.description"),
+          },
+          {
+            to: "decoracoes",
+            icon: <TvRegular />,
+            title: t("settings.tabs.video"),
+            description: t("settings.desc.video"),
           },
         ]}
       />

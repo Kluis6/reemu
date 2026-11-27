@@ -51,7 +51,7 @@ ROUTES = [
     "/settings/sistema",
     "/settings/sistema/opcoes",
     "/settings/sistema/hardware",
-    "/settings/video/shaders",
+    "/settings/aparencia/decoracoes/shaders",
     "/settings/controllers",
     "/settings/bios",
     "/settings/cores",

@@ -5,8 +5,11 @@ import {
   Caption1,
   Input,
   Spinner,
+  Tab,
+  TabList,
   Text,
   makeStyles,
+  mergeClasses,
   tokens,
 } from '@fluentui/react-components'
 import {
@@ -16,10 +19,11 @@ import {
   DeleteRegular,
   DeveloperBoardRegular,
   HistoryRegular,
+  InfoRegular,
   SettingsRegular,
 } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { LIST_ICON_ACTION_WIDTH, ListIconAction } from '../../components/ListIconAction'
 import { LoadingState } from '../../components/EmptyState'
 import { CORE_UPDATES_KEY, CORE_UPDATES_STALE_MS } from '../../hooks/useCoreUpdates'
@@ -33,28 +37,66 @@ import {
   type CatalogCore,
 } from '../../lib/tauri'
 import { useToastStore } from '../../stores/useToastStore'
+import { PAGE_PAD_B, SAFE_Y, SCROLLBAR_W } from '../../styles/metrics'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { CoreInfoDialog } from './CoreInfo'
 
-// Botões da direita quadrados, só com ícone. Três vagas, para não mudarem de lugar nas
-// linhas com Atualizar ou Versão anterior.
+// Até quatro ações por linha, incluindo Atualizar ou Versão anterior.
 // Cabe "atualização disponível" numa linha, nos três idiomas.
 const STATUS_W = '190px'
-const ACTIONS_W = `calc(3 * ${LIST_ICON_ACTION_WIDTH} + 2 * ${tokens.spacingHorizontalS})`
+const ACTIONS_W = `calc(4 * ${LIST_ICON_ACTION_WIDTH} + 3 * ${tokens.spacingHorizontalS})`
+const STATUS_FILTERS = [
+  ['all', 'cores.filterAll'],
+  ['installed', 'cores.filterInstalled'],
+  ['updates', 'cores.filterUpdates'],
+] as const
+type StatusFilter = (typeof STATUS_FILTERS)[number][0]
 
 const useStyles = makeStyles({
-  root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM },
-  // Busca: o campo com largura de leitura e a contagem ao lado.
+  root: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, gap: tokens.spacingVerticalM },
+  header: {
+    display: 'flex', flexDirection: 'column', flexShrink: 0, gap: tokens.spacingVerticalM,
+    paddingInlineEnd: `${SCROLLBAR_W}px`,
+  },
   filterRow: {
     display: 'flex',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: tokens.spacingHorizontalM,
-    '& .fui-Input': { width: 'min(420px, 100%)' },
+  },
+  search: { flex: '1 1 230px', minWidth: 0, maxWidth: '420px' },
+  filters: {
+    flexWrap: 'wrap',
+    rowGap: tokens.spacingVerticalS,
+    '& .fui-Tab': {
+      boxSizing: 'border-box',
+      minWidth: '96px',
+      paddingBlock: '5px',
+      paddingInline: tokens.spacingHorizontalM,
+      borderRadius: tokens.borderRadiusMedium,
+      fontSize: tokens.fontSizeBase300,
+    },
+    '& .fui-Tab__content': { fontWeight: tokens.fontWeightRegular },
+    '& .fui-Tab[aria-selected="false"]': {
+      backgroundColor: 'var(--reemuControlFill)',
+      color: tokens.colorNeutralForeground1,
+      ':hover': { backgroundColor: 'var(--reemuControlFillHover)' },
+      ':active': { backgroundColor: 'var(--reemuControlFillPressed)' },
+    },
   },
   updateAll: { marginLeft: 'auto', flexShrink: 0 },
-  // Lista em linhas, como a Biblioteca da Microsoft Store (print do usuário):
-  // uma coluna, cada core numa faixa da largura toda.
-  list: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
+  list: {
+    flexGrow: 1,
+    minHeight: 0,
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+    scrollbarGutter: 'stable',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: tokens.spacingVerticalS,
+    paddingBottom: `${PAGE_PAD_B - SAFE_Y + 24}px`,
+  },
   // ícone + nome | sistemas | situação | botão
   row: {
     display: 'grid',
@@ -65,6 +107,7 @@ const useStyles = makeStyles({
     // quadrado do ícone (48) + 12 + 12
     padding: tokens.spacingHorizontalM,
     boxSizing: 'border-box',
+    flexShrink: 0,
     borderRadius: tokens.borderRadiusMedium,
     background: tokens.colorNeutralBackground2,
     // janela estreita / interface grande: sistemas e situação vão pra
@@ -123,11 +166,6 @@ const useStyles = makeStyles({
   },
 })
 
-/**
- * Configurações › Cores: só o catálogo (pedido do usuário — a aba
- * "Instalados" saiu). Os instalados aparecem no próprio catálogo, com o
- * selo "Instalado" e o botão de remover.
- */
 export function SettingsCores() {
   const styles = useStyles()
   return (
@@ -152,6 +190,21 @@ function Catalog() {
   })
   const outdated = updates.data ?? []
   const [filter, setFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [infoCoreId, setInfoCoreId] = useState<string | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const infoTrigger = useRef<HTMLButtonElement>(null)
+  const resetListScroll = () => {
+    if (listRef.current) listRef.current.scrollTop = 0
+  }
+  const closeInfo = () => {
+    const trigger = infoTrigger.current
+    setInfoCoreId(null)
+    requestAnimationFrame(() => {
+      const target = trigger?.isConnected ? trigger : listRef.current
+      target?.focus({ preventScroll: true })
+    })
+  }
 
   // Atualizou: sai da lista sem consultar tudo de novo. A DLL nova é tão nova
   // quanto a última compilação, e o backend diria o mesmo.
@@ -203,10 +256,7 @@ function Catalog() {
   })
   const uninstall = useMutation({
     mutationFn: (coreId: string) => removeCore(coreId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['core-catalog'] })
-      qc.invalidateQueries({ queryKey: ['installed-cores'] })
-    },
+    onSuccess: (_result, coreId) => updated(coreId),
     onError: (e) => push(errorToast(e, 'removeCore')),
   })
 
@@ -221,42 +271,77 @@ function Catalog() {
     updateAll.isPending
 
   const f = filter.trim().toLowerCase()
+  const outdatedIds = new Set(outdated)
+  const infoCore = catalog.data?.find((c) => c.coreId === infoCoreId)
   const sorted = [...(catalog.data ?? [])]
+    .filter((c) => statusFilter === 'all'
+      || (c.installed && (statusFilter === 'installed' || outdatedIds.has(c.coreId))))
     .filter((c) => !f || `${c.name} ${c.systems}`.toLowerCase().includes(f))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <>
-      <Caption1>
-        <Trans i18nKey="cores.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
-      </Caption1>
-      <div className={styles.filterRow}>
-        <Input
-          // sem o anel de foco (pedido do usuário; ver `reemu-no-ring` no
-          // index.css) e com fundo/borda visíveis em qualquer tema
-          className="reemu-no-ring reemu-list-search"
-          appearance="filled-darker"
-          placeholder={t('cores.filter')}
-          value={filter}
-          onChange={(_, d) => setFilter(d.value)}
-        />
+      <div className={styles.header}>
         <Caption1>
-          {t('cores.count', { shown: sorted.length, total: catalog.data?.length ?? 0 })}
+          <Trans i18nKey="cores.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
         </Caption1>
-        {outdated.length > 0 && (
-          <Button
-            className={styles.updateAll}
-            appearance="primary"
-            icon={<ArrowCircleUpRegular />}
-            disabled={updateAll.isPending || update.isPending}
-            onClick={() => updateAll.mutate(outdated)}
+        <div className={styles.filterRow}>
+          <Input
+            // sem o anel de foco (pedido do usuário; ver `reemu-no-ring` no
+            // index.css) e com fundo/borda visíveis em qualquer tema
+            className={mergeClasses(styles.search, 'reemu-no-ring reemu-list-search')}
+            appearance="filled-darker"
+            aria-label={t('cores.searchLabel')}
+            placeholder={t('cores.filter')}
+            value={filter}
+            onChange={(_, d) => {
+              resetListScroll()
+              setFilter(d.value)
+            }}
+          />
+          <TabList
+            className={styles.filters}
+            appearance="filled-circular"
+            aria-label={t('cores.statusFilter')}
+            selectedValue={statusFilter}
+            onTabSelect={(_, { value }) => {
+              resetListScroll()
+              setStatusFilter(value as StatusFilter)
+            }}
           >
-            {updateAll.isPending ? t('cores.updating') : t('cores.updateAll', { count: outdated.length })}
-          </Button>
-        )}
+            {STATUS_FILTERS.map(([value, label]) => (
+              <Tab key={value} id={`core-filter-${value}`} value={value} aria-controls="core-catalog-results">
+                {t(label)}
+              </Tab>
+            ))}
+          </TabList>
+          <Caption1 aria-live="polite">
+            {t('cores.count', { shown: sorted.length, total: catalog.data?.length ?? 0 })}
+          </Caption1>
+          {outdated.length > 0 && (
+            <Button
+              className={styles.updateAll}
+              appearance="primary"
+              disabled={updateAll.isPending || update.isPending}
+              onClick={() => updateAll.mutate(outdated)}
+            >
+              {updateAll.isPending ? t('cores.updating') : t('cores.updateAll', { count: outdated.length })}
+            </Button>
+          )}
+        </div>
       </div>
-      <div className={styles.list}>
-        {sorted.length === 0 && <Caption1>{t('cores.noneFound')}</Caption1>}
+      <div
+        id="core-catalog-results"
+        ref={listRef}
+        role="tabpanel"
+        aria-labelledby={`core-filter-${statusFilter}`}
+        tabIndex={0}
+        className={styles.list}
+      >
+        {sorted.length === 0 && (
+          statusFilter === 'updates' && updates.isPending ? <LoadingState label={t('cores.checkingUpdates')} />
+            : <Caption1>{t(statusFilter === 'updates' && updates.isError ? 'cores.updatesUnavailable' : 'cores.noneFound')}</Caption1>
+        )}
         {sorted.map((c: CatalogCore) => (
           <div key={c.coreId} className={styles.row}>
             <span className={styles.lead}>
@@ -286,7 +371,7 @@ function Catalog() {
             <Body1 className={styles.col}>{c.systems}</Body1>
             <span className={styles.col}>
               {c.installed &&
-                (outdated.includes(c.coreId) ? (
+                (outdatedIds.has(c.coreId) ? (
                   <Badge className={styles.badge} appearance="tint" color="brand" icon={<ArrowCircleUpRegular />}>
                     {t('cores.updateBadge')}
                   </Badge>
@@ -297,7 +382,7 @@ function Catalog() {
                 ))}
             </span>
             <span className={styles.actions}>
-              {c.installed && outdated.includes(c.coreId) ? (
+              {c.installed && outdatedIds.has(c.coreId) ? (
                 <ListIconAction
                   primary
                   label={busy(c.coreId) ? t('cores.updating') : t('cores.update')}
@@ -316,6 +401,15 @@ function Catalog() {
                   />
                 )
               )}
+              <ListIconAction
+                label={t('cores.detail.information', { name: c.name })}
+                icon={<InfoRegular />}
+                aria-haspopup="dialog"
+                onClick={(event) => {
+                  infoTrigger.current = event.currentTarget
+                  setInfoCoreId(c.coreId)
+                }}
+              />
               {c.installed && (
                 <ListIconAction
                   label={t('settings.title')}
@@ -343,6 +437,13 @@ function Catalog() {
           </div>
         ))}
       </div>
+      {infoCore && (
+        <CoreInfoDialog
+          entry={infoCore}
+          updateAvailable={outdatedIds.has(infoCore.coreId)}
+          onClose={closeInfo}
+        />
+      )}
     </>
   )
 }

@@ -15,6 +15,7 @@ import { LoadingState } from '../../components/EmptyState'
 import { ShaderParams } from '../../components/ShaderParams'
 import { ShaderPreview } from '../../components/ShaderPreview'
 import * as M from '../../styles/metrics'
+import { usePanelSlideStyles } from '../../lib/motion'
 import { errorToast, sysToast, shaderIssueToast } from '../../lib/toast'
 import {
   clearDecorations,
@@ -78,23 +79,6 @@ const useStyles = makeStyles({
     gap: '8px',
     flexGrow: 1,
     minHeight: 0,
-    animationDuration: tokens.durationSlow,
-    animationTimingFunction: tokens.curveDecelerateMax,
-    // `backwards` (não `both`): o estado final é o natural — ver RouteTransition
-    animationFillMode: 'backwards',
-    '@media (prefers-reduced-motion: reduce)': { animationName: 'none' },
-  },
-  inFwd: {
-    animationName: {
-      from: { opacity: 0, transform: 'translateX(24px)' },
-      to: { opacity: 1, transform: 'translateX(0)' },
-    },
-  },
-  inBack: {
-    animationName: {
-      from: { opacity: 0, transform: 'translateX(-24px)' },
-      to: { opacity: 1, transform: 'translateX(0)' },
-    },
   },
   // 24 até os parâmetros (8 do `gap` + 16)
   panelHead: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' },
@@ -115,10 +99,8 @@ const useStyles = makeStyles({
 type VideoSection = 'shaders' | 'molduras'
 
 /**
- * Configurações › Vídeo. Como nas Configurações do Windows: sem `section`
- * é a página da categoria, com um card por subseção; `shaders` e
- * `molduras` são as subseções (rotas `video/shaders` e `video/molduras`),
- * com o caminho "Configurações › Vídeo › …" no topo (do `SettingsLayout`).
+ * Configurações › Aparência › Decorações. Sem `section`, exibe os cards
+ * que levam às páginas de Shaders e Molduras.
  */
 export function SettingsVideo({ section }: { section?: VideoSection }) {
   const { t } = useTranslation()
@@ -126,6 +108,7 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
   const qc = useQueryClient()
   const push = useToastStore((s) => s.push)
   const st = useStyles()
+  const slide = usePanelSlideStyles()
   // muda a cada parâmetro gravado → refaz a prévia do shader
   const [paramsRev, setParamsRev] = useState(0)
 
@@ -261,8 +244,9 @@ export function SettingsVideo({ section }: { section?: VideoSection }) {
                     key={paramsOpen ? 'params' : 'list'}
                     className={mergeClasses(
                       st.swap,
-                      swapDir === 'fwd' && st.inFwd,
-                      swapDir === 'back' && st.inBack,
+                      slide.transition,
+                      swapDir === 'fwd' && slide.forward,
+                      swapDir === 'back' && slide.backward,
                     )}
                   >
                     {paramsOpen && hasParams ? (

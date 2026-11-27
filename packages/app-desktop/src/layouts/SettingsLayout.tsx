@@ -40,7 +40,7 @@ const useStyles = makeStyles({
     flexDirection: "column",
     rowGap: tokens.spacingVerticalXL,
   },
-  // Caminho "Configurações › Vídeo › Molduras" com o `Breadcrumb` do Fluent 2
+  // Caminho das configurações com o `Breadcrumb` do Fluent 2
   // (nav + lista ordenada, divisores fora do foco, `aria-current` no último
   // — fluent2.microsoft.design/components/web/react/core/breadcrumb/usage),
   // no tamanho de título como nas Configurações do Windows 11 (o maior
@@ -69,6 +69,12 @@ const useStyles = makeStyles({
     paddingBottom: "0 !important",
     whiteSpace: "nowrap",
     color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1})`,
+  },
+  crumbButtonCompact: {
+    "@media (max-width: 960px)": {
+      fontSize: tokens.fontSizeBase600,
+      lineHeight: tokens.lineHeightBase600,
+    },
   },
   crumbCurrent: { color: `var(--reemuWallpaperText, ${tokens.colorNeutralForeground1}) !important` },
   crumbPage: { fontWeight: tokens.fontWeightRegular },
@@ -117,6 +123,13 @@ const useStyles = makeStyles({
     // O fim da lista sobe além da barra de dicas, que flutua sobre o card.
     paddingBottom: `${M.PAGE_PAD_B - M.SAFE_Y + 24}px`,
   },
+  paneFixed: {
+    minHeight: 0,
+    overflow: "hidden",
+    scrollbarGutter: "auto",
+    paddingRight: tokens.spacingHorizontalXXL,
+    paddingBottom: 0,
+  },
   content: { minWidth: 0, maxWidth: "640px" },
   // Abas de lista em grade (Aparência, Cores, BIOS…) usam a largura toda —
   // 640 é bom pra formulário, mas deixava as colunas espremidas.
@@ -137,11 +150,10 @@ const WIDE_TABS = new Set([
   // Gerenciar biblioteca: lista em faixas, como Cores
   "biblioteca",
   "controllers",
-  "video",
 ]);
 
 /** Categorias que abrem numa grade de cards (subcategorias). */
-const HUB_SECTIONS = new Set(["aparencia", "video", "sistema"]);
+const HUB_SECTIONS = new Set(["aparencia", "sistema"]);
 
 export function SettingsLayout() {
   const { t } = useTranslation();
@@ -149,9 +161,12 @@ export function SettingsLayout() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   // mesma condição da barra de dicas (`ButtonHints`)
-  // ["", "settings", categoria?, subseção?]
-  const [, , catKey, sub] = pathname.split("/");
+  const [, , catKey, sub, detail] = pathname.split("/");
   const section = SETTINGS_SECTIONS.find((s) => s.key === catKey);
+  const coreList = catKey === "cores" && !sub;
+  const decorations = catKey === "aparencia" && sub === "decoracoes";
+  const shadersPage = decorations && detail === "shaders";
+  const crumbButton = mergeClasses(styles.crumbButton, decorations && !!detail && styles.crumbButtonCompact);
   // nome do core no caminho de Configurações › Cores › core
   const catalog = useQuery({
     queryKey: ["core-catalog"],
@@ -170,11 +185,13 @@ export function SettingsLayout() {
   ];
   if (section) {
     const label = t(`settings.tabs.${section.id}`);
-    if (section.key === "video" && (sub === "shaders" || sub === "molduras")) {
-      crumbs.push({ label, to: "/settings/video" });
+    if (decorations) {
+      crumbs.push({ label, to: "/settings/aparencia" });
       crumbs.push({
-        label: sub === "shaders" ? t("video.tabShaders") : t("video.tabBezels"),
+        label: t("settings.tabs.video"),
+        to: detail ? "/settings/aparencia/decoracoes" : undefined,
       });
+      if (detail) crumbs.push({ label: shadersPage ? t("video.tabShaders") : t("video.tabBezels") });
     } else if (section.key === "aparencia" && sub === "protecao-de-tela") {
       crumbs.push({ label, to: "/settings/aparencia" }, { label: t("appearance.screensaver.title") });
     } else if (section.key === "aparencia" && (sub === "temas" || sub === "papel-de-parede")) {
@@ -219,7 +236,7 @@ export function SettingsLayout() {
             <BreadcrumbItem key={i}>
               {c.to ? (
                 <BreadcrumbButton
-                  className={styles.crumbButton}
+                  className={crumbButton}
                   onClick={() => navigate(c.to!)}
                 >
                   {c.label}
@@ -227,7 +244,7 @@ export function SettingsLayout() {
               ) : (
                 <BreadcrumbButton
                   className={mergeClasses(
-                    styles.crumbButton,
+                    crumbButton,
                     styles.crumbCurrent,
                     i > 0 && styles.crumbPage,
                   )}
@@ -247,11 +264,11 @@ export function SettingsLayout() {
               {/* Entrada de uma subcategoria (Aparência, Decorações): os cards
                   das opções direto na página, sem o card geral — ele só
                   aparece dentro da opção escolhida. */}
-              {HUB_SECTIONS.has(section.key) && !sub ? (
+              {(HUB_SECTIONS.has(section.key) && !sub) || (decorations && !detail) ? (
                 <Outlet />
               ) : (
                 <div className={styles.card}>
-                  <div className={styles.pane}>
+                  <div className={mergeClasses(styles.pane, coreList && styles.paneFixed)}>
                     <div
                       className={mergeClasses(
                         styles.content,
@@ -262,7 +279,7 @@ export function SettingsLayout() {
                         section.key === "sistema" &&
                         (sub === "opcoes" || sub === "sobre") &&
                         styles.wide,
-                        section.key === "video" && sub === "shaders" && styles.fill,
+                        (coreList || shadersPage) && styles.fill,
                         // Temas e Plano de fundo: na altura útil do card, sem rolar
                         section.key === "aparencia" &&
                         (sub === "temas" || sub === "papel-de-parede") &&

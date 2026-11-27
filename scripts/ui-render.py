@@ -20,7 +20,7 @@ caminho do Windows):
       --mock 'list_cheats=[{"id":1,"romId":"r1","description":"Vidas","code":"7E0DBF09","enabled":true}]' \\
       --step wait:5 --step 'emit:focus-changed={"focus":"MenuFocused"}' \\
       --step wait:1 --step nav:tabNext --step shot:menu
-  python scripts/ui-render.py --route /settings/video/shaders --step wait:6 --step audit-focus
+  python scripts/ui-render.py --route /settings/aparencia/decoracoes/shaders --step wait:6 --step audit-focus
 
 Passos (`--step`, na ordem dada):
   wait:<s>                  espera

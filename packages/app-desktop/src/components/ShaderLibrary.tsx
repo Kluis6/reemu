@@ -1,20 +1,17 @@
 import {
-  Accordion,
-  AccordionHeader,
-  AccordionItem,
-  AccordionPanel,
   Body1,
   Button,
   Caption1,
   Input,
   Spinner,
+  Subtitle2,
   makeStyles,
   mergeClasses,
   tokens,
 } from '@fluentui/react-components'
-import { FolderRegular } from '@fluentui/react-icons'
+import { ArrowLeftRegular, FolderRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   downloadShaderPack,
   listSlangpDir,
@@ -24,9 +21,10 @@ import {
   type SlangpEntry,
 } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
+import { usePanelSlideStyles } from '../lib/motion'
 import { errorPatch } from '../lib/toast'
 import { DownloadButton } from './DownloadButton'
-import { ShaderCard } from './ShaderCard'
+import { ShaderCard, ShaderCategoryCard } from './ShaderCard'
 import { Trans, useTranslation } from 'react-i18next'
 
 const ROOT_KEY = 'reemu.shaderLibRoot'
@@ -45,38 +43,20 @@ const useStyles = makeStyles({
   // sem a margem negativa em cima: a lista passava por baixo do campo de filtro
   listFill: { flexGrow: 1, minHeight: 0, maxHeight: 'none', marginTop: 0, marginBottom: 0 },
   bar: { display: 'flex', gap: tokens.spacingHorizontalS, alignItems: 'center' },
-  path: {
-    flexGrow: 1,
-    minWidth: 0,
-    overflowX: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    color: tokens.colorNeutralForeground3,
-    fontVariantNumeric: 'tabular-nums',
-  },
+  panel: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalS },
+  categoryTitle: { minWidth: 0, overflowWrap: 'anywhere' },
   list: {
     display: 'flex',
     flexDirection: 'column',
-    gap: tokens.spacingVerticalXXS,
+    gap: tokens.spacingVerticalS,
     maxHeight: '340px',
     overflowY: 'auto',
     // folga (8) pro anel de foco dos cards não ser cortado pela borda que rola
     padding: '8px',
     margin: '-8px',
-    // Sem snap: com grupos e cards de alturas diferentes, ele cortava o item focado.
     scrollPaddingTop: '8px',
     scrollPaddingBottom: '8px',
     '& > *': { flexShrink: 0 },
-  },
-  // Cards do grupo iguais aos da lista de Shaders do ReEmu: mesmo
-  // espaçamento e a largura toda (sem a margem lateral do AccordionPanel).
-  panel: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: tokens.spacingVerticalS,
-    marginLeft: 0,
-    marginRight: 0,
-    paddingBottom: tokens.spacingVerticalS,
   },
 })
 
@@ -208,11 +188,26 @@ export function ShaderLibrary({
 }) {
   const { t } = useTranslation()
   const s = useStyles()
+  const slide = usePanelSlideStyles()
   const { root, chooseRoot, downloading, download } = pack
   const [filter, setFilter] = useState('')
-  // grupos abertos (só relevante quando há > 3 grupos e sem filtro — senão
-  // tudo fica aberto).
-  const [openGroups, setOpenGroups] = useState<string[]>([])
+  const [group, setGroup] = useState<{ category: string; open: boolean } | null>(null)
+  const filterRef = useRef<HTMLInputElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const categoryRef = useRef<HTMLDivElement>(null)
+  const backRef = useRef<HTMLButtonElement>(null)
+  const categoriesScroll = useRef(0)
+
+  useEffect(() => {
+    if (!group) return
+    if (group.open) {
+      backRef.current?.focus({ preventScroll: true })
+    } else {
+      if (listRef.current) listRef.current.scrollTop = categoriesScroll.current
+      const target = categoryRef.current ?? filterRef.current
+      target?.focus({ preventScroll: true })
+    }
+  }, [group])
 
   const q = useQuery({
     queryKey: ['slangp-dir', root],
@@ -228,13 +223,15 @@ export function ShaderLibrary({
     const by = new Map<string, SlangpEntry[]>()
     for (const e of q.data ?? []) {
       if (!hit(e)) continue
-      const k = e.category || t('shaders.root')
-      const arr = by.get(k)
+      const arr = by.get(e.category)
       if (arr) arr.push(e)
-      else by.set(k, [e])
+      else by.set(e.category, [e])
     }
-    return [...by.entries()]
-  }, [q.data, filter, t])
+    return by
+  }, [q.data, filter])
+
+  const category = group?.open ? group.category : null
+  const presets = category === null ? null : (groups.get(category) ?? [])
 
   if (!root) {
     return (
@@ -266,51 +263,62 @@ export function ShaderLibrary({
         <>
           <div className={s.bar}>
             <Input
+              ref={filterRef}
+              aria-label={t('shaders.filter')}
               appearance="filled-darker"
               placeholder={t('shaders.filter')}
               value={filter}
               onChange={(_, d) => setFilter(d.value)}
               style={{ flex: 1 }}
             />
-            <Caption1>{t('shaders.presets', { count: q.data.length })}</Caption1>
+            <Caption1>{t('shaders.presets', { count: presets?.length ?? q.data.length })}</Caption1>
           </div>
-          <div className={mergeClasses(s.list, fill && s.listFill)}>
-            {groups.length === 0 && <Caption1>{t('shaders.nothing')}</Caption1>}
-            <Accordion
-              multiple
-              collapsible
-              openItems={
-                groups.length <= 3 || filter.trim()
-                  ? groups.map(([cat]) => cat)
-                  : openGroups
-              }
-              onToggle={(_, d) => setOpenGroups(d.openItems as string[])}
-            >
-              {groups.map(([cat, items]) => (
-                <AccordionItem key={cat} value={cat}>
-                  <AccordionHeader>
-                    <Caption1>
-                      {cat} · {items.length}
-                    </Caption1>
-                  </AccordionHeader>
-                  <AccordionPanel className={s.panel}>
-                    {items.map((e) => (
-                      <ShaderCard
-                        key={e.path}
-                        title={e.name}
-                        // 2ª linha como a descrição dos shaders do ReEmu: o
-                        // arquivo dentro do pacote
-                        description={relPath(e.path, root)}
-                        selected={e.path === activePath}
-                        disabled={busy}
-                        onSelect={() => onPick(e.path)}
-                        onSettings={settingsFor?.(e.path)}
-                      />
-                    ))}
-                  </AccordionPanel>
-                </AccordionItem>
+          <div
+            key={category === null ? 'categories' : 'presets'}
+            className={mergeClasses(
+              s.panel,
+              fill && s.rootFill,
+              slide.transition,
+              !!group && (group.open ? slide.forward : slide.backward),
+            )}
+          >
+            {category !== null && (
+              <div className={s.bar}>
+                <Button
+                  ref={backRef}
+                  appearance="subtle"
+                  icon={<ArrowLeftRegular />}
+                  aria-label={t('shaders.backToCategories')}
+                  onClick={() => setGroup({ category, open: false })}
+                />
+                <Subtitle2 className={s.categoryTitle}>{category || t('shaders.root')}</Subtitle2>
+              </div>
+            )}
+            <div ref={listRef} className={mergeClasses(s.list, fill && s.listFill)}>
+              {(presets?.length ?? groups.size) === 0 && <Caption1>{t('shaders.nothing')}</Caption1>}
+              {presets ? presets.map((entry) => (
+                <ShaderCard
+                  key={entry.path}
+                  title={entry.name}
+                  description={relPath(entry.path, root)}
+                  selected={entry.path === activePath}
+                  disabled={busy}
+                  onSelect={() => onPick(entry.path)}
+                  onSettings={settingsFor?.(entry.path)}
+                />
+              )) : Array.from(groups, ([cat, items]) => (
+                <ShaderCategoryCard
+                  key={cat}
+                  ref={cat === group?.category ? categoryRef : undefined}
+                  title={cat || t('shaders.root')}
+                  count={items.length}
+                  onOpen={() => {
+                    categoriesScroll.current = listRef.current?.scrollTop ?? 0
+                    setGroup({ category: cat, open: true })
+                  }}
+                />
               ))}
-            </Accordion>
+            </div>
           </div>
         </>
       )}

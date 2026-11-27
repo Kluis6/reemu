@@ -10,7 +10,8 @@ import {
   shorthands,
   tokens,
 } from '@fluentui/react-components'
-import { OptionsRegular } from '@fluentui/react-icons'
+import { ChevronRightRegular, OptionsRegular } from '@fluentui/react-icons'
+import type { Ref } from 'react'
 import { useTranslation } from 'react-i18next'
 import { TOOLTIP_POSITION } from '../lib/tooltip'
 
@@ -64,6 +65,39 @@ const useStyles = makeStyles({
     ...shorthands.borderColor(`${tokens.colorNeutralStrokeAccessible} !important`),
   },
 })
+
+export function ShaderCategoryCard({ title, count, onOpen, ref }: {
+  title: string
+  count: number
+  onOpen: () => void
+  ref?: Ref<HTMLDivElement>
+}) {
+  const { t } = useTranslation()
+  const s = useStyles()
+  return (
+    <Card
+      ref={ref}
+      appearance="filled-alternative"
+      className={s.card}
+      role="button"
+      tabIndex={0}
+      focusMode="off"
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen()
+        }
+      }}
+    >
+      <CardHeader
+        header={<Text weight="semibold" className={s.title}>{title}</Text>}
+        description={<Caption1 className={s.desc}>{t('shaders.presets', { count })}</Caption1>}
+        action={<ChevronRightRegular aria-hidden />}
+      />
+    </Card>
+  )
+}
 
 /**
  * Um shader da lista: card selecionável (escolher = aplicar) com título e

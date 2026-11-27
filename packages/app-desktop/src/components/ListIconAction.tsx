@@ -1,5 +1,5 @@
 import { Button, Tooltip, makeStyles, mergeClasses, tokens } from '@fluentui/react-components'
-import type { ReactElement } from 'react'
+import type { MouseEventHandler, ReactElement } from 'react'
 import { TOOLTIP_ABOVE } from '../lib/tooltip'
 import { useModalButtonStyles } from '../styles/buttons'
 
@@ -24,12 +24,13 @@ const useStyles = makeStyles({
   },
 })
 
-export function ListIconAction({ label, icon, primary = false, disabled, onClick }: {
+export function ListIconAction({ label, icon, primary = false, disabled, onClick, 'aria-haspopup': hasPopup }: {
   label: string
   icon: ReactElement
   primary?: boolean
   disabled?: boolean
-  onClick: () => void
+  onClick: MouseEventHandler<HTMLButtonElement>
+  'aria-haspopup'?: 'dialog'
 }) {
   const s = useStyles()
   const button = useModalButtonStyles()
@@ -39,6 +40,7 @@ export function ListIconAction({ label, icon, primary = false, disabled, onClick
         className={mergeClasses(s.action, !primary && s.keepBg, !primary && button.secondaryFlat)}
         appearance={primary ? 'primary' : 'secondary'}
         icon={icon}
+        aria-haspopup={hasPopup}
         disabled={disabled}
         onClick={onClick}
       />
