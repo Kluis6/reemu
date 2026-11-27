@@ -128,6 +128,8 @@ o card atual fica.
 - [ ] `backlog` — **Executar as validações pendentes do ReEmu em Linux x64**
       (2026-11-23). Usar um runner Linux para a fumaça automatizada e uma
       sessão desktop Linux para os testes de interface, controle e vídeo.
+      - **Menu de energia.** Validar desligamento e reinício numa sessão
+        desktop Linux com systemd e conferir o aviso quando o sistema recusar.
       - **Cores Libretro.** Rodar a fumaça do catálogo com `bsnes-jg`,
         `Mesen-S`, `Mesen2` e `DoubleCherryGB`. Repetir os testes de cartucho,
         vídeo, áudio, RetroPad, save states e persistência da SRAM. Cobrir Famicom Disk

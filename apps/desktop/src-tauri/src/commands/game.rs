@@ -824,28 +824,97 @@ pub fn quit_app(app: AppHandle) {
     app.exit(0);
 }
 
-/// Desliga a máquina (`systemctl poweroff`) — menu de energia do rail,
-/// estilo "modo XBOX". Só dispara o comando (`spawn`, não espera): a
-/// própria queda do sistema encerra o ReEmu, não precisa de outro passo
-/// aqui. Depende de o usuário ter permissão via polkit/systemd-logind
-/// (padrão em qualquer desktop Linux moderno, sem precisar de senha).
-#[tauri::command]
-pub fn shutdown_system() -> Result<(), AppError> {
-    std::process::Command::new("systemctl")
-        .arg("poweroff")
-        .spawn()
-        .map_err(|e| format!("não consegui desligar: {e}"))?;
-    Ok(())
+enum PowerAction {
+    Shutdown,
+    Restart,
 }
 
-/// Reinicia a máquina (`systemctl reboot`). Ver `shutdown_system`.
+fn system_power_command(action: PowerAction) -> Result<std::process::Command, AppError> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
+
+        let system_root = std::env::var_os("SystemRoot").ok_or("SystemRoot ausente")?;
+        let executable = std::path::PathBuf::from(system_root).join("System32/shutdown.exe");
+        let mut command = std::process::Command::new(executable);
+        let mode = match action {
+            PowerAction::Shutdown => "/s",
+            PowerAction::Restart => "/r",
+        };
+        // Um timeout positivo faz o Windows forçar o fechamento dos aplicativos.
+        command
+            .args([mode, "/t", "0"])
+            .creation_flags(CREATE_NO_WINDOW);
+        Ok(command)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let mut command = std::process::Command::new("systemctl");
+        command.arg(match action {
+            PowerAction::Shutdown => "poweroff",
+            PowerAction::Restart => "reboot",
+        });
+        Ok(command)
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        let _ = action;
+        Err("Ação de energia indisponível neste sistema".into())
+    }
+}
+
+async fn request_system_power(app: AppHandle, action: PowerAction) -> Result<(), AppError> {
+    let mut command = system_power_command(action)?;
+    // O encerramento pelo sistema pode pular o ExitRequested do Tauri.
+    // Descarrega um jogo ativo antes do pedido para gravar a save RAM.
+    if app.state::<AppState>().session.state() != SessionState::Idle {
+        unload_game(app).await?;
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let output = command.output()?;
+        if output.status.success() {
+            return Ok(());
+        }
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let details = if stderr.trim().is_empty() {
+            stdout.trim()
+        } else {
+            stderr.trim()
+        };
+        let program = command.get_program().to_string_lossy();
+        let status = output.status;
+        let message = if details.is_empty() {
+            format!("{program} ({status})")
+        } else {
+            format!("{program} ({status}): {details}")
+        };
+        Err(message.into())
+    })
+    .await?
+}
+
 #[tauri::command]
-pub fn restart_system() -> Result<(), AppError> {
-    std::process::Command::new("systemctl")
-        .arg("reboot")
-        .spawn()
-        .map_err(|e| format!("não consegui reiniciar: {e}"))?;
-    Ok(())
+pub async fn shutdown_system(app: AppHandle) -> Result<(), AppError> {
+    request_system_power(app, PowerAction::Shutdown).await
+}
+
+#[tauri::command]
+pub async fn restart_system(app: AppHandle) -> Result<(), AppError> {
+    request_system_power(app, PowerAction::Restart).await
+}
+
+#[cfg(all(test, target_os = "windows"))]
+#[test]
+fn windows_power_commands_use_system_shutdown_without_force() {
+    for (action, mode) in [(PowerAction::Shutdown, "/s"), (PowerAction::Restart, "/r")] {
+        let command = system_power_command(action).unwrap();
+        let executable = std::path::Path::new(command.get_program());
+        assert!(executable.ends_with("System32/shutdown.exe") && executable.is_file());
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(args, [mode, "/t", "0"]);
+    }
 }
 
 #[tauri::command]

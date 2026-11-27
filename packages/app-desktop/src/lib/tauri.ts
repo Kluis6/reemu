@@ -174,10 +174,10 @@ export const updateVideoConfig = (config: VideoConfig) =>
 
 export const quitApp = () => invoke<void>('quit_app')
 
-/** Desliga a máquina (`systemctl poweroff`) — menu de energia do rail. */
+/** Desliga o computador pelo menu de energia. */
 export const shutdownSystem = () => invoke<void>('shutdown_system')
 
-/** Reinicia a máquina (`systemctl reboot`). */
+/** Reinicia o computador pelo menu de energia. */
 export const restartSystem = () => invoke<void>('restart_system')
 export const isFullscreen = () => invoke<boolean>('is_fullscreen')
 export const setFullscreen = (value: boolean) => invoke<void>('set_fullscreen', { value })
