@@ -19,6 +19,7 @@
 pub mod api;
 pub mod device;
 pub mod engine;
+pub mod folder;
 pub mod local;
 pub mod platform;
 pub mod reconcile;

@@ -14,6 +14,7 @@ impl Engine {
     pub(super) fn sweep_temps(&self) {
         let mut dirs = vec![self.dirs.saves.clone()];
         dirs.extend(local::system_dirs(&self.dirs.system));
+        dirs.extend(local::folder_group_dirs(&self.dirs.saves));
         for dir in dirs {
             let Ok(entries) = std::fs::read_dir(&dir) else {
                 continue;
@@ -23,9 +24,19 @@ impl Engine {
                     .file_name()
                     .to_str()
                     .is_some_and(|n| n.ends_with(TMP_SUFFIX));
-                if is_ours && entry.file_type().is_ok_and(|t| t.is_file()) {
+                if !is_ours {
+                    continue;
+                }
+                let Ok(ft) = entry.file_type() else {
+                    continue;
+                };
+                if ft.is_file() || ft.is_symlink() {
                     if let Err(e) = std::fs::remove_file(entry.path()) {
                         log::warn!("sync: temporário velho não saiu: {e}");
+                    }
+                } else if ft.is_dir() {
+                    if let Err(e) = std::fs::remove_dir_all(entry.path()) {
+                        log::warn!("sync: pasta temporária velha não saiu: {e}");
                     }
                 }
             }
@@ -68,21 +79,32 @@ impl Engine {
         Ok(target)
     }
 
-    /// Copia o arquivo para a pasta de backup da passada (o original fica). A
-    /// cópia vai ao disco (`fsync`) antes de o original ser substituído.
+    /// Copia o arquivo ou pasta de save para a pasta de backup da passada (o
+    /// original fica). A cópia vai ao disco (`fsync`) antes da substituição.
     pub fn backup(&self, path: &Path) -> io::Result<PathBuf> {
         let target = self.backup_target(path)?;
-        copy_synced(path, &target)?;
+        let meta = std::fs::symlink_metadata(path)?;
+        if meta.is_dir() && !meta.file_type().is_symlink() {
+            super::super::folder::copy_dir_synced(path, &target)?;
+        } else {
+            copy_synced(path, &target)?;
+        }
         Ok(target)
     }
 
-    /// Muda o arquivo para a pasta de backup da passada.
+    /// Muda o arquivo ou pasta de save para a pasta de backup da passada.
     pub(super) fn move_to_backup(&self, path: &Path) -> io::Result<PathBuf> {
         let target = self.backup_target(path)?;
         if std::fs::rename(path, &target).is_err() {
             // Outro volume: copia, grava no disco e só então tira o original.
-            copy_synced(path, &target)?;
-            std::fs::remove_file(path)?;
+            let meta = std::fs::symlink_metadata(path)?;
+            if meta.is_dir() && !meta.file_type().is_symlink() {
+                super::super::folder::copy_dir_synced(path, &target)?;
+                std::fs::remove_dir_all(path)?;
+            } else {
+                copy_synced(path, &target)?;
+                std::fs::remove_file(path)?;
+            }
         }
         Ok(target)
     }
