@@ -568,6 +568,21 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-11-27 — FB Alpha 2012 CPS-1 no Windows x64**. O core entra no
+  catálogo como alternativa para Arcade. O loader já preserva o ZIP e seu
+  nome original conforme solicitado pelo core. Cinco conjuntos locais
+  passaram o teste nativo de 1.800 quadros e a restauração de save state.
+  A variante fica atrás dos outros candidatos Arcade com a mesma pontuação
+  na escolha automática. [Evidência e fontes oficiais](ai-context/inventario-libretro.md#cores-já-no-catálogo)
+
+- **2026-11-27 — AmiArcadia no Windows x64**. A biblioteca separa Emerson Arcadia 2001,
+  Interton VC 4000 e Elektor TV Games Computer. `.bin` depende da pasta para identificar o console.
+  `.tvc` identifica Elektor e tem prioridade sobre `.bin` no arquivo compactado do AmiArcadia.
+  Para programas Interton desconhecidos pelo CRC, o ReEmu aplica o modo Interton da biblioteca
+  quando não há seleção explícita. A DLL 4.60 passou instalação pelo catálogo, abertura avulsa
+  e compactada, vídeo, áudio, RetroPad e restauração de estado com programas de teste próprios.
+  [Evidência e fontes oficiais](ai-context/inventario-libretro.md#cores-já-no-catálogo)
+
 - **2026-11-26 - mídia em disco por jogo e escolha manual no catálogo (parte 3 de 3)**.
   O protocolo `media://` guarda `hero`, `logo`, tela de título e até 8 capturas
   em `<dados>/media/<game_uuid>/`, compartilhando os arquivos entre dumps do

@@ -224,6 +224,8 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
                     "gametank" => ext == "gtr",
                     "megaduck" => matches!(ext.as_str(), "duck" | "bin"),
                     "handheld_electronic" => ext == "mgw",
+                    "arcadia" | "vc4000" => ext == "bin",
+                    "elektor" => ext == "tvc",
                     _ => false,
                 });
             RomDto {

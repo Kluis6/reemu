@@ -24,7 +24,7 @@ const ROM_EXTS: &[&str] = &[
     "d81", "g64", "t64", "x64", "crt", "adf", "adz", "dms", "hdf", "tzx", "z80", "rzx", "szx",
     "scl", "trd", "cdt", "cpr", "m3u", "cue", "gdi", "ccd", "chd", "iso", "gcm", "rvz", "wia",
     "gcz", "cso", "pbp", "cdi", "img", "mdf", "nrg", "tgc", "msa", "stx", "ch8", "sc8", "xo8",
-    "hc8", "t81", "uze", "vaporbin", "gtr", "duck", "mgw",
+    "hc8", "t81", "uze", "vaporbin", "gtr", "duck", "mgw", "tvc",
 ];
 
 /// ROM extraída para um arquivo ou diretório temporário, apagado no `Drop`.

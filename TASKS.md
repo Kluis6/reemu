@@ -183,6 +183,13 @@ o card atual fica.
         No EightyOne, executar `REEMU_SMOKE_ONLY=81_libretro`, abrir `.p`
         avulso e compactado, testar fitas `.tzx` e `.t81` pela biblioteca e
         verificar teclado virtual, teclado físico e restauração do save state.
+        No AmiArcadia, executar `REEMU_SMOKE_ONLY=amiarcadia_libretro`.
+        Validar cartuchos Arcadia e Interton em `.bin` e programas Elektor
+        em `.tvc`, avulsos, ZIP e 7z. Conferir RetroPad e save states.
+        No FB Alpha 2012 CPS-1, executar `REEMU_SMOKE_ONLY=fbalpha2012_cps1_libretro`
+        para conferir instalação e probe. Abrir um ZIP do conjunto FB Alpha
+        0.2.97.28 pela biblioteca Arcade com seleção manual do core. Conferir
+        vídeo, áudio, RetroPad e restauração de save state.
       - **Gerenciamento de BIOS.** Testar na interface a escolha de pasta,
         a busca em subpastas, o reconhecimento por MD5, a importação no
         destino por core, a revisão manual e a repetição sem duplicatas.

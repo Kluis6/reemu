@@ -11,6 +11,7 @@ export function requiresCompatibleCore(systemId: string | undefined, ext: string
   return systemId === 'laserdisc' || systemId === 'zx81' || systemId === 'arduboy'
     || systemId === 'uzebox' || systemId === 'vaporspec' || systemId === 'gametank'
     || systemId === 'megaduck' || systemId === 'handheld_electronic'
+    || systemId === 'arcadia' || systemId === 'vc4000' || systemId === 'elektor'
     || (systemId === 'zxspectrum' && ext === 'tzx')
 }
 
@@ -36,5 +37,11 @@ export function rankCores(
     }
     return (systemId && c.systems.includes(systemId) ? 0 : 2) + (c.extensions.includes(ext) ? 0 : 1)
   }
-  return [...available].sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name))
+  // Um ZIP de Arcade pode ser de outra placa. Em empate, o CPS-1 fica como
+  // alternativa depois dos cores que a seleção automática já oferecia.
+  const arcadePriority = (c: InstalledCore) =>
+    c.coreId === 'fbalpha2012_cps1_libretro' ? 1 : 0
+  return [...available].sort((a, b) =>
+    score(a) - score(b) || arcadePriority(a) - arcadePriority(b) || a.name.localeCompare(b.name),
+  )
 }

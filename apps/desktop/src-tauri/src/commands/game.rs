@@ -58,7 +58,7 @@ pub async fn load_game(
     // valores por core, com os overrides deste jogo por cima.
     let initial_option_values = match state.db.clone() {
         Some(pool) => {
-            let repo = db::CoreOptionsRepo::new(pool);
+            let repo = db::CoreOptionsRepo::new(pool.clone());
             let mut v = repo.values_for(&core_id).await.unwrap_or_default();
             if let Some(rid) = &rom_id {
                 for (k, val) in repo
@@ -67,6 +67,19 @@ pub async fn load_game(
                     .unwrap_or_default()
                 {
                     v.insert(k, val);
+                }
+                // O core identifica ROMs conhecidas pelo CRC. Para homebrews
+                // de Interton, usa o sistema da biblioteca como padrão.
+                if core_id == "amiarcadia_libretro"
+                    && !v.contains_key("amiarcadia_machine")
+                    && db::RomsRepo::new(pool)
+                        .get(rid)
+                        .await
+                        .ok()
+                        .flatten()
+                        .is_some_and(|rom| rom.system_id == "vc4000")
+                {
+                    v.insert("amiarcadia_machine".into(), "Interton".into());
                 }
             }
             v

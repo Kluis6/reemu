@@ -403,6 +403,50 @@ async fn megaduck_bin_needs_a_platform_folder_and_duck_takes_priority() {
 }
 
 #[tokio::test]
+async fn amiarcadia_media_uses_folder_for_bin_and_extension_for_tvc() {
+    let dir = scratch_dir();
+    write(&dir, "unrelated.bin", b"unclassified");
+    write(&dir, "Emerson - Arcadia 2001/Arcadia.BIN", b"arcadia");
+    write(&dir, "Interton - VC 4000/Interton.BIN", b"interton");
+    write(&dir, "Elektor.TVC", b"\x02\x10\x00\x10\x00\x1f\x10\x00");
+
+    let mut zip = zip::ZipWriter::new(
+        std::fs::File::create(dir.join("Emerson - Arcadia 2001/Mixed.zip")).unwrap(),
+    );
+    let options = zip::write::SimpleFileOptions::default();
+    zip.start_file("Auxiliary.bin", options).unwrap();
+    zip.write_all(b"unrelated").unwrap();
+    zip.start_file("Elektor.tvc", options).unwrap();
+    let tvc = b"\x02\x10\x00\x10\x00\x1f\x10\x00";
+    zip.write_all(tvc).unwrap();
+    zip.finish().unwrap();
+
+    let mut sevenz =
+        sevenz_rust2::ArchiveWriter::create(dir.join("Interton - VC 4000/Game.7z")).unwrap();
+    sevenz
+        .push_archive_entry(
+            sevenz_rust2::ArchiveEntry::new_file("Interton.bin"),
+            Some(std::io::Cursor::new(b"interton")),
+        )
+        .unwrap();
+    drop(sevenz.finish().unwrap());
+
+    let repo = db::RomsRepo::new(db::connect_in_memory().await.unwrap());
+    let report = scan_into(&repo, &dir, 0, |_| {}).await.unwrap();
+    assert_eq!((report.added, report.errors), (5, 0), "{report:?}");
+    assert_eq!(repo.list_by_system("arcadia").await.unwrap().len(), 1);
+    let interton = repo.list_by_system("vc4000").await.unwrap();
+    assert_eq!(interton.len(), 2);
+    assert!(interton
+        .iter()
+        .all(|game| game.crc32 == crc_of(b"interton")));
+    let elektor = repo.list_by_system("elektor").await.unwrap();
+    assert_eq!(elektor.len(), 2);
+    assert!(elektor.iter().all(|game| game.crc32 == crc_of(tvc)));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn chip8_scan_recognizes_variants_as_one_platform() {
     let dir = scratch_dir();
     let rom_bytes = b"\x00\xe0\x12\x00";

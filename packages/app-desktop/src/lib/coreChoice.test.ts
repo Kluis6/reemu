@@ -65,6 +65,16 @@ describe('rankCores', () => {
     expect(rankCores(cores, 'atari5200', 'bin')[0].coreId).toBe('a5200_libretro')
   })
 
+  it('oferece o CPS-1 para ZIP de Arcade sem mudar a escolha automática existente', () => {
+    const cps1 = core('fbalpha2012_cps1_libretro', 'FB Alpha 2012 CPS-1', ['zip'], ['arcade'])
+    const fbneo = core('fbneo_libretro', 'FinalBurn Neo', ['zip'], ['arcade'])
+    const mame = core('mame_libretro', 'MAME', ['zip'], ['arcade'])
+
+    expect(rankCores([cps1, mame, fbneo], 'arcade', 'zip')).toEqual([fbneo, mame, cps1])
+    expect(rankCores([cps1, mame], 'arcade', 'zip')).toEqual([mame, cps1])
+    expect(rankCores([cps1], 'arcade', 'zip')).toEqual([cps1])
+  })
+
   it('escolhe Uzem para Uzebox e exige um core compatível', () => {
     const uzem = core('uzem_libretro', 'Uzem', ['uze'], ['uzebox'])
     expect(rankCores([...cores, uzem], 'uzebox', 'uze')).toEqual([uzem])
@@ -82,6 +92,16 @@ describe('rankCores', () => {
     expect(rankCores([...cores, sameDuck], 'megaduck', 'duck')).toEqual([sameDuck])
     expect(rankCores([...cores, sameDuck], 'megaduck', 'bin')).toEqual([sameDuck])
     expect(rankCores(cores, 'megaduck', 'bin')).toEqual([])
+  })
+
+  it('seleciona AmiArcadia pelo sistema mesmo com outros cores que aceitam BIN', () => {
+    const amiArcadia = core('amiarcadia_libretro', 'AmiArcadia', ['bin', 'tvc'], ['arcadia', 'vc4000', 'elektor'])
+    const installed = [...cores, amiArcadia]
+    expect(rankCores(installed, 'arcadia', 'bin')).toEqual([amiArcadia])
+    expect(rankCores(installed, 'vc4000', 'bin')).toEqual([amiArcadia])
+    expect(rankCores(installed, 'elektor', 'tvc')).toEqual([amiArcadia])
+    expect(rankCores(cores, 'vc4000', 'bin')).toEqual([])
+    expect(rankCores(installed, 'atari2600', 'bin')[0].coreId).toBe('stella_libretro')
   })
 
   it('sem core do sistema, cai na extensão e depois no nome', () => {

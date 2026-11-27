@@ -5,7 +5,7 @@ A disponibilidade indica presença no índice de pacotes. A compatibilidade
 será comprovada pelo [roteiro de implementação](26-compatibilidade-libretro.md).
 
 - **356 IDs** na união dos metadados de cores e dos dois índices.
-- **261 IDs com pacote desktop**, dos quais 147 já estão no catálogo e 114 faltam. Entre os faltantes, 111 aparecem nos dois índices e 3 apenas no de Linux x64.
+- **261 IDs com pacote desktop**, dos quais 149 já estão no catálogo e 112 faltam. Entre os faltantes, 109 aparecem nos dois índices e 3 apenas no de Linux x64.
 - **95 IDs adicionais** dos metadados oficiais ficam na fila de investigação de builds e alvos.
 
 ## Fontes do recorte
@@ -15,7 +15,7 @@ será comprovada pelo [roteiro de implementação](26-compatibilidade-libretro.m
 - Windows x64, 258 IDs. SHA-256 do índice `82a8986115b431f154685c30f64ebe91de902dba66bd29f5e525d2ac0baf5dab`. [Índice do buildbot](https://buildbot.libretro.com/nightly/windows/x86_64/latest/.index-extended)
 - Linux x64, 261 IDs. SHA-256 do índice `d913ba47e22bf5f21956a7892740e8380c6a5942b3428cb269fb86edfa0111b7`. [Índice do buildbot](https://buildbot.libretro.com/nightly/linux/x86_64/latest/.index-extended)
 
-## IDs publicados para desktop fora do catálogo (114)
+## IDs publicados para desktop fora do catálogo (112)
 
 Os exemplos de extensão vêm dos arquivos oficiais de informações.
 Confirme o contrato do binário escolhido. Cada entrada passa pelos critérios
@@ -37,9 +37,8 @@ do roteiro antes de ser publicada como compatível.
 - [ ] `xemu_libretro` — Xbox. Validar boot, XISO e disco QCOW2, com persistência após fechar. **Pacote:** Windows e Linux x64.
 - [ ] `xenia_edge_libretro` — Xbox 360. Validar ISO/XEX e saves em `content/` com Vulkan. Encaminhar D3D12 ao [roteiro de GPU](24-direct3d-por-core.md). **Pacote:** Windows e Linux x64.
 
-### Alternativas para plataformas identificadas (8)
+### Alternativas para plataformas identificadas (7)
 
-- [ ] `fbalpha2012_cps1_libretro` — CP System I. Testar a seleção do core no sistema já mapeado com `.zip`. **Pacote:** Windows e Linux x64.
 - [ ] `fbalpha2012_cps2_libretro` — CP System II. Testar a seleção do core no sistema já mapeado com `.zip`. **Pacote:** Windows e Linux x64.
 - [ ] `fbalpha2012_cps3_libretro` — CP System III. Testar a seleção do core no sistema já mapeado com `.zip`. **Pacote:** Windows e Linux x64.
 - [ ] `fbalpha2012_neogeo_libretro` — Neo Geo. Testar a seleção do core no sistema já mapeado com `.zip`. **Pacote:** Windows e Linux x64.
@@ -48,9 +47,8 @@ do roteiro antes de ser publicada como compatível.
 - [ ] `pcem_libretro` — PC. Testar a seleção do core no sistema já mapeado com `.exe`, `.com`, `.bat`. Testar abertura sem conteúdo. **Pacote:** Windows e Linux x64.
 - [ ] `rust_dos_libretro` — DOS. Testar a seleção do core no sistema já mapeado com `.exe`, `.com`, `.bat`. Testar abertura sem conteúdo. **Pacote:** Windows e Linux x64.
 
-### Plataformas e formatos a confirmar (44)
+### Plataformas e formatos a confirmar (43)
 
-- [ ] `amiarcadia_libretro` — Arcadia 2001. Confirmar o mapeamento da plataforma e os formatos do core como `.bin`, `.tvc`. **Pacote:** Windows e Linux x64.
 - [ ] `applewin_libretro` — II. Confirmar o mapeamento da plataforma e os formatos do core como `.bin`, `.do`, `.dsk`. Testar abertura sem conteúdo. **Pacote:** Windows e Linux x64.
 - [ ] `b2_libretro` — BBC Micro. Confirmar o mapeamento da plataforma e os formatos do core como `.ssd`, `.dsd`. Testar abertura sem conteúdo. **Pacote:** Windows e Linux x64.
 - [ ] `bbkemu_libretro` — BBK Electronic Dictionary. Confirmar o mapeamento da plataforma e os formatos do core como `.gam`. **Pacote:** Windows e Linux x64.
@@ -262,6 +260,8 @@ Os testes pendentes em Linux x64 estão reunidos na
 
 | Core | Evidência no Windows x64 | Linux x64 e modos adicionais |
 | --- | --- | --- |
+| `fbalpha2012_cps1_libretro` | A DLL `v0.2.97.28` abre os ZIPs de CPS-1 pela rota Arcade, com o arquivo inteiro e o nome original. Cinco conjuntos locais rodaram 1.800 quadros de 384×224 e restauraram save states com a pasta de sistema vazia. Houve áudio audível em três títulos. Quatro outros ZIPs da biblioteca foram recusados. A seleção automática preserva a ordem dos outros candidatos Arcade que também aceitam ZIP. | Pacote Linux x64 publicado. Execução em Linux e teste interativo de controle pendentes. [Documentação oficial e versão do romset](https://docs.libretro.com/library/fbalpha2012_cps1/) |
+| `amiarcadia_libretro` | Buildbot de 2026-11-26, versão `4.60`, licença não comercial. Programas de teste próprios abriram sem BIOS externa. No app, passaram instalação, varredura e abertura de Arcadia 2001 e Interton VC 4000 em `.bin`, e Elektor em `.tvc`, inclusive ZIP e 7z. O RetroPad A alterou a imagem no Arcadia e o estado foi restaurado após fechar e reabrir. A fumaça confirma vídeo, tom e restauração de estado com `.bin`, `.tvc` e ZIP. | Pacote Linux x64 publicado. Execução em Linux e integração dos arcades Zaccaria e Malzak ficam pendentes. [Documentação](https://docs.libretro.com/library/amiarcadia/) · [Código consultado](https://github.com/warmenhoven/amiarcadia/tree/8ca27c925833fe0021475155512c7f467924f647) |
 | `bsnes-jg_libretro` | Buildbot de 2026-11-23, versão 2.1.0. Descoberta e probe pelo loader. A fumaça do catálogo rodou 180 quadros com imagem, áudio e restauração de save state. Teste adicional confirmou o botão B do RetroPad e a restauração de 2 KiB de SRAM após reabertura. | Pacote publicado. Validação em Linux e dos subsistemas Super Game Boy, BS-X e Sufami Turbo pendente. |
 | `mesen-s_libretro` | Buildbot de 2026-11-23, versão 0.4.0. O core-host rodou 180 quadros com imagem, áudio e restauração de save state para `.sfc`, `.gb` e `.gbc` com modo Color obrigatório. Testes adicionais confirmaram o botão B do RetroPad, a restauração da SRAM após reabertura, o modo Super Game Boy com as duas revisões de firmware e a inicialização de Satellaview com `.bs` avulso e em ZIP. | Pacote publicado. Execução em Linux e validação de jogos comerciais de Satellaview pendentes. [Documentação oficial](https://docs.libretro.com/library/mesen-s/) |
 | `mesen2_libretro` | Buildbot de 2026-11-23, versão 2.0.0 anunciada pela DLL. O core-host rodou 180 quadros com imagem, áudio e restauração de save state em cada cartucho de teste de NES, SNES, GB, GBC, GBA, PC Engine, SuperGrafx, Master System, Game Gear, WonderSwan e WonderSwan Color. O GBA abriu sem BIOS com a opção de iniciar direto no cartucho aplicada pelo ReEmu. FDS e PC Engine CD passaram com mídia sintética e também com programas homebrew usando firmware original. Super Game Boy 2 passou com firmware sintético e original. | Pacote Linux verificado como ELF64 x86-64 com os símbolos Libretro. Execução em Linux e boot de discos comerciais pendentes. [Documentação oficial](https://docs.libretro.com/library/mesen2/) |

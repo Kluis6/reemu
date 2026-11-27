@@ -67,6 +67,7 @@ pub fn system_for_extension(ext: &str) -> Option<&'static str> {
         "gtr" => "gametank",
         "duck" => "megaduck",
         "mgw" => "handheld_electronic",
+        "tvc" => "elektor",
         "vec" => "vectrex",
         "d64" | "d71" | "d81" | "g64" | "t64" | "x64" | "crt" => "c64",
         "adf" | "adz" | "dms" | "hdf" => "amiga",
@@ -220,6 +221,9 @@ pub fn system_from_folder_name(name: &str) -> Option<&'static str> {
         | "mega duck - cougar boy"
         | "welback - mega duck"
         | "welback holdings - mega duck" => "megaduck",
+        "arcadia" | "arcadia 2001" | "emerson arcadia 2001" | "emerson - arcadia 2001" => "arcadia",
+        "vc4000" | "vc 4000" | "interton" | "interton vc 4000" | "interton - vc 4000" => "vc4000",
+        "elektor" | "elektor tv games computer" | "elektor - tv games computer" => "elektor",
         "zx81"
         | "zx 81"
         | "sinclair zx81"
@@ -291,7 +295,7 @@ pub fn folder_only_exts(system_id: &str) -> &'static [&'static str] {
     match system_id {
         "msx" => MSX_FOLDER_EXTS,
         "arduboy" => &["hex"],
-        "odyssey2" | "megaduck" => &["bin"],
+        "odyssey2" | "megaduck" | "arcadia" | "vc4000" => &["bin"],
         "vectrex" => &["bin"],
         "supervision" => &["bin"],
         "sg1000" => &["bin", "rom"],

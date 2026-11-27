@@ -42,11 +42,14 @@ pub fn peek_archive(path: &Path, folder_system: Option<&str>) -> Option<Archived
             peek_zip(path, folder_system, required_extension)
         }
     };
-    if folder_system == Some("megaduck") {
-        // DUCK tem prioridade sobre arquivos BIN na mesma coleção.
-        if let Some(rom) = peek(Some("duck")) {
-            return Some(rom);
-        }
+    // O formato específico tem prioridade sobre BIN na mesma coleção.
+    let preferred = match folder_system {
+        Some("megaduck") => Some("duck"),
+        Some("arcadia" | "vc4000" | "elektor") => Some("tvc"),
+        _ => None,
+    };
+    if let Some(rom) = preferred.and_then(|extension| peek(Some(extension))) {
+        return Some(rom);
     }
     if required_sheet_priority(path, seven_zip) {
         for &sheet in ARCHIVE_SHEET_PRIORITY {
@@ -176,8 +179,13 @@ fn archive_entry_system(
     if folder_system == Some("zx81") && ext.eq_ignore_ascii_case("tzx") {
         return Some("zx81");
     }
-    if folder_system == Some("megaduck") && ext.eq_ignore_ascii_case("bin") {
-        return Some("megaduck");
+    if ext.eq_ignore_ascii_case("bin") {
+        match folder_system {
+            Some("megaduck") => return Some("megaduck"),
+            Some("arcadia") => return Some("arcadia"),
+            Some("vc4000") => return Some("vc4000"),
+            _ => {}
+        }
     }
     if matches!(ext.to_ascii_lowercase().as_str(), "gcm" | "gcz" | "tgc") {
         return Some("gamecube");

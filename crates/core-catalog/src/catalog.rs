@@ -270,6 +270,12 @@ pub const CATALOG: &[CatalogEntry] = &[
         "Non-commercial",
     ),
     sw(
+        "fbalpha2012_cps1_libretro",
+        "FB Alpha 2012 CPS-1",
+        "Arcade / Capcom CPS-1",
+        "Non-commercial",
+    ),
+    sw(
         "mame2003_plus_libretro",
         "MAME 2003-Plus",
         "Arcade (0.78+)",
@@ -365,6 +371,12 @@ pub const CATALOG: &[CatalogEntry] = &[
     sw("gametank_libretro", "GameTank", "GameTank", "MIT"),
     sw("sameduck_libretro", "SameDuck", "Mega Duck / Cougar Boy", "MIT"),
     sw("gw_libretro", "GW", "Handheld Electronic", "zlib"),
+    sw(
+        "amiarcadia_libretro",
+        "AmiArcadia",
+        "Emerson Arcadia 2001 / Interton VC 4000 / Elektor TV Games Computer",
+        "Non-commercial",
+    ),
     sw(
         "scummvm_libretro",
         "ScummVM",
@@ -689,6 +701,9 @@ fn systems_from_text(text: &str) -> Vec<&'static str> {
     add(word("gametank"), "gametank");
     add(has("mega duck") || has("cougar boy"), "megaduck");
     add(has("handheld electronic"), "handheld_electronic");
+    add(has("arcadia 2001"), "arcadia");
+    add(has("interton vc 4000"), "vc4000");
+    add(has("elektor tv games computer"), "elektor");
     add(has("colecovision"), "coleco");
     add(has("commodore 64") || has("c64"), "c64");
     add(has("amiga"), "amiga");
@@ -980,6 +995,10 @@ mod tests {
         assert_eq!(system_ids("gametank_libretro"), vec!["gametank"]);
         assert_eq!(system_ids("sameduck_libretro"), vec!["megaduck"]);
         assert_eq!(system_ids("gw_libretro"), vec!["handheld_electronic"]);
+        assert_eq!(
+            system_ids("amiarcadia_libretro"),
+            vec!["arcadia", "vc4000", "elektor"]
+        );
         assert_eq!(system_ids("81_libretro"), vec!["zx81"]);
         assert_eq!(system_ids("mesen-s_libretro"), vec!["snes", "gb", "gbc"]);
         assert_eq!(
@@ -1016,6 +1035,7 @@ mod tests {
             vec!["pcengine", "pcenginecd", "supergrafx"]
         );
         assert_eq!(ids("Neo Geo / CPS / arcade"), vec!["arcade"]);
+        assert_eq!(system_ids("fbalpha2012_cps1_libretro"), vec!["arcade"]);
         // todo core do catálogo cai em pelo menos um sistema da varredura,
         // exceto os de sistemas que a varredura não tem (Doom, TIC-80,
         // Commodore 128, Enterprise)
@@ -1352,6 +1372,60 @@ mod tests {
             }
         }
         "120 quadros de emulação por framefile e ZIP, vídeo e áudio".into()
+    }
+
+    fn amiarcadia_smoke(host: &Path, core: &Path, cores_dir: &Path) -> String {
+        use crate::smoke_roms::{AMIARCADIA_BIN, AMIARCADIA_TVC};
+        use std::ffi::OsStr;
+        use std::io::Write;
+
+        let system = cores_dir.join("amiarcadia-system");
+        std::fs::create_dir_all(&system).unwrap();
+        let bin = cores_dir.join("arcadia-smoke.bin");
+        let tvc = cores_dir.join("elektor-smoke.tvc");
+        let bin_zip = bin.with_extension("zip");
+        let mixed_zip = tvc.with_extension("zip");
+        std::fs::write(&bin, AMIARCADIA_BIN).unwrap();
+        std::fs::write(&tvc, AMIARCADIA_TVC).unwrap();
+
+        for (path, tvc_entry) in [(&bin_zip, false), (&mixed_zip, true)] {
+            let mut zip = zip::ZipWriter::new(std::fs::File::create(path).unwrap());
+            let opts = zip::write::SimpleFileOptions::default();
+            zip.start_file("arcadia.bin", opts).unwrap();
+            zip.write_all(AMIARCADIA_BIN).unwrap();
+            if tvc_entry {
+                zip.start_file("elektor.tvc", opts).unwrap();
+                zip.write_all(AMIARCADIA_TVC).unwrap();
+            }
+            zip.finish().unwrap();
+        }
+
+        for (rom, expected_color) in [
+            (bin, "0\t255\t255"),
+            (bin_zip, "0\t255\t255"),
+            (tvc, "156\t0\t0"),
+            (mixed_zip, "156\t0\t0"),
+        ] {
+            let args = [
+                OsStr::new("--run"),
+                cores_dir.as_os_str(),
+                OsStr::new("amiarcadia_libretro"),
+                rom.as_os_str(),
+                OsStr::new("180"),
+                system.as_os_str(),
+            ];
+            let (status, output, detail) = run_host(host, core, &args, &system.join("run.txt"));
+            if !status.is_some_and(|s| s.success())
+                || !smoke_has_av_and_state(&output)
+                || !output.lines().any(|line| line == "REEMU_RUN_AUDIBLE\ttrue")
+                || !output
+                    .lines()
+                    .any(|line| line.strip_prefix("REEMU_RUN_CENTER\t") == Some(expected_color))
+            {
+                return format!("FALHA: AmiArcadia ({}): {output}{detail}", rom.display());
+            }
+        }
+        "180 quadros de Arcadia e Elektor, mídia avulsa e ZIP, vídeo, áudio e save state ok".into()
     }
 
     fn eightyone_smoke(host: &Path, core: &Path, cores_dir: &Path) -> String {
@@ -1999,6 +2073,11 @@ mod tests {
             };
             let game = if c.id == "81_libretro" && row.0 == "ok" {
                 eightyone_smoke(&host, &path, &cores_dir)
+            } else {
+                game
+            };
+            let game = if c.id == "amiarcadia_libretro" && row.0 == "ok" {
+                amiarcadia_smoke(&host, &path, &cores_dir)
             } else {
                 game
             };

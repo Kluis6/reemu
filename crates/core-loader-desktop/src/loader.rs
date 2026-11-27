@@ -446,9 +446,14 @@ impl DesktopCoreLoader {
         let extracted = if crate::archive::is_archive(Path::new(rom_path)) && !keep_archive {
             let archive = Path::new(rom_path);
             let temp = std::env::temp_dir();
-            let extracted = if core_id.0 == "sameduck_libretro" {
-                // DUCK identifica a plataforma. BIN pode ser um arquivo auxiliar.
-                match crate::archive::extract_rom(archive, &temp, Some("duck")) {
+            let preferred_cart = match core_id.0.as_str() {
+                "sameduck_libretro" => Some("duck"),
+                "amiarcadia_libretro" => Some("tvc"),
+                _ => None,
+            };
+            let extracted = if let Some(ext) = preferred_cart {
+                // O formato específico identifica a plataforma. BIN pode ser auxiliar.
+                match crate::archive::extract_rom(archive, &temp, Some(ext)) {
                     Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                         crate::archive::extract_rom(archive, &temp, Some("bin"))
                     }
@@ -463,7 +468,7 @@ impl DesktopCoreLoader {
                     if e.kind() == std::io::ErrorKind::NotFound
                         && !matches!(
                             core_id.0.as_str(),
-                            "gametank_libretro" | "sameduck_libretro"
+                            "gametank_libretro" | "sameduck_libretro" | "amiarcadia_libretro"
                         ) =>
                 {
                     log::info!(
