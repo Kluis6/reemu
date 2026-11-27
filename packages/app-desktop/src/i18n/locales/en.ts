@@ -1477,6 +1477,16 @@ const en: Messages = {
     privacy: 'File names and hashes are sent to Alvanista to identify your games. Nothing about you is stored with the request.',
     counts: '{{found}} identified, {{pending}} queued, {{unknown}} unmatched',
     disabledByServer: 'Catalog currently turned off. Local providers continue as usual.',
+    pick: {
+      button: 'Choose game',
+      title: 'Choose game from catalog',
+      placeholder: 'Type the game title…',
+      hint: 'Your choice applies right away on this machine and helps the catalog recognize this file.',
+      searching: 'Searching catalog…',
+      empty: 'No games found for "{{query}}".',
+      error: 'Could not reach the catalog right now. Please try again.',
+      applied: 'Game updated from catalog.',
+    },
   },
 }
 

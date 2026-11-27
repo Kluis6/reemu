@@ -1478,6 +1478,16 @@ const ptBR = {
     privacy: 'Os nomes e os hashes dos arquivos vão para o Alvanista para identificar os jogos. Nada sobre você fica junto do pedido.',
     counts: '{{found}} identificados, {{pending}} na fila, {{unknown}} sem resposta',
     disabledByServer: 'Catálogo desligado no momento. Os provedores locais seguem normalmente.',
+    pick: {
+      button: 'Escolher o jogo',
+      title: 'Escolher o jogo no catálogo',
+      placeholder: 'Digite o nome do jogo…',
+      hint: 'A sua escolha vale na hora nesta máquina e ajuda o catálogo a reconhecer este arquivo.',
+      searching: 'Buscando no catálogo…',
+      empty: 'Nenhum jogo encontrado para "{{query}}".',
+      error: 'Não foi possível consultar o catálogo agora. Tente de novo.',
+      applied: 'Jogo atualizado pelo catálogo.',
+    },
   },
 }
 

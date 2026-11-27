@@ -365,6 +365,8 @@ pub fn run() {
             catalog::catalog_status,
             catalog::catalog_set_enabled,
             catalog::catalog_run_now,
+            catalog::catalog_search,
+            catalog::catalog_pick,
             sync::sync_status,
             sync::sync_set_enabled,
             sync::sync_set_label,

@@ -37,6 +37,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FullscreenDialog } from "../components/FullscreenDialog";
+import { PickGameDialog } from "../components/catalog/PickGameDialog";
 import { ConflictDialog } from "../components/sync/ConflictDialog";
 import { SaveLine } from "../components/sync/SaveLine";
 import { GamePresets } from "../components/GamePresets";
@@ -70,6 +71,7 @@ import { knownPlatforms, platformLabel } from "../lib/platform";
 import { errorToast, sysToast, shaderIssueToast } from "../lib/toast";
 import { errorText } from "../lib/errors";
 import {
+  catalogMediaUrl,
   deleteSaveState,
   getRomMetadata,
   rescrapeRom,
@@ -89,6 +91,7 @@ import {
   type SyncConflict,
 } from "../lib/tauri";
 import { conflictFor } from "../hooks/useSync";
+import { useCatalogStatus } from "../hooks/useCatalog";
 import { formatPlayTime } from "../lib/playTime";
 import { useModalButtonStyles } from "../styles/buttons";
 import { useDetailStyles, useTabStyles } from "../styles/xbox";
@@ -248,6 +251,12 @@ export function RomDetail() {
   const [editSystem, setEditSystem] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
   const [infoTab, setInfoTab] = useState<"about" | "library">("about");
+  const [pickOpen, setPickOpen] = useState(false);
+  const catalogStatus = useCatalogStatus();
+  const canPickFromCatalog =
+    !!catalogStatus.data?.connected &&
+    catalogStatus.data.enabled &&
+    !catalogStatus.data.disabledByServer;
   // Conflito de save achado ao apertar Jogar: pergunta antes de abrir.
   const [conflictAsk, setConflictAsk] = useState<{ conflict: SyncConflict; loadState?: string } | null>(null);
   // Campos da gaveta formatados pelo que cada provedor documenta
@@ -270,22 +279,37 @@ export function RomDetail() {
   // Dialog de tela cheia aberto; o conteúdo de Emulador fica na própria página.
   const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "media" | null>(null);
   const hasShaderCfg = !!shaderInfo.data?.gpu;
-  // Galeria: só as mídias que o provedor trouxe.
-  const shots = [
-    { key: "screenshot", url: meta.data?.screenshotUrl },
-    { key: "titleScreen", url: meta.data?.titleScreenUrl },
-    { key: "fanart", url: meta.data?.fanartUrl },
-  ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
+  const gameUuid = meta.data?.gameUuid;
   const catalog = meta.data?.gamekave;
+  const heroUrl = catalogMediaUrl(gameUuid, meta.data?.fanartUrl, "hero", 0);
+  const logoUrl = catalogMediaUrl(gameUuid, meta.data?.logoUrl, "logo", 0);
+  const titleScreenUrl = catalogMediaUrl(gameUuid, meta.data?.titleScreenUrl, "title", 0);
+  const catalogScreenshots = (catalog?.screenshots ?? []).slice(0, 8);
+  const primaryShotUrl = catalogMediaUrl(
+    gameUuid,
+    meta.data?.screenshotUrl,
+    "screenshot",
+    Math.max(0, catalogScreenshots.indexOf(meta.data?.screenshotUrl ?? "")),
+  );
+  // Galeria: só as mídias que o provedor trouxe, servidas do cache por jogo quando há gameUuid.
+  const shots = [
+    { key: "screenshot", url: primaryShotUrl },
+    { key: "titleScreen", url: titleScreenUrl },
+    { key: "fanart", url: heroUrl },
+  ].filter((m): m is { key: "screenshot" | "titleScreen" | "fanart"; url: string } => !!m.url);
   const galleryShots = [
     ...shots,
-    ...(catalog?.screenshots ?? [])
-      .filter((url) => !shots.some((shot) => shot.url === url))
-      .map((url) => ({ key: "screenshot" as const, url })),
+    ...catalogScreenshots
+      .map((raw, idx) => ({
+        raw,
+        url: catalogMediaUrl(gameUuid, raw, "screenshot", idx)!,
+      }))
+      .filter(({ raw, url }) => raw !== meta.data?.screenshotUrl && !shots.some((shot) => shot.url === url))
+      .map(({ url }) => ({ key: "screenshot" as const, url })),
   ];
   const trailerUrls = [...new Set([meta.data?.videoUrl, ...(catalog?.trailers ?? [])])]
     .filter((url): url is string => !!url);
-  const hasMedia = galleryShots.length > 0 || trailerUrls.length > 0 || !!meta.data?.logoUrl;
+  const hasMedia = galleryShots.length > 0 || trailerUrls.length > 0 || !!logoUrl;
   const panels = [
     { key: "states", show: true },
     { key: "shader", show: hasShaderCfg },
@@ -380,8 +404,10 @@ export function RomDetail() {
       </EmptyState>
     );
 
-  const cover = meta.data?.coverUrl ?? rom.boxart;
-  const hero = meta.data?.fanartUrl;
+  const cover = meta.data?.coverUrl?.startsWith("data:")
+    ? meta.data.coverUrl
+    : (rom.boxart ?? meta.data?.coverUrl);
+  const hero = heroUrl;
   const backdrop = hero && hero !== brokenHero ? hero : cover;
   const fileParts = splitPath(rom.filePath);
   const title = rom.userTitle ?? meta.data?.title ?? rom.title;
@@ -740,6 +766,15 @@ export function RomDetail() {
                       {sourceText}
                     </Badge>
                   )}
+                  {canPickFromCatalog && (
+                    <Button
+                      size="small"
+                      appearance="secondary"
+                      onClick={() => setPickOpen(true)}
+                    >
+                      {t("catalog.pick.button")}
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -834,7 +869,7 @@ export function RomDetail() {
                 <GameCatalogFacts catalog={catalog} />
               )}
 
-              {(shots.length > 0 || meta.data?.logoUrl || trailerUrls.length > 0) && (
+              {(shots.length > 0 || logoUrl || trailerUrls.length > 0) && (
                 <section className={s.infoSection} aria-labelledby="info-media">
                   <h3 id="info-media" className={s.infoHeading}>
                     {t("game.tabs.media")}
@@ -849,9 +884,9 @@ export function RomDetail() {
                     />
                   )}
                   <div className={s.infoMediaGrid}>
-                    {meta.data?.logoUrl && (
+                    {logoUrl && (
                       <figure className={s.galleryItem}>
-                        <img className={s.infoLogo} src={meta.data.logoUrl} alt="" loading="lazy" />
+                        <img className={s.infoLogo} src={logoUrl} alt="" loading="lazy" />
                         <figcaption className={s.galleryCaption}>{t("game.media.logo")}</figcaption>
                       </figure>
                     )}
@@ -1063,8 +1098,8 @@ export function RomDetail() {
           )}
           {panel === "media" && (
             <div className={s.gallery}>
-              {meta.data?.logoUrl && (
-                <img className={s.galleryLogo} src={meta.data.logoUrl} alt={t("game.media.logo")} />
+              {logoUrl && (
+                <img className={s.galleryLogo} src={logoUrl} alt={t("game.media.logo")} />
               )}
               {trailerUrls.map((url) => (
                 <video
@@ -1089,6 +1124,15 @@ export function RomDetail() {
           )}
         </div>
       </FullscreenDialog>
+
+      {pickOpen && (
+        <PickGameDialog
+          romId={rom.id}
+          systemId={rom.systemId}
+          initialQuery={rom.title}
+          onClose={() => setPickOpen(false)}
+        />
+      )}
 
       {conflictAsk && (
         <ConflictDialog

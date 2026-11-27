@@ -44,6 +44,9 @@ pub struct AppState {
     /// `<dados>/covers` — cache local das capas baixadas da libretro (uma
     /// vez por ROM, servido pelo protocolo `cover://` em `covers.rs`).
     pub covers_dir: std::path::PathBuf,
+    /// `<dados>/media`: cache por jogo (`<game_uuid>/`) de hero, logo, tela de
+    /// título e capturas do catálogo (`media://` em `covers.rs`).
+    pub media_dir: std::path::PathBuf,
     /// Hotkeys de sistema carregadas do DB (`system_hotkeys`). `save_binding` /
     /// `clear_system_hotkey` recompõem via `refresh_hotkey_resolver`.
     pub hotkeys: Mutex<ComboHotkeyResolver>,
@@ -139,6 +142,7 @@ impl AppState {
         let profile_dir = base.join("profile");
         let appearance_dir = base.join("appearance");
         let covers_dir = base.join("covers");
+        let media_dir = base.join("media");
         let mut cfg = SessionConfig::new(cores_dir.clone(), system_dir.clone(), save_dir.clone());
         cfg.enable_gamepad = true;
         cfg.audio_sink = Some(Box::new(move || {
@@ -165,6 +169,7 @@ impl AppState {
             profile_dir,
             appearance_dir,
             covers_dir,
+            media_dir,
             hotkeys: Mutex::new(ComboHotkeyResolver::new(hotkeys)),
             last_hotkey: Mutex::new(None),
             current_rom: Mutex::new(None),
@@ -397,7 +402,7 @@ mod game;
 pub(crate) mod hardware;
 mod input;
 mod library;
-mod metadata;
+pub(crate) mod metadata;
 mod save_states;
 mod settings;
 mod shader_preview;

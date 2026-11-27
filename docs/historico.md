@@ -568,6 +568,15 @@ Infra:
 
 ## Notas de progresso
 
+- **2026-11-26 - mídia em disco por jogo e escolha manual no catálogo (parte 3 de 3)**.
+  O protocolo `media://` guarda `hero`, `logo`, tela de título e até 8 capturas
+  em `<dados>/media/<game_uuid>/`, compartilhando os arquivos entre dumps do
+  mesmo jogo e servindo offline após o primeiro acesso (apenas URLs `https://`
+  sem credenciais; vídeos seguem em streaming). Na gaveta de informações da
+  página do jogo, "Escolher o jogo" pesquisa `GET /api/partner/v1/games/search`
+  e envia o vínculo em `POST /api/partner/v1/games/claims`, aplicando os dados
+  na hora com `state = 'manual'`.
+
 - **2026-11-26 - catálogo do Alvanista na biblioteca (parte 2 de 3)**. Com a
   conta do Alvanista conectada e a chave ligada em Configurações > Metadados,
   a biblioteca resolve as ROMs em lotes de até 200 por
