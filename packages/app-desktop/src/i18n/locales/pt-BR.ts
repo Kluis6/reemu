@@ -1473,6 +1473,12 @@ const ptBR = {
       altRight: 'Alt dir.',
     },
   },
+  catalog: {
+    toggle: 'Usar o catálogo do Alvanista para identificar meus jogos',
+    privacy: 'Os nomes e os hashes dos arquivos vão para o Alvanista para identificar os jogos. Nada sobre você fica junto do pedido.',
+    counts: '{{found}} identificados, {{pending}} na fila, {{unknown}} sem resposta',
+    disabledByServer: 'Catálogo desligado no momento. Os provedores locais seguem normalmente.',
+  },
 }
 
 export default ptBR

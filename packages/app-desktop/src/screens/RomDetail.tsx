@@ -334,7 +334,7 @@ export function RomDetail() {
     onError: (e) => push(errorToast(e, "saveChanges")),
   });
   const openEdit = () => {
-    const name = meta.data?.title ?? rom?.title ?? "";
+    const name = rom?.userTitle ?? meta.data?.title ?? rom?.title ?? "";
     const fields = gameMetadataDraft(meta.data);
     setOriginalEditName(name);
     setOriginalDetails(fields);
@@ -384,7 +384,7 @@ export function RomDetail() {
   const hero = meta.data?.fanartUrl;
   const backdrop = hero && hero !== brokenHero ? hero : cover;
   const fileParts = splitPath(rom.filePath);
-  const title = meta.data?.title ?? rom.title;
+  const title = rom.userTitle ?? meta.data?.title ?? rom.title;
   const hasQuick = states.data?.some((st) => st.slot === 0) ?? false;
 
   // Antes de abrir: um conflito de game save é perguntado (com "Decidir depois"
@@ -859,7 +859,9 @@ export function RomDetail() {
                       <figure key={image.key} className={s.galleryItem}>
                         <img className={s.infoShot} src={image.url} alt="" loading="lazy" />
                         <figcaption className={s.galleryCaption}>
-                          {image.key === "fanart" && meta.data?.providerSource === "gamekave"
+                          {image.key === "fanart" &&
+                          (meta.data?.providerSource === "gamekave" ||
+                            meta.data?.providerSource === "alvanista")
                             ? t("game.media.hero")
                             : t(`game.media.${image.key}`)}
                         </figcaption>

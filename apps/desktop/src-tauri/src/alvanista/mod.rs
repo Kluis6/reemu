@@ -223,6 +223,27 @@ impl Alvanista {
         let _ = self.status_from(tokens, None).await;
     }
 
+    /// Pedido JSON autenticado nas rotas de parceiro (`/api/partner/v1/*`).
+    /// Sem sessão marcada, devolve `AuthEnded` sem tocar no chaveiro nem na
+    /// rede; se a sessão viva acabou no servidor, limpa o espelho e o aparelho
+    /// do cloud save como em `status`.
+    pub(crate) async fn partner_json(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<&serde_json::Value>,
+    ) -> Result<(u16, serde_json::Value), ClientError> {
+        if !self.has_session().await {
+            return Err(ClientError::AuthEnded);
+        }
+        let res = self.client.authed_json(method, path, body).await;
+        if matches!(res, Err(ClientError::AuthEnded)) {
+            let _ = self.store().mirror_clear().await;
+            self.forget_save_device(true).await;
+        }
+        res
+    }
+
     /// Cancela a tentativa em andamento (se houver).
     pub fn cancel(&self) {
         self.generation.fetch_add(1, Ordering::SeqCst);
@@ -592,6 +613,9 @@ impl Alvanista {
         if let Err(e) = self.store().mirror_clear().await {
             log::warn!("alvanista: espelho não apagado: {e}");
         }
+        let _ = db::RomResolutionRepo::new(self.store().db().clone())
+            .clear_pending()
+            .await;
         Ok(())
     }
 
@@ -659,6 +683,7 @@ pub fn refresh_on_start(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         refresh_profile_now(&app).await;
+        crate::catalog::spawn_on_start(app.clone());
         // O cloud save começa depois: a primeira passada usa o par que a
         // renovação deixou.
         crate::sync::engine::run_on_start(app).await;
@@ -692,11 +717,15 @@ pub async fn alvanista_connect(
 ) -> Result<AlvanistaStatus, String> {
     let alva = state_of(&app)?;
     let lang = Lang::from_tag(lang.as_deref().unwrap_or("pt-BR"));
-    if saves == Some(true) {
+    let res = if saves == Some(true) {
         alva.reconnect_with_saves(lang, open_in_browser).await
     } else {
         alva.connect(lang, open_in_browser).await
+    };
+    if res.is_ok() {
+        crate::catalog::trigger_in_background(&app, crate::catalog::PassScope::All);
     }
+    res
 }
 
 #[tauri::command]

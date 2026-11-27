@@ -243,6 +243,48 @@ impl RomRepository for RomsRepo {
 }
 
 impl RomsRepo {
+    /// ROMs antigas ou provisórias cuja identidade ainda não foi calculada
+    /// (`identified_at IS NULL`), para o passo preguiçoso em segundo plano.
+    pub async fn unidentified(&self) -> Result<Vec<Rom>, RepoError> {
+        let rows = sqlx::query(AssertSqlSafe(format!(
+            "{SELECT_COLS} WHERE identified_at IS NULL ORDER BY system_id, file_path"
+        )))
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
+        rows.iter().map(row_to_rom).collect()
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn save_identity(
+        &self,
+        id: &str,
+        crc32: &str,
+        md5: &str,
+        sha1: Option<&str>,
+        serial: Option<&str>,
+        ident_name: &str,
+        ident_size: Option<i64>,
+        identified_at: Option<i64>,
+    ) -> Result<(), RepoError> {
+        sqlx::query(
+            "UPDATE roms SET crc32 = ?2, md5 = ?3, sha1 = ?4, serial = ?5, \
+             ident_name = ?6, ident_size = ?7, identified_at = ?8 WHERE id = ?1",
+        )
+        .bind(id)
+        .bind(crc32)
+        .bind(md5)
+        .bind(sha1)
+        .bind(serial)
+        .bind(ident_name)
+        .bind(ident_size)
+        .bind(identified_at)
+        .execute(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(())
+    }
+
     pub async fn set_metadata_and_details(
         &self,
         id: &str,

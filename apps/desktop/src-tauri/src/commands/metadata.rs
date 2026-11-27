@@ -63,6 +63,7 @@ pub struct GameMetadataDto {
     pub release_date: Option<String>,
     pub genre: Option<String>,
     pub provider_source: Option<String>,
+    pub game_uuid: Option<String>,
     pub developer: Option<String>,
     pub publisher: Option<String>,
     pub players: Option<String>,
@@ -93,6 +94,7 @@ impl From<GameMetadata> for GameMetadataDto {
             release_date: m.release_date,
             genre: m.genre,
             provider_source: m.provider_source,
+            game_uuid: m.game_uuid,
             developer: m.details.developer,
             publisher: m.details.publisher,
             players: m.details.players,
@@ -166,6 +168,7 @@ pub async fn get_rom_metadata(
         release_date: None,
         genre: None,
         provider_source: None,
+        game_uuid: None,
         details: Default::default(),
     }));
     if let Some(title) = rom.user_title {
@@ -260,7 +263,9 @@ pub async fn review_pending_match(
             cover_url: candidate.cover_url,
             release_date: candidate.release_date,
             genre: candidate.genre,
-            provider_source: Some(candidate.provider),
+            provider_source: Some(candidate.provider.clone()),
+            game_uuid: (candidate.provider == "gamekave" && !candidate.external_id.is_empty())
+                .then_some(candidate.external_id),
             details: candidate.details,
         }
         .into(),
@@ -357,7 +362,10 @@ async fn metadata_config(pool: &db::Db) -> Result<domain::metadata::MetadataConf
 /// Dispara uma leva de scraping em background e volta na hora. O progresso é
 /// consultado por `metadata_scan_progress`.
 #[tauri::command]
-pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppError> {
+pub async fn start_metadata_scan(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), AppError> {
     let pool = pool(&state)?;
     let progress = state.scrape.clone();
     if !progress.begin() {
@@ -366,6 +374,7 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppEr
     let covers = crate::covers::CoverDir(state.covers_dir.clone());
     tauri::async_runtime::spawn(async move {
         let run = async {
+            crate::catalog::run_before_own_scraper(&app, crate::catalog::PassScope::All).await;
             let cfg = metadata_config(&pool).await?;
             scraping::scrape_pending(pool, progress.clone(), cfg, &covers).await
         };
@@ -383,9 +392,13 @@ pub async fn start_metadata_scan(state: State<'_, AppState>) -> Result<(), AppEr
 /// (foi pra revisão) ou `"none"` (nenhum provedor achou).
 #[tauri::command]
 pub async fn rescrape_rom(
+    app: AppHandle,
     state: State<'_, AppState>,
     rom_id: String,
 ) -> Result<&'static str, AppError> {
+    if let Some(outcome) = crate::catalog::resolve_one_for_rescrape(&app, &rom_id).await {
+        return Ok(outcome);
+    }
     let pool = pool(&state)?;
     let cfg = metadata_config(&pool).await?;
     let covers = crate::covers::CoverDir(state.covers_dir.clone());

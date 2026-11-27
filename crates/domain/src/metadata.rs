@@ -164,7 +164,7 @@ pub trait RomHashService: Send + Sync {
 }
 
 /// Metadata catalogada de um jogo (linha de `game_metadata`).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct GameMetadata {
     pub rom_id: String,
     pub title: String,
@@ -174,7 +174,54 @@ pub struct GameMetadata {
     pub genre: Option<String>,
     pub provider_source: Option<String>,
     #[serde(default)]
+    pub game_uuid: Option<String>,
+    #[serde(default)]
     pub details: GameDetails,
+}
+
+/// Estado da consulta ao catálogo do Alvanista para uma ROM (`rom_resolution.state`).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ResolutionState {
+    Found,
+    Pending,
+    Unknown,
+    Manual,
+}
+
+impl ResolutionState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Found => "found",
+            Self::Pending => "pending",
+            Self::Unknown => "unknown",
+            Self::Manual => "manual",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "found" => Some(Self::Found),
+            "pending" => Some(Self::Pending),
+            "unknown" => Some(Self::Unknown),
+            "manual" => Some(Self::Manual),
+            _ => None,
+        }
+    }
+}
+
+/// Linha de `rom_resolution`: resposta guardada do catálogo para uma ROM.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RomResolution {
+    pub rom_id: String,
+    pub state: ResolutionState,
+    pub game_uuid: Option<String>,
+    pub matched_by: Option<String>,
+    pub reason: Option<String>,
+    pub retry_after: Option<i64>,
+    pub media_pending: bool,
+    pub answer_json: Option<String>,
+    pub resolved_at: i64,
 }
 
 /// Uma correspondência aguardando revisão do usuário (`scrape_matches` com

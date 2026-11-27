@@ -24,4 +24,13 @@ isFavorite: boolean,
 /**
  * Tempo de jogo acumulado (s): o perfil soma e ordena sem uma chamada por ROM.
  */
-playTimeSecs: number, contentExtension?: string, };
+playTimeSecs: number, 
+/**
+ * Extensão interna usada na escolha do core para jogos compactados.
+ */
+contentExtension?: string, 
+/**
+ * Nome escolhido pela pessoa (`roms.user_title`), quando definido; tem
+ * precedência sobre o título do catálogo na grade e na página do jogo.
+ */
+userTitle?: string, };

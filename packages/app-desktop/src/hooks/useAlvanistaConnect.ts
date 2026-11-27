@@ -5,6 +5,7 @@ import { sysToast } from '../lib/toast'
 import { alvanistaCancel, alvanistaConnect, alvanistaDisconnect } from '../lib/tauri'
 import { useToastStore } from '../stores/useToastStore'
 import { ALVANISTA_STATUS_KEY, DISCONNECTED } from './useAlvanistaStatusSync'
+import { CATALOG_STATUS_KEY } from './useCatalog'
 import { ALVANISTA_CACHED_KEY } from './useEffectiveProfile'
 
 /** Códigos que o `alvanista_connect` devolve ao falhar. */
@@ -63,6 +64,7 @@ export function useAlvanistaConnect({ saves = false }: { saves?: boolean } = {})
         // O topo e o corpo leem estados diferentes: os dois mudam juntos.
         qc.setQueryData(ALVANISTA_CACHED_KEY, next)
         void qc.invalidateQueries({ queryKey: ALVANISTA_CACHED_KEY })
+        void qc.invalidateQueries({ queryKey: CATALOG_STATUS_KEY })
         setConnecting(false)
       })
       .catch((err: unknown) => {
@@ -103,6 +105,7 @@ export function useAlvanistaDisconnect() {
       await qc.cancelQueries({ queryKey: ALVANISTA_CACHED_KEY })
       qc.setQueryData(ALVANISTA_CACHED_KEY, DISCONNECTED)
       void qc.invalidateQueries({ queryKey: ALVANISTA_CACHED_KEY })
+      void qc.invalidateQueries({ queryKey: CATALOG_STATUS_KEY })
       push(sysToast(t('alvanista.disconnected'), 'Success'))
     } catch {
       push(sysToast(t('alvanista.disconnectFailed'), 'Error'))

@@ -21,7 +21,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { LoadingState } from '../../components/EmptyState'
 import { ReviewMetadataDialog } from './ReviewMetadataDialog'
-import { BlockGroup, FieldBlock } from '../../components/SettingBlock'
+import { BlockGroup, FieldBlock, ToggleBlock } from '../../components/SettingBlock'
+import { useCatalogStatus, useSetCatalogEnabled } from '../../hooks/useCatalog'
 import { providerLabel } from '../../lib/metadataFormat'
 import { ListIconAction } from '../../components/ListIconAction'
 import { PAGE_PAD_B, SAFE_Y } from '../../styles/metrics'
@@ -103,6 +104,9 @@ export function SettingsMetadata() {
   const [tab, setTab] = useState<'results' | 'credentials'>('results')
   const qc = useQueryClient()
   const push = useToastStore((st) => st.push)
+
+  const catalog = useCatalogStatus()
+  const setCatalog = useSetCatalogEnabled()
 
   const cfg = useQuery({ queryKey: ['metadata-config'], queryFn: getMetadataConfig, retry: false })
   const [form, setForm] = useState<MetadataConfig | null>(null)
@@ -202,6 +206,35 @@ export function SettingsMetadata() {
       <div id="metadata-results" className={s.tabPanel} role="tabpanel" aria-labelledby="metadata-results-tab" tabIndex={0} hidden={tab !== 'results'}>
         {tab === 'results' && (
           <div className={s.panel}>
+            {catalog.data?.connected && (
+              <div className={s.scan} data-testid="catalog-section">
+                <BlockGroup>
+                  <ToggleBlock
+                    label={t('catalog.toggle')}
+                    description={t('catalog.privacy')}
+                    checked={catalog.data.enabled}
+                    busy={setCatalog.isPending}
+                    onChange={(on) =>
+                      setCatalog.mutate(on, {
+                        onError: (e) => push(errorToast(e, 'saveMetadataConfig')),
+                      })
+                    }
+                  />
+                </BlockGroup>
+                {catalog.data.enabled && (
+                  <Caption1 className={s.dim} role="status" data-testid="catalog-status-line">
+                    {catalog.data.disabledByServer
+                      ? t('catalog.disabledByServer')
+                      : t('catalog.counts', {
+                          found: catalog.data.found,
+                          pending: catalog.data.pending,
+                          unknown: catalog.data.unknown,
+                        })}
+                  </Caption1>
+                )}
+              </div>
+            )}
+
             <Caption1>
               <Trans i18nKey="metadata.intro" components={{ b: <Text as="strong" weight="semibold" /> }} />
             </Caption1>

@@ -210,6 +210,10 @@ impl Store {
         }
     }
 
+    pub(crate) fn db(&self) -> &db::Db {
+        self.repo.db()
+    }
+
     /// Lê o par. Erro de leitura do chaveiro é erro, não "sem conexão": quem
     /// chama não pode tratar uma falha como desconectado.
     pub async fn load(&self) -> Result<Option<Loaded>, String> {

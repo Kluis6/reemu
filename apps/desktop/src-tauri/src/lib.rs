@@ -4,6 +4,7 @@ mod appearance;
 mod bezel_pack;
 mod bios;
 mod bundled_shaders;
+mod catalog;
 mod commands;
 mod covers;
 mod credentials;
@@ -170,6 +171,8 @@ pub fn run() {
                         cores: state.cores_dir.clone(),
                     }
                 };
+                let covers_dir = app.state::<AppState>().covers_dir.clone();
+                catalog::install(app.handle(), pool.clone(), covers_dir);
                 sync::engine::install(app.handle(), sync_service, pool, dirs);
                 // Renova o espelho do perfil em segundo plano e depois roda a
                 // primeira passada do sync. Sem sessão não lê o chaveiro nem
@@ -359,6 +362,9 @@ pub fn run() {
             alvanista::alvanista_cancel,
             alvanista::alvanista_open_profile,
             alvanista::alvanista_open_site,
+            catalog::catalog_status,
+            catalog::catalog_set_enabled,
+            catalog::catalog_run_now,
             sync::sync_status,
             sync::sync_set_enabled,
             sync::sync_set_label,

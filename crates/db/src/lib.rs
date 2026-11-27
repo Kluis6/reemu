@@ -16,9 +16,9 @@ pub use repositories::{
     is_under, AlvanistaRepo, AspectAssignments, AspectRepo, AspectRow, AudioConfigRepo,
     AudioSettings, CheatsRepo, ControllerMappingsRepo, CoreOptionsRepo, DecorationAssignmentRow,
     DecorationRepo, DevicePortsRepo, HotkeyRow, InstalledCoresRepo, KeyboardBindingsRepo,
-    LibraryFoldersRepo, MetadataRepo, OptionOverrideRow, ProfileRepo, Put, RomIdentity, RomsRepo,
-    SaveStateRepo, SettingsRepo, SettingsTx, ShaderAssignmentRow, ShaderChainRepo, SyncRepo,
-    SystemCoreRepo, SystemHotkeysRepo, VideoConfigRepo, VideoSettings,
+    LibraryFoldersRepo, MetadataRepo, OptionOverrideRow, ProfileRepo, Put, RomIdentity,
+    RomResolutionRepo, RomsRepo, SaveStateRepo, SettingsRepo, SettingsTx, ShaderAssignmentRow,
+    ShaderChainRepo, SyncRepo, SystemCoreRepo, SystemHotkeysRepo, VideoConfigRepo, VideoSettings,
 };
 
 use thiserror::Error;

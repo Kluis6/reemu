@@ -920,6 +920,8 @@ async fn record_result(
             release_date: c.release_date.clone(),
             genre: c.genre.clone(),
             provider_source: Some(c.provider.clone()),
+            game_uuid: (c.provider == "gamekave" && !c.external_id.is_empty())
+                .then(|| c.external_id.clone()),
             details: c.details.clone(),
         })
         .await
@@ -951,6 +953,13 @@ async fn scrape_one_with(
     rom_id: &str,
     providers: &Providers,
 ) -> Result<Outcome, String> {
+    let skip = db::RomResolutionRepo::new(pool.clone())
+        .skip_own_scraper_ids()
+        .await
+        .map_err(|e| e.to_string())?;
+    if skip.contains(rom_id) {
+        return Ok(Outcome::NoMatch);
+    }
     let rom = load_scrape_rom(&pool, rom_id).await?;
     let (stem, candidate) = lookup_rom(&rom, cfg, providers).await?;
     record_result(
@@ -1039,10 +1048,17 @@ async fn scrape_pending_with(
     let repo = db::MetadataRepo::new(pool.clone());
     let roms_repo = db::RomsRepo::new(pool.clone());
 
-    let ids = repo
-        .rom_ids_without_match()
+    let skip = db::RomResolutionRepo::new(pool.clone())
+        .skip_own_scraper_ids()
         .await
         .map_err(|e| e.to_string())?;
+    let ids: Vec<String> = repo
+        .rom_ids_without_match()
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .filter(|id| !skip.contains(id))
+        .collect();
     progress.start_processing(ids.len());
     log::info!("metadata: {} ROM(s) na fila de scraping", ids.len());
 
@@ -1792,5 +1808,79 @@ mod tests {
             .expect("candidato canônico");
         assert_eq!(c.external_id, "2");
         assert_eq!(c.title, "Castlevania: Symphony of the Night");
+    }
+
+    #[tokio::test]
+    async fn own_scraper_skips_pending_and_found() {
+        use domain::metadata::{ResolutionState, RomResolution};
+
+        let (base, seen) = mock(|target| {
+            if target.starts_with("/api2/jeuInfos.php") {
+                (404, String::new())
+            } else if target.starts_with("/games/search") {
+                (200, r#"{"games": []}"#.into())
+            } else {
+                (404, String::new())
+            }
+        });
+        let pool = db::connect_in_memory().await.unwrap();
+        let roms = db::RomsRepo::new(pool.clone());
+        let res_repo = db::RomResolutionRepo::new(pool.clone());
+
+        for (id, name, state) in [
+            ("r_found", "FoundGame", ResolutionState::Found),
+            ("r_pending", "PendingGame", ResolutionState::Pending),
+            ("r_manual", "ManualGame", ResolutionState::Manual),
+            ("r_unknown", "UnknownGame", ResolutionState::Unknown),
+        ] {
+            roms.add(&Rom {
+                id: id.into(),
+                file_path: format!("/biblioteca/nes/{name}.nes"),
+                system_id: "nes".into(),
+                crc32: "11223344".into(),
+                md5: "0123456789abcdef0123456789abcdef".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+            res_repo
+                .put(&RomResolution {
+                    rom_id: id.into(),
+                    state,
+                    game_uuid: None,
+                    matched_by: None,
+                    reason: None,
+                    retry_after: Some(9_999_999),
+                    media_pending: false,
+                    answer_json: None,
+                    resolved_at: 100,
+                })
+                .await
+                .unwrap();
+        }
+
+        let providers = local(&base);
+        let progress = Arc::new(ScrapeProgress::default());
+        scrape_pending_with(
+            pool.clone(),
+            progress,
+            MetadataConfig::default(),
+            &NoCovers,
+            &providers,
+        )
+        .await
+        .unwrap();
+
+        let targets = seen.lock().unwrap().clone();
+        assert!(
+            targets.iter().any(|t| t.contains("UnknownGame")),
+            "unknown deveria consultar os provedores locais: {targets:?}"
+        );
+        for skipped in ["FoundGame", "PendingGame", "ManualGame"] {
+            assert!(
+                !targets.iter().any(|t| t.contains(skipped)),
+                "{skipped} não deveria consultar os provedores locais: {targets:?}"
+            );
+        }
     }
 }

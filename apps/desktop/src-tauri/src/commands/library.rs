@@ -25,10 +25,15 @@ pub struct RomDto {
     pub is_favorite: bool,
     /// Tempo de jogo acumulado (s): o perfil soma e ordena sem uma chamada por ROM.
     pub play_time_secs: u64,
-    // Extensão interna usada na escolha do core para jogos compactados.
+    /// Extensão interna usada na escolha do core para jogos compactados.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub content_extension: Option<String>,
+    /// Nome escolhido pela pessoa (`roms.user_title`), quando definido; tem
+    /// precedência sobre o título do catálogo na grade e na página do jogo.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub user_title: Option<String>,
 }
 
 /// Título de exibição de uma ROM: o que o usuário renomeou, senão o nome do
@@ -47,20 +52,39 @@ pub(crate) fn rom_title(r: &domain::library::Rom) -> String {
 #[tauri::command]
 pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, AppError> {
     let pool = pool(&state)?;
+    list_roms_from_pool(&pool).await
+}
+
+async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
     let repo = db::RomsRepo::new(pool.clone());
+    let meta_repo = db::MetadataRepo::new(pool.clone());
     let roms = repo.list().await.map_err(AppError::from)?;
     let play_times = repo.play_times().await.map_err(AppError::from)?;
-    let cover_overrides = db::MetadataRepo::new(pool)
+    let cover_overrides = meta_repo
         .cover_override_ids()
+        .await
+        .map_err(AppError::from)?;
+    let meta_titles = meta_repo
+        .titles_and_covers()
         .await
         .map_err(AppError::from)?;
     Ok(roms
         .into_iter()
         .map(|r| {
-            let title = rom_title(&r);
-            // Uma capa editada também aparece em sistemas sem cobertura da libretro.
+            let fallback_title = rom_title(&r);
+            let meta = meta_titles.get(&r.id);
+            let title = r
+                .user_title
+                .clone()
+                .or_else(|| {
+                    meta.map(|(t, _)| t.trim().to_owned())
+                        .filter(|t| !t.is_empty())
+                })
+                .unwrap_or_else(|| fallback_title.clone());
+            let has_meta_cover = meta.is_some_and(|(_, has_cover)| *has_cover);
             let boxart = (cover_overrides.contains(&r.id)
-                || library_scan::libretro_boxart_url(&r.system_id, &title).is_some())
+                || has_meta_cover
+                || library_scan::libretro_boxart_url(&r.system_id, &fallback_title).is_some())
             .then(|| crate::covers::cover_url(&r.id));
             let content_extension = std::path::Path::new(&r.file_path)
                 .extension()
@@ -85,6 +109,7 @@ pub async fn list_roms(state: State<'_, AppState>) -> Result<Vec<RomDto>, AppErr
                 play_time_secs: play_times.get(&r.id).copied().unwrap_or(0),
                 boxart,
                 title,
+                user_title: r.user_title,
                 id: r.id,
                 system_id: r.system_id,
                 file_path: r.file_path,
@@ -105,12 +130,7 @@ pub(super) fn validate_metadata_edits(
             let value = value.trim();
             value.is_empty()
                 || (value.starts_with("data:") && crate::covers::uploaded_artwork(value).is_some())
-                || reqwest::Url::parse(value).ok().is_some_and(|url| {
-                    url.scheme() == "https"
-                        && url.host_str().is_some()
-                        && url.username().is_empty()
-                        && url.password().is_none()
-                })
+                || net::http::https_url(value).is_some()
         };
         if [
             &details.cover_url,
@@ -389,6 +409,7 @@ async fn scan_dirs(
 
 #[tauri::command]
 pub async fn scan_library(
+    app: AppHandle,
     state: State<'_, AppState>,
     path: String,
     on_progress: tauri::ipc::Channel<ScanProgressDto>,
@@ -399,6 +420,9 @@ pub async fn scan_library(
         .add(&path, now_unix())
         .await
         .map_err(AppError::from)?;
+    if r.added + r.reclassified > 0 {
+        crate::catalog::trigger_in_background(&app, crate::catalog::PassScope::All);
+    }
     Ok(r)
 }
 
@@ -432,6 +456,7 @@ fn folders_from_roms(roms: &[domain::library::Rom]) -> Vec<String> {
 /// (disco externo desligado) é pulada, sem mexer no que veio dela.
 #[tauri::command]
 pub async fn rescan_library(
+    app: AppHandle,
     state: State<'_, AppState>,
     on_progress: tauri::ipc::Channel<ScanProgressDto>,
 ) -> Result<ScanReportDto, AppError> {
@@ -455,7 +480,11 @@ pub async fn rescan_library(
             missing.len()
         );
     }
-    scan_dirs(&repo, &present, &on_progress).await
+    let r = scan_dirs(&repo, &present, &on_progress).await?;
+    if r.added + r.reclassified > 0 {
+        crate::catalog::trigger_in_background(&app, crate::catalog::PassScope::All);
+    }
+    Ok(r)
 }
 
 #[cfg(test)]
@@ -488,5 +517,118 @@ mod tests {
             rom("/d/jogos/snes/x.sfc"),
         ];
         assert_eq!(folders_from_roms(&roms), ["/d/jogos", "/r/roms"]);
+    }
+
+    #[tokio::test]
+    async fn list_roms_prefers_user_title_then_catalogue_title() {
+        use domain::library::RomRepository;
+        use domain::metadata::{GameMetadata, MetadataRepository};
+
+        let pool = db::connect_in_memory().await.unwrap();
+        let roms_repo = db::RomsRepo::new(pool.clone());
+        let meta_repo = db::MetadataRepo::new(pool.clone());
+
+        roms_repo
+            .add(&domain::library::Rom {
+                id: "r_stem".into(),
+                file_path: "/roms/snes/smw_dump.sfc".into(),
+                system_id: "snes".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        roms_repo
+            .add(&domain::library::Rom {
+                id: "r_cat".into(),
+                file_path: "/roms/snes/ct_dump.sfc".into(),
+                system_id: "snes".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        roms_repo
+            .add(&domain::library::Rom {
+                id: "r_user".into(),
+                file_path: "/roms/snes/eb_dump.sfc".into(),
+                system_id: "snes".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        roms_repo
+            .set_metadata("r_user", Some("Meu EarthBound"), None)
+            .await
+            .unwrap();
+
+        for (id, title) in [("r_cat", "Chrono Trigger"), ("r_user", "EarthBound")] {
+            meta_repo
+                .upsert_metadata(&GameMetadata {
+                    rom_id: id.into(),
+                    title: title.into(),
+                    provider_source: Some("alvanista".into()),
+                    ..Default::default()
+                })
+                .await
+                .unwrap();
+        }
+
+        let got = list_roms_from_pool(&pool).await.unwrap();
+        let by_id = |id: &str| got.iter().find(|r| r.id == id).unwrap();
+        assert_eq!(by_id("r_stem").title, "smw_dump");
+        assert_eq!(by_id("r_cat").title, "Chrono Trigger");
+        assert_eq!(by_id("r_user").title, "Meu EarthBound");
+        assert_eq!(
+            by_id("r_user").user_title.as_deref(),
+            Some("Meu EarthBound")
+        );
+    }
+
+    #[tokio::test]
+    async fn list_roms_uses_cached_cover_when_metadata_has_one() {
+        use domain::library::RomRepository;
+        use domain::metadata::{GameMetadata, MetadataRepository};
+
+        let pool = db::connect_in_memory().await.unwrap();
+        let roms_repo = db::RomsRepo::new(pool.clone());
+        let meta_repo = db::MetadataRepo::new(pool.clone());
+
+        // `disc` não tem cobertura na libretro: `boxart` só aparece quando
+        // `game_metadata.cover_url` existe.
+        roms_repo
+            .add(&domain::library::Rom {
+                id: "r_no_cover".into(),
+                file_path: "/roms/disc/a.iso".into(),
+                system_id: "disc".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        roms_repo
+            .add(&domain::library::Rom {
+                id: "r_with_cover".into(),
+                file_path: "/roms/disc/b.iso".into(),
+                system_id: "disc".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        meta_repo
+            .upsert_metadata(&GameMetadata {
+                rom_id: "r_with_cover".into(),
+                title: "Jogo com Capa".into(),
+                cover_url: Some("https://cdn.alvanista.com/b/cover.webp".into()),
+                provider_source: Some("alvanista".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let got = list_roms_from_pool(&pool).await.unwrap();
+        let by_id = |id: &str| got.iter().find(|r| r.id == id).unwrap();
+        assert_eq!(by_id("r_no_cover").boxart, None);
+        assert_eq!(
+            by_id("r_with_cover").boxart,
+            Some(crate::covers::cover_url("r_with_cover"))
+        );
     }
 }

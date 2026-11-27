@@ -15,6 +15,10 @@ impl AlvanistaRepo {
         Self { db }
     }
 
+    pub fn db(&self) -> &Db {
+        &self.db
+    }
+
     pub async fn state_get(&self, key: &str) -> Result<Option<String>, RepoError> {
         let row = sqlx::query("SELECT value FROM alvanista_state WHERE key = ?1")
             .bind(key)
@@ -59,5 +63,36 @@ impl AlvanistaRepo {
             .await
             .map_err(be)?;
         Ok(())
+    }
+
+    /// Chave "Usar o catálogo do Alvanista para identificar meus jogos" (ligada por padrão).
+    pub async fn catalog_enabled(&self) -> Result<bool, RepoError> {
+        Ok(self.state_get("catalog.enabled").await?.as_deref() != Some("0"))
+    }
+
+    pub async fn set_catalog_enabled(&self, enabled: bool) -> Result<(), RepoError> {
+        self.state_set("catalog.enabled", if enabled { "1" } else { "0" })
+            .await?;
+        if enabled {
+            self.state_delete("catalog.disabled").await?;
+        }
+        Ok(())
+    }
+
+    pub async fn catalog_disabled_by_server(&self) -> Result<bool, RepoError> {
+        Ok(self.state_get("catalog.disabled").await?.as_deref() == Some("1"))
+    }
+
+    pub async fn set_catalog_disabled_by_server(&self, disabled: bool) -> Result<(), RepoError> {
+        if disabled {
+            self.state_set("catalog.disabled", "1").await
+        } else {
+            self.state_delete("catalog.disabled").await
+        }
+    }
+
+    /// O catálogo está ativo (chave ligada e rota habilitada no servidor)?
+    pub async fn catalog_active(&self) -> Result<bool, RepoError> {
+        Ok(self.catalog_enabled().await? && !self.catalog_disabled_by_server().await?)
     }
 }
