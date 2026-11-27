@@ -3,6 +3,7 @@ import {
   Text,
   Badge,
   Button,
+  Card,
   Spinner,
   Caption1,
   DrawerBody,
@@ -552,15 +553,19 @@ export function RomDetail() {
               <Text as="h1" className={s.title}>
                 {title}
               </Text>
-              {(meta.data?.releaseDate || meta.data?.genre || activeRegion) && (
+              {(activeRegion || releaseYear || genres[0]) && (
                 <div className={s.badges}>
                   {activeRegion && (
-                    <span className={s.badge} data-testid="rom-region-badge">
+                    <Badge className={s.badge} color="informative" data-testid="rom-region-badge">
                       {regionDisplayLabel(activeRegion, t)}
-                    </span>
+                    </Badge>
                   )}
-                  {releaseYear && <span className={s.badge}>{releaseYear}</span>}
-                  {genres[0] && <span className={s.badge}>{genres[0]}</span>}
+                  {releaseYear && (
+                    <Badge className={s.badge} color="informative">{releaseYear}</Badge>
+                  )}
+                  {genres[0] && (
+                    <Badge className={s.badge} color="informative">{genres[0]}</Badge>
+                  )}
                 </div>
               )}
             </div>
@@ -650,25 +655,25 @@ export function RomDetail() {
               />
             </Tooltip>
           </div>
-          {/* Tempo de jogo abaixo das ações, como na página de jogo do app
-              Xbox ("Tempo jogado: 20 minutos"). */}
-          {playTime.data !== undefined && (
-            <div className={s.heroStats}>
-              <ClockRegular className={s.heroStatsIcon} />
-              <span>
-                {playTime.data > 0
-                  ? t("game.timePlayed", { time: formatPlayTime(playTime.data) })
-                  : t("game.neverPlayed")}
-              </span>
-            </div>
-          )}
-          <SaveLine romId={romId} className={s.heroStats} iconClassName={s.heroStatsIcon} />
-          <AlvanistaCollectionBar
-            gameUuid={gameUuid}
-            systemId={rom.systemId}
-            playTimeSeconds={playTime.data ?? 0}
-            className={s.heroStats}
-          />
+          <Card appearance="subtle" className={s.heroActivity}>
+            {playTime.data !== undefined && (
+              <div className={s.heroStats}>
+                <ClockRegular className={s.heroStatsIcon} />
+                <span>
+                  {playTime.data > 0
+                    ? t("game.timePlayed", { time: formatPlayTime(playTime.data) })
+                    : t("game.neverPlayed")}
+                </span>
+              </div>
+            )}
+            <SaveLine romId={romId} className={s.heroStats} iconClassName={s.heroStatsIcon} />
+            <AlvanistaCollectionBar
+              gameUuid={gameUuid}
+              systemId={rom.systemId}
+              playTimeSeconds={playTime.data ?? 0}
+              className={s.heroStats}
+            />
+          </Card>
           {/* Só depois de carregar a lista de cores: antes ela vem vazia e o
               aviso piscava ao abrir a página. */}
           {cores.isSuccess && coreList.length === 0 && (

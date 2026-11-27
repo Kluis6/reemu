@@ -53,6 +53,17 @@ const useStyles = makeStyles({
     fontSize: '20px',
     flexShrink: 0,
   },
+  consent: {
+    display: 'grid',
+    gridTemplateColumns: 'auto minmax(0, 1fr)',
+    alignItems: 'start',
+  },
+  consentContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: tokens.spacingVerticalS,
+  },
   select: {
     minWidth: '156px',
   },
@@ -99,21 +110,23 @@ export function AlvanistaCollectionBar({
 
   if (needsConsent) {
     return (
-      <div className={mergeClasses(s.row, className)} data-testid="alva-collection-consent">
+      <div className={mergeClasses(s.row, className, s.consent)} data-testid="alva-collection-consent">
         <LibraryRegular className={s.icon} aria-hidden />
-        <span>{t('collection.connectPrompt')}</span>
-        {connecting ? (
-          <>
-            <span>{t('collection.connecting')}</span>
-            <Button size="small" appearance="subtle" onClick={cancel}>
-              {t('collection.cancelConnect')}
+        <div className={s.consentContent}>
+          <span>{t('collection.connectPrompt')}</span>
+          {connecting ? (
+            <>
+              <span>{t('collection.connecting')}</span>
+              <Button size="small" appearance="subtle" onClick={cancel}>
+                {t('collection.cancelConnect')}
+              </Button>
+            </>
+          ) : (
+            <Button size="small" appearance="secondary" onClick={connect}>
+              {t('collection.connectButton')}
             </Button>
-          </>
-        ) : (
-          <Button size="small" appearance="secondary" onClick={connect}>
-            {t('collection.connectButton')}
-          </Button>
-        )}
+          )}
+        </div>
       </div>
     )
   }

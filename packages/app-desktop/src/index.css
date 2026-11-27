@@ -113,6 +113,11 @@ kbd {
 }
 
 
+/* Mesmo espaço entre as abas horizontais, inclusive nos portais do Fluent. */
+.fui-TabList[aria-orientation="horizontal"] {
+  column-gap: var(--spacingHorizontalMNudge);
+}
+
 /* ---------------------------------------------------------------- foco ----
    Foco padrão do ReEmu em TODO componente focável, inclusive nos portais do
    Fluent (menus, diálogos, gavetas, que ficam fora do `.app`): anel de 3 px

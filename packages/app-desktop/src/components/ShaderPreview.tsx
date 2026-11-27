@@ -42,7 +42,6 @@ const useStyles = makeStyles({
     marginBottom: '16px',
   },
   tabs: {
-    columnGap: '8px',
     // raio padrão do ReEmu (4) no lugar da pílula do `filled-circular`
     '& .fui-Tab': { borderRadius: tokens.borderRadiusMedium },
   },

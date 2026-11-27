@@ -83,6 +83,7 @@ export function EmptyState({
   title,
   children,
   action,
+  className,
   size = 'medium',
   onCard = false,
 }: {
@@ -97,6 +98,7 @@ export function EmptyState({
   children?: ReactNode
   /** Botão de ação (ex.: "Adicionar ROMs…"). */
   action?: ReactNode
+  className?: string
   /** `large`: ocupa a página, no meio, com tudo maior (página inicial vazia). */
   size?: 'medium' | 'large'
   onCard?: boolean
@@ -104,7 +106,7 @@ export function EmptyState({
   const s = useStyles()
   const lg = size === 'large'
   return (
-    <div className={mergeClasses(s.root, lg && s.rootLg)}>
+    <div className={mergeClasses(s.root, lg && s.rootLg, className)}>
       <div className={mergeClasses(s.content, lg && s.contentLg, !onCard && 'reemu-on-wallpaper')}>
         {(art || icon) && (
           <div className={mergeClasses(art ? s.art : s.icon, artAccent && s.artAccent, lg && s.artLg)} aria-hidden>

@@ -7,6 +7,7 @@ import {
   Text,
   Title2,
   makeStyles,
+  mergeClasses,
   tokens,
 } from '@fluentui/react-components'
 import {
@@ -26,7 +27,7 @@ import { socialErrorCode, useAlvanistaAchievements } from '../hooks/useSocial'
 import { platformLabel } from '../lib/platform'
 import { alvanistaCachedStatus, listRoms, raStatus } from '../lib/tauri'
 import { pickText } from './profile/profileData'
-import { PAGE_PAD_B, PAGE_PAD_L, PAGE_PAD_R, PAGE_TOP } from '../styles/metrics'
+import { PAGE_PAD_B, PAGE_TOP } from '../styles/metrics'
 import { useTabStyles } from '../styles/xbox'
 
 const useStyles = makeStyles({
@@ -34,9 +35,11 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     gap: tokens.spacingVerticalXL,
-    padding: `${PAGE_TOP}px ${PAGE_PAD_R}px ${PAGE_PAD_B}px ${PAGE_PAD_L}px`,
-    boxSizing: 'border-box',
+    // O AppShell aplica as margens da Início ao redor da página.
+    minHeight: `calc(100vh - var(--reemuPageTop, ${PAGE_TOP}px) - var(--reemuScrollPadB, ${PAGE_PAD_B}px) - var(--reemuInsetY, 0px))`,
   },
+  tabs: { marginLeft: 0 },
+  empty: { flexGrow: 1, minHeight: 0 },
   hero: {
     display: 'flex',
     alignItems: 'center',
@@ -205,6 +208,7 @@ export function Achievements() {
       return (
         <EmptyState
           size="large"
+          className={s.empty}
           art={<TrophyRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
           artAccent
           title={t('nav.achievements')}
@@ -301,6 +305,7 @@ export function Achievements() {
       return (
         <EmptyState
           size="large"
+          className={s.empty}
           art={<TrophyRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
           artAccent
           title={t('achievements.alvanistaTab')}
@@ -319,6 +324,7 @@ export function Achievements() {
       return (
         <EmptyState
           size="large"
+          className={s.empty}
           art={<TrophyRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
           artAccent
           title={t('achievements.alvanistaTab')}
@@ -345,6 +351,7 @@ export function Achievements() {
       return (
         <EmptyState
           size="large"
+          className={s.empty}
           art={<TrophyRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
           artAccent
           title={t('achievements.alvanistaTab')}
@@ -458,7 +465,7 @@ export function Achievements() {
   return (
     <div className={s.page}>
       <TabList
-        className={tb.tabs}
+        className={mergeClasses(tb.tabs, s.tabs, 'reemu-on-wallpaper')}
         selectedValue={tab}
         onTabSelect={(_, d) => setTab(d.value as 'ra' | 'alvanista')}
       >

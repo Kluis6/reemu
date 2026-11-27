@@ -1145,15 +1145,20 @@ export const useDetailStyles = makeStyles({
   heroBody: {
     position: "relative",
     zIndex: 1,
-    display: "flex",
-    flexDirection: "column",
-    // Capa → ações: 16 epx, como no app Xbox.
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 5fr) minmax(0, 4fr)",
+    gridTemplateAreas: '"title activity" "actions activity"',
+    columnGap: "32px",
     rowGap: "16px",
+    "@media (max-width: 1020px)": {
+      gridTemplateColumns: "minmax(0, 1fr)",
+      gridTemplateAreas: '"title" "actions" "activity"',
+    },
     // Esquerda usa o MESMO padding da página (`PAGE_PAD_L`, o `.hero` pai
     // cancelou com margin negativo) — ícone/título alinham com o resto do
     // conteúdo (tabs, título das seções) em vez de ficar colado na rail.
     paddingLeft: PAGE_PAD_L,
-    paddingRight: "26px",
+    paddingRight: PAGE_PAD_L,
     // As abas de baixo sobem 96 sobre o hero (`tabsOverlap`); o conteúdo
     // termina 24 acima delas (o TabList começa 20 abaixo do topo da seção):
     // 96 − 20 + 24 = 100. Com o hero no tamanho mínimo isso não muda nada;
@@ -1166,9 +1171,11 @@ export const useDetailStyles = makeStyles({
     // do destaque da Início e dos títulos das outras telas (pedido do
     // usuário; antes ficava logo abaixo da topbar, em y = 80).
     paddingTop: "var(--reemuPageTop, 116px)",
-    maxWidth: "min(85%, 900px)",
+    width: "100%",
+    boxSizing: "border-box",
   },
   heroHeader: {
+    gridArea: "title",
     display: "flex",
     flexDirection: "row",
     alignItems: "center",
@@ -1269,28 +1276,25 @@ export const useDetailStyles = makeStyles({
   },
   badges: {
     display: "flex",
+    alignItems: "center",
     columnGap: "8px",
     rowGap: "6px",
     marginTop: "8px",
     flexWrap: "wrap",
   },
-  // fluent2.microsoft.design/typography: "use sentence case, nunca all caps".
   badge: {
-    paddingTop: "3px",
-    paddingBottom: "3px",
-    paddingLeft: "10px",
-    paddingRight: "10px",
-    borderRadius: tokens.borderRadiusCircular,
-    fontSize: tokens.fontSizeBase200,
-    fontWeight: 600,
-    letterSpacing: "0.02em",
-    backgroundColor: "rgba(0, 0, 0, 0.55)",
-    border: `1px solid ${tokens.colorNeutralStroke2}`,
+    // Centraliza visualmente os glifos do Segoe UI dentro da altura do Badge.
+    paddingBottom: "2px",
+    // O fundo mantém contraste com o texto branco mesmo sobre artes claras.
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    color: "#fff",
+    ...shorthands.borderColor("rgba(255, 255, 255, 0.45)"),
   },
   // Descrição: fora do hero agora (modelo "página de loja" — banner só
   // com ícone/título/ações, sinopse vem depois, sobre o fundo normal da
   // página) — `.root` já dá o espaçamento (`rowGap`) entre ela e o hero.
   actions: {
+    gridArea: "actions",
     display: "flex",
     // 16 epx entre os botões, como no app Xbox.
     columnGap: "16px",
@@ -1366,15 +1370,29 @@ export const useDetailStyles = makeStyles({
     ":hover, :focus": { backgroundColor: `${HERO_BTN_HOVER} !important` },
     ":hover:active": { backgroundColor: `${HERO_BTN_PRESSED} !important` },
   },
-  // Linha de tempo de jogo abaixo das ações (página de jogo do app Xbox:
-  // texto de 16 com ícone, logo abaixo dos botões). Branco translúcido:
-  // fica sempre sobre o véu escuro do hero.
+  heroActivity: {
+    gridArea: "activity",
+    alignSelf: "end",
+    display: "flex",
+    flexDirection: "column",
+    rowGap: tokens.spacingVerticalM,
+    padding: `${tokens.spacingVerticalM} ${tokens.spacingHorizontalL}`,
+    borderRadius: tokens.borderRadiusMedium,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    boxShadow: "none",
+    ":empty": { display: "none" },
+    "& .fui-Button": {
+      backgroundColor: "var(--reemuSurface1) !important",
+      color: `${tokens.colorNeutralForeground1} !important`,
+      ":hover, :focus": { backgroundColor: `${HERO_BTN_HOVER} !important` },
+    },
+  },
   heroStats: {
     display: "flex",
     alignItems: "center",
     columnGap: "8px",
     fontSize: tokens.fontSizeBase400,
-    color: "rgba(255, 255, 255, 0.82)",
+    color: "#fff",
   },
   heroStatsIcon: { fontSize: `${M.ICON}px`, flexShrink: 0 },
   // Coração de favorito preenchido: cor de marca (mesmo token do "Nintendo
@@ -1402,6 +1420,7 @@ export const useDetailStyles = makeStyles({
   },
   // Mesmo espaço dos outros itens do hero (o `rowGap` de 16), sem margem a mais.
   noCoreBar: {
+    gridColumn: "1 / -1",
     maxWidth: "720px",
   },
   section: { display: "flex", flexDirection: "column", rowGap: "10px" },
@@ -1904,7 +1923,6 @@ export const usePauseStyles = makeStyles({
 export const useTabStyles = makeStyles({
   tabs: {
     ...TAB_STATES,
-    columnGap: "8px",
     // O texto da 1ª aba na mesma coluna do conteúdo de baixo, como nas
     // Configurações do Windows 11 (título da seção, rótulos e controles
     // começam no mesmo x): a aba tem 13 de padding + 2 do conteúdo do
