@@ -6,7 +6,7 @@ use domain::metadata::{
     GameMetadata, GameMetadataEdits, MatchStatus, MetadataConfig, MetadataRepository, PendingMatch,
     ScrapeCandidate,
 };
-use sqlx::Row;
+use sqlx::{QueryBuilder, Row, Sqlite};
 
 pub struct MetadataRepo {
     db: Db,
@@ -165,6 +165,77 @@ impl MetadataRepo {
         super::roms_repo::RomsRepo::update_metadata(&mut tx, rom_id, title, None, edits).await?;
         tx.commit().await.map_err(be)?;
         Ok(())
+    }
+
+    /// Resolve várias correspondências pendentes em uma única transação SQLite.
+    /// Devolve os `rom_id`s que estavam em `pending_review` e foram resolvidos.
+    pub async fn resolve_pending_bulk(
+        &self,
+        rom_ids: &[String],
+        accept: bool,
+    ) -> Result<Vec<String>, RepoError> {
+        const CHUNK: usize = 200;
+
+        let mut seen = std::collections::HashSet::with_capacity(rom_ids.len());
+        let unique: Vec<&str> = rom_ids
+            .iter()
+            .map(String::as_str)
+            .filter(|id| !id.is_empty() && seen.insert(*id))
+            .collect();
+        if unique.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut tx = self.db.begin().await.map_err(be)?;
+        let mut resolved: Vec<String> = Vec::with_capacity(unique.len());
+
+        if !accept {
+            for chunk in unique.chunks(CHUNK) {
+                let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new(
+                    "UPDATE scrape_matches SET status = 'no_match' \
+                     WHERE status = 'pending_review' AND rom_id IN (",
+                );
+                let mut sep = qb.separated(", ");
+                for id in chunk {
+                    sep.push_bind((*id).to_owned());
+                }
+                sep.push_unseparated(") RETURNING rom_id");
+                let ids: Vec<String> = qb
+                    .build_query_scalar::<String>()
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(be)?;
+                resolved.extend(ids);
+            }
+        } else {
+            for chunk in unique.chunks(CHUNK) {
+                let mut qb: QueryBuilder<Sqlite> = QueryBuilder::new(
+                    "UPDATE scrape_matches SET status = 'user_confirmed' \
+                     WHERE status = 'pending_review' AND rom_id IN (",
+                );
+                let mut sep = qb.separated(", ");
+                for id in chunk {
+                    sep.push_bind((*id).to_owned());
+                }
+                sep.push_unseparated(") RETURNING rom_id, candidate_json");
+                let rows: Vec<(String, Option<String>)> = qb
+                    .build_query_as::<(String, Option<String>)>()
+                    .fetch_all(&mut *tx)
+                    .await
+                    .map_err(be)?;
+                for (rom_id, raw) in rows {
+                    let json =
+                        raw.ok_or_else(|| RepoError::Backend("pendência sem candidato".into()))?;
+                    let candidate: ScrapeCandidate = serde_json::from_str(&json)
+                        .map_err(|e| RepoError::Corrupt(format!("candidate JSON inválido: {e}")))?;
+                    write_metadata(&mut *tx, &meta_from_candidate(&rom_id, &candidate)).await?;
+                    resolved.push(rom_id);
+                }
+            }
+        }
+
+        tx.commit().await.map_err(be)?;
+        Ok(resolved)
     }
 }
 

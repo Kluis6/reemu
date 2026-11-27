@@ -36,6 +36,7 @@ body {
   font-style: normal;
   font-display: swap;
 }
+
 @font-face {
   font-family: "Selawik";
   src: url("./assets/fonts/selawik/selawksl.woff2") format("woff2");
@@ -43,6 +44,7 @@ body {
   font-style: normal;
   font-display: swap;
 }
+
 @font-face {
   font-family: "Selawik";
   src: url("./assets/fonts/selawik/selawk.woff2") format("woff2");
@@ -50,6 +52,7 @@ body {
   font-style: normal;
   font-display: swap;
 }
+
 @font-face {
   font-family: "Selawik";
   src: url("./assets/fonts/selawik/selawksb.woff2") format("woff2");
@@ -57,6 +60,7 @@ body {
   font-style: normal;
   font-display: swap;
 }
+
 @font-face {
   font-family: "Selawik";
   src: url("./assets/fonts/selawik/selawkb.woff2") format("woff2");
@@ -72,6 +76,7 @@ body {
   -webkit-user-select: none;
   user-select: none;
 }
+
 input,
 textarea,
 [contenteditable="true"] {
@@ -157,6 +162,7 @@ kbd {
 :where(.fui-Button, .fui-MenuButton, .fui-ToggleButton) {
   position: relative;
 }
+
 /* A área do anel e do brilho existe SEMPRE, transparente em repouso: o hover
    e o foco só mudam a cor. Antes o hover abria o `overflow` (o Fluent põe
    `hidden` na raiz do botão) e criava o `::before`; ao sair, a área de fora
@@ -170,6 +176,7 @@ kbd {
   outline: 3px solid transparent !important;
   outline-offset: 3px !important;
 }
+
 :where(.fui-Button, .fui-MenuButton, .fui-ToggleButton):where(:not(:disabled, [aria-disabled="true"]))::before {
   content: "";
   position: absolute;
@@ -180,6 +187,7 @@ kbd {
   box-shadow: 0 0 12px transparent;
   pointer-events: none;
 }
+
 :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):not(:disabled, [aria-disabled="true"]):is(:hover, [data-fui-focus-visible]),
 html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus {
   border-color: transparent !important;
@@ -188,6 +196,7 @@ html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus 
   box-shadow: none !important;
   overflow: visible !important;
 }
+
 :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):not(:disabled, [aria-disabled="true"]):is(:hover, [data-fui-focus-visible])::before,
 html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus::before {
   content: "";
@@ -206,13 +215,14 @@ html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus:
    `<input>` escondido (switch, rádio, checkbox, slider, card selecionável),
    no componente visível que o contém. Os cards de jogo têm o anel próprio
    (vão transparente). */
-html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):not(.fui-Card, .fui-Dropdown__button):focus,
+html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):not(.fui-Card, .fui-Dropdown__button, [role="tabpanel"]):focus,
 html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):focus-within,
 html[data-nav-focus] .fui-Card:not([role="button"]):has(> .fui-Card__checkbox:focus) {
   outline: 3px solid var(--colorBrandStroke1) !important;
   outline-offset: 3px !important;
   box-shadow: none !important;
 }
+
 /* Botão do Fluent pelo controle: a borda some como no foco de teclado
    (regra acima do 2) — antes a borda cinza ficava dentro do anel só no
    controle (botões-pílula da página inicial, pedido do usuário). */
@@ -258,11 +268,13 @@ html[data-nav-focus] :is(.fui-Button, .fui-MenuButton, .fui-ToggleButton):focus 
 .fui-AccordionHeader__button {
   border-radius: var(--borderRadiusMedium);
 }
+
 .fui-AccordionHeader__button:hover,
 .fui-AccordionHeader__button[data-fui-focus-visible],
 html[data-nav-focus] .fui-AccordionHeader__button:focus {
   background-color: var(--colorNeutralBackground1Hover);
 }
+
 /* mais específico que a regra 2, que zera o `box-shadow` com `!important` */
 html[data-nav-focus] .fui-AccordionHeader .fui-AccordionHeader__button.fui-AccordionHeader__button:focus {
   box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent) !important;
@@ -306,6 +318,7 @@ html[data-nav-focus] .fui-Select:focus-within .fui-Select__select,
 html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):not(.fui-Card):focus {
   border-color: transparent !important;
 }
+
 :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search, [data-fui-focus-within]):has(:focus-visible)::after,
 html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search, [data-fui-focus-within]):focus-within::after {
   opacity: 0;
@@ -323,15 +336,18 @@ html[data-nav-focus] :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):fo
 .fui-Slider:has([data-nav-engaged]) {
   border-radius: var(--borderRadiusMedium);
 }
+
 html[data-nav-focus] .fui-Switch:focus-within {
   width: fit-content;
 }
+
 /* `[tabindex]:not(.fui-Card)` só pra ganhar da regra geral do controle
    (mais específica que um `:is([role])`). */
 html[data-nav-focus] :is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="treeitem"])[tabindex]:not(.fui-Card):focus {
   outline-offset: -3px !important;
   box-shadow: none !important;
 }
+
 :is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="treeitem"]):is([data-fui-focus-visible], [data-fui-focus-within])::after {
   top: 0 !important;
   right: 0 !important;
@@ -355,15 +371,17 @@ html[data-nav-focus] :is([role="menuitem"], [role="menuitemradio"], [role="menui
   padding: 12px !important;
   margin: 0 -12px !important;
 }
+
 /* Slide do carrossel da Início: o botão ocupa o carrossel inteiro, que corta
    o que passa da borda (`overflow: hidden`). O anel padrão (3 px a 3 px, com
    o brilho) vai no PRÓPRIO carrossel, que não é cortado; o botão em si fica
    sem anel. */
-html[data-nav-focus] .fui-CarouselCard > button:not(.fui-Card):focus,
-.fui-CarouselCard > button:focus-visible {
+html[data-nav-focus] .fui-CarouselCard>button:not(.fui-Card):focus,
+.fui-CarouselCard>button:focus-visible {
   outline: none !important;
   box-shadow: none !important;
 }
+
 html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
 .fui-Carousel:has(.fui-CarouselCard > button:focus-visible) {
   outline: 3px solid var(--colorBrandStroke1) !important;
@@ -423,18 +441,17 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
    menu/lista, slide do carrossel. `::before` livre nesses componentes
    (conferido no DOM); a posição relativa vai em `:where` (especificidade 0),
    então quem já é `absolute` continua `absolute`. */
-:where(
-  .fui-Button[data-fui-focus-visible],
+:where(.fui-Button[data-fui-focus-visible],
   .fui-MenuButton[data-fui-focus-visible],
   .fui-ToggleButton[data-fui-focus-visible],
   :is(a[href], button:not(.fui-Button, .fui-MenuButton, .fui-ToggleButton), [tabindex]:not([tabindex="-1"])):focus-visible,
   html[data-nav-focus] :is(button, a[href], [tabindex]:not(i)):focus,
-  :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus
-):not(.fui-Card, .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
+  :is(a[href], [tabindex]:not([tabindex="-1"]), .fui-Tab):focus):not(.fui-Card, .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button, [role="tabpanel"],
   [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"],
   [role="treeitem"], .fui-CarouselCard > button, .fui-CarouselButton) {
   position: relative;
 }
+
 /* As setas do carrossel já são `absolute` (laterais, no meio da altura) e
    servem de base pro `::before`; com o `relative` acima elas pulavam de
    lugar ao receber foco — a classe do Fluent que as posiciona perde pra
@@ -443,8 +460,7 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
    (`overflow: hidden` — o Button do Fluent, o Card, a Tab) o esconderia.
    Enquanto em foco, deixa aparecer (o texto já corta com reticências no
    próprio rótulo). */
-:is(
-  .fui-Button[data-fui-focus-visible],
+:is(.fui-Button[data-fui-focus-visible],
   .fui-MenuButton[data-fui-focus-visible],
   .fui-ToggleButton[data-fui-focus-visible],
   :is(a[href], button:not(.fui-Button, .fui-MenuButton, .fui-ToggleButton), [tabindex]:not([tabindex="-1"])):focus-visible,
@@ -455,15 +471,13 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):has(:focus-visible),
   html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):focus-within,
   html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
-  .fui-Carousel:has(.fui-CarouselCard > button:focus-visible)
-):not(.fui-Card[role="button"], .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
+  .fui-Carousel:has(.fui-CarouselCard > button:focus-visible)):not(.fui-Card[role="button"], .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button, [role="tabpanel"],
   [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"],
   [role="treeitem"], .fui-CarouselCard > button) {
   overflow: visible !important;
 }
 
-:is(
-  .fui-Button[data-fui-focus-visible],
+:is(.fui-Button[data-fui-focus-visible],
   .fui-MenuButton[data-fui-focus-visible],
   .fui-ToggleButton[data-fui-focus-visible],
   :is(a[href], button:not(.fui-Button, .fui-MenuButton, .fui-ToggleButton), [tabindex]:not([tabindex="-1"])):focus-visible,
@@ -474,8 +488,7 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):has(:focus-visible),
   html[data-nav-focus] :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):focus-within,
   html[data-nav-focus] .fui-Carousel:has(.fui-CarouselCard > button:focus),
-  .fui-Carousel:has(.fui-CarouselCard > button:focus-visible)
-):not(.fui-Card[role="button"], .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button,
+  .fui-Carousel:has(.fui-CarouselCard > button:focus-visible)):not(.fui-Card[role="button"], .fui-Card__checkbox, input, textarea, select, .fui-Dropdown__button, [role="tabpanel"],
   [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"],
   [role="treeitem"], .fui-CarouselCard > button)::before {
   content: "";
@@ -485,6 +498,7 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   box-shadow: 0 0 12px color-mix(in srgb, var(--colorBrandStroke1) 45%, transparent);
   pointer-events: none;
 }
+
 /* Anéis em `::after` do Fluent (teclado) que não são botões: o brilho já
    sai por fora do próprio anel (regra 1). */
 
@@ -514,48 +528,51 @@ html[data-nav-focus] .reemu-no-ring:focus-within {
   border-color: transparent !important;
   overflow: visible !important;
 }
+
 :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):not(.reemu-block *):hover {
   border-radius: var(--borderRadiusMedium);
 }
+
 :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring):hover {
   outline: 3px solid var(--colorBrandStroke1) !important;
   outline-offset: 3px !important;
   box-shadow: none !important;
 }
+
 :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring, .reemu-list-search):hover,
 .fui-Select:not(.reemu-no-ring):hover .fui-Select__select {
   border-color: transparent !important;
 }
+
 :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox, .fui-SpinButton):not(.reemu-no-ring):hover::after {
   opacity: 0;
 }
+
 :is([role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="treeitem"]):not([aria-disabled="true"]):hover {
   outline: 3px solid var(--colorBrandStroke1) !important;
   outline-offset: -3px !important;
   border-radius: var(--borderRadiusMedium);
 }
+
 /* o brilho por fora do anel, nos mesmos que levam o brilho no foco */
-:where(
-  :is(a[href], button, [role="button"], [role="tab"]):not(.fui-Card, .fui-Button, .fui-MenuButton, .fui-ToggleButton,
+:where( :is(a[href], button, [role="button"], [role="tab"]):not(.fui-Card, .fui-Button, .fui-MenuButton, .fui-ToggleButton,
     .fui-Dropdown__button, .fui-CarouselCard > button, .fui-CarouselButton, [role="menuitem"], [role="menuitemradio"],
     [role="menuitemcheckbox"], [role="option"], [role="treeitem"], :disabled, [aria-disabled="true"]):hover,
   :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):not(.reemu-block *):hover,
   .fui-Card:not([role="button"]):has(> .fui-Card__checkbox):hover,
   .reemu-block:hover,
-  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):hover
-) {
+  :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):hover) {
   position: relative;
 }
-:is(
-  :is(a[href], button, [role="button"], [role="tab"]):not(.fui-Card, .fui-Button, .fui-MenuButton, .fui-ToggleButton,
+
+:is( :is(a[href], button, [role="button"], [role="tab"]):not(.fui-Card, .fui-Button, .fui-MenuButton, .fui-ToggleButton,
     .fui-Dropdown__button, .fui-CarouselCard > button, [role="menuitem"], [role="menuitemradio"],
     [role="menuitemcheckbox"], [role="option"], [role="treeitem"], :disabled, [aria-disabled="true"]):hover,
   :is(.fui-Switch, .fui-Radio, .fui-Checkbox, .fui-Slider):not(.reemu-block *):hover,
   .fui-Card:not([role="button"]):has(> .fui-Card__checkbox):hover,
   .reemu-block:hover,
   :is(.fui-Input, .fui-Textarea, .fui-SearchBox, .fui-Select, .fui-Dropdown, .fui-Combobox):not(.reemu-no-ring):hover,
-  .fui-Carousel:has(.fui-CarouselCard > button:hover)
-)::before {
+  .fui-Carousel:has(.fui-CarouselCard > button:hover))::before {
   content: "";
   position: absolute;
   inset: -4px;
@@ -570,9 +587,11 @@ html[data-nav-focus],
 html[data-nav-focus] * {
   cursor: none !important;
 }
+
 html[data-nav-focus] body {
   pointer-events: none;
 }
+
 html[data-nav-focus] .reemu-nav-back {
   visibility: hidden;
 }
@@ -593,22 +612,27 @@ html .reemu-app {
   --reemuInsetY: calc(var(--reemuOverscan, 0) * 1vh);
   grid-template-columns: calc(var(--reemuRailW) + var(--reemuInsetX)) 1fr;
 }
+
 html nav[data-nav-rail] {
   padding-left: var(--reemuInsetX);
   padding-top: calc(15px + var(--reemuInsetY));
   padding-bottom: calc(15px + var(--reemuInsetY));
 }
+
 html [data-nav-topbar] {
   padding-top: calc(32px + var(--reemuInsetY));
   padding-right: calc(47px + var(--reemuInsetX));
 }
+
 .reemu-topbar-status {
   display: contents;
 }
+
 /* Texto e indicadores expostos diretamente ao papel de parede. */
 .reemu-app:has(> [data-wallpaper-visible]) :is(.reemu-on-wallpaper, .reemu-topbar-status) {
   --reemuWallpaperText: #fff;
 }
+
 /* A lista vai até a borda da tela e a folga fica por dentro dela: com margem, os
    cards eram cortados numa linha antes da borda. */
 html [data-nav-content=""] {
@@ -616,12 +640,14 @@ html [data-nav-content=""] {
   padding-bottom: calc(var(--reemuScrollPadB) + var(--reemuInsetY));
   scroll-padding-bottom: calc(var(--reemuScrollPadB) + var(--reemuInsetY));
 }
+
 /* Página do jogo: sem a faixa reservada à barra de rolagem, para a arte chegar à
    borda da janela. Os 6 px voltam no padding e o conteúdo segue alinhado à topbar. */
 html [data-nav-content="bleed"] {
   scrollbar-gutter: auto;
   padding-right: calc(var(--reemuScrollPadR) + 6px);
 }
+
 html .reemu-hints {
   transform: translate(calc(-1 * var(--reemuInsetX)), calc(-1 * var(--reemuInsetY)));
   /* A barra é translúcida a pedido: sem o desfoque, o texto de trás se misturava ao dela. */
@@ -633,6 +659,7 @@ html .reemu-hints {
 .fui-Badge:has(.fui-Badge__icon) {
   padding-bottom: 2px;
 }
+
 .fui-Badge__icon {
   position: relative;
   top: 1px;
@@ -653,10 +680,12 @@ html[data-nav-focus] .reemu-block:focus-within {
   outline: 3px solid var(--colorBrandStroke1) !important;
   outline-offset: 3px !important;
 }
+
 .reemu-block :is(.fui-Switch, .fui-Slider):has(:focus-visible),
 html[data-nav-focus] .reemu-block :is(.fui-Switch, .fui-Slider):focus-within {
   outline: none !important;
 }
+
 .reemu-block .fui-Switch__indicator::after,
 .reemu-block .fui-Switch[data-fui-focus-within]::after {
   display: none;
@@ -669,10 +698,12 @@ html[data-nav-focus] .reemu-block :is(.fui-Switch, .fui-Slider):focus-within {
   width: 6px;
   height: 6px;
 }
+
 *::-webkit-scrollbar-track,
 *::-webkit-scrollbar-corner {
   background-color: transparent;
 }
+
 *::-webkit-scrollbar-thumb {
   background-color: var(--colorNeutralStroke2);
   border-radius: var(--borderRadiusCircular);

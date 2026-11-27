@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import {
+  catalogRunNow,
   catalogSetEnabled,
   catalogStatus,
   onCatalogEvent,
@@ -25,6 +26,20 @@ export function useSetCatalogEnabled() {
     mutationFn: (enabled: boolean) => catalogSetEnabled(enabled),
     onSuccess: (next: CatalogStatus) => {
       qc.setQueryData(CATALOG_STATUS_KEY, next)
+    },
+  })
+}
+
+/** Roda uma passada imediata do catálogo do Alvanista sob demanda. */
+export function useRunCatalogNow() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => catalogRunNow(),
+    onSuccess: (next: CatalogStatus) => {
+      qc.setQueryData(CATALOG_STATUS_KEY, next)
+      void qc.invalidateQueries({ queryKey: ['pending-matches'] })
+      void qc.invalidateQueries({ queryKey: ['roms'] })
+      void qc.invalidateQueries({ queryKey: ['rom-metadata'] })
     },
   })
 }

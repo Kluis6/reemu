@@ -413,6 +413,8 @@ export const reviewPendingMatch = (romId: string, refresh = false) =>
 export const readGameArtworkFile = (path: string) => invoke<string>('read_game_artwork', { path })
 export const resolvePendingMatch = (romId: string, accept: boolean, title?: string, details?: GameMetadataEdits) =>
   invoke<void>('resolve_pending_match', { romId, accept, title: title ?? null, details: details ?? null })
+export const resolvePendingMatchesBulk = (romIds: string[], accept: boolean) =>
+  invoke<number>('resolve_pending_matches_bulk', { romIds, accept })
 
 export type { ScrapeProgress }
 export const metadataScanProgress = () => invoke<ScrapeProgress>('metadata_scan_progress')
