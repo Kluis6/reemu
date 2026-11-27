@@ -256,8 +256,14 @@ export function RomDetail() {
   const [originalDetails, setOriginalDetails] = useState<GameMetadataEdits>({});
   const [originalEditName, setOriginalEditName] = useState("");
   const [brokenHero, setBrokenHero] = useState<string | null>(null);
+  const [brokenBackdrop, setBrokenBackdrop] = useState<string | null>(null);
   // capa que não carregou (URL quebrada): cai no card sem imagem
   const [brokenCover, setBrokenCover] = useState<string | null>(null);
+  useEffect(() => {
+    setBrokenCover(null);
+    setBrokenHero(null);
+    setBrokenBackdrop(null);
+  }, [romId, meta.data?.gameUuid, meta.data?.coverUrl, meta.data?.fanartUrl, meta.data?.screenshotUrl, rom?.boxart]);
   const [editName, setEditName] = useState("");
   const [editSystem, setEditSystem] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
@@ -429,8 +435,12 @@ export function RomDetail() {
   const cover = meta.data?.coverUrl?.startsWith("data:")
     ? meta.data.coverUrl
     : (rom.boxart ?? meta.data?.coverUrl);
-  const hero = heroUrl;
-  const backdrop = hero && hero !== brokenHero ? hero : cover;
+  const hero = heroUrl ?? primaryShotUrl;
+  const candidateBackdrop = hero && hero !== brokenHero ? hero : cover;
+  const backdrop =
+    candidateBackdrop && candidateBackdrop !== brokenBackdrop
+      ? candidateBackdrop
+      : undefined;
   const fileParts = splitPath(rom.filePath);
   const title = rom.userTitle ?? meta.data?.title ?? rom.title;
   const activeRegion =
@@ -503,9 +513,9 @@ export function RomDetail() {
               className={s.heroArt}
               src={backdrop}
               alt=""
-              onError={(event) => {
+              onError={() => {
                 if (backdrop === hero && hero !== cover) setBrokenHero(backdrop);
-                else event.currentTarget.style.display = "none";
+                else setBrokenBackdrop(backdrop);
               }}
             />
           )}
@@ -901,7 +911,7 @@ export function RomDetail() {
                 <GameCatalogFacts catalog={catalog} />
               )}
 
-              {(shots.length > 0 || logoUrl || trailerUrls.length > 0) && (
+              {(galleryShots.length > 0 || logoUrl || trailerUrls.length > 0) && (
                 <section className={s.infoSection} aria-labelledby="info-media">
                   <h3 id="info-media" className={s.infoHeading}>
                     {t("game.tabs.media")}
@@ -922,8 +932,8 @@ export function RomDetail() {
                         <figcaption className={s.galleryCaption}>{t("game.media.logo")}</figcaption>
                       </figure>
                     )}
-                    {shots.map((image) => (
-                      <figure key={image.key} className={s.galleryItem}>
+                    {galleryShots.map((image) => (
+                      <figure key={`${image.key}:${image.url}`} className={s.galleryItem}>
                         <img className={s.infoShot} src={image.url} alt="" loading="lazy" />
                         <figcaption className={s.galleryCaption}>
                           {image.key === "fanart" &&

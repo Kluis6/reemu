@@ -498,6 +498,16 @@ impl CatalogEngine {
             .game
             .ok_or_else(|| CatalogError::Transient("resposta sem dados do jogo".into()))?;
 
+        #[cfg(not(test))]
+        let answer = {
+            let mut enriched = answer;
+            enrich_answer_from_public_catalog(&mut enriched).await;
+            enriched
+        };
+        if let Some(data_dir) = self.covers_dir.parent() {
+            crate::covers::invalidate_game_media(&data_dir.join("media"), &answer.game_id);
+        }
+
         let meta = self
             .apply_answer_with_region(
                 rom_id,
@@ -605,6 +615,9 @@ impl CatalogEngine {
                 .map_err(|e| CatalogError::Repo(e.to_string()))?;
 
         if !skip_metadata {
+            if is_manual {
+                let _ = meta_repo.clear_artwork_edits(rom_id).await;
+            }
             let candidate = candidate_from_answer(&meta);
             let match_status = if is_manual {
                 MatchStatus::UserConfirmed
@@ -847,6 +860,203 @@ impl CatalogEngine {
         }
         Ok(report)
     }
+}
+
+fn safe_catalog_asset_url(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    let normalized = if let Some(rest) = trimmed.strip_prefix("//images.igdb.com/") {
+        format!("https://images.igdb.com/{rest}")
+    } else {
+        trimmed.to_owned()
+    };
+    let upgraded = normalized
+        .replace("/t_thumb/", "/t_1080p/")
+        .replace("/t_cover_small/", "/t_1080p/");
+    let parsed = reqwest::Url::parse(&upgraded).ok()?;
+    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
+        return None;
+    }
+    match parsed.host_str()? {
+        "cdn.gamekave.net" | "images.igdb.com" => Some(parsed.to_string()),
+        _ => None,
+    }
+}
+
+fn push_unique_asset(list: &mut Vec<String>, candidate: Option<String>, max_len: usize) {
+    let Some(url) = candidate else {
+        return;
+    };
+    if list.len() < max_len && !list.contains(&url) {
+        list.push(url);
+    }
+}
+
+pub(crate) fn apply_public_catalog_to_answer(
+    answer: &mut GameAnswer,
+    assets: Option<&serde_json::Value>,
+    game: Option<&serde_json::Value>,
+) {
+    if let Some(assets) = assets {
+        if answer.media.cover.is_none() {
+            answer.media.cover = assets
+                .pointer("/covers/default/url")
+                .and_then(serde_json::Value::as_str)
+                .and_then(safe_catalog_asset_url)
+                .or_else(|| {
+                    assets
+                        .pointer("/covers/list")
+                        .and_then(serde_json::Value::as_array)?
+                        .iter()
+                        .filter(|it| it["hidden"].as_bool() != Some(true))
+                        .find_map(|it| it["url"].as_str().and_then(safe_catalog_asset_url))
+                });
+        }
+        if let Some(reg_obj) = assets["regional_covers"].as_object() {
+            for (region, val) in reg_obj {
+                let Some(url) = val.as_str().and_then(safe_catalog_asset_url) else {
+                    continue;
+                };
+                let key = scraping::rom_name::normalize_region_code(region)
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| region.trim().to_ascii_uppercase());
+                if !key.is_empty() {
+                    answer.media.regional_covers.entry(key).or_insert(url);
+                }
+            }
+        }
+        if answer.media.hero.is_none() {
+            answer.media.hero = assets
+                .pointer("/heroes/default/url")
+                .and_then(serde_json::Value::as_str)
+                .and_then(safe_catalog_asset_url)
+                .or_else(|| {
+                    assets
+                        .pointer("/heroes/list")
+                        .and_then(serde_json::Value::as_array)?
+                        .iter()
+                        .filter(|it| it["hidden"].as_bool() != Some(true))
+                        .find_map(|it| it["url"].as_str().and_then(safe_catalog_asset_url))
+                });
+        }
+        if answer.media.logo.is_none() {
+            answer.media.logo = assets
+                .pointer("/logos/default/url")
+                .and_then(serde_json::Value::as_str)
+                .and_then(safe_catalog_asset_url)
+                .or_else(|| {
+                    assets
+                        .pointer("/logos/list")
+                        .and_then(serde_json::Value::as_array)?
+                        .iter()
+                        .filter(|it| it["hidden"].as_bool() != Some(true))
+                        .find_map(|it| it["url"].as_str().and_then(safe_catalog_asset_url))
+                });
+        }
+        if let Some(shots) = assets
+            .pointer("/screenshots/list")
+            .and_then(serde_json::Value::as_array)
+        {
+            for it in shots {
+                if it["hidden"].as_bool() == Some(true) {
+                    continue;
+                }
+                push_unique_asset(
+                    &mut answer.media.screenshots,
+                    it["url"].as_str().and_then(safe_catalog_asset_url),
+                    crate::covers::MAX_SCREENSHOTS,
+                );
+            }
+        }
+        if answer.media.title_screen.is_none() {
+            answer.media.title_screen = assets
+                .pointer("/other/list")
+                .and_then(serde_json::Value::as_array)
+                .and_then(|arr| {
+                    arr.iter().find_map(|it| {
+                        let stem = it["stem"].as_str().unwrap_or_default();
+                        (stem.eq_ignore_ascii_case("title")
+                            || stem.eq_ignore_ascii_case("screentitle"))
+                        .then(|| it["url"].as_str().and_then(safe_catalog_asset_url))
+                        .flatten()
+                    })
+                });
+        }
+        if answer.media.video.is_none() {
+            answer.media.video = ["/trailers/list", "/videos/list"]
+                .into_iter()
+                .find_map(|ptr| {
+                    assets
+                        .pointer(ptr)
+                        .and_then(serde_json::Value::as_array)?
+                        .iter()
+                        .filter(|it| it["hidden"].as_bool() != Some(true))
+                        .find_map(|it| it["url"].as_str().and_then(safe_catalog_asset_url))
+                });
+        }
+    }
+
+    if let Some(game) = game {
+        let meta = &game["metadata"];
+        if answer.media.cover.is_none() {
+            answer.media.cover = game["cover_url"]
+                .as_str()
+                .and_then(safe_catalog_asset_url)
+                .or_else(|| meta["cover_url"].as_str().and_then(safe_catalog_asset_url))
+                .or_else(|| {
+                    meta.pointer("/cover/url")
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(safe_catalog_asset_url)
+                });
+        }
+        if answer.media.hero.is_none() {
+            answer.media.hero = meta["hero_url"].as_str().and_then(safe_catalog_asset_url);
+        }
+        if answer.media.title_screen.is_none() {
+            answer.media.title_screen = meta
+                .pointer("/retroachievements/title_url")
+                .and_then(serde_json::Value::as_str)
+                .and_then(safe_catalog_asset_url);
+        }
+        if let Some(shots) = meta["screenshots"].as_array() {
+            for item in shots {
+                let raw = item.as_str().or_else(|| item["url"].as_str());
+                push_unique_asset(
+                    &mut answer.media.screenshots,
+                    raw.and_then(safe_catalog_asset_url),
+                    crate::covers::MAX_SCREENSHOTS,
+                );
+            }
+        }
+    }
+}
+
+#[cfg(not(test))]
+async fn enrich_answer_from_public_catalog(answer: &mut GameAnswer) {
+    let game_id = answer.game_id.trim();
+    if game_id.is_empty() || !game_id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-') {
+        return;
+    }
+    let client = net::http::client();
+    let assets_url = format!("https://api.gamekave.net/games/{game_id}/assets");
+    let game_url = format!("https://api.gamekave.net/games/{game_id}");
+    let fetch_json = |url: String| async move {
+        client
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(6))
+            .send()
+            .await
+            .ok()?
+            .error_for_status()
+            .ok()?
+            .json::<serde_json::Value>()
+            .await
+            .ok()
+    };
+    let assets_task = tauri::async_runtime::spawn(fetch_json(assets_url));
+    let game_task = tauri::async_runtime::spawn(fetch_json(game_url));
+    let assets = assets_task.await.ok().flatten();
+    let game = game_task.await.ok().flatten();
+    apply_public_catalog_to_answer(answer, assets.as_ref(), game.as_ref());
 }
 
 #[cfg(test)]
@@ -1817,5 +2027,70 @@ mod tests {
             .unwrap();
         assert_eq!(saved.title, "Final Fantasy VI");
         assert_eq!(saved.game_uuid.as_deref(), Some(chosen_id));
+    }
+
+    #[test]
+    fn apply_public_catalog_fills_missing_cover_title_screen_and_screenshots() {
+        let mut answer = GameAnswer {
+            game_id: "2015da97-ad78-4020-97ff-4caa387cf66d".into(),
+            title: "Spawn: Armageddon".into(),
+            platform: Some("nintendo-gamecube".into()),
+            media: super::super::answer::Media::default(),
+            media_pending: false,
+            ..Default::default()
+        };
+        let assets = json!({
+            "covers": {
+                "default": {
+                    "url": "https://cdn.gamekave.net/games/2015da97-ad78-4020-97ff-4caa387cf66d/cover/1080p.jpg"
+                },
+                "list": []
+            },
+            "regional_covers": {
+                "jp": "https://cdn.gamekave.net/igdb-assets/covers/co8nm4.jpg",
+                "us": "https://www.screenscraper.fr/image.php?devid=secret"
+            },
+            "screenshots": {
+                "list": [
+                    {"hidden": false, "url": "https://cdn.gamekave.net/games/2015da97-ad78-4020-97ff-4caa387cf66d/screenshot/igdb/screenshot_1.jpg"},
+                    {"hidden": true, "url": "https://cdn.gamekave.net/games/2015da97-ad78-4020-97ff-4caa387cf66d/screenshot/igdb/hidden.jpg"}
+                ]
+            },
+            "other": {
+                "list": [
+                    {"stem": "title", "url": "https://cdn.gamekave.net/games/2015da97-ad78-4020-97ff-4caa387cf66d/retroachievements/title.png"}
+                ]
+            }
+        });
+        let game = json!({
+            "metadata": {
+                "screenshots": [
+                    {"url": "//images.igdb.com/igdb/image/upload/t_thumb/scuazf.jpg"}
+                ]
+            }
+        });
+
+        apply_public_catalog_to_answer(&mut answer, Some(&assets), Some(&game));
+
+        assert_eq!(
+            answer.media.cover.as_deref(),
+            Some("https://cdn.gamekave.net/games/2015da97-ad78-4020-97ff-4caa387cf66d/cover/1080p.jpg")
+        );
+        assert_eq!(
+            answer.media.regional_covers.get("JP").map(String::as_str),
+            Some("https://cdn.gamekave.net/igdb-assets/covers/co8nm4.jpg")
+        );
+        assert!(!answer.media.regional_covers.contains_key("NA"));
+        assert_eq!(
+            answer.media.title_screen.as_deref(),
+            Some("https://cdn.gamekave.net/games/2015da97-ad78-4020-97ff-4caa387cf66d/retroachievements/title.png")
+        );
+        assert_eq!(
+            answer.media.screenshots,
+            vec![
+                "https://cdn.gamekave.net/games/2015da97-ad78-4020-97ff-4caa387cf66d/screenshot/igdb/screenshot_1.jpg",
+                "https://images.igdb.com/igdb/image/upload/t_1080p/scuazf.jpg"
+            ]
+        );
     }
 }

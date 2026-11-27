@@ -78,10 +78,7 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
     let meta_repo = db::MetadataRepo::new(pool.clone());
     let roms = repo.list().await.map_err(AppError::from)?;
     let play_times = repo.play_times().await.map_err(AppError::from)?;
-    let cover_overrides = meta_repo
-        .cover_override_ids()
-        .await
-        .map_err(AppError::from)?;
+    let cover_overrides = meta_repo.cover_overrides().await.map_err(AppError::from)?;
     let meta_summaries = meta_repo
         .library_summaries()
         .await
@@ -177,10 +174,25 @@ async fn list_roms_from_pool(pool: &db::Db) -> Result<Vec<RomDto>, AppError> {
             );
 
             let has_meta_cover = meta.is_some_and(|m| m.has_cover);
-            let boxart = (cover_overrides.contains(&r.id)
+            let override_cover = cover_overrides.get(&r.id);
+            let boxart = (override_cover.is_some()
                 || has_meta_cover
                 || library_scan::libretro_boxart_url(&r.system_id, &fallback_title).is_some())
-            .then(|| crate::covers::cover_url(&r.id));
+            .then(|| {
+                let seed = if let Some(ov) = override_cover {
+                    Some(format!("ov:{ov}"))
+                } else if has_meta_cover {
+                    Some(format!(
+                        "meta:{}:{}:{}",
+                        meta.and_then(|m| m.game_uuid.as_deref()).unwrap_or(""),
+                        meta.and_then(|m| m.cover_url.as_deref()).unwrap_or(""),
+                        region.as_deref().unwrap_or(""),
+                    ))
+                } else {
+                    None
+                };
+                crate::covers::cover_url_versioned(&r.id, seed.as_deref())
+            });
             let content_extension = std::path::Path::new(&r.file_path)
                 .extension()
                 .and_then(|ext| ext.to_str())
@@ -725,10 +737,31 @@ mod tests {
         let got = list_roms_from_pool(&pool).await.unwrap();
         let by_id = |id: &str| got.iter().find(|r| r.id == id).unwrap();
         assert_eq!(by_id("r_no_cover").boxart, None);
-        assert_eq!(
-            by_id("r_with_cover").boxart,
-            Some(crate::covers::cover_url("r_with_cover"))
+        let first_boxart = by_id("r_with_cover").boxart.clone().expect("boxart");
+        assert!(
+            first_boxart.starts_with(&format!("{}?v=", crate::covers::cover_url("r_with_cover"))),
+            "unexpected boxart url: {first_boxart}"
         );
+
+        meta_repo
+            .upsert_metadata(&GameMetadata {
+                rom_id: "r_with_cover".into(),
+                title: "Jogo Outra Capa".into(),
+                cover_url: Some("https://cdn.alvanista.com/b/cover-v2.webp".into()),
+                provider_source: Some("alvanista".into()),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+        let got_after = list_roms_from_pool(&pool).await.unwrap();
+        let next_boxart = got_after
+            .iter()
+            .find(|r| r.id == "r_with_cover")
+            .unwrap()
+            .boxart
+            .clone()
+            .expect("boxart");
+        assert_ne!(first_boxart, next_boxart);
     }
 
     #[tokio::test]

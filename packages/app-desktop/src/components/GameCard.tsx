@@ -11,7 +11,7 @@ import {
   tokens,
 } from "@fluentui/react-components";
 import { HeartFilled } from "@fluentui/react-icons";
-import { useRef, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { DIALOG_FADE_ONLY } from "../lib/motion";
 import { useModalButtonStyles } from "../styles/buttons";
 import { useCardStyles } from "../styles/xbox";
@@ -144,6 +144,10 @@ export function GameCard({
   const l = useLocalStyles();
   const [broken, setBroken] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    setBroken(false);
+    setLoaded(false);
+  }, [boxart]);
   const [menuOpen, setMenuOpen] = useState(false);
   const btn = useModalButtonStyles();
   const cardRef = useRef<HTMLDivElement>(null);

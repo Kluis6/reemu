@@ -15,6 +15,7 @@ pub struct MetadataRepo {
 #[derive(Debug, Clone, Default)]
 pub struct RomMetadataSummary {
     pub title: String,
+    pub cover_url: Option<String>,
     pub has_cover: bool,
     pub game_uuid: Option<String>,
     pub rom_region: Option<String>,
@@ -26,15 +27,38 @@ impl MetadataRepo {
         Self { db }
     }
 
-    pub async fn cover_override_ids(&self) -> Result<std::collections::HashSet<String>, RepoError> {
-        let ids: Vec<String> = sqlx::query_scalar(
-            "SELECT rom_id FROM game_metadata_edits
-             WHERE json_extract(fields_json, '$.coverUrl') <> ''",
+    pub async fn cover_overrides(
+        &self,
+    ) -> Result<std::collections::HashMap<String, String>, RepoError> {
+        let rows: Vec<(String, String)> = sqlx::query_as(
+            "SELECT rom_id, json_extract(fields_json, '$.coverUrl') \
+             FROM game_metadata_edits \
+             WHERE COALESCE(json_extract(fields_json, '$.coverUrl'), '') <> ''",
         )
         .fetch_all(&self.db)
         .await
         .map_err(be)?;
-        Ok(ids.into_iter().collect())
+        Ok(rows.into_iter().collect())
+    }
+
+    pub async fn cover_override_ids(&self) -> Result<std::collections::HashSet<String>, RepoError> {
+        Ok(self.cover_overrides().await?.into_keys().collect())
+    }
+
+    pub async fn clear_artwork_edits(&self, rom_id: &str) -> Result<(), RepoError> {
+        sqlx::query(
+            "UPDATE game_metadata_edits \
+             SET fields_json = json_patch( \
+                 fields_json, \
+                 '{\"coverUrl\":null,\"fanartUrl\":null,\"screenshotUrl\":null,\"logoUrl\":null}' \
+             ) \
+             WHERE rom_id = ?1",
+        )
+        .bind(rom_id)
+        .execute(&self.db)
+        .await
+        .map_err(be)?;
+        Ok(())
     }
 
     /// `rom_id -> (title, tem_cover_url)` de `game_metadata` numa leitura só,
@@ -59,6 +83,7 @@ impl MetadataRepo {
         struct SummaryRow {
             rom_id: String,
             title: String,
+            cover_url: Option<String>,
             has_cover: i64,
             game_uuid: Option<String>,
             rom_region: Option<String>,
@@ -66,7 +91,7 @@ impl MetadataRepo {
         }
 
         let rows: Vec<SummaryRow> = sqlx::query_as(
-            "SELECT rom_id, title, \
+            "SELECT rom_id, title, cover_url, \
                     ( (cover_url IS NOT NULL AND TRIM(cover_url) <> '') \
                       OR COALESCE(json_array_length(gamekave_json, '$.covers'), 0) > 0 ) AS has_cover, \
                     game_uuid, \
@@ -84,6 +109,7 @@ impl MetadataRepo {
                     row.rom_id,
                     RomMetadataSummary {
                         title: row.title,
+                        cover_url: row.cover_url.filter(|s| !s.trim().is_empty()),
                         has_cover: row.has_cover != 0,
                         game_uuid: row.game_uuid.filter(|s| !s.trim().is_empty()),
                         rom_region: row.rom_region.filter(|s| !s.trim().is_empty()),

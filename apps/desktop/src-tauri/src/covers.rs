@@ -106,6 +106,13 @@ pub fn invalidate(covers_dir: &Path, rom_id: &str) {
     let _ = std::fs::remove_file(cache_path(covers_dir, rom_id));
 }
 
+/// Remove mídias cacheadas por `game_uuid` para forçar releitura após enriquecimento.
+pub fn invalidate_game_media(media_dir: &Path, game_uuid: &str) {
+    if is_safe_id(game_uuid) {
+        let _ = std::fs::remove_dir_all(media_dir.join(sanitize(game_uuid)));
+    }
+}
+
 /// O cache de capas na pasta `covers_dir`, para a crate `scraping`.
 pub struct CoverDir(pub PathBuf);
 
@@ -192,6 +199,21 @@ fn scheme_url(scheme: &str, path: &str) -> String {
 /// `http://<esquema>.localhost/`; nos demais sistemas, `<esquema>://localhost/`.
 pub fn cover_url(rom_id: &str) -> String {
     scheme_url("cover", rom_id)
+}
+
+/// URL da capa com sufixo `?v=<fnv1a>` quando há metadados/edição, evitando que
+/// o WebView mantenha em memória um `404` ou uma capa anterior do mesmo `rom_id`.
+pub fn cover_url_versioned(rom_id: &str, version_seed: Option<&str>) -> String {
+    let base = cover_url(rom_id);
+    let Some(seed) = version_seed.map(str::trim).filter(|s| !s.is_empty()) else {
+        return base;
+    };
+    let mut hash: u32 = 0x811c_9dc5;
+    for b in seed.bytes() {
+        hash ^= u32::from(b);
+        hash = hash.wrapping_mul(0x0100_0193);
+    }
+    format!("{base}?v={hash:08x}")
 }
 
 #[cfg(test)]

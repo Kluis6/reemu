@@ -128,11 +128,18 @@ export function PickGameDialog({
   const pick = useMutation({
     mutationFn: (game: CatalogSearchGame) => catalogPick(romId, game.gameId, i18n.language),
     onMutate: () => setPickError(false),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['roms'] })
-      void qc.invalidateQueries({ queryKey: ['rom-metadata', romId] })
-      void qc.invalidateQueries({ queryKey: ['pending-matches'] })
-      void qc.invalidateQueries({ queryKey: CATALOG_STATUS_KEY })
+    onSuccess: async (freshMeta) => {
+      const resolvedLang = i18n.resolvedLanguage ?? i18n.language
+      qc.setQueryData(['rom-metadata', romId, resolvedLang], freshMeta)
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['roms'] }),
+        qc.invalidateQueries({ queryKey: ['rom-metadata', romId] }),
+        qc.invalidateQueries({ queryKey: ['alvanista-collection'] }),
+        qc.invalidateQueries({ queryKey: ['gamelog-state', romId] }),
+        qc.invalidateQueries({ queryKey: ['gamelog-items'] }),
+        qc.invalidateQueries({ queryKey: ['pending-matches'] }),
+        qc.invalidateQueries({ queryKey: CATALOG_STATUS_KEY }),
+      ])
       push(sysToast(t('catalog.pick.applied'), 'Success'))
       onClose()
     },
