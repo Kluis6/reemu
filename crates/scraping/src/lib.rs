@@ -984,6 +984,16 @@ async fn load_scrape_rom(pool: &db::Db, rom_id: &str) -> Result<domain::library:
         .ok_or_else(|| "jogo não encontrado na biblioteca".into())
 }
 
+fn has_screenscraper_credentials(cfg: &MetadataConfig) -> bool {
+    cfg.screenscraper_user
+        .as_deref()
+        .is_some_and(|u| !u.trim().is_empty())
+        && cfg
+            .screenscraper_password
+            .as_deref()
+            .is_some_and(|p| !p.trim().is_empty())
+}
+
 async fn lookup_rom(
     rom: &domain::library::Rom,
     cfg: MetadataConfig,
@@ -997,7 +1007,11 @@ async fn lookup_rom(
     let (hash, stem) = hash_and_stem(rom);
     let q = rom_query(rom, &hash, &stem);
     let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
-    let mut result = query_screenscraper(&client, &cfg, &q, &providers.screenscraper).await;
+    let mut result = if has_screenscraper_credentials(&cfg) {
+        query_screenscraper(&client, &cfg, &q, &providers.screenscraper).await
+    } else {
+        Ok(None)
+    };
     let ss_refused = matches!(&result, Err(e) if e == ERR_SS_DEV_LOGIN);
     if let Some(key) = tgdb_key.filter(|_| ss_refused || matches!(&result, Ok(None))) {
         result = query_thegamesdb(&client, key, &q, &providers.thegamesdb).await;
@@ -1059,9 +1073,10 @@ async fn scrape_pending_with(
         .build()
         .map_err(net_error)?;
 
-    // ScreenScraper recusou as credenciais de desenvolvedor: não adianta
-    // perguntar de novo pras outras milhares de ROMs (cada falha custava
-    // ~16 s). Segue com os provedores de reserva.
+    // ScreenScraper só entra na cascata quando o usuário configurou conta
+    // própria; se recusar as credenciais de desenvolvedor, para de perguntar
+    // nas próximas ROMs e segue pelos provedores alternativos.
+    let ss_configured = has_screenscraper_credentials(&cfg);
     let mut ss_ok = true;
 
     for rom_id in ids {
@@ -1079,10 +1094,10 @@ async fn scrape_pending_with(
         let (hash, stem) = hash_and_stem(&rom);
         let q = rom_query(&rom, &hash, &stem);
 
-        // Cascata: ScreenScraper (hash) primeiro; se ele não achar e houver
-        // chave do TheGamesDB, tenta por nome lá. A GameKave fica por último.
+        // Cascata: ScreenScraper (hash) quando há credenciais; se não achar e
+        // houver chave do TheGamesDB, tenta por nome lá. A GameKave fica por último.
         let tgdb_key = cfg.thegamesdb_api_key.as_deref().filter(|k| !k.is_empty());
-        let mut result = if ss_ok {
+        let mut result = if ss_configured && ss_ok {
             query_screenscraper(&client, &cfg, &q, &providers.screenscraper).await
         } else {
             Ok(None)
@@ -1548,6 +1563,8 @@ mod tests {
         .await
         .unwrap();
         let cfg = MetadataConfig {
+            screenscraper_user: Some("usuario".into()),
+            screenscraper_password: Some("senha".into()),
             thegamesdb_api_key: Some("chave".into()),
             ..Default::default()
         };
@@ -1859,5 +1876,56 @@ mod tests {
                 "{skipped} não deveria consultar os provedores locais: {targets:?}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn without_screenscraper_credentials_skips_screenscraper_and_sets_no_warning() {
+        let (base, seen) = mock(|target| {
+            if target.starts_with("/api2/jeuInfos.php") {
+                (
+                    403,
+                    "Erreur de login : Vérifier vos identifiants développeur !".into(),
+                )
+            } else if target.starts_with("/games/search") {
+                (200, r#"{"games": []}"#.into())
+            } else {
+                (404, String::new())
+            }
+        });
+        let pool = db::connect_in_memory().await.unwrap();
+        db::RomsRepo::new(pool.clone())
+            .add(&Rom {
+                id: "r1".into(),
+                file_path: "/biblioteca/snes/Super Mario World.sfc".into(),
+                system_id: "snes".into(),
+                crc32: "B19ED489".into(),
+                md5: "cdd3c8c37322978ca8669b34bc89c804".into(),
+                ..Default::default()
+            })
+            .await
+            .unwrap();
+
+        let providers = local(&base);
+        let progress = Arc::new(ScrapeProgress::default());
+        scrape_pending_with(
+            pool.clone(),
+            progress.clone(),
+            MetadataConfig::default(),
+            &NoCovers,
+            &providers,
+        )
+        .await
+        .unwrap();
+
+        let targets = seen.lock().unwrap().clone();
+        assert!(
+            !targets.iter().any(|t| t.starts_with("/api2/jeuInfos.php")),
+            "sem credenciais do ScreenScraper não deve consultar a API: {targets:?}"
+        );
+        assert_eq!(progress.snapshot().6, None);
+
+        let one =
+            scrape_one_with(pool, MetadataConfig::default(), &NoCovers, "r1", &providers).await;
+        assert_eq!(one, Ok(Outcome::NoMatch));
     }
 }

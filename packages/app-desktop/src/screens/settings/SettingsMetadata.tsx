@@ -5,6 +5,7 @@ import {
   Field,
   Input,
   MessageBar,
+  MessageBarActions,
   MessageBarBody,
   MessageBarTitle,
   ProgressBar,
@@ -16,6 +17,7 @@ import {
   mergeClasses,
   tokens,
 } from '@fluentui/react-components'
+import { DismissRegular } from '@fluentui/react-icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
@@ -39,6 +41,24 @@ import { PendingMatchesSection } from './PendingMatchesSection'
 import { ReviewMetadataDialog } from './ReviewMetadataDialog'
 
 const progressKey = ['metadata-progress'] as const
+const DISMISS_SS_DEV_WARNING_KEY = 'reemu.dismissSsDevWarning'
+
+function readSsWarningDismissed(): boolean {
+  try {
+    return sessionStorage.getItem(DISMISS_SS_DEV_WARNING_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeSsWarningDismissed(dismissed: boolean) {
+  try {
+    if (dismissed) sessionStorage.setItem(DISMISS_SS_DEV_WARNING_KEY, '1')
+    else sessionStorage.removeItem(DISMISS_SS_DEV_WARNING_KEY)
+  } catch {
+    // sessionStorage indisponível
+  }
+}
 
 const useStyles = makeStyles({
   root: {
@@ -87,6 +107,7 @@ export function SettingsMetadata() {
   const tb = useTabStyles()
   const [review, setReview] = useState<PendingMatch | null>(null)
   const [tab, setTab] = useState<'results' | 'credentials'>('results')
+  const [ssWarningDismissed, setSsWarningDismissed] = useState<boolean>(readSsWarningDismissed)
   const qc = useQueryClient()
   const push = useToastStore((st) => st.push)
 
@@ -126,6 +147,8 @@ export function SettingsMetadata() {
   const save = useMutation({
     mutationFn: (c: MetadataConfig) => setMetadataConfig(c),
     onSuccess: () => {
+      writeSsWarningDismissed(false)
+      setSsWarningDismissed(false)
       void qc.invalidateQueries({ queryKey: ['metadata-config'] })
       push(sysToast(t('metadata.saved'), 'Success'))
     },
@@ -170,6 +193,21 @@ export function SettingsMetadata() {
   const ratio = showCounts && p ? p.done / p.total : undefined
   const statusText = t(`metadata.status.${status}`)
   const catalogBusy = runCatalog.isPending || Boolean(catalog.data?.running)
+  const hasSsCredentials = Boolean(
+    cfg.data?.screenscraperUser?.trim() && cfg.data?.screenscraperPassword?.trim(),
+  )
+  const showSsDevWarning =
+    !scan.isPending && hasSsCredentials && p?.error === 'ss_dev_login' && !ssWarningDismissed
+  const hasProgressWarning =
+    Boolean(p?.error && p.error !== 'ss_dev_login') ||
+    showSsDevWarning ||
+    status === 'failed' ||
+    status === 'cancelled'
+
+  const dismissSsWarning = () => {
+    writeSsWarningDismissed(true)
+    setSsWarningDismissed(true)
+  }
 
   return (
     <div className={s.root}>
@@ -276,7 +314,7 @@ export function SettingsMetadata() {
                     aria-label={t('metadata.scan')}
                     thickness="large"
                     value={ratio}
-                    color={p?.error || status === 'failed' || status === 'cancelled' ? 'warning' : 'brand'}
+                    color={hasProgressWarning ? 'warning' : 'brand'}
                   />
                 )}
                 {showCounts && p && (
@@ -293,12 +331,22 @@ export function SettingsMetadata() {
                 )}
               </div>
             )}
-            {!scan.isPending && p?.error === 'ss_dev_login' && (
-              <MessageBar intent="warning">
+            {showSsDevWarning && (
+              <MessageBar intent="warning" data-testid="ss-dev-warning">
                 <MessageBarBody>
                   <MessageBarTitle>{t('metadata.errors.ssDevLoginTitle')}.</MessageBarTitle>{' '}
                   {t('metadata.errors.ssDevLogin')}
                 </MessageBarBody>
+                <MessageBarActions
+                  containerAction={
+                    <Button
+                      appearance="transparent"
+                      icon={<DismissRegular />}
+                      aria-label={t('shell.close')}
+                      onClick={dismissSsWarning}
+                    />
+                  }
+                />
               </MessageBar>
             )}
           </div>

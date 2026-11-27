@@ -121,6 +121,7 @@ beforeEach(() => {
 afterEach(async () => {
   if (unmount) await unmount()
   host?.remove()
+  sessionStorage.clear()
 })
 
 describe('SettingsMetadata catalog section', () => {
@@ -241,5 +242,49 @@ describe('SettingsMetadata bulk actions and large queue pagination', () => {
     await settle()
 
     expect(api.resolvePendingMatchesBulk).toHaveBeenCalledWith(['rom-1', 'rom-3'], false)
+  })
+})
+
+describe('SettingsMetadata ScreenScraper warning behavior', () => {
+  it('does not render ss_dev_login warning when ScreenScraper credentials are not configured', async () => {
+    api.metadataScanProgress.mockResolvedValue({
+      ...PROGRESS,
+      running: true,
+      status: 'running',
+      done: 12,
+      total: 100,
+      error: 'ss_dev_login',
+    })
+    await mount()
+    expect(host.querySelector('[data-testid="ss-dev-warning"]')).toBeNull()
+  })
+
+  it('allows dismissing ss_dev_login warning when ScreenScraper credentials are configured', async () => {
+    api.getMetadataConfig.mockResolvedValue({
+      ...CFG,
+      screenscraperUser: 'edward',
+      screenscraperPassword: 'secret',
+    })
+    api.metadataScanProgress.mockResolvedValue({
+      ...PROGRESS,
+      running: true,
+      status: 'running',
+      done: 12,
+      total: 100,
+      error: 'ss_dev_login',
+    })
+    await mount()
+
+    const banner = host.querySelector('[data-testid="ss-dev-warning"]')
+    expect(banner).toBeTruthy()
+    const closeBtn = banner!.querySelector<HTMLButtonElement>('button[aria-label="Fechar"]')
+    expect(closeBtn).toBeTruthy()
+
+    await act(async () => {
+      closeBtn!.click()
+    })
+    await settle()
+    expect(host.querySelector('[data-testid="ss-dev-warning"]')).toBeNull()
+    expect(sessionStorage.getItem('reemu.dismissSsDevWarning')).toBe('1')
   })
 })
