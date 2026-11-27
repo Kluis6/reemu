@@ -50,6 +50,7 @@ pub async fn load_game(
         .store(true, std::sync::atomic::Ordering::Relaxed);
     *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    crate::ra::on_game_unloaded(&app);
 
     // Valores de opção salvos — o filho os aplica já durante o load (ele
     // pede via `GET_VARIABLE`), mandados junto no `EmuSession::load`. Cascata:
@@ -92,6 +93,7 @@ pub async fn load_game(
     // tira da thread async.
     let av = {
         let core_id = core_id.clone();
+        let rom_path = rom_path.clone();
         let joined = tauri::async_runtime::spawn_blocking(move || {
             session.load(&core_id, &rom_path, initial_option_values)
         })
@@ -160,9 +162,16 @@ pub async fn load_game(
         let _ = db::RomsRepo::new(pool).mark_played(rid, now).await;
     }
 
-    // Cheats ligados deste jogo (doc 17) — o core aplica a partir daqui.
-    if let Some(rid) = rom_id.as_deref() {
-        super::cheats::apply_cheats(&state, rid).await;
+    // RetroAchievements: liga o cliente na memória do core. Em modo Hardcore,
+    // cheats e carregamento de save states ficam desativados nesta sessão.
+    let hardcore_ra =
+        crate::ra::on_game_launched(&app, Some(&core_id), rom_id.as_deref(), &rom_path).await;
+
+    // Cheats ligados deste jogo (doc 17): pulados em sessões Hardcore.
+    if !hardcore_ra {
+        if let Some(rid) = rom_id.as_deref() {
+            super::cheats::apply_cheats(&state, rid).await;
+        }
     }
 
     // Proporção da imagem (rom → sistema → todos, ou a do core).
@@ -587,6 +596,7 @@ pub async fn unload_game(app: AppHandle) -> Result<(), AppError> {
         .take();
     *state.video_menu.lock().unwrap_or_else(|p| p.into_inner()) = VideoMenu::Playing;
     *state.pause_bg.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    crate::ra::on_game_unloaded(&app);
     // A subsurface é escondida pelo `reemu-video-pump` assim que a sessão fica
     // `Idle` (que `Command::Unload` marca antes do teardown bloqueante). Tocar
     // na conexão Wayland fora da thread do pump corrompe o `wl_display`

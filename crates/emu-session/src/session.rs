@@ -198,6 +198,15 @@ struct Shared {
     /// Quirks de serialização do core carregado
     /// (`domain::core_loader::serialization_quirk`); 0 sem core.
     serialization_quirks: AtomicU64,
+    /// Caminho temporário extraído pelo core para arquivos `.zip`/`.7z`.
+    extracted_content_path: Mutex<Option<PathBuf>>,
+    /// Ouvinte de pedidos HTTP e eventos do RetroAchievements vindos do core.
+    ra_sink: Mutex<Option<RaHostSink>>,
+    /// Época monotônica da partida atual para descartar respostas HTTP atrasadas
+    /// de uma partida já fechada.
+    ra_gen: AtomicU64,
+    /// Último tick `idle()` do `rcheevos` quando um core Vulkan in-process está pausado.
+    ra_last_idle: Mutex<Option<Instant>>,
 }
 
 type VkJob = Box<dyn FnOnce() + Send>;
@@ -351,6 +360,10 @@ impl EmuSession {
             core_set_options: Mutex::new(Vec::new()),
             loading_core: Mutex::new(None),
             serialization_quirks: AtomicU64::new(0),
+            extracted_content_path: Mutex::new(None),
+            ra_sink: Mutex::new(None),
+            ra_gen: AtomicU64::new(0),
+            ra_last_idle: Mutex::new(None),
         });
 
         let gamepad_thread = cfg.enable_gamepad.then(|| {
@@ -473,6 +486,15 @@ impl EmuSession {
         self.shared.serialization_quirks.load(Ordering::Acquire)
     }
 
+    /// Caminho temporário extraído pelo core quando a partida atual abriu um `.zip`/`.7z`.
+    pub fn extracted_content_path(&self) -> Option<PathBuf> {
+        self.shared
+            .extracted_content_path
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone()
+    }
+
     /// Opções que o core trocou sozinho (`RETRO_ENVIRONMENT_SET_VARIABLE`)
     /// desde a última chamada, `(core, chave, valor)`. O app grava como
     /// opção do core, pra valerem nas próximas sessões.
@@ -503,9 +525,35 @@ impl EmuSession {
                 None => break,
             }
         }
-        if !self.shared.vk_local_active.load(Ordering::Acquire)
-            || self.shared.vk_local_paused.load(Ordering::Acquire)
-        {
+        if !self.shared.vk_local_active.load(Ordering::Acquire) {
+            return None;
+        }
+        if self.shared.vk_local_paused.load(Ordering::Acquire) {
+            let should_idle = {
+                let mut last = self
+                    .shared
+                    .ra_last_idle
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner());
+                let due = last.is_none_or(|t| t.elapsed() >= Duration::from_millis(100));
+                if due {
+                    *last = Some(Instant::now());
+                }
+                due
+            };
+            if should_idle {
+                let drain = self
+                    .shared
+                    .vk_local
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .as_mut()
+                    .and_then(|lc| lc.idle_ra());
+                if let Some(drain) = drain {
+                    let gen = self.shared.ra_gen.load(Ordering::Acquire);
+                    dispatch_ra_drain(&self.shared, gen, drain);
+                }
+            }
             return None;
         }
         let mut guard = self
@@ -516,6 +564,10 @@ impl EmuSession {
         let lc = guard.as_mut()?;
         lc.apply_input(&snapshot_input());
         let tick = lc.run_frame();
+        if let Some(drain) = tick.ra_drain {
+            let gen = self.shared.ra_gen.load(Ordering::Acquire);
+            dispatch_ra_drain(&self.shared, gen, drain);
+        }
         collect_local_core_set_options(&self.shared);
         // Rota local: o core marca o analógico do core-loader (mesmo
         // processo); o poller do controle olha o do pai.
@@ -607,6 +659,99 @@ impl EmuSession {
     pub fn set_core_option(&self, key: &str, value: &str) -> bool {
         self.call(|reply| Command::SetCoreOption(key.to_string(), value.to_string(), reply))
             .unwrap_or(false)
+    }
+
+    /// Registra o receptor de pedidos HTTP e eventos do RetroAchievements.
+    pub fn set_ra_sink(&self, sink: RaHostSink) {
+        *self
+            .shared
+            .ra_sink
+            .lock()
+            .unwrap_or_else(|p| p.into_inner()) = Some(sink);
+    }
+
+    /// Inicia o runtime do RetroAchievements na partida aberta agora.
+    pub fn init_achievements(&self, cfg: achievements::RaSessionConfig) {
+        let session_gen = self.shared.ra_gen.load(Ordering::Acquire);
+        if self.shared.vk_local_active.load(Ordering::Acquire) {
+            let sh = Arc::clone(&self.shared);
+            let drain = on_vk_thread(&self.shared, move || {
+                sh.vk_local
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner())
+                    .as_mut()
+                    .map(|lc| lc.init_achievements(cfg))
+            });
+            if let Some(drain) = drain {
+                dispatch_ra_drain(&self.shared, session_gen, drain);
+            }
+            return;
+        }
+        if let Some(ch) = self
+            .shared
+            .child_channel
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+        {
+            let _ = ch.send(&ToChild::InitAchievements(Box::new(cfg)), &[]);
+        }
+    }
+
+    /// Entrega a resposta HTTP de um pedido do `rcheevos`, descartando se a
+    /// partida já mudou (`session_gen` antigo).
+    pub fn deliver_ra_http_response(
+        &self,
+        session_gen: u64,
+        request_id: u64,
+        status_code: i32,
+        body: Vec<u8>,
+    ) {
+        if self.shared.ra_gen.load(Ordering::Acquire) != session_gen {
+            return;
+        }
+        if self.shared.vk_local_active.load(Ordering::Acquire) {
+            let sh = Arc::clone(&self.shared);
+            let id = self.shared.vk_job_seq.fetch_add(1, Ordering::Relaxed);
+            self.shared
+                .vk_jobs
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .push_back((
+                    id,
+                    Box::new(move || {
+                        if sh.ra_gen.load(Ordering::Acquire) != session_gen {
+                            return;
+                        }
+                        let drain = sh
+                            .vk_local
+                            .lock()
+                            .unwrap_or_else(|p| p.into_inner())
+                            .as_mut()
+                            .and_then(|lc| lc.on_ra_http_response(request_id, status_code, &body));
+                        if let Some(drain) = drain {
+                            dispatch_ra_drain(&sh, session_gen, drain);
+                        }
+                    }),
+                ));
+            return;
+        }
+        if let Some(ch) = self
+            .shared
+            .child_channel
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .as_ref()
+        {
+            let _ = ch.send(
+                &ToChild::RaHttpResponse {
+                    request_id,
+                    status_code,
+                    body,
+                },
+                &[],
+            );
+        }
     }
 
     /// Troca a lista de cheats do jogo carregado (doc 17). Sem jogo, nada.
@@ -1367,7 +1512,90 @@ fn handle_event(
             }
             shared.serialization_quirks.store(quirks, Ordering::Release);
         }
+        ToParent::ExtractedContentPath(path) => {
+            *shared
+                .extracted_content_path
+                .lock()
+                .unwrap_or_else(|p| p.into_inner()) = path;
+        }
+        ToParent::RaHttpRequest(req) => {
+            emit_ra_message(
+                shared,
+                RaHostMessage::HttpRequest {
+                    session_gen: shared.ra_gen.load(Ordering::Acquire),
+                    req,
+                },
+            );
+        }
+        ToParent::RaGameLoaded(snapshot) => {
+            emit_ra_message(
+                shared,
+                RaHostMessage::GameLoaded {
+                    session_gen: shared.ra_gen.load(Ordering::Acquire),
+                    snapshot: *snapshot,
+                },
+            );
+        }
+        ToParent::RaEvent(event) => {
+            emit_ra_message(
+                shared,
+                RaHostMessage::Event {
+                    session_gen: shared.ra_gen.load(Ordering::Acquire),
+                    event: *event,
+                },
+            );
+        }
         other => log::debug!("evento do core-host fora de um round-trip: {other:?}"),
+    }
+}
+
+/// Mensagens vindas do runtime de conquistas do core para o processo principal.
+pub enum RaHostMessage {
+    HttpRequest {
+        session_gen: u64,
+        req: achievements::OutboundHttpRequest,
+    },
+    GameLoaded {
+        session_gen: u64,
+        snapshot: achievements::RaLoadedSnapshot,
+    },
+    Event {
+        session_gen: u64,
+        event: achievements::AchievementEvent,
+    },
+}
+
+pub type RaHostSink = Arc<dyn Fn(RaHostMessage) + Send + Sync>;
+
+fn emit_ra_message(shared: &Shared, msg: RaHostMessage) {
+    let sink = shared
+        .ra_sink
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .clone();
+    if let Some(sink) = sink {
+        sink(msg);
+    }
+}
+
+fn dispatch_ra_drain(shared: &Shared, session_gen: u64, drain: achievements::RuntimeDrain) {
+    for warn in drain.warnings {
+        log::warn!("core (ra): {warn}");
+    }
+    if let Some(snapshot) = drain.loaded {
+        emit_ra_message(
+            shared,
+            RaHostMessage::GameLoaded {
+                session_gen,
+                snapshot,
+            },
+        );
+    }
+    for event in drain.events {
+        emit_ra_message(shared, RaHostMessage::Event { session_gen, event });
+    }
+    for req in drain.http_requests {
+        emit_ra_message(shared, RaHostMessage::HttpRequest { session_gen, req });
     }
 }
 
@@ -1871,12 +2099,17 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
 
         match cmd {
             Command::Load(id, rom, initial_option_values, reply) => {
+                shared.ra_gen.fetch_add(1, Ordering::AcqRel);
                 *shared
                     .loading_core
                     .lock()
                     .unwrap_or_else(|p| p.into_inner()) = Some(id.0.clone());
                 // os quirks do core anterior não valem pro novo
                 shared.serialization_quirks.store(0, Ordering::Release);
+                *shared
+                    .extracted_content_path
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = None;
                 // Salva a save RAM do jogo anterior e mata o processo
                 // incondicionalmente — o novo `Load` SEMPRE sobe um processo
                 // novo, mesmo que o anterior fosse o mesmo core (é essa
@@ -1902,6 +2135,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 ring = None;
                 current_srm = None;
                 *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner()) = None;
+                *shared
+                    .extracted_content_path
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = None;
                 *shared
                     .child_channel
                     .lock()
@@ -1992,6 +2229,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                                 );
                                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(id.0.clone());
+                                *shared
+                                    .extracted_content_path
+                                    .lock()
+                                    .unwrap_or_else(|p| p.into_inner()) = lc.extracted_rom_path();
                                 *shared.vk_local.lock().unwrap_or_else(|p| p.into_inner()) =
                                     Some(lc);
                                 collect_local_core_set_options(&shared);
@@ -2175,6 +2416,7 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 }
             }
             Command::Unload(reply) => {
+                shared.ra_gen.fetch_add(1, Ordering::AcqRel);
                 teardown_vk_local(&shared, &mut sink, current_srm.as_deref());
                 *shared
                     .latest_frame
@@ -2197,6 +2439,10 @@ fn core_loop(mut cfg: SessionConfig, rx: Receiver<Command>, shared: Arc<Shared>)
                 current_srm = None;
                 *shared.loaded_core.lock().unwrap_or_else(|p| p.into_inner()) = None;
                 *shared.child_pid.lock().unwrap_or_else(|p| p.into_inner()) = None;
+                *shared
+                    .extracted_content_path
+                    .lock()
+                    .unwrap_or_else(|p| p.into_inner()) = None;
                 *shared
                     .child_channel
                     .lock()

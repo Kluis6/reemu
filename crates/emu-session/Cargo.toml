@@ -5,6 +5,7 @@ edition.workspace = true
 description = "Loop de emulação numa thread dedicada + state machine de foco"
 
 [dependencies]
+achievements = { path = "../achievements" }
 domain = { path = "../domain" }
 core-loader-desktop = { path = "../core-loader-desktop" }
 core-ipc = { path = "../core-ipc" }

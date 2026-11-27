@@ -259,18 +259,91 @@ fn sniff_bytes(b: &[u8]) -> Option<&'static str> {
     None
 }
 
-/// Ponto de entrada do scan: fareja, tratando `.cue` como ponteiro pro binário.
+/// Ponto de entrada do scan: fareja, tratando `.cue` como ponteiro pro binário
+/// e caindo na inspeção de setores/ISO9660 para `.chd`, `.gdi` e DVDs de PS2
+/// cujo `SYSTEM.CNF` mora depois dos primeiros 256 KiB.
 pub fn identify(path: &Path) -> Option<&'static str> {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
         .map(str::to_ascii_lowercase)
         .unwrap_or_default();
-    if ext == "cue" {
+    let initial = if ext == "cue" {
         sniff_cue(path)
     } else {
         sniff_disc_system(path)
+    };
+    initial.or_else(|| sniff_via_sectors(path))
+}
+
+pub(crate) fn sniff_header_bytes(b: &[u8]) -> Option<&'static str> {
+    sniff_bytes(b)
+}
+
+fn sniff_via_sectors(path: &Path) -> Option<&'static str> {
+    use crate::iso9660;
+    use crate::sector::{open_file, Area, SectorReader};
+
+    if let Some(mut hd) = SectorReader::open(path, Area::HighDensity, &open_file) {
+        if let Some(s0) = hd.read_sector(0) {
+            if s0.starts_with(b"SEGA SEGAKATANA ") {
+                return Some("dreamcast");
+            }
+        }
     }
+
+    let mut reader = SectorReader::open(path, Area::FirstData, &open_file)?;
+    if let Some(s0) = reader.read_sector(0) {
+        if s0.len() >= 7 && s0[0] == 0x01 && &s0[1..6] == b"ZZZZZ" {
+            return Some("3do");
+        }
+        if s0.starts_with(b"SEGADISCSYSTEM") {
+            return Some("segacd");
+        }
+        if s0.starts_with(b"SEGA SEGASATURN") {
+            return Some("saturn");
+        }
+        if s0.starts_with(b"SEGA SEGAKATANA") {
+            return Some("dreamcast");
+        }
+        if s0.starts_with(b"PC-FX:Hu_CD-ROM") || s0.starts_with(b"PC-FX:") {
+            return Some("pcfx");
+        }
+    }
+    if let Some(s1) = reader.read_sector(1) {
+        if s1.get(32..55) == Some(b"PC Engine CD-ROM SYSTEM") {
+            return Some("pcenginecd");
+        }
+    }
+    if iso9660::lookup(&mut reader, &["PS3_GAME"]).is_some() {
+        return None;
+    }
+    if iso9660::lookup(&mut reader, &["PSP_GAME", "PARAM.SFO"]).is_some() {
+        return Some("psp");
+    }
+    if let Some(cnf) = iso9660::lookup(&mut reader, &["SYSTEM.CNF"]) {
+        if let Some(bytes) = iso9660::read_file(&mut reader, cnf, 16 * 1024) {
+            let text = String::from_utf8_lossy(&bytes);
+            for line in text.lines() {
+                if let Some((k, _)) = line.split_once('=') {
+                    let key = k.trim();
+                    if key.eq_ignore_ascii_case("BOOT2") {
+                        return Some("ps2");
+                    }
+                    if key.eq_ignore_ascii_case("BOOT") {
+                        return Some("psx");
+                    }
+                }
+            }
+        }
+    }
+    if iso9660::lookup(&mut reader, &["PSX.EXE"]).is_some() {
+        return Some("psx");
+    }
+    if iso9660::lookup(&mut reader, &["IPL.TXT"]).is_some() {
+        return Some("neogeocd");
+    }
+    None
 }
 
 #[cfg(test)]
@@ -448,5 +521,94 @@ mod tests {
         );
         assert_eq!(identify(&cue("Sobe.cue", "../fora/Jogo.bin")), None);
         assert_eq!(identify(&cue("SobeWin.cue", r"..\fora\Jogo.bin")), None);
+    }
+
+    fn minimal_iso9660_with_file_at(name: &str, file_lba: u32, payload: &[u8]) -> Vec<u8> {
+        const SECTOR: usize = 2048;
+        let total_sectors = (file_lba as usize) + payload.len().max(1).div_ceil(SECTOR) + 2;
+        let mut img = vec![0u8; total_sectors * SECTOR];
+
+        fn dir_rec(ident: &[u8], lba: u32, size: u32, is_dir: bool) -> Vec<u8> {
+            let len = (33 + ident.len()) + ((33 + ident.len()) % 2);
+            let mut rec = vec![0u8; len];
+            rec[0] = len as u8;
+            rec[2..6].copy_from_slice(&lba.to_le_bytes());
+            rec[6..10].copy_from_slice(&lba.to_be_bytes());
+            rec[10..14].copy_from_slice(&size.to_le_bytes());
+            rec[14..18].copy_from_slice(&size.to_be_bytes());
+            rec[25] = if is_dir { 0x02 } else { 0x00 };
+            rec[28..30].copy_from_slice(&1u16.to_le_bytes());
+            rec[30..32].copy_from_slice(&1u16.to_be_bytes());
+            rec[32] = ident.len() as u8;
+            rec[33..33 + ident.len()].copy_from_slice(ident);
+            rec
+        }
+
+        let file_off = (file_lba as usize) * SECTOR;
+        img[file_off..file_off + payload.len()].copy_from_slice(payload);
+
+        let mut root = dir_rec(&[0], 18, SECTOR as u32, true);
+        root.extend(dir_rec(&[1], 18, SECTOR as u32, true));
+        root.extend(dir_rec(
+            format!("{name};1").as_bytes(),
+            file_lba,
+            payload.len() as u32,
+            false,
+        ));
+        img[18 * SECTOR..18 * SECTOR + root.len()].copy_from_slice(&root);
+
+        let pvd = &mut img[16 * SECTOR..17 * SECTOR];
+        pvd[0] = 1;
+        pvd[1..6].copy_from_slice(b"CD001");
+        pvd[6] = 1;
+        pvd[128..130].copy_from_slice(&(SECTOR as u16).to_le_bytes());
+        pvd[156..156 + 34].copy_from_slice(&dir_rec(&[0], 18, SECTOR as u32, true));
+
+        let term = &mut img[17 * SECTOR..18 * SECTOR];
+        term[0] = 255;
+        term[1..6].copy_from_slice(b"CD001");
+        img
+    }
+
+    #[test]
+    fn identifies_ps2_dvd_whose_system_cnf_lives_past_256_kib_and_in_chd() {
+        let dir = tempfile::tempdir().unwrap();
+        let cnf = b"BOOT2 = cdrom0:\\SLUS_202.28;1\r\nVER = 1.10\r\nVMODE = NTSC\r\n";
+        // LBA 200 = 409_600 bytes (> 256 KiB lidos por sniff_disc_system).
+        let iso_bytes = minimal_iso9660_with_file_at("SYSTEM.CNF", 200, cnf);
+        let iso_path = dir.path().join("Silent Hill 2.iso");
+        std::fs::write(&iso_path, &iso_bytes).unwrap();
+        assert_eq!(sniff_disc_system(&iso_path), None);
+        assert_eq!(identify(&iso_path), Some("ps2"));
+
+        // O mesmo volume empacotado num CHD v5 nao comprimido (DVD, unidade = 2048).
+        let hunk_size = 16_384u32;
+        let logical_bytes =
+            (iso_bytes.len() as u64).div_ceil(u64::from(hunk_size)) * u64::from(hunk_size);
+        let hunk_count = (logical_bytes / u64::from(hunk_size)) as usize;
+        let header_size = 124usize;
+        let map_offset = header_size as u64;
+        let data_offset = (map_offset + (hunk_count * 4) as u64).div_ceil(u64::from(hunk_size))
+            * u64::from(hunk_size);
+        let mut chd = vec![0u8; (data_offset + logical_bytes) as usize];
+        chd[0..8].copy_from_slice(b"MComprHD");
+        chd[8..12].copy_from_slice(&(header_size as u32).to_be_bytes());
+        chd[12..16].copy_from_slice(&5u32.to_be_bytes());
+        // compressors[0..4] = 0 -> CHD v5 descomprimido
+        chd[32..40].copy_from_slice(&logical_bytes.to_be_bytes());
+        chd[40..48].copy_from_slice(&map_offset.to_be_bytes());
+        chd[48..56].copy_from_slice(&0u64.to_be_bytes()); // meta_offset = 0 (DVD)
+        chd[56..60].copy_from_slice(&hunk_size.to_be_bytes());
+        chd[60..64].copy_from_slice(&2048u32.to_be_bytes());
+        for i in 0..hunk_count {
+            let block_index = (data_offset / u64::from(hunk_size)) as u32 + i as u32;
+            let at = header_size + i * 4;
+            chd[at..at + 4].copy_from_slice(&block_index.to_be_bytes());
+        }
+        let d_off = data_offset as usize;
+        chd[d_off..d_off + iso_bytes.len()].copy_from_slice(&iso_bytes);
+        let chd_path = dir.path().join("Silent Hill 2.chd");
+        std::fs::write(&chd_path, &chd).unwrap();
+        assert_eq!(identify(&chd_path), Some("ps2"));
     }
 }

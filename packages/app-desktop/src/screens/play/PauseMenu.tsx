@@ -1,6 +1,5 @@
 import {
   Badge,
-  Body1,
   Button,
   DrawerBody,
   DrawerFooter,
@@ -30,6 +29,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheatsPanel } from "../../components/CheatsPanel";
+import { GameAchievementsPanel } from "../../components/GameAchievementsPanel";
 import { SaveStateThumb } from "../../components/SaveStateThumb";
 import { LocalStateNote } from "../../components/sync/LocalStateNote";
 import { RemoteStateList } from "../../components/sync/RemoteStateList";
@@ -371,12 +371,7 @@ export function PauseMenu({
 
           {tab === "cheats" && romId && <CheatsPanel romId={romId} />}
 
-          {tab === "achievements" && (
-            <div className={pause.soon}>
-              <TrophyRegular className={pause.soonIcon} aria-hidden />
-              <Body1>{t("play.achievementsSoon")}</Body1>
-            </div>
-          )}
+          {tab === "achievements" && <GameAchievementsPanel romId={romId} compact />}
         </div>
       </DrawerBody>
 

@@ -47,8 +47,11 @@ pub(super) async fn apply_cheats(state: &AppState, rom_id: &str) {
     }
 }
 
-/// Reaplica só se a mudança foi no jogo que está aberto.
-async fn reapply_if_current(state: &AppState, rom_id: &str) {
+/// Reaplica só se a mudança foi no jogo que está aberto e fora do modo Hardcore.
+async fn reapply_if_current(state: &AppState, hardcore_active: bool, rom_id: &str) {
+    if hardcore_active {
+        return;
+    }
     let current = state
         .current_rom
         .lock()
@@ -88,6 +91,7 @@ pub async fn list_cheats(
 #[tauri::command]
 pub async fn add_cheat(
     state: State<'_, AppState>,
+    ra: State<'_, crate::ra::RaState>,
     rom_id: String,
     description: String,
     code: String,
@@ -99,13 +103,14 @@ pub async fn add_cheat(
         .add(&rom_id, &description, &code, true)
         .await
         .map_err(AppError::from)?;
-    reapply_if_current(&state, &rom_id).await;
+    reapply_if_current(&state, ra.is_hardcore_active(), &rom_id).await;
     Ok(cheat.into())
 }
 
 #[tauri::command]
 pub async fn update_cheat(
     state: State<'_, AppState>,
+    ra: State<'_, crate::ra::RaState>,
     id: i64,
     description: String,
     code: String,
@@ -118,15 +123,19 @@ pub async fn update_cheat(
         .await
         .map_err(AppError::from)?
         .ok_or("cheat não encontrado")?;
-    reapply_if_current(&state, &cheat.rom_id).await;
+    reapply_if_current(&state, ra.is_hardcore_active(), &cheat.rom_id).await;
     Ok(cheat.into())
 }
 
 #[tauri::command]
-pub async fn delete_cheat(state: State<'_, AppState>, id: i64) -> Result<(), AppError> {
+pub async fn delete_cheat(
+    state: State<'_, AppState>,
+    ra: State<'_, crate::ra::RaState>,
+    id: i64,
+) -> Result<(), AppError> {
     let repo = db::CheatsRepo::new(pool(&state)?);
     if let Some(rom_id) = repo.delete(id).await.map_err(AppError::from)? {
-        reapply_if_current(&state, &rom_id).await;
+        reapply_if_current(&state, ra.is_hardcore_active(), &rom_id).await;
     }
     Ok(())
 }

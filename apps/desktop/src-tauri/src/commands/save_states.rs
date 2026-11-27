@@ -234,7 +234,17 @@ pub async fn list_save_states(
 }
 
 #[tauri::command]
-pub async fn load_save_state(state: State<'_, AppState>, state_id: String) -> Result<(), AppError> {
+pub async fn load_save_state(
+    state: State<'_, AppState>,
+    ra: State<'_, crate::ra::RaState>,
+    state_id: String,
+) -> Result<(), AppError> {
+    if ra.is_hardcore_active() {
+        return Err(
+            "Modo Hardcore ativo: carregar save state fica desativado nas conquistas Hardcore."
+                .into(),
+        );
+    }
     let running = state.session.loaded_core();
     let repo = db::SaveStateRepo::new(pool(&state)?);
     let meta = save_svc::load_bytes(&repo, &state_id, running.as_deref())

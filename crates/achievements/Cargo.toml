@@ -1,0 +1,21 @@
+[package]
+name = "achievements"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+chd = "0.4"
+flate2 = "1"
+log = "0.4"
+serde = { workspace = true }
+sevenz-rust2 = { version = "0.25", default-features = false }
+thiserror = { workspace = true }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+chd = { version = "0.4", features = ["encode"] }
+sevenz-rust2 = { version = "0.25", default-features = false, features = ["compress"] }
+tempfile = "3"
+
+[build-dependencies]
+cc = "1"

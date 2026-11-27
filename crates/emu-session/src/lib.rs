@@ -17,7 +17,8 @@ mod session;
 pub use core_ipc::InteropImage;
 pub use focus::FocusController;
 pub use session::{
-    srm_path, EmuSession, InteropProvider, InteropReply, SessionConfig, SessionError, SessionState,
+    srm_path, EmuSession, InteropProvider, InteropReply, RaHostMessage, RaHostSink, SessionConfig,
+    SessionError, SessionState,
 };
 
 pub use core_loader_desktop::{gl_interop_wanted, AnalogState, RetroPadState};

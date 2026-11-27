@@ -67,6 +67,11 @@ import type { UpdateInfo } from './bindings/UpdateInfo'
 import type { VideoConfig } from './bindings/VideoConfig'
 import type { InstalledCore } from './bindings/InstalledCore'
 import type { LoadedGame } from './bindings/LoadedGame'
+import type { RaAchievement } from './bindings/RaAchievement'
+import type { RaGameLoadedEvent } from './bindings/RaGameLoadedEvent'
+import type { RaGameView } from './bindings/RaGameView'
+import type { RaStatus } from './bindings/RaStatus'
+import type { RaUnlockEvent } from './bindings/RaUnlockEvent'
 
 const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
@@ -1133,4 +1138,49 @@ export async function appVersion(): Promise<string> {
   if (!inTauri) throw new Error('fora do Tauri: appVersion')
   const { getVersion } = await import('@tauri-apps/api/app')
   return getVersion()
+}
+
+// --- RetroAchievements (`src-tauri/src/ra.rs`) ----------------------------
+
+export type { RaAchievement, RaGameLoadedEvent, RaGameView, RaStatus, RaUnlockEvent }
+
+export const raStatus = () => invoke<RaStatus>('ra_status')
+
+export const raLogin = (username: string, password: string) =>
+  invoke<RaStatus>('ra_login', { username, password })
+
+export const raLogout = () => invoke<RaStatus>('ra_logout')
+
+export const raSetPreferences = (prefs: {
+  enabled?: boolean
+  hardcore?: boolean
+  unofficial?: boolean
+  encore?: boolean
+}) =>
+  invoke<RaStatus>('ra_set_preferences', {
+    enabled: prefs.enabled ?? null,
+    hardcore: prefs.hardcore ?? null,
+    unofficial: prefs.unofficial ?? null,
+    encore: prefs.encore ?? null,
+  })
+
+export const raGameAchievements = (romId: string) =>
+  invoke<RaGameView>('ra_game_achievements', { romId })
+
+export async function onRaStatusChanged(cb: (st: RaStatus) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<RaStatus>('ra-status-changed', (e) => cb(e.payload))
+}
+
+export async function onRaGameLoaded(cb: (ev: RaGameLoadedEvent) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<RaGameLoadedEvent>('ra-game-loaded', (e) => cb(e.payload))
+}
+
+export async function onRaAchievementUnlocked(cb: (ev: RaUnlockEvent) => void): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<RaUnlockEvent>('ra-achievement-unlocked', (e) => cb(e.payload))
 }

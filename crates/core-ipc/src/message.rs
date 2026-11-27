@@ -96,6 +96,14 @@ pub enum ToChild {
     InteropSlotFree {
         slot: u32,
     },
+    /// Inicia a sessão do RetroAchievements na memória do core já aberto.
+    InitAchievements(Box<achievements::RaSessionConfig>),
+    /// Entrega ao `rcheevos` a resposta de um `ToParent::RaHttpRequest`.
+    RaHttpResponse {
+        request_id: u64,
+        status_code: i32,
+        body: Vec<u8>,
+    },
     Shutdown,
 }
 
@@ -118,6 +126,9 @@ pub enum ToParent {
     /// Quirks de serialização do core (`domain::core_loader::serialization_quirk`),
     /// mandados logo antes do `Loaded`.
     SerializationQuirks(u64),
+    /// Caminho da ROM/imagem extraída em diretório temporário pelo filho (quando
+    /// o arquivo original era `.zip`/`.7z`), para o pai reutilizar no hash RA.
+    ExtractedContentPath(Option<PathBuf>),
     FrameReady {
         slot: u32,
         meta: FrameMetadata,
@@ -171,6 +182,12 @@ pub enum ToParent {
         key: String,
         value: String,
     },
+    /// Pedido HTTPS construído pelo `rcheevos` para o processo principal executar.
+    RaHttpRequest(achievements::OutboundHttpRequest),
+    /// Conjunto de conquistas carregado e sessão iniciada no `rcheevos`.
+    RaGameLoaded(Box<achievements::RaLoadedSnapshot>),
+    /// Evento em tempo real disparado pelo `rcheevos` (`AchievementTriggered`, etc.).
+    RaEvent(Box<achievements::AchievementEvent>),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
