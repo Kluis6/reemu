@@ -5,6 +5,7 @@ mod bezel_pack;
 mod bios;
 mod bundled_shaders;
 mod catalog;
+mod collection;
 mod commands;
 mod covers;
 mod credentials;
@@ -367,6 +368,8 @@ pub fn run() {
             catalog::catalog_run_now,
             catalog::catalog_search,
             catalog::catalog_pick,
+            collection::alvanista_collection_status,
+            collection::alvanista_collection_update,
             sync::sync_status,
             sync::sync_set_enabled,
             sync::sync_set_label,

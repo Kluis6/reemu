@@ -1518,6 +1518,33 @@ const es: Messages = {
       applied: 'Juego actualizado desde el catálogo.',
     },
   },
+  collection: {
+    connectPrompt: 'Vincula tu colección de Alvanista para marcar posesión, progreso y lista de deseos.',
+    connectButton: 'Conectar a mi Colección',
+    connecting: 'Esperando en el navegador…',
+    cancelConnect: 'Cancelar',
+    inCollection: 'En la colección',
+    addCollection: 'Añadir a la colección',
+    wishlist: 'Lista de deseos',
+    addWishlist: 'Quiero comprar',
+    journeyLabel: 'Progreso en Alvanista',
+    syncTime: 'Sincronizar tiempo ({{minutes}} min)',
+    syncingTime: 'Sincronizando…',
+    timeSynced: 'Tiempo sincronizado con Alvanista.',
+    updateFailed: 'No se pudo actualizar tu colección en Alvanista ahora.',
+    offline: 'Colección de Alvanista no disponible sin conexión.',
+    status: {
+      no_status: 'Sin estado',
+      unplayed: 'No jugado',
+      want_to_play: 'Quiero jugar',
+      backlog: 'Pendiente',
+      playing: 'Jugando',
+      played: 'Jugado',
+      finished: 'Terminado',
+      completed: '100% completado',
+      abandoned: 'Abandonado',
+    },
+  },
 }
 
 export default es

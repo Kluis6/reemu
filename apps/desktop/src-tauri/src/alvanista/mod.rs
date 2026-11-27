@@ -136,6 +136,12 @@ impl Alvanista {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn store(&self) -> &Store {
+        self.client.store()
+    }
+
+    #[cfg(not(test))]
     fn store(&self) -> &Store {
         self.client.store()
     }
@@ -278,7 +284,39 @@ impl Alvanista {
     where
         F: FnOnce(&str) -> Result<(), String>,
     {
-        let scope = format!("{} {}", config::SCOPE_PROFILE, config::SCOPE_SAVES);
+        self.connect_adding_scopes(&[config::SCOPE_SAVES], lang, open)
+            .await
+    }
+
+    /// Pede escopos adicionais preservando os escopos que a sessão viva já tem
+    /// (por exemplo: quem já autorizou `saves` e pede `collection` continua com
+    /// os dois no novo consentimento).
+    pub async fn connect_adding_scopes<F>(
+        &self,
+        extra: &[&str],
+        lang: Lang,
+        open: F,
+    ) -> Result<AlvanistaStatus, String>
+    where
+        F: FnOnce(&str) -> Result<(), String>,
+    {
+        let mut list: Vec<String> = vec![config::SCOPE_PROFILE.to_owned()];
+        if matches!(self.store().has_session().await, Ok(true)) {
+            if let Ok(existing) = self.store().scopes().await {
+                for s in existing {
+                    if !s.is_empty() && !list.iter().any(|x| x == &s) {
+                        list.push(s);
+                    }
+                }
+            }
+        }
+        for &s in extra {
+            let s = s.trim();
+            if !s.is_empty() && !list.iter().any(|x| x == s) {
+                list.push(s.to_owned());
+            }
+        }
+        let scope = list.join(" ");
         self.connect_with(&scope, lang, open).await
     }
 
@@ -707,18 +745,47 @@ fn state_of(app: &AppHandle) -> Result<tauri::State<'_, Alvanista>, String> {
         .ok_or_else(|| "failed".to_owned())
 }
 
+fn allowed_extra_scope(s: &str) -> Option<&'static str> {
+    match s.trim() {
+        config::SCOPE_PROFILE => Some(config::SCOPE_PROFILE),
+        config::SCOPE_SAVES => Some(config::SCOPE_SAVES),
+        config::SCOPE_COLLECTION => Some(config::SCOPE_COLLECTION),
+        "friends:read" => Some("friends:read"),
+        "achievements:read" => Some("achievements:read"),
+        _ => None,
+    }
+}
+
 /// `saves`: pede também o escopo do cloud save no mesmo consentimento (a
 /// página Sincronização, onde a pessoa já disse que quer sincronizar).
+/// `scopes`: escopos incrementais adicionais (ex.: `["collection"]`), unidos
+/// aos escopos já concedidos na sessão atual.
 #[tauri::command]
 pub async fn alvanista_connect(
     app: AppHandle,
     lang: Option<String>,
     saves: Option<bool>,
+    scopes: Option<Vec<String>>,
 ) -> Result<AlvanistaStatus, String> {
     let alva = state_of(&app)?;
     let lang = Lang::from_tag(lang.as_deref().unwrap_or("pt-BR"));
-    let res = if saves == Some(true) {
-        alva.reconnect_with_saves(lang, open_in_browser).await
+    let mut extra: Vec<&'static str> = Vec::new();
+    if saves == Some(true) {
+        extra.push(config::SCOPE_SAVES);
+    }
+    if let Some(raw_scopes) = scopes {
+        for raw in raw_scopes {
+            let Some(clean) = allowed_extra_scope(&raw) else {
+                return Err("failed".to_owned());
+            };
+            if clean != config::SCOPE_PROFILE && !extra.contains(&clean) {
+                extra.push(clean);
+            }
+        }
+    }
+    let res = if !extra.is_empty() {
+        alva.connect_adding_scopes(&extra, lang, open_in_browser)
+            .await
     } else {
         alva.connect(lang, open_in_browser).await
     };
@@ -1828,5 +1895,40 @@ mod tests {
             .filter(|r| r.method.as_str() == "DELETE")
             .count();
         assert_eq!(deletes, 1, "o aparelho é revogado com o token dele");
+    }
+
+    #[tokio::test]
+    async fn connect_adding_scopes_preserves_existing_session_scopes() {
+        let _serial = SERIAL.lock().await;
+        let api = family().await;
+        api.allow(&["profile:read", "saves", "collection"]);
+        let (alva, _) = alva_with_session(&api).await;
+        let device = alva.store().device_id().await.unwrap();
+        api.seed(&tokens("s_saves"), &device, &["profile:read", "saves"]);
+        alva.store()
+            .replace_session(&tokens("s_saves"), &["profile:read", "saves"])
+            .await
+            .unwrap();
+
+        let seen_url = Arc::new(std::sync::Mutex::new(String::new()));
+        let seen_url2 = seen_url.clone();
+        let inner_open = browser(true);
+        let st = alva
+            .connect_adding_scopes(&[config::SCOPE_COLLECTION], Lang::PtBr, move |url| {
+                *seen_url2.lock().unwrap() = url.to_owned();
+                inner_open(url)
+            })
+            .await
+            .unwrap();
+        let auth_url = seen_url.lock().unwrap().clone();
+        assert!(
+            auth_url.contains("scope=profile%3Aread%20saves%20collection"),
+            "unexpected authorize_url: {auth_url}"
+        );
+        assert!(st.connected && !st.ended);
+        assert_eq!(
+            alva.store().scopes().await.unwrap(),
+            vec!["profile:read", "saves", "collection"]
+        );
     }
 }
