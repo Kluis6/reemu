@@ -1009,7 +1009,13 @@ export type RawInputEvent =
 export type BindingTarget = 'system_hotkey' | 'controller_mapping'
 
 /** `SystemAction::as_wire()` do backend. */
-export type SystemActionKey = 'toggle_menu_overlay' | 'quick_save' | 'quick_load'
+export type SystemActionKey =
+  | 'toggle_menu_overlay'
+  | 'quick_save'
+  | 'quick_load'
+  | 'capture_screenshot'
+  | 'toggle_audio_note'
+  | 'toggle_video_recording'
 
 export async function onRawInputCaptured(
   cb: (ev: RawInputEvent) => void,
@@ -1143,9 +1149,62 @@ const gamepadButtonNames = (): Record<number, string> => ({
   15: 'D-pad ↑', 16: 'D-pad ↓', 17: 'D-pad ←', 18: 'D-pad →',
 })
 
+function fnv1aKeyScancode(code: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < code.length; i++) {
+    h ^= code.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h >>> 0
+}
+
+const KNOWN_SCANCODE_LABELS: Map<number, string> = (() => {
+  const map = new Map<number, string>()
+  const add = (code: string, label = code) => map.set(fnv1aKeyScancode(code), label)
+  for (let n = 1; n <= 24; n++) add(`F${n}`)
+  for (let c = 65; c <= 90; c++) {
+    const ch = String.fromCharCode(c)
+    add(`Key${ch}`, ch)
+  }
+  for (let d = 0; d <= 9; d++) {
+    add(`Digit${d}`, String(d))
+    add(`Numpad${d}`, `Num ${d}`)
+  }
+  add('ShiftLeft', 'Shift')
+  add('ShiftRight', 'RShift')
+  add('ControlLeft', 'Ctrl')
+  add('ControlRight', 'RCtrl')
+  add('AltLeft', 'Alt')
+  add('AltRight', 'RAlt')
+  add('Space', 'Space')
+  add('Enter', 'Enter')
+  add('Backspace', 'Backspace')
+  add('PrintScreen', 'PrintScreen')
+  add('Insert', 'Insert')
+  add('Delete', 'Delete')
+  add('Home', 'Home')
+  add('End', 'End')
+  add('PageUp', 'PageUp')
+  add('PageDown', 'PageDown')
+  add('Backquote', '`')
+  add('Minus', '-')
+  add('Equal', '=')
+  add('BracketLeft', '[')
+  add('BracketRight', ']')
+  add('Backslash', '\\')
+  add('Semicolon', ';')
+  add('Quote', "'")
+  add('Comma', ',')
+  add('Period', '.')
+  add('Slash', '/')
+  return map
+})()
+
 /** Rótulo curto e legível de um evento bruto (pra chips da UI de captura). */
 export function describeRawInput(ev: RawInputEvent): string {
-  if ('Keyboard' in ev) return i18n.t('input.key')
+  if ('Keyboard' in ev) {
+    return KNOWN_SCANCODE_LABELS.get(ev.Keyboard.scancode >>> 0) ?? i18n.t('input.key')
+  }
   if ('GamepadButton' in ev)
     return (
       gamepadButtonNames()[ev.GamepadButton.index] ??
@@ -1248,4 +1307,255 @@ export async function onRaAchievementUnlocked(cb: (ev: RaUnlockEvent) => void): 
   if (!inTauri) return () => {}
   const { listen } = await import('@tauri-apps/api/event')
   return listen<RaUnlockEvent>('ra-achievement-unlocked', (e) => cb(e.payload))
+}
+
+// --- Meu Log + thread automatica de check-in da sessao (`gamelog.rs`) -----
+
+export type GamelogVisibility = 'public' | 'friends' | 'private'
+export type GamelogKind = 'note' | 'screenshot' | 'video' | 'audio'
+
+export interface GamelogPrefs {
+  autoSessionCheckin: boolean
+  autoAttachCaptures: boolean
+  visibility: GamelogVisibility | string
+}
+
+export interface GamelogRuntimeState {
+  audioRecording: boolean
+  audioElapsedMs: number
+  videoRecording: boolean
+  videoElapsedMs: number
+  ffmpegAvailable: boolean
+  activeRomId: string | null
+  activeGameId: string | null
+  activeSessionPostId: string | null
+  activeRaGameId: number
+  prefs: GamelogPrefs
+}
+
+export interface GamelogUsage {
+  usedBytes: number
+  quotaBytes: number
+  itemCount: number
+}
+
+export interface GamelogMedia {
+  key: string
+  url: string
+  mimeType: string
+  sizeBytes: number
+  width: number | null
+  height: number | null
+  durationMs: number | null
+  posterUrl: string | null
+}
+
+export interface GamelogItem {
+  id: string
+  gameId: string
+  kind: GamelogKind | string
+  title: string | null
+  body: string
+  platformId: string | null
+  visibility: GamelogVisibility | string
+  state: string
+  takenAt: string | null
+  createdAt: string
+  updatedAt: string
+  media: GamelogMedia[]
+}
+
+export interface GamelogList {
+  items: GamelogItem[]
+  nextCursor: string | null
+}
+
+export interface GamelogCaptureResult {
+  localPath: string
+  uploadedItem: GamelogItem | null
+  attachedPostId: string | null
+  warning: string | null
+}
+
+export const gamelogState = () => invoke<GamelogRuntimeState>('gamelog_state')
+
+export const gamelogSetPrefs = (prefs: {
+  autoSessionCheckin?: boolean
+  autoAttachCaptures?: boolean
+  visibility?: GamelogVisibility
+}) =>
+  invoke<GamelogPrefs>('gamelog_set_prefs', {
+    autoSessionCheckin: prefs.autoSessionCheckin ?? null,
+    autoAttachCaptures: prefs.autoAttachCaptures ?? null,
+    visibility: prefs.visibility ?? null,
+  })
+
+export const gamelogUsage = () => invoke<GamelogUsage>('gamelog_usage')
+
+export const gamelogListItems = (gameId: string, cursor?: string | null, limit = 20) =>
+  invoke<GamelogList>('gamelog_list_items', {
+    gameId,
+    cursor: cursor ?? null,
+    limit,
+  })
+
+export const gamelogCreateNote = (args: {
+  gameId: string
+  romId?: string | null
+  title?: string | null
+  body: string
+  visibility?: GamelogVisibility
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogItem>('gamelog_create_note', {
+    gameId: args.gameId,
+    romId: args.romId ?? null,
+    title: args.title ?? null,
+    body: args.body,
+    visibility: args.visibility ?? null,
+    attachToSession: args.attachToSession ?? null,
+  })
+
+export const gamelogUploadFile = (args: {
+  gameId: string
+  romId?: string | null
+  filePath: string
+  kind?: GamelogKind | null
+  title?: string | null
+  caption?: string | null
+  visibility?: GamelogVisibility
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogItem>('gamelog_upload_file', {
+    gameId: args.gameId,
+    romId: args.romId ?? null,
+    filePath: args.filePath,
+    kind: args.kind ?? null,
+    title: args.title ?? null,
+    caption: args.caption ?? null,
+    visibility: args.visibility ?? null,
+    attachToSession: args.attachToSession ?? null,
+  })
+
+export const gamelogPatchItem = (args: {
+  itemId: string
+  title?: string | null
+  body?: string | null
+  visibility?: GamelogVisibility
+}) =>
+  invoke<GamelogItem>('gamelog_patch_item', {
+    itemId: args.itemId,
+    title: args.title ?? null,
+    body: args.body ?? null,
+    visibility: args.visibility ?? null,
+  })
+
+export const gamelogDeleteItem = (itemId: string) =>
+  invoke<void>('gamelog_delete_item', { itemId })
+
+export const gamelogAttachToSession = (args: {
+  itemId: string
+  gameId?: string | null
+  caption?: string | null
+  visibility?: GamelogVisibility
+}) =>
+  invoke<string | null>('gamelog_attach_to_session', {
+    itemId: args.itemId,
+    gameId: args.gameId ?? null,
+    caption: args.caption ?? null,
+    visibility: args.visibility ?? null,
+  })
+
+export const gamelogCaptureScreenshot = (args?: {
+  caption?: string | null
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogCaptureResult>('gamelog_capture_screenshot', {
+    caption: args?.caption ?? null,
+    attachToSession: args?.attachToSession ?? null,
+  })
+
+export const gamelogStartAudioNote = (args?: {
+  romId?: string | null
+  gameId?: string | null
+  title?: string | null
+  caption?: string | null
+}) =>
+  invoke<GamelogRuntimeState>('gamelog_start_audio_note', {
+    romId: args?.romId ?? null,
+    gameId: args?.gameId ?? null,
+    title: args?.title ?? null,
+    caption: args?.caption ?? null,
+  })
+
+export const gamelogStopAudioNote = (args?: {
+  title?: string | null
+  caption?: string | null
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogCaptureResult>('gamelog_stop_audio_note', {
+    title: args?.title ?? null,
+    caption: args?.caption ?? null,
+    attachToSession: args?.attachToSession ?? null,
+  })
+
+export const gamelogCancelAudioNote = () =>
+  invoke<GamelogRuntimeState>('gamelog_cancel_audio_note')
+
+export const gamelogStartVideoRecording = (caption?: string | null) =>
+  invoke<GamelogRuntimeState>('gamelog_start_video_recording', {
+    caption: caption ?? null,
+  })
+
+export const gamelogStopVideoRecording = (args?: {
+  caption?: string | null
+  attachToSession?: boolean
+}) =>
+  invoke<GamelogCaptureResult>('gamelog_stop_video_recording', {
+    caption: args?.caption ?? null,
+    attachToSession: args?.attachToSession ?? null,
+  })
+
+export const gamelogOpenCapturesDir = (romId?: string | null) =>
+  invoke<void>('gamelog_open_captures_dir', { romId: romId ?? null })
+
+export const gamelogOpenSessionPost = (postId: string) =>
+  invoke<void>('gamelog_open_session_post', { postId })
+
+export function pickGamelogMediaFile(title = i18n.t('gamelog.pickMediaTitle')): Promise<string | null> {
+  return pickPath({
+    title,
+    extensions: [
+      'png',
+      'jpg',
+      'jpeg',
+      'webp',
+      'gif',
+      'mp4',
+      'webm',
+      'mov',
+      'wav',
+      'mp3',
+      'm4a',
+      'ogg',
+      'flac',
+    ],
+    filterName: i18n.t('gamelog.mediaFilter'),
+  })
+}
+
+export async function onGamelogStateChanged(
+  cb: (st: GamelogRuntimeState) => void,
+): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<GamelogRuntimeState>('gamelog-state-changed', (e) => cb(e.payload))
+}
+
+export async function onGamelogUpdated(
+  cb: (ev: { gameId: string | null }) => void,
+): Promise<() => void> {
+  if (!inTauri) return () => {}
+  const { listen } = await import('@tauri-apps/api/event')
+  return listen<{ gameId: string | null }>('gamelog-updated', (e) => cb(e.payload))
 }

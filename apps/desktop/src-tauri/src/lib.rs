@@ -10,6 +10,7 @@ mod commands;
 mod covers;
 mod credentials;
 mod decoration;
+mod gamelog;
 mod gpu;
 
 /// Quadros do jogo novo apresentados antes de a janela de vídeo reaparecer.
@@ -122,12 +123,18 @@ pub fn run() {
                         .ok()
                 })
                 .unwrap_or_default();
+            if let Some(pool) = db.as_ref() {
+                tauri::async_runtime::block_on(gamelog::seed_default_hotkeys_once(&base, pool));
+            }
             let hotkeys = db
                 .as_ref()
                 .and_then(|pool| {
                     tauri::async_runtime::block_on(commands::load_system_hotkeys(pool)).ok()
                 })
                 .unwrap_or_default();
+            app.manage(std::sync::Arc::new(gamelog::GamelogState::new(
+                base.clone(),
+            )));
             if let Some(pool) = db.as_ref() {
                 tauri::async_runtime::block_on(commands::load_controller_mappings(pool));
                 tauri::async_runtime::block_on(commands::seed_builtin_shader_presets(pool));
@@ -408,6 +415,23 @@ pub fn run() {
             ra::ra_logout,
             ra::ra_set_preferences,
             ra::ra_game_achievements,
+            gamelog::gamelog_state,
+            gamelog::gamelog_set_prefs,
+            gamelog::gamelog_usage,
+            gamelog::gamelog_list_items,
+            gamelog::gamelog_create_note,
+            gamelog::gamelog_upload_file,
+            gamelog::gamelog_patch_item,
+            gamelog::gamelog_delete_item,
+            gamelog::gamelog_attach_to_session,
+            gamelog::gamelog_capture_screenshot,
+            gamelog::gamelog_start_audio_note,
+            gamelog::gamelog_stop_audio_note,
+            gamelog::gamelog_cancel_audio_note,
+            gamelog::gamelog_start_video_recording,
+            gamelog::gamelog_stop_video_recording,
+            gamelog::gamelog_open_captures_dir,
+            gamelog::gamelog_open_session_post,
             commands::js_log,
             commands::current_focus,
             commands::toggle_focus,
@@ -570,6 +594,7 @@ pub fn run() {
         // de sair pra fazer o flush final da save RAM `.srm`. Sem isso só o
         // flush periódico (10s) protegia. Idempotente se já não há jogo.
         tauri::RunEvent::ExitRequested { .. } => {
+            tauri::async_runtime::block_on(gamelog::on_game_unloaded(app_handle));
             let _ = app_handle.state::<AppState>().session.unload();
         }
         _ => {}
@@ -796,6 +821,11 @@ fn spawn_video_pump(app: tauri::AppHandle) {
                             if let Some(fp) = gpu.as_mut() {
                                 let t = std::time::Instant::now();
                                 fp.render_to_surface(Some(f));
+                                if gamelog::should_sample_video_frame() {
+                                    if let Some((cw, ch, rgba)) = fp.capture_surface_frame() {
+                                        gamelog::push_video_frame(cw, ch, rgba);
+                                    }
+                                }
                                 // Tarefa A4: uma vez por segundo, manda o
                                 // período medido do monitor pro core-host
                                 // casar o ritmo (`RateMatch`).

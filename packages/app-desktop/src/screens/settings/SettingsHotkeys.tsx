@@ -13,7 +13,14 @@ import { useToastStore } from '../../stores/useToastStore'
 import { Trans, useTranslation } from 'react-i18next'
 
 // Rótulo traduzido na renderização: `hotkeys.actions.<key>`.
-const HOTKEY_ACTIONS = ['toggle_menu_overlay', 'quick_save', 'quick_load'] as const satisfies readonly SystemActionKey[]
+const HOTKEY_ACTIONS = [
+  'toggle_menu_overlay',
+  'quick_save',
+  'quick_load',
+  'capture_screenshot',
+  'toggle_audio_note',
+  'toggle_video_recording',
+] as const satisfies readonly SystemActionKey[]
 
 const useStyles = makeStyles({
   root: { display: 'flex', flexDirection: 'column', gap: tokens.spacingVerticalM, maxWidth: '520px' },

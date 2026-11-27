@@ -73,6 +73,9 @@ export function useAlvanistaConnect({
         void qc.invalidateQueries({ queryKey: ['alvanista-collection'] })
         void qc.invalidateQueries({ queryKey: ['alvanista-friends'] })
         void qc.invalidateQueries({ queryKey: ['alvanista-achievements'] })
+        void qc.invalidateQueries({ queryKey: ['gamelog-usage'] })
+        void qc.invalidateQueries({ queryKey: ['gamelog-items'] })
+        void qc.invalidateQueries({ queryKey: ['gamelog-state'] })
         setConnecting(false)
       })
       .catch((err: unknown) => {

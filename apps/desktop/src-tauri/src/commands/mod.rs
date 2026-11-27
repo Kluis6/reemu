@@ -227,6 +227,11 @@ pub(crate) fn poll_hotkeys<R: tauri::Runtime>(app: &AppHandle<R>) {
         }
         SystemAction::QuickSave => spawn_quick_state(app.clone(), true),
         SystemAction::QuickLoad => spawn_quick_state(app.clone(), false),
+        SystemAction::CaptureScreenshot => crate::gamelog::hotkey_capture_screenshot(app.clone()),
+        SystemAction::ToggleAudioNote => crate::gamelog::hotkey_toggle_audio_note(app.clone()),
+        SystemAction::ToggleVideoRecording => {
+            crate::gamelog::hotkey_toggle_video_recording(app.clone())
+        }
     }
 }
 

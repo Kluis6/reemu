@@ -47,6 +47,7 @@ import { SearchArt } from "../components/EmptyArt";
 import { EmptyState, LoadingState } from "../components/EmptyState";
 import { CheatsPanel } from "../components/CheatsPanel";
 import { GameAchievementsPanel } from "../components/GameAchievementsPanel";
+import { GameLogPanel } from "../components/GameLogPanel";
 import { SaveStateThumb } from "../components/SaveStateThumb";
 import { LocalStateNote } from "../components/sync/LocalStateNote";
 import {
@@ -300,7 +301,7 @@ export function RomDetail() {
     (location.state as { openPanel?: string } | null)?.openPanel === "achievements"
       ? "achievements"
       : null;
-  const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "media" | null>(initialPanel);
+  const [panel, setPanel] = useState<"states" | "shader" | "cheats" | "achievements" | "gamelog" | "media" | null>(initialPanel);
   const hasShaderCfg = !!shaderInfo.data?.gpu;
   const gameUuid = meta.data?.gameUuid;
   const catalog = meta.data?.gamekave;
@@ -339,6 +340,7 @@ export function RomDetail() {
     // cheats por código (doc 17): a lista é do jogo, vale ao abrir
     { key: "cheats", show: true },
     { key: "achievements", show: true },
+    { key: "gamelog", show: true },
     { key: "media", show: hasMedia },
   ] as const;
 
@@ -1177,6 +1179,21 @@ export function RomDetail() {
             <GameAchievementsPanel
               romId={romId}
               onNavigateSettings={() => navigate("/settings/conquistas")}
+            />
+          )}
+          {panel === "gamelog" && (
+            <GameLogPanel
+              romId={romId}
+              gameUuid={gameUuid}
+              inGame={false}
+              onPickCatalogGame={
+                canPickFromCatalog
+                  ? () => {
+                      setPanel(null);
+                      setPickOpen(true);
+                    }
+                  : undefined
+              }
             />
           )}
           {panel === "media" && (

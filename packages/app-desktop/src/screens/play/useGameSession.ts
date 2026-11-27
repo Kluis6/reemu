@@ -137,12 +137,23 @@ export function useQuickStateToasts(romId: string) {
     let off: (() => void) | undefined;
     let alive = true;
     void onHotkeyAction((e) => {
-      const save = e.action === "quick_save";
+      if (e.action === "quick_save" || e.action === "quick_load") {
+        const save = e.action === "quick_save";
+        if (e.ok) {
+          qc.invalidateQueries({ queryKey: ["save-states", romId] });
+          push(sysToast(t(save ? "play.quickSaved" : "play.quickLoaded"), "Success"));
+        } else {
+          push(errorToast(e.message, save ? "quickSave" : "quickLoad"));
+        }
+        return;
+      }
+      void qc.invalidateQueries({ queryKey: ["gamelog-state"] });
+      void qc.invalidateQueries({ queryKey: ["gamelog-items"] });
+      void qc.invalidateQueries({ queryKey: ["gamelog-usage"] });
       if (e.ok) {
-        qc.invalidateQueries({ queryKey: ["save-states", romId] });
-        push(sysToast(t(save ? "play.quickSaved" : "play.quickLoaded"), "Success"));
+        push(sysToast(e.message, "Success"));
       } else {
-        push(errorToast(e.message, save ? "quickSave" : "quickLoad"));
+        push(errorToast(e.message, "gamelogAction"));
       }
     }).then((fn) => {
       if (alive) off = fn;
