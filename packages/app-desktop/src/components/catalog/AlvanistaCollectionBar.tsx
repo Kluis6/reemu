@@ -31,13 +31,14 @@ import { useToastStore } from '../../stores/useToastStore'
 
 const JOURNEY_ORDER: CollectionJourneyStatus[] = [
   'no_status',
+  'unplayed',
   'want_to_play',
   'backlog',
   'playing',
   'played',
+  'finished',
   'completed',
-  'completed_100',
-  'dropped',
+  'abandoned',
 ]
 
 const useStyles = makeStyles({

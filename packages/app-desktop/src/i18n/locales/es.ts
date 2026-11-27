@@ -1505,13 +1505,14 @@ const es: Messages = {
     offline: 'Colección de Alvanista no disponible sin conexión.',
     status: {
       no_status: 'Sin estado',
+      unplayed: 'No jugado',
       want_to_play: 'Quiero jugar',
       backlog: 'Pendiente',
       playing: 'Jugando',
       played: 'Jugado',
-      completed: 'Completado',
-      completed_100: '100% completado',
-      dropped: 'Abandonado',
+      finished: 'Terminado',
+      completed: '100% completado',
+      abandoned: 'Abandonado',
     },
   },
 }

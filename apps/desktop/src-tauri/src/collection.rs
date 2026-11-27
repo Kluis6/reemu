@@ -47,8 +47,10 @@ struct StatusBatchWire {
 }
 
 #[derive(Deserialize)]
-struct UpdateItemWire {
-    item: ItemWire,
+#[serde(untagged)]
+enum UpdateItemWire {
+    Wrapped { item: ItemWire },
+    Direct(ItemWire),
 }
 
 #[derive(Deserialize)]
@@ -89,10 +91,9 @@ impl From<ItemWire> for CollectionItemDto {
             } else {
                 w.interest
             },
-            status: if w.status.is_empty() {
-                "no_status".to_owned()
-            } else {
-                w.status
+            status: match w.status.as_str() {
+                "" | "wishlist" => "no_status".to_owned(),
+                other => other.to_owned(),
             },
             playtime_minutes: w.playtime_minutes,
             last_played_at: w.last_played_at,
@@ -206,7 +207,7 @@ pub async fn update_item(
         body.insert("in_collection".into(), serde_json::Value::Bool(v));
     }
     if let Some(v) = patch.in_wishlist {
-        body.insert("in_wishlist".into(), serde_json::Value::Bool(v));
+        body.insert("wishlist".into(), serde_json::Value::Bool(v));
     }
     if let Some(st) = patch
         .status
@@ -214,7 +215,15 @@ pub async fn update_item(
         .map(str::trim)
         .filter(|s| !s.is_empty())
     {
-        body.insert("status".into(), serde_json::Value::String(st.to_owned()));
+        let canonical = match st {
+            "completed_100" => "completed",
+            "dropped" => "abandoned",
+            other => other,
+        };
+        body.insert(
+            "status".into(),
+            serde_json::Value::String(canonical.to_owned()),
+        );
     }
     if let Some(mins) = patch.playtime_minutes {
         if mins < 0 {
@@ -235,7 +244,10 @@ pub async fn update_item(
         return Err(map_non_success(status, &val));
     }
     let parsed: UpdateItemWire = serde_json::from_value(val).map_err(|_| "failed".to_owned())?;
-    Ok(parsed.item.into())
+    let item = match parsed {
+        UpdateItemWire::Wrapped { item } | UpdateItemWire::Direct(item) => item,
+    };
+    Ok(item.into())
 }
 
 fn alva_state(app: &AppHandle) -> Result<tauri::State<'_, Alvanista>, String> {
@@ -368,14 +380,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn update_item_sends_only_patched_axes() {
+    async fn update_item_sends_only_patched_axes_and_reads_flat_response() {
         let _serial = SERIAL.lock().await;
         let (api, seen) = spawn_fake_partner(|line, _body| {
             assert!(line.starts_with(&format!("PUT /api/partner/v1/collection/{GAME_A} ")));
             (
                 200,
                 format!(
-                    r#"{{"item":{{"game_id":"{GAME_A}","in_collection":true,"possessed":true,"ownership":"owned","in_wishlist":true,"interest":"medium","status":"completed","playtime_minutes":240}}}}"#
+                    r#"{{"game_id":"{GAME_A}","in_collection":false,"possessed":false,"ownership":"none","in_wishlist":true,"interest":"medium","status":"finished","playtime_minutes":240}}"#
                 ),
             )
         });
@@ -390,25 +402,28 @@ mod tests {
             &alva,
             GAME_A,
             &CollectionPatchDto {
-                system: Some("gamecube".into()),
-                in_collection: Some(true),
-                in_wishlist: None,
-                status: Some("completed".into()),
+                system: Some("n64".into()),
+                in_collection: None,
+                in_wishlist: Some(true),
+                status: Some("finished".into()),
                 playtime_minutes: None,
             },
         )
         .await
         .unwrap();
-        assert_eq!(updated.status, "completed");
+        assert!(updated.in_wishlist);
+        assert_eq!(updated.interest, "medium");
+        assert_eq!(updated.status, "finished");
         assert_eq!(updated.playtime_minutes, 240);
 
         let sent = seen.lock().unwrap();
         assert_eq!(sent.len(), 1);
         let payload: serde_json::Value = serde_json::from_str(&sent[0].1).unwrap();
-        assert_eq!(payload["system"], "gamecube");
-        assert_eq!(payload["in_collection"], true);
-        assert_eq!(payload["status"], "completed");
+        assert_eq!(payload["system"], "n64");
+        assert_eq!(payload["wishlist"], true);
         assert!(payload.get("in_wishlist").is_none());
+        assert!(payload.get("in_collection").is_none());
+        assert_eq!(payload["status"], "finished");
         assert!(payload.get("playtime_minutes").is_none());
     }
 }

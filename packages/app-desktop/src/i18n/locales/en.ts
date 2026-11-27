@@ -1505,13 +1505,14 @@ const en: Messages = {
     offline: 'Alvanista collection unavailable while offline.',
     status: {
       no_status: 'No status',
+      unplayed: 'Unplayed',
       want_to_play: 'Want to play',
       backlog: 'Backlog',
       playing: 'Playing',
       played: 'Played',
-      completed: 'Completed',
-      completed_100: '100% completed',
-      dropped: 'Dropped',
+      finished: 'Finished',
+      completed: '100% completed',
+      abandoned: 'Dropped',
     },
   },
 }

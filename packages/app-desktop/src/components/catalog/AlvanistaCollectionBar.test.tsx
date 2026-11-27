@@ -167,6 +167,20 @@ describe('AlvanistaCollectionBar', () => {
       playtimeMinutes: 120,
       system: 'snes',
     })
+
+    const wishlistBtn = [...view.host.querySelectorAll('button')].find(
+      (b) => b.getAttribute('aria-pressed') === 'false',
+    )
+    expect(wishlistBtn).toBeTruthy()
+    await act(async () => {
+      wishlistBtn!.click()
+    })
+    await flush()
+
+    expect(tauriMocks.alvanistaCollectionUpdate).toHaveBeenCalledWith(GAME_UUID, {
+      inWishlist: true,
+      system: 'snes',
+    })
     await view.unmount()
   })
 })

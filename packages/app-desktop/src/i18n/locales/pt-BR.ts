@@ -1506,13 +1506,14 @@ const ptBR = {
     offline: 'Coleção do Alvanista indisponível sem conexão.',
     status: {
       no_status: 'Sem status',
+      unplayed: 'Não jogado',
       want_to_play: 'Quero jogar',
       backlog: 'Na fila',
       playing: 'Jogando',
       played: 'Jogado',
-      completed: 'Zerado',
-      completed_100: '100% concluído',
-      dropped: 'Abandonado',
+      finished: 'Zerado',
+      completed: '100% concluído',
+      abandoned: 'Abandonado',
     },
   },
 }

@@ -691,13 +691,14 @@ export async function onCatalogEvent(cb: (e: CatalogEvent) => void): Promise<() 
 
 export type CollectionJourneyStatus =
   | 'no_status'
+  | 'unplayed'
   | 'want_to_play'
   | 'backlog'
   | 'playing'
   | 'played'
+  | 'finished'
   | 'completed'
-  | 'completed_100'
-  | 'dropped'
+  | 'abandoned'
 
 export interface CollectionItem {
   gameId: string
