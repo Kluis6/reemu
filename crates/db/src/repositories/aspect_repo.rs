@@ -43,6 +43,29 @@ impl AspectRepo {
         row.map(|r| r.try_get("aspect").map_err(be)).transpose()
     }
 
+    /// Valor atribuído ao padrão geral (`None` = usa a proporção do core).
+    pub async fn get_default(&self) -> Result<Option<String>, RepoError> {
+        self.one("default", "").await
+    }
+
+    /// Todas as plataformas com proporção própria (`(system_id, aspect)`).
+    pub async fn list_systems(&self) -> Result<Vec<(String, String)>, RepoError> {
+        let rows = sqlx::query(
+            "SELECT target, aspect FROM aspect_assignments WHERE scope = 'system' ORDER BY target",
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(be)?;
+        rows.into_iter()
+            .map(|r| {
+                Ok((
+                    r.try_get("target").map_err(be)?,
+                    r.try_get("aspect").map_err(be)?,
+                ))
+            })
+            .collect()
+    }
+
     /// As três linhas da cascata do jogo. `rom_id` `None` = jogo fora da
     /// biblioteca (só plataforma e padrão).
     pub async fn get(

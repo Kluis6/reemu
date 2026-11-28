@@ -11,6 +11,7 @@ import type { CatalogCore } from './bindings/CatalogCore'
 import type { CatalogSearchGame } from './bindings/CatalogSearchGame'
 import type { CatalogStatus } from './bindings/CatalogStatus'
 import type { AspectInfo } from './bindings/AspectInfo'
+import type { AspectSettings } from './bindings/AspectSettings'
 import type { AudioConfig } from './bindings/AudioConfig'
 import type { BezelCatalogItem } from './bindings/BezelCatalogItem'
 import type { BezelProgress } from './bindings/BezelProgress'
@@ -56,6 +57,7 @@ import type { StateNote } from './bindings/StateNote'
 import type { ScanProgress } from './bindings/ScanProgress'
 import type { ScanReport } from './bindings/ScanReport'
 import type { ScrapeProgress } from './bindings/ScrapeProgress'
+import type { ShaderAssignments } from './bindings/ShaderAssignments'
 import type { ShaderInfo } from './bindings/ShaderInfo'
 import type { ShaderPackProgress } from './bindings/ShaderPackProgress'
 import { isWallpaperId, type WallpaperId } from './wallpapers'
@@ -184,8 +186,9 @@ export const setFullscreen = (value: boolean) => invoke<void>('set_fullscreen', 
 
 /** Preset "de 1 clique" que aponta pro pacote `slang-shaders`. */
 export type { CuratedPreset }
-export type { ShaderInfo }
+export type { ShaderAssignments, ShaderInfo }
 export const getShaderInfo = () => invoke<ShaderInfo>('get_shader_info')
+export const getShaderAssignments = () => invoke<ShaderAssignments>('get_shader_assignments')
 
 export type ShaderScope = 'default' | 'system' | 'rom'
 /** Problema conhecido de um preset na GPU (lista em `gpu/known_issues.txt`):
@@ -221,7 +224,16 @@ export const listSlangpDir = (root: string) =>
 /** Parâmetro ajustável do shader ativo (`#pragma parameter`). Vazio pros
  *  builtins (plain/crt/lcd). */
 export type { ShaderParam }
-export const getShaderParams = () => invoke<ShaderParam[]>('get_shader_params')
+export const getShaderParams = (
+  scope?: ShaderScope,
+  romId?: string,
+  systemId?: string,
+) =>
+  invoke<ShaderParam[]>('get_shader_params', {
+    scope: typeof scope === 'string' ? scope : null,
+    systemId: typeof systemId === 'string' ? systemId : null,
+    romId: typeof romId === 'string' ? romId : null,
+  })
 /** Ajusta um parâmetro agora; `scope` (+`systemId`/`romId`) persiste. */
 export const setShaderParam = (
   name: string,
@@ -288,11 +300,22 @@ export const listInstalledCores = () => invoke<InstalledCore[]>('list_installed_
 /** Proporção da imagem: a do core, fixa, ou a janela inteira. */
 export type AspectValue = 'core' | '4:3' | '16:9' | 'fill'
 export type AspectScope = 'rom' | 'system' | 'default'
-export type { AspectInfo }
+export type { AspectInfo, AspectSettings }
+export const getAspectSettings = () => invoke<AspectSettings>('get_aspect_settings')
 export const getAspect = (romId: string) => invoke<AspectInfo>('get_aspect', { romId })
 /** `aspect` null = volta a herdar. Com um jogo aberto, vale na hora. */
-export const setAspect = (scope: AspectScope, romId: string, aspect: AspectValue | null) =>
-  invoke<void>('set_aspect', { scope, romId, aspect })
+export const setAspect = (
+  scope: AspectScope,
+  romId: string,
+  aspect: AspectValue | null,
+  systemId?: string,
+) =>
+  invoke<void>('set_aspect', {
+    scope,
+    romId: romId || null,
+    systemId: systemId ?? null,
+    aspect,
+  })
 /** A moldura saiu porque a imagem do jogo está larga demais pra ela. */
 export async function onWideBezelOff(cb: () => void): Promise<() => void> {
   if (!inTauri) return () => {}

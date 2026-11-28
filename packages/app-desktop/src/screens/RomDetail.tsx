@@ -217,7 +217,7 @@ export function RomDetail() {
   const shaderParamsKey = `rom:${currentGameShader}`;
   const shaderParams = useQuery({
     queryKey: ["shader-params", "rom", romId, shaderSystemId, shaderParamsKey],
-    queryFn: getShaderParams,
+    queryFn: () => getShaderParams("rom", romId, shaderSystemId),
     enabled: !!shaderAtScope,
     retry: false,
   });

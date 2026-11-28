@@ -302,6 +302,33 @@ pub struct AspectInfo {
     system_id: String,
 }
 
+/// Proporção padrão geral e overrides por plataforma, para Configurações > Vídeo.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(test, derive(ts_rs::TS), ts(export, rename = "AspectSettings"))]
+pub struct AspectSettings {
+    #[cfg_attr(test, ts(type = "'core' | '4:3' | '16:9' | 'fill' | null"))]
+    pub at_default: Option<String>,
+    #[cfg_attr(test, ts(type = "Record<string, 'core' | '4:3' | '16:9' | 'fill'>"))]
+    pub systems: std::collections::BTreeMap<String, String>,
+}
+
+#[tauri::command]
+pub async fn get_aspect_settings(state: State<'_, AppState>) -> Result<AspectSettings, AppError> {
+    let repo = db::AspectRepo::new(pool(&state)?);
+    let at_default = repo.get_default().await.map_err(AppError::from)?;
+    let systems = repo
+        .list_systems()
+        .await
+        .map_err(AppError::from)?
+        .into_iter()
+        .collect();
+    Ok(AspectSettings {
+        at_default,
+        systems,
+    })
+}
+
 #[tauri::command]
 pub async fn get_aspect(
     state: State<'_, AppState>,
@@ -322,28 +349,43 @@ pub async fn get_aspect(
 }
 
 /// Grava a proporção no escopo (`rom`, `system` ou `default`); `aspect` `None`
-/// volta a herdar. Com um jogo aberto, vale na hora.
+/// (ou vazio) volta a herdar. Com um jogo aberto, vale na hora.
 #[tauri::command]
 pub async fn set_aspect(
     state: State<'_, AppState>,
     scope: String,
-    rom_id: String,
+    rom_id: Option<String>,
+    system_id: Option<String>,
     aspect: Option<String>,
 ) -> Result<(), AppError> {
-    if let Some(a) = aspect.as_deref() {
+    let aspect = aspect.as_deref().filter(|s| !s.is_empty());
+    if let Some(a) = aspect {
         if !matches!(a, "core" | "4:3" | "16:9" | "fill") {
             return Err(AppError::from(format!("proporção desconhecida: {a}")));
         }
     }
     let pool = pool(&state)?;
     let target = match scope.as_str() {
-        "rom" => rom_id,
-        "system" => system_of(&pool, Some(&rom_id)).await,
+        "rom" => rom_id
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| AppError::from("escopo 'rom' precisa de rom_id"))?,
+        "system" => match system_id {
+            Some(s) if !s.is_empty() => s,
+            _ => {
+                let s = system_of(&pool, rom_id.as_deref()).await;
+                if s.is_empty() {
+                    return Err(AppError::from(
+                        "escopo 'system' precisa de system_id ou rom_id",
+                    ));
+                }
+                s
+            }
+        },
         "default" => String::new(),
         other => return Err(AppError::from(format!("escopo desconhecido: {other}"))),
     };
     db::AspectRepo::new(pool)
-        .set(&scope, &target, aspect.as_deref())
+        .set(&scope, &target, aspect)
         .await
         .map_err(AppError::from)?;
     let current = state
@@ -372,11 +414,23 @@ pub(super) async fn apply_resolved_shader_ex(
     rom_id: Option<&str>,
     force: bool,
 ) -> bool {
+    apply_scope_shader_ex(state, None, rom_id, force).await
+}
+
+pub(super) async fn apply_scope_shader_ex(
+    state: &AppState,
+    system_id: Option<&str>,
+    rom_id: Option<&str>,
+    force: bool,
+) -> bool {
     use domain::shader_chain::ShaderChainResolver;
     let Some(pool) = state.db.clone() else {
         return false;
     };
-    let system = system_of(&pool, rom_id).await;
+    let system = match system_id {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => system_of(&pool, rom_id).await,
+    };
     let sc = db::ShaderChainRepo::new(pool);
     let mut active = None;
     let (target, has_bezel, overrides) = match sc.resolve(&system, rom_id).await {
@@ -406,10 +460,6 @@ pub(super) async fn apply_resolved_shader_ex(
     use crate::shader_failure::{report, FailureKind};
     let mut guard = state.gpu.lock().unwrap_or_else(|p| p.into_inner());
     if let Some(fp) = guard.as_mut() {
-        // Shader que impede o jogo de aparecer (pedido do usuário,
-        // 2026-10-29): os que travam a GPU (`gpu::known_issues`) nem são
-        // aplicados; os que não montam também não. Nos dois casos o jogo roda
-        // no `plain`, o shader sai da atribuição e o aviso vai pro sino.
         let hang = crate::gpu::shader_issue(&target) == Some(crate::gpu::ShaderIssue::GpuHang);
         if hang {
             let _ = fp.set_preset("plain");
@@ -427,10 +477,23 @@ pub(super) async fn apply_resolved_shader_ex(
                 report(&target, FailureKind::Build, e);
                 return false;
             }
-        }
-        for (k, v) in &overrides {
-            if let Ok(val) = v.parse::<f32>() {
-                fp.set_shader_param(k, val);
+            for (k, v) in &overrides {
+                if let Ok(val) = v.parse::<f32>() {
+                    fp.set_shader_param(k, val);
+                }
+            }
+        } else {
+            let defaults: Vec<(String, f32)> = fp
+                .shader_param_meta()
+                .iter()
+                .map(|m| (m.name.clone(), m.default))
+                .collect();
+            for (name, def) in defaults {
+                let val = overrides
+                    .get(&name)
+                    .and_then(|s| s.parse::<f32>().ok())
+                    .unwrap_or(def);
+                fp.set_shader_param(&name, val);
             }
         }
     }

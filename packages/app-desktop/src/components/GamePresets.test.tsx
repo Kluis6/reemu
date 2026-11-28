@@ -82,12 +82,12 @@ describe('GamePresets', () => {
   })
 
   it('a core without a ready preset writes only the resolution', async () => {
-    api.getCoreOptions.mockResolvedValue([option('flycast_internal_resolution', ['640x480', '1920x1440']), option('y', ['a', 'b'])])
-    await mount('flycast_libretro')
+    api.getCoreOptions.mockResolvedValue([option('parallel-n64-screensize', ['640x480', '1920x1440']), option('y', ['a', 'b'])])
+    await mount('parallel_n64_libretro')
     await act(async () => radio('Qualidade').click())
     await settle()
     expect(api.setCoreOption).toHaveBeenCalledTimes(1)
-    expect(api.setCoreOption).toHaveBeenCalledWith('flycast_libretro', 'flycast_internal_resolution', '1920x1440', 'r1')
+    expect(api.setCoreOption).toHaveBeenCalledWith('parallel_n64_libretro', 'parallel-n64-screensize', '1920x1440', 'r1')
   })
 
   it('Qualidade writes the preset values for this game', async () => {

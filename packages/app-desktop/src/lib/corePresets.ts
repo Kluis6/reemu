@@ -10,10 +10,34 @@ export interface CorePreset {
 
 export type PresetLevel = 'performance' | 'normal' | 'quality' | 'custom'
 
+const MELONDS_PRESET: CorePreset = {
+  performance: {
+    melonds_jit_enable: 'enabled',
+    melonds_threaded_renderer: 'enabled',
+    melonds_opengl_renderer: 'disabled',
+    melonds_opengl_resolution: '1x native (256x192)',
+    melonds_opengl_filtering: 'nearest',
+  },
+  quality: {
+    melonds_jit_enable: 'enabled',
+    melonds_threaded_renderer: 'enabled',
+    melonds_opengl_renderer: 'enabled',
+    melonds_opengl_resolution: '4x native (1024x768)',
+    melonds_opengl_filtering: 'linear',
+  },
+}
+
 /**
- * Por core. Chaves, valores e efeitos conferidos em `libretro/libretro_core_options.h`
- * do PPSSPP e em docs.libretro.com/library/ppsspp. `mulitsample` é a grafia da chave
- * no core. `skip_buffer_effects` fica de fora: alguns jogos podem não desenhar nada.
+ * Por core (`crates/core-catalog/src/catalog.rs`). Chaves, valores e efeitos
+ * conferidos nos `libretro_core_options.h` de cada core e em docs.libretro.com
+ * (`docs/ai-context/21-opcoes-cores-por-cenario.md`).
+ *
+ * - PPSSPP: `mulitsample` é a grafia da chave no core; `skip_buffer_effects`
+ *   fica de fora porque alguns jogos podem não desenhar nada.
+ * - PCSX ReARMed: `gpu_unai_blending` e `gpu_unai_lighting` ficam de fora
+ *   porque causam erros graves de imagem.
+ * - Flycast: inclui os prefixos `reicast_*` (usado pelo core atual) e
+ *   `flycast_*` (usado na documentação); chaves ausentes no core são ignoradas.
  */
 const PRESETS: Record<string, CorePreset> = {
   ppsspp_libretro: {
@@ -34,21 +58,143 @@ const PRESETS: Record<string, CorePreset> = {
       ppsspp_texture_filtering: 'Auto max quality',
     },
   },
+  mednafen_psx_hw_libretro: {
+    performance: {
+      beetle_psx_hw_renderer: 'hardware',
+      beetle_psx_hw_internal_resolution: '1x(native)',
+      beetle_psx_hw_pgxp_mode: 'disabled',
+      beetle_psx_hw_filter: 'nearest',
+      beetle_psx_hw_dither_mode: '1x(native)',
+      beetle_psx_hw_cpu_dynarec: 'enabled',
+    },
+    quality: {
+      beetle_psx_hw_renderer: 'hardware',
+      beetle_psx_hw_internal_resolution: '4x',
+      beetle_psx_hw_pgxp_mode: 'memory only',
+      beetle_psx_hw_filter: 'bilinear',
+      beetle_psx_hw_dither_mode: 'internal resolution',
+      beetle_psx_hw_cpu_dynarec: 'enabled',
+    },
+  },
+  swanstation_libretro: {
+    performance: {
+      swanstation_GPU_ResolutionScale: '1',
+      swanstation_GPU_TrueColor: 'false',
+      swanstation_GPU_TextureFilter: 'Nearest',
+      swanstation_GPU_PGXPEnable: 'false',
+      swanstation_GPU_MSAA: '1',
+      swanstation_CPU_ExecutionMode: 'Recompiler',
+    },
+    quality: {
+      swanstation_GPU_ResolutionScale: '4',
+      swanstation_GPU_TrueColor: 'true',
+      swanstation_GPU_TextureFilter: 'Bilinear',
+      swanstation_GPU_PGXPEnable: 'true',
+      swanstation_GPU_MSAA: '4',
+      swanstation_CPU_ExecutionMode: 'Recompiler',
+    },
+  },
+  pcsx_rearmed_libretro: {
+    performance: {
+      pcsx_rearmed_drc: 'enabled',
+      pcsx_rearmed_frameskip_type: 'auto',
+      pcsx_rearmed_gpu_thread_rendering: 'auto',
+      pcsx_rearmed_dithering: 'disabled',
+      pcsx_rearmed_neon_enhancement_enable: 'disabled',
+    },
+    quality: {
+      pcsx_rearmed_drc: 'enabled',
+      pcsx_rearmed_frameskip_type: 'disabled',
+      pcsx_rearmed_gpu_thread_rendering: 'auto',
+      pcsx_rearmed_dithering: 'enabled',
+      pcsx_rearmed_neon_enhancement_enable: 'enabled',
+    },
+  },
+  mupen64plus_next_libretro: {
+    performance: {
+      'mupen64plus-cpucore': 'dynamic_recompiler',
+      'mupen64plus-43screensize': '320x240',
+      'mupen64plus-169screensize': '640x360',
+      'mupen64plus-MultiSampling': '0',
+      'mupen64plus-FXAA': '0',
+    },
+    quality: {
+      'mupen64plus-cpucore': 'dynamic_recompiler',
+      'mupen64plus-43screensize': '1280x960',
+      'mupen64plus-169screensize': '1920x1080',
+      'mupen64plus-MultiSampling': '4',
+      'mupen64plus-FXAA': '1',
+    },
+  },
+  flycast_libretro: {
+    performance: {
+      reicast_internal_resolution: '640x480',
+      flycast_internal_resolution: '640x480',
+      reicast_threaded_rendering: 'enabled',
+      flycast_threaded_rendering: 'enabled',
+      reicast_auto_skip_frame: 'some',
+      flycast_auto_skip_frame: 'some',
+      reicast_alpha_sorting: 'per-strip (fast, least accurate)',
+      flycast_alpha_sorting: 'per-strip (fast, least accurate)',
+      reicast_anisotropic_filtering: 'off',
+      flycast_anisotropic_filtering: 'off',
+    },
+    quality: {
+      reicast_internal_resolution: '1920x1440',
+      flycast_internal_resolution: '1920x1440',
+      reicast_threaded_rendering: 'enabled',
+      flycast_threaded_rendering: 'enabled',
+      reicast_auto_skip_frame: 'disabled',
+      flycast_auto_skip_frame: 'disabled',
+      reicast_alpha_sorting: 'per-pixel (accurate)',
+      flycast_alpha_sorting: 'per-pixel (accurate)',
+      reicast_anisotropic_filtering: '16',
+      flycast_anisotropic_filtering: '16',
+    },
+  },
+  melonds_libretro: MELONDS_PRESET,
+  melondsds_libretro: {
+    performance: {
+      ...MELONDS_PRESET.performance,
+      melonds_render_mode: 'software',
+      melonds_opengl_scale_factor: '1',
+    },
+    quality: {
+      ...MELONDS_PRESET.quality,
+      melonds_render_mode: 'opengl',
+      melonds_opengl_scale_factor: '4',
+    },
+  },
+}
+
+/** Variantes equivalentes entre versões dos cores. */
+const FALLBACK_CHOICES: Record<string, readonly string[]> = {
+  bilinear: ['xBR'],
+  xBR: ['bilinear'],
+  some: ['enabled'],
+  off: ['disabled'],
+  disabled: ['off'],
+  '16': ['16x'],
+  '16x': ['16'],
+  x4: ['4x', '4'],
+  '1x(native)': ['1x (native)', '1x'],
+  'per-strip (fast, least accurate)': ['per-strip'],
+  'per-pixel (accurate)': ['per-pixel'],
 }
 
 /** Escala de resolução dos cores 3D. Fica de fora quem só muda o tamanho da tela 2D
  *  (`atari800_resolution`, `fbneo-resolution`). */
 const RESOLUTION_KEY =
-  /internal_resolution|opengl_resolution|screensize|resolutionscale|parallel-rdp-upscaling|upscale_multiplier/i
+  /internal_resolution|opengl_resolution|screensize|resolutionscale|scale_factor|parallel-rdp-upscaling|upscale_multiplier/i
 /** Largura e fator-alvo da Qualidade, cerca de 4x nos consoles 3D de 240p. */
 const QUALITY_WIDTH = 1920
 const QUALITY_FACTOR = 4
 
-/** Tamanho comparável de um valor: largura de `640x480`, ou o fator de `4x` e `4`. */
+/** Tamanho comparável de um valor: largura de `640x480`, ou o fator de `4x`, `1x(native)` e `4`. */
 function resolutionSize(value: string): { kind: 'width' | 'factor'; size: number } | null {
-  const pixels = /^(\d+)x\d+/.exec(value)
+  const pixels = /^(\d+)x\d+/i.exec(value)
   if (pixels) return { kind: 'width', size: Number(pixels[1]) }
-  const factor = /^(\d+(?:\.\d+)?)x?(?:\s|$)/.exec(value)
+  const factor = /^(\d+(?:\.\d+)?)x?(?:[\s(]|$)/i.exec(value)
   return factor ? { kind: 'factor', size: Number(factor[1]) } : null
 }
 
@@ -66,6 +212,64 @@ function qualityResolution(option: CoreOption): string {
     }
   }
   return best
+}
+
+/** O menor valor de resolução oferecido pelo core (nativa). */
+function nativeResolution(option: CoreOption): string | null {
+  let best: string | null = null
+  let bestSize = Infinity
+  for (const value of option.choices) {
+    const parsed = resolutionSize(value)
+    if (!parsed) continue
+    const limit = parsed.kind === 'width' ? 640 : 1
+    if (parsed.size <= limit && parsed.size < bestSize) {
+      best = value
+      bestSize = parsed.size
+    }
+  }
+  return best
+}
+
+/** Casa o valor pedido com o que esta versão do core realmente oferece em `choices`,
+ *  usada tanto em `detectLevel` quanto em `presetChanges` para manter os dois idênticos. */
+function resolveChoice(option: CoreOption, wanted: string | undefined): string | null {
+  if (wanted === undefined) return null
+  if (option.choices.includes(wanted)) return wanted
+  const lower = wanted.toLowerCase()
+  const caseMatch = option.choices.find((c) => c.toLowerCase() === lower)
+  if (caseMatch !== undefined) return caseMatch
+
+  for (const alt of FALLBACK_CHOICES[wanted] ?? []) {
+    if (option.choices.includes(alt)) return alt
+    const altMatch = option.choices.find((c) => c.toLowerCase() === alt.toLowerCase())
+    if (altMatch !== undefined) return altMatch
+  }
+
+  if (RESOLUTION_KEY.test(option.key)) {
+    const target = resolutionSize(wanted)
+    if (!target) return null
+    const sameSize = option.choices.find((c) => {
+      const parsed = resolutionSize(c)
+      return parsed !== null && parsed.kind === target.kind && parsed.size === target.size
+    })
+    if (sameSize !== undefined) return sameSize
+
+    const isUpscaled =
+      (target.kind === 'factor' && target.size > 1) ||
+      (target.kind === 'width' && target.size >= 960)
+    if (isUpscaled) {
+      const best = qualityResolution(option)
+      const parsed = resolutionSize(best)
+      const minUpscaled = parsed?.kind === 'width' ? 640 : 1
+      if (option.choices.includes(best) && parsed && parsed.size > minUpscaled) {
+        return best
+      }
+    } else {
+      return nativeResolution(option)
+    }
+  }
+
+  return null
 }
 
 /** Por enquanto só resolução: Desempenho no padrão do core, em geral a nativa, e
@@ -100,8 +304,7 @@ export function detectLevel(preset: CorePreset, options: readonly CoreOption[]):
   // Valor que esta versão do core não oferece não é gravado, então não entra na conta.
   const matches = (values: Record<string, string>) =>
     relevant.every((o) => {
-      const wanted = values[o.key]
-      const expected = wanted !== undefined && o.choices.includes(wanted) ? wanted : null
+      const expected = resolveChoice(o, values[o.key])
       return (o.romValue ?? null) === expected
     })
   if (matches(preset.performance)) return 'performance'
@@ -121,8 +324,8 @@ export function presetChanges(
   const changes: { key: string; value: string }[] = []
   for (const option of options) {
     if (!known.has(option.key)) continue
-    const wanted = target[option.key]
-    const value = wanted !== undefined && option.choices.includes(wanted) ? wanted : ''
+    const expected = level === 'normal' ? null : resolveChoice(option, target[option.key])
+    const value = expected ?? ''
     if ((option.romValue ?? '') !== value) changes.push({ key: option.key, value })
   }
   return changes
