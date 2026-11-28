@@ -930,6 +930,7 @@ fn handle_game_loaded(app: &AppHandle, snapshot: RaLoadedSnapshot) {
         ra_state.set_hardcore_active(false);
     }
     if !snapshot.incompatible_version {
+        crate::gas::on_ra_game_loaded(app, rom_id.clone(), snapshot.game_id, snapshot.hardcore);
         crate::gamelog::on_ra_game_loaded(app, rom_id.clone(), &snapshot);
     }
     let live = LiveGameAchievements {
@@ -1008,6 +1009,7 @@ fn handle_runtime_event(app: &AppHandle, event: AchievementEvent) {
                     &raw_view,
                 );
             }
+            crate::gas::on_ra_achievement_unlocked(app, id, hardcore);
             crate::gamelog::on_ra_achievement_unlocked(
                 app,
                 id,

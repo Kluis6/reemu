@@ -11,6 +11,7 @@ mod covers;
 mod credentials;
 mod decoration;
 mod gamelog;
+mod gas;
 mod gpu;
 
 /// Quadros do jogo novo apresentados antes de a janela de vídeo reaparecer.
@@ -79,6 +80,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(updates::UpdateState::default())
         .manage(ra::RaState::default())
+        .manage(gas::GasState::default())
         .setup(|app| {
             shader_failure::init(app.handle().clone());
             gpu::set_shader_failure_hook(|source, error| {

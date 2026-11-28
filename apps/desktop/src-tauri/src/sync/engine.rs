@@ -24,9 +24,9 @@ use super::api::{
     ApiError, FileFilter, RemoteDevice, RemoteFile, RemoteVersion, UploadMeta, Uploaded,
 };
 use super::device::{default_label, rfc3339, Device};
-use super::local::{
-    self, account_saves, log_tag, parse_key, rom_saves, LocalSaves, NameCase, SaveFile,
-};
+#[cfg(test)]
+use super::local::account_saves;
+use super::local::{self, log_tag, parse_key, LocalSaves, NameCase, SaveFile};
 use super::platform::platform_for_system;
 use super::reconcile::{decide, Action, Kind, Local, Remote};
 use super::{failed, severity, SyncError, SyncEvent, SyncService, SYNC_EVENT};
@@ -833,9 +833,14 @@ impl Engine {
         let (files, local) = match scope {
             PassScope::All => {
                 let files = self.list(alva, &token).await?;
-                let local = account_saves(&self.roms, &self.dirs.saves, &self.dirs.system)
-                    .await
-                    .map_err(local_err)?;
+                let local = local::account_saves_with_db(
+                    &self.db,
+                    &self.roms,
+                    &self.dirs.saves,
+                    &self.dirs.system,
+                )
+                .await
+                .map_err(local_err)?;
                 (files, local)
             }
             // Uma ROM (antes de abrir, depois de fechar): só as vagas dela no
@@ -850,15 +855,29 @@ impl Engine {
                     return Ok(());
                 };
                 let (names, cores) = local::rom_listing(&rom, &self.dirs.saves);
-                let files = self.list_for(alva, &token, &names, &cores).await?;
+                let mut files = self.list_for(alva, &token, &names, &cores).await?;
                 // Saiu da biblioteca no meio: nada a fazer (um mapa vazio faria
                 // todo conflito parecer de jogo fora da biblioteca).
-                let Some(local) = rom_saves(&self.roms, &self.dirs.saves, &self.dirs.system, id)
-                    .await
-                    .map_err(local_err)?
+                let Some(local) = local::rom_saves_with_db(
+                    &self.db,
+                    &self.roms,
+                    &self.dirs.saves,
+                    &self.dirs.system,
+                    id,
+                )
+                .await
+                .map_err(local_err)?
                 else {
                     return Ok(());
                 };
+                if !has_rom_save_row(&files)
+                    && self.rom_may_fallback(&rom, local.rom_game_uuid(id)).await?
+                {
+                    let extra = self
+                        .list_platform_rom_files(alva, &token, platform_for_system(&rom.system_id))
+                        .await?;
+                    merge_remote_files(&mut files, extra);
+                }
                 (files, local)
             }
             // Os escopos de states não olham os game saves.
@@ -1133,8 +1152,68 @@ impl Engine {
         Ok(rows)
     }
 
+    /// As linhas `kind=file` sem `core` de uma plataforma, incluindo apagadas:
+    /// fallback quando o nome exato do arquivo local não existe na nuvem e a
+    /// ROM tem `game_uuid`, `crc32` de 8 hex ou base registrada.
+    async fn list_platform_rom_files(
+        &self,
+        alva: &Alvanista,
+        token: &str,
+        platform: &str,
+    ) -> Result<Vec<RemoteFile>, SyncError> {
+        let filter = FileFilter {
+            kind: "file",
+            platform: Some(platform),
+            core: Some(""),
+            include_deleted: true,
+            ..FileFilter::default()
+        };
+        match self.sync.api.list_files(token, &filter).await {
+            Ok(found) => {
+                let mut ids = HashSet::new();
+                let rows: Vec<RemoteFile> = found
+                    .into_iter()
+                    .filter(|f| {
+                        f.kind == "file"
+                            && f.platform == platform
+                            && is_coreless(f)
+                            && ids.insert(f.save_id.clone())
+                    })
+                    .collect();
+                let mut known = lock(&self.known_files);
+                known.retain(|f| !(f.platform == platform && is_coreless(f)));
+                known.extend(rows.iter().cloned());
+                Ok(rows)
+            }
+            Err(err) => Err(self.ending(alva, err).await),
+        }
+    }
+
+    async fn rom_may_fallback(
+        &self,
+        rom: &domain::library::Rom,
+        game_uuid: Option<&str>,
+    ) -> Result<bool, SyncError> {
+        if game_uuid.is_some() || local::clean_crc32_hex(&rom.crc32).is_some() {
+            return Ok(true);
+        }
+        for slot in local::rom_slot_files(rom, &self.dirs.saves) {
+            if self
+                .repo
+                .base_get(&slot.key)
+                .await
+                .map_err(repo_err)?
+                .is_some()
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// As linhas da nuvem de um arquivo: o nome dele, ou a pasta (`core`) de
-    /// um cartão ou VMU.
+    /// um cartão ou VMU. Para saves unitários de ROM sem linha exata na nuvem,
+    /// cai na listagem da plataforma quando há `game_uuid`, `crc32` ou base.
     async fn list_file(
         &self,
         alva: &Alvanista,
@@ -1144,8 +1223,30 @@ impl Engine {
         match file.core {
             Some(core) => self.list_for(alva, token, &[], &[core]).await,
             None => {
-                self.list_for(alva, token, std::slice::from_ref(&file.filename), &[])
-                    .await
+                let mut rows = self
+                    .list_for(alva, token, std::slice::from_ref(&file.filename), &[])
+                    .await?;
+                if !has_rom_save_row(&rows) && !file.is_folder {
+                    let can_fallback = file.game_uuid.is_some()
+                        || file
+                            .rom_crc32
+                            .as_deref()
+                            .and_then(local::clean_crc32_hex)
+                            .is_some()
+                        || self
+                            .repo
+                            .base_get(&file.key)
+                            .await
+                            .map_err(repo_err)?
+                            .is_some();
+                    if can_fallback {
+                        let extra = self
+                            .list_platform_rom_files(alva, token, file.platform)
+                            .await?;
+                        merge_remote_files(&mut rows, extra);
+                    }
+                }
+                Ok(rows)
             }
         }
     }
@@ -1186,14 +1287,34 @@ impl Engine {
             }
         }
         for row in files {
-            let slots = match row.core.as_deref() {
+            let slots: Vec<SaveFile> = match row.core.as_deref() {
                 Some(core) if core.starts_with("system/") => {
                     local.system_slot(core, &row.filename).into_iter().collect()
                 }
                 Some(core) if core.starts_with("saves/") => {
                     local.folder_slot(core, &row.filename).into_iter().collect()
                 }
-                _ => local.rom_slots(&row.filename),
+                _ => {
+                    let exact = local.rom_slots(&row.filename);
+                    if exact
+                        .iter()
+                        .any(|s| row.platform == "other" || s.platform == row.platform)
+                    {
+                        exact
+                    } else if is_coreless(row) {
+                        local
+                            .fallback_rom_slot(
+                                &row.platform,
+                                &row.filename,
+                                row.game_uuid.as_deref(),
+                                row.slug.as_deref(),
+                            )
+                            .into_iter()
+                            .collect()
+                    } else {
+                        Vec::new()
+                    }
+                }
             };
             for slot in slots {
                 // Uma linha que a base de outra chave segue não ganha vaga só
@@ -1202,7 +1323,9 @@ impl Engine {
                 let followed = claimed
                     .get(row.save_id.as_str())
                     .is_some_and(|by| !by.contains(slot.key.as_str()));
-                if !followed && pick(&by_name, &slot).is_some() {
+                if !followed
+                    && pick_remote(&by_name, files, local, bases.get(&slot.key), &slot).is_some()
+                {
                     keys.add(slot);
                 }
             }
@@ -1212,10 +1335,12 @@ impl Engine {
         let scope_paths: HashSet<String> = match scope {
             PassScope::All | PassScope::State(_) | PassScope::States => HashSet::new(),
             PassScope::Rom(id) => match self.roms.get(id).await {
-                Ok(Some(rom)) => local::rom_slot_files(&rom, &self.dirs.saves)
-                    .iter()
-                    .map(|f| path_key(self.name_case, &f.path))
-                    .collect(),
+                Ok(Some(rom)) => {
+                    local::rom_slot_files_with_uuid(&rom, local.rom_game_uuid(id), &self.dirs.saves)
+                        .iter()
+                        .map(|f| path_key(self.name_case, &f.path))
+                        .collect()
+                }
                 Ok(None) => HashSet::new(),
                 Err(e) => return Err(failed(format!("ROM {id}: {e}"))),
             },
@@ -1234,7 +1359,7 @@ impl Engine {
             .filter(in_scope)
             .map(|file| {
                 let base = bases.get(&file.key);
-                let row = pick(&by_name, &file).or_else(|| base_row(files, base, &file));
+                let row = pick_remote(&by_name, files, local, base, &file);
                 Entry {
                     row: row.cloned(),
                     base: base.cloned(),
@@ -1243,6 +1368,111 @@ impl Engine {
             })
             .collect())
     }
+}
+
+fn is_coreless(r: &RemoteFile) -> bool {
+    r.core.as_deref().map_or(true, str::is_empty)
+}
+
+fn has_rom_save_row(files: &[RemoteFile]) -> bool {
+    files.iter().any(|r| {
+        let c = r.core.as_deref().unwrap_or_default();
+        !c.starts_with("system/") && !c.starts_with("saves/")
+    })
+}
+
+fn merge_remote_files(into: &mut Vec<RemoteFile>, extra: Vec<RemoteFile>) {
+    let mut seen: HashSet<String> = into.iter().map(|r| r.save_id.clone()).collect();
+    for r in extra {
+        if seen.insert(r.save_id.clone()) {
+            into.push(r);
+        }
+    }
+}
+
+/// Escolhe a linha remota para `file`:
+/// 1. Regra 1: stem exato (`pick`) vence sempre;
+/// 2. Cartões/VMUs com maiúsculas legadas na base (`base_row`);
+/// 3. Regra 2: fallback de ROM (`core == None`) por `crc32` ou `game_uuid` na
+///    mesma plataforma, ou pela base já vinculada a esse `save_id`.
+fn pick_remote<'a>(
+    by_name: &ByName<'a>,
+    files: &'a [RemoteFile],
+    local: &LocalSaves,
+    base: Option<&BaseRow>,
+    file: &SaveFile,
+) -> Option<&'a RemoteFile> {
+    if let Some(exact) = pick(by_name, file) {
+        return Some(exact);
+    }
+    if let Some(card_base) = base_row(files, base, file) {
+        return Some(card_base);
+    }
+    if file.core.is_some() || file.is_folder {
+        return None;
+    }
+    let file_crc = file.rom_crc32.as_deref().and_then(local::clean_crc32_hex);
+    if let Some(matched) = files
+        .iter()
+        .filter(|r| {
+            let live_or_tracked = r.deleted_at.is_none()
+                || base
+                    .filter(|b| b.wiped_at.is_none())
+                    .is_some_and(|b| b.remote_save_id == r.save_id);
+            live_or_tracked
+                && is_coreless(r)
+                && r.platform == file.platform
+                && local
+                    .fallback_rom_slot(
+                        &r.platform,
+                        &r.filename,
+                        r.game_uuid.as_deref(),
+                        r.slug.as_deref(),
+                    )
+                    .is_some_and(|slot| slot.key == file.key)
+        })
+        .max_by(|a, b| cmp_fallback(a, b, file_crc.as_deref()))
+    {
+        return Some(matched);
+    }
+    base_rom_row(files, local, base, file)
+}
+
+fn cmp_fallback(a: &RemoteFile, b: &RemoteFile, file_crc: Option<&str>) -> std::cmp::Ordering {
+    let crc_match = |r: &RemoteFile| {
+        file_crc.is_some()
+            && r.slug
+                .as_deref()
+                .and_then(local::parse_crc32_slug)
+                .as_deref()
+                == file_crc
+    };
+    (a.deleted_at.is_none(), crc_match(a), rank(a)).cmp(&(
+        b.deleted_at.is_none(),
+        crc_match(b),
+        rank(b),
+    ))
+}
+
+fn base_rom_row<'a>(
+    files: &'a [RemoteFile],
+    local: &LocalSaves,
+    base: Option<&BaseRow>,
+    file: &SaveFile,
+) -> Option<&'a RemoteFile> {
+    let base = base.filter(|b| b.wiped_at.is_none())?;
+    if file.core.is_some() || file.is_folder {
+        return None;
+    }
+    files.iter().find(|r| {
+        if r.save_id != base.remote_save_id || !is_coreless(r) {
+            return false;
+        }
+        let Some((remote_stem, _)) = r.filename.rsplit_once('.') else {
+            return false;
+        };
+        !local.has_exact_rom_stem(&r.platform, remote_stem)
+    })
 }
 
 /// A linha que a base de um cartão ou VMU segue, quando o nome não acha
