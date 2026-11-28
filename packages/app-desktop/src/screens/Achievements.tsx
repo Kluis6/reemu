@@ -11,6 +11,7 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import {
+  ArrowLeftRegular,
   ArrowSyncRegular,
   SettingsRegular,
   TrophyRegular,
@@ -24,6 +25,7 @@ import { useAlvanistaConnect } from '../hooks/useAlvanistaConnect'
 import { ALVANISTA_CACHED_KEY } from '../hooks/useEffectiveProfile'
 import { RA_STATUS_KEY } from '../hooks/useRetroAchievements'
 import { socialErrorCode, useAlvanistaAchievements } from '../hooks/useSocial'
+import { navigateBack } from '../lib/focusNav'
 import { platformLabel } from '../lib/platform'
 import { alvanistaCachedStatus, listRoms, raStatus } from '../lib/tauri'
 import { pickText } from './profile/profileData'
@@ -40,6 +42,13 @@ const useStyles = makeStyles({
   },
   tabs: { marginLeft: 0 },
   empty: { flexGrow: 1, minHeight: 0 },
+  topRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: tokens.spacingHorizontalM,
+  },
   hero: {
     display: 'flex',
     alignItems: 'center',
@@ -464,18 +473,27 @@ export function Achievements() {
 
   return (
     <div className={s.page}>
-      <TabList
-        className={mergeClasses(tb.tabs, s.tabs, 'reemu-on-wallpaper')}
-        selectedValue={tab}
-        onTabSelect={(_, d) => setTab(d.value as 'ra' | 'alvanista')}
-      >
-        <Tab value="ra">
-          RetroAchievements
-        </Tab>
-        <Tab value="alvanista">
-          {t('achievements.alvanistaTab')}
-        </Tab>
-      </TabList>
+      <div className={s.topRow}>
+        <Button
+          appearance="secondary"
+          icon={<ArrowLeftRegular />}
+          onClick={() => navigateBack(navigate)}
+        >
+          {t('hints.back')}
+        </Button>
+        <TabList
+          className={mergeClasses(tb.tabs, s.tabs, 'reemu-on-wallpaper')}
+          selectedValue={tab}
+          onTabSelect={(_, d) => setTab(d.value as 'ra' | 'alvanista')}
+        >
+          <Tab value="ra">
+            RetroAchievements
+          </Tab>
+          <Tab value="alvanista">
+            {t('achievements.alvanistaTab')}
+          </Tab>
+        </TabList>
+      </div>
 
       {tab === 'ra' ? renderRetroAchievements() : renderAlvanistaAchievements()}
     </div>

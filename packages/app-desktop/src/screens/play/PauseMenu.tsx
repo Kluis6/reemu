@@ -30,6 +30,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CheatsPanel } from "../../components/CheatsPanel";
+import { CloseButton } from "../../components/CloseButton";
 import { GameAchievementsPanel } from "../../components/GameAchievementsPanel";
 import { GameLogPanel } from "../../components/GameLogPanel";
 import { SaveStateThumb } from "../../components/SaveStateThumb";
@@ -201,9 +202,10 @@ export function PauseMenu({
       position="start"
       size="small"
       className={pause.drawer}
+      data-pause-drawer=""
       aria-label={t("play.paused")}
       onOpenChange={(_, d) => {
-        if (!d.open && d.type === "backdropClick") onResume();
+        if (!d.open) onResume();
       }}
     >
       <DrawerHeader className={pause.header}>
@@ -234,7 +236,10 @@ export function PauseMenu({
             </kbd>
           )}
         </div>
-        <DrawerHeaderTitle heading={{ as: "h2", className: pause.title }}>
+        <DrawerHeaderTitle
+          heading={{ as: "h2", className: pause.title }}
+          action={<CloseButton onClick={onResume} />}
+        >
           {t(tabs.find((x) => x.id === tab)?.label ?? "play.tabStates")}
         </DrawerHeaderTitle>
       </DrawerHeader>

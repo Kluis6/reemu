@@ -949,7 +949,9 @@ export const useHintStyles = makeStyles({
     fontWeight: tokens.fontWeightRegular,
     lineHeight: 1,
     color: "#ffffff",
-    zIndex: 50,
+    // Acima de `.fui-DialogSurface` e `.fui-OverlayDrawer` (1000000), para as
+    // dicas (A) Selecionar / (B) Fechar continuarem visíveis em diálogos de tela cheia.
+    zIndex: 1000001,
     pointerEvents: "none",
   },
   // Variante no meio da tela, embaixo (onboarding: o modal ocupa o centro e

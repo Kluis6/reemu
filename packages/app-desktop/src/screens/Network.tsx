@@ -9,6 +9,7 @@ import {
   tokens,
 } from '@fluentui/react-components'
 import {
+  ArrowLeftRegular,
   ArrowSyncRegular,
   OpenRegular,
   PeopleRegular,
@@ -19,6 +20,7 @@ import { useNavigate } from 'react-router-dom'
 import { EmptyState, LoadingState } from '../components/EmptyState'
 import { useAlvanistaConnect } from '../hooks/useAlvanistaConnect'
 import { ALVANISTA_CACHED_KEY } from '../hooks/useEffectiveProfile'
+import { navigateBack } from '../lib/focusNav'
 import {
   socialErrorCode,
   useAlvanistaFriends,
@@ -154,45 +156,63 @@ export function Network() {
 
   if (alva.isLoading) return <LoadingState />
 
+  const backBar = (
+    <div>
+      <Button
+        appearance="secondary"
+        icon={<ArrowLeftRegular />}
+        onClick={() => navigateBack(navigate)}
+      >
+        {t('hints.back')}
+      </Button>
+    </div>
+  )
+
   if (!connected) {
     return (
-      <EmptyState
-        size="large"
-        art={<PeopleRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
-        artAccent
-        title={t('nav.network')}
-        action={
-          <Button appearance="primary" onClick={() => navigate('/settings/perfil')}>
-            {t('network.openProfileSettings')}
-          </Button>
-        }
-      >
-        {t('network.notConnectedHint')}
-      </EmptyState>
+      <div className={s.page}>
+        {backBar}
+        <EmptyState
+          size="large"
+          art={<PeopleRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
+          artAccent
+          title={t('nav.network')}
+          action={
+            <Button appearance="primary" onClick={() => navigate('/settings/perfil')}>
+              {t('network.openProfileSettings')}
+            </Button>
+          }
+        >
+          {t('network.notConnectedHint')}
+        </EmptyState>
+      </div>
     )
   }
 
   if (needsConsent) {
     return (
-      <EmptyState
-        size="large"
-        art={<PeopleRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
-        artAccent
-        title={t('nav.network')}
-        action={
-          connecting ? (
-            <Button appearance="secondary" onClick={cancel}>
-              {t('network.cancelConnect')}
-            </Button>
-          ) : (
-            <Button appearance="primary" onClick={connect}>
-              {t('network.connectButton')}
-            </Button>
-          )
-        }
-      >
-        {connecting ? t('network.connecting') : t('network.consentHint')}
-      </EmptyState>
+      <div className={s.page}>
+        {backBar}
+        <EmptyState
+          size="large"
+          art={<PeopleRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
+          artAccent
+          title={t('nav.network')}
+          action={
+            connecting ? (
+              <Button appearance="secondary" onClick={cancel}>
+                {t('network.cancelConnect')}
+              </Button>
+            ) : (
+              <Button appearance="primary" onClick={connect}>
+                {t('network.connectButton')}
+              </Button>
+            )
+          }
+        >
+          {connecting ? t('network.connecting') : t('network.consentHint')}
+        </EmptyState>
+      </div>
     )
   }
 
@@ -200,19 +220,22 @@ export function Network() {
 
   if (errCode === 'offline') {
     return (
-      <EmptyState
-        size="large"
-        art={<PeopleRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
-        artAccent
-        title={t('nav.network')}
-        action={
-          <Button appearance="secondary" onClick={() => void friends.refetch()}>
-            {t('network.retry')}
-          </Button>
-        }
-      >
-        {t('network.offlineHint')}
-      </EmptyState>
+      <div className={s.page}>
+        {backBar}
+        <EmptyState
+          size="large"
+          art={<PeopleRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
+          artAccent
+          title={t('nav.network')}
+          action={
+            <Button appearance="secondary" onClick={() => void friends.refetch()}>
+              {t('network.retry')}
+            </Button>
+          }
+        >
+          {t('network.offlineHint')}
+        </EmptyState>
+      </div>
     )
   }
 
@@ -221,14 +244,17 @@ export function Network() {
 
   if (list.length === 0) {
     return (
-      <EmptyState
-        size="large"
-        art={<PeopleRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
-        artAccent
-        title={t('nav.network')}
-      >
-        {t('network.emptyHint')}
-      </EmptyState>
+      <div className={s.page}>
+        {backBar}
+        <EmptyState
+          size="large"
+          art={<PeopleRegular style={{ color: 'var(--reemuBrandAccent)' }} />}
+          artAccent
+          title={t('nav.network')}
+        >
+          {t('network.emptyHint')}
+        </EmptyState>
+      </div>
     )
   }
 
@@ -251,6 +277,13 @@ export function Network() {
           </Caption1>
         </div>
         <div className={s.headerActions}>
+          <Button
+            appearance="secondary"
+            icon={<ArrowLeftRegular />}
+            onClick={() => navigateBack(navigate)}
+          >
+            {t('hints.back')}
+          </Button>
           <Switch
             checked={showOnline}
             onChange={(_, d) => setShowOnline(d.checked)}

@@ -33,8 +33,10 @@ function navSkipped(el: HTMLElement): boolean {
  */
 export const NAV_FOCUS_ATTR = 'data-nav-focus'
 let navFocusListening = false
+let lastPointerAt: { x: number; y: number } | null = null
 function markNavFocus() {
   document.documentElement.setAttribute(NAV_FOCUS_ATTR, '')
+  lastPointerAt = null
   if (navFocusListening) return
   navFocusListening = true
   const leave = () => {
@@ -43,15 +45,18 @@ function markNavFocus() {
     notifyNavState()
   }
   window.addEventListener('pointerdown', leave, { capture: true })
+  window.addEventListener('mousedown', leave, { capture: true })
+  window.addEventListener('touchstart', leave, { capture: true, passive: true })
   window.addEventListener('wheel', leave, { capture: true, passive: true })
-  // Compara a posição: o sistema manda `pointermove` sem o ponteiro ter saído do
-  // lugar, por exemplo ao mostrar a janela.
-  let at: { x: number; y: number } | null = null
+  // Compara a posição: o sistema pode mandar um primeiro `pointermove` sintético
+  // sem deslocamento ao exibir a janela; qualquer deslocamento real sai do modo controle.
   window.addEventListener(
     'pointermove',
     (e) => {
-      if (at && (at.x !== e.clientX || at.y !== e.clientY)) leave()
-      at = { x: e.clientX, y: e.clientY }
+      if (lastPointerAt && (lastPointerAt.x !== e.clientX || lastPointerAt.y !== e.clientY)) {
+        leave()
+      }
+      lastPointerAt = { x: e.clientX, y: e.clientY }
     },
     { capture: true },
   )
@@ -66,14 +71,77 @@ function notifyNavState() {
   window.dispatchEvent(new Event(NAV_STATE_EVENT))
 }
 
+function visibleElements(selector: string): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>(selector)).filter((el) => {
+    const r = el.getBoundingClientRect()
+    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'
+  })
+}
+
+/** A camada aberta mais ao topo (menu, popover, dialog ou drawer), ou `null`. */
+export function topmostOverlay(): HTMLElement | null {
+  const open = visibleElements(OVERLAY)
+  return open[open.length - 1] ?? null
+}
+
+/** A superfície modal mais ao topo (`.fui-DialogSurface` ou `.fui-OverlayDrawer`), para portais como o teclado na tela. */
+export function topmostModalSurface(): HTMLElement | null {
+  const open = visibleElements('.fui-DialogSurface, .fui-OverlayDrawer')
+  return open[open.length - 1] ?? null
+}
+
+/**
+ * Fecha a camada aberta mais ao topo (como Esc ou o B do controle).
+ * Quando `ignorePauseDrawer` é `true`, ignora o próprio `PauseMenu`
+ * (`[data-pause-drawer]`) para o fluxo `/play/` alternar o foco pelo backend,
+ * mas continua fechando menus, popovers ou diálogos abertos por cima dele.
+ */
+export function closeTopmostOverlay(ignorePauseDrawer = false): boolean {
+  const overlay = topmostOverlay()
+  if (!overlay) return false
+  if (ignorePauseDrawer && overlay.hasAttribute('data-pause-drawer')) return false
+
+  if (!overlay.matches('[role="menu"], .fui-PopoverSurface')) {
+    const closeBtn = Array.from(
+      overlay.querySelectorAll<HTMLButtonElement>('button[data-overlay-close]:not([disabled])'),
+    ).find((btn) => btn.closest(OVERLAY) === overlay)
+    if (closeBtn) {
+      closeBtn.click()
+      return true
+    }
+  }
+
+  const target =
+    document.activeElement instanceof HTMLElement && overlay.contains(document.activeElement)
+      ? document.activeElement
+      : overlay
+  target.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'Escape',
+      code: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    }),
+  )
+  return true
+}
+
+export interface BackNavigator {
+  (delta: number): unknown
+  (to: string, opts?: { replace?: boolean }): unknown
+}
+
+/** Volta para a tela anterior ou, sem histórico na sessão, para a tela inicial. */
+export function navigateBack(navigate: BackNavigator) {
+  const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0
+  if (idx > 0) navigate(-1)
+  else navigate('/', { replace: true })
+}
+
 /** A camada aberta por cima de tudo, ou o documento. Os portais do Fluent entram
  *  na ordem em que abrem, então a última é a de cima. */
 export function navScope(): ParentNode {
-  const open = Array.from(document.querySelectorAll<HTMLElement>(OVERLAY)).filter((el) => {
-    const r = el.getBoundingClientRect()
-    return r.width > 0 && r.height > 0
-  })
-  return open[open.length - 1] ?? document
+  return topmostOverlay() ?? document
 }
 
 /** O que o controle alcança dentro de `scope`. */

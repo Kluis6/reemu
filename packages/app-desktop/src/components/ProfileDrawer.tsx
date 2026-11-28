@@ -20,6 +20,7 @@ import { BadgeIcon } from "../screens/profile/AlvanistaCardBlock";
 import { tierAccent } from "../lib/tierRing";
 import { pickText, readableInk } from "../screens/profile/profileData";
 import { floatingDrawer } from "../styles/xbox";
+import { CloseButton } from "./CloseButton";
 import { ProfileAvatar } from "./ProfileAvatar";
 
 // tamanho da escala do `Avatar` do Fluent (20…128); fora dela ele cai no padrão
@@ -193,6 +194,7 @@ export function ProfileDrawer({
           <div className={s.top}>
             {level != null && <span className={s.chip}>{t("profilePage.chipLevel", { level })}</span>}
             {connected && <img className={s.symbol} src={symbol} alt="" aria-hidden draggable={false} />}
+            <CloseButton size="small" onClick={() => onOpenChange(false)} />
           </div>
           <div className={s.identity}>
             <ProfileAvatar profile={profile} size={AVATAR} className={s.avatar} tier={tierColors} />

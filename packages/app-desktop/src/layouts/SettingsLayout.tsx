@@ -227,8 +227,9 @@ export function SettingsLayout() {
       <div className={styles.page}>
         <Breadcrumb
           className={mergeClasses(styles.crumbs, "reemu-on-wallpaper")}
-          // com o controle, B volta; o foco entra direto nas opções
-          data-nav-skip
+          // Na raiz (`/settings`) o título é estático e o foco entra direto nos cards;
+          // dentro de uma subpágina o caminho continua alcançável também pelo controle.
+          data-nav-skip={!section ? "" : undefined}
           size="large"
           aria-label={t("settings.title")}
         >
